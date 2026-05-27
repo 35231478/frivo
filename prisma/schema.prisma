@@ -1,0 +1,850 @@
+// Frivo — Sistema SaaS para Empresas de Climatização e Refrigeração
+// Schema v2: Unidades, TipoTecnico, ART, Responsável Técnico
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum Plano {
+  BASICO
+  PROFISSIONAL
+  ENTERPRISE
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  GERENTE
+  OPERADOR
+  TECNICO
+}
+
+enum TipoPessoa {
+  FISICA
+  JURIDICA
+}
+
+enum TipoTecnico {
+  TECNICO_CAMPO
+  RESPONSAVEL_TECNICO
+}
+
+enum TipoEquipamento {
+  AR_CONDICIONADO_SPLIT
+  AR_CONDICIONADO_JANELA
+  AR_CONDICIONADO_CENTRAL
+  AR_CONDICIONADO_PORTATIL
+  CHILLER
+  TORRE_RESFRIAMENTO
+  CAMARA_FRIA
+  CAMARA_CLIMATIZADA
+  REFRIGERADOR_COMERCIAL
+  CONGELADOR_COMERCIAL
+  VRF
+  FANCOIL
+  CONDENSADORA
+  EVAPORADORA
+  OUTRO
+}
+
+enum TipoContrato {
+  MANUTENCAO_PREVENTIVA
+  MANUTENCAO_CORRETIVA
+  MANUTENCAO_COMPLETA
+  INSTALACAO
+  LOCACAO
+  ASSISTENCIA_TECNICA
+}
+
+enum StatusContrato {
+  ATIVO
+  SUSPENSO
+  ENCERRADO
+  VENCIDO
+  AGUARDANDO_ASSINATURA
+}
+
+enum Periodicidade {
+  SEMANAL
+  QUINZENAL
+  MENSAL
+  BIMESTRAL
+  TRIMESTRAL
+  SEMESTRAL
+  ANUAL
+}
+
+enum TipoServico {
+  INSTALACAO
+  MANUTENCAO_PREVENTIVA
+  MANUTENCAO_CORRETIVA
+  LIMPEZA
+  RECARGA_GAS
+  VISITA_TECNICA
+  GARANTIA
+  ORCAMENTO
+  DESMONTAGEM
+  OUTRO
+}
+
+enum Prioridade {
+  BAIXA
+  NORMAL
+  ALTA
+  URGENTE
+}
+
+enum StatusOS {
+  ABERTA
+  AGENDADA
+  EM_ANDAMENTO
+  PAUSADA
+  AGUARDANDO_PECA
+  CONCLUIDA
+  CANCELADA
+}
+
+enum TipoAtividade {
+  CRIACAO
+  ATUALIZACAO_STATUS
+  COMENTARIO
+  AGENDAMENTO
+  ATRIBUICAO_TECNICO
+  TROCA_PECA
+  FOTO_ADICIONADA
+  ASSINATURA_COLETADA
+  CONCLUSAO
+  CANCELAMENTO
+  REABERTURA
+}
+
+enum Segmento {
+  INDUSTRIA
+  COMERCIO
+  SAUDE
+  EDUCACAO
+  HOTELARIA
+  ALIMENTACAO
+  CORPORATIVO
+  RESIDENCIAL
+  OUTRO
+}
+
+enum OrigemCliente {
+  INDICACAO
+  GOOGLE
+  INSTAGRAM
+  FACEBOOK
+  LINKEDIN
+  PROSPECCAO_ATIVA
+  SITE
+  OUTRO
+}
+
+enum StatusFinanceiro {
+  ADIMPLENTE
+  INADIMPLENTE
+  EM_NEGOCIACAO
+  AGUARDANDO_VENCIMENTO
+}
+
+enum TipoContato {
+  FINANCEIRO
+  OPERACIONAL
+  TECNICO
+  DIRETORIA
+  OUTRO
+}
+
+enum TipoInteracao {
+  LIGACAO
+  VISITA
+  EMAIL
+  WHATSAPP
+  REUNIAO
+}
+
+// ─────────────────────────────────────────────
+// EMPRESA (tenant raiz)
+// ─────────────────────────────────────────────
+
+model Empresa {
+  id           String   @id @default(cuid())
+  nome         String
+  nomeFantasia String?
+  cnpj         String   @unique
+  email        String
+  telefone     String?
+  celular      String?
+  site         String?
+  logo         String?
+  endereco     String?
+  numero       String?
+  complemento  String?
+  bairro       String?
+  cidade       String?
+  estado       String?
+  cep          String?
+  latitude     Float?
+  longitude    Float?
+  plano        Plano    @default(BASICO)
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  usuarios      Usuario[]
+  clientes      Cliente[]
+  equipamentos  Equipamento[]
+  contratos     Contrato[]
+  ordensServico OrdemServico[]
+  tecnicos      Tecnico[]
+  unidades      Unidade[]
+  tiposOs              TipoOs[]
+  formularios          FormularioTemplate[]
+  tiposEquipamentoCustom TipoEquipamentoCustom[]
+  servicos             Servico[]
+  produtos             Produto[]
+
+  configuracao  Configuracao?
+
+  @@map("empresas")
+}
+
+// ─────────────────────────────────────────────
+// CONFIGURAÇÕES DA EMPRESA
+// ─────────────────────────────────────────────
+
+model Configuracao {
+  id        String @id @default(cuid())
+  empresaId String @unique @map("empresa_id")
+
+  // Campos obrigatórios no cadastro de clientes
+  clienteEmailObrigatorio      Boolean @default(false) @map("cliente_email_obrigatorio")
+  clienteWhatsappObrigatorio   Boolean @default(false) @map("cliente_whatsapp_obrigatorio")
+  clienteTelefoneObrigatorio   Boolean @default(false) @map("cliente_telefone_obrigatorio")
+  clienteCepObrigatorio        Boolean @default(false) @map("cliente_cep_obrigatorio")
+  clienteRtObrigatorio         Boolean @default(false) @map("cliente_rt_obrigatorio")
+  clienteArtObrigatorio        Boolean @default(false) @map("cliente_art_obrigatorio")
+
+  // Regras de cadastro
+  clienteExigirUnidade     Boolean @default(false) @map("cliente_exigir_unidade")
+  clienteExigirDocumento   Boolean @default(true) @map("cliente_exigir_documento")
+
+  // Ordens de serviço
+  osExigirFoto             Boolean @default(false) @map("os_exigir_foto")
+  osExigirAssinatura       Boolean @default(false) @map("os_exigir_assinatura")
+  osPermitirSemContrato    Boolean @default(true) @map("os_permitir_sem_contrato")
+  osExigirQuestionario     Boolean @default(false) @map("os_exigir_questionario")
+  osPermitirEdicaoConcluida Boolean @default(false) @map("os_permitir_edicao_concluida")
+
+  // Notificações
+  notifEmailAbrirOs        Boolean @default(false) @map("notif_email_abrir_os")
+  notifEmailConcluirOs     Boolean @default(false) @map("notif_email_concluir_os")
+  notifWhatsappAbrirOs     Boolean @default(false) @map("notif_whatsapp_abrir_os")
+  notifWhatsappConcluirOs  Boolean @default(false) @map("notif_whatsapp_concluir_os")
+
+  // Aparência e mapa
+  mostrarMapa              Boolean @default(true) @map("mostrar_mapa")
+  mostrarDistancia         Boolean @default(true) @map("mostrar_distancia")
+  mostrarTecnicoProximo    Boolean @default(true) @map("mostrar_tecnico_proximo")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@map("configuracoes")
+}
+
+// ─────────────────────────────────────────────
+// USUARIO
+// ─────────────────────────────────────────────
+
+model Usuario {
+  id           String    @id @default(cuid())
+  empresaId    String    @map("empresa_id")
+  nome         String
+  email        String
+  senha        String
+  role         Role      @default(OPERADOR)
+  avatar       String?
+  telefone     String?
+  ativo        Boolean   @default(true)
+  ultimoAcesso DateTime? @map("ultimo_acesso")
+  criadoEm     DateTime  @default(now()) @map("criado_em")
+  atualizadoEm DateTime  @updatedAt @map("atualizado_em")
+
+  empresa           Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  ordensEmitidas    OrdemServico[]     @relation("UsuarioCriador")
+  ordensResponsavel OrdemServico[]     @relation("OsResponsavel")
+  osHistorico       OsHistorico[]
+  interacoesCliente InteracaoCliente[]
+
+  @@unique([email, empresaId])
+  @@map("usuarios")
+}
+
+// ─────────────────────────────────────────────
+// TECNICO
+// ─────────────────────────────────────────────
+
+model Tecnico {
+  id             String      @id @default(cuid())
+  empresaId      String      @map("empresa_id")
+  nome           String
+  cpf            String
+  email          String?
+  telefone       String
+  celular        String?
+  tipo           TipoTecnico @default(TECNICO_CAMPO)
+  crea           String?
+  especialidades     String[]
+  latitude           Float?
+  longitude          Float?
+  ultimaLocalizacao  DateTime?  @map("ultima_localizacao")
+  observacoes        String?
+  ativo              Boolean    @default(true)
+  criadoEm           DateTime   @default(now()) @map("criado_em")
+  atualizadoEm       DateTime   @updatedAt @map("atualizado_em")
+
+  empresa              Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  clientesResponsavel  Cliente[]
+  contratosResponsavel Contrato[]
+  atividadesOs         AtividadeOs[]
+
+  @@unique([cpf, empresaId])
+  @@map("tecnicos")
+}
+
+// ─────────────────────────────────────────────
+// CLIENTE
+// ─────────────────────────────────────────────
+
+model Cliente {
+  id                  String     @id @default(cuid())
+  empresaId           String     @map("empresa_id")
+  tipoPessoa          TipoPessoa @default(JURIDICA) @map("tipo_pessoa")
+  nome                String
+  nomeFantasia        String?    @map("nome_fantasia")
+  cpfCnpj             String     @map("cpf_cnpj")
+  inscricaoEstadual   String?    @map("inscricao_estadual")
+  email               String?
+  telefone            String?
+  celular             String?
+  contato             String?
+  logo                String?          @db.Text
+  segmento            Segmento?
+  origem              OrigemCliente?
+  statusFinanceiro    StatusFinanceiro @default(ADIMPLENTE) @map("status_financeiro")
+  satisfacao          Int?             @db.SmallInt
+  ultimaPesquisaEm    DateTime?        @map("ultima_pesquisa_em")
+  artNumero           String?          @map("art_numero")
+  responsavelTecnicoId String?         @map("responsavel_tecnico_id")
+  endereco            String?
+  numero              String?
+  complemento         String?
+  bairro              String?
+  cidade              String?
+  estado              String?
+  cep                 String?
+  observacoes         String?
+  ativo               Boolean    @default(true)
+  criadoEm            DateTime   @default(now()) @map("criado_em")
+  atualizadoEm        DateTime   @updatedAt @map("atualizado_em")
+
+  empresa             Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  responsavelTecnico  Tecnico?       @relation(fields: [responsavelTecnicoId], references: [id])
+  unidades            Unidade[]
+  contratos           Contrato[]
+  ordensServico       OrdemServico[]
+  anexos              AnexoCliente[]
+  contatosCliente     ContatoCliente[]
+  interacoes          InteracaoCliente[]
+
+  @@unique([cpfCnpj, empresaId])
+  @@map("clientes")
+}
+
+// ─────────────────────────────────────────────
+// CONTATO DO CLIENTE
+// ─────────────────────────────────────────────
+
+model ContatoCliente {
+  id         String      @id @default(cuid())
+  empresaId  String      @map("empresa_id")
+  clienteId  String      @map("cliente_id")
+  nome       String
+  cargo      String?
+  tipo       TipoContato @default(OUTRO)
+  telefone   String?
+  whatsapp   String?
+  email      String?
+  principal  Boolean     @default(false)
+  ativo      Boolean     @default(true)
+  criadoEm   DateTime    @default(now()) @map("criado_em")
+  atualizadoEm DateTime  @updatedAt @map("atualizado_em")
+
+  cliente    Cliente     @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@map("contatos_cliente")
+}
+
+// ─────────────────────────────────────────────
+// INTERAÇÃO COM O CLIENTE (histórico)
+// ─────────────────────────────────────────────
+
+model InteracaoCliente {
+  id         String        @id @default(cuid())
+  empresaId  String        @map("empresa_id")
+  clienteId  String        @map("cliente_id")
+  usuarioId  String        @map("usuario_id")
+  tipo       TipoInteracao
+  descricao  String
+  criadoEm   DateTime      @default(now()) @map("criado_em")
+
+  cliente    Cliente       @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  usuario    Usuario       @relation(fields: [usuarioId], references: [id])
+
+  @@map("interacoes_cliente")
+}
+
+// ─────────────────────────────────────────────
+// UNIDADE (filial / endereço do cliente)
+// ─────────────────────────────────────────────
+
+model Unidade {
+  id          String   @id @default(cuid())
+  empresaId   String   @map("empresa_id")
+  clienteId   String   @map("cliente_id")
+  nome        String
+  principal   Boolean  @default(false)
+  logradouro  String?
+  numero      String?
+  complemento String?
+  bairro      String?
+  cidade      String?
+  estado      String?
+  cep         String?
+  latitude    Float?
+  longitude   Float?
+  telefone    String?
+  observacoes String?
+  ativo       Boolean  @default(true)
+  criadoEm    DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  empresa      Empresa           @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  cliente      Cliente           @relation(fields: [clienteId], references: [id])
+  equipamentos Equipamento[]
+  contratos    ContratoUnidade[]
+  ordensServico OrdemServico[]
+
+  @@map("unidades")
+}
+
+// ─────────────────────────────────────────────
+// ANEXO DO CLIENTE
+// ─────────────────────────────────────────────
+
+model AnexoCliente {
+  id         String   @id @default(cuid())
+  empresaId  String   @map("empresa_id")
+  clienteId  String   @map("cliente_id")
+  nome       String
+  tipo       String
+  tamanho    Int
+  conteudo   String   @db.Text
+  criadoEm   DateTime @default(now()) @map("criado_em")
+
+  cliente    Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@map("anexos_clientes")
+}
+
+// ─────────────────────────────────────────────
+// EQUIPAMENTO
+// ─────────────────────────────────────────────
+
+model Equipamento {
+  id             String          @id @default(cuid())
+  empresaId      String          @map("empresa_id")
+  unidadeId      String          @map("unidade_id")
+  tipo           TipoEquipamento
+  marca          String
+  modelo         String
+  numeroSerie    String?         @map("numero_serie")
+  patrimonio     String?
+  capacidade     String?
+  fluido         String?
+  tensao         String?
+  localizacao    String?
+  dataInstalacao DateTime?       @map("data_instalacao")
+  dataFabricacao DateTime?       @map("data_fabricacao")
+  garantiaAte    DateTime?       @map("garantia_ate")
+  observacoes    String?
+  fotos          String[]
+  ativo          Boolean         @default(true)
+  criadoEm       DateTime        @default(now()) @map("criado_em")
+  atualizadoEm   DateTime        @updatedAt @map("atualizado_em")
+
+  empresa       Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  unidade       Unidade        @relation(fields: [unidadeId], references: [id])
+
+  @@map("equipamentos")
+}
+
+// ─────────────────────────────────────────────
+// CONTRATO
+// ─────────────────────────────────────────────
+
+model Contrato {
+  id                   String         @id @default(cuid())
+  empresaId            String         @map("empresa_id")
+  clienteId            String         @map("cliente_id")
+  numero               String
+  tipo                 TipoContrato
+  status               StatusContrato @default(ATIVO)
+  periodicidade        Periodicidade  @default(MENSAL)
+  valorMensal          Decimal?       @map("valor_mensal") @db.Decimal(10, 2)
+  valorTotal           Decimal?       @map("valor_total") @db.Decimal(10, 2)
+  dataInicio           DateTime       @map("data_inicio")
+  dataFim              DateTime?      @map("data_fim")
+  diaVencimento        Int?           @map("dia_vencimento")
+  artNumero            String?        @map("art_numero")
+  responsavelTecnicoId String?        @map("responsavel_tecnico_id")
+  observacoes          String?
+  documento            String?
+  criadoEm             DateTime       @default(now()) @map("criado_em")
+  atualizadoEm         DateTime       @updatedAt @map("atualizado_em")
+
+  empresa             Empresa           @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  cliente             Cliente           @relation(fields: [clienteId], references: [id])
+  responsavelTecnico  Tecnico?          @relation(fields: [responsavelTecnicoId], references: [id])
+  unidades            ContratoUnidade[]
+  ordensServico       OrdemServico[]
+
+  @@unique([numero, empresaId])
+  @@map("contratos")
+}
+
+// tabela de junção contrato <-> unidade
+model ContratoUnidade {
+  id         String @id @default(cuid())
+  contratoId String @map("contrato_id")
+  unidadeId  String @map("unidade_id")
+
+  contrato Contrato @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+  unidade  Unidade  @relation(fields: [unidadeId], references: [id])
+
+  @@unique([contratoId, unidadeId])
+  @@map("contratos_unidades")
+}
+
+// ─────────────────────────────────────────────
+// TIPO DE EQUIPAMENTO (configurável)
+// ─────────────────────────────────────────────
+
+model TipoEquipamentoCustom {
+  id          String  @id @default(cuid())
+  empresaId   String  @map("empresa_id")
+  nome        String
+  descricao   String?
+  ativo       Boolean @default(true)
+  criadoEm    DateTime @default(now()) @map("criado_em")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@map("tipos_equipamento_custom")
+}
+
+// ─────────────────────────────────────────────
+// SERVIÇO (catálogo)
+// ─────────────────────────────────────────────
+
+model Servico {
+  id            String  @id @default(cuid())
+  empresaId     String  @map("empresa_id")
+  nome          String
+  descricao     String?
+  unidade       String  @default("un")
+  valorPadrao   Decimal? @map("valor_padrao") @db.Decimal(10, 2)
+  ativo         Boolean @default(true)
+  criadoEm      DateTime @default(now()) @map("criado_em")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@map("servicos")
+}
+
+// ─────────────────────────────────────────────
+// PRODUTO (catálogo)
+// ─────────────────────────────────────────────
+
+model Produto {
+  id              String  @id @default(cuid())
+  empresaId       String  @map("empresa_id")
+  nome            String
+  descricao       String?
+  unidade         String  @default("un")
+  valorPadrao     Decimal? @map("valor_padrao") @db.Decimal(10, 2)
+  estoqueMinimo   Int?    @map("estoque_minimo")
+  ativo           Boolean @default(true)
+  criadoEm        DateTime @default(now()) @map("criado_em")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@map("produtos")
+}
+
+// ─────────────────────────────────────────────
+// TIPO DE OS (configurável pela empresa)
+// ─────────────────────────────────────────────
+
+model TipoOs {
+  id          String  @id @default(cuid())
+  empresaId   String  @map("empresa_id")
+  nome        String
+  descricao   String?
+  cor         String  @default("#3b82f6")
+  ativo       Boolean @default(true)
+  criadoEm    DateTime @default(now()) @map("criado_em")
+
+  empresa     Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  formularios FormularioTemplate[]
+  atividades  AtividadeOs[]
+
+  @@map("tipos_os")
+}
+
+// ─────────────────────────────────────────────
+// FORMULÁRIO TEMPLATE (campos dinâmicos)
+// ─────────────────────────────────────────────
+
+model FormularioTemplate {
+  id          String  @id @default(cuid())
+  empresaId   String  @map("empresa_id")
+  nome        String
+  descricao   String?
+  tipoOsId    String? @map("tipo_os_id")
+  ativo       Boolean @default(true)
+  criadoEm    DateTime @default(now()) @map("criado_em")
+
+  empresa     Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  tipoOs      TipoOs?              @relation(fields: [tipoOsId], references: [id])
+  campos      FormularioCampo[]
+  respostas   AtividadeResposta[]
+
+  @@map("formulario_templates")
+}
+
+enum TipoCampo {
+  TEXTO_CURTO
+  TEXTO_LONGO
+  NUMERO
+  SIM_NAO
+  MULTIPLA_ESCOLHA
+  DATA
+  FOTO
+  ASSINATURA
+}
+
+model FormularioCampo {
+  id            String  @id @default(cuid())
+  formularioId  String  @map("formulario_id")
+  label         String
+  tipo          TipoCampo
+  obrigatorio   Boolean @default(false)
+  ordem         Int     @default(0)
+  opcoes        Json?
+
+  formulario FormularioTemplate  @relation(fields: [formularioId], references: [id], onDelete: Cascade)
+  respostas  AtividadeResposta[]
+
+  @@map("formulario_campos")
+}
+
+// ─────────────────────────────────────────────
+// ORDEM DE SERVIÇO
+// ─────────────────────────────────────────────
+
+model OrdemServico {
+  id                String      @id @default(cuid())
+  empresaId         String      @map("empresa_id")
+  numero            String
+  clienteId         String      @map("cliente_id")
+  unidadeId         String?     @map("unidade_id")
+  contratoId        String?     @map("contrato_id")
+  responsavelId     String?     @map("responsavel_id")
+  criadoPorId       String      @map("criado_por_id")
+  prioridade        Prioridade  @default(NORMAL)
+  status            StatusOS    @default(ABERTA)
+  descricao         String
+  previsaoConclusao DateTime?   @map("previsao_conclusao")
+  dataInicio        DateTime?   @map("data_inicio")
+  dataConclusao     DateTime?   @map("data_conclusao")
+  observacoes       String?
+  criadoEm          DateTime    @default(now()) @map("criado_em")
+  atualizadoEm      DateTime    @updatedAt @map("atualizado_em")
+
+  empresa       Empresa          @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  cliente       Cliente          @relation(fields: [clienteId], references: [id])
+  unidade       Unidade?         @relation(fields: [unidadeId], references: [id])
+  contrato      Contrato?        @relation(fields: [contratoId], references: [id])
+  responsavel   Usuario?         @relation("OsResponsavel", fields: [responsavelId], references: [id])
+  criadoPor     Usuario          @relation("UsuarioCriador", fields: [criadoPorId], references: [id])
+  atividades    AtividadeOs[]
+  itensOrcamento OsItemOrcamento[]
+  medicoes       OsMedicao[]
+  anexos         OsAnexo[]
+  historico      OsHistorico[]
+
+  @@unique([numero, empresaId])
+  @@map("ordens_servico")
+}
+
+// ─────────────────────────────────────────────
+// ATIVIDADE DA OS (tarefas do técnico)
+// ─────────────────────────────────────────────
+
+enum StatusAtividade {
+  AGENDADA
+  EM_ANDAMENTO
+  CONCLUIDA
+  CANCELADA
+}
+
+model AtividadeOs {
+  id              String          @id @default(cuid())
+  empresaId       String          @map("empresa_id")
+  ordemServicoId  String          @map("ordem_servico_id")
+  tipoOsId        String?         @map("tipo_os_id")
+  tecnicoId       String?         @map("tecnico_id")
+  titulo          String
+  status          StatusAtividade @default(AGENDADA)
+  dataAgendada    DateTime?       @map("data_agendada")
+  duracaoMin      Int?            @map("duracao_min")
+  observacao      String?
+  resumo          String?         @db.Text
+  criadoEm        DateTime        @default(now()) @map("criado_em")
+  atualizadoEm    DateTime        @updatedAt @map("atualizado_em")
+
+  ordemServico OrdemServico        @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  tipoOs       TipoOs?            @relation(fields: [tipoOsId], references: [id])
+  tecnico      Tecnico?           @relation(fields: [tecnicoId], references: [id])
+  respostas    AtividadeResposta[]
+
+  @@map("atividades_os")
+}
+
+model AtividadeResposta {
+  id           String  @id @default(cuid())
+  atividadeId  String  @map("atividade_id")
+  campoId      String  @map("campo_id")
+  formularioId String  @map("formulario_id")
+  resposta     String? @db.Text
+  arquivoUrl   String? @db.Text
+
+  atividade  AtividadeOs        @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+  campo      FormularioCampo    @relation(fields: [campoId], references: [id])
+  formulario FormularioTemplate @relation(fields: [formularioId], references: [id])
+
+  @@unique([atividadeId, campoId])
+  @@map("atividade_respostas")
+}
+
+// ─────────────────────────────────────────────
+// ORÇAMENTO E FINANCEIRO DA OS
+// ─────────────────────────────────────────────
+
+model OsItemOrcamento {
+  id             String    @id @default(cuid())
+  ordemServicoId String    @map("ordem_servico_id")
+  descricao      String
+  quantidade     Decimal   @db.Decimal(10, 2)
+  valorUnitario  Decimal   @map("valor_unitario") @db.Decimal(10, 2)
+  valorTotal     Decimal   @map("valor_total") @db.Decimal(10, 2)
+  executado      Boolean   @default(false)
+  executadoEm    DateTime? @map("executado_em")
+
+  ordemServico   OrdemServico       @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  itensFinanceiro OsItemFinanceiro[]
+
+  @@map("os_itens_orcamento")
+}
+
+enum StatusMedicao {
+  RASCUNHO
+  ENVIADA
+  APROVADA
+}
+
+model OsMedicao {
+  id             String        @id @default(cuid())
+  ordemServicoId String        @map("ordem_servico_id")
+  numero         Int
+  dataMedicao    DateTime      @default(now()) @map("data_medicao")
+  valorTotal     Decimal       @map("valor_total") @db.Decimal(10, 2)
+  status         StatusMedicao @default(RASCUNHO)
+
+  ordemServico    OrdemServico       @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  itensFinanceiro OsItemFinanceiro[]
+
+  @@map("os_medicoes")
+}
+
+model OsItemFinanceiro {
+  id                String  @id @default(cuid())
+  ordemServicoId    String  @map("ordem_servico_id")
+  itemOrcamentoId   String  @map("item_orcamento_id")
+  medicaoId         String? @map("medicao_id")
+  descricao         String
+  quantidade        Decimal @db.Decimal(10, 2)
+  valorTotal        Decimal @map("valor_total") @db.Decimal(10, 2)
+
+  itemOrcamento OsItemOrcamento @relation(fields: [itemOrcamentoId], references: [id], onDelete: Cascade)
+  medicao       OsMedicao?      @relation(fields: [medicaoId], references: [id])
+
+  @@map("os_itens_financeiro")
+}
+
+// ─────────────────────────────────────────────
+// ANEXOS DA OS
+// ─────────────────────────────────────────────
+
+model OsAnexo {
+  id             String   @id @default(cuid())
+  ordemServicoId String   @map("ordem_servico_id")
+  nome           String
+  tipo           String
+  tamanho        Int
+  conteudo       String   @db.Text
+  criadoEm       DateTime @default(now()) @map("criado_em")
+
+  ordemServico OrdemServico @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+
+  @@map("os_anexos")
+}
+
+// ─────────────────────────────────────────────
+// HISTÓRICO DA OS (log automático)
+// ─────────────────────────────────────────────
+
+model OsHistorico {
+  id             String   @id @default(cuid())
+  ordemServicoId String   @map("ordem_servico_id")
+  usuarioId      String   @map("usuario_id")
+  acao           String
+  detalhes       String?
+  criadoEm       DateTime @default(now()) @map("criado_em")
+
+  ordemServico OrdemServico @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  usuario      Usuario      @relation(fields: [usuarioId], references: [id])
+
+  @@map("os_historico")
+}

@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --radius: 0.5rem;
+  }
+
+  body {
+    @apply bg-gray-50 text-gray-900 antialiased;
+  }
+}
+
+@layer components {
+  .badge-status-aberta        { @apply bg-blue-100 text-blue-700; }
+  .badge-status-agendada      { @apply bg-purple-100 text-purple-700; }
+  .badge-status-em_andamento  { @apply bg-yellow-100 text-yellow-700; }
+  .badge-status-pausada       { @apply bg-orange-100 text-orange-700; }
+  .badge-status-aguardando_peca { @apply bg-amber-100 text-amber-700; }
+  .badge-status-concluida     { @apply bg-green-100 text-green-700; }
+  .badge-status-cancelada     { @apply bg-red-100 text-red-700; }
+
+  .badge-prioridade-baixa   { @apply bg-gray-100 text-gray-600; }
+  .badge-prioridade-normal  { @apply bg-blue-100 text-blue-600; }
+  .badge-prioridade-alta    { @apply bg-orange-100 text-orange-600; }
+  .badge-prioridade-urgente { @apply bg-red-100 text-red-700 font-semibold; }
+}
