@@ -12,14 +12,14 @@ interface FormFieldProps {
 
 export function FormField({ label, error, required, hint, className, children }: FormFieldProps) {
   return (
-    <div className={cn("flex flex-col gap-1", className)}>
-      <label className="text-sm font-medium text-gray-700">
+    <div className={cn("flex flex-col gap-1.5", className)}>
+      <label className="text-sm font-semibold text-ink">
         {label}
         {required && <span className="text-red-500 ml-0.5">*</span>}
       </label>
       {children}
-      {hint && !error && <p className="text-xs text-gray-400">{hint}</p>}
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {hint && !error && <p className="text-xs text-ink-muted">{hint}</p>}
+      {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
     </div>
   );
 }
@@ -27,7 +27,7 @@ export function FormField({ label, error, required, hint, className, children }:
 export function FormSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="space-y-4">
-      <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-100 pb-2">
+      <h3 className="text-xs font-bold text-ink-muted uppercase tracking-wider pb-2 border-b-2 border-success-500/40">
         {title}
       </h3>
       {children}

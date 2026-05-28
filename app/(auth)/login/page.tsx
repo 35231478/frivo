@@ -1,27 +1,35 @@
 import type { Metadata } from "next";
 import { LoginForm } from "@/components/auth/login-form";
-import { Snowflake } from "lucide-react";
+import { FrivoLogo } from "@/components/layout/frivo-logo";
 
 export const metadata: Metadata = { title: "Entrar" };
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-frivo-900 to-frivo-700 p-4">
-      <div className="w-full max-w-sm">
-        <div className="flex flex-col items-center gap-3 mb-8">
-          <div className="bg-white/10 rounded-2xl p-3">
-            <Snowflake className="w-10 h-10 text-white" />
-          </div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">Frivo</h1>
-          <p className="text-frivo-200 text-sm text-center">
-            Gestão para climatização e refrigeração
+    <div className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden bg-gradient-to-br from-sidebar via-sidebar-800 to-primary-500">
+      {/* Decoração ambiente */}
+      <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-primary-500/20 blur-3xl" />
+      <div className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full bg-success-500/20 blur-3xl" />
+
+      <div className="relative w-full max-w-md">
+        <div className="flex flex-col items-center mb-8">
+          <FrivoLogo size="lg" />
+          <p className="text-slate-200 text-sm text-center mt-4">
+            Gestão para empresas de climatização e refrigeração
           </p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-xl p-8">
-          <h2 className="text-xl font-semibold text-gray-800 mb-6">Entrar na sua conta</h2>
+        <div className="bg-white rounded-2xl shadow-elevated p-8 border border-white/10">
+          <div className="mb-6">
+            <h2 className="text-xl font-bold text-ink">Entrar na sua conta</h2>
+            <p className="text-sm text-ink-muted mt-1">Acesse o painel de gestão</p>
+          </div>
           <LoginForm />
         </div>
+
+        <p className="text-center text-xs text-slate-300 mt-6">
+          © {new Date().getFullYear()} Frivo · by Termofrio
+        </p>
       </div>
     </div>
   );

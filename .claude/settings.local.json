@@ -6,7 +6,9 @@
       "PowerShell(Start-Sleep -Seconds 3; node -e \"fetch\\('http://localhost:3000/api/cnpj/00000000000191', { headers: { Cookie: '' } }\\).then\\(r => { console.log\\('status:', r.status\\); return r.json\\(\\); }\\).then\\(d => console.log\\(JSON.stringify\\(d, null, 2\\)\\)\\).catch\\(e => console.log\\('ERRO:', e.message\\)\\)\")",
       "PowerShell(node -e \"async function test\\(\\) { const r1 = await fetch\\('https://brasilapi.com.br/api/cnpj/v1/00000000000191', { headers: { 'Accept': 'application/json', 'User-Agent': 'Frivo/1.0' } }\\); const d = await r1.json\\(\\); console.log\\('BrasilAPI OK:', d.razao_social\\); const r2 = await fetch\\('https://brasilapi.com.br/api/cnpj/v1/11222333000100', { headers: { 'Accept': 'application/json', 'User-Agent': 'Frivo/1.0' } }\\); console.log\\('404 test:', r2.status\\); } test\\(\\).catch\\(e => console.log\\('ERR', e.message\\)\\)\")",
       "PowerShell(winget install *)",
-      "PowerShell($git = \"C:\\\\Program Files\\\\Git\\\\cmd\\\\git.exe\"; cd \"C:\\\\Users\\\\Edion\\\\frivo\"; & $git init 2>&1; & $git add . 2>&1; & $git commit -m \"Frivo - OS, configuracoes, cadastros, melhorias clientes\" 2>&1)"
+      "PowerShell($git = \"C:\\\\Program Files\\\\Git\\\\cmd\\\\git.exe\"; cd \"C:\\\\Users\\\\Edion\\\\frivo\"; & $git init 2>&1; & $git add . 2>&1; & $git commit -m \"Frivo - OS, configuracoes, cadastros, melhorias clientes\" 2>&1)",
+      "PowerShell($git = \"C:\\\\Program Files\\\\Git\\\\cmd\\\\git.exe\"; cd \"C:\\\\Users\\\\Edion\\\\frivo\"; & $git config user.email \"edionebonfim@gmail.com\" 2>&1; & $git config user.name \"Edione Bonfim\" 2>&1; & $git commit -m \"Frivo - OS, configuracoes, cadastros, melhorias clientes\" 2>&1)",
+      "PowerShell(npx tsc --noEmit --pretty false 2>&1 | Select-Object -First 80)"
     ]
   }
 }

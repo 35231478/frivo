@@ -109,35 +109,38 @@ export function CrudCadastro({ titulo, apiUrl, campos, colunasLista }: CrudCadas
       {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
 
       {loading ? (
-        <p className="text-sm text-gray-400 text-center py-8">Carregando…</p>
+        <p className="text-sm text-ink-subtle text-center py-8">Carregando…</p>
       ) : (
         <>
           {/* Tabela */}
-          <div className="border border-gray-200 rounded-lg overflow-hidden">
+          <div className="border border-surface-border rounded-lg overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
+              <thead className="bg-surface-alt border-b border-surface-border">
                 <tr>
                   {colunasLista.map((col) => (
-                    <th key={col.key} className="text-left px-4 py-2.5 font-medium text-gray-600">{col.label}</th>
+                    <th key={col.key} className="text-left px-4 py-2.5 font-semibold text-ink-muted text-xs uppercase tracking-wider">{col.label}</th>
                   ))}
-                  <th className="text-right px-4 py-2.5 font-medium text-gray-600 w-24">Ações</th>
+                  <th className="text-right px-4 py-2.5 font-semibold text-ink-muted text-xs uppercase tracking-wider w-24">Ações</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody>
                 {ativos.length === 0 && (
-                  <tr><td colSpan={colunasLista.length + 1} className="text-center text-gray-400 py-8">Nenhum item cadastrado.</td></tr>
+                  <tr><td colSpan={colunasLista.length + 1} className="text-center text-ink-subtle py-8">Nenhum item cadastrado.</td></tr>
                 )}
-                {ativos.map((item) => (
-                  <tr key={item.id} className="hover:bg-gray-50">
+                {ativos.map((item, idx) => (
+                  <tr key={item.id} className={cn(
+                    "border-b border-surface-border hover:bg-primary-50/40 transition-colors",
+                    idx % 2 === 1 && "bg-surface-alt/30",
+                  )}>
                     {colunasLista.map((col) => (
-                      <td key={col.key} className="px-4 py-2.5 text-gray-700">
+                      <td key={col.key} className="px-4 py-2.5 text-ink">
                         {col.render ? col.render(item) : String(item[col.key] ?? "—")}
                       </td>
                     ))}
                     <td className="px-4 py-2.5 text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => abrirEditar(item)} className="p-1 text-gray-400 hover:text-frivo-600 rounded" title="Editar"><Pencil className="w-3.5 h-3.5" /></button>
-                        <button onClick={() => remover(item.id)} className="p-1 text-gray-400 hover:text-red-600 rounded" title="Desativar"><Trash2 className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => abrirEditar(item)} className="p-1.5 text-ink-muted hover:text-primary-600 hover:bg-primary-50 rounded transition-colors" title="Editar"><Pencil className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => remover(item.id)} className="p-1.5 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Desativar"><Trash2 className="w-3.5 h-3.5" /></button>
                       </div>
                     </td>
                   </tr>
@@ -147,14 +150,14 @@ export function CrudCadastro({ titulo, apiUrl, campos, colunasLista }: CrudCadas
           </div>
 
           {inativos.length > 0 && (
-            <details className="text-xs text-gray-400">
-              <summary className="cursor-pointer hover:text-gray-600">{inativos.length} item(ns) inativo(s)</summary>
+            <details className="text-xs text-ink-subtle">
+              <summary className="cursor-pointer hover:text-ink-muted">{inativos.length} item(ns) inativo(s)</summary>
               <div className="mt-2 space-y-1">
                 {inativos.map((i) => (
-                  <div key={i.id} className="flex items-center justify-between px-3 py-1.5 bg-gray-50 rounded">
+                  <div key={i.id} className="flex items-center justify-between px-3 py-1.5 bg-surface-alt rounded">
                     <span className="line-through">{i.nome}</span>
                     <button onClick={() => { fetch(`${apiUrl}/${i.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ativo: true }) }).then(() => setItens((p) => p.map((x) => (x.id === i.id ? { ...x, ativo: true } : x)))); }}
-                      className="text-frivo-600 hover:underline">Reativar</button>
+                      className="text-primary-600 hover:underline font-medium">Reativar</button>
                   </div>
                 ))}
               </div>
@@ -165,10 +168,10 @@ export function CrudCadastro({ titulo, apiUrl, campos, colunasLista }: CrudCadas
 
       {/* Formulário */}
       {editando && (
-        <div className="border border-frivo-200 bg-frivo-50/30 rounded-lg p-4 space-y-4">
+        <div className="border border-primary-200 bg-primary-50/30 rounded-lg p-4 space-y-4">
           <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold text-frivo-800">{editando === "novo" ? "Novo item" : "Editar item"}</h4>
-            <button onClick={cancelar} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
+            <h4 className="text-sm font-bold text-primary-700">{editando === "novo" ? "Novo item" : "Editar item"}</h4>
+            <button onClick={cancelar} className="text-ink-muted hover:text-ink"><X className="w-4 h-4" /></button>
           </div>
           <FormGrid>
             {campos.map((c) => (
@@ -182,7 +185,7 @@ export function CrudCadastro({ titulo, apiUrl, campos, colunasLista }: CrudCadas
                   </div>
                 ) : c.tipo === "select" && c.opcoes ? (
                   <select value={form[c.key] ?? ""} onChange={(e) => setForm((f) => ({ ...f, [c.key]: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
+                    className="w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all">
                     <option value="">Selecione</option>
                     {c.opcoes.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
                   </select>

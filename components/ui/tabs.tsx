@@ -20,22 +20,29 @@ export function Tabs({ tabs, defaultTab, children }: TabsProps) {
 
   return (
     <div>
-      <div className="border-b border-gray-200 overflow-x-auto">
+      <div className="border-b border-surface-border overflow-x-auto">
         <nav className="flex gap-0 -mb-px">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActive(tab.id)}
               className={cn(
-                "px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap",
+                "px-4 py-3 text-sm font-medium border-b-2 transition-all whitespace-nowrap",
                 active === tab.id
-                  ? "border-frivo-600 text-frivo-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300",
+                  ? "border-primary-500 text-primary-600"
+                  : "border-transparent text-ink-muted hover:text-ink hover:border-surface-border",
               )}
             >
               {tab.label}
               {tab.badge !== undefined && tab.badge > 0 && (
-                <span className="ml-1.5 bg-gray-100 text-gray-600 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
+                <span
+                  className={cn(
+                    "ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full",
+                    active === tab.id
+                      ? "bg-primary-100 text-primary-700"
+                      : "bg-surface-alt text-ink-muted"
+                  )}
+                >
                   {tab.badge}
                 </span>
               )}
@@ -43,9 +50,7 @@ export function Tabs({ tabs, defaultTab, children }: TabsProps) {
           ))}
         </nav>
       </div>
-      <div className="pt-4">
-        {children(active)}
-      </div>
+      <div className="pt-4">{children(active)}</div>
     </div>
   );
 }

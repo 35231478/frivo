@@ -17,11 +17,11 @@ const LABELS_TIPO: Record<string, string> = {
 };
 
 const COR_STATUS: Record<string, string> = {
-  ATIVO: "bg-green-100 text-green-700",
-  SUSPENSO: "bg-orange-100 text-orange-700",
-  ENCERRADO: "bg-gray-100 text-gray-600",
-  VENCIDO: "bg-red-100 text-red-700",
-  AGUARDANDO_ASSINATURA: "bg-blue-100 text-blue-700",
+  ATIVO: "bg-success-50 text-success-700",
+  SUSPENSO: "bg-orange-50 text-orange-700",
+  ENCERRADO: "bg-slate-100 text-slate-600",
+  VENCIDO: "bg-red-50 text-red-700",
+  AGUARDANDO_ASSINATURA: "bg-primary-50 text-primary-700",
 };
 
 const LABELS_STATUS: Record<string, string> = {
@@ -69,68 +69,73 @@ export default async function ContratosPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <FileText className="w-6 h-6 text-frivo-600" />
-          <h1 className="text-2xl font-bold text-gray-900">Contratos</h1>
-          <span className="text-sm text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{total}</span>
+          <div className="p-2 bg-primary-50 rounded-lg">
+            <FileText className="w-5 h-5 text-primary-600" />
+          </div>
+          <h1 className="page-title">Contratos</h1>
+          <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{total}</span>
         </div>
         <Link
           href="/contratos/novo"
-          className="flex items-center gap-2 bg-frivo-600 hover:bg-frivo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+          className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow"
         >
           <Plus className="w-4 h-4" />
           Novo Contrato
         </Link>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="p-4 border-b border-gray-100">
+      <div className="card overflow-hidden">
+        <div className="p-4 border-b border-surface-border bg-surface-alt/40">
           <form method="get">
             <input
               name="busca"
               defaultValue={busca}
               placeholder="Buscar por número ou cliente..."
-              className="w-full sm:max-w-sm border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-frivo-500"
+              className="w-full sm:max-w-sm bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all"
             />
           </form>
         </div>
 
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-100">
+          <thead className="bg-surface-alt border-b border-surface-border">
             <tr>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Número</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Cliente</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600 hidden md:table-cell">Tipo</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600 hidden lg:table-cell">Vigência</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-600 hidden lg:table-cell">Valor/mês</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
+              <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Número</th>
+              <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Cliente</th>
+              <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden md:table-cell">Tipo</th>
+              <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden lg:table-cell">Vigência</th>
+              <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden lg:table-cell">Valor/mês</th>
+              <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Status</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-50">
+          <tbody>
             {contratos.length === 0 ? (
               <tr>
-                <td colSpan={6} className="text-center text-gray-400 py-12">
+                <td colSpan={6} className="text-center text-ink-subtle py-12">
                   Nenhum contrato encontrado
                 </td>
               </tr>
             ) : (
-              contratos.map((ct) => (
-                <tr key={ct.id} className="hover:bg-gray-50 transition-colors">
+              contratos.map((ct, idx) => (
+                <tr key={ct.id} className={cn(
+                  "border-b border-surface-border hover:bg-primary-50/40 transition-colors",
+                  idx % 2 === 1 && "bg-surface-alt/30",
+                )}>
                   <td className="px-4 py-3">
-                    <Link href={`/contratos/${ct.id}`} className="font-mono font-medium text-frivo-600 hover:underline">
+                    <Link href={`/contratos/${ct.id}`} className="font-mono font-semibold text-primary-600 hover:underline">
                       {ct.numero}
                     </Link>
-                    <Link href={`/contratos/${ct.id}/editar`} className="block text-xs text-gray-400 hover:underline">editar</Link>
+                    <Link href={`/contratos/${ct.id}/editar`} className="block text-xs text-ink-subtle hover:text-primary-600 hover:underline">editar</Link>
                   </td>
-                  <td className="px-4 py-3 text-gray-900">{ct.cliente.nomeFantasia ?? ct.cliente.nome}</td>
-                  <td className="px-4 py-3 text-gray-500 hidden md:table-cell">{LABELS_TIPO[ct.tipo] ?? ct.tipo}</td>
-                  <td className="px-4 py-3 text-gray-500 hidden lg:table-cell">
+                  <td className="px-4 py-3 text-ink font-medium">{ct.cliente.nomeFantasia ?? ct.cliente.nome}</td>
+                  <td className="px-4 py-3 text-ink-muted hidden md:table-cell">{LABELS_TIPO[ct.tipo] ?? ct.tipo}</td>
+                  <td className="px-4 py-3 text-ink-muted hidden lg:table-cell">
                     {formatarData(ct.dataInicio)} – {formatarData(ct.dataFim) ?? "indeterminado"}
                   </td>
-                  <td className="px-4 py-3 text-right text-gray-500 hidden lg:table-cell">
+                  <td className="px-4 py-3 text-right text-ink-muted hidden lg:table-cell">
                     {formatarMoeda(ct.valorMensal ? Number(ct.valorMensal) : null)}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={cn("px-2 py-0.5 rounded-full text-xs", COR_STATUS[ct.status])}>
+                    <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full", COR_STATUS[ct.status])}>
                       {LABELS_STATUS[ct.status] ?? ct.status}
                     </span>
                   </td>

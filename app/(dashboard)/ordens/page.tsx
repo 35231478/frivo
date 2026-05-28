@@ -7,15 +7,20 @@ import { ClipboardList, Plus } from "lucide-react";
 
 export const metadata: Metadata = { title: "Ordens de Serviço" };
 
-const COR_STATUS: Record<string, string> = {
-  ABERTA: "bg-blue-100 text-blue-700", AGENDADA: "bg-purple-100 text-purple-700",
-  EM_ANDAMENTO: "bg-yellow-100 text-yellow-700", PAUSADA: "bg-orange-100 text-orange-700",
-  AGUARDANDO_PECA: "bg-amber-100 text-amber-700", CONCLUIDA: "bg-green-100 text-green-700",
-  CANCELADA: "bg-red-100 text-red-700",
+const CLASSE_STATUS: Record<string, string> = {
+  ABERTA: "badge-status-aberta",
+  AGENDADA: "badge-status-agendada",
+  EM_ANDAMENTO: "badge-status-em_andamento",
+  PAUSADA: "badge-status-pausada",
+  AGUARDANDO_PECA: "badge-status-aguardando_peca",
+  CONCLUIDA: "badge-status-concluida",
+  CANCELADA: "badge-status-cancelada",
 };
-const COR_PRIORIDADE: Record<string, string> = {
-  BAIXA: "bg-gray-100 text-gray-600", NORMAL: "bg-blue-100 text-blue-600",
-  ALTA: "bg-orange-100 text-orange-600", URGENTE: "bg-red-100 text-red-700 font-semibold",
+const CLASSE_PRIORIDADE: Record<string, string> = {
+  BAIXA: "badge-prioridade-baixa",
+  NORMAL: "badge-prioridade-normal",
+  ALTA: "badge-prioridade-alta",
+  URGENTE: "badge-prioridade-urgente",
 };
 
 export default async function OrdensPage({
@@ -57,63 +62,68 @@ export default async function OrdensPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <ClipboardList className="w-6 h-6 text-frivo-600" />
-          <h1 className="text-2xl font-bold text-gray-900">Ordens de Serviço</h1>
-          <span className="text-sm text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{total}</span>
+          <div className="p-2 bg-primary-50 rounded-lg">
+            <ClipboardList className="w-5 h-5 text-primary-600" />
+          </div>
+          <h1 className="page-title">Ordens de Serviço</h1>
+          <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{total}</span>
         </div>
-        <Link href="/ordens/nova" className="flex items-center gap-2 bg-frivo-600 hover:bg-frivo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+        <Link href="/ordens/nova" className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow">
           <Plus className="w-4 h-4" /> Nova OS
         </Link>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="p-4 border-b border-gray-100">
+      <div className="card overflow-hidden">
+        <div className="p-4 border-b border-surface-border bg-surface-alt/40">
           <form method="get" className="flex flex-wrap gap-2">
             <input name="busca" defaultValue={busca} placeholder="Buscar por número, cliente ou descrição..."
-              className="flex-1 min-w-[200px] border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-frivo-500" />
-            <select name="status" defaultValue={status} className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
+              className="flex-1 min-w-[200px] bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all" />
+            <select name="status" defaultValue={status} className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all">
               <option value="">Status</option>
               {Object.entries(LABELS_STATUS_OS).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
             </select>
-            <select name="prioridade" defaultValue={prioridade} className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
+            <select name="prioridade" defaultValue={prioridade} className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all">
               <option value="">Prioridade</option>
               {Object.entries(LABELS_PRIORIDADE).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
             </select>
-            <button type="submit" className="bg-frivo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-frivo-700">Filtrar</button>
+            <button type="submit" className="bg-primary-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-600 transition-all shadow-sm">Filtrar</button>
           </form>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-100">
+            <thead className="bg-surface-alt border-b border-surface-border">
               <tr>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Número</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Cliente</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600 hidden md:table-cell">Endereço</th>
-                <th className="text-center px-4 py-3 font-medium text-gray-600 hidden lg:table-cell">Ativid.</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600 hidden lg:table-cell">Abertura</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600 hidden md:table-cell">Prioridade</th>
+                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Número</th>
+                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Cliente</th>
+                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden md:table-cell">Endereço</th>
+                <th className="text-center px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden lg:table-cell">Ativid.</th>
+                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden lg:table-cell">Abertura</th>
+                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Status</th>
+                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden md:table-cell">Prioridade</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody>
               {ordens.length === 0 ? (
-                <tr><td colSpan={7} className="text-center text-gray-400 py-12">Nenhuma OS encontrada</td></tr>
+                <tr><td colSpan={7} className="text-center text-ink-subtle py-12">Nenhuma OS encontrada</td></tr>
               ) : (
-                ordens.map((os) => (
-                  <tr key={os.id} className="hover:bg-gray-50 transition-colors">
+                ordens.map((os, idx) => (
+                  <tr key={os.id} className={cn(
+                    "border-b border-surface-border hover:bg-primary-50/40 transition-colors",
+                    idx % 2 === 1 && "bg-surface-alt/30",
+                  )}>
                     <td className="px-4 py-3">
-                      <Link href={`/ordens/${os.id}`} className="font-mono font-medium text-frivo-600 hover:underline">{os.numero}</Link>
+                      <Link href={`/ordens/${os.id}`} className="font-mono font-semibold text-primary-600 hover:underline">{os.numero}</Link>
                     </td>
-                    <td className="px-4 py-3 text-gray-900">{os.cliente.nomeFantasia ?? os.cliente.nome}</td>
-                    <td className="px-4 py-3 text-gray-500 hidden md:table-cell">{os.unidade?.nome ?? "—"}</td>
-                    <td className="px-4 py-3 text-center text-gray-500 hidden lg:table-cell">{os._count.atividades}</td>
-                    <td className="px-4 py-3 text-gray-500 hidden lg:table-cell">{formatarData(os.criadoEm)}</td>
+                    <td className="px-4 py-3 text-ink font-medium">{os.cliente.nomeFantasia ?? os.cliente.nome}</td>
+                    <td className="px-4 py-3 text-ink-muted hidden md:table-cell">{os.unidade?.nome ?? "—"}</td>
+                    <td className="px-4 py-3 text-center text-ink-muted hidden lg:table-cell">{os._count.atividades}</td>
+                    <td className="px-4 py-3 text-ink-muted hidden lg:table-cell">{formatarData(os.criadoEm)}</td>
                     <td className="px-4 py-3">
-                      <span className={cn("px-2 py-0.5 rounded-full text-xs", COR_STATUS[os.status])}>{LABELS_STATUS_OS[os.status]}</span>
+                      <span className={CLASSE_STATUS[os.status]}>{LABELS_STATUS_OS[os.status]}</span>
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell">
-                      <span className={cn("px-2 py-0.5 rounded-full text-xs", COR_PRIORIDADE[os.prioridade])}>{LABELS_PRIORIDADE[os.prioridade]}</span>
+                      <span className={CLASSE_PRIORIDADE[os.prioridade]}>{LABELS_PRIORIDADE[os.prioridade]}</span>
                     </td>
                   </tr>
                 ))

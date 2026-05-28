@@ -30,6 +30,16 @@ export async function GET(_: NextRequest, { params }: Params) {
       medicoes: { include: { itensFinanceiro: true }, orderBy: { numero: "asc" } },
       anexos: { select: { id: true, nome: true, tipo: true, tamanho: true, criadoEm: true }, orderBy: { criadoEm: "desc" } },
       historico: { include: { usuario: { select: { nome: true } } }, orderBy: { criadoEm: "desc" } },
+      orcamentos: {
+        include: {
+          orcamento: {
+            select: {
+              id: true, codigo: true, nome: true, status: true, totalGeral: true,
+              criadoEm: true, validadeEm: true, tokenPublico: true,
+            },
+          },
+        },
+      },
     },
   });
   if (!os) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });

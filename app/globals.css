@@ -5,24 +5,164 @@
 @layer base {
   :root {
     --radius: 0.5rem;
+
+    /* Paleta Frivo — identidade profissional */
+    --color-sidebar: #0F2744;
+    --color-primary: #0EA5E9;
+    --color-success: #10B981;
+    --color-warning: #F59E0B;
+    --color-danger:  #EF4444;
+    --color-ink:     #1E293B;
+    --color-ink-muted: #64748B;
+    --color-ink-subtle: #94A3B8;
+    --color-surface: #FFFFFF;
+    --color-surface-page: #F1F5F9;
+    --color-surface-alt: #F8FAFC;
+    --color-border: #E2E8F0;
   }
 
-  body {
-    @apply bg-gray-50 text-gray-900 antialiased;
+  html, body {
+    background-color: var(--color-surface-page);
+    color: var(--color-ink);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background-color: rgba(14, 165, 233, 0.2);
+    color: var(--color-ink);
+  }
+
+  /* Scrollbar discreta */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #CBD5E1;
+    border-radius: 8px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #94A3B8;
+    background-clip: padding-box;
+    border: 2px solid transparent;
   }
 }
 
 @layer components {
-  .badge-status-aberta        { @apply bg-blue-100 text-blue-700; }
-  .badge-status-agendada      { @apply bg-purple-100 text-purple-700; }
-  .badge-status-em_andamento  { @apply bg-yellow-100 text-yellow-700; }
-  .badge-status-pausada       { @apply bg-orange-100 text-orange-700; }
-  .badge-status-aguardando_peca { @apply bg-amber-100 text-amber-700; }
-  .badge-status-concluida     { @apply bg-green-100 text-green-700; }
-  .badge-status-cancelada     { @apply bg-red-100 text-red-700; }
+  /* --- Cards e superfícies --- */
+  .card {
+    @apply bg-white rounded-xl border border-surface-border shadow-card;
+  }
+  .card-padded {
+    @apply card p-6;
+  }
+  .card-header {
+    @apply flex items-center justify-between mb-4;
+  }
+  .card-title {
+    @apply text-base font-semibold text-ink;
+  }
 
-  .badge-prioridade-baixa   { @apply bg-gray-100 text-gray-600; }
-  .badge-prioridade-normal  { @apply bg-blue-100 text-blue-600; }
-  .badge-prioridade-alta    { @apply bg-orange-100 text-orange-600; }
-  .badge-prioridade-urgente { @apply bg-red-100 text-red-700 font-semibold; }
+  /* --- Tipografia utilitária --- */
+  .label-uppercase {
+    @apply text-xs font-medium text-ink-muted uppercase tracking-wider;
+  }
+  .page-title {
+    @apply text-2xl font-bold text-ink tracking-tight;
+  }
+  .page-subtitle {
+    @apply text-sm text-ink-muted mt-1;
+  }
+  .section-title {
+    @apply text-base font-semibold text-ink;
+  }
+
+  /* --- Status (OS) — cores vibrantes mas suaves --- */
+  .badge-base {
+    @apply inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full;
+  }
+  .badge-status-aberta          { @apply badge-base bg-primary-50 text-primary-700; }
+  .badge-status-agendada        { @apply badge-base bg-violet-50 text-violet-700; }
+  .badge-status-em_andamento    { @apply badge-base bg-amber-50 text-amber-700; }
+  .badge-status-pausada         { @apply badge-base bg-orange-50 text-orange-700; }
+  .badge-status-aguardando_peca { @apply badge-base bg-yellow-50 text-yellow-700; }
+  .badge-status-concluida       { @apply badge-base bg-success-50 text-success-700; }
+  .badge-status-cancelada       { @apply badge-base bg-red-50 text-red-700; }
+
+  .badge-prioridade-baixa    { @apply badge-base bg-slate-100 text-slate-600; }
+  .badge-prioridade-normal   { @apply badge-base bg-primary-50 text-primary-700; }
+  .badge-prioridade-alta     { @apply badge-base bg-orange-50 text-orange-700; }
+  .badge-prioridade-urgente  { @apply badge-base bg-red-50 text-red-700 font-semibold; }
+
+  .badge-ativo    { @apply badge-base bg-success-50 text-success-700; }
+  .badge-inativo  { @apply badge-base bg-slate-100 text-slate-600; }
+  .badge-contrato { @apply badge-base bg-success-50 text-success-700 font-semibold; }
+
+  /* Orçamento */
+  .badge-orc-rascunho   { @apply badge-base bg-slate-100 text-slate-600; }
+  .badge-orc-enviado    { @apply badge-base bg-primary-50 text-primary-700; }
+  .badge-orc-aprovado   { @apply badge-base bg-success-50 text-success-700; }
+  .badge-orc-reprovado  { @apply badge-base bg-red-50 text-red-700; }
+  .badge-orc-cancelado  { @apply badge-base bg-slate-100 text-slate-500; }
+
+  /* --- Tabelas --- */
+  .table-base {
+    @apply w-full text-sm;
+  }
+  .table-base thead th {
+    @apply bg-surface-alt text-left text-xs font-semibold text-ink-muted uppercase tracking-wider px-4 py-3 border-b border-surface-border;
+  }
+  .table-base tbody td {
+    @apply px-4 py-3 border-b border-surface-border text-ink;
+  }
+  .table-base tbody tr {
+    @apply transition-colors;
+  }
+  .table-base tbody tr:nth-child(even) {
+    @apply bg-surface-alt/40;
+  }
+  .table-base tbody tr:hover {
+    @apply bg-primary-50/50;
+  }
+
+  /* --- Inputs (estilo padronizado) --- */
+  .input-base {
+    @apply w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 text-sm text-ink
+           placeholder:text-ink-subtle transition-all
+           focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10
+           disabled:bg-surface-alt disabled:text-ink-muted disabled:cursor-not-allowed;
+  }
+  .input-error {
+    @apply border-red-400 focus:border-red-500 focus:ring-red-500/10;
+  }
+
+  /* --- Botões (utility classes) --- */
+  .btn-base {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium
+           transition-all disabled:opacity-60 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn-base bg-primary-500 text-white hover:bg-primary-600 active:bg-primary-700 shadow-sm hover:shadow;
+  }
+  .btn-success {
+    @apply btn-base bg-success-500 text-white hover:bg-success-600 active:bg-success-700 shadow-sm hover:shadow;
+  }
+  .btn-outline {
+    @apply btn-base bg-white border border-primary-500 text-primary-600 hover:bg-primary-50;
+  }
+  .btn-secondary {
+    @apply btn-base bg-white border border-surface-border text-ink hover:bg-surface-alt;
+  }
+  .btn-danger {
+    @apply btn-base bg-red-500 text-white hover:bg-red-600 shadow-sm;
+  }
+  .btn-ghost {
+    @apply btn-base text-ink hover:bg-surface-alt;
+  }
 }

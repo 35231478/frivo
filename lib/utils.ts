@@ -45,6 +45,20 @@ export function gerarNumeroContrato(sequencial: number): string {
   return `CT-${new Date().getFullYear()}-${String(sequencial).padStart(3, "0")}`;
 }
 
+export function gerarCodigoOrcamento(sequencial: number): string {
+  return `ORC-${new Date().getFullYear()}-${String(sequencial).padStart(4, "0")}`;
+}
+
+export function sanitizarNumero(valor: string | null | undefined): string {
+  return (valor ?? "").replace(/\D/g, "");
+}
+
+export function whatsappLink(telefone: string | null | undefined, mensagem: string): string {
+  const num = sanitizarNumero(telefone);
+  const comDdi = num.length >= 12 ? num : `55${num}`;
+  return `https://wa.me/${comDdi}?text=${encodeURIComponent(mensagem)}`;
+}
+
 export const LABELS_STATUS_OS: Record<string, string> = {
   ABERTA: "Aberta",
   AGENDADA: "Agendada",
@@ -124,10 +138,10 @@ export const LABELS_STATUS_FINANCEIRO: Record<string, string> = {
 };
 
 export const COR_STATUS_FINANCEIRO: Record<string, string> = {
-  ADIMPLENTE: "bg-green-100 text-green-700",
-  INADIMPLENTE: "bg-red-100 text-red-700",
-  EM_NEGOCIACAO: "bg-yellow-100 text-yellow-700",
-  AGUARDANDO_VENCIMENTO: "bg-orange-100 text-orange-700",
+  ADIMPLENTE: "bg-success-50 text-success-700",
+  INADIMPLENTE: "bg-red-50 text-red-700",
+  EM_NEGOCIACAO: "bg-amber-50 text-amber-700",
+  AGUARDANDO_VENCIMENTO: "bg-orange-50 text-orange-700",
 };
 
 export const LABELS_TIPO_CONTATO: Record<string, string> = {
@@ -144,4 +158,25 @@ export const LABELS_TIPO_INTERACAO: Record<string, string> = {
   EMAIL: "E-mail",
   WHATSAPP: "WhatsApp",
   REUNIAO: "Reunião",
+};
+
+export const LABELS_STATUS_ORCAMENTO: Record<string, string> = {
+  RASCUNHO: "Rascunho",
+  ENVIADO: "Enviado",
+  APROVADO: "Aprovado",
+  REPROVADO: "Reprovado",
+  CANCELADO: "Cancelado",
+};
+
+export const CLASSE_STATUS_ORCAMENTO: Record<string, string> = {
+  RASCUNHO: "badge-orc-rascunho",
+  ENVIADO: "badge-orc-enviado",
+  APROVADO: "badge-orc-aprovado",
+  REPROVADO: "badge-orc-reprovado",
+  CANCELADO: "badge-orc-cancelado",
+};
+
+export const LABELS_TIPO_DESCONTO: Record<string, string> = {
+  VALOR: "R$",
+  PERCENTUAL: "%",
 };

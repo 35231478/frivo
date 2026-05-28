@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { OsAtividades } from "@/components/os/os-atividades";
 import { OsOrcamento } from "@/components/os/os-orcamento";
 import { OsFinanceiro } from "@/components/os/os-financeiro";
+import { OsOrcamentosVinculados } from "@/components/os/os-orcamentos-vinculados";
 import { ChevronLeft, FileText, Clock, User, Building2, MapPin, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 
@@ -47,7 +48,8 @@ export function OsDetalhe({ os: initialOs }: { os: any }) {
   const tabs = [
     { id: "geral", label: "Geral" },
     { id: "atividades", label: "Atividades", badge: os.atividades.length },
-    { id: "orcamento", label: "Orçamento", badge: os.itensOrcamento.length },
+    { id: "orcamentos", label: "Orçamentos", badge: os.orcamentos?.length ?? 0 },
+    { id: "orcamento", label: "Itens da OS", badge: os.itensOrcamento.length },
     { id: "financeiro", label: "Financeiro", badge: os.medicoes.length },
     { id: "formularios", label: "Formulários" },
     { id: "anexos", label: "Anexos", badge: os.anexos.length },
@@ -89,6 +91,13 @@ export function OsDetalhe({ os: initialOs }: { os: any }) {
             <div className="p-5">
               {activeTab === "geral" && <TabGeral os={os} />}
               {activeTab === "atividades" && <OsAtividades osId={os.id} atividades={os.atividades} />}
+              {activeTab === "orcamentos" && (
+                <OsOrcamentosVinculados
+                  osId={os.id}
+                  clienteId={os.cliente.id}
+                  vinculados={os.orcamentos ?? []}
+                />
+              )}
               {activeTab === "orcamento" && <OsOrcamento osId={os.id} itens={os.itensOrcamento} />}
               {activeTab === "financeiro" && <OsFinanceiro osId={os.id} medicoes={os.medicoes} itensOrcamento={os.itensOrcamento} />}
               {activeTab === "formularios" && <TabFormularios atividades={os.atividades} />}

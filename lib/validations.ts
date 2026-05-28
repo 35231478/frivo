@@ -5,6 +5,7 @@ import {
   Periodicidade, TipoPessoa, TipoTecnico,
   Segmento, OrigemCliente, StatusFinanceiro,
   TipoContato, TipoInteracao,
+  TipoDesconto,
 } from "@prisma/client";
 
 const valorOpcional = z.preprocess(
@@ -145,6 +146,50 @@ export const tecnicoSchema = z.object({
   observacoes: z.string().optional(),
 });
 
+// ─────────────────────────────────────────────
+// ORÇAMENTO
+// ─────────────────────────────────────────────
+
+export const orcamentoItemSchema = z.object({
+  catalogoId: z.string().optional().nullable(),
+  descricao: z.string().min(1, "Descrição é obrigatória"),
+  quantidade: z.preprocess(
+    (v) => (v === "" || v == null ? 1 : Number(v)),
+    z.number().positive("Quantidade deve ser > 0")
+  ),
+  valorUnitario: z.preprocess(
+    (v) => (v === "" || v == null ? 0 : Number(v)),
+    z.number().nonnegative("Valor não pode ser negativo")
+  ),
+  observacao: z.string().optional().nullable(),
+});
+
+export const orcamentoSchema = z.object({
+  nome: z.string().min(2, "Nome do orçamento é obrigatório"),
+  clienteId: z.string().min(1, "Cliente é obrigatório"),
+  descricao: z.string().optional().nullable(),
+  observacao: z.string().optional().nullable(),
+  validadeEm: z.string().optional().nullable(),
+  desconto: z.preprocess(
+    (v) => (v === "" || v == null ? 0 : Number(v)),
+    z.number().nonnegative("Desconto não pode ser negativo")
+  ).default(0),
+  tipoDesconto: z.nativeEnum(TipoDesconto).default(TipoDesconto.VALOR),
+  servicos: z.array(orcamentoItemSchema).default([]),
+  produtos: z.array(orcamentoItemSchema).default([]),
+  ordensServicoIds: z.array(z.string()).default([]),
+});
+
+export const aprovacaoPublicaSchema = z.object({
+  nome: z.string().min(3, "Nome completo é obrigatório"),
+  cpf: z.string().refine(
+    (v) => v.replace(/\D/g, "").length === 11,
+    "CPF inválido"
+  ),
+  assinaturaUrl: z.string().min(20, "Assinatura é obrigatória")
+    .refine((v) => v.startsWith("data:image/"), "Assinatura inválida"),
+});
+
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ClienteInput = z.infer<typeof clienteSchema>;
 export type UnidadeInput = z.infer<typeof unidadeSchema>;
@@ -152,3 +197,6 @@ export type EquipamentoInput = z.infer<typeof equipamentoSchema>;
 export type ContratoInput = z.infer<typeof contratoSchema>;
 export type OrdemServicoInput = z.infer<typeof ordemServicoSchema>;
 export type TecnicoInput = z.infer<typeof tecnicoSchema>;
+export type OrcamentoItemInput = z.infer<typeof orcamentoItemSchema>;
+export type OrcamentoInput = z.infer<typeof orcamentoSchema>;
+export type AprovacaoPublicaInput = z.infer<typeof aprovacaoPublicaSchema>;
