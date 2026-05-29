@@ -45,7 +45,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (dup) return NextResponse.json({ erro: "Número já cadastrado" }, { status: 409 });
   }
 
-  const { unidadeIds, dataInicio, dataFim, valorMensal, valorTotal, responsavelTecnicoId, ...resto } = parsed.data;
+  const { unidadeIds, dataInicio, dataFim, valorMensal, valorTotal, responsavelTecnicoId, tipoOsRecorrenciaId, tecnicoRecorrenciaId, ...resto } = parsed.data;
 
   const atualizado = await prisma.$transaction(async (tx) => {
     await tx.contratoUnidade.deleteMany({ where: { contratoId: id } });
@@ -58,6 +58,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
         valorMensal: valorMensal ?? null,
         valorTotal: valorTotal ?? null,
         responsavelTecnicoId: responsavelTecnicoId || null,
+        tipoOsRecorrenciaId: tipoOsRecorrenciaId || null,
+        tecnicoRecorrenciaId: tecnicoRecorrenciaId || null,
         unidades: {
           create: unidadeIds.map((unidadeId) => ({ unidadeId })),
         },

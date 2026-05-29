@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { gerarNumeroContaReceber } from "@/lib/utils";
+import { gerarNumeroContaReceber, gerarNumeroMedicao } from "@/lib/utils";
+import { calcularVencimento } from "@/lib/medicao-helpers";
 
 /**
  * Cria (de forma idempotente) uma conta a receber a partir de uma medição.
@@ -54,4 +55,72 @@ export async function gerarContaReceberDoOrcamento(orcamentoId: string) {
       dataVencimento: orcamento.validadeEm,
     },
   });
+}
+
+/**
+ * Cria (de forma idempotente) uma medição financeira a partir de um relatório
+ * aprovado. O status segue o perfil de faturamento do cliente:
+ * - COM_APROVACAO (perfil 1) → AGUARDANDO_PC
+ * - AUTOMATICO (perfil 2)    → NF_EMITIDA (preparado para integração de NF)
+ * - FATURA_UNICA (perfil 3)  → RASCUNHO (aguarda agrupamento do mês)
+ * - sem perfil               → PC_RECEBIDO (libera NF)
+ */
+export async function criarMedicaoDeRelatorio(relatorioId: string) {
+  const relatorio = await prisma.relatorioOs.findUnique({
+    where: { id: relatorioId },
+    include: { ordemServico: { include: { cliente: true } } },
+  });
+  if (!relatorio) return null;
+  if (relatorio.medicaoId) return prisma.medicao.findUnique({ where: { id: relatorio.medicaoId } });
+
+  const cliente = relatorio.ordemServico.cliente;
+  const perfil = cliente.tipoFaturamento;
+  const status =
+    perfil === "COM_APROVACAO" ? "AGUARDANDO_PC" :
+    perfil === "AUTOMATICO" ? "NF_EMITIDA" :
+    perfil === "FATURA_UNICA" ? "RASCUNHO" :
+    "PC_RECEBIDO";
+
+  const valor = relatorio.valorFinanceiro ? Number(relatorio.valorFinanceiro) : 0;
+  const seq = (await prisma.medicao.count({ where: { empresaId: relatorio.empresaId } })) + 1;
+  const numero = gerarNumeroMedicao(seq, relatorio.anoReferencia);
+  const vencimento = calcularVencimento(cliente.diaFaturamento, relatorio.mesReferencia, relatorio.anoReferencia);
+
+  const medicao = await prisma.medicao.create({
+    data: {
+      empresaId: relatorio.empresaId,
+      clienteId: relatorio.ordemServico.clienteId,
+      contratoId: relatorio.contratoId,
+      numero,
+      tipo: "MENSAL_FIXO",
+      mes: relatorio.mesReferencia,
+      ano: relatorio.anoReferencia,
+      descricao: `Relatório ${relatorio.numero}`,
+      status: status as any,
+      valorTotal: valor,
+      valorLiquido: valor,
+      dataAprovacao: new Date(),
+      dataVencimento: vencimento,
+      tokenPublico: crypto.randomUUID(),
+      itens: {
+        create: [{
+          tipo: "SERVICO",
+          descricao: `Serviço do período — ${relatorio.numero}`,
+          quantidade: 1,
+          valorUnitario: valor,
+          valorTotal: valor,
+          ordem: 0,
+        }],
+      },
+    },
+  });
+
+  await prisma.relatorioOs.update({ where: { id: relatorioId }, data: { medicaoId: medicao.id } });
+
+  // Gera conta a receber, exceto quando aguarda agrupamento (perfil fatura única)
+  if (perfil !== "FATURA_UNICA") {
+    await gerarContaReceberDaMedicao(medicao.id);
+  }
+
+  return medicao;
 }

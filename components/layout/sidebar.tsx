@@ -10,7 +10,7 @@ import {
   LayoutDashboard, Users, Thermometer, ClipboardList, FileText,
   HardHat, Settings, ChevronDown, ChevronRight,
   Wrench, FileSpreadsheet, Cog, Package, ListChecks, Calculator,
-  Wallet, Receipt, TrendingUp, FileBarChart, Clock, ShoppingCart, Timer, Tags,
+  Wallet, Receipt, TrendingUp, FileBarChart, Clock, ShoppingCart, Timer, Tags, CalendarDays,
 } from "lucide-react";
 
 const itensMenu = [
@@ -18,6 +18,7 @@ const itensMenu = [
   { href: "/clientes",     icone: Users,           label: "Clientes" },
   { href: "/equipamentos", icone: Thermometer,     label: "Equipamentos" },
   { href: "/ordens",       icone: ClipboardList,   label: "Ordens de Serviço" },
+  { href: "/calendario",   icone: CalendarDays,    label: "Calendário" },
   { href: "/orcamentos",   icone: Calculator,      label: "Orçamentos" },
   { href: "/contratos",    icone: FileText,        label: "Contratos" },
   { href: "/tecnicos",     icone: HardHat,         label: "Técnicos" },

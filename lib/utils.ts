@@ -61,6 +61,10 @@ export function gerarNumeroPedidoCompra(sequencial: number, ano = new Date().get
   return `PCI-${ano}-${String(sequencial).padStart(4, "0")}`;
 }
 
+export function gerarNumeroRelatorio(sequencial: number, ano = new Date().getFullYear()): string {
+  return `REL-${ano}-${String(sequencial).padStart(4, "0")}`;
+}
+
 export const MESES_PT = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
@@ -324,6 +328,53 @@ export const LABELS_TIPO_TABELA_PRECO: Record<string, string> = {
 export const LABELS_TIPO_PRECO_TABELA: Record<string, string> = {
   VALOR_FIXO: "Valor fixo",
   DESCONTO_PERCENTUAL: "Desconto percentual",
+};
+
+// ── OS recorrente / Relatórios ──
+
+export const LABELS_PERIODICIDADE: Record<string, string> = {
+  SEMANAL: "Semanal",
+  QUINZENAL: "Quinzenal",
+  MENSAL: "Mensal",
+  BIMESTRAL: "Bimestral",
+  TRIMESTRAL: "Trimestral",
+  SEMESTRAL: "Semestral",
+  ANUAL: "Anual",
+};
+
+// Frequências válidas para recorrência de OS
+export const FREQUENCIAS_RECORRENCIA = ["MENSAL", "BIMESTRAL", "TRIMESTRAL", "SEMESTRAL", "ANUAL"] as const;
+
+export const LABELS_TRATAMENTO_FIM_SEMANA: Record<string, string> = {
+  MANTER: "Manter na data original",
+  ADIANTAR: "Adiantar para sexta-feira",
+  POSTERGAR: "Postergar para segunda-feira",
+};
+
+export const LABELS_TIPO_RELATORIO: Record<string, string> = {
+  PMOC: "PMOC",
+  MANUTENCAO: "Relatório de Manutenção",
+  MEDICAO: "Medição",
+};
+
+export const TITULO_RELATORIO: Record<string, string> = {
+  PMOC: "RELATÓRIO DE MANUTENÇÃO — PMOC",
+  MANUTENCAO: "RELATÓRIO DE MANUTENÇÃO",
+  MEDICAO: "RELATÓRIO DE MEDIÇÃO",
+};
+
+export const LABELS_STATUS_RELATORIO: Record<string, string> = {
+  RASCUNHO: "Rascunho",
+  ENVIADO: "Enviado",
+  APROVADO: "Aprovado",
+  REPROVADO: "Reprovado",
+};
+
+export const CLASSE_STATUS_RELATORIO: Record<string, string> = {
+  RASCUNHO: "badge-base bg-slate-100 text-slate-600",
+  ENVIADO: "badge-base bg-primary-50 text-primary-700",
+  APROVADO: "badge-base bg-success-50 text-success-700",
+  REPROVADO: "badge-base bg-red-50 text-red-700",
 };
 
 /** Substitui variáveis {{nome}} em um template de mensagem. */

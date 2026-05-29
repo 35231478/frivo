@@ -284,6 +284,32 @@ enum TipoPrecoTabela {
   DESCONTO_PERCENTUAL
 }
 
+// ── OS recorrente / Relatórios ──
+
+enum OrigemOS {
+  MANUAL
+  RECORRENTE
+}
+
+enum TratamentoFimSemana {
+  MANTER
+  ADIANTAR
+  POSTERGAR
+}
+
+enum TipoRelatorio {
+  PMOC
+  MANUTENCAO
+  MEDICAO
+}
+
+enum StatusRelatorio {
+  RASCUNHO
+  ENVIADO
+  APROVADO
+  REPROVADO
+}
+
 // ─────────────────────────────────────────────
 // EMPRESA (tenant raiz)
 // ─────────────────────────────────────────────
@@ -330,6 +356,7 @@ model Empresa {
   prazoTemplates       PrazoTemplate[]
   pedidosCompra        PedidoCompraInterno[]
   tabelasPreco         TabelaPreco[]
+  relatorios           RelatorioOs[]
 
   configuracao  Configuracao?
 
@@ -437,6 +464,7 @@ model Tecnico {
   clientesResponsavel  Cliente[]
   contratosResponsavel Contrato[]
   atividadesOs         AtividadeOs[]
+  contratosRecorrencia Contrato[]     @relation("ContratoTecnicoRecorrencia")
 
   @@unique([cpf, empresaId])
   @@map("tecnicos")
@@ -657,15 +685,27 @@ model Contrato {
   responsavelTecnicoId String?        @map("responsavel_tecnico_id")
   observacoes          String?
   documento            String?
+
+  // Recorrência de OS
+  recorrencia           Boolean              @default(false)
+  frequenciaRecorrencia Periodicidade?       @map("frequencia_recorrencia")
+  diaRecorrencia        Int?                 @map("dia_recorrencia")
+  fimSemanaRecorrencia  TratamentoFimSemana? @map("fim_semana_recorrencia")
+  tipoOsRecorrenciaId   String?              @map("tipo_os_recorrencia_id")
+  tecnicoRecorrenciaId  String?              @map("tecnico_recorrencia_id")
+
   criadoEm             DateTime       @default(now()) @map("criado_em")
   atualizadoEm         DateTime       @updatedAt @map("atualizado_em")
 
   empresa             Empresa           @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   cliente             Cliente           @relation(fields: [clienteId], references: [id])
   responsavelTecnico  Tecnico?          @relation(fields: [responsavelTecnicoId], references: [id])
+  tipoOsRecorrencia   TipoOs?           @relation("ContratoTipoOsRecorrencia", fields: [tipoOsRecorrenciaId], references: [id])
+  tecnicoRecorrencia  Tecnico?          @relation("ContratoTecnicoRecorrencia", fields: [tecnicoRecorrenciaId], references: [id])
   unidades            ContratoUnidade[]
   ordensServico       OrdemServico[]
   medicoes            Medicao[]
+  relatorios          RelatorioOs[]
 
   @@unique([numero, empresaId])
   @@map("contratos")
@@ -774,6 +814,7 @@ model TipoOs {
   empresa     Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   formularios FormularioTemplate[]
   atividades  AtividadeOs[]
+  contratosRecorrencia Contrato[]  @relation("ContratoTipoOsRecorrencia")
 
   @@map("tipos_os")
 }
@@ -840,6 +881,8 @@ model OrdemServico {
   criadoPorId       String      @map("criado_por_id")
   prioridade        Prioridade  @default(NORMAL)
   status            StatusOS    @default(ABERTA)
+  origem            OrigemOS    @default(MANUAL)
+  periodoRecorrencia String?    @map("periodo_recorrencia")
   descricao         String
   previsaoConclusao DateTime?   @map("previsao_conclusao")
   dataInicio        DateTime?   @map("data_inicio")
@@ -863,6 +906,7 @@ model OrdemServico {
   medicaoItens   MedicaoItem[]
   pedidosCompra  PedidoCompraInterno[]
   prazos         OsPrazo[]
+  relatorios     RelatorioOs[]
 
   @@unique([numero, empresaId])
   @@map("ordens_servico")
@@ -1156,6 +1200,7 @@ model Medicao {
   itens         MedicaoItem[]
   nfs           MedicaoNf[]
   contasReceber ContaReceber[]
+  relatorios    RelatorioOs[]
 
   @@unique([numero, empresaId])
   @@map("medicoes")
@@ -1396,4 +1441,42 @@ model TabelaPrecoItem {
   produto Produto?    @relation(fields: [produtoId], references: [id])
 
   @@map("tabela_preco_itens")
+}
+
+// ─────────────────────────────────────────────
+// RELATÓRIO DE OS (PMOC / Manutenção / Medição)
+// ─────────────────────────────────────────────
+
+model RelatorioOs {
+  id              String          @id @default(cuid())
+  empresaId       String          @map("empresa_id")
+  ordemServicoId  String          @map("ordem_servico_id")
+  contratoId      String?         @map("contrato_id")
+  numero          String
+  tipo            TipoRelatorio   @default(PMOC)
+  mesReferencia   Int             @map("mes_referencia")
+  anoReferencia   Int             @map("ano_referencia")
+  valorFinanceiro Decimal?        @map("valor_financeiro") @db.Decimal(12, 2)
+  observacao      String?         @db.Text
+  status          StatusRelatorio @default(RASCUNHO)
+  tokenPublico    String          @unique @map("token_publico")
+  pdfUrl          String?         @map("pdf_url") @db.Text
+
+  assinadoEm     DateTime? @map("assinado_em")
+  assinadoPor    String?   @map("assinado_por")
+  assinadoCpf    String?   @map("assinado_cpf")
+  assinaturaUrl  String?   @map("assinatura_url") @db.Text
+
+  medicaoId      String?   @map("medicao_id")
+
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  empresa      Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  ordemServico OrdemServico @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  contrato     Contrato?    @relation(fields: [contratoId], references: [id])
+  medicao      Medicao?     @relation(fields: [medicaoId], references: [id])
+
+  @@unique([numero, empresaId])
+  @@map("relatorios_os")
 }

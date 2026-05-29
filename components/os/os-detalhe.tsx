@@ -12,6 +12,7 @@ import { OsOrcamento } from "@/components/os/os-orcamento";
 import { OsFinanceiro } from "@/components/os/os-financeiro";
 import { OsOrcamentosVinculados } from "@/components/os/os-orcamentos-vinculados";
 import { OsPrazos } from "@/components/os/os-prazos";
+import { OsRelatorios } from "@/components/os/os-relatorios";
 import { ComprasSecao } from "@/components/compras/compras-secao";
 import { ChevronLeft, FileText, Clock, User, Building2, MapPin, AlertTriangle, FileBarChart } from "lucide-react";
 import Link from "next/link";
@@ -66,6 +67,7 @@ export function OsDetalhe({ os: initialOs }: { os: any }) {
     { id: "orcamento", label: "Itens da OS", badge: os.itensOrcamento.length },
     { id: "prazos", label: "Prazos" },
     { id: "compras", label: "Compras" },
+    { id: "relatorios", label: "Relatórios" },
     { id: "financeiro", label: "Financeiro", badge: os.medicoes.length },
     { id: "formularios", label: "Formulários" },
     { id: "anexos", label: "Anexos", badge: os.anexos.length },
@@ -122,6 +124,7 @@ export function OsDetalhe({ os: initialOs }: { os: any }) {
               {activeTab === "orcamento" && <OsOrcamento osId={os.id} itens={os.itensOrcamento} />}
               {activeTab === "prazos" && <OsPrazos osId={os.id} />}
               {activeTab === "compras" && <ComprasSecao ordemServicoId={os.id} />}
+              {activeTab === "relatorios" && <OsRelatorios osId={os.id} contratoId={os.contrato?.id ?? null} concluida={os.status === "CONCLUIDA"} />}
               {activeTab === "financeiro" && <OsFinanceiro osId={os.id} medicoes={os.medicoes} itensOrcamento={os.itensOrcamento} />}
               {activeTab === "formularios" && <TabFormularios atividades={os.atividades} />}
               {activeTab === "anexos" && <TabAnexos osId={os.id} anexos={os.anexos} />}

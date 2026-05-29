@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
   });
   if (dup) return NextResponse.json({ erro: "Número de contrato já cadastrado" }, { status: 409 });
 
-  const { unidadeIds, dataInicio, dataFim, valorMensal, valorTotal, responsavelTecnicoId, ...resto } = parsed.data;
+  const { unidadeIds, dataInicio, dataFim, valorMensal, valorTotal, responsavelTecnicoId, tipoOsRecorrenciaId, tecnicoRecorrenciaId, ...resto } = parsed.data;
 
   const contrato = await prisma.contrato.create({
     data: {
@@ -48,6 +48,8 @@ export async function POST(req: NextRequest) {
       valorMensal: valorMensal ?? null,
       valorTotal: valorTotal ?? null,
       responsavelTecnicoId: responsavelTecnicoId || null,
+      tipoOsRecorrenciaId: tipoOsRecorrenciaId || null,
+      tecnicoRecorrenciaId: tecnicoRecorrenciaId || null,
       unidades: {
         create: unidadeIds.map((unidadeId) => ({ unidadeId })),
       },

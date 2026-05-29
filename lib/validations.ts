@@ -10,6 +10,7 @@ import {
   StatusMedicaoFin, StatusContaReceber, FormaPagamento,
   ResponsavelPrazo, CanalNotificacao, StatusPedidoCompra,
   TipoTabelaPreco, TipoPrecoTabela,
+  TratamentoFimSemana, TipoRelatorio,
 } from "@prisma/client";
 
 const valorOpcional = z.preprocess(
@@ -146,6 +147,22 @@ export const contratoSchema = z.object({
   responsavelTecnicoId: z.string().optional(),
   observacoes: z.string().optional(),
   unidadeIds: z.array(z.string()).default([]),
+  // Recorrência de OS
+  recorrencia: z.boolean().default(false),
+  frequenciaRecorrencia: z.preprocess(
+    (v) => (v === "" || v == null ? null : v),
+    z.nativeEnum(Periodicidade).nullable()
+  ).default(null),
+  diaRecorrencia: z.preprocess(
+    (v) => (v === "" || v == null ? null : Number(v)),
+    z.number().min(1).max(28).nullable()
+  ).default(null),
+  fimSemanaRecorrencia: z.preprocess(
+    (v) => (v === "" || v == null ? null : v),
+    z.nativeEnum(TratamentoFimSemana).nullable()
+  ).default(null),
+  tipoOsRecorrenciaId: z.string().optional().nullable(),
+  tecnicoRecorrenciaId: z.string().optional().nullable(),
 });
 
 export const ordemServicoSchema = z.object({
@@ -416,6 +433,31 @@ export const tabelaPrecoSchema = z.object({
 
 export type TabelaPrecoInput = z.infer<typeof tabelaPrecoSchema>;
 export type TabelaPrecoItemInput = z.infer<typeof tabelaPrecoItemSchema>;
+
+// ─────────────────────────────────────────────
+// RELATÓRIO DE OS
+// ─────────────────────────────────────────────
+
+export const relatorioSchema = z.object({
+  tipo: z.nativeEnum(TipoRelatorio).default(TipoRelatorio.PMOC),
+  mesReferencia: z.preprocess(
+    (v) => (v === "" || v == null ? new Date().getMonth() + 1 : Number(v)),
+    z.number().min(1).max(12)
+  ),
+  anoReferencia: z.preprocess(
+    (v) => (v === "" || v == null ? new Date().getFullYear() : Number(v)),
+    z.number().min(2000).max(2100)
+  ),
+  valorFinanceiro: z.preprocess(
+    (v) => (v === "" || v == null ? null : Number(v)),
+    z.number().nonnegative().nullable()
+  ).optional(),
+  observacao: z.string().optional().nullable(),
+});
+
+export const aprovacaoRelatorioSchema = aprovacaoPublicaSchema;
+
+export type RelatorioInput = z.infer<typeof relatorioSchema>;
 
 export type PrazoTemplateInput = z.infer<typeof prazoTemplateSchema>;
 export type PrazoEtapaTemplateInput = z.infer<typeof prazoEtapaTemplateSchema>;

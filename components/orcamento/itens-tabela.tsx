@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { cn, formatarMoeda } from "@/lib/utils";
-import { Plus, Trash2, Search, X, Lock } from "lucide-react";
+import { Plus, Trash2, Search, X, Lock, LockOpen } from "lucide-react";
 
 export interface ItemTabela {
   id: string;            // uuid local
@@ -12,7 +12,7 @@ export interface ItemTabela {
   valorUnitario: number;
   observacao?: string | null;
   bloqueado?: boolean;
-  origemPreco?: "contrato" | "padrao";
+  origemPreco?: "contrato" | "padrao" | "fora_tabela";
   valorPadraoCadastro?: number;
 }
 
@@ -62,7 +62,9 @@ export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange,
     const tItem = tabela?.itens[c.id];
     let valorUnitario = padrao;
     let bloqueado = false;
-    let origemPreco: "contrato" | "padrao" | undefined = tabela ? "padrao" : undefined;
+    // Sem tabela vinculada: comportamento padrão (sem badge).
+    // Com tabela: item presente => "contrato"; ausente (via "mostrar todos") => "fora_tabela".
+    let origemPreco: ItemTabela["origemPreco"] = tabela ? "fora_tabela" : undefined;
     if (tItem) {
       valorUnitario = tItem.valorFinal;
       bloqueado = (tabela?.precosBloqueados ?? false) || tItem.bloqueado;
@@ -135,10 +137,16 @@ export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange,
                       <span
                         className={cn(
                           "inline-block mt-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded",
-                          it.origemPreco === "contrato" ? "bg-success-50 text-success-700" : "bg-slate-100 text-slate-500",
+                          it.origemPreco === "contrato" && "bg-success-50 text-success-700",
+                          it.origemPreco === "padrao" && "bg-slate-100 text-slate-500",
+                          it.origemPreco === "fora_tabela" && "bg-amber-50 text-amber-700",
                         )}
                       >
-                        {it.origemPreco === "contrato" ? "Preço de contrato" : "Preço padrão"}
+                        {it.origemPreco === "contrato"
+                          ? "Preço de contrato"
+                          : it.origemPreco === "fora_tabela"
+                            ? "⚠️ Fora da tabela"
+                            : "Preço padrão"}
                       </span>
                     )}
                   </td>
@@ -206,7 +214,7 @@ export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange,
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <BuscaCatalogo catalogo={catalogo} onSelect={adicionarDoCatalogo} placeholder={labelAdicionar} />
+        <BuscaCatalogo catalogo={catalogo} onSelect={adicionarDoCatalogo} placeholder={labelAdicionar} tabela={tabela} />
         <button
           type="button"
           onClick={adicionarVazio}
@@ -223,13 +231,16 @@ function BuscaCatalogo({
   catalogo,
   onSelect,
   placeholder,
+  tabela,
 }: {
   catalogo: CatalogoItem[];
   onSelect: (c: CatalogoItem) => void;
   placeholder: string;
+  tabela?: TabelaPrecoCliente | null;
 }) {
   const [query, setQuery] = useState("");
   const [aberto, setAberto] = useState(false);
+  const [mostrarTodos, setMostrarTodos] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -240,10 +251,22 @@ function BuscaCatalogo({
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
 
+  // Quando o cliente tem tabela e não está no modo "mostrar todos",
+  // a busca exibe apenas os itens presentes na tabela do cliente.
+  const restritoTabela = !!tabela && !mostrarTodos;
+  const base = restritoTabela ? catalogo.filter((c) => !!tabela!.itens[c.id]) : catalogo;
+
   const q = query.trim().toLowerCase();
   const filtrados = q
-    ? catalogo.filter((c) => c.nome.toLowerCase().includes(q) || (c.descricao ?? "").toLowerCase().includes(q))
-    : catalogo;
+    ? base.filter((c) => c.nome.toLowerCase().includes(q) || (c.descricao ?? "").toLowerCase().includes(q))
+    : base;
+
+  // Preço exibido no dropdown: o da tabela quando o item pertence a ela.
+  function precoExibido(c: CatalogoItem): { valor: number | null; contrato: boolean } {
+    const t = tabela?.itens[c.id];
+    if (t) return { valor: t.valorFinal, contrato: true };
+    return { valor: c.valorPadrao != null ? Number(c.valorPadrao) : null, contrato: false };
+  }
 
   return (
     <div className="relative flex-1 min-w-[240px]" ref={ref}>
@@ -253,7 +276,7 @@ function BuscaCatalogo({
         value={query}
         onChange={(e) => { setQuery(e.target.value); setAberto(true); }}
         onFocus={() => setAberto(true)}
-        placeholder={placeholder}
+        placeholder={restritoTabela ? "Buscar na tabela do cliente..." : placeholder}
         className="w-full bg-white border border-surface-border rounded-lg pl-9 pr-9 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all"
       />
       {query && (
@@ -265,28 +288,49 @@ function BuscaCatalogo({
           <X className="w-3.5 h-3.5" />
         </button>
       )}
-      {aberto && filtrados.length > 0 && (
+      {aberto && (
         <div className="absolute z-20 left-0 right-0 top-full mt-1 max-h-64 overflow-y-auto bg-white border border-surface-border rounded-lg shadow-card-hover">
-          {filtrados.slice(0, 20).map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => { onSelect(c); setQuery(""); setAberto(false); }}
-              className="w-full text-left px-3 py-2 hover:bg-primary-50 border-b border-surface-border last:border-0 flex items-center justify-between gap-3"
-            >
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-ink truncate">{c.nome}</p>
-                {c.descricao && <p className="text-xs text-ink-muted truncate">{c.descricao}</p>}
-              </div>
-              <span className={cn(
-                "text-xs font-mono shrink-0",
-                c.valorPadrao != null ? "text-success-700" : "text-ink-subtle italic"
-              )}>
-                {c.valorPadrao != null ? formatarMoeda(Number(c.valorPadrao)) : "—"}
-              </span>
-            </button>
-          ))}
+          {filtrados.length === 0 && (
+            <p className="px-3 py-3 text-xs text-ink-subtle italic">
+              {restritoTabela ? "Nenhum item na tabela do cliente. Use “Mostrar todos”." : "Nenhum item encontrado."}
+            </p>
+          )}
+          {filtrados.slice(0, 20).map((c) => {
+            const pe = precoExibido(c);
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => { onSelect(c); setQuery(""); setAberto(false); }}
+                className="w-full text-left px-3 py-2 hover:bg-primary-50 border-b border-surface-border last:border-0 flex items-center justify-between gap-3"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-ink truncate">{c.nome}</p>
+                  {c.descricao && <p className="text-xs text-ink-muted truncate">{c.descricao}</p>}
+                </div>
+                <span className={cn(
+                  "text-xs font-mono shrink-0",
+                  pe.valor == null ? "text-ink-subtle italic" : pe.contrato ? "text-success-700 font-semibold" : "text-ink-muted",
+                )}>
+                  {pe.valor != null ? formatarMoeda(pe.valor) : "—"}
+                </span>
+              </button>
+            );
+          })}
         </div>
+      )}
+
+      {/* Alterna entre "só da tabela" e "todos" quando há tabela vinculada */}
+      {tabela && (
+        <button
+          type="button"
+          onClick={() => setMostrarTodos((v) => !v)}
+          className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-medium text-primary-600 hover:text-primary-700"
+          title={mostrarTodos ? "Mostrar apenas os itens da tabela do cliente" : "Mostrar todos os serviços/produtos cadastrados"}
+        >
+          {mostrarTodos ? <Lock className="w-3.5 h-3.5" /> : <LockOpen className="w-3.5 h-3.5" />}
+          {mostrarTodos ? "Mostrar só da tabela" : "Mostrar todos os serviços"}
+        </button>
       )}
     </div>
   );

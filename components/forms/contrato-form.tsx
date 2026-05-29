@@ -10,8 +10,10 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
+import { ToggleSwitch } from "@/components/ui/toggle-switch";
+import { FREQUENCIAS_RECORRENCIA, LABELS_PERIODICIDADE, LABELS_TRATAMENTO_FIM_SEMANA } from "@/lib/utils";
 import type { Contrato, Tecnico, Unidade } from "@prisma/client";
-import { Building2 } from "lucide-react";
+import { Building2, Repeat } from "lucide-react";
 
 function toDateInput(date: Date | null | undefined) {
   if (!date) return "";
@@ -30,11 +32,6 @@ const LABELS_STATUS_CONTRATO: Record<string, string> = {
   ATIVO: "Ativo", SUSPENSO: "Suspenso", ENCERRADO: "Encerrado",
   VENCIDO: "Vencido", AGUARDANDO_ASSINATURA: "Aguardando Assinatura",
 };
-const LABELS_PERIODICIDADE: Record<string, string> = {
-  SEMANAL: "Semanal", QUINZENAL: "Quinzenal", MENSAL: "Mensal",
-  BIMESTRAL: "Bimestral", TRIMESTRAL: "Trimestral", SEMESTRAL: "Semestral", ANUAL: "Anual",
-};
-
 type ClienteItem = { id: string; nome: string; nomeFantasia?: string | null };
 type ResponsavelItem = Pick<Tecnico, "id" | "nome" | "crea">;
 
@@ -54,6 +51,8 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
   const [clientes, setClientes] = useState<ClienteItem[]>([]);
   const [unidades, setUnidades] = useState<Unidade[]>([]);
   const [responsaveis, setResponsaveis] = useState<ResponsavelItem[]>([]);
+  const [tiposOs, setTiposOs] = useState<{ id: string; nome: string }[]>([]);
+  const [tecnicos, setTecnicos] = useState<{ id: string; nome: string }[]>([]);
   const [clienteIdSelecionado, setClienteIdSelecionado] = useState(initialData?.clienteId ?? "");
 
   const unidadeIdsIniciais = initialData?.unidades?.map((u) => u.unidade.id) ?? [];
@@ -62,6 +61,8 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
     register,
     handleSubmit,
     control,
+    watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<ContratoInput>({
     resolver: zodResolver(contratoSchema),
@@ -81,18 +82,29 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
           responsavelTecnicoId: initialData.responsavelTecnicoId ?? "",
           observacoes: initialData.observacoes ?? "",
           unidadeIds: unidadeIdsIniciais,
+          recorrencia: initialData.recorrencia ?? false,
+          frequenciaRecorrencia: initialData.frequenciaRecorrencia ?? null,
+          diaRecorrencia: initialData.diaRecorrencia ?? null,
+          fimSemanaRecorrencia: initialData.fimSemanaRecorrencia ?? null,
+          tipoOsRecorrenciaId: initialData.tipoOsRecorrenciaId ?? "",
+          tecnicoRecorrenciaId: initialData.tecnicoRecorrenciaId ?? "",
         }
       : {
           status: "ATIVO",
           periodicidade: "MENSAL",
           unidadeIds: [],
           numero: `CT-${new Date().getFullYear()}-`,
+          recorrencia: false,
         },
   });
+
+  const recorrenciaAtiva = watch("recorrencia");
 
   useEffect(() => {
     fetch("/api/clientes").then((r) => r.json()).then(setClientes).catch(() => {});
     fetch("/api/tecnicos?tipo=RESPONSAVEL_TECNICO").then((r) => r.json()).then(setResponsaveis).catch(() => {});
+    fetch("/api/tipos-os").then((r) => r.json()).then((d) => setTiposOs(Array.isArray(d) ? d : [])).catch(() => {});
+    fetch("/api/tecnicos").then((r) => r.json()).then((d) => setTecnicos(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -259,6 +271,58 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
               </div>
             )}
           />
+        )}
+      </FormSection>
+
+      {/* Recorrência de OS */}
+      <FormSection title="Recorrência de OS">
+        <p className="text-xs text-gray-400 -mt-2 mb-1">
+          Gere ordens de serviço automaticamente para este contrato, conforme a frequência configurada.
+        </p>
+        <ToggleSwitch
+          label="Ativar recorrência de OS"
+          description="Quando ativo, o contrato entra na geração automática de OS recorrentes."
+          checked={!!recorrenciaAtiva}
+          onChange={(v) => setValue("recorrencia", v)}
+        />
+
+        {recorrenciaAtiva && (
+          <div className="space-y-4 border-l-2 border-primary-200 pl-4 mt-2">
+            <FormGrid cols={3}>
+              <FormField label="Frequência">
+                <Select {...register("frequenciaRecorrencia")} placeholder="Selecione">
+                  {FREQUENCIAS_RECORRENCIA.map((f) => (
+                    <option key={f} value={f}>{LABELS_PERIODICIDADE[f]}</option>
+                  ))}
+                </Select>
+              </FormField>
+              <FormField label="Dia do mês" hint="1 a 28">
+                <Input {...register("diaRecorrencia", { valueAsNumber: true })} type="number" min={1} max={28} placeholder="1" />
+              </FormField>
+              <FormField label="Finais de semana">
+                <Select {...register("fimSemanaRecorrencia")} placeholder="Selecione">
+                  {Object.entries(LABELS_TRATAMENTO_FIM_SEMANA).map(([v, l]) => (
+                    <option key={v} value={v}>{l}</option>
+                  ))}
+                </Select>
+              </FormField>
+            </FormGrid>
+            <FormGrid>
+              <FormField label="Tipo de OS padrão">
+                <Select {...register("tipoOsRecorrenciaId")} placeholder="Selecione">
+                  {tiposOs.map((t) => (<option key={t.id} value={t.id}>{t.nome}</option>))}
+                </Select>
+              </FormField>
+              <FormField label="Técnico responsável padrão">
+                <Select {...register("tecnicoRecorrenciaId")} placeholder="Selecione">
+                  {tecnicos.map((t) => (<option key={t.id} value={t.id}>{t.nome}</option>))}
+                </Select>
+              </FormField>
+            </FormGrid>
+            <p className="text-xs text-gray-400 flex items-center gap-1.5">
+              <Repeat className="w-3.5 h-3.5" /> A vigência segue as datas de início/fim do contrato.
+            </p>
+          </div>
         )}
       </FormSection>
 
