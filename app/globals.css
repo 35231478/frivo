@@ -111,6 +111,17 @@
   .badge-orc-reprovado  { @apply badge-base bg-red-50 text-red-700; }
   .badge-orc-cancelado  { @apply badge-base bg-slate-100 text-slate-500; }
 
+  /* Medição (financeiro) */
+  .badge-med-rascunho      { @apply badge-base bg-slate-100 text-slate-600; }
+  .badge-med-aguardando    { @apply badge-base bg-primary-50 text-primary-700; }
+  .badge-med-aprovada      { @apply badge-base bg-emerald-50 text-emerald-600; }
+  .badge-med-aguardando-pc { @apply badge-base bg-yellow-50 text-yellow-700; }
+  .badge-med-pc            { @apply badge-base bg-success-50 text-success-700; }
+  .badge-med-nf            { @apply badge-base bg-violet-50 text-violet-700; }
+  .badge-med-boleto        { @apply badge-base bg-indigo-50 text-indigo-700; }
+  .badge-med-pago          { @apply badge-base bg-success-100 text-success-700 font-semibold; }
+  .badge-med-cancelada     { @apply badge-base bg-red-50 text-red-700; }
+
   /* --- Tabelas --- */
   .table-base {
     @apply w-full text-sm;

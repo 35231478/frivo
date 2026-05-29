@@ -49,6 +49,24 @@ export function gerarCodigoOrcamento(sequencial: number): string {
   return `ORC-${new Date().getFullYear()}-${String(sequencial).padStart(4, "0")}`;
 }
 
+export function gerarNumeroMedicao(sequencial: number, ano = new Date().getFullYear()): string {
+  return `MED-${ano}-${String(sequencial).padStart(4, "0")}`;
+}
+
+export function gerarNumeroContaReceber(sequencial: number, ano = new Date().getFullYear()): string {
+  return `CR-${ano}-${String(sequencial).padStart(4, "0")}`;
+}
+
+export const MESES_PT = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+];
+
+export function nomeMes(mes: number | null | undefined): string {
+  if (mes == null || mes < 1 || mes > 12) return "—";
+  return MESES_PT[mes - 1];
+}
+
 export function sanitizarNumero(valor: string | null | undefined): string {
   return (valor ?? "").replace(/\D/g, "");
 }
@@ -179,4 +197,69 @@ export const CLASSE_STATUS_ORCAMENTO: Record<string, string> = {
 export const LABELS_TIPO_DESCONTO: Record<string, string> = {
   VALOR: "R$",
   PERCENTUAL: "%",
+};
+
+// ─────────────────────────────────────────────
+// FINANCEIRO
+// ─────────────────────────────────────────────
+
+export const LABELS_PERFIL_FATURAMENTO: Record<string, string> = {
+  COM_APROVACAO: "Com aprovação (licitação/corporativo)",
+  AUTOMATICO: "Automático (privado simples)",
+  FATURA_UNICA: "Fatura única (agrupa tudo)",
+};
+
+export const LABELS_TIPO_MEDICAO: Record<string, string> = {
+  MENSAL_FIXO: "Mensal fixo",
+  ADICIONAL: "Adicional",
+  FATURA_UNICA: "Fatura única",
+};
+
+export const LABELS_STATUS_MEDICAO: Record<string, string> = {
+  RASCUNHO: "Rascunho",
+  AGUARDANDO_APROVACAO: "Aguardando aprovação",
+  APROVADA: "Aprovada",
+  AGUARDANDO_PC: "Aguardando PC",
+  PC_RECEBIDO: "PC recebido",
+  NF_EMITIDA: "NF emitida",
+  BOLETO_GERADO: "Boleto gerado",
+  PAGO: "Pago",
+  CANCELADA: "Cancelada",
+};
+
+export const CLASSE_STATUS_MEDICAO: Record<string, string> = {
+  RASCUNHO: "badge-med-rascunho",
+  AGUARDANDO_APROVACAO: "badge-med-aguardando",
+  APROVADA: "badge-med-aprovada",
+  AGUARDANDO_PC: "badge-med-aguardando-pc",
+  PC_RECEBIDO: "badge-med-pc",
+  NF_EMITIDA: "badge-med-nf",
+  BOLETO_GERADO: "badge-med-boleto",
+  PAGO: "badge-med-pago",
+  CANCELADA: "badge-med-cancelada",
+};
+
+export const LABELS_STATUS_CONTA_RECEBER: Record<string, string> = {
+  PREVISTO: "Previsto",
+  A_RECEBER: "A receber",
+  RECEBIDO: "Recebido",
+  CANCELADO: "Cancelado",
+  ATRASADO: "Atrasado",
+};
+
+export const CLASSE_STATUS_CONTA_RECEBER: Record<string, string> = {
+  PREVISTO: "badge-base bg-slate-100 text-slate-600",
+  A_RECEBER: "badge-base bg-primary-50 text-primary-700",
+  RECEBIDO: "badge-base bg-success-50 text-success-700",
+  CANCELADO: "badge-base bg-slate-100 text-slate-500",
+  ATRASADO: "badge-base bg-red-50 text-red-700",
+};
+
+export const LABELS_FORMA_PAGAMENTO: Record<string, string> = {
+  BOLETO: "Boleto",
+  PIX: "PIX",
+  TRANSFERENCIA: "Transferência",
+  DINHEIRO: "Dinheiro",
+  CARTAO: "Cartão",
+  CHEQUE: "Cheque",
 };

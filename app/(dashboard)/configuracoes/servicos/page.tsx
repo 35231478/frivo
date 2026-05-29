@@ -25,10 +25,19 @@ export default function ServicosPage() {
               ],
             },
             { key: "valorPadrao", label: "Valor padrão (R$)", tipo: "number", placeholder: "0,00" },
+            { key: "codigoMunicipal", label: "Código do serviço municipal", placeholder: "Ex: 1401" },
+            { key: "codigoLc116", label: "Código LC 116", placeholder: "Ex: 14.01" },
+            { key: "aliquotaISS", label: "Alíquota ISS (%)", tipo: "number", placeholder: "Ex: 5,00" },
+            { key: "aliquotaPIS", label: "Alíquota PIS (%)", tipo: "number", placeholder: "Ex: 0,65" },
+            { key: "aliquotaCOFINS", label: "Alíquota COFINS (%)", tipo: "number", placeholder: "Ex: 3,00" },
+            { key: "aliquotaCSLL", label: "Alíquota CSLL (%)", tipo: "number", placeholder: "Ex: 1,00" },
+            { key: "aliquotaIR", label: "Alíquota IR (%)", tipo: "number", placeholder: "Ex: 1,50" },
+            { key: "observacaoFiscal", label: "Observação fiscal", tipo: "textarea" },
           ]}
           colunasLista={[
             { key: "nome", label: "Nome", render: (item: any) => <span className="font-medium">{item.nome}</span> },
             { key: "unidade", label: "Unidade" },
+            { key: "codigoLc116", label: "LC 116", render: (item: any) => item.codigoLc116 || "—" },
             {
               key: "valorPadrao", label: "Valor padrão",
               render: (item: any) => item.valorPadrao ? formatarMoeda(Number(item.valorPadrao)) : "—",

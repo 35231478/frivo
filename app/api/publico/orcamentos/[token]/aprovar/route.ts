@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { aprovacaoPublicaSchema } from "@/lib/validations";
+import { gerarContaReceberDoOrcamento } from "@/lib/financeiro-server";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -38,6 +39,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       assinaturaUrl: parsed.data.assinaturaUrl,
     },
   });
+
+  // Orçamento aprovado entra em contas a receber como PREVISTO
+  await gerarContaReceberDoOrcamento(orcamento.id);
 
   return NextResponse.json({ ok: true, status: aprovado.status });
 }

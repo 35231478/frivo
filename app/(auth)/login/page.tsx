@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { LoginForm } from "@/components/auth/login-form";
 import { FrivoLogo } from "@/components/layout/frivo-logo";
 
@@ -24,7 +25,9 @@ export default function LoginPage() {
             <h2 className="text-xl font-bold text-ink">Entrar na sua conta</h2>
             <p className="text-sm text-ink-muted mt-1">Acesse o painel de gestão</p>
           </div>
-          <LoginForm />
+          <Suspense fallback={<div className="text-sm text-ink-muted">Carregando…</div>}>
+            <LoginForm />
+          </Suspense>
         </div>
 
         <p className="text-center text-xs text-slate-300 mt-6">

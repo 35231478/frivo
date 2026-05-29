@@ -6,6 +6,8 @@ import {
   Segmento, OrigemCliente, StatusFinanceiro,
   TipoContato, TipoInteracao,
   TipoDesconto,
+  PerfilFaturamento, TipoMedicao, TipoItemMedicao,
+  StatusMedicaoFin, StatusContaReceber, FormaPagamento,
 } from "@prisma/client";
 
 const valorOpcional = z.preprocess(
@@ -14,6 +16,15 @@ const valorOpcional = z.preprocess(
       ? undefined
       : Number(v),
   z.number().positive("Deve ser maior que zero").optional()
+);
+
+// decimal opcional aceitando 0 (alíquotas, percentuais) — vazio vira null
+const decimalOpcional = z.preprocess(
+  (v) =>
+    v === "" || v === null || v === undefined || (typeof v === "number" && isNaN(v as number))
+      ? null
+      : Number(v),
+  z.number().nonnegative("Não pode ser negativo").nullable()
 );
 
 export const loginSchema = z.object({
@@ -60,6 +71,21 @@ export const clienteSchema = z.object({
   estado: z.string().optional(),
   cep: z.string().optional(),
   observacoes: z.string().optional(),
+  // Perfil de faturamento
+  tipoFaturamento: z.preprocess(
+    (v) => (v === "" || v == null ? null : v),
+    z.nativeEnum(PerfilFaturamento).nullable()
+  ).default(null),
+  diaFaturamento: z.preprocess(
+    (v) => (v === "" || v == null ? 1 : Number(v)),
+    z.number().min(1).max(28)
+  ).default(1),
+  condicaoPagamento: z.string().optional().nullable(),
+  exigePcAntesNf: z.boolean().default(false),
+  agrupaAdicionais: z.boolean().default(false),
+  boletoUnicoMensal: z.boolean().default(false),
+  emailsFaturamento: z.array(z.string()).default([]),
+  whatsappFaturamento: z.string().optional().nullable(),
 });
 
 export const unidadeSchema = z.object({
@@ -190,6 +216,89 @@ export const aprovacaoPublicaSchema = z.object({
     .refine((v) => v.startsWith("data:image/"), "Assinatura inválida"),
 });
 
+// ─────────────────────────────────────────────
+// MEDIÇÃO / FINANCEIRO
+// ─────────────────────────────────────────────
+
+export const medicaoItemSchema = z.object({
+  tipo: z.nativeEnum(TipoItemMedicao).default(TipoItemMedicao.SERVICO),
+  servicoId: z.string().optional().nullable(),
+  produtoId: z.string().optional().nullable(),
+  ordemServicoId: z.string().optional().nullable(),
+  orcamentoId: z.string().optional().nullable(),
+  descricao: z.string().min(1, "Descrição é obrigatória"),
+  quantidade: z.preprocess(
+    (v) => (v === "" || v == null ? 1 : Number(v)),
+    z.number().positive("Quantidade deve ser > 0")
+  ),
+  valorUnitario: z.preprocess(
+    (v) => (v === "" || v == null ? 0 : Number(v)),
+    z.number().nonnegative("Valor não pode ser negativo")
+  ),
+  codigoMunicipal: z.string().optional().nullable(),
+  aliquotaISS: decimalOpcional.optional(),
+  aliquotaPIS: decimalOpcional.optional(),
+  aliquotaCOFINS: decimalOpcional.optional(),
+  aliquotaCSLL: decimalOpcional.optional(),
+  aliquotaIR: decimalOpcional.optional(),
+  observacao: z.string().optional().nullable(),
+});
+
+export const medicaoSchema = z.object({
+  clienteId: z.string().min(1, "Cliente é obrigatório"),
+  contratoId: z.string().optional().nullable(),
+  tipo: z.nativeEnum(TipoMedicao).default(TipoMedicao.MENSAL_FIXO),
+  mes: z.preprocess(
+    (v) => (v === "" || v == null ? null : Number(v)),
+    z.number().min(1).max(12).nullable()
+  ).optional(),
+  ano: z.preprocess(
+    (v) => (v === "" || v == null ? null : Number(v)),
+    z.number().min(2000).max(2100).nullable()
+  ).optional(),
+  descricao: z.string().optional().nullable(),
+  observacao: z.string().optional().nullable(),
+  descontoValor: z.preprocess(
+    (v) => (v === "" || v == null ? 0 : Number(v)),
+    z.number().nonnegative()
+  ).default(0),
+  descontoPercent: z.preprocess(
+    (v) => (v === "" || v == null ? 0 : Number(v)),
+    z.number().nonnegative().max(100)
+  ).default(0),
+  itens: z.array(medicaoItemSchema).default([]),
+});
+
+export const aprovacaoMedicaoSchema = aprovacaoPublicaSchema;
+
+export const acaoMedicaoSchema = z.object({
+  acao: z.enum([
+    "ENVIAR", "APROVAR_MANUAL", "REGISTRAR_PC", "REGISTRAR_NF",
+    "REGISTRAR_BOLETO", "REGISTRAR_PAGAMENTO", "CANCELAR",
+  ]),
+  // Campos contextuais conforme a ação
+  pcNumero: z.string().optional().nullable(),
+  pcAnexoUrl: z.string().optional().nullable(),
+  nfNumero: z.string().optional().nullable(),
+  nfUrl: z.string().optional().nullable(),
+  boletoUrl: z.string().optional().nullable(),
+  boletoCodigoBarras: z.string().optional().nullable(),
+  dataPagamento: z.string().optional().nullable(),
+  formaPagamento: z.nativeEnum(FormaPagamento).optional().nullable(),
+  valorPago: z.preprocess(
+    (v) => (v === "" || v == null ? null : Number(v)),
+    z.number().nonnegative().nullable()
+  ).optional(),
+});
+
+export const contaReceberUpdateSchema = z.object({
+  status: z.nativeEnum(StatusContaReceber).optional(),
+  dataVencimento: z.string().optional().nullable(),
+  dataRecebimento: z.string().optional().nullable(),
+  formaPagamento: z.nativeEnum(FormaPagamento).optional().nullable(),
+  observacao: z.string().optional().nullable(),
+});
+
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ClienteInput = z.infer<typeof clienteSchema>;
 export type UnidadeInput = z.infer<typeof unidadeSchema>;
@@ -200,3 +309,7 @@ export type TecnicoInput = z.infer<typeof tecnicoSchema>;
 export type OrcamentoItemInput = z.infer<typeof orcamentoItemSchema>;
 export type OrcamentoInput = z.infer<typeof orcamentoSchema>;
 export type AprovacaoPublicaInput = z.infer<typeof aprovacaoPublicaSchema>;
+export type MedicaoItemInput = z.infer<typeof medicaoItemSchema>;
+export type MedicaoInput = z.infer<typeof medicaoSchema>;
+export type AcaoMedicaoInput = z.infer<typeof acaoMedicaoSchema>;
+export type ContaReceberUpdateInput = z.infer<typeof contaReceberUpdateSchema>;

@@ -11,7 +11,7 @@ import { OsAtividades } from "@/components/os/os-atividades";
 import { OsOrcamento } from "@/components/os/os-orcamento";
 import { OsFinanceiro } from "@/components/os/os-financeiro";
 import { OsOrcamentosVinculados } from "@/components/os/os-orcamentos-vinculados";
-import { ChevronLeft, FileText, Clock, User, Building2, MapPin, AlertTriangle } from "lucide-react";
+import { ChevronLeft, FileText, Clock, User, Building2, MapPin, AlertTriangle, FileBarChart } from "lucide-react";
 import Link from "next/link";
 
 const COR_STATUS: Record<string, string> = {
@@ -29,6 +29,18 @@ export function OsDetalhe({ os: initialOs }: { os: any }) {
   const router = useRouter();
   const [os, setOs] = useState(initialOs);
   const [salvando, setSalvando] = useState(false);
+  const [gerandoMedicao, setGerandoMedicao] = useState(false);
+
+  async function gerarMedicao() {
+    setGerandoMedicao(true);
+    try {
+      const res = await fetch(`/api/ordens/${os.id}/gerar-medicao`, { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        router.push(`/financeiro/medicoes/${data.id}`);
+      }
+    } catch {} finally { setGerandoMedicao(false); }
+  }
 
   async function alterarStatus(novoStatus: string) {
     setSalvando(true);
@@ -78,6 +90,11 @@ export function OsDetalhe({ os: initialOs }: { os: any }) {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {os.status === "CONCLUIDA" && (
+            <Button variant="outline" onClick={gerarMedicao} loading={gerandoMedicao}>
+              <FileBarChart className="w-4 h-4" /> Gerar medição
+            </Button>
+          )}
           <Select value={os.status} onChange={(e) => alterarStatus(e.target.value)} className="text-sm w-auto" disabled={salvando}>
             {Object.entries(LABELS_STATUS_OS).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
           </Select>

@@ -21,10 +21,11 @@ import { LogoUpload } from "@/components/forms/logo-upload";
 import { ContatosManager } from "@/components/forms/contatos-manager";
 import { ContatosLocal, type ContatoLocal } from "@/components/forms/contatos-local";
 import { InteracoesManager } from "@/components/forms/interacoes-manager";
-import { LABELS_SEGMENTO, LABELS_ORIGEM, LABELS_STATUS_FINANCEIRO, COR_STATUS_FINANCEIRO } from "@/lib/utils";
+import { ToggleSwitch } from "@/components/ui/toggle-switch";
+import { LABELS_SEGMENTO, LABELS_ORIGEM, LABELS_STATUS_FINANCEIRO, COR_STATUS_FINANCEIRO, LABELS_PERFIL_FATURAMENTO } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import type { Cliente, Tecnico, Unidade, Configuracao, ContatoCliente } from "@prisma/client";
-import { Search, Loader2, FileCheck, Lock, Pencil } from "lucide-react";
+import { Search, Loader2, FileCheck, Lock, Pencil, Plus, X, Mail } from "lucide-react";
 
 type ResponsavelItem = Pick<Tecnico, "id" | "nome" | "crea">;
 type AnexoItem = { id: string; nome: string; tipo: string; tamanho: number; criadoEm: string | Date };
@@ -54,6 +55,16 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
   const [razaoSocialBloqueada, setRazaoSocialBloqueada] = useState(false);
   const [config, setConfig] = useState<Partial<Configuracao>>({});
   const [satisfacao, setSatisfacao] = useState<number | null>(initialData?.satisfacao ?? null);
+
+  // Perfil de faturamento (gerenciado fora do RHF)
+  const [tipoFaturamento, setTipoFaturamento] = useState<string>(initialData?.tipoFaturamento ?? "");
+  const [diaFaturamento, setDiaFaturamento] = useState<number>(initialData?.diaFaturamento ?? 1);
+  const [condicaoPagamento, setCondicaoPagamento] = useState<string>(initialData?.condicaoPagamento ?? "");
+  const [exigePcAntesNf, setExigePcAntesNf] = useState<boolean>(initialData?.exigePcAntesNf ?? false);
+  const [agrupaAdicionais, setAgrupaAdicionais] = useState<boolean>(initialData?.agrupaAdicionais ?? false);
+  const [boletoUnicoMensal, setBoletoUnicoMensal] = useState<boolean>(initialData?.boletoUnicoMensal ?? false);
+  const [emailsFaturamento, setEmailsFaturamento] = useState<string[]>(initialData?.emailsFaturamento ?? []);
+  const [whatsappFaturamento, setWhatsappFaturamento] = useState<string>(initialData?.whatsappFaturamento ?? "");
 
   useEffect(() => {
     fetch("/api/tecnicos?tipo=RESPONSAVEL_TECNICO").then((r) => r.json()).then(setResponsaveis).catch(() => {});
@@ -126,7 +137,18 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
     const erroCfg = validarConfigDinamica();
     if (erroCfg) { setErroGlobal(erroCfg); return; }
 
-    const payload: any = { ...data, satisfacao };
+    const payload: any = {
+      ...data,
+      satisfacao,
+      tipoFaturamento: tipoFaturamento || null,
+      diaFaturamento,
+      condicaoPagamento: condicaoPagamento || null,
+      exigePcAntesNf,
+      agrupaAdicionais,
+      boletoUnicoMensal,
+      emailsFaturamento,
+      whatsappFaturamento: whatsappFaturamento || null,
+    };
     if (!isEditing) {
       payload.unidades = unidadesNovas.map(({ _tempId, ...u }) => u);
       payload.anexos = anexosNovos.map(({ _tempId, ...a }) => a);
@@ -323,6 +345,69 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
         </FormSection>
       )}
 
+      {/* Perfil de Faturamento */}
+      <FormSection title="Perfil de Faturamento">
+        <p className="text-xs text-gray-400 -mt-2 mb-3">
+          Define como as medições e faturas deste cliente são geradas e enviadas.
+        </p>
+        <FormGrid>
+          <FormField label="Tipo de faturamento" hint="Define o fluxo de aprovação e cobrança">
+            <Select value={tipoFaturamento} onChange={(e) => setTipoFaturamento(e.target.value)} placeholder="Selecione">
+              {Object.entries(LABELS_PERFIL_FATURAMENTO).map(([v, l]) => (
+                <option key={v} value={v}>{l}</option>
+              ))}
+            </Select>
+          </FormField>
+          <FormField label="Dia de faturamento" hint="Dia do mês (1 a 28)">
+            <Input
+              type="number" min={1} max={28}
+              value={diaFaturamento}
+              onChange={(e) => setDiaFaturamento(Math.min(28, Math.max(1, Number(e.target.value) || 1)))}
+            />
+          </FormField>
+        </FormGrid>
+        <FormGrid>
+          <FormField label="Condição de pagamento" hint="Ex: 30 dias, 15 dias, à vista">
+            <Input value={condicaoPagamento} onChange={(e) => setCondicaoPagamento(e.target.value)} placeholder="30 dias" />
+          </FormField>
+          <FormField label="WhatsApp para envio automático">
+            <WhatsAppInput value={whatsappFaturamento} onChange={(e) => setWhatsappFaturamento(e.target.value)} placeholder="(00) 00000-0000" />
+          </FormField>
+        </FormGrid>
+
+        <FormField label="E-mails para envio automático" hint="Adicione um ou mais e-mails que receberão as faturas">
+          <EmailsFaturamento emails={emailsFaturamento} onChange={setEmailsFaturamento} />
+        </FormField>
+
+        {/* Toggles condicionais por perfil */}
+        {(tipoFaturamento === "COM_APROVACAO" || tipoFaturamento === "FATURA_UNICA") && (
+          <div className="border-t border-gray-100 pt-1">
+            <ToggleSwitch
+              label="Exige PC (Pedido de Compra) antes da NF"
+              description="A nota fiscal só pode ser emitida após o registro do PC do cliente."
+              checked={exigePcAntesNf}
+              onChange={setExigePcAntesNf}
+            />
+          </div>
+        )}
+        {tipoFaturamento === "FATURA_UNICA" && (
+          <div className="divide-y divide-gray-100 border-t border-gray-100">
+            <ToggleSwitch
+              label="Agrupa adicionais do mês na fatura"
+              description="Contrato e adicionais (OS/orçamentos) do mês entram numa fatura única."
+              checked={agrupaAdicionais}
+              onChange={setAgrupaAdicionais}
+            />
+            <ToggleSwitch
+              label="Boleto único mensal"
+              description="Gera um único boleto consolidando toda a fatura do mês."
+              checked={boletoUnicoMensal}
+              onChange={setBoletoUnicoMensal}
+            />
+          </div>
+        )}
+      </FormSection>
+
       {/* Observações */}
       <FormSection title="Observações">
         <FormField label="Observações internas">
@@ -335,5 +420,48 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
         <Button type="submit" loading={isSubmitting}>{isEditing ? "Salvar alterações" : "Cadastrar cliente"}</Button>
       </div>
     </form>
+  );
+}
+
+function EmailsFaturamento({ emails, onChange }: { emails: string[]; onChange: (e: string[]) => void }) {
+  const [novo, setNovo] = useState("");
+
+  function adicionar() {
+    const e = novo.trim().toLowerCase();
+    if (!e) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return;
+    if (emails.includes(e)) { setNovo(""); return; }
+    onChange([...emails, e]);
+    setNovo("");
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <Input
+          type="email"
+          value={novo}
+          onChange={(e) => setNovo(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); adicionar(); } }}
+          placeholder="financeiro@cliente.com.br"
+          className="flex-1"
+        />
+        <Button type="button" variant="secondary" onClick={adicionar} className="shrink-0">
+          <Plus className="w-4 h-4" /> Adicionar
+        </Button>
+      </div>
+      {emails.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {emails.map((e) => (
+            <span key={e} className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 text-xs font-medium rounded-full pl-3 pr-1.5 py-1">
+              <Mail className="w-3 h-3" /> {e}
+              <button type="button" onClick={() => onChange(emails.filter((x) => x !== e))} className="p-0.5 hover:bg-primary-100 rounded-full">
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

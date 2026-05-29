@@ -3,11 +3,31 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
+const aliquota = z.preprocess(
+  (v) => (v === "" || v == null || (typeof v === "number" && isNaN(v)) ? null : Number(v)),
+  z.number().nonnegative().nullable()
+);
+const textoFiscal = z.preprocess(
+  (v) => (v === "" || v == null ? null : v),
+  z.string().nullable()
+);
+
 const schema = z.object({
   nome: z.string().min(1),
   descricao: z.string().optional(),
   unidade: z.string().default("un"),
-  valorPadrao: z.number().optional().nullable(),
+  valorPadrao: z.preprocess(
+    (v) => (v === "" || v == null || (typeof v === "number" && isNaN(v)) ? null : Number(v)),
+    z.number().nullable()
+  ).optional(),
+  codigoMunicipal: textoFiscal.optional(),
+  codigoLc116: textoFiscal.optional(),
+  aliquotaISS: aliquota.optional(),
+  aliquotaPIS: aliquota.optional(),
+  aliquotaCOFINS: aliquota.optional(),
+  aliquotaCSLL: aliquota.optional(),
+  aliquotaIR: aliquota.optional(),
+  observacaoFiscal: textoFiscal.optional(),
   ativo: z.boolean().default(true),
 });
 

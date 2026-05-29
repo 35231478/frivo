@@ -10,6 +10,7 @@ import {
   LayoutDashboard, Users, Thermometer, ClipboardList, FileText,
   HardHat, Settings, ChevronDown, ChevronRight,
   Wrench, FileSpreadsheet, Cog, Package, ListChecks, Calculator,
+  Wallet, Receipt, TrendingUp, FileBarChart,
 } from "lucide-react";
 
 const itensMenu = [
@@ -20,6 +21,12 @@ const itensMenu = [
   { href: "/orcamentos",   icone: Calculator,      label: "Orçamentos" },
   { href: "/contratos",    icone: FileText,        label: "Contratos" },
   { href: "/tecnicos",     icone: HardHat,         label: "Técnicos" },
+];
+
+const itensFinanceiro = [
+  { href: "/financeiro/medicoes",        icone: FileBarChart, label: "Medições" },
+  { href: "/financeiro/contas-receber",  icone: Receipt,      label: "Contas a Receber" },
+  { href: "/financeiro/fluxo-caixa",     icone: TrendingUp,   label: "Fluxo de Caixa" },
 ];
 
 const itensCadastros = [
@@ -46,9 +53,13 @@ export function Sidebar({ session }: SidebarProps) {
   const [cadastrosAberto, setCadastrosAberto] = useState(
     itensCadastros.some(({ href }) => pathname.startsWith(href))
   );
+  const [financeiroAberto, setFinanceiroAberto] = useState(
+    pathname.startsWith("/financeiro")
+  );
 
   const configAtivo = pathname === "/configuracoes" || pathname.startsWith("/configuracoes/");
   const cadastroAtivo = itensCadastros.some(({ href }) => pathname.startsWith(href));
+  const financeiroAtivo = pathname.startsWith("/financeiro");
 
   const usuario = session.user;
   const iniciais =
@@ -76,6 +87,53 @@ export function Sidebar({ session }: SidebarProps) {
           {itensMenu.map(({ href, icone: Icone, label }) => (
             <SidebarLink key={href} href={href} icone={Icone} label={label} pathname={pathname} />
           ))}
+
+          {/* Financeiro — submenu expansível */}
+          <button
+            onClick={() => setFinanceiroAberto((v) => !v)}
+            className={cn(
+              "relative flex items-center justify-between w-full pl-4 pr-3 py-2.5 rounded-lg text-sm transition-all",
+              financeiroAtivo
+                ? "bg-primary-500 text-white font-semibold"
+                : "text-slate-200 hover:bg-white/5 hover:text-white",
+            )}
+          >
+            {financeiroAtivo && (
+              <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r bg-success-500" />
+            )}
+            <span className="flex items-center gap-3">
+              <Wallet className="w-[18px] h-[18px]" />
+              Financeiro
+            </span>
+            {financeiroAberto ? (
+              <ChevronDown className="w-3.5 h-3.5" />
+            ) : (
+              <ChevronRight className="w-3.5 h-3.5" />
+            )}
+          </button>
+
+          {financeiroAberto && (
+            <div className="ml-5 pl-3 border-l border-white/10 space-y-0.5 mt-1">
+              {itensFinanceiro.map(({ href, icone: Icone, label }) => {
+                const ativo = pathname === href || pathname.startsWith(href + "/");
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    className={cn(
+                      "flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs transition-colors",
+                      ativo
+                        ? "bg-white/10 text-white font-medium"
+                        : "text-slate-300 hover:bg-white/5 hover:text-white",
+                    )}
+                  >
+                    <Icone className="w-3.5 h-3.5 shrink-0" />
+                    {label}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="my-4 border-t border-white/5" />
