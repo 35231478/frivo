@@ -4,10 +4,11 @@ import { forwardRef } from "react";
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   error?: boolean;
+  valido?: boolean;
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, error, ...props }, ref) => (
+  ({ className, error, valido, ...props }, ref) => (
     <input
       ref={ref}
       {...props}
@@ -18,7 +19,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         "placeholder:text-ink-subtle",
         error
           ? "border-red-400 focus:border-red-500 focus:ring-red-500/10"
-          : "border-surface-border",
+          : valido
+            ? "border-success-400 focus:border-success-500 focus:ring-success-500/10"
+            : "border-surface-border",
         className
       )}
     />

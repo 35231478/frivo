@@ -28,6 +28,7 @@ import type { Cliente, Tecnico, Unidade, Configuracao, ContatoCliente } from "@p
 import {
   Search, Loader2, FileCheck, Lock, Pencil, Plus, X, Mail, AlertCircle,
   FileText, Phone, MapPin, HardHat, Image as ImageIcon, Heart, Headset,
+  Building2, Tag, DollarSign, Users, Paperclip, Star, MessageSquare, Globe,
 } from "lucide-react";
 
 type ResponsavelItem = Pick<Tecnico, "id" | "nome" | "crea">;
@@ -77,6 +78,13 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
   // Abas
   const [aba, setAba] = useState("geral");
   const [abasErro, setAbasErro] = useState<Set<string>>(new Set());
+  const [cnpjInfo, setCnpjInfo] = useState<{ nome: string; cidade?: string; estado?: string } | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  function mostrarToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  }
 
   // Perfil de faturamento (gerenciado fora do RHF)
   const [tipoFaturamento, setTipoFaturamento] = useState<string>(initialData?.tipoFaturamento ?? "");
@@ -136,6 +144,7 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
       if (!res.ok) { const err = await res.json(); setErroGlobal(err.erro ?? "Erro ao consultar CNPJ."); return; }
       const data = await res.json();
       if (data.nome) { setValue("nome", data.nome); setRazaoSocialBloqueada(true); }
+      setCnpjInfo({ nome: data.nome ?? "", cidade: data.cidade, estado: data.estado });
       if (data.nomeFantasia) setValue("nomeFantasia", data.nomeFantasia);
       if (data.email) setValue("email", data.email);
       if (data.telefone) setValue("telefone", data.telefone);
@@ -168,7 +177,7 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
     if (primeira) { setAba(primeira.id); setErroGlobal(`Existem campos obrigatórios na aba "${primeira.label}".`); }
   }
 
-  async function onSubmit(data: ClienteInput) {
+  async function onSubmit(data: ClienteInput, continuar = false) {
     setErroGlobal(""); setAbasErro(new Set());
     const erroCfg = validarConfigDinamica();
     if (erroCfg) { setAbasErro(new Set([erroCfg.aba])); setAba(erroCfg.aba); setErroGlobal(erroCfg.msg); return; }
@@ -201,7 +210,14 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
         body: JSON.stringify(payload),
       });
       if (!res.ok) { const err = await res.json(); setErroGlobal(err.erro ?? "Erro ao salvar cliente."); return; }
-      router.push("/clientes"); router.refresh();
+      const saved = await res.json().catch(() => ({}));
+      if (continuar) {
+        mostrarToast(isEditing ? "Alterações salvas com sucesso!" : "Cliente cadastrado com sucesso!");
+        if (!isEditing && saved?.id) { router.push(`/clientes/${saved.id}/editar`); router.refresh(); }
+        else router.refresh();
+      } else {
+        router.push("/clientes"); router.refresh();
+      }
     } catch { setErroGlobal("Erro de conexão."); }
   }
 
@@ -224,60 +240,91 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
     { id: "portal", label: "Portal", icone: Headset },
   ];
 
+  const salvar = handleSubmit((d) => onSubmit(d, false), onError);
+  const salvarEContinuar = handleSubmit((d) => onSubmit(d, true), onError);
+  const titulo = isEditing ? (initialData?.nome || "Editar cliente") : "Novo cliente";
+
+  const BotoesAcao = ({ compact = false }: { compact?: boolean }) => (
+    <div className="flex items-center gap-2 shrink-0">
+      <Button type="button" variant="secondary" size={compact ? "sm" : "md"} onClick={() => router.push("/clientes")}>Cancelar</Button>
+      <Button type="button" variant="outline" size={compact ? "sm" : "md"} loading={isSubmitting} onClick={salvarEContinuar}>
+        <span className={compact ? "hidden lg:inline" : ""}>Salvar e continuar</span>
+        <span className={compact ? "lg:hidden" : "hidden"}>Continuar</span>
+      </Button>
+      <Button type="button" variant="success" size={compact ? "sm" : "md"} loading={isSubmitting} onClick={salvar}>
+        <FileCheck className="w-4 h-4" /> Salvar
+      </Button>
+    </div>
+  );
+
   return (
-    <form onSubmit={handleSubmit(onSubmit, onError)} className="space-y-6">
-      {/* Cabeçalho de status */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {isEditing && temContrato && (
-          <span className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium rounded-lg px-3 py-1.5">
-            <FileCheck className="w-4 h-4" /> Cliente de Contrato
-          </span>
-        )}
-        {statusFin && (
-          <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", COR_STATUS_FINANCEIRO[statusFin])}>
-            {LABELS_STATUS_FINANCEIRO[statusFin]}
-          </span>
-        )}
-        {!ativoVal && <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Inativo</span>}
-      </div>
-
-      {/* Abas fixas no topo */}
-      <div className="sticky top-0 z-20 bg-white -mx-6 px-6 pt-1 pb-0 border-b border-surface-border">
-        <nav className="flex gap-1 overflow-x-auto -mb-px">
-          {ABAS.map((t) => {
-            const ativa = aba === t.id;
-            const comErro = abasErro.has(t.id);
-            return (
-              <button
-                key={t.id} type="button" onClick={() => setAba(t.id)}
-                className={cn(
-                  "flex items-center gap-2 px-3.5 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition-all",
-                  ativa ? "border-primary-500 text-primary-600" : "border-transparent text-ink-muted hover:text-ink hover:border-surface-border",
-                  comErro && !ativa && "text-red-600",
-                  comErro && "border-red-400",
-                )}
-              >
-                <t.icone className="w-4 h-4" />
-                {t.label}
-                {t.badge != null && t.badge > 0 && (
-                  <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", ativa ? "bg-primary-100 text-primary-700" : "bg-surface-alt text-ink-muted")}>{t.badge}</span>
-                )}
-                {comErro && <AlertCircle className="w-3.5 h-3.5 text-red-500" />}
-              </button>
-            );
-          })}
-        </nav>
-      </div>
-
-      {erroGlobal && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0" /> {erroGlobal}
+    <form onSubmit={salvar} className="min-h-full -m-6 bg-[#F8FAFC] p-4 sm:p-6">
+      {/* Toast de sucesso */}
+      {toast && (
+        <div className="fixed top-5 right-5 z-50 flex items-center gap-2 bg-success-600 text-white text-sm font-medium rounded-xl px-4 py-3 shadow-card-hover animate-in fade-in slide-in-from-top-2">
+          <FileCheck className="w-4 h-4" /> {toast}
         </div>
       )}
 
+      <div className="max-w-7xl mx-auto space-y-5">
+        {/* Cabeçalho fixo: título + status + ações */}
+        <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-[#F8FAFC]/90 backdrop-blur border-b border-surface-border">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3 flex-wrap min-w-0">
+              <h1 className="text-xl font-bold text-ink truncate">{titulo}</h1>
+              {isEditing && temContrato && (
+                <span className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium rounded-lg px-2.5 py-1">
+                  <FileCheck className="w-3.5 h-3.5" /> Contrato
+                </span>
+              )}
+              {statusFin && (
+                <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", COR_STATUS_FINANCEIRO[statusFin])}>
+                  {LABELS_STATUS_FINANCEIRO[statusFin]}
+                </span>
+              )}
+              {!ativoVal && <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Inativo</span>}
+            </div>
+            <BotoesAcao compact />
+          </div>
+        </div>
+
+        {erroGlobal && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" /> {erroGlobal}
+          </div>
+        )}
+
+        {/* Card central branco com abas + conteúdo */}
+        <div className="bg-white rounded-2xl shadow-card border border-surface-border overflow-hidden">
+          <nav className="flex gap-1.5 overflow-x-auto px-4 pt-4 pb-4 border-b border-surface-border">
+            {ABAS.map((t) => {
+              const ativa = aba === t.id;
+              const comErro = abasErro.has(t.id);
+              return (
+                <button
+                  key={t.id} type="button" onClick={() => setAba(t.id)}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl whitespace-nowrap transition-all",
+                    ativa ? "bg-primary-500 text-white shadow-sm" : "text-ink-muted hover:text-ink hover:bg-surface-alt",
+                    comErro && !ativa && "text-red-600 bg-red-50",
+                  )}
+                >
+                  <t.icone className="w-4 h-4" />
+                  {t.label}
+                  {t.badge != null && t.badge > 0 && (
+                    <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", ativa ? "bg-white/25 text-white" : "bg-surface-alt text-ink-muted")}>{t.badge}</span>
+                  )}
+                  {comErro && <AlertCircle className={cn("w-3.5 h-3.5", ativa ? "text-white" : "text-red-500")} />}
+                </button>
+              );
+            })}
+          </nav>
+
+          <div className="p-5 sm:p-6 lg:p-8">
+
       {/* ABA 1 — Dados Gerais */}
       <Painel ativo={aba === "geral"}>
-        <FormSection title="Dados básicos">
+        <FormSection title="Dados básicos" icon={<Building2 className="w-3.5 h-3.5" />}>
           <FormGrid>
             <FormField label="Tipo de pessoa" required>
               <Select {...register("tipoPessoa")} error={!!errors.tipoPessoa}>
@@ -285,22 +332,37 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
                 <option value="FISICA">Pessoa Física</option>
               </Select>
             </FormField>
-            <FormField label={tipoPessoa === "FISICA" ? "CPF" : "CNPJ"} required error={errors.cpfCnpj?.message}>
+            <FormField label={tipoPessoa === "FISICA" ? "CPF" : "CNPJ"} required error={errors.cpfCnpj?.message} hint={tipoPessoa === "JURIDICA" ? "Informe o CNPJ e clique em Buscar para preencher automaticamente." : undefined}>
               <div className="flex gap-2">
-                <Input {...register("cpfCnpj")} placeholder={tipoPessoa === "FISICA" ? "000.000.000-00" : "00.000.000/0001-00"} error={!!errors.cpfCnpj} className="flex-1" />
+                <Input {...register("cpfCnpj")} placeholder={tipoPessoa === "FISICA" ? "000.000.000-00" : "00.000.000/0001-00"} error={!!errors.cpfCnpj} valido={!errors.cpfCnpj && !!cnpjInfo} className="flex-1" />
                 {tipoPessoa === "JURIDICA" && (
-                  <Button type="button" variant="secondary" loading={buscandoCnpj} onClick={buscarCnpj} className="shrink-0">
-                    {buscandoCnpj ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                    <span className="hidden sm:inline ml-1">Buscar CNPJ</span>
+                  <Button type="button" variant="success" loading={buscandoCnpj} onClick={buscarCnpj} className="shrink-0">
+                    {!buscandoCnpj && <Search className="w-4 h-4" />}
+                    <span className="hidden sm:inline ml-1">Buscar</span>
                   </Button>
                 )}
               </div>
             </FormField>
           </FormGrid>
+          {cnpjInfo && cnpjInfo.nome && (
+            <div className="flex items-start gap-3 bg-success-50 border border-success-200 rounded-xl px-4 py-3 animate-in fade-in">
+              <FileCheck className="w-5 h-5 text-success-600 shrink-0 mt-0.5" />
+              <div className="text-sm min-w-0">
+                <p className="font-semibold text-success-800">Dados encontrados na Receita Federal</p>
+                <p className="text-success-700 truncate">
+                  {cnpjInfo.nome}
+                  {(cnpjInfo.cidade || cnpjInfo.estado) && ` — ${[cnpjInfo.cidade, cnpjInfo.estado].filter(Boolean).join("/")}`}
+                </p>
+              </div>
+              <button type="button" onClick={() => setCnpjInfo(null)} className="ml-auto text-success-600 hover:text-success-800 shrink-0">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           <FormGrid>
             <FormField label={tipoPessoa === "FISICA" ? "Nome completo" : "Razão social"} required error={errors.nome?.message}>
               <div className="relative">
-                <Input {...register("nome")} error={!!errors.nome} readOnly={razaoSocialBloqueada} className={razaoSocialBloqueada ? "bg-gray-100 text-gray-600 pr-20" : ""} />
+                <Input {...register("nome")} error={!!errors.nome} valido={!errors.nome && razaoSocialBloqueada} readOnly={razaoSocialBloqueada} className={razaoSocialBloqueada ? "bg-gray-100 text-gray-600 pr-20" : ""} />
                 {razaoSocialBloqueada && (
                   <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                     <Lock className="w-3.5 h-3.5 text-gray-400" />
@@ -322,7 +384,7 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
           )}
         </FormSection>
 
-        <FormSection title="Classificação">
+        <FormSection title="Classificação" icon={<Tag className="w-3.5 h-3.5" />}>
           <FormGrid cols={3}>
             <FormField label="Segmento">
               <Select {...register("segmento")} placeholder="Selecione">
@@ -345,7 +407,7 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
           </div>
         </FormSection>
 
-        <FormSection title="Comercial">
+        <FormSection title="Comercial" icon={<DollarSign className="w-3.5 h-3.5" />}>
           <FormGrid>
             <FormField label="Tabela de preços" hint="Sem seleção, usa a tabela Padrão da empresa">
               <Select value={tabelaPrecoId} onChange={(e) => setTabelaPrecoId(e.target.value)} placeholder="Padrão (automático)">
@@ -391,7 +453,7 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
 
       {/* ABA 2 — Contatos */}
       <Painel ativo={aba === "contatos"}>
-        <FormSection title="Contato rápido">
+        <FormSection title="Contato rápido" icon={<Phone className="w-3.5 h-3.5" />}>
           <FormGrid cols={3}>
             <FormField label={reqLabel("E-mail", "clienteEmailObrigatorio")} error={errors.email?.message}>
               <Input {...register("email")} type="email" placeholder="email@empresa.com.br" error={!!errors.email} />
@@ -408,7 +470,7 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
           </FormGrid>
         </FormSection>
 
-        <FormSection title="Contatos adicionais">
+        <FormSection title="Contatos adicionais" icon={<Users className="w-3.5 h-3.5" />}>
           <p className="text-xs text-gray-400 -mt-2 mb-3">
             {isEditing
               ? "Gerencie os contatos deste cliente. Contatos do tipo \"Operacional\" serão usados para abertura de chamados."
@@ -424,7 +486,7 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
 
       {/* ABA 3 — Endereços */}
       <Painel ativo={aba === "enderecos"}>
-        <FormSection title="Endereços do Cliente">
+        <FormSection title="Endereços do Cliente" icon={<MapPin className="w-3.5 h-3.5" />}>
           <p className="text-xs text-gray-400 -mt-2 mb-3">
             {isEditing
               ? "Gerencie os endereços do cliente. O endereço marcado com estrela é o principal."
@@ -443,7 +505,7 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
 
       {/* ABA 4 — Técnico e ART */}
       <Painel ativo={aba === "tecnico"}>
-        <FormSection title="Responsável técnico e ART">
+        <FormSection title="Responsável técnico e ART" icon={<HardHat className="w-3.5 h-3.5" />}>
           <FormGrid>
             <FormField label={reqLabel("Responsável técnico", "clienteRtObrigatorio")} hint="Engenheiro responsável">
               <Select {...register("responsavelTecnicoId")} placeholder="Selecione">
@@ -463,11 +525,11 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
       {/* ABA 5 — Documentos e Mídia */}
       <Painel ativo={aba === "documentos"}>
         {isEditing && (
-          <FormSection title="Logomarca">
+          <FormSection title="Logomarca" icon={<ImageIcon className="w-3.5 h-3.5" />}>
             <LogoUpload clienteId={initialData!.id} logoInicial={initialData!.logo} />
           </FormSection>
         )}
-        <FormSection title="Anexos">
+        <FormSection title="Anexos" icon={<Paperclip className="w-3.5 h-3.5" />}>
           {isEditing
             ? <AnexosManager clienteId={initialData!.id} anexosIniciais={initialData!.anexos ?? []} />
             : <AnexosLocal anexos={anexosNovos} onChange={setAnexosNovos} />}
@@ -477,18 +539,18 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
 
       {/* ABA 6 — Relacionamento */}
       <Painel ativo={aba === "relacionamento"}>
-        <FormSection title="Satisfação">
+        <FormSection title="Satisfação" icon={<Star className="w-3.5 h-3.5" />}>
           <div className="flex items-center gap-3">
             <span className="text-sm text-ink-muted">Nível de satisfação:</span>
             <StarRating value={satisfacao} onChange={(v) => { setSatisfacao(v || null); setValue("satisfacao", v || null); }} />
           </div>
         </FormSection>
         {isEditing && (
-          <FormSection title="Histórico de Interações">
+          <FormSection title="Histórico de Interações" icon={<MessageSquare className="w-3.5 h-3.5" />}>
             <InteracoesManager clienteId={initialData!.id} interacoesIniciais={initialData!.interacoes ?? []} />
           </FormSection>
         )}
-        <FormSection title="Observações">
+        <FormSection title="Observações" icon={<FileText className="w-3.5 h-3.5" />}>
           <FormField label="Observações internas">
             <Textarea {...register("observacoes")} placeholder="Informações adicionais…" rows={3} />
           </FormField>
@@ -497,7 +559,7 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
 
       {/* ABA 7 — Portal */}
       <Painel ativo={aba === "portal"}>
-        <FormSection title="Portal do Cliente">
+        <FormSection title="Portal do Cliente" icon={<Globe className="w-3.5 h-3.5" />}>
           <p className="text-xs text-gray-400 -mt-2 mb-1">
             Habilita o acesso do cliente ao portal externo. O acesso individual e as permissões de cada contato são definidos na aba <strong>Contatos</strong>.
           </p>
@@ -528,11 +590,14 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
           )}
         </FormSection>
       </Painel>
+          </div>{/* fim do conteúdo */}
 
-      <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
-        <Button type="button" variant="secondary" onClick={() => router.back()}>Cancelar</Button>
-        <Button type="submit" loading={isSubmitting}>{isEditing ? "Salvar alterações" : "Cadastrar cliente"}</Button>
-      </div>
+          {/* Barra de ações no rodapé */}
+          <div className="flex items-center justify-end gap-3 px-5 sm:px-6 lg:px-8 py-4 bg-surface-alt/40 border-t border-surface-border">
+            <BotoesAcao />
+          </div>
+        </div>{/* fim do card */}
+      </div>{/* fim do container */}
     </form>
   );
 }

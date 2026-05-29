@@ -24,10 +24,11 @@ export function FormField({ label, error, required, hint, className, children }:
   );
 }
 
-export function FormSection({ title, children }: { title: string; children: ReactNode }) {
+export function FormSection({ title, icon, children }: { title: string; icon?: ReactNode; children: ReactNode }) {
   return (
     <div className="space-y-4">
-      <h3 className="text-xs font-bold text-ink-muted uppercase tracking-wider pb-2 border-b-2 border-success-500/40">
+      <h3 className="flex items-center gap-2 text-xs font-bold text-ink-muted uppercase tracking-wider pb-2 border-b-2 border-success-500/40">
+        {icon && <span className="text-success-600">{icon}</span>}
         {title}
       </h3>
       {children}

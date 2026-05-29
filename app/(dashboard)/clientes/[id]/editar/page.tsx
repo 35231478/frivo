@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { PageHeader } from "@/components/ui/page-header";
 import { ClienteForm } from "@/components/forms/cliente-form";
 
 export const metadata: Metadata = { title: "Editar Cliente" };
@@ -25,12 +24,5 @@ export default async function EditarClientePage({ params }: { params: Promise<{ 
   });
   if (!cliente) notFound();
 
-  return (
-    <div className="max-w-3xl mx-auto">
-      <PageHeader title="Editar cliente" description={cliente.nomeFantasia ?? cliente.nome} backHref="/clientes" />
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <ClienteForm initialData={cliente} />
-      </div>
-    </div>
-  );
+  return <ClienteForm initialData={cliente} />;
 }
