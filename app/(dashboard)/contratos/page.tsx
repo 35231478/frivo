@@ -1,150 +1,100 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { formatarData, formatarMoeda, cn } from "@/lib/utils";
-import Link from "next/link";
-import { FileText, Plus } from "lucide-react";
+import { ContratosListaClient } from "@/components/contratos/contratos-lista-client";
 
 export const metadata: Metadata = { title: "Contratos" };
 
-const LABELS_TIPO: Record<string, string> = {
-  MANUTENCAO_PREVENTIVA: "Prev.",
-  MANUTENCAO_CORRETIVA: "Corr.",
-  MANUTENCAO_COMPLETA: "Completa",
-  INSTALACAO: "Instalação",
-  LOCACAO: "Locação",
-  ASSISTENCIA_TECNICA: "A. Técnica",
+type SP = {
+  busca?: string; status?: string; frequencia?: string;
+  vigenciaInicio?: string; vigenciaFim?: string; valorMin?: string; valorMax?: string;
+  clienteId?: string; sort?: string; dir?: string;
 };
 
-const COR_STATUS: Record<string, string> = {
-  ATIVO: "bg-success-50 text-success-700",
-  SUSPENSO: "bg-orange-50 text-orange-700",
-  ENCERRADO: "bg-slate-100 text-slate-600",
-  VENCIDO: "bg-red-50 text-red-700",
-  AGUARDANDO_ASSINATURA: "bg-primary-50 text-primary-700",
+const SORT_MAP: Record<string, (dir: "asc" | "desc") => any> = {
+  valorMensal: (dir) => ({ valorMensal: dir }),
+  dataInicio: (dir) => ({ dataInicio: dir }),
+  dataFim: (dir) => ({ dataFim: dir }),
+  cliente: (dir) => ({ cliente: { nome: dir } }),
 };
 
-const LABELS_STATUS: Record<string, string> = {
-  ATIVO: "Ativo",
-  SUSPENSO: "Suspenso",
-  ENCERRADO: "Encerrado",
-  VENCIDO: "Vencido",
-  AGUARDANDO_ASSINATURA: "Aguard. Assinatura",
-};
-
-export default async function ContratosPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ busca?: string; pagina?: string }>;
-}) {
-  const { busca = "", pagina = "1" } = await searchParams;
+export default async function ContratosPage({ searchParams }: { searchParams: Promise<SP> }) {
+  const sp = await searchParams;
   const session = await auth();
   const empresaId = session!.user!.empresaId;
-  const porPagina = 20;
-  const skip = (Number(pagina) - 1) * porPagina;
+
+  const agora = new Date();
+  const em30 = new Date(agora.getTime() + 30 * 864e5);
+  const sort = sp.sort && SORT_MAP[sp.sort] ? sp.sort : "dataInicio";
+  const dir: "asc" | "desc" = sp.dir === "asc" ? "asc" : "desc";
 
   const where: any = { empresaId };
-  if (busca) {
+  if (sp.busca) {
     where.OR = [
-      { numero: { contains: busca, mode: "insensitive" } },
-      { cliente: { nome: { contains: busca, mode: "insensitive" } } },
+      { numero: { contains: sp.busca, mode: "insensitive" } },
+      { cliente: { nome: { contains: sp.busca, mode: "insensitive" } } },
     ];
   }
+  if (sp.frequencia) where.periodicidade = sp.frequencia;
+  if (sp.clienteId) where.clienteId = sp.clienteId;
+  if (sp.vigenciaInicio) where.dataInicio = { ...(where.dataInicio ?? {}), gte: new Date(sp.vigenciaInicio) };
+  if (sp.vigenciaFim) { const f = new Date(sp.vigenciaFim); f.setHours(23, 59, 59, 999); where.dataInicio = { ...(where.dataInicio ?? {}), lte: f }; }
+  if (sp.valorMin) where.valorMensal = { ...(where.valorMensal ?? {}), gte: Number(sp.valorMin) };
+  if (sp.valorMax) where.valorMensal = { ...(where.valorMensal ?? {}), lte: Number(sp.valorMax) };
+  // Status computado
+  if (sp.status === "ATIVO") where.status = "ATIVO";
+  else if (sp.status === "INATIVO") where.status = { in: ["SUSPENSO", "ENCERRADO"] };
+  else if (sp.status === "VENCIDO") { where.status = { not: "ENCERRADO" }; where.dataFim = { lt: agora }; }
+  else if (sp.status === "VENCENDO") { where.status = "ATIVO"; where.dataFim = { gte: agora, lte: em30 }; }
 
-  const [contratos, total] = await Promise.all([
+  const [contratos, total, agregadoFiltrado, ativos, somaAtivos, vencendo, vencidos, clientes] = await Promise.all([
     prisma.contrato.findMany({
       where,
       include: {
         cliente: { select: { id: true, nome: true, nomeFantasia: true } },
-        _count: { select: { unidades: true } },
+        ordensServico: { where: { previsaoConclusao: { gte: agora } }, orderBy: { previsaoConclusao: "asc" }, take: 1, select: { id: true, numero: true, status: true, previsaoConclusao: true } },
       },
-      orderBy: { criadoEm: "desc" },
-      skip,
-      take: porPagina,
+      orderBy: SORT_MAP[sort](dir),
+      take: 200,
     }),
     prisma.contrato.count({ where }),
+    prisma.contrato.aggregate({ where, _sum: { valorMensal: true } }),
+    prisma.contrato.count({ where: { empresaId, status: "ATIVO" } }),
+    prisma.contrato.aggregate({ where: { empresaId, status: "ATIVO" }, _sum: { valorMensal: true } }),
+    prisma.contrato.count({ where: { empresaId, status: "ATIVO", dataFim: { gte: agora, lte: em30 } } }),
+    prisma.contrato.count({ where: { empresaId, status: { not: "ENCERRADO" }, dataFim: { lt: agora } } }),
+    prisma.cliente.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true, nomeFantasia: true }, orderBy: { nome: "asc" } }),
   ]);
 
+  const valorMensalAtivos = Number(somaAtivos._sum.valorMensal ?? 0);
+
+  const view = contratos.map((c) => {
+    const fim = c.dataFim;
+    const vencido = !!fim && fim < agora && c.status !== "ENCERRADO";
+    const vencendo = !!fim && fim >= agora && fim <= em30 && c.status === "ATIVO";
+    return {
+      id: c.id,
+      numero: c.numero,
+      cliente: c.cliente.nomeFantasia ?? c.cliente.nome,
+      periodicidade: c.periodicidade,
+      valorMensal: c.valorMensal ? Number(c.valorMensal) : null,
+      dataInicio: c.dataInicio.toISOString(),
+      dataFim: fim ? fim.toISOString() : null,
+      status: c.status,
+      vencido, vencendo,
+      proximaOs: c.ordensServico[0]
+        ? { id: c.ordensServico[0].id, numero: c.ordensServico[0].numero, status: c.ordensServico[0].status, previsaoConclusao: c.ordensServico[0].previsaoConclusao?.toISOString() ?? null }
+        : null,
+    };
+  });
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary-50 rounded-lg">
-            <FileText className="w-5 h-5 text-primary-600" />
-          </div>
-          <h1 className="page-title">Contratos</h1>
-          <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{total}</span>
-        </div>
-        <Link
-          href="/contratos/novo"
-          className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow"
-        >
-          <Plus className="w-4 h-4" />
-          Novo Contrato
-        </Link>
-      </div>
-
-      <div className="card overflow-hidden">
-        <div className="p-4 border-b border-surface-border bg-surface-alt/40">
-          <form method="get">
-            <input
-              name="busca"
-              defaultValue={busca}
-              placeholder="Buscar por número ou cliente..."
-              className="w-full sm:max-w-sm bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all"
-            />
-          </form>
-        </div>
-
-        <table className="w-full text-sm">
-          <thead className="bg-surface-alt border-b border-surface-border">
-            <tr>
-              <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Número</th>
-              <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Cliente</th>
-              <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden md:table-cell">Tipo</th>
-              <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden lg:table-cell">Vigência</th>
-              <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden lg:table-cell">Valor/mês</th>
-              <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {contratos.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="text-center text-ink-subtle py-12">
-                  Nenhum contrato encontrado
-                </td>
-              </tr>
-            ) : (
-              contratos.map((ct, idx) => (
-                <tr key={ct.id} className={cn(
-                  "border-b border-surface-border hover:bg-primary-50/40 transition-colors",
-                  idx % 2 === 1 && "bg-surface-alt/30",
-                )}>
-                  <td className="px-4 py-3">
-                    <Link href={`/contratos/${ct.id}`} className="font-mono font-semibold text-primary-600 hover:underline">
-                      {ct.numero}
-                    </Link>
-                    <Link href={`/contratos/${ct.id}/editar`} className="block text-xs text-ink-subtle hover:text-primary-600 hover:underline">editar</Link>
-                  </td>
-                  <td className="px-4 py-3 text-ink font-medium">{ct.cliente.nomeFantasia ?? ct.cliente.nome}</td>
-                  <td className="px-4 py-3 text-ink-muted hidden md:table-cell">{LABELS_TIPO[ct.tipo] ?? ct.tipo}</td>
-                  <td className="px-4 py-3 text-ink-muted hidden lg:table-cell">
-                    {formatarData(ct.dataInicio)} – {formatarData(ct.dataFim) ?? "indeterminado"}
-                  </td>
-                  <td className="px-4 py-3 text-right text-ink-muted hidden lg:table-cell">
-                    {formatarMoeda(ct.valorMensal ? Number(ct.valorMensal) : null)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full", COR_STATUS[ct.status])}>
-                      {LABELS_STATUS[ct.status] ?? ct.status}
-                    </span>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <ContratosListaClient
+      contratos={view}
+      total={total}
+      somaMensalFiltrada={Number(agregadoFiltrado._sum.valorMensal ?? 0)}
+      resumo={{ ativos, valorMensalTotal: valorMensalAtivos, valorAnualTotal: valorMensalAtivos * 12, vencendo, vencidos }}
+      opcoesClientes={clientes.map((c) => ({ value: c.id, label: c.nomeFantasia ?? c.nome }))}
+    />
   );
 }
