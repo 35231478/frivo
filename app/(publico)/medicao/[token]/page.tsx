@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { MedicaoDocumento } from "@/components/medicao/medicao-documento";
+import { MedicaoEnvio } from "@/components/medicao/medicao-envio";
 import { AprovacaoMedicao } from "@/components/medicao/aprovacao-medicao";
+import { RelatorioGeralDocumento } from "@/components/relatorio/relatorio-geral-documento";
+import { carregarRelatorioPorToken } from "@/lib/relatorio-server";
 import { FrivoLogo } from "@/components/layout/frivo-logo";
 import { LABELS_STATUS_MEDICAO, CLASSE_STATUS_MEDICAO, formatarData, cn } from "@/lib/utils";
 import { CheckCircle2, AlertTriangle } from "lucide-react";
@@ -32,11 +35,22 @@ export default async function MedicaoPublicaPage({ params }: { params: Promise<{
   const aguardando = medicao.status === "AGUARDANDO_APROVACAO";
   const jaAprovada = !!medicao.assinaturaUrl;
 
+  // Documento integrado: anexa o relatório consolidado quando há um relatório vinculado
+  const relVinculado = await prisma.relatorioOs.findFirst({
+    where: { medicaoId: medicao.id, escopo: "MEDICAO_COMPLETA" },
+    select: { tokenPublico: true },
+  });
+  const consolidado = relVinculado ? await carregarRelatorioPorToken(relVinculado.tokenPublico) : null;
+
+  const emailDestino = medicao.cliente.emailsFaturamento?.[0] ?? medicao.cliente.email ?? null;
+  const whatsappDestino = medicao.cliente.whatsappFaturamento ?? medicao.cliente.celular ?? null;
+
   return (
     <div className="min-h-screen flex flex-col">
       <header className="bg-sidebar text-white py-4 px-6 shadow-sm">
-        <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
+        <div className="max-w-4xl mx-auto flex items-center justify-between gap-4 flex-wrap">
           <FrivoLogo size="sm" showSubtitle={false} />
+          <MedicaoEnvio token={token} numero={medicao.numero} empresaNome={medicao.empresa.nomeFantasia ?? medicao.empresa.nome} emailDestino={emailDestino} whatsappDestino={whatsappDestino} />
         </div>
       </header>
 
@@ -66,6 +80,18 @@ export default async function MedicaoPublicaPage({ params }: { params: Promise<{
           <div className="bg-white rounded-2xl shadow-card p-6 md:p-10">
             <MedicaoDocumento medicao={medicao} empresa={medicao.empresa} cliente={medicao.cliente} />
           </div>
+
+          {consolidado && (
+            <div className="bg-white rounded-2xl shadow-card p-6 md:p-10">
+              <p className="text-xs uppercase tracking-wider text-ink-muted mb-4 pb-2 border-b border-surface-border">Relatório técnico completo</p>
+              <RelatorioGeralDocumento
+                relatorio={consolidado.relatorio}
+                empresa={consolidado.empresa}
+                os={consolidado.os}
+                equipamentos={consolidado.equipamentos}
+              />
+            </div>
+          )}
 
           {aguardando && !jaAprovada && <AprovacaoMedicao token={token} />}
           {medicao.status === "RASCUNHO" && (

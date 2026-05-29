@@ -9,18 +9,15 @@ interface Props {
   empresaNome: string;
   emailDestino?: string | null;
   whatsappDestino?: string | null;
-  /** Caminho público base (sem origin), ex.: "/relatorio/os/<token>". Default: "/relatorio/<token>". */
-  publicPath?: string;
 }
 
-export function RelatorioEnvio({ token, numero, empresaNome, emailDestino, whatsappDestino, publicPath }: Props) {
+export function MedicaoEnvio({ token, numero, empresaNome, emailDestino, whatsappDestino }: Props) {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const path = publicPath ?? `/relatorio/${token}`;
-  const publicUrl = `${origin}${path}`;
-  const printUrl = `${path}/imprimir`;
+  const publicUrl = `${origin}/medicao/${token}`;
+  const printUrl = `/medicao/${token}/imprimir`;
 
-  const assunto = `Relatório ${numero} — ${empresaNome}`;
-  const corpo = `Olá,\n\nSegue o relatório ${numero} para sua avaliação:\n\n${publicUrl}\n\nAtenciosamente,\n${empresaNome}`;
+  const assunto = `Medição ${numero} — ${empresaNome}`;
+  const corpo = `Olá,\n\nSegue a medição ${numero} (fatura + relatório) para sua avaliação:\n\n${publicUrl}\n\nAtenciosamente,\n${empresaNome}`;
   const mailto = emailDestino
     ? `mailto:${encodeURIComponent(emailDestino)}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`
     : `mailto:?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`;
@@ -29,7 +26,7 @@ export function RelatorioEnvio({ token, numero, empresaNome, emailDestino, whats
   return (
     <div className="flex flex-wrap items-center gap-2">
       <a href={printUrl} target="_blank" rel="noopener" className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold px-3 py-2 rounded-lg transition-colors">
-        <Printer className="w-4 h-4" /> Baixar PDF
+        <Printer className="w-4 h-4" /> Baixar / Imprimir
       </a>
       <a href={mailto} className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold px-3 py-2 rounded-lg transition-colors">
         <Mail className="w-4 h-4" /> Enviar por E-mail

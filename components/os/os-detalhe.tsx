@@ -124,7 +124,7 @@ export function OsDetalhe({ os: initialOs }: { os: any }) {
               {activeTab === "orcamento" && <OsOrcamento osId={os.id} itens={os.itensOrcamento} />}
               {activeTab === "prazos" && <OsPrazos osId={os.id} />}
               {activeTab === "compras" && <ComprasSecao ordemServicoId={os.id} />}
-              {activeTab === "relatorios" && <OsRelatorios osId={os.id} contratoId={os.contrato?.id ?? null} concluida={os.status === "CONCLUIDA"} />}
+              {activeTab === "relatorios" && <OsRelatorios osId={os.id} />}
               {activeTab === "financeiro" && <OsFinanceiro osId={os.id} medicoes={os.medicoes} itensOrcamento={os.itensOrcamento} />}
               {activeTab === "formularios" && <TabFormularios atividades={os.atividades} />}
               {activeTab === "anexos" && <TabAnexos osId={os.id} anexos={os.anexos} />}

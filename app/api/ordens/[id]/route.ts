@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { gerarRelatoriosDaOs } from "@/lib/relatorio-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -78,6 +79,15 @@ export async function PUT(req: NextRequest, { params }: Params) {
     await prisma.osHistorico.create({
       data: { ordemServicoId: id, usuarioId, acao: "Status alterado", detalhes: `${existente.status} → ${status}` },
     });
+  }
+
+  // Ao concluir a OS, gera automaticamente os relatórios (idempotente)
+  if (status === "CONCLUIDA" && existente.status !== "CONCLUIDA") {
+    try {
+      await gerarRelatoriosDaOs(id, empresaId);
+    } catch (e) {
+      console.error("Falha ao gerar relatórios automáticos da OS", e);
+    }
   }
 
   return NextResponse.json(atualizado);

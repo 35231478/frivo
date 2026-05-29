@@ -310,6 +310,12 @@ enum StatusRelatorio {
   REPROVADO
 }
 
+enum EscopoRelatorio {
+  ATIVIDADE
+  GERAL
+  MEDICAO_COMPLETA
+}
+
 // ─────────────────────────────────────────────
 // EMPRESA (tenant raiz)
 // ─────────────────────────────────────────────
@@ -942,6 +948,7 @@ model AtividadeOs {
   tipoOs       TipoOs?            @relation(fields: [tipoOsId], references: [id])
   tecnico      Tecnico?           @relation(fields: [tecnicoId], references: [id])
   respostas    AtividadeResposta[]
+  relatorios   RelatorioOs[]
 
   @@map("atividades_os")
 }
@@ -1451,9 +1458,12 @@ model RelatorioOs {
   id              String          @id @default(cuid())
   empresaId       String          @map("empresa_id")
   ordemServicoId  String          @map("ordem_servico_id")
+  atividadeId     String?         @map("atividade_id")
   contratoId      String?         @map("contrato_id")
   numero          String
   tipo            TipoRelatorio   @default(PMOC)
+  escopo          EscopoRelatorio @default(GERAL)
+  resumoAutomatico String?        @map("resumo_automatico") @db.Text
   mesReferencia   Int             @map("mes_referencia")
   anoReferencia   Int             @map("ano_referencia")
   valorFinanceiro Decimal?        @map("valor_financeiro") @db.Decimal(12, 2)
@@ -1474,6 +1484,7 @@ model RelatorioOs {
 
   empresa      Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   ordemServico OrdemServico @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  atividade    AtividadeOs? @relation(fields: [atividadeId], references: [id])
   contrato     Contrato?    @relation(fields: [contratoId], references: [id])
   medicao      Medicao?     @relation(fields: [medicaoId], references: [id])
 
