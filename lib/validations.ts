@@ -97,6 +97,7 @@ export const clienteSchema = z.object({
   segmento: z.nativeEnum(Segmento).optional().nullable(),
   origem: z.nativeEnum(OrigemCliente).optional().nullable(),
   statusFinanceiro: z.nativeEnum(StatusFinanceiro).default(StatusFinanceiro.ADIMPLENTE),
+  ativo: z.boolean().default(true),
   satisfacao: z.number().min(1).max(5).optional().nullable(),
   email: z.string().email("E-mail inválido").optional().or(z.literal("")),
   telefone: z.string().optional(),
