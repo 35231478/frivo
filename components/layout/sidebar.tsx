@@ -10,7 +10,7 @@ import {
   LayoutDashboard, Users, Thermometer, ClipboardList, FileText,
   HardHat, Settings, ChevronDown, ChevronRight,
   Wrench, FileSpreadsheet, Cog, Package, ListChecks, Calculator,
-  Wallet, Receipt, TrendingUp, FileBarChart,
+  Wallet, Receipt, TrendingUp, FileBarChart, Clock, ShoppingCart, Timer,
 } from "lucide-react";
 
 const itensMenu = [
@@ -21,6 +21,7 @@ const itensMenu = [
   { href: "/orcamentos",   icone: Calculator,      label: "Orçamentos" },
   { href: "/contratos",    icone: FileText,        label: "Contratos" },
   { href: "/tecnicos",     icone: HardHat,         label: "Técnicos" },
+  { href: "/prazos",       icone: Timer,           label: "Prazos" },
 ];
 
 const itensFinanceiro = [
@@ -29,12 +30,17 @@ const itensFinanceiro = [
   { href: "/financeiro/fluxo-caixa",     icone: TrendingUp,   label: "Fluxo de Caixa" },
 ];
 
+const itensCompras = [
+  { href: "/compras/pedidos", icone: ShoppingCart, label: "Pedidos de Compra" },
+];
+
 const itensCadastros = [
   { href: "/configuracoes/tipos-os",          icone: ListChecks,       label: "Tipos de OS" },
   { href: "/configuracoes/formularios",       icone: FileSpreadsheet,  label: "Formulários" },
   { href: "/configuracoes/tipos-equipamento", icone: Thermometer,      label: "Tipos de Equipamento" },
   { href: "/configuracoes/servicos",          icone: Wrench,           label: "Serviços" },
   { href: "/configuracoes/produtos",          icone: Package,          label: "Produtos" },
+  { href: "/configuracoes/prazos",            icone: Clock,            label: "Prazos e SLA" },
 ];
 
 const ROLE_LABELS: Record<string, string> = {
@@ -56,10 +62,14 @@ export function Sidebar({ session }: SidebarProps) {
   const [financeiroAberto, setFinanceiroAberto] = useState(
     pathname.startsWith("/financeiro")
   );
+  const [comprasAberto, setComprasAberto] = useState(
+    pathname.startsWith("/compras")
+  );
 
   const configAtivo = pathname === "/configuracoes" || pathname.startsWith("/configuracoes/");
   const cadastroAtivo = itensCadastros.some(({ href }) => pathname.startsWith(href));
   const financeiroAtivo = pathname.startsWith("/financeiro");
+  const comprasAtivo = pathname.startsWith("/compras");
 
   const usuario = session.user;
   const iniciais =
@@ -115,6 +125,53 @@ export function Sidebar({ session }: SidebarProps) {
           {financeiroAberto && (
             <div className="ml-5 pl-3 border-l border-white/10 space-y-0.5 mt-1">
               {itensFinanceiro.map(({ href, icone: Icone, label }) => {
+                const ativo = pathname === href || pathname.startsWith(href + "/");
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    className={cn(
+                      "flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs transition-colors",
+                      ativo
+                        ? "bg-white/10 text-white font-medium"
+                        : "text-slate-300 hover:bg-white/5 hover:text-white",
+                    )}
+                  >
+                    <Icone className="w-3.5 h-3.5 shrink-0" />
+                    {label}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Compras — submenu expansível */}
+          <button
+            onClick={() => setComprasAberto((v) => !v)}
+            className={cn(
+              "relative flex items-center justify-between w-full pl-4 pr-3 py-2.5 rounded-lg text-sm transition-all",
+              comprasAtivo
+                ? "bg-primary-500 text-white font-semibold"
+                : "text-slate-200 hover:bg-white/5 hover:text-white",
+            )}
+          >
+            {comprasAtivo && (
+              <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r bg-success-500" />
+            )}
+            <span className="flex items-center gap-3">
+              <ShoppingCart className="w-[18px] h-[18px]" />
+              Compras
+            </span>
+            {comprasAberto ? (
+              <ChevronDown className="w-3.5 h-3.5" />
+            ) : (
+              <ChevronRight className="w-3.5 h-3.5" />
+            )}
+          </button>
+
+          {comprasAberto && (
+            <div className="ml-5 pl-3 border-l border-white/10 space-y-0.5 mt-1">
+              {itensCompras.map(({ href, icone: Icone, label }) => {
                 const ativo = pathname === href || pathname.startsWith(href + "/");
                 return (
                   <Link

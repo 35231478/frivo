@@ -2,11 +2,12 @@ import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ResumoCard } from "@/components/dashboard/resumo-card";
+import { contarAlertasPrazos } from "@/lib/prazo-server";
 import { formatarData, cn, LABELS_STATUS_OS } from "@/lib/utils";
 import Link from "next/link";
 import {
   Users, Thermometer, ClipboardList, CalendarCheck, FileText,
-  HardHat, AlertTriangle, CheckCircle, ArrowRight,
+  HardHat, AlertTriangle, CheckCircle, ArrowRight, Timer, Clock, ShoppingCart,
 } from "lucide-react";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -54,13 +55,56 @@ const CLASSE_STATUS: Record<string, string> = {
 
 export default async function DashboardPage() {
   const session = await auth();
-  const r = await buscarResumos(session!.user!.empresaId);
+  const empresaId = session!.user!.empresaId;
+  const [r, alertas] = await Promise.all([
+    buscarResumos(empresaId),
+    contarAlertasPrazos(empresaId),
+  ]);
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="page-title">Dashboard</h1>
         <p className="page-subtitle">Visão geral de {session!.user!.empresaNome}</p>
+      </div>
+
+      {/* Prazos e alertas */}
+      <div>
+        <p className="label-uppercase mb-3">Prazos e Alertas</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <ResumoCard
+            titulo="Prazos vencidos"
+            valor={alertas.prazosVencidos}
+            icone={AlertTriangle}
+            corIcone="text-red-600"
+            corFundo="bg-red-50"
+            href="/prazos?status=ATRASADO"
+          />
+          <ResumoCard
+            titulo="Vencendo hoje"
+            valor={alertas.etapasVencendoHoje}
+            icone={Clock}
+            corIcone="text-amber-600"
+            corFundo="bg-amber-50"
+            href="/prazos?status=ATIVO"
+          />
+          <ResumoCard
+            titulo="Compras pendentes"
+            valor={alertas.pedidosPendentes}
+            icone={ShoppingCart}
+            corIcone="text-orange-600"
+            corFundo="bg-orange-50"
+            href="/compras/pedidos"
+          />
+          <ResumoCard
+            titulo="Atendimentos em atraso"
+            valor={alertas.atendimentosAtraso}
+            icone={Timer}
+            corIcone="text-red-600"
+            corFundo="bg-red-50"
+            href="/ordens"
+          />
+        </div>
       </div>
 
       {/* Resumo operacional */}

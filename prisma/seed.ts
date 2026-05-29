@@ -1,7 +1,7 @@
 import {
   PrismaClient, Plano, Role, TipoPessoa, TipoTecnico,
   TipoContrato, StatusContrato, Periodicidade, StatusOS, Prioridade,
-  TipoCampo, StatusAtividade,
+  TipoCampo, StatusAtividade, ResponsavelPrazo, CanalNotificacao,
 } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
@@ -219,6 +219,74 @@ async function main() {
     await prisma.produto.create({ data: { empresaId: empresa.id, ...p } });
   }
   console.log(`Produtos criados: ${produtos.length}`);
+
+  // ======== TEMPLATES DE PRAZO / SLA ========
+  const msgPadrao = "OS {{os_numero}} — {{cliente_nome}}: etapa \"{{prazo_etapa}}\" iniciada. {{link}}";
+  const prazoTemplates = [
+    {
+      nome: "Compra de Material", cor: "#F59E0B",
+      descricao: "Fluxo de aquisição de material para a OS.",
+      etapas: [
+        { nome: "Solicitado", prazoHoras: 1, responsavel: ResponsavelPrazo.COMPRADOR },
+        { nome: "Cotando", prazoHoras: 4, responsavel: ResponsavelPrazo.COMPRADOR },
+        { nome: "Comprado", prazoHoras: 24, responsavel: ResponsavelPrazo.COMPRADOR },
+        { nome: "Entregue", prazoHoras: 48, responsavel: ResponsavelPrazo.COMPRADOR },
+      ],
+    },
+    {
+      nome: "Atendimento Urgente", cor: "#EF4444",
+      descricao: "SLA de atendimento emergencial.",
+      etapas: [
+        { nome: "Aberto", prazoHoras: 0.5, responsavel: ResponsavelPrazo.GESTOR },
+        { nome: "Técnico Designado", prazoHoras: 1, responsavel: ResponsavelPrazo.GESTOR },
+        { nome: "Em Atendimento", prazoHoras: 2, responsavel: ResponsavelPrazo.TECNICO },
+        { nome: "Concluído", prazoHoras: 4, responsavel: ResponsavelPrazo.TECNICO },
+      ],
+    },
+    {
+      nome: "Instalação", cor: "#0EA5E9",
+      descricao: "Fluxo de instalação de equipamento.",
+      etapas: [
+        { nome: "Agendado", prazoHoras: 24, responsavel: ResponsavelPrazo.GESTOR },
+        { nome: "Material Separado", prazoHoras: 4, responsavel: ResponsavelPrazo.COMPRADOR },
+        { nome: "Em Execução", prazoHoras: 2, responsavel: ResponsavelPrazo.TECNICO },
+        { nome: "Concluído", prazoHoras: 8, responsavel: ResponsavelPrazo.TECNICO },
+      ],
+    },
+    {
+      nome: "Aprovação de Orçamento", cor: "#8B5CF6",
+      descricao: "Acompanhamento da aprovação comercial.",
+      etapas: [
+        { nome: "Enviado", prazoHoras: 24, responsavel: ResponsavelPrazo.CLIENTE },
+        { nome: "Visualizado", prazoHoras: 48, responsavel: ResponsavelPrazo.CLIENTE },
+        { nome: "Aprovado/Reprovado", prazoHoras: 72, responsavel: ResponsavelPrazo.CLIENTE },
+      ],
+    },
+  ];
+  const totalPrazos = await prisma.prazoTemplate.count({ where: { empresaId: empresa.id } });
+  if (totalPrazos === 0) {
+    for (const t of prazoTemplates) {
+      await prisma.prazoTemplate.create({
+        data: {
+          empresaId: empresa.id,
+          nome: t.nome,
+          descricao: t.descricao,
+          cor: t.cor,
+          etapas: {
+            create: t.etapas.map((e, idx) => ({
+              nome: e.nome,
+              prazoHoras: e.prazoHoras,
+              responsavel: e.responsavel,
+              canal: CanalNotificacao.WHATSAPP,
+              mensagem: msgPadrao,
+              ordem: idx,
+            })),
+          },
+        },
+      });
+    }
+    console.log(`Templates de prazo criados: ${prazoTemplates.length}`);
+  }
 
   console.log("\nSeed concluído!");
   console.log("Login: admin@climatotal.com.br / admin123");

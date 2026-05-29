@@ -1,11 +1,19 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import { Bell, ChevronRight, LogOut, Search } from "lucide-react";
+import { Bell, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "next-auth";
+
+interface Alertas {
+  prazosVencidos: number;
+  etapasVencendoHoje: number;
+  pedidosPendentes: number;
+  atendimentosAtraso: number;
+  total: number;
+}
 
 interface HeaderProps {
   session: Session;
@@ -47,6 +55,24 @@ export function Header({ session }: HeaderProps) {
   const usuario = session.user;
   const pathname = usePathname();
   const breadcrumb = useMemo(() => gerarBreadcrumb(pathname), [pathname]);
+
+  const [alertas, setAlertas] = useState<Alertas | null>(null);
+  const [sinoAberto, setSinoAberto] = useState(false);
+  const sinoRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetch("/api/alertas").then((r) => r.json()).then(setAlertas).catch(() => {});
+  }, [pathname]);
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (sinoRef.current && !sinoRef.current.contains(e.target as Node)) setSinoAberto(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  const total = alertas?.total ?? 0;
   const iniciais =
     usuario.name
       ?.split(" ")
@@ -94,13 +120,38 @@ export function Header({ session }: HeaderProps) {
         </div>
 
         {/* Notificações */}
-        <button
-          className="relative p-2 rounded-lg text-ink-muted hover:text-primary-600 hover:bg-surface-alt transition-colors"
-          title="Notificações"
-        >
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-success-500 rounded-full ring-2 ring-white" />
-        </button>
+        <div className="relative" ref={sinoRef}>
+          <button
+            onClick={() => setSinoAberto((v) => !v)}
+            className="relative p-2 rounded-lg text-ink-muted hover:text-primary-600 hover:bg-surface-alt transition-colors"
+            title="Alertas de prazos"
+          >
+            <Bell className="w-5 h-5" />
+            {total > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full ring-2 ring-white flex items-center justify-center">
+                {total > 99 ? "99+" : total}
+              </span>
+            )}
+          </button>
+
+          {sinoAberto && (
+            <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-surface-border rounded-xl shadow-card-hover z-30 overflow-hidden">
+              <div className="px-4 py-3 border-b border-surface-border">
+                <p className="text-sm font-bold text-ink">Alertas de prazos</p>
+              </div>
+              {total === 0 ? (
+                <p className="text-sm text-ink-muted text-center py-6">Nenhum alerta no momento 🎉</p>
+              ) : (
+                <div className="divide-y divide-surface-border">
+                  <AlertaItem href="/prazos?status=ATRASADO" icone={AlertTriangle} cor="text-red-600" label="Prazos vencidos" valor={alertas?.prazosVencidos ?? 0} onClick={() => setSinoAberto(false)} />
+                  <AlertaItem href="/prazos?status=ATIVO" icone={Clock} cor="text-amber-600" label="Vencendo hoje" valor={alertas?.etapasVencendoHoje ?? 0} onClick={() => setSinoAberto(false)} />
+                  <AlertaItem href="/compras/pedidos" icone={ShoppingCart} cor="text-orange-600" label="Compras pendentes" valor={alertas?.pedidosPendentes ?? 0} onClick={() => setSinoAberto(false)} />
+                  <AlertaItem href="/ordens" icone={Timer} cor="text-red-600" label="Atendimentos em atraso" valor={alertas?.atendimentosAtraso ?? 0} onClick={() => setSinoAberto(false)} />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         <div className="w-px h-8 bg-surface-border" />
 
@@ -123,5 +174,26 @@ export function Header({ session }: HeaderProps) {
         </div>
       </div>
     </header>
+  );
+}
+
+function AlertaItem({
+  href, icone: Icone, cor, label, valor, onClick,
+}: {
+  href: string;
+  icone: React.ComponentType<{ className?: string }>;
+  cor: string;
+  label: string;
+  valor: number;
+  onClick: () => void;
+}) {
+  return (
+    <Link href={href} onClick={onClick} className="flex items-center justify-between px-4 py-2.5 hover:bg-surface-alt transition-colors">
+      <span className="flex items-center gap-2.5 text-sm text-ink">
+        <Icone className={`w-4 h-4 ${cor}`} />
+        {label}
+      </span>
+      <span className={valor > 0 ? "text-sm font-bold text-ink" : "text-sm text-ink-subtle"}>{valor}</span>
+    </Link>
   );
 }

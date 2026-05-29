@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { OrcamentoDocumento } from "@/components/orcamento/orcamento-documento";
 import { AcoesEnvio } from "@/components/orcamento/acoes-envio";
+import { ComprasSecao } from "@/components/compras/compras-secao";
 import { PageHeader } from "@/components/ui/page-header";
 import { LABELS_STATUS_OS, cn } from "@/lib/utils";
 import { ClipboardList, ExternalLink } from "lucide-react";
@@ -62,6 +63,10 @@ export default async function OrcamentoDetalhePage({
 
       <div className="card-padded">
         <OrcamentoDocumento orcamento={orcamento} empresa={empresa} cliente={orcamento.cliente} />
+      </div>
+
+      <div className="card-padded">
+        <ComprasSecao orcamentoId={orcamento.id} />
       </div>
 
       {orcamento.ordensServico.length > 0 && (

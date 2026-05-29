@@ -234,6 +234,43 @@ enum FormaPagamento {
   CHEQUE
 }
 
+// ── Prazos / SLA e Compras ──
+
+enum ResponsavelPrazo {
+  COMPRADOR
+  GESTOR
+  TECNICO
+  CLIENTE
+}
+
+enum CanalNotificacao {
+  WHATSAPP
+  EMAIL
+  SISTEMA
+}
+
+enum StatusPedidoCompra {
+  SOLICITADO
+  COTANDO
+  COMPRADO
+  ENTREGUE
+  CANCELADO
+}
+
+enum StatusOsPrazo {
+  ATIVO
+  CONCLUIDO
+  CANCELADO
+  ATRASADO
+}
+
+enum StatusPrazoEtapa {
+  PENDENTE
+  EM_ANDAMENTO
+  CONCLUIDA
+  ATRASADA
+}
+
 // ─────────────────────────────────────────────
 // EMPRESA (tenant raiz)
 // ─────────────────────────────────────────────
@@ -277,6 +314,8 @@ model Empresa {
   orcamentos           Orcamento[]
   medicoes             Medicao[]
   contasReceber        ContaReceber[]
+  prazoTemplates       PrazoTemplate[]
+  pedidosCompra        PedidoCompraInterno[]
 
   configuracao  Configuracao?
 
@@ -350,6 +389,8 @@ model Usuario {
   osHistorico       OsHistorico[]
   interacoesCliente InteracaoCliente[]
   orcamentosCriados Orcamento[]        @relation("OrcamentoCriador")
+  pedidosSolicitados PedidoCompraInterno[] @relation("PedidoSolicitante")
+  pedidosComprador   PedidoCompraInterno[] @relation("PedidoComprador")
 
   @@unique([email, empresaId])
   @@map("usuarios")
@@ -693,6 +734,7 @@ model Produto {
   empresa         Empresa            @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   orcamentoItens  OrcamentoProduto[]
   medicaoItens    MedicaoItem[]
+  pedidoItens     PedidoCompraItem[]
 
   @@map("produtos")
 }
@@ -800,6 +842,8 @@ model OrdemServico {
   historico      OsHistorico[]
   orcamentos     OrcamentoOs[]
   medicaoItens   MedicaoItem[]
+  pedidosCompra  PedidoCompraInterno[]
+  prazos         OsPrazo[]
 
   @@unique([numero, empresaId])
   @@map("ordens_servico")
@@ -986,6 +1030,7 @@ model Orcamento {
   ordensServico   OrcamentoOs[]
   medicaoItens    MedicaoItem[]
   contasReceber   ContaReceber[]
+  pedidosCompra   PedidoCompraInterno[]
 
   @@unique([codigo, empresaId])
   @@map("orcamentos")
@@ -1170,4 +1215,126 @@ model ContaReceber {
   orcamento Orcamento? @relation(fields: [orcamentoId], references: [id])
 
   @@map("contas_receber")
+}
+
+// ─────────────────────────────────────────────
+// PRAZOS / SLA — TEMPLATES
+// ─────────────────────────────────────────────
+
+model PrazoTemplate {
+  id        String   @id @default(cuid())
+  empresaId String   @map("empresa_id")
+  nome      String
+  descricao String?
+  cor       String   @default("#0EA5E9")
+  ativo     Boolean  @default(true)
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  empresa Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  etapas  PrazoEtapaTemplate[]
+  osPrazos OsPrazo[]
+
+  @@map("prazo_templates")
+}
+
+model PrazoEtapaTemplate {
+  id          String           @id @default(cuid())
+  templateId  String           @map("template_id")
+  nome        String
+  prazoHoras  Float            @default(24) @map("prazo_horas")
+  responsavel ResponsavelPrazo @default(COMPRADOR)
+  canal       CanalNotificacao @default(WHATSAPP)
+  mensagem    String?          @db.Text
+  ordem       Int              @default(0)
+
+  template PrazoTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@map("prazo_etapa_templates")
+}
+
+// ─────────────────────────────────────────────
+// PEDIDO DE COMPRA INTERNO
+// ─────────────────────────────────────────────
+
+model PedidoCompraInterno {
+  id               String             @id @default(cuid())
+  empresaId        String             @map("empresa_id")
+  numero           String
+  ordemServicoId   String?            @map("ordem_servico_id")
+  orcamentoId      String?            @map("orcamento_id")
+  solicitanteId    String             @map("solicitante_id")
+  compradorId      String?            @map("comprador_id")
+  status           StatusPedidoCompra @default(SOLICITADO)
+  prazoNecessario  DateTime?          @map("prazo_necessario")
+  observacao       String?            @db.Text
+  criadoEm         DateTime           @default(now()) @map("criado_em")
+  atualizadoEm     DateTime           @updatedAt @map("atualizado_em")
+
+  empresa      Empresa            @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  ordemServico OrdemServico?      @relation(fields: [ordemServicoId], references: [id])
+  orcamento    Orcamento?         @relation(fields: [orcamentoId], references: [id])
+  solicitante  Usuario            @relation("PedidoSolicitante", fields: [solicitanteId], references: [id])
+  comprador    Usuario?           @relation("PedidoComprador", fields: [compradorId], references: [id])
+  itens        PedidoCompraItem[]
+
+  @@unique([numero, empresaId])
+  @@map("pedidos_compra_interno")
+}
+
+model PedidoCompraItem {
+  id            String   @id @default(cuid())
+  pedidoId      String   @map("pedido_id")
+  produtoId     String?  @map("produto_id")
+  descricao     String
+  quantidade    Decimal  @default(1) @db.Decimal(10, 2)
+  unidade       String   @default("un")
+  valorEstimado Decimal? @map("valor_estimado") @db.Decimal(12, 2)
+  valorReal     Decimal? @map("valor_real") @db.Decimal(12, 2)
+  fornecedor    String?
+  observacao    String?
+
+  pedido  PedidoCompraInterno @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  produto Produto?            @relation(fields: [produtoId], references: [id])
+
+  @@map("pedidos_compra_item")
+}
+
+// ─────────────────────────────────────────────
+// PRAZOS NA OS
+// ─────────────────────────────────────────────
+
+model OsPrazo {
+  id             String        @id @default(cuid())
+  ordemServicoId String        @map("ordem_servico_id")
+  templateId     String?       @map("template_id")
+  nome           String
+  status         StatusOsPrazo @default(ATIVO)
+  etapaAtual     Int           @default(0) @map("etapa_atual")
+  criadoEm       DateTime      @default(now()) @map("criado_em")
+
+  ordemServico OrdemServico   @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  template     PrazoTemplate? @relation(fields: [templateId], references: [id])
+  etapas       OsPrazoEtapa[]
+
+  @@map("os_prazos")
+}
+
+model OsPrazoEtapa {
+  id                 String           @id @default(cuid())
+  osPrazoId          String           @map("os_prazo_id")
+  nome               String
+  prazoHoras         Float            @default(24) @map("prazo_horas")
+  prazoLimite        DateTime         @map("prazo_limite")
+  status             StatusPrazoEtapa @default(PENDENTE)
+  responsavel        ResponsavelPrazo @default(COMPRADOR)
+  canal              CanalNotificacao @default(WHATSAPP)
+  mensagem           String?          @db.Text
+  concluidaEm        DateTime?        @map("concluida_em")
+  concluidaPor       String?          @map("concluida_por")
+  notificacaoEnviada Boolean          @default(false) @map("notificacao_enviada")
+  ordem              Int              @default(0)
+
+  osPrazo OsPrazo @relation(fields: [osPrazoId], references: [id], onDelete: Cascade)
+
+  @@map("os_prazo_etapas")
 }

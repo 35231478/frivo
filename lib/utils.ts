@@ -57,6 +57,10 @@ export function gerarNumeroContaReceber(sequencial: number, ano = new Date().get
   return `CR-${ano}-${String(sequencial).padStart(4, "0")}`;
 }
 
+export function gerarNumeroPedidoCompra(sequencial: number, ano = new Date().getFullYear()): string {
+  return `PCI-${ano}-${String(sequencial).padStart(4, "0")}`;
+}
+
 export const MESES_PT = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
@@ -263,3 +267,65 @@ export const LABELS_FORMA_PAGAMENTO: Record<string, string> = {
   CARTAO: "Cartão",
   CHEQUE: "Cheque",
 };
+
+// ─────────────────────────────────────────────
+// PRAZOS / SLA E COMPRAS
+// ─────────────────────────────────────────────
+
+export const LABELS_RESPONSAVEL_PRAZO: Record<string, string> = {
+  COMPRADOR: "Comprador",
+  GESTOR: "Gestor",
+  TECNICO: "Técnico",
+  CLIENTE: "Cliente",
+};
+
+export const LABELS_CANAL_NOTIFICACAO: Record<string, string> = {
+  WHATSAPP: "WhatsApp",
+  EMAIL: "E-mail",
+  SISTEMA: "Sistema",
+};
+
+export const LABELS_STATUS_PEDIDO_COMPRA: Record<string, string> = {
+  SOLICITADO: "Solicitado",
+  COTANDO: "Cotando",
+  COMPRADO: "Comprado",
+  ENTREGUE: "Entregue",
+  CANCELADO: "Cancelado",
+};
+
+export const CLASSE_STATUS_PEDIDO_COMPRA: Record<string, string> = {
+  SOLICITADO: "badge-base bg-primary-50 text-primary-700",
+  COTANDO: "badge-base bg-amber-50 text-amber-700",
+  COMPRADO: "badge-base bg-violet-50 text-violet-700",
+  ENTREGUE: "badge-base bg-success-50 text-success-700",
+  CANCELADO: "badge-base bg-slate-100 text-slate-500",
+};
+
+export const LABELS_STATUS_OS_PRAZO: Record<string, string> = {
+  ATIVO: "Ativo",
+  CONCLUIDO: "Concluído",
+  CANCELADO: "Cancelado",
+  ATRASADO: "Atrasado",
+};
+
+export const LABELS_STATUS_PRAZO_ETAPA: Record<string, string> = {
+  PENDENTE: "Pendente",
+  EM_ANDAMENTO: "Em andamento",
+  CONCLUIDA: "Concluída",
+  ATRASADA: "Atrasada",
+};
+
+/** Substitui variáveis {{nome}} em um template de mensagem. */
+export function aplicarVariaveis(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, chave) => vars[chave] ?? "");
+}
+
+/** Formata uma duração em horas como texto legível (ex.: 30min, 4h, 2d). */
+export function formatarPrazoHoras(horas: number): string {
+  if (horas < 1) return `${Math.round(horas * 60)}min`;
+  if (horas % 24 === 0) return `${horas / 24}d`;
+  if (horas < 24) return `${horas}h`;
+  const dias = Math.floor(horas / 24);
+  const resto = horas % 24;
+  return resto ? `${dias}d ${resto}h` : `${dias}d`;
+}
