@@ -10,7 +10,7 @@ import {
   LayoutDashboard, Users, Thermometer, ClipboardList, FileText,
   HardHat, Settings, ChevronDown, ChevronRight,
   Wrench, FileSpreadsheet, Cog, Package, ListChecks, Calculator,
-  Wallet, Receipt, TrendingUp, FileBarChart, Clock, ShoppingCart, Timer,
+  Wallet, Receipt, TrendingUp, FileBarChart, Clock, ShoppingCart, Timer, Tags,
 } from "lucide-react";
 
 const itensMenu = [
@@ -40,6 +40,7 @@ const itensCadastros = [
   { href: "/configuracoes/tipos-equipamento", icone: Thermometer,      label: "Tipos de Equipamento" },
   { href: "/configuracoes/servicos",          icone: Wrench,           label: "Serviços" },
   { href: "/configuracoes/produtos",          icone: Package,          label: "Produtos" },
+  { href: "/configuracoes/tabelas-preco",     icone: Tags,             label: "Tabelas de Preços" },
   { href: "/configuracoes/prazos",            icone: Clock,            label: "Prazos e SLA" },
 ];
 

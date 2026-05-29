@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { cn, formatarMoeda } from "@/lib/utils";
-import { Plus, Trash2, Search, X } from "lucide-react";
+import { Plus, Trash2, Search, X, Lock } from "lucide-react";
 
 export interface ItemTabela {
   id: string;            // uuid local
@@ -11,6 +11,9 @@ export interface ItemTabela {
   quantidade: number;
   valorUnitario: number;
   observacao?: string | null;
+  bloqueado?: boolean;
+  origemPreco?: "contrato" | "padrao";
+  valorPadraoCadastro?: number;
 }
 
 export interface CatalogoItem {
@@ -21,19 +24,27 @@ export interface CatalogoItem {
   valorPadrao?: unknown; // Decimal | number | null
 }
 
+export interface TabelaPrecoCliente {
+  nome: string;
+  tipo: string;
+  precosBloqueados: boolean;
+  itens: Record<string, { valorFinal: number; bloqueado: boolean; tipoPreco: string; descontoPercent: number | null }>;
+}
+
 interface ItensTabelaProps {
   titulo: string;
   labelAdicionar: string;
   catalogo: CatalogoItem[];
   itens: ItemTabela[];
   onChange: (itens: ItemTabela[]) => void;
+  tabela?: TabelaPrecoCliente | null;
 }
 
 function novoId() {
   return Math.random().toString(36).slice(2);
 }
 
-export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange }: ItensTabelaProps) {
+export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange, tabela }: ItensTabelaProps) {
   function atualizar(id: string, patch: Partial<ItemTabela>) {
     onChange(itens.map((it) => (it.id === id ? { ...it, ...patch } : it)));
   }
@@ -47,7 +58,16 @@ export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange 
     ]);
   }
   function adicionarDoCatalogo(c: CatalogoItem) {
-    const valor = c.valorPadrao == null ? 0 : Number(c.valorPadrao);
+    const padrao = c.valorPadrao == null ? 0 : Number(c.valorPadrao);
+    const tItem = tabela?.itens[c.id];
+    let valorUnitario = padrao;
+    let bloqueado = false;
+    let origemPreco: "contrato" | "padrao" | undefined = tabela ? "padrao" : undefined;
+    if (tItem) {
+      valorUnitario = tItem.valorFinal;
+      bloqueado = (tabela?.precosBloqueados ?? false) || tItem.bloqueado;
+      origemPreco = "contrato";
+    }
     onChange([
       ...itens,
       {
@@ -55,7 +75,10 @@ export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange 
         catalogoId: c.id,
         descricao: c.descricao ? `${c.nome} — ${c.descricao}` : c.nome,
         quantidade: 1,
-        valorUnitario: valor,
+        valorUnitario,
+        bloqueado,
+        origemPreco,
+        valorPadraoCadastro: padrao,
       },
     ]);
   }
@@ -108,6 +131,16 @@ export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange 
                       placeholder="Descrição do item"
                       className="w-full bg-transparent text-ink focus:outline-none focus:bg-primary-50/30 rounded px-1 py-0.5"
                     />
+                    {it.origemPreco && (
+                      <span
+                        className={cn(
+                          "inline-block mt-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded",
+                          it.origemPreco === "contrato" ? "bg-success-50 text-success-700" : "bg-slate-100 text-slate-500",
+                        )}
+                      >
+                        {it.origemPreco === "contrato" ? "Preço de contrato" : "Preço padrão"}
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <input
@@ -120,14 +153,29 @@ export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange 
                     />
                   </td>
                   <td className="px-3 py-2">
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={it.valorUnitario}
-                      onChange={(e) => atualizar(it.id, { valorUnitario: Number(e.target.value) })}
-                      className="w-full text-right bg-transparent text-ink focus:outline-none focus:bg-primary-50/30 rounded px-1 py-0.5"
-                    />
+                    {it.bloqueado ? (
+                      <div
+                        className="flex items-center justify-end gap-1 bg-surface-alt text-ink-muted rounded px-1.5 py-0.5 cursor-not-allowed"
+                        title="Preço definido em contrato — não pode ser alterado"
+                      >
+                        <Lock className="w-3 h-3 shrink-0" />
+                        <span className="font-medium">{formatarMoeda(Number(it.valorUnitario) || 0)}</span>
+                      </div>
+                    ) : (
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={it.valorUnitario}
+                        onChange={(e) => atualizar(it.id, { valorUnitario: Number(e.target.value) })}
+                        title={
+                          it.origemPreco === "contrato" && it.valorPadraoCadastro != null && it.valorPadraoCadastro !== Number(it.valorUnitario)
+                            ? `Preço padrão: ${formatarMoeda(it.valorPadraoCadastro)} · Aplicado: ${formatarMoeda(Number(it.valorUnitario) || 0)}`
+                            : undefined
+                        }
+                        className="w-full text-right bg-transparent text-ink focus:outline-none focus:bg-primary-50/30 rounded px-1 py-0.5"
+                      />
+                    )}
                   </td>
                   <td className="px-3 py-2 text-right font-semibold text-ink">
                     {formatarMoeda(total)}

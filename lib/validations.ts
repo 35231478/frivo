@@ -9,6 +9,7 @@ import {
   PerfilFaturamento, TipoMedicao, TipoItemMedicao,
   StatusMedicaoFin, StatusContaReceber, FormaPagamento,
   ResponsavelPrazo, CanalNotificacao, StatusPedidoCompra,
+  TipoTabelaPreco, TipoPrecoTabela,
 } from "@prisma/client";
 
 const valorOpcional = z.preprocess(
@@ -87,6 +88,10 @@ export const clienteSchema = z.object({
   boletoUnicoMensal: z.boolean().default(false),
   emailsFaturamento: z.array(z.string()).default([]),
   whatsappFaturamento: z.string().optional().nullable(),
+  tabelaPrecoId: z.preprocess(
+    (v) => (v === "" || v == null ? null : v),
+    z.string().nullable()
+  ).default(null),
 });
 
 export const unidadeSchema = z.object({
@@ -380,6 +385,37 @@ export const osPrazoSchema = z.object({
   templateId: z.string().min(1, "Selecione um template de prazo"),
   nome: z.string().optional().nullable(),
 });
+
+// ─────────────────────────────────────────────
+// TABELAS DE PREÇOS
+// ─────────────────────────────────────────────
+
+export const tabelaPrecoItemSchema = z.object({
+  servicoId: z.string().optional().nullable(),
+  produtoId: z.string().optional().nullable(),
+  tipoPreco: z.nativeEnum(TipoPrecoTabela).default(TipoPrecoTabela.VALOR_FIXO),
+  valorFixo: z.preprocess(
+    (v) => (v === "" || v == null ? null : Number(v)),
+    z.number().nonnegative().nullable()
+  ).optional(),
+  descontoPercent: z.preprocess(
+    (v) => (v === "" || v == null ? null : Number(v)),
+    z.number().nonnegative().max(100).nullable()
+  ).optional(),
+  bloqueado: z.boolean().default(false),
+}).refine((it) => it.servicoId || it.produtoId, { message: "Selecione um serviço ou produto" });
+
+export const tabelaPrecoSchema = z.object({
+  nome: z.string().min(2, "Nome da tabela é obrigatório"),
+  descricao: z.string().optional().nullable(),
+  tipo: z.nativeEnum(TipoTabelaPreco).default(TipoTabelaPreco.PERSONALIZADA),
+  precosBloqueados: z.boolean().default(false),
+  ativo: z.boolean().default(true),
+  itens: z.array(tabelaPrecoItemSchema).default([]),
+});
+
+export type TabelaPrecoInput = z.infer<typeof tabelaPrecoSchema>;
+export type TabelaPrecoItemInput = z.infer<typeof tabelaPrecoItemSchema>;
 
 export type PrazoTemplateInput = z.infer<typeof prazoTemplateSchema>;
 export type PrazoEtapaTemplateInput = z.infer<typeof prazoEtapaTemplateSchema>;

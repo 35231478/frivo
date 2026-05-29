@@ -271,6 +271,19 @@ enum StatusPrazoEtapa {
   ATRASADA
 }
 
+// ── Tabelas de Preços ──
+
+enum TipoTabelaPreco {
+  PADRAO
+  CONTRATO
+  PERSONALIZADA
+}
+
+enum TipoPrecoTabela {
+  VALOR_FIXO
+  DESCONTO_PERCENTUAL
+}
+
 // ─────────────────────────────────────────────
 // EMPRESA (tenant raiz)
 // ─────────────────────────────────────────────
@@ -316,6 +329,7 @@ model Empresa {
   contasReceber        ContaReceber[]
   prazoTemplates       PrazoTemplate[]
   pedidosCompra        PedidoCompraInterno[]
+  tabelasPreco         TabelaPreco[]
 
   configuracao  Configuracao?
 
@@ -472,6 +486,8 @@ model Cliente {
   emailsFaturamento   String[]   @map("emails_faturamento")
   whatsappFaturamento String?    @map("whatsapp_faturamento")
 
+  tabelaPrecoId       String?    @map("tabela_preco_id")
+
   criadoEm            DateTime   @default(now()) @map("criado_em")
   atualizadoEm        DateTime   @updatedAt @map("atualizado_em")
 
@@ -486,6 +502,7 @@ model Cliente {
   orcamentos          Orcamento[]
   medicoes            Medicao[]
   contasReceber       ContaReceber[]
+  tabelaPreco         TabelaPreco?       @relation(fields: [tabelaPrecoId], references: [id])
 
   @@unique([cpfCnpj, empresaId])
   @@map("clientes")
@@ -712,6 +729,7 @@ model Servico {
   empresa         Empresa            @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   orcamentoItens  OrcamentoServico[]
   medicaoItens    MedicaoItem[]
+  tabelaItens     TabelaPrecoItem[]
 
   @@map("servicos")
 }
@@ -735,6 +753,7 @@ model Produto {
   orcamentoItens  OrcamentoProduto[]
   medicaoItens    MedicaoItem[]
   pedidoItens     PedidoCompraItem[]
+  tabelaItens     TabelaPrecoItem[]
 
   @@map("produtos")
 }
@@ -1337,4 +1356,44 @@ model OsPrazoEtapa {
   osPrazo OsPrazo @relation(fields: [osPrazoId], references: [id], onDelete: Cascade)
 
   @@map("os_prazo_etapas")
+}
+
+// ─────────────────────────────────────────────
+// TABELAS DE PREÇOS
+// ─────────────────────────────────────────────
+
+model TabelaPreco {
+  id               String          @id @default(cuid())
+  empresaId        String          @map("empresa_id")
+  nome             String
+  descricao        String?
+  tipo             TipoTabelaPreco @default(PERSONALIZADA)
+  precosBloqueados Boolean         @default(false) @map("precos_bloqueados")
+  ativo            Boolean         @default(true)
+  criadoEm         DateTime        @default(now()) @map("criado_em")
+  atualizadoEm     DateTime        @updatedAt @map("atualizado_em")
+
+  empresa  Empresa           @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  itens    TabelaPrecoItem[]
+  clientes Cliente[]
+
+  @@map("tabelas_preco")
+}
+
+model TabelaPrecoItem {
+  id              String          @id @default(cuid())
+  tabelaId        String          @map("tabela_id")
+  servicoId       String?         @map("servico_id")
+  produtoId       String?         @map("produto_id")
+  tipoPreco       TipoPrecoTabela @default(VALOR_FIXO) @map("tipo_preco")
+  valorFixo       Decimal?        @map("valor_fixo") @db.Decimal(12, 2)
+  descontoPercent Decimal?        @map("desconto_percent") @db.Decimal(5, 2)
+  valorFinal      Decimal         @default(0) @map("valor_final") @db.Decimal(12, 2)
+  bloqueado       Boolean         @default(false)
+
+  tabela  TabelaPreco @relation(fields: [tabelaId], references: [id], onDelete: Cascade)
+  servico Servico?    @relation(fields: [servicoId], references: [id])
+  produto Produto?    @relation(fields: [produtoId], references: [id])
+
+  @@map("tabela_preco_itens")
 }

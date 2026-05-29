@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,11 +8,11 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid, FormSection } from "@/components/ui/form-field";
 import { PageHeader } from "@/components/ui/page-header";
-import { ItensTabela, type ItemTabela, type CatalogoItem } from "@/components/orcamento/itens-tabela";
+import { ItensTabela, type ItemTabela, type CatalogoItem, type TabelaPrecoCliente } from "@/components/orcamento/itens-tabela";
 import { OsVinculadas } from "@/components/orcamento/os-vinculadas";
 import { TotaisBloco } from "@/components/orcamento/totais-bloco";
 import type { TipoDesconto } from "@prisma/client";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Tags } from "lucide-react";
 
 interface ClienteOpt {
   id: string;
@@ -95,6 +95,17 @@ export function OrcamentoForm({
 
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const [tabelaPreco, setTabelaPreco] = useState<TabelaPrecoCliente | null>(null);
+
+  useEffect(() => {
+    if (!clienteId) { setTabelaPreco(null); return; }
+    let ativo = true;
+    fetch(`/api/clientes/${clienteId}/tabela-preco`)
+      .then((r) => r.json())
+      .then((d) => { if (ativo) setTabelaPreco(d && d.itens ? d : null); })
+      .catch(() => { if (ativo) setTabelaPreco(null); });
+    return () => { ativo = false; };
+  }, [clienteId]);
 
   const totalServicos = useMemo(
     () => servicos.reduce((acc, it) => acc + (Number(it.quantidade) || 0) * (Number(it.valorUnitario) || 0), 0),
@@ -194,6 +205,17 @@ export function OrcamentoForm({
         </div>
       )}
 
+      {tabelaPreco && (
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 bg-success-50 text-success-700 text-xs font-semibold rounded-full px-3 py-1">
+            <Tags className="w-3.5 h-3.5" /> Tabela: {tabelaPreco.nome}
+          </span>
+          {tabelaPreco.precosBloqueados && (
+            <span className="text-xs text-ink-muted">Preços bloqueados por contrato</span>
+          )}
+        </div>
+      )}
+
       <div className="card-padded space-y-6">
         <FormSection title="Identificação">
           <FormGrid cols={2}>
@@ -229,6 +251,7 @@ export function OrcamentoForm({
           catalogo={catalogoServicos}
           itens={servicos}
           onChange={setServicos}
+          tabela={tabelaPreco}
         />
       </div>
 
@@ -239,6 +262,7 @@ export function OrcamentoForm({
           catalogo={catalogoProdutos}
           itens={produtos}
           onChange={setProdutos}
+          tabela={tabelaPreco}
         />
       </div>
 

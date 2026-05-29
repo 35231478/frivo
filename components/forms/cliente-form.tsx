@@ -65,10 +65,13 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
   const [boletoUnicoMensal, setBoletoUnicoMensal] = useState<boolean>(initialData?.boletoUnicoMensal ?? false);
   const [emailsFaturamento, setEmailsFaturamento] = useState<string[]>(initialData?.emailsFaturamento ?? []);
   const [whatsappFaturamento, setWhatsappFaturamento] = useState<string>(initialData?.whatsappFaturamento ?? "");
+  const [tabelaPrecoId, setTabelaPrecoId] = useState<string>(initialData?.tabelaPrecoId ?? "");
+  const [tabelas, setTabelas] = useState<{ id: string; nome: string; tipo: string }[]>([]);
 
   useEffect(() => {
     fetch("/api/tecnicos?tipo=RESPONSAVEL_TECNICO").then((r) => r.json()).then(setResponsaveis).catch(() => {});
     fetch("/api/configuracoes").then((r) => r.json()).then(setConfig).catch(() => {});
+    fetch("/api/tabelas-preco").then((r) => r.json()).then((d) => setTabelas(Array.isArray(d) ? d.filter((t: any) => t.ativo !== false) : [])).catch(() => {});
   }, []);
 
   const {
@@ -148,6 +151,7 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
       boletoUnicoMensal,
       emailsFaturamento,
       whatsappFaturamento: whatsappFaturamento || null,
+      tabelaPrecoId: tabelaPrecoId || null,
     };
     if (!isEditing) {
       payload.unidades = unidadesNovas.map(({ _tempId, ...u }) => u);
@@ -372,6 +376,13 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
           </FormField>
           <FormField label="WhatsApp para envio automático">
             <WhatsAppInput value={whatsappFaturamento} onChange={(e) => setWhatsappFaturamento(e.target.value)} placeholder="(00) 00000-0000" />
+          </FormField>
+          <FormField label="Tabela de preços" hint="Sem seleção, usa a tabela Padrão da empresa">
+            <Select value={tabelaPrecoId} onChange={(e) => setTabelaPrecoId(e.target.value)} placeholder="Padrão (automático)">
+              {tabelas.map((t) => (
+                <option key={t.id} value={t.id}>{t.nome}</option>
+              ))}
+            </Select>
           </FormField>
         </FormGrid>
 

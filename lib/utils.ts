@@ -315,6 +315,17 @@ export const LABELS_STATUS_PRAZO_ETAPA: Record<string, string> = {
   ATRASADA: "Atrasada",
 };
 
+export const LABELS_TIPO_TABELA_PRECO: Record<string, string> = {
+  PADRAO: "Padrão",
+  CONTRATO: "Contrato",
+  PERSONALIZADA: "Personalizada",
+};
+
+export const LABELS_TIPO_PRECO_TABELA: Record<string, string> = {
+  VALOR_FIXO: "Valor fixo",
+  DESCONTO_PERCENTUAL: "Desconto percentual",
+};
+
 /** Substitui variáveis {{nome}} em um template de mensagem. */
 export function aplicarVariaveis(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, chave) => vars[chave] ?? "");

@@ -288,6 +288,18 @@ async function main() {
     console.log(`Templates de prazo criados: ${prazoTemplates.length}`);
   }
 
+  // ======== TABELAS DE PREÇOS ========
+  const totalTabelas = await prisma.tabelaPreco.count({ where: { empresaId: empresa.id } });
+  if (totalTabelas === 0) {
+    await prisma.tabelaPreco.create({
+      data: { empresaId: empresa.id, nome: "Padrão", descricao: "Tabela padrão da empresa", tipo: "PADRAO" },
+    });
+    await prisma.tabelaPreco.create({
+      data: { empresaId: empresa.id, nome: "Contrato", descricao: "Preços de contrato", tipo: "CONTRATO" },
+    });
+    console.log("Tabelas de preços criadas: 2 (Padrão, Contrato)");
+  }
+
   console.log("\nSeed concluído!");
   console.log("Login: admin@climatotal.com.br / admin123");
 }

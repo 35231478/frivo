@@ -8,9 +8,9 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid, FormSection } from "@/components/ui/form-field";
 import { PageHeader } from "@/components/ui/page-header";
-import { ItensTabela, type ItemTabela, type CatalogoItem } from "@/components/orcamento/itens-tabela";
+import { ItensTabela, type ItemTabela, type CatalogoItem, type TabelaPrecoCliente } from "@/components/orcamento/itens-tabela";
 import { LABELS_TIPO_MEDICAO, MESES_PT, formatarMoeda } from "@/lib/utils";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Tags } from "lucide-react";
 
 interface ClienteOpt {
   id: string;
@@ -82,18 +82,24 @@ export function MedicaoForm({
   );
 
   const [contratos, setContratos] = useState<ContratoOpt[]>([]);
+  const [tabelaPreco, setTabelaPreco] = useState<TabelaPrecoCliente | null>(null);
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
     if (!clienteId) {
       setContratos([]);
+      setTabelaPreco(null);
       return;
     }
     fetch(`/api/contratos?clienteId=${clienteId}`)
       .then((r) => r.json())
       .then((data) => setContratos(Array.isArray(data) ? data : []))
       .catch(() => setContratos([]));
+    fetch(`/api/clientes/${clienteId}/tabela-preco`)
+      .then((r) => r.json())
+      .then((d) => setTabelaPreco(d && d.itens ? d : null))
+      .catch(() => setTabelaPreco(null));
   }, [clienteId]);
 
   const valorTotal = useMemo(() => {
@@ -191,6 +197,17 @@ export function MedicaoForm({
         </div>
       )}
 
+      {tabelaPreco && (
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 bg-success-50 text-success-700 text-xs font-semibold rounded-full px-3 py-1">
+            <Tags className="w-3.5 h-3.5" /> Tabela: {tabelaPreco.nome}
+          </span>
+          {tabelaPreco.precosBloqueados && (
+            <span className="text-xs text-ink-muted">Preços bloqueados por contrato</span>
+          )}
+        </div>
+      )}
+
       <div className="card-padded space-y-6">
         <FormSection title="Identificação">
           <FormGrid cols={2}>
@@ -238,11 +255,11 @@ export function MedicaoForm({
       </div>
 
       <div className="card-padded">
-        <ItensTabela titulo="Serviços" labelAdicionar="Buscar serviço por nome..." catalogo={catalogoServicos} itens={servicos} onChange={setServicos} />
+        <ItensTabela titulo="Serviços" labelAdicionar="Buscar serviço por nome..." catalogo={catalogoServicos} itens={servicos} onChange={setServicos} tabela={tabelaPreco} />
       </div>
 
       <div className="card-padded">
-        <ItensTabela titulo="Produtos" labelAdicionar="Buscar produto por nome..." catalogo={catalogoProdutos} itens={produtos} onChange={setProdutos} />
+        <ItensTabela titulo="Produtos" labelAdicionar="Buscar produto por nome..." catalogo={catalogoProdutos} itens={produtos} onChange={setProdutos} tabela={tabelaPreco} />
       </div>
 
       <div className="card-padded">
