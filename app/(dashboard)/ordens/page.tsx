@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { formatarData, cn, LABELS_STATUS_OS, LABELS_PRIORIDADE } from "@/lib/utils";
+import { formatarData, cn, LABELS_STATUS_OS, LABELS_PRIORIDADE, LABELS_ORIGEM_OS } from "@/lib/utils";
 import Link from "next/link";
-import { ClipboardList, Plus } from "lucide-react";
+import { ClipboardList, Plus, Headset } from "lucide-react";
 
 export const metadata: Metadata = { title: "Ordens de Serviço" };
 
 const CLASSE_STATUS: Record<string, string> = {
   ABERTA: "badge-status-aberta",
+  AGUARDANDO_ATENDIMENTO: "badge-status-aguardando_atendimento",
   AGENDADA: "badge-status-agendada",
   EM_ANDAMENTO: "badge-status-em_andamento",
   PAUSADA: "badge-status-pausada",
@@ -21,20 +22,22 @@ const CLASSE_PRIORIDADE: Record<string, string> = {
   NORMAL: "badge-prioridade-normal",
   ALTA: "badge-prioridade-alta",
   URGENTE: "badge-prioridade-urgente",
+  CRITICO: "badge-prioridade-critico",
 };
 
 export default async function OrdensPage({
   searchParams,
 }: {
-  searchParams: Promise<{ busca?: string; status?: string; prioridade?: string }>;
+  searchParams: Promise<{ busca?: string; status?: string; prioridade?: string; origem?: string }>;
 }) {
-  const { busca = "", status = "", prioridade = "" } = await searchParams;
+  const { busca = "", status = "", prioridade = "", origem = "" } = await searchParams;
   const session = await auth();
   const empresaId = session!.user!.empresaId;
 
   const where: any = { empresaId };
   if (status) where.status = status;
   if (prioridade) where.prioridade = prioridade;
+  if (origem) where.origem = origem;
   if (busca) {
     where.OR = [
       { numero: { contains: busca, mode: "insensitive" } },
@@ -52,6 +55,7 @@ export default async function OrdensPage({
         responsavel: { select: { nome: true } },
         _count: { select: { atividades: true } },
       },
+      // origem e chamadoNumero já vêm como escalares
       orderBy: { criadoEm: "desc" },
       take: 100,
     }),
@@ -86,6 +90,10 @@ export default async function OrdensPage({
               <option value="">Prioridade</option>
               {Object.entries(LABELS_PRIORIDADE).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
             </select>
+            <select name="origem" defaultValue={origem} className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all">
+              <option value="">Origem</option>
+              {Object.entries(LABELS_ORIGEM_OS).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
+            </select>
             <button type="submit" className="bg-primary-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-600 transition-all shadow-sm">Filtrar</button>
           </form>
         </div>
@@ -113,7 +121,12 @@ export default async function OrdensPage({
                     idx % 2 === 1 && "bg-surface-alt/30",
                   )}>
                     <td className="px-4 py-3">
-                      <Link href={`/ordens/${os.id}`} className="font-mono font-semibold text-primary-600 hover:underline">{os.numero}</Link>
+                      <Link href={`/ordens/${os.id}`} className="font-mono font-semibold text-primary-600 hover:underline">{os.chamadoNumero ?? os.numero}</Link>
+                      {os.origem === "PORTAL_CLIENTE" && (
+                        <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-semibold bg-cyan-50 text-cyan-700 px-1.5 py-0.5 rounded">
+                          <Headset className="w-3 h-3" /> Portal
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-ink font-medium">{os.cliente.nomeFantasia ?? os.cliente.nome}</td>
                     <td className="px-4 py-3 text-ink-muted hidden md:table-cell">{os.unidade?.nome ?? "—"}</td>

@@ -8,6 +8,7 @@ import { FormField, FormGrid } from "@/components/ui/form-field";
 import { WhatsAppInput } from "@/components/ui/whatsapp-input";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { LABELS_TIPO_CONTATO } from "@/lib/utils";
+import { PortalAcessoContato } from "@/components/forms/portal-acesso-contato";
 import type { ContatoCliente } from "@prisma/client";
 import { Plus, Pencil, Trash2, X, Check, UserCircle, ChevronDown, ChevronRight, Star, Phone, Mail } from "lucide-react";
 
@@ -166,10 +167,19 @@ export function ContatosManager({ clienteId, contatosIniciais }: ContatosManager
                   {c.telefone && <div className="flex items-center gap-1"><Phone className="w-3 h-3 text-gray-400" /> <a href={`tel:${c.telefone.replace(/\D/g, "")}`} className="text-gray-700">{c.telefone}</a></div>}
                   {c.whatsapp && <div className="flex items-center gap-1"><span className="text-green-500 text-[10px] font-bold">WA</span> <a href={`https://wa.me/55${c.whatsapp.replace(/\D/g, "")}`} target="_blank" className="text-gray-700">{c.whatsapp}</a></div>}
                 </div>
-                <div className="flex items-center gap-2 pt-1">
+                <div className="flex items-center gap-2 pt-1 flex-wrap">
                   <Button type="button" variant="secondary" onClick={() => abrirEditar(c)} className="text-xs h-7 px-2.5"><Pencil className="w-3 h-3" /> Editar</Button>
                   <Button type="button" variant="ghost" onClick={() => remover(c.id)} className="text-xs h-7 px-2.5 text-red-500 hover:text-red-700"><Trash2 className="w-3 h-3" /> Remover</Button>
                 </div>
+                <PortalAcessoContato
+                  clienteId={clienteId}
+                  contatoId={c.id}
+                  contatoNome={c.nome}
+                  emailInicial={c.email}
+                  whatsappInicial={c.whatsapp}
+                  temAcesso={!!(c as any).senha}
+                  permissoesIniciais={((c as any).permissoes as Record<string, boolean> | null) ?? null}
+                />
               </div>
             )}
           </div>

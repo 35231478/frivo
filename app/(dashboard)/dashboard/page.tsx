@@ -7,7 +7,7 @@ import { formatarData, cn, LABELS_STATUS_OS } from "@/lib/utils";
 import Link from "next/link";
 import {
   Users, Thermometer, ClipboardList, CalendarCheck, FileText,
-  HardHat, AlertTriangle, CheckCircle, ArrowRight, Timer, Clock, ShoppingCart,
+  HardHat, AlertTriangle, CheckCircle, ArrowRight, Timer, Clock, ShoppingCart, Headset,
 } from "lucide-react";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -103,6 +103,14 @@ export default async function DashboardPage() {
             corIcone="text-red-600"
             corFundo="bg-red-50"
             href="/ordens"
+          />
+          <ResumoCard
+            titulo="Chamados do portal"
+            valor={alertas.chamadosPortal}
+            icone={Headset}
+            corIcone="text-cyan-600"
+            corFundo="bg-cyan-50"
+            href="/ordens?origem=PORTAL_CLIENTE"
           />
         </div>
       </div>

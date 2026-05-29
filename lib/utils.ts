@@ -87,6 +87,7 @@ export function whatsappLink(telefone: string | null | undefined, mensagem: stri
 
 export const LABELS_STATUS_OS: Record<string, string> = {
   ABERTA: "Aberta",
+  AGUARDANDO_ATENDIMENTO: "Aguardando Atendimento",
   AGENDADA: "Agendada",
   EM_ANDAMENTO: "Em Andamento",
   PAUSADA: "Pausada",
@@ -100,7 +101,27 @@ export const LABELS_PRIORIDADE: Record<string, string> = {
   NORMAL: "Normal",
   ALTA: "Alta",
   URGENTE: "Urgente",
+  CRITICO: "Crítico",
 };
+
+export const LABELS_ORIGEM_OS: Record<string, string> = {
+  MANUAL: "Manual",
+  RECORRENTE: "Recorrente",
+  PORTAL_CLIENTE: "Portal do Cliente",
+};
+
+export const PERMISSOES_PORTAL = [
+  { chave: "verOS", label: "Ver histórico de OS" },
+  { chave: "abrirChamados", label: "Abrir chamados" },
+  { chave: "verDocumentos", label: "Ver documentos (PMOC, ART, contratos)" },
+  { chave: "verEquipamentos", label: "Ver equipamentos" },
+  { chave: "verFinanceiro", label: "Ver financeiro" },
+  { chave: "verBoletos", label: "Ver e baixar boletos" },
+  { chave: "aprovarMedicoes", label: "Aprovar medições" },
+  { chave: "verValores", label: "Ver valores financeiros" },
+] as const;
+
+export type PermissaoPortal = (typeof PERMISSOES_PORTAL)[number]["chave"];
 
 export const LABELS_TIPO_SERVICO: Record<string, string> = {
   INSTALACAO: "Instalação",

@@ -101,10 +101,12 @@ enum Prioridade {
   NORMAL
   ALTA
   URGENTE
+  CRITICO
 }
 
 enum StatusOS {
   ABERTA
+  AGUARDANDO_ATENDIMENTO
   AGENDADA
   EM_ANDAMENTO
   PAUSADA
@@ -289,6 +291,7 @@ enum TipoPrecoTabela {
 enum OrigemOS {
   MANUAL
   RECORRENTE
+  PORTAL_CLIENTE
 }
 
 enum TratamentoFimSemana {
@@ -363,6 +366,7 @@ model Empresa {
   pedidosCompra        PedidoCompraInterno[]
   tabelasPreco         TabelaPreco[]
   relatorios           RelatorioOs[]
+  tiposProblema        TipoProblema[]
 
   configuracao  Configuracao?
 
@@ -406,6 +410,11 @@ model Configuracao {
   mostrarMapa              Boolean @default(true) @map("mostrar_mapa")
   mostrarDistancia         Boolean @default(true) @map("mostrar_distancia")
   mostrarTecnicoProximo    Boolean @default(true) @map("mostrar_tecnico_proximo")
+
+  // Portal do Cliente (white-label)
+  portalCorPrimaria        String? @map("portal_cor_primaria")
+  portalLogo               String? @map("portal_logo") @db.Text
+  portalBoasVindas         String? @map("portal_boas_vindas") @db.Text
 
   empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
 
@@ -522,6 +531,8 @@ model Cliente {
 
   tabelaPrecoId       String?    @map("tabela_preco_id")
 
+  portalAtivo         Boolean    @default(false) @map("portal_ativo")
+
   criadoEm            DateTime   @default(now()) @map("criado_em")
   atualizadoEm        DateTime   @updatedAt @map("atualizado_em")
 
@@ -558,10 +569,17 @@ model ContatoCliente {
   email      String?
   principal  Boolean     @default(false)
   ativo      Boolean     @default(true)
+
+  // Acesso ao Portal do Cliente
+  senha        String?
+  ultimoAcesso DateTime?  @map("ultimo_acesso")
+  permissoes   Json?
+
   criadoEm   DateTime    @default(now()) @map("criado_em")
   atualizadoEm DateTime  @updatedAt @map("atualizado_em")
 
-  cliente    Cliente     @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  cliente       Cliente        @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  ordensAbertas OrdemServico[] @relation("OsContatoOrigem")
 
   @@map("contatos_cliente")
 }
@@ -666,6 +684,7 @@ model Equipamento {
 
   empresa       Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   unidade       Unidade        @relation(fields: [unidadeId], references: [id])
+  ordensServico OrdemServico[]
 
   @@map("equipamentos")
 }
@@ -889,6 +908,9 @@ model OrdemServico {
   status            StatusOS    @default(ABERTA)
   origem            OrigemOS    @default(MANUAL)
   periodoRecorrencia String?    @map("periodo_recorrencia")
+  chamadoNumero     String?     @map("chamado_numero")
+  contatoOrigemId   String?     @map("contato_origem_id")
+  equipamentoId     String?     @map("equipamento_id")
   descricao         String
   previsaoConclusao DateTime?   @map("previsao_conclusao")
   dataInicio        DateTime?   @map("data_inicio")
@@ -903,6 +925,8 @@ model OrdemServico {
   contrato      Contrato?        @relation(fields: [contratoId], references: [id])
   responsavel   Usuario?         @relation("OsResponsavel", fields: [responsavelId], references: [id])
   criadoPor     Usuario          @relation("UsuarioCriador", fields: [criadoPorId], references: [id])
+  contatoOrigem ContatoCliente?  @relation("OsContatoOrigem", fields: [contatoOrigemId], references: [id])
+  equipamento   Equipamento?     @relation(fields: [equipamentoId], references: [id])
   atividades    AtividadeOs[]
   itensOrcamento OsItemOrcamento[]
   medicoes       OsMedicao[]
@@ -1490,4 +1514,20 @@ model RelatorioOs {
 
   @@unique([numero, empresaId])
   @@map("relatorios_os")
+}
+
+// ─────────────────────────────────────────────
+// PORTAL DO CLIENTE — TIPOS DE PROBLEMA (chamados)
+// ─────────────────────────────────────────────
+
+model TipoProblema {
+  id        String   @id @default(cuid())
+  empresaId String   @map("empresa_id")
+  nome      String
+  ativo     Boolean  @default(true)
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@map("tipos_problema")
 }

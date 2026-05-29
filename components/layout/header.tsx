@@ -1,7 +1,7 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import { Bell, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer } from "lucide-react";
+import { Bell, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer, Headset } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -12,6 +12,7 @@ interface Alertas {
   etapasVencendoHoje: number;
   pedidosPendentes: number;
   atendimentosAtraso: number;
+  chamadosPortal: number;
   total: number;
 }
 
@@ -146,6 +147,7 @@ export function Header({ session }: HeaderProps) {
                   <AlertaItem href="/prazos?status=ATRASADO" icone={AlertTriangle} cor="text-red-600" label="Prazos vencidos" valor={alertas?.prazosVencidos ?? 0} onClick={() => setSinoAberto(false)} />
                   <AlertaItem href="/prazos?status=ATIVO" icone={Clock} cor="text-amber-600" label="Vencendo hoje" valor={alertas?.etapasVencendoHoje ?? 0} onClick={() => setSinoAberto(false)} />
                   <AlertaItem href="/compras/pedidos" icone={ShoppingCart} cor="text-orange-600" label="Compras pendentes" valor={alertas?.pedidosPendentes ?? 0} onClick={() => setSinoAberto(false)} />
+                  <AlertaItem href="/ordens?origem=PORTAL_CLIENTE" icone={Headset} cor="text-cyan-600" label="Chamados do portal" valor={alertas?.chamadosPortal ?? 0} onClick={() => setSinoAberto(false)} />
                   <AlertaItem href="/ordens" icone={Timer} cor="text-red-600" label="Atendimentos em atraso" valor={alertas?.atendimentosAtraso ?? 0} onClick={() => setSinoAberto(false)} />
                 </div>
               )}

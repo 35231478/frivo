@@ -21,12 +21,14 @@ export async function GET(req: NextRequest) {
   const status = searchParams.get("status");
   const prioridade = searchParams.get("prioridade");
   const clienteId = searchParams.get("clienteId");
+  const origem = searchParams.get("origem");
   const busca = searchParams.get("busca") ?? "";
 
   const where: any = { empresaId };
   if (status) where.status = status;
   if (prioridade) where.prioridade = prioridade;
   if (clienteId) where.clienteId = clienteId;
+  if (origem) where.origem = origem;
   if (busca) {
     where.OR = [
       { numero: { contains: busca, mode: "insensitive" } },

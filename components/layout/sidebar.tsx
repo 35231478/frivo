@@ -10,7 +10,7 @@ import {
   LayoutDashboard, Users, Thermometer, ClipboardList, FileText,
   HardHat, Settings, ChevronDown, ChevronRight,
   Wrench, FileSpreadsheet, Cog, Package, ListChecks, Calculator,
-  Wallet, Receipt, TrendingUp, FileBarChart, Clock, ShoppingCart, Timer, Tags, CalendarDays,
+  Wallet, Receipt, TrendingUp, FileBarChart, Clock, ShoppingCart, Timer, Tags, CalendarDays, Headset,
 } from "lucide-react";
 
 const itensMenu = [
@@ -43,6 +43,7 @@ const itensCadastros = [
   { href: "/configuracoes/produtos",          icone: Package,          label: "Produtos" },
   { href: "/configuracoes/tabelas-preco",     icone: Tags,             label: "Tabelas de Preços" },
   { href: "/configuracoes/prazos",            icone: Clock,            label: "Prazos e SLA" },
+  { href: "/configuracoes/portal",            icone: Headset,          label: "Portal do Cliente" },
 ];
 
 const ROLE_LABELS: Record<string, string> = {

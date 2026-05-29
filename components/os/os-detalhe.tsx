@@ -18,7 +18,8 @@ import { ChevronLeft, FileText, Clock, User, Building2, MapPin, AlertTriangle, F
 import Link from "next/link";
 
 const COR_STATUS: Record<string, string> = {
-  ABERTA: "bg-blue-100 text-blue-700", AGENDADA: "bg-purple-100 text-purple-700",
+  ABERTA: "bg-blue-100 text-blue-700", AGUARDANDO_ATENDIMENTO: "bg-cyan-100 text-cyan-700",
+  AGENDADA: "bg-purple-100 text-purple-700",
   EM_ANDAMENTO: "bg-yellow-100 text-yellow-700", PAUSADA: "bg-orange-100 text-orange-700",
   AGUARDANDO_PECA: "bg-amber-100 text-amber-700", CONCLUIDA: "bg-green-100 text-green-700",
   CANCELADA: "bg-red-100 text-red-700",
@@ -26,6 +27,7 @@ const COR_STATUS: Record<string, string> = {
 const COR_PRIORIDADE: Record<string, string> = {
   BAIXA: "bg-gray-100 text-gray-600", NORMAL: "bg-blue-100 text-blue-600",
   ALTA: "bg-orange-100 text-orange-600", URGENTE: "bg-red-100 text-red-700 font-semibold",
+  CRITICO: "bg-red-200 text-red-800 font-bold",
 };
 
 export function OsDetalhe({ os: initialOs }: { os: any }) {
@@ -83,8 +85,13 @@ export function OsDetalhe({ os: initialOs }: { os: any }) {
             <ChevronLeft className="w-5 h-5" />
           </Link>
           <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-gray-900 font-mono">{os.numero}</h1>
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-2xl font-bold text-gray-900 font-mono">{os.chamadoNumero ?? os.numero}</h1>
+              {os.origem === "PORTAL_CLIENTE" && (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold bg-cyan-50 text-cyan-700 px-2 py-0.5 rounded-full">
+                  <FileBarChart className="w-3 h-3" /> Chamado do portal
+                </span>
+              )}
               <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium", COR_STATUS[os.status])}>
                 {LABELS_STATUS_OS[os.status]}
               </span>

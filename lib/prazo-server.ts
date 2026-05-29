@@ -34,7 +34,7 @@ export async function contarAlertasPrazos(empresaId: string) {
   const fimHoje = new Date(agora);
   fimHoje.setHours(23, 59, 59, 999);
 
-  const [prazosVencidos, etapasVencendoHoje, pedidosPendentes, atendimentosAtraso] = await Promise.all([
+  const [prazosVencidos, etapasVencendoHoje, pedidosPendentes, atendimentosAtraso, chamadosPortal] = await Promise.all([
     prisma.osPrazo.count({ where: { ordemServico: { empresaId }, status: "ATRASADO" } }),
     prisma.osPrazoEtapa.count({
       where: {
@@ -53,6 +53,9 @@ export async function contarAlertasPrazos(empresaId: string) {
         previsaoConclusao: { lt: agora },
       },
     }),
+    prisma.ordemServico.count({
+      where: { empresaId, origem: "PORTAL_CLIENTE", status: "AGUARDANDO_ATENDIMENTO" },
+    }),
   ]);
 
   return {
@@ -60,6 +63,7 @@ export async function contarAlertasPrazos(empresaId: string) {
     etapasVencendoHoje,
     pedidosPendentes,
     atendimentosAtraso,
-    total: prazosVencidos + etapasVencendoHoje + pedidosPendentes + atendimentosAtraso,
+    chamadosPortal,
+    total: prazosVencidos + etapasVencendoHoje + pedidosPendentes + atendimentosAtraso + chamadosPortal,
   };
 }

@@ -67,6 +67,7 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
   const [whatsappFaturamento, setWhatsappFaturamento] = useState<string>(initialData?.whatsappFaturamento ?? "");
   const [tabelaPrecoId, setTabelaPrecoId] = useState<string>(initialData?.tabelaPrecoId ?? "");
   const [tabelas, setTabelas] = useState<{ id: string; nome: string; tipo: string }[]>([]);
+  const [portalAtivo, setPortalAtivo] = useState<boolean>(initialData?.portalAtivo ?? false);
 
   useEffect(() => {
     fetch("/api/tecnicos?tipo=RESPONSAVEL_TECNICO").then((r) => r.json()).then(setResponsaveis).catch(() => {});
@@ -152,6 +153,7 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
       emailsFaturamento,
       whatsappFaturamento: whatsappFaturamento || null,
       tabelaPrecoId: tabelaPrecoId || null,
+      portalAtivo,
     };
     if (!isEditing) {
       payload.unidades = unidadesNovas.map(({ _tempId, ...u }) => u);
@@ -416,6 +418,22 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
               onChange={setBoletoUnicoMensal}
             />
           </div>
+        )}
+      </FormSection>
+
+      {/* Portal do Cliente */}
+      <FormSection title="Portal do Cliente">
+        <p className="text-xs text-gray-400 -mt-2 mb-1">
+          Habilita o acesso do cliente ao portal externo. O acesso individual e as permissões de cada contato são definidos na seção <strong>Contatos</strong>.
+        </p>
+        <ToggleSwitch
+          label="Portal ativo"
+          description="Quando desligado, nenhum contato deste cliente consegue acessar o portal."
+          checked={portalAtivo}
+          onChange={setPortalAtivo}
+        />
+        {!isEditing && (
+          <p className="text-xs text-gray-400">Salve o cliente para conceder acesso de portal aos contatos.</p>
         )}
       </FormSection>
 

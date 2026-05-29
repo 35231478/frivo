@@ -35,6 +35,44 @@ export const loginSchema = z.object({
   senha: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
 });
 
+// Login do Portal do Cliente (contatos)
+export const portalLoginSchema = z.object({
+  email: z.string().email("E-mail inválido"),
+  senha: z.string().min(1, "Senha é obrigatória"),
+});
+
+// Concessão/edição de acesso ao portal para um contato
+export const acessoPortalSchema = z.object({
+  email: z.string().email("E-mail inválido"),
+  senha: z.string().optional(), // se vazio, mantém a senha atual
+  ativo: z.boolean().default(true),
+  permissoes: z.object({
+    verOS: z.boolean().default(false),
+    abrirChamados: z.boolean().default(false),
+    verDocumentos: z.boolean().default(false),
+    verEquipamentos: z.boolean().default(false),
+    verFinanceiro: z.boolean().default(false),
+    verBoletos: z.boolean().default(false),
+    aprovarMedicoes: z.boolean().default(false),
+    verValores: z.boolean().default(false),
+  }).default({}),
+});
+
+// Abertura de chamado pelo portal
+export const chamadoPortalSchema = z.object({
+  unidadeId: z.string().optional().nullable(),
+  equipamentoId: z.string().optional().nullable(),
+  tipoProblema: z.string().optional().nullable(),
+  descricao: z.string().min(5, "Descreva o problema (mín. 5 caracteres)"),
+  urgencia: z.enum(["NORMAL", "URGENTE", "CRITICO"]).default("NORMAL"),
+  fotos: z.array(z.object({
+    nome: z.string(),
+    tipo: z.string(),
+    tamanho: z.number(),
+    conteudo: z.string(),
+  })).default([]),
+});
+
 export const contatoClienteSchema = z.object({
   nome: z.string().min(2, "Nome do contato é obrigatório"),
   cargo: z.string().optional(),
@@ -93,6 +131,7 @@ export const clienteSchema = z.object({
     (v) => (v === "" || v == null ? null : v),
     z.string().nullable()
   ).default(null),
+  portalAtivo: z.boolean().default(false),
 });
 
 export const unidadeSchema = z.object({
