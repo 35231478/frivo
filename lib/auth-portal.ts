@@ -30,7 +30,8 @@ export const {
       async authorize(credentials) {
         const parsed = portalLoginSchema.safeParse(credentials);
         if (!parsed.success) return null;
-        const { email, senha } = parsed.data;
+        const email = parsed.data.email.trim();
+        const { senha } = parsed.data;
 
         const contato = await prisma.contatoCliente.findFirst({
           where: {

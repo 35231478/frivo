@@ -39,8 +39,9 @@ export function PortalAcessoContato({ clienteId, contatoId, contatoNome, emailIn
         body: JSON.stringify({ email, senha: senha || undefined, ativo: true, permissoes: perms }),
       });
       if (!res.ok) { const e = await res.json().catch(() => ({})); setFb({ t: "erro", m: e.erro ?? "Erro ao salvar." }); return; }
+      const data = await res.json().catch(() => ({}));
       setTemAcesso(true); setSenha("");
-      setFb({ t: "ok", m: "Acesso salvo." });
+      setFb({ t: "ok", m: data.portalAtivado ? "Acesso salvo e portal ativado para este cliente." : "Acesso salvo." });
     } catch { setFb({ t: "erro", m: "Erro de conexão." }); } finally { setSalvando(false); }
   }
 

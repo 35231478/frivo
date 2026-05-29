@@ -46,7 +46,13 @@ export async function PUT(req: NextRequest, { params }: Params) {
     select: { id: true, email: true, ativo: true, permissoes: true, senha: true },
   });
 
-  return NextResponse.json({ ...atualizado, temAcesso: !!atualizado.senha });
+  // Conceder acesso a um contato ativa automaticamente o portal do cliente
+  // (o toggle "Portal ativo" continua servindo como chave geral para desligar).
+  if (d.ativo && atualizado.senha) {
+    await prisma.cliente.update({ where: { id }, data: { portalAtivo: true } });
+  }
+
+  return NextResponse.json({ ...atualizado, temAcesso: !!atualizado.senha, portalAtivado: d.ativo && !!atualizado.senha });
 }
 
 // Revoga o acesso ao portal.
