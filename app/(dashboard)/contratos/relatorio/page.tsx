@@ -20,14 +20,14 @@ export default async function RelatorioContratosPage({ searchParams }: { searchP
   const fimMes = new Date(ano, mes, 0, 23, 59, 59);
   const periodo = `${ano}-${String(mes).padStart(2, "0")}`;
 
-  // Contratos ativos cuja vigência cobre o mês
+  // Contratos ativos com recorrência de OS habilitada cuja vigência cobre o mês
   const contratos = await prisma.contrato.findMany({
-    where: { empresaId, status: "ATIVO", dataInicio: { lte: fimMes }, OR: [{ dataFim: null }, { dataFim: { gte: inicioMes } }] },
+    where: { empresaId, status: "ATIVO", recorrencia: true, dataInicio: { lte: fimMes }, OR: [{ dataFim: null }, { dataFim: { gte: inicioMes } }] },
     include: { cliente: { select: { id: true, nome: true, nomeFantasia: true } } },
   });
 
-  // Apenas os que têm ocorrência neste mês conforme a frequência
-  const doMes = contratos.filter((c) => ehOcorrencia(c.dataInicio, ano, mes, intervaloMeses(c.periodicidade)));
+  // Apenas os que têm ocorrência neste mês conforme a frequência de recorrência de OS
+  const doMes = contratos.filter((c) => ehOcorrencia(c.dataInicio, ano, mes, intervaloMeses(c.frequenciaRecorrencia ?? c.periodicidade)));
   const ids = doMes.map((c) => c.id);
 
   // OS do mês desses contratos (recorrente por período ou previsão dentro do mês)

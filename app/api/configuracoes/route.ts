@@ -1,6 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { z } from "zod";
+
+const configuracaoSchema = z.object({
+  clienteEmailObrigatorio: z.boolean().optional(),
+  clienteWhatsappObrigatorio: z.boolean().optional(),
+  clienteTelefoneObrigatorio: z.boolean().optional(),
+  clienteCepObrigatorio: z.boolean().optional(),
+  clienteRtObrigatorio: z.boolean().optional(),
+  clienteArtObrigatorio: z.boolean().optional(),
+  clienteExigirUnidade: z.boolean().optional(),
+  clienteExigirDocumento: z.boolean().optional(),
+  osExigirFoto: z.boolean().optional(),
+  osExigirAssinatura: z.boolean().optional(),
+  osPermitirSemContrato: z.boolean().optional(),
+  osExigirQuestionario: z.boolean().optional(),
+  osPermitirEdicaoConcluida: z.boolean().optional(),
+  notifEmailAbrirOs: z.boolean().optional(),
+  notifEmailConcluirOs: z.boolean().optional(),
+  notifWhatsappAbrirOs: z.boolean().optional(),
+  notifWhatsappConcluirOs: z.boolean().optional(),
+  mostrarMapa: z.boolean().optional(),
+  mostrarDistancia: z.boolean().optional(),
+  mostrarTecnicoProximo: z.boolean().optional(),
+  portalCorPrimaria: z.string().nullable().optional(),
+  portalLogo: z.string().nullable().optional(),
+  portalBoasVindas: z.string().nullable().optional(),
+}).strict();
 
 export async function GET() {
   const session = await auth();
@@ -31,7 +58,13 @@ export async function PUT(req: NextRequest) {
   const empresaId = session.user!.empresaId;
   const body = await req.json();
 
-  const { id, empresaId: _, ...dados } = body;
+  // Remove campos de controle antes de validar (id/empresaId não são editáveis aqui)
+  const { id: _id, empresaId: _empresaId, ...entrada } = body;
+  const parsed = configuracaoSchema.safeParse(entrada);
+  if (!parsed.success) {
+    return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+  }
+  const dados = parsed.data;
 
   const config = await prisma.configuracao.upsert({
     where: { empresaId },

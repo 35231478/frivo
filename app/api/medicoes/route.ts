@@ -72,8 +72,13 @@ export async function POST(req: NextRequest) {
   if (!cliente) return NextResponse.json({ erro: "Cliente inválido" }, { status: 400 });
 
   const ano = data.ano ?? new Date().getFullYear();
-  const total = await prisma.medicao.count({ where: { empresaId } });
-  const numero = gerarNumeroMedicao(total + 1, ano);
+  const ultimaMed = await prisma.medicao.findFirst({
+    where: { empresaId, numero: { startsWith: `MED-${ano}-` } },
+    orderBy: { numero: "desc" },
+    select: { numero: true },
+  });
+  const seq = (ultimaMed ? Number(ultimaMed.numero.split("-")[2]) : 0) + 1;
+  const numero = gerarNumeroMedicao(seq, ano);
   const tokenPublico = crypto.randomUUID();
 
   const totais = calcularTotaisMedicao(data.itens, data.descontoValor, data.descontoPercent);

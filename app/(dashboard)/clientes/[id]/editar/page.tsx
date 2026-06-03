@@ -19,7 +19,7 @@ export default async function EditarClientePage({ params }: { params: Promise<{ 
       anexos: { select: { id: true, nome: true, tipo: true, tamanho: true, criadoEm: true }, orderBy: { criadoEm: "desc" } },
       contatosCliente: { where: { ativo: true }, orderBy: [{ principal: "desc" }, { nome: "asc" }] },
       interacoes: { include: { usuario: { select: { id: true, nome: true } } }, orderBy: { criadoEm: "desc" }, take: 50 },
-      _count: { select: { contratos: true } },
+      _count: { select: { contratos: { where: { status: "ATIVO" } } } },
     },
   });
   if (!cliente) notFound();

@@ -13,8 +13,16 @@ export async function gerarContaReceberDaMedicao(medicaoId: string) {
   const medicao = await prisma.medicao.findUnique({ where: { id: medicaoId } });
   if (!medicao) return null;
 
-  const total = await prisma.contaReceber.count({ where: { empresaId: medicao.empresaId } });
-  const numero = gerarNumeroContaReceber(total + 1, medicao.ano ?? new Date().getFullYear());
+  const ano = medicao.ano ?? new Date().getFullYear();
+  const numero = await proximoNumeroContaReceber(medicao.empresaId, ano);
+
+  // Status da conta acompanha o estágio da medição: se a NF já foi emitida,
+  // a conta já está liberada para recebimento (corrige o perfil AUTOMATICO,
+  // que cria a medição direto em NF_EMITIDA).
+  const status =
+    medicao.status === "PAGO" ? "RECEBIDO" :
+    medicao.status === "NF_EMITIDA" || medicao.status === "BOLETO_GERADO" ? "A_RECEBER" :
+    "PREVISTO";
 
   return prisma.contaReceber.create({
     data: {
@@ -24,10 +32,21 @@ export async function gerarContaReceberDaMedicao(medicaoId: string) {
       numero,
       descricao: medicao.descricao || `Medição ${medicao.numero}`,
       valor: medicao.valorLiquido,
-      status: "PREVISTO",
+      status,
       dataVencimento: medicao.dataVencimento,
     },
   });
+}
+
+/** Próximo número sequencial de conta a receber (CR-AAAA-NNNN) baseado no maior do ano. */
+async function proximoNumeroContaReceber(empresaId: string, ano: number) {
+  const ultimo = await prisma.contaReceber.findFirst({
+    where: { empresaId, numero: { startsWith: `CR-${ano}-` } },
+    orderBy: { numero: "desc" },
+    select: { numero: true },
+  });
+  const seq = ultimo ? Number(ultimo.numero.split("-")[2]) + 1 : 1;
+  return gerarNumeroContaReceber(seq, ano);
 }
 
 /**
@@ -40,8 +59,7 @@ export async function gerarContaReceberDoOrcamento(orcamentoId: string) {
   const orcamento = await prisma.orcamento.findUnique({ where: { id: orcamentoId } });
   if (!orcamento) return null;
 
-  const total = await prisma.contaReceber.count({ where: { empresaId: orcamento.empresaId } });
-  const numero = gerarNumeroContaReceber(total + 1);
+  const numero = await proximoNumeroContaReceber(orcamento.empresaId, new Date().getFullYear());
 
   return prisma.contaReceber.create({
     data: {
@@ -82,7 +100,12 @@ export async function criarMedicaoDeRelatorio(relatorioId: string) {
     "PC_RECEBIDO";
 
   const valor = relatorio.valorFinanceiro ? Number(relatorio.valorFinanceiro) : 0;
-  const seq = (await prisma.medicao.count({ where: { empresaId: relatorio.empresaId } })) + 1;
+  const ultimaMed = await prisma.medicao.findFirst({
+    where: { empresaId: relatorio.empresaId, numero: { startsWith: `MED-${relatorio.anoReferencia}-` } },
+    orderBy: { numero: "desc" },
+    select: { numero: true },
+  });
+  const seq = ultimaMed ? Number(ultimaMed.numero.split("-")[2]) + 1 : 1;
   const numero = gerarNumeroMedicao(seq, relatorio.anoReferencia);
   const vencimento = calcularVencimento(cliente.diaFaturamento, relatorio.mesReferencia, relatorio.anoReferencia);
 

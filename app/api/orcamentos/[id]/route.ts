@@ -68,6 +68,20 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     );
   }
   const data = parsed.data;
+
+  // Valida que as OS vinculadas pertencem ao mesmo tenant e cliente (evita vínculo cross-tenant)
+  if (data.ordensServicoIds.length) {
+    const validas = await prisma.ordemServico.count({
+      where: { id: { in: data.ordensServicoIds }, empresaId, clienteId: data.clienteId },
+    });
+    if (validas !== data.ordensServicoIds.length) {
+      return NextResponse.json(
+        { erro: "Uma ou mais ordens de serviço são inválidas ou não pertencem a este cliente" },
+        { status: 400 }
+      );
+    }
+  }
+
   const totais = calcularTotais(data.servicos, data.produtos, data.desconto, data.tipoDesconto);
 
   const atualizado = await prisma.$transaction(async (tx) => {

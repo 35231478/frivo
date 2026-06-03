@@ -62,8 +62,14 @@ export async function POST(req: NextRequest) {
   const parsed = osCreateSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
 
-  const total = await prisma.ordemServico.count({ where: { empresaId } });
-  const numero = `OS-${new Date().getFullYear()}-${String(total + 1).padStart(4, "0")}`;
+  const ano = new Date().getFullYear();
+  const ultimaOs = await prisma.ordemServico.findFirst({
+    where: { empresaId, numero: { startsWith: `OS-${ano}-` } },
+    orderBy: { numero: "desc" },
+    select: { numero: true },
+  });
+  const seq = (ultimaOs ? Number(ultimaOs.numero.split("-")[2]) : 0) + 1;
+  const numero = `OS-${ano}-${String(seq).padStart(4, "0")}`;
 
   const os = await prisma.ordemServico.create({
     data: {

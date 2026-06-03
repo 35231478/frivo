@@ -21,6 +21,9 @@ export async function POST(req: NextRequest, { params }: Params) {
   const { id } = await params;
   const empresaId = session.user!.empresaId;
 
+  const os = await prisma.ordemServico.findFirst({ where: { id, empresaId }, select: { id: true } });
+  if (!os) return NextResponse.json({ erro: "Ordem de serviço não encontrada" }, { status: 404 });
+
   const body = await req.json();
   const parsed = atividadeSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos" }, { status: 400 });

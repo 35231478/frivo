@@ -33,7 +33,7 @@ export default async function ClientesPage({
     prisma.cliente.findMany({
       where,
       include: {
-        _count: { select: { unidades: true, ordensServico: true, contratos: true } },
+        _count: { select: { unidades: true, ordensServico: true, contratos: { where: { status: "ATIVO" } } } },
         responsavelTecnico: { select: { nome: true } },
       },
       orderBy: { nome: "asc" },

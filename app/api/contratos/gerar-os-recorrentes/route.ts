@@ -31,7 +31,13 @@ export async function POST(req: NextRequest) {
     include: { cliente: { select: { nome: true, nomeFantasia: true } }, tipoOsRecorrencia: { select: { id: true, nome: true } } },
   });
 
-  let seq = await prisma.ordemServico.count({ where: { empresaId } });
+  // Sequencial derivado do maior número de OS do ano alvo (evita colisão ao gerar para outro ano)
+  const ultimaOs = await prisma.ordemServico.findFirst({
+    where: { empresaId, numero: { startsWith: `OS-${ano}-` } },
+    orderBy: { numero: "desc" },
+    select: { numero: true },
+  });
+  let seq = ultimaOs ? Number(ultimaOs.numero.split("-")[2]) : 0;
   let criadas = 0;
   let ignoradas = 0;
   const resultado: { contrato: string; numero?: string; status: string }[] = [];

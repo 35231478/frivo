@@ -8,7 +8,12 @@ type Params = { params: Promise<{ id: string }> };
 export async function PUT(req: NextRequest, { params }: Params) {
   const session = await auth();
   if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const empresaId = session.user!.empresaId;
   const { id } = await params;
+
+  const existente = await prisma.formularioTemplate.findFirst({ where: { id, empresaId } });
+  if (!existente) return NextResponse.json({ erro: "Formulário não encontrado" }, { status: 404 });
+
   const body = await req.json();
   const { campos, tipoOsId, ...resto } = body;
 
@@ -46,7 +51,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
 export async function DELETE(_: NextRequest, { params }: Params) {
   const session = await auth();
   if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const empresaId = session.user!.empresaId;
   const { id } = await params;
+
+  const existente = await prisma.formularioTemplate.findFirst({ where: { id, empresaId } });
+  if (!existente) return NextResponse.json({ erro: "Formulário não encontrado" }, { status: 404 });
 
   await prisma.formularioTemplate.update({ where: { id }, data: { ativo: false } });
   return NextResponse.json({ ok: true });

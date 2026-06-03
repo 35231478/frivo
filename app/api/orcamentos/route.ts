@@ -66,55 +66,85 @@ export async function POST(req: NextRequest) {
   }
   const data = parsed.data;
 
-  const total = await prisma.orcamento.count({ where: { empresaId } });
-  const codigo = gerarCodigoOrcamento(total + 1);
-  const tokenPublico = crypto.randomUUID();
+  // Valida que as OS vinculadas pertencem ao mesmo tenant e cliente (evita vínculo cross-tenant)
+  if (data.ordensServicoIds.length) {
+    const validas = await prisma.ordemServico.count({
+      where: { id: { in: data.ordensServicoIds }, empresaId, clienteId: data.clienteId },
+    });
+    if (validas !== data.ordensServicoIds.length) {
+      return NextResponse.json(
+        { erro: "Uma ou mais ordens de serviço são inválidas ou não pertencem a este cliente" },
+        { status: 400 }
+      );
+    }
+  }
 
+  const tokenPublico = crypto.randomUUID();
   const totais = calcularTotais(data.servicos, data.produtos, data.desconto, data.tipoDesconto);
 
-  const orcamento = await prisma.orcamento.create({
-    data: {
-      empresaId,
-      codigo,
-      nome: data.nome,
-      clienteId: data.clienteId,
-      criadoPorId: usuarioId,
-      descricao: data.descricao ?? null,
-      observacao: data.observacao ?? null,
-      validadeEm: data.validadeEm ? new Date(data.validadeEm) : null,
-      desconto: data.desconto,
-      tipoDesconto: data.tipoDesconto,
-      totalServicos: totais.totalServicos,
-      totalProdutos: totais.totalProdutos,
-      totalGeral: totais.totalGeral,
-      tokenPublico,
-      servicos: {
-        create: data.servicos.map((s, idx) => ({
-          servicoId: s.catalogoId || null,
-          descricao: s.descricao,
-          quantidade: s.quantidade,
-          valorUnitario: s.valorUnitario,
-          valorTotal: s.quantidade * s.valorUnitario,
-          observacao: s.observacao ?? null,
-          ordem: idx,
-        })),
-      },
-      produtos: {
-        create: data.produtos.map((p, idx) => ({
-          produtoId: p.catalogoId || null,
-          descricao: p.descricao,
-          quantidade: p.quantidade,
-          valorUnitario: p.valorUnitario,
-          valorTotal: p.quantidade * p.valorUnitario,
-          observacao: p.observacao ?? null,
-          ordem: idx,
-        })),
-      },
-      ordensServico: {
-        create: data.ordensServicoIds.map((osId) => ({ ordemServicoId: osId })),
-      },
-    },
-  });
+  // Numeração derivada do maior código existente do ano (evita reuso após exclusão); retry em colisão
+  const ano = new Date().getFullYear();
+  let orcamento;
+  for (let tentativa = 0; ; tentativa++) {
+    const ultimo = await prisma.orcamento.findFirst({
+      where: { empresaId, codigo: { startsWith: `ORC-${ano}-` } },
+      orderBy: { codigo: "desc" },
+      select: { codigo: true },
+    });
+    const seq = ultimo ? Number(ultimo.codigo.split("-")[2]) + 1 : 1;
+    const codigo = gerarCodigoOrcamento(seq);
+
+    try {
+      orcamento = await prisma.orcamento.create({
+        data: {
+          empresaId,
+          codigo,
+          nome: data.nome,
+          clienteId: data.clienteId,
+          criadoPorId: usuarioId,
+          descricao: data.descricao ?? null,
+          observacao: data.observacao ?? null,
+          validadeEm: data.validadeEm ? new Date(data.validadeEm) : null,
+          desconto: data.desconto,
+          tipoDesconto: data.tipoDesconto,
+          totalServicos: totais.totalServicos,
+          totalProdutos: totais.totalProdutos,
+          totalGeral: totais.totalGeral,
+          tokenPublico,
+          servicos: {
+            create: data.servicos.map((s, idx) => ({
+              servicoId: s.catalogoId || null,
+              descricao: s.descricao,
+              quantidade: s.quantidade,
+              valorUnitario: s.valorUnitario,
+              valorTotal: s.quantidade * s.valorUnitario,
+              observacao: s.observacao ?? null,
+              ordem: idx,
+            })),
+          },
+          produtos: {
+            create: data.produtos.map((p, idx) => ({
+              produtoId: p.catalogoId || null,
+              descricao: p.descricao,
+              quantidade: p.quantidade,
+              valorUnitario: p.valorUnitario,
+              valorTotal: p.quantidade * p.valorUnitario,
+              observacao: p.observacao ?? null,
+              ordem: idx,
+            })),
+          },
+          ordensServico: {
+            create: data.ordensServicoIds.map((osId) => ({ ordemServicoId: osId })),
+          },
+        },
+      });
+      break;
+    } catch (e: any) {
+      // P2002 = violação de unique (codigo, empresaId) por concorrência → tenta o próximo número
+      if (e?.code === "P2002" && tentativa < 5) continue;
+      throw e;
+    }
+  }
 
   return NextResponse.json(orcamento, { status: 201 });
 }

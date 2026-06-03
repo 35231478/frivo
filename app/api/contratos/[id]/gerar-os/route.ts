@@ -35,7 +35,13 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (existente) return NextResponse.json({ id: existente.id, jaExistia: true });
 
   const dataAgendada = dataAgendadaRecorrencia(ano, mes, (contrato as any).diaRecorrencia ?? contrato.diaVencimento ?? 1, (contrato as any).fimSemanaRecorrencia);
-  const seq = (await prisma.ordemServico.count({ where: { empresaId } })) + 1;
+  // Sequencial derivado do maior número de OS do ano alvo (evita colisão ao gerar para outro ano)
+  const ultimaOs = await prisma.ordemServico.findFirst({
+    where: { empresaId, numero: { startsWith: `OS-${ano}-` } },
+    orderBy: { numero: "desc" },
+    select: { numero: true },
+  });
+  const seq = (ultimaOs ? Number(ultimaOs.numero.split("-")[2]) : 0) + 1;
   const numero = `OS-${ano}-${String(seq).padStart(4, "0")}`;
   const tituloTipo = contrato.tipoOsRecorrencia?.nome ?? "Manutenção do contrato";
 

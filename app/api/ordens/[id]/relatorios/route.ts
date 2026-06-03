@@ -91,7 +91,12 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
   const data = parsed.data;
 
-  const seq = (await prisma.relatorioOs.count({ where: { empresaId } })) + 1;
+  const ultimoRel = await prisma.relatorioOs.findFirst({
+    where: { empresaId, numero: { startsWith: `REL-${data.anoReferencia}-` } },
+    orderBy: { numero: "desc" },
+    select: { numero: true },
+  });
+  const seq = (ultimoRel ? Number(ultimoRel.numero.split("-")[2]) : 0) + 1;
   const numero = gerarNumeroRelatorio(seq, data.anoReferencia);
 
   const relatorio = await prisma.relatorioOs.create({

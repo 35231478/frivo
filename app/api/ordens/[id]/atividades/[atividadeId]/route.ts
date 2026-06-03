@@ -8,9 +8,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const session = await auth();
   if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
   const { id, atividadeId } = await params;
+  const empresaId = session.user!.empresaId;
   const body = await req.json();
 
-  const existente = await prisma.atividadeOs.findFirst({ where: { id: atividadeId, ordemServicoId: id } });
+  const existente = await prisma.atividadeOs.findFirst({ where: { id: atividadeId, ordemServicoId: id, empresaId } });
   if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
 
   const { status, titulo, tipoOsId, tecnicoId, dataAgendada, duracaoMin, observacao, resumo } = body;

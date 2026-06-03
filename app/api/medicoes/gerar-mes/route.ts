@@ -35,7 +35,13 @@ export async function POST(req: NextRequest) {
     porCliente.set(c.clienteId, arr);
   }
 
-  let sequencial = await prisma.medicao.count({ where: { empresaId } });
+  // Sequencial derivado do maior número de medição do ano alvo (evita colisão entre anos)
+  const ultimaMed = await prisma.medicao.findFirst({
+    where: { empresaId, numero: { startsWith: `MED-${ano}-` } },
+    orderBy: { numero: "desc" },
+    select: { numero: true },
+  });
+  let sequencial = ultimaMed ? Number(ultimaMed.numero.split("-")[2]) : 0;
   let criadas = 0;
   let ignoradas = 0;
   const resultado: { cliente: string; numero?: string; status: string }[] = [];

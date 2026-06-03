@@ -61,10 +61,22 @@ export default async function CalendarioPage({
     gridFim = new Date(ult.getFullYear(), ult.getMonth(), ult.getDate(), 23, 59, 59);
   }
 
-  const where: any = { empresaId, previsaoConclusao: { gte: gridInicio, lte: gridFim } };
+  const periodo = { gte: gridInicio, lte: gridFim };
+  const filtroAtividade: any = {};
+  if (tecnicoId) filtroAtividade.tecnicoId = tecnicoId;
+  if (tipoOsId) filtroAtividade.tipoOsId = tipoOsId;
+
+  // Considera OS com previsão de conclusão no período OU com atividade agendada no período
+  const where: any = {
+    empresaId,
+    OR: [
+      { previsaoConclusao: periodo },
+      { atividades: { some: { ...filtroAtividade, dataAgendada: periodo } } },
+    ],
+  };
   if (status) where.status = status;
-  if (tecnicoId) where.atividades = { some: { tecnicoId } };
-  if (tipoOsId) where.atividades = { ...(where.atividades ?? {}), some: { ...(where.atividades?.some ?? {}), tipoOsId } };
+  // Quando há filtro de técnico/tipo, a OS precisa ter ao menos uma atividade compatível
+  if (tecnicoId || tipoOsId) where.atividades = { some: filtroAtividade };
 
   const [ordens, tecnicos, tiposOs] = await Promise.all([
     prisma.ordemServico.findMany({
@@ -72,6 +84,7 @@ export default async function CalendarioPage({
       select: {
         id: true, numero: true, status: true, prioridade: true, origem: true, previsaoConclusao: true,
         cliente: { select: { nome: true, nomeFantasia: true } },
+        atividades: { where: { dataAgendada: periodo }, select: { dataAgendada: true }, orderBy: { dataAgendada: "asc" } },
       },
       orderBy: { previsaoConclusao: "asc" },
       take: 500,
@@ -82,8 +95,14 @@ export default async function CalendarioPage({
 
   const porDia = new Map<string, typeof ordens>();
   for (const os of ordens) {
-    if (!os.previsaoConclusao) continue;
-    const k = chave(new Date(os.previsaoConclusao));
+    // Posiciona pela previsão de conclusão (se dentro do período) ou pela 1ª atividade agendada no período
+    let dataPos: Date | null = os.previsaoConclusao ? new Date(os.previsaoConclusao) : null;
+    if (!dataPos || dataPos < gridInicio || dataPos > gridFim) {
+      const prox = os.atividades[0]?.dataAgendada;
+      dataPos = prox ? new Date(prox) : dataPos;
+    }
+    if (!dataPos) continue;
+    const k = chave(dataPos);
     const arr = porDia.get(k) ?? [];
     arr.push(os);
     porDia.set(k, arr);

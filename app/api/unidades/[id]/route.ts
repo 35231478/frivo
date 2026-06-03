@@ -48,7 +48,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
     return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
   }
 
-  const atualizado = await prisma.unidade.update({ where: { id }, data: parsed.data });
+  // Não permite reatribuir a unidade a outro cliente nesta rota (evita mover entre clientes/tenants)
+  const { clienteId: _clienteId, ...dadosAtualizacao } = parsed.data;
+  const atualizado = await prisma.unidade.update({ where: { id }, data: dadosAtualizacao });
   return NextResponse.json(atualizado);
 }
 

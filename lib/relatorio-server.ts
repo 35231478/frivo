@@ -33,7 +33,13 @@ export async function gerarRelatoriosDaOs(osId: string, empresaId: string) {
   const mesReferencia = ref.getMonth() + 1;
   const anoReferencia = ref.getFullYear();
 
-  let seq = await prisma.relatorioOs.count({ where: { empresaId } });
+  // Sequencial derivado do maior número de relatório do ano de referência (evita colisão entre anos)
+  const ultimoRel = await prisma.relatorioOs.findFirst({
+    where: { empresaId, numero: { startsWith: `REL-${anoReferencia}-` } },
+    orderBy: { numero: "desc" },
+    select: { numero: true },
+  });
+  let seq = ultimoRel ? Number(ultimoRel.numero.split("-")[2]) : 0;
   let criados = 0;
 
   // Relatórios individuais por atividade concluída

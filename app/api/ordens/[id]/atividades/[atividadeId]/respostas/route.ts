@@ -8,6 +8,10 @@ export async function POST(req: NextRequest, { params }: Params) {
   const session = await auth();
   if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
   const { id, atividadeId } = await params;
+  const empresaId = session.user!.empresaId;
+
+  const atividade = await prisma.atividadeOs.findFirst({ where: { id: atividadeId, ordemServicoId: id, empresaId }, select: { id: true } });
+  if (!atividade) return NextResponse.json({ erro: "Atividade não encontrada" }, { status: 404 });
 
   const body = await req.json();
   const { respostas, formularioId } = body as {
