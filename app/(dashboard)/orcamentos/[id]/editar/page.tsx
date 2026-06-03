@@ -33,7 +33,7 @@ export default async function EditarOrcamentoPage({
     redirect(`/orcamentos/${id}`);
   }
 
-  const [clientes, servicos, produtos] = await Promise.all([
+  const [clientes, servicos, produtos, tecnicos, termoTemplates] = await Promise.all([
     prisma.cliente.findMany({
       where: { empresaId, ativo: true },
       select: { id: true, nome: true, nomeFantasia: true },
@@ -49,6 +49,16 @@ export default async function EditarOrcamentoPage({
       select: { id: true, nome: true, descricao: true, unidade: true, valorPadrao: true },
       orderBy: { nome: "asc" },
     }),
+    prisma.tecnico.findMany({
+      where: { empresaId, ativo: true, tipo: "RESPONSAVEL_TECNICO" },
+      select: { id: true, nome: true, crea: true },
+      orderBy: { nome: "asc" },
+    }),
+    prisma.termoReferenciaTemplate.findMany({
+      where: { empresaId, ativo: true },
+      select: { id: true, nome: true, conteudo: true },
+      orderBy: { nome: "asc" },
+    }),
   ]);
 
   const inicial = {
@@ -56,11 +66,31 @@ export default async function EditarOrcamentoPage({
     nome: orcamento.nome,
     codigo: orcamento.codigo,
     clienteId: orcamento.clienteId,
+    tipo: orcamento.tipo,
     descricao: orcamento.descricao,
     observacao: orcamento.observacao,
     validadeEm: orcamento.validadeEm,
     desconto: Number(orcamento.desconto),
     tipoDesconto: orcamento.tipoDesconto,
+    proposta: {
+      valorMensal: orcamento.valorMensal ? Number(orcamento.valorMensal) : null,
+      frequenciaContrato: orcamento.frequenciaContrato,
+      diaExecucao: orcamento.diaExecucao,
+      dataInicioContrato: orcamento.dataInicioContrato,
+      vigenciaMeses: orcamento.vigenciaMeses,
+      condicaoPagamento: orcamento.condicaoPagamento,
+      diaFaturamento: orcamento.diaFaturamento,
+      perfilFaturamento: orcamento.perfilFaturamento,
+      exigePcAntesNf: orcamento.exigePcAntesNf,
+      responsavelTecnicoId: orcamento.responsavelTecnicoId,
+      artNumero: orcamento.artNumero,
+      termoReferencia: orcamento.termoReferencia,
+      visitasPorPeriodo: orcamento.visitasPorPeriodo,
+      equipamentosCobertos: orcamento.equipamentosCobertos,
+      prazoEmergencial: orcamento.prazoEmergencial,
+      prazoNormal: orcamento.prazoNormal,
+      horarioAtendimento: orcamento.horarioAtendimento,
+    },
     servicos: orcamento.servicos.map((s) => ({
       id: s.id,
       catalogoId: s.servicoId,
@@ -92,6 +122,8 @@ export default async function EditarOrcamentoPage({
       clientes={clientes}
       catalogoServicos={servicos.map((s) => ({ ...s, valorPadrao: s.valorPadrao ? Number(s.valorPadrao) : null }))}
       catalogoProdutos={produtos.map((p) => ({ ...p, valorPadrao: p.valorPadrao ? Number(p.valorPadrao) : null }))}
+      tecnicos={tecnicos}
+      termoTemplates={termoTemplates}
       inicial={inicial}
     />
   );

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { cn, formatarData, formatarMoeda, LABELS_STATUS_ORCAMENTO, CLASSE_STATUS_ORCAMENTO } from "@/lib/utils";
+import { cn, formatarData, formatarMoeda, LABELS_STATUS_ORCAMENTO, CLASSE_STATUS_ORCAMENTO, LABELS_TIPO_ORCAMENTO, CLASSE_TIPO_ORCAMENTO } from "@/lib/utils";
 import Link from "next/link";
 import { Calculator, Plus } from "lucide-react";
 
@@ -10,14 +10,15 @@ export const metadata: Metadata = { title: "Orçamentos" };
 export default async function OrcamentosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ busca?: string; status?: string; clienteId?: string; dataInicio?: string; dataFim?: string }>;
+  searchParams: Promise<{ busca?: string; status?: string; tipo?: string; clienteId?: string; dataInicio?: string; dataFim?: string }>;
 }) {
-  const { busca = "", status = "", clienteId = "", dataInicio = "", dataFim = "" } = await searchParams;
+  const { busca = "", status = "", tipo = "", clienteId = "", dataInicio = "", dataFim = "" } = await searchParams;
   const session = await auth();
   const empresaId = session!.user!.empresaId;
 
   const where: any = { empresaId };
   if (status) where.status = status;
+  if (tipo) where.tipo = tipo;
   if (clienteId) where.clienteId = clienteId;
   if (dataInicio || dataFim) {
     where.criadoEm = {};
@@ -81,6 +82,13 @@ export default async function OrcamentosPage({
               placeholder="Buscar por código, nome ou cliente..."
               className="flex-1 min-w-[220px] bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all"
             />
+            <select name="tipo" defaultValue={tipo}
+              className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all">
+              <option value="">Todos os tipos</option>
+              {Object.entries(LABELS_TIPO_ORCAMENTO).map(([v, l]) => (
+                <option key={v} value={v}>{l}</option>
+              ))}
+            </select>
             <select name="status" defaultValue={status}
               className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all">
               <option value="">Todos status</option>
@@ -122,6 +130,7 @@ export default async function OrcamentosPage({
                 <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Código</th>
                 <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Nome</th>
                 <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Cliente</th>
+                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Tipo</th>
                 <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Status</th>
                 <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Total</th>
                 <th className="text-center px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden md:table-cell">OS</th>
@@ -131,7 +140,7 @@ export default async function OrcamentosPage({
             <tbody>
               {orcamentos.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center text-ink-subtle py-12">
+                  <td colSpan={8} className="text-center text-ink-subtle py-12">
                     Nenhum orçamento encontrado
                   </td>
                 </tr>
@@ -151,6 +160,11 @@ export default async function OrcamentosPage({
                     </td>
                     <td className="px-4 py-3 text-ink font-medium">{o.nome}</td>
                     <td className="px-4 py-3 text-ink-muted">{o.cliente.nomeFantasia ?? o.cliente.nome}</td>
+                    <td className="px-4 py-3">
+                      <span className={CLASSE_TIPO_ORCAMENTO[o.tipo]}>
+                        {LABELS_TIPO_ORCAMENTO[o.tipo]}
+                      </span>
+                    </td>
                     <td className="px-4 py-3">
                       <span className={CLASSE_STATUS_ORCAMENTO[o.status]}>
                         {LABELS_STATUS_ORCAMENTO[o.status]}

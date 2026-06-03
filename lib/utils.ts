@@ -213,6 +213,7 @@ export const LABELS_STATUS_ORCAMENTO: Record<string, string> = {
   APROVADO: "Aprovado",
   REPROVADO: "Reprovado",
   CANCELADO: "Cancelado",
+  CONVERTIDA: "Convertida",
 };
 
 export const CLASSE_STATUS_ORCAMENTO: Record<string, string> = {
@@ -221,7 +222,39 @@ export const CLASSE_STATUS_ORCAMENTO: Record<string, string> = {
   APROVADO: "badge-orc-aprovado",
   REPROVADO: "badge-orc-reprovado",
   CANCELADO: "badge-orc-cancelado",
+  CONVERTIDA: "badge-base bg-primary-50 text-primary-700",
 };
+
+export const LABELS_TIPO_ORCAMENTO: Record<string, string> = {
+  COMUM: "Orçamento Comum",
+  PROPOSTA_CONTRATO: "Proposta de Contrato",
+};
+
+export const CLASSE_TIPO_ORCAMENTO: Record<string, string> = {
+  COMUM: "badge-base bg-primary-50 text-primary-700",
+  PROPOSTA_CONTRATO: "badge-base bg-success-50 text-success-700",
+};
+
+/** Variáveis disponíveis no termo de referência da proposta de contrato. */
+export const VARIAVEIS_TERMO = [
+  "{{cliente_nome}}",
+  "{{valor_mensal}}",
+  "{{vigencia}}",
+  "{{frequencia}}",
+  "{{data_inicio}}",
+  "{{responsavel_tecnico}}",
+  "{{art_numero}}",
+] as const;
+
+/** Calcula a data fim somando `meses` à data de início. */
+export function calcularDataFimContrato(inicio: Date | string | null | undefined, meses: number | null | undefined): Date | null {
+  if (!inicio || !meses) return null;
+  const d = new Date(inicio);
+  if (isNaN(d.getTime())) return null;
+  const fim = new Date(d);
+  fim.setMonth(fim.getMonth() + meses);
+  return fim;
+}
 
 export const LABELS_TIPO_DESCONTO: Record<string, string> = {
   VALOR: "R$",

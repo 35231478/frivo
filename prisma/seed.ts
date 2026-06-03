@@ -300,6 +300,41 @@ async function main() {
     console.log("Tabelas de preços criadas: 2 (Padrão, Contrato)");
   }
 
+  // ======== TERMOS DE REFERÊNCIA ========
+  const totalTermos = await prisma.termoReferenciaTemplate.count({ where: { empresaId: empresa.id } });
+  if (totalTermos === 0) {
+    const termos = [
+      {
+        nome: "Termo Padrão Manutenção Preventiva",
+        descricao: "Modelo enxuto para contratos de manutenção preventiva mensal.",
+        conteudo:
+          `CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE MANUTENÇÃO PREVENTIVA\n\n` +
+          `A CONTRATADA prestará à {{cliente_nome}} serviços de manutenção preventiva nos equipamentos de climatização cobertos por este instrumento, ` +
+          `com frequência {{frequencia}}, pelo valor mensal de {{valor_mensal}}, iniciando em {{data_inicio}} e com vigência de {{vigencia}}.\n\n` +
+          `1. OBJETO\nManutenção preventiva conforme PMOC, incluindo inspeção, limpeza e verificação de desempenho dos equipamentos.\n\n` +
+          `2. RESPONSÁVEL TÉCNICO\nResponsável técnico: {{responsavel_tecnico}} — ART nº {{art_numero}}.\n\n` +
+          `3. OBRIGAÇÕES\nA CONTRATADA executará as visitas programadas e emitirá relatório técnico a cada atendimento.\n\n` +
+          `4. VIGÊNCIA\nO presente contrato vigorará por {{vigencia}} a contar de {{data_inicio}}.`,
+      },
+      {
+        nome: "Termo Contrato Anual",
+        descricao: "Modelo completo para contratos anuais de manutenção.",
+        conteudo:
+          `CONTRATO ANUAL DE MANUTENÇÃO DE SISTEMAS DE CLIMATIZAÇÃO\n\n` +
+          `Pelo presente instrumento, a CONTRATADA compromete-se a prestar à {{cliente_nome}} os serviços de manutenção descritos no escopo, ` +
+          `pelo período de {{vigencia}} com início em {{data_inicio}}, mediante o pagamento mensal de {{valor_mensal}} e visitas com periodicidade {{frequencia}}.\n\n` +
+          `CLÁUSULA 1 — DO OBJETO\nManutenção preventiva e corretiva dos equipamentos cobertos, conforme escopo e SLA anexos.\n\n` +
+          `CLÁUSULA 2 — DO RESPONSÁVEL TÉCNICO\nOs serviços serão acompanhados por {{responsavel_tecnico}}, sob a ART nº {{art_numero}}.\n\n` +
+          `CLÁUSULA 3 — DO VALOR E REAJUSTE\nO valor mensal de {{valor_mensal}} será reajustado anualmente conforme índice acordado entre as partes.\n\n` +
+          `CLÁUSULA 4 — DA VIGÊNCIA\nEste contrato terá vigência de {{vigencia}}, iniciando-se em {{data_inicio}}, renovável mediante acordo entre as partes.`,
+      },
+    ];
+    for (const t of termos) {
+      await prisma.termoReferenciaTemplate.create({ data: { empresaId: empresa.id, ...t } });
+    }
+    console.log(`Termos de referência criados: ${termos.length}`);
+  }
+
   console.log("\nSeed concluído!");
   console.log("Login: admin@climatotal.com.br / admin123");
 }

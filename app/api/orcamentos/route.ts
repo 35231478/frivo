@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { orcamentoSchema } from "@/lib/validations";
 import { gerarCodigoOrcamento } from "@/lib/utils";
-import { calcularTotais } from "@/lib/orcamento-helpers";
+import { calcularTotais, montarCamposProposta } from "@/lib/orcamento-helpers";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -12,6 +12,7 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status");
+  const tipo = searchParams.get("tipo");
   const clienteId = searchParams.get("clienteId");
   const dataInicio = searchParams.get("dataInicio");
   const dataFim = searchParams.get("dataFim");
@@ -19,6 +20,7 @@ export async function GET(req: NextRequest) {
 
   const where: any = { empresaId };
   if (status) where.status = status;
+  if (tipo) where.tipo = tipo;
   if (clienteId) where.clienteId = clienteId;
   if (dataInicio || dataFim) {
     where.criadoEm = {};
@@ -81,6 +83,7 @@ export async function POST(req: NextRequest) {
 
   const tokenPublico = crypto.randomUUID();
   const totais = calcularTotais(data.servicos, data.produtos, data.desconto, data.tipoDesconto);
+  const proposta = montarCamposProposta(data);
 
   // Numeração derivada do maior código existente do ano (evita reuso após exclusão); retry em colisão
   const ano = new Date().getFullYear();
@@ -111,6 +114,7 @@ export async function POST(req: NextRequest) {
           totalProdutos: totais.totalProdutos,
           totalGeral: totais.totalGeral,
           tokenPublico,
+          ...proposta,
           servicos: {
             create: data.servicos.map((s, idx) => ({
               servicoId: s.catalogoId || null,

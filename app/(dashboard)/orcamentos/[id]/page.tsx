@@ -4,11 +4,13 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { OrcamentoDocumento } from "@/components/orcamento/orcamento-documento";
+import { PropostaDocumento } from "@/components/orcamento/proposta-documento";
 import { AcoesEnvio } from "@/components/orcamento/acoes-envio";
+import { ConverterContrato } from "@/components/orcamento/converter-contrato";
 import { ComprasSecao } from "@/components/compras/compras-secao";
 import { PageHeader } from "@/components/ui/page-header";
-import { LABELS_STATUS_OS, cn } from "@/lib/utils";
-import { ClipboardList, ExternalLink } from "lucide-react";
+import { LABELS_STATUS_OS, formatarData, cn } from "@/lib/utils";
+import { ClipboardList, ExternalLink, CheckCircle2, FileSignature } from "lucide-react";
 
 export const metadata: Metadata = { title: "Orçamento" };
 
@@ -27,6 +29,8 @@ export default async function OrcamentoDetalhePage({
       include: {
         cliente: true,
         criadoPor: { select: { id: true, nome: true } },
+        responsavelTecnico: { select: { nome: true, crea: true } },
+        contratoGerado: { select: { id: true, numero: true } },
         servicos: { orderBy: { ordem: "asc" } },
         produtos: { orderBy: { ordem: "asc" } },
         ordensServico: {
@@ -42,6 +46,13 @@ export default async function OrcamentoDetalhePage({
   if (!orcamento || !empresa) notFound();
 
   const podeEditar = orcamento.status === "RASCUNHO";
+  const ehProposta = orcamento.tipo === "PROPOSTA_CONTRATO";
+  const equipamentos = ehProposta && orcamento.equipamentosCobertos.length
+    ? (await prisma.equipamento.findMany({
+        where: { id: { in: orcamento.equipamentosCobertos }, empresaId },
+        select: { id: true, marca: true, modelo: true, numeroSerie: true, unidade: { select: { nome: true } } },
+      })).map((e) => ({ id: e.id, rotulo: [e.marca, e.modelo, e.numeroSerie ? `(${e.numeroSerie})` : "", e.unidade?.nome ? `— ${e.unidade.nome}` : ""].filter(Boolean).join(" ") }))
+    : [];
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -61,8 +72,37 @@ export default async function OrcamentoDetalhePage({
         />
       </div>
 
+      {/* Indicadores e conversão da proposta de contrato */}
+      {ehProposta && orcamento.status === "APROVADO" && (
+        <>
+          {orcamento.assinadoEm && (
+            <div className="bg-success-50 border-2 border-success-500 text-success-700 rounded-xl px-5 py-3 flex items-center gap-2 text-sm font-semibold">
+              <CheckCircle2 className="w-5 h-5 shrink-0" /> Aprovada pelo cliente em {formatarData(orcamento.assinadoEm, "dd/MM/yyyy 'às' HH:mm")}
+            </div>
+          )}
+          {!orcamento.contratoGerado && <ConverterContrato orcamentoId={orcamento.id} />}
+        </>
+      )}
+      {ehProposta && orcamento.contratoGerado && (
+        <Link href={`/contratos/${orcamento.contratoGerado.id}/editar`}
+          className="bg-primary-50 border-2 border-primary-300 text-primary-700 rounded-xl px-5 py-3 flex items-center gap-2 text-sm font-semibold hover:bg-primary-100 transition-colors">
+          <FileSignature className="w-5 h-5 shrink-0" /> Convertida em contrato {orcamento.contratoGerado.numero}
+          <ExternalLink className="w-3.5 h-3.5" />
+        </Link>
+      )}
+
       <div className="card-padded">
-        <OrcamentoDocumento orcamento={orcamento} empresa={empresa} cliente={orcamento.cliente} />
+        {ehProposta ? (
+          <PropostaDocumento
+            orcamento={orcamento}
+            empresa={empresa}
+            cliente={orcamento.cliente}
+            responsavelTecnico={orcamento.responsavelTecnico}
+            equipamentos={equipamentos}
+          />
+        ) : (
+          <OrcamentoDocumento orcamento={orcamento} empresa={empresa} cliente={orcamento.cliente} />
+        )}
       </div>
 
       <div className="card-padded">

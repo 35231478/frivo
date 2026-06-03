@@ -5,7 +5,7 @@ import {
   Periodicidade, TipoPessoa, TipoTecnico,
   Segmento, OrigemCliente, StatusFinanceiro,
   TipoContato, TipoInteracao,
-  TipoDesconto,
+  TipoDesconto, TipoOrcamento,
   PerfilFaturamento, TipoMedicao, TipoItemMedicao,
   StatusMedicaoFin, StatusContaReceber, FormaPagamento,
   ResponsavelPrazo, CanalNotificacao, StatusPedidoCompra,
@@ -253,9 +253,16 @@ export const orcamentoItemSchema = z.object({
   observacao: z.string().optional().nullable(),
 });
 
+const intOpcional = (min: number, max: number) =>
+  z.preprocess(
+    (v) => (v === "" || v == null ? null : Number(v)),
+    z.number().int().min(min).max(max).nullable()
+  ).default(null);
+
 export const orcamentoSchema = z.object({
   nome: z.string().min(2, "Nome do orçamento é obrigatório"),
   clienteId: z.string().min(1, "Cliente é obrigatório"),
+  tipo: z.nativeEnum(TipoOrcamento).default(TipoOrcamento.COMUM),
   descricao: z.string().optional().nullable(),
   observacao: z.string().optional().nullable(),
   validadeEm: z.string().optional().nullable(),
@@ -267,6 +274,38 @@ export const orcamentoSchema = z.object({
   servicos: z.array(orcamentoItemSchema).default([]),
   produtos: z.array(orcamentoItemSchema).default([]),
   ordensServicoIds: z.array(z.string()).default([]),
+
+  // Proposta de contrato
+  valorMensal: decimalOpcional,
+  frequenciaContrato: z.preprocess(
+    (v) => (v === "" || v == null ? null : v),
+    z.nativeEnum(Periodicidade).nullable()
+  ).default(null),
+  diaExecucao: intOpcional(1, 31),
+  dataInicioContrato: z.string().optional().nullable(),
+  vigenciaMeses: intOpcional(1, 120),
+  condicaoPagamento: z.string().optional().nullable(),
+  diaFaturamento: intOpcional(1, 28),
+  perfilFaturamento: z.preprocess(
+    (v) => (v === "" || v == null ? null : v),
+    z.nativeEnum(PerfilFaturamento).nullable()
+  ).default(null),
+  exigePcAntesNf: z.boolean().default(false),
+  responsavelTecnicoId: z.string().optional().nullable(),
+  artNumero: z.string().optional().nullable(),
+  termoReferencia: z.string().optional().nullable(),
+  visitasPorPeriodo: intOpcional(1, 999),
+  equipamentosCobertos: z.array(z.string()).default([]),
+  prazoEmergencial: intOpcional(0, 100000),
+  prazoNormal: intOpcional(0, 100000),
+  horarioAtendimento: z.string().optional().nullable(),
+});
+
+export const termoTemplateSchema = z.object({
+  nome: z.string().min(1, "Nome é obrigatório"),
+  descricao: z.string().optional().nullable(),
+  conteudo: z.string().optional().nullable(),
+  ativo: z.boolean().optional(),
 });
 
 export const aprovacaoPublicaSchema = z.object({

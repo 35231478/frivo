@@ -14,7 +14,7 @@ export default async function NovoOrcamentoPage({
   const session = await auth();
   const empresaId = session!.user!.empresaId;
 
-  const [clientes, servicos, produtos, osInicial] = await Promise.all([
+  const [clientes, servicos, produtos, osInicial, tecnicos, termoTemplates] = await Promise.all([
     prisma.cliente.findMany({
       where: { empresaId, ativo: true },
       select: { id: true, nome: true, nomeFantasia: true },
@@ -36,6 +36,16 @@ export default async function NovoOrcamentoPage({
           select: { id: true, numero: true, descricao: true, status: true, clienteId: true },
         })
       : Promise.resolve(null),
+    prisma.tecnico.findMany({
+      where: { empresaId, ativo: true, tipo: "RESPONSAVEL_TECNICO" },
+      select: { id: true, nome: true, crea: true },
+      orderBy: { nome: "asc" },
+    }),
+    prisma.termoReferenciaTemplate.findMany({
+      where: { empresaId, ativo: true },
+      select: { id: true, nome: true, conteudo: true },
+      orderBy: { nome: "asc" },
+    }),
   ]);
 
   const clienteIdInicial = osInicial?.clienteId ?? clienteId;
@@ -46,6 +56,8 @@ export default async function NovoOrcamentoPage({
       clientes={clientes}
       catalogoServicos={servicos.map((s) => ({ ...s, valorPadrao: s.valorPadrao ? Number(s.valorPadrao) : null }))}
       catalogoProdutos={produtos.map((p) => ({ ...p, valorPadrao: p.valorPadrao ? Number(p.valorPadrao) : null }))}
+      tecnicos={tecnicos}
+      termoTemplates={termoTemplates}
       clienteIdInicial={clienteIdInicial}
       osInicialId={osInicial?.id}
       osInicial={osInicial ? { id: osInicial.id, numero: osInicial.numero, descricao: osInicial.descricao, status: osInicial.status } : undefined}

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { orcamentoSchema } from "@/lib/validations";
-import { calcularTotais } from "@/lib/orcamento-helpers";
+import { calcularTotais, montarCamposProposta } from "@/lib/orcamento-helpers";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -83,6 +83,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   const totais = calcularTotais(data.servicos, data.produtos, data.desconto, data.tipoDesconto);
+  const proposta = montarCamposProposta(data);
 
   const atualizado = await prisma.$transaction(async (tx) => {
     await tx.orcamentoServico.deleteMany({ where: { orcamentoId: id } });
@@ -102,6 +103,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         totalServicos: totais.totalServicos,
         totalProdutos: totais.totalProdutos,
         totalGeral: totais.totalGeral,
+        ...proposta,
         servicos: {
           create: data.servicos.map((s, idx) => ({
             servicoId: s.catalogoId || null,

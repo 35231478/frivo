@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { OrcamentoDocumento } from "@/components/orcamento/orcamento-documento";
+import { PropostaDocumento } from "@/components/orcamento/proposta-documento";
 import { AprovacaoPublica } from "@/components/orcamento/aprovacao-publica";
 import { FrivoLogo } from "@/components/layout/frivo-logo";
 import { LABELS_STATUS_ORCAMENTO, CLASSE_STATUS_ORCAMENTO, formatarData, cn } from "@/lib/utils";
@@ -27,12 +28,21 @@ export default async function OrcamentoPublicoPage({
     include: {
       empresa: true,
       cliente: true,
+      responsavelTecnico: { select: { nome: true, crea: true } },
       servicos: { orderBy: { ordem: "asc" } },
       produtos: { orderBy: { ordem: "asc" } },
     },
   });
 
   if (!orcamento) notFound();
+
+  const proposta = orcamento.tipo === "PROPOSTA_CONTRATO";
+  const equipamentos = proposta && orcamento.equipamentosCobertos.length
+    ? (await prisma.equipamento.findMany({
+        where: { id: { in: orcamento.equipamentosCobertos }, empresaId: orcamento.empresaId },
+        select: { id: true, marca: true, modelo: true, numeroSerie: true, unidade: { select: { nome: true } } },
+      })).map((e) => ({ id: e.id, rotulo: [e.marca, e.modelo, e.numeroSerie ? `(${e.numeroSerie})` : "", e.unidade?.nome ? `— ${e.unidade.nome}` : ""].filter(Boolean).join(" ") }))
+    : [];
 
   const expirado = orcamento.validadeEm ? orcamento.validadeEm < new Date() : false;
   const cancelado = orcamento.status === "CANCELADO";
@@ -87,11 +97,21 @@ export default async function OrcamentoPublicoPage({
 
           {/* Documento */}
           <div className="bg-white rounded-2xl shadow-card p-6 md:p-10">
-            <OrcamentoDocumento
-              orcamento={orcamento}
-              empresa={orcamento.empresa}
-              cliente={orcamento.cliente}
-            />
+            {proposta ? (
+              <PropostaDocumento
+                orcamento={orcamento}
+                empresa={orcamento.empresa}
+                cliente={orcamento.cliente}
+                responsavelTecnico={orcamento.responsavelTecnico}
+                equipamentos={equipamentos}
+              />
+            ) : (
+              <OrcamentoDocumento
+                orcamento={orcamento}
+                empresa={orcamento.empresa}
+                cliente={orcamento.cliente}
+              />
+            )}
           </div>
 
           {/* Aprovação */}

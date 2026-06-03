@@ -181,6 +181,12 @@ enum StatusOrcamento {
   APROVADO
   REPROVADO
   CANCELADO
+  CONVERTIDA
+}
+
+enum TipoOrcamento {
+  COMUM
+  PROPOSTA_CONTRATO
 }
 
 enum TipoDesconto {
@@ -367,6 +373,7 @@ model Empresa {
   tabelasPreco         TabelaPreco[]
   relatorios           RelatorioOs[]
   tiposProblema        TipoProblema[]
+  termoTemplates       TermoReferenciaTemplate[]
 
   configuracao  Configuracao?
 
@@ -480,6 +487,7 @@ model Tecnico {
   contratosResponsavel Contrato[]
   atividadesOs         AtividadeOs[]
   contratosRecorrencia Contrato[]     @relation("ContratoTecnicoRecorrencia")
+  orcamentosResponsavel Orcamento[]   @relation("OrcamentoResponsavelTecnico")
 
   @@unique([cpf, empresaId])
   @@map("tecnicos")
@@ -719,10 +727,14 @@ model Contrato {
   tipoOsRecorrenciaId   String?              @map("tipo_os_recorrencia_id")
   tecnicoRecorrenciaId  String?              @map("tecnico_recorrencia_id")
 
+  // Origem: proposta de contrato (orçamento) que gerou este contrato
+  origemOrcamentoId    String?        @unique @map("origem_orcamento_id")
+
   criadoEm             DateTime       @default(now()) @map("criado_em")
   atualizadoEm         DateTime       @updatedAt @map("atualizado_em")
 
   empresa             Empresa           @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  origemOrcamento     Orcamento?        @relation("OrcamentoContrato", fields: [origemOrcamentoId], references: [id])
   cliente             Cliente           @relation(fields: [clienteId], references: [id])
   responsavelTecnico  Tecnico?          @relation(fields: [responsavelTecnicoId], references: [id])
   tipoOsRecorrencia   TipoOs?           @relation("ContratoTipoOsRecorrencia", fields: [tipoOsRecorrenciaId], references: [id])
@@ -1095,10 +1107,31 @@ model Orcamento {
   nome            String
   clienteId       String          @map("cliente_id")
   criadoPorId     String          @map("criado_por_id")
+  tipo            TipoOrcamento   @default(COMUM)
   descricao       String?         @db.Text
   observacao      String?         @db.Text
   status          StatusOrcamento @default(RASCUNHO)
   validadeEm      DateTime?       @map("validade_em")
+
+  // Proposta de contrato (usados quando tipo = PROPOSTA_CONTRATO)
+  valorMensal         Decimal?           @map("valor_mensal") @db.Decimal(12, 2)
+  frequenciaContrato  Periodicidade?     @map("frequencia_contrato")
+  diaExecucao         Int?               @map("dia_execucao")
+  dataInicioContrato  DateTime?          @map("data_inicio_contrato")
+  vigenciaMeses       Int?               @map("vigencia_meses")
+  dataFimContrato     DateTime?          @map("data_fim_contrato")
+  condicaoPagamento   String?            @map("condicao_pagamento")
+  diaFaturamento      Int?               @map("dia_faturamento")
+  perfilFaturamento   PerfilFaturamento? @map("perfil_faturamento")
+  exigePcAntesNf      Boolean            @default(false) @map("exige_pc_antes_nf")
+  responsavelTecnicoId String?           @map("responsavel_tecnico_id")
+  artNumero           String?            @map("art_numero")
+  termoReferencia     String?            @map("termo_referencia") @db.Text
+  visitasPorPeriodo   Int?               @map("visitas_por_periodo")
+  equipamentosCobertos String[]          @map("equipamentos_cobertos")
+  prazoEmergencial    Int?               @map("prazo_emergencial")
+  prazoNormal         Int?               @map("prazo_normal")
+  horarioAtendimento  String?            @map("horario_atendimento")
 
   totalServicos   Decimal         @default(0) @map("total_servicos") @db.Decimal(12, 2)
   totalProdutos   Decimal         @default(0) @map("total_produtos") @db.Decimal(12, 2)
@@ -1119,12 +1152,14 @@ model Orcamento {
   empresa         Empresa             @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   cliente         Cliente             @relation(fields: [clienteId], references: [id])
   criadoPor       Usuario             @relation("OrcamentoCriador", fields: [criadoPorId], references: [id])
+  responsavelTecnico Tecnico?         @relation("OrcamentoResponsavelTecnico", fields: [responsavelTecnicoId], references: [id])
   servicos        OrcamentoServico[]
   produtos        OrcamentoProduto[]
   ordensServico   OrcamentoOs[]
   medicaoItens    MedicaoItem[]
   contasReceber   ContaReceber[]
   pedidosCompra   PedidoCompraInterno[]
+  contratoGerado  Contrato?           @relation("OrcamentoContrato")
 
   @@unique([codigo, empresaId])
   @@map("orcamentos")
@@ -1330,6 +1365,21 @@ model PrazoTemplate {
   osPrazos OsPrazo[]
 
   @@map("prazo_templates")
+}
+
+// Template de Termo de Referência (usado nas propostas de contrato)
+model TermoReferenciaTemplate {
+  id        String   @id @default(cuid())
+  empresaId String   @map("empresa_id")
+  nome      String
+  descricao String?
+  conteudo  String   @db.Text
+  ativo     Boolean  @default(true)
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@map("termo_referencia_templates")
 }
 
 model PrazoEtapaTemplate {

@@ -1,5 +1,6 @@
 import type { TipoDesconto } from "@prisma/client";
-import type { OrcamentoItemInput } from "./validations";
+import type { OrcamentoItemInput, OrcamentoInput } from "./validations";
+import { calcularDataFimContrato } from "./utils";
 
 export interface TotaisOrcamento {
   totalServicos: number;
@@ -43,6 +44,47 @@ export function calcularTotais(
 
 function round2(v: number) {
   return Math.round(v * 100) / 100;
+}
+
+/**
+ * Monta os campos da proposta de contrato a partir do payload validado.
+ * Para tipo COMUM, zera/anula todos os campos específicos de proposta.
+ */
+export function montarCamposProposta(data: OrcamentoInput) {
+  if (data.tipo !== "PROPOSTA_CONTRATO") {
+    return {
+      tipo: "COMUM" as const,
+      valorMensal: null, frequenciaContrato: null, diaExecucao: null,
+      dataInicioContrato: null, vigenciaMeses: null, dataFimContrato: null,
+      condicaoPagamento: null, diaFaturamento: null, perfilFaturamento: null,
+      exigePcAntesNf: false, responsavelTecnicoId: null, artNumero: null,
+      termoReferencia: null, visitasPorPeriodo: null, equipamentosCobertos: [],
+      prazoEmergencial: null, prazoNormal: null, horarioAtendimento: null,
+    };
+  }
+  const inicio = data.dataInicioContrato ? new Date(data.dataInicioContrato) : null;
+  const dataFim = calcularDataFimContrato(inicio, data.vigenciaMeses ?? null);
+  return {
+    tipo: "PROPOSTA_CONTRATO" as const,
+    valorMensal: data.valorMensal ?? null,
+    frequenciaContrato: data.frequenciaContrato ?? null,
+    diaExecucao: data.diaExecucao ?? null,
+    dataInicioContrato: inicio,
+    vigenciaMeses: data.vigenciaMeses ?? null,
+    dataFimContrato: dataFim,
+    condicaoPagamento: data.condicaoPagamento?.trim() || null,
+    diaFaturamento: data.diaFaturamento ?? null,
+    perfilFaturamento: data.perfilFaturamento ?? null,
+    exigePcAntesNf: data.exigePcAntesNf ?? false,
+    responsavelTecnicoId: data.responsavelTecnicoId || null,
+    artNumero: data.artNumero?.trim() || null,
+    termoReferencia: data.termoReferencia ?? null,
+    visitasPorPeriodo: data.visitasPorPeriodo ?? null,
+    equipamentosCobertos: data.equipamentosCobertos ?? [],
+    prazoEmergencial: data.prazoEmergencial ?? null,
+    prazoNormal: data.prazoNormal ?? null,
+    horarioAtendimento: data.horarioAtendimento?.trim() || null,
+  };
 }
 
 export function buildPublicUrl(token: string, origin: string): string {
