@@ -473,6 +473,7 @@ model Tecnico {
   celular        String?
   tipo           TipoTecnico @default(TECNICO_CAMPO)
   crea           String?
+  avatar             String?    @db.Text
   especialidades     String[]
   latitude           Float?
   longitude          Float?

@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { cn, formatarData, LABELS_STATUS_OS, LABELS_PRIORIDADE, LABELS_ORIGEM_OS } from "@/lib/utils";
+import { cn, formatarData, MESES_PT, LABELS_STATUS_OS, LABELS_PRIORIDADE, LABELS_ORIGEM_OS } from "@/lib/utils";
 import { BuscaSelect, type OpcaoBusca } from "@/components/ui/busca-select";
 import {
   ClipboardList, Plus, Search, SlidersHorizontal, X, ArrowUp, ArrowDown, ArrowUpDown,
-  LayoutGrid, List, Download, Headset, Filter,
+  LayoutGrid, List, Download, Headset, Filter, ChevronLeft, ChevronRight, CalendarDays, CalendarCheck,
 } from "lucide-react";
 
 interface OrdemView {
@@ -29,6 +29,34 @@ const CLASSE_PRIORIDADE: Record<string, string> = {
 
 const FILTROS_CHAVE = ["busca", "status", "prioridade", "origem", "clienteId", "responsavelId", "tipoOsId", "contratoId", "numero", "dataInicio", "dataFim"];
 const AVANCADOS = ["dataInicio", "dataFim", "clienteId", "responsavelId", "tipoOsId", "numero", "origem", "contratoId"];
+
+const DIAS_SEMANA = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
+const STATUS_PENDENTE = ["ABERTA", "AGUARDANDO_ATENDIMENTO", "AGENDADA", "AGUARDANDO_PECA"];
+const STATUS_ANDAMENTO = ["EM_ANDAMENTO", "PAUSADA"];
+const STATUS_FINALIZADA = ["CONCLUIDA", "CANCELADA"];
+
+// "2026-06-02" → Date no horário local (evita o deslocamento de fuso do new Date("yyyy-mm-dd"))
+function parseDia(s: string): Date {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+// Date → "2026-06-02" no horário local
+function ymdLocal(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function dataPorExtenso(s: string): string {
+  const d = parseDia(s);
+  return `${DIAS_SEMANA[d.getDay()]}, ${String(d.getDate()).padStart(2, "0")} de ${MESES_PT[d.getMonth()]} de ${d.getFullYear()}`;
+}
+// Cor do badge do dia conforme a situação geral das OS (atrasada > pendente > em andamento > concluídas)
+function corDoDia(ordens: OrdemView[]): string {
+  const agora = Date.now();
+  const atrasada = ordens.some((o) => o.previsaoConclusao && new Date(o.previsaoConclusao).getTime() < agora && !STATUS_FINALIZADA.includes(o.status));
+  if (atrasada) return "bg-red-50 text-red-700 border-red-200";
+  if (ordens.some((o) => STATUS_PENDENTE.includes(o.status))) return "bg-amber-50 text-amber-700 border-amber-200";
+  if (ordens.some((o) => STATUS_ANDAMENTO.includes(o.status))) return "bg-primary-50 text-primary-700 border-primary-200";
+  return "bg-success-50 text-success-700 border-success-200";
+}
 
 export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens: OrdemView[]; total: number; exibindo: number; opcoes: Opcoes }) {
   const router = useRouter();
@@ -64,6 +92,38 @@ export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [numeroLocal]);
 
+  // --- Navegação por data ---
+  const dataAtual = get("data");
+  const hojeStr = ymdLocal(new Date());
+  const ehHoje = dataAtual === hojeStr;
+
+  // Define o dia (limpa o intervalo "de/até" para não conflitar com a navegação)
+  function setData(valor: string | null) {
+    setParams({ data: valor, dataInicio: null, dataFim: null });
+  }
+  function deslocarDia(dias: number) {
+    const base = dataAtual ? parseDia(dataAtual) : new Date();
+    base.setDate(base.getDate() + dias);
+    setData(ymdLocal(base));
+  }
+  const irParaHoje = () => setData(hojeStr);
+
+  // Atalhos de teclado: ← dia anterior · → próximo dia · T volta para hoje
+  useEffect(() => {
+    function aoTeclar(e: KeyboardEvent) {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const alvo = document.activeElement as HTMLElement | null;
+      const tag = alvo?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || alvo?.isContentEditable) return;
+      if (e.key === "ArrowLeft") { e.preventDefault(); deslocarDia(-1); }
+      else if (e.key === "ArrowRight") { e.preventDefault(); deslocarDia(1); }
+      else if (e.key === "t" || e.key === "T") { e.preventDefault(); irParaHoje(); }
+    }
+    window.addEventListener("keydown", aoTeclar);
+    return () => window.removeEventListener("keydown", aoTeclar);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataAtual]);
+
   function toggleLista(param: string, valor: string) {
     const atual = get(param).split(",").filter(Boolean);
     const novo = atual.includes(valor) ? atual.filter((x) => x !== valor) : [...atual, valor];
@@ -79,6 +139,7 @@ export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens:
   function limparFiltros() {
     const novo = new URLSearchParams();
     if (get("view")) novo.set("view", get("view"));
+    if (get("data")) novo.set("data", get("data"));
     setBuscaLocal(""); setNumeroLocal("");
     router.replace(`${pathname}${novo.toString() ? `?${novo}` : ""}`, { scroll: false });
   }
@@ -103,6 +164,57 @@ export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens:
         <Link href="/ordens/nova" className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow">
           <Plus className="w-4 h-4" /> Nova OS
         </Link>
+      </div>
+
+      {/* Navegação por data */}
+      <div className="card p-3 flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => deslocarDia(-1)} title="Dia anterior (←)"
+            className="p-2 rounded-lg border border-surface-border bg-white text-ink-muted hover:bg-surface-alt hover:text-ink transition-colors">
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button type="button" onClick={irParaHoje} title="Voltar para hoje (T)"
+            className={cn("inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border transition-colors",
+              ehHoje ? "bg-success-500 border-success-500 text-white shadow-sm" : "bg-white border-primary-500 text-primary-600 hover:bg-primary-50")}>
+            <CalendarCheck className="w-4 h-4" /> Hoje
+          </button>
+          <button type="button" onClick={() => deslocarDia(1)} title="Próximo dia (→)"
+            className="p-2 rounded-lg border border-surface-border bg-white text-ink-muted hover:bg-surface-alt hover:text-ink transition-colors">
+            <ChevronRight className="w-4 h-4" />
+          </button>
+          <div className="relative">
+            <button type="button" title="Escolher data"
+              className="p-2 rounded-lg border border-surface-border bg-white text-ink-muted hover:bg-surface-alt hover:text-ink transition-colors">
+              <CalendarDays className="w-4 h-4" />
+            </button>
+            <input type="date" value={dataAtual || hojeStr} onChange={(e) => e.target.value && setData(e.target.value)}
+              aria-label="Selecionar data" className="absolute inset-0 opacity-0 cursor-pointer" />
+          </div>
+        </div>
+
+        <div key={dataAtual || "todos"} className="anim-data flex flex-1 items-center justify-center gap-2 flex-wrap min-w-[260px] text-center">
+          {dataAtual ? (
+            <>
+              <span className="text-sm font-semibold text-ink">{dataPorExtenso(dataAtual)}</span>
+              <span className={cn("inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full border", corDoDia(ordens))}>
+                {total} {total === 1 ? "ordem de serviço" : "ordens de serviço"}
+              </span>
+            </>
+          ) : (
+            <span className="text-sm font-semibold text-ink-muted">
+              Todas as datas · {total} {total === 1 ? "ordem de serviço" : "ordens de serviço"}
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 min-w-[140px]">
+          {dataAtual && (
+            <button type="button" onClick={() => setData(null)}
+              className="inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700">
+              <X className="w-3.5 h-3.5" /> Ver todos os dias
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="card overflow-hidden">
@@ -151,11 +263,11 @@ export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens:
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-surface-border">
               <div>
                 <label className="text-[11px] font-semibold text-ink-muted">Abertura — de</label>
-                <input type="date" defaultValue={get("dataInicio")} onChange={(e) => setParams({ dataInicio: e.target.value || null })} className={selectCls} />
+                <input type="date" defaultValue={get("dataInicio")} onChange={(e) => setParams({ dataInicio: e.target.value || null, data: null })} className={selectCls} />
               </div>
               <div>
                 <label className="text-[11px] font-semibold text-ink-muted">Abertura — até</label>
-                <input type="date" defaultValue={get("dataFim")} onChange={(e) => setParams({ dataFim: e.target.value || null })} className={selectCls} />
+                <input type="date" defaultValue={get("dataFim")} onChange={(e) => setParams({ dataFim: e.target.value || null, data: null })} className={selectCls} />
               </div>
               <div>
                 <label className="text-[11px] font-semibold text-ink-muted">Cliente</label>

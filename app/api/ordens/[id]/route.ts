@@ -47,6 +47,52 @@ export async function GET(_: NextRequest, { params }: Params) {
   return NextResponse.json(os);
 }
 
+// Reagendamento rápido (drag-and-drop no calendário): move a OS para outro dia.
+// Body: { data: "YYYY-MM-DD", atividadeId?: string }
+export async function PATCH(req: NextRequest, { params }: Params) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const { id } = await params;
+  const empresaId = session.user!.empresaId;
+  const usuarioId = session.user!.id;
+
+  const os = await prisma.ordemServico.findFirst({ where: { id, empresaId } });
+  if (!os) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
+  if (os.status === "CONCLUIDA" || os.status === "CANCELADA") {
+    return NextResponse.json({ erro: "Não é possível reagendar OS concluída ou cancelada." }, { status: 422 });
+  }
+
+  const body = await req.json();
+  const data: string | undefined = body?.data;
+  const atividadeId: string | undefined = body?.atividadeId || undefined;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(data ?? "");
+  if (!m) return NextResponse.json({ erro: "Data inválida." }, { status: 400 });
+  const [, ys, ms, ds] = m;
+  const y = Number(ys), mo = Number(ms) - 1, d = Number(ds);
+
+  // Desloca a data mantendo o horário existente (setFullYear opera no fuso do servidor,
+  // o mesmo usado para posicionar os cards no calendário).
+  const desloca = (base: Date | null) => {
+    const dt = base ? new Date(base) : new Date(y, mo, d, 8, 0, 0, 0);
+    dt.setFullYear(y, mo, d);
+    return dt;
+  };
+
+  if (atividadeId) {
+    const ativ = await prisma.atividadeOs.findFirst({ where: { id: atividadeId, ordemServicoId: id } });
+    if (!ativ) return NextResponse.json({ erro: "Atividade não encontrada." }, { status: 404 });
+    await prisma.atividadeOs.update({ where: { id: atividadeId }, data: { dataAgendada: desloca(ativ.dataAgendada) } });
+  } else {
+    await prisma.ordemServico.update({ where: { id }, data: { previsaoConclusao: desloca(os.previsaoConclusao) } });
+  }
+
+  await prisma.osHistorico.create({
+    data: { ordemServicoId: id, usuarioId, acao: "OS reagendada", detalhes: `Movida para ${ds}/${ms}/${ys}` },
+  });
+
+  return NextResponse.json({ ok: true });
+}
+
 export async function PUT(req: NextRequest, { params }: Params) {
   const session = await auth();
   if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });

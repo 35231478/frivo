@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, KeyboardEvent } from "react";
+import { useState, useRef, KeyboardEvent } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
@@ -10,8 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
+import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import type { Tecnico } from "@prisma/client";
-import { X, Plus } from "lucide-react";
+import { X, Plus, Upload, Trash2 } from "lucide-react";
 
 const ESPECIALIDADES_SUGERIDAS = [
   "Split", "VRF", "Chiller", "Câmara Fria",
@@ -28,11 +29,15 @@ export function TecnicoForm({ initialData }: TecnicoFormProps) {
   const [erroGlobal, setErroGlobal] = useState("");
   const [especialidades, setEspecialidades] = useState<string[]>(initialData?.especialidades ?? []);
   const [novaEsp, setNovaEsp] = useState("");
+  const [avatar, setAvatar] = useState<string | null>(initialData?.avatar ?? null);
+  const [erroFoto, setErroFoto] = useState("");
+  const fotoRef = useRef<HTMLInputElement>(null);
 
   const {
     register,
     handleSubmit,
     setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<TecnicoInput>({
     resolver: zodResolver(tecnicoSchema),
@@ -70,6 +75,18 @@ export function TecnicoForm({ initialData }: TecnicoFormProps) {
     if (e.key === "Enter") { e.preventDefault(); adicionarEsp(novaEsp); }
   }
 
+  function handleFoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (fotoRef.current) fotoRef.current.value = "";
+    if (!file) return;
+    setErroFoto("");
+    if (!file.type.startsWith("image/")) { setErroFoto("Envie uma imagem (PNG, JPG ou WEBP)."); return; }
+    if (file.size > 2 * 1024 * 1024) { setErroFoto("Imagem muito grande. Tamanho máximo: 2 MB."); return; }
+    const reader = new FileReader();
+    reader.onload = () => setAvatar(typeof reader.result === "string" ? reader.result : null);
+    reader.readAsDataURL(file);
+  }
+
   async function onSubmit(data: TecnicoInput) {
     setErroGlobal("");
     try {
@@ -77,7 +94,7 @@ export function TecnicoForm({ initialData }: TecnicoFormProps) {
       const res = await fetch(url, {
         method: isEditing ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...data, especialidades }),
+        body: JSON.stringify({ ...data, especialidades, avatar: avatar ?? "" }),
       });
       if (!res.ok) {
         const err = await res.json();
@@ -99,6 +116,24 @@ export function TecnicoForm({ initialData }: TecnicoFormProps) {
 
       {/* Dados pessoais */}
       <FormSection title="Dados pessoais">
+        <FormField label="Foto do técnico" hint="Aparece no calendário e nas ordens de serviço">
+          <div className="flex items-center gap-4">
+            <AvatarTecnico nome={watch("nome")} fotoUrl={avatar} size={72} />
+            <div className="flex flex-col gap-1.5">
+              <input ref={fotoRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={handleFoto} className="hidden" />
+              <Button type="button" variant="secondary" onClick={() => fotoRef.current?.click()} className="text-xs py-1 px-2.5 h-auto">
+                <Upload className="w-3.5 h-3.5" /> {avatar ? "Trocar foto" : "Enviar foto"}
+              </Button>
+              {avatar && (
+                <Button type="button" variant="ghost" onClick={() => setAvatar(null)} className="text-xs text-red-500 hover:text-red-700 py-1 px-2.5 h-auto">
+                  <Trash2 className="w-3.5 h-3.5" /> Remover
+                </Button>
+              )}
+              <p className="text-xs text-gray-400">PNG, JPG ou WEBP — máx. 2 MB</p>
+              {erroFoto && <p className="text-xs text-red-600">{erroFoto}</p>}
+            </div>
+          </div>
+        </FormField>
         <FormGrid>
           <FormField label="Nome completo" required error={errors.nome?.message}>
             <Input {...register("nome")} error={!!errors.nome} />

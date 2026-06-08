@@ -8,7 +8,27 @@
       "PowerShell(winget install *)",
       "PowerShell($git = \"C:\\\\Program Files\\\\Git\\\\cmd\\\\git.exe\"; cd \"C:\\\\Users\\\\Edion\\\\frivo\"; & $git init 2>&1; & $git add . 2>&1; & $git commit -m \"Frivo - OS, configuracoes, cadastros, melhorias clientes\" 2>&1)",
       "PowerShell($git = \"C:\\\\Program Files\\\\Git\\\\cmd\\\\git.exe\"; cd \"C:\\\\Users\\\\Edion\\\\frivo\"; & $git config user.email \"edionebonfim@gmail.com\" 2>&1; & $git config user.name \"Edione Bonfim\" 2>&1; & $git commit -m \"Frivo - OS, configuracoes, cadastros, melhorias clientes\" 2>&1)",
-      "PowerShell(npx tsc --noEmit --pretty false 2>&1 | Select-Object -First 80)"
+      "PowerShell(npx tsc --noEmit --pretty false 2>&1 | Select-Object -First 80)",
+      "Bash(npx prisma *)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(git add *)",
+      "PowerShell(Stop-Process *)",
+      "Bash(npx next *)",
+      "Bash(npm run *)",
+      "Bash(break)",
+      "Bash(git commit -m ' *)",
+      "Bash(npx tsc *)",
+      "Bash(powershell -Command \"Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue\")",
+      "Bash(cd *)",
+      "Bash(curl -s -o /dev/null -m 40 http://localhost:3000/login)",
+      "Bash(curl -s -c cj.txt __TRACKED_VAR__/login -o /dev/null)",
+      "Bash(curl -s -b cj.txt -c cj.txt __TRACKED_VAR__/api/auth/csrf)",
+      "Bash(git remote *)",
+      "Bash(git push *)",
+      "Bash(git *)",
+      "PowerShell(Get-CimInstance *)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(curl -s -o /dev/null -w \"calendario:%{http_code}\\\\n\" \"http://localhost:3000/calendario?mes=6&ano=2026&view=mensal\")"
     ]
   }
 }

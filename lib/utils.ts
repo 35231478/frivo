@@ -79,6 +79,28 @@ export function sanitizarNumero(valor: string | null | undefined): string {
   return (valor ?? "").replace(/\D/g, "");
 }
 
+// Iniciais a partir do nome (1 ou 2 letras maiúsculas)
+export function iniciais(nome: string | null | undefined): string {
+  const partes = (nome ?? "").trim().split(/\s+/).filter(Boolean);
+  if (partes.length === 0) return "?";
+  if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase();
+  return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
+}
+
+// Paleta de avatares: azul, verde, roxo, laranja, rosa, ciano (fundo sólido, texto branco)
+export const CORES_AVATAR = [
+  "bg-blue-500", "bg-emerald-500", "bg-violet-500",
+  "bg-orange-500", "bg-pink-500", "bg-cyan-500",
+];
+
+// Cor consistente para o mesmo nome (hash simples da string)
+export function corAvatar(nome: string | null | undefined): string {
+  const s = nome ?? "";
+  let hash = 0;
+  for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) | 0;
+  return CORES_AVATAR[Math.abs(hash) % CORES_AVATAR.length];
+}
+
 export function whatsappLink(telefone: string | null | undefined, mensagem: string): string {
   const num = sanitizarNumero(telefone);
   const comDdi = num.length >= 12 ? num : `55${num}`;

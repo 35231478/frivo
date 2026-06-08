@@ -179,3 +179,15 @@
     @apply btn-base text-ink hover:bg-surface-alt;
   }
 }
+
+/* --- Animação da navegação por data (Ordens de Serviço) --- */
+@keyframes osFadeSlide {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: none; }
+}
+.anim-data {
+  animation: osFadeSlide 0.25s ease;
+}
+.anim-tooltip {
+  animation: osFadeSlide 0.15s ease;
+}

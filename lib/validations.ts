@@ -231,6 +231,7 @@ export const tecnicoSchema = z.object({
   celular: z.string().optional(),
   tipo: z.nativeEnum(TipoTecnico).default(TipoTecnico.TECNICO_CAMPO),
   crea: z.string().optional(),
+  avatar: z.string().optional(),
   especialidades: z.array(z.string()).default([]),
   observacoes: z.string().optional(),
 });
