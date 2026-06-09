@@ -10,13 +10,14 @@ import {
   LayoutDashboard, Users, Thermometer, ClipboardList, FileText,
   HardHat, Settings, ChevronDown, ChevronRight,
   Wrench, FileSpreadsheet, Cog, Package, ListChecks, Calculator,
-  Wallet, Receipt, TrendingUp, FileBarChart, Clock, ShoppingCart, Timer, Tags, CalendarDays, Headset, ScrollText,
+  Wallet, Receipt, TrendingUp, FileBarChart, Clock, ShoppingCart, Timer, Tags, CalendarDays, Headset, ScrollText, QrCode,
 } from "lucide-react";
 
 const itensMenu = [
   { href: "/dashboard",    icone: LayoutDashboard, label: "Dashboard" },
   { href: "/clientes",     icone: Users,           label: "Clientes" },
   { href: "/equipamentos", icone: Thermometer,     label: "Equipamentos" },
+  { href: "/qrcodes",      icone: QrCode,          label: "QR Codes" },
   { href: "/ordens",       icone: ClipboardList,   label: "Ordens de Serviço" },
   { href: "/calendario",   icone: CalendarDays,    label: "Calendário" },
   { href: "/orcamentos",   icone: Calculator,      label: "Orçamentos" },
@@ -45,6 +46,7 @@ const itensCadastros = [
   { href: "/configuracoes/prazos",            icone: Clock,            label: "Prazos e SLA" },
   { href: "/configuracoes/termos",            icone: ScrollText,       label: "Termos de Referência" },
   { href: "/configuracoes/portal",            icone: Headset,          label: "Portal do Cliente" },
+  { href: "/configuracoes/qr-code",           icone: QrCode,           label: "QR Code" },
 ];
 
 const ROLE_LABELS: Record<string, string> = {

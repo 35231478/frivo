@@ -374,6 +374,7 @@ model Empresa {
   relatorios           RelatorioOs[]
   tiposProblema        TipoProblema[]
   termoTemplates       TermoReferenciaTemplate[]
+  qrcodes              Qrcode[]
 
   configuracao  Configuracao?
 
@@ -422,6 +423,9 @@ model Configuracao {
   portalCorPrimaria        String? @map("portal_cor_primaria")
   portalLogo               String? @map("portal_logo") @db.Text
   portalBoasVindas         String? @map("portal_boas_vindas") @db.Text
+
+  // QR Code (acesso público, botões de contato, restrições) — armazenado como JSON
+  qrConfig                 Json?   @map("qr_config")
 
   empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
 
@@ -678,9 +682,15 @@ model Equipamento {
   modelo         String
   numeroSerie    String?         @map("numero_serie")
   patrimonio     String?
+  nome           String?
+  anoFabricacao  String?         @map("ano_fabricacao")
   capacidade     String?
   fluido         String?
   tensao         String?
+  potencia       String?
+  fase           String?
+  correnteNominal String?        @map("corrente_nominal")
+  observacoesTecnicas String?    @map("observacoes_tecnicas")
   localizacao    String?
   dataInstalacao DateTime?       @map("data_instalacao")
   dataFabricacao DateTime?       @map("data_fabricacao")
@@ -694,8 +704,30 @@ model Equipamento {
   empresa       Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   unidade       Unidade        @relation(fields: [unidadeId], references: [id])
   ordensServico OrdemServico[]
+  qrcode        Qrcode?
 
   @@map("equipamentos")
+}
+
+// ─────────────────────────────────────────────
+// QR CODE (etiqueta pública do equipamento)
+// ─────────────────────────────────────────────
+
+model Qrcode {
+  id            String   @id @default(cuid())
+  empresaId     String   @map("empresa_id")
+  codigo        String
+  equipamentoId String?  @unique @map("equipamento_id")
+  tokenPublico  String   @unique @default(uuid()) @map("token_publico")
+  ativo         Boolean  @default(true)
+  criadoEm      DateTime @default(now()) @map("criado_em")
+  atualizadoEm  DateTime @updatedAt @map("atualizado_em")
+
+  empresa     Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  equipamento Equipamento? @relation(fields: [equipamentoId], references: [id], onDelete: SetNull)
+
+  @@unique([codigo, empresaId])
+  @@map("qrcodes")
 }
 
 // ─────────────────────────────────────────────

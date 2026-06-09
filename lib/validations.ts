@@ -155,18 +155,25 @@ export const unidadeSchema = z.object({
 export const equipamentoSchema = z.object({
   unidadeId: z.string().min(1, "Unidade é obrigatória"),
   tipo: z.nativeEnum(TipoEquipamento),
+  nome: z.string().optional(),
   marca: z.string().min(1, "Marca é obrigatória"),
   modelo: z.string().min(1, "Modelo é obrigatório"),
   numeroSerie: z.string().optional(),
   patrimonio: z.string().optional(),
+  anoFabricacao: z.string().optional(),
   capacidade: z.string().optional(),
   fluido: z.string().optional(),
   tensao: z.string().optional(),
+  potencia: z.string().optional(),
+  fase: z.string().optional(),
+  correnteNominal: z.string().optional(),
   localizacao: z.string().optional(),
   dataInstalacao: z.string().optional(),
   dataFabricacao: z.string().optional(),
   garantiaAte: z.string().optional(),
   observacoes: z.string().optional(),
+  observacoesTecnicas: z.string().optional(),
+  fotos: z.array(z.string()).max(5, "Máximo de 5 imagens").optional(),
 });
 
 export const contratoSchema = z.object({

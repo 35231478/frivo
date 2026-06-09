@@ -43,10 +43,22 @@ export default async function OrdensPage({ searchParams }: { searchParams: Promi
   if (sp.tipoOsId) where.atividades = { some: { tipoOsId: sp.tipoOsId } };
   if (sp.numero) where.numero = { contains: sp.numero, mode: "insensitive" };
   if (sp.data) {
-    // Navegação por dia: filtra a abertura para o dia selecionado (limites em horário local).
+    // Navegação por dia: mostra OS com atividade agendada, previsão de conclusão
+    // ou abertura no dia selecionado (limites em horário local).
     const [y, m, d] = sp.data.split("-").map(Number);
     if (y && m && d) {
-      where.criadoEm = { gte: new Date(y, m - 1, d, 0, 0, 0, 0), lte: new Date(y, m - 1, d, 23, 59, 59, 999) };
+      const inicio = new Date(y, m - 1, d, 0, 0, 0, 0);
+      const fim = new Date(y, m - 1, d, 23, 59, 59, 999);
+      where.AND = [
+        ...(where.AND ?? []),
+        {
+          OR: [
+            { atividades: { some: { dataAgendada: { gte: inicio, lte: fim } } } },
+            { previsaoConclusao: { gte: inicio, lte: fim } },
+            { criadoEm: { gte: inicio, lte: fim } },
+          ],
+        },
+      ];
     }
   } else if (sp.dataInicio || sp.dataFim) {
     where.criadoEm = {};

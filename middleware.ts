@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const rotasPublicas = ["/login", "/api/auth", "/orcamento/", "/medicao/", "/relatorio/", "/api/publico/", "/portal", "/api/portal-auth", "/api/portal/"];
+const rotasPublicas = ["/login", "/api/auth", "/orcamento/", "/medicao/", "/relatorio/", "/api/publico/", "/portal", "/api/portal-auth", "/api/portal/", "/qr/", "/api/qr/"];
 
 export default auth(function middleware(req: NextRequest & { auth: any }) {
   const { pathname } = req.nextUrl;
