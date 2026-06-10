@@ -1,10 +1,34 @@
-import { auth } from "@/lib/auth";
+import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { authConfig } from "@/auth.config";
 
-const rotasPublicas = ["/login", "/api/auth", "/orcamento/", "/medicao/", "/relatorio/", "/api/publico/", "/portal", "/api/portal-auth", "/api/portal/", "/qr/", "/api/qr/"];
+// Instância leve do Auth.js (sem provider/bcrypt/Prisma) — apenas lê e verifica o
+// JWT da sessão. Isso mantém o bundle do middleware bem abaixo do limite do Edge.
+const { auth } = NextAuth(authConfig);
 
-export default auth(function middleware(req: NextRequest & { auth: any }) {
+// Rotas liberadas (sem sessão). Mantém as barras finais onde necessário para não
+// liberar rotas protegidas semelhantes (ex.: "/qr/" não libera "/qrcodes";
+// "/orcamento/" não libera "/orcamentos").
+const rotasPublicas = [
+  "/login",
+  "/api/auth",        // endpoints internos do Auth.js
+  "/portal",          // inclui /portal/login
+  "/api/portal-auth",
+  "/api/portal/",
+  "/orcamento/",
+  "/medicao/",
+  "/relatorio/",
+  "/api/publico/",
+  "/qr/",
+  "/api/qr/",
+  "/instalar",
+  "/offline",
+  "/sw.js",
+  "/manifest.json",
+];
+
+export default auth(function middleware(req: NextRequest & { auth: unknown }) {
   const { pathname } = req.nextUrl;
 
   const ehRotaPublica = rotasPublicas.some((rota) => pathname.startsWith(rota));
@@ -23,5 +47,8 @@ export default auth(function middleware(req: NextRequest & { auth: any }) {
 });
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.png$).*)"],
+  matcher: [
+    // Ignora assets estáticos e arquivos do PWA (service worker, workbox, manifest, ícones)
+    "/((?!_next/static|_next/image|favicon.ico|sw.js|swe-worker-.*|workbox-.*|fallback-.*|manifest.json|icons/.*|.*\\.png$).*)",
+  ],
 };

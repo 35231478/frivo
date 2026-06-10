@@ -3,16 +3,10 @@ import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations";
+import { authConfig } from "@/auth.config";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  // Necessário em produção (next start / self-hosted): confia no header Host
-  // do proxy. Sem isso, o Auth.js v5 lança UntrustedHost e as rotas de auth dão 500.
-  trustHost: true,
-  session: { strategy: "jwt" },
-  pages: {
-    signIn: "/login",
-    error: "/login",
-  },
+  ...authConfig,
   providers: [
     Credentials({
       async authorize(credentials) {
@@ -47,22 +41,4 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       },
     }),
   ],
-  callbacks: {
-    jwt({ token, user }) {
-      if (user) {
-        token.id = user.id;
-        token.empresaId = (user as any).empresaId;
-        token.empresaNome = (user as any).empresaNome;
-        token.role = (user as any).role;
-      }
-      return token;
-    },
-    session({ session, token }) {
-      session.user.id = token.id as string;
-      (session.user as any).empresaId = token.empresaId;
-      (session.user as any).empresaNome = token.empresaNome;
-      (session.user as any).role = token.role;
-      return session;
-    },
-  },
 });
