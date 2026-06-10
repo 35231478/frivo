@@ -11,7 +11,13 @@ export async function GET(_: NextRequest, { params }: Params) {
   const { id } = await params;
   const empresaId = (session.user as any).empresaId as string;
 
-  const tecnico = await prisma.tecnico.findFirst({ where: { id, empresaId } });
+  const tecnico = await prisma.tecnico.findFirst({
+    where: { id, empresaId },
+    include: {
+      competencias: { select: { id: true } },
+      documentos: { orderBy: { criadoEm: "asc" } },
+    },
+  });
   if (!tecnico) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
   return NextResponse.json(tecnico);
 }
@@ -38,7 +44,28 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (dup) return NextResponse.json({ erro: "CPF já cadastrado" }, { status: 409 });
   }
 
-  const atualizado = await prisma.tecnico.update({ where: { id }, data: parsed.data });
+  const { competenciaIds, documentos, dataNascimento, dataAdmissao, cargoId, email, ...rest } = parsed.data;
+
+  const atualizado = await prisma.tecnico.update({
+    where: { id },
+    data: {
+      ...rest,
+      email: email || null,
+      cargoId: cargoId || null,
+      dataNascimento: dataNascimento ? new Date(dataNascimento) : null,
+      dataAdmissao: dataAdmissao ? new Date(dataAdmissao) : null,
+      competencias: { set: competenciaIds.map((cid) => ({ id: cid })) },
+      documentos: {
+        deleteMany: {},
+        create: documentos.map((d) => ({
+          tipo: d.tipo,
+          nome: d.nome,
+          arquivoUrl: d.arquivoUrl || null,
+          dataVencimento: d.dataVencimento ? new Date(d.dataVencimento) : null,
+        })),
+      },
+    },
+  });
   return NextResponse.json(atualizado);
 }
 

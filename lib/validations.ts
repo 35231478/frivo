@@ -11,6 +11,8 @@ import {
   ResponsavelPrazo, CanalNotificacao, StatusPedidoCompra,
   TipoTabelaPreco, TipoPrecoTabela,
   TratamentoFimSemana, TipoRelatorio,
+  StatusColaborador, TipoVeiculo, StatusVeiculo, StatusEquipe,
+  TipoManutencaoVeiculo, TipoDocumentoVeiculo, FrequenciaChecklist, TipoItemChecklist,
 } from "@prisma/client";
 
 const valorOpcional = z.preprocess(
@@ -230,17 +232,134 @@ export const ordemServicoSchema = z.object({
   observacoes: z.string().optional(),
 });
 
+const documentoColaboradorSchema = z.object({
+  tipo: z.string().min(1),
+  nome: z.string().min(1),
+  arquivoUrl: z.string().optional().nullable(),
+  dataVencimento: z.string().optional().nullable(),
+});
+
+// Colaborador (antigo "Técnico") — cadastro completo em abas
 export const tecnicoSchema = z.object({
+  // Dados pessoais
   nome: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
   cpf: z.string().min(11, "CPF inválido"),
+  rg: z.string().optional(),
+  dataNascimento: z.string().optional().nullable(),
   email: z.string().email("E-mail inválido").optional().or(z.literal("")),
   telefone: z.string().min(8, "Telefone inválido"),
   celular: z.string().optional(),
+  whatsapp: z.string().optional(),
+  avatar: z.string().optional(),
+  endereco: z.string().optional(),
+  numero: z.string().optional(),
+  complemento: z.string().optional(),
+  bairro: z.string().optional(),
+  cidade: z.string().optional(),
+  estado: z.string().optional(),
+  cep: z.string().optional(),
+  // Dados profissionais
+  cargoId: z.string().optional().nullable(),
   tipo: z.nativeEnum(TipoTecnico).default(TipoTecnico.TECNICO_CAMPO),
   crea: z.string().optional(),
-  avatar: z.string().optional(),
+  dataAdmissao: z.string().optional().nullable(),
+  salario: decimalOpcional.optional(),
+  jornadaEntrada: z.string().optional(),
+  jornadaSaida: z.string().optional(),
+  jornadaDias: z.array(z.string()).default([]),
+  statusColaborador: z.nativeEnum(StatusColaborador).default(StatusColaborador.ATIVO),
+  // Competências e especialidades
+  competenciaIds: z.array(z.string()).default([]),
   especialidades: z.array(z.string()).default([]),
+  // Documentos
+  documentos: z.array(documentoColaboradorSchema).default([]),
   observacoes: z.string().optional(),
+});
+
+// ─────────────────────────────────────────────
+// VEÍCULOS
+// ─────────────────────────────────────────────
+
+export const veiculoSchema = z.object({
+  fotos: z.array(z.string()).max(5, "Máximo de 5 fotos").default([]),
+  placa: z.string().min(1, "Placa é obrigatória"),
+  modelo: z.string().min(1, "Modelo é obrigatório"),
+  marca: z.string().optional(),
+  ano: z.string().optional(),
+  cor: z.string().optional(),
+  tipo: z.nativeEnum(TipoVeiculo).default(TipoVeiculo.CARRO),
+  chassi: z.string().optional(),
+  renavam: z.string().optional(),
+  quilometragemAtual: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().int().nonnegative().nullable()).optional(),
+  proximaRevisaoKm: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().int().nonnegative().nullable()).optional(),
+  proximaRevisaoData: z.string().optional().nullable(),
+  seguroVencimento: z.string().optional().nullable(),
+  status: z.nativeEnum(StatusVeiculo).default(StatusVeiculo.ATIVO),
+  responsavelId: z.string().optional().nullable(),
+  equipeId: z.string().optional().nullable(),
+  observacoes: z.string().optional(),
+  documentos: z.array(z.object({
+    tipo: z.nativeEnum(TipoDocumentoVeiculo).default(TipoDocumentoVeiculo.OUTRO),
+    nome: z.string().min(1),
+    arquivoUrl: z.string().optional().nullable(),
+    dataVencimento: z.string().optional().nullable(),
+  })).default([]),
+});
+
+export const veiculoManutencaoSchema = z.object({
+  tipo: z.nativeEnum(TipoManutencaoVeiculo).default(TipoManutencaoVeiculo.PREVENTIVA),
+  descricao: z.string().min(1, "Descrição é obrigatória"),
+  quilometragem: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().int().nonnegative().nullable()).optional(),
+  custo: decimalOpcional.optional(),
+  dataRealizacao: z.string().min(1, "Data é obrigatória"),
+  proximaData: z.string().optional().nullable(),
+  proximaKm: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().int().nonnegative().nullable()).optional(),
+  anexoUrl: z.string().optional().nullable(),
+});
+
+// ─────────────────────────────────────────────
+// EQUIPES
+// ─────────────────────────────────────────────
+
+export const equipeSchema = z.object({
+  nome: z.string().min(1, "Nome é obrigatório"),
+  cor: z.string().default("#0EA5E9"),
+  liderId: z.string().optional().nullable(),
+  membroIds: z.array(z.string()).default([]),
+  veiculoId: z.string().optional().nullable(),
+  status: z.nativeEnum(StatusEquipe).default(StatusEquipe.ATIVA),
+  observacoes: z.string().optional(),
+});
+
+// ─────────────────────────────────────────────
+// CHECKLIST DE VEÍCULO
+// ─────────────────────────────────────────────
+
+export const checklistTemplateSchema = z.object({
+  nome: z.string().min(1, "Nome é obrigatório"),
+  descricao: z.string().optional(),
+  frequencia: z.nativeEnum(FrequenciaChecklist).default(FrequenciaChecklist.DIARIO),
+  ativo: z.boolean().default(true),
+  itens: z.array(z.object({
+    categoria: z.string().min(1),
+    descricao: z.string().min(1),
+    tipo: z.nativeEnum(TipoItemChecklist).default(TipoItemChecklist.OK_NOK),
+    opcoes: z.array(z.string()).default([]),
+    obrigatorio: z.boolean().default(true),
+    ordem: z.number().int().default(0),
+  })).default([]),
+});
+
+export const checklistPreenchidoSchema = z.object({
+  veiculoId: z.string().min(1, "Veículo é obrigatório"),
+  templateId: z.string().min(1, "Template é obrigatório"),
+  observacaoGeral: z.string().optional(),
+  itens: z.array(z.object({
+    itemTemplateId: z.string().min(1),
+    valor: z.string().optional().nullable(),
+    foto: z.string().optional().nullable(),
+    alerta: z.boolean().default(false),
+  })).default([]),
 });
 
 // ─────────────────────────────────────────────

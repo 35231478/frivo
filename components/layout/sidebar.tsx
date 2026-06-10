@@ -11,6 +11,7 @@ import {
   HardHat, Settings, ChevronDown, ChevronRight,
   Wrench, FileSpreadsheet, Cog, Package, ListChecks, Calculator,
   Wallet, Receipt, TrendingUp, FileBarChart, Clock, ShoppingCart, Timer, Tags, CalendarDays, Headset, ScrollText, QrCode,
+  Truck, UsersRound, IdCard, ClipboardCheck,
 } from "lucide-react";
 
 const itensMenu = [
@@ -22,8 +23,13 @@ const itensMenu = [
   { href: "/calendario",   icone: CalendarDays,    label: "Calendário" },
   { href: "/orcamentos",   icone: Calculator,      label: "Orçamentos" },
   { href: "/contratos",    icone: FileText,        label: "Contratos" },
-  { href: "/tecnicos",     icone: HardHat,         label: "Técnicos" },
   { href: "/prazos",       icone: Timer,           label: "Prazos" },
+];
+
+const itensEquipes = [
+  { href: "/colaboradores", icone: HardHat,     label: "Colaboradores" },
+  { href: "/equipes",       icone: UsersRound,  label: "Equipes" },
+  { href: "/veiculos",      icone: Truck,       label: "Veículos" },
 ];
 
 const itensFinanceiro = [
@@ -37,6 +43,8 @@ const itensCompras = [
 ];
 
 const itensCadastros = [
+  { href: "/configuracoes/cargos",            icone: IdCard,           label: "Cargos" },
+  { href: "/configuracoes/checklists-veiculo", icone: ClipboardCheck,  label: "Checklists de Veículo" },
   { href: "/configuracoes/tipos-os",          icone: ListChecks,       label: "Tipos de OS" },
   { href: "/configuracoes/formularios",       icone: FileSpreadsheet,  label: "Formulários" },
   { href: "/configuracoes/tipos-equipamento", icone: Thermometer,      label: "Tipos de Equipamento" },
@@ -71,11 +79,15 @@ export function Sidebar({ session }: SidebarProps) {
   const [comprasAberto, setComprasAberto] = useState(
     pathname.startsWith("/compras")
   );
+  const [equipesAberto, setEquipesAberto] = useState(
+    itensEquipes.some(({ href }) => pathname.startsWith(href))
+  );
 
   const configAtivo = pathname === "/configuracoes" || pathname.startsWith("/configuracoes/");
   const cadastroAtivo = itensCadastros.some(({ href }) => pathname.startsWith(href));
   const financeiroAtivo = pathname.startsWith("/financeiro");
   const comprasAtivo = pathname.startsWith("/compras");
+  const equipesAtivo = itensEquipes.some(({ href }) => pathname.startsWith(href));
 
   const usuario = session.user;
   const iniciais =
@@ -103,6 +115,53 @@ export function Sidebar({ session }: SidebarProps) {
           {itensMenu.map(({ href, icone: Icone, label }) => (
             <SidebarLink key={href} href={href} icone={Icone} label={label} pathname={pathname} />
           ))}
+
+          {/* Equipes — submenu expansível */}
+          <button
+            onClick={() => setEquipesAberto((v) => !v)}
+            className={cn(
+              "relative flex items-center justify-between w-full pl-4 pr-3 py-2.5 rounded-lg text-sm transition-all",
+              equipesAtivo
+                ? "bg-primary-500 text-white font-semibold"
+                : "text-slate-200 hover:bg-white/5 hover:text-white",
+            )}
+          >
+            {equipesAtivo && (
+              <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r bg-success-500" />
+            )}
+            <span className="flex items-center gap-3">
+              <UsersRound className="w-[18px] h-[18px]" />
+              Equipes
+            </span>
+            {equipesAberto ? (
+              <ChevronDown className="w-3.5 h-3.5" />
+            ) : (
+              <ChevronRight className="w-3.5 h-3.5" />
+            )}
+          </button>
+
+          {equipesAberto && (
+            <div className="ml-5 pl-3 border-l border-white/10 space-y-0.5 mt-1">
+              {itensEquipes.map(({ href, icone: Icone, label }) => {
+                const ativo = pathname === href || pathname.startsWith(href + "/");
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    className={cn(
+                      "flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs transition-colors",
+                      ativo
+                        ? "bg-white/10 text-white font-medium"
+                        : "text-slate-300 hover:bg-white/5 hover:text-white",
+                    )}
+                  >
+                    <Icone className="w-3.5 h-3.5 shrink-0" />
+                    {label}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
 
           {/* Financeiro — submenu expansível */}
           <button

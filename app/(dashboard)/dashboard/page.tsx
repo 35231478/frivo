@@ -183,12 +183,12 @@ export default async function DashboardPage() {
             href="/contratos"
           />
           <ResumoCard
-            titulo="Técnicos"
+            titulo="Colaboradores"
             valor={r.tecnicosAtivos}
             icone={HardHat}
             corIcone="text-success-600"
             corFundo="bg-success-50"
-            href="/tecnicos"
+            href="/colaboradores"
           />
         </div>
       </div>

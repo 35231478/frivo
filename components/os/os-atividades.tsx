@@ -122,9 +122,11 @@ export function OsAtividades({ osId, atividades: iniciais }: { osId: string; ati
                 {tiposOs.filter((t) => t.ativo).map((t) => (<option key={t.id} value={t.id}>{t.nome}</option>))}
               </Select>
             </FormField>
-            <FormField label="Técnico">
+            <FormField label="Técnico" hint={form.tipoOsId ? "Apenas colaboradores com competência neste tipo de OS" : undefined}>
               <Select value={form.tecnicoId} onChange={(e) => setForm((f) => ({ ...f, tecnicoId: e.target.value }))} placeholder="Selecione">
-                {tecnicos.map((t: any) => (<option key={t.id} value={t.id}>{t.nome}</option>))}
+                {tecnicos
+                  .filter((t: any) => !form.tipoOsId || (t.competencias ?? []).some((c: any) => c.id === form.tipoOsId))
+                  .map((t: any) => (<option key={t.id} value={t.id}>{t.nome}</option>))}
               </Select>
             </FormField>
           </FormGrid>
