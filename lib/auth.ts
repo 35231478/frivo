@@ -5,6 +5,9 @@ import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  // Necessário em produção (next start / self-hosted): confia no header Host
+  // do proxy. Sem isso, o Auth.js v5 lança UntrustedHost e as rotas de auth dão 500.
+  trustHost: true,
   session: { strategy: "jwt" },
   pages: {
     signIn: "/login",
