@@ -24,6 +24,7 @@ export function AvatarCliente({ nome, logoUrl, size = 28, className, title }: Av
         src={logoUrl}
         alt={nome ?? "Cliente"}
         title={title ?? nome ?? undefined}
+        loading="lazy"
         style={dim}
         className={cn("rounded-full object-cover border border-white shadow-sm shrink-0", className)}
       />

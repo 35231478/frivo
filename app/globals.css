@@ -191,3 +191,39 @@
 .anim-tooltip {
   animation: osFadeSlide 0.15s ease;
 }
+
+/* --- Splash screen (app instalado) --- */
+@keyframes splashOut {
+  0%, 70% { opacity: 1; }
+  100% { opacity: 0; visibility: hidden; }
+}
+.anim-splash-out {
+  animation: splashOut 0.9s ease forwards;
+}
+
+/* --- Mobile / PWA --- */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  /* Rolagem suave com inércia em iOS e sem "bounce" propagando */
+  .scroller-mobile {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
+}
+
+@layer utilities {
+  /* Alvos de toque mínimos 44x44 (acessibilidade mobile) */
+  .touch-target {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  /* Áreas seguras (notch / barra inferior) */
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+}

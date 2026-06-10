@@ -56,7 +56,7 @@ export default async function VeiculosPage() {
                 <div className="aspect-video bg-surface-alt relative">
                   {v.fotos[0] ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={v.fotos[0]} alt={v.placa} className="w-full h-full object-cover" />
+                    <img src={v.fotos[0]} alt={v.placa} loading="lazy" className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-ink-subtle"><Truck className="w-10 h-10" /></div>
                   )}

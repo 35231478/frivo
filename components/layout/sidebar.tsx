@@ -11,7 +11,7 @@ import {
   HardHat, Settings, ChevronDown, ChevronRight,
   Wrench, FileSpreadsheet, Cog, Package, ListChecks, Calculator,
   Wallet, Receipt, TrendingUp, FileBarChart, Clock, ShoppingCart, Timer, Tags, CalendarDays, Headset, ScrollText, QrCode,
-  Truck, UsersRound, IdCard, ClipboardCheck,
+  Truck, UsersRound, IdCard, ClipboardCheck, Smartphone,
 } from "lucide-react";
 
 const itensMenu = [
@@ -66,9 +66,10 @@ const ROLE_LABELS: Record<string, string> = {
 
 interface SidebarProps {
   session: Session;
+  variant?: "desktop" | "mobile";
 }
 
-export function Sidebar({ session }: SidebarProps) {
+export function Sidebar({ session, variant = "desktop" }: SidebarProps) {
   const pathname = usePathname();
   const [cadastrosAberto, setCadastrosAberto] = useState(
     itensCadastros.some(({ href }) => pathname.startsWith(href))
@@ -100,7 +101,10 @@ export function Sidebar({ session }: SidebarProps) {
   const cargoLabel = ROLE_LABELS[usuario.role] ?? usuario.role;
 
   return (
-    <aside className="hidden lg:flex flex-col w-64 bg-sidebar text-white shrink-0 shadow-xl">
+    <aside className={cn(
+      "flex flex-col bg-sidebar text-white shrink-0 shadow-xl",
+      variant === "mobile" ? "w-72 h-full" : "hidden lg:flex w-64",
+    )}>
       {/* Logo */}
       <div className="flex items-center px-5 py-5 border-b border-white/5">
         <FrivoLogo size="md" />
@@ -320,6 +324,17 @@ export function Sidebar({ session }: SidebarProps) {
           )}
         </div>
       </nav>
+
+      {/* Instalar app */}
+      <div className="px-3 pt-2">
+        <Link
+          href="/instalar"
+          className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-slate-300 hover:bg-white/5 hover:text-white transition-colors"
+        >
+          <Smartphone className="w-3.5 h-3.5 shrink-0" />
+          Instalar app no celular
+        </Link>
+      </div>
 
       {/* Usuário */}
       <div className="px-3 py-3 border-t border-white/5">

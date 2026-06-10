@@ -1,7 +1,7 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import { Bell, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer, Headset, ClipboardCheck, FileWarning, Wrench } from "lucide-react";
+import { Bell, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer, Headset, ClipboardCheck, FileWarning, Wrench, Menu } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -93,9 +93,19 @@ export function Header({ session }: HeaderProps) {
       .toUpperCase() ?? "??";
 
   return (
-    <header className="bg-white border-b border-surface-border shadow-card px-6 py-3 flex items-center justify-between gap-4 shrink-0">
+    <header className="bg-white border-b border-surface-border shadow-card px-4 sm:px-6 py-3 flex items-center justify-between gap-4 shrink-0">
+      {/* Hamburguer (mobile) */}
+      <button
+        type="button"
+        onClick={() => window.dispatchEvent(new Event("frivo:toggle-menu"))}
+        className="lg:hidden -ml-1 p-2 rounded-lg text-ink-muted hover:text-primary-600 hover:bg-surface-alt transition-colors touch-target"
+        aria-label="Abrir menu"
+      >
+        <Menu className="w-5 h-5" />
+      </button>
+
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-sm min-w-0">
+      <nav className="hidden sm:flex items-center gap-1.5 text-sm min-w-0">
         <Link href="/dashboard" className="text-ink-muted hover:text-primary-600 transition-colors">
           {usuario.empresaNome}
         </Link>
