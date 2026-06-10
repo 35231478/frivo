@@ -60,6 +60,7 @@ const itensCadastros = [
   { href: "/configuracoes/termos",            icone: ScrollText,       label: "Termos de Referência" },
   { href: "/configuracoes/portal",            icone: Headset,          label: "Portal do Cliente" },
   { href: "/configuracoes/qr-code",           icone: QrCode,           label: "QR Code" },
+  { href: "/configuracoes/financeiro/categorias", icone: Tags,         label: "Categorias Financeiras" },
   { href: "/configuracoes/integracoes/inter", icone: Landmark,         label: "Banco Inter" },
 ];
 

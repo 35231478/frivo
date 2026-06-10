@@ -406,6 +406,7 @@ model Empresa {
   checklistsPreenchidos  ChecklistPreenchido[]
   perfisAcesso           PerfilAcesso[]
   contasPagar            ContaPagar[]
+  categoriasFinanceiras  CategoriaFinanceira[]
 
   configuracao    Configuracao?
   integracaoInter IntegracaoInter?
@@ -1484,6 +1485,7 @@ model ContaReceber {
   boletoVencimento    DateTime? @map("boleto_vencimento")
   boletoStatus        BoletoStatus? @map("boleto_status")
 
+  categoria    String?
   observacao   String?
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
@@ -1494,6 +1496,19 @@ model ContaReceber {
   orcamento Orcamento? @relation(fields: [orcamentoId], references: [id])
 
   @@map("contas_receber")
+}
+
+model CategoriaFinanceira {
+  id        String   @id @default(cuid())
+  empresaId String   @map("empresa_id")
+  nome      String
+  cor       String   @default("#64748B")
+  ativo     Boolean  @default(true)
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@map("categorias_financeiras")
 }
 
 model ContaPagar {

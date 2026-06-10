@@ -31,6 +31,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
     where: { id },
     data: {
       status: d.status,
+      descricao: d.descricao ?? undefined,
+      categoria: d.categoria === undefined ? undefined : d.categoria || null,
+      valor: d.valor ?? undefined,
       formaPagamento: d.formaPagamento ?? undefined,
       banco: d.banco === undefined ? undefined : d.banco || null,
       observacao: d.observacao ?? undefined,

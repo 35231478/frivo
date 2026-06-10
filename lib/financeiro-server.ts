@@ -43,7 +43,7 @@ export async function gerarContaReceberDaMedicao(medicaoId: string) {
 }
 
 /** Próximo número sequencial de conta a receber (CR-AAAA-NNNN) baseado no maior do ano. */
-async function proximoNumeroContaReceber(empresaId: string, ano: number) {
+export async function proximoNumeroContaReceber(empresaId: string, ano: number) {
   const ultimo = await prisma.contaReceber.findFirst({
     where: { empresaId, numero: { startsWith: `CR-${ano}-` } },
     orderBy: { numero: "desc" },

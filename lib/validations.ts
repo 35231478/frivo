@@ -524,6 +524,9 @@ export const acaoMedicaoSchema = z.object({
 
 export const contaReceberUpdateSchema = z.object({
   status: z.nativeEnum(StatusContaReceber).optional(),
+  descricao: z.string().optional(),
+  categoria: z.string().optional().nullable(),
+  valor: z.preprocess((v) => (v === "" || v == null ? undefined : Number(v)), z.number().positive()).optional(),
   dataVencimento: z.string().optional().nullable(),
   dataRecebimento: z.string().optional().nullable(),
   formaPagamento: z.nativeEnum(FormaPagamento).optional().nullable(),
