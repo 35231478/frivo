@@ -383,6 +383,7 @@ model Empresa {
   equipes                Equipe[]
   checklistTemplates     ChecklistTemplate[]
   checklistsPreenchidos  ChecklistPreenchido[]
+  perfisAcesso           PerfilAcesso[]
 
   configuracao Configuracao?
 
@@ -467,6 +468,8 @@ model Usuario {
   pedidosSolicitados PedidoCompraInterno[] @relation("PedidoSolicitante")
   pedidosComprador   PedidoCompraInterno[] @relation("PedidoComprador")
   pushSubscriptions  PushSubscription[]
+  perfilAcessoId     String?               @map("perfil_acesso_id")
+  perfilAcesso       PerfilAcesso?         @relation(fields: [perfilAcessoId], references: [id])
 
   @@unique([email, empresaId])
   @@map("usuarios")
@@ -517,6 +520,8 @@ model Tecnico {
 
   // Dados profissionais
   cargoId           String?           @map("cargo_id")
+  perfilAcessoId    String?           @map("perfil_acesso_id")
+  tipoEquipe        TipoEquipe        @default(CAMPO) @map("tipo_equipe")
   dataAdmissao      DateTime?         @map("data_admissao")
   salario           Decimal?          @db.Decimal(12, 2)
   jornadaEntrada    String?           @map("jornada_entrada")
@@ -534,6 +539,7 @@ model Tecnico {
 
   empresa               Empresa                @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   cargo                 Cargo?                 @relation(fields: [cargoId], references: [id])
+  perfilAcesso          PerfilAcesso?          @relation(fields: [perfilAcessoId], references: [id])
   clientesResponsavel   Cliente[]
   contratosResponsavel  Contrato[]
   atividadesOs          AtividadeOs[]
@@ -1729,6 +1735,40 @@ enum StatusChecklist {
   PENDENTE
   CONCLUIDO
   COM_ALERTAS
+}
+
+enum TipoEquipe {
+  CAMPO
+  ADMINISTRATIVO
+}
+
+enum TipoPerfilAcesso {
+  ADMINISTRADOR
+  SUPERVISOR
+  FINANCEIRO
+  TECNICO
+  AUXILIAR
+  PERSONALIZADO
+}
+
+model PerfilAcesso {
+  id            String           @id @default(cuid())
+  empresaId     String           @map("empresa_id")
+  nome          String
+  descricao     String?
+  tipo          TipoPerfilAcesso @default(PERSONALIZADO)
+  cor           String           @default("#8B5CF6")
+  ativo         Boolean          @default(true)
+  padraoSistema Boolean          @default(false) @map("padrao_sistema")
+  permissoes    Json
+  criadoEm      DateTime         @default(now()) @map("criado_em")
+  atualizadoEm  DateTime         @updatedAt @map("atualizado_em")
+
+  empresa       Empresa   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  usuarios      Usuario[]
+  colaboradores Tecnico[]
+
+  @@map("perfis_acesso")
 }
 
 model Cargo {

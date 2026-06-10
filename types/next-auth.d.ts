@@ -1,5 +1,6 @@
 import "next-auth";
 import type { Role } from "@prisma/client";
+import type { Permissoes } from "@/lib/permissoes";
 
 declare module "next-auth" {
   interface Session {
@@ -11,6 +12,8 @@ declare module "next-auth" {
       empresaId: string;
       empresaNome: string;
       role: Role;
+      permissoes: Permissoes;
+      perfilNome?: string | null;
     };
   }
 
@@ -21,6 +24,8 @@ declare module "next-auth" {
     empresaId: string;
     empresaNome: string;
     role: Role;
+    permissoes?: Permissoes;
+    perfilNome?: string | null;
   }
 }
 
@@ -30,5 +35,7 @@ declare module "next-auth/jwt" {
     empresaId: string;
     empresaNome: string;
     role: Role;
+    permissoes?: Permissoes;
+    perfilNome?: string | null;
   }
 }

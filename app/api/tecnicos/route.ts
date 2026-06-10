@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
   });
   if (existente) return NextResponse.json({ erro: "CPF já cadastrado" }, { status: 409 });
 
-  const { competenciaIds, documentos, dataNascimento, dataAdmissao, cargoId, email, ...rest } = parsed.data;
+  const { competenciaIds, documentos, dataNascimento, dataAdmissao, cargoId, perfilAcessoId, email, ...rest } = parsed.data;
 
   const tecnico = await prisma.tecnico.create({
     data: {
@@ -54,6 +54,7 @@ export async function POST(req: NextRequest) {
       empresaId,
       email: email || null,
       cargoId: cargoId || null,
+      perfilAcessoId: perfilAcessoId || null,
       dataNascimento: dataNascimento ? new Date(dataNascimento) : null,
       dataAdmissao: dataAdmissao ? new Date(dataAdmissao) : null,
       competencias: { connect: competenciaIds.map((id) => ({ id })) },

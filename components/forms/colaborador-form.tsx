@@ -71,13 +71,26 @@ export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
 
   const [cargos, setCargos] = useState<CargoOpt[]>([]);
   const [tiposOs, setTiposOs] = useState<TipoOsOpt[]>([]);
+  const [perfis, setPerfis] = useState<{ id: string; nome: string; tipo: string }[]>([]);
+  const [perfilAcessoId, setPerfilAcessoId] = useState<string>(initialData?.perfilAcessoId ?? "");
+  const [tipoEquipe, setTipoEquipe] = useState<string>(initialData?.tipoEquipe ?? "CAMPO");
   const docRef = useRef<HTMLInputElement>(null);
   const docIdx = useRef<number | null>(null);
 
   useEffect(() => {
     fetch("/api/cargos").then((r) => r.json()).then((d) => setCargos(Array.isArray(d) ? d.filter((c: any) => c.ativo !== false) : [])).catch(() => {});
     fetch("/api/tipos-os").then((r) => r.json()).then((d) => setTiposOs(Array.isArray(d) ? d.filter((t: any) => t.ativo !== false) : [])).catch(() => {});
+    fetch("/api/perfis-acesso").then((r) => r.json()).then((d) => setPerfis(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
+
+  // Ao escolher o tipo de equipe, sugere um perfil compatível (se nenhum estiver escolhido)
+  function escolherTipoEquipe(novo: string) {
+    setTipoEquipe(novo);
+    if (perfilAcessoId) return;
+    const alvo = novo === "CAMPO" ? ["TECNICO"] : ["SUPERVISOR", "FINANCEIRO"];
+    const sugestao = perfis.find((p) => alvo.includes(p.tipo));
+    if (sugestao) setPerfilAcessoId(sugestao.id);
+  }
 
   const dataIso = (v: any) => (v ? String(v).slice(0, 10) : "");
 
@@ -170,6 +183,8 @@ export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
         body: JSON.stringify({
           ...data,
           avatar: avatar ?? "",
+          perfilAcessoId: perfilAcessoId || null,
+          tipoEquipe,
           especialidades, competenciaIds, jornadaDias,
           documentos,
         }),
@@ -313,6 +328,20 @@ export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
                     <option value="ADMINISTRATIVO">Administrativo</option>
                     <option value="MOTORISTA">Motorista</option>
                     <option value="OUTRO">Outro</option>
+                  </Select>
+                </FormField>
+              </FormGrid>
+              <FormGrid>
+                <FormField label="Tipo de Equipe" hint="Define em qual equipe o colaborador aparece">
+                  <Select value={tipoEquipe} onChange={(e) => escolherTipoEquipe(e.target.value)}>
+                    <option value="CAMPO">Campo</option>
+                    <option value="ADMINISTRATIVO">Administrativo</option>
+                  </Select>
+                </FormField>
+                <FormField label="Perfil de Acesso" hint="Define as permissões no sistema (Configurações → Perfis)">
+                  <Select value={perfilAcessoId} onChange={(e) => setPerfilAcessoId(e.target.value)}>
+                    <option value="">Sem perfil</option>
+                    {perfis.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
                   </Select>
                 </FormField>
               </FormGrid>

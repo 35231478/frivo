@@ -41,3 +41,8 @@ next-env.d.ts
 # OS
 .DS_Store
 Thumbs.db
+
+# Logs locais de debug
+*.start-out.log
+*.start-err.log
+.start-*.log

@@ -21,6 +21,8 @@ export const authConfig = {
         token.empresaId = (user as any).empresaId;
         token.empresaNome = (user as any).empresaNome;
         token.role = (user as any).role;
+        token.permissoes = (user as any).permissoes;
+        token.perfilNome = (user as any).perfilNome;
       }
       return token;
     },
@@ -29,6 +31,8 @@ export const authConfig = {
       (session.user as any).empresaId = token.empresaId;
       (session.user as any).empresaNome = token.empresaNome;
       (session.user as any).role = token.role;
+      (session.user as any).permissoes = token.permissoes ?? {};
+      (session.user as any).perfilNome = token.perfilNome ?? null;
       return session;
     },
   },

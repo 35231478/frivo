@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { moduloDaRota, pode } from "@/lib/permissoes";
 import { FrivoLogo } from "./frivo-logo";
 import type { Session } from "next-auth";
 import {
@@ -11,7 +12,7 @@ import {
   HardHat, Settings, ChevronDown, ChevronRight,
   Wrench, FileSpreadsheet, Cog, Package, ListChecks, Calculator,
   Wallet, Receipt, TrendingUp, FileBarChart, Clock, ShoppingCart, Timer, Tags, CalendarDays, Headset, ScrollText, QrCode,
-  Truck, UsersRound, IdCard, ClipboardCheck, Smartphone,
+  Truck, UsersRound, IdCard, ClipboardCheck, Smartphone, ShieldCheck, UserCog,
 } from "lucide-react";
 
 const itensMenu = [
@@ -43,6 +44,8 @@ const itensCompras = [
 ];
 
 const itensCadastros = [
+  { href: "/configuracoes/perfis",            icone: ShieldCheck,      label: "Perfis de Acesso" },
+  { href: "/configuracoes/usuarios",          icone: UserCog,          label: "Usuários" },
   { href: "/configuracoes/cargos",            icone: IdCard,           label: "Cargos" },
   { href: "/configuracoes/checklists-veiculo", icone: ClipboardCheck,  label: "Checklists de Veículo" },
   { href: "/configuracoes/tipos-os",          icone: ListChecks,       label: "Tipos de OS" },
@@ -100,6 +103,18 @@ export function Sidebar({ session, variant = "desktop" }: SidebarProps) {
       .toUpperCase() ?? "??";
   const cargoLabel = ROLE_LABELS[usuario.role] ?? usuario.role;
 
+  // Filtragem por permissão de visualização do módulo
+  const permissoes = (usuario as any).permissoes;
+  const role = usuario.role;
+  const podeVer = (href: string) => {
+    const m = moduloDaRota(href);
+    return !m || pode(permissoes, m, "visualizar", role);
+  };
+  const menuVisivel = itensMenu.filter((i) => podeVer(i.href));
+  const equipesVisiveis = itensEquipes.filter((i) => podeVer(i.href));
+  const financeiroVisiveis = itensFinanceiro.filter((i) => podeVer(i.href));
+  const podeConfig = pode(permissoes, "configuracoes", "visualizar", role);
+
   return (
     <aside className={cn(
       "flex flex-col bg-sidebar text-white shrink-0 shadow-xl",
@@ -116,11 +131,12 @@ export function Sidebar({ session, variant = "desktop" }: SidebarProps) {
           Operação
         </p>
         <div className="space-y-1">
-          {itensMenu.map(({ href, icone: Icone, label }) => (
+          {menuVisivel.map(({ href, icone: Icone, label }) => (
             <SidebarLink key={href} href={href} icone={Icone} label={label} pathname={pathname} />
           ))}
 
           {/* Equipes — submenu expansível */}
+          {equipesVisiveis.length > 0 && (<>
           <button
             onClick={() => setEquipesAberto((v) => !v)}
             className={cn(
@@ -146,7 +162,7 @@ export function Sidebar({ session, variant = "desktop" }: SidebarProps) {
 
           {equipesAberto && (
             <div className="ml-5 pl-3 border-l border-white/10 space-y-0.5 mt-1">
-              {itensEquipes.map(({ href, icone: Icone, label }) => {
+              {equipesVisiveis.map(({ href, icone: Icone, label }) => {
                 const ativo = pathname === href || pathname.startsWith(href + "/");
                 return (
                   <Link
@@ -166,8 +182,10 @@ export function Sidebar({ session, variant = "desktop" }: SidebarProps) {
               })}
             </div>
           )}
+          </>)}
 
           {/* Financeiro — submenu expansível */}
+          {financeiroVisiveis.length > 0 && (<>
           <button
             onClick={() => setFinanceiroAberto((v) => !v)}
             className={cn(
@@ -193,7 +211,7 @@ export function Sidebar({ session, variant = "desktop" }: SidebarProps) {
 
           {financeiroAberto && (
             <div className="ml-5 pl-3 border-l border-white/10 space-y-0.5 mt-1">
-              {itensFinanceiro.map(({ href, icone: Icone, label }) => {
+              {financeiroVisiveis.map(({ href, icone: Icone, label }) => {
                 const ativo = pathname === href || pathname.startsWith(href + "/");
                 return (
                   <Link
@@ -213,6 +231,7 @@ export function Sidebar({ session, variant = "desktop" }: SidebarProps) {
               })}
             </div>
           )}
+          </>)}
 
           {/* Compras — submenu expansível */}
           <button
@@ -268,6 +287,7 @@ export function Sidebar({ session, variant = "desktop" }: SidebarProps) {
           Sistema
         </p>
         <div className="space-y-1">
+          {podeConfig && (<>
           <SidebarLink
             href="/configuracoes"
             icone={Settings}
@@ -322,6 +342,7 @@ export function Sidebar({ session, variant = "desktop" }: SidebarProps) {
               })}
             </div>
           )}
+          </>)}
         </div>
       </nav>
 

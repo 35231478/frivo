@@ -4,6 +4,7 @@ import {
   TipoCampo, StatusAtividade, ResponsavelPrazo, CanalNotificacao,
 } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { PRESETS, CORES_PERFIL } from "../lib/permissoes";
 
 const prisma = new PrismaClient();
 
@@ -380,6 +381,27 @@ async function main() {
       },
     });
     console.log("Checklist Diário criado com 15 itens");
+  }
+
+  // ───────────── Perfis de acesso padrão ─────────────
+  const totalPerfis = await prisma.perfilAcesso.count({ where: { empresaId: empresa.id } });
+  if (totalPerfis === 0) {
+    const perfisPadrao = [
+      { nome: "Administrador", tipo: "ADMINISTRADOR", descricao: "Acesso total ao sistema" },
+      { nome: "Supervisor de Manutenção", tipo: "SUPERVISOR", descricao: "OS, clientes, equipes e relatórios" },
+      { nome: "Financeiro", tipo: "FINANCEIRO", descricao: "Financeiro, contratos, orçamentos e clientes" },
+      { nome: "Técnico de Campo", tipo: "TECNICO", descricao: "OS, equipamentos, calendário e veículos" },
+      { nome: "Auxiliar Técnico", tipo: "AUXILIAR", descricao: "OS (visualizar), equipamentos e calendário" },
+    ] as const;
+    for (const p of perfisPadrao) {
+      await prisma.perfilAcesso.create({
+        data: {
+          empresaId: empresa.id, nome: p.nome, descricao: p.descricao, tipo: p.tipo as any,
+          cor: CORES_PERFIL[p.tipo] ?? "#8B5CF6", padraoSistema: true, permissoes: PRESETS[p.tipo] as any,
+        },
+      });
+    }
+    console.log(`Perfis de acesso padrão criados: ${perfisPadrao.length}`);
   }
 
   console.log("\nSeed concluído!");

@@ -44,7 +44,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (dup) return NextResponse.json({ erro: "CPF já cadastrado" }, { status: 409 });
   }
 
-  const { competenciaIds, documentos, dataNascimento, dataAdmissao, cargoId, email, ...rest } = parsed.data;
+  const { competenciaIds, documentos, dataNascimento, dataAdmissao, cargoId, perfilAcessoId, email, ...rest } = parsed.data;
 
   const atualizado = await prisma.tecnico.update({
     where: { id },
@@ -52,6 +52,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
       ...rest,
       email: email || null,
       cargoId: cargoId || null,
+      perfilAcessoId: perfilAcessoId || null,
       dataNascimento: dataNascimento ? new Date(dataNascimento) : null,
       dataAdmissao: dataAdmissao ? new Date(dataAdmissao) : null,
       competencias: { set: competenciaIds.map((cid) => ({ id: cid })) },
