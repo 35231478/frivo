@@ -51,7 +51,7 @@ export default async function ContratosPage({ searchParams }: { searchParams: Pr
     prisma.contrato.findMany({
       where,
       include: {
-        cliente: { select: { id: true, nome: true, nomeFantasia: true } },
+        cliente: { select: { id: true, nome: true, nomeFantasia: true, logo: true } },
         ordensServico: { where: { previsaoConclusao: { gte: agora } }, orderBy: { previsaoConclusao: "asc" }, take: 1, select: { id: true, numero: true, status: true, previsaoConclusao: true } },
       },
       orderBy: SORT_MAP[sort](dir),
@@ -76,6 +76,7 @@ export default async function ContratosPage({ searchParams }: { searchParams: Pr
       id: c.id,
       numero: c.numero,
       cliente: c.cliente.nomeFantasia ?? c.cliente.nome,
+      clienteLogo: c.cliente.logo ?? null,
       periodicidade: c.periodicidade,
       valorMensal: c.valorMensal ? Number(c.valorMensal) : null,
       dataInicio: c.dataInicio.toISOString(),

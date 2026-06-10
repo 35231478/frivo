@@ -5,13 +5,14 @@ import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { cn, formatarData, formatarMoeda, LABELS_PERIODICIDADE } from "@/lib/utils";
 import { BuscaSelect, type OpcaoBusca } from "@/components/ui/busca-select";
+import { AvatarCliente } from "@/components/ui/avatar-cliente";
 import {
   FileText, Plus, Search, SlidersHorizontal, X, ArrowUp, ArrowDown, ArrowUpDown,
   Filter, BarChart3, Wallet, CalendarClock, AlertTriangle,
 } from "lucide-react";
 
 interface ContratoView {
-  id: string; numero: string; cliente: string; periodicidade: string; valorMensal: number | null;
+  id: string; numero: string; cliente: string; clienteLogo: string | null; periodicidade: string; valorMensal: number | null;
   dataInicio: string; dataFim: string | null; status: string; vencido: boolean; vencendo: boolean;
   proximaOs: { id: string; numero: string; status: string; previsaoConclusao: string | null } | null;
 }
@@ -172,7 +173,12 @@ export function ContratosListaClient({ contratos, total, somaMensalFiltrada, res
                   <td className="px-4 py-3">
                     <Link href={`/contratos/${ct.id}`} className="font-mono font-semibold text-primary-600 hover:underline">{ct.numero}</Link>
                   </td>
-                  <td className="px-4 py-3 text-ink font-medium">{ct.cliente}</td>
+                  <td className="px-4 py-3 text-ink font-medium">
+                    <div className="flex items-center gap-2">
+                      <AvatarCliente nome={ct.cliente} logoUrl={ct.clienteLogo} size={28} />
+                      <span className="truncate">{ct.cliente}</span>
+                    </div>
+                  </td>
                   <td className="px-4 py-3 hidden md:table-cell"><span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full", COR_FREQ[ct.periodicidade])}>{LABELS_PERIODICIDADE[ct.periodicidade] ?? ct.periodicidade}</span></td>
                   <td className="px-4 py-3 text-right text-ink font-medium">{formatarMoeda(ct.valorMensal)}</td>
                   <td className="px-4 py-3 text-right text-ink-muted hidden md:table-cell">{ct.valorMensal != null ? formatarMoeda(ct.valorMensal * 12) : "—"}</td>

@@ -8,6 +8,7 @@ import {
 import Link from "next/link";
 import { FileBarChart, Plus } from "lucide-react";
 import { GerarMedicoesMes } from "@/components/medicao/gerar-medicoes-mes";
+import { AvatarCliente } from "@/components/ui/avatar-cliente";
 
 export const metadata: Metadata = { title: "Medições" };
 
@@ -44,7 +45,7 @@ export default async function MedicoesPage({
   const [medicoes, total, clientes] = await Promise.all([
     prisma.medicao.findMany({
       where,
-      include: { cliente: { select: { id: true, nome: true, nomeFantasia: true } } },
+      include: { cliente: { select: { id: true, nome: true, nomeFantasia: true, logo: true } } },
       orderBy: { criadoEm: "desc" },
       take: 100,
     }),
@@ -125,7 +126,12 @@ export default async function MedicoesPage({
                     <td className="px-4 py-3">
                       <Link href={`/financeiro/medicoes/${m.id}`} className="font-mono font-semibold text-primary-600 hover:underline">{m.numero}</Link>
                     </td>
-                    <td className="px-4 py-3 text-ink font-medium">{m.cliente.nomeFantasia ?? m.cliente.nome}</td>
+                    <td className="px-4 py-3 text-ink font-medium">
+                      <div className="flex items-center gap-2">
+                        <AvatarCliente nome={m.cliente.nomeFantasia ?? m.cliente.nome} logoUrl={m.cliente.logo} size={28} />
+                        <span className="truncate">{m.cliente.nomeFantasia ?? m.cliente.nome}</span>
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-ink-muted hidden md:table-cell">{LABELS_TIPO_MEDICAO[m.tipo]}</td>
                     <td className="px-4 py-3 text-ink-muted hidden lg:table-cell">{m.mes ? `${nomeMes(m.mes)}/${m.ano}` : formatarData(m.criadoEm)}</td>
                     <td className="px-4 py-3"><span className={CLASSE_STATUS_MEDICAO[m.status]}>{LABELS_STATUS_MEDICAO[m.status]}</span></td>

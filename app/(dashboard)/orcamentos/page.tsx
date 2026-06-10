@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { cn, formatarData, formatarMoeda, LABELS_STATUS_ORCAMENTO, CLASSE_STATUS_ORCAMENTO, LABELS_TIPO_ORCAMENTO, CLASSE_TIPO_ORCAMENTO } from "@/lib/utils";
 import Link from "next/link";
 import { Calculator, Plus } from "lucide-react";
+import { AvatarCliente } from "@/components/ui/avatar-cliente";
 
 export const metadata: Metadata = { title: "Orçamentos" };
 
@@ -41,7 +42,7 @@ export default async function OrcamentosPage({
     prisma.orcamento.findMany({
       where,
       include: {
-        cliente: { select: { id: true, nome: true, nomeFantasia: true } },
+        cliente: { select: { id: true, nome: true, nomeFantasia: true, logo: true } },
         _count: { select: { ordensServico: true } },
       },
       orderBy: { criadoEm: "desc" },
@@ -159,7 +160,12 @@ export default async function OrcamentosPage({
                       </Link>
                     </td>
                     <td className="px-4 py-3 text-ink font-medium">{o.nome}</td>
-                    <td className="px-4 py-3 text-ink-muted">{o.cliente.nomeFantasia ?? o.cliente.nome}</td>
+                    <td className="px-4 py-3 text-ink-muted">
+                      <div className="flex items-center gap-2">
+                        <AvatarCliente nome={o.cliente.nomeFantasia ?? o.cliente.nome} logoUrl={o.cliente.logo} size={28} />
+                        <span className="truncate">{o.cliente.nomeFantasia ?? o.cliente.nome}</span>
+                      </div>
+                    </td>
                     <td className="px-4 py-3">
                       <span className={CLASSE_TIPO_ORCAMENTO[o.tipo]}>
                         {LABELS_TIPO_ORCAMENTO[o.tipo]}

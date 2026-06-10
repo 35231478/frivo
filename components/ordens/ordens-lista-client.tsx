@@ -5,14 +5,18 @@ import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { cn, formatarData, MESES_PT, LABELS_STATUS_OS, LABELS_PRIORIDADE, LABELS_ORIGEM_OS } from "@/lib/utils";
 import { BuscaSelect, type OpcaoBusca } from "@/components/ui/busca-select";
+import { AvatarCliente } from "@/components/ui/avatar-cliente";
+import { AvatarStack } from "@/components/ui/avatar-stack";
 import {
   ClipboardList, Plus, Search, SlidersHorizontal, X, ArrowUp, ArrowDown, ArrowUpDown,
   LayoutGrid, List, Download, Headset, Filter, ChevronLeft, ChevronRight, CalendarDays, CalendarCheck,
 } from "lucide-react";
 
+interface TecnicoView { id: string; nome: string; avatar: string | null }
 interface OrdemView {
   id: string; numero: string; chamadoNumero: string | null; origem: string;
-  cliente: string; unidade: string | null; responsavel: string | null; atividades: number;
+  cliente: string; clienteLogo: string | null; unidade: string | null; responsavel: string | null; atividades: number;
+  tecnicos: TecnicoView[];
   status: string; prioridade: string; criadoEm: string; previsaoConclusao: string | null;
 }
 interface Opcoes { clientes: OpcaoBusca[]; usuarios: OpcaoBusca[]; tiposOs: OpcaoBusca[]; contratos: OpcaoBusca[] }
@@ -331,11 +335,18 @@ export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens:
                   <span className="font-mono font-semibold text-primary-600">{os.chamadoNumero ?? os.numero}</span>
                   {os.origem === "PORTAL_CLIENTE" && <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-cyan-50 text-cyan-700 px-1.5 py-0.5 rounded"><Headset className="w-3 h-3" /> Portal</span>}
                 </div>
-                <p className="text-sm font-medium text-ink mt-1 truncate">{os.cliente}</p>
-                <p className="text-xs text-ink-muted truncate">{os.unidade ?? "—"}{os.responsavel ? ` · ${os.responsavel}` : ""}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <AvatarCliente nome={os.cliente} logoUrl={os.clienteLogo} size={28} />
+                  <p className="text-sm font-medium text-ink truncate">{os.cliente}</p>
+                </div>
+                <p className="text-xs text-ink-muted truncate mt-1">{os.unidade ?? "—"}{os.responsavel ? ` · ${os.responsavel}` : ""}</p>
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
                   <span className={CLASSE_STATUS[os.status]}>{LABELS_STATUS_OS[os.status]}</span>
                   <span className={CLASSE_PRIORIDADE[os.prioridade]}>{LABELS_PRIORIDADE[os.prioridade]}</span>
+                </div>
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider">Equipe:</span>
+                  <AvatarStack tecnicos={os.tecnicos} size={28} />
                 </div>
                 <p className="text-[11px] text-ink-subtle mt-2">Aberta {formatarData(os.criadoEm)}{os.previsaoConclusao ? ` · Prev. ${formatarData(os.previsaoConclusao)}` : ""}</p>
               </Link>
@@ -353,6 +364,7 @@ export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens:
                   <Th className="hidden xl:table-cell" onClick={() => ordenarPor("previsaoConclusao")}>Previsão <Seta campo="previsaoConclusao" /></Th>
                   <Th onClick={() => ordenarPor("status")}>Status <Seta campo="status" /></Th>
                   <Th className="hidden md:table-cell" onClick={() => ordenarPor("prioridade")}>Prioridade <Seta campo="prioridade" /></Th>
+                  <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Equipe</th>
                 </tr>
               </thead>
               <tbody>
@@ -362,12 +374,18 @@ export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens:
                       <Link href={`/ordens/${os.id}`} className="font-mono font-semibold text-primary-600 hover:underline">{os.chamadoNumero ?? os.numero}</Link>
                       {os.origem === "PORTAL_CLIENTE" && <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-semibold bg-cyan-50 text-cyan-700 px-1.5 py-0.5 rounded"><Headset className="w-3 h-3" /> Portal</span>}
                     </td>
-                    <td className="px-4 py-3 text-ink font-medium">{os.cliente}</td>
+                    <td className="px-4 py-3 text-ink font-medium">
+                      <div className="flex items-center gap-2">
+                        <AvatarCliente nome={os.cliente} logoUrl={os.clienteLogo} size={28} />
+                        <span className="truncate">{os.cliente}</span>
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-ink-muted hidden lg:table-cell">{os.responsavel ?? "—"}</td>
                     <td className="px-4 py-3 text-ink-muted hidden lg:table-cell">{formatarData(os.criadoEm)}</td>
                     <td className="px-4 py-3 text-ink-muted hidden xl:table-cell">{os.previsaoConclusao ? formatarData(os.previsaoConclusao) : "—"}</td>
                     <td className="px-4 py-3"><span className={CLASSE_STATUS[os.status]}>{LABELS_STATUS_OS[os.status]}</span></td>
                     <td className="px-4 py-3 hidden md:table-cell"><span className={CLASSE_PRIORIDADE[os.prioridade]}>{LABELS_PRIORIDADE[os.prioridade]}</span></td>
+                    <td className="px-4 py-3"><div className="flex justify-end"><AvatarStack tecnicos={os.tecnicos} size={28} /></div></td>
                   </tr>
                 ))}
               </tbody>

@@ -78,10 +78,10 @@ export default async function OrdensPage({ searchParams }: { searchParams: Promi
     prisma.ordemServico.findMany({
       where,
       include: {
-        cliente: { select: { id: true, nome: true, nomeFantasia: true } },
+        cliente: { select: { id: true, nome: true, nomeFantasia: true, logo: true } },
         unidade: { select: { nome: true } },
         responsavel: { select: { nome: true } },
-        _count: { select: { atividades: true } },
+        atividades: { select: { tecnico: { select: { id: true, nome: true, avatar: true } } } },
       },
       orderBy: SORT_MAP[sort](dir),
       take: TAKE,
@@ -93,20 +93,29 @@ export default async function OrdensPage({ searchParams }: { searchParams: Promi
     prisma.contrato.findMany({ where: { empresaId }, select: { id: true, numero: true }, orderBy: { numero: "asc" } }),
   ]);
 
-  const ordensView = ordens.map((o) => ({
-    id: o.id,
-    numero: o.numero,
-    chamadoNumero: o.chamadoNumero,
-    origem: o.origem,
-    cliente: o.cliente.nomeFantasia ?? o.cliente.nome,
-    unidade: o.unidade?.nome ?? null,
-    responsavel: o.responsavel?.nome ?? null,
-    atividades: o._count.atividades,
-    status: o.status,
-    prioridade: o.prioridade,
-    criadoEm: o.criadoEm.toISOString(),
-    previsaoConclusao: o.previsaoConclusao ? o.previsaoConclusao.toISOString() : null,
-  }));
+  const ordensView = ordens.map((o) => {
+    // Técnicos das atividades, deduplicados por id e ordenados por nome (pt-BR)
+    const tecnicos = Array.from(
+      new Map(o.atividades.filter((a) => a.tecnico).map((a) => [a.tecnico!.id, a.tecnico!])).values(),
+    ).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+
+    return {
+      id: o.id,
+      numero: o.numero,
+      chamadoNumero: o.chamadoNumero,
+      origem: o.origem,
+      cliente: o.cliente.nomeFantasia ?? o.cliente.nome,
+      clienteLogo: o.cliente.logo ?? null,
+      unidade: o.unidade?.nome ?? null,
+      responsavel: o.responsavel?.nome ?? null,
+      atividades: o.atividades.length,
+      tecnicos: tecnicos.map((t) => ({ id: t.id, nome: t.nome, avatar: t.avatar ?? null })),
+      status: o.status,
+      prioridade: o.prioridade,
+      criadoEm: o.criadoEm.toISOString(),
+      previsaoConclusao: o.previsaoConclusao ? o.previsaoConclusao.toISOString() : null,
+    };
+  });
 
   return (
     <OrdensListaClient
