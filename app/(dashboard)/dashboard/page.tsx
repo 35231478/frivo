@@ -3,11 +3,13 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ResumoCard } from "@/components/dashboard/resumo-card";
 import { contarAlertasPrazos } from "@/lib/prazo-server";
+import { contarAlertasVeiculos } from "@/lib/veiculo-server";
 import { formatarData, cn, LABELS_STATUS_OS } from "@/lib/utils";
 import Link from "next/link";
 import {
   Users, Thermometer, ClipboardList, CalendarCheck, FileText,
   HardHat, AlertTriangle, CheckCircle, ArrowRight, Timer, Clock, ShoppingCart, Headset,
+  Truck, ClipboardCheck, Wrench,
 } from "lucide-react";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -56,9 +58,10 @@ const CLASSE_STATUS: Record<string, string> = {
 export default async function DashboardPage() {
   const session = await auth();
   const empresaId = session!.user!.empresaId;
-  const [r, alertas] = await Promise.all([
+  const [r, alertas, frota] = await Promise.all([
     buscarResumos(empresaId),
     contarAlertasPrazos(empresaId),
+    contarAlertasVeiculos(empresaId),
   ]);
 
   return (
@@ -150,6 +153,45 @@ export default async function DashboardPage() {
             corIcone="text-red-600"
             corFundo="bg-red-50"
             href="/ordens"
+          />
+        </div>
+      </div>
+
+      {/* Frota de veículos */}
+      <div>
+        <p className="label-uppercase mb-3">Frota</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <ResumoCard
+            titulo="Checklist pendente hoje"
+            valor={frota.checklistPendente}
+            icone={ClipboardCheck}
+            corIcone="text-blue-600"
+            corFundo="bg-blue-50"
+            href="/veiculos/checklist"
+          />
+          <ResumoCard
+            titulo="Documentos vencendo"
+            valor={frota.documentosVencendo}
+            icone={AlertTriangle}
+            corIcone="text-amber-600"
+            corFundo="bg-amber-50"
+            href="/veiculos"
+          />
+          <ResumoCard
+            titulo="Veículos em manutenção"
+            valor={frota.veiculosManutencao}
+            icone={Wrench}
+            corIcone="text-violet-600"
+            corFundo="bg-violet-50"
+            href="/veiculos"
+          />
+          <ResumoCard
+            titulo="Revisões chegando"
+            valor={frota.revisaoChegando}
+            icone={Truck}
+            corIcone="text-orange-600"
+            corFundo="bg-orange-50"
+            href="/veiculos"
           />
         </div>
       </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import { Bell, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer, Headset } from "lucide-react";
+import { Bell, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer, Headset, ClipboardCheck, FileWarning, Wrench } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -13,6 +13,10 @@ interface Alertas {
   pedidosPendentes: number;
   atendimentosAtraso: number;
   chamadosPortal: number;
+  checklistPendente: number;
+  checklistsComAlertas: number;
+  documentosVencendo: number;
+  veiculosManutencao: number;
   total: number;
 }
 
@@ -27,6 +31,12 @@ const ROTULOS_ROTA: Record<string, string> = {
   ordens: "Ordens de Serviço",
   contratos: "Contratos",
   tecnicos: "Técnicos",
+  colaboradores: "Colaboradores",
+  equipes: "Equipes",
+  veiculos: "Veículos",
+  checklist: "Checklist",
+  cargos: "Cargos",
+  "checklists-veiculo": "Checklists de Veículo",
   configuracoes: "Configurações",
   formularios: "Formulários",
   produtos: "Produtos",
@@ -149,6 +159,10 @@ export function Header({ session }: HeaderProps) {
                   <AlertaItem href="/compras/pedidos" icone={ShoppingCart} cor="text-orange-600" label="Compras pendentes" valor={alertas?.pedidosPendentes ?? 0} onClick={() => setSinoAberto(false)} />
                   <AlertaItem href="/ordens?origem=PORTAL_CLIENTE" icone={Headset} cor="text-cyan-600" label="Chamados do portal" valor={alertas?.chamadosPortal ?? 0} onClick={() => setSinoAberto(false)} />
                   <AlertaItem href="/ordens" icone={Timer} cor="text-red-600" label="Atendimentos em atraso" valor={alertas?.atendimentosAtraso ?? 0} onClick={() => setSinoAberto(false)} />
+                  <AlertaItem href="/veiculos/checklist" icone={ClipboardCheck} cor="text-blue-600" label="Checklists pendentes" valor={alertas?.checklistPendente ?? 0} onClick={() => setSinoAberto(false)} />
+                  <AlertaItem href="/veiculos" icone={AlertTriangle} cor="text-amber-600" label="Checklists com alertas" valor={alertas?.checklistsComAlertas ?? 0} onClick={() => setSinoAberto(false)} />
+                  <AlertaItem href="/veiculos" icone={FileWarning} cor="text-orange-600" label="Documentos de veículo vencendo" valor={alertas?.documentosVencendo ?? 0} onClick={() => setSinoAberto(false)} />
+                  <AlertaItem href="/veiculos" icone={Wrench} cor="text-violet-600" label="Veículos em manutenção" valor={alertas?.veiculosManutencao ?? 0} onClick={() => setSinoAberto(false)} />
                 </div>
               )}
             </div>
