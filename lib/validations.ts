@@ -527,6 +527,39 @@ export const contaReceberUpdateSchema = z.object({
   dataVencimento: z.string().optional().nullable(),
   dataRecebimento: z.string().optional().nullable(),
   formaPagamento: z.nativeEnum(FormaPagamento).optional().nullable(),
+  banco: z.string().optional().nullable(),
+  observacao: z.string().optional().nullable(),
+});
+
+// ─────────────────────────────────────────────
+// CONTAS A PAGAR
+// ─────────────────────────────────────────────
+
+const valorObrigatorio = z.preprocess(
+  (v) => (v === "" || v == null ? undefined : Number(v)),
+  z.number().positive("Valor deve ser maior que zero"),
+);
+
+export const contaPagarSchema = z.object({
+  fornecedor: z.string().min(1, "Fornecedor é obrigatório"),
+  fornecedorCnpj: z.string().optional().nullable(),
+  descricao: z.string().min(1, "Descrição é obrigatória"),
+  valorTotal: valorObrigatorio,
+  dataVencimento: z.string().optional().nullable(),
+  formaPagamento: z.nativeEnum(FormaPagamento).optional().nullable(),
+  banco: z.string().optional().nullable(),
+  pedidoCompraId: z.string().optional().nullable(),
+  observacao: z.string().optional().nullable(),
+});
+
+export const contaPagarUpdateSchema = contaPagarSchema.partial();
+
+export const pagamentoContaPagarSchema = z.object({
+  valor: valorObrigatorio,
+  dataPagamento: z.string().min(1, "Data é obrigatória"),
+  formaPagamento: z.nativeEnum(FormaPagamento).optional().nullable(),
+  banco: z.string().optional().nullable(),
+  comprovante: z.string().optional().nullable(),
   observacao: z.string().optional().nullable(),
 });
 

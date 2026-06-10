@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/ui/page-header";
 import { PedidoStatusAcoes } from "@/components/compras/pedido-status-acoes";
+import { GerarContaPagar } from "@/components/compras/gerar-conta-pagar";
 import { cn, formatarData, formatarDataHora, formatarMoeda, LABELS_STATUS_PEDIDO_COMPRA, CLASSE_STATUS_PEDIDO_COMPRA } from "@/lib/utils";
 import { ClipboardList } from "lucide-react";
 
@@ -25,6 +26,7 @@ export default async function PedidoCompraDetalhe({ params }: { params: Promise<
       solicitante: { select: { nome: true } },
       ordemServico: { select: { id: true, numero: true, cliente: { select: { nome: true, nomeFantasia: true } } } },
       orcamento: { select: { id: true, codigo: true } },
+      contasPagar: { select: { id: true } },
     },
   });
   if (!pedido) notFound();
@@ -39,7 +41,10 @@ export default async function PedidoCompraDetalhe({ params }: { params: Promise<
       <div className="card-padded space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <span className={CLASSE_STATUS_PEDIDO_COMPRA[pedido.status]}>{LABELS_STATUS_PEDIDO_COMPRA[pedido.status]}</span>
-          <PedidoStatusAcoes pedidoId={pedido.id} status={pedido.status} />
+          <div className="flex items-center gap-2 flex-wrap">
+            <GerarContaPagar pedidoId={pedido.id} jaExiste={pedido.contasPagar.length > 0} />
+            <PedidoStatusAcoes pedidoId={pedido.id} status={pedido.status} />
+          </div>
         </div>
 
         {/* Stepper */}

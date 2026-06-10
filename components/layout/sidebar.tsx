@@ -12,7 +12,7 @@ import {
   HardHat, Settings, ChevronDown, ChevronRight,
   Wrench, FileSpreadsheet, Cog, Package, ListChecks, Calculator,
   Wallet, Receipt, TrendingUp, FileBarChart, Clock, ShoppingCart, Timer, Tags, CalendarDays, Headset, ScrollText, QrCode,
-  Truck, UsersRound, IdCard, ClipboardCheck, Smartphone, ShieldCheck, UserCog,
+  Truck, UsersRound, IdCard, ClipboardCheck, Smartphone, ShieldCheck, UserCog, Upload,
 } from "lucide-react";
 
 const itensMenu = [
@@ -34,9 +34,11 @@ const itensEquipes = [
 ];
 
 const itensFinanceiro = [
-  { href: "/financeiro/medicoes",        icone: FileBarChart, label: "Medições" },
-  { href: "/financeiro/contas-receber",  icone: Receipt,      label: "Contas a Receber" },
-  { href: "/financeiro/fluxo-caixa",     icone: TrendingUp,   label: "Fluxo de Caixa" },
+  { href: "/financeiro",                 icone: LayoutDashboard, label: "Dashboard Financeiro" },
+  { href: "/financeiro/contas-receber",  icone: Receipt,         label: "Contas a Receber" },
+  { href: "/financeiro/contas-pagar",    icone: Upload,          label: "Contas a Pagar" },
+  { href: "/financeiro/medicoes",        icone: FileBarChart,    label: "Medições" },
+  { href: "/financeiro/fluxo-caixa",     icone: TrendingUp,      label: "Fluxo de Caixa" },
 ];
 
 const itensCompras = [

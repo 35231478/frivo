@@ -245,6 +245,14 @@ enum FormaPagamento {
   CHEQUE
 }
 
+enum StatusContaPagar {
+  PENDENTE
+  PAGO_PARCIAL
+  PAGO_TOTAL
+  VENCIDO
+  CANCELADO
+}
+
 // ── Prazos / SLA e Compras ──
 
 enum ResponsavelPrazo {
@@ -384,6 +392,7 @@ model Empresa {
   checklistTemplates     ChecklistTemplate[]
   checklistsPreenchidos  ChecklistPreenchido[]
   perfisAcesso           PerfilAcesso[]
+  contasPagar            ContaPagar[]
 
   configuracao Configuracao?
 
@@ -1427,6 +1436,12 @@ model ContaReceber {
   dataRecebimento DateTime?       @map("data_recebimento")
   formaPagamento  FormaPagamento? @map("forma_pagamento")
 
+  banco               String?
+  clienteCnpj         String?   @map("cliente_cnpj")
+  notificacaoEnviadaEm DateTime? @map("notificacao_enviada_em")
+  boletoUrl           String?   @db.Text @map("boleto_url")
+  boletoCodigoBarras  String?   @map("boleto_codigo_barras")
+
   observacao   String?
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
@@ -1437,6 +1452,50 @@ model ContaReceber {
   orcamento Orcamento? @relation(fields: [orcamentoId], references: [id])
 
   @@map("contas_receber")
+}
+
+model ContaPagar {
+  id             String           @id @default(cuid())
+  empresaId      String           @map("empresa_id")
+  numero         String
+  fornecedor     String
+  fornecedorCnpj String?          @map("fornecedor_cnpj")
+  descricao      String
+  valorTotal     Decimal          @map("valor_total") @db.Decimal(12, 2)
+  valorPago      Decimal          @default(0) @map("valor_pago") @db.Decimal(12, 2)
+  saldoRestante  Decimal          @map("saldo_restante") @db.Decimal(12, 2)
+  status         StatusContaPagar @default(PENDENTE)
+  dataVencimento DateTime?        @map("data_vencimento")
+  dataPagamento  DateTime?        @map("data_pagamento")
+  formaPagamento FormaPagamento?  @map("forma_pagamento")
+  banco          String?
+  pedidoCompraId String?          @map("pedido_compra_id")
+  observacao     String?
+  criadoEm       DateTime         @default(now()) @map("criado_em")
+  atualizadoEm   DateTime         @updatedAt @map("atualizado_em")
+
+  empresa      Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  pedidoCompra PedidoCompraInterno? @relation(fields: [pedidoCompraId], references: [id])
+  pagamentos   PagamentoContaPagar[]
+
+  @@unique([numero, empresaId])
+  @@map("contas_pagar")
+}
+
+model PagamentoContaPagar {
+  id             String          @id @default(cuid())
+  contaPagarId   String          @map("conta_pagar_id")
+  valor          Decimal         @db.Decimal(12, 2)
+  dataPagamento  DateTime        @map("data_pagamento")
+  formaPagamento FormaPagamento? @map("forma_pagamento")
+  banco          String?
+  comprovante    String?         @db.Text
+  observacao     String?
+  criadoEm       DateTime        @default(now()) @map("criado_em")
+
+  contaPagar ContaPagar @relation(fields: [contaPagarId], references: [id], onDelete: Cascade)
+
+  @@map("pagamentos_conta_pagar")
 }
 
 // ─────────────────────────────────────────────
@@ -1513,6 +1572,7 @@ model PedidoCompraInterno {
   solicitante  Usuario            @relation("PedidoSolicitante", fields: [solicitanteId], references: [id])
   comprador    Usuario?           @relation("PedidoComprador", fields: [compradorId], references: [id])
   itens        PedidoCompraItem[]
+  contasPagar  ContaPagar[]
 
   @@unique([numero, empresaId])
   @@map("pedidos_compra_interno")

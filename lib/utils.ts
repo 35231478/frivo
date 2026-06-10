@@ -57,6 +57,10 @@ export function gerarNumeroContaReceber(sequencial: number, ano = new Date().get
   return `CR-${ano}-${String(sequencial).padStart(4, "0")}`;
 }
 
+export function gerarNumeroContaPagar(sequencial: number, ano = new Date().getFullYear()): string {
+  return `CP-${ano}-${String(sequencial).padStart(4, "0")}`;
+}
+
 export function gerarNumeroPedidoCompra(sequencial: number, ano = new Date().getFullYear()): string {
   return `PCI-${ano}-${String(sequencial).padStart(4, "0")}`;
 }

@@ -20,21 +20,32 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
   const d = parsed.data;
 
+  const dataRecebimento =
+    d.status === "RECEBIDO"
+      ? (d.dataRecebimento ? new Date(d.dataRecebimento) : new Date())
+      : d.dataRecebimento === null
+        ? null
+        : undefined;
+
   const atualizada = await prisma.contaReceber.update({
     where: { id },
     data: {
       status: d.status,
       formaPagamento: d.formaPagamento ?? undefined,
+      banco: d.banco === undefined ? undefined : d.banco || null,
       observacao: d.observacao ?? undefined,
       dataVencimento: d.dataVencimento ? new Date(d.dataVencimento) : undefined,
-      dataRecebimento:
-        d.status === "RECEBIDO"
-          ? (d.dataRecebimento ? new Date(d.dataRecebimento) : new Date())
-          : d.dataRecebimento === null
-            ? null
-            : undefined,
+      dataRecebimento,
     },
   });
+
+  // Ao quitar uma conta vinda de medição, marca a medição como PAGO.
+  if (d.status === "RECEBIDO" && existente.medicaoId) {
+    await prisma.medicao.updateMany({
+      where: { id: existente.medicaoId, status: { notIn: ["PAGO", "CANCELADA"] } },
+      data: { status: "PAGO", dataPagamento: dataRecebimento ?? new Date(), formaPagamento: d.formaPagamento ?? undefined },
+    });
+  }
 
   return NextResponse.json(atualizada);
 }
