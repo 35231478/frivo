@@ -14,6 +14,7 @@ const { auth } = NextAuth(authConfig);
 const rotasPublicas = [
   "/login",
   "/api/auth",        // endpoints internos do Auth.js
+  "/api/webhooks",    // webhooks externos (ex.: Banco Inter)
   "/portal",          // inclui /portal/login
   "/api/portal-auth",
   "/api/portal/",

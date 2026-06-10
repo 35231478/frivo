@@ -253,6 +253,19 @@ enum StatusContaPagar {
   CANCELADO
 }
 
+enum BoletoStatus {
+  PENDENTE
+  EMITIDO
+  PAGO
+  CANCELADO
+  VENCIDO
+}
+
+enum AmbienteInter {
+  SANDBOX
+  PRODUCAO
+}
+
 // ── Prazos / SLA e Compras ──
 
 enum ResponsavelPrazo {
@@ -394,7 +407,8 @@ model Empresa {
   perfisAcesso           PerfilAcesso[]
   contasPagar            ContaPagar[]
 
-  configuracao Configuracao?
+  configuracao    Configuracao?
+  integracaoInter IntegracaoInter?
 
   @@map("empresas")
 }
@@ -448,6 +462,27 @@ model Configuracao {
   empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
 
   @@map("configuracoes")
+}
+
+// Integração bancária — Banco Inter (credenciais e certificado criptografados)
+model IntegracaoInter {
+  id            String        @id @default(cuid())
+  empresaId     String        @unique @map("empresa_id")
+  ativo         Boolean       @default(false)
+  ambiente      AmbienteInter @default(SANDBOX)
+  clientId      String?       @map("client_id")
+  clientSecret  String?       @db.Text @map("client_secret") // criptografado
+  contaCorrente String?       @map("conta_corrente")
+  certificado   String?       @db.Text // PEM criptografado
+  chavePrivada  String?       @db.Text @map("chave_privada") // PEM criptografado
+  webhookSecret String?       @map("webhook_secret")
+  pixChave      String?       @map("pix_chave")
+  criadoEm      DateTime      @default(now()) @map("criado_em")
+  atualizadoEm  DateTime      @updatedAt @map("atualizado_em")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@map("integracoes_inter")
 }
 
 // ─────────────────────────────────────────────
@@ -1441,6 +1476,13 @@ model ContaReceber {
   notificacaoEnviadaEm DateTime? @map("notificacao_enviada_em")
   boletoUrl           String?   @db.Text @map("boleto_url")
   boletoCodigoBarras  String?   @map("boleto_codigo_barras")
+  boletoId            String?   @map("boleto_id")
+  boletoNossoNumero   String?   @map("boleto_nosso_numero")
+  boletoPdfUrl        String?   @db.Text @map("boleto_pdf_url")
+  boletoLinhaDigitavel String?  @map("boleto_linha_digitavel")
+  boletoEmitidoEm     DateTime? @map("boleto_emitido_em")
+  boletoVencimento    DateTime? @map("boleto_vencimento")
+  boletoStatus        BoletoStatus? @map("boleto_status")
 
   observacao   String?
   criadoEm     DateTime @default(now()) @map("criado_em")

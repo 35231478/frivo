@@ -1,7 +1,7 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import { Bell, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer, Headset, ClipboardCheck, FileWarning, Wrench, Menu } from "lucide-react";
+import { Bell, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer, Headset, ClipboardCheck, FileWarning, Wrench, Menu, Barcode } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -17,6 +17,7 @@ interface Alertas {
   checklistsComAlertas: number;
   documentosVencendo: number;
   veiculosManutencao: number;
+  boletosPagos: number;
   total: number;
 }
 
@@ -173,6 +174,7 @@ export function Header({ session }: HeaderProps) {
                   <AlertaItem href="/veiculos" icone={AlertTriangle} cor="text-amber-600" label="Checklists com alertas" valor={alertas?.checklistsComAlertas ?? 0} onClick={() => setSinoAberto(false)} />
                   <AlertaItem href="/veiculos" icone={FileWarning} cor="text-orange-600" label="Documentos de veículo vencendo" valor={alertas?.documentosVencendo ?? 0} onClick={() => setSinoAberto(false)} />
                   <AlertaItem href="/veiculos" icone={Wrench} cor="text-violet-600" label="Veículos em manutenção" valor={alertas?.veiculosManutencao ?? 0} onClick={() => setSinoAberto(false)} />
+                  <AlertaItem href="/financeiro/contas-receber?status=RECEBIDO" icone={Barcode} cor="text-emerald-600" label="Boletos pagos hoje" valor={alertas?.boletosPagos ?? 0} onClick={() => setSinoAberto(false)} />
                 </div>
               )}
             </div>

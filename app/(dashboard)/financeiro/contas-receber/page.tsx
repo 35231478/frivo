@@ -7,8 +7,9 @@ import {
 } from "@/lib/utils";
 import { statusVisualReceber } from "@/lib/financeiro-status";
 import { AvatarCliente } from "@/components/ui/avatar-cliente";
-import { Receipt, AlertTriangle } from "lucide-react";
+import { Receipt, AlertTriangle, Barcode } from "lucide-react";
 import { ContaReceberAcoes } from "@/components/financeiro/conta-receber-acoes";
+import { SincronizarBoletos } from "@/components/financeiro/sincronizar-boletos";
 
 export const metadata: Metadata = { title: "Contas a Receber" };
 
@@ -45,7 +46,7 @@ export default async function ContasReceberPage({
     if (dataFim) { const f = new Date(dataFim); f.setHours(23, 59, 59, 999); where.dataVencimento.lte = f; }
   }
 
-  const [contas, clientes] = await Promise.all([
+  const [contas, clientes, integracao] = await Promise.all([
     prisma.contaReceber.findMany({
       where,
       include: {
@@ -60,7 +61,9 @@ export default async function ContasReceberPage({
       take: 200,
     }),
     prisma.cliente.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true, nomeFantasia: true }, orderBy: { nome: "asc" } }),
+    prisma.integracaoInter.findUnique({ where: { empresaId }, select: { ativo: true } }),
   ]);
+  const interAtivo = !!integracao?.ativo;
 
   // Totalizadores do conjunto filtrado
   let totalFiltrado = 0, totalVencido = 0, totalAVencer = 0, totalPago = 0;
@@ -78,9 +81,12 @@ export default async function ContasReceberPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="p-2 bg-primary-50 rounded-lg"><Receipt className="w-5 h-5 text-primary-600" /></div>
-        <h1 className="page-title">Contas a Receber</h1>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-primary-50 rounded-lg"><Receipt className="w-5 h-5 text-primary-600" /></div>
+          <h1 className="page-title">Contas a Receber</h1>
+        </div>
+        {interAtivo && <SincronizarBoletos />}
       </div>
 
       <div className="card overflow-hidden">
@@ -143,9 +149,12 @@ export default async function ContasReceberPage({
                       <td className="px-4 py-3 text-right font-bold text-success-700">{formatarMoeda(valor)}</td>
                       <td className="px-4 py-3 text-ink-muted hidden md:table-cell">{formatarData(c.dataVencimento)}</td>
                       <td className="px-4 py-3">
-                        <span className={cn("inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full", sv.classe)}>
-                          {sv.linhaVermelha && <AlertTriangle className="w-3 h-3" />}
-                          {sv.label}
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className={cn("inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full", sv.classe)}>
+                            {sv.linhaVermelha && <AlertTriangle className="w-3 h-3" />}
+                            {sv.label}
+                          </span>
+                          {c.boletoStatus === "EMITIDO" && <Barcode className="w-4 h-4 text-emerald-600" aria-label="Boleto emitido" />}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-ink-muted hidden lg:table-cell">{c.banco ?? "—"}</td>
@@ -154,6 +163,12 @@ export default async function ContasReceberPage({
                           id: c.id, numero: c.numero, descricao: c.descricao, valor,
                           dataVencimento: c.dataVencimento ? c.dataVencimento.toISOString() : null,
                           status: c.status, banco: c.banco, clienteNome: nome, whatsapp, email,
+                          interAtivo,
+                          boletoStatus: c.boletoStatus,
+                          boletoEmitidoEm: c.boletoEmitidoEm ? c.boletoEmitidoEm.toISOString() : null,
+                          boletoVencimento: c.boletoVencimento ? c.boletoVencimento.toISOString() : null,
+                          boletoLinhaDigitavel: c.boletoLinhaDigitavel,
+                          boletoCodigoBarras: c.boletoCodigoBarras,
                         }} />
                       </td>
                     </tr>
