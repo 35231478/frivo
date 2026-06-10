@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { emitirBoletoInter, cancelarBoletoInter, carregarConfigInter } from "@/lib/inter-api";
+import { enviarBoleto } from "@/lib/email";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -74,6 +75,8 @@ export async function POST(req: NextRequest, { params }: Params) {
       },
       select: { id: true, boletoId: true, boletoNossoNumero: true, boletoCodigoBarras: true, boletoLinhaDigitavel: true, boletoEmitidoEm: true, boletoVencimento: true },
     });
+    // Envia o boleto por e-mail, se configurado (a função verifica toggle + preferência do cliente)
+    await enviarBoleto(id).catch(() => {});
     return NextResponse.json(atualizada, { status: 201 });
   } catch (e: any) {
     return NextResponse.json({ erro: e?.message ?? "Erro ao emitir boleto." }, { status: 502 });

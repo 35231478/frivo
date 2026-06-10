@@ -12,7 +12,7 @@ import {
   HardHat, Settings, ChevronDown, ChevronRight,
   Wrench, FileSpreadsheet, Cog, Package, ListChecks, Calculator,
   Wallet, Receipt, TrendingUp, FileBarChart, Clock, ShoppingCart, Timer, Tags, CalendarDays, Headset, ScrollText, QrCode,
-  Truck, UsersRound, IdCard, ClipboardCheck, Smartphone, ShieldCheck, UserCog, Upload, Landmark,
+  Truck, UsersRound, IdCard, ClipboardCheck, Smartphone, ShieldCheck, UserCog, Upload, Landmark, Mail,
 } from "lucide-react";
 
 const itensMenu = [
@@ -62,6 +62,7 @@ const itensCadastros = [
   { href: "/configuracoes/qr-code",           icone: QrCode,           label: "QR Code" },
   { href: "/configuracoes/financeiro/categorias", icone: Tags,         label: "Categorias Financeiras" },
   { href: "/configuracoes/integracoes/inter", icone: Landmark,         label: "Banco Inter" },
+  { href: "/configuracoes/email",             icone: Mail,             label: "E-mail" },
 ];
 
 const ROLE_LABELS: Record<string, string> = {

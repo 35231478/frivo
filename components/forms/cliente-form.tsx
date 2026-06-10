@@ -98,6 +98,16 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
   const [tabelaPrecoId, setTabelaPrecoId] = useState<string>(initialData?.tabelaPrecoId ?? "");
   const [tabelas, setTabelas] = useState<{ id: string; nome: string; tipo: string }[]>([]);
   const [portalAtivo, setPortalAtivo] = useState<boolean>(initialData?.portalAtivo ?? false);
+  const [prefsEmail, setPrefsEmail] = useState({
+    emailReceberBoletos: initialData?.emailReceberBoletos ?? true,
+    emailReceberRelatorios: initialData?.emailReceberRelatorios ?? true,
+    emailReceberLembretes: initialData?.emailReceberLembretes ?? true,
+    emailReceberConfirmacoes: initialData?.emailReceberConfirmacoes ?? true,
+    emailReceberOrcamentos: initialData?.emailReceberOrcamentos ?? true,
+    emailReceberOs: initialData?.emailReceberOs ?? true,
+  });
+  const setPref = (k: string, v: boolean) => setPrefsEmail((p) => ({ ...p, [k]: v }));
+  const [emailsCopia, setEmailsCopia] = useState<string[]>(initialData?.emailsCopia ?? []);
 
   useEffect(() => {
     fetch("/api/tecnicos?tipo=RESPONSAVEL_TECNICO").then((r) => r.json()).then(setResponsaveis).catch(() => {});
@@ -195,6 +205,8 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
       whatsappFaturamento: whatsappFaturamento || null,
       tabelaPrecoId: tabelaPrecoId || null,
       portalAtivo,
+      ...prefsEmail,
+      emailsCopia,
     };
     if (!isEditing) {
       payload.unidades = unidadesNovas.map(({ _tempId, ...u }) => u);
@@ -448,6 +460,20 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
               <ToggleSwitch label="Boleto único mensal" description="Gera um único boleto consolidando toda a fatura do mês." checked={boletoUnicoMensal} onChange={setBoletoUnicoMensal} />
             </div>
           )}
+        </FormSection>
+
+        <FormSection title="Preferências de E-mail" icon={<Mail className="w-3.5 h-3.5" />}>
+          <div className="divide-y divide-gray-100">
+            <ToggleSwitch label="Receber boletos por e-mail" description="Envio automático de boletos emitidos" checked={prefsEmail.emailReceberBoletos} onChange={(v) => setPref("emailReceberBoletos", v)} />
+            <ToggleSwitch label="Receber relatórios/medições" description="Notifica quando o relatório está disponível" checked={prefsEmail.emailReceberRelatorios} onChange={(v) => setPref("emailReceberRelatorios", v)} />
+            <ToggleSwitch label="Receber lembretes de vencimento" description="Avisos de cobranças a vencer/vencidas" checked={prefsEmail.emailReceberLembretes} onChange={(v) => setPref("emailReceberLembretes", v)} />
+            <ToggleSwitch label="Receber confirmações de pagamento" description="Confirmação quando um pagamento é registrado" checked={prefsEmail.emailReceberConfirmacoes} onChange={(v) => setPref("emailReceberConfirmacoes", v)} />
+            <ToggleSwitch label="Receber lembretes de orçamentos" description="Lembretes de orçamentos enviados/vencendo" checked={prefsEmail.emailReceberOrcamentos} onChange={(v) => setPref("emailReceberOrcamentos", v)} />
+            <ToggleSwitch label="Receber atualizações de OS" description="Avisos de abertura/conclusão de ordens" checked={prefsEmail.emailReceberOs} onChange={(v) => setPref("emailReceberOs", v)} />
+          </div>
+          <FormField label="E-mails adicionais para cópia (CC)" hint="Recebem cópia de todos os e-mails enviados ao cliente">
+            <EmailsFaturamento emails={emailsCopia} onChange={setEmailsCopia} />
+          </FormField>
         </FormSection>
       </Painel>
 

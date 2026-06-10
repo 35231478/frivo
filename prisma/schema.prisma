@@ -407,9 +407,12 @@ model Empresa {
   perfisAcesso           PerfilAcesso[]
   contasPagar            ContaPagar[]
   categoriasFinanceiras  CategoriaFinanceira[]
+  emailTemplates         EmailTemplate[]
+  emailLogs              EmailLog[]
 
   configuracao    Configuracao?
   integracaoInter IntegracaoInter?
+  emailConfig     EmailConfig?
 
   @@map("empresas")
 }
@@ -484,6 +487,88 @@ model IntegracaoInter {
   empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
 
   @@map("integracoes_inter")
+}
+
+enum StatusEmailLog {
+  ENVIADO
+  ERRO
+  ENTREGUE
+}
+
+// Configuração de e-mail transacional (Resend) por empresa
+model EmailConfig {
+  id            String  @id @default(cuid())
+  empresaId     String  @unique @map("empresa_id")
+  ativo         Boolean @default(false)
+  apiKey        String? @db.Text @map("api_key") // criptografada
+  remetente     String?
+  nomeRemetente String? @map("nome_remetente")
+  replyTo       String? @map("reply_to")
+
+  // Notificações automáticas
+  notifBoletoEmitido       Boolean @default(false) @map("notif_boleto_emitido")
+  notifMedicaoGerada       Boolean @default(false) @map("notif_medicao_gerada")
+  notifLembreteVencimento  Boolean @default(false) @map("notif_lembrete_vencimento")
+  notifConfirmacaoPagamento Boolean @default(false) @map("notif_confirmacao_pagamento")
+  notifCobrancaVencida     Boolean @default(false) @map("notif_cobranca_vencida")
+  notifOsAberta            Boolean @default(false) @map("notif_os_aberta")
+  notifOsConcluida         Boolean @default(false) @map("notif_os_concluida")
+  notifOrcamentoEnviado    Boolean @default(false) @map("notif_orcamento_enviado")
+  notifContratoAssinatura  Boolean @default(false) @map("notif_contrato_assinatura")
+
+  // Lembretes de orçamento
+  lembreteOrcNaoRespondido Boolean @default(false) @map("lembrete_orc_nao_respondido")
+  lembreteOrcVencendo      Boolean @default(false) @map("lembrete_orc_vencendo")
+  lembreteOrcVencido       Boolean @default(false) @map("lembrete_orc_vencido")
+  lembreteOrcAprovadoSemOs Boolean @default(false) @map("lembrete_orc_aprovado_sem_os")
+  pararSeVisualizado       Boolean @default(true)  @map("parar_se_visualizado")
+
+  diasLembreteVencimento        Int @default(3) @map("dias_lembrete_vencimento")
+  diasLembreteOrcamento         Int @default(3) @map("dias_lembrete_orcamento")
+  diasLembreteOrcamentoVencendo Int @default(3) @map("dias_lembrete_orcamento_vencendo")
+  diasAposAprovacaoSemOs        Int @default(5) @map("dias_apos_aprovacao_sem_os")
+  maxLembretesOrcamento         Int @default(3) @map("max_lembretes_orcamento")
+
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@map("email_config")
+}
+
+model EmailTemplate {
+  id        String   @id @default(cuid())
+  empresaId String   @map("empresa_id")
+  tipo      String
+  nome      String
+  assunto   String
+  corpo     String   @db.Text
+  ativo     Boolean  @default(true)
+  criadoEm  DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@unique([empresaId, tipo])
+  @@map("email_templates")
+}
+
+model EmailLog {
+  id             String         @id @default(cuid())
+  empresaId      String         @map("empresa_id")
+  para           String
+  assunto        String
+  templateId     String?        @map("template_id")
+  referenciaId   String?        @map("referencia_id")
+  referenciaTipo String?        @map("referencia_tipo")
+  status         StatusEmailLog @default(ENVIADO)
+  erro           String?        @db.Text
+  enviadoEm      DateTime       @default(now()) @map("enviado_em")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@map("email_logs")
 }
 
 // ─────────────────────────────────────────────
@@ -644,6 +729,15 @@ model Cliente {
   boletoUnicoMensal   Boolean            @default(false) @map("boleto_unico_mensal")
   emailsFaturamento   String[]           @map("emails_faturamento")
   whatsappFaturamento String?            @map("whatsapp_faturamento")
+
+  // Preferências de e-mail
+  emailReceberBoletos      Boolean  @default(true) @map("email_receber_boletos")
+  emailReceberRelatorios   Boolean  @default(true) @map("email_receber_relatorios")
+  emailReceberLembretes    Boolean  @default(true) @map("email_receber_lembretes")
+  emailReceberConfirmacoes Boolean  @default(true) @map("email_receber_confirmacoes")
+  emailReceberOrcamentos   Boolean  @default(true) @map("email_receber_orcamentos")
+  emailReceberOs           Boolean  @default(true) @map("email_receber_os")
+  emailsCopia              String[] @map("emails_copia")
 
   tabelaPrecoId String? @map("tabela_preco_id")
 
@@ -1278,6 +1372,10 @@ model Orcamento {
 
   tokenPublico  String    @unique @map("token_publico")
   enviadoEm     DateTime? @map("enviado_em")
+  visualizadoEm DateTime? @map("visualizado_em")
+  lembreteEnviadoEm DateTime? @map("lembrete_enviado_em")
+  totalLembretes    Int     @default(0) @map("total_lembretes")
+  lembretesAtivos   Boolean @default(true) @map("lembretes_ativos")
   assinadoEm    DateTime? @map("assinado_em")
   assinadoPor   String?   @map("assinado_por")
   assinadoCpf   String?   @map("assinado_cpf")

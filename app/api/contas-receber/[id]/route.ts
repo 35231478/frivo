@@ -50,5 +50,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
     });
   }
 
+  // Confirmação de pagamento por e-mail (a função verifica toggle + preferência do cliente)
+  if (d.status === "RECEBIDO" && existente.status !== "RECEBIDO") {
+    const { enviarConfirmacaoPagamento } = await import("@/lib/email");
+    await enviarConfirmacaoPagamento(id).catch(() => {});
+  }
+
   return NextResponse.json(atualizada);
 }

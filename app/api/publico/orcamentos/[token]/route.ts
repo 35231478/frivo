@@ -30,5 +30,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     return NextResponse.json({ erro: "Orçamento cancelado" }, { status: 410 });
   }
 
+  // Registra a primeira visualização do cliente (usado para parar lembretes)
+  if (!orcamento.visualizadoEm) {
+    await prisma.orcamento.update({ where: { id: orcamento.id }, data: { visualizadoEm: new Date() } });
+  }
+
   return NextResponse.json(orcamento);
 }

@@ -130,6 +130,14 @@ export const clienteSchema = z.object({
   boletoUnicoMensal: z.boolean().default(false),
   emailsFaturamento: z.array(z.string()).default([]),
   whatsappFaturamento: z.string().optional().nullable(),
+  // Preferências de e-mail
+  emailReceberBoletos: z.boolean().default(true),
+  emailReceberRelatorios: z.boolean().default(true),
+  emailReceberLembretes: z.boolean().default(true),
+  emailReceberConfirmacoes: z.boolean().default(true),
+  emailReceberOrcamentos: z.boolean().default(true),
+  emailReceberOs: z.boolean().default(true),
+  emailsCopia: z.array(z.string()).default([]),
   tabelaPrecoId: z.preprocess(
     (v) => (v === "" || v == null ? null : v),
     z.string().nullable()

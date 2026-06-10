@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { buildPublicUrl, buildMailtoLink } from "@/lib/orcamento-helpers";
 import { whatsappLink } from "@/lib/utils";
+import { enviarOrcamento } from "@/lib/email";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -31,6 +32,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     },
   });
 
+  // Envio automático por e-mail (Resend), se configurado e habilitado
+  const cfgEmail = await prisma.emailConfig.findUnique({ where: { empresaId } });
+  let emailEnviado = false;
+  if (cfgEmail?.ativo && cfgEmail.notifOrcamentoEnviado) {
+    const r = await enviarOrcamento(id).catch(() => ({ ok: false }));
+    emailEnviado = r.ok;
+  }
+
   const origem = new URL(req.url).origin;
   const publicUrl = buildPublicUrl(orcamento.tokenPublico, origem);
   const emailDest = orcamento.cliente.email ?? "";
@@ -42,5 +51,5 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     `Você pode aprová-lo digitalmente pelo link acima.`;
   const whatsappUrl = telefone ? whatsappLink(telefone, msgWhats) : null;
 
-  return NextResponse.json({ orcamento: atualizado, publicUrl, mailtoUrl, whatsappUrl });
+  return NextResponse.json({ orcamento: atualizado, publicUrl, mailtoUrl, whatsappUrl, emailEnviado });
 }
