@@ -15,7 +15,7 @@ export const authConfig = {
   },
   providers: [], // adicionados em lib/auth.ts (runtime Node)
   callbacks: {
-    jwt({ token, user }) {
+    jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id;
         token.empresaId = (user as any).empresaId;
@@ -23,7 +23,12 @@ export const authConfig = {
         token.role = (user as any).role;
         token.permissoes = (user as any).permissoes;
         token.perfilNome = (user as any).perfilNome;
-        token.picture = (user as any).image ?? null;
+      }
+      // Atualização disparada por update() no client (perfil: nome/e-mail).
+      // O avatar NÃO trafega no JWT (base64 estouraria o cookie) — vem do banco.
+      if (trigger === "update" && session) {
+        if (typeof (session as any).name === "string") token.name = (session as any).name;
+        if (typeof (session as any).email === "string") token.email = (session as any).email;
       }
       return token;
     },
@@ -34,7 +39,6 @@ export const authConfig = {
       (session.user as any).role = token.role;
       (session.user as any).permissoes = token.permissoes ?? {};
       (session.user as any).perfilNome = token.perfilNome ?? null;
-      session.user.image = (token.picture as string | null) ?? null;
       return session;
     },
   },

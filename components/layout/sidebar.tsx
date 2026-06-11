@@ -145,9 +145,10 @@ const SECOES: Secao[] = [
 interface SidebarProps {
   session: Session;
   variant?: "desktop" | "mobile";
+  avatarUrl?: string | null;
 }
 
-export function Sidebar({ session, variant = "desktop" }: SidebarProps) {
+export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProps) {
   const pathname = usePathname();
   const usuario = session.user;
 
@@ -239,7 +240,7 @@ export function Sidebar({ session, variant = "desktop" }: SidebarProps) {
           onClick={() => setMenuAberto((v) => !v)}
           className={cn("flex items-center w-full rounded-lg p-2 hover:bg-white/5 transition-colors", colapsada ? "justify-center" : "gap-3")}
         >
-          <Avatar image={usuario.image} name={usuario.name} />
+          <Avatar image={avatarUrl ?? usuario.image} name={usuario.name} />
           {!colapsada && (<>
             <span className="flex-1 min-w-0 text-left">
               <span className="block text-sm font-medium text-white truncate">{usuario.name ?? "Usuário"}</span>

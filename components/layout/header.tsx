@@ -23,6 +23,7 @@ interface Alertas {
 
 interface HeaderProps {
   session: Session;
+  avatarUrl?: string | null;
 }
 
 const ROTULOS_ROTA: Record<string, string> = {
@@ -66,7 +67,7 @@ function gerarBreadcrumb(pathname: string) {
   return itens;
 }
 
-export function Header({ session }: HeaderProps) {
+export function Header({ session, avatarUrl }: HeaderProps) {
   const usuario = session.user;
   const pathname = usePathname();
   const breadcrumb = useMemo(() => gerarBreadcrumb(pathname), [pathname]);
@@ -192,9 +193,14 @@ export function Header({ session }: HeaderProps) {
             <p className="text-sm font-semibold text-ink leading-tight">{usuario.name}</p>
             <p className="text-xs text-ink-muted leading-tight">{usuario.email}</p>
           </div>
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary-500 to-success-500 flex items-center justify-center text-white text-xs font-bold shadow-sm">
-            {iniciais}
-          </div>
+          {avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={avatarUrl} alt={usuario.name ?? "Usuário"} className="w-9 h-9 rounded-full object-cover shadow-sm" />
+          ) : (
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary-500 to-success-500 flex items-center justify-center text-white text-xs font-bold shadow-sm">
+              {iniciais}
+            </div>
+          )}
           <button
             onClick={() => signOut({ callbackUrl: "/login" })}
             className="text-ink-muted hover:text-red-500 hover:bg-red-50 transition-colors p-2 rounded-lg"

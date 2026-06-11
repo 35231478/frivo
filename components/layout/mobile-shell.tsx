@@ -11,7 +11,7 @@ import { Sidebar } from "./sidebar";
  * - swipe a partir da borda esquerda da tela (abre) e swipe para a esquerda (fecha)
  * - toque no overlay ou em qualquer link do menu
  */
-export function MobileShell({ session }: { session: Session }) {
+export function MobileShell({ session, avatarUrl }: { session: Session; avatarUrl?: string | null }) {
   const [aberto, setAberto] = useState(false);
   const toqueInicio = useRef<{ x: number; y: number } | null>(null);
 
@@ -79,7 +79,7 @@ export function MobileShell({ session }: { session: Session }) {
           aberto ? "translate-x-0" : "-translate-x-full",
         )}
       >
-        <Sidebar session={session} variant="mobile" />
+        <Sidebar session={session} variant="mobile" avatarUrl={avatarUrl} />
       </div>
     </div>
   );
