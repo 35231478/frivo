@@ -242,7 +242,7 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
       </div>
 
       {/* ========== CONFIGURAÇÕES AVANÇADAS ========== */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-8">
+      <div id="preferencias" className="bg-white rounded-xl border border-gray-200 p-6 space-y-8 scroll-mt-20">
         <div className="flex items-center gap-2">
           <SlidersHorizontal className="w-5 h-5 text-frivo-600" />
           <h2 className="text-lg font-semibold text-gray-900">Configurações Avançadas</h2>
