@@ -23,6 +23,7 @@ export const authConfig = {
         token.role = (user as any).role;
         token.permissoes = (user as any).permissoes;
         token.perfilNome = (user as any).perfilNome;
+        token.picture = (user as any).image ?? null;
       }
       return token;
     },
@@ -33,6 +34,7 @@ export const authConfig = {
       (session.user as any).role = token.role;
       (session.user as any).permissoes = token.permissoes ?? {};
       (session.user as any).perfilNome = token.perfilNome ?? null;
+      session.user.image = (token.picture as string | null) ?? null;
       return session;
     },
   },
