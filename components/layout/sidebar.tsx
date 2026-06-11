@@ -52,6 +52,7 @@ const itensCadastros = [
   { href: "/configuracoes/checklists-veiculo", icone: ClipboardCheck,  label: "Checklists de Veículo" },
   { href: "/configuracoes/tipos-os",          icone: ListChecks,       label: "Tipos de OS" },
   { href: "/configuracoes/formularios",       icone: FileSpreadsheet,  label: "Formulários" },
+  { href: "/configuracoes/formularios-por-tipo", icone: FileSpreadsheet, label: "Formulários por Tipo" },
   { href: "/configuracoes/tipos-equipamento", icone: Thermometer,      label: "Tipos de Equipamento" },
   { href: "/configuracoes/servicos",          icone: Wrench,           label: "Serviços" },
   { href: "/configuracoes/produtos",          icone: Package,          label: "Produtos" },

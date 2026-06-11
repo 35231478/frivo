@@ -409,6 +409,7 @@ model Empresa {
   categoriasFinanceiras  CategoriaFinanceira[]
   emailTemplates         EmailTemplate[]
   emailLogs              EmailLog[]
+  formTypeMappings       FormTypeMapping[]
 
   configuracao    Configuracao?
   integracaoInter IntegracaoInter?
@@ -475,10 +476,10 @@ model IntegracaoInter {
   ativo         Boolean       @default(false)
   ambiente      AmbienteInter @default(SANDBOX)
   clientId      String?       @map("client_id")
-  clientSecret  String?       @db.Text @map("client_secret") // criptografado
+  clientSecret  String?       @map("client_secret") @db.Text // criptografado
   contaCorrente String?       @map("conta_corrente")
   certificado   String?       @db.Text // PEM criptografado
-  chavePrivada  String?       @db.Text @map("chave_privada") // PEM criptografado
+  chavePrivada  String?       @map("chave_privada") @db.Text // PEM criptografado
   webhookSecret String?       @map("webhook_secret")
   pixChave      String?       @map("pix_chave")
   criadoEm      DateTime      @default(now()) @map("criado_em")
@@ -500,28 +501,28 @@ model EmailConfig {
   id            String  @id @default(cuid())
   empresaId     String  @unique @map("empresa_id")
   ativo         Boolean @default(false)
-  apiKey        String? @db.Text @map("api_key") // criptografada
+  apiKey        String? @map("api_key") @db.Text // criptografada
   remetente     String?
   nomeRemetente String? @map("nome_remetente")
   replyTo       String? @map("reply_to")
 
   // Notificações automáticas
-  notifBoletoEmitido       Boolean @default(false) @map("notif_boleto_emitido")
-  notifMedicaoGerada       Boolean @default(false) @map("notif_medicao_gerada")
-  notifLembreteVencimento  Boolean @default(false) @map("notif_lembrete_vencimento")
+  notifBoletoEmitido        Boolean @default(false) @map("notif_boleto_emitido")
+  notifMedicaoGerada        Boolean @default(false) @map("notif_medicao_gerada")
+  notifLembreteVencimento   Boolean @default(false) @map("notif_lembrete_vencimento")
   notifConfirmacaoPagamento Boolean @default(false) @map("notif_confirmacao_pagamento")
-  notifCobrancaVencida     Boolean @default(false) @map("notif_cobranca_vencida")
-  notifOsAberta            Boolean @default(false) @map("notif_os_aberta")
-  notifOsConcluida         Boolean @default(false) @map("notif_os_concluida")
-  notifOrcamentoEnviado    Boolean @default(false) @map("notif_orcamento_enviado")
-  notifContratoAssinatura  Boolean @default(false) @map("notif_contrato_assinatura")
+  notifCobrancaVencida      Boolean @default(false) @map("notif_cobranca_vencida")
+  notifOsAberta             Boolean @default(false) @map("notif_os_aberta")
+  notifOsConcluida          Boolean @default(false) @map("notif_os_concluida")
+  notifOrcamentoEnviado     Boolean @default(false) @map("notif_orcamento_enviado")
+  notifContratoAssinatura   Boolean @default(false) @map("notif_contrato_assinatura")
 
   // Lembretes de orçamento
   lembreteOrcNaoRespondido Boolean @default(false) @map("lembrete_orc_nao_respondido")
   lembreteOrcVencendo      Boolean @default(false) @map("lembrete_orc_vencendo")
   lembreteOrcVencido       Boolean @default(false) @map("lembrete_orc_vencido")
   lembreteOrcAprovadoSemOs Boolean @default(false) @map("lembrete_orc_aprovado_sem_os")
-  pararSeVisualizado       Boolean @default(true)  @map("parar_se_visualizado")
+  pararSeVisualizado       Boolean @default(true) @map("parar_se_visualizado")
 
   diasLembreteVencimento        Int @default(3) @map("dias_lembrete_vencimento")
   diasLembreteOrcamento         Int @default(3) @map("dias_lembrete_orcamento")
@@ -538,14 +539,14 @@ model EmailConfig {
 }
 
 model EmailTemplate {
-  id        String   @id @default(cuid())
-  empresaId String   @map("empresa_id")
-  tipo      String
-  nome      String
-  assunto   String
-  corpo     String   @db.Text
-  ativo     Boolean  @default(true)
-  criadoEm  DateTime @default(now()) @map("criado_em")
+  id           String   @id @default(cuid())
+  empresaId    String   @map("empresa_id")
+  tipo         String
+  nome         String
+  assunto      String
+  corpo        String   @db.Text
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
   empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
@@ -667,20 +668,22 @@ model Tecnico {
   criadoEm          DateTime  @default(now()) @map("criado_em")
   atualizadoEm      DateTime  @updatedAt @map("atualizado_em")
 
-  empresa               Empresa                @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  cargo                 Cargo?                 @relation(fields: [cargoId], references: [id])
-  perfilAcesso          PerfilAcesso?          @relation(fields: [perfilAcessoId], references: [id])
+  empresa               Empresa                         @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  cargo                 Cargo?                          @relation(fields: [cargoId], references: [id])
+  perfilAcesso          PerfilAcesso?                   @relation(fields: [perfilAcessoId], references: [id])
   clientesResponsavel   Cliente[]
   contratosResponsavel  Contrato[]
   atividadesOs          AtividadeOs[]
-  contratosRecorrencia  Contrato[]             @relation("ContratoTecnicoRecorrencia")
-  orcamentosResponsavel Orcamento[]            @relation("OrcamentoResponsavelTecnico")
-  competencias          TipoOs[]               @relation("ColaboradorCompetencias")
+  contratosRecorrencia  Contrato[]                      @relation("ContratoTecnicoRecorrencia")
+  orcamentosResponsavel Orcamento[]                     @relation("OrcamentoResponsavelTecnico")
+  competencias          TipoOs[]                        @relation("ColaboradorCompetencias")
   documentos            ColaboradorDocumento[]
-  equipesLideradas      Equipe[]               @relation("EquipeLider")
-  equipesMembro         Equipe[]               @relation("EquipeMembros")
-  veiculosResponsavel   Veiculo[]              @relation("VeiculoResponsavel")
+  equipesLideradas      Equipe[]                        @relation("EquipeLider")
+  equipesMembro         Equipe[]                        @relation("EquipeMembros")
+  veiculosResponsavel   Veiculo[]                       @relation("VeiculoResponsavel")
   checklistsPreenchidos ChecklistPreenchido[]
+  equipamentosMarcados  AtividadeEquipamento[]
+  respostasEquipamento  RespostaFormularioEquipamento[]
 
   @@unique([cpf, empresaId])
   @@map("tecnicos")
@@ -874,7 +877,9 @@ model Equipamento {
   id                  String          @id @default(cuid())
   empresaId           String          @map("empresa_id")
   unidadeId           String          @map("unidade_id")
+  // tipo (enum) mantido em sincronia p/ telas legadas; tipoEquipamentoId é o canônico
   tipo                TipoEquipamento
+  tipoEquipamentoId   String?         @map("tipo_equipamento_id")
   marca               String
   modelo              String
   numeroSerie         String?         @map("numero_serie")
@@ -898,10 +903,13 @@ model Equipamento {
   criadoEm            DateTime        @default(now()) @map("criado_em")
   atualizadoEm        DateTime        @updatedAt @map("atualizado_em")
 
-  empresa       Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  unidade       Unidade        @relation(fields: [unidadeId], references: [id])
-  ordensServico OrdemServico[]
-  qrcode        Qrcode?
+  empresa             Empresa                         @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  unidade             Unidade                         @relation(fields: [unidadeId], references: [id])
+  tipoEquipamento     TipoEquipamentoCustom?          @relation(fields: [tipoEquipamentoId], references: [id])
+  ordensServico       OrdemServico[]
+  qrcode              Qrcode?
+  atividades          AtividadeEquipamento[]
+  respostasFormulario RespostaFormularioEquipamento[]
 
   @@map("equipamentos")
 }
@@ -1000,10 +1008,15 @@ model TipoEquipamentoCustom {
   empresaId String   @map("empresa_id")
   nome      String
   descricao String?
+  // Chave estável p/ ancorar tipos padrão ao antigo enum TipoEquipamento
+  // (mantém compatibilidade com telas legadas e a coluna Equipamento.tipo).
+  chaveEnum String?  @map("chave_enum")
   ativo     Boolean  @default(true)
   criadoEm  DateTime @default(now()) @map("criado_em")
 
-  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  empresa          Empresa           @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  equipamentos     Equipamento[]
+  formTypeMappings FormTypeMapping[]
 
   @@map("tipos_equipamento_custom")
 }
@@ -1081,6 +1094,7 @@ model TipoOs {
   empresa                  Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   formularios              FormularioTemplate[]
   atividades               AtividadeOs[]
+  formTypeMappings         FormTypeMapping[]
   contratosRecorrencia     Contrato[]           @relation("ContratoTipoOsRecorrencia")
   colaboradoresCompetentes Tecnico[]            @relation("ColaboradorCompetencias")
 
@@ -1100,10 +1114,12 @@ model FormularioTemplate {
   ativo     Boolean  @default(true)
   criadoEm  DateTime @default(now()) @map("criado_em")
 
-  empresa   Empresa             @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  tipoOs    TipoOs?             @relation(fields: [tipoOsId], references: [id])
-  campos    FormularioCampo[]
-  respostas AtividadeResposta[]
+  empresa              Empresa                         @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  tipoOs               TipoOs?                         @relation(fields: [tipoOsId], references: [id])
+  campos               FormularioCampo[]
+  respostas            AtividadeResposta[]
+  formTypeMappings     FormTypeMapping[]
+  respostasEquipamento RespostaFormularioEquipamento[]
 
   @@map("formulario_templates")
 }
@@ -1128,8 +1144,9 @@ model FormularioCampo {
   ordem        Int       @default(0)
   opcoes       Json?
 
-  formulario FormularioTemplate  @relation(fields: [formularioId], references: [id], onDelete: Cascade)
-  respostas  AtividadeResposta[]
+  formulario           FormularioTemplate              @relation(fields: [formularioId], references: [id], onDelete: Cascade)
+  respostas            AtividadeResposta[]
+  respostasEquipamento RespostaFormularioEquipamento[]
 
   @@map("formulario_campos")
 }
@@ -1211,11 +1228,13 @@ model AtividadeOs {
   criadoEm       DateTime        @default(now()) @map("criado_em")
   atualizadoEm   DateTime        @updatedAt @map("atualizado_em")
 
-  ordemServico OrdemServico        @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
-  tipoOs       TipoOs?             @relation(fields: [tipoOsId], references: [id])
-  tecnico      Tecnico?            @relation(fields: [tecnicoId], references: [id])
-  respostas    AtividadeResposta[]
-  relatorios   RelatorioOs[]
+  ordemServico         OrdemServico                    @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  tipoOs               TipoOs?                         @relation(fields: [tipoOsId], references: [id])
+  tecnico              Tecnico?                        @relation(fields: [tecnicoId], references: [id])
+  respostas            AtividadeResposta[]
+  relatorios           RelatorioOs[]
+  equipamentos         AtividadeEquipamento[]
+  respostasEquipamento RespostaFormularioEquipamento[]
 
   @@map("atividades_os")
 }
@@ -1234,6 +1253,80 @@ model AtividadeResposta {
 
   @@unique([atividadeId, campoId])
   @@map("atividade_respostas")
+}
+
+// ─────────────────────────────────────────────
+// FORMULÁRIO POR TIPO (Tipo de Equipamento + Tipo de OS → Formulário)
+// Uma combinação (tipoEquipamento + tipoOs) aponta para um único formulário.
+// ─────────────────────────────────────────────
+
+model FormTypeMapping {
+  id                   String   @id @default(cuid())
+  empresaId            String   @map("empresa_id")
+  tipoEquipamentoId    String   @map("tipo_equipamento_id")
+  tipoOsId             String   @map("tipo_os_id")
+  formularioTemplateId String   @map("formulario_template_id")
+  criadoEm             DateTime @default(now()) @map("criado_em")
+  atualizadoEm         DateTime @updatedAt @map("atualizado_em")
+
+  empresa            Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  tipoEquipamento    TipoEquipamentoCustom @relation(fields: [tipoEquipamentoId], references: [id], onDelete: Cascade)
+  tipoOs             TipoOs                @relation(fields: [tipoOsId], references: [id], onDelete: Cascade)
+  formularioTemplate FormularioTemplate    @relation(fields: [formularioTemplateId], references: [id], onDelete: Cascade)
+
+  @@unique([tipoEquipamentoId, tipoOsId])
+  @@index([empresaId])
+  @@map("form_type_mappings")
+}
+
+// ─────────────────────────────────────────────
+// EQUIPAMENTOS DA ATIVIDADE (marcação feito/não-feito via QR)
+// ─────────────────────────────────────────────
+
+model AtividadeEquipamento {
+  id            String    @id @default(cuid())
+  atividadeId   String    @map("atividade_id")
+  equipamentoId String    @map("equipamento_id")
+  feito         Boolean   @default(false)
+  feitoEm       DateTime? @map("feito_em")
+  feitoPorId    String?   @map("feito_por_id")
+  criadoEm      DateTime  @default(now()) @map("criado_em")
+
+  atividade   AtividadeOs @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+  equipamento Equipamento @relation(fields: [equipamentoId], references: [id], onDelete: Cascade)
+  feitoPor    Tecnico?    @relation(fields: [feitoPorId], references: [id])
+
+  @@unique([atividadeId, equipamentoId])
+  @@index([equipamentoId])
+  @@map("atividade_equipamentos")
+}
+
+// ─────────────────────────────────────────────
+// RESPOSTAS DE FORMULÁRIO POR EQUIPAMENTO
+// Respostas preenchidas em massa por grupo, mas persistidas por equipamento.
+// ─────────────────────────────────────────────
+
+model RespostaFormularioEquipamento {
+  id              String   @id @default(cuid())
+  empresaId       String   @map("empresa_id")
+  atividadeId     String   @map("atividade_id")
+  equipamentoId   String   @map("equipamento_id")
+  formularioId    String   @map("formulario_id")
+  campoId         String   @map("campo_id")
+  resposta        String?  @db.Text
+  arquivoUrl      String?  @db.Text
+  respondidoPorId String?  @map("respondido_por_id")
+  respondidoEm    DateTime @default(now()) @map("respondido_em")
+
+  atividade     AtividadeOs        @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+  equipamento   Equipamento        @relation(fields: [equipamentoId], references: [id], onDelete: Cascade)
+  formulario    FormularioTemplate @relation(fields: [formularioId], references: [id])
+  campo         FormularioCampo    @relation(fields: [campoId], references: [id])
+  respondidoPor Tecnico?           @relation(fields: [respondidoPorId], references: [id])
+
+  @@unique([atividadeId, equipamentoId, campoId])
+  @@index([equipamentoId])
+  @@map("respostas_formulario_equipamento")
 }
 
 // ─────────────────────────────────────────────
@@ -1370,16 +1463,16 @@ model Orcamento {
   tipoDesconto  TipoDesconto @default(VALOR) @map("tipo_desconto")
   totalGeral    Decimal      @default(0) @map("total_geral") @db.Decimal(12, 2)
 
-  tokenPublico  String    @unique @map("token_publico")
-  enviadoEm     DateTime? @map("enviado_em")
-  visualizadoEm DateTime? @map("visualizado_em")
+  tokenPublico      String    @unique @map("token_publico")
+  enviadoEm         DateTime? @map("enviado_em")
+  visualizadoEm     DateTime? @map("visualizado_em")
   lembreteEnviadoEm DateTime? @map("lembrete_enviado_em")
-  totalLembretes    Int     @default(0) @map("total_lembretes")
-  lembretesAtivos   Boolean @default(true) @map("lembretes_ativos")
-  assinadoEm    DateTime? @map("assinado_em")
-  assinadoPor   String?   @map("assinado_por")
-  assinadoCpf   String?   @map("assinado_cpf")
-  assinaturaUrl String?   @db.Text
+  totalLembretes    Int       @default(0) @map("total_lembretes")
+  lembretesAtivos   Boolean   @default(true) @map("lembretes_ativos")
+  assinadoEm        DateTime? @map("assinado_em")
+  assinadoPor       String?   @map("assinado_por")
+  assinadoCpf       String?   @map("assinado_cpf")
+  assinaturaUrl     String?   @db.Text
 
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
@@ -1570,18 +1663,18 @@ model ContaReceber {
   dataRecebimento DateTime?       @map("data_recebimento")
   formaPagamento  FormaPagamento? @map("forma_pagamento")
 
-  banco               String?
-  clienteCnpj         String?   @map("cliente_cnpj")
-  notificacaoEnviadaEm DateTime? @map("notificacao_enviada_em")
-  boletoUrl           String?   @db.Text @map("boleto_url")
-  boletoCodigoBarras  String?   @map("boleto_codigo_barras")
-  boletoId            String?   @map("boleto_id")
-  boletoNossoNumero   String?   @map("boleto_nosso_numero")
-  boletoPdfUrl        String?   @db.Text @map("boleto_pdf_url")
-  boletoLinhaDigitavel String?  @map("boleto_linha_digitavel")
-  boletoEmitidoEm     DateTime? @map("boleto_emitido_em")
-  boletoVencimento    DateTime? @map("boleto_vencimento")
-  boletoStatus        BoletoStatus? @map("boleto_status")
+  banco                String?
+  clienteCnpj          String?       @map("cliente_cnpj")
+  notificacaoEnviadaEm DateTime?     @map("notificacao_enviada_em")
+  boletoUrl            String?       @map("boleto_url") @db.Text
+  boletoCodigoBarras   String?       @map("boleto_codigo_barras")
+  boletoId             String?       @map("boleto_id")
+  boletoNossoNumero    String?       @map("boleto_nosso_numero")
+  boletoPdfUrl         String?       @map("boleto_pdf_url") @db.Text
+  boletoLinhaDigitavel String?       @map("boleto_linha_digitavel")
+  boletoEmitidoEm      DateTime?     @map("boleto_emitido_em")
+  boletoVencimento     DateTime?     @map("boleto_vencimento")
+  boletoStatus         BoletoStatus? @map("boleto_status")
 
   categoria    String?
   observacao   String?
@@ -1629,8 +1722,8 @@ model ContaPagar {
   criadoEm       DateTime         @default(now()) @map("criado_em")
   atualizadoEm   DateTime         @updatedAt @map("atualizado_em")
 
-  empresa      Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  pedidoCompra PedidoCompraInterno? @relation(fields: [pedidoCompraId], references: [id])
+  empresa      Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  pedidoCompra PedidoCompraInterno?  @relation(fields: [pedidoCompraId], references: [id])
   pagamentos   PagamentoContaPagar[]
 
   @@unique([numero, empresaId])

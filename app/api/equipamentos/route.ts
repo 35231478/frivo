@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { equipamentoSchema } from "@/lib/validations";
+import { resolverTipoEquipamentoId } from "@/lib/tipo-equipamento";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -54,10 +55,12 @@ export async function POST(req: NextRequest) {
   if (!unidade) return NextResponse.json({ erro: "Unidade não encontrada" }, { status: 404 });
 
   const { dataInstalacao, dataFabricacao, garantiaAte, ...resto } = parsed.data;
+  const tipoEquipamentoId = await resolverTipoEquipamentoId(empresaId, resto.tipo);
   const equipamento = await prisma.equipamento.create({
     data: {
       ...resto,
       empresaId,
+      tipoEquipamentoId,
       dataInstalacao: dataInstalacao ? new Date(dataInstalacao) : null,
       dataFabricacao: dataFabricacao ? new Date(dataFabricacao) : null,
       garantiaAte: garantiaAte ? new Date(garantiaAte) : null,

@@ -1,18 +1,20 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid } from "@/components/ui/form-field";
 import { cn, formatarDataHora } from "@/lib/utils";
-import { Plus, X, Check, ChevronDown, ChevronRight, Wrench, User } from "lucide-react";
+import { AtividadeEquipamentos } from "@/components/os/atividade-equipamentos";
+import { Plus, X, Check, ChevronDown, ChevronRight, Wrench, User, Smartphone } from "lucide-react";
 
 const STATUS_LABELS: Record<string, string> = { AGENDADA: "Agendada", EM_ANDAMENTO: "Em Andamento", CONCLUIDA: "Concluída", CANCELADA: "Cancelada" };
 const STATUS_COR: Record<string, string> = { AGENDADA: "bg-purple-100 text-purple-700", EM_ANDAMENTO: "bg-yellow-100 text-yellow-700", CONCLUIDA: "bg-green-100 text-green-700", CANCELADA: "bg-red-100 text-red-700" };
 
-export function OsAtividades({ osId, atividades: iniciais }: { osId: string; atividades: any[] }) {
+export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId }: { osId: string; atividades: any[]; clienteId?: string; unidadeId?: string | null }) {
   const [atividades, setAtividades] = useState(iniciais);
   const [expandido, setExpandido] = useState<Set<string>>(new Set());
   const [mostraForm, setMostraForm] = useState(false);
@@ -96,10 +98,24 @@ export function OsAtividades({ osId, atividades: iniciais }: { osId: string; ati
                     <pre className="text-sm text-gray-700 whitespace-pre-wrap bg-white rounded-lg p-3 border border-gray-100 font-sans">{a.resumo}</pre>
                   </div>
                 )}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between gap-2">
                   <Select value={a.status} onChange={(e) => alterarStatusAtividade(a.id, e.target.value)} className="text-xs w-auto h-7">
                     {Object.entries(STATUS_LABELS).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
                   </Select>
+                  <Link href={`/ordens/${osId}/atividades/${a.id}/executar`}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-frivo-600 hover:text-frivo-700 bg-frivo-50 hover:bg-frivo-100 px-2.5 py-1.5 rounded-lg">
+                    <Smartphone className="w-3.5 h-3.5" /> Executar
+                  </Link>
+                </div>
+
+                <div className="border-t border-gray-100 pt-3">
+                  <AtividadeEquipamentos
+                    osId={osId}
+                    atividadeId={a.id}
+                    clienteId={clienteId}
+                    unidadeId={unidadeId}
+                    temTipoOs={Boolean(a.tipoOs?.id ?? a.tipoOsId)}
+                  />
                 </div>
               </div>
             )}

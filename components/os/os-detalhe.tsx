@@ -120,7 +120,7 @@ export function OsDetalhe({ os: initialOs }: { os: any }) {
           {(activeTab) => (
             <div className="p-5">
               {activeTab === "geral" && <TabGeral os={os} />}
-              {activeTab === "atividades" && <OsAtividades osId={os.id} atividades={os.atividades} />}
+              {activeTab === "atividades" && <OsAtividades osId={os.id} atividades={os.atividades} clienteId={os.cliente.id} unidadeId={os.unidadeId} />}
               {activeTab === "orcamentos" && (
                 <OsOrcamentosVinculados
                   osId={os.id}
