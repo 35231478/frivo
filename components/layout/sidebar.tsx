@@ -221,10 +221,7 @@ export function Sidebar({ session, variant = "desktop" }: SidebarProps) {
       {/* Navegação principal */}
       <nav className="flex-1 px-3 py-4 overflow-y-auto">
         {secoesVisiveis.map((sec, idx) => (
-          <div key={sec.titulo} className={cn(idx > 0 && "mt-5")}>
-            <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-              {sec.titulo}
-            </p>
+          <div key={sec.titulo} className={cn(idx > 0 && "mt-4 pt-4 border-t border-white/5")}>
             <div className="space-y-1">
               {sec.entries.map((e) =>
                 ehGrupo(e) ? (
