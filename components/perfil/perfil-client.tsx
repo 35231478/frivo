@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { FormField } from "@/components/ui/form-field";
+import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { cn } from "@/lib/utils";
-import { Camera, Check, AlertCircle, User, Lock, Building2 } from "lucide-react";
+import { User, Camera, Lock, Building2, ShieldCheck, FileCheck, AlertCircle, Briefcase } from "lucide-react";
 
 interface Initial {
   nome: string;
@@ -18,7 +18,10 @@ interface Initial {
   cargo: string;
 }
 
-type Msg = { tipo: "ok" | "erro"; texto: string } | null;
+// Painel de aba (oculto via CSS quando inativo, p/ preservar estado dos campos)
+function Painel({ ativo, children }: { ativo: boolean; children: React.ReactNode }) {
+  return <div className={cn("space-y-8", !ativo && "hidden")}>{children}</div>;
+}
 
 // Redimensiona a imagem p/ no máx 256px e exporta JPEG leve (data URL)
 function redimensionar(file: File): Promise<string> {
@@ -46,28 +49,26 @@ function redimensionar(file: File): Promise<string> {
   });
 }
 
-function Feedback({ msg }: { msg: Msg }) {
-  if (!msg) return null;
-  return (
-    <div className={cn("flex items-center gap-2 text-sm rounded-lg px-3 py-2 border",
-      msg.tipo === "ok" ? "bg-green-50 border-green-200 text-green-700" : "bg-red-50 border-red-200 text-red-700")}>
-      {msg.tipo === "ok" ? <Check className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />} {msg.texto}
-    </div>
-  );
-}
-
-const cardCls = "bg-white rounded-xl border border-gray-200 p-5 sm:p-6 space-y-4";
-const tituloCls = "flex items-center gap-2 text-base font-semibold text-gray-900";
+const ABAS = [
+  { id: "dados", label: "Dados Pessoais", icone: User },
+  { id: "foto", label: "Foto de Perfil", icone: Camera },
+  { id: "seguranca", label: "Segurança", icone: Lock },
+  { id: "conta", label: "Minha Conta", icone: Building2 },
+];
 
 export function PerfilClient({ initial }: { initial: Initial }) {
   const router = useRouter();
   const { update } = useSession();
 
-  const iniciais = initial.nome?.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase() || "??";
+  const [aba, setAba] = useState("dados");
+  const [erro, setErro] = useState("");
+  const [toast, setToast] = useState<string | null>(null);
+  function mostrarToast(msg: string) { setToast(msg); setTimeout(() => setToast(null), 3000); }
+  function trocarAba(id: string) { setAba(id); setErro(""); }
 
   // ── Foto ──
   const [avatar, setAvatar] = useState<string | null>(initial.avatar);
-  const [msgFoto, setMsgFoto] = useState<Msg>(null);
+  const [preview, setPreview] = useState<string | null>(null); // imagem redimensionada pendente
   const [enviandoFoto, setEnviandoFoto] = useState(false);
   const fotoRef = useRef<HTMLInputElement>(null);
 
@@ -75,21 +76,27 @@ export function PerfilClient({ initial }: { initial: Initial }) {
     const file = e.target.files?.[0];
     if (fotoRef.current) fotoRef.current.value = "";
     if (!file) return;
-    setMsgFoto(null);
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) { setMsgFoto({ tipo: "erro", texto: "Use uma imagem JPG ou PNG." }); return; }
-    if (file.size > 2 * 1024 * 1024) { setMsgFoto({ tipo: "erro", texto: "Imagem muito grande. Máximo 2 MB." }); return; }
-    setEnviandoFoto(true);
+    setErro("");
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) { setErro("Use uma imagem JPG ou PNG."); return; }
+    if (file.size > 2 * 1024 * 1024) { setErro("Imagem muito grande. Máximo 2 MB."); return; }
+    try { setPreview(await redimensionar(file)); }
+    catch { setErro("Não foi possível processar a imagem."); }
+  }
+
+  async function salvarFoto() {
+    if (!preview) return;
+    setErro(""); setEnviandoFoto(true);
     try {
-      const imagem = await redimensionar(file);
       const res = await fetch("/api/perfil/avatar", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imagem }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imagem: preview }),
       });
       const data = await res.json();
-      if (!res.ok) { setMsgFoto({ tipo: "erro", texto: data?.erro ?? "Erro ao enviar foto." }); return; }
+      if (!res.ok) { setErro(data?.erro ?? "Erro ao enviar foto."); return; }
       setAvatar(data.avatar);
-      setMsgFoto({ tipo: "ok", texto: "Foto atualizada." });
+      setPreview(null);
+      mostrarToast("Foto atualizada com sucesso!");
       router.refresh(); // reflete no sidebar/header (avatar vem do banco no layout)
-    } catch { setMsgFoto({ tipo: "erro", texto: "Não foi possível processar a imagem." }); }
+    } catch { setErro("Erro de conexão."); }
     finally { setEnviandoFoto(false); }
   }
 
@@ -97,15 +104,14 @@ export function PerfilClient({ initial }: { initial: Initial }) {
   const [nome, setNome] = useState(initial.nome);
   const [email, setEmail] = useState(initial.email);
   const [confirmacaoEmail, setConfirmacaoEmail] = useState("");
-  const [msgDados, setMsgDados] = useState<Msg>(null);
   const [salvandoDados, setSalvandoDados] = useState(false);
   const emailMudou = email.trim().toLowerCase() !== initial.email.toLowerCase();
 
   async function salvarDados() {
-    setMsgDados(null);
-    if (!nome.trim()) { setMsgDados({ tipo: "erro", texto: "Informe o nome completo." }); return; }
+    setErro("");
+    if (!nome.trim()) { setErro("Informe o nome completo."); return; }
     if (emailMudou && confirmacaoEmail.trim().toLowerCase() !== email.trim().toLowerCase()) {
-      setMsgDados({ tipo: "erro", texto: "A confirmação de e-mail não coincide." }); return;
+      setErro("A confirmação de e-mail não coincide."); return;
     }
     setSalvandoDados(true);
     try {
@@ -114,12 +120,12 @@ export function PerfilClient({ initial }: { initial: Initial }) {
         body: JSON.stringify({ nome: nome.trim(), email: email.trim(), confirmacaoEmail: confirmacaoEmail.trim() || undefined }),
       });
       const data = await res.json();
-      if (!res.ok) { setMsgDados({ tipo: "erro", texto: data?.erro ?? "Erro ao salvar." }); return; }
+      if (!res.ok) { setErro(data?.erro ?? "Erro ao salvar."); return; }
       setConfirmacaoEmail("");
-      setMsgDados({ tipo: "ok", texto: "Dados atualizados." });
+      mostrarToast("Dados atualizados com sucesso!");
       await update({ name: data.nome, email: data.email }); // atualiza o JWT (sidebar/header)
       router.refresh();
-    } catch { setMsgDados({ tipo: "erro", texto: "Erro de conexão." }); }
+    } catch { setErro("Erro de conexão."); }
     finally { setSalvandoDados(false); }
   }
 
@@ -127,13 +133,12 @@ export function PerfilClient({ initial }: { initial: Initial }) {
   const [senhaAtual, setSenhaAtual] = useState("");
   const [novaSenha, setNovaSenha] = useState("");
   const [confirmar, setConfirmar] = useState("");
-  const [msgSenha, setMsgSenha] = useState<Msg>(null);
   const [salvandoSenha, setSalvandoSenha] = useState(false);
 
   async function salvarSenha() {
-    setMsgSenha(null);
-    if (novaSenha.length < 8) { setMsgSenha({ tipo: "erro", texto: "A nova senha deve ter no mínimo 8 caracteres." }); return; }
-    if (novaSenha !== confirmar) { setMsgSenha({ tipo: "erro", texto: "A confirmação da nova senha não coincide." }); return; }
+    setErro("");
+    if (novaSenha.length < 8) { setErro("A nova senha deve ter no mínimo 8 caracteres."); return; }
+    if (novaSenha !== confirmar) { setErro("A confirmação da nova senha não coincide."); return; }
     setSalvandoSenha(true);
     try {
       const res = await fetch("/api/perfil/senha", {
@@ -141,92 +146,176 @@ export function PerfilClient({ initial }: { initial: Initial }) {
         body: JSON.stringify({ senhaAtual, novaSenha, confirmar }),
       });
       const data = await res.json();
-      if (!res.ok) { setMsgSenha({ tipo: "erro", texto: data?.erro ?? "Erro ao alterar senha." }); return; }
+      if (!res.ok) { setErro(data?.erro ?? "Erro ao alterar senha."); return; }
       setSenhaAtual(""); setNovaSenha(""); setConfirmar("");
-      setMsgSenha({ tipo: "ok", texto: "Senha alterada com sucesso." });
-    } catch { setMsgSenha({ tipo: "erro", texto: "Erro de conexão." }); }
+      mostrarToast("Senha alterada com sucesso!");
+    } catch { setErro("Erro de conexão."); }
     finally { setSalvandoSenha(false); }
   }
 
-  const infoConta = [
-    { label: "Empresa", valor: initial.empresaNome },
-    { label: "Perfil de acesso", valor: initial.perfilNome ?? initial.cargo },
-    { label: "Função", valor: initial.cargo },
-  ].filter((i) => i.valor);
+  const iniciais = nome?.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase() || "??";
+
+  // Ação do botão "Salvar" (depende da aba ativa; oculto na aba somente-leitura)
+  const acao: { label: string; fn: () => void; saving: boolean; disabled?: boolean } | null =
+    aba === "dados" ? { label: "Salvar alterações", fn: salvarDados, saving: salvandoDados }
+      : aba === "foto" ? { label: "Salvar foto", fn: salvarFoto, saving: enviandoFoto, disabled: !preview }
+      : aba === "seguranca" ? { label: "Alterar senha", fn: salvarSenha, saving: salvandoSenha }
+      : null;
+
+  const BotaoSalvar = ({ compact = false }: { compact?: boolean }) =>
+    acao ? (
+      <Button type="button" variant="success" size={compact ? "sm" : "md"} loading={acao.saving} disabled={acao.disabled} onClick={acao.fn}>
+        <FileCheck className="w-4 h-4" /> {acao.label}
+      </Button>
+    ) : null;
 
   return (
-    <div className="space-y-5">
-      {/* 1. Foto de perfil */}
-      <div className={cardCls}>
-        <h3 className={tituloCls}><Camera className="w-4 h-4 text-primary-500" /> Foto de perfil</h3>
-        <div className="flex items-center gap-5">
-          {avatar ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={avatar} alt="Foto de perfil" className="w-20 h-20 rounded-full object-cover border border-gray-200" />
-          ) : (
-            <span className="w-20 h-20 rounded-full bg-gradient-to-br from-primary-500 to-success-500 flex items-center justify-center text-white text-2xl font-bold">{iniciais}</span>
-          )}
-          <div className="space-y-2">
-            <input ref={fotoRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={onFoto} className="hidden" />
-            <Button type="button" variant="secondary" loading={enviandoFoto} onClick={() => fotoRef.current?.click()}>
-              <Camera className="w-4 h-4" /> Alterar foto
-            </Button>
-            <p className="text-[11px] text-gray-400">JPG ou PNG, máximo 2 MB.</p>
+    <div className="min-h-full -m-6 bg-[#F8FAFC] p-4 sm:p-6">
+      {/* Toast de sucesso */}
+      {toast && (
+        <div className="fixed top-5 right-5 z-50 flex items-center gap-2 bg-success-600 text-white text-sm font-medium rounded-xl px-4 py-3 shadow-card-hover animate-in fade-in slide-in-from-top-2">
+          <FileCheck className="w-4 h-4" /> {toast}
+        </div>
+      )}
+
+      <div className="max-w-5xl mx-auto space-y-5">
+        {/* Cabeçalho fixo: título + badges + ação */}
+        <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-[#F8FAFC]/90 backdrop-blur border-b border-surface-border">
+          <div className="max-w-5xl mx-auto flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3 flex-wrap min-w-0">
+              <h1 className="text-xl font-bold text-ink truncate">{nome || "Meu Perfil"}</h1>
+              <span className="inline-flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-medium rounded-lg px-2.5 py-1">
+                <ShieldCheck className="w-3.5 h-3.5" /> {initial.perfilNome ?? initial.cargo}
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                <Briefcase className="w-3 h-3" /> {initial.cargo}
+              </span>
+            </div>
+            <BotaoSalvar compact />
           </div>
         </div>
-        <Feedback msg={msgFoto} />
-      </div>
 
-      {/* 2. Dados pessoais */}
-      <div className={cardCls}>
-        <h3 className={tituloCls}><User className="w-4 h-4 text-primary-500" /> Dados pessoais</h3>
-        <FormField label="Nome completo" required>
-          <Input value={nome} onChange={(e) => setNome(e.target.value)} />
-        </FormField>
-        <FormField label="E-mail" required>
-          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-        </FormField>
-        {emailMudou && (
-          <FormField label="Confirmação de e-mail" required hint="Repita o novo e-mail para confirmar">
-            <Input type="email" value={confirmacaoEmail} onChange={(e) => setConfirmacaoEmail(e.target.value)} />
-          </FormField>
-        )}
-        <Feedback msg={msgDados} />
-        <div className="flex justify-end">
-          <Button type="button" loading={salvandoDados} onClick={salvarDados}><Check className="w-4 h-4" /> Salvar alterações</Button>
-        </div>
-      </div>
+        {/* Card central branco com abas + conteúdo */}
+        <div className="bg-white rounded-2xl shadow-card border border-surface-border overflow-hidden">
+          <nav className="flex gap-1.5 overflow-x-auto px-4 pt-4 pb-4 border-b border-surface-border">
+            {ABAS.map((t) => {
+              const ativa = aba === t.id;
+              return (
+                <button
+                  key={t.id} type="button" onClick={() => trocarAba(t.id)}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl whitespace-nowrap transition-all",
+                    ativa ? "bg-primary-500 text-white shadow-sm" : "text-ink-muted hover:text-ink hover:bg-surface-alt",
+                  )}
+                >
+                  <t.icone className="w-4 h-4" />
+                  {t.label}
+                </button>
+              );
+            })}
+          </nav>
 
-      {/* 3. Segurança — senha */}
-      <div className={cardCls}>
-        <h3 className={tituloCls}><Lock className="w-4 h-4 text-primary-500" /> Alterar senha</h3>
-        <FormField label="Senha atual" required>
-          <Input type="password" value={senhaAtual} onChange={(e) => setSenhaAtual(e.target.value)} autoComplete="current-password" />
-        </FormField>
-        <FormField label="Nova senha" required hint="Mínimo de 8 caracteres">
-          <Input type="password" value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} autoComplete="new-password" />
-        </FormField>
-        <FormField label="Confirmar nova senha" required>
-          <Input type="password" value={confirmar} onChange={(e) => setConfirmar(e.target.value)} autoComplete="new-password" />
-        </FormField>
-        <Feedback msg={msgSenha} />
-        <div className="flex justify-end">
-          <Button type="button" loading={salvandoSenha} onClick={salvarSenha}><Lock className="w-4 h-4" /> Alterar senha</Button>
-        </div>
-      </div>
+          <div className="p-5 sm:p-6 lg:p-8">
+            {erro && (
+              <div className="mb-6 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" /> {erro}
+              </div>
+            )}
 
-      {/* 4. Informações da conta (somente leitura) */}
-      <div className={cardCls}>
-        <h3 className={tituloCls}><Building2 className="w-4 h-4 text-primary-500" /> Informações da conta</h3>
-        <dl className="divide-y divide-gray-50 -my-1">
-          {infoConta.map((i) => (
-            <div key={i.label} className="flex items-center justify-between gap-4 py-2.5">
-              <dt className="text-sm text-gray-500">{i.label}</dt>
-              <dd className="text-sm font-medium text-gray-900 text-right">{i.valor}</dd>
+            {/* ABA 1 — Dados Pessoais */}
+            <Painel ativo={aba === "dados"}>
+              <FormSection title="Dados pessoais" icon={<User className="w-3.5 h-3.5" />}>
+                <FormGrid>
+                  <FormField label="Nome completo" required>
+                    <Input value={nome} onChange={(e) => setNome(e.target.value)} />
+                  </FormField>
+                  <FormField label="E-mail" required>
+                    <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                  </FormField>
+                </FormGrid>
+                {emailMudou && (
+                  <FormGrid>
+                    <FormField label="Confirmar e-mail" required hint="Repita o novo e-mail para confirmar a alteração">
+                      <Input type="email" value={confirmacaoEmail} onChange={(e) => setConfirmacaoEmail(e.target.value)} />
+                    </FormField>
+                  </FormGrid>
+                )}
+              </FormSection>
+            </Painel>
+
+            {/* ABA 2 — Foto de Perfil */}
+            <Painel ativo={aba === "foto"}>
+              <FormSection title="Foto de perfil" icon={<Camera className="w-3.5 h-3.5" />}>
+                <div className="flex flex-col items-center gap-4 py-4">
+                  {preview || avatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={(preview ?? avatar)!} alt="Foto de perfil" className="w-32 h-32 rounded-full object-cover border-4 border-white shadow-card" />
+                  ) : (
+                    <span className="w-32 h-32 rounded-full bg-gradient-to-br from-primary-500 to-success-500 flex items-center justify-center text-white text-4xl font-bold shadow-card">{iniciais}</span>
+                  )}
+                  <input ref={fotoRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={onFoto} className="hidden" />
+                  <div className="flex items-center gap-2">
+                    <Button type="button" variant="secondary" onClick={() => fotoRef.current?.click()}>
+                      <Camera className="w-4 h-4" /> Alterar foto
+                    </Button>
+                    {preview && (
+                      <Button type="button" variant="ghost" onClick={() => setPreview(null)}>Descartar</Button>
+                    )}
+                  </div>
+                  <p className="text-xs text-ink-muted text-center">
+                    JPG ou PNG, máximo 2 MB.{preview && " Pré-visualização — clique em \"Salvar foto\" para confirmar."}
+                  </p>
+                </div>
+              </FormSection>
+            </Painel>
+
+            {/* ABA 3 — Segurança */}
+            <Painel ativo={aba === "seguranca"}>
+              <FormSection title="Alterar senha" icon={<Lock className="w-3.5 h-3.5" />}>
+                <FormGrid>
+                  <FormField label="Senha atual" required>
+                    <Input type="password" value={senhaAtual} onChange={(e) => setSenhaAtual(e.target.value)} autoComplete="current-password" />
+                  </FormField>
+                </FormGrid>
+                <FormGrid>
+                  <FormField label="Nova senha" required hint="Mínimo de 8 caracteres">
+                    <Input type="password" value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} autoComplete="new-password" />
+                  </FormField>
+                  <FormField label="Confirmar nova senha" required>
+                    <Input type="password" value={confirmar} onChange={(e) => setConfirmar(e.target.value)} autoComplete="new-password" />
+                  </FormField>
+                </FormGrid>
+              </FormSection>
+            </Painel>
+
+            {/* ABA 4 — Minha Conta (somente leitura) */}
+            <Painel ativo={aba === "conta"}>
+              <FormSection title="Informações da conta" icon={<Building2 className="w-3.5 h-3.5" />}>
+                <FormGrid>
+                  <FormField label="Empresa">
+                    <Input value={initial.empresaNome} disabled readOnly className="bg-gray-100 text-gray-600" />
+                  </FormField>
+                  <FormField label="Perfil de acesso">
+                    <Input value={initial.perfilNome ?? initial.cargo} disabled readOnly className="bg-gray-100 text-gray-600" />
+                  </FormField>
+                </FormGrid>
+                <FormGrid>
+                  <FormField label="Cargo / função">
+                    <Input value={initial.cargo} disabled readOnly className="bg-gray-100 text-gray-600" />
+                  </FormField>
+                </FormGrid>
+                <p className="text-xs text-ink-muted">Estes dados são definidos por um administrador e não podem ser editados aqui.</p>
+              </FormSection>
+            </Painel>
+          </div>
+
+          {/* Barra de ações no rodapé */}
+          {acao && (
+            <div className="flex items-center justify-end gap-3 px-5 sm:px-6 lg:px-8 py-4 bg-surface-alt/40 border-t border-surface-border">
+              <BotaoSalvar />
             </div>
-          ))}
-        </dl>
-        <p className="text-[11px] text-gray-400">Estes dados são definidos por um administrador e não podem ser editados aqui.</p>
+          )}
+        </div>
       </div>
     </div>
   );
