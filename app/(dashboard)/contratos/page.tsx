@@ -41,10 +41,11 @@ export default async function ContratosPage({ searchParams }: { searchParams: Pr
   if (sp.vigenciaFim) { const f = new Date(sp.vigenciaFim); f.setHours(23, 59, 59, 999); where.dataInicio = { ...(where.dataInicio ?? {}), lte: f }; }
   if (sp.valorMin) where.valorMensal = { ...(where.valorMensal ?? {}), gte: Number(sp.valorMin) };
   if (sp.valorMax) where.valorMensal = { ...(where.valorMensal ?? {}), lte: Number(sp.valorMax) };
-  // Status computado
-  if (sp.status === "ATIVO") where.status = "ATIVO";
-  else if (sp.status === "INATIVO") where.status = { in: ["SUSPENSO", "ENCERRADO"] };
-  else if (sp.status === "VENCIDO") { where.status = { not: "ENCERRADO" }; where.dataFim = { lt: agora }; }
+  // Filtro de status: valores diretos do enum + computados (VENCIDO/VENCENDO)
+  const STATUS_ENUM = ["ATIVO", "SUSPENSO", "ENCERRADO", "CANCELADO", "EM_RENOVACAO", "AGUARDANDO_ASSINATURA"];
+  if (sp.status && STATUS_ENUM.includes(sp.status)) where.status = sp.status;
+  else if (sp.status === "INATIVO") where.status = { in: ["SUSPENSO", "ENCERRADO", "CANCELADO"] };
+  else if (sp.status === "VENCIDO") { where.status = { notIn: ["ENCERRADO", "CANCELADO"] }; where.dataFim = { lt: agora }; }
   else if (sp.status === "VENCENDO") { where.status = "ATIVO"; where.dataFim = { gte: agora, lte: em30 }; }
 
   const [contratos, total, agregadoFiltrado, ativos, somaAtivos, vencendo, vencidos, clientes] = await Promise.all([

@@ -15,17 +15,26 @@ import { ContratoDocumentos } from "@/components/forms/contrato-documentos";
 import { proximasOcorrencias } from "@/lib/recorrencia-helpers";
 import {
   FREQUENCIAS_RECORRENCIA, LABELS_PERIODICIDADE, LABELS_TRATAMENTO_FIM_SEMANA,
-  LABELS_TIPO_CONTRATO, LABELS_STATUS_CONTRATO, STATUS_CONTRATO_FORM,
+  LABELS_TIPO_CONTRATO, LABELS_STATUS_CONTRATO, COR_STATUS_CONTRATO, STATUS_CONTRATO_FORM,
   LABELS_AJUSTE_FIM_SEMANA, LABELS_TIPO_VENCIMENTO, LABELS_INDICE_REAJUSTE,
   LABELS_PERIODO_REF_NFSE, LABELS_PERIODO_VISITA, LABELS_MES, ITENS_INCLUSOS_CONTRATO,
-  formatarMoeda, formatarData, cn,
+  formatarMoeda, formatarData, formatarDataHora, cn,
 } from "@/lib/utils";
 import type { Contrato, Tecnico, Unidade } from "@prisma/client";
 import {
   FileText, CalendarClock, ClipboardList, HardHat, MapPin, TrendingUp, BellRing,
   Paperclip, Repeat, StickyNote, Building2, FileCheck, AlertCircle, Wand2, DollarSign, Receipt,
-  Plus, Search, Check, X, CalendarDays,
+  Plus, Search, Check, X, CalendarDays, ChevronDown, CheckCircle2, PauseCircle, RefreshCw, XCircle, History, User,
 } from "lucide-react";
+
+// Opções de mudança de status oferecidas no cabeçalho (ícone, cor e descrição).
+const STATUS_OPCOES: { valor: string; label: string; descricao: string; icone: any; cor: string }[] = [
+  { valor: "ATIVO", label: "Ativo", descricao: "Contrato vigente e em execução", icone: CheckCircle2, cor: "text-success-600" },
+  { valor: "SUSPENSO", label: "Suspenso", descricao: "Pausado temporariamente", icone: PauseCircle, cor: "text-amber-600" },
+  { valor: "EM_RENOVACAO", label: "Em renovação", descricao: "Em processo de renovação", icone: RefreshCw, cor: "text-blue-600" },
+  { valor: "ENCERRADO", label: "Encerrado", descricao: "Encerrado naturalmente ao fim da vigência", icone: FileCheck, cor: "text-slate-600" },
+  { valor: "CANCELADO", label: "Cancelado", descricao: "Cancelado antes do prazo", icone: XCircle, cor: "text-red-600" },
+];
 
 const ESTADOS_BR = [
   "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
@@ -43,12 +52,14 @@ type ClienteItem = { id: string; nome: string; nomeFantasia?: string | null };
 type ResponsavelItem = Pick<Tecnico, "id" | "nome" | "crea">;
 type AnexoItem = { id: string; nome: string; tipo: string; tamanho: number; categoria?: string | null; criadoEm: string | Date };
 type ReajusteItem = { id: string; data: string | Date; indice: string; percentual: any; valorAnterior: any; valorNovo: any };
+type HistoricoStatusItem = { id: string; statusAnterior: string; statusNovo: string; motivo: string | null; createdAt: string | Date; usuario?: { id: string; nome: string } | null };
 
 interface ContratoComRelacoes extends Contrato {
   unidades?: Array<{ unidade: Unidade }>;
   responsavelTecnico?: ResponsavelItem | null;
   anexos?: AnexoItem[];
   reajustes?: ReajusteItem[];
+  historicoStatus?: HistoricoStatusItem[];
 }
 
 interface ContratoFormProps {
@@ -82,6 +93,13 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
   const [tecnicos, setTecnicos] = useState<{ id: string; nome: string }[]>([]);
   const [clienteIdSelecionado, setClienteIdSelecionado] = useState(initialData?.clienteId ?? clienteIdParam);
   const [gerandoNumero, setGerandoNumero] = useState(false);
+
+  // Gerenciamento de status (cabeçalho + histórico)
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const [statusAlvo, setStatusAlvo] = useState<string | null>(null);
+  const [motivoStatus, setMotivoStatus] = useState("");
+  const [salvandoStatus, setSalvandoStatus] = useState(false);
+  const [historicoStatus, setHistoricoStatus] = useState<HistoricoStatusItem[]>(initialData?.historicoStatus ?? []);
 
   // Itens inclusos do escopo (JSON) — gerenciado fora do RHF
   const itensIniciais = (initialData?.itensInclusos as Record<string, any> | null) ?? {};
@@ -229,6 +247,29 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
       const res = await fetch("/api/contratos/proximo-numero");
       if (res.ok) { const d = await res.json(); if (d.numero) setValue("numero", d.numero); }
     } catch {} finally { setGerandoNumero(false); }
+  }
+
+  function abrirConfirmacaoStatus(status: string) {
+    setStatusMenuOpen(false);
+    setMotivoStatus("");
+    setStatusAlvo(status);
+  }
+
+  async function confirmarStatus() {
+    if (!statusAlvo || !isEditing) return;
+    setSalvandoStatus(true);
+    try {
+      const res = await fetch(`/api/contratos/${initialData!.id}/status`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: statusAlvo, motivo: motivoStatus || undefined }),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); setErroGlobal(e.erro ?? "Erro ao alterar status."); setStatusAlvo(null); return; }
+      const data = await res.json();
+      setValue("status", statusAlvo as any);
+      if (data.historico) setHistoricoStatus((prev) => [data.historico, ...prev]);
+      mostrarToast(`Status alterado para "${LABELS_STATUS_CONTRATO[statusAlvo] ?? statusAlvo}".`);
+      setStatusAlvo(null);
+    } catch { setErroGlobal("Erro de conexão."); } finally { setSalvandoStatus(false); }
   }
 
   // Meses entre início e fim da vigência (inclusivo). null se indeterminado/ inválido.
@@ -392,14 +433,66 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
         </div>
       )}
 
+      {/* Modal de confirmação de mudança de status */}
+      {statusAlvo && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => !salvandoStatus && setStatusAlvo(null)}>
+          <div className="bg-white rounded-2xl shadow-card-hover w-full max-w-md p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-bold text-ink">Alterar status para “{LABELS_STATUS_CONTRATO[statusAlvo] ?? statusAlvo}”?</h3>
+            <p className="text-sm text-ink-muted">{STATUS_OPCOES.find((o) => o.valor === statusAlvo)?.descricao}</p>
+            <div>
+              <label className="text-xs font-semibold text-ink">Motivo (opcional)</label>
+              <Textarea value={motivoStatus} onChange={(e) => setMotivoStatus(e.target.value)} rows={3} placeholder="Ex: distrato solicitado pelo cliente, pausa por inadimplência…" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="secondary" onClick={() => setStatusAlvo(null)} disabled={salvandoStatus}>Cancelar</Button>
+              <Button type="button" variant="success" loading={salvandoStatus} onClick={confirmarStatus}>Confirmar</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto space-y-5">
         {/* Cabeçalho fixo */}
         <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-[#F8FAFC]/90 backdrop-blur border-b border-surface-border">
           <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3 flex-wrap min-w-0">
               <h1 className="text-xl font-bold text-ink truncate">{titulo}</h1>
-              {statusVal && (
-                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary-50 text-primary-700">
+              {isEditing ? (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setStatusMenuOpen((o) => !o)}
+                    title="Alterar status do contrato"
+                    className={cn("inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full transition-opacity hover:opacity-80", COR_STATUS_CONTRATO[statusVal] ?? "bg-slate-100 text-slate-600")}
+                  >
+                    {LABELS_STATUS_CONTRATO[statusVal] ?? statusVal} <ChevronDown className="w-3 h-3" />
+                  </button>
+                  {statusMenuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setStatusMenuOpen(false)} />
+                      <div className="absolute left-0 mt-2 z-50 w-72 bg-white border border-surface-border rounded-xl shadow-card-hover p-1.5">
+                        {STATUS_OPCOES.map((o) => {
+                          const atual = o.valor === statusVal;
+                          return (
+                            <button
+                              key={o.valor} type="button" disabled={atual}
+                              onClick={() => abrirConfirmacaoStatus(o.valor)}
+                              className={cn("w-full flex items-start gap-2.5 p-2 rounded-lg text-left transition-colors", atual ? "opacity-50 cursor-default" : "hover:bg-surface-alt")}
+                            >
+                              <o.icone className={cn("w-4 h-4 mt-0.5 shrink-0", o.cor)} />
+                              <span className="min-w-0">
+                                <span className="block text-sm font-medium text-ink">{o.label}{atual && " (atual)"}</span>
+                                <span className="block text-xs text-ink-muted">{o.descricao}</span>
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full", COR_STATUS_CONTRATO[statusVal] ?? "bg-slate-100 text-slate-600")}>
                   {LABELS_STATUS_CONTRATO[statusVal] ?? statusVal}
                 </span>
               )}
@@ -467,10 +560,18 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
                 {Object.entries(LABELS_TIPO_CONTRATO).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
               </Select>
             </FormField>
-            <FormField label="Status" required>
-              <Select {...register("status")}>
-                {STATUS_CONTRATO_FORM.map((v) => (<option key={v} value={v}>{LABELS_STATUS_CONTRATO[v]}</option>))}
-              </Select>
+            <FormField label="Status" required hint={isEditing ? "Altere pelo botão de status no cabeçalho" : undefined}>
+              {isEditing ? (
+                <div className="flex h-10 items-center">
+                  <span className={cn("inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full", COR_STATUS_CONTRATO[statusVal] ?? "bg-slate-100 text-slate-600")}>
+                    {LABELS_STATUS_CONTRATO[statusVal] ?? statusVal}
+                  </span>
+                </div>
+              ) : (
+                <Select {...register("status")}>
+                  {STATUS_CONTRATO_FORM.map((v) => (<option key={v} value={v}>{LABELS_STATUS_CONTRATO[v]}</option>))}
+                </Select>
+              )}
             </FormField>
             <FormField label="Periodicidade" required>
               <Select {...register("periodicidade")}>
@@ -968,6 +1069,31 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
           <FormField label="Cláusulas especiais, restrições, acordos adicionais">
             <Textarea {...register("observacoes")} placeholder="Informações adicionais…" rows={6} />
           </FormField>
+        </FormSection>
+
+        <FormSection title="Histórico de status" icon={<History className="w-3.5 h-3.5" />}>
+          {!isEditing || historicoStatus.length === 0 ? (
+            <p className="text-sm text-ink-muted py-1">Nenhuma mudança de status registrada.</p>
+          ) : (
+            <div className="space-y-2">
+              {historicoStatus.map((h) => (
+                <div key={h.id} className="border border-surface-border rounded-lg p-3">
+                  <div className="flex items-center gap-2 flex-wrap text-sm">
+                    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", COR_STATUS_CONTRATO[h.statusAnterior] ?? "bg-slate-100 text-slate-600")}>
+                      {LABELS_STATUS_CONTRATO[h.statusAnterior] ?? h.statusAnterior}
+                    </span>
+                    <span className="text-ink-subtle">→</span>
+                    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", COR_STATUS_CONTRATO[h.statusNovo] ?? "bg-slate-100 text-slate-600")}>
+                      {LABELS_STATUS_CONTRATO[h.statusNovo] ?? h.statusNovo}
+                    </span>
+                    <span className="ml-auto text-xs text-ink-muted">{formatarDataHora(h.createdAt)}</span>
+                  </div>
+                  {h.motivo && <p className="text-sm text-ink mt-1.5">{h.motivo}</p>}
+                  <p className="text-xs text-ink-subtle mt-1 flex items-center gap-1"><User className="w-3 h-3" /> {h.usuario?.nome ?? "—"}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </FormSection>
       </Painel>
 

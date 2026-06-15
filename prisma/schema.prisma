@@ -72,6 +72,7 @@ enum StatusContrato {
   ATIVO
   SUSPENSO
   ENCERRADO
+  CANCELADO
   VENCIDO
   AGUARDANDO_ASSINATURA
   EM_RENOVACAO
@@ -628,6 +629,7 @@ model Usuario {
   pedidosSolicitados PedidoCompraInterno[] @relation("PedidoSolicitante")
   pedidosComprador   PedidoCompraInterno[] @relation("PedidoComprador")
   pushSubscriptions  PushSubscription[]
+  contratoHistoricos ContratoHistoricoStatus[]
   perfilAcessoId     String?               @map("perfil_acesso_id")
   perfilAcesso       PerfilAcesso?         @relation(fields: [perfilAcessoId], references: [id])
 
@@ -1054,9 +1056,27 @@ model Contrato {
   relatorios         RelatorioOs[]
   anexos             AnexoContrato[]
   reajustes          ReajusteContrato[]
+  historicoStatus    ContratoHistoricoStatus[]
 
   @@unique([numero, empresaId])
   @@map("contratos")
+}
+
+// Histórico de mudanças de status do contrato
+model ContratoHistoricoStatus {
+  id             String         @id @default(cuid())
+  empresaId      String         @map("empresa_id")
+  contratoId     String         @map("contrato_id")
+  statusAnterior StatusContrato @map("status_anterior")
+  statusNovo     StatusContrato @map("status_novo")
+  motivo         String?
+  usuarioId      String         @map("usuario_id")
+  createdAt      DateTime       @default(now()) @map("created_at")
+
+  contrato Contrato @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+  usuario  Usuario  @relation(fields: [usuarioId], references: [id])
+
+  @@map("contrato_historico_status")
 }
 
 // Documentos/anexos do contrato (PDF assinado e demais arquivos)

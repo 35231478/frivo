@@ -19,11 +19,11 @@ interface ContratoView {
 interface Resumo { ativos: number; valorMensalTotal: number; valorAnualTotal: number; vencendo: number; vencidos: number }
 
 const LABELS_STATUS: Record<string, string> = {
-  ATIVO: "Ativo", SUSPENSO: "Suspenso", ENCERRADO: "Encerrado", VENCIDO: "Vencido", AGUARDANDO_ASSINATURA: "Aguard. Assinatura",
+  ATIVO: "Ativo", SUSPENSO: "Suspenso", EM_RENOVACAO: "Em renovação", ENCERRADO: "Encerrado", CANCELADO: "Cancelado", VENCIDO: "Vencido", AGUARDANDO_ASSINATURA: "Aguard. Assinatura",
 };
 const COR_STATUS: Record<string, string> = {
-  ATIVO: "bg-success-50 text-success-700", SUSPENSO: "bg-orange-50 text-orange-700",
-  ENCERRADO: "bg-slate-100 text-slate-600", VENCIDO: "bg-red-50 text-red-700", AGUARDANDO_ASSINATURA: "bg-primary-50 text-primary-700",
+  ATIVO: "bg-success-50 text-success-700", SUSPENSO: "bg-amber-50 text-amber-700", EM_RENOVACAO: "bg-blue-50 text-blue-700",
+  ENCERRADO: "bg-slate-100 text-slate-600", CANCELADO: "bg-red-50 text-red-700", VENCIDO: "bg-red-50 text-red-700", AGUARDANDO_ASSINATURA: "bg-primary-50 text-primary-700",
 };
 const COR_FREQ: Record<string, string> = {
   SEMANAL: "bg-slate-100 text-slate-600", QUINZENAL: "bg-slate-100 text-slate-600",
@@ -120,7 +120,10 @@ export function ContratosListaClient({ contratos, total, somaMensalFiltrada, res
             <select value={get("status")} onChange={(e) => setParams({ status: e.target.value || null })} className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10">
               <option value="">Todos status</option>
               <option value="ATIVO">Ativo</option>
-              <option value="INATIVO">Inativo</option>
+              <option value="SUSPENSO">Suspenso</option>
+              <option value="EM_RENOVACAO">Em renovação</option>
+              <option value="ENCERRADO">Encerrado</option>
+              <option value="CANCELADO">Cancelado</option>
               <option value="VENCENDO">Vencendo (30d)</option>
               <option value="VENCIDO">Vencido</option>
             </select>
@@ -169,7 +172,7 @@ export function ContratosListaClient({ contratos, total, somaMensalFiltrada, res
               {contratos.length === 0 ? (
                 <tr><td colSpan={9} className="text-center text-ink-subtle py-12">Nenhum contrato encontrado</td></tr>
               ) : contratos.map((ct, idx) => (
-                <tr key={ct.id} className={cn("border-b border-surface-border hover:bg-primary-50/40 transition-colors", idx % 2 === 1 && "bg-surface-alt/30", ct.vencido && "bg-red-50/60 hover:bg-red-50")}>
+                <tr key={ct.id} className={cn("border-b border-surface-border hover:bg-primary-50/40 transition-colors", idx % 2 === 1 && "bg-surface-alt/30", ct.vencido && "bg-red-50/60 hover:bg-red-50", (ct.status === "ENCERRADO" || ct.status === "CANCELADO") && "opacity-60")}>
                   <td className="px-4 py-3">
                     <Link href={`/contratos/${ct.id}`} className="font-mono font-semibold text-primary-600 hover:underline">{ct.numero}</Link>
                   </td>

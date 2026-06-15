@@ -466,6 +466,7 @@ export const LABELS_STATUS_CONTRATO: Record<string, string> = {
   ATIVO: "Ativo",
   SUSPENSO: "Suspenso",
   ENCERRADO: "Encerrado",
+  CANCELADO: "Cancelado",
   VENCIDO: "Vencido",
   AGUARDANDO_ASSINATURA: "Aguardando Assinatura",
   EM_RENOVACAO: "Em renovação",
@@ -475,13 +476,14 @@ export const COR_STATUS_CONTRATO: Record<string, string> = {
   ATIVO: "bg-success-50 text-success-700",
   SUSPENSO: "bg-amber-50 text-amber-700",
   ENCERRADO: "bg-slate-100 text-slate-600",
+  CANCELADO: "bg-red-50 text-red-700",
   VENCIDO: "bg-red-50 text-red-700",
   AGUARDANDO_ASSINATURA: "bg-slate-100 text-slate-600",
   EM_RENOVACAO: "bg-blue-50 text-blue-700",
 };
 
-// Status oferecidos no formulário de contrato (subconjunto do enum).
-export const STATUS_CONTRATO_FORM = ["ATIVO", "SUSPENSO", "ENCERRADO", "EM_RENOVACAO"] as const;
+// Status oferecidos no formulário/gerenciamento de contrato (subconjunto do enum).
+export const STATUS_CONTRATO_FORM = ["ATIVO", "SUSPENSO", "EM_RENOVACAO", "ENCERRADO", "CANCELADO"] as const;
 
 // Ajuste de fins de semana/feriados para o vencimento da parcela.
 export const LABELS_AJUSTE_FIM_SEMANA: Record<string, string> = {
