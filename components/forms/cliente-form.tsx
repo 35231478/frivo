@@ -20,7 +20,7 @@ import { AnexosLocal, type AnexoLocal } from "@/components/forms/anexos-local";
 import { LogoUpload } from "@/components/forms/logo-upload";
 import { ContatosManager } from "@/components/forms/contatos-manager";
 import { ContatosLocal, type ContatoLocal } from "@/components/forms/contatos-local";
-import { ComunicacaoManager } from "@/components/forms/comunicacao-manager";
+import { ComunicacaoContatos } from "@/components/forms/comunicacao-contatos";
 import { ClienteContratos } from "@/components/forms/cliente-contratos";
 import { InteracoesManager } from "@/components/forms/interacoes-manager";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
@@ -200,9 +200,6 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
 
   // Valida regras dinâmicas da empresa; retorna { aba, msg } do primeiro erro
   function validarConfigDinamica(): { aba: string; msg: string } | null {
-    if (config.clienteEmailObrigatorio && !watch("email")) return { aba: "contatos", msg: "E-mail é obrigatório (configuração da empresa)." };
-    if (config.clienteWhatsappObrigatorio && !watch("celular")) return { aba: "contatos", msg: "WhatsApp é obrigatório (configuração da empresa)." };
-    if (config.clienteTelefoneObrigatorio && !watch("telefone")) return { aba: "contatos", msg: "Telefone é obrigatório (configuração da empresa)." };
     if (config.clienteExigirUnidade && !isEditing && unidadesNovas.length === 0) return { aba: "enderecos", msg: "Adicione pelo menos um endereço antes de salvar (configuração da empresa)." };
     return null;
   }
@@ -533,9 +530,6 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
               <WhatsAppInput value={whatsappFaturamento} onChange={(e) => setWhatsappFaturamento(e.target.value)} placeholder="(00) 00000-0000" />
             </FormField>
           </FormGrid>
-          <FormField label="E-mails para envio automático" hint="Adicione um ou mais e-mails que receberão as faturas">
-            <EmailsFaturamento emails={emailsFaturamento} onChange={setEmailsFaturamento} />
-          </FormField>
           {(tipoFaturamento === "COM_APROVACAO" || tipoFaturamento === "FATURA_UNICA") && (
             <div className="border-t border-gray-100 pt-1">
               <ToggleSwitch label="Exige PC (Pedido de Compra) antes da NF" description="A nota fiscal só pode ser emitida após o registro do PC do cliente." checked={exigePcAntesNf} onChange={setExigePcAntesNf} />
@@ -553,27 +547,10 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
 
       {/* ABA 2 — Contatos */}
       <Painel ativo={aba === "contatos"}>
-        <FormSection title="Contato rápido" icon={<Phone className="w-3.5 h-3.5" />}>
-          <FormGrid cols={3}>
-            <FormField label={reqLabel("E-mail", "clienteEmailObrigatorio")} error={errors.email?.message}>
-              <Input {...register("email")} type="email" placeholder="email@empresa.com.br" error={!!errors.email} />
-            </FormField>
-            <FormField label={reqLabel("Telefone", "clienteTelefoneObrigatorio")}>
-              <PhoneInput {...register("telefone")} placeholder="(00) 0000-0000" value={telefoneVal} />
-            </FormField>
-            <FormField label={reqLabel("Celular / WhatsApp", "clienteWhatsappObrigatorio")}>
-              <WhatsAppInput {...register("celular")} placeholder="(00) 00000-0000" value={celularVal} />
-            </FormField>
-          </FormGrid>
-          <FormGrid>
-            <FormField label="Nome do contato principal"><Input {...register("contato")} placeholder="João Silva" /></FormField>
-          </FormGrid>
-        </FormSection>
-
-        <FormSection title="Contatos adicionais" icon={<Users className="w-3.5 h-3.5" />}>
+        <FormSection title="Contatos do cliente" icon={<Users className="w-3.5 h-3.5" />}>
           <p className="text-xs text-gray-400 -mt-2 mb-3">
             {isEditing
-              ? "Gerencie os contatos deste cliente. Contatos do tipo \"Operacional\" serão usados para abertura de chamados."
+              ? "Gerencie os contatos deste cliente. O tipo define quais comunicações cada um recebe (veja a aba Comunicação)."
               : "Adicione os contatos do cliente. O primeiro será marcado como principal."}
           </p>
           {isEditing ? (
@@ -586,16 +563,15 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
 
       {/* ABA — Comunicação */}
       <Painel ativo={aba === "comunicacao"}>
-        <FormSection title="Contatos de comunicação" icon={<Send className="w-3.5 h-3.5" />}>
+        <FormSection title="Contatos por área" icon={<Send className="w-3.5 h-3.5" />}>
           <p className="text-xs text-gray-400 -mt-2 mb-3">
-            Defina quem recebe cada tipo de e-mail. <strong>Operacional</strong> recebe atualizações de OS/agendamentos;{" "}
-            <strong>Financeiro</strong> recebe boletos, NF e cobranças; <strong>Contratual</strong> recebe orçamentos e relatórios.
+            Os contatos são cadastrados na aba <strong>Contatos</strong> e aqui aparecem agrupados pelo tipo, indicando o que cada um recebe.
             Sem contato de um tipo, o sistema usa o e-mail principal do cliente.
           </p>
           {isEditing ? (
-            <ComunicacaoManager clienteId={initialData!.id} contatosIniciais={initialData!.contatosCliente ?? []} />
+            <ComunicacaoContatos clienteId={initialData!.id} ativo={aba === "comunicacao"} onGerenciar={() => setAba("contatos")} />
           ) : (
-            <p className="text-sm text-ink-muted">Salve o cliente para adicionar contatos de comunicação.</p>
+            <p className="text-sm text-ink-muted">Salve o cliente para visualizar os contatos por área.</p>
           )}
         </FormSection>
 
