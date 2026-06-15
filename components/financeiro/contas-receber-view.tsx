@@ -27,11 +27,11 @@ type CardKey = "A_RECEBER" | "VENCIDO" | "VENCE_HOJE" | "RECEBIDO";
 
 const inicioMes = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); };
 
-export function ContasReceberView({ contas, clientes, categorias, interAtivo }: { contas: ContaView[]; clientes: Opcao[]; categorias: { nome: string; cor: string }[]; interAtivo: boolean }) {
+export function ContasReceberView({ contas, clientes, categorias, interAtivo, clienteIdInicial = "" }: { contas: ContaView[]; clientes: Opcao[]; categorias: { nome: string; cor: string }[]; interAtivo: boolean; clienteIdInicial?: string }) {
   const [card, setCard] = useState<CardKey | null>(null);
   const [busca, setBusca] = useState("");
-  const [painel, setPainel] = useState(false);
-  const [f, setF] = useState({ vencDe: "", vencAte: "", clienteId: "", forma: "", banco: "", categoria: "", valorMin: "", valorMax: "", status: new Set<string>() });
+  const [painel, setPainel] = useState(!!clienteIdInicial);
+  const [f, setF] = useState({ vencDe: "", vencAte: "", clienteId: clienteIdInicial, forma: "", banco: "", categoria: "", valorMin: "", valorMax: "", status: new Set<string>() });
 
   // status visual por conta (memo)
   const comStatus = useMemo(() => contas.map((c) => ({ c, sv: statusVisualReceber(c.status, c.dataVencimento) })), [contas]);

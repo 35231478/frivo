@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { formatarCpfCnpj, cn, LABELS_STATUS_FINANCEIRO, COR_STATUS_FINANCEIRO, LABELS_SEGMENTO } from "@/lib/utils";
+import { formatarCpfCnpj, cn, LABELS_SEGMENTO } from "@/lib/utils";
+import {
+  calcularStatusFinanceiroEmLote, LABELS_STATUS_FINANCEIRO_CALC, COR_STATUS_FINANCEIRO_CALC,
+  type StatusFinanceiroCalc,
+} from "@/lib/status-financeiro";
+import { Prisma } from "@prisma/client";
 import Link from "next/link";
 import { Users, Plus, FileCheck, Star } from "lucide-react";
 
@@ -18,6 +23,9 @@ export default async function ClientesPage({
   const porPagina = 20;
   const skip = (Number(pagina) - 1) * porPagina;
 
+  // O status financeiro é calculado (não é mais coluna filtrável no banco).
+  const statusFiltro = (["SEM_HISTORICO", "ADIMPLENTE", "INADIMPLENTE"] as const).find((s) => s === status);
+
   const where: any = { empresaId, ativo: true };
   if (busca) {
     where.OR = [
@@ -26,22 +34,39 @@ export default async function ClientesPage({
       { cpfCnpj: { contains: busca } },
     ];
   }
-  if (status) where.statusFinanceiro = status;
   if (segmento) where.segmento = segmento;
 
-  const [clientes, total] = await Promise.all([
-    prisma.cliente.findMany({
-      where,
-      include: {
-        _count: { select: { unidades: true, ordensServico: true, contratos: { where: { status: "ATIVO" } } } },
-        responsavelTecnico: { select: { nome: true } },
-      },
-      orderBy: { nome: "asc" },
-      skip,
-      take: porPagina,
-    }),
-    prisma.cliente.count({ where }),
-  ]);
+  const incluir = {
+    _count: { select: { unidades: true, ordensServico: true, contratos: { where: { status: "ATIVO" } } } },
+    responsavelTecnico: { select: { nome: true } },
+  } satisfies Prisma.ClienteInclude;
+  const ordenar: Prisma.ClienteOrderByWithRelationInput[] = [{ nome: "asc" }, { id: "asc" }];
+
+  type ClienteRow = Prisma.ClienteGetPayload<{ include: typeof incluir }>;
+  let clientes: ClienteRow[] = [];
+  let total = 0;
+  let statusFinanceiroMap: Record<string, StatusFinanceiroCalc> = {};
+
+  if (statusFiltro) {
+    // Filtro por status calculado: avalia todos os clientes que batem nos demais
+    // filtros, calcula o status real e pagina sobre o subconjunto resultante.
+    const todos = await prisma.cliente.findMany({ where, select: { id: true }, orderBy: ordenar });
+    statusFinanceiroMap = await calcularStatusFinanceiroEmLote(empresaId, todos.map((c) => c.id));
+    const idsFiltrados = todos
+      .filter((c) => (statusFinanceiroMap[c.id] ?? "SEM_HISTORICO") === statusFiltro)
+      .map((c) => c.id);
+    total = idsFiltrados.length;
+    const idsPagina = idsFiltrados.slice(skip, skip + porPagina);
+    clientes = idsPagina.length
+      ? await prisma.cliente.findMany({ where: { id: { in: idsPagina } }, include: incluir, orderBy: ordenar })
+      : [];
+  } else {
+    [clientes, total] = await Promise.all([
+      prisma.cliente.findMany({ where, include: incluir, orderBy: ordenar, skip, take: porPagina }),
+      prisma.cliente.count({ where }),
+    ]);
+    statusFinanceiroMap = await calcularStatusFinanceiroEmLote(empresaId, clientes.map((c) => c.id));
+  }
 
   function estrelas(n: number | null) {
     if (!n) return null;
@@ -84,7 +109,7 @@ export default async function ClientesPage({
             <select name="status" defaultValue={status}
               className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all">
               <option value="">Status financeiro</option>
-              {Object.entries(LABELS_STATUS_FINANCEIRO).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
+              {Object.entries(LABELS_STATUS_FINANCEIRO_CALC).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
             </select>
             <select name="segmento" defaultValue={segmento}
               className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all">
@@ -141,9 +166,14 @@ export default async function ClientesPage({
                   <td className="px-4 py-3 text-center text-ink-muted">{c._count.unidades}</td>
                   <td className="px-4 py-3 text-center text-ink-muted">{c._count.ordensServico}</td>
                   <td className="px-4 py-3">
-                    <span className={cn("text-[10px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap", COR_STATUS_FINANCEIRO[c.statusFinanceiro])}>
-                      {LABELS_STATUS_FINANCEIRO[c.statusFinanceiro]}
-                    </span>
+                    {(() => {
+                      const sf = statusFinanceiroMap[c.id] ?? "SEM_HISTORICO";
+                      return (
+                        <span className={cn("text-[10px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap", COR_STATUS_FINANCEIRO_CALC[sf])}>
+                          {LABELS_STATUS_FINANCEIRO_CALC[sf]}
+                        </span>
+                      );
+                    })()}
                   </td>
                 </tr>
               ))

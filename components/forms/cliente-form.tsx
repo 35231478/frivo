@@ -22,13 +22,17 @@ import { ContatosManager } from "@/components/forms/contatos-manager";
 import { ContatosLocal, type ContatoLocal } from "@/components/forms/contatos-local";
 import { InteracoesManager } from "@/components/forms/interacoes-manager";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
-import { LABELS_SEGMENTO, LABELS_ORIGEM, LABELS_STATUS_FINANCEIRO, COR_STATUS_FINANCEIRO, LABELS_PERFIL_FATURAMENTO, PERMISSOES_PORTAL } from "@/lib/utils";
+import { LABELS_SEGMENTO, LABELS_ORIGEM, LABELS_PERFIL_FATURAMENTO, PERMISSOES_PORTAL, formatarMoeda } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import {
+  LABELS_STATUS_FINANCEIRO_CALC, COR_STATUS_FINANCEIRO_CALC, type StatusFinanceiroCalc,
+} from "@/lib/status-financeiro";
+import Link from "next/link";
 import type { Cliente, Tecnico, Unidade, Configuracao, ContatoCliente } from "@prisma/client";
 import {
   Search, Loader2, FileCheck, Lock, Pencil, Plus, X, Mail, AlertCircle,
   FileText, Phone, MapPin, HardHat, Image as ImageIcon, Heart, Headset,
-  Building2, Tag, DollarSign, Users, Paperclip, Star, MessageSquare, Globe,
+  Building2, Tag, DollarSign, Users, Paperclip, Star, MessageSquare, Globe, ArrowUpRight,
 } from "lucide-react";
 
 type ResponsavelItem = Pick<Tecnico, "id" | "nome" | "crea">;
@@ -44,6 +48,10 @@ interface ClienteFormProps {
     interacoes?: InteracaoItem[];
     _count?: { contratos: number };
   };
+  /** Status financeiro calculado a partir das contas a receber (somente leitura). */
+  statusFinanceiroCalc?: StatusFinanceiroCalc;
+  /** Total a receber nos próximos 30 dias (parcelas em aberto). */
+  totalProximos30Dias?: number;
 }
 
 // Mapeia cada campo (RHF) à aba onde ele está, para destacar abas com erro
@@ -61,9 +69,11 @@ function Painel({ ativo, children }: { ativo: boolean; children: React.ReactNode
   return <div className={cn("space-y-8", !ativo && "hidden")}>{children}</div>;
 }
 
-export function ClienteForm({ initialData }: ClienteFormProps) {
+export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30Dias }: ClienteFormProps) {
   const router = useRouter();
   const isEditing = !!initialData;
+  const statusCalc: StatusFinanceiroCalc = statusFinanceiroCalc ?? "SEM_HISTORICO";
+  const totalProx = totalProximos30Dias ?? 0;
   const temContrato = (initialData?._count?.contratos ?? 0) > 0;
   const [erroGlobal, setErroGlobal] = useState("");
   const [buscandoCnpj, setBuscandoCnpj] = useState(false);
@@ -142,7 +152,6 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
   const tipoPessoa = watch("tipoPessoa");
   const telefoneVal = watch("telefone") ?? "";
   const celularVal = watch("celular") ?? "";
-  const statusFin = watch("statusFinanceiro") ?? "ADIMPLENTE";
   const ativoVal = watch("ativo") ?? true;
 
   async function buscarCnpj() {
@@ -289,11 +298,9 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
                   <FileCheck className="w-3.5 h-3.5" /> Contrato
                 </span>
               )}
-              {statusFin && (
-                <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", COR_STATUS_FINANCEIRO[statusFin])}>
-                  {LABELS_STATUS_FINANCEIRO[statusFin]}
-                </span>
-              )}
+              <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", COR_STATUS_FINANCEIRO_CALC[statusCalc])}>
+                {LABELS_STATUS_FINANCEIRO_CALC[statusCalc]}
+              </span>
               {!ativoVal && <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Inativo</span>}
             </div>
             <BotoesAcao compact />
@@ -408,10 +415,21 @@ export function ClienteForm({ initialData }: ClienteFormProps) {
                 {Object.entries(LABELS_ORIGEM).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
               </Select>
             </FormField>
-            <FormField label="Status financeiro">
-              <Select {...register("statusFinanceiro")}>
-                {Object.entries(LABELS_STATUS_FINANCEIRO).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
-              </Select>
+            <FormField label="Status financeiro" hint="Calculado automaticamente pelas contas a receber">
+              <div className="flex flex-col gap-1.5 pt-1.5">
+                <span className={cn("inline-flex w-fit items-center text-xs font-semibold px-2.5 py-1 rounded-full", COR_STATUS_FINANCEIRO_CALC[statusCalc])}>
+                  {LABELS_STATUS_FINANCEIRO_CALC[statusCalc]}
+                </span>
+                {isEditing && statusCalc !== "SEM_HISTORICO" && totalProx > 0 && (
+                  <Link
+                    href={`/financeiro/contas-receber?clienteId=${initialData!.id}`}
+                    className="inline-flex w-fit items-center gap-1 text-xs text-ink-muted hover:text-primary-600 transition-colors"
+                  >
+                    A receber (30 dias): {formatarMoeda(totalProx)}
+                    <ArrowUpRight className="w-3 h-3" />
+                  </Link>
+                )}
+              </div>
             </FormField>
           </FormGrid>
           <div className="border-t border-gray-100 pt-1">

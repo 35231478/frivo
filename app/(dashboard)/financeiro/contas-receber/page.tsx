@@ -5,7 +5,12 @@ import { ContasReceberView, type ContaView } from "@/components/financeiro/conta
 
 export const metadata: Metadata = { title: "Contas a Receber" };
 
-export default async function ContasReceberPage() {
+export default async function ContasReceberPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ clienteId?: string }>;
+}) {
+  const { clienteId = "" } = await searchParams;
   const session = await auth();
   const empresaId = session!.user!.empresaId;
 
@@ -60,6 +65,7 @@ export default async function ContasReceberPage() {
       clientes={clientes.map((c) => ({ id: c.id, nome: c.nomeFantasia ?? c.nome }))}
       categorias={categorias}
       interAtivo={!!integracao?.ativo}
+      clienteIdInicial={clienteId}
     />
   );
 }

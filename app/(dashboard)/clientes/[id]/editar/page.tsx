@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ClienteForm } from "@/components/forms/cliente-form";
+import { calcularStatusFinanceiroDetalhado } from "@/lib/status-financeiro";
 
 export const metadata: Metadata = { title: "Editar Cliente" };
 
@@ -24,5 +25,7 @@ export default async function EditarClientePage({ params }: { params: Promise<{ 
   });
   if (!cliente) notFound();
 
-  return <ClienteForm initialData={cliente} />;
+  const { status, totalProximos30Dias } = await calcularStatusFinanceiroDetalhado(id, empresaId);
+
+  return <ClienteForm initialData={cliente} statusFinanceiroCalc={status} totalProximos30Dias={totalProximos30Dias} />;
 }
