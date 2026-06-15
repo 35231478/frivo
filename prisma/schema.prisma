@@ -74,6 +74,34 @@ enum StatusContrato {
   ENCERRADO
   VENCIDO
   AGUARDANDO_ASSINATURA
+  EM_RENOVACAO
+}
+
+enum TipoVencimento {
+  DIAS_APOS_FATURAMENTO
+  DIA_FIXO_MES
+}
+
+enum IndiceReajuste {
+  IPCA
+  IGPM
+  INPC
+  PERCENTUAL_FIXO
+}
+
+enum PeriodoRefNFSe {
+  MES_ANTERIOR_FATURAMENTO
+  MES_FATURAMENTO
+  MES_POSTERIOR_FATURAMENTO
+  MES_ANTERIOR_VENCIMENTO
+  MES_VENCIMENTO
+}
+
+enum PeriodoVisita {
+  MES
+  TRIMESTRE
+  SEMESTRE
+  ANO
 }
 
 enum Periodicidade {
@@ -958,6 +986,45 @@ model Contrato {
   observacoes          String?
   documento            String?
 
+  // Faturamento / NFS-e
+  diaFaturamento          Int?                 @map("dia_faturamento")
+  tipoVencimento          TipoVencimento?      @map("tipo_vencimento")
+  diasAposVencimento      Int?                 @map("dias_apos_vencimento")
+  diaFixoMes              Int?                 @map("dia_fixo_mes")
+  ajusteFinsDeSemana      TratamentoFimSemana? @map("ajuste_fins_de_semana")
+  descricaoNFSe           String?              @map("descricao_nfse")
+  adicionarPeriodoRef     Boolean              @default(false) @map("adicionar_periodo_ref")
+  periodoRefOpcao         PeriodoRefNFSe?      @map("periodo_ref_opcao")
+  adicionarNumContrato    Boolean              @default(false) @map("adicionar_num_contrato")
+  adicionarVencimentoNFSe Boolean              @default(false) @map("adicionar_vencimento_nfse")
+
+  // Escopo
+  descricaoServicos    String?        @map("descricao_servicos")
+  itensInclusos        Json?          @map("itens_inclusos")
+  qtdVisitas           Int?           @map("qtd_visitas")
+  periodoVisitas       PeriodoVisita? @map("periodo_visitas")
+
+  // Responsabilidade técnica (artNumero/responsavelTecnicoId acima)
+  artVencimento DateTime? @map("art_vencimento")
+  exibirRTNFSe  Boolean   @default(false) @map("exibir_rt_nfse")
+  exibirRTPDF   Boolean   @default(false) @map("exibir_rt_pdf")
+
+  // Reajuste
+  reajusteAtivo          Boolean         @default(false) @map("reajuste_ativo")
+  reajusteIndice         IndiceReajuste? @map("reajuste_indice")
+  reajustePercentual     Decimal?        @map("reajuste_percentual") @db.Decimal(6, 3)
+  reajusteMesAniversario Int?            @map("reajuste_mes_aniversario")
+  reajusteNotificar      Boolean         @default(false) @map("reajuste_notificar")
+  reajusteNotificarDias  Int?            @map("reajuste_notificar_dias")
+
+  // Alertas e renovação
+  alertaDias                Int?    @default(30) @map("alerta_dias")
+  renovacaoAutomatica       Boolean @default(false) @map("renovacao_automatica")
+  renovacaoMeses            Int?    @map("renovacao_meses")
+  notificarClienteRenovacao Boolean @default(false) @map("notificar_cliente_renovacao")
+  notificarClienteDias      Int?    @map("notificar_cliente_dias")
+  alertaEmailCliente        Boolean @default(false) @map("alerta_email_cliente")
+
   // Recorrência de OS
   recorrencia           Boolean              @default(false)
   frequenciaRecorrencia Periodicidade?       @map("frequencia_recorrencia")
@@ -982,9 +1049,45 @@ model Contrato {
   ordensServico      OrdemServico[]
   medicoes           Medicao[]
   relatorios         RelatorioOs[]
+  anexos             AnexoContrato[]
+  reajustes          ReajusteContrato[]
 
   @@unique([numero, empresaId])
   @@map("contratos")
+}
+
+// Documentos/anexos do contrato (PDF assinado e demais arquivos)
+model AnexoContrato {
+  id         String   @id @default(cuid())
+  empresaId  String   @map("empresa_id")
+  contratoId String   @map("contrato_id")
+  nome       String
+  tipo       String
+  tamanho    Int
+  conteudo   String   @db.Text
+  categoria  String?  // ASSINADO | ANEXO
+  criadoEm   DateTime @default(now()) @map("criado_em")
+
+  contrato Contrato @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+
+  @@map("anexos_contrato")
+}
+
+// Histórico de reajustes aplicados ao contrato
+model ReajusteContrato {
+  id            String   @id @default(cuid())
+  empresaId     String   @map("empresa_id")
+  contratoId    String   @map("contrato_id")
+  data          DateTime @default(now())
+  indice        String
+  percentual    Decimal  @db.Decimal(6, 3)
+  valorAnterior Decimal  @map("valor_anterior") @db.Decimal(10, 2)
+  valorNovo     Decimal  @map("valor_novo") @db.Decimal(10, 2)
+  criadoEm      DateTime @default(now()) @map("criado_em")
+
+  contrato Contrato @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+
+  @@map("reajustes_contrato")
 }
 
 // tabela de junção contrato <-> unidade

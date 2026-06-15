@@ -452,6 +452,75 @@ export const LABELS_TRATAMENTO_FIM_SEMANA: Record<string, string> = {
   POSTERGAR: "Postergar para segunda-feira",
 };
 
+// ── Contratos ──
+export const LABELS_TIPO_CONTRATO: Record<string, string> = {
+  MANUTENCAO_PREVENTIVA: "Manutenção Preventiva",
+  MANUTENCAO_CORRETIVA: "Manutenção Corretiva",
+  MANUTENCAO_COMPLETA: "Manutenção Completa",
+  INSTALACAO: "Instalação",
+  LOCACAO: "Locação",
+  ASSISTENCIA_TECNICA: "Assistência Técnica",
+};
+
+export const LABELS_STATUS_CONTRATO: Record<string, string> = {
+  ATIVO: "Ativo",
+  SUSPENSO: "Suspenso",
+  ENCERRADO: "Encerrado",
+  VENCIDO: "Vencido",
+  AGUARDANDO_ASSINATURA: "Aguardando Assinatura",
+  EM_RENOVACAO: "Em renovação",
+};
+
+// Status oferecidos no formulário de contrato (subconjunto do enum).
+export const STATUS_CONTRATO_FORM = ["ATIVO", "SUSPENSO", "ENCERRADO", "EM_RENOVACAO"] as const;
+
+// Ajuste de fins de semana/feriados para o vencimento da parcela.
+export const LABELS_AJUSTE_FIM_SEMANA: Record<string, string> = {
+  ADIANTAR: "Antecipar para dia útil anterior",
+  POSTERGAR: "Postergar para próximo dia útil",
+  MANTER: "Manter data original",
+};
+
+export const LABELS_TIPO_VENCIMENTO: Record<string, string> = {
+  DIAS_APOS_FATURAMENTO: "Dias após o faturamento",
+  DIA_FIXO_MES: "Dia fixo do mês",
+};
+
+export const LABELS_INDICE_REAJUSTE: Record<string, string> = {
+  IPCA: "IPCA",
+  IGPM: "IGP-M",
+  INPC: "INPC",
+  PERCENTUAL_FIXO: "Percentual fixo",
+};
+
+export const LABELS_PERIODO_REF_NFSE: Record<string, string> = {
+  MES_ANTERIOR_FATURAMENTO: "Mês anterior ao faturamento",
+  MES_FATURAMENTO: "Mês do faturamento",
+  MES_POSTERIOR_FATURAMENTO: "Mês posterior ao faturamento",
+  MES_ANTERIOR_VENCIMENTO: "Mês anterior ao vencimento",
+  MES_VENCIMENTO: "Mês do vencimento",
+};
+
+export const LABELS_PERIODO_VISITA: Record<string, string> = {
+  MES: "por mês",
+  TRIMESTRE: "por trimestre",
+  SEMESTRE: "por semestre",
+  ANO: "por ano",
+};
+
+export const LABELS_MES: Record<number, string> = {
+  1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
+  7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro",
+};
+
+// Itens inclusos padrão do escopo do contrato (checklist).
+export const ITENS_INCLUSOS_CONTRATO = [
+  { chave: "manutencaoPreventivaMensal", label: "Manutenção preventiva mensal" },
+  { chave: "limpezaQuimicaSemestral", label: "Limpeza química semestral" },
+  { chave: "atendimentoCorretivo", label: "Atendimento corretivo" },
+  { chave: "relatorioPmoc", label: "Relatório PMOC" },
+] as const;
+
 export const LABELS_TIPO_RELATORIO: Record<string, string> = {
   PMOC: "PMOC",
   MANUTENCAO: "Relatório de Manutenção",

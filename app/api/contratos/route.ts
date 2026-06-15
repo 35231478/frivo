@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { contratoSchema } from "@/lib/validations";
+import { gerarPrevisaoContratoContasReceber } from "@/lib/financeiro-server";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
   });
   if (dup) return NextResponse.json({ erro: "Número de contrato já cadastrado" }, { status: 409 });
 
-  const { unidadeIds, dataInicio, dataFim, valorMensal, valorTotal, responsavelTecnicoId, tipoOsRecorrenciaId, tecnicoRecorrenciaId, ...resto } = parsed.data;
+  const { unidadeIds, dataInicio, dataFim, valorMensal, valorTotal, responsavelTecnicoId, tipoOsRecorrenciaId, tecnicoRecorrenciaId, artVencimento, itensInclusos, ...resto } = parsed.data;
 
   const contrato = await prisma.contrato.create({
     data: {
@@ -50,12 +51,17 @@ export async function POST(req: NextRequest) {
       responsavelTecnicoId: responsavelTecnicoId || null,
       tipoOsRecorrenciaId: tipoOsRecorrenciaId || null,
       tecnicoRecorrenciaId: tecnicoRecorrenciaId || null,
+      artVencimento: artVencimento ? new Date(artVencimento) : null,
+      ...(itensInclusos ? { itensInclusos: itensInclusos as any } : {}),
       unidades: {
         create: unidadeIds.map((unidadeId) => ({ unidadeId })),
       },
     },
     include: { unidades: true },
   });
+
+  // Gera a previsão de contas a receber (idempotente).
+  await gerarPrevisaoContratoContasReceber(contrato.id).catch(() => 0);
 
   return NextResponse.json(contrato, { status: 201 });
 }

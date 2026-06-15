@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { contratoSchema } from "@/lib/validations";
+import { gerarPrevisaoContratoContasReceber } from "@/lib/financeiro-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -17,6 +18,8 @@ export async function GET(_: NextRequest, { params }: Params) {
       cliente: { select: { id: true, nome: true, nomeFantasia: true } },
       responsavelTecnico: { select: { id: true, nome: true, crea: true } },
       unidades: { include: { unidade: true } },
+      anexos: { select: { id: true, nome: true, tipo: true, tamanho: true, categoria: true, criadoEm: true }, orderBy: { criadoEm: "desc" } },
+      reajustes: { orderBy: { data: "desc" } },
     },
   });
   if (!contrato) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
@@ -45,7 +48,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (dup) return NextResponse.json({ erro: "Número já cadastrado" }, { status: 409 });
   }
 
-  const { unidadeIds, dataInicio, dataFim, valorMensal, valorTotal, responsavelTecnicoId, tipoOsRecorrenciaId, tecnicoRecorrenciaId, ...resto } = parsed.data;
+  const { unidadeIds, dataInicio, dataFim, valorMensal, valorTotal, responsavelTecnicoId, tipoOsRecorrenciaId, tecnicoRecorrenciaId, artVencimento, itensInclusos, ...resto } = parsed.data;
 
   const atualizado = await prisma.$transaction(async (tx) => {
     await tx.contratoUnidade.deleteMany({ where: { contratoId: id } });
@@ -60,6 +63,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
         responsavelTecnicoId: responsavelTecnicoId || null,
         tipoOsRecorrenciaId: tipoOsRecorrenciaId || null,
         tecnicoRecorrenciaId: tecnicoRecorrenciaId || null,
+        artVencimento: artVencimento ? new Date(artVencimento) : null,
+        ...(itensInclusos ? { itensInclusos: itensInclusos as any } : {}),
         unidades: {
           create: unidadeIds.map((unidadeId) => ({ unidadeId })),
         },
@@ -67,6 +72,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
       include: { unidades: true },
     });
   });
+
+  // Atualiza a previsão de contas a receber (idempotente).
+  await gerarPrevisaoContratoContasReceber(id).catch(() => 0);
 
   return NextResponse.json(atualizado);
 }

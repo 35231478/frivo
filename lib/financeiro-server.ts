@@ -153,6 +153,99 @@ export async function criarMedicaoDeRelatorio(relatorioId: string) {
 }
 
 // ─────────────────────────────────────────────
+// CONTRATOS → PREVISÃO DE CONTAS A RECEBER
+// ─────────────────────────────────────────────
+
+function addMonths(d: Date, n: number): Date { const x = new Date(d); x.setDate(1); x.setMonth(x.getMonth() + n); return x; }
+function addDays(d: Date, n: number): Date { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+function diaDoMes(ano: number, mes0: number, dia: number): Date {
+  const ultimo = new Date(ano, mes0 + 1, 0).getDate();
+  return new Date(ano, mes0, Math.min(dia, ultimo));
+}
+/** Ajusta uma data que cai no fim de semana conforme o tratamento escolhido. */
+function ajustarFimDeSemana(d: Date, modo: string | null | undefined): Date {
+  const wd = d.getDay(); // 0=dom, 6=sáb
+  if (modo === "ADIANTAR") { if (wd === 6) return addDays(d, -1); if (wd === 0) return addDays(d, -2); }
+  else if (modo === "POSTERGAR") { if (wd === 6) return addDays(d, 2); if (wd === 0) return addDays(d, 1); }
+  return d;
+}
+const PASSO_PERIODICIDADE: Record<string, number> = {
+  SEMANAL: 1, QUINZENAL: 1, MENSAL: 1, BIMESTRAL: 2, TRIMESTRAL: 3, SEMESTRAL: 6, ANUAL: 12,
+};
+
+/**
+ * Gera (de forma idempotente) a previsão de contas a receber de um contrato.
+ * Cria uma conta PREVISTO por período de faturamento, apenas para datas futuras
+ * (de hoje em diante), até o fim da vigência ou, se indeterminada, +12 meses.
+ * Não duplica períodos já gerados (chave: numero "<contrato>/AAAAMM").
+ * Retorna a quantidade de contas criadas.
+ */
+export async function gerarPrevisaoContratoContasReceber(contratoId: string): Promise<number> {
+  const contrato = await prisma.contrato.findUnique({
+    where: { id: contratoId },
+    include: { cliente: { select: { cpfCnpj: true } } },
+  });
+  if (!contrato) return 0;
+  const valor = contrato.valorMensal ? Number(contrato.valorMensal) : 0;
+  if (valor <= 0) return 0;
+  if (contrato.status === "ENCERRADO" || contrato.status === "SUSPENSO") return 0;
+
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const inicio = new Date(contrato.dataInicio);
+  const fim = contrato.dataFim ? new Date(contrato.dataFim) : addMonths(hoje, 12);
+  const passo = PASSO_PERIODICIDADE[contrato.periodicidade] ?? 1;
+
+  const diaFat = contrato.diaFaturamento ?? contrato.diaFixoMes ?? contrato.diaVencimento ?? 1;
+  const base = `${contrato.descricaoNFSe?.trim() || `Contrato ${contrato.numero}`}`;
+
+  let criadas = 0;
+  for (let k = 0; k < 120; k++) {
+    const refMes = addMonths(inicio, k * passo);
+    if (refMes > fim) break;
+    const ano = refMes.getFullYear();
+    const mes0 = refMes.getMonth();
+
+    const dataFaturamento = diaDoMes(ano, mes0, diaFat);
+    if (dataFaturamento < hoje) continue; // apenas futuras
+
+    // Vencimento
+    let venc: Date;
+    if (contrato.tipoVencimento === "DIA_FIXO_MES" && contrato.diaFixoMes) {
+      venc = diaDoMes(ano, mes0, contrato.diaFixoMes);
+    } else {
+      venc = addDays(dataFaturamento, contrato.diasAposVencimento ?? 0);
+    }
+    venc = ajustarFimDeSemana(venc, contrato.ajusteFinsDeSemana);
+
+    const tag = `${ano}${String(mes0 + 1).padStart(2, "0")}`;
+    const numero = `${contrato.numero}/${tag}`;
+
+    const existente = await prisma.contaReceber.findFirst({
+      where: { empresaId: contrato.empresaId, clienteId: contrato.clienteId, numero },
+      select: { id: true },
+    });
+    if (existente) continue;
+
+    await prisma.contaReceber.create({
+      data: {
+        empresaId: contrato.empresaId,
+        clienteId: contrato.clienteId,
+        numero,
+        descricao: `${base} — Ref. ${String(mes0 + 1).padStart(2, "0")}/${ano}`,
+        valor,
+        status: "PREVISTO",
+        dataVencimento: venc,
+        categoria: "Contrato",
+        clienteCnpj: contrato.cliente?.cpfCnpj ?? null,
+      },
+    });
+    criadas++;
+  }
+
+  return criadas;
+}
+
+// ─────────────────────────────────────────────
 // CONTAS A PAGAR
 // ─────────────────────────────────────────────
 

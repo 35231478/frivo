@@ -32,7 +32,7 @@ import Link from "next/link";
 import type { Cliente, Tecnico, Unidade, Configuracao, ContatoCliente } from "@prisma/client";
 import {
   Search, Loader2, FileCheck, Lock, Pencil, Plus, X, Mail, AlertCircle,
-  FileText, Phone, MapPin, HardHat, Image as ImageIcon, Heart, Headset,
+  FileText, Phone, MapPin, Image as ImageIcon, Heart, Headset,
   Building2, Tag, DollarSign, Users, Paperclip, Star, MessageSquare, Globe, ArrowUpRight, Send,
 } from "lucide-react";
 
@@ -60,7 +60,6 @@ const CAMPO_ABA: Record<string, string> = {
   tipoPessoa: "geral", cpfCnpj: "geral", nome: "geral", nomeFantasia: "geral", inscricaoEstadual: "geral",
   segmento: "geral", origem: "geral", statusFinanceiro: "geral", ativo: "geral",
   email: "contatos", telefone: "contatos", celular: "contatos", contato: "contatos",
-  responsavelTecnicoId: "tecnico", artNumero: "tecnico",
   observacoes: "relacionamento",
 };
 
@@ -78,7 +77,6 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
   const temContrato = (initialData?._count?.contratos ?? 0) > 0;
   const [erroGlobal, setErroGlobal] = useState("");
   const [buscandoCnpj, setBuscandoCnpj] = useState(false);
-  const [responsaveis, setResponsaveis] = useState<ResponsavelItem[]>([]);
   const [unidadesNovas, setUnidadesNovas] = useState<UnidadeLocal[]>([]);
   const [anexosNovos, setAnexosNovos] = useState<AnexoLocal[]>([]);
   const [contatosNovos, setContatosNovos] = useState<ContatoLocal[]>([]);
@@ -121,7 +119,6 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
   const [emailsCopia, setEmailsCopia] = useState<string[]>(initialData?.emailsCopia ?? []);
 
   useEffect(() => {
-    fetch("/api/tecnicos?tipo=RESPONSAVEL_TECNICO").then((r) => r.json()).then(setResponsaveis).catch(() => {});
     fetch("/api/configuracoes").then((r) => r.json()).then(setConfig).catch(() => {});
     fetch("/api/tabelas-preco").then((r) => r.json()).then((d) => setTabelas(Array.isArray(d) ? d.filter((t: any) => t.ativo !== false) : [])).catch(() => {});
   }, []);
@@ -183,8 +180,6 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
     if (config.clienteEmailObrigatorio && !watch("email")) return { aba: "contatos", msg: "E-mail é obrigatório (configuração da empresa)." };
     if (config.clienteWhatsappObrigatorio && !watch("celular")) return { aba: "contatos", msg: "WhatsApp é obrigatório (configuração da empresa)." };
     if (config.clienteTelefoneObrigatorio && !watch("telefone")) return { aba: "contatos", msg: "Telefone é obrigatório (configuração da empresa)." };
-    if (config.clienteRtObrigatorio && !watch("responsavelTecnicoId")) return { aba: "tecnico", msg: "Responsável técnico é obrigatório (configuração da empresa)." };
-    if (config.clienteArtObrigatorio && !watch("artNumero")) return { aba: "tecnico", msg: "Número ART é obrigatório (configuração da empresa)." };
     if (config.clienteExigirUnidade && !isEditing && unidadesNovas.length === 0) return { aba: "enderecos", msg: "Adicione pelo menos um endereço antes de salvar (configuração da empresa)." };
     return null;
   }
@@ -257,7 +252,6 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
     { id: "contatos", label: "Contatos", icone: Phone, badge: qtdContatos },
     { id: "comunicacao", label: "Comunicação", icone: Send },
     { id: "enderecos", label: "Endereços", icone: MapPin, badge: qtdEnderecos },
-    { id: "tecnico", label: "Técnico e ART", icone: HardHat },
     { id: "documentos", label: "Documentos e Mídia", icone: ImageIcon, badge: qtdAnexos },
     { id: "relacionamento", label: "Relacionamento", icone: Heart },
     { id: "portal", label: "Portal", icone: Headset },
@@ -569,25 +563,6 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
               enderecoCliente={{ endereco: initialData!.endereco, numero: initialData!.numero, complemento: initialData!.complemento, bairro: initialData!.bairro, cidade: initialData!.cidade, estado: initialData!.estado, cep: initialData!.cep, telefone: initialData!.telefone }} />
           ) : (
             <UnidadesLocal unidades={unidadesNovas} onChange={setUnidadesNovas} />
-          )}
-        </FormSection>
-      </Painel>
-
-      {/* ABA 4 — Técnico e ART */}
-      <Painel ativo={aba === "tecnico"}>
-        <FormSection title="Responsável técnico e ART" icon={<HardHat className="w-3.5 h-3.5" />}>
-          <FormGrid>
-            <FormField label={reqLabel("Responsável técnico", "clienteRtObrigatorio")} hint="Engenheiro responsável">
-              <Select {...register("responsavelTecnicoId")} placeholder="Selecione">
-                {responsaveis.map((rt) => (<option key={rt.id} value={rt.id}>{rt.nome}{rt.crea ? ` — CREA ${rt.crea}` : ""}</option>))}
-              </Select>
-            </FormField>
-            <FormField label={reqLabel("Número ART", "clienteArtObrigatorio")} hint="Anotação de Responsabilidade Técnica">
-              <Input {...register("artNumero")} placeholder="Ex: ART-2024-001234" />
-            </FormField>
-          </FormGrid>
-          {watch("responsavelTecnicoId") && (
-            <p className="text-xs text-ink-muted">CREA do responsável: {responsaveis.find((r) => r.id === watch("responsavelTecnicoId"))?.crea || "não informado"}</p>
           )}
         </FormSection>
       </Painel>

@@ -11,6 +11,7 @@ import {
   ResponsavelPrazo, CanalNotificacao, StatusPedidoCompra,
   TipoTabelaPreco, TipoPrecoTabela,
   TratamentoFimSemana, TipoRelatorio,
+  TipoVencimento, IndiceReajuste, PeriodoRefNFSe, PeriodoVisita,
   StatusColaborador, TipoVeiculo, StatusVeiculo, StatusEquipe,
   TipoManutencaoVeiculo, TipoDocumentoVeiculo, FrequenciaChecklist, TipoItemChecklist,
 } from "@prisma/client";
@@ -220,6 +221,45 @@ export const contratoSchema = z.object({
   ).default(null),
   tipoOsRecorrenciaId: z.string().optional().nullable(),
   tecnicoRecorrenciaId: z.string().optional().nullable(),
+
+  // Faturamento / NFS-e
+  diaFaturamento: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().min(1).max(28).nullable()).default(null),
+  tipoVencimento: z.preprocess((v) => (v === "" || v == null ? null : v), z.nativeEnum(TipoVencimento).nullable()).default(null),
+  diasAposVencimento: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().min(0).max(365).nullable()).default(null),
+  diaFixoMes: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().min(1).max(31).nullable()).default(null),
+  ajusteFinsDeSemana: z.preprocess((v) => (v === "" || v == null ? null : v), z.nativeEnum(TratamentoFimSemana).nullable()).default(null),
+  descricaoNFSe: z.string().optional().nullable(),
+  adicionarPeriodoRef: z.boolean().default(false),
+  periodoRefOpcao: z.preprocess((v) => (v === "" || v == null ? null : v), z.nativeEnum(PeriodoRefNFSe).nullable()).default(null),
+  adicionarNumContrato: z.boolean().default(false),
+  adicionarVencimentoNFSe: z.boolean().default(false),
+
+  // Escopo
+  descricaoServicos: z.string().optional().nullable(),
+  itensInclusos: z.record(z.any()).optional().nullable(),
+  qtdVisitas: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().min(0).nullable()).default(null),
+  periodoVisitas: z.preprocess((v) => (v === "" || v == null ? null : v), z.nativeEnum(PeriodoVisita).nullable()).default(null),
+
+  // Responsabilidade técnica
+  artVencimento: z.string().optional().nullable(),
+  exibirRTNFSe: z.boolean().default(false),
+  exibirRTPDF: z.boolean().default(false),
+
+  // Reajuste
+  reajusteAtivo: z.boolean().default(false),
+  reajusteIndice: z.preprocess((v) => (v === "" || v == null ? null : v), z.nativeEnum(IndiceReajuste).nullable()).default(null),
+  reajustePercentual: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().min(0).nullable()).default(null),
+  reajusteMesAniversario: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().min(1).max(12).nullable()).default(null),
+  reajusteNotificar: z.boolean().default(false),
+  reajusteNotificarDias: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().min(0).nullable()).default(null),
+
+  // Alertas e renovação
+  alertaDias: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().min(0).nullable()).default(30),
+  renovacaoAutomatica: z.boolean().default(false),
+  renovacaoMeses: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().min(1).nullable()).default(null),
+  notificarClienteRenovacao: z.boolean().default(false),
+  notificarClienteDias: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().min(0).nullable()).default(null),
+  alertaEmailCliente: z.boolean().default(false),
 });
 
 export const ordemServicoSchema = z.object({
