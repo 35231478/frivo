@@ -21,6 +21,7 @@ import { LogoUpload } from "@/components/forms/logo-upload";
 import { ContatosManager } from "@/components/forms/contatos-manager";
 import { ContatosLocal, type ContatoLocal } from "@/components/forms/contatos-local";
 import { ComunicacaoManager } from "@/components/forms/comunicacao-manager";
+import { ClienteContratos } from "@/components/forms/cliente-contratos";
 import { InteracoesManager } from "@/components/forms/interacoes-manager";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { LABELS_SEGMENTO, LABELS_ORIGEM, LABELS_PERFIL_FATURAMENTO, PERMISSOES_PORTAL, formatarMoeda } from "@/lib/utils";
@@ -33,7 +34,7 @@ import type { Cliente, Tecnico, Unidade, Configuracao, ContatoCliente } from "@p
 import {
   Search, Loader2, FileCheck, Lock, Pencil, Plus, X, Mail, AlertCircle,
   FileText, Phone, MapPin, Image as ImageIcon, Heart, Headset,
-  Building2, Tag, DollarSign, Users, Paperclip, Star, MessageSquare, Globe, ArrowUpRight, Send,
+  Building2, Tag, DollarSign, Users, Paperclip, Star, MessageSquare, Globe, ArrowUpRight, Send, FileSignature,
 } from "lucide-react";
 
 type ResponsavelItem = Pick<Tecnico, "id" | "nome" | "crea">;
@@ -74,7 +75,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
   const isEditing = !!initialData;
   const statusCalc: StatusFinanceiroCalc = statusFinanceiroCalc ?? "SEM_HISTORICO";
   const totalProx = totalProximos30Dias ?? 0;
-  const temContrato = (initialData?._count?.contratos ?? 0) > 0;
+  const qtdContratosAtivos = initialData?._count?.contratos ?? 0;
   const [erroGlobal, setErroGlobal] = useState("");
   const [buscandoCnpj, setBuscandoCnpj] = useState(false);
   const [unidadesNovas, setUnidadesNovas] = useState<UnidadeLocal[]>([]);
@@ -252,6 +253,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
     { id: "contatos", label: "Contatos", icone: Phone, badge: qtdContatos },
     { id: "comunicacao", label: "Comunicação", icone: Send },
     { id: "enderecos", label: "Endereços", icone: MapPin, badge: qtdEnderecos },
+    { id: "contratos", label: "Contratos", icone: FileSignature, badge: qtdContratosAtivos },
     { id: "documentos", label: "Documentos e Mídia", icone: ImageIcon, badge: qtdAnexos },
     { id: "relacionamento", label: "Relacionamento", icone: Heart },
     { id: "portal", label: "Portal", icone: Headset },
@@ -289,10 +291,23 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
           <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3 flex-wrap min-w-0">
               <h1 className="text-xl font-bold text-ink truncate">{titulo}</h1>
-              {isEditing && temContrato && (
-                <span className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium rounded-lg px-2.5 py-1">
-                  <FileCheck className="w-3.5 h-3.5" /> Contrato
-                </span>
+              {isEditing && (
+                <button
+                  type="button"
+                  onClick={() => setAba("contratos")}
+                  title="Ver contratos do cliente"
+                  className={cn(
+                    "inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-2.5 py-1 border transition-colors",
+                    qtdContratosAtivos > 0
+                      ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+                      : "bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200",
+                  )}
+                >
+                  <FileSignature className="w-3.5 h-3.5" />
+                  {qtdContratosAtivos > 0
+                    ? `${qtdContratosAtivos} contrato${qtdContratosAtivos > 1 ? "s" : ""} ativo${qtdContratosAtivos > 1 ? "s" : ""}`
+                    : "Sem contratos"}
+                </button>
               )}
               <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", COR_STATUS_FINANCEIRO_CALC[statusCalc])}>
                 {LABELS_STATUS_FINANCEIRO_CALC[statusCalc]}
@@ -563,6 +578,17 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
               enderecoCliente={{ endereco: initialData!.endereco, numero: initialData!.numero, complemento: initialData!.complemento, bairro: initialData!.bairro, cidade: initialData!.cidade, estado: initialData!.estado, cep: initialData!.cep, telefone: initialData!.telefone }} />
           ) : (
             <UnidadesLocal unidades={unidadesNovas} onChange={setUnidadesNovas} />
+          )}
+        </FormSection>
+      </Painel>
+
+      {/* ABA — Contratos */}
+      <Painel ativo={aba === "contratos"}>
+        <FormSection title="Contratos do cliente" icon={<FileSignature className="w-3.5 h-3.5" />}>
+          {isEditing ? (
+            <ClienteContratos clienteId={initialData!.id} />
+          ) : (
+            <p className="text-sm text-ink-muted">Salve o cliente para gerenciar os contratos.</p>
           )}
         </FormSection>
       </Painel>

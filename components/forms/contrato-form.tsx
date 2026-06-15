@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { contratoSchema, type ContratoInput } from "@/lib/validations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,7 +58,9 @@ const CAMPO_ABA: Record<string, string> = {
 
 export function ContratoForm({ initialData }: ContratoFormProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const isEditing = !!initialData;
+  const clienteIdParam = searchParams.get("clienteId") ?? "";
   const [erroGlobal, setErroGlobal] = useState("");
   const [aba, setAba] = useState("dados");
   const [abasErro, setAbasErro] = useState<Set<string>>(new Set());
@@ -69,7 +71,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
   const [responsaveis, setResponsaveis] = useState<ResponsavelItem[]>([]);
   const [tiposOs, setTiposOs] = useState<{ id: string; nome: string }[]>([]);
   const [tecnicos, setTecnicos] = useState<{ id: string; nome: string }[]>([]);
-  const [clienteIdSelecionado, setClienteIdSelecionado] = useState(initialData?.clienteId ?? "");
+  const [clienteIdSelecionado, setClienteIdSelecionado] = useState(initialData?.clienteId ?? clienteIdParam);
   const [gerandoNumero, setGerandoNumero] = useState(false);
 
   // Itens inclusos do escopo (JSON) — gerenciado fora do RHF
@@ -145,6 +147,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
           alertaEmailCliente: initialData.alertaEmailCliente ?? false,
         }
       : {
+          clienteId: clienteIdParam || undefined,
           status: "ATIVO",
           periodicidade: "MENSAL",
           unidadeIds: [],

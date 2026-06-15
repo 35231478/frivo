@@ -471,6 +471,15 @@ export const LABELS_STATUS_CONTRATO: Record<string, string> = {
   EM_RENOVACAO: "Em renovação",
 };
 
+export const COR_STATUS_CONTRATO: Record<string, string> = {
+  ATIVO: "bg-success-50 text-success-700",
+  SUSPENSO: "bg-amber-50 text-amber-700",
+  ENCERRADO: "bg-slate-100 text-slate-600",
+  VENCIDO: "bg-red-50 text-red-700",
+  AGUARDANDO_ASSINATURA: "bg-slate-100 text-slate-600",
+  EM_RENOVACAO: "bg-blue-50 text-blue-700",
+};
+
 // Status oferecidos no formulário de contrato (subconjunto do enum).
 export const STATUS_CONTRATO_FORM = ["ATIVO", "SUSPENSO", "ENCERRADO", "EM_RENOVACAO"] as const;
 
