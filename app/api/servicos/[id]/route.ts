@@ -38,6 +38,11 @@ export async function DELETE(_: NextRequest, { params }: Params) {
   const session = await auth();
   if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
   const { id } = await params;
+  const empresaId = session.user!.empresaId;
+
+  // Garante isolamento de tenant antes de desativar
+  const existente = await prisma.servico.findFirst({ where: { id, empresaId } });
+  if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
 
   await prisma.servico.update({ where: { id }, data: { ativo: false } });
   return NextResponse.json({ ok: true });
