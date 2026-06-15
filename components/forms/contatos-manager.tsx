@@ -86,6 +86,17 @@ export function ContatosManager({ clienteId, contatosIniciais }: ContatosManager
     } catch { setErro("Erro de conexão."); } finally { setSalvando(false); }
   }
 
+  function onAcessoChange(contatoId: string, info: { temAcesso: boolean; senhaProvisoria: string | null; acessoConcedidoEm: string | null }) {
+    setContatos((prev) => prev.map((c) => c.id === contatoId
+      ? {
+          ...c,
+          senha: info.temAcesso ? (c.senha ?? "set") : null,
+          senhaProvisoria: info.senhaProvisoria,
+          acessoConcedidoEm: info.acessoConcedidoEm ? new Date(info.acessoConcedidoEm) : c.acessoConcedidoEm,
+        }
+      : c));
+  }
+
   async function remover(id: string) {
     if (!confirm("Remover este contato?")) return;
     try {
@@ -154,6 +165,9 @@ export function ContatosManager({ clienteId, contatosIniciais }: ContatosManager
                     <span className="text-[10px] font-medium bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">
                       {LABELS_TIPO_CONTATO[c.tipo] ?? c.tipo}
                     </span>
+                    {c.senha && (
+                      <span className="text-[10px] font-semibold bg-success-50 text-success-700 px-1.5 py-0.5 rounded-full">Portal ativo</span>
+                    )}
                   </div>
                   {c.cargo && <p className="text-xs text-gray-500">{c.cargo}</p>}
                 </div>
@@ -177,8 +191,11 @@ export function ContatosManager({ clienteId, contatosIniciais }: ContatosManager
                   contatoNome={c.nome}
                   emailInicial={c.email}
                   whatsappInicial={c.whatsapp}
-                  temAcesso={!!(c as any).senha}
+                  temAcesso={!!c.senha}
+                  senhaProvisoriaInicial={c.senhaProvisoria}
+                  acessoConcedidoEmInicial={c.acessoConcedidoEm}
                   permissoesIniciais={((c as any).permissoes as Record<string, boolean> | null) ?? null}
+                  onChange={(info) => onAcessoChange(c.id, info)}
                 />
               </div>
             )}

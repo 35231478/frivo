@@ -22,6 +22,7 @@ import { ContatosManager } from "@/components/forms/contatos-manager";
 import { ContatosLocal, type ContatoLocal } from "@/components/forms/contatos-local";
 import { ComunicacaoContatos } from "@/components/forms/comunicacao-contatos";
 import { ClienteContratos } from "@/components/forms/cliente-contratos";
+import { PortalUsuarios } from "@/components/forms/portal-usuarios";
 import { InteracoesManager } from "@/components/forms/interacoes-manager";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { LABELS_SEGMENTO, LABELS_ORIGEM, LABELS_PERFIL_FATURAMENTO, PERMISSOES_PORTAL, formatarMoeda } from "@/lib/utils";
@@ -265,7 +266,6 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
   const qtdContatos = isEditing ? (initialData!.contatosCliente?.length ?? 0) : contatosNovos.length;
   const qtdEnderecos = isEditing ? (initialData!.unidades?.length ?? 0) : unidadesNovas.length;
   const qtdAnexos = isEditing ? (initialData!.anexos?.length ?? 0) : anexosNovos.length;
-  const contatosComPortal = (initialData?.contatosCliente ?? []).filter((c) => (c as any).senha);
 
   const ABAS = [
     { id: "geral", label: "Dados Gerais", icone: FileText },
@@ -676,22 +676,8 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
           />
           {!isEditing ? (
             <p className="text-xs text-gray-400">Salve o cliente para conceder acesso de portal aos contatos.</p>
-          ) : contatosComPortal.length === 0 ? (
-            <p className="text-sm text-ink-muted">Nenhum contato com acesso ao portal ainda. Conceda o acesso na aba <strong>Contatos</strong>.</p>
           ) : (
-            <div className="space-y-2">
-              <p className="text-xs font-bold text-ink-muted uppercase tracking-wider">Contatos com acesso</p>
-              {contatosComPortal.map((c) => {
-                const perms = ((c as any).permissoes as Record<string, boolean> | null) ?? {};
-                const qtd = PERMISSOES_PORTAL.filter((p) => perms[p.chave]).length;
-                return (
-                  <div key={c.id} className="flex items-center justify-between border border-surface-border rounded-lg px-3 py-2 text-sm">
-                    <span className="flex items-center gap-2"><Headset className="w-4 h-4 text-primary-600" /> {c.nome} <span className="text-ink-muted">· {c.email}</span></span>
-                    <span className="text-xs text-ink-muted">{qtd} permissão(ões)</span>
-                  </div>
-                );
-              })}
-            </div>
+            <PortalUsuarios clienteId={initialData!.id} ativo={aba === "portal"} />
           )}
         </FormSection>
       </Painel>

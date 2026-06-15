@@ -813,9 +813,11 @@ model ContatoCliente {
   ativo     Boolean     @default(true)
 
   // Acesso ao Portal do Cliente
-  senha        String?
-  ultimoAcesso DateTime? @map("ultimo_acesso")
-  permissoes   Json?
+  senha            String?
+  senhaProvisoria  String?   @map("senha_provisoria") // texto legível p/ consulta do gestor
+  acessoConcedidoEm DateTime? @map("acesso_concedido_em")
+  ultimoAcesso     DateTime? @map("ultimo_acesso")
+  permissoes       Json?
 
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
