@@ -229,6 +229,7 @@ export const contratoSchema = z.object({
   diaFixoMes: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().min(1).max(31).nullable()).default(null),
   ajusteFinsDeSemana: z.preprocess((v) => (v === "" || v == null ? null : v), z.nativeEnum(TratamentoFimSemana).nullable()).default(null),
   descricaoNFSe: z.string().optional().nullable(),
+  servicosNFSeIds: z.array(z.string()).default([]),
   adicionarPeriodoRef: z.boolean().default(false),
   periodoRefOpcao: z.preprocess((v) => (v === "" || v == null ? null : v), z.nativeEnum(PeriodoRefNFSe).nullable()).default(null),
   adicionarNumContrato: z.boolean().default(false),

@@ -993,6 +993,7 @@ model Contrato {
   diaFixoMes              Int?                 @map("dia_fixo_mes")
   ajusteFinsDeSemana      TratamentoFimSemana? @map("ajuste_fins_de_semana")
   descricaoNFSe           String?              @map("descricao_nfse")
+  servicosNFSeIds         String[]             @default([]) @map("servicos_nfse_ids")
   adicionarPeriodoRef     Boolean              @default(false) @map("adicionar_periodo_ref")
   periodoRefOpcao         PeriodoRefNFSe?      @map("periodo_ref_opcao")
   adicionarNumContrato    Boolean              @default(false) @map("adicionar_num_contrato")

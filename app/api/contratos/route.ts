@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { contratoSchema } from "@/lib/validations";
 import { gerarPrevisaoContratoContasReceber } from "@/lib/financeiro-server";
+import { gerarOsRecorrentesContrato } from "@/lib/recorrencia-server";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -62,6 +63,8 @@ export async function POST(req: NextRequest) {
 
   // Gera a previsão de contas a receber (idempotente).
   await gerarPrevisaoContratoContasReceber(contrato.id).catch(() => 0);
+  // Gera as OS recorrentes futuras (idempotente), se a recorrência estiver ativa.
+  if (contrato.recorrencia) await gerarOsRecorrentesContrato(contrato.id, session.user!.id).catch(() => 0);
 
   return NextResponse.json(contrato, { status: 201 });
 }

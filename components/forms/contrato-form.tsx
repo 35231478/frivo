@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { ContratoDocumentos } from "@/components/forms/contrato-documentos";
+import { proximasOcorrencias } from "@/lib/recorrencia-helpers";
 import {
   FREQUENCIAS_RECORRENCIA, LABELS_PERIODICIDADE, LABELS_TRATAMENTO_FIM_SEMANA,
   LABELS_TIPO_CONTRATO, LABELS_STATUS_CONTRATO, STATUS_CONTRATO_FORM,
@@ -23,7 +24,15 @@ import type { Contrato, Tecnico, Unidade } from "@prisma/client";
 import {
   FileText, CalendarClock, ClipboardList, HardHat, MapPin, TrendingUp, BellRing,
   Paperclip, Repeat, StickyNote, Building2, FileCheck, AlertCircle, Wand2, DollarSign, Receipt,
+  Plus, Search, Check, X, CalendarDays,
 } from "lucide-react";
+
+const ESTADOS_BR = [
+  "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
+  "PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO",
+];
+
+const emptyEndereco = () => ({ nome: "", cep: "", logradouro: "", numero: "", complemento: "", bairro: "", cidade: "", estado: "" });
 
 function toDateInput(date: Date | null | undefined) {
   if (!date) return "";
@@ -82,6 +91,17 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
     return o;
   });
   const [outrosItens, setOutrosItens] = useState<string>(itensIniciais.outros ?? "");
+
+  // Serviços para a NFS-e (seleção múltipla)
+  const [servicos, setServicos] = useState<{ id: string; nome: string; descricao?: string | null }[]>([]);
+  const [servicosSelecionados, setServicosSelecionados] = useState<string[]>(initialData?.servicosNFSeIds ?? []);
+
+  // Novo endereço inline (aba Locais)
+  const [mostrarNovoEndereco, setMostrarNovoEndereco] = useState(false);
+  const [endereco, setEndereco] = useState(emptyEndereco());
+  const [buscandoCep, setBuscandoCep] = useState(false);
+  const [salvandoEndereco, setSalvandoEndereco] = useState(false);
+  const [erroEndereco, setErroEndereco] = useState("");
 
   const unidadeIdsIniciais = initialData?.unidades?.map((u) => u.unidade.id) ?? [];
 
@@ -179,13 +199,21 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
   const adicionarPeriodoRefVal = watch("adicionarPeriodoRef");
   const tipoVencimentoVal = watch("tipoVencimento");
   const statusVal = watch("status");
+  const dataInicioVal = watch("dataInicio");
   const dataFimVal = watch("dataFim");
+  const valorMensalVal = watch("valorMensal");
+  const freqRecVal = watch("frequenciaRecorrencia");
+  const diaRecVal = watch("diaRecorrencia");
+  const fimSemanaRecVal = watch("fimSemanaRecorrencia");
+  const tipoOsRecVal = watch("tipoOsRecorrenciaId");
+  const tecnicoRecVal = watch("tecnicoRecorrenciaId");
 
   useEffect(() => {
     fetch("/api/clientes").then((r) => r.json()).then((d) => setClientes(Array.isArray(d) ? d : [])).catch(() => {});
     fetch("/api/tecnicos?tipo=RESPONSAVEL_TECNICO").then((r) => r.json()).then((d) => setResponsaveis(Array.isArray(d) ? d : [])).catch(() => {});
     fetch("/api/tipos-os").then((r) => r.json()).then((d) => setTiposOs(Array.isArray(d) ? d : [])).catch(() => {});
     fetch("/api/tecnicos").then((r) => r.json()).then((d) => setTecnicos(Array.isArray(d) ? d : [])).catch(() => {});
+    fetch("/api/servicos").then((r) => r.json()).then((d) => setServicos(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -203,6 +231,77 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
     } catch {} finally { setGerandoNumero(false); }
   }
 
+  // Meses entre início e fim da vigência (inclusivo). null se indeterminado/ inválido.
+  const mesesVigencia = (() => {
+    if (!dataInicioVal || !dataFimVal) return null;
+    const a = new Date(`${dataInicioVal}T00:00:00`);
+    const b = new Date(`${dataFimVal}T00:00:00`);
+    if (b < a) return null;
+    return (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth()) + 1;
+  })();
+  const valorMensalNum = typeof valorMensalVal === "number" && !isNaN(valorMensalVal) ? valorMensalVal : null;
+  const valorTotalCalc = valorMensalNum != null && mesesVigencia != null ? valorMensalNum * mesesVigencia : null;
+  const duracaoTexto = mesesVigencia != null ? `${mesesVigencia} ${mesesVigencia === 1 ? "mês" : "meses"}` : "Indeterminado";
+
+  // Prévia das OS recorrentes (máx 12)
+  const previewRecorrencia = (recorrenciaAtiva && freqRecVal && dataInicioVal)
+    ? proximasOcorrencias({
+        dataInicio: new Date(`${dataInicioVal}T12:00:00`),
+        dataFim: dataFimVal ? new Date(`${dataFimVal}T12:00:00`) : null,
+        frequencia: freqRecVal,
+        diaRecorrencia: diaRecVal,
+        fimSemana: fimSemanaRecVal,
+        limite: 12,
+      })
+    : [];
+  const tipoOsNome = tiposOs.find((t) => t.id === tipoOsRecVal)?.nome ?? "Atendimento recorrente";
+  const responsavelNome = tecnicos.find((t) => t.id === tecnicoRecVal)?.nome ?? "—";
+
+  function toggleServico(id: string) {
+    setServicosSelecionados((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  }
+
+  async function buscarCepEndereco() {
+    const cep = endereco.cep.replace(/\D/g, "");
+    if (cep.length !== 8) return;
+    setBuscandoCep(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      const data = await res.json();
+      if (!data.erro) {
+        setEndereco((f) => ({
+          ...f,
+          logradouro: data.logradouro ?? f.logradouro,
+          bairro: data.bairro ?? f.bairro,
+          cidade: data.localidade ?? f.cidade,
+          estado: data.uf ?? f.estado,
+          complemento: data.complemento || f.complemento,
+        }));
+      }
+    } catch {} finally { setBuscandoCep(false); }
+  }
+
+  async function salvarNovoEndereco() {
+    setErroEndereco("");
+    if (!clienteIdSelecionado) { setErroEndereco("Selecione um cliente primeiro."); return; }
+    if (!endereco.nome.trim()) { setErroEndereco("Informe um nome para o endereço."); return; }
+    setSalvandoEndereco(true);
+    try {
+      const res = await fetch("/api/unidades", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...endereco, clienteId: clienteIdSelecionado }),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); setErroEndereco(e.erro ?? "Erro ao salvar endereço."); return; }
+      const nova: Unidade = await res.json();
+      setUnidades((prev) => [...prev, nova]);
+      // Vincula automaticamente ao contrato
+      const atual = (watch("unidadeIds") ?? []) as string[];
+      setValue("unidadeIds", [...atual, nova.id]);
+      setEndereco(emptyEndereco());
+      setMostrarNovoEndereco(false);
+    } catch { setErroEndereco("Erro de conexão."); } finally { setSalvandoEndereco(false); }
+  }
+
   function onError(errs: typeof errors) {
     const abas = new Set<string>();
     Object.keys(errs).forEach((c) => { const a = CAMPO_ABA[c]; if (a) abas.add(a); });
@@ -213,9 +312,15 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
 
   async function onSubmit(data: ContratoInput, continuar = false) {
     setErroGlobal(""); setAbasErro(new Set());
+    const descricaoServicos = servicos.filter((s) => servicosSelecionados.includes(s.id)).map((s) => s.nome).join("; ");
     const payload: any = {
       ...data,
       itensInclusos: { ...itensInclusos, outros: outrosItens || undefined },
+      // Valor total calculado automaticamente (valor mensal × meses de vigência)
+      valorTotal: valorTotalCalc ?? undefined,
+      // Serviços da NFS-e (IDs + descrição derivada para a nota)
+      servicosNFSeIds: servicosSelecionados,
+      descricaoNFSe: descricaoServicos || "",
       // Fallback: vencimento da ART = fim da vigência, se não informado
       artVencimento: data.artVencimento || data.dataFim || undefined,
     };
@@ -383,8 +488,10 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
             <FormField label="Valor mensal (R$)" hint="Gera previsão de contas a receber" error={errors.valorMensal?.message}>
               <Input {...register("valorMensal", { valueAsNumber: true })} type="number" step="0.01" min="0" placeholder="0,00" error={!!errors.valorMensal} />
             </FormField>
-            <FormField label="Valor total (R$)" error={errors.valorTotal?.message}>
-              <Input {...register("valorTotal", { valueAsNumber: true })} type="number" step="0.01" min="0" placeholder="0,00" error={!!errors.valorTotal} />
+            <FormField label="Valor total (R$)" hint="Calculado: valor mensal × meses de vigência">
+              <div className="flex h-10 items-center rounded-lg border border-surface-border bg-surface-alt/60 px-3 text-sm font-medium text-ink">
+                {valorTotalCalc != null ? formatarMoeda(valorTotalCalc) : "—"}
+              </div>
             </FormField>
             <FormField label="Dia de faturamento" hint="1 a 28">
               <Input {...register("diaFaturamento")} type="number" min={1} max={28} placeholder="1" />
@@ -398,6 +505,9 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
               <Input {...register("dataFim")} type="date" />
             </FormField>
           </FormGrid>
+          <p className="flex items-center gap-1.5 text-xs text-ink-muted -mt-2">
+            <CalendarDays className="w-3.5 h-3.5" /> Duração da vigência: <span className="font-semibold text-ink">{duracaoTexto}</span>
+          </p>
 
           <div className="space-y-2">
             <p className="text-xs font-bold text-ink-muted uppercase tracking-wider">Tipo de vencimento</p>
@@ -427,8 +537,30 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
         </FormSection>
 
         <FormSection title="Configurações da NFS-e" icon={<Receipt className="w-3.5 h-3.5" />}>
-          <FormField label="Descrição para NFS-e" hint="Aparece na nota fiscal exatamente como escrito">
-            <Textarea {...register("descricaoNFSe")} rows={3} placeholder="Serviços de manutenção preventiva de climatização…" />
+          <FormField label="Serviços da NFS-e" hint="Selecione um ou mais serviços que aparecem na nota fiscal">
+            {servicos.length === 0 ? (
+              <p className="text-sm text-ink-muted">
+                Nenhum serviço cadastrado. Cadastre serviços em Configurações para usá-los aqui.
+              </p>
+            ) : (
+              <div className="space-y-1.5 max-h-60 overflow-y-auto border border-surface-border rounded-lg p-2">
+                {servicos.map((s) => {
+                  const sel = servicosSelecionados.includes(s.id);
+                  return (
+                    <label key={s.id} className={cn("flex items-start gap-2.5 p-2 rounded-lg cursor-pointer transition-colors", sel ? "bg-primary-50/60" : "hover:bg-surface-alt")}>
+                      <input type="checkbox" checked={sel} onChange={() => toggleServico(s.id)} className="mt-0.5 accent-primary-600" />
+                      <span className="min-w-0">
+                        <span className="block text-sm text-ink">{s.nome}</span>
+                        {s.descricao && <span className="block text-xs text-ink-subtle truncate">{s.descricao}</span>}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+            {servicosSelecionados.length > 0 && (
+              <p className="text-xs text-ink-muted mt-1.5">{servicosSelecionados.length} serviço(s) selecionado(s).</p>
+            )}
           </FormField>
           <div className="border-t border-gray-100 pt-1 divide-y divide-gray-100">
             <ToggleSwitch
@@ -532,42 +664,93 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
         <FormSection title="Locais cobertos pelo contrato" icon={<MapPin className="w-3.5 h-3.5" />}>
           {!clienteIdSelecionado ? (
             <p className="text-sm text-ink-muted py-3">Selecione um cliente primeiro (aba "Dados do contrato").</p>
-          ) : unidades.length === 0 ? (
-            <p className="text-sm text-ink-muted py-3">Nenhum endereço cadastrado para este cliente.</p>
           ) : (
-            <Controller
-              name="unidadeIds"
-              control={control}
-              render={({ field }) => (
-                <div className="space-y-2">
-                  {unidades.map((u) => {
-                    const selecionado = field.value?.includes(u.id) ?? false;
-                    return (
-                      <label key={u.id} className="flex items-start gap-3 p-3 border border-surface-border rounded-lg hover:border-primary-300 cursor-pointer transition-colors">
-                        <input
-                          type="checkbox"
-                          checked={selecionado}
-                          onChange={(e) => {
-                            const atual = field.value ?? [];
-                            field.onChange(e.target.checked ? [...atual, u.id] : atual.filter((id) => id !== u.id));
-                          }}
-                          className="mt-0.5 accent-primary-600"
-                        />
-                        <div className="flex items-center gap-2">
-                          <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
-                          <div>
-                            <p className="text-sm font-medium text-ink">{u.nome}</p>
-                            <p className="text-xs text-ink-subtle">
-                              {[u.logradouro, u.numero, u.bairro, u.cidade, u.estado].filter(Boolean).join(", ") || "Sem endereço"}
-                            </p>
-                          </div>
-                        </div>
-                      </label>
-                    );
-                  })}
+            <div className="space-y-3">
+              <Controller
+                name="unidadeIds"
+                control={control}
+                render={({ field }) =>
+                  unidades.length === 0 ? (
+                    <p className="text-sm text-ink-muted">Nenhum endereço cadastrado para este cliente. Adicione um abaixo.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {unidades.map((u) => {
+                        const selecionado = field.value?.includes(u.id) ?? false;
+                        return (
+                          <label key={u.id} className="flex items-start gap-3 p-3 border border-surface-border rounded-lg hover:border-primary-300 cursor-pointer transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={selecionado}
+                              onChange={(e) => {
+                                const atual = field.value ?? [];
+                                field.onChange(e.target.checked ? [...atual, u.id] : atual.filter((id) => id !== u.id));
+                              }}
+                              className="mt-0.5 accent-primary-600"
+                            />
+                            <div className="flex items-center gap-2">
+                              <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
+                              <div>
+                                <p className="text-sm font-medium text-ink">{u.nome}</p>
+                                <p className="text-xs text-ink-subtle">
+                                  {[u.logradouro, u.numero, u.bairro, u.cidade, u.estado].filter(Boolean).join(", ") || "Sem endereço"}
+                                </p>
+                              </div>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )
+                }
+              />
+
+              {!mostrarNovoEndereco ? (
+                <Button type="button" variant="secondary" onClick={() => { setErroEndereco(""); setMostrarNovoEndereco(true); }} className="w-full justify-center border-dashed">
+                  <Plus className="w-4 h-4" /> Adicionar novo endereço
+                </Button>
+              ) : (
+                <div className="border border-primary-200 bg-primary-50/30 rounded-lg p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold text-primary-800">Novo endereço</h4>
+                    <button type="button" onClick={() => { setMostrarNovoEndereco(false); setErroEndereco(""); }} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
+                  </div>
+                  {erroEndereco && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erroEndereco}</div>}
+                  <FormGrid>
+                    <FormField label="Nome / descrição" required>
+                      <Input value={endereco.nome} onChange={(e) => setEndereco((f) => ({ ...f, nome: e.target.value }))} placeholder="Ex: Matriz, Filial, Depósito" />
+                    </FormField>
+                    <FormField label="CEP" hint="Digite e clique na lupa para preencher">
+                      <div className="flex gap-2">
+                        <Input value={endereco.cep} onChange={(e) => setEndereco((f) => ({ ...f, cep: e.target.value }))} placeholder="00000-000" maxLength={9} />
+                        <Button type="button" variant="secondary" loading={buscandoCep} onClick={buscarCepEndereco} className="shrink-0 px-3"><Search className="w-4 h-4" /></Button>
+                      </div>
+                    </FormField>
+                  </FormGrid>
+                  <FormField label="Logradouro">
+                    <Input value={endereco.logradouro} onChange={(e) => setEndereco((f) => ({ ...f, logradouro: e.target.value }))} placeholder="Rua, Av., etc." />
+                  </FormField>
+                  <FormGrid cols={3}>
+                    <FormField label="Número"><Input value={endereco.numero} onChange={(e) => setEndereco((f) => ({ ...f, numero: e.target.value }))} /></FormField>
+                    <FormField label="Complemento" className="sm:col-span-2"><Input value={endereco.complemento} onChange={(e) => setEndereco((f) => ({ ...f, complemento: e.target.value }))} /></FormField>
+                  </FormGrid>
+                  <FormGrid cols={3}>
+                    <FormField label="Bairro"><Input value={endereco.bairro} onChange={(e) => setEndereco((f) => ({ ...f, bairro: e.target.value }))} /></FormField>
+                    <FormField label="Cidade"><Input value={endereco.cidade} onChange={(e) => setEndereco((f) => ({ ...f, cidade: e.target.value }))} /></FormField>
+                    <FormField label="Estado">
+                      <Select value={endereco.estado} onChange={(e) => setEndereco((f) => ({ ...f, estado: e.target.value }))} placeholder="UF">
+                        {ESTADOS_BR.map((uf) => (<option key={uf} value={uf}>{uf}</option>))}
+                      </Select>
+                    </FormField>
+                  </FormGrid>
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" variant="secondary" onClick={() => { setMostrarNovoEndereco(false); setErroEndereco(""); }}>Cancelar</Button>
+                    <Button type="button" loading={salvandoEndereco} onClick={salvarNovoEndereco} disabled={!endereco.nome.trim()}>
+                      <Check className="w-4 h-4" /> Adicionar e vincular
+                    </Button>
+                  </div>
                 </div>
               )}
-            />
+            </div>
           )}
         </FormSection>
       </Painel>
@@ -738,6 +921,42 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
               <p className="text-xs text-gray-400 flex items-center gap-1.5">
                 <Repeat className="w-3.5 h-3.5" /> A vigência segue as datas de início/fim do contrato.
               </p>
+
+              {/* Prévia das OS que serão geradas */}
+              <div className="space-y-2 pt-2">
+                <p className="text-xs font-bold text-ink-muted uppercase tracking-wider">Prévia das OS (máx. 12)</p>
+                {!dataInicioVal ? (
+                  <p className="text-sm text-ink-muted">Informe a data de início da vigência para visualizar a prévia.</p>
+                ) : previewRecorrencia.length === 0 ? (
+                  <p className="text-sm text-ink-muted">Nenhuma ocorrência futura com a configuração atual.</p>
+                ) : (
+                  <div className="overflow-x-auto border border-surface-border rounded-lg">
+                    <table className="w-full text-sm">
+                      <thead className="bg-surface-alt border-b border-surface-border">
+                        <tr>
+                          <th className="text-left px-3 py-2 font-semibold text-ink-muted text-xs uppercase">#</th>
+                          <th className="text-left px-3 py-2 font-semibold text-ink-muted text-xs uppercase">Data prevista</th>
+                          <th className="text-left px-3 py-2 font-semibold text-ink-muted text-xs uppercase">Tipo de OS</th>
+                          <th className="text-left px-3 py-2 font-semibold text-ink-muted text-xs uppercase">Responsável</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {previewRecorrencia.map((oc, i) => (
+                          <tr key={oc.periodo} className="border-b border-surface-border last:border-0">
+                            <td className="px-3 py-2 text-ink-muted">{i + 1}</td>
+                            <td className="px-3 py-2 text-ink">{formatarData(oc.data)}</td>
+                            <td className="px-3 py-2 text-ink">{tipoOsNome}</td>
+                            <td className="px-3 py-2 text-ink-muted">{responsavelNome}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <p className="text-xs text-ink-subtle">
+                  Ao salvar com recorrência ativa, estas OS são criadas com status <strong>Agendada</strong>, vinculadas ao contrato, e aparecem no calendário e na listagem de OS.
+                </p>
+              </div>
             </div>
           )}
         </FormSection>
