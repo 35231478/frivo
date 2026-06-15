@@ -15,9 +15,9 @@ export const metadata: Metadata = { title: "Clientes" };
 export default async function ClientesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ busca?: string; pagina?: string; status?: string; segmento?: string }>;
+  searchParams: Promise<{ busca?: string; pagina?: string; status?: string; segmento?: string; inativos?: string }>;
 }) {
-  const { busca = "", pagina = "1", status = "", segmento = "" } = await searchParams;
+  const { busca = "", pagina = "1", status = "", segmento = "", inativos = "" } = await searchParams;
   const session = await auth();
   const empresaId = session!.user!.empresaId;
   const porPagina = 20;
@@ -25,8 +25,10 @@ export default async function ClientesPage({
 
   // O status financeiro é calculado (não é mais coluna filtrável no banco).
   const statusFiltro = (["SEM_HISTORICO", "ADIMPLENTE", "INADIMPLENTE"] as const).find((s) => s === status);
+  const mostrarInativos = inativos === "1";
 
-  const where: any = { empresaId, ativo: true };
+  // Por padrão lista apenas ativos; com "Mostrar inativos" inclui os inativos também.
+  const where: any = { empresaId, ...(mostrarInativos ? {} : { ativo: true }) };
   if (busca) {
     where.OR = [
       { nome: { contains: busca, mode: "insensitive" } },
@@ -116,6 +118,10 @@ export default async function ClientesPage({
               <option value="">Segmento</option>
               {Object.entries(LABELS_SEGMENTO).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
             </select>
+            <label className="inline-flex items-center gap-2 px-3 py-2 text-sm text-ink-muted bg-white border border-surface-border rounded-lg cursor-pointer select-none">
+              <input type="checkbox" name="inativos" value="1" defaultChecked={mostrarInativos} className="accent-primary-600" />
+              Mostrar inativos
+            </label>
             <button type="submit" className="bg-primary-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-600 transition-all shadow-sm">
               Filtrar
             </button>
@@ -142,12 +148,16 @@ export default async function ClientesPage({
                 <tr key={c.id} className={cn(
                   "border-b border-surface-border hover:bg-primary-50/40 transition-colors",
                   idx % 2 === 1 && "bg-surface-alt/30",
+                  !c.ativo && "opacity-60",
                 )}>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 flex-wrap">
                       <Link href={`/clientes/${c.id}/editar`} className="font-semibold text-ink hover:text-primary-600 transition-colors">
                         {c.nomeFantasia ?? c.nome}
                       </Link>
+                      {!c.ativo && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full whitespace-nowrap">Inativo</span>
+                      )}
                       {c._count.contratos > 0 && (
                         <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-success-50 text-success-700 px-2 py-0.5 rounded-full whitespace-nowrap">
                           <FileCheck className="w-2.5 h-2.5" /> Cliente de Contrato

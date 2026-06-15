@@ -67,6 +67,26 @@ export async function PUT(req: NextRequest, { params }: Params) {
   return NextResponse.json(atualizado);
 }
 
+// Alteração pontual de status (ativo/inativo) sem mexer no restante do cadastro.
+// Inativar é um soft-delete: apenas `ativo` muda; todo o histórico é preservado.
+export async function PATCH(req: NextRequest, { params }: Params) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const { id } = await params;
+  const empresaId = session.user!.empresaId;
+
+  const existente = await getClienteTenant(id, empresaId);
+  if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
+
+  const body = await req.json().catch(() => ({}));
+  if (typeof body.ativo !== "boolean") {
+    return NextResponse.json({ erro: "Campo 'ativo' (boolean) é obrigatório." }, { status: 400 });
+  }
+
+  const atualizado = await prisma.cliente.update({ where: { id }, data: { ativo: body.ativo } });
+  return NextResponse.json({ ok: true, ativo: atualizado.ativo });
+}
+
 export async function DELETE(_: NextRequest, { params }: Params) {
   const session = await auth();
   if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });

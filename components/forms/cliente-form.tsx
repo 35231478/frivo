@@ -91,9 +91,31 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
   const [cnpjInfo, setCnpjInfo] = useState<{ nome: string; cidade?: string; estado?: string } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
+  // Controle do status ativo/inativo (header)
+  const [statusOpen, setStatusOpen] = useState(false);
+  const [mudandoAtivo, setMudandoAtivo] = useState(false);
+
   function mostrarToast(msg: string) {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
+  }
+
+  // Inativa/reativa o cliente via PATCH (sem salvar o formulário inteiro).
+  async function alterarAtivo(novo: boolean) {
+    if (!isEditing) return;
+    setMudandoAtivo(true);
+    try {
+      const res = await fetch(`/api/clientes/${initialData!.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ativo: novo }),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); setErroGlobal(e.erro ?? "Erro ao alterar status."); return; }
+      setValue("ativo", novo);
+      setStatusOpen(false);
+      mostrarToast(novo ? "Cliente reativado." : "Cliente inativado.");
+      router.refresh();
+    } catch { setErroGlobal("Erro de conexão."); } finally { setMudandoAtivo(false); }
   }
 
   // Perfil de faturamento (gerenciado fora do RHF)
@@ -312,7 +334,46 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
               <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", COR_STATUS_FINANCEIRO_CALC[statusCalc])}>
                 {LABELS_STATUS_FINANCEIRO_CALC[statusCalc]}
               </span>
-              {!ativoVal && <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Inativo</span>}
+              {isEditing ? (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setStatusOpen((o) => !o)}
+                    title="Alterar status do cliente"
+                    className={cn(
+                      "inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-2.5 py-1 border transition-colors",
+                      ativoVal
+                        ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+                        : "bg-red-50 border-red-200 text-red-600 hover:bg-red-100",
+                    )}
+                  >
+                    <span className={cn("w-1.5 h-1.5 rounded-full", ativoVal ? "bg-emerald-500" : "bg-red-500")} />
+                    {ativoVal ? "Ativo" : "Inativo"}
+                  </button>
+                  {statusOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setStatusOpen(false)} />
+                      <div className="absolute left-0 mt-2 z-50 w-72 bg-white border border-surface-border rounded-xl shadow-card-hover p-3 space-y-3">
+                        <p className="text-sm text-ink">
+                          {ativoVal
+                            ? "Deseja inativar este cliente? Ele não aparecerá nas listagens padrão, mas todo o histórico será preservado."
+                            : "Deseja reativar este cliente?"}
+                        </p>
+                        <div className="flex justify-end gap-2">
+                          <Button type="button" variant="secondary" size="sm" onClick={() => setStatusOpen(false)}>Cancelar</Button>
+                          <Button type="button" variant={ativoVal ? "danger" : "success"} size="sm" loading={mudandoAtivo} onClick={() => alterarAtivo(!ativoVal)}>
+                            {ativoVal ? "Inativar" : "Reativar"}
+                          </Button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-2.5 py-1 border bg-emerald-50 border-emerald-200 text-emerald-700">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Ativo
+                </span>
+              )}
             </div>
             <BotoesAcao compact />
           </div>
@@ -443,9 +504,6 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
               </div>
             </FormField>
           </FormGrid>
-          <div className="border-t border-gray-100 pt-1">
-            <ToggleSwitch label="Cliente ativo" description="Clientes inativos não aparecem nas listagens padrão." checked={!!ativoVal} onChange={(v) => setValue("ativo", v)} />
-          </div>
         </FormSection>
 
         <FormSection title="Comercial" icon={<DollarSign className="w-3.5 h-3.5" />}>
