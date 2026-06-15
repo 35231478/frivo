@@ -167,6 +167,7 @@ enum TipoContato {
   OPERACIONAL
   TECNICO
   DIRETORIA
+  CONTRATUAL
   OUTRO
 }
 

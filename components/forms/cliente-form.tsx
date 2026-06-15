@@ -20,6 +20,7 @@ import { AnexosLocal, type AnexoLocal } from "@/components/forms/anexos-local";
 import { LogoUpload } from "@/components/forms/logo-upload";
 import { ContatosManager } from "@/components/forms/contatos-manager";
 import { ContatosLocal, type ContatoLocal } from "@/components/forms/contatos-local";
+import { ComunicacaoManager } from "@/components/forms/comunicacao-manager";
 import { InteracoesManager } from "@/components/forms/interacoes-manager";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { LABELS_SEGMENTO, LABELS_ORIGEM, LABELS_PERFIL_FATURAMENTO, PERMISSOES_PORTAL, formatarMoeda } from "@/lib/utils";
@@ -32,7 +33,7 @@ import type { Cliente, Tecnico, Unidade, Configuracao, ContatoCliente } from "@p
 import {
   Search, Loader2, FileCheck, Lock, Pencil, Plus, X, Mail, AlertCircle,
   FileText, Phone, MapPin, HardHat, Image as ImageIcon, Heart, Headset,
-  Building2, Tag, DollarSign, Users, Paperclip, Star, MessageSquare, Globe, ArrowUpRight,
+  Building2, Tag, DollarSign, Users, Paperclip, Star, MessageSquare, Globe, ArrowUpRight, Send,
 } from "lucide-react";
 
 type ResponsavelItem = Pick<Tecnico, "id" | "nome" | "crea">;
@@ -254,6 +255,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
   const ABAS = [
     { id: "geral", label: "Dados Gerais", icone: FileText },
     { id: "contatos", label: "Contatos", icone: Phone, badge: qtdContatos },
+    { id: "comunicacao", label: "Comunicação", icone: Send },
     { id: "enderecos", label: "Endereços", icone: MapPin, badge: qtdEnderecos },
     { id: "tecnico", label: "Técnico e ART", icone: HardHat },
     { id: "documentos", label: "Documentos e Mídia", icone: ImageIcon, badge: qtdAnexos },
@@ -480,19 +482,6 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
           )}
         </FormSection>
 
-        <FormSection title="Preferências de E-mail" icon={<Mail className="w-3.5 h-3.5" />}>
-          <div className="divide-y divide-gray-100">
-            <ToggleSwitch label="Receber boletos por e-mail" description="Envio automático de boletos emitidos" checked={prefsEmail.emailReceberBoletos} onChange={(v) => setPref("emailReceberBoletos", v)} />
-            <ToggleSwitch label="Receber relatórios/medições" description="Notifica quando o relatório está disponível" checked={prefsEmail.emailReceberRelatorios} onChange={(v) => setPref("emailReceberRelatorios", v)} />
-            <ToggleSwitch label="Receber lembretes de vencimento" description="Avisos de cobranças a vencer/vencidas" checked={prefsEmail.emailReceberLembretes} onChange={(v) => setPref("emailReceberLembretes", v)} />
-            <ToggleSwitch label="Receber confirmações de pagamento" description="Confirmação quando um pagamento é registrado" checked={prefsEmail.emailReceberConfirmacoes} onChange={(v) => setPref("emailReceberConfirmacoes", v)} />
-            <ToggleSwitch label="Receber lembretes de orçamentos" description="Lembretes de orçamentos enviados/vencendo" checked={prefsEmail.emailReceberOrcamentos} onChange={(v) => setPref("emailReceberOrcamentos", v)} />
-            <ToggleSwitch label="Receber atualizações de OS" description="Avisos de abertura/conclusão de ordens" checked={prefsEmail.emailReceberOs} onChange={(v) => setPref("emailReceberOs", v)} />
-          </div>
-          <FormField label="E-mails adicionais para cópia (CC)" hint="Recebem cópia de todos os e-mails enviados ao cliente">
-            <EmailsFaturamento emails={emailsCopia} onChange={setEmailsCopia} />
-          </FormField>
-        </FormSection>
       </Painel>
 
       {/* ABA 2 — Contatos */}
@@ -525,6 +514,43 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
           ) : (
             <ContatosLocal contatos={contatosNovos} onChange={setContatosNovos} />
           )}
+        </FormSection>
+      </Painel>
+
+      {/* ABA — Comunicação */}
+      <Painel ativo={aba === "comunicacao"}>
+        <FormSection title="Contatos de comunicação" icon={<Send className="w-3.5 h-3.5" />}>
+          <p className="text-xs text-gray-400 -mt-2 mb-3">
+            Defina quem recebe cada tipo de e-mail. <strong>Operacional</strong> recebe atualizações de OS/agendamentos;{" "}
+            <strong>Financeiro</strong> recebe boletos, NF e cobranças; <strong>Contratual</strong> recebe orçamentos e relatórios.
+            Sem contato de um tipo, o sistema usa o e-mail principal do cliente.
+          </p>
+          {isEditing ? (
+            <ComunicacaoManager clienteId={initialData!.id} contatosIniciais={initialData!.contatosCliente ?? []} />
+          ) : (
+            <p className="text-sm text-ink-muted">Salve o cliente para adicionar contatos de comunicação.</p>
+          )}
+        </FormSection>
+
+        <FormSection title="Preferências de notificação" icon={<Mail className="w-3.5 h-3.5" />}>
+          <p className="text-xs font-bold text-ink-muted uppercase tracking-wider">Operacional</p>
+          <div className="divide-y divide-gray-100">
+            <ToggleSwitch label="Receber atualizações de OS" description="Avisos de abertura/conclusão de ordens de serviço" checked={prefsEmail.emailReceberOs} onChange={(v) => setPref("emailReceberOs", v)} />
+          </div>
+          <p className="text-xs font-bold text-ink-muted uppercase tracking-wider mt-4">Financeiro</p>
+          <div className="divide-y divide-gray-100">
+            <ToggleSwitch label="Receber boletos por e-mail" description="Envio automático de boletos emitidos" checked={prefsEmail.emailReceberBoletos} onChange={(v) => setPref("emailReceberBoletos", v)} />
+            <ToggleSwitch label="Receber lembretes de vencimento" description="Avisos de cobranças a vencer/vencidas" checked={prefsEmail.emailReceberLembretes} onChange={(v) => setPref("emailReceberLembretes", v)} />
+            <ToggleSwitch label="Receber confirmações de pagamento" description="Confirmação quando um pagamento é registrado" checked={prefsEmail.emailReceberConfirmacoes} onChange={(v) => setPref("emailReceberConfirmacoes", v)} />
+          </div>
+          <p className="text-xs font-bold text-ink-muted uppercase tracking-wider mt-4">Contratual</p>
+          <div className="divide-y divide-gray-100">
+            <ToggleSwitch label="Receber orçamentos/propostas" description="Lembretes de orçamentos enviados/vencendo" checked={prefsEmail.emailReceberOrcamentos} onChange={(v) => setPref("emailReceberOrcamentos", v)} />
+            <ToggleSwitch label="Receber relatórios/medições" description="Notifica quando o relatório está disponível" checked={prefsEmail.emailReceberRelatorios} onChange={(v) => setPref("emailReceberRelatorios", v)} />
+          </div>
+          <FormField label="E-mails adicionais para cópia (CC)" hint="Recebem cópia de todos os e-mails enviados ao cliente">
+            <EmailsFaturamento emails={emailsCopia} onChange={setEmailsCopia} />
+          </FormField>
         </FormSection>
       </Painel>
 

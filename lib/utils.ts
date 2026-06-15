@@ -222,7 +222,28 @@ export const LABELS_TIPO_CONTATO: Record<string, string> = {
   OPERACIONAL: "Operacional / Chamados",
   TECNICO: "Técnico",
   DIRETORIA: "Diretoria",
+  CONTRATUAL: "Contratual",
   OUTRO: "Outro",
+};
+
+// Tipos de contato usados na aba "Comunicação" (roteamento de e-mails por área).
+export const TIPOS_COMUNICACAO = ["OPERACIONAL", "FINANCEIRO", "CONTRATUAL"] as const;
+export type TipoComunicacao = (typeof TIPOS_COMUNICACAO)[number];
+
+export const LABELS_TIPO_COMUNICACAO: Record<TipoComunicacao, string> = {
+  OPERACIONAL: "Operacional",
+  FINANCEIRO: "Financeiro",
+  CONTRATUAL: "Contratual",
+};
+
+// Cores dos badges por tipo de contato (cobre todos os valores de TipoContato).
+export const COR_TIPO_CONTATO: Record<string, string> = {
+  OPERACIONAL: "bg-blue-50 text-blue-700",
+  FINANCEIRO: "bg-emerald-50 text-emerald-700",
+  CONTRATUAL: "bg-purple-50 text-purple-700",
+  TECNICO: "bg-amber-50 text-amber-700",
+  DIRETORIA: "bg-slate-100 text-slate-600",
+  OUTRO: "bg-gray-100 text-gray-600",
 };
 
 export const LABELS_TIPO_INTERACAO: Record<string, string> = {
