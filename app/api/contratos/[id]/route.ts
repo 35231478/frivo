@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { contratoSchema } from "@/lib/validations";
 import { gerarPrevisaoContratoContasReceber } from "@/lib/financeiro-server";
-import { gerarOsRecorrentesContrato } from "@/lib/recorrencia-server";
+import { gerarOsRecorrentesContrato, gerarOsRecorrentesLocais } from "@/lib/recorrencia-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -49,11 +49,12 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (dup) return NextResponse.json({ erro: "Número já cadastrado" }, { status: 409 });
   }
 
-  const { unidadeIds, dataInicio, dataFim, valorMensal, valorTotal, responsavelTecnicoId, tipoOsRecorrenciaId, tecnicoRecorrenciaId, artVencimento, itensInclusos, ...resto } = parsed.data;
+  const { unidadeIds, recorrenciasLocais, dataInicio, dataFim, valorMensal, valorTotal, responsavelTecnicoId, tipoOsRecorrenciaId, tecnicoRecorrenciaId, artVencimento, itensInclusos, ...resto } = parsed.data;
 
   const atualizado = await prisma.$transaction(async (tx) => {
     await tx.contratoUnidade.deleteMany({ where: { contratoId: id } });
-    return tx.contrato.update({
+    await tx.contratoRecorrenciaLocal.deleteMany({ where: { contratoId: id } });
+    const c = await tx.contrato.update({
       where: { id },
       data: {
         ...resto,
@@ -72,11 +73,24 @@ export async function PUT(req: NextRequest, { params }: Params) {
       },
       include: { unidades: true },
     });
+    if (recorrenciasLocais.length) {
+      await tx.contratoRecorrenciaLocal.createMany({
+        data: recorrenciasLocais
+          .filter((r) => unidadeIds.includes(r.unidadeId))
+          .map((r) => ({
+            empresaId, contratoId: id, unidadeId: r.unidadeId, ativa: r.ativa,
+            frequencia: r.frequencia ?? null, tipoOsId: r.tipoOsId || null, tecnicoId: r.tecnicoId || null,
+            dataPrimeiraOs: r.dataPrimeiraOs ? new Date(r.dataPrimeiraOs) : null,
+          })),
+      });
+    }
+    return c;
   });
 
   // Atualiza a previsão de contas a receber (idempotente).
   await gerarPrevisaoContratoContasReceber(id).catch(() => 0);
-  // Gera as OS recorrentes futuras (idempotente), se a recorrência estiver ativa.
+  // Gera as OS recorrentes: por local (novo) + contrato-nível legado (idempotentes).
+  await gerarOsRecorrentesLocais(id, session.user!.id).catch(() => 0);
   if (atualizado.recorrencia) await gerarOsRecorrentesContrato(id, session.user!.id).catch(() => 0);
 
   return NextResponse.json(atualizado);

@@ -1057,9 +1057,31 @@ model Contrato {
   anexos             AnexoContrato[]
   reajustes          ReajusteContrato[]
   historicoStatus    ContratoHistoricoStatus[]
+  recorrenciasLocais ContratoRecorrenciaLocal[]
 
   @@unique([numero, empresaId])
   @@map("contratos")
+}
+
+// Configuração de recorrência de OS por local coberto do contrato
+model ContratoRecorrenciaLocal {
+  id             String               @id @default(cuid())
+  empresaId      String               @map("empresa_id")
+  contratoId     String               @map("contrato_id")
+  unidadeId      String               @map("unidade_id")
+  ativa          Boolean              @default(false)
+  frequencia     Periodicidade?
+  tipoOsId       String?              @map("tipo_os_id")
+  tecnicoId      String?              @map("tecnico_id")
+  dataPrimeiraOs DateTime?            @map("data_primeira_os")
+  fimSemana      TratamentoFimSemana? @map("fim_semana")
+  criadoEm       DateTime             @default(now()) @map("criado_em")
+  atualizadoEm   DateTime             @updatedAt @map("atualizado_em")
+
+  contrato Contrato @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+
+  @@unique([contratoId, unidadeId])
+  @@map("contrato_recorrencia_local")
 }
 
 // Histórico de mudanças de status do contrato

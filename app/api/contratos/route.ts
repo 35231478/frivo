@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { contratoSchema } from "@/lib/validations";
 import { gerarPrevisaoContratoContasReceber } from "@/lib/financeiro-server";
-import { gerarOsRecorrentesContrato } from "@/lib/recorrencia-server";
+import { gerarOsRecorrentesContrato, gerarOsRecorrentesLocais } from "@/lib/recorrencia-server";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
   });
   if (dup) return NextResponse.json({ erro: "Número de contrato já cadastrado" }, { status: 409 });
 
-  const { unidadeIds, dataInicio, dataFim, valorMensal, valorTotal, responsavelTecnicoId, tipoOsRecorrenciaId, tecnicoRecorrenciaId, artVencimento, itensInclusos, ...resto } = parsed.data;
+  const { unidadeIds, recorrenciasLocais, dataInicio, dataFim, valorMensal, valorTotal, responsavelTecnicoId, tipoOsRecorrenciaId, tecnicoRecorrenciaId, artVencimento, itensInclusos, ...resto } = parsed.data;
 
   const contrato = await prisma.contrato.create({
     data: {
@@ -61,9 +61,23 @@ export async function POST(req: NextRequest) {
     include: { unidades: true },
   });
 
+  // Configurações de recorrência por local
+  if (recorrenciasLocais.length) {
+    await prisma.contratoRecorrenciaLocal.createMany({
+      data: recorrenciasLocais
+        .filter((r) => unidadeIds.includes(r.unidadeId))
+        .map((r) => ({
+          empresaId, contratoId: contrato.id, unidadeId: r.unidadeId, ativa: r.ativa,
+          frequencia: r.frequencia ?? null, tipoOsId: r.tipoOsId || null, tecnicoId: r.tecnicoId || null,
+          dataPrimeiraOs: r.dataPrimeiraOs ? new Date(r.dataPrimeiraOs) : null,
+        })),
+    });
+  }
+
   // Gera a previsão de contas a receber (idempotente).
   await gerarPrevisaoContratoContasReceber(contrato.id).catch(() => 0);
-  // Gera as OS recorrentes futuras (idempotente), se a recorrência estiver ativa.
+  // Gera as OS recorrentes: por local (novo) + contrato-nível legado (idempotentes).
+  await gerarOsRecorrentesLocais(contrato.id, session.user!.id).catch(() => 0);
   if (contrato.recorrencia) await gerarOsRecorrentesContrato(contrato.id, session.user!.id).catch(() => 0);
 
   return NextResponse.json(contrato, { status: 201 });

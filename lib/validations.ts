@@ -222,6 +222,16 @@ export const contratoSchema = z.object({
   tipoOsRecorrenciaId: z.string().optional().nullable(),
   tecnicoRecorrenciaId: z.string().optional().nullable(),
 
+  // Recorrência de OS por local coberto
+  recorrenciasLocais: z.array(z.object({
+    unidadeId: z.string(),
+    ativa: z.boolean().default(false),
+    frequencia: z.preprocess((v) => (v === "" || v == null ? null : v), z.nativeEnum(Periodicidade).nullable()).default(null),
+    tipoOsId: z.string().optional().nullable(),
+    tecnicoId: z.string().optional().nullable(),
+    dataPrimeiraOs: z.string().optional().nullable(),
+  })).default([]),
+
   // Faturamento / NFS-e
   diaFaturamento: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().min(1).max(28).nullable()).default(null),
   tipoVencimento: z.preprocess((v) => (v === "" || v == null ? null : v), z.nativeEnum(TipoVencimento).nullable()).default(null),

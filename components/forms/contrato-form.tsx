@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { ContratoDocumentos } from "@/components/forms/contrato-documentos";
+import { RecorrenciaLocais, type LocalConfig } from "@/components/forms/recorrencia-locais";
 import { proximasOcorrencias } from "@/lib/recorrencia-helpers";
 import {
   FREQUENCIAS_RECORRENCIA, LABELS_PERIODICIDADE, LABELS_TRATAMENTO_FIM_SEMANA,
@@ -53,6 +54,7 @@ type ResponsavelItem = Pick<Tecnico, "id" | "nome" | "crea">;
 type AnexoItem = { id: string; nome: string; tipo: string; tamanho: number; categoria?: string | null; criadoEm: string | Date };
 type ReajusteItem = { id: string; data: string | Date; indice: string; percentual: any; valorAnterior: any; valorNovo: any };
 type HistoricoStatusItem = { id: string; statusAnterior: string; statusNovo: string; motivo: string | null; createdAt: string | Date; usuario?: { id: string; nome: string } | null };
+type RecorrenciaLocalItem = { unidadeId: string; ativa: boolean; frequencia: string | null; tipoOsId: string | null; tecnicoId: string | null; dataPrimeiraOs: string | Date | null };
 
 interface ContratoComRelacoes extends Contrato {
   unidades?: Array<{ unidade: Unidade }>;
@@ -60,6 +62,7 @@ interface ContratoComRelacoes extends Contrato {
   anexos?: AnexoItem[];
   reajustes?: ReajusteItem[];
   historicoStatus?: HistoricoStatusItem[];
+  recorrenciasLocais?: RecorrenciaLocalItem[];
 }
 
 interface ContratoFormProps {
@@ -100,6 +103,27 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
   const [motivoStatus, setMotivoStatus] = useState("");
   const [salvandoStatus, setSalvandoStatus] = useState(false);
   const [historicoStatus, setHistoricoStatus] = useState<HistoricoStatusItem[]>(initialData?.historicoStatus ?? []);
+
+  // Recorrência de OS por local (config fora do RHF, indexada por unidadeId)
+  const [recLocais, setRecLocais] = useState<Record<string, LocalConfig>>(() => {
+    const o: Record<string, LocalConfig> = {};
+    for (const r of initialData?.recorrenciasLocais ?? []) {
+      o[r.unidadeId] = {
+        ativa: r.ativa,
+        frequencia: r.frequencia ?? "MENSAL",
+        tipoOsId: r.tipoOsId ?? "",
+        tecnicoId: r.tecnicoId ?? "",
+        dataPrimeiraOs: r.dataPrimeiraOs ? new Date(r.dataPrimeiraOs).toISOString().split("T")[0] : "",
+      };
+    }
+    return o;
+  });
+  function onChangeRecLocal(unidadeId: string, patch: Partial<LocalConfig>) {
+    setRecLocais((s) => {
+      const atual: LocalConfig = s[unidadeId] ?? { ativa: false, frequencia: "MENSAL", tipoOsId: "", tecnicoId: "", dataPrimeiraOs: "" };
+      return { ...s, [unidadeId]: { ...atual, ...patch } };
+    });
+  }
 
   // Itens inclusos do escopo (JSON) — gerenciado fora do RHF
   const itensIniciais = (initialData?.itensInclusos as Record<string, any> | null) ?? {};
@@ -354,6 +378,10 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
   async function onSubmit(data: ContratoInput, continuar = false) {
     setErroGlobal(""); setAbasErro(new Set());
     const descricaoServicos = servicos.filter((s) => servicosSelecionados.includes(s.id)).map((s) => s.nome).join("; ");
+    const recPayload = (data.unidadeIds ?? []).map((unidadeId) => {
+      const c = recLocais[unidadeId];
+      return c ? { unidadeId, ativa: c.ativa, frequencia: c.frequencia || null, tipoOsId: c.tipoOsId || null, tecnicoId: c.tecnicoId || null, dataPrimeiraOs: c.dataPrimeiraOs || null } : null;
+    }).filter(Boolean);
     const payload: any = {
       ...data,
       itensInclusos: { ...itensInclusos, outros: outrosItens || undefined },
@@ -362,6 +390,8 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
       // Serviços da NFS-e (IDs + descrição derivada para a nota)
       servicosNFSeIds: servicosSelecionados,
       descricaoNFSe: descricaoServicos || "",
+      // Recorrência de OS por local coberto
+      recorrenciasLocais: recPayload,
       // Fallback: vencimento da ART = fim da vigência, se não informado
       artVencimento: data.artVencimento || data.dataFim || undefined,
     };
@@ -411,6 +441,10 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
     return { txt: `Vence em ${dias} dias`, cls: "bg-success-50 text-success-700" };
   }
   const bv = badgeVigencia();
+
+  // Locais cobertos atualmente selecionados (para a aba de recorrência por local)
+  const unidadeIdsAtuais = (watch("unidadeIds") ?? []) as string[];
+  const locaisCobertos = unidades.filter((u) => unidadeIdsAtuais.includes(u.id)).map((u) => ({ id: u.id, nome: u.nome }));
 
   const BotoesAcao = ({ compact = false }: { compact?: boolean }) => (
     <div className="flex items-center gap-2 shrink-0">
@@ -980,86 +1014,19 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
         </FormSection>
       </Painel>
 
-      {/* ABA 9 — Recorrência de OS */}
+      {/* ABA 9 — Recorrência de OS por local */}
       <Painel ativo={aba === "recorrencia"}>
-        <FormSection title="Recorrência de OS" icon={<Repeat className="w-3.5 h-3.5" />}>
-          <p className="text-xs text-gray-400 -mt-2 mb-1">Gere ordens de serviço automaticamente conforme a frequência configurada.</p>
-          <ToggleSwitch
-            label="Ativar recorrência de OS"
-            description="Quando ativo, o contrato entra na geração automática de OS recorrentes."
-            checked={!!recorrenciaAtiva}
-            onChange={(v) => setValue("recorrencia", v)}
+        <FormSection title="Recorrência de OS por local" icon={<Repeat className="w-3.5 h-3.5" />}>
+          <p className="text-xs text-gray-400 -mt-2 mb-1">
+            Cada local coberto pode ter sua própria recorrência (frequência, tipo de OS, responsável e data da primeira OS).
+          </p>
+          <RecorrenciaLocais
+            locais={locaisCobertos}
+            tiposOs={tiposOs}
+            tecnicos={tecnicos}
+            value={recLocais}
+            onChange={onChangeRecLocal}
           />
-          {recorrenciaAtiva && (
-            <div className="space-y-4 border-l-2 border-primary-200 pl-4 mt-2">
-              <FormGrid cols={3}>
-                <FormField label="Frequência">
-                  <Select {...register("frequenciaRecorrencia")} placeholder="Selecione">
-                    {FREQUENCIAS_RECORRENCIA.map((f) => (<option key={f} value={f}>{LABELS_PERIODICIDADE[f]}</option>))}
-                  </Select>
-                </FormField>
-                <FormField label="Dia do mês" hint="1 a 28">
-                  <Input {...register("diaRecorrencia")} type="number" min={1} max={28} placeholder="1" />
-                </FormField>
-                <FormField label="Finais de semana">
-                  <Select {...register("fimSemanaRecorrencia")} placeholder="Selecione">
-                    {Object.entries(LABELS_TRATAMENTO_FIM_SEMANA).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
-                  </Select>
-                </FormField>
-              </FormGrid>
-              <FormGrid>
-                <FormField label="Tipo de OS padrão">
-                  <Select {...register("tipoOsRecorrenciaId")} placeholder="Selecione">
-                    {tiposOs.map((t) => (<option key={t.id} value={t.id}>{t.nome}</option>))}
-                  </Select>
-                </FormField>
-                <FormField label="Técnico responsável padrão">
-                  <Select {...register("tecnicoRecorrenciaId")} placeholder="Selecione">
-                    {tecnicos.map((t) => (<option key={t.id} value={t.id}>{t.nome}</option>))}
-                  </Select>
-                </FormField>
-              </FormGrid>
-              <p className="text-xs text-gray-400 flex items-center gap-1.5">
-                <Repeat className="w-3.5 h-3.5" /> A vigência segue as datas de início/fim do contrato.
-              </p>
-
-              {/* Prévia das OS que serão geradas */}
-              <div className="space-y-2 pt-2">
-                <p className="text-xs font-bold text-ink-muted uppercase tracking-wider">Prévia das OS (máx. 12)</p>
-                {!dataInicioVal ? (
-                  <p className="text-sm text-ink-muted">Informe a data de início da vigência para visualizar a prévia.</p>
-                ) : previewRecorrencia.length === 0 ? (
-                  <p className="text-sm text-ink-muted">Nenhuma ocorrência futura com a configuração atual.</p>
-                ) : (
-                  <div className="overflow-x-auto border border-surface-border rounded-lg">
-                    <table className="w-full text-sm">
-                      <thead className="bg-surface-alt border-b border-surface-border">
-                        <tr>
-                          <th className="text-left px-3 py-2 font-semibold text-ink-muted text-xs uppercase">#</th>
-                          <th className="text-left px-3 py-2 font-semibold text-ink-muted text-xs uppercase">Data prevista</th>
-                          <th className="text-left px-3 py-2 font-semibold text-ink-muted text-xs uppercase">Tipo de OS</th>
-                          <th className="text-left px-3 py-2 font-semibold text-ink-muted text-xs uppercase">Responsável</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {previewRecorrencia.map((oc, i) => (
-                          <tr key={oc.periodo} className="border-b border-surface-border last:border-0">
-                            <td className="px-3 py-2 text-ink-muted">{i + 1}</td>
-                            <td className="px-3 py-2 text-ink">{formatarData(oc.data)}</td>
-                            <td className="px-3 py-2 text-ink">{tipoOsNome}</td>
-                            <td className="px-3 py-2 text-ink-muted">{responsavelNome}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-                <p className="text-xs text-ink-subtle">
-                  Ao salvar com recorrência ativa, estas OS são criadas com status <strong>Agendada</strong>, vinculadas ao contrato, e aparecem no calendário e na listagem de OS.
-                </p>
-              </div>
-            </div>
-          )}
         </FormSection>
       </Painel>
 

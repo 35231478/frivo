@@ -19,6 +19,7 @@ export default async function EditarContratoPage({ params }: { params: Promise<{
       anexos: { select: { id: true, nome: true, tipo: true, tamanho: true, categoria: true, criadoEm: true }, orderBy: { criadoEm: "desc" } },
       reajustes: { orderBy: { data: "desc" } },
       historicoStatus: { include: { usuario: { select: { id: true, nome: true } } }, orderBy: { createdAt: "desc" } },
+      recorrenciasLocais: true,
     },
   });
   if (!contrato) notFound();
