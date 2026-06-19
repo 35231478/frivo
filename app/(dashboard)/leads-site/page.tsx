@@ -14,7 +14,9 @@ import {
 export const metadata: Metadata = { title: "Leads do Site" };
 export const dynamic = "force-dynamic";
 
-const MARCADOR = "SITE_CALCULADORA";
+// Leads do site são os orçamentos nomeados "Lead do site — ..." (criados pelo
+// endpoint público /api/publico/leads).
+const NOME_PREFIXO = "Lead do site";
 
 const FILTROS: { key: string; label: string; status: string[] | null }[] = [
   { key: "todos", label: "Todos", status: null },
@@ -34,7 +36,7 @@ export default async function LeadsSitePage({
 
   const filtro = FILTROS.find((f) => f.key === status) ?? FILTROS[0];
 
-  const where: any = { empresaId, observacao: { contains: MARCADOR } };
+  const where: any = { empresaId, nome: { startsWith: NOME_PREFIXO } };
   if (filtro.status) where.status = { in: filtro.status };
 
   const desde = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -46,32 +48,21 @@ export default async function LeadsSitePage({
       take: 200,
     }),
     prisma.orcamento.count({
-      where: { empresaId, observacao: { contains: MARCADOR }, criadoEm: { gte: desde } },
+      where: { empresaId, nome: { startsWith: NOME_PREFIXO }, criadoEm: { gte: desde } },
     }),
   ]);
 
   const linhas = orcamentos.map((o) => {
-    let dados: any = {};
-    try {
-      dados = JSON.parse(o.observacao ?? "{}");
-    } catch {
-      /* observacao não-JSON: ignora */
-    }
-    const contato = dados.contato ?? {};
-    const pre = dados.preOrcamento ?? {};
-    const semValor =
-      pre.totalMin == null || (pre.totalMin === 0 && pre.totalMax === 0);
+    const valor = Number(o.totalGeral);
     return {
       id: o.id,
       codigo: o.codigo,
       data: o.criadoEm,
-      nome: contato.nome ?? o.cliente.nome,
-      cidade: contato.cidade ?? o.cliente.cidade ?? "—",
-      whatsapp: contato.whatsapp ?? o.cliente.celular ?? "—",
-      recomendacao: dados.recomendacao ?? dados.ambientes?.[0]?.tipoEquipamento ?? "—",
-      valor: semValor
-        ? "Sob consulta"
-        : `${formatarMoeda(pre.totalMin)} – ${formatarMoeda(pre.totalMax)}`,
+      nome: o.cliente.nome,
+      cidade: o.cliente.cidade ?? "—",
+      whatsapp: o.cliente.celular ?? "—",
+      recomendacao: o.descricao ?? "—",
+      valor: valor > 0 ? formatarMoeda(valor) : "Sob consulta",
       status: o.status as string,
     };
   });

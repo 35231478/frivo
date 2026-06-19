@@ -17,8 +17,6 @@ import { enviarEmailInterno } from "@/lib/email";
 
 export const runtime = "nodejs";
 
-const MARCADOR = "SITE_CALCULADORA";
-
 const ambienteSchema = z.object({
   nome: z.string(),
   areaM2: z.number(),
@@ -200,23 +198,70 @@ export async function POST(req: Request) {
       });
     }
 
-    // 5. Observação: JSON com todos os dados do cálculo + marcador do painel
-    const observacao = JSON.stringify({
-      marcador: MARCADOR,
-      tipoUso: data.tipoUso,
-      recomendacao: data.recomendacao ?? null,
-      ambientes: data.ambientes,
-      preOrcamento: data.preOrcamento,
-      contato: {
-        nome: data.nome,
-        whatsapp: data.whatsapp,
-        email: data.email,
-        cidade: data.cidade,
-        mensagemAdicional: data.mensagemAdicional ?? null,
-      },
-    });
+    // 5. Itens do orçamento: por ambiente, 1 produto (equipamento) + 1 serviço
+    //    (instalação). O valor do equipamento é a média do pré-orçamento
+    //    rateada por ambiente; a instalação usa um valor de referência.
+    const qtd = data.ambientes.length;
+    const INSTALACAO_UNIT = 900; // referência (entre R$ 600 e R$ 1.200)
+    const equipUnit =
+      Math.round((((data.preOrcamento.totalMin + data.preOrcamento.totalMax) / 2) / qtd) * 100) / 100;
 
-    // 6. Orçamento com numeração ORC-YYYY-NNNN (retry em colisão de unique)
+    const produtosCreate = data.ambientes.map((a, idx) => ({
+      descricao: `${a.tipoEquipamento} — ${fmt(a.btuRecomendado)} BTU/h (${a.nome})`,
+      quantidade: 1,
+      valorUnitario: equipUnit,
+      valorTotal: equipUnit,
+      observacao: a.justificativa || null,
+      ordem: idx,
+    }));
+    const servicosCreate = data.ambientes.map((a, idx) => ({
+      descricao: `Instalação e comissionamento — ${a.nome}`,
+      quantidade: 1,
+      valorUnitario: INSTALACAO_UNIT,
+      valorTotal: INSTALACAO_UNIT,
+      ordem: idx,
+    }));
+
+    const totalProdutos = produtosCreate.reduce((s, p) => s + p.valorTotal, 0);
+    const totalServicos = servicosCreate.reduce((s, p) => s + p.valorTotal, 0);
+    const totalGeral = totalProdutos + totalServicos;
+
+    // 6. Observação: texto formatado e legível (não JSON cru).
+    const instalTotal = INSTALACAO_UNIT * qtd;
+    const dataHora = new Date().toLocaleString("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+    const linhasAmbientes = data.ambientes
+      .map(
+        (a) =>
+          `• ${a.nome}: ${a.areaM2} m² → ${fmt(a.btuRecomendado)} BTU/h — ${a.tipoEquipamento}\n  Justificativa: ${a.justificativa}`,
+      )
+      .join("\n");
+    const observacao = [
+      `Lead recebido via Calculadora de BTU do site — ${dataHora}`,
+      ``,
+      `DADOS DO CLIENTE`,
+      `Nome: ${data.nome}`,
+      `WhatsApp: ${data.whatsapp}`,
+      `E-mail: ${data.email}`,
+      `Cidade: ${data.cidade}`,
+      `Tipo de uso: ${data.tipoUso}`,
+      ...(data.mensagemAdicional ? [`Mensagem: ${data.mensagemAdicional}`] : []),
+      ``,
+      `AMBIENTES CALCULADOS`,
+      linhasAmbientes,
+      ``,
+      `PRÉ-ORÇAMENTO ESTIMADO`,
+      `Equipamentos: R$ ${fmt(data.preOrcamento.totalMin)} a R$ ${fmt(data.preOrcamento.totalMax)}`,
+      `Instalação (referência): R$ ${fmt(INSTALACAO_UNIT)} por unidade (${qtd}x = R$ ${fmt(instalTotal)})`,
+      `Total estimado: R$ ${fmt(data.preOrcamento.totalMin + instalTotal)} a R$ ${fmt(data.preOrcamento.totalMax + instalTotal)}`,
+      ``,
+      `⚠️ Valores de referência — orçamento definitivo após visita técnica.`,
+    ].join("\n");
+
+    // 7. Orçamento com numeração ORC-YYYY-NNNN (retry em colisão de unique)
     const ano = new Date().getFullYear();
     let orcamento!: { id: string; codigo: string };
     for (let tentativa = 0; ; tentativa++) {
@@ -235,11 +280,15 @@ export async function POST(req: Request) {
             nome: `Lead do site — ${data.nome}`,
             clienteId: cliente.id,
             criadoPorId,
-            descricao: `Lead da calculadora de BTU do site (${data.tipoUso}).`,
+            descricao: data.recomendacao ?? `Calculadora de BTU (${data.tipoUso})`,
             observacao,
             status: "RASCUNHO",
-            totalGeral: data.preOrcamento.totalMax,
+            totalServicos,
+            totalProdutos,
+            totalGeral,
             tokenPublico: crypto.randomUUID(),
+            produtos: { create: produtosCreate },
+            servicos: { create: servicosCreate },
           },
           select: { id: true, codigo: true },
         });
