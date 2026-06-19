@@ -78,6 +78,29 @@ export async function enviarEmail(empresaId: string, p: {
   return { ok, erro };
 }
 
+/**
+ * Envia um e-mail interno simples (sem template), reutilizando a configuração
+ * do Resend da empresa. Usado para notificações internas — ex.: leads do site.
+ */
+export async function enviarEmailInterno(
+  empresaId: string,
+  para: string,
+  assunto: string,
+  html: string,
+): Promise<ResultadoEmail> {
+  const cfg = await carregarConfig(empresaId);
+  if (!cfg?.completo) return { ok: false, erro: "E-mail não configurado ou inativo." };
+  try {
+    const resend = new Resend(cfg.apiKeyDecrypted!);
+    const from = cfg.nomeRemetente ? `${cfg.nomeRemetente} <${cfg.remetente}>` : cfg.remetente!;
+    const res = await resend.emails.send({ from, to: para, replyTo: cfg.replyTo ?? undefined, subject: assunto, html } as any);
+    if ((res as any)?.error) return { ok: false, erro: (res as any).error.message ?? "Erro no envio." };
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, erro: e?.message ?? "Erro no envio." };
+  }
+}
+
 /** Envia um e-mail de teste para um destinatário. */
 export async function enviarEmailTeste(empresaId: string, para: string): Promise<ResultadoEmail> {
   const cfg = await carregarConfig(empresaId);

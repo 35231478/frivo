@@ -13,7 +13,7 @@ import {
   HardHat, Settings, ChevronDown, ChevronRight,
   Wrench, FileSpreadsheet, Cog, Package, ListChecks, Calculator,
   Wallet, Receipt, TrendingUp, FileBarChart, Clock, ShoppingCart, Timer, Tags, CalendarDays, Headset, ScrollText, QrCode,
-  Truck, UsersRound, IdCard, ClipboardCheck, Smartphone, ShieldCheck, UserCog, Upload, Landmark, Mail, Building2,
+  Truck, UsersRound, IdCard, ClipboardCheck, Smartphone, ShieldCheck, UserCog, Upload, Landmark, Mail, Building2, Globe,
   PanelLeftClose, PanelLeftOpen, MoreVertical, LogOut,
 } from "lucide-react";
 
@@ -77,6 +77,7 @@ const SECOES: Secao[] = [
         tipo: "grupo", label: "Propostas e contratos", icone: FileText, itens: [
           { href: "/orcamentos", icone: Calculator, label: "Orçamentos" },
           { href: "/contratos", icone: FileText, label: "Contratos" },
+          { href: "/leads-site", icone: Globe, label: "Leads do Site" },
         ],
       },
       {
