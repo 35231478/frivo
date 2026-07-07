@@ -76,9 +76,23 @@ export function Header({ session, avatarUrl }: HeaderProps) {
   const [sinoAberto, setSinoAberto] = useState(false);
   const sinoRef = useRef<HTMLDivElement>(null);
 
+  // Carrega os alertas uma vez ao montar e revalida por polling (2 min).
+  // Antes isso rodava a cada troca de rota ([pathname]), o que disparava ~16
+  // queries + 2 updateMany no /api/alertas em toda navegação de menu.
   useEffect(() => {
-    fetch("/api/alertas").then((r) => r.json()).then(setAlertas).catch(() => {});
-  }, [pathname]);
+    let ativo = true;
+    const carregar = () =>
+      fetch("/api/alertas")
+        .then((r) => r.json())
+        .then((d) => { if (ativo) setAlertas(d); })
+        .catch(() => {});
+    carregar();
+    const intervalo = setInterval(carregar, 120000);
+    return () => {
+      ativo = false;
+      clearInterval(intervalo);
+    };
+  }, []);
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
