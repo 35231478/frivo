@@ -25,7 +25,7 @@ import { ClienteContratos } from "@/components/forms/cliente-contratos";
 import { PortalUsuarios } from "@/components/forms/portal-usuarios";
 import { InteracoesManager } from "@/components/forms/interacoes-manager";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
-import { LABELS_SEGMENTO, LABELS_ORIGEM, LABELS_PERFIL_FATURAMENTO, PERMISSOES_PORTAL, formatarMoeda } from "@/lib/utils";
+import { LABELS_PERFIL_FATURAMENTO, PERMISSOES_PORTAL, formatarMoeda } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import {
   LABELS_STATUS_FINANCEIRO_CALC, COR_STATUS_FINANCEIRO_CALC, type StatusFinanceiroCalc,
@@ -35,7 +35,7 @@ import type { Cliente, Tecnico, Unidade, Configuracao, ContatoCliente } from "@p
 import {
   Search, Loader2, FileCheck, Lock, Pencil, Plus, X, Mail, AlertCircle,
   FileText, Phone, MapPin, Image as ImageIcon, Heart, Headset,
-  Building2, Tag, DollarSign, Users, Paperclip, Star, MessageSquare, Globe, ArrowUpRight, Send, FileSignature,
+  Building2, DollarSign, Users, Paperclip, Star, MessageSquare, Globe, ArrowUpRight, Send, FileSignature,
 } from "lucide-react";
 
 type ResponsavelItem = Pick<Tecnico, "id" | "nome" | "crea">;
@@ -60,7 +60,7 @@ interface ClienteFormProps {
 // Mapeia cada campo (RHF) à aba onde ele está, para destacar abas com erro
 const CAMPO_ABA: Record<string, string> = {
   tipoPessoa: "geral", cpfCnpj: "geral", nome: "geral", nomeFantasia: "geral", inscricaoEstadual: "geral",
-  segmento: "geral", origem: "geral", statusFinanceiro: "geral", ativo: "geral",
+  statusFinanceiro: "geral", ativo: "geral",
   email: "contatos", telefone: "contatos", celular: "contatos", contato: "contatos",
   observacoes: "relacionamento",
 };
@@ -157,7 +157,6 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
           tipoPessoa: initialData.tipoPessoa, nome: initialData.nome,
           nomeFantasia: initialData.nomeFantasia ?? "", cpfCnpj: initialData.cpfCnpj,
           inscricaoEstadual: initialData.inscricaoEstadual ?? "",
-          segmento: initialData.segmento ?? undefined, origem: initialData.origem ?? undefined,
           statusFinanceiro: initialData.statusFinanceiro, ativo: initialData.ativo, satisfacao: initialData.satisfacao,
           email: initialData.email ?? "", telefone: initialData.telefone ?? "",
           celular: initialData.celular ?? "", contato: initialData.contato ?? "",
@@ -231,6 +230,10 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
       whatsappFaturamento: whatsappFaturamento || null,
       tabelaPrecoId: tabelaPrecoId || null,
       portalAtivo,
+      // Segmento e Origem não são mais editáveis no formulário; preserva o valor
+      // já cadastrado (a edição zeraria o campo se ele não viesse no payload).
+      segmento: initialData?.segmento ?? null,
+      origem: initialData?.origem ?? null,
       ...prefsEmail,
       emailsCopia,
     };
@@ -269,6 +272,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
 
   const ABAS = [
     { id: "geral", label: "Dados Gerais", icone: FileText },
+    { id: "faturamento", label: "Faturamento", icone: DollarSign },
     { id: "contatos", label: "Contatos", icone: Phone, badge: qtdContatos },
     { id: "comunicacao", label: "Comunicação", icone: Send },
     { id: "enderecos", label: "Endereços", icone: MapPin, badge: qtdEnderecos },
@@ -470,20 +474,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
               <FormField label="Inscrição estadual"><Input {...register("inscricaoEstadual")} placeholder="Isento ou número" /></FormField>
             </FormGrid>
           )}
-        </FormSection>
-
-        <FormSection title="Classificação" icon={<Tag className="w-3.5 h-3.5" />}>
-          <FormGrid cols={3}>
-            <FormField label="Segmento">
-              <Select {...register("segmento")} placeholder="Selecione">
-                {Object.entries(LABELS_SEGMENTO).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
-              </Select>
-            </FormField>
-            <FormField label="Origem">
-              <Select {...register("origem")} placeholder="Selecione">
-                {Object.entries(LABELS_ORIGEM).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
-              </Select>
-            </FormField>
+          <FormGrid>
             <FormField label="Status financeiro" hint="Calculado automaticamente pelas contas a receber">
               <div className="flex flex-col gap-1.5 pt-1.5">
                 <span className={cn("inline-flex w-fit items-center text-xs font-semibold px-2.5 py-1 rounded-full", COR_STATUS_FINANCEIRO_CALC[statusCalc])}>
@@ -502,7 +493,10 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
             </FormField>
           </FormGrid>
         </FormSection>
+      </Painel>
 
+      {/* ABA 2 — Faturamento */}
+      <Painel ativo={aba === "faturamento"}>
         <FormSection title="Comercial" icon={<DollarSign className="w-3.5 h-3.5" />}>
           <FormGrid>
             <FormField label="Tabela de preços" hint="Sem seleção, usa a tabela Padrão da empresa">
@@ -542,10 +536,9 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
             </div>
           )}
         </FormSection>
-
       </Painel>
 
-      {/* ABA 2 — Contatos */}
+      {/* ABA 3 — Contatos */}
       <Painel ativo={aba === "contatos"}>
         <FormSection title="Contatos do cliente" icon={<Users className="w-3.5 h-3.5" />}>
           <p className="text-xs text-gray-400 -mt-2 mb-3">
