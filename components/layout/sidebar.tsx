@@ -13,7 +13,7 @@ import {
   HardHat, Settings, ChevronDown, ChevronRight,
   Wrench, FileSpreadsheet, Cog, Package, ListChecks, Calculator,
   Wallet, Receipt, TrendingUp, FileBarChart, Clock, ShoppingCart, Timer, Tags, CalendarDays, Headset, ScrollText, QrCode,
-  Truck, UsersRound, IdCard, ClipboardCheck, Smartphone, ShieldCheck, UserCog, Upload, Landmark, Mail, Building2, Globe,
+  Truck, UsersRound, IdCard, ClipboardCheck, Smartphone, ShieldCheck, UserCog, Upload, Landmark, Mail, Building2, Globe, Coins,
   PanelLeftClose, PanelLeftOpen, MoreVertical, LogOut,
 } from "lucide-react";
 
@@ -25,6 +25,8 @@ interface Item {
   label: string;
   /** Sobrescreve o alvo de ativação (ex.: itens com mesma rota). "__nunca__" = nunca ativo. */
   matchHref?: string;
+  /** Sobrescreve o módulo de permissão (quando o 1º segmento da rota não reflete o gate correto). */
+  modulo?: string;
 }
 interface Grupo {
   tipo: "grupo";
@@ -40,20 +42,25 @@ interface Secao {
 const ehGrupo = (e: Item | Grupo): e is Grupo => (e as Grupo).tipo === "grupo";
 
 const STORAGE_KEY = "frivo:sidebar-recolhido";
+const MODULO_KEY = "frivo:sidebar-modulo";
 
 // ─────────────────────────────────────────────
-// Estrutura de navegação (apenas reorganização — todas as rotas preservadas)
+// Estrutura de navegação por MÓDULO ("mundos")
+// Apenas reorganização — todas as rotas são preservadas (nenhuma rota nova/alterada).
+// O título das seções serve apenas para agrupar/espaçar (não é exibido).
 // ─────────────────────────────────────────────
-const SECOES: Secao[] = [
+
+/** Módulo OPERACIONAL — dia a dia de campo, comercial, equipes e frota. */
+const OPERACIONAL: Secao[] = [
   {
-    titulo: "Núcleo operacional",
+    titulo: "Início",
     entries: [
       { href: "/dashboard", icone: LayoutDashboard, label: "Dashboard" },
       { href: "/clientes", icone: Users, label: "Clientes" },
     ],
   },
   {
-    titulo: "Campo e execução",
+    titulo: "op-grupos",
     entries: [
       {
         tipo: "grupo", label: "Operações", icone: ClipboardList, itens: [
@@ -68,34 +75,13 @@ const SECOES: Secao[] = [
           { href: "/qrcodes", icone: QrCode, label: "QR Codes" },
         ],
       },
-    ],
-  },
-  {
-    titulo: "Comercial",
-    entries: [
       {
-        tipo: "grupo", label: "Propostas e contratos", icone: FileText, itens: [
+        tipo: "grupo", label: "Comercial", icone: FileText, itens: [
           { href: "/orcamentos", icone: Calculator, label: "Orçamentos" },
           { href: "/contratos", icone: FileText, label: "Contratos" },
           { href: "/leads-site", icone: Globe, label: "Leads do Site" },
         ],
       },
-      {
-        tipo: "grupo", label: "Financeiro", icone: Wallet, itens: [
-          { href: "/financeiro", icone: LayoutDashboard, label: "Dashboard financeiro" },
-          { href: "/financeiro/contas-receber", icone: Receipt, label: "Contas a receber" },
-          { href: "/financeiro/contas-pagar", icone: Upload, label: "Contas a pagar" },
-          { href: "/financeiro/medicoes", icone: FileBarChart, label: "Medições" },
-          { href: "/financeiro/fluxo-caixa", icone: TrendingUp, label: "Fluxo de caixa" },
-          { href: "/compras/pedidos", icone: ShoppingCart, label: "Pedidos de compra" },
-          { href: "/financeiro/contas-bancarias", icone: Landmark, label: "Contas bancárias" },
-        ],
-      },
-    ],
-  },
-  {
-    titulo: "Pessoas e frota",
-    entries: [
       {
         tipo: "grupo", label: "Equipes", icone: UsersRound, itens: [
           { href: "/colaboradores", icone: HardHat, label: "Colaboradores" },
@@ -105,11 +91,48 @@ const SECOES: Secao[] = [
       {
         tipo: "grupo", label: "Frota", icone: Truck, itens: [
           { href: "/veiculos", icone: Truck, label: "Veículos" },
-          { href: "/configuracoes/checklists-veiculo", icone: ClipboardCheck, label: "Checklists de veículo" },
+          { href: "/configuracoes/checklists-veiculo", icone: ClipboardCheck, label: "Checklists", modulo: "veiculos" },
         ],
       },
     ],
   },
+];
+
+/** Módulo FINANCEIRO — recebimentos, pagamentos e tesouraria. */
+const FINANCEIRO: Secao[] = [
+  {
+    titulo: "Visão geral",
+    entries: [
+      { href: "/financeiro", icone: Wallet, label: "Dashboard financeiro", modulo: "financeiro" },
+      { href: "/financeiro/fluxo-caixa", icone: TrendingUp, label: "Fluxo de caixa", modulo: "financeiro" },
+    ],
+  },
+  {
+    titulo: "fin-grupos",
+    entries: [
+      {
+        tipo: "grupo", label: "Recebimentos", icone: Receipt, itens: [
+          { href: "/financeiro/contas-receber", icone: Receipt, label: "Contas a receber", modulo: "financeiro" },
+          { href: "/financeiro/medicoes", icone: FileBarChart, label: "Medições", modulo: "financeiro" },
+        ],
+      },
+      {
+        tipo: "grupo", label: "Pagamentos", icone: Upload, itens: [
+          { href: "/financeiro/contas-pagar", icone: Upload, label: "Contas a pagar", modulo: "financeiro" },
+          { href: "/compras/pedidos", icone: ShoppingCart, label: "Pedidos de compra", modulo: "financeiro" },
+        ],
+      },
+      {
+        tipo: "grupo", label: "Tesouraria", icone: Landmark, itens: [
+          { href: "/financeiro/contas-bancarias", icone: Landmark, label: "Contas bancárias", modulo: "financeiro" },
+        ],
+      },
+    ],
+  },
+];
+
+/** Bloco SISTEMA — configurações, acessível pelo rodapé em ambos os módulos. */
+const SISTEMA: Secao[] = [
   {
     titulo: "Sistema",
     entries: [
@@ -143,6 +166,30 @@ const SECOES: Secao[] = [
   },
 ];
 
+type Modulo = "operacional" | "financeiro";
+type Vista = Modulo | "sistema";
+
+const VISTAS: Record<Vista, Secao[]> = { operacional: OPERACIONAL, financeiro: FINANCEIRO, sistema: SISTEMA };
+
+const baseHref = (i: Item) => i.matchHref ?? i.href.split("#")[0];
+
+/** Todas as bases de rota marcadas com sua vista (para descobrir a qual módulo uma rota pertence). */
+const BASES_POR_VISTA: { base: string; vista: Vista }[] = (Object.keys(VISTAS) as Vista[]).flatMap((vista) =>
+  VISTAS[vista].flatMap((s) => s.entries.flatMap((e) => (ehGrupo(e) ? e.itens : [e]).map((i) => ({ base: baseHref(i), vista }))))
+    .filter((b) => b.base !== "__nunca__"),
+);
+
+/** Descobre a vista (módulo) de uma rota pelo prefixo mais longo; null se não pertencer a nenhuma. */
+function vistaDaRota(pathname: string): Vista | null {
+  let melhor: { base: string; vista: Vista } | null = null;
+  for (const b of BASES_POR_VISTA) {
+    if (pathname === b.base || pathname.startsWith(b.base + "/")) {
+      if (!melhor || b.base.length > melhor.base.length) melhor = b;
+    }
+  }
+  return melhor?.vista ?? null;
+}
+
 interface SidebarProps {
   session: Session;
   variant?: "desktop" | "mobile";
@@ -158,10 +205,30 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
   const [montado, setMontado] = useState(false);
   const [menuAberto, setMenuAberto] = useState(false);
 
+  // Módulo ativo ("mundo") + overlay de configurações (Sistema)
+  const [modulo, setModulo] = useState<Modulo>("operacional");
+  const [sistemaAberto, setSistemaAberto] = useState(false);
+
   useEffect(() => {
-    if (typeof window !== "undefined" && localStorage.getItem(STORAGE_KEY) === "1") setRecolhido(true);
+    if (typeof window !== "undefined") {
+      if (localStorage.getItem(STORAGE_KEY) === "1") setRecolhido(true);
+      const m = localStorage.getItem(MODULO_KEY);
+      if (m === "financeiro" || m === "operacional") setModulo(m);
+    }
     setMontado(true);
   }, []);
+
+  // Troca automática de vista conforme a rota atual (o menu segue a página).
+  useEffect(() => {
+    const v = vistaDaRota(pathname);
+    if (v === "sistema") setSistemaAberto(true);
+    else if (v) { setModulo(v); setSistemaAberto(false); }
+  }, [pathname]);
+
+  // Persiste o módulo escolhido
+  useEffect(() => {
+    if (montado) { try { localStorage.setItem(MODULO_KEY, modulo); } catch {} }
+  }, [modulo, montado]);
 
   const toggleRecolher = () =>
     setRecolhido((v) => {
@@ -172,49 +239,75 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
 
   const colapsada = variant === "desktop" && recolhido;
 
-  // Permissão de visualização por rota (1º segmento → módulo)
+  // Permissão de visualização por item (item.modulo sobrescreve o 1º segmento da rota)
   const permissoes = (usuario as any).permissoes;
   const role = usuario.role;
-  const podeVer = (href: string) => {
-    const m = moduloDaRota(href.split("#")[0]);
+  const podeVer = (i: Item) => {
+    const m = i.modulo ?? moduloDaRota(i.href.split("#")[0]);
     return !m || pode(permissoes, m, "visualizar", role);
   };
 
-  const baseHref = (href: string, matchHref?: string) => matchHref ?? href.split("#")[0];
+  // Filtra seções por permissão (itens sem permissão somem; grupos/seções vazios somem)
+  const filtrar = (secoes: Secao[]) =>
+    secoes.map((sec) => {
+      const entries = sec.entries
+        .map((e) => {
+          if (!ehGrupo(e)) return podeVer(e) ? e : null;
+          const itens = e.itens.filter((i) => podeVer(i));
+          return itens.length > 0 ? { ...e, itens } : null;
+        })
+        .filter(Boolean) as (Item | Grupo)[];
+      return { ...sec, entries };
+    }).filter((sec) => sec.entries.length > 0);
 
-  // Item ativo pelo prefixo mais longo (ex.: /financeiro vs /financeiro/contas-receber)
-  const todasBases = SECOES.flatMap((s) =>
-    s.entries.flatMap((e) => (ehGrupo(e) ? e.itens : [e]).map((i) => baseHref(i.href, i.matchHref))),
+  const temItens = (secoes: Secao[]) => secoes.some((s) => s.entries.length > 0);
+
+  // Disponibilidade de cada mundo conforme RBAC
+  const operacionalDisponivel = temItens(filtrar(OPERACIONAL));
+  const financeiroDisponivel = temItens(filtrar(FINANCEIRO));
+  const sistemaDisponivel = temItens(filtrar(SISTEMA));
+
+  // Módulo efetivo (cai para o disponível se o escolhido não estiver acessível)
+  const moduloEfetivo: Modulo =
+    modulo === "financeiro" && !financeiroDisponivel ? "operacional"
+      : modulo === "operacional" && !operacionalDisponivel && financeiroDisponivel ? "financeiro"
+        : modulo;
+  const vistaAtiva: Vista = sistemaAberto && sistemaDisponivel ? "sistema" : moduloEfetivo;
+
+  const secoesVisiveis = filtrar(VISTAS[vistaAtiva]);
+  const mostrarSeletor = operacionalDisponivel && financeiroDisponivel;
+
+  // Item ativo pelo prefixo mais longo dentro da vista atual
+  const basesAtuais = secoesVisiveis.flatMap((s) =>
+    s.entries.flatMap((e) => (ehGrupo(e) ? e.itens : [e]).map((i) => baseHref(i))),
   ).filter((b) => b !== "__nunca__");
   let ativoHref: string | null = null;
-  for (const b of todasBases) {
+  for (const b of basesAtuais) {
     if (pathname === b || pathname.startsWith(b + "/")) {
       if (!ativoHref || b.length > ativoHref.length) ativoHref = b;
     }
   }
-  const itemAtivo = (i: Item) => baseHref(i.href, i.matchHref) === ativoHref;
+  const itemAtivo = (i: Item) => baseHref(i) === ativoHref;
   const grupoAtivo = (g: Grupo) => g.itens.some((i) => itemAtivo(i));
 
-  // Estado de expansão dos grupos (abre o que contém o item ativo)
-  const [abertos, setAbertos] = useState<Set<string>>(() => {
-    const s = new Set<string>();
-    for (const sec of SECOES) for (const e of sec.entries) if (ehGrupo(e) && e.itens.some((i) => baseHref(i.href, i.matchHref) === ativoHref)) s.add(e.label);
-    return s;
-  });
+  // Estado de expansão dos grupos
+  const [abertos, setAbertos] = useState<Set<string>>(new Set());
   const toggle = (label: string) =>
     setAbertos((p) => { const n = new Set(p); if (n.has(label)) n.delete(label); else n.add(label); return n; });
 
-  // Filtra itens/grupos/seções por permissão
-  const secoesVisiveis = SECOES.map((sec) => {
-    const entries = sec.entries
-      .map((e) => {
-        if (!ehGrupo(e)) return podeVer(e.href) ? e : null;
-        const itens = e.itens.filter((i) => podeVer(i.href));
-        return itens.length > 0 ? { ...e, itens } : null;
-      })
-      .filter(Boolean) as (Item | Grupo)[];
-    return { ...sec, entries };
-  }).filter((sec) => sec.entries.length > 0);
+  // Abre automaticamente o grupo que contém o item ativo
+  useEffect(() => {
+    if (!ativoHref) return;
+    for (const sec of VISTAS[vistaAtiva]) {
+      for (const e of sec.entries) {
+        if (ehGrupo(e) && e.itens.some((i) => baseHref(i) === ativoHref)) {
+          setAbertos((p) => (p.has(e.label) ? p : new Set(p).add(e.label)));
+        }
+      }
+    }
+  }, [ativoHref, vistaAtiva]);
+
+  const escolherModulo = (m: Modulo) => { setModulo(m); setSistemaAberto(false); };
 
   return (
     <aside className={cn(
@@ -273,6 +366,28 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
           </div>
         </>)}
       </div>
+
+      {/* Seletor de módulos ("mundos") */}
+      {mostrarSeletor && (
+        <div className={cn("px-3 pt-3", colapsada ? "pb-1" : "pb-1")}>
+          <div className={cn("bg-white/5 rounded-xl p-1", colapsada ? "flex flex-col gap-1" : "grid grid-cols-2 gap-1")}>
+            <SeletorBotao
+              ativo={vistaAtiva === "operacional"}
+              onClick={() => escolherModulo("operacional")}
+              icone={Wrench}
+              label="Operacional"
+              colapsada={colapsada}
+            />
+            <SeletorBotao
+              ativo={vistaAtiva === "financeiro"}
+              onClick={() => escolherModulo("financeiro")}
+              icone={Coins}
+              label="Financeiro"
+              colapsada={colapsada}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Navegação principal */}
       <nav className="flex-1 px-3 py-4 overflow-y-auto overflow-x-hidden">
@@ -342,8 +457,24 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
         ))}
       </nav>
 
-      {/* Rodapé: instalar app + logo */}
+      {/* Rodapé: configurações (Sistema) + instalar app + logo */}
       <div className="px-3 pt-2 pb-3 border-t border-white/5 space-y-2">
+        {sistemaDisponivel && (
+          <button
+            onClick={() => setSistemaAberto((v) => !v)}
+            title={colapsada ? "Configurações" : undefined}
+            className={cn(
+              "flex items-center rounded-lg text-sm transition-colors w-full",
+              colapsada ? "justify-center py-2" : "gap-3 pl-4 pr-3 py-2.5",
+              sistemaAberto
+                ? "bg-primary-500 text-white font-semibold"
+                : "text-slate-200 hover:bg-white/5 hover:text-white",
+            )}
+          >
+            <Settings className="w-[18px] h-[18px] shrink-0" />
+            {!colapsada && <span className="truncate">Configurações</span>}
+          </button>
+        )}
         <Link
           href="/instalar"
           title={colapsada ? "Instalar app" : undefined}
@@ -360,6 +491,33 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
         </div>
       </div>
     </aside>
+  );
+}
+
+interface SeletorBotaoProps {
+  ativo: boolean;
+  onClick: () => void;
+  icone: Icone;
+  label: string;
+  colapsada: boolean;
+}
+
+function SeletorBotao({ ativo, onClick, icone: Icone, label, colapsada }: SeletorBotaoProps) {
+  return (
+    <button
+      onClick={onClick}
+      title={colapsada ? label : undefined}
+      className={cn(
+        "flex items-center justify-center rounded-lg text-xs font-medium transition-all",
+        colapsada ? "py-2" : "gap-1.5 py-2 px-2",
+        ativo
+          ? "bg-primary-500 text-white shadow-sm"
+          : "text-slate-300 hover:bg-white/5 hover:text-white",
+      )}
+    >
+      <Icone className={cn(colapsada ? "w-[18px] h-[18px]" : "w-4 h-4 shrink-0")} />
+      {!colapsada && <span className="truncate">{label}</span>}
+    </button>
   );
 }
 
