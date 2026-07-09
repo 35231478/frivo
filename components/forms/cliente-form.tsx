@@ -20,12 +20,12 @@ import { AnexosLocal, type AnexoLocal } from "@/components/forms/anexos-local";
 import { LogoUpload } from "@/components/forms/logo-upload";
 import { ContatosManager } from "@/components/forms/contatos-manager";
 import { ContatosLocal, type ContatoLocal } from "@/components/forms/contatos-local";
-import { ComunicacaoContatos } from "@/components/forms/comunicacao-contatos";
+import { ComunicacaoPreferencias } from "@/components/forms/comunicacao-preferencias";
 import { ClienteContratos } from "@/components/forms/cliente-contratos";
-import { PortalUsuarios } from "@/components/forms/portal-usuarios";
+import { PortalContatos } from "@/components/forms/portal-contatos";
 import { InteracoesManager } from "@/components/forms/interacoes-manager";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
-import { LABELS_PERFIL_FATURAMENTO, PERMISSOES_PORTAL, formatarMoeda } from "@/lib/utils";
+import { LABELS_PERFIL_FATURAMENTO, formatarMoeda } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import {
   LABELS_STATUS_FINANCEIRO_CALC, COR_STATUS_FINANCEIRO_CALC, type StatusFinanceiroCalc,
@@ -33,7 +33,7 @@ import {
 import Link from "next/link";
 import type { Cliente, Tecnico, Unidade, Configuracao, ContatoCliente } from "@prisma/client";
 import {
-  Search, Loader2, FileCheck, Lock, Pencil, Plus, X, Mail, AlertCircle,
+  Search, Loader2, FileCheck, Lock, Pencil, X, AlertCircle,
   FileText, Phone, MapPin, Image as ImageIcon, Heart, Headset,
   Building2, DollarSign, Users, Paperclip, Star, MessageSquare, Globe, ArrowUpRight, Send, FileSignature,
 } from "lucide-react";
@@ -126,12 +126,12 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
   const [exigePcAntesNf, setExigePcAntesNf] = useState<boolean>(initialData?.exigePcAntesNf ?? false);
   const [agrupaAdicionais, setAgrupaAdicionais] = useState<boolean>(initialData?.agrupaAdicionais ?? false);
   const [boletoUnicoMensal, setBoletoUnicoMensal] = useState<boolean>(initialData?.boletoUnicoMensal ?? false);
-  const [emailsFaturamento, setEmailsFaturamento] = useState<string[]>(initialData?.emailsFaturamento ?? []);
+  const [emailsFaturamento] = useState<string[]>(initialData?.emailsFaturamento ?? []);
   const [whatsappFaturamento, setWhatsappFaturamento] = useState<string>(initialData?.whatsappFaturamento ?? "");
   const [tabelaPrecoId, setTabelaPrecoId] = useState<string>(initialData?.tabelaPrecoId ?? "");
   const [tabelas, setTabelas] = useState<{ id: string; nome: string; tipo: string }[]>([]);
   const [portalAtivo, setPortalAtivo] = useState<boolean>(initialData?.portalAtivo ?? false);
-  const [prefsEmail, setPrefsEmail] = useState({
+  const [prefsEmail] = useState({
     emailReceberBoletos: initialData?.emailReceberBoletos ?? true,
     emailReceberRelatorios: initialData?.emailReceberRelatorios ?? true,
     emailReceberLembretes: initialData?.emailReceberLembretes ?? true,
@@ -139,8 +139,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
     emailReceberOrcamentos: initialData?.emailReceberOrcamentos ?? true,
     emailReceberOs: initialData?.emailReceberOs ?? true,
   });
-  const setPref = (k: string, v: boolean) => setPrefsEmail((p) => ({ ...p, [k]: v }));
-  const [emailsCopia, setEmailsCopia] = useState<string[]>(initialData?.emailsCopia ?? []);
+  const [emailsCopia] = useState<string[]>(initialData?.emailsCopia ?? []);
 
   useEffect(() => {
     fetch("/api/configuracoes").then((r) => r.json()).then(setConfig).catch(() => {});
@@ -272,14 +271,14 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
 
   const ABAS = [
     { id: "geral", label: "Dados Gerais", icone: FileText },
-    { id: "faturamento", label: "Faturamento", icone: DollarSign },
     { id: "contatos", label: "Contatos", icone: Phone, badge: qtdContatos },
-    { id: "comunicacao", label: "Comunicação", icone: Send },
     { id: "enderecos", label: "Endereços", icone: MapPin, badge: qtdEnderecos },
+    { id: "comunicacao", label: "Comunicação", icone: Send },
+    { id: "faturamento", label: "Faturamento", icone: DollarSign },
     { id: "contratos", label: "Contratos", icone: FileSignature, badge: qtdContratosAtivos },
+    { id: "portal", label: "Portal", icone: Headset },
     { id: "documentos", label: "Documentos e Mídia", icone: ImageIcon, badge: qtdAnexos },
     { id: "relacionamento", label: "Relacionamento", icone: Heart },
-    { id: "portal", label: "Portal", icone: Headset },
   ];
 
   const salvar = handleSubmit((d) => onSubmit(d, false), onError);
@@ -308,10 +307,10 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto space-y-5">
+      <div className="max-w-[1600px] mx-auto space-y-5">
         {/* Cabeçalho fixo: título + status + ações */}
         <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-[#F8FAFC]/90 backdrop-blur border-b border-surface-border">
-          <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 flex-wrap">
+          <div className="max-w-[1600px] mx-auto flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3 flex-wrap min-w-0">
               <h1 className="text-xl font-bold text-ink truncate">{titulo}</h1>
               {isEditing && (
@@ -388,7 +387,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
 
         {/* Card central branco com abas + conteúdo */}
         <div className="bg-white rounded-2xl shadow-card border border-surface-border overflow-hidden">
-          <nav className="flex gap-1.5 overflow-x-auto px-4 pt-4 pb-4 border-b border-surface-border">
+          <nav className="flex flex-wrap gap-1.5 px-4 pt-4 pb-4 border-b border-surface-border">
             {ABAS.map((t) => {
               const ativa = aba === t.id;
               const comErro = abasErro.has(t.id);
@@ -543,7 +542,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
         <FormSection title="Contatos do cliente" icon={<Users className="w-3.5 h-3.5" />}>
           <p className="text-xs text-gray-400 -mt-2 mb-3">
             {isEditing
-              ? "Gerencie os contatos deste cliente. O tipo define quais comunicações cada um recebe (veja a aba Comunicação)."
+              ? "Cadastre os contatos deste cliente. Defina quem recebe cada comunicação na aba Comunicação e o acesso ao portal na aba Portal."
               : "Adicione os contatos do cliente. O primeiro será marcado como principal."}
           </p>
           {isEditing ? (
@@ -556,37 +555,15 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
 
       {/* ABA — Comunicação */}
       <Painel ativo={aba === "comunicacao"}>
-        <FormSection title="Contatos por área" icon={<Send className="w-3.5 h-3.5" />}>
+        <FormSection title="Preferências de comunicação" icon={<Send className="w-3.5 h-3.5" />}>
           <p className="text-xs text-gray-400 -mt-2 mb-3">
-            Os contatos são cadastrados na aba <strong>Contatos</strong> e aqui aparecem agrupados pelo tipo, indicando o que cada um recebe.
-            Sem contato de um tipo, o sistema usa o e-mail principal do cliente.
+            Defina quais contatos recebem cada tipo de comunicação e por qual canal. Os contatos são cadastrados na aba <strong>Contatos</strong>.
           </p>
           {isEditing ? (
-            <ComunicacaoContatos clienteId={initialData!.id} ativo={aba === "comunicacao"} onGerenciar={() => setAba("contatos")} />
+            <ComunicacaoPreferencias clienteId={initialData!.id} ativo={aba === "comunicacao"} onGerenciar={() => setAba("contatos")} />
           ) : (
-            <p className="text-sm text-ink-muted">Salve o cliente para visualizar os contatos por área.</p>
+            <p className="text-sm text-ink-muted">Salve o cliente para configurar a comunicação dos contatos.</p>
           )}
-        </FormSection>
-
-        <FormSection title="Preferências de notificação" icon={<Mail className="w-3.5 h-3.5" />}>
-          <p className="text-xs font-bold text-ink-muted uppercase tracking-wider">Operacional</p>
-          <div className="divide-y divide-gray-100">
-            <ToggleSwitch label="Receber atualizações de OS" description="Avisos de abertura/conclusão de ordens de serviço" checked={prefsEmail.emailReceberOs} onChange={(v) => setPref("emailReceberOs", v)} />
-          </div>
-          <p className="text-xs font-bold text-ink-muted uppercase tracking-wider mt-4">Financeiro</p>
-          <div className="divide-y divide-gray-100">
-            <ToggleSwitch label="Receber boletos por e-mail" description="Envio automático de boletos emitidos" checked={prefsEmail.emailReceberBoletos} onChange={(v) => setPref("emailReceberBoletos", v)} />
-            <ToggleSwitch label="Receber lembretes de vencimento" description="Avisos de cobranças a vencer/vencidas" checked={prefsEmail.emailReceberLembretes} onChange={(v) => setPref("emailReceberLembretes", v)} />
-            <ToggleSwitch label="Receber confirmações de pagamento" description="Confirmação quando um pagamento é registrado" checked={prefsEmail.emailReceberConfirmacoes} onChange={(v) => setPref("emailReceberConfirmacoes", v)} />
-          </div>
-          <p className="text-xs font-bold text-ink-muted uppercase tracking-wider mt-4">Contratual</p>
-          <div className="divide-y divide-gray-100">
-            <ToggleSwitch label="Receber orçamentos/propostas" description="Lembretes de orçamentos enviados/vencendo" checked={prefsEmail.emailReceberOrcamentos} onChange={(v) => setPref("emailReceberOrcamentos", v)} />
-            <ToggleSwitch label="Receber relatórios/medições" description="Notifica quando o relatório está disponível" checked={prefsEmail.emailReceberRelatorios} onChange={(v) => setPref("emailReceberRelatorios", v)} />
-          </div>
-          <FormField label="E-mails adicionais para cópia (CC)" hint="Recebem cópia de todos os e-mails enviados ao cliente">
-            <EmailsFaturamento emails={emailsCopia} onChange={setEmailsCopia} />
-          </FormField>
         </FormSection>
       </Painel>
 
@@ -659,7 +636,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
       <Painel ativo={aba === "portal"}>
         <FormSection title="Portal do Cliente" icon={<Globe className="w-3.5 h-3.5" />}>
           <p className="text-xs text-gray-400 -mt-2 mb-1">
-            Habilita o acesso do cliente ao portal externo. O acesso individual e as permissões de cada contato são definidos na aba <strong>Contatos</strong>.
+            Habilita o acesso do cliente ao portal externo e gerencia o acesso individual de cada contato (senha provisória, redefinição e revogação).
           </p>
           <ToggleSwitch
             label="Portal ativo"
@@ -670,7 +647,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
           {!isEditing ? (
             <p className="text-xs text-gray-400">Salve o cliente para conceder acesso de portal aos contatos.</p>
           ) : (
-            <PortalUsuarios clienteId={initialData!.id} ativo={aba === "portal"} />
+            <PortalContatos clienteId={initialData!.id} ativo={aba === "portal"} onGerenciar={() => setAba("contatos")} />
           )}
         </FormSection>
       </Painel>
@@ -683,48 +660,5 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
         </div>{/* fim do card */}
       </div>{/* fim do container */}
     </form>
-  );
-}
-
-function EmailsFaturamento({ emails, onChange }: { emails: string[]; onChange: (e: string[]) => void }) {
-  const [novo, setNovo] = useState("");
-
-  function adicionar() {
-    const e = novo.trim().toLowerCase();
-    if (!e) return;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return;
-    if (emails.includes(e)) { setNovo(""); return; }
-    onChange([...emails, e]);
-    setNovo("");
-  }
-
-  return (
-    <div className="space-y-2">
-      <div className="flex gap-2">
-        <Input
-          type="email"
-          value={novo}
-          onChange={(e) => setNovo(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); adicionar(); } }}
-          placeholder="financeiro@cliente.com.br"
-          className="flex-1"
-        />
-        <Button type="button" variant="secondary" onClick={adicionar} className="shrink-0">
-          <Plus className="w-4 h-4" /> Adicionar
-        </Button>
-      </div>
-      {emails.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {emails.map((e) => (
-            <span key={e} className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 text-xs font-medium rounded-full pl-3 pr-1.5 py-1">
-              <Mail className="w-3 h-3" /> {e}
-              <button type="button" onClick={() => onChange(emails.filter((x) => x !== e))} className="p-0.5 hover:bg-primary-100 rounded-full">
-                <X className="w-3 h-3" />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }

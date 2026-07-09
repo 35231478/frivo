@@ -14,6 +14,7 @@ import {
   TipoVencimento, IndiceReajuste, PeriodoRefNFSe, PeriodoVisita,
   StatusColaborador, TipoVeiculo, StatusVeiculo, StatusEquipe,
   TipoManutencaoVeiculo, TipoDocumentoVeiculo, FrequenciaChecklist, TipoItemChecklist,
+  TipoComunicacao, CanalComunicacao,
 } from "@prisma/client";
 
 const valorOpcional = z.preprocess(
@@ -84,6 +85,17 @@ export const contatoClienteSchema = z.object({
   whatsapp: z.string().optional(),
   email: z.string().email("E-mail inválido").optional().or(z.literal("")),
   principal: z.boolean().default(false),
+});
+
+// Preferências de comunicação: quais contatos recebem cada tipo, por qual canal.
+export const comunicacaoPreferenciaItemSchema = z.object({
+  contatoId: z.string().min(1),
+  tipo: z.nativeEnum(TipoComunicacao),
+  canal: z.nativeEnum(CanalComunicacao).default(CanalComunicacao.EMAIL),
+});
+
+export const comunicacaoPreferenciasSchema = z.object({
+  preferencias: z.array(comunicacaoPreferenciaItemSchema),
 });
 
 export const interacaoClienteSchema = z.object({

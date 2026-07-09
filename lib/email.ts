@@ -1,5 +1,5 @@
 import { Resend } from "resend";
-import { TipoContato } from "@prisma/client";
+import { TipoContato, TipoComunicacao, CanalComunicacao } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { descriptografar } from "@/lib/crypto";
 import { TEMPLATES_PADRAO, substituirVariaveis, montarEmailHtml, type DadosEmpresaEmail } from "@/lib/email-templates";
@@ -141,6 +141,51 @@ export async function getContatosPorTipo(clienteId: string, tipo: TipoContato): 
   return principal ? [principal] : [];
 }
 
+// Mapeia o tipo de comunicação (aba Comunicação) ao TipoContato legado, usado
+// como fallback quando o cliente ainda não configurou preferências.
+const LEGADO_POR_COMUNICACAO: Record<TipoComunicacao, TipoContato> = {
+  ORDENS: TipoContato.OPERACIONAL,
+  ORCAMENTOS: TipoContato.CONTRATUAL,
+  FINANCEIRO: TipoContato.FINANCEIRO,
+};
+
+/**
+ * Retorna os contatos configurados (na aba Comunicação) para receber um tipo de
+ * comunicação, com o canal escolhido. Retorna [] se o cliente não configurou
+ * nenhum contato para o tipo (nesse caso os envios caem no roteamento legado).
+ * Base para o envio por WhatsApp — hoje só o e-mail é efetivado.
+ */
+export async function getContatosComunicacao(
+  clienteId: string,
+  tipo: TipoComunicacao,
+): Promise<{ nome: string; email: string | null; whatsapp: string | null; canal: CanalComunicacao }[]> {
+  const prefs = await prisma.comunicacaoPreferencia.findMany({
+    where: { clienteId, tipo, contato: { ativo: true } },
+    include: { contato: { select: { nome: true, email: true, whatsapp: true, principal: true } } },
+    orderBy: { contato: { principal: "desc" } },
+  });
+  return prefs.map((p) => ({ nome: p.contato.nome, email: p.contato.email, whatsapp: p.contato.whatsapp, canal: p.canal }));
+}
+
+/**
+ * E-mails que devem receber um tipo de comunicação (canais EMAIL ou AMBOS).
+ * Se houver configuração explícita na aba Comunicação, ela é respeitada; caso
+ * contrário, cai no roteamento legado por TipoContato (com fallback para o
+ * e-mail principal do cliente).
+ */
+export async function getEmailsComunicacao(clienteId: string, tipo: TipoComunicacao): Promise<string[]> {
+  const contatos = await getContatosComunicacao(clienteId, tipo);
+  if (contatos.length > 0) {
+    return [...new Set(
+      contatos
+        .filter((c) => c.canal === CanalComunicacao.EMAIL || c.canal === CanalComunicacao.AMBOS)
+        .map((c) => (c.email ?? "").trim())
+        .filter((e) => e !== ""),
+    )];
+  }
+  return getContatosPorTipo(clienteId, LEGADO_POR_COMUNICACAO[tipo]);
+}
+
 /** Monta { para, cc } a partir de uma lista de e-mails + os e-mails de cópia do cliente. */
 function montarDestinatarios(emails: string[], cli: { emailsCopia?: string[] | null }): { para: string; cc: string[] } | null {
   const lista = [...new Set(emails.map((e) => e.trim()).filter(Boolean))];
@@ -159,7 +204,7 @@ export async function enviarBoleto(contaReceberId: string): Promise<ResultadoEma
   if (!c) return { ok: false, erro: "Conta não encontrada." };
   const cfg = await prisma.emailConfig.findUnique({ where: { empresaId: c.empresaId } });
   if (!cfg?.notifBoletoEmitido || !c.cliente.emailReceberBoletos) return { ok: false, erro: "Notificação desativada." };
-  const emails = await getContatosPorTipo(c.cliente.id, TipoContato.FINANCEIRO);
+  const emails = await getEmailsComunicacao(c.cliente.id, TipoComunicacao.FINANCEIRO);
   if (emails.length === 0 && c.cliente.emailsFaturamento?.[0]) emails.push(c.cliente.emailsFaturamento[0]);
   const dest = montarDestinatarios(emails, c.cliente);
   if (!dest) return { ok: false, erro: "Destinatário sem e-mail." };
@@ -174,7 +219,7 @@ export async function enviarLembreteVencimento(contaReceberId: string): Promise<
   const c = await prisma.contaReceber.findUnique({ where: { id: contaReceberId }, include: { cliente: true } });
   if (!c) return { ok: false, erro: "Conta não encontrada." };
   if (!c.cliente.emailReceberLembretes) return { ok: false, erro: "Cliente não recebe lembretes." };
-  const dest = montarDestinatarios(await getContatosPorTipo(c.cliente.id, TipoContato.FINANCEIRO), c.cliente);
+  const dest = montarDestinatarios(await getEmailsComunicacao(c.cliente.id, TipoComunicacao.FINANCEIRO), c.cliente);
   if (!dest) return { ok: false, erro: "Destinatário sem e-mail." };
   const dias = c.dataVencimento ? Math.max(0, Math.round((new Date(c.dataVencimento).getTime() - Date.now()) / 86400000)) : 0;
   return enviarEmail(c.empresaId, {
@@ -188,7 +233,7 @@ export async function enviarConfirmacaoPagamento(contaReceberId: string): Promis
   if (!c) return { ok: false, erro: "Conta não encontrada." };
   const cfg = await prisma.emailConfig.findUnique({ where: { empresaId: c.empresaId } });
   if (!cfg?.notifConfirmacaoPagamento || !c.cliente.emailReceberConfirmacoes) return { ok: false, erro: "Notificação desativada." };
-  const dest = montarDestinatarios(await getContatosPorTipo(c.cliente.id, TipoContato.FINANCEIRO), c.cliente);
+  const dest = montarDestinatarios(await getEmailsComunicacao(c.cliente.id, TipoComunicacao.FINANCEIRO), c.cliente);
   if (!dest) return { ok: false, erro: "Destinatário sem e-mail." };
   return enviarEmail(c.empresaId, {
     tipo: "CONFIRMACAO_PAGAMENTO", para: dest.para, cc: dest.cc, referenciaId: c.id, referenciaTipo: "ContaReceber",
@@ -200,7 +245,7 @@ export async function enviarMedicao(medicaoId: string): Promise<ResultadoEmail> 
   const m = await prisma.medicao.findUnique({ where: { id: medicaoId }, include: { cliente: true } });
   if (!m) return { ok: false, erro: "Medição não encontrada." };
   if (!m.cliente.emailReceberRelatorios) return { ok: false, erro: "Cliente não recebe relatórios." };
-  const dest = montarDestinatarios(await getContatosPorTipo(m.cliente.id, TipoContato.CONTRATUAL), m.cliente);
+  const dest = montarDestinatarios(await getEmailsComunicacao(m.cliente.id, TipoComunicacao.ORDENS), m.cliente);
   if (!dest) return { ok: false, erro: "Destinatário sem e-mail." };
   const ref = m.mes ? `${nomeMes(m.mes)}/${m.ano ?? ""}` : (m.numero ?? "");
   const link = m.tokenPublico ? `${baseUrl()}/medicao/${m.tokenPublico}` : "";
@@ -214,7 +259,7 @@ export async function enviarOrcamento(orcamentoId: string): Promise<ResultadoEma
   const o = await prisma.orcamento.findUnique({ where: { id: orcamentoId }, include: { cliente: true } });
   if (!o) return { ok: false, erro: "Orçamento não encontrado." };
   if (!o.cliente.emailReceberOrcamentos) return { ok: false, erro: "Cliente não recebe orçamentos." };
-  const dest = montarDestinatarios(await getContatosPorTipo(o.cliente.id, TipoContato.CONTRATUAL), o.cliente);
+  const dest = montarDestinatarios(await getEmailsComunicacao(o.cliente.id, TipoComunicacao.ORCAMENTOS), o.cliente);
   if (!dest) return { ok: false, erro: "Destinatário sem e-mail." };
   return enviarEmail(o.empresaId, {
     tipo: "ORCAMENTO_ENVIADO", para: dest.para, cc: dest.cc, referenciaId: o.id, referenciaTipo: "Orcamento",
@@ -234,7 +279,7 @@ export async function enviarLembreteOrcamento(orcamentoId: string, tipo: TipoLem
   const o = await prisma.orcamento.findUnique({ where: { id: orcamentoId }, include: { cliente: true } });
   if (!o) return { ok: false, erro: "Orçamento não encontrado." };
   if (!o.cliente.emailReceberOrcamentos) return { ok: false, erro: "Cliente não recebe orçamentos." };
-  const dest = montarDestinatarios(await getContatosPorTipo(o.cliente.id, TipoContato.CONTRATUAL), o.cliente);
+  const dest = montarDestinatarios(await getEmailsComunicacao(o.cliente.id, TipoComunicacao.ORCAMENTOS), o.cliente);
   if (!dest) return { ok: false, erro: "Destinatário sem e-mail." };
   const dias = o.validadeEm ? Math.round((new Date(o.validadeEm).getTime() - Date.now()) / 86400000) : 0;
   return enviarEmail(o.empresaId, {
@@ -249,7 +294,7 @@ export async function enviarOS(ordemServicoId: string, tipo: "aberta" | "conclui
   const cfg = await prisma.emailConfig.findUnique({ where: { empresaId: os.empresaId } });
   const toggle = tipo === "concluida" ? cfg?.notifOsConcluida : cfg?.notifOsAberta;
   if (!toggle || !os.cliente.emailReceberOs) return { ok: false, erro: "Notificação desativada." };
-  const dest = montarDestinatarios(await getContatosPorTipo(os.cliente.id, TipoContato.OPERACIONAL), os.cliente);
+  const dest = montarDestinatarios(await getEmailsComunicacao(os.cliente.id, TipoComunicacao.ORDENS), os.cliente);
   if (!dest) return { ok: false, erro: "Destinatário sem e-mail." };
   return enviarEmail(os.empresaId, {
     tipo: tipo === "concluida" ? "OS_CONCLUIDA" : "OS_CONCLUIDA", para: dest.para, cc: dest.cc, referenciaId: os.id, referenciaTipo: "OrdemServico",

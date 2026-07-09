@@ -3,11 +3,9 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { FormField, FormGrid } from "@/components/ui/form-field";
 import { WhatsAppInput } from "@/components/ui/whatsapp-input";
 import { PhoneInput } from "@/components/ui/phone-input";
-import { LABELS_TIPO_CONTATO } from "@/lib/utils";
 import { Plus, Pencil, Trash2, X, Check, UserCircle, ChevronDown, ChevronRight, Star, Phone, Mail } from "lucide-react";
 
 export interface ContatoLocal {
@@ -96,19 +94,14 @@ export function ContatosLocal({ contatos, onChange }: ContatosLocalProps) {
           </FormField>
         </FormGrid>
         <FormGrid>
-          <FormField label="Tipo">
-            <Select value={form.tipo} onChange={(e) => updateField("tipo", e.target.value)}>
-              {Object.entries(LABELS_TIPO_CONTATO).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
-            </Select>
-          </FormField>
           <FormField label="E-mail">
             <Input value={form.email} onChange={(e) => updateField("email", e.target.value)} type="email" placeholder="email@empresa.com" />
           </FormField>
-        </FormGrid>
-        <FormGrid>
           <FormField label="Telefone">
             <PhoneInput value={form.telefone} onChange={(e: any) => updateField("telefone", e.target.value)} placeholder="(00) 0000-0000" />
           </FormField>
+        </FormGrid>
+        <FormGrid>
           <FormField label="WhatsApp">
             <WhatsAppInput value={form.whatsapp} onChange={(e: any) => updateField("whatsapp", e.target.value)} placeholder="(00) 00000-0000" />
           </FormField>
@@ -140,9 +133,6 @@ export function ContatosLocal({ contatos, onChange }: ContatosLocalProps) {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-medium text-gray-900">{c.nome}</span>
-                    <span className="text-[10px] font-medium bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">
-                      {LABELS_TIPO_CONTATO[c.tipo] ?? c.tipo}
-                    </span>
                     {c.principal && (
                       <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
                         <Star className="w-2.5 h-2.5 fill-current" /> Principal

@@ -200,6 +200,20 @@ enum TipoContato {
   OUTRO
 }
 
+// Tipo de comunicação (aba "Comunicação" do cliente): quem recebe o quê.
+enum TipoComunicacao {
+  ORDENS // OS, agendamentos, PMOC, relatórios de serviço
+  ORCAMENTOS // orçamentos e propostas
+  FINANCEIRO // NF-e, boletos, cobranças, lembretes de vencimento
+}
+
+// Canal de envio configurado por contato/tipo.
+enum CanalComunicacao {
+  EMAIL
+  WHATSAPP
+  AMBOS
+}
+
 enum TipoInteracao {
   LIGACAO
   VISITA
@@ -789,6 +803,7 @@ model Cliente {
   ordensServico      OrdemServico[]
   anexos             AnexoCliente[]
   contatosCliente    ContatoCliente[]
+  comunicacaoPreferencias ComunicacaoPreferencia[]
   interacoes         InteracaoCliente[]
   orcamentos         Orcamento[]
   medicoes           Medicao[]
@@ -833,10 +848,35 @@ model ContatoCliente {
 
   cliente       Cliente        @relation(fields: [clienteId], references: [id], onDelete: Cascade)
   ordensAbertas OrdemServico[] @relation("OsContatoOrigem")
+  comunicacaoPreferencias ComunicacaoPreferencia[]
 
   @@index([clienteId])
   @@index([empresaId])
   @@map("contatos_cliente")
+}
+
+// ─────────────────────────────────────────────
+// PREFERÊNCIA DE COMUNICAÇÃO (quem recebe o quê, por qual canal)
+// ─────────────────────────────────────────────
+
+model ComunicacaoPreferencia {
+  id        String           @id @default(cuid())
+  empresaId String           @map("empresa_id")
+  clienteId String           @map("cliente_id")
+  contatoId String           @map("contato_id")
+  tipo      TipoComunicacao
+  canal     CanalComunicacao @default(EMAIL)
+
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  cliente Cliente        @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  contato ContatoCliente @relation(fields: [contatoId], references: [id], onDelete: Cascade)
+
+  @@unique([contatoId, tipo])
+  @@index([clienteId, tipo])
+  @@index([empresaId])
+  @@map("comunicacao_preferencias")
 }
 
 // ─────────────────────────────────────────────

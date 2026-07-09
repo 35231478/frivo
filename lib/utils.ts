@@ -236,6 +236,31 @@ export const LABELS_TIPO_COMUNICACAO: Record<TipoComunicacao, string> = {
   CONTRATUAL: "Contratual",
 };
 
+// Preferências de comunicação (aba Comunicação do cliente): seções e canais.
+export const LABELS_CANAL_COMUNICACAO: Record<string, string> = {
+  EMAIL: "E-mail",
+  WHATSAPP: "WhatsApp",
+  AMBOS: "Ambos",
+};
+
+export const SECOES_COMUNICACAO = [
+  {
+    tipo: "ORDENS",
+    titulo: "Ordens de Serviço e Agendamentos",
+    descricao: "Recebem notificações de OS, agendamentos, PMOC e relatórios de serviço.",
+  },
+  {
+    tipo: "ORCAMENTOS",
+    titulo: "Orçamentos",
+    descricao: "Recebem orçamentos e propostas.",
+  },
+  {
+    tipo: "FINANCEIRO",
+    titulo: "Notas Fiscais e Boletos",
+    descricao: "Recebem NF-e, boletos, cobranças e lembretes de vencimento.",
+  },
+] as const;
+
 // Cores dos badges por tipo de contato (cobre todos os valores de TipoContato).
 export const COR_TIPO_CONTATO: Record<string, string> = {
   OPERACIONAL: "bg-blue-50 text-blue-700",

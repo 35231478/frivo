@@ -3,19 +3,16 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { FormField, FormGrid } from "@/components/ui/form-field";
 import { WhatsAppInput } from "@/components/ui/whatsapp-input";
 import { PhoneInput } from "@/components/ui/phone-input";
-import { LABELS_TIPO_CONTATO } from "@/lib/utils";
-import { PortalAcessoContato } from "@/components/forms/portal-acesso-contato";
 import type { ContatoCliente } from "@prisma/client";
 import { Plus, Pencil, Trash2, X, Check, UserCircle, ChevronDown, ChevronRight, Star, Phone, Mail } from "lucide-react";
 
 interface ContatoFormData {
   nome: string;
   cargo: string;
-  tipo: string;
+  tipo: string; // preservado internamente (não editável aqui); uso definido na aba Comunicação
   telefone: string;
   whatsapp: string;
   email: string;
@@ -86,17 +83,6 @@ export function ContatosManager({ clienteId, contatosIniciais }: ContatosManager
     } catch { setErro("Erro de conexão."); } finally { setSalvando(false); }
   }
 
-  function onAcessoChange(contatoId: string, info: { temAcesso: boolean; senhaProvisoria: string | null; acessoConcedidoEm: string | null }) {
-    setContatos((prev) => prev.map((c) => c.id === contatoId
-      ? {
-          ...c,
-          senha: info.temAcesso ? (c.senha ?? "set") : null,
-          senhaProvisoria: info.senhaProvisoria,
-          acessoConcedidoEm: info.acessoConcedidoEm ? new Date(info.acessoConcedidoEm) : c.acessoConcedidoEm,
-        }
-      : c));
-  }
-
   async function remover(id: string) {
     if (!confirm("Remover este contato?")) return;
     try {
@@ -118,15 +104,10 @@ export function ContatosManager({ clienteId, contatosIniciais }: ContatosManager
           <FormField label="Cargo"><Input value={form.cargo} onChange={(e) => updateField("cargo", e.target.value)} placeholder="Ex: Gerente, Coordenador" /></FormField>
         </FormGrid>
         <FormGrid>
-          <FormField label="Tipo">
-            <Select value={form.tipo} onChange={(e) => updateField("tipo", e.target.value)}>
-              {Object.entries(LABELS_TIPO_CONTATO).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
-            </Select>
-          </FormField>
           <FormField label="E-mail"><Input value={form.email} onChange={(e) => updateField("email", e.target.value)} type="email" placeholder="email@empresa.com" /></FormField>
+          <FormField label="Telefone"><PhoneInput value={form.telefone} onChange={(e: any) => updateField("telefone", e.target.value)} placeholder="(00) 0000-0000" /></FormField>
         </FormGrid>
         <FormGrid>
-          <FormField label="Telefone"><PhoneInput value={form.telefone} onChange={(e: any) => updateField("telefone", e.target.value)} placeholder="(00) 0000-0000" /></FormField>
           <FormField label="WhatsApp"><WhatsAppInput value={form.whatsapp} onChange={(e: any) => updateField("whatsapp", e.target.value)} placeholder="(00) 00000-0000" /></FormField>
         </FormGrid>
         <div className="flex justify-end gap-2">
@@ -162,11 +143,10 @@ export function ContatosManager({ clienteId, contatosIniciais }: ContatosManager
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-medium text-gray-900">{c.nome}</span>
-                    <span className="text-[10px] font-medium bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">
-                      {LABELS_TIPO_CONTATO[c.tipo] ?? c.tipo}
-                    </span>
-                    {c.senha && (
-                      <span className="text-[10px] font-semibold bg-success-50 text-success-700 px-1.5 py-0.5 rounded-full">Portal ativo</span>
+                    {c.principal && (
+                      <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
+                        <Star className="w-2.5 h-2.5 fill-current" /> Principal
+                      </span>
                     )}
                   </div>
                   {c.cargo && <p className="text-xs text-gray-500">{c.cargo}</p>}
@@ -185,18 +165,6 @@ export function ContatosManager({ clienteId, contatosIniciais }: ContatosManager
                   <Button type="button" variant="secondary" onClick={() => abrirEditar(c)} className="text-xs h-7 px-2.5"><Pencil className="w-3 h-3" /> Editar</Button>
                   <Button type="button" variant="ghost" onClick={() => remover(c.id)} className="text-xs h-7 px-2.5 text-red-500 hover:text-red-700"><Trash2 className="w-3 h-3" /> Remover</Button>
                 </div>
-                <PortalAcessoContato
-                  clienteId={clienteId}
-                  contatoId={c.id}
-                  contatoNome={c.nome}
-                  emailInicial={c.email}
-                  whatsappInicial={c.whatsapp}
-                  temAcesso={!!c.senha}
-                  senhaProvisoriaInicial={c.senhaProvisoria}
-                  acessoConcedidoEmInicial={c.acessoConcedidoEm}
-                  permissoesIniciais={((c as any).permissoes as Record<string, boolean> | null) ?? null}
-                  onChange={(info) => onAcessoChange(c.id, info)}
-                />
               </div>
             )}
           </div>
