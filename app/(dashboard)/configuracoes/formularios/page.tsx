@@ -8,9 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid } from "@/components/ui/form-field";
+import { Drawer } from "@/components/ui/drawer";
 import { cn, formatarData } from "@/lib/utils";
 import {
-  Plus, Pencil, Trash2, X, Check, GripVertical, ChevronDown, ChevronRight,
+  Plus, Pencil, Trash2, Check, GripVertical, Search,
   ListChecks, Link2, History, Loader2, ExternalLink, Boxes, Wrench, AlertTriangle,
 } from "lucide-react";
 
@@ -32,13 +33,13 @@ interface TipoOs { id: string; nome: string; cor: string; ativo?: boolean }
 export default function FormulariosPage() {
   const [formularios, setFormularios] = useState<Formulario[]>([]);
   const [tiposOs, setTiposOs] = useState<TipoOs[]>([]);
-  const [expandido, setExpandido] = useState<string | null>(null);
   const [editando, setEditando] = useState<string | "novo" | null>(null);
   const [abaForm, setAbaForm] = useState<"campos" | "vinculos" | "historico">("campos");
   const [form, setForm] = useState({ nome: "", descricao: "", tipoOsId: "" });
   const [campos, setCampos] = useState<Campo[]>([]);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
+  const [busca, setBusca] = useState("");
 
   useEffect(() => {
     fetch("/api/formularios").then((r) => r.json()).then(setFormularios).catch(() => {});
@@ -105,72 +106,94 @@ export default function FormulariosPage() {
     } catch { setErro("Erro de conexão."); } finally { setSalvando(false); }
   }
 
+  async function remover(f: Formulario) {
+    if (!confirm(`Remover o formulário "${f.nome}"?`)) return;
+    const res = await fetch(`/api/formularios/${f.id}`, { method: "DELETE" });
+    if (res.ok) setFormularios((p) => p.filter((x) => x.id !== f.id));
+  }
+
+  const q = busca.trim().toLowerCase();
+  const filtrados = q ? formularios.filter((f) => f.nome.toLowerCase().includes(q)) : formularios;
+
   return (
-    <div className="max-w-3xl mx-auto">
+    <div>
       <PageHeader title="Formulários" description="Templates de formulário para atividades de OS" backHref="/configuracoes" />
       <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-        {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
+        {erro && !editando && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
 
-        {/* Lista */}
-        {formularios.map((f) => (
-          <div key={f.id} className="border border-gray-200 rounded-lg overflow-hidden">
-            <button onClick={() => setExpandido(expandido === f.id ? null : f.id)} className="flex items-center justify-between w-full p-3 text-left hover:bg-gray-50">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-gray-900">{f.nome}</span>
-                {f.tipoOs && <span className="text-[10px] text-white px-1.5 py-0.5 rounded-full" style={{ backgroundColor: f.tipoOs.cor }}>{f.tipoOs.nome}</span>}
-                <span className="text-[10px] text-gray-400">{f.campos.length} campo(s)</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <button onClick={(e) => { e.stopPropagation(); abrirEditar(f); }} className="p-1 text-gray-400 hover:text-frivo-600"><Pencil className="w-3.5 h-3.5" /></button>
-                {expandido === f.id ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
-              </div>
-            </button>
-            {expandido === f.id && (
-              <div className="border-t border-gray-100 p-3 bg-gray-50/50 space-y-1">
-                {f.descricao && <p className="text-xs text-gray-500 mb-2">{f.descricao}</p>}
-                {f.campos.map((c, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs text-gray-700">
-                    <span className="text-gray-400 w-4 text-right">{c.ordem}.</span>
-                    <span className="font-medium">{c.label}</span>
-                    <span className="text-gray-400">({TIPOS_CAMPO.find((t) => t.value === c.tipo)?.label ?? c.tipo})</span>
-                    {c.obrigatorio && <span className="text-red-500 text-[10px]">obrigatório</span>}
-                  </div>
-                ))}
-              </div>
-            )}
+        {/* Barra: busca + Novo */}
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="w-4 h-4 text-ink-subtle absolute left-3 top-1/2 -translate-y-1/2" />
+            <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar formulário..." className="pl-9" />
           </div>
-        ))}
+          <Button type="button" onClick={abrirNovo} className="ml-auto shrink-0">
+            <Plus className="w-4 h-4" /> Novo formulário
+          </Button>
+        </div>
 
-        {/* Formulário de criação/edição */}
-        {editando && (
-          <div className="border border-frivo-200 bg-frivo-50/30 rounded-lg p-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <h4 className="text-sm font-semibold text-frivo-800">{editando === "novo" ? "Novo formulário" : (form.nome || "Editar formulário")}</h4>
-              <button onClick={() => setEditando(null)} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
-            </div>
+        {/* Lista full-width */}
+        <div className="border border-surface-border rounded-lg overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-surface-alt border-b border-surface-border">
+              <tr>
+                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Nome</th>
+                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden sm:table-cell">Tipo de OS</th>
+                <th className="text-center px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Campos</th>
+                <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider w-24">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtrados.length === 0 ? (
+                <tr><td colSpan={4} className="text-center text-ink-subtle py-10">{q ? "Nenhum formulário encontrado." : "Nenhum formulário cadastrado."}</td></tr>
+              ) : filtrados.map((f, idx) => (
+                <tr key={f.id} className={cn("border-b border-surface-border last:border-0 hover:bg-primary-50/40 transition-colors", idx % 2 === 1 && "bg-surface-alt/30")}>
+                  <td className="px-4 py-3 font-medium text-ink">{f.nome}</td>
+                  <td className="px-4 py-3 hidden sm:table-cell">
+                    {f.tipoOs ? <span className="text-[11px] text-white px-2 py-0.5 rounded-full" style={{ backgroundColor: f.tipoOs.cor }}>{f.tipoOs.nome}</span> : <span className="text-ink-subtle">Genérico</span>}
+                  </td>
+                  <td className="px-4 py-3 text-center text-ink-muted">{f.campos.length}</td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <button onClick={() => abrirEditar(f)} title="Editar" className="p-1.5 text-ink-muted hover:text-primary-600 hover:bg-primary-50 rounded transition-colors"><Pencil className="w-4 h-4" /></button>
+                      <button onClick={() => remover(f)} title="Remover" className="p-1.5 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded transition-colors"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-            {editando !== "novo" && (
-              <nav className="flex gap-1.5">
-                {([{ id: "campos", label: "Campos", icone: ListChecks }, { id: "vinculos", label: "Vínculos", icone: Link2 }, { id: "historico", label: "Histórico", icone: History }] as const).map((t) => (
-                  <button
-                    key={t.id} type="button" onClick={() => setAbaForm(t.id)}
-                    className={cn(
-                      "flex items-center gap-2 px-3.5 py-2 text-sm font-medium rounded-lg transition-all",
-                      abaForm === t.id ? "bg-primary-500 text-white shadow-sm" : "text-ink-muted hover:text-ink hover:bg-white",
-                    )}
-                  >
-                    <t.icone className="w-4 h-4" /> {t.label}
-                  </button>
-                ))}
-              </nav>
-            )}
-
-            {abaForm === "vinculos" && editando !== "novo" ? (
-              <FormularioVinculos formId={editando} />
-            ) : abaForm === "historico" && editando !== "novo" ? (
-              <FormularioHistorico formId={editando} />
-            ) : (
-            <>
+      {/* Drawer de cadastro/edição */}
+      <Drawer
+        aberto={!!editando}
+        onFechar={() => setEditando(null)}
+        titulo={editando === "novo" ? "Novo formulário" : (form.nome || "Editar formulário")}
+        abas={editando && editando !== "novo" ? [
+          { id: "campos", label: "Campos", icone: ListChecks },
+          { id: "vinculos", label: "Vínculos", icone: Link2 },
+          { id: "historico", label: "Histórico", icone: History },
+        ] : undefined}
+        abaAtiva={abaForm}
+        onAbaChange={(id) => setAbaForm(id as "campos" | "vinculos" | "historico")}
+        rodape={abaForm === "campos" ? (
+          <>
+            <Button type="button" variant="secondary" onClick={() => setEditando(null)}>Cancelar</Button>
+            <Button type="button" loading={salvando} onClick={salvar}><Check className="w-4 h-4" /> Salvar</Button>
+          </>
+        ) : (
+          <Button type="button" variant="secondary" onClick={() => setEditando(null)}>Fechar</Button>
+        )}
+      >
+        {abaForm === "vinculos" && editando && editando !== "novo" ? (
+          <FormularioVinculos formId={editando} />
+        ) : abaForm === "historico" && editando && editando !== "novo" ? (
+          <FormularioHistorico formId={editando} />
+        ) : (
+          <div className="space-y-4">
+            {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
             <FormGrid>
               <FormField label="Nome" required>
                 <Input value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} placeholder="Ex: Checklist Manutenção Preventiva" />
@@ -207,22 +230,9 @@ export default function FormulariosPage() {
                 <Plus className="w-3 h-3" /> Adicionar campo
               </Button>
             </div>
-
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="secondary" onClick={() => setEditando(null)}>Cancelar</Button>
-              <Button type="button" loading={salvando} onClick={salvar}><Check className="w-4 h-4" /> Salvar</Button>
-            </div>
-            </>
-            )}
           </div>
         )}
-
-        {!editando && (
-          <Button type="button" variant="secondary" onClick={abrirNovo} className="w-full justify-center border-dashed">
-            <Plus className="w-4 h-4" /> Novo formulário
-          </Button>
-        )}
-      </div>
+      </Drawer>
     </div>
   );
 }
