@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField } from "@/components/ui/form-field";
+import { Drawer } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
 import {
   Plus, Pencil, Trash2, X, Check, Search, FileText, Settings2, AlertTriangle, Loader2, Boxes,
@@ -37,6 +38,7 @@ export function TiposEquipamentoCadastro() {
   const [form, setForm] = useState<{ nome: string; descricao: string }>({ nome: "", descricao: "" });
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
+  const [busca, setBusca] = useState("");
 
   useEffect(() => {
     fetch("/api/tipos-equipamento").then((r) => r.json()).then((d) => setItens(Array.isArray(d) ? d : [])).catch(() => {});
@@ -81,98 +83,89 @@ export function TiposEquipamentoCadastro() {
     if (res.ok) setItens((p) => p.filter((x) => x.id !== e.id));
   }
 
+  const q = busca.trim().toLowerCase();
+  const itensFiltrados = q
+    ? itens.filter((e) => e.nome.toLowerCase().includes(q) || (e.descricao ?? "").toLowerCase().includes(q))
+    : itens;
+
   return (
     <div className="space-y-4">
-      {/* Lista */}
-      {itens.length > 0 ? (
-        <div className="border border-surface-border rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-surface-alt text-ink-muted text-xs uppercase">
-              <tr>
-                <th className="text-left font-medium px-3 py-2">Nome</th>
-                <th className="text-left font-medium px-3 py-2 hidden sm:table-cell">Observações</th>
-                <th className="px-3 py-2 w-16"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-surface-border">
-              {itens.map((e) => (
-                <tr key={e.id} className="hover:bg-surface-alt/40">
-                  <td className="px-3 py-2 font-medium text-ink">{e.nome}</td>
-                  <td className="px-3 py-2 text-ink-muted hidden sm:table-cell">{e.descricao || "—"}</td>
-                  <td className="px-3 py-2">
-                    <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => abrirEditar(e)} title="Editar" className="p-1 text-ink-subtle hover:text-primary-600"><Pencil className="w-3.5 h-3.5" /></button>
-                      <button onClick={() => remover(e)} title="Remover" className="p-1 text-ink-subtle hover:text-red-600"><Trash2 className="w-3.5 h-3.5" /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* Barra: busca + Novo */}
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="w-4 h-4 text-ink-subtle absolute left-3 top-1/2 -translate-y-1/2" />
+          <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar tipo de equipamento..." className="pl-9" />
         </div>
-      ) : (
-        <p className="text-sm text-ink-subtle text-center py-6">Nenhum tipo de equipamento cadastrado ainda.</p>
-      )}
-
-      {/* Painel de cadastro/edição com abas */}
-      {editando && (
-        <div className="border border-primary-200 bg-primary-50/20 rounded-xl overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-primary-100">
-            <h4 className="text-sm font-semibold text-primary-800">{editando === "novo" ? "Novo tipo de equipamento" : form.nome || "Editar tipo de equipamento"}</h4>
-            <button onClick={fechar} className="text-ink-subtle hover:text-ink"><X className="w-4 h-4" /></button>
-          </div>
-
-          {/* Abas */}
-          <nav className="flex gap-1.5 px-4 pt-3">
-            {([{ id: "geral", label: "Geral", icone: Settings2 }, { id: "formularios", label: "Formulários", icone: FileText }] as const).map((t) => (
-              <button
-                key={t.id} type="button" onClick={() => setAba(t.id)}
-                className={cn(
-                  "flex items-center gap-2 px-3.5 py-2 text-sm font-medium rounded-lg transition-all",
-                  aba === t.id ? "bg-primary-500 text-white shadow-sm" : "text-ink-muted hover:text-ink hover:bg-white",
-                )}
-              >
-                <t.icone className="w-4 h-4" /> {t.label}
-              </button>
-            ))}
-          </nav>
-
-          <div className="p-4">
-            {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 mb-3">{erro}</div>}
-
-            {/* ABA GERAL */}
-            {aba === "geral" && (
-              <div className="space-y-4">
-                <FormField label="Nome do equipamento" required>
-                  <Input value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} placeholder="Ex: Split, Chiller, VRF" />
-                </FormField>
-                <FormField label="Observações">
-                  <Textarea value={form.descricao} onChange={(e) => setForm((f) => ({ ...f, descricao: e.target.value }))} rows={3} placeholder="Observações sobre este tipo de equipamento" />
-                </FormField>
-                <div className="flex justify-end gap-2">
-                  <Button type="button" variant="secondary" onClick={fechar}>Fechar</Button>
-                  <Button type="button" loading={salvando} onClick={salvarGeral}><Check className="w-4 h-4" /> Salvar</Button>
-                </div>
-              </div>
-            )}
-
-            {/* ABA FORMULÁRIOS */}
-            {aba === "formularios" && (
-              equipId ? (
-                <FormulariosVinculados equipId={equipId} formOpts={ativos(formOpts)} tiposOs={ativos(tiposOs)} />
-              ) : (
-                <p className="text-sm text-ink-muted py-4">Salve o tipo de equipamento na aba <strong>Geral</strong> para vincular formulários.</p>
-              )
-            )}
-          </div>
-        </div>
-      )}
-
-      {!editando && (
-        <Button type="button" variant="secondary" onClick={abrirNovo} className="w-full justify-center border-dashed">
+        <Button type="button" onClick={abrirNovo} className="ml-auto shrink-0">
           <Plus className="w-4 h-4" /> Novo tipo de equipamento
         </Button>
-      )}
+      </div>
+
+      {/* Lista full-width */}
+      <div className="border border-surface-border rounded-lg overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-surface-alt border-b border-surface-border">
+            <tr>
+              <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Nome</th>
+              <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden sm:table-cell">Observações</th>
+              <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider w-24">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {itensFiltrados.length === 0 ? (
+              <tr><td colSpan={3} className="text-center text-ink-subtle py-10">{busca ? "Nenhum tipo encontrado." : "Nenhum tipo de equipamento cadastrado ainda."}</td></tr>
+            ) : itensFiltrados.map((e, idx) => (
+              <tr key={e.id} className={cn("border-b border-surface-border last:border-0 hover:bg-primary-50/40 transition-colors", idx % 2 === 1 && "bg-surface-alt/30")}>
+                <td className="px-4 py-3 font-medium text-ink">{e.nome}</td>
+                <td className="px-4 py-3 text-ink-muted hidden sm:table-cell">{e.descricao || "—"}</td>
+                <td className="px-4 py-3 text-right">
+                  <div className="flex items-center justify-end gap-1">
+                    <button onClick={() => abrirEditar(e)} title="Editar" className="p-1.5 text-ink-muted hover:text-primary-600 hover:bg-primary-50 rounded transition-colors"><Pencil className="w-4 h-4" /></button>
+                    <button onClick={() => remover(e)} title="Remover" className="p-1.5 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded transition-colors"><Trash2 className="w-4 h-4" /></button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Drawer de cadastro/edição com abas Geral + Formulários */}
+      <Drawer
+        aberto={!!editando}
+        onFechar={fechar}
+        titulo={editando === "novo" ? "Novo tipo de equipamento" : (form.nome || "Editar tipo de equipamento")}
+        abas={[{ id: "geral", label: "Geral", icone: Settings2 }, { id: "formularios", label: "Formulários", icone: FileText }]}
+        abaAtiva={aba}
+        onAbaChange={(id) => setAba(id as "geral" | "formularios")}
+        rodape={aba === "geral" ? (
+          <>
+            <Button type="button" variant="secondary" onClick={fechar}>Cancelar</Button>
+            <Button type="button" loading={salvando} onClick={salvarGeral}><Check className="w-4 h-4" /> Salvar</Button>
+          </>
+        ) : (
+          <Button type="button" variant="secondary" onClick={fechar}>Fechar</Button>
+        )}
+      >
+        {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 mb-4">{erro}</div>}
+
+        {aba === "geral" ? (
+          <div className="space-y-4">
+            <FormField label="Nome do equipamento" required>
+              <Input value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} placeholder="Ex: Split, Chiller, VRF" />
+            </FormField>
+            <FormField label="Observações">
+              <Textarea value={form.descricao} onChange={(e) => setForm((f) => ({ ...f, descricao: e.target.value }))} rows={4} placeholder="Observações sobre este tipo de equipamento" />
+            </FormField>
+          </div>
+        ) : (
+          equipId ? (
+            <FormulariosVinculados equipId={equipId} formOpts={ativos(formOpts)} tiposOs={ativos(tiposOs)} />
+          ) : (
+            <p className="text-sm text-ink-muted py-4">Salve o tipo de equipamento na aba <strong>Geral</strong> para vincular formulários.</p>
+          )
+        )}
+      </Drawer>
     </div>
   );
 }
