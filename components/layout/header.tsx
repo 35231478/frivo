@@ -43,7 +43,6 @@ const ROTULOS_ROTA: Record<string, string> = {
   perfil: "Meu Perfil",
   configuracoes: "Configurações",
   formularios: "Formulários",
-  "formularios-por-tipo": "Formulários por Tipo",
   produtos: "Produtos",
   servicos: "Serviços",
   "tipos-equipamento": "Tipos de Equipamento",

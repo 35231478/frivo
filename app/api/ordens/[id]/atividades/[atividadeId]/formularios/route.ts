@@ -59,6 +59,8 @@ export async function GET(_: NextRequest, { params }: Params) {
     where: { empresaId, tipoOsId: atividade.tipoOsId, tipoEquipamentoId: { in: tipoIds } },
     select: {
       tipoEquipamentoId: true,
+      obrigatorioConcluir: true,
+      obrigatorioImpedimento: true,
       formularioTemplate: {
         select: {
           id: true, nome: true,
@@ -67,7 +69,7 @@ export async function GET(_: NextRequest, { params }: Params) {
       },
     },
   });
-  const mapByTipo = new Map(mappings.map((m) => [m.tipoEquipamentoId, m.formularioTemplate]));
+  const mapByTipo = new Map(mappings.map((m) => [m.tipoEquipamentoId, m]));
 
   // Respostas já gravadas (para status de respondido por equipamento+formulário)
   const respostas = await prisma.respostaFormularioEquipamento.findMany({
@@ -85,11 +87,12 @@ export async function GET(_: NextRequest, { params }: Params) {
   const tiposSemFormulario: any[] = [];
 
   for (const [tid, grupo] of porTipo) {
-    const formulario = mapByTipo.get(tid);
-    if (!formulario) {
+    const mapeado = mapByTipo.get(tid);
+    if (!mapeado) {
       tiposSemFormulario.push({ id: tid, nome: grupo.nome, qtd: grupo.itens.length });
       continue;
     }
+    const formulario = mapeado.formularioTemplate;
     const totalCampos = formulario.campos.length;
     const equipamentos = grupo.itens.map((v) => {
       const respondidos = respMap.get(`${v.equipamento.id}|${formulario.id}`)?.size ?? 0;
@@ -110,6 +113,8 @@ export async function GET(_: NextRequest, { params }: Params) {
       tipoEquipamentoId: tid,
       tipoEquipamentoNome: grupo.nome,
       formulario,
+      obrigatorioConcluir: mapeado.obrigatorioConcluir,
+      obrigatorioImpedimento: mapeado.obrigatorioImpedimento,
       equipamentos,
       resumo: {
         total: equipamentos.length,

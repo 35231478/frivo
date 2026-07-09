@@ -141,7 +141,6 @@ const SISTEMA: Secao[] = [
           { href: "/configuracoes/tipos-os", icone: ListChecks, label: "Tipos de OS" },
           { href: "/configuracoes/tipos-equipamento", icone: Thermometer, label: "Tipos de equipamento" },
           { href: "/configuracoes/formularios", icone: FileSpreadsheet, label: "Formulários" },
-          { href: "/configuracoes/formularios-por-tipo", icone: FileSpreadsheet, label: "Formulários por tipo" },
           { href: "/configuracoes/servicos", icone: Wrench, label: "Serviços" },
           { href: "/configuracoes/produtos", icone: Package, label: "Produtos" },
           { href: "/configuracoes/tabelas-preco", icone: Tags, label: "Tabelas de preços" },

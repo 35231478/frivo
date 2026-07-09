@@ -21,6 +21,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
   const [tiposOs, setTiposOs] = useState<any[]>([]);
   const [tecnicos, setTecnicos] = useState<any[]>([]);
   const [salvando, setSalvando] = useState(false);
+  const [erroStatus, setErroStatus] = useState("");
   const [form, setForm] = useState({ titulo: "", tipoOsId: "", tecnicoId: "", dataAgendada: "", duracaoMin: "", observacao: "" });
 
   useEffect(() => {
@@ -50,6 +51,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
   }
 
   async function alterarStatusAtividade(atividadeId: string, novoStatus: string) {
+    setErroStatus("");
     const res = await fetch(`/api/ordens/${osId}/atividades/${atividadeId}`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: novoStatus }),
@@ -57,11 +59,19 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
     if (res.ok) {
       const atualizada = await res.json();
       setAtividades((p) => p.map((a) => (a.id === atividadeId ? atualizada : a)));
+    } else {
+      const e = await res.json().catch(() => ({}));
+      setErroStatus(e?.erro ?? "Não foi possível alterar o status da atividade.");
     }
   }
 
   return (
     <div className="space-y-3">
+      {erroStatus && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 flex items-start gap-2">
+          <X className="w-4 h-4 shrink-0 mt-0.5" /> {erroStatus}
+        </div>
+      )}
       {atividades.length === 0 && !mostraForm && (
         <p className="text-sm text-gray-400 text-center py-6">Nenhuma atividade cadastrada.</p>
       )}

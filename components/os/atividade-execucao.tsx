@@ -27,7 +27,7 @@ interface Vinculo {
 }
 
 type Campo = { id: string; label: string; tipo: string; obrigatorio: boolean; ordem: number; opcoes?: any };
-type Grupo = { tipoEquipamentoId: string; tipoEquipamentoNome: string; formulario: { id: string; nome: string; campos: Campo[] }; equipamentos: any[]; resumo: { total: number; feitos: number; respondidos: number } };
+type Grupo = { tipoEquipamentoId: string; tipoEquipamentoNome: string; formulario: { id: string; nome: string; campos: Campo[] }; obrigatorioConcluir?: boolean; obrigatorioImpedimento?: boolean; equipamentos: any[]; resumo: { total: number; feitos: number; respondidos: number } };
 type FormsData = { grupos: Grupo[]; tiposSemFormulario: { id: string; nome: string; qtd: number }[] };
 
 function rotulo(e: Vinculo["equipamento"]) {
@@ -239,7 +239,14 @@ function FormularioGrupo({ base, grupo, onSalvo, onErro }: {
   return (
     <div className="bg-white rounded-xl border border-frivo-200 overflow-hidden">
       <div className="px-4 py-2.5 bg-frivo-50/40 border-b border-frivo-100">
-        <p className="text-sm font-semibold text-frivo-800">{grupo.tipoEquipamentoNome}</p>
+        <p className="text-sm font-semibold text-frivo-800 flex items-center gap-2 flex-wrap">
+          {grupo.tipoEquipamentoNome}
+          {grupo.obrigatorioConcluir && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-red-50 text-red-600 px-1.5 py-0.5 rounded-full">
+              <AlertCircle className="w-3 h-3" /> Obrigatório para concluir
+            </span>
+          )}
+        </p>
         <p className="text-[11px] text-gray-500">{grupo.formulario.nome} · será aplicado a {feitos} equipamento(s) feito(s)</p>
       </div>
       <input ref={fotoRef} type="file" accept="image/*" capture="environment" onChange={handleFoto} className="hidden" />

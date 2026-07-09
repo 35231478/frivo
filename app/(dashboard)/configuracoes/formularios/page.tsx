@@ -1,13 +1,18 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid } from "@/components/ui/form-field";
-import { Plus, Pencil, Trash2, X, Check, GripVertical, ChevronDown, ChevronRight } from "lucide-react";
+import { cn, formatarData } from "@/lib/utils";
+import {
+  Plus, Pencil, Trash2, X, Check, GripVertical, ChevronDown, ChevronRight,
+  ListChecks, Link2, History, Loader2, ExternalLink, Boxes, Wrench, AlertTriangle,
+} from "lucide-react";
 
 const TIPOS_CAMPO = [
   { value: "TEXTO_CURTO", label: "Texto curto" },
@@ -29,6 +34,7 @@ export default function FormulariosPage() {
   const [tiposOs, setTiposOs] = useState<TipoOs[]>([]);
   const [expandido, setExpandido] = useState<string | null>(null);
   const [editando, setEditando] = useState<string | "novo" | null>(null);
+  const [abaForm, setAbaForm] = useState<"campos" | "vinculos" | "historico">("campos");
   const [form, setForm] = useState({ nome: "", descricao: "", tipoOsId: "" });
   const [campos, setCampos] = useState<Campo[]>([]);
   const [salvando, setSalvando] = useState(false);
@@ -43,6 +49,7 @@ export default function FormulariosPage() {
     setForm({ nome: "", descricao: "", tipoOsId: "" });
     setCampos([{ label: "", tipo: "TEXTO_CURTO", obrigatorio: false, ordem: 1 }]);
     setEditando("novo");
+    setAbaForm("campos");
     setErro("");
   }
 
@@ -50,6 +57,7 @@ export default function FormulariosPage() {
     setForm({ nome: f.nome, descricao: f.descricao ?? "", tipoOsId: f.tipoOsId ?? "" });
     setCampos(f.campos.length > 0 ? f.campos : [{ label: "", tipo: "TEXTO_CURTO", obrigatorio: false, ordem: 1 }]);
     setEditando(f.id);
+    setAbaForm("campos");
     setErro("");
   }
 
@@ -137,9 +145,32 @@ export default function FormulariosPage() {
         {editando && (
           <div className="border border-frivo-200 bg-frivo-50/30 rounded-lg p-4 space-y-4">
             <div className="flex items-center justify-between">
-              <h4 className="text-sm font-semibold text-frivo-800">{editando === "novo" ? "Novo formulário" : "Editar formulário"}</h4>
+              <h4 className="text-sm font-semibold text-frivo-800">{editando === "novo" ? "Novo formulário" : (form.nome || "Editar formulário")}</h4>
               <button onClick={() => setEditando(null)} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
             </div>
+
+            {editando !== "novo" && (
+              <nav className="flex gap-1.5">
+                {([{ id: "campos", label: "Campos", icone: ListChecks }, { id: "vinculos", label: "Vínculos", icone: Link2 }, { id: "historico", label: "Histórico", icone: History }] as const).map((t) => (
+                  <button
+                    key={t.id} type="button" onClick={() => setAbaForm(t.id)}
+                    className={cn(
+                      "flex items-center gap-2 px-3.5 py-2 text-sm font-medium rounded-lg transition-all",
+                      abaForm === t.id ? "bg-primary-500 text-white shadow-sm" : "text-ink-muted hover:text-ink hover:bg-white",
+                    )}
+                  >
+                    <t.icone className="w-4 h-4" /> {t.label}
+                  </button>
+                ))}
+              </nav>
+            )}
+
+            {abaForm === "vinculos" && editando !== "novo" ? (
+              <FormularioVinculos formId={editando} />
+            ) : abaForm === "historico" && editando !== "novo" ? (
+              <FormularioHistorico formId={editando} />
+            ) : (
+            <>
             <FormGrid>
               <FormField label="Nome" required>
                 <Input value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} placeholder="Ex: Checklist Manutenção Preventiva" />
@@ -181,6 +212,8 @@ export default function FormulariosPage() {
               <Button type="button" variant="secondary" onClick={() => setEditando(null)}>Cancelar</Button>
               <Button type="button" loading={salvando} onClick={salvar}><Check className="w-4 h-4" /> Salvar</Button>
             </div>
+            </>
+            )}
           </div>
         )}
 
@@ -190,6 +223,120 @@ export default function FormulariosPage() {
           </Button>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Aba Vínculos — onde este formulário é usado (somente leitura)
+// ─────────────────────────────────────────────
+interface Vinculo {
+  id: string;
+  tipoEquipamento: { id: string; nome: string };
+  tipoOs: { id: string; nome: string; cor: string };
+  obrigatorioConcluir: boolean;
+  obrigatorioImpedimento: boolean;
+}
+
+function FormularioVinculos({ formId }: { formId: string }) {
+  const [vinculos, setVinculos] = useState<Vinculo[] | null>(null);
+
+  useEffect(() => {
+    let cancelado = false;
+    setVinculos(null);
+    fetch(`/api/formularios/${formId}/vinculos`)
+      .then((r) => r.json())
+      .then((d) => { if (!cancelado) setVinculos(Array.isArray(d) ? d : []); })
+      .catch(() => { if (!cancelado) setVinculos([]); });
+    return () => { cancelado = true; };
+  }, [formId]);
+
+  if (vinculos === null) return <div className="flex items-center gap-2 text-sm text-ink-muted py-3"><Loader2 className="w-4 h-4 animate-spin" /> Carregando vínculos…</div>;
+  if (vinculos.length === 0) {
+    return (
+      <div className="text-center py-8 border border-dashed border-surface-border rounded-xl">
+        <Boxes className="w-6 h-6 text-ink-subtle mx-auto mb-2" />
+        <p className="text-sm text-ink-muted">Este formulário ainda não está vinculado a nenhum equipamento.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-ink-muted">Este formulário é usado nas seguintes combinações de equipamento e tipo de OS:</p>
+      {vinculos.map((v) => (
+        <div key={v.id} className="flex items-center justify-between gap-3 border border-surface-border rounded-lg p-2.5 flex-wrap">
+          <div className="flex items-center gap-2 min-w-0 flex-wrap text-sm">
+            <span className="inline-flex items-center gap-1.5 text-ink"><Boxes className="w-3.5 h-3.5 text-ink-subtle" /> {v.tipoEquipamento.nome}</span>
+            <span className="text-ink-subtle">·</span>
+            <span className="inline-flex items-center gap-1"><Wrench className="w-3.5 h-3.5 text-ink-subtle" /></span>
+            <span className="text-[11px] text-white px-1.5 py-0.5 rounded-full" style={{ backgroundColor: v.tipoOs.cor }}>{v.tipoOs.nome}</span>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {v.obrigatorioConcluir && <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-success-50 text-success-700 px-2 py-0.5 rounded-full"><Check className="w-3 h-3" /> Concluir</span>}
+            {v.obrigatorioImpedimento && <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full"><AlertTriangle className="w-3 h-3" /> Impedimento</span>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Aba Histórico — respostas registradas deste formulário
+// ─────────────────────────────────────────────
+interface RespostaSessao {
+  ordemId: string; ordemNumero: string; equipamentoNome: string;
+  tecnicoNome: string | null; respondidoEm: string;
+}
+
+function FormularioHistorico({ formId }: { formId: string }) {
+  const [sessoes, setSessoes] = useState<RespostaSessao[] | null>(null);
+
+  useEffect(() => {
+    let cancelado = false;
+    setSessoes(null);
+    fetch(`/api/formularios/${formId}/historico`)
+      .then((r) => r.json())
+      .then((d) => { if (!cancelado) setSessoes(Array.isArray(d) ? d : []); })
+      .catch(() => { if (!cancelado) setSessoes([]); });
+    return () => { cancelado = true; };
+  }, [formId]);
+
+  if (sessoes === null) return <div className="flex items-center gap-2 text-sm text-ink-muted py-3"><Loader2 className="w-4 h-4 animate-spin" /> Carregando histórico…</div>;
+  if (sessoes.length === 0) {
+    return (
+      <div className="text-center py-8 border border-dashed border-surface-border rounded-xl">
+        <History className="w-6 h-6 text-ink-subtle mx-auto mb-2" />
+        <p className="text-sm text-ink-muted">Nenhuma resposta registrada ainda.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="border border-surface-border rounded-lg overflow-hidden">
+      <table className="w-full text-sm">
+        <thead className="bg-surface-alt text-ink-muted text-xs uppercase">
+          <tr>
+            <th className="text-left font-medium px-3 py-2">OS</th>
+            <th className="text-left font-medium px-3 py-2">Equipamento</th>
+            <th className="text-left font-medium px-3 py-2 hidden sm:table-cell">Técnico</th>
+            <th className="text-left font-medium px-3 py-2">Data</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-surface-border">
+          {sessoes.map((s, i) => (
+            <tr key={i} className="hover:bg-surface-alt/40">
+              <td className="px-3 py-2">
+                <Link href={`/ordens/${s.ordemId}`} className="inline-flex items-center gap-1 text-primary-600 hover:text-primary-700 font-medium">
+                  {s.ordemNumero} <ExternalLink className="w-3 h-3" />
+                </Link>
+              </td>
+              <td className="px-3 py-2 text-ink">{s.equipamentoNome}</td>
+              <td className="px-3 py-2 text-ink-muted hidden sm:table-cell">{s.tecnicoNome ?? "—"}</td>
+              <td className="px-3 py-2 text-ink-muted">{formatarData(s.respondidoEm)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
