@@ -320,7 +320,7 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
 
   return (
     <aside
-      style={temaFin ? { backgroundColor: "#0B66C3" } : undefined}
+      style={temaFin ? { backgroundColor: "#14498F" } : undefined}
       className={cn(
         "flex flex-col bg-sidebar text-white shrink-0 shadow-xl",
         montado && "transition-[width,background-color] duration-200 ease-in-out",
