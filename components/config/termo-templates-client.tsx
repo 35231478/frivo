@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField } from "@/components/ui/form-field";
-import { VARIAVEIS_TERMO } from "@/lib/utils";
-import { Plus, Pencil, Trash2, X, Check, FileText } from "lucide-react";
+import { Drawer } from "@/components/ui/drawer";
+import { cn, VARIAVEIS_TERMO } from "@/lib/utils";
+import { Plus, Pencil, Trash2, Check, FileText, Search } from "lucide-react";
 
 interface Termo {
   id: string;
@@ -23,6 +24,7 @@ export function TermoTemplatesClient() {
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [busca, setBusca] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -79,37 +81,70 @@ export function TermoTemplatesClient() {
   }
 
   const ativos = itens.filter((i) => i.ativo !== false);
+  const q = busca.trim().toLowerCase();
+  const filtrados = q ? ativos.filter((t) => t.nome.toLowerCase().includes(q) || (t.descricao ?? "").toLowerCase().includes(q)) : ativos;
+  const termoEditando = editando && editando !== "novo" ? itens.find((i) => i.id === editando) : null;
 
   return (
     <div className="space-y-4">
-      {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
+      {/* Barra: busca + Novo */}
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="w-4 h-4 text-ink-subtle absolute left-3 top-1/2 -translate-y-1/2" />
+          <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar termo..." className="pl-9" />
+        </div>
+        <Button type="button" onClick={abrirNovo} className="ml-auto shrink-0">
+          <Plus className="w-4 h-4" /> Novo termo
+        </Button>
+      </div>
 
       {loading ? (
         <p className="text-sm text-ink-subtle text-center py-8">Carregando…</p>
       ) : (
-        <div className="border border-surface-border rounded-lg divide-y divide-surface-border">
-          {ativos.length === 0 && <p className="text-center text-ink-subtle py-8 text-sm">Nenhum termo cadastrado.</p>}
-          {ativos.map((t) => (
-            <div key={t.id} className="flex items-center justify-between gap-3 px-4 py-3">
-              <div className="min-w-0">
-                <p className="font-semibold text-ink flex items-center gap-2"><FileText className="w-4 h-4 text-primary-600" /> {t.nome}</p>
-                {t.descricao && <p className="text-xs text-ink-muted mt-0.5">{t.descricao}</p>}
-              </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <button onClick={() => abrirEditar(t)} className="p-1.5 text-ink-muted hover:text-primary-600 hover:bg-primary-50 rounded" title="Editar"><Pencil className="w-3.5 h-3.5" /></button>
-                <button onClick={() => remover(t.id)} className="p-1.5 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded" title="Desativar"><Trash2 className="w-3.5 h-3.5" /></button>
-              </div>
-            </div>
-          ))}
+        <div className="border border-surface-border rounded-lg overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-surface-alt border-b border-surface-border">
+              <tr>
+                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Nome</th>
+                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden sm:table-cell">Descrição</th>
+                <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider w-24">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtrados.length === 0 ? (
+                <tr><td colSpan={3} className="text-center text-ink-subtle py-10">{q ? "Nenhum termo encontrado." : "Nenhum termo cadastrado."}</td></tr>
+              ) : filtrados.map((t, idx) => (
+                <tr key={t.id} className={cn("border-b border-surface-border last:border-0 hover:bg-primary-50/40 transition-colors", idx % 2 === 1 && "bg-surface-alt/30")}>
+                  <td className="px-4 py-3 font-medium text-ink"><span className="inline-flex items-center gap-2"><FileText className="w-4 h-4 text-primary-600" /> {t.nome}</span></td>
+                  <td className="px-4 py-3 text-ink-muted hidden sm:table-cell">{t.descricao || "—"}</td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <button onClick={() => abrirEditar(t)} className="p-1.5 text-ink-muted hover:text-primary-600 hover:bg-primary-50 rounded transition-colors" title="Editar"><Pencil className="w-4 h-4" /></button>
+                      <button onClick={() => remover(t.id)} className="p-1.5 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Desativar"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
-      {editando && (
-        <div className="border border-primary-200 bg-primary-50/30 rounded-lg p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <h4 className="text-sm font-bold text-primary-700">{editando === "novo" ? "Novo termo" : "Editar termo"}</h4>
-            <button onClick={cancelar} className="text-ink-muted hover:text-ink"><X className="w-4 h-4" /></button>
-          </div>
+      {/* Drawer de cadastro/edição */}
+      <Drawer
+        aberto={!!editando}
+        onFechar={cancelar}
+        titulo={editando === "novo" ? "Novo termo" : `Editar ${termoEditando?.nome ?? "termo"}`}
+        largura="w-full sm:w-[60vw] sm:min-w-[520px] sm:max-w-[880px]"
+        rodape={
+          <>
+            <Button type="button" variant="secondary" onClick={cancelar}>Cancelar</Button>
+            <Button type="button" loading={salvando} onClick={salvar}><Check className="w-4 h-4" /> {editando === "novo" ? "Adicionar" : "Salvar"}</Button>
+          </>
+        }
+      >
+        {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 mb-4">{erro}</div>}
+        <div className="space-y-4">
           <FormField label="Nome" required>
             <Input value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} placeholder="Ex.: Termo Contrato Anual" />
           </FormField>
@@ -131,18 +166,8 @@ export function TermoTemplatesClient() {
             <Textarea ref={textareaRef} value={form.conteudo} onChange={(e) => setForm((f) => ({ ...f, conteudo: e.target.value }))} rows={12}
               placeholder="Ex.: A CONTRATADA prestará serviços de manutenção para {{cliente_nome}}..." />
           </FormField>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={cancelar}>Cancelar</Button>
-            <Button type="button" loading={salvando} onClick={salvar}><Check className="w-4 h-4" /> {editando === "novo" ? "Adicionar" : "Salvar"}</Button>
-          </div>
         </div>
-      )}
-
-      {!editando && (
-        <Button type="button" variant="secondary" onClick={abrirNovo} className="w-full justify-center border-dashed">
-          <Plus className="w-4 h-4" /> Adicionar termo de referência
-        </Button>
-      )}
+      </Drawer>
     </div>
   );
 }

@@ -6,7 +6,7 @@ export const metadata: Metadata = { title: "Prazos e SLA" };
 
 export default function PrazosConfigPage() {
   return (
-    <div className="max-w-3xl mx-auto">
+    <div>
       <PageHeader title="Prazos e SLA" description="Modelos de prazo com etapas, responsáveis e notificações" backHref="/configuracoes" />
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <PrazoTemplatesClient />

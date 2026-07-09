@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { FormField, FormGrid } from "@/components/ui/form-field";
-import { cn, LABELS_RESPONSAVEL_PRAZO, LABELS_CANAL_NOTIFICACAO, formatarPrazoHoras } from "@/lib/utils";
-import { Plus, Pencil, Trash2, X, Check, ArrowUp, ArrowDown, Clock } from "lucide-react";
+import { Drawer } from "@/components/ui/drawer";
+import { cn, LABELS_RESPONSAVEL_PRAZO, LABELS_CANAL_NOTIFICACAO } from "@/lib/utils";
+import { Plus, Pencil, Trash2, Check, ArrowUp, ArrowDown, Clock, Search } from "lucide-react";
 
 type UnidadePrazo = "minutos" | "horas" | "dias";
 
@@ -60,6 +61,7 @@ export function PrazoTemplatesClient() {
   const [descricao, setDescricao] = useState("");
   const [cor, setCor] = useState("#0EA5E9");
   const [etapas, setEtapas] = useState<Etapa[]>([]);
+  const [busca, setBusca] = useState("");
 
   useEffect(() => {
     fetch("/api/prazo-templates").then((r) => r.json()).then(setTemplates).catch(() => {}).finally(() => setLoading(false));
@@ -138,20 +140,72 @@ export function PrazoTemplatesClient() {
   }
 
   const ativos = templates.filter((t) => t.ativo !== false);
+  const q = busca.trim().toLowerCase();
+  const filtrados = q ? ativos.filter((t) => t.nome.toLowerCase().includes(q)) : ativos;
 
   return (
     <div className="space-y-4">
-      {erro && !editando && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
+      {/* Barra: busca + Novo */}
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="w-4 h-4 text-ink-subtle absolute left-3 top-1/2 -translate-y-1/2" />
+          <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar modelo de prazo..." className="pl-9" />
+        </div>
+        <Button type="button" onClick={abrirNovo} className="ml-auto shrink-0">
+          <Plus className="w-4 h-4" /> Novo modelo de prazo
+        </Button>
+      </div>
 
       {loading ? (
         <p className="text-sm text-ink-subtle text-center py-8">Carregando…</p>
-      ) : editando ? (
-        <div className="border border-primary-200 bg-primary-50/30 rounded-lg p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <h4 className="text-sm font-bold text-primary-700">{editando === "novo" ? "Novo template" : "Editar template"}</h4>
-            <button onClick={() => setEditando(null)} className="text-ink-muted hover:text-ink"><X className="w-4 h-4" /></button>
-          </div>
+      ) : (
+        <div className="border border-surface-border rounded-lg overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-surface-alt border-b border-surface-border">
+              <tr>
+                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Nome</th>
+                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Etapas</th>
+                <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider w-24">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtrados.length === 0 ? (
+                <tr><td colSpan={3} className="text-center text-ink-subtle py-10">{q ? "Nenhum modelo encontrado." : "Nenhum modelo de prazo cadastrado."}</td></tr>
+              ) : filtrados.map((t, idx) => (
+                <tr key={t.id} className={cn("border-b border-surface-border last:border-0 hover:bg-primary-50/40 transition-colors", idx % 2 === 1 && "bg-surface-alt/30")}>
+                  <td className="px-4 py-3 font-medium text-ink">
+                    <span className="inline-flex items-center gap-2"><span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: t.cor }} /> {t.nome}</span>
+                  </td>
+                  <td className="px-4 py-3 text-ink-muted">
+                    <span className="inline-flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {t.etapas.length} etapa(s)</span>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <button onClick={() => abrirEditar(t)} className="p-1.5 text-ink-muted hover:text-primary-600 hover:bg-primary-50 rounded transition-colors" title="Editar"><Pencil className="w-4 h-4" /></button>
+                      <button onClick={() => remover(t.id)} className="p-1.5 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Desativar"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
+      {/* Drawer de cadastro/edição */}
+      <Drawer
+        aberto={!!editando}
+        onFechar={() => setEditando(null)}
+        titulo={editando === "novo" ? "Novo modelo de prazo" : `Editar ${nome || "modelo de prazo"}`}
+        largura="w-full sm:w-[60vw] sm:min-w-[520px] sm:max-w-[900px]"
+        rodape={
+          <>
+            <Button type="button" variant="secondary" onClick={() => setEditando(null)}>Cancelar</Button>
+            <Button type="button" loading={salvando} onClick={salvar}><Check className="w-4 h-4" /> {editando === "novo" ? "Criar" : "Salvar"}</Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
           {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
 
           <FormGrid cols={2}>
@@ -221,43 +275,8 @@ export function PrazoTemplatesClient() {
               <Plus className="w-4 h-4" /> Adicionar etapa
             </Button>
           </div>
-
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setEditando(null)}>Cancelar</Button>
-            <Button loading={salvando} onClick={salvar}><Check className="w-4 h-4" /> {editando === "novo" ? "Criar template" : "Salvar"}</Button>
-          </div>
         </div>
-      ) : (
-        <>
-          {ativos.length === 0 ? (
-            <p className="text-sm text-ink-subtle text-center py-8">Nenhum template de prazo cadastrado.</p>
-          ) : (
-            <div className="space-y-2">
-              {ativos.map((t) => (
-                <div key={t.id} className="border border-surface-border rounded-lg p-3 flex items-center justify-between hover:bg-surface-alt/40 transition-colors">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: t.cor }} />
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-ink">{t.nome}</p>
-                      <p className="text-xs text-ink-muted flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {t.etapas.length} etapa(s): {t.etapas.map((e) => `${e.nome} (${formatarPrazoHoras(e.prazoHoras)})`).join(" → ")}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={() => abrirEditar(t)} className="p-1.5 text-ink-muted hover:text-primary-600 hover:bg-primary-50 rounded"><Pencil className="w-3.5 h-3.5" /></button>
-                    <button onClick={() => remover(t.id)} className="p-1.5 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          <Button type="button" variant="secondary" onClick={abrirNovo} className="w-full justify-center border-dashed">
-            <Plus className="w-4 h-4" /> Adicionar template de prazo
-          </Button>
-        </>
-      )}
+      </Drawer>
     </div>
   );
 }
