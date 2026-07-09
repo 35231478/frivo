@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/ui/page-header";
 
 export default function CategoriasFinanceirasPage() {
   return (
-    <div className="max-w-3xl mx-auto">
+    <div>
       <PageHeader title="Categorias Financeiras" description="Classifique cobranças e despesas (ex: Contrato Mensal, Serviço Avulso)" backHref="/configuracoes" />
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <CrudCadastro

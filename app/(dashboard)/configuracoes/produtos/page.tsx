@@ -6,7 +6,7 @@ import { formatarMoeda } from "@/lib/utils";
 
 export default function ProdutosPage() {
   return (
-    <div className="max-w-3xl mx-auto">
+    <div>
       <PageHeader title="Produtos" description="Catálogo de peças e materiais usados nos serviços" backHref="/configuracoes" />
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <CrudCadastro
