@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { moduloDaRota, pode } from "@/lib/permissoes";
@@ -198,6 +198,7 @@ interface SidebarProps {
 
 export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const usuario = session.user;
 
   // Recolher/expandir (apenas desktop) — persistido em localStorage
@@ -277,6 +278,11 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
   const secoesVisiveis = filtrar(VISTAS[vistaAtiva]);
   const mostrarSeletor = operacionalDisponivel && financeiroDisponivel;
 
+  // Tema por módulo: financeiro = azul royal (estilo Conta Azul); demais = navy padrão.
+  // Destaque de item ativo adaptável ao fundo (overlay branco no financeiro).
+  const temaFin = vistaAtiva === "financeiro";
+  const ativoBg = temaFin ? "bg-white/20" : "bg-primary-500";
+
   // Item ativo pelo prefixo mais longo dentro da vista atual
   const basesAtuais = secoesVisiveis.flatMap((s) =>
     s.entries.flatMap((e) => (ehGrupo(e) ? e.itens : [e]).map((i) => baseHref(i))),
@@ -290,31 +296,37 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
   const itemAtivo = (i: Item) => baseHref(i) === ativoHref;
   const grupoAtivo = (g: Grupo) => g.itens.some((i) => itemAtivo(i));
 
-  // Estado de expansão dos grupos
+  // Estado de expansão dos grupos — accordion: no máximo um grupo aberto por vez
   const [abertos, setAbertos] = useState<Set<string>>(new Set());
   const toggle = (label: string) =>
-    setAbertos((p) => { const n = new Set(p); if (n.has(label)) n.delete(label); else n.add(label); return n; });
+    setAbertos((p) => (p.has(label) ? new Set() : new Set([label])));
 
-  // Abre automaticamente o grupo que contém o item ativo
+  // Ao carregar/navegar, mantém aberto apenas o grupo que contém a rota ativa
   useEffect(() => {
-    if (!ativoHref) return;
+    let alvo: string | null = null;
     for (const sec of VISTAS[vistaAtiva]) {
       for (const e of sec.entries) {
-        if (ehGrupo(e) && e.itens.some((i) => baseHref(i) === ativoHref)) {
-          setAbertos((p) => (p.has(e.label) ? p : new Set(p).add(e.label)));
-        }
+        if (ehGrupo(e) && e.itens.some((i) => baseHref(i) === ativoHref)) alvo = e.label;
       }
     }
+    setAbertos(alvo ? new Set([alvo]) : new Set());
   }, [ativoHref, vistaAtiva]);
 
-  const escolherModulo = (m: Modulo) => { setModulo(m); setSistemaAberto(false); };
+  const escolherModulo = (m: Modulo) => {
+    setModulo(m);
+    setSistemaAberto(false);
+    router.push(m === "financeiro" ? "/financeiro" : "/dashboard");
+  };
 
   return (
-    <aside className={cn(
-      "flex flex-col bg-sidebar text-white shrink-0 shadow-xl",
-      montado && "transition-[width] duration-200 ease-in-out",
-      variant === "mobile" ? "w-72 h-full" : cn("hidden lg:flex", colapsada ? "lg:w-16" : "lg:w-[280px]"),
-    )}>
+    <aside
+      style={temaFin ? { backgroundColor: "#0B66C3" } : undefined}
+      className={cn(
+        "flex flex-col bg-sidebar text-white shrink-0 shadow-xl",
+        montado && "transition-[width,background-color] duration-200 ease-in-out",
+        variant === "mobile" ? "w-72 h-full" : cn("hidden lg:flex", colapsada ? "lg:w-16" : "lg:w-[280px]"),
+      )}
+    >
       {/* Toggle recolher/expandir (desktop) */}
       {variant === "desktop" && (
         <div className={cn("flex items-center px-3 pt-3", colapsada ? "justify-center" : "justify-end")}>
@@ -373,6 +385,7 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
           <div className={cn("bg-white/5 rounded-xl p-1", colapsada ? "flex flex-col gap-1" : "grid grid-cols-2 gap-1")}>
             <SeletorBotao
               ativo={vistaAtiva === "operacional"}
+              ativoBg={ativoBg}
               onClick={() => escolherModulo("operacional")}
               icone={Wrench}
               label="Operacional"
@@ -380,6 +393,7 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
             />
             <SeletorBotao
               ativo={vistaAtiva === "financeiro"}
+              ativoBg={ativoBg}
               onClick={() => escolherModulo("financeiro")}
               icone={Coins}
               label="Financeiro"
@@ -403,7 +417,7 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
                       title={e.label}
                       className={cn(
                         "relative flex items-center justify-center py-2.5 rounded-lg transition-all",
-                        grupoAtivo(e) ? "bg-primary-500 text-white" : "text-slate-200 hover:bg-white/5 hover:text-white",
+                        grupoAtivo(e) ? cn(ativoBg, "text-white") : "text-slate-200 hover:bg-white/5 hover:text-white",
                       )}
                     >
                       <e.icone className="w-[18px] h-[18px]" />
@@ -415,7 +429,7 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
                         className={cn(
                           "relative flex items-center justify-between w-full pl-4 pr-3 py-2.5 rounded-lg text-sm transition-all",
                           grupoAtivo(e)
-                            ? "bg-primary-500 text-white font-semibold"
+                            ? cn(ativoBg, "text-white font-semibold")
                             : "text-slate-200 hover:bg-white/5 hover:text-white",
                         )}
                       >
@@ -428,19 +442,19 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
                       </button>
 
                       {abertos.has(e.label) && (
-                        <div className="ml-5 pl-3 border-l border-white/10 space-y-0.5 mt-1">
+                        <div className="mt-1 ml-3 pl-3 pr-1 py-1 rounded-lg bg-white/5 border-l-2 border-white/15 space-y-0.5">
                           {e.itens.map((i) => (
                             <Link
                               key={i.href + i.label}
                               href={i.href}
                               className={cn(
-                                "flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs transition-colors",
+                                "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
                                 itemAtivo(i)
-                                  ? "bg-white/10 text-white font-medium"
-                                  : "text-slate-300 hover:bg-white/5 hover:text-white",
+                                  ? "bg-white/15 text-white font-medium"
+                                  : "text-slate-200 hover:bg-white/10 hover:text-white",
                               )}
                             >
-                              <i.icone className="w-3.5 h-3.5 shrink-0" />
+                              <i.icone className="w-4 h-4 shrink-0" />
                               {i.label}
                             </Link>
                           ))}
@@ -449,7 +463,7 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
                     </div>
                   )
                 ) : (
-                  <SidebarLink key={e.href} href={e.href} icone={e.icone} label={e.label} ativo={itemAtivo(e)} colapsada={colapsada} />
+                  <SidebarLink key={e.href} href={e.href} icone={e.icone} label={e.label} ativo={itemAtivo(e)} ativoBg={ativoBg} colapsada={colapsada} />
                 ),
               )}
             </div>
@@ -467,7 +481,7 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
               "flex items-center rounded-lg text-sm transition-colors w-full",
               colapsada ? "justify-center py-2" : "gap-3 pl-4 pr-3 py-2.5",
               sistemaAberto
-                ? "bg-primary-500 text-white font-semibold"
+                ? cn(ativoBg, "text-white font-semibold")
                 : "text-slate-200 hover:bg-white/5 hover:text-white",
             )}
           >
@@ -496,13 +510,14 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
 
 interface SeletorBotaoProps {
   ativo: boolean;
+  ativoBg: string;
   onClick: () => void;
   icone: Icone;
   label: string;
   colapsada: boolean;
 }
 
-function SeletorBotao({ ativo, onClick, icone: Icone, label, colapsada }: SeletorBotaoProps) {
+function SeletorBotao({ ativo, ativoBg, onClick, icone: Icone, label, colapsada }: SeletorBotaoProps) {
   return (
     <button
       onClick={onClick}
@@ -511,7 +526,7 @@ function SeletorBotao({ ativo, onClick, icone: Icone, label, colapsada }: Seleto
         "flex items-center justify-center rounded-lg text-xs font-medium transition-all",
         colapsada ? "py-2" : "gap-1.5 py-2 px-2",
         ativo
-          ? "bg-primary-500 text-white shadow-sm"
+          ? cn(ativoBg, "text-white shadow-sm")
           : "text-slate-300 hover:bg-white/5 hover:text-white",
       )}
     >
@@ -540,10 +555,11 @@ interface SidebarLinkProps {
   icone: Icone;
   label: string;
   ativo: boolean;
+  ativoBg: string;
   colapsada: boolean;
 }
 
-function SidebarLink({ href, icone: Icone, label, ativo, colapsada }: SidebarLinkProps) {
+function SidebarLink({ href, icone: Icone, label, ativo, ativoBg, colapsada }: SidebarLinkProps) {
   return (
     <Link
       href={href}
@@ -552,7 +568,7 @@ function SidebarLink({ href, icone: Icone, label, ativo, colapsada }: SidebarLin
         "relative flex items-center rounded-lg text-sm transition-all",
         colapsada ? "justify-center py-2.5" : "gap-3 pl-4 pr-3 py-2.5",
         ativo
-          ? "bg-primary-500 text-white font-semibold shadow-sm"
+          ? cn(ativoBg, "text-white font-semibold shadow-sm")
           : "text-slate-200 hover:bg-white/5 hover:text-white",
       )}
     >
