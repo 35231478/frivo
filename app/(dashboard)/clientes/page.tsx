@@ -9,6 +9,7 @@ import {
 import { Prisma } from "@prisma/client";
 import Link from "next/link";
 import { Users, Plus, FileCheck, Star } from "lucide-react";
+import { ClienteAcoes } from "@/components/clientes/cliente-acoes";
 
 export const metadata: Metadata = { title: "Clientes" };
 
@@ -138,11 +139,12 @@ export default async function ClientesPage({
               <th className="text-center px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">End.</th>
               <th className="text-center px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">OS</th>
               <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Status</th>
+              <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider w-px">Ações</th>
             </tr>
           </thead>
           <tbody>
             {clientes.length === 0 ? (
-              <tr><td colSpan={7} className="text-center text-ink-subtle py-12">Nenhum cliente encontrado</td></tr>
+              <tr><td colSpan={8} className="text-center text-ink-subtle py-12">Nenhum cliente encontrado</td></tr>
             ) : (
               clientes.map((c, idx) => (
                 <tr key={c.id} className={cn(
@@ -184,6 +186,9 @@ export default async function ClientesPage({
                         </span>
                       );
                     })()}
+                  </td>
+                  <td className="px-4 py-3">
+                    <ClienteAcoes id={c.id} />
                   </td>
                 </tr>
               ))
