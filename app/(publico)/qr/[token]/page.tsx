@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getPortalBranding } from "@/lib/portal-server";
 import { getPortalSession } from "@/lib/auth-portal";
+import { auth } from "@/lib/auth";
+import { pode } from "@/lib/permissoes";
 import { mesclarQrConfig } from "@/lib/qr-config";
 import { LABELS_TIPO_EQUIPAMENTO } from "@/lib/utils";
 import { QrPublicoClient } from "@/components/public/qr-publico-client";
@@ -41,6 +43,15 @@ export default async function QrPublicoPage({ params }: { params: Promise<{ toke
   if (!qrcode) notFound();
 
   const empresaId = qrcode.empresaId;
+
+  // Equipe interna logada (mesma empresa, com acesso a equipamentos) ganha atalho para o
+  // histórico completo no sistema — vale mesmo com a página pública desativada.
+  const sessaoEquipe = await auth().catch(() => null);
+  const linkEquipe =
+    qrcode.equipamentoId && sessaoEquipe?.user?.empresaId === empresaId
+    && pode(sessaoEquipe.user.permissoes, "equipamentos", "visualizar", sessaoEquipe.user.role)
+      ? `/equipamentos/${qrcode.equipamentoId}?aba=historico`
+      : null;
   const [branding, configRow] = await Promise.all([
     getPortalBranding(empresaId),
     prisma.configuracao.findUnique({ where: { empresaId }, select: { qrConfig: true } }),
@@ -60,6 +71,11 @@ export default async function QrPublicoPage({ params }: { params: Promise<{ toke
           <h1 className="text-xl font-bold text-ink mb-4">{branding.empresaNome}</h1>
         )}
         <p className="text-ink-muted">Acesso restrito.</p>
+        {linkEquipe && (
+          <a href={linkEquipe} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary-500 text-white px-4 py-2.5 text-sm font-medium">
+            Abrir histórico completo no sistema
+          </a>
+        )}
         {wpp && (
           <a href={`https://wa.me/55${wpp}`} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-green-500 text-white px-4 py-2.5 text-sm font-medium">
             Entre em contato pelo WhatsApp
@@ -81,11 +97,19 @@ export default async function QrPublicoPage({ params }: { params: Promise<{ toke
     );
   }
 
+  // Atendimentos do equipamento: OS aberta para ele ou atividade que o inclui (OS com vários equipamentos)
+  const daOsDoEquipamento = {
+    OR: [
+      { equipamentoId: equip.id },
+      { atividades: { some: { equipamentos: { some: { equipamentoId: equip.id } } } } },
+    ],
+  };
+
   // ── Histórico (últimas 5 OS concluídas) ──
   const mostrarHistorico = cfg.mostrarHistorico && (!cfg.historicoSomenteLogado || logado);
   const historico = mostrarHistorico
     ? await prisma.ordemServico.findMany({
-        where: { empresaId, equipamentoId: equip.id, status: "CONCLUIDA" },
+        where: { empresaId, status: "CONCLUIDA", ...daOsDoEquipamento },
         orderBy: [{ dataConclusao: "desc" }, { criadoEm: "desc" }],
         take: 5,
         select: {
@@ -98,7 +122,10 @@ export default async function QrPublicoPage({ params }: { params: Promise<{ toke
   // ── Próxima manutenção agendada ──
   const proxima = cfg.mostrarProximaManutencao
     ? await prisma.atividadeOs.findFirst({
-        where: { empresaId, ordemServico: { equipamentoId: equip.id }, status: "AGENDADA", dataAgendada: { gte: new Date() } },
+        where: {
+          empresaId, status: "AGENDADA", dataAgendada: { gte: new Date() },
+          OR: [{ ordemServico: { equipamentoId: equip.id } }, { equipamentos: { some: { equipamentoId: equip.id } } }],
+        },
         orderBy: { dataAgendada: "asc" },
         select: { dataAgendada: true, titulo: true, tipoOs: { select: { nome: true } } },
       })
@@ -131,6 +158,7 @@ export default async function QrPublicoPage({ params }: { params: Promise<{ toke
       status: STATUS_LABEL[o.status] ?? { label: o.status, cor: "#94A3B8" },
     })),
     historicoOculto: cfg.mostrarHistorico && cfg.historicoSomenteLogado && !logado,
+    linkEquipe,
     proxima: proxima
       ? { data: dataBR(proxima.dataAgendada), tipo: proxima.tipoOs?.nome ?? proxima.titulo }
       : null,

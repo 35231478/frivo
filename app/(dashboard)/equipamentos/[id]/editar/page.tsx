@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { EquipamentoForm } from "@/components/forms/equipamento-form";
 
@@ -11,6 +12,8 @@ export default async function EditarEquipamentoPage({ params, searchParams }: { 
   const { aba } = await searchParams;
   const session = await auth();
   const empresaId = session!.user!.empresaId;
+  // Sem permissão de editar: abre o perfil (ficha técnica + histórico), que é somente leitura.
+  if (!pode(session!.user!.permissoes, "equipamentos", "editar", session!.user!.role)) redirect(`/equipamentos/${id}`);
 
   const equipamento = await prisma.equipamento.findFirst({
     where: { id, empresaId },

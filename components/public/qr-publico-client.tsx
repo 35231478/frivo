@@ -14,6 +14,8 @@ type Dados = {
   localizacao: { unidade: string | null; local: string | null } | null;
   historico: { id: string; numero: string; data: string; tipo: string; tecnico: string | null; status: { label: string; cor: string } }[];
   historicoOculto: boolean;
+  /** Atalho para o histórico completo no sistema (só para a equipe interna logada). */
+  linkEquipe?: string | null;
   proxima: { data: string; tipo: string } | null;
   botoes: { whatsapp: string | null; site: string | null; chamado: Botao; orcamento: Botao };
 };
@@ -103,6 +105,11 @@ export function QrPublicoClient({ dados }: { dados: Dados }) {
         )}
         {dados.historicoOculto && (
           <p className="text-center text-xs text-ink-muted">O histórico completo está disponível para clientes logados no portal.</p>
+        )}
+        {dados.linkEquipe && (
+          <a href={dados.linkEquipe} className="flex items-center justify-center gap-2 w-full rounded-lg border border-primary-200 bg-primary-50 text-primary-700 px-4 py-3 text-sm font-semibold">
+            <ClipboardList className="w-4 h-4" /> Histórico completo no sistema (equipe)
+          </a>
         )}
 
         {/* Formulário inline */}

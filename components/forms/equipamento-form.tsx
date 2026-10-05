@@ -15,8 +15,8 @@ import { LABELS_TIPO_EQUIPAMENTO, cn } from "@/lib/utils";
 import { Thermometer, ImageIcon, MapPin, Cog, QrCode, History, CheckCircle2, ClipboardList } from "lucide-react";
 
 const TIPOS_EQUIPAMENTO = Object.entries(LABELS_TIPO_EQUIPAMENTO);
-const FLUIDOS = ["R22", "R410A", "R32", "R404A", "R134a", "Outro"];
-const TENSOES = ["110V", "220V", "380V"];
+const FLUIDOS = ["R22", "R410A", "R32", "R407C", "R404A", "R134a", "R290", "Outro"];
+const TENSOES = ["110V", "127V", "220V", "380V", "440V"];
 const FASES = ["Monofásico", "Bifásico", "Trifásico"];
 
 const STATUS_OS: Record<string, { label: string; cor: string }> = {
@@ -75,6 +75,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
     marca: initialData?.marca ?? "",
     modelo: initialData?.modelo ?? "",
     numeroSerie: initialData?.numeroSerie ?? "",
+    patrimonio: initialData?.patrimonio ?? "",
     tipo: initialData?.tipo ?? "",
     anoFabricacao: initialData?.anoFabricacao ?? "",
     observacoes: initialData?.observacoes ?? "",
@@ -140,6 +141,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
         marca: form.marca,
         modelo: form.modelo,
         numeroSerie: form.numeroSerie || undefined,
+        patrimonio: form.patrimonio || undefined,
         anoFabricacao: form.anoFabricacao || undefined,
         capacidade: form.capacidade || undefined,
         fluido: form.fluido || undefined,
@@ -253,6 +255,9 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
                 </FormField>
               </FormGrid>
               <FormGrid>
+                <FormField label="Patrimônio / TAG" hint="Código de patrimônio do cliente ou etiqueta do equipamento">
+                  <Input value={form.patrimonio} onChange={(e) => set("patrimonio", e.target.value)} placeholder="Ex: PAT-00123, TAG AC-07" />
+                </FormField>
                 <FormField label="Ano de fabricação">
                   <Input value={form.anoFabricacao} onChange={(e) => set("anoFabricacao", e.target.value)} placeholder="Ex: 2022" />
                 </FormField>
@@ -278,8 +283,8 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
                   {unidades.map((u) => (<option key={u.id} value={u.id}>{u.nome}{u.cidade ? ` — ${u.cidade}` : ""}</option>))}
                 </Select>
               </FormField>
-              <FormField label="Ambiente" hint="Onde o equipamento está instalado neste endereço">
-                <Input value={form.localizacao} onChange={(e) => set("localizacao", e.target.value)} placeholder="Ex: Sala de Reuniões, Recepção, Sala 201" />
+              <FormField label="Ambiente / setor" hint="Onde o equipamento está instalado neste endereço">
+                <Input value={form.localizacao} onChange={(e) => set("localizacao", e.target.value)} placeholder="Ex: 2º andar · Sala de Reuniões, Recepção, CPD" />
               </FormField>
               {unidadeSel && (unidadeSel.logradouro || unidadeSel.cidade) && (
                 <MapaEndereco logradouro={unidadeSel.logradouro ?? undefined} numero={unidadeSel.numero ?? undefined} cidade={unidadeSel.cidade ?? undefined} estado={unidadeSel.estado ?? undefined} cep={unidadeSel.cep ?? undefined} />
@@ -296,8 +301,8 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
                     {opcoesComValor(FLUIDOS, form.fluido).map((f) => (<option key={f} value={f}>{f}</option>))}
                   </Select>
                 </FormField>
-                <FormField label="Capacidade (BTU/h)">
-                  <Input value={form.capacidade} onChange={(e) => set("capacidade", e.target.value)} placeholder="Ex: 12000" inputMode="numeric" />
+                <FormField label="Capacidade" hint="Informe a unidade: BTU/h ou TR">
+                  <Input value={form.capacidade} onChange={(e) => set("capacidade", e.target.value)} placeholder="Ex: 12.000 BTU/h ou 5 TR" />
                 </FormField>
                 <FormField label="Tensão">
                   <Select value={form.tensao} onChange={(e) => set("tensao", e.target.value)} placeholder="Selecione">

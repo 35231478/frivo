@@ -9,6 +9,8 @@ import {
   SlidersHorizontal, X, ChevronDown, ChevronUp, ArrowUpDown, ArrowUp, ArrowDown,
   Eye, Pencil, QrCode,
 } from "lucide-react";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { EquipamentoAtivoBotao } from "@/components/equipamentos/equipamento-ativo-botao";
 
 type Equip = {
   id: string;
@@ -45,6 +47,7 @@ export function EquipamentosListaClient({ equipamentos }: { equipamentos: Equip[
   const router = useRouter();
   const sp = useSearchParams();
 
+  const { pode } = usePermissoes();
   const [view, setView] = useState<"cards" | "lista">("cards");
   const [avancadoAberto, setAvancadoAberto] = useState(false);
 
@@ -178,9 +181,11 @@ export function EquipamentosListaClient({ equipamentos }: { equipamentos: Equip[
               <ListIcon className="w-4 h-4" />
             </button>
           </div>
-          <Link href="/equipamentos/novo" className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow">
-            <Plus className="w-4 h-4" /> Novo Equipamento
-          </Link>
+          {pode("equipamentos", "criar") && (
+            <Link href="/equipamentos/novo" className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow">
+              <Plus className="w-4 h-4" /> Novo Equipamento
+            </Link>
+          )}
         </div>
       </div>
 
@@ -264,7 +269,7 @@ export function EquipamentosListaClient({ equipamentos }: { equipamentos: Equip[
       ) : view === "cards" ? (
         <CardsView itens={filtrados} />
       ) : (
-        <ListaView itens={filtrados} sortKey={sortKey} sortDir={sortDir} onOrdenar={ordenar} />
+        <ListaView itens={filtrados} sortKey={sortKey} sortDir={sortDir} onOrdenar={ordenar} podeEditar={pode("equipamentos", "editar")} />
       )}
     </div>
   );
@@ -298,7 +303,7 @@ function CardsView({ itens }: { itens: Equip[] }) {
 }
 
 /* ───────── Lista ───────── */
-function ListaView({ itens, sortKey, sortDir, onOrdenar }: { itens: Equip[]; sortKey: SortKey; sortDir: "asc" | "desc"; onOrdenar: (k: SortKey) => void }) {
+function ListaView({ itens, sortKey, sortDir, onOrdenar, podeEditar }: { itens: Equip[]; sortKey: SortKey; sortDir: "asc" | "desc"; onOrdenar: (k: SortKey) => void; podeEditar: boolean }) {
   const router = useRouter();
   return (
     <div className="bg-white border border-surface-border rounded-xl overflow-x-auto">
@@ -331,8 +336,13 @@ function ListaView({ itens, sortKey, sortDir, onOrdenar }: { itens: Equip[]; sor
               <td className="px-3 py-2" onClick={(ev) => ev.stopPropagation()}>
                 <div className="flex items-center justify-end gap-1">
                   <Link href={`/equipamentos/${e.id}`} title="Ver" className="p-1.5 rounded-md text-ink-muted hover:text-primary-600 hover:bg-surface-alt"><Eye className="w-4 h-4" /></Link>
-                  <Link href={`/equipamentos/${e.id}/editar`} title="Editar" className="p-1.5 rounded-md text-ink-muted hover:text-primary-600 hover:bg-surface-alt"><Pencil className="w-4 h-4" /></Link>
-                  <Link href={`/equipamentos/${e.id}/editar?aba=qrcode`} title="QR Code" className={cn("p-1.5 rounded-md hover:bg-surface-alt", e.temQr ? "text-emerald-600" : "text-ink-muted hover:text-primary-600")}><QrCode className="w-4 h-4" /></Link>
+                  {podeEditar && (
+                    <>
+                      <Link href={`/equipamentos/${e.id}/editar`} title="Editar" className="p-1.5 rounded-md text-ink-muted hover:text-primary-600 hover:bg-surface-alt"><Pencil className="w-4 h-4" /></Link>
+                      <Link href={`/equipamentos/${e.id}/editar?aba=qrcode`} title="QR Code" className={cn("p-1.5 rounded-md hover:bg-surface-alt", e.temQr ? "text-emerald-600" : "text-ink-muted hover:text-primary-600")}><QrCode className="w-4 h-4" /></Link>
+                    </>
+                  )}
+                  <EquipamentoAtivoBotao id={e.id} nome={e.nome} ativo={e.ativo} />
                 </div>
               </td>
             </tr>
