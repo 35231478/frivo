@@ -25,6 +25,7 @@ import { ClienteContratos } from "@/components/forms/cliente-contratos";
 import { PortalContatos } from "@/components/forms/portal-contatos";
 import { InteracoesManager } from "@/components/forms/interacoes-manager";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { LABELS_PERFIL_FATURAMENTO, formatarMoeda } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import {
@@ -74,6 +75,11 @@ function Painel({ ativo, children }: { ativo: boolean; children: React.ReactNode
 export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30Dias }: ClienteFormProps) {
   const router = useRouter();
   const isEditing = !!initialData;
+  // RBAC (o servidor também valida): sem permissão de salvar, a ficha abre somente leitura.
+  const { pode } = usePermissoes();
+  const podeSalvar = pode("clientes", isEditing ? "editar" : "criar");
+  const podeInativar = pode("clientes", "excluir");
+  const podeReativar = pode("clientes", "editar");
   const statusCalc: StatusFinanceiroCalc = statusFinanceiroCalc ?? "SEM_HISTORICO";
   const totalProx = totalProximos30Dias ?? 0;
   const qtdContratosAtivos = initialData?._count?.contratos ?? 0;
@@ -101,16 +107,19 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
     setTimeout(() => setToast(null), 3000);
   }
 
-  // Inativa/reativa o cliente via PATCH (sem salvar o formulário inteiro).
+  // Inativa (DELETE = soft-delete, exige "excluir") ou reativa (PATCH, exige "editar")
+  // o cliente sem salvar o formulário inteiro.
   async function alterarAtivo(novo: boolean) {
     if (!isEditing) return;
     setMudandoAtivo(true);
     try {
-      const res = await fetch(`/api/clientes/${initialData!.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ativo: novo }),
-      });
+      const res = novo
+        ? await fetch(`/api/clientes/${initialData!.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ativo: true }),
+          })
+        : await fetch(`/api/clientes/${initialData!.id}`, { method: "DELETE" });
       if (!res.ok) { const e = await res.json().catch(() => ({})); setErroGlobal(e.erro ?? "Erro ao alterar status."); return; }
       setValue("ativo", novo);
       setStatusOpen(false);
@@ -212,6 +221,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
   }
 
   async function onSubmit(data: ClienteInput, continuar = false) {
+    if (!podeSalvar) return;
     setErroGlobal(""); setAbasErro(new Set());
     const erroCfg = validarConfigDinamica();
     if (erroCfg) { setAbasErro(new Set([erroCfg.aba])); setAba(erroCfg.aba); setErroGlobal(erroCfg.msg); return; }
@@ -284,8 +294,14 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
   const salvar = handleSubmit((d) => onSubmit(d, false), onError);
   const salvarEContinuar = handleSubmit((d) => onSubmit(d, true), onError);
   const titulo = isEditing ? (initialData?.nome || "Editar cliente") : "Novo cliente";
+  // Inativar exige "excluir"; reativar exige "editar". Sem a permissão, o status vira só um selo.
+  const podeAlterarStatus = ativoVal ? podeInativar : podeReativar;
 
-  const BotoesAcao = ({ compact = false }: { compact?: boolean }) => (
+  const BotoesAcao = ({ compact = false }: { compact?: boolean }) => !podeSalvar ? (
+    <div className="flex items-center gap-2 shrink-0">
+      <Button type="button" variant="secondary" size={compact ? "sm" : "md"} onClick={() => router.push("/clientes")}>Voltar</Button>
+    </div>
+  ) : (
     <div className="flex items-center gap-2 shrink-0">
       <Button type="button" variant="secondary" size={compact ? "sm" : "md"} onClick={() => router.push("/clientes")}>Cancelar</Button>
       <Button type="button" variant="outline" size={compact ? "sm" : "md"} loading={isSubmitting} onClick={salvarEContinuar}>
@@ -334,7 +350,15 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
               <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", COR_STATUS_FINANCEIRO_CALC[statusCalc])}>
                 {LABELS_STATUS_FINANCEIRO_CALC[statusCalc]}
               </span>
-              {isEditing ? (
+              {isEditing && !podeAlterarStatus ? (
+                <span className={cn(
+                  "inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-2.5 py-1 border",
+                  ativoVal ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-red-50 border-red-200 text-red-600",
+                )}>
+                  <span className={cn("w-1.5 h-1.5 rounded-full", ativoVal ? "bg-emerald-500" : "bg-red-500")} />
+                  {ativoVal ? "Ativo" : "Inativo"}
+                </span>
+              ) : isEditing ? (
                 <div className="relative">
                   <button
                     type="button"
@@ -379,6 +403,12 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
           </div>
         </div>
 
+        {!podeSalvar && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-4 py-3 flex items-center gap-2">
+            <Lock className="w-4 h-4 shrink-0" /> Modo somente leitura: seu perfil não tem permissão para {isEditing ? "editar" : "cadastrar"} clientes.
+          </div>
+        )}
+
         {erroGlobal && (
           <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" /> {erroGlobal}
@@ -412,6 +442,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
           </nav>
 
           <div className="p-5 sm:p-6 lg:p-8">
+          <fieldset disabled={!podeSalvar} className="min-w-0">
 
       {/* ABA 1 — Dados Gerais */}
       <Painel ativo={aba === "geral"}>
@@ -651,6 +682,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
           )}
         </FormSection>
       </Painel>
+          </fieldset>
           </div>{/* fim do conteúdo */}
 
           {/* Barra de ações no rodapé */}
