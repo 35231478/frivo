@@ -6,6 +6,9 @@ import { cn, nomeMes, formatarData } from "@/lib/utils";
 import { GerarOsRecorrentes } from "@/components/calendario/gerar-os-recorrentes";
 import { CalendarioPainel } from "@/components/calendario/calendario-painel";
 import type { CelulaDia, CardOs } from "@/components/calendario/calendario-grid";
+import { SOLICITACAO_PENDENTE } from "@/lib/solicitacoes";
+import { pode } from "@/lib/permissoes";
+import { SolicitacoesGaveta } from "@/components/calendario/solicitacoes-gaveta";
 import { CalendarDays, ChevronLeft, ChevronRight, Repeat } from "lucide-react";
 
 export const metadata: Metadata = { title: "Calendário" };
@@ -62,13 +65,19 @@ export default async function CalendarioPage({
     empresaId,
     // OS inativadas (CANCELADA) saem do calendário
     status: { not: "CANCELADA" },
+    // Solicitação de cliente pendente (portal/QR, aguardando atendimento) não é
+    // agendamento: só entra no calendário depois de aceita (vira AGENDADA)
+    NOT: { ...SOLICITACAO_PENDENTE },
     OR: [
       { previsaoConclusao: periodo },
       { atividades: { some: { dataAgendada: periodo } } },
     ],
   };
 
-  const [ordens, tecnicos, tiposOs, clientes] = await Promise.all([
+  const { permissoes, role } = session!.user!;
+  const veSolicitacoes = pode(permissoes, "ordens", "editar", role) || pode(permissoes, "ordens", "excluir", role);
+
+  const [ordens, tecnicos, tiposOs, clientes, solicitacoesPendentes] = await Promise.all([
     prisma.ordemServico.findMany({
       where,
       select: {
@@ -92,6 +101,7 @@ export default async function CalendarioPage({
     prisma.tecnico.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true, avatar: true }, orderBy: { nome: "asc" } }),
     prisma.tipoOs.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
     prisma.cliente.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true, nomeFantasia: true }, orderBy: { nome: "asc" } }),
+    veSolicitacoes ? prisma.ordemServico.count({ where: { empresaId, ...SOLICITACAO_PENDENTE } }) : Promise.resolve(0),
   ]);
 
   // Monta os cards e os posiciona por dia (preferindo a atividade agendada; senão a previsão)
@@ -167,6 +177,7 @@ export default async function CalendarioPage({
   const mesSeguinte = mes === 12 ? { mes: 1, ano: ano + 1 } : { mes: mes + 1, ano };
 
   return (
+    <SolicitacoesGaveta totalInicial={solicitacoesPendentes}>
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
@@ -225,5 +236,6 @@ export default async function CalendarioPage({
         </div>
       </div>
     </div>
+    </SolicitacoesGaveta>
   );
 }

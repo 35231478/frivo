@@ -15,7 +15,7 @@ import { usePermissoes } from "@/components/providers/permissoes-provider";
  * Sem a permissão correspondente, não renderiza nada.
  */
 export function OsInativarBotao({
-  osId, numero, status, variante = "botao", abrirAoMontar = false, onFechar, onAlterado,
+  osId, numero, status, variante = "botao", abrirAoMontar = false, onFechar, onAlterado, modo = "inativar", className,
 }: {
   osId: string;
   numero: string;
@@ -26,10 +26,14 @@ export function OsInativarBotao({
   abrirAoMontar?: boolean;
   onFechar?: () => void;
   onAlterado?: (novoStatus: string) => void;
+  /** "recusar": recusa de solicitação do cliente (gaveta de Solicitações) — mesmo fluxo, textos próprios. */
+  modo?: "inativar" | "recusar";
+  className?: string;
 }) {
   const router = useRouter();
   const { pode } = usePermissoes();
-  const cancelada = status === "CANCELADA";
+  const recusar = modo === "recusar";
+  const cancelada = !recusar && status === "CANCELADA";
   const permitido = cancelada ? pode("ordens", "editar") : pode("ordens", "excluir");
 
   const [aberto, setAberto] = useState(abrirAoMontar);
@@ -54,7 +58,7 @@ export function OsInativarBotao({
           })
         : await fetch(`/api/ordens/${osId}`, {
             method: "DELETE", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ motivo }),
+            body: JSON.stringify(recusar ? { motivo, recusa: true } : { motivo }),
           });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setErro(data.erro ?? "Não foi possível concluir a ação."); return; }
@@ -62,7 +66,7 @@ export function OsInativarBotao({
       setAberto(false); setMotivo("");
       onAlterado?.(novo);
       onFechar?.();
-      router.refresh();
+      if (!recusar) router.refresh();
     } catch {
       setErro("Erro de conexão.");
     } finally {
@@ -71,7 +75,7 @@ export function OsInativarBotao({
   }
 
   const Icone = cancelada ? RotateCcw : Ban;
-  const rotulo = cancelada ? "Reabrir OS" : "Inativar OS";
+  const rotulo = recusar ? "Recusar solicitação" : cancelada ? "Reabrir OS" : "Inativar OS";
 
   return (
     <>
@@ -88,15 +92,31 @@ export function OsInativarBotao({
           className={cn(
             "inline-flex items-center gap-1.5 text-sm border rounded-lg px-3 py-2 transition-colors",
             cancelada ? "text-emerald-700 border-emerald-200 hover:bg-emerald-50" : "text-red-600 border-red-200 hover:bg-red-50",
+            className,
           )}
         >
-          <Icone className="w-4 h-4" /> {cancelada ? "Reabrir" : "Inativar"}
+          <Icone className="w-4 h-4" /> {recusar ? "Recusar" : cancelada ? "Reabrir" : "Inativar"}
         </button>
       )}
 
-      <Modal aberto={aberto} onFechar={fechar} titulo={cancelada ? `Reabrir a OS ${numero}?` : `Inativar a OS ${numero}?`} tamanho="sm">
+      <Modal aberto={aberto} onFechar={fechar} titulo={recusar ? `Recusar a solicitação ${numero}?` : cancelada ? `Reabrir a OS ${numero}?` : `Inativar a OS ${numero}?`} tamanho="sm">
         <div className="space-y-4">
-          {cancelada ? (
+          {recusar ? (
+            <>
+              <p className="text-sm text-ink">
+                Tem certeza? A solicitação será <strong>recusada</strong>: a OS vira <strong>Cancelada</strong> e o cliente
+                passa a ver “Cancelada” no portal. Nada é apagado e ela pode ser reaberta depois pela própria OS.
+              </p>
+              <label className="block">
+                <span className="block text-xs font-medium text-ink mb-1">Motivo (opcional — fica no histórico)</span>
+                <textarea
+                  value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={2} maxLength={500}
+                  placeholder="Ex: fora da área de atendimento, serviço não prestado…"
+                  className="w-full bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 resize-none"
+                />
+              </label>
+            </>
+          ) : cancelada ? (
             <p className="text-sm text-ink">A OS volta para o status <strong>Aberta</strong> e reaparece nas listas e no calendário.</p>
           ) : (
             <>
@@ -131,7 +151,7 @@ export function OsInativarBotao({
               )}
             >
               {carregando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Icone className="w-4 h-4" />}
-              {cancelada ? "Reabrir OS" : "Sim, inativar"}
+              {recusar ? "Sim, recusar" : cancelada ? "Reabrir OS" : "Sim, inativar"}
             </button>
           </div>
         </div>

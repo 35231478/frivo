@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { proximoNumeroOs } from "@/lib/os-server";
 import { mesclarQrConfig } from "@/lib/qr-config";
 import { z } from "zod";
 
@@ -53,8 +54,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!gestor) return NextResponse.json({ erro: "Empresa sem usuário responsável." }, { status: 400 });
 
   const ano = new Date().getFullYear();
-  const totalOs = await prisma.ordemServico.count({ where: { empresaId } });
-  const numero = `OS-${ano}-${String(totalOs + 1).padStart(4, "0")}`;
+  const numero = await proximoNumeroOs(empresaId, ano);
   const totalChamados = await prisma.ordemServico.count({ where: { empresaId, origem: "PORTAL_CLIENTE" } });
   const chamadoNumero = `CHM-${ano}-${String(totalChamados + 1).padStart(4, "0")}`;
 
