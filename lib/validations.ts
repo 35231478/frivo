@@ -365,11 +365,15 @@ export const tecnicoSchema = z.object({
 // ─────────────────────────────────────────────
 
 export const veiculoSchema = z.object({
-  fotos: z.array(z.string()).max(5, "Máximo de 5 fotos").default([]),
+  // 4 ângulos (frente, traseira, laterais) + até 4 "outros"; cada foto já vem reduzida pela tela (~300 KB)
+  fotos: z.array(z.string()).max(8, "Máximo de 8 fotos").default([]),
+  fotosRotulos: z.array(z.enum(["FRENTE", "TRASEIRA", "LATERAL_ESQUERDA", "LATERAL_DIREITA", "OUTRO"])).max(8).default([]),
   placa: z.string().min(1, "Placa é obrigatória"),
   modelo: z.string().min(1, "Modelo é obrigatório"),
   marca: z.string().optional(),
   ano: z.string().optional(),
+  anoModelo: z.string().optional(),
+  combustivel: z.string().max(30).optional(),
   cor: z.string().optional(),
   tipo: z.nativeEnum(TipoVeiculo).default(TipoVeiculo.CARRO),
   chassi: z.string().optional(),

@@ -9,10 +9,14 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
-import { GaleriaImagens } from "@/components/ui/galeria-imagens";
+import { Bloco, Opcionais } from "@/components/ui/bloco-cadastro";
+import { FotosVeiculo } from "@/components/veiculos/fotos-veiculo";
+import { CrlvPorFoto, type DadosCrlv } from "@/components/veiculos/crlv-por-foto";
 import { aliviarFotos } from "@/lib/imagem-cliente";
+import { COMBUSTIVEIS } from "@/lib/veiculo-campos";
+import { organizarFotosVeiculo, type RotuloFotoVeiculo } from "@/lib/veiculo-fotos";
 import {
-  Truck, UserCog, FileText, Wrench, ClipboardCheck, AlertCircle, Plus, Trash2, Upload, X,
+  Truck, UserCog, FileText, Wrench, ClipboardCheck, AlertCircle, Plus, Trash2, Upload, X, ChevronLeft, CheckCircle2, Circle, ChevronDown, Lock,
 } from "lucide-react";
 
 type Aba = "identificacao" | "responsavel" | "documentos" | "manutencoes" | "checklists";
@@ -42,7 +46,12 @@ function formatarPlaca(v: string): string {
   return s;
 }
 
-export function VeiculoForm({ initialData, ocorrencias }: { initialData?: any; ocorrencias?: { descricao: string; count: number }[] }) {
+export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }: {
+  initialData?: any;
+  ocorrencias?: { descricao: string; count: number }[];
+  /** Sem "veiculos.gerenciar": a ficha abre para consulta, sem salvar nem ler documento por IA. */
+  somenteLeitura?: boolean;
+}) {
   const router = useRouter();
   const isEditing = !!initialData;
   const veiculoId = initialData?.id as string | undefined;
@@ -50,13 +59,20 @@ export function VeiculoForm({ initialData, ocorrencias }: { initialData?: any; o
   const [aba, setAba] = useState<Aba>("identificacao");
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
+  // Enquanto a conferência do CRLV está aberta, o formulário manual fica escondido (evita salvar sem conferir)
+  const [conferindo, setConferindo] = useState(false);
 
-  const [fotos, setFotos] = useState<string[]>(initialData?.fotos ?? []);
+  // Fotos por ângulo (Frente = capa); veículos antigos sem rótulo aparecem em "Outros"
+  const [fotos, setFotos] = useState<string[]>(() => organizarFotosVeiculo(initialData?.fotos ?? [], initialData?.fotosRotulos ?? []).fotos);
+  const [fotosRotulos, setFotosRotulos] = useState<RotuloFotoVeiculo[]>(() => organizarFotosVeiculo(initialData?.fotos ?? [], initialData?.fotosRotulos ?? []).fotosRotulos);
+  const mudarFotos = (f: string[], r: RotuloFotoVeiculo[]) => { setFotos(f); setFotosRotulos(r); };
   const [form, setForm] = useState({
     placa: initialData?.placa ?? "",
     marca: initialData?.marca ?? "",
     modelo: initialData?.modelo ?? "",
     ano: initialData?.ano ?? "",
+    anoModelo: initialData?.anoModelo ?? "",
+    combustivel: initialData?.combustivel ?? "",
     cor: initialData?.cor ?? "",
     tipo: initialData?.tipo ?? "CARRO",
     chassi: initialData?.chassi ?? "",
@@ -95,6 +111,28 @@ export function VeiculoForm({ initialData, ocorrencias }: { initialData?: any; o
       : [])).catch(() => {});
   }, []);
 
+  /** Dados conferidos do CRLV → campos do cadastro (só os que a pessoa manteve preenchidos). */
+  function aplicarCrlv(d: DadosCrlv) {
+    setForm((f) => ({
+      ...f,
+      ...(d.placa && { placa: formatarPlaca(d.placa) }),
+      ...(d.marca && { marca: d.marca }),
+      ...(d.modelo && { modelo: d.modelo }),
+      ...(d.ano_fabricacao && { ano: d.ano_fabricacao }),
+      ...(d.ano_modelo && { anoModelo: d.ano_modelo }),
+      ...(d.cor && { cor: d.cor }),
+      ...(d.combustivel && { combustivel: d.combustivel }),
+      ...(d.tipo && { tipo: d.tipo }),
+      ...(d.chassi && { chassi: d.chassi }),
+      ...(d.renavam && { renavam: d.renavam }),
+    }));
+    if (d.registrarCrlv && d.exercicio) {
+      const nome = `CRLV ${d.exercicio}`;
+      setDocumentos((p) => (p.some((x) => x.tipo === "CRLV" && x.nome === nome) ? p : [...p, { tipo: "CRLV", nome, arquivoUrl: null, dataVencimento: null }]));
+    }
+    setErro("");
+  }
+
   function addDoc() { setDocumentos((p) => [...p, { tipo: "CRLV", nome: "", arquivoUrl: null, dataVencimento: null }]); }
   function updDoc(i: number, k: keyof DocItem, v: string | null) { setDocumentos((p) => p.map((d, idx) => (idx === i ? { ...d, [k]: v } : d))); }
   function removeDoc(i: number) { setDocumentos((p) => p.filter((_, idx) => idx !== i)); }
@@ -109,6 +147,11 @@ export function VeiculoForm({ initialData, ocorrencias }: { initialData?: any; o
     reader.readAsDataURL(file);
   }
 
+  // Cadastro novo (página única): ao dar erro, leva a pessoa até a mensagem
+  useEffect(() => {
+    if (erro && !isEditing) document.querySelector("[data-erro]")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [erro, isEditing]);
+
   async function salvar() {
     setErro("");
     if (!form.placa.trim()) { setErro("Placa é obrigatória."); setAba("identificacao"); return; }
@@ -121,18 +164,71 @@ export function VeiculoForm({ initialData, ocorrencias }: { initialData?: any; o
         method: isEditing ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...form, fotos: await aliviarFotos(fotos), documentos,
+          ...form, fotos: await aliviarFotos(fotos), fotosRotulos, documentos,
           quilometragemAtual: form.quilometragemAtual || null,
           proximaRevisaoKm: form.proximaRevisaoKm || null,
           proximaRevisaoData: form.proximaRevisaoData || null,
           seguroVencimento: form.seguroVencimento || null,
         }),
       });
-      if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao salvar veículo."); return; }
+      if (res.status === 413) { setErro("As fotos ficaram grandes demais para enviar. Remova alguma foto e tente de novo."); return; }
+      if (!res.ok) { const e = await res.json().catch(() => ({})); setErro(e.erro ?? "Erro ao salvar veículo."); return; }
       router.push("/veiculos");
       router.refresh();
     } catch { setErro("Erro de conexão."); } finally { setSalvando(false); }
   }
+
+  const seletorCombustivel = (
+    <Select aria-label="Combustível" value={form.combustivel} onChange={(e) => upd("combustivel", e.target.value)}>
+      <option value="">Selecione…</option>
+      {COMBUSTIVEIS.map((c) => <option key={c} value={c}>{c}</option>)}
+      {form.combustivel && !(COMBUSTIVEIS as readonly string[]).includes(form.combustivel) && <option value={form.combustivel}>{form.combustivel}</option>}
+    </Select>
+  );
+
+  const listaDocumentos = (
+    <>
+      <p className="text-sm text-ink-muted -mt-1">CRLV, seguro, IPVA e demais documentos. Vencidos ou vencendo em 30 dias são destacados.</p>
+      {documentos.length === 0 ? (
+        <p className="text-sm text-ink-subtle py-4 text-center border border-dashed border-surface-border rounded-lg">Nenhum documento adicionado.</p>
+      ) : (
+        <div className="space-y-3">
+          {documentos.map((doc, i) => {
+            const venc = doc.dataVencimento;
+            const vencido = venc && new Date(venc).getTime() < Date.now();
+            const alerta = !vencido && venc && new Date(venc).getTime() <= Date.now() + 30 * 864e5;
+            return (
+              <div key={i} className="border border-surface-border rounded-lg p-3 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <FormField label="Tipo">
+                    <Select value={doc.tipo} onChange={(e) => updDoc(i, "tipo", e.target.value)}>
+                      {TIPOS_DOC_VEICULO.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
+                    </Select>
+                  </FormField>
+                  <FormField label="Nome / descrição"><Input value={doc.nome} onChange={(e) => updDoc(i, "nome", e.target.value)} placeholder="Ex: CRLV 2026" /></FormField>
+                  <FormField label="Vencimento"><Input type="date" value={doc.dataVencimento ?? ""} onChange={(e) => updDoc(i, "dataVencimento", e.target.value || null)} /></FormField>
+                </div>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <Button type="button" variant="secondary" onClick={() => escolherArquivo(i)} className="text-xs py-1 px-2.5 h-auto">
+                      <Upload className="w-3.5 h-3.5" /> {doc.arquivoUrl ? "Trocar arquivo" : "Anexar arquivo"}
+                    </Button>
+                    {doc.arquivoUrl && <span className="text-xs text-success-600">Arquivo anexado</span>}
+                    {vencido && <span className="text-xs font-semibold bg-red-50 text-red-700 px-2 py-0.5 rounded-full">Vencido</span>}
+                    {alerta && <span className="text-xs font-semibold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full">Vence em 30 dias</span>}
+                  </div>
+                  <button type="button" onClick={() => removeDoc(i)} className="text-red-500 hover:text-red-700 p-1.5"><Trash2 className="w-4 h-4" /></button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <Button type="button" variant="secondary" onClick={addDoc} className="w-full justify-center border-dashed">
+        <Plus className="w-4 h-4" /> Adicionar documento
+      </Button>
+    </>
+  );
 
   const ABAS: { id: Aba; label: string; icone: any; badge?: number; soEdicao?: boolean }[] = [
     { id: "identificacao", label: "Identificação", icone: Truck },
@@ -141,6 +237,123 @@ export function VeiculoForm({ initialData, ocorrencias }: { initialData?: any; o
     { id: "manutencoes", label: "Manutenções", icone: Wrench, badge: manutencoes.length, soEdicao: true },
     { id: "checklists", label: "Checklists", icone: ClipboardCheck, badge: initialData?.checklists?.length, soEdicao: true },
   ];
+
+  /* ───────── Cadastro novo: página única em blocos, com a leitura do CRLV em destaque ───────── */
+  if (!isEditing) {
+    const obrigatorios: [string, boolean][] = [["Placa", !!form.placa.trim()], ["Modelo", !!form.modelo.trim()]];
+    const feitos = obrigatorios.filter(([, ok]) => ok).length;
+    return (
+      <div className="space-y-6" data-cadastro-novo-veiculo>
+        <input ref={docRef} type="file" onChange={handleDocFile} className="hidden" />
+        <div className="flex items-start gap-3">
+          <Link href="/veiculos" title="Voltar" className="mt-1 p-1.5 -ml-1 rounded-lg text-ink-muted hover:text-primary-600 hover:bg-surface-alt"><ChevronLeft className="w-5 h-5" /></Link>
+          <div>
+            <h1 className="text-2xl font-bold text-ink tracking-tight">Novo veículo</h1>
+            <p className="text-sm text-ink-muted mt-0.5">Só placa e modelo são obrigatórios. O resto pode ser completado depois.</p>
+          </div>
+        </div>
+
+        <CrlvPorFoto onAplicar={aplicarCrlv} onConferindo={setConferindo} />
+
+        <div className={cn("space-y-6", conferindo && "hidden")}>
+        <div className="flex items-center gap-3 text-xs text-ink-subtle">
+          <span className="h-px flex-1 bg-surface-border" /> ou preencha manualmente <span className="h-px flex-1 bg-surface-border" />
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap text-xs" data-progresso>
+          <span className="font-semibold text-ink">Obrigatórios {feitos}/{obrigatorios.length}:</span>
+          {obrigatorios.map(([rotulo, ok]) => (
+            <span key={rotulo} className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full border", ok ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-ink-muted bg-white border-surface-border")}>
+              {ok ? <CheckCircle2 className="w-3 h-3" /> : <Circle className="w-3 h-3" />} {rotulo}
+            </span>
+          ))}
+        </div>
+
+        {erro && <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3" data-erro><AlertCircle className="w-4 h-4 shrink-0" /> {erro}</div>}
+
+        <Bloco numero={1} titulo="Identificação" descricao="Os dados do documento do veículo (CRLV).">
+          <FormGrid cols={3}>
+            <FormField label="Placa" required>
+              <Input aria-label="Placa" value={form.placa} onChange={(e) => upd("placa", formatarPlaca(e.target.value))} placeholder="AAA-0000 ou AAA0A00" />
+            </FormField>
+            <FormField label="Marca"><Input aria-label="Marca" value={form.marca} onChange={(e) => upd("marca", e.target.value)} placeholder="Ex: Fiat" /></FormField>
+            <FormField label="Modelo" required><Input aria-label="Modelo" value={form.modelo} onChange={(e) => upd("modelo", e.target.value)} placeholder="Ex: Strada Freedom" /></FormField>
+          </FormGrid>
+          <FormGrid cols={3}>
+            <FormField label="Tipo">
+              <Select aria-label="Tipo" value={form.tipo} onChange={(e) => upd("tipo", e.target.value)}>
+                {TIPOS_VEICULO.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
+              </Select>
+            </FormField>
+            <FormField label="Combustível">{seletorCombustivel}</FormField>
+            <FormField label="Cor"><Input aria-label="Cor" value={form.cor} onChange={(e) => upd("cor", e.target.value)} placeholder="Ex: Branca" /></FormField>
+          </FormGrid>
+          <Opcionais rotulo="Documento">
+            <FormGrid cols={2}>
+              <FormField label="Ano de fabricação"><Input aria-label="Ano de fabricação" value={form.ano} onChange={(e) => upd("ano", e.target.value)} placeholder="2022" inputMode="numeric" /></FormField>
+              <FormField label="Ano modelo"><Input aria-label="Ano modelo" value={form.anoModelo} onChange={(e) => upd("anoModelo", e.target.value)} placeholder="2023" inputMode="numeric" /></FormField>
+            </FormGrid>
+            <FormGrid cols={2}>
+              <FormField label="Chassi"><Input aria-label="Chassi" value={form.chassi} onChange={(e) => upd("chassi", e.target.value.toUpperCase())} placeholder="17 caracteres" /></FormField>
+              <FormField label="RENAVAM"><Input aria-label="RENAVAM" value={form.renavam} onChange={(e) => upd("renavam", e.target.value.replace(/\D/g, ""))} inputMode="numeric" placeholder="11 dígitos" /></FormField>
+            </FormGrid>
+          </Opcionais>
+        </Bloco>
+
+        <Bloco numero={2} titulo="Fotos do veículo" descricao="Uma foto por ângulo. A da frente é a capa (aparece na lista)." opcional>
+          <FotosVeiculo fotos={fotos} rotulos={fotosRotulos} onChange={mudarFotos} />
+        </Bloco>
+
+        <Bloco numero={3} titulo="Responsável e equipe" descricao="Quem dirige e a qual equipe o veículo pertence." opcional>
+          <FormGrid>
+            <FormField label="Colaborador / motorista responsável">
+              <Select aria-label="Responsável" value={form.responsavelId} onChange={(e) => upd("responsavelId", e.target.value)}>
+                <option value="">Selecione…</option>
+                {colaboradores.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              </Select>
+            </FormField>
+            <FormField label="Equipe vinculada">
+              <Select aria-label="Equipe" value={form.equipeId} onChange={(e) => upd("equipeId", e.target.value)}>
+                <option value="">Selecione…</option>
+                {equipes.map((e) => <option key={e.id} value={e.id}>{e.nome}</option>)}
+              </Select>
+            </FormField>
+          </FormGrid>
+          <FormField label="Quilometragem atual">
+            <Input type="number" value={form.quilometragemAtual} onChange={(e) => upd("quilometragemAtual", e.target.value)} placeholder="0" className="sm:max-w-xs" />
+          </FormField>
+        </Bloco>
+
+        <Bloco numero={4} titulo="Documentos e revisão" descricao="Seguro, CRLV, IPVA e a próxima revisão — geram alertas antes de vencer." opcional>
+          <FormGrid cols={3}>
+            <FormField label="Vencimento do seguro"><Input type="date" value={form.seguroVencimento} onChange={(e) => upd("seguroVencimento", e.target.value)} /></FormField>
+            <FormField label="Próxima revisão — km"><Input type="number" value={form.proximaRevisaoKm} onChange={(e) => upd("proximaRevisaoKm", e.target.value)} placeholder="Ex: 60000" /></FormField>
+            <FormField label="Próxima revisão — data"><Input type="date" value={form.proximaRevisaoData} onChange={(e) => upd("proximaRevisaoData", e.target.value)} /></FormField>
+          </FormGrid>
+          <details className="group/det" open={documentos.length > 0}>
+            <summary className="cursor-pointer list-none inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:text-primary-700">
+              <ChevronDown className="w-4 h-4 transition-transform group-open/det:rotate-180" /> Documentos ({documentos.length}) e observações
+            </summary>
+            <div className="mt-4 space-y-4" data-documentos>
+              {listaDocumentos}
+              <FormField label="Observações"><Textarea value={form.observacoes} onChange={(e) => upd("observacoes", e.target.value)} rows={2} /></FormField>
+            </div>
+          </details>
+        </Bloco>
+
+        <div className="sticky bottom-20 lg:bottom-4 z-20" data-barra-acoes>
+          <div className="flex items-center justify-between gap-3 bg-white/95 backdrop-blur border border-surface-border rounded-xl shadow-lg px-4 py-3">
+            <span className="text-xs text-ink-muted hidden sm:inline">{feitos === obrigatorios.length ? "Tudo pronto para cadastrar." : `Faltam ${obrigatorios.length - feitos} campo(s) obrigatório(s).`}</span>
+            <div className="flex items-center gap-2 ml-auto">
+              <Button type="button" variant="secondary" onClick={() => router.back()}>Cancelar</Button>
+              <Button type="button" onClick={salvar} loading={salvando}>Cadastrar veículo</Button>
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -173,16 +386,18 @@ export function VeiculoForm({ initialData, ocorrencias }: { initialData?: any; o
           })}
         </nav>
 
-        <div className="p-5 sm:p-6 lg:p-8 space-y-8">
+        <fieldset disabled={somenteLeitura} className="p-5 sm:p-6 lg:p-8 space-y-8 min-w-0">
           {/* ABA 1 — Identificação */}
           <div className={cn("space-y-8", aba !== "identificacao" && "hidden")}>
-            <FormSection title="Fotos">
-              <GaleriaImagens fotos={fotos} onChange={setFotos} />
+            {!somenteLeitura && <CrlvPorFoto compacto onAplicar={aplicarCrlv} onConferindo={setConferindo} />}
+            <div className={cn("space-y-8", conferindo && "hidden")}>
+            <FormSection title="Fotos do veículo">
+              <FotosVeiculo fotos={fotos} rotulos={fotosRotulos} onChange={mudarFotos} somenteLeitura={somenteLeitura} />
             </FormSection>
             <FormSection title="Dados do veículo">
               <FormGrid cols={3}>
                 <FormField label="Placa" required>
-                  <Input value={form.placa} onChange={(e) => upd("placa", formatarPlaca(e.target.value))} placeholder="AAA-0000 ou AAA0A00" />
+                  <Input aria-label="Placa" value={form.placa} onChange={(e) => upd("placa", formatarPlaca(e.target.value))} placeholder="AAA-0000 ou AAA0A00" />
                 </FormField>
                 <FormField label="Tipo">
                   <Select value={form.tipo} onChange={(e) => upd("tipo", e.target.value)}>
@@ -196,17 +411,22 @@ export function VeiculoForm({ initialData, ocorrencias }: { initialData?: any; o
                 </FormField>
               </FormGrid>
               <FormGrid cols={3}>
-                <FormField label="Marca"><Input value={form.marca} onChange={(e) => upd("marca", e.target.value)} placeholder="Ex: Fiat" /></FormField>
-                <FormField label="Modelo" required><Input value={form.modelo} onChange={(e) => upd("modelo", e.target.value)} placeholder="Ex: Fiorino" /></FormField>
-                <FormField label="Ano"><Input value={form.ano} onChange={(e) => upd("ano", e.target.value)} placeholder="2022" /></FormField>
+                <FormField label="Marca"><Input aria-label="Marca" value={form.marca} onChange={(e) => upd("marca", e.target.value)} placeholder="Ex: Fiat" /></FormField>
+                <FormField label="Modelo" required><Input aria-label="Modelo" value={form.modelo} onChange={(e) => upd("modelo", e.target.value)} placeholder="Ex: Fiorino" /></FormField>
+                <FormField label="Cor"><Input aria-label="Cor" value={form.cor} onChange={(e) => upd("cor", e.target.value)} /></FormField>
               </FormGrid>
               <FormGrid cols={3}>
-                <FormField label="Cor"><Input value={form.cor} onChange={(e) => upd("cor", e.target.value)} /></FormField>
-                <FormField label="Chassi"><Input value={form.chassi} onChange={(e) => upd("chassi", e.target.value)} /></FormField>
-                <FormField label="RENAVAM"><Input value={form.renavam} onChange={(e) => upd("renavam", e.target.value)} /></FormField>
+                <FormField label="Ano de fabricação"><Input aria-label="Ano de fabricação" value={form.ano} onChange={(e) => upd("ano", e.target.value)} placeholder="2022" inputMode="numeric" /></FormField>
+                <FormField label="Ano modelo"><Input aria-label="Ano modelo" value={form.anoModelo} onChange={(e) => upd("anoModelo", e.target.value)} placeholder="2023" inputMode="numeric" /></FormField>
+                <FormField label="Combustível">{seletorCombustivel}</FormField>
+              </FormGrid>
+              <FormGrid cols={3}>
+                <FormField label="Chassi"><Input aria-label="Chassi" value={form.chassi} onChange={(e) => upd("chassi", e.target.value.toUpperCase())} /></FormField>
+                <FormField label="RENAVAM"><Input aria-label="RENAVAM" value={form.renavam} onChange={(e) => upd("renavam", e.target.value.replace(/\D/g, ""))} inputMode="numeric" /></FormField>
               </FormGrid>
               <FormField label="Observações"><Textarea value={form.observacoes} onChange={(e) => upd("observacoes", e.target.value)} rows={2} /></FormField>
             </FormSection>
+            </div>
           </div>
 
           {/* ABA 2 — Responsável */}
@@ -240,45 +460,7 @@ export function VeiculoForm({ initialData, ocorrencias }: { initialData?: any; o
               </FormField>
             </FormSection>
             <FormSection title="Documentos do veículo">
-              <p className="text-sm text-ink-muted -mt-1">CRLV, seguro, IPVA e demais documentos. Vencidos ou vencendo em 30 dias são destacados.</p>
-              {documentos.length === 0 ? (
-                <p className="text-sm text-ink-subtle py-4 text-center border border-dashed border-surface-border rounded-lg">Nenhum documento adicionado.</p>
-              ) : (
-                <div className="space-y-3">
-                  {documentos.map((doc, i) => {
-                    const venc = doc.dataVencimento;
-                    const vencido = venc && new Date(venc).getTime() < Date.now();
-                    const alerta = !vencido && venc && new Date(venc).getTime() <= Date.now() + 30 * 864e5;
-                    return (
-                      <div key={i} className="border border-surface-border rounded-lg p-3 space-y-3">
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <FormField label="Tipo">
-                            <Select value={doc.tipo} onChange={(e) => updDoc(i, "tipo", e.target.value)}>
-                              {TIPOS_DOC_VEICULO.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
-                            </Select>
-                          </FormField>
-                          <FormField label="Nome / descrição"><Input value={doc.nome} onChange={(e) => updDoc(i, "nome", e.target.value)} placeholder="Ex: CRLV 2026" /></FormField>
-                          <FormField label="Vencimento"><Input type="date" value={doc.dataVencimento ?? ""} onChange={(e) => updDoc(i, "dataVencimento", e.target.value || null)} /></FormField>
-                        </div>
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <div className="flex items-center gap-2">
-                            <Button type="button" variant="secondary" onClick={() => escolherArquivo(i)} className="text-xs py-1 px-2.5 h-auto">
-                              <Upload className="w-3.5 h-3.5" /> {doc.arquivoUrl ? "Trocar arquivo" : "Anexar arquivo"}
-                            </Button>
-                            {doc.arquivoUrl && <span className="text-xs text-success-600">Arquivo anexado</span>}
-                            {vencido && <span className="text-xs font-semibold bg-red-50 text-red-700 px-2 py-0.5 rounded-full">Vencido</span>}
-                            {alerta && <span className="text-xs font-semibold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full">Vence em 30 dias</span>}
-                          </div>
-                          <button type="button" onClick={() => removeDoc(i)} className="text-red-500 hover:text-red-700 p-1.5"><Trash2 className="w-4 h-4" /></button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              <Button type="button" variant="secondary" onClick={addDoc} className="w-full justify-center border-dashed">
-                <Plus className="w-4 h-4" /> Adicionar documento
-              </Button>
+              {listaDocumentos}
             </FormSection>
           </div>
 
@@ -348,13 +530,17 @@ export function VeiculoForm({ initialData, ocorrencias }: { initialData?: any; o
               </FormSection>
             )}
           </div>
-        </div>
+        </fieldset>
       </div>
 
-      <div className="flex items-center justify-end gap-3 pt-1">
-        <Button type="button" variant="secondary" onClick={() => router.back()}>Cancelar</Button>
-        <Button type="button" loading={salvando} onClick={salvar}>{isEditing ? "Salvar alterações" : "Cadastrar veículo"}</Button>
-      </div>
+      {conferindo ? null : somenteLeitura ? (
+        <p data-somente-leitura className="flex items-center justify-end gap-1.5 text-xs text-ink-muted pt-1"><Lock className="w-3.5 h-3.5" /> Somente consulta — você não tem permissão para editar veículos.</p>
+      ) : (
+        <div className="flex items-center justify-end gap-3 pt-1">
+          <Button type="button" variant="secondary" onClick={() => router.back()}>Cancelar</Button>
+          <Button type="button" loading={salvando} onClick={salvar}>{isEditing ? "Salvar alterações" : "Cadastrar veículo"}</Button>
+        </div>
+      )}
     </div>
   );
 }

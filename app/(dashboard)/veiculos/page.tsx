@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
+import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { formatarData } from "@/lib/utils";
 import Link from "next/link";
@@ -26,6 +27,7 @@ export default async function VeiculosPage({ searchParams }: { searchParams: Pro
   const contem = (v: string) => ({ contains: v, mode: "insensitive" as const });
   const session = await auth();
   const empresaId = session!.user!.empresaId;
+  const podeGerenciar = pode(session!.user!.permissoes, "veiculos", "gerenciar", session!.user!.role);
   const agora = Date.now();
 
   const veiculos = await prisma.veiculo.findMany({
@@ -60,9 +62,11 @@ export default async function VeiculosPage({ searchParams }: { searchParams: Pro
           <h1 className="page-title">Veículos</h1>
           <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{veiculos.length}</span>
         </div>
-        <Link href="/veiculos/novo" className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow">
-          <Plus className="w-4 h-4" /> Novo Veículo
-        </Link>
+        {podeGerenciar && (
+          <Link href="/veiculos/novo" className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow">
+            <Plus className="w-4 h-4" /> Novo Veículo
+          </Link>
+        )}
       </div>
 
       <form method="get" className="flex flex-wrap items-center gap-3">
@@ -111,7 +115,7 @@ export default async function VeiculosPage({ searchParams }: { searchParams: Pro
                     <span className="font-mono font-bold text-ink">{v.placa}</span>
                     <span className="text-xs text-ink-muted">{LABEL_TIPO[v.tipo]}</span>
                   </div>
-                  <p className="text-sm text-ink-muted mt-0.5 truncate">{[v.marca, v.modelo, v.ano].filter(Boolean).join(" · ") || "—"}</p>
+                  <p className="text-sm text-ink-muted mt-0.5 truncate">{[v.marca, v.modelo, v.ano && v.anoModelo && v.anoModelo !== v.ano ? `${v.ano}/${v.anoModelo}` : (v.ano ?? v.anoModelo), v.combustivel].filter(Boolean).join(" · ") || "—"}</p>
                   <div className="flex items-center gap-3 mt-3 text-xs text-ink-muted flex-wrap">
                     {v.responsavel && <span className="flex items-center gap-1"><UserCog className="w-3.5 h-3.5" />{v.responsavel.nome}</span>}
                     {v.equipe && <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: v.equipe.cor }} />{v.equipe.nome}</span>}

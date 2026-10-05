@@ -2382,10 +2382,16 @@ model Veiculo {
   id                 String        @id @default(cuid())
   empresaId          String        @map("empresa_id")
   fotos              String[]
+  /// Ângulo de cada foto, na mesma ordem de `fotos` (FRENTE, TRASEIRA, LATERAL_ESQUERDA, LATERAL_DIREITA, OUTRO).
+  /// A capa é sempre fotos[0] = a FRENTE quando existir. Vazio em veículos antigos.
+  fotosRotulos       String[]      @default([]) @map("fotos_rotulos")
   placa              String
   modelo             String
   marca              String?
+  /// Ano de fabricação
   ano                String?
+  anoModelo          String?       @map("ano_modelo")
+  combustivel        String?
   cor                String?
   tipo               TipoVeiculo   @default(CARRO)
   chassi             String?

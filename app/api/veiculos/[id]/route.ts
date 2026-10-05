@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { veiculoSchema } from "@/lib/validations";
+import { organizarFotosVeiculo } from "@/lib/veiculo-fotos";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { pode } from "@/lib/permissoes";
 import { impactoVeiculo, anotarInativacao, lerMotivo } from "@/lib/inativacao-server";
@@ -26,8 +27,10 @@ export async function GET(_: NextRequest, { params }: Params) {
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  // Cadastrar/editar veículo exige "veiculos.gerenciar" (antes bastava estar logado)
+  const guard = await exigirPermissao("veiculos", "gerenciar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const empresaId = session.user!.empresaId;
   const { id } = await params;
 
@@ -44,7 +47,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (dup) return NextResponse.json({ erro: "Placa já cadastrada" }, { status: 409 });
   }
 
-  const { documentos, responsavelId, equipeId, proximaRevisaoData, seguroVencimento, ...rest } = parsed.data;
+  const { documentos, responsavelId, equipeId, proximaRevisaoData, seguroVencimento, fotos: fotosBrutas, fotosRotulos: rotulosBrutos, ...rest } = parsed.data;
+  // Frente primeiro (capa), depois traseira, laterais e outros
+  const { fotos, fotosRotulos } = organizarFotosVeiculo(fotosBrutas, rotulosBrutos);
   // Inativar pelo formulário (status) segue a mesma regra do botão: exige "excluir"
   if (rest.status === "INATIVO" && existente.status !== "INATIVO" && !pode(session.user!.permissoes, "veiculos", "excluir", session.user!.role))
     return NextResponse.json({ erro: "Sem permissão para inativar veículos" }, { status: 403 });
@@ -53,6 +58,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
     where: { id },
     data: {
       ...rest,
+      fotos,
+      fotosRotulos,
       placa,
       responsavelId: responsavelId || null,
       equipeId: equipeId || null,

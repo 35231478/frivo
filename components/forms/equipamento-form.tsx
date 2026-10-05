@@ -11,6 +11,7 @@ import { ClienteCombobox } from "@/components/ui/cliente-combobox";
 import { GaleriaImagens } from "@/components/ui/galeria-imagens";
 import { aliviarFotos } from "@/lib/imagem-cliente";
 import { AvisoSerieDuplicada } from "@/components/equipamentos/aviso-serie-duplicada";
+import { Bloco, Opcionais } from "@/components/ui/bloco-cadastro";
 import { MapaEndereco } from "@/components/ui/mapa-endereco";
 import { EquipamentoQrSection } from "@/components/forms/equipamento-qr-section";
 import { TipoBadge, TipoIcone } from "@/components/equipamentos/tipo-equipamento";
@@ -19,7 +20,7 @@ import { SelectCadastroRapido, type CampoRapido, type OpcaoCadastro } from "@/co
 import { UNIDADE } from "@/components/cadastro-rapido/definicoes";
 import Link from "next/link";
 import { LABELS_TIPO_EQUIPAMENTO, cn } from "@/lib/utils";
-import { Thermometer, ImageIcon, MapPin, Cog, QrCode, History, CheckCircle2, ClipboardList, ChevronLeft, ExternalLink, Camera, Sparkles, ChevronDown, Tag, Circle } from "lucide-react";
+import { Thermometer, ImageIcon, MapPin, Cog, QrCode, History, CheckCircle2, ClipboardList, ChevronLeft, ExternalLink, Camera, Sparkles, ChevronDown, Circle } from "lucide-react";
 
 const TIPOS_EQUIPAMENTO = Object.entries(LABELS_TIPO_EQUIPAMENTO);
 
@@ -747,33 +748,6 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-/** Bloco do cadastro novo: título/descrição à esquerda (desktop), campos à direita. */
-function Bloco({ numero, titulo, descricao, opcional, children }: { numero: number; titulo: string; descricao: string; opcional?: boolean; children: React.ReactNode }) {
-  return (
-    <section className="bg-white border border-surface-border rounded-2xl p-5 sm:p-6 lg:grid lg:grid-cols-[220px_1fr] lg:gap-8" data-bloco={titulo}>
-      <header className="mb-4 lg:mb-0">
-        <div className="flex items-center gap-2">
-          <span className="w-6 h-6 rounded-full bg-primary-50 text-primary-700 text-xs font-bold flex items-center justify-center">{numero}</span>
-          <h2 className="font-semibold text-ink">{titulo}</h2>
-          {opcional && <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-subtle bg-surface-alt px-1.5 py-0.5 rounded">opcional</span>}
-        </div>
-        <p className="text-xs text-ink-muted mt-1.5 leading-relaxed">{descricao}</p>
-      </header>
-      <div className="space-y-4 min-w-0">{children}</div>
-    </section>
-  );
-}
-
-/** Agrupa campos opcionais com um rótulo discreto, separados dos obrigatórios. */
-function Opcionais({ rotulo = "Opcionais", children }: { rotulo?: string; children: React.ReactNode }) {
-  return (
-    <div className="pt-4 border-t border-dashed border-surface-border">
-      <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-subtle mb-3"><Tag className="w-3 h-3" /> {rotulo}</p>
-      {children}
     </div>
   );
 }
