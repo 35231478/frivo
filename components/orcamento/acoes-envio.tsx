@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Mail, MessageCircle, Link2, Printer, Send, Ban, Pencil, Check, AlertCircle } from "lucide-react";
+import { Mail, MessageCircle, Link2, Printer, Send, Pencil, Check, AlertCircle } from "lucide-react";
 
 interface AcoesEnvioProps {
   orcamentoId: string;
@@ -77,7 +77,6 @@ export function AcoesEnvio({ orcamentoId, codigo, tokenPublico, status, podeEdit
   }
 
   const podeEnviar = status === "RASCUNHO" || status === "ENVIADO" || status === "REPROVADO";
-  const podeCancelar = status !== "APROVADO" && status !== "CANCELADO";
 
   return (
     <div className="space-y-3">
@@ -139,16 +138,6 @@ export function AcoesEnvio({ orcamentoId, codigo, tokenPublico, status, podeEdit
             loading={carregando === "status-REPROVADO"}
           >
             Marcar como reprovado
-          </Button>
-        )}
-        {podeCancelar && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => alterarStatus("CANCELADO", "Cancelar este orçamento? Esta ação não pode ser desfeita.")}
-            loading={carregando === "status-CANCELADO"}
-          >
-            <Ban className="w-3.5 h-3.5" /> Cancelar orçamento
           </Button>
         )}
       </div>

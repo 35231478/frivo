@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { AvatarStack } from "@/components/ui/avatar-stack";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import { UsersRound, Plus, Truck, Crown, HardHat, Building2 } from "lucide-react";
+import { InativarRegistro } from "@/components/ui/inativar-registro";
 
 interface Membro { id: string; nome: string; avatar: string | null }
 interface Grupo {
@@ -23,6 +24,9 @@ type Aba = "grupos" | "campo" | "administrativa";
 export function EquipesView({ grupos, colaboradores }: { grupos: Grupo[]; colaboradores: Colaborador[] }) {
   const [aba, setAba] = useState<Aba>("grupos");
   const [perfilFiltro, setPerfilFiltro] = useState("");
+  const [mostrarInativas, setMostrarInativas] = useState(false);
+  // Equipe inativada (status INATIVA) fica fora da lista padrão
+  const gruposVisiveis = mostrarInativas ? grupos : grupos.filter((g) => g.status === "ATIVA");
 
   const perfis = Array.from(new Map(colaboradores.filter((c) => c.perfilAcesso).map((c) => [c.perfilAcesso!.nome, c.perfilAcesso!])).values());
 
@@ -30,7 +34,7 @@ export function EquipesView({ grupos, colaboradores }: { grupos: Grupo[]; colabo
   const adm = colaboradores.filter((c) => c.tipoEquipe === "ADMINISTRATIVO");
 
   const ABAS: { id: Aba; label: string; icone: any; count: number }[] = [
-    { id: "grupos", label: "Grupos de Equipe", icone: UsersRound, count: grupos.length },
+    { id: "grupos", label: "Grupos de Equipe", icone: UsersRound, count: gruposVisiveis.length },
     { id: "campo", label: "Equipe de Campo", icone: HardHat, count: campo.length },
     { id: "administrativa", label: "Equipe Administrativa", icone: Building2, count: adm.length },
   ];
@@ -80,12 +84,20 @@ export function EquipesView({ grupos, colaboradores }: { grupos: Grupo[]; colabo
       )}
 
       {aba === "grupos" && (
-        grupos.length === 0 ? (
-          <p className="text-ink-subtle text-center py-12">Nenhuma equipe cadastrada.</p>
+        <label className="inline-flex items-center gap-2 text-sm text-ink-muted select-none">
+          <input type="checkbox" checked={mostrarInativas} onChange={(e) => setMostrarInativas(e.target.checked)} className="accent-primary-600" aria-label="Mostrar inativas" />
+          Mostrar inativas
+        </label>
+      )}
+
+      {aba === "grupos" && (
+        gruposVisiveis.length === 0 ? (
+          <p className="text-ink-subtle text-center py-12">{grupos.length ? "Nenhuma equipe ativa." : "Nenhuma equipe cadastrada."}</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {grupos.map((e) => (
-              <Link key={e.id} href={`/equipes/${e.id}/editar`} className="bg-white border border-surface-border rounded-xl p-4 hover:border-primary-300 hover:shadow-card-hover transition-all">
+            {gruposVisiveis.map((e) => (
+              <div key={e.id} data-card-id={e.id} className="relative">
+              <Link href={`/equipes/${e.id}/editar`} className={cn("block h-full bg-white border border-surface-border rounded-xl p-4 pb-10 hover:border-primary-300 hover:shadow-card-hover transition-all", e.status !== "ATIVA" && "opacity-70")}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="w-3.5 h-3.5 rounded-full shrink-0" style={{ backgroundColor: e.cor }} />
@@ -110,6 +122,10 @@ export function EquipesView({ grupos, colaboradores }: { grupos: Grupo[]; colabo
                   {e.veiculos[0] && <span className="inline-flex items-center gap-1 text-xs text-ink-muted"><Truck className="w-3.5 h-3.5" />{e.veiculos[0].placa}</span>}
                 </div>
               </Link>
+              <div className="absolute bottom-2 right-2">
+                <InativarRegistro url={`/api/equipes/${e.id}`} modulo="equipes" acaoReativar="gerenciar" ativo={e.status === "ATIVA"} nome={e.nome} entidade="equipe" feminino />
+              </div>
+              </div>
             ))}
           </div>
         )

@@ -3,6 +3,9 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { orcamentoSchema } from "@/lib/validations";
 import { calcularTotais, montarCamposProposta } from "@/lib/orcamento-helpers";
+import { exigirPermissao } from "@/lib/permissoes-server";
+import { pode } from "@/lib/permissoes";
+import { impactoOrcamento } from "@/lib/inativacao-server";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -42,6 +45,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   // Mudança simples de status (enviar, cancelar, reprovar)
   if (body.status && Object.keys(body).length === 1) {
+    // Cancelar = inativar o orçamento: mesma regra do botão (exige "excluir" e não pode ter virado contrato/financeiro)
+    if (body.status === "CANCELADO" && existente.status !== "CANCELADO") {
+      if (!pode(session.user!.permissoes, "orcamentos", "excluir", session.user!.role))
+        return NextResponse.json({ erro: "Sem permissão para cancelar orçamentos" }, { status: 403 });
+      const impacto = await impactoOrcamento(id, empresaId);
+      if (impacto?.bloqueio) return NextResponse.json({ erro: impacto.bloqueio }, { status: 409 });
+    }
     const novo = await prisma.orcamento.update({
       where: { id },
       data: {
@@ -136,21 +146,41 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   return NextResponse.json(atualizado);
 }
 
+/**
+ * Inativa o orçamento — soft-delete: vira CANCELADO (nada é apagado; itens, vínculos
+ * com OS e o link público são preservados) e pode ser reaberto depois.
+ * Bloqueia orçamento que virou contrato, entrou no financeiro ou está aprovado em execução numa OS.
+ */
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
-  const empresaId = session.user!.empresaId;
+  const guard = await exigirPermissao("orcamentos", "excluir");
+  if (guard.erro) return guard.resposta;
+  const empresaId = guard.session.user!.empresaId;
   const { id } = await params;
 
-  const existente = await prisma.orcamento.findFirst({ where: { id, empresaId } });
+  const existente = await prisma.orcamento.findFirst({ where: { id, empresaId }, select: { id: true, status: true } });
   if (!existente) return NextResponse.json({ erro: "Orçamento não encontrado" }, { status: 404 });
-  if (existente.status === "APROVADO") {
-    return NextResponse.json(
-      { erro: "Orçamento aprovado não pode ser excluído. Cancele-o." },
-      { status: 400 }
-    );
-  }
+  if (existente.status === "CANCELADO") return NextResponse.json({ ok: true, status: "CANCELADO" });
 
-  await prisma.orcamento.delete({ where: { id } });
-  return NextResponse.json({ ok: true });
+  const impacto = await impactoOrcamento(id, empresaId);
+  if (impacto?.bloqueio) return NextResponse.json({ erro: impacto.bloqueio }, { status: 409 });
+
+  await prisma.orcamento.update({ where: { id }, data: { status: "CANCELADO", lembretesAtivos: false } });
+  return NextResponse.json({ ok: true, status: "CANCELADO" });
+}
+
+/** Reabre um orçamento cancelado (volta para RASCUNHO, editável). Exige "editar". */
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const guard = await exigirPermissao("orcamentos", "editar");
+  if (guard.erro) return guard.resposta;
+  const empresaId = guard.session.user!.empresaId;
+  const { id } = await params;
+  const body = await req.json().catch(() => ({}));
+  if (body?.ativo !== true) return NextResponse.json({ erro: "Ação inválida" }, { status: 400 });
+
+  const existente = await prisma.orcamento.findFirst({ where: { id, empresaId }, select: { status: true } });
+  if (!existente) return NextResponse.json({ erro: "Orçamento não encontrado" }, { status: 404 });
+  if (existente.status !== "CANCELADO") return NextResponse.json({ ok: true, status: existente.status });
+
+  await prisma.orcamento.update({ where: { id }, data: { status: "RASCUNHO" } });
+  return NextResponse.json({ ok: true, status: "RASCUNHO" });
 }

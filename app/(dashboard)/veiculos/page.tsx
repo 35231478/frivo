@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { formatarData } from "@/lib/utils";
 import Link from "next/link";
 import { Truck, Plus, UserCog, AlertTriangle, Wrench } from "lucide-react";
+import { InativarRegistro } from "@/components/ui/inativar-registro";
 
 export const metadata: Metadata = { title: "Veículos" };
 
@@ -15,13 +16,15 @@ const BADGE_STATUS: Record<string, string> = {
 };
 const LABEL_STATUS: Record<string, string> = { ATIVO: "Ativo", INATIVO: "Inativo", MANUTENCAO: "Em manutenção" };
 
-export default async function VeiculosPage() {
+export default async function VeiculosPage({ searchParams }: { searchParams: Promise<{ inativos?: string }> }) {
+  const mostrarInativos = (await searchParams).inativos === "1";
   const session = await auth();
   const empresaId = session!.user!.empresaId;
   const agora = Date.now();
 
   const veiculos = await prisma.veiculo.findMany({
-    where: { empresaId },
+    // Inativado (status INATIVO) fica fora da lista padrão
+    where: { empresaId, ...(mostrarInativos ? {} : { status: { not: "INATIVO" as const } }) },
     include: {
       responsavel: { select: { nome: true } },
       equipe: { select: { nome: true, cor: true } },
@@ -43,6 +46,14 @@ export default async function VeiculosPage() {
         </Link>
       </div>
 
+      <form method="get" className="flex items-center gap-3">
+        <label className="inline-flex items-center gap-2 text-sm text-ink-muted select-none">
+          <input type="checkbox" name="inativos" value="1" defaultChecked={mostrarInativos} className="accent-primary-600" />
+          Mostrar inativos
+        </label>
+        <button type="submit" className="text-sm font-semibold text-primary-600 hover:text-primary-700 px-2 py-1 rounded-lg hover:bg-primary-50">Aplicar</button>
+      </form>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {veiculos.length === 0 ? (
           <p className="text-ink-subtle col-span-full text-center py-12">Nenhum veículo cadastrado.</p>
@@ -52,7 +63,8 @@ export default async function VeiculosPage() {
             const seguroAlerta = v.seguroVencimento && new Date(v.seguroVencimento).getTime() <= agora + 30 * 864e5;
             const revisaoAlerta = v.proximaRevisaoData && new Date(v.proximaRevisaoData).getTime() <= agora + 30 * 864e5;
             return (
-              <Link key={v.id} href={`/veiculos/${v.id}/editar`} className="bg-white border border-surface-border rounded-xl overflow-hidden hover:border-primary-300 hover:shadow-card-hover transition-all">
+              <div key={v.id} data-card-id={v.id} className="relative">
+              <Link href={`/veiculos/${v.id}/editar`} className={`block h-full bg-white border border-surface-border rounded-xl overflow-hidden hover:border-primary-300 hover:shadow-card-hover transition-all ${v.status === "INATIVO" ? "opacity-70" : ""}`}>
                 <div className="aspect-video bg-surface-alt relative">
                   {v.fotos[0] ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -80,6 +92,10 @@ export default async function VeiculosPage() {
                   )}
                 </div>
               </Link>
+              <div className="absolute bottom-2 right-2 bg-white/90 rounded-md">
+                <InativarRegistro url={`/api/veiculos/${v.id}`} modulo="veiculos" acaoReativar="gerenciar" ativo={v.status !== "INATIVO"} nome={v.placa} entidade="veículo" />
+              </div>
+              </div>
             );
           })
         )}

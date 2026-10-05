@@ -5,6 +5,7 @@ import { formatarCpfCnpj, formatarTelefone } from "@/lib/utils";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import Link from "next/link";
 import { HardHat, Plus } from "lucide-react";
+import { InativarRegistro } from "@/components/ui/inativar-registro";
 
 export const metadata: Metadata = { title: "Colaboradores" };
 
@@ -27,13 +28,15 @@ const LABEL_STATUS: Record<string, string> = { ATIVO: "Ativo", INATIVO: "Inativo
 export default async function ColaboradoresPage({
   searchParams,
 }: {
-  searchParams: Promise<{ busca?: string }>;
+  searchParams: Promise<{ busca?: string; inativos?: string }>;
 }) {
-  const { busca = "" } = await searchParams;
+  const { busca = "", inativos = "" } = await searchParams;
+  const mostrarInativos = inativos === "1";
   const session = await auth();
   const empresaId = session!.user!.empresaId;
 
-  const where: any = { empresaId, ativo: true };
+  // Por padrão só ativos; "Mostrar inativos" inclui os inativados
+  const where: any = { empresaId, ...(mostrarInativos ? {} : { ativo: true }) };
   if (busca) {
     where.OR = [
       { nome: { contains: busca, mode: "insensitive" } },
@@ -68,13 +71,18 @@ export default async function ColaboradoresPage({
 
       <div className="card overflow-hidden">
         <div className="p-4 border-b border-surface-border bg-surface-alt/40">
-          <form method="get">
+          <form method="get" className="flex flex-wrap items-center gap-3">
             <input
               name="busca"
               defaultValue={busca}
               placeholder="Buscar por nome ou CPF..."
               className="w-full sm:max-w-sm bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all"
             />
+            <label className="inline-flex items-center gap-2 text-sm text-ink-muted select-none">
+              <input type="checkbox" name="inativos" value="1" defaultChecked={mostrarInativos} className="accent-primary-600" />
+              Mostrar inativos
+            </label>
+            <button type="submit" className="bg-primary-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-600 transition-all shadow-sm">Filtrar</button>
           </form>
         </div>
 
@@ -83,16 +91,16 @@ export default async function ColaboradoresPage({
             <p className="text-ink-subtle col-span-full text-center py-8">Nenhum colaborador encontrado</p>
           ) : (
             colaboradores.map((c) => (
+              <div key={c.id} data-card-id={c.id} className="relative">
               <Link
-                key={c.id}
                 href={`/colaboradores/${c.id}/editar`}
-                className="flex items-start gap-4 p-4 bg-white border border-surface-border rounded-xl hover:border-primary-300 hover:shadow-card-hover transition-all"
+                className={`flex items-start gap-4 p-4 pr-10 bg-white border border-surface-border rounded-xl hover:border-primary-300 hover:shadow-card-hover transition-all h-full ${c.ativo ? "" : "opacity-70"}`}
               >
                 <AvatarTecnico nome={c.nome} fotoUrl={c.avatar} size={48} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <p className="font-semibold text-ink truncate">{c.nome}</p>
-                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${BADGE_STATUS[c.statusColaborador] ?? ""}`}>{LABEL_STATUS[c.statusColaborador] ?? c.statusColaborador}</span>
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${BADGE_STATUS[c.ativo ? c.statusColaborador : "INATIVO"] ?? ""}`}>{c.ativo ? (LABEL_STATUS[c.statusColaborador] ?? c.statusColaborador) : "Inativo"}</span>
                   </div>
                   <p className="text-xs text-ink-muted">{c.cargo?.nome ?? LABEL_TIPO[c.tipo] ?? c.tipo}</p>
                   <p className="text-xs text-ink-subtle mt-1">{formatarCpfCnpj(c.cpf)} · {formatarTelefone(c.telefone)}</p>
@@ -109,6 +117,10 @@ export default async function ColaboradoresPage({
                   </p>
                 </div>
               </Link>
+              <div className="absolute top-2 right-2">
+                <InativarRegistro url={`/api/tecnicos/${c.id}`} modulo="equipes" acaoReativar="gerenciar" ativo={c.ativo} nome={c.nome} entidade="colaborador" />
+              </div>
+              </div>
             ))
           )}
         </div>

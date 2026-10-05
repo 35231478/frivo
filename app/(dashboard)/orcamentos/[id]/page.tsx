@@ -9,6 +9,7 @@ import { AcoesEnvio } from "@/components/orcamento/acoes-envio";
 import { ConverterContrato } from "@/components/orcamento/converter-contrato";
 import { ComprasSecao } from "@/components/compras/compras-secao";
 import { PageHeader } from "@/components/ui/page-header";
+import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { LABELS_STATUS_OS, formatarData, cn } from "@/lib/utils";
 import { ClipboardList, ExternalLink, CheckCircle2, FileSignature } from "lucide-react";
 
@@ -60,7 +61,21 @@ export default async function OrcamentoDetalhePage({
         title={`Orçamento ${orcamento.codigo}`}
         description={orcamento.nome}
         backHref="/orcamentos"
+        actions={
+          <InativarRegistro
+            url={`/api/orcamentos/${orcamento.id}`} modulo="orcamentos" acaoReativar="editar" variante="botao"
+            ativo={orcamento.status !== "CANCELADO"} nome={orcamento.codigo} entidade="orçamento"
+            rotuloInativar="Cancelar" rotuloReativar="Reabrir" comMotivo={false}
+            textoInativar="Tem certeza? O orçamento passa para Cancelado e sai da lista padrão. Nada é apagado: itens, vínculos e o link público ficam preservados, e ele pode ser reaberto (volta para Rascunho)."
+            textoReativar="O orçamento volta para Rascunho (editável) e reaparece na lista."
+          />
+        }
       />
+      {orcamento.status === "CANCELADO" && (
+        <div data-aviso-inativo className="bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-3 text-sm">
+          Este orçamento está <strong>cancelado</strong> (inativado) e não aparece na lista padrão. Use “Reabrir” para voltar a editá-lo.
+        </div>
+      )}
 
       <div className="card-padded">
         <AcoesEnvio

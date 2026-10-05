@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/ui/page-header";
+import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { ColaboradorForm } from "@/components/forms/colaborador-form";
 
 export const metadata: Metadata = { title: "Editar Colaborador" };
@@ -32,8 +33,16 @@ export default async function EditarColaboradorPage({ params }: { params: Promis
 
   return (
     <div className="max-w-4xl mx-auto">
-      <PageHeader title="Editar Colaborador" description={colaborador.nome} backHref="/colaboradores" />
-      <ColaboradorForm initialData={initialData} />
+      <PageHeader
+        title="Editar Colaborador" description={colaborador.nome} backHref="/colaboradores"
+        actions={<InativarRegistro url={`/api/tecnicos/${colaborador.id}`} modulo="equipes" acaoReativar="gerenciar" variante="botao" ativo={colaborador.ativo} nome={colaborador.nome} entidade="colaborador" />}
+      />
+      {!colaborador.ativo && (
+        <div data-aviso-inativo className="mb-4 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-3 text-sm">
+          Este colaborador está <strong>inativo</strong>: não aparece nas listas nem nos seletores de técnico. Use “Reativar” para voltar a usá-lo.
+        </div>
+      )}
+      <ColaboradorForm key={`${colaborador.ativo}-${colaborador.statusColaborador}`} initialData={initialData} />
     </div>
   );
 }
