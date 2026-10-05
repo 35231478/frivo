@@ -87,10 +87,9 @@ export function FotosVeiculo({ fotos, rotulos, onChange, somenteLeitura }: {
         {ANGULOS_VEICULO.map((a) => (
           <SlotFoto
             key={a} id={a} titulo={ROTULOS_FOTO_VEICULO[a]}
-            selo={a === "FRENTE" ? "Capa" : "Recomendada"}
-            seloCor={a === "FRENTE" ? "bg-primary-100 text-primary-700" : "bg-surface-alt text-ink-muted"}
+            selo={a === "FRENTE" ? "Capa" : undefined} seloCor="bg-primary-100 text-primary-700"
             icone={Car} dica={DICAS[a]} url={porAngulo[a] ?? null}
-            rotuloAria={`Foto ${ROTULOS_FOTO_VEICULO[a].toLowerCase()}`}
+            rotuloAria={`Foto ${ROTULOS_FOTO_VEICULO[a].toLowerCase()}`} somenteLeitura={somenteLeitura}
             onArquivo={(f) => !somenteLeitura && escolherAngulo(a, f)}
             onRemover={() => { if (somenteLeitura) return; const n = { ...porAngulo }; delete n[a]; emitir(n, outros); }}
           />

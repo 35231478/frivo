@@ -9,22 +9,29 @@ import { ImagePlus, RotateCcw, X } from "lucide-react";
  * por foto do equipamento (etiqueta / equipamento / outro ângulo) e nas fotos do
  * veículo por ângulo (frente, traseira, laterais).
  */
-export function SlotFoto({ id, titulo, selo, seloCor, icone: Icone, dica, obrigatoria, url, rotuloAria, onArquivo, onRemover }: {
-  id: string; titulo: string; selo: string; seloCor: string; icone: React.ComponentType<{ className?: string }>; dica: string;
+export function SlotFoto({ id, titulo, selo, seloCor, icone: Icone, dica, obrigatoria, url, rotuloAria, onArquivo, onRemover, somenteLeitura }: {
+  id: string; titulo: string; selo?: string; seloCor?: string; icone: React.ComponentType<{ className?: string }>; dica: string;
   obrigatoria?: boolean; url: string | null; rotuloAria: string; onArquivo: (f: File | undefined) => void; onRemover: () => void;
+  /** Só exibe a foto (sem fotografar/trocar/remover). */
+  somenteLeitura?: boolean;
 }) {
   const camera = useRef<HTMLInputElement>(null);
   const galeria = useRef<HTMLInputElement>(null);
   const escolher = (e: React.ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; e.target.value = ""; onArquivo(f); };
   return (
-    <div data-slot={id} className={cn("rounded-xl border p-2.5 flex flex-col gap-2", url ? "border-surface-border bg-white" : "border-dashed border-primary-300 bg-primary-50/30")}>
+    <div data-slot={id} className={cn("rounded-xl border p-2.5 flex flex-col gap-2", url || somenteLeitura ? "border-surface-border bg-white" : "border-dashed border-primary-300 bg-primary-50/30")}>
       <div className="flex items-center justify-between gap-1">
         <p className="text-xs font-semibold text-ink truncate">{titulo}{obrigatoria && <span className="text-red-500"> *</span>}</p>
-        <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0", seloCor)}>{selo}</span>
+        {selo && <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0", seloCor)}>{selo}</span>}
       </div>
       <input ref={camera} type="file" accept="image/*" capture="environment" className="hidden" onChange={escolher} aria-label={`${rotuloAria} (câmera)`} />
       <input ref={galeria} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={escolher} aria-label={`${rotuloAria} (arquivo)`} />
-      {url ? (
+      {somenteLeitura ? (
+        url
+          // eslint-disable-next-line @next/next/no-img-element
+          ? <img src={url} alt={titulo} className="w-full h-32 object-cover rounded-lg bg-surface-alt" />
+          : <div className="h-32 rounded-lg bg-surface-alt flex items-center justify-center text-xs text-ink-subtle">Sem foto</div>
+      ) : url ? (
         <div className="relative">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={url} alt={titulo} className="w-full h-32 object-cover rounded-lg bg-surface-alt" />

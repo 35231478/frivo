@@ -59,6 +59,8 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
   const [aba, setAba] = useState<Aba>("identificacao");
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
+  // Enquanto a conferência do CRLV está aberta, o formulário manual fica escondido (evita salvar sem conferir)
+  const [conferindo, setConferindo] = useState(false);
 
   // Fotos por ângulo (Frente = capa); veículos antigos sem rótulo aparecem em "Outros"
   const [fotos, setFotos] = useState<string[]>(() => organizarFotosVeiculo(initialData?.fotos ?? [], initialData?.fotosRotulos ?? []).fotos);
@@ -251,8 +253,9 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
           </div>
         </div>
 
-        <CrlvPorFoto onAplicar={aplicarCrlv} />
+        <CrlvPorFoto onAplicar={aplicarCrlv} onConferindo={setConferindo} />
 
+        <div className={cn("space-y-6", conferindo && "hidden")}>
         <div className="flex items-center gap-3 text-xs text-ink-subtle">
           <span className="h-px flex-1 bg-surface-border" /> ou preencha manualmente <span className="h-px flex-1 bg-surface-border" />
         </div>
@@ -347,6 +350,7 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
             </div>
           </div>
         </div>
+        </div>
       </div>
     );
   }
@@ -385,7 +389,8 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
         <fieldset disabled={somenteLeitura} className="p-5 sm:p-6 lg:p-8 space-y-8 min-w-0">
           {/* ABA 1 — Identificação */}
           <div className={cn("space-y-8", aba !== "identificacao" && "hidden")}>
-            {!somenteLeitura && <CrlvPorFoto compacto onAplicar={aplicarCrlv} />}
+            {!somenteLeitura && <CrlvPorFoto compacto onAplicar={aplicarCrlv} onConferindo={setConferindo} />}
+            <div className={cn("space-y-8", conferindo && "hidden")}>
             <FormSection title="Fotos do veículo">
               <FotosVeiculo fotos={fotos} rotulos={fotosRotulos} onChange={mudarFotos} somenteLeitura={somenteLeitura} />
             </FormSection>
@@ -421,6 +426,7 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
               </FormGrid>
               <FormField label="Observações"><Textarea value={form.observacoes} onChange={(e) => upd("observacoes", e.target.value)} rows={2} /></FormField>
             </FormSection>
+            </div>
           </div>
 
           {/* ABA 2 — Responsável */}
@@ -527,7 +533,7 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
         </fieldset>
       </div>
 
-      {somenteLeitura ? (
+      {conferindo ? null : somenteLeitura ? (
         <p data-somente-leitura className="flex items-center justify-end gap-1.5 text-xs text-ink-muted pt-1"><Lock className="w-3.5 h-3.5" /> Somente consulta — você não tem permissão para editar veículos.</p>
       ) : (
         <div className="flex items-center justify-end gap-3 pt-1">

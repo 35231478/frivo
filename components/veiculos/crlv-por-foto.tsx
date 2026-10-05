@@ -38,8 +38,14 @@ async function lerCrlvComIa(imagem: string): Promise<{ ok: true; dados: any } | 
  * VEÍCULO e eles só vão para o formulário depois da CONFERÊNCIA (corrigir/confirmar).
  * A foto do documento não é guardada no sistema. Qualquer falha cai para a digitação.
  */
-export function CrlvPorFoto({ onAplicar, compacto }: { onAplicar: (d: DadosCrlv) => void; compacto?: boolean }) {
-  const [etapa, setEtapa] = useState<Etapa>("inicio");
+export function CrlvPorFoto({ onAplicar, onConferindo, compacto }: {
+  onAplicar: (d: DadosCrlv) => void;
+  /** Avisa quando a conferência abre/fecha (o cadastro esconde o formulário manual enquanto isso). */
+  onConferindo?: (conferindo: boolean) => void;
+  compacto?: boolean;
+}) {
+  const [etapa, setEtapaInterna] = useState<Etapa>("inicio");
+  const setEtapa = (e: Etapa) => { setEtapaInterna(e); onConferindo?.(e === "conferencia"); };
   const [foto, setFoto] = useState<string | null>(null);
   const [qualidade, setQualidade] = useState<QualidadeImagem | null>(null);
   const [erro, setErro] = useState("");
