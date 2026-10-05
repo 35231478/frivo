@@ -50,6 +50,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
     return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
   }
 
+  // Inativar pela edição completa exige "excluir", como no DELETE e no PATCH.
+  if (existente.ativo && parsed.data.ativo === false
+    && !pode(session.user!.permissoes, "clientes", "excluir", session.user!.role))
+    return NextResponse.json({ erro: "Sem permissão" }, { status: 403 });
+
   if (parsed.data.cpfCnpj !== existente.cpfCnpj) {
     const dup = await prisma.cliente.findUnique({
       where: { cpfCnpj_empresaId: { cpfCnpj: parsed.data.cpfCnpj, empresaId } },
@@ -74,6 +79,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
 // Alteração pontual de status (ativo/inativo) sem mexer no restante do cadastro.
 // Inativar é um soft-delete: apenas `ativo` muda; todo o histórico é preservado.
+// Reativar exige "editar"; inativar exige também "excluir" (mesma regra do DELETE).
 export async function PATCH(req: NextRequest, { params }: Params) {
   const session = await auth();
   if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
@@ -89,6 +95,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (typeof body.ativo !== "boolean") {
     return NextResponse.json({ erro: "Campo 'ativo' (boolean) é obrigatório." }, { status: 400 });
   }
+  if (body.ativo === false && !pode(session.user!.permissoes, "clientes", "excluir", session.user!.role))
+    return NextResponse.json({ erro: "Sem permissão" }, { status: 403 });
 
   const atualizado = await prisma.cliente.update({ where: { id }, data: { ativo: body.ativo } });
   return NextResponse.json({ ok: true, ativo: atualizado.ativo });
