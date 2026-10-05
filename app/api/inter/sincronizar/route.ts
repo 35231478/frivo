@@ -8,7 +8,7 @@ import { carregarConfigInter, consultarBoletoInter } from "@/lib/inter-api";
  * atualizando as contas a receber (e medições) que foram pagas/canceladas.
  */
 export async function POST() {
-  const guard = await exigirPermissao("financeiro", "gerenciar");
+  const guard = await exigirPermissao("financeiro", "contasReceber");
   if (guard.erro) return guard.resposta;
   const empresaId = guard.session.user.empresaId;
 
