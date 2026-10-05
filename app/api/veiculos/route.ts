@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { veiculoSchema } from "@/lib/validations";
+import { organizarFotosVeiculo } from "@/lib/veiculo-fotos";
+import { exigirPermissao } from "@/lib/permissoes-server";
 
 export async function GET() {
   const session = await auth();
@@ -22,8 +24,10 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  // Cadastrar/editar veículo exige "veiculos.gerenciar" (antes bastava estar logado)
+  const guard = await exigirPermissao("veiculos", "gerenciar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const empresaId = session.user!.empresaId;
 
   const body = await req.json();
@@ -34,11 +38,15 @@ export async function POST(req: NextRequest) {
   const existente = await prisma.veiculo.findFirst({ where: { empresaId, placa } });
   if (existente) return NextResponse.json({ erro: "Placa já cadastrada" }, { status: 409 });
 
-  const { documentos, responsavelId, equipeId, proximaRevisaoData, seguroVencimento, ...rest } = parsed.data;
+  const { documentos, responsavelId, equipeId, proximaRevisaoData, seguroVencimento, fotos: fotosBrutas, fotosRotulos: rotulosBrutos, ...rest } = parsed.data;
+  // Frente primeiro (capa), depois traseira, laterais e outros
+  const { fotos, fotosRotulos } = organizarFotosVeiculo(fotosBrutas, rotulosBrutos);
 
   const veiculo = await prisma.veiculo.create({
     data: {
       ...rest,
+      fotos,
+      fotosRotulos,
       placa,
       empresaId,
       responsavelId: responsavelId || null,

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/ui/page-header";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
@@ -73,7 +74,10 @@ export default async function EditarVeiculoPage({ params }: { params: Promise<{ 
           Este veículo está <strong>inativo</strong>: não aparece na lista padrão nem no checklist. Use “Reativar” para voltar a usá-lo.
         </div>
       )}
-      <VeiculoForm key={veiculo.status} initialData={initialData} ocorrencias={ocorrencias} />
+      <VeiculoForm
+        key={veiculo.status} initialData={initialData} ocorrencias={ocorrencias}
+        somenteLeitura={!pode(session!.user!.permissoes, "veiculos", "gerenciar", session!.user!.role)}
+      />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
-import { ErroOcr, lerEtiqueta, lerPlaca } from "@/lib/equipamento-ocr";
+import { ErroOcr } from "@/lib/ocr-ia";
+import { lerEtiqueta, lerPlaca } from "@/lib/equipamento-ocr";
 
 // Duas tentativas de 20s no pior caso (SDK com maxRetries: 1)
 export const maxDuration = 60;
