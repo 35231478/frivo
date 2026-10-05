@@ -2,21 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { gerarQrCodeEquipamento } from "@/lib/qrcode-server";
 
 type Params = { params: Promise<{ id: string }> };
 
 const postSchema = z.object({
   qrcodeId: z.string().optional(),
 });
-
-async function proximoSequencial(empresaId: string, ano: number) {
-  const ultimo = await prisma.qrcode.findFirst({
-    where: { empresaId, codigo: { startsWith: `QR-${ano}-` } },
-    orderBy: { codigo: "desc" },
-    select: { codigo: true },
-  });
-  return ultimo ? Number(ultimo.codigo.split("-")[2]) + 1 : 1;
-}
 
 /** Gera um novo QR Code já vinculado ao equipamento, OU vincula um QR existente. */
 export async function POST(req: NextRequest, { params }: Params) {
@@ -46,11 +38,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
 
   // Gerar um novo QR e vincular
-  const ano = new Date().getFullYear();
-  const seq = await proximoSequencial(empresaId, ano);
-  const novo = await prisma.qrcode.create({
-    data: { empresaId, codigo: `QR-${ano}-${String(seq).padStart(4, "0")}`, equipamentoId: id },
-  });
+  const novo = await gerarQrCodeEquipamento(empresaId, id);
   return NextResponse.json(novo, { status: 201 });
 }
 
