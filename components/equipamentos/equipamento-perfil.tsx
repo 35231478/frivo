@@ -5,6 +5,7 @@ import Link from "next/link";
 import { cn, formatarData, formatarDataHora, LABELS_STATUS_OS } from "@/lib/utils";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { EquipamentoAtivoBotao } from "@/components/equipamentos/equipamento-ativo-botao";
+import { GerarQrBotao } from "@/components/equipamentos/gerar-qr-botao";
 import { TipoBadge, TipoIcone } from "@/components/equipamentos/tipo-equipamento";
 import { GarantiaSelo, StatusSelo } from "@/components/equipamentos/selos";
 import type { EventoHistorico } from "@/lib/equipamento-historico";
@@ -71,6 +72,8 @@ function emQuanto(iso: string) {
 export function EquipamentoPerfil({ equipamento: e, tipoNome, historico, linhaDoTempo, indicadores, abaInicial }: Props) {
   const { pode } = usePermissoes();
   const podeEditar = pode("equipamentos", "editar");
+  // Quem só cria equipamentos também precisa gerar o QR depois (não tem acesso à edição)
+  const podeGerarQr = podeEditar || pode("equipamentos", "criar");
   const podeAbrirOs = pode("ordens", "criar");
   const podeEtiqueta = pode("qrcodes", "visualizar");
   // ?aba=atendimentos abre direto na linha do tempo (ex.: atalho do QR Code para a equipe)
@@ -188,6 +191,7 @@ export function EquipamentoPerfil({ equipamento: e, tipoNome, historico, linhaDo
                   <QrCode className="w-4 h-4" /> {e.qrcode ? "QR Code" : "Gerar QR"}
                 </Link>
               )}
+              {!podeEditar && podeGerarQr && !e.qrcode && <GerarQrBotao equipamentoId={e.id} variante="botao" />}
               {podeEditar && (
                 <Link href={`/equipamentos/${e.id}/editar`} className="inline-flex items-center gap-1.5 text-sm text-ink border border-surface-border rounded-lg px-3 py-2 hover:border-primary-300 hover:text-primary-600">
                   <Pencil className="w-4 h-4" /> Editar
@@ -279,7 +283,9 @@ export function EquipamentoPerfil({ equipamento: e, tipoNome, historico, linhaDo
           ]} vazio="Garantia não informada." />
           <CardFicha
             titulo="QR Code" icone={QrCode}
-            acao={podeEditar ? <Link href={`/equipamentos/${e.id}/editar?aba=qrcode`} className="text-xs text-primary-600 hover:text-primary-700">{e.qrcode ? "Gerenciar" : "Gerar QR"}</Link> : undefined}
+            acao={podeEditar
+              ? <Link href={`/equipamentos/${e.id}/editar?aba=qrcode`} className="text-xs text-primary-600 hover:text-primary-700">{e.qrcode ? "Gerenciar" : "Gerar QR"}</Link>
+              : podeGerarQr && !e.qrcode ? <GerarQrBotao equipamentoId={e.id} /> : undefined}
             itens={[
               { label: "Código", valor: e.qrcode?.codigo, mono: true },
               { label: "Situação", valor: e.qrcode ? (e.qrcode.ativo === false ? "Inativo" : "Vinculado") : null },

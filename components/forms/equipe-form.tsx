@@ -35,7 +35,12 @@ export function EquipeForm({ initialData }: { initialData?: any }) {
 
   useEffect(() => {
     fetch("/api/tecnicos").then((r) => r.json()).then((d) => setColaboradores(Array.isArray(d) ? d : [])).catch(() => {});
-    fetch("/api/veiculos").then((r) => r.json()).then((d) => setVeiculos(Array.isArray(d) ? d.map((v: any) => ({ id: v.id, placa: v.placa, modelo: v.modelo })) : [])).catch(() => {});
+    // Só veículos ativos; o já vinculado continua aparecendo mesmo se tiver sido inativado
+    const vinculado = initialData?.veiculos?.[0]?.id;
+    fetch("/api/veiculos").then((r) => r.json()).then((d) => setVeiculos(Array.isArray(d)
+      ? d.filter((v: any) => v.status !== "INATIVO" || v.id === vinculado)
+        .map((v: any) => ({ id: v.id, placa: v.placa, modelo: v.status === "INATIVO" ? `${v.modelo} (inativo)` : v.modelo }))
+      : [])).catch(() => {});
   }, []);
 
   function toggleMembro(id: string) {

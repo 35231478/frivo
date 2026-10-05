@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatarData } from "@/lib/utils";
 import Link from "next/link";
-import { Truck, Plus, UserCog, AlertTriangle, Wrench } from "lucide-react";
+import { Truck, Plus, UserCog, AlertTriangle, Wrench, Search, X } from "lucide-react";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
 
 export const metadata: Metadata = { title: "Veículos" };
@@ -16,15 +16,34 @@ const BADGE_STATUS: Record<string, string> = {
 };
 const LABEL_STATUS: Record<string, string> = { ATIVO: "Ativo", INATIVO: "Inativo", MANUTENCAO: "Em manutenção" };
 
-export default async function VeiculosPage({ searchParams }: { searchParams: Promise<{ inativos?: string }> }) {
-  const mostrarInativos = (await searchParams).inativos === "1";
+export default async function VeiculosPage({ searchParams }: { searchParams: Promise<{ inativos?: string; q?: string }> }) {
+  const sp = await searchParams;
+  const mostrarInativos = sp.inativos === "1";
+  const busca = (sp.q ?? "").trim().slice(0, 80);
+  // Placa com ou sem hífen ("ABC-1234" / "abc1234") e demais campos sem diferenciar maiúsculas
+  const placaBusca = busca.replace(/[^a-z0-9]/gi, "");
+  const variantesPlaca = [...new Set([busca, placaBusca, placaBusca.length > 3 ? `${placaBusca.slice(0, 3)}-${placaBusca.slice(3)}` : ""].filter(Boolean))];
+  const contem = (v: string) => ({ contains: v, mode: "insensitive" as const });
   const session = await auth();
   const empresaId = session!.user!.empresaId;
   const agora = Date.now();
 
   const veiculos = await prisma.veiculo.findMany({
     // Inativado (status INATIVO) fica fora da lista padrão
-    where: { empresaId, ...(mostrarInativos ? {} : { status: { not: "INATIVO" as const } }) },
+    where: {
+      empresaId,
+      ...(mostrarInativos ? {} : { status: { not: "INATIVO" as const } }),
+      ...(busca && {
+        OR: [
+          ...variantesPlaca.map((v) => ({ placa: contem(v) })),
+          { modelo: contem(busca) },
+          { marca: contem(busca) },
+          { renavam: contem(busca) },
+          { responsavel: { nome: contem(busca) } },
+          { equipe: { nome: contem(busca) } },
+        ],
+      }),
+    },
     include: {
       responsavel: { select: { nome: true } },
       equipe: { select: { nome: true, cor: true } },
@@ -46,17 +65,30 @@ export default async function VeiculosPage({ searchParams }: { searchParams: Pro
         </Link>
       </div>
 
-      <form method="get" className="flex items-center gap-3">
+      <form method="get" className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[220px] max-w-md">
+          <Search className="w-4 h-4 text-ink-subtle absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="search" name="q" defaultValue={busca} aria-label="Buscar veículo"
+            placeholder="Buscar por placa, modelo, marca, responsável ou equipe"
+            className="w-full bg-white border border-surface-border rounded-lg pl-9 pr-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10"
+          />
+        </div>
         <label className="inline-flex items-center gap-2 text-sm text-ink-muted select-none">
           <input type="checkbox" name="inativos" value="1" defaultChecked={mostrarInativos} className="accent-primary-600" />
           Mostrar inativos
         </label>
-        <button type="submit" className="text-sm font-semibold text-primary-600 hover:text-primary-700 px-2 py-1 rounded-lg hover:bg-primary-50">Aplicar</button>
+        <button type="submit" className="text-sm font-semibold text-primary-600 hover:text-primary-700 px-2 py-1 rounded-lg hover:bg-primary-50">Buscar</button>
+        {busca && (
+          <Link href={mostrarInativos ? "/veiculos?inativos=1" : "/veiculos"} className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink">
+            <X className="w-3.5 h-3.5" /> Limpar busca
+          </Link>
+        )}
       </form>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {veiculos.length === 0 ? (
-          <p className="text-ink-subtle col-span-full text-center py-12">Nenhum veículo cadastrado.</p>
+          <p className="text-ink-subtle col-span-full text-center py-12">{busca ? `Nenhum veículo encontrado para “${busca}”.` : "Nenhum veículo cadastrado."}</p>
         ) : (
           veiculos.map((v) => {
             const docAlerta = v.documentos.some((d) => d.dataVencimento && new Date(d.dataVencimento).getTime() <= agora + 30 * 864e5);

@@ -2,19 +2,20 @@
 
 import { useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { ImagePlus, ChevronLeft, ChevronRight, X, Star, Image as ImageIcon } from "lucide-react";
+import { ImagePlus, ChevronLeft, ChevronRight, X, Star, Image as ImageIcon, Loader2 } from "lucide-react";
+import { reduzirImagem, FOTO_GALERIA } from "@/lib/imagem-cliente";
 
 const MAX_IMAGENS = 5;
 const TIPOS_ACEITOS = ["image/jpeg", "image/png", "image/webp"];
 
-/** Lê um arquivo como data URL (base64). */
-function lerArquivo(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+/**
+ * Lê o arquivo já reduzido/recomprimido (JPEG, lado maior 1280px): a foto original do
+ * celular (3–8 MB) iria inteira em base64 para o banco e podia estourar o limite de
+ * 4,5 MB por requisição do Vercel. Mesma redução do cadastro por foto.
+ */
+async function lerArquivo(file: File): Promise<string> {
+  const { imagem } = await reduzirImagem(file, FOTO_GALERIA.ladoMax, FOTO_GALERIA.qualidade);
+  return imagem.dataUrl;
 }
 
 interface Props {
@@ -26,6 +27,7 @@ export function GaleriaImagens({ fotos, onChange }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [atual, setAtual] = useState(0);
   const [erro, setErro] = useState("");
+  const [processando, setProcessando] = useState(false);
 
   async function adicionar(e: React.ChangeEvent<HTMLInputElement>) {
     setErro("");
@@ -38,9 +40,16 @@ export function GaleriaImagens({ fotos, onChange }: Props) {
     const validos = arquivos.filter((f) => TIPOS_ACEITOS.includes(f.type));
     if (validos.length < arquivos.length) setErro("Apenas JPG, PNG ou WEBP são aceitos.");
 
-    const novas = await Promise.all(validos.slice(0, restante).map(lerArquivo));
-    onChange([...fotos, ...novas]);
-    if (inputRef.current) inputRef.current.value = "";
+    setProcessando(true);
+    try {
+      const lidas = await Promise.allSettled(validos.slice(0, restante).map(lerArquivo));
+      const novas = lidas.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+      if (novas.length < lidas.length) setErro("Não foi possível ler uma das imagens. Tente outra foto.");
+      if (novas.length) onChange([...fotos, ...novas]);
+    } finally {
+      setProcessando(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
   }
 
   function remover(idx: number) {
@@ -129,8 +138,9 @@ export function GaleriaImagens({ fotos, onChange }: Props) {
         </div>
       )}
 
+      {processando && <p data-galeria-processando className="flex items-center gap-1.5 text-xs text-ink-muted"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Otimizando a foto…</p>}
       {erro && <p className="text-xs text-red-500">{erro}</p>}
-      <p className="text-xs text-ink-subtle">Até {MAX_IMAGENS} imagens (JPG, PNG ou WEBP). A primeira é a principal — clique numa miniatura para defini-la.</p>
+      <p className="text-xs text-ink-subtle">Até {MAX_IMAGENS} imagens (JPG, PNG ou WEBP). A primeira é a principal — clique numa miniatura para defini-la. As fotos são otimizadas automaticamente.</p>
     </div>
   );
 }

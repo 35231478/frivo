@@ -9,6 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid } from "@/components/ui/form-field";
 import { ClienteCombobox } from "@/components/ui/cliente-combobox";
 import { GaleriaImagens } from "@/components/ui/galeria-imagens";
+import { aliviarFotos } from "@/lib/imagem-cliente";
+import { AvisoSerieDuplicada } from "@/components/equipamentos/aviso-serie-duplicada";
 import { MapaEndereco } from "@/components/ui/mapa-endereco";
 import { EquipamentoQrSection } from "@/components/forms/equipamento-qr-section";
 import { TipoBadge, TipoIcone } from "@/components/equipamentos/tipo-equipamento";
@@ -240,7 +242,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
         nome: form.nome || undefined,
         marca: form.marca,
         modelo: form.modelo,
-        numeroSerie: form.numeroSerie || undefined,
+        numeroSerie: form.numeroSerie.trim() || undefined,
         patrimonio: form.patrimonio || undefined,
         anoFabricacao: form.anoFabricacao || undefined,
         capacidade: form.capacidade.trim() ? `${form.capacidade.trim()} ${form.capacidadeUnidade}` : undefined,
@@ -256,7 +258,8 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
         garantiaAte: form.garantiaAte || undefined,
         observacoes: form.observacoes || undefined,
         observacoesTecnicas: form.observacoesTecnicas || undefined,
-        fotos,
+        // Fotos antigas salvas no tamanho original são recomprimidas antes de enviar
+        fotos: await aliviarFotos(fotos),
       };
       const url = isEditing ? `/api/equipamentos/${initialData.id}` : "/api/equipamentos";
       const res = await fetch(url, {
@@ -264,7 +267,8 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) { const e = await res.json(); setErroGlobal(e.erro ?? "Erro ao salvar equipamento."); return; }
+      if (res.status === 413) { setErroGlobal("As fotos ficaram grandes demais para enviar. Remova alguma foto e tente de novo."); return; }
+      if (!res.ok) { const e = await res.json().catch(() => ({})); setErroGlobal(e.erro ?? "Erro ao salvar equipamento."); return; }
       router.push("/equipamentos");
       router.refresh();
     } catch { setErroGlobal("Erro de conexão. Tente novamente."); } finally { setSalvando(false); }
@@ -369,6 +373,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
               <FormField label="Patrimônio / TAG"><Input aria-label="Patrimônio / TAG" value={form.patrimonio} onChange={(e) => set("patrimonio", e.target.value)} placeholder="Ex: TAG AC-07" /></FormField>
               <FormField label="Apelido"><Input aria-label="Apelido" value={form.nome} onChange={(e) => set("nome", e.target.value)} placeholder="Ex: Split da recepção" /></FormField>
             </FormGrid>
+            <AvisoSerieDuplicada numero={form.numeroSerie} />
           </Opcionais>
         </Bloco>
 
@@ -559,7 +564,8 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
                   <Input value={form.modelo} onChange={(e) => set("modelo", e.target.value)} />
                 </FormField>
                 <FormField label="Número de série">
-                  <Input value={form.numeroSerie} onChange={(e) => set("numeroSerie", e.target.value)} placeholder="S/N ou código" />
+                  <Input aria-label="Número de série" value={form.numeroSerie} onChange={(e) => set("numeroSerie", e.target.value)} placeholder="S/N ou código" />
+                  <AvisoSerieDuplicada numero={form.numeroSerie} ignorarId={initialData.id} />
                 </FormField>
               </FormGrid>
               <FormGrid>

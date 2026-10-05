@@ -35,11 +35,40 @@ export async function reduzirImagem(file: Blob, ladoMax = 1600, qualidade = 0.82
   const canvas = document.createElement("canvas");
   canvas.width = w; canvas.height = h;
   const ctx = canvas.getContext("2d")!;
+  // Fundo branco: PNG/WEBP com transparência não fica preto ao virar JPEG
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, w, h);
   ctx.drawImage(fonte, 0, 0, w, h);
   if ("close" in fonte) fonte.close();
   const dataUrl = canvas.toDataURL("image/jpeg", qualidade);
   const bytes = Math.floor(((dataUrl.length - dataUrl.indexOf(",") - 1) * 3) / 4);
   return { imagem: { dataUrl, largura: w, altura: h, bytes }, qualidade: avaliarQualidade(canvas) };
+}
+
+/** Lado maior e qualidade das fotos de galeria (equipamento/veículo): ~150–400 KB cada. */
+export const FOTO_GALERIA = { ladoMax: 1280, qualidade: 0.8 } as const;
+/** Acima disto, uma foto já salva (ex.: original do celular de antes da compressão) é recomprimida. */
+const LIMITE_FOTO_BYTES = 600 * 1024;
+
+export function bytesDataUrl(dataUrl: string): number {
+  const i = dataUrl.indexOf(",");
+  return Math.floor(((dataUrl.length - i - 1) * 3) / 4);
+}
+
+/**
+ * Garante que as fotos vão leves para o servidor (corpo da requisição no Vercel ≤ 4,5 MB).
+ * Fotos novas já chegam reduzidas pela galeria; aqui pegamos as antigas, salvas com o
+ * tamanho original. Se uma não puder ser lida, fica como está.
+ */
+export async function aliviarFotos(fotos: string[]): Promise<string[]> {
+  return Promise.all(fotos.map(async (f) => {
+    if (!f.startsWith("data:image/") || bytesDataUrl(f) <= LIMITE_FOTO_BYTES) return f;
+    try {
+      const blob = await (await fetch(f)).blob();
+      const { imagem } = await reduzirImagem(blob, FOTO_GALERIA.ladoMax, FOTO_GALERIA.qualidade);
+      return imagem.bytes < bytesDataUrl(f) ? imagem.dataUrl : f;
+    } catch { return f; }
+  }));
 }
 
 /** Brilho médio e variância do Laplaciano (medida clássica de foco) numa versão reduzida. */

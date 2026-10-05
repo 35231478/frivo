@@ -14,6 +14,7 @@ import { ClienteCombobox } from "@/components/ui/cliente-combobox";
 import { SelectCadastroRapido, type CampoRapido, type OpcaoCadastro } from "@/components/ui/select-cadastro-rapido";
 import { UNIDADE } from "@/components/cadastro-rapido/definicoes";
 import { reduzirImagem, type QualidadeImagem } from "@/lib/imagem-cliente";
+import { AvisoSerieDuplicada } from "@/components/equipamentos/aviso-serie-duplicada";
 
 /* ───────── Campos lidos da etiqueta (mesmos nomes do JSON pedido à IA) ───────── */
 type Campo =
@@ -535,6 +536,7 @@ export function CadastroPorFoto() {
                 </div>
               ))}
             </dl>
+            <AvisoSerieDuplicada numero={valores.numero_serie} />
             <div className="flex gap-2 text-xs">
               <button type="button" onClick={() => { setFaltantes(PERGUNTAS.map((p) => p.campo)); setIdxPergunta(0); setEtapa("faltantes"); }} className="inline-flex items-center gap-1 text-primary-600 hover:underline"><Pencil className="w-3 h-3" /> Corrigir dados</button>
               <button type="button" onClick={() => setEtapa("local")} className="inline-flex items-center gap-1 text-primary-600 hover:underline"><Pencil className="w-3 h-3" /> Corrigir local</button>
@@ -567,7 +569,7 @@ export function CadastroPorFoto() {
             <h2 className="text-lg font-semibold text-ink">Equipamento cadastrado!</h2>
             {salvo.qr
               ? <p className="text-sm text-ink-muted">QR Code gerado: <strong className="font-mono text-ink" data-qr>{salvo.qr}</strong></p>
-              : <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{salvo.avisoQr ?? "O QR Code não foi gerado. Gere pela aba QR Code."}</p>}
+              : <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{salvo.avisoQr ?? "O QR Code não foi gerado. Gere pela ficha do equipamento (botão “Gerar QR”)."}</p>}
             <div className="flex flex-col sm:flex-row gap-2 justify-center">
               <Link href={`/equipamentos/${salvo.id}?aba=qrcode`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold">
                 <QrCode className="w-4 h-4" /> Ver e imprimir o QR Code
