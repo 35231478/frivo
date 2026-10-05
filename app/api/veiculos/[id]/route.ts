@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { veiculoSchema } from "@/lib/validations";
+import { exigirPermissao } from "@/lib/permissoes-server";
+import { pode } from "@/lib/permissoes";
+import { impactoVeiculo, anotarInativacao, lerMotivo } from "@/lib/inativacao-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -42,6 +45,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
 
   const { documentos, responsavelId, equipeId, proximaRevisaoData, seguroVencimento, ...rest } = parsed.data;
+  // Inativar pelo formulário (status) segue a mesma regra do botão: exige "excluir"
+  if (rest.status === "INATIVO" && existente.status !== "INATIVO" && !pode(session.user!.permissoes, "veiculos", "excluir", session.user!.role))
+    return NextResponse.json({ erro: "Sem permissão para inativar veículos" }, { status: 403 });
 
   const veiculo = await prisma.veiculo.update({
     where: { id },
@@ -67,15 +73,42 @@ export async function PUT(req: NextRequest, { params }: Params) {
   return NextResponse.json(veiculo);
 }
 
-export async function DELETE(_: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+/**
+ * Inativa o veículo — soft-delete (status INATIVO). Antes era exclusão física, que
+ * apagava junto (cascade) checklists, manutenções e documentos. Body opcional: { motivo }.
+ */
+export async function DELETE(req: NextRequest, { params }: Params) {
+  const guard = await exigirPermissao("veiculos", "excluir");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const empresaId = session.user!.empresaId;
   const { id } = await params;
 
   const existente = await prisma.veiculo.findFirst({ where: { id, empresaId } });
   if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
+  if (existente.status === "INATIVO") return NextResponse.json({ ok: true });
 
-  await prisma.veiculo.delete({ where: { id } });
+  const impacto = await impactoVeiculo(id, empresaId);
+  if (impacto?.bloqueio) return NextResponse.json({ erro: impacto.bloqueio }, { status: 409 });
+
+  const motivo = lerMotivo(await req.json().catch(() => ({})));
+  await prisma.veiculo.update({
+    where: { id },
+    data: { status: "INATIVO", observacoes: anotarInativacao(existente.observacoes, session.user!.name ?? "usuário", motivo) },
+  });
+  return NextResponse.json({ ok: true });
+}
+
+/** Reativa o veículo (status ATIVO). Exige "gerenciar". Body: { ativo: true } */
+export async function PATCH(req: NextRequest, { params }: Params) {
+  const guard = await exigirPermissao("veiculos", "gerenciar");
+  if (guard.erro) return guard.resposta;
+  const empresaId = guard.session.user!.empresaId;
+  const { id } = await params;
+  if ((await req.json().catch(() => ({})))?.ativo !== true) return NextResponse.json({ erro: "Ação inválida" }, { status: 400 });
+
+  const existente = await prisma.veiculo.findFirst({ where: { id, empresaId }, select: { id: true } });
+  if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
+  await prisma.veiculo.update({ where: { id }, data: { status: "ATIVO" } });
   return NextResponse.json({ ok: true });
 }

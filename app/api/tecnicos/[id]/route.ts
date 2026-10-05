@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { tecnicoSchema } from "@/lib/validations";
+import { exigirPermissao } from "@/lib/permissoes-server";
+import { pode } from "@/lib/permissoes";
+import { impactoColaborador, anotarInativacao, lerMotivo } from "@/lib/inativacao-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -45,11 +48,22 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
 
   const { competenciaIds, documentos, dataNascimento, dataAdmissao, cargoId, perfilAcessoId, email, ...rest } = parsed.data;
+  // Status "Inativo" no formulário = inativar o colaborador (mesma regra do botão: exige "excluir").
+  // Mantém `ativo` em sincronia com o status (antes o status mudava, mas ele seguia nas listas).
+  let ativo = existente.ativo;
+  if (rest.statusColaborador === "INATIVO" && existente.statusColaborador !== "INATIVO") {
+    if (!pode(session.user!.permissoes, "equipes", "excluir", session.user!.role))
+      return NextResponse.json({ erro: "Sem permissão para inativar colaboradores" }, { status: 403 });
+    ativo = false;
+  } else if (rest.statusColaborador !== "INATIVO" && existente.statusColaborador === "INATIVO") {
+    ativo = true;
+  }
 
   const atualizado = await prisma.tecnico.update({
     where: { id },
     data: {
       ...rest,
+      ativo,
       email: email || null,
       cargoId: cargoId || null,
       perfilAcessoId: perfilAcessoId || null,
@@ -70,15 +84,43 @@ export async function PUT(req: NextRequest, { params }: Params) {
   return NextResponse.json(atualizado);
 }
 
-export async function DELETE(_: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+/**
+ * Inativa o colaborador — soft-delete (ativo=false + status INATIVO). Atividades, OS,
+ * equipes e histórico ficam preservados; ele sai das listas e dos seletores.
+ * Exige "excluir" do módulo Equipes/Colaboradores. Body opcional: { motivo }.
+ */
+export async function DELETE(req: NextRequest, { params }: Params) {
+  const guard = await exigirPermissao("equipes", "excluir");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const { id } = await params;
-  const empresaId = (session.user as any).empresaId as string;
+  const empresaId = session.user!.empresaId;
 
   const existente = await prisma.tecnico.findFirst({ where: { id, empresaId } });
   if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
+  if (!existente.ativo) return NextResponse.json({ ok: true });
 
-  await prisma.tecnico.update({ where: { id }, data: { ativo: false } });
+  const impacto = await impactoColaborador(id, empresaId);
+  if (impacto?.bloqueio) return NextResponse.json({ erro: impacto.bloqueio }, { status: 409 });
+
+  const motivo = lerMotivo(await req.json().catch(() => ({})));
+  await prisma.tecnico.update({
+    where: { id },
+    data: { ativo: false, statusColaborador: "INATIVO", observacoes: anotarInativacao(existente.observacoes, session.user!.name ?? "usuário", motivo) },
+  });
+  return NextResponse.json({ ok: true });
+}
+
+/** Reativa o colaborador (ativo=true + status ATIVO). Exige "gerenciar". Body: { ativo: true } */
+export async function PATCH(req: NextRequest, { params }: Params) {
+  const guard = await exigirPermissao("equipes", "gerenciar");
+  if (guard.erro) return guard.resposta;
+  const empresaId = guard.session.user!.empresaId;
+  const { id } = await params;
+  if ((await req.json().catch(() => ({})))?.ativo !== true) return NextResponse.json({ erro: "Ação inválida" }, { status: 400 });
+
+  const existente = await prisma.tecnico.findFirst({ where: { id, empresaId }, select: { id: true } });
+  if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
+  await prisma.tecnico.update({ where: { id }, data: { ativo: true, statusColaborador: "ATIVO" } });
   return NextResponse.json({ ok: true });
 }

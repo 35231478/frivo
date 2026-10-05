@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/ui/page-header";
+import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { VeiculoForm } from "@/components/forms/veiculo-form";
 
 export const metadata: Metadata = { title: "Editar Veículo" };
@@ -63,8 +64,16 @@ export default async function EditarVeiculoPage({ params }: { params: Promise<{ 
 
   return (
     <div className="max-w-4xl mx-auto">
-      <PageHeader title={`Veículo ${veiculo.placa}`} description={[veiculo.marca, veiculo.modelo].filter(Boolean).join(" ")} backHref="/veiculos" />
-      <VeiculoForm initialData={initialData} ocorrencias={ocorrencias} />
+      <PageHeader
+        title={`Veículo ${veiculo.placa}`} description={[veiculo.marca, veiculo.modelo].filter(Boolean).join(" ")} backHref="/veiculos"
+        actions={<InativarRegistro url={`/api/veiculos/${veiculo.id}`} modulo="veiculos" acaoReativar="gerenciar" variante="botao" ativo={veiculo.status !== "INATIVO"} nome={veiculo.placa} entidade="veículo" />}
+      />
+      {veiculo.status === "INATIVO" && (
+        <div data-aviso-inativo className="mb-4 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-3 text-sm">
+          Este veículo está <strong>inativo</strong>: não aparece na lista padrão nem no checklist. Use “Reativar” para voltar a usá-lo.
+        </div>
+      )}
+      <VeiculoForm key={veiculo.status} initialData={initialData} ocorrencias={ocorrencias} />
     </div>
   );
 }

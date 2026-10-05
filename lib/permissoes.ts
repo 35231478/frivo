@@ -41,7 +41,7 @@ export const SECOES: SecaoDef[] = [
   },
   {
     id: "comercial", label: "Comercial", modulos: [
-      { id: "orcamentos", label: "Orçamentos", icone: "💰", acoes: ["visualizar", "criar", "editar", "aprovar"] },
+      { id: "orcamentos", label: "Orçamentos", icone: "💰", acoes: ["visualizar", "criar", "editar", "aprovar", "excluir"] },
       { id: "contratos", label: "Contratos", icone: "📄", acoes: ["visualizar", "criar", "editar"] },
       { id: "licitacoes", label: "Licitações", icone: "🏛️", acoes: ["visualizar", "gerenciar"] },
     ],
@@ -53,8 +53,8 @@ export const SECOES: SecaoDef[] = [
   },
   {
     id: "equipe", label: "Equipe", modulos: [
-      { id: "equipes", label: "Equipes / Colaboradores", icone: "👤", acoes: ["visualizar", "gerenciar"] },
-      { id: "veiculos", label: "Veículos", icone: "🚗", acoes: ["visualizar", "checklist", "gerenciar"] },
+      { id: "equipes", label: "Equipes / Colaboradores", icone: "👤", acoes: ["visualizar", "gerenciar", "excluir"] },
+      { id: "veiculos", label: "Veículos", icone: "🚗", acoes: ["visualizar", "checklist", "gerenciar", "excluir"] },
     ],
   },
   {

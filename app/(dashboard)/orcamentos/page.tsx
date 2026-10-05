@@ -5,20 +5,24 @@ import { cn, formatarData, formatarMoeda, LABELS_STATUS_ORCAMENTO, CLASSE_STATUS
 import Link from "next/link";
 import { Calculator, Plus } from "lucide-react";
 import { AvatarCliente } from "@/components/ui/avatar-cliente";
+import { InativarRegistro } from "@/components/ui/inativar-registro";
 
 export const metadata: Metadata = { title: "Orçamentos" };
 
 export default async function OrcamentosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ busca?: string; status?: string; tipo?: string; clienteId?: string; dataInicio?: string; dataFim?: string }>;
+  searchParams: Promise<{ busca?: string; status?: string; tipo?: string; clienteId?: string; dataInicio?: string; dataFim?: string; inativos?: string }>;
 }) {
-  const { busca = "", status = "", tipo = "", clienteId = "", dataInicio = "", dataFim = "" } = await searchParams;
+  const { busca = "", status = "", tipo = "", clienteId = "", dataInicio = "", dataFim = "", inativos = "" } = await searchParams;
+  const mostrarCancelados = inativos === "1";
   const session = await auth();
   const empresaId = session!.user!.empresaId;
 
   const where: any = { empresaId };
+  // Cancelado = orçamento inativado: fica fora da lista padrão (filtre o status ou marque "Mostrar cancelados")
   if (status) where.status = status;
+  else if (!mostrarCancelados) where.status = { not: "CANCELADO" };
   if (tipo) where.tipo = tipo;
   if (clienteId) where.clienteId = clienteId;
   if (dataInicio || dataFim) {
@@ -118,6 +122,10 @@ export default async function OrcamentosPage({
               title="Data final"
               className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all"
             />
+            <label className="inline-flex items-center gap-2 text-sm text-ink-muted px-1 select-none">
+              <input type="checkbox" name="inativos" value="1" defaultChecked={mostrarCancelados} className="accent-primary-600" />
+              Mostrar cancelados
+            </label>
             <button type="submit" className="bg-primary-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-600 transition-all shadow-sm">
               Filtrar
             </button>
@@ -136,12 +144,13 @@ export default async function OrcamentosPage({
                 <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Total</th>
                 <th className="text-center px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden md:table-cell">OS</th>
                 <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden lg:table-cell">Criado</th>
+                <th className="w-10 px-2 py-3"><span className="sr-only">Ações</span></th>
               </tr>
             </thead>
             <tbody>
               {orcamentos.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center text-ink-subtle py-12">
+                  <td colSpan={9} className="text-center text-ink-subtle py-12">
                     Nenhum orçamento encontrado
                   </td>
                 </tr>
@@ -184,6 +193,15 @@ export default async function OrcamentosPage({
                     </td>
                     <td className="px-4 py-3 text-ink-muted hidden lg:table-cell">
                       {formatarData(o.criadoEm)}
+                    </td>
+                    <td className="px-2 py-3 text-right">
+                      <InativarRegistro
+                        url={`/api/orcamentos/${o.id}`} modulo="orcamentos" acaoReativar="editar"
+                        ativo={o.status !== "CANCELADO"} nome={o.codigo} entidade="orçamento"
+                        rotuloInativar="Cancelar" rotuloReativar="Reabrir" comMotivo={false}
+                        textoInativar="Tem certeza? O orçamento passa para Cancelado e sai da lista padrão. Nada é apagado: itens, vínculos e o link público ficam preservados, e ele pode ser reaberto (volta para Rascunho)."
+                        textoReativar="O orçamento volta para Rascunho (editável) e reaparece na lista."
+                      />
                     </td>
                   </tr>
                 ))
