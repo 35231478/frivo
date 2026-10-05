@@ -23,3 +23,25 @@ export async function resolverTipoEquipamentoId(empresaId: string, tipoEnum: str
   });
   return criado.id;
 }
+
+/**
+ * Resolve o par (tipo enum, tipoEquipamentoId) a gravar no equipamento.
+ * - Com `tipoEquipamentoId` (tipo personalizado, ex.: criado no cadastro rápido):
+ *   valida a empresa e usa `chaveEnum` do tipo — ou OUTRO quando é um tipo novo.
+ * - Sem ele: comportamento de sempre (resolve a partir do enum).
+ */
+export async function resolverTipoEquipamento(
+  empresaId: string,
+  tipoEnum: string,
+  tipoEquipamentoId?: string | null,
+): Promise<{ tipo: string; tipoEquipamentoId: string | null } | null> {
+  if (tipoEquipamentoId) {
+    const custom = await prisma.tipoEquipamentoCustom.findFirst({
+      where: { id: tipoEquipamentoId, empresaId },
+      select: { id: true, chaveEnum: true },
+    });
+    if (!custom) return null;
+    return { tipo: custom.chaveEnum ?? "OUTRO", tipoEquipamentoId: custom.id };
+  }
+  return { tipo: tipoEnum, tipoEquipamentoId: await resolverTipoEquipamentoId(empresaId, tipoEnum) };
+}

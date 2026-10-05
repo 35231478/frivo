@@ -3,7 +3,7 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { equipamentoSchema } from "@/lib/validations";
-import { resolverTipoEquipamentoId } from "@/lib/tipo-equipamento";
+import { resolverTipoEquipamento } from "@/lib/tipo-equipamento";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -45,15 +45,17 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const unidade = await prisma.unidade.findFirst({ where: { id: parsed.data.unidadeId, empresaId } });
   if (!unidade) return NextResponse.json({ erro: "Unidade não encontrada" }, { status: 404 });
 
-  const { dataInstalacao, dataFabricacao, garantiaInicio, garantiaAte, ...resto } = parsed.data;
+  const { dataInstalacao, dataFabricacao, garantiaInicio, garantiaAte, tipoEquipamentoId: tipoCustomId, ...resto } = parsed.data;
   if (garantiaInicio && garantiaAte && garantiaInicio > garantiaAte)
     return NextResponse.json({ erro: "O início da garantia deve ser anterior ao fim." }, { status: 400 });
-  const tipoEquipamentoId = await resolverTipoEquipamentoId(empresaId, resto.tipo);
+  const tipoResolvido = await resolverTipoEquipamento(empresaId, resto.tipo, tipoCustomId);
+  if (!tipoResolvido) return NextResponse.json({ erro: "Tipo de equipamento não encontrado" }, { status: 400 });
   const atualizado = await prisma.equipamento.update({
     where: { id },
     data: {
       ...resto,
-      tipoEquipamentoId,
+      tipo: tipoResolvido.tipo as any,
+      tipoEquipamentoId: tipoResolvido.tipoEquipamentoId,
       dataInstalacao: dataInstalacao ? new Date(dataInstalacao) : null,
       dataFabricacao: dataFabricacao ? new Date(dataFabricacao) : null,
       garantiaInicio: garantiaInicio ? new Date(garantiaInicio) : null,

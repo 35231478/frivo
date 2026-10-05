@@ -22,6 +22,7 @@ export default async function EditarEquipamentoPage({ params, searchParams }: { 
         include: { cliente: { select: { id: true, nome: true, nomeFantasia: true } } },
       },
       qrcode: { select: { id: true, codigo: true } },
+      tipoEquipamento: { select: { id: true, nome: true, chaveEnum: true } },
       ordensServico: {
         orderBy: { criadoEm: "desc" },
         take: 30,

@@ -4,7 +4,7 @@ import { pode } from "@/lib/permissoes";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { equipamentoSchema } from "@/lib/validations";
-import { resolverTipoEquipamentoId } from "@/lib/tipo-equipamento";
+import { resolverTipoEquipamento } from "@/lib/tipo-equipamento";
 
 /**
  * Lista equipamentos ativos. Além de quem visualiza o módulo, libera a leitura para
@@ -64,15 +64,17 @@ export async function POST(req: NextRequest) {
   });
   if (!unidade) return NextResponse.json({ erro: "Unidade não encontrada" }, { status: 404 });
 
-  const { dataInstalacao, dataFabricacao, garantiaInicio, garantiaAte, ...resto } = parsed.data;
+  const { dataInstalacao, dataFabricacao, garantiaInicio, garantiaAte, tipoEquipamentoId: tipoCustomId, ...resto } = parsed.data;
   if (garantiaInicio && garantiaAte && garantiaInicio > garantiaAte)
     return NextResponse.json({ erro: "O início da garantia deve ser anterior ao fim." }, { status: 400 });
-  const tipoEquipamentoId = await resolverTipoEquipamentoId(empresaId, resto.tipo);
+  const tipoResolvido = await resolverTipoEquipamento(empresaId, resto.tipo, tipoCustomId);
+  if (!tipoResolvido) return NextResponse.json({ erro: "Tipo de equipamento não encontrado" }, { status: 400 });
   const equipamento = await prisma.equipamento.create({
     data: {
       ...resto,
+      tipo: tipoResolvido.tipo as any,
       empresaId,
-      tipoEquipamentoId,
+      tipoEquipamentoId: tipoResolvido.tipoEquipamentoId,
       dataInstalacao: dataInstalacao ? new Date(dataInstalacao) : null,
       dataFabricacao: dataFabricacao ? new Date(dataFabricacao) : null,
       garantiaInicio: garantiaInicio ? new Date(garantiaInicio) : null,
