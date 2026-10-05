@@ -1,15 +1,16 @@
 import {
   formatarCpfCnpj, formatarData, formatarDataHora, formatarMoeda, formatarTelefone,
   nomeMes, TITULO_RELATORIO, LABELS_STATUS_RELATORIO, CLASSE_STATUS_RELATORIO,
-  LABELS_TIPO_EQUIPAMENTO, cn,
+  cn,
 } from "@/lib/utils";
+import { EquipamentosTabela, type EquipamentoInfo } from "@/components/relatorio/cabecalho-relatorio";
 
 interface Resposta { resposta: string | null; arquivoUrl: string | null; campo: { label: string; tipo: string } }
 interface Atividade {
   id: string; titulo: string; criadoEm: Date | string; resumo: string | null;
   tecnico?: { nome: string } | null; tipoOs?: { nome: string } | null; respostas: Resposta[];
 }
-interface Equip { id: string; tipo: string; marca: string; modelo: string; numeroSerie: string | null; localizacao: string | null }
+type Equip = EquipamentoInfo;
 
 export interface RelatorioDocumentoProps {
   relatorio: {
@@ -120,32 +121,8 @@ export function RelatorioDocumento({ relatorio, empresa, os, equipamentos }: Rel
         {os.descricao && <p className="text-sm mt-2 text-ink-muted whitespace-pre-wrap">{os.descricao}</p>}
       </div>
 
-      {/* EQUIPAMENTOS ATENDIDOS */}
-      {equipamentos.length > 0 && (
-        <div className="py-4 border-b border-surface-border">
-          <p className="text-xs uppercase tracking-wider text-ink-muted mb-2">Equipamentos atendidos</p>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-surface-alt border-b border-surface-border">
-                <th className="text-left px-2 py-1.5 font-semibold text-ink-muted text-xs uppercase">Equipamento</th>
-                <th className="text-left px-2 py-1.5 font-semibold text-ink-muted text-xs uppercase">Modelo</th>
-                <th className="text-left px-2 py-1.5 font-semibold text-ink-muted text-xs uppercase">Nº série</th>
-                <th className="text-left px-2 py-1.5 font-semibold text-ink-muted text-xs uppercase">Localização</th>
-              </tr>
-            </thead>
-            <tbody>
-              {equipamentos.map((e) => (
-                <tr key={e.id} className="border-b border-surface-border">
-                  <td className="px-2 py-1.5">{LABELS_TIPO_EQUIPAMENTO[e.tipo] ?? e.tipo} — {e.marca}</td>
-                  <td className="px-2 py-1.5 text-ink-muted">{e.modelo}</td>
-                  <td className="px-2 py-1.5 text-ink-muted">{e.numeroSerie ?? "—"}</td>
-                  <td className="px-2 py-1.5 text-ink-muted">{e.localizacao ?? os.unidade?.nome ?? "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* EQUIPAMENTOS ATENDIDOS — ambiente e equipamento separados (tabela compartilhada) */}
+      <EquipamentosTabela equipamentos={equipamentos} unidadeNome={os.unidade?.nome} />
 
       {/* RELATÓRIO TÉCNICO */}
       <div className="py-4 border-b border-surface-border">

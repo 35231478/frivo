@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { ambienteEquipamento, descricaoEquipamento, fabricanteModelo } from "@/lib/equipamento-descricao";
 import { cn, formatarData } from "@/lib/utils";
 import { Camera,
   Plus, Search, LayoutGrid, Rows3, X, ChevronDown, ChevronLeft, ChevronRight,
@@ -12,7 +13,7 @@ import { Camera,
 import { BuscaSelect, type OpcaoBusca } from "@/components/ui/busca-select";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { EquipamentoAtivoBotao } from "@/components/equipamentos/equipamento-ativo-botao";
-import { TipoBadge, TipoIcone } from "@/components/equipamentos/tipo-equipamento";
+import { TipoIcone } from "@/components/equipamentos/tipo-equipamento";
 import { GarantiaSelo, StatusSelo } from "@/components/equipamentos/selos";
 import type { FiltrosListagem, OrdemListagem } from "@/lib/equipamento-listagem";
 import { TAMANHOS_PAGINA } from "@/lib/equipamento-listagem";
@@ -65,8 +66,22 @@ function identificadores(e: Pick<EquipLinha, "numeroSerie" | "patrimonio">) {
 }
 
 /** "Unidade · Setor · Ambiente" (o que houver). */
-function localTexto(e: Pick<EquipLinha, "unidade" | "setor" | "ambiente">) {
-  return [e.unidade, e.setor, e.ambiente].filter(Boolean).join(" · ");
+/** "Recepção · 2º andar" — ambiente primeiro, setor como complemento. */
+function ambienteTexto(e: Pick<EquipLinha, "setor" | "ambiente">): string | null {
+  const a = ambienteEquipamento(e);
+  return a.principal ? [a.principal, a.complemento].filter(Boolean).join(" · ") : null;
+}
+
+function AmbienteCelula({ e, onFiltrar }: { e: EquipLinha; onFiltrar: (m: Record<string, string | null>) => void }) {
+  const a = ambienteEquipamento(e);
+  if (!a.principal) return <span className="text-xs text-ink-subtle italic">Não informado</span>;
+  return (
+    <button data-ambiente onClick={() => onFiltrar({ cliente: e.clienteId, unidade: e.unidadeId, setor: e.setor ?? null })}
+      className="block text-left max-w-full group/amb" title="Ver equipamentos deste local">
+      <span className="flex items-center gap-1 font-medium text-ink truncate group-hover/amb:text-primary-600"><MapPin className="w-3.5 h-3.5 text-primary-500 shrink-0" />{a.principal}</span>
+      {a.complemento && <span className="block text-xs text-ink-muted truncate pl-[18px]">{a.complemento}</span>}
+    </button>
+  );
 }
 
 export function EquipamentosListaClient({ itens, total, filtros: f, opcoes, resumo }: Props) {
@@ -385,9 +400,9 @@ function Tabela({
       <table className="w-full text-sm">
         <thead className="bg-surface-alt text-ink-muted text-[11px] uppercase tracking-wide border-b border-surface-border">
           <tr>
-            <ThOrd label="Equipamento" k="nome" f={f} onOrdenar={onOrdenar} className="pl-4" />
-            <ThOrd label="Tipo · Capacidade" k="tipo" f={f} onOrdenar={onOrdenar} />
-            <ThOrd label="Cliente › Local" k="cliente" f={f} onOrdenar={onOrdenar} />
+            <ThOrd label="Equipamento (tipo · capacidade)" k="tipo" f={f} onOrdenar={onOrdenar} className="pl-4" />
+            <th className="text-left px-3 py-2.5 font-semibold">Ambiente</th>
+            <ThOrd label="Cliente › Unidade" k="cliente" f={f} onOrdenar={onOrdenar} />
             <ThOrd label="Garantia" k="garantia" f={f} onOrdenar={onOrdenar} />
             <th className="text-left px-3 py-2.5 font-semibold">Status</th>
             <ThOrd label="Últ. atend." k="ultimo" f={f} onOrdenar={onOrdenar} className="hidden lg:table-cell" />
@@ -400,31 +415,27 @@ function Tabela({
               key={e.id} onClick={() => router.push(`/equipamentos/${e.id}`)}
               className={cn("cursor-pointer hover:bg-primary-50/40 transition-colors", !e.ativo && "opacity-60")}
             >
-              <td className="pl-4 pr-3 py-2">
-                <div className="flex items-center gap-3 min-w-[180px]">
+              <td className="pl-4 pr-3 py-2.5">
+                <div className="flex items-center gap-3 min-w-[220px]">
                   <Miniatura e={e} />
                   <div className="min-w-0">
-                    <p className="font-semibold text-ink truncate max-w-[190px] 2xl:max-w-[280px]">{e.nome}</p>
-                    <p className="text-xs text-ink-muted truncate max-w-[190px] 2xl:max-w-[280px]">
-                      {e.temNome && <span>{e.modelo} · {e.marca}</span>}
-                      {identificadores(e) && (
-                        <span className="font-mono text-[11px] text-ink-subtle">{e.temNome ? " · " : ""}{identificadores(e)}</span>
-                      )}
-                      {!e.temNome && !identificadores(e) && "—"}
+                    <p data-descricao className="font-semibold text-ink truncate max-w-[260px] 2xl:max-w-[360px]">{descricaoEquipamento(e)}</p>
+                    <p className="text-xs text-ink-muted truncate max-w-[260px] 2xl:max-w-[360px]">
+                      {[e.temNome ? e.nome : null, fabricanteModelo(e)].filter(Boolean).join(" · ")}
+                      {identificadores(e) && <span className="font-mono text-[11px] text-ink-subtle"> · {identificadores(e)}</span>}
                     </p>
                   </div>
                 </div>
               </td>
-              <td className="px-3 py-2">
-                <TipoBadge tipo={e.tipo} label={e.tipoLabel} className="max-w-[130px] 2xl:max-w-none" />
-                {e.capacidade && <p className="text-xs text-ink-muted mt-1 pl-1 whitespace-nowrap">{e.capacidade}</p>}
+              <td className="px-3 py-2.5 max-w-[200px] 2xl:max-w-[260px]" onClick={(ev) => ev.stopPropagation()}>
+                <AmbienteCelula e={e} onFiltrar={onFiltrar} />
               </td>
-              <td className="px-3 py-2 max-w-[200px] 2xl:max-w-[300px]" onClick={(ev) => ev.stopPropagation()}>
+              <td className="px-3 py-2.5 max-w-[200px] 2xl:max-w-[300px]" onClick={(ev) => ev.stopPropagation()}>
                 <button onClick={() => onFiltrar({ cliente: e.clienteId, unidade: null, setor: null })} className="block text-ink font-medium truncate max-w-full hover:text-primary-600 text-left" title="Ver equipamentos deste cliente">
                   {e.cliente}
                 </button>
-                <button onClick={() => onFiltrar({ cliente: e.clienteId, unidade: e.unidadeId, setor: e.setor ?? null })} className="block text-xs text-ink-muted truncate max-w-full hover:text-primary-600 text-left" title="Ver equipamentos deste local">
-                  {localTexto(e)}
+                <button onClick={() => onFiltrar({ cliente: e.clienteId, unidade: e.unidadeId, setor: null })} className="block text-xs text-ink-muted truncate max-w-full hover:text-primary-600 text-left" title="Ver equipamentos desta unidade">
+                  {e.unidade}
                 </button>
               </td>
               <td className="px-3 py-2"><GarantiaSelo fim={e.garantiaAte} compacto /></td>
@@ -476,13 +487,16 @@ function LinhaMobile({ e }: { e: EquipLinha }) {
     <Link href={`/equipamentos/${e.id}`} className={cn("flex items-start gap-3 p-3 active:bg-surface-alt", !e.ativo && "opacity-60")}>
       <Miniatura e={e} />
       <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
-          <p className="font-semibold text-ink leading-tight truncate">{e.nome}</p>
+        <p data-ambiente className="text-[11px] font-semibold uppercase tracking-wide text-primary-700 truncate flex items-center gap-1">
+          <MapPin className="w-3 h-3 shrink-0" />{ambienteTexto(e) ?? "Ambiente não informado"}
+        </p>
+        <div className="flex items-start justify-between gap-2 mt-0.5">
+          <p data-descricao className="font-semibold text-ink leading-tight truncate">{descricaoEquipamento(e)}</p>
           <ChevronRight className="w-4 h-4 text-ink-subtle shrink-0 mt-0.5" />
         </div>
-        <p className="text-xs text-ink-muted truncate mt-0.5">{e.cliente} › {localTexto(e)}</p>
+        <p className="text-xs text-ink-muted truncate mt-0.5">{[e.temNome ? e.nome : null, fabricanteModelo(e), e.patrimonio ? (/^tag\b/i.test(e.patrimonio) ? e.patrimonio : `TAG ${e.patrimonio}`) : null].filter(Boolean).join(" · ")}</p>
+        <p className="text-xs text-ink-subtle truncate">{e.cliente} › {e.unidade}</p>
         <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
-          <TipoBadge tipo={e.tipo} label={e.tipoLabel} />
           {e.garantiaAte && <GarantiaSelo fim={e.garantiaAte} compacto />}
           {!e.ativo && <StatusSelo ativo={false} />}
           {e.ultimoAtendimento && (
@@ -508,16 +522,18 @@ function Cards({ itens }: { itens: EquipLinha[] }) {
           </div>
           <div className="p-3.5 space-y-2">
             <div>
-              <h3 className="font-semibold text-ink leading-tight truncate group-hover:text-primary-600">{e.nome}</h3>
-              <p className="text-xs text-ink-muted truncate">{e.modelo} · {e.marca}</p>
+              <p data-ambiente className="text-[11px] font-semibold uppercase tracking-wide text-primary-700 truncate flex items-center gap-1">
+                <MapPin className="w-3 h-3 shrink-0" />{ambienteTexto(e) ?? "Ambiente não informado"}
+              </p>
+              <h3 data-descricao className="font-semibold text-ink leading-tight truncate group-hover:text-primary-600 mt-0.5">{descricaoEquipamento(e)}</h3>
+              <p className="text-xs text-ink-muted truncate">{[e.temNome ? e.nome : null, fabricanteModelo(e)].filter(Boolean).join(" · ")}</p>
             </div>
             <div className="flex items-center gap-1.5 flex-wrap">
-              <TipoBadge tipo={e.tipo} label={e.tipoLabel} />
               <GarantiaSelo fim={e.garantiaAte} compacto />
               <StatusSelo ativo={e.ativo} />
             </div>
             <p className="text-xs text-ink-muted truncate flex items-center gap-1.5 pt-2 border-t border-surface-border/70">
-              <MapPin className="w-3.5 h-3.5 shrink-0" /> {e.cliente} › {localTexto(e)}
+              <Building2 className="w-3.5 h-3.5 shrink-0" /> {e.cliente} › {e.unidade}
             </p>
           </div>
         </Link>
@@ -531,7 +547,7 @@ function Miniatura({ e }: { e: EquipLinha }) {
   if (!e.foto) return <TipoIcone tipo={e.tipo} tamanho="md" />;
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={e.foto} alt={e.nome} loading="lazy" className="w-10 h-10 rounded-lg object-cover border border-surface-border shrink-0 bg-surface-alt" />
+    <img src={e.foto} alt={e.nome} loading="lazy" decoding="async" width={48} height={48} className="w-12 h-12 rounded-lg object-cover border border-surface-border shrink-0 bg-surface-alt" />
   );
 }
 

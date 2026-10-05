@@ -1,4 +1,5 @@
-import { formatarCpfCnpj, formatarTelefone, LABELS_TIPO_EQUIPAMENTO } from "@/lib/utils";
+import { formatarCpfCnpj, formatarTelefone } from "@/lib/utils";
+import { ambienteEquipamento, descricaoEquipamento, fabricanteModelo } from "@/lib/equipamento-descricao";
 
 export interface EmpresaInfo {
   nome: string; nomeFantasia?: string | null; cnpj: string; email?: string | null; telefone?: string | null;
@@ -80,29 +81,49 @@ export function DadosClienteContrato({ cliente, contrato }: { cliente: ClienteIn
   );
 }
 
-export interface EquipamentoInfo { id: string; tipo: string; marca: string; modelo: string; numeroSerie: string | null; localizacao: string | null }
+export interface EquipamentoInfo {
+  id: string; tipo: string; marca: string; modelo: string; numeroSerie: string | null; localizacao: string | null;
+  setor?: string | null; capacidade?: string | null; patrimonio?: string | null; nome?: string | null;
+  tipoEquipamento?: { nome: string } | null;
+}
 
-export function EquipamentosTabela({ equipamentos, unidadeNome }: { equipamentos: EquipamentoInfo[]; unidadeNome?: string | null }) {
+/**
+ * Equipamentos do relatório da OS: AMBIENTE e EQUIPAMENTO em colunas separadas
+ * (antes o nome da sala se misturava ao do equipamento). Ex.:
+ *   Ambiente: Recepção (2º andar) · Equipamento: Split Piso Teto — 48.000 BTU/h
+ * Ordenado por setor/ambiente, para o cliente percorrer o prédio sala a sala.
+ */
+export function EquipamentosTabela({ equipamentos, unidadeNome, titulo = "Equipamentos atendidos" }: { equipamentos: EquipamentoInfo[]; unidadeNome?: string | null; titulo?: string }) {
   if (equipamentos.length === 0) return null;
+  const linhas = equipamentos
+    .map((e) => ({ e, amb: ambienteEquipamento(e, unidadeNome) }))
+    .sort((a, b) => `${a.e.setor ?? ""}|${a.amb.principal ?? ""}`.localeCompare(`${b.e.setor ?? ""}|${b.amb.principal ?? ""}`, "pt-BR"));
   return (
-    <div className="py-4 border-b border-surface-border">
-      <p className="text-xs uppercase tracking-wider text-ink-muted mb-2">Equipamentos atendidos</p>
+    <div className="py-4 border-b border-surface-border" data-equipamentos-relatorio>
+      <p className="text-xs uppercase tracking-wider text-ink-muted mb-2">{titulo}</p>
       <table className="w-full text-sm">
         <thead>
           <tr className="bg-surface-alt border-b border-surface-border">
+            <th className="text-left px-2 py-1.5 font-semibold text-ink-muted text-xs uppercase w-[34%]">Ambiente / local</th>
             <th className="text-left px-2 py-1.5 font-semibold text-ink-muted text-xs uppercase">Equipamento</th>
-            <th className="text-left px-2 py-1.5 font-semibold text-ink-muted text-xs uppercase">Modelo</th>
-            <th className="text-left px-2 py-1.5 font-semibold text-ink-muted text-xs uppercase">Nº série</th>
-            <th className="text-left px-2 py-1.5 font-semibold text-ink-muted text-xs uppercase">Localização</th>
+            <th className="text-left px-2 py-1.5 font-semibold text-ink-muted text-xs uppercase w-[22%]">Identificação</th>
           </tr>
         </thead>
         <tbody>
-          {equipamentos.map((e) => (
-            <tr key={e.id} className="border-b border-surface-border">
-              <td className="px-2 py-1.5">{LABELS_TIPO_EQUIPAMENTO[e.tipo] ?? e.tipo} — {e.marca}</td>
-              <td className="px-2 py-1.5 text-ink-muted">{e.modelo}</td>
-              <td className="px-2 py-1.5 text-ink-muted">{e.numeroSerie ?? "—"}</td>
-              <td className="px-2 py-1.5 text-ink-muted">{e.localizacao ?? unidadeNome ?? "—"}</td>
+          {linhas.map(({ e, amb }) => (
+            <tr key={e.id} className="border-b border-surface-border align-top" data-equip-linha>
+              <td className="px-2 py-2">
+                <p className={amb.informado ? "font-semibold text-ink" : "text-ink-muted"} data-ambiente>{amb.principal ?? "—"}</p>
+                {amb.complemento && <p className={amb.informado ? "text-xs text-ink-muted" : "text-xs text-ink-subtle italic"}>{amb.complemento}</p>}
+              </td>
+              <td className="px-2 py-2">
+                <p className="font-semibold text-ink" data-equipamento>{descricaoEquipamento(e)}</p>
+                <p className="text-xs text-ink-muted">{[e.nome, fabricanteModelo(e)].filter(Boolean).join(" · ")}</p>
+              </td>
+              <td className="px-2 py-2 text-xs text-ink-muted">
+                {e.patrimonio && <p>TAG: <span className="font-mono text-ink">{e.patrimonio}</span></p>}
+                <p>Nº série: <span className="font-mono text-ink">{e.numeroSerie ?? "—"}</span></p>
+              </td>
             </tr>
           ))}
         </tbody>
