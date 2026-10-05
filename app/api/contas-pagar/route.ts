@@ -19,7 +19,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const guard = await exigirPermissao("financeiro", "gerenciar");
+  const guard = await exigirPermissao("financeiro", "fluxoCaixa");
   if (guard.erro) return guard.resposta;
   const empresaId = guard.session.user.empresaId;
 

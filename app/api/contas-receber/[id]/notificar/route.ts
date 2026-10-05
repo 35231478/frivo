@@ -6,7 +6,7 @@ type Params = { params: Promise<{ id: string }> };
 
 /** Registra a data/hora da notificação de cobrança (WhatsApp/E-mail). */
 export async function POST(_: NextRequest, { params }: Params) {
-  const guard = await exigirPermissao("financeiro", "visualizar");
+  const guard = await exigirPermissao("financeiro", "contasReceber");
   if (guard.erro) return guard.resposta;
   const { id } = await params;
   const empresaId = guard.session.user.empresaId;

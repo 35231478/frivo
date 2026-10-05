@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { medicaoSchema } from "@/lib/validations";
 import { calcularTotaisMedicao } from "@/lib/medicao-helpers";
@@ -7,8 +7,9 @@ import { calcularTotaisMedicao } from "@/lib/medicao-helpers";
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("financeiro", "medicoes");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const { id } = await params;
   const empresaId = session.user!.empresaId;
 
@@ -27,8 +28,9 @@ export async function GET(_: NextRequest, { params }: Params) {
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("financeiro", "medicoes");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const { id } = await params;
   const empresaId = session.user!.empresaId;
 
@@ -89,8 +91,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
 }
 
 export async function DELETE(_: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("financeiro", "medicoes");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const { id } = await params;
   const empresaId = session.user!.empresaId;
 

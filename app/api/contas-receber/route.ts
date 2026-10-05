@@ -16,7 +16,7 @@ const schema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const guard = await exigirPermissao("financeiro", "gerenciar");
+  const guard = await exigirPermissao("financeiro", "contasReceber");
   if (guard.erro) return guard.resposta;
   const empresaId = guard.session.user.empresaId;
 

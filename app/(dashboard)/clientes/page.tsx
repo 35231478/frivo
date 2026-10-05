@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
+import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { formatarCpfCnpj, cn, LABELS_SEGMENTO } from "@/lib/utils";
 import {
@@ -21,6 +22,7 @@ export default async function ClientesPage({
   const { busca = "", pagina = "1", status = "", segmento = "", inativos = "" } = await searchParams;
   const session = await auth();
   const empresaId = session!.user!.empresaId;
+  const podeCriar = pode(session!.user!.permissoes, "clientes", "criar", session!.user!.role);
   const porPagina = 20;
   const skip = (Number(pagina) - 1) * porPagina;
 
@@ -92,12 +94,14 @@ export default async function ClientesPage({
           <h1 className="page-title">Clientes</h1>
           <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{total}</span>
         </div>
-        <Link
-          href="/clientes/novo"
-          className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow"
-        >
-          <Plus className="w-4 h-4" /> Novo Cliente
-        </Link>
+        {podeCriar && (
+          <Link
+            href="/clientes/novo"
+            className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow"
+          >
+            <Plus className="w-4 h-4" /> Novo Cliente
+          </Link>
+        )}
       </div>
 
       <div className="card overflow-hidden">
@@ -188,7 +192,7 @@ export default async function ClientesPage({
                     })()}
                   </td>
                   <td className="px-4 py-3">
-                    <ClienteAcoes id={c.id} />
+                    <ClienteAcoes id={c.id} nome={c.nomeFantasia ?? c.nome} ativo={c.ativo} />
                   </td>
                 </tr>
               ))
