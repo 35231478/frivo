@@ -20,7 +20,7 @@ export async function GET(_: NextRequest, { params }: Params) {
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {
-  const guard = await exigirPermissao("financeiro", "gerenciar");
+  const guard = await exigirPermissao("financeiro", "fluxoCaixa");
   if (guard.erro) return guard.resposta;
   const { id } = await params;
   const empresaId = guard.session.user.empresaId;
@@ -51,7 +51,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
 }
 
 export async function DELETE(_: NextRequest, { params }: Params) {
-  const guard = await exigirPermissao("financeiro", "gerenciar");
+  const guard = await exigirPermissao("financeiro", "fluxoCaixa");
   if (guard.erro) return guard.resposta;
   const { id } = await params;
   const empresaId = guard.session.user.empresaId;

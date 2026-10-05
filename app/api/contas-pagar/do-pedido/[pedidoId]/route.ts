@@ -6,7 +6,7 @@ import { gerarContaPagarDoPedido } from "@/lib/financeiro-server";
 type Params = { params: Promise<{ pedidoId: string }> };
 
 export async function POST(_: NextRequest, { params }: Params) {
-  const guard = await exigirPermissao("financeiro", "gerenciar");
+  const guard = await exigirPermissao("financeiro", "fluxoCaixa");
   if (guard.erro) return guard.resposta;
   const { pedidoId } = await params;
   const empresaId = guard.session.user.empresaId;
