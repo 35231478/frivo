@@ -31,6 +31,16 @@ export default function NovaOrdemPage() {
     fetch("/api/clientes").then((r) => r.json()).then(setClientes).catch(() => {});
   }, []);
 
+  // Pré-preenchimento opcional via URL (ex.: "Abrir OS" na ficha do equipamento)
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const cli = sp.get("clienteId");
+    if (cli) setClienteId(cli);
+    const unidadeId = sp.get("unidadeId") ?? "";
+    const descricao = sp.get("descricao") ?? "";
+    if (unidadeId || descricao) setForm((f) => ({ ...f, unidadeId: unidadeId || f.unidadeId, descricao: descricao || f.descricao }));
+  }, []);
+
   useEffect(() => {
     if (!clienteId) { setUnidades([]); setContratos([]); return; }
     fetch(`/api/unidades?clienteId=${clienteId}`).then((r) => r.json()).then(setUnidades).catch(() => {});

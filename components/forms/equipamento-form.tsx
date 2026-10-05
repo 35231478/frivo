@@ -11,8 +11,11 @@ import { ClienteCombobox } from "@/components/ui/cliente-combobox";
 import { GaleriaImagens } from "@/components/ui/galeria-imagens";
 import { MapaEndereco } from "@/components/ui/mapa-endereco";
 import { EquipamentoQrSection } from "@/components/forms/equipamento-qr-section";
+import { TipoBadge, TipoIcone } from "@/components/equipamentos/tipo-equipamento";
+import { StatusSelo } from "@/components/equipamentos/selos";
+import Link from "next/link";
 import { LABELS_TIPO_EQUIPAMENTO, cn } from "@/lib/utils";
-import { Thermometer, ImageIcon, MapPin, Cog, QrCode, History, CheckCircle2, ClipboardList } from "lucide-react";
+import { Thermometer, ImageIcon, MapPin, Cog, QrCode, History, CheckCircle2, ClipboardList, ChevronLeft, ExternalLink } from "lucide-react";
 
 const TIPOS_EQUIPAMENTO = Object.entries(LABELS_TIPO_EQUIPAMENTO);
 const FLUIDOS = ["R22", "R410A", "R32", "R407C", "R404A", "R134a", "R290", "Outro"];
@@ -208,34 +211,44 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
   const tipoLabel = form.tipo ? (LABELS_TIPO_EQUIPAMENTO[form.tipo as keyof typeof LABELS_TIPO_EQUIPAMENTO] ?? form.tipo) : null;
   const nomeExibicao = form.nome || [form.marca, form.modelo].filter(Boolean).join(" ") || "Novo equipamento";
   const ativo = initialData?.ativo ?? true;
+  const clienteNome = initialData?.unidade?.cliente
+    ? (initialData.unidade.cliente.nomeFantasia ?? initialData.unidade.cliente.nome)
+    : null;
+  const localResumo = [clienteNome && clienteId === initialData?.unidade?.clienteId ? clienteNome : null, unidadeSel?.nome, form.setor, form.localizacao]
+    .filter(Boolean).join(" › ");
 
   const abas: { id: Aba; label: string; icone: any; oculta?: boolean }[] = [
     { id: "identificacao", label: "Identificação", icone: ImageIcon },
     { id: "localizacao", label: "Localização", icone: MapPin },
     { id: "tecnicos", label: "Dados Técnicos", icone: Cog },
     { id: "qrcode", label: "QR Code", icone: QrCode },
-    { id: "historico", label: "Histórico", icone: History, oculta: !isEditing },
+    { id: "historico", label: "Atendimentos", icone: History, oculta: !isEditing },
   ];
 
   return (
     <div className="space-y-5">
-      {/* Cabeçalho fixo */}
-      <div className="sticky top-0 z-20 bg-white border border-surface-border rounded-xl shadow-sm px-4 py-3 flex items-center justify-between gap-4">
+      {/* Cabeçalho fixo — mesmo vocabulário visual da ficha (ícone do tipo, selos, local) */}
+      <div className="sticky top-0 z-20 bg-white border border-surface-border rounded-xl shadow-sm px-3 sm:px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-12 h-12 rounded-lg overflow-hidden bg-surface-alt border border-surface-border flex items-center justify-center shrink-0">
-            {fotos[0] ? <img src={fotos[0]} alt="" className="w-full h-full object-cover" /> : <Thermometer className="w-6 h-6 text-ink-subtle" />}
-          </div>
+          <Link href={isEditing ? `/equipamentos/${initialData.id}` : "/equipamentos"} title="Voltar" className="p-1.5 -ml-1 rounded-lg text-ink-muted hover:text-primary-600 hover:bg-surface-alt">
+            <ChevronLeft className="w-5 h-5" />
+          </Link>
+          {fotos[0]
+            // eslint-disable-next-line @next/next/no-img-element
+            ? <img src={fotos[0]} alt="" className="w-12 h-12 rounded-lg object-cover border border-surface-border shrink-0" />
+            : form.tipo ? <TipoIcone tipo={form.tipo} tamanho="lg" className="w-12 h-12" /> : (
+              <div className="w-12 h-12 rounded-lg bg-surface-alt border border-surface-border flex items-center justify-center shrink-0"><Thermometer className="w-6 h-6 text-ink-subtle" /></div>
+            )}
           <div className="min-w-0">
-            <h2 className="font-semibold text-ink truncate">{nomeExibicao}</h2>
-            <div className="flex items-center gap-2 mt-0.5">
-              {tipoLabel && <span className="inline-flex text-[11px] font-medium text-primary-700 bg-primary-50 px-2 py-0.5 rounded-full">{tipoLabel}</span>}
-              <span className={cn("inline-flex text-[11px] font-medium px-2 py-0.5 rounded-full", ativo ? "text-emerald-700 bg-emerald-50" : "text-gray-500 bg-gray-100")}>
-                {ativo ? "Ativo" : "Inativo"}
-              </span>
+            <h2 className="font-semibold text-ink truncate">{isEditing ? nomeExibicao : (form.marca || form.modelo || form.nome ? nomeExibicao : "Novo equipamento")}</h2>
+            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+              {form.tipo && <TipoBadge tipo={form.tipo} label={tipoLabel ?? undefined} />}
+              <StatusSelo ativo={ativo} />
+              {localResumo && <span className="text-[11px] text-ink-muted truncate max-w-[280px] flex items-center gap-1"><MapPin className="w-3 h-3 shrink-0" />{localResumo}</span>}
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 ml-auto">
           <Button type="button" variant="secondary" onClick={() => router.back()}>Cancelar</Button>
           <Button type="button" onClick={salvar} loading={salvando}>{isEditing ? "Salvar" : "Cadastrar"}</Button>
         </div>
@@ -265,7 +278,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
           })}
         </div>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {/* ABA 1 — Identificação */}
           {aba === "identificacao" && (
             <div className="space-y-5">
@@ -411,7 +424,10 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
 
           {/* ABA 5 — Histórico */}
           {aba === "historico" && isEditing && (
-            <div>
+            <div className="space-y-3">
+              <Link href={`/equipamentos/${initialData.id}?aba=atendimentos`} className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-600 hover:text-primary-700">
+                Ver linha do tempo completa na ficha <ExternalLink className="w-3.5 h-3.5" />
+              </Link>
               {(initialData?.ordensServico ?? []).length === 0 ? (
                 <div className="text-center py-10 text-ink-muted">
                   <ClipboardList className="w-10 h-10 mx-auto mb-2 text-ink-subtle" />
