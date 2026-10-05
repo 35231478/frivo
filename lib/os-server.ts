@@ -27,3 +27,17 @@ export async function motivoBloqueioInativacao(osId: string): Promise<string | n
   }
   return null;
 }
+
+/**
+ * Próximo número de OS do ano ("OS-2026-0042"), pelo MAIOR sequencial já usado.
+ * (Contar as OS e somar 1 colide com números existentes e derrubava a abertura de
+ * chamado pelo portal/QR com erro de número duplicado.)
+ */
+export async function proximoNumeroOs(empresaId: string, ano = new Date().getFullYear()): Promise<string> {
+  const prefixo = `OS-${ano}-`;
+  const [r] = await prisma.$queryRaw<{ max: number | null }[]>`
+    SELECT MAX(CAST(split_part(numero, '-', 3) AS INTEGER)) AS max
+    FROM ordens_servico
+    WHERE empresa_id = ${empresaId} AND numero LIKE ${prefixo + "%"} AND split_part(numero, '-', 3) ~ '^[0-9]{1,9}$'`;
+  return `${prefixo}${String((r?.max ?? 0) + 1).padStart(4, "0")}`;
+}

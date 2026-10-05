@@ -227,3 +227,29 @@
     padding-top: env(safe-area-inset-top);
   }
 }
+
+/* --- Gaveta de Solicitações (calendário): aba que "acena" discretamente --- */
+@keyframes gavetaAcena {
+  0%, 86%, 100% { transform: translateX(0); }
+  90% { transform: translateX(-5px); }
+  94% { transform: translateX(0); }
+  97% { transform: translateX(-3px); }
+}
+.anim-gaveta-acena {
+  animation: gavetaAcena 4.5s ease-in-out infinite;
+}
+@keyframes gavetaEntra {
+  from { transform: translateX(100%); }
+  to { transform: none; }
+}
+@keyframes gavetaSobe {
+  from { transform: translateY(100%); }
+  to { transform: none; }
+}
+@layer utilities {
+  .anim-gaveta-entra { animation: gavetaEntra 0.22s ease-out; }
+  .anim-gaveta-sobe { animation: gavetaSobe 0.25s ease-out; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .anim-gaveta-acena, .anim-gaveta-entra, .anim-gaveta-sobe { animation: none; }
+}

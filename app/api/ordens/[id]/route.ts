@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { pode } from "@/lib/permissoes";
 import { motivoBloqueioInativacao } from "@/lib/os-server";
+import { SOLICITACAO_PENDENTE } from "@/lib/solicitacoes";
 import { prisma } from "@/lib/prisma";
 import { gerarRelatoriosDaOs } from "@/lib/relatorio-server";
 
@@ -21,6 +22,7 @@ export async function GET(_: NextRequest, { params }: Params) {
       unidade: { select: { id: true, nome: true, cidade: true, estado: true } },
       contrato: { select: { id: true, numero: true } },
       responsavel: { select: { id: true, nome: true } },
+      equipamento: { select: { id: true, nome: true, marca: true, modelo: true } },
       criadoPor: { select: { id: true, nome: true } },
       atividades: {
         include: {
@@ -170,20 +172,26 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   const { id } = await params;
   const empresaId = session.user!.empresaId;
 
-  const os = await prisma.ordemServico.findFirst({ where: { id, empresaId }, select: { id: true, status: true, numero: true } });
+  const os = await prisma.ordemServico.findFirst({ where: { id, empresaId }, select: { id: true, status: true, numero: true, origem: true } });
   if (!os) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
+
+  const body = await req.json().catch(() => ({}));
+  const motivo = typeof body?.motivo === "string" ? body.motivo.trim().slice(0, 500) : "";
+  // Recusa de solicitação do cliente (gaveta de Solicitações): mesmo fluxo, mas só
+  // vale enquanto a solicitação está pendente — evita "recusar" algo já aceito.
+  const recusa = body?.recusa === true;
+  if (recusa && (os.origem !== SOLICITACAO_PENDENTE.origem || os.status !== SOLICITACAO_PENDENTE.status))
+    return NextResponse.json({ erro: "Esta solicitação já foi tratada (aceita ou recusada) por outra pessoa." }, { status: 409 });
+
   if (os.status === "CANCELADA") return NextResponse.json({ ok: true, status: "CANCELADA" });
 
   const bloqueio = await motivoBloqueioInativacao(id);
   if (bloqueio) return NextResponse.json({ erro: bloqueio }, { status: 409 });
 
-  const body = await req.json().catch(() => ({}));
-  const motivo = typeof body?.motivo === "string" ? body.motivo.trim().slice(0, 500) : "";
-
   await prisma.ordemServico.update({ where: { id }, data: { status: "CANCELADA" } });
   await prisma.osHistorico.create({
     data: {
-      ordemServicoId: id, usuarioId: session.user!.id, acao: "OS inativada (cancelada)",
+      ordemServicoId: id, usuarioId: session.user!.id, acao: recusa ? "Solicitação recusada" : "OS inativada (cancelada)",
       detalhes: `${os.status} → CANCELADA${motivo ? ` — Motivo: ${motivo}` : ""}`,
     },
   });

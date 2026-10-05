@@ -198,7 +198,7 @@ export function CalendarioGrid({
     <div className="p-2 md:p-4">
       <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={aoIniciarArrasto} onDragEnd={aoTerminarArrasto}>
         {/* Sem overflow-hidden: o dia expandido cresce POR CIMA dos vizinhos sem mexer na grade */}
-        <div className="grid grid-cols-7 gap-px bg-surface-border rounded-lg md:min-w-[760px]">
+        <div className="grid grid-cols-7 gap-px bg-surface-border rounded-lg md:min-w-[680px]">
           {DIAS_SEMANA.map((d, i) => (
             <div key={d} className={cn("bg-surface-alt text-center py-2 text-[10px] md:text-xs font-semibold text-ink-muted uppercase tracking-wider", i === 0 && "rounded-tl-lg", i === 6 && "rounded-tr-lg")}>{d}</div>
           ))}
