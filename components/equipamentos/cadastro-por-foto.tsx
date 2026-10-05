@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Camera, ImagePlus, Loader2, ShieldAlert, Sparkles, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight,
-  DoorOpen, QrCode, Keyboard, RotateCcw, Pencil,
+  DoorOpen, QrCode, Keyboard, RotateCcw, Pencil, Star, Tag, X,
 } from "lucide-react";
 import { cn, LABELS_TIPO_EQUIPAMENTO } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -73,7 +73,10 @@ async function lerComIa(tipo: "etiqueta" | "placa", imagem: string): Promise<{ o
 
 export function CadastroPorFoto() {
   const [etapa, setEtapa] = useState<Etapa>("foto");
+  // Fotos: etiqueta (a IA lê; fica como foto de apoio) · equipamento por completo (CAPA) · outro ângulo (opcional)
   const [foto, setFoto] = useState<string | null>(null);
+  const [fotoFrente, setFotoFrente] = useState<string | null>(null);
+  const [fotoExtra, setFotoExtra] = useState<string | null>(null);
   const [qualidade, setQualidade] = useState<QualidadeImagem | null>(null);
   const [lendo, setLendo] = useState(false);
   const [aviso, setAviso] = useState<{ tipo: "erro" | "ruim"; texto: string } | null>(null);
@@ -97,12 +100,9 @@ export function CadastroPorFoto() {
 
   // Tipos personalizados
   const [tiposCustom, setTiposCustom] = useState<TipoCustom[]>([]);
-  const [usarFoto, setUsarFoto] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState<{ id: string; qr: string | null; avisoQr?: string } | null>(null);
 
-  const inputCamera = useRef<HTMLInputElement>(null);
-  const inputGaleria = useRef<HTMLInputElement>(null);
   const inputPlaca = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -144,19 +144,23 @@ export function CadastroPorFoto() {
 
   const set = (c: Campo, v: string) => setValores((s) => ({ ...s, [c]: v }));
 
-  /* ───────── 1. Foto da etiqueta ───────── */
-  async function aoEscolherFoto(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
+  /* ───────── 1. Fotos (etiqueta para a IA + equipamento por completo = capa) ───────── */
+  async function aoEscolherFoto(qual: "etiqueta" | "frente" | "extra", file: File | undefined) {
     if (!file) return;
     setAviso(null); setErroEtapa("");
     try {
-      const { imagem, qualidade } = await reduzirImagem(file);
-      setFoto(imagem.dataUrl); setQualidade(qualidade);
+      // Etiqueta em 1600px (texto miúdo para a IA); as demais em 1280px (só exibição)
+      const { imagem, qualidade } = await reduzirImagem(file, qual === "etiqueta" ? 1600 : 1280, qual === "etiqueta" ? 0.82 : 0.8);
+      if (qual === "etiqueta") { setFoto(imagem.dataUrl); setQualidade(qualidade); }
+      else if (qual === "frente") setFotoFrente(imagem.dataUrl);
+      else setFotoExtra(imagem.dataUrl);
     } catch {
       setAviso({ tipo: "erro", texto: "Não foi possível abrir esta imagem. Tente outra foto." });
     }
   }
+  const remover = (qual: "etiqueta" | "frente" | "extra") => {
+    if (qual === "etiqueta") { setFoto(null); setQualidade(null); } else if (qual === "frente") setFotoFrente(null); else setFotoExtra(null);
+  };
 
   function irParaManual(motivo?: string) {
     if (motivo) setAviso({ tipo: "erro", texto: motivo });
@@ -168,6 +172,7 @@ export function CadastroPorFoto() {
 
   async function lerEtiqueta() {
     if (!foto) return;
+    if (!fotoFrente) { setAviso({ tipo: "ruim", texto: "Falta a foto do equipamento por completo (é a capa do cadastro)." }); return; }
     setLendo(true); setAviso(null);
     const r = await lerComIa("etiqueta", foto);
     setLendo(false);
@@ -268,7 +273,8 @@ export function CadastroPorFoto() {
         setor: setor.trim() || undefined,
         localizacao: ambiente.trim() || undefined,
         observacoesTecnicas: obsIa || undefined,
-        fotos: usarFoto && foto ? [foto] : [],
+        // Capa (fotos[0]) = equipamento por completo; a etiqueta fica como foto de apoio, nunca como capa
+        fotos: [fotoFrente, foto, fotoExtra].filter((x): x is string => !!x),
         gerarQrCode: true,
       };
       const res = await fetch("/api/equipamentos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -284,13 +290,13 @@ export function CadastroPorFoto() {
   }
 
   function recomecar() {
-    setEtapa("foto"); setFoto(null); setQualidade(null); setAviso(null); setValores(VAZIO); setLidosPelaIa(new Set());
+    setEtapa("foto"); setFoto(null); setFotoFrente(null); setFotoExtra(null); setQualidade(null); setAviso(null); setValores(VAZIO); setLidosPelaIa(new Set());
     setDuvidosos(new Set()); setOutrasInfos(""); setFaltantes([]); setIdxPergunta(0); setSetor(""); setAmbiente("");
     setAvisoPlaca(null); setSalvo(null); setErroEtapa("");
   }
 
   const PASSOS: { id: Etapa; rotulo: string }[] = [
-    { id: "foto", rotulo: "Etiqueta" }, { id: "conferencia", rotulo: "Conferir" }, { id: "faltantes", rotulo: "Completar" },
+    { id: "foto", rotulo: "Fotos" }, { id: "conferencia", rotulo: "Conferir" }, { id: "faltantes", rotulo: "Completar" },
     { id: "local", rotulo: "Local" }, { id: "revisao", rotulo: "Salvar" },
   ];
   const idxEtapa = PASSOS.findIndex((p) => p.id === etapa);
@@ -362,44 +368,41 @@ export function CadastroPorFoto() {
             <div data-aviso-privacidade className="flex items-start gap-2 text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
               <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-slate-500" />
               <span>
-                <strong>Privacidade:</strong> a foto é enviada para a <strong>Anthropic</strong> (IA Claude), fora do Frivo, só para ler o texto da etiqueta.
-                Enquadre apenas a etiqueta — evite pessoas, documentos ou telas na foto.
+                <strong>Privacidade:</strong> só a foto da <strong>etiqueta</strong> é enviada para a <strong>Anthropic</strong> (IA Claude), fora do Frivo, para ler o texto.
+                As fotos do equipamento ficam só no Frivo. Evite pessoas, documentos ou telas nas fotos.
               </span>
             </div>
-            <input ref={inputCamera} type="file" accept="image/*" capture="environment" className="hidden" onChange={aoEscolherFoto} aria-label="Foto da etiqueta (câmera)" />
-            <input ref={inputGaleria} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={aoEscolherFoto} aria-label="Foto da etiqueta (arquivo)" />
-
-            {foto ? (
-              <div className="space-y-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={foto} alt="Foto da etiqueta" className="w-full max-h-80 object-contain rounded-lg border border-surface-border bg-surface-alt" />
-                {qualidade && (qualidade.escura || qualidade.borrada) && (
-                  <p data-aviso-qualidade className="flex items-start gap-2 text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                    <AlertTriangle className="w-4 h-4 shrink-0" />
-                    A foto parece {qualidade.escura ? "escura" : "tremida/sem foco"}. A leitura pode falhar — se puder, tire outra mais de perto e com luz.
-                  </p>
-                )}
-                <div className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => inputCamera.current?.click()} className="inline-flex items-center justify-center gap-2 px-3 py-3 rounded-lg border border-surface-border text-sm font-medium text-ink hover:bg-surface-alt">
-                    <RotateCcw className="w-4 h-4" /> Tirar outra
-                  </button>
-                  <button type="button" onClick={lerEtiqueta} disabled={lendo} className="inline-flex items-center justify-center gap-2 px-3 py-3 rounded-lg bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold disabled:opacity-60">
-                    {lendo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} {lendo ? "Lendo a etiqueta…" : "Ler com IA"}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <button type="button" onClick={() => inputCamera.current?.click()} className="w-full flex flex-col items-center justify-center gap-2 py-10 rounded-xl border-2 border-dashed border-primary-300 bg-primary-50/50 text-primary-700 hover:bg-primary-50">
-                  <Camera className="w-10 h-10" />
-                  <span className="font-semibold">Fotografar a etiqueta</span>
-                  <span className="text-xs text-primary-600/80">De frente, bem perto, sem reflexo</span>
-                </button>
-                <button type="button" onClick={() => inputGaleria.current?.click()} className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-lg border border-surface-border text-sm text-ink hover:bg-surface-alt">
-                  <ImagePlus className="w-4 h-4" /> Escolher foto da galeria
-                </button>
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" data-slots-fotos>
+              <SlotFoto
+                id="etiqueta" titulo="1. Etiqueta" selo="A IA lê esta" seloCor="bg-violet-100 text-violet-800" icone={Tag}
+                dica="De frente, bem perto, sem reflexo" obrigatoria url={foto} rotuloAria="Foto da etiqueta"
+                onArquivo={(f) => aoEscolherFoto("etiqueta", f)} onRemover={() => remover("etiqueta")}
+              />
+              <SlotFoto
+                id="frente" titulo="2. Equipamento" selo="Capa do cadastro" seloCor="bg-primary-100 text-primary-800" icone={Star}
+                dica="Por completo: afaste-se e pegue o aparelho inteiro" obrigatoria url={fotoFrente} rotuloAria="Foto do equipamento"
+                onArquivo={(f) => aoEscolherFoto("frente", f)} onRemover={() => remover("frente")}
+              />
+              <SlotFoto
+                id="extra" titulo="3. Outro ângulo" selo="Opcional" seloCor="bg-surface-alt text-ink-muted" icone={Camera}
+                dica="Ex.: condensadora, instalação" url={fotoExtra} rotuloAria="Outra foto"
+                onArquivo={(f) => aoEscolherFoto("extra", f)} onRemover={() => remover("extra")}
+              />
+            </div>
+            {qualidade && foto && (qualidade.escura || qualidade.borrada) && (
+              <p data-aviso-qualidade className="flex items-start gap-2 text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                A foto da etiqueta parece {qualidade.escura ? "escura" : "tremida/sem foco"}. A leitura pode falhar — se puder, tire outra mais de perto e com luz.
+              </p>
             )}
+            <p className="text-xs text-ink-muted">
+              A <strong className="text-ink">capa</strong> do equipamento (lista e ficha) será a foto 2 — nunca a etiqueta, que fica guardada como foto de apoio.
+            </p>
+            <button type="button" onClick={lerEtiqueta} disabled={lendo || !foto}
+              className="w-full inline-flex items-center justify-center gap-2 px-3 py-3 rounded-lg bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold disabled:opacity-50">
+              {lendo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              {lendo ? "Lendo a etiqueta…" : !foto ? "Tire a foto da etiqueta para continuar" : !fotoFrente ? "Falta a foto do equipamento" : "Ler etiqueta com IA"}
+            </button>
             <button type="button" onClick={() => irParaManual()} className="w-full inline-flex items-center justify-center gap-1.5 text-sm text-ink-muted hover:text-ink py-1">
               <Keyboard className="w-4 h-4" /> Sem etiqueta? Preencher manualmente
             </button>
@@ -536,11 +539,19 @@ export function CadastroPorFoto() {
               <button type="button" onClick={() => { setFaltantes(PERGUNTAS.map((p) => p.campo)); setIdxPergunta(0); setEtapa("faltantes"); }} className="inline-flex items-center gap-1 text-primary-600 hover:underline"><Pencil className="w-3 h-3" /> Corrigir dados</button>
               <button type="button" onClick={() => setEtapa("local")} className="inline-flex items-center gap-1 text-primary-600 hover:underline"><Pencil className="w-3 h-3" /> Corrigir local</button>
             </div>
-            {foto && (
-              <label className="flex items-center gap-2 text-sm text-ink">
-                <input type="checkbox" checked={usarFoto} onChange={(e) => setUsarFoto(e.target.checked)} className="accent-primary-600" />
-                Usar a foto da etiqueta como foto do equipamento
-              </label>
+            {(fotoFrente || foto || fotoExtra) && (
+              <div data-fotos-revisao>
+                <p className="text-xs font-semibold text-ink-muted mb-1.5">Fotos que serão salvas</p>
+                <div className="flex gap-2">
+                  {([[fotoFrente, "Capa", true], [foto, "Etiqueta (apoio)", false], [fotoExtra, "Outro ângulo", false]] as const).filter(([u]) => !!u).map(([u, rotulo, capa]) => (
+                    <figure key={rotulo} className="w-24">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={u!} alt={rotulo} className={cn("w-24 h-20 object-cover rounded-lg border", capa ? "border-primary-400 ring-2 ring-primary-200" : "border-surface-border")} />
+                      <figcaption className={cn("text-[10px] mt-1 text-center", capa ? "font-semibold text-primary-700" : "text-ink-muted")}>{rotulo}</figcaption>
+                    </figure>
+                  ))}
+                </div>
+              </div>
             )}
             {erroEtapa && <p className="text-sm text-red-600">{erroEtapa}</p>}
             <button type="button" onClick={salvar} disabled={salvando} className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold disabled:opacity-60">
@@ -568,6 +579,45 @@ export function CadastroPorFoto() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Espaço de uma foto do cadastro (câmera ou galeria), com rótulo do papel dela. */
+function SlotFoto({ id, titulo, selo, seloCor, icone: Icone, dica, obrigatoria, url, rotuloAria, onArquivo, onRemover }: {
+  id: string; titulo: string; selo: string; seloCor: string; icone: React.ComponentType<{ className?: string }>; dica: string;
+  obrigatoria?: boolean; url: string | null; rotuloAria: string; onArquivo: (f: File | undefined) => void; onRemover: () => void;
+}) {
+  const camera = useRef<HTMLInputElement>(null);
+  const galeria = useRef<HTMLInputElement>(null);
+  const escolher = (e: React.ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; e.target.value = ""; onArquivo(f); };
+  return (
+    <div data-slot={id} className={cn("rounded-xl border p-2.5 flex flex-col gap-2", url ? "border-surface-border bg-white" : "border-dashed border-primary-300 bg-primary-50/30")}>
+      <div className="flex items-center justify-between gap-1">
+        <p className="text-xs font-semibold text-ink truncate">{titulo}{obrigatoria && <span className="text-red-500"> *</span>}</p>
+        <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0", seloCor)}>{selo}</span>
+      </div>
+      <input ref={camera} type="file" accept="image/*" capture="environment" className="hidden" onChange={escolher} aria-label={`${rotuloAria} (câmera)`} />
+      <input ref={galeria} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={escolher} aria-label={`${rotuloAria} (arquivo)`} />
+      {url ? (
+        <div className="relative">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url} alt={titulo} className="w-full h-32 object-cover rounded-lg bg-surface-alt" />
+          <button type="button" onClick={onRemover} title="Remover foto" className="absolute top-1.5 right-1.5 bg-black/55 hover:bg-red-600 text-white rounded-full p-1"><X className="w-3.5 h-3.5" /></button>
+          <button type="button" onClick={() => camera.current?.click()} className="mt-1.5 w-full inline-flex items-center justify-center gap-1 text-xs text-ink-muted hover:text-ink"><RotateCcw className="w-3 h-3" /> Trocar</button>
+        </div>
+      ) : (
+        <>
+          <button type="button" onClick={() => camera.current?.click()} className="h-28 rounded-lg flex flex-col items-center justify-center gap-1 text-primary-700 hover:bg-primary-50">
+            <Icone className="w-7 h-7" />
+            <span className="text-xs font-semibold">Fotografar</span>
+            <span className="text-[10px] text-primary-600/80 text-center px-1">{dica}</span>
+          </button>
+          <button type="button" onClick={() => galeria.current?.click()} className="inline-flex items-center justify-center gap-1 text-[11px] text-ink-muted hover:text-ink">
+            <ImagePlus className="w-3 h-3" /> da galeria
+          </button>
+        </>
+      )}
     </div>
   );
 }

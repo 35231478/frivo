@@ -1,4 +1,10 @@
 import { prisma } from "@/lib/prisma";
+
+/** Campos do equipamento no relatório da OS (ambiente/setor separados do tipo + capacidade). */
+const SELECT_EQUIP_RELATORIO = {
+  id: true, tipo: true, marca: true, modelo: true, numeroSerie: true, localizacao: true,
+  setor: true, capacidade: true, patrimonio: true, nome: true, tipoEquipamento: { select: { nome: true } },
+} as const;
 import { gerarNumeroRelatorio } from "@/lib/utils";
 
 /** Resumo automático de uma atividade: descrição/observação ou 1ª resposta do questionário. */
@@ -127,7 +133,7 @@ export async function carregarRelatorioPorToken(token: string) {
   const equipamentos = relatorio.ordemServico.unidadeId
     ? await prisma.equipamento.findMany({
         where: { unidadeId: relatorio.ordemServico.unidadeId, ativo: true },
-        select: { id: true, tipo: true, marca: true, modelo: true, numeroSerie: true, localizacao: true },
+        select: SELECT_EQUIP_RELATORIO,
       })
     : [];
 
@@ -160,7 +166,7 @@ export async function carregarAtividade(atividadeId: string) {
   const equipamentos = os.unidadeId
     ? await prisma.equipamento.findMany({
         where: { unidadeId: os.unidadeId, ativo: true },
-        select: { id: true, tipo: true, marca: true, modelo: true, numeroSerie: true, localizacao: true },
+        select: SELECT_EQUIP_RELATORIO,
       })
     : [];
 

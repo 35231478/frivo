@@ -17,7 +17,7 @@ import { SelectCadastroRapido, type CampoRapido, type OpcaoCadastro } from "@/co
 import { UNIDADE } from "@/components/cadastro-rapido/definicoes";
 import Link from "next/link";
 import { LABELS_TIPO_EQUIPAMENTO, cn } from "@/lib/utils";
-import { Thermometer, ImageIcon, MapPin, Cog, QrCode, History, CheckCircle2, ClipboardList, ChevronLeft, ExternalLink } from "lucide-react";
+import { Thermometer, ImageIcon, MapPin, Cog, QrCode, History, CheckCircle2, ClipboardList, ChevronLeft, ExternalLink, Camera, Sparkles, ChevronDown, Tag, Circle } from "lucide-react";
 
 const TIPOS_EQUIPAMENTO = Object.entries(LABELS_TIPO_EQUIPAMENTO);
 
@@ -196,6 +196,11 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
       .catch(() => {});
   }, [form.unidadeId]);
 
+  // Cadastro novo (página única): ao dar erro, leva a pessoa até a mensagem
+  useEffect(() => {
+    if (erroGlobal && !isEditing) document.querySelector("[data-erro]")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [erroGlobal, isEditing]);
+
   const ultimaManutencao = useMemo(() => {
     const concluidas = (initialData?.ordensServico ?? []).filter((o: any) => o.status === "CONCLUIDA" && o.dataConclusao);
     if (concluidas.length === 0) return null;
@@ -283,6 +288,191 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
     { id: "qrcode", label: "QR Code", icone: QrCode },
     { id: "historico", label: "Atendimentos", icone: History, oculta: !isEditing },
   ];
+
+  // ── NOVO EQUIPAMENTO: página única, em blocos, com a IA em destaque ──
+  // (a edição continua em abas: QR Code e Atendimentos só fazem sentido depois de salvo)
+  if (!isEditing) {
+    const obrigatorios: [string, boolean][] = [
+      ["Tipo", !!form.tipo], ["Marca", !!form.marca.trim()], ["Modelo", !!form.modelo.trim()],
+      ["Cliente", !!clienteId], ["Unidade", !!form.unidadeId],
+    ];
+    const feitos = obrigatorios.filter(([, ok]) => ok).length;
+    const linkFoto = "/equipamentos/novo/foto";
+    return (
+      <div className="space-y-6" data-cadastro-novo>
+        {/* Título */}
+        <div className="flex items-start gap-3">
+          <Link href="/equipamentos" title="Voltar" className="mt-1 p-1.5 -ml-1 rounded-lg text-ink-muted hover:text-primary-600 hover:bg-surface-alt"><ChevronLeft className="w-5 h-5" /></Link>
+          <div>
+            <h1 className="text-2xl font-bold text-ink tracking-tight">Novo equipamento</h1>
+            <p className="text-sm text-ink-muted mt-0.5">Só 5 campos são obrigatórios. O resto pode ser completado depois.</p>
+          </div>
+        </div>
+
+        {/* Caminho principal: IA */}
+        <Link href={linkFoto} data-atalho-foto
+          className="group block rounded-2xl border border-primary-200 bg-gradient-to-br from-primary-50 via-white to-white p-5 sm:p-6 shadow-sm hover:shadow-md hover:border-primary-300 transition-all">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <span className="w-12 h-12 rounded-xl bg-primary-500 text-white flex items-center justify-center shrink-0 shadow-sm"><Camera className="w-6 h-6" /></span>
+            <div className="flex-1 min-w-0">
+              <p className="flex items-center gap-2 flex-wrap">
+                <span className="text-lg font-semibold text-ink">Preencher com foto</span>
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-primary-700 bg-primary-100 px-2 py-0.5 rounded-full"><Sparkles className="w-3 h-3" /> Recomendado</span>
+              </p>
+              <p className="text-sm text-ink-muted mt-1">
+                Tire 2 fotos — a <strong className="text-ink">etiqueta</strong> e o <strong className="text-ink">equipamento por completo</strong>. A IA lê marca, modelo,
+                capacidade, tensão e gás, e você só confere.
+              </p>
+            </div>
+            <span className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-primary-500 group-hover:bg-primary-600 text-white text-sm font-semibold shrink-0">
+              <Camera className="w-4 h-4" /> Usar fotos
+            </span>
+          </div>
+        </Link>
+
+        <div className="flex items-center gap-3 text-xs text-ink-subtle">
+          <span className="h-px flex-1 bg-surface-border" /> ou preencha manualmente <span className="h-px flex-1 bg-surface-border" />
+        </div>
+
+        {/* Progresso dos obrigatórios */}
+        <div className="flex items-center gap-2 flex-wrap text-xs" data-progresso>
+          <span className="font-semibold text-ink">Obrigatórios {feitos}/{obrigatorios.length}:</span>
+          {obrigatorios.map(([rotulo, ok]) => (
+            <span key={rotulo} className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full border", ok ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-ink-muted bg-white border-surface-border")}>
+              {ok ? <CheckCircle2 className="w-3 h-3" /> : <Circle className="w-3 h-3" />} {rotulo}
+            </span>
+          ))}
+        </div>
+
+        {erroGlobal && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3" data-erro>{erroGlobal}</div>}
+
+        <Bloco numero={1} titulo="Identificação" descricao="O que é o equipamento.">
+          <FormField label="Tipo de equipamento" required>
+            <SelectCadastroRapido
+              value={form.tipo} onChange={(v) => set("tipo", v)} opcoes={opcoesTipo}
+              entidade={{ singular: "tipo de equipamento", plural: "tipos de equipamento" }} placeholder="Selecione o tipo"
+              campos={CAMPOS_TIPO} campoBusca="nome" criar={criarTipo}
+              permissao={{ modulo: "configuracoes", acao: "gerenciar" }} linkCadastroCompleto="/configuracoes/tipos-equipamento"
+            />
+          </FormField>
+          <FormGrid>
+            <FormField label="Marca" required>
+              <Input aria-label="Marca" value={form.marca} onChange={(e) => set("marca", e.target.value)} placeholder="Ex: LG, Carrier, Daikin" />
+            </FormField>
+            <FormField label="Modelo" required>
+              <Input aria-label="Modelo" value={form.modelo} onChange={(e) => set("modelo", e.target.value)} placeholder="Como está na etiqueta" />
+            </FormField>
+          </FormGrid>
+          <Opcionais>
+            <FormGrid cols={3}>
+              <FormField label="Nº de série"><Input aria-label="Nº de série" value={form.numeroSerie} onChange={(e) => set("numeroSerie", e.target.value)} placeholder="S/N" /></FormField>
+              <FormField label="Patrimônio / TAG"><Input aria-label="Patrimônio / TAG" value={form.patrimonio} onChange={(e) => set("patrimonio", e.target.value)} placeholder="Ex: TAG AC-07" /></FormField>
+              <FormField label="Apelido"><Input aria-label="Apelido" value={form.nome} onChange={(e) => set("nome", e.target.value)} placeholder="Ex: Split da recepção" /></FormField>
+            </FormGrid>
+          </Opcionais>
+        </Bloco>
+
+        <Bloco numero={2} titulo="Localização" descricao="Onde ele está instalado: cliente, endereço e o ambiente (sala).">
+          <FormGrid>
+            <FormField label="Cliente" required>
+              <ClienteCombobox value={clienteId} onChange={(id) => { setClienteId(id); set("unidadeId", ""); }} />
+            </FormField>
+            <FormField label="Endereço / Unidade" required>
+              <SelectCadastroRapido
+                value={form.unidadeId} onChange={(v) => set("unidadeId", v)} opcoes={opcoesUnidade} entidade={UNIDADE.entidade}
+                contexto="para este cliente" placeholder="Selecione o endereço" disabled={!clienteId} textoDesabilitado="Selecione um cliente primeiro"
+                carregando={carregandoUnidades} campos={UNIDADE.campos} campoBusca="nome" criar={criarUnidade}
+                permissao={UNIDADE.permissao} linkCadastroCompleto={clienteId ? UNIDADE.link(clienteId) : undefined}
+              />
+            </FormField>
+          </FormGrid>
+          <Opcionais rotulo="Ambiente (recomendado: aparece na lista e no relatório da OS)">
+            <FormGrid>
+              <FormField label="Ambiente / sala" hint="Ex: Recepção, Sala 201, CPD">
+                <Input aria-label="Ambiente" value={form.localizacao} onChange={(e) => set("localizacao", e.target.value)} placeholder="Ex: Recepção" list="sugestoes-ambiente-novo" />
+                <datalist id="sugestoes-ambiente-novo">{sugestoesLocal.ambientes.map((v) => <option key={v} value={v} />)}</datalist>
+              </FormField>
+              <FormField label="Setor" hint="Andar, bloco ou área">
+                <Input aria-label="Setor" value={form.setor} onChange={(e) => set("setor", e.target.value)} placeholder="Ex: 2º andar" list="sugestoes-setor-novo" />
+                <datalist id="sugestoes-setor-novo">{sugestoesLocal.setores.map((v) => <option key={v} value={v} />)}</datalist>
+              </FormField>
+            </FormGrid>
+          </Opcionais>
+        </Bloco>
+
+        <Bloco numero={3} titulo="Dados técnicos" descricao="Pode completar depois — mas capacidade e tensão ajudam muito no atendimento." opcional>
+          <FormGrid cols={3}>
+            <FormField label="Capacidade">
+              <div className="flex gap-2">
+                <Input aria-label="Capacidade" value={form.capacidade} onChange={(e) => set("capacidade", e.target.value)} placeholder={form.capacidadeUnidade === "TR" ? "Ex: 5" : "Ex: 12.000"} inputMode="decimal" />
+                <Select aria-label="Unidade da capacidade" value={form.capacidadeUnidade} onChange={(e) => set("capacidadeUnidade", e.target.value)} className="w-28 shrink-0">
+                  {UNIDADES_CAPACIDADE.map((u) => (<option key={u} value={u}>{u}</option>))}
+                </Select>
+              </div>
+            </FormField>
+            <FormField label="Tensão">
+              <Select aria-label="Tensão" value={form.tensao} onChange={(e) => set("tensao", e.target.value)} placeholder="Selecione">
+                {opcoesComValor(TENSOES, form.tensao).map((t) => (<option key={t} value={t}>{t}</option>))}
+              </Select>
+            </FormField>
+            <FormField label="Gás refrigerante">
+              <Select aria-label="Gás refrigerante" value={form.fluido} onChange={(e) => set("fluido", e.target.value)} placeholder="Selecione">
+                {opcoesComValor(FLUIDOS, form.fluido).map((x) => (<option key={x} value={x}>{x}</option>))}
+              </Select>
+            </FormField>
+          </FormGrid>
+          <details className="group/mais">
+            <summary className="cursor-pointer list-none inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:text-primary-700">
+              <ChevronDown className="w-4 h-4 transition-transform group-open/mais:rotate-180" /> Mais dados técnicos (fase, potência, corrente, ano)
+            </summary>
+            <div className="mt-4">
+              <FormGrid cols={3}>
+                <FormField label="Fase">
+                  <Select value={form.fase} onChange={(e) => set("fase", e.target.value)} placeholder="Selecione">
+                    {opcoesComValor(FASES, form.fase).map((x) => (<option key={x} value={x}>{x}</option>))}
+                  </Select>
+                </FormField>
+                <FormField label="Potência (kW)"><Input value={form.potencia} onChange={(e) => set("potencia", e.target.value)} placeholder="Ex: 3,5" inputMode="decimal" /></FormField>
+                <FormField label="Corrente nominal (A)"><Input value={form.correnteNominal} onChange={(e) => set("correnteNominal", e.target.value)} placeholder="Ex: 10" inputMode="decimal" /></FormField>
+                <FormField label="Ano de fabricação"><Input value={form.anoFabricacao} onChange={(e) => set("anoFabricacao", e.target.value)} placeholder="Ex: 2022" inputMode="numeric" /></FormField>
+              </FormGrid>
+            </div>
+          </details>
+        </Bloco>
+
+        <Bloco numero={4} titulo="Fotos e outros detalhes" descricao="A 1ª foto é a capa: use a do equipamento por completo (não a da etiqueta)." opcional>
+          <GaleriaImagens fotos={fotos} onChange={setFotos} />
+          <details className="group/det">
+            <summary className="cursor-pointer list-none inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:text-primary-700">
+              <ChevronDown className="w-4 h-4 transition-transform group-open/det:rotate-180" /> Instalação, garantia e observações
+            </summary>
+            <div className="mt-4 space-y-4">
+              <FormGrid cols={3}>
+                <FormField label="Data de instalação"><Input type="date" value={form.dataInstalacao} onChange={(e) => set("dataInstalacao", e.target.value)} /></FormField>
+                <FormField label="Início da garantia"><Input type="date" value={form.garantiaInicio} onChange={(e) => set("garantiaInicio", e.target.value)} /></FormField>
+                <FormField label="Fim da garantia"><Input type="date" value={form.garantiaAte} onChange={(e) => set("garantiaAte", e.target.value)} /></FormField>
+              </FormGrid>
+              <FormField label="Observações"><Textarea value={form.observacoes} onChange={(e) => set("observacoes", e.target.value)} rows={2} placeholder="Particularidades, acessórios…" /></FormField>
+              <FormField label="Observações técnicas"><Textarea value={form.observacoesTecnicas} onChange={(e) => set("observacoesTecnicas", e.target.value)} rows={2} placeholder="Notas técnicas, peças trocadas…" /></FormField>
+            </div>
+          </details>
+        </Bloco>
+
+        {/* Barra de ações fixa */}
+        <div className="sticky bottom-20 lg:bottom-4 z-20" data-barra-acoes>
+          <div>
+            <div className="flex items-center justify-between gap-3 bg-white/95 backdrop-blur border border-surface-border rounded-xl shadow-lg px-4 py-3">
+              <span className="text-xs text-ink-muted hidden sm:inline">{feitos === obrigatorios.length ? "Tudo pronto para cadastrar." : `Faltam ${obrigatorios.length - feitos} campo(s) obrigatório(s).`}</span>
+              <div className="flex items-center gap-2 ml-auto">
+                <Button type="button" variant="secondary" onClick={() => router.back()}>Cancelar</Button>
+                <Button type="button" onClick={salvar} loading={salvando}>Cadastrar equipamento</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -551,6 +741,33 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Bloco do cadastro novo: título/descrição à esquerda (desktop), campos à direita. */
+function Bloco({ numero, titulo, descricao, opcional, children }: { numero: number; titulo: string; descricao: string; opcional?: boolean; children: React.ReactNode }) {
+  return (
+    <section className="bg-white border border-surface-border rounded-2xl p-5 sm:p-6 lg:grid lg:grid-cols-[220px_1fr] lg:gap-8" data-bloco={titulo}>
+      <header className="mb-4 lg:mb-0">
+        <div className="flex items-center gap-2">
+          <span className="w-6 h-6 rounded-full bg-primary-50 text-primary-700 text-xs font-bold flex items-center justify-center">{numero}</span>
+          <h2 className="font-semibold text-ink">{titulo}</h2>
+          {opcional && <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-subtle bg-surface-alt px-1.5 py-0.5 rounded">opcional</span>}
+        </div>
+        <p className="text-xs text-ink-muted mt-1.5 leading-relaxed">{descricao}</p>
+      </header>
+      <div className="space-y-4 min-w-0">{children}</div>
+    </section>
+  );
+}
+
+/** Agrupa campos opcionais com um rótulo discreto, separados dos obrigatórios. */
+function Opcionais({ rotulo = "Opcionais", children }: { rotulo?: string; children: React.ReactNode }) {
+  return (
+    <div className="pt-4 border-t border-dashed border-surface-border">
+      <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-subtle mb-3"><Tag className="w-3 h-3" /> {rotulo}</p>
+      {children}
     </div>
   );
 }
