@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
@@ -14,8 +14,9 @@ const osCreateSchema = z.object({
 });
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("ordens", "visualizar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const empresaId = session.user!.empresaId;
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status");
@@ -53,8 +54,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("ordens", "criar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const empresaId = session.user!.empresaId;
   const usuarioId = session.user!.id;
 

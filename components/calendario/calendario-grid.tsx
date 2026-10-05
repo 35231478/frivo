@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext, DragOverlay, useDraggable, useDroppable,
@@ -10,9 +10,11 @@ import {
 import { cn, MESES_PT, LABELS_STATUS_OS, LABELS_PRIORIDADE } from "@/lib/utils";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import { BuscaSelect, type OpcaoBusca } from "@/components/ui/busca-select";
-import { Repeat, MapPin, CalendarClock, Wrench, AlertTriangle, X, Plus, Check, Lock } from "lucide-react";
+import { Repeat, MapPin, CalendarClock, Wrench, AlertTriangle, X, Plus, Check, Lock, Maximize2, Minimize2, GripHorizontal } from "lucide-react";
 
 export interface CardOs {
+  /** Chave única do card (OS + dia): uma OS com visitas em dias diferentes gera um card por dia. */
+  chave: string;
   id: string;
   numero: string;
   origem: string;
@@ -82,7 +84,23 @@ function dataCurta(dateKey: string) {
   return `${d}/${m}/${y}`;
 }
 
-const MAX_CARDS = 3;
+/** Cards visíveis no dia recolhido (o resto vai para o "+N mais" — nada some). */
+const MAX_CARDS_MES = 3;
+const MAX_CARDS_SEMANA = 10;
+/** Altura padrão do quadrado do dia (px) e limites da alça de redimensionar. */
+const ALTURA_MES = 120;
+const ALTURA_SEMANA = 360;
+const ALTURA_MAX = 900;
+/** Tamanho "expandido rápido": cabe tudo (com rolagem se passar de 70% da tela). */
+const AUTO = -1;
+const CHAVE_TAMANHOS = "frivo:calendario:tamanhos-dia";
+
+function lerTamanhos(): Record<string, number> {
+  try { return JSON.parse(window.localStorage.getItem(CHAVE_TAMANHOS) ?? "{}") ?? {}; } catch { return {}; }
+}
+function gravarTamanhos(t: Record<string, number>) {
+  try { window.localStorage.setItem(CHAVE_TAMANHOS, JSON.stringify(t)); } catch { /* modo privado */ }
+}
 
 type ToastMsg = { id: number; texto: string; tipo: "ok" | "erro" };
 
@@ -98,6 +116,18 @@ export function CalendarioGrid({
   const [toasts, setToasts] = useState<ToastMsg[]>([]);
   const arrastouRef = useRef(false);
   const toastSeq = useRef(0);
+  const semanal = celulas.length === 7;
+  // Tamanho escolhido por dia (expandir/arrastar), lembrado neste navegador
+  const [tamanhos, setTamanhos] = useState<Record<string, number>>({});
+  useEffect(() => { setTamanhos(lerTamanhos()); }, []);
+  function definirTamanho(dateKey: string, valor: number | null) {
+    setTamanhos((prev) => {
+      const novo = { ...prev };
+      if (valor === null) delete novo[dateKey]; else novo[dateKey] = valor;
+      gravarTamanhos(novo);
+      return novo;
+    });
+  }
 
   // Reconcilia com os dados do servidor após refresh
   useEffect(() => { setEventos(eventosPorDia); }, [eventosPorDia]);
@@ -135,8 +165,8 @@ export function CalendarioGrid({
     const { card, fromDay } = data;
     // Move otimista
     setEventos((prev) => {
-      const origem = (prev[fromDay] ?? []).filter((c) => c.id !== card.id);
-      const movido = { ...card, dataFmt: dataCurta(destino) };
+      const origem = (prev[fromDay] ?? []).filter((c) => c.chave !== card.chave);
+      const movido = { ...card, chave: `${card.id}:${destino}`, dataFmt: dataCurta(destino) };
       const alvo = [...(prev[destino] ?? []), movido].sort((a, b) => (a.hora ?? "99").localeCompare(b.hora ?? "99"));
       return { ...prev, [fromDay]: origem, [destino]: alvo };
     });
@@ -156,7 +186,7 @@ export function CalendarioGrid({
     } catch (err: any) {
       // Reverte
       setEventos((prev) => {
-        const alvo = (prev[destino] ?? []).filter((c) => c.id !== card.id);
+        const alvo = (prev[destino] ?? []).filter((c) => c.chave !== `${card.id}:${destino}`);
         const origem = [...(prev[fromDay] ?? []), card].sort((a, b) => (a.hora ?? "99").localeCompare(b.hora ?? "99"));
         return { ...prev, [destino]: alvo, [fromDay]: origem };
       });
@@ -167,9 +197,10 @@ export function CalendarioGrid({
   return (
     <div className="p-2 md:p-4">
       <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={aoIniciarArrasto} onDragEnd={aoTerminarArrasto}>
-        <div className="grid grid-cols-7 gap-px bg-surface-border rounded-lg overflow-hidden min-w-[760px]">
-          {DIAS_SEMANA.map((d) => (
-            <div key={d} className="bg-surface-alt text-center py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider">{d}</div>
+        {/* Sem overflow-hidden: o dia expandido cresce POR CIMA dos vizinhos sem mexer na grade */}
+        <div className="grid grid-cols-7 gap-px bg-surface-border rounded-lg md:min-w-[760px]">
+          {DIAS_SEMANA.map((d, i) => (
+            <div key={d} className={cn("bg-surface-alt text-center py-2 text-[10px] md:text-xs font-semibold text-ink-muted uppercase tracking-wider", i === 0 && "rounded-tl-lg", i === 6 && "rounded-tr-lg")}>{d}</div>
           ))}
 
           {celulas.map((cel) => (
@@ -185,6 +216,10 @@ export function CalendarioGrid({
               onSairHover={() => setHover(null)}
               onVerMais={() => setModalDia(cel.dateKey)}
               onCriar={() => setCriarDia(cel.dateKey)}
+              maxCards={semanal ? MAX_CARDS_SEMANA : MAX_CARDS_MES}
+              alturaBase={semanal ? ALTURA_SEMANA : ALTURA_MES}
+              tamanho={tamanhos[cel.dateKey] ?? null}
+              onTamanho={(v) => definirTamanho(cel.dateKey, v)}
             />
           ))}
         </div>
@@ -199,7 +234,12 @@ export function CalendarioGrid({
 
       {/* Modal "ver mais" do dia */}
       {modalDia && (
-        <ModalDia dateKey={modalDia} eventos={eventos[modalDia] ?? []} onClose={() => setModalDia(null)} onNavegar={(c) => { setModalDia(null); router.push(`/ordens/${c.id}`); }} />
+        <ModalDia
+          dateKey={modalDia} eventos={eventos[modalDia] ?? []} dimmedIds={dimmedIds}
+          onClose={() => setModalDia(null)}
+          onNavegar={(c) => { setModalDia(null); router.push(`/ordens/${c.id}`); }}
+          onCriar={() => { const d = modalDia; setModalDia(null); setCriarDia(d); }}
+        />
       )}
 
       {/* Modal de criação rápida */}
@@ -229,20 +269,37 @@ export function CalendarioGrid({
 }
 
 function Celula({
-  cel, cards, dimmedIds, arrastando, arrastouRef, onNavegar, onHover, onSairHover, onVerMais, onCriar,
+  cel, cards: cardsDia, dimmedIds, arrastando, arrastouRef, onNavegar, onHover, onSairHover, onVerMais, onCriar,
+  maxCards, alturaBase, tamanho, onTamanho,
 }: {
   cel: CelulaDia; cards: CardOs[]; dimmedIds?: Set<string>; arrastando: { card: CardOs; fromDay: string } | null;
   arrastouRef: React.MutableRefObject<boolean>;
   onNavegar: (c: CardOs) => void; onHover: (c: CardOs, r: DOMRect) => void; onSairHover: () => void;
   onVerMais: () => void; onCriar: () => void;
+  maxCards: number; alturaBase: number; tamanho: number | null; onTamanho: (v: number | null) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: cel.dateKey, disabled: !cel.inMonth });
+  const conteudoRef = useRef<HTMLDivElement>(null);
+  const [redimensionando, setRedimensionando] = useState<number | null>(null);
+  // Altura do dia recolhido: ao expandir, o quadrado continua ocupando esse espaço na grade
+  // (a linha da semana não encolhe nem cresce — só o painel sobreposto muda).
+  const [alturaRecolhida, setAlturaRecolhida] = useState<number | null>(null);
+  const recolhido = (redimensionando ?? tamanho) === null;
+  useLayoutEffect(() => {
+    if (!recolhido || !conteudoRef.current) return;
+    const h = Math.round(conteudoRef.current.getBoundingClientRect().height);
+    if (h > 0 && h !== alturaRecolhida) setAlturaRecolhida(h);
+  });
 
   if (!cel.inMonth) {
-    return <div className="min-h-[120px]" style={{ backgroundColor: "#F8FAFC" }} />;
+    return <div className="min-h-[56px] md:min-h-[120px]" style={{ backgroundColor: "#F8FAFC" }} />;
   }
 
-  const visiveis = cards.slice(0, MAX_CARDS);
+  // As OS que batem com o filtro vêm primeiro (as esmaecidas não "roubam" as vagas visíveis)
+  const cards = dimmedIds ? [...cardsDia].sort((x, y) => Number(dimmedIds.has(x.chave)) - Number(dimmedIds.has(y.chave))) : cardsDia;
+  const alturaAtual = redimensionando ?? tamanho;
+  const expandido = alturaAtual !== null;
+  const visiveis = expandido ? cards : cards.slice(0, maxCards);
   const extra = cards.length - visiveis.length;
   const ehOrigem = arrastando?.fromDay === cel.dateKey;
 
@@ -251,49 +308,139 @@ function Celula({
     onCriar();
   }
 
+  // Alça: arrasta a base do dia para esticar/encolher só este dia (sobreposto aos vizinhos)
+  function iniciarRedimensionar(e: React.PointerEvent) {
+    e.preventDefault(); e.stopPropagation();
+    const inicioY = e.clientY;
+    const inicioH = conteudoRef.current?.getBoundingClientRect().height ?? alturaBase;
+    let ultimo = inicioH;
+    const mover = (ev: PointerEvent) => {
+      ultimo = Math.round(Math.min(ALTURA_MAX, Math.max(alturaBase, inicioH + ev.clientY - inicioY)));
+      setRedimensionando(ultimo);
+    };
+    const soltar = () => {
+      window.removeEventListener("pointermove", mover);
+      window.removeEventListener("pointerup", soltar);
+      setRedimensionando(null);
+      // Voltou ao tamanho padrão → esquece; senão lembra a altura
+      onTamanho(ultimo <= alturaBase + 4 ? null : ultimo);
+    };
+    window.addEventListener("pointermove", mover);
+    window.addEventListener("pointerup", soltar);
+  }
+
+  // Recolhido: ocupa a altura padrão (alça na base). Expandido: sobreposto, nunca menor que o padrão.
+  const estiloConteudo: React.CSSProperties = !expandido ? { minHeight: alturaBase }
+    : alturaAtual === AUTO ? { minHeight: alturaBase, maxHeight: "70vh" }
+    : { minHeight: alturaBase, height: alturaAtual! };
+
   return (
-    <div
-      ref={setNodeRef}
-      onClick={aoClicarCelula}
-      className={cn(
-        "group/cel relative bg-white min-h-[120px] p-1.5 align-top transition-colors cursor-pointer",
-        isOver && "ring-2 ring-inset ring-primary-500 bg-primary-50/60",
-        ehOrigem && !isOver && "outline-dashed outline-2 -outline-offset-2 outline-primary-400 bg-primary-50/20",
-      )}
-    >
-      <div className="flex items-center justify-between">
-        <div className={cn(
-          "text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full",
-          cel.isToday ? "bg-primary-500 text-white shadow-sm" : "text-ink",
-        )}>
+    <>
+      {/* ── Celular: dia compacto; tocar abre a lista completa ── */}
+      <button
+        type="button"
+        data-dia-mobile={cel.dateKey}
+        onClick={onVerMais}
+        className={cn("md:hidden bg-white min-h-[56px] p-1 flex flex-col items-center gap-1 text-left", cel.isToday && "bg-primary-50/50")}
+      >
+        <span className={cn("text-[11px] font-semibold w-5 h-5 flex items-center justify-center rounded-full", cel.isToday ? "bg-primary-500 text-white" : "text-ink")}>
           {cel.dayNum}
-        </div>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onCriar(); }}
-          title="Criar OS neste dia"
-          className="opacity-0 group-hover/cel:opacity-100 transition-opacity p-0.5 rounded-md text-primary-600 hover:bg-primary-100"
-        >
-          <Plus className="w-4 h-4" />
-        </button>
-      </div>
-
-      <div className="space-y-1 mt-1">
-        {visiveis.map((card) => (
-          <CardArrastavel key={card.id} card={card} fromDay={cel.dateKey} dimmed={dimmedIds?.has(card.id) ?? false} onNavegar={onNavegar} onHover={onHover} onSairHover={onSairHover} />
-        ))}
-
-        {extra > 0 && (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onVerMais(); }}
-            className="w-full text-left text-[10px] font-semibold text-primary-600 hover:text-primary-700 px-1.5 py-0.5 rounded hover:bg-primary-50 transition-colors"
-          >
-            +{extra} mais
-          </button>
+        </span>
+        {cards.length > 0 && (
+          <span className={cn("text-[10px] font-bold px-1.5 rounded-full tabular-nums",
+            cards.some((c) => c.atrasada) ? "bg-red-100 text-red-700" : "bg-primary-100 text-primary-700")}>
+            {cards.length}
+          </span>
         )}
+      </button>
+
+      {/* ── Desktop: quadrado do dia (a grade mantém a altura padrão; o expandido é sobreposto) ── */}
+      <div
+        ref={setNodeRef}
+        data-dia={cel.dateKey}
+        onClick={aoClicarCelula}
+        style={{ minHeight: Math.max(alturaBase, alturaRecolhida ?? 0) }}
+        className={cn(
+          "hidden md:block group/cel relative bg-white align-top cursor-pointer",
+          expandido && "z-30",
+        )}
+      >
+        <div
+          ref={conteudoRef}
+          data-conteudo-dia={cel.dateKey}
+          style={estiloConteudo}
+          className={cn(
+            "p-1.5 flex flex-col transition-colors",
+            expandido
+              ? "absolute inset-x-0 top-0 bg-white shadow-2xl ring-1 ring-primary-300 rounded-b-md"
+              : "relative",
+            isOver && "ring-2 ring-inset ring-primary-500 bg-primary-50/60",
+            ehOrigem && !isOver && "outline-dashed outline-2 -outline-offset-2 outline-primary-400 bg-primary-50/20",
+          )}
+        >
+          <div className="flex items-center justify-between gap-1 shrink-0">
+            <div className={cn(
+              "text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full",
+              cel.isToday ? "bg-primary-500 text-white shadow-sm" : "text-ink",
+            )}>
+              {cel.dayNum}
+            </div>
+            <div className="flex items-center">
+              {(expandido || cards.length > maxCards) && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onTamanho(expandido ? null : AUTO); }}
+                  title={expandido ? "Recolher o dia" : `Expandir o dia (mostrar as ${cards.length} OS)`}
+                  className={cn("p-0.5 rounded-md text-ink-muted hover:text-primary-600 hover:bg-primary-50", !expandido && "opacity-60 group-hover/cel:opacity-100")}
+                >
+                  {expandido ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onCriar(); }}
+                title="Criar OS neste dia"
+                className="opacity-0 group-hover/cel:opacity-100 transition-opacity p-0.5 rounded-md text-primary-600 hover:bg-primary-100"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className={cn("space-y-1 mt-1 min-h-0", expandido && "flex-1 overflow-y-auto pr-0.5")}>
+            {visiveis.map((card) => (
+              <CardArrastavel key={card.chave} card={card} fromDay={cel.dateKey} dimmed={dimmedIds?.has(card.chave) ?? false} onNavegar={onNavegar} onHover={onHover} onSairHover={onSairHover} />
+            ))}
+          </div>
+
+          {/* Rede de segurança: o que não coube fica SEMPRE indicado e a um clique */}
+          {extra > 0 && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onVerMais(); }}
+              className="mt-1 w-full text-left text-[11px] font-semibold text-primary-600 hover:text-primary-700 px-1.5 py-0.5 rounded hover:bg-primary-50 transition-colors shrink-0"
+            >
+              +{extra} mais
+            </button>
+          )}
+
+          {/* Alça para esticar só este dia */}
+          <div
+            onPointerDown={iniciarRedimensionar}
+            onClick={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => { e.stopPropagation(); onTamanho(null); }}
+            title="Arraste para ajustar a altura deste dia (duplo clique volta ao padrão)"
+            className={cn(
+              "absolute left-0 right-0 bottom-0 h-2.5 flex items-center justify-center cursor-ns-resize touch-none",
+              "opacity-0 group-hover/cel:opacity-100 transition-opacity",
+              expandido && "opacity-100",
+            )}
+          >
+            <GripHorizontal className="w-4 h-3 text-ink-subtle" />
+          </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -305,7 +452,7 @@ function CardArrastavel({
 }) {
   const travada = bloqueada(card);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: card.id,
+    id: card.chave,
     data: { card, fromDay },
     disabled: travada || dimmed,
   });
@@ -396,25 +543,31 @@ function Tooltip({ card, rect }: { card: CardOs; rect: DOMRect }) {
 }
 
 function ModalDia({
-  dateKey, eventos, onClose, onNavegar,
-}: { dateKey: string; eventos: CardOs[]; onClose: () => void; onNavegar: (c: CardOs) => void }) {
+  dateKey, eventos, dimmedIds, onClose, onNavegar, onCriar,
+}: { dateKey: string; eventos: CardOs[]; dimmedIds?: Set<string>; onClose: () => void; onNavegar: (c: CardOs) => void; onCriar: () => void }) {
+  useEffect(() => {
+    const aoTeclar = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", aoTeclar);
+    return () => window.removeEventListener("keydown", aoTeclar);
+  }, [onClose]);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col anim-tooltip" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between gap-3 p-4 border-b border-surface-border">
           <div>
             <h3 className="font-semibold text-ink capitalize">{diaPorExtenso(dateKey)}</h3>
             <p className="text-xs text-ink-muted">{eventos.length} {eventos.length === 1 ? "ordem de serviço" : "ordens de serviço"}</p>
           </div>
-          <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-ink-muted hover:bg-surface-alt"><X className="w-4 h-4" /></button>
+          <button type="button" title="Fechar" onClick={onClose} className="p-1.5 rounded-lg text-ink-muted hover:bg-surface-alt"><X className="w-4 h-4" /></button>
         </div>
         <div className="overflow-y-auto p-3 space-y-2">
+          {eventos.length === 0 && <p className="text-sm text-ink-subtle text-center py-6">Nenhuma OS neste dia.</p>}
           {eventos.map((card) => (
             <button
-              key={card.id}
+              key={card.chave}
               type="button"
               onClick={() => onNavegar(card)}
-              className={cn("w-full flex items-center gap-2.5 border-l-4 rounded-lg px-3 py-2.5 text-left transition-colors", corFundo(card), corBorda(card))}
+              className={cn("w-full flex items-center gap-2.5 border-l-4 rounded-lg px-3 py-2.5 text-left transition-colors", corFundo(card), corBorda(card), dimmedIds?.has(card.chave) && "opacity-40")}
             >
               <span className="text-xs font-semibold text-ink-muted tabular-nums shrink-0 w-10">{card.hora ?? "--:--"}</span>
               <div className="flex-1 min-w-0">
@@ -431,6 +584,12 @@ function ModalDia({
               <AvatarTecnico nome={card.tecnicoNome} fotoUrl={card.tecnicoAvatar} size={28} />
             </button>
           ))}
+        </div>
+        <div className="p-3 border-t border-surface-border">
+          <button type="button" onClick={onCriar}
+            className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-primary-600 border border-dashed border-primary-300 hover:bg-primary-50">
+            <Plus className="w-4 h-4" /> Nova OS neste dia
+          </button>
         </div>
       </div>
     </div>

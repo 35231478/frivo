@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { OsInativarBotao } from "@/components/os/os-inativar";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { cn, formatarData, MESES_PT, LABELS_STATUS_OS, LABELS_PRIORIDADE, LABELS_ORIGEM_OS } from "@/lib/utils";
 import { BuscaSelect, type OpcaoBusca } from "@/components/ui/busca-select";
@@ -64,6 +66,7 @@ function corDoDia(ordens: OrdemView[]): string {
 
 export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens: OrdemView[]; total: number; exibindo: number; opcoes: Opcoes }) {
   const router = useRouter();
+  const { pode } = usePermissoes();
   const pathname = usePathname();
   const sp = useSearchParams();
   const get = (k: string) => sp.get(k) ?? "";
@@ -165,9 +168,11 @@ export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens:
           <h1 className="page-title">Ordens de Serviço</h1>
           <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{total}</span>
         </div>
-        <Link href="/ordens/nova" className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow">
-          <Plus className="w-4 h-4" /> Nova OS
-        </Link>
+        {pode("ordens", "criar") && (
+          <Link href="/ordens/nova" className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow">
+            <Plus className="w-4 h-4" /> Nova OS
+          </Link>
+        )}
       </div>
 
       {/* Navegação por data */}
@@ -252,6 +257,11 @@ export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens:
                 <button key={v} type="button" onClick={() => toggleLista("status", v)}
                   className={cn("text-xs px-2 py-1 rounded-full border transition-colors", naLista("status", v) ? "bg-primary-500 border-primary-500 text-white" : "bg-white border-surface-border text-ink-muted hover:border-primary-300")}>{l}</button>
               ))}
+              {!get("status") && (
+                <span className="text-[11px] text-ink-subtle ml-1" title="OS inativadas ficam ocultas; marque “Cancelada” para vê-las">
+                  (canceladas ocultas)
+                </span>
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider mr-1">Prioridade</span>
@@ -330,7 +340,8 @@ export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens:
         ) : view === "cards" ? (
           <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {ordens.map((os) => (
-              <Link key={os.id} href={`/ordens/${os.id}`} className="border border-surface-border rounded-xl p-4 hover:border-primary-200 hover:shadow-card transition-all">
+              <div key={os.id} className="relative">
+              <Link href={`/ordens/${os.id}`} className="block h-full border border-surface-border rounded-xl p-4 hover:border-primary-200 hover:shadow-card transition-all">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-mono font-semibold text-primary-600">{os.chamadoNumero ?? os.numero}</span>
                   {os.origem === "PORTAL_CLIENTE" && <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-cyan-50 text-cyan-700 px-1.5 py-0.5 rounded"><Headset className="w-3 h-3" /> Portal</span>}
@@ -350,6 +361,8 @@ export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens:
                 </div>
                 <p className="text-[11px] text-ink-subtle mt-2">Aberta {formatarData(os.criadoEm)}{os.previsaoConclusao ? ` · Prev. ${formatarData(os.previsaoConclusao)}` : ""}</p>
               </Link>
+              <div className="absolute bottom-2 right-2"><OsInativarBotao osId={os.id} numero={os.chamadoNumero ?? os.numero} status={os.status} variante="icone" /></div>
+              </div>
             ))}
           </div>
         ) : (
@@ -365,6 +378,7 @@ export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens:
                   <Th onClick={() => ordenarPor("status")}>Status <Seta campo="status" /></Th>
                   <Th className="hidden md:table-cell" onClick={() => ordenarPor("prioridade")}>Prioridade <Seta campo="prioridade" /></Th>
                   <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Equipe</th>
+                  <th className="w-px px-2 py-3"><span className="sr-only">Ações</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -386,6 +400,7 @@ export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens:
                     <td className="px-4 py-3"><span className={CLASSE_STATUS[os.status]}>{LABELS_STATUS_OS[os.status]}</span></td>
                     <td className="px-4 py-3 hidden md:table-cell"><span className={CLASSE_PRIORIDADE[os.prioridade]}>{LABELS_PRIORIDADE[os.prioridade]}</span></td>
                     <td className="px-4 py-3"><div className="flex justify-end"><AvatarStack tecnicos={os.tecnicos} size={28} /></div></td>
+                    <td className="px-2 py-3"><OsInativarBotao osId={os.id} numero={os.chamadoNumero ?? os.numero} status={os.status} variante="icone" /></td>
                   </tr>
                 ))}
               </tbody>

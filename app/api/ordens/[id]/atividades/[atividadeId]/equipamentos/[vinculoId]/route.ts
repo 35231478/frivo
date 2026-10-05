@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { exigirPermissao, exigirAlgumaPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
@@ -16,8 +16,9 @@ async function getVinculo(empresaId: string, id: string, atividadeId: string, vi
 const patchSchema = z.object({ feito: z.boolean() });
 
 export async function PATCH(req: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirAlgumaPermissao([["ordens", "editar"], ["ordens", "concluir"]]);
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const { id, atividadeId, vinculoId } = await params;
 
   const vinculo = await getVinculo(session.user!.empresaId, id, atividadeId, vinculoId);
@@ -38,8 +39,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 }
 
 export async function DELETE(_: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("ordens", "editar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const { id, atividadeId, vinculoId } = await params;
 
   if (!(await getVinculo(session.user!.empresaId, id, atividadeId, vinculoId))) {

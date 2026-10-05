@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ id: string; atividadeId: string }> };
@@ -12,8 +12,9 @@ type Params = { params: Promise<{ id: string; atividadeId: string }> };
  * Reutilizado pelo PWA do técnico (execução da atividade).
  */
 export async function GET(_: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("ordens", "visualizar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const { id, atividadeId } = await params;
   const empresaId = session.user!.empresaId;
 

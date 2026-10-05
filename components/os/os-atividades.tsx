@@ -11,7 +11,17 @@ import { cn, formatarDataHora } from "@/lib/utils";
 import { AtividadeEquipamentos } from "@/components/os/atividade-equipamentos";
 import { SelectCadastroRapido } from "@/components/ui/select-cadastro-rapido";
 import { TECNICO } from "@/components/cadastro-rapido/definicoes";
-import { Plus, X, Check, ChevronDown, ChevronRight, Wrench, User, Smartphone } from "lucide-react";
+import { Plus, X, Check, ChevronDown, ChevronRight, Wrench, User, Smartphone, Pencil, Trash2, Loader2, AlertTriangle } from "lucide-react";
+import { Modal } from "@/components/ui/modal";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
+
+/** ISO → valor de <input type="datetime-local"> no fuso do navegador. */
+function paraInputLocal(iso?: string | Date | null) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 const STATUS_LABELS: Record<string, string> = { AGENDADA: "Agendada", EM_ANDAMENTO: "Em Andamento", CONCLUIDA: "Concluída", CANCELADA: "Cancelada" };
 const STATUS_COR: Record<string, string> = { AGENDADA: "bg-purple-100 text-purple-700", EM_ANDAMENTO: "bg-yellow-100 text-yellow-700", CONCLUIDA: "bg-green-100 text-green-700", CANCELADA: "bg-red-100 text-red-700" };
@@ -26,6 +36,60 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
   const [salvando, setSalvando] = useState(false);
   const [erroStatus, setErroStatus] = useState("");
   const [form, setForm] = useState({ titulo: "", tipoOsId: "", tecnicoId: "", dataAgendada: "", duracaoMin: "", observacao: "" });
+  const { pode } = usePermissoes();
+  const podeEditar = pode("ordens", "editar");
+  const podeExcluir = pode("ordens", "excluir");
+  const podeStatus = podeEditar || pode("ordens", "concluir");
+  // Editar / excluir atividade
+  const [editando, setEditando] = useState<any | null>(null);
+  const [formEdicao, setFormEdicao] = useState({ titulo: "", tipoOsId: "", tecnicoId: "", dataAgendada: "", duracaoMin: "", observacao: "" });
+  const [excluindo, setExcluindo] = useState<any | null>(null);
+  const [processando, setProcessando] = useState(false);
+  const [erroModal, setErroModal] = useState("");
+
+  function abrirEdicao(a: any) {
+    setErroModal("");
+    setFormEdicao({
+      titulo: a.titulo ?? "", tipoOsId: a.tipoOs?.id ?? a.tipoOsId ?? "", tecnicoId: a.tecnico?.id ?? a.tecnicoId ?? "",
+      dataAgendada: paraInputLocal(a.dataAgendada), duracaoMin: a.duracaoMin ? String(a.duracaoMin) : "", observacao: a.observacao ?? "",
+    });
+    setEditando(a);
+  }
+
+  async function salvarEdicao() {
+    if (!editando) return;
+    if (!formEdicao.titulo.trim()) { setErroModal("O título é obrigatório."); return; }
+    setProcessando(true); setErroModal("");
+    try {
+      const res = await fetch(`/api/ordens/${osId}/atividades/${editando.id}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          titulo: formEdicao.titulo.trim(),
+          tipoOsId: formEdicao.tipoOsId,
+          tecnicoId: formEdicao.tecnicoId,
+          dataAgendada: formEdicao.dataAgendada ? new Date(formEdicao.dataAgendada).toISOString() : "",
+          duracaoMin: formEdicao.duracaoMin ? Number(formEdicao.duracaoMin) : null,
+          observacao: formEdicao.observacao,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setErroModal(data.erro ?? "Não foi possível salvar."); return; }
+      setAtividades((p) => p.map((x) => (x.id === editando.id ? { ...x, ...data } : x)));
+      setEditando(null);
+    } catch { setErroModal("Erro de conexão."); } finally { setProcessando(false); }
+  }
+
+  async function confirmarExclusao() {
+    if (!excluindo) return;
+    setProcessando(true); setErroModal("");
+    try {
+      const res = await fetch(`/api/ordens/${osId}/atividades/${excluindo.id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setErroModal(data.erro ?? "Não foi possível excluir."); return; }
+      setAtividades((p) => p.filter((x) => x.id !== excluindo.id));
+      setExcluindo(null);
+    } catch { setErroModal("Erro de conexão."); } finally { setProcessando(false); }
+  }
 
   useEffect(() => {
     fetch("/api/tipos-os").then((r) => r.json()).then(setTiposOs).catch(() => {});
@@ -112,10 +176,26 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
                     <pre className="text-sm text-gray-700 whitespace-pre-wrap bg-white rounded-lg p-3 border border-gray-100 font-sans">{a.resumo}</pre>
                   </div>
                 )}
-                <div className="flex items-center justify-between gap-2">
-                  <Select value={a.status} onChange={(e) => alterarStatusAtividade(a.id, e.target.value)} className="text-xs w-auto h-7">
-                    {Object.entries(STATUS_LABELS).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
-                  </Select>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-1">
+                    {podeStatus && (
+                      <Select value={a.status} onChange={(e) => alterarStatusAtividade(a.id, e.target.value)} className="text-xs w-auto py-1.5">
+                        {Object.entries(STATUS_LABELS).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
+                      </Select>
+                    )}
+                    {podeEditar && (
+                      <button type="button" onClick={() => abrirEdicao(a)} title="Editar atividade"
+                        className="p-2 rounded-md text-gray-500 hover:text-frivo-600 hover:bg-white">
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                    )}
+                    {podeExcluir && (
+                      <button type="button" onClick={() => { setErroModal(""); setExcluindo(a); }} title="Excluir atividade"
+                        className="p-2 rounded-md text-gray-500 hover:text-red-600 hover:bg-red-50">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
                   <Link href={`/ordens/${osId}/atividades/${a.id}/executar`}
                     className="inline-flex items-center gap-1.5 text-xs font-medium text-frivo-600 hover:text-frivo-700 bg-frivo-50 hover:bg-frivo-100 px-2.5 py-1.5 rounded-lg">
                     <Smartphone className="w-3.5 h-3.5" /> Executar
@@ -194,11 +274,74 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
         </div>
       )}
 
-      {!mostraForm && atividades.length < 20 && (
+      {!mostraForm && podeEditar && atividades.length < 20 && (
         <Button type="button" variant="secondary" onClick={() => setMostraForm(true)} className="w-full justify-center border-dashed">
           <Plus className="w-4 h-4" /> Nova atividade
         </Button>
       )}
+
+      {/* ── Editar atividade ── */}
+      <Modal aberto={!!editando} onFechar={() => setEditando(null)} titulo="Editar atividade">
+        <div className="space-y-4">
+          <FormField label="Título" required>
+            <Input value={formEdicao.titulo} onChange={(e) => setFormEdicao((f) => ({ ...f, titulo: e.target.value }))} />
+          </FormField>
+          <FormGrid>
+            <FormField label="Tipo de OS">
+              <Select value={formEdicao.tipoOsId} onChange={(e) => setFormEdicao((f) => ({ ...f, tipoOsId: e.target.value }))} placeholder="Sem tipo">
+                {tiposOs.filter((t) => t.ativo || t.id === formEdicao.tipoOsId).map((t) => (<option key={t.id} value={t.id}>{t.nome}</option>))}
+              </Select>
+            </FormField>
+            <FormField label="Técnico">
+              <Select value={formEdicao.tecnicoId} onChange={(e) => setFormEdicao((f) => ({ ...f, tecnicoId: e.target.value }))} placeholder="Sem técnico">
+                {tecnicos.map((t: any) => (<option key={t.id} value={t.id}>{t.nome}</option>))}
+              </Select>
+            </FormField>
+          </FormGrid>
+          <FormGrid>
+            <FormField label="Data/hora agendada">
+              <Input type="datetime-local" value={formEdicao.dataAgendada} onChange={(e) => setFormEdicao((f) => ({ ...f, dataAgendada: e.target.value }))} />
+            </FormField>
+            <FormField label="Duração estimada (min)">
+              <Input type="number" value={formEdicao.duracaoMin} onChange={(e) => setFormEdicao((f) => ({ ...f, duracaoMin: e.target.value }))} />
+            </FormField>
+          </FormGrid>
+          <FormField label="Observação">
+            <Textarea value={formEdicao.observacao} onChange={(e) => setFormEdicao((f) => ({ ...f, observacao: e.target.value }))} rows={2} />
+          </FormField>
+          {erroModal && <ErroModal texto={erroModal} />}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => setEditando(null)}>Cancelar</Button>
+            <Button type="button" loading={processando} onClick={salvarEdicao}><Check className="w-4 h-4" /> Salvar</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── Excluir atividade ── */}
+      <Modal aberto={!!excluindo} onFechar={() => setExcluindo(null)} titulo="Excluir atividade?" tamanho="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-ink">
+            Tem certeza? A atividade <strong>{excluindo?.titulo}</strong> será removida da OS (fica registrado no histórico).
+            Atividades que já têm execução registrada não podem ser excluídas — nesse caso, cancele a atividade.
+          </p>
+          {erroModal && <ErroModal texto={erroModal} />}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => setExcluindo(null)}>Voltar</Button>
+            <button type="button" onClick={confirmarExclusao} disabled={processando}
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold rounded-lg bg-red-600 hover:bg-red-700 text-white disabled:opacity-60">
+              {processando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} Sim, excluir
+            </button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+function ErroModal({ texto }: { texto: string }) {
+  return (
+    <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+      <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> <span>{texto}</span>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { exigirAlgumaPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { dataAgendadaRecorrencia } from "@/lib/recorrencia-helpers";
 
@@ -10,8 +10,10 @@ type Params = { params: Promise<{ id: string }> };
  * Body: { mes, ano } (default: mês/ano corrente). Usado pelo relatório de contratos.
  */
 export async function POST(req: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  // Gera OS: quem cria OS ou quem administra o contrato (relatório de contratos)
+  const guard = await exigirAlgumaPermissao([["ordens", "criar"], ["contratos", "editar"]]);
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const { id } = await params;
   const empresaId = session.user!.empresaId;
   const usuarioId = session.user!.id;
