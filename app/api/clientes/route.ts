@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { clienteSchema } from "@/lib/validations";
 import { z } from "zod";
@@ -46,6 +47,8 @@ const clienteComUnidadesSchema = clienteSchema.extend({
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  if (!pode(session.user!.permissoes, "clientes", "visualizar", session.user!.role))
+    return NextResponse.json({ erro: "Sem permissão" }, { status: 403 });
 
   const empresaId = session.user!.empresaId;
   const { searchParams } = new URL(req.url);
@@ -72,6 +75,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  if (!pode(session.user!.permissoes, "clientes", "criar", session.user!.role))
+    return NextResponse.json({ erro: "Sem permissão" }, { status: 403 });
 
   const empresaId = session.user!.empresaId;
   const body = await req.json();
