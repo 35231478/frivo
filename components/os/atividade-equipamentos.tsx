@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
+import { CadastroRapidoModal, usePodeCriar, type OpcaoCadastro } from "@/components/ui/select-cadastro-rapido";
+import { EQUIPAMENTO, UNIDADE } from "@/components/cadastro-rapido/definicoes";
 import { Plus, X, Check, Trash2, HardDrive, ClipboardList, CircleCheck, CircleDashed, AlertCircle } from "lucide-react";
 
 interface Props {
@@ -30,6 +32,20 @@ export function AtividadeEquipamentos({ osId, atividadeId, clienteId, unidadeId,
   const [mostraAdd, setMostraAdd] = useState(false);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [salvando, setSalvando] = useState(false);
+  // Cadastro rápido de equipamento (mesmo componente do cadastro inline)
+  const podeCriarEquip = usePodeCriar(EQUIPAMENTO.permissao);
+  const [novoEquip, setNovoEquip] = useState(false);
+  const [unidadesCliente, setUnidadesCliente] = useState<OpcaoCadastro[] | null>(null);
+
+  async function abrirNovoEquip() {
+    // OS sem endereço: o mini-cadastro pede a unidade do cliente
+    if (!unidadeId && clienteId && !unidadesCliente) {
+      const d = await fetch(`/api/unidades?clienteId=${clienteId}`).then((r) => r.json()).catch(() => []);
+      setUnidadesCliente(Array.isArray(d) ? d.map(UNIDADE.opcao) : []);
+    }
+    setMostraAdd(true);
+    setNovoEquip(true);
+  }
 
   const base = `/api/ordens/${osId}/atividades/${atividadeId}`;
 
@@ -113,7 +129,14 @@ export function AtividadeEquipamentos({ osId, atividadeId, clienteId, unidadeId,
               <button onClick={() => { setMostraAdd(false); setSelecionados(new Set()); }} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
             </div>
             {candidatos.length === 0 ? (
-              <p className="text-xs text-gray-400">Nenhum equipamento disponível para adicionar.</p>
+              <p className="text-xs text-gray-400">
+                {disponiveis.length === 0 ? "Nenhum equipamento cadastrado neste local." : "Todos os equipamentos deste local já foram adicionados."}
+                {podeCriarEquip && (
+                  <button type="button" onClick={abrirNovoEquip} className="ml-1 font-semibold text-frivo-600 hover:text-frivo-700 inline-flex items-center gap-0.5">
+                    <Plus className="w-3 h-3" /> Cadastrar agora
+                  </button>
+                )}
+              </p>
             ) : (
               <div className="max-h-48 overflow-y-auto space-y-1">
                 {candidatos.map((e) => {
@@ -129,7 +152,12 @@ export function AtividadeEquipamentos({ osId, atividadeId, clienteId, unidadeId,
                 })}
               </div>
             )}
-            <div className="flex justify-end">
+            <div className="flex items-center justify-between gap-2">
+              {podeCriarEquip && candidatos.length > 0 ? (
+                <button type="button" onClick={abrirNovoEquip} className="text-xs font-semibold text-frivo-600 hover:text-frivo-700 inline-flex items-center gap-1">
+                  <Plus className="w-3 h-3" /> Novo equipamento
+                </button>
+              ) : <span />}
               <Button type="button" loading={salvando} onClick={adicionar} disabled={selecionados.size === 0} className="h-7 text-xs px-3">
                 <Check className="w-3.5 h-3.5" /> Adicionar {selecionados.size > 0 ? `(${selecionados.size})` : ""}
               </Button>
@@ -137,6 +165,22 @@ export function AtividadeEquipamentos({ osId, atividadeId, clienteId, unidadeId,
           </div>
         )}
       </div>
+
+      <CadastroRapidoModal
+        aberto={novoEquip}
+        onFechar={() => setNovoEquip(false)}
+        titulo="Novo equipamento"
+        contexto={unidadeId ? "neste endereço da OS" : "para este cliente"}
+        campos={EQUIPAMENTO.campos(unidadeId ? undefined : unidadesCliente ?? [])}
+        linkCadastroCompleto={EQUIPAMENTO.link}
+        criar={async (v) => {
+          const e = await EQUIPAMENTO.criar(unidadeId ?? "", v);
+          setDisponiveis((l) => [...l, e]);
+          return { value: e.id, label: rotuloEquip(e) };
+        }}
+        // Já aparece marcado na lista — falta só confirmar em "Adicionar"
+        onCriado={(o) => { setNovoEquip(false); setSelecionados((p) => new Set(p).add(o.value)); }}
+      />
 
       {/* ── Formulários desta atividade ── */}
       <div>

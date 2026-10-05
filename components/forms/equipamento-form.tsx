@@ -14,6 +14,7 @@ import { EquipamentoQrSection } from "@/components/forms/equipamento-qr-section"
 import { TipoBadge, TipoIcone } from "@/components/equipamentos/tipo-equipamento";
 import { StatusSelo } from "@/components/equipamentos/selos";
 import { SelectCadastroRapido, type CampoRapido, type OpcaoCadastro } from "@/components/ui/select-cadastro-rapido";
+import { UNIDADE } from "@/components/cadastro-rapido/definicoes";
 import Link from "next/link";
 import { LABELS_TIPO_EQUIPAMENTO, cn } from "@/lib/utils";
 import { Thermometer, ImageIcon, MapPin, Cog, QrCode, History, CheckCircle2, ClipboardList, ChevronLeft, ExternalLink } from "lucide-react";
@@ -25,14 +26,6 @@ const PREFIXO_CUSTOM = "custom:";
 type TipoCustom = { id: string; nome: string; chaveEnum: string | null; ativo: boolean };
 
 // Cadastro rápido: só o essencial (o cadastro completo fica a um link de distância)
-const CAMPOS_UNIDADE: CampoRapido[] = [
-  { nome: "nome", label: "Nome do local", obrigatorio: true, placeholder: "Ex: Matriz, Loja Centro, Bloco A" },
-  { nome: "cep", label: "CEP", tipo: "cep", placeholder: "00000-000", colunas: 2 },
-  { nome: "logradouro", label: "Endereço", placeholder: "Rua / Avenida", colunas: 4 },
-  { nome: "numero", label: "Número", placeholder: "Nº", colunas: 2 },
-  { nome: "cidade", label: "Cidade", colunas: 2 },
-  { nome: "estado", label: "UF", tipo: "uf", colunas: 2 },
-];
 const CAMPOS_TIPO: CampoRapido[] = [
   { nome: "nome", label: "Nome do tipo", obrigatorio: true, placeholder: "Ex: Cortina de ar, Bebedouro, Purificador" },
 ];
@@ -167,21 +160,14 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
   ], [tiposCustom]);
 
   const opcoesUnidade: OpcaoCadastro[] = useMemo(
-    () => unidades.map((u) => ({ value: u.id, label: u.nome, descricao: u.cidade ?? undefined })),
+    () => unidades.map(UNIDADE.opcao),
     [unidades],
   );
 
   async function criarUnidade(v: Record<string, string>): Promise<OpcaoCadastro> {
-    const res = await fetch("/api/unidades", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      // Primeiro endereço do cliente vira o principal
-      body: JSON.stringify({ ...v, clienteId, principal: unidades.length === 0 }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.erro ?? "Erro ao cadastrar a unidade.");
-    setUnidades((lista) => [...lista, data].sort((a, b) => a.nome.localeCompare(b.nome)));
-    return { value: data.id, label: data.nome, descricao: data.cidade ?? undefined };
+    const data = await UNIDADE.criar(clienteId, v, unidades.length === 0);
+    setUnidades((lista) => [...lista, data].sort((x, y) => x.nome.localeCompare(y.nome)));
+    return UNIDADE.opcao(data);
   }
 
   async function criarTipo(v: Record<string, string>): Promise<OpcaoCadastro> {
@@ -415,18 +401,17 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
                   value={form.unidadeId}
                   onChange={(v) => set("unidadeId", v)}
                   opcoes={opcoesUnidade}
-                  entidade={{ singular: "unidade", plural: "unidades", feminino: true }}
+                  entidade={UNIDADE.entidade}
                   contexto="para este cliente"
                   placeholder="Selecione o endereço"
                   disabled={!clienteId}
                   textoDesabilitado="Selecione um cliente primeiro"
                   carregando={carregandoUnidades}
-                  campos={CAMPOS_UNIDADE}
+                  campos={UNIDADE.campos}
                   campoBusca="nome"
                   criar={criarUnidade}
-                  // Unidade é endereço do cliente: criar exige poder editar o cliente
-                  permissao={{ modulo: "clientes", acao: "editar" }}
-                  linkCadastroCompleto={clienteId ? `/clientes/${clienteId}/editar` : undefined}
+                  permissao={UNIDADE.permissao}
+                  linkCadastroCompleto={clienteId ? UNIDADE.link(clienteId) : undefined}
                 />
               </FormField>
               <FormGrid>

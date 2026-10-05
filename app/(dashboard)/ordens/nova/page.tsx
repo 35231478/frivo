@@ -9,6 +9,8 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { LABELS_PRIORIDADE } from "@/lib/utils";
+import { SelectCadastroRapido } from "@/components/ui/select-cadastro-rapido";
+import { CLIENTE, UNIDADE } from "@/components/cadastro-rapido/definicoes";
 
 type Item = { id: string; nome: string; nomeFantasia?: string | null };
 type UnidadeItem = { id: string; nome: string; cidade?: string | null };
@@ -20,6 +22,8 @@ export default function NovaOrdemPage() {
   const [unidades, setUnidades] = useState<UnidadeItem[]>([]);
   const [contratos, setContratos] = useState<ContratoItem[]>([]);
   const [clienteId, setClienteId] = useState("");
+  const [carregandoClientes, setCarregandoClientes] = useState(true);
+  const [carregandoUnidades, setCarregandoUnidades] = useState(false);
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [form, setForm] = useState({
@@ -28,7 +32,8 @@ export default function NovaOrdemPage() {
   });
 
   useEffect(() => {
-    fetch("/api/clientes").then((r) => r.json()).then(setClientes).catch(() => {});
+    fetch("/api/clientes").then((r) => r.json()).then((d) => setClientes(Array.isArray(d) ? d : [])).catch(() => {})
+      .finally(() => setCarregandoClientes(false));
   }, []);
 
   // Pré-preenchimento opcional via URL (ex.: "Abrir OS" na ficha do equipamento)
@@ -43,7 +48,9 @@ export default function NovaOrdemPage() {
 
   useEffect(() => {
     if (!clienteId) { setUnidades([]); setContratos([]); return; }
-    fetch(`/api/unidades?clienteId=${clienteId}`).then((r) => r.json()).then(setUnidades).catch(() => {});
+    setCarregandoUnidades(true);
+    fetch(`/api/unidades?clienteId=${clienteId}`).then((r) => r.json()).then((d) => setUnidades(Array.isArray(d) ? d : [])).catch(() => {})
+      .finally(() => setCarregandoUnidades(false));
     fetch(`/api/contratos?clienteId=${clienteId}`).then((r) => r.json()).then(setContratos).catch(() => {});
   }, [clienteId]);
 
@@ -69,15 +76,47 @@ export default function NovaOrdemPage() {
 
         <FormSection title="Informações gerais">
           <FormField label="Cliente" required>
-            <Select value={clienteId} onChange={(e) => setClienteId(e.target.value)} placeholder="Selecione o cliente">
-              {clientes.map((c) => (<option key={c.id} value={c.id}>{c.nomeFantasia ?? c.nome}</option>))}
-            </Select>
+            <SelectCadastroRapido
+              value={clienteId}
+              onChange={(v) => { setClienteId(v); setForm((f) => ({ ...f, unidadeId: "", contratoId: "" })); }}
+              opcoes={clientes.map(CLIENTE.opcao)}
+              entidade={CLIENTE.entidade}
+              placeholder="Selecione o cliente"
+              carregando={carregandoClientes}
+              campos={CLIENTE.campos}
+              valoresIniciais={CLIENTE.valoresIniciais}
+              campoBusca="nome"
+              permissao={CLIENTE.permissao}
+              linkCadastroCompleto={CLIENTE.link}
+              criar={async (v) => {
+                const c = await CLIENTE.criar(v);
+                setClientes((l) => [...l, c]);
+                return CLIENTE.opcao(c);
+              }}
+            />
           </FormField>
           <FormGrid>
             <FormField label="Endereço do cliente">
-              <Select value={form.unidadeId} onChange={(e) => setForm((f) => ({ ...f, unidadeId: e.target.value }))} placeholder={clienteId ? "Selecione" : "Selecione um cliente primeiro"} disabled={!clienteId}>
-                {unidades.map((u) => (<option key={u.id} value={u.id}>{u.nome}{u.cidade ? ` — ${u.cidade}` : ""}</option>))}
-              </Select>
+              <SelectCadastroRapido
+                value={form.unidadeId}
+                onChange={(v) => setForm((f) => ({ ...f, unidadeId: v }))}
+                opcoes={unidades.map(UNIDADE.opcao)}
+                entidade={UNIDADE.entidade}
+                contexto="para este cliente"
+                placeholder="Selecione"
+                disabled={!clienteId}
+                textoDesabilitado="Selecione um cliente primeiro"
+                carregando={carregandoUnidades}
+                campos={UNIDADE.campos}
+                campoBusca="nome"
+                permissao={UNIDADE.permissao}
+                linkCadastroCompleto={clienteId ? UNIDADE.link(clienteId) : undefined}
+                criar={async (v) => {
+                  const u = await UNIDADE.criar(clienteId, v, unidades.length === 0);
+                  setUnidades((l) => [...l, u]);
+                  return UNIDADE.opcao(u);
+                }}
+              />
             </FormField>
             <FormField label="Contrato vinculado">
               <Select value={form.contratoId} onChange={(e) => setForm((f) => ({ ...f, contratoId: e.target.value }))} placeholder="Sem contrato" disabled={!clienteId}>
