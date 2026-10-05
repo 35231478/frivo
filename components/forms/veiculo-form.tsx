@@ -10,6 +10,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { GaleriaImagens } from "@/components/ui/galeria-imagens";
+import { aliviarFotos } from "@/lib/imagem-cliente";
 import {
   Truck, UserCog, FileText, Wrench, ClipboardCheck, AlertCircle, Plus, Trash2, Upload, X,
 } from "lucide-react";
@@ -86,7 +87,12 @@ export function VeiculoForm({ initialData, ocorrencias }: { initialData?: any; o
 
   useEffect(() => {
     fetch("/api/tecnicos").then((r) => r.json()).then((d) => setColaboradores(Array.isArray(d) ? d : [])).catch(() => {});
-    fetch("/api/equipes").then((r) => r.json()).then((d) => setEquipes(Array.isArray(d) ? d.map((e: any) => ({ id: e.id, nome: e.nome })) : [])).catch(() => {});
+    // Só equipes ativas; a já vinculada continua aparecendo mesmo se tiver sido inativada
+    const vinculada = initialData?.equipeId;
+    fetch("/api/equipes").then((r) => r.json()).then((d) => setEquipes(Array.isArray(d)
+      ? d.filter((e: any) => e.status === "ATIVA" || e.id === vinculada)
+        .map((e: any) => ({ id: e.id, nome: e.status === "ATIVA" ? e.nome : `${e.nome} (inativa)` }))
+      : [])).catch(() => {});
   }, []);
 
   function addDoc() { setDocumentos((p) => [...p, { tipo: "CRLV", nome: "", arquivoUrl: null, dataVencimento: null }]); }
@@ -115,7 +121,7 @@ export function VeiculoForm({ initialData, ocorrencias }: { initialData?: any; o
         method: isEditing ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...form, fotos, documentos,
+          ...form, fotos: await aliviarFotos(fotos), documentos,
           quilometragemAtual: form.quilometragemAtual || null,
           proximaRevisaoKm: form.proximaRevisaoKm || null,
           proximaRevisaoData: form.proximaRevisaoData || null,

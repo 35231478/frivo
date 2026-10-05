@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
     } catch (e) {
       // O equipamento já foi salvo: não desfaz o cadastro por causa do QR
       console.error("Falha ao gerar QR do equipamento", e);
-      return NextResponse.json({ ...equipamento, qrcode: null, avisoQr: "O equipamento foi salvo, mas o QR Code não pôde ser gerado agora. Gere pela aba QR Code." }, { status: 201 });
+      return NextResponse.json({ ...equipamento, qrcode: null, avisoQr: "O equipamento foi salvo, mas o QR Code não pôde ser gerado agora. Gere pela ficha do equipamento (botão \"Gerar QR\")." }, { status: 201 });
     }
   }
 

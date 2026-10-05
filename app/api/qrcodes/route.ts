@@ -2,20 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { codigoQr, proximoSequencialQr } from "@/lib/qrcode-server";
 
 const gerarSchema = z.object({
   quantidade: z.number().int().min(1).max(100),
 });
-
-/** Próximo número sequencial QR-AAAA-#### para a empresa. */
-async function proximoSequencial(empresaId: string, ano: number) {
-  const ultimo = await prisma.qrcode.findFirst({
-    where: { empresaId, codigo: { startsWith: `QR-${ano}-` } },
-    orderBy: { codigo: "desc" },
-    select: { codigo: true },
-  });
-  return ultimo ? Number(ultimo.codigo.split("-")[2]) + 1 : 1;
-}
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -54,19 +45,20 @@ export async function POST(req: NextRequest) {
   }
 
   const ano = new Date().getFullYear();
-  const inicio = await proximoSequencial(empresaId, ano);
+  const inicio = await proximoSequencialQr(empresaId, ano);
 
   const dados = Array.from({ length: parsed.data.quantidade }, (_, i) => ({
     empresaId,
-    codigo: `QR-${ano}-${String(inicio + i).padStart(4, "0")}`,
+    codigo: codigoQr(ano, inicio + i),
   }));
 
   await prisma.qrcode.createMany({ data: dados });
 
   const criados = await prisma.qrcode.findMany({
     where: { empresaId, codigo: { in: dados.map((d) => d.codigo) } },
-    orderBy: { codigo: "asc" },
   });
+  // Ordem numérica (como texto, "…-10000" viria antes de "…-9999")
+  criados.sort((a, b) => Number(a.codigo.split("-")[2]) - Number(b.codigo.split("-")[2]));
 
   return NextResponse.json(criados, { status: 201 });
 }
