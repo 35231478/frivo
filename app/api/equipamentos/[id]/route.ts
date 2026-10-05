@@ -45,7 +45,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const unidade = await prisma.unidade.findFirst({ where: { id: parsed.data.unidadeId, empresaId } });
   if (!unidade) return NextResponse.json({ erro: "Unidade não encontrada" }, { status: 404 });
 
-  const { dataInstalacao, dataFabricacao, garantiaAte, ...resto } = parsed.data;
+  const { dataInstalacao, dataFabricacao, garantiaInicio, garantiaAte, ...resto } = parsed.data;
+  if (garantiaInicio && garantiaAte && garantiaInicio > garantiaAte)
+    return NextResponse.json({ erro: "O início da garantia deve ser anterior ao fim." }, { status: 400 });
   const tipoEquipamentoId = await resolverTipoEquipamentoId(empresaId, resto.tipo);
   const atualizado = await prisma.equipamento.update({
     where: { id },
@@ -54,6 +56,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
       tipoEquipamentoId,
       dataInstalacao: dataInstalacao ? new Date(dataInstalacao) : null,
       dataFabricacao: dataFabricacao ? new Date(dataFabricacao) : null,
+      garantiaInicio: garantiaInicio ? new Date(garantiaInicio) : null,
       garantiaAte: garantiaAte ? new Date(garantiaAte) : null,
     },
   });

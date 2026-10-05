@@ -979,9 +979,12 @@ model Equipamento {
   fase                String?
   correnteNominal     String?         @map("corrente_nominal")
   observacoesTecnicas String?         @map("observacoes_tecnicas")
+  // Local em hierarquia: Cliente -> Unidade (unidadeId) -> Setor -> Ambiente (coluna `localizacao`)
+  setor               String?
   localizacao         String?
   dataInstalacao      DateTime?       @map("data_instalacao")
   dataFabricacao      DateTime?       @map("data_fabricacao")
+  garantiaInicio      DateTime?       @map("garantia_inicio")
   garantiaAte         DateTime?       @map("garantia_ate")
   observacoes         String?
   fotos               String[]

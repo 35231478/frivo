@@ -64,7 +64,9 @@ export async function POST(req: NextRequest) {
   });
   if (!unidade) return NextResponse.json({ erro: "Unidade não encontrada" }, { status: 404 });
 
-  const { dataInstalacao, dataFabricacao, garantiaAte, ...resto } = parsed.data;
+  const { dataInstalacao, dataFabricacao, garantiaInicio, garantiaAte, ...resto } = parsed.data;
+  if (garantiaInicio && garantiaAte && garantiaInicio > garantiaAte)
+    return NextResponse.json({ erro: "O início da garantia deve ser anterior ao fim." }, { status: 400 });
   const tipoEquipamentoId = await resolverTipoEquipamentoId(empresaId, resto.tipo);
   const equipamento = await prisma.equipamento.create({
     data: {
@@ -73,6 +75,7 @@ export async function POST(req: NextRequest) {
       tipoEquipamentoId,
       dataInstalacao: dataInstalacao ? new Date(dataInstalacao) : null,
       dataFabricacao: dataFabricacao ? new Date(dataFabricacao) : null,
+      garantiaInicio: garantiaInicio ? new Date(garantiaInicio) : null,
       garantiaAte: garantiaAte ? new Date(garantiaAte) : null,
     },
   });

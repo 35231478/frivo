@@ -11,12 +11,16 @@ import {
 } from "lucide-react";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { EquipamentoAtivoBotao } from "@/components/equipamentos/equipamento-ativo-botao";
+import {
+  situacaoGarantia, LABELS_SITUACAO_GARANTIA, COR_SITUACAO_GARANTIA, type SituacaoGarantia,
+} from "@/lib/equipamento-garantia";
 
 type Equip = {
   id: string;
   nome: string; marca: string; modelo: string; numeroSerie: string | null;
   tipo: string; tipoLabel: string;
-  foto: string | null; ambiente: string | null; fluido: string | null;
+  foto: string | null; setor: string | null; ambiente: string | null; fluido: string | null;
+  garantiaAte: string | null;
   ativo: boolean; temQr: boolean; dataInstalacao: string | null;
   clienteId: string; cliente: string; unidadeId: string; unidade: string;
 };
@@ -41,7 +45,12 @@ function dataBR(iso: string | null) {
   return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-type SortKey = "nome" | "cliente" | "tipo" | "dataInstalacao";
+type SortKey = "nome" | "cliente" | "tipo" | "dataInstalacao" | "garantia";
+
+/** "Setor · Ambiente" (o que houver). */
+function localTexto(e: { setor: string | null; ambiente: string | null }) {
+  return [e.setor, e.ambiente].filter(Boolean).join(" · ");
+}
 
 export function EquipamentosListaClient({ equipamentos }: { equipamentos: Equip[] }) {
   const router = useRouter();
@@ -60,6 +69,7 @@ export function EquipamentosListaClient({ equipamentos }: { equipamentos: Equip[
   const [fluidos, setFluidos] = useState<string[]>((sp.get("fluidos") ?? "").split(",").filter(Boolean));
   const [status, setStatus] = useState(sp.get("status") ?? "");
   const [qr, setQr] = useState(sp.get("qr") ?? "");
+  const [garantia, setGarantia] = useState(sp.get("garantia") ?? "");
   const [sortKey, setSortKey] = useState<SortKey>((sp.get("sort") as SortKey) || "nome");
   const [sortDir, setSortDir] = useState<"asc" | "desc">(sp.get("dir") === "desc" ? "desc" : "asc");
 
@@ -67,7 +77,7 @@ export function EquipamentosListaClient({ equipamentos }: { equipamentos: Equip[
   useEffect(() => {
     const v = localStorage.getItem("equip-view");
     if (v === "lista" || v === "cards") setView(v);
-    if (sp.get("status") || sp.get("fluidos") || sp.get("unidade") || sp.get("ambiente") || sp.get("qr")) setAvancadoAberto(true);
+    if (sp.get("status") || sp.get("fluidos") || sp.get("unidade") || sp.get("ambiente") || sp.get("qr") || sp.get("garantia")) setAvancadoAberto(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   function trocarView(v: "cards" | "lista") {
@@ -84,6 +94,7 @@ export function EquipamentosListaClient({ equipamentos }: { equipamentos: Equip[
       if (tipos.length) p.set("tipos", tipos.join(","));
       if (unidadeId) p.set("unidade", unidadeId);
       if (ambiente) p.set("ambiente", ambiente);
+      if (garantia) p.set("garantia", garantia);
       if (fluidos.length) p.set("fluidos", fluidos.join(","));
       if (status) p.set("status", status);
       if (qr) p.set("qr", qr);
@@ -93,7 +104,7 @@ export function EquipamentosListaClient({ equipamentos }: { equipamentos: Equip[
       router.replace(qs ? `/equipamentos?${qs}` : "/equipamentos", { scroll: false });
     }, 400);
     return () => clearTimeout(t);
-  }, [busca, clienteId, tipos, unidadeId, ambiente, fluidos, status, qr, sortKey, sortDir, router]);
+  }, [busca, clienteId, tipos, unidadeId, ambiente, fluidos, status, qr, garantia, sortKey, sortDir, router]);
 
   // Opções de filtro derivadas da lista
   const clientes = useMemo(() => {
@@ -131,9 +142,13 @@ export function EquipamentosListaClient({ equipamentos }: { equipamentos: Equip[
       if (status === "inativo" && e.ativo) return false;
       if (qr === "com" && !e.temQr) return false;
       if (qr === "sem" && e.temQr) return false;
-      if (amb && !(e.ambiente ?? "").toLowerCase().includes(amb)) return false;
+      if (amb && !localTexto(e).toLowerCase().includes(amb)) return false;
+      if (garantia) {
+        const sit = situacaoGarantia(e.garantiaAte);
+        if (garantia === "sem" ? sit !== null : sit !== garantia) return false;
+      }
       if (termo) {
-        const alvo = `${e.nome} ${e.marca} ${e.modelo} ${e.numeroSerie ?? ""} ${e.ambiente ?? ""}`.toLowerCase();
+        const alvo = `${e.nome} ${e.marca} ${e.modelo} ${e.numeroSerie ?? ""} ${localTexto(e)}`.toLowerCase();
         if (!alvo.includes(termo)) return false;
       }
       return true;
@@ -145,17 +160,19 @@ export function EquipamentosListaClient({ equipamentos }: { equipamentos: Equip[
       else if (sortKey === "cliente") { av = a.cliente.toLowerCase(); bv = b.cliente.toLowerCase(); }
       else if (sortKey === "tipo") { av = a.tipoLabel.toLowerCase(); bv = b.tipoLabel.toLowerCase(); }
       else if (sortKey === "dataInstalacao") { av = a.dataInstalacao ?? ""; bv = b.dataInstalacao ?? ""; }
+      // Sem garantia vai para o fim na ordem crescente
+      else if (sortKey === "garantia") { av = a.garantiaAte ?? "9999"; bv = b.garantiaAte ?? "9999"; }
       if (av < bv) return -1 * dir;
       if (av > bv) return 1 * dir;
       return 0;
     });
     return arr;
-  }, [equipamentos, busca, clienteId, tipos, unidadeId, ambiente, fluidos, status, qr, sortKey, sortDir]);
+  }, [equipamentos, busca, clienteId, tipos, unidadeId, ambiente, fluidos, status, qr, garantia, sortKey, sortDir]);
 
-  const filtrosAtivos = [clienteId, tipos.length, unidadeId, ambiente, fluidos.length, status, qr, busca].filter(Boolean).length;
+  const filtrosAtivos = [clienteId, tipos.length, unidadeId, ambiente, fluidos.length, status, qr, garantia, busca].filter(Boolean).length;
 
   function limpar() {
-    setBusca(""); setClienteId(""); setTipos([]); setUnidadeId(""); setAmbiente(""); setFluidos([]); setStatus(""); setQr("");
+    setBusca(""); setClienteId(""); setTipos([]); setUnidadeId(""); setAmbiente(""); setFluidos([]); setStatus(""); setQr(""); setGarantia("");
   }
   function ordenar(key: SortKey) {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -194,7 +211,7 @@ export function EquipamentosListaClient({ equipamentos }: { equipamentos: Equip[
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
           <div className="relative md:col-span-5">
             <Search className="w-4 h-4 text-ink-subtle absolute left-3 top-1/2 -translate-y-1/2" />
-            <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por nome, modelo, marca, série, ambiente…"
+            <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por nome, modelo, marca, série, setor, ambiente…"
               className="w-full bg-white border border-surface-border rounded-lg pl-9 pr-3 py-2.5 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10" />
           </div>
           <select value={clienteId} onChange={(e) => { setClienteId(e.target.value); setUnidadeId(""); }}
@@ -231,15 +248,15 @@ export function EquipamentosListaClient({ equipamentos }: { equipamentos: Equip[
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-ink-muted mb-1">Ambiente</label>
-              <input value={ambiente} onChange={(e) => setAmbiente(e.target.value)} placeholder="Ex: Recepção"
+              <label className="block text-xs font-medium text-ink-muted mb-1">Setor / ambiente</label>
+              <input value={ambiente} onChange={(e) => setAmbiente(e.target.value)} placeholder="Ex: 2º andar, Recepção"
                 className="w-full bg-white border border-surface-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10" />
             </div>
             <div>
               <label className="block text-xs font-medium text-ink-muted mb-1">Fluido refrigerante</label>
               <MultiSelect titulo="Fluidos" opcoes={fluidosOpc} selecionados={fluidos} onChange={setFluidos} compacto />
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <div>
                 <label className="block text-xs font-medium text-ink-muted mb-1">Status</label>
                 <select value={status} onChange={(e) => setStatus(e.target.value)}
@@ -256,6 +273,17 @@ export function EquipamentosListaClient({ equipamentos }: { equipamentos: Equip[
                   <option value="">Todos</option>
                   <option value="com">Com QR</option>
                   <option value="sem">Sem QR</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-ink-muted mb-1">Garantia</label>
+                <select value={garantia} onChange={(e) => setGarantia(e.target.value)}
+                  className="w-full bg-white border border-surface-border rounded-lg px-2 py-2 text-sm focus:outline-none focus:border-primary-500">
+                  <option value="">Todas</option>
+                  <option value="vigente">Em garantia</option>
+                  <option value="vencendo">Vencendo (30 dias)</option>
+                  <option value="vencida">Vencida</option>
+                  <option value="sem">Sem garantia</option>
                 </select>
               </div>
             </div>
@@ -293,7 +321,7 @@ function CardsView({ itens }: { itens: Equip[] }) {
             <TipoBadge tipo={e.tipo} label={e.tipoLabel} />
             <div className="pt-1 space-y-1 text-xs text-ink-muted border-t border-gray-100 mt-2">
               <p className="flex items-center gap-1.5 truncate"><Building2 className="w-3.5 h-3.5 shrink-0" /> {e.cliente}</p>
-              <p className="flex items-center gap-1.5 truncate"><MapPin className="w-3.5 h-3.5 shrink-0" /> {e.unidade}{e.ambiente ? ` · ${e.ambiente}` : ""}</p>
+              <p className="flex items-center gap-1.5 truncate"><MapPin className="w-3.5 h-3.5 shrink-0" /> {e.unidade}{localTexto(e) ? ` · ${localTexto(e)}` : ""}</p>
             </div>
           </div>
         </Link>
@@ -312,11 +340,11 @@ function ListaView({ itens, sortKey, sortDir, onOrdenar, podeEditar }: { itens: 
           <tr>
             <th className="w-14 px-3 py-3"></th>
             <ThOrd label="Nome" k="nome" sortKey={sortKey} sortDir={sortDir} onOrdenar={onOrdenar} />
+            <th className="text-left px-3 py-3 font-semibold hidden md:table-cell">Nº série</th>
             <th className="text-left px-3 py-3 font-semibold hidden md:table-cell">Modelo / Marca</th>
             <ThOrd label="Tipo" k="tipo" sortKey={sortKey} sortDir={sortDir} onOrdenar={onOrdenar} />
-            <ThOrd label="Cliente" k="cliente" sortKey={sortKey} sortDir={sortDir} onOrdenar={onOrdenar} className="hidden lg:table-cell" />
-            <th className="text-left px-3 py-3 font-semibold hidden lg:table-cell">Endereço</th>
-            <th className="text-left px-3 py-3 font-semibold hidden xl:table-cell">Ambiente</th>
+            <ThOrd label="Cliente / Local" k="cliente" sortKey={sortKey} sortDir={sortDir} onOrdenar={onOrdenar} className="hidden lg:table-cell" />
+            <ThOrd label="Fim garantia" k="garantia" sortKey={sortKey} sortDir={sortDir} onOrdenar={onOrdenar} className="hidden xl:table-cell" />
             <th className="text-left px-3 py-3 font-semibold">Status</th>
             <th className="text-right px-3 py-3 font-semibold">Ações</th>
           </tr>
@@ -327,11 +355,14 @@ function ListaView({ itens, sortKey, sortDir, onOrdenar, podeEditar }: { itens: 
               className={cn("cursor-pointer hover:bg-primary-50/40 transition-colors", idx % 2 === 1 && "bg-surface-alt/30")}>
               <td className="px-3 py-2"><Miniatura equip={e} /></td>
               <td className="px-3 py-2 font-medium text-ink">{e.nome}</td>
+              <td className="px-3 py-2 text-ink-muted hidden md:table-cell font-mono text-xs">{e.numeroSerie ?? "—"}</td>
               <td className="px-3 py-2 text-ink-muted hidden md:table-cell">{e.modelo}<span className="text-ink-subtle"> · {e.marca}</span></td>
               <td className="px-3 py-2"><TipoBadge tipo={e.tipo} label={e.tipoLabel} /></td>
-              <td className="px-3 py-2 text-ink-muted hidden lg:table-cell truncate max-w-[180px]">{e.cliente}</td>
-              <td className="px-3 py-2 text-ink-muted hidden lg:table-cell">{e.unidade}</td>
-              <td className="px-3 py-2 text-ink-muted hidden xl:table-cell">{e.ambiente ?? "—"}</td>
+              <td className="px-3 py-2 hidden lg:table-cell max-w-[220px]">
+                <p className="text-ink truncate">{e.cliente}</p>
+                <p className="text-[11px] text-ink-subtle truncate">{e.unidade}{localTexto(e) ? ` · ${localTexto(e)}` : ""}</p>
+              </td>
+              <td className="px-3 py-2 hidden xl:table-cell"><GarantiaCelula fim={e.garantiaAte} /></td>
               <td className="px-3 py-2"><StatusBadge ativo={e.ativo} /></td>
               <td className="px-3 py-2" onClick={(ev) => ev.stopPropagation()}>
                 <div className="flex items-center justify-end gap-1">
@@ -388,6 +419,15 @@ function Miniatura({ equip }: { equip: Equip }) {
 function TipoBadge({ tipo, label }: { tipo: string; label: string }) {
   const idx = hashIdx(tipo, BADGE_CORES.length);
   return <span className={cn("inline-flex text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap", BADGE_CORES[idx])}>{label}</span>;
+}
+function GarantiaCelula({ fim }: { fim: string | null }) {
+  const sit: SituacaoGarantia | null = situacaoGarantia(fim);
+  if (!fim || !sit) return <span className="text-ink-subtle">—</span>;
+  return (
+    <span title={LABELS_SITUACAO_GARANTIA[sit]} className={cn("inline-flex text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap", COR_SITUACAO_GARANTIA[sit])}>
+      {dataBR(fim)}
+    </span>
+  );
 }
 function StatusBadge({ ativo }: { ativo: boolean }) {
   return <span className={cn("inline-flex text-[10px] font-medium px-2 py-0.5 rounded-full", ativo ? "text-emerald-700 bg-emerald-50" : "text-gray-500 bg-gray-100")}>{ativo ? "Ativo" : "Inativo"}</span>;

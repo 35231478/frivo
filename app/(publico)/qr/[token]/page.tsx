@@ -50,7 +50,7 @@ export default async function QrPublicoPage({ params }: { params: Promise<{ toke
   const linkEquipe =
     qrcode.equipamentoId && sessaoEquipe?.user?.empresaId === empresaId
     && pode(sessaoEquipe.user.permissoes, "equipamentos", "visualizar", sessaoEquipe.user.role)
-      ? `/equipamentos/${qrcode.equipamentoId}?aba=historico`
+      ? `/equipamentos/${qrcode.equipamentoId}?aba=atendimentos`
       : null;
   const [branding, configRow] = await Promise.all([
     getPortalBranding(empresaId),
@@ -147,7 +147,7 @@ export default async function QrPublicoPage({ params }: { params: Promise<{ toke
         }
       : null,
     localizacao: cfg.mostrarLocalizacao
-      ? { unidade: equip.unidade?.nome ?? null, local: equip.localizacao ?? null }
+      ? { unidade: equip.unidade?.nome ?? null, local: [equip.setor, equip.localizacao].filter(Boolean).join(" · ") || null }
       : null,
     historico: historico.map((o) => ({
       id: o.id,

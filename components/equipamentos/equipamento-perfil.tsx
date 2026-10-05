@@ -7,6 +7,7 @@ import { cn, formatarData, formatarDataHora, LABELS_STATUS_OS } from "@/lib/util
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { EquipamentoAtivoBotao } from "@/components/equipamentos/equipamento-ativo-botao";
 import type { EventoHistorico } from "@/lib/equipamento-historico";
+import { situacaoGarantia, LABELS_SITUACAO_GARANTIA, COR_SITUACAO_GARANTIA } from "@/lib/equipamento-garantia";
 import {
   Pencil, QrCode, ClipboardList, User, ExternalLink, CircleCheck, History, Wrench, FileText, Camera,
 } from "lucide-react";
@@ -19,8 +20,14 @@ interface Props {
   abaInicial?: string;
 }
 
-type Aba = "dados" | "historico" | "formularios";
-const ABAS_VALIDAS: Aba[] = ["dados", "historico", "formularios"];
+type Aba = "dados" | "atendimentos" | "formularios";
+const ABAS_VALIDAS: Aba[] = ["dados", "atendimentos", "formularios"];
+
+/** Aceita o nome antigo da aba (?aba=historico) para links já distribuídos. */
+function resolverAba(aba?: string): Aba {
+  if (aba === "historico") return "atendimentos";
+  return ABAS_VALIDAS.includes(aba as Aba) ? (aba as Aba) : "dados";
+}
 
 const COR_STATUS: Record<string, string> = {
   CONCLUIDA: "text-emerald-700 bg-emerald-50",
@@ -32,17 +39,18 @@ const COR_STATUS: Record<string, string> = {
 export function EquipamentoPerfil({ equipamento: e, tipoNome, historico, linhaDoTempo, abaInicial }: Props) {
   const { pode } = usePermissoes();
   const podeEditar = pode("equipamentos", "editar");
-  // ?aba=historico abre direto na linha do tempo (ex.: link "histórico completo" do QR Code)
-  const [aba, setAba] = useState<Aba>(ABAS_VALIDAS.includes(abaInicial as Aba) ? (abaInicial as Aba) : "dados");
+  // ?aba=atendimentos abre direto na linha do tempo (ex.: atalho do QR Code para a equipe)
+  const [aba, setAba] = useState<Aba>(resolverAba(abaInicial));
   const cliente = e.unidade?.cliente;
   const titulo = e.nome ? e.nome : `${e.marca} ${e.modelo}`;
 
+  const garantia = situacaoGarantia(e.garantiaAte);
   const ultimaManutencao = linhaDoTempo.find((ev) => ev.status === "CONCLUIDA")?.data ?? null;
   const proximaAgendada = [...linhaDoTempo].reverse().find((ev) => ev.status === "AGENDADA" && new Date(ev.data) >= new Date())?.data ?? null;
 
   const abas: { id: Aba; label: string; badge?: number }[] = [
     { id: "dados", label: "Ficha técnica" },
-    { id: "historico", label: "Histórico", badge: linhaDoTempo.length },
+    { id: "atendimentos", label: "Atendimentos", badge: linhaDoTempo.length },
     { id: "formularios", label: "Formulários", badge: historico.length },
   ];
 
@@ -65,11 +73,13 @@ export function EquipamentoPerfil({ equipamento: e, tipoNome, historico, linhaDo
   const localizacao: { label: string; valor?: string | null }[] = [
     { label: "Cliente", valor: cliente ? (cliente.nomeFantasia ?? cliente.nome) : null },
     { label: "Endereço / Unidade", valor: e.unidade?.nome },
-    { label: "Ambiente / setor", valor: e.localizacao },
+    { label: "Setor", valor: e.setor },
+    { label: "Ambiente", valor: e.localizacao },
   ];
   const datas: { label: string; valor?: string | null }[] = [
     { label: "Instalação", valor: e.dataInstalacao ? formatarData(e.dataInstalacao) : null },
-    { label: "Garantia até", valor: e.garantiaAte ? formatarData(e.garantiaAte) : null },
+    { label: "Início da garantia", valor: e.garantiaInicio ? formatarData(e.garantiaInicio) : null },
+    { label: "Fim da garantia", valor: e.garantiaAte ? formatarData(e.garantiaAte) : null },
     { label: "Última manutenção", valor: ultimaManutencao ? formatarData(ultimaManutencao) : null },
     { label: "Próxima agendada", valor: proximaAgendada ? formatarData(proximaAgendada) : null },
     { label: "QR Code", valor: e.qrcode?.codigo ?? null },
@@ -113,6 +123,19 @@ export function EquipamentoPerfil({ equipamento: e, tipoNome, historico, linhaDo
       {/* ── Ficha técnica ── */}
       {aba === "dados" && (
         <div className="bg-white rounded-xl border border-surface-border p-5 space-y-5">
+          {(e.fotos?.[0] || garantia) && (
+            <div className="flex items-start gap-4">
+              {e.fotos?.[0] && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={e.fotos[0]} alt={titulo} className="w-28 h-28 rounded-xl object-cover border border-surface-border shrink-0" />
+              )}
+              {garantia && (
+                <span className={cn("text-xs font-medium px-2.5 py-1 rounded-full", COR_SITUACAO_GARANTIA[garantia])}>
+                  {LABELS_SITUACAO_GARANTIA[garantia]}{e.garantiaAte ? ` · até ${formatarData(e.garantiaAte)}` : ""}
+                </span>
+              )}
+            </div>
+          )}
           <BlocoSpecs titulo="Identificação" itens={identificacao} />
           <BlocoSpecs titulo="Dados técnicos" itens={tecnicos} />
           <BlocoSpecs titulo="Localização" itens={localizacao} />
@@ -132,8 +155,8 @@ export function EquipamentoPerfil({ equipamento: e, tipoNome, historico, linhaDo
         </div>
       )}
 
-      {/* ── Histórico (linha do tempo de atendimentos) ── */}
-      {aba === "historico" && (
+      {/* ── Atendimentos (linha do tempo) ── */}
+      {aba === "atendimentos" && (
         linhaDoTempo.length === 0 ? (
           <div className="bg-white rounded-xl border border-surface-border text-center py-10">
             <History className="w-6 h-6 text-gray-300 mx-auto mb-2" />
