@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
+import { SelectCadastroRapido, CadastroRapidoModal, usePodeCriar, type CampoRapido, type PermissaoCriar } from "@/components/ui/select-cadastro-rapido";
+import { CLIENTE, UNIDADE } from "@/components/cadastro-rapido/definicoes";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter, useSearchParams } from "next/navigation";
 import { contratoSchema, type ContratoInput } from "@/lib/validations";
@@ -25,7 +27,7 @@ import type { Contrato, Tecnico, Unidade } from "@prisma/client";
 import {
   FileText, CalendarClock, ClipboardList, HardHat, MapPin, TrendingUp, BellRing,
   Paperclip, Repeat, StickyNote, Building2, FileCheck, AlertCircle, Wand2, DollarSign, Receipt,
-  Plus, Search, Check, X, CalendarDays, ChevronDown, CheckCircle2, PauseCircle, RefreshCw, XCircle, History, User,
+  Plus, CalendarDays, ChevronDown, CheckCircle2, PauseCircle, RefreshCw, XCircle, History, User,
 } from "lucide-react";
 
 // Opções de mudança de status oferecidas no cabeçalho (ícone, cor e descrição).
@@ -37,12 +39,17 @@ const STATUS_OPCOES: { valor: string; label: string; descricao: string; icone: a
   { valor: "CANCELADO", label: "Cancelado", descricao: "Cancelado antes do prazo", icone: XCircle, cor: "text-red-600" },
 ];
 
-const ESTADOS_BR = [
-  "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
-  "PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO",
+// Endereço novo no contrato: campos do cadastro rápido de unidade + bairro/complemento (o painel antigo os tinha)
+const CAMPOS_UNIDADE_CONTRATO: CampoRapido[] = [
+  ...UNIDADE.campos,
+  { nome: "bairro", label: "Bairro", colunas: 3 },
+  { nome: "complemento", label: "Complemento", colunas: 3 },
 ];
-
-const emptyEndereco = () => ({ nome: "", cep: "", logradouro: "", numero: "", complemento: "", bairro: "", cidade: "", estado: "" });
+const PERMISSAO_UNIDADE_CONTRATO: PermissaoCriar = [
+  { modulo: "clientes", acao: "editar" },
+  { modulo: "contratos", acao: "criar" },
+  { modulo: "contratos", acao: "editar" },
+];
 
 function toDateInput(date: Date | null | undefined) {
   if (!date) return "";
@@ -139,11 +146,10 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
   const [servicosSelecionados, setServicosSelecionados] = useState<string[]>(initialData?.servicosNFSeIds ?? []);
 
   // Novo endereço inline (aba Locais)
-  const [mostrarNovoEndereco, setMostrarNovoEndereco] = useState(false);
-  const [endereco, setEndereco] = useState(emptyEndereco());
-  const [buscandoCep, setBuscandoCep] = useState(false);
-  const [salvandoEndereco, setSalvandoEndereco] = useState(false);
-  const [erroEndereco, setErroEndereco] = useState("");
+  // Novo endereço (local coberto) pelo cadastro rápido compartilhado
+  const [novaUnidade, setNovaUnidade] = useState(false);
+  // Criar endereço aqui já era permitido a quem cuida do contrato; mantém isso e soma quem edita clientes
+  const podeCriarUnidade = usePodeCriar(PERMISSAO_UNIDADE_CONTRATO);
 
   const unidadeIdsIniciais = initialData?.unidades?.map((u) => u.unidade.id) ?? [];
 
@@ -324,47 +330,6 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
 
   function toggleServico(id: string) {
     setServicosSelecionados((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
-  }
-
-  async function buscarCepEndereco() {
-    const cep = endereco.cep.replace(/\D/g, "");
-    if (cep.length !== 8) return;
-    setBuscandoCep(true);
-    try {
-      const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-      const data = await res.json();
-      if (!data.erro) {
-        setEndereco((f) => ({
-          ...f,
-          logradouro: data.logradouro ?? f.logradouro,
-          bairro: data.bairro ?? f.bairro,
-          cidade: data.localidade ?? f.cidade,
-          estado: data.uf ?? f.estado,
-          complemento: data.complemento || f.complemento,
-        }));
-      }
-    } catch {} finally { setBuscandoCep(false); }
-  }
-
-  async function salvarNovoEndereco() {
-    setErroEndereco("");
-    if (!clienteIdSelecionado) { setErroEndereco("Selecione um cliente primeiro."); return; }
-    if (!endereco.nome.trim()) { setErroEndereco("Informe um nome para o endereço."); return; }
-    setSalvandoEndereco(true);
-    try {
-      const res = await fetch("/api/unidades", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...endereco, clienteId: clienteIdSelecionado }),
-      });
-      if (!res.ok) { const e = await res.json().catch(() => ({})); setErroEndereco(e.erro ?? "Erro ao salvar endereço."); return; }
-      const nova: Unidade = await res.json();
-      setUnidades((prev) => [...prev, nova]);
-      // Vincula automaticamente ao contrato
-      const atual = (watch("unidadeIds") ?? []) as string[];
-      setValue("unidadeIds", [...atual, nova.id]);
-      setEndereco(emptyEndereco());
-      setMostrarNovoEndereco(false);
-    } catch { setErroEndereco("Erro de conexão."); } finally { setSalvandoEndereco(false); }
   }
 
   function onError(errs: typeof errors) {
@@ -571,13 +536,30 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
         <FormSection title="Dados do contrato" icon={<FileText className="w-3.5 h-3.5" />}>
           <FormGrid>
             <FormField label="Cliente" required error={errors.clienteId?.message}>
-              <Select
-                {...register("clienteId", { onChange: (e) => setClienteIdSelecionado(e.target.value) })}
-                error={!!errors.clienteId}
-                placeholder="Selecione o cliente"
-              >
-                {clientes.map((c) => (<option key={c.id} value={c.id}>{c.nomeFantasia ?? c.nome}</option>))}
-              </Select>
+              <Controller
+                name="clienteId"
+                control={control}
+                render={({ field }) => (
+                  <SelectCadastroRapido
+                    value={field.value ?? ""}
+                    onChange={(v) => { field.onChange(v); setClienteIdSelecionado(v); }}
+                    opcoes={clientes.map(CLIENTE.opcao)}
+                    entidade={CLIENTE.entidade}
+                    placeholder="Selecione o cliente"
+                    erro={!!errors.clienteId}
+                    campos={CLIENTE.campos}
+                    valoresIniciais={CLIENTE.valoresIniciais}
+                    campoBusca="nome"
+                    permissao={CLIENTE.permissao}
+                    linkCadastroCompleto={CLIENTE.link}
+                    criar={async (v) => {
+                      const c = await CLIENTE.criar(v);
+                      setClientes((l) => [...l, c]);
+                      return CLIENTE.opcao(c);
+                    }}
+                  />
+                )}
+              />
             </FormField>
             <FormField label="Número do contrato" required error={errors.numero?.message} hint="Ex: CT-2024-001">
               <div className="flex gap-2">
@@ -806,7 +788,9 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
                 control={control}
                 render={({ field }) =>
                   unidades.length === 0 ? (
-                    <p className="text-sm text-ink-muted">Nenhum endereço cadastrado para este cliente. Adicione um abaixo.</p>
+                    <p className="text-sm text-ink-muted">
+                      Nenhum endereço cadastrado para este cliente{podeCriarUnidade ? " — cadastre abaixo." : "."}
+                    </p>
                   ) : (
                     <div className="space-y-2">
                       {unidades.map((u) => {
@@ -839,52 +823,30 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
                 }
               />
 
-              {!mostrarNovoEndereco ? (
-                <Button type="button" variant="secondary" onClick={() => { setErroEndereco(""); setMostrarNovoEndereco(true); }} className="w-full justify-center border-dashed">
-                  <Plus className="w-4 h-4" /> Adicionar novo endereço
+              {podeCriarUnidade && (
+                <Button type="button" variant="secondary" onClick={() => setNovaUnidade(true)} className="w-full justify-center border-dashed">
+                  <Plus className="w-4 h-4" /> {unidades.length === 0 ? "Cadastrar agora" : "Adicionar novo endereço"}
                 </Button>
-              ) : (
-                <div className="border border-primary-200 bg-primary-50/30 rounded-lg p-4 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-semibold text-primary-800">Novo endereço</h4>
-                    <button type="button" onClick={() => { setMostrarNovoEndereco(false); setErroEndereco(""); }} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
-                  </div>
-                  {erroEndereco && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erroEndereco}</div>}
-                  <FormGrid>
-                    <FormField label="Nome / descrição" required>
-                      <Input value={endereco.nome} onChange={(e) => setEndereco((f) => ({ ...f, nome: e.target.value }))} placeholder="Ex: Matriz, Filial, Depósito" />
-                    </FormField>
-                    <FormField label="CEP" hint="Digite e clique na lupa para preencher">
-                      <div className="flex gap-2">
-                        <Input value={endereco.cep} onChange={(e) => setEndereco((f) => ({ ...f, cep: e.target.value }))} placeholder="00000-000" maxLength={9} />
-                        <Button type="button" variant="secondary" loading={buscandoCep} onClick={buscarCepEndereco} className="shrink-0 px-3"><Search className="w-4 h-4" /></Button>
-                      </div>
-                    </FormField>
-                  </FormGrid>
-                  <FormField label="Logradouro">
-                    <Input value={endereco.logradouro} onChange={(e) => setEndereco((f) => ({ ...f, logradouro: e.target.value }))} placeholder="Rua, Av., etc." />
-                  </FormField>
-                  <FormGrid cols={3}>
-                    <FormField label="Número"><Input value={endereco.numero} onChange={(e) => setEndereco((f) => ({ ...f, numero: e.target.value }))} /></FormField>
-                    <FormField label="Complemento" className="sm:col-span-2"><Input value={endereco.complemento} onChange={(e) => setEndereco((f) => ({ ...f, complemento: e.target.value }))} /></FormField>
-                  </FormGrid>
-                  <FormGrid cols={3}>
-                    <FormField label="Bairro"><Input value={endereco.bairro} onChange={(e) => setEndereco((f) => ({ ...f, bairro: e.target.value }))} /></FormField>
-                    <FormField label="Cidade"><Input value={endereco.cidade} onChange={(e) => setEndereco((f) => ({ ...f, cidade: e.target.value }))} /></FormField>
-                    <FormField label="Estado">
-                      <Select value={endereco.estado} onChange={(e) => setEndereco((f) => ({ ...f, estado: e.target.value }))} placeholder="UF">
-                        {ESTADOS_BR.map((uf) => (<option key={uf} value={uf}>{uf}</option>))}
-                      </Select>
-                    </FormField>
-                  </FormGrid>
-                  <div className="flex justify-end gap-2">
-                    <Button type="button" variant="secondary" onClick={() => { setMostrarNovoEndereco(false); setErroEndereco(""); }}>Cancelar</Button>
-                    <Button type="button" loading={salvandoEndereco} onClick={salvarNovoEndereco} disabled={!endereco.nome.trim()}>
-                      <Check className="w-4 h-4" /> Adicionar e vincular
-                    </Button>
-                  </div>
-                </div>
               )}
+              <CadastroRapidoModal
+                aberto={novaUnidade}
+                onFechar={() => setNovaUnidade(false)}
+                titulo="Novo endereço"
+                contexto="para este cliente"
+                campos={CAMPOS_UNIDADE_CONTRATO}
+                linkCadastroCompleto={UNIDADE.link(clienteIdSelecionado)}
+                criar={async (v) => {
+                  const nova: Unidade = await UNIDADE.criar(clienteIdSelecionado, v, unidades.length === 0);
+                  setUnidades((prev) => [...prev, nova]);
+                  return UNIDADE.opcao(nova);
+                }}
+                // Já entra marcado como local coberto pelo contrato
+                onCriado={(o) => {
+                  setNovaUnidade(false);
+                  const atual = (watch("unidadeIds") ?? []) as string[];
+                  setValue("unidadeIds", [...atual, o.value]);
+                }}
+              />
             </div>
           )}
         </FormSection>

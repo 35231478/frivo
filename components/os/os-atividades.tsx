@@ -9,6 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid } from "@/components/ui/form-field";
 import { cn, formatarDataHora } from "@/lib/utils";
 import { AtividadeEquipamentos } from "@/components/os/atividade-equipamentos";
+import { SelectCadastroRapido } from "@/components/ui/select-cadastro-rapido";
+import { TECNICO } from "@/components/cadastro-rapido/definicoes";
 import { Plus, X, Check, ChevronDown, ChevronRight, Wrench, User, Smartphone } from "lucide-react";
 
 const STATUS_LABELS: Record<string, string> = { AGENDADA: "Agendada", EM_ANDAMENTO: "Em Andamento", CONCLUIDA: "Concluída", CANCELADA: "Cancelada" };
@@ -20,13 +22,15 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
   const [mostraForm, setMostraForm] = useState(false);
   const [tiposOs, setTiposOs] = useState<any[]>([]);
   const [tecnicos, setTecnicos] = useState<any[]>([]);
+  const [carregandoTecnicos, setCarregandoTecnicos] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [erroStatus, setErroStatus] = useState("");
   const [form, setForm] = useState({ titulo: "", tipoOsId: "", tecnicoId: "", dataAgendada: "", duracaoMin: "", observacao: "" });
 
   useEffect(() => {
     fetch("/api/tipos-os").then((r) => r.json()).then(setTiposOs).catch(() => {});
-    fetch("/api/tecnicos").then((r) => r.json()).then(setTecnicos).catch(() => {});
+    fetch("/api/tecnicos").then((r) => r.json()).then((d) => setTecnicos(Array.isArray(d) ? d : [])).catch(() => {})
+      .finally(() => setCarregandoTecnicos(false));
   }, []);
 
   function toggleExpand(id: string) {
@@ -149,11 +153,27 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
               </Select>
             </FormField>
             <FormField label="Técnico" hint={form.tipoOsId ? "Apenas colaboradores com competência neste tipo de OS" : undefined}>
-              <Select value={form.tecnicoId} onChange={(e) => setForm((f) => ({ ...f, tecnicoId: e.target.value }))} placeholder="Selecione">
-                {tecnicos
+              <SelectCadastroRapido
+                value={form.tecnicoId}
+                onChange={(v) => setForm((f) => ({ ...f, tecnicoId: v }))}
+                opcoes={tecnicos
                   .filter((t: any) => !form.tipoOsId || (t.competencias ?? []).some((c: any) => c.id === form.tipoOsId))
-                  .map((t: any) => (<option key={t.id} value={t.id}>{t.nome}</option>))}
-              </Select>
+                  .map((t: any) => ({ value: t.id, label: t.nome }))}
+                entidade={TECNICO.entidade}
+                contexto={form.tipoOsId ? "com competência neste tipo de OS" : undefined}
+                placeholder="Selecione"
+                carregando={carregandoTecnicos}
+                campos={TECNICO.campos}
+                campoBusca="nome"
+                permissao={TECNICO.permissao}
+                linkCadastroCompleto={TECNICO.link}
+                criar={async (v) => {
+                  // Já habilita no tipo de OS da atividade (senão o filtro de competência o esconderia)
+                  const t = await TECNICO.criar(v, form.tipoOsId || undefined);
+                  setTecnicos((l) => [...l, { ...t, competencias: form.tipoOsId ? [{ id: form.tipoOsId }] : [] }]);
+                  return { value: t.id, label: t.nome };
+                }}
+              />
             </FormField>
           </FormGrid>
           <FormGrid>

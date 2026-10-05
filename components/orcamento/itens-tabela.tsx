@@ -3,6 +3,9 @@
 import { useState, useRef, useEffect } from "react";
 import { cn, formatarMoeda } from "@/lib/utils";
 import { Plus, Trash2, Search, X, Lock, LockOpen } from "lucide-react";
+import {
+  CadastroRapidoModal, usePodeCriar, type CampoRapido, type EntidadeCadastro, type PermissaoCriar,
+} from "@/components/ui/select-cadastro-rapido";
 
 export interface ItemTabela {
   id: string;            // uuid local
@@ -31,6 +34,16 @@ export interface TabelaPrecoCliente {
   itens: Record<string, { valorFinal: number; bloqueado: boolean; tipoPreco: string; descontoPercent: number | null }>;
 }
 
+/** Cadastro rápido de item de catálogo (produto/serviço) direto da busca. */
+export interface CadastroCatalogo {
+  entidade: EntidadeCadastro;
+  campos: CampoRapido[];
+  permissao: PermissaoCriar;
+  link?: string;
+  /** Cria na API e devolve o item de catálogo (o pai também o inclui no catálogo). */
+  criar: (valores: Record<string, string>) => Promise<CatalogoItem>;
+}
+
 interface ItensTabelaProps {
   titulo: string;
   labelAdicionar: string;
@@ -38,13 +51,14 @@ interface ItensTabelaProps {
   itens: ItemTabela[];
   onChange: (itens: ItemTabela[]) => void;
   tabela?: TabelaPrecoCliente | null;
+  cadastro?: CadastroCatalogo;
 }
 
 function novoId() {
   return Math.random().toString(36).slice(2);
 }
 
-export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange, tabela }: ItensTabelaProps) {
+export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange, tabela, cadastro }: ItensTabelaProps) {
   function atualizar(id: string, patch: Partial<ItemTabela>) {
     onChange(itens.map((it) => (it.id === id ? { ...it, ...patch } : it)));
   }
@@ -214,7 +228,7 @@ export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange,
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <BuscaCatalogo catalogo={catalogo} onSelect={adicionarDoCatalogo} placeholder={labelAdicionar} tabela={tabela} />
+        <BuscaCatalogo catalogo={catalogo} onSelect={adicionarDoCatalogo} placeholder={labelAdicionar} tabela={tabela} cadastro={cadastro} />
         <button
           type="button"
           onClick={adicionarVazio}
@@ -232,12 +246,17 @@ function BuscaCatalogo({
   onSelect,
   placeholder,
   tabela,
+  cadastro,
 }: {
   catalogo: CatalogoItem[];
   onSelect: (c: CatalogoItem) => void;
   placeholder: string;
   tabela?: TabelaPrecoCliente | null;
+  cadastro?: CadastroCatalogo;
 }) {
+  const podeCriar = usePodeCriar(cadastro?.permissao) && !!cadastro;
+  const [modal, setModal] = useState(false);
+  const [nomeInicial, setNomeInicial] = useState("");
   const [query, setQuery] = useState("");
   const [aberto, setAberto] = useState(false);
   const [mostrarTodos, setMostrarTodos] = useState(false);
@@ -292,7 +311,11 @@ function BuscaCatalogo({
         <div className="absolute z-20 left-0 right-0 top-full mt-1 max-h-64 overflow-y-auto bg-white border border-surface-border rounded-lg shadow-card-hover">
           {filtrados.length === 0 && (
             <p className="px-3 py-3 text-xs text-ink-subtle italic">
-              {restritoTabela ? "Nenhum item na tabela do cliente. Use “Mostrar todos”." : "Nenhum item encontrado."}
+              {restritoTabela
+                ? "Nenhum item na tabela do cliente. Use “Mostrar todos”."
+                : catalogo.length === 0 && cadastro
+                  ? `Nenhum ${cadastro.entidade.singular} cadastrado.`
+                  : "Nenhum item encontrado."}
             </p>
           )}
           {filtrados.slice(0, 20).map((c) => {
@@ -317,7 +340,40 @@ function BuscaCatalogo({
               </button>
             );
           })}
+          {/* Cadastro rápido no rodapé do dropdown */}
+          {podeCriar && (
+            <button
+              type="button"
+              onClick={() => { setNomeInicial(filtrados.length === 0 ? query.trim() : ""); setAberto(false); setModal(true); }}
+              className="sticky bottom-0 w-full flex items-center gap-2 px-3 py-2.5 text-sm font-semibold text-primary-600 bg-surface-alt hover:bg-primary-50 border-t border-surface-border"
+            >
+              <Plus className="w-4 h-4" />
+              {filtrados.length === 0 && query.trim()
+                ? `Criar “${query.trim()}”`
+                : catalogo.length === 0 ? "Cadastrar agora" : `Novo ${cadastro!.entidade.singular}`}
+            </button>
+          )}
         </div>
+      )}
+
+      {cadastro && (
+        <CadastroRapidoModal
+          aberto={modal}
+          onFechar={() => setModal(false)}
+          titulo={`Novo ${cadastro.entidade.singular}`}
+          contexto="no catálogo"
+          campos={cadastro.campos}
+          linkCadastroCompleto={cadastro.link}
+          valoresIniciais={nomeInicial ? { nome: nomeInicial } : {}}
+          criar={async (v) => {
+            const item = await cadastro.criar(v);
+            // Já entra no orçamento como item selecionado
+            onSelect(item);
+            setQuery("");
+            return { value: item.id, label: item.nome };
+          }}
+          onCriado={() => setModal(false)}
+        />
       )}
 
       {/* Alterna entre "só da tabela" e "todos" quando há tabela vinculada */}

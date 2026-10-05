@@ -33,10 +33,24 @@ export interface CampoRapido {
   obrigatorio?: boolean;
   placeholder?: string;
   /** "cep" preenche logradouro/bairro/cidade/estado (se existirem) via ViaCEP. */
-  tipo?: "texto" | "cep" | "uf" | "textarea";
+  tipo?: "texto" | "cep" | "uf" | "textarea" | "select";
+  /** Opções quando `tipo: "select"`. */
+  opcoes?: { value: string; label: string }[];
   /** Colunas no grid de 6 (celular sempre ocupa a linha toda). */
   colunas?: 2 | 3 | 4 | 6;
   maxLength?: number;
+  inputMode?: "text" | "numeric" | "decimal" | "tel" | "email";
+}
+
+/** Uma permissão, ou uma lista em que QUALQUER uma libera a criação. */
+export type PermissaoCriar = { modulo: string; acao: Acao } | { modulo: string; acao: Acao }[];
+
+/** Hook: o usuário pode criar segundo `permissao`? (sem permissão informada = pode). */
+export function usePodeCriar(permissao?: PermissaoCriar): boolean {
+  const { pode } = usePermissoes();
+  if (!permissao) return true;
+  const lista = Array.isArray(permissao) ? permissao : [permissao];
+  return lista.some((p) => pode(p.modulo, p.acao));
 }
 
 export interface EntidadeCadastro {
@@ -55,8 +69,10 @@ interface Props {
   campos: CampoRapido[];
   /** Cria o item na API e devolve a opção já pronta para seleção. Lance Error(msg) em falha. */
   criar: (valores: Record<string, string>) => Promise<OpcaoCadastro>;
-  /** Permissão exigida para criar. Sem ela, a opção de criar não aparece. */
-  permissao?: { modulo: string; acao: Acao };
+  /** Permissão exigida para criar (ou lista: qualquer uma libera). Sem ela, a opção de criar não aparece. */
+  permissao?: PermissaoCriar;
+  /** Valores pré-preenchidos no mini-cadastro (ex.: tipo de pessoa padrão). */
+  valoresIniciais?: Record<string, string>;
   /** Link para o cadastro completo (abre em nova aba para não perder este formulário). */
   linkCadastroCompleto?: string;
   /** Texto contextual no mini-cadastro (ex.: "para o cliente X"). */
@@ -79,10 +95,9 @@ const inputCls =
 
 export function SelectCadastroRapido({
   value, onChange, opcoes, entidade, campos, criar, permissao, linkCadastroCompleto, contexto,
-  placeholder, disabled, textoDesabilitado, carregando, erro, campoBusca, className,
+  placeholder, disabled, textoDesabilitado, carregando, erro, campoBusca, className, valoresIniciais,
 }: Props) {
-  const { pode } = usePermissoes();
-  const podeCriar = permissao ? pode(permissao.modulo, permissao.acao) : true;
+  const podeCriar = usePodeCriar(permissao);
 
   const novo = entidade.feminino ? "Nova" : "Novo";
   const nenhum = entidade.feminino ? "Nenhuma" : "Nenhum";
@@ -123,7 +138,7 @@ export function SelectCadastroRapido({
         )}
         <MiniCadastro
           aberto={modal} onFechar={() => setModal(false)} titulo={`${novo} ${entidade.singular}`} contexto={contexto}
-          campos={campos} criar={criar} linkCadastroCompleto={linkCadastroCompleto} valoresIniciais={{}}
+          campos={campos} criar={criar} linkCadastroCompleto={linkCadastroCompleto} valoresIniciais={valoresIniciais ?? {}}
           onCriado={(o) => { setModal(false); onChange(o.value); }}
         />
       </div>
@@ -195,7 +210,7 @@ export function SelectCadastroRapido({
       <MiniCadastro
         aberto={modal} onFechar={() => setModal(false)} titulo={`${novo} ${entidade.singular}`} contexto={contexto}
         campos={campos} criar={criar} linkCadastroCompleto={linkCadastroCompleto}
-        valoresIniciais={campoBusca && busca.trim() ? { [campoBusca]: busca.trim() } : {}}
+        valoresIniciais={{ ...valoresIniciais, ...(campoBusca && busca.trim() ? { [campoBusca]: busca.trim() } : {}) }}
         onCriado={(o) => { setModal(false); setBusca(""); onChange(o.value); }}
       />
     </div>
@@ -203,6 +218,18 @@ export function SelectCadastroRapido({
 }
 
 /* ───────── Mini-formulário ───────── */
+/**
+ * O mini-cadastro sozinho, para telas com seletor próprio (busca de catálogo,
+ * lista de múltipla escolha). Mesmo comportamento do SelectCadastroRapido.
+ */
+export function CadastroRapidoModal(props: {
+  aberto: boolean; onFechar: () => void; titulo: string; contexto?: string;
+  campos: CampoRapido[]; criar: Props["criar"]; linkCadastroCompleto?: string;
+  valoresIniciais?: Record<string, string>; onCriado: (o: OpcaoCadastro) => void;
+}) {
+  return <MiniCadastro {...props} valoresIniciais={props.valoresIniciais ?? {}} />;
+}
+
 function MiniCadastro({
   aberto, onFechar, titulo, contexto, campos, criar, linkCadastroCompleto, valoresIniciais, onCriado,
 }: {
@@ -274,7 +301,12 @@ function MiniCadastro({
                 {c.label}{c.obrigatorio && <span className="text-red-500"> *</span>}
                 {c.tipo === "cep" && buscandoCep && <Loader2 className="inline w-3 h-3 ml-1 animate-spin text-ink-subtle" />}
               </span>
-              {c.tipo === "uf" ? (
+              {c.tipo === "select" ? (
+                <select value={valores[c.nome] ?? ""} onChange={(e) => set(c.nome, e.target.value)} className={cn(inputCls, faltando.has(c.nome) && "border-red-300")}>
+                  {!c.obrigatorio || !(valores[c.nome]) ? <option value="">{c.placeholder ?? "Selecione"}</option> : null}
+                  {(c.opcoes ?? []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              ) : c.tipo === "uf" ? (
                 <select value={valores[c.nome] ?? ""} onChange={(e) => set(c.nome, e.target.value)} className={cn(inputCls, faltando.has(c.nome) && "border-red-300")}>
                   <option value="">UF</option>
                   {UFS.map((u) => <option key={u} value={u}>{u}</option>)}
@@ -291,7 +323,7 @@ function MiniCadastro({
                   value={valores[c.nome] ?? ""}
                   onChange={(e) => { set(c.nome, e.target.value); if (c.tipo === "cep") buscarCep(e.target.value); }}
                   placeholder={c.placeholder} maxLength={c.maxLength ?? (c.tipo === "cep" ? 9 : undefined)}
-                  inputMode={c.tipo === "cep" ? "numeric" : undefined}
+                  inputMode={c.tipo === "cep" ? "numeric" : c.inputMode}
                   className={cn(inputCls, faltando.has(c.nome) && "border-red-300 focus:border-red-400 focus:ring-red-500/10")}
                 />
               )}

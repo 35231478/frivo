@@ -4,11 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid, FormSection } from "@/components/ui/form-field";
 import { PageHeader } from "@/components/ui/page-header";
-import { ItensTabela, type ItemTabela, type CatalogoItem, type TabelaPrecoCliente } from "@/components/orcamento/itens-tabela";
+import { ItensTabela, type ItemTabela, type CatalogoItem, type TabelaPrecoCliente, type CadastroCatalogo } from "@/components/orcamento/itens-tabela";
+import { SelectCadastroRapido } from "@/components/ui/select-cadastro-rapido";
+import { CLIENTE, PRODUTO, SERVICO } from "@/components/cadastro-rapido/definicoes";
 import { OsVinculadas } from "@/components/orcamento/os-vinculadas";
 import { TotaisBloco } from "@/components/orcamento/totais-bloco";
 import { PropostaCampos, PROPOSTA_VAZIA, type PropostaState } from "@/components/orcamento/proposta-campos";
@@ -136,9 +137,9 @@ function toInputDate(d: Date | string | null | undefined): string {
 
 export function OrcamentoForm({
   mode,
-  clientes,
-  catalogoServicos,
-  catalogoProdutos,
+  clientes: clientesIniciais,
+  catalogoServicos: servicosIniciais,
+  catalogoProdutos: produtosIniciais,
   tecnicos = [],
   termoTemplates = [],
   inicial,
@@ -147,6 +148,29 @@ export function OrcamentoForm({
   osInicial,
 }: OrcamentoFormProps) {
   const router = useRouter();
+
+  // Listas locais: itens criados no cadastro rápido entram aqui sem recarregar a página
+  const [clientes, setClientes] = useState<ClienteOpt[]>(clientesIniciais);
+  const [catalogoServicos, setCatalogoServicos] = useState<CatalogoItem[]>(servicosIniciais);
+  const [catalogoProdutos, setCatalogoProdutos] = useState<CatalogoItem[]>(produtosIniciais);
+  const cadastroServico: CadastroCatalogo = {
+    entidade: SERVICO.entidade, campos: SERVICO.campos, permissao: SERVICO.permissao, link: SERVICO.link,
+    criar: async (v) => {
+      const s = await SERVICO.criar(v);
+      const item = { ...s, valorPadrao: s.valorPadrao != null ? Number(s.valorPadrao) : null };
+      setCatalogoServicos((l) => [...l, item]);
+      return item;
+    },
+  };
+  const cadastroProduto: CadastroCatalogo = {
+    entidade: PRODUTO.entidade, campos: PRODUTO.campos, permissao: PRODUTO.permissao, link: PRODUTO.link,
+    criar: async (v) => {
+      const p = await PRODUTO.criar(v);
+      const item = { ...p, valorPadrao: p.valorPadrao != null ? Number(p.valorPadrao) : null };
+      setCatalogoProdutos((l) => [...l, item]);
+      return item;
+    },
+  };
 
   const [tipo, setTipo] = useState<TipoOrcamento>(inicial?.tipo ?? "COMUM");
   const [proposta, setProposta] = useState<PropostaState>(propostaInicialToState(inicial?.proposta));
@@ -377,13 +401,23 @@ export function OrcamentoForm({
               <Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Manutenção mensal — split sala XYZ" />
             </FormField>
             <FormField label="Cliente" required>
-              <Select value={clienteId} onChange={(e) => setClienteId(e.target.value)} placeholder="Selecione...">
-                {clientes.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nomeFantasia ?? c.nome}
-                  </option>
-                ))}
-              </Select>
+              <SelectCadastroRapido
+                value={clienteId}
+                onChange={setClienteId}
+                opcoes={clientes.map(CLIENTE.opcao)}
+                entidade={CLIENTE.entidade}
+                placeholder="Selecione..."
+                campos={CLIENTE.campos}
+                valoresIniciais={CLIENTE.valoresIniciais}
+                campoBusca="nome"
+                permissao={CLIENTE.permissao}
+                linkCadastroCompleto={CLIENTE.link}
+                criar={async (v) => {
+                  const c = await CLIENTE.criar(v);
+                  setClientes((l) => [...l, c]);
+                  return CLIENTE.opcao(c);
+                }}
+              />
             </FormField>
             <FormField label="Validade" hint="Após esta data o orçamento não pode mais ser aprovado">
               <Input type="date" value={validadeEm} onChange={(e) => setValidadeEm(e.target.value)} />
@@ -406,6 +440,7 @@ export function OrcamentoForm({
           itens={servicos}
           onChange={setServicos}
           tabela={tabelaPreco}
+          cadastro={cadastroServico}
         />
       </div>
 
@@ -417,6 +452,7 @@ export function OrcamentoForm({
           itens={produtos}
           onChange={setProdutos}
           tabela={tabelaPreco}
+          cadastro={cadastroProduto}
         />
       </div>
 
