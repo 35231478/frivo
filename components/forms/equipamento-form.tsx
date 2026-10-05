@@ -13,11 +13,29 @@ import { MapaEndereco } from "@/components/ui/mapa-endereco";
 import { EquipamentoQrSection } from "@/components/forms/equipamento-qr-section";
 import { TipoBadge, TipoIcone } from "@/components/equipamentos/tipo-equipamento";
 import { StatusSelo } from "@/components/equipamentos/selos";
+import { SelectCadastroRapido, type CampoRapido, type OpcaoCadastro } from "@/components/ui/select-cadastro-rapido";
 import Link from "next/link";
 import { LABELS_TIPO_EQUIPAMENTO, cn } from "@/lib/utils";
 import { Thermometer, ImageIcon, MapPin, Cog, QrCode, History, CheckCircle2, ClipboardList, ChevronLeft, ExternalLink } from "lucide-react";
 
 const TIPOS_EQUIPAMENTO = Object.entries(LABELS_TIPO_EQUIPAMENTO);
+
+/** Tipos personalizados (sem `chaveEnum`) entram no select como "custom:<id>". */
+const PREFIXO_CUSTOM = "custom:";
+type TipoCustom = { id: string; nome: string; chaveEnum: string | null; ativo: boolean };
+
+// Cadastro rápido: só o essencial (o cadastro completo fica a um link de distância)
+const CAMPOS_UNIDADE: CampoRapido[] = [
+  { nome: "nome", label: "Nome do local", obrigatorio: true, placeholder: "Ex: Matriz, Loja Centro, Bloco A" },
+  { nome: "cep", label: "CEP", tipo: "cep", placeholder: "00000-000", colunas: 2 },
+  { nome: "logradouro", label: "Endereço", placeholder: "Rua / Avenida", colunas: 4 },
+  { nome: "numero", label: "Número", placeholder: "Nº", colunas: 2 },
+  { nome: "cidade", label: "Cidade", colunas: 2 },
+  { nome: "estado", label: "UF", tipo: "uf", colunas: 2 },
+];
+const CAMPOS_TIPO: CampoRapido[] = [
+  { nome: "nome", label: "Nome do tipo", obrigatorio: true, placeholder: "Ex: Cortina de ar, Bebedouro, Purificador" },
+];
 const FLUIDOS = ["R22", "R410A", "R32", "R407C", "R404A", "R134a", "R290", "Outro"];
 const TENSOES = ["110V", "127V", "220V", "380V", "440V"];
 const FASES = ["Monofásico", "Bifásico", "Trifásico"];
@@ -82,6 +100,8 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
   const [fotos, setFotos] = useState<string[]>(initialData?.fotos ?? []);
   const [clienteId, setClienteId] = useState<string>(initialData?.unidade?.clienteId ?? "");
   const [unidades, setUnidades] = useState<UnidadeItem[]>([]);
+  const [carregandoUnidades, setCarregandoUnidades] = useState(false);
+  const [tiposCustom, setTiposCustom] = useState<TipoCustom[]>([]);
   // Sugestões de setor/ambiente já usados em outros equipamentos do mesmo endereço
   const [sugestoesLocal, setSugestoesLocal] = useState<{ setores: string[]; ambientes: string[] }>({ setores: [], ambientes: [] });
 
@@ -91,7 +111,10 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
     modelo: initialData?.modelo ?? "",
     numeroSerie: initialData?.numeroSerie ?? "",
     patrimonio: initialData?.patrimonio ?? "",
-    tipo: initialData?.tipo ?? "",
+    // Tipo personalizado (sem chave do enum) é identificado pelo id do cadastro
+    tipo: initialData?.tipoEquipamento && !initialData.tipoEquipamento.chaveEnum
+      ? `${PREFIXO_CUSTOM}${initialData.tipoEquipamento.id}`
+      : initialData?.tipo ?? "",
     anoFabricacao: initialData?.anoFabricacao ?? "",
     observacoes: initialData?.observacoes ?? "",
     unidadeId: initialData?.unidadeId ?? unidadeIdFixo ?? "",
@@ -117,16 +140,61 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
   // Carrega unidades ao escolher cliente
   useEffect(() => {
     if (!clienteId) { setUnidades([]); return; }
+    setCarregandoUnidades(true);
     fetch(`/api/unidades?clienteId=${clienteId}`)
       .then((r) => r.json())
       .then((lista: UnidadeItem[]) => {
-        setUnidades(lista);
+        setUnidades(Array.isArray(lista) ? lista : []);
         // Auto-seleciona se houver apenas uma unidade (e ainda não há seleção)
-        if (lista.length === 1 && !form.unidadeId) set("unidadeId", lista[0].id);
+        if (Array.isArray(lista) && lista.length === 1 && !form.unidadeId) set("unidadeId", lista[0].id);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setCarregandoUnidades(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clienteId]);
+
+  // Tipos personalizados da empresa (os padrões vêm do enum)
+  useEffect(() => {
+    fetch("/api/tipos-equipamento")
+      .then((r) => r.json())
+      .then((d) => setTiposCustom(Array.isArray(d) ? d.filter((t: TipoCustom) => !t.chaveEnum && t.ativo !== false) : []))
+      .catch(() => {});
+  }, []);
+
+  const opcoesTipo: OpcaoCadastro[] = useMemo(() => [
+    ...TIPOS_EQUIPAMENTO.map(([value, label]) => ({ value, label })),
+    ...tiposCustom.map((t) => ({ value: `${PREFIXO_CUSTOM}${t.id}`, label: t.nome, descricao: "personalizado" })),
+  ], [tiposCustom]);
+
+  const opcoesUnidade: OpcaoCadastro[] = useMemo(
+    () => unidades.map((u) => ({ value: u.id, label: u.nome, descricao: u.cidade ?? undefined })),
+    [unidades],
+  );
+
+  async function criarUnidade(v: Record<string, string>): Promise<OpcaoCadastro> {
+    const res = await fetch("/api/unidades", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      // Primeiro endereço do cliente vira o principal
+      body: JSON.stringify({ ...v, clienteId, principal: unidades.length === 0 }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.erro ?? "Erro ao cadastrar a unidade.");
+    setUnidades((lista) => [...lista, data].sort((a, b) => a.nome.localeCompare(b.nome)));
+    return { value: data.id, label: data.nome, descricao: data.cidade ?? undefined };
+  }
+
+  async function criarTipo(v: Record<string, string>): Promise<OpcaoCadastro> {
+    const res = await fetch("/api/tipos-equipamento", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nome: v.nome }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.erro ?? "Erro ao cadastrar o tipo.");
+    setTiposCustom((lista) => [...lista, data].sort((a, b) => a.nome.localeCompare(b.nome)));
+    return { value: `${PREFIXO_CUSTOM}${data.id}`, label: data.nome };
+  }
 
   // Carrega setores/ambientes já usados no endereço selecionado (autocomplete)
   useEffect(() => {
@@ -172,9 +240,12 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
 
     setSalvando(true);
     try {
+      const tipoCustomId = form.tipo.startsWith(PREFIXO_CUSTOM) ? form.tipo.slice(PREFIXO_CUSTOM.length) : null;
       const payload = {
         unidadeId: form.unidadeId,
-        tipo: form.tipo,
+        // Tipo personalizado: a API usa tipoEquipamentoId (o enum fica como OUTRO)
+        tipo: tipoCustomId ? "OUTRO" : form.tipo,
+        tipoEquipamentoId: tipoCustomId ?? undefined,
         nome: form.nome || undefined,
         marca: form.marca,
         modelo: form.modelo,
@@ -208,7 +279,9 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
     } catch { setErroGlobal("Erro de conexão. Tente novamente."); } finally { setSalvando(false); }
   }
 
-  const tipoLabel = form.tipo ? (LABELS_TIPO_EQUIPAMENTO[form.tipo as keyof typeof LABELS_TIPO_EQUIPAMENTO] ?? form.tipo) : null;
+  const tipoLabel = form.tipo ? (opcoesTipo.find((o) => o.value === form.tipo)?.label ?? LABELS_TIPO_EQUIPAMENTO[form.tipo] ?? null) : null;
+  // Ícone/cor: tipo personalizado usa o visual de "Outro"
+  const tipoVisual = form.tipo.startsWith(PREFIXO_CUSTOM) ? "OUTRO" : form.tipo;
   const nomeExibicao = form.nome || [form.marca, form.modelo].filter(Boolean).join(" ") || "Novo equipamento";
   const ativo = initialData?.ativo ?? true;
   const clienteNome = initialData?.unidade?.cliente
@@ -236,13 +309,13 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
           {fotos[0]
             // eslint-disable-next-line @next/next/no-img-element
             ? <img src={fotos[0]} alt="" className="w-12 h-12 rounded-lg object-cover border border-surface-border shrink-0" />
-            : form.tipo ? <TipoIcone tipo={form.tipo} tamanho="lg" className="w-12 h-12" /> : (
+            : form.tipo ? <TipoIcone tipo={tipoVisual} tamanho="lg" className="w-12 h-12" /> : (
               <div className="w-12 h-12 rounded-lg bg-surface-alt border border-surface-border flex items-center justify-center shrink-0"><Thermometer className="w-6 h-6 text-ink-subtle" /></div>
             )}
           <div className="min-w-0">
             <h2 className="font-semibold text-ink truncate">{isEditing ? nomeExibicao : (form.marca || form.modelo || form.nome ? nomeExibicao : "Novo equipamento")}</h2>
             <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-              {form.tipo && <TipoBadge tipo={form.tipo} label={tipoLabel ?? undefined} />}
+              {form.tipo && <TipoBadge tipo={tipoVisual} label={tipoLabel ?? undefined} />}
               <StatusSelo ativo={ativo} />
               {localResumo && <span className="text-[11px] text-ink-muted truncate max-w-[280px] flex items-center gap-1"><MapPin className="w-3 h-3 shrink-0" />{localResumo}</span>}
             </div>
@@ -288,9 +361,18 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
                   <Input value={form.nome} onChange={(e) => set("nome", e.target.value)} placeholder="Ex: Split Sala de Reuniões" />
                 </FormField>
                 <FormField label="Tipo de equipamento" required>
-                  <Select value={form.tipo} onChange={(e) => set("tipo", e.target.value)} placeholder="Selecione o tipo">
-                    {TIPOS_EQUIPAMENTO.map(([val, label]) => (<option key={val} value={val}>{label}</option>))}
-                  </Select>
+                  <SelectCadastroRapido
+                    value={form.tipo}
+                    onChange={(v) => set("tipo", v)}
+                    opcoes={opcoesTipo}
+                    entidade={{ singular: "tipo de equipamento", plural: "tipos de equipamento" }}
+                    placeholder="Selecione o tipo"
+                    campos={CAMPOS_TIPO}
+                    campoBusca="nome"
+                    criar={criarTipo}
+                    permissao={{ modulo: "configuracoes", acao: "gerenciar" }}
+                    linkCadastroCompleto="/configuracoes/tipos-equipamento"
+                  />
                 </FormField>
               </FormGrid>
               <FormGrid cols={3}>
@@ -329,9 +411,23 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
                 />
               </FormField>
               <FormField label="Endereço / Unidade" required>
-                <Select value={form.unidadeId} onChange={(e) => set("unidadeId", e.target.value)} placeholder={clienteId ? "Selecione o endereço" : "Selecione um cliente primeiro"} disabled={!clienteId}>
-                  {unidades.map((u) => (<option key={u.id} value={u.id}>{u.nome}{u.cidade ? ` — ${u.cidade}` : ""}</option>))}
-                </Select>
+                <SelectCadastroRapido
+                  value={form.unidadeId}
+                  onChange={(v) => set("unidadeId", v)}
+                  opcoes={opcoesUnidade}
+                  entidade={{ singular: "unidade", plural: "unidades", feminino: true }}
+                  contexto="para este cliente"
+                  placeholder="Selecione o endereço"
+                  disabled={!clienteId}
+                  textoDesabilitado="Selecione um cliente primeiro"
+                  carregando={carregandoUnidades}
+                  campos={CAMPOS_UNIDADE}
+                  campoBusca="nome"
+                  criar={criarUnidade}
+                  // Unidade é endereço do cliente: criar exige poder editar o cliente
+                  permissao={{ modulo: "clientes", acao: "editar" }}
+                  linkCadastroCompleto={clienteId ? `/clientes/${clienteId}/editar` : undefined}
+                />
               </FormField>
               <FormGrid>
                 <FormField label="Setor" hint="Andar, bloco ou área dentro do endereço">

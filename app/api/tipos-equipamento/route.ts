@@ -1,14 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
-import { z } from "zod";
+import { tipoEquipamentoSchema } from "@/lib/validations";
 
-const schema = z.object({
-  nome: z.string().min(1, "Nome é obrigatório"),
-  descricao: z.string().optional(),
-  ativo: z.boolean().default(true),
-});
-
+// Leitura liberada a qualquer usuário logado (formulário de equipamento lista os tipos).
 export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
@@ -20,16 +16,23 @@ export async function GET() {
   return NextResponse.json(tipos);
 }
 
+// Tipos de equipamento são cadastro de configuração.
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("configuracoes", "gerenciar");
+  if (guard.erro) return guard.resposta;
+  const empresaId = guard.session.user!.empresaId;
 
-  const body = await req.json();
-  const parsed = schema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos" }, { status: 400 });
+  const parsed = tipoEquipamentoSchema.safeParse(await req.json().catch(() => ({})));
+  if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
+
+  const duplicado = await prisma.tipoEquipamentoCustom.findFirst({
+    where: { empresaId, ativo: true, nome: { equals: parsed.data.nome, mode: "insensitive" } },
+    select: { id: true },
+  });
+  if (duplicado) return NextResponse.json({ erro: "Já existe um tipo de equipamento com esse nome." }, { status: 409 });
 
   const item = await prisma.tipoEquipamentoCustom.create({
-    data: { ...parsed.data, empresaId: session.user!.empresaId },
+    data: { ...parsed.data, descricao: parsed.data.descricao || null, empresaId },
   });
   return NextResponse.json(item, { status: 201 });
 }

@@ -175,9 +175,18 @@ export const unidadeSchema = z.object({
   observacoes: z.string().optional(),
 });
 
+/** Tipo de equipamento (cadastro de configuração / cadastro rápido). */
+export const tipoEquipamentoSchema = z.object({
+  nome: z.string().trim().min(1, "Nome é obrigatório"),
+  descricao: z.string().nullable().optional(),
+  ativo: z.boolean().default(true),
+});
+
 export const equipamentoSchema = z.object({
   unidadeId: z.string().min(1, "Unidade é obrigatória"),
   tipo: z.nativeEnum(TipoEquipamento),
+  /** Tipo personalizado (TipoEquipamentoCustom). Quando enviado, prevalece sobre `tipo`. */
+  tipoEquipamentoId: z.string().optional(),
   nome: z.string().optional(),
   marca: z.string().min(1, "Marca é obrigatória"),
   modelo: z.string().min(1, "Modelo é obrigatório"),
