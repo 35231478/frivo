@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { exigirPermissao } from "@/lib/permissoes-server";
+import { pode } from "@/lib/permissoes";
+import { motivoBloqueioInativacao } from "@/lib/os-server";
 import { prisma } from "@/lib/prisma";
 import { gerarRelatoriosDaOs } from "@/lib/relatorio-server";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("ordens", "visualizar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const { id } = await params;
   const empresaId = session.user!.empresaId;
 
@@ -50,8 +53,9 @@ export async function GET(_: NextRequest, { params }: Params) {
 // Reagendamento rápido (drag-and-drop no calendário): move a OS para outro dia.
 // Body: { data: "YYYY-MM-DD", atividadeId?: string }
 export async function PATCH(req: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("ordens", "editar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const { id } = await params;
   const empresaId = session.user!.empresaId;
   const usuarioId = session.user!.id;
@@ -94,8 +98,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("ordens", "editar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const { id } = await params;
   const empresaId = session.user!.empresaId;
   const usuarioId = session.user!.id;
@@ -105,6 +110,20 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   const body = await req.json();
   const { status, prioridade, descricao, observacoes, unidadeId, contratoId, responsavelId, previsaoConclusao } = body;
+
+  // Mudanças de status com regra própria (o servidor decide, não só a tela)
+  if (status !== undefined && status !== existente.status) {
+    const { permissoes, role } = session.user!;
+    if (status === "CANCELADA") {
+      // Cancelar = inativar a OS: exige "excluir" e não pode ter entrado no financeiro
+      if (!pode(permissoes, "ordens", "excluir", role))
+        return NextResponse.json({ erro: "Sem permissão para cancelar/inativar OS" }, { status: 403 });
+      const bloqueio = await motivoBloqueioInativacao(id);
+      if (bloqueio) return NextResponse.json({ erro: bloqueio }, { status: 409 });
+    }
+    if (status === "CONCLUIDA" && !pode(permissoes, "ordens", "concluir", role))
+      return NextResponse.json({ erro: "Sem permissão para concluir OS" }, { status: 403 });
+  }
 
   const data: any = {};
   if (status !== undefined) data.status = status;
@@ -137,4 +156,36 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
 
   return NextResponse.json(atualizado);
+}
+
+/**
+ * Inativa a OS — soft-delete: a OS vira CANCELADA (nada é apagado; histórico,
+ * atividades, anexos e relatórios ficam preservados) e pode ser reaberta depois.
+ * Bloqueia OS que já entrou no financeiro (medição vinculada). Body opcional: { motivo }.
+ */
+export async function DELETE(req: NextRequest, { params }: Params) {
+  const guard = await exigirPermissao("ordens", "excluir");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
+  const { id } = await params;
+  const empresaId = session.user!.empresaId;
+
+  const os = await prisma.ordemServico.findFirst({ where: { id, empresaId }, select: { id: true, status: true, numero: true } });
+  if (!os) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
+  if (os.status === "CANCELADA") return NextResponse.json({ ok: true, status: "CANCELADA" });
+
+  const bloqueio = await motivoBloqueioInativacao(id);
+  if (bloqueio) return NextResponse.json({ erro: bloqueio }, { status: 409 });
+
+  const body = await req.json().catch(() => ({}));
+  const motivo = typeof body?.motivo === "string" ? body.motivo.trim().slice(0, 500) : "";
+
+  await prisma.ordemServico.update({ where: { id }, data: { status: "CANCELADA" } });
+  await prisma.osHistorico.create({
+    data: {
+      ordemServicoId: id, usuarioId: session.user!.id, acao: "OS inativada (cancelada)",
+      detalhes: `${os.status} → CANCELADA${motivo ? ` — Motivo: ${motivo}` : ""}`,
+    },
+  });
+  return NextResponse.json({ ok: true, status: "CANCELADA" });
 }

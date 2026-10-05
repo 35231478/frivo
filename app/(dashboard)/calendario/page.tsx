@@ -60,6 +60,8 @@ export default async function CalendarioPage({
   // (esmaecendo os cards que não correspondem, sem removê-los do calendário).
   const where: any = {
     empresaId,
+    // OS inativadas (CANCELADA) saem do calendário
+    status: { not: "CANCELADA" },
     OR: [
       { previsaoConclusao: periodo },
       { atividades: { some: { dataAgendada: periodo } } },
@@ -85,7 +87,7 @@ export default async function CalendarioPage({
         },
       },
       orderBy: { previsaoConclusao: "asc" },
-      take: 500,
+      // Sem limite: um corte aqui fazia OS sumirem do calendário em meses cheios
     }),
     prisma.tecnico.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true, avatar: true }, orderBy: { nome: "asc" } }),
     prisma.tipoOs.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
@@ -96,37 +98,47 @@ export default async function CalendarioPage({
   const agora = hoje.getTime();
   const eventosPorDia: Record<string, CardOs[]> = {};
   for (const os of ordens) {
-    const ativ = os.atividades[0];
-    // Card posicionado preferindo a atividade agendada; senão pela previsão de conclusão
-    let posData: Date | null = null;
-    let atividadeId: string | null = null;
-    if (ativ?.dataAgendada) { posData = new Date(ativ.dataAgendada); atividadeId = ativ.id; }
-    else if (os.previsaoConclusao) { posData = new Date(os.previsaoConclusao); }
-    if (!posData || posData < gridInicio || posData > gridFim) continue;
+    // Um card por DIA em que a OS tem atividade agendada (antes só a 1ª atividade
+    // aparecia e as visitas seguintes sumiam do calendário). Sem atividade no
+    // período, o card fica na previsão de conclusão.
+    const porDia = new Map<string, { data: Date; ativ: (typeof os.atividades)[number] | null }>();
+    for (const at of os.atividades) {
+      if (!at.dataAgendada) continue;
+      const d = new Date(at.dataAgendada);
+      if (d < gridInicio || d > gridFim) continue;
+      const k = chave(d);
+      if (!porDia.has(k)) porDia.set(k, { data: d, ativ: at });
+    }
+    if (porDia.size === 0 && os.previsaoConclusao) {
+      const d = new Date(os.previsaoConclusao);
+      if (d >= gridInicio && d <= gridFim) porDia.set(chave(d), { data: d, ativ: null });
+    }
 
-    const k = chave(posData);
     const atrasada = !!os.previsaoConclusao && new Date(os.previsaoConclusao).getTime() < agora && !FINALIZADAS.includes(os.status);
-    const card: CardOs = {
-      id: os.id,
-      numero: os.numero,
-      origem: os.origem,
-      atividadeId,
-      clienteId: os.cliente.id,
-      tecnicoId: ativ?.tecnico?.id ?? null,
-      tipoOsId: ativ?.tipoOs?.id ?? null,
-      clienteCurto: os.cliente.nomeFantasia ?? os.cliente.nome,
-      clienteCompleto: os.cliente.nome,
-      unidade: os.unidade?.nome ?? null,
-      tipoOs: ativ?.tipoOs?.nome ?? null,
-      hora: formatarData(posData, "HH:mm"),
-      dataFmt: formatarData(posData, "dd/MM/yyyy"),
-      tecnicoNome: ativ?.tecnico?.nome ?? null,
-      tecnicoAvatar: ativ?.tecnico?.avatar ?? null,
-      status: os.status,
-      prioridade: os.prioridade,
-      atrasada,
-    };
-    (eventosPorDia[k] ??= []).push(card);
+    for (const [k, { data: posData, ativ }] of porDia) {
+      const card: CardOs = {
+        chave: `${os.id}:${k}`,
+        id: os.id,
+        numero: os.numero,
+        origem: os.origem,
+        atividadeId: ativ?.id ?? null,
+        clienteId: os.cliente.id,
+        tecnicoId: ativ?.tecnico?.id ?? null,
+        tipoOsId: ativ?.tipoOs?.id ?? null,
+        clienteCurto: os.cliente.nomeFantasia ?? os.cliente.nome,
+        clienteCompleto: os.cliente.nome,
+        unidade: os.unidade?.nome ?? null,
+        tipoOs: ativ?.tipoOs?.nome ?? null,
+        hora: formatarData(posData, "HH:mm"),
+        dataFmt: formatarData(posData, "dd/MM/yyyy"),
+        tecnicoNome: ativ?.tecnico?.nome ?? null,
+        tecnicoAvatar: ativ?.tecnico?.avatar ?? null,
+        status: os.status,
+        prioridade: os.prioridade,
+        atrasada,
+      };
+      (eventosPorDia[k] ??= []).push(card);
+    }
   }
 
   // Ordena os cards de cada dia pela hora

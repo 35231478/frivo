@@ -34,7 +34,9 @@ export default async function OrdensPage({ searchParams }: { searchParams: Promi
   const dir: "asc" | "desc" = sp.dir === "asc" ? "asc" : "desc";
 
   const where: any = { empresaId };
+  // Sem filtro de status, OS inativadas (CANCELADA) ficam fora; o chip "Cancelada" as mostra
   if (statusList.length) where.status = { in: statusList };
+  else where.status = { not: "CANCELADA" };
   if (prioridadeList.length) where.prioridade = { in: prioridadeList };
   if (sp.origem) where.origem = sp.origem;
   if (sp.clienteId) where.clienteId = sp.clienteId;

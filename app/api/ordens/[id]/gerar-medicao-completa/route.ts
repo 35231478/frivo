@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { gerarNumeroRelatorio } from "@/lib/utils";
 import { criarMedicaoDeRelatorio } from "@/lib/financeiro-server";
@@ -13,8 +13,9 @@ type Params = { params: Promise<{ id: string }> };
  * Retorna o token público da medição para abrir /medicao/[token].
  */
 export async function POST(_: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("financeiro", "medicoes");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const { id } = await params;
   const empresaId = session.user!.empresaId;
 

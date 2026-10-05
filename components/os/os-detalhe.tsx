@@ -14,6 +14,9 @@ import { OsOrcamentosVinculados } from "@/components/os/os-orcamentos-vinculados
 import { OsPrazos } from "@/components/os/os-prazos";
 import { OsRelatorios } from "@/components/os/os-relatorios";
 import { ComprasSecao } from "@/components/compras/compras-secao";
+import { OsInativarBotao } from "@/components/os/os-inativar";
+import { OsAnexos } from "@/components/os/os-anexos";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { ChevronLeft, FileText, Clock, User, Building2, MapPin, AlertTriangle, FileBarChart } from "lucide-react";
 import Link from "next/link";
 
@@ -35,32 +38,44 @@ export function OsDetalhe({ os: initialOs }: { os: any }) {
   const [os, setOs] = useState(initialOs);
   const [salvando, setSalvando] = useState(false);
   const [gerandoMedicao, setGerandoMedicao] = useState(false);
+  const [erroAcao, setErroAcao] = useState("");
+  const [confirmarCancelamento, setConfirmarCancelamento] = useState(false);
+  const { pode } = usePermissoes();
+  const podeEditar = pode("ordens", "editar");
 
   async function gerarMedicao() {
-    setGerandoMedicao(true);
+    setGerandoMedicao(true); setErroAcao("");
     try {
       const res = await fetch(`/api/ordens/${os.id}/gerar-medicao`, { method: "POST" });
-      if (res.ok) {
-        const data = await res.json();
-        router.push(`/financeiro/medicoes/${data.id}`);
-      }
-    } catch {} finally { setGerandoMedicao(false); }
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) router.push(`/financeiro/medicoes/${data.id}`);
+      else setErroAcao(data.erro ?? "Não foi possível gerar a medição.");
+    } catch { setErroAcao("Erro de conexão."); } finally { setGerandoMedicao(false); }
   }
 
   async function alterarStatus(novoStatus: string) {
-    setSalvando(true);
+    // Cancelar = inativar: passa pela confirmação (e pela regra de medição no servidor)
+    if (novoStatus === "CANCELADA") { setConfirmarCancelamento(true); return; }
+    setSalvando(true); setErroAcao("");
     try {
       const res = await fetch(`/api/ordens/${os.id}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: novoStatus }),
       });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        const atualizado = await res.json();
-        setOs((prev: any) => ({ ...prev, ...atualizado }));
+        setOs((prev: any) => ({ ...prev, ...data }));
         router.refresh();
+      } else {
+        setErroAcao(data.erro ?? "Não foi possível alterar o status.");
       }
-    } catch {} finally { setSalvando(false); }
+    } catch { setErroAcao("Erro de conexão."); } finally { setSalvando(false); }
   }
+
+  // Opções de status conforme a permissão (o servidor também valida)
+  const opcoesStatus = Object.entries(LABELS_STATUS_OS).filter(([v]) =>
+    v === os.status
+    || (v === "CANCELADA" ? pode("ordens", "excluir") : v === "CONCLUIDA" ? pode("ordens", "concluir") : true));
 
   const tabs = [
     { id: "geral", label: "Geral" },
@@ -102,17 +117,43 @@ export function OsDetalhe({ os: initialOs }: { os: any }) {
             <p className="text-sm text-gray-500 mt-1">{os.cliente.nomeFantasia ?? os.cliente.nome}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {os.status === "CONCLUIDA" && (
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {os.status === "CONCLUIDA" && pode("financeiro", "medicoes") && (
             <Button variant="outline" onClick={gerarMedicao} loading={gerandoMedicao}>
               <FileBarChart className="w-4 h-4" /> Gerar medição
             </Button>
           )}
-          <Select value={os.status} onChange={(e) => alterarStatus(e.target.value)} className="text-sm w-auto" disabled={salvando}>
-            {Object.entries(LABELS_STATUS_OS).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
-          </Select>
+          {podeEditar && (
+            <Select value={os.status} onChange={(e) => alterarStatus(e.target.value)} className="text-sm w-auto" disabled={salvando}>
+              {opcoesStatus.map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
+            </Select>
+          )}
+          <OsInativarBotao
+            osId={os.id} numero={os.chamadoNumero ?? os.numero} status={os.status}
+            onAlterado={(novo) => setOs((prev: any) => ({ ...prev, status: novo }))}
+          />
+          {confirmarCancelamento && (
+            <OsInativarBotao
+              osId={os.id} numero={os.chamadoNumero ?? os.numero} status={os.status}
+              variante="oculto" abrirAoMontar
+              onFechar={() => setConfirmarCancelamento(false)}
+              onAlterado={(novo) => setOs((prev: any) => ({ ...prev, status: novo }))}
+            />
+          )}
         </div>
       </div>
+
+      {erroAcao && (
+        <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> {erroAcao}
+        </div>
+      )}
+      {os.status === "CANCELADA" && (
+        <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          Esta OS está inativada (cancelada). Ela não aparece nas listas padrão nem no calendário; use “Reabrir” para voltar a trabalhar nela.
+        </div>
+      )}
 
       {/* Abas */}
       <div className="bg-white rounded-xl border border-gray-200">
@@ -134,7 +175,7 @@ export function OsDetalhe({ os: initialOs }: { os: any }) {
               {activeTab === "relatorios" && <OsRelatorios osId={os.id} />}
               {activeTab === "financeiro" && <OsFinanceiro osId={os.id} medicoes={os.medicoes} itensOrcamento={os.itensOrcamento} />}
               {activeTab === "formularios" && <TabFormularios atividades={os.atividades} />}
-              {activeTab === "anexos" && <TabAnexos osId={os.id} anexos={os.anexos} />}
+              {activeTab === "anexos" && <OsAnexos osId={os.id} anexos={os.anexos} />}
               {activeTab === "historico" && <TabHistorico historico={os.historico} />}
             </div>
           )}
@@ -194,41 +235,6 @@ function TabFormularios({ atividades }: { atividades: any[] }) {
           <pre className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 rounded-lg p-3 font-sans">{a.resumo}</pre>
         </div>
       ))}
-    </div>
-  );
-}
-
-function TabAnexos({ osId, anexos: iniciais }: { osId: string; anexos: any[] }) {
-  const [anexos, setAnexos] = useState(iniciais);
-  const [uploading, setUploading] = useState(false);
-
-  async function upload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    const fd = new FormData();
-    fd.append("arquivo", file);
-    try {
-      const res = await fetch(`/api/ordens/${osId}/anexos`, { method: "POST", body: fd });
-      if (res.ok) { const novo = await res.json(); setAnexos((p) => [novo, ...p]); }
-    } catch {} finally { setUploading(false); }
-  }
-
-  return (
-    <div className="space-y-3">
-      {anexos.map((a: any) => (
-        <div key={a.id} className="flex items-center gap-3 p-2.5 border border-gray-200 rounded-lg">
-          <FileText className="w-4 h-4 text-gray-400" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm text-gray-800 truncate">{a.nome}</p>
-            <p className="text-xs text-gray-400">{(a.tamanho / 1024).toFixed(0)} KB — {formatarData(a.criadoEm)}</p>
-          </div>
-        </div>
-      ))}
-      <input type="file" id="os-anexo-input" onChange={upload} className="hidden" />
-      <Button variant="secondary" onClick={() => document.getElementById("os-anexo-input")?.click()} loading={uploading} className="w-full justify-center border-dashed">
-        Enviar anexo
-      </Button>
     </div>
   );
 }

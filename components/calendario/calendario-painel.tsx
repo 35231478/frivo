@@ -85,7 +85,7 @@ export function CalendarioPainel({
     for (const [k, cards] of Object.entries(eventosPorDia)) {
       for (const card of cards) {
         const ok = casa(card);
-        if (!ok && filtrando) dim.add(card.id);
+        if (!ok && filtrando) dim.add(card.chave);
         if (ok && inMonth.has(k)) x++;
       }
     }

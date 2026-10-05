@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { exigirAlgumaPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ id: string; atividadeId: string }> };
 
 export async function POST(req: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirAlgumaPermissao([["ordens", "editar"], ["ordens", "concluir"]]);
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const { id, atividadeId } = await params;
   const empresaId = session.user!.empresaId;
 

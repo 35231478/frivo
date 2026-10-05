@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
+import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { formatarData, LABELS_STATUS_OS, LABELS_PRIORIDADE } from "@/lib/utils";
 
@@ -18,8 +18,9 @@ function csvCampo(v: string | null | undefined): string {
 }
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session) return new Response("Não autorizado", { status: 401 });
+  const guard = await exigirPermissao("ordens", "visualizar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const empresaId = session.user!.empresaId;
   const sp = req.nextUrl.searchParams;
 
@@ -29,7 +30,9 @@ export async function GET(req: NextRequest) {
   const dir: "asc" | "desc" = sp.get("dir") === "asc" ? "asc" : "desc";
 
   const where: any = { empresaId };
+  // Mesma regra da lista: sem filtro de status, OS inativadas (CANCELADA) ficam fora
   if (statusList.length) where.status = { in: statusList };
+  else where.status = { not: "CANCELADA" };
   if (prioridadeList.length) where.prioridade = { in: prioridadeList };
   if (sp.get("origem")) where.origem = sp.get("origem");
   if (sp.get("clienteId")) where.clienteId = sp.get("clienteId");
