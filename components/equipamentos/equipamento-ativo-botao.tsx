@@ -64,7 +64,7 @@ export function EquipamentoAtivoBotao({
         disabled={carregando}
         onClick={executar}
         className={cn(
-          "p-1.5 rounded-md hover:bg-surface-alt disabled:opacity-50",
+          "p-1 rounded-md hover:bg-surface-alt disabled:opacity-50",
           ativo ? "text-ink-muted hover:text-red-600" : "text-ink-muted hover:text-emerald-600",
         )}
       >

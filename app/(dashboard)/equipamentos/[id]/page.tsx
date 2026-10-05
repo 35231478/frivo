@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { LABELS_TIPO_EQUIPAMENTO } from "@/lib/utils";
 import { EquipamentoPerfil } from "@/components/equipamentos/equipamento-perfil";
 import { carregarHistoricoEquipamento } from "@/lib/equipamento-historico";
+import { proximaManutencaoPorContrato } from "@/lib/equipamento-indicadores";
 
 export const metadata: Metadata = { title: "Equipamento" };
 
@@ -21,7 +22,7 @@ export default async function EquipamentoPerfilPage({
     include: {
       tipoEquipamento: { select: { id: true, nome: true } },
       unidade: { include: { cliente: { select: { id: true, nome: true, nomeFantasia: true } } } },
-      qrcode: { select: { id: true, codigo: true } },
+      qrcode: { select: { id: true, codigo: true, ativo: true } },
     },
   });
   if (!equipamento) notFound();
@@ -82,8 +83,27 @@ export default async function EquipamentoPerfilPage({
   // Linha do tempo de atendimentos (OS diretas + atividades com vários equipamentos)
   const linhaDoTempo = await carregarHistoricoEquipamento(empresaId, id);
 
+  // Visão rápida — derivada dos atendimentos; a "próxima" usa a atividade agendada mais
+  // próxima e, na falta dela, a recorrência de contrato do local (sem campos novos no banco).
+  const agora = Date.now();
+  const concluidos = linhaDoTempo.filter((ev) => ev.status === "CONCLUIDA");
+  const agendada = linhaDoTempo
+    .filter((ev) => ev.status === "AGENDADA" && new Date(ev.data).getTime() >= agora)
+    .sort((a, b) => a.data.localeCompare(b.data))[0];
+  const porContrato = agendada ? null : await proximaManutencaoPorContrato(empresaId, equipamento.unidadeId);
+  const indicadores = {
+    ultimoAtendimento: concluidos[0]?.data ?? null,
+    proxima: agendada
+      ? { data: agendada.data, origem: agendada.tipoServico?.nome ?? agendada.titulo, osId: agendada.os.id }
+      : porContrato
+        ? { data: porContrato.data.toISOString(), origem: porContrato.origem, osId: null }
+        : null,
+    totalAtendimentos: concluidos.length,
+  };
+
   return (
     <EquipamentoPerfil
+      indicadores={indicadores}
       equipamento={equipamento as any}
       tipoNome={tipoNome}
       historico={historico}

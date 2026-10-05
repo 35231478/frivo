@@ -23,3 +23,9 @@ export const COR_SITUACAO_GARANTIA: Record<SituacaoGarantia, string> = {
   vencendo: "text-amber-700 bg-amber-50",
   vencida: "text-red-600 bg-red-50",
 };
+
+/** Dias até o fim da garantia (negativo = vencida há N dias). */
+export function diasRestantesGarantia(fim: Date | string | null | undefined, hoje = new Date()): number | null {
+  if (!fim) return null;
+  return Math.floor((new Date(fim).getTime() - hoje.getTime()) / 86_400_000);
+}
