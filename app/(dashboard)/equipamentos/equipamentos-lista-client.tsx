@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cn, formatarData } from "@/lib/utils";
-import {
+import { Camera,
   Plus, Search, LayoutGrid, Rows3, X, ChevronDown, ChevronLeft, ChevronRight,
   ArrowUpDown, ArrowUp, ArrowDown, Eye, Pencil, QrCode, Loader2, SlidersHorizontal,
   Building2, MapPin, ShieldAlert, ShieldX, CheckCircle2, CalendarCheck, Thermometer,
@@ -173,6 +173,11 @@ export function EquipamentosListaClient({ itens, total, filtros: f, opcoes, resu
               <LayoutGrid className="w-4 h-4" />
             </button>
           </div>
+          {podeCriar && (
+            <Link href="/equipamentos/novo/foto" title="Cadastrar pela foto da etiqueta (IA)" className="inline-flex items-center gap-2 border border-primary-300 text-primary-700 bg-primary-50 hover:bg-primary-100 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all">
+              <Camera className="w-4 h-4" /> <span className="hidden sm:inline">Por foto</span>
+            </Link>
+          )}
           {podeCriar && (
             <Link href={`/equipamentos/novo${f.unidade ? `?unidadeId=${f.unidade}` : ""}`} className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow">
               <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Novo equipamento</span><span className="sm:hidden">Novo</span>

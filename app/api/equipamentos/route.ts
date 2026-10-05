@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
+import { gerarQrCodeEquipamento } from "@/lib/qrcode-server";
 import { equipamentoSchema } from "@/lib/validations";
 import { resolverTipoEquipamento } from "@/lib/tipo-equipamento";
 
@@ -81,6 +82,18 @@ export async function POST(req: NextRequest) {
       garantiaAte: garantiaAte ? new Date(garantiaAte) : null,
     },
   });
+
+  // Cadastro pela foto da etiqueta pede o QR já na criação (mesma geração da aba "QR Code")
+  if (body?.gerarQrCode === true) {
+    try {
+      const qrcode = await gerarQrCodeEquipamento(empresaId, equipamento.id);
+      return NextResponse.json({ ...equipamento, qrcode: { id: qrcode.id, codigo: qrcode.codigo } }, { status: 201 });
+    } catch (e) {
+      // O equipamento já foi salvo: não desfaz o cadastro por causa do QR
+      console.error("Falha ao gerar QR do equipamento", e);
+      return NextResponse.json({ ...equipamento, qrcode: null, avisoQr: "O equipamento foi salvo, mas o QR Code não pôde ser gerado agora. Gere pela aba QR Code." }, { status: 201 });
+    }
+  }
 
   return NextResponse.json(equipamento, { status: 201 });
 }
