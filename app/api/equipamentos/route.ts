@@ -1,12 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { pode } from "@/lib/permissoes";
+import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { equipamentoSchema } from "@/lib/validations";
 import { resolverTipoEquipamentoId } from "@/lib/tipo-equipamento";
 
+/**
+ * Lista equipamentos ativos. Além de quem visualiza o módulo, libera a leitura para
+ * quem usa os seletores de equipamento na OS (ordens) e no orçamento (orcamentos).
+ */
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const { permissoes, role } = session.user!;
+  if (!["equipamentos", "ordens", "orcamentos"].some((m) => pode(permissoes, m, "visualizar", role)))
+    return NextResponse.json({ erro: "Sem permissão para esta ação" }, { status: 403 });
 
   const empresaId = session.user!.empresaId;
   const { searchParams } = new URL(req.url);
@@ -37,8 +46,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("equipamentos", "criar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
 
   const empresaId = session.user!.empresaId;
   const body = await req.json();
@@ -54,7 +64,9 @@ export async function POST(req: NextRequest) {
   });
   if (!unidade) return NextResponse.json({ erro: "Unidade não encontrada" }, { status: 404 });
 
-  const { dataInstalacao, dataFabricacao, garantiaAte, ...resto } = parsed.data;
+  const { dataInstalacao, dataFabricacao, garantiaInicio, garantiaAte, ...resto } = parsed.data;
+  if (garantiaInicio && garantiaAte && garantiaInicio > garantiaAte)
+    return NextResponse.json({ erro: "O início da garantia deve ser anterior ao fim." }, { status: 400 });
   const tipoEquipamentoId = await resolverTipoEquipamentoId(empresaId, resto.tipo);
   const equipamento = await prisma.equipamento.create({
     data: {
@@ -63,6 +75,7 @@ export async function POST(req: NextRequest) {
       tipoEquipamentoId,
       dataInstalacao: dataInstalacao ? new Date(dataInstalacao) : null,
       dataFabricacao: dataFabricacao ? new Date(dataFabricacao) : null,
+      garantiaInicio: garantiaInicio ? new Date(garantiaInicio) : null,
       garantiaAte: garantiaAte ? new Date(garantiaAte) : null,
     },
   });

@@ -15,8 +15,8 @@ import { LABELS_TIPO_EQUIPAMENTO, cn } from "@/lib/utils";
 import { Thermometer, ImageIcon, MapPin, Cog, QrCode, History, CheckCircle2, ClipboardList } from "lucide-react";
 
 const TIPOS_EQUIPAMENTO = Object.entries(LABELS_TIPO_EQUIPAMENTO);
-const FLUIDOS = ["R22", "R410A", "R32", "R404A", "R134a", "Outro"];
-const TENSOES = ["110V", "220V", "380V"];
+const FLUIDOS = ["R22", "R410A", "R32", "R407C", "R404A", "R134a", "R290", "Outro"];
+const TENSOES = ["110V", "127V", "220V", "380V", "440V"];
 const FASES = ["Monofásico", "Bifásico", "Trifásico"];
 
 const STATUS_OS: Record<string, { label: string; cor: string }> = {
@@ -38,6 +38,16 @@ function dataBR(d: any): string {
   if (!d) return "—";
   return new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
+const UNIDADES_CAPACIDADE = ["BTU/h", "TR"];
+
+/** Separa "12.000 BTU/h" / "5 TR" em valor + unidade (valores antigos sem unidade = BTU/h). */
+function separarCapacidade(cap?: string | null): { valor: string; unidade: string } {
+  const txt = (cap ?? "").trim();
+  const m = txt.match(/^(.*?)\s*(BTU\/h|BTU|TR)$/i);
+  if (!m) return { valor: txt, unidade: "BTU/h" };
+  return { valor: m[1].trim(), unidade: m[2].toUpperCase() === "TR" ? "TR" : "BTU/h" };
+}
+
 function opcoesComValor(base: string[], valor?: string) {
   return valor && !base.includes(valor) ? [valor, ...base] : base;
 }
@@ -69,24 +79,30 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
   const [fotos, setFotos] = useState<string[]>(initialData?.fotos ?? []);
   const [clienteId, setClienteId] = useState<string>(initialData?.unidade?.clienteId ?? "");
   const [unidades, setUnidades] = useState<UnidadeItem[]>([]);
+  // Sugestões de setor/ambiente já usados em outros equipamentos do mesmo endereço
+  const [sugestoesLocal, setSugestoesLocal] = useState<{ setores: string[]; ambientes: string[] }>({ setores: [], ambientes: [] });
 
   const [form, setForm] = useState({
     nome: initialData?.nome ?? "",
     marca: initialData?.marca ?? "",
     modelo: initialData?.modelo ?? "",
     numeroSerie: initialData?.numeroSerie ?? "",
+    patrimonio: initialData?.patrimonio ?? "",
     tipo: initialData?.tipo ?? "",
     anoFabricacao: initialData?.anoFabricacao ?? "",
     observacoes: initialData?.observacoes ?? "",
     unidadeId: initialData?.unidadeId ?? unidadeIdFixo ?? "",
+    setor: initialData?.setor ?? "",
     localizacao: initialData?.localizacao ?? "",
     fluido: initialData?.fluido ?? "",
-    capacidade: initialData?.capacidade ?? "",
+    capacidade: separarCapacidade(initialData?.capacidade).valor,
+    capacidadeUnidade: separarCapacidade(initialData?.capacidade).unidade,
     tensao: initialData?.tensao ?? "",
     potencia: initialData?.potencia ?? "",
     fase: initialData?.fase ?? "",
     correnteNominal: initialData?.correnteNominal ?? "",
     dataInstalacao: toDateInput(initialData?.dataInstalacao),
+    garantiaInicio: toDateInput(initialData?.garantiaInicio),
     garantiaAte: toDateInput(initialData?.garantiaAte),
     observacoesTecnicas: initialData?.observacoesTecnicas ?? "",
   });
@@ -108,6 +124,20 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clienteId]);
+
+  // Carrega setores/ambientes já usados no endereço selecionado (autocomplete)
+  useEffect(() => {
+    if (!form.unidadeId) { setSugestoesLocal({ setores: [], ambientes: [] }); return; }
+    fetch(`/api/equipamentos?unidadeId=${form.unidadeId}`)
+      .then((r) => r.json())
+      .then((d) => {
+        const lista: any[] = Array.isArray(d) ? d : [];
+        const unicos = (vals: (string | null | undefined)[]) =>
+          [...new Set(vals.map((v) => (v ?? "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+        setSugestoesLocal({ setores: unicos(lista.map((e) => e.setor)), ambientes: unicos(lista.map((e) => e.localizacao)) });
+      })
+      .catch(() => {});
+  }, [form.unidadeId]);
 
   const ultimaManutencao = useMemo(() => {
     const concluidas = (initialData?.ordensServico ?? []).filter((o: any) => o.status === "CONCLUIDA" && o.dataConclusao);
@@ -131,6 +161,12 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
       return;
     }
 
+    if (form.garantiaInicio && form.garantiaAte && form.garantiaInicio > form.garantiaAte) {
+      setAba("tecnicos");
+      setErroGlobal("O início da garantia deve ser anterior ao fim.");
+      return;
+    }
+
     setSalvando(true);
     try {
       const payload = {
@@ -140,15 +176,18 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
         marca: form.marca,
         modelo: form.modelo,
         numeroSerie: form.numeroSerie || undefined,
+        patrimonio: form.patrimonio || undefined,
         anoFabricacao: form.anoFabricacao || undefined,
-        capacidade: form.capacidade || undefined,
+        capacidade: form.capacidade.trim() ? `${form.capacidade.trim()} ${form.capacidadeUnidade}` : undefined,
         fluido: form.fluido || undefined,
         tensao: form.tensao || undefined,
         potencia: form.potencia || undefined,
         fase: form.fase || undefined,
         correnteNominal: form.correnteNominal || undefined,
+        setor: form.setor || undefined,
         localizacao: form.localizacao || undefined,
         dataInstalacao: form.dataInstalacao || undefined,
+        garantiaInicio: form.garantiaInicio || undefined,
         garantiaAte: form.garantiaAte || undefined,
         observacoes: form.observacoes || undefined,
         observacoesTecnicas: form.observacoesTecnicas || undefined,
@@ -253,6 +292,9 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
                 </FormField>
               </FormGrid>
               <FormGrid>
+                <FormField label="Patrimônio / TAG" hint="Código de patrimônio do cliente ou etiqueta do equipamento">
+                  <Input value={form.patrimonio} onChange={(e) => set("patrimonio", e.target.value)} placeholder="Ex: PAT-00123, TAG AC-07" />
+                </FormField>
                 <FormField label="Ano de fabricação">
                   <Input value={form.anoFabricacao} onChange={(e) => set("anoFabricacao", e.target.value)} placeholder="Ex: 2022" />
                 </FormField>
@@ -278,9 +320,16 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
                   {unidades.map((u) => (<option key={u.id} value={u.id}>{u.nome}{u.cidade ? ` — ${u.cidade}` : ""}</option>))}
                 </Select>
               </FormField>
-              <FormField label="Ambiente" hint="Onde o equipamento está instalado neste endereço">
-                <Input value={form.localizacao} onChange={(e) => set("localizacao", e.target.value)} placeholder="Ex: Sala de Reuniões, Recepção, Sala 201" />
-              </FormField>
+              <FormGrid>
+                <FormField label="Setor" hint="Andar, bloco ou área dentro do endereço">
+                  <Input value={form.setor} onChange={(e) => set("setor", e.target.value)} placeholder="Ex: 2º andar, Bloco B, Administrativo" list="sugestoes-setor" />
+                  <datalist id="sugestoes-setor">{sugestoesLocal.setores.map((v) => <option key={v} value={v} />)}</datalist>
+                </FormField>
+                <FormField label="Ambiente" hint="Sala/ambiente onde está instalado">
+                  <Input value={form.localizacao} onChange={(e) => set("localizacao", e.target.value)} placeholder="Ex: Sala de Reuniões, Recepção, CPD" list="sugestoes-ambiente" />
+                  <datalist id="sugestoes-ambiente">{sugestoesLocal.ambientes.map((v) => <option key={v} value={v} />)}</datalist>
+                </FormField>
+              </FormGrid>
               {unidadeSel && (unidadeSel.logradouro || unidadeSel.cidade) && (
                 <MapaEndereco logradouro={unidadeSel.logradouro ?? undefined} numero={unidadeSel.numero ?? undefined} cidade={unidadeSel.cidade ?? undefined} estado={unidadeSel.estado ?? undefined} cep={unidadeSel.cep ?? undefined} />
               )}
@@ -296,8 +345,13 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
                     {opcoesComValor(FLUIDOS, form.fluido).map((f) => (<option key={f} value={f}>{f}</option>))}
                   </Select>
                 </FormField>
-                <FormField label="Capacidade (BTU/h)">
-                  <Input value={form.capacidade} onChange={(e) => set("capacidade", e.target.value)} placeholder="Ex: 12000" inputMode="numeric" />
+                <FormField label="Capacidade térmica">
+                  <div className="flex gap-2">
+                    <Input value={form.capacidade} onChange={(e) => set("capacidade", e.target.value)} placeholder={form.capacidadeUnidade === "TR" ? "Ex: 5" : "Ex: 12.000"} inputMode="decimal" />
+                    <Select value={form.capacidadeUnidade} onChange={(e) => set("capacidadeUnidade", e.target.value)} className="w-28 shrink-0">
+                      {UNIDADES_CAPACIDADE.map((u) => (<option key={u} value={u}>{u}</option>))}
+                    </Select>
+                  </div>
                 </FormField>
                 <FormField label="Tensão">
                   <Select value={form.tensao} onChange={(e) => set("tensao", e.target.value)} placeholder="Selecione">
@@ -325,7 +379,12 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
                 <FormField label="Última manutenção" hint="Preenchido automaticamente">
                   <Input value={dataBR(ultimaManutencao)} disabled readOnly />
                 </FormField>
-                <FormField label="Garantia até">
+              </FormGrid>
+              <FormGrid cols={3}>
+                <FormField label="Início da garantia">
+                  <Input type="date" value={form.garantiaInicio} onChange={(e) => set("garantiaInicio", e.target.value)} />
+                </FormField>
+                <FormField label="Fim da garantia">
                   <Input type="date" value={form.garantiaAte} onChange={(e) => set("garantiaAte", e.target.value)} />
                 </FormField>
               </FormGrid>

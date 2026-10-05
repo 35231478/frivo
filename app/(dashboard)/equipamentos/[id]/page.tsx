@@ -4,11 +4,15 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { LABELS_TIPO_EQUIPAMENTO } from "@/lib/utils";
 import { EquipamentoPerfil } from "@/components/equipamentos/equipamento-perfil";
+import { carregarHistoricoEquipamento } from "@/lib/equipamento-historico";
 
 export const metadata: Metadata = { title: "Equipamento" };
 
-export default async function EquipamentoPerfilPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EquipamentoPerfilPage({
+  params, searchParams,
+}: { params: Promise<{ id: string }>; searchParams: Promise<{ aba?: string }> }) {
   const { id } = await params;
+  const { aba } = await searchParams;
   const session = await auth();
   const empresaId = session!.user!.empresaId;
 
@@ -18,14 +22,6 @@ export default async function EquipamentoPerfilPage({ params }: { params: Promis
       tipoEquipamento: { select: { id: true, nome: true } },
       unidade: { include: { cliente: { select: { id: true, nome: true, nomeFantasia: true } } } },
       qrcode: { select: { id: true, codigo: true } },
-      ordensServico: {
-        orderBy: { criadoEm: "desc" },
-        take: 30,
-        select: {
-          id: true, numero: true, status: true, criadoEm: true, dataConclusao: true,
-          atividades: { take: 1, select: { tipoOs: { select: { nome: true } }, tecnico: { select: { nome: true } } } },
-        },
-      },
     },
   });
   if (!equipamento) notFound();
@@ -83,5 +79,16 @@ export default async function EquipamentoPerfilPage({ params }: { params: Promis
     ?? LABELS_TIPO_EQUIPAMENTO[equipamento.tipo as keyof typeof LABELS_TIPO_EQUIPAMENTO]
     ?? equipamento.tipo;
 
-  return <EquipamentoPerfil equipamento={equipamento as any} tipoNome={tipoNome} historico={historico} />;
+  // Linha do tempo de atendimentos (OS diretas + atividades com vários equipamentos)
+  const linhaDoTempo = await carregarHistoricoEquipamento(empresaId, id);
+
+  return (
+    <EquipamentoPerfil
+      equipamento={equipamento as any}
+      tipoNome={tipoNome}
+      historico={historico}
+      linhaDoTempo={linhaDoTempo}
+      abaInicial={aba}
+    />
+  );
 }
