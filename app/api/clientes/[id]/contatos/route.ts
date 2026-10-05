@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { contatoClienteSchema } from "@/lib/validations";
 
@@ -8,6 +9,8 @@ type Params = { params: Promise<{ id: string }> };
 export async function GET(_: NextRequest, { params }: Params) {
   const session = await auth();
   if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  if (!pode(session.user!.permissoes, "clientes", "visualizar", session.user!.role))
+    return NextResponse.json({ erro: "Sem permissão" }, { status: 403 });
   const { id } = await params;
   const empresaId = session.user!.empresaId;
 
@@ -22,6 +25,8 @@ export async function GET(_: NextRequest, { params }: Params) {
 export async function POST(req: NextRequest, { params }: Params) {
   const session = await auth();
   if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  if (!pode(session.user!.permissoes, "clientes", "editar", session.user!.role))
+    return NextResponse.json({ erro: "Sem permissão" }, { status: 403 });
   const { id } = await params;
   const empresaId = session.user!.empresaId;
 

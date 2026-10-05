@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ id: string }> };
@@ -9,6 +10,8 @@ const MAX_LOGO_SIZE = 2 * 1024 * 1024; // 2 MB
 export async function PUT(req: NextRequest, { params }: Params) {
   const session = await auth();
   if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  if (!pode(session.user!.permissoes, "clientes", "editar", session.user!.role))
+    return NextResponse.json({ erro: "Sem permissão" }, { status: 403 });
   const { id } = await params;
   const empresaId = session.user!.empresaId;
 
@@ -41,6 +44,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
 export async function DELETE(_: NextRequest, { params }: Params) {
   const session = await auth();
   if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  if (!pode(session.user!.permissoes, "clientes", "editar", session.user!.role))
+    return NextResponse.json({ erro: "Sem permissão" }, { status: 403 });
   const { id } = await params;
   const empresaId = session.user!.empresaId;
 
