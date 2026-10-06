@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { pode } from "@/lib/permissoes";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/ui/page-header";
@@ -12,10 +13,12 @@ export default async function EditarEquipePage({ params }: { params: Promise<{ i
   const { id } = await params;
   const session = await auth();
   const empresaId = session!.user!.empresaId;
+  // Editar exige "gerenciar"; quem só visualiza vê as equipes no montador (somente leitura)
+  if (!pode(session!.user!.permissoes, "equipes", "gerenciar", session!.user!.role)) redirect("/equipes/montador");
 
   const equipe = await prisma.equipe.findFirst({
     where: { id, empresaId },
-    include: { membros: { select: { id: true, nome: true } }, veiculos: { select: { id: true } } },
+    include: { membros: { select: { id: true, nome: true } }, veiculos: { select: { id: true, placa: true } } },
   });
   if (!equipe) notFound();
 

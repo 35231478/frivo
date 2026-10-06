@@ -414,7 +414,12 @@ export const equipeSchema = z.object({
   cor: z.string().default("#0EA5E9"),
   liderId: z.string().optional().nullable(),
   membroIds: z.array(z.string()).default([]),
+  /** Legado (1 veículo): só garante o vínculo, nunca desvincula os outros. */
   veiculoId: z.string().optional().nullable(),
+  /** Lista completa de veículos da equipe. Ausente = não mexe nos veículos. */
+  veiculoIds: z.array(z.string()).optional(),
+  /** Obrigatório para DESVINCULAR veículos que já estavam na equipe (senão 409 com a lista). */
+  confirmarDesvinculo: z.boolean().optional(),
   status: z.nativeEnum(StatusEquipe).default(StatusEquipe.ATIVA),
   observacoes: z.string().optional(),
 });

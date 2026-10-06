@@ -5,6 +5,7 @@ import { equipeSchema } from "@/lib/validations";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { pode } from "@/lib/permissoes";
 import { impactoEquipe, anotarInativacao, lerMotivo } from "@/lib/inativacao-server";
+import { aplicarVeiculosEquipe, planejarVeiculosEquipe, validarPessoasEquipe } from "@/lib/equipe-veiculos";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -26,8 +27,10 @@ export async function GET(_: NextRequest, { params }: Params) {
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  // Editar equipe exige "Equipes / Colaboradores › gerenciar" (antes bastava estar logado)
+  const guard = await exigirPermissao("equipes", "gerenciar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const empresaId = session.user!.empresaId;
   const { id } = await params;
 
@@ -38,10 +41,24 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const parsed = equipeSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
 
-  const { membroIds, veiculoId, liderId, ...rest } = parsed.data;
+  const { membroIds, veiculoId, veiculoIds, confirmarDesvinculo, liderId, ...rest } = parsed.data;
   // Inativar pelo formulário (status) segue a mesma regra do botão: exige "excluir"
   if (rest.status === "INATIVA" && existente.status !== "INATIVA" && !pode(session.user!.permissoes, "equipes", "excluir", session.user!.role))
     return NextResponse.json({ erro: "Sem permissão para inativar equipes" }, { status: 403 });
+
+  if (!(await validarPessoasEquipe(empresaId, membroIds, liderId)))
+    return NextResponse.json({ erro: "Colaborador inválido." }, { status: 400 });
+
+  // Veículos: nunca desvincula sem confirmação explícita
+  let plano;
+  try { plano = await planejarVeiculosEquipe(empresaId, id, { veiculoIds, veiculoId }); }
+  catch { return NextResponse.json({ erro: "Veículo inválido." }, { status: 400 }); }
+  if (plano.desvincular.length && !confirmarDesvinculo) {
+    return NextResponse.json({
+      erro: `Salvar vai desvincular ${plano.desvincular.length === 1 ? "o veículo" : "os veículos"} ${plano.desvincular.map((v) => v.placa).join(", ")} desta equipe. Confirme para continuar.`,
+      requerConfirmacao: true, desvincular: plano.desvincular.map((v) => v.placa),
+    }, { status: 409 });
+  }
 
   const equipe = await prisma.equipe.update({
     where: { id },
@@ -52,11 +69,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     },
   });
 
-  // Veículo vinculado: garante vínculo único — limpa os atuais e define o escolhido
-  await prisma.veiculo.updateMany({ where: { empresaId, equipeId: id }, data: { equipeId: null } });
-  if (veiculoId) {
-    await prisma.veiculo.updateMany({ where: { id: veiculoId, empresaId }, data: { equipeId: id } });
-  }
+  await aplicarVeiculosEquipe(empresaId, id, plano);
 
   return NextResponse.json(equipe);
 }

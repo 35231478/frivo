@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { equipeSchema } from "@/lib/validations";
-import { exigirAlgumaPermissao } from "@/lib/permissoes-server";
+import { exigirAlgumaPermissao, exigirPermissao } from "@/lib/permissoes-server";
+import { aplicarVeiculosEquipe, planejarVeiculosEquipe, validarPessoasEquipe } from "@/lib/equipe-veiculos";
 
 export async function GET(req: NextRequest) {
   // Equipes são lidas pela tela de equipes/veículos e pelo seletor de técnicos da OS
@@ -34,15 +35,21 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
-  const empresaId = session.user!.empresaId;
+  // Criar equipe exige "Equipes / Colaboradores › gerenciar" (antes bastava estar logado)
+  const guard = await exigirPermissao("equipes", "gerenciar");
+  if (guard.erro) return guard.resposta;
+  const empresaId = guard.session.user!.empresaId;
 
   const body = await req.json();
   const parsed = equipeSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
 
-  const { membroIds, veiculoId, liderId, ...rest } = parsed.data;
+  const { membroIds, veiculoId, veiculoIds, confirmarDesvinculo: _c, liderId, ...rest } = parsed.data;
+  if (!(await validarPessoasEquipe(empresaId, membroIds, liderId)))
+    return NextResponse.json({ erro: "Colaborador inválido." }, { status: 400 });
+  let plano;
+  try { plano = await planejarVeiculosEquipe(empresaId, null, { veiculoIds, veiculoId }); }
+  catch { return NextResponse.json({ erro: "Veículo inválido." }, { status: 400 }); }
 
   const equipe = await prisma.equipe.create({
     data: {
@@ -53,9 +60,7 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  if (veiculoId) {
-    await prisma.veiculo.updateMany({ where: { id: veiculoId, empresaId }, data: { equipeId: equipe.id } });
-  }
+  await aplicarVeiculosEquipe(empresaId, equipe.id, plano);
 
   return NextResponse.json(equipe, { status: 201 });
 }
