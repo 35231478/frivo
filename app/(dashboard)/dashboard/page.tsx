@@ -8,6 +8,7 @@ import { partesBR } from "@/lib/fuso";
 import { cn } from "@/lib/utils";
 import { PersonalizarDashboard } from "@/components/dashboard/personalizar-dashboard";
 import { BlocoComErro } from "@/components/dashboard/ui";
+import { FrivoIA } from "@/components/ia/frivo-ia";
 import {
   BlocoAgenda, BlocoComercial, BlocoEquipamentos, BlocoFinanceiro, BlocoFrota, BlocoOperacional, BlocoOsDoDia,
   BlocoPrazos, BlocoSolicitacoes,
@@ -96,6 +97,8 @@ export default async function DashboardPage() {
           })}
         </div>
       )}
+
+      <FrivoIA />
     </div>
   );
 }

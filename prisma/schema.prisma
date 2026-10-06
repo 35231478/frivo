@@ -2550,3 +2550,28 @@ model ChecklistItemPreenchido {
 
   @@map("checklist_item_preenchidos")
 }
+
+/// Registro de uso do assistente Frivo IA (uma linha por pergunta): tokens, custo estimado e
+/// ferramentas consultadas. Sem FK de propósito: o log não pode travar exclusões nem o chat.
+model IaUso {
+  id                 String   @id @default(cuid())
+  empresaId          String   @map("empresa_id")
+  usuarioId          String   @map("usuario_id")
+  modelo             String
+  /// Primeiros 300 caracteres da pergunta (auditoria)
+  pergunta           String
+  ferramentas        String[] @default([])
+  tokensEntrada      Int      @default(0) @map("tokens_entrada")
+  tokensSaida        Int      @default(0) @map("tokens_saida")
+  tokensCacheLeitura Int      @default(0) @map("tokens_cache_leitura")
+  tokensCacheEscrita Int      @default(0) @map("tokens_cache_escrita")
+  custoUsd           Decimal  @default(0) @map("custo_usd") @db.Decimal(12, 6)
+  sucesso            Boolean  @default(true)
+  erro               String?
+  duracaoMs          Int      @default(0) @map("duracao_ms")
+  criadoEm           DateTime @default(now()) @map("criado_em")
+
+  @@index([empresaId, criadoEm])
+  @@index([usuarioId, criadoEm])
+  @@map("ia_uso")
+}
