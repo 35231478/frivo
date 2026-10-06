@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { contatoClienteSchema } from "@/lib/validations";
+import { contatoSeguro } from "@/lib/contato-cliente";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -19,7 +20,7 @@ export async function GET(_: NextRequest, { params }: Params) {
     orderBy: [{ principal: "desc" }, { nome: "asc" }],
   });
 
-  return NextResponse.json(contatos);
+  return NextResponse.json(contatos.map(contatoSeguro));
 }
 
 export async function POST(req: NextRequest, { params }: Params) {
@@ -43,5 +44,5 @@ export async function POST(req: NextRequest, { params }: Params) {
     data: { ...parsed.data, empresaId, clienteId: id },
   });
 
-  return NextResponse.json(contato, { status: 201 });
+  return NextResponse.json(contatoSeguro(contato), { status: 201 });
 }

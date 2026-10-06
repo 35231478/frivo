@@ -33,6 +33,7 @@ import {
 } from "@/lib/status-financeiro";
 import Link from "next/link";
 import type { Cliente, Tecnico, Unidade, Configuracao, ContatoCliente } from "@prisma/client";
+import type { ContatoSeguro } from "@/lib/contato-cliente";
 import {
   Search, Loader2, FileCheck, Lock, Pencil, X, AlertCircle,
   FileText, Phone, MapPin, Image as ImageIcon, Heart, Headset,
@@ -48,7 +49,7 @@ interface ClienteFormProps {
     responsavelTecnico?: ResponsavelItem | null;
     unidades?: Unidade[];
     anexos?: AnexoItem[];
-    contatosCliente?: ContatoCliente[];
+    contatosCliente?: ContatoSeguro<ContatoCliente>[];
     interacoes?: InteracaoItem[];
     _count?: { contratos: number };
   };

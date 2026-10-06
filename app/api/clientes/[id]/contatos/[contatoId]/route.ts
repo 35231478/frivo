@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { contatoClienteSchema } from "@/lib/validations";
+import { contatoSeguro } from "@/lib/contato-cliente";
 
 type Params = { params: Promise<{ id: string; contatoId: string }> };
 
@@ -30,7 +31,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     data: parsed.data,
   });
 
-  return NextResponse.json(atualizado);
+  return NextResponse.json(contatoSeguro(atualizado));
 }
 
 export async function DELETE(_: NextRequest, { params }: Params) {

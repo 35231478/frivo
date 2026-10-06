@@ -10,8 +10,7 @@ interface Contato {
   nome: string;
   email?: string | null;
   whatsapp?: string | null;
-  senha?: string | null;
-  senhaProvisoria?: string | null;
+  temAcesso?: boolean;
   acessoConcedidoEm?: string | null;
   permissoes?: Record<string, boolean> | null;
 }
@@ -38,8 +37,7 @@ export function PortalContatos({ clienteId, ativo, onGerenciar }: { clienteId: s
     setContatos((prev) => (prev ?? []).map((c) => c.id === id
       ? {
           ...c,
-          senha: info.temAcesso ? (c.senha ?? "set") : null,
-          senhaProvisoria: info.senhaProvisoria ?? c.senhaProvisoria,
+          temAcesso: info.temAcesso,
           acessoConcedidoEm: info.acessoConcedidoEm ?? c.acessoConcedidoEm,
         }
       : c));
@@ -64,10 +62,10 @@ export function PortalContatos({ clienteId, ativo, onGerenciar }: { clienteId: s
   return (
     <div className="space-y-2">
       <p className="text-xs text-ink-muted mb-1">
-        Conceda ou gerencie o acesso de cada contato ao portal do cliente. A senha provisória fica visível para você repassar ao contato.
+        Conceda ou gerencie o acesso de cada contato ao portal do cliente. A senha aparece só no momento em que é definida ou redefinida, para você repassar ao contato.
       </p>
       {contatos.map((c) => {
-        const temAcesso = !!c.senha;
+        const temAcesso = !!c.temAcesso;
         return (
           <div key={c.id} className="border border-surface-border rounded-lg p-3 space-y-2">
             <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -86,7 +84,6 @@ export function PortalContatos({ clienteId, ativo, onGerenciar }: { clienteId: s
               emailInicial={c.email}
               whatsappInicial={c.whatsapp}
               temAcesso={temAcesso}
-              senhaProvisoriaInicial={c.senhaProvisoria}
               acessoConcedidoEmInicial={c.acessoConcedidoEm}
               permissoesIniciais={c.permissoes ?? null}
               onChange={(info) => onAcessoChange(c.id, info)}

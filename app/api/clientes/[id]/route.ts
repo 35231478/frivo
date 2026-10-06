@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { clienteSchema } from "@/lib/validations";
+import { contatoSeguro } from "@/lib/contato-cliente";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -30,7 +31,7 @@ export async function GET(_: NextRequest, { params }: Params) {
     },
   });
   if (!cliente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
-  return NextResponse.json(cliente);
+  return NextResponse.json({ ...cliente, contatosCliente: cliente.contatosCliente.map(contatoSeguro) });
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {

@@ -20,7 +20,6 @@ interface Props {
   emailInicial?: string | null;
   whatsappInicial?: string | null;
   temAcesso: boolean;
-  senhaProvisoriaInicial?: string | null;
   acessoConcedidoEmInicial?: string | Date | null;
   permissoesIniciais?: Record<string, boolean> | null;
   onChange?: (info: AcessoChange) => void;
@@ -28,13 +27,14 @@ interface Props {
 
 export function PortalAcessoContato({
   clienteId, contatoId, contatoNome, emailInicial, whatsappInicial,
-  temAcesso: temAcessoInicial, senhaProvisoriaInicial, acessoConcedidoEmInicial, permissoesIniciais, onChange,
+  temAcesso: temAcessoInicial, acessoConcedidoEmInicial, permissoesIniciais, onChange,
 }: Props) {
   const [aberto, setAberto] = useState(false);
   const [email, setEmail] = useState(emailInicial ?? "");
   const [senha, setSenha] = useState("");
   const [temAcesso, setTemAcesso] = useState(temAcessoInicial);
-  const [senhaProvisoria, setSenhaProvisoria] = useState<string | null>(senhaProvisoriaInicial ?? null);
+  // A senha só existe aqui logo depois de definida/redefinida: o servidor guarda apenas o hash.
+  const [senhaProvisoria, setSenhaProvisoria] = useState<string | null>(null);
   const [revelar, setRevelar] = useState(false);
   const [perms, setPerms] = useState<Record<string, boolean>>(permissoesIniciais ?? {});
   const [salvando, setSalvando] = useState(false);
@@ -60,7 +60,7 @@ export function PortalAcessoContato({
       if (!res.ok) { const e = await res.json().catch(() => ({})); setFb({ t: "erro", m: e.erro ?? "Erro ao salvar." }); return; }
       const data = await res.json().catch(() => ({}));
       setTemAcesso(true); setSenha("");
-      if (data.senhaProvisoria) setSenhaProvisoria(data.senhaProvisoria);
+      if (data.senhaProvisoria) { setSenhaProvisoria(data.senhaProvisoria); setRevelar(true); }
       setFb({ t: "ok", m: "Acesso concedido!" });
       onChange?.({ temAcesso: true, senhaProvisoria: data.senhaProvisoria ?? senhaProvisoria, acessoConcedidoEm: data.acessoConcedidoEm ?? null });
     } catch { setFb({ t: "erro", m: "Erro de conexão." }); } finally { setSalvando(false); setAcao(null); }
@@ -84,9 +84,9 @@ export function PortalAcessoContato({
     try {
       const res = await fetch(`/api/clientes/${clienteId}/contatos/${contatoId}/acesso-portal`, { method: "DELETE" });
       if (res.ok) {
-        setTemAcesso(false); setRevelar(false);
+        setTemAcesso(false); setRevelar(false); setSenhaProvisoria(null);
         setFb({ t: "ok", m: "Acesso revogado." });
-        onChange?.({ temAcesso: false, senhaProvisoria, acessoConcedidoEm: null });
+        onChange?.({ temAcesso: false, senhaProvisoria: null, acessoConcedidoEm: null });
       }
     } finally { setSalvando(false); setAcao(null); }
   }
@@ -130,12 +130,19 @@ export function PortalAcessoContato({
           </div>
           <div className="min-w-0">
             <p className="text-[11px] font-semibold text-ink-muted">Senha provisória</p>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-mono text-ink">{revelar ? (senhaProvisoria || "—") : "••••••••"}</span>
-              <button type="button" onClick={() => setRevelar((v) => !v)} className="text-ink-muted hover:text-ink" title={revelar ? "Ocultar" : "Revelar"}>
-                {revelar ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-              </button>
-            </div>
+            {senhaProvisoria ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-mono text-ink">{revelar ? senhaProvisoria : "••••••••"}</span>
+                  <button type="button" onClick={() => setRevelar((v) => !v)} className="text-ink-muted hover:text-ink" title={revelar ? "Ocultar" : "Revelar"}>
+                    {revelar ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+                <p className="text-[10px] text-amber-700">Repasse agora: por segurança ela não será exibida de novo.</p>
+              </>
+            ) : (
+              <p className="text-xs text-ink-muted">Definida. Para enviar uma nova ao contato, use “Redefinir senha”.</p>
+            )}
           </div>
         </div>
       )}

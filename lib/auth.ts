@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations";
 import { authConfig } from "@/auth.config";
-import { permissoesTotais, type Permissoes } from "@/lib/permissoes";
+import { permissoesDoUsuario } from "@/lib/permissoes";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   ...authConfig,
@@ -20,7 +20,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           where: { email, ativo: true },
           include: {
             empresa: { select: { id: true, nomeFantasia: true, plano: true, ativo: true } },
-            perfilAcesso: { select: { nome: true, permissoes: true } },
+            perfilAcesso: { select: { nome: true, permissoes: true, ativo: true } },
           },
         });
 
@@ -34,13 +34,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           data: { ultimoAcesso: new Date() },
         });
 
-        // Administrador master tem acesso total, independente do perfil.
-        // Usuário SEM perfil atribuído fica sem restrição (até um admin definir um perfil) —
-        // assim a introdução do RBAC não bloqueia usuários existentes.
-        const permissoes: Permissoes =
-          usuario.role === "ADMIN" || !usuario.perfilAcesso
-            ? permissoesTotais()
-            : (usuario.perfilAcesso.permissoes as Permissoes);
+        // ADMIN = acesso total; perfil ativo = permissões do perfil; sem perfil = só o dashboard.
+        const permissoes = permissoesDoUsuario(usuario);
 
         return {
           id: usuario.id,
@@ -50,7 +45,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           empresaNome: usuario.empresa.nomeFantasia ?? "",
           role: usuario.role,
           permissoes,
-          perfilNome: usuario.perfilAcesso?.nome ?? null,
+          perfilNome: usuario.perfilAcesso?.ativo === false ? null : usuario.perfilAcesso?.nome ?? null,
         };
       },
     }),
