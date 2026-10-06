@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { ambienteEquipamento, descricaoEquipamento, fabricanteModelo } from "@/lib/equipamento-descricao";
 import { cn, formatarData } from "@/lib/utils";
 import { Camera,
-  Plus, Search, LayoutGrid, Rows3, X, ChevronDown, ChevronLeft, ChevronRight,
-  ArrowUpDown, ArrowUp, ArrowDown, Eye, Pencil, QrCode, Loader2, SlidersHorizontal,
+  Plus, X, ChevronDown, ChevronRight,
+  Eye, Pencil, QrCode, Loader2, SlidersHorizontal,
   Building2, MapPin, ShieldAlert, ShieldX, CheckCircle2, CalendarCheck, Thermometer,
 } from "lucide-react";
 import { BuscaSelect, type OpcaoBusca } from "@/components/ui/busca-select";
@@ -16,7 +16,8 @@ import { EquipamentoAtivoBotao } from "@/components/equipamentos/equipamento-ati
 import { TipoIcone } from "@/components/equipamentos/tipo-equipamento";
 import { GarantiaSelo, StatusSelo } from "@/components/equipamentos/selos";
 import type { FiltrosListagem, OrdemListagem } from "@/lib/equipamento-listagem";
-import { TAMANHOS_PAGINA } from "@/lib/equipamento-listagem";
+import { useListagemUrl } from "@/components/listagem/use-listagem-url";
+import { AlternarVisao, CampoBusca, ChipResumo, MultiSelect, Paginacao, SelectFiltro, ThOrd } from "@/components/listagem/listagem-ui";
 
 export type EquipLinha = {
   id: string;
@@ -36,18 +37,6 @@ interface Props {
   filtros: FiltrosListagem;
   opcoes: { clientes: OpcaoBusca[]; unidades: OpcaoBusca[]; setores: string[]; fluidos: string[]; tipos: OpcaoBusca[] };
   resumo: { ativos: number; vencendo: number; vencidas: number; semQr: number };
-}
-
-const CHAVE_FILTROS = "frivo:equipamentos:filtros";
-const CHAVE_VISAO = "frivo:equipamentos:visao";
-/** Parâmetros que não fazem parte do "filtro salvo". */
-const NAO_PERSISTIR = ["pagina"];
-
-function lerStorage(chave: string): string | null {
-  try { return window.localStorage.getItem(chave); } catch { return null; }
-}
-function gravarStorage(chave: string, valor: string) {
-  try { window.localStorage.setItem(chave, valor); } catch { /* modo privado etc. */ }
 }
 
 function haQuanto(iso: string | null) {
@@ -85,70 +74,13 @@ function AmbienteCelula({ e, onFiltrar }: { e: EquipLinha; onFiltrar: (m: Record
 }
 
 export function EquipamentosListaClient({ itens, total, filtros: f, opcoes, resumo }: Props) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const sp = useSearchParams();
   const { pode } = usePermissoes();
   const podeCriar = pode("equipamentos", "criar");
   const podeEditar = pode("equipamentos", "editar");
-  const [pendente, startTransition] = useTransition();
-
-  const [visao, setVisao] = useState<"lista" | "cards">("lista");
-  const [busca, setBusca] = useState(f.q);
+  // URL = fonte da verdade; filtros salvos e visão lista/cards (mesmo hook da listagem de Veículos)
+  const { visao, trocarVisao, busca, setBusca, navegar, limpar, pendente } = useListagemUrl({ chave: "equipamentos", qAtual: f.q });
   const [maisAberto, setMaisAberto] = useState(!!(f.qr || f.fluido));
   const [filtrosMobile, setFiltrosMobile] = useState(false);
-
-  // Visão (lista/cards) é preferência pessoal
-  useEffect(() => {
-    const v = lerStorage(CHAVE_VISAO);
-    if (v === "cards" || v === "lista") setVisao(v);
-  }, []);
-  function trocarVisao(v: "lista" | "cards") { setVisao(v); gravarStorage(CHAVE_VISAO, v); }
-
-  // Filtros persistentes: ao abrir /equipamentos "limpo", restaura o último filtro usado
-  const restaurou = useRef(false);
-  const restaurando = useRef(false);
-  useEffect(() => {
-    if (restaurou.current) return;
-    restaurou.current = true;
-    if (sp.toString() === "") {
-      const salvo = lerStorage(CHAVE_FILTROS);
-      if (salvo) {
-        restaurando.current = true;
-        router.replace(`${pathname}?${salvo}`, { scroll: false });
-      }
-    }
-  }, [sp, pathname, router]);
-  useEffect(() => {
-    // Enquanto restaura, não sobrescreve o filtro salvo com a URL ainda vazia
-    if (restaurando.current) {
-      if (sp.toString() === "") return;
-      restaurando.current = false;
-    }
-    const p = new URLSearchParams(sp.toString());
-    NAO_PERSISTIR.forEach((k) => p.delete(k));
-    gravarStorage(CHAVE_FILTROS, p.toString());
-  }, [sp]);
-
-  /** Aplica mudanças na URL (fonte da verdade); por padrão volta para a página 1. */
-  function navegar(mudancas: Record<string, string | null>, manterPagina = false) {
-    const p = new URLSearchParams(sp.toString());
-    for (const [k, v] of Object.entries(mudancas)) {
-      if (v === null || v === "") p.delete(k); else p.set(k, v);
-    }
-    if (!manterPagina) p.delete("pagina");
-    const qs = p.toString();
-    startTransition(() => router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: !manterPagina ? false : true }));
-  }
-
-  // Busca com debounce (servidor)
-  useEffect(() => {
-    if (busca.trim() === f.q) return;
-    const t = setTimeout(() => navegar({ q: busca.trim() || null }), 350);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [busca]);
-  useEffect(() => { setBusca(f.q); }, [f.q]);
 
   function ordenar(k: OrdemListagem) {
     const dir = f.ordem === k ? (f.dir === "asc" ? "desc" : "asc") : (k === "ultimo" ? "desc" : "asc");
@@ -156,16 +88,8 @@ export function EquipamentosListaClient({ itens, total, filtros: f, opcoes, resu
   }
 
   const filtrosAtivos = [f.q, f.cliente, f.unidade, f.setor, f.tipos.length, f.status !== "ativo", f.garantia, f.qr, f.fluido].filter(Boolean).length;
-  function limpar() {
-    setBusca("");
-    startTransition(() => router.replace(pathname, { scroll: false }));
-  }
-
   const clienteSel = opcoes.clientes.find((c) => c.value === f.cliente);
   const unidadeSel = opcoes.unidades.find((u) => u.value === f.unidade);
-  const inicio = total === 0 ? 0 : (f.pagina - 1) * f.porPagina + 1;
-  const fim = Math.min(total, f.pagina * f.porPagina);
-  const totalPaginas = Math.max(1, Math.ceil(total / f.porPagina));
 
   return (
     <div className="space-y-4">
@@ -180,14 +104,7 @@ export function EquipamentosListaClient({ itens, total, filtros: f, opcoes, resu
           {pendente && <Loader2 className="w-4 h-4 text-primary-500 animate-spin" />}
         </div>
         <div className="flex items-center gap-2">
-          <div className="hidden md:flex items-center bg-surface-alt border border-surface-border rounded-lg p-0.5">
-            <button onClick={() => trocarVisao("lista")} title="Lista" className={cn("p-1.5 rounded-md transition-colors", visao === "lista" ? "bg-white text-primary-600 shadow-sm" : "text-ink-muted hover:text-ink")}>
-              <Rows3 className="w-4 h-4" />
-            </button>
-            <button onClick={() => trocarVisao("cards")} title="Cards" className={cn("p-1.5 rounded-md transition-colors", visao === "cards" ? "bg-white text-primary-600 shadow-sm" : "text-ink-muted hover:text-ink")}>
-              <LayoutGrid className="w-4 h-4" />
-            </button>
-          </div>
+          <AlternarVisao visao={visao} onTrocar={trocarVisao} />
           {podeCriar && (
             <Link href="/equipamentos/novo/foto" title="Cadastrar pela foto da etiqueta (IA)" className="inline-flex items-center gap-2 border border-primary-300 text-primary-700 bg-primary-50 hover:bg-primary-100 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all">
               <Camera className="w-4 h-4" /> <span className="hidden sm:inline">Por foto</span>
@@ -224,19 +141,7 @@ export function EquipamentosListaClient({ itens, total, filtros: f, opcoes, resu
       {/* ── Busca + filtros ── */}
       <div className="bg-white border border-surface-border rounded-xl p-3 sm:p-4 space-y-3">
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-subtle pointer-events-none" />
-            <input
-              value={busca} onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar nome, modelo, marca, nº série, TAG, cliente, setor…"
-              className="w-full bg-white border border-surface-border rounded-lg pl-9 pr-9 py-2.5 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10"
-            />
-            {busca && (
-              <button onClick={() => setBusca("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-subtle hover:text-ink" title="Limpar busca">
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
+          <CampoBusca valor={busca} onChange={setBusca} placeholder="Buscar nome, modelo, marca, nº série, TAG, cliente, setor…" />
           <div className="flex items-center gap-2">
             <Building2 className="w-4 h-4 text-ink-subtle shrink-0 hidden sm:block" />
             <BuscaSelect
@@ -279,7 +184,7 @@ export function EquipamentosListaClient({ itens, total, filtros: f, opcoes, resu
             valor={f.setor} onChange={(v) => navegar({ setor: v || null })}
             vazio="Setor: todos" opcoes={opcoes.setores.map((s) => ({ value: s, label: s }))}
           />
-          <MultiSelect titulo="Tipo" opcoes={opcoes.tipos} selecionados={f.tipos} onChange={(v) => navegar({ tipos: v.join(",") || null })} />
+          <MultiSelect titulo="Tipo" opcoes={opcoes.tipos} selecionados={f.tipos} onChange={(v) => navegar({ tipos: v.join(",") || null })} icone={(t) => <TipoIcone tipo={t} tamanho="sm" className="w-6 h-6" />} />
           <SelectFiltro
             valor={f.status === "ativo" ? "" : f.status} onChange={(v) => navegar({ status: v || null })}
             vazio="Status: ativos" opcoes={[{ value: "inativo", label: "Status: inativos" }, { value: "todos", label: "Status: todos" }]}
@@ -354,35 +259,7 @@ export function EquipamentosListaClient({ itens, total, filtros: f, opcoes, resu
       </div>
 
       {/* ── Paginação ── */}
-      {total > 0 && (
-        <div className="flex items-center justify-between gap-3 flex-wrap text-sm">
-          <p className="text-ink-muted">
-            <span className="font-medium text-ink">{inicio.toLocaleString("pt-BR")}–{fim.toLocaleString("pt-BR")}</span> de {total.toLocaleString("pt-BR")}
-          </p>
-          <div className="flex items-center gap-2">
-            <select
-              value={f.porPagina} onChange={(e) => navegar({ por: e.target.value === "50" ? null : e.target.value })}
-              className="bg-white border border-surface-border rounded-lg px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-primary-500"
-              title="Itens por página"
-            >
-              {TAMANHOS_PAGINA.map((n) => <option key={n} value={n}>{n} / pág.</option>)}
-            </select>
-            <button
-              disabled={f.pagina <= 1} onClick={() => navegar({ pagina: String(f.pagina - 1) }, true)}
-              className="p-2 rounded-lg border border-surface-border bg-white text-ink-muted hover:text-primary-600 disabled:opacity-40 disabled:pointer-events-none" title="Anterior"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <span className="text-ink-muted tabular-nums">{f.pagina} / {totalPaginas}</span>
-            <button
-              disabled={f.pagina >= totalPaginas} onClick={() => navegar({ pagina: String(f.pagina + 1) }, true)}
-              className="p-2 rounded-lg border border-surface-border bg-white text-ink-muted hover:text-primary-600 disabled:opacity-40 disabled:pointer-events-none" title="Próxima"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
+      <Paginacao total={total} pagina={f.pagina} porPagina={f.porPagina} onNavegar={navegar} />
     </div>
   );
 }
@@ -400,12 +277,12 @@ function Tabela({
       <table className="w-full text-sm">
         <thead className="bg-surface-alt text-ink-muted text-[11px] uppercase tracking-wide border-b border-surface-border">
           <tr>
-            <ThOrd label="Equipamento (tipo · capacidade)" k="tipo" f={f} onOrdenar={onOrdenar} className="pl-4" />
+            <ThOrd label="Equipamento (tipo · capacidade)" k="tipo" ordem={f.ordem} dir={f.dir} onOrdenar={onOrdenar} className="pl-4" />
             <th className="text-left px-3 py-2.5 font-semibold">Ambiente</th>
-            <ThOrd label="Cliente › Unidade" k="cliente" f={f} onOrdenar={onOrdenar} />
-            <ThOrd label="Garantia" k="garantia" f={f} onOrdenar={onOrdenar} />
+            <ThOrd label="Cliente › Unidade" k="cliente" ordem={f.ordem} dir={f.dir} onOrdenar={onOrdenar} />
+            <ThOrd label="Garantia" k="garantia" ordem={f.ordem} dir={f.dir} onOrdenar={onOrdenar} />
             <th className="text-left px-3 py-2.5 font-semibold">Status</th>
-            <ThOrd label="Últ. atend." k="ultimo" f={f} onOrdenar={onOrdenar} className="hidden lg:table-cell" />
+            <ThOrd label="Últ. atend." k="ultimo" ordem={f.ordem} dir={f.dir} onOrdenar={onOrdenar} className="hidden lg:table-cell" />
             <th className="text-right pl-2 pr-3 py-2.5 font-semibold">Ações</th>
           </tr>
         </thead>
@@ -548,88 +425,5 @@ function Miniatura({ e }: { e: EquipLinha }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img src={e.foto} alt={e.nome} loading="lazy" decoding="async" width={48} height={48} className="w-12 h-12 rounded-lg object-cover border border-surface-border shrink-0 bg-surface-alt" />
-  );
-}
-
-function ThOrd({ label, k, f, onOrdenar, className }: { label: string; k: OrdemListagem; f: FiltrosListagem; onOrdenar: (k: OrdemListagem) => void; className?: string }) {
-  const ativo = f.ordem === k;
-  return (
-    <th className={cn("text-left px-3 py-2.5 font-semibold whitespace-nowrap", className)}>
-      <button onClick={() => onOrdenar(k)} className={cn("inline-flex items-center gap-1 hover:text-ink transition-colors uppercase", ativo && "text-ink")}>
-        {label}
-        {ativo ? (f.dir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 opacity-40" />}
-      </button>
-    </th>
-  );
-}
-
-function ChipResumo({ ativo, onClick, icone: Icone, cor, rotulo, valor }: {
-  ativo: boolean; onClick: () => void; icone: typeof CheckCircle2; cor: string; rotulo: string; valor: number;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "shrink-0 inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
-        ativo ? "bg-primary-50 border-primary-300" : "bg-white border-surface-border hover:border-primary-200",
-      )}
-    >
-      <Icone className={cn("w-4 h-4", cor)} />
-      <span className="font-semibold text-ink tabular-nums">{valor.toLocaleString("pt-BR")}</span>
-      <span className="text-ink-muted">{rotulo}</span>
-    </button>
-  );
-}
-
-function SelectFiltro({ valor, onChange, vazio, opcoes }: { valor: string; onChange: (v: string) => void; vazio: string; opcoes: OpcaoBusca[] }) {
-  return (
-    <select
-      value={valor} onChange={(e) => onChange(e.target.value)}
-      className={cn(
-        "bg-white border rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:border-primary-500 max-w-[200px]",
-        valor ? "border-primary-300 text-primary-700 bg-primary-50/50" : "border-surface-border text-ink",
-      )}
-    >
-      <option value="">{vazio}</option>
-      {opcoes.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-    </select>
-  );
-}
-
-function MultiSelect({ titulo, opcoes, selecionados, onChange }: { titulo: string; opcoes: OpcaoBusca[]; selecionados: string[]; onChange: (v: string[]) => void }) {
-  const [aberto, setAberto] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    function onDoc(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setAberto(false); }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, []);
-  function toggle(id: string) {
-    onChange(selecionados.includes(id) ? selecionados.filter((s) => s !== id) : [...selecionados, id]);
-  }
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button" onClick={() => setAberto((v) => !v)}
-        className={cn(
-          "inline-flex items-center gap-1.5 bg-white border rounded-lg px-2.5 py-1.5 text-sm focus:outline-none",
-          selecionados.length ? "border-primary-300 text-primary-700 bg-primary-50/50" : "border-surface-border text-ink",
-        )}
-      >
-        {selecionados.length === 0 ? `${titulo}: todos` : `${titulo} (${selecionados.length})`}
-        <ChevronDown className="w-3.5 h-3.5 text-ink-muted" />
-      </button>
-      {aberto && (
-        <div className="absolute z-30 mt-1 w-64 bg-white border border-surface-border rounded-lg shadow-lg max-h-72 overflow-y-auto py-1">
-          {opcoes.map((o) => (
-            <label key={o.value} className="flex items-center gap-2 px-3 py-1.5 hover:bg-surface-alt cursor-pointer text-sm">
-              <input type="checkbox" checked={selecionados.includes(o.value)} onChange={() => toggle(o.value)} className="accent-primary-600" />
-              <TipoIcone tipo={o.value} tamanho="sm" className="w-6 h-6" />
-              <span className="truncate">{o.label}</span>
-            </label>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }
