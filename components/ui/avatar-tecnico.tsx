@@ -22,6 +22,7 @@ export function AvatarTecnico({ nome, fotoUrl, size = 24, className, title }: Av
       <img
         src={fotoUrl}
         alt={nome ?? "Técnico"}
+        loading="lazy" decoding="async"
         title={title ?? nome ?? undefined}
         style={dim}
         className={cn("rounded-full object-cover border border-white shadow-sm shrink-0", className)}

@@ -4,11 +4,13 @@ import {
   cn,
 } from "@/lib/utils";
 import { EquipamentosTabela, type EquipamentoInfo } from "@/components/relatorio/cabecalho-relatorio";
+import { nomesTecnicosAtividade, textoTecnicosAtividade } from "@/lib/atividade-equipe";
 
 interface Resposta { resposta: string | null; arquivoUrl: string | null; campo: { label: string; tipo: string } }
 interface Atividade {
   id: string; titulo: string; criadoEm: Date | string; resumo: string | null;
   tecnico?: { nome: string } | null; tipoOs?: { nome: string } | null; respostas: Resposta[];
+  tecnicosEquipe?: { tecnico: { nome: string } }[]; equipe?: { nome: string } | null;
 }
 type Equip = EquipamentoInfo;
 
@@ -49,9 +51,8 @@ function enderecoStr(e: any): string {
 }
 
 export function RelatorioDocumento({ relatorio, empresa, os, equipamentos }: RelatorioDocumentoProps) {
-  const tecnicosSet = new Map<string, string>();
-  os.atividades.forEach((a) => { if (a.tecnico) tecnicosSet.set(a.tecnico.nome, a.tecnico.nome); });
-  const equipe = [...tecnicosSet.values()];
+  // Todos os técnicos das atividades (responsáveis e membros das equipes)
+  const equipe = [...new Set(os.atividades.flatMap((a) => nomesTecnicosAtividade(a)))];
   const tipos = [...new Set(os.atividades.map((a) => a.tipoOs?.nome).filter(Boolean))] as string[];
 
   return (
@@ -136,7 +137,7 @@ export function RelatorioDocumento({ relatorio, empresa, os, equipamentos }: Rel
               <div key={a.id} className="border border-surface-border rounded-lg p-3" style={{ breakInside: "avoid" }}>
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <p className="font-semibold text-ink">{a.titulo}</p>
-                  <p className="text-xs text-ink-muted">{formatarDataHora(a.criadoEm)}{a.tecnico ? ` · ${a.tecnico.nome}` : ""}</p>
+                  <p className="text-xs text-ink-muted">{formatarDataHora(a.criadoEm)}{textoTecnicosAtividade(a) ? ` · ${textoTecnicosAtividade(a)}` : ""}</p>
                 </div>
                 {textos.length > 0 && (
                   <div className="space-y-1 text-sm">

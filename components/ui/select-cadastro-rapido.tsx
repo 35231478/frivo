@@ -226,16 +226,18 @@ export function CadastroRapidoModal(props: {
   aberto: boolean; onFechar: () => void; titulo: string; contexto?: string;
   campos: CampoRapido[]; criar: Props["criar"]; linkCadastroCompleto?: string;
   valoresIniciais?: Record<string, string>; onCriado: (o: OpcaoCadastro) => void;
+  /** Texto do botão de salvar (padrão: "Salvar e selecionar"). */
+  rotuloSalvar?: string;
 }) {
   return <MiniCadastro {...props} valoresIniciais={props.valoresIniciais ?? {}} />;
 }
 
 function MiniCadastro({
-  aberto, onFechar, titulo, contexto, campos, criar, linkCadastroCompleto, valoresIniciais, onCriado,
+  aberto, onFechar, titulo, contexto, campos, criar, linkCadastroCompleto, valoresIniciais, onCriado, rotuloSalvar,
 }: {
   aberto: boolean; onFechar: () => void; titulo: string; contexto?: string;
   campos: CampoRapido[]; criar: Props["criar"]; linkCadastroCompleto?: string;
-  valoresIniciais: Record<string, string>; onCriado: (o: OpcaoCadastro) => void;
+  valoresIniciais: Record<string, string>; onCriado: (o: OpcaoCadastro) => void; rotuloSalvar?: string;
 }) {
   const [valores, setValores] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState(false);
@@ -345,7 +347,7 @@ function MiniCadastro({
             </button>
             <button type="button" onClick={salvar} disabled={salvando} className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-semibold rounded-lg bg-primary-500 hover:bg-primary-600 text-white disabled:opacity-60">
               {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              <span className="sm:hidden">Salvar</span><span className="hidden sm:inline whitespace-nowrap">Salvar e selecionar</span>
+              <span className="sm:hidden">Salvar</span><span className="hidden sm:inline whitespace-nowrap">{rotuloSalvar ?? "Salvar e selecionar"}</span>
             </button>
           </div>
         </div>

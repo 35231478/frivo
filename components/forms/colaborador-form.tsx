@@ -12,6 +12,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
+import { reduzirImagem } from "@/lib/imagem-cliente";
 import {
   X, Plus, Upload, Trash2, AlertCircle, User, Briefcase, ListChecks, FileText,
 } from "lucide-react";
@@ -46,7 +47,7 @@ function vencendoEm30(data: string | null): boolean {
   return venc <= limite;
 }
 
-export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
+export function ColaboradorForm({ initialData, somenteLeitura = false }: ColaboradorFormProps & { somenteLeitura?: boolean }) {
   const router = useRouter();
   const isEditing = !!initialData;
   const [aba, setAba] = useState<Aba>("pessoais");
@@ -136,16 +137,17 @@ export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
     if (e.key === "Enter") { e.preventDefault(); adicionarEsp(novaEsp); }
   }
 
-  function handleFoto(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (fotoRef.current) fotoRef.current.value = "";
     if (!file) return;
     setErroFoto("");
     if (!file.type.startsWith("image/")) { setErroFoto("Envie uma imagem (PNG, JPG ou WEBP)."); return; }
-    if (file.size > 2 * 1024 * 1024) { setErroFoto("Imagem muito grande. Máximo 2 MB."); return; }
-    const reader = new FileReader();
-    reader.onload = () => setAvatar(typeof reader.result === "string" ? reader.result : null);
-    reader.readAsDataURL(file);
+    // Foto de perfil: reduzida no navegador (lado maior 512px, JPEG) — fica leve na listagem
+    try {
+      const { imagem } = await reduzirImagem(file, 512, 0.85);
+      setAvatar(imagem.dataUrl);
+    } catch { setErroFoto("Não foi possível abrir esta imagem."); }
   }
 
   function addDocumento() {
@@ -218,6 +220,7 @@ export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
         </div>
       )}
 
+      <fieldset disabled={somenteLeitura} className="min-w-0">
       <div className="bg-white rounded-2xl shadow-card border border-surface-border overflow-hidden">
         <nav className="flex gap-1.5 overflow-x-auto px-4 pt-4 pb-4 border-b border-surface-border">
           {ABAS.map((t) => {
@@ -511,12 +514,18 @@ export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-3 pt-1">
-        <Button type="button" variant="secondary" onClick={() => router.back()}>Cancelar</Button>
-        <Button type="submit" loading={isSubmitting}>
-          {isEditing ? "Salvar alterações" : "Cadastrar colaborador"}
-        </Button>
-      </div>
+      </fieldset>
+
+      {somenteLeitura ? (
+        <p data-somente-leitura className="text-right text-xs text-ink-muted pt-1">Somente consulta — você não tem permissão para editar colaboradores.</p>
+      ) : (
+        <div className="flex items-center justify-end gap-3 pt-1">
+          <Button type="button" variant="secondary" onClick={() => router.back()}>Cancelar</Button>
+          <Button type="submit" loading={isSubmitting}>
+            {isEditing ? "Salvar alterações" : "Cadastrar colaborador"}
+          </Button>
+        </div>
+      )}
     </form>
   );
 }

@@ -35,6 +35,11 @@ export function AtividadeDocumento({ empresa, os, atividade, equipamentos, numer
         <div className="border-t border-ink/40 pt-1 text-sm text-center">
           <p className="text-ink-muted">{atividade.tecnico?.nome ?? "Técnico executor"}</p>
           <p className="text-xs text-ink-subtle">Técnico responsável</p>
+          {(atividade.tecnicosEquipe?.length ?? 0) > 0 && (
+            <p data-membros-relatorio className="text-xs text-ink-subtle mt-1">
+              {atividade.equipe ? `Equipe ${atividade.equipe.nome}: ` : "Com: "}{atividade.tecnicosEquipe!.map((t) => t.tecnico.nome).join(", ")}
+            </p>
+          )}
         </div>
         <div className="text-right text-xs text-ink-subtle self-end">
           <p>Conclusão: {os.dataConclusao ? formatarData(os.dataConclusao, "dd/MM/yyyy 'às' HH:mm") : "—"}</p>

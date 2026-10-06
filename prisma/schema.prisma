@@ -634,18 +634,18 @@ model Usuario {
   criadoEm     DateTime  @default(now()) @map("criado_em")
   atualizadoEm DateTime  @updatedAt @map("atualizado_em")
 
-  empresa            Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  ordensEmitidas     OrdemServico[]        @relation("UsuarioCriador")
-  ordensResponsavel  OrdemServico[]        @relation("OsResponsavel")
+  empresa            Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  ordensEmitidas     OrdemServico[]            @relation("UsuarioCriador")
+  ordensResponsavel  OrdemServico[]            @relation("OsResponsavel")
   osHistorico        OsHistorico[]
   interacoesCliente  InteracaoCliente[]
-  orcamentosCriados  Orcamento[]           @relation("OrcamentoCriador")
-  pedidosSolicitados PedidoCompraInterno[] @relation("PedidoSolicitante")
-  pedidosComprador   PedidoCompraInterno[] @relation("PedidoComprador")
+  orcamentosCriados  Orcamento[]               @relation("OrcamentoCriador")
+  pedidosSolicitados PedidoCompraInterno[]     @relation("PedidoSolicitante")
+  pedidosComprador   PedidoCompraInterno[]     @relation("PedidoComprador")
   pushSubscriptions  PushSubscription[]
   contratoHistoricos ContratoHistoricoStatus[]
-  perfilAcessoId     String?               @map("perfil_acesso_id")
-  perfilAcesso       PerfilAcesso?         @relation(fields: [perfilAcessoId], references: [id])
+  perfilAcessoId     String?                   @map("perfil_acesso_id")
+  perfilAcesso       PerfilAcesso?             @relation(fields: [perfilAcessoId], references: [id])
 
   @@unique([email, empresaId])
   @@index([empresaId, ativo])
@@ -720,6 +720,7 @@ model Tecnico {
   clientesResponsavel   Cliente[]
   contratosResponsavel  Contrato[]
   atividadesOs          AtividadeOs[]
+  atividadesEquipe      AtividadeTecnico[]
   contratosRecorrencia  Contrato[]                      @relation("ContratoTecnicoRecorrencia")
   orcamentosResponsavel Orcamento[]                     @relation("OrcamentoResponsavelTecnico")
   competencias          TipoOs[]                        @relation("ColaboradorCompetencias")
@@ -796,19 +797,19 @@ model Cliente {
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  empresa            Empresa            @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  responsavelTecnico Tecnico?           @relation(fields: [responsavelTecnicoId], references: [id])
-  unidades           Unidade[]
-  contratos          Contrato[]
-  ordensServico      OrdemServico[]
-  anexos             AnexoCliente[]
-  contatosCliente    ContatoCliente[]
+  empresa                 Empresa                  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  responsavelTecnico      Tecnico?                 @relation(fields: [responsavelTecnicoId], references: [id])
+  unidades                Unidade[]
+  contratos               Contrato[]
+  ordensServico           OrdemServico[]
+  anexos                  AnexoCliente[]
+  contatosCliente         ContatoCliente[]
   comunicacaoPreferencias ComunicacaoPreferencia[]
-  interacoes         InteracaoCliente[]
-  orcamentos         Orcamento[]
-  medicoes           Medicao[]
-  contasReceber      ContaReceber[]
-  tabelaPreco        TabelaPreco?       @relation(fields: [tabelaPrecoId], references: [id])
+  interacoes              InteracaoCliente[]
+  orcamentos              Orcamento[]
+  medicoes                Medicao[]
+  contasReceber           ContaReceber[]
+  tabelaPreco             TabelaPreco?             @relation(fields: [tabelaPrecoId], references: [id])
 
   @@unique([cpfCnpj, empresaId])
   @@index([empresaId, ativo])
@@ -837,17 +838,17 @@ model ContatoCliente {
   ativo     Boolean     @default(true)
 
   // Acesso ao Portal do Cliente
-  senha            String?
-  senhaProvisoria  String?   @map("senha_provisoria") // texto legível p/ consulta do gestor
+  senha             String?
+  senhaProvisoria   String?   @map("senha_provisoria") // texto legível p/ consulta do gestor
   acessoConcedidoEm DateTime? @map("acesso_concedido_em")
-  ultimoAcesso     DateTime? @map("ultimo_acesso")
-  permissoes       Json?
+  ultimoAcesso      DateTime? @map("ultimo_acesso")
+  permissoes        Json?
 
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  cliente       Cliente        @relation(fields: [clienteId], references: [id], onDelete: Cascade)
-  ordensAbertas OrdemServico[] @relation("OsContatoOrigem")
+  cliente                 Cliente                  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  ordensAbertas           OrdemServico[]           @relation("OsContatoOrigem")
   comunicacaoPreferencias ComunicacaoPreferencia[]
 
   @@index([clienteId])
@@ -1063,10 +1064,10 @@ model Contrato {
   adicionarVencimentoNFSe Boolean              @default(false) @map("adicionar_vencimento_nfse")
 
   // Escopo
-  descricaoServicos    String?        @map("descricao_servicos")
-  itensInclusos        Json?          @map("itens_inclusos")
-  qtdVisitas           Int?           @map("qtd_visitas")
-  periodoVisitas       PeriodoVisita? @map("periodo_visitas")
+  descricaoServicos String?        @map("descricao_servicos")
+  itensInclusos     Json?          @map("itens_inclusos")
+  qtdVisitas        Int?           @map("qtd_visitas")
+  periodoVisitas    PeriodoVisita? @map("periodo_visitas")
 
   // Responsabilidade técnica (artNumero/responsavelTecnicoId acima)
   artVencimento DateTime? @map("art_vencimento")
@@ -1103,12 +1104,12 @@ model Contrato {
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  empresa            Empresa           @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  origemOrcamento    Orcamento?        @relation("OrcamentoContrato", fields: [origemOrcamentoId], references: [id])
-  cliente            Cliente           @relation(fields: [clienteId], references: [id])
-  responsavelTecnico Tecnico?          @relation(fields: [responsavelTecnicoId], references: [id])
-  tipoOsRecorrencia  TipoOs?           @relation("ContratoTipoOsRecorrencia", fields: [tipoOsRecorrenciaId], references: [id])
-  tecnicoRecorrencia Tecnico?          @relation("ContratoTecnicoRecorrencia", fields: [tecnicoRecorrenciaId], references: [id])
+  empresa            Empresa                    @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  origemOrcamento    Orcamento?                 @relation("OrcamentoContrato", fields: [origemOrcamentoId], references: [id])
+  cliente            Cliente                    @relation(fields: [clienteId], references: [id])
+  responsavelTecnico Tecnico?                   @relation(fields: [responsavelTecnicoId], references: [id])
+  tipoOsRecorrencia  TipoOs?                    @relation("ContratoTipoOsRecorrencia", fields: [tipoOsRecorrenciaId], references: [id])
+  tecnicoRecorrencia Tecnico?                   @relation("ContratoTecnicoRecorrencia", fields: [tecnicoRecorrenciaId], references: [id])
   unidades           ContratoUnidade[]
   ordensServico      OrdemServico[]
   medicoes           Medicao[]
@@ -1174,7 +1175,7 @@ model AnexoContrato {
   tipo       String
   tamanho    Int
   conteudo   String   @db.Text
-  categoria  String?  // ASSINADO | ANEXO
+  categoria  String? // ASSINADO | ANEXO
   criadoEm   DateTime @default(now()) @map("criado_em")
 
   contrato Contrato @relation(fields: [contratoId], references: [id], onDelete: Cascade)
@@ -1441,7 +1442,10 @@ model AtividadeOs {
   empresaId      String          @map("empresa_id")
   ordemServicoId String          @map("ordem_servico_id")
   tipoOsId       String?         @map("tipo_os_id")
+  /// Técnico RESPONSÁVEL (líder da equipe ou o 1º escolhido). Os demais ficam em `tecnicosEquipe`.
   tecnicoId      String?         @map("tecnico_id")
+  /// Equipe usada para preencher os técnicos (opcional; só registro)
+  equipeId       String?         @map("equipe_id")
   titulo         String
   status         StatusAtividade @default(AGENDADA)
   dataAgendada   DateTime?       @map("data_agendada")
@@ -1454,6 +1458,8 @@ model AtividadeOs {
   ordemServico         OrdemServico                    @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
   tipoOs               TipoOs?                         @relation(fields: [tipoOsId], references: [id])
   tecnico              Tecnico?                        @relation(fields: [tecnicoId], references: [id])
+  equipe               Equipe?                         @relation(fields: [equipeId], references: [id], onDelete: SetNull)
+  tecnicosEquipe       AtividadeTecnico[]
   respostas            AtividadeResposta[]
   relatorios           RelatorioOs[]
   equipamentos         AtividadeEquipamento[]
@@ -1462,8 +1468,23 @@ model AtividadeOs {
   @@index([ordemServicoId])
   @@index([tecnicoId])
   @@index([tipoOsId])
+  @@index([equipeId])
   @@index([empresaId, dataAgendada])
   @@map("atividades_os")
+}
+
+/// Demais técnicos da atividade (além do responsável `AtividadeOs.tecnicoId`).
+model AtividadeTecnico {
+  atividadeId String   @map("atividade_id")
+  tecnicoId   String   @map("tecnico_id")
+  criadoEm    DateTime @default(now()) @map("criado_em")
+
+  atividade AtividadeOs @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+  tecnico   Tecnico     @relation(fields: [tecnicoId], references: [id], onDelete: Cascade)
+
+  @@id([atividadeId, tecnicoId])
+  @@index([tecnicoId])
+  @@map("atividade_tecnicos")
 }
 
 model AtividadeResposta {
@@ -1488,16 +1509,16 @@ model AtividadeResposta {
 // ─────────────────────────────────────────────
 
 model FormTypeMapping {
-  id                   String   @id @default(cuid())
-  empresaId            String   @map("empresa_id")
-  tipoEquipamentoId    String   @map("tipo_equipamento_id")
-  tipoOsId             String   @map("tipo_os_id")
-  formularioTemplateId String   @map("formulario_template_id")
+  id                     String   @id @default(cuid())
+  empresaId              String   @map("empresa_id")
+  tipoEquipamentoId      String   @map("tipo_equipamento_id")
+  tipoOsId               String   @map("tipo_os_id")
+  formularioTemplateId   String   @map("formulario_template_id")
   // Obrigatoriedade do formulário no fluxo do técnico (PWA)
-  obrigatorioConcluir    Boolean @default(false) @map("obrigatorio_concluir")
-  obrigatorioImpedimento Boolean @default(false) @map("obrigatorio_impedimento")
-  criadoEm             DateTime @default(now()) @map("criado_em")
-  atualizadoEm         DateTime @updatedAt @map("atualizado_em")
+  obrigatorioConcluir    Boolean  @default(false) @map("obrigatorio_concluir")
+  obrigatorioImpedimento Boolean  @default(false) @map("obrigatorio_impedimento")
+  criadoEm               DateTime @default(now()) @map("criado_em")
+  atualizadoEm           DateTime @updatedAt @map("atualizado_em")
 
   empresa            Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   tipoEquipamento    TipoEquipamentoCustom @relation(fields: [tipoEquipamentoId], references: [id], onDelete: Cascade)
@@ -2370,10 +2391,11 @@ model Equipe {
   criadoEm     DateTime     @default(now()) @map("criado_em")
   atualizadoEm DateTime     @updatedAt @map("atualizado_em")
 
-  empresa  Empresa   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  lider    Tecnico?  @relation("EquipeLider", fields: [liderId], references: [id])
-  membros  Tecnico[] @relation("EquipeMembros")
-  veiculos Veiculo[]
+  empresa      Empresa       @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  lider        Tecnico?      @relation("EquipeLider", fields: [liderId], references: [id])
+  membros      Tecnico[]     @relation("EquipeMembros")
+  veiculos     Veiculo[]
+  atividadesOs AtividadeOs[]
 
   @@map("equipes")
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/ui/page-header";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
@@ -42,7 +43,10 @@ export default async function EditarColaboradorPage({ params }: { params: Promis
           Este colaborador está <strong>inativo</strong>: não aparece nas listas nem nos seletores de técnico. Use “Reativar” para voltar a usá-lo.
         </div>
       )}
-      <ColaboradorForm key={`${colaborador.ativo}-${colaborador.statusColaborador}`} initialData={initialData} />
+      <ColaboradorForm
+        key={`${colaborador.ativo}-${colaborador.statusColaborador}`} initialData={initialData}
+        somenteLeitura={!pode(session!.user!.permissoes, "equipes", "gerenciar", session!.user!.role)}
+      />
     </div>
   );
 }

@@ -30,6 +30,12 @@ export interface CardOs {
   dataFmt: string;
   tecnicoNome: string | null;
   tecnicoAvatar: string | null;
+  /** Responsável + demais técnicos da atividade (para o filtro por técnico). */
+  tecnicoIds?: string[];
+  /** Demais técnicos (além do responsável) e a equipe usada, se houver. */
+  membros?: { nome: string; avatar: string | null }[];
+  equipeNome?: string | null;
+  equipeCor?: string | null;
   status: string;
   prioridade: string;
   atrasada: boolean;
@@ -494,7 +500,51 @@ function CardVisual({ card, travada, className }: { card: CardOs; travada?: bool
         {card.origem === "RECORRENTE" && <Repeat className="w-2.5 h-2.5 shrink-0 text-ink-subtle" />}
         <span className="truncate">{card.clienteCurto}</span>
       </span>
-      <AvatarTecnico nome={card.tecnicoNome} fotoUrl={card.tecnicoAvatar} size={22} />
+      <AvataresCard card={card} size={22} />
+    </div>
+  );
+}
+
+/** Avatar do responsável + "+N" quando a atividade tem mais técnicos (equipe). */
+function AvataresCard({ card, size }: { card: CardOs; size: number }) {
+  const extra = card.membros?.length ?? 0;
+  return (
+    <span className="flex items-center shrink-0" data-avatares-card title={[card.tecnicoNome, ...(card.membros ?? []).map((m) => m.nome)].filter(Boolean).join(", ")}>
+      <AvatarTecnico nome={card.tecnicoNome} fotoUrl={card.tecnicoAvatar} size={size} />
+      {extra > 0 && (
+        <span className="-ml-1.5 rounded-full bg-primary-600 text-white font-semibold border border-white flex items-center justify-center"
+          style={{ width: size, height: size, fontSize: Math.max(9, Math.round(size * 0.42)) }}>+{extra}</span>
+      )}
+    </span>
+  );
+}
+
+/** "Equipe Alfa" + responsável e membros (tooltip / lista do dia). */
+function EquipeCard({ card }: { card: CardOs }) {
+  const membros = card.membros ?? [];
+  if (!card.equipeNome && !membros.length) {
+    return (
+      <div className="flex items-center gap-2 pt-1.5 border-t border-surface-border">
+        <AvatarTecnico nome={card.tecnicoNome} fotoUrl={card.tecnicoAvatar} size={28} />
+        <span className="text-xs font-medium text-ink">{card.tecnicoNome ?? "Sem técnico definido"}</span>
+      </div>
+    );
+  }
+  return (
+    <div className="pt-1.5 border-t border-surface-border space-y-1.5" data-equipe-card>
+      {card.equipeNome && (
+        <p className="flex items-center gap-1.5 text-xs font-semibold text-ink">
+          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: card.equipeCor ?? "#0EA5E9" }} />Equipe {card.equipeNome}
+        </p>
+      )}
+      <ul className="space-y-1">
+        {card.tecnicoNome && (
+          <li className="flex items-center gap-2 text-xs text-ink"><AvatarTecnico nome={card.tecnicoNome} fotoUrl={card.tecnicoAvatar} size={20} />{card.tecnicoNome}<span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 rounded">responsável</span></li>
+        )}
+        {membros.map((m) => (
+          <li key={m.nome} className="flex items-center gap-2 text-xs text-ink-muted"><AvatarTecnico nome={m.nome} fotoUrl={m.avatar} size={20} />{m.nome}</li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -525,10 +575,7 @@ function Tooltip({ card, rect }: { card: CardOs; rect: DOMRect }) {
             <div className="flex items-center gap-1.5"><Wrench className="w-3.5 h-3.5 shrink-0 text-ink-subtle" /><span>{card.tipoOs}</span></div>
           )}
         </div>
-        <div className="flex items-center gap-2 pt-1.5 border-t border-surface-border">
-          <AvatarTecnico nome={card.tecnicoNome} fotoUrl={card.tecnicoAvatar} size={28} />
-          <span className="text-xs font-medium text-ink">{card.tecnicoNome ?? "Sem técnico definido"}</span>
-        </div>
+        <EquipeCard card={card} />
         <div className="flex items-center gap-2 flex-wrap">
           <span className={badgePrioridade(card.prioridade)}>{LABELS_PRIORIDADE[card.prioridade] ?? card.prioridade}</span>
           {card.atrasada && (
@@ -579,9 +626,10 @@ function ModalDia({
                   <span className="font-mono">{card.numero}</span>
                   {card.unidade ? ` · ${card.unidade}` : ""}
                   {card.atrasada ? " · Atrasada" : ""}
+                  {card.equipeNome ? ` · Equipe ${card.equipeNome}` : ""}
                 </p>
               </div>
-              <AvatarTecnico nome={card.tecnicoNome} fotoUrl={card.tecnicoAvatar} size={28} />
+              <AvataresCard card={card} size={28} />
             </button>
           ))}
         </div>

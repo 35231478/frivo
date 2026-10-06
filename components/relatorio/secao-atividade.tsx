@@ -1,4 +1,5 @@
 import { formatarDataHora } from "@/lib/utils";
+import { textoTecnicosAtividade } from "@/lib/atividade-equipe";
 
 export interface AtividadeSecao {
   id: string;
@@ -10,6 +11,8 @@ export interface AtividadeSecao {
   resumo?: string | null;
   tipoOs?: { nome: string; cor?: string | null } | null;
   tecnico?: { nome: string } | null;
+  tecnicosEquipe?: { tecnico: { nome: string } }[];
+  equipe?: { nome: string } | null;
   respostas: { resposta: string | null; arquivoUrl: string | null; campo: { label: string; tipo: string } }[];
 }
 
@@ -39,7 +42,7 @@ export function SecaoAtividade({ atividade, numero }: { atividade: AtividadeSeca
         )}
       </div>
       <p className="text-xs text-ink-muted mb-3">
-        {atividade.tecnico?.nome ?? "Sem técnico"} · Início {formatarDataHora(atividade.dataAgendada ?? atividade.criadoEm)} · Duração {duracaoTxt(atividade.duracaoMin)}
+        <span data-tecnicos-relatorio>{textoTecnicosAtividade(atividade) ?? "Sem técnico"}</span> · Início {formatarDataHora(atividade.dataAgendada ?? atividade.criadoEm)} · Duração {duracaoTxt(atividade.duracaoMin)}
       </p>
 
       {(atividade.observacao || atividade.resumo) && (

@@ -6,6 +6,8 @@ const config: Config = {
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
+    // Classes montadas em lib/ (ex.: cores do avatar em CORES_AVATAR) — sem isto algumas não entravam no CSS
+    "./lib/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     extend: {

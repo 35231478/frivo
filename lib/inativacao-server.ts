@@ -85,6 +85,10 @@ export async function impactoColaborador(id: string, empresaId: string): Promise
   const avisos: string[] = [];
   const os = [...new Set(t.atividadesOs.map((a) => a.ordemServico.chamadoNumero ?? a.ordemServico.numero))];
   if (os.length) avisos.push(`Tem ${plural(t.atividadesOs.length, "atividade em aberto", "atividades em aberto")} em ${plural(os.length, "OS", "OS")} (${lista(os)}). Elas continuam atribuídas a ele: reatribua a outro técnico nas OS.`);
+  const comoMembro = await prisma.atividadeTecnico.count({
+    where: { tecnicoId: id, atividade: { status: { notIn: ["CONCLUIDA", "CANCELADA"] as any }, ordemServico: { status: { notIn: ["CONCLUIDA", "CANCELADA"] } } } },
+  });
+  if (comoMembro) avisos.push(`Também está na equipe de ${plural(comoMembro, "atividade em aberto", "atividades em aberto")} (não como responsável). Ele continua listado nelas até você trocar.`);
   if (t.contratosRecorrencia.length) avisos.push(`É o técnico das OS recorrentes do(s) contrato(s) ${lista(t.contratosRecorrencia.map((c) => c.numero))}: as próximas OS geradas sairão sem técnico até você trocar no contrato.`);
   if (t.contratosResponsavel.length) avisos.push(`É responsável pelo(s) contrato(s) ${lista(t.contratosResponsavel.map((c) => c.numero))}.`);
   if (t.equipesLideradas.length) avisos.push(`Lidera a(s) equipe(s) ${lista(t.equipesLideradas.map((e) => e.nome))} — defina outro líder.`);
@@ -114,7 +118,10 @@ export async function impactoEquipe(id: string, empresaId: string): Promise<Impa
     ? await prisma.ordemServico.count({
         where: {
           empresaId, status: { notIn: ["CONCLUIDA", "CANCELADA"] },
-          atividades: { some: { tecnicoId: { in: e.membros.map((m) => m.id) }, status: { notIn: ["CONCLUIDA", "CANCELADA"] as any } } },
+          atividades: { some: {
+            OR: [{ tecnicoId: { in: e.membros.map((m) => m.id) } }, { tecnicosEquipe: { some: { tecnicoId: { in: e.membros.map((m) => m.id) } } } }],
+            status: { notIn: ["CONCLUIDA", "CANCELADA"] as any },
+          } },
         },
       })
     : 0;
