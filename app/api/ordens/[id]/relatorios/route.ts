@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { nomesTecnicosAtividade, textoTecnicosAtividade } from "@/lib/atividade-equipe";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { relatorioSchema } from "@/lib/validations";
@@ -26,6 +27,8 @@ export async function GET(_: NextRequest, { params }: Params) {
         include: {
           tipoOs: { select: { nome: true, cor: true } },
           tecnico: { select: { nome: true } },
+          equipe: { select: { nome: true } },
+          tecnicosEquipe: { select: { tecnico: { select: { nome: true } } }, orderBy: { criadoEm: "asc" } },
           respostas: { include: { campo: { select: { label: true, tipo: true } } } },
         },
       },
@@ -41,7 +44,7 @@ export async function GET(_: NextRequest, { params }: Params) {
   const tecnicos = new Set<string>();
   let totalFotos = 0;
   const atividades = os.atividades.map((a) => {
-    if (a.tecnico) tecnicos.add(a.tecnico.nome);
+    nomesTecnicosAtividade(a).forEach((n) => tecnicos.add(n));
     const fotos = a.respostas.filter((r) => ehFoto(r.arquivoUrl, r.campo.tipo)).length;
     totalFotos += fotos;
     const respostasPreenchidas = a.respostas.filter((r) => (r.resposta ?? "").trim()).length;
@@ -50,7 +53,7 @@ export async function GET(_: NextRequest, { params }: Params) {
     const resumo = base ? base.slice(0, 150) : primeira ? `${primeira.campo.label}: ${primeira.resposta}`.slice(0, 150) : "";
     return {
       id: a.id, titulo: a.titulo, status: a.status, criadoEm: a.criadoEm, duracaoMin: a.duracaoMin,
-      tipoOsNome: a.tipoOs?.nome ?? null, tipoOsCor: a.tipoOs?.cor ?? null, tecnicoNome: a.tecnico?.nome ?? null,
+      tipoOsNome: a.tipoOs?.nome ?? null, tipoOsCor: a.tipoOs?.cor ?? null, tecnicoNome: textoTecnicosAtividade(a),
       resumo, fotos, respostas: respostasPreenchidas,
     };
   });

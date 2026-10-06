@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirAlgumaPermissao, exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { pode } from "@/lib/permissoes";
+import { ErroTecnicos, INCLUDE_TECNICOS_ATIVIDADE, gravarTecnicos, lerDefinicao, resolverTecnicos } from "@/lib/atividade-tecnicos";
 
 type Params = { params: Promise<{ id: string; atividadeId: string }> };
 
@@ -20,7 +21,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   // Editar os dados da atividade exige "editar"; quem só pode "concluir" (execução em campo)
   // continua podendo mudar o status e o resumo.
-  const editandoDados = [titulo, tipoOsId, tecnicoId, dataAgendada, duracaoMin, observacao].some((v) => v !== undefined);
+  const def = lerDefinicao(body);
+  const editandoDados = [titulo, tipoOsId, tecnicoId, dataAgendada, duracaoMin, observacao, def].some((v) => v !== undefined);
   if (editandoDados) {
     if (!pode(session.user!.permissoes, "ordens", "editar", session.user!.role))
       return NextResponse.json({ erro: "Sem permissão para editar a atividade" }, { status: 403 });
@@ -32,6 +34,14 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (tecnicoId && !(await prisma.tecnico.findFirst({ where: { id: tecnicoId, empresaId }, select: { id: true } })))
       return NextResponse.json({ erro: "Técnico inválido." }, { status: 400 });
   }
+  // Vários técnicos / equipe (o responsável vira o tecnico_id; os demais, atividade_tecnicos)
+  let tecnicos: Awaited<ReturnType<typeof resolverTecnicos>> | null = null;
+  if (def) {
+    const tipoFinal = tipoOsId !== undefined ? (tipoOsId || null) : existente.tipoOsId;
+    try { tecnicos = await resolverTecnicos(empresaId, def, tipoFinal); }
+    catch (e) { if (e instanceof ErroTecnicos) return NextResponse.json({ erro: e.message }, { status: 400 }); throw e; }
+  }
+  const antes = def ? await prisma.atividadeTecnico.findMany({ where: { atividadeId }, select: { tecnicoId: true } }) : [];
 
   // Gate "obrigatório para concluir": não finaliza a atividade sem responder os
   // formulários marcados como obrigatórios (por tipo de OS + tipo de equipamento).
@@ -84,26 +94,31 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (status !== undefined) data.status = status;
   if (titulo !== undefined) data.titulo = titulo;
   if (tipoOsId !== undefined) data.tipoOsId = tipoOsId || null;
-  if (tecnicoId !== undefined) data.tecnicoId = tecnicoId || null;
+  if (tecnicoId !== undefined && !tecnicos) data.tecnicoId = tecnicoId || null;
   if (dataAgendada !== undefined) data.dataAgendada = dataAgendada ? new Date(dataAgendada) : null;
   if (duracaoMin !== undefined) data.duracaoMin = duracaoMin;
   if (observacao !== undefined) data.observacao = observacao;
   if (resumo !== undefined) data.resumo = resumo;
 
-  const atualizado = await prisma.atividadeOs.update({
-    where: { id: atividadeId }, data,
-    include: {
-      tipoOs: { select: { id: true, nome: true, cor: true } },
-      tecnico: { select: { id: true, nome: true } },
-      respostas: { include: { campo: true } },
-    },
+  const atualizado = await prisma.$transaction(async (tx) => {
+    if (Object.keys(data).length) await tx.atividadeOs.update({ where: { id: atividadeId }, data });
+    if (tecnicos) await gravarTecnicos(tx, atividadeId, tecnicos);
+    return tx.atividadeOs.findUniqueOrThrow({
+      where: { id: atividadeId },
+      include: { tipoOs: { select: { id: true, nome: true, cor: true } }, ...INCLUDE_TECNICOS_ATIVIDADE, respostas: { include: { campo: true } } },
+    });
   });
+  const mudouEquipe = !!tecnicos && (
+    tecnicos.responsavel !== existente.tecnicoId || tecnicos.equipeId !== existente.equipeId
+    || [...tecnicos.outros].sort().join() !== antes.map((a) => a.tecnicoId).sort().join()
+  );
 
   if (editandoDados) {
     const mudou = [
       titulo !== undefined && titulo !== existente.titulo && "título",
       tipoOsId !== undefined && (tipoOsId || null) !== existente.tipoOsId && "tipo de OS",
-      tecnicoId !== undefined && (tecnicoId || null) !== existente.tecnicoId && "técnico",
+      !tecnicos && tecnicoId !== undefined && (tecnicoId || null) !== existente.tecnicoId && "técnico",
+      mudouEquipe && "técnicos/equipe",
       dataAgendada !== undefined && "data agendada",
       duracaoMin !== undefined && duracaoMin !== existente.duracaoMin && "duração",
       observacao !== undefined && observacao !== existente.observacao && "observação",

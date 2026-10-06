@@ -83,7 +83,10 @@ export default async function OrdensPage({ searchParams }: { searchParams: Promi
         cliente: { select: { id: true, nome: true, nomeFantasia: true, logo: true } },
         unidade: { select: { nome: true } },
         responsavel: { select: { nome: true } },
-        atividades: { select: { tecnico: { select: { id: true, nome: true, avatar: true } } } },
+        atividades: { select: {
+          tecnico: { select: { id: true, nome: true, avatar: true } },
+          tecnicosEquipe: { select: { tecnico: { select: { id: true, nome: true, avatar: true } } } },
+        } },
       },
       orderBy: SORT_MAP[sort](dir),
       take: TAKE,
@@ -98,7 +101,8 @@ export default async function OrdensPage({ searchParams }: { searchParams: Promi
   const ordensView = ordens.map((o) => {
     // Técnicos das atividades, deduplicados por id e ordenados por nome (pt-BR)
     const tecnicos = Array.from(
-      new Map(o.atividades.filter((a) => a.tecnico).map((a) => [a.tecnico!.id, a.tecnico!])).values(),
+      // responsáveis + membros das equipes das atividades
+      new Map(o.atividades.flatMap((a) => [a.tecnico, ...a.tecnicosEquipe.map((t) => t.tecnico)]).filter(Boolean).map((t) => [t!.id, t!])).values(),
     ).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 
     return {

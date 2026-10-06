@@ -2,11 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { equipeSchema } from "@/lib/validations";
+import { exigirAlgumaPermissao } from "@/lib/permissoes-server";
 
-export async function GET() {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
-  const empresaId = session.user!.empresaId;
+export async function GET(req: NextRequest) {
+  // Equipes são lidas pela tela de equipes/veículos e pelo seletor de técnicos da OS
+  const guard = await exigirAlgumaPermissao([["equipes", "visualizar"], ["veiculos", "visualizar"], ["ordens", "editar"], ["ordens", "criar"]]);
+  if (guard.erro) return guard.resposta;
+  const empresaId = guard.session.user!.empresaId;
+
+  // ?resumo=1: só o necessário para o seletor da OS (sem avatares em base64)
+  if (req.nextUrl.searchParams.get("resumo") === "1") {
+    const equipes = await prisma.equipe.findMany({
+      where: { empresaId, status: "ATIVA" },
+      select: { id: true, nome: true, cor: true, liderId: true, membros: { where: { ativo: true }, select: { id: true } } },
+      orderBy: { nome: "asc" },
+    });
+    return NextResponse.json(equipes.map((e) => ({ id: e.id, nome: e.nome, cor: e.cor, liderId: e.liderId, membroIds: e.membros.map((m) => m.id) })));
+  }
 
   const equipes = await prisma.equipe.findMany({
     where: { empresaId },

@@ -1,130 +1,104 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { formatarCpfCnpj, formatarTelefone } from "@/lib/utils";
-import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
-import Link from "next/link";
-import { HardHat, Plus } from "lucide-react";
-import { InativarRegistro } from "@/components/ui/inativar-registro";
+import {
+  FUNCOES_TECNICAS, LABELS_FUNCAO, WHERE_SEM_EQUIPE, datasAvisoColaborador, lerFiltrosColaboradores,
+  montarOrderByColaboradores, montarWhereColaboradores, whereAvisoColaborador,
+} from "@/lib/colaborador-listagem";
+import { ColaboradoresListaClient, type ColaboradorLinha } from "./colaboradores-lista-client";
 
 export const metadata: Metadata = { title: "Colaboradores" };
 
-const LABEL_TIPO: Record<string, string> = {
-  TECNICO_CAMPO: "Técnico de Campo",
-  RESPONSAVEL_TECNICO: "Responsável Técnico",
-  ADMINISTRATIVO: "Administrativo",
-  MOTORISTA: "Motorista",
-  OUTRO: "Outro",
-};
+const selectLinha = {
+  id: true, nome: true, tipo: true, telefone: true, email: true, crea: true, ativo: true, statusColaborador: true,
+  especialidades: true, dataAdmissao: true, atualizadoEm: true,
+  cargo: { select: { nome: true } },
+  equipesMembro: { where: { status: "ATIVA" as const }, select: { id: true, nome: true, cor: true }, orderBy: { nome: "asc" as const } },
+  equipesLideradas: { where: { status: "ATIVA" as const }, select: { id: true, nome: true, cor: true } },
+  _count: { select: { atividadesOs: true } },
+} as const;
 
-const BADGE_STATUS: Record<string, string> = {
-  ATIVO: "bg-success-50 text-success-700",
-  INATIVO: "bg-surface-alt text-ink-muted",
-  FERIAS: "bg-amber-50 text-amber-700",
-  AFASTADO: "bg-red-50 text-red-700",
-};
-const LABEL_STATUS: Record<string, string> = { ATIVO: "Ativo", INATIVO: "Inativo", FERIAS: "Férias", AFASTADO: "Afastado" };
-
-export default async function ColaboradoresPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ busca?: string; inativos?: string }>;
-}) {
-  const { busca = "", inativos = "" } = await searchParams;
-  const mostrarInativos = inativos === "1";
+export default async function ColaboradoresPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const session = await auth();
   const empresaId = session!.user!.empresaId;
+  const f = lerFiltrosColaboradores(await searchParams);
+  const where = montarWhereColaboradores(empresaId, f);
+  const { inicioHoje, limite } = datasAvisoColaborador();
 
-  // Por padrão só ativos; "Mostrar inativos" inclui os inativados
-  const where: any = { empresaId, ...(mostrarInativos ? {} : { ativo: true }) };
-  if (busca) {
-    where.OR = [
-      { nome: { contains: busca, mode: "insensitive" } },
-      { cpf: { contains: busca } },
-    ];
-  }
+  // ── Página atual (paginação no servidor; o avatar em base64 NÃO vem aqui) ──
+  const [linhas, total] = await Promise.all([
+    prisma.tecnico.findMany({ where, select: selectLinha, orderBy: montarOrderByColaboradores(f), skip: (f.pagina - 1) * f.porPagina, take: f.porPagina }),
+    prisma.tecnico.count({ where }),
+  ]);
+  const ids = linhas.map((l) => l.id);
+  const [comFotoRows, docs] = await Promise.all([
+    ids.length ? prisma.$queryRaw<{ id: string }[]>`SELECT id FROM tecnicos WHERE id = ANY(${ids}) AND avatar IS NOT NULL AND avatar <> ''` : Promise.resolve([]),
+    ids.length
+      ? prisma.colaboradorDocumento.findMany({
+          where: { colaboradorId: { in: ids }, dataVencimento: { not: null, lt: limite } },
+          select: { colaboradorId: true, nome: true, dataVencimento: true }, orderBy: { dataVencimento: "asc" },
+        })
+      : Promise.resolve([]),
+  ]);
+  const comFoto = new Set(comFotoRows.map((r) => r.id));
+  const docProximo = new Map<string, { nome: string; data: Date }>();
+  for (const d of docs) if (!docProximo.has(d.colaboradorId)) docProximo.set(d.colaboradorId, { nome: d.nome, data: d.dataVencimento! });
 
-  const colaboradores = await prisma.tecnico.findMany({
-    where,
-    include: { _count: { select: { atividadesOs: true } }, cargo: { select: { nome: true } } },
-    orderBy: { nome: "asc" },
+  // ── Opções dos filtros ──
+  const [cargos, equipes] = await Promise.all([
+    prisma.cargo.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
+    prisma.equipe.findMany({ where: { empresaId, status: "ATIVA" }, select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
+  ]);
+
+  // ── Indicadores (chips): no escopo de função/cargo/equipe, sem o próprio status/aviso ──
+  const escopo = montarWhereColaboradores(empresaId, { ...f, q: "" }, { status: true, aviso: true });
+  const ativosW = { AND: [escopo, { ativo: true }] };
+  const contar = (extra: object | null) => prisma.tecnico.count({ where: { AND: [ativosW, extra ?? {}] } });
+  const [ativos, inativos, tecnicos, semEquipe, ausentes, docVencido, docVencendo] = await Promise.all([
+    prisma.tecnico.count({ where: ativosW }),
+    prisma.tecnico.count({ where: { AND: [escopo, { ativo: false }] } }),
+    contar({ tipo: { in: FUNCOES_TECNICAS as any } }),
+    contar(WHERE_SEM_EQUIPE),
+    contar(whereAvisoColaborador("ausente")),
+    contar(whereAvisoColaborador("doc_vencido")),
+    contar(whereAvisoColaborador("doc_vencendo")),
+  ]);
+
+  const itens: ColaboradorLinha[] = linhas.map((c) => {
+    const doc = docProximo.get(c.id);
+    return {
+      id: c.id,
+      nome: c.nome,
+      funcao: c.tipo,
+      funcaoLabel: LABELS_FUNCAO[c.tipo] ?? c.tipo,
+      cargo: c.cargo?.nome ?? null,
+      telefone: c.telefone,
+      email: c.email,
+      ativo: c.ativo,
+      status: c.ativo ? c.statusColaborador : "INATIVO",
+      especialidades: c.especialidades,
+      // Foto servida sob demanda (?v= renova quando o cadastro muda)
+      foto: comFoto.has(c.id) ? `/api/tecnicos/${c.id}/avatar?v=${c.atualizadoEm.getTime()}` : null,
+      // Equipes que lidera (primeiro) + equipes em que é membro
+      equipes: [...new Map([...c.equipesLideradas, ...c.equipesMembro].map((e) => [e.id, { id: e.id, nome: e.nome, cor: e.cor }])).values()],
+      lider: c.equipesLideradas.length > 0,
+      semEquipe: c.ativo && c.equipesMembro.length === 0 && c.equipesLideradas.length === 0,
+      atividades: c._count.atividadesOs,
+      documento: doc ? { nome: doc.nome, data: doc.data.toISOString(), vencido: doc.data < inicioHoje } : null,
+    };
   });
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary-50 rounded-lg">
-            <HardHat className="w-5 h-5 text-primary-600" />
-          </div>
-          <h1 className="page-title">Colaboradores</h1>
-          <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{colaboradores.length}</span>
-        </div>
-        <Link
-          href="/colaboradores/novo"
-          className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow"
-        >
-          <Plus className="w-4 h-4" />
-          Novo Colaborador
-        </Link>
-      </div>
-
-      <div className="card overflow-hidden">
-        <div className="p-4 border-b border-surface-border bg-surface-alt/40">
-          <form method="get" className="flex flex-wrap items-center gap-3">
-            <input
-              name="busca"
-              defaultValue={busca}
-              placeholder="Buscar por nome ou CPF..."
-              className="w-full sm:max-w-sm bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all"
-            />
-            <label className="inline-flex items-center gap-2 text-sm text-ink-muted select-none">
-              <input type="checkbox" name="inativos" value="1" defaultChecked={mostrarInativos} className="accent-primary-600" />
-              Mostrar inativos
-            </label>
-            <button type="submit" className="bg-primary-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-600 transition-all shadow-sm">Filtrar</button>
-          </form>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
-          {colaboradores.length === 0 ? (
-            <p className="text-ink-subtle col-span-full text-center py-8">Nenhum colaborador encontrado</p>
-          ) : (
-            colaboradores.map((c) => (
-              <div key={c.id} data-card-id={c.id} className="relative">
-              <Link
-                href={`/colaboradores/${c.id}/editar`}
-                className={`flex items-start gap-4 p-4 pr-10 bg-white border border-surface-border rounded-xl hover:border-primary-300 hover:shadow-card-hover transition-all h-full ${c.ativo ? "" : "opacity-70"}`}
-              >
-                <AvatarTecnico nome={c.nome} fotoUrl={c.avatar} size={48} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="font-semibold text-ink truncate">{c.nome}</p>
-                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${BADGE_STATUS[c.ativo ? c.statusColaborador : "INATIVO"] ?? ""}`}>{c.ativo ? (LABEL_STATUS[c.statusColaborador] ?? c.statusColaborador) : "Inativo"}</span>
-                  </div>
-                  <p className="text-xs text-ink-muted">{c.cargo?.nome ?? LABEL_TIPO[c.tipo] ?? c.tipo}</p>
-                  <p className="text-xs text-ink-subtle mt-1">{formatarCpfCnpj(c.cpf)} · {formatarTelefone(c.telefone)}</p>
-                  {c.especialidades.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {c.especialidades.slice(0, 2).map((esp) => (
-                        <span key={esp} className="text-xs bg-primary-50 text-primary-700 px-2 py-0.5 rounded-full font-medium">{esp}</span>
-                      ))}
-                      {c.especialidades.length > 2 && <span className="text-xs text-ink-subtle">+{c.especialidades.length - 2}</span>}
-                    </div>
-                  )}
-                  <p className="text-xs text-ink-subtle mt-2 pt-2 border-t border-surface-border">
-                    {c._count.atividadesOs} atividades realizadas
-                  </p>
-                </div>
-              </Link>
-              <div className="absolute top-2 right-2">
-                <InativarRegistro url={`/api/tecnicos/${c.id}`} modulo="equipes" acaoReativar="gerenciar" ativo={c.ativo} nome={c.nome} entidade="colaborador" />
-              </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    </div>
+    <ColaboradoresListaClient
+      itens={itens}
+      total={total}
+      filtros={f}
+      opcoes={{
+        funcoes: Object.entries(LABELS_FUNCAO).map(([value, label]) => ({ value, label })),
+        cargos: cargos.map((c) => ({ value: c.id, label: c.nome })),
+        equipes: equipes.map((e) => ({ value: e.id, label: e.nome })),
+      }}
+      resumo={{ ativos, inativos, tecnicos, semEquipe, ausentes, docVencido, docVencendo }}
+    />
   );
 }

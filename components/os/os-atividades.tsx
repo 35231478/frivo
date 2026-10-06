@@ -9,9 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid } from "@/components/ui/form-field";
 import { cn, formatarDataHora } from "@/lib/utils";
 import { AtividadeEquipamentos } from "@/components/os/atividade-equipamentos";
-import { SelectCadastroRapido } from "@/components/ui/select-cadastro-rapido";
-import { TECNICO } from "@/components/cadastro-rapido/definicoes";
-import { Plus, X, Check, ChevronDown, ChevronRight, Wrench, User, Smartphone, Pencil, Trash2, Loader2, AlertTriangle } from "lucide-react";
+import { SeletorTecnicos, VALOR_TECNICOS_VAZIO, corpoTecnicos, valorDaAtividade, type EquipeOpcao, type ValorTecnicos } from "@/components/os/seletor-tecnicos";
+import { Plus, X, Check, ChevronDown, ChevronRight, Wrench, User, Users, Smartphone, Pencil, Trash2, Loader2, AlertTriangle } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 
@@ -35,14 +34,19 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
   const [carregandoTecnicos, setCarregandoTecnicos] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [erroStatus, setErroStatus] = useState("");
-  const [form, setForm] = useState({ titulo: "", tipoOsId: "", tecnicoId: "", dataAgendada: "", duracaoMin: "", observacao: "" });
+  const [form, setForm] = useState({ titulo: "", tipoOsId: "", dataAgendada: "", duracaoMin: "", observacao: "" });
+  // Técnicos da atividade: equipe e/ou técnicos individuais (responsável = tecnicoId)
+  const [equipes, setEquipes] = useState<EquipeOpcao[]>([]);
+  const [tecnicosNova, setTecnicosNova] = useState<ValorTecnicos>(VALOR_TECNICOS_VAZIO);
+  const [tecnicosEdicao, setTecnicosEdicao] = useState<ValorTecnicos>(VALOR_TECNICOS_VAZIO);
+  const [erroForm, setErroForm] = useState("");
   const { pode } = usePermissoes();
   const podeEditar = pode("ordens", "editar");
   const podeExcluir = pode("ordens", "excluir");
   const podeStatus = podeEditar || pode("ordens", "concluir");
   // Editar / excluir atividade
   const [editando, setEditando] = useState<any | null>(null);
-  const [formEdicao, setFormEdicao] = useState({ titulo: "", tipoOsId: "", tecnicoId: "", dataAgendada: "", duracaoMin: "", observacao: "" });
+  const [formEdicao, setFormEdicao] = useState({ titulo: "", tipoOsId: "", dataAgendada: "", duracaoMin: "", observacao: "" });
   const [excluindo, setExcluindo] = useState<any | null>(null);
   const [processando, setProcessando] = useState(false);
   const [erroModal, setErroModal] = useState("");
@@ -50,9 +54,10 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
   function abrirEdicao(a: any) {
     setErroModal("");
     setFormEdicao({
-      titulo: a.titulo ?? "", tipoOsId: a.tipoOs?.id ?? a.tipoOsId ?? "", tecnicoId: a.tecnico?.id ?? a.tecnicoId ?? "",
+      titulo: a.titulo ?? "", tipoOsId: a.tipoOs?.id ?? a.tipoOsId ?? "",
       dataAgendada: paraInputLocal(a.dataAgendada), duracaoMin: a.duracaoMin ? String(a.duracaoMin) : "", observacao: a.observacao ?? "",
     });
+    setTecnicosEdicao(valorDaAtividade(a));
     setEditando(a);
   }
 
@@ -66,7 +71,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
         body: JSON.stringify({
           titulo: formEdicao.titulo.trim(),
           tipoOsId: formEdicao.tipoOsId,
-          tecnicoId: formEdicao.tecnicoId,
+          ...corpoTecnicos(tecnicosEdicao),
           dataAgendada: formEdicao.dataAgendada ? new Date(formEdicao.dataAgendada).toISOString() : "",
           duracaoMin: formEdicao.duracaoMin ? Number(formEdicao.duracaoMin) : null,
           observacao: formEdicao.observacao,
@@ -95,6 +100,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
     fetch("/api/tipos-os").then((r) => r.json()).then(setTiposOs).catch(() => {});
     fetch("/api/tecnicos").then((r) => r.json()).then((d) => setTecnicos(Array.isArray(d) ? d : [])).catch(() => {})
       .finally(() => setCarregandoTecnicos(false));
+    fetch("/api/equipes?resumo=1").then((r) => (r.ok ? r.json() : [])).then((d) => setEquipes(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
 
   function toggleExpand(id: string) {
@@ -102,20 +108,21 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
   }
 
   async function criarAtividade() {
-    if (!form.titulo.trim()) return;
+    setErroForm("");
+    if (!form.titulo.trim()) { setErroForm("O título é obrigatório."); return; }
     setSalvando(true);
     try {
       const res = await fetch(`/api/ordens/${osId}/atividades`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, duracaoMin: form.duracaoMin ? Number(form.duracaoMin) : undefined }),
+        body: JSON.stringify({ ...form, ...corpoTecnicos(tecnicosNova), duracaoMin: form.duracaoMin ? Number(form.duracaoMin) : undefined }),
       });
-      if (res.ok) {
-        const nova = await res.json();
-        setAtividades((p) => [...p, nova]);
-        setForm({ titulo: "", tipoOsId: "", tecnicoId: "", dataAgendada: "", duracaoMin: "", observacao: "" });
-        setMostraForm(false);
-      }
-    } catch {} finally { setSalvando(false); }
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { setErroForm(d.erro ?? "Não foi possível adicionar a atividade."); return; }
+      setAtividades((p) => [...p, d]);
+      setForm({ titulo: "", tipoOsId: "", dataAgendada: "", duracaoMin: "", observacao: "" });
+      setTecnicosNova(VALOR_TECNICOS_VAZIO);
+      setMostraForm(false);
+    } catch { setErroForm("Erro de conexão."); } finally { setSalvando(false); }
   }
 
   async function alterarStatusAtividade(atividadeId: string, novoStatus: string) {
@@ -158,7 +165,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
                     <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full", STATUS_COR[a.status])}>{STATUS_LABELS[a.status]}</span>
                   </div>
                   <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
-                    {a.tecnico && <span className="flex items-center gap-1"><User className="w-3 h-3" />{a.tecnico.nome}</span>}
+                    <TecnicosAtividade a={a} />
                     {a.dataAgendada && <span>{formatarDataHora(a.dataAgendada)}</span>}
                     {a.duracaoMin && <span>{a.duracaoMin} min</span>}
                   </div>
@@ -226,36 +233,17 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
           <FormField label="Título" required>
             <Input value={form.titulo} onChange={(e) => setForm((f) => ({ ...f, titulo: e.target.value }))} placeholder="Descrição breve da atividade" />
           </FormField>
-          <FormGrid>
-            <FormField label="Tipo de OS">
-              <Select value={form.tipoOsId} onChange={(e) => setForm((f) => ({ ...f, tipoOsId: e.target.value }))} placeholder="Selecione">
-                {tiposOs.filter((t) => t.ativo).map((t) => (<option key={t.id} value={t.id}>{t.nome}</option>))}
-              </Select>
-            </FormField>
-            <FormField label="Técnico" hint={form.tipoOsId ? "Apenas colaboradores com competência neste tipo de OS" : undefined}>
-              <SelectCadastroRapido
-                value={form.tecnicoId}
-                onChange={(v) => setForm((f) => ({ ...f, tecnicoId: v }))}
-                opcoes={tecnicos
-                  .filter((t: any) => !form.tipoOsId || (t.competencias ?? []).some((c: any) => c.id === form.tipoOsId))
-                  .map((t: any) => ({ value: t.id, label: t.nome }))}
-                entidade={TECNICO.entidade}
-                contexto={form.tipoOsId ? "com competência neste tipo de OS" : undefined}
-                placeholder="Selecione"
-                carregando={carregandoTecnicos}
-                campos={TECNICO.campos}
-                campoBusca="nome"
-                permissao={TECNICO.permissao}
-                linkCadastroCompleto={TECNICO.link}
-                criar={async (v) => {
-                  // Já habilita no tipo de OS da atividade (senão o filtro de competência o esconderia)
-                  const t = await TECNICO.criar(v, form.tipoOsId || undefined);
-                  setTecnicos((l) => [...l, { ...t, competencias: form.tipoOsId ? [{ id: form.tipoOsId }] : [] }]);
-                  return { value: t.id, label: t.nome };
-                }}
-              />
-            </FormField>
-          </FormGrid>
+          <FormField label="Tipo de OS">
+            <Select value={form.tipoOsId} onChange={(e) => setForm((f) => ({ ...f, tipoOsId: e.target.value }))} placeholder="Selecione">
+              {tiposOs.filter((t) => t.ativo).map((t) => (<option key={t.id} value={t.id}>{t.nome}</option>))}
+            </Select>
+          </FormField>
+          <FormField label="Técnicos / equipe">
+            <SeletorTecnicos
+              tecnicos={tecnicos} equipes={equipes} tipoOsId={form.tipoOsId} valor={tecnicosNova} onChange={setTecnicosNova}
+              carregando={carregandoTecnicos} onTecnicoCriado={(t) => setTecnicos((l) => [...l, t])}
+            />
+          </FormField>
           <FormGrid>
             <FormField label="Data/hora agendada">
               <Input type="datetime-local" value={form.dataAgendada} onChange={(e) => setForm((f) => ({ ...f, dataAgendada: e.target.value }))} />
@@ -267,6 +255,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
           <FormField label="Observação">
             <Textarea value={form.observacao} onChange={(e) => setForm((f) => ({ ...f, observacao: e.target.value }))} rows={2} />
           </FormField>
+          {erroForm && <ErroModal texto={erroForm} />}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={() => setMostraForm(false)}>Cancelar</Button>
             <Button type="button" loading={salvando} onClick={criarAtividade}><Check className="w-4 h-4" /> Adicionar</Button>
@@ -292,12 +281,13 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
                 {tiposOs.filter((t) => t.ativo || t.id === formEdicao.tipoOsId).map((t) => (<option key={t.id} value={t.id}>{t.nome}</option>))}
               </Select>
             </FormField>
-            <FormField label="Técnico">
-              <Select value={formEdicao.tecnicoId} onChange={(e) => setFormEdicao((f) => ({ ...f, tecnicoId: e.target.value }))} placeholder="Sem técnico">
-                {tecnicos.map((t: any) => (<option key={t.id} value={t.id}>{t.nome}</option>))}
-              </Select>
-            </FormField>
           </FormGrid>
+          <FormField label="Técnicos / equipe">
+            <SeletorTecnicos
+              tecnicos={tecnicos} equipes={equipes} tipoOsId={formEdicao.tipoOsId} valor={tecnicosEdicao} onChange={setTecnicosEdicao}
+              carregando={carregandoTecnicos} onTecnicoCriado={(t) => setTecnicos((l) => [...l, t])}
+            />
+          </FormField>
           <FormGrid>
             <FormField label="Data/hora agendada">
               <Input type="datetime-local" value={formEdicao.dataAgendada} onChange={(e) => setFormEdicao((f) => ({ ...f, dataAgendada: e.target.value }))} />
@@ -335,6 +325,20 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
         </div>
       </Modal>
     </div>
+  );
+}
+
+/** "Equipe Alfa · João (resp.), Maria, Pedro" — responsável primeiro. */
+function TecnicosAtividade({ a }: { a: any }) {
+  const nomes: string[] = [a.tecnico?.nome, ...(a.tecnicosEquipe ?? []).map((t: any) => t.tecnico?.nome)].filter(Boolean);
+  if (!nomes.length && !a.equipe) return null;
+  return (
+    <span className="flex items-center gap-1 min-w-0" data-tecnicos-atividade>
+      {a.equipe
+        ? <><Users className="w-3 h-3 shrink-0" /><span className="inline-flex items-center gap-1 font-medium text-gray-600"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: a.equipe.cor }} />{a.equipe.nome}</span><span>·</span></>
+        : nomes.length > 1 ? <Users className="w-3 h-3 shrink-0" /> : <User className="w-3 h-3 shrink-0" />}
+      <span className="truncate">{nomes.map((n, i) => (i === 0 && nomes.length > 1 ? `${n} (resp.)` : n)).join(", ") || "Sem técnico"}</span>
+    </span>
   );
 }
 

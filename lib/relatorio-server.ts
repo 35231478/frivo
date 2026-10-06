@@ -119,6 +119,8 @@ export async function carregarRelatorioPorToken(token: string) {
             orderBy: { criadoEm: "asc" },
             include: {
               tecnico: { select: { nome: true } },
+              equipe: { select: { nome: true } },
+              tecnicosEquipe: { select: { tecnico: { select: { nome: true } } }, orderBy: { criadoEm: "asc" } },
               tipoOs: { select: { nome: true } },
               respostas: { include: { campo: { select: { label: true, tipo: true } } } },
             },
@@ -146,6 +148,8 @@ export async function carregarAtividade(atividadeId: string) {
     where: { id: atividadeId },
     include: {
       tecnico: { select: { nome: true } },
+      equipe: { select: { nome: true } },
+      tecnicosEquipe: { select: { tecnico: { select: { nome: true } } }, orderBy: { criadoEm: "asc" } },
       tipoOs: { select: { nome: true, cor: true } },
       respostas: { include: { campo: { select: { label: true, tipo: true } } } },
       ordemServico: {
