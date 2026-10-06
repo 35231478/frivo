@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_FOTOS_CHAMADO } from "@/lib/anexos";
 import {
   TipoServico, Prioridade, StatusOS,
   TipoEquipamento, TipoContrato, StatusContrato,
@@ -74,7 +75,7 @@ export const chamadoPortalSchema = z.object({
     tipo: z.string(),
     tamanho: z.number(),
     conteudo: z.string(),
-  })).default([]),
+  })).max(MAX_FOTOS_CHAMADO, `Envie no máximo ${MAX_FOTOS_CHAMADO} fotos`).default([]),
 });
 
 export const contatoClienteSchema = z.object({

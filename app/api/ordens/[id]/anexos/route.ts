@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { osDaEmpresa } from "@/lib/os-server";
+import { validarArquivoUpload } from "@/lib/anexos-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -15,18 +16,18 @@ export async function POST(req: NextRequest, { params }: Params) {
   const formData = await req.formData();
   const file = formData.get("arquivo") as File | null;
   if (!file) return NextResponse.json({ erro: "Nenhum arquivo enviado." }, { status: 400 });
-  if (file.size > 5 * 1024 * 1024) return NextResponse.json({ erro: "Máximo 5 MB." }, { status: 400 });
-
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const conteudo = `data:${file.type};base64,${buffer.toString("base64")}`;
+  // Tipo decidido pelo conteúdo (não pelo que o navegador declara): bloqueia HTML/SVG/scripts
+  const v = await validarArquivoUpload(file);
+  if (!v.ok) return NextResponse.json({ erro: v.erro }, { status: 400 });
+  const { nome, tipo, tamanho, conteudo } = v.arquivo;
 
   const anexo = await prisma.osAnexo.create({
-    data: { ordemServicoId: id, nome: file.name, tipo: file.type, tamanho: file.size, conteudo },
+    data: { ordemServicoId: id, nome, tipo, tamanho, conteudo },
     select: { id: true, nome: true, tipo: true, tamanho: true, criadoEm: true },
   });
 
   await prisma.osHistorico.create({
-    data: { ordemServicoId: id, usuarioId: session.user!.id, acao: "Anexo adicionado", detalhes: file.name },
+    data: { ordemServicoId: id, usuarioId: session.user!.id, acao: "Anexo adicionado", detalhes: nome },
   });
 
   return NextResponse.json(anexo, { status: 201 });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
+import { validarDataUrl, type ArquivoValidado } from "@/lib/anexos-server";
 import { clienteSchema } from "@/lib/validations";
 import { z } from "zod";
 
@@ -93,6 +94,14 @@ export async function POST(req: NextRequest) {
 
   const { responsavelTecnicoId, unidades, anexos, contatos, ...resto } = parsed.data;
 
+  // Anexos chegam como data URL: o tipo gravado vem do conteúdo, não do que foi declarado
+  const anexosValidos: ArquivoValidado[] = [];
+  for (const a of anexos ?? []) {
+    const v = validarDataUrl(a.conteudo, a.nome);
+    if (!v.ok) return NextResponse.json({ erro: `Anexo "${a.nome}": ${v.erro}` }, { status: 400 });
+    anexosValidos.push(v.arquivo);
+  }
+
   const cliente = await prisma.cliente.create({
     data: {
       ...resto,
@@ -108,9 +117,9 @@ export async function POST(req: NextRequest) {
             })),
           }
         : undefined,
-      anexos: anexos && anexos.length > 0
+      anexos: anexosValidos.length > 0
         ? {
-            create: anexos.map((a) => ({ ...a, empresaId })),
+            create: anexosValidos.map((a) => ({ ...a, empresaId })),
           }
         : undefined,
       contatosCliente: contatos && contatos.length > 0

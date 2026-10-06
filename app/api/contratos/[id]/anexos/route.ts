@@ -1,20 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { validarArquivoUpload } from "@/lib/anexos-server";
 
 type Params = { params: Promise<{ id: string }> };
-
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
-const TIPOS_PERMITIDOS = [
-  "application/pdf",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-];
 
 export async function GET(_: NextRequest, { params }: Params) {
   const session = await auth();
@@ -48,18 +37,13 @@ export async function POST(req: NextRequest, { params }: Params) {
   const categoria = (formData.get("categoria") as string | null) || "ANEXO";
 
   if (!file) return NextResponse.json({ erro: "Nenhum arquivo enviado." }, { status: 400 });
-  if (!TIPOS_PERMITIDOS.includes(file.type)) {
-    return NextResponse.json({ erro: "Tipo de arquivo não permitido. Envie PDF, DOC, XLS ou imagem." }, { status: 400 });
-  }
-  if (file.size > MAX_FILE_SIZE) {
-    return NextResponse.json({ erro: "Arquivo muito grande. Tamanho máximo: 5 MB." }, { status: 400 });
-  }
-
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const conteudo = `data:${file.type};base64,${buffer.toString("base64")}`;
+  // Tipo decidido pelo conteúdo (não pelo que o navegador declara)
+  const v = await validarArquivoUpload(file);
+  if (!v.ok) return NextResponse.json({ erro: v.erro }, { status: 400 });
+  const { nome, tipo, tamanho, conteudo } = v.arquivo;
 
   const anexo = await prisma.anexoContrato.create({
-    data: { empresaId, contratoId: id, nome: file.name, tipo: file.type, tamanho: file.size, conteudo, categoria },
+    data: { empresaId, contratoId: id, nome, tipo, tamanho, conteudo, categoria },
     select: { id: true, nome: true, tipo: true, tamanho: true, categoria: true, criadoEm: true },
   });
 
