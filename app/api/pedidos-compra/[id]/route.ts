@@ -1,10 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { pode, type Permissoes } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { pedidoCompraStatusSchema } from "@/lib/validations";
 import { LABELS_STATUS_PEDIDO_COMPRA, whatsappLink } from "@/lib/utils";
 
 type Params = { params: Promise<{ id: string }> };
+
+/** Quem pode ver/mexer: financeiro, quem vê a OS/orçamento de origem, ou o comprador designado. */
+function podeVerPedido(
+  user: { id: string; role?: string; permissoes?: unknown },
+  pedido: { ordemServicoId: string | null; orcamentoId: string | null; compradorId: string | null },
+) {
+  const p = user.permissoes as Permissoes;
+  return pode(p, "financeiro", "visualizar", user.role)
+    || pedido.compradorId === user.id
+    || (!!pedido.ordemServicoId && pode(p, "ordens", "visualizar", user.role))
+    || (!!pedido.orcamentoId && pode(p, "orcamentos", "visualizar", user.role));
+}
+
+const semPermissao = () => NextResponse.json({ erro: "Sem permissão para esta ação" }, { status: 403 });
 
 export async function GET(_: NextRequest, { params }: Params) {
   const session = await auth();
@@ -23,6 +38,7 @@ export async function GET(_: NextRequest, { params }: Params) {
     },
   });
   if (!pedido) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
+  if (!podeVerPedido(session.user!, pedido)) return semPermissao();
   return NextResponse.json(pedido);
 }
 
@@ -37,6 +53,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
     include: { ordemServico: { include: { responsavel: { select: { nome: true, telefone: true } } } } },
   });
   if (!pedido) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
+  // Andar com o status (cotação/compra/entrega): o comprador designado ou o financeiro
+  const u = session.user!;
+  if (pedido.compradorId !== u.id && !pode(u.permissoes as Permissoes, "financeiro", "visualizar", u.role)) {
+    return semPermissao();
+  }
 
   const parsed = pedidoCompraStatusSchema.safeParse(await req.json());
   if (!parsed.success) {

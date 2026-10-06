@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { orcamentoSchema } from "@/lib/validations";
 import { calcularTotais, montarCamposProposta } from "@/lib/orcamento-helpers";
@@ -8,8 +7,9 @@ import { pode } from "@/lib/permissoes";
 import { impactoOrcamento } from "@/lib/inativacao-server";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("orcamentos", "visualizar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const empresaId = session.user!.empresaId;
   const { id } = await params;
 
@@ -32,9 +32,21 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   return NextResponse.json(orcamento);
 }
 
+/**
+ * Mudanças de status permitidas pelo PUT `{ status }` (origem → destino).
+ * APROVADO só vem da assinatura do cliente na página pública (que também gera o financeiro);
+ * CONVERTIDA, da conversão em contrato; voltar a RASCUNHO, do "Reativar" (PATCH).
+ */
+const TRANSICOES_STATUS: Record<string, string[]> = {
+  ENVIADO: ["RASCUNHO", "ENVIADO", "REPROVADO"],
+  REPROVADO: ["ENVIADO"],
+  CANCELADO: ["RASCUNHO", "ENVIADO", "APROVADO", "REPROVADO"],
+};
+
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("orcamentos", "editar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const empresaId = session.user!.empresaId;
   const { id } = await params;
 
@@ -43,23 +55,31 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const body = await req.json();
 
-  // Mudança simples de status (enviar, cancelar, reprovar)
+  // Mudança simples de status (enviar, cancelar, reprovar) — só as transições da lista
   if (body.status && Object.keys(body).length === 1) {
+    const novo = String(body.status);
+    if (novo === existente.status) return NextResponse.json(existente);
+    if (!TRANSICOES_STATUS[novo]?.includes(existente.status)) {
+      const motivo = novo === "APROVADO"
+        ? "A aprovação é feita pelo cliente, com assinatura, no link do orçamento."
+        : `Não é possível mudar o orçamento de ${existente.status} para ${novo}.`;
+      return NextResponse.json({ erro: motivo }, { status: 400 });
+    }
     // Cancelar = inativar o orçamento: mesma regra do botão (exige "excluir" e não pode ter virado contrato/financeiro)
-    if (body.status === "CANCELADO" && existente.status !== "CANCELADO") {
+    if (novo === "CANCELADO") {
       if (!pode(session.user!.permissoes, "orcamentos", "excluir", session.user!.role))
         return NextResponse.json({ erro: "Sem permissão para cancelar orçamentos" }, { status: 403 });
       const impacto = await impactoOrcamento(id, empresaId);
       if (impacto?.bloqueio) return NextResponse.json({ erro: impacto.bloqueio }, { status: 409 });
     }
-    const novo = await prisma.orcamento.update({
+    const atualizado = await prisma.orcamento.update({
       where: { id },
       data: {
-        status: body.status,
-        enviadoEm: body.status === "ENVIADO" ? new Date() : existente.enviadoEm,
+        status: novo as typeof existente.status,
+        enviadoEm: novo === "ENVIADO" ? new Date() : existente.enviadoEm,
       },
     });
-    return NextResponse.json(novo);
+    return NextResponse.json(atualizado);
   }
 
   // Edição completa só em RASCUNHO

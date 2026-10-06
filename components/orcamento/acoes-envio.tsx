@@ -71,6 +71,12 @@ export function AcoesEnvio({ orcamentoId, codigo, tokenPublico, status, podeEdit
         body: JSON.stringify({ status: novo }),
       });
       if (res.ok) router.refresh();
+      else {
+        const e = await res.json().catch(() => ({}));
+        setFeedback({ tipo: "erro", msg: e.erro ?? "Não foi possível alterar o status." });
+      }
+    } catch {
+      setFeedback({ tipo: "erro", msg: "Erro de conexão." });
     } finally {
       setCarregando(null);
     }
