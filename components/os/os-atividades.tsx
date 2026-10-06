@@ -9,8 +9,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid } from "@/components/ui/form-field";
 import { cn, formatarDataHora } from "@/lib/utils";
 import { AtividadeEquipamentos } from "@/components/os/atividade-equipamentos";
-import { SeletorTecnicos, VALOR_TECNICOS_VAZIO, corpoTecnicos, valorDaAtividade, type EquipeOpcao, type ValorTecnicos } from "@/components/os/seletor-tecnicos";
-import { Plus, X, Check, ChevronDown, ChevronRight, Wrench, User, Users, Smartphone, Pencil, Trash2, Loader2, AlertTriangle } from "lucide-react";
+import { SeletorExecucao, VALOR_EXECUCAO_VAZIO, corpoExecucao, temExecutor, useOpcoesExecucao, valorExecucaoDaAtividade, type ValorExecucao } from "@/components/os/seletor-execucao";
+import { MSG_SEM_EXECUTOR_TELA, atividadeSemExecutor } from "@/lib/atividade-equipe";
+import { Plus, X, Check, ChevronDown, ChevronRight, Wrench, User, Users, Smartphone, Pencil, Trash2, Loader2, AlertTriangle, Car } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 
@@ -30,15 +31,14 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
   const [expandido, setExpandido] = useState<Set<string>>(new Set());
   const [mostraForm, setMostraForm] = useState(false);
   const [tiposOs, setTiposOs] = useState<any[]>([]);
-  const [tecnicos, setTecnicos] = useState<any[]>([]);
-  const [carregandoTecnicos, setCarregandoTecnicos] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [erroStatus, setErroStatus] = useState("");
   const [form, setForm] = useState({ titulo: "", tipoOsId: "", dataAgendada: "", duracaoMin: "", observacao: "" });
-  // Técnicos da atividade: equipe e/ou técnicos individuais (responsável = tecnicoId)
-  const [equipes, setEquipes] = useState<EquipeOpcao[]>([]);
-  const [tecnicosNova, setTecnicosNova] = useState<ValorTecnicos>(VALOR_TECNICOS_VAZIO);
-  const [tecnicosEdicao, setTecnicosEdicao] = useState<ValorTecnicos>(VALOR_TECNICOS_VAZIO);
+  // Quem executa (equipe e/ou colaboradores; responsável = tecnicoId) + veículo da atividade
+  const opcoesExecucao = useOpcoesExecucao();
+  const [tecnicosNova, setTecnicosNova] = useState<ValorExecucao>(VALOR_EXECUCAO_VAZIO);
+  const [tecnicosEdicao, setTecnicosEdicao] = useState<ValorExecucao>(VALOR_EXECUCAO_VAZIO);
+  const [faltaExecutor, setFaltaExecutor] = useState(false);
   const [erroForm, setErroForm] = useState("");
   const { pode } = usePermissoes();
   const podeEditar = pode("ordens", "editar");
@@ -57,13 +57,15 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
       titulo: a.titulo ?? "", tipoOsId: a.tipoOs?.id ?? a.tipoOsId ?? "",
       dataAgendada: paraInputLocal(a.dataAgendada), duracaoMin: a.duracaoMin ? String(a.duracaoMin) : "", observacao: a.observacao ?? "",
     });
-    setTecnicosEdicao(valorDaAtividade(a));
+    setTecnicosEdicao(valorExecucaoDaAtividade(a));
+    setFaltaExecutor(false);
     setEditando(a);
   }
 
   async function salvarEdicao() {
     if (!editando) return;
     if (!formEdicao.titulo.trim()) { setErroModal("O título é obrigatório."); return; }
+    if (!temExecutor(tecnicosEdicao)) { setFaltaExecutor(true); setErroModal(MSG_SEM_EXECUTOR_TELA); return; }
     setProcessando(true); setErroModal("");
     try {
       const res = await fetch(`/api/ordens/${osId}/atividades/${editando.id}`, {
@@ -71,7 +73,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
         body: JSON.stringify({
           titulo: formEdicao.titulo.trim(),
           tipoOsId: formEdicao.tipoOsId,
-          ...corpoTecnicos(tecnicosEdicao),
+          ...corpoExecucao(tecnicosEdicao),
           dataAgendada: formEdicao.dataAgendada ? new Date(formEdicao.dataAgendada).toISOString() : "",
           duracaoMin: formEdicao.duracaoMin ? Number(formEdicao.duracaoMin) : null,
           observacao: formEdicao.observacao,
@@ -98,9 +100,6 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
 
   useEffect(() => {
     fetch("/api/tipos-os").then((r) => r.json()).then(setTiposOs).catch(() => {});
-    fetch("/api/tecnicos").then((r) => r.json()).then((d) => setTecnicos(Array.isArray(d) ? d : [])).catch(() => {})
-      .finally(() => setCarregandoTecnicos(false));
-    fetch("/api/equipes?resumo=1").then((r) => (r.ok ? r.json() : [])).then((d) => setEquipes(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
 
   function toggleExpand(id: string) {
@@ -110,17 +109,19 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
   async function criarAtividade() {
     setErroForm("");
     if (!form.titulo.trim()) { setErroForm("O título é obrigatório."); return; }
+    if (!temExecutor(tecnicosNova)) { setFaltaExecutor(true); setErroForm(MSG_SEM_EXECUTOR_TELA); return; }
     setSalvando(true);
     try {
       const res = await fetch(`/api/ordens/${osId}/atividades`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, ...corpoTecnicos(tecnicosNova), duracaoMin: form.duracaoMin ? Number(form.duracaoMin) : undefined }),
+        body: JSON.stringify({ ...form, ...corpoExecucao(tecnicosNova), duracaoMin: form.duracaoMin ? Number(form.duracaoMin) : undefined }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) { setErroForm(d.erro ?? "Não foi possível adicionar a atividade."); return; }
       setAtividades((p) => [...p, d]);
       setForm({ titulo: "", tipoOsId: "", dataAgendada: "", duracaoMin: "", observacao: "" });
-      setTecnicosNova(VALOR_TECNICOS_VAZIO);
+      setTecnicosNova(VALOR_EXECUCAO_VAZIO);
+      setFaltaExecutor(false);
       setMostraForm(false);
     } catch { setErroForm("Erro de conexão."); } finally { setSalvando(false); }
   }
@@ -148,7 +149,10 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
         </div>
       )}
       {atividades.length === 0 && !mostraForm && (
-        <p className="text-sm text-gray-400 text-center py-6">Nenhuma atividade cadastrada.</p>
+        <div data-os-sem-executor className="flex items-start gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>Esta OS ainda não tem <strong>quem execute</strong>. {podeEditar ? "Adicione uma atividade escolhendo a equipe ou os colaboradores." : "Peça a quem pode editar a OS para definir a equipe ou os colaboradores."}</span>
+        </div>
       )}
 
       {atividades.map((a) => {
@@ -166,6 +170,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
                   </div>
                   <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
                     <TecnicosAtividade a={a} />
+                    {a.veiculo && <span className="flex items-center gap-1 shrink-0" data-veiculo-atividade><Car className="w-3 h-3" />{a.veiculo.placa}</span>}
                     {a.dataAgendada && <span>{formatarDataHora(a.dataAgendada)}</span>}
                     {a.duracaoMin && <span>{a.duracaoMin} min</span>}
                   </div>
@@ -238,11 +243,8 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
               {tiposOs.filter((t) => t.ativo).map((t) => (<option key={t.id} value={t.id}>{t.nome}</option>))}
             </Select>
           </FormField>
-          <FormField label="Técnicos / equipe">
-            <SeletorTecnicos
-              tecnicos={tecnicos} equipes={equipes} tipoOsId={form.tipoOsId} valor={tecnicosNova} onChange={setTecnicosNova}
-              carregando={carregandoTecnicos} onTecnicoCriado={(t) => setTecnicos((l) => [...l, t])}
-            />
+          <FormField label="Quem executa" required>
+            <SeletorExecucao opcoes={opcoesExecucao} tipoOsId={form.tipoOsId} valor={tecnicosNova} onChange={(v) => { setTecnicosNova(v); if (temExecutor(v)) setErroForm((e) => (e === MSG_SEM_EXECUTOR_TELA ? "" : e)); }} erro={faltaExecutor} />
           </FormField>
           <FormGrid>
             <FormField label="Data/hora agendada">
@@ -282,11 +284,13 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
               </Select>
             </FormField>
           </FormGrid>
-          <FormField label="Técnicos / equipe">
-            <SeletorTecnicos
-              tecnicos={tecnicos} equipes={equipes} tipoOsId={formEdicao.tipoOsId} valor={tecnicosEdicao} onChange={setTecnicosEdicao}
-              carregando={carregandoTecnicos} onTecnicoCriado={(t) => setTecnicos((l) => [...l, t])}
-            />
+          {atividadeSemExecutor(editando) && (
+            <p data-aviso-sem-executor className="flex items-start gap-1.5 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> Atividade antiga sem executor: para salvar, escolha a equipe ou os colaboradores.
+            </p>
+          )}
+          <FormField label="Quem executa" required>
+            <SeletorExecucao opcoes={opcoesExecucao} tipoOsId={formEdicao.tipoOsId} valor={tecnicosEdicao} onChange={(v) => { setTecnicosEdicao(v); if (temExecutor(v)) setErroModal((e) => (e === MSG_SEM_EXECUTOR_TELA ? "" : e)); }} erro={faltaExecutor} />
           </FormField>
           <FormGrid>
             <FormField label="Data/hora agendada">
@@ -331,7 +335,13 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
 /** "Equipe Alfa · João (resp.), Maria, Pedro" — responsável primeiro. */
 function TecnicosAtividade({ a }: { a: any }) {
   const nomes: string[] = [a.tecnico?.nome, ...(a.tecnicosEquipe ?? []).map((t: any) => t.tecnico?.nome)].filter(Boolean);
-  if (!nomes.length && !a.equipe) return null;
+  if (!nomes.length && !a.equipe) {
+    return (
+      <span data-sem-executor className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">
+        <AlertTriangle className="w-3 h-3" /> Sem executor
+      </span>
+    );
+  }
   return (
     <span className="flex items-center gap-1 min-w-0" data-tecnicos-atividade>
       {a.equipe

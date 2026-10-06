@@ -13,6 +13,8 @@ import { SelectCadastroRapido } from "@/components/ui/select-cadastro-rapido";
 import { CLIENTE, UNIDADE, EQUIPAMENTO } from "@/components/cadastro-rapido/definicoes";
 import type { OpcaoCadastro } from "@/components/ui/select-cadastro-rapido";
 import { Inbox } from "lucide-react";
+import { SeletorExecucao, VALOR_EXECUCAO_VAZIO, corpoExecucao, temExecutor, useOpcoesExecucao, type ValorExecucao } from "@/components/os/seletor-execucao";
+import { MSG_SEM_EXECUTOR_TELA } from "@/lib/atividade-equipe";
 
 type Item = { id: string; nome: string; nomeFantasia?: string | null };
 type UnidadeItem = { id: string; nome: string; cidade?: string | null };
@@ -45,14 +47,20 @@ export default function NovaOrdemPage() {
   const [solicitacao, setSolicitacao] = useState<Solicitacao | null>(null);
   const [carregandoSolicitacao, setCarregandoSolicitacao] = useState(false);
   const [dataHora, setDataHora] = useState("");
-  const [tecnicoId, setTecnicoId] = useState("");
-  const [tecnicos, setTecnicos] = useState<Item[]>([]);
+  // Quem executa (OBRIGATÓRIO) + veículo — vira a 1ª atividade da OS
+  const opcoesExecucao = useOpcoesExecucao();
+  const [execucao, setExecucao] = useState<ValorExecucao>(VALOR_EXECUCAO_VAZIO);
+  const [faltaExecutor, setFaltaExecutor] = useState(false);
+  const [tiposOs, setTiposOs] = useState<{ id: string; nome: string; ativo: boolean }[]>([]);
+  const [tipoOsId, setTipoOsId] = useState("");
+  const [agendarPara, setAgendarPara] = useState("");
   const [equipamentoId, setEquipamentoId] = useState("");
   const [equipamentos, setEquipamentos] = useState<EquipItem[]>([]);
 
   useEffect(() => {
     fetch("/api/clientes").then((r) => r.json()).then((d) => setClientes(Array.isArray(d) ? d : [])).catch(() => {})
       .finally(() => setCarregandoClientes(false));
+    fetch("/api/tipos-os").then((r) => (r.ok ? r.json() : [])).then((d) => setTiposOs(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
 
   // Pré-preenchimento opcional via URL (ex.: "Abrir OS" na ficha do equipamento)
@@ -74,7 +82,6 @@ export default function NovaOrdemPage() {
           contratoId: os.contratoId ?? "", observacoes: os.observacoes ?? "",
         }));
       }).catch(() => setErro("Erro de conexão.")).finally(() => setCarregandoSolicitacao(false));
-      fetch("/api/tecnicos").then((r) => r.json()).then((d) => setTecnicos(Array.isArray(d) ? d : [])).catch(() => {});
       return;
     }
     const cli = sp.get("clienteId");
@@ -101,6 +108,7 @@ export default function NovaOrdemPage() {
     if (!solicitacao) return;
     if (!dataHora) { setErro("Escolha a data e a hora do atendimento."); return; }
     if (form.descricao.trim().length < 5) { setErro("Descrição muito curta."); return; }
+    if (!temExecutor(execucao)) { setFaltaExecutor(true); setErro(MSG_SEM_EXECUTOR_TELA); return; }
     setErro(""); setSalvando(true);
     try {
       const res = await fetch(`/api/solicitacoes/${solicitacao.id}/aceitar`, {
@@ -108,7 +116,7 @@ export default function NovaOrdemPage() {
         body: JSON.stringify({
           dataHora, descricao: form.descricao, prioridade: form.prioridade, unidadeId: form.unidadeId || null,
           contratoId: form.contratoId || null, observacoes: form.observacoes || null,
-          equipamentoId: equipamentoId || null, tecnicoId: tecnicoId || null,
+          equipamentoId: equipamentoId || null, ...corpoExecucao(execucao),
         }),
       });
       const d = await res.json().catch(() => ({}));
@@ -121,11 +129,15 @@ export default function NovaOrdemPage() {
 
   async function salvar() {
     if (!clienteId || !form.descricao.trim()) { setErro("Cliente e descrição são obrigatórios."); return; }
+    if (!temExecutor(execucao)) { setFaltaExecutor(true); setErro(MSG_SEM_EXECUTOR_TELA); return; }
     setErro(""); setSalvando(true);
     try {
       const res = await fetch("/api/ordens", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, clienteId }),
+        body: JSON.stringify({
+          ...form, clienteId,
+          execucao: { tipoOsId: tipoOsId || null, dataAgendada: agendarPara ? new Date(agendarPara).toISOString() : null, ...corpoExecucao(execucao) },
+        }),
       });
       if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao criar OS."); return; }
       const os = await res.json();
@@ -249,13 +261,26 @@ export default function NovaOrdemPage() {
                   />
                 )}
               </FormField>
-              <FormField label="Técnico">
-                <Select value={tecnicoId} onChange={(e) => setTecnicoId(e.target.value)} placeholder="Definir depois">
-                  {tecnicos.map((t) => (<option key={t.id} value={t.id}>{t.nome}</option>))}
+            </FormGrid>
+          )}
+        </FormSection>
+
+        <FormSection title="Quem executa">
+          {!solicitacao && (
+            <FormGrid>
+              <FormField label="Tipo de OS" hint="Filtra os colaboradores pela competência">
+                <Select value={tipoOsId} onChange={(e) => setTipoOsId(e.target.value)} placeholder="Sem tipo definido">
+                  {tiposOs.filter((t) => t.ativo !== false).map((t) => (<option key={t.id} value={t.id}>{t.nome}</option>))}
                 </Select>
+              </FormField>
+              <FormField label="Agendar para" hint="Opcional — aparece no calendário">
+                <Input type="datetime-local" aria-label="Agendar para" value={agendarPara} onChange={(e) => setAgendarPara(e.target.value)} />
               </FormField>
             </FormGrid>
           )}
+          <FormField label="Equipe ou colaboradores" required>
+            <SeletorExecucao opcoes={opcoesExecucao} tipoOsId={solicitacao ? "" : tipoOsId} valor={execucao} onChange={(v) => { setExecucao(v); if (temExecutor(v)) { setFaltaExecutor(false); setErro((e) => (e === MSG_SEM_EXECUTOR_TELA ? "" : e)); } }} erro={faltaExecutor} />
+          </FormField>
         </FormSection>
 
         <FormSection title="Descrição">

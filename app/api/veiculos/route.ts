@@ -3,9 +3,20 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { veiculoSchema } from "@/lib/validations";
 import { organizarFotosVeiculo } from "@/lib/veiculo-fotos";
-import { exigirPermissao } from "@/lib/permissoes-server";
+import { exigirAlgumaPermissao, exigirPermissao } from "@/lib/permissoes-server";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  // ?resumo=1: só o necessário para escolher o veículo na OS / no colaborador (sem fotos)
+  if (req.nextUrl.searchParams.get("resumo") === "1") {
+    const guard = await exigirAlgumaPermissao([["veiculos", "visualizar"], ["ordens", "criar"], ["ordens", "editar"], ["equipes", "gerenciar"]]);
+    if (guard.erro) return guard.resposta;
+    const veiculos = await prisma.veiculo.findMany({
+      where: { empresaId: guard.session.user!.empresaId },
+      select: { id: true, placa: true, modelo: true, marca: true, status: true, equipeId: true },
+      orderBy: { placa: "asc" },
+    });
+    return NextResponse.json(veiculos);
+  }
   const session = await auth();
   if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
   const empresaId = session.user!.empresaId;

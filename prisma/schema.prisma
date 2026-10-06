@@ -710,11 +710,14 @@ model Tecnico {
   longitude         Float?
   ultimaLocalizacao DateTime? @map("ultima_localizacao")
   observacoes       String?
+  /// Veículo "padrão" do colaborador (opcional) — puxado automaticamente na OS quando ele executa sozinho
+  veiculoId         String?   @map("veiculo_id")
   ativo             Boolean   @default(true)
   criadoEm          DateTime  @default(now()) @map("criado_em")
   atualizadoEm      DateTime  @updatedAt @map("atualizado_em")
 
   empresa               Empresa                         @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  veiculoPadrao         Veiculo?                        @relation("VeiculoPadraoColaborador", fields: [veiculoId], references: [id], onDelete: SetNull)
   cargo                 Cargo?                          @relation(fields: [cargoId], references: [id])
   perfilAcesso          PerfilAcesso?                   @relation(fields: [perfilAcessoId], references: [id])
   clientesResponsavel   Cliente[]
@@ -734,6 +737,7 @@ model Tecnico {
 
   @@unique([cpf, empresaId])
   @@index([empresaId, ativo])
+  @@index([veiculoId])
   @@map("tecnicos")
 }
 
@@ -1446,6 +1450,8 @@ model AtividadeOs {
   tecnicoId      String?         @map("tecnico_id")
   /// Equipe usada para preencher os técnicos (opcional; só registro)
   equipeId       String?         @map("equipe_id")
+  /// Veículo usado NESTA atividade (puxado da equipe/colaborador, editável; não altera o vínculo padrão)
+  veiculoId      String?         @map("veiculo_id")
   titulo         String
   status         StatusAtividade @default(AGENDADA)
   dataAgendada   DateTime?       @map("data_agendada")
@@ -1459,6 +1465,7 @@ model AtividadeOs {
   tipoOs               TipoOs?                         @relation(fields: [tipoOsId], references: [id])
   tecnico              Tecnico?                        @relation(fields: [tecnicoId], references: [id])
   equipe               Equipe?                         @relation(fields: [equipeId], references: [id], onDelete: SetNull)
+  veiculo              Veiculo?                        @relation(fields: [veiculoId], references: [id], onDelete: SetNull)
   tecnicosEquipe       AtividadeTecnico[]
   respostas            AtividadeResposta[]
   relatorios           RelatorioOs[]
@@ -1469,6 +1476,7 @@ model AtividadeOs {
   @@index([tecnicoId])
   @@index([tipoOsId])
   @@index([equipeId])
+  @@index([veiculoId])
   @@index([empresaId, dataAgendada])
   @@map("atividades_os")
 }
@@ -2429,12 +2437,14 @@ model Veiculo {
   criadoEm           DateTime      @default(now()) @map("criado_em")
   atualizadoEm       DateTime      @updatedAt @map("atualizado_em")
 
-  empresa     Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  responsavel Tecnico?              @relation("VeiculoResponsavel", fields: [responsavelId], references: [id])
-  equipe      Equipe?               @relation(fields: [equipeId], references: [id])
-  manutencoes VeiculoManutencao[]
-  documentos  VeiculoDocumento[]
-  checklists  ChecklistPreenchido[]
+  empresa             Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  responsavel         Tecnico?              @relation("VeiculoResponsavel", fields: [responsavelId], references: [id])
+  equipe              Equipe?               @relation(fields: [equipeId], references: [id])
+  manutencoes         VeiculoManutencao[]
+  documentos          VeiculoDocumento[]
+  checklists          ChecklistPreenchido[]
+  colaboradoresPadrao Tecnico[]             @relation("VeiculoPadraoColaborador")
+  atividadesOs        AtividadeOs[]
 
   @@unique([placa, empresaId])
   @@index([empresaId, status])

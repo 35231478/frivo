@@ -138,6 +138,7 @@ export async function impactoVeiculo(id: string, empresaId: string): Promise<Imp
     select: {
       responsavel: { select: { nome: true } },
       equipe: { select: { nome: true } },
+      colaboradoresPadrao: { where: { ativo: true }, select: { nome: true } },
       _count: { select: { checklists: true, manutencoes: true } },
     },
   });
@@ -149,6 +150,8 @@ export async function impactoVeiculo(id: string, empresaId: string): Promise<Imp
     avisos.push(`O histórico (${plural(v._count.checklists, "checklist", "checklists")}, ${plural(v._count.manutencoes, "manutenção", "manutenções")}) é preservado.`);
   if (v.responsavel) avisos.push(`O responsável (${v.responsavel.nome}) continua vinculado.`);
   if (v.equipe) avisos.push(`Continua vinculado à equipe ${v.equipe.nome}.`);
+  if (v.colaboradoresPadrao.length)
+    avisos.push(`É o veículo padrão de ${lista(v.colaboradoresPadrao.map((c) => c.nome))}: inativo, deixa de ser puxado nas novas OS (o vínculo fica guardado).`);
   return { bloqueio: null, avisos };
 }
 

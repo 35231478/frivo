@@ -67,6 +67,8 @@ export function SeletorTecnicos({ tecnicos, equipes, tipoOsId, valor, onChange, 
     : [];
   const semCompetencia = valor.tecnicoIds.filter((id) => !temCompetencia(id));
   const opcoesAdicionar = tecnicos.filter((t) => !valor.tecnicoIds.includes(t.id) && temCompetencia(t.id)).map((t) => ({ value: t.id, label: t.nome }));
+  // Quem não aparece por falta de competência no tipo de OS (para não parecer que "não há técnicos")
+  const ocultosCompetencia = tipoOsId ? tecnicos.filter((t) => !temCompetencia(t.id) && !valor.tecnicoIds.includes(t.id)).length : 0;
 
   return (
     <div className="space-y-2.5" data-seletor-tecnicos>
@@ -78,7 +80,7 @@ export function SeletorTecnicos({ tecnicos, equipes, tipoOsId, valor, onChange, 
             className={cn("flex-1 min-w-0 bg-white border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500",
               valor.equipeId ? "border-primary-300 text-primary-700 bg-primary-50/40" : "border-surface-border text-ink")}
           >
-            <option value="">Usar uma equipe… (opcional)</option>
+            <option value="">{valor.tecnicoIds.length ? "Sem equipe (colaboradores avulsos)" : "Escolher uma equipe…"}</option>
             {equipes.map((e) => <option key={e.id} value={e.id}>{e.nome} ({e.membroIds.length + (e.liderId && !e.membroIds.includes(e.liderId) ? 1 : 0)})</option>)}
           </select>
         </div>
@@ -109,7 +111,7 @@ export function SeletorTecnicos({ tecnicos, equipes, tipoOsId, valor, onChange, 
       <SelectCadastroRapido
         value="" onChange={adicionar} opcoes={opcoesAdicionar}
         entidade={TECNICO.entidade} contexto={tipoOsId ? "com competência neste tipo de OS" : undefined}
-        placeholder={valor.tecnicoIds.length ? "Adicionar outro técnico…" : "Selecione o técnico"}
+        placeholder={valor.tecnicoIds.length ? "Adicionar outro colaborador…" : equipes.length ? "…ou escolha colaboradores" : "Selecione o colaborador"}
         carregando={carregando} campos={TECNICO.campos} campoBusca="nome" permissao={TECNICO.permissao} linkCadastroCompleto={TECNICO.link}
         criar={async (v) => {
           // Já habilita no tipo de OS da atividade (senão o filtro de competência o esconderia)
@@ -121,9 +123,15 @@ export function SeletorTecnicos({ tecnicos, equipes, tipoOsId, valor, onChange, 
 
       <p className="text-[11px] text-ink-subtle">
         {valor.tecnicoIds.length > 1
-          ? <>A <Crown className="inline w-3 h-3 text-amber-600" /> marca o responsável; todos os técnicos podem executar e concluir a atividade.</>
-          : tipoOsId ? "Apenas colaboradores com competência neste tipo de OS." : "Escolha uma equipe ou um ou mais técnicos."}
+          ? <>A <Crown className="inline w-3 h-3 text-amber-600" /> marca o responsável; todos podem executar e concluir a atividade.</>
+          : tipoOsId ? "Apenas colaboradores com competência neste tipo de OS." : "Obrigatório: escolha uma equipe ou um ou mais colaboradores."}
       </p>
+      {ocultosCompetencia > 0 && (
+        <p data-ocultos-competencia className="text-[11px] text-ink-muted">
+          {ocultosCompetencia} colaborador{ocultosCompetencia > 1 ? "es" : ""} sem competência neste tipo de OS não aparece{ocultosCompetencia > 1 ? "m" : ""} na lista —
+          habilite em <a href="/colaboradores" target="_blank" rel="noreferrer" className="font-semibold text-primary-600 hover:underline">Colaboradores › Competências</a> ou deixe o tipo de OS em branco.
+        </p>
+      )}
       {foraDaEquipe.length > 0 && (
         <p data-fora-equipe className="flex items-start gap-1.5 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
