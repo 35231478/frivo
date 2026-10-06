@@ -5,7 +5,8 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { AvatarStack } from "@/components/ui/avatar-stack";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
-import { UsersRound, Plus, Truck, Crown, HardHat, Building2 } from "lucide-react";
+import { UsersRound, Plus, Truck, Crown, HardHat, Building2, LayoutDashboard } from "lucide-react";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
 
 interface Membro { id: string; nome: string; avatar: string | null }
@@ -23,6 +24,8 @@ type Aba = "grupos" | "campo" | "administrativa";
 
 export function EquipesView({ grupos, colaboradores }: { grupos: Grupo[]; colaboradores: Colaborador[] }) {
   const [aba, setAba] = useState<Aba>("grupos");
+  const { pode } = usePermissoes();
+  const podeGerenciar = pode("equipes", "gerenciar");
   const [perfilFiltro, setPerfilFiltro] = useState("");
   const [mostrarInativas, setMostrarInativas] = useState(false);
   // Equipe inativada (status INATIVA) fica fora da lista padrão
@@ -46,11 +49,16 @@ export function EquipesView({ grupos, colaboradores }: { grupos: Grupo[]; colabo
           <div className="p-2 bg-primary-50 rounded-lg"><UsersRound className="w-5 h-5 text-primary-600" /></div>
           <h1 className="page-title">Equipes</h1>
         </div>
-        {aba === "grupos" && (
-          <Link href="/equipes/novo" className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow">
-            <Plus className="w-4 h-4" /> Nova Equipe
+        <div className="flex items-center gap-2">
+          <Link href="/equipes/montador" data-abrir-montador className="inline-flex items-center gap-2 border border-primary-300 text-primary-700 bg-primary-50 hover:bg-primary-100 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all">
+            <LayoutDashboard className="w-4 h-4" /> Montar equipes
           </Link>
-        )}
+          {aba === "grupos" && podeGerenciar && (
+            <Link href="/equipes/novo" className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow">
+              <Plus className="w-4 h-4" /> Nova Equipe
+            </Link>
+          )}
+        </div>
       </div>
 
       {/* Abas */}
@@ -119,7 +127,7 @@ export function EquipesView({ grupos, colaboradores }: { grupos: Grupo[]; colabo
                     <span className="text-xs text-ink-muted">{e.membros.length} membro(s)</span>
                     <AvatarStack tecnicos={e.membros.map((m) => ({ id: m.id, nome: m.nome, avatar: m.avatar }))} size={26} />
                   </div>
-                  {e.veiculos[0] && <span className="inline-flex items-center gap-1 text-xs text-ink-muted"><Truck className="w-3.5 h-3.5" />{e.veiculos[0].placa}</span>}
+                  {e.veiculos.length > 0 && <span className="inline-flex items-center gap-1 text-xs text-ink-muted"><Truck className="w-3.5 h-3.5" />{e.veiculos.map((v) => v.placa).join(", ")}</span>}
                 </div>
               </Link>
               <div className="absolute bottom-2 right-2">
