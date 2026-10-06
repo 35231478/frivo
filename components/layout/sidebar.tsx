@@ -9,7 +9,7 @@ import { moduloDaRota, pode } from "@/lib/permissoes";
 import { FrivoLogo, FrivoMark } from "./frivo-logo";
 import type { Session } from "next-auth";
 import {
-  LayoutDashboard, Users, Thermometer, ClipboardList, FileText,
+  LayoutDashboard, Users, Thermometer, ClipboardList, FileText, FileBadge,
   HardHat, Settings, ChevronDown, ChevronRight,
   Wrench, FileSpreadsheet, Cog, Package, ListChecks, Calculator,
   Wallet, Receipt, TrendingUp, FileBarChart, Clock, ShoppingCart, Timer, Tags, CalendarDays, Headset, ScrollText, QrCode,
@@ -73,6 +73,7 @@ const OPERACIONAL: Secao[] = [
         tipo: "grupo", label: "Equipamentos", icone: Thermometer, itens: [
           { href: "/equipamentos", icone: Thermometer, label: "Todos os equipamentos" },
           { href: "/qrcodes", icone: QrCode, label: "QR Codes" },
+          { href: "/pmoc", icone: FileBadge, label: "PMOC" },
         ],
       },
       {

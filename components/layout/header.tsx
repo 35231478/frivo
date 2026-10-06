@@ -30,6 +30,7 @@ const ROTULOS_ROTA: Record<string, string> = {
   dashboard: "Dashboard",
   clientes: "Clientes",
   equipamentos: "Equipamentos",
+  pmoc: "PMOC",
   ordens: "Ordens de Serviço",
   contratos: "Contratos",
   tecnicos: "Técnicos",
@@ -60,7 +61,7 @@ function gerarBreadcrumb(pathname: string) {
     acc += "/" + seg;
     const label =
       ROTULOS_ROTA[seg] ??
-      (/^[0-9a-f]{8,}/i.test(seg) ? "Detalhes" : seg.charAt(0).toUpperCase() + seg.slice(1));
+      (/^[0-9a-f]{8,}/i.test(seg) || /^c[a-z0-9]{20,}$/.test(seg) ? "Detalhes" : seg.charAt(0).toUpperCase() + seg.slice(1));
     itens.push({ label, href: acc });
   }
   return itens;

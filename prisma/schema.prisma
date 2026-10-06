@@ -459,6 +459,8 @@ model Empresa {
   integracaoInter IntegracaoInter?
   emailConfig     EmailConfig?
 
+  pmocs Pmoc[]
+
   @@map("empresas")
 }
 
@@ -634,18 +636,20 @@ model Usuario {
   criadoEm     DateTime  @default(now()) @map("criado_em")
   atualizadoEm DateTime  @updatedAt @map("atualizado_em")
 
-  empresa            Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  ordensEmitidas     OrdemServico[]        @relation("UsuarioCriador")
-  ordensResponsavel  OrdemServico[]        @relation("OsResponsavel")
+  empresa            Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  ordensEmitidas     OrdemServico[]            @relation("UsuarioCriador")
+  ordensResponsavel  OrdemServico[]            @relation("OsResponsavel")
   osHistorico        OsHistorico[]
   interacoesCliente  InteracaoCliente[]
-  orcamentosCriados  Orcamento[]           @relation("OrcamentoCriador")
-  pedidosSolicitados PedidoCompraInterno[] @relation("PedidoSolicitante")
-  pedidosComprador   PedidoCompraInterno[] @relation("PedidoComprador")
+  orcamentosCriados  Orcamento[]               @relation("OrcamentoCriador")
+  pedidosSolicitados PedidoCompraInterno[]     @relation("PedidoSolicitante")
+  pedidosComprador   PedidoCompraInterno[]     @relation("PedidoComprador")
   pushSubscriptions  PushSubscription[]
   contratoHistoricos ContratoHistoricoStatus[]
-  perfilAcessoId     String?               @map("perfil_acesso_id")
-  perfilAcesso       PerfilAcesso?         @relation(fields: [perfilAcessoId], references: [id])
+  perfilAcessoId     String?                   @map("perfil_acesso_id")
+  perfilAcesso       PerfilAcesso?             @relation(fields: [perfilAcessoId], references: [id])
+
+  pmocsCriados Pmoc[] @relation("PmocCriador")
 
   @@unique([email, empresaId])
   @@index([empresaId, ativo])
@@ -731,6 +735,8 @@ model Tecnico {
   equipamentosMarcados  AtividadeEquipamento[]
   respostasEquipamento  RespostaFormularioEquipamento[]
 
+  pmocsResponsavel Pmoc[] @relation("PmocResponsavelTecnico")
+
   @@unique([cpf, empresaId])
   @@index([empresaId, ativo])
   @@map("tecnicos")
@@ -796,19 +802,21 @@ model Cliente {
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  empresa            Empresa            @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  responsavelTecnico Tecnico?           @relation(fields: [responsavelTecnicoId], references: [id])
-  unidades           Unidade[]
-  contratos          Contrato[]
-  ordensServico      OrdemServico[]
-  anexos             AnexoCliente[]
-  contatosCliente    ContatoCliente[]
+  empresa                 Empresa                  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  responsavelTecnico      Tecnico?                 @relation(fields: [responsavelTecnicoId], references: [id])
+  unidades                Unidade[]
+  contratos               Contrato[]
+  ordensServico           OrdemServico[]
+  anexos                  AnexoCliente[]
+  contatosCliente         ContatoCliente[]
   comunicacaoPreferencias ComunicacaoPreferencia[]
-  interacoes         InteracaoCliente[]
-  orcamentos         Orcamento[]
-  medicoes           Medicao[]
-  contasReceber      ContaReceber[]
-  tabelaPreco        TabelaPreco?       @relation(fields: [tabelaPrecoId], references: [id])
+  interacoes              InteracaoCliente[]
+  orcamentos              Orcamento[]
+  medicoes                Medicao[]
+  contasReceber           ContaReceber[]
+  tabelaPreco             TabelaPreco?             @relation(fields: [tabelaPrecoId], references: [id])
+
+  pmocs Pmoc[]
 
   @@unique([cpfCnpj, empresaId])
   @@index([empresaId, ativo])
@@ -837,17 +845,17 @@ model ContatoCliente {
   ativo     Boolean     @default(true)
 
   // Acesso ao Portal do Cliente
-  senha            String?
-  senhaProvisoria  String?   @map("senha_provisoria") // texto legível p/ consulta do gestor
+  senha             String?
+  senhaProvisoria   String?   @map("senha_provisoria") // texto legível p/ consulta do gestor
   acessoConcedidoEm DateTime? @map("acesso_concedido_em")
-  ultimoAcesso     DateTime? @map("ultimo_acesso")
-  permissoes       Json?
+  ultimoAcesso      DateTime? @map("ultimo_acesso")
+  permissoes        Json?
 
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  cliente       Cliente        @relation(fields: [clienteId], references: [id], onDelete: Cascade)
-  ordensAbertas OrdemServico[] @relation("OsContatoOrigem")
+  cliente                 Cliente                  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  ordensAbertas           OrdemServico[]           @relation("OsContatoOrigem")
   comunicacaoPreferencias ComunicacaoPreferencia[]
 
   @@index([clienteId])
@@ -930,6 +938,8 @@ model Unidade {
   contratos     ContratoUnidade[]
   ordensServico OrdemServico[]
 
+  pmocs Pmoc[]
+
   @@index([clienteId])
   @@index([empresaId])
   @@map("unidades")
@@ -1000,6 +1010,8 @@ model Equipamento {
   atividades          AtividadeEquipamento[]
   respostasFormulario RespostaFormularioEquipamento[]
 
+  pmocs PmocEquipamento[]
+
   @@index([empresaId, ativo])
   @@index([unidadeId])
   @@index([tipoEquipamentoId])
@@ -1063,10 +1075,10 @@ model Contrato {
   adicionarVencimentoNFSe Boolean              @default(false) @map("adicionar_vencimento_nfse")
 
   // Escopo
-  descricaoServicos    String?        @map("descricao_servicos")
-  itensInclusos        Json?          @map("itens_inclusos")
-  qtdVisitas           Int?           @map("qtd_visitas")
-  periodoVisitas       PeriodoVisita? @map("periodo_visitas")
+  descricaoServicos String?        @map("descricao_servicos")
+  itensInclusos     Json?          @map("itens_inclusos")
+  qtdVisitas        Int?           @map("qtd_visitas")
+  periodoVisitas    PeriodoVisita? @map("periodo_visitas")
 
   // Responsabilidade técnica (artNumero/responsavelTecnicoId acima)
   artVencimento DateTime? @map("art_vencimento")
@@ -1103,12 +1115,12 @@ model Contrato {
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  empresa            Empresa           @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  origemOrcamento    Orcamento?        @relation("OrcamentoContrato", fields: [origemOrcamentoId], references: [id])
-  cliente            Cliente           @relation(fields: [clienteId], references: [id])
-  responsavelTecnico Tecnico?          @relation(fields: [responsavelTecnicoId], references: [id])
-  tipoOsRecorrencia  TipoOs?           @relation("ContratoTipoOsRecorrencia", fields: [tipoOsRecorrenciaId], references: [id])
-  tecnicoRecorrencia Tecnico?          @relation("ContratoTecnicoRecorrencia", fields: [tecnicoRecorrenciaId], references: [id])
+  empresa            Empresa                    @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  origemOrcamento    Orcamento?                 @relation("OrcamentoContrato", fields: [origemOrcamentoId], references: [id])
+  cliente            Cliente                    @relation(fields: [clienteId], references: [id])
+  responsavelTecnico Tecnico?                   @relation(fields: [responsavelTecnicoId], references: [id])
+  tipoOsRecorrencia  TipoOs?                    @relation("ContratoTipoOsRecorrencia", fields: [tipoOsRecorrenciaId], references: [id])
+  tecnicoRecorrencia Tecnico?                   @relation("ContratoTecnicoRecorrencia", fields: [tecnicoRecorrenciaId], references: [id])
   unidades           ContratoUnidade[]
   ordensServico      OrdemServico[]
   medicoes           Medicao[]
@@ -1174,7 +1186,7 @@ model AnexoContrato {
   tipo       String
   tamanho    Int
   conteudo   String   @db.Text
-  categoria  String?  // ASSINADO | ANEXO
+  categoria  String? // ASSINADO | ANEXO
   criadoEm   DateTime @default(now()) @map("criado_em")
 
   contrato Contrato @relation(fields: [contratoId], references: [id], onDelete: Cascade)
@@ -1488,16 +1500,16 @@ model AtividadeResposta {
 // ─────────────────────────────────────────────
 
 model FormTypeMapping {
-  id                   String   @id @default(cuid())
-  empresaId            String   @map("empresa_id")
-  tipoEquipamentoId    String   @map("tipo_equipamento_id")
-  tipoOsId             String   @map("tipo_os_id")
-  formularioTemplateId String   @map("formulario_template_id")
+  id                     String   @id @default(cuid())
+  empresaId              String   @map("empresa_id")
+  tipoEquipamentoId      String   @map("tipo_equipamento_id")
+  tipoOsId               String   @map("tipo_os_id")
+  formularioTemplateId   String   @map("formulario_template_id")
   // Obrigatoriedade do formulário no fluxo do técnico (PWA)
-  obrigatorioConcluir    Boolean @default(false) @map("obrigatorio_concluir")
-  obrigatorioImpedimento Boolean @default(false) @map("obrigatorio_impedimento")
-  criadoEm             DateTime @default(now()) @map("criado_em")
-  atualizadoEm         DateTime @updatedAt @map("atualizado_em")
+  obrigatorioConcluir    Boolean  @default(false) @map("obrigatorio_concluir")
+  obrigatorioImpedimento Boolean  @default(false) @map("obrigatorio_impedimento")
+  criadoEm               DateTime @default(now()) @map("criado_em")
+  atualizadoEm           DateTime @updatedAt @map("atualizado_em")
 
   empresa            Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   tipoEquipamento    TipoEquipamentoCustom @relation(fields: [tipoEquipamentoId], references: [id], onDelete: Cascade)
@@ -2517,4 +2529,71 @@ model ChecklistItemPreenchido {
   itemTemplate ChecklistItemTemplate @relation(fields: [itemTemplateId], references: [id])
 
   @@map("checklist_item_preenchidos")
+}
+
+// ─────────────────────────────────────────────
+// PMOC — Plano de Manutenção, Operação e Controle (Lei 13.589/2018)
+// Etapa 1: cadastro base (identificação, RT/ART e equipamentos cobertos).
+// Status exibido: RASCUNHO (manual) | Vigente/Expirado (calculado pelas datas
+// quando PUBLICADO) — ver lib/pmoc.ts. Soft-delete por `ativo`.
+// ─────────────────────────────────────────────
+
+enum StatusPmoc {
+  RASCUNHO
+  PUBLICADO
+}
+
+model Pmoc {
+  id            String     @id @default(cuid())
+  empresaId     String     @map("empresa_id")
+  clienteId     String     @map("cliente_id")
+  unidadeId     String     @map("unidade_id")
+  nome          String
+  descricao     String?    @db.Text
+  dataInicio    DateTime   @map("data_inicio") @db.Date
+  dataExpiracao DateTime   @map("data_expiracao") @db.Date
+  status        StatusPmoc @default(RASCUNHO)
+
+  // Responsável Técnico (snapshot do nome/CREA; vínculo opcional ao colaborador)
+  responsavelTecnicoId String? @map("responsavel_tecnico_id")
+  rtNome               String? @map("rt_nome")
+  rtCrea               String? @map("rt_crea")
+
+  // ART (número + arquivo em data URL — nunca carregado nas listagens)
+  artNumero         String? @map("art_numero")
+  artArquivo        String? @map("art_arquivo") @db.Text
+  artArquivoNome    String? @map("art_arquivo_nome")
+  artArquivoTipo    String? @map("art_arquivo_tipo")
+  artArquivoTamanho Int?    @map("art_arquivo_tamanho")
+
+  ativo        Boolean  @default(true)
+  criadoPorId  String?  @map("criado_por_id")
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  empresa            Empresa           @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  cliente            Cliente           @relation(fields: [clienteId], references: [id])
+  unidade            Unidade           @relation(fields: [unidadeId], references: [id])
+  responsavelTecnico Tecnico?          @relation("PmocResponsavelTecnico", fields: [responsavelTecnicoId], references: [id], onDelete: SetNull)
+  criadoPor          Usuario?          @relation("PmocCriador", fields: [criadoPorId], references: [id], onDelete: SetNull)
+  equipamentos       PmocEquipamento[]
+
+  @@index([empresaId, ativo])
+  @@index([clienteId])
+  @@index([unidadeId])
+  @@map("pmocs")
+}
+
+model PmocEquipamento {
+  id            String   @id @default(cuid())
+  pmocId        String   @map("pmoc_id")
+  equipamentoId String   @map("equipamento_id")
+  criadoEm      DateTime @default(now()) @map("criado_em")
+
+  pmoc        Pmoc        @relation(fields: [pmocId], references: [id], onDelete: Cascade)
+  equipamento Equipamento @relation(fields: [equipamentoId], references: [id], onDelete: Cascade)
+
+  @@unique([pmocId, equipamentoId])
+  @@index([equipamentoId])
+  @@map("pmoc_equipamentos")
 }
