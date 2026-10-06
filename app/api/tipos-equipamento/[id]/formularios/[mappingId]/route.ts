@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { exigirPermissao } from "@/lib/permissoes-server";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
@@ -31,8 +31,9 @@ function serializar(m: Prisma.FormTypeMappingGetPayload<{ include: typeof inclui
 
 // Atualiza o tipo de OS e/ou os flags de obrigatoriedade de um vínculo.
 export async function PUT(req: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("configuracoes", "gerenciar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const { id, mappingId } = await params;
   const empresaId = session.user!.empresaId;
 
@@ -72,8 +73,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
 // Remove o vínculo do formulário com o tipo de equipamento.
 export async function DELETE(_: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("configuracoes", "gerenciar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const { id, mappingId } = await params;
   const empresaId = session.user!.empresaId;
 

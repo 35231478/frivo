@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { exigirPermissao } from "@/lib/permissoes-server";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
@@ -33,8 +33,9 @@ function serializar(m: Prisma.FormTypeMappingGetPayload<{ include: typeof inclui
 
 // Lista os formulários vinculados a um tipo de equipamento.
 export async function GET(_: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("configuracoes", "visualizar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const { id } = await params;
   const empresaId = session.user!.empresaId;
 
@@ -51,8 +52,9 @@ export async function GET(_: NextRequest, { params }: Params) {
 
 // Vincula um formulário (para um tipo de OS) ao tipo de equipamento.
 export async function POST(req: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("configuracoes", "gerenciar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const { id } = await params;
   const empresaId = session.user!.empresaId;
 
