@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { proximoNumeroOs } from "@/lib/os-server";
 import { getPortalSession } from "@/lib/auth-portal";
 import { chamadoPortalSchema } from "@/lib/validations";
+import { validarDataUrl, type ArquivoValidado } from "@/lib/anexos-server";
+import { TIPOS_IMAGEM } from "@/lib/anexos";
 
 const MAP_URGENCIA: Record<string, "NORMAL" | "ALTA" | "CRITICO"> = {
   NORMAL: "NORMAL", URGENTE: "ALTA", CRITICO: "CRITICO",
@@ -31,6 +33,17 @@ export async function POST(req: NextRequest) {
   if (d.equipamentoId) {
     const e = await prisma.equipamento.findFirst({ where: { id: d.equipamentoId, empresaId, unidade: { clienteId } }, select: { id: true, unidadeId: true } });
     if (!e) return NextResponse.json({ erro: "Equipamento inválido" }, { status: 400 });
+  }
+
+  // Fotos chegam como data URL do navegador do cliente: só imagens, conferidas pelo conteúdo
+  const fotos: ArquivoValidado[] = [];
+  for (const f of d.fotos) {
+    const v = validarDataUrl(f.conteudo, f.nome, {
+      tipos: TIPOS_IMAGEM,
+      mensagemTipo: "Envie apenas fotos (JPG, PNG ou WEBP).",
+    });
+    if (!v.ok) return NextResponse.json({ erro: `Foto "${f.nome}": ${v.erro}` }, { status: 400 });
+    fotos.push(v.arquivo);
   }
 
   // Responsável interno pela criação (gestor/admin da empresa)
@@ -62,7 +75,7 @@ export async function POST(req: NextRequest) {
       origem: "PORTAL_CLIENTE",
       prioridade: MAP_URGENCIA[d.urgencia] ?? "NORMAL",
       descricao,
-      anexos: d.fotos.length > 0 ? { create: d.fotos.map((f) => ({ nome: f.nome, tipo: f.tipo, tamanho: f.tamanho, conteudo: f.conteudo })) } : undefined,
+      anexos: fotos.length > 0 ? { create: fotos } : undefined,
     },
   });
 

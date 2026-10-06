@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { osDaEmpresa } from "@/lib/os-server";
+import { respostaAnexo } from "@/lib/anexos-server";
 
 type Params = { params: Promise<{ id: string; anexoId: string }> };
 
-/** Baixa o anexo (?inline=1 abre no navegador, ex.: foto/PDF). */
+/** Baixa o anexo (?inline=1 abre no navegador — só imagem comum/PDF; o resto é sempre download). */
 export async function GET(req: NextRequest, { params }: Params) {
   const guard = await exigirPermissao("ordens", "visualizar");
   if (guard.erro) return guard.resposta;
@@ -15,20 +16,8 @@ export async function GET(req: NextRequest, { params }: Params) {
   const anexo = await prisma.osAnexo.findFirst({ where: { id: anexoId, ordemServicoId: id } });
   if (!anexo) return NextResponse.json({ erro: "Anexo não encontrado" }, { status: 404 });
 
-  // Os anexos são guardados como data URL (base64)
-  const m = anexo.conteudo.match(/^data:([^;,]*);base64,([\s\S]*)$/);
-  const tipo = m?.[1] || anexo.tipo || "application/octet-stream";
-  const bytes = Buffer.from(m ? m[2] : anexo.conteudo, "base64");
-  const inline = req.nextUrl.searchParams.get("inline") === "1";
-  const nome = encodeURIComponent(anexo.nome);
-  return new NextResponse(bytes, {
-    headers: {
-      "Content-Type": tipo,
-      "Content-Length": String(bytes.length),
-      "Content-Disposition": `${inline ? "inline" : "attachment"}; filename*=UTF-8''${nome}`,
-      "Cache-Control": "private, no-store",
-    },
-  });
+  // Data URL (base64); o tipo servido vem dos bytes, não do que foi gravado
+  return respostaAnexo(anexo, req.nextUrl.searchParams.get("inline") === "1");
 }
 
 /** Exclui o anexo da OS (registra no histórico). */

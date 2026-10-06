@@ -5,6 +5,7 @@ import { Download, Eye, FileText, Image as ImageIcon, Loader2, Paperclip, Trash2
 import { formatarData } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { ACCEPT_ANEXO, podeVisualizarInline } from "@/lib/anexos";
 
 interface Anexo { id: string; nome: string; tipo: string; tamanho: number; criadoEm: string | Date }
 
@@ -13,7 +14,6 @@ function tamanhoLegivel(b: number) {
   if (b < 1024 * 1024) return `${(b / 1024).toFixed(0)} KB`;
   return `${(b / 1024 / 1024).toFixed(1)} MB`;
 }
-const visualizavel = (tipo: string) => tipo.startsWith("image/") || tipo === "application/pdf";
 
 /**
  * Anexos da OS: enviar, visualizar, baixar e excluir (com confirmação).
@@ -82,7 +82,7 @@ export function OsAnexos({ osId, anexos: iniciais }: { osId: string; anexos: Ane
               <p className="text-xs text-ink-subtle">{tamanhoLegivel(a.tamanho)} — {formatarData(a.criadoEm)}</p>
             </div>
             <div className="flex items-center gap-0.5 shrink-0">
-              {visualizavel(a.tipo) && (
+              {podeVisualizarInline(a.tipo) && (
                 <a href={`${base}/${a.id}?inline=1`} target="_blank" rel="noreferrer" title="Visualizar"
                   className="p-2 rounded-md text-ink-muted hover:text-primary-600 hover:bg-surface-alt">
                   <Eye className="w-4 h-4" />
@@ -105,7 +105,7 @@ export function OsAnexos({ osId, anexos: iniciais }: { osId: string; anexos: Ane
 
       {podeEditar && (
         <>
-          <input ref={input} type="file" onChange={enviar} className="hidden" aria-label="Arquivo do anexo" />
+          <input ref={input} type="file" accept={ACCEPT_ANEXO} onChange={enviar} className="hidden" aria-label="Arquivo do anexo" />
           <button type="button" onClick={() => input.current?.click()} disabled={enviando}
             className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border border-dashed border-surface-border text-ink hover:bg-surface-alt disabled:opacity-60">
             {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Enviar anexo (máx. 5 MB)
