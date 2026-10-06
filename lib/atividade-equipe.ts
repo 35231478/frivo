@@ -19,3 +19,10 @@ export function textoTecnicosAtividade(a: TecnicosAtividadeInfo): string | null 
   const lista = nomes.length > 1 ? [`${nomes[0]} (responsável)`, ...nomes.slice(1)].join(", ") : nomes[0];
   return a.equipe ? `Equipe ${a.equipe.nome}: ${lista}` : lista;
 }
+
+export const MSG_SEM_EXECUTOR_TELA = "Escolha quem executa: uma equipe ou um ou mais colaboradores.";
+
+/** Atividades antigas (antes da seleção obrigatória) podem não ter executor — só exibimos o aviso. */
+export function atividadeSemExecutor(a: any) {
+  return !!a && !a.tecnico?.id && !a.tecnicoId && !(a.tecnicosEquipe ?? []).length;
+}

@@ -30,6 +30,7 @@ export async function GET(_: NextRequest, { params }: Params) {
           tecnico: { select: { id: true, nome: true } },
           equipe: { select: { id: true, nome: true, cor: true } },
           tecnicosEquipe: { select: { tecnico: { select: { id: true, nome: true } } }, orderBy: { criadoEm: "asc" } },
+          veiculo: { select: { id: true, placa: true, modelo: true, marca: true } },
           respostas: { include: { campo: true } },
         },
         orderBy: { criadoEm: "asc" },

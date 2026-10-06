@@ -3,6 +3,7 @@ import { z } from "zod";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { SOLICITACAO_PENDENTE } from "@/lib/solicitacoes";
+import { ErroTecnicos, MSG_SEM_EXECUTOR, gravarTecnicos, lerDefinicao, lerVeiculo, resolverTecnicos, resolverVeiculo } from "@/lib/atividade-tecnicos";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -14,6 +15,10 @@ const schema = z.object({
   contratoId: z.string().optional().nullable(),
   equipamentoId: z.string().optional().nullable(),
   tecnicoId: z.string().optional().nullable(),
+  tecnicoIds: z.array(z.string()).optional(),
+  responsavelId: z.string().optional().nullable(),
+  equipeId: z.string().optional().nullable(),
+  veiculoId: z.string().optional().nullable(),
   observacoes: z.string().optional().nullable(),
 });
 
@@ -57,9 +62,16 @@ export async function POST(req: NextRequest, { params }: Params) {
   const contratoId = d.contratoId || null;
   if (contratoId && !(await prisma.contrato.findFirst({ where: { id: contratoId, empresaId, clienteId: os.clienteId }, select: { id: true } })))
     return NextResponse.json({ erro: "Contrato inválido para este cliente." }, { status: 400 });
-  const tecnicoId = d.tecnicoId || null;
-  if (tecnicoId && !(await prisma.tecnico.findFirst({ where: { id: tecnicoId, empresaId }, select: { id: true } })))
-    return NextResponse.json({ erro: "Técnico inválido." }, { status: 400 });
+  // Quem executa é obrigatório (equipe OU colaboradores); veículo puxado da equipe/colaborador ou escolhido
+  const corpo = parsed.data as any;
+  const def = lerDefinicao(corpo);
+  if (!def) return NextResponse.json({ erro: MSG_SEM_EXECUTOR }, { status: 400 });
+  let tecnicos: Awaited<ReturnType<typeof resolverTecnicos>>;
+  let veiculoId: string | null;
+  try {
+    tecnicos = await resolverTecnicos(empresaId, def, null, { exigir: true });
+    veiculoId = await resolverVeiculo(empresaId, lerVeiculo(corpo), tecnicos);
+  } catch (e) { if (e instanceof ErroTecnicos) return NextResponse.json({ erro: e.message }, { status: 400 }); throw e; }
 
   // Troca de status condicional: se outra pessoa tratou no meio do caminho, não sobrescreve
   const atualizado = await prisma.$transaction(async (tx) => {
@@ -80,10 +92,11 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (r.count === 0) return false;
     const atividade = await tx.atividadeOs.create({
       data: {
-        empresaId, ordemServicoId: id, tecnicoId, dataAgendada: quando, status: "AGENDADA",
+        empresaId, ordemServicoId: id, tecnicoId: tecnicos.responsavel, veiculoId, dataAgendada: quando, status: "AGENDADA",
         titulo: `Atendimento do chamado ${os.chamadoNumero ?? os.numero}`,
       },
     });
+    await gravarTecnicos(tx, atividade.id, tecnicos);
     const equip = equipamentoId ?? os.equipamentoId;
     if (equip) await tx.atividadeEquipamento.create({ data: { atividadeId: atividade.id, equipamentoId: equip } });
     await tx.osHistorico.create({

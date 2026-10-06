@@ -9,8 +9,10 @@ import {
 } from "@dnd-kit/core";
 import { cn, MESES_PT, LABELS_STATUS_OS, LABELS_PRIORIDADE } from "@/lib/utils";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
+import { SeletorExecucao, VALOR_EXECUCAO_VAZIO, corpoExecucao, temExecutor, useOpcoesExecucao, type ValorExecucao } from "@/components/os/seletor-execucao";
+import { MSG_SEM_EXECUTOR_TELA } from "@/lib/atividade-equipe";
 import { BuscaSelect, type OpcaoBusca } from "@/components/ui/busca-select";
-import { Repeat, MapPin, CalendarClock, Wrench, AlertTriangle, X, Plus, Check, Lock, Maximize2, Minimize2, GripHorizontal } from "lucide-react";
+import { Repeat, MapPin, CalendarClock, Wrench, AlertTriangle, X, Plus, Check, Lock, Maximize2, Minimize2, GripHorizontal, Car } from "lucide-react";
 
 export interface CardOs {
   /** Chave única do card (OS + dia): uma OS com visitas em dias diferentes gera um card por dia. */
@@ -36,6 +38,8 @@ export interface CardOs {
   membros?: { nome: string; avatar: string | null }[];
   equipeNome?: string | null;
   equipeCor?: string | null;
+  /** Veículo desta atividade ("ABC1D23 — Strada"), se houver. */
+  veiculo?: string | null;
   status: string;
   prioridade: string;
   atrasada: boolean;
@@ -576,6 +580,9 @@ function Tooltip({ card, rect }: { card: CardOs; rect: DOMRect }) {
           )}
         </div>
         <EquipeCard card={card} />
+        {card.veiculo && (
+          <div className="flex items-center gap-1.5 text-xs text-ink-muted mt-1.5" data-veiculo-card><Car className="w-3.5 h-3.5 shrink-0 text-ink-subtle" />{card.veiculo}</div>
+        )}
         <div className="flex items-center gap-2 flex-wrap">
           <span className={badgePrioridade(card.prioridade)}>{LABELS_PRIORIDADE[card.prioridade] ?? card.prioridade}</span>
           {card.atrasada && (
@@ -655,41 +662,41 @@ function CriarOsModal({
   const router = useRouter();
   const [clienteId, setClienteId] = useState("");
   const [tipoOsId, setTipoOsId] = useState("");
-  const [tecnicoId, setTecnicoId] = useState("");
+  // Quem executa (OBRIGATÓRIO): equipe ou colaboradores + veículo puxado automaticamente
+  const opcoesExecucao = useOpcoesExecucao();
+  const [execucao, setExecucao] = useState<ValorExecucao>(VALOR_EXECUCAO_VAZIO);
+  const [faltaExecutor, setFaltaExecutor] = useState(false);
   const [hora, setHora] = useState("08:00");
   const [prioridade, setPrioridade] = useState("NORMAL");
   const [descricao, setDescricao] = useState("");
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
 
-  const tecnicoSel = opcoes.tecnicos.find((t) => t.value === tecnicoId);
   const inputCls = "w-full bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all";
 
   async function criar(abrir: boolean) {
     setErro("");
     if (!clienteId) { setErro("Selecione o cliente."); return; }
     if (descricao.trim().length < 5) { setErro("Descreva o serviço (mínimo 5 caracteres)."); return; }
+    if (!temExecutor(execucao)) { setFaltaExecutor(true); setErro(MSG_SEM_EXECUTOR_TELA); return; }
     setSalvando(true);
     try {
       const dataAgendada = `${dateKey}T${hora || "08:00"}:00`;
+      // OS + atividade agendada (com quem executa e o veículo) numa única chamada — tudo ou nada
+      const titulo = opcoes.tiposOs.find((t) => t.value === tipoOsId)?.label ?? "Atendimento agendado";
       const resOs = await fetch("/api/ordens", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clienteId, descricao: descricao.trim(), prioridade, previsaoConclusao: dataAgendada }),
+        body: JSON.stringify({
+          clienteId, descricao: descricao.trim(), prioridade, previsaoConclusao: dataAgendada,
+          execucao: { titulo, tipoOsId: tipoOsId || null, dataAgendada: new Date(dataAgendada).toISOString(), ...corpoExecucao(execucao) },
+        }),
       });
       if (!resOs.ok) {
         const err = await resOs.json().catch(() => ({}));
         throw new Error(err.erro ?? "Erro ao criar OS.");
       }
       const os = await resOs.json();
-
-      // Cria a atividade agendada (posiciona o card no dia e horário)
-      const titulo = opcoes.tiposOs.find((t) => t.value === tipoOsId)?.label ?? "Atendimento agendado";
-      await fetch(`/api/ordens/${os.id}/atividades`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ titulo, tipoOsId: tipoOsId || undefined, tecnicoId: tecnicoId || undefined, dataAgendada, status: "AGENDADA" }),
-      });
 
       if (abrir) { router.push(`/ordens/${os.id}`); return; }
       onCriada(os.numero);
@@ -719,18 +726,15 @@ function CriarOsModal({
             <BuscaSelect value={clienteId} onChange={setClienteId} options={opcoes.clientes} placeholder="Buscar cliente…" />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-[11px] font-semibold text-ink-muted">Tipo de OS</label>
-              <BuscaSelect value={tipoOsId} onChange={setTipoOsId} options={opcoes.tiposOs} placeholder="Selecionar tipo…" />
-            </div>
-            <div>
-              <label className="text-[11px] font-semibold text-ink-muted">Técnico responsável</label>
-              <div className="flex items-center gap-2">
-                {tecnicoId && <AvatarTecnico nome={tecnicoSel?.label} fotoUrl={tecnicoSel?.avatar} size={28} />}
-                <div className="flex-1 min-w-0"><BuscaSelect value={tecnicoId} onChange={setTecnicoId} options={opcoes.tecnicos} placeholder="Selecionar técnico…" /></div>
-              </div>
-            </div>
+          <div>
+            <label className="text-[11px] font-semibold text-ink-muted">Tipo de OS</label>
+            <BuscaSelect value={tipoOsId} onChange={setTipoOsId} options={opcoes.tiposOs} placeholder="Selecionar tipo…" />
+          </div>
+
+          <div data-quem-executa>
+            <label className="text-[11px] font-semibold text-ink-muted">Quem executa *</label>
+            <SeletorExecucao opcoes={opcoesExecucao} tipoOsId={tipoOsId} valor={execucao}
+              onChange={(v) => { setExecucao(v); if (temExecutor(v)) { setFaltaExecutor(false); setErro((e) => (e === MSG_SEM_EXECUTOR_TELA ? "" : e)); } }} erro={faltaExecutor} />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

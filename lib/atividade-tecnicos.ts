@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { sugerirVeiculo } from "@/lib/veiculo-sugestao";
 
 /**
  * Vários técnicos na mesma atividade da OS (escolhidos um a um ou a partir de uma EQUIPE).
@@ -9,15 +10,22 @@ import { prisma } from "@/lib/prisma";
  * - `atividades_os.equipe_id` registra a equipe usada (só registro; a composição real é a lista).
  * Execução/conclusão continua regida pelas permissões (ordens.editar / ordens.concluir):
  * qualquer membro com essa permissão pode executar.
+ *
+ * Quem executa é OBRIGATÓRIO ao criar/salvar a atividade (equipe OU colaboradores).
+ * Atividades antigas sem executor continuam abrindo e mudando de status normalmente;
+ * só ao salvar a edição é que o executor passa a ser exigido.
  */
 
 export class ErroTecnicos extends Error {}
+
+export const MSG_SEM_EXECUTOR = "Escolha quem executa: uma equipe ou um ou mais colaboradores.";
 
 /** Include padrão para exibir os técnicos de uma atividade (responsável + equipe). */
 export const INCLUDE_TECNICOS_ATIVIDADE = {
   tecnico: { select: { id: true, nome: true } },
   equipe: { select: { id: true, nome: true, cor: true } },
   tecnicosEquipe: { select: { tecnico: { select: { id: true, nome: true } } }, orderBy: { criadoEm: "asc" } },
+  veiculo: { select: { id: true, placa: true, modelo: true, marca: true } },
 } satisfies Prisma.AtividadeOsInclude;
 
 export interface DefinicaoTecnicos {
@@ -32,8 +40,15 @@ export interface DefinicaoTecnicos {
  * Valida e normaliza: técnicos ativos da empresa, com competência no tipo de OS (quando
  * houver — mesma regra do seletor de técnico) e equipe ativa da empresa.
  */
-export async function resolverTecnicos(empresaId: string, def: DefinicaoTecnicos, tipoOsId: string | null) {
+export async function resolverTecnicos(
+  empresaId: string, def: DefinicaoTecnicos, tipoOsId: string | null, opts: { exigir?: boolean } = {},
+) {
   const ids = [...new Set(def.tecnicoIds.filter(Boolean))].slice(0, 30);
+  if (opts.exigir && !ids.length) {
+    throw new ErroTecnicos(def.equipeId
+      ? "A equipe escolhida não tem colaboradores aptos (ativos e com competência neste tipo de OS). Adicione colaboradores."
+      : MSG_SEM_EXECUTOR);
+  }
   let equipe: { id: string; liderId: string | null } | null = null;
   if (def.equipeId) {
     equipe = await prisma.equipe.findFirst({ where: { id: def.equipeId, empresaId, status: "ATIVA" }, select: { id: true, liderId: true } });
@@ -65,12 +80,47 @@ export async function gravarTecnicos(
   if (r.outros.length) await tx.atividadeTecnico.createMany({ data: r.outros.map((tecnicoId) => ({ atividadeId, tecnicoId })) });
 }
 
-/** Lê `tecnicoIds`/`responsavelId`/`equipeId` do corpo da requisição (undefined = não mexer). */
+/**
+ * Lê `tecnicoIds`/`responsavelId`/`equipeId` do corpo da requisição (undefined = não mexer).
+ * O formato antigo (só `tecnicoId`) vira uma definição de 1 técnico — passa pelas mesmas validações.
+ */
 export function lerDefinicao(body: any): DefinicaoTecnicos | undefined {
+  if (body && !Array.isArray(body.tecnicoIds) && typeof body.tecnicoId === "string") {
+    return { tecnicoIds: body.tecnicoId ? [body.tecnicoId] : [], responsavelId: body.tecnicoId || null, equipeId: null };
+  }
   if (!body || !Array.isArray(body.tecnicoIds)) return undefined;
   return {
     tecnicoIds: body.tecnicoIds.filter((x: unknown): x is string => typeof x === "string"),
     responsavelId: typeof body.responsavelId === "string" ? body.responsavelId : null,
     equipeId: typeof body.equipeId === "string" && body.equipeId ? body.equipeId : null,
   };
+}
+
+/** `veiculoId` do corpo: undefined = não informado; null = sem veículo; string = escolhido. */
+export function lerVeiculo(body: any): string | null | undefined {
+  if (!body || !("veiculoId" in body) || body.veiculoId === undefined) return undefined;
+  return typeof body.veiculoId === "string" && body.veiculoId ? body.veiculoId : null;
+}
+
+/**
+ * Veículo da atividade. Escolhido → valida que é da empresa. Não informado → puxa o padrão
+ * (equipe → veículo da equipe; colaborador → veículo padrão do responsável), como a tela faz.
+ */
+export async function resolverVeiculo(
+  empresaId: string, pedido: string | null | undefined, r: { responsavel: string | null; equipeId: string | null },
+): Promise<string | null> {
+  if (pedido) {
+    const v = await prisma.veiculo.findFirst({ where: { id: pedido, empresaId }, select: { id: true } });
+    if (!v) throw new ErroTecnicos("Veículo inválido.");
+    return v.id;
+  }
+  if (pedido === null) return null;
+  const [veiculos, resp] = await Promise.all([
+    prisma.veiculo.findMany({
+      where: { empresaId, status: "ATIVO", OR: [{ equipeId: r.equipeId ?? "__nenhuma__" }, { colaboradoresPadrao: { some: { id: r.responsavel ?? "__nenhum__" } } }] },
+      select: { id: true, placa: true, modelo: true, marca: true, status: true, equipeId: true },
+    }),
+    r.responsavel ? prisma.tecnico.findUnique({ where: { id: r.responsavel }, select: { veiculoId: true } }) : null,
+  ]);
+  return sugerirVeiculo({ equipeId: r.equipeId, responsavelId: r.responsavel }, veiculos, () => resp?.veiculoId).veiculoId;
 }

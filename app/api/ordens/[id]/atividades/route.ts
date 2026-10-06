@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
-import { ErroTecnicos, INCLUDE_TECNICOS_ATIVIDADE, gravarTecnicos, lerDefinicao, resolverTecnicos } from "@/lib/atividade-tecnicos";
+import { ErroTecnicos, INCLUDE_TECNICOS_ATIVIDADE, MSG_SEM_EXECUTOR, gravarTecnicos, lerDefinicao, lerVeiculo, resolverTecnicos, resolverVeiculo } from "@/lib/atividade-tecnicos";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -30,13 +30,16 @@ export async function POST(req: NextRequest, { params }: Params) {
   const parsed = atividadeSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos" }, { status: 400 });
 
-  // Vários técnicos / equipe: { tecnicoIds, responsavelId?, equipeId? } (o formato antigo, só tecnicoId, continua valendo)
+  // Quem executa (OBRIGATÓRIO): { tecnicoIds, responsavelId?, equipeId? } — o formato antigo (só tecnicoId) continua valendo.
+  // Veículo: { veiculoId } escolhido, null = sem veículo, ausente = puxa o da equipe/colaborador.
   const def = lerDefinicao(body);
-  let tecnicos: Awaited<ReturnType<typeof resolverTecnicos>> | null = null;
-  if (def) {
-    try { tecnicos = await resolverTecnicos(empresaId, def, parsed.data.tipoOsId || null); }
-    catch (e) { if (e instanceof ErroTecnicos) return NextResponse.json({ erro: e.message }, { status: 400 }); throw e; }
-  }
+  if (!def) return NextResponse.json({ erro: MSG_SEM_EXECUTOR }, { status: 400 });
+  let tecnicos: Awaited<ReturnType<typeof resolverTecnicos>>;
+  let veiculoId: string | null;
+  try {
+    tecnicos = await resolverTecnicos(empresaId, def, parsed.data.tipoOsId || null, { exigir: true });
+    veiculoId = await resolverVeiculo(empresaId, lerVeiculo(body), tecnicos);
+  } catch (e) { if (e instanceof ErroTecnicos) return NextResponse.json({ erro: e.message }, { status: 400 }); throw e; }
 
   const criada = await prisma.$transaction(async (tx) => {
    const a = await tx.atividadeOs.create({
@@ -45,14 +48,15 @@ export async function POST(req: NextRequest, { params }: Params) {
       ordemServicoId: id,
       titulo: parsed.data.titulo,
       tipoOsId: parsed.data.tipoOsId || null,
-      tecnicoId: tecnicos ? tecnicos.responsavel : parsed.data.tecnicoId || null,
+      tecnicoId: tecnicos.responsavel,
+      veiculoId,
       dataAgendada: parsed.data.dataAgendada ? new Date(parsed.data.dataAgendada) : null,
       duracaoMin: parsed.data.duracaoMin ?? null,
       observacao: parsed.data.observacao || null,
     },
     select: { id: true },
    });
-   if (tecnicos) await gravarTecnicos(tx, a.id, tecnicos);
+   await gravarTecnicos(tx, a.id, tecnicos);
    return a;
   });
   const atividade = await prisma.atividadeOs.findUniqueOrThrow({

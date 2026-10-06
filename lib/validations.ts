@@ -343,6 +343,8 @@ export const tecnicoSchema = z.object({
   // Dados profissionais
   cargoId: z.string().optional().nullable(),
   perfilAcessoId: z.string().optional().nullable(),
+  /** Veículo "padrão" (opcional) — puxado na OS quando o colaborador executa sozinho */
+  veiculoId: z.string().optional().nullable(),
   tipoEquipe: z.enum(["CAMPO", "ADMINISTRATIVO"]).default("CAMPO"),
   tipo: z.nativeEnum(TipoTecnico).default(TipoTecnico.TECNICO_CAMPO),
   crea: z.string().optional(),

@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
     select: {
       id: true, nome: true, telefone: true, especialidades: true, tipo: true, crea: true, avatar: true,
       competencias: { select: { id: true } },
+      veiculoId: true,
     },
   });
 
@@ -49,7 +50,10 @@ export async function POST(req: NextRequest) {
   });
   if (existente) return NextResponse.json({ erro: "CPF já cadastrado" }, { status: 409 });
 
-  const { competenciaIds, documentos, dataNascimento, dataAdmissao, cargoId, perfilAcessoId, email, ...rest } = parsed.data;
+  const { competenciaIds, documentos, dataNascimento, dataAdmissao, cargoId, perfilAcessoId, email, veiculoId, ...rest } = parsed.data;
+  // Veículo padrão (opcional) precisa ser da mesma empresa
+  if (veiculoId && !(await prisma.veiculo.findFirst({ where: { id: veiculoId, empresaId }, select: { id: true } })))
+    return NextResponse.json({ erro: "Veículo inválido." }, { status: 400 });
 
   const tecnico = await prisma.tecnico.create({
     data: {
@@ -58,6 +62,7 @@ export async function POST(req: NextRequest) {
       email: email || null,
       cargoId: cargoId || null,
       perfilAcessoId: perfilAcessoId || null,
+      veiculoId: veiculoId || null,
       dataNascimento: dataNascimento ? new Date(dataNascimento) : null,
       dataAdmissao: dataAdmissao ? new Date(dataAdmissao) : null,
       competencias: { connect: competenciaIds.map((id) => ({ id })) },

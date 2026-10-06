@@ -49,7 +49,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (dup) return NextResponse.json({ erro: "CPF já cadastrado" }, { status: 409 });
   }
 
-  const { competenciaIds, documentos, dataNascimento, dataAdmissao, cargoId, perfilAcessoId, email, ...rest } = parsed.data;
+  const { competenciaIds, documentos, dataNascimento, dataAdmissao, cargoId, perfilAcessoId, email, veiculoId, ...rest } = parsed.data;
+  // Veículo padrão (opcional): só muda quando enviado; precisa ser da mesma empresa
+  if (veiculoId && !(await prisma.veiculo.findFirst({ where: { id: veiculoId, empresaId }, select: { id: true } })))
+    return NextResponse.json({ erro: "Veículo inválido." }, { status: 400 });
   // Status "Inativo" no formulário = inativar o colaborador (mesma regra do botão: exige "excluir").
   // Mantém `ativo` em sincronia com o status (antes o status mudava, mas ele seguia nas listas).
   let ativo = existente.ativo;
@@ -69,6 +72,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
       email: email || null,
       cargoId: cargoId || null,
       perfilAcessoId: perfilAcessoId || null,
+      ...(veiculoId !== undefined && { veiculoId: veiculoId || null }),
       dataNascimento: dataNascimento ? new Date(dataNascimento) : null,
       dataAdmissao: dataAdmissao ? new Date(dataAdmissao) : null,
       competencias: { set: competenciaIds.map((cid) => ({ id: cid })) },

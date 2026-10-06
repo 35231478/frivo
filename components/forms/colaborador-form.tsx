@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
+import { rotuloVeiculo, type VeiculoResumo } from "@/lib/veiculo-sugestao";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import { reduzirImagem } from "@/lib/imagem-cliente";
 import {
@@ -75,6 +76,9 @@ export function ColaboradorForm({ initialData, somenteLeitura = false }: Colabor
   const [perfis, setPerfis] = useState<{ id: string; nome: string; tipo: string }[]>([]);
   const [perfilAcessoId, setPerfilAcessoId] = useState<string>(initialData?.perfilAcessoId ?? "");
   const [tipoEquipe, setTipoEquipe] = useState<string>(initialData?.tipoEquipe ?? "CAMPO");
+  // Veículo "padrão" (opcional): puxado automaticamente na OS quando ele executa sozinho
+  const [veiculoId, setVeiculoId] = useState<string>(initialData?.veiculoId ?? "");
+  const [veiculos, setVeiculos] = useState<VeiculoResumo[]>([]);
   const docRef = useRef<HTMLInputElement>(null);
   const docIdx = useRef<number | null>(null);
 
@@ -82,6 +86,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false }: Colabor
     fetch("/api/cargos").then((r) => r.json()).then((d) => setCargos(Array.isArray(d) ? d.filter((c: any) => c.ativo !== false) : [])).catch(() => {});
     fetch("/api/tipos-os").then((r) => r.json()).then((d) => setTiposOs(Array.isArray(d) ? d.filter((t: any) => t.ativo !== false) : [])).catch(() => {});
     fetch("/api/perfis-acesso").then((r) => r.json()).then((d) => setPerfis(Array.isArray(d) ? d : [])).catch(() => {});
+    fetch("/api/veiculos?resumo=1").then((r) => (r.ok ? r.json() : [])).then((d) => setVeiculos(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
 
   // Ao escolher o tipo de equipe, sugere um perfil compatível (se nenhum estiver escolhido)
@@ -186,6 +191,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false }: Colabor
           ...data,
           avatar: avatar ?? "",
           perfilAcessoId: perfilAcessoId || null,
+          veiculoId: veiculoId || null,
           tipoEquipe,
           especialidades, competenciaIds, jornadaDias,
           documentos,
@@ -348,6 +354,14 @@ export function ColaboradorForm({ initialData, somenteLeitura = false }: Colabor
                   </Select>
                 </FormField>
               </FormGrid>
+              <FormField label="Veículo padrão" hint="Opcional — puxado automaticamente na OS quando este colaborador executa (dá para trocar na OS)">
+                <Select aria-label="Veículo padrão" value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)}>
+                  <option value="">Sem veículo padrão</option>
+                  {veiculos.filter((v) => v.status === "ATIVO" || v.id === veiculoId).map((v) => (
+                    <option key={v.id} value={v.id}>{rotuloVeiculo(v)}{v.status !== "ATIVO" ? " (inativo)" : ""}</option>
+                  ))}
+                </Select>
+              </FormField>
               {tipo === "RESPONSAVEL_TECNICO" && (
                 <FormField label="CREA / Registro profissional" hint="Obrigatório para responsáveis técnicos">
                   <Input {...register("crea")} placeholder="Ex: 5012345-D/SP" />
