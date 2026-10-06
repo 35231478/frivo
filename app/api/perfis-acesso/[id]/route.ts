@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { exigirPermissao } from "@/lib/permissoes-server";
+import { permissoesExcedentes, type Permissoes } from "@/lib/permissoes";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -36,6 +37,24 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const body = await req.json();
   const parsed = perfilUpdateSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos" }, { status: 400 });
+
+  // Contra autopromoção (ADMIN passa direto): não edita o próprio perfil, nem perfil com
+  // mais acesso que o seu, nem concede acessos que não tem.
+  const eu = guard.session.user;
+  if (eu.role !== "ADMIN") {
+    const meu = await prisma.usuario.findUnique({ where: { id: eu.id }, select: { perfilAcessoId: true } });
+    if (meu?.perfilAcessoId === id) {
+      return NextResponse.json({ erro: "Você não pode alterar o perfil de acesso ao qual está vinculado." }, { status: 403 });
+    }
+    const minhas = eu.permissoes as Permissoes;
+    if (permissoesExcedentes(minhas, existente.permissoes as Permissoes, eu.role).length > 0) {
+      return NextResponse.json({ erro: "Este perfil tem acessos que você não tem; só um administrador pode alterá-lo." }, { status: 403 });
+    }
+    const excedentes = permissoesExcedentes(minhas, (parsed.data.permissoes ?? {}) as Permissoes, eu.role);
+    if (excedentes.length > 0) {
+      return NextResponse.json({ erro: "Você não pode conceder acessos que você mesmo não tem.", excedentes }, { status: 403 });
+    }
+  }
 
   const perfil = await prisma.perfilAcesso.update({ where: { id }, data: parsed.data });
   return NextResponse.json(perfil);

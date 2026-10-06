@@ -7,7 +7,11 @@ import { FormField, FormGrid } from "@/components/ui/form-field";
 import { WhatsAppInput } from "@/components/ui/whatsapp-input";
 import { PhoneInput } from "@/components/ui/phone-input";
 import type { ContatoCliente } from "@prisma/client";
+import type { ContatoSeguro } from "@/lib/contato-cliente";
 import { Plus, Pencil, Trash2, X, Check, UserCircle, ChevronDown, ChevronRight, Star, Phone, Mail } from "lucide-react";
+
+/** Contato como vem da API: sem hash/senha do portal. */
+type Contato = ContatoSeguro<ContatoCliente>;
 
 interface ContatoFormData {
   nome: string;
@@ -25,11 +29,11 @@ const emptyForm: ContatoFormData = {
 
 interface ContatosManagerProps {
   clienteId: string;
-  contatosIniciais: ContatoCliente[];
+  contatosIniciais: Contato[];
 }
 
 export function ContatosManager({ clienteId, contatosIniciais }: ContatosManagerProps) {
-  const [contatos, setContatos] = useState<ContatoCliente[]>(contatosIniciais);
+  const [contatos, setContatos] = useState<Contato[]>(contatosIniciais);
   const [editando, setEditando] = useState<string | "novo" | null>(null);
   const [expandido, setExpandido] = useState<Set<string>>(new Set());
   const [form, setForm] = useState<ContatoFormData>(emptyForm);
@@ -46,7 +50,7 @@ export function ContatosManager({ clienteId, contatosIniciais }: ContatosManager
     setErro("");
   }
 
-  function abrirEditar(c: ContatoCliente) {
+  function abrirEditar(c: Contato) {
     setForm({
       nome: c.nome, cargo: c.cargo ?? "", tipo: c.tipo,
       telefone: c.telefone ?? "", whatsapp: c.whatsapp ?? "",

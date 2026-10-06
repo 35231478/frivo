@@ -110,6 +110,45 @@ export function pode(
   return permissoes[modulo]?.[acao] === true;
 }
 
+/**
+ * Permissões efetivas de um usuário no login:
+ * - role ADMIN (administrador master) → acesso total;
+ * - perfil de acesso ATIVO → permissões do perfil;
+ * - sem perfil (ou perfil inativo) → nenhuma permissão além do dashboard.
+ *   Antes, "sem perfil" liberava tudo — tirar o perfil de alguém deve restringir, não liberar.
+ */
+export function permissoesDoUsuario(usuario: {
+  role?: string | null;
+  perfilAcesso?: { ativo?: boolean | null; permissoes: unknown } | null;
+}): Permissoes {
+  if (usuario.role === "ADMIN") return permissoesTotais();
+  const perfil = usuario.perfilAcesso;
+  if (!perfil || perfil.ativo === false || !perfil.permissoes || typeof perfil.permissoes !== "object") {
+    return permissoesVazias();
+  }
+  return perfil.permissoes as Permissoes;
+}
+
+/**
+ * Lista ("modulo.acao") das permissões de `alvo` que `base` NÃO tem. Vazia = alvo cabe em base.
+ * Usada para impedir que alguém conceda (a si ou a outro) mais acesso do que ele mesmo tem.
+ */
+export function permissoesExcedentes(
+  base: Permissoes | null | undefined,
+  alvo: Permissoes | null | undefined,
+  roleBase?: string,
+): string[] {
+  if (roleBase === "ADMIN") return [];
+  const faltando: string[] = [];
+  for (const [modulo, acoes] of Object.entries(alvo ?? {})) {
+    if (modulo === "dashboard") continue;
+    for (const [acao, ligado] of Object.entries(acoes ?? {})) {
+      if (ligado === true && base?.[modulo]?.[acao as Acao] !== true) faltando.push(`${modulo}.${acao}`);
+    }
+  }
+  return faltando;
+}
+
 /** Mapeia o primeiro segmento da rota para um módulo de permissão. */
 const ROTA_MODULO: Record<string, string> = {
   dashboard: "dashboard",
