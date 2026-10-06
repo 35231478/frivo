@@ -1,285 +1,101 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { ResumoCard } from "@/components/dashboard/resumo-card";
-import { contarAlertasPrazos } from "@/lib/prazo-server";
-import { contarAlertasVeiculos } from "@/lib/veiculo-server";
-import { formatarData, cn, LABELS_STATUS_OS } from "@/lib/utils";
-import Link from "next/link";
+import { pode, type Permissoes } from "@/lib/permissoes";
+import { aplicarPreferencia, blocosPermitidos, COOKIE_DASHBOARD, lerPreferencia, type BlocoId } from "@/lib/dashboard/blocos";
+import { carregarBlocos, type DadosBloco } from "@/lib/dashboard/dados";
+import { partesBR } from "@/lib/fuso";
+import { cn } from "@/lib/utils";
+import { PersonalizarDashboard } from "@/components/dashboard/personalizar-dashboard";
+import { BlocoComErro } from "@/components/dashboard/ui";
 import {
-  Users, Thermometer, ClipboardList, CalendarCheck, FileText,
-  HardHat, AlertTriangle, CheckCircle, ArrowRight, Timer, Clock, ShoppingCart, Headset,
-  Truck, ClipboardCheck, Wrench,
+  BlocoAgenda, BlocoComercial, BlocoEquipamentos, BlocoFinanceiro, BlocoFrota, BlocoOperacional, BlocoOsDoDia,
+  BlocoPrazos, BlocoSolicitacoes,
+} from "@/components/dashboard/blocos";
+import {
+  CalendarDays, ClipboardList, FileSignature, HardHat, Headset, LayoutDashboard, Thermometer, Timer, Truck, Wallet,
+  type LucideIcon,
 } from "lucide-react";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
-async function buscarResumos(empresaId: string) {
-  const hoje = new Date();
-  const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+const ICONES: Record<BlocoId, LucideIcon> = {
+  operacional: ClipboardList, "os-do-dia": HardHat, solicitacoes: Headset, agenda: CalendarDays,
+  comercial: FileSignature, financeiro: Wallet, equipamentos: Thermometer, frota: Truck, prazos: Timer,
+};
 
-  const [totalClientes, totalEquipamentos, osAbertas, osEmAndamento, osConcluidas, osEmAtraso, contratosAtivos, tecnicosAtivos, ultimasOs] =
-    await Promise.all([
-      prisma.cliente.count({ where: { empresaId, ativo: true } }),
-      prisma.equipamento.count({ where: { empresaId, ativo: true } }),
-      prisma.ordemServico.count({ where: { empresaId, status: "ABERTA" } }),
-      prisma.ordemServico.count({ where: { empresaId, status: "EM_ANDAMENTO" } }),
-      prisma.ordemServico.count({ where: { empresaId, status: "CONCLUIDA", dataConclusao: { gte: inicioMes } } }),
-      prisma.ordemServico.count({
-        where: {
-          empresaId,
-          status: { notIn: ["CONCLUIDA", "CANCELADA"] },
-          previsaoConclusao: { lt: hoje },
-        },
-      }),
-      prisma.contrato.count({ where: { empresaId, status: "ATIVO" } }),
-      prisma.tecnico.count({ where: { empresaId, ativo: true } }),
-      prisma.ordemServico.findMany({
-        where: { empresaId },
-        include: { cliente: { select: { nomeFantasia: true, nome: true } } },
-        orderBy: { criadoEm: "desc" },
-        take: 5,
-      }),
-    ]);
-
-  return { totalClientes, totalEquipamentos, osAbertas, osEmAndamento, osConcluidas, osEmAtraso, contratosAtivos, tecnicosAtivos, ultimasOs };
+function renderizar<K extends BlocoId>(id: K, d: DadosBloco[K]) {
+  switch (id) {
+    case "operacional": return <BlocoOperacional d={d as DadosBloco["operacional"]} />;
+    case "os-do-dia": return <BlocoOsDoDia d={d as DadosBloco["os-do-dia"]} />;
+    case "solicitacoes": return <BlocoSolicitacoes d={d as DadosBloco["solicitacoes"]} />;
+    case "agenda": return <BlocoAgenda d={d as DadosBloco["agenda"]} />;
+    case "comercial": return <BlocoComercial d={d as DadosBloco["comercial"]} />;
+    case "financeiro": return <BlocoFinanceiro d={d as DadosBloco["financeiro"]} />;
+    case "equipamentos": return <BlocoEquipamentos d={d as DadosBloco["equipamentos"]} />;
+    case "frota": return <BlocoFrota d={d as DadosBloco["frota"]} />;
+    case "prazos": return <BlocoPrazos d={d as DadosBloco["prazos"]} />;
+  }
 }
 
-const CLASSE_STATUS: Record<string, string> = {
-  ABERTA: "badge-status-aberta",
-  EM_ANDAMENTO: "badge-status-em_andamento",
-  CONCLUIDA: "badge-status-concluida",
-  CANCELADA: "badge-status-cancelada",
-  AGENDADA: "badge-status-agendada",
-  PAUSADA: "badge-status-pausada",
-  AGUARDANDO_PECA: "badge-status-aguardando_peca",
-};
+const DIAS = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
+const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
 export default async function DashboardPage() {
   const session = await auth();
-  const empresaId = session!.user!.empresaId;
-  const [r, alertas, frota] = await Promise.all([
-    buscarResumos(empresaId),
-    contarAlertasPrazos(empresaId),
-    contarAlertasVeiculos(empresaId),
-  ]);
+  const user = session!.user!;
+  const permissoes = user.permissoes as Permissoes;
+  const podeVer = (modulo: string, acao: string = "visualizar") => pode(permissoes, modulo, acao as any, user.role);
+
+  // Blocos que o perfil pode ver, na ordem/visibilidade escolhidas pelo usuário (cookie deste navegador)
+  const pref = lerPreferencia((await cookies()).get(COOKIE_DASHBOARD)?.value);
+  const { todos, visiveis } = aplicarPreferencia(blocosPermitidos(permissoes, user.role), pref);
+
+  // Só consulta o que vai aparecer; um bloco com erro não derruba a página
+  const dados = await carregarBlocos(visiveis.map((b) => b.id), { empresaId: user.empresaId, podeVer });
+
+  const { ano, mes, dia } = partesBR();
+  const semana = new Date(Date.UTC(ano, mes, dia)).getUTCDay();
+  const primeiroNome = (user.name ?? "").split(" ")[0];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="page-title">Dashboard</h1>
-        <p className="page-subtitle">Visão geral de {session!.user!.empresaNome}</p>
-      </div>
-
-      {/* Prazos e alertas */}
-      <div>
-        <p className="label-uppercase mb-3">Prazos e Alertas</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <ResumoCard
-            titulo="Prazos vencidos"
-            valor={alertas.prazosVencidos}
-            icone={AlertTriangle}
-            corIcone="text-red-600"
-            corFundo="bg-red-50"
-            href="/prazos?status=ATRASADO"
-          />
-          <ResumoCard
-            titulo="Vencendo hoje"
-            valor={alertas.etapasVencendoHoje}
-            icone={Clock}
-            corIcone="text-amber-600"
-            corFundo="bg-amber-50"
-            href="/prazos?status=ATIVO"
-          />
-          <ResumoCard
-            titulo="Compras pendentes"
-            valor={alertas.pedidosPendentes}
-            icone={ShoppingCart}
-            corIcone="text-orange-600"
-            corFundo="bg-orange-50"
-            href="/compras/pedidos"
-          />
-          <ResumoCard
-            titulo="Atendimentos em atraso"
-            valor={alertas.atendimentosAtraso}
-            icone={Timer}
-            corIcone="text-red-600"
-            corFundo="bg-red-50"
-            href="/ordens"
-          />
-          <ResumoCard
-            titulo="Chamados do portal"
-            valor={alertas.chamadosPortal}
-            icone={Headset}
-            corIcone="text-cyan-600"
-            corFundo="bg-cyan-50"
-            href="/ordens?origem=PORTAL_CLIENTE"
-          />
-        </div>
-      </div>
-
-      {/* Resumo operacional */}
-      <div>
-        <p className="label-uppercase mb-3">Ordens de Serviço</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <ResumoCard
-            titulo="OS Abertas"
-            valor={r.osAbertas}
-            icone={ClipboardList}
-            corIcone="text-primary-600"
-            corFundo="bg-primary-50"
-            href="/ordens?status=ABERTA"
-          />
-          <ResumoCard
-            titulo="Em Andamento"
-            valor={r.osEmAndamento}
-            icone={CalendarCheck}
-            corIcone="text-amber-600"
-            corFundo="bg-amber-50"
-            href="/ordens?status=EM_ANDAMENTO"
-          />
-          <ResumoCard
-            titulo="Concluídas no mês"
-            valor={r.osConcluidas}
-            icone={CheckCircle}
-            corIcone="text-success-600"
-            corFundo="bg-success-50"
-            href="/ordens?status=CONCLUIDA"
-          />
-          <ResumoCard
-            titulo="Em Atraso"
-            valor={r.osEmAtraso}
-            icone={AlertTriangle}
-            corIcone="text-red-600"
-            corFundo="bg-red-50"
-            href="/ordens"
-          />
-        </div>
-      </div>
-
-      {/* Frota de veículos */}
-      <div>
-        <p className="label-uppercase mb-3">Frota</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <ResumoCard
-            titulo="Checklist pendente hoje"
-            valor={frota.checklistPendente}
-            icone={ClipboardCheck}
-            corIcone="text-blue-600"
-            corFundo="bg-blue-50"
-            href="/veiculos/checklist"
-          />
-          <ResumoCard
-            titulo="Documentos vencendo"
-            valor={frota.documentosVencendo}
-            icone={AlertTriangle}
-            corIcone="text-amber-600"
-            corFundo="bg-amber-50"
-            href="/veiculos"
-          />
-          <ResumoCard
-            titulo="Veículos em manutenção"
-            valor={frota.veiculosManutencao}
-            icone={Wrench}
-            corIcone="text-violet-600"
-            corFundo="bg-violet-50"
-            href="/veiculos"
-          />
-          <ResumoCard
-            titulo="Revisões chegando"
-            valor={frota.revisaoChegando}
-            icone={Truck}
-            corIcone="text-orange-600"
-            corFundo="bg-orange-50"
-            href="/veiculos"
-          />
-        </div>
-      </div>
-
-      {/* Cadastros */}
-      <div>
-        <p className="label-uppercase mb-3">Base Operacional</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <ResumoCard
-            titulo="Clientes"
-            valor={r.totalClientes}
-            icone={Users}
-            corIcone="text-success-600"
-            corFundo="bg-success-50"
-            href="/clientes"
-          />
-          <ResumoCard
-            titulo="Equipamentos"
-            valor={r.totalEquipamentos}
-            icone={Thermometer}
-            corIcone="text-success-600"
-            corFundo="bg-success-50"
-            href="/equipamentos"
-          />
-          <ResumoCard
-            titulo="Contratos Ativos"
-            valor={r.contratosAtivos}
-            icone={FileText}
-            corIcone="text-success-600"
-            corFundo="bg-success-50"
-            href="/contratos"
-          />
-          <ResumoCard
-            titulo="Colaboradores"
-            valor={r.tecnicosAtivos}
-            icone={HardHat}
-            corIcone="text-success-600"
-            corFundo="bg-success-50"
-            href="/colaboradores"
-          />
-        </div>
-      </div>
-
-      {/* Últimas OS */}
-      <div className="card-padded">
-        <div className="card-header">
-          <h2 className="card-title">Últimas Ordens de Serviço</h2>
-          <Link
-            href="/ordens"
-            className="inline-flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700 transition-colors"
-          >
-            Ver todas
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
-        </div>
-        {r.ultimasOs.length === 0 ? (
-          <p className="text-sm text-ink-muted text-center py-8">
-            Nenhuma OS cadastrada ainda.
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="page-title">{primeiroNome ? `Olá, ${primeiroNome}` : "Dashboard"}</h1>
+          <p className="page-subtitle first-letter:uppercase">
+            {DIAS[semana]}, {dia} de {MESES[mes]} · {user.empresaNome}
           </p>
-        ) : (
-          <div className="divide-y divide-surface-border">
-            {r.ultimasOs.map((os) => (
-              <Link
-                key={os.id}
-                href={`/ordens/${os.id}`}
-                className="flex items-center justify-between py-3 px-2 -mx-2 rounded-lg hover:bg-surface-alt transition-colors"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="font-mono text-sm font-semibold text-primary-600 shrink-0">
-                    {os.numero}
-                  </span>
-                  <span className="text-sm text-ink truncate">
-                    {os.cliente.nomeFantasia ?? os.cliente.nome}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <span className={cn(CLASSE_STATUS[os.status])}>
-                    {LABELS_STATUS_OS[os.status]}
-                  </span>
-                  <span className="text-xs text-ink-subtle hidden sm:inline">
-                    {formatarData(os.criadoEm)}
-                  </span>
-                </div>
-              </Link>
-            ))}
-          </div>
+        </div>
+        {todos.length > 0 && (
+          <PersonalizarDashboard
+            blocos={todos.map((b) => ({ id: b.id, titulo: b.titulo, descricao: b.descricao }))}
+            ocultosIniciais={pref.ocultos.filter((id) => todos.some((b) => b.id === id))}
+          />
         )}
       </div>
+
+      {visiveis.length === 0 ? (
+        <div className="bg-white rounded-xl border border-dashed border-surface-border p-10 text-center">
+          <LayoutDashboard className="w-8 h-8 text-ink-subtle mx-auto mb-2" />
+          <p className="text-sm text-ink-muted">
+            {todos.length === 0
+              ? "Seu perfil de acesso ainda não libera nenhum módulo. Fale com o administrador."
+              : "Todos os blocos estão ocultos. Use “Personalizar” para escolher o que ver."}
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5" data-dashboard-blocos>
+          {visiveis.map((b) => {
+            const d = dados[b.id];
+            return (
+              <div key={b.id} className={cn("min-w-0", b.largo && "lg:col-span-2")}>
+                {!d || "erro" in d ? <BlocoComErro titulo={b.titulo} icone={ICONES[b.id]} /> : renderizar(b.id, d as never)}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
