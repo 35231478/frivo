@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { exigirAlgumaPermissao, exigirPermissao } from "@/lib/permissoes-server";
 import { contratoSchema } from "@/lib/validations";
 import { gerarPrevisaoContratoContasReceber } from "@/lib/financeiro-server";
 import { gerarOsRecorrentesContrato, gerarOsRecorrentesLocais } from "@/lib/recorrencia-server";
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirAlgumaPermissao([["contratos", "visualizar"], ["ordens", "criar"], ["financeiro", "medicoes"]]);
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
 
   const empresaId = session.user!.empresaId;
   const { searchParams } = new URL(req.url);
@@ -23,8 +24,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("contratos", "criar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
 
   const empresaId = session.user!.empresaId;
   const body = await req.json();

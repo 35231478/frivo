@@ -1,19 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { pedidoCompraSchema } from "@/lib/validations";
 import { gerarNumeroPedidoCompra, formatarData, whatsappLink } from "@/lib/utils";
 
-export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
-  const empresaId = session.user!.empresaId;
+/**
+ * Pedido de compra não tem módulo próprio: vale a permissão de onde ele nasce/é visto.
+ * Na OS → ordens; no orçamento → orcamentos; lista geral (Compras, Contas a pagar) → financeiro.
+ */
+function moduloDoPedido(ordemServicoId?: string | null, orcamentoId?: string | null) {
+  return ordemServicoId ? "ordens" : orcamentoId ? "orcamentos" : "financeiro";
+}
 
+export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status");
   const ordemServicoId = searchParams.get("ordemServicoId");
   const orcamentoId = searchParams.get("orcamentoId");
   const compradorId = searchParams.get("compradorId");
+
+  const guard = await exigirPermissao(moduloDoPedido(ordemServicoId, orcamentoId), "visualizar");
+  if (guard.erro) return guard.resposta;
+  const empresaId = guard.session.user!.empresaId;
 
   const where: any = { empresaId };
   if (status) where.status = status;
@@ -37,16 +45,28 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
-  const empresaId = session.user!.empresaId;
-  const solicitanteId = session.user!.id;
-
   const parsed = pedidoCompraSchema.safeParse(await req.json());
   if (!parsed.success) {
     return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
   }
   const data = parsed.data;
+
+  // Pedir material de uma OS exige editar a OS; de um orçamento, editar o orçamento
+  const modulo = moduloDoPedido(data.ordemServicoId, data.orcamentoId);
+  const guard = await exigirPermissao(modulo, modulo === "financeiro" ? "visualizar" : "editar");
+  if (guard.erro) return guard.resposta;
+  const empresaId = guard.session.user!.empresaId;
+  const solicitanteId = guard.session.user!.id;
+
+  // A OS/orçamento de origem precisa ser da mesma empresa (senão a permissão acima não vale nada)
+  if (data.ordemServicoId) {
+    const os = await prisma.ordemServico.findFirst({ where: { id: data.ordemServicoId, empresaId }, select: { id: true } });
+    if (!os) return NextResponse.json({ erro: "OS não encontrada" }, { status: 404 });
+  }
+  if (data.orcamentoId) {
+    const orc = await prisma.orcamento.findFirst({ where: { id: data.orcamentoId, empresaId }, select: { id: true } });
+    if (!orc) return NextResponse.json({ erro: "Orçamento não encontrado" }, { status: 404 });
+  }
 
   const seq = (await prisma.pedidoCompraInterno.count({ where: { empresaId } })) + 1;
   const numero = gerarNumeroPedidoCompra(seq);

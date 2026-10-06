@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { exigirPermissao } from "@/lib/permissoes-server";
 import { buildPublicUrl, buildMailtoLink } from "@/lib/orcamento-helpers";
 import { whatsappLink } from "@/lib/utils";
 import { enviarOrcamento } from "@/lib/email";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("orcamentos", "editar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const empresaId = session.user!.empresaId;
   const empresaNome = session.user!.empresaNome;
   const { id } = await params;
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     include: { cliente: { select: { email: true, celular: true, telefone: true, nome: true } } },
   });
   if (!orcamento) return NextResponse.json({ erro: "Orçamento não encontrado" }, { status: 404 });
-  if (orcamento.status === "APROVADO" || orcamento.status === "CANCELADO") {
+  if (orcamento.status === "APROVADO" || orcamento.status === "CANCELADO" || orcamento.status === "CONVERTIDA") {
     return NextResponse.json(
       { erro: "Orçamento já encerrado, não é possível reenviar" },
       { status: 400 }
