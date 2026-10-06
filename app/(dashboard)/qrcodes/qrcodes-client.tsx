@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { QrCode, Printer, Link2, X, Plus } from "lucide-react";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
 
 type EquipamentoRef = { id: string; nome: string; local: string | null };
 type QrItem = {
@@ -27,6 +28,8 @@ function formatarData(iso: string) {
 
 export function QrcodesClient({ lista, equipamentosLivres }: Props) {
   const router = useRouter();
+  // Gerar e vincular QR exigem "QR Codes › gerenciar" (mesma regra da API); ver/imprimir não.
+  const podeGerenciar = usePermissoes().pode("qrcodes", "gerenciar");
   const [filtroVinculo, setFiltroVinculo] = useState("");
   const [filtroAtivo, setFiltroAtivo] = useState("");
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
@@ -77,9 +80,11 @@ export function QrcodesClient({ lista, equipamentosLivres }: Props) {
           <Button variant="secondary" onClick={imprimirSelecionados} disabled={selecionados.size === 0}>
             <Printer className="w-4 h-4" /> Imprimir{selecionados.size > 0 ? ` (${selecionados.size})` : ""}
           </Button>
-          <Button onClick={() => setModalGerar(true)}>
-            <Plus className="w-4 h-4" /> Gerar QR Codes
-          </Button>
+          {podeGerenciar && (
+            <Button onClick={() => setModalGerar(true)}>
+              <Plus className="w-4 h-4" /> Gerar QR Codes
+            </Button>
+          )}
         </div>
       </div>
 
@@ -137,7 +142,7 @@ export function QrcodesClient({ lista, equipamentosLivres }: Props) {
                 </td>
                 <td className="px-4 py-3 text-ink-muted">{formatarData(q.criadoEm)}</td>
                 <td className="px-4 py-3 text-right">
-                  {!q.equipamento && (
+                  {podeGerenciar && !q.equipamento && (
                     <button onClick={() => setVinculandoId(q.id)} className="inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700">
                       <Link2 className="w-3.5 h-3.5" /> Vincular
                     </button>

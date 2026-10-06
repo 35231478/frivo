@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { exigirAlgumaPermissao, exigirPermissao } from "@/lib/permissoes-server";
 import { z } from "zod";
 import { codigoQr, proximoSequencialQr } from "@/lib/qrcode-server";
 
@@ -9,8 +9,9 @@ const gerarSchema = z.object({
 });
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirAlgumaPermissao([["qrcodes", "visualizar"], ["equipamentos", "editar"]]);
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const empresaId = session.user!.empresaId;
 
   const { searchParams } = new URL(req.url);
@@ -35,8 +36,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("qrcodes", "gerenciar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const empresaId = session.user!.empresaId;
 
   const parsed = gerarSchema.safeParse(await req.json());

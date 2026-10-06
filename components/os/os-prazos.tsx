@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { cn, formatarDataHora, formatarPrazoHoras, LABELS_RESPONSAVEL_PRAZO, LABELS_STATUS_OS_PRAZO } from "@/lib/utils";
 import { Plus, CheckCircle2, AlertTriangle, Circle, ChevronRight, Trash2, Timer } from "lucide-react";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
 
 interface Etapa {
   id: string; nome: string; prazoHoras: number; prazoLimite: string;
@@ -17,6 +18,8 @@ interface Prazo {
 interface Template { id: string; nome: string; ativo: boolean }
 
 export function OsPrazos({ osId }: { osId: string }) {
+  // Criar, avançar e cancelar prazo exigem editar a OS (mesma regra da API)
+  const podeEditar = usePermissoes().pode("ordens", "editar");
   const [prazos, setPrazos] = useState<Prazo[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,7 +70,7 @@ export function OsPrazos({ osId }: { osId: string }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="section-title flex items-center gap-2"><Timer className="w-4 h-4 text-primary-600" /> Prazos / SLA</h3>
-        {!adicionando && (
+        {podeEditar && !adicionando && (
           <Button variant="outline" size="sm" onClick={() => setAdicionando(true)}>
             <Plus className="w-4 h-4" /> Adicionar prazo
           </Button>
@@ -107,12 +110,12 @@ export function OsPrazos({ osId }: { osId: string }) {
                     )}>{LABELS_STATUS_OS_PRAZO[p.status]}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    {ativo && (
+                    {podeEditar && ativo && (
                       <Button size="sm" variant="primary" onClick={() => avancar(p.id)} loading={acao === p.id}>
                         Avançar etapa <ChevronRight className="w-3.5 h-3.5" />
                       </Button>
                     )}
-                    {p.status !== "CANCELADO" && p.status !== "CONCLUIDO" && (
+                    {podeEditar && p.status !== "CANCELADO" && p.status !== "CONCLUIDO" && (
                       <button onClick={() => cancelar(p.id)} className="p-1.5 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded" title="Cancelar prazo"><Trash2 className="w-3.5 h-3.5" /></button>
                     )}
                   </div>

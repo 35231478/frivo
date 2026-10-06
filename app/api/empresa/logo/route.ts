@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { exigirPermissao } from "@/lib/permissoes-server";
 
 export async function PUT(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("configuracoes", "gerenciar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
 
   const formData = await req.formData();
   const file = formData.get("logo") as File | null;
@@ -23,8 +24,9 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE() {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("configuracoes", "gerenciar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
 
   await prisma.empresa.update({ where: { id: session.user!.empresaId }, data: { logo: null } });
   return NextResponse.json({ ok: true });

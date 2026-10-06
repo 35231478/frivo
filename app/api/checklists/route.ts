@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { exigirPermissao } from "@/lib/permissoes-server";
 import { checklistPreenchidoSchema } from "@/lib/validations";
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("veiculos", "visualizar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const empresaId = session.user!.empresaId;
   const { searchParams } = new URL(req.url);
   const veiculoId = searchParams.get("veiculoId");
@@ -26,8 +27,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("veiculos", "checklist");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const empresaId = session.user!.empresaId;
 
   const body = await req.json();
