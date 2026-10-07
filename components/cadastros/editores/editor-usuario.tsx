@@ -21,7 +21,7 @@ export function AvisoConvite({ convite, nome, onFechar }: { convite: ResultadoCo
         <p className="text-sm text-ink flex items-start gap-2"><Mail className="w-4 h-4 mt-0.5 text-emerald-600 shrink-0" /> Enviamos para {nome} um e-mail com o link para definir a senha. O link vale por 72 horas e só pode ser usado uma vez.</p>
       ) : convite ? (
         <div className="space-y-3" data-convite-link>
-          <p className="text-sm text-ink">Não deu para enviar o e-mail{convite.erroEmail ? ` (${convite.erroEmail})` : ""}. Repasse este link para {nome} definir a própria senha — ele vale por 72 horas e só pode ser usado uma vez:</p>
+          <p className="text-sm text-ink">Não deu para enviar o e-mail{convite.erroEmail ? ` (${convite.erroEmail.replace(/\.$/, "")})` : ""}. Repasse este link para {nome} definir a própria senha — ele vale por 72 horas e só pode ser usado uma vez:</p>
           <div className="flex gap-2">
             <Input readOnly value={convite.link ?? ""} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} aria-label="Link do convite" />
             <Button type="button" variant="secondary" onClick={async () => { await navigator.clipboard?.writeText(convite.link ?? ""); setCopiado(true); }}>
