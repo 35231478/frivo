@@ -356,6 +356,9 @@ export function OrcamentoForm({
           <span className="inline-flex items-center gap-1.5 bg-success-50 text-success-700 text-xs font-semibold rounded-full px-3 py-1">
             <Tags className="w-3.5 h-3.5" /> Tabela: {tabelaPreco.nome}
           </span>
+          {tabelaPreco.vinculadaInativa && (
+            <span className="text-xs text-amber-700" data-aviso-tabela-inativa>A tabela do cliente (“{tabelaPreco.vinculadaInativa.nome}”) está inativa: valem os preços da Padrão.</span>
+          )}
           {tabelaPreco.precosBloqueados && (
             <span className="text-xs text-ink-muted">Preços bloqueados por contrato</span>
           )}

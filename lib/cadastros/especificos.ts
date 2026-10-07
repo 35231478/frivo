@@ -2,7 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { permissoesDoUsuario, permissoesExcedentes, type Permissoes } from "@/lib/permissoes";
 import { REGIME_LABEL, type Regime } from "@/lib/folha/calculo";
 import { garantirModelosPadrao } from "@/lib/folha/server";
-import { ErroRefEmpresa, validarRefEmpresa } from "@/lib/ref-empresa";
+import { ErroRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
+import { calcularValorFinalTabela } from "@/lib/tabela-preco-helpers";
 import { enviarConvite, senhaInicialAleatoria } from "@/lib/usuarios/convite";
 import type { EntidadeCadastro } from "@/lib/cadastros/registro";
 
@@ -213,8 +214,151 @@ const usuarios: RegrasCadastro = {
   },
 };
 
+/* ───────────────────────── Tipos de equipamento ───────────────────────── */
+/** Nome único entre os tipos ATIVOS (um inativo com o mesmo nome não impede: reative-o ou use outro). */
+async function nomeTipoEmUso(empresaId: string, nome: string, exceto?: string) {
+  return !!(await prisma.tipoEquipamentoCustom.findFirst({
+    where: { empresaId, ativo: true, nome: { equals: nome, mode: "insensitive" }, ...(exceto && { id: { not: exceto } }) }, select: { id: true },
+  }));
+}
+
+const tiposEquipamento: RegrasCadastro = {
+  async criar(dados, ator) {
+    const d = dados as { nome: string; descricao: string | null };
+    if (await nomeTipoEmUso(ator.empresaId, d.nome)) return falha(409, "Já existe um tipo de equipamento com esse nome.");
+    const item = await prisma.tipoEquipamentoCustom.create({ data: { empresaId: ator.empresaId, nome: d.nome, descricao: d.descricao, ativo: true } });
+    return { ok: true, item };
+  },
+  async editar(existente, dados, ator) {
+    const d = dados as { nome?: string; descricao?: string | null };
+    if (d.nome !== undefined && d.nome.toLowerCase() !== String(existente.nome).toLowerCase() && await nomeTipoEmUso(ator.empresaId, d.nome, existente.id))
+      return falha(409, "Já existe um tipo de equipamento com esse nome.");
+    const item = await prisma.tipoEquipamentoCustom.update({ where: { id: existente.id }, data: d });
+    return { ok: true, item };
+  },
+  async bloqueioAtivo(t, ativo, ator) {
+    // Reativar com o nome de outro tipo ativo duplicaria a lista
+    if (ativo && await nomeTipoEmUso(ator.empresaId, String(t.nome), t.id))
+      return `Já existe outro tipo ativo chamado “${t.nome}”: renomeie um dos dois antes de reativar.`;
+    return null;
+  },
+  async impacto(t, empresaId) {
+    const [equip, forms] = await Promise.all([
+      prisma.equipamento.count({ where: { empresaId, tipoEquipamentoId: t.id, ativo: true } }),
+      prisma.formTypeMapping.count({ where: { tipoEquipamentoId: t.id } }),
+    ]);
+    const avisos: string[] = [];
+    if (equip) avisos.push(`${pl(equip, "equipamento ativo é", "equipamentos ativos são")} deste tipo: ${equip === 1 ? "continua" : "continuam"} com ele (aparece como “inativo” na edição); só deixa de ser oferecido para novos equipamentos.`);
+    if (forms) avisos.push(`${pl(forms, "formulário está vinculado", "formulários estão vinculados")} a este tipo: os vínculos ficam guardados e voltam a valer se você reativar.`);
+    return { usos: [{ rotulo: pl(equip, "equipamento ativo", "equipamentos ativos"), total: equip }, { rotulo: pl(forms, "formulário vinculado", "formulários vinculados"), total: forms }], avisos };
+  },
+};
+
+/* ───────────────────────── Tabelas de preço ───────────────────────── */
+type ItemTabela = { servicoId?: string | null; produtoId?: string | null; tipoPreco: "VALOR_FIXO" | "DESCONTO_PERCENTUAL"; valorFixo?: number | null; descontoPercent?: number | null; bloqueado: boolean };
+
+/**
+ * Itens da tabela: serviço/produto da empresa; item NOVO precisa estar ativo no catálogo (o que a
+ * tabela já tinha continua aceito, mesmo inativo). O valor final é calculado aqui, nunca vem do corpo.
+ */
+async function montarItensTabela(itens: ItemTabela[], empresaId: string, jaTinha: { servicoId?: unknown; produtoId?: unknown }[] = []) {
+  const servicoIds = itens.map((i) => i.servicoId).filter((x): x is string => !!x);
+  const produtoIds = itens.map((i) => i.produtoId).filter((x): x is string => !!x);
+  if (new Set(servicoIds).size !== servicoIds.length || new Set(produtoIds).size !== produtoIds.length)
+    throw new ErroRefEmpresa("O mesmo serviço/produto aparece duas vezes na tabela.");
+  await Promise.all([
+    validarRefsEmpresa("servico", servicoIds, empresaId, "Serviço", { novoAtivo: true, manter: jaTinha.map((i) => i.servicoId as string) }),
+    validarRefsEmpresa("produto", produtoIds, empresaId, "Produto", { novoAtivo: true, manter: jaTinha.map((i) => i.produtoId as string) }),
+  ]);
+  const [servicos, produtos] = await Promise.all([
+    servicoIds.length ? prisma.servico.findMany({ where: { id: { in: servicoIds }, empresaId }, select: { id: true, valorPadrao: true } }) : [],
+    produtoIds.length ? prisma.produto.findMany({ where: { id: { in: produtoIds }, empresaId }, select: { id: true, valorPadrao: true } }) : [],
+  ]);
+  const base = new Map([...servicos, ...produtos].map((x) => [x.id, x.valorPadrao ? Number(x.valorPadrao) : 0]));
+  return itens.map((it) => ({
+    servicoId: it.servicoId || null,
+    produtoId: it.produtoId || null,
+    tipoPreco: it.tipoPreco,
+    valorFixo: it.tipoPreco === "VALOR_FIXO" ? (it.valorFixo ?? null) : null,
+    descontoPercent: it.tipoPreco === "DESCONTO_PERCENTUAL" ? (it.descontoPercent ?? null) : null,
+    valorFinal: calcularValorFinalTabela(it.tipoPreco, it.valorFixo, it.descontoPercent, base.get((it.servicoId || it.produtoId) as string)),
+    bloqueado: it.bloqueado,
+  }));
+}
+
+const comRef = async (fn: () => Promise<Gravacao>): Promise<Gravacao> => {
+  try { return await fn(); } catch (e) { if (e instanceof ErroRefEmpresa) return falha(400, e.message); throw e; }
+};
+
+const tabelasPreco: RegrasCadastro = {
+  criar: (dados, ator) => comRef(async () => {
+    const { itens, ...d } = dados as { itens: ItemTabela[] } & Record<string, unknown>;
+    const linhas = await montarItensTabela(itens, ator.empresaId);
+    const item = await prisma.tabelaPreco.create({ data: { ...(d as any), empresaId: ator.empresaId, ativo: true, itens: { create: linhas } } });
+    return { ok: true, item };
+  }),
+  // Parcial: sem `itens` no corpo, os itens não mudam (renomear nunca apaga preço)
+  editar: (existente, dados, ator) => comRef(async () => {
+    const { itens, ...d } = dados as { itens?: ItemTabela[] } & Record<string, unknown>;
+    const linhas = itens && await montarItensTabela(itens, ator.empresaId, (existente.itens ?? []) as { servicoId?: unknown; produtoId?: unknown }[]);
+    const item = await prisma.tabelaPreco.update({
+      where: { id: existente.id }, data: { ...(d as any), ...(linhas && { itens: { deleteMany: {}, create: linhas } }) },
+    });
+    return { ok: true, item };
+  }),
+  async impacto(t, empresaId) {
+    const clientes = await prisma.cliente.count({ where: { empresaId, tabelaPrecoId: t.id, ativo: true } });
+    const outraPadrao = await prisma.tabelaPreco.findFirst({ where: { empresaId, tipo: "PADRAO", ativo: true, id: { not: t.id } }, select: { nome: true } });
+    const avisos: string[] = [];
+    if (clientes) avisos.push(`${pl(clientes, "cliente ativo usa", "clientes ativos usam")} esta tabela. Ao inativar, ${clientes === 1 ? "ele continua ligado" : "eles continuam ligados"} a ela (aparece como “inativa” no cadastro do cliente), mas os preços passam a vir da tabela Padrão${outraPadrao ? ` (“${outraPadrao.nome}”)` : ""} até você escolher outra.`);
+    if (t.tipo === "PADRAO" && !outraPadrao) avisos.push("É a única tabela Padrão ativa: clientes sem tabela própria ficam sem tabela (valem os preços do catálogo).");
+    return { usos: [{ rotulo: pl(clientes, "cliente ativo", "clientes ativos"), total: clientes }], avisos };
+  },
+};
+
+/* ───────────────────────── Termos de referência ───────────────────────── */
+const termos: RegrasCadastro = {
+  async impacto() {
+    // A proposta COPIA o texto do termo: nada que já foi feito depende do cadastro
+    return { usos: [], avisos: ["As propostas que já usaram este termo guardam uma cópia do texto: nada muda nelas. Ele só deixa de aparecer em “Carregar de um template”."] };
+  },
+};
+
+/* ───────────────────────── Modelos de prazo ───────────────────────── */
+type EtapaPrazo = { nome: string; prazoHoras: number; responsavel: string; canal: string; mensagem?: string | null };
+const linhasEtapas = (etapas: EtapaPrazo[]) => etapas.map((e, ordem) => ({
+  nome: e.nome, prazoHoras: e.prazoHoras, responsavel: e.responsavel as any, canal: e.canal as any, mensagem: e.mensagem ?? null, ordem,
+}));
+
+const modelosPrazo: RegrasCadastro = {
+  async criar(dados, ator) {
+    const { etapas, ...d } = dados as { etapas: EtapaPrazo[] } & Record<string, unknown>;
+    const item = await prisma.prazoTemplate.create({ data: { ...(d as any), empresaId: ator.empresaId, ativo: true, etapas: { create: linhasEtapas(etapas) } } });
+    return { ok: true, item };
+  },
+  // Parcial: sem `etapas`, as etapas não mudam. Prazos já abertos nas OS têm cópia das etapas: não mudam.
+  async editar(existente, dados) {
+    const { etapas, ...d } = dados as { etapas?: EtapaPrazo[] } & Record<string, unknown>;
+    const item = await prisma.prazoTemplate.update({
+      where: { id: existente.id }, data: { ...(d as any), ...(etapas && { etapas: { deleteMany: {}, create: linhasEtapas(etapas) } }) },
+    });
+    return { ok: true, item };
+  },
+  async impacto(m, empresaId) {
+    const abertos = await prisma.osPrazo.count({ where: { templateId: m.id, status: { in: ["ATIVO", "ATRASADO"] }, ordemServico: { empresaId } } });
+    const avisos = abertos
+      ? [`${pl(abertos, "prazo em andamento usa", "prazos em andamento usam")} este modelo nas OS: ${abertos === 1 ? "continua correndo" : "continuam correndo"} normalmente. O modelo só deixa de ser oferecido em “Adicionar prazo”.`]
+      : [];
+    return { usos: [{ rotulo: pl(abertos, "prazo em andamento", "prazos em andamento"), total: abertos }], avisos };
+  },
+};
+
 export const REGRAS: Partial<Record<EntidadeCadastro, RegrasCadastro>> = {
   "perfis-acesso": perfis,
   "modelos-encargos": modelos,
   usuarios,
+  "tipos-equipamento": tiposEquipamento,
+  "tabelas-preco": tabelasPreco,
+  "termos-referencia": termos,
+  "modelos-prazo": modelosPrazo,
 };

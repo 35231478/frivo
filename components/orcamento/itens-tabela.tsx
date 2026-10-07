@@ -32,6 +32,8 @@ export interface TabelaPrecoCliente {
   tipo: string;
   precosBloqueados: boolean;
   itens: Record<string, { valorFinal: number; bloqueado: boolean; tipoPreco: string; descontoPercent: number | null }>;
+  /** A tabela do cliente foi inativada: o preço veio da tabela Padrão */
+  vinculadaInativa?: { id: string; nome: string } | null;
 }
 
 /** Cadastro rápido de item de catálogo (produto/serviço) direto da busca. */

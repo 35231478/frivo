@@ -113,7 +113,6 @@ const RESTRITAS: Caso[] = [
   ["PUT termo-template", r.termo, "PUT"],
   ["DELETE termo-template", r.termo, "DELETE"],
   ["POST prazo-templates", r.prazosTpl, "POST"],
-  ["GET prazo-template", r.prazoTpl, "GET"],
   ["PUT prazo-template", r.prazoTpl, "PUT"],
   ["DELETE prazo-template", r.prazoTpl, "DELETE"],
   ["POST checklist-templates", r.checklistTpls, "POST"],
@@ -155,6 +154,8 @@ describe("leituras de catálogo continuam abertas a qualquer logado (usadas em O
     ["GET tipos-problema", r.tiposProblema, "GET"],
     ["GET tabelas-preco", r.tabelas, "GET"],
     ["GET prazo-templates", r.prazosTpl, "GET"],
+    // Leva 3: o registro único segue a regra da lista (mesmos dados, que o auxiliar já lê)
+    ["GET prazo-template", r.prazoTpl, "GET"],
   ];
   it.each(CATALOGOS)("%s → auxiliar lê", async (...c) => {
     logar(PRESETS.AUXILIAR);
