@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid } from "@/components/ui/form-field";
+import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
 import { MessageCircle, MessageSquare, Mail, FileText, CheckCircle2, Eye, Settings, Download, Ban, MoreVertical, Pencil } from "lucide-react";
 
 interface Conta {
@@ -25,7 +26,7 @@ interface Conta {
   boletoCodigoBarras: string | null;
 }
 
-export function ContaReceberAcoes({ conta, categorias = [] }: { conta: Conta; categorias?: { nome: string; cor: string }[] }) {
+export function ContaReceberAcoes({ conta, categorias = [] }: { conta: Conta; categorias?: { id: string; nome: string; cor: string; ativo: boolean }[] }) {
   const router = useRouter();
   const [modal, setModal] = useState<null | "whatsapp" | "email" | "pagar" | "detalhes" | "editar" | "boletoEmitir" | "boletoConfig" | "boletoEmitido">(null);
   const [menu, setMenu] = useState(false);
@@ -160,7 +161,7 @@ export function ContaReceberAcoes({ conta, categorias = [] }: { conta: Conta; ca
   );
 }
 
-function EditarCobranca({ conta, categorias, onPronto }: { conta: Conta; categorias: { nome: string; cor: string }[]; onPronto: () => void }) {
+function EditarCobranca({ conta, categorias, onPronto }: { conta: Conta; categorias: { id: string; nome: string; cor: string; ativo: boolean }[]; onPronto: () => void }) {
   const [descricao, setDescricao] = useState(conta.descricao);
   const [categoria, setCategoria] = useState(conta.categoria ?? "");
   const [valor, setValor] = useState(String(conta.valor));
@@ -187,10 +188,8 @@ function EditarCobranca({ conta, categorias, onPronto }: { conta: Conta; categor
       <FormField label="Descrição"><Input value={descricao} onChange={(e) => setDescricao(e.target.value)} /></FormField>
       <FormGrid>
         <FormField label="Categoria">
-          <Select value={categoria} onChange={(e) => setCategoria(e.target.value)}>
-            <option value="">Sem categoria</option>
-            {categorias.map((c) => <option key={c.nome} value={c.nome}>{c.nome}</option>)}
-          </Select>
+          {/* Só ativas para nova escolha; a categoria atual segue visível mesmo inativa */}
+          <SeletorCadastro entidade="categorias-financeiras" itens={categorias} valor={categoria} vazio="Sem categoria" onChange={setCategoria} />
         </FormField>
         <FormField label="Valor"><Input type="number" step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} /></FormField>
       </FormGrid>

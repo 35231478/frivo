@@ -67,7 +67,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   // Cargo, perfil de acesso e competências (tipos de OS) precisam ser da mesma empresa
   try {
     await Promise.all([
-      validarRefEmpresa("cargo", cargoId, empresaId, "Cargo"),
+      validarRefEmpresa("cargo", cargoId, empresaId, "Cargo", { novoAtivo: true, manter: [existente.cargoId] }),
       validarRefEmpresa("perfilAcesso", perfilAcessoId, empresaId, "Perfil de acesso"),
       validarRefsEmpresa("tipoOs", competenciaIds, empresaId, "Competência"),
     ]);

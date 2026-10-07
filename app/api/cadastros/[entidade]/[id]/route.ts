@@ -1,7 +1,7 @@
 import { rotasItem } from "@/lib/cadastros/rotas";
 
-/** Compatibilidade: mesma implementação de /api/cadastros/produtos/[id] (edição parcial; DELETE só inativa). */
-const r = rotasItem("produtos");
+/** Cadastros padronizados: obter, editar parcial / inativar / reativar (PATCH), inativar (DELETE). */
+const r = rotasItem();
 export const GET = r.GET;
 export const PATCH = r.PATCH;
 export const PUT = r.PUT;

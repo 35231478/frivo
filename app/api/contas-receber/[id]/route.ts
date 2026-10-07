@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
+import { respostaRefEmpresa, validarCategoriaFinanceira } from "@/lib/ref-empresa";
 import { contaReceberUpdateSchema } from "@/lib/validations";
 
 type Params = { params: Promise<{ id: string }> };
@@ -20,6 +21,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
     return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
   }
   const d = parsed.data;
+  // Categoria nova precisa ser ativa; manter a atual (mesmo inativa) é aceito
+  try { await validarCategoriaFinanceira(d.categoria, empresaId, existente.categoria); }
+  catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
   const dataRecebimento =
     d.status === "RECEBIDO"

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { motivoBloqueioInativacao } from "@/lib/os-server";
 import { anotarInativacao, impactoColaborador, impactoOrcamento, impactoVeiculo } from "@/lib/inativacao-server";
 import { gerarQrCodeEquipamento } from "@/lib/qrcode-server";
+import { CADASTROS, type EntidadeCadastro } from "@/lib/cadastros/registro";
 
 /**
  * Regras de inativar/reativar POR REGISTRO — a mesma função atende a ação individual (rotas
@@ -74,6 +75,22 @@ export async function gerarQrEquipamento(id: string, ctx: ContextoItem): Promise
   if (e.qrcode) return ok(`Já tinha o QR ${e.qrcode.codigo}`, { qrcodeId: e.qrcode.id });
   const qr = await gerarQrCodeEquipamento(ctx.empresaId, id);
   return ok(`QR ${qr.codigo} gerado`, { qrcodeId: qr.id });
+}
+
+/* ───────── Cadastros padronizados (produtos, serviços, cargos, categorias): ativo true/false ─────────
+ * Única função de ativar/inativar desses cadastros: a usam a rota genérica /api/cadastros, as rotas
+ * antigas (/api/produtos…) e as ações em massa. Nunca apaga: só ativo=false. */
+type DelegateAtivo = {
+  findFirst: (a: { where: { id: string; empresaId: string }; select: { ativo: true } }) => Promise<{ ativo: boolean } | null>;
+  update: (a: { where: { id: string }; data: { ativo: boolean } }) => Promise<unknown>;
+};
+export async function definirAtivoCadastro(entidade: EntidadeCadastro, id: string, ativo: boolean, ctx: ContextoItem): Promise<ResultadoItem> {
+  const tabela = (prisma as unknown as Record<string, DelegateAtivo>)[CADASTROS[entidade].modelo];
+  const r = await tabela.findFirst({ where: { id, empresaId: ctx.empresaId }, select: { ativo: true } });
+  if (!r) return NAO_ENCONTRADO;
+  if (r.ativo === ativo) return ok(ativo ? "Já estava ativo" : "Já estava inativo");
+  await tabela.update({ where: { id }, data: { ativo } });
+  return ok();
 }
 
 /* ───────── Cliente: ativo true/false ───────── */

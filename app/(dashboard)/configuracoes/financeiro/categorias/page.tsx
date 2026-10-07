@@ -1,32 +1,15 @@
 "use client";
 
-import { CrudCadastro } from "@/components/config/crud-cadastro";
+import { CadastroPadrao } from "@/components/cadastros/cadastro-padrao";
 import { PageHeader } from "@/components/ui/page-header";
 
+/** Cadastro padronizado: campos, colunas, validação e permissões em lib/cadastros/registro.ts. */
 export default function CategoriasFinanceirasPage() {
   return (
     <div>
       <PageHeader title="Categorias Financeiras" description="Classifique cobranças e despesas (ex: Contrato Mensal, Serviço Avulso)" backHref="/configuracoes" />
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <CrudCadastro
-          titulo="Categoria"
-          apiUrl="/api/categorias-financeiras"
-          campos={[
-            { key: "nome", label: "Nome", obrigatorio: true, placeholder: "Ex: Contrato Mensal" },
-            { key: "cor", label: "Cor", tipo: "color" },
-          ]}
-          colunasLista={[
-            {
-              key: "nome", label: "Nome",
-              render: (item: any) => (
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: item.cor }} />
-                  <span className="font-medium">{item.nome}</span>
-                </div>
-              ),
-            },
-          ]}
-        />
+      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
+        <CadastroPadrao entidade="categorias-financeiras" />
       </div>
     </div>
   );

@@ -6,8 +6,10 @@ import { LABELS_FUNCAO, lerFiltrosColaboradores, montarWhereColaboradores } from
 import { whereClientes, whereContratos, whereOrcamentos, whereOrdens } from "@/lib/listas/filtros";
 import { calcularStatusFinanceiroEmLote } from "@/lib/status-financeiro";
 import { MAX_SELECAO, type AcaoItem, type Entidade } from "@/lib/acoes-massa/acoes";
+import { idsCadastro, linhasCadastro, rotulosCadastro } from "@/lib/cadastros/servidor";
+import type { EntidadeCadastro } from "@/lib/cadastros/registro";
 import {
-  cancelarOrcamento, cancelarOs, definirAtivoCliente, definirAtivoEquipamento, gerarQrEquipamento, inativarColaborador,
+  cancelarOrcamento, cancelarOs, definirAtivoCadastro, definirAtivoCliente, definirAtivoEquipamento, gerarQrEquipamento, inativarColaborador,
   inativarVeiculo, reativarColaborador, reativarContrato, reativarOrcamento, reativarVeiculo, suspenderContrato,
   type ContextoItem, type ResultadoItem,
 } from "@/lib/acoes-massa/regras";
@@ -25,7 +27,19 @@ export const EXECUTORES: Record<Entidade, Partial<Record<AcaoItem, (id: string, 
   contratos: { inativar: suspenderContrato, reativar: reativarContrato },
   veiculos: { inativar: inativarVeiculo, reativar: reativarVeiculo },
   colaboradores: { inativar: inativarColaborador, reativar: reativarColaborador },
+  produtos: cadastro("produtos"),
+  servicos: cadastro("servicos"),
+  cargos: cadastro("cargos"),
+  "categorias-financeiras": cadastro("categorias-financeiras"),
 };
+
+/** Cadastros padronizados: a mesma regra única de ativar/inativar da rota /api/cadastros. */
+function cadastro(entidade: EntidadeCadastro) {
+  return {
+    inativar: (id: string, ctx: ContextoItem) => definirAtivoCadastro(entidade, id, false, ctx),
+    reativar: (id: string, ctx: ContextoItem) => definirAtivoCadastro(entidade, id, true, ctx),
+  };
+}
 
 /** Nome legível de cada registro (para o resultado mostrar QUAL não pôde), só da empresa da sessão. */
 export async function rotulos(entidade: Entidade, ids: string[], empresaId: string): Promise<Map<string, string>> {
@@ -53,6 +67,9 @@ export async function rotulos(entidade: Entidade, ids: string[], empresaId: stri
       break;
     case "colaboradores":
       pares = (await prisma.tecnico.findMany({ where, select: { id: true, nome: true } })).map((r) => [r.id, r.nome]);
+      break;
+    case "produtos": case "servicos": case "cargos": case "categorias-financeiras":
+      pares = await rotulosCadastro(entidade, ids, empresaId);
       break;
   }
   return new Map(pares);
@@ -101,6 +118,8 @@ export async function idsDoFiltro(entidade: Entidade, filtro: string, empresaId:
       const where = montarWhereColaboradores(empresaId, lerFiltrosColaboradores(sp));
       return pegar(prisma.tecnico.findMany({ where, select: { id: true }, take }), prisma.tecnico.count({ where }));
     }
+    case "produtos": case "servicos": case "cargos": case "categorias-financeiras":
+      return idsCadastro(entidade, sp, empresaId, MAX_SELECAO);
   }
 }
 
@@ -177,6 +196,8 @@ export async function linhasExportacao(entidade: Entidade, ids: string[], empres
         ...rs.map((r) => [r.nome, LABELS_FUNCAO[r.tipo] ?? r.tipo, r.cargo?.nome ?? "", r.telefone, r.email ?? "", r.equipesMembro.map((e) => e.nome).join(", "),
           r.especialidades.join(", "), d(r.dataAdmissao), r.ativo ? r.statusColaborador : "INATIVO"])];
     }
+    case "produtos": case "servicos": case "cargos": case "categorias-financeiras":
+      return linhasCadastro(entidade, ids, empresaId);
   }
 }
 

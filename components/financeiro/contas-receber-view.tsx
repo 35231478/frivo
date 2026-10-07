@@ -27,7 +27,7 @@ type CardKey = "A_RECEBER" | "VENCIDO" | "VENCE_HOJE" | "RECEBIDO";
 
 const inicioMes = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); };
 
-export function ContasReceberView({ contas, clientes, categorias, interAtivo, clienteIdInicial = "" }: { contas: ContaView[]; clientes: Opcao[]; categorias: { nome: string; cor: string }[]; interAtivo: boolean; clienteIdInicial?: string }) {
+export function ContasReceberView({ contas, clientes, categorias, interAtivo, clienteIdInicial = "" }: { contas: ContaView[]; clientes: Opcao[]; categorias: { id: string; nome: string; cor: string; ativo: boolean }[]; interAtivo: boolean; clienteIdInicial?: string }) {
   const [card, setCard] = useState<CardKey | null>(null);
   const [busca, setBusca] = useState("");
   const [painel, setPainel] = useState(!!clienteIdInicial);
@@ -169,7 +169,8 @@ export function ContasReceberView({ contas, clientes, categorias, interAtivo, cl
               <FiltroCampo label="Categoria">
                 <select value={f.categoria} onChange={(e) => setF({ ...f, categoria: e.target.value })} className={inputCls}>
                   <option value="">Todas</option>
-                  {categorias.map((c) => <option key={c.nome} value={c.nome}>{c.nome}</option>)}
+                  {/* Filtro: inclui as inativas (contas antigas continuam filtráveis) */}
+                  {categorias.map((c) => <option key={c.nome} value={c.nome}>{c.ativo ? c.nome : `${c.nome} (inativa)`}</option>)}
                 </select>
               </FiltroCampo>
               <FiltroCampo label="Forma de pagamento">

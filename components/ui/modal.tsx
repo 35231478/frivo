@@ -24,7 +24,9 @@ export function Modal({ aberto, onFechar, titulo, children, tamanho = "md" }: Mo
   if (!aberto) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+    // text-left/whitespace-normal: o modal é renderizado no lugar do botão (ex.: célula "Ações" alinhada à
+    // direita e sem quebra de linha) e não pode herdar esse alinhamento
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 text-left whitespace-normal" role="dialog" aria-modal="true">
       <div className="absolute inset-0 bg-black/50" onClick={onFechar} />
       <div className={cn(
         "relative bg-white rounded-2xl shadow-card-hover w-full max-h-[90vh] overflow-y-auto",

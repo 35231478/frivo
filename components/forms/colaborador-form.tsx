@@ -15,6 +15,7 @@ import { rotuloVeiculo, type VeiculoResumo } from "@/lib/veiculo-sugestao";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import { reduzirImagem } from "@/lib/imagem-cliente";
 import { FolhaColaborador } from "@/components/folha/folha-colaborador";
+import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
 import {
   X, Plus, Upload, Trash2, AlertCircle, User, Briefcase, ListChecks, FileText, Wallet,
 } from "lucide-react";
@@ -32,7 +33,6 @@ const DIAS_SEMANA = [
 
 const TIPOS_DOC = ["CNH", "Certificado NR-35", "Certificado NR-10", "ASO", "Carteira de Trabalho", "Diploma", "Outro"];
 
-interface CargoOpt { id: string; nome: string }
 interface TipoOsOpt { id: string; nome: string; cor: string }
 interface DocItem { tipo: string; nome: string; arquivoUrl: string | null; dataVencimento: string | null }
 
@@ -76,7 +76,6 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
     })),
   );
 
-  const [cargos, setCargos] = useState<CargoOpt[]>([]);
   const [tiposOs, setTiposOs] = useState<TipoOsOpt[]>([]);
   const [perfis, setPerfis] = useState<{ id: string; nome: string; tipo: string }[]>([]);
   const [perfilAcessoId, setPerfilAcessoId] = useState<string>(initialData?.perfilAcessoId ?? "");
@@ -88,7 +87,6 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
   const docIdx = useRef<number | null>(null);
 
   useEffect(() => {
-    fetch("/api/cargos").then((r) => r.json()).then((d) => setCargos(Array.isArray(d) ? d.filter((c: any) => c.ativo !== false) : [])).catch(() => {});
     fetch("/api/tipos-os").then((r) => r.json()).then((d) => setTiposOs(Array.isArray(d) ? d.filter((t: any) => t.ativo !== false) : [])).catch(() => {});
     fetch("/api/perfis-acesso").then((r) => r.json()).then((d) => setPerfis(Array.isArray(d) ? d : [])).catch(() => {});
     fetch("/api/veiculos?resumo=1").then((r) => (r.ok ? r.json() : [])).then((d) => setVeiculos(Array.isArray(d) ? d : [])).catch(() => {});
@@ -106,7 +104,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
   const dataIso = (v: any) => (v ? String(v).slice(0, 10) : "");
 
   const {
-    register, handleSubmit, watch,
+    register, handleSubmit, watch, setValue,
     formState: { errors, isSubmitting },
   } = useForm<TecnicoInput>({
     resolver: zodResolver(tecnicoSchema),
@@ -329,10 +327,11 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
             <FormSection title="Função">
               <FormGrid>
                 <FormField label="Cargo" hint="Cadastre cargos em Configurações → Cargos">
-                  <Select {...register("cargoId")}>
-                    <option value="">Selecione…</option>
-                    {cargos.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                  </Select>
+                  {/* Só cargos ativos para nova escolha; o cargo atual segue visível mesmo inativo */}
+                  <SeletorCadastro
+                    entidade="cargos" valor={watch("cargoId") ?? ""} placeholder="Selecione…"
+                    onChange={(v) => setValue("cargoId", v, { shouldDirty: true })}
+                  />
                 </FormField>
                 <FormField label="Tipo" required>
                   <Select {...register("tipo")}>

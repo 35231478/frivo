@@ -22,7 +22,8 @@ interface Item { id: string; rotulo: string; ok: boolean; detalhe?: string; codi
 const ICONE: Record<AcaoItem, React.ComponentType<{ className?: string }>> = { inativar: Ban, reativar: RotateCcw, "gerar-qr": QrCode };
 const fmt = (n: number) => n.toLocaleString("pt-BR");
 
-export function BarraAcoesMassa() {
+/** `aoConcluir`: listas carregadas no cliente recarregam por aqui (padrão: router.refresh()). */
+export function BarraAcoesMassa({ aoConcluir }: { aoConcluir?: () => void } = {}) {
   const sel = useSelecaoMassa();
   const { permissoes, role, pode } = usePermissoes();
   const router = useRouter();
@@ -115,7 +116,7 @@ export function BarraAcoesMassa() {
         <ExecucaoMassa
           acao={acao} ids={[...sel.selecionados]}
           podeImprimirQr={pode("qrcodes", "visualizar")}
-          onFechar={(houveMudanca) => { setAcao(null); if (houveMudanca) { sel.limpar(); router.refresh(); } }}
+          onFechar={(houveMudanca) => { setAcao(null); if (houveMudanca) { sel.limpar(); if (aoConcluir) aoConcluir(); else router.refresh(); } }}
         />
       )}
     </>,

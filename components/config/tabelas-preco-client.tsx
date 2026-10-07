@@ -42,9 +42,10 @@ export function TabelasPrecoClient() {
 
   useEffect(() => {
     fetch("/api/tabelas-preco").then((r) => r.json()).then((d) => setTabelas(Array.isArray(d) ? d : [])).catch(() => {}).finally(() => setLoading(false));
+    // Catálogo para ADICIONAR itens: só ativos (itens já na tabela trazem os próprios dados, mesmo inativos)
     Promise.all([
-      fetch("/api/servicos").then((r) => r.json()).catch(() => []),
-      fetch("/api/produtos").then((r) => r.json()).catch(() => []),
+      fetch("/api/cadastros/servicos?ativo=sim").then((r) => r.json()).catch(() => []),
+      fetch("/api/cadastros/produtos?ativo=sim").then((r) => r.json()).catch(() => []),
     ]).then(([s, p]) => {
       const cat: CatalogoItem[] = [
         ...(Array.isArray(s) ? s : []).map((x: any) => ({ id: x.id, nome: x.nome, valorPadrao: x.valorPadrao ? Number(x.valorPadrao) : 0, kind: "SERVICO" as const })),

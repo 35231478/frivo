@@ -9,7 +9,11 @@ import { pode, type Acao, type Permissoes } from "@/lib/permissoes";
  * Exclusão definitiva em massa não existe de propósito.
  */
 
-export const ENTIDADES = ["ordens", "equipamentos", "clientes", "orcamentos", "contratos", "veiculos", "colaboradores"] as const;
+export const ENTIDADES = [
+  "ordens", "equipamentos", "clientes", "orcamentos", "contratos", "veiculos", "colaboradores",
+  // Cadastros padronizados (lib/cadastros/registro.ts)
+  "produtos", "servicos", "cargos", "categorias-financeiras",
+] as const;
 export type Entidade = (typeof ENTIDADES)[number];
 
 export const ACOES_ITEM = ["inativar", "reativar", "gerar-qr"] as const;
@@ -105,7 +109,27 @@ export const ENTIDADE: Record<Entidade, DefEntidade> = {
       reativar: { rotulo: "Reativar", feito: "reativados", permissao: [["equipes", "gerenciar"]], impacto: "Os colaboradores voltam às listas e seletores." },
     },
   },
+  // Cadastros padronizados: inativar/reativar com a permissão do registro (lib/cadastros/registro.ts)
+  produtos: acoesCadastro("produto", "produtos"),
+  servicos: acoesCadastro("serviço", "serviços"),
+  cargos: acoesCadastro("cargo", "cargos"),
+  "categorias-financeiras": acoesCadastro("categoria", "categorias", true),
 };
+
+/** Ações em massa de um cadastro padronizado: inativar/reativar com a permissão do registro. */
+function acoesCadastro(singular: string, plural: string, feminino = false): DefEntidade {
+  const o = feminino ? "as" : "os";
+  return {
+    modulo: "configuracoes", singular, plural,
+    acoes: {
+      inativar: {
+        rotulo: "Inativar", feito: `inativad${o}`, permissao: [["configuracoes", "gerenciar"]], perigo: true,
+        impacto: `${feminino ? "As" : "Os"} ${plural} saem das listas e dos seletores para novas escolhas. Nada é apagado: os registros que já ${feminino ? "as" : "os"} usam continuam iguais e dá para reativar depois.`,
+      },
+      reativar: { rotulo: "Reativar", feito: `reativad${o}`, permissao: [["configuracoes", "gerenciar"]], impacto: `${feminino ? "As" : "Os"} ${plural} voltam às listas e aos seletores.` },
+    },
+  };
+}
 
 /** Exportar: ver a lista + "Relatórios › Exportar". */
 export function requisitosExportar(entidade: Entidade): Requisito[][] {
