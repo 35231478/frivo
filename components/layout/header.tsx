@@ -47,6 +47,11 @@ const ROTULOS_ROTA: Record<string, string> = {
   servicos: "Serviços",
   "tipos-equipamento": "Tipos de Equipamento",
   "tipos-os": "Tipos de OS",
+  financeiro: "Financeiro",
+  "custo-pessoal": "Custo de Pessoal",
+  colaborador: "Colaborador",
+  encargos: "Encargos",
+  importar: "Importar",
   novo: "Novo",
   nova: "Nova",
   editar: "Editar",
@@ -60,7 +65,7 @@ function gerarBreadcrumb(pathname: string) {
     acc += "/" + seg;
     const label =
       ROTULOS_ROTA[seg] ??
-      (/^[0-9a-f]{8,}/i.test(seg) ? "Detalhes" : seg.charAt(0).toUpperCase() + seg.slice(1));
+      (/^[0-9a-f]{8,}/i.test(seg) || /^c[a-z0-9]{20,}$/.test(seg) ? "Detalhes" : seg.charAt(0).toUpperCase() + seg.slice(1));
     itens.push({ label, href: acc });
   }
   return itens;

@@ -6,7 +6,7 @@
 
 export type Acao =
   | "visualizar" | "criar" | "editar" | "excluir" | "concluir" | "aprovar"
-  | "gerenciar" | "medicoes" | "contasReceber" | "fluxoCaixa" | "checklist" | "exportar";
+  | "gerenciar" | "medicoes" | "contasReceber" | "fluxoCaixa" | "folha" | "checklist" | "exportar";
 
 export type Permissoes = Record<string, Partial<Record<Acao, boolean>>>;
 
@@ -24,6 +24,7 @@ export const ACOES_LABEL: Record<Acao, string> = {
   medicoes: "Medições",
   contasReceber: "Contas a Receber",
   fluxoCaixa: "Fluxo de Caixa",
+  folha: "Custo de pessoal",
   checklist: "Checklist",
   exportar: "Exportar",
 };
@@ -48,7 +49,8 @@ export const SECOES: SecaoDef[] = [
   },
   {
     id: "financeiro", label: "Financeiro", modulos: [
-      { id: "financeiro", label: "Financeiro", icone: "💵", acoes: ["visualizar", "medicoes", "contasReceber", "fluxoCaixa"] },
+      // "folha" = Custo de pessoal (RH): salários, benefícios, encargos e importação de colaboradores
+      { id: "financeiro", label: "Financeiro", icone: "💵", acoes: ["visualizar", "medicoes", "contasReceber", "fluxoCaixa", "folha"] },
     ],
   },
   {
@@ -196,7 +198,7 @@ export const PRESETS: Record<string, Permissoes> = {
     orcamentos: ["visualizar", "criar", "editar", "aprovar"],
     contratos: ["visualizar", "criar", "editar"],
     licitacoes: ["visualizar", "gerenciar"],
-    financeiro: ["visualizar", "medicoes", "contasReceber", "fluxoCaixa"],
+    financeiro: ["visualizar", "medicoes", "contasReceber", "fluxoCaixa", "folha"],
     relatorios: ["visualizar", "exportar"],
   }),
   TECNICO: montarPermissoes({

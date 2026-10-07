@@ -13,7 +13,7 @@ export default async function NovoColaboradorPage() {
   return (
     <div className="max-w-4xl mx-auto">
       <PageHeader title="Novo Colaborador" description="Cadastre um colaborador da equipe" backHref="/colaboradores" />
-      <ColaboradorForm />
+      <ColaboradorForm podeFolha={pode(session?.user?.permissoes, "financeiro", "folha", session?.user?.role)} />
     </div>
   );
 }

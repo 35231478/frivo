@@ -14,8 +14,9 @@ import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { rotuloVeiculo, type VeiculoResumo } from "@/lib/veiculo-sugestao";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import { reduzirImagem } from "@/lib/imagem-cliente";
+import { FolhaColaborador } from "@/components/folha/folha-colaborador";
 import {
-  X, Plus, Upload, Trash2, AlertCircle, User, Briefcase, ListChecks, FileText,
+  X, Plus, Upload, Trash2, AlertCircle, User, Briefcase, ListChecks, FileText, Wallet,
 } from "lucide-react";
 
 const ESPECIALIDADES_SUGERIDAS = [
@@ -39,7 +40,7 @@ interface ColaboradorFormProps {
   initialData?: any;
 }
 
-type Aba = "pessoais" | "profissionais" | "competencias" | "documentos";
+type Aba = "pessoais" | "profissionais" | "competencias" | "documentos" | "folha";
 
 function vencendoEm30(data: string | null): boolean {
   if (!data) return false;
@@ -48,7 +49,11 @@ function vencendoEm30(data: string | null): boolean {
   return venc <= limite;
 }
 
-export function ColaboradorForm({ initialData, somenteLeitura = false }: ColaboradorFormProps & { somenteLeitura?: boolean }) {
+/**
+ * `podeFolha` (permissão "Financeiro › Custo de pessoal") mostra a aba "Dados financeiros / Folha".
+ * Sem ela, salário e benefícios não aparecem nem chegam ao navegador.
+ */
+export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha = false }: ColaboradorFormProps & { somenteLeitura?: boolean; podeFolha?: boolean }) {
   const router = useRouter();
   const isEditing = !!initialData;
   const [aba, setAba] = useState<Aba>("pessoais");
@@ -116,7 +121,6 @@ export function ColaboradorForm({ initialData, somenteLeitura = false }: Colabor
           cidade: initialData.cidade ?? "", estado: initialData.estado ?? "", cep: initialData.cep ?? "",
           cargoId: initialData.cargoId ?? "", tipo: initialData.tipo, crea: initialData.crea ?? "",
           dataAdmissao: dataIso(initialData.dataAdmissao),
-          salario: initialData.salario != null ? Number(initialData.salario) : undefined,
           jornadaEntrada: initialData.jornadaEntrada ?? "", jornadaSaida: initialData.jornadaSaida ?? "",
           statusColaborador: initialData.statusColaborador ?? "ATIVO",
           observacoes: initialData.observacoes ?? "",
@@ -214,6 +218,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false }: Colabor
     { id: "profissionais", label: "Dados Profissionais", icone: Briefcase },
     { id: "competencias", label: "Competências", icone: ListChecks, badge: competenciaIds.length },
     { id: "documentos", label: "Documentos", icone: FileText, badge: documentos.length },
+    ...(podeFolha ? [{ id: "folha" as const, label: "Dados financeiros / Folha", icone: Wallet }] : []),
   ];
 
   const inputCls = "w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all";
@@ -226,7 +231,6 @@ export function ColaboradorForm({ initialData, somenteLeitura = false }: Colabor
         </div>
       )}
 
-      <fieldset disabled={somenteLeitura} className="min-w-0">
       <div className="bg-white rounded-2xl shadow-card border border-surface-border overflow-hidden">
         <nav className="flex gap-1.5 overflow-x-auto px-4 pt-4 pb-4 border-b border-surface-border">
           {ABAS.map((t) => {
@@ -249,7 +253,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false }: Colabor
           })}
         </nav>
 
-        <div className="p-5 sm:p-6 lg:p-8 space-y-8">
+        <fieldset disabled={somenteLeitura} className={cn("min-w-0 p-5 sm:p-6 lg:p-8 space-y-8", aba === "folha" && "hidden")}>
           {/* ABA 1 — Dados Pessoais */}
           <div className={cn("space-y-8", aba !== "pessoais" && "hidden")}>
             <FormSection title="Identificação">
@@ -367,12 +371,9 @@ export function ColaboradorForm({ initialData, somenteLeitura = false }: Colabor
                   <Input {...register("crea")} placeholder="Ex: 5012345-D/SP" />
                 </FormField>
               )}
-              <FormGrid cols={3}>
+              <FormGrid>
                 <FormField label="Data de admissão">
                   <Input type="date" {...register("dataAdmissao")} />
-                </FormField>
-                <FormField label="Salário" hint="Reservado para o módulo de RH">
-                  <Input type="number" step="0.01" {...register("salario")} placeholder="0,00" />
                 </FormField>
                 <FormField label="Status">
                   <Select {...register("statusColaborador")}>
@@ -525,12 +526,19 @@ export function ColaboradorForm({ initialData, somenteLeitura = false }: Colabor
               </Button>
             </FormSection>
           </div>
-        </div>
+        </fieldset>
+
+        {/* ABA 5 — Dados financeiros / Folha (só com a permissão; salva separado do cadastro) */}
+        {podeFolha && aba === "folha" && (
+          <div className="p-5 sm:p-6 lg:p-8">
+            {isEditing ? <FolhaColaborador colaboradorId={initialData.id} /> : (
+              <p className="text-sm text-ink-muted">Cadastre o colaborador primeiro; depois, em “Editar”, preencha os dados financeiros desta aba.</p>
+            )}
+          </div>
+        )}
       </div>
 
-      </fieldset>
-
-      {somenteLeitura ? (
+      {aba === "folha" ? null : somenteLeitura ? (
         <p data-somente-leitura className="text-right text-xs text-ink-muted pt-1">Somente consulta — você não tem permissão para editar colaboradores.</p>
       ) : (
         <div className="flex items-center justify-end gap-3 pt-1">

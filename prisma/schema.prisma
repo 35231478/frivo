@@ -444,6 +444,9 @@ model Empresa {
   termoTemplates         TermoReferenciaTemplate[]
   qrcodes                Qrcode[]
   cargos                 Cargo[]
+  colaboradoresFolha     ColaboradorFolha[]
+  modelosEncargos        ModeloEncargos[]
+  folhaSnapshots         FolhaSnapshot[]
   veiculos               Veiculo[]
   equipes                Equipe[]
   checklistTemplates     ChecklistTemplate[]
@@ -734,6 +737,7 @@ model Tecnico {
   checklistsPreenchidos ChecklistPreenchido[]
   equipamentosMarcados  AtividadeEquipamento[]
   respostasEquipamento  RespostaFormularioEquipamento[]
+  folha                 ColaboradorFolha?
 
   @@unique([cpf, empresaId])
   @@index([empresaId, ativo])
@@ -2574,4 +2578,117 @@ model IaUso {
   @@index([empresaId, criadoEm])
   @@index([usuarioId, criadoEm])
   @@map("ia_uso")
+}
+
+// ─────────────────────────────────────────────
+// CUSTO DE PESSOAL (gestão de folha — NÃO é folha oficial)
+// ─────────────────────────────────────────────
+
+/// Regime de contratação do colaborador (define o modelo de encargos padrão)
+enum RegimeContratacao {
+  CLT
+  PJ
+  DIARISTA
+  AUTONOMO
+}
+
+enum TipoAdicional {
+  NENHUM
+  INSALUBRIDADE
+  PERICULOSIDADE
+}
+
+/// Dados financeiros do colaborador para a gestão de custo de pessoal (1:1 com tecnicos).
+/// O salário/base mensal continua em `tecnicos.salario` (fonte única); aqui fica o resto.
+/// Só quem tem a permissão "Financeiro › Custo de pessoal" lê ou grava.
+model ColaboradorFolha {
+  id                 String            @id @default(cuid())
+  empresaId          String            @map("empresa_id")
+  colaboradorId      String            @unique @map("colaborador_id")
+  regime             RegimeContratacao @default(CLT)
+  /// Diarista: valor da diária × dias no mês = base
+  valorDiaria        Decimal?          @map("valor_diaria") @db.Decimal(12, 2)
+  diasMes            Int?              @map("dias_mes")
+  /// Horas pagas no mês (custo-hora = custo mensal ÷ horas). CLT 44h/semana = 220h.
+  horasMes           Int               @default(220) @map("horas_mes")
+  adicionalTipo      TipoAdicional     @default(NENHUM) @map("adicional_tipo")
+  /// Percentual sobre o salário/base (ex.: periculosidade 30). Ignorado se houver valor fixo.
+  adicionalPercent   Decimal?          @map("adicional_percent") @db.Decimal(6, 2)
+  adicionalValor     Decimal?          @map("adicional_valor") @db.Decimal(12, 2)
+  /// Horas extras: valor mensal estimado (manual, até integrar com o ponto)
+  horasExtrasValor   Decimal?          @map("horas_extras_valor") @db.Decimal(12, 2)
+  valeTransporte     Decimal?          @map("vale_transporte") @db.Decimal(12, 2)
+  /// Desconta do empregado até 6% do salário/base (só CLT)
+  descontaVt         Boolean           @default(true) @map("desconta_vt")
+  valeAlimentacao    Decimal?          @map("vale_alimentacao") @db.Decimal(12, 2)
+  planoSaude         Decimal?          @map("plano_saude") @db.Decimal(12, 2)
+  outrosBeneficios   Decimal?          @map("outros_beneficios") @db.Decimal(12, 2)
+  /// Outros descontos que reduzem o custo da empresa (ex.: coparticipação)
+  descontos          Decimal?          @db.Decimal(12, 2)
+  descontosDescricao String?           @map("descontos_descricao")
+  /// Modelo de encargos específico; vazio = padrão do regime
+  modeloEncargosId   String?           @map("modelo_encargos_id")
+  observacoes        String?
+  criadoEm           DateTime          @default(now()) @map("criado_em")
+  atualizadoEm       DateTime          @updatedAt @map("atualizado_em")
+
+  empresa        Empresa         @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  colaborador    Tecnico         @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  modeloEncargos ModeloEncargos? @relation(fields: [modeloEncargosId], references: [id], onDelete: SetNull)
+
+  @@index([empresaId])
+  @@map("colaborador_folha")
+}
+
+/// Modelo de encargos por regime, com percentuais editáveis (ajustar com o contador).
+/// `itens` = [{ nome, percentual }] — o total incide sobre a remuneração (base + adicionais + HE).
+model ModeloEncargos {
+  id           String            @id @default(cuid())
+  empresaId    String            @map("empresa_id")
+  nome         String
+  regime       RegimeContratacao
+  /// Padrão do regime (um por regime e empresa, garantido na aplicação)
+  padrao       Boolean           @default(false)
+  itens        Json              @default("[]")
+  ativo        Boolean           @default(true)
+  criadoEm     DateTime          @default(now()) @map("criado_em")
+  atualizadoEm DateTime          @updatedAt @map("atualizado_em")
+
+  empresa       Empresa            @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  colaboradores ColaboradorFolha[]
+
+  @@unique([empresaId, nome])
+  @@index([empresaId, regime])
+  @@map("modelos_encargos")
+}
+
+/// Foto do custo de cada colaborador num mês fechado ("YYYY-MM"). Não muda quando salário ou
+/// encargos mudarem depois. Sem FK para o colaborador: o histórico fica mesmo se ele sair.
+model FolhaSnapshot {
+  id            String            @id @default(cuid())
+  empresaId     String            @map("empresa_id")
+  competencia   String
+  colaboradorId String            @map("colaborador_id")
+  nome          String
+  funcao        String?
+  equipe        String?
+  regime        RegimeContratacao
+  base          Decimal           @db.Decimal(12, 2)
+  adicionais    Decimal           @db.Decimal(12, 2)
+  encargos      Decimal           @db.Decimal(12, 2)
+  beneficios    Decimal           @db.Decimal(12, 2)
+  descontos     Decimal           @db.Decimal(12, 2)
+  custoTotal    Decimal           @map("custo_total") @db.Decimal(12, 2)
+  horasMes      Int               @map("horas_mes")
+  custoHora     Decimal           @map("custo_hora") @db.Decimal(12, 2)
+  /// Detalhamento (itens de encargo e percentuais usados), para auditoria
+  detalhe       Json?
+  criadoPor     String?           @map("criado_por")
+  criadoEm      DateTime          @default(now()) @map("criado_em")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@unique([empresaId, competencia, colaboradorId])
+  @@index([empresaId, competencia])
+  @@map("folha_snapshots")
 }

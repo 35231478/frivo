@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
-import { moduloDaRota, pode } from "@/lib/permissoes";
+import { moduloDaRota, pode, type Acao } from "@/lib/permissoes";
 import { FrivoLogo, FrivoMark } from "./frivo-logo";
 import type { Session } from "next-auth";
 import {
@@ -13,7 +13,7 @@ import {
   HardHat, Settings, ChevronDown, ChevronRight,
   Wrench, FileSpreadsheet, Cog, Package, ListChecks, Calculator,
   Wallet, Receipt, TrendingUp, FileBarChart, Clock, ShoppingCart, Timer, Tags, CalendarDays, Headset, ScrollText, QrCode,
-  Truck, UsersRound, IdCard, ClipboardCheck, Smartphone, ShieldCheck, UserCog, Upload, Landmark, Mail, Building2, Globe, Coins,
+  Truck, UsersRound, IdCard, BadgeDollarSign, ClipboardCheck, Smartphone, ShieldCheck, UserCog, Upload, Landmark, Mail, Building2, Globe, Coins,
   PanelLeftClose, PanelLeftOpen, MoreVertical, LogOut,
 } from "lucide-react";
 
@@ -27,6 +27,8 @@ interface Item {
   matchHref?: string;
   /** Sobrescreve o módulo de permissão (quando o 1º segmento da rota não reflete o gate correto). */
   modulo?: string;
+  /** Ação exigida (padrão: "visualizar"). Ex.: Custo de pessoal exige "Financeiro › folha". */
+  acao?: Acao;
 }
 interface Grupo {
   tipo: "grupo";
@@ -125,6 +127,11 @@ const FINANCEIRO: Secao[] = [
       {
         tipo: "grupo", label: "Tesouraria", icone: Landmark, itens: [
           { href: "/financeiro/contas-bancarias", icone: Landmark, label: "Contas bancárias", modulo: "financeiro" },
+        ],
+      },
+      {
+        tipo: "grupo", label: "Pessoal", icone: BadgeDollarSign, itens: [
+          { href: "/financeiro/custo-pessoal", icone: BadgeDollarSign, label: "Custo de pessoal", modulo: "financeiro", acao: "folha" },
         ],
       },
     ],
@@ -244,7 +251,7 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
   const role = usuario.role;
   const podeVer = (i: Item) => {
     const m = i.modulo ?? moduloDaRota(i.href.split("#")[0]);
-    return !m || pode(permissoes, m, "visualizar", role);
+    return !m || (pode(permissoes, m, "visualizar", role) && (!i.acao || pode(permissoes, m, i.acao, role)));
   };
 
   // Filtra seções por permissão (itens sem permissão somem; grupos/seções vazios somem)

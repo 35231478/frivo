@@ -8,8 +8,8 @@ import { impactoColaborador, anotarInativacao, lerMotivo } from "@/lib/inativaca
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_: NextRequest, { params }: Params) {
-  // Ficha completa (salário, CPF/RG, documentos): só quem gerencia colaboradores.
-  // Seletores de técnico usam a lista resumida de GET /api/tecnicos.
+  // Ficha completa (CPF/RG, documentos): só quem gerencia colaboradores. O salário só vai junto
+  // para quem tem "Financeiro › Custo de pessoal". Seletores de técnico usam GET /api/tecnicos.
   const guard = await exigirPermissao("equipes", "gerenciar");
   if (guard.erro) return guard.resposta;
   const { session } = guard;
@@ -24,7 +24,14 @@ export async function GET(_: NextRequest, { params }: Params) {
     },
   });
   if (!tecnico) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
-  return NextResponse.json(tecnico);
+  return NextResponse.json(semSalario(tecnico, session));
+}
+
+/** Remove o salário da resposta para quem não tem a permissão de folha. */
+function semSalario<T extends { salario?: unknown }>(t: T, session: { user?: { permissoes?: any; role?: string } | null }) {
+  if (pode(session.user?.permissoes, "financeiro", "folha", session.user?.role)) return t;
+  const { salario: _, ...resto } = t;
+  return resto;
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {
@@ -89,7 +96,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
       },
     },
   });
-  return NextResponse.json(atualizado);
+  return NextResponse.json(semSalario(atualizado, session));
 }
 
 /**
