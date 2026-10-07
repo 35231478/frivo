@@ -7,14 +7,13 @@ import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { moduloDaRota, pode, type Acao } from "@/lib/permissoes";
 import { FrivoLogo, FrivoMark } from "./frivo-logo";
+import { SECOES_CONFIGURACOES } from "@/lib/navegacao/configuracoes";
 import type { Session } from "next-auth";
 import {
-  LayoutDashboard, Users, Thermometer, ClipboardList, FileText,
-  HardHat, Settings, ChevronDown, ChevronRight,
-  Wrench, FileSpreadsheet, Cog, Package, ListChecks, Calculator,
-  Wallet, Receipt, TrendingUp, FileBarChart, Clock, ShoppingCart, Timer, Tags, CalendarDays, Headset, ScrollText, QrCode,
-  Truck, UsersRound, IdCard, BadgeDollarSign, ClipboardCheck, Smartphone, ShieldCheck, UserCog, Upload, Landmark, Mail, Building2, Globe, Coins,
-  PanelLeftClose, PanelLeftOpen, MoreVertical, LogOut,
+  LayoutDashboard, Users, Thermometer, ClipboardList, FileText, HardHat, Settings, ChevronDown, ChevronRight,
+  Wrench, Calculator, Wallet, Receipt, TrendingUp, FileBarChart, ShoppingCart, Timer, CalendarDays, QrCode,
+  Truck, UsersRound, BadgeDollarSign, ClipboardCheck, Smartphone, UserCog, Upload, Landmark, Globe, Coins,
+  PanelLeftClose, PanelLeftOpen, MoreVertical, LogOut, LayoutGrid,
 } from "lucide-react";
 
 type Icone = React.ComponentType<{ className?: string }>;
@@ -29,6 +28,10 @@ interface Item {
   modulo?: string;
   /** Ação exigida (padrão: "visualizar"). Ex.: Custo de pessoal exige "Financeiro › folha". */
   acao?: Acao;
+  /** Subtítulo do subgrupo dentro do grupo (ex.: "Catálogo") */
+  subgrupo?: string;
+  /** Microtexto abaixo do item (ex.: Usuários = quem faz login) */
+  dica?: string;
 }
 interface Grupo {
   tipo: "grupo";
@@ -138,37 +141,23 @@ const FINANCEIRO: Secao[] = [
   },
 ];
 
-/** Bloco SISTEMA — configurações, acessível pelo rodapé em ambos os módulos. */
+/**
+ * Bloco SISTEMA — configurações, acessível pelo rodapé e pelo menu do usuário. Três seções
+ * (operacionais, financeiras, conta) com subgrupos, geradas de lib/navegacao/configuracoes.ts
+ * (a mesma fonte das telas de cada seção). Cada grupo começa com a "Visão geral" da seção.
+ */
 const SISTEMA: Secao[] = [
   {
     titulo: "Sistema",
-    entries: [
-      {
-        tipo: "grupo", label: "Configurações operacionais", icone: Cog, itens: [
-          { href: "/configuracoes/tipos-os", icone: ListChecks, label: "Tipos de OS" },
-          { href: "/configuracoes/tipos-equipamento", icone: Thermometer, label: "Tipos de equipamento" },
-          { href: "/configuracoes/formularios", icone: FileSpreadsheet, label: "Formulários" },
-          { href: "/configuracoes/servicos", icone: Wrench, label: "Serviços" },
-          { href: "/configuracoes/produtos", icone: Package, label: "Produtos" },
-          { href: "/configuracoes/tabelas-preco", icone: Tags, label: "Tabelas de preços" },
-          { href: "/configuracoes/termos", icone: ScrollText, label: "Termos de referência" },
-          { href: "/configuracoes/prazos", icone: Clock, label: "Modelos de prazo" },
-          { href: "/configuracoes/financeiro/categorias", icone: Tags, label: "Categorias financeiras" },
-        ],
-      },
-      {
-        tipo: "grupo", label: "Configurações da conta", icone: Settings, itens: [
-          { href: "/configuracoes", icone: Building2, label: "Dados da empresa" },
-          { href: "/configuracoes/perfis", icone: ShieldCheck, label: "Perfis de acesso" },
-          { href: "/configuracoes/usuarios", icone: UserCog, label: "Usuários" },
-          { href: "/configuracoes/cargos", icone: IdCard, label: "Cargos" },
-          { href: "/configuracoes#preferencias", icone: Cog, label: "Preferências", matchHref: "__nunca__" },
-          { href: "/configuracoes/email", icone: Mail, label: "E-mail transacional" },
-          { href: "/configuracoes/portal", icone: Headset, label: "Portal do cliente" },
-          { href: "/configuracoes/qr-code", icone: QrCode, label: "Config. QR Code" },
-        ],
-      },
-    ],
+    entries: SECOES_CONFIGURACOES.map((sec): Grupo => ({
+      tipo: "grupo", label: sec.label, icone: sec.icone,
+      itens: [
+        { href: sec.href, icone: LayoutGrid, label: "Visão geral" },
+        ...sec.subgrupos.flatMap((sg) => sg.itens.map((i): Item => ({
+          href: i.href, icone: i.icone, label: i.label, matchHref: i.matchHref, subgrupo: sg.titulo, dica: i.dicaNoMenu ? i.dica : undefined,
+        }))),
+      ],
+    })),
   },
 ];
 
@@ -273,6 +262,10 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
   const operacionalDisponivel = temItens(filtrar(OPERACIONAL));
   const financeiroDisponivel = temItens(filtrar(FINANCEIRO));
   const sistemaDisponivel = temItens(filtrar(SISTEMA));
+  // Atalho do menu do usuário: a primeira seção de configurações que o perfil pode ver
+  const primeiroGrupoSistema = filtrar(SISTEMA)[0]?.entries.find(ehGrupo);
+  const configHref = primeiroGrupoSistema ? primeiroGrupoSistema.itens[0].href : null;
+  const perfilRotulo = role === "ADMIN" ? "ADMIN" : usuario.perfilNome || "Sem perfil de acesso";
 
   // Módulo efetivo (cai para o disponível se o escolhido não estiver acessível)
   const moduloEfetivo: Modulo =
@@ -368,6 +361,12 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
             "absolute z-20 mt-1 w-52 bg-white rounded-lg shadow-xl border border-gray-100 py-1",
             colapsada ? "left-full ml-2 top-2" : "left-3 right-3",
           )}>
+            <div className="px-3 pt-1.5 pb-2 mb-1 border-b border-gray-100" data-menu-conta>
+              <p className="text-xs text-gray-900 truncate" title={`${usuario.empresaNome} · ${perfilRotulo}`}>
+                <span className="font-semibold">{usuario.empresaNome || "Empresa"}</span>
+                <span className="text-gray-500"> · {perfilRotulo}</span>
+              </p>
+            </div>
             <Link
               href="/perfil"
               onClick={() => setMenuAberto(false)}
@@ -375,6 +374,16 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
             >
               <UserCog className="w-4 h-4" /> Gerenciar perfil
             </Link>
+            {configHref && (
+              <Link
+                href={configHref}
+                onClick={() => setMenuAberto(false)}
+                className="flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                data-acao="menu-configuracoes"
+              >
+                <Settings className="w-4 h-4" /> Configurações
+              </Link>
+            )}
             <button
               onClick={() => signOut({ callbackUrl: "/login" })}
               className="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50"
@@ -440,8 +449,8 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
                         )}
                       >
                         {grupoAtivo(e) && <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r bg-success-500" />}
-                        <span className="flex items-center gap-3">
-                          <e.icone className="w-[18px] h-[18px]" />
+                        <span className="flex items-center gap-3 text-left leading-tight min-w-0">
+                          <e.icone className="w-[18px] h-[18px] shrink-0" />
                           {e.label}
                         </span>
                         {abertos.has(e.label) ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
@@ -449,20 +458,29 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
 
                       {abertos.has(e.label) && (
                         <div className="mt-1 ml-3 pl-3 pr-1 py-1 rounded-lg bg-white/5 border-l-2 border-white/15 space-y-0.5">
-                          {e.itens.map((i) => (
-                            <Link
-                              key={i.href + i.label}
-                              href={i.href}
-                              className={cn(
-                                "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
-                                itemAtivo(i)
-                                  ? "bg-white/15 text-white font-medium"
-                                  : "text-slate-200 hover:bg-white/10 hover:text-white",
+                          {e.itens.map((i, k) => (
+                            <div key={i.href + i.label}>
+                              {i.subgrupo && i.subgrupo !== e.itens[k - 1]?.subgrupo && (
+                                <p className="px-3 pt-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400" data-subgrupo>{i.subgrupo}</p>
                               )}
-                            >
-                              <i.icone className="w-4 h-4 shrink-0" />
-                              {i.label}
-                            </Link>
+                              <Link
+                                href={i.href}
+                                className={cn(
+                                  "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
+                                  itemAtivo(i)
+                                    ? "bg-white/15 text-white font-medium"
+                                    : "text-slate-200 hover:bg-white/10 hover:text-white",
+                                )}
+                              >
+                                <i.icone className={cn("w-4 h-4 shrink-0", i.dica && "self-start mt-0.5")} />
+                                {i.dica ? (
+                                  <span className="min-w-0">
+                                    <span className="block">{i.label}</span>
+                                    <span className="block text-[11px] leading-snug text-slate-400 font-normal">{i.dica}</span>
+                                  </span>
+                                ) : i.label}
+                              </Link>
+                            </div>
                           ))}
                         </div>
                       )}
