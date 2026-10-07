@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
+import { respostaRefEmpresa, validarRefEmpresa } from "@/lib/ref-empresa";
 import { clienteSchema } from "@/lib/validations";
 import { contatoSeguro } from "@/lib/contato-cliente";
 import { definirAtivoCliente } from "@/lib/acoes-massa/regras";
@@ -65,6 +66,13 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
 
   const { responsavelTecnicoId, segmento, origem, satisfacao, ...resto } = parsed.data;
+  // Tabela de preço e responsável técnico precisam ser da mesma empresa
+  try {
+    await Promise.all([
+      validarRefEmpresa("tabelaPreco", resto.tabelaPrecoId, empresaId, "Tabela de preço"),
+      validarRefEmpresa("tecnico", responsavelTecnicoId, empresaId, "Responsável técnico"),
+    ]);
+  } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
   const atualizado = await prisma.cliente.update({
     where: { id },

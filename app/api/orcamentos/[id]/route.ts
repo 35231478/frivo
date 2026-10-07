@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { orcamentoSchema } from "@/lib/validations";
 import { calcularTotais, montarCamposProposta } from "@/lib/orcamento-helpers";
 import { exigirPermissao } from "@/lib/permissoes-server";
@@ -99,6 +100,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     );
   }
   const data = parsed.data;
+
+  // Cliente, responsável técnico e itens do catálogo precisam ser da mesma empresa
+  try {
+    await Promise.all([
+      validarRefEmpresa("cliente", data.clienteId, empresaId, "Cliente"),
+      validarRefEmpresa("tecnico", data.responsavelTecnicoId, empresaId, "Responsável técnico"),
+      validarRefsEmpresa("servico", data.servicos.map((s) => s.catalogoId), empresaId, "Serviço do catálogo"),
+      validarRefsEmpresa("produto", data.produtos.map((p) => p.catalogoId), empresaId, "Produto do catálogo"),
+    ]);
+  } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
   // Valida que as OS vinculadas pertencem ao mesmo tenant e cliente (evita vínculo cross-tenant)
   if (data.ordensServicoIds.length) {

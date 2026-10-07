@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
+import { respostaRefEmpresa, validarRefEmpresa } from "@/lib/ref-empresa";
 import { validarDataUrl, type ArquivoValidado } from "@/lib/anexos-server";
 import { clienteSchema } from "@/lib/validations";
 import { z } from "zod";
@@ -93,6 +94,13 @@ export async function POST(req: NextRequest) {
   if (existente) return NextResponse.json({ erro: "CPF/CNPJ já cadastrado" }, { status: 409 });
 
   const { responsavelTecnicoId, unidades, anexos, contatos, ...resto } = parsed.data;
+  // Tabela de preço e responsável técnico precisam ser da mesma empresa
+  try {
+    await Promise.all([
+      validarRefEmpresa("tabelaPreco", resto.tabelaPrecoId, empresaId, "Tabela de preço"),
+      validarRefEmpresa("tecnico", responsavelTecnicoId, empresaId, "Responsável técnico"),
+    ]);
+  } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
   // Anexos chegam como data URL: o tipo gravado vem do conteúdo, não do que foi declarado
   const anexosValidos: ArquivoValidado[] = [];

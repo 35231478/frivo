@@ -13,6 +13,7 @@ const { auth } = NextAuth(authConfig);
 // "/orcamento/" não libera "/orcamentos").
 const rotasPublicas = [
   "/login",
+  "/sessao-encerrada", // limpa o cookie de uma sessão que o servidor já não aceita
   "/api/auth",        // endpoints internos do Auth.js
   "/api/webhooks",    // webhooks externos (ex.: Banco Inter)
   "/api/email/processar-lembretes", // cron (valida CRON_SECRET internamente)

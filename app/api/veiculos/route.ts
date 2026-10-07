@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { veiculoSchema } from "@/lib/validations";
 import { organizarFotosVeiculo } from "@/lib/veiculo-fotos";
@@ -17,9 +16,11 @@ export async function GET(req: NextRequest) {
     });
     return NextResponse.json(veiculos);
   }
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
-  const empresaId = session.user!.empresaId;
+  // Lista completa (responsável, equipe, contagens): tela de veículos e formulário de equipe.
+  // Exige a permissão do módulo, não só estar logado; sempre só da empresa da sessão.
+  const guard = await exigirAlgumaPermissao([["veiculos", "visualizar"], ["equipes", "gerenciar"]]);
+  if (guard.erro) return guard.resposta;
+  const empresaId = guard.session.user!.empresaId;
 
   const veiculos = await prisma.veiculo.findMany({
     where: { empresaId },

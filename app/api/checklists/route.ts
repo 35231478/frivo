@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { respostaRefEmpresa, validarRefEmpresa } from "@/lib/ref-empresa";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { checklistPreenchidoSchema } from "@/lib/validations";
 
@@ -41,6 +42,16 @@ export async function POST(req: NextRequest) {
 
   const veiculo = await prisma.veiculo.findFirst({ where: { id: veiculoId, empresaId } });
   if (!veiculo) return NextResponse.json({ erro: "Veículo não encontrado" }, { status: 404 });
+  // Modelo de checklist e colaborador precisam ser da mesma empresa; os itens, do próprio modelo
+  try {
+    await Promise.all([
+      validarRefEmpresa("checklistTemplate", templateId, empresaId, "Modelo de checklist"),
+      validarRefEmpresa("tecnico", colaboradorId, empresaId, "Colaborador"),
+    ]);
+  } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
+  const itemIds = [...new Set(itens.map((i) => i.itemTemplateId))];
+  if (itemIds.length && (await prisma.checklistItemTemplate.count({ where: { id: { in: itemIds }, templateId } })) !== itemIds.length)
+    return NextResponse.json({ erro: "Item de checklist inválido." }, { status: 400 });
 
   const temAlerta = itens.some((i) => i.alerta);
   const status = temAlerta ? "COM_ALERTAS" : "CONCLUIDO";

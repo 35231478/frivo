@@ -36,12 +36,21 @@ export interface DefinicaoTecnicos {
   equipeId?: string | null;
 }
 
+/** Quem já está na atividade (edição): continua aceito mesmo se foi inativado depois. */
+export interface VinculosAtuais {
+  tecnicoIds: string[];
+  equipeId: string | null;
+}
+
 /**
  * Valida e normaliza: técnicos ativos da empresa, com competência no tipo de OS (quando
  * houver — mesma regra do seletor de técnico) e equipe ativa da empresa.
+ * Na edição, `vinculosAtuais` lista quem JÁ está na atividade: esses continuam aceitos mesmo
+ * inativos (reeditar uma atividade antiga não pode travar). Inativo só é recusado como vínculo NOVO.
  */
 export async function resolverTecnicos(
-  empresaId: string, def: DefinicaoTecnicos, tipoOsId: string | null, opts: { exigir?: boolean } = {},
+  empresaId: string, def: DefinicaoTecnicos, tipoOsId: string | null,
+  opts: { exigir?: boolean; vinculosAtuais?: VinculosAtuais } = {},
 ) {
   const ids = [...new Set(def.tecnicoIds.filter(Boolean))].slice(0, 30);
   if (opts.exigir && !ids.length) {
@@ -50,16 +59,23 @@ export async function resolverTecnicos(
       : MSG_SEM_EXECUTOR);
   }
   let equipe: { id: string; liderId: string | null } | null = null;
+  const atuais = opts.vinculosAtuais;
   if (def.equipeId) {
-    equipe = await prisma.equipe.findFirst({ where: { id: def.equipeId, empresaId, status: "ATIVA" }, select: { id: true, liderId: true } });
+    const equipeJaVinculada = !!atuais?.equipeId && atuais.equipeId === def.equipeId;
+    equipe = await prisma.equipe.findFirst({
+      where: { id: def.equipeId, empresaId, ...(equipeJaVinculada ? {} : { status: "ATIVA" as const }) },
+      select: { id: true, liderId: true },
+    });
     if (!equipe) throw new ErroTecnicos("Equipe inválida ou inativa.");
   }
   if (ids.length) {
+    const jaVinculados = new Set(atuais?.tecnicoIds ?? []);
     const encontrados = await prisma.tecnico.findMany({
-      where: { id: { in: ids }, empresaId, ativo: true },
-      select: { id: true, nome: true, competencias: tipoOsId ? { where: { id: tipoOsId }, select: { id: true } } : undefined },
+      where: { id: { in: ids }, empresaId },
+      select: { id: true, nome: true, ativo: true, competencias: tipoOsId ? { where: { id: tipoOsId }, select: { id: true } } : undefined },
     });
-    if (encontrados.length !== ids.length) throw new ErroTecnicos("Um ou mais técnicos são inválidos ou estão inativos.");
+    const validos = encontrados.filter((t) => t.ativo || jaVinculados.has(t.id));
+    if (validos.length !== ids.length) throw new ErroTecnicos("Um ou mais técnicos são inválidos ou estão inativos.");
     if (tipoOsId) {
       const sem = encontrados.filter((t) => !(t.competencias ?? []).length).map((t) => t.nome);
       if (sem.length) throw new ErroTecnicos(`Sem competência neste tipo de OS: ${sem.join(", ")}.`);

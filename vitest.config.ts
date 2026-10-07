@@ -6,5 +6,8 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/unit/**/*.test.ts"],
+    // next-auth importa "next/server" sem extensão (ESM): processado pelo Vite, resolve normal.
+    // Necessário para testar o Auth.js real (tests/unit/sessao-ativa.test.ts).
+    server: { deps: { inline: ["next-auth"] } },
   },
 });

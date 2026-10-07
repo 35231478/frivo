@@ -13,7 +13,8 @@ import { AuthSessionProvider } from "@/components/providers/session-provider";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
-  if (!session) redirect("/login");
+  // Sem sessão válida (inclusive usuário inativado): limpa o cookie e vai para o login
+  if (!session) redirect("/sessao-encerrada");
 
   // Avatar vem do banco (fora do JWT, para não estourar o cookie com base64)
   const dbUser = await prisma.usuario.findUnique({ where: { id: session.user.id }, select: { avatar: true } });

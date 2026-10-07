@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { tecnicoSchema } from "@/lib/validations";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { pode } from "@/lib/permissoes";
@@ -63,6 +64,14 @@ export async function PUT(req: NextRequest, { params }: Params) {
   // Veículo padrão (opcional): só muda quando enviado; precisa ser da mesma empresa
   if (veiculoId && !(await prisma.veiculo.findFirst({ where: { id: veiculoId, empresaId }, select: { id: true } })))
     return NextResponse.json({ erro: "Veículo inválido." }, { status: 400 });
+  // Cargo, perfil de acesso e competências (tipos de OS) precisam ser da mesma empresa
+  try {
+    await Promise.all([
+      validarRefEmpresa("cargo", cargoId, empresaId, "Cargo"),
+      validarRefEmpresa("perfilAcesso", perfilAcessoId, empresaId, "Perfil de acesso"),
+      validarRefsEmpresa("tipoOs", competenciaIds, empresaId, "Competência"),
+    ]);
+  } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
   // Status "Inativo" no formulário = inativar o colaborador (mesma regra do botão: exige "excluir").
   // Mantém `ativo` em sincronia com o status (antes o status mudava, mas ele seguia nas listas).
   let ativo = existente.ativo;

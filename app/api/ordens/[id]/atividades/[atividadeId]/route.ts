@@ -39,14 +39,19 @@ export async function PUT(req: NextRequest, { params }: Params) {
   let tecnicos: Awaited<ReturnType<typeof resolverTecnicos>> | null = null;
   // Veículo desta atividade: só muda quando enviado (null = sem veículo). Não mexe no vínculo padrão.
   let veiculoId: string | null | undefined;
+  const antes = def ? await prisma.atividadeTecnico.findMany({ where: { atividadeId }, select: { tecnicoId: true } }) : [];
   try {
     if (def) {
       const tipoFinal = tipoOsId !== undefined ? (tipoOsId || null) : existente.tipoOsId;
-      tecnicos = await resolverTecnicos(empresaId, def, tipoFinal, { exigir: true });
+      // Quem já está na atividade segue aceito mesmo se foi inativado (só vínculo novo exige ativo)
+      const vinculosAtuais = {
+        tecnicoIds: [existente.tecnicoId, ...antes.map((a) => a.tecnicoId)].filter((x): x is string => !!x),
+        equipeId: existente.equipeId,
+      };
+      tecnicos = await resolverTecnicos(empresaId, def, tipoFinal, { exigir: true, vinculosAtuais });
     }
     if (veiculoPedido !== undefined) veiculoId = await resolverVeiculo(empresaId, veiculoPedido, { responsavel: null, equipeId: null });
   } catch (e) { if (e instanceof ErroTecnicos) return NextResponse.json({ erro: e.message }, { status: 400 }); throw e; }
-  const antes = def ? await prisma.atividadeTecnico.findMany({ where: { atividadeId }, select: { tecnicoId: true } }) : [];
 
   // Gate "obrigatório para concluir": não finaliza a atividade sem responder os
   // formulários marcados como obrigatórios (por tipo de OS + tipo de equipamento).
@@ -59,7 +64,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const tipoIds = [...new Set(feitos.map((f) => f.equipamento.tipoEquipamentoId).filter(Boolean) as string[])];
     if (tipoIds.length > 0) {
       const obrig = await prisma.formTypeMapping.findMany({
-        where: { empresaId, tipoOsId: existente.tipoOsId, tipoEquipamentoId: { in: tipoIds }, obrigatorioConcluir: true },
+        // Formulário inativo não é mais exigido (não trava atividades que já o usavam)
+        where: { empresaId, tipoOsId: existente.tipoOsId, tipoEquipamentoId: { in: tipoIds }, obrigatorioConcluir: true, formularioTemplate: { ativo: true } },
         select: { tipoEquipamentoId: true, formularioTemplateId: true, formularioTemplate: { select: { nome: true, _count: { select: { campos: true } } } } },
       });
       if (obrig.length > 0) {

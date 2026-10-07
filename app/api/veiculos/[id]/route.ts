@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { veiculoSchema } from "@/lib/validations";
 import { organizarFotosVeiculo } from "@/lib/veiculo-fotos";
@@ -11,9 +10,10 @@ import { inativarVeiculo, reativarVeiculo, statusHttp } from "@/lib/acoes-massa/
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
-  const empresaId = session.user!.empresaId;
+  // Detalhe com documentos e manutenções: exige ver veículos; id de outra empresa = 404
+  const guard = await exigirPermissao("veiculos", "visualizar");
+  if (guard.erro) return guard.resposta;
+  const empresaId = guard.session.user!.empresaId;
   const { id } = await params;
 
   const veiculo = await prisma.veiculo.findFirst({

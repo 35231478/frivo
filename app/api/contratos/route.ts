@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { exigirAlgumaPermissao, exigirPermissao } from "@/lib/permissoes-server";
 import { contratoSchema } from "@/lib/validations";
 import { gerarPrevisaoContratoContasReceber } from "@/lib/financeiro-server";
@@ -42,6 +43,15 @@ export async function POST(req: NextRequest) {
   if (dup) return NextResponse.json({ erro: "Número de contrato já cadastrado" }, { status: 409 });
 
   const { unidadeIds, recorrenciasLocais, dataInicio, dataFim, valorMensal, valorTotal, responsavelTecnicoId, tipoOsRecorrenciaId, tecnicoRecorrenciaId, artVencimento, itensInclusos, ...resto } = parsed.data;
+  // Cliente, locais, tipos de OS e técnicos (inclusive os da recorrência por local) precisam ser da mesma empresa
+  try {
+    await Promise.all([
+      validarRefEmpresa("cliente", resto.clienteId, empresaId, "Cliente"),
+      validarRefsEmpresa("unidade", unidadeIds, empresaId, "Local"),
+      validarRefsEmpresa("tipoOs", [tipoOsRecorrenciaId, ...recorrenciasLocais.map((r) => r.tipoOsId)], empresaId, "Tipo de OS"),
+      validarRefsEmpresa("tecnico", [responsavelTecnicoId, tecnicoRecorrenciaId, ...recorrenciasLocais.map((r) => r.tecnicoId)], empresaId, "Técnico"),
+    ]);
+  } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
   const contrato = await prisma.contrato.create({
     data: {
