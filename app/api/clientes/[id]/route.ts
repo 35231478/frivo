@@ -4,6 +4,7 @@ import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { clienteSchema } from "@/lib/validations";
 import { contatoSeguro } from "@/lib/contato-cliente";
+import { definirAtivoCliente } from "@/lib/acoes-massa/regras";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -99,8 +100,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (body.ativo === false && !pode(session.user!.permissoes, "clientes", "excluir", session.user!.role))
     return NextResponse.json({ erro: "Sem permissão" }, { status: 403 });
 
-  const atualizado = await prisma.cliente.update({ where: { id }, data: { ativo: body.ativo } });
-  return NextResponse.json({ ok: true, ativo: atualizado.ativo });
+  await definirAtivoCliente(id, body.ativo, { empresaId, usuarioId: session.user!.id, usuarioNome: session.user!.name ?? "usuário" });
+  return NextResponse.json({ ok: true, ativo: body.ativo });
 }
 
 export async function DELETE(_: NextRequest, { params }: Params) {
@@ -114,6 +115,6 @@ export async function DELETE(_: NextRequest, { params }: Params) {
   const existente = await getClienteTenant(id, empresaId);
   if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
 
-  await prisma.cliente.update({ where: { id }, data: { ativo: false } });
+  await definirAtivoCliente(id, false, { empresaId, usuarioId: session.user!.id, usuarioNome: session.user!.name ?? "usuário" });
   return NextResponse.json({ ok: true });
 }

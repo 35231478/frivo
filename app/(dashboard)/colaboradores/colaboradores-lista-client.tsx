@@ -1,5 +1,6 @@
 "use client";
 
+import { CheckboxLinha, CheckboxPagina, useAcoesMassaDisponiveis } from "@/components/acoes-massa/selecao";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -52,6 +53,7 @@ function StatusColaboradorSelo({ status, className }: { status: string; classNam
 const funcaoCargo = (c: ColaboradorLinha) => [c.cargo, c.funcaoLabel].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(" · ");
 
 export function ColaboradoresListaClient({ itens, total, filtros: f, opcoes, resumo }: Props) {
+  const massa = useAcoesMassaDisponiveis("colaboradores");
   const { pode } = usePermissoes();
   const podeGerenciar = pode("equipes", "gerenciar");
   // Mesmo hook das listagens de Equipamentos e Veículos
@@ -152,10 +154,15 @@ export function ColaboradoresListaClient({ itens, total, filtros: f, opcoes, res
         ) : (
           <>
             <div className="md:hidden bg-white border border-surface-border rounded-xl divide-y divide-surface-border overflow-hidden" data-visao="mobile">
-              {itens.map((c) => <LinhaMobile key={c.id} c={c} />)}
+              {itens.map((c) => (
+                <div key={c.id} className="flex items-stretch">
+                  {massa && <div className="pl-3 pt-4"><CheckboxLinha id={c.id} rotulo={c.nome} /></div>}
+                  <div className="min-w-0 flex-1"><LinhaMobile c={c} /></div>
+                </div>
+              ))}
             </div>
             <div className="hidden md:block">
-              {visao === "lista" ? <Tabela itens={itens} f={f} onOrdenar={ordenar} /> : <Cards itens={itens} />}
+              {visao === "lista" ? <Tabela massa={massa} itens={itens} f={f} onOrdenar={ordenar} /> : <Cards massa={massa} itens={itens} />}
             </div>
           </>
         )}
@@ -217,14 +224,15 @@ function DocSelo({ c }: { c: ColaboradorLinha }) {
 }
 
 /* ───────── Tabela (desktop) ───────── */
-function Tabela({ itens, f, onOrdenar }: { itens: ColaboradorLinha[]; f: FiltrosColaboradores; onOrdenar: (k: OrdemColaboradores) => void }) {
+function Tabela({ massa, itens, f, onOrdenar }: { massa: boolean; itens: ColaboradorLinha[]; f: FiltrosColaboradores; onOrdenar: (k: OrdemColaboradores) => void }) {
   const router = useRouter();
   return (
     <div className="bg-white border border-surface-border rounded-xl overflow-x-auto" data-visao="lista">
       <table className="w-full text-sm">
         <thead className="bg-surface-alt text-ink-muted text-[11px] uppercase tracking-wide border-b border-surface-border">
           <tr>
-            <ThOrd label="Colaborador" k="nome" ordem={f.ordem} dir={f.dir} onOrdenar={onOrdenar} className="pl-4" />
+            {massa && <th className="w-px pl-4 pr-1 py-2.5"><CheckboxPagina /></th>}
+            <ThOrd label="Colaborador" k="nome" ordem={f.ordem} dir={f.dir} onOrdenar={onOrdenar} className={massa ? "pl-2" : "pl-4"} />
             <ThOrd label="Cargo / função" k="cargo" ordem={f.ordem} dir={f.dir} onOrdenar={onOrdenar} />
             <th className="text-left px-3 py-2.5 font-semibold">Equipe</th>
             <th className="text-left px-3 py-2.5 font-semibold">Contato</th>
@@ -237,7 +245,8 @@ function Tabela({ itens, f, onOrdenar }: { itens: ColaboradorLinha[]; f: Filtros
           {itens.map((c) => (
             <tr key={c.id} data-colaborador-id={c.id} onClick={() => router.push(`/colaboradores/${c.id}/editar`)}
               className={cn("cursor-pointer hover:bg-primary-50/40 transition-colors", !c.ativo && "opacity-60")}>
-              <td className="pl-4 pr-3 py-2.5">
+              {massa && <td className="w-px pl-4 pr-1 py-2.5" onClick={(ev) => ev.stopPropagation()}><CheckboxLinha id={c.id} rotulo={c.nome} /></td>}
+              <td className={massa ? "pl-2 pr-3 py-2.5" : "pl-4 pr-3 py-2.5"}>
                 <div className="flex items-center gap-3 min-w-[200px]">
                   <AvatarTecnico nome={c.nome} fotoUrl={c.foto} size={40} />
                   <div className="min-w-0">
@@ -293,12 +302,14 @@ function LinhaMobile({ c }: { c: ColaboradorLinha }) {
 }
 
 /* ───────── Cards (desktop, alternativo) ───────── */
-function Cards({ itens }: { itens: ColaboradorLinha[] }) {
+function Cards({ massa, itens }: { massa: boolean; itens: ColaboradorLinha[] }) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4" data-visao="cards">
       {itens.map((c) => (
-        <Link key={c.id} href={`/colaboradores/${c.id}/editar`} data-colaborador-id={c.id}
-          className={cn("group bg-white border border-surface-border rounded-xl p-4 hover:shadow-md hover:border-primary-300 transition-all flex flex-col gap-3", !c.ativo && "opacity-60")}>
+        <div key={c.id} className="relative">
+        {massa && <CheckboxLinha id={c.id} rotulo={c.nome} className="absolute top-2 left-2 z-10 bg-white rounded p-1.5 m-0 shadow-sm" />}
+        <Link href={`/colaboradores/${c.id}/editar`} data-colaborador-id={c.id}
+          className={cn("h-full group bg-white border border-surface-border rounded-xl p-4 hover:shadow-md hover:border-primary-300 transition-all flex flex-col gap-3", !c.ativo && "opacity-60")}>
           <div className="flex items-start gap-3">
             <AvatarTecnico nome={c.nome} fotoUrl={c.foto} size={56} />
             <div className="min-w-0 flex-1">
@@ -316,6 +327,7 @@ function Cards({ itens }: { itens: ColaboradorLinha[] }) {
             <span className="ml-auto inline-flex items-center gap-1 text-ink-subtle"><Users className="w-3.5 h-3.5" />{c.atividades} ativ.</span>
           </p>
         </Link>
+        </div>
       ))}
     </div>
   );

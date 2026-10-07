@@ -1,5 +1,6 @@
 "use client";
 
+import { CheckboxLinha, CheckboxPagina, useAcoesMassaDisponiveis } from "@/components/acoes-massa/selecao";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -74,6 +75,7 @@ function AmbienteCelula({ e, onFiltrar }: { e: EquipLinha; onFiltrar: (m: Record
 }
 
 export function EquipamentosListaClient({ itens, total, filtros: f, opcoes, resumo }: Props) {
+  const massa = useAcoesMassaDisponiveis("equipamentos");
   const { pode } = usePermissoes();
   const podeCriar = pode("equipamentos", "criar");
   const podeEditar = pode("equipamentos", "editar");
@@ -246,13 +248,18 @@ export function EquipamentosListaClient({ itens, total, filtros: f, opcoes, resu
           <>
             {/* Celular: lista compacta (sempre) */}
             <div className="md:hidden bg-white border border-surface-border rounded-xl divide-y divide-surface-border overflow-hidden">
-              {itens.map((e) => <LinhaMobile key={e.id} e={e} />)}
+              {itens.map((e) => (
+                <div key={e.id} className="flex items-stretch">
+                  {massa && <div className="pl-3 pt-4"><CheckboxLinha id={e.id} rotulo={descricaoEquipamento(e)} /></div>}
+                  <div className="min-w-0 flex-1"><LinhaMobile e={e} /></div>
+                </div>
+              ))}
             </div>
             {/* Desktop: tabela densa (padrão) ou cards */}
             <div className="hidden md:block">
               {visao === "lista"
-                ? <Tabela itens={itens} f={f} onOrdenar={ordenar} onFiltrar={navegar} podeEditar={podeEditar} />
-                : <Cards itens={itens} />}
+                ? <Tabela itens={itens} f={f} onOrdenar={ordenar} onFiltrar={navegar} podeEditar={podeEditar} massa={massa} />
+                : <Cards itens={itens} massa={massa} />}
             </div>
           </>
         )}
@@ -266,10 +273,10 @@ export function EquipamentosListaClient({ itens, total, filtros: f, opcoes, resu
 
 /* ───────── Tabela (desktop) ───────── */
 function Tabela({
-  itens, f, onOrdenar, onFiltrar, podeEditar,
+  itens, f, onOrdenar, onFiltrar, podeEditar, massa,
 }: {
   itens: EquipLinha[]; f: FiltrosListagem; onOrdenar: (k: OrdemListagem) => void;
-  onFiltrar: (m: Record<string, string | null>) => void; podeEditar: boolean;
+  onFiltrar: (m: Record<string, string | null>) => void; podeEditar: boolean; massa: boolean;
 }) {
   const router = useRouter();
   return (
@@ -277,7 +284,8 @@ function Tabela({
       <table className="w-full text-sm">
         <thead className="bg-surface-alt text-ink-muted text-[11px] uppercase tracking-wide border-b border-surface-border">
           <tr>
-            <ThOrd label="Equipamento (tipo · capacidade)" k="tipo" ordem={f.ordem} dir={f.dir} onOrdenar={onOrdenar} className="pl-4" />
+            {massa && <th className="w-px pl-4 pr-1 py-2.5"><CheckboxPagina /></th>}
+            <ThOrd label="Equipamento (tipo · capacidade)" k="tipo" ordem={f.ordem} dir={f.dir} onOrdenar={onOrdenar} className={massa ? "pl-2" : "pl-4"} />
             <th className="text-left px-3 py-2.5 font-semibold">Ambiente</th>
             <ThOrd label="Cliente › Unidade" k="cliente" ordem={f.ordem} dir={f.dir} onOrdenar={onOrdenar} />
             <ThOrd label="Garantia" k="garantia" ordem={f.ordem} dir={f.dir} onOrdenar={onOrdenar} />
@@ -292,7 +300,8 @@ function Tabela({
               key={e.id} onClick={() => router.push(`/equipamentos/${e.id}`)}
               className={cn("cursor-pointer hover:bg-primary-50/40 transition-colors", !e.ativo && "opacity-60")}
             >
-              <td className="pl-4 pr-3 py-2.5">
+              {massa && <td className="w-px pl-4 pr-1 py-2.5"><CheckboxLinha id={e.id} rotulo={descricaoEquipamento(e)} /></td>}
+              <td className={cn("pr-3 py-2.5", massa ? "pl-2" : "pl-4")}>
                 <div className="flex items-center gap-3 min-w-[220px]">
                   <Miniatura e={e} />
                   <div className="min-w-0">
@@ -386,11 +395,13 @@ function LinhaMobile({ e }: { e: EquipLinha }) {
 }
 
 /* ───────── Cards (desktop, alternativo) ───────── */
-function Cards({ itens }: { itens: EquipLinha[] }) {
+function Cards({ itens, massa }: { itens: EquipLinha[]; massa: boolean }) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
       {itens.map((e) => (
-        <Link key={e.id} href={`/equipamentos/${e.id}`} className={cn("group bg-white border border-surface-border rounded-xl overflow-hidden hover:shadow-md hover:border-primary-300 transition-all", !e.ativo && "opacity-60")}>
+        <div key={e.id} className="relative">
+        {massa && <CheckboxLinha id={e.id} rotulo={descricaoEquipamento(e)} className="absolute top-2 left-2 z-10 bg-white rounded p-1.5 m-0 shadow-sm" />}
+        <Link href={`/equipamentos/${e.id}`} className={cn("block h-full group bg-white border border-surface-border rounded-xl overflow-hidden hover:shadow-md hover:border-primary-300 transition-all", !e.ativo && "opacity-60")}>
           <div className="aspect-[16/9] bg-surface-alt overflow-hidden">
             {e.foto
               // eslint-disable-next-line @next/next/no-img-element
@@ -414,6 +425,7 @@ function Cards({ itens }: { itens: EquipLinha[] }) {
             </p>
           </div>
         </Link>
+        </div>
       ))}
     </div>
   );

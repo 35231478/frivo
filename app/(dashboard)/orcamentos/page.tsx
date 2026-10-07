@@ -1,6 +1,10 @@
+import { SelecaoMassaProvider, CheckboxLinha, CheckboxPagina } from "@/components/acoes-massa/selecao";
+import { BarraAcoesMassa } from "@/components/acoes-massa/barra";
+import { temAcaoMassa } from "@/lib/acoes-massa/acoes";
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { whereOrcamentos } from "@/lib/listas/filtros";
 import { cn, formatarData, formatarMoeda, LABELS_STATUS_ORCAMENTO, CLASSE_STATUS_ORCAMENTO, LABELS_TIPO_ORCAMENTO, CLASSE_TIPO_ORCAMENTO } from "@/lib/utils";
 import Link from "next/link";
 import { Calculator, Plus } from "lucide-react";
@@ -18,29 +22,9 @@ export default async function OrcamentosPage({
   const mostrarCancelados = inativos === "1";
   const session = await auth();
   const empresaId = session!.user!.empresaId;
+  const massa = temAcaoMassa(session!.user!.permissoes, session!.user!.role, "orcamentos");
 
-  const where: any = { empresaId };
-  // Cancelado = orçamento inativado: fica fora da lista padrão (filtre o status ou marque "Mostrar cancelados")
-  if (status) where.status = status;
-  else if (!mostrarCancelados) where.status = { not: "CANCELADO" };
-  if (tipo) where.tipo = tipo;
-  if (clienteId) where.clienteId = clienteId;
-  if (dataInicio || dataFim) {
-    where.criadoEm = {};
-    if (dataInicio) where.criadoEm.gte = new Date(dataInicio);
-    if (dataFim) {
-      const fim = new Date(dataFim);
-      fim.setHours(23, 59, 59, 999);
-      where.criadoEm.lte = fim;
-    }
-  }
-  if (busca) {
-    where.OR = [
-      { codigo: { contains: busca, mode: "insensitive" } },
-      { nome: { contains: busca, mode: "insensitive" } },
-      { cliente: { nome: { contains: busca, mode: "insensitive" } } },
-    ];
-  }
+  const where = whereOrcamentos(empresaId, { busca, status, tipo, clienteId, dataInicio, dataFim, inativos });
 
   const [orcamentos, total, clientes] = await Promise.all([
     prisma.orcamento.findMany({
@@ -61,6 +45,7 @@ export default async function OrcamentosPage({
   ]);
 
   return (
+    <SelecaoMassaProvider entidade="orcamentos" idsPagina={orcamentos.map((o) => o.id)} total={total}>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -136,6 +121,7 @@ export default async function OrcamentosPage({
           <table className="w-full text-sm">
             <thead className="bg-surface-alt border-b border-surface-border">
               <tr>
+                {massa && <th className="w-px pl-4 pr-1 py-3"><CheckboxPagina /></th>}
                 <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Código</th>
                 <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Nome</th>
                 <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Cliente</th>
@@ -150,7 +136,7 @@ export default async function OrcamentosPage({
             <tbody>
               {orcamentos.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center text-ink-subtle py-12">
+                  <td colSpan={massa ? 10 : 9} className="text-center text-ink-subtle py-12">
                     Nenhum orçamento encontrado
                   </td>
                 </tr>
@@ -163,6 +149,7 @@ export default async function OrcamentosPage({
                       idx % 2 === 1 && "bg-surface-alt/30",
                     )}
                   >
+                    {massa && <td className="w-px pl-4 pr-1 py-3"><CheckboxLinha id={o.id} rotulo={o.codigo} /></td>}
                     <td className="px-4 py-3">
                       <Link href={`/orcamentos/${o.id}`} className="font-mono font-semibold text-primary-600 hover:underline">
                         {o.codigo}
@@ -211,5 +198,7 @@ export default async function OrcamentosPage({
         </div>
       </div>
     </div>
+    <BarraAcoesMassa />
+    </SelecaoMassaProvider>
   );
 }

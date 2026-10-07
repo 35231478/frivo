@@ -5,6 +5,7 @@ import { calcularTotais, montarCamposProposta } from "@/lib/orcamento-helpers";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { pode } from "@/lib/permissoes";
 import { impactoOrcamento } from "@/lib/inativacao-server";
+import { cancelarOrcamento, reativarOrcamento, statusHttp } from "@/lib/acoes-massa/regras";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const guard = await exigirPermissao("orcamentos", "visualizar");
@@ -177,14 +178,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const empresaId = guard.session.user!.empresaId;
   const { id } = await params;
 
-  const existente = await prisma.orcamento.findFirst({ where: { id, empresaId }, select: { id: true, status: true } });
-  if (!existente) return NextResponse.json({ erro: "Orçamento não encontrado" }, { status: 404 });
-  if (existente.status === "CANCELADO") return NextResponse.json({ ok: true, status: "CANCELADO" });
-
-  const impacto = await impactoOrcamento(id, empresaId);
-  if (impacto?.bloqueio) return NextResponse.json({ erro: impacto.bloqueio }, { status: 409 });
-
-  await prisma.orcamento.update({ where: { id }, data: { status: "CANCELADO", lembretesAtivos: false } });
+  // Mesma regra da ação em massa (lib/acoes-massa/regras.ts)
+  const r = await cancelarOrcamento(id, { empresaId, usuarioId: guard.session.user!.id, usuarioNome: guard.session.user!.name ?? "usuário" });
+  if (!r.ok) return NextResponse.json({ erro: r.codigo === "nao_encontrado" ? "Orçamento não encontrado" : r.motivo }, { status: statusHttp(r) });
   return NextResponse.json({ ok: true, status: "CANCELADO" });
 }
 
@@ -197,10 +193,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const body = await req.json().catch(() => ({}));
   if (body?.ativo !== true) return NextResponse.json({ erro: "Ação inválida" }, { status: 400 });
 
-  const existente = await prisma.orcamento.findFirst({ where: { id, empresaId }, select: { status: true } });
-  if (!existente) return NextResponse.json({ erro: "Orçamento não encontrado" }, { status: 404 });
-  if (existente.status !== "CANCELADO") return NextResponse.json({ ok: true, status: existente.status });
-
-  await prisma.orcamento.update({ where: { id }, data: { status: "RASCUNHO" } });
-  return NextResponse.json({ ok: true, status: "RASCUNHO" });
+  const r = await reativarOrcamento(id, { empresaId, usuarioId: guard.session.user!.id, usuarioNome: guard.session.user!.name ?? "usuário" });
+  if (!r.ok) return NextResponse.json({ erro: "Orçamento não encontrado" }, { status: statusHttp(r) });
+  return NextResponse.json({ ok: true, status: r.dados?.status });
 }

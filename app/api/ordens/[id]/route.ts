@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { pode } from "@/lib/permissoes";
 import { motivoBloqueioInativacao } from "@/lib/os-server";
+import { cancelarOs, statusHttp } from "@/lib/acoes-massa/regras";
 import { SOLICITACAO_PENDENTE } from "@/lib/solicitacoes";
 import { prisma } from "@/lib/prisma";
 import { gerarRelatoriosDaOs } from "@/lib/relatorio-server";
@@ -186,17 +187,8 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   if (recusa && (os.origem !== SOLICITACAO_PENDENTE.origem || os.status !== SOLICITACAO_PENDENTE.status))
     return NextResponse.json({ erro: "Esta solicitação já foi tratada (aceita ou recusada) por outra pessoa." }, { status: 409 });
 
-  if (os.status === "CANCELADA") return NextResponse.json({ ok: true, status: "CANCELADA" });
-
-  const bloqueio = await motivoBloqueioInativacao(id);
-  if (bloqueio) return NextResponse.json({ erro: bloqueio }, { status: 409 });
-
-  await prisma.ordemServico.update({ where: { id }, data: { status: "CANCELADA" } });
-  await prisma.osHistorico.create({
-    data: {
-      ordemServicoId: id, usuarioId: session.user!.id, acao: recusa ? "Solicitação recusada" : "OS inativada (cancelada)",
-      detalhes: `${os.status} → CANCELADA${motivo ? ` — Motivo: ${motivo}` : ""}`,
-    },
-  });
+  // Mesma regra da ação em massa (lib/acoes-massa/regras.ts)
+  const r = await cancelarOs(id, { empresaId, usuarioId: session.user!.id, usuarioNome: session.user!.name ?? "usuário", motivo }, { recusa });
+  if (!r.ok) return NextResponse.json({ erro: r.motivo }, { status: statusHttp(r) });
   return NextResponse.json({ ok: true, status: "CANCELADA" });
 }

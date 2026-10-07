@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { OsInativarBotao } from "@/components/os/os-inativar";
+import { CheckboxLinha, CheckboxPagina, useAcoesMassaDisponiveis } from "@/components/acoes-massa/selecao";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { cn, formatarData, MESES_PT, LABELS_STATUS_OS, LABELS_PRIORIDADE, LABELS_ORIGEM_OS } from "@/lib/utils";
@@ -72,6 +73,7 @@ export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens:
   const get = (k: string) => sp.get(k) ?? "";
 
   const view = get("view") === "cards" ? "cards" : "tabela";
+  const massa = useAcoesMassaDisponiveis("ordens");
   const sortAtual = get("sort") || "criadoEm";
   const dirAtual = (get("dir") || "desc") as "asc" | "desc";
   const filtrosAtivos = FILTROS_CHAVE.filter((k) => get(k) !== "").length;
@@ -341,6 +343,7 @@ export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens:
           <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {ordens.map((os) => (
               <div key={os.id} className="relative">
+              {massa && <CheckboxLinha id={os.id} rotulo={os.chamadoNumero ?? os.numero} className="absolute top-3 right-3 z-10 bg-white rounded" />}
               <Link href={`/ordens/${os.id}`} className="block h-full border border-surface-border rounded-xl p-4 hover:border-primary-200 hover:shadow-card transition-all">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-mono font-semibold text-primary-600">{os.chamadoNumero ?? os.numero}</span>
@@ -370,6 +373,7 @@ export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens:
             <table className="w-full text-sm">
               <thead className="bg-surface-alt border-b border-surface-border">
                 <tr>
+                  {massa && <th className="w-px pl-4 pr-1 py-3"><CheckboxPagina /></th>}
                   <Th onClick={() => ordenarPor("numero")}>Número <Seta campo="numero" /></Th>
                   <Th onClick={() => ordenarPor("cliente")}>Cliente <Seta campo="cliente" /></Th>
                   <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden lg:table-cell">Técnico</th>
@@ -384,7 +388,8 @@ export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens:
               <tbody>
                 {ordens.map((os, idx) => (
                   <tr key={os.id} className={cn("border-b border-surface-border hover:bg-primary-50/40 transition-colors", idx % 2 === 1 && "bg-surface-alt/30")}>
-                    <td className="px-4 py-3">
+                    {massa && <td className="w-px pl-4 pr-1 py-3"><CheckboxLinha id={os.id} rotulo={os.chamadoNumero ?? os.numero} /></td>}
+                    <td className="px-4 py-3 whitespace-nowrap">
                       <Link href={`/ordens/${os.id}`} className="font-mono font-semibold text-primary-600 hover:underline">{os.chamadoNumero ?? os.numero}</Link>
                       {os.origem === "PORTAL_CLIENTE" && <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-semibold bg-cyan-50 text-cyan-700 px-1.5 py-0.5 rounded"><Headset className="w-3 h-3" /> Portal</span>}
                     </td>

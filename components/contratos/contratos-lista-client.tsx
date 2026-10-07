@@ -1,5 +1,6 @@
 "use client";
 
+import { CheckboxLinha, CheckboxPagina, useAcoesMassaDisponiveis } from "@/components/acoes-massa/selecao";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
@@ -36,6 +37,7 @@ const FILTROS = ["busca", "status", "frequencia", "vigenciaInicio", "vigenciaFim
 export function ContratosListaClient({ contratos, total, somaMensalFiltrada, resumo, opcoesClientes }: {
   contratos: ContratoView[]; total: number; somaMensalFiltrada: number; resumo: Resumo; opcoesClientes: OpcaoBusca[];
 }) {
+  const massa = useAcoesMassaDisponiveis("contratos");
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
@@ -157,6 +159,7 @@ export function ContratosListaClient({ contratos, total, somaMensalFiltrada, res
           <table className="w-full text-sm">
             <thead className="bg-surface-alt border-b border-surface-border">
               <tr>
+                {massa && <th className="w-px pl-4 pr-1 py-3"><CheckboxPagina /></th>}
                 <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Número</th>
                 <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider cursor-pointer select-none hover:text-ink" onClick={() => ordenarPor("cliente")}>Cliente <Seta campo="cliente" /></th>
                 <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden md:table-cell">Frequência</th>
@@ -170,10 +173,11 @@ export function ContratosListaClient({ contratos, total, somaMensalFiltrada, res
             </thead>
             <tbody>
               {contratos.length === 0 ? (
-                <tr><td colSpan={9} className="text-center text-ink-subtle py-12">Nenhum contrato encontrado</td></tr>
+                <tr><td colSpan={massa ? 10 : 9} className="text-center text-ink-subtle py-12">Nenhum contrato encontrado</td></tr>
               ) : contratos.map((ct, idx) => (
                 <tr key={ct.id} className={cn("border-b border-surface-border hover:bg-primary-50/40 transition-colors", idx % 2 === 1 && "bg-surface-alt/30", ct.vencido && "bg-red-50/60 hover:bg-red-50", (ct.status === "ENCERRADO" || ct.status === "CANCELADO") && "opacity-60")}>
-                  <td className="px-4 py-3">
+                  {massa && <td className="w-px pl-4 pr-1 py-3"><CheckboxLinha id={ct.id} rotulo={ct.numero} /></td>}
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <Link href={`/contratos/${ct.id}`} className="font-mono font-semibold text-primary-600 hover:underline">{ct.numero}</Link>
                   </td>
                   <td className="px-4 py-3 text-ink font-medium">

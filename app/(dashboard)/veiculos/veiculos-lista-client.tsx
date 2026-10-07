@@ -1,5 +1,6 @@
 "use client";
 
+import { CheckboxLinha, CheckboxPagina, useAcoesMassaDisponiveis } from "@/components/acoes-massa/selecao";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -50,6 +51,7 @@ const marcaModelo = (v: Pick<VeiculoLinha, "marca" | "modelo">) => [v.marca, v.m
 const detalhes = (v: VeiculoLinha) => [anoTexto(v), v.combustivel, v.tipoLabel].filter(Boolean).join(" · ");
 
 export function VeiculosListaClient({ itens, total, filtros: f, tipos, resumo }: Props) {
+  const massa = useAcoesMassaDisponiveis("veiculos");
   const { pode } = usePermissoes();
   const podeGerenciar = pode("veiculos", "gerenciar");
   const podeChecklist = pode("veiculos", "checklist");
@@ -153,13 +155,18 @@ export function VeiculosListaClient({ itens, total, filtros: f, tipos, resumo }:
           <>
             {/* Celular: lista compacta (sempre) */}
             <div className="md:hidden bg-white border border-surface-border rounded-xl divide-y divide-surface-border overflow-hidden" data-visao="mobile">
-              {itens.map((v) => <LinhaMobile key={v.id} v={v} />)}
+              {itens.map((v) => (
+                <div key={v.id} className="flex items-stretch">
+                  {massa && <div className="pl-3 pt-4"><CheckboxLinha id={v.id} rotulo={v.placa} /></div>}
+                  <div className="min-w-0 flex-1"><LinhaMobile v={v} /></div>
+                </div>
+              ))}
             </div>
             {/* Desktop: tabela (padrão) ou cards */}
             <div className="hidden md:block">
               {visao === "lista"
-                ? <Tabela itens={itens} f={f} onOrdenar={ordenar} podeGerenciar={podeGerenciar} podeChecklist={podeChecklist} />
-                : <Cards itens={itens} />}
+                ? <Tabela massa={massa} itens={itens} f={f} onOrdenar={ordenar} podeGerenciar={podeGerenciar} podeChecklist={podeChecklist} />
+                : <Cards massa={massa} itens={itens} />}
             </div>
           </>
         )}
@@ -186,8 +193,8 @@ function Avisos({ v, vazio }: { v: VeiculoLinha; vazio?: React.ReactNode }) {
 }
 
 /* ───────── Tabela (desktop) ───────── */
-function Tabela({ itens, f, onOrdenar, podeGerenciar, podeChecklist }: {
-  itens: VeiculoLinha[]; f: FiltrosVeiculos; onOrdenar: (k: OrdemVeiculos) => void; podeGerenciar: boolean; podeChecklist: boolean;
+function Tabela({ massa, itens, f, onOrdenar, podeGerenciar, podeChecklist }: {
+  massa: boolean; itens: VeiculoLinha[]; f: FiltrosVeiculos; onOrdenar: (k: OrdemVeiculos) => void; podeGerenciar: boolean; podeChecklist: boolean;
 }) {
   const router = useRouter();
   return (
@@ -195,7 +202,8 @@ function Tabela({ itens, f, onOrdenar, podeGerenciar, podeChecklist }: {
       <table className="w-full text-sm">
         <thead className="bg-surface-alt text-ink-muted text-[11px] uppercase tracking-wide border-b border-surface-border">
           <tr>
-            <ThOrd label="Veículo (placa · marca/modelo)" k="placa" ordem={f.ordem} dir={f.dir} onOrdenar={onOrdenar} className="pl-4" />
+            {massa && <th className="w-px pl-4 pr-1 py-2.5"><CheckboxPagina /></th>}
+            <ThOrd label="Veículo (placa · marca/modelo)" k="placa" ordem={f.ordem} dir={f.dir} onOrdenar={onOrdenar} className={massa ? "pl-2" : "pl-4"} />
             <ThOrd label="Ano" k="ano" ordem={f.ordem} dir={f.dir} onOrdenar={onOrdenar} />
             <th className="text-left px-3 py-2.5 font-semibold">Combustível</th>
             <th className="text-left px-3 py-2.5 font-semibold">Responsável / equipe</th>
@@ -208,7 +216,8 @@ function Tabela({ itens, f, onOrdenar, podeGerenciar, podeChecklist }: {
           {itens.map((v) => (
             <tr key={v.id} data-veiculo-id={v.id} onClick={() => router.push(`/veiculos/${v.id}/editar`)}
               className={cn("cursor-pointer hover:bg-primary-50/40 transition-colors", v.status === "INATIVO" && "opacity-60")}>
-              <td className="pl-4 pr-3 py-2.5">
+              {massa && <td className="w-px pl-4 pr-1 py-2.5" onClick={(ev) => ev.stopPropagation()}><CheckboxLinha id={v.id} rotulo={v.placa} /></td>}
+              <td className={massa ? "pl-2 pr-3 py-2.5" : "pl-4 pr-3 py-2.5"}>
                 <div className="flex items-center gap-3 min-w-[220px]">
                   <Miniatura v={v} />
                   <div className="min-w-0">
@@ -272,12 +281,14 @@ function LinhaMobile({ v }: { v: VeiculoLinha }) {
 }
 
 /* ───────── Cards (desktop, alternativo) ───────── */
-function Cards({ itens }: { itens: VeiculoLinha[] }) {
+function Cards({ massa, itens }: { massa: boolean; itens: VeiculoLinha[] }) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4" data-visao="cards">
       {itens.map((v) => (
-        <Link key={v.id} href={`/veiculos/${v.id}/editar`} data-veiculo-id={v.id}
-          className={cn("group bg-white border border-surface-border rounded-xl overflow-hidden hover:shadow-md hover:border-primary-300 transition-all", v.status === "INATIVO" && "opacity-60")}>
+        <div key={v.id} className="relative">
+        {massa && <CheckboxLinha id={v.id} rotulo={v.placa} className="absolute top-2 left-2 z-10 bg-white rounded p-1.5 m-0 shadow-sm" />}
+        <Link href={`/veiculos/${v.id}/editar`} data-veiculo-id={v.id}
+          className={cn("block h-full group bg-white border border-surface-border rounded-xl overflow-hidden hover:shadow-md hover:border-primary-300 transition-all", v.status === "INATIVO" && "opacity-60")}>
           <div className="aspect-[16/9] bg-surface-alt overflow-hidden relative">
             {v.foto
               // eslint-disable-next-line @next/next/no-img-element
@@ -300,6 +311,7 @@ function Cards({ itens }: { itens: VeiculoLinha[] }) {
             </p>
           </div>
         </Link>
+        </div>
       ))}
     </div>
   );
