@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
+import { respostaRefEmpresa, validarRefEmpresa } from "@/lib/ref-empresa";
 import { z } from "zod";
 import { ErroTecnicos, INCLUDE_TECNICOS_ATIVIDADE, MSG_SEM_EXECUTOR, gravarTecnicos, lerDefinicao, lerVeiculo, resolverTecnicos, resolverVeiculo } from "@/lib/atividade-tecnicos";
 
@@ -29,6 +30,9 @@ export async function POST(req: NextRequest, { params }: Params) {
   const body = await req.json();
   const parsed = atividadeSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos" }, { status: 400 });
+  // Tipo de OS precisa ser da mesma empresa
+  try { await validarRefEmpresa("tipoOs", parsed.data.tipoOsId, empresaId, "Tipo de OS"); }
+  catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
   // Quem executa (OBRIGATÓRIO): { tecnicoIds, responsavelId?, equipeId? } — o formato antigo (só tecnicoId) continua valendo.
   // Veículo: { veiculoId } escolhido, null = sem veículo, ausente = puxa o da equipe/colaborador.

@@ -64,14 +64,12 @@ export async function GET(_: NextRequest, { params }: Params) {
       obrigatorioImpedimento: true,
       formularioTemplate: {
         select: {
-          id: true, nome: true,
+          id: true, nome: true, ativo: true,
           campos: { orderBy: { ordem: "asc" }, select: { id: true, label: true, tipo: true, obrigatorio: true, ordem: true, opcoes: true } },
         },
       },
     },
   });
-  const mapByTipo = new Map(mappings.map((m) => [m.tipoEquipamentoId, m]));
-
   // Respostas já gravadas (para status de respondido por equipamento+formulário)
   const respostas = await prisma.respostaFormularioEquipamento.findMany({
     where: { atividadeId },
@@ -83,6 +81,15 @@ export async function GET(_: NextRequest, { params }: Params) {
     if (!respMap.has(k)) respMap.set(k, new Set());
     respMap.get(k)!.add(r.campoId);
   }
+
+  // Formulário inativo: some das atividades que ainda não o usaram e, nas que já têm respostas
+  // dele, continua visível (o registro fica) mas deixa de ser obrigatório — não trava a conclusão.
+  const formsRespondidos = new Set(respostas.map((r) => r.formularioId));
+  const mapByTipo = new Map(
+    mappings
+      .filter((m) => m.formularioTemplate.ativo || formsRespondidos.has(m.formularioTemplate.id))
+      .map((m) => [m.tipoEquipamentoId, m.formularioTemplate.ativo ? m : { ...m, obrigatorioConcluir: false, obrigatorioImpedimento: false }]),
+  );
 
   const grupos: any[] = [];
   const tiposSemFormulario: any[] = [];

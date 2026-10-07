@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { equipeSchema } from "@/lib/validations";
 import { exigirPermissao } from "@/lib/permissoes-server";
@@ -10,9 +9,10 @@ import { aplicarVeiculosEquipe, planejarVeiculosEquipe, validarPessoasEquipe } f
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
-  const empresaId = session.user!.empresaId;
+  // Exige ver equipes (não só estar logado); id de outra empresa = 404
+  const guard = await exigirPermissao("equipes", "visualizar");
+  if (guard.erro) return guard.resposta;
+  const empresaId = guard.session.user!.empresaId;
   const { id } = await params;
 
   const equipe = await prisma.equipe.findFirst({

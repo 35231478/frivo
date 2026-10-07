@@ -2,16 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { exigirPermissao } from "@/lib/permissoes-server";
-import { z } from "zod";
-
-const schema = z.object({
-  nome: z.string().min(1),
-  descricao: z.string().optional(),
-  unidade: z.string().default("un"),
-  valorPadrao: z.number().optional().nullable(),
-  estoqueMinimo: z.number().int().optional().nullable(),
-  ativo: z.boolean().default(true),
-});
+import { primeiroErro, produtoCriarSchema } from "@/lib/produto-schema";
 
 export async function GET() {
   // Leitura de catálogo: qualquer usuário logado (usado nas telas de OS, orçamento, contrato e cliente).
@@ -31,9 +22,8 @@ export async function POST(req: NextRequest) {
   if (guard.erro) return guard.resposta;
   const { session } = guard;
 
-  const body = await req.json();
-  const parsed = schema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos" }, { status: 400 });
+  const parsed = produtoCriarSchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ erro: primeiroErro(parsed.error) }, { status: 400 });
 
   const item = await prisma.produto.create({
     data: { ...parsed.data, valorPadrao: parsed.data.valorPadrao ?? null, estoqueMinimo: parsed.data.estoqueMinimo ?? null, empresaId: session.user!.empresaId },

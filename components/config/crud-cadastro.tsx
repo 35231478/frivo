@@ -98,9 +98,20 @@ export function CrudCadastro({ titulo, apiUrl, campos, colunasLista }: CrudCadas
   async function remover(id: string) {
     if (!confirm("Desativar este item?")) return;
     try {
-      await fetch(`${apiUrl}/${id}`, { method: "DELETE" });
+      const res = await fetch(`${apiUrl}/${id}`, { method: "DELETE" });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); alert(e.erro ?? "Não foi possível desativar."); return; }
       setItens((p) => p.map((i) => (i.id === id ? { ...i, ativo: false } : i)));
-    } catch {}
+    } catch { alert("Erro de conexão."); }
+  }
+
+  // Reativar manda só { ativo: true }: o servidor faz edição parcial e não mexe nos outros campos
+  async function reativar(id: string) {
+    try {
+      const res = await fetch(`${apiUrl}/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ativo: true }) });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); alert(e.erro ?? "Não foi possível reativar."); return; }
+      const atualizado = await res.json().catch(() => null);
+      setItens((p) => p.map((x) => (x.id === id ? (atualizado?.id ? atualizado : { ...x, ativo: true }) : x)));
+    } catch { alert("Erro de conexão."); }
   }
 
   const ativos = itens.filter((i) => i.ativo !== false);
@@ -172,7 +183,7 @@ export function CrudCadastro({ titulo, apiUrl, campos, colunasLista }: CrudCadas
                 {inativos.map((i) => (
                   <div key={i.id} className="flex items-center justify-between px-3 py-1.5 bg-surface-alt rounded">
                     <span className="line-through">{i.nome}</span>
-                    <button onClick={() => { fetch(`${apiUrl}/${i.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ativo: true }) }).then(() => setItens((p) => p.map((x) => (x.id === i.id ? { ...x, ativo: true } : x)))); }}
+                    <button onClick={() => reativar(i.id)}
                       className="text-primary-600 hover:underline font-medium">Reativar</button>
                   </div>
                 ))}

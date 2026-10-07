@@ -1,23 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { exigirPermissao } from "@/lib/permissoes-server";
-import { z } from "zod";
-import { TipoCampo } from "@prisma/client";
-
-const campoSchema = z.object({
-  label: z.string().min(1),
-  tipo: z.nativeEnum(TipoCampo),
-  obrigatorio: z.boolean().default(false),
-  ordem: z.number().default(0),
-  opcoes: z.any().optional(),
-});
-
-const formularioSchema = z.object({
-  nome: z.string().min(1),
-  descricao: z.string().optional(),
-  tipoOsId: z.string().optional().nullable(),
-  campos: z.array(campoSchema).optional(),
-});
+import { formularioCriarSchema as formularioSchema } from "@/lib/formulario-schema";
+import { respostaRefEmpresa, validarRefEmpresa } from "@/lib/ref-empresa";
 
 export async function GET(req: NextRequest) {
   const guard = await exigirPermissao("configuracoes", "visualizar");
@@ -50,6 +35,8 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos" }, { status: 400 });
 
   const { campos, tipoOsId, ...resto } = parsed.data;
+  try { await validarRefEmpresa("tipoOs", tipoOsId, empresaId, "Tipo de OS"); }
+  catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
   const formulario = await prisma.formularioTemplate.create({
     data: {
       ...resto,

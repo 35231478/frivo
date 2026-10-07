@@ -5,9 +5,19 @@ import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations";
 import { authConfig } from "@/auth.config";
 import { permissoesDoUsuario } from "@/lib/permissoes";
+import { conferirTokenAtivo } from "@/lib/sessao-ativa";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   ...authConfig,
+  callbacks: {
+    ...authConfig.callbacks,
+    // Só no runtime Node (o middleware Edge usa o authConfig puro): usuário ou empresa
+    // inativados perdem a sessão na requisição seguinte, sem esperar o token expirar.
+    async jwt(params) {
+      const token = authConfig.callbacks.jwt(params);
+      return conferirTokenAtivo(token, !!params.user);
+    },
+  },
   providers: [
     Credentials({
       async authorize(credentials) {

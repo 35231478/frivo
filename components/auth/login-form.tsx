@@ -12,6 +12,8 @@ export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") ?? "/dashboard";
+  // Vindo de /sessao-encerrada: o acesso foi encerrado (usuário/empresa inativados ou sessão inválida)
+  const sessaoEncerrada = searchParams.get("sessao") === "encerrada";
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [erro, setErro] = useState("");
 
@@ -40,6 +42,13 @@ export function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+      {sessaoEncerrada && !erro && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-3 py-2.5 flex items-center gap-2" role="status">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          Sua sessão foi encerrada. Entre novamente para continuar.
+        </div>
+      )}
+
       {erro && (
         <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2.5 flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" />

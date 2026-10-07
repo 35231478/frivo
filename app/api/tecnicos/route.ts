@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { tecnicoSchema } from "@/lib/validations";
 import { exigirPermissao } from "@/lib/permissoes-server";
 
@@ -54,6 +55,14 @@ export async function POST(req: NextRequest) {
   // Veículo padrão (opcional) precisa ser da mesma empresa
   if (veiculoId && !(await prisma.veiculo.findFirst({ where: { id: veiculoId, empresaId }, select: { id: true } })))
     return NextResponse.json({ erro: "Veículo inválido." }, { status: 400 });
+  // Cargo, perfil de acesso e competências (tipos de OS) precisam ser da mesma empresa
+  try {
+    await Promise.all([
+      validarRefEmpresa("cargo", cargoId, empresaId, "Cargo"),
+      validarRefEmpresa("perfilAcesso", perfilAcessoId, empresaId, "Perfil de acesso"),
+      validarRefsEmpresa("tipoOs", competenciaIds, empresaId, "Competência"),
+    ]);
+  } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
   const tecnico = await prisma.tecnico.create({
     data: {
