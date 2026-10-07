@@ -39,7 +39,8 @@ export async function listarCadastro(def: DefCadastro, empresaId: string, f: { a
 
 /** Registro BRUTO (com colunas ocultas) — só para uso interno, nunca para resposta. */
 export function obterBruto(def: DefCadastro, empresaId: string, id: string) {
-  return tabela(def).findFirst({ where: { id, empresaId }, ...(def.incluir && { include: def.incluir }) });
+  const include = def.incluir || def.incluirItem ? { ...def.incluir, ...def.incluirItem } : undefined;
+  return tabela(def).findFirst({ where: { id, empresaId }, ...(include && { include }) });
 }
 
 export async function obterCadastro(def: DefCadastro, empresaId: string, id: string) {

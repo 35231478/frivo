@@ -6,7 +6,8 @@ import {
   Camera, Loader2, ShieldAlert, Sparkles, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight,
   DoorOpen, QrCode, Keyboard, Pencil, Star, Tag,
 } from "lucide-react";
-import { cn, LABELS_TIPO_EQUIPAMENTO } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { opcoesTipoEquipamento, PREFIXO_TIPO_CUSTOM, type TipoEquipamentoCadastro } from "@/lib/cadastros/tipos-equipamento";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { FormField } from "@/components/ui/form-field";
@@ -31,7 +32,7 @@ const VAZIO: Valores = {
 const FLUIDOS = ["R22", "R410A", "R32", "R407C", "R404A", "R134a", "R290", "Outro"];
 const TENSOES = ["110V", "127V", "220V", "380V", "440V"];
 const FASES = ["Monofásico", "Bifásico", "Trifásico"];
-const PREFIXO_CUSTOM = "custom:";
+const PREFIXO_CUSTOM = PREFIXO_TIPO_CUSTOM;
 const CAMPOS_TIPO: CampoRapido[] = [{ nome: "nome", label: "Nome do tipo", obrigatorio: true, placeholder: "Ex: Cortina de ar, Bebedouro" }];
 
 /** Ordem do mini-questionário (o que a IA não leu é perguntado nesta ordem). */
@@ -53,7 +54,7 @@ const ROTULO: Record<string, string> = Object.fromEntries(PERGUNTAS.map((p) => [
 
 type Etapa = "foto" | "conferencia" | "faltantes" | "local" | "revisao" | "pronto";
 type UnidadeItem = { id: string; nome: string; cidade?: string | null; clienteId: string };
-type TipoCustom = { id: string; nome: string; chaveEnum: string | null; ativo: boolean };
+type TipoCustom = TipoEquipamentoCadastro;
 
 /** Chama a leitura por IA com limite de tempo; qualquer falha vira mensagem para o fallback manual. */
 async function lerComIa(tipo: "etiqueta" | "placa", imagem: string): Promise<{ ok: true; dados: any } | { ok: false; erro: string }> {
@@ -109,7 +110,7 @@ export function CadastroPorFoto() {
 
   useEffect(() => {
     fetch("/api/tipos-equipamento").then((r) => r.json())
-      .then((d) => setTiposCustom(Array.isArray(d) ? d.filter((t: TipoCustom) => !t.chaveEnum && t.ativo !== false) : []))
+      .then((d) => setTiposCustom(Array.isArray(d) ? d : []))
       .catch(() => {});
   }, []);
 
@@ -125,10 +126,8 @@ export function CadastroPorFoto() {
       .catch(() => {}).finally(() => setCarregandoUnidades(false));
   }, [clienteId]);
 
-  const opcoesTipo: OpcaoCadastro[] = useMemo(() => [
-    ...Object.entries(LABELS_TIPO_EQUIPAMENTO).map(([value, label]) => ({ value, label })),
-    ...tiposCustom.map((t) => ({ value: `${PREFIXO_CUSTOM}${t.id}`, label: t.nome, descricao: "personalizado" })),
-  ], [tiposCustom]);
+  // Equipamento novo: só tipos ativos (padrão inativado pela empresa também sai)
+  const opcoesTipo: OpcaoCadastro[] = useMemo(() => opcoesTipoEquipamento(tiposCustom), [tiposCustom]);
   const rotuloTipo = (v: string) => opcoesTipo.find((o) => o.value === v)?.label ?? v;
 
   async function criarTipo(v: Record<string, string>): Promise<OpcaoCadastro> {

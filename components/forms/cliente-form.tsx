@@ -32,6 +32,7 @@ import {
   LABELS_STATUS_FINANCEIRO_CALC, COR_STATUS_FINANCEIRO_CALC, type StatusFinanceiroCalc,
 } from "@/lib/status-financeiro";
 import Link from "next/link";
+import { SeletorCadastro, useCadastro } from "@/components/cadastros/seletor-cadastro";
 import type { Cliente, Tecnico, Unidade, Configuracao, ContatoCliente } from "@prisma/client";
 import type { ContatoSeguro } from "@/lib/contato-cliente";
 import {
@@ -139,7 +140,8 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
   const [emailsFaturamento] = useState<string[]>(initialData?.emailsFaturamento ?? []);
   const [whatsappFaturamento, setWhatsappFaturamento] = useState<string>(initialData?.whatsappFaturamento ?? "");
   const [tabelaPrecoId, setTabelaPrecoId] = useState<string>(initialData?.tabelaPrecoId ?? "");
-  const [tabelas, setTabelas] = useState<{ id: string; nome: string; tipo: string }[]>([]);
+  const tabelasPreco = useCadastro("tabelas-preco");
+  const tabelaInativa = tabelasPreco.itens.find((t) => t.id === tabelaPrecoId && t.ativo === false) ?? null;
   const [portalAtivo, setPortalAtivo] = useState<boolean>(initialData?.portalAtivo ?? false);
   const [prefsEmail] = useState({
     emailReceberBoletos: initialData?.emailReceberBoletos ?? true,
@@ -153,7 +155,6 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
 
   useEffect(() => {
     fetch("/api/configuracoes").then((r) => r.json()).then(setConfig).catch(() => {});
-    fetch("/api/tabelas-preco").then((r) => r.json()).then((d) => setTabelas(Array.isArray(d) ? d.filter((t: any) => t.ativo !== false) : [])).catch(() => {});
   }, []);
 
   const {
@@ -531,9 +532,13 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
         <FormSection title="Comercial" icon={<DollarSign className="w-3.5 h-3.5" />}>
           <FormGrid>
             <FormField label="Tabela de preços" hint="Sem seleção, usa a tabela Padrão da empresa">
-              <Select value={tabelaPrecoId} onChange={(e) => setTabelaPrecoId(e.target.value)} placeholder="Padrão (automático)">
-                {tabelas.map((t) => (<option key={t.id} value={t.id}>{t.nome}</option>))}
-              </Select>
+              {/* Só ativas para nova escolha; a do cliente continua visível mesmo inativa (“(inativa)”) */}
+              <SeletorCadastro entidade="tabelas-preco" valor={tabelaPrecoId} onChange={(v) => setTabelaPrecoId(v)} vazio="Padrão (automático)" itens={tabelasPreco.itens} />
+              {tabelaInativa && (
+                <p className="text-xs text-amber-700 mt-1" data-aviso-tabela-inativa>
+                  “{tabelaInativa.nome}” está inativa: os preços deste cliente estão vindo da tabela Padrão. Escolha outra tabela ou reative-a.
+                </p>
+              )}
             </FormField>
           </FormGrid>
           <p className="text-xs font-bold text-ink-muted uppercase tracking-wider mt-2">Perfil de Faturamento</p>

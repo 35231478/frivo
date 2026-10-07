@@ -2,6 +2,7 @@
 
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid, FormSection } from "@/components/ui/form-field";
 import {
@@ -42,7 +43,7 @@ interface PropostaCamposProps {
   proposta: PropostaState;
   onChange: (patch: Partial<PropostaState>) => void;
   tecnicos: { id: string; nome: string; crea?: string | null }[];
-  termoTemplates: { id: string; nome: string; conteudo: string }[];
+  termoTemplates: { id: string; nome: string; conteudo: string; ativo?: boolean }[];
   equipamentos: { id: string; rotulo: string }[];
 }
 
@@ -141,9 +142,8 @@ export function PropostaCampos({ proposta, onChange, tecnicos, termoTemplates, e
       <div className="card-padded">
         <FormSection title="Termo de referência">
           <FormField label="Carregar de um template">
-            <Select value="" onChange={(e) => { if (e.target.value) aplicarTemplate(e.target.value); }} placeholder="Selecione um template...">
-              {termoTemplates.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
-            </Select>
+            {/* Ação de carregar (copia o texto): sempre escolha nova, só termos ativos */}
+            <SeletorCadastro entidade="termos-referencia" itens={termoTemplates} valor="" onChange={(v) => { if (v) aplicarTemplate(v); }} placeholder="Selecione um template..." />
           </FormField>
           <div className="flex flex-wrap gap-1.5">
             {VARIAVEIS_TERMO.map((v) => (

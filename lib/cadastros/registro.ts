@@ -18,9 +18,12 @@ export const ENTIDADES_CADASTRO = [
   "produtos", "servicos", "cargos", "categorias-financeiras",
   // Leva 4: acesso ao sistema e custo de pessoal
   "perfis-acesso", "modelos-encargos", "usuarios",
+  // Leva 3: cadastros operacionais que ficaram para trás
+  "tipos-equipamento", "tabelas-preco", "termos-referencia", "modelos-prazo",
 ] as const;
 export type EntidadeCadastro = (typeof ENTIDADES_CADASTRO)[number];
-export type ModeloCadastro = "produto" | "servico" | "cargo" | "categoriaFinanceira" | "perfilAcesso" | "modeloEncargos" | "usuario";
+export type ModeloCadastro = "produto" | "servico" | "cargo" | "categoriaFinanceira" | "perfilAcesso" | "modeloEncargos" | "usuario"
+  | "tipoEquipamentoCustom" | "tabelaPreco" | "termoReferenciaTemplate" | "prazoTemplate";
 export type AcaoCadastro = "listar" | "criar" | "editar" | "inativar" | "reativar";
 
 /** Basta UMA das permissões. `null` = qualquer usuário logado (catálogo lido nos seletores de outras telas). */
@@ -66,6 +69,8 @@ export interface DefCadastro {
   ocultos?: string[];
   /** include do Prisma na lista/registro (dados puros, sem funções) */
   incluir?: Record<string, unknown>;
+  /** include a mais só no registro único (GET /[id], edição, impacto) — ex.: itens da tabela de preço */
+  incluirItem?: Record<string, unknown>;
   /** orderBy da lista (padrão: nome) */
   ordem?: unknown;
   /** O formulário é um editor próprio (passado pela página ao CadastroPadrao), não os `campos` */
@@ -124,6 +129,27 @@ const UNIDADES_SERVICO = [
   { value: "un", label: "Unidade (un)" }, { value: "hora", label: "Hora (h)" },
   { value: "m2", label: "Metro quadrado (m²)" }, { value: "m", label: "Metro linear (m)" },
 ];
+
+/* Itens de tabela de preço e etapas de modelo de prazo (enums literais: o registro é puro, sem Prisma) */
+const idOpcional = z.preprocess((v) => (vazio(v) ? null : v), z.string().max(40).nullable());
+export const itemTabelaSchema = z.object({
+  servicoId: idOpcional.optional(),
+  produtoId: idOpcional.optional(),
+  tipoPreco: z.enum(["VALOR_FIXO", "DESCONTO_PERCENTUAL"]).default("VALOR_FIXO"),
+  valorFixo: numero().optional(),
+  descontoPercent: numero().refine((v) => v == null || v <= 100, "Desconto vai até 100%.").optional(),
+  bloqueado: z.boolean().default(false),
+}).strict().refine((it) => !!it.servicoId !== !!it.produtoId, { message: "Cada item da tabela é um serviço OU um produto." });
+export const etapaPrazoSchema = z.object({
+  nome: z.string().trim().min(1, "Toda etapa precisa de um nome.").max(120),
+  prazoHoras: z.preprocess((v) => (vazio(v) ? 24 : typeof v === "string" ? Number(v.replace(",", ".")) : v),
+    z.number({ invalid_type_error: "Prazo da etapa inválido." }).positive("O prazo da etapa precisa ser maior que zero.").max(24 * 365)),
+  responsavel: z.enum(["COMPRADOR", "GESTOR", "TECNICO", "CLIENTE"]).default("COMPRADOR"),
+  canal: z.enum(["WHATSAPP", "EMAIL", "SISTEMA"]).default("WHATSAPP"),
+  mensagem: textoOpcional(2000).optional(),
+  // A ordem é a posição na lista (o cliente pode mandar, mas é ignorada)
+  ordem: z.number().optional(),
+}).strict();
 
 /* ───────── Registro ───────── */
 export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
@@ -264,6 +290,76 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       email: z.string().trim().toLowerCase().email("E-mail inválido.").max(160),
       perfilAcessoId: z.preprocess((v) => (vazio(v) ? null : v), z.string().max(40).nullable()),
     }, { perfilAcessoId: null }, { soCriar: ["email"] }),
+  },
+  "tipos-equipamento": {
+    entidade: "tipos-equipamento", modelo: "tipoEquipamentoCustom", massa: true, singular: "tipo de equipamento", plural: "tipos de equipamento",
+    modulo: "configuracoes", permissoes: PERMISSOES_CONFIG, chave: "id", editorProprio: true,
+    busca: ["nome", "descricao"],
+    incluir: { _count: { select: { equipamentos: true, formTypeMappings: true } } },
+    campos: [
+      { key: "nome", label: "Nome", obrigatorio: true, placeholder: "Ex: Split, Chiller, VRF" },
+      { key: "descricao", label: "Observações", tipo: "textarea" },
+    ],
+    colunas: [{ key: "nome", label: "Tipo" }, { key: "descricao", label: "Observações" }, { key: "uso", label: "Em uso" }],
+    // chaveEnum (âncora dos tipos padrão) nunca entra pelo corpo
+    ...schemas({ nome: nome.max(120), descricao: textoOpcional(1000) }, { descricao: null }),
+  },
+  "tabelas-preco": {
+    entidade: "tabelas-preco", modelo: "tabelaPreco", massa: true, singular: "tabela de preços", plural: "tabelas de preços", feminino: true,
+    modulo: "configuracoes", permissoes: PERMISSOES_CONFIG, chave: "id", editorProprio: true,
+    busca: ["nome", "descricao"],
+    incluir: { _count: { select: { itens: true, clientes: true } } },
+    // Os itens só no registro único (o editor busca ao abrir): a lista e os seletores ficam leves
+    incluirItem: {
+      itens: { include: { servico: { select: { id: true, nome: true, valorPadrao: true, ativo: true } }, produto: { select: { id: true, nome: true, valorPadrao: true, ativo: true } } } },
+    },
+    ordem: [{ tipo: "asc" }, { nome: "asc" }],
+    campos: [
+      { key: "nome", label: "Nome", obrigatorio: true },
+      { key: "tipo", label: "Tipo", tipo: "select", opcoes: [{ value: "PADRAO", label: "Padrão" }, { value: "CONTRATO", label: "Contrato" }, { value: "PERSONALIZADA", label: "Personalizada" }] },
+      { key: "descricao", label: "Descrição", tipo: "textarea" },
+    ],
+    colunas: [{ key: "nome", label: "Tabela" }, { key: "tipo", label: "Tipo" }, { key: "itens", label: "Itens" }, { key: "uso", label: "Clientes" }],
+    ...schemas({
+      nome: z.string().trim().min(2, "Informe o nome da tabela.").max(120), descricao: textoOpcional(1000),
+      tipo: z.enum(["PADRAO", "CONTRATO", "PERSONALIZADA"]), precosBloqueados: z.boolean(),
+      itens: z.array(itemTabelaSchema).max(2000),
+    }, { descricao: null, tipo: "PERSONALIZADA", precosBloqueados: false, itens: [] }),
+  },
+  "termos-referencia": {
+    entidade: "termos-referencia", modelo: "termoReferenciaTemplate", massa: true, singular: "termo de referência", plural: "termos de referência",
+    modulo: "configuracoes",
+    // Ler: quem vê Configurações (a proposta recebe os termos já carregados pela página)
+    permissoes: { ...PERMISSOES_CONFIG, listar: [["configuracoes", "visualizar"]] },
+    chave: "id", editorProprio: true,
+    busca: ["nome", "descricao"],
+    campos: [
+      { key: "nome", label: "Nome", obrigatorio: true },
+      { key: "descricao", label: "Descrição" },
+      { key: "conteudo", label: "Conteúdo", tipo: "textarea" },
+    ],
+    colunas: [{ key: "nome", label: "Termo" }, { key: "descricao", label: "Descrição" }],
+    ...schemas({
+      nome: nome.max(160), descricao: textoOpcional(500),
+      conteudo: z.preprocess((v) => (v == null ? "" : v), z.string().max(100_000)),
+    }, { descricao: null, conteudo: "" }),
+  },
+  "modelos-prazo": {
+    entidade: "modelos-prazo", modelo: "prazoTemplate", massa: true, singular: "modelo de prazo", plural: "modelos de prazo",
+    // Ler: qualquer usuário logado (a OS escolhe o modelo); gravar: Configurações › gerenciar
+    modulo: "configuracoes", permissoes: PERMISSOES_CONFIG, chave: "id", editorProprio: true,
+    busca: ["nome", "descricao"],
+    incluir: { etapas: { orderBy: { ordem: "asc" } }, _count: { select: { osPrazos: true } } },
+    campos: [
+      { key: "nome", label: "Nome", obrigatorio: true },
+      { key: "descricao", label: "Descrição", tipo: "textarea" },
+      { key: "cor", label: "Cor", tipo: "cor" },
+    ],
+    colunas: [{ key: "nome", label: "Modelo", formato: "cor-nome" }, { key: "etapas", label: "Etapas" }, { key: "uso", label: "Usado em" }],
+    ...schemas({
+      nome: z.string().trim().min(2, "Informe o nome do modelo.").max(120), descricao: textoOpcional(1000), cor,
+      etapas: z.array(etapaPrazoSchema).min(1, "Adicione ao menos uma etapa.").max(50),
+    }, { descricao: null, cor: "#0EA5E9" }),
   },
 };
 

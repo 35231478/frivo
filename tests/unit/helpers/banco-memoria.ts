@@ -6,10 +6,14 @@
  * pelas relações declaradas em `relacoes`. `select`/`include` não recortam colunas (devolve a
  * linha inteira com as relações hidratadas), mas o `where` de uma relação lista aninhada
  * (`campos: { where: { ativo: true } }`) é aplicado, em qualquer nível.
+ * Escrita aninhada (`itens: { create: [...] }`, `etapas: { deleteMany: {}, create: [...] }`) só para as
+ * relações declaradas em `aninhadas` ({ modelo: { campo: [modeloFilho, chaveEstrangeira] } }); as
+ * demais são ignoradas, como sempre.
  */
 export type Linha = Record<string, any>;
 export interface Banco { t: Record<string, Linha[]>; escritas: string[]; seq: number }
 export type Relacoes = Record<string, (linha: Linha, t: (m: string) => Linha[]) => Linha>;
+export type Aninhadas = Record<string, Record<string, [filho: string, fk: string]>>;
 
 const ehObjeto = (v: unknown): v is Linha => !!v && typeof v === "object" && !(v instanceof Date) && !Array.isArray(v);
 
@@ -51,12 +55,21 @@ function projetar(row: Linha, sel?: Linha): Linha {
   return out;
 }
 
-export function criarPrisma(db: Banco, relacoes: Relacoes = {}) {
+export function criarPrisma(db: Banco, relacoes: Relacoes = {}, aninhadas: Aninhadas = {}) {
   const T = (m: string) => (db.t[m] ??= []);
   const hidratar = (m: string, r: Linha) => (relacoes[m] ? { ...r, ...relacoes[m](r, T) } : { ...r });
   const linhas = (m: string, where?: Linha) => T(m).filter((x) => casa(hidratar(m, x), where));
   const escrever = (m: string, op: string, r?: Linha) => db.escritas.push(`${m}.${op}:${r?.id ?? ""}`);
   const naoAchou = () => Object.assign(new Error("not found"), { code: "P2025" });
+  /** Grava os filhos de uma relação aninhada declarada (deleteMany antes de create, como o Prisma). */
+  const gravarFilhos = (m: string, pai: Linha, data: Linha) => {
+    for (const [campo, [filho, fk]] of Object.entries(aninhadas[m] ?? {})) {
+      const op = data[campo];
+      if (!ehObjeto(op)) continue;
+      if ("deleteMany" in op) { db.t[filho] = T(filho).filter((x) => x[fk] !== pai.id); escrever(filho, "deleteMany"); }
+      for (const d of [op.create ?? []].flat()) { const r = { id: `${filho}-${++db.seq}`, ...d, [fk]: pai.id }; T(filho).push(r); escrever(filho, "create", r); }
+    }
+  };
   const model = (m: string) => ({
     findFirst: async ({ where, select, include }: any = {}) => { const r = linhas(m, where)[0]; return r ? projetar(hidratar(m, r), select ?? include) : null; },
     findUnique: async ({ where, select, include }: any = {}) => { const r = linhas(m, where)[0]; return r ? projetar(hidratar(m, r), select ?? include) : null; },
@@ -70,14 +83,14 @@ export function criarPrisma(db: Banco, relacoes: Relacoes = {}) {
       const { campos, ...resto } = data ?? {};
       const r: Linha = { id: `${m}-${++db.seq}`, ...resto };
       for (const [k, v] of Object.entries(r)) if (ehObjeto(v) && ("create" in v || "connect" in v)) delete r[k];
-      T(m).push(r); escrever(m, "create", r); void campos; return hidratar(m, r);
+      T(m).push(r); escrever(m, "create", r); gravarFilhos(m, r, resto); void campos; return hidratar(m, r);
     },
     createMany: async ({ data }: any) => { for (const d of data) T(m).push({ id: `${m}-${++db.seq}`, ...d }); escrever(m, "createMany"); return { count: data.length }; },
     update: async ({ where, data, include, select }: any) => {
       const r = T(m).find((x) => casa(x, where));
       if (!r) throw naoAchou();
-      for (const [k, v] of Object.entries(data ?? {})) if (!ehObjeto(v)) r[k] = v; // relações aninhadas: ignoradas
-      escrever(m, "update", r); return projetar(hidratar(m, r), include ?? select);
+      for (const [k, v] of Object.entries(data ?? {})) if (!ehObjeto(v)) r[k] = v; // relações aninhadas: só as declaradas
+      escrever(m, "update", r); gravarFilhos(m, r, data ?? {}); return projetar(hidratar(m, r), include ?? select);
     },
     upsert: async ({ where, create, update }: any) => {
       const r = T(m).find((x) => casa(x, where));
