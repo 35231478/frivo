@@ -10,6 +10,20 @@ jobs:
     name: Typecheck e testes
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # PostgreSQL de verdade só para rodar os SQLs de prisma/sql/ nos testes (ex.: migração de dados)
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,3 +41,5 @@ jobs:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
       - run: npm run typecheck
       - run: npm test
+        env:
+          PG_TESTE_URL: postgresql://ci:ci@localhost:5432/ci

@@ -29,7 +29,7 @@ export function useCadastro<T extends ItemCadastro = ItemCadastro>(entidade: Ent
 /**
  * Seletor padrão de um cadastro (cargo, produto, serviço, categoria…): só ativos para nova
  * escolha; o valor atual continua visível mesmo inativo ("(inativo)"). O valor é o que o
- * registro grava (id, ou o nome no caso da categoria financeira).
+ * registro grava (o id; um cadastro com `chave: "nome"` grava o nome).
  */
 export function SeletorCadastro({
   entidade, valor, onChange, itens: itensProp, placeholder, vazio, className, disabled, id, nome,

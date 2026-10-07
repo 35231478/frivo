@@ -198,6 +198,12 @@ export async function gerarPrevisaoContratoContasReceber(contratoId: string): Pr
   const diaFat = contrato.diaFaturamento ?? contrato.diaFixoMes ?? contrato.diaVencimento ?? 1;
   const base = `${contrato.descricaoNFSe?.trim() || `Contrato ${contrato.numero}`}`;
 
+  // Categoria "Contrato": ligada por ID quando a empresa tem uma categoria ATIVA com esse nome
+  // (mesma regra da migração: nome exato); senão fica só o texto, como sempre foi.
+  const catContrato = await prisma.categoriaFinanceira.findFirst({
+    where: { empresaId: contrato.empresaId, nome: "Contrato", ativo: true }, orderBy: { criadoEm: "asc" }, select: { id: true },
+  });
+
   let criadas = 0;
   for (let k = 0; k < 120; k++) {
     const refMes = addMonths(inicio, k * passo);
@@ -236,6 +242,7 @@ export async function gerarPrevisaoContratoContasReceber(contratoId: string): Pr
         status: "PREVISTO",
         dataVencimento: venc,
         categoria: "Contrato",
+        categoriaId: catContrato?.id ?? null,
         clienteCnpj: contrato.cliente?.cpfCnpj ?? null,
       },
     });

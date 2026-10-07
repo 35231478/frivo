@@ -17,7 +17,7 @@ import { prisma } from "@/lib/prisma";
 /** Modelos com `empresaId` que aparecem como vínculo em requisições. */
 export type ModeloRef =
   | "cliente" | "cargo" | "perfilAcesso" | "tipoOs" | "tabelaPreco" | "servico" | "produto"
-  | "checklistTemplate" | "unidade" | "tecnico" | "equipe" | "veiculo" | "formularioTemplate";
+  | "checklistTemplate" | "unidade" | "tecnico" | "equipe" | "veiculo" | "formularioTemplate" | "categoriaFinanceira";
 
 export class ErroRefEmpresa extends Error {}
 
@@ -53,13 +53,18 @@ export async function validarRefEmpresa(modelo: ModeloRef, id: string | null | u
 }
 
 /**
- * Categoria financeira é gravada pelo NOME na conta a receber. Nome novo precisa ser de uma
- * categoria ATIVA da empresa; manter o nome atual (mesmo de categoria inativa/antiga) é aceito.
+ * Categoria financeira de uma conta (a receber / a pagar) — o vínculo é o ID (Leva 5.1).
+ * `undefined` = não mexe; vazio/null = sem categoria. Senão: categoria da empresa; escolha NOVA
+ * precisa estar ativa (manter a `atual`, mesmo inativa, é aceito). Devolve o que gravar, com o nome
+ * da categoria (cópia só como histórico/fallback — a tela mostra o nome da categoria ligada).
  */
-export async function validarCategoriaFinanceira(nome: string | null | undefined, empresaId: string, atual?: string | null) {
-  if (!nome || nome === atual) return;
-  if (!(await prisma.categoriaFinanceira.count({ where: { empresaId, nome, ativo: true } })))
-    throw new ErroRefEmpresa("Categoria inválida ou inativa.");
+export async function categoriaParaGravar(categoriaId: string | null | undefined, empresaId: string, atual?: string | null):
+  Promise<{ categoriaId?: string | null; nome?: string | null }> {
+  if (categoriaId === undefined) return {};
+  if (!categoriaId) return { categoriaId: null, nome: null };
+  await validarRefEmpresa("categoriaFinanceira", categoriaId, empresaId, "Categoria financeira", { novoAtivo: true, manter: [atual] });
+  const c = await prisma.categoriaFinanceira.findFirst({ where: { id: categoriaId, empresaId }, select: { nome: true } });
+  return { categoriaId, nome: c?.nome ?? null };
 }
 
 /** Converte o erro em resposta 400 (ou devolve null se não for erro de vínculo). */

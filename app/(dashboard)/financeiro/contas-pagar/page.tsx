@@ -6,15 +6,16 @@ import { cn, formatarData, formatarMoeda, formatarCpfCnpj } from "@/lib/utils";
 import { statusVisualPagar, LABELS_STATUS_CONTA_PAGAR } from "@/lib/financeiro-status";
 import { Upload, Plus, AlertTriangle, ShoppingCart } from "lucide-react";
 import { ContaPagarAcoes } from "@/components/financeiro/conta-pagar-acoes";
+import { CategoriaBadge } from "@/components/financeiro/categoria-badge";
 
 export const metadata: Metadata = { title: "Contas a Pagar" };
 
 export default async function ContasPagarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; fornecedor?: string; origem?: string; dataInicio?: string; dataFim?: string }>;
+  searchParams: Promise<{ status?: string; fornecedor?: string; origem?: string; dataInicio?: string; dataFim?: string; categoria?: string }>;
 }) {
-  const { status = "", fornecedor = "", origem = "", dataInicio = "", dataFim = "" } = await searchParams;
+  const { status = "", fornecedor = "", origem = "", dataInicio = "", dataFim = "", categoria = "" } = await searchParams;
   const session = await auth();
   const empresaId = session!.user!.empresaId;
 
@@ -27,6 +28,7 @@ export default async function ContasPagarPage({
   const where: any = { empresaId };
   if (status) where.status = status;
   if (fornecedor) where.fornecedor = { contains: fornecedor, mode: "insensitive" };
+  if (categoria) where.categoriaId = categoria; // por id: renomear a categoria não tira a conta do filtro
   if (origem === "PEDIDO") where.pedidoCompraId = { not: null };
   else if (origem === "MANUAL") where.pedidoCompraId = null;
   if (dataInicio || dataFim) {
@@ -35,12 +37,16 @@ export default async function ContasPagarPage({
     if (dataFim) { const f = new Date(dataFim); f.setHours(23, 59, 59, 999); where.dataVencimento.lte = f; }
   }
 
-  const contas = await prisma.contaPagar.findMany({
-    where,
-    include: { pedidoCompra: { select: { numero: true } } },
-    orderBy: [{ dataVencimento: "asc" }, { criadoEm: "desc" }],
-    take: 300,
-  });
+  const [contas, categorias] = await Promise.all([
+    prisma.contaPagar.findMany({
+      where,
+      include: { pedidoCompra: { select: { numero: true } } },
+      orderBy: [{ dataVencimento: "asc" }, { criadoEm: "desc" }],
+      take: 300,
+    }),
+    // Todas (ativas e inativas): cor/nome das contas que já usam uma categoria inativa não somem
+    prisma.categoriaFinanceira.findMany({ where: { empresaId }, select: { id: true, nome: true, cor: true, ativo: true }, orderBy: { nome: "asc" } }),
+  ]);
 
   let totalFiltrado = 0, totalVencido = 0, totalAberto = 0, totalPago = 0;
   for (const c of contas) {
@@ -72,6 +78,10 @@ export default async function ContasPagarPage({
               {Object.entries(LABELS_STATUS_CONTA_PAGAR).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
             <input name="fornecedor" defaultValue={fornecedor} placeholder="Fornecedor" className={inputCls} />
+            <select name="categoria" defaultValue={categoria} className={inputCls} aria-label="Categoria">
+              <option value="">Todas categorias</option>
+              {categorias.map((c) => <option key={c.id} value={c.id}>{c.ativo ? c.nome : `${c.nome} (inativa)`}</option>)}
+            </select>
             <select name="origem" defaultValue={origem} className={inputCls}>
               <option value="">Todas origens</option>
               <option value="MANUAL">Manual</option>
@@ -89,6 +99,7 @@ export default async function ContasPagarPage({
               <tr>
                 <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Fornecedor</th>
                 <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden xl:table-cell">Descrição</th>
+                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden md:table-cell">Categoria</th>
                 <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Total</th>
                 <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden md:table-cell">Pago</th>
                 <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Saldo</th>
@@ -100,7 +111,7 @@ export default async function ContasPagarPage({
             </thead>
             <tbody>
               {contas.length === 0 ? (
-                <tr><td colSpan={9} className="text-center text-ink-subtle py-12">Nenhuma conta a pagar encontrada</td></tr>
+                <tr><td colSpan={10} className="text-center text-ink-subtle py-12">Nenhuma conta a pagar encontrada</td></tr>
               ) : (
                 contas.map((c) => {
                   const sv = statusVisualPagar(c.status, c.dataVencimento);
@@ -111,6 +122,7 @@ export default async function ContasPagarPage({
                         {c.fornecedorCnpj && <p className="text-xs text-ink-subtle">{formatarCpfCnpj(c.fornecedorCnpj)}</p>}
                       </td>
                       <td className="px-4 py-3 text-ink-muted hidden xl:table-cell truncate max-w-[200px]">{c.descricao}</td>
+                      <td className="px-4 py-3 hidden md:table-cell"><CategoriaBadge conta={c} categorias={categorias} /></td>
                       <td className="px-4 py-3 text-right font-semibold text-ink">{formatarMoeda(Number(c.valorTotal))}</td>
                       <td className="px-4 py-3 text-right text-success-700 hidden md:table-cell">{formatarMoeda(Number(c.valorPago))}</td>
                       <td className="px-4 py-3 text-right font-bold text-ink">{formatarMoeda(Number(c.saldoRestante))}</td>
@@ -138,7 +150,7 @@ export default async function ContasPagarPage({
             {contas.length > 0 && (
               <tfoot className="bg-surface-alt border-t border-surface-border">
                 <tr className="text-sm">
-                  <td colSpan={2} className="px-4 py-3 font-semibold text-ink">Totais ({contas.length})</td>
+                  <td colSpan={3} className="px-4 py-3 font-semibold text-ink">Totais ({contas.length})</td>
                   <td className="px-4 py-3 text-right font-bold text-ink">{formatarMoeda(totalFiltrado)}</td>
                   <td className="px-4 py-3 text-right text-success-700 hidden md:table-cell">{formatarMoeda(totalPago)}</td>
                   <td colSpan={5} className="px-4 py-3">

@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { AlertCircle } from "lucide-react";
+import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
 
 export function ContaPagarForm({ initialData }: { initialData?: any }) {
   const router = useRouter();
@@ -27,6 +28,7 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
     banco: initialData?.banco ?? "",
     pedidoCompraId: initialData?.pedidoCompraId ?? "",
     observacao: initialData?.observacao ?? "",
+    categoriaId: initialData?.categoriaId ?? "",
   });
   const upd = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -54,6 +56,7 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
           banco: form.banco || null,
           pedidoCompraId: form.pedidoCompraId || null,
           observacao: form.observacao || null,
+          categoriaId: form.categoriaId || null,
         }),
       });
       if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao salvar."); return; }
@@ -72,7 +75,13 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
             <FormField label="Fornecedor" required><Input value={form.fornecedor} onChange={(e) => upd("fornecedor", e.target.value)} /></FormField>
             <FormField label="CNPJ"><Input value={form.fornecedorCnpj} onChange={(e) => upd("fornecedorCnpj", e.target.value)} placeholder="00.000.000/0000-00" /></FormField>
           </FormGrid>
-          <FormField label="Descrição" required><Input value={form.descricao} onChange={(e) => upd("descricao", e.target.value)} placeholder="Ex: Compra de peças" /></FormField>
+          <FormGrid>
+            <FormField label="Descrição" required><Input value={form.descricao} onChange={(e) => upd("descricao", e.target.value)} placeholder="Ex: Compra de peças" /></FormField>
+            <FormField label="Categoria" hint="Categorias em Configurações › Financeiro › Categorias">
+              {/* Só ativas para nova escolha; a categoria atual segue visível mesmo inativa */}
+              <SeletorCadastro entidade="categorias-financeiras" valor={form.categoriaId} vazio="Sem categoria" onChange={(v) => upd("categoriaId", v)} />
+            </FormField>
+          </FormGrid>
         </FormSection>
 
         <FormSection title="Pagamento">

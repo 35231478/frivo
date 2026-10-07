@@ -7,13 +7,17 @@ import { statusVisualReceber } from "@/lib/financeiro-status";
 import { AvatarCliente } from "@/components/ui/avatar-cliente";
 import { ContaReceberAcoes } from "@/components/financeiro/conta-receber-acoes";
 import { SincronizarBoletos } from "@/components/financeiro/sincronizar-boletos";
+import { CategoriaBadge } from "@/components/financeiro/categoria-badge";
+import { categoriaDaConta } from "@/lib/financeiro/categoria";
 import {
   Receipt, AlertTriangle, CalendarClock, CheckCircle2, Search, SlidersHorizontal,
   Plus, Download, X, Barcode,
 } from "lucide-react";
 
 export interface ContaView {
-  id: string; numero: string; descricao: string; categoria: string | null; valor: number;
+  id: string; numero: string; descricao: string; valor: number;
+  /** Categoria ligada (por id) e o texto antigo (só exibido quando não há vínculo) */
+  categoriaId: string | null; categoria: string | null;
   dataVencimento: string | null; dataRecebimento: string | null; status: string; banco: string | null;
   clienteId: string; clienteNome: string; clienteCnpj: string | null; clienteLogo: string | null;
   formaPagamento: string | null;
@@ -65,7 +69,7 @@ export function ContasReceberView({ contas, clientes, categorias, interAtivo, cl
       if (q && !(`${c.clienteNome} ${c.descricao} ${c.numero}`.toLowerCase().includes(q))) return false;
       // painel
       if (f.clienteId && c.clienteId !== f.clienteId) return false;
-      if (f.categoria && c.categoria !== f.categoria) return false;
+      if (f.categoria && c.categoriaId !== f.categoria) return false; // por id: renomear não tira do filtro
       if (f.forma && c.formaPagamento !== f.forma) return false;
       if (f.banco && !(c.banco ?? "").toLowerCase().includes(f.banco.toLowerCase())) return false;
       if (f.valorMin && c.valor < Number(f.valorMin)) return false;
@@ -88,7 +92,7 @@ export function ContasReceberView({ contas, clientes, categorias, interAtivo, cl
   function exportar() {
     const linhas = [["Número", "Cliente", "CNPJ", "Descrição", "Categoria", "Vencimento", "Valor", "Status"]];
     for (const { c, sv } of filtradas) {
-      linhas.push([c.numero, c.clienteNome, c.clienteCnpj ?? "", c.descricao, c.categoria ?? "", c.dataVencimento ? formatarData(c.dataVencimento) : "", String(c.valor).replace(".", ","), sv.label]);
+      linhas.push([c.numero, c.clienteNome, c.clienteCnpj ?? "", c.descricao, categoriaDaConta(c, categorias)?.nome ?? "", c.dataVencimento ? formatarData(c.dataVencimento) : "", String(c.valor).replace(".", ","), sv.label]);
     }
     const csv = linhas.map((l) => l.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(";")).join("\n");
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
@@ -170,7 +174,7 @@ export function ContasReceberView({ contas, clientes, categorias, interAtivo, cl
                 <select value={f.categoria} onChange={(e) => setF({ ...f, categoria: e.target.value })} className={inputCls}>
                   <option value="">Todas</option>
                   {/* Filtro: inclui as inativas (contas antigas continuam filtráveis) */}
-                  {categorias.map((c) => <option key={c.nome} value={c.nome}>{c.ativo ? c.nome : `${c.nome} (inativa)`}</option>)}
+                  {categorias.map((c) => <option key={c.id} value={c.id}>{c.ativo ? c.nome : `${c.nome} (inativa)`}</option>)}
                 </select>
               </FiltroCampo>
               <FiltroCampo label="Forma de pagamento">
@@ -219,7 +223,6 @@ export function ContasReceberView({ contas, clientes, categorias, interAtivo, cl
               {filtradas.length === 0 ? (
                 <tr><td colSpan={7} className="text-center text-ink-subtle py-12">Nenhuma cobrança encontrada</td></tr>
               ) : filtradas.map(({ c, sv }) => {
-                const cat = categorias.find((x) => x.nome === c.categoria);
                 return (
                   <tr key={c.id} className={cn("border-b border-surface-border transition-colors", sv.linhaVermelha ? "bg-red-50 hover:bg-red-100/50" : "hover:bg-surface-alt/60")}>
                     <td className="px-4 py-3">
@@ -233,7 +236,7 @@ export function ContasReceberView({ contas, clientes, categorias, interAtivo, cl
                     </td>
                     <td className="px-4 py-3 text-ink-muted hidden lg:table-cell truncate max-w-[200px]">{c.descricao}</td>
                     <td className="px-4 py-3 hidden md:table-cell">
-                      {c.categoria ? <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: `${cat?.cor ?? "#64748B"}1a`, color: cat?.cor ?? "#64748B" }}>{c.categoria}</span> : <span className="text-ink-subtle">—</span>}
+                      <CategoriaBadge conta={c} categorias={categorias} />
                     </td>
                     <td className="px-4 py-3 text-ink-muted hidden md:table-cell">{c.dataVencimento ? formatarData(c.dataVencimento) : "—"}</td>
                     <td className="px-4 py-3 text-right font-bold text-success-700">{formatarMoeda(c.valor)}</td>
@@ -247,7 +250,7 @@ export function ContasReceberView({ contas, clientes, categorias, interAtivo, cl
                     </td>
                     <td className="px-4 py-3 text-right">
                       <ContaReceberAcoes conta={{
-                        id: c.id, numero: c.numero, descricao: c.descricao, categoria: c.categoria, valor: c.valor,
+                        id: c.id, numero: c.numero, descricao: c.descricao, categoriaId: c.categoriaId, categoria: c.categoria, valor: c.valor,
                         dataVencimento: c.dataVencimento, status: c.status, banco: c.banco,
                         clienteNome: c.clienteNome, whatsapp: c.whatsapp, email: c.email, notificacaoEnviadaEm: c.notificacaoEnviadaEm,
                         interAtivo, boletoStatus: c.boletoStatus, boletoEmitidoEm: c.boletoEmitidoEm, boletoVencimento: c.boletoVencimento,

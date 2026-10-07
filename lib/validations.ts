@@ -624,7 +624,8 @@ export const acaoMedicaoSchema = z.object({
 export const contaReceberUpdateSchema = z.object({
   status: z.nativeEnum(StatusContaReceber).optional(),
   descricao: z.string().optional(),
-  categoria: z.string().optional().nullable(),
+  /** Categoria financeira pelo ID (Leva 5.1) */
+  categoriaId: z.string().optional().nullable(),
   valor: z.preprocess((v) => (v === "" || v == null ? undefined : Number(v)), z.number().positive()).optional(),
   dataVencimento: z.string().optional().nullable(),
   dataRecebimento: z.string().optional().nullable(),
@@ -652,6 +653,8 @@ export const contaPagarSchema = z.object({
   banco: z.string().optional().nullable(),
   pedidoCompraId: z.string().optional().nullable(),
   observacao: z.string().optional().nullable(),
+  /** Categoria financeira pelo ID (Leva 5.1: conta a pagar passa a ter categoria) */
+  categoriaId: z.string().optional().nullable(),
 });
 
 export const contaPagarUpdateSchema = contaPagarSchema.partial();

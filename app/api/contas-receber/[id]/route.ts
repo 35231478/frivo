@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
-import { respostaRefEmpresa, validarCategoriaFinanceira } from "@/lib/ref-empresa";
+import { categoriaParaGravar, respostaRefEmpresa } from "@/lib/ref-empresa";
 import { contaReceberUpdateSchema } from "@/lib/validations";
 
 type Params = { params: Promise<{ id: string }> };
@@ -22,7 +22,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
   const d = parsed.data;
   // Categoria nova precisa ser ativa; manter a atual (mesmo inativa) é aceito
-  try { await validarCategoriaFinanceira(d.categoria, empresaId, existente.categoria); }
+  let categoria: Awaited<ReturnType<typeof categoriaParaGravar>>;
+  try { categoria = await categoriaParaGravar(d.categoriaId, empresaId, existente.categoriaId); }
   catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
   const dataRecebimento =
@@ -37,7 +38,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
     data: {
       status: d.status,
       descricao: d.descricao ?? undefined,
-      categoria: d.categoria === undefined ? undefined : d.categoria || null,
+      // Sem categoriaId no corpo, nada muda (inclusive o texto antigo de contas ainda sem categoria ligada)
+      categoriaId: categoria.categoriaId,
+      categoria: categoria.categoriaId === undefined ? undefined : categoria.nome,
       valor: d.valor ?? undefined,
       formaPagamento: d.formaPagamento ?? undefined,
       banco: d.banco === undefined ? undefined : d.banco || null,

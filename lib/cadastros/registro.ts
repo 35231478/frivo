@@ -193,8 +193,8 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
   "categorias-financeiras": {
     entidade: "categorias-financeiras", modelo: "categoriaFinanceira", massa: true, singular: "categoria", plural: "categorias", feminino: true,
     modulo: "configuracoes", permissoes: PERMISSOES_CONFIG,
-    // A conta a receber grava o NOME da categoria (texto), não o id
-    chave: "nome",
+    // As contas (a receber e a pagar) gravam o ID da categoria (Leva 5.1): renomear não desliga nada
+    chave: "id",
     busca: ["nome"],
     campos: [
       { key: "nome", label: "Nome", obrigatorio: true, placeholder: "Ex: Contrato Mensal" },
