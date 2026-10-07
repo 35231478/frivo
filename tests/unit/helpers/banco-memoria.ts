@@ -1,10 +1,11 @@
 /**
  * Banco em memória para testes de rota (substitui `@/lib/prisma`). Cobre o que as rotas usam:
- * findFirst/findUnique/findMany/count/create/createMany/update/updateMany/delete/deleteMany e
+ * findFirst/findUnique/findMany/count/create/createMany/update/updateMany/upsert/delete/deleteMany e
  * $transaction. Filtros: igualdade, in/notIn/not/has/contains, AND/OR, chave composta
  * (`cpf_empresaId`) e filtro por relação (`formularioTemplate: { ativo: true }`), resolvido
- * pelas relações declaradas em `relacoes`. `select`/`include` são ignorados: devolve a linha
- * inteira com as relações hidratadas.
+ * pelas relações declaradas em `relacoes`. `select`/`include` não recortam colunas (devolve a
+ * linha inteira com as relações hidratadas), mas o `where` de uma relação lista aninhada
+ * (`campos: { where: { ativo: true } }`) é aplicado, em qualquer nível.
  */
 export type Linha = Record<string, any>;
 export interface Banco { t: Record<string, Linha[]>; escritas: string[]; seq: number }
@@ -33,6 +34,22 @@ function casa(row: Linha, where: Linha = {}): boolean {
   });
 }
 
+/** Aplica o `where` das relações listadas em select/include (recursivo). */
+function projetar(row: Linha, sel?: Linha): Linha {
+  if (!sel || !ehObjeto(row)) return row;
+  const out: Linha = { ...row };
+  for (const [k, v] of Object.entries(sel)) {
+    if (!ehObjeto(v) || !(k in out)) continue;
+    const filho = v.select ?? v.include;
+    if (Array.isArray(out[k])) {
+      out[k] = (out[k] as Linha[]).filter((x) => casa(x, v.where)).map((x) => projetar(x, filho));
+    } else if (ehObjeto(out[k])) {
+      out[k] = projetar(out[k], filho);
+    }
+  }
+  return out;
+}
+
 export function criarPrisma(db: Banco, relacoes: Relacoes = {}) {
   const T = (m: string) => (db.t[m] ??= []);
   const hidratar = (m: string, r: Linha) => (relacoes[m] ? { ...r, ...relacoes[m](r, T) } : { ...r });
@@ -40,10 +57,13 @@ export function criarPrisma(db: Banco, relacoes: Relacoes = {}) {
   const escrever = (m: string, op: string, r?: Linha) => db.escritas.push(`${m}.${op}:${r?.id ?? ""}`);
   const naoAchou = () => Object.assign(new Error("not found"), { code: "P2025" });
   const model = (m: string) => ({
-    findFirst: async ({ where }: any = {}) => { const r = linhas(m, where)[0]; return r ? hidratar(m, r) : null; },
-    findUnique: async ({ where }: any = {}) => { const r = linhas(m, where)[0]; return r ? hidratar(m, r) : null; },
-    findUniqueOrThrow: async ({ where }: any = {}) => { const r = linhas(m, where)[0]; if (!r) throw naoAchou(); return hidratar(m, r); },
-    findMany: async ({ where, take }: any = {}) => { const rs = linhas(m, where).map((r) => hidratar(m, r)); return take ? rs.slice(0, take) : rs; },
+    findFirst: async ({ where, select, include }: any = {}) => { const r = linhas(m, where)[0]; return r ? projetar(hidratar(m, r), select ?? include) : null; },
+    findUnique: async ({ where, select, include }: any = {}) => { const r = linhas(m, where)[0]; return r ? projetar(hidratar(m, r), select ?? include) : null; },
+    findUniqueOrThrow: async ({ where, select, include }: any = {}) => { const r = linhas(m, where)[0]; if (!r) throw naoAchou(); return projetar(hidratar(m, r), select ?? include); },
+    findMany: async ({ where, take, select, include }: any = {}) => {
+      const rs = linhas(m, where).map((r) => projetar(hidratar(m, r), select ?? include));
+      return take ? rs.slice(0, take) : rs;
+    },
     count: async ({ where }: any = {}) => linhas(m, where).length,
     create: async ({ data }: any) => {
       const { campos, ...resto } = data ?? {};
@@ -52,11 +72,16 @@ export function criarPrisma(db: Banco, relacoes: Relacoes = {}) {
       T(m).push(r); escrever(m, "create", r); void campos; return hidratar(m, r);
     },
     createMany: async ({ data }: any) => { for (const d of data) T(m).push({ id: `${m}-${++db.seq}`, ...d }); escrever(m, "createMany"); return { count: data.length }; },
-    update: async ({ where, data }: any) => {
+    update: async ({ where, data, include, select }: any) => {
       const r = T(m).find((x) => casa(x, where));
       if (!r) throw naoAchou();
       for (const [k, v] of Object.entries(data ?? {})) if (!ehObjeto(v)) r[k] = v; // relações aninhadas: ignoradas
-      escrever(m, "update", r); return hidratar(m, r);
+      escrever(m, "update", r); return projetar(hidratar(m, r), include ?? select);
+    },
+    upsert: async ({ where, create, update }: any) => {
+      const r = T(m).find((x) => casa(x, where));
+      if (r) { Object.assign(r, update); escrever(m, "update", r); return hidratar(m, r); }
+      const novo = { id: `${m}-${++db.seq}`, ...create }; T(m).push(novo); escrever(m, "create", novo); return hidratar(m, novo);
     },
     updateMany: async ({ where, data }: any) => { const rs = T(m).filter((x) => casa(x, where)); rs.forEach((r) => Object.assign(r, data)); return { count: rs.length }; },
     delete: async ({ where }: any) => { const i = T(m).findIndex((x) => casa(x, where)); if (i < 0) throw naoAchou(); escrever(m, "delete"); return T(m).splice(i, 1)[0]; },

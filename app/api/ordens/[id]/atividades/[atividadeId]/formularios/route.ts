@@ -65,7 +65,12 @@ export async function GET(_: NextRequest, { params }: Params) {
       formularioTemplate: {
         select: {
           id: true, nome: true, ativo: true,
-          campos: { orderBy: { ordem: "asc" }, select: { id: true, label: true, tipo: true, obrigatorio: true, ordem: true, opcoes: true } },
+          // Campos ativos + os removidos que JÁ têm resposta nesta atividade (o registro não pode sumir)
+          campos: {
+            where: { OR: [{ ativo: true }, { respostasEquipamento: { some: { atividadeId } } }] },
+            orderBy: { ordem: "asc" },
+            select: { id: true, label: true, tipo: true, obrigatorio: true, ordem: true, opcoes: true, ativo: true },
+          },
         },
       },
     },
@@ -100,10 +105,16 @@ export async function GET(_: NextRequest, { params }: Params) {
       tiposSemFormulario.push({ id: tid, nome: grupo.nome, qtd: grupo.itens.length });
       continue;
     }
-    const formulario = mapeado.formularioTemplate;
-    const totalCampos = formulario.campos.length;
+    // Campo removido (inativo) só aparece com a resposta antiga: nunca é obrigatório nem entra na conta
+    const formulario = {
+      ...mapeado.formularioTemplate,
+      campos: mapeado.formularioTemplate.campos.map((c) => (c.ativo ? c : { ...c, obrigatorio: false })),
+    };
+    const ativos = new Set(formulario.campos.filter((c) => c.ativo).map((c) => c.id));
+    const totalCampos = ativos.size;
     const equipamentos = grupo.itens.map((v) => {
-      const respondidos = respMap.get(`${v.equipamento.id}|${formulario.id}`)?.size ?? 0;
+      const resp = respMap.get(`${v.equipamento.id}|${formulario.id}`) ?? new Set<string>();
+      const respondidos = [...resp].filter((c) => ativos.has(c)).length;
       return {
         vinculoId: v.id,
         equipamentoId: v.equipamento.id,

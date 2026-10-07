@@ -66,7 +66,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
       const obrig = await prisma.formTypeMapping.findMany({
         // Formulário inativo não é mais exigido (não trava atividades que já o usavam)
         where: { empresaId, tipoOsId: existente.tipoOsId, tipoEquipamentoId: { in: tipoIds }, obrigatorioConcluir: true, formularioTemplate: { ativo: true } },
-        select: { tipoEquipamentoId: true, formularioTemplateId: true, formularioTemplate: { select: { nome: true, _count: { select: { campos: true } } } } },
+        select: { tipoEquipamentoId: true, formularioTemplateId: true, formularioTemplate: { select: { nome: true, campos: { where: { ativo: true }, select: { id: true } } } } },
       });
       if (obrig.length > 0) {
         const respostas = await prisma.respostaFormularioEquipamento.findMany({
@@ -86,9 +86,12 @@ export async function PUT(req: NextRequest, { params }: Params) {
           if (!tid) continue;
           const o = mapByTipo.get(tid);
           if (!o) continue;
-          const total = o.formularioTemplate._count.campos;
+          // Só campos ativos contam (campo removido na edição não é mais exigido)
+          const ativos = o.formularioTemplate.campos.map((c) => c.id);
+          const total = ativos.length;
           if (total === 0) continue;
-          const respondidos = respMap.get(`${f.equipamentoId}|${o.formularioTemplateId}`)?.size ?? 0;
+          const resp = respMap.get(`${f.equipamentoId}|${o.formularioTemplateId}`);
+          const respondidos = ativos.filter((c) => resp?.has(c)).length;
           if (respondidos < total) pendentes.add(o.formularioTemplate.nome);
         }
         if (pendentes.size > 0) {

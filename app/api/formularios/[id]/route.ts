@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { exigirPermissao } from "@/lib/permissoes-server";
-import { TipoCampo } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { formularioEditarSchema } from "@/lib/formulario-schema";
 import { respostaRefEmpresa, validarRefEmpresa } from "@/lib/ref-empresa";
+import { mesmoConteudo, planejarFilhos } from "@/lib/sincronizar-filhos";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -24,29 +25,42 @@ export async function PUT(req: NextRequest, { params }: Params) {
   try { await validarRefEmpresa("tipoOs", tipoOsId, empresaId, "Tipo de OS"); }
   catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
+  // Campos: atualiza os existentes, cria os novos e INATIVA os removidos (nunca apaga — as
+  // respostas de atividades antigas apontam para eles e o histórico tem que continuar inteiro).
+  // Campo JÁ respondido cuja pergunta/tipo/opções mudou ganha nova versão (o antigo fica inativo).
+  const plano = campos
+    ? planejarFilhos(
+      await prisma.formularioCampo.findMany({
+        where: { formularioId: id },
+        select: { id: true, ativo: true, label: true, tipo: true, opcoes: true, _count: { select: { respostas: true, respostasEquipamento: true } } },
+      }),
+      campos,
+      {
+        versionar: (e, c) => e._count.respostas + e._count.respostasEquipamento > 0
+          && (e.label !== c.label || e.tipo !== c.tipo || !mesmoConteudo(e.opcoes, c.opcoes)),
+      },
+    )
+    : null;
+  if (plano?.invalidos.length) return NextResponse.json({ erro: "Campo inválido (não pertence a este formulário)." }, { status: 400 });
+  const dadosCampo = (c: NonNullable<typeof campos>[number]) => ({
+    label: c.label, tipo: c.tipo, obrigatorio: c.obrigatorio ?? false, ordem: c.ordem ?? 0,
+    opcoes: c.opcoes ?? Prisma.DbNull,
+  });
+
   const atualizado = await prisma.$transaction(async (tx) => {
-    if (campos) {
-      await tx.formularioCampo.deleteMany({ where: { formularioId: id } });
+    if (plano) {
+      if (plano.inativar.length) await tx.formularioCampo.updateMany({ where: { id: { in: plano.inativar }, formularioId: id }, data: { ativo: false } });
+      for (const c of plano.atualizar) await tx.formularioCampo.update({ where: { id: c.id }, data: { ...dadosCampo(c), ativo: true } });
+      for (const c of plano.criar) await tx.formularioCampo.create({ data: { ...dadosCampo(c), formularioId: id, ativo: true } });
     }
     return tx.formularioTemplate.update({
       where: { id },
       data: {
         ...Object.fromEntries(Object.entries(resto).filter(([, v]) => v !== undefined)),
         ...(tipoOsId !== undefined && { tipoOsId: tipoOsId || null }),
-        ...(campos && {
-          campos: {
-            create: campos.map((c) => ({
-              label: c.label,
-              tipo: c.tipo as TipoCampo,
-              obrigatorio: c.obrigatorio ?? false,
-              ordem: c.ordem ?? 0,
-              opcoes: c.opcoes ?? null,
-            })),
-          },
-        }),
       },
       include: {
-        campos: { orderBy: { ordem: "asc" } },
+        campos: { where: { ativo: true }, orderBy: { ordem: "asc" } },
         tipoOs: { select: { id: true, nome: true, cor: true } },
       },
     });

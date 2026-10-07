@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const formularios = await prisma.formularioTemplate.findMany({
     where: { empresaId, ativo: true, ...(tipoOsId && { tipoOsId }) },
     include: {
-      campos: { orderBy: { ordem: "asc" } },
+      campos: { where: { ativo: true }, orderBy: { ordem: "asc" } }, // removidos na edição ficam só no histórico
       tipoOs: { select: { id: true, nome: true, cor: true } },
     },
     orderBy: { nome: "asc" },
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
       ...resto,
       empresaId,
       tipoOsId: tipoOsId || null,
-      campos: campos ? { create: campos } : undefined,
+      campos: campos ? { create: campos.map(({ id: _id, ...c }) => c) } : undefined,
     },
     include: { campos: { orderBy: { ordem: "asc" } } },
   });

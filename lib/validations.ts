@@ -437,6 +437,8 @@ export const checklistTemplateSchema = z.object({
   frequencia: z.nativeEnum(FrequenciaChecklist).default(FrequenciaChecklist.DIARIO),
   ativo: z.boolean().default(true),
   itens: z.array(z.object({
+    /** Item já existente (edição): atualiza no lugar. Sem id = item novo. */
+    id: z.string().min(1).nullable().optional(),
     categoria: z.string().min(1),
     descricao: z.string().min(1),
     tipo: z.nativeEnum(TipoItemChecklist).default(TipoItemChecklist.OK_NOK),
@@ -445,6 +447,9 @@ export const checklistTemplateSchema = z.object({
     ordem: z.number().int().default(0),
   })).default([]),
 });
+
+/** Edição PARCIAL do modelo de checklist: só muda o que veio (sem defaults que reativariam ou zerariam). */
+export const checklistTemplateEditarSchema = checklistTemplateSchema.partial();
 
 export const checklistPreenchidoSchema = z.object({
   veiculoId: z.string().min(1, "Veículo é obrigatório"),

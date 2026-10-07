@@ -13,7 +13,7 @@ export default async function ChecklistVeiculoPage({ searchParams }: { searchPar
 
   const [veiculos, templates, colaboradores] = await Promise.all([
     prisma.veiculo.findMany({ where: { empresaId, status: { not: "INATIVO" } }, select: { id: true, placa: true, modelo: true }, orderBy: { placa: "asc" } }),
-    prisma.checklistTemplate.findMany({ where: { empresaId, ativo: true }, include: { itens: { orderBy: { ordem: "asc" } } }, orderBy: { nome: "asc" } }),
+    prisma.checklistTemplate.findMany({ where: { empresaId, ativo: true }, include: { itens: { where: { ativo: true }, orderBy: { ordem: "asc" } } }, orderBy: { nome: "asc" } }),
     prisma.tecnico.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
   ]);
 

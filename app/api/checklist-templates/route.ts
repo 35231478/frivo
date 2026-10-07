@@ -11,7 +11,8 @@ export async function GET() {
 
   const templates = await prisma.checklistTemplate.findMany({
     where: { empresaId },
-    include: { itens: { orderBy: { ordem: "asc" } }, _count: { select: { itens: true, preenchidos: true } } },
+    // Só itens ativos (os removidos na edição ficam no banco para o histórico dos checklists preenchidos)
+    include: { itens: { where: { ativo: true }, orderBy: { ordem: "asc" } }, _count: { select: { itens: { where: { ativo: true } }, preenchidos: true } } },
     orderBy: { nome: "asc" },
   });
 
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest) {
     data: {
       ...rest,
       empresaId,
-      itens: { create: itens.map((it, idx) => ({ ...it, ordem: it.ordem || idx })) },
+      itens: { create: itens.map(({ id: _id, ...it }, idx) => ({ ...it, ordem: it.ordem || idx })) },
     },
     include: { itens: { orderBy: { ordem: "asc" } } },
   });
