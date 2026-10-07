@@ -1,51 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { exigirPermissao } from "@/lib/permissoes-server";
+import { rotasItem } from "@/lib/cadastros/rotas";
 
-type Params = { params: Promise<{ id: string }> };
-
-const CAMPOS_NUM = ["valorPadrao", "aliquotaISS", "aliquotaPIS", "aliquotaCOFINS", "aliquotaCSLL", "aliquotaIR"];
-const CAMPOS_TEXTO = ["codigoMunicipal", "codigoLc116", "observacaoFiscal", "descricao"];
-
-export async function PUT(req: NextRequest, { params }: Params) {
-  const guard = await exigirPermissao("configuracoes", "gerenciar");
-  if (guard.erro) return guard.resposta;
-  const { session } = guard;
-  const { id } = await params;
-  const empresaId = session.user!.empresaId;
-  const body = await req.json();
-
-  // Garante isolamento de tenant
-  const existente = await prisma.servico.findFirst({ where: { id, empresaId } });
-  if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
-
-  const data: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(body)) {
-    if (k === "id" || k === "empresaId" || k === "criadoEm") continue;
-    if (CAMPOS_NUM.includes(k)) {
-      data[k] = v === "" || v == null || (typeof v === "number" && isNaN(v)) ? null : Number(v);
-    } else if (CAMPOS_TEXTO.includes(k)) {
-      data[k] = v === "" || v == null ? null : v;
-    } else {
-      data[k] = v;
-    }
-  }
-
-  const item = await prisma.servico.update({ where: { id }, data });
-  return NextResponse.json(item);
-}
-
-export async function DELETE(_: NextRequest, { params }: Params) {
-  const guard = await exigirPermissao("configuracoes", "gerenciar");
-  if (guard.erro) return guard.resposta;
-  const { session } = guard;
-  const { id } = await params;
-  const empresaId = session.user!.empresaId;
-
-  // Garante isolamento de tenant antes de desativar
-  const existente = await prisma.servico.findFirst({ where: { id, empresaId } });
-  if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
-
-  await prisma.servico.update({ where: { id }, data: { ativo: false } });
-  return NextResponse.json({ ok: true });
-}
+/** Compatibilidade: mesma implementação de /api/cadastros/servicos/[id] (edição parcial; DELETE só inativa). */
+const r = rotasItem("servicos");
+export const GET = r.GET;
+export const PATCH = r.PATCH;
+export const PUT = r.PUT;
+export const DELETE = r.DELETE;

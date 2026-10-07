@@ -9,8 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid } from "@/components/ui/form-field";
 import { cn, formatarData, formatarMoeda, LABELS_STATUS_PEDIDO_COMPRA, CLASSE_STATUS_PEDIDO_COMPRA } from "@/lib/utils";
 import { ShoppingCart, Plus, Trash2, X, Check, MessageCircle, AlertCircle } from "lucide-react";
+import { SeletorCadastro, useCadastro } from "@/components/cadastros/seletor-cadastro";
 
-interface Produto { id: string; nome: string; unidade?: string | null; valorPadrao?: unknown }
 interface Usuario { id: string; nome: string; role: string }
 interface ItemForm { _id: string; produtoId: string; descricao: string; quantidade: number; unidade: string; valorEstimado: string }
 interface Pedido {
@@ -23,7 +23,8 @@ function uid() { return Math.random().toString(36).slice(2); }
 
 export function ComprasSecao({ ordemServicoId, orcamentoId }: { ordemServicoId?: string; orcamentoId?: string }) {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
-  const [produtos, setProdutos] = useState<Produto[]>([]);
+  // Catálogo inteiro uma vez só; o SeletorCadastro de cada linha mostra só os ativos
+  const { itens: produtos } = useCadastro("produtos");
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [aberto, setAberto] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -42,7 +43,6 @@ export function ComprasSecao({ ordemServicoId, orcamentoId }: { ordemServicoId?:
 
   useEffect(() => {
     carregar();
-    fetch("/api/produtos").then((r) => r.json()).then((d) => setProdutos(Array.isArray(d) ? d : [])).catch(() => {});
     fetch("/api/usuarios").then((r) => r.json()).then((d) => setUsuarios(Array.isArray(d) ? d : [])).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -55,7 +55,7 @@ export function ComprasSecao({ ordemServicoId, orcamentoId }: { ordemServicoId?:
     patchItem(id, {
       produtoId,
       descricao: prod ? prod.nome : "",
-      unidade: prod?.unidade ?? "un",
+      unidade: typeof prod?.unidade === "string" ? prod.unidade : "un",
     });
   }
 
@@ -117,9 +117,7 @@ export function ComprasSecao({ ordemServicoId, orcamentoId }: { ordemServicoId?:
               <div key={it._id} className="grid grid-cols-12 gap-2 items-end bg-white border border-surface-border rounded-lg p-2">
                 <div className="col-span-12 sm:col-span-4">
                   <label className="text-[11px] text-ink-muted">Produto</label>
-                  <Select value={it.produtoId} onChange={(e) => selecionarProduto(it._id, e.target.value)} placeholder="Manual / digitar">
-                    {produtos.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
-                  </Select>
+                  <SeletorCadastro entidade="produtos" itens={produtos} valor={it.produtoId} vazio="Manual / digitar" onChange={(v) => selecionarProduto(it._id, v)} />
                 </div>
                 <div className="col-span-12 sm:col-span-4">
                   <label className="text-[11px] text-ink-muted">Descrição</label>

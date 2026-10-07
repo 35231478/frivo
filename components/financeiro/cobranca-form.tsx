@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LABELS_FORMA_PAGAMENTO } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -10,12 +10,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { ClienteCombobox } from "@/components/ui/cliente-combobox";
 import { AlertCircle } from "lucide-react";
+import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
 
 export function CobrancaForm() {
   const router = useRouter();
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
-  const [categorias, setCategorias] = useState<any[]>([]);
 
   const [clienteId, setClienteId] = useState("");
   const [descricao, setDescricao] = useState("");
@@ -25,10 +25,6 @@ export function CobrancaForm() {
   const [forma, setForma] = useState("");
   const [banco, setBanco] = useState("");
   const [obs, setObs] = useState("");
-
-  useEffect(() => {
-    fetch("/api/categorias-financeiras").then((r) => r.json()).then((d) => setCategorias(Array.isArray(d) ? d.filter((c: any) => c.ativo !== false) : [])).catch(() => {});
-  }, []);
 
   async function salvar() {
     setErro("");
@@ -58,10 +54,7 @@ export function CobrancaForm() {
           <FormGrid>
             <FormField label="Descrição / referência" required><Input value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Ex: Serviço de manutenção" /></FormField>
             <FormField label="Categoria">
-              <Select value={categoria} onChange={(e) => setCategoria(e.target.value)}>
-                <option value="">Sem categoria</option>
-                {categorias.map((c) => <option key={c.id} value={c.nome}>{c.nome}</option>)}
-              </Select>
+              <SeletorCadastro entidade="categorias-financeiras" valor={categoria} vazio="Sem categoria" onChange={setCategoria} />
             </FormField>
           </FormGrid>
           <FormGrid cols={3}>

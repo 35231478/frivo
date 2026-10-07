@@ -18,12 +18,14 @@ import type { Acao } from "@/lib/permissoes";
  * Sem a permissão correspondente, não renderiza nada (o servidor também valida).
  */
 export function InativarRegistro({
-  url, modulo, acaoReativar, ativo, nome, entidade, variante = "icone",
+  url, modulo, acaoInativar = "excluir", acaoReativar, ativo, nome, entidade, variante = "icone",
   rotuloInativar = "Inativar", rotuloReativar = "Reativar", comMotivo = true,
   textoInativar, textoReativar, aoConcluir, feminino = false,
 }: {
   url: string;
   modulo: string;
+  /** Permissão de inativar (padrão "excluir"; cadastros de Configurações usam "gerenciar"). */
+  acaoInativar?: Acao;
   acaoReativar: Acao;
   ativo: boolean;
   nome: string;
@@ -49,7 +51,7 @@ export function InativarRegistro({
   const [impacto, setImpacto] = useState<{ bloqueio: string | null; avisos: string[] } | null>(null);
   const [checando, setChecando] = useState(false);
 
-  const permitido = ativo ? pode(modulo, "excluir") : pode(modulo, acaoReativar);
+  const permitido = ativo ? pode(modulo, acaoInativar) : pode(modulo, acaoReativar);
   if (!permitido) return null;
 
   const rotulo = ativo ? rotuloInativar : rotuloReativar;

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
+import { respostaRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { pedidoCompraSchema } from "@/lib/validations";
 import { gerarNumeroPedidoCompra, formatarData, whatsappLink } from "@/lib/utils";
 
@@ -67,6 +68,10 @@ export async function POST(req: NextRequest) {
     const orc = await prisma.orcamento.findFirst({ where: { id: data.orcamentoId, empresaId }, select: { id: true } });
     if (!orc) return NextResponse.json({ erro: "Orçamento não encontrado" }, { status: 404 });
   }
+
+  // Produtos do catálogo: da empresa e ativos (pedido novo = escolha nova)
+  try { await validarRefsEmpresa("produto", data.itens.map((it) => it.produtoId), empresaId, "Produto", { novoAtivo: true }); }
+  catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
   const seq = (await prisma.pedidoCompraInterno.count({ where: { empresaId } })) + 1;
   const numero = gerarNumeroPedidoCompra(seq);

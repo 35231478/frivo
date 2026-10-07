@@ -36,7 +36,9 @@ export default async function ContasReceberPage({
       take: 500,
     }),
     prisma.cliente.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true, nomeFantasia: true }, orderBy: { nome: "asc" } }),
-    prisma.categoriaFinanceira.findMany({ where: { empresaId, ativo: true }, select: { nome: true, cor: true }, orderBy: { nome: "asc" } }),
+    // Todas (ativas e inativas): a cor das contas antigas não some e a edição mostra a categoria atual;
+    // o SeletorCadastro só oferece as ativas para nova escolha
+    prisma.categoriaFinanceira.findMany({ where: { empresaId }, select: { id: true, nome: true, cor: true, ativo: true }, orderBy: { nome: "asc" } }),
     prisma.integracaoInter.findUnique({ where: { empresaId }, select: { ativo: true } }),
   ]);
 

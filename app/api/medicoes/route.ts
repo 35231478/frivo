@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
+import { respostaRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { medicaoSchema } from "@/lib/validations";
 import { gerarNumeroMedicao } from "@/lib/utils";
 import { calcularTotaisMedicao } from "@/lib/medicao-helpers";
@@ -72,6 +73,14 @@ export async function POST(req: NextRequest) {
   // Garante que o cliente pertence ao tenant
   const cliente = await prisma.cliente.findFirst({ where: { id: data.clienteId, empresaId } });
   if (!cliente) return NextResponse.json({ erro: "Cliente inválido" }, { status: 400 });
+
+  // Serviços/produtos do catálogo precisam ser da mesma empresa
+  try {
+    await Promise.all([
+      validarRefsEmpresa("servico", data.itens.map((i) => i.servicoId), empresaId, "Serviço"),
+      validarRefsEmpresa("produto", data.itens.map((i) => i.produtoId), empresaId, "Produto"),
+    ]);
+  } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
   const ano = data.ano ?? new Date().getFullYear();
   const ultimaMed = await prisma.medicao.findFirst({

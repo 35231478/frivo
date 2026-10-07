@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
+import { respostaRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { medicaoSchema } from "@/lib/validations";
 import { calcularTotaisMedicao } from "@/lib/medicao-helpers";
 
@@ -46,6 +47,13 @@ export async function PUT(req: NextRequest, { params }: Params) {
     return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
   }
   const data = parsed.data;
+  // Serviços/produtos do catálogo precisam ser da mesma empresa
+  try {
+    await Promise.all([
+      validarRefsEmpresa("servico", data.itens.map((i) => i.servicoId), empresaId, "Serviço"),
+      validarRefsEmpresa("produto", data.itens.map((i) => i.produtoId), empresaId, "Produto"),
+    ]);
+  } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
   const totais = calcularTotaisMedicao(data.itens, data.descontoValor, data.descontoPercent);
 
   const atualizada = await prisma.medicao.update({

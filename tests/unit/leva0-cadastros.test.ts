@@ -169,9 +169,11 @@ describe("2. produtos", () => {
     expect(r.json.erro).toMatch(/inteiro/);
   });
 
-  it("o corpo não troca a empresa nem o id", async () => {
-    expect((await chamar(produto, "PUT", { id: "p1" }, { empresaId: "e2", id: "outro", nome: "Gás" })).status).toBe(200);
-    expect(linha("produto", "p1")).toMatchObject({ empresaId: "e1", nome: "Gás" });
+  it("o corpo não troca a empresa nem o id (Leva 2: campo desconhecido é RECUSADO, não só ignorado)", async () => {
+    const r = await chamar(produto, "PUT", { id: "p1" }, { empresaId: "e2", id: "outro", nome: "Gás" });
+    expect(r.status).toBe(400);
+    expect(r.json.erro).toMatch(/Campo não permitido: .*empresaId/);
+    expect(linha("produto", "p1")).toMatchObject({ empresaId: "e1", nome: "Gás R410A" });
   });
 
   it("produto de outra empresa: 404", async () => {

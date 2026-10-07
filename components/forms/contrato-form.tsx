@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
+import { opcoesCadastro } from "@/lib/cadastros/opcoes";
 import { SelectCadastroRapido, CadastroRapidoModal, usePodeCriar, type CampoRapido, type PermissaoCriar } from "@/components/ui/select-cadastro-rapido";
 import { CLIENTE, UNIDADE } from "@/components/cadastro-rapido/definicoes";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -142,7 +143,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
   const [outrosItens, setOutrosItens] = useState<string>(itensIniciais.outros ?? "");
 
   // Serviços para a NFS-e (seleção múltipla)
-  const [servicos, setServicos] = useState<{ id: string; nome: string; descricao?: string | null }[]>([]);
+  const [servicos, setServicos] = useState<{ id: string; nome: string; descricao?: string | null; ativo?: boolean }[]>([]);
   const [servicosSelecionados, setServicosSelecionados] = useState<string[]>(initialData?.servicosNFSeIds ?? []);
 
   // Novo endereço inline (aba Locais)
@@ -268,6 +269,9 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
     if (!clienteIdSelecionado) { setUnidades([]); return; }
     fetch(`/api/unidades?clienteId=${clienteIdSelecionado}`).then((r) => r.json()).then((d) => setUnidades(Array.isArray(d) ? d : [])).catch(() => {});
   }, [clienteIdSelecionado]);
+
+  // Serviços da NFS-e: só ativos para nova escolha + os inativos que este contrato já usa ("(inativo)")
+  const servicosOpcoes = opcoesCadastro(servicos, servicosSelecionados).filter((o): o is typeof o & { item: NonNullable<typeof o.item> } => !!o.item);
 
   function mostrarToast(msg: string) { setToast(msg); setTimeout(() => setToast(null), 3000); }
 
@@ -655,19 +659,19 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
 
         <FormSection title="Configurações da NFS-e" icon={<Receipt className="w-3.5 h-3.5" />}>
           <FormField label="Serviços da NFS-e" hint="Selecione um ou mais serviços que aparecem na nota fiscal">
-            {servicos.length === 0 ? (
+            {servicosOpcoes.length === 0 ? (
               <p className="text-sm text-ink-muted">
                 Nenhum serviço cadastrado. Cadastre serviços em Configurações para usá-los aqui.
               </p>
             ) : (
               <div className="space-y-1.5 max-h-60 overflow-y-auto border border-surface-border rounded-lg p-2">
-                {servicos.map((s) => {
+                {servicosOpcoes.map(({ item: s, rotulo, inativo }) => {
                   const sel = servicosSelecionados.includes(s.id);
                   return (
                     <label key={s.id} className={cn("flex items-start gap-2.5 p-2 rounded-lg cursor-pointer transition-colors", sel ? "bg-primary-50/60" : "hover:bg-surface-alt")}>
                       <input type="checkbox" checked={sel} onChange={() => toggleServico(s.id)} className="mt-0.5 accent-primary-600" />
                       <span className="min-w-0">
-                        <span className="block text-sm text-ink">{s.nome}</span>
+                        <span className={cn("block text-sm", inativo ? "text-ink-muted" : "text-ink")}>{rotulo}</span>
                         {s.descricao && <span className="block text-xs text-ink-subtle truncate">{s.descricao}</span>}
                       </span>
                     </label>

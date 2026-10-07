@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { respostaRefEmpresa, validarCategoriaFinanceira } from "@/lib/ref-empresa";
 import { z } from "zod";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { proximoNumeroContaReceber } from "@/lib/financeiro-server";
@@ -26,6 +27,9 @@ export async function POST(req: NextRequest) {
 
   const cliente = await prisma.cliente.findFirst({ where: { id: d.clienteId, empresaId }, select: { cpfCnpj: true } });
   if (!cliente) return NextResponse.json({ erro: "Cliente não encontrado" }, { status: 404 });
+
+  try { await validarCategoriaFinanceira(d.categoria, empresaId); }
+  catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
   const numero = await proximoNumeroContaReceber(empresaId, new Date().getFullYear());
   const conta = await prisma.contaReceber.create({
