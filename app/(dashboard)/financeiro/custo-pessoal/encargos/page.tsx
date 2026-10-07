@@ -2,10 +2,8 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
-import { prisma } from "@/lib/prisma";
-import { garantirModelosPadrao, listarModelos } from "@/lib/folha/server";
 import { PageHeader } from "@/components/ui/page-header";
-import { ModelosEncargos } from "@/components/folha/modelos-encargos";
+import { ModelosEncargosTela } from "@/components/cadastros/telas/modelos-encargos";
 import { Info } from "lucide-react";
 
 export const metadata: Metadata = { title: "Modelos de encargos" };
@@ -14,14 +12,6 @@ export default async function ModelosEncargosPage() {
   const session = await auth();
   const user = session!.user!;
   if (!pode(user.permissoes, "financeiro", "folha", user.role)) redirect("/sem-permissao");
-  const empresaId = user.empresaId;
-
-  await garantirModelosPadrao(empresaId);
-  const [modelos, uso] = await Promise.all([
-    listarModelos(empresaId),
-    prisma.colaboradorFolha.groupBy({ by: ["modeloEncargosId"], where: { empresaId, modeloEncargosId: { not: null } }, _count: { _all: true } }),
-  ]);
-  const emUso = new Map(uso.map((u) => [u.modeloEncargosId, u._count._all]));
 
   return (
     <div className="max-w-5xl mx-auto space-y-4">
@@ -33,7 +23,10 @@ export default async function ModelosEncargosPage() {
           o INSS patronal costuma não incidir (Anexo III). <strong>Ajuste com o seu contador.</strong> Estimativa de gestão — não substitui a folha oficial.
         </p>
       </div>
-      <ModelosEncargos modelos={modelos.filter((m) => m.ativo).map((m) => ({ ...m, emUso: emUso.get(m.id) ?? 0 }))} />
+      {/* Cadastro padronizado (lib/cadastros): os modelos padrão são criados na primeira listagem */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
+        <ModelosEncargosTela />
+      </div>
     </div>
   );
 }

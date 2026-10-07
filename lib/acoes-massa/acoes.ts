@@ -12,7 +12,7 @@ import { pode, type Acao, type Permissoes } from "@/lib/permissoes";
 export const ENTIDADES = [
   "ordens", "equipamentos", "clientes", "orcamentos", "contratos", "veiculos", "colaboradores",
   // Cadastros padronizados (lib/cadastros/registro.ts)
-  "produtos", "servicos", "cargos", "categorias-financeiras",
+  "produtos", "servicos", "cargos", "categorias-financeiras", "perfis-acesso", "modelos-encargos",
 ] as const;
 export type Entidade = (typeof ENTIDADES)[number];
 
@@ -114,19 +114,22 @@ export const ENTIDADE: Record<Entidade, DefEntidade> = {
   servicos: acoesCadastro("serviço", "serviços"),
   cargos: acoesCadastro("cargo", "cargos"),
   "categorias-financeiras": acoesCadastro("categoria", "categorias", true),
+  // Travas de cada um (perfil padrão, o próprio perfil, modelo padrão) valem por item no lote
+  "perfis-acesso": acoesCadastro("perfil de acesso", "perfis de acesso"),
+  "modelos-encargos": acoesCadastro("modelo de encargos", "modelos de encargos", false, ["financeiro", "folha"]),
 };
 
 /** Ações em massa de um cadastro padronizado: inativar/reativar com a permissão do registro. */
-function acoesCadastro(singular: string, plural: string, feminino = false): DefEntidade {
+function acoesCadastro(singular: string, plural: string, feminino = false, requisito: Requisito = ["configuracoes", "gerenciar"]): DefEntidade {
   const o = feminino ? "as" : "os";
   return {
-    modulo: "configuracoes", singular, plural,
+    modulo: requisito[0], singular, plural,
     acoes: {
       inativar: {
-        rotulo: "Inativar", feito: `inativad${o}`, permissao: [["configuracoes", "gerenciar"]], perigo: true,
+        rotulo: "Inativar", feito: `inativad${o}`, permissao: [requisito], perigo: true,
         impacto: `${feminino ? "As" : "Os"} ${plural} saem das listas e dos seletores para novas escolhas. Nada é apagado: os registros que já ${feminino ? "as" : "os"} usam continuam iguais e dá para reativar depois.`,
       },
-      reativar: { rotulo: "Reativar", feito: `reativad${o}`, permissao: [["configuracoes", "gerenciar"]], impacto: `${feminino ? "As" : "Os"} ${plural} voltam às listas e aos seletores.` },
+      reativar: { rotulo: "Reativar", feito: `reativad${o}`, permissao: [requisito], impacto: `${feminino ? "As" : "Os"} ${plural} voltam às listas e aos seletores.` },
     },
   };
 }

@@ -18,7 +18,9 @@ async function carregar(id: string, empresaId: string) {
   const c = await prisma.tecnico.findFirst({ where: { id, empresaId }, select: { id: true, nome: true, salario: true, folha: true } });
   if (!c) return null;
   await garantirModelosPadrao(empresaId);
-  const modelos = (await listarModelos(empresaId)).filter((m) => m.ativo);
+  // Todos (ativos e inativos): a tela mantém visível o modelo inativo que ele já usa; o cálculo
+  // (modeloAplicado) só usa modelos ativos — com inativo, cai no padrão do regime e a tela avisa
+  const modelos = await listarModelos(empresaId);
   const dados = dadosDoColaborador(c);
   const modelo = modeloAplicado(modelos, dados.regime, c.folha?.modeloEncargosId);
   const f = c.folha;
@@ -36,7 +38,7 @@ async function carregar(id: string, empresaId: string) {
       modeloEncargosId: f?.modeloEncargosId ?? null, observacoes: f?.observacoes ?? null,
     },
     cadastrado: !!f,
-    modelos: modelos.map((m) => ({ id: m.id, nome: m.nome, regime: m.regime, padrao: m.padrao, itens: m.itens })),
+    modelos: modelos.map((m) => ({ id: m.id, nome: m.nome, regime: m.regime, padrao: m.padrao, ativo: m.ativo, itens: m.itens })),
     custo: calcularCusto(dados, modelo?.itens ?? []),
     modeloAplicado: modelo?.nome ?? null,
   };
@@ -69,9 +71,14 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   // Modelo de encargos escolhido: precisa ser da mesma empresa e do mesmo regime
   if (modeloEncargosId) {
-    const m = await prisma.modeloEncargos.findFirst({ where: { id: modeloEncargosId, empresaId }, select: { regime: true } });
+    const m = await prisma.modeloEncargos.findFirst({ where: { id: modeloEncargosId, empresaId }, select: { regime: true, ativo: true } });
     if (!m) return NextResponse.json({ erro: "Modelo de encargos inválido" }, { status: 400 });
     if (m.regime !== d.regime) return NextResponse.json({ erro: "O modelo de encargos é de outro tipo de contrato" }, { status: 400 });
+    // Escolha NOVA precisa ser de modelo ativo; manter o que ele já usava (mesmo inativo) é aceito
+    if (!m.ativo) {
+      const atual = await prisma.colaboradorFolha.findUnique({ where: { colaboradorId: id }, select: { modeloEncargosId: true } });
+      if (atual?.modeloEncargosId !== modeloEncargosId) return NextResponse.json({ erro: "Modelo de encargos inativo: escolha um ativo." }, { status: 400 });
+    }
   }
 
   const dados = {

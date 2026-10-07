@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { AvisoInativacaoStatus } from "@/components/ui/aviso-inativacao-status";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,9 @@ export function EquipeForm({ initialData }: { initialData?: any }) {
   const [veiculoIds, setVeiculoIds] = useState<string[]>(vinculadosAntes);
   const [confirmar, setConfirmar] = useState<string[] | null>(null);
   const [status, setStatus] = useState(initialData?.status ?? "ATIVA");
+  // Status → Inativa (editando): mostra o impacto e pede motivo, como o botão Inativar
+  const [motivoInativacao, setMotivoInativacao] = useState("");
+  const inativandoPeloStatus = !!initialData?.id && status === "INATIVA" && initialData?.status !== "INATIVA";
   const [observacoes, setObservacoes] = useState(initialData?.observacoes ?? "");
 
   const [colaboradores, setColaboradores] = useState<Colab[]>([]);
@@ -67,7 +71,7 @@ export function EquipeForm({ initialData }: { initialData?: any }) {
       const res = await fetch(url, {
         method: isEditing ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome, cor, liderId: liderId || null, membroIds, veiculoIds, confirmarDesvinculo, status, observacoes }),
+        body: JSON.stringify({ nome, cor, liderId: liderId || null, membroIds, veiculoIds, confirmarDesvinculo, status, observacoes, ...(inativandoPeloStatus && { motivoInativacao }) }),
       });
       const e = await res.json().catch(() => ({}));
       if (res.status === 409 && e.requerConfirmacao) { setConfirmar(e.desvincular ?? []); return; }
@@ -98,6 +102,7 @@ export function EquipeForm({ initialData }: { initialData?: any }) {
               </Select>
             </FormField>
           </FormGrid>
+          {initialData?.id && <AvisoInativacaoStatus url={`/api/equipes/${initialData.id}`} mostrar={inativandoPeloStatus} motivo={motivoInativacao} onMotivo={setMotivoInativacao} />}
           <FormField label="Cor de identificação" hint="Usada para destacar a equipe no calendário">
             <div className="flex items-center gap-2 flex-wrap">
               {CORES.map((c) => (

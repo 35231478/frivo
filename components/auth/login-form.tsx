@@ -14,6 +14,8 @@ export function LoginForm() {
   const callbackUrl = searchParams.get("callbackUrl") ?? "/dashboard";
   // Vindo de /sessao-encerrada: o acesso foi encerrado (usuário/empresa inativados ou sessão inválida)
   const sessaoEncerrada = searchParams.get("sessao") === "encerrada";
+  // Vindo de /definir-senha (convite): senha criada, é só entrar
+  const senhaDefinida = searchParams.get("senha") === "definida";
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [erro, setErro] = useState("");
 
@@ -21,7 +23,7 @@ export function LoginForm() {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<LoginInput>({ resolver: zodResolver(loginSchema) });
+  } = useForm<LoginInput>({ resolver: zodResolver(loginSchema), defaultValues: { email: searchParams.get("email") ?? "" } });
 
   const onSubmit = async (data: LoginInput) => {
     setErro("");
@@ -42,6 +44,13 @@ export function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+      {senhaDefinida && !erro && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm rounded-lg px-3 py-2.5 flex items-center gap-2" role="status">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          Senha definida! Entre com o seu e-mail e a nova senha.
+        </div>
+      )}
+
       {sessaoEncerrada && !erro && (
         <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-3 py-2.5 flex items-center gap-2" role="status">
           <AlertCircle className="w-4 h-4 shrink-0" />

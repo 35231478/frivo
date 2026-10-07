@@ -48,7 +48,9 @@ export function InativarRegistro({
   const [motivo, setMotivo] = useState("");
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(false);
-  const [impacto, setImpacto] = useState<{ bloqueio: string | null; avisos: string[] } | null>(null);
+  const [impacto, setImpacto] = useState<{ bloqueio: string | null; avisos: string[]; usuarioVinculado?: { id: string; nome: string; email: string } | null } | null>(null);
+  // Colaborador que também é usuário: inativar o login junto (mesma regra de Configurações › Usuários)
+  const [inativarUsuario, setInativarUsuario] = useState(false);
   const [checando, setChecando] = useState(false);
 
   const permitido = ativo ? pode(modulo, acaoInativar) : pode(modulo, acaoReativar);
@@ -59,7 +61,7 @@ export function InativarRegistro({
 
   async function abrir(e?: React.MouseEvent) {
     e?.preventDefault(); e?.stopPropagation();
-    setAberto(true); setErro(""); setMotivo(""); setImpacto(null);
+    setAberto(true); setErro(""); setMotivo(""); setImpacto(null); setInativarUsuario(false);
     if (!ativo) return;
     setChecando(true);
     try {
@@ -74,10 +76,11 @@ export function InativarRegistro({
     setCarregando(true); setErro("");
     try {
       const res = ativo
-        ? await fetch(url, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motivo }) })
+        ? await fetch(url, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motivo, ...(inativarUsuario && { inativarUsuario: true }) }) })
         : await fetch(url, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ativo: true }) });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) { setErro(d.erro ?? "Não foi possível concluir a ação."); return; }
+      if (d.aviso) { setErro(d.aviso); return; } // concluiu em parte: mostra o que faltou
       setAberto(false);
       if (aoConcluir) aoConcluir(!ativo); else router.refresh();
     } catch { setErro("Erro de conexão."); } finally { setCarregando(false); }
@@ -128,6 +131,13 @@ export function InativarRegistro({
                 {impacto.avisos.map((a) => <li key={a}>{a}</li>)}
               </ul>
             </div>
+          )}
+
+          {ativo && !bloqueado && impacto?.usuarioVinculado && pode("configuracoes", "gerenciar") && (
+            <label className="flex items-start gap-2 text-sm text-ink bg-surface-alt rounded-lg px-3 py-2" data-inativar-usuario>
+              <input type="checkbox" checked={inativarUsuario} onChange={(e) => setInativarUsuario(e.target.checked)} className="mt-0.5 w-4 h-4 rounded border-surface-border text-primary-600" />
+              <span>Também inativar o usuário de login <strong>{impacto.usuarioVinculado.email}</strong> (ele perde o acesso ao sistema na hora).</span>
+            </label>
           )}
 
           {ativo && comMotivo && !bloqueado && (

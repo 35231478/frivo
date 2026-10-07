@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
   }
 
   const nomes = await rotulos(entidade, ids, empresaId); // só os da empresa da sessão aparecem aqui
-  const ctx = { empresaId, usuarioId: user.id, usuarioNome: user.name ?? "usuário", origem: "massa" as const, motivo };
+  const ctx = { empresaId, usuarioId: user.id, usuarioNome: user.name ?? "usuário", origem: "massa" as const, motivo, role: user.role, permissoes };
   const inicio = Date.now();
   const resultados: ItemResultado[] = [];
 

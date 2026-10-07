@@ -26,6 +26,7 @@ function casa(row: Linha, where: Linha = {}): boolean {
       if ("not" in v) return row[k] !== v.not;
       if ("has" in v) return (row[k] ?? []).includes(v.has);
       if ("contains" in v) return String(row[k] ?? "").toLowerCase().includes(String(v.contains).toLowerCase());
+      if ("equals" in v) return v.mode === "insensitive" ? String(row[k] ?? "").toLowerCase() === String(v.equals).toLowerCase() : row[k] === v.equals;
       if ("some" in v) return (row[k] ?? []).some((x: Linha) => casa(x, v.some));
       if (ehObjeto(row[k])) return casa(row[k], v); // filtro por relação 1-1
       return true;
