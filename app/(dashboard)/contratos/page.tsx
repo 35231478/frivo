@@ -1,6 +1,9 @@
+import { SelecaoMassaProvider } from "@/components/acoes-massa/selecao";
+import { BarraAcoesMassa } from "@/components/acoes-massa/barra";
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { whereContratos } from "@/lib/listas/filtros";
 import { ContratosListaClient } from "@/components/contratos/contratos-lista-client";
 
 export const metadata: Metadata = { title: "Contratos" };
@@ -28,25 +31,7 @@ export default async function ContratosPage({ searchParams }: { searchParams: Pr
   const sort = sp.sort && SORT_MAP[sp.sort] ? sp.sort : "dataInicio";
   const dir: "asc" | "desc" = sp.dir === "asc" ? "asc" : "desc";
 
-  const where: any = { empresaId };
-  if (sp.busca) {
-    where.OR = [
-      { numero: { contains: sp.busca, mode: "insensitive" } },
-      { cliente: { nome: { contains: sp.busca, mode: "insensitive" } } },
-    ];
-  }
-  if (sp.frequencia) where.periodicidade = sp.frequencia;
-  if (sp.clienteId) where.clienteId = sp.clienteId;
-  if (sp.vigenciaInicio) where.dataInicio = { ...(where.dataInicio ?? {}), gte: new Date(sp.vigenciaInicio) };
-  if (sp.vigenciaFim) { const f = new Date(sp.vigenciaFim); f.setHours(23, 59, 59, 999); where.dataInicio = { ...(where.dataInicio ?? {}), lte: f }; }
-  if (sp.valorMin) where.valorMensal = { ...(where.valorMensal ?? {}), gte: Number(sp.valorMin) };
-  if (sp.valorMax) where.valorMensal = { ...(where.valorMensal ?? {}), lte: Number(sp.valorMax) };
-  // Filtro de status: valores diretos do enum + computados (VENCIDO/VENCENDO)
-  const STATUS_ENUM = ["ATIVO", "SUSPENSO", "ENCERRADO", "CANCELADO", "EM_RENOVACAO", "AGUARDANDO_ASSINATURA"];
-  if (sp.status && STATUS_ENUM.includes(sp.status)) where.status = sp.status;
-  else if (sp.status === "INATIVO") where.status = { in: ["SUSPENSO", "ENCERRADO", "CANCELADO"] };
-  else if (sp.status === "VENCIDO") { where.status = { notIn: ["ENCERRADO", "CANCELADO"] }; where.dataFim = { lt: agora }; }
-  else if (sp.status === "VENCENDO") { where.status = "ATIVO"; where.dataFim = { gte: agora, lte: em30 }; }
+  const where = whereContratos(empresaId, sp, agora);
 
   const [contratos, total, agregadoFiltrado, ativos, somaAtivos, vencendo, vencidos, clientes] = await Promise.all([
     prisma.contrato.findMany({
@@ -91,6 +76,7 @@ export default async function ContratosPage({ searchParams }: { searchParams: Pr
   });
 
   return (
+    <SelecaoMassaProvider entidade="contratos" idsPagina={contratos.map((c) => c.id)} total={total}>
     <ContratosListaClient
       contratos={view}
       total={total}
@@ -98,5 +84,7 @@ export default async function ContratosPage({ searchParams }: { searchParams: Pr
       resumo={{ ativos, valorMensalTotal: valorMensalAtivos, valorAnualTotal: valorMensalAtivos * 12, vencendo, vencidos }}
       opcoesClientes={clientes.map((c) => ({ value: c.id, label: c.nomeFantasia ?? c.nome }))}
     />
+    <BarraAcoesMassa />
+    </SelecaoMassaProvider>
   );
 }

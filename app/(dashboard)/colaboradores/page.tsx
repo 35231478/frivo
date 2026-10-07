@@ -1,3 +1,5 @@
+import { SelecaoMassaProvider } from "@/components/acoes-massa/selecao";
+import { BarraAcoesMassa } from "@/components/acoes-massa/barra";
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -89,6 +91,7 @@ export default async function ColaboradoresPage({ searchParams }: { searchParams
   });
 
   return (
+    <SelecaoMassaProvider entidade="colaboradores" idsPagina={itens.map((i) => i.id)} total={total}>
     <ColaboradoresListaClient
       itens={itens}
       total={total}
@@ -100,5 +103,7 @@ export default async function ColaboradoresPage({ searchParams }: { searchParams
       }}
       resumo={{ ativos, inativos, tecnicos, semEquipe, ausentes, docVencido, docVencendo }}
     />
+    <BarraAcoesMassa />
+    </SelecaoMassaProvider>
   );
 }

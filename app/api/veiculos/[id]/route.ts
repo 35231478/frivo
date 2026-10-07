@@ -5,7 +5,8 @@ import { veiculoSchema } from "@/lib/validations";
 import { organizarFotosVeiculo } from "@/lib/veiculo-fotos";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { pode } from "@/lib/permissoes";
-import { impactoVeiculo, anotarInativacao, lerMotivo } from "@/lib/inativacao-server";
+import { lerMotivo } from "@/lib/inativacao-server";
+import { inativarVeiculo, reativarVeiculo, statusHttp } from "@/lib/acoes-massa/regras";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -91,18 +92,10 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   const empresaId = session.user!.empresaId;
   const { id } = await params;
 
-  const existente = await prisma.veiculo.findFirst({ where: { id, empresaId } });
-  if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
-  if (existente.status === "INATIVO") return NextResponse.json({ ok: true });
-
-  const impacto = await impactoVeiculo(id, empresaId);
-  if (impacto?.bloqueio) return NextResponse.json({ erro: impacto.bloqueio }, { status: 409 });
-
   const motivo = lerMotivo(await req.json().catch(() => ({})));
-  await prisma.veiculo.update({
-    where: { id },
-    data: { status: "INATIVO", observacoes: anotarInativacao(existente.observacoes, session.user!.name ?? "usuário", motivo) },
-  });
+  // Mesma regra da ação em massa (lib/acoes-massa/regras.ts)
+  const r = await inativarVeiculo(id, { empresaId, usuarioId: session.user!.id, usuarioNome: session.user!.name ?? "usuário", motivo });
+  if (!r.ok) return NextResponse.json({ erro: r.codigo === "nao_encontrado" ? "Não encontrado" : r.motivo }, { status: statusHttp(r) });
   return NextResponse.json({ ok: true });
 }
 
@@ -114,8 +107,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const { id } = await params;
   if ((await req.json().catch(() => ({})))?.ativo !== true) return NextResponse.json({ erro: "Ação inválida" }, { status: 400 });
 
-  const existente = await prisma.veiculo.findFirst({ where: { id, empresaId }, select: { id: true } });
-  if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
-  await prisma.veiculo.update({ where: { id }, data: { status: "ATIVO" } });
+  const r = await reativarVeiculo(id, { empresaId, usuarioId: guard.session.user!.id, usuarioNome: guard.session.user!.name ?? "usuário" });
+  if (!r.ok) return NextResponse.json({ erro: "Não encontrado" }, { status: statusHttp(r) });
   return NextResponse.json({ ok: true });
 }

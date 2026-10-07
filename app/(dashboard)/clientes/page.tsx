@@ -1,7 +1,11 @@
+import { SelecaoMassaProvider, CheckboxLinha, CheckboxPagina } from "@/components/acoes-massa/selecao";
+import { BarraAcoesMassa } from "@/components/acoes-massa/barra";
+import { temAcaoMassa } from "@/lib/acoes-massa/acoes";
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
+import { whereClientes } from "@/lib/listas/filtros";
 import { formatarCpfCnpj, cn, LABELS_SEGMENTO } from "@/lib/utils";
 import {
   calcularStatusFinanceiroEmLote, LABELS_STATUS_FINANCEIRO_CALC, COR_STATUS_FINANCEIRO_CALC,
@@ -23,23 +27,13 @@ export default async function ClientesPage({
   const session = await auth();
   const empresaId = session!.user!.empresaId;
   const podeCriar = pode(session!.user!.permissoes, "clientes", "criar", session!.user!.role);
+  const massa = temAcaoMassa(session!.user!.permissoes, session!.user!.role, "clientes");
   const porPagina = 20;
   const skip = (Number(pagina) - 1) * porPagina;
 
-  // O status financeiro é calculado (não é mais coluna filtrável no banco).
-  const statusFiltro = (["SEM_HISTORICO", "ADIMPLENTE", "INADIMPLENTE"] as const).find((s) => s === status);
+  // O status financeiro é calculado (não é mais coluna filtrável no banco): vem à parte.
   const mostrarInativos = inativos === "1";
-
-  // Por padrão lista apenas ativos; com "Mostrar inativos" inclui os inativos também.
-  const where: any = { empresaId, ...(mostrarInativos ? {} : { ativo: true }) };
-  if (busca) {
-    where.OR = [
-      { nome: { contains: busca, mode: "insensitive" } },
-      { nomeFantasia: { contains: busca, mode: "insensitive" } },
-      { cpfCnpj: { contains: busca } },
-    ];
-  }
-  if (segmento) where.segmento = segmento;
+  const { where, statusFiltro } = whereClientes(empresaId, { busca, status, segmento, inativos });
 
   const incluir = {
     _count: { select: { unidades: true, ordensServico: true, contratos: { where: { status: "ATIVO" } } } },
@@ -85,6 +79,7 @@ export default async function ClientesPage({
   }
 
   return (
+    <SelecaoMassaProvider entidade="clientes" idsPagina={clientes.map((c) => c.id)} total={total}>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -136,6 +131,7 @@ export default async function ClientesPage({
         <table className="w-full text-sm">
           <thead className="bg-surface-alt border-b border-surface-border">
             <tr>
+              {massa && <th className="w-px pl-4 pr-1 py-3"><CheckboxPagina /></th>}
               <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Nome</th>
               <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden md:table-cell">CPF/CNPJ</th>
               <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden lg:table-cell">Segmento</th>
@@ -148,7 +144,7 @@ export default async function ClientesPage({
           </thead>
           <tbody>
             {clientes.length === 0 ? (
-              <tr><td colSpan={8} className="text-center text-ink-subtle py-12">Nenhum cliente encontrado</td></tr>
+              <tr><td colSpan={massa ? 9 : 8} className="text-center text-ink-subtle py-12">Nenhum cliente encontrado</td></tr>
             ) : (
               clientes.map((c, idx) => (
                 <tr key={c.id} className={cn(
@@ -156,6 +152,7 @@ export default async function ClientesPage({
                   idx % 2 === 1 && "bg-surface-alt/30",
                   !c.ativo && "opacity-60",
                 )}>
+                  {massa && <td className="w-px pl-4 pr-1 py-3"><CheckboxLinha id={c.id} rotulo={c.nomeFantasia ?? c.nome} /></td>}
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 flex-wrap">
                       <Link href={`/clientes/${c.id}/editar`} className="font-semibold text-ink hover:text-primary-600 transition-colors">
@@ -201,5 +198,7 @@ export default async function ClientesPage({
         </table>
       </div>
     </div>
+    <BarraAcoesMassa />
+    </SelecaoMassaProvider>
   );
 }

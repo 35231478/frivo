@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
+import { definirAtivoEquipamento } from "@/lib/acoes-massa/regras";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { equipamentoSchema } from "@/lib/validations";
@@ -83,8 +84,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (body.ativo === false && !pode(session.user!.permissoes, "equipamentos", "excluir", session.user!.role))
     return NextResponse.json({ erro: "Sem permissão para esta ação" }, { status: 403 });
 
-  const atualizado = await prisma.equipamento.update({ where: { id }, data: { ativo: body.ativo } });
-  return NextResponse.json({ ok: true, ativo: atualizado.ativo });
+  await definirAtivoEquipamento(id, body.ativo, { empresaId, usuarioId: session.user!.id, usuarioNome: session.user!.name ?? "usuário" });
+  return NextResponse.json({ ok: true, ativo: body.ativo });
 }
 
 export async function DELETE(_: NextRequest, { params }: Params) {
@@ -97,6 +98,6 @@ export async function DELETE(_: NextRequest, { params }: Params) {
   const existente = await prisma.equipamento.findFirst({ where: { id, empresaId } });
   if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
 
-  await prisma.equipamento.update({ where: { id }, data: { ativo: false } });
+  await definirAtivoEquipamento(id, false, { empresaId, usuarioId: session.user!.id, usuarioNome: session.user!.name ?? "usuário" });
   return NextResponse.json({ ok: true });
 }

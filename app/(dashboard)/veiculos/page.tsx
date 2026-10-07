@@ -1,3 +1,5 @@
+import { SelecaoMassaProvider } from "@/components/acoes-massa/selecao";
+import { BarraAcoesMassa } from "@/components/acoes-massa/barra";
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -112,6 +114,7 @@ export default async function VeiculosPage({ searchParams }: { searchParams: Pro
   });
 
   return (
+    <SelecaoMassaProvider entidade="veiculos" idsPagina={itens.map((i) => i.id)} total={total}>
     <VeiculosListaClient
       itens={itens}
       total={total}
@@ -119,5 +122,7 @@ export default async function VeiculosPage({ searchParams }: { searchParams: Pro
       tipos={Object.entries(TIPOS_VEICULO).map(([value, label]) => ({ value, label }))}
       resumo={{ ativos, manutencao, inativos, docVencido, docVencendo, revisaoVencida, revisaoProxima, semChecklist }}
     />
+    <BarraAcoesMassa />
+    </SelecaoMassaProvider>
   );
 }
