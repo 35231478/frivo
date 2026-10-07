@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirAlgumaPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
+import { respostaRefEmpresa, validarRefEmpresa } from "@/lib/ref-empresa";
 
 type Params = { params: Promise<{ id: string; atividadeId: string }> };
 
@@ -20,9 +21,19 @@ export async function POST(req: NextRequest, { params }: Params) {
     respostas: Array<{ campoId: string; resposta?: string; arquivoUrl?: string }>;
   };
 
-  if (!respostas || !formularioId) {
+  if (!Array.isArray(respostas) || !formularioId) {
     return NextResponse.json({ erro: "Dados inválidos" }, { status: 400 });
   }
+  // Formulário da empresa; campos dele, ativos (ou removidos já respondidos nesta atividade)
+  try { await validarRefEmpresa("formularioTemplate", formularioId, empresaId, "Formulário"); }
+  catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
+  const campos = await prisma.formularioCampo.findMany({
+    where: { formularioId, OR: [{ ativo: true }, { respostas: { some: { atividadeId } } }] },
+    orderBy: { ordem: "asc" },
+  });
+  const validos = new Set(campos.map((c) => c.id));
+  if (respostas.some((r) => !validos.has(r.campoId)))
+    return NextResponse.json({ erro: "Campo inválido (não pertence a este formulário ou foi removido)." }, { status: 400 });
 
   // Upsert each response
   for (const r of respostas) {
@@ -42,11 +53,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     });
   }
 
-  // Generate summary
-  const campos = await prisma.formularioCampo.findMany({
-    where: { formularioId },
-    orderBy: { ordem: "asc" },
-  });
+  // Resumo: campos ativos + removidos que têm resposta (lista lida antes de gravar)
 
   const respostasDb = await prisma.atividadeResposta.findMany({
     where: { atividadeId },

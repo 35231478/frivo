@@ -56,9 +56,13 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ erro: "Nenhum equipamento marcado como feito neste grupo." }, { status: 400 });
   }
 
-  // Valida que os campos pertencem ao formulário
+  // Valida que os campos pertencem ao formulário e estão ativos — campo removido na edição só
+  // aceita resposta se já tinha sido respondido nesta atividade (regravar o registro antigo).
   const camposValidos = new Set(
-    (await prisma.formularioCampo.findMany({ where: { formularioId }, select: { id: true } })).map((c) => c.id),
+    (await prisma.formularioCampo.findMany({
+      where: { formularioId, OR: [{ ativo: true }, { respostasEquipamento: { some: { atividadeId } } }] },
+      select: { id: true },
+    })).map((c) => c.id),
   );
   const limpos = respostas.filter((r) => camposValidos.has(r.campoId));
 

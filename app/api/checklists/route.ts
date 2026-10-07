@@ -50,7 +50,8 @@ export async function POST(req: NextRequest) {
     ]);
   } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
   const itemIds = [...new Set(itens.map((i) => i.itemTemplateId))];
-  if (itemIds.length && (await prisma.checklistItemTemplate.count({ where: { id: { in: itemIds }, templateId } })) !== itemIds.length)
+  // Itens do próprio modelo e ATIVOS (item removido na edição não entra em checklist novo)
+  if (itemIds.length && (await prisma.checklistItemTemplate.count({ where: { id: { in: itemIds }, templateId, ativo: true } })) !== itemIds.length)
     return NextResponse.json({ erro: "Item de checklist inválido." }, { status: 400 });
 
   const temAlerta = itens.some((i) => i.alerta);

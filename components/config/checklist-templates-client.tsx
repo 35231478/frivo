@@ -17,7 +17,7 @@ const TIPOS_ITEM = [
   { v: "FOTO", l: "Foto" },
 ];
 
-interface ItemForm { categoria: string; descricao: string; tipo: string; opcoesStr: string; obrigatorio: boolean }
+interface ItemForm { id?: string; categoria: string; descricao: string; tipo: string; opcoesStr: string; obrigatorio: boolean }
 
 const ITEM_VAZIO: ItemForm = { categoria: "", descricao: "", tipo: "OK_NOK", opcoesStr: "OK, NOK", obrigatorio: true };
 
@@ -44,7 +44,7 @@ export function ChecklistTemplatesClient() {
   function abrirEditar(t: any) {
     setNome(t.nome); setDescricao(t.descricao ?? ""); setFrequencia(t.frequencia);
     setItens((t.itens ?? []).map((i: any) => ({
-      categoria: i.categoria, descricao: i.descricao, tipo: i.tipo,
+      id: i.id, categoria: i.categoria, descricao: i.descricao, tipo: i.tipo,
       opcoesStr: (i.opcoes ?? []).join(", "), obrigatorio: i.obrigatorio,
     })));
     setEditando(t.id); setErro("");
@@ -69,8 +69,9 @@ export function ChecklistTemplatesClient() {
     setSalvando(true);
     const payload = {
       nome, descricao, frequencia,
+      // id dos itens existentes: o servidor atualiza no lugar (removido vira inativo, não é apagado)
       itens: itens.map((i, idx) => ({
-        categoria: i.categoria, descricao: i.descricao, tipo: i.tipo,
+        id: i.id, categoria: i.categoria, descricao: i.descricao, tipo: i.tipo,
         opcoes: (i.tipo === "OK_NOK" || i.tipo === "NIVEL") ? i.opcoesStr.split(",").map((s) => s.trim()).filter(Boolean) : [],
         obrigatorio: i.obrigatorio, ordem: idx,
       })),

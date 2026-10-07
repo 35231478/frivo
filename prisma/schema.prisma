@@ -1365,6 +1365,8 @@ model FormularioCampo {
   obrigatorio  Boolean   @default(false)
   ordem        Int       @default(0)
   opcoes       Json?
+  /// Campo removido na edição: fica no banco (as respostas antigas apontam para ele), some do preenchimento novo
+  ativo        Boolean   @default(true)
 
   formulario           FormularioTemplate              @relation(fields: [formularioId], references: [id], onDelete: Cascade)
   respostas            AtividadeResposta[]
@@ -2512,6 +2514,8 @@ model ChecklistItemTemplate {
   opcoes      String[]
   obrigatorio Boolean           @default(true)
   ordem       Int               @default(0)
+  /// Item removido na edição: fica no banco (checklists já preenchidos apontam para ele), some do preenchimento novo
+  ativo       Boolean           @default(true)
 
   template         ChecklistTemplate         @relation(fields: [templateId], references: [id], onDelete: Cascade)
   itensPreenchidos ChecklistItemPreenchido[]

@@ -83,7 +83,8 @@ export default function FormulariosPage() {
     const payload = {
       ...form,
       tipoOsId: form.tipoOsId || null,
-      campos: camposValidos.map((c, i) => ({ label: c.label, tipo: c.tipo, obrigatorio: c.obrigatorio, ordem: i + 1, opcoes: c.opcoes })),
+      // id dos campos existentes: o servidor atualiza no lugar (removido vira inativo, não é apagado)
+      campos: camposValidos.map((c, i) => ({ id: c.id, label: c.label, tipo: c.tipo, obrigatorio: c.obrigatorio, ordem: i + 1, opcoes: c.opcoes })),
     };
 
     try {

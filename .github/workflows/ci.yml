@@ -12,11 +12,16 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # histórico para comparar com a base do PR (schema x SQL)
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Schema alterado exige SQL em prisma/sql/
+        if: github.event_name == 'pull_request'
+        run: bash scripts/checar-sql-schema.sh "origin/${{ github.base_ref }}"
       - run: npx prisma validate
         env:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci

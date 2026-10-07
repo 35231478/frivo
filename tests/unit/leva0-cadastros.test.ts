@@ -67,7 +67,7 @@ function semear() {
       { id: "f1", empresaId: "e1", nome: "PMOC Split", ativo: false, tipoOsId: "to1", descricao: null },
       { id: "fB", empresaId: "e2", nome: "Da outra", ativo: true, tipoOsId: null },
     ],
-    formularioCampo: [{ id: "c1", formularioId: "f1", label: "Pressão", tipo: "TEXTO_CURTO", obrigatorio: true, ordem: 1 }],
+    formularioCampo: [{ id: "c1", formularioId: "f1", label: "Pressão", tipo: "TEXTO_CURTO", obrigatorio: true, ordem: 1, ativo: true }],
     formTypeMapping: [{ id: "m1", empresaId: "e1", tipoOsId: "to1", tipoEquipamentoId: "te1", formularioTemplateId: "f1", obrigatorioConcluir: true, obrigatorioImpedimento: true }],
     respostaFormularioEquipamento: [],
     produto: [
@@ -88,7 +88,7 @@ function semear() {
     ],
     unidade: [{ id: "u1", empresaId: "e1", clienteId: "c1", nome: "Matriz" }, { id: "uB", empresaId: "e2", clienteId: "cB", nome: "Outra" }],
     checklistTemplate: [{ id: "ckA", empresaId: "e1", nome: "Diário", ativo: true }, { id: "ckB", empresaId: "e2", nome: "Da outra", ativo: true }],
-    checklistItemTemplate: [{ id: "iA", templateId: "ckA", descricao: "Pneus" }, { id: "iB", templateId: "ckB", descricao: "Da outra" }],
+    checklistItemTemplate: [{ id: "iA", templateId: "ckA", descricao: "Pneus", ativo: true }, { id: "iB", templateId: "ckB", descricao: "Da outra", ativo: true }],
   };
 }
 

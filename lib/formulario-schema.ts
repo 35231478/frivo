@@ -4,6 +4,8 @@ import { TipoCampo } from "@prisma/client";
 /** Formulários (templates de atividade). A empresa vem SEMPRE da sessão, nunca do corpo. */
 
 export const campoFormularioSchema = z.object({
+  /** Campo já existente (edição): atualiza no lugar. Sem id = campo novo. */
+  id: z.string().min(1).nullable().optional(),
   label: z.string().min(1),
   tipo: z.nativeEnum(TipoCampo),
   obrigatorio: z.boolean().default(false),

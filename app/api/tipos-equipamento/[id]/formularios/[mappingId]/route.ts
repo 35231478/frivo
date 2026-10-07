@@ -14,7 +14,7 @@ const schema = z.object({
 
 const incluir = {
   tipoOs: { select: { id: true, nome: true, cor: true } },
-  formularioTemplate: { select: { id: true, nome: true, _count: { select: { campos: true } } } },
+  formularioTemplate: { select: { id: true, nome: true, _count: { select: { campos: { where: { ativo: true } } } } } },
 } as const;
 
 function serializar(m: Prisma.FormTypeMappingGetPayload<{ include: typeof incluir }>) {
