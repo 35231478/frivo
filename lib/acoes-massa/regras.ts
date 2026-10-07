@@ -1,9 +1,11 @@
 import type { StatusContrato } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { motivoBloqueioInativacao } from "@/lib/os-server";
-import { anotarInativacao, impactoColaborador, impactoOrcamento, impactoVeiculo } from "@/lib/inativacao-server";
+import { anotarInativacao, impactoColaborador, impactoEquipe, impactoOrcamento, impactoVeiculo } from "@/lib/inativacao-server";
 import { gerarQrCodeEquipamento } from "@/lib/qrcode-server";
 import { CADASTROS, type EntidadeCadastro } from "@/lib/cadastros/registro";
+import { REGRAS, type Registro } from "@/lib/cadastros/especificos";
+import type { Permissoes } from "@/lib/permissoes";
 
 /**
  * Regras de inativar/reativar POR REGISTRO — a mesma função atende a ação individual (rotas
@@ -21,6 +23,9 @@ export interface ContextoItem {
   /** Texto que entra no histórico/observação (ex.: "Inativado em massa") */
   origem?: "individual" | "massa";
   motivo?: string;
+  /** Papel e acessos de quem age (travas que dependem do ator: perfil/usuário com mais acesso que ele) */
+  role?: string;
+  permissoes?: Permissoes;
 }
 
 export type CodigoFalha = "nao_encontrado" | "sem_permissao" | "bloqueado" | "invalido" | "erro";
@@ -81,16 +86,26 @@ export async function gerarQrEquipamento(id: string, ctx: ContextoItem): Promise
  * Única função de ativar/inativar desses cadastros: a usam a rota genérica /api/cadastros, as rotas
  * antigas (/api/produtos…) e as ações em massa. Nunca apaga: só ativo=false. */
 type DelegateAtivo = {
-  findFirst: (a: { where: { id: string; empresaId: string }; select: { ativo: true } }) => Promise<{ ativo: boolean } | null>;
+  findFirst: (a: { where: { id: string; empresaId: string } }) => Promise<(Record<string, unknown> & { id: string; ativo: boolean }) | null>;
   update: (a: { where: { id: string }; data: { ativo: boolean } }) => Promise<unknown>;
 };
 export async function definirAtivoCadastro(entidade: EntidadeCadastro, id: string, ativo: boolean, ctx: ContextoItem): Promise<ResultadoItem> {
   const tabela = (prisma as unknown as Record<string, DelegateAtivo>)[CADASTROS[entidade].modelo];
-  const r = await tabela.findFirst({ where: { id, empresaId: ctx.empresaId }, select: { ativo: true } });
+  const r = await tabela.findFirst({ where: { id, empresaId: ctx.empresaId } });
   if (!r) return NAO_ENCONTRADO;
   if (r.ativo === ativo) return ok(ativo ? "Já estava ativo" : "Já estava inativo");
+  // Travas do cadastro (perfil padrão, o próprio usuário, último admin…): nunca puladas, nem em massa
+  const bloqueio = await verificarAtivoCadastro(entidade, r, ativo, ctx);
+  if (bloqueio) return falha("bloqueado", bloqueio);
   await tabela.update({ where: { id }, data: { ativo } });
   return ok();
+}
+
+/** O que impede mudar o `ativo` deste registro (null = pode). Sem acessos no contexto, trava (seguro). */
+export async function verificarAtivoCadastro(entidade: EntidadeCadastro, registro: Registro, ativo: boolean, ctx: ContextoItem) {
+  const regra = REGRAS[entidade]?.bloqueioAtivo;
+  if (!regra) return null;
+  return regra(registro, ativo, { id: ctx.usuarioId, empresaId: ctx.empresaId, role: ctx.role, permissoes: ctx.permissoes ?? {} });
 }
 
 /* ───────── Cliente: ativo true/false ───────── */
@@ -197,5 +212,28 @@ export async function reativarColaborador(id: string, ctx: ContextoItem): Promis
   if (!t) return NAO_ENCONTRADO;
   if (t.ativo) return ok("Já estava ativo");
   await prisma.tecnico.update({ where: { id }, data: { ativo: true, statusColaborador: "ATIVO" } });
+  return ok();
+}
+
+/* ───────── Equipe: inativar = status INATIVA (+ anotação); reativar = ATIVA ─────────
+ * Única função: botão Inativar (DELETE), select de status do formulário (PUT) e reativar (PATCH). */
+export async function inativarEquipe(id: string, ctx: ContextoItem): Promise<ResultadoItem> {
+  const e = await prisma.equipe.findFirst({ where: { id, empresaId: ctx.empresaId }, select: { status: true, observacoes: true } });
+  if (!e) return NAO_ENCONTRADO;
+  if (e.status === "INATIVA") return ok("Já estava inativa");
+  const impacto = await impactoEquipe(id, ctx.empresaId);
+  if (impacto?.bloqueio) return falha("bloqueado", impacto.bloqueio);
+  await prisma.equipe.update({
+    where: { id },
+    data: { status: "INATIVA", observacoes: anotarInativacao(e.observacoes, ctx.usuarioNome, ctx.motivo ?? "", `Inativada${sufixoMassa(ctx)}`) },
+  });
+  return ok();
+}
+
+export async function reativarEquipe(id: string, ctx: ContextoItem): Promise<ResultadoItem> {
+  const e = await prisma.equipe.findFirst({ where: { id, empresaId: ctx.empresaId }, select: { status: true } });
+  if (!e) return NAO_ENCONTRADO;
+  if (e.status === "ATIVA") return ok("Já estava ativa");
+  await prisma.equipe.update({ where: { id }, data: { status: "ATIVA" } });
   return ok();
 }

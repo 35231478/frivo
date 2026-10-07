@@ -16,7 +16,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { permissoesTotais, permissoesVazias, PRESETS, type Permissoes } from "@/lib/permissoes";
 import type { Banco, Linha } from "./helpers/banco-memoria";
 import { opcoesCadastro } from "@/lib/cadastros/opcoes";
-import { CADASTROS, ENTIDADES_CADASTRO, type EntidadeCadastro } from "@/lib/cadastros/registro";
+import { CADASTROS, type EntidadeCadastro as EntidadeQualquer } from "@/lib/cadastros/registro";
+
+/** Os 4 cadastros simples da Leva 2 (perfis, modelos e usuários têm testes próprios — Leva 4) */
+const ENTIDADES_CADASTRO = ["produtos", "servicos", "cargos", "categorias-financeiras"] as const;
+type EntidadeCadastro = Extract<EntidadeQualquer, (typeof ENTIDADES_CADASTRO)[number]>;
 
 const db = vi.hoisted(() => ({ t: {}, escritas: [], seq: 0 }) as unknown as Banco);
 vi.mock("@/lib/prisma", async () => {
@@ -188,7 +192,7 @@ describe("rotas antigas usam a mesma implementação", () => {
     expect((await chamar(() => import("@/app/api/servicos/route"), "POST", {}, { nome: "x", empresaId: "e2" })).status).toBe(400);
   });
   it("entidade inexistente na rota genérica: 404", async () => {
-    expect((await chamar(colecao, "GET", { entidade: "usuarios" })).status).toBe(404);
+    expect((await chamar(colecao, "GET", { entidade: "nao-existe" })).status).toBe(404);
   });
 });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, Check, Pencil, Plus, RefreshCw, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,8 @@ import { Drawer } from "@/components/ui/drawer";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { BarraAcoesMassa } from "@/components/acoes-massa/barra";
-import { CheckboxLinha, CheckboxPagina, SelecaoMassaProvider, useAcoesMassaDisponiveis } from "@/components/acoes-massa/selecao";
+import { CheckboxLinha, CheckboxPagina, SelecaoMassaProvider } from "@/components/acoes-massa/selecao";
+import { podeAcao, podeExportar, type AcaoItem, type Entidade } from "@/lib/acoes-massa/acoes";
 import { cn, formatarMoeda } from "@/lib/utils";
 import { CADASTROS, type AcaoCadastro, type CampoCadastro, type ColunaCadastro, type DefCadastro, type EntidadeCadastro } from "@/lib/cadastros/registro";
 
@@ -22,11 +23,40 @@ import { CADASTROS, type AcaoCadastro, type CampoCadastro, type ColunaCadastro, 
  * Botões aparecem conforme a permissão; toda gravação que falha mostra o motivo (nada silencioso).
  * Aba e busca ficam na URL (?aba=&q=): o "selecionar todos do filtro" usa o mesmo filtro no servidor.
  */
-type Item = Record<string, any> & { id: string; nome: string; ativo: boolean };
+export type ItemCadastroTela = Record<string, any> & { id: string; nome: string; ativo: boolean };
+type Item = ItemCadastroTela;
+
+/** Editor próprio (perfis, modelos de encargos, usuários): abre/fecha e grava pela rota genérica. */
+export interface EditorCadastroProps { item: Item | null; aberto: boolean; onFechar: () => void; onSalvo: (item: Item) => void }
+
+export interface CadastroPadraoProps {
+  entidade: EntidadeCadastro;
+  /** Formulário próprio (registro com `editorProprio`) */
+  Editor?: ComponentType<EditorCadastroProps>;
+  /** Célula personalizada (undefined = padrão do registro) */
+  celula?: (coluna: string, item: Item) => ReactNode | undefined;
+  /** Botões extras na linha (ex.: reenviar convite) */
+  acoesLinha?: (item: Item, recarregar: () => void) => ReactNode;
+  /** Texto acima da lista */
+  ajuda?: ReactNode;
+}
+
+/** Grava pela rota genérica (POST cria / PATCH edita) — usado pelos editores próprios. */
+export async function salvarCadastro(entidade: EntidadeCadastro, id: string | null, corpo: Record<string, unknown>):
+  Promise<{ ok: true; item: Item } | { ok: false; erro: string }> {
+  try {
+    const res = await fetch(id ? `/api/cadastros/${entidade}/${id}` : `/api/cadastros/${entidade}`, {
+      method: id ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo),
+    });
+    const d = await res.json().catch(() => null);
+    if (!res.ok || !d?.id) return { ok: false, erro: d?.erro ?? "Não foi possível salvar." };
+    return { ok: true, item: d };
+  } catch { return { ok: false, erro: "Erro de conexão: nada foi salvo." }; }
+}
 type Aba = "ativos" | "inativos" | "todos";
 const ABAS: { id: Aba; label: string }[] = [{ id: "ativos", label: "Ativos" }, { id: "inativos", label: "Inativos" }, { id: "todos", label: "Todos" }];
 
-export function CadastroPadrao(props: { entidade: EntidadeCadastro }) {
+export function CadastroPadrao(props: CadastroPadraoProps) {
   // useSearchParams exige Suspense nas páginas client
   return <Suspense fallback={<p className="text-sm text-ink-subtle text-center py-8">Carregando…</p>}><Conteudo {...props} /></Suspense>;
 }
@@ -40,10 +70,23 @@ function usePodeCadastro(def: DefCadastro) {
 const vazioParaForm = (c: CampoCadastro) => (c.tipo === "cor" ? "#64748B" : c.tipo === "select" ? c.opcoes?.[0]?.value ?? "" : "");
 const valorParaForm = (c: CampoCadastro, v: unknown) => (v == null ? (c.tipo === "cor" ? "#64748B" : "") : String(v));
 
-function Conteudo({ entidade }: { entidade: EntidadeCadastro }) {
+/** Seleção em massa: só cadastros registrados nas ações em massa e com alguma ação permitida. */
+function useMassa(def: DefCadastro) {
+  const { permissoes, role } = usePermissoes();
+  if (!def.massa) return false;
+  const e = def.entidade as Entidade;
+  return podeExportar(permissoes, role, e) || (["inativar", "reativar"] as AcaoItem[]).some((a) => podeAcao(permissoes, role, e, a));
+}
+
+function ComSelecao({ ativo, entidade, ids, children }: { ativo: boolean; entidade: EntidadeCadastro; ids: string[]; children: ReactNode }) {
+  if (!ativo) return <>{children}</>;
+  return <SelecaoMassaProvider entidade={entidade as Entidade} idsPagina={ids} total={ids.length}>{children}</SelecaoMassaProvider>;
+}
+
+function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda }: CadastroPadraoProps) {
   const def = CADASTROS[entidade];
   const podeCad = usePodeCadastro(def);
-  const massa = useAcoesMassaDisponiveis(entidade);
+  const massa = useMassa(def);
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
@@ -84,8 +127,9 @@ function Conteudo({ entidade }: { entidade: EntidadeCadastro }) {
   const Titulo = def.singular[0].toUpperCase() + def.singular.slice(1);
 
   return (
-    <SelecaoMassaProvider entidade={entidade} idsPagina={visiveis.map((i) => i.id)} total={visiveis.length}>
+    <ComSelecao ativo={!!def.massa} entidade={entidade} ids={visiveis.map((i) => i.id)}>
       <div className="space-y-4" data-cadastro={entidade}>
+        {ajuda && <div className="text-sm text-ink-muted">{ajuda}</div>}
         {/* Abas + busca + Novo */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
           <div className="flex rounded-lg border border-surface-border p-0.5 bg-surface-alt w-full sm:w-auto" role="tablist">
@@ -142,7 +186,7 @@ function Conteudo({ entidade }: { entidade: EntidadeCadastro }) {
                     {massa && <td className="w-px pl-4 pr-1 py-3"><CheckboxLinha id={item.id} rotulo={item.nome} /></td>}
                     {def.colunas.map((col, i) => (
                       <td key={col.key} className={cn("px-3 sm:px-4 py-3", i > 0 && "hidden sm:table-cell")}>
-                        <Celula col={col} item={item} primeira={i === 0} />
+                        {celula?.(col.key, item) ?? <Celula col={col} item={item} primeira={i === 0} />}
                         {/* Celular: a coluna Situação some; o selo vai embaixo do nome */}
                         {i === 0 && !item.ativo && <span className="sm:hidden mt-1 inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full bg-surface-alt text-ink-muted">Inativo</span>}
                       </td>
@@ -156,6 +200,7 @@ function Conteudo({ entidade }: { entidade: EntidadeCadastro }) {
                     )}
                     <td className="px-3 sm:px-4 py-3 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1">
+                        {acoesLinha?.(item, () => void carregar())}
                         {podeCad("editar") && (
                           <button type="button" onClick={() => setEditando(item)} className="p-1.5 text-ink-muted hover:text-primary-600 hover:bg-primary-50 rounded" title={`Editar ${item.nome}`} aria-label={`Editar ${item.nome}`}>
                             <Pencil className="w-4 h-4" />
@@ -163,7 +208,7 @@ function Conteudo({ entidade }: { entidade: EntidadeCadastro }) {
                         )}
                         {podeCad(item.ativo ? "inativar" : "reativar") && (
                           <InativarRegistro
-                            url={`/api/cadastros/${entidade}/${item.id}`} modulo={def.modulo}
+                            url={`/api/cadastros/${entidade}/${item.id}`} modulo={def.permissoes.inativar?.[0]?.[0] ?? def.modulo}
                             acaoInativar={def.permissoes.inativar?.[0]?.[1] ?? "gerenciar"} acaoReativar={def.permissoes.reativar?.[0]?.[1] ?? "gerenciar"}
                             ativo={item.ativo} nome={item.nome} entidade={def.singular} feminino={def.feminino} comMotivo={false}
                             aoConcluir={() => void carregar()}
@@ -179,15 +224,23 @@ function Conteudo({ entidade }: { entidade: EntidadeCadastro }) {
         )}
       </div>
 
-      <FormularioCadastro
-        def={def} titulo={Titulo} editando={editando} onFechar={() => setEditando(null)}
-        onSalvo={(salvo) => {
-          setItens((p) => (p.some((i) => i.id === salvo.id) ? p.map((i) => (i.id === salvo.id ? salvo : i)) : [...p, salvo].sort((a, b) => a.nome.localeCompare(b.nome))));
-          setEditando(null);
-        }}
-      />
-      <BarraAcoesMassa aoConcluir={() => void carregar()} />
-    </SelecaoMassaProvider>
+      {def.editorProprio && Editor ? (
+        // Editor próprio: depois de salvar recarrega (contagens e vínculos vêm do servidor)
+        <Editor
+          item={editando && editando !== "novo" ? editando : null} aberto={!!editando}
+          onFechar={() => setEditando(null)} onSalvo={() => { setEditando(null); void carregar(); }}
+        />
+      ) : (
+        <FormularioCadastro
+          def={def} titulo={Titulo} editando={editando} onFechar={() => setEditando(null)}
+          onSalvo={(salvo) => {
+            setItens((p) => (p.some((i) => i.id === salvo.id) ? p.map((i) => (i.id === salvo.id ? salvo : i)) : [...p, salvo].sort((a, b) => a.nome.localeCompare(b.nome))));
+            setEditando(null);
+          }}
+        />
+      )}
+      {def.massa && <BarraAcoesMassa aoConcluir={() => void carregar()} />}
+    </ComSelecao>
   );
 }
 

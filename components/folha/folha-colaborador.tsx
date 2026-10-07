@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid, FormSection } from "@/components/ui/form-field";
+import { opcoesCadastro } from "@/lib/cadastros/opcoes";
 import {
   ADICIONAIS, ADICIONAL_LABEL, AVISO_GESTAO, REGIMES, REGIME_LABEL, calcularCusto, horasDoMes,
   type Adicional, type ItemEncargo, type Regime,
@@ -20,7 +21,7 @@ import { formatarMoeda } from "@/lib/utils";
  * Não é um <form> (fica dentro do formulário do colaborador): salva por conta própria.
  */
 
-interface Modelo { id: string; nome: string; regime: Regime; padrao: boolean; itens: ItemEncargo[] }
+type Modelo = { id: string; nome: string; regime: Regime; padrao: boolean; ativo: boolean; itens: ItemEncargo[] };
 
 const CAMPOS_VALOR = ["salario", "valorDiaria", "diasMes", "horasMes", "adicionalPercent", "adicionalValor", "horasExtrasValor",
   "valeTransporte", "valeAlimentacao", "planoSaude", "outrosBeneficios", "descontos"] as const;
@@ -62,8 +63,16 @@ export function FolhaColaborador({ colaboradorId }: { colaboradorId: string }) {
   const set = <K extends keyof Estado>(k: K, v: Estado[K]) => { setOk(false); setE((p) => (p ? { ...p, [k]: v } : p)); };
 
   const modelosDoRegime = useMemo(() => modelos.filter((m) => e && m.regime === e.regime), [modelos, e]);
-  const padrao = modelosDoRegime.find((m) => m.padrao) ?? modelosDoRegime[0];
-  const modelo = modelosDoRegime.find((m) => m.id === e?.modeloEncargosId) ?? padrao;
+  // Cálculo: só modelos ATIVOS (igual ao servidor); o escolhido inativo cai no padrão — e a tela avisa
+  const ativosDoRegime = modelosDoRegime.filter((m) => m.ativo);
+  const padrao = ativosDoRegime.find((m) => m.padrao) ?? ativosDoRegime[0];
+  const escolhido = modelosDoRegime.find((m) => m.id === e?.modeloEncargosId);
+  const modelo = (escolhido?.ativo ? escolhido : undefined) ?? padrao;
+  // Opções: ativos + o atual se estiver inativo, marcado "(inativo)"
+  const opcoesModelo = useMemo(
+    () => opcoesCadastro(modelosDoRegime.filter((m) => m.id !== padrao?.id), [e?.modeloEncargosId]),
+    [modelosDoRegime, padrao, e?.modeloEncargosId],
+  );
 
   const custo = useMemo(() => {
     if (!e) return null;
@@ -138,8 +147,13 @@ export function FolhaColaborador({ colaboradorId }: { colaboradorId: string }) {
               <FormField label="Modelo de encargos" hint="Percentuais em Financeiro → Custo de pessoal → Encargos">
                 <Select value={e.modeloEncargosId} aria-label="Modelo de encargos" onChange={(ev) => set("modeloEncargosId", ev.target.value)}>
                   <option value="">Padrão do tipo{padrao ? `: ${padrao.nome}` : ""}</option>
-                  {modelosDoRegime.filter((m) => m.id !== padrao?.id).map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
+                  {opcoesModelo.filter((o) => !o.avulso).map((o) => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
                 </Select>
+                {escolhido && !escolhido.ativo && (
+                  <p className="text-xs text-amber-700 mt-1" data-aviso-modelo-inativo>
+                    “{escolhido.nome}” está inativo: o custo está sendo calculado pelo padrão{padrao ? ` (“${padrao.nome}”)` : ""}. Escolha outro modelo ou reative-o.
+                  </p>
+                )}
               </FormField>
             </FormGrid>
             {diarista ? (

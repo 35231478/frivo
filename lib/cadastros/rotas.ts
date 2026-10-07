@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { pode, type Permissoes } from "@/lib/permissoes";
-import { definirAtivoCadastro, statusHttp } from "@/lib/acoes-massa/regras";
+import { definirAtivoCadastro, statusHttp, verificarAtivoCadastro, type ContextoItem } from "@/lib/acoes-massa/regras";
+import type { Ator, Registro } from "@/lib/cadastros/especificos";
 import {
   CADASTROS, ehEntidadeCadastro, lerFiltroAtivo, type AcaoCadastro, type DefCadastro, type EntidadeCadastro, type FiltroAtivo,
 } from "@/lib/cadastros/registro";
-import { criarCadastro, editarCadastro, impactoCadastro, listarCadastro, obterCadastro } from "@/lib/cadastros/servidor";
+import { criarCadastro, editarCadastro, impactoCadastro, listarCadastro, obterBruto, obterCadastro } from "@/lib/cadastros/servidor";
 
 /**
  * Handlers HTTP dos cadastros padronizados. Os mesmos atendem:
@@ -39,12 +40,19 @@ export async function exigirCadastro(def: DefCadastro, acao: AcaoCadastro): Prom
   return { sessao: session };
 }
 
-async function resolver(ctx: Ctx, fixa?: EntidadeCadastro) {
-  const p = await ctx.params;
+async function resolver(ctx: Ctx | undefined, fixa?: EntidadeCadastro) {
+  const p: Record<string, string> = (await ctx?.params) ?? {};
   const entidade = fixa ?? p.entidade;
   return { def: entidade && ehEntidadeCadastro(entidade) ? CADASTROS[entidade] : null, id: p.id };
 }
 const naoExiste = () => json({ erro: "Cadastro inexistente" }, 404);
+
+/** Quem age, a partir da sessão (acessos atuais conferidos pelo Auth a cada requisição). */
+function atorDe(s: Sessao, req?: NextRequest): Ator {
+  const u = s.user;
+  return { id: u.id, nome: u.name ?? "usuário", empresaId: u.empresaId, role: u.role, permissoes: (u.permissoes ?? {}) as Permissoes, baseUrl: req?.nextUrl.origin };
+}
+const ctxDe = (a: Ator): ContextoItem => ({ empresaId: a.empresaId, usuarioId: a.id, usuarioNome: a.nome, origem: "individual", role: a.role, permissoes: a.permissoes });
 
 async function lerCorpo(req: NextRequest): Promise<Record<string, unknown> | null> {
   const c = await req.json().catch(() => null);
@@ -70,7 +78,7 @@ export function rotasColecao(fixa?: EntidadeCadastro, opts: { ativoPadrao?: Filt
       if ("resposta" in g) return g.resposta;
       const corpo = await lerCorpo(req);
       if (!corpo) return json({ erro: "Dados inválidos." }, 400);
-      const r = await criarCadastro(def, g.sessao.user.empresaId, corpo);
+      const r = await criarCadastro(def, atorDe(g.sessao, req), corpo);
       return r.ok ? json(r.item, 201) : json({ erro: r.erro }, r.status);
     },
   };
@@ -95,19 +103,28 @@ export function rotasItem(fixa?: EntidadeCadastro) {
       if ("resposta" in g) return g.resposta;
       sessao = g.sessao;
     }
-    const u = sessao!.user;
+    const ator = atorDe(sessao!, req);
     if (!temCampos && ativo === undefined) return json({ erro: "Nada para alterar." }, 400);
 
+    // Inativar/reativar junto com edição: a trava é conferida ANTES de gravar qualquer campo
+    if (typeof ativo === "boolean" && temCampos) {
+      const bruto = await obterBruto(def, ator.empresaId, id);
+      if (!bruto) return json({ erro: "Não encontrado" }, 404);
+      if (bruto.ativo !== ativo) {
+        const bloqueio = await verificarAtivoCadastro(def.entidade, bruto as Registro, ativo, ctxDe(ator));
+        if (bloqueio) return json({ erro: bloqueio }, 409);
+      }
+    }
     if (temCampos) {
-      const r = await editarCadastro(def, u.empresaId, id, campos);
+      const r = await editarCadastro(def, ator, id, campos);
       if (!r.ok) return json({ erro: r.erro }, r.status);
     }
-    // Ativo: a MESMA regra das ações em massa
+    // Ativo: a MESMA regra das ações em massa (com as travas do cadastro)
     if (typeof ativo === "boolean") {
-      const r = await definirAtivoCadastro(def.entidade, id, ativo, { empresaId: u.empresaId, usuarioId: u.id, usuarioNome: u.name ?? "usuário", origem: "individual" });
+      const r = await definirAtivoCadastro(def.entidade, id, ativo, ctxDe(ator));
       if (!r.ok) return json({ erro: r.motivo }, statusHttp(r));
     }
-    return json(await obterCadastro(def, u.empresaId, id));
+    return json(await obterCadastro(def, ator.empresaId, id));
   }
 
   return {
@@ -126,8 +143,7 @@ export function rotasItem(fixa?: EntidadeCadastro) {
       if (!def || !id) return naoExiste();
       const g = await exigirCadastro(def, "inativar");
       if ("resposta" in g) return g.resposta;
-      const u = g.sessao.user;
-      const r = await definirAtivoCadastro(def.entidade, id, false, { empresaId: u.empresaId, usuarioId: u.id, usuarioNome: u.name ?? "usuário", origem: "individual" });
+      const r = await definirAtivoCadastro(def.entidade, id, false, ctxDe(atorDe(g.sessao)));
       return r.ok ? json({ ok: true, detalhe: r.detalhe }) : json({ erro: r.motivo }, statusHttp(r));
     },
   };
@@ -141,7 +157,7 @@ export function rotaImpacto(fixa?: EntidadeCadastro) {
       if (!def || !id) return naoExiste();
       const g = await exigirCadastro(def, "inativar");
       if ("resposta" in g) return g.resposta;
-      const impacto = await impactoCadastro(def.entidade, id, g.sessao.user.empresaId);
+      const impacto = await impactoCadastro(def.entidade, id, g.sessao.user.empresaId, atorDe(g.sessao));
       return impacto ? json(impacto) : json({ erro: "Não encontrado" }, 404);
     },
   };

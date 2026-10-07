@@ -15,7 +15,8 @@ import { rotuloVeiculo, type VeiculoResumo } from "@/lib/veiculo-sugestao";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import { reduzirImagem } from "@/lib/imagem-cliente";
 import { FolhaColaborador } from "@/components/folha/folha-colaborador";
-import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
+import { SeletorCadastro, useCadastro } from "@/components/cadastros/seletor-cadastro";
+import { AvisoInativacaoStatus } from "@/components/ui/aviso-inativacao-status";
 import {
   X, Plus, Upload, Trash2, AlertCircle, User, Briefcase, ListChecks, FileText, Wallet,
 } from "lucide-react";
@@ -77,7 +78,8 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
   );
 
   const [tiposOs, setTiposOs] = useState<TipoOsOpt[]>([]);
-  const [perfis, setPerfis] = useState<{ id: string; nome: string; tipo: string }[]>([]);
+  // Perfis (ativos e inativos): o SeletorCadastro só oferece os ativos e mantém o atual se inativo
+  const { itens: perfis } = useCadastro("perfis-acesso");
   const [perfilAcessoId, setPerfilAcessoId] = useState<string>(initialData?.perfilAcessoId ?? "");
   const [tipoEquipe, setTipoEquipe] = useState<string>(initialData?.tipoEquipe ?? "CAMPO");
   // Veículo "padrão" (opcional): puxado automaticamente na OS quando ele executa sozinho
@@ -88,7 +90,6 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
 
   useEffect(() => {
     fetch("/api/tipos-os").then((r) => r.json()).then((d) => setTiposOs(Array.isArray(d) ? d.filter((t: any) => t.ativo !== false) : [])).catch(() => {});
-    fetch("/api/perfis-acesso").then((r) => r.json()).then((d) => setPerfis(Array.isArray(d) ? d : [])).catch(() => {});
     fetch("/api/veiculos?resumo=1").then((r) => (r.ok ? r.json() : [])).then((d) => setVeiculos(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
 
@@ -97,7 +98,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
     setTipoEquipe(novo);
     if (perfilAcessoId) return;
     const alvo = novo === "CAMPO" ? ["TECNICO"] : ["SUPERVISOR", "FINANCEIRO"];
-    const sugestao = perfis.find((p) => alvo.includes(p.tipo));
+    const sugestao = perfis.find((p) => p.ativo !== false && alvo.includes(String(p.tipo)));
     if (sugestao) setPerfilAcessoId(sugestao.id);
   }
 
@@ -127,6 +128,9 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
   });
 
   const tipo = watch("tipo");
+  // Status → Inativo (editando): mostra o impacto e pede motivo, como o botão Inativar
+  const [motivoInativacao, setMotivoInativacao] = useState("");
+  const inativandoPeloStatus = isEditing && watch("statusColaborador") === "INATIVO" && initialData?.ativo !== false && initialData?.statusColaborador !== "INATIVO";
 
   function toggleDia(code: string) {
     setJornadaDias((p) => (p.includes(code) ? p.filter((d) => d !== code) : [...p, code]));
@@ -197,6 +201,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
           tipoEquipe,
           especialidades, competenciaIds, jornadaDias,
           documentos,
+          ...(inativandoPeloStatus && { motivoInativacao }),
         }),
       });
       if (!res.ok) {
@@ -351,10 +356,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
                   </Select>
                 </FormField>
                 <FormField label="Perfil de Acesso" hint="Define as permissões no sistema (Configurações → Perfis)">
-                  <Select value={perfilAcessoId} onChange={(e) => setPerfilAcessoId(e.target.value)}>
-                    <option value="">Sem perfil</option>
-                    {perfis.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
-                  </Select>
+                  <SeletorCadastro entidade="perfis-acesso" itens={perfis} valor={perfilAcessoId} vazio="Sem perfil" onChange={setPerfilAcessoId} />
                 </FormField>
               </FormGrid>
               <FormField label="Veículo padrão" hint="Opcional — puxado automaticamente na OS quando este colaborador executa (dá para trocar na OS)">
@@ -383,6 +385,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
                   </Select>
                 </FormField>
               </FormGrid>
+              {isEditing && <AvisoInativacaoStatus url={`/api/tecnicos/${initialData.id}`} mostrar={inativandoPeloStatus} motivo={motivoInativacao} onMotivo={setMotivoInativacao} />}
             </FormSection>
 
             <FormSection title="Jornada de trabalho">

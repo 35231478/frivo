@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
   try {
     await Promise.all([
       validarRefEmpresa("cargo", cargoId, empresaId, "Cargo", { novoAtivo: true }),
-      validarRefEmpresa("perfilAcesso", perfilAcessoId, empresaId, "Perfil de acesso"),
+      validarRefEmpresa("perfilAcesso", perfilAcessoId, empresaId, "Perfil de acesso", { novoAtivo: true }),
       validarRefsEmpresa("tipoOs", competenciaIds, empresaId, "Competência"),
     ]);
   } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }

@@ -31,6 +31,8 @@ export const EXECUTORES: Record<Entidade, Partial<Record<AcaoItem, (id: string, 
   servicos: cadastro("servicos"),
   cargos: cadastro("cargos"),
   "categorias-financeiras": cadastro("categorias-financeiras"),
+  "perfis-acesso": cadastro("perfis-acesso"),
+  "modelos-encargos": cadastro("modelos-encargos"),
 };
 
 /** Cadastros padronizados: a mesma regra única de ativar/inativar da rota /api/cadastros. */
@@ -68,7 +70,7 @@ export async function rotulos(entidade: Entidade, ids: string[], empresaId: stri
     case "colaboradores":
       pares = (await prisma.tecnico.findMany({ where, select: { id: true, nome: true } })).map((r) => [r.id, r.nome]);
       break;
-    case "produtos": case "servicos": case "cargos": case "categorias-financeiras":
+    case "produtos": case "servicos": case "cargos": case "categorias-financeiras": case "perfis-acesso": case "modelos-encargos":
       pares = await rotulosCadastro(entidade, ids, empresaId);
       break;
   }
@@ -118,7 +120,7 @@ export async function idsDoFiltro(entidade: Entidade, filtro: string, empresaId:
       const where = montarWhereColaboradores(empresaId, lerFiltrosColaboradores(sp));
       return pegar(prisma.tecnico.findMany({ where, select: { id: true }, take }), prisma.tecnico.count({ where }));
     }
-    case "produtos": case "servicos": case "cargos": case "categorias-financeiras":
+    case "produtos": case "servicos": case "cargos": case "categorias-financeiras": case "perfis-acesso": case "modelos-encargos":
       return idsCadastro(entidade, sp, empresaId, MAX_SELECAO);
   }
 }
@@ -196,7 +198,7 @@ export async function linhasExportacao(entidade: Entidade, ids: string[], empres
         ...rs.map((r) => [r.nome, LABELS_FUNCAO[r.tipo] ?? r.tipo, r.cargo?.nome ?? "", r.telefone, r.email ?? "", r.equipesMembro.map((e) => e.nome).join(", "),
           r.especialidades.join(", "), d(r.dataAdmissao), r.ativo ? r.statusColaborador : "INATIVO"])];
     }
-    case "produtos": case "servicos": case "cargos": case "categorias-financeiras":
+    case "produtos": case "servicos": case "cargos": case "categorias-financeiras": case "perfis-acesso": case "modelos-encargos":
       return linhasCadastro(entidade, ids, empresaId);
   }
 }

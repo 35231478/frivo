@@ -10,7 +10,12 @@ import { formatarData } from "@/lib/utils";
  * - `avisos`: impactos que não impedem, mas o usuário precisa saber antes de confirmar.
  * A mesma função alimenta o modal (GET …/impacto) e a rota que inativa (DELETE).
  */
-export interface Impacto { bloqueio: string | null; avisos: string[] }
+export interface Impacto {
+  bloqueio: string | null;
+  avisos: string[];
+  /** Colaborador que também é usuário do sistema: o modal oferece inativar o login junto */
+  usuarioVinculado?: { id: string; nome: string; email: string } | null;
+}
 
 const plural = (n: number, s: string, p: string) => `${n} ${n === 1 ? s : p}`;
 const lista = (itens: string[], max = 3) => itens.slice(0, max).join(", ") + (itens.length > max ? ` e mais ${itens.length - max}` : "");
@@ -95,11 +100,13 @@ export async function impactoColaborador(id: string, empresaId: string): Promise
   if (t.equipesMembro.length) avisos.push(`Continua listado como membro de ${lista(t.equipesMembro.map((e) => e.nome))}.`);
   if (t.veiculosResponsavel.length) avisos.push(`É responsável pelo(s) veículo(s) ${lista(t.veiculosResponsavel.map((v) => v.placa))}.`);
   if (t.clientesResponsavel.length) avisos.push(`É o técnico responsável de ${plural(t.clientesResponsavel.length, "cliente", "clientes")}.`);
-  if (t.email) {
-    const usuario = await prisma.usuario.findFirst({ where: { empresaId, ativo: true, email: { equals: t.email, mode: "insensitive" } }, select: { id: true } });
-    if (usuario) avisos.push(`Ele também é usuário do sistema (${t.email}). Inativar o colaborador NÃO bloqueia o login — para isso, inative o usuário em Configurações › Usuários.`);
-  }
-  return { bloqueio: null, avisos };
+  // Também é usuário do sistema? Inativar só o colaborador não bloqueia o login: o modal oferece
+  // inativar o usuário junto, pela MESMA regra de Configurações › Usuários (definirAtivoCadastro)
+  const usuario = t.email
+    ? await prisma.usuario.findFirst({ where: { empresaId, ativo: true, email: { equals: t.email, mode: "insensitive" } }, select: { id: true, nome: true, email: true } })
+    : null;
+  if (usuario) avisos.push(`Ele também é usuário do sistema (${usuario.email}). Inativar só o colaborador NÃO bloqueia o login — marque abaixo para inativar o usuário junto (ou faça depois em Configurações › Usuários).`);
+  return { bloqueio: null, avisos, usuarioVinculado: usuario };
 }
 
 /* ───────── Equipe (inativar = status INATIVA) ───────── */

@@ -3,6 +3,7 @@ import type { Impacto } from "@/lib/inativacao-server";
 import {
   CADASTROS, mensagemValidacao, whereCadastro, type DefCadastro, type EntidadeCadastro, type FiltroAtivo,
 } from "@/lib/cadastros/registro";
+import { REGRAS, type Ator, type Registro } from "@/lib/cadastros/especificos";
 
 /**
  * Cadastros padronizados — lado do servidor (Prisma). Toda operação recebe o empresaId da SESSÃO;
@@ -20,32 +21,55 @@ export const tabela = (def: DefCadastro) => (prisma as unknown as Record<string,
 
 export type ResultadoGravacao = { ok: true; item: Record<string, unknown> } | { ok: false; status: number; erro: string };
 
-export function listarCadastro(def: DefCadastro, empresaId: string, f: { ativo: FiltroAtivo; q?: string | null }) {
-  return tabela(def).findMany({ where: whereCadastro(def, empresaId, f), orderBy: { nome: "asc" } });
+/** Tira as colunas ocultas (ex.: hash da senha) de QUALQUER resposta. */
+export function limpar<T extends Record<string, unknown> | null>(def: DefCadastro, item: T): T {
+  if (!item || !def.ocultos?.length) return item;
+  const copia: Record<string, unknown> = { ...item };
+  for (const k of def.ocultos) delete copia[k];
+  return copia as T;
 }
 
-export function obterCadastro(def: DefCadastro, empresaId: string, id: string) {
-  return tabela(def).findFirst({ where: { id, empresaId } });
+export async function listarCadastro(def: DefCadastro, empresaId: string, f: { ativo: FiltroAtivo; q?: string | null }) {
+  await REGRAS[def.entidade]?.antesDeListar?.(empresaId);
+  const itens = await tabela(def).findMany({
+    where: whereCadastro(def, empresaId, f), orderBy: def.ordem ?? { nome: "asc" }, ...(def.incluir && { include: def.incluir }),
+  });
+  return itens.map((i) => limpar(def, i));
+}
+
+/** Registro BRUTO (com colunas ocultas) — só para uso interno, nunca para resposta. */
+export function obterBruto(def: DefCadastro, empresaId: string, id: string) {
+  return tabela(def).findFirst({ where: { id, empresaId }, ...(def.incluir && { include: def.incluir }) });
+}
+
+export async function obterCadastro(def: DefCadastro, empresaId: string, id: string) {
+  return limpar(def, await obterBruto(def, empresaId, id));
 }
 
 /** Cria (sempre ativo, sempre na empresa da sessão). Campo desconhecido no corpo = 400. */
-export async function criarCadastro(def: DefCadastro, empresaId: string, corpo: unknown): Promise<ResultadoGravacao> {
+export async function criarCadastro(def: DefCadastro, ator: Ator, corpo: unknown): Promise<ResultadoGravacao> {
   const parsed = def.schemaCriar.safeParse(corpo ?? {});
   if (!parsed.success) return { ok: false, status: 400, erro: mensagemValidacao(parsed.error, def) };
-  const item = await tabela(def).create({ data: { ...(parsed.data as object), empresaId, ativo: true } });
-  return { ok: true, item };
+  const especifico = REGRAS[def.entidade]?.criar;
+  const r = especifico
+    ? await especifico(parsed.data as Record<string, unknown>, ator)
+    : { ok: true as const, item: await tabela(def).create({ data: { ...(parsed.data as object), empresaId: ator.empresaId, ativo: true } }) };
+  return r.ok ? { ok: true, item: limpar(def, r.item) } : r;
 }
 
 /** Edição PARCIAL: só os campos enviados mudam (nunca zera o que não veio). Campo desconhecido = 400. */
-export async function editarCadastro(def: DefCadastro, empresaId: string, id: string, corpo: unknown): Promise<ResultadoGravacao> {
-  const existente = await obterCadastro(def, empresaId, id);
+export async function editarCadastro(def: DefCadastro, ator: Ator, id: string, corpo: unknown): Promise<ResultadoGravacao> {
+  const existente = await obterBruto(def, ator.empresaId, id);
   if (!existente) return { ok: false, status: 404, erro: `${def.singular[0].toUpperCase()}${def.singular.slice(1)} não encontrad${def.feminino ? "a" : "o"}.` };
   const parsed = def.schemaEditar.safeParse(corpo ?? {});
   if (!parsed.success) return { ok: false, status: 400, erro: mensagemValidacao(parsed.error, def) };
   const data = Object.fromEntries(Object.entries(parsed.data as object).filter(([, v]) => v !== undefined));
-  if (!Object.keys(data).length) return { ok: true, item: existente };
-  const item = await tabela(def).update({ where: { id }, data });
-  return { ok: true, item };
+  if (!Object.keys(data).length) return { ok: true, item: limpar(def, existente) };
+  const especifico = REGRAS[def.entidade]?.editar;
+  const r = especifico
+    ? await especifico(existente as Registro, data, ator)
+    : { ok: true as const, item: await tabela(def).update({ where: { id }, data }) };
+  return r.ok ? { ok: true, item: limpar(def, r.item) } : r;
 }
 
 /* ───────── Impacto: quantos registros usam (para o diálogo de inativar) ───────── */
@@ -92,13 +116,25 @@ async function contarUsos(entidade: EntidadeCadastro, id: string, nome: string, 
       const n = await prisma.contaReceber.count({ where: { empresaId, categoria: nome } });
       return [{ rotulo: pl(n, "conta a receber", "contas a receber"), total: n }];
     }
+     default:
+      return [];
   }
 }
 
-export async function impactoCadastro(entidade: EntidadeCadastro, id: string, empresaId: string): Promise<ImpactoCadastro | null> {
+/**
+ * Impacto antes de inativar: usos + avisos + o que BLOQUEIA (mesma trava da rota e da ação em massa;
+ * o modal mostra e desabilita o botão). `ator` = quem vai inativar (travas que dependem dele).
+ */
+export async function impactoCadastro(entidade: EntidadeCadastro, id: string, empresaId: string, ator?: Pick<Ator, "id" | "empresaId" | "role" | "permissoes">): Promise<ImpactoCadastro | null> {
   const def = CADASTROS[entidade];
-  const r = await obterCadastro(def, empresaId, id);
+  const r = await obterBruto(def, empresaId, id);
   if (!r) return null;
+  const regras = REGRAS[entidade];
+  const bloqueio = ator && regras?.bloqueioAtivo ? await regras.bloqueioAtivo(r as Registro, false, ator) : null;
+  if (regras?.impacto) {
+    const e = await regras.impacto(r as Registro, empresaId);
+    return { bloqueio, avisos: e.avisos.length ? e.avisos : ["Não está em uso em nenhum registro."], usos: e.usos.filter((u) => u.total > 0) };
+  }
   const usos = (await contarUsos(entidade, id, String(r.nome ?? ""), empresaId)).filter((u) => u.total > 0);
   const o = def.feminino ? "a" : "o";
   const avisos = usos.length
@@ -107,7 +143,7 @@ export async function impactoCadastro(entidade: EntidadeCadastro, id: string, em
       `Esses registros continuam como estão (nada é apagado) e seguem mostrando ${o} ${def.singular} como “inativ${o}”; ${def.feminino ? "ela" : "ele"} só deixa de ser oferecid${o} para novas escolhas.`,
     ]
     : [`Não está em uso em nenhum registro.`];
-  return { bloqueio: null, avisos, usos };
+  return { bloqueio, avisos, usos };
 }
 
 /* ───────── Ações em massa (seleção, rótulos, "todos do filtro", exportação) ───────── */

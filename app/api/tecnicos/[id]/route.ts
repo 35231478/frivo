@@ -3,9 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { tecnicoSchema } from "@/lib/validations";
 import { exigirPermissao } from "@/lib/permissoes-server";
-import { pode } from "@/lib/permissoes";
-import { lerMotivo } from "@/lib/inativacao-server";
-import { inativarColaborador, reativarColaborador, statusHttp } from "@/lib/acoes-massa/regras";
+import { pode, type Permissoes } from "@/lib/permissoes";
+import { impactoColaborador, lerMotivo } from "@/lib/inativacao-server";
+import { definirAtivoCadastro, inativarColaborador, reativarColaborador, statusHttp, verificarAtivoCadastro } from "@/lib/acoes-massa/regras";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -68,26 +68,32 @@ export async function PUT(req: NextRequest, { params }: Params) {
   try {
     await Promise.all([
       validarRefEmpresa("cargo", cargoId, empresaId, "Cargo", { novoAtivo: true, manter: [existente.cargoId] }),
-      validarRefEmpresa("perfilAcesso", perfilAcessoId, empresaId, "Perfil de acesso"),
+      validarRefEmpresa("perfilAcesso", perfilAcessoId, empresaId, "Perfil de acesso", { novoAtivo: true, manter: [existente.perfilAcessoId] }),
       validarRefsEmpresa("tipoOs", competenciaIds, empresaId, "Competência"),
     ]);
   } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
-  // Status "Inativo" no formulário = inativar o colaborador (mesma regra do botão: exige "excluir").
-  // Mantém `ativo` em sincronia com o status (antes o status mudava, mas ele seguia nas listas).
-  let ativo = existente.ativo;
-  if (rest.statusColaborador === "INATIVO" && existente.statusColaborador !== "INATIVO") {
-    if (!pode(session.user!.permissoes, "equipes", "excluir", session.user!.role))
+  // Status "Inativo" no formulário = inativar o colaborador pela MESMA função do botão e da ação em
+  // massa (impacto/bloqueio, motivo e anotação nas observações; exige "excluir"). Sair de "Inativo"
+  // = reativar pela mesma função. `ativo` só muda por essas funções.
+  const u = session.user!;
+  const ctxStatus = { empresaId, usuarioId: u.id, usuarioNome: u.name ?? "usuário", motivo: lerMotivo({ motivo: body?.motivoInativacao }), role: u.role, permissoes: u.permissoes as Permissoes };
+  const virandoInativo = rest.statusColaborador === "INATIVO" && existente.ativo;
+  const saindoDeInativo = rest.statusColaborador !== "INATIVO" && (!existente.ativo || existente.statusColaborador === "INATIVO");
+  if (virandoInativo) {
+    if (!pode(u.permissoes, "equipes", "excluir", u.role))
       return NextResponse.json({ erro: "Sem permissão para inativar colaboradores" }, { status: 403 });
-    ativo = false;
-  } else if (rest.statusColaborador !== "INATIVO" && existente.statusColaborador === "INATIVO") {
-    ativo = true;
+    const impacto = await impactoColaborador(id, empresaId);
+    if (impacto?.bloqueio) return NextResponse.json({ erro: impacto.bloqueio }, { status: 409 });
+  }
+  if (saindoDeInativo) {
+    const r = await reativarColaborador(id, ctxStatus);
+    if (!r.ok) return NextResponse.json({ erro: r.motivo }, { status: statusHttp(r) });
   }
 
   const atualizado = await prisma.tecnico.update({
     where: { id },
     data: {
       ...rest,
-      ativo,
       email: email || null,
       cargoId: cargoId || null,
       perfilAcessoId: perfilAcessoId || null,
@@ -106,6 +112,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
       },
     },
   });
+  if (virandoInativo) {
+    const r = await inativarColaborador(id, ctxStatus);
+    if (!r.ok) return NextResponse.json({ erro: r.motivo }, { status: statusHttp(r) });
+    return NextResponse.json(semSalario({ ...atualizado, ativo: false, statusColaborador: "INATIVO" as const }, session));
+  }
   return NextResponse.json(semSalario(atualizado, session));
 }
 
@@ -121,11 +132,35 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   const { id } = await params;
   const empresaId = session.user!.empresaId;
 
-  const motivo = lerMotivo(await req.json().catch(() => ({})));
+  const corpo = await req.json().catch(() => ({}));
+  const motivo = lerMotivo(corpo);
+  const u = session.user!;
+  const ctx = { empresaId, usuarioId: u.id, usuarioNome: u.name ?? "usuário", motivo, role: u.role, permissoes: u.permissoes as Permissoes };
+
+  // Inativar o USUÁRIO de login junto (opcional): mesma regra e travas de Configurações › Usuários,
+  // conferidas ANTES de mexer no colaborador (nada pela metade)
+  let usuarioId: string | null = null;
+  if (corpo?.inativarUsuario === true) {
+    if (!pode(u.permissoes, "configuracoes", "gerenciar", u.role))
+      return NextResponse.json({ erro: "Sem permissão para inativar usuários (Configurações › gerenciar)." }, { status: 403 });
+    const impacto = await impactoColaborador(id, empresaId);
+    if (!impacto) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
+    if (impacto.usuarioVinculado) {
+      const registro = await prisma.usuario.findUnique({ where: { id: impacto.usuarioVinculado.id } });
+      const bloqueio = registro && await verificarAtivoCadastro("usuarios", registro, false, ctx);
+      if (bloqueio) return NextResponse.json({ erro: `Usuário de login: ${bloqueio}` }, { status: 409 });
+      usuarioId = impacto.usuarioVinculado.id;
+    }
+  }
+
   // Mesma regra da ação em massa (lib/acoes-massa/regras.ts)
-  const r = await inativarColaborador(id, { empresaId, usuarioId: session.user!.id, usuarioNome: session.user!.name ?? "usuário", motivo });
+  const r = await inativarColaborador(id, ctx);
   if (!r.ok) return NextResponse.json({ erro: r.codigo === "nao_encontrado" ? "Não encontrado" : r.motivo }, { status: statusHttp(r) });
-  return NextResponse.json({ ok: true });
+  if (usuarioId) {
+    const ru = await definirAtivoCadastro("usuarios", usuarioId, false, ctx);
+    if (!ru.ok) return NextResponse.json({ ok: true, aviso: `Colaborador inativado, mas o usuário não: ${ru.motivo}` });
+  }
+  return NextResponse.json({ ok: true, usuarioInativado: !!usuarioId });
 }
 
 /** Reativa o colaborador (ativo=true + status ATIVO). Exige "gerenciar". Body: { ativo: true } */

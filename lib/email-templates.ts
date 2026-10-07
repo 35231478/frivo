@@ -19,6 +19,7 @@ export const VARIAVEIS_DISPONIVEIS = [
   "link_boleto", "link_documento", "link_orcamento",
   "empresa_nome", "empresa_telefone", "empresa_email", "empresa_site",
   "mes_referencia", "data_aprovacao",
+  "usuario_nome", "link_definir_senha", "validade_convite",
 ] as const;
 
 export const TEMPLATES_PADRAO: DefTemplate[] = [
@@ -56,6 +57,10 @@ export const TEMPLATES_PADRAO: DefTemplate[] = [
   { tipo: "CONTRATO_ASSINATURA", nome: "Contrato para Assinatura", assunto: "Proposta de contrato {{numero_contrato}} aguarda sua assinatura",
     corpo: "<p>Olá <strong>{{cliente_nome}}</strong>,</p><p>A proposta de contrato <strong>{{numero_contrato}}</strong> está pronta e aguarda sua assinatura digital.</p>",
     botaoLabel: "Assinar contrato", botaoVar: "link_documento" },
+  // Usuário novo do sistema (Configurações › Usuários): a senha é definida por ele, pelo link
+  { tipo: "CONVITE_USUARIO", nome: "Convite de usuário do sistema", assunto: "Seu acesso ao sistema — {{empresa_nome}}",
+    corpo: "<p>Olá <strong>{{usuario_nome}}</strong>,</p><p>Você foi cadastrado(a) no sistema da <strong>{{empresa_nome}}</strong>. Clique no botão abaixo para definir a sua senha e entrar.</p><p style=\"color:#64748b;font-size:13px\">O link vale por {{validade_convite}} e só pode ser usado uma vez. Se você não esperava este convite, ignore este e-mail.</p>",
+    botaoLabel: "Definir minha senha", botaoVar: "link_definir_senha" },
 ];
 
 export function substituirVariaveis(texto: string, vars: Record<string, string>): string {

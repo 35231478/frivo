@@ -231,7 +231,7 @@ describe("isolamento por empresa", () => {
   });
 
   it("modelos de outra empresa: não aparecem, não editam, não excluem", async () => {
-    const lista = await (await (await rotas.modelos()).GET()).json();
+    const lista = await (await (await rotas.modelos()).GET(req("GET"), { params: Promise.resolve({}) })).json();
     expect(lista.map((m: any) => m.id)).not.toContain("m-e2");
     const mod = await rotas.modelo();
     expect((await mod.PUT(req("PUT", { nome: "Hack", regime: "CLT", padrao: false, itens: [] }), params("m-e2"))).status).toBe(404);
