@@ -350,7 +350,7 @@ export const tecnicoSchema = z.object({
   tipo: z.nativeEnum(TipoTecnico).default(TipoTecnico.TECNICO_CAMPO),
   crea: z.string().optional(),
   dataAdmissao: z.string().optional().nullable(),
-  salario: decimalOpcional.optional(),
+  // Salário/base NÃO entra aqui: só pela seção "Dados financeiros / Folha" (permissão financeiro.folha)
   jornadaEntrada: z.string().optional(),
   jornadaSaida: z.string().optional(),
   jornadaDias: z.array(z.string()).default([]),

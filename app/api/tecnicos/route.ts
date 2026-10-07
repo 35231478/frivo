@@ -77,5 +77,7 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  return NextResponse.json(tecnico, { status: 201 });
+  // Salário só pela seção de folha (financeiro.folha): não volta na resposta do cadastro geral
+  const { salario: _, ...resposta } = tecnico;
+  return NextResponse.json(resposta, { status: 201 });
 }

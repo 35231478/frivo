@@ -20,10 +20,14 @@ export default async function EditarColaboradorPage({ params }: { params: Promis
   });
   if (!colaborador) notFound();
 
-  // Serializa para o client (Decimal/Date → tipos simples)
+  const user = session!.user!;
+  const podeFolha = pode(user.permissoes, "financeiro", "folha", user.role);
+
+  // Serializa para o client (Decimal/Date → tipos simples). O salário NÃO vai para o navegador:
+  // quem tem a permissão de folha vê/edita na aba "Dados financeiros / Folha" (API própria).
+  const { salario: _salario, ...semSalario } = colaborador;
   const initialData = {
-    ...colaborador,
-    salario: colaborador.salario != null ? Number(colaborador.salario) : null,
+    ...semSalario,
     dataNascimento: colaborador.dataNascimento ? colaborador.dataNascimento.toISOString() : null,
     dataAdmissao: colaborador.dataAdmissao ? colaborador.dataAdmissao.toISOString() : null,
     documentos: colaborador.documentos.map((d) => ({
@@ -45,7 +49,8 @@ export default async function EditarColaboradorPage({ params }: { params: Promis
       )}
       <ColaboradorForm
         key={`${colaborador.ativo}-${colaborador.statusColaborador}`} initialData={initialData}
-        somenteLeitura={!pode(session!.user!.permissoes, "equipes", "gerenciar", session!.user!.role)}
+        somenteLeitura={!pode(user.permissoes, "equipes", "gerenciar", user.role)}
+        podeFolha={podeFolha}
       />
     </div>
   );
