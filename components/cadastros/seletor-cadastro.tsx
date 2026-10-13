@@ -50,7 +50,9 @@ export function SeletorCadastro({
   const def = CADASTROS[entidade];
   const proprio = useCadastro(entidade, itensProp);
   const itens = itensProp ?? proprio.itens;
-  const opcoes = useMemo(() => opcoesCadastro(itens, [valor], def.chave, { feminino: def.feminino }), [itens, valor, def]);
+  const carregando = !itensProp && proprio.carregando;
+  // Carregando: sem opções (senão o valor atual piscaria como "(cadastro removido)" antes da lista chegar)
+  const opcoes = useMemo(() => (carregando ? [] : opcoesCadastro(itens, [valor], def.chave, { feminino: def.feminino })), [carregando, itens, valor, def]);
   const textoVazio = vazio ?? placeholder ?? "Selecione…";
 
   return (
