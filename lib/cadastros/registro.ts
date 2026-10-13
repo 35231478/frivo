@@ -20,10 +20,12 @@ export const ENTIDADES_CADASTRO = [
   "perfis-acesso", "modelos-encargos", "usuarios",
   // Leva 3: cadastros operacionais que ficaram para trás
   "tipos-equipamento", "tabelas-preco", "termos-referencia", "modelos-prazo",
+  // Leva 5.2: fornecedor de verdade (ligado na conta a pagar)
+  "fornecedores",
 ] as const;
 export type EntidadeCadastro = (typeof ENTIDADES_CADASTRO)[number];
 export type ModeloCadastro = "produto" | "servico" | "cargo" | "categoriaFinanceira" | "perfilAcesso" | "modeloEncargos" | "usuario"
-  | "tipoEquipamentoCustom" | "tabelaPreco" | "termoReferenciaTemplate" | "prazoTemplate";
+  | "tipoEquipamentoCustom" | "tabelaPreco" | "termoReferenciaTemplate" | "prazoTemplate" | "fornecedor";
 export type AcaoCadastro = "listar" | "criar" | "editar" | "inativar" | "reativar";
 
 /** Basta UMA das permissões. `null` = qualquer usuário logado (catálogo lido nos seletores de outras telas). */
@@ -150,6 +152,14 @@ export const etapaPrazoSchema = z.object({
   // A ordem é a posição na lista (o cliente pode mandar, mas é ignorada)
   ordem: z.number().optional(),
 }).strict();
+
+/** CNPJ/CPF: guarda só os dígitos; vazio = sem documento; precisa ter 11 (CPF) ou 14 (CNPJ) dígitos. */
+export const documentoSchema = z.preprocess((v) => {
+  if (vazio(v)) return null;
+  return typeof v === "string" ? v.replace(/\D/g, "") : v;
+}, z.string().refine((d) => d.length === 11 || d.length === 14, "CNPJ/CPF inválido: use 14 dígitos (CNPJ) ou 11 (CPF).").nullable());
+const emailOpcional = z.preprocess((v) => (vazio(v) ? null : typeof v === "string" ? v.trim().toLowerCase() : v),
+  z.string().email("E-mail inválido.").max(160).nullable());
 
 /* ───────── Registro ───────── */
 export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
@@ -360,6 +370,33 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       nome: z.string().trim().min(2, "Informe o nome do modelo.").max(120), descricao: textoOpcional(1000), cor,
       etapas: z.array(etapaPrazoSchema).min(1, "Adicione ao menos uma etapa.").max(50),
     }, { descricao: null, cor: "#0EA5E9" }),
+  },
+  fornecedores: {
+    entidade: "fornecedores", modelo: "fornecedor", massa: true, singular: "fornecedor", plural: "fornecedores",
+    // Ver: quem usa o financeiro (a conta a pagar escolhe o fornecedor); gravar: quem lança contas a pagar
+    // ou gerencia as configurações
+    modulo: "financeiro",
+    permissoes: {
+      listar: [["financeiro", "visualizar"], ["configuracoes", "visualizar"]],
+      criar: [["financeiro", "fluxoCaixa"], ["configuracoes", "gerenciar"]],
+      editar: [["financeiro", "fluxoCaixa"], ["configuracoes", "gerenciar"]],
+      inativar: [["financeiro", "fluxoCaixa"], ["configuracoes", "gerenciar"]],
+      reativar: [["financeiro", "fluxoCaixa"], ["configuracoes", "gerenciar"]],
+    },
+    chave: "id",
+    busca: ["nome", "documento", "email", "telefone"],
+    incluir: { _count: { select: { contasPagar: true } } },
+    campos: [
+      { key: "nome", label: "Nome / razão social", obrigatorio: true, placeholder: "Ex: Frigelar Distribuidora" },
+      { key: "documento", label: "CNPJ / CPF", placeholder: "00.000.000/0000-00" },
+      { key: "telefone", label: "Telefone", placeholder: "(00) 00000-0000" },
+      { key: "email", label: "E-mail", tipo: "email", placeholder: "contato@fornecedor.com.br" },
+      { key: "observacoes", label: "Observações", tipo: "textarea" },
+    ],
+    colunas: [{ key: "nome", label: "Fornecedor" }, { key: "documento", label: "CNPJ / CPF" }, { key: "contato", label: "Contato" }, { key: "uso", label: "Contas a pagar" }],
+    ...schemas({
+      nome: nome, documento: documentoSchema, telefone: textoOpcional(30), email: emailOpcional, observacoes: textoOpcional(2000),
+    }, { documento: null, telefone: null, email: null, observacoes: null }),
   },
 };
 

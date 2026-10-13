@@ -454,6 +454,7 @@ model Empresa {
   perfisAcesso           PerfilAcesso[]
   contasPagar            ContaPagar[]
   categoriasFinanceiras  CategoriaFinanceira[]
+  fornecedores           Fornecedor[]
   emailTemplates         EmailTemplate[]
   emailLogs              EmailLog[]
   formTypeMappings       FormTypeMapping[]
@@ -1989,10 +1990,35 @@ model CategoriaFinanceira {
   @@map("categorias_financeiras")
 }
 
+// Fornecedor (Leva 5.2): cadastro de verdade, ligado na conta a pagar por ID. Documento (CNPJ/CPF)
+// guardado só com dígitos; único por empresa quando preenchido (NULL não conflita no PostgreSQL).
+model Fornecedor {
+  id           String   @id @default(cuid())
+  empresaId    String   @map("empresa_id")
+  nome         String
+  documento    String?
+  telefone     String?
+  email        String?
+  observacoes  String?
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  empresa     Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  contasPagar ContaPagar[]
+
+  @@unique([empresaId, documento])
+  @@index([empresaId, ativo])
+  @@map("fornecedores")
+}
+
 model ContaPagar {
   id             String           @id @default(cuid())
   empresaId      String           @map("empresa_id")
   numero         String
+  // Fornecedor: o vínculo é o ID (Leva 5.2). `fornecedor`/`fornecedorCnpj` (texto) ficam como
+  // histórico/fallback — e são o que aparece nas contas antigas que não casaram com um cadastro.
+  fornecedorId   String?          @map("fornecedor_id")
   fornecedor     String
   fornecedorCnpj String?          @map("fornecedor_cnpj")
   descricao      String
@@ -2014,10 +2040,12 @@ model ContaPagar {
   empresa             Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   pedidoCompra        PedidoCompraInterno?  @relation(fields: [pedidoCompraId], references: [id])
   categoriaFinanceira CategoriaFinanceira?  @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  fornecedorCadastro  Fornecedor?           @relation(fields: [fornecedorId], references: [id], onDelete: SetNull)
   pagamentos          PagamentoContaPagar[]
 
   @@unique([numero, empresaId])
   @@index([categoriaId])
+  @@index([fornecedorId])
   @@index([empresaId, status])
   @@map("contas_pagar")
 }

@@ -125,6 +125,7 @@ const FINANCEIRO: Secao[] = [
         tipo: "grupo", label: "Pagamentos", icone: Upload, itens: [
           { href: "/financeiro/contas-pagar", icone: Upload, label: "Contas a pagar", modulo: "financeiro" },
           { href: "/compras/pedidos", icone: ShoppingCart, label: "Pedidos de compra", modulo: "financeiro" },
+          { href: "/financeiro/fornecedores", icone: Truck, label: "Fornecedores", modulo: "financeiro" },
         ],
       },
       {

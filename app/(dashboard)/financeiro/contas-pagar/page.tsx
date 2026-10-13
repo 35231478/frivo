@@ -7,15 +7,16 @@ import { statusVisualPagar, LABELS_STATUS_CONTA_PAGAR } from "@/lib/financeiro-s
 import { Upload, Plus, AlertTriangle, ShoppingCart } from "lucide-react";
 import { ContaPagarAcoes } from "@/components/financeiro/conta-pagar-acoes";
 import { CategoriaBadge } from "@/components/financeiro/categoria-badge";
+import { fornecedorDaConta } from "@/lib/financeiro/fornecedor";
 
 export const metadata: Metadata = { title: "Contas a Pagar" };
 
 export default async function ContasPagarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; fornecedor?: string; origem?: string; dataInicio?: string; dataFim?: string; categoria?: string }>;
+  searchParams: Promise<{ status?: string; fornecedor?: string; fornecedorId?: string; origem?: string; dataInicio?: string; dataFim?: string; categoria?: string }>;
 }) {
-  const { status = "", fornecedor = "", origem = "", dataInicio = "", dataFim = "", categoria = "" } = await searchParams;
+  const { status = "", fornecedor = "", fornecedorId = "", origem = "", dataInicio = "", dataFim = "", categoria = "" } = await searchParams;
   const session = await auth();
   const empresaId = session!.user!.empresaId;
 
@@ -27,7 +28,12 @@ export default async function ContasPagarPage({
 
   const where: any = { empresaId };
   if (status) where.status = status;
-  if (fornecedor) where.fornecedor = { contains: fornecedor, mode: "insensitive" };
+  // Busca por texto: no nome do cadastro ligado e no texto antigo (contas sem cadastro)
+  if (fornecedor) where.OR = [
+    { fornecedorCadastro: { nome: { contains: fornecedor, mode: "insensitive" } } },
+    { fornecedor: { contains: fornecedor, mode: "insensitive" } },
+  ];
+  if (fornecedorId) where.fornecedorId = fornecedorId; // por id: renomear o fornecedor não tira do filtro
   if (categoria) where.categoriaId = categoria; // por id: renomear a categoria não tira a conta do filtro
   if (origem === "PEDIDO") where.pedidoCompraId = { not: null };
   else if (origem === "MANUAL") where.pedidoCompraId = null;
@@ -37,15 +43,16 @@ export default async function ContasPagarPage({
     if (dataFim) { const f = new Date(dataFim); f.setHours(23, 59, 59, 999); where.dataVencimento.lte = f; }
   }
 
-  const [contas, categorias] = await Promise.all([
+  const [contas, categorias, fornecedores] = await Promise.all([
     prisma.contaPagar.findMany({
       where,
-      include: { pedidoCompra: { select: { numero: true } } },
+      include: { pedidoCompra: { select: { numero: true } }, fornecedorCadastro: { select: { id: true, nome: true, documento: true, ativo: true } } },
       orderBy: [{ dataVencimento: "asc" }, { criadoEm: "desc" }],
       take: 300,
     }),
     // Todas (ativas e inativas): cor/nome das contas que já usam uma categoria inativa não somem
     prisma.categoriaFinanceira.findMany({ where: { empresaId }, select: { id: true, nome: true, cor: true, ativo: true }, orderBy: { nome: "asc" } }),
+    prisma.fornecedor.findMany({ where: { empresaId }, select: { id: true, nome: true, ativo: true }, orderBy: { nome: "asc" } }),
   ]);
 
   let totalFiltrado = 0, totalVencido = 0, totalAberto = 0, totalPago = 0;
@@ -77,7 +84,11 @@ export default async function ContasPagarPage({
               <option value="">Todos status</option>
               {Object.entries(LABELS_STATUS_CONTA_PAGAR).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
-            <input name="fornecedor" defaultValue={fornecedor} placeholder="Fornecedor" className={inputCls} />
+            <select name="fornecedorId" defaultValue={fornecedorId} className={inputCls} aria-label="Fornecedor cadastrado">
+              <option value="">Todos fornecedores</option>
+              {fornecedores.map((f) => <option key={f.id} value={f.id}>{f.ativo ? f.nome : `${f.nome} (inativo)`}</option>)}
+            </select>
+            <input name="fornecedor" defaultValue={fornecedor} placeholder="Buscar fornecedor" className={inputCls} />
             <select name="categoria" defaultValue={categoria} className={inputCls} aria-label="Categoria">
               <option value="">Todas categorias</option>
               {categorias.map((c) => <option key={c.id} value={c.id}>{c.ativo ? c.nome : `${c.nome} (inativa)`}</option>)}
@@ -115,11 +126,16 @@ export default async function ContasPagarPage({
               ) : (
                 contas.map((c) => {
                   const sv = statusVisualPagar(c.status, c.dataVencimento);
+                  const forn = fornecedorDaConta(c);
                   return (
                     <tr key={c.id} className={cn("border-b border-surface-border transition-colors", sv.linhaVermelha ? "bg-red-50 hover:bg-red-100/60" : "hover:bg-primary-50/40")}>
                       <td className="px-4 py-3">
-                        <p className="font-medium text-ink truncate max-w-[180px]">{c.fornecedor}</p>
-                        {c.fornecedorCnpj && <p className="text-xs text-ink-subtle">{formatarCpfCnpj(c.fornecedorCnpj)}</p>}
+                        <p className="font-medium text-ink truncate max-w-[180px]" data-fornecedor={forn.id ?? "sem-cadastro"}>
+                          {forn.nome}
+                          {!forn.ativo && <span className="ml-1 text-[10px] font-semibold text-ink-muted">(inativo)</span>}
+                          {forn.semCadastro && <span className="ml-1 text-[10px] font-semibold text-amber-700" title="Fornecedor só em texto: escolha o cadastro na edição">(sem cadastro)</span>}
+                        </p>
+                        {forn.documento && <p className="text-xs text-ink-subtle">{formatarCpfCnpj(forn.documento)}</p>}
                       </td>
                       <td className="px-4 py-3 text-ink-muted hidden xl:table-cell truncate max-w-[200px]">{c.descricao}</td>
                       <td className="px-4 py-3 hidden md:table-cell"><CategoriaBadge conta={c} categorias={categorias} /></td>
@@ -140,7 +156,7 @@ export default async function ContasPagarPage({
                         )}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <ContaPagarAcoes conta={{ id: c.id, numero: c.numero, fornecedor: c.fornecedor, valorTotal: Number(c.valorTotal), valorPago: Number(c.valorPago), saldoRestante: Number(c.saldoRestante), status: c.status }} />
+                        <ContaPagarAcoes conta={{ id: c.id, numero: c.numero, fornecedor: forn.nome, valorTotal: Number(c.valorTotal), valorPago: Number(c.valorPago), saldoRestante: Number(c.saldoRestante), status: c.status }} />
                       </td>
                     </tr>
                   );
