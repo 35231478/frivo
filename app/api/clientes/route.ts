@@ -94,10 +94,10 @@ export async function POST(req: NextRequest) {
   if (existente) return NextResponse.json({ erro: "CPF/CNPJ já cadastrado" }, { status: 409 });
 
   const { responsavelTecnicoId, unidades, anexos, contatos, ...resto } = parsed.data;
-  // Tabela de preço e responsável técnico precisam ser da mesma empresa
+  // Tabela de preço e responsável técnico precisam ser da mesma empresa (tabela: só ativa)
   try {
     await Promise.all([
-      validarRefEmpresa("tabelaPreco", resto.tabelaPrecoId, empresaId, "Tabela de preço"),
+      validarRefEmpresa("tabelaPreco", resto.tabelaPrecoId, empresaId, "Tabela de preço", { novoAtivo: true }),
       validarRefEmpresa("tecnico", responsavelTecnicoId, empresaId, "Responsável técnico"),
     ]);
   } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
+import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
 import { cn, formatarDataHora, formatarPrazoHoras, LABELS_RESPONSAVEL_PRAZO, LABELS_STATUS_OS_PRAZO } from "@/lib/utils";
 import { Plus, CheckCircle2, AlertTriangle, Circle, ChevronRight, Trash2, Timer } from "lucide-react";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
@@ -15,16 +15,15 @@ interface Prazo {
   id: string; nome: string; status: string; etapaAtual: number;
   etapas: Etapa[]; template?: { cor?: string } | null;
 }
-interface Template { id: string; nome: string; ativo: boolean }
 
 export function OsPrazos({ osId }: { osId: string }) {
   // Criar, avançar e cancelar prazo exigem editar a OS (mesma regra da API)
   const podeEditar = usePermissoes().pode("ordens", "editar");
   const [prazos, setPrazos] = useState<Prazo[]>([]);
-  const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [adicionando, setAdicionando] = useState(false);
   const [templateId, setTemplateId] = useState("");
+  const [erro, setErro] = useState("");
   const [acao, setAcao] = useState<string | null>(null);
 
   function carregar() {
@@ -33,17 +32,18 @@ export function OsPrazos({ osId }: { osId: string }) {
 
   useEffect(() => {
     carregar();
-    fetch("/api/prazo-templates").then((r) => r.json()).then((d) => setTemplates(Array.isArray(d) ? d.filter((t: Template) => t.ativo !== false) : [])).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function adicionar() {
     if (!templateId) return;
-    setAcao("add");
+    setAcao("add"); setErro("");
     try {
       const res = await fetch(`/api/ordens/${osId}/prazos`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ templateId }) });
-      if (res.ok) { setAdicionando(false); setTemplateId(""); carregar(); }
-    } finally { setAcao(null); }
+      if (res.ok) { setAdicionando(false); setTemplateId(""); carregar(); return; }
+      const d = await res.json().catch(() => null);
+      setErro(d?.erro ?? "Não foi possível criar o prazo.");
+    } catch { setErro("Erro de conexão: o prazo não foi criado."); } finally { setAcao(null); }
   }
 
   async function avancar(prazoId: string) {
@@ -78,15 +78,17 @@ export function OsPrazos({ osId }: { osId: string }) {
       </div>
 
       {adicionando && (
-        <div className="border border-primary-200 bg-primary-50/30 rounded-lg p-4 flex items-end gap-2">
-          <div className="flex-1">
-            <label className="text-xs font-semibold text-ink">Template de prazo</label>
-            <Select value={templateId} onChange={(e) => setTemplateId(e.target.value)} placeholder="Selecione um template" className="mt-1">
-              {templates.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
-            </Select>
+        <div className="border border-primary-200 bg-primary-50/30 rounded-lg p-4 space-y-2">
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <label className="text-xs font-semibold text-ink">Modelo de prazo</label>
+              {/* Só modelos ativos (o servidor recusa modelo inativo em prazo novo) */}
+              <SeletorCadastro entidade="modelos-prazo" valor={templateId} onChange={(v) => setTemplateId(v)} placeholder="Selecione um modelo" className="mt-1" />
+            </div>
+            <Button onClick={adicionar} loading={acao === "add"} disabled={!templateId}>Criar</Button>
+            <Button variant="secondary" onClick={() => { setAdicionando(false); setErro(""); }}>Cancelar</Button>
           </div>
-          <Button onClick={adicionar} loading={acao === "add"} disabled={!templateId}>Criar</Button>
-          <Button variant="secondary" onClick={() => setAdicionando(false)}>Cancelar</Button>
+          {erro && <p role="alert" className="text-sm text-red-700">{erro}</p>}
         </div>
       )}
 

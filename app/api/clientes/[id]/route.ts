@@ -66,10 +66,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
 
   const { responsavelTecnicoId, segmento, origem, satisfacao, ...resto } = parsed.data;
-  // Tabela de preço e responsável técnico precisam ser da mesma empresa
+  // Tabela de preço e responsável técnico precisam ser da mesma empresa; tabela NOVA precisa estar
+  // ativa (manter a que o cliente já usa, mesmo inativa, é aceito)
   try {
     await Promise.all([
-      validarRefEmpresa("tabelaPreco", resto.tabelaPrecoId, empresaId, "Tabela de preço"),
+      validarRefEmpresa("tabelaPreco", resto.tabelaPrecoId, empresaId, "Tabela de preço", { novoAtivo: true, manter: [existente.tabelaPrecoId] }),
       validarRefEmpresa("tecnico", responsavelTecnicoId, empresaId, "Responsável técnico"),
     ]);
   } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }

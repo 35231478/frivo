@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
   if (garantiaInicio && garantiaAte && garantiaInicio > garantiaAte)
     return NextResponse.json({ erro: "O início da garantia deve ser anterior ao fim." }, { status: 400 });
   const tipoResolvido = await resolverTipoEquipamento(empresaId, resto.tipo, tipoCustomId);
-  if (!tipoResolvido) return NextResponse.json({ erro: "Tipo de equipamento não encontrado" }, { status: 400 });
+  if ("erro" in tipoResolvido) return NextResponse.json({ erro: tipoResolvido.erro }, { status: 400 });
   const equipamento = await prisma.equipamento.create({
     data: {
       ...resto,

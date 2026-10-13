@@ -20,13 +20,13 @@ import { SelectCadastroRapido, type CampoRapido, type OpcaoCadastro } from "@/co
 import { UNIDADE } from "@/components/cadastro-rapido/definicoes";
 import Link from "next/link";
 import { LABELS_TIPO_EQUIPAMENTO, cn } from "@/lib/utils";
+import { opcoesTipoEquipamento, PREFIXO_TIPO_CUSTOM, type TipoEquipamentoCadastro } from "@/lib/cadastros/tipos-equipamento";
 import { Thermometer, ImageIcon, MapPin, Cog, QrCode, History, CheckCircle2, ClipboardList, ChevronLeft, ExternalLink, Camera, Sparkles, ChevronDown, Circle } from "lucide-react";
 
-const TIPOS_EQUIPAMENTO = Object.entries(LABELS_TIPO_EQUIPAMENTO);
 
 /** Tipos personalizados (sem `chaveEnum`) entram no select como "custom:<id>". */
-const PREFIXO_CUSTOM = "custom:";
-type TipoCustom = { id: string; nome: string; chaveEnum: string | null; ativo: boolean };
+const PREFIXO_CUSTOM = PREFIXO_TIPO_CUSTOM;
+type TipoCustom = TipoEquipamentoCadastro;
 
 // Cadastro rápido: só o essencial (o cadastro completo fica a um link de distância)
 const CAMPOS_TIPO: CampoRapido[] = [
@@ -101,16 +101,17 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
   // Sugestões de setor/ambiente já usados em outros equipamentos do mesmo endereço
   const [sugestoesLocal, setSugestoesLocal] = useState<{ setores: string[]; ambientes: string[] }>({ setores: [], ambientes: [] });
 
+  // Tipo personalizado (sem chave do enum) é identificado pelo id do cadastro
+  const tipoInicial = initialData?.tipoEquipamento && !initialData.tipoEquipamento.chaveEnum
+    ? `${PREFIXO_CUSTOM}${initialData.tipoEquipamento.id}`
+    : initialData?.tipo ?? "";
   const [form, setForm] = useState({
     nome: initialData?.nome ?? "",
     marca: initialData?.marca ?? "",
     modelo: initialData?.modelo ?? "",
     numeroSerie: initialData?.numeroSerie ?? "",
     patrimonio: initialData?.patrimonio ?? "",
-    // Tipo personalizado (sem chave do enum) é identificado pelo id do cadastro
-    tipo: initialData?.tipoEquipamento && !initialData.tipoEquipamento.chaveEnum
-      ? `${PREFIXO_CUSTOM}${initialData.tipoEquipamento.id}`
-      : initialData?.tipo ?? "",
+    tipo: tipoInicial,
     anoFabricacao: initialData?.anoFabricacao ?? "",
     observacoes: initialData?.observacoes ?? "",
     unidadeId: initialData?.unidadeId ?? unidadeIdFixo ?? "",
@@ -153,14 +154,12 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
   useEffect(() => {
     fetch("/api/tipos-equipamento")
       .then((r) => r.json())
-      .then((d) => setTiposCustom(Array.isArray(d) ? d.filter((t: TipoCustom) => !t.chaveEnum && t.ativo !== false) : []))
+      .then((d) => setTiposCustom(Array.isArray(d) ? d : []))
       .catch(() => {});
   }, []);
 
-  const opcoesTipo: OpcaoCadastro[] = useMemo(() => [
-    ...TIPOS_EQUIPAMENTO.map(([value, label]) => ({ value, label })),
-    ...tiposCustom.map((t) => ({ value: `${PREFIXO_CUSTOM}${t.id}`, label: t.nome, descricao: "personalizado" })),
-  ], [tiposCustom]);
+  // Só ativos para nova escolha; o tipo atual continua visível mesmo inativo (regra do SeletorCadastro)
+  const opcoesTipo: OpcaoCadastro[] = useMemo(() => opcoesTipoEquipamento(tiposCustom, initialData ? tipoInicial : null), [tiposCustom, initialData, tipoInicial]);
 
   const opcoesUnidade: OpcaoCadastro[] = useMemo(
     () => unidades.map(UNIDADE.opcao),

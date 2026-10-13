@@ -46,6 +46,7 @@ const ROTULOS_ROTA: Record<string, string> = {
   produtos: "Produtos",
   servicos: "Serviços",
   "tipos-equipamento": "Tipos de Equipamento",
+  "tabelas-preco": "Tabelas de Preços",
   "tipos-os": "Tipos de OS",
   financeiro: "Financeiro",
   "custo-pessoal": "Custo de Pessoal",

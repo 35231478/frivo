@@ -1,83 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { exigirPermissao } from "@/lib/permissoes-server";
-import { prazoTemplateSchema } from "@/lib/validations";
+import { rotasItem } from "@/lib/cadastros/rotas";
 
-type Params = { params: Promise<{ id: string }> };
-
-export async function GET(_: NextRequest, { params }: Params) {
-  const guard = await exigirPermissao("configuracoes", "visualizar");
-  if (guard.erro) return guard.resposta;
-  const { session } = guard;
-  const { id } = await params;
-  const empresaId = session.user!.empresaId;
-
-  const template = await prisma.prazoTemplate.findFirst({
-    where: { id, empresaId },
-    include: { etapas: { orderBy: { ordem: "asc" } } },
-  });
-  if (!template) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
-  return NextResponse.json(template);
-}
-
-export async function PUT(req: NextRequest, { params }: Params) {
-  const guard = await exigirPermissao("configuracoes", "gerenciar");
-  if (guard.erro) return guard.resposta;
-  const { session } = guard;
-  const { id } = await params;
-  const empresaId = session.user!.empresaId;
-
-  const existente = await prisma.prazoTemplate.findFirst({ where: { id, empresaId } });
-  if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
-
-  const body = await req.json();
-  // Permite alternar somente o "ativo" (reativar/desativar)
-  if (typeof body.ativo === "boolean" && Object.keys(body).length === 1) {
-    const upd = await prisma.prazoTemplate.update({ where: { id }, data: { ativo: body.ativo } });
-    return NextResponse.json(upd);
-  }
-
-  const parsed = prazoTemplateSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
-  }
-  const data = parsed.data;
-
-  const atualizado = await prisma.prazoTemplate.update({
-    where: { id },
-    data: {
-      nome: data.nome,
-      descricao: data.descricao ?? null,
-      cor: data.cor,
-      ativo: data.ativo,
-      etapas: {
-        deleteMany: {},
-        create: data.etapas.map((e, idx) => ({
-          nome: e.nome,
-          prazoHoras: e.prazoHoras,
-          responsavel: e.responsavel,
-          canal: e.canal,
-          mensagem: e.mensagem ?? null,
-          ordem: idx,
-        })),
-      },
-    },
-    include: { etapas: { orderBy: { ordem: "asc" } } },
-  });
-
-  return NextResponse.json(atualizado);
-}
-
-export async function DELETE(_: NextRequest, { params }: Params) {
-  const guard = await exigirPermissao("configuracoes", "gerenciar");
-  if (guard.erro) return guard.resposta;
-  const { session } = guard;
-  const { id } = await params;
-  const empresaId = session.user!.empresaId;
-
-  const existente = await prisma.prazoTemplate.findFirst({ where: { id, empresaId } });
-  if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
-
-  await prisma.prazoTemplate.update({ where: { id }, data: { ativo: false } });
-  return NextResponse.json({ ok: true });
-}
+/**
+ * Compatibilidade: /api/cadastros/modelos-prazo/[id]. Edição PARCIAL (sem `etapas` as etapas não
+ * mudam); DELETE inativa. Prazos já abertos nas OS têm cópia das etapas e não mudam.
+ */
+const r = rotasItem("modelos-prazo");
+export const GET = r.GET;
+export const PATCH = r.PATCH;
+export const PUT = r.PUT;
+export const DELETE = r.DELETE;

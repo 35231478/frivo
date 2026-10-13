@@ -7,9 +7,10 @@ type Params = { params: Promise<{ id: string }> };
 
 /**
  * Resolve a tabela de preços efetiva de um cliente:
- * - a tabela vinculada ao cliente, ou
- * - a tabela PADRAO ativa da empresa como fallback.
- * Retorna os itens indexados pelo id do serviço/produto.
+ * - a tabela vinculada ao cliente, se estiver ATIVA;
+ * - senão (sem tabela, ou com tabela inativada), a tabela PADRAO ativa da empresa.
+ * Retorna os itens indexados pelo id do serviço/produto e, quando a vinculada está inativa,
+ * `vinculadaInativa` (para a tela avisar que o preço veio da Padrão).
  */
 export async function GET(_: NextRequest, { params }: Params) {
   const session = await auth();
@@ -22,16 +23,18 @@ export async function GET(_: NextRequest, { params }: Params) {
   const cliente = await prisma.cliente.findFirst({ where: { id, empresaId }, select: { tabelaPrecoId: true } });
   if (!cliente) return NextResponse.json({ erro: "Cliente não encontrado" }, { status: 404 });
 
-  const tabela = cliente.tabelaPrecoId
-    ? await prisma.tabelaPreco.findFirst({
-        where: { id: cliente.tabelaPrecoId, empresaId, ativo: true },
-        include: { itens: true },
-      })
+  const vinculada = cliente.tabelaPrecoId
+    ? await prisma.tabelaPreco.findFirst({ where: { id: cliente.tabelaPrecoId, empresaId }, include: { itens: true } })
+    : null;
+  // Tabela inativada não vale mais para preço novo: volta para a Padrão (antes ficava sem tabela nenhuma)
+  const tabela = vinculada?.ativo
+    ? vinculada
     : await prisma.tabelaPreco.findFirst({
         where: { empresaId, tipo: "PADRAO", ativo: true },
         include: { itens: true },
         orderBy: { criadoEm: "asc" },
       });
+  const vinculadaInativa = vinculada && !vinculada.ativo ? { id: vinculada.id, nome: vinculada.nome } : null;
 
   if (!tabela) return NextResponse.json(null);
 
@@ -53,5 +56,6 @@ export async function GET(_: NextRequest, { params }: Params) {
     tipo: tabela.tipo,
     precosBloqueados: tabela.precosBloqueados,
     itens,
+    vinculadaInativa,
   });
 }

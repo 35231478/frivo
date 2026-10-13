@@ -1,55 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { exigirPermissao } from "@/lib/permissoes-server";
-import { prazoTemplateSchema } from "@/lib/validations";
+import { rotasColecao } from "@/lib/cadastros/rotas";
 
-export async function GET() {
-  // Leitura de catálogo: qualquer usuário logado (usado nas telas de OS, orçamento, contrato e cliente).
-  // Gravar exige configuracoes.gerenciar.
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
-
-  const templates = await prisma.prazoTemplate.findMany({
-    where: { empresaId: session.user!.empresaId },
-    include: { etapas: { orderBy: { ordem: "asc" } }, _count: { select: { osPrazos: true } } },
-    orderBy: { nome: "asc" },
-  });
-  return NextResponse.json(templates);
-}
-
-export async function POST(req: NextRequest) {
-  const guard = await exigirPermissao("configuracoes", "gerenciar");
-  if (guard.erro) return guard.resposta;
-  const { session } = guard;
-  const empresaId = session.user!.empresaId;
-
-  const parsed = prazoTemplateSchema.safeParse(await req.json());
-  if (!parsed.success) {
-    return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
-  }
-  const data = parsed.data;
-
-  const template = await prisma.prazoTemplate.create({
-    data: {
-      empresaId,
-      nome: data.nome,
-      descricao: data.descricao ?? null,
-      cor: data.cor,
-      ativo: data.ativo,
-      etapas: {
-        create: data.etapas.map((e, idx) => ({
-          nome: e.nome,
-          prazoHoras: e.prazoHoras,
-          responsavel: e.responsavel,
-          canal: e.canal,
-          mensagem: e.mensagem ?? null,
-          ordem: idx,
-        })),
-      },
-    },
-    include: { etapas: { orderBy: { ordem: "asc" } } },
-  });
-
-  return NextResponse.json(template, { status: 201 });
-}
+/** Compatibilidade: /api/cadastros/modelos-prazo (traz as etapas). Sem ?ativo devolve todos, como sempre. */
+const r = rotasColecao("modelos-prazo", { ativoPadrao: "todos" });
+export const GET = r.GET;
+export const POST = r.POST;

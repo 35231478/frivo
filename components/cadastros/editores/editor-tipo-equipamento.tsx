@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Check, X, Search, FileText, Settings2, AlertTriangle, Loader2, Boxes } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -8,11 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormField } from "@/components/ui/form-field";
 import { Drawer } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
-import {
-  Plus, Pencil, Trash2, X, Check, Search, FileText, Settings2, AlertTriangle, Loader2, Boxes,
-} from "lucide-react";
+import { salvarCadastro, type EditorCadastroProps, type ItemCadastroTela } from "@/components/cadastros/cadastro-padrao";
 
-interface Equip { id: string; nome: string; descricao: string | null; ativo?: boolean }
 interface FormOpt { id: string; nome: string; ativo?: boolean; campos?: { id: string }[] }
 interface TipoOsOpt { id: string; nome: string; cor: string; ativo?: boolean }
 interface Vinculo {
@@ -28,145 +26,81 @@ interface Vinculo {
 
 const ativos = <T extends { ativo?: boolean }>(l: T[]) => l.filter((o) => o.ativo !== false);
 
-export function TiposEquipamentoCadastro() {
-  const [itens, setItens] = useState<Equip[]>([]);
+/**
+ * Editor de tipo de equipamento (CadastroPadrao › tipos-equipamento): aba Geral (nome, observações)
+ * e aba Formulários (vínculos por tipo de OS). Ao CRIAR, o editor continua aberto com o tipo novo
+ * para já vincular formulários; a lista recarrega ao fechar.
+ */
+export function EditorTipoEquipamento({ item, aberto, onFechar, onSalvo }: EditorCadastroProps) {
+  const [aba, setAba] = useState<"geral" | "formularios">("geral");
+  const [nome, setNome] = useState("");
+  const [descricao, setDescricao] = useState("");
+  const [salvo, setSalvo] = useState<ItemCadastroTela | null>(null);
+  const [erro, setErro] = useState("");
+  const [salvando, setSalvando] = useState(false);
   const [formOpts, setFormOpts] = useState<FormOpt[]>([]);
   const [tiposOs, setTiposOs] = useState<TipoOsOpt[]>([]);
-  const [editando, setEditando] = useState<string | "novo" | null>(null);
-  const [equipId, setEquipId] = useState<string | null>(null); // id real quando editando persistido
-  const [aba, setAba] = useState<"geral" | "formularios">("geral");
-  const [form, setForm] = useState<{ nome: string; descricao: string }>({ nome: "", descricao: "" });
-  const [salvando, setSalvando] = useState(false);
-  const [erro, setErro] = useState("");
-  const [busca, setBusca] = useState("");
 
   useEffect(() => {
-    fetch("/api/tipos-equipamento").then((r) => r.json()).then((d) => setItens(Array.isArray(d) ? d : [])).catch(() => {});
+    if (!aberto) return;
+    setErro(""); setAba("geral"); setSalvo(null);
+    setNome(item?.nome ?? ""); setDescricao((item?.descricao as string | null) ?? "");
+  }, [aberto, item]);
+
+  useEffect(() => {
+    if (!aberto || formOpts.length) return;
     fetch("/api/formularios").then((r) => r.json()).then((d) => setFormOpts(Array.isArray(d) ? d : [])).catch(() => {});
     fetch("/api/tipos-os").then((r) => r.json()).then((d) => setTiposOs(Array.isArray(d) ? d : [])).catch(() => {});
-  }, []);
+  }, [aberto, formOpts.length]);
 
-  function abrirNovo() {
-    setForm({ nome: "", descricao: "" });
-    setEditando("novo"); setEquipId(null); setAba("geral"); setErro("");
-  }
-  function abrirEditar(e: Equip) {
-    setForm({ nome: e.nome, descricao: e.descricao ?? "" });
-    setEditando(e.id); setEquipId(e.id); setAba("geral"); setErro("");
-  }
-  function fechar() { setEditando(null); setEquipId(null); setErro(""); }
+  const atual = salvo ?? item;
+  // Fechar depois de ter salvo algo recarrega a lista (contagens e o tipo novo)
+  const fechar = () => (salvo ? onSalvo(salvo) : onFechar());
 
   async function salvarGeral() {
-    if (!form.nome.trim()) { setErro("Nome do tipo de equipamento é obrigatório."); return; }
+    if (!nome.trim()) { setErro("Nome do tipo de equipamento é obrigatório."); return; }
     setSalvando(true); setErro("");
-    try {
-      const novo = editando === "novo";
-      const res = await fetch(novo ? "/api/tipos-equipamento" : `/api/tipos-equipamento/${editando}`, {
-        method: novo ? "POST" : "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome: form.nome.trim(), descricao: form.descricao.trim() || null }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setErro(data?.erro ?? "Erro ao salvar."); return; }
-      if (novo) {
-        setItens((p) => [...p, data]);
-        setEditando(data.id); setEquipId(data.id); // habilita aba Formulários
-      } else {
-        setItens((p) => p.map((i) => (i.id === editando ? { ...i, ...data } : i)));
-      }
-    } catch { setErro("Erro de conexão."); } finally { setSalvando(false); }
+    const r = await salvarCadastro("tipos-equipamento", atual?.id ?? null, { nome: nome.trim(), descricao: descricao.trim() || null });
+    setSalvando(false);
+    if (!r.ok) { setErro(r.erro); return; }
+    if (atual) { onSalvo(r.item); return; }
+    setSalvo(r.item); setAba("formularios"); // tipo novo: segue para vincular formulários
   }
-
-  async function remover(e: Equip) {
-    if (!confirm(`Remover o tipo de equipamento "${e.nome}"?`)) return;
-    const res = await fetch(`/api/tipos-equipamento/${e.id}`, { method: "DELETE" });
-    if (res.ok) setItens((p) => p.filter((x) => x.id !== e.id));
-  }
-
-  const q = busca.trim().toLowerCase();
-  const itensFiltrados = q
-    ? itens.filter((e) => e.nome.toLowerCase().includes(q) || (e.descricao ?? "").toLowerCase().includes(q))
-    : itens;
 
   return (
-    <div className="space-y-4">
-      {/* Barra: busca + Novo */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="w-4 h-4 text-ink-subtle absolute left-3 top-1/2 -translate-y-1/2" />
-          <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar tipo de equipamento..." className="pl-9" />
+    <Drawer
+      aberto={aberto} onFechar={fechar}
+      titulo={atual ? (nome || atual.nome) : "Novo tipo de equipamento"}
+      abas={[{ id: "geral", label: "Geral", icone: Settings2 }, { id: "formularios", label: "Formulários", icone: FileText }]}
+      abaAtiva={aba} onAbaChange={(id) => setAba(id as "geral" | "formularios")}
+      rodape={aba === "geral" ? (
+        <>
+          <Button type="button" variant="secondary" onClick={fechar}>Cancelar</Button>
+          <Button type="button" loading={salvando} onClick={salvarGeral}><Check className="w-4 h-4" /> Salvar</Button>
+        </>
+      ) : (
+        <Button type="button" variant="secondary" onClick={fechar}>Fechar</Button>
+      )}
+    >
+      {erro && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 mb-4">{erro}</div>}
+      {atual && atual.ativo === false && <p className="text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2 mb-4">Tipo inativo: não aparece para novos equipamentos até ser reativado.</p>}
+      {salvo && aba === "formularios" && <p className="text-sm bg-success-50 border border-success-200 text-success-700 rounded-lg px-3 py-2 mb-4">Tipo criado. Vincule os formulários abaixo (ou feche).</p>}
+
+      {aba === "geral" ? (
+        <div className="space-y-4">
+          <FormField label="Nome do equipamento" required>
+            <Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex: Split, Chiller, VRF" maxLength={120} />
+          </FormField>
+          <FormField label="Observações">
+            <Textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={4} placeholder="Observações sobre este tipo de equipamento" />
+          </FormField>
         </div>
-        <Button type="button" onClick={abrirNovo} className="ml-auto shrink-0">
-          <Plus className="w-4 h-4" /> Novo tipo de equipamento
-        </Button>
-      </div>
-
-      {/* Lista full-width */}
-      <div className="border border-surface-border rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-surface-alt border-b border-surface-border">
-            <tr>
-              <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Nome</th>
-              <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden sm:table-cell">Observações</th>
-              <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider w-24">Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {itensFiltrados.length === 0 ? (
-              <tr><td colSpan={3} className="text-center text-ink-subtle py-10">{busca ? "Nenhum tipo encontrado." : "Nenhum tipo de equipamento cadastrado ainda."}</td></tr>
-            ) : itensFiltrados.map((e, idx) => (
-              <tr key={e.id} className={cn("border-b border-surface-border last:border-0 hover:bg-primary-50/40 transition-colors", idx % 2 === 1 && "bg-surface-alt/30")}>
-                <td className="px-4 py-3 font-medium text-ink">{e.nome}</td>
-                <td className="px-4 py-3 text-ink-muted hidden sm:table-cell">{e.descricao || "—"}</td>
-                <td className="px-4 py-3 text-right">
-                  <div className="flex items-center justify-end gap-1">
-                    <button onClick={() => abrirEditar(e)} title="Editar" className="p-1.5 text-ink-muted hover:text-primary-600 hover:bg-primary-50 rounded transition-colors"><Pencil className="w-4 h-4" /></button>
-                    <button onClick={() => remover(e)} title="Remover" className="p-1.5 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded transition-colors"><Trash2 className="w-4 h-4" /></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Drawer de cadastro/edição com abas Geral + Formulários */}
-      <Drawer
-        aberto={!!editando}
-        onFechar={fechar}
-        titulo={editando === "novo" ? "Novo tipo de equipamento" : (form.nome || "Editar tipo de equipamento")}
-        abas={[{ id: "geral", label: "Geral", icone: Settings2 }, { id: "formularios", label: "Formulários", icone: FileText }]}
-        abaAtiva={aba}
-        onAbaChange={(id) => setAba(id as "geral" | "formularios")}
-        rodape={aba === "geral" ? (
-          <>
-            <Button type="button" variant="secondary" onClick={fechar}>Cancelar</Button>
-            <Button type="button" loading={salvando} onClick={salvarGeral}><Check className="w-4 h-4" /> Salvar</Button>
-          </>
-        ) : (
-          <Button type="button" variant="secondary" onClick={fechar}>Fechar</Button>
-        )}
-      >
-        {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 mb-4">{erro}</div>}
-
-        {aba === "geral" ? (
-          <div className="space-y-4">
-            <FormField label="Nome do equipamento" required>
-              <Input value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} placeholder="Ex: Split, Chiller, VRF" />
-            </FormField>
-            <FormField label="Observações">
-              <Textarea value={form.descricao} onChange={(e) => setForm((f) => ({ ...f, descricao: e.target.value }))} rows={4} placeholder="Observações sobre este tipo de equipamento" />
-            </FormField>
-          </div>
-        ) : (
-          equipId ? (
-            <FormulariosVinculados equipId={equipId} formOpts={ativos(formOpts)} tiposOs={ativos(tiposOs)} />
-          ) : (
-            <p className="text-sm text-ink-muted py-4">Salve o tipo de equipamento na aba <strong>Geral</strong> para vincular formulários.</p>
-          )
-        )}
-      </Drawer>
-    </div>
+      ) : atual ? (
+        <FormulariosVinculados equipId={atual.id} formOpts={ativos(formOpts)} tiposOs={ativos(tiposOs)} />
+      ) : (
+        <p className="text-sm text-ink-muted py-4">Salve o tipo de equipamento na aba <strong>Geral</strong> para vincular formulários.</p>
+      )}
+    </Drawer>
   );
 }
 

@@ -17,7 +17,8 @@ import { prisma } from "@/lib/prisma";
 /** Modelos com `empresaId` que aparecem como vínculo em requisições. */
 export type ModeloRef =
   | "cliente" | "cargo" | "perfilAcesso" | "tipoOs" | "tabelaPreco" | "servico" | "produto"
-  | "checklistTemplate" | "unidade" | "tecnico" | "equipe" | "veiculo" | "formularioTemplate" | "categoriaFinanceira";
+  | "checklistTemplate" | "unidade" | "tecnico" | "equipe" | "veiculo" | "formularioTemplate"
+  | "prazoTemplate" | "tipoEquipamentoCustom" | "categoriaFinanceira";
 
 export class ErroRefEmpresa extends Error {}
 
