@@ -177,9 +177,9 @@ export function lerXlsx(buf: Buffer): Tabela {
 }
 
 /** Lê CSV ou XLSX pelo conteúdo (o .xlsx começa com "PK"). Rejeita .xls antigo com mensagem clara. */
-export function lerPlanilha(buf: Buffer, nome = ""): Tabela {
+export function lerPlanilha(buf: Buffer, nome = "", maxBytes = MAX_BYTES_PLANILHA): Tabela {
   if (buf.length === 0) throw new ErroPlanilha("O arquivo está vazio.");
-  if (buf.length > MAX_BYTES_PLANILHA) throw new ErroPlanilha("Arquivo maior que 2 MB.");
+  if (buf.length > maxBytes) throw new ErroPlanilha(`Arquivo maior que ${Math.round(maxBytes / 1024 / 1024)} MB.`);
   if (buf[0] === 0x50 && buf[1] === 0x4b) return lerXlsx(buf);
   if (buf[0] === 0xd0 && buf[1] === 0xcf) throw new ErroPlanilha("Formato .xls (Excel 97-2003) não suportado. No Excel, use “Salvar como” → .xlsx ou CSV.");
   if (/\.(xlsx|xls|ods|pdf)$/i.test(nome)) throw new ErroPlanilha("Arquivo inválido: não parece um .xlsx. Baixe o modelo e preencha nele.");

@@ -14,6 +14,8 @@ import { BarraAcoesMassa } from "@/components/acoes-massa/barra";
 import { CheckboxLinha, CheckboxPagina, SelecaoMassaProvider } from "@/components/acoes-massa/selecao";
 import { podeAcao, podeExportar, type AcaoItem, type Entidade } from "@/lib/acoes-massa/acoes";
 import { cn, formatarMoeda } from "@/lib/utils";
+import { ImportarPlanilha } from "@/components/importacao/importar-planilha";
+import { ehEntidadeImportacao } from "@/lib/importacao/entidades";
 import { CADASTROS, type AcaoCadastro, type CampoCadastro, type ColunaCadastro, type DefCadastro, type EntidadeCadastro } from "@/lib/cadastros/registro";
 
 /**
@@ -149,9 +151,13 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda }: CadastroPadra
             <Input value={busca} onChange={(e) => mudarUrl({ q: e.target.value || null })} placeholder={`Buscar ${def.plural}…`} className="pl-9" aria-label={`Buscar ${def.plural}`} />
           </div>
           {podeCad("criar") && (
-            <Button type="button" onClick={() => setEditando("novo")} className="sm:ml-auto shrink-0">
-              <Plus className="w-4 h-4" /> Nov{def.feminino ? "a" : "o"} {def.singular}
-            </Button>
+            <div className="flex gap-2 sm:ml-auto shrink-0">
+              {/* Importação em massa: mesma permissão de criar (o servidor confere de novo) */}
+              {ehEntidadeImportacao(entidade) && <ImportarPlanilha entidade={entidade} onConcluido={() => void carregar()} className="flex-1 sm:flex-none" />}
+              <Button type="button" onClick={() => setEditando("novo")} className="flex-1 sm:flex-none shrink-0">
+                <Plus className="w-4 h-4" /> Nov{def.feminino ? "a" : "o"} {def.singular}
+              </Button>
+            </div>
           )}
         </div>
 
