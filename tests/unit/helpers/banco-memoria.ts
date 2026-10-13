@@ -1,7 +1,7 @@
 /**
  * Banco em memória para testes de rota (substitui `@/lib/prisma`). Cobre o que as rotas usam:
  * findFirst/findUnique/findMany/count/create/createMany/update/updateMany/upsert/delete/deleteMany e
- * $transaction. Filtros: igualdade, in/notIn/not/has/contains, AND/OR, chave composta
+ * $transaction. findMany respeita orderBy (ver `comparador`), skip e take. Filtros: igualdade, in/notIn/not/has/contains, AND/OR, chave composta
  * (`cpf_empresaId`) e filtro por relação (`formularioTemplate: { ativo: true }`), resolvido
  * pelas relações declaradas em `relacoes`. `select`/`include` não recortam colunas (devolve a
  * linha inteira com as relações hidratadas), mas o `where` de uma relação lista aninhada
@@ -33,6 +33,7 @@ function casa(row: Linha, where: Linha = {}): boolean {
       if ("equals" in v) return v.mode === "insensitive" ? String(row[k] ?? "").toLowerCase() === String(v.equals).toLowerCase() : row[k] === v.equals;
       if ("some" in v) return (row[k] ?? []).some((x: Linha) => casa(x, v.some));
       if (ehObjeto(row[k])) return casa(row[k], v); // filtro por relação 1-1
+      if (row[k] === null && !("is" in v) && !("isNot" in v)) return false; // relação vazia não casa (como o Prisma)
       return true;
     }
     return row[k] === v;
@@ -55,6 +56,40 @@ function projetar(row: Linha, sel?: Linha): Linha {
   return out;
 }
 
+/**
+ * orderBy do Prisma em memória: campo escalar (asc/desc ou { sort, nulls }), campo de relação 1-1
+ * ({ cliente: { nome: "asc" } }) e contagem ({ itens: { _count: "desc" } }, pela relação hidratada).
+ * Nulos como no PostgreSQL: por último no asc, primeiro no desc (salvo `nulls`). Texto: pt-BR.
+ */
+function comparador(ordens: Linha[]) {
+  const valor = (r: Linha, o: Linha): [unknown, string, string | undefined] => {
+    const [k, v] = Object.entries(o)[0];
+    if (typeof v === "string") return [r[k], v, undefined];
+    if (ehObjeto(v) && "sort" in v) return [r[k], v.sort, v.nulls];
+    if (ehObjeto(v) && "_count" in v) return [Array.isArray(r[k]) ? r[k].length : (r._count?.[k] ?? 0), v._count, undefined];
+    if (ehObjeto(v)) return valor(r[k] ?? {}, v);
+    return [undefined, "asc", undefined];
+  };
+  return (a: Linha, b: Linha) => {
+    for (const o of ordens) {
+      const [va, dir, nulls] = valor(a, o);
+      const [vb] = valor(b, o);
+      const sinal = dir === "desc" ? -1 : 1;
+      const na = va == null, nb = vb == null;
+      if (na || nb) {
+        if (na && nb) continue;
+        const nulosPrimeiro = nulls ? nulls === "first" : dir === "desc";
+        return (na ? -1 : 1) * (nulosPrimeiro ? 1 : -1);
+      }
+      const c = typeof va === "string" && typeof vb === "string" ? va.localeCompare(vb, "pt-BR")
+        : va instanceof Date && vb instanceof Date ? va.getTime() - vb.getTime()
+        : Number(va) - Number(vb);
+      if (c) return c * sinal;
+    }
+    return 0;
+  };
+}
+
 export function criarPrisma(db: Banco, relacoes: Relacoes = {}, aninhadas: Aninhadas = {}) {
   const T = (m: string) => (db.t[m] ??= []);
   const hidratar = (m: string, r: Linha) => (relacoes[m] ? { ...r, ...relacoes[m](r, T) } : { ...r });
@@ -74,11 +109,16 @@ export function criarPrisma(db: Banco, relacoes: Relacoes = {}, aninhadas: Aninh
     findFirst: async ({ where, select, include }: any = {}) => { const r = linhas(m, where)[0]; return r ? projetar(hidratar(m, r), select ?? include) : null; },
     findUnique: async ({ where, select, include }: any = {}) => { const r = linhas(m, where)[0]; return r ? projetar(hidratar(m, r), select ?? include) : null; },
     findUniqueOrThrow: async ({ where, select, include }: any = {}) => { const r = linhas(m, where)[0]; if (!r) throw naoAchou(); return projetar(hidratar(m, r), select ?? include); },
-    findMany: async ({ where, take, select, include }: any = {}) => {
-      const rs = linhas(m, where).map((r) => projetar(hidratar(m, r), select ?? include));
+    findMany: async ({ where, take, skip, orderBy, select, include }: any = {}) => {
+      const hs = linhas(m, where).map((r) => hidratar(m, r));
+      if (orderBy) hs.sort(comparador([orderBy].flat()));
+      const rs = hs.slice(skip ?? 0).map((r) => projetar(r, select ?? include));
       return take ? rs.slice(0, take) : rs;
     },
     count: async ({ where }: any = {}) => linhas(m, where).length,
+    aggregate: async ({ where, _sum }: any = {}) => ({
+      _sum: Object.fromEntries(Object.keys(_sum ?? {}).map((k) => [k, linhas(m, where).reduce((t, r) => t + Number(r[k] ?? 0), 0)])),
+    }),
     create: async ({ data }: any) => {
       const { campos, ...resto } = data ?? {};
       const r: Linha = { id: `${m}-${++db.seq}`, ...resto };

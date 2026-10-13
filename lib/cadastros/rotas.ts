@@ -6,7 +6,8 @@ import type { Ator, Registro } from "@/lib/cadastros/especificos";
 import {
   CADASTROS, ehEntidadeCadastro, lerFiltroAtivo, type AcaoCadastro, type DefCadastro, type EntidadeCadastro, type FiltroAtivo,
 } from "@/lib/cadastros/registro";
-import { criarCadastro, editarCadastro, impactoCadastro, listarCadastro, obterBruto, obterCadastro } from "@/lib/cadastros/servidor";
+import { criarCadastro, editarCadastro, impactoCadastro, listarCadastro, listarCadastroPaginado, obterBruto, obterCadastro, sugestoesCadastro } from "@/lib/cadastros/servidor";
+import { paramsDe, pediuPaginacao } from "@/lib/listagem";
 
 /**
  * Handlers HTTP dos cadastros padronizados. Os mesmos atendem:
@@ -14,7 +15,9 @@ import { criarCadastro, editarCadastro, impactoCadastro, listarCadastro, obterBr
  *  - as rotas antigas (/api/produtos, /api/servicos, /api/cargos, /api/categorias-financeiras), que só
  *    fixam a entidade — uma regra só, sem duplicar validação.
  *
- *   GET    coleção   ?ativo=sim|nao|todos &q=busca        (listar)
+ *   GET    coleção   ?ativo=sim|nao|todos &q=busca        (listar: a lista inteira, como sempre)
+ *                     + &pagina=&por=&ordem=&dir=          (paginado: { itens, total, pagina, porPagina, contagens })
+ *                     + &sugestoes=1                       (as ~5 que mais combinam com ?q=)
  *   POST   coleção   { campos }                             (criar — campo desconhecido = 400)
  *   GET    item                                             (obter)
  *   PATCH  item      { campos } e/ou { ativo }              (editar parcial / inativar / reativar)
@@ -68,8 +71,12 @@ export function rotasColecao(fixa?: EntidadeCadastro, opts: { ativoPadrao?: Filt
       const g = await exigirCadastro(def, "listar");
       if ("resposta" in g) return g.resposta;
       const sp = req.nextUrl.searchParams;
-      const itens = await listarCadastro(def, g.sessao.user.empresaId, { ativo: lerFiltroAtivo(sp.get("ativo"), opts.ativoPadrao ?? "sim"), q: sp.get("q") });
-      return json(itens);
+      const f = { ativo: lerFiltroAtivo(sp.get("ativo"), opts.ativoPadrao ?? "sim"), q: sp.get("q") };
+      const empresaId = g.sessao.user.empresaId;
+      if (sp.get("sugestoes") === "1") return json({ sugestoes: await sugestoesCadastro(def, empresaId, f) });
+      // Paginado só quando pedido (?pagina/?por): os seletores das outras telas continuam recebendo a lista
+      if (pediuPaginacao(paramsDe(sp))) return json(await listarCadastroPaginado(def, empresaId, f, paramsDe(sp)));
+      return json(await listarCadastro(def, empresaId, f));
     },
     async POST(req: NextRequest, ctx: Ctx) {
       const { def } = await resolver(ctx, fixa);

@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Acao } from "@/lib/permissoes";
 import { REGIMES, REGIME_LABEL } from "@/lib/folha/calculo";
 import { itensEncargoSchema } from "@/lib/folha/validacao";
+import type { Direcao, MapaOrdem } from "@/lib/listagem";
 
 /**
  * Cadastros padronizados — registro DECLARATIVO (mesmo espírito do ENTIDADE das ações em massa).
@@ -46,6 +47,11 @@ export interface ColunaCadastro {
   key: string;
   label: string;
   formato?: "texto" | "moeda" | "cor-nome";
+  /**
+   * Ordenar clicando no cabeçalho: nome do campo (escalar) ou o orderBy do Prisma para a direção
+   * (relação/contagem). Sem isto a coluna não é ordenável — o servidor só aceita a lista branca.
+   */
+  ordenar?: string | ((dir: "asc" | "desc") => unknown);
 }
 
 /** Requisito de cada ação: "logado" não existe aqui — use null em listar. */
@@ -63,6 +69,8 @@ export interface DefCadastro {
   colunas: ColunaCadastro[];
   /** Campos usados na busca (?q=) */
   busca: string[];
+  /** Campo mostrado ao lado do nome nas sugestões da busca (ex.: CNPJ do fornecedor) */
+  detalheSugestao?: string;
   /** O que os outros registros gravam ao escolher este cadastro (categoria: o NOME) */
   chave: "id" | "nome";
   schemaCriar: z.ZodTypeAny;
@@ -175,8 +183,8 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       { key: "estoqueMinimo", label: "Estoque mínimo", tipo: "inteiro", placeholder: "0" },
     ],
     colunas: [
-      { key: "nome", label: "Nome" }, { key: "unidade", label: "Unidade" },
-      { key: "valorPadrao", label: "Valor padrão", formato: "moeda" }, { key: "estoqueMinimo", label: "Est. mín." },
+      { key: "nome", label: "Nome", ordenar: "nome" }, { key: "unidade", label: "Unidade", ordenar: "unidade" },
+      { key: "valorPadrao", label: "Valor padrão", formato: "moeda", ordenar: "valorPadrao" }, { key: "estoqueMinimo", label: "Est. mín.", ordenar: "estoqueMinimo" },
     ],
     ...schemas({
       nome, descricao: textoOpcional(), unidade,
@@ -202,8 +210,8 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       { key: "observacaoFiscal", label: "Observação fiscal", tipo: "textarea", grupo: "Dados fiscais" },
     ],
     colunas: [
-      { key: "nome", label: "Nome" }, { key: "unidade", label: "Unidade" },
-      { key: "codigoLc116", label: "LC 116" }, { key: "valorPadrao", label: "Valor padrão", formato: "moeda" },
+      { key: "nome", label: "Nome", ordenar: "nome" }, { key: "unidade", label: "Unidade", ordenar: "unidade" },
+      { key: "codigoLc116", label: "LC 116", ordenar: "codigoLc116" }, { key: "valorPadrao", label: "Valor padrão", formato: "moeda", ordenar: "valorPadrao" },
     ],
     ...schemas({
       nome, descricao: textoOpcional(), unidade, valorPadrao: numero(),
@@ -223,7 +231,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       { key: "nome", label: "Nome", obrigatorio: true, placeholder: "Ex: Técnico de Refrigeração" },
       { key: "descricao", label: "Descrição", tipo: "textarea", placeholder: "Atribuições do cargo" },
     ],
-    colunas: [{ key: "nome", label: "Nome" }, { key: "descricao", label: "Descrição" }],
+    colunas: [{ key: "nome", label: "Nome", ordenar: "nome" }, { key: "descricao", label: "Descrição", ordenar: "descricao" }],
     ...schemas({ nome, descricao: textoOpcional() }, { descricao: null }),
   },
   "categorias-financeiras": {
@@ -236,7 +244,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       { key: "nome", label: "Nome", obrigatorio: true, placeholder: "Ex: Contrato Mensal" },
       { key: "cor", label: "Cor", tipo: "cor" },
     ],
-    colunas: [{ key: "nome", label: "Nome", formato: "cor-nome" }],
+    colunas: [{ key: "nome", label: "Nome", formato: "cor-nome", ordenar: "nome" }],
     ...schemas({ nome, cor }, { cor: "#64748B" }),
   },
   "perfis-acesso": {
@@ -254,7 +262,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       { key: "tipo", label: "Tipo" },
       { key: "cor", label: "Cor", tipo: "cor" },
     ],
-    colunas: [{ key: "nome", label: "Perfil", formato: "cor-nome" }, { key: "tipo", label: "Tipo" }, { key: "uso", label: "Em uso" }],
+    colunas: [{ key: "nome", label: "Perfil", formato: "cor-nome", ordenar: "nome" }, { key: "tipo", label: "Tipo", ordenar: "tipo" }, { key: "uso", label: "Em uso", ordenar: (dir) => ({ usuarios: { _count: dir } }) }],
     ...schemas({
       nome: nome.max(80), descricao: textoOpcional(500),
       tipo: z.enum(["ADMINISTRADOR", "SUPERVISOR", "FINANCEIRO", "TECNICO", "AUXILIAR", "PERSONALIZADO"]),
@@ -275,7 +283,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       { key: "regime", label: "Tipo de contrato", tipo: "select", opcoes: REGIMES.map((r) => ({ value: r, label: REGIME_LABEL[r] })) },
       { key: "padrao", label: "Padrão do tipo" },
     ],
-    colunas: [{ key: "nome", label: "Modelo" }, { key: "regime", label: "Tipo de contrato" }, { key: "total", label: "Encargos" }, { key: "uso", label: "Em uso" }],
+    colunas: [{ key: "nome", label: "Modelo", ordenar: "nome" }, { key: "regime", label: "Tipo de contrato", ordenar: "regime" }, { key: "total", label: "Encargos" }, { key: "uso", label: "Em uso", ordenar: (dir) => ({ colaboradores: { _count: dir } }) }],
     ...schemas({
       nome: nome.max(80), regime: z.enum(REGIMES), padrao: z.boolean(), itens: itensEncargoSchema,
     }, { padrao: false, itens: [] }),
@@ -286,7 +294,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
     // Dados de contato e de acesso: só quem gerencia as Configurações (igual à tela antiga)
     permissoes: { listar: SO_GESTOR, criar: SO_GESTOR, editar: SO_GESTOR, inativar: SO_GESTOR, reativar: SO_GESTOR },
     chave: "id", editorProprio: true,
-    busca: ["nome", "email"],
+    busca: ["nome", "email"], detalheSugestao: "email",
     // O hash da senha nunca sai em resposta nenhuma
     ocultos: ["senha"],
     incluir: { perfilAcesso: { select: { id: true, nome: true, cor: true, ativo: true } } },
@@ -294,7 +302,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       { key: "nome", label: "Nome", obrigatorio: true },
       { key: "email", label: "E-mail", tipo: "email", obrigatorio: true },
     ],
-    colunas: [{ key: "nome", label: "Usuário" }, { key: "perfil", label: "Perfil de acesso" }, { key: "ultimoAcesso", label: "Último acesso" }],
+    colunas: [{ key: "nome", label: "Usuário", ordenar: "nome" }, { key: "perfil", label: "Perfil de acesso", ordenar: (dir) => ({ perfilAcesso: { nome: dir } }) }, { key: "ultimoAcesso", label: "Último acesso", ordenar: (dir) => ({ ultimoAcesso: { sort: dir, nulls: "last" } }) }],
     ...schemas({
       nome: z.string().trim().min(2, "Informe o nome (mín. 2 letras).").max(120),
       email: z.string().trim().toLowerCase().email("E-mail inválido.").max(160),
@@ -310,7 +318,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       { key: "nome", label: "Nome", obrigatorio: true, placeholder: "Ex: Split, Chiller, VRF" },
       { key: "descricao", label: "Observações", tipo: "textarea" },
     ],
-    colunas: [{ key: "nome", label: "Tipo" }, { key: "descricao", label: "Observações" }, { key: "uso", label: "Em uso" }],
+    colunas: [{ key: "nome", label: "Tipo", ordenar: "nome" }, { key: "descricao", label: "Observações", ordenar: "descricao" }, { key: "uso", label: "Em uso", ordenar: (dir) => ({ equipamentos: { _count: dir } }) }],
     // chaveEnum (âncora dos tipos padrão) nunca entra pelo corpo
     ...schemas({ nome: nome.max(120), descricao: textoOpcional(1000) }, { descricao: null }),
   },
@@ -329,7 +337,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       { key: "tipo", label: "Tipo", tipo: "select", opcoes: [{ value: "PADRAO", label: "Padrão" }, { value: "CONTRATO", label: "Contrato" }, { value: "PERSONALIZADA", label: "Personalizada" }] },
       { key: "descricao", label: "Descrição", tipo: "textarea" },
     ],
-    colunas: [{ key: "nome", label: "Tabela" }, { key: "tipo", label: "Tipo" }, { key: "itens", label: "Itens" }, { key: "uso", label: "Clientes" }],
+    colunas: [{ key: "nome", label: "Tabela", ordenar: "nome" }, { key: "tipo", label: "Tipo", ordenar: "tipo" }, { key: "itens", label: "Itens", ordenar: (dir) => ({ itens: { _count: dir } }) }, { key: "uso", label: "Clientes", ordenar: (dir) => ({ clientes: { _count: dir } }) }],
     ...schemas({
       nome: z.string().trim().min(2, "Informe o nome da tabela.").max(120), descricao: textoOpcional(1000),
       tipo: z.enum(["PADRAO", "CONTRATO", "PERSONALIZADA"]), precosBloqueados: z.boolean(),
@@ -348,7 +356,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       { key: "descricao", label: "Descrição" },
       { key: "conteudo", label: "Conteúdo", tipo: "textarea" },
     ],
-    colunas: [{ key: "nome", label: "Termo" }, { key: "descricao", label: "Descrição" }],
+    colunas: [{ key: "nome", label: "Termo", ordenar: "nome" }, { key: "descricao", label: "Descrição", ordenar: "descricao" }],
     ...schemas({
       nome: nome.max(160), descricao: textoOpcional(500),
       conteudo: z.preprocess((v) => (v == null ? "" : v), z.string().max(100_000)),
@@ -365,7 +373,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       { key: "descricao", label: "Descrição", tipo: "textarea" },
       { key: "cor", label: "Cor", tipo: "cor" },
     ],
-    colunas: [{ key: "nome", label: "Modelo", formato: "cor-nome" }, { key: "etapas", label: "Etapas" }, { key: "uso", label: "Usado em" }],
+    colunas: [{ key: "nome", label: "Modelo", formato: "cor-nome", ordenar: "nome" }, { key: "etapas", label: "Etapas", ordenar: (dir) => ({ etapas: { _count: dir } }) }, { key: "uso", label: "Usado em", ordenar: (dir) => ({ osPrazos: { _count: dir } }) }],
     ...schemas({
       nome: z.string().trim().min(2, "Informe o nome do modelo.").max(120), descricao: textoOpcional(1000), cor,
       etapas: z.array(etapaPrazoSchema).min(1, "Adicione ao menos uma etapa.").max(50),
@@ -384,7 +392,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       reativar: [["financeiro", "fluxoCaixa"], ["configuracoes", "gerenciar"]],
     },
     chave: "id",
-    busca: ["nome", "documento", "email", "telefone"],
+    busca: ["nome", "documento", "email", "telefone"], detalheSugestao: "documento",
     incluir: { _count: { select: { contasPagar: true } } },
     campos: [
       { key: "nome", label: "Nome / razão social", obrigatorio: true, placeholder: "Ex: Frigelar Distribuidora" },
@@ -393,7 +401,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       { key: "email", label: "E-mail", tipo: "email", placeholder: "contato@fornecedor.com.br" },
       { key: "observacoes", label: "Observações", tipo: "textarea" },
     ],
-    colunas: [{ key: "nome", label: "Fornecedor" }, { key: "documento", label: "CNPJ / CPF" }, { key: "contato", label: "Contato" }, { key: "uso", label: "Contas a pagar" }],
+    colunas: [{ key: "nome", label: "Fornecedor", ordenar: "nome" }, { key: "documento", label: "CNPJ / CPF", ordenar: "documento" }, { key: "contato", label: "Contato" }, { key: "uso", label: "Contas a pagar", ordenar: (dir) => ({ contasPagar: { _count: dir } }) }],
     ...schemas({
       nome: nome, documento: documentoSchema, telefone: textoOpcional(30), email: emailOpcional, observacoes: textoOpcional(2000),
     }, { documento: null, telefone: null, email: null, observacoes: null }),
@@ -411,6 +419,12 @@ export function lerFiltroAtivo(v: string | null | undefined, padrao: FiltroAtivo
 }
 
 /** where da lista (empresa + status + busca) — o mesmo da tela, do "selecionar todos do filtro" e da exportação. */
+/** Lista branca de ordenação da tela (coluna → orderBy). */
+export function mapaOrdemCadastro(def: DefCadastro): MapaOrdem {
+  return Object.fromEntries(def.colunas.filter((c) => c.ordenar).map((c) => [c.key,
+    typeof c.ordenar === "string" ? (dir: Direcao) => ({ [c.ordenar as string]: dir }) : (c.ordenar as (d: Direcao) => unknown)]));
+}
+
 export function whereCadastro(def: DefCadastro, empresaId: string, f: { ativo: FiltroAtivo; q?: string | null }) {
   const q = f.q?.trim();
   return {

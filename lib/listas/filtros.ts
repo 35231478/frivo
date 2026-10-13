@@ -4,6 +4,8 @@
  * nunca divergirem. Sempre começam pelo empresaId da sessão.
  */
 
+import { variantesDocumento } from "@/lib/listagem";
+
 type SP = Record<string, string | undefined>;
 
 export function whereOrdens(empresaId: string, sp: SP) {
@@ -64,6 +66,8 @@ export function whereClientes(empresaId: string, sp: SP) {
       { nome: { contains: sp.busca, mode: "insensitive" } },
       { nomeFantasia: { contains: sp.busca, mode: "insensitive" } },
       { cpfCnpj: { contains: sp.busca } },
+      // CNPJ/CPF são gravados com máscara: "11222333" também acha "11.222.333/0001-81"
+      ...variantesDocumento(sp.busca).map((v) => ({ cpfCnpj: { contains: v } })),
     ];
   }
   if (sp.segmento) where.segmento = sp.segmento;

@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import type { Impacto } from "@/lib/inativacao-server";
 import {
-  CADASTROS, mensagemValidacao, whereCadastro, type DefCadastro, type EntidadeCadastro, type FiltroAtivo,
+  CADASTROS, mapaOrdemCadastro, mensagemValidacao, whereCadastro, type DefCadastro, type EntidadeCadastro, type FiltroAtivo,
 } from "@/lib/cadastros/registro";
+import { janela, lerOrdem, lerPaginacao, ordemPrisma, paginaValida, ranquearSugestoes, type ParamsUrl, type Sugestao } from "@/lib/listagem";
 import { REGRAS, type Ator, type Registro } from "@/lib/cadastros/especificos";
 
 /**
@@ -35,6 +36,46 @@ export async function listarCadastro(def: DefCadastro, empresaId: string, f: { a
     where: whereCadastro(def, empresaId, f), orderBy: def.ordem ?? { nome: "asc" }, ...(def.incluir && { include: def.incluir }),
   });
   return itens.map((i) => limpar(def, i));
+}
+
+export interface PaginaCadastro {
+  itens: Record<string, unknown>[];
+  total: number;
+  pagina: number;
+  porPagina: number;
+  /** Quantos em cada aba, com a busca atual (os números das abas Ativos / Inativos / Todos) */
+  contagens: { ativos: number; inativos: number; todos: number };
+}
+
+/**
+ * Lista PAGINADA no servidor (?pagina=&por=&ordem=&dir=), com o total e as contagens das abas.
+ * Ordenação só pelas colunas ordenáveis do registro; página além do fim volta para a última.
+ */
+export async function listarCadastroPaginado(def: DefCadastro, empresaId: string, f: { ativo: FiltroAtivo; q?: string | null }, sp: ParamsUrl): Promise<PaginaCadastro> {
+  await REGRAS[def.entidade]?.antesDeListar?.(empresaId);
+  const t = tabela(def);
+  const comBusca = whereCadastro(def, empresaId, { ativo: "todos", q: f.q });
+  const [ativos, inativos] = await Promise.all([t.count({ where: { ...comBusca, ativo: true } }), t.count({ where: { ...comBusca, ativo: false } })]);
+  const total = f.ativo === "sim" ? ativos : f.ativo === "nao" ? inativos : ativos + inativos;
+  const { pagina: pedida, porPagina } = lerPaginacao(sp);
+  const pagina = paginaValida(pedida, porPagina, total);
+  const mapa = mapaOrdemCadastro(def);
+  const itens = total === 0 ? [] : await t.findMany({
+    where: whereCadastro(def, empresaId, f), orderBy: ordemPrisma(lerOrdem(sp, mapa), mapa, def.ordem ?? { nome: "asc" }),
+    ...janela(pagina, porPagina), ...(def.incluir && { include: def.incluir }),
+  });
+  return { itens: itens.map((i) => limpar(def, i)), total, pagina, porPagina, contagens: { ativos, inativos, todos: ativos + inativos } };
+}
+
+/** Sugestões da busca: as ~5 que mais combinam (só id, nome e o detalhe; nada além do que a lista mostra). */
+export async function sugestoesCadastro(def: DefCadastro, empresaId: string, f: { ativo: FiltroAtivo; q?: string | null }): Promise<Sugestao[]> {
+  const q = f.q?.trim();
+  if (!q) return [];
+  const det = def.detalheSugestao;
+  const rs = await tabela(def).findMany({
+    where: whereCadastro(def, empresaId, f), select: { id: true, nome: true, ...(det && { [det]: true }) }, orderBy: [{ nome: "asc" }, { id: "asc" }], take: 50,
+  });
+  return ranquearSugestoes(rs.map((r) => ({ id: String(r.id), rotulo: String(r.nome), detalhe: det && r[det] != null ? String(r[det]) : null })), q);
 }
 
 /** Registro BRUTO (com colunas ocultas) — só para uso interno, nunca para resposta. */
