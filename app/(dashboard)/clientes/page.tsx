@@ -15,6 +15,7 @@ import { Prisma } from "@prisma/client";
 import Link from "next/link";
 import { Users, Plus, FileCheck, Star } from "lucide-react";
 import { ClienteAcoes } from "@/components/clientes/cliente-acoes";
+import { ImportarClientes } from "@/components/clientes/importar-clientes";
 
 export const metadata: Metadata = { title: "Clientes" };
 
@@ -81,7 +82,7 @@ export default async function ClientesPage({
   return (
     <SelecaoMassaProvider entidade="clientes" idsPagina={clientes.map((c) => c.id)} total={total}>
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-primary-50 rounded-lg">
             <Users className="w-5 h-5 text-primary-600" />
@@ -90,12 +91,15 @@ export default async function ClientesPage({
           <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{total}</span>
         </div>
         {podeCriar && (
-          <Link
-            href="/clientes/novo"
-            className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow"
-          >
-            <Plus className="w-4 h-4" /> Novo Cliente
-          </Link>
+          <div className="flex items-center gap-2">
+            <ImportarClientes />
+            <Link
+              href="/clientes/novo"
+              className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow"
+            >
+              <Plus className="w-4 h-4" /> Novo Cliente
+            </Link>
+          </div>
         )}
       </div>
 
