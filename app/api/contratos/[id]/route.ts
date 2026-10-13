@@ -52,7 +52,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (dup) return NextResponse.json({ erro: "Número já cadastrado" }, { status: 409 });
   }
 
-  const { unidadeIds, recorrenciasLocais, dataInicio, dataFim, valorMensal, valorTotal, responsavelTecnicoId, tipoOsRecorrenciaId, tecnicoRecorrenciaId, artVencimento, itensInclusos, ...resto } = parsed.data;
+  const { unidadeIds, recorrenciasLocais, dataInicio, dataFim, valorMensal, valorTotal, responsavelTecnicoId, tipoOsRecorrenciaId, tecnicoRecorrenciaId, artVencimento, ...resto } = parsed.data;
   // Cliente, locais, tipos de OS e técnicos (inclusive os da recorrência por local) precisam ser da mesma empresa
   try {
     await Promise.all([
@@ -78,7 +78,6 @@ export async function PUT(req: NextRequest, { params }: Params) {
         tipoOsRecorrenciaId: tipoOsRecorrenciaId || null,
         tecnicoRecorrenciaId: tecnicoRecorrenciaId || null,
         artVencimento: artVencimento ? new Date(artVencimento) : null,
-        ...(itensInclusos ? { itensInclusos: itensInclusos as any } : {}),
         unidades: {
           create: unidadeIds.map((unidadeId) => ({ unidadeId })),
         },

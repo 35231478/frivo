@@ -529,33 +529,10 @@ export const LABELS_INDICE_REAJUSTE: Record<string, string> = {
   PERCENTUAL_FIXO: "Percentual fixo",
 };
 
-export const LABELS_PERIODO_REF_NFSE: Record<string, string> = {
-  MES_ANTERIOR_FATURAMENTO: "Mês anterior ao faturamento",
-  MES_FATURAMENTO: "Mês do faturamento",
-  MES_POSTERIOR_FATURAMENTO: "Mês posterior ao faturamento",
-  MES_ANTERIOR_VENCIMENTO: "Mês anterior ao vencimento",
-  MES_VENCIMENTO: "Mês do vencimento",
-};
-
-export const LABELS_PERIODO_VISITA: Record<string, string> = {
-  MES: "por mês",
-  TRIMESTRE: "por trimestre",
-  SEMESTRE: "por semestre",
-  ANO: "por ano",
-};
-
 export const LABELS_MES: Record<number, string> = {
   1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
   7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro",
 };
-
-// Itens inclusos padrão do escopo do contrato (checklist).
-export const ITENS_INCLUSOS_CONTRATO = [
-  { chave: "manutencaoPreventivaMensal", label: "Manutenção preventiva mensal" },
-  { chave: "limpezaQuimicaSemestral", label: "Limpeza química semestral" },
-  { chave: "atendimentoCorretivo", label: "Atendimento corretivo" },
-  { chave: "relatorioPmoc", label: "Relatório PMOC" },
-] as const;
 
 export const LABELS_TIPO_RELATORIO: Record<string, string> = {
   PMOC: "PMOC",
