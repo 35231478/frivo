@@ -644,8 +644,8 @@ const valorObrigatorio = z.preprocess(
 );
 
 export const contaPagarSchema = z.object({
-  fornecedor: z.string().min(1, "Fornecedor é obrigatório"),
-  fornecedorCnpj: z.string().optional().nullable(),
+  /** Fornecedor pelo ID (Leva 5.2). O texto livre não é mais aceito: nome/CNPJ vêm do cadastro. */
+  fornecedorId: z.string().optional().nullable(),
   descricao: z.string().min(1, "Descrição é obrigatória"),
   valorTotal: valorObrigatorio,
   dataVencimento: z.string().optional().nullable(),

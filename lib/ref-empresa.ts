@@ -18,7 +18,7 @@ import { prisma } from "@/lib/prisma";
 export type ModeloRef =
   | "cliente" | "cargo" | "perfilAcesso" | "tipoOs" | "tabelaPreco" | "servico" | "produto"
   | "checklistTemplate" | "unidade" | "tecnico" | "equipe" | "veiculo" | "formularioTemplate"
-  | "prazoTemplate" | "tipoEquipamentoCustom" | "categoriaFinanceira";
+  | "prazoTemplate" | "tipoEquipamentoCustom" | "categoriaFinanceira" | "fornecedor";
 
 export class ErroRefEmpresa extends Error {}
 
@@ -66,6 +66,19 @@ export async function categoriaParaGravar(categoriaId: string | null | undefined
   await validarRefEmpresa("categoriaFinanceira", categoriaId, empresaId, "Categoria financeira", { novoAtivo: true, manter: [atual] });
   const c = await prisma.categoriaFinanceira.findFirst({ where: { id: categoriaId, empresaId }, select: { nome: true } });
   return { categoriaId, nome: c?.nome ?? null };
+}
+
+/**
+ * Fornecedor da conta a pagar — o vínculo é o ID (Leva 5.2). `undefined` = não mexe; senão: fornecedor
+ * da empresa; escolha NOVA precisa estar ativa (manter o `atual`, mesmo inativo, é aceito). Devolve o
+ * que gravar, com nome e documento do cadastro (cópia só como histórico/fallback em texto).
+ */
+export async function fornecedorParaGravar(fornecedorId: string | null | undefined, empresaId: string, atual?: string | null):
+  Promise<{ fornecedorId?: string; nome?: string; documento?: string | null }> {
+  if (fornecedorId === undefined || fornecedorId === null || fornecedorId === "") return {};
+  await validarRefEmpresa("fornecedor", fornecedorId, empresaId, "Fornecedor", { novoAtivo: true, manter: [atual] });
+  const f = await prisma.fornecedor.findFirst({ where: { id: fornecedorId, empresaId }, select: { nome: true, documento: true } });
+  return { fornecedorId, nome: f?.nome ?? "", documento: f?.documento ?? null };
 }
 
 /** Converte o erro em resposta 400 (ou devolve null se não for erro de vínculo). */

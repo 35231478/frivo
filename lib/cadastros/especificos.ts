@@ -353,6 +353,44 @@ const modelosPrazo: RegrasCadastro = {
   },
 };
 
+/* ───────────────────────── Fornecedores ───────────────────────── */
+/** CNPJ/CPF único por empresa (o banco também garante: índice único empresa + documento). */
+async function documentoEmUso(empresaId: string, documento: string | null | undefined, exceto?: string) {
+  if (!documento) return null;
+  return prisma.fornecedor.findFirst({ where: { empresaId, documento, ...(exceto && { id: { not: exceto } }) }, select: { nome: true, ativo: true } });
+}
+const msgDocumento = (f: { nome: string; ativo: boolean }) =>
+  `Já existe um fornecedor com este CNPJ/CPF: “${f.nome}”${f.ativo ? "" : " (inativo — reative-o em vez de cadastrar de novo)"}.`;
+
+const fornecedores: RegrasCadastro = {
+  async criar(dados, ator) {
+    const d = dados as { nome: string; documento: string | null };
+    const dup = await documentoEmUso(ator.empresaId, d.documento);
+    if (dup) return falha(409, msgDocumento(dup));
+    const item = await prisma.fornecedor.create({ data: { ...(dados as any), empresaId: ator.empresaId, ativo: true } });
+    return { ok: true, item };
+  },
+  async editar(existente, dados, ator) {
+    const d = dados as { documento?: string | null };
+    if (d.documento !== undefined && d.documento !== existente.documento) {
+      const dup = await documentoEmUso(ator.empresaId, d.documento, existente.id);
+      if (dup) return falha(409, msgDocumento(dup));
+    }
+    const item = await prisma.fornecedor.update({ where: { id: existente.id }, data: dados as any });
+    return { ok: true, item };
+  },
+  async impacto(f, empresaId) {
+    const [total, abertas] = await Promise.all([
+      prisma.contaPagar.count({ where: { empresaId, fornecedorId: f.id } }),
+      prisma.contaPagar.count({ where: { empresaId, fornecedorId: f.id, status: { notIn: ["PAGO_TOTAL", "CANCELADO"] } } }),
+    ]);
+    const avisos = total
+      ? [`Usado em ${pl(total, "conta a pagar", "contas a pagar")}${abertas ? ` (${pl(abertas, "em aberto", "em aberto")})` : ""}. Elas continuam ligadas a ele (aparece como “inativo”); ele só deixa de ser oferecido em contas novas.`]
+      : [];
+    return { usos: [{ rotulo: pl(total, "conta a pagar", "contas a pagar"), total }], avisos };
+  },
+};
+
 export const REGRAS: Partial<Record<EntidadeCadastro, RegrasCadastro>> = {
   "perfis-acesso": perfis,
   "modelos-encargos": modelos,
@@ -361,4 +399,5 @@ export const REGRAS: Partial<Record<EntidadeCadastro, RegrasCadastro>> = {
   "tabelas-preco": tabelasPreco,
   "termos-referencia": termos,
   "modelos-prazo": modelosPrazo,
+  fornecedores,
 };

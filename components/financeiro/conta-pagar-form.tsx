@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { LABELS_FORMA_PAGAMENTO } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,8 +20,7 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
   const [pedidos, setPedidos] = useState<any[]>([]);
 
   const [form, setForm] = useState({
-    fornecedor: initialData?.fornecedor ?? "",
-    fornecedorCnpj: initialData?.fornecedorCnpj ?? "",
+    fornecedorId: initialData?.fornecedorId ?? "",
     descricao: initialData?.descricao ?? "",
     valorTotal: initialData?.valorTotal != null ? String(initialData.valorTotal) : "",
     dataVencimento: initialData?.dataVencimento ? String(initialData.dataVencimento).slice(0, 10) : "",
@@ -31,6 +31,8 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
     categoriaId: initialData?.categoriaId ?? "",
   });
   const upd = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  // Conta antiga cujo fornecedor (texto) não casou com nenhum cadastro: mostra o texto e pede a escolha
+  const textoAntigo = isEditing && !initialData?.fornecedorId && initialData?.fornecedor ? String(initialData.fornecedor) : null;
 
   useEffect(() => {
     if (isEditing) return;
@@ -39,7 +41,7 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
 
   async function salvar() {
     setErro("");
-    if (!form.fornecedor.trim()) { setErro("Fornecedor é obrigatório."); return; }
+    if (!form.fornecedorId && !textoAntigo) { setErro("Escolha o fornecedor."); return; }
     if (!form.descricao.trim()) { setErro("Descrição é obrigatória."); return; }
     if (!form.valorTotal || Number(form.valorTotal) <= 0) { setErro("Informe um valor válido."); return; }
     setSalvando(true);
@@ -50,7 +52,8 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
-          fornecedorCnpj: form.fornecedorCnpj || null,
+          // Só manda o fornecedor quando há um escolhido (conta antiga sem cadastro segue com o texto)
+          fornecedorId: form.fornecedorId || undefined,
           dataVencimento: form.dataVencimento || null,
           formaPagamento: form.formaPagamento || null,
           banco: form.banco || null,
@@ -71,10 +74,18 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
 
       <div className="bg-white rounded-2xl shadow-card border border-surface-border p-5 sm:p-6 space-y-8">
         <FormSection title="Fornecedor">
-          <FormGrid>
-            <FormField label="Fornecedor" required><Input value={form.fornecedor} onChange={(e) => upd("fornecedor", e.target.value)} /></FormField>
-            <FormField label="CNPJ"><Input value={form.fornecedorCnpj} onChange={(e) => upd("fornecedorCnpj", e.target.value)} placeholder="00.000.000/0000-00" /></FormField>
-          </FormGrid>
+          <FormField label="Fornecedor" required>
+            {/* Só ativos para nova escolha; o fornecedor atual segue visível mesmo inativo (“(inativo)”) */}
+            <SeletorCadastro entidade="fornecedores" valor={form.fornecedorId} vazio={textoAntigo ? "Escolha o fornecedor…" : "Selecione o fornecedor…"} onChange={(v) => upd("fornecedorId", v)} />
+            {textoAntigo && !form.fornecedorId && (
+              <p className="text-xs text-amber-700 mt-1" data-fornecedor-antigo>
+                Fornecedor antigo: “{textoAntigo}”{initialData?.fornecedorCnpj ? ` (${initialData.fornecedorCnpj})` : ""} — sem cadastro. Escolha o fornecedor para ligar esta conta.
+              </p>
+            )}
+            <p className="text-xs text-ink-muted mt-1">
+              Não está na lista? <Link href="/financeiro/fornecedores" target="_blank" className="text-primary-600 hover:underline">Cadastre o fornecedor</Link> e recarregue esta tela.
+            </p>
+          </FormField>
           <FormGrid>
             <FormField label="Descrição" required><Input value={form.descricao} onChange={(e) => upd("descricao", e.target.value)} placeholder="Ex: Compra de peças" /></FormField>
             <FormField label="Categoria" hint="Categorias em Configurações › Financeiro › Categorias">

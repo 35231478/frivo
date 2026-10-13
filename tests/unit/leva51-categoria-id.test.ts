@@ -61,6 +61,7 @@ function semear() {
       { id: "cp1", empresaId: "e1", numero: "CP-2026-0001", fornecedor: "Frigelar", descricao: "Gás", valorTotal: 300, valorPago: 0, saldoRestante: 300, status: "PENDENTE", categoriaId: "cat-pecas" },
     ],
     pagamentoContaPagar: [],
+    fornecedor: [{ id: "forn1", empresaId: "e1", nome: "Frigelar", documento: null, ativo: true }],
     medicao: [],
   };
 }
@@ -126,7 +127,7 @@ describe("renomear a categoria mantém as contas ligadas", () => {
 
 // ═════════════════════════ Conta a pagar ═════════════════════════
 describe("conta a pagar agora tem categoria", () => {
-  const base = { fornecedor: "Frigelar", descricao: "Compressor", valorTotal: 900 };
+  const base = { fornecedorId: "forn1", descricao: "Compressor", valorTotal: 900 }; // Leva 5.2: fornecedor pelo cadastro
   it("criar com categoria (por id), listar com a categoria, editar trocando de categoria", async () => {
     const r = await chamar(pagar, "POST", {}, { ...base, categoriaId: "cat-avulso" });
     expect(r.status).toBe(201);

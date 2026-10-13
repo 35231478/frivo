@@ -37,6 +37,7 @@ export const EXECUTORES: Record<Entidade, Partial<Record<AcaoItem, (id: string, 
   "tabelas-preco": cadastro("tabelas-preco"),
   "termos-referencia": cadastro("termos-referencia"),
   "modelos-prazo": cadastro("modelos-prazo"),
+  fornecedores: cadastro("fornecedores"),
 };
 
 /** Cadastros padronizados: a mesma regra única de ativar/inativar da rota /api/cadastros. */
@@ -75,7 +76,7 @@ export async function rotulos(entidade: Entidade, ids: string[], empresaId: stri
       pares = (await prisma.tecnico.findMany({ where, select: { id: true, nome: true } })).map((r) => [r.id, r.nome]);
       break;
     case "produtos": case "servicos": case "cargos": case "categorias-financeiras": case "perfis-acesso": case "modelos-encargos":
-    case "tipos-equipamento": case "tabelas-preco": case "termos-referencia": case "modelos-prazo":
+    case "tipos-equipamento": case "tabelas-preco": case "termos-referencia": case "modelos-prazo": case "fornecedores":
       pares = await rotulosCadastro(entidade, ids, empresaId);
       break;
   }
@@ -126,7 +127,7 @@ export async function idsDoFiltro(entidade: Entidade, filtro: string, empresaId:
       return pegar(prisma.tecnico.findMany({ where, select: { id: true }, take }), prisma.tecnico.count({ where }));
     }
     case "produtos": case "servicos": case "cargos": case "categorias-financeiras": case "perfis-acesso": case "modelos-encargos":
-    case "tipos-equipamento": case "tabelas-preco": case "termos-referencia": case "modelos-prazo":
+    case "tipos-equipamento": case "tabelas-preco": case "termos-referencia": case "modelos-prazo": case "fornecedores":
       return idsCadastro(entidade, sp, empresaId, MAX_SELECAO);
   }
 }
@@ -205,7 +206,7 @@ export async function linhasExportacao(entidade: Entidade, ids: string[], empres
           r.especialidades.join(", "), d(r.dataAdmissao), r.ativo ? r.statusColaborador : "INATIVO"])];
     }
     case "produtos": case "servicos": case "cargos": case "categorias-financeiras": case "perfis-acesso": case "modelos-encargos":
-    case "tipos-equipamento": case "tabelas-preco": case "termos-referencia": case "modelos-prazo":
+    case "tipos-equipamento": case "tabelas-preco": case "termos-referencia": case "modelos-prazo": case "fornecedores":
       return linhasCadastro(entidade, ids, empresaId);
   }
 }

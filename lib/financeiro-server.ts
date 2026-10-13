@@ -297,6 +297,9 @@ export async function recalcularContaPagar(contaPagarId: string) {
   });
 }
 
+/** Nome para comparar fornecedores: minúsculas, sem espaços nas pontas nem repetidos (igual ao SQL). */
+export const normalizarNome = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
+
 /** Cria (idempotente) uma conta a pagar a partir de um pedido de compra interno. */
 export async function gerarContaPagarDoPedido(pedidoCompraId: string) {
   const existente = await prisma.contaPagar.findFirst({ where: { pedidoCompraId } });
@@ -313,6 +316,10 @@ export async function gerarContaPagarDoPedido(pedidoCompraId: string) {
     0,
   );
   const fornecedor = pedido.itens.find((i) => i.fornecedor)?.fornecedor ?? "Fornecedor a definir";
+  // Liga ao cadastro quando o nome do item bate com um fornecedor ATIVO da empresa (mesma regra da
+  // migração: maiúsculas e espaços não contam); senão fica só o texto, como sempre foi.
+  const cadastrado = (await prisma.fornecedor.findMany({ where: { empresaId: pedido.empresaId, ativo: true }, select: { id: true, nome: true, documento: true } }))
+    .find((f) => normalizarNome(f.nome) === normalizarNome(fornecedor));
   const ano = new Date().getFullYear();
   const numero = await proximoNumeroContaPagar(pedido.empresaId, ano);
 
@@ -320,7 +327,9 @@ export async function gerarContaPagarDoPedido(pedidoCompraId: string) {
     data: {
       empresaId: pedido.empresaId,
       numero,
-      fornecedor,
+      fornecedor: cadastrado?.nome ?? fornecedor,
+      fornecedorId: cadastrado?.id ?? null,
+      fornecedorCnpj: cadastrado?.documento ?? null,
       descricao: `Pedido de compra ${pedido.numero}`,
       valorTotal,
       valorPago: 0,
