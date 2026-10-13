@@ -162,10 +162,13 @@ describe("lib/listagem (peças puras)", () => {
   });
 
   it("sugestões: no máximo 5; igual > começa com > palavra > contém; sem acento", () => {
-    const s = ["Manutenção corretiva", "Gás R22", "Recarga de gás", "GAS", "Gasoduto", "Tubo", "Gás R410A", "Regás"].map((r, i) => ({ id: String(i), rotulo: r }));
+    const s = ["Manutenção corretiva", "Gás R22", "Recarga de gás", "GAS", "Gasoduto", "Tubo", "Gás R410A", "Regás", "Água com gás"].map((r, i) => ({ id: String(i), rotulo: r }));
     const r = ranquearSugestoes(s, "gas");
     expect(r).toHaveLength(5);
-    expect(r.map((x) => x.rotulo)).toEqual(["GAS", "Gás R22", "Gás R410A", "Gasoduto", "Recarga de gás"]);
+    // "Começa com" vem antes de "uma palavra começa com", mesmo que a ordem alfabética diga o contrário
+    expect(r.map((x) => x.rotulo)).toEqual(["GAS", "Gás R22", "Gás R410A", "Gasoduto", "Água com gás"]);
+    // Depois: palavra começa > só contém > achada por outro campo (sem o termo no nome)
+    expect(ranquearSugestoes(s, "gas", 9).map((x) => x.rotulo).slice(4)).toEqual(["Água com gás", "Recarga de gás", "Regás", "Manutenção corretiva", "Tubo"]);
     expect(pontuar("Regás", "gas")).toBe(1);
     expect(pontuar("Tubo", "gas")).toBe(0);
   });
@@ -357,6 +360,11 @@ describe("listas renderizadas no servidor", () => {
   it("OS: paginada (página 3 mostra 101–130); empresa da sessão", async () => {
     const h = await html(() => import("@/app/(dashboard)/ordens/page"), "pagina=3");
     expect(h).toContain("101–130");
+    // As OS da página 3 (as mais antigas), não as 100 primeiras
+    expect(h).toContain("OS-0130");
+    expect(h).toContain("OS-0101");
+    expect(h).not.toContain("OS-0100");
+    expect(h).not.toContain("OS-0001");
     expect(h).toContain("data-pagina=\"3\"");
     logar(permissoesTotais(), "e2");
     const b = await html(() => import("@/app/(dashboard)/ordens/page"), "");
