@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { respostaRefEmpresa, validarCategoriaFinanceira } from "@/lib/ref-empresa";
+import { categoriaParaGravar, respostaRefEmpresa } from "@/lib/ref-empresa";
 import { z } from "zod";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { proximoNumeroContaReceber } from "@/lib/financeiro-server";
@@ -8,7 +8,8 @@ import { proximoNumeroContaReceber } from "@/lib/financeiro-server";
 const schema = z.object({
   clienteId: z.string().min(1, "Cliente é obrigatório"),
   descricao: z.string().min(1, "Descrição é obrigatória"),
-  categoria: z.string().optional().nullable(),
+  // Categoria financeira pelo ID (o nome não é mais aceito: renomear a categoria desligava as contas)
+  categoriaId: z.string().optional().nullable(),
   valor: z.preprocess((v) => (v === "" || v == null ? undefined : Number(v)), z.number().positive("Valor deve ser maior que zero")),
   dataVencimento: z.string().optional().nullable(),
   formaPagamento: z.enum(["BOLETO", "PIX", "TRANSFERENCIA", "DINHEIRO", "CARTAO", "CHEQUE"]).optional().nullable(),
@@ -28,7 +29,8 @@ export async function POST(req: NextRequest) {
   const cliente = await prisma.cliente.findFirst({ where: { id: d.clienteId, empresaId }, select: { cpfCnpj: true } });
   if (!cliente) return NextResponse.json({ erro: "Cliente não encontrado" }, { status: 404 });
 
-  try { await validarCategoriaFinanceira(d.categoria, empresaId); }
+  let categoria: Awaited<ReturnType<typeof categoriaParaGravar>>;
+  try { categoria = await categoriaParaGravar(d.categoriaId, empresaId); }
   catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
   const numero = await proximoNumeroContaReceber(empresaId, new Date().getFullYear());
@@ -38,7 +40,8 @@ export async function POST(req: NextRequest) {
       clienteId: d.clienteId,
       numero,
       descricao: d.descricao,
-      categoria: d.categoria || null,
+      categoriaId: categoria.categoriaId ?? null,
+      categoria: categoria.nome ?? null,
       valor: d.valor,
       status: "A_RECEBER",
       dataVencimento: d.dataVencimento ? new Date(d.dataVencimento) : null,

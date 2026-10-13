@@ -43,7 +43,7 @@ export default async function ContasReceberPage({
   ]);
 
   const view: ContaView[] = contas.map((c) => ({
-    id: c.id, numero: c.numero, descricao: c.descricao, categoria: c.categoria, valor: Number(c.valor),
+    id: c.id, numero: c.numero, descricao: c.descricao, categoriaId: c.categoriaId, categoria: c.categoria, valor: Number(c.valor),
     dataVencimento: c.dataVencimento ? c.dataVencimento.toISOString() : null,
     dataRecebimento: c.dataRecebimento ? c.dataRecebimento.toISOString() : null,
     status: c.status, banco: c.banco, formaPagamento: c.formaPagamento,

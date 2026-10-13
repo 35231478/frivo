@@ -79,11 +79,14 @@ function semear() {
     { id: "t3", empresaId: "e1", nome: "Caio", ativo: false, cargoId: "cargos-A" }, // inativo não conta
     { id: "tI", empresaId: "e1", nome: "Duda", ativo: true, cargoId: "cargos-I", cpf: "11111111111" }, // usa cargo INATIVO
   ];
+  // Leva 5.1: a conta aponta para a categoria pelo ID (o nome fica só como histórico)
   db.t.contaReceber = [
-    { id: "cr1", empresaId: "e1", categoria: "Contrato mensal" }, { id: "cr2", empresaId: "e1", categoria: "Contrato mensal" },
-    { id: "crI", empresaId: "e1", categoria: "Contrato mensal antigo", descricao: "Antiga", valor: 10, status: "A_RECEBER" },
-    { id: "crB", empresaId: "e2", categoria: "Contrato mensal" },
+    { id: "cr1", empresaId: "e1", categoriaId: "categorias-financeiras-A", categoria: "Contrato mensal" },
+    { id: "cr2", empresaId: "e1", categoriaId: "categorias-financeiras-A", categoria: "Contrato mensal" },
+    { id: "crI", empresaId: "e1", categoriaId: "categorias-financeiras-I", categoria: "Contrato mensal antigo", descricao: "Antiga", valor: 10, status: "A_RECEBER" },
+    { id: "crB", empresaId: "e2", categoriaId: "categorias-financeiras-B", categoria: "Contrato mensal" },
   ];
+  db.t.contaPagar = [];
 }
 
 beforeEach(() => { semear(); logar(); });
@@ -213,7 +216,7 @@ describe("impacto antes de inativar", () => {
   it("cargo: conta só colaboradores ativos", async () => {
     expect((await ver("cargos")).avisos[0]).toBe("Em uso: 2 colaboradores ativos.");
   });
-  it("categoria: conta as contas a receber pelo NOME, só da empresa", async () => {
+  it("categoria: conta as contas a receber pelo ID (Leva 5.1), só da empresa", async () => {
     expect((await ver("categorias-financeiras")).avisos[0]).toBe("Em uso: 2 contas a receber.");
   });
   it("sem uso: avisa que não está em uso", async () => {
@@ -293,9 +296,10 @@ describe("servidor: escolha NOVA de cadastro inativo é recusada; manter o valor
   });
   it("conta a receber: categoria nova inativa = 400; manter a inativa que já tinha = 200; de outra empresa = 400", async () => {
     const conta = () => import("@/app/api/contas-receber/[id]/route");
-    expect((await chamar(conta, "PUT", { id: "cr1" }, { categoria: "Contrato mensal antigo" })).json.erro).toBe("Categoria inválida ou inativa.");
-    expect((await chamar(conta, "PUT", { id: "crI" }, { categoria: "Contrato mensal antigo", descricao: "Antiga 2" })).status).toBe(200);
-    expect((await chamar(conta, "PUT", { id: "cr1" }, { categoria: "Contrato mensal da outra" })).status).toBe(400);
+    // Leva 5.1: por ID
+    expect((await chamar(conta, "PUT", { id: "cr1" }, { categoriaId: "categorias-financeiras-I" })).json.erro).toBe("Categoria financeira inativo(a): escolha um(a) ativo(a).");
+    expect((await chamar(conta, "PUT", { id: "crI" }, { categoriaId: "categorias-financeiras-I", descricao: "Antiga 2" })).status).toBe(200);
+    expect((await chamar(conta, "PUT", { id: "cr1" }, { categoriaId: "categorias-financeiras-B" })).status).toBe(400);
   });
   it("pedido de compra: produto inativo ou de outra empresa = 400", async () => {
     const pedidos = () => import("@/app/api/pedidos-compra/route");

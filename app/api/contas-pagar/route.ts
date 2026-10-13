@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { contaPagarSchema } from "@/lib/validations";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { proximoNumeroContaPagar } from "@/lib/financeiro-server";
+import { categoriaParaGravar, respostaRefEmpresa } from "@/lib/ref-empresa";
 
 export async function GET() {
   const guard = await exigirPermissao("financeiro", "visualizar");
@@ -11,7 +12,7 @@ export async function GET() {
 
   const contas = await prisma.contaPagar.findMany({
     where: { empresaId },
-    include: { pedidoCompra: { select: { numero: true } } },
+    include: { pedidoCompra: { select: { numero: true } }, categoriaFinanceira: { select: { id: true, nome: true, cor: true, ativo: true } } },
     orderBy: [{ dataVencimento: "asc" }, { criadoEm: "desc" }],
     take: 300,
   });
@@ -26,6 +27,10 @@ export async function POST(req: NextRequest) {
   const parsed = contaPagarSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
   const d = parsed.data;
+
+  let categoria: Awaited<ReturnType<typeof categoriaParaGravar>>;
+  try { categoria = await categoriaParaGravar(d.categoriaId, empresaId); }
+  catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
   const numero = await proximoNumeroContaPagar(empresaId, new Date().getFullYear());
   const conta = await prisma.contaPagar.create({
@@ -44,6 +49,7 @@ export async function POST(req: NextRequest) {
       banco: d.banco || null,
       pedidoCompraId: d.pedidoCompraId || null,
       observacao: d.observacao || null,
+      categoriaId: categoria.categoriaId ?? null,
     },
   });
   return NextResponse.json(conta, { status: 201 });

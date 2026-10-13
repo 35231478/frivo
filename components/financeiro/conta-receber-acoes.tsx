@@ -11,10 +11,11 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid } from "@/components/ui/form-field";
 import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
+import { categoriaDaConta } from "@/lib/financeiro/categoria";
 import { MessageCircle, MessageSquare, Mail, FileText, CheckCircle2, Eye, Settings, Download, Ban, MoreVertical, Pencil } from "lucide-react";
 
 interface Conta {
-  id: string; numero: string; descricao: string; categoria?: string | null; valor: number;
+  id: string; numero: string; descricao: string; categoriaId?: string | null; categoria?: string | null; valor: number;
   dataVencimento: string | null; status: string; banco: string | null;
   clienteNome: string; whatsapp: string | null; email: string | null;
   notificacaoEnviadaEm?: string | null;
@@ -27,6 +28,7 @@ interface Conta {
 }
 
 export function ContaReceberAcoes({ conta, categorias = [] }: { conta: Conta; categorias?: { id: string; nome: string; cor: string; ativo: boolean }[] }) {
+  const categoriaExibida = categoriaDaConta(conta, categorias);
   const router = useRouter();
   const [modal, setModal] = useState<null | "whatsapp" | "email" | "pagar" | "detalhes" | "editar" | "boletoEmitir" | "boletoConfig" | "boletoEmitido">(null);
   const [menu, setMenu] = useState(false);
@@ -138,7 +140,7 @@ export function ContaReceberAcoes({ conta, categorias = [] }: { conta: Conta; ca
         <dl className="text-sm space-y-2">
           <Linha rotulo="Cliente" valor={conta.clienteNome} />
           <Linha rotulo="Descrição" valor={conta.descricao} />
-          {conta.categoria && <Linha rotulo="Categoria" valor={conta.categoria} />}
+          {categoriaExibida && <Linha rotulo="Categoria" valor={`${categoriaExibida.nome}${categoriaExibida.semCadastro ? " (sem cadastro)" : !categoriaExibida.ativo ? " (inativa)" : ""}`} />}
           <Linha rotulo="Valor" valor={formatarMoeda(conta.valor)} />
           <Linha rotulo="Vencimento" valor={venc} />
           <Linha rotulo="Banco" valor={conta.banco ?? "—"} />
@@ -163,7 +165,9 @@ export function ContaReceberAcoes({ conta, categorias = [] }: { conta: Conta; ca
 
 function EditarCobranca({ conta, categorias, onPronto }: { conta: Conta; categorias: { id: string; nome: string; cor: string; ativo: boolean }[]; onPronto: () => void }) {
   const [descricao, setDescricao] = useState(conta.descricao);
-  const [categoria, setCategoria] = useState(conta.categoria ?? "");
+  const [categoriaId, setCategoriaId] = useState(conta.categoriaId ?? "");
+  // Conta antiga cujo nome não casou com nenhuma categoria: mostra o texto e pede a escolha
+  const textoAntigo = !conta.categoriaId && conta.categoria ? conta.categoria : null;
   const [valor, setValor] = useState(String(conta.valor));
   const [vencimento, setVencimento] = useState(conta.dataVencimento ? conta.dataVencimento.slice(0, 10) : "");
   const [banco, setBanco] = useState(conta.banco ?? "");
@@ -175,7 +179,11 @@ function EditarCobranca({ conta, categorias, onPronto }: { conta: Conta; categor
     try {
       const res = await fetch(`/api/contas-receber/${conta.id}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ descricao, categoria: categoria || null, valor: Number(valor), dataVencimento: vencimento || null, banco: banco || null }),
+        body: JSON.stringify({
+          descricao, valor: Number(valor), dataVencimento: vencimento || null, banco: banco || null,
+          // Categoria pelo ID, só se mudou (editar outra coisa não apaga o texto antigo de quem não tem vínculo)
+          ...(categoriaId !== (conta.categoriaId ?? "") && { categoriaId: categoriaId || null }),
+        }),
       });
       if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao salvar."); return; }
       onPronto();
@@ -189,7 +197,10 @@ function EditarCobranca({ conta, categorias, onPronto }: { conta: Conta; categor
       <FormGrid>
         <FormField label="Categoria">
           {/* Só ativas para nova escolha; a categoria atual segue visível mesmo inativa */}
-          <SeletorCadastro entidade="categorias-financeiras" itens={categorias} valor={categoria} vazio="Sem categoria" onChange={setCategoria} />
+          <SeletorCadastro entidade="categorias-financeiras" itens={categorias} valor={categoriaId} vazio={textoAntigo ? "Escolha a categoria…" : "Sem categoria"} onChange={setCategoriaId} />
+          {textoAntigo && !categoriaId && (
+            <p className="text-xs text-amber-700 mt-1" data-categoria-antiga>Categoria antiga: “{textoAntigo}” (sem cadastro). Escolha uma categoria para ligar esta conta.</p>
+          )}
         </FormField>
         <FormField label="Valor"><Input type="number" step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} /></FormField>
       </FormGrid>

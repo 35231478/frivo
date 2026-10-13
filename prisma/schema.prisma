@@ -1951,16 +1951,21 @@ model ContaReceber {
   boletoVencimento     DateTime?     @map("boleto_vencimento")
   boletoStatus         BoletoStatus? @map("boleto_status")
 
+  // Categoria financeira: o vínculo é o ID (Leva 5.1). `categoria` (nome) fica como histórico/fallback
+  // das contas antigas cujo nome não casou com nenhuma categoria cadastrada.
+  categoriaId  String?  @map("categoria_id")
   categoria    String?
   observacao   String?
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  empresa   Empresa    @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  cliente   Cliente    @relation(fields: [clienteId], references: [id])
-  medicao   Medicao?   @relation(fields: [medicaoId], references: [id])
-  orcamento Orcamento? @relation(fields: [orcamentoId], references: [id])
+  empresa             Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  cliente             Cliente              @relation(fields: [clienteId], references: [id])
+  medicao             Medicao?             @relation(fields: [medicaoId], references: [id])
+  orcamento           Orcamento?           @relation(fields: [orcamentoId], references: [id])
+  categoriaFinanceira CategoriaFinanceira? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
 
+  @@index([categoriaId])
   @@index([empresaId, clienteId])
   @@index([empresaId, status, dataVencimento])
   @@index([empresaId, boletoStatus, dataRecebimento])
@@ -1977,7 +1982,9 @@ model CategoriaFinanceira {
   ativo     Boolean  @default(true)
   criadoEm  DateTime @default(now()) @map("criado_em")
 
-  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  empresa       Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  contasReceber ContaReceber[]
+  contasPagar   ContaPagar[]
 
   @@map("categorias_financeiras")
 }
@@ -1998,15 +2005,19 @@ model ContaPagar {
   formaPagamento FormaPagamento?  @map("forma_pagamento")
   banco          String?
   pedidoCompraId String?          @map("pedido_compra_id")
+  // Categoria financeira (Leva 5.1): conta a pagar não tinha categoria; passa a ter, por ID
+  categoriaId    String?          @map("categoria_id")
   observacao     String?
   criadoEm       DateTime         @default(now()) @map("criado_em")
   atualizadoEm   DateTime         @updatedAt @map("atualizado_em")
 
-  empresa      Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  pedidoCompra PedidoCompraInterno?  @relation(fields: [pedidoCompraId], references: [id])
-  pagamentos   PagamentoContaPagar[]
+  empresa             Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  pedidoCompra        PedidoCompraInterno?  @relation(fields: [pedidoCompraId], references: [id])
+  categoriaFinanceira CategoriaFinanceira?  @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  pagamentos          PagamentoContaPagar[]
 
   @@unique([numero, empresaId])
+  @@index([categoriaId])
   @@index([empresaId, status])
   @@map("contas_pagar")
 }

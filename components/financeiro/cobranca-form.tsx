@@ -19,7 +19,7 @@ export function CobrancaForm() {
 
   const [clienteId, setClienteId] = useState("");
   const [descricao, setDescricao] = useState("");
-  const [categoria, setCategoria] = useState("");
+  const [categoriaId, setCategoriaId] = useState("");
   const [valor, setValor] = useState("");
   const [vencimento, setVencimento] = useState("");
   const [forma, setForma] = useState("");
@@ -35,7 +35,7 @@ export function CobrancaForm() {
     try {
       const res = await fetch("/api/contas-receber", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clienteId, descricao, categoria: categoria || null, valor: Number(valor), dataVencimento: vencimento || null, formaPagamento: forma || null, banco: banco || null, observacao: obs || null }),
+        body: JSON.stringify({ clienteId, descricao, categoriaId: categoriaId || null, valor: Number(valor), dataVencimento: vencimento || null, formaPagamento: forma || null, banco: banco || null, observacao: obs || null }),
       });
       if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao criar cobrança."); return; }
       router.push("/financeiro/contas-receber");
@@ -54,7 +54,7 @@ export function CobrancaForm() {
           <FormGrid>
             <FormField label="Descrição / referência" required><Input value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Ex: Serviço de manutenção" /></FormField>
             <FormField label="Categoria">
-              <SeletorCadastro entidade="categorias-financeiras" valor={categoria} vazio="Sem categoria" onChange={setCategoria} />
+              <SeletorCadastro entidade="categorias-financeiras" valor={categoriaId} vazio="Sem categoria" onChange={setCategoriaId} />
             </FormField>
           </FormGrid>
           <FormGrid cols={3}>

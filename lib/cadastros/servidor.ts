@@ -82,7 +82,7 @@ function juntar(partes: string[]) {
   return partes.length <= 1 ? partes.join("") : `${partes.slice(0, -1).join(", ")} e ${partes[partes.length - 1]}`;
 }
 
-async function contarUsos(entidade: EntidadeCadastro, id: string, nome: string, empresaId: string): Promise<Uso[]> {
+async function contarUsos(entidade: EntidadeCadastro, id: string, empresaId: string): Promise<Uso[]> {
   switch (entidade) {
     case "produtos": {
       const [orc, med, ped, tab] = await Promise.all([
@@ -113,9 +113,12 @@ async function contarUsos(entidade: EntidadeCadastro, id: string, nome: string, 
       return [{ rotulo: pl(n, "colaborador ativo", "colaboradores ativos"), total: n }];
     }
     case "categorias-financeiras": {
-      // A conta a receber guarda o NOME da categoria
-      const n = await prisma.contaReceber.count({ where: { empresaId, categoria: nome } });
-      return [{ rotulo: pl(n, "conta a receber", "contas a receber"), total: n }];
+      // As contas apontam para a categoria pelo ID (renomear não muda a contagem)
+      const [rec, pag] = await Promise.all([
+        prisma.contaReceber.count({ where: { empresaId, categoriaId: id } }),
+        prisma.contaPagar.count({ where: { empresaId, categoriaId: id } }),
+      ]);
+      return [{ rotulo: pl(rec, "conta a receber", "contas a receber"), total: rec }, { rotulo: pl(pag, "conta a pagar", "contas a pagar"), total: pag }];
     }
      default:
       return [];
@@ -136,7 +139,7 @@ export async function impactoCadastro(entidade: EntidadeCadastro, id: string, em
     const e = await regras.impacto(r as Registro, empresaId);
     return { bloqueio, avisos: e.avisos.length ? e.avisos : ["Não está em uso em nenhum registro."], usos: e.usos.filter((u) => u.total > 0) };
   }
-  const usos = (await contarUsos(entidade, id, String(r.nome ?? ""), empresaId)).filter((u) => u.total > 0);
+  const usos = (await contarUsos(entidade, id, empresaId)).filter((u) => u.total > 0);
   const o = def.feminino ? "a" : "o";
   const avisos = usos.length
     ? [

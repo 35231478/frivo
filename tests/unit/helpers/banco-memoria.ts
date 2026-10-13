@@ -89,7 +89,7 @@ export function criarPrisma(db: Banco, relacoes: Relacoes = {}, aninhadas: Aninh
     update: async ({ where, data, include, select }: any) => {
       const r = T(m).find((x) => casa(x, where));
       if (!r) throw naoAchou();
-      for (const [k, v] of Object.entries(data ?? {})) if (!ehObjeto(v)) r[k] = v; // relações aninhadas: só as declaradas
+      for (const [k, v] of Object.entries(data ?? {})) if (v !== undefined && !ehObjeto(v)) r[k] = v; // undefined = não mexe (como o Prisma); relações aninhadas: só as declaradas
       escrever(m, "update", r); gravarFilhos(m, r, data ?? {}); return projetar(hidratar(m, r), include ?? select);
     },
     upsert: async ({ where, create, update }: any) => {
