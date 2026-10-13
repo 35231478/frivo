@@ -97,15 +97,15 @@ async function contarUsos(entidade: EntidadeCadastro, id: string, empresaId: str
       ];
     }
     case "servicos": {
-      const [orc, med, tab, ctr] = await Promise.all([
+      // Contrato não escolhe mais serviços da NFS-e (servicosNFSeIds deixou de ser usado): não conta
+      const [orc, med, tab] = await Promise.all([
         prisma.orcamento.count({ where: { empresaId, servicos: { some: { servicoId: id } } } }),
         prisma.medicao.count({ where: { empresaId, itens: { some: { servicoId: id } } } }),
         prisma.tabelaPreco.count({ where: { empresaId, itens: { some: { servicoId: id } } } }),
-        prisma.contrato.count({ where: { empresaId, servicosNFSeIds: { has: id } } }),
       ]);
       return [
         { rotulo: pl(orc, "orçamento", "orçamentos"), total: orc }, { rotulo: pl(med, "medição", "medições"), total: med },
-        { rotulo: pl(tab, "tabela de preço", "tabelas de preço"), total: tab }, { rotulo: pl(ctr, "contrato (NFS-e)", "contratos (NFS-e)"), total: ctr },
+        { rotulo: pl(tab, "tabela de preço", "tabelas de preço"), total: tab },
       ];
     }
     case "cargos": {

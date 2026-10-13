@@ -210,8 +210,8 @@ describe("impacto antes de inativar", () => {
     expect(r.avisos[0]).toBe("Em uso: 2 orçamentos, 1 medição e 1 pedido de compra.");
     expect(r.bloqueio).toBeNull();
   });
-  it("serviço: inclui contratos que o usam na NFS-e", async () => {
-    expect((await ver("servicos")).avisos[0]).toBe("Em uso: 1 orçamento e 2 contratos (NFS-e).");
+  it("serviço: conta orçamentos; os serviços da NFS-e do contrato não contam mais (a NFS-e saiu do contrato)", async () => {
+    expect((await ver("servicos")).avisos[0]).toBe("Em uso: 1 orçamento.");
   });
   it("cargo: conta só colaboradores ativos", async () => {
     expect((await ver("cargos")).avisos[0]).toBe("Em uso: 2 colaboradores ativos.");
