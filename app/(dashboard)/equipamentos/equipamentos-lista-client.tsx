@@ -1,7 +1,7 @@
 "use client";
 
 import { CheckboxLinha, CheckboxPagina, useAcoesMassaDisponiveis } from "@/components/acoes-massa/selecao";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ambienteEquipamento, descricaoEquipamento, fabricanteModelo } from "@/lib/equipamento-descricao";
@@ -18,7 +18,7 @@ import { TipoIcone } from "@/components/equipamentos/tipo-equipamento";
 import { GarantiaSelo, StatusSelo } from "@/components/equipamentos/selos";
 import type { FiltrosListagem, OrdemListagem } from "@/lib/equipamento-listagem";
 import { useListagemUrl } from "@/components/listagem/use-listagem-url";
-import { AlternarVisao, CampoBusca, ChipResumo, MultiSelect, Paginacao, SelectFiltro, ThOrd } from "@/components/listagem/listagem-ui";
+import { AlternarVisao, CampoBusca, sugerirPorUrl, ChipResumo, MultiSelect, Paginacao, SelectFiltro, ThOrd } from "@/components/listagem/listagem-ui";
 
 export type EquipLinha = {
   id: string;
@@ -81,6 +81,8 @@ export function EquipamentosListaClient({ itens, total, filtros: f, opcoes, resu
   const podeEditar = pode("equipamentos", "editar");
   // URL = fonte da verdade; filtros salvos e visão lista/cards (mesmo hook da listagem de Veículos)
   const { visao, trocarVisao, busca, setBusca, navegar, limpar, pendente } = useListagemUrl({ chave: "equipamentos", qAtual: f.q });
+  const roteador = useRouter();
+  const sugerir = useMemo(() => sugerirPorUrl("/api/listas/sugestoes?lista=equipamentos"), []);
   const [maisAberto, setMaisAberto] = useState(!!(f.qr || f.fluido));
   const [filtrosMobile, setFiltrosMobile] = useState(false);
 
@@ -143,7 +145,7 @@ export function EquipamentosListaClient({ itens, total, filtros: f, opcoes, resu
       {/* ── Busca + filtros ── */}
       <div className="bg-white border border-surface-border rounded-xl p-3 sm:p-4 space-y-3">
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2">
-          <CampoBusca valor={busca} onChange={setBusca} placeholder="Buscar nome, modelo, marca, nº série, TAG, cliente, setor…" />
+          <CampoBusca valor={busca} onChange={setBusca} carregando={pendente} sugerir={sugerir} onEscolher={(s) => s.href && roteador.push(s.href)} placeholder="Buscar nome, modelo, marca, nº série, TAG, cliente, setor…" />
           <div className="flex items-center gap-2">
             <Building2 className="w-4 h-4 text-ink-subtle shrink-0 hidden sm:block" />
             <BuscaSelect

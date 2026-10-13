@@ -1,8 +1,8 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { AlertCircle, Check, Pencil, Plus, RefreshCw, Search } from "lucide-react";
+import { AlertCircle, Check, Pencil, Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,6 +14,9 @@ import { BarraAcoesMassa } from "@/components/acoes-massa/barra";
 import { CheckboxLinha, CheckboxPagina, SelecaoMassaProvider } from "@/components/acoes-massa/selecao";
 import { podeAcao, podeExportar, type AcaoItem, type Entidade } from "@/lib/acoes-massa/acoes";
 import { cn, formatarMoeda } from "@/lib/utils";
+import { lerTamanho, proximaOrdem, TAMANHO_PADRAO, type Ordem } from "@/lib/listagem";
+import { CampoBusca, ListaVazia, lerTamanhoPreferido, Paginacao, SkeletonLista, sugerirPorUrl, ThOrd } from "@/components/listagem/listagem-ui";
+import { DEBOUNCE_BUSCA_MS } from "@/components/listagem/use-listagem-url";
 import { ImportarPlanilha } from "@/components/importacao/importar-planilha";
 import { ehEntidadeImportacao } from "@/lib/importacao/entidades";
 import { CADASTROS, type AcaoCadastro, type CampoCadastro, type ColunaCadastro, type DefCadastro, type EntidadeCadastro } from "@/lib/cadastros/registro";
@@ -23,7 +26,9 @@ import { CADASTROS, type AcaoCadastro, type CampoCadastro, type ColunaCadastro, 
  * que vale nas três; criar/editar num painel lateral (edição manda só o que mudou); inativar com
  * o impacto ("em uso: 12 orçamentos e 3 medições"); reativar; seleção em massa (PR #31).
  * Botões aparecem conforme a permissão; toda gravação que falha mostra o motivo (nada silencioso).
- * Aba e busca ficam na URL (?aba=&q=): o "selecionar todos do filtro" usa o mesmo filtro no servidor.
+ * Lista paginada NO SERVIDOR (25/50/100 por página, lembrado), busca ao vivo com sugestões,
+ * ordenação pelo cabeçalho e cartões no celular. Tudo na URL (?aba=&q=&pagina=&por=&ordem=&dir=):
+ * o "selecionar todos do filtro" usa o mesmo filtro no servidor (paginação/ordem não contam).
  */
 export type ItemCadastroTela = Record<string, any> & { id: string; nome: string; ativo: boolean };
 type Item = ItemCadastroTela;
@@ -80,10 +85,14 @@ function useMassa(def: DefCadastro) {
   return podeExportar(permissoes, role, e) || (["inativar", "reativar"] as AcaoItem[]).some((a) => podeAcao(permissoes, role, e, a));
 }
 
-function ComSelecao({ ativo, entidade, ids, children }: { ativo: boolean; entidade: EntidadeCadastro; ids: string[]; children: ReactNode }) {
+function ComSelecao({ ativo, entidade, ids, total, children }: { ativo: boolean; entidade: EntidadeCadastro; ids: string[]; total: number; children: ReactNode }) {
   if (!ativo) return <>{children}</>;
-  return <SelecaoMassaProvider entidade={entidade as Entidade} idsPagina={ids} total={ids.length}>{children}</SelecaoMassaProvider>;
+  return <SelecaoMassaProvider entidade={entidade as Entidade} idsPagina={ids} total={total}>{children}</SelecaoMassaProvider>;
 }
+
+/** Resposta paginada da rota genérica (?pagina=&por=) */
+interface PaginaLista { itens: Item[]; total: number; pagina: number; porPagina: number; contagens: Record<Aba, number> }
+const FILTRO_ABA: Record<Aba, string> = { ativos: "sim", inativos: "nao", todos: "todos" };
 
 function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda }: CadastroPadraoProps) {
   const def = CADASTROS[entidade];
@@ -93,43 +102,90 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda }: CadastroPadra
   const pathname = usePathname();
   const sp = useSearchParams();
   const aba: Aba = sp.get("aba") === "inativos" ? "inativos" : sp.get("aba") === "todos" ? "todos" : "ativos";
-  const busca = sp.get("q") ?? "";
+  const qUrl = sp.get("q") ?? "";
+  const pagina = Math.max(1, Number(sp.get("pagina")) || 1);
+  const porPagina = lerTamanho(sp.get("por"));
+  const ordem: Ordem = { campo: sp.get("ordem"), dir: sp.get("dir") === "desc" ? "desc" : "asc" };
 
-  const [itens, setItens] = useState<Item[]>([]);
+  const [dados, setDados] = useState<PaginaLista | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erroLista, setErroLista] = useState("");
   const [editando, setEditando] = useState<Item | "novo" | null>(null);
+  const [busca, setBusca] = useState(qUrl);
 
-  const carregar = useCallback(async () => {
-    setCarregando(true); setErroLista("");
-    try {
-      const r = await fetch(`/api/cadastros/${entidade}?ativo=todos`, { cache: "no-store" });
-      const d = await r.json().catch(() => null);
-      if (!r.ok || !Array.isArray(d)) { setErroLista(d?.erro ?? `Não foi possível carregar ${def.plural}.`); return; }
-      setItens(d);
-    } catch { setErroLista("Erro de conexão ao carregar a lista."); } finally { setCarregando(false); }
-  }, [entidade, def.plural]);
-  useEffect(() => { void carregar(); }, [carregar]);
-
-  function mudarUrl(m: Record<string, string | null>) {
+  function mudarUrl(m: Record<string, string | null>, manterPagina = false) {
     const p = new URLSearchParams(sp.toString());
     for (const [k, v] of Object.entries(m)) { if (v) p.set(k, v); else p.delete(k); }
+    if (!manterPagina && !("pagina" in m)) p.delete("pagina");
     router.replace(`${pathname}${p.toString() ? `?${p}` : ""}`, { scroll: false });
   }
 
-  const q = busca.trim().toLowerCase();
-  const casaBusca = (i: Item) => !q || def.busca.some((k) => String(i[k] ?? "").toLowerCase().includes(q));
-  const contagem = useMemo(() => ({
-    ativos: itens.filter((i) => i.ativo && casaBusca(i)).length,
-    inativos: itens.filter((i) => !i.ativo && casaBusca(i)).length,
-    todos: itens.filter(casaBusca).length,
+  // Itens por página: a preferência lembrada vale ao abrir (se a URL não disser outro)
+  useEffect(() => {
+    const pref = lerTamanhoPreferido();
+    if (!sp.get("por") && pref && pref !== TAMANHO_PADRAO) mudarUrl({ por: String(pref) }, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [itens, q]);
-  const visiveis = itens.filter((i) => casaBusca(i) && (aba === "todos" || (aba === "ativos" ? i.ativo : !i.ativo)));
+  }, []);
+
+  // Busca ao vivo: filtra conforme digita (debounce), sem Enter; volta para a página 1
+  useEffect(() => {
+    if (busca.trim() === qUrl.trim()) return;
+    const t = setTimeout(() => mudarUrl({ q: busca.trim() || null }), DEBOUNCE_BUSCA_MS);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busca]);
+  useEffect(() => { setBusca((b) => (b.trim() === qUrl.trim() ? b : qUrl)); }, [qUrl]);
+
+  const consulta = new URLSearchParams({ ativo: FILTRO_ABA[aba], pagina: String(pagina), por: String(porPagina) });
+  if (qUrl.trim()) consulta.set("q", qUrl.trim());
+  if (ordem.campo) { consulta.set("ordem", ordem.campo); consulta.set("dir", ordem.dir); }
+  const chaveConsulta = consulta.toString();
+
+  const pedido = useRef(0);
+  const carregar = useCallback(async () => {
+    const meu = ++pedido.current;
+    setCarregando(true); setErroLista("");
+    try {
+      const r = await fetch(`/api/cadastros/${entidade}?${chaveConsulta}`, { cache: "no-store" });
+      const d = await r.json().catch(() => null);
+      if (meu !== pedido.current) return; // chegou uma resposta antiga: ignora
+      if (!r.ok || !Array.isArray(d?.itens)) { setErroLista(d?.erro ?? `Não foi possível carregar ${def.plural}.`); return; }
+      setDados(d);
+    } catch { if (meu === pedido.current) setErroLista("Erro de conexão ao carregar a lista."); }
+    finally { if (meu === pedido.current) setCarregando(false); }
+  }, [entidade, def.plural, chaveConsulta]);
+  useEffect(() => { void carregar(); }, [carregar]);
+
+  const sugerir = useMemo(() => sugerirPorUrl(`/api/cadastros/${entidade}?sugestoes=1&ativo=${FILTRO_ABA[aba]}`), [entidade, aba]);
+  const itens = dados?.itens ?? [];
+  const contagem = dados?.contagens;
   const Titulo = def.singular[0].toUpperCase() + def.singular.slice(1);
+  const ordenar = (campo: string) => { const o = proximaOrdem(ordem, campo); mudarUrl({ ordem: o.campo, dir: o.dir === "desc" ? "desc" : null }, true); };
+  const vazio = qUrl.trim()
+    ? `Nenhum${def.feminino ? "a" : ""} ${def.singular} encontrad${def.feminino ? "a" : "o"}`
+    : aba === "inativos" ? `Nenhum${def.feminino ? "a" : ""} ${def.singular} inativ${def.feminino ? "a" : "o"}.` : `Nenhum${def.feminino ? "a" : ""} ${def.singular} cadastrad${def.feminino ? "a" : "o"}.`;
+  const acoes = (item: Item) => (
+    <div className="flex items-center justify-end gap-1">
+      {acoesLinha?.(item, () => void carregar())}
+      {podeCad("editar") && (
+        <button type="button" onClick={() => setEditando(item)} className="p-1.5 text-ink-muted hover:text-primary-600 hover:bg-primary-50 rounded" title={`Editar ${item.nome}`} aria-label={`Editar ${item.nome}`}>
+          <Pencil className="w-4 h-4" />
+        </button>
+      )}
+      {podeCad(item.ativo ? "inativar" : "reativar") && (
+        <InativarRegistro
+          url={`/api/cadastros/${entidade}/${item.id}`} modulo={def.permissoes.inativar?.[0]?.[0] ?? def.modulo}
+          acaoInativar={def.permissoes.inativar?.[0]?.[1] ?? "gerenciar"} acaoReativar={def.permissoes.reativar?.[0]?.[1] ?? "gerenciar"}
+          ativo={item.ativo} nome={item.nome} entidade={def.singular} feminino={def.feminino} comMotivo={false}
+          aoConcluir={() => void carregar()}
+        />
+      )}
+    </div>
+  );
+  const valor = (col: ColunaCadastro, item: Item, i: number) => celula?.(col.key, item) ?? <Celula col={col} item={item} primeira={i === 0} />;
 
   return (
-    <ComSelecao ativo={!!def.massa} entidade={entidade} ids={visiveis.map((i) => i.id)}>
+    <ComSelecao ativo={!!def.massa} entidade={entidade} ids={itens.map((i) => i.id)} total={dados?.total ?? 0}>
       <div className="space-y-4" data-cadastro={entidade}>
         {ajuda && <div className="text-sm text-ink-muted">{ajuda}</div>}
         {/* Abas + busca + Novo */}
@@ -142,13 +198,15 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda }: CadastroPadra
                 className={cn("flex-1 sm:flex-none px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
                   aba === a.id ? "bg-white text-primary-700 shadow-sm" : "text-ink-muted hover:text-ink")}
               >
-                {a.label} <span className="text-xs text-ink-subtle">({contagem[a.id]})</span>
+                {a.label} <span className="text-xs text-ink-subtle tabular-nums">({contagem ? contagem[a.id].toLocaleString("pt-BR") : "…"})</span>
               </button>
             ))}
           </div>
-          <div className="relative flex-1 sm:max-w-sm">
-            <Search className="w-4 h-4 text-ink-subtle absolute left-3 top-1/2 -translate-y-1/2" />
-            <Input value={busca} onChange={(e) => mudarUrl({ q: e.target.value || null })} placeholder={`Buscar ${def.plural}…`} className="pl-9" aria-label={`Buscar ${def.plural}`} />
+          <div className="flex-1 sm:max-w-sm">
+            <CampoBusca
+              valor={busca} onChange={setBusca} placeholder={`Buscar ${def.plural}…`} rotulo={`Buscar ${def.plural}`}
+              sugerir={sugerir} carregando={carregando && !!dados}
+            />
           </div>
           {podeCad("criar") && (
             <div className="flex gap-2 sm:ml-auto shrink-0">
@@ -161,71 +219,74 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda }: CadastroPadra
           )}
         </div>
 
-        {carregando ? (
-          <p className="text-sm text-ink-subtle text-center py-8">Carregando…</p>
-        ) : erroLista ? (
+        {erroLista ? (
           <div className="flex flex-col items-center gap-2 py-8 text-sm text-red-700" data-erro-lista>
             <span className="flex items-center gap-2"><AlertCircle className="w-4 h-4" /> {erroLista}</span>
             <Button type="button" variant="secondary" size="sm" onClick={carregar}><RefreshCw className="w-4 h-4" /> Tentar de novo</Button>
           </div>
+        ) : !dados ? (
+          <div className="border border-surface-border rounded-lg"><SkeletonLista /></div>
+        ) : itens.length === 0 ? (
+          <div className="border border-surface-border rounded-lg">
+            <ListaVazia mensagem={vazio} busca={qUrl.trim() || undefined} onLimpar={() => setBusca("")} />
+          </div>
         ) : (
-          <div className="border border-surface-border rounded-lg overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-alt border-b border-surface-border">
-                <tr>
-                  {massa && <th className="w-px pl-4 pr-1 py-3"><CheckboxPagina /></th>}
-                  {def.colunas.map((col, i) => (
-                    <th key={col.key} className={cn("text-left px-3 sm:px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider", i > 0 && "hidden sm:table-cell")}>{col.label}</th>
-                  ))}
-                  {aba === "todos" && <th className="hidden sm:table-cell text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Situação</th>}
-                  <th className="text-right px-3 sm:px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visiveis.length === 0 && (
-                  <tr><td colSpan={def.colunas.length + 3} className="text-center text-ink-subtle py-10">
-                    {q ? "Nada encontrado com essa busca." : aba === "inativos" ? `Nenhum${def.feminino ? "a" : ""} ${def.singular} inativ${def.feminino ? "a" : "o"}.` : `Nenhum${def.feminino ? "a" : ""} ${def.singular} cadastrad${def.feminino ? "a" : "o"}.`}
-                  </td></tr>
-                )}
-                {visiveis.map((item, idx) => (
-                  <tr key={item.id} data-linha={item.id} className={cn("border-b border-surface-border last:border-0 hover:bg-primary-50/40", idx % 2 === 1 && "bg-surface-alt/30", !item.ativo && "text-ink-muted")}>
-                    {massa && <td className="w-px pl-4 pr-1 py-3"><CheckboxLinha id={item.id} rotulo={item.nome} /></td>}
-                    {def.colunas.map((col, i) => (
-                      <td key={col.key} className={cn("px-3 sm:px-4 py-3", i > 0 && "hidden sm:table-cell")}>
-                        {celula?.(col.key, item) ?? <Celula col={col} item={item} primeira={i === 0} />}
-                        {/* Celular: a coluna Situação some; o selo vai embaixo do nome */}
-                        {i === 0 && !item.ativo && <span className="sm:hidden mt-1 inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full bg-surface-alt text-ink-muted">Inativo</span>}
-                      </td>
-                    ))}
-                    {aba === "todos" && (
-                      <td className="hidden sm:table-cell px-4 py-3">
-                        <span className={cn("text-[11px] font-semibold px-2 py-0.5 rounded-full", item.ativo ? "bg-emerald-50 text-emerald-700" : "bg-surface-alt text-ink-muted")}>
-                          {item.ativo ? "Ativo" : "Inativo"}
-                        </span>
-                      </td>
-                    )}
-                    <td className="px-3 sm:px-4 py-3 text-right whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-1">
-                        {acoesLinha?.(item, () => void carregar())}
-                        {podeCad("editar") && (
-                          <button type="button" onClick={() => setEditando(item)} className="p-1.5 text-ink-muted hover:text-primary-600 hover:bg-primary-50 rounded" title={`Editar ${item.nome}`} aria-label={`Editar ${item.nome}`}>
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                        )}
-                        {podeCad(item.ativo ? "inativar" : "reativar") && (
-                          <InativarRegistro
-                            url={`/api/cadastros/${entidade}/${item.id}`} modulo={def.permissoes.inativar?.[0]?.[0] ?? def.modulo}
-                            acaoInativar={def.permissoes.inativar?.[0]?.[1] ?? "gerenciar"} acaoReativar={def.permissoes.reativar?.[0]?.[1] ?? "gerenciar"}
-                            ativo={item.ativo} nome={item.nome} entidade={def.singular} feminino={def.feminino} comMotivo={false}
-                            aoConcluir={() => void carregar()}
-                          />
-                        )}
-                      </div>
-                    </td>
+          <div className={cn("space-y-3 transition-opacity", carregando && "opacity-60")} aria-busy={carregando}>
+            {/* Celular: cada registro vira um cartão */}
+            <ul className="sm:hidden space-y-2" data-cartoes>
+              {itens.map((item) => (
+                <li key={item.id} data-cartao={item.id} className={cn("border border-surface-border rounded-lg bg-white p-3", !item.ativo && "text-ink-muted")}>
+                  <div className="flex items-start gap-2">
+                    {massa && <span className="pt-0.5"><CheckboxLinha id={item.id} rotulo={item.nome} /></span>}
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm">{valor(def.colunas[0], item, 0)}</div>
+                      {!item.ativo && <span className="mt-1 inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full bg-surface-alt text-ink-muted">Inativo</span>}
+                      <dl className="mt-1.5 grid grid-cols-[auto,1fr] gap-x-3 gap-y-0.5 text-xs">
+                        {def.colunas.slice(1).map((col, i) => (
+                          <div key={col.key} className="contents">
+                            <dt className="text-ink-subtle">{col.label}</dt>
+                            <dd className="text-ink min-w-0 truncate">{valor(col, item, i + 1)}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </div>
+                    <div className="shrink-0">{acoes(item)}</div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            {/* Desktop: tabela com cabeçalho ordenável */}
+            <div className="hidden sm:block border border-surface-border rounded-lg overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-surface-alt border-b border-surface-border">
+                  <tr>
+                    {massa && <th className="w-px pl-4 pr-1 py-3"><CheckboxPagina /></th>}
+                    {def.colunas.map((col) => col.ordenar
+                      ? <ThOrd key={col.key} label={col.label} k={col.key} ordem={ordem.campo} dir={ordem.dir} onOrdenar={ordenar} className="px-4 py-3 text-ink-muted text-xs tracking-wider" />
+                      : <th key={col.key} className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">{col.label}</th>)}
+                    {aba === "todos" && <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Situação</th>}
+                    <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Ações</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {itens.map((item, idx) => (
+                    <tr key={item.id} data-linha={item.id} className={cn("border-b border-surface-border last:border-0 hover:bg-primary-50/40", idx % 2 === 1 && "bg-surface-alt/30", !item.ativo && "text-ink-muted")}>
+                      {massa && <td className="w-px pl-4 pr-1 py-3"><CheckboxLinha id={item.id} rotulo={item.nome} /></td>}
+                      {def.colunas.map((col, i) => <td key={col.key} className="px-4 py-3">{valor(col, item, i)}</td>)}
+                      {aba === "todos" && (
+                        <td className="px-4 py-3">
+                          <span className={cn("text-[11px] font-semibold px-2 py-0.5 rounded-full", item.ativo ? "bg-emerald-50 text-emerald-700" : "bg-surface-alt text-ink-muted")}>
+                            {item.ativo ? "Ativo" : "Inativo"}
+                          </span>
+                        </td>
+                      )}
+                      <td className="px-4 py-3 text-right whitespace-nowrap">{acoes(item)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Paginacao total={dados.total} pagina={dados.pagina} porPagina={dados.porPagina} rotulo={def.plural} onNavegar={mudarUrl} />
           </div>
         )}
       </div>
@@ -239,10 +300,7 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda }: CadastroPadra
       ) : (
         <FormularioCadastro
           def={def} titulo={Titulo} editando={editando} onFechar={() => setEditando(null)}
-          onSalvo={(salvo) => {
-            setItens((p) => (p.some((i) => i.id === salvo.id) ? p.map((i) => (i.id === salvo.id ? salvo : i)) : [...p, salvo].sort((a, b) => a.nome.localeCompare(b.nome))));
-            setEditando(null);
-          }}
+          onSalvo={() => { setEditando(null); void carregar(); }}
         />
       )}
       {def.massa && <BarraAcoesMassa aoConcluir={() => void carregar()} />}

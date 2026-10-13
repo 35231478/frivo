@@ -10,32 +10,29 @@ import Link from "next/link";
 import { Calculator, Plus } from "lucide-react";
 import { AvatarCliente } from "@/components/ui/avatar-cliente";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
+import type { Prisma } from "@prisma/client";
+import { janela, lerOrdem, lerPaginacao, ordemPrisma, paginaValida } from "@/lib/listagem";
+import { ORDEM_ORCAMENTOS, ORDEM_PADRAO_ORCAMENTOS } from "@/lib/listas/ordenacao";
+import { BuscaUrl, ConteudoUrl, FiltroCheckUrl, FiltroDataUrl, FiltroSelectUrl, LimparBuscaUrl, ListaUrl, PaginacaoUrl, ThOrdUrl } from "@/components/listagem/lista-url";
 
 export const metadata: Metadata = { title: "Orçamentos" };
 
 export default async function OrcamentosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ busca?: string; status?: string; tipo?: string; clienteId?: string; dataInicio?: string; dataFim?: string; inativos?: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const { busca = "", status = "", tipo = "", clienteId = "", dataInicio = "", dataFim = "", inativos = "" } = await searchParams;
-  const mostrarCancelados = inativos === "1";
+  const sp = await searchParams;
+  const { busca = "", status = "", tipo = "", clienteId = "", dataInicio = "", dataFim = "", inativos = "" } = sp;
   const session = await auth();
   const empresaId = session!.user!.empresaId;
   const massa = temAcaoMassa(session!.user!.permissoes, session!.user!.role, "orcamentos");
+  const { pagina: paginaPedida, porPagina } = lerPaginacao(sp);
+  const orderBy = ordemPrisma(lerOrdem(sp, ORDEM_ORCAMENTOS), ORDEM_ORCAMENTOS, ORDEM_PADRAO_ORCAMENTOS) as Prisma.OrcamentoOrderByWithRelationInput[];
 
   const where = whereOrcamentos(empresaId, { busca, status, tipo, clienteId, dataInicio, dataFim, inativos });
 
-  const [orcamentos, total, clientes] = await Promise.all([
-    prisma.orcamento.findMany({
-      where,
-      include: {
-        cliente: { select: { id: true, nome: true, nomeFantasia: true, logo: true } },
-        _count: { select: { ordensServico: true } },
-      },
-      orderBy: { criadoEm: "desc" },
-      take: 100,
-    }),
+  const [total, clientes] = await Promise.all([
     prisma.orcamento.count({ where }),
     prisma.cliente.findMany({
       where: { empresaId, ativo: true },
@@ -43,9 +40,20 @@ export default async function OrcamentosPage({
       orderBy: { nome: "asc" },
     }),
   ]);
+  const pagina = paginaValida(paginaPedida, porPagina, total);
+  const orcamentos = total ? await prisma.orcamento.findMany({
+    where,
+    include: {
+      cliente: { select: { id: true, nome: true, nomeFantasia: true, logo: true } },
+      _count: { select: { ordensServico: true } },
+    },
+    orderBy,
+    ...janela(pagina, porPagina),
+  }) : [];
 
   return (
     <SelecaoMassaProvider entidade="orcamentos" idsPagina={orcamentos.map((o) => o.id)} total={total}>
+    <ListaUrl chave="orcamentos" paramBusca="busca" qAtual={busca}>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -65,83 +73,62 @@ export default async function OrcamentosPage({
 
       <div className="card overflow-hidden">
         <div className="p-4 border-b border-surface-border bg-surface-alt/40">
-          <form method="get" className="flex flex-wrap gap-2">
-            <input
-              name="busca"
-              defaultValue={busca}
-              placeholder="Buscar por código, nome ou cliente..."
-              className="flex-1 min-w-[220px] bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all"
-            />
-            <select name="tipo" defaultValue={tipo}
-              className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all">
-              <option value="">Todos os tipos</option>
-              {Object.entries(LABELS_TIPO_ORCAMENTO).map(([v, l]) => (
-                <option key={v} value={v}>{l}</option>
-              ))}
-            </select>
-            <select name="status" defaultValue={status}
-              className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all">
-              <option value="">Todos status</option>
-              {Object.entries(LABELS_STATUS_ORCAMENTO).map(([v, l]) => (
-                <option key={v} value={v}>{l}</option>
-              ))}
-            </select>
-            <select name="clienteId" defaultValue={clienteId}
-              className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all">
-              <option value="">Todos clientes</option>
-              {clientes.map((c) => (
-                <option key={c.id} value={c.id}>{c.nomeFantasia ?? c.nome}</option>
-              ))}
-            </select>
-            <input
-              type="date"
-              name="dataInicio"
-              defaultValue={dataInicio}
-              title="Data inicial"
-              className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all"
-            />
-            <input
-              type="date"
-              name="dataFim"
-              defaultValue={dataFim}
-              title="Data final"
-              className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all"
-            />
-            <label className="inline-flex items-center gap-2 text-sm text-ink-muted px-1 select-none">
-              <input type="checkbox" name="inativos" value="1" defaultChecked={mostrarCancelados} className="accent-primary-600" />
-              Mostrar cancelados
-            </label>
-            <button type="submit" className="bg-primary-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-600 transition-all shadow-sm">
-              Filtrar
-            </button>
-          </form>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex-1 min-w-[220px]">
+              <BuscaUrl lista="orcamentos" placeholder="Buscar por código, nome ou cliente…" rotulo="Buscar orçamentos" />
+            </div>
+            <FiltroSelectUrl param="tipo" vazio="Todos os tipos" opcoes={Object.entries(LABELS_TIPO_ORCAMENTO).map(([value, label]) => ({ value, label }))} />
+            <FiltroSelectUrl param="status" vazio="Todos status" opcoes={Object.entries(LABELS_STATUS_ORCAMENTO).map(([value, label]) => ({ value, label }))} />
+            <FiltroSelectUrl param="clienteId" vazio="Todos clientes" opcoes={clientes.map((c) => ({ value: c.id, label: c.nomeFantasia ?? c.nome }))} />
+            <FiltroDataUrl param="dataInicio" titulo="Data inicial" />
+            <FiltroDataUrl param="dataFim" titulo="Data final" />
+            <FiltroCheckUrl param="inativos" rotulo="Mostrar cancelados" />
+          </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <ConteudoUrl>
+        {orcamentos.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-12 text-center" data-lista-vazia>
+            <p className="text-sm font-medium text-ink">Nenhum orçamento encontrado</p>
+            {busca && <p className="text-xs text-ink-muted">Nada combina com “{busca}”.</p>}
+            <LimparBuscaUrl />
+          </div>
+        ) : (
+        <>
+        {/* Celular: um cartão por orçamento */}
+        <ul className="md:hidden divide-y divide-surface-border" data-cartoes>
+          {orcamentos.map((o) => (
+            <li key={o.id} data-cartao={o.id} className="flex items-start gap-3 px-4 py-3">
+              {massa && <span className="pt-0.5"><CheckboxLinha id={o.id} rotulo={o.codigo} /></span>}
+              <Link href={`/orcamentos/${o.id}`} className="min-w-0 flex-1">
+                <p className="text-sm"><span className="font-mono font-semibold text-primary-600">{o.codigo}</span> <span className="text-ink font-medium">{o.nome}</span></p>
+                <p className="text-xs text-ink-muted truncate">{o.cliente.nomeFantasia ?? o.cliente.nome} · {formatarData(o.criadoEm)}</p>
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  <span className={CLASSE_STATUS_ORCAMENTO[o.status]}>{LABELS_STATUS_ORCAMENTO[o.status]}</span>
+                  <span className="text-sm font-semibold text-ink ml-auto">{formatarMoeda(Number(o.totalGeral))}</span>
+                </div>
+              </Link>
+            </li>
+          ))}
+        </ul>
+        <div className="overflow-x-auto hidden md:block">
           <table className="w-full text-sm">
             <thead className="bg-surface-alt border-b border-surface-border">
               <tr>
                 {massa && <th className="w-px pl-4 pr-1 py-3"><CheckboxPagina /></th>}
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Código</th>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Nome</th>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Cliente</th>
+                <ThOrdUrl label="Código" k="codigo" className="px-4 py-3 text-ink-muted text-xs tracking-wider" />
+                <ThOrdUrl label="Nome" k="nome" className="px-4 py-3 text-ink-muted text-xs tracking-wider" />
+                <ThOrdUrl label="Cliente" k="cliente" className="px-4 py-3 text-ink-muted text-xs tracking-wider" />
                 <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Tipo</th>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Status</th>
-                <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Total</th>
+                <ThOrdUrl label="Status" k="status" className="px-4 py-3 text-ink-muted text-xs tracking-wider" />
+                <ThOrdUrl label="Total" k="valor" className="px-4 py-3 text-ink-muted text-xs tracking-wider" />
                 <th className="text-center px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden md:table-cell">OS</th>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden lg:table-cell">Criado</th>
+                <ThOrdUrl label="Criado" k="criado" padrao="criado" className="px-4 py-3 text-ink-muted text-xs tracking-wider hidden lg:table-cell" />
                 <th className="w-10 px-2 py-3"><span className="sr-only">Ações</span></th>
               </tr>
             </thead>
             <tbody>
-              {orcamentos.length === 0 ? (
-                <tr>
-                  <td colSpan={massa ? 10 : 9} className="text-center text-ink-subtle py-12">
-                    Nenhum orçamento encontrado
-                  </td>
-                </tr>
-              ) : (
-                orcamentos.map((o, idx) => (
+              {orcamentos.map((o, idx) => (
                   <tr
                     key={o.id}
                     className={cn(
@@ -191,13 +178,19 @@ export default async function OrcamentosPage({
                       />
                     </td>
                   </tr>
-                ))
-              )}
+                ))}
             </tbody>
           </table>
         </div>
+        </>
+        )}
+        </ConteudoUrl>
+        <div className="px-4 py-3 border-t border-surface-border">
+          <PaginacaoUrl total={total} pagina={pagina} porPagina={porPagina} rotulo="orçamentos" />
+        </div>
       </div>
     </div>
+    </ListaUrl>
     <BarraAcoesMassa />
     </SelecaoMassaProvider>
   );

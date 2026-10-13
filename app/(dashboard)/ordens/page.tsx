@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { whereOrdens } from "@/lib/listas/filtros";
+import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
 import { OrdensListaClient } from "@/components/ordens/ordens-lista-client";
 import { SelecaoMassaProvider } from "@/components/acoes-massa/selecao";
 import { BarraAcoesMassa } from "@/components/acoes-massa/barra";
@@ -12,7 +13,7 @@ type SP = {
   busca?: string; status?: string; prioridade?: string; origem?: string;
   clienteId?: string; responsavelId?: string; tipoOsId?: string; contratoId?: string;
   numero?: string; dataInicio?: string; dataFim?: string; data?: string;
-  sort?: string; dir?: string; view?: string;
+  sort?: string; dir?: string; view?: string; pagina?: string; por?: string;
 };
 
 const SORT_MAP: Record<string, (dir: "asc" | "desc") => any> = {
@@ -24,8 +25,6 @@ const SORT_MAP: Record<string, (dir: "asc" | "desc") => any> = {
   prioridade: (dir) => ({ prioridade: dir }),
 };
 
-const TAKE = 100;
-
 export default async function OrdensPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
   const session = await auth();
@@ -35,8 +34,11 @@ export default async function OrdensPage({ searchParams }: { searchParams: Promi
   const dir: "asc" | "desc" = sp.dir === "asc" ? "asc" : "desc";
 
   const where = whereOrdens(empresaId, sp);
+  const { pagina: paginaPedida, porPagina } = lerPaginacao(sp);
+  const total = await prisma.ordemServico.count({ where });
+  const pagina = paginaValida(paginaPedida, porPagina, total);
 
-  const [ordens, total, clientes, usuarios, tiposOs, contratos] = await Promise.all([
+  const [ordens, clientes, usuarios, tiposOs, contratos] = await Promise.all([
     prisma.ordemServico.findMany({
       where,
       include: {
@@ -48,10 +50,10 @@ export default async function OrdensPage({ searchParams }: { searchParams: Promi
           tecnicosEquipe: { select: { tecnico: { select: { id: true, nome: true, avatar: true } } } },
         } },
       },
-      orderBy: SORT_MAP[sort](dir),
-      take: TAKE,
+      // `id` no fim: desempate estável (a paginação não repete nem pula OS)
+      orderBy: [SORT_MAP[sort](dir), { id: "asc" }],
+      ...janela(pagina, porPagina),
     }),
-    prisma.ordemServico.count({ where }),
     prisma.cliente.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true, nomeFantasia: true }, orderBy: { nome: "asc" } }),
     prisma.usuario.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
     prisma.tipoOs.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
@@ -88,7 +90,8 @@ export default async function OrdensPage({ searchParams }: { searchParams: Promi
     <OrdensListaClient
       ordens={ordensView}
       total={total}
-      exibindo={ordens.length}
+      pagina={pagina}
+      porPagina={porPagina}
       opcoes={{
         clientes: clientes.map((c) => ({ value: c.id, label: c.nomeFantasia ?? c.nome })),
         usuarios: usuarios.map((u) => ({ value: u.id, label: u.nome })),

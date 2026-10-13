@@ -1,7 +1,7 @@
 "use client";
 
 import { CheckboxLinha, CheckboxPagina, useAcoesMassaDisponiveis } from "@/components/acoes-massa/selecao";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { useListagemUrl } from "@/components/listagem/use-listagem-url";
-import { AlternarVisao, CampoBusca, ChipResumo, MultiSelect, Paginacao, SelectFiltro, ThOrd, type Opcao } from "@/components/listagem/listagem-ui";
+import { AlternarVisao, CampoBusca, sugerirPorUrl, ChipResumo, MultiSelect, Paginacao, SelectFiltro, ThOrd, type Opcao } from "@/components/listagem/listagem-ui";
 import { ChecklistSelo, DocumentoSelo, RevisaoSelo, VeiculoStatusSelo } from "@/components/veiculos/selos";
 import type { FiltrosVeiculos, OrdemVeiculos } from "@/lib/veiculo-listagem";
 
@@ -57,6 +57,8 @@ export function VeiculosListaClient({ itens, total, filtros: f, tipos, resumo }:
   const podeChecklist = pode("veiculos", "checklist");
   // Mesmo hook da listagem de Equipamentos: URL = fonte da verdade, filtro salvo, visão lista/cards
   const { visao, trocarVisao, busca, setBusca, navegar, limpar, pendente } = useListagemUrl({ chave: "veiculos", qAtual: f.q });
+  const roteador = useRouter();
+  const sugerir = useMemo(() => sugerirPorUrl("/api/listas/sugestoes?lista=veiculos"), []);
   const [filtrosMobile, setFiltrosMobile] = useState(false);
 
   function ordenar(k: OrdemVeiculos) {
@@ -113,7 +115,7 @@ export function VeiculosListaClient({ itens, total, filtros: f, tipos, resumo }:
       {/* ── Busca + filtros ── */}
       <div className="bg-white border border-surface-border rounded-xl p-3 sm:p-4 space-y-3">
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.6fr)_auto] gap-2 items-center">
-          <CampoBusca valor={busca} onChange={setBusca} rotulo="Buscar veículo" placeholder="Buscar placa, modelo, marca, RENAVAM, responsável ou equipe…" />
+          <CampoBusca valor={busca} onChange={setBusca} carregando={pendente} sugerir={sugerir} onEscolher={(s) => s.href && roteador.push(s.href)} rotulo="Buscar veículo" placeholder="Buscar placa, modelo, marca, RENAVAM, responsável ou equipe…" />
           <button
             onClick={() => setFiltrosMobile((v) => !v)}
             className="lg:hidden w-full inline-flex items-center justify-center gap-1.5 text-sm font-medium text-primary-600 border border-surface-border rounded-lg py-2"

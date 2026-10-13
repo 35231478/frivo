@@ -1,7 +1,9 @@
 "use client";
 
 import { CheckboxLinha, CheckboxPagina, useAcoesMassaDisponiveis } from "@/components/acoes-massa/selecao";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { CampoBusca, Paginacao, sugerirPorUrl } from "@/components/listagem/listagem-ui";
+import { DEBOUNCE_BUSCA_MS, useTamanhoPreferido } from "@/components/listagem/use-listagem-url";
 import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { cn, formatarData, formatarMoeda, LABELS_PERIODICIDADE } from "@/lib/utils";
@@ -34,8 +36,8 @@ const COR_FREQ: Record<string, string> = {
 
 const FILTROS = ["busca", "status", "frequencia", "vigenciaInicio", "vigenciaFim", "valorMin", "valorMax", "clienteId"];
 
-export function ContratosListaClient({ contratos, total, somaMensalFiltrada, resumo, opcoesClientes }: {
-  contratos: ContratoView[]; total: number; somaMensalFiltrada: number; resumo: Resumo; opcoesClientes: OpcaoBusca[];
+export function ContratosListaClient({ contratos, total, pagina, porPagina, somaMensalFiltrada, resumo, opcoesClientes }: {
+  contratos: ContratoView[]; total: number; pagina: number; porPagina: number; somaMensalFiltrada: number; resumo: Resumo; opcoesClientes: OpcaoBusca[];
 }) {
   const massa = useAcoesMassaDisponiveis("contratos");
   const router = useRouter();
@@ -51,13 +53,19 @@ export function ContratosListaClient({ contratos, total, somaMensalFiltrada, res
   const [valorMin, setValorMin] = useState(get("valorMin"));
   const [valorMax, setValorMax] = useState(get("valorMax"));
 
-  function setParams(updates: Record<string, string | null>) {
+  const [pendente, startTransition] = useTransition();
+  /** Muda a URL; qualquer filtro novo volta para a página 1 (só a paginação mantém a página). */
+  function setParams(updates: Record<string, string | null>, manterPagina = false) {
     const novo = new URLSearchParams(sp.toString());
     for (const [k, v] of Object.entries(updates)) { if (v) novo.set(k, v); else novo.delete(k); }
-    router.replace(`${pathname}?${novo.toString()}`, { scroll: false });
+    if (!manterPagina && !("pagina" in updates)) novo.delete("pagina");
+    startTransition(() => router.replace(`${pathname}?${novo.toString()}`, { scroll: false }));
   }
+  useTamanhoPreferido((por) => setParams({ por }, true));
+  const sugerir = useMemo(() => sugerirPorUrl("/api/listas/sugestoes?lista=contratos"), []);
 
-  useEffect(() => { const t = setTimeout(() => { if (buscaLocal !== get("busca")) setParams({ busca: buscaLocal || null }); }, 500); return () => clearTimeout(t); /* eslint-disable-next-line */ }, [buscaLocal]);
+
+  useEffect(() => { const t = setTimeout(() => { if (buscaLocal !== get("busca")) setParams({ busca: buscaLocal || null }); }, DEBOUNCE_BUSCA_MS); return () => clearTimeout(t); /* eslint-disable-next-line */ }, [buscaLocal]);
   useEffect(() => { const t = setTimeout(() => { if (valorMin !== get("valorMin")) setParams({ valorMin: valorMin || null }); }, 600); return () => clearTimeout(t); /* eslint-disable-next-line */ }, [valorMin]);
   useEffect(() => { const t = setTimeout(() => { if (valorMax !== get("valorMax")) setParams({ valorMax: valorMax || null }); }, 600); return () => clearTimeout(t); /* eslint-disable-next-line */ }, [valorMax]);
 
@@ -65,7 +73,7 @@ export function ContratosListaClient({ contratos, total, somaMensalFiltrada, res
     if (sortAtual === campo) setParams({ dir: dirAtual === "asc" ? "desc" : "asc" });
     else setParams({ sort: campo, dir: "asc" });
   }
-  function limpar() { setBuscaLocal(""); setValorMin(""); setValorMax(""); router.replace(pathname, { scroll: false }); }
+  function limpar() { setBuscaLocal(""); setValorMin(""); setValorMax(""); router.replace(get("por") ? `${pathname}?por=${get("por")}` : pathname, { scroll: false }); }
 
   function Seta({ campo }: { campo: string }) {
     if (sortAtual !== campo) return <ArrowUpDown className="inline w-3 h-3 ml-1 text-ink-subtle" />;
@@ -114,10 +122,11 @@ export function ContratosListaClient({ contratos, total, somaMensalFiltrada, res
         {/* Filtros */}
         <div className="p-4 border-b border-surface-border bg-surface-alt/40 space-y-3">
           <div className="flex flex-wrap gap-2 items-center">
-            <div className="relative flex-1 min-w-[220px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-subtle pointer-events-none" />
-              <input value={buscaLocal} onChange={(e) => setBuscaLocal(e.target.value)} placeholder="Buscar por número ou cliente..."
-                className="w-full bg-white border border-surface-border rounded-lg pl-9 pr-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all" />
+            <div className="flex-1 min-w-[220px]">
+              <CampoBusca
+                valor={buscaLocal} onChange={setBuscaLocal} placeholder="Buscar por número ou cliente…" rotulo="Buscar contratos"
+                sugerir={sugerir} onEscolher={(s) => s.href && router.push(s.href)} carregando={pendente}
+              />
             </div>
             <select value={get("status")} onChange={(e) => setParams({ status: e.target.value || null })} className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10">
               <option value="">Todos status</option>
@@ -150,31 +159,55 @@ export function ContratosListaClient({ contratos, total, somaMensalFiltrada, res
           )}
 
           <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
-            <span className="text-sm text-ink-muted">{total} contrato(s){filtrosAtivos > 0 && <span className="ml-2 inline-flex items-center gap-1 text-xs font-semibold bg-primary-50 text-primary-700 px-2 py-0.5 rounded-full"><Filter className="w-3 h-3" /> {filtrosAtivos} filtro(s)</span>}</span>
+            <span className="text-sm text-ink-muted" data-contador><strong className="text-ink">{total.toLocaleString("pt-BR")}</strong> contrato(s){filtrosAtivos > 0 && <span className="ml-2 inline-flex items-center gap-1 text-xs font-semibold bg-primary-50 text-primary-700 px-2 py-0.5 rounded-full"><Filter className="w-3 h-3" /> {filtrosAtivos} filtro(s)</span>}</span>
             {filtrosAtivos > 0 && <button type="button" onClick={limpar} className="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-700"><X className="w-3.5 h-3.5" /> Limpar filtros</button>}
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className={cn("transition-opacity", pendente && "opacity-60")} aria-busy={pendente}>
+        {contratos.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-12 text-center" data-lista-vazia>
+            <p className="text-sm font-medium text-ink">Nenhum contrato encontrado</p>
+            {buscaLocal && <p className="text-xs text-ink-muted">Nada combina com “{buscaLocal}”.</p>}
+            {filtrosAtivos > 0 && <button type="button" onClick={limpar} className="text-sm text-primary-600 hover:underline">Limpar filtros</button>}
+          </div>
+        ) : (<>
+        {/* Celular: um cartão por contrato */}
+        <ul className="md:hidden divide-y divide-surface-border" data-cartoes>
+          {contratos.map((ct) => (
+            <li key={ct.id} data-cartao={ct.id} className={cn("flex items-start gap-3 px-4 py-3", ct.vencido && "bg-red-50/60", (ct.status === "ENCERRADO" || ct.status === "CANCELADO") && "opacity-60")}>
+              {massa && <span className="pt-0.5"><CheckboxLinha id={ct.id} rotulo={ct.numero} /></span>}
+              <Link href={`/contratos/${ct.id}`} className="min-w-0 flex-1">
+                <p className="text-sm"><span className="font-mono font-semibold text-primary-600">{ct.numero}</span> <span className="text-ink font-medium">{ct.cliente}</span></p>
+                <p className="text-xs text-ink-muted">{LABELS_PERIODICIDADE[ct.periodicidade] ?? ct.periodicidade} · {ct.dataFim ? `até ${formatarData(ct.dataFim)}` : "indeterminado"}</p>
+                <div className="mt-1.5 flex items-center gap-2">
+                  {ct.vencido ? <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-700">Vencido</span>
+                    : ct.vencendo ? <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">Vence em breve</span>
+                    : <span className={cn("text-[11px] font-semibold px-2 py-0.5 rounded-full", COR_STATUS[ct.status])}>{LABELS_STATUS[ct.status] ?? ct.status}</span>}
+                  <span className="ml-auto text-sm font-semibold text-ink">{formatarMoeda(ct.valorMensal)}<span className="text-xs font-normal text-ink-muted">/mês</span></span>
+                </div>
+              </Link>
+            </li>
+          ))}
+        </ul>
+        <div className="overflow-x-auto hidden md:block">
           <table className="w-full text-sm">
             <thead className="bg-surface-alt border-b border-surface-border">
               <tr>
                 {massa && <th className="w-px pl-4 pr-1 py-3"><CheckboxPagina /></th>}
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Número</th>
+                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider cursor-pointer select-none hover:text-ink" onClick={() => ordenarPor("numero")}>Número <Seta campo="numero" /></th>
                 <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider cursor-pointer select-none hover:text-ink" onClick={() => ordenarPor("cliente")}>Cliente <Seta campo="cliente" /></th>
                 <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden md:table-cell">Frequência</th>
                 <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider cursor-pointer select-none hover:text-ink" onClick={() => ordenarPor("valorMensal")}>Valor/mês <Seta campo="valorMensal" /></th>
                 <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden md:table-cell">Valor/ano</th>
                 <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden lg:table-cell cursor-pointer select-none hover:text-ink" onClick={() => ordenarPor("dataInicio")}>Início <Seta campo="dataInicio" /></th>
                 <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden lg:table-cell cursor-pointer select-none hover:text-ink" onClick={() => ordenarPor("dataFim")}>Fim <Seta campo="dataFim" /></th>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Status</th>
+                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider cursor-pointer select-none hover:text-ink" onClick={() => ordenarPor("status")}>Status <Seta campo="status" /></th>
                 <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden xl:table-cell">Próxima OS</th>
               </tr>
             </thead>
             <tbody>
-              {contratos.length === 0 ? (
-                <tr><td colSpan={massa ? 10 : 9} className="text-center text-ink-subtle py-12">Nenhum contrato encontrado</td></tr>
-              ) : contratos.map((ct, idx) => (
+              {contratos.map((ct, idx) => (
                 <tr key={ct.id} className={cn("border-b border-surface-border hover:bg-primary-50/40 transition-colors", idx % 2 === 1 && "bg-surface-alt/30", ct.vencido && "bg-red-50/60 hover:bg-red-50", (ct.status === "ENCERRADO" || ct.status === "CANCELADO") && "opacity-60")}>
                   {massa && <td className="w-px pl-4 pr-1 py-3"><CheckboxLinha id={ct.id} rotulo={ct.numero} /></td>}
                   <td className="px-4 py-3 whitespace-nowrap">
@@ -219,6 +252,11 @@ export function ContratosListaClient({ contratos, total, somaMensalFiltrada, res
               </tfoot>
             )}
           </table>
+        </div>
+        </>)}
+        </div>
+        <div className="px-4 py-3 border-t border-surface-border">
+          <Paginacao total={total} pagina={pagina} porPagina={porPagina} rotulo="contratos" onNavegar={setParams} />
         </div>
       </div>
     </div>

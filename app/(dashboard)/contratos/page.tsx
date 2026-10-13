@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { whereContratos } from "@/lib/listas/filtros";
+import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
 import { ContratosListaClient } from "@/components/contratos/contratos-lista-client";
 
 export const metadata: Metadata = { title: "Contratos" };
@@ -11,10 +12,12 @@ export const metadata: Metadata = { title: "Contratos" };
 type SP = {
   busca?: string; status?: string; frequencia?: string;
   vigenciaInicio?: string; vigenciaFim?: string; valorMin?: string; valorMax?: string;
-  clienteId?: string; sort?: string; dir?: string;
+  clienteId?: string; sort?: string; dir?: string; pagina?: string; por?: string;
 };
 
 const SORT_MAP: Record<string, (dir: "asc" | "desc") => any> = {
+  numero: (dir) => ({ numero: dir }),
+  status: (dir) => ({ status: dir }),
   valorMensal: (dir) => ({ valorMensal: dir }),
   dataInicio: (dir) => ({ dataInicio: dir }),
   dataFim: (dir) => ({ dataFim: dir }),
@@ -32,18 +35,20 @@ export default async function ContratosPage({ searchParams }: { searchParams: Pr
   const dir: "asc" | "desc" = sp.dir === "asc" ? "asc" : "desc";
 
   const where = whereContratos(empresaId, sp, agora);
+  const { pagina: paginaPedida, porPagina } = lerPaginacao(sp);
+  const total = await prisma.contrato.count({ where });
+  const pagina = paginaValida(paginaPedida, porPagina, total);
 
-  const [contratos, total, agregadoFiltrado, ativos, somaAtivos, vencendo, vencidos, clientes] = await Promise.all([
+  const [contratos, agregadoFiltrado, ativos, somaAtivos, vencendo, vencidos, clientes] = await Promise.all([
     prisma.contrato.findMany({
       where,
       include: {
         cliente: { select: { id: true, nome: true, nomeFantasia: true, logo: true } },
         ordensServico: { where: { previsaoConclusao: { gte: agora } }, orderBy: { previsaoConclusao: "asc" }, take: 1, select: { id: true, numero: true, status: true, previsaoConclusao: true } },
       },
-      orderBy: SORT_MAP[sort](dir),
-      take: 200,
+      orderBy: [SORT_MAP[sort](dir), { id: "asc" }],
+      ...janela(pagina, porPagina),
     }),
-    prisma.contrato.count({ where }),
     prisma.contrato.aggregate({ where, _sum: { valorMensal: true } }),
     prisma.contrato.count({ where: { empresaId, status: "ATIVO" } }),
     prisma.contrato.aggregate({ where: { empresaId, status: "ATIVO" }, _sum: { valorMensal: true } }),
@@ -80,6 +85,8 @@ export default async function ContratosPage({ searchParams }: { searchParams: Pr
     <ContratosListaClient
       contratos={view}
       total={total}
+      pagina={pagina}
+      porPagina={porPagina}
       somaMensalFiltrada={Number(agregadoFiltrado._sum.valorMensal ?? 0)}
       resumo={{ ativos, valorMensalTotal: valorMensalAtivos, valorAnualTotal: valorMensalAtivos * 12, vencendo, vencidos }}
       opcoesClientes={clientes.map((c) => ({ value: c.id, label: c.nomeFantasia ?? c.nome }))}

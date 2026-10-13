@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { CampoBusca, Paginacao, sugerirPorUrl } from "@/components/listagem/listagem-ui";
+import { DEBOUNCE_BUSCA_MS, useTamanhoPreferido } from "@/components/listagem/use-listagem-url";
 import Link from "next/link";
 import { OsInativarBotao } from "@/components/os/os-inativar";
 import { CheckboxLinha, CheckboxPagina, useAcoesMassaDisponiveis } from "@/components/acoes-massa/selecao";
@@ -65,7 +67,7 @@ function corDoDia(ordens: OrdemView[]): string {
   return "bg-success-50 text-success-700 border-success-200";
 }
 
-export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens: OrdemView[]; total: number; exibindo: number; opcoes: Opcoes }) {
+export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: { ordens: OrdemView[]; total: number; pagina: number; porPagina: number; opcoes: Opcoes }) {
   const router = useRouter();
   const { pode } = usePermissoes();
   const pathname = usePathname();
@@ -82,15 +84,20 @@ export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens:
   const [buscaLocal, setBuscaLocal] = useState(get("busca"));
   const [numeroLocal, setNumeroLocal] = useState(get("numero"));
 
-  function setParams(updates: Record<string, string | null>) {
+  const [pendente, startTransition] = useTransition();
+  /** Muda a URL; qualquer filtro novo volta para a página 1 (só a paginação mantém a página). */
+  function setParams(updates: Record<string, string | null>, manterPagina = false) {
     const novo = new URLSearchParams(sp.toString());
     for (const [k, v] of Object.entries(updates)) { if (v) novo.set(k, v); else novo.delete(k); }
-    router.replace(`${pathname}?${novo.toString()}`, { scroll: false });
+    if (!manterPagina && !("pagina" in updates)) novo.delete("pagina");
+    startTransition(() => router.replace(`${pathname}?${novo.toString()}`, { scroll: false }));
   }
+  useTamanhoPreferido((por) => setParams({ por }, true));
+  const sugerir = useMemo(() => sugerirPorUrl("/api/listas/sugestoes?lista=ordens"), []);
 
-  // Debounce da busca geral
+  // Busca ao vivo (debounce), sem Enter
   useEffect(() => {
-    const t = setTimeout(() => { if (buscaLocal !== get("busca")) setParams({ busca: buscaLocal || null }); }, 500);
+    const t = setTimeout(() => { if (buscaLocal !== get("busca")) setParams({ busca: buscaLocal || null }); }, DEBOUNCE_BUSCA_MS);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buscaLocal]);
@@ -149,6 +156,7 @@ export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens:
     const novo = new URLSearchParams();
     if (get("view")) novo.set("view", get("view"));
     if (get("data")) novo.set("data", get("data"));
+    if (get("por")) novo.set("por", get("por"));
     setBuscaLocal(""); setNumeroLocal("");
     router.replace(`${pathname}${novo.toString() ? `?${novo}` : ""}`, { scroll: false });
   }
@@ -232,10 +240,11 @@ export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens:
         {/* Filtros principais */}
         <div className="p-4 border-b border-surface-border bg-surface-alt/40 space-y-3">
           <div className="flex flex-wrap gap-2 items-center">
-            <div className="relative flex-1 min-w-[220px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-subtle pointer-events-none" />
-              <input value={buscaLocal} onChange={(e) => setBuscaLocal(e.target.value)} placeholder="Buscar por número, descrição ou cliente..."
-                className="w-full bg-white border border-surface-border rounded-lg pl-9 pr-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all" />
+            <div className="flex-1 min-w-[220px]">
+              <CampoBusca
+                valor={buscaLocal} onChange={setBuscaLocal} placeholder="Buscar por número, descrição ou cliente…" rotulo="Buscar ordens de serviço"
+                sugerir={sugerir} onEscolher={(s) => s.href && router.push(s.href)} carregando={pendente}
+              />
             </div>
             <button type="button" onClick={() => setMostrarAvancados((v) => !v)}
               className={cn("inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-colors", mostrarAvancados ? "bg-primary-50 border-primary-200 text-primary-700" : "bg-white border-surface-border text-ink-muted hover:bg-surface-alt")}>
@@ -321,7 +330,7 @@ export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens:
           {/* Resumo / ações de filtro */}
           <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
             <div className="flex items-center gap-3 text-sm text-ink-muted">
-              <span>Exibindo <strong className="text-ink">{exibindo}</strong> de <strong className="text-ink">{total}</strong> ordens de serviço</span>
+              <span data-contador><strong className="text-ink">{total.toLocaleString("pt-BR")}</strong> {total === 1 ? "ordem de serviço" : "ordens de serviço"}</span>
               {filtrosAtivos > 0 && (
                 <span className="inline-flex items-center gap-1 text-xs font-semibold bg-primary-50 text-primary-700 px-2 py-0.5 rounded-full">
                   <Filter className="w-3 h-3" /> {filtrosAtivos} filtro(s) ativo(s)
@@ -336,11 +345,16 @@ export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens:
           </div>
         </div>
 
-        {/* Resultados */}
+        {/* Resultados (celular: sempre cartões) */}
+        <div className={cn("transition-opacity", pendente && "opacity-60")} aria-busy={pendente}>
         {ordens.length === 0 ? (
-          <p className="text-center text-ink-subtle py-12">Nenhuma OS encontrada com os filtros aplicados.</p>
-        ) : view === "cards" ? (
-          <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="flex flex-col items-center gap-2 py-12 text-center" data-lista-vazia>
+            <p className="text-sm font-medium text-ink">Nenhuma OS encontrada</p>
+            <p className="text-xs text-ink-muted">{buscaLocal ? `Nada combina com “${buscaLocal}”.` : "Nenhuma OS com os filtros aplicados."}</p>
+            {filtrosAtivos > 0 && <button type="button" onClick={limparFiltros} className="text-sm text-primary-600 hover:underline">Limpar filtros</button>}
+          </div>
+        ) : (<>
+          <div className={cn("p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3", view !== "cards" && "md:hidden")} data-cartoes>
             {ordens.map((os) => (
               <div key={os.id} className="relative">
               {massa && <CheckboxLinha id={os.id} rotulo={os.chamadoNumero ?? os.numero} className="absolute top-3 right-3 z-10 bg-white rounded" />}
@@ -368,8 +382,8 @@ export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens:
               </div>
             ))}
           </div>
-        ) : (
-          <div className="overflow-x-auto">
+          {view !== "cards" && (
+          <div className="overflow-x-auto hidden md:block">
             <table className="w-full text-sm">
               <thead className="bg-surface-alt border-b border-surface-border">
                 <tr>
@@ -411,7 +425,12 @@ export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens:
               </tbody>
             </table>
           </div>
-        )}
+          )}
+        </>)}
+        </div>
+        <div className="px-4 py-3 border-t border-surface-border">
+          <Paginacao total={total} pagina={pagina} porPagina={porPagina} rotulo={total === 1 ? "ordem de serviço" : "ordens de serviço"} onNavegar={setParams} />
+        </div>
       </div>
     </div>
   );
