@@ -10,6 +10,8 @@ import { lerFiltros, montarWhere } from "@/lib/equipamento-listagem";
 import { lerFiltrosVeiculos, montarWhereVeiculos } from "@/lib/veiculo-listagem";
 import { lerFiltrosColaboradores, montarWhereColaboradores } from "@/lib/colaborador-listagem";
 import { ranquearSugestoes, type Sugestao } from "@/lib/listagem";
+import { whereEstoque } from "@/lib/estoque/servidor";
+import { formatarQtd } from "@/lib/estoque/regras";
 
 /** Quantos candidatos o banco devolve antes de ranquear (os 5 melhores saem daqui) */
 const CANDIDATOS = 50;
@@ -71,6 +73,13 @@ export const SUGESTOES: Record<string, DefSugestao> = {
       where: montarWhereColaboradores(empresaId, lerFiltrosColaboradores({ q })), select: { id: true, nome: true, cargo: { select: { nome: true } } },
       orderBy: [{ nome: "asc" }, { id: "asc" }], take: CANDIDATOS,
     })).map((t: any) => ({ id: t.id, rotulo: t.nome, detalhe: t.cargo?.nome ?? null, href: `/colaboradores/${t.id}/editar` })),
+  },
+  estoque: {
+    modulo: "estoque",
+    buscar: async (empresaId, q) => (await p.produto.findMany({
+      where: whereEstoque(empresaId, { busca: q }), select: { id: true, nome: true, unidade: true, saldo: true },
+      orderBy: [{ nome: "asc" }, { id: "asc" }], take: CANDIDATOS,
+    })).map((x: any) => ({ id: x.id, rotulo: x.nome, detalhe: `saldo ${formatarQtd(Number(x.saldo))} ${x.unidade}`, href: `/estoque/${x.id}` })),
   },
   equipes: {
     modulo: "equipes",

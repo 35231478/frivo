@@ -38,6 +38,8 @@ export const SECOES: SecaoDef[] = [
       { id: "equipamentos", label: "Equipamentos", icone: "🔧", acoes: ["visualizar", "criar", "editar", "excluir"] },
       { id: "calendario", label: "Calendário", icone: "📅", acoes: ["visualizar"] },
       { id: "qrcodes", label: "QR Codes", icone: "📊", acoes: ["visualizar", "gerenciar"] },
+      // Estoque: ver saldos/extrato; gerenciar = lançar entrada, ajuste e inventário
+      { id: "estoque", label: "Estoque", icone: "📦", acoes: ["visualizar", "gerenciar"] },
     ],
   },
   {
@@ -167,6 +169,7 @@ const ROTA_MODULO: Record<string, string> = {
   equipes: "equipes",
   colaboradores: "equipes",
   veiculos: "veiculos",
+  estoque: "estoque",
   configuracoes: "configuracoes",
 };
 
@@ -189,6 +192,7 @@ export const PRESETS: Record<string, Permissoes> = {
     qrcodes: ["visualizar", "gerenciar"],
     equipes: ["visualizar", "gerenciar"],
     veiculos: ["visualizar", "checklist", "gerenciar"],
+    estoque: ["visualizar", "gerenciar"],
     relatorios: ["visualizar", "exportar"],
   }),
   FINANCEIRO: montarPermissoes({
@@ -199,6 +203,7 @@ export const PRESETS: Record<string, Permissoes> = {
     contratos: ["visualizar", "criar", "editar"],
     licitacoes: ["visualizar", "gerenciar"],
     financeiro: ["visualizar", "medicoes", "contasReceber", "fluxoCaixa", "folha"],
+    estoque: ["visualizar"],
     relatorios: ["visualizar", "exportar"],
   }),
   TECNICO: montarPermissoes({

@@ -433,6 +433,7 @@ model Empresa {
   tiposEquipamentoCustom TipoEquipamentoCustom[]
   servicos               Servico[]
   produtos               Produto[]
+  movimentacoesEstoque   MovimentacaoEstoque[]
   orcamentos             Orcamento[]
   medicoes               Medicao[]
   contasReceber          ContaReceber[]
@@ -638,18 +639,19 @@ model Usuario {
   criadoEm     DateTime  @default(now()) @map("criado_em")
   atualizadoEm DateTime  @updatedAt @map("atualizado_em")
 
-  empresa            Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  ordensEmitidas     OrdemServico[]            @relation("UsuarioCriador")
-  ordensResponsavel  OrdemServico[]            @relation("OsResponsavel")
-  osHistorico        OsHistorico[]
-  interacoesCliente  InteracaoCliente[]
-  orcamentosCriados  Orcamento[]               @relation("OrcamentoCriador")
-  pedidosSolicitados PedidoCompraInterno[]     @relation("PedidoSolicitante")
-  pedidosComprador   PedidoCompraInterno[]     @relation("PedidoComprador")
-  pushSubscriptions  PushSubscription[]
-  contratoHistoricos ContratoHistoricoStatus[]
-  perfilAcessoId     String?                   @map("perfil_acesso_id")
-  perfilAcesso       PerfilAcesso?             @relation(fields: [perfilAcessoId], references: [id])
+  empresa              Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  ordensEmitidas       OrdemServico[]            @relation("UsuarioCriador")
+  ordensResponsavel    OrdemServico[]            @relation("OsResponsavel")
+  osHistorico          OsHistorico[]
+  interacoesCliente    InteracaoCliente[]
+  orcamentosCriados    Orcamento[]               @relation("OrcamentoCriador")
+  pedidosSolicitados   PedidoCompraInterno[]     @relation("PedidoSolicitante")
+  pedidosComprador     PedidoCompraInterno[]     @relation("PedidoComprador")
+  pushSubscriptions    PushSubscription[]
+  contratoHistoricos   ContratoHistoricoStatus[]
+  movimentacoesEstoque MovimentacaoEstoque[]
+  perfilAcessoId       String?                   @map("perfil_acesso_id")
+  perfilAcesso         PerfilAcesso?             @relation(fields: [perfilAcessoId], references: [id])
 
   @@unique([email, empresaId])
   @@index([empresaId, ativo])
@@ -1289,16 +1291,68 @@ model Produto {
   unidade       String   @default("un")
   valorPadrao   Decimal? @map("valor_padrao") @db.Decimal(10, 2)
   estoqueMinimo Int?     @map("estoque_minimo")
+  /// Saldo em estoque — CACHE da soma das movimentações (a fonte da verdade é movimentacoes_estoque).
+  /// Só muda pela lib/estoque (lançamento + saldo na mesma transação); nunca pelo cadastro.
+  saldo         Decimal  @default(0) @db.Decimal(12, 3)
   ativo         Boolean  @default(true)
   criadoEm      DateTime @default(now()) @map("criado_em")
 
-  empresa        Empresa            @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  empresa        Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   orcamentoItens OrcamentoProduto[]
   medicaoItens   MedicaoItem[]
   pedidoItens    PedidoCompraItem[]
   tabelaItens    TabelaPrecoItem[]
+  movimentacoes  MovimentacaoEstoque[]
 
   @@map("produtos")
+}
+
+// ─────────────────────────────────────────────
+// ESTOQUE — razão de movimentações (fonte da verdade do saldo)
+// ─────────────────────────────────────────────
+
+enum TipoMovimentacaoEstoque {
+  ENTRADA
+  SAIDA
+  AJUSTE
+  DEVOLUCAO
+}
+
+enum OrigemMovimentacaoEstoque {
+  COMPRA
+  OS
+  AJUSTE
+  INVENTARIO
+}
+
+/// Uma linha por movimento. `quantidade` é COM SINAL (+ entra, − sai): o saldo do produto é a soma.
+/// AJUSTE/INVENTARIO gravam a diferença para chegar ao valor informado. Nunca é apagada nem editada.
+model MovimentacaoEstoque {
+  id            String                    @id @default(cuid())
+  empresaId     String                    @map("empresa_id")
+  produtoId     String                    @map("produto_id")
+  tipo          TipoMovimentacaoEstoque
+  origem        OrigemMovimentacaoEstoque
+  quantidade    Decimal                   @db.Decimal(12, 3)
+  /// Saldo do produto logo depois deste movimento (extrato)
+  saldoApos     Decimal                   @map("saldo_apos") @db.Decimal(12, 3)
+  custoUnitario Decimal?                  @map("custo_unitario") @db.Decimal(12, 2)
+  /// Id do documento de origem (pedido de compra, OS…) — opcional, sem FK
+  refId         String?                   @map("ref_id")
+  observacao    String?
+  usuarioId     String?                   @map("usuario_id")
+  /// Futuro: estoque por local (veículo/almoxarifado). Ainda não usado.
+  localId       String?                   @map("local_id")
+  data          DateTime                  @default(now())
+  criadoEm      DateTime                  @default(now()) @map("criado_em")
+
+  empresa Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  produto Produto  @relation(fields: [produtoId], references: [id])
+  usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([empresaId, produtoId, data])
+  @@index([empresaId, data])
+  @@map("movimentacoes_estoque")
 }
 
 // ─────────────────────────────────────────────
