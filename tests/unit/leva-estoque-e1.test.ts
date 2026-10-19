@@ -481,7 +481,10 @@ describe("telas", () => {
     expect(h).toContain("Saldo negativo: saiu mais do que entrou.");
     expect(h).not.toContain("data-divergencia");
     expect([...new Set(attrs(h, "data-mov"))]).toEqual(movs("p1").map((m) => m.id).reverse());
-    expect(h).toContain("−4");
+    // quantidade com sinal no cartão (celular) E na tabela
+    expect(h.split("−4").length - 1).toBe(2);
+    expect(h).toMatch(/text-red-600">−4<\/td>/);
+    expect(h).toMatch(/text-success-700">\+3<\/td>/);
     expect(h).toContain("Bruno");
     expect(attrs(h, "data-lancar")).toEqual(["p1"]);
     await expect(extrato("pB")).rejects.toThrow("NEXT_NOT_FOUND");

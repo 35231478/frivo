@@ -118,6 +118,7 @@ describe("Lançar estoque", () => {
     await digitar("valor", "0,5");
     await enviar();
     expect($('[role="alert"]')!.textContent).toContain("o saldo ficou negativo (-0,5 kg)");
+    expect(enviados.at(-1)!.corpo).toEqual({ operacao: "ENTRADA", quantidade: 0.5 }); // sem custo digitado: não manda custo
     // "Lançar outro" volta ao formulário limpo
     await clicar(botao("Lançar outro"));
     expect($<HTMLInputElement>('input[name="valor"]')!.value).toBe("");
