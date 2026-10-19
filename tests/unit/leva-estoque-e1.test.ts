@@ -12,6 +12,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { moduloDaRota, pode, permissoesTotais, permissoesVazias, PRESETS, type Permissoes } from "@/lib/permissoes";
 import {
@@ -402,6 +403,12 @@ describe("GET extrato / lista / alertas", () => {
     logar(permissoesVazias());
     expect((await alertasApi()).status).toBe(403);
     expect((await listaApi()).status).toBe(403);
+    logar(so({ visualizar: true }));
+    expect((await alertasApi()).status).toBe(200);
+    expect((await listaApi()).status).toBe(200);
+    sessao.atual = null;
+    expect((await alertasApi()).status).toBe(401);
+    expect((await listaApi()).status).toBe(401);
   });
 
   it("listar e consultar não gravam nada", async () => {
@@ -484,5 +491,38 @@ describe("telas", () => {
     await mov("p1", "ENTRADA", 3);
     prod("p1").saldo = 99;
     expect(await extrato("p1")).toContain("data-divergencia");
+  });
+});
+
+// ═════════════════════════ Menu ═════════════════════════
+vi.mock("next-auth/react", () => ({ signOut: () => {} }));
+describe("menu: quem não tem Estoque não vê", () => {
+  const menu = async (permissoes: Permissoes, role = "OPERADOR") => {
+    const { Sidebar } = await import("@/components/layout/sidebar");
+    return renderToStaticMarkup(createElement(Sidebar, { session: { user: { id: "u1", name: "Ana", email: "a@x.com", empresaId: "e1", role, permissoes } } as any }));
+  };
+  it("grupo Estoque no Operacional só para quem pode ver o módulo", async () => {
+    expect(await menu(permissoesTotais())).toContain(">Estoque<");
+    expect(await menu({ ...permissoesVazias(), ordens: { visualizar: true } })).not.toContain(">Estoque<");
+    expect(await menu({ ...permissoesVazias(), ordens: { visualizar: true }, estoque: { visualizar: true } })).toContain(">Estoque<");
+    expect(await menu(permissoesVazias(), "ADMIN")).toContain(">Estoque<");
+  });
+});
+
+describe("sugestões da busca do estoque", () => {
+  const sugestoes = async (qs: string) => {
+    const { GET } = await import("@/app/api/listas/sugestoes/route");
+    const res = await GET(new NextRequest(`http://localhost/api/listas/sugestoes?${qs}`));
+    return { status: res.status, json: await res.json() };
+  };
+  it("produtos ativos da empresa, com o saldo; link para o extrato; precisa ver Estoque", async () => {
+    await mov("p1", "ENTRADA", 2.5);
+    const r = await sugestoes("lista=estoque&q=gás");
+    expect(r.json.sugestoes).toEqual([{ id: "p1", rotulo: "Gás R410A", detalhe: "saldo 2,5 kg", href: "/estoque/p1" }]);
+    expect((await sugestoes("lista=estoque&q=tubo")).json.sugestoes).toEqual([]); // inativo
+    logar({ ...permissoesVazias(), clientes: { visualizar: true } });
+    expect((await sugestoes("lista=estoque&q=gás")).status).toBe(403);
+    logar(permissoesTotais(), "e2");
+    expect((await sugestoes("lista=estoque&q=gás")).json.sugestoes.map((s: any) => s.id)).toEqual(["pB"]);
   });
 });
