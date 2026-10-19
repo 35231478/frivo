@@ -211,6 +211,14 @@ export const equipamentoSchema = z.object({
   fotos: z.array(z.string()).max(5, "Máximo de 5 imagens").optional(),
 });
 
+/** Limite da descrição dos serviços do contrato (contador "x/1000" no formulário). */
+export const MAX_DESCRICAO_SERVICOS = 1000;
+
+/**
+ * Contrato. Campos que saíram do formulário (NFS-e, itens inclusos, visitas, "exibir RT na NFS-e")
+ * NÃO estão aqui: o Zod descarta chave desconhecida, então nada novo é gravado neles e o valor
+ * antigo no banco não é apagado ao editar.
+ */
 export const contratoSchema = z.object({
   clienteId: z.string().min(1, "Cliente é obrigatório"),
   numero: z.string().min(1, "Número é obrigatório"),
@@ -256,28 +264,19 @@ export const contratoSchema = z.object({
     dataPrimeiraOs: z.string().optional().nullable(),
   })).default([]),
 
-  // Faturamento / NFS-e
+  // Faturamento (a NFS-e saiu do contrato: serviços da nota, período de referência, nº do contrato
+  // e vencimento na descrição não são mais gravados — o que já existia no banco fica como está)
   diaFaturamento: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().min(1).max(28).nullable()).default(null),
   tipoVencimento: z.preprocess((v) => (v === "" || v == null ? null : v), z.nativeEnum(TipoVencimento).nullable()).default(null),
   diasAposVencimento: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().min(0).max(365).nullable()).default(null),
   diaFixoMes: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().min(1).max(31).nullable()).default(null),
   ajusteFinsDeSemana: z.preprocess((v) => (v === "" || v == null ? null : v), z.nativeEnum(TratamentoFimSemana).nullable()).default(null),
-  descricaoNFSe: z.string().optional().nullable(),
-  servicosNFSeIds: z.array(z.string()).default([]),
-  adicionarPeriodoRef: z.boolean().default(false),
-  periodoRefOpcao: z.preprocess((v) => (v === "" || v == null ? null : v), z.nativeEnum(PeriodoRefNFSe).nullable()).default(null),
-  adicionarNumContrato: z.boolean().default(false),
-  adicionarVencimentoNFSe: z.boolean().default(false),
 
-  // Escopo
-  descricaoServicos: z.string().optional().nullable(),
-  itensInclusos: z.record(z.any()).optional().nullable(),
-  qtdVisitas: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().min(0).nullable()).default(null),
-  periodoVisitas: z.preprocess((v) => (v === "" || v == null ? null : v), z.nativeEnum(PeriodoVisita).nullable()).default(null),
+  // Escopo: só a descrição (itens inclusos e visitas saíram do formulário; o já gravado fica como está)
+  descricaoServicos: z.string().max(MAX_DESCRICAO_SERVICOS, `Descrição dos serviços: no máximo ${MAX_DESCRICAO_SERVICOS} caracteres.`).optional().nullable(),
 
   // Responsabilidade técnica
   artVencimento: z.string().optional().nullable(),
-  exibirRTNFSe: z.boolean().default(false),
   exibirRTPDF: z.boolean().default(false),
 
   // Reajuste
