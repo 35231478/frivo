@@ -71,7 +71,7 @@ export const lancamentoManualSchema = z.discriminatedUnion("operacao", [
   z.object({
     operacao: z.literal("AJUSTE"),
     novoSaldo: numero("Informe o saldo correto.").refine((n) => n >= 0, "O saldo correto não pode ser negativo.").refine((n) => n < MAX, "Valor grande demais.").refine(casas, "Use no máximo 3 casas decimais."),
-    observacao: obs.min(3, "Ajuste exige o motivo (observação)."),
+    observacao: z.string({ required_error: "Ajuste exige o motivo (observação)." }).trim().max(500, "Observação: no máximo 500 caracteres.").min(3, "Ajuste exige o motivo (observação)."),
   }).strict(),
   z.object({
     operacao: z.literal("INVENTARIO"),
@@ -89,5 +89,6 @@ export function mensagemLancamento(e: z.ZodError) {
   if (!i) return "Dados inválidos.";
   if (i.code === "unrecognized_keys") return `Campo não permitido: ${i.keys.join(", ")}.`;
   if (i.code === "invalid_union_discriminator") return "Escolha entrada, ajuste ou inventário.";
+  if (i.path.length === 0) return "Dados inválidos.";
   return i.message;
 }

@@ -141,7 +141,9 @@ describe("regras", () => {
     expect(msg({ operacao: "ENTRADA", quantidade: 1.2345 })).toBe("Use no máximo 3 casas decimais.");
     expect(msg({ operacao: "ENTRADA", quantidade: 1e10 })).toBe("Quantidade grande demais.");
     expect(msg({ operacao: "ENTRADA", quantidade: 1, custoUnitario: -1 })).toBe("O custo não pode ser negativo.");
-    expect(msg({ operacao: "AJUSTE", novoSaldo: 3 })).toBe("Required");
+    expect(msg({ operacao: "AJUSTE", novoSaldo: 3 })).toBe("Ajuste exige o motivo (observação).");
+    expect(msg(null)).toBe("Dados inválidos.");
+    expect(msg({ operacao: "AJUSTE", novoSaldo: 3, observacao: "x".repeat(501) })).toBe("Observação: no máximo 500 caracteres.");
     expect(msg({ operacao: "AJUSTE", novoSaldo: 3, observacao: "  " })).toBe("Ajuste exige o motivo (observação).");
     expect(msg({ operacao: "AJUSTE", novoSaldo: -1, observacao: "perda" })).toBe("O saldo correto não pode ser negativo.");
     expect(ok({ operacao: "AJUSTE", novoSaldo: 0, observacao: "perda" }).success).toBe(true);
@@ -265,12 +267,12 @@ describe("POST /api/estoque/:produtoId/movimentacoes", () => {
   it("validação: 400 com a mensagem; ajuste sem diferença = 400; nada gravado", async () => {
     const casos: [unknown, string][] = [
       [{ operacao: "ENTRADA", quantidade: 0 }, "A quantidade precisa ser maior que zero."],
-      [{ operacao: "AJUSTE", novoSaldo: 1 }, "Required"],
+      [{ operacao: "AJUSTE", novoSaldo: 1 }, "Ajuste exige o motivo (observação)."],
       [{ operacao: "AJUSTE", novoSaldo: 0, observacao: "zerado" }, "O saldo já é esse — não há o que ajustar."],
       [{ operacao: "SAIDA", quantidade: 1 }, "Escolha entrada, ajuste ou inventário."],
       [{ operacao: "ENTRADA", quantidade: 1, empresaId: "e2" }, "Campo não permitido: empresaId."],
       [{ operacao: "ENTRADA", quantidade: 1, usuarioId: "uB" }, "Campo não permitido: usuarioId."],
-      [null, "Expected object, received null"],
+      [null, "Dados inválidos."],
     ];
     for (const [corpo, erro] of casos) {
       const r = await lancarApi("p1", corpo);
