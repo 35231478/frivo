@@ -138,12 +138,14 @@ INSERT INTO "_tipos_padrao" VALUES
     ('FANCOIL', 'Fancoil', 'Fan Coil'),
     ('CAMARA_FRIA', 'Câmara Fria/Refrigeração', 'Câmara Fria');
 
--- 5a. Tipo personalizado com o mesmo nome (sem diferenciar maiúsculas, espaços e pontuação) vira o padrão
+-- 5a. Tipo personalizado com o mesmo nome — o novo ou o antigo de fábrica (ex.: "VRF" → VRF/VRV), sem
+--     diferenciar maiúsculas, espaços e pontuação — vira o padrão (mantém id, equipamentos e formulários)
 UPDATE "tipos_equipamento_custom" t SET "chave_enum" = alvo."chave"
 FROM (
   SELECT DISTINCT ON (c."empresa_id", p."chave") c."id", p."chave"
   FROM "tipos_equipamento_custom" c
-  JOIN "_tipos_padrao" p ON regexp_replace(lower(c."nome"), '[^[:alnum:]]', '', 'g') = regexp_replace(lower(p."nome"), '[^[:alnum:]]', '', 'g')
+  JOIN "_tipos_padrao" p ON regexp_replace(lower(c."nome"), '[^[:alnum:]]', '', 'g')
+    IN (regexp_replace(lower(p."nome"), '[^[:alnum:]]', '', 'g'), regexp_replace(lower(coalesce(p."nome_antigo", p."nome")), '[^[:alnum:]]', '', 'g'))
   WHERE c."chave_enum" IS NULL
     AND NOT EXISTS (SELECT 1 FROM "tipos_equipamento_custom" x WHERE x."empresa_id" = c."empresa_id" AND x."chave_enum" = p."chave")
   ORDER BY c."empresa_id", p."chave", c."ativo" DESC, c."criado_em"

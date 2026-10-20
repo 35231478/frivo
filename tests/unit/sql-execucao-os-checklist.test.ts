@@ -41,7 +41,7 @@ describe.skipIf(!URL)("SQL de produção: execução da OS — tipos, checklist 
       CREATE TABLE "atividades_os" ("id" TEXT PRIMARY KEY);
       CREATE TABLE "atividade_equipamentos" ("id" TEXT PRIMARY KEY, "atividade_id" TEXT NOT NULL, "equipamento_id" TEXT NOT NULL,
         "feito" BOOLEAN NOT NULL DEFAULT false, "feito_em" TIMESTAMP(3), "criado_em" TIMESTAMP(3) NOT NULL DEFAULT now());
-      INSERT INTO "empresas" VALUES ('e1'), ('e2'), ('e3');
+      INSERT INTO "empresas" VALUES ('e1'), ('e2'), ('e3'), ('e4');
       -- e1: tipos padrão com o nome de fábrica (backfill antigo) + "cassete" criado à mão, com equipamento
       INSERT INTO "tipos_equipamento_custom" ("id", "empresa_id", "nome", "chave_enum", "criado_em") VALUES
         ('e1-split', 'e1', 'Ar-cond. Split', 'AR_CONDICIONADO_SPLIT', now()), ('e1-vrf', 'e1', 'VRF', 'VRF', now()),
@@ -53,7 +53,10 @@ describe.skipIf(!URL)("SQL de produção: execução da OS — tipos, checklist 
         ('e2-split', 'e2', 'Split 9000 BTU', 'AR_CONDICIONADO_SPLIT'), ('e2-vrf', 'e2', 'VRF', 'VRF'),
         ('e2-vrfvrv', 'e2', 'VRF/VRV', NULL), ('e2-chiller', 'e2', 'Chiller', 'CHILLER');
       -- e3: nenhum tipo ainda
-      INSERT INTO "equipamentos" VALUES ('eq-cas', 'e1', 'OUTRO', 'e1-cassete'), ('eq-chi', 'e1', 'CHILLER', NULL), ('eq-out', 'e1', 'OUTRO', NULL);
+      -- e4: criou à mão "VRF" e "Fan coil" (os nomes ANTIGOS de fábrica), sem chave, com equipamento
+      INSERT INTO "tipos_equipamento_custom" ("id", "empresa_id", "nome", "chave_enum") VALUES ('e4-vrf', 'e4', 'VRF', NULL), ('e4-fan', 'e4', 'Fan coil', NULL);
+      INSERT INTO "equipamentos" VALUES ('eq-cas', 'e1', 'OUTRO', 'e1-cassete'), ('eq-chi', 'e1', 'CHILLER', NULL), ('eq-out', 'e1', 'OUTRO', NULL),
+        ('eq-vrf4', 'e4', 'VRF', 'e4-vrf');
     `);
     // o checklist do Chiller da e2 "já existia" (tabela criada por uma rodada anterior, item inativado pela empresa)
     psql(["-f", ARQUIVO]);
@@ -104,11 +107,17 @@ describe.skipIf(!URL)("SQL de produção: execução da OS — tipos, checklist 
       "VRF=VRF", // o nome novo já estava em uso por outro tipo ativo: não renomeia
     ]);
     expect(tipos("e3")).toEqual(TIPOS_PADRAO.map((t) => `${t.chave}=${t.nome}`).sort());
+    // Nome antigo de fábrica também é adotado (o mesmo tipo, com os equipamentos dele): nada de "VRF" + "VRF/VRV"
+    expect(linhas(`SELECT "id" || '=' || coalesce("chave_enum", '-') || '=' || "nome" FROM "tipos_equipamento_custom" WHERE "empresa_id" = 'e4' AND "id" LIKE 'e4-%' ORDER BY 1`))
+      .toEqual(["e4-fan=FANCOIL=Fan coil", "e4-vrf=VRF=VRF/VRV"]); // "Fan coil" é a grafia da empresa: fica
+    expect(tipos("e4").filter((t) => t.includes("VRF") || t.includes("FANCOIL"))).toEqual(["FANCOIL=Fan coil", "VRF=VRF/VRV"]);
+    expect(sql(`SELECT "tipo_equipamento_id" FROM "equipamentos" WHERE "id" = 'eq-vrf4'`)).toBe("e4-vrf");
   });
 
   it("equipamentos: o tipo que faltava é preenchido; o do tipo adotado passa ao enum novo", () => {
     expect(linhas(`SELECT "id" || ':' || "tipo" || ':' || coalesce("tipo_equipamento_id", '-') FROM "equipamentos" ORDER BY 1`)).toEqual([
       "eq-cas:CASSETE:e1-cassete", "eq-chi:CHILLER:e1-chiller", `eq-out:OUTRO:-`, // e1 não tem tipo "Outro": fica sem FK, como antes
+      "eq-vrf4:VRF:e4-vrf",
     ]);
   });
 
