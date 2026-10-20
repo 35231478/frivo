@@ -67,6 +67,7 @@ describe("painel de preço de venda", () => {
     await clicar($("[data-salvar-preco]"));
     expect(chamadas.at(-1)).toEqual({ url: "/api/estoque/pGas/preco", metodo: "PUT", corpo: { modo: "margem", margem: 30, custoBase: 100 } });
     expect(txt('[role="status"]')).toContain("Preço salvo: R$ 142,86.");
+    expect(txt("[data-situacao-preco]")).toBe("Preço atual");
     expect(txt("[data-preco-salvo]")).toContain("definido por margem de 30,0% sobre a venda");
     expect(nav.refresh).toHaveBeenCalled();
   });
@@ -74,6 +75,9 @@ describe("painel de preço de venda", () => {
   it("preço fixo recalcula a margem e o markup exibidos; vai para a API como preço", async () => {
     await painel({ preco: 142.86, margemVenda: 30 });
     expect(($('input[name="margem"]') as HTMLInputElement).value).toBe("30"); // abre no modo em que foi salvo
+    expect(txt("[data-situacao-preco]")).toBe("Preço atual");
+    expect(txt("[data-preco]")).toBe("R$ 142,86");
+    expect($("[data-sugestao-margem-alvo]")).toBeNull(); // custo igual ao da margem: nada a sugerir
     await clicar($('[data-modo="preco"]'));
     await digitar($('input[name="preco"]'), "150");
     expect(txt("[data-preco]")).toBe("R$ 150,00");
@@ -144,9 +148,18 @@ describe("conciliação: conversão, aviso de custo e preço", () => {
     expect($("[data-preco-venda]")).toBeNull();
     expect(chamadas).toEqual([]); // nada foi gravado
     await clicar($('[data-ajustar-preco="1"]'));
+    // abre mostrando o preço ATUAL com o custo desta nota (nada simulado, nada salvo)
+    expect(txt("[data-situacao-preco]")).toBe("Preço atual");
     expect(txt("[data-custo]")).toBe("R$ 105,00");
-    expect(txt("[data-preco-venda] [data-margem]")).toBe("30,0%"); // por margem: 30% sobre o custo novo
+    expect(txt("[data-preco-venda] [data-preco]")).toBe("R$ 142,86");
+    expect(txt("[data-preco-venda] [data-margem]")).toBe("26,5%");
+    expect(txt("[data-preco-venda] [data-markup]")).toBe("36,1%");
+    expect(($("[data-salvar-preco]") as HTMLButtonElement).disabled).toBe(true);
+    expect(txt("[data-sugestao-margem-alvo]")).toContain("Com a margem alvo de 30,0% e este custo, o preço seria R$ 150,00.");
+    await clicar($("[data-usar-margem-alvo]"));
+    expect(txt("[data-situacao-preco]")).toBe("Simulação — ainda não salvo");
     expect(txt("[data-preco-venda] [data-preco]")).toBe("R$ 150,00");
+    expect(txt("[data-preco-venda] [data-margem]")).toBe("30,0%");
     respostas["/api/estoque/pGas/preco"] = { status: 200, corpo: { preco: 150, margemVenda: 30 } };
     await clicar($("[data-salvar-preco]"));
     expect(chamadas.at(-1)).toEqual({ url: "/api/estoque/pGas/preco", metodo: "PUT", corpo: { modo: "margem", margem: 30, custoBase: 105 } });

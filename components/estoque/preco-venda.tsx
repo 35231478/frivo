@@ -36,8 +36,10 @@ export interface PrecoVendaProps {
 
 /**
  * Preço de venda do produto: por MARGEM sobre a venda (preço = custo ÷ (1 − margem)) ou por preço
- * FIXO. Mostra ao vivo custo · preço · margem % (sobre a venda) · markup % (sobre o custo). Só grava
- * quando a pessoa clica em salvar — o custo mudar nunca muda o preço sozinho.
+ * FIXO. Abre mostrando o preço ATUAL (e a margem/markup que ele dá com o custo de agora); ao mexer,
+ * mostra ao vivo a SIMULAÇÃO — custo · preço · margem % (sobre a venda) · markup % (sobre o custo) —
+ * marcada como "ainda não salvo". Só grava quando a pessoa clica em salvar: o custo mudar nunca muda
+ * o preço sozinho.
  */
 export function PrecoVenda({ produtoId, unidade, custo, rotuloCusto = "Último custo de compra", preco, margemVenda, podeEditar, className }: PrecoVendaProps) {
   const router = useRouter();
@@ -48,14 +50,21 @@ export function PrecoVenda({ produtoId, unidade, custo, rotuloCusto = "Último c
   const [precoTxt, setPrecoTxt] = useState(preco != null ? numeroBr(preco) : "");
   const [enviando, setEnviando] = useState(false);
   const [msg, setMsg] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
+  // até a pessoa mexer, os cartões mostram o preço SALVO (não uma simulação)
+  const [editado, setEditado] = useState(false);
+  const mexer = () => { setEditado(true); setMsg(null); };
 
   const margemDigitada = lerNumero(margemTxt);
   const precoNovo = modo === "margem" ? precoPorMargem(custo, margemDigitada) : lerNumero(precoTxt);
-  const margem = margemSobreVenda(precoNovo, custo);
-  const markup = markupSobreCusto(precoNovo, custo);
+  const precoExibido = editado ? precoNovo : salvo.preco;
+  const simulando = editado && precoNovo !== salvo.preco;
+  const margem = margemSobreVenda(precoExibido, custo);
+  const markup = markupSobreCusto(precoExibido, custo);
+  // margem alvo guardada e o custo mudou: o preço que a manteria (só sugestão, com botão)
+  const precoDaMargemAlvo = !editado && salvo.margemVenda != null ? precoPorMargem(custo, salvo.margemVenda) : null;
   const erroMargem = modo === "margem" && margemTxt.trim() !== "" && precoNovo == null
     ? (margemDigitada != null && margemDigitada >= 100 ? "A margem sobre a venda precisa ser menor que 100%." : "Margem inválida.") : null;
-  const mudou = precoNovo != null && (precoNovo !== salvo.preco || (modo === "margem" ? margemDigitada : null) !== salvo.margemVenda);
+  const mudou = editado && precoNovo != null && (precoNovo !== salvo.preco || (modo === "margem" ? margemDigitada : null) !== salvo.margemVenda);
 
   async function salvar() {
     if (precoNovo == null || !(precoNovo > 0)) { setMsg({ tipo: "erro", texto: "Informe uma margem ou um preço válido." }); return; }
@@ -66,6 +75,7 @@ export function PrecoVenda({ produtoId, unidade, custo, rotuloCusto = "Último c
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { setMsg({ tipo: "erro", texto: j.erro ?? "Não foi possível salvar o preço." }); return; }
       setSalvo({ preco: j.preco, margemVenda: j.margemVenda });
+      setEditado(false);
       setMsg({ tipo: "ok", texto: `Preço salvo: ${moeda(j.preco)}.` });
       router.refresh();
     } catch {
@@ -75,9 +85,12 @@ export function PrecoVenda({ produtoId, unidade, custo, rotuloCusto = "Último c
 
   return (
     <div className={cn("space-y-3", className)} data-preco-venda={produtoId}>
+      <p className={cn("text-[11px] font-semibold uppercase tracking-wider", simulando ? "text-amber-700" : "text-ink-muted")} data-situacao-preco={simulando ? "simulacao" : "atual"}>
+        {simulando ? "Simulação — ainda não salvo" : "Preço atual"}
+      </p>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
         <Valor rotulo="Custo" valor={moeda(custo, 4)} sub={semCusto ? "sem compra com custo ainda" : `${rotuloCusto} · por ${unidade}`} attr="data-custo" />
-        <Valor rotulo="Preço" valor={moeda(precoNovo)} sub={`de venda · por ${unidade}`} attr="data-preco" destaque />
+        <Valor rotulo="Preço" valor={moeda(precoExibido)} sub={`de venda · por ${unidade}`} attr="data-preco" destaque />
         <Valor rotulo="Margem" valor={formatarPct(margem)} sub="sobre a venda" attr="data-margem" />
         <Valor rotulo="Markup" valor={formatarPct(markup)} sub="sobre o custo" attr="data-markup" />
       </div>
@@ -88,7 +101,7 @@ export function PrecoVenda({ produtoId, unidade, custo, rotuloCusto = "Último c
             {(["margem", "preco"] as const).map((m) => (
               <button key={m} type="button" role="radio" aria-checked={modo === m} data-modo={m}
                 disabled={m === "margem" && semCusto} title={m === "margem" && semCusto ? "Sem custo de compra não dá para calcular pela margem" : undefined}
-                onClick={() => { setModo(m); setMsg(null); if (m === "preco" && precoNovo != null && !precoTxt) setPrecoTxt(numeroBr(precoNovo)); }}
+                onClick={() => { setModo(m); mexer(); if (m === "preco" && precoNovo != null && !precoTxt) setPrecoTxt(numeroBr(precoNovo)); }}
                 className={cn("px-3 py-1.5 text-xs font-semibold rounded-md transition-colors disabled:opacity-40", modo === m ? "bg-white text-primary-700 shadow-sm" : "text-ink-muted hover:text-ink")}>
                 {m === "margem" ? "Por margem" : "Preço fixo"}
               </button>
@@ -98,7 +111,7 @@ export function PrecoVenda({ produtoId, unidade, custo, rotuloCusto = "Último c
             <label className="block">
               <span className="text-xs font-semibold text-ink">Margem sobre a venda</span>
               <div className="relative mt-1 w-32">
-                <Input value={margemTxt} onChange={(e) => { setMargemTxt(e.target.value); setMsg(null); }} inputMode="decimal" className="pr-7 text-right" aria-label="Margem sobre a venda (%)" name="margem" />
+                <Input value={margemTxt} onChange={(e) => { setMargemTxt(e.target.value); mexer(); }} inputMode="decimal" className="pr-7 text-right" aria-label="Margem sobre a venda (%)" name="margem" />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-ink-muted">%</span>
               </div>
             </label>
@@ -107,7 +120,7 @@ export function PrecoVenda({ produtoId, unidade, custo, rotuloCusto = "Último c
               <span className="text-xs font-semibold text-ink">Preço de venda</span>
               <div className="relative mt-1 w-40">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink-muted">R$</span>
-                <Input value={precoTxt} onChange={(e) => { setPrecoTxt(e.target.value); setMsg(null); }} inputMode="decimal" className="pl-9 text-right" aria-label="Preço de venda (R$)" name="preco" />
+                <Input value={precoTxt} onChange={(e) => { setPrecoTxt(e.target.value); mexer(); }} inputMode="decimal" className="pl-9 text-right" aria-label="Preço de venda (R$)" name="preco" />
               </div>
             </label>
           )}
@@ -117,6 +130,15 @@ export function PrecoVenda({ produtoId, unidade, custo, rotuloCusto = "Último c
         <p className="text-xs text-ink-muted">Para mudar o preço, precisa de Configurações › gerenciar (o mesmo do cadastro de produtos).</p>
       )}
       {erroMargem && <p className="text-xs text-red-600" role="alert">{erroMargem}</p>}
+      {podeEditar && precoDaMargemAlvo != null && salvo.preco != null && Math.abs(precoDaMargemAlvo - salvo.preco) >= 0.01 && (
+        <p className="text-xs text-ink-muted" data-sugestao-margem-alvo>
+          Com a margem alvo de {formatarPct(salvo.margemVenda)} e este custo, o preço seria <strong className="text-ink">{moeda(precoDaMargemAlvo)}</strong>.{" "}
+          <button type="button" className="font-semibold text-primary-600 hover:underline" data-usar-margem-alvo
+            onClick={() => { setModo("margem"); setMargemTxt(numeroBr(salvo.margemVenda!)); mexer(); }}>
+            Simular com a margem alvo
+          </button>
+        </p>
+      )}
       <p className="text-[11px] text-ink-subtle" data-preco-salvo>
         Preço salvo: <strong className="text-ink-muted">{moeda(salvo.preco)}</strong>
         {salvo.margemVenda != null ? ` · definido por margem de ${formatarPct(salvo.margemVenda)} sobre a venda` : salvo.preco != null ? " · preço fixo" : ""}
