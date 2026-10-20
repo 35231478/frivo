@@ -255,6 +255,15 @@ describe.skipIf(!URL_PG)("app do técnico: Meu dia, escopo e sincronização off
     comoEscritorio();
     const x = await exec("aA");
     expect(x.execucao).toMatchObject({ bloqueada: true, conclusao: { ok: true, atendidos: 1, naoAtendidos: 1 } });
+    // vínculos criados no mesmo instante: ordem estável (desempate pelo id), não a ordem física do banco,
+    // que muda depois de cada gravação — o "próximo equipamento" depende disso
+    const mesmo = new Date("2026-10-20T12:00:00Z");
+    await prisma.atividadeEquipamento.createMany({ data: [
+      { id: "vz", atividadeId: "aG", equipamentoId: "eqA", criadoEm: mesmo }, { id: "va", atividadeId: "aG", equipamentoId: "eqB", criadoEm: mesmo },
+    ] });
+    await prisma.atividadeEquipamento.update({ where: { id: "va" }, data: { feito: true } });
+    expect((await exec("aG")).execucao.equipamentos.map((e: any) => e.equipamento.id)).toEqual(["eqB", "eqA"]);
+    await prisma.atividadeEquipamento.deleteMany({ where: { atividadeId: "aG" } });
     expect(equipDe(x, "eqA").respostas.i2).toMatchObject({ status: "ATENCAO", audio: true, audioId: expect.any(String) });
     expect(equipDe(x, "eqA").respostas.m1).toMatchObject({ valor: 118.5, unidade: "psi", status: null });
     expect(x.execucao.adicionais).toEqual([expect.objectContaining({ clientId: "adic-0001-aaaa", descricao: "Troca do controle remoto (pedido do cliente)", statusCobranca: "A_AVALIAR", criadoPor: "João", fotos: [expect.objectContaining({ clientId: "foto-adic-0001" })] })]);

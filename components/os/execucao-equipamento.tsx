@@ -46,7 +46,7 @@ const opcoesCampo = (o: unknown): string[] => Array.isArray(o) ? o.map(String) :
 /** Situação do equipamento na atividade (o chip do cabeçalho do cartão). */
 export function situacaoEquipamento(e: EquipamentoTela): { rotulo: string; classe: string; chave: string } {
   const respondidos = e.itens.filter((i) => respondido(i, e.respostas[i.id])).length;
-  if (!e.feito) return respondidos || e.fotos.length
+  if (!e.feito) return respondidos || e.fotos.length || (e.observacao ?? "").trim()
     ? { chave: "nao-atendido", rotulo: "Não atendido", classe: "bg-slate-100 text-slate-600" }
     : { chave: "nao-iniciado", rotulo: "Não iniciado", classe: "bg-slate-100 text-slate-500" };
   if (e.completo) return { chave: "completo", rotulo: "Completo", classe: "bg-success-50 text-success-700" };

@@ -91,7 +91,7 @@ export async function carregarExecucao(empresaId: string, osId: string, atividad
 
   const vinculos = await prisma.atividadeEquipamento.findMany({
     where: { atividadeId },
-    orderBy: { criadoEm: "asc" },
+    orderBy: [{ criadoEm: "asc" }, { id: "asc" }], // vínculos criados juntos: ordem estável (não muda depois de gravar)
     select: { id: true, feito: true, observacao: true, equipamento: { select: SELECT_EQUIP_EXECUCAO } },
   });
   const tipoIds = [...new Set(vinculos.map((v) => v.equipamento.tipoEquipamentoId).filter((x): x is string => !!x))];

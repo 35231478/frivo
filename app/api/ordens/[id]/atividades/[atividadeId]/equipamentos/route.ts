@@ -42,7 +42,7 @@ export async function GET(_: NextRequest, { params }: Params) {
   const itens = await prisma.atividadeEquipamento.findMany({
     where: { atividadeId },
     select: equipSelect,
-    orderBy: { criadoEm: "asc" },
+    orderBy: [{ criadoEm: "asc" }, { id: "asc" }],
   });
   return NextResponse.json(itens);
 }
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   const itens = await prisma.atividadeEquipamento.findMany({
     where: { atividadeId },
     select: equipSelect,
-    orderBy: { criadoEm: "asc" },
+    orderBy: [{ criadoEm: "asc" }, { id: "asc" }],
   });
   return NextResponse.json(itens, { status: 201 });
 }

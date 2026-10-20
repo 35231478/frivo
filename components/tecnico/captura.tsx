@@ -168,7 +168,11 @@ export function ObservacaoVoz({ valor, onSalvar, aoDigitar, audio, onAudio, rotu
             {gravando ? <><Square className="w-4 h-4" /> Parar ({gravando}s)</> : <><span className="w-2.5 h-2.5 rounded-full bg-red-600" /> Gravar áudio</>}
           </button>
         )}
-        {!online && !ditar && <span className="text-xs text-ink-muted">Sem sinal: grave um áudio ou digite (o áudio sobe quando o sinal voltar).</span>}
+        {!online && !ditar && (
+          <span className="text-xs text-ink-muted">
+            {gravar ? "Sem sinal: grave um áudio ou digite (o áudio sobe quando o sinal voltar)." : "Sem sinal: digite (o ditado volta quando houver sinal)."}
+          </span>
+        )}
       </div>
       {audio && (
         <div className="flex items-center gap-2 rounded-xl bg-surface-alt border border-surface-border p-2" data-audio>

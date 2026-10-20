@@ -19,7 +19,8 @@ import type { AdicionalTela, EquipamentoTela, ExecucaoTela, NovaOperacao, Retrat
 /** Situação do equipamento (chip da lista). */
 export function situacao(e: EquipamentoTela) {
   if (!e.feito) {
-    const mexeu = Object.values(e.respostas).some((r) => r.status || r.valor !== null) || e.fotos.length > 0;
+    // Marcado como não atendido (com o motivo) ou já mexido: "Não atendido"; senão ainda "A fazer"
+    const mexeu = Object.values(e.respostas).some((r) => r.status || r.valor !== null) || e.fotos.length > 0 || !!e.observacao;
     return mexeu ? { chave: "nao-atendido", rotulo: "Não atendido", classe: "bg-slate-100 text-slate-600" } : { chave: "nao-iniciado", rotulo: "A fazer", classe: "bg-primary-50 text-primary-700" };
   }
   if (e.completo) return { chave: "completo", rotulo: "Completo", classe: "bg-success-100 text-success-700" };
@@ -89,7 +90,7 @@ function ResumoOs({ r, x, aEnviar, registrar }: { r: RetratoAtividade; x: Execuc
             <span className={cn("text-xs font-semibold rounded-full px-2 py-0.5", st.classe)} data-status={x.atividade.status}>{st.rotulo}</span>
           </div>
           <h1 className="text-xl font-bold text-ink leading-tight">{c.cliente}</h1>
-          <p className="text-sm text-ink-muted">{x.atividade.titulo}{c.unidade ? ` · ${c.unidade}` : ""}{c.hora ? ` · ${c.hora}` : ""}</p>
+          <p className="text-sm text-ink-muted">{[x.atividade.titulo !== x.atividade.tipoOs?.nome && x.atividade.titulo, c.unidade, c.hora].filter(Boolean).join(" · ")}</p>
           {c.endereco && <p className="text-sm text-ink flex gap-1 pt-1"><MapPin className="w-4 h-4 text-ink-subtle shrink-0 mt-0.5" /> {c.endereco}</p>}
           {c.descricao && <p className="text-sm text-ink bg-surface-alt rounded-lg p-2.5 mt-2 whitespace-pre-line" data-descricao>{c.descricao}</p>}
         </div>
@@ -176,7 +177,6 @@ function ResumoOs({ r, x, aEnviar, registrar }: { r: RetratoAtividade; x: Execuc
       {concluir && <ModalConcluir x={x} onFechar={() => setConcluir(false)} onConcluir={async (resumo) => {
         await registrar([{ tipo: "concluir", atividadeId, dados: resumo ? { resumo } : {} }]);
         setConcluir(false);
-        setAviso({ tipo: "ok", texto: "Atividade concluída. Vai para o escritório na sincronização." });
       }} />}
     </div>
   );
