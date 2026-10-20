@@ -275,9 +275,10 @@ describe("execução guiada", () => {
     expect($("[data-modal-atencao]")).not.toBeNull();
     const salvar = () => $("[data-salvar-atencao]")!;
     expect(salvar().hasAttribute("disabled")).toBe(true);
-    await digitar($("[data-modal-atencao] textarea"), "Bandeja com lodo");
-    expect(salvar().hasAttribute("disabled")).toBe(true); // falta a foto
     await foto($("[data-modal-atencao] input[data-foto-input]"));
+    await esperarAte(() => !!$("[data-modal-atencao] [data-miniatura]"), "foto no modal");
+    expect(salvar().hasAttribute("disabled")).toBe(true); // falta a observação
+    await digitar($("[data-modal-atencao] textarea"), "Bandeja com lodo");
     await esperarAte(() => !salvar().hasAttribute("disabled"), "salvar habilitado");
     await clicar(salvar());
     await esperarAte(() => !$("[data-modal-atencao]"), "modal fechado");

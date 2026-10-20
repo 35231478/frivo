@@ -163,6 +163,13 @@ describe.skipIf(!URL_PG)("app do técnico: Meu dia, escopo e sincronização off
     // Maria vê as dela
     comoTecnico("t2", "uT2", "maria@clima.com");
     expect((await chamar("tecnico/meu-dia", "GET")).json.atividades.map((x: any) => x.atividadeId)).toEqual(["aB", "aC"]);
+    // Atividade de OUTRA empresa apontando para o mesmo técnico (dado inconsistente): nunca aparece
+    await prisma.ordemServico.create({ data: { id: "osE2", empresaId: "e2", numero: "OS-9", clienteId: "cE2", unidadeId: "unE2", criadoPorId: "uE2", descricao: "x" } });
+    await prisma.atividadeOs.create({ data: { id: "aE2", empresaId: "e2", ordemServicoId: "osE2", titulo: "Da outra", tecnicoId: "t1", dataAgendada: new Date(hoje.getTime() + 10 * H) } });
+    comoTecnico();
+    expect((await chamar("tecnico/meu-dia", "GET")).json.atividades.map((x: any) => x.atividadeId)).toEqual(["aB", "aA", "aG"]);
+    expect((await chamar("tecnico/agenda", "GET", {}, undefined, "?dias=3")).json.dias[0].atividades.map((x: any) => x.atividadeId)).toEqual(["aB", "aA", "aG"]);
+    await prisma.atividadeOs.delete({ where: { id: "aE2" } });
     // Usuário sem técnico ligado: aviso claro, lista vazia
     comoEscritorio();
     expect((await chamar("tecnico/meu-dia", "GET")).json).toMatchObject({ tecnico: null, atividades: [], aviso: expect.stringContaining("não está ligado a um técnico") });
@@ -205,7 +212,6 @@ describe.skipIf(!URL_PG)("app do técnico: Meu dia, escopo e sincronização off
     comoTecnico();
     fila.push(
       op("iniciar", "aA"),
-      op("foto", "aA", { equipamentoId: "eqA", dados: { dataUrl: FOTO, momento: "ANTES", clientId: "foto-antes-eqA-001" } }),
       op("tudoOk", "aA", { equipamentoId: "eqA" }),
       op("resposta", "aA", { equipamentoId: "eqA", itemId: "i2", dados: { status: "ATENCAO", observacao: "Bandeja com lodo" } }),
       op("foto", "aA", { equipamentoId: "eqA", dados: { dataUrl: FOTO, itemId: "i2", clientId: "foto-i2-eqA-0001" } }),
@@ -213,6 +219,8 @@ describe.skipIf(!URL_PG)("app do técnico: Meu dia, escopo e sincronização off
       op("foto", "aA", { equipamentoId: "eqA", dados: { dataUrl: FOTO, itemId: "i1", clientId: "foto-i1-eqA-0001" } }),
       op("resposta", "aA", { equipamentoId: "eqA", itemId: "m1", dados: { valor: 118.5 } }),
       op("resposta", "aA", { equipamentoId: "eqA", itemId: "m2", dados: { valor: 12, unidade: "°F" } }),
+      // a foto ANTES foi registrada depois das outras (o relatório ordena: antes → itens → depois)
+      op("foto", "aA", { equipamentoId: "eqA", dados: { dataUrl: FOTO, momento: "ANTES", clientId: "foto-antes-eqA-001" } }),
       op("foto", "aA", { equipamentoId: "eqA", dados: { dataUrl: FOTO, momento: "DEPOIS", clientId: "foto-depois-eqA-01" } }),
       op("equipamento", "aA", { equipamentoId: "eqB", dados: { feito: false } }),
       op("adicional", "aA", { dados: { clientId: "adic-0001-aaaa", descricao: "Troca do controle remoto (pedido do cliente)", equipamentoId: "eqB" } }),
@@ -237,12 +245,12 @@ describe.skipIf(!URL_PG)("app do técnico: Meu dia, escopo e sincronização off
     ]);
     const fotos = await prisma.fotoAtendimento.findMany({ where: { atividadeId: "aA" }, orderBy: { criadoEm: "asc" } });
     expect(fotos.map((f: any) => [f.equipamentoId, f.itemId, f.momento, f.clientId])).toEqual([
-      ["eqA", null, "ANTES", "foto-antes-eqA-001"], ["eqA", "i2", null, "foto-i2-eqA-0001"], ["eqA", "i1", null, "foto-i1-eqA-0001"], ["eqA", null, "DEPOIS", "foto-depois-eqA-01"],
+      ["eqA", "i2", null, "foto-i2-eqA-0001"], ["eqA", "i1", null, "foto-i1-eqA-0001"], ["eqA", null, "ANTES", "foto-antes-eqA-001"], ["eqA", null, "DEPOIS", "foto-depois-eqA-01"],
     ]);
     const adic = await prisma.servicoAdicional.findMany({ include: { fotos: true } });
     expect(adic.map((s: any) => [s.ordemServicoId, s.atividadeId, s.equipamentoId, s.statusCobranca, s.criadoPorId, s.fotos.length])).toEqual([["osA", "aA", "eqB", "A_AVALIAR", "uT", 1]]);
     // Nenhuma OS nova foi criada para o adicional
-    expect(await prisma.ordemServico.count()).toBe(4);
+    expect(await prisma.ordemServico.count({ where: { empresaId: "e1" } })).toBe(4);
     // eqB ficou "não atendido" (não trava); o retrato da atividade já mostra tudo
     comoEscritorio();
     const x = await exec("aA");
@@ -398,6 +406,8 @@ describe.skipIf(!URL_PG)("app do técnico: Meu dia, escopo e sincronização off
     const s = await prisma.servicoAdicional.findFirst({ where: { clientId: "adic-0001-aaaa" } });
     expect([s.descricao, s.equipamentoId]).toEqual(["Troca do controle remoto e das pilhas", "eqB"]); // equipamento não enviado = mantém
     expect((await sync([op("adicionalRemover", "aA", { dados: { clientId: "adic-0001-aaaa" } })])).json.resultados[0]).toMatchObject({ ok: true, dados: { removidos: 1 } });
+    // tirar (pelo id do aparelho) um que nunca subiu: não é erro, nada a tirar
+    expect((await sync([op("adicionalRemover", "aA", { dados: { clientId: "adic-0009-zzzz" } })])).json.resultados[0]).toMatchObject({ ok: true, dados: { removidos: 0 } });
     expect(await prisma.servicoAdicionalFoto.count({ where: { servicoId: s.id } })).toBe(0); // as fotos foram junto
     const r3 = await sync([op("foto", "aA", { equipamentoId: "eqA", dados: { dataUrl: FOTO, itemId: "i1", momento: "ANTES", clientId: "foto-errada-0001" } })]);
     expect(r3.json.resultados[0]).toMatchObject({ ok: false, status: 400 });

@@ -119,6 +119,8 @@ describe("estado da tela = retrato + fila (as mesmas regras do servidor)", () =>
       op({ tipo: "resposta", atividadeId: "aA", equipamentoId: "eqA", itemId: "m1", dados: { status: "NAO_SE_APLICA" } }, 4),
     ]);
     expect(z.equipamentos[0].respostas).toEqual({ m1: expect.objectContaining({ status: "NAO_SE_APLICA", valor: null }) });
+    // só o "OK" na medição: nada muda (o servidor recusaria)
+    expect(estadoDaAtividade(r, [op({ tipo: "resposta", atividadeId: "aA", equipamentoId: "eqA", itemId: "m1", dados: { status: "OK" } }, 1)]).equipamentos[0].respostas).toEqual({});
   });
 
   it("áudio vale como observação; vincular pela lista/QR traz o checklist do tipo; adicional com foto; concluir trava a tela", () => {
@@ -226,6 +228,14 @@ describe("motor de sincronização + IndexedDB", () => {
     expect(s.lotes).toEqual([]);
     // o retrato novo (pedido DEPOIS da confirmação) tira da fila
     await motor.baixarRetrato("aA");
+    expect(await fila()).toEqual([]);
+  });
+
+  it("retrato pedido ANTES da confirmação não tira a operação da fila (pode não contê-la)", async () => {
+    const op1 = await banco.enfileirar({ tipo: "iniciar", atividadeId: "aA", id: novoId(), criadoEm: "", estado: "enviada", tentativas: 0, enviadaEm: 2_000 } as OperacaoFila);
+    await banco.guardarRetrato(retrato(), 1_500); // pedido antes de o servidor confirmar
+    expect((await fila()).map((o) => o.seq)).toEqual([op1.seq]);
+    await banco.guardarRetrato(retrato(), 2_500); // pedido depois: já contém
     expect(await fila()).toEqual([]);
   });
 

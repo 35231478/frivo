@@ -27,7 +27,7 @@ export const MAX_FOTOS_EQUIPAMENTO = 40;
 export const MAX_FOTOS_ADICIONAL = 20;
 const TAMANHO_MAX_FOTO = 5 * 1024 * 1024;
 const MSG_FOTO = "Envie uma foto (JPG, PNG, WEBP ou HEIC).";
-/** Maior número que cabe na coluna (DECIMAL 12,3) */
+/** Maior número que cabe na coluna (DECIMAL 12,3 — o banco arredonda em 3 casas) */
 const VALOR_MAX = 999_999_999;
 
 const clientIdSchema = z.string().trim().min(8).max(64).regex(/^[A-Za-z0-9_-]+$/, "Identificador inválido.");
@@ -59,7 +59,6 @@ export async function responderItem(ctx: ContextoExecucao, itemId: string, d: Re
     if (status === "OK" || status === "ATENCAO") return erro(400, "Item de medição: informe o número (ou “Não se aplica”).");
     if (valor !== undefined && valor !== null) {
       if (Math.abs(valor) > VALOR_MAX) return erro(400, "Número grande demais para uma medição.");
-      valor = Math.round(valor * 1000) / 1000;
       status = null; // mediu: deixa de ser "Não se aplica"
     }
     if (status === "NAO_SE_APLICA") valor = null;
