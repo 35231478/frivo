@@ -8,7 +8,7 @@ import {
   type EquipamentoParaPendencia,
 } from "@/lib/execucao/pendencias";
 import { checklistSchema, planejarChecklist } from "@/lib/checklist/tipo";
-import { ITENS_BASE, TIPOS_PADRAO, checklistSugerido } from "@/lib/checklist/padrao";
+import { ITENS_BASE, ITENS_BASE_E1, TIPOS_PADRAO, TIPOS_PADRAO_E1, checklistSugerido } from "@/lib/checklist/padrao";
 
 const ITENS = [
   { id: "i1", texto: "Limpeza dos filtros", pedirFoto: true, pedirObservacao: false, ativo: true },
@@ -141,8 +141,30 @@ describe("checklists sugeridos (boas práticas AVAC)", () => {
 
   it("os 8 tipos pré-cadastrados, cada um com o seu checklist", () => {
     expect(TIPOS_PADRAO.map((t) => t.nome)).toEqual(["Split Hi-Wall (parede)", "Piso-Teto", "Cassete", "VRF/VRV", "Chiller", "Self-Contained", "Fancoil", "Câmara Fria/Refrigeração"]);
-    expect(ITENS_BASE).toHaveLength(14);
+    expect(ITENS_BASE).toHaveLength(17);
+    expect(ITENS_BASE_E1).toHaveLength(14);
     expect(textos("AR_CONDICIONADO_SPLIT")).toEqual(ITENS_BASE.map((i) => i.texto));
+  });
+
+  it("etapa 2: cada \"Medição de …\" vira itens de MEDIÇÃO (número + unidade), no mesmo lugar; o resto não muda", () => {
+    const medicoes = ITENS_BASE.filter((i) => i.tipoResposta === "MEDICAO").map((i) => `${i.texto} (${i.unidade})`);
+    expect(medicoes).toEqual([
+      "Pressão de sucção (psi)", "Pressão de descarga (psi)",
+      "Corrente do compressor (A)", "Corrente dos ventiladores (A)",
+      "Temperatura de insuflamento (°C)", "Temperatura de retorno (°C)",
+    ]);
+    // nenhum item de medição pede foto/observação (só captura) e nenhum item "Medição de…" sobra
+    for (const t of TIPOS_PADRAO) {
+      expect(t.itens.some((i) => /^Medição de/.test(i.texto))).toBe(false);
+      for (const i of t.itens.filter((x) => x.tipoResposta === "MEDICAO")) expect([i.pedirFoto, i.pedirObservacao, !!i.unidade]).toEqual([undefined, undefined, true]);
+    }
+    // os itens que não são medição ficam iguais e na mesma ordem relativa
+    TIPOS_PADRAO_E1.forEach((e1, k) => {
+      const semMedicao = (itens: typeof ITENS_BASE) => itens.filter((i) => !i.tipoResposta && !/^Medição de|Temperatura de entrada e saída|Controle de temperatura da câmara/.test(i.texto)).map((i) => i.texto);
+      expect(semMedicao(TIPOS_PADRAO[k].itens)).toEqual(semMedicao(e1.itens));
+    });
+    expect(textos("CAMARA_FRIA")).toContain("Setpoint da câmara");
+    expect(textos("CHILLER")).toEqual(expect.arrayContaining(["Temperatura de entrada da água", "Temperatura de saída da água"]));
   });
 
   it("específicos: Cassete/Piso-Teto (bomba de dreno, aletas); VRF (erros, comunicação, pressões); Câmara (degelo, gaxetas)", () => {

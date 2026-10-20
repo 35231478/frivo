@@ -437,6 +437,9 @@ model Empresa {
   checklistTipoItens     ChecklistTipoItem[]
   checklistRespostas     ChecklistResposta[]
   fotosAtendimento       FotoAtendimento[]
+  servicosAdicionais     ServicoAdicional[]
+  fotosAdicionais        ServicoAdicionalFoto[]
+  syncOperacoes          SyncOperacao[]
   servicos               Servico[]
   produtos               Produto[]
   movimentacoesEstoque   MovimentacaoEstoque[]
@@ -666,6 +669,9 @@ model Usuario {
   notasCompra          NotaCompra[]
   checklistRespostas   ChecklistResposta[]
   fotosAtendimento     FotoAtendimento[]
+  servicosAdicionais   ServicoAdicional[]
+  fotosAdicionais      ServicoAdicionalFoto[]
+  syncOperacoes        SyncOperacao[]
   perfilAcessoId       String?                   @map("perfil_acesso_id")
   perfilAcesso         PerfilAcesso?             @relation(fields: [perfilAcessoId], references: [id])
 
@@ -1029,6 +1035,7 @@ model Equipamento {
   respostasFormulario RespostaFormularioEquipamento[]
   checklistRespostas  ChecklistResposta[]
   fotosAtendimento    FotoAtendimento[]
+  servicosAdicionais  ServicoAdicional[]
 
   @@index([empresaId, ativo])
   @@index([unidadeId])
@@ -1491,24 +1498,25 @@ model OrdemServico {
   criadoEm           DateTime   @default(now()) @map("criado_em")
   atualizadoEm       DateTime   @updatedAt @map("atualizado_em")
 
-  empresa        Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  cliente        Cliente               @relation(fields: [clienteId], references: [id])
-  unidade        Unidade?              @relation(fields: [unidadeId], references: [id])
-  contrato       Contrato?             @relation(fields: [contratoId], references: [id])
-  responsavel    Usuario?              @relation("OsResponsavel", fields: [responsavelId], references: [id])
-  criadoPor      Usuario               @relation("UsuarioCriador", fields: [criadoPorId], references: [id])
-  contatoOrigem  ContatoCliente?       @relation("OsContatoOrigem", fields: [contatoOrigemId], references: [id])
-  equipamento    Equipamento?          @relation(fields: [equipamentoId], references: [id])
-  atividades     AtividadeOs[]
-  itensOrcamento OsItemOrcamento[]
-  medicoes       OsMedicao[]
-  anexos         OsAnexo[]
-  historico      OsHistorico[]
-  orcamentos     OrcamentoOs[]
-  medicaoItens   MedicaoItem[]
-  pedidosCompra  PedidoCompraInterno[]
-  prazos         OsPrazo[]
-  relatorios     RelatorioOs[]
+  empresa            Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  cliente            Cliente               @relation(fields: [clienteId], references: [id])
+  unidade            Unidade?              @relation(fields: [unidadeId], references: [id])
+  contrato           Contrato?             @relation(fields: [contratoId], references: [id])
+  responsavel        Usuario?              @relation("OsResponsavel", fields: [responsavelId], references: [id])
+  criadoPor          Usuario               @relation("UsuarioCriador", fields: [criadoPorId], references: [id])
+  contatoOrigem      ContatoCliente?       @relation("OsContatoOrigem", fields: [contatoOrigemId], references: [id])
+  equipamento        Equipamento?          @relation(fields: [equipamentoId], references: [id])
+  atividades         AtividadeOs[]
+  itensOrcamento     OsItemOrcamento[]
+  medicoes           OsMedicao[]
+  anexos             OsAnexo[]
+  historico          OsHistorico[]
+  orcamentos         OrcamentoOs[]
+  medicaoItens       MedicaoItem[]
+  pedidosCompra      PedidoCompraInterno[]
+  prazos             OsPrazo[]
+  relatorios         RelatorioOs[]
+  servicosAdicionais ServicoAdicional[]
 
   @@unique([numero, empresaId])
   @@index([empresaId, status])
@@ -1567,6 +1575,7 @@ model AtividadeOs {
   respostasEquipamento RespostaFormularioEquipamento[]
   checklistRespostas   ChecklistResposta[]
   fotosAtendimento     FotoAtendimento[]
+  servicosAdicionais   ServicoAdicional[]
 
   @@index([ordemServicoId])
   @@index([tecnicoId])
@@ -1661,6 +1670,21 @@ model AtividadeEquipamento {
 /// Tipo de resposta de um item do checklist (por ora só OK / Atenção / Não se aplica).
 enum TipoRespostaChecklist {
   OK_ATENCAO_NA
+  /// Medição: o técnico só captura número + unidade (sem avaliar no app)
+  MEDICAO
+}
+
+/// Foto do equipamento antes ou depois do serviço (as do checklist ficam sem momento)
+enum MomentoFoto {
+  ANTES
+  DEPOIS
+}
+
+/// Serviço adicional pedido na visita: o adm decide se cobra (Etapa 3 liga à cobrança)
+enum StatusCobrancaAdicional {
+  A_AVALIAR
+  COBRAR
+  NAO_COBRAR
 }
 
 /// Resposta de um item do checklist de um equipamento atendido.
@@ -1682,6 +1706,8 @@ model ChecklistTipoItem {
   pedirFoto         Boolean               @default(false) @map("pedir_foto")
   /// O técnico precisa escrever observação (ex.: o valor medido), exceto em "Não se aplica"
   pedirObservacao   Boolean               @default(false) @map("pedir_observacao")
+  /// Medição: unidade padrão (psi, °C, A, V…)
+  unidade           String?
   ordem             Int                   @default(0)
   ativo             Boolean               @default(true)
   criadoEm          DateTime              @default(now()) @map("criado_em")
@@ -1709,6 +1735,11 @@ model ChecklistResposta {
   observacao      String?            @db.Text
   /// Texto do item quando foi respondido (o relatório antigo continua fiel se o item mudar depois)
   textoItem       String             @map("texto_item")
+  /// Medição: o número capturado e a unidade (sem avaliação no app — a leitura é do adm)
+  valor           Decimal?           @db.Decimal(12, 3)
+  unidade         String?
+  /// Observação em áudio (data URL), quando o técnico não pôde ditar nem digitar
+  audioUrl        String?            @map("audio_url") @db.Text
   respondidoPorId String?            @map("respondido_por_id")
   respondidoEm    DateTime           @default(now()) @map("respondido_em")
   criadoEm        DateTime           @default(now()) @map("criado_em")
@@ -1729,15 +1760,19 @@ model ChecklistResposta {
 /// Foto de um equipamento atendido numa atividade — geral (itemId nulo) ou de um item do checklist.
 /// Cada equipamento tem as SUAS fotos (nada é replicado entre equipamentos).
 model FotoAtendimento {
-  id            String   @id @default(cuid())
-  empresaId     String   @map("empresa_id")
-  atividadeId   String   @map("atividade_id")
-  equipamentoId String   @map("equipamento_id")
-  itemId        String?  @map("item_id")
+  id            String       @id @default(cuid())
+  empresaId     String       @map("empresa_id")
+  atividadeId   String       @map("atividade_id")
+  equipamentoId String       @map("equipamento_id")
+  itemId        String?      @map("item_id")
   /// Imagem em data URL (base64), tipo conferido pelo conteúdo no upload
-  url           String   @db.Text
-  criadoPorId   String?  @map("criado_por_id")
-  criadoEm      DateTime @default(now()) @map("criado_em")
+  url           String       @db.Text
+  /// Antes / depois do serviço (fotos do equipamento); nulo = foto do item ou geral
+  momento       MomentoFoto?
+  /// Id gerado no aparelho (app offline): reenviar a mesma foto não duplica
+  clientId      String?      @unique @map("client_id")
+  criadoPorId   String?      @map("criado_por_id")
+  criadoEm      DateTime     @default(now()) @map("criado_em")
 
   empresa     Empresa            @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   atividade   AtividadeOs        @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
@@ -1749,6 +1784,74 @@ model FotoAtendimento {
   @@index([equipamentoId])
   @@index([itemId])
   @@map("fotos_atendimento")
+}
+
+/// Serviço a mais pedido pelo cliente na visita: entra na MESMA OS e no MESMO relatório, destacado
+/// como "Adicional" (o adm avalia a cobrança). Criado pelo técnico, inclusive offline (clientId).
+model ServicoAdicional {
+  id             String                  @id @default(cuid())
+  empresaId      String                  @map("empresa_id")
+  ordemServicoId String                  @map("ordem_servico_id")
+  atividadeId    String                  @map("atividade_id")
+  equipamentoId  String?                 @map("equipamento_id")
+  descricao      String                  @db.Text
+  statusCobranca StatusCobrancaAdicional @default(A_AVALIAR) @map("status_cobranca")
+  /// Id gerado no aparelho: reenviar não duplica
+  clientId       String?                 @unique @map("client_id")
+  criadoPorId    String?                 @map("criado_por_id")
+  criadoEm       DateTime                @default(now()) @map("criado_em")
+  atualizadoEm   DateTime                @updatedAt @map("atualizado_em")
+
+  empresa      Empresa                @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  ordemServico OrdemServico           @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  atividade    AtividadeOs            @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+  equipamento  Equipamento?           @relation(fields: [equipamentoId], references: [id], onDelete: SetNull)
+  criadoPor    Usuario?               @relation(fields: [criadoPorId], references: [id], onDelete: SetNull)
+  fotos        ServicoAdicionalFoto[]
+
+  @@index([ordemServicoId])
+  @@index([atividadeId])
+  @@index([equipamentoId])
+  @@index([empresaId])
+  @@map("servicos_adicionais")
+}
+
+model ServicoAdicionalFoto {
+  id          String   @id @default(cuid())
+  empresaId   String   @map("empresa_id")
+  servicoId   String   @map("servico_id")
+  /// Imagem em data URL (base64), tipo conferido pelo conteúdo no upload
+  url         String   @db.Text
+  clientId    String?  @unique @map("client_id")
+  criadoPorId String?  @map("criado_por_id")
+  criadoEm    DateTime @default(now()) @map("criado_em")
+
+  empresa   Empresa          @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  servico   ServicoAdicional @relation(fields: [servicoId], references: [id], onDelete: Cascade)
+  criadoPor Usuario?         @relation(fields: [criadoPorId], references: [id], onDelete: SetNull)
+
+  @@index([servicoId])
+  @@index([empresaId])
+  @@map("servicos_adicionais_fotos")
+}
+
+/// Operações do app do técnico já aplicadas (id gerado no aparelho): o reenvio da mesma operação
+/// — sinal que cai no meio do envio — devolve o resultado guardado em vez de aplicar de novo.
+model SyncOperacao {
+  id           String   @id
+  empresaId    String   @map("empresa_id")
+  usuarioId    String   @map("usuario_id")
+  tipo         String
+  atividadeId  String?  @map("atividade_id")
+  resultado    Json
+  processadoEm DateTime @default(now()) @map("processado_em")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([empresaId, usuarioId])
+  @@index([processadoEm])
+  @@map("sync_operacoes")
 }
 
 // ─────────────────────────────────────────────
