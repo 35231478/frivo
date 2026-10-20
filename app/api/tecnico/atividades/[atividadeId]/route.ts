@@ -32,12 +32,22 @@ export async function GET(_: NextRequest, { params }: Params) {
     where: { empresaId, ativo: true, ...(unidadeId ? { unidadeId } : { unidade: { clienteId } }) },
     orderBy: [{ localizacao: "asc" }, { nome: "asc" }],
     take: 300,
-    select: SELECT_EQUIP_EXECUCAO,
+    select: { ...SELECT_EQUIP_EXECUCAO, qrcode: { select: { tokenPublico: true, codigo: true } } },
   });
+  // Checklist de cada tipo da unidade: vincular sem sinal já mostra o checklist do equipamento novo
+  const tipoIds = [...new Set(daUnidade.map((e) => e.tipoEquipamentoId).filter((x): x is string => !!x))];
+  const itens = tipoIds.length ? await prisma.checklistTipoItem.findMany({
+    where: { tipoEquipamentoId: { in: tipoIds }, empresaId, ativo: true },
+    orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }],
+    select: { id: true, tipoEquipamentoId: true, texto: true, pedirFoto: true, pedirObservacao: true, ativo: true, ordem: true, tipoResposta: true, unidade: true },
+  }) : [];
+  const checklistsPorTipo: Record<string, Omit<(typeof itens)[number], "tipoEquipamentoId">[]> = {};
+  for (const { tipoEquipamentoId, ...i } of itens) (checklistsPorTipo[tipoEquipamentoId] ??= []).push(i);
   return NextResponse.json({
     cartao,
     execucao,
-    equipamentosUnidade: daUnidade.map(apresentarEquipamento),
+    equipamentosUnidade: daUnidade.map(({ qrcode, ...e }) => ({ ...apresentarEquipamento(e), tipoEquipamentoId: e.tipoEquipamentoId, qr: qrcode })),
+    checklistsPorTipo,
     geradoEm: new Date().toISOString(),
   }, { headers: { "Cache-Control": "private, no-store" } });
 }

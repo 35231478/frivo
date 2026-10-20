@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { authConfig } from "@/auth.config";
 import { moduloDaRota, pode } from "@/lib/permissoes";
+import { ROTA_TECNICO, destinoModoTecnico, emModoTecnico } from "@/lib/tecnico/modo";
 
 // Instância leve do Auth.js (sem provider/bcrypt/Prisma) — apenas lê e verifica o
 // JWT da sessão. Isso mantém o bundle do middleware bem abaixo do limite do Edge.
@@ -46,7 +47,14 @@ export default auth(function middleware(req: NextRequest & { auth: any }) {
   }
 
   if (req.auth && pathname === "/login") {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
+    return NextResponse.redirect(new URL(emModoTecnico(req.auth.user) ? ROTA_TECNICO : "/dashboard", req.url));
+  }
+
+  // Modo técnico: o técnico puro fica no app de campo (Meu dia · Agenda · Perfil); o resto do
+  // sistema leva para "Meu dia" (link antigo de execução abre a mesma atividade no app)
+  if (req.auth && !ehRotaPublica && emModoTecnico(req.auth.user)) {
+    const destino = destinoModoTecnico(pathname);
+    if (destino) return NextResponse.redirect(new URL(destino, req.url));
   }
 
   // Controle de acesso por perfil: se a rota exige um módulo e o usuário não tem

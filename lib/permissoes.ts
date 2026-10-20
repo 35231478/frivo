@@ -160,6 +160,7 @@ const ROTA_MODULO: Record<string, string> = {
   equipamentos: "equipamentos",
   ordens: "ordens",
   prazos: "ordens",
+  tecnico: "ordens", // app do técnico (Meu dia)
   calendario: "calendario",
   qrcodes: "qrcodes",
   orcamentos: "orcamentos",

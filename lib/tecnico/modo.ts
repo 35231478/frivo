@@ -40,6 +40,6 @@ export function destinoModoTecnico(pathname: string): string | null {
   if (pathname.startsWith("/api/")) return null;
   if (LIBERADAS.some((b) => dentro(pathname, b))) return null;
   const exec = /^\/ordens\/([^/]+)\/atividades\/([^/]+)\/executar\/?$/.exec(pathname);
-  if (exec) return `${ROTA_TECNICO}/os?a=${encodeURIComponent(exec[2])}`;
+  if (exec) return `${ROTA_TECNICO}?ver=os&a=${encodeURIComponent(exec[2])}`;
   return ROTA_TECNICO;
 }
