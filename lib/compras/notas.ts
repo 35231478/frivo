@@ -16,14 +16,16 @@ import { prisma } from "@/lib/prisma";
 import { formatarCpfCnpj, gerarNumeroContaPagar } from "@/lib/utils";
 import { arred } from "@/lib/estoque/regras";
 import { movimentar } from "@/lib/estoque/servidor";
+import { LABEL_STATUS_NOTA } from "@/lib/compras/rotulos";
 import { chaveDePara, ErroNfe, lerNfe, mesmaRaizCnpj, parcelasDaNota, type DuplicataNfe } from "@/lib/compras/nfe";
 
 /** Recusa com status HTTP e dados extras (ex.: a nota que já existe). */
+export { LABEL_STATUS_NOTA };
+
 export class ErroNota extends Error {
   constructor(msg: string, public status = 400, public extra: Record<string, unknown> = {}) { super(msg); }
 }
 
-export const LABEL_STATUS_NOTA = { IMPORTADA: "Importada", CONCILIADA: "Conciliada", LANCADA: "Lançada" } as const;
 const so = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
 const dataBr = (d: Date) => d.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
 

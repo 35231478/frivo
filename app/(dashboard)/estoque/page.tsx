@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { AlertTriangle, Package, ScrollText } from "lucide-react";
+import { AlertTriangle, FileUp, Package, ScrollText } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { cn } from "@/lib/utils";
@@ -34,6 +34,9 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
             <h1 className="page-title">Estoque</h1>
             <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{total}</span>
           </div>
+          <Link href="/estoque/notas" className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm" data-ir-notas>
+            <FileUp className="w-4 h-4" /> {podeLancar ? "Importar NF de compra" : "Notas de compra"}
+          </Link>
         </div>
 
         {/* Aviso no topo: quantos estão no mínimo (ou abaixo) e quantos negativos — clicar filtra */}

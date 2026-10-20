@@ -15,6 +15,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { NextRequest } from "next/server";
+import { renderToStaticMarkup } from "react-dom/server";
 import { permissoesTotais, permissoesVazias, type Permissoes } from "@/lib/permissoes";
 import { chaveValida, dvChave, ErroNfe, lerNfe, mesmaRaizCnpj, parcelasDaNota } from "@/lib/compras/nfe";
 import type { Banco } from "./helpers/banco-memoria";
@@ -35,6 +36,7 @@ vi.mock("@/lib/prisma", async () => {
         _count: { itens: T("notaCompraItem").filter((i) => i.notaId === n.id).length },
       }),
       notaCompraItem: (i, T) => ({ produto: por(T, "produto", i.produtoId) }),
+      movimentacaoEstoque: (m, T) => ({ produto: por(T, "produto", m.produtoId) }),
       // produto criado pela rota não traz `ativo` (no banco é default true)
       deParaProdutoFornecedor: (d, T) => { const p = por(T, "produto", d.produtoId); return { produto: p && { ...p, ativo: p.ativo ?? true } }; },
       pedidoCompraInterno: (p, T) => ({ contasPagar: T("contaPagar").filter((c) => c.pedidoCompraId === p.id) }),
@@ -43,6 +45,11 @@ vi.mock("@/lib/prisma", async () => {
 });
 const sessao = vi.hoisted(() => ({ atual: null as any }));
 vi.mock("@/lib/auth", () => ({ auth: vi.fn(async () => sessao.atual) }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: () => {}, push: () => {}, refresh: () => {} }),
+  usePathname: () => "/estoque/notas", useSearchParams: () => new URLSearchParams(),
+  notFound: () => { throw new Error("NEXT_NOT_FOUND"); },
+}));
 
 const logar = (permissoes: Permissoes = permissoesTotais(), empresaId = "e1", role = "OPERADOR", id = "u1") => {
   sessao.atual = { user: { id, name: "Ana", email: "a@x.com", empresaId, role, permissoes } };
@@ -445,5 +452,64 @@ describe("empresa e permissão", () => {
     expect((await lancarApi(id)).status).toBe(201);
     logar(permissoesVazias(), "e1", "ADMIN");
     expect((await importar(XML2)).status).toBe(201);
+  });
+});
+
+// ═════════════════════════ Telas ═════════════════════════
+const lista = async () => { const { default: P } = await import("@/app/(dashboard)/estoque/notas/page"); return renderToStaticMarkup(await P({ searchParams: Promise.resolve({}) })); };
+const detalhe = async (id: string) => { const { default: P } = await import("@/app/(dashboard)/estoque/notas/[id]/page"); return renderToStaticMarkup(await P({ params: Promise.resolve({ id }) })); };
+const attrs = (h: string, a: string) => [...h.matchAll(new RegExp(`${a}="([^"]+)"`, "g"))].map((m) => m[1]);
+
+describe("telas", () => {
+  it("lista: upload só para quem gerencia; notas com situação", async () => {
+    T("pedidoCompraInterno").forEach((p) => { p.status = "COMPRADO"; });
+    const id = (await importar(XML1)).json.nota.id;
+    const h = await lista();
+    expect(h).toContain("data-upload-xml");
+    expect(attrs(h, "data-nota")).toEqual([id, id]); // cartão + linha
+    expect(h).toContain("FRIGELAR COMERCIO E DISTRIBUICAO S.A.");
+    expect(h).toContain("Importada");
+    logar(so({ estoque: { visualizar: true } }));
+    expect(await lista()).not.toContain("data-upload-xml");
+  });
+
+  it("conciliação: itens, aprendido marcado, aviso de unidade, parcelas e pedidos; sem Financeiro não lança", async () => {
+    T("pedidoCompraInterno")[0].status = "COMPRADO";
+    const id1 = await nota1Conciliada();
+    await lancarApi(id1);
+    const id2 = (await importar(XML2)).json.nota.id;
+    const h = await detalhe(id2);
+    expect(attrs(h, "data-item")).toEqual(["1", "2"]);
+    expect(attrs(h, "data-vinculo")).toEqual(["existente", "pendente"]);
+    expect(h).toContain("data-aprendido");
+    expect(h).toContain("aprendido de nota anterior");
+    expect(h).not.toContain("data-unidade-divergente"); // gás: UN × un é a mesma unidade
+    expect(h).toMatch(/À vista · vence 03\/11\/2026/);
+    expect(h).toContain(">PC-0312</option>");
+    expect(h).toContain("Confirmar e lançar");
+    logar(so({ estoque: { visualizar: true, gerenciar: true } }));
+    const sem = await detalhe(id2);
+    expect(sem).toContain("data-sem-lancar");
+    expect(sem).not.toContain(">PC-0312</option>");
+    logar(so({ estoque: { visualizar: true } }));
+    const leitura = await detalhe(id2);
+    expect(leitura).not.toContain("Confirmar e lançar");
+    expect(leitura).toContain("Só quem gerencia o Estoque concilia e lança a nota.");
+  });
+
+  it("resultado: entradas com custo, contas a pagar e aviso de unidade; outra empresa = 404", async () => {
+    const id = await nota1Conciliada();
+    await lancarApi(id);
+    const h = await detalhe(id);
+    expect(h).toContain("data-resultado");
+    expect(h).toContain("Nota lançada: 3 entrada(s) no estoque e 3 conta(s) a pagar.");
+    expect(attrs(h, "data-conta")).toEqual([`CP-${ANO}-0008`, `CP-${ANO}-0009`, `CP-${ANO}-0010`]);
+    expect(h).toMatch(/R\$\s12,3333/); // custo da NF com 4 casas (espaço do R$ é não separável)
+    expect(h).toContain("vence 14/11/2026");
+    expect(h).toContain("data-avisos");
+    expect(h).toContain("Capacitor 35uF: a nota veio em “PC”");
+    expect(h).toContain("3526 1011 2223 3300 0181 5500 1000 0045 2110 0004 5217");
+    logar(permissoesTotais(), "e2");
+    await expect(detalhe(id)).rejects.toThrow("NEXT_NOT_FOUND");
   });
 });

@@ -83,6 +83,7 @@ const OPERACIONAL: Secao[] = [
       {
         tipo: "grupo", label: "Estoque", icone: Package, itens: [
           { href: "/estoque", icone: Package, label: "Saldos e extrato" },
+          { href: "/estoque/notas", icone: FileText, label: "Notas de compra" },
         ],
       },
       {
