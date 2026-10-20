@@ -134,6 +134,14 @@ describe("leitura da NF-e (layout 4.00)", () => {
     expect(lerNfe(soNfe)).toMatchObject({ chave: CHAVE1, status: null });
   });
 
+  it("nota com UM item só e UMA duplicata (caso comum) também vira lista", () => {
+    const umItem = XML2.replace(/<det nItem="2">[\s\S]*?<\/det>/, "")
+      .replace("<transp>", "<cobr><dup><nDup>001</nDup><dVenc>2026-12-03</dVenc><vDup>829.10</vDup></dup></cobr><transp>");
+    const n = lerNfe(umItem);
+    expect(n.itens.map((i) => [i.numeroItem, i.codigo, i.quantidade])).toEqual([[1, "R410A-11", 1]]);
+    expect(n.duplicatas).toEqual([{ numero: "001", vencimento: "2026-12-03", valor: 829.1 }]);
+  });
+
   it("chave de acesso: dígito verificador (módulo 11)", () => {
     expect(dvChave(CHAVE1.slice(0, 43))).toBe("7");
     expect(chaveValida(CHAVE1)).toBe(true);
