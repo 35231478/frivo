@@ -3,6 +3,7 @@ import { z } from "zod";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { ROTULO_COBRANCA } from "@/lib/execucao/adicional";
+import { ehTecnicoPuro } from "@/lib/tecnico/modo";
 
 type Params = { params: Promise<{ id: string; servicoId: string }> };
 
@@ -15,6 +16,9 @@ const schema = z.object({ statusCobranca: z.enum(["A_AVALIAR", "COBRAR", "NAO_CO
 export async function PATCH(req: NextRequest, { params }: Params) {
   const guard = await exigirPermissao("ordens", "editar");
   if (guard.erro) return guard.resposta;
+  // Perfil de técnico (mesmo com "editar OS") só registra o adicional; a cobrança é do escritório
+  if (ehTecnicoPuro(guard.session.user.role, guard.session.user.permissoes))
+    return NextResponse.json({ erro: "A cobrança do serviço adicional é decidida pelo escritório." }, { status: 403 });
   const { id, servicoId } = await params;
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ erro: "Situação de cobrança inválida." }, { status: 400 });

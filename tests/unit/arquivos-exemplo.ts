@@ -20,3 +20,7 @@ export const SVG = txt('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)
 
 export const dataUrl = (tipo: string, bytes: Uint8Array) =>
   `data:${tipo};base64,${Buffer.from(bytes).toString("base64")}`;
+
+/** Áudios (cabeçalho): WebM/Opus do Chrome/Android e MP4/AAC do Safari/iPhone */
+export const WEBM = junta(b(0x1a, 0x45, 0xdf, 0xa3), txt("resto-do-audio"));
+export const M4A = junta(b(0, 0, 0, 0x20), txt("ftypM4A "), txt("resto"));
