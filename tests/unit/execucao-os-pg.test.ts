@@ -295,10 +295,13 @@ describe.skipIf(!URL_PG)("execução da OS por equipamento (PostgreSQL real)", (
     await prisma.atividadeOs.create({ data: { id: "at2c", empresaId: "e1", ordemServicoId: os2, titulo: "Retorno (cancelado)", status: "CANCELADA" } });
     await prisma.atividadeEquipamento.create({ data: { atividadeId: "at2c", equipamentoId: "eqB", feito: true } });
     expect((await chamar("ordens/[id]", "PUT", { id: os2 }, { status: "CONCLUIDA" })).status).toBe(200);
+    // O equipamento "principal" da OS (o do chamado) sem vínculo NÃO vira atendido quando a OS tem equipamentos
+    // vinculados (só a OS antiga, sem nenhum vínculo, conta o principal como atendido)
+    await prisma.ordemServico.update({ where: { id: os2 }, data: { equipamentoId: "eqD" } });
     const { relatorioInterno } = await import("@/lib/relatorio-os/dados");
     const { dados } = (await relatorioInterno(os2, "e1"))!;
     expect(dados.equipamentos.map((b) => b.id)).toEqual(["eqA"]);
-    expect(dados.naoAtendidos.map((e) => e.id)).toEqual(["eqB"]);
+    expect(dados.naoAtendidos.map((e) => e.id)).toEqual(["eqD", "eqB"]);
     const b = dados.equipamentos[0];
     expect(b.checklistTipo).toEqual([{ atividade: expect.any(String), itens: [
       { texto: "Limpeza dos filtros", status: "OK", observacao: null },
@@ -308,7 +311,7 @@ describe.skipIf(!URL_PG)("execução da OS por equipamento (PostgreSQL real)", (
     expect(b.resumoChecklist).toEqual({ ok: 2, atencao: 1, naoSeAplica: 0 });
     expect(b.fotos.map((f) => [f.url, f.legenda])).toEqual([[FOTO_PNG, "Limpeza dos filtros"]]);
     expect(b.observacoes).toEqual(["Dreno parcialmente obstruído — limpo."]);
-    expect(dados.resultado.texto).toBe("Concluída · 1 de 2 equipamentos atendido · 1 de 2 atividades concluída");
+    expect(dados.resultado.texto).toBe("Concluída · 1 de 3 equipamentos atendido · 1 de 2 atividades concluída");
     expect(dados.equipamentos.some((x) => x.id === "eqI")).toBe(false); // nunca "todos os da unidade"
 
     // Relatórios gerados na conclusão (link antigo: geral e por atividade) — também só o atendido
