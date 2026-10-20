@@ -80,7 +80,7 @@ describe.skipIf(!URL)("SQL de produção: app do técnico — medição, áudio,
   });
 
   it("enums: MEDICAO no tipo de resposta; momento da foto e status de cobrança do adicional", () => {
-    const valores = (t: string) => linhas(`SELECT e.enumlabel FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid WHERE t.typname = '${t}' ORDER BY e.enumsortorder`);
+    const valores = (t: string) => linhas(`SELECT e.enumlabel FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid JOIN pg_namespace n ON n.oid = t.typnamespace WHERE t.typname = '${t}' AND n.nspname = '${SCHEMA}' ORDER BY e.enumsortorder`);
     expect(valores("TipoRespostaChecklist")).toEqual(["OK_ATENCAO_NA", "MEDICAO"]);
     expect(valores("MomentoFoto")).toEqual(["ANTES", "DEPOIS"]);
     expect(valores("StatusCobrancaAdicional")).toEqual(["A_AVALIAR", "COBRAR", "NAO_COBRAR"]);
