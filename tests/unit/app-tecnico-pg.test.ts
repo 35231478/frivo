@@ -342,8 +342,10 @@ describe.skipIf(!URL_PG)("app do técnico: Meu dia, escopo e sincronização off
     comoTecnico();
     await sync([
       op("resposta", "aB", { equipamentoId: "eqC", itemId: "i2", dados: { status: "ATENCAO" } }),
+      op("tudoOk", "aB", { equipamentoId: "eqC" }), // TUDO OK depois não apaga a Atenção
       op("foto", "aB", { equipamentoId: "eqC", dados: { dataUrl: FOTO, itemId: "i1", clientId: "foto-i1-eqC-0001" } }),
     ]);
+    expect((await prisma.checklistResposta.findFirst({ where: { atividadeId: "aB", itemId: "i2" } })).status).toBe("ATENCAO");
     const r = await sync([op("concluir", "aB", { dados: {} })]);
     expect(r.json.resultados[0]).toMatchObject({ ok: false, status: 422 });
     expect(r.json.resultados[0].erro).toBe("Para concluir, falta: Split da padaria — foto em “Dreno e bandeja”; observação em “Dreno e bandeja”.");
@@ -417,6 +419,26 @@ describe.skipIf(!URL_PG)("app do técnico: Meu dia, escopo e sincronização off
     expect((await chamar("ordens/[id]/servicos-adicionais/[servicoId]", "PATCH", { id: "osA", servicoId: s.id }, { statusCobranca: "TALVEZ" })).status).toBe(400);
     comoEscritorio("e2", permissoesTotais(), "uE2");
     expect((await chamar("ordens/[id]/servicos-adicionais/[servicoId]", "PATCH", { id: "osA", servicoId: s.id }, { statusCobranca: "NAO_COBRAR" })).status).toBe(404);
+  });
+
+  it("técnico do usuário: achado pelo e-mail sem diferença de maiúsculas, só se ATIVO; adicional de atividade cancelada não vai ao relatório", async () => {
+    // sessão sem o vínculo (logou antes de ser ligado): o Meu dia acha pelo e-mail (JOAO@Clima.com × joao@clima.com)
+    comoTecnico(null);
+    expect((await chamar("tecnico/meu-dia", "GET")).json.tecnico).toEqual({ id: "t1", nome: "João Silva" });
+    // técnico inativado: nem pelo vínculo da sessão nem pelo e-mail
+    await prisma.tecnico.update({ where: { id: "t1" }, data: { ativo: false } });
+    comoTecnico();
+    expect((await chamar("tecnico/meu-dia", "GET")).json).toMatchObject({ tecnico: null, atividades: [] });
+    comoTecnico(null);
+    expect((await chamar("tecnico/meu-dia", "GET")).json.tecnico).toBeNull();
+    await prisma.tecnico.update({ where: { id: "t1" }, data: { ativo: true } });
+    // adicional numa atividade que depois foi cancelada: não entra no relatório
+    await prisma.atividadeOs.create({ data: { id: "aX", empresaId: "e1", ordemServicoId: "osA", titulo: "Visita cancelada", tecnicoId: "t1", status: "CANCELADA" } });
+    await prisma.servicoAdicional.create({ data: { empresaId: "e1", ordemServicoId: "osA", atividadeId: "aX", descricao: "Não deveria sair", criadoPorId: "uT" } });
+    const { relatorioInterno } = await import("@/lib/relatorio-os/dados");
+    const { dados } = (await relatorioInterno("osA", "e1"))!;
+    expect(dados.adicionais.map((a) => a.descricao)).not.toContain("Não deveria sair");
+    expect(dados.adicionais.length).toBeGreaterThan(0);
   });
 
   it("permissão: sem login 401; só visualizar não sincroniza; operações antigas são limpas depois de 30 dias", async () => {

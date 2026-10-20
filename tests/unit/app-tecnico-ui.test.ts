@@ -314,3 +314,81 @@ describe("execução guiada", () => {
     expect((await fila()).some((o) => o.tipo === "concluir")).toBe(false);
   });
 });
+
+/* ═════════════════════════ escritório ═════════════════════════ */
+async function montarSimples(el: any, role = "OPERADOR", permissoes = permissoesTotais()) {
+  const { PermissoesProvider } = await import("@/components/providers/permissoes-provider");
+  caixa = document.createElement("div");
+  document.body.appendChild(caixa);
+  root = createRoot(caixa);
+  await act(async () => { root.render(createElement(PermissoesProvider, { role, permissoes, children: el })); });
+  await esperar(2);
+}
+const ADICIONAL = {
+  id: "s1", descricao: "Troca do controle remoto", statusCobranca: "A_AVALIAR" as const, criadoEm: "2026-10-20T15:00:00Z",
+  atividade: { titulo: "Preventiva" }, equipamento: { nome: "Split Sala 2", marca: "Daikin", modelo: "FTXS", patrimonio: "AC-02" },
+  criadoPor: { nome: "João" }, fotos: [{ id: "f1" }],
+};
+
+describe("escritório: adicional na OS e no relatório", () => {
+  it("painel da OS: o escritório decide a cobrança (grava e desfaz se falhar); o técnico só vê", async () => {
+    const { OsAdicionais } = await import("@/components/os/os-adicionais");
+    const chamadas: { url: string; corpo: unknown }[] = [];
+    let ok = true;
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
+      chamadas.push({ url, corpo: JSON.parse(String(init.body)) });
+      return new Response(JSON.stringify(ok ? {} : { erro: "Sem permissão para esta ação" }), { status: ok ? 200 : 403, headers: { "content-type": "application/json" } });
+    }));
+    try {
+      await montarSimples(createElement(OsAdicionais, { osId: "osA", adicionais: [ADICIONAL] }));
+      expect($("[data-os-adicionais]")!.textContent).toContain("Serviços adicionais pedidos na visita (1)");
+      expect($("[data-a-avaliar]")!.textContent).toBe("1 a avaliar para cobrança");
+      expect($("[data-adicional-os=s1]")!.textContent).toContain("Split Sala 2 · TAG AC-02");
+      await clicar($("[data-cobranca=COBRAR]"));
+      expect(chamadas).toEqual([{ url: "/api/ordens/osA/servicos-adicionais/s1", corpo: { statusCobranca: "COBRAR" } }]);
+      expect($("[data-cobranca=COBRAR]")!.getAttribute("aria-pressed")).toBe("true");
+      expect($("[data-a-avaliar]")).toBeNull();
+      ok = false;
+      await clicar($("[data-cobranca=NAO_COBRAR]"));
+      await esperar();
+      expect($("[data-cobranca=COBRAR]")!.getAttribute("aria-pressed")).toBe("true"); // desfeito
+      expect($("[data-os-adicionais]")!.textContent).toContain("Sem permissão para esta ação");
+      act(() => root.unmount()); caixa.remove();
+      // técnico (mesmo com "editar OS"): só a situação, sem botões
+      await montarSimples(createElement(OsAdicionais, { osId: "osA", adicionais: [ADICIONAL] }), "TECNICO", PRESETS.TECNICO);
+      expect($("[data-cobranca=COBRAR]")).toBeNull();
+      expect($("[data-adicional-os=s1]")!.textContent).toContain("A avaliar");
+      act(() => root.unmount()); caixa.remove();
+      // sem adicional: nada aparece
+      await montarSimples(createElement(OsAdicionais, { osId: "osA", adicionais: [] }));
+      expect($("[data-os-adicionais]")).toBeNull();
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it("documento: medição com o valor e a unidade; áudio e cobrança só na versão interna; adicional em destaque", async () => {
+    const { BlocoEquip, SecaoAdicionais } = await import("@/components/relatorio/relatorio-os-documento");
+    const bloco = {
+      id: "eqA", local: { principal: "Sala 1", complemento: null, unidade: "Matriz" }, titulo: "Split Sala 1", descricao: "Split", fabricante: "Daikin", tag: "AC-01", numeroSerie: null,
+      checklist: [], observacoes: [], fotos: [],
+      checklistTipo: [{ atividade: "Preventiva", itens: [
+        { texto: "Dreno e bandeja", status: "ATENCAO" as const, observacao: "Bandeja com lodo", medicao: null, audio: true },
+        { texto: "Pressão de sucção", status: null, observacao: null, medicao: { valor: 118.5, unidade: "psi" }, audio: false },
+      ] }],
+      resumoChecklist: { ok: 0, atencao: 1, naoSeAplica: 0, medicoes: 1 },
+    };
+    const ad = [{ id: "s1", descricao: "Troca do controle remoto", atividade: "Preventiva", equipamento: "Split Sala 2", fotos: [], statusCobranca: "COBRAR" as const, criadoPor: "João" }];
+    const doc = (interna: boolean) => createElement("div", null, createElement(BlocoEquip, { b: bloco, checklist: true, fotos: true, interna }), createElement(SecaoAdicionais, { adicionais: ad, fotos: true, interna }));
+    await montarSimples(doc(true));
+    expect($("[data-medicao-relatorio]")!.textContent).toBe("118,5 psi");
+    expect($("[data-resumo-checklist]")!.textContent).toContain("1 medição");
+    expect($("[data-audio-relatorio]")!.textContent).toContain("Observação em áudio");
+    expect($("[data-adicional-relatorio]")!.textContent).toContain("Adicional");
+    expect($("[data-cobranca]")!.textContent).toBe("Cobrança: Cobrar");
+    act(() => root.unmount()); caixa.remove();
+    await montarSimples(doc(false));
+    expect($("[data-medicao-relatorio]")!.textContent).toBe("118,5 psi");
+    expect($("[data-audio-relatorio]")).toBeNull();
+    expect($("[data-cobranca]")).toBeNull();
+    expect($("[data-adicional-relatorio]")!.textContent).toContain("Troca do controle remoto");
+  });
+});
