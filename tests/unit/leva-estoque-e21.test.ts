@@ -14,7 +14,7 @@
  *  - empresa sempre da sessão e permissões (Estoque › gerenciar; + Financeiro › fluxo de caixa para o
  *    financeiro e para lançar; + Configurações › gerenciar para preço).
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { NextRequest } from "next/server";
@@ -110,6 +110,14 @@ function semear() {
   };
 }
 beforeEach(() => { semear(); logar(); });
+// Carrega (compila) rotas e telas uma vez, fora do tempo de cada teste
+beforeAll(async () => {
+  await Promise.all([
+    import("@/app/api/compras/notas/route"), import("@/app/api/compras/notas/[id]/conciliacao/route"), import("@/app/api/compras/notas/[id]/lancar/route"),
+    import("@/app/api/cadastros/[entidade]/route"), import("@/app/api/contas-pagar/route"), import("@/app/(dashboard)/estoque/notas/[id]/page"),
+    import("@/app/(dashboard)/financeiro/contas-pagar/page"), import("@/app/(dashboard)/financeiro/contas-pagar/[id]/page"), import("@/app/(dashboard)/estoque/notas/page"),
+  ]);
+}, 120_000);
 
 const T = (m: string) => (db.t as any)[m] as any[];
 const prod = (id: string) => T("produto").find((p) => p.id === id);

@@ -46,7 +46,8 @@ export function CampoBoleto({ valor, onChange, valorParcela, vencimentoParcela, 
           <span>{b.tipo === "bancario" ? `${b.emissor} (${b.banco})` : b.emissor}</span>
           {b.valor != null && <span>· {formatarMoeda(b.valor)}</span>}
           {b.vencimento && <span>· vence {diaBr(b.vencimento)}</span>}
-          <span className="text-ink-subtle font-mono break-all">· {formatarLinhaDigitavel(b.linhaDigitavel)}</span>
+          {/* colou o código de barras (ou só dígitos): mostra a linha digitável que ele vira */}
+          {formatarLinhaDigitavel(b.linhaDigitavel) !== valor.trim() && <span className="text-ink-subtle font-mono break-all">· {formatarLinhaDigitavel(b.linhaDigitavel)}</span>}
         </p>
       )}
       {avisos.map((a) => <p key={a} className="text-xs text-amber-700 flex items-start gap-1" data-boleto-aviso><AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" />{a}</p>)}

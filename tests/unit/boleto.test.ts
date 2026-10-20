@@ -85,6 +85,8 @@ describe("dígitos verificadores", () => {
     // convênio: resto 0 ou 1 → 0
     expect(modulo11Convenio("0")).toBe(0);
     expect(modulo11Convenio("5")).toBe(1); // 5×2 = 10 → resto 10 → 11 − 10 = 1
+    expect(modulo11Convenio("6")).toBe(0); // 6×2 = 12 → resto 1 → 0 (e não 10)
+    expect(modulo11Convenio("17")).toBe(5); // 1×3 + 7×2 = 17 → resto 6 → 11 − 6 = 5
   });
 
   it("DV geral bancário nunca é 0: resto 0 ou 1 dá 1 (FEBRABAN)", () => {

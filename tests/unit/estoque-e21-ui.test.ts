@@ -10,7 +10,7 @@
  *  - importar pelo atalho do Financeiro abre a nota com o "voltar" para Contas a pagar;
  *  - conta a pagar manual: centro de custo e boleto (conferido antes de enviar).
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
@@ -23,6 +23,13 @@ let respostas: Record<string, { status: number; corpo: unknown }>;
 const chamadas: { url: string; metodo: string; corpo: any }[] = [];
 const CATEGORIAS = [{ id: "catMat", nome: "Materiais e peças", cor: "#0EA5E9", ativo: true }, { id: "catGas", nome: "Gases", cor: "#22C55E", ativo: true }];
 const CENTROS = [{ id: "ccObra", nome: "Obra Shopping Norte", ativo: true }, { id: "ccFrota", nome: "Frota", ativo: true }];
+
+// Carrega (compila) os componentes uma vez, fora do tempo de cada teste
+beforeAll(async () => {
+  await Promise.all([
+    import("@/components/compras/conciliacao-nota"), import("@/components/compras/importar-nota"), import("@/components/financeiro/conta-pagar-form"),
+  ]);
+}, 120_000);
 
 beforeEach(() => {
   chamadas.length = 0;
@@ -135,7 +142,11 @@ describe("parcelas", () => {
   it("boleto colado: conferido na hora (banco, valor, vencimento; avisa se não bate); inválido trava o salvar com o motivo", async () => {
     await central();
     await digitar($('input[name="boleto-1"]'), "10492.00650 61000.100042 00997.263900 9 89810000021403");
-    expect(txt('[data-campo-boleto="boleto-1"] [data-boleto-ok]')).toMatch(/^Caixa \(104\)· R\$ 214,03· vence 10\/05\/2022· 10492\.00650/);
+    // colou já formatada: não repete a linha; colado o código de barras, mostra a linha que ele vira
+    expect(txt('[data-campo-boleto="boleto-1"] [data-boleto-ok]')).toBe("Caixa (104)· R$ 214,03· vence 10/05/2022");
+    await digitar($('input[name="boleto-3"]'), "10499898100000214032006561000100040099726390");
+    expect(txt('[data-campo-boleto="boleto-3"] [data-boleto-ok]')).toBe("Caixa (104)· R$ 214,03· vence 10/05/2022· 10492.00650 61000.100042 00997.263900 9 89810000021403");
+    await digitar($('input[name="boleto-3"]'), "");
     const avisos = $$('[data-campo-boleto="boleto-1"] [data-boleto-aviso]').map((a) => a.textContent!.replace(/ /g, " "));
     expect(avisos).toEqual(["O boleto é de R$ 214,03 e a parcela, de R$ 583,10: confira se é o boleto certo.", "O boleto vence em 10/05/2022 e a parcela, em 14/11/2026."]);
     await digitar($('input[name="boleto-2"]'), BOLETO.slice(0, 40));

@@ -92,7 +92,7 @@ export default async function ContaPagarPage({ params }: { params: Promise<{ id:
                 <ShoppingCart className="w-3.5 h-3.5" /> {conta.pedidoCompra.numero}
               </Link>
             ))}
-            {conta.observacao && linha("Observação", <span className="text-ink-muted">{conta.observacao}</span>)}
+            {conta.observacao && linha("Observação", <span className="text-ink-muted [overflow-wrap:anywhere]">{conta.observacao}</span>)}
           </dl>
         </div>
 
