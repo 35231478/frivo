@@ -27,6 +27,10 @@ declare module "next-auth" {
     role: Role;
     permissoes?: Permissoes;
     perfilNome?: string | null;
+    /** "Manter conectado" marcado no login */
+    lembrar?: boolean;
+    /** Impressão da senha no login (lib/acesso/impressao-senha) */
+    fs?: string;
   }
 }
 
@@ -38,5 +42,10 @@ declare module "next-auth/jwt" {
     role: Role;
     permissoes?: Permissoes;
     perfilNome?: string | null;
+    /** "Manter conectado": false = sessão de 1 dia desde `loginEm` (ms) */
+    lembrar?: boolean;
+    loginEm?: number;
+    /** Impressão da senha no login: senha trocada depois → sessão encerrada */
+    fs?: string;
   }
 }

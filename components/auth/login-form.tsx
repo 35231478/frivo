@@ -1,12 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { loginSchema, type LoginInput } from "@/lib/validations";
 import { AlertCircle, Eye, EyeOff, Loader2, LogIn } from "lucide-react";
+
+const CHAVE_LEMBRAR = "frivo:manter-conectado";
+
+/** Erro do login: senha errada (genérico, não diz se o e-mail existe) ou bloqueio por excesso de tentativas. */
+export function mensagemErroLogin(code: string | undefined): string {
+  const minutos = /^bloqueado-(\d+)$/.exec(code ?? "")?.[1];
+  if (minutos) return `Muitas tentativas sem sucesso. Por segurança, aguarde ${minutos} min e tente de novo — ou use “Esqueci minha senha”.`;
+  return "E-mail ou senha inválidos.";
+}
 
 export function LoginForm() {
   const router = useRouter();
@@ -18,6 +28,9 @@ export function LoginForm() {
   const senhaDefinida = searchParams.get("senha") === "definida";
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [erro, setErro] = useState("");
+  // "Manter conectado": desmarcado por padrão; o aparelho lembra a última escolha
+  const [lembrar, setLembrar] = useState(false);
+  useEffect(() => { try { setLembrar(localStorage.getItem(CHAVE_LEMBRAR) === "1"); } catch { /* sem storage */ } }, []);
 
   const {
     register,
@@ -27,14 +40,16 @@ export function LoginForm() {
 
   const onSubmit = async (data: LoginInput) => {
     setErro("");
+    try { localStorage.setItem(CHAVE_LEMBRAR, lembrar ? "1" : "0"); } catch { /* sem storage */ }
     const resultado = await signIn("credentials", {
       email: data.email,
       senha: data.senha,
+      lembrar: lembrar ? "true" : "false",
       redirect: false,
     });
 
     if (resultado?.error) {
-      setErro("E-mail ou senha inválidos.");
+      setErro(mensagemErroLogin(resultado.code));
       return;
     }
 
@@ -81,7 +96,12 @@ export function LoginForm() {
       </div>
 
       <div className="space-y-1.5">
-        <label className="text-sm font-semibold text-ink">Senha</label>
+        <div className="flex items-center justify-between gap-2">
+          <label className="text-sm font-semibold text-ink">Senha</label>
+          <Link href="/esqueci-senha" className="text-xs font-semibold text-primary-600 hover:text-primary-700 hover:underline">
+            Esqueci minha senha
+          </Link>
+        </div>
         <div className="relative">
           <input
             {...register("senha")}
@@ -104,6 +124,23 @@ export function LoginForm() {
           <p className="text-xs text-red-600 font-medium">{errors.senha.message}</p>
         )}
       </div>
+
+      <label className="flex items-start gap-2.5 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          name="lembrar"
+          checked={lembrar}
+          onChange={(e) => setLembrar(e.target.checked)}
+          disabled={isSubmitting}
+          className="mt-0.5 w-4 h-4 rounded border-surface-border text-primary-600 focus:ring-primary-500/20"
+        />
+        <span className="text-sm text-ink">
+          Manter conectado
+          <span className="block text-xs text-ink-muted">
+            {lembrar ? "Fica conectado por 30 dias neste aparelho." : "Sem marcar, a sessão vale por 1 dia. Não marque em computador compartilhado."}
+          </span>
+        </span>
+      </label>
 
       <button
         type="submit"

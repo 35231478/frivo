@@ -306,7 +306,7 @@ describe("usuários", () => {
     const r = await chamar(col, "POST", U, { nome: "Nina Nova", email: "nina@x.com" }, "http://localhost/api/x");
     const token = new URL(r.json.convite.link).searchParams.get("token")!;
     const pub = () => import("@/app/api/publico/definir-senha/route");
-    expect((await chamar(pub, "GET", {}, undefined, `http://localhost/api/publico/definir-senha?token=${encodeURIComponent(token)}`)).json).toEqual({ nome: "Nina Nova", email: "nina@x.com" });
+    expect((await chamar(pub, "GET", {}, undefined, `http://localhost/api/publico/definir-senha?token=${encodeURIComponent(token)}`)).json).toEqual({ nome: "Nina Nova", email: "nina@x.com", finalidade: "convite" });
     expect((await chamar(pub, "POST", {}, { token, senha: "curta", confirmar: "curta" })).status).toBe(400);
     expect((await chamar(pub, "POST", {}, { token, senha: "senha-forte-123", confirmar: "outra-coisa" })).status).toBe(400);
     expect((await chamar(pub, "POST", {}, { token, senha: "senha-forte-123", confirmar: "senha-forte-123" })).status).toBe(200);
@@ -322,10 +322,10 @@ describe("usuários", () => {
     expect((await verificarTokenConvite(t)).ok).toBe(true);
     const [corpo, assinatura] = t.split(".");
     const falso = Buffer.from(JSON.stringify({ ...JSON.parse(Buffer.from(corpo, "base64url").toString()), u: "admin" })).toString("base64url");
-    expect(await verificarTokenConvite(`${falso}.${assinatura}`)).toEqual({ ok: false, erro: "invalido" });
-    expect(await verificarTokenConvite(t, Date.now() + 73 * 3600_000)).toEqual({ ok: false, erro: "expirado" });
+    expect(await verificarTokenConvite(`${falso}.${assinatura}`)).toEqual({ ok: false, finalidade: "convite", erro: "invalido" });
+    expect(await verificarTokenConvite(t, Date.now() + 73 * 3600_000)).toEqual({ ok: false, finalidade: "convite", erro: "expirado" });
     u.ativo = false;
-    expect(await verificarTokenConvite(t)).toEqual({ ok: false, erro: "invalido" });
+    expect(await verificarTokenConvite(t)).toEqual({ ok: false, finalidade: "convite", erro: "invalido" });
   });
 
   it("criar: e-mail repetido = 409; e-mail não muda na edição (campo não permitido)", async () => {

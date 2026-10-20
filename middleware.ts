@@ -14,7 +14,8 @@ const { auth } = NextAuth(authConfig);
 const rotasPublicas = [
   "/login",
   "/sessao-encerrada", // limpa o cookie de uma sessão que o servidor já não aceita
-  "/definir-senha",    // convite de usuário (link assinado, uso único)
+  "/definir-senha",    // convite de usuário e "esqueci a senha" (link assinado, uso único)
+  "/esqueci-senha",    // pede o link de nova senha (resposta sempre genérica)
   "/api/auth",        // endpoints internos do Auth.js
   "/api/webhooks",    // webhooks externos (ex.: Banco Inter)
   "/api/email/processar-lembretes", // cron (valida CRON_SECRET internamente)

@@ -1,7 +1,7 @@
 /**
  * Banco em memória para testes de rota (substitui `@/lib/prisma`). Cobre o que as rotas usam:
  * findFirst/findUnique/findMany/count/create/createMany/update/updateMany/upsert/delete/deleteMany e
- * $transaction. findMany respeita orderBy (ver `comparador`), skip e take. Filtros: igualdade, in/notIn/not/has/contains, AND/OR, chave composta
+ * $transaction. findMany respeita orderBy (ver `comparador`), skip e take. Filtros: igualdade, in/notIn/not/has/contains, lt/lte/gt/gte, AND/OR, chave composta
  * (`cpf_empresaId`) e filtro por relação (`formularioTemplate: { ativo: true }`), resolvido
  * pelas relações declaradas em `relacoes`. `select`/`include` não recortam colunas (devolve a
  * linha inteira com as relações hidratadas), mas o `where` de uma relação lista aninhada
@@ -32,6 +32,12 @@ function casa(row: Linha, where: Linha = {}): boolean {
       if ("contains" in v) return String(row[k] ?? "").toLowerCase().includes(String(v.contains).toLowerCase());
       if ("equals" in v) return v.mode === "insensitive" ? String(row[k] ?? "").toLowerCase() === String(v.equals).toLowerCase() : row[k] === v.equals;
       if ("some" in v) return (row[k] ?? []).some((x: Linha) => casa(x, v.some));
+      if (["lt", "lte", "gt", "gte"].some((op) => op in v)) {
+        if (row[k] == null) return false; // NULL não compara (como no SQL)
+        const n = Number(row[k]);
+        return (!("lt" in v) || n < Number(v.lt)) && (!("lte" in v) || n <= Number(v.lte))
+          && (!("gt" in v) || n > Number(v.gt)) && (!("gte" in v) || n >= Number(v.gte));
+      }
       if (ehObjeto(row[k])) return casa(row[k], v); // filtro por relação 1-1
       if (row[k] === null && !("is" in v) && !("isNot" in v)) return false; // relação vazia não casa (como o Prisma)
       return true;
