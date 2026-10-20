@@ -243,14 +243,23 @@ const tiposEquipamento: RegrasCadastro = {
     return null;
   },
   async impacto(t, empresaId) {
-    const [equip, forms] = await Promise.all([
+    const [equip, forms, itens] = await Promise.all([
       prisma.equipamento.count({ where: { empresaId, tipoEquipamentoId: t.id, ativo: true } }),
       prisma.formTypeMapping.count({ where: { tipoEquipamentoId: t.id } }),
+      prisma.checklistTipoItem.count({ where: { tipoEquipamentoId: t.id, ativo: true } }),
     ]);
     const avisos: string[] = [];
     if (equip) avisos.push(`${pl(equip, "equipamento ativo é", "equipamentos ativos são")} deste tipo: ${equip === 1 ? "continua" : "continuam"} com ele (aparece como “inativo” na edição); só deixa de ser oferecido para novos equipamentos.`);
     if (forms) avisos.push(`${pl(forms, "formulário está vinculado", "formulários estão vinculados")} a este tipo: os vínculos ficam guardados e voltam a valer se você reativar.`);
-    return { usos: [{ rotulo: pl(equip, "equipamento ativo", "equipamentos ativos"), total: equip }, { rotulo: pl(forms, "formulário vinculado", "formulários vinculados"), total: forms }], avisos };
+    if (itens) avisos.push(`O checklist deste tipo (${pl(itens, "item", "itens")}) fica guardado: equipamentos deste tipo continuam respondendo ele nas OS, e as respostas antigas não mudam.`);
+    return {
+      usos: [
+        { rotulo: pl(equip, "equipamento ativo", "equipamentos ativos"), total: equip },
+        { rotulo: pl(forms, "formulário vinculado", "formulários vinculados"), total: forms },
+        { rotulo: pl(itens, "item de checklist", "itens de checklist"), total: itens },
+      ],
+      avisos,
+    };
   },
 };
 

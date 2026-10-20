@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, X, Search, FileText, Settings2, AlertTriangle, Loader2, Boxes } from "lucide-react";
+import { Check, X, Search, FileText, Settings2, AlertTriangle, Loader2, Boxes, ListChecks } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -10,6 +10,8 @@ import { FormField } from "@/components/ui/form-field";
 import { Drawer } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
 import { salvarCadastro, type EditorCadastroProps, type ItemCadastroTela } from "@/components/cadastros/cadastro-padrao";
+import { ChecklistTipo } from "@/components/cadastros/editores/checklist-tipo";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
 
 interface FormOpt { id: string; nome: string; ativo?: boolean; campos?: { id: string }[] }
 interface TipoOsOpt { id: string; nome: string; cor: string; ativo?: boolean }
@@ -25,14 +27,17 @@ interface Vinculo {
 }
 
 const ativos = <T extends { ativo?: boolean }>(l: T[]) => l.filter((o) => o.ativo !== false);
+type Aba = "geral" | "checklist" | "formularios";
 
 /**
- * Editor de tipo de equipamento (CadastroPadrao › tipos-equipamento): aba Geral (nome, observações)
- * e aba Formulários (vínculos por tipo de OS). Ao CRIAR, o editor continua aberto com o tipo novo
- * para já vincular formulários; a lista recarrega ao fechar.
+ * Editor de tipo de equipamento (CadastroPadrao › tipos-equipamento): aba Geral (nome, observações),
+ * aba Checklist (o que cada equipamento do tipo responde na OS) e aba Formulários (vínculos por tipo
+ * de OS). Ao CRIAR, o editor continua aberto com o tipo novo e vai para o Checklist; a lista recarrega
+ * ao fechar.
  */
 export function EditorTipoEquipamento({ item, aberto, onFechar, onSalvo }: EditorCadastroProps) {
-  const [aba, setAba] = useState<"geral" | "formularios">("geral");
+  const [aba, setAba] = useState<Aba>("geral");
+  const { pode } = usePermissoes();
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
   const [salvo, setSalvo] = useState<ItemCadastroTela | null>(null);
@@ -64,15 +69,15 @@ export function EditorTipoEquipamento({ item, aberto, onFechar, onSalvo }: Edito
     setSalvando(false);
     if (!r.ok) { setErro(r.erro); return; }
     if (atual) { onSalvo(r.item); return; }
-    setSalvo(r.item); setAba("formularios"); // tipo novo: segue para vincular formulários
+    setSalvo(r.item); setAba("checklist"); // tipo novo: segue para montar o checklist
   }
 
   return (
     <Drawer
       aberto={aberto} onFechar={fechar}
       titulo={atual ? (nome || atual.nome) : "Novo tipo de equipamento"}
-      abas={[{ id: "geral", label: "Geral", icone: Settings2 }, { id: "formularios", label: "Formulários", icone: FileText }]}
-      abaAtiva={aba} onAbaChange={(id) => setAba(id as "geral" | "formularios")}
+      abas={[{ id: "geral", label: "Geral", icone: Settings2 }, { id: "checklist", label: "Checklist", icone: ListChecks }, { id: "formularios", label: "Formulários", icone: FileText }]}
+      abaAtiva={aba} onAbaChange={(id) => setAba(id as Aba)}
       rodape={aba === "geral" ? (
         <>
           <Button type="button" variant="secondary" onClick={fechar}>Cancelar</Button>
@@ -84,7 +89,7 @@ export function EditorTipoEquipamento({ item, aberto, onFechar, onSalvo }: Edito
     >
       {erro && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 mb-4">{erro}</div>}
       {atual && atual.ativo === false && <p className="text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2 mb-4">Tipo inativo: não aparece para novos equipamentos até ser reativado.</p>}
-      {salvo && aba === "formularios" && <p className="text-sm bg-success-50 border border-success-200 text-success-700 rounded-lg px-3 py-2 mb-4">Tipo criado. Vincule os formulários abaixo (ou feche).</p>}
+      {salvo && aba === "checklist" && <p className="text-sm bg-success-50 border border-success-200 text-success-700 rounded-lg px-3 py-2 mb-4">Tipo criado. Monte o checklist abaixo (ou feche).</p>}
 
       {aba === "geral" ? (
         <div className="space-y-4">
@@ -95,10 +100,12 @@ export function EditorTipoEquipamento({ item, aberto, onFechar, onSalvo }: Edito
             <Textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={4} placeholder="Observações sobre este tipo de equipamento" />
           </FormField>
         </div>
-      ) : atual ? (
-        <FormulariosVinculados equipId={atual.id} formOpts={ativos(formOpts)} tiposOs={ativos(tiposOs)} />
+      ) : !atual ? (
+        <p className="text-sm text-ink-muted py-4">Salve o tipo de equipamento na aba <strong>Geral</strong> para {aba === "checklist" ? "montar o checklist" : "vincular formulários"}.</p>
+      ) : aba === "checklist" ? (
+        <ChecklistTipo tipoId={atual.id} podeEditar={pode("configuracoes", "gerenciar")} />
       ) : (
-        <p className="text-sm text-ink-muted py-4">Salve o tipo de equipamento na aba <strong>Geral</strong> para vincular formulários.</p>
+        <FormulariosVinculados equipId={atual.id} formOpts={ativos(formOpts)} tiposOs={ativos(tiposOs)} />
       )}
     </Drawer>
   );
