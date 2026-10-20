@@ -151,6 +151,14 @@ async function avisosDeCusto(empresaId: string, nota: Nota) {
 
 function Resultado({ nota, movs, avisos }: { nota: Nota; movs: Awaited<ReturnType<typeof entradasDaNota>>; avisos: Awaited<ReturnType<typeof avisosDeCusto>> }) {
   const convertidos = nota.itens.filter((i) => i.produto && (Number(i.fatorConversao) !== 1 || !mesmaUnidade(i.unidade, i.produto.unidade)));
+  // fiscal da nota ≠ cadastro (o vazio já foi preenchido no lançamento; o que sobra é diferença — ficou o do cadastro)
+  const divergenciasFiscais = nota.itens.flatMap((i) => {
+    const p = i.produto;
+    if (!p) return [];
+    const pares = [["NCM", i.ncm, p.ncm], ["CEST", i.cest, p.cest], ["GTIN", i.gtin, p.gtin], ["origem", i.origem, p.origemMercadoria], ["unidade tributável", i.unidadeTributavel, p.unidadeTributavel]] as const;
+    return pares.flatMap(([rotulo, daNota, doCadastro]) => (daNota && doCadastro && daNota.trim() !== doCadastro.trim()
+      ? [`${p.nome}: ${rotulo} do cadastro (${doCadastro}) é diferente da nota (${daNota}) — mantido o do cadastro.`] : []));
+  });
   const totalContas = nota.contasPagar.reduce((t, c) => t + Number(c.valorTotal), 0);
   return (
     <div className="space-y-4" data-resultado>
@@ -162,6 +170,11 @@ function Resultado({ nota, movs, avisos }: { nota: Nota; movs: Awaited<ReturnTyp
           {convertidos.map((i) => (
             <p key={i.id}>{i.produto!.nome}: 1 {i.unidade} = {formatarFator(Number(i.fatorConversao))} {i.produto!.unidade} — {formatarQtd(Number(i.quantidade))} {i.unidade} entraram como {formatarQtd(Number(i.quantidade) * Number(i.fatorConversao))} {i.produto!.unidade}.</p>
           ))}
+        </div>
+      )}
+      {divergenciasFiscais.length > 0 && (
+        <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 space-y-0.5" data-divergencias-fiscais>
+          {divergenciasFiscais.map((t) => <p key={t} className="flex items-start gap-1"><AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" /> {t}</p>)}
         </div>
       )}
       {avisos.length > 0 && (

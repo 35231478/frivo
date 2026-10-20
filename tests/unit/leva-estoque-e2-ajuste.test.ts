@@ -300,6 +300,18 @@ describe("custo mudou numa nova NF: só avisa, nunca muda o preço", () => {
     expect(await detalhe(id2)).toContain("data-avisos-custo");
   });
 
+  it("último custo só olha ENTRADAS com custo (uma saída com custo — ex.: baixa futura por OS — não conta)", async () => {
+    const { ultimosCustos } = await import("@/lib/estoque/custo");
+    T("movimentacaoEstoque").push(
+      { id: "m-1", empresaId: "e1", produtoId: "pGas", tipo: "ENTRADA", origem: "AJUSTE", quantidade: 10, custoUnitario: 100, data: new Date("2026-01-01T12:00:00Z") },
+      { id: "m-2", empresaId: "e1", produtoId: "pGas", tipo: "SAIDA", origem: "OS", quantidade: -2, custoUnitario: 80, data: new Date("2026-02-01T12:00:00Z") },
+      { id: "m-3", empresaId: "e1", produtoId: "pGas", tipo: "ENTRADA", origem: "AJUSTE", quantidade: 1, custoUnitario: null, data: new Date("2026-03-01T12:00:00Z") },
+      { id: "m-4", empresaId: "e2", produtoId: "pGas", tipo: "ENTRADA", origem: "COMPRA", quantidade: 1, custoUnitario: 999, data: new Date("2026-04-01T12:00:00Z") },
+    );
+    expect(await ultimosCustos("e1", ["pGas"])).toEqual(new Map([["pGas", 100]]));
+    expect(await ultimosCustos("e1", ["pVal"])).toEqual(new Map());
+  });
+
   it("custo igual ao anterior, ou primeira compra: sem aviso", async () => {
     const { r } = await nota1Lancada();
     expect(r.json.avisosCusto).toEqual([]); // 1ª compra do gás; a válvula nunca teve custo
@@ -341,6 +353,9 @@ describe("dados fiscais do XML", () => {
     const r = await lancarApi(id2);
     expect(r.json.avisos).toEqual(["Gás R404A: NCM do cadastro (29037990) é diferente da nota (38247800) — mantido o do cadastro."]);
     expect(prod("pGas").ncm).toBe("29037990");
+    // e o resultado da nota lançada continua mostrando a diferença
+    expect(texto(await detalhe(id2))).toContain("Gás R404A: NCM do cadastro (29037990) é diferente da nota (38247800) — mantido o do cadastro.");
+    expect(await detalhe(id)).not.toContain("data-divergencias-fiscais"); // a 1ª nota bate com o cadastro
     expect(id).not.toBe(id2);
   });
 
