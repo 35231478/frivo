@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { cn, formatarData, formatarDataHora, LABELS_STATUS_OS } from "@/lib/utils";
 import {
   FileText, FileBarChart, DollarSign, Camera, ListChecks, Wrench, Users, Clock,
-  CornerDownRight, ExternalLink, CalendarRange, AlertCircle,
+  CornerDownRight, ExternalLink, CalendarRange, AlertCircle, Lock,
 } from "lucide-react";
 
 interface Atividade {
@@ -103,13 +103,16 @@ export function OsRelatorios({ osId }: { osId: string }) {
             </span>
           </div>
           <div className="flex items-center gap-2">
+            <a href={`/ordens/${osId}/relatorio`} target="_blank" rel="noopener" className="btn-secondary" data-relatorio-interno title="Todas as seções, inclusive as marcadas como só interno">
+              <Lock className="w-4 h-4" /> Versão interna
+            </a>
             {geral ? (
-              <a href={`/relatorio/os/${geral.tokenPublico}`} target="_blank" rel="noopener" className="btn-secondary">
-                <FileBarChart className="w-4 h-4" /> Relatório Geral
+              <a href={`/relatorio/os/${geral.tokenPublico}`} target="_blank" rel="noopener" className="btn-secondary" data-relatorio-cliente title="Link público que o cliente recebe">
+                <FileBarChart className="w-4 h-4" /> Versão do cliente
               </a>
             ) : (
-              <Button variant="secondary" disabled title="Gerado automaticamente quando a OS é concluída">
-                <FileBarChart className="w-4 h-4" /> Relatório Geral
+              <Button variant="secondary" disabled title="O link do cliente é gerado automaticamente quando a OS é concluída">
+                <FileBarChart className="w-4 h-4" /> Versão do cliente
               </Button>
             )}
             <Button variant="success" onClick={gerarMedicao} loading={gerando}>
@@ -117,7 +120,7 @@ export function OsRelatorios({ osId }: { osId: string }) {
             </Button>
           </div>
         </div>
-        {!geral && <p className="text-xs text-ink-subtle mt-2">Os relatórios são gerados automaticamente quando a OS é concluída.</p>}
+        {!geral && <p className="text-xs text-ink-subtle mt-2">O link do cliente é gerado automaticamente quando a OS é concluída. A versão interna já pode ser aberta.</p>}
       </div>
 
       {/* Hierarquia: relatório geral (pai) + atividades (filhos) */}

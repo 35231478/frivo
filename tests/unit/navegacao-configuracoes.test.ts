@@ -18,6 +18,8 @@ const ANTES = [
   "/configuracoes/financeiro/categorias", "/configuracoes", "/configuracoes/perfis", "/configuracoes/usuarios",
   "/configuracoes/cargos", "/configuracoes#preferencias", "/configuracoes/email", "/configuracoes/portal", "/configuracoes/qr-code",
 ];
+/** Itens novos desde a reorganização */
+const NOVOS = ["/configuracoes/impressao-os"];
 
 describe("estrutura", () => {
   it("3 seções, cada uma com tela própria que existe", () => {
@@ -26,7 +28,7 @@ describe("estrutura", () => {
   });
 
   it("todos os itens de antes continuam, sem duplicar, e cada um aponta para uma página que existe", () => {
-    expect([...hrefs].sort()).toEqual([...ANTES].sort());
+    expect([...hrefs].sort()).toEqual([...ANTES, ...NOVOS].sort());
     expect(new Set(hrefs).size).toBe(hrefs.length);
     for (const h of hrefs) expect(paginaExiste(h), h).toBe(true);
   });
@@ -34,7 +36,7 @@ describe("estrutura", () => {
   it("subgrupos pedidos; Categorias financeiras saiu das operacionais e foi para as financeiras", () => {
     const sub = (id: string) => SECOES_CONFIGURACOES.find((s) => s.id === id)!.subgrupos.map((g) => [g.titulo, g.itens.map((i) => i.label)]);
     expect(sub("operacionais")).toEqual([
-      ["Ordens de serviço", ["Tipos de OS", "Formulários", "Termos de referência", "Modelos de prazo"]],
+      ["Ordens de serviço", ["Tipos de OS", "Formulários", "Termos de referência", "Modelos de prazo", "Impressão da OS"]],
       ["Catálogo", ["Tipos de equipamento", "Serviços", "Produtos", "Tabelas de preços"]],
     ]);
     expect(sub("financeiras")).toEqual([["Classificação", ["Categorias financeiras"]]]);
