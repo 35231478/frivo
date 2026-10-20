@@ -13,9 +13,9 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { carregarContexto, type Ator } from "@/lib/execucao/contexto";
 import {
-  adicionalSchema, adicionarFoto, concluirAtividade, concluirSchema, equipamentoSchema, fotoAdicional, fotoAdicionalSchema, fotoSchema,
+  adicionalSchema, adicionarFoto, concluirAtividade, concluirSchema, equipamentoSchema, formularioSchema, fotoAdicional, fotoAdicionalSchema, fotoSchema,
   gravarAudio, iniciarAtividade, marcarEquipamento, removerAdicional, removerFoto, removerFotoAdicional, respostaSchema, responderItem,
-  salvarAdicional, tudoOk, vincularEquipamentos, vincularPorQr, type ResultadoAcao,
+  responderFormulario, salvarAdicional, tudoOk, vincularEquipamentos, vincularPorQr, type ResultadoAcao,
 } from "@/lib/execucao/acoes";
 
 export const MAX_OPERACOES = 100;
@@ -34,6 +34,7 @@ export const operacaoSchema = z.discriminatedUnion("tipo", [
   z.object({ ...base, tipo: z.literal("foto"), equipamentoId: id, dados: fotoSchema }).strict(),
   z.object({ ...base, tipo: z.literal("fotoRemover"), dados: ref }).strict(),
   z.object({ ...base, tipo: z.literal("equipamento"), equipamentoId: id, dados: equipamentoSchema }).strict(),
+  z.object({ ...base, tipo: z.literal("formulario"), equipamentoId: id, dados: formularioSchema }).strict(),
   z.object({ ...base, tipo: z.literal("vincular"), equipamentoIds: z.array(id).min(1).max(200) }).strict(),
   z.object({ ...base, tipo: z.literal("scan"), valor: z.string().min(1).max(500) }).strict(),
   z.object({ ...base, tipo: z.literal("adicional"), dados: adicionalSchema }).strict(),
@@ -72,6 +73,7 @@ async function executar(ator: Ator, op: Operacao): Promise<ResultadoAcao<unknown
     case "foto": return adicionarFoto(ctx, op.dados);
     case "fotoRemover": return removerFoto(ctx, { fotoId: op.dados.id, clientId: op.dados.clientId });
     case "equipamento": return marcarEquipamento(ctx, op.dados);
+    case "formulario": return responderFormulario(ctx, op.dados);
     case "vincular": return vincularEquipamentos(ctx, op.equipamentoIds);
     case "scan": return vincularPorQr(ctx, op.valor);
     case "adicional": return salvarAdicional(ctx, op.dados);

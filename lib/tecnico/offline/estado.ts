@@ -124,6 +124,18 @@ export function aplicar(r: RetratoAtividade, x: ExecucaoTela, op: OperacaoFila):
         return { ...e, feito, ...(obs !== undefined && { observacao: obs }) };
       });
 
+    case "formulario":
+      return mudarEquip(op.equipamentoId, (e) => {
+        if (!e.formulario || e.formulario.id !== op.dados.formularioId) return e;
+        const atual = e.formulario.respostas[op.dados.campoId] ?? { resposta: null, arquivoUrl: null };
+        const nova = {
+          resposta: op.dados.resposta !== undefined ? op.dados.resposta : atual.resposta,
+          arquivoUrl: op.dados.arquivoUrl !== undefined ? op.dados.arquivoUrl : atual.arquivoUrl,
+        };
+        const feito = e.feito || !!((nova.resposta ?? "").trim() || nova.arquivoUrl);
+        return { ...e, feito, formulario: { ...e.formulario, respostas: { ...e.formulario.respostas, [op.dados.campoId]: nova } } };
+      });
+
     case "vincular": {
       const novos = op.equipamentoIds
         .filter((id) => !x.equipamentos.some((e) => e.equipamento.id === id))

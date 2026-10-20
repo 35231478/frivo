@@ -26,6 +26,7 @@ export interface EquipamentoUnidade extends EquipamentoInfo {
 }
 
 export type ItemTela = ItemExecucao & { ordem: number };
+export interface CampoFormularioTela { id: string; label: string; tipo: string; obrigatorio: boolean; ordem: number; opcoes: unknown; ativo: boolean }
 export type RespostaTela = RespostaItem & { audioId: string | null; /** áudio gravado no aparelho, ainda não enviado */ audioLocal?: string | null };
 export interface FotoTela {
   id: string | null; clientId: string | null; itemId: string | null; momento: "ANTES" | "DEPOIS" | null;
@@ -41,7 +42,7 @@ export interface EquipamentoTela {
   itens: ItemTela[];
   respostas: Record<string, RespostaTela>;
   fotos: FotoTela[];
-  formulario: FormularioExecucao | null;
+  formulario: (Omit<FormularioExecucao, "campos"> & { campos: CampoFormularioTela[] }) | null;
   faltas: FaltasEquipamento;
   completo: boolean;
   /** Vinculado no aparelho, ainda não confirmado */
