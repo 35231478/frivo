@@ -266,6 +266,11 @@ describe("custo mudou numa nova NF: só avisa, nunca muda o preço", () => {
     expect(texto(h)).toMatch(/Preço de venda: R\$ 142,86 margem com o custo desta nota: 26,5%/);
     expect(h).toContain('data-ajustar-preco="1"'); // ajustar é opcional e só com clique
     expect(prod("pGas")).toMatchObject({ valorPadrao: 142.86, margemVenda: 30 });
+    // quem concilia sem poder mexer em preço (Configurações › gerenciar) vê o aviso, mas não o "Ajustar preço"
+    logar(so({ estoque: { visualizar: true, gerenciar: true }, financeiro: { visualizar: true, fluxoCaixa: true } }));
+    const semPreco = await detalhe(id2);
+    expect(semPreco).toContain('data-aviso-custo="1"');
+    expect(semPreco).not.toContain("data-ajustar-preco");
   });
 
   it("ao lançar: o aviso volta na resposta e no resultado; preço e margem alvo continuam os mesmos", async () => {
@@ -280,6 +285,19 @@ describe("custo mudou numa nova NF: só avisa, nunca muda o preço", () => {
     const h = await detalhe(id2);
     expect(h).toContain("data-avisos-custo");
     expect(texto(h)).toContain(TEXTO);
+  });
+
+  it("último custo = a entrada MAIS RECENTE; o resultado de uma nota antiga não compara com compras de depois", async () => {
+    const { id: id1 } = await nota1Lancada();
+    const id2 = (await importar(XML2)).json.nota.id;
+    await lancarApi(id2);
+    expect(texto(await paginaProduto("pGas"))).toMatch(/Custo R\$ 105,00 Último custo de compra/);
+    // a 1ª nota foi lançada ANTES das entradas da 2ª: o resultado dela não acusa "custo mudou"
+    const n1 = T("notaCompra").find((n) => n.id === id1);
+    const ultimaDaPrimeira = Math.max(...movsDa(id1).map((m) => Number(String(m.id).split("-").pop())));
+    n1.lancadaEm = new Date(Date.UTC(2020, 0, 1) + ultimaDaPrimeira * 60_000 + 30_000);
+    expect(await detalhe(id1)).not.toContain("data-avisos-custo");
+    expect(await detalhe(id2)).toContain("data-avisos-custo");
   });
 
   it("custo igual ao anterior, ou primeira compra: sem aviso", async () => {
