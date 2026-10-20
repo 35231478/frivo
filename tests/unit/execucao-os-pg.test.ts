@@ -104,6 +104,7 @@ describe.skipIf(!URL_PG)("execução da OS por equipamento (PostgreSQL real)", (
       eq("eqA", "un1", "Split Sala 1", { patrimonio: "AC-01", localizacao: "Sala 1" }),
       eq("eqB", "un1", "Split Sala 2", { localizacao: "Sala 2" }),
       eq("eqI", "un1", "Split desativado", { ativo: false }),
+      eq("eqD", "un1", "Cassete do auditório", { tipo: "CASSETE", tipoEquipamentoId: "te2" }),
       eq("eqC", "un2", "Split da padaria"),
       { ...eq("eqE2", "unE2", "Da outra empresa"), empresaId: "e2", tipoEquipamentoId: null },
     ] });
@@ -270,11 +271,29 @@ describe.skipIf(!URL_PG)("execução da OS por equipamento (PostgreSQL real)", (
     expect(r.json.erro).toMatch(/marque-o como “não atendido”/);
     expect((await chamar(`${A}/equipamentos/[vinculoId]`, "DELETE", { ...p1(), vinculoId: vB.id })).status).toBe(200);
     expect((await prisma.atividadeEquipamento.findMany({ where: { atividadeId: at1 } })).map((x: any) => x.equipamentoId)).toEqual(["eqA"]);
-    // A atividade com execução gravada também não pode ser excluída
+    // A atividade com execução gravada também não pode ser excluída — nem com o equipamento marcado
+    // "não atendido" (as respostas continuam lá e iriam junto)
     expect((await chamar(A, "DELETE", p1())).status).toBe(409);
+    expect((await chamar(EQUIP, "PATCH", { ...p1(), equipamentoId: "eqA" }, { feito: false })).json).toMatchObject({ feito: false });
+    const r2 = await chamar(A, "DELETE", p1());
+    expect(r2.status).toBe(409);
+    expect(r2.json.erro).toMatch(/checklist/);
+    expect(await prisma.checklistResposta.count({ where: { atividadeId: at1 } })).toBe(1);
   });
 
-  it("OS conclui com o que foi atendido; relatório fiel: só os atendidos, cada um com checklist, fotos e observação DELE", async () => {
+  it("tipos diferentes na mesma atividade: cada equipamento responde o checklist do SEU tipo", async () => {
+    expect((await chamar(`${A}/equipamentos`, "POST", p1(), { equipamentoIds: ["eqD"] })).status).toBe(201);
+    const x = await exec(p1());
+    expect(equipDe(x, "eqD").itens.map((i: any) => i.texto)).toEqual(["Bomba de dreno"]);
+    expect(equipDe(x, "eqA").itens.map((i: any) => i.texto)).toEqual(["Limpeza dos filtros", "Medição de corrente do compressor", "Teste de funcionamento"]);
+    expect((await responder(p1(), "eqD", "i1", { status: "OK" })).status).toBe(400);
+    expect((await responder(p1(), "eqD", "iCas", { status: "OK" })).status).toBe(200);
+  });
+
+  it("OS conclui com o que foi atendido (atividade cancelada não conta); relatório fiel: só os atendidos, cada um com o que é DELE", async () => {
+    // Uma atividade CANCELADA com o eqB "atendido" e nada respondido: não trava a OS nem vira atendimento no relatório
+    await prisma.atividadeOs.create({ data: { id: "at2c", empresaId: "e1", ordemServicoId: os2, titulo: "Retorno (cancelado)", status: "CANCELADA" } });
+    await prisma.atividadeEquipamento.create({ data: { atividadeId: "at2c", equipamentoId: "eqB", feito: true } });
     expect((await chamar("ordens/[id]", "PUT", { id: os2 }, { status: "CONCLUIDA" })).status).toBe(200);
     const { relatorioInterno } = await import("@/lib/relatorio-os/dados");
     const { dados } = (await relatorioInterno(os2, "e1"))!;
@@ -289,7 +308,7 @@ describe.skipIf(!URL_PG)("execução da OS por equipamento (PostgreSQL real)", (
     expect(b.resumoChecklist).toEqual({ ok: 2, atencao: 1, naoSeAplica: 0 });
     expect(b.fotos.map((f) => [f.url, f.legenda])).toEqual([[FOTO_PNG, "Limpeza dos filtros"]]);
     expect(b.observacoes).toEqual(["Dreno parcialmente obstruído — limpo."]);
-    expect(dados.resultado.texto).toBe("Concluída · 1 de 2 equipamentos atendido · 1 de 1 atividade concluída");
+    expect(dados.resultado.texto).toBe("Concluída · 1 de 2 equipamentos atendido · 1 de 2 atividades concluída");
     expect(dados.equipamentos.some((x) => x.id === "eqI")).toBe(false); // nunca "todos os da unidade"
 
     // Relatórios gerados na conclusão (link antigo: geral e por atividade) — também só o atendido
@@ -301,6 +320,49 @@ describe.skipIf(!URL_PG)("execução da OS por equipamento (PostgreSQL real)", (
       expect(d.equipamentos.map((e: any) => e.id)).toEqual(["eqA"]);
       expect(d.blocos.map((x) => [x.id, x.checklistTipo[0].itens.length, x.fotos.length])).toEqual([["eqA", 3, 1]]);
     }
+  });
+
+  it("2 equipamentos e 2 atividades: cada bloco do relatório só com o que é DELE, das atividades em que ELE foi atendido", async () => {
+    const os3 = (await novaOs({ equipamentoIds: ["eqA", "eqB"] })).json.id;
+    const atX = await primeiraAtividade(os3);
+    const atY = (await prisma.atividadeOs.create({ data: { empresaId: "e1", ordemServicoId: os3, titulo: "Retorno", status: "EM_ANDAMENTO" } })).id;
+    const px = { id: os3, atividadeId: atX }, py = { id: os3, atividadeId: atY };
+    for (const [eq, item, corpo] of [
+      ["eqA", "i1", { status: "OK" }], ["eqA", "i2", { status: "ATENCAO", observacao: "Corrente alta" }], ["eqA", "i3", { status: "OK" }],
+      ["eqB", "i1", { status: "NAO_SE_APLICA" }], ["eqB", "i2", { status: "OK", observacao: "5 A" }], ["eqB", "i3", { status: "OK" }],
+    ] as const) expect((await responder(px, eq, item, corpo)).status).toBe(200);
+    await chamar(FOTOS, "POST", { ...px, equipamentoId: "eqA" }, { dataUrl: FOTO_PNG, itemId: "i1" });
+    const fotoB = dataUrl("image/png", new Uint8Array([...PNG, 1, 2, 3]));
+    await chamar(FOTOS, "POST", { ...px, equipamentoId: "eqB" }, { dataUrl: fotoB });
+    // Na 2ª atividade o eqA chegou a ter resposta, mas foi marcado "não atendido": não entra no bloco dele
+    await chamar(`${A}/equipamentos`, "POST", py, { equipamentoIds: ["eqA"] });
+    await responder(py, "eqA", "i1", { status: "ATENCAO", observacao: "não deveria aparecer" });
+    await chamar(EQUIP, "PATCH", { ...py, equipamentoId: "eqA" }, { feito: false });
+
+    const { relatorioInterno } = await import("@/lib/relatorio-os/dados");
+    const { dados } = (await relatorioInterno(os3, "e1"))!;
+    const bloco = (id: string) => dados.equipamentos.find((b) => b.id === id)!;
+    expect(dados.equipamentos.map((b) => b.id)).toEqual(["eqA", "eqB"]);
+    expect(bloco("eqA").checklistTipo.map((g) => g.itens.map((i) => i.status))).toEqual([["OK", "ATENCAO", "OK"]]);
+    expect(bloco("eqB").checklistTipo.map((g) => g.itens.map((i) => i.status))).toEqual([["NAO_SE_APLICA", "OK", "OK"]]);
+    expect([bloco("eqA").resumoChecklist, bloco("eqB").resumoChecklist]).toEqual([{ ok: 2, atencao: 1, naoSeAplica: 0 }, { ok: 2, atencao: 0, naoSeAplica: 1 }]);
+    expect(bloco("eqA").fotos).toEqual([{ url: FOTO_PNG, legenda: "Limpeza dos filtros" }]);
+    expect(bloco("eqB").fotos).toEqual([{ url: fotoB, legenda: "Foto do equipamento" }]);
+
+    // Link antigo por atividade: só o que foi atendido NAQUELA atividade
+    const rel = (atividadeId: string, tokenPublico: string) => prisma.relatorioOs.create({ data: {
+      empresaId: "e1", ordemServicoId: os3, atividadeId, escopo: "ATIVIDADE", numero: `REL-${tokenPublico}`, mesReferencia: 10, anoReferencia: 2026, tokenPublico,
+    } });
+    await rel(atX, "tok-rel-x"); await rel(atY, "tok-rel-y");
+    const { carregarRelatorioPorToken, carregarAtividade } = await import("@/lib/relatorio-server");
+    expect((await carregarRelatorioPorToken("tok-rel-x"))!.blocos.map((b) => b.id)).toEqual(["eqA", "eqB"]);
+    expect((await carregarRelatorioPorToken("tok-rel-y"))!.blocos).toEqual([]);
+    // Relatório de atividade (o PR #48 acrescenta o token: passa-se o da atividade quando a coluna existir)
+    const doc = async (id: string) => {
+      const a = await prisma.atividadeOs.findUnique({ where: { id } });
+      return (await (carregarAtividade as any)(id, a.tokenRelatorio))!.equipamentos.map((b: any) => b.id);
+    };
+    expect([await doc(atX), await doc(atY)]).toEqual([["eqA", "eqB"], []]);
   });
 
   it("histórico do equipamento: o atendimento entra sozinho, com o checklist, as fotos e a observação dele", async () => {

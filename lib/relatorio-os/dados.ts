@@ -162,7 +162,7 @@ export function blocosAtendidos(ativs: Atividade[], unidade: string | null, prin
   const equips = new Map<string, { e: Equip; atividades: Set<string> }>();
   for (const a of ativs) for (const v of a.equipamentos) {
     const x = equips.get(v.equipamento.id) ?? { e: v.equipamento, atividades: new Set<string>() };
-    if (v.feito) x.atividades.add(a.id);
+    if (v.feito && a.status !== "CANCELADA") x.atividades.add(a.id); // atividade cancelada não atendeu ninguém
     equips.set(v.equipamento.id, x);
   }
   // OS antiga (concluída sem nenhum equipamento vinculado): o principal era o atendido
