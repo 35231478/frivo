@@ -6,6 +6,7 @@ import { cancelarOs, statusHttp } from "@/lib/acoes-massa/regras";
 import { SOLICITACAO_PENDENTE } from "@/lib/solicitacoes";
 import { prisma } from "@/lib/prisma";
 import { gerarRelatoriosDaOs } from "@/lib/relatorio-server";
+import { verificarConclusaoOs } from "@/lib/execucao/dados";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -129,6 +130,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
     }
     if (status === "CONCLUIDA" && !pode(permissoes, "ordens", "concluir", role))
       return NextResponse.json({ erro: "Sem permissão para concluir OS" }, { status: 403 });
+    // Trava: a OS só conclui com pelo menos 1 equipamento atendido e o checklist de cada atendido respondido
+    if (status === "CONCLUIDA") {
+      const r = await verificarConclusaoOs(empresaId, id);
+      if (!r.ok) return NextResponse.json({ erro: r.mensagem, pendencias: r.pendencias }, { status: 422 });
+    }
   }
 
   const data: any = {};

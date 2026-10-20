@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { exigirAlgumaPermissao } from "@/lib/permissoes-server";
+import { contextoExecucao } from "@/lib/execucao/contexto";
+import { nomeEquipamento } from "@/lib/execucao/vinculos";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
@@ -8,23 +9,17 @@ type Params = { params: Promise<{ id: string; atividadeId: string }> };
 const schema = z.object({ valor: z.string().min(1) });
 
 /**
- * Resolve um QR escaneado (URL .../qr/<token>, token puro ou código QR-AAAA-NNNN)
- * para o equipamento e marca o vínculo da atividade como "feito".
+ * Resolve um QR escaneado (URL .../qr/<token>, token puro ou código QR-AAAA-NNNN) para o equipamento:
+ * já vinculado à atividade → marca como atendido; ainda não → VINCULA (se for do cliente da OS e
+ * estiver ativo) já como atendido. Equipamento de outro cliente nunca entra.
  */
 export async function POST(req: NextRequest, { params }: Params) {
-  const guard = await exigirAlgumaPermissao([["ordens", "editar"], ["ordens", "concluir"]]);
-  if (guard.erro) return guard.resposta;
-  const { session } = guard;
   const { id, atividadeId } = await params;
-  const empresaId = session.user!.empresaId;
+  const ctx = await contextoExecucao(id, atividadeId);
+  if (!ctx.ok) return ctx.resposta;
+  const { empresaId } = ctx;
 
-  const atividade = await prisma.atividadeOs.findFirst({
-    where: { id: atividadeId, ordemServicoId: id, empresaId },
-    select: { id: true },
-  });
-  if (!atividade) return NextResponse.json({ erro: "Atividade não encontrada" }, { status: 404 });
-
-  const parsed = schema.safeParse(await req.json());
+  const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos" }, { status: 400 });
 
   // Extrai o token de uma URL .../qr/<token> ou usa o valor cru
@@ -39,30 +34,26 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!qrcode?.equipamentoId) {
     return NextResponse.json({ erro: "QR Code não reconhecido." }, { status: 404 });
   }
-
-  const vinculo = await prisma.atividadeEquipamento.findFirst({
-    where: { atividadeId, equipamentoId: qrcode.equipamentoId },
-    select: { id: true, equipamento: { select: { nome: true, marca: true, modelo: true } } },
+  const equipamentoId = qrcode.equipamentoId;
+  const eq = await prisma.equipamento.findFirst({
+    where: { id: equipamentoId, empresaId },
+    select: { nome: true, marca: true, modelo: true, ativo: true, unidade: { select: { clienteId: true } } },
   });
-  if (!vinculo) {
-    const eq = await prisma.equipamento.findUnique({
-      where: { id: qrcode.equipamentoId },
-      select: { nome: true, marca: true, modelo: true },
-    });
-    const nome = eq ? `${eq.nome ? `${eq.nome} — ` : ""}${eq.marca} ${eq.modelo}` : "equipamento";
-    return NextResponse.json({ erro: `O ${nome} não faz parte desta atividade.` }, { status: 409 });
+  if (!eq) return NextResponse.json({ erro: "QR Code não reconhecido." }, { status: 404 });
+  const nome = nomeEquipamento(eq);
+
+  const vinculo = await prisma.atividadeEquipamento.findFirst({ where: { atividadeId, equipamentoId }, select: { id: true } });
+  if (vinculo) {
+    await prisma.atividadeEquipamento.update({ where: { id: vinculo.id }, data: { feito: true, feitoEm: new Date() } });
+    return NextResponse.json({ ok: true, vinculado: false, vinculoId: vinculo.id, equipamentoId, nome });
   }
+  if (eq.unidade?.clienteId !== ctx.atividade.ordemServico.clienteId)
+    return NextResponse.json({ erro: `O ${nome} é de outro cliente: não entra nesta OS.` }, { status: 409 });
+  if (!eq.ativo) return NextResponse.json({ erro: `O ${nome} está inativo: reative o cadastro dele para usar na OS.` }, { status: 409 });
 
-  const atualizado = await prisma.atividadeEquipamento.update({
-    where: { id: vinculo.id },
-    data: { feito: true, feitoEm: new Date() },
-    select: { id: true, feito: true, equipamentoId: true },
+  const novo = await prisma.atividadeEquipamento.create({
+    data: { atividadeId, equipamentoId, feito: true, feitoEm: new Date() },
+    select: { id: true },
   });
-
-  return NextResponse.json({
-    ok: true,
-    vinculoId: atualizado.id,
-    equipamentoId: atualizado.equipamentoId,
-    nome: `${vinculo.equipamento.nome ? `${vinculo.equipamento.nome} — ` : ""}${vinculo.equipamento.marca} ${vinculo.equipamento.modelo}`,
-  });
+  return NextResponse.json({ ok: true, vinculado: true, vinculoId: novo.id, equipamentoId, nome }, { status: 201 });
 }
