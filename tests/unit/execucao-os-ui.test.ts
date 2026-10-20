@@ -164,6 +164,11 @@ describe("tela de execução", () => {
     await clicar($("[data-concluir]"));
     expect(txt("[data-pendencias]")).toContain("Split Sala 1 (Sala): 1 item sem resposta (“Medição de corrente”).");
     expect(escritas()).toEqual([]);
+    // Respondeu o que faltava: o aviso some sozinho (não fica um "ainda não dá" velho na tela)
+    respostas[`PUT ${BASE}/execucao/equipamentos/eqA/itens/i2`] = { status: 200, corpo: { itemId: "i2", status: "NAO_SE_APLICA", observacao: null, feito: true } };
+    await clicar(botaoResposta("eqA", "i2", "NAO_SE_APLICA"));
+    expect($("[data-pendencias]")).toBeNull();
+    expect(txt("[data-resumo-execucao]")).toContain("pronto para concluir");
   });
 
   it("sem equipamento atendido: diz como resolver; Concluir não envia", async () => {

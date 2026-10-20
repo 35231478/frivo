@@ -27,7 +27,8 @@ interface ExecucaoTela {
   equipamentos: EquipamentoTela[];
   conclusao: ResultadoConclusao;
 }
-type Pendencias = { erro: string; pendencias?: { equipamentoId: string; titulo: string }[] };
+/** `servidor`: recusa do servidor (fica até a próxima tentativa); senão é a conferência da tela, que some quando tudo fica respondido */
+type Pendencias = { erro: string; pendencias?: { equipamentoId: string; titulo: string }[]; servidor: boolean };
 
 /** Recalcula, na tela, o que falta (as MESMAS regras do servidor) depois de cada resposta. */
 function recalcular(x: ExecucaoTela): ExecucaoTela {
@@ -161,14 +162,14 @@ export function AtividadeExecucao({ osId, atividadeId, titulo, osNumero, tipoOs 
   async function concluir() {
     if (!exec) return;
     setPendencias(null);
-    if (!exec.conclusao.ok) { setPendencias({ erro: exec.conclusao.mensagem ?? "Faltam respostas.", pendencias: exec.conclusao.pendencias }); return; }
+    if (!exec.conclusao.ok) { setPendencias({ erro: exec.conclusao.mensagem ?? "Faltam respostas.", pendencias: exec.conclusao.pendencias, servidor: false }); return; }
     const nao = exec.conclusao.naoAtendidos;
     if (nao && !window.confirm(`${nao === 1 ? "1 equipamento vinculado não foi atendido e vai" : `${nao} equipamentos vinculados não foram atendidos e vão`} como “não atendido” no relatório. Concluir mesmo assim?`)) return;
     setConcluindo(true);
     try {
       const r = await fetch(base, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "CONCLUIDA" }) });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) { setPendencias({ erro: d.erro ?? "Não foi possível concluir.", pendencias: d.pendencias }); return; }
+      if (!r.ok) { setPendencias({ erro: d.erro ?? "Não foi possível concluir.", pendencias: d.pendencias, servidor: true }); return; }
       setMensagem({ tipo: "ok", texto: "Atividade concluída." });
       await carregar();
     } finally { setConcluindo(false); }
@@ -249,7 +250,7 @@ export function AtividadeExecucao({ osId, atividadeId, titulo, osNumero, tipoOs 
             </div>
           )}
 
-          {pendencias && (
+          {pendencias && (pendencias.servidor || !exec.conclusao.ok) && (
             <div role="alert" className="mt-4 bg-red-50 border border-red-200 text-red-800 rounded-xl px-4 py-3 text-sm space-y-2" data-pendencias>
               <p className="font-semibold flex items-center gap-2"><AlertCircle className="w-4 h-4" /> Ainda não dá para concluir</p>
               {exec.conclusao.semEquipamento ? <p>{exec.conclusao.mensagem}</p> : (
@@ -262,7 +263,7 @@ export function AtividadeExecucao({ osId, atividadeId, titulo, osNumero, tipoOs 
           )}
 
           {!somenteLeitura && (
-            <div className="fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur border-t border-gray-200 px-4 py-3 md:static md:bg-transparent md:border-0 md:px-0 md:mt-5">
+            <div className="fixed inset-x-0 z-30 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] bg-white/95 backdrop-blur border-t border-gray-200 px-4 py-3 md:static md:bg-transparent md:border-0 md:px-0 md:mt-5" data-barra-concluir>
               <div className="max-w-2xl mx-auto">
                 <Button type="button" variant={exec.conclusao.ok ? "success" : "secondary"} onClick={concluir} loading={concluindo} className="w-full justify-center" data-concluir>
                   <CircleCheck className="w-4 h-4" /> Concluir atividade
