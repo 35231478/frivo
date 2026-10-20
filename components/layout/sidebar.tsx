@@ -13,7 +13,7 @@ import {
   LayoutDashboard, Users, Thermometer, ClipboardList, FileText, HardHat, Settings, ChevronDown, ChevronRight,
   Wrench, Calculator, Wallet, Receipt, TrendingUp, FileBarChart, ShoppingCart, Timer, CalendarDays, QrCode,
   Truck, UsersRound, BadgeDollarSign, ClipboardCheck, Smartphone, UserCog, Upload, Landmark, Globe, Coins,
-  PanelLeftClose, PanelLeftOpen, MoreVertical, LogOut, LayoutGrid,
+  PanelLeftClose, PanelLeftOpen, MoreVertical, LogOut, LayoutGrid, Package,
 } from "lucide-react";
 
 type Icone = React.ComponentType<{ className?: string }>;
@@ -78,6 +78,11 @@ const OPERACIONAL: Secao[] = [
         tipo: "grupo", label: "Equipamentos", icone: Thermometer, itens: [
           { href: "/equipamentos", icone: Thermometer, label: "Todos os equipamentos" },
           { href: "/qrcodes", icone: QrCode, label: "QR Codes" },
+        ],
+      },
+      {
+        tipo: "grupo", label: "Estoque", icone: Package, itens: [
+          { href: "/estoque", icone: Package, label: "Saldos e extrato" },
         ],
       },
       {
