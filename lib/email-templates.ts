@@ -19,7 +19,7 @@ export const VARIAVEIS_DISPONIVEIS = [
   "link_boleto", "link_documento", "link_orcamento",
   "empresa_nome", "empresa_telefone", "empresa_email", "empresa_site",
   "mes_referencia", "data_aprovacao",
-  "usuario_nome", "link_definir_senha", "validade_convite",
+  "usuario_nome", "link_definir_senha", "validade_convite", "validade_link",
 ] as const;
 
 export const TEMPLATES_PADRAO: DefTemplate[] = [
@@ -61,6 +61,10 @@ export const TEMPLATES_PADRAO: DefTemplate[] = [
   { tipo: "CONVITE_USUARIO", nome: "Convite de usuário do sistema", assunto: "Seu acesso ao sistema — {{empresa_nome}}",
     corpo: "<p>Olá <strong>{{usuario_nome}}</strong>,</p><p>Você foi cadastrado(a) no sistema da <strong>{{empresa_nome}}</strong>. Clique no botão abaixo para definir a sua senha e entrar.</p><p style=\"color:#64748b;font-size:13px\">O link vale por {{validade_convite}} e só pode ser usado uma vez. Se você não esperava este convite, ignore este e-mail.</p>",
     botaoLabel: "Definir minha senha", botaoVar: "link_definir_senha" },
+  // "Esqueci minha senha" na tela de login: link assinado, curto e de uso único
+  { tipo: "RECUPERACAO_SENHA", nome: "Recuperação de senha", assunto: "Criar nova senha — {{empresa_nome}}",
+    corpo: "<p>Olá <strong>{{usuario_nome}}</strong>,</p><p>Recebemos um pedido para criar uma nova senha de acesso ao sistema da <strong>{{empresa_nome}}</strong>. Clique no botão abaixo para definir a nova senha.</p><p style=\"color:#64748b;font-size:13px\">O link vale por {{validade_link}} e só pode ser usado uma vez. Se não foi você quem pediu, ignore este e-mail: a sua senha atual continua valendo.</p>",
+    botaoLabel: "Criar nova senha", botaoVar: "link_definir_senha" },
 ];
 
 export function substituirVariaveis(texto: string, vars: Record<string, string>): string {

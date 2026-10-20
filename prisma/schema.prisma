@@ -2793,3 +2793,18 @@ model FolhaSnapshot {
   @@index([empresaId, competencia])
   @@map("folha_snapshots")
 }
+
+/// Tentativas que contam para o limite anti força bruta: senha errada no login, pedido de "esqueci a
+/// senha" e senha atual errada na troca. Sem empresa (o login acontece antes de saber a empresa).
+/// A chave guarda só o HASH do e-mail / IP / usuário, nunca o texto. Linhas com mais de 1 dia são
+/// apagadas no caminho (lib/acesso/limite.ts).
+model TentativaAcesso {
+  id       String   @id @default(cuid())
+  tipo     String
+  chave    String
+  criadoEm DateTime @default(now()) @map("criado_em")
+
+  @@index([tipo, chave, criadoEm])
+  @@index([criadoEm])
+  @@map("tentativas_acesso")
+}
