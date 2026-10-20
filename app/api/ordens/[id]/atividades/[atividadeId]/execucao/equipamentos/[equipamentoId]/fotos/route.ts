@@ -7,7 +7,8 @@ import { contextoExecucao, itemDoEquipamento, marcarAtendido } from "@/lib/execu
 
 type Params = { params: Promise<{ id: string; atividadeId: string; equipamentoId: string }> };
 
-export const MAX_FOTOS_EQUIPAMENTO = 40;
+/** Fotos por equipamento numa atividade (rota do Next não pode exportar outras constantes) */
+const MAX_FOTOS_EQUIPAMENTO = 40;
 const TAMANHO_MAX_FOTO = 5 * 1024 * 1024;
 
 const schema = z.object({ dataUrl: z.string().min(30), itemId: z.string().min(1).nullable().optional() }).strict();
