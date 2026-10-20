@@ -3,16 +3,19 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { LinkRelatorioAtividade } from "@/components/os/link-relatorio-atividade";
 import { cn, formatarData, formatarDataHora, LABELS_STATUS_OS } from "@/lib/utils";
 import {
-  FileText, FileBarChart, DollarSign, Camera, ListChecks, Wrench, Users, Clock,
-  CornerDownRight, ExternalLink, CalendarRange, AlertCircle, Lock,
+  FileBarChart, DollarSign, Camera, ListChecks, Wrench, Users, Clock,
+  CornerDownRight, CalendarRange, AlertCircle, Lock,
 } from "lucide-react";
 
 interface Atividade {
   id: string; titulo: string; status: string; criadoEm: string; duracaoMin: number | null;
   tipoOsNome: string | null; tipoOsCor: string | null; tecnicoNome: string | null;
   resumo: string; fotos: number; respostas: number;
+  /** Link público do relatório, já com o token. */
+  linkRelatorio: string;
 }
 interface Relatorio { id: string; numero: string; escopo: string; tokenPublico: string; status: string }
 interface Resumo {
@@ -52,6 +55,10 @@ export function OsRelatorios({ osId }: { osId: string }) {
   useEffect(() => { carregar(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
   const geral = relatorios.find((r) => r.escopo === "GERAL");
+
+  function trocarLink(atividadeId: string, linkRelatorio: string) {
+    setResumo((r) => r && { ...r, atividades: r.atividades.map((a) => (a.id === atividadeId ? { ...a, linkRelatorio } : a)) });
+  }
 
   async function gerarMedicao() {
     setGerando(true); setErro("");
@@ -159,10 +166,7 @@ export function OsRelatorios({ osId }: { osId: string }) {
                       <span className="flex items-center gap-1"><ListChecks className="w-3.5 h-3.5" /> {a.respostas} resposta(s)</span>
                     </div>
                   </div>
-                  <a href={`/relatorio/atividade/${a.id}`} target="_blank" rel="noopener"
-                    className="shrink-0 inline-flex items-center gap-1.5 text-xs font-medium text-primary-600 hover:text-primary-700 hover:bg-primary-50 px-2.5 py-1.5 rounded-lg">
-                    <FileText className="w-3.5 h-3.5" /> Ver relatório <ExternalLink className="w-3 h-3" />
-                  </a>
+                  <LinkRelatorioAtividade osId={osId} atividadeId={a.id} link={a.linkRelatorio} onNovoLink={(link) => trocarLink(a.id, link)} />
                 </div>
               </div>
             </div>
