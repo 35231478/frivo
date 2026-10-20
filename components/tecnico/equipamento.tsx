@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowLeft, ArrowRight, Camera, Check, CheckCheck, CircleSlash, ClipboardList, Ruler } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
@@ -267,7 +267,8 @@ function ItemMedicao({ item, r, so, onResponder }: { item: ItemTela; r?: Respost
   const atual = mostrarNumero(r?.valor ?? null);
   const unidade = r?.unidade ?? item.unidade ?? "";
   const na = r?.status === "NAO_SE_APLICA";
-  if (!focado && texto !== atual && !erro) setTexto(atual);
+  // O valor gravado mudou (sincronizou, N/A…): o campo acompanha — mas nunca enquanto o técnico digita
+  useEffect(() => { if (!focado) { setTexto(atual); setErro(null); } }, [atual]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function gravar() {
     setFocado(false);

@@ -141,7 +141,7 @@ export class MotorSync {
 
   /* ── baixar ── */
   async baixarRetrato(atividadeId: string): Promise<RetratoAtividade | null> {
-    if (!this.online()) return null;
+    if (!this.online()) { this.publicar(); return null; }
     const pedidoEm = this.agora();
     try {
       const r = await this.fetch(`/api/tecnico/atividades/${encodeURIComponent(atividadeId)}`, { cache: "no-store" });
@@ -161,7 +161,8 @@ export class MotorSync {
   /** Baixa uma lista (Meu dia / Agenda), guarda no aparelho e devolve; sem sinal, devolve a guardada. */
   async baixarLista<T>(chave: "meuDia" | "agenda", url: string): Promise<{ dados: T | null; baixadoEm: number | null; doAparelho: boolean }> {
     const guardada = await this.banco.ler<{ dados: T; baixadoEm: number }>(chave);
-    if (this.online()) {
+    if (!this.online()) this.publicar(); // o indicador já mostra "Offline"
+    else {
       try {
         const r = await this.fetch(url, { cache: "no-store" });
         if (r.status === 401) { this.sessaoExpirada = true; this.publicar(); }
