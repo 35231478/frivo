@@ -140,6 +140,10 @@ describe("leitura da NF-e (layout 4.00)", () => {
     expect(chaveValida(CHAVE1.slice(0, 43) + "8")).toBe(false);
     expect(chaveValida(CHAVE1.slice(1))).toBe(false);
     expect(dvChave("35261111222333000181550010000046101000046103".slice(0, 43))).toBe("3");
+    // resto 0 e resto 1 → DV 0 (não "11"/"10")
+    expect(dvChave("3526101122233300018155001000004521100000000")).toBe("0");
+    expect(dvChave("3526101122233300018155001000004521100000006")).toBe("0");
+    expect(chaveValida("35261011222333000181550010000045211000000060")).toBe(true);
   });
 
   it("recusa com motivo: não é NF-e, layout/modelo errado, chave inválida, não autorizada, DOCTYPE, sem itens", () => {
@@ -157,6 +161,7 @@ describe("leitura da NF-e (layout 4.00)", () => {
     expect(erro(XML1.replace("<dVenc>2026-11-14</dVenc>", "<dVenc>14/11/2026</dVenc>"))).toBe("Duplicata 1 sem vencimento válido.");
     expect(erro(XML1.replace("<qCom>2.0000</qCom>", "<qCom>abc</qCom>"))).toMatch(/Valor inválido em qCom do item 1/);
     expect(erro(XML1.replace("<vNF>1749.30</vNF>", ""))).toMatch(/vNF/);
+    expect(erro(XML1.replace("<qCom>10.0000</qCom>", "<qCom>0.0000</qCom>"))).toBe("Há item com quantidade zero ou negativa.");
   });
 
   it("parcelas: duplicatas (meio-dia UTC = mesmo dia no Brasil) ou à vista na emissão", () => {
@@ -444,6 +449,10 @@ describe("empresa e permissão", () => {
     expect((await importar(XML2)).status).toBe(403);
     expect((await conciliarApi(id, [])).status).toBe(403);
     expect((await lancarApi(id)).status).toBe(403);
+    logar(so({ estoque: { visualizar: true, gerenciar: false }, financeiro: { fluxoCaixa: true } }));
+    expect((await lancarApi(id)).status).toBe(403); // Financeiro sozinho não lança estoque
+    logar(so({ clientes: { visualizar: true } }));
+    expect((await chamar(rotaNotas, "GET", {})).status).toBe(403);
     logar(so({ estoque: { visualizar: true, gerenciar: true } }));
     const r = await lancarApi(id);
     expect([r.status, r.json.erro]).toEqual([403, "Lançar a nota gera conta a pagar: precisa também de Financeiro › fluxo de caixa."]);
@@ -511,5 +520,18 @@ describe("telas", () => {
     expect(h).toContain("3526 1011 2223 3300 0181 5500 1000 0045 2110 0004 5217");
     logar(permissoesTotais(), "e2");
     await expect(detalhe(id)).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+});
+
+describe("função de entrada da E1 dentro da transação da nota", () => {
+  it("com a transação de quem chama: produto de outra empresa é recusado como 'Produto inválido(a).'", async () => {
+    const { movimentar } = await import("@/lib/estoque/servidor");
+    const { prisma } = await import("@/lib/prisma");
+    await expect(movimentar({ empresaId: "e1", produtoId: "pB", operacao: "ENTRADA", valor: 1 }, prisma as any)).rejects.toThrow("Produto inválido(a).");
+    await expect(movimentar({ empresaId: "e1", produtoId: "nao-existe", operacao: "ENTRADA", valor: 1 }, prisma as any)).rejects.toThrow("Produto inválido(a).");
+    expect(T("movimentacaoEstoque")).toEqual([]);
+    const ok = await movimentar({ empresaId: "e1", produtoId: "pGas", operacao: "ENTRADA", valor: 2, custoUnitario: 0.0345, origem: "COMPRA", refId: "n1" }, prisma as any);
+    expect(ok.saldo).toBe(3);
+    expect(T("movimentacaoEstoque")[0]).toMatchObject({ origem: "COMPRA", refId: "n1", custoUnitario: 0.0345 });
   });
 });

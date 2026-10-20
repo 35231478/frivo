@@ -74,7 +74,7 @@ export function ConciliacaoNota({ notaId, itens, pedidos, podeLancar, motivoSemL
           {semVinculo.length > 0 && (
             <button type="button" className="text-xs font-semibold text-primary-600 hover:underline" data-criar-todos
               onClick={() => setEscolhas((s) => ({ ...s, ...Object.fromEntries(semVinculo.map((i) => [i.id, { modo: "novo", nome: i.descricaoFornecedor, unidade: i.unidade }])) }))}>
-              Criar produto novo para os {semVinculo.length} sem vínculo
+              {semVinculo.length === 1 ? "Criar produto novo para o item sem vínculo" : `Criar produto novo para os ${semVinculo.length} sem vínculo`}
             </button>
           )}
         </div>

@@ -108,6 +108,11 @@ describe("conciliação (de-para)", () => {
       expect(parcelas[k]).toMatch(/583,10$/);
     });
 
+    // 1 letra não busca
+    const n0 = chamadas.length;
+    await digitar($('[data-item="2"] [data-busca-produto]') as HTMLInputElement, "c");
+    await passar(400);
+    expect(chamadas.length).toBe(n0);
     // item 2: busca "cap" (debounce) e escolhe o produto do cadastro
     respostas["/api/compras/produtos"] = { status: 200, corpo: { produtos: [{ id: "pCap", nome: "Capacitor 35uF", unidade: "un", saldo: 3 }] } };
     await digitar($('[data-item="2"] [data-busca-produto]') as HTMLInputElement, "cap");

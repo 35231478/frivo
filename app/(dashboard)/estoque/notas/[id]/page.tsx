@@ -5,7 +5,7 @@ import { AlertTriangle, ArrowLeft, CheckCircle2, FileText, Package, Wallet } fro
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
-import { cn, formatarCpfCnpj, formatarData, formatarMoeda } from "@/lib/utils";
+import { cn, formatarCpfCnpj, formatarMoeda } from "@/lib/utils";
 import { formatarQtd } from "@/lib/estoque/regras";
 import { carregarNota } from "@/lib/compras/notas";
 import { chaveDePara, parcelasDaNota, type DuplicataNfe } from "@/lib/compras/nfe";
@@ -15,6 +15,8 @@ import { ConciliacaoNota } from "@/components/compras/conciliacao-nota";
 export const metadata: Metadata = { title: "Nota de compra" };
 
 const diaBr = (d: Date) => d.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+/** "19/10/2026 às 22:15" no horário de Brasília (o mesmo do aviso de nota repetida) */
+const dataHoraBr = (d: Date) => `${diaBr(d)} às ${d.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })}`;
 const moeda4 = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 4 });
 
 /** Nota de compra: antes de lançar = conciliação (de-para); depois = resultado (estoque + contas). */
@@ -48,7 +50,7 @@ export default async function NotaCompraPage({ params }: { params: Promise<{ id:
           </div>
         </div>
         <p className="mt-3 text-[11px] text-ink-muted">Chave de acesso <span className="font-mono text-ink break-all">{chaveEmBlocos(nota.chaveAcesso)}</span></p>
-        <p className="text-[11px] text-ink-subtle">Importada em {formatarData(nota.criadoEm, "dd/MM/yyyy 'às' HH:mm")}{nota.usuario && ` por ${nota.usuario.nome}`}{nota.lancadaEm && ` · lançada em ${formatarData(nota.lancadaEm, "dd/MM/yyyy 'às' HH:mm")}`}</p>
+        <p className="text-[11px] text-ink-subtle">Importada em {dataHoraBr(nota.criadoEm)}{nota.usuario && ` por ${nota.usuario.nome}`}{nota.lancadaEm && ` · lançada em ${dataHoraBr(nota.lancadaEm)}`}</p>
       </div>
 
       {lancada ? <Resultado nota={nota} movs={await entradasDaNota(u.empresaId, nota.id)} /> : gerencia ? (
