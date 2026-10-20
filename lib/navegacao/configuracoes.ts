@@ -1,5 +1,5 @@
 import {
-  Building2, Clock, Cog, FileSpreadsheet, Headset, IdCard, ListChecks, Mail, Package, QrCode, ScrollText, ShieldCheck, Tags,
+  Building2, Clock, Cog, FileSpreadsheet, Headset, IdCard, ListChecks, Mail, Package, Printer, QrCode, ScrollText, ShieldCheck, Tags,
   Thermometer, UserCog, Wallet, Wrench, type LucideIcon,
 } from "lucide-react";
 import { moduloDaRota, pode, type Permissoes } from "@/lib/permissoes";
@@ -50,6 +50,7 @@ export const SECOES_CONFIGURACOES: SecaoConfig[] = [
           { href: "/configuracoes/formularios", icone: FileSpreadsheet, label: "Formulários", dica: "Checklists e formulários preenchidos nas atividades" },
           { href: "/configuracoes/termos", icone: ScrollText, label: "Termos de referência", dica: "Modelos de termo usados nas propostas de contrato" },
           { href: "/configuracoes/prazos", icone: Clock, label: "Modelos de prazo", dica: "Etapas, responsáveis e prazos (SLA) das OS" },
+          { href: "/configuracoes/impressao-os", icone: Printer, label: "Impressão da OS", dica: "Seções do relatório da OS e o que o cliente vê" },
         ],
       },
       {

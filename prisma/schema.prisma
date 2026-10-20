@@ -513,6 +513,10 @@ model Configuracao {
   // QR Code (acesso público, botões de contato, restrições) — armazenado como JSON
   qrConfig Json? @map("qr_config")
 
+  /// Impressão do relatório da OS: seções ligadas/desligadas e quem vê (cliente × só interno).
+  /// JSON { [secao]: { ativo, cliente } }; ausente = padrões de lib/relatorio-os/config.ts
+  relatorioOsConfig Json? @map("relatorio_os_config")
+
   empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
 
   @@map("configuracoes")
