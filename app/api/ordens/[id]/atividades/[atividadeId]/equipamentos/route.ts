@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
-import { contextoExecucao } from "@/lib/execucao/contexto";
-import { equipamentosDoCliente } from "@/lib/execucao/vinculos";
+import { atorDaSessao, contextoExecucao } from "@/lib/execucao/contexto";
+import { vincularEquipamentos } from "@/lib/execucao/acoes";
+import { filtroEscopo } from "@/lib/tecnico/escopo";
 
 type Params = { params: Promise<{ id: string; atividadeId: string }> };
 
@@ -20,9 +21,9 @@ const equipSelect = {
   },
 } as const;
 
-async function getAtividade(empresaId: string, id: string, atividadeId: string) {
+async function getAtividade(empresaId: string, id: string, atividadeId: string, escopo: Parameters<typeof filtroEscopo>[0]) {
   return prisma.atividadeOs.findFirst({
-    where: { id: atividadeId, ordemServicoId: id, empresaId },
+    where: { id: atividadeId, ordemServicoId: id, empresaId, ...filtroEscopo(escopo) },
     select: { id: true },
   });
 }
@@ -34,7 +35,7 @@ export async function GET(_: NextRequest, { params }: Params) {
   const { id, atividadeId } = await params;
   const empresaId = session.user!.empresaId;
 
-  if (!(await getAtividade(empresaId, id, atividadeId))) {
+  if (!(await getAtividade(empresaId, id, atividadeId, atorDaSessao(session).escopo))) {
     return NextResponse.json({ erro: "Atividade não encontrada" }, { status: 404 });
   }
 
@@ -60,13 +61,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   const parsed = postSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos" }, { status: 400 });
 
-  const { validos, erro } = await equipamentosDoCliente(ctx.empresaId, ctx.atividade.ordemServico.clienteId, parsed.data.equipamentoIds);
-  if (erro) return NextResponse.json({ erro }, { status: 400 });
-
-  await prisma.atividadeEquipamento.createMany({
-    data: validos.map((equipamentoId) => ({ atividadeId, equipamentoId })),
-    skipDuplicates: true,
-  });
+  const r = await vincularEquipamentos(ctx, parsed.data.equipamentoIds);
+  if (!r.ok) return NextResponse.json({ erro: r.erro }, { status: r.status });
 
   const itens = await prisma.atividadeEquipamento.findMany({
     where: { atividadeId },

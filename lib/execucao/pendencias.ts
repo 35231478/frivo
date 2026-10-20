@@ -3,7 +3,9 @@
  * mostrar). Regra:
  *  - pelo menos 1 equipamento ATENDIDO (vinculado e marcado como atendido);
  *  - em cada atendido, todo item ATIVO do checklist do tipo com resposta (OK / Atenção / Não se
- *    aplica); a foto e a observação que o item pede (dispensadas em "Não se aplica");
+ *    aplica; item de MEDIÇÃO = o número, ou "Não se aplica"); a foto e a observação que o item pede
+ *    (dispensadas em "Não se aplica"); "Atenção" SEMPRE pede foto do item + observação (escrita ou
+ *    em áudio) — o adm precisa ver o problema;
  *  - e, se o tipo tem formulário obrigatório para concluir (tipo de OS × tipo de equipamento), todos
  *    os campos ativos dele preenchidos — POR EQUIPAMENTO, contando o valor (não só a linha gravada).
  * Equipamento vinculado e NÃO atendido não trava: sai como "não atendido" no relatório.
@@ -13,8 +15,23 @@ export type StatusItem = "OK" | "ATENCAO" | "NAO_SE_APLICA";
 export const STATUS_ITEM: StatusItem[] = ["OK", "ATENCAO", "NAO_SE_APLICA"];
 export const ROTULO_STATUS: Record<StatusItem, string> = { OK: "OK", ATENCAO: "Atenção", NAO_SE_APLICA: "Não se aplica" };
 
-export interface ItemExecucao { id: string; texto: string; pedirFoto: boolean; pedirObservacao: boolean; ativo: boolean }
-export interface RespostaItem { status: StatusItem | null; observacao: string | null }
+export type TipoResposta = "OK_ATENCAO_NA" | "MEDICAO";
+export interface ItemExecucao {
+  id: string; texto: string; pedirFoto: boolean; pedirObservacao: boolean; ativo: boolean;
+  /** MEDICAO: o técnico só captura número + unidade (nada de avaliar se está bom ou ruim) */
+  tipoResposta: TipoResposta;
+  /** Unidade padrão da medição (psi, °C, A…) */
+  unidade: string | null;
+}
+export interface RespostaItem {
+  status: StatusItem | null;
+  observacao: string | null;
+  /** Medição: o número capturado e a unidade */
+  valor: number | null;
+  unidade: string | null;
+  /** Tem observação em áudio (vale como observação) */
+  audio: boolean;
+}
 export interface CampoExecucao { id: string; label: string; tipo: string; ativo: boolean }
 export interface FormularioExecucao {
   id: string; nome: string; obrigatorioConcluir: boolean;
@@ -42,16 +59,24 @@ export interface PendenciaEquipamento extends FaltasEquipamento { equipamentoId:
 
 const preenchido = (v: string | null | undefined) => !!(v ?? "").trim();
 
+/** O item tem resposta? Medição = tem o número; os demais = OK / Atenção / Não se aplica. */
+export function respondido(it: Pick<ItemExecucao, "tipoResposta">, r: RespostaItem | undefined): boolean {
+  if (!r) return false;
+  if (r.status === "NAO_SE_APLICA") return true;
+  return it.tipoResposta === "MEDICAO" ? r.valor !== null && Number.isFinite(r.valor) : !!r.status;
+}
+
 /** O que falta neste equipamento (vazio = completo). */
 export function faltasEquipamento(e: EquipamentoParaPendencia): FaltasEquipamento {
   const f: FaltasEquipamento = { semResposta: [], semFoto: [], semObservacao: [], formulario: null };
   for (const it of e.itens) {
     if (!it.ativo) continue; // item removido do checklist do tipo não é mais exigido
     const r = e.respostas[it.id];
-    if (!r?.status) { f.semResposta.push(it.texto); continue; }
-    if (r.status === "NAO_SE_APLICA") continue;
-    if (it.pedirFoto && !(e.fotosPorItem[it.id] > 0)) f.semFoto.push(it.texto);
-    if (it.pedirObservacao && !preenchido(r.observacao)) f.semObservacao.push(it.texto);
+    if (r?.status === "NAO_SE_APLICA") continue;
+    if (!respondido(it, r)) { f.semResposta.push(it.texto); continue; }
+    const atencao = r!.status === "ATENCAO";
+    if ((it.pedirFoto || atencao) && !(e.fotosPorItem[it.id] > 0)) f.semFoto.push(it.texto);
+    if ((it.pedirObservacao || atencao) && !preenchido(r!.observacao) && !r!.audio) f.semObservacao.push(it.texto);
   }
   const form = e.formulario;
   if (form?.obrigatorioConcluir) {

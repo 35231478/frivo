@@ -43,6 +43,16 @@ export function apresentarEquipamento(e: EquipBanco) {
   };
 }
 
+/** Resposta como a tela recebe: + o id da resposta quando tem áudio (servido à parte) */
+export type RespostaTela = RespostaItem & { audioId: string | null };
+export interface FotoExecucao { id: string; itemId: string | null; momento: "ANTES" | "DEPOIS" | null; clientId: string | null; criadoEm: Date }
+export interface ServicoAdicionalTela {
+  id: string; clientId: string | null; descricao: string; equipamentoId: string | null;
+  statusCobranca: "A_AVALIAR" | "COBRAR" | "NAO_COBRAR";
+  fotos: { id: string; clientId: string | null }[];
+  criadoPor: string | null; criadoEm: Date;
+}
+
 export type CampoFormularioTela = { id: string; label: string; tipo: string; obrigatorio: boolean; ordem: number; opcoes: unknown; ativo: boolean };
 export interface EquipamentoExecucao {
   vinculoId: string;
@@ -50,8 +60,8 @@ export interface EquipamentoExecucao {
   observacao: string | null;
   equipamento: ReturnType<typeof apresentarEquipamento>;
   itens: (ItemExecucao & { ordem: number })[];
-  respostas: Record<string, RespostaItem>;
-  fotos: { id: string; itemId: string | null; criadoEm: Date }[];
+  respostas: Record<string, RespostaTela>;
+  fotos: FotoExecucao[];
   formulario: (FormularioExecucao & { campos: CampoFormularioTela[] }) | null;
   faltas: FaltasEquipamento;
   completo: boolean;
@@ -62,8 +72,12 @@ export interface Execucao {
   /** Atividade concluída/cancelada: só leitura (reabra para editar) */
   bloqueada: boolean;
   equipamentos: EquipamentoExecucao[];
+  /** Serviços a mais pedidos na visita (mesma OS, mesmo relatório, destacados como "Adicional") */
+  adicionais: ServicoAdicionalTela[];
   conclusao: ResultadoConclusao;
 }
+
+const numero = (v: { toNumber(): number } | number | null | undefined) => (v === null || v === undefined ? null : typeof v === "number" ? v : v.toNumber());
 
 export async function carregarExecucao(empresaId: string, osId: string, atividadeId: string): Promise<Execucao | null> {
   const atividade = await prisma.atividadeOs.findFirst({
@@ -82,20 +96,22 @@ export async function carregarExecucao(empresaId: string, osId: string, atividad
   });
   const tipoIds = [...new Set(vinculos.map((v) => v.equipamento.tipoEquipamentoId).filter((x): x is string => !!x))];
 
-  const [itensAtivos, respostas, fotos, mappings, respForm] = await Promise.all([
+  const [itensAtivos, respostas, comAudio, fotos, mappings, respForm, adicionais] = await Promise.all([
     tipoIds.length ? prisma.checklistTipoItem.findMany({
       where: { tipoEquipamentoId: { in: tipoIds }, ativo: true },
       orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }],
-      select: { id: true, tipoEquipamentoId: true, texto: true, pedirFoto: true, pedirObservacao: true, ativo: true, ordem: true },
+      select: { id: true, tipoEquipamentoId: true, texto: true, pedirFoto: true, pedirObservacao: true, ativo: true, ordem: true, tipoResposta: true, unidade: true },
     }) : Promise.resolve([]),
     prisma.checklistResposta.findMany({
       where: { atividadeId },
       select: {
-        equipamentoId: true, itemId: true, status: true, observacao: true, textoItem: true,
-        item: { select: { id: true, tipoEquipamentoId: true, pedirFoto: true, pedirObservacao: true, ativo: true, ordem: true } },
+        id: true, equipamentoId: true, itemId: true, status: true, observacao: true, textoItem: true, valor: true, unidade: true,
+        item: { select: { id: true, tipoEquipamentoId: true, pedirFoto: true, pedirObservacao: true, ativo: true, ordem: true, tipoResposta: true, unidade: true } },
       },
     }),
-    prisma.fotoAtendimento.findMany({ where: { atividadeId }, orderBy: { criadoEm: "asc" }, select: { id: true, equipamentoId: true, itemId: true, criadoEm: true } }),
+    // Só QUAIS têm áudio (o áudio em si é servido à parte)
+    prisma.checklistResposta.findMany({ where: { atividadeId, audioUrl: { not: null } }, select: { id: true } }),
+    prisma.fotoAtendimento.findMany({ where: { atividadeId }, orderBy: { criadoEm: "asc" }, select: { id: true, equipamentoId: true, itemId: true, momento: true, clientId: true, criadoEm: true } }),
     atividade.tipoOsId && tipoIds.length ? prisma.formTypeMapping.findMany({
       where: { empresaId, tipoOsId: atividade.tipoOsId, tipoEquipamentoId: { in: tipoIds } },
       select: {
@@ -117,7 +133,16 @@ export async function carregarExecucao(empresaId: string, osId: string, atividad
       where: { atividadeId },
       select: { equipamentoId: true, formularioId: true, campoId: true, resposta: true, arquivoUrl: true },
     }),
+    prisma.servicoAdicional.findMany({
+      where: { atividadeId, empresaId },
+      orderBy: { criadoEm: "asc" },
+      select: {
+        id: true, clientId: true, descricao: true, equipamentoId: true, statusCobranca: true, criadoEm: true,
+        criadoPor: { select: { nome: true } }, fotos: { orderBy: { criadoEm: "asc" }, select: { id: true, clientId: true } },
+      },
+    }),
   ]);
+  const audios = new Set(comAudio.map((r) => r.id));
 
   const formsRespondidos = new Set(respForm.map((r) => r.formularioId));
   const formPorTipo = new Map(mappings
@@ -134,9 +159,13 @@ export async function carregarExecucao(empresaId: string, osId: string, atividad
     // Itens respondidos que não estão mais no checklist do tipo (removidos, ou o tipo mudou): ficam à mostra, sem exigir
     const antigos = minhas.filter((r) => !ids.has(r.itemId)).map((r) => ({
       id: r.itemId, texto: r.textoItem, pedirFoto: r.item.pedirFoto, pedirObservacao: r.item.pedirObservacao, ativo: false, ordem: 10_000 + r.item.ordem,
+      tipoResposta: r.item.tipoResposta, unidade: r.item.unidade,
     }));
     const itens = [...ativosDoTipo.map(({ tipoEquipamentoId: _t, ...i }) => i), ...antigos];
-    const resp: Record<string, RespostaItem> = Object.fromEntries(minhas.map((r) => [r.itemId, { status: (r.status as StatusItem | null) ?? null, observacao: r.observacao }]));
+    const resp: Record<string, RespostaTela> = Object.fromEntries(minhas.map((r) => [r.itemId, {
+      status: (r.status as StatusItem | null) ?? null, observacao: r.observacao, valor: numero(r.valor), unidade: r.unidade,
+      audio: audios.has(r.id), audioId: audios.has(r.id) ? r.id : null,
+    }]));
     const minhasFotos = fotos.filter((f) => f.equipamentoId === e.id).map(({ equipamentoId: _e, ...f }) => f);
 
     const m = e.tipoEquipamentoId ? formPorTipo.get(e.tipoEquipamentoId) : undefined;
@@ -162,6 +191,7 @@ export async function carregarExecucao(empresaId: string, osId: string, atividad
     os: atividade.ordemServico,
     bloqueada: STATUS_BLOQUEADOS.includes(atividade.status),
     equipamentos,
+    adicionais: adicionais.map(({ criadoPor, ...a }) => ({ ...a, criadoPor: criadoPor?.nome ?? null })),
     conclusao,
   };
 }

@@ -29,6 +29,7 @@ export const authConfig = {
         token.lembrar = (user as any).lembrar !== false; // "Manter conectado"
         token.loginEm = Date.now();
         token.fs = (user as any).fs; // impressão da senha: trocou a senha, as outras sessões caem (lib/sessao-ativa)
+        token.tecnicoId = (user as any).tecnicoId ?? null; // técnico ligado ao usuário (modo técnico: lib/tecnico/modo)
       }
       if (sessaoCurtaVencida(token)) return null; // sem "Manter conectado": 1 dia desde o login
       // Atualização disparada por update() no client (perfil: nome/e-mail).
@@ -46,6 +47,7 @@ export const authConfig = {
       (session.user as any).role = token.role;
       (session.user as any).permissoes = token.permissoes ?? {};
       (session.user as any).perfilNome = token.perfilNome ?? null;
+      (session.user as any).tecnicoId = token.tecnicoId ?? null;
       return session;
     },
   },
