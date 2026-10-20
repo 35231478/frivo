@@ -1,14 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AlertTriangle, ArrowLeft, Package } from "lucide-react";
+import { AlertTriangle, ArrowLeft, FileText, Package, Tag } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { cn } from "@/lib/utils";
+import { prisma } from "@/lib/prisma";
 import { extratoProduto } from "@/lib/estoque/servidor";
+import { ultimosCustos } from "@/lib/estoque/custo";
+import { formatarNcm, rotuloOrigem } from "@/lib/compras/rotulos";
 import { formatarDelta, formatarQtd, LABEL_ORIGEM, LABEL_TIPO } from "@/lib/estoque/regras";
 import { LancarEstoque } from "@/components/estoque/lancar-estoque";
 import { SaldoQtd, SeloSituacao } from "@/components/estoque/situacao";
+import { PrecoVenda } from "@/components/estoque/preco-venda";
 import { ListaUrl, PaginacaoUrl } from "@/components/listagem/lista-url";
 
 export const metadata: Metadata = { title: "Extrato do estoque" };
@@ -26,6 +30,17 @@ export default async function ExtratoEstoquePage({ params, searchParams }: {
   if (!extrato) notFound();
   const { produto: p, movimentacoes, total, pagina, porPagina, somaRazao } = extrato;
   const podeLancar = pode(u.permissoes, "estoque", "gerenciar", u.role);
+  const [extra, custos] = await Promise.all([
+    prisma.produto.findFirst({
+      where: { id: p.id, empresaId: u.empresaId },
+      select: { valorPadrao: true, margemVenda: true, ncm: true, cest: true, gtin: true, origemMercadoria: true, unidadeTributavel: true },
+    }),
+    ultimosCustos(u.empresaId, [p.id]),
+  ]);
+  const fiscais = [
+    ["NCM", formatarNcm(extra?.ncm)], ["CEST", extra?.cest], ["GTIN/EAN", extra?.gtin],
+    ["Origem", rotuloOrigem(extra?.origemMercadoria)], ["Unidade tributável", extra?.unidadeTributavel],
+  ] as const;
 
   return (
     <ListaUrl chave="estoque-extrato" qAtual="">
@@ -54,6 +69,27 @@ export default async function ExtratoEstoquePage({ params, searchParams }: {
           <div className="card p-4 col-span-2 sm:col-span-1">
             <p className="text-xs text-ink-muted">Situação</p>
             <div className="mt-1.5"><SeloSituacao situacao={p.situacao} /></div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+          <div className="card p-4 xl:col-span-2" data-card-preco>
+            <p className="text-sm font-semibold text-ink flex items-center gap-2 mb-3"><Tag className="w-4 h-4 text-primary-600" /> Preço de venda</p>
+            <PrecoVenda
+              produtoId={p.id} unidade={p.unidade} custo={custos.get(p.id) ?? null}
+              preco={extra?.valorPadrao == null ? null : Number(extra.valorPadrao)}
+              margemVenda={extra?.margemVenda == null ? null : Number(extra.margemVenda)}
+              podeEditar={pode(u.permissoes, "configuracoes", "gerenciar", u.role)}
+            />
+          </div>
+          <div className="card p-4" data-dados-fiscais>
+            <p className="text-sm font-semibold text-ink flex items-center gap-2 mb-2"><FileText className="w-4 h-4 text-primary-600" /> Dados fiscais</p>
+            <dl className="text-sm space-y-1">
+              {fiscais.map(([rotulo, valor]) => (
+                <div key={rotulo} className="flex justify-between gap-3"><dt className="text-ink-muted">{rotulo}</dt><dd className="text-ink text-right font-medium">{valor || "—"}</dd></div>
+              ))}
+            </dl>
+            <p className="text-[11px] text-ink-subtle mt-2">Vêm do XML da nota de compra quando o produto é criado ou vinculado por ela.</p>
           </div>
         </div>
 

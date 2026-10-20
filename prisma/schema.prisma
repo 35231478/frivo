@@ -434,6 +434,8 @@ model Empresa {
   servicos               Servico[]
   produtos               Produto[]
   movimentacoesEstoque   MovimentacaoEstoque[]
+  notasCompra            NotaCompra[]
+  deParasProduto         DeParaProdutoFornecedor[]
   orcamentos             Orcamento[]
   medicoes               Medicao[]
   contasReceber          ContaReceber[]
@@ -654,6 +656,7 @@ model Usuario {
   pushSubscriptions    PushSubscription[]
   contratoHistoricos   ContratoHistoricoStatus[]
   movimentacoesEstoque MovimentacaoEstoque[]
+  notasCompra          NotaCompra[]
   perfilAcessoId       String?                   @map("perfil_acesso_id")
   perfilAcesso         PerfilAcesso?             @relation(fields: [perfilAcessoId], references: [id])
 
@@ -1288,25 +1291,39 @@ model Servico {
 // ─────────────────────────────────────────────
 
 model Produto {
-  id            String   @id @default(cuid())
-  empresaId     String   @map("empresa_id")
-  nome          String
-  descricao     String?
-  unidade       String   @default("un")
-  valorPadrao   Decimal? @map("valor_padrao") @db.Decimal(10, 2)
-  estoqueMinimo Int?     @map("estoque_minimo")
+  id                String   @id @default(cuid())
+  empresaId         String   @map("empresa_id")
+  nome              String
+  descricao         String?
+  unidade           String   @default("un")
+  /// Preço de venda (o "valor padrão" que orçamentos, medições e tabelas de preço já usam)
+  valorPadrao       Decimal? @map("valor_padrao") @db.Decimal(10, 2)
+  /// Margem alvo % SOBRE A VENDA quando o preço foi definido por margem (preço = custo ÷ (1 − margem)).
+  /// Nula = preço fixo. O preço nunca muda sozinho quando o custo muda (só há aviso).
+  margemVenda       Decimal? @map("margem_venda") @db.Decimal(5, 2)
+  estoqueMinimo     Int?     @map("estoque_minimo")
+  /// Dados fiscais (para o faturamento): vêm do XML da NF de compra quando o produto é criado ou
+  /// vinculado por ela; valor já preenchido não é sobrescrito.
+  ncm               String?
+  cest              String?
+  gtin              String?
+  /// Origem da mercadoria (0 a 8, tabela da NF-e)
+  origemMercadoria  String?  @map("origem_mercadoria")
+  unidadeTributavel String?  @map("unidade_tributavel")
   /// Saldo em estoque — CACHE da soma das movimentações (a fonte da verdade é movimentacoes_estoque).
   /// Só muda pela lib/estoque (lançamento + saldo na mesma transação); nunca pelo cadastro.
-  saldo         Decimal  @default(0) @db.Decimal(12, 3)
-  ativo         Boolean  @default(true)
-  criadoEm      DateTime @default(now()) @map("criado_em")
+  saldo             Decimal  @default(0) @db.Decimal(12, 3)
+  ativo             Boolean  @default(true)
+  criadoEm          DateTime @default(now()) @map("criado_em")
 
-  empresa        Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  empresa        Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   orcamentoItens OrcamentoProduto[]
   medicaoItens   MedicaoItem[]
   pedidoItens    PedidoCompraItem[]
   tabelaItens    TabelaPrecoItem[]
   movimentacoes  MovimentacaoEstoque[]
+  notaItens      NotaCompraItem[]
+  deParas        DeParaProdutoFornecedor[]
 
   @@map("produtos")
 }
@@ -1340,8 +1357,8 @@ model MovimentacaoEstoque {
   quantidade    Decimal                   @db.Decimal(12, 3)
   /// Saldo do produto logo depois deste movimento (extrato)
   saldoApos     Decimal                   @map("saldo_apos") @db.Decimal(12, 3)
-  custoUnitario Decimal?                  @map("custo_unitario") @db.Decimal(12, 2)
-  /// Id do documento de origem (pedido de compra, OS…) — opcional, sem FK
+  custoUnitario Decimal?                  @map("custo_unitario") @db.Decimal(14, 4)
+  /// Id do documento de origem (nota de compra, OS…) — opcional, sem FK. COMPRA: refId = NotaCompra.id
   refId         String?                   @map("ref_id")
   observacao    String?
   usuarioId     String?                   @map("usuario_id")
@@ -2062,8 +2079,10 @@ model Fornecedor {
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  empresa     Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  empresa     Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   contasPagar ContaPagar[]
+  notasCompra NotaCompra[]
+  deParas     DeParaProdutoFornecedor[]
 
   @@unique([empresaId, documento])
   @@index([empresaId, ativo])
@@ -2089,6 +2108,8 @@ model ContaPagar {
   formaPagamento FormaPagamento?  @map("forma_pagamento")
   banco          String?
   pedidoCompraId String?          @map("pedido_compra_id")
+  /// Nota de compra (NF-e importada) que gerou esta conta — uma conta por duplicata
+  notaCompraId   String?          @map("nota_compra_id")
   // Categoria financeira (Leva 5.1): conta a pagar não tinha categoria; passa a ter, por ID
   categoriaId    String?          @map("categoria_id")
   observacao     String?
@@ -2099,11 +2120,13 @@ model ContaPagar {
   pedidoCompra        PedidoCompraInterno?  @relation(fields: [pedidoCompraId], references: [id])
   categoriaFinanceira CategoriaFinanceira?  @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
   fornecedorCadastro  Fornecedor?           @relation(fields: [fornecedorId], references: [id], onDelete: SetNull)
+  notaCompra          NotaCompra?           @relation(fields: [notaCompraId], references: [id], onDelete: SetNull)
   pagamentos          PagamentoContaPagar[]
 
   @@unique([numero, empresaId])
   @@index([categoriaId])
   @@index([fornecedorId])
+  @@index([notaCompraId])
   @@index([empresaId, status])
   @@map("contas_pagar")
 }
@@ -2199,6 +2222,7 @@ model PedidoCompraInterno {
   comprador    Usuario?           @relation("PedidoComprador", fields: [compradorId], references: [id])
   itens        PedidoCompraItem[]
   contasPagar  ContaPagar[]
+  notasCompra  NotaCompra[]
 
   @@unique([numero, empresaId])
   @@index([empresaId, status])
@@ -2792,6 +2816,116 @@ model FolhaSnapshot {
   @@unique([empresaId, competencia, colaboradorId])
   @@index([empresaId, competencia])
   @@map("folha_snapshots")
+}
+
+// ─────────────────────────────────────────────
+// ESTOQUE E2 — Nota de compra (NF-e) → produtos + estoque + contas a pagar
+// ─────────────────────────────────────────────
+
+/// IMPORTADA: XML lido, itens ainda sem produto · CONCILIADA: todo item ligado a um produto ·
+/// LANCADA: entrada no estoque + contas a pagar gravadas (não muda mais)
+enum StatusNotaCompra {
+  IMPORTADA
+  CONCILIADA
+  LANCADA
+}
+
+/// NF-e de compra importada por XML (layout 4.00). Uma por chave de acesso na empresa.
+model NotaCompra {
+  id             String           @id @default(cuid())
+  empresaId      String           @map("empresa_id")
+  fornecedorId   String           @map("fornecedor_id")
+  /// 44 dígitos — reimportar a mesma nota é bloqueado (único por empresa)
+  chaveAcesso    String           @map("chave_acesso")
+  numero         String
+  serie          String
+  dataEmissao    DateTime         @map("data_emissao")
+  valorTotal     Decimal          @map("valor_total") @db.Decimal(12, 2)
+  status         StatusNotaCompra @default(IMPORTADA)
+  /// XML original, como veio
+  xml            String           @db.Text
+  /// Emitente como estava na nota (o cadastro do fornecedor pode mudar depois)
+  emitenteNome   String           @map("emitente_nome")
+  emitenteCnpj   String           @map("emitente_cnpj")
+  /// Duplicatas (cobr/dup): [{ numero, vencimento: "AAAA-MM-DD", valor }]
+  duplicatas     Json             @default("[]")
+  /// Pedido de compra atendido por esta nota (opcional): recebe o custo real nos itens
+  pedidoCompraId String?          @map("pedido_compra_id")
+  usuarioId      String?          @map("usuario_id")
+  lancadaEm      DateTime?        @map("lancada_em")
+  criadoEm       DateTime         @default(now()) @map("criado_em")
+  atualizadoEm   DateTime         @updatedAt @map("atualizado_em")
+
+  empresa      Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  fornecedor   Fornecedor           @relation(fields: [fornecedorId], references: [id])
+  pedidoCompra PedidoCompraInterno? @relation(fields: [pedidoCompraId], references: [id], onDelete: SetNull)
+  usuario      Usuario?             @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  itens        NotaCompraItem[]
+  contasPagar  ContaPagar[]
+
+  @@unique([empresaId, chaveAcesso])
+  @@index([empresaId, status, criadoEm])
+  @@index([fornecedorId])
+  @@map("notas_compra")
+}
+
+/// Item da NF (det/prod). `produtoId` é preenchido na conciliação (de-para).
+model NotaCompraItem {
+  id                  String   @id @default(cuid())
+  notaId              String   @map("nota_id")
+  /// nItem da NF (1, 2, 3…)
+  numeroItem          Int      @map("numero_item")
+  codigoFornecedor    String   @map("codigo_fornecedor")
+  descricaoFornecedor String   @map("descricao_fornecedor")
+  ncm                 String?
+  cfop                String?
+  cest                String?
+  gtin                String?
+  /// Origem da mercadoria (0 a 8) do ICMS do item
+  origem              String?
+  unidadeTributavel   String?  @map("unidade_tributavel")
+  /// Unidade comercial da nota (uCom): a quantidade e o valor unitário estão nela
+  unidade             String
+  quantidade          Decimal  @db.Decimal(15, 4)
+  valorUnitario       Decimal  @map("valor_unitario") @db.Decimal(15, 4)
+  valorTotal          Decimal  @map("valor_total") @db.Decimal(12, 2)
+  /// 1 [unidade da nota] = fatorConversao [unidade do produto]. Entrada = quantidade × fator;
+  /// custo por unidade do produto = valor unitário ÷ fator.
+  fatorConversao      Decimal  @default(1) @map("fator_conversao") @db.Decimal(15, 6)
+  produtoId           String?  @map("produto_id")
+  criadoEm            DateTime @default(now()) @map("criado_em")
+
+  nota    NotaCompra @relation(fields: [notaId], references: [id], onDelete: Cascade)
+  produto Produto?   @relation(fields: [produtoId], references: [id], onDelete: SetNull)
+
+  @@unique([notaId, numeroItem])
+  @@index([produtoId])
+  @@map("notas_compra_itens")
+}
+
+/// De-para que aprende: o código do item NESTE fornecedor = este produto. Na próxima nota do
+/// mesmo fornecedor, o item já vem vinculado.
+model DeParaProdutoFornecedor {
+  id                  String   @id @default(cuid())
+  empresaId           String   @map("empresa_id")
+  fornecedorId        String   @map("fornecedor_id")
+  codigoFornecedor    String   @map("codigo_fornecedor")
+  descricaoFornecedor String   @map("descricao_fornecedor")
+  produtoId           String   @map("produto_id")
+  /// Unidade em que este fornecedor vende o item (uCom) quando o fator foi aprendido
+  unidadeOrigem       String?  @map("unidade_origem")
+  /// 1 [unidadeOrigem] = fatorConversao [unidade do produto]; pré-preenche a próxima nota
+  fatorConversao      Decimal  @default(1) @map("fator_conversao") @db.Decimal(15, 6)
+  criadoEm            DateTime @default(now()) @map("criado_em")
+  atualizadoEm        DateTime @updatedAt @map("atualizado_em")
+
+  empresa    Empresa    @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  fornecedor Fornecedor @relation(fields: [fornecedorId], references: [id], onDelete: Cascade)
+  produto    Produto    @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+
+  @@unique([empresaId, fornecedorId, codigoFornecedor])
+  @@index([produtoId])
+  @@map("de_para_produto_fornecedor")
 }
 
 /// Tentativas que contam para o limite anti força bruta: senha errada no login, pedido de "esqueci a
