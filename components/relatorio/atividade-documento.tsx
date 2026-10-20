@@ -1,12 +1,15 @@
 import { formatarData } from "@/lib/utils";
-import { CabecalhoEmpresa, DadosClienteContrato, EquipamentosTabela, type EmpresaInfo, type ClienteInfo, type ContratoInfo, type EquipamentoInfo } from "./cabecalho-relatorio";
+import { CabecalhoEmpresa, DadosClienteContrato, type EmpresaInfo, type ClienteInfo, type ContratoInfo } from "./cabecalho-relatorio";
 import { SecaoAtividade, type AtividadeSecao } from "./secao-atividade";
+import { BlocosEquipamentos } from "./relatorio-os-documento";
+import type { BlocoEquipamento } from "@/lib/relatorio-os/dados";
 
 export interface AtividadeDocumentoProps {
   empresa: EmpresaInfo;
   os: { numero: string; criadoEm: Date | string; dataConclusao?: Date | string | null; cliente: ClienteInfo; contrato?: ContratoInfo | null; unidade?: { nome: string } | null };
   atividade: AtividadeSecao;
-  equipamentos: EquipamentoInfo[];
+  /** SÓ os equipamentos atendidos nesta atividade (cada um com checklist, fotos e observação dele) */
+  equipamentos: BlocoEquipamento[];
   numero: string;
 }
 
@@ -24,7 +27,7 @@ export function AtividadeDocumento({ empresa, os, atividade, equipamentos, numer
         <div><span className="text-ink-muted block text-xs">Unidade</span>{os.unidade?.nome ?? "—"}</div>
       </div>
 
-      <EquipamentosTabela equipamentos={equipamentos} unidadeNome={os.unidade?.nome} />
+      <BlocosEquipamentos blocos={equipamentos} />
 
       <div className="py-4 border-b border-surface-border">
         <p className="text-xs uppercase tracking-wider text-ink-muted mb-3">Execução técnica</p>

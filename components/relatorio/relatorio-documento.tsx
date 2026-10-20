@@ -4,6 +4,8 @@ import {
   cn,
 } from "@/lib/utils";
 import { EquipamentosTabela, type EquipamentoInfo } from "@/components/relatorio/cabecalho-relatorio";
+import { BlocosEquipamentos } from "@/components/relatorio/relatorio-os-documento";
+import type { BlocoEquipamento } from "@/lib/relatorio-os/dados";
 import { nomesTecnicosAtividade, textoTecnicosAtividade } from "@/lib/atividade-equipe";
 
 interface Resposta { resposta: string | null; arquivoUrl: string | null; campo: { label: string; tipo: string } }
@@ -36,6 +38,8 @@ export interface RelatorioDocumentoProps {
     atividades: Atividade[];
   };
   equipamentos: Equip[];
+  /** Blocos dos equipamentos ATENDIDOS (checklist, fotos e observação de cada um); sem eles, a tabela simples */
+  blocos?: BlocoEquipamento[];
 }
 
 function n(v: unknown): number { return typeof v === "number" ? v : Number(v ?? 0); }
@@ -50,7 +54,7 @@ function enderecoStr(e: any): string {
   return p.join(" — ");
 }
 
-export function RelatorioDocumento({ relatorio, empresa, os, equipamentos }: RelatorioDocumentoProps) {
+export function RelatorioDocumento({ relatorio, empresa, os, equipamentos, blocos }: RelatorioDocumentoProps) {
   // Todos os técnicos das atividades (responsáveis e membros das equipes)
   const equipe = [...new Set(os.atividades.flatMap((a) => nomesTecnicosAtividade(a)))];
   const tipos = [...new Set(os.atividades.map((a) => a.tipoOs?.nome).filter(Boolean))] as string[];
@@ -123,7 +127,7 @@ export function RelatorioDocumento({ relatorio, empresa, os, equipamentos }: Rel
       </div>
 
       {/* EQUIPAMENTOS ATENDIDOS — ambiente e equipamento separados (tabela compartilhada) */}
-      <EquipamentosTabela equipamentos={equipamentos} unidadeNome={os.unidade?.nome} />
+      {blocos ? <BlocosEquipamentos blocos={blocos} /> : <EquipamentosTabela equipamentos={equipamentos} unidadeNome={os.unidade?.nome} />}
 
       {/* RELATÓRIO TÉCNICO */}
       <div className="py-4 border-b border-surface-border">

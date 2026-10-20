@@ -461,6 +461,33 @@ function LinhaDoTempo({ eventos, onVerRespostas }: { eventos: EventoHistorico[];
 
                         {ev.resumo && <p className="text-xs text-ink mt-2 whitespace-pre-wrap line-clamp-3">{ev.resumo}</p>}
 
+                        {/* Execução deste equipamento: checklist do tipo, observação e as fotos DELE */}
+                        {ev.checklist && (
+                          <div className="mt-2.5" data-checklist-historico>
+                            <p className="text-xs text-ink-muted flex items-center gap-1.5 flex-wrap">
+                              <ListChecks className="w-3.5 h-3.5 text-primary-500" />Checklist
+                              <span className="px-1.5 py-px rounded bg-emerald-50 text-emerald-700 font-semibold">{ev.checklist.ok} OK</span>
+                              {ev.checklist.atencao > 0 && <span className="px-1.5 py-px rounded bg-amber-50 text-amber-700 font-semibold">{ev.checklist.atencao} Atenção</span>}
+                              {ev.checklist.naoSeAplica > 0 && <span className="px-1.5 py-px rounded bg-slate-100 text-slate-600 font-semibold">{ev.checklist.naoSeAplica} N/A</span>}
+                            </p>
+                            {ev.checklist.itensAtencao.length > 0 && (
+                              <p className="text-[11px] text-amber-800 mt-1" data-itens-atencao>Atenção: {ev.checklist.itensAtencao.join(" · ")}</p>
+                            )}
+                          </div>
+                        )}
+                        {ev.observacao && <p className="text-xs text-ink mt-1.5 whitespace-pre-wrap" data-observacao-historico><span className="text-ink-muted">Observação: </span>{ev.observacao}</p>}
+                        {ev.fotos.length > 0 && (
+                          <div className="flex gap-1.5 mt-2 overflow-x-auto" data-fotos-historico>
+                            {ev.fotos.slice(0, 8).map((url) => (
+                              <a key={url} href={url} target="_blank" rel="noreferrer" className="shrink-0">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={url} alt="Foto do atendimento" loading="lazy" className="w-14 h-14 rounded-lg object-cover border border-surface-border" />
+                              </a>
+                            ))}
+                            {ev.fotos.length > 8 && <span className="shrink-0 w-14 h-14 rounded-lg bg-surface-alt text-xs text-ink-muted flex items-center justify-center">+{ev.fotos.length - 8}</span>}
+                          </div>
+                        )}
+
                         {ev.formularios.length > 0 && (
                           <div className="mt-2.5 space-y-2">
                             {ev.formularios.map((fm, i) => (

@@ -6,21 +6,28 @@
  *   horários · observações · assinaturas.
  * O que mostrar em cada versão (cliente × interna) é decidido na tela, pela configuração.
  *
- * Fonte de cada parte (só dado que já existe):
- *  - checklist/fotos por equipamento: respostas_formulario_equipamento (atividade × equipamento × campo);
+ * Fonte de cada parte:
+ *  - checklist do TIPO por equipamento: checklist_respostas (OK / Atenção / Não se aplica + observação);
+ *  - fotos por equipamento: fotos_atendimento (as DELE, por item ou gerais) + as fotos do formulário do tipo;
+ *  - formulário do tipo por equipamento: respostas_formulario_equipamento (atividade × equipamento × campo);
  *  - formulário geral: atividade_respostas (respostas da atividade, sem equipamento);
- *  - equipamentos da OS: atividade_equipamentos (feito = atendido) + o equipamento principal da OS.
+ *  - equipamentos: SÓ os ATENDIDOS na OS (atividade_equipamentos.feito), e de cada um só o que foi
+ *    registrado nas atividades em que ele foi atendido. OS antiga concluída sem nenhum vínculo: o
+ *    equipamento principal da OS conta como atendido (era assim que se registrava).
  */
 import { prisma } from "@/lib/prisma";
 import { LABELS_STATUS_OS } from "@/lib/utils";
 import { ambienteEquipamento, descricaoEquipamento, fabricanteModelo } from "@/lib/equipamento-descricao";
 import { textoTecnicosAtividade } from "@/lib/atividade-equipe";
 import { enderecoStr, type ClienteInfo, type ContratoInfo, type EmpresaInfo } from "@/components/relatorio/cabecalho-relatorio";
+import type { StatusItem } from "@/lib/execucao/pendencias";
 
 /* ───────── Tipos do documento ───────── */
 export interface ItemChecklist { label: string; tipo: string; valor: string }
 export interface GrupoChecklist { formulario: string; atividade: string; itens: ItemChecklist[] }
 export interface FotoRelatorio { url: string; legenda: string }
+export interface ItemChecklistTipo { texto: string; status: StatusItem | null; observacao: string | null }
+export interface ChecklistTipoRelatorio { atividade: string; itens: ItemChecklistTipo[] }
 export interface BlocoEquipamento {
   id: string;
   /** Onde está: ambiente (principal) + setor (complemento) + unidade */
@@ -30,8 +37,15 @@ export interface BlocoEquipamento {
   fabricante: string;
   tag: string | null;
   numeroSerie: string | null;
+  /** Checklist do tipo do equipamento, por atividade em que ele foi atendido */
+  checklistTipo: ChecklistTipoRelatorio[];
+  /** Contagem das respostas do checklist do tipo */
+  resumoChecklist: { ok: number; atencao: number; naoSeAplica: number };
+  /** Formulário do tipo (tipo de OS × tipo de equipamento) */
   checklist: GrupoChecklist[];
   fotos: FotoRelatorio[];
+  /** Observação do técnico sobre ESTE equipamento */
+  observacoes: string[];
 }
 export interface AssinaturaColetada { rotulo: string; url: string; nome: string | null; data: Date | null }
 export interface RelatorioOsDados {
@@ -65,6 +79,7 @@ type Equip = {
   id: string; tipo: string; marca: string; modelo: string; numeroSerie: string | null; patrimonio: string | null; nome: string | null;
   capacidade: string | null; setor: string | null; localizacao: string | null; tipoEquipamento?: { nome: string } | null;
 };
+export type AtividadeParaBlocos = Atividade;
 type Atividade = {
   id: string; titulo: string; status: string; criadoEm: Date; dataAgendada: Date | null; duracaoMin: number | null;
   observacao: string | null; resumo: string | null;
@@ -72,8 +87,10 @@ type Atividade = {
   tecnicosEquipe?: { tecnico: { nome: string } }[];
   veiculo?: { placa: string; modelo: string; marca: string | null } | null;
   respostas: Resposta[];
-  equipamentos: { feito: boolean; equipamento: Equip }[];
+  equipamentos: { feito: boolean; observacao?: string | null; equipamento: Equip }[];
   respostasEquipamento: (Resposta & { equipamentoId: string })[];
+  checklistRespostas?: { equipamentoId: string; status: string | null; observacao: string | null; textoItem: string; item?: { ordem: number } | null }[];
+  fotosAtendimento?: { id: string; equipamentoId: string; url: string; item?: { texto: string } | null }[];
 };
 export interface OsParaRelatorio {
   numero: string; status: string; descricao: string; observacoes: string | null;
@@ -120,7 +137,7 @@ function checklistDe(respostas: Resposta[], atividade: string): GrupoChecklist[]
 }
 const fotosDe = (respostas: Resposta[]): FotoRelatorio[] => respostas.filter(ehFoto).map((r) => ({ url: r.arquivoUrl!, legenda: r.campo.label }));
 
-function blocoEquipamento(e: Equip, unidade: string | null): Omit<BlocoEquipamento, "checklist" | "fotos"> {
+function blocoEquipamento(e: Equip, unidade: string | null): Omit<BlocoEquipamento, "checklist" | "fotos" | "checklistTipo" | "resumoChecklist" | "observacoes"> {
   const amb = ambienteEquipamento(e, null);
   return {
     id: e.id,
@@ -134,33 +151,63 @@ function blocoEquipamento(e: Equip, unidade: string | null): Omit<BlocoEquipamen
 }
 const localTexto = (l: BlocoEquipamento["local"]) => [l.principal, l.complemento].filter(Boolean).join(" · ") || null;
 
+const STATUS_VALIDOS: StatusItem[] = ["OK", "ATENCAO", "NAO_SE_APLICA"];
+
+/**
+ * Os equipamentos ATENDIDOS (um bloco cada) e os vinculados que não foram atendidos. De cada
+ * atendido, só o que foi registrado nas atividades em que ELE foi atendido: checklist do tipo, as
+ * fotos dele, a observação dele e o formulário do tipo. Usado no relatório da OS e no da atividade.
+ */
+export function blocosAtendidos(ativs: Atividade[], unidade: string | null, principal: Equip | null = null, legado = false) {
+  const equips = new Map<string, { e: Equip; atividades: Set<string> }>();
+  for (const a of ativs) for (const v of a.equipamentos) {
+    const x = equips.get(v.equipamento.id) ?? { e: v.equipamento, atividades: new Set<string>() };
+    if (v.feito) x.atividades.add(a.id);
+    equips.set(v.equipamento.id, x);
+  }
+  // OS antiga (concluída sem nenhum equipamento vinculado): o principal era o atendido
+  if (principal && !equips.has(principal.id))
+    equips.set(principal.id, { e: principal, atividades: new Set(legado && equips.size === 0 ? ["*", ...ativs.map((a) => a.id)] : []) });
+
+  const blocos: BlocoEquipamento[] = [...equips.values()].filter((x) => x.atividades.size).map(({ e, atividades }) => {
+    const checklist: GrupoChecklist[] = [], fotos: FotoRelatorio[] = [], checklistTipo: ChecklistTipoRelatorio[] = [], observacoes: string[] = [];
+    const resumoChecklist = { ok: 0, atencao: 0, naoSeAplica: 0 };
+    for (const a of ativs.filter((x) => atividades.has(x.id))) {
+      const itens = (a.checklistRespostas ?? []).filter((r) => r.equipamentoId === e.id && (r.status || (r.observacao ?? "").trim()))
+        .sort((x, y) => (x.item?.ordem ?? 0) - (y.item?.ordem ?? 0))
+        .map((r) => ({ texto: r.textoItem, status: STATUS_VALIDOS.includes(r.status as StatusItem) ? (r.status as StatusItem) : null, observacao: (r.observacao ?? "").trim() || null }));
+      for (const it of itens) {
+        if (it.status === "OK") resumoChecklist.ok++;
+        else if (it.status === "ATENCAO") resumoChecklist.atencao++;
+        else if (it.status === "NAO_SE_APLICA") resumoChecklist.naoSeAplica++;
+      }
+      if (itens.length) checklistTipo.push({ atividade: a.titulo, itens });
+      fotos.push(...(a.fotosAtendimento ?? []).filter((f) => f.equipamentoId === e.id).map((f) => ({ url: f.url, legenda: f.item?.texto ?? "Foto do equipamento" })));
+      const rs = a.respostasEquipamento.filter((r) => r.equipamentoId === e.id);
+      checklist.push(...checklistDe(rs, a.titulo));
+      fotos.push(...fotosDe(rs));
+      const obs = (a.equipamentos.find((v) => v.equipamento.id === e.id)?.observacao ?? "").trim();
+      if (obs && !observacoes.includes(obs)) observacoes.push(obs);
+    }
+    return { ...blocoEquipamento(e, unidade), checklistTipo, resumoChecklist, checklist, fotos, observacoes };
+  }).sort((a, b) =>
+    `${a.local.complemento ?? ""}|${a.local.principal ?? ""}|${a.titulo}`.localeCompare(`${b.local.complemento ?? ""}|${b.local.principal ?? ""}|${b.titulo}`, "pt-BR"));
+
+  const naoAtendidos = [...equips.values()].filter((x) => !x.atividades.size).map(({ e }) => {
+    const b = blocoEquipamento(e, unidade);
+    return { id: e.id, titulo: b.titulo, local: localTexto(b.local) };
+  }).sort((a, b) => a.titulo.localeCompare(b.titulo, "pt-BR"));
+
+  const ids = new Set(blocos.map((b) => b.id));
+  const equipamentosAtendidos = [...equips.values()].filter((x) => ids.has(x.e.id)).map((x) => x.e);
+  return { blocos, naoAtendidos, total: equips.size, equipamentosAtendidos };
+}
+
 export function montarRelatorioOs(os: OsParaRelatorio, relatorio: RelatorioRef | null): RelatorioOsDados {
   const unidade = os.unidade?.nome ?? null;
   const ativs = os.atividades;
 
-  // Equipamentos da OS: os das atividades (feito em alguma = atendido) + o principal da OS
-  const equips = new Map<string, { e: Equip; feito: boolean }>();
-  for (const a of ativs) for (const v of a.equipamentos) {
-    const atual = equips.get(v.equipamento.id);
-    equips.set(v.equipamento.id, { e: v.equipamento, feito: (atual?.feito ?? false) || v.feito });
-  }
-  if (os.equipamento && !equips.has(os.equipamento.id)) equips.set(os.equipamento.id, { e: os.equipamento, feito: true });
-
-  const blocos: BlocoEquipamento[] = [...equips.values()].filter((x) => x.feito).map(({ e }) => {
-    const checklist: GrupoChecklist[] = [], fotos: FotoRelatorio[] = [];
-    for (const a of ativs) {
-      const rs = a.respostasEquipamento.filter((r) => r.equipamentoId === e.id);
-      checklist.push(...checklistDe(rs, a.titulo));
-      fotos.push(...fotosDe(rs));
-    }
-    return { ...blocoEquipamento(e, unidade), checklist, fotos };
-  }).sort((a, b) =>
-    `${a.local.complemento ?? ""}|${a.local.principal ?? ""}|${a.titulo}`.localeCompare(`${b.local.complemento ?? ""}|${b.local.principal ?? ""}|${b.titulo}`, "pt-BR"));
-
-  const naoAtendidos = [...equips.values()].filter((x) => !x.feito).map(({ e }) => {
-    const b = blocoEquipamento(e, unidade);
-    return { id: e.id, titulo: b.titulo, local: localTexto(b.local) };
-  }).sort((a, b) => a.titulo.localeCompare(b.titulo, "pt-BR"));
+  const { blocos, naoAtendidos, total } = blocosAtendidos(ativs, unidade, os.equipamento, os.status === "CONCLUIDA");
 
   const concluidas = ativs.filter((a) => a.status === "CONCLUIDA").length;
   // Relato do técnico (texto livre da atividade). O `resumo` NÃO entra: é o despejo automático das
@@ -169,7 +216,7 @@ export function montarRelatorioOs(os: OsParaRelatorio, relatorio: RelatorioRef |
   const situacao = LABELS_STATUS_OS[os.status] ?? os.status;
   const partes = [
     `${situacao}`,
-    equips.size ? `${blocos.length} de ${equips.size} equipamento${equips.size === 1 ? "" : "s"} atendido${blocos.length === 1 ? "" : "s"}` : null,
+    total ? `${blocos.length} de ${total} equipamento${total === 1 ? "" : "s"} atendido${blocos.length === 1 ? "" : "s"}` : null,
     ativs.length ? `${concluidas} de ${ativs.length} atividade${ativs.length === 1 ? "" : "s"} concluída${concluidas === 1 ? "" : "s"}` : null,
   ].filter(Boolean);
   const texto = [partes.join(" · "), relatos.join(" ").slice(0, 280)].filter(Boolean).join(". ");
@@ -209,7 +256,7 @@ export function montarRelatorioOs(os: OsParaRelatorio, relatorio: RelatorioRef |
       endereco: enderecoStr({ endereco: os.unidade.logradouro, numero: os.unidade.numero, bairro: os.unidade.bairro, cidade: os.unidade.cidade, estado: os.unidade.estado, cep: os.unidade.cep }),
     } : null,
     equipe,
-    resultado: { texto, atendidos: blocos.length, totalEquipamentos: equips.size, atividades: ativs.length, concluidas },
+    resultado: { texto, atendidos: blocos.length, totalEquipamentos: total, atividades: ativs.length, concluidas },
     equipamentos: blocos,
     naoAtendidos,
     geral: {
@@ -236,6 +283,8 @@ const SELECT_EQUIP = {
   setor: true, localizacao: true, tipoEquipamento: { select: { nome: true } },
 } as const;
 const CAMPO = { select: { label: true, tipo: true, ordem: true } } as const;
+export const SELECT_CHECKLIST = { select: { equipamentoId: true, status: true, observacao: true, textoItem: true, item: { select: { ordem: true } } } } as const;
+export const SELECT_FOTOS = { orderBy: { criadoEm: "asc" }, select: { id: true, equipamentoId: true, url: true, item: { select: { texto: true } } } } as const;
 
 /** OS da empresa (empresa SEMPRE da sessão, ou do relatório no link público). null = não existe nela. */
 export async function carregarOsParaRelatorio(osId: string, empresaId: string): Promise<OsParaRelatorio | null> {
@@ -258,6 +307,8 @@ export async function carregarOsParaRelatorio(osId: string, empresaId: string): 
           respostas: { include: { campo: CAMPO, formulario: { select: { nome: true } } } },
           equipamentos: { orderBy: { criadoEm: "asc" }, include: { equipamento: { select: SELECT_EQUIP } } },
           respostasEquipamento: { include: { campo: CAMPO, formulario: { select: { nome: true } } } },
+          checklistRespostas: SELECT_CHECKLIST,
+          fotosAtendimento: SELECT_FOTOS,
         },
       },
     },
