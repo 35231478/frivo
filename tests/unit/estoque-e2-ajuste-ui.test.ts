@@ -118,9 +118,16 @@ const ITEM_GAS = {
   fiscal: { ...SEM_FISCAL, ncm: "38247800", cest: "0100100", origemMercadoria: "1", unidadeTributavel: "KG" },
   fator: 13.6, fatorAprendido: { unidade: "UN", fator: 13.6 }, produto: GAS, aprendido: true,
 };
+// E2.1: a nota 4855 não tem duplicata (à vista, na emissão)
+const A_VISTA = [{ duplicata: null, vencimento: "2026-11-19", valor: 2856, boleto: null }];
+const FIN = {
+  categoriaId: null, centroCustoId: null, formaPagamento: "BOLETO", parcelas: A_VISTA, parcelasNf: A_VISTA, valorNota: 2856,
+  pagamentosNf: [], padrao: { categoriaId: null, centroCustoId: null }, hoje: "2026-11-19",
+};
+const FIN_CORPO = { categoriaId: null, centroCustoId: null, formaPagamento: "BOLETO", parcelas: null };
 const conciliacao = async (itens: (typeof ITEM_GAS | Record<string, unknown>)[] = [ITEM_GAS], extra: Record<string, unknown> = {}) => {
   const { ConciliacaoNota } = await import("@/components/compras/conciliacao-nota");
-  await montar(createElement(ConciliacaoNota, { notaId: "n2", itens: itens as Parameters<typeof ConciliacaoNota>[0]["itens"], pedidos: [], podeLancar: true, parcelas: [{ numero: "001", vencimento: "19/11/2026", valor: 2856 }], podePrecificar: true, ...extra }));
+  await montar(createElement(ConciliacaoNota, { notaId: "n2", itens: itens as Parameters<typeof ConciliacaoNota>[0]["itens"], pedidos: [], podeLancar: true, financeiro: FIN as Parameters<typeof ConciliacaoNota>[0]["financeiro"], podePrecificar: true, ...extra }));
 };
 
 describe("conciliação: conversão, aviso de custo e preço", () => {
@@ -138,37 +145,37 @@ describe("conciliação: conversão, aviso de custo e preço", () => {
     await digitar($('[data-fator-item="1"]'), "13.6");
     respostas["/api/compras/notas/n2/lancar"] = { status: 201, corpo: {} };
     await clicar(botao("Confirmar e lançar"));
-    expect(chamadas.at(-1)).toEqual({ url: "/api/compras/notas/n2/lancar", metodo: "POST", corpo: { itens: [{ itemId: "i1", produtoId: "pGas", fator: 13.6 }], pedidoCompraId: null } });
+    // preço não mexido = null (o servidor não muda o preço do produto)
+    expect(chamadas.filter((c) => !c.url.startsWith("/api/cadastros")).at(-1)).toEqual({ url: "/api/compras/notas/n2/lancar", metodo: "POST", corpo: { itens: [{ itemId: "i1", produtoId: "pGas", fator: 13.6, preco: null }], financeiro: FIN_CORPO, pedidoCompraId: null } });
   });
 
-  it("custo mudou: só aviso (com a margem que o preço dá agora); ajustar preço abre o painel com o custo DESTA nota", async () => {
+  it("custo mudou: só aviso (com a margem que o preço dá agora); o preço NA LINHA abre no atual com o custo DESTA nota", async () => {
     await conciliacao();
     expect(txt('[data-aviso-custo="1"]')).toBe(" O custo mudou: era R$ 100,00/kg, nesta nota R$ 105,00/kg (+5,0%). Seu preço atual (R$ 142,86) dá 26,5% de margem agora (antes 30,0%). Para manter 30,0%, o preço seria R$ 150,00. O preço não foi alterado.");
-    expect(txt('[data-preco-item="1"]')).toContain("margem com o custo desta nota: 26,5%");
-    expect($("[data-preco-venda]")).toBeNull();
-    expect(chamadas).toEqual([]); // nada foi gravado
-    await clicar($('[data-ajustar-preco="1"]'));
-    // abre mostrando o preço ATUAL com o custo desta nota (nada simulado, nada salvo)
+    // E2.1: o painel já está na linha (sem clicar), mostrando o preço ATUAL com o custo desta nota
     expect(txt("[data-situacao-preco]")).toBe("Preço atual");
     expect(txt("[data-custo]")).toBe("R$ 105,00");
     expect(txt("[data-preco-venda] [data-preco]")).toBe("R$ 142,86");
     expect(txt("[data-preco-venda] [data-margem]")).toBe("26,5%");
     expect(txt("[data-preco-venda] [data-markup]")).toBe("36,1%");
-    expect(($("[data-salvar-preco]") as HTMLButtonElement).disabled).toBe(true);
+    expect($("[data-salvar-preco]")).toBeNull(); // rascunho: vai para o produto só ao lançar
     expect(txt("[data-sugestao-margem-alvo]")).toContain("Com a margem alvo de 30,0% e este custo, o preço seria R$ 150,00.");
     await clicar($("[data-usar-margem-alvo]"));
-    expect(txt("[data-situacao-preco]")).toBe("Simulação — ainda não salvo");
+    expect(txt("[data-situacao-preco]")).toBe("Novo preço — vai para o produto ao confirmar e lançar");
     expect(txt("[data-preco-venda] [data-preco]")).toBe("R$ 150,00");
     expect(txt("[data-preco-venda] [data-margem]")).toBe("30,0%");
-    respostas["/api/estoque/pGas/preco"] = { status: 200, corpo: { preco: 150, margemVenda: 30 } };
-    await clicar($("[data-salvar-preco]"));
-    expect(chamadas.at(-1)).toEqual({ url: "/api/estoque/pGas/preco", metodo: "PUT", corpo: { modo: "margem", margem: 30, custoBase: 105 } });
+    expect($('[data-aviso-custo="1"]')).toBeNull(); // a pessoa decidiu o preço: o aviso sobre o preço antigo sai
+    expect(chamadas.filter((c) => !c.url.startsWith("/api/cadastros"))).toEqual([]); // nada foi gravado
+    respostas["/api/compras/notas/n2/lancar"] = { status: 201, corpo: {} };
+    await clicar(botao("Confirmar e lançar"));
+    expect(chamadas.at(-1)!.corpo.itens).toEqual([{ itemId: "i1", produtoId: "pGas", fator: 13.6, preco: { modo: "margem", margem: 30 } }]);
   });
 
-  it("sem permissão de preço: vê o aviso, mas não o 'Ajustar preço'; diferença fiscal aparece", async () => {
+  it("sem permissão de preço: vê o aviso e o preço na linha, mas não edita; diferença fiscal aparece", async () => {
     await conciliacao([ITEM_GAS], { podePrecificar: false });
     expect($('[data-aviso-custo="1"]')).not.toBeNull();
-    expect($("[data-ajustar-preco]")).toBeNull();
+    expect(txt("[data-preco-venda] [data-preco]")).toBe("R$ 142,86");
+    expect($('input[name="margem"]')).toBeNull();
     expect(txt("[data-divergencia-fiscal]")).toBe("NCM: cadastro 29037990 · nota 38247800 (fica o do cadastro)");
     expect(txt('[data-fiscal="1"]')).toContain("Fiscal da nota: NCM 3824.78.00 · CEST 0100100 · origem 1 · un. trib. KG");
   });
@@ -189,6 +196,8 @@ describe("conciliação: conversão, aviso de custo e preço", () => {
     expect(($('[data-fator-item="1"]') as HTMLInputElement).value).toBe("");
     await digitar($('[data-fator-item="1"]'), "13,6");
     expect(txt('[data-item="1"] [data-entra]')).toBe("Entra 27,2 kg · custo R$ 105,00/kg");
-    expect(txt('[data-item="1"]')).toContain("O preço de venda do produto novo pode ser definido depois de lançar");
+    // E2.1: produto novo também tem o preço na linha (criado com ele ao lançar)
+    expect($('[data-preco-venda="novo"]')).not.toBeNull();
+    expect(txt("[data-situacao-preco]")).toBe("Produto novo — sem preço ainda");
   });
 });

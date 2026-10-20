@@ -2,14 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, ArrowRightLeft, Check, ChevronDown, Link2, Loader2, PackagePlus, Search, Sparkles, Tag, X } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, Check, Link2, Loader2, PackagePlus, Save, Search, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn, formatarMoeda } from "@/lib/utils";
 import { formatarQtd } from "@/lib/estoque/regras";
-import { avisoCusto, converterItem, formatarFator, formatarPct, lerNumero, margemSobreVenda, mesmaUnidade } from "@/lib/estoque/preco";
+import { avisoCusto, converterItem, formatarFator, lerNumero, mesmaUnidade } from "@/lib/estoque/preco";
 import { formatarNcm } from "@/lib/compras/rotulos";
-import { PrecoVenda } from "@/components/estoque/preco-venda";
+import { PrecoVenda, type PrecoDefinido } from "@/components/estoque/preco-venda";
+import { corpoFinanceiro, FinanceiroNotaEditor, financeiroInicial, type FinanceiroNota, type FinanceiroUi } from "@/components/compras/financeiro-nota";
 
 export interface FiscalProduto { ncm: string | null; cest: string | null; gtin: string | null; origemMercadoria: string | null; unidadeTributavel: string | null }
 export interface ProdutoConciliacao {
@@ -29,8 +30,11 @@ export interface ItemConciliacao {
   produto: ProdutoConciliacao | null;
   /** veio vinculado pelo de-para (aprendido de nota anterior deste fornecedor) */
   aprendido: boolean;
+  /** preço de venda já definido nesta nota (rascunho salvo), aplicado ao produto só ao lançar */
+  precoRascunho?: PrecoDefinido | null;
 }
 type Escolha = { modo: "existente"; produto: ProdutoConciliacao } | { modo: "novo"; nome: string; unidade: string } | null;
+type PrecoTela = PrecoDefinido | null | "invalido";
 
 const moeda4 = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 4 });
 const unidadeDoProduto = (i: ItemConciliacao, e: Escolha) => (e?.modo === "existente" ? e.produto.unidade : e?.modo === "novo" ? (e.unidade.trim() || i.unidade) : null);
@@ -53,32 +57,45 @@ function fatorEfetivo(i: ItemConciliacao, e: Escolha, txt: string): number | nul
 }
 
 /**
- * Conciliação (de-para) da nota de compra: cada item da NF → produto existente (busca) OU produto
- * novo. Itens que o fornecedor já mandou antes chegam vinculados ("aprendido"), com o fator de
- * conversão aprendido. Unidade da nota diferente da do produto: "1 [unidade da nota] = ___ [unidade
- * do produto]" — entra quantidade × fator, a custo = valor unitário ÷ fator. Custo diferente da compra
- * anterior: só AVISA quanto o preço atual dá de margem agora (o preço só muda se a pessoa ajustar).
+ * Central de lançamento da nota de compra (rascunho até "Confirmar e lançar"):
+ *  - itens: cada um → produto existente (busca) OU produto novo (nome e unidade editáveis na linha);
+ *    o que o fornecedor já mandou antes chega vinculado ("aprendido"), com o fator de conversão;
+ *    unidade diferente = "1 [unidade da nota] = ___ [unidade do produto]";
+ *  - preço de venda NA LINHA (custo · preço · margem · markup, ao vivo): definido aqui, vai para o produto
+ *    só ao lançar; custo diferente da compra anterior: só AVISA;
+ *  - financeiro: categoria e centro de custo (padrão do fornecedor), forma de pagamento (do XML) e as
+ *    parcelas editáveis, com o boleto de cada uma.
+ * "Salvar rascunho" grava tudo sem lançar; "Confirmar e lançar" faz tudo numa transação.
  */
-export function ConciliacaoNota({ notaId, itens, pedidos, podeLancar, motivoSemLancar, parcelas, podePrecificar = false }: {
+export function ConciliacaoNota({ notaId, itens, pedidos, podeLancar, motivoSemLancar, financeiro, podePrecificar = false }: {
   notaId: string; itens: ItemConciliacao[]; pedidos: { id: string; numero: string }[];
+  /** Financeiro › fluxo de caixa: lança e mexe no financeiro */
   podeLancar: boolean; motivoSemLancar?: string | null;
-  parcelas: { numero: string; vencimento: string; valor: number }[];
-  /** Configurações › gerenciar (cadastro de produtos): pode ajustar o preço daqui */
+  financeiro: FinanceiroNota;
+  /** Configurações › gerenciar (cadastro de produtos): define o preço de venda na linha */
   podePrecificar?: boolean;
 }) {
   const router = useRouter();
   const [escolhas, setEscolhas] = useState<Record<string, Escolha>>(() =>
     Object.fromEntries(itens.map((i) => [i.id, i.produto ? { modo: "existente", produto: i.produto } : null])));
   const [fatores, setFatores] = useState<Record<string, string>>(() => Object.fromEntries(itens.map((i) => [i.id, fatorInicial(i)])));
+  const [precos, setPrecos] = useState<Record<string, PrecoTela>>(() => Object.fromEntries(itens.map((i) => [i.id, i.precoRascunho ?? null])));
+  const [fin, setFin] = useState<FinanceiroUi>(() => financeiroInicial(financeiro));
   const [pedidoId, setPedidoId] = useState("");
   const [enviando, setEnviando] = useState<"salvar" | "lancar" | null>(null);
   const [msg, setMsg] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
 
   const definir = (i: ItemConciliacao, e: Escolha) => {
+    const antes = escolhas[i.id];
     setEscolhas((s) => ({ ...s, [i.id]: e }));
-    // trocou o produto: fator volta para 1 (mesma unidade) ou fica em branco para informar
     const un = unidadeDoProduto(i, e);
-    setFatores((f) => ({ ...f, [i.id]: un != null && mesmaUnidade(i.unidade, un) ? "1" : e?.modo === "existente" && e.produto.id === i.produto?.id ? fatorInicial(i) : "" }));
+    // editar o nome do produto novo (mesma unidade) não é trocar de produto: fator e preço ficam
+    const mesmoProduto = (antes?.modo === "existente" && e?.modo === "existente" && antes.produto.id === e.produto.id) || (antes?.modo === "novo" && e?.modo === "novo");
+    // trocou o produto (ou a unidade): fator volta para 1 (mesma unidade) ou fica em branco para informar
+    if (!mesmoProduto || unidadeDoProduto(i, antes) !== un)
+      setFatores((f) => ({ ...f, [i.id]: un != null && mesmaUnidade(i.unidade, un) ? "1" : e?.modo === "existente" && e.produto.id === i.produto?.id ? fatorInicial(i) : "" }));
+    // o preço definido era para o produto anterior: começa de novo
+    if (!mesmoProduto) setPrecos((p) => ({ ...p, [i.id]: null }));
     setMsg(null);
   };
   const completo = (i: ItemConciliacao) => {
@@ -86,25 +103,39 @@ export function ConciliacaoNota({ notaId, itens, pedidos, podeLancar, motivoSemL
     return !!e && (e.modo === "existente" || e.nome.trim().length >= 2) && fatorEfetivo(i, e, fatores[i.id] ?? "") != null;
   };
   const vinculados = itens.filter(completo).length;
-  type CorpoItem = ({ itemId: string; produtoId: string } | { itemId: string; novo: { nome: string; unidade: string | null } }) & { fator?: number };
+  type CorpoItem = ({ itemId: string; produtoId: string } | { itemId: string; novo: { nome: string; unidade: string | null } }) & { fator?: number; preco?: PrecoDefinido | null };
   const corpoItens = () => itens.flatMap((i): CorpoItem[] => {
     const e = escolhas[i.id];
     if (!e) return [];
     const fator = fatorEfetivo(i, e, fatores[i.id] ?? "") ?? undefined;
+    // preço só vai no corpo de quem pode precificar (sem o campo, o servidor não mexe)
+    const preco = podePrecificar ? { preco: precos[i.id] === "invalido" ? null : (precos[i.id] as PrecoDefinido | null) } : {};
     return e.modo === "existente"
-      ? [{ itemId: i.id, produtoId: e.produto.id, fator }]
-      : [{ itemId: i.id, novo: { nome: e.nome.trim(), unidade: e.unidade.trim() || null }, fator }];
+      ? [{ itemId: i.id, produtoId: e.produto.id, fator, ...preco }]
+      : [{ itemId: i.id, novo: { nome: e.nome.trim(), unidade: e.unidade.trim() || null }, fator, ...preco }];
   });
 
   async function enviar(acao: "salvar" | "lancar") {
-    setEnviando(acao); setMsg(null);
+    setMsg(null);
+    const invalido = itens.find((i) => precos[i.id] === "invalido" && escolhas[i.id]);
+    if (invalido && podePrecificar) { setMsg({ tipo: "erro", texto: `Item ${invalido.numeroItem}: preço de venda inválido — corrija ou mantenha o preço atual.` }); return; }
+    const novoSemNome = itens.find((i) => { const e = escolhas[i.id]; return e?.modo === "novo" && e.nome.trim().length < 2; });
+    if (novoSemNome) { setMsg({ tipo: "erro", texto: `Item ${novoSemNome.numeroItem}: dê um nome ao produto novo.` }); return; }
+    let corpoFin: Record<string, unknown> | undefined;
+    if (podeLancar) {
+      const f = corpoFinanceiro(fin, financeiro);
+      if (!f.ok) { setMsg({ tipo: "erro", texto: f.erro }); return; }
+      corpoFin = f.corpo;
+    }
+    setEnviando(acao);
     try {
-      const r = acao === "salvar"
-        ? await fetch(`/api/compras/notas/${notaId}/conciliacao`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ itens: corpoItens() }) })
-        : await fetch(`/api/compras/notas/${notaId}/lancar`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ itens: corpoItens(), pedidoCompraId: pedidoId || null }) });
+      const corpo = { itens: corpoItens(), ...(corpoFin && { financeiro: corpoFin }), ...(acao === "lancar" && { pedidoCompraId: pedidoId || null }) };
+      const r = await fetch(acao === "salvar" ? `/api/compras/notas/${notaId}/conciliacao` : `/api/compras/notas/${notaId}/lancar`, {
+        method: acao === "salvar" ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo),
+      });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { setMsg({ tipo: "erro", texto: j.erro ?? "Não foi possível concluir." }); return; }
-      setMsg({ tipo: "ok", texto: acao === "salvar" ? (j.faltam ? `Vínculos salvos. Faltam ${j.faltam} item(ns).` : "Vínculos salvos: nota conciliada.") : "Nota lançada." });
+      setMsg({ tipo: "ok", texto: acao === "salvar" ? (j.faltam ? `Rascunho salvo. Faltam ${j.faltam} item(ns) sem produto.` : "Rascunho salvo: tudo pronto para lançar.") : "Nota lançada." });
       router.refresh();
     } catch {
       setMsg({ tipo: "erro", texto: "Sem conexão. Tente de novo." });
@@ -116,7 +147,7 @@ export function ConciliacaoNota({ notaId, itens, pedidos, podeLancar, motivoSemL
     <div className="space-y-4">
       <div className="card overflow-hidden">
         <div className="px-4 py-3 border-b border-surface-border bg-surface-alt/40 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm font-semibold text-ink">De-para dos itens <span className="text-ink-muted font-normal">· <span data-vinculados>{vinculados}</span> de {itens.length} com produto</span></p>
+          <p className="text-sm font-semibold text-ink">Itens da nota <span className="text-ink-muted font-normal">· <span data-vinculados>{vinculados}</span> de {itens.length} com produto</span></p>
           {semVinculo.length > 0 && (
             <button type="button" className="text-xs font-semibold text-primary-600 hover:underline" data-criar-todos
               onClick={() => semVinculo.forEach((i) => definir(i, { modo: "novo", nome: i.descricaoFornecedor, unidade: i.unidade }))}>
@@ -136,7 +167,8 @@ export function ConciliacaoNota({ notaId, itens, pedidos, podeLancar, motivoSemL
                 <Vinculo item={i} escolha={escolhas[i.id]} onChange={(e) => definir(i, e)} />
               </div>
               {escolhas[i.id] && (
-                <Conversao item={i} escolha={escolhas[i.id]} fatorTxt={fatores[i.id] ?? ""} podePrecificar={podePrecificar}
+                <Linha item={i} escolha={escolhas[i.id]} fatorTxt={fatores[i.id] ?? ""} podePrecificar={podePrecificar}
+                  preco={precos[i.id]} onPreco={(v) => { setPrecos((p) => ({ ...p, [i.id]: v })); setMsg(null); }}
                   onFator={(t) => { setFatores((f) => ({ ...f, [i.id]: t })); setMsg(null); }} />
               )}
             </li>
@@ -144,17 +176,11 @@ export function ConciliacaoNota({ notaId, itens, pedidos, podeLancar, motivoSemL
         </ul>
       </div>
 
-      <div className="card p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <p className="text-[11px] uppercase tracking-wider font-semibold text-ink-muted mb-1">Contas a pagar que serão geradas</p>
-          <ul className="text-sm space-y-0.5" data-parcelas>
-            {parcelas.map((p, k) => (
-              <li key={k} className="flex justify-between gap-3 tabular-nums"><span className="text-ink-muted">{parcelas.length > 1 ? `Parcela ${k + 1}/${parcelas.length}` : "À vista"} · vence {p.vencimento}</span><span className="font-semibold">{formatarMoeda(p.valor)}</span></li>
-            ))}
-          </ul>
-        </div>
-        {pedidos.length > 0 && (
-          <label className="block text-sm">
+      <FinanceiroNotaEditor nota={financeiro} valor={fin} onChange={(v) => { setFin(v); setMsg(null); }} podeEditar={podeLancar} />
+
+      {pedidos.length > 0 && (
+        <div className="card p-4">
+          <label className="block text-sm max-w-md">
             <span className="text-[11px] uppercase tracking-wider font-semibold text-ink-muted">Pedido de compra (opcional)</span>
             <select value={pedidoId} onChange={(e) => setPedidoId(e.target.value)} data-pedido
               className="mt-1 w-full bg-white border border-surface-border rounded-lg px-3 py-2 text-sm">
@@ -163,13 +189,16 @@ export function ConciliacaoNota({ notaId, itens, pedidos, podeLancar, motivoSemL
             </select>
             <span className="text-xs text-ink-muted">O custo real da nota vai para os itens do pedido com o mesmo produto.</span>
           </label>
-        )}
-      </div>
+        </div>
+      )}
 
       {msg && <p role={msg.tipo === "erro" ? "alert" : "status"} className={cn("text-sm font-medium", msg.tipo === "ok" ? "text-success-700" : "text-red-600")}>{msg.texto}</p>}
       <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-2">
         {!podeLancar && motivoSemLancar && <p className="text-xs text-ink-muted sm:mr-auto" data-sem-lancar>{motivoSemLancar}</p>}
-        <Button type="button" variant="secondary" onClick={() => enviar("salvar")} loading={enviando === "salvar"} disabled={!!enviando}>Salvar vínculos</Button>
+        {podeLancar && <p className="text-xs text-ink-muted sm:mr-auto">Nada vai para o estoque nem para o financeiro antes de confirmar: até lá, é rascunho.</p>}
+        <Button type="button" variant="secondary" onClick={() => enviar("salvar")} loading={enviando === "salvar"} disabled={!!enviando} data-salvar-rascunho>
+          <Save className="w-4 h-4" /> Salvar rascunho
+        </Button>
         <Button type="button" onClick={() => enviar("lancar")} loading={enviando === "lancar"} disabled={!!enviando || !podeLancar || vinculados < itens.length} data-lancar-nota>
           <Check className="w-4 h-4" /> Confirmar e lançar
         </Button>
@@ -196,13 +225,21 @@ function Vinculo({ item, escolha, onChange }: { item: ItemConciliacao; escolha: 
     return (
       <div className="rounded-lg border border-primary-200 bg-primary-50/50 px-3 py-2 space-y-2 self-start" data-vinculo="novo">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-semibold text-primary-700 flex items-center gap-1"><PackagePlus className="w-3.5 h-3.5" /> Produto novo</p>
+          <p className="text-xs font-semibold text-primary-700 flex items-center gap-1"><PackagePlus className="w-3.5 h-3.5" /> Produto novo — confira o nome</p>
           <button type="button" onClick={() => onChange(null)} className="text-ink-muted hover:text-ink" aria-label="Cancelar produto novo"><X className="w-4 h-4" /></button>
         </div>
-        <div className="grid grid-cols-[1fr_5rem] gap-2">
-          <Input value={escolha.nome} onChange={(e) => onChange({ ...escolha, nome: e.target.value })} aria-label="Nome do produto novo" name={`novo-nome-${item.numeroItem}`} maxLength={200} />
-          <Input value={escolha.unidade} onChange={(e) => onChange({ ...escolha, unidade: e.target.value })} aria-label="Unidade" name={`novo-un-${item.numeroItem}`} maxLength={10} />
+        <div className="grid grid-cols-[1fr_5.5rem] gap-2">
+          <label className="block">
+            <span className="text-[11px] font-semibold text-ink">Nome do produto</span>
+            <Input value={escolha.nome} onChange={(e) => onChange({ ...escolha, nome: e.target.value })} aria-label="Nome do produto novo" name={`novo-nome-${item.numeroItem}`}
+              maxLength={200} data-novo-nome={item.numeroItem} className={cn("mt-0.5", escolha.nome.trim().length < 2 && "border-red-400")} />
+          </label>
+          <label className="block">
+            <span className="text-[11px] font-semibold text-ink">Unidade</span>
+            <Input value={escolha.unidade} onChange={(e) => onChange({ ...escolha, unidade: e.target.value })} aria-label="Unidade" name={`novo-un-${item.numeroItem}`} maxLength={10} className="mt-0.5" />
+          </label>
         </div>
+        {escolha.nome.trim().length < 2 && <p className="text-[11px] text-red-600">Dê um nome ao produto novo.</p>}
       </div>
     );
   }
@@ -218,13 +255,14 @@ function Vinculo({ item, escolha, onChange }: { item: ItemConciliacao; escolha: 
 }
 
 /**
- * Faixa do item já vinculado: conversão "1 UN = ___ kg" (aprendida ou a informar), o que entra e a que
- * custo, aviso de custo diferente da última compra, preço/margem atuais e "Ajustar preço" (opcional).
+ * O resto da linha do item vinculado: conversão "1 UN = ___ kg" (aprendida ou a informar), o que entra e
+ * a que custo, aviso de custo diferente da última compra, o PREÇO DE VENDA (custo · preço · margem ·
+ * markup ao vivo, definido aqui e aplicado ao lançar) e os dados fiscais.
  */
-function Conversao({ item, escolha, fatorTxt, onFator, podePrecificar }: {
+function Linha({ item, escolha, fatorTxt, onFator, podePrecificar, preco, onPreco }: {
   item: ItemConciliacao; escolha: Escolha; fatorTxt: string; onFator: (t: string) => void; podePrecificar: boolean;
+  preco: PrecoTela | undefined; onPreco: (v: PrecoTela) => void;
 }) {
-  const [precoAberto, setPrecoAberto] = useState(false);
   const un = unidadeDoProduto(item, escolha)!;
   const igual = mesmaUnidade(item.unidade, un);
   const fator = fatorEfetivo(item, escolha, fatorTxt);
@@ -234,7 +272,9 @@ function Conversao({ item, escolha, fatorTxt, onFator, podePrecificar }: {
     && (item.fatorAprendido.unidade == null || mesmaUnidade(item.fatorAprendido.unidade, item.unidade)) && lerNumero(fatorTxt) === item.fatorAprendido.fator;
   const unidadeMudou = !igual && item.fatorAprendido?.unidade && produto?.id === item.produto?.id && !mesmaUnidade(item.fatorAprendido.unidade, item.unidade)
     ? item.fatorAprendido : null;
-  const aviso = produto && conv ? avisoCusto({
+  // preço novo definido na linha: o aviso de custo (sobre o preço antigo) dá lugar à decisão da pessoa
+  const definido = preco != null && preco !== "invalido";
+  const aviso = produto && conv && !definido ? avisoCusto({
     produtoId: produto.id, produto: produto.nome, unidade: un, custoAnterior: produto.custo, custoNovo: conv.custoUnitario, preco: produto.preco, margemAlvo: produto.margemVenda,
   }) : null;
   const divergencias = produto ? CAMPOS_FISCAIS.flatMap(([c, rot]) => {
@@ -244,7 +284,7 @@ function Conversao({ item, escolha, fatorTxt, onFator, podePrecificar }: {
   }) : [];
 
   return (
-    <div className="rounded-lg bg-surface-alt/50 border border-surface-border px-3 py-2.5 space-y-2 text-xs" data-conversao={item.numeroItem}>
+    <div className="rounded-lg bg-surface-alt/50 border border-surface-border px-3 py-2.5 space-y-2.5 text-xs" data-conversao={item.numeroItem}>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <span className="inline-flex items-center gap-1.5 text-ink">
           <ArrowRightLeft className="w-3.5 h-3.5 text-primary-600" />
@@ -266,21 +306,12 @@ function Conversao({ item, escolha, fatorTxt, onFator, podePrecificar }: {
       {aviso && (
         <p className="text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5 flex items-start gap-1.5" data-aviso-custo={item.numeroItem}><AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" /> {aviso.texto}</p>
       )}
-      {produto && conv && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-ink-muted" data-preco-item={item.numeroItem}>
-          <span className="inline-flex items-center gap-1"><Tag className="w-3.5 h-3.5" /> Preço de venda: <strong className="text-ink">{produto.preco != null ? formatarMoeda(produto.preco) : "não definido"}</strong></span>
-          {produto.preco != null && <span>margem com o custo desta nota: <strong className="text-ink">{formatarPct(margemSobreVenda(produto.preco, conv.custoUnitario))}</strong></span>}
-          {podePrecificar && (
-            <button type="button" onClick={() => setPrecoAberto((v) => !v)} className="inline-flex items-center gap-0.5 font-semibold text-primary-600 hover:underline" data-ajustar-preco={item.numeroItem}>
-              Ajustar preço <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", precoAberto && "rotate-180")} />
-            </button>
-          )}
+      {conv && (
+        <div data-preco-item={item.numeroItem}>
+          <PrecoVenda key={produto?.id ?? "novo"} compacto produtoId={produto?.id ?? null} unidade={un} custo={conv.custoUnitario} rotuloCusto="Custo nesta nota"
+            preco={produto?.preco ?? null} margemVenda={produto?.margemVenda ?? null} podeEditar={podePrecificar}
+            rascunho={{ valor: preco && preco !== "invalido" ? preco : null, onChange: onPreco }} />
         </div>
-      )}
-      {escolha?.modo === "novo" && <p className="text-ink-muted">O preço de venda do produto novo pode ser definido depois de lançar, na página dele no Estoque.</p>}
-      {produto && conv && precoAberto && (
-        <PrecoVenda produtoId={produto.id} unidade={un} custo={conv.custoUnitario} rotuloCusto="Custo nesta nota"
-          preco={produto.preco} margemVenda={produto.margemVenda} podeEditar={podePrecificar} className="pt-1" />
       )}
       <Fiscal item={item} divergencias={divergencias} />
     </div>

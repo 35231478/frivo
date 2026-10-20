@@ -15,7 +15,9 @@ export interface Banco { t: Record<string, Linha[]>; escritas: string[]; seq: nu
 export type Relacoes = Record<string, (linha: Linha, t: (m: string) => Linha[]) => Linha>;
 export type Aninhadas = Record<string, Record<string, [filho: string, fk: string]>>;
 
-const ehObjeto = (v: unknown): v is Linha => !!v && typeof v === "object" && !(v instanceof Date) && !Array.isArray(v);
+const ehObjeto = (v: unknown): v is Linha => !!v && typeof v === "object" && !(v instanceof Date) && !Array.isArray(v) && !ehNuloJson(v);
+/** Prisma.DbNull / Prisma.JsonNull (coluna Json? = NULL): gravado aqui como null */
+const ehNuloJson = (v: unknown) => !!v && typeof v === "object" && ["DbNull", "JsonNull"].includes((v as object).constructor?.name ?? "");
 
 function casa(row: Linha, where: Linha = {}): boolean {
   return Object.entries(where).every(([k, v]) => {
@@ -139,6 +141,7 @@ export function criarPrisma(db: Banco, relacoes: Relacoes = {}, aninhadas: Aninh
       for (const [k, v] of Object.entries(data ?? {})) {
         if (ehObjeto(v) && "increment" in v) r[k] = Number(r[k] ?? 0) + Number(v.increment);
         else if (ehObjeto(v) && "decrement" in v) r[k] = Number(r[k] ?? 0) - Number(v.decrement);
+        else if (ehNuloJson(v)) r[k] = null;
         else if (v !== undefined && !ehObjeto(v)) r[k] = v; // undefined = não mexe (como o Prisma); relações aninhadas: só as declaradas
       }
       escrever(m, "update", r); gravarFilhos(m, r, data ?? {}); return projetar(hidratar(m, r), include ?? select);

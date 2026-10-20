@@ -391,6 +391,54 @@ const fornecedores: RegrasCadastro = {
   },
 };
 
+/* ───────────────────────── Centros de custo ───────────────────────── */
+/** Nome único na empresa, sem diferença de maiúsculas/minúsculas (ativo ou inativo). */
+async function centroComNome(empresaId: string, nome: string, exceto?: string) {
+  return prisma.centroCusto.findFirst({
+    where: { empresaId, nome: { equals: nome.trim(), mode: "insensitive" }, ...(exceto && { id: { not: exceto } }) },
+    select: { nome: true, ativo: true },
+  });
+}
+const msgCentro = (c: { nome: string; ativo: boolean }) =>
+  `Já existe o centro de custo “${c.nome}”${c.ativo ? "" : " (inativo — reative-o em vez de cadastrar de novo)"}.`;
+
+const centrosCusto: RegrasCadastro = {
+  async criar(dados, ator) {
+    const dup = await centroComNome(ator.empresaId, String(dados.nome));
+    if (dup) return falha(409, msgCentro(dup));
+    const item = await prisma.centroCusto.create({ data: { nome: String(dados.nome), empresaId: ator.empresaId, ativo: true } });
+    return { ok: true, item };
+  },
+  async editar(existente, dados, ator) {
+    if (typeof dados.nome === "string") {
+      const dup = await centroComNome(ator.empresaId, dados.nome, existente.id);
+      if (dup) return falha(409, msgCentro(dup));
+    }
+    const item = await prisma.centroCusto.update({ where: { id: existente.id }, data: dados as { nome?: string } });
+    return { ok: true, item };
+  },
+  async impacto(c, empresaId) {
+    const [contas, abertas, fornecedores, notas] = await Promise.all([
+      prisma.contaPagar.count({ where: { empresaId, centroCustoId: c.id } }),
+      prisma.contaPagar.count({ where: { empresaId, centroCustoId: c.id, status: { notIn: ["PAGO_TOTAL", "CANCELADO"] } } }),
+      prisma.fornecedor.count({ where: { empresaId, centroCustoPadraoId: c.id } }),
+      prisma.notaCompra.count({ where: { empresaId, centroCustoId: c.id, status: { not: "LANCADA" } } }),
+    ]);
+    const avisos: string[] = [];
+    if (contas) avisos.push(`Usado em ${pl(contas, "conta a pagar", "contas a pagar")}${abertas ? ` (${pl(abertas, "em aberto", "em aberto")})` : ""}. Elas continuam com este centro de custo (aparece como “inativo”); ele só deixa de ser oferecido em contas novas.`);
+    if (fornecedores) avisos.push(`É o padrão de ${pl(fornecedores, "fornecedor", "fornecedores")}: as próximas notas deles não vêm mais com ele.`);
+    if (notas) avisos.push(`Está em ${pl(notas, "nota de compra ainda não lançada", "notas de compra ainda não lançadas")}: dá para lançar assim mesmo ou trocar antes.`);
+    return {
+      usos: [
+        { rotulo: pl(contas, "conta a pagar", "contas a pagar"), total: contas },
+        { rotulo: pl(fornecedores, "fornecedor (padrão)", "fornecedores (padrão)"), total: fornecedores },
+        { rotulo: pl(notas, "nota não lançada", "notas não lançadas"), total: notas },
+      ],
+      avisos,
+    };
+  },
+};
+
 export const REGRAS: Partial<Record<EntidadeCadastro, RegrasCadastro>> = {
   "perfis-acesso": perfis,
   "modelos-encargos": modelos,
@@ -400,4 +448,5 @@ export const REGRAS: Partial<Record<EntidadeCadastro, RegrasCadastro>> = {
   "termos-referencia": termos,
   "modelos-prazo": modelosPrazo,
   fornecedores,
+  "centros-custo": centrosCusto,
 };

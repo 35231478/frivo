@@ -654,6 +654,10 @@ export const contaPagarSchema = z.object({
   observacao: z.string().optional().nullable(),
   /** Categoria financeira pelo ID (Leva 5.1: conta a pagar passa a ter categoria) */
   categoriaId: z.string().optional().nullable(),
+  /** Centro de custo pelo ID (E2.1) */
+  centroCustoId: z.string().optional().nullable(),
+  /** Boleto colado: linha digitável (47/48) ou código de barras (44); DVs conferidos na rota. "" = sem boleto */
+  boleto: z.string().max(80).optional().nullable(),
 });
 
 export const contaPagarUpdateSchema = contaPagarSchema.partial();

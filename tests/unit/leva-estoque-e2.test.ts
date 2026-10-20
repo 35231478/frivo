@@ -503,7 +503,10 @@ describe("telas", () => {
     expect(h).toContain("data-aprendido");
     expect(h).toContain("aprendido de nota anterior");
     expect(h).not.toContain("data-unidade-divergente"); // gás: UN × un é a mesma unidade
-    expect(h).toMatch(/À vista · vence 03\/11\/2026/);
+    // E2.1: parcelas editáveis — sem duplicata, uma parcela única (à vista) vencendo na emissão
+    expect(h).toMatch(/data-parcela="1"/);
+    expect(h).toMatch(/name="vencimento-1"[^>]*value="2026-11-03"|value="2026-11-03"[^>]*name="vencimento-1"/);
+    expect(h).toContain("Sem duplicata na NF: à vista, no valor da nota.");
     expect(h).toContain(">PC-0312</option>");
     expect(h).toContain("Confirmar e lançar");
     logar(so({ estoque: { visualizar: true, gerenciar: true } }));

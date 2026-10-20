@@ -11,6 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { AlertCircle } from "lucide-react";
 import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
+import { CampoBoleto } from "@/components/financeiro/campo-boleto";
+import { lerBoleto } from "@/lib/financeiro/boleto";
 
 export function ContaPagarForm({ initialData }: { initialData?: any }) {
   const router = useRouter();
@@ -29,6 +31,8 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
     pedidoCompraId: initialData?.pedidoCompraId ?? "",
     observacao: initialData?.observacao ?? "",
     categoriaId: initialData?.categoriaId ?? "",
+    centroCustoId: initialData?.centroCustoId ?? "",
+    boleto: initialData?.linhaDigitavel ?? "",
   });
   const upd = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
   // Conta antiga cujo fornecedor (texto) não casou com nenhum cadastro: mostra o texto e pede a escolha
@@ -44,6 +48,7 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
     if (!form.fornecedorId && !textoAntigo) { setErro("Escolha o fornecedor."); return; }
     if (!form.descricao.trim()) { setErro("Descrição é obrigatória."); return; }
     if (!form.valorTotal || Number(form.valorTotal) <= 0) { setErro("Informe um valor válido."); return; }
+    if (form.boleto.replace(/\D/g, "")) { const b = lerBoleto(form.boleto); if (!b.ok) { setErro(`Boleto: ${b.erro}`); return; } }
     setSalvando(true);
     try {
       const url = isEditing ? `/api/contas-pagar/${initialData.id}` : "/api/contas-pagar";
@@ -60,6 +65,8 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
           pedidoCompraId: form.pedidoCompraId || null,
           observacao: form.observacao || null,
           categoriaId: form.categoriaId || null,
+          centroCustoId: form.centroCustoId || null,
+          boleto: form.boleto.trim() || null,
         }),
       });
       if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao salvar."); return; }
@@ -93,6 +100,11 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
               <SeletorCadastro entidade="categorias-financeiras" valor={form.categoriaId} vazio="Sem categoria" onChange={(v) => upd("categoriaId", v)} />
             </FormField>
           </FormGrid>
+          <FormGrid>
+            <FormField label="Centro de custo" hint="Centros em Configurações › Financeiro › Centros de custo">
+              <SeletorCadastro entidade="centros-custo" valor={form.centroCustoId} vazio="Sem centro de custo" onChange={(v) => upd("centroCustoId", v)} />
+            </FormField>
+          </FormGrid>
         </FormSection>
 
         <FormSection title="Pagamento">
@@ -117,6 +129,8 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
               </FormField>
             )}
           </FormGrid>
+          <CampoBoleto valor={form.boleto} onChange={(v) => upd("boleto", v)} name="boleto"
+            valorParcela={Number(form.valorTotal) > 0 ? Number(form.valorTotal) : null} vencimentoParcela={form.dataVencimento || null} />
           <FormField label="Observação"><Textarea value={form.observacao} onChange={(e) => upd("observacao", e.target.value)} rows={2} /></FormField>
         </FormSection>
       </div>

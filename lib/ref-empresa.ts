@@ -18,7 +18,7 @@ import { prisma } from "@/lib/prisma";
 export type ModeloRef =
   | "cliente" | "cargo" | "perfilAcesso" | "tipoOs" | "tabelaPreco" | "servico" | "produto"
   | "checklistTemplate" | "unidade" | "tecnico" | "equipe" | "veiculo" | "formularioTemplate"
-  | "prazoTemplate" | "tipoEquipamentoCustom" | "categoriaFinanceira" | "fornecedor";
+  | "prazoTemplate" | "tipoEquipamentoCustom" | "categoriaFinanceira" | "fornecedor" | "centroCusto";
 
 export class ErroRefEmpresa extends Error {}
 
@@ -79,6 +79,19 @@ export async function fornecedorParaGravar(fornecedorId: string | null | undefin
   await validarRefEmpresa("fornecedor", fornecedorId, empresaId, "Fornecedor", { novoAtivo: true, manter: [atual] });
   const f = await prisma.fornecedor.findFirst({ where: { id: fornecedorId, empresaId }, select: { nome: true, documento: true } });
   return { fornecedorId, nome: f?.nome ?? "", documento: f?.documento ?? null };
+}
+
+/**
+ * Centro de custo de uma conta a pagar (E2.1) — o vínculo é o ID. `undefined` = não mexe; vazio/null =
+ * sem centro. Senão: centro da empresa; escolha NOVA precisa estar ativa (manter o `atual`, mesmo
+ * inativo, é aceito).
+ */
+export async function centroCustoParaGravar(centroCustoId: string | null | undefined, empresaId: string, atual?: string | null):
+  Promise<{ centroCustoId?: string | null }> {
+  if (centroCustoId === undefined) return {};
+  if (!centroCustoId) return { centroCustoId: null };
+  await validarRefEmpresa("centroCusto", centroCustoId, empresaId, "Centro de custo", { novoAtivo: true, manter: [atual] });
+  return { centroCustoId };
 }
 
 /** Converte o erro em resposta 400 (ou devolve null se não for erro de vínculo). */

@@ -457,6 +457,7 @@ model Empresa {
   perfisAcesso           PerfilAcesso[]
   contasPagar            ContaPagar[]
   categoriasFinanceiras  CategoriaFinanceira[]
+  centrosCusto           CentroCusto[]
   fornecedores           Fornecedor[]
   emailTemplates         EmailTemplate[]
   emailLogs              EmailLog[]
@@ -2058,73 +2059,111 @@ model CategoriaFinanceira {
   ativo     Boolean  @default(true)
   criadoEm  DateTime @default(now()) @map("criado_em")
 
-  empresa       Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  contasReceber ContaReceber[]
-  contasPagar   ContaPagar[]
+  empresa            Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  contasReceber      ContaReceber[]
+  contasPagar        ContaPagar[]
+  /// Fornecedores que têm esta categoria como padrão (aprendida na nota de compra)
+  fornecedoresPadrao Fornecedor[]
+  notasCompra        NotaCompra[]
 
   @@map("categorias_financeiras")
+}
+
+/// Centro de custo (E2.1): onde a despesa pesa (ex.: Obra Shopping Norte, Frota, Administrativo).
+/// Cadastro padronizado (lib/cadastros); a conta a pagar aponta pelo ID, e o fornecedor guarda o
+/// padrão aprendido na nota de compra.
+model CentroCusto {
+  id           String   @id @default(cuid())
+  empresaId    String   @map("empresa_id")
+  nome         String
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  empresa            Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  contasPagar        ContaPagar[]
+  fornecedoresPadrao Fornecedor[]
+  notasCompra        NotaCompra[]
+
+  @@index([empresaId, ativo])
+  @@map("centros_custo")
 }
 
 // Fornecedor (Leva 5.2): cadastro de verdade, ligado na conta a pagar por ID. Documento (CNPJ/CPF)
 // guardado só com dígitos; único por empresa quando preenchido (NULL não conflita no PostgreSQL).
 model Fornecedor {
-  id           String   @id @default(cuid())
-  empresaId    String   @map("empresa_id")
-  nome         String
-  documento    String?
-  telefone     String?
-  email        String?
-  observacoes  String?
-  ativo        Boolean  @default(true)
-  criadoEm     DateTime @default(now()) @map("criado_em")
-  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+  id                  String   @id @default(cuid())
+  empresaId           String   @map("empresa_id")
+  nome                String
+  documento           String?
+  telefone            String?
+  email               String?
+  observacoes         String?
+  /// Padrões aprendidos na nota de compra (E2.1): a próxima nota deste fornecedor já vem com eles
+  categoriaPadraoId   String?  @map("categoria_padrao_id")
+  centroCustoPadraoId String?  @map("centro_custo_padrao_id")
+  ativo               Boolean  @default(true)
+  criadoEm            DateTime @default(now()) @map("criado_em")
+  atualizadoEm        DateTime @updatedAt @map("atualizado_em")
 
-  empresa     Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  contasPagar ContaPagar[]
-  notasCompra NotaCompra[]
-  deParas     DeParaProdutoFornecedor[]
+  empresa           Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  categoriaPadrao   CategoriaFinanceira?      @relation(fields: [categoriaPadraoId], references: [id], onDelete: SetNull)
+  centroCustoPadrao CentroCusto?              @relation(fields: [centroCustoPadraoId], references: [id], onDelete: SetNull)
+  contasPagar       ContaPagar[]
+  notasCompra       NotaCompra[]
+  deParas           DeParaProdutoFornecedor[]
 
   @@unique([empresaId, documento])
   @@index([empresaId, ativo])
+  @@index([categoriaPadraoId])
+  @@index([centroCustoPadraoId])
   @@map("fornecedores")
 }
 
 model ContaPagar {
-  id             String           @id @default(cuid())
-  empresaId      String           @map("empresa_id")
-  numero         String
+  id                 String           @id @default(cuid())
+  empresaId          String           @map("empresa_id")
+  numero             String
   // Fornecedor: o vínculo é o ID (Leva 5.2). `fornecedor`/`fornecedorCnpj` (texto) ficam como
   // histórico/fallback — e são o que aparece nas contas antigas que não casaram com um cadastro.
-  fornecedorId   String?          @map("fornecedor_id")
-  fornecedor     String
-  fornecedorCnpj String?          @map("fornecedor_cnpj")
-  descricao      String
-  valorTotal     Decimal          @map("valor_total") @db.Decimal(12, 2)
-  valorPago      Decimal          @default(0) @map("valor_pago") @db.Decimal(12, 2)
-  saldoRestante  Decimal          @map("saldo_restante") @db.Decimal(12, 2)
-  status         StatusContaPagar @default(PENDENTE)
-  dataVencimento DateTime?        @map("data_vencimento")
-  dataPagamento  DateTime?        @map("data_pagamento")
-  formaPagamento FormaPagamento?  @map("forma_pagamento")
-  banco          String?
-  pedidoCompraId String?          @map("pedido_compra_id")
+  fornecedorId       String?          @map("fornecedor_id")
+  fornecedor         String
+  fornecedorCnpj     String?          @map("fornecedor_cnpj")
+  descricao          String
+  valorTotal         Decimal          @map("valor_total") @db.Decimal(12, 2)
+  valorPago          Decimal          @default(0) @map("valor_pago") @db.Decimal(12, 2)
+  saldoRestante      Decimal          @map("saldo_restante") @db.Decimal(12, 2)
+  status             StatusContaPagar @default(PENDENTE)
+  dataVencimento     DateTime?        @map("data_vencimento")
+  dataPagamento      DateTime?        @map("data_pagamento")
+  formaPagamento     FormaPagamento?  @map("forma_pagamento")
+  banco              String?
+  pedidoCompraId     String?          @map("pedido_compra_id")
   /// Nota de compra (NF-e importada) que gerou esta conta — uma conta por duplicata
-  notaCompraId   String?          @map("nota_compra_id")
+  notaCompraId       String?          @map("nota_compra_id")
   // Categoria financeira (Leva 5.1): conta a pagar não tinha categoria; passa a ter, por ID
-  categoriaId    String?          @map("categoria_id")
-  observacao     String?
-  criadoEm       DateTime         @default(now()) @map("criado_em")
-  atualizadoEm   DateTime         @updatedAt @map("atualizado_em")
+  categoriaId        String?          @map("categoria_id")
+  /// Centro de custo (E2.1), por ID
+  centroCustoId      String?          @map("centro_custo_id")
+  /// Boleto desta conta (E2.1, "DDA manual"): linha digitável (47 dígitos, boleto bancário; 48,
+  /// convênio/arrecadação) e o código de barras (44) — os dois só com dígitos, DVs conferidos
+  linhaDigitavel     String?          @map("linha_digitavel")
+  codigoBarrasBoleto String?          @map("codigo_barras_boleto")
+  observacao         String?
+  criadoEm           DateTime         @default(now()) @map("criado_em")
+  atualizadoEm       DateTime         @updatedAt @map("atualizado_em")
 
   empresa             Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   pedidoCompra        PedidoCompraInterno?  @relation(fields: [pedidoCompraId], references: [id])
   categoriaFinanceira CategoriaFinanceira?  @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  centroCusto         CentroCusto?          @relation(fields: [centroCustoId], references: [id], onDelete: SetNull)
   fornecedorCadastro  Fornecedor?           @relation(fields: [fornecedorId], references: [id], onDelete: SetNull)
   notaCompra          NotaCompra?           @relation(fields: [notaCompraId], references: [id], onDelete: SetNull)
   pagamentos          PagamentoContaPagar[]
 
   @@unique([numero, empresaId])
   @@index([categoriaId])
+  @@index([centroCustoId])
   @@index([fornecedorId])
   @@index([notaCompraId])
   @@index([empresaId, status])
@@ -2851,6 +2890,13 @@ model NotaCompra {
   duplicatas     Json             @default("[]")
   /// Pedido de compra atendido por esta nota (opcional): recebe o custo real nos itens
   pedidoCompraId String?          @map("pedido_compra_id")
+  /// Rascunho do lançamento financeiro (E2.1), editável até "Confirmar e lançar". Categoria e centro
+  /// de custo vêm do padrão aprendido do fornecedor; a forma, do pag/tPag do XML.
+  categoriaId    String?          @map("categoria_id")
+  centroCustoId  String?          @map("centro_custo_id")
+  formaPagamento FormaPagamento?  @map("forma_pagamento")
+  /// Parcelas editadas: [{ numero, vencimento: "AAAA-MM-DD", valor, boleto }]; null = as duplicatas da NF
+  parcelas       Json?
   usuarioId      String?          @map("usuario_id")
   lancadaEm      DateTime?        @map("lancada_em")
   criadoEm       DateTime         @default(now()) @map("criado_em")
@@ -2859,6 +2905,8 @@ model NotaCompra {
   empresa      Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   fornecedor   Fornecedor           @relation(fields: [fornecedorId], references: [id])
   pedidoCompra PedidoCompraInterno? @relation(fields: [pedidoCompraId], references: [id], onDelete: SetNull)
+  categoria    CategoriaFinanceira? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  centroCusto  CentroCusto?         @relation(fields: [centroCustoId], references: [id], onDelete: SetNull)
   usuario      Usuario?             @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
   itens        NotaCompraItem[]
   contasPagar  ContaPagar[]
@@ -2866,6 +2914,8 @@ model NotaCompra {
   @@unique([empresaId, chaveAcesso])
   @@index([empresaId, status, criadoEm])
   @@index([fornecedorId])
+  @@index([categoriaId])
+  @@index([centroCustoId])
   @@map("notas_compra")
 }
 
@@ -2892,6 +2942,11 @@ model NotaCompraItem {
   /// 1 [unidade da nota] = fatorConversao [unidade do produto]. Entrada = quantidade × fator;
   /// custo por unidade do produto = valor unitário ÷ fator.
   fatorConversao      Decimal  @default(1) @map("fator_conversao") @db.Decimal(15, 6)
+  /// Preço de venda definido na linha da conciliação (E2.1, rascunho): vai para o produto ao lançar.
+  /// margemVenda preenchida = por margem (o preço é recalculado com o custo desta nota); só o preço =
+  /// preço fixo; os dois vazios = o preço do produto não muda.
+  precoVenda          Decimal? @map("preco_venda") @db.Decimal(12, 2)
+  margemVenda         Decimal? @map("margem_venda") @db.Decimal(5, 2)
   produtoId           String?  @map("produto_id")
   criadoEm            DateTime @default(now()) @map("criado_em")
 
