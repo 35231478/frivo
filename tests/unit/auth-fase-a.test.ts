@@ -44,6 +44,9 @@ vi.mock("next/server", async (orig) => ({ ...(await orig<typeof import("next/ser
 const sessao = vi.hoisted(() => ({ atual: null as any }));
 vi.mock("@/lib/auth", async (orig) => ({ ...(await orig<typeof import("@/lib/auth")>()), auth: vi.fn(async () => sessao.atual) }));
 
+// bcrypt de verdade (custo 12 no e-mail sem cadastro e na troca): alguns testes passam de 5 s em máquina carregada
+vi.setConfig({ testTimeout: 30_000 });
+
 const COOKIE = "authjs.session-token";
 const HORA = 3600_000;
 const DIA = 24 * HORA;
