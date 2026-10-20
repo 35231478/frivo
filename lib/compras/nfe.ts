@@ -35,6 +35,8 @@ export interface ItemNfe {
   valorTotal: number;
 }
 export interface DuplicataNfe { numero: string; vencimento: string; valor: number }
+/** Forma de pagamento (pag/detPag): tPag da NF, o nome amigável e o valor pago nela */
+export interface PagamentoNfe { tPag: string; descricao: string; valor: number; aPrazo: boolean | null }
 export interface NotaNfe {
   chave: string;
   numero: string;
@@ -45,6 +47,8 @@ export interface NotaNfe {
   itens: ItemNfe[];
   totais: { produtos: number; frete: number; desconto: number; outros: number; ipi: number; st: number; nota: number };
   duplicatas: DuplicataNfe[];
+  /** pag/detPag (forma de pagamento informada pelo emitente) */
+  pagamentos: PagamentoNfe[];
   /** cStat do protocolo (100/150 = autorizada); null quando o XML veio sem protocolo */
   status: { codigo: string; motivo: string } | null;
   informacoes: string | null;
@@ -145,6 +149,13 @@ export function lerNfe(xml: string): NotaNfe {
     return { numero: txt(d.nDup) || String(i + 1).padStart(3, "0"), vencimento: venc, valor: num(d.vDup, `vDup da duplicata ${i + 1}`) };
   });
 
+  const pagamentos: PagamentoNfe[] = (inf.pag?.detPag ?? []).flatMap((p: any) => {
+    const tPag = txt(p.tPag).padStart(2, "0");
+    if (!/^\d{2}$/.test(tPag)) return [];
+    const ind = txt(p.indPag);
+    return [{ tPag, descricao: descricaoTPag(tPag), valor: num(p.vPag, "vPag", false), aPrazo: ind === "1" ? true : ind === "0" ? false : null }];
+  });
+
   return {
     chave,
     numero: txt(ide.nNF),
@@ -169,9 +180,46 @@ export function lerNfe(xml: string): NotaNfe {
       nota: num(tot.vNF, "vNF (valor da nota)"),
     },
     duplicatas,
+    pagamentos,
     status,
     informacoes: opc(inf.infAdic?.infCpl),
   };
+}
+
+/* ───────── Forma de pagamento (pag/detPag/tPag) ───────── */
+/** As formas da conta a pagar (o enum FormaPagamento do banco). */
+export type FormaPagamentoConta = "BOLETO" | "PIX" | "TRANSFERENCIA" | "DINHEIRO" | "CARTAO" | "CHEQUE";
+
+/** tPag da NF-e → nome amigável e a forma da conta a pagar (null = não há uma equivalente). */
+export const TPAG: Record<string, { descricao: string; forma: FormaPagamentoConta | null }> = {
+  "01": { descricao: "Dinheiro", forma: "DINHEIRO" },
+  "02": { descricao: "Cheque", forma: "CHEQUE" },
+  "03": { descricao: "Cartão de crédito", forma: "CARTAO" },
+  "04": { descricao: "Cartão de débito", forma: "CARTAO" },
+  "05": { descricao: "Crédito na loja", forma: null },
+  "10": { descricao: "Vale-alimentação", forma: null },
+  "11": { descricao: "Vale-refeição", forma: null },
+  "12": { descricao: "Vale-presente", forma: null },
+  "13": { descricao: "Vale-combustível", forma: null },
+  "15": { descricao: "Boleto bancário", forma: "BOLETO" },
+  "16": { descricao: "Depósito bancário", forma: "TRANSFERENCIA" },
+  "17": { descricao: "PIX", forma: "PIX" },
+  "18": { descricao: "Transferência bancária / carteira digital", forma: "TRANSFERENCIA" },
+  "19": { descricao: "Programa de fidelidade / cashback", forma: null },
+  "20": { descricao: "PIX (QR estático)", forma: "PIX" },
+  "90": { descricao: "Sem pagamento", forma: null },
+  "99": { descricao: "Outros", forma: null },
+};
+export const descricaoTPag = (tPag: string) => TPAG[tPag]?.descricao ?? `Outra forma (código ${tPag})`;
+
+/**
+ * Forma da conta a pagar pelo que a NF informa: a do maior pagamento que tem equivalente (uma nota
+ * paga parte em PIX e parte em boleto fica com a de maior valor). Nada equivalente: null (a pessoa escolhe).
+ */
+export function formaDaNota(pagamentos: PagamentoNfe[]): FormaPagamentoConta | null {
+  const comForma = pagamentos.filter((p) => TPAG[p.tPag]?.forma);
+  if (!comForma.length) return null;
+  return TPAG[comForma.reduce((a, b) => (b.valor > a.valor ? b : a)).tPag].forma;
 }
 
 /**

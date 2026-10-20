@@ -7,10 +7,12 @@ import { AlertTriangle, FileUp, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * Upload do XML da NF-e de compra (arrastar ou escolher). Deu certo → abre a conciliação da nota.
- * Nota repetida (mesma chave) → aviso com o link da que já existe; nada é importado de novo.
+ * Upload do XML da NF-e de compra (arrastar ou escolher). Deu certo → abre a central de lançamento da
+ * nota. Nota repetida (mesma chave) → aviso com o link da que já existe; nada é importado de novo.
+ * `de`: de onde a pessoa veio (ex.: "contas-pagar", o atalho do Financeiro) — o "voltar" da nota leva para lá.
  */
-export function ImportarNota() {
+export function ImportarNota({ de }: { de?: string | null }) {
+  const sufixo = de ? `?de=${encodeURIComponent(de)}` : "";
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [enviando, setEnviando] = useState(false);
@@ -31,7 +33,7 @@ export function ImportarNota() {
       const r = await fetch("/api/compras/notas", { method: "POST", body: fd });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { setErro({ texto: j.erro ?? "Não foi possível importar.", notaId: j.notaId }); return; }
-      router.push(`/estoque/notas/${j.nota.id}`);
+      router.push(`/estoque/notas/${j.nota.id}${sufixo}`);
     } catch {
       setErro({ texto: "Sem conexão. Tente de novo." });
     } finally {
@@ -64,7 +66,7 @@ export function ImportarNota() {
       {erro && (
         <p role="alert" className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
           <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-          <span>{erro.texto}{erro.notaId && <> <Link href={`/estoque/notas/${erro.notaId}`} className="font-semibold underline">Abrir a nota importada</Link></>}</span>
+          <span>{erro.texto}{erro.notaId && <> <Link href={`/estoque/notas/${erro.notaId}${sufixo}`} className="font-semibold underline">Abrir a nota importada</Link></>}</span>
         </p>
       )}
     </div>

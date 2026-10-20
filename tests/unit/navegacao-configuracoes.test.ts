@@ -19,7 +19,8 @@ const ANTES = [
   "/configuracoes/cargos", "/configuracoes#preferencias", "/configuracoes/email", "/configuracoes/portal", "/configuracoes/qr-code",
 ];
 /** Itens novos desde a reorganização */
-const NOVOS = ["/configuracoes/impressao-os"];
+// Itens que entraram depois: impressão da OS (relatório) e centros de custo (E2.1)
+const NOVOS = ["/configuracoes/impressao-os", "/configuracoes/financeiro/centros-custo"];
 
 describe("estrutura", () => {
   it("3 seções, cada uma com tela própria que existe", () => {
@@ -39,7 +40,7 @@ describe("estrutura", () => {
       ["Ordens de serviço", ["Tipos de OS", "Formulários", "Termos de referência", "Modelos de prazo", "Impressão da OS"]],
       ["Catálogo", ["Tipos de equipamento", "Serviços", "Produtos", "Tabelas de preços"]],
     ]);
-    expect(sub("financeiras")).toEqual([["Classificação", ["Categorias financeiras"]]]);
+    expect(sub("financeiras")).toEqual([["Classificação", ["Categorias financeiras", "Centros de custo"]]]);
     expect(sub("conta")).toEqual([
       ["Empresa", ["Dados da empresa", "Preferências"]],
       ["Acesso e pessoas", ["Usuários", "Perfis de acesso", "Cargos"]],

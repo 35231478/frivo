@@ -23,10 +23,12 @@ export const ENTIDADES_CADASTRO = [
   "tipos-equipamento", "tabelas-preco", "termos-referencia", "modelos-prazo",
   // Leva 5.2: fornecedor de verdade (ligado na conta a pagar)
   "fornecedores",
+  // E2.1: centro de custo (toda conta a pagar; aprendido por fornecedor na nota de compra)
+  "centros-custo",
 ] as const;
 export type EntidadeCadastro = (typeof ENTIDADES_CADASTRO)[number];
 export type ModeloCadastro = "produto" | "servico" | "cargo" | "categoriaFinanceira" | "perfilAcesso" | "modeloEncargos" | "usuario"
-  | "tipoEquipamentoCustom" | "tabelaPreco" | "termoReferenciaTemplate" | "prazoTemplate" | "fornecedor";
+  | "tipoEquipamentoCustom" | "tabelaPreco" | "termoReferenciaTemplate" | "prazoTemplate" | "fornecedor" | "centroCusto";
 export type AcaoCadastro = "listar" | "criar" | "editar" | "inativar" | "reativar";
 
 /** Basta UMA das permissões. `null` = qualquer usuário logado (catálogo lido nos seletores de outras telas). */
@@ -405,6 +407,20 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
     ...schemas({
       nome: nome, documento: documentoSchema, telefone: textoOpcional(30), email: emailOpcional, observacoes: textoOpcional(2000),
     }, { documento: null, telefone: null, email: null, observacoes: null }),
+  },
+  "centros-custo": {
+    entidade: "centros-custo", modelo: "centroCusto", massa: true, singular: "centro de custo", plural: "centros de custo",
+    // Igual às categorias financeiras (a outra classificação da despesa): qualquer usuário logado lê
+    // (seletor da conta a pagar e da nota de compra); gravar: Configurações › gerenciar
+    modulo: "configuracoes", permissoes: PERMISSOES_CONFIG, chave: "id",
+    busca: ["nome"],
+    incluir: { _count: { select: { contasPagar: true } } },
+    campos: [
+      { key: "nome", label: "Nome", obrigatorio: true, placeholder: "Ex: Obra Shopping Norte, Frota, Administrativo" },
+    ],
+    colunas: [{ key: "nome", label: "Centro de custo", ordenar: "nome" }, { key: "uso", label: "Contas a pagar", ordenar: (dir) => ({ contasPagar: { _count: dir } }) }],
+    // Nome único na empresa (sem diferença de maiúsculas): regra em especificos.ts
+    ...schemas({ nome: nome.max(120) }),
   },
 };
 

@@ -4,13 +4,14 @@ import { pode, type Permissoes } from "@/lib/permissoes";
 import { ErroRefEmpresa } from "@/lib/ref-empresa";
 import { ErroEstoque } from "@/lib/estoque/servidor";
 import { ErroNota, lancarNota } from "@/lib/compras/notas";
-import { lancarSchema } from "@/lib/compras/validacao";
+import { lancarSchema, mensagemZod } from "@/lib/compras/validacao";
 
 type Params = { params: Promise<{ id: string }> };
 
 /**
- * POST /api/compras/notas/:id/lancar { itens?, pedidoCompraId? } — entrada no estoque + contas a pagar.
- * Precisa de Estoque › gerenciar (entrada) E Financeiro › fluxo de caixa (gera conta a pagar).
+ * POST /api/compras/notas/:id/lancar { itens?, pedidoCompraId?, financeiro? } — entrada no estoque + contas a pagar,
+ * numa transação só. Precisa de Estoque › gerenciar (entrada) E Financeiro › fluxo de caixa (gera conta a pagar).
+ * Preço de venda definido na linha: só é aplicado por quem tem Configurações › gerenciar.
  */
 export async function POST(req: NextRequest, { params }: Params) {
   const guard = await exigirPermissao("estoque", "gerenciar");
@@ -20,9 +21,12 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ erro: "Lançar a nota gera conta a pagar: precisa também de Financeiro › fluxo de caixa." }, { status: 403 });
   const { id } = await params;
   const parsed = lancarSchema.safeParse(await req.json().catch(() => ({})));
-  if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? "Dados inválidos." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ erro: mensagemZod(parsed.error) }, { status: 400 });
   try {
-    const r = await lancarNota({ empresaId: user.empresaId, usuarioId: user.id, notaId: id, escolhas: parsed.data.itens ?? [], pedidoCompraId: parsed.data.pedidoCompraId ?? null });
+    const r = await lancarNota({
+      empresaId: user.empresaId, usuarioId: user.id, notaId: id, escolhas: parsed.data.itens ?? [], pedidoCompraId: parsed.data.pedidoCompraId ?? null,
+      financeiro: parsed.data.financeiro, podePrecificar: pode(user.permissoes as Permissoes, "configuracoes", "gerenciar", user.role),
+    });
     return NextResponse.json(r, { status: 201 });
   } catch (e) {
     if (e instanceof ErroNota) return NextResponse.json({ erro: e.message, ...e.extra }, { status: e.status });

@@ -1,18 +1,20 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AlertTriangle, ArrowLeft, CheckCircle2, FileText, Package, Wallet } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Barcode, CheckCircle2, FileText, Package, Tag, Wallet } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
-import { cn, formatarCpfCnpj, formatarMoeda } from "@/lib/utils";
+import { cn, formatarCpfCnpj, formatarMoeda, LABELS_FORMA_PAGAMENTO } from "@/lib/utils";
 import { formatarQtd } from "@/lib/estoque/regras";
-import { carregarNota } from "@/lib/compras/notas";
-import { chaveDePara, parcelasDaNota, type DuplicataNfe } from "@/lib/compras/nfe";
+import { carregarNota, ErroNota, parcelasDoRascunho } from "@/lib/compras/notas";
+import { chaveDePara, diaNoBrasil, lerNfe, type DuplicataNfe } from "@/lib/compras/nfe";
+import { parcelasDaNf } from "@/lib/compras/parcelas";
 import { ultimosCustos } from "@/lib/estoque/custo";
-import { avisoCusto, formatarFator, mesmaUnidade } from "@/lib/estoque/preco";
+import { avisoCusto, formatarFator, formatarPct, mesmaUnidade } from "@/lib/estoque/preco";
 import { chaveEmBlocos, COR_STATUS_NOTA, LABEL_STATUS_NOTA } from "@/lib/compras/rotulos";
 import { ConciliacaoNota, type ItemConciliacao } from "@/components/compras/conciliacao-nota";
+import type { FinanceiroNota } from "@/components/compras/financeiro-nota";
 
 export const metadata: Metadata = { title: "Nota de compra" };
 
@@ -21,20 +23,26 @@ const diaBr = (d: Date) => d.toLocaleDateString("pt-BR", { timeZone: "America/Sa
 const dataHoraBr = (d: Date) => `${diaBr(d)} às ${d.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })}`;
 const moeda4 = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 4 });
 
-/** Nota de compra: antes de lançar = conciliação (de-para); depois = resultado (estoque + contas). */
-export default async function NotaCompraPage({ params }: { params: Promise<{ id: string }> }) {
-  const [{ id }, session] = await Promise.all([params, auth()]);
+/**
+ * Nota de compra: antes de lançar = central de lançamento (rascunho: de-para, preço na linha e o
+ * financeiro); depois = resultado (estoque + contas a pagar). `?de=contas-pagar`: veio do atalho
+ * "Lançar a partir de NF" do Financeiro (o "voltar" leva para lá).
+ */
+export default async function NotaCompraPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams?: Promise<{ de?: string }> }) {
+  const [{ id }, session, sp] = await Promise.all([params, auth(), searchParams ?? Promise.resolve({} as { de?: string })]);
+  const doFinanceiro = sp.de === "contas-pagar";
   const u = session!.user!;
   const nota = await carregarNota(u.empresaId, id);
   if (!nota) notFound();
   const gerencia = pode(u.permissoes, "estoque", "gerenciar", u.role);
   const financeiro = pode(u.permissoes, "financeiro", "fluxoCaixa", u.role);
   const lancada = nota.status === "LANCADA";
-  const parcelas = parcelasDaNota({ duplicatas: nota.duplicatas as unknown as DuplicataNfe[], valorTotal: Number(nota.valorTotal), dataEmissao: nota.dataEmissao });
 
   return (
     <div className="space-y-5 max-w-5xl">
-      <Link href="/estoque/notas" className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink"><ArrowLeft className="w-4 h-4" /> Notas de compra</Link>
+      {doFinanceiro
+        ? <Link href="/financeiro/contas-pagar" className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink" data-voltar="contas-pagar"><ArrowLeft className="w-4 h-4" /> Contas a pagar</Link>
+        : <Link href="/estoque/notas" className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink"><ArrowLeft className="w-4 h-4" /> Notas de compra</Link>}
 
       <div className="card p-4 sm:p-5" data-cabecalho-nota>
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -61,8 +69,8 @@ export default async function NotaCompraPage({ params }: { params: Promise<{ id:
           itens={await itensParaConciliar(u.empresaId, nota)}
           pedidos={financeiro ? await pedidosAbertos(u.empresaId) : []}
           podeLancar={financeiro}
-          motivoSemLancar={financeiro ? null : "Lançar gera conta a pagar: precisa de Financeiro › fluxo de caixa. Você pode salvar os vínculos."}
-          parcelas={parcelas.map((p) => ({ numero: p.numero, vencimento: diaBr(p.vencimento), valor: p.valor }))}
+          motivoSemLancar={financeiro ? null : "Lançar gera conta a pagar: precisa de Financeiro › fluxo de caixa. Você pode salvar o rascunho dos itens."}
+          financeiro={financeiroDaNota(nota)}
           podePrecificar={pode(u.permissoes, "configuracoes", "gerenciar", u.role)}
         />
       ) : (
@@ -73,6 +81,26 @@ export default async function NotaCompraPage({ params }: { params: Promise<{ id:
 }
 
 type Nota = NonNullable<Awaited<ReturnType<typeof carregarNota>>>;
+
+/** Rascunho financeiro para a central: o salvo (ou o que veio na NF) + o que o XML informa. */
+function financeiroDaNota(nota: Nota): FinanceiroNota {
+  const parcelasNf = parcelasDaNf({ duplicatas: nota.duplicatas as unknown as DuplicataNfe[], valorTotal: Number(nota.valorTotal), dataEmissao: nota.dataEmissao });
+  let parcelas = parcelasNf;
+  try { parcelas = parcelasDoRascunho(nota.parcelas) ?? parcelasNf; } catch (e) { if (!(e instanceof ErroNota)) throw e; }
+  let pagamentosNf: FinanceiroNota["pagamentosNf"] = [];
+  try { pagamentosNf = lerNfe(nota.xml).pagamentos; } catch { /* XML já foi lido na importação; sem pag = sem forma */ }
+  return {
+    categoriaId: nota.categoriaId, centroCustoId: nota.centroCustoId, formaPagamento: nota.formaPagamento,
+    parcelas, parcelasNf, valorNota: Number(nota.valorTotal), pagamentosNf,
+    padrao: { categoriaId: nota.fornecedor.categoriaPadraoId, centroCustoId: nota.fornecedor.centroCustoPadraoId },
+    hoje: diaNoBrasil(new Date()),
+  };
+}
+
+/** Preço de venda já definido na linha (rascunho salvo): por margem ou fixo. */
+const precoRascunho = (i: { precoVenda: unknown; margemVenda: unknown }) =>
+  i.margemVenda != null ? { modo: "margem" as const, margem: Number(i.margemVenda) }
+    : i.precoVenda != null ? { modo: "preco" as const, preco: Number(i.precoVenda) } : null;
 
 async function itensParaConciliar(empresaId: string, nota: Nota): Promise<ItemConciliacao[]> {
   const deParas = await prisma.deParaProdutoFornecedor.findMany({
@@ -97,6 +125,7 @@ async function itensParaConciliar(empresaId: string, nota: Nota): Promise<ItemCo
         fiscal: { ncm: p.ncm, cest: p.cest, gtin: p.gtin, origemMercadoria: p.origemMercadoria, unidadeTributavel: p.unidadeTributavel },
       } : null,
       aprendido: !!i.produtoId && dp?.produtoId === i.produtoId,
+      precoRascunho: precoRascunho(i),
     };
   });
 }
@@ -134,9 +163,9 @@ async function entradasDaNota(empresaId: string, notaId: string) {
   });
 }
 
-/** Custo da nota ≠ compra anterior: só aviso (o preço não muda sozinho) */
+/** Custo da nota ≠ compra anterior: só aviso (o preço não muda sozinho). Preço definido nesta nota: sem aviso. */
 async function avisosDeCusto(empresaId: string, nota: Nota) {
-  const comProduto = nota.itens.filter((i) => i.produto);
+  const comProduto = nota.itens.filter((i) => i.produto && !precoRascunho(i));
   const antes = await ultimosCustos(empresaId, comProduto.map((i) => i.produtoId!), { excetoNotaId: nota.id, antesDe: nota.lancadaEm });
   return comProduto.flatMap((i) => {
     const p = i.produto!;
@@ -160,6 +189,7 @@ function Resultado({ nota, movs, avisos }: { nota: Nota; movs: Awaited<ReturnTyp
       ? [`${p.nome}: ${rotulo} do cadastro (${doCadastro}) é diferente da nota (${daNota}) — mantido o do cadastro.`] : []));
   });
   const totalContas = nota.contasPagar.reduce((t, c) => t + Number(c.valorTotal), 0);
+  const comPreco = nota.itens.filter((i) => i.produto && precoRascunho(i));
   return (
     <div className="space-y-4" data-resultado>
       <p className="flex items-center gap-2 text-sm font-semibold text-success-700 bg-success-50 border border-success-200 rounded-lg px-3 py-2">
@@ -184,6 +214,19 @@ function Resultado({ nota, movs, avisos }: { nota: Nota; movs: Awaited<ReturnTyp
           ))}
         </div>
       )}
+      {comPreco.length > 0 && (
+        <div className="text-xs text-primary-800 bg-primary-50 border border-primary-200 rounded-lg px-3 py-2 space-y-0.5" data-precos-definidos>
+          {comPreco.map((i) => {
+            const pr = precoRascunho(i)!;
+            return (
+              <p key={i.id} className="flex items-start gap-1"><Tag className="w-3.5 h-3.5 mt-px shrink-0" />
+                <span><strong>{i.produto!.nome}</strong>: preço de venda definido nesta nota — {formatarMoeda(Number(i.precoVenda ?? i.produto!.valorPadrao))}
+                  {pr.modo === "margem" ? ` (margem de ${formatarPct(pr.margem)} sobre a venda)` : " (preço fixo)"}.</span>
+              </p>
+            );
+          })}
+        </div>
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="card overflow-hidden">
           <p className="px-4 py-3 border-b border-surface-border text-sm font-semibold flex items-center gap-2"><Package className="w-4 h-4 text-primary-600" /> Entradas no estoque (custo da NF)</p>
@@ -201,10 +244,19 @@ function Resultado({ nota, movs, avisos }: { nota: Nota; movs: Awaited<ReturnTyp
         </div>
         <div className="card overflow-hidden">
           <p className="px-4 py-3 border-b border-surface-border text-sm font-semibold flex items-center gap-2"><Wallet className="w-4 h-4 text-primary-600" /> Contas a pagar · {formatarMoeda(totalContas)}</p>
+          <p className="px-4 py-2 border-b border-surface-border text-xs text-ink-muted flex flex-wrap gap-x-3 gap-y-0.5" data-classificacao>
+            <span>Categoria: <strong className="text-ink">{nota.categoria?.nome ?? "—"}</strong></span>
+            <span>Centro de custo: <strong className="text-ink">{nota.centroCusto?.nome ?? "—"}</strong></span>
+            <span>Forma: <strong className="text-ink">{nota.formaPagamento ? LABELS_FORMA_PAGAMENTO[nota.formaPagamento] : "—"}</strong></span>
+          </p>
           <ul className="divide-y divide-surface-border text-sm">
             {nota.contasPagar.map((c) => (
               <li key={c.id} className="px-4 py-2.5 flex justify-between gap-3" data-conta={c.numero}>
-                <div><p className="font-medium text-ink">{c.numero}</p><p className="text-xs text-ink-muted">{c.descricao} · vence {c.dataVencimento ? diaBr(c.dataVencimento) : "—"}</p></div>
+                <div>
+                  <Link href={`/financeiro/contas-pagar/${c.id}`} className="font-medium text-ink hover:text-primary-600">{c.numero}</Link>
+                  <p className="text-xs text-ink-muted">{c.descricao} · vence {c.dataVencimento ? diaBr(c.dataVencimento) : "—"}
+                    {c.linhaDigitavel && <span className="ml-1 inline-flex items-center gap-0.5 text-primary-700" data-conta-boleto><Barcode className="w-3 h-3" /> boleto</span>}</p>
+                </div>
                 <p className="font-semibold tabular-nums">{formatarMoeda(Number(c.valorTotal))}</p>
               </li>
             ))}

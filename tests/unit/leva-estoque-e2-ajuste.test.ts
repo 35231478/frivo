@@ -263,14 +263,17 @@ describe("custo mudou numa nova NF: só avisa, nunca muda o preço", () => {
     const h = await detalhe(id2);
     expect(h).toContain('data-aviso-custo="1"');
     expect(texto(h)).toContain(TEXTO);
-    expect(texto(h)).toMatch(/Preço de venda: R\$ 142,86 margem com o custo desta nota: 26,5%/);
-    expect(h).toContain('data-ajustar-preco="1"'); // ajustar é opcional e só com clique
+    // E2.1: o preço fica NA LINHA (sem clicar): preço atual R$ 142,86 com o custo desta nota = 26,5% de margem
+    const linha = texto(h.slice(h.indexOf('data-preco-item="1"')));
+    expect(linha).toMatch(/^.*?Preço atual.*?Custo R\$ 105,00.*?Preço R\$ 142,86.*?Margem 26,5%.*?Markup 36,1%/);
+    expect(h).toContain('name="margem"'); // dá para definir ali mesmo (vai para o produto só ao lançar)
     expect(prod("pGas")).toMatchObject({ valorPadrao: 142.86, margemVenda: 30 });
-    // quem concilia sem poder mexer em preço (Configurações › gerenciar) vê o aviso, mas não o "Ajustar preço"
+    // quem concilia sem poder mexer em preço (Configurações › gerenciar) vê o aviso e o preço, mas não edita
     logar(so({ estoque: { visualizar: true, gerenciar: true }, financeiro: { visualizar: true, fluxoCaixa: true } }));
     const semPreco = await detalhe(id2);
     expect(semPreco).toContain('data-aviso-custo="1"');
-    expect(semPreco).not.toContain("data-ajustar-preco");
+    expect(semPreco).toContain('data-preco-item="1"');
+    expect(semPreco).not.toContain('name="margem"');
   });
 
   it("ao lançar: o aviso volta na resposta e no resultado; preço e margem alvo continuam os mesmos", async () => {

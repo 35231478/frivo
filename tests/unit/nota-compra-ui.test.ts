@@ -89,11 +89,17 @@ const ITENS = [
   { id: "i2", numeroItem: 2, codigoFornecedor: "CAP-35UF", descricaoFornecedor: "CAPACITOR 35UF 440V", unidade: "PC", quantidade: 10, valorUnitario: 18.45, valorTotal: 184.5, fiscal: SEM_FISCAL, fator: 1, fatorAprendido: null, produto: null, aprendido: false },
   { id: "i3", numeroItem: 3, codigoFornecedor: "TUB-14-15", descricaoFornecedor: "TUBO COBRE 1/4", unidade: "M", quantidade: 15, valorUnitario: 12.3333, valorTotal: 185, fiscal: SEM_FISCAL, fator: 1, fatorAprendido: null, produto: null, aprendido: false },
 ];
+// E2.1: a parte financeira da central (as 3 duplicatas da NF 4521, boleto no pag/tPag)
+const DUPS = [["001", "2026-11-14"], ["002", "2026-12-14"], ["003", "2027-01-13"]].map(([d, v]) => ({ duplicata: d, vencimento: v, valor: 583.1, boleto: null }));
+const FIN = {
+  categoriaId: null, centroCustoId: null, formaPagamento: "BOLETO", parcelas: DUPS, parcelasNf: DUPS, valorNota: 1749.3,
+  pagamentosNf: [{ tPag: "15", descricao: "Boleto bancário", valor: 1749.3, aPrazo: true }], padrao: { categoriaId: null, centroCustoId: null }, hoje: "2026-10-20",
+};
+const FIN_CORPO = { categoriaId: null, centroCustoId: null, formaPagamento: "BOLETO", parcelas: null };
 const props = (extra: Record<string, unknown> = {}) => ({
-  notaId: "n1", itens: ITENS, pedidos: [{ id: "ped1", numero: "PC-0312" }], podeLancar: true,
-  parcelas: [{ numero: "001", vencimento: "14/11/2026", valor: 583.1 }, { numero: "002", vencimento: "14/12/2026", valor: 583.1 }, { numero: "003", vencimento: "13/01/2027", valor: 583.1 }],
+  notaId: "n1", itens: ITENS, pedidos: [{ id: "ped1", numero: "PC-0312" }], podeLancar: true, financeiro: FIN,
   ...extra,
-});
+}) as any;
 const botao = (t: string) => [...caixa.querySelectorAll("button")].find((b) => b.textContent?.trim().endsWith(t)) as HTMLButtonElement;
 
 describe("conciliação (de-para)", () => {
@@ -105,11 +111,11 @@ describe("conciliação (de-para)", () => {
     expect(($('[data-fator-item="1"]') as HTMLInputElement).disabled).toBe(true); // UN × un: 1, travado
     expect(($('[data-fator-item="1"]') as HTMLInputElement).value).toBe("1");
     expect(botao("Confirmar e lançar").disabled).toBe(true); // faltam 2
-    const parcelas = $$("[data-parcelas] li").map((l) => l.textContent ?? "");
-    expect(parcelas).toHaveLength(3);
-    ["Parcela 1/3 · vence 14/11/2026", "Parcela 2/3 · vence 14/12/2026", "Parcela 3/3 · vence 13/01/2027"].forEach((t, k) => {
-      expect(parcelas[k]).toContain(t);
-      expect(parcelas[k]).toMatch(/583,10$/);
+    // as 3 duplicatas viram 3 parcelas editáveis (vencimento e valor), como vieram na NF
+    expect($$("[data-parcela]")).toHaveLength(3);
+    ["2026-11-14", "2026-12-14", "2027-01-13"].forEach((v, k) => {
+      expect(($(`input[name="vencimento-${k + 1}"]`) as HTMLInputElement).value).toBe(v);
+      expect(($(`input[name="valor-${k + 1}"]`) as HTMLInputElement).value).toBe("583,10");
     });
 
     // 1 letra não busca
@@ -148,19 +154,20 @@ describe("conciliação (de-para)", () => {
     await clicar(botao("Confirmar e lançar"));
     expect(chamadas.at(-1)).toEqual({ url: "/api/compras/notas/n1/lancar", metodo: "POST", corpo: {
       itens: [{ itemId: "i1", produtoId: "pGas", fator: 1 }, { itemId: "i2", produtoId: "pCap", fator: 1 }, { itemId: "i3", novo: { nome: "Tubo de cobre 1/4", unidade: "M" }, fator: 1 }],
+      financeiro: FIN_CORPO,
       pedidoCompraId: "ped1",
     } });
     expect($('[role="status"]')!.textContent).toBe("Nota lançada.");
     expect(nav.refresh).toHaveBeenCalled();
   });
 
-  it("salvar vínculos parcial; 'criar para todos'; trocar volta a pendente; erro da API aparece", async () => {
+  it("salvar rascunho parcial; 'criar para todos'; trocar volta a pendente; erro da API aparece", async () => {
     const { ConciliacaoNota } = await import("@/components/compras/conciliacao-nota");
     await montar(createElement(ConciliacaoNota, props()));
     respostas["/api/compras/notas/n1/conciliacao"] = { status: 200, corpo: { status: "IMPORTADA", faltam: 2 } };
-    await clicar(botao("Salvar vínculos"));
-    expect(chamadas.at(-1)).toEqual({ url: "/api/compras/notas/n1/conciliacao", metodo: "PUT", corpo: { itens: [{ itemId: "i1", produtoId: "pGas", fator: 1 }] } });
-    expect($('[role="status"]')!.textContent).toBe("Vínculos salvos. Faltam 2 item(ns).");
+    await clicar(botao("Salvar rascunho"));
+    expect(chamadas.at(-1)).toEqual({ url: "/api/compras/notas/n1/conciliacao", metodo: "PUT", corpo: { itens: [{ itemId: "i1", produtoId: "pGas", fator: 1 }], financeiro: FIN_CORPO } });
+    expect($('[role="status"]')!.textContent).toBe("Rascunho salvo. Faltam 2 item(ns) sem produto.");
     await clicar($("[data-criar-todos]"));
     expect($$('[data-vinculo="novo"]')).toHaveLength(2);
     expect($("[data-criar-todos]")).toBeNull();
@@ -168,7 +175,7 @@ describe("conciliação (de-para)", () => {
     expect($('[data-item="1"] [data-vinculo]')!.getAttribute("data-vinculo")).toBe("pendente");
     expect(botao("Confirmar e lançar").disabled).toBe(true);
     await clicar($('[data-criar-novo="1"]'));
-    nav.refresh.mockClear(); // o "Salvar vínculos" acima atualizou a página (certo); daqui em diante, não
+    nav.refresh.mockClear(); // o "Salvar rascunho" acima atualizou a página (certo); daqui em diante, não
     respostas["/api/compras/notas/n1/lancar"] = { status: 409, corpo: { erro: "Esta nota já foi lançada: o estoque e as contas não são lançados de novo." } };
     await clicar(botao("Confirmar e lançar"));
     expect($('[role="alert"]')!.textContent).toBe("Esta nota já foi lançada: o estoque e as contas não são lançados de novo.");
@@ -182,6 +189,6 @@ describe("conciliação (de-para)", () => {
     expect(botao("Confirmar e lançar").disabled).toBe(true);
     expect($("[data-sem-lancar]")!.textContent).toContain("Financeiro › fluxo de caixa");
     expect($("[data-pedido]")).toBeNull();
-    expect(botao("Salvar vínculos").disabled).toBe(false);
+    expect(botao("Salvar rascunho").disabled).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 import {
   Building2, Clock, Cog, FileSpreadsheet, Headset, IdCard, ListChecks, Mail, Package, Printer, QrCode, ScrollText, ShieldCheck, Tags,
-  Thermometer, UserCog, Wallet, Wrench, type LucideIcon,
+  Target, Thermometer, UserCog, Wallet, Wrench, type LucideIcon,
 } from "lucide-react";
 import { moduloDaRota, pode, type Permissoes } from "@/lib/permissoes";
 
@@ -72,6 +72,7 @@ export const SECOES_CONFIGURACOES: SecaoConfig[] = [
         titulo: "Classificação",
         itens: [
           { href: "/configuracoes/financeiro/categorias", icone: Tags, label: "Categorias financeiras", dica: "Classificam cobranças e despesas (ex.: Contrato Mensal)" },
+          { href: "/configuracoes/financeiro/centros-custo", icone: Target, label: "Centros de custo", dica: "Onde a despesa pesa (ex.: uma obra, a frota) — em toda conta a pagar" },
         ],
       },
     ],

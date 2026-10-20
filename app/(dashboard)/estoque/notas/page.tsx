@@ -13,9 +13,13 @@ import { ListaUrl, PaginacaoUrl } from "@/components/listagem/lista-url";
 export const metadata: Metadata = { title: "Notas de compra" };
 
 
-/** Estoque › Notas de compra: importar o XML da NF-e e acompanhar as notas (rota: Estoque › visualizar). */
+/**
+ * Estoque › Notas de compra: importar o XML da NF-e e acompanhar as notas (rota: Estoque › visualizar).
+ * Também é a tela do atalho "Lançar a partir de NF" de Financeiro › Contas a pagar (`?de=contas-pagar`).
+ */
 export default async function NotasCompraPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
+  const doFinanceiro = sp.de === "contas-pagar";
   const u = (await auth())!.user!;
   const podeImportar = pode(u.permissoes, "estoque", "gerenciar", u.role);
   const { pagina: pedida, porPagina } = lerPaginacao(sp);
@@ -26,13 +30,16 @@ export default async function NotasCompraPage({ searchParams }: { searchParams: 
   return (
     <ListaUrl chave="notas-compra" qAtual="">
       <div className="space-y-6">
-        <Link href="/estoque" className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink"><ArrowLeft className="w-4 h-4" /> Estoque</Link>
+        {doFinanceiro
+          ? <Link href="/financeiro/contas-pagar" className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink" data-voltar="contas-pagar"><ArrowLeft className="w-4 h-4" /> Contas a pagar</Link>
+          : <Link href="/estoque" className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink"><ArrowLeft className="w-4 h-4" /> Estoque</Link>}
         <div className="flex items-center gap-3">
           <div className="p-2 bg-primary-50 rounded-lg"><FileText className="w-5 h-5 text-primary-600" /></div>
           <h1 className="page-title">Notas de compra</h1>
           <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{total}</span>
         </div>
-        {podeImportar && <ImportarNota />}
+        {doFinanceiro && <p className="text-sm text-ink-muted -mt-3">Importe o XML: a nota vira conta a pagar (com parcelas, categoria e centro de custo) e entrada no estoque, tudo de uma vez ao confirmar.</p>}
+        {podeImportar && <ImportarNota de={doFinanceiro ? "contas-pagar" : null} />}
 
         <div className="card overflow-hidden">
           {notas.length === 0 ? (
@@ -45,7 +52,7 @@ export default async function NotasCompraPage({ searchParams }: { searchParams: 
               <ul className="md:hidden divide-y divide-surface-border" data-cartoes>
                 {notas.map((n) => (
                   <li key={n.id} data-nota={n.id} className="px-4 py-3">
-                    <Link href={`/estoque/notas/${n.id}`} className="font-semibold text-ink hover:text-primary-600">NF {n.numero}/{n.serie}</Link>
+                    <Link href={`/estoque/notas/${n.id}${doFinanceiro ? "?de=contas-pagar" : ""}`} className="font-semibold text-ink hover:text-primary-600">NF {n.numero}/{n.serie}</Link>
                     <p className="text-xs text-ink-muted truncate">{n.emitenteNome}</p>
                     <div className="mt-1 flex items-center gap-2 text-xs">
                       <span className="font-semibold tabular-nums">{formatarMoeda(Number(n.valorTotal))}</span>
@@ -66,7 +73,7 @@ export default async function NotasCompraPage({ searchParams }: { searchParams: 
                 <tbody>
                   {notas.map((n, i) => (
                     <tr key={n.id} data-nota={n.id} className={cn("border-b border-surface-border hover:bg-primary-50/40", i % 2 === 1 && "bg-surface-alt/30")}>
-                      <td className="px-4 py-3"><Link href={`/estoque/notas/${n.id}`} className="font-semibold text-ink hover:text-primary-600">{n.numero}/{n.serie}</Link></td>
+                      <td className="px-4 py-3"><Link href={`/estoque/notas/${n.id}${doFinanceiro ? "?de=contas-pagar" : ""}`} className="font-semibold text-ink hover:text-primary-600">{n.numero}/{n.serie}</Link></td>
                       <td className="px-4 py-3 text-ink-muted">{n.emitenteNome}</td>
                       <td className="px-4 py-3 text-ink-muted whitespace-nowrap">{formatarData(n.dataEmissao)}</td>
                       <td className="px-4 py-3 text-right font-semibold tabular-nums">{formatarMoeda(Number(n.valorTotal))}</td>

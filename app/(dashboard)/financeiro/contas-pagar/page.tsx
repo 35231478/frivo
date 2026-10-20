@@ -4,7 +4,8 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { cn, formatarData, formatarMoeda, formatarCpfCnpj } from "@/lib/utils";
 import { statusVisualPagar, LABELS_STATUS_CONTA_PAGAR } from "@/lib/financeiro-status";
-import { Upload, Plus, AlertTriangle, ShoppingCart } from "lucide-react";
+import { Upload, Plus, AlertTriangle, ShoppingCart, FileText, Barcode } from "lucide-react";
+import { pode } from "@/lib/permissoes";
 import { ContaPagarAcoes } from "@/components/financeiro/conta-pagar-acoes";
 import { CategoriaBadge } from "@/components/financeiro/categoria-badge";
 import { fornecedorDaConta } from "@/lib/financeiro/fornecedor";
@@ -14,11 +15,14 @@ export const metadata: Metadata = { title: "Contas a Pagar" };
 export default async function ContasPagarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; fornecedor?: string; fornecedorId?: string; origem?: string; dataInicio?: string; dataFim?: string; categoria?: string }>;
+  searchParams: Promise<{ status?: string; fornecedor?: string; fornecedorId?: string; origem?: string; dataInicio?: string; dataFim?: string; categoria?: string; centro?: string }>;
 }) {
-  const { status = "", fornecedor = "", fornecedorId = "", origem = "", dataInicio = "", dataFim = "", categoria = "" } = await searchParams;
+  const { status = "", fornecedor = "", fornecedorId = "", origem = "", dataInicio = "", dataFim = "", categoria = "", centro = "" } = await searchParams;
   const session = await auth();
-  const empresaId = session!.user!.empresaId;
+  const u = session!.user!;
+  const empresaId = u.empresaId;
+  // Atalho para a mesma importação de XML do Estoque (importar exige Estoque › gerenciar)
+  const podeImportarNf = pode(u.permissoes, "estoque", "gerenciar", u.role);
 
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
   await prisma.contaPagar.updateMany({
@@ -35,24 +39,31 @@ export default async function ContasPagarPage({
   ];
   if (fornecedorId) where.fornecedorId = fornecedorId; // por id: renomear o fornecedor não tira do filtro
   if (categoria) where.categoriaId = categoria; // por id: renomear a categoria não tira a conta do filtro
+  if (centro) where.centroCustoId = centro;
   if (origem === "PEDIDO") where.pedidoCompraId = { not: null };
-  else if (origem === "MANUAL") where.pedidoCompraId = null;
+  else if (origem === "NF") where.notaCompraId = { not: null };
+  else if (origem === "MANUAL") { where.pedidoCompraId = null; where.notaCompraId = null; }
   if (dataInicio || dataFim) {
     where.dataVencimento = {};
     if (dataInicio) where.dataVencimento.gte = new Date(dataInicio);
     if (dataFim) { const f = new Date(dataFim); f.setHours(23, 59, 59, 999); where.dataVencimento.lte = f; }
   }
 
-  const [contas, categorias, fornecedores] = await Promise.all([
+  const [contas, categorias, fornecedores, centros] = await Promise.all([
     prisma.contaPagar.findMany({
       where,
-      include: { pedidoCompra: { select: { numero: true } }, fornecedorCadastro: { select: { id: true, nome: true, documento: true, ativo: true } } },
+      include: {
+        pedidoCompra: { select: { numero: true } }, notaCompra: { select: { id: true, numero: true } },
+        centroCusto: { select: { id: true, nome: true, ativo: true } },
+        fornecedorCadastro: { select: { id: true, nome: true, documento: true, ativo: true } },
+      },
       orderBy: [{ dataVencimento: "asc" }, { criadoEm: "desc" }],
       take: 300,
     }),
     // Todas (ativas e inativas): cor/nome das contas que já usam uma categoria inativa não somem
     prisma.categoriaFinanceira.findMany({ where: { empresaId }, select: { id: true, nome: true, cor: true, ativo: true }, orderBy: { nome: "asc" } }),
     prisma.fornecedor.findMany({ where: { empresaId }, select: { id: true, nome: true, ativo: true }, orderBy: { nome: "asc" } }),
+    prisma.centroCusto.findMany({ where: { empresaId }, select: { id: true, nome: true, ativo: true }, orderBy: { nome: "asc" } }),
   ]);
 
   let totalFiltrado = 0, totalVencido = 0, totalAberto = 0, totalPago = 0;
@@ -72,9 +83,16 @@ export default async function ContasPagarPage({
           <div className="p-2 bg-primary-50 rounded-lg"><Upload className="w-5 h-5 text-primary-600" /></div>
           <h1 className="page-title">Contas a Pagar</h1>
         </div>
-        <Link href="/financeiro/contas-pagar/nova" className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow">
-          <Plus className="w-4 h-4" /> Nova Conta
-        </Link>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {podeImportarNf && (
+            <Link href="/estoque/notas?de=contas-pagar" data-lancar-nf className="inline-flex items-center gap-2 bg-white border border-surface-border hover:border-primary-300 hover:bg-primary-50/40 text-ink px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm">
+              <FileText className="w-4 h-4 text-primary-600" /> Lançar a partir de NF
+            </Link>
+          )}
+          <Link href="/financeiro/contas-pagar/nova" className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow">
+            <Plus className="w-4 h-4" /> Nova Conta
+          </Link>
+        </div>
       </div>
 
       <div className="card overflow-hidden">
@@ -93,10 +111,15 @@ export default async function ContasPagarPage({
               <option value="">Todas categorias</option>
               {categorias.map((c) => <option key={c.id} value={c.id}>{c.ativo ? c.nome : `${c.nome} (inativa)`}</option>)}
             </select>
+            <select name="centro" defaultValue={centro} className={inputCls} aria-label="Centro de custo">
+              <option value="">Todos centros de custo</option>
+              {centros.map((c) => <option key={c.id} value={c.id}>{c.ativo ? c.nome : `${c.nome} (inativo)`}</option>)}
+            </select>
             <select name="origem" defaultValue={origem} className={inputCls}>
               <option value="">Todas origens</option>
               <option value="MANUAL">Manual</option>
               <option value="PEDIDO">Pedido de compra</option>
+              <option value="NF">Nota de compra (NF)</option>
             </select>
             <input type="date" name="dataInicio" defaultValue={dataInicio} title="Vencimento de" className={inputCls} />
             <input type="date" name="dataFim" defaultValue={dataFim} title="Vencimento até" className={inputCls} />
@@ -130,6 +153,7 @@ export default async function ContasPagarPage({
                   return (
                     <tr key={c.id} className={cn("border-b border-surface-border transition-colors", sv.linhaVermelha ? "bg-red-50 hover:bg-red-100/60" : "hover:bg-primary-50/40")}>
                       <td className="px-4 py-3">
+                        <Link href={`/financeiro/contas-pagar/${c.id}`} className="text-[11px] font-semibold text-primary-600 hover:underline" data-detalhe-conta={c.numero}>{c.numero}</Link>
                         <p className="font-medium text-ink truncate max-w-[180px]" data-fornecedor={forn.id ?? "sem-cadastro"}>
                           {forn.nome}
                           {!forn.ativo && <span className="ml-1 text-[10px] font-semibold text-ink-muted">(inativo)</span>}
@@ -138,18 +162,26 @@ export default async function ContasPagarPage({
                         {forn.documento && <p className="text-xs text-ink-subtle">{formatarCpfCnpj(forn.documento)}</p>}
                       </td>
                       <td className="px-4 py-3 text-ink-muted hidden xl:table-cell truncate max-w-[200px]">{c.descricao}</td>
-                      <td className="px-4 py-3 hidden md:table-cell"><CategoriaBadge conta={c} categorias={categorias} /></td>
+                      <td className="px-4 py-3 hidden md:table-cell">
+                        <CategoriaBadge conta={c} categorias={categorias} />
+                        {c.centroCusto && <p className="text-[11px] text-ink-muted mt-0.5" data-centro-custo={c.centroCusto.id}>{c.centroCusto.nome}{!c.centroCusto.ativo && " (inativo)"}</p>}
+                      </td>
                       <td className="px-4 py-3 text-right font-semibold text-ink">{formatarMoeda(Number(c.valorTotal))}</td>
                       <td className="px-4 py-3 text-right text-success-700 hidden md:table-cell">{formatarMoeda(Number(c.valorPago))}</td>
                       <td className="px-4 py-3 text-right font-bold text-ink">{formatarMoeda(Number(c.saldoRestante))}</td>
-                      <td className="px-4 py-3 text-ink-muted hidden md:table-cell">{formatarData(c.dataVencimento)}</td>
+                      <td className="px-4 py-3 text-ink-muted hidden md:table-cell">
+                        {formatarData(c.dataVencimento)}
+                        {c.linhaDigitavel && <span className="ml-1.5 inline-flex align-middle text-primary-600" title="Boleto colado: veja no detalhe da conta" data-tem-boleto><Barcode className="w-3.5 h-3.5" /></span>}
+                      </td>
                       <td className="px-4 py-3">
                         <span className={cn("inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full", sv.classe)}>
                           {sv.linhaVermelha && <AlertTriangle className="w-3 h-3" />}{sv.label}
                         </span>
                       </td>
                       <td className="px-4 py-3 hidden lg:table-cell">
-                        {c.pedidoCompra ? (
+                        {c.notaCompra ? (
+                          <Link href={`/estoque/notas/${c.notaCompra.id}`} className="inline-flex items-center gap-1 text-[11px] font-semibold bg-primary-50 text-primary-700 px-2 py-0.5 rounded-full hover:underline"><FileText className="w-3 h-3" /> NF {c.notaCompra.numero}</Link>
+                        ) : c.pedidoCompra ? (
                           <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-cyan-50 text-cyan-700 px-2 py-0.5 rounded-full"><ShoppingCart className="w-3 h-3" /> Pedido {c.pedidoCompra.numero}</span>
                         ) : (
                           <span className="text-[11px] font-semibold bg-surface-alt text-ink-muted px-2 py-0.5 rounded-full">Manual</span>
