@@ -19,7 +19,8 @@ vi.mock("@/lib/prisma", async () => {
   const campo = (c: Linha, T: (m: string) => Linha[]) => {
     const respostas = T("atividadeResposta").filter((r) => r.campoId === c.id);
     const respostasEquipamento = T("respostaFormularioEquipamento").filter((r) => r.campoId === c.id);
-    return { ...c, respostas, respostasEquipamento, _count: { respostas: respostas.length, respostasEquipamento: respostasEquipamento.length } };
+    const formulario = T("formularioTemplate").find((f) => f.id === c.formularioId);
+    return { ...c, formulario, respostas, respostasEquipamento, _count: { respostas: respostas.length, respostasEquipamento: respostasEquipamento.length } };
   };
   const formulario = (f: Linha, T: (m: string) => Linha[]) => ({
     ...f, tipoOs: null, campos: T("formularioCampo").filter((c) => c.formularioId === f.id).sort((a, b) => a.ordem - b.ordem).map((c) => campo(c, T)),
@@ -103,9 +104,9 @@ const copia = (m: string) => JSON.parse(JSON.stringify(db.t[m]));
 
 const formulario = () => import("@/app/api/formularios/[id]/route");
 const formularios = () => import("@/app/api/formularios/route");
-const execForms = () => import("@/app/api/ordens/[id]/atividades/[atividadeId]/formularios/route");
+const execucao = () => import("@/app/api/ordens/[id]/atividades/[atividadeId]/execucao/route");
 const atividade = () => import("@/app/api/ordens/[id]/atividades/[atividadeId]/route");
-const gruposRespostas = () => import("@/app/api/ordens/[id]/atividades/[atividadeId]/grupos/respostas/route");
+const respostaCampo = () => import("@/app/api/ordens/[id]/atividades/[atividadeId]/execucao/equipamentos/[equipamentoId]/formulario/route");
 const respostasLegado = () => import("@/app/api/ordens/[id]/atividades/[atividadeId]/respostas/route");
 
 /** O que a tela manda ao salvar: os campos que ficaram (com id) + os novos (sem id). */
@@ -117,7 +118,10 @@ const editarSemTemperatura = {
     { label: "Tensão", tipo: "NUMERO", obrigatorio: true, ordem: 3 },
   ],
 };
-const campoIds = (grupo: Linha) => grupo.formulario.campos.map((c: Linha) => c.id);
+const campoIds = (equip: Linha) => equip.formulario.campos.map((c: Linha) => c.id);
+/** Grava UM campo do formulário do tipo para o equipamento (como a execução faz a cada toque). */
+const gravarCampo = (atividadeId: string, campoId: string, resposta: string) =>
+  chamar(respostaCampo, "PUT", { id: "os1", atividadeId, equipamentoId: "eqp1" }, { formularioId: "f1", campoId, resposta });
 
 // ─────────────────────────────────────────────
 describe("formulário com respostas: editar sem apagar", () => {
@@ -145,36 +149,36 @@ describe("formulário com respostas: editar sem apagar", () => {
 
   it("preenchimento NOVO não mostra o campo removido; o registro ANTIGO continua mostrando (com a resposta, sem ser obrigatório)", async () => {
     await chamar(formulario, "PUT", { id: "f1" }, editarSemTemperatura);
-    const nova = await chamar(execForms, "GET", { id: "os1", atividadeId: "aNew" });
-    expect(campoIds(nova.json.grupos[0])).not.toContain("c2");
-    expect(nova.json.grupos[0].formulario.campos.map((c: Linha) => c.label)).toEqual(["Pressão", "Corrente", "Tensão"]);
+    const nova = await chamar(execucao, "GET", { id: "os1", atividadeId: "aNew" });
+    expect(campoIds(nova.json.equipamentos[0])).not.toContain("c2");
+    expect(nova.json.equipamentos[0].formulario.campos.map((c: Linha) => c.label)).toEqual(["Pressão", "Corrente", "Tensão"]);
 
-    const antiga = await chamar(execForms, "GET", { id: "os1", atividadeId: "aOld" });
-    const c2 = antiga.json.grupos[0].formulario.campos.find((c: Linha) => c.id === "c2");
+    const antiga = await chamar(execucao, "GET", { id: "os1", atividadeId: "aOld" });
+    const c2 = antiga.json.equipamentos[0].formulario.campos.find((c: Linha) => c.id === "c2");
     expect(c2).toMatchObject({ label: "Temperatura", ativo: false, obrigatorio: false });
-    // c1 e c3 respondidos (o novo "Tensão" não): 2 de 3 ativos
-    expect(antiga.json.grupos[0].equipamentos[0]).toMatchObject({ respondidos: 2, completo: false });
+    // c1, c2 e c3 com valor gravado; só o novo "Tensão" falta (c2, removido, não é mais exigido)
+    expect(antiga.json.equipamentos[0].formulario.respostas.c2).toMatchObject({ resposta: "18 °C" });
+    expect(antiga.json.equipamentos[0]).toMatchObject({ completo: false, faltas: { formulario: { nome: "PMOC Split", campos: ["Tensão"] } } });
   });
 
   it("concluir a atividade nova exige só os campos ativos (o removido não trava)", async () => {
     await chamar(formulario, "PUT", { id: "f1" }, editarSemTemperatura);
     const tensao = db.t.formularioCampo.find((c) => c.label === "Tensão")!.id;
-    expect((await chamar(atividade, "PUT", { id: "os1", atividadeId: "aNew" }, { status: "CONCLUIDA" })).status).toBe(400);
-    const salvar = await chamar(gruposRespostas, "POST", { id: "os1", atividadeId: "aNew" }, {
-      tipoEquipamentoId: "te1", formularioId: "f1",
-      respostas: [{ campoId: "c1", resposta: "110 psi" }, { campoId: "c3", resposta: "6 A" }, { campoId: tensao, resposta: "220" }, { campoId: "c2", resposta: "ignorada" }],
-    });
-    expect(salvar.json).toMatchObject({ ok: true, camposPorEquipamento: 3 }); // c2 (removido) não entra em atividade nova
+    expect((await chamar(atividade, "PUT", { id: "os1", atividadeId: "aNew" }, { status: "CONCLUIDA" })).status).toBe(422);
+    for (const [campo, valor] of [["c1", "110 psi"], ["c3", "6 A"], [tensao, "220"]]) expect((await gravarCampo("aNew", campo, valor)).status).toBe(200);
+    // c2 (removido) não entra em atividade nova
+    expect((await gravarCampo("aNew", "c2", "ignorada")).status).toBe(400);
     expect(db.t.respostaFormularioEquipamento.some((r) => r.atividadeId === "aNew" && r.campoId === "c2")).toBe(false);
     expect((await chamar(atividade, "PUT", { id: "os1", atividadeId: "aNew" }, { status: "CONCLUIDA" })).status).toBe(200);
   });
 
   it("o registro antigo pode ser regravado com o campo removido (já respondido nele)", async () => {
     await chamar(formulario, "PUT", { id: "f1" }, editarSemTemperatura);
-    const r = await chamar(gruposRespostas, "POST", { id: "os1", atividadeId: "aOld" }, {
-      tipoEquipamentoId: "te1", formularioId: "f1", respostas: [{ campoId: "c2", resposta: "19 °C" }],
-    });
-    expect(r.json).toMatchObject({ ok: true, camposPorEquipamento: 1 });
+    // aOld está concluída: só regrava depois de reabrir (reabrir não apaga nada)
+    linha("atividadeOs", "aOld").status = "EM_ANDAMENTO";
+    const r = await gravarCampo("aOld", "c2", "19 °C");
+    expect(r.status).toBe(200);
+    expect(linha("respostaFormularioEquipamento", "r2")).toMatchObject({ campoId: "c2", resposta: "19 °C" });
   });
 
   it("mudar a PERGUNTA de um campo já respondido cria nova versão; a resposta antiga fica com a pergunta original", async () => {
