@@ -22,6 +22,8 @@ function psql(args: string[]) {
 }
 const sql = (q: string) => psql(["-c", q]);
 const linhas = (q: string) => sql(q).split("\n").filter(Boolean);
+/** Linhas em ordem de bytes, igual em qualquer banco (a ordem do PostgreSQL muda com a collation: en_US ignora "-" e "=") */
+const ordenadas = (q: string) => linhas(q).sort();
 
 const ENUM_HOJE = ["AR_CONDICIONADO_SPLIT", "AR_CONDICIONADO_JANELA", "AR_CONDICIONADO_CENTRAL", "AR_CONDICIONADO_PORTATIL", "CHILLER", "TORRE_RESFRIAMENTO",
   "CAMARA_FRIA", "CAMARA_CLIMATIZADA", "REFRIGERADOR_COMERCIAL", "CONGELADOR_COMERCIAL", "VRF", "FANCOIL", "CONDENSADORA", "EVAPORADORA", "OUTRO"];
@@ -74,16 +76,16 @@ describe.skipIf(!URL)("SQL de produção: execução da OS — tipos, checklist 
   });
 
   it("tabelas, coluna, índices e chaves com os nomes do Prisma; a resposta trava a exclusão do item", () => {
-    expect(linhas(`SELECT table_name FROM information_schema.tables WHERE table_schema = '${SCHEMA}' AND table_name IN ('checklist_tipo_itens', 'checklist_respostas', 'fotos_atendimento') ORDER BY 1`))
+    expect(ordenadas(`SELECT table_name FROM information_schema.tables WHERE table_schema = '${SCHEMA}' AND table_name IN ('checklist_tipo_itens', 'checklist_respostas', 'fotos_atendimento')`))
       .toEqual(["checklist_respostas", "checklist_tipo_itens", "fotos_atendimento"]);
     expect(sql(`SELECT data_type || ':' || is_nullable FROM information_schema.columns WHERE table_schema = '${SCHEMA}' AND table_name = 'atividade_equipamentos' AND column_name = 'observacao'`)).toBe("text:YES");
-    expect(linhas(`SELECT indexname FROM pg_indexes WHERE schemaname = '${SCHEMA}' AND tablename IN ('checklist_tipo_itens', 'checklist_respostas', 'fotos_atendimento') AND indexname NOT LIKE '%pkey' ORDER BY 1`)).toEqual([
+    expect(ordenadas(`SELECT indexname FROM pg_indexes WHERE schemaname = '${SCHEMA}' AND tablename IN ('checklist_tipo_itens', 'checklist_respostas', 'fotos_atendimento') AND indexname NOT LIKE '%pkey'`)).toEqual([
       "checklist_respostas_atividade_id_equipamento_id_item_id_key", "checklist_respostas_equipamento_id_idx", "checklist_respostas_item_id_idx",
       "checklist_tipo_itens_empresa_id_idx", "checklist_tipo_itens_tipo_equipamento_id_ativo_ordem_idx",
       "fotos_atendimento_atividade_id_equipamento_id_idx", "fotos_atendimento_equipamento_id_idx", "fotos_atendimento_item_id_idx",
     ]);
     // a=no action, c=cascade, n=set null, r=restrict
-    expect(linhas(`SELECT conname || ':' || confdeltype::text FROM pg_constraint WHERE contype = 'f' AND conrelid::regclass::text IN ('checklist_tipo_itens', 'checklist_respostas', 'fotos_atendimento') ORDER BY 1`)).toEqual([
+    expect(ordenadas(`SELECT conname || ':' || confdeltype::text FROM pg_constraint WHERE contype = 'f' AND conrelid::regclass::text IN ('checklist_tipo_itens', 'checklist_respostas', 'fotos_atendimento')`)).toEqual([
       "checklist_respostas_atividade_id_fkey:c", "checklist_respostas_empresa_id_fkey:c", "checklist_respostas_equipamento_id_fkey:c",
       "checklist_respostas_item_id_fkey:r", "checklist_respostas_respondido_por_id_fkey:n",
       "checklist_tipo_itens_empresa_id_fkey:c", "checklist_tipo_itens_tipo_equipamento_id_fkey:c",
@@ -93,7 +95,7 @@ describe.skipIf(!URL)("SQL de produção: execução da OS — tipos, checklist 
   });
 
   it("os 8 tipos em todas as empresas: nome de fábrica trocado, nome da empresa mantido, personalizado adotado, nada duplicado", () => {
-    const tipos = (e: string) => linhas(`SELECT coalesce("chave_enum", '-') || '=' || "nome" FROM "tipos_equipamento_custom" WHERE "empresa_id" = '${e}' ORDER BY 1`);
+    const tipos = (e: string) => ordenadas(`SELECT coalesce("chave_enum", '-') || '=' || "nome" FROM "tipos_equipamento_custom" WHERE "empresa_id" = '${e}'`);
     expect(tipos("e1")).toEqual([
       "AR_CONDICIONADO_JANELA=Ar-cond. Janela", // fora dos 8: não muda
       "AR_CONDICIONADO_SPLIT=Split Hi-Wall (parede)", "CAMARA_FRIA=Câmara Fria/Refrigeração",
@@ -108,14 +110,14 @@ describe.skipIf(!URL)("SQL de produção: execução da OS — tipos, checklist 
     ]);
     expect(tipos("e3")).toEqual(TIPOS_PADRAO.map((t) => `${t.chave}=${t.nome}`).sort());
     // Nome antigo de fábrica também é adotado (o mesmo tipo, com os equipamentos dele): nada de "VRF" + "VRF/VRV"
-    expect(linhas(`SELECT "id" || '=' || coalesce("chave_enum", '-') || '=' || "nome" FROM "tipos_equipamento_custom" WHERE "empresa_id" = 'e4' AND "id" LIKE 'e4-%' ORDER BY 1`))
+    expect(ordenadas(`SELECT "id" || '=' || coalesce("chave_enum", '-') || '=' || "nome" FROM "tipos_equipamento_custom" WHERE "empresa_id" = 'e4' AND "id" LIKE 'e4-%'`))
       .toEqual(["e4-fan=FANCOIL=Fan coil", "e4-vrf=VRF=VRF/VRV"]); // "Fan coil" é a grafia da empresa: fica
     expect(tipos("e4").filter((t) => t.includes("VRF") || t.includes("FANCOIL"))).toEqual(["FANCOIL=Fan coil", "VRF=VRF/VRV"]);
     expect(sql(`SELECT "tipo_equipamento_id" FROM "equipamentos" WHERE "id" = 'eq-vrf4'`)).toBe("e4-vrf");
   });
 
   it("equipamentos: o tipo que faltava é preenchido; o do tipo adotado passa ao enum novo", () => {
-    expect(linhas(`SELECT "id" || ':' || "tipo" || ':' || coalesce("tipo_equipamento_id", '-') FROM "equipamentos" ORDER BY 1`)).toEqual([
+    expect(ordenadas(`SELECT "id" || ':' || "tipo" || ':' || coalesce("tipo_equipamento_id", '-') FROM "equipamentos"`)).toEqual([
       "eq-cas:CASSETE:e1-cassete", "eq-chi:CHILLER:e1-chiller", `eq-out:OUTRO:-`, // e1 não tem tipo "Outro": fica sem FK, como antes
       "eq-vrf4:VRF:e4-vrf",
     ]);

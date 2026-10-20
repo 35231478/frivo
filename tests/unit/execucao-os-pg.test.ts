@@ -70,6 +70,12 @@ describe.skipIf(!URL_PG)("execução da OS por equipamento (PostgreSQL real)", (
     process.env.DATABASE_URL = url;
     (globalThis as any).prisma = undefined;
     ({ prisma } = await import("@/lib/prisma"));
+    // Compila as rotas uma vez aqui (fora do limite de 5 s de cada teste)
+    await Promise.all([
+      "ordens", "ordens/[id]", A, EXEC, ITEM, FOTOS, EQUIP, `${A}/scan`, `${A}/equipamentos`, `${A}/equipamentos/[vinculoId]`,
+      "fotos-atendimento/[id]", "tipos-equipamento/[id]/checklist", "cadastros/[entidade]/[id]/impacto",
+    ].map((r) => import(/* @vite-ignore */ `@/app/api/${r}/route`)));
+    await Promise.all([import("@/lib/relatorio-os/dados"), import("@/lib/relatorio-server"), import("@/lib/equipamento-historico")]);
     await prisma.empresa.createMany({ data: [
       { id: "e1", nome: "Clima Total", cnpj: "12.345.678/0001-90", email: "e@x.com" },
       { id: "e2", nome: "Outra", cnpj: "98.765.432/0001-10", email: "o@x.com" },
