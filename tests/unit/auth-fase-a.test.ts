@@ -59,10 +59,11 @@ beforeAll(async () => {
 
 const errorOriginal = console.error;
 beforeEach(() => {
-  // O Auth.js registra cada login recusado ("[auth][error] CredentialsSignin"): esperado aqui
+  // O Auth.js registra cada login recusado ("CredentialsSignin") e cada token vencido ("JWTSessionError"): esperado aqui
   vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => {
     const t = String(a[0]);
-    if ((t.includes("[auth][error]") && t.includes("CredentialsSignin")) || /^\s+at .*@auth\/core/.test(t)) return;
+    if ((t.includes("[auth][error]") && /CredentialsSignin|JWTSessionError/.test(t)) || (/^\s+at /.test(t) && t.includes("@auth/core"))
+      || /\[auth\]\[(cause|details)\]/.test(t)) return;
     errorOriginal(...a);
   });
   vi.useFakeTimers({ toFake: ["Date"] });
@@ -188,6 +189,18 @@ describe("limite de tentativas no login", () => {
     expect((await entrar("ana@x.com", SENHA_ANA)).ok).toBe(true);
   });
 
+  it("o bloqueio dura até a 1ª das 5 falhas sair da janela (falhas espalhadas no tempo)", async () => {
+    for (let i = 0; i < 5; i++) { await entrar("ana@x.com", "errada-123"); avancar(60_000); }
+    expect((await entrar("ana@x.com", SENHA_ANA)).code).toBe("bloqueado-10"); // 1ª falha em T0; agora T0+5min
+    avancar(10 * 60_000 + 1);
+    expect((await entrar("ana@x.com", SENHA_ANA)).ok).toBe(true);
+  });
+
+  it("trocar maiúsculas do e-mail não escapa do limite", async () => {
+    for (const e of ["Ana@x.com", "ANA@x.com", "ana@X.com", "aNa@x.com", "ana@x.COM"]) await entrar(e, "errada-123");
+    expect((await entrar("ana@x.com", SENHA_ANA)).code).toBe("bloqueado-15");
+  });
+
   it("4 erros + 1 acerto zera a conta do e-mail", async () => {
     for (let i = 0; i < 4; i++) await entrar("ana@x.com", "errada-123");
     expect((await entrar("ana@x.com", SENHA_ANA)).ok).toBe(true);
@@ -215,6 +228,22 @@ describe("limite de tentativas no login", () => {
     for (let i = 0; i < 20; i++) await registrarTentativa("LOGIN", { email: `chute${i}@x.com`, ip: "6.6.6.6" });
     expect((await entrar("ana@x.com", SENHA_ANA, { ip: "6.6.6.6" })).code).toBe("bloqueado-15");
     expect((await entrar("ana@x.com", SENHA_ANA, { ip: "200.1.1.1" })).ok).toBe(true);
+  });
+
+  it("acertar a senha zera o e-mail, mas não as falhas do IP", async () => {
+    const { registrarTentativa } = await import("@/lib/acesso/limite");
+    for (let i = 0; i < 19; i++) await registrarTentativa("LOGIN", { email: `chute${i}@x.com`, ip: "6.6.6.6" });
+    expect((await entrar("ana@x.com", SENHA_ANA, { ip: "6.6.6.6" })).ok).toBe(true);
+    await entrar("ninguem@x.com", "errada-123", { ip: "6.6.6.6" }); // 20ª falha do IP
+    expect((await entrar("ana@x.com", SENHA_ANA, { ip: "6.6.6.6" })).code).toBe("bloqueado-15");
+  });
+
+  it("IP de quem chamou: o 1º do x-forwarded-for, senão x-real-ip", async () => {
+    const { ipDaRequisicao } = await import("@/lib/acesso/limite");
+    expect(ipDaRequisicao(new Headers({ "x-forwarded-for": "203.0.113.5, 10.0.0.1" }))).toBe("203.0.113.5");
+    expect(ipDaRequisicao(new Headers({ "x-real-ip": "203.0.113.9" }))).toBe("203.0.113.9");
+    expect(ipDaRequisicao(new Headers())).toBeNull();
+    expect(ipDaRequisicao(undefined)).toBeNull();
   });
 
   it("guarda só o hash do e-mail e do IP; linhas com mais de 1 dia são apagadas", async () => {
@@ -445,10 +474,37 @@ describe("troca de senha (Meu perfil › Segurança)", () => {
     const r = await trocar({ senhaAtual: SENHA_ANA, novaSenha: "Nova-senha9", confirmar: "Nova-senha9" }, aqui.cookie);
     expect(r.status).toBe(200);
     expect(r.setCookie).toMatch(/HttpOnly/i);
+    expect(r.setCookie).not.toMatch(/; Secure/i); // http local: igual ao cookie do Auth.js
     expect(await tokenDo(r.cookie)).toMatchObject({ id: "u1", lembrar: false, loginEm: T0 }); // mantém a escolha e o prazo
     expect((await lerSessao(r.cookie)).sessao?.user?.id).toBe("u1");
     expect((await lerSessao(celular.cookie)).sessao).toBeNull();
     expect((await lerSessao(aqui.cookie)).sessao).toBeNull(); // o cookie velho deste aparelho também não vale mais
+  });
+
+  it("acertar a senha atual zera os erros anteriores", async () => {
+    logarAna();
+    for (let i = 0; i < 4; i++) await trocar({ senhaAtual: "chute-123", novaSenha: "Nova-senha9", confirmar: "Nova-senha9" });
+    expect((await trocar({ senhaAtual: SENHA_ANA, novaSenha: "Nova-senha9", confirmar: "Nova-senha9" })).status).toBe(200);
+    for (let i = 0; i < 4; i++) await trocar({ senhaAtual: "chute-123", novaSenha: "Outra-senha1", confirmar: "Outra-senha1" });
+    expect((await trocar({ senhaAtual: "Nova-senha9", novaSenha: "Outra-senha1", confirmar: "Outra-senha1" })).status).toBe(200);
+  });
+
+  it("em produção (https) o cookie regravado mantém o nome __Secure- e a marca Secure", async () => {
+    const { regravarSessaoAtual } = await import("@/lib/acesso/sessao-cookie");
+    const { NextResponse } = await import("next/server");
+    const nome = "__Secure-authjs.session-token";
+    const valor = await encode({ salt: nome, secret: SEGREDO, token: { id: "u1", fs: "velha" } });
+    const res = NextResponse.json({ ok: true });
+    const req = new NextRequest("https://app.frivo.com.br/api/perfil/senha", { headers: { cookie: `${nome}=${valor}` } });
+    expect(await regravarSessaoAtual(req, res, (t) => ({ ...t, fs: "nova" }))).toBe(true);
+    const sc = res.headers.getSetCookie()[0];
+    expect(sc).toMatch(/^__Secure-authjs\.session-token=/);
+    expect(sc).toMatch(/; Secure/i);
+    expect(await decode({ token: sc.split(";")[0].slice(nome.length + 1), secret: SEGREDO, salt: nome })).toMatchObject({ id: "u1", fs: "nova" });
+    // sem sessão no pedido: não grava nada
+    const vazio = NextResponse.json({});
+    expect(await regravarSessaoAtual(new NextRequest("https://app.frivo.com.br/x"), vazio, (t) => t)).toBe(false);
+    expect(vazio.headers.getSetCookie()).toEqual([]);
   });
 
   it("5 erros na senha atual bloqueiam a troca por 15 min (quem pegou a sessão aberta não fica chutando)", async () => {
