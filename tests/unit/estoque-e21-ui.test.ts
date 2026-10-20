@@ -230,6 +230,27 @@ describe("preço de venda na linha", () => {
     expect(ultima("/api/compras/notas/n1/conciliacao")!.corpo.itens[0]).not.toHaveProperty("preco");
   });
 
+  it("trocar o produto da linha descarta o preço digitado para o anterior (não vai para o outro produto)", async () => {
+    const CAP = { id: "pCap", nome: "Capacitor 35uF", unidade: "un", preco: 42, margemVenda: null, custo: 18, fiscal: SEM_FISCAL };
+    respostas["/api/compras/produtos"] = { status: 200, corpo: { produtos: [CAP] } };
+    await central();
+    const linha = '[data-preco-item="1"]';
+    await clicar($(`${linha} [data-modo="margem"]`));
+    await digitar($(`${linha} input[name="margem"]`), "30");
+    expect(txt(`${linha} [data-preco]`)).toBe("R$ 985,57");
+    await clicar($('[data-item="1"] button[aria-label="Trocar produto"]'));
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await digitar($('[data-item="1"] [data-busca-produto]'), "cap");
+    await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+    vi.useRealTimers();
+    await clicar($('[data-opcao-produto="pCap"]'));
+    expect(txt(`${linha} [data-situacao-preco]`)).toBe("Preço atual");
+    expect(txt(`${linha} [data-preco]`)).toBe("R$ 42,00");
+    respostas["/api/compras/notas/n1/conciliacao"] = { status: 200, corpo: { faltam: 1 } };
+    await clicar(botao("Salvar rascunho"));
+    expect(ultima("/api/compras/notas/n1/conciliacao")!.corpo.itens[0]).toMatchObject({ itemId: "i1", produtoId: "pCap", preco: null });
+  });
+
   it("produto novo: nome visível e editável na linha (editar o nome não perde o fator); preço da linha vai junto", async () => {
     await central();
     await clicar($('[data-criar-novo="3"]'));
@@ -282,5 +303,18 @@ describe("atalho e conta a pagar manual", () => {
     respostas["/api/contas-pagar"] = { status: 201, corpo: {} };
     await clicar(botao("Criar conta a pagar"));
     expect(ultima("/api/contas-pagar")!.corpo).toMatchObject({ fornecedorId: "fA", centroCustoId: "ccObra", boleto: BOLETO });
+  });
+
+  it("conta a pagar manual sem centro de custo nem boleto: vão null (o contrato da API), não texto vazio", async () => {
+    const { ContaPagarForm } = await import("@/components/financeiro/conta-pagar-form");
+    await montar(createElement(ContaPagarForm, {}));
+    await escolher($('[data-seletor-cadastro="fornecedores"]'), "fA");
+    await digitar($('input[placeholder="Ex: Compra de peças"]'), "Peças");
+    await digitar($('input[type="number"]'), "214.03");
+    respostas["/api/contas-pagar"] = { status: 201, corpo: {} };
+    await clicar(botao("Criar conta a pagar"));
+    const corpo = ultima("/api/contas-pagar")!.corpo;
+    expect(corpo.centroCustoId).toBeNull();
+    expect(corpo.boleto).toBeNull();
   });
 });
