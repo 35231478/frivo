@@ -312,11 +312,11 @@ describe.skipIf(!URL_PG)("execução da OS por equipamento (PostgreSQL real)", (
     expect(dados.naoAtendidos.map((e) => e.id)).toEqual(["eqD", "eqB"]);
     const b = dados.equipamentos[0];
     expect(b.checklistTipo).toEqual([{ atividade: expect.any(String), itens: [
-      { texto: "Limpeza dos filtros", status: "OK", observacao: null },
-      { texto: "Medição de corrente do compressor", status: "ATENCAO", observacao: "6,2 A — acima do nominal" },
-      { texto: "Teste de funcionamento", status: "OK", observacao: null },
+      { texto: "Limpeza dos filtros", status: "OK", observacao: null, medicao: null, audio: false },
+      { texto: "Medição de corrente do compressor", status: "ATENCAO", observacao: "6,2 A — acima do nominal", medicao: null, audio: false },
+      { texto: "Teste de funcionamento", status: "OK", observacao: null, medicao: null, audio: false },
     ] }]);
-    expect(b.resumoChecklist).toEqual({ ok: 2, atencao: 1, naoSeAplica: 0 });
+    expect(b.resumoChecklist).toEqual({ ok: 2, atencao: 1, naoSeAplica: 0, medicoes: 0 });
     expect(b.fotos.map((f) => [f.url, f.legenda])).toEqual([[FOTO_PNG, "Limpeza dos filtros"], [FOTO_PNG, "Medição de corrente do compressor"]]);
     expect(b.observacoes).toEqual(["Dreno parcialmente obstruído — limpo."]);
     expect(dados.resultado.texto).toBe("Concluída · 1 de 3 equipamentos atendido · 1 de 2 atividades concluída");
@@ -356,7 +356,7 @@ describe.skipIf(!URL_PG)("execução da OS por equipamento (PostgreSQL real)", (
     expect(dados.equipamentos.map((b) => b.id)).toEqual(["eqA", "eqB"]);
     expect(bloco("eqA").checklistTipo.map((g) => g.itens.map((i) => i.status))).toEqual([["OK", "ATENCAO", "OK"]]);
     expect(bloco("eqB").checklistTipo.map((g) => g.itens.map((i) => i.status))).toEqual([["NAO_SE_APLICA", "OK", "OK"]]);
-    expect([bloco("eqA").resumoChecklist, bloco("eqB").resumoChecklist]).toEqual([{ ok: 2, atencao: 1, naoSeAplica: 0 }, { ok: 2, atencao: 0, naoSeAplica: 1 }]);
+    expect([bloco("eqA").resumoChecklist, bloco("eqB").resumoChecklist]).toEqual([{ ok: 2, atencao: 1, naoSeAplica: 0, medicoes: 0 }, { ok: 2, atencao: 0, naoSeAplica: 1, medicoes: 0 }]);
     expect(bloco("eqA").fotos).toEqual([{ url: FOTO_PNG, legenda: "Limpeza dos filtros" }]);
     expect(bloco("eqB").fotos).toEqual([{ url: fotoB, legenda: "Foto do equipamento" }]);
 

@@ -475,7 +475,38 @@ function LinhaDoTempo({ eventos, onVerRespostas }: { eventos: EventoHistorico[];
                             )}
                           </div>
                         )}
+                        {(ev.medicoes ?? []).length > 0 && (
+                          <div className="mt-2" data-medicoes-historico>
+                            <p className="text-[11px] text-ink-muted">Medições</p>
+                            <ul className="flex flex-wrap gap-1.5 mt-0.5">
+                              {ev.medicoes.map((m, i) => (
+                                <li key={i} className="text-[11px] rounded bg-primary-50 text-primary-800 px-1.5 py-0.5">
+                                  {m.texto}: <b className="tabular-nums">{m.valor.toLocaleString("pt-BR", { maximumFractionDigits: 3 })}{m.unidade ? ` ${m.unidade}` : ""}</b>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
                         {ev.observacao && <p className="text-xs text-ink mt-1.5 whitespace-pre-wrap" data-observacao-historico><span className="text-ink-muted">Observação: </span>{ev.observacao}</p>}
+                        {(ev.audios ?? []).map((a) => (
+                          <div key={a.url} className="mt-1.5" data-audio-historico>
+                            <p className="text-[11px] text-ink-muted">Áudio — {a.texto}</p>
+                            <audio controls preload="none" src={a.url} className="h-8 w-full max-w-xs" />
+                          </div>
+                        ))}
+                        {(ev.adicionais ?? []).map((ad, i) => (
+                          <div key={i} className="mt-2 rounded-lg border border-violet-200 bg-violet-50/60 px-2 py-1.5" data-adicional-historico>
+                            <p className="text-[11px]"><span className="font-bold uppercase tracking-wide text-violet-700">Adicional</span> <span className="text-ink">{ad.descricao}</span></p>
+                            {ad.fotos.length > 0 && (
+                              <div className="flex gap-1.5 mt-1 overflow-x-auto">
+                                {ad.fotos.slice(0, 6).map((url) => (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <a key={url} href={url} target="_blank" rel="noreferrer" className="shrink-0"><img src={url} alt="Foto do serviço adicional" loading="lazy" className="w-12 h-12 rounded object-cover border border-violet-200" /></a>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
                         {ev.fotos.length > 0 && (
                           <div className="flex gap-1.5 mt-2 overflow-x-auto" data-fotos-historico>
                             {ev.fotos.slice(0, 8).map((url) => (

@@ -6,7 +6,7 @@ const SELECT_EQUIP_RELATORIO = {
   setor: true, capacidade: true, patrimonio: true, nome: true, tipoEquipamento: { select: { nome: true } },
 } as const;
 import { gerarNumeroRelatorio } from "@/lib/utils";
-import { blocosAtendidos, SELECT_CHECKLIST, SELECT_FOTOS } from "@/lib/relatorio-os/dados";
+import { adicionaisDe, blocosAtendidos, SELECT_ADICIONAIS, SELECT_CHECKLIST, SELECT_FOTOS } from "@/lib/relatorio-os/dados";
 
 /** O que o relatório precisa para montar os blocos dos equipamentos ATENDIDOS (checklist, fotos, observação). */
 const INCLUDE_ATENDIMENTO = {
@@ -14,6 +14,7 @@ const INCLUDE_ATENDIMENTO = {
   respostasEquipamento: { include: { campo: { select: { label: true, tipo: true, ordem: true } }, formulario: { select: { nome: true } } } },
   checklistRespostas: SELECT_CHECKLIST,
   fotosAtendimento: SELECT_FOTOS,
+  servicosAdicionais: SELECT_ADICIONAIS,
 } as const;
 
 /** Resumo automático de uma atividade: descrição/observação ou 1ª resposta do questionário. */
@@ -146,12 +147,10 @@ export async function carregarRelatorioPorToken(token: string) {
   // SÓ os equipamentos atendidos (na atividade do relatório, ou na OS toda), nunca todos os da unidade
   const os = relatorio.ordemServico;
   const daAtividade = relatorio.escopo === "ATIVIDADE" && !!relatorio.atividadeId;
-  const { blocos, equipamentosAtendidos: equipamentos } = blocosAtendidos(
-    daAtividade ? os.atividades.filter((a) => a.id === relatorio.atividadeId) : os.atividades,
-    os.unidade?.nome ?? null, daAtividade ? null : os.equipamento, os.status === "CONCLUIDA",
-  );
+  const ativs = daAtividade ? os.atividades.filter((a) => a.id === relatorio.atividadeId) : os.atividades;
+  const { blocos, equipamentosAtendidos: equipamentos } = blocosAtendidos(ativs, os.unidade?.nome ?? null, daAtividade ? null : os.equipamento, os.status === "CONCLUIDA");
 
-  return { relatorio, empresa: relatorio.empresa, os, equipamentos, blocos };
+  return { relatorio, empresa: relatorio.empresa, os, equipamentos, blocos, adicionais: adicionaisDe(ativs) };
 }
 
 /** Carrega os dados de uma atividade para o relatório individual (pela atividade id). */
@@ -182,11 +181,12 @@ export async function carregarAtividade(atividadeId: string) {
   const os = atividade.ordemServico;
   // SÓ os equipamentos atendidos nesta atividade, cada um com o checklist, as fotos e a observação dele
   const { blocos: equipamentos } = blocosAtendidos([atividade], os.unidade?.nome ?? null);
+  const adicionais = adicionaisDe([atividade]);
 
   const rel = await prisma.relatorioOs.findFirst({
     where: { atividadeId, escopo: "ATIVIDADE" },
     select: { numero: true },
   });
 
-  return { empresa: os.empresa, os, atividade, equipamentos, numero: rel?.numero ?? "RELATÓRIO" };
+  return { empresa: os.empresa, os, atividade, equipamentos, adicionais, numero: rel?.numero ?? "RELATÓRIO" };
 }

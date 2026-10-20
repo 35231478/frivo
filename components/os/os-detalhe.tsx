@@ -16,6 +16,7 @@ import { OsRelatorios } from "@/components/os/os-relatorios";
 import { ComprasSecao } from "@/components/compras/compras-secao";
 import { OsInativarBotao } from "@/components/os/os-inativar";
 import { OsAnexos } from "@/components/os/os-anexos";
+import { OsAdicionais } from "@/components/os/os-adicionais";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { ChevronLeft, FileText, Clock, User, Building2, MapPin, AlertTriangle, FileBarChart } from "lucide-react";
 import Link from "next/link";
@@ -154,6 +155,8 @@ export function OsDetalhe({ os: initialOs }: { os: any }) {
           Esta OS está inativada (cancelada). Ela não aparece nas listas padrão nem no calendário; use “Reabrir” para voltar a trabalhar nela.
         </div>
       )}
+
+      <OsAdicionais osId={os.id} adicionais={os.servicosAdicionais ?? []} />
 
       {/* Abas */}
       <div className="bg-white rounded-xl border border-gray-200">

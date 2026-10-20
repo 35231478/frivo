@@ -20,7 +20,7 @@ export default async function RelatorioAtividadePage({ params }: { params: Promi
       `}</style>
       <div className="min-h-screen bg-surface-page py-6 print:bg-white print:py-0">
         <div className="max-w-4xl mx-auto bg-white p-6 md:p-10 rounded-2xl shadow-card print:shadow-none print:rounded-none print:p-0">
-          <AtividadeDocumento empresa={empresa} os={os} atividade={atividade} equipamentos={equipamentos} numero={numero} />
+          <AtividadeDocumento empresa={empresa} os={os} atividade={atividade} equipamentos={equipamentos} adicionais={dados.adicionais} numero={numero} />
         </div>
         <AutoPrint />
       </div>

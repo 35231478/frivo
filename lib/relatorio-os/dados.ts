@@ -7,8 +7,10 @@
  * O que mostrar em cada versão (cliente × interna) é decidido na tela, pela configuração.
  *
  * Fonte de cada parte:
- *  - checklist do TIPO por equipamento: checklist_respostas (OK / Atenção / Não se aplica + observação);
- *  - fotos por equipamento: fotos_atendimento (as DELE, por item ou gerais) + as fotos do formulário do tipo;
+ *  - checklist do TIPO por equipamento: checklist_respostas (OK / Atenção / Não se aplica + observação;
+ *    medição = número + unidade, sem avaliação; áudio só sinalizado, na versão interna);
+ *  - fotos por equipamento: fotos_atendimento (as DELE: antes → itens/gerais → depois) + as do formulário do tipo;
+ *  - serviços ADICIONAIS (pedidos na visita): servicos_adicionais da OS, destacados (a cobrança é do adm);
  *  - formulário do tipo por equipamento: respostas_formulario_equipamento (atividade × equipamento × campo);
  *  - formulário geral: atividade_respostas (respostas da atividade, sem equipamento);
  *  - equipamentos: SÓ os ATENDIDOS na OS (atividade_equipamentos.feito), e de cada um só o que foi
@@ -26,7 +28,13 @@ import type { StatusItem } from "@/lib/execucao/pendencias";
 export interface ItemChecklist { label: string; tipo: string; valor: string }
 export interface GrupoChecklist { formulario: string; atividade: string; itens: ItemChecklist[] }
 export interface FotoRelatorio { url: string; legenda: string }
-export interface ItemChecklistTipo { texto: string; status: StatusItem | null; observacao: string | null }
+export interface ItemChecklistTipo {
+  texto: string; status: StatusItem | null; observacao: string | null;
+  /** Medição capturada pelo técnico (número + unidade) — sem avaliação */
+  medicao: { valor: number; unidade: string | null } | null;
+  /** Tem observação em áudio (ouve-se na OS; no papel, só a marca na versão interna) */
+  audio: boolean;
+}
 export interface ChecklistTipoRelatorio { atividade: string; itens: ItemChecklistTipo[] }
 export interface BlocoEquipamento {
   id: string;
@@ -40,12 +48,17 @@ export interface BlocoEquipamento {
   /** Checklist do tipo do equipamento, por atividade em que ele foi atendido */
   checklistTipo: ChecklistTipoRelatorio[];
   /** Contagem das respostas do checklist do tipo */
-  resumoChecklist: { ok: number; atencao: number; naoSeAplica: number };
+  resumoChecklist: { ok: number; atencao: number; naoSeAplica: number; medicoes: number };
   /** Formulário do tipo (tipo de OS × tipo de equipamento) */
   checklist: GrupoChecklist[];
   fotos: FotoRelatorio[];
   /** Observação do técnico sobre ESTE equipamento */
   observacoes: string[];
+}
+/** Serviço a mais pedido na visita: mesma OS, mesmo relatório, destacado (a cobrança o escritório decide) */
+export interface AdicionalRelatorio {
+  id: string; descricao: string; atividade: string; equipamento: string | null; fotos: FotoRelatorio[];
+  statusCobranca: "A_AVALIAR" | "COBRAR" | "NAO_COBRAR"; criadoPor: string | null;
 }
 export interface AssinaturaColetada { rotulo: string; url: string; nome: string | null; data: Date | null }
 export interface RelatorioOsDados {
@@ -64,6 +77,7 @@ export interface RelatorioOsDados {
   resultado: { texto: string; atendidos: number; totalEquipamentos: number; atividades: number; concluidas: number };
   equipamentos: BlocoEquipamento[];
   naoAtendidos: { id: string; titulo: string; local: string | null }[];
+  adicionais: AdicionalRelatorio[];
   geral: { checklist: GrupoChecklist[]; fotos: FotoRelatorio[] };
   tempos: { atividade: string; status: string; inicio: Date | null; duracaoMin: number | null }[];
   observacoes: string[];
@@ -89,8 +103,16 @@ type Atividade = {
   respostas: Resposta[];
   equipamentos: { feito: boolean; observacao?: string | null; equipamento: Equip }[];
   respostasEquipamento: (Resposta & { equipamentoId: string })[];
-  checklistRespostas?: { equipamentoId: string; status: string | null; observacao: string | null; textoItem: string; item?: { ordem: number } | null }[];
-  fotosAtendimento?: { id: string; equipamentoId: string; url: string; item?: { texto: string } | null }[];
+  checklistRespostas?: {
+    equipamentoId: string; status: string | null; observacao: string | null; textoItem: string; item?: { ordem: number } | null;
+    id?: string; valor?: { toNumber(): number } | number | null; unidade?: string | null; audio?: boolean;
+  }[];
+  fotosAtendimento?: { id: string; equipamentoId: string; url: string; momento?: "ANTES" | "DEPOIS" | null; item?: { texto: string } | null }[];
+  servicosAdicionais?: AdicionalEntrada[];
+};
+type AdicionalEntrada = {
+  id: string; descricao: string; statusCobranca: "A_AVALIAR" | "COBRAR" | "NAO_COBRAR"; criadoPor?: { nome: string } | null;
+  equipamento: Equip | null; fotos: { url: string }[];
 };
 export interface OsParaRelatorio {
   numero: string; status: string; descricao: string; observacoes: string | null;
@@ -152,6 +174,23 @@ function blocoEquipamento(e: Equip, unidade: string | null): Omit<BlocoEquipamen
 const localTexto = (l: BlocoEquipamento["local"]) => [l.principal, l.complemento].filter(Boolean).join(" · ") || null;
 
 const STATUS_VALIDOS: StatusItem[] = ["OK", "ATENCAO", "NAO_SE_APLICA"];
+const numero = (v: { toNumber(): number } | number | null | undefined) => (v === null || v === undefined ? null : typeof v === "number" ? v : v.toNumber());
+/** Antes do serviço → fotos dos itens/gerais → depois do serviço */
+const ORDEM_MOMENTO = { ANTES: 0, NENHUM: 1, DEPOIS: 2 } as const;
+const legendaFoto = (f: { momento?: "ANTES" | "DEPOIS" | null; item?: { texto: string } | null }) =>
+  f.momento === "ANTES" ? "Antes do serviço" : f.momento === "DEPOIS" ? "Depois do serviço" : f.item?.texto ?? "Foto do equipamento";
+
+/** Os serviços adicionais das atividades (menos as canceladas), com o equipamento e as fotos de cada um. */
+export function adicionaisDe(ativs: Atividade[]): AdicionalRelatorio[] {
+  return ativs.filter((a) => a.status !== "CANCELADA").flatMap((a) => (a.servicosAdicionais ?? []).map((s) => {
+    const eq = s.equipamento ? blocoEquipamento(s.equipamento, null) : null;
+    return {
+      id: s.id, descricao: s.descricao, atividade: a.titulo, statusCobranca: s.statusCobranca, criadoPor: s.criadoPor?.nome ?? null,
+      equipamento: eq ? [eq.titulo, eq.tag && `TAG ${eq.tag}`].filter(Boolean).join(" · ") : null,
+      fotos: s.fotos.map((f, i) => ({ url: f.url, legenda: `Adicional — foto ${i + 1}` })),
+    };
+  }));
+}
 
 /**
  * Os equipamentos ATENDIDOS (um bloco cada) e os vinculados que não foram atendidos. De cada
@@ -171,18 +210,28 @@ export function blocosAtendidos(ativs: Atividade[], unidade: string | null, prin
 
   const blocos: BlocoEquipamento[] = [...equips.values()].filter((x) => x.atividades.size).map(({ e, atividades }) => {
     const checklist: GrupoChecklist[] = [], fotos: FotoRelatorio[] = [], checklistTipo: ChecklistTipoRelatorio[] = [], observacoes: string[] = [];
-    const resumoChecklist = { ok: 0, atencao: 0, naoSeAplica: 0 };
+    const resumoChecklist = { ok: 0, atencao: 0, naoSeAplica: 0, medicoes: 0 };
     for (const a of ativs.filter((x) => atividades.has(x.id))) {
-      const itens = (a.checklistRespostas ?? []).filter((r) => r.equipamentoId === e.id && (r.status || (r.observacao ?? "").trim()))
+      const itens: ItemChecklistTipo[] = (a.checklistRespostas ?? [])
+        .filter((r) => r.equipamentoId === e.id && (r.status || (r.observacao ?? "").trim() || numero(r.valor) !== null || r.audio))
         .sort((x, y) => (x.item?.ordem ?? 0) - (y.item?.ordem ?? 0))
-        .map((r) => ({ texto: r.textoItem, status: STATUS_VALIDOS.includes(r.status as StatusItem) ? (r.status as StatusItem) : null, observacao: (r.observacao ?? "").trim() || null }));
+        .map((r) => {
+          const valor = numero(r.valor);
+          return {
+            texto: r.textoItem, status: STATUS_VALIDOS.includes(r.status as StatusItem) ? (r.status as StatusItem) : null, observacao: (r.observacao ?? "").trim() || null,
+            medicao: valor === null ? null : { valor, unidade: r.unidade ?? null }, audio: !!r.audio,
+          };
+        });
       for (const it of itens) {
         if (it.status === "OK") resumoChecklist.ok++;
         else if (it.status === "ATENCAO") resumoChecklist.atencao++;
         else if (it.status === "NAO_SE_APLICA") resumoChecklist.naoSeAplica++;
+        else if (it.medicao) resumoChecklist.medicoes++;
       }
       if (itens.length) checklistTipo.push({ atividade: a.titulo, itens });
-      fotos.push(...(a.fotosAtendimento ?? []).filter((f) => f.equipamentoId === e.id).map((f) => ({ url: f.url, legenda: f.item?.texto ?? "Foto do equipamento" })));
+      fotos.push(...(a.fotosAtendimento ?? []).filter((f) => f.equipamentoId === e.id)
+        .map((f, i) => ({ f, i })).sort((x, y) => ORDEM_MOMENTO[x.f.momento ?? "NENHUM"] - ORDEM_MOMENTO[y.f.momento ?? "NENHUM"] || x.i - y.i)
+        .map(({ f }) => ({ url: f.url, legenda: legendaFoto(f) })));
       const rs = a.respostasEquipamento.filter((r) => r.equipamentoId === e.id);
       checklist.push(...checklistDe(rs, a.titulo));
       fotos.push(...fotosDe(rs));
@@ -259,6 +308,7 @@ export function montarRelatorioOs(os: OsParaRelatorio, relatorio: RelatorioRef |
     resultado: { texto, atendidos: blocos.length, totalEquipamentos: total, atividades: ativs.length, concluidas },
     equipamentos: blocos,
     naoAtendidos,
+    adicionais: adicionaisDe(ativs),
     geral: {
       checklist: ativs.flatMap((a) => checklistDe(a.respostas, a.titulo)),
       fotos: ativs.flatMap((a) => fotosDe(a.respostas)),
@@ -283,8 +333,24 @@ const SELECT_EQUIP = {
   setor: true, localizacao: true, tipoEquipamento: { select: { nome: true } },
 } as const;
 const CAMPO = { select: { label: true, tipo: true, ordem: true } } as const;
-export const SELECT_CHECKLIST = { select: { equipamentoId: true, status: true, observacao: true, textoItem: true, item: { select: { ordem: true } } } } as const;
-export const SELECT_FOTOS = { orderBy: { criadoEm: "asc" }, select: { id: true, equipamentoId: true, url: true, item: { select: { texto: true } } } } as const;
+export const SELECT_CHECKLIST = { select: { id: true, equipamentoId: true, status: true, observacao: true, textoItem: true, valor: true, unidade: true, item: { select: { ordem: true } } } } as const;
+export const SELECT_FOTOS = { orderBy: { criadoEm: "asc" }, select: { id: true, equipamentoId: true, url: true, momento: true, item: { select: { texto: true } } } } as const;
+export const SELECT_ADICIONAIS = {
+  orderBy: { criadoEm: "asc" },
+  select: {
+    id: true, descricao: true, statusCobranca: true, criadoPor: { select: { nome: true } },
+    equipamento: { select: SELECT_EQUIP }, fotos: { orderBy: { criadoEm: "asc" }, select: { url: true } },
+  },
+} as const;
+
+/** Marca as respostas que têm áudio (sem carregar o áudio: ele é servido à parte). */
+export async function marcarAudios<T extends { checklistRespostas?: { id?: string; audio?: boolean }[] }>(atividades: T[]): Promise<T[]> {
+  const ids = atividades.flatMap((a) => (a.checklistRespostas ?? []).map((r) => r.id).filter((x): x is string => !!x));
+  if (!ids.length) return atividades;
+  const com = new Set((await prisma.checklistResposta.findMany({ where: { id: { in: ids }, audioUrl: { not: null } }, select: { id: true } })).map((r) => r.id));
+  for (const a of atividades) for (const r of a.checklistRespostas ?? []) r.audio = !!r.id && com.has(r.id);
+  return atividades;
+}
 
 /** OS da empresa (empresa SEMPRE da sessão, ou do relatório no link público). null = não existe nela. */
 export async function carregarOsParaRelatorio(osId: string, empresaId: string): Promise<OsParaRelatorio | null> {
@@ -309,10 +375,12 @@ export async function carregarOsParaRelatorio(osId: string, empresaId: string): 
           respostasEquipamento: { include: { campo: CAMPO, formulario: { select: { nome: true } } } },
           checklistRespostas: SELECT_CHECKLIST,
           fotosAtendimento: SELECT_FOTOS,
+          servicosAdicionais: SELECT_ADICIONAIS,
         },
       },
     },
   });
+  if (os) await marcarAudios(os.atividades);
   return os as unknown as OsParaRelatorio | null;
 }
 

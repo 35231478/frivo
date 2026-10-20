@@ -5,19 +5,26 @@ import { ArrowDown, ArrowUp, Camera, Check, ListChecks, MessageSquareText, Plus,
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { UNIDADES_SUGERIDAS, type TipoRespostaItem } from "@/lib/checklist/tipo";
 
-interface ItemTela { chave: string; id?: string; texto: string; pedirFoto: boolean; pedirObservacao: boolean; respostas?: number }
-type Sugestao = { texto: string; pedirFoto: boolean; pedirObservacao: boolean };
+interface ItemTela {
+  chave: string; id?: string; texto: string; pedirFoto: boolean; pedirObservacao: boolean; respostas?: number;
+  tipoResposta: TipoRespostaItem; unidade: string | null;
+  /** Tipo gravado (mudar = item novo; o antigo sai com as respostas dele) */
+  tipoOriginal?: TipoRespostaItem;
+}
+type Sugestao = Omit<ItemTela, "chave" | "id" | "respostas" | "tipoOriginal">;
 
 let seq = 0;
 const novaChave = () => `n${++seq}`;
-const daApi = (i: { id: string; texto: string; pedirFoto: boolean; pedirObservacao: boolean; respostas?: number }): ItemTela =>
-  ({ chave: i.id, id: i.id, texto: i.texto, pedirFoto: i.pedirFoto, pedirObservacao: i.pedirObservacao, respostas: i.respostas });
+const daApi = (i: { id: string; texto: string; pedirFoto: boolean; pedirObservacao: boolean; respostas?: number; tipoResposta?: TipoRespostaItem; unidade?: string | null }): ItemTela =>
+  ({ chave: i.id, id: i.id, texto: i.texto, pedirFoto: i.pedirFoto, pedirObservacao: i.pedirObservacao, respostas: i.respostas, tipoResposta: i.tipoResposta ?? "OK_ATENCAO_NA", unidade: i.unidade ?? null, tipoOriginal: i.tipoResposta ?? "OK_ATENCAO_NA" });
 
 /**
  * Aba "Checklist" do tipo de equipamento: os itens que CADA equipamento deste tipo responde na OS
- * (OK · Atenção · Não se aplica), com "pede foto" / "pede observação". Adicionar, remover e reordenar;
- * grava a lista inteira. Item removido sai das próximas OS — as respostas antigas ficam no histórico.
+ * (OK · Atenção · Não se aplica, ou MEDIÇÃO: número + unidade, que o técnico só registra), com "pede
+ * foto" / "pede observação". Adicionar, remover e reordenar; grava a lista inteira. Item removido sai
+ * das próximas OS — as respostas antigas ficam no histórico. Trocar o tipo de resposta = item novo.
  */
 export function ChecklistTipo({ tipoId, podeEditar }: { tipoId: string; podeEditar: boolean }) {
   const [itens, setItens] = useState<ItemTela[] | null>(null);
@@ -50,12 +57,17 @@ export function ChecklistTipo({ tipoId, podeEditar }: { tipoId: string; podeEdit
     if (!itens) return;
     const vazio = itens.findIndex((i) => i.texto.trim().length < 2);
     if (vazio >= 0) { setMsg({ tipo: "erro", texto: `Item ${vazio + 1}: escreva o texto do item.` }); return; }
+    const semUnidade = itens.findIndex((i) => i.tipoResposta === "MEDICAO" && !(i.unidade ?? "").trim());
+    if (semUnidade >= 0) { setMsg({ tipo: "erro", texto: `Item ${semUnidade + 1}: informe a unidade da medição (ex.: psi, °C, A).` }); return; }
     setSalvando(true); setMsg(null);
     try {
       const res = await fetch(`/api/tipos-equipamento/${tipoId}/checklist`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          itens: itens.map((i) => ({ ...(i.id && { id: i.id }), texto: i.texto, tipoResposta: "OK_ATENCAO_NA", pedirFoto: i.pedirFoto, pedirObservacao: i.pedirObservacao })),
+          itens: itens.map((i) => ({
+            ...(i.id && { id: i.id }), texto: i.texto, tipoResposta: i.tipoResposta, pedirFoto: i.pedirFoto, pedirObservacao: i.pedirObservacao,
+            ...(i.tipoResposta === "MEDICAO" && { unidade: (i.unidade ?? "").trim() }),
+          })),
         }),
       });
       const d = await res.json().catch(() => ({}));
@@ -74,8 +86,9 @@ export function ChecklistTipo({ tipoId, podeEditar }: { tipoId: string; podeEdit
   return (
     <div className="space-y-3" data-checklist-tipo>
       <p className="text-xs text-ink-muted">
-        Cada equipamento deste tipo responde estes itens na OS: <strong>OK</strong>, <strong>Atenção</strong> ou <strong>Não se aplica</strong>.
-        Para concluir a OS, todos precisam de resposta (com foto/observação quando o item pede).
+        Cada equipamento deste tipo responde estes itens na OS: <strong>OK</strong>, <strong>Atenção</strong> ou <strong>Não se aplica</strong> —
+        ou, nos itens de <strong>medição</strong>, o número com a unidade (o técnico só registra; quem interpreta é o escritório).
+        Para concluir a OS, todos precisam de resposta (com foto/observação quando o item pede; “Atenção” sempre pede foto e observação).
       </p>
 
       {itens.length === 0 && (
@@ -109,10 +122,22 @@ export function ChecklistTipo({ tipoId, podeEditar }: { tipoId: string; podeEdit
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 pl-7 text-xs">
               <label className="inline-flex items-center gap-1.5 text-ink-muted">
                 Resposta
-                <select disabled={!podeEditar} value="OK_ATENCAO_NA" onChange={() => {}} className="rounded border border-surface-border bg-white px-1.5 py-0.5 text-xs text-ink" aria-label={`Tipo de resposta do item ${i + 1}`}>
+                <select disabled={!podeEditar} value={it.tipoResposta} className="rounded border border-surface-border bg-white px-1.5 py-0.5 text-xs text-ink" aria-label={`Tipo de resposta do item ${i + 1}`}
+                  onChange={(e) => editar(i, { tipoResposta: e.target.value as TipoRespostaItem, unidade: e.target.value === "MEDICAO" ? it.unidade ?? "" : null })}>
                   <option value="OK_ATENCAO_NA">OK / Atenção / Não se aplica</option>
+                  <option value="MEDICAO">Medição (número + unidade)</option>
                 </select>
               </label>
+              {it.tipoResposta === "MEDICAO" && (
+                <label className="inline-flex items-center gap-1.5 text-ink-muted">
+                  Unidade
+                  <input list="unidades-medicao" value={it.unidade ?? ""} disabled={!podeEditar} maxLength={20} placeholder="psi" onChange={(e) => editar(i, { unidade: e.target.value })}
+                    className="w-20 rounded border border-surface-border bg-white px-1.5 py-0.5 text-xs text-ink" aria-label={`Unidade do item ${i + 1}`} />
+                </label>
+              )}
+              {!!it.id && !!it.respostas && it.tipoOriginal !== it.tipoResposta && (
+                <span className="text-amber-700" data-aviso-troca-tipo>Mudar o tipo cria um item novo; as respostas antigas ficam no histórico.</span>
+              )}
               <label className="inline-flex items-center gap-1.5 cursor-pointer">
                 <input type="checkbox" checked={it.pedirFoto} disabled={!podeEditar} onChange={(e) => editar(i, { pedirFoto: e.target.checked })} className="accent-primary-600" name={`foto-${i + 1}`} />
                 <Camera className="w-3.5 h-3.5 text-ink-muted" /> Pede foto
@@ -131,7 +156,7 @@ export function ChecklistTipo({ tipoId, podeEditar }: { tipoId: string; podeEdit
 
       {podeEditar && (
         <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-          <Button type="button" variant="secondary" onClick={() => mudar((l) => [...l, { chave: novaChave(), texto: "", pedirFoto: false, pedirObservacao: false }])} data-adicionar-item>
+          <Button type="button" variant="secondary" onClick={() => mudar((l) => [...l, { chave: novaChave(), texto: "", pedirFoto: false, pedirObservacao: false, tipoResposta: "OK_ATENCAO_NA", unidade: null }])} data-adicionar-item>
             <Plus className="w-4 h-4" /> Adicionar item
           </Button>
           <div className="flex items-center gap-2">
@@ -143,6 +168,7 @@ export function ChecklistTipo({ tipoId, podeEditar }: { tipoId: string; podeEdit
         </div>
       )}
       <p className="text-[11px] text-ink-subtle">Item removido sai das próximas OS; o que já foi respondido continua no histórico e nos relatórios, com o texto da época.</p>
+      <datalist id="unidades-medicao">{UNIDADES_SUGERIDAS.map((u) => <option key={u} value={u} />)}</datalist>
     </div>
   );
 }

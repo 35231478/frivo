@@ -152,7 +152,7 @@ const attrs = (h: string, a: string) => [...h.matchAll(new RegExp(`${a}="([^"]+)
 // ═════════════════════════ Configuração (pura) ═════════════════════════
 describe("configuração de impressão", () => {
   it("padrão: tudo ligado; cliente vê tudo menos 'não atendidos' e 'horários'", () => {
-    expect(SECOES_RELATORIO.map((s) => s.id)).toEqual(["resultado", "clienteLocal", "equipe", "equipamentos", "fotos", "checklistGeral", "naoAtendidos", "tempos", "observacoes", "assinaturas"]);
+    expect(SECOES_RELATORIO.map((s) => s.id)).toEqual(["resultado", "clienteLocal", "equipe", "equipamentos", "fotos", "adicionais", "checklistGeral", "naoAtendidos", "tempos", "observacoes", "assinaturas"]);
     expect(SECOES_RELATORIO.every((s) => CONFIG_RELATORIO_PADRAO[s.id].ativo)).toBe(true);
     expect(SECOES_RELATORIO.filter((s) => !CONFIG_RELATORIO_PADRAO[s.id].cliente).map((s) => s.id)).toEqual(["naoAtendidos", "tempos"]);
     expect(mesclarConfigRelatorio(null)).toEqual(CONFIG_RELATORIO_PADRAO);
@@ -473,8 +473,8 @@ describe("tela Configurações › Impressão da OS", () => {
     const h = await tela();
     expect(attrs(h, "data-secao")).toEqual(SECOES_RELATORIO.map((s) => s.id));
     expect(h).toMatch(/aria-checked="false" aria-label="Incluir Fotos dos equipamentos"/);
-    expect(h).toContain('data-conta="cliente">8<');
-    expect(h).toContain('data-conta="interna">9<');
+    expect(h).toContain('data-conta="cliente">9<');
+    expect(h).toContain('data-conta="interna">10<');
     expect(h).not.toContain("data-somente-leitura");
     logar(so({ configuracoes: { visualizar: true } }));
     const r = await tela();

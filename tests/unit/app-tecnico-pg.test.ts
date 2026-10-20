@@ -72,6 +72,7 @@ describe.skipIf(!URL_PG)("app do técnico: Meu dia, escopo e sincronização off
       "servicos-adicionais/fotos/[id]", "ordens/[id]/servicos-adicionais/[servicoId]", "ordens/[id]/atividades/[atividadeId]",
       "ordens/[id]/atividades/[atividadeId]/execucao", "ordens/[id]/atividades/[atividadeId]/execucao/equipamentos/[equipamentoId]/itens/[itemId]",
     ].map((r) => import(/* @vite-ignore */ `@/app/api/${r}/route`)));
+    await Promise.all([import("@/lib/relatorio-os/dados"), import("@/lib/equipamento-historico")]);
 
     await prisma.empresa.createMany({ data: [
       { id: "e1", nome: "Clima Total", cnpj: "12.345.678/0001-90", email: "e@x.com" },
@@ -249,6 +250,42 @@ describe.skipIf(!URL_PG)("app do técnico: Meu dia, escopo e sincronização off
     expect(equipDe(x, "eqA").respostas.i2).toMatchObject({ status: "ATENCAO", audio: true, audioId: expect.any(String) });
     expect(equipDe(x, "eqA").respostas.m1).toMatchObject({ valor: 118.5, unidade: "psi", status: null });
     expect(x.execucao.adicionais).toEqual([expect.objectContaining({ clientId: "adic-0001-aaaa", descricao: "Troca do controle remoto (pedido do cliente)", statusCobranca: "A_AVALIAR", criadoPor: "João", fotos: [expect.objectContaining({ clientId: "foto-adic-0001" })] })]);
+  });
+
+  it("ALIMENTA o relatório da OS (#44) e o histórico do equipamento (#7): medições com unidade, antes/depois, áudio só marcado, adicional destacado", async () => {
+    const { relatorioInterno } = await import("@/lib/relatorio-os/dados");
+    const { dados } = (await relatorioInterno("osA", "e1"))!;
+    expect(dados.equipamentos.map((b) => b.id)).toEqual(["eqA"]); // só o atendido (eqB ficou "não atendido")
+    expect(dados.naoAtendidos.map((e) => e.id)).toEqual(["eqB"]);
+    const b = dados.equipamentos[0];
+    expect(b.checklistTipo[0].itens.map((i) => [i.texto, i.status, i.medicao, i.audio, i.observacao])).toEqual([
+      ["Limpeza dos filtros de ar", "OK", null, false, null],
+      ["Dreno e bandeja", "ATENCAO", null, true, "Bandeja com lodo"],
+      ["Pressão de sucção", null, { valor: 118.5, unidade: "psi" }, false, null],
+      ["Temperatura de insuflamento", null, { valor: 12, unidade: "°F" }, false, null],
+    ]);
+    expect(b.resumoChecklist).toEqual({ ok: 1, atencao: 1, naoSeAplica: 0, medicoes: 2 });
+    // antes → fotos dos itens → depois
+    expect(b.fotos.map((f) => f.legenda)).toEqual(["Antes do serviço", "Dreno e bandeja", "Limpeza dos filtros de ar", "Depois do serviço"]);
+    expect(dados.adicionais).toEqual([{
+      id: expect.any(String), descricao: "Troca do controle remoto (pedido do cliente)", atividade: "Preventiva mensal", equipamento: "Split Sala 2",
+      statusCobranca: "A_AVALIAR", criadoPor: "João", fotos: [{ url: FOTO, legenda: "Adicional — foto 1" }],
+    }]);
+    // Histórico do equipamento: medições e áudio no eqA; o adicional no eqB (mesmo não atendido)
+    const { carregarHistoricoEquipamento } = await import("@/lib/equipamento-historico");
+    const hA = (await carregarHistoricoEquipamento("e1", "eqA")).find((e) => e.atividadeId === "aA")!;
+    expect(hA.medicoes).toEqual([{ texto: "Pressão de sucção", valor: 118.5, unidade: "psi" }, { texto: "Temperatura de insuflamento", valor: 12, unidade: "°F" }]);
+    expect(hA.checklist).toMatchObject({ ok: 1, atencao: 1, itensAtencao: ["Dreno e bandeja"] });
+    expect(hA.audios).toEqual([{ texto: "Dreno e bandeja", url: expect.stringMatching(/^\/api\/checklist-respostas\/.+\/audio$/) }]);
+    expect(hA.fotos).toHaveLength(4);
+    const hB = (await carregarHistoricoEquipamento("e1", "eqB")).find((e) => e.atividadeId === "aA")!;
+    expect(hB.adicionais).toEqual([{ descricao: "Troca do controle remoto (pedido do cliente)", statusCobranca: "A_AVALIAR", fotos: [expect.stringMatching(/^\/api\/servicos-adicionais\/fotos\//)] }]);
+    // A foto do adicional é servida só para a empresa
+    comoEscritorio();
+    const fotoAd = await prisma.servicoAdicionalFoto.findFirst();
+    expect((await chamar("servicos-adicionais/fotos/[id]", "GET", { id: fotoAd.id })).tipo).toBe("image/png");
+    comoEscritorio("e2", permissoesTotais(), "uE2");
+    expect((await chamar("servicos-adicionais/fotos/[id]", "GET", { id: fotoAd.id })).status).toBe(404);
   });
 
   it("REENVIAR a mesma fila (resposta perdida) não duplica nada: devolve o resultado guardado", async () => {
