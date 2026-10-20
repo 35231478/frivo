@@ -48,7 +48,7 @@ export function LinkRelatorioAtividade({
 
   const botao = "inline-flex items-center gap-1.5 text-xs font-medium text-primary-600 hover:text-primary-700 hover:bg-primary-50 px-2.5 py-1.5 rounded-lg disabled:opacity-50";
   return (
-    <div className="shrink-0 flex flex-col items-end gap-0.5" data-acoes-relatorio={atividadeId}>
+    <div className="shrink-0 flex flex-wrap items-center gap-1 -ml-2.5 sm:ml-0 sm:flex-col sm:items-end sm:gap-0.5" data-acoes-relatorio={atividadeId}>
       <a href={link} target="_blank" rel="noopener noreferrer" className={botao} data-ver-relatorio>
         <FileText className="w-3.5 h-3.5" /> Ver relatório <ExternalLink className="w-3 h-3" />
       </a>
@@ -62,7 +62,7 @@ export function LinkRelatorioAtividade({
         </button>
       )}
       {msg && (
-        <p role="status" className={`text-[11px] max-w-[14rem] text-right ${msg.tipo === "ok" ? "text-success-700" : "text-red-700"}`}>{msg.texto}</p>
+        <p role="status" className={`w-full sm:w-auto px-2.5 sm:px-0 text-[11px] sm:max-w-[14rem] sm:text-right ${msg.tipo === "ok" ? "text-success-700" : "text-red-700"}`}>{msg.texto}</p>
       )}
     </div>
   );

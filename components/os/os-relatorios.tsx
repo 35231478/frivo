@@ -109,7 +109,7 @@ export function OsRelatorios({ osId }: { osId: string }) {
               <Clock className="w-4 h-4" /> Status: <span className="font-medium text-ink">{LABELS_STATUS_OS[resumo.statusOs] ?? resumo.statusOs}</span>
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <a href={`/ordens/${osId}/relatorio`} target="_blank" rel="noopener" className="btn-secondary" data-relatorio-interno title="Todas as seções, inclusive as marcadas como só interno">
               <Lock className="w-4 h-4" /> Versão interna
             </a>
@@ -148,7 +148,7 @@ export function OsRelatorios({ osId }: { osId: string }) {
             <div key={a.id} className="relative">
               <CornerDownRight className="absolute -left-[26px] top-3 w-4 h-4 text-ink-subtle" />
               <div className="border border-surface-border rounded-lg p-3 bg-white hover:border-primary-200 transition-colors">
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold text-ink">{a.titulo}</p>
