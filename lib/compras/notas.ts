@@ -2,12 +2,16 @@
  * Nota de compra (NF-e por XML) → fornecedor + produtos + estoque + contas a pagar.
  *
  *   importarNota   lê o XML, barra nota repetida (chave de acesso) e nota de outro CNPJ, cria/vincula o
- *                  fornecedor pelo CNPJ e pré-vincula os itens que o de-para já conhece;
- *   conciliar      liga cada item a um produto existente ou cria o produto novo;
+ *                  fornecedor pelo CNPJ e pré-vincula os itens que o de-para já conhece — com o fator
+ *                  de conversão aprendido, se a unidade da nota for a mesma de antes;
+ *   conciliar      liga cada item a um produto existente ou cria o produto novo (com os dados fiscais
+ *                  do XML) e guarda o fator "1 [unidade da nota] = fator [unidade do produto]";
  *   lancarNota     numa ÚNICA transação: entrada de cada item no estoque (função da E1, origem COMPRA,
- *                  refId = nota, custo = valor unitário da NF), grava o de-para aprendido, gera a(s)
- *                  conta(s) a pagar (uma por duplicata), leva o custo real ao pedido de compra (se
- *                  informado) e marca a nota como LANCADA. Ou tudo, ou nada; lançar 2x é recusado.
+ *                  refId = nota) já convertida — quantidade × fator, custo = valor unitário ÷ fator —,
+ *                  grava o de-para aprendido (com unidade e fator), completa os dados fiscais vazios do
+ *                  produto, gera a(s) conta(s) a pagar (uma por duplicata), leva o custo real ao pedido
+ *                  de compra (se informado) e marca a nota como LANCADA. Ou tudo, ou nada; lançar 2x é
+ *                  recusado. Custo diferente da compra anterior: só AVISA (o preço nunca muda sozinho).
  *
  * Empresa SEMPRE a da sessão (quem chama passa); nota/produto/pedido de outra empresa = recusado.
  */
@@ -16,6 +20,8 @@ import { prisma } from "@/lib/prisma";
 import { formatarCpfCnpj, gerarNumeroContaPagar } from "@/lib/utils";
 import { arred } from "@/lib/estoque/regras";
 import { movimentar } from "@/lib/estoque/servidor";
+import { ultimosCustos } from "@/lib/estoque/custo";
+import { avisoCusto, converterItem, mesmaUnidade, type AvisoCusto } from "@/lib/estoque/preco";
 import { LABEL_STATUS_NOTA } from "@/lib/compras/rotulos";
 import { chaveDePara, ErroNfe, lerNfe, mesmaRaizCnpj, parcelasDaNota, type DuplicataNfe } from "@/lib/compras/nfe";
 
@@ -56,14 +62,20 @@ export async function importarNota({ empresaId, usuarioId, xml }: { empresaId: s
   // Aprendizado: código do item neste fornecedor → produto (só produto ativo da empresa)
   const deParas = await prisma.deParaProdutoFornecedor.findMany({
     where: { empresaId, fornecedorId: fornecedor.id, codigoFornecedor: { in: nfe.itens.map((i) => chaveDePara(i.codigo)) }, produto: { ativo: true } },
-    select: { codigoFornecedor: true, produtoId: true },
+    select: { codigoFornecedor: true, produtoId: true, unidadeOrigem: true, fatorConversao: true },
   });
-  const conhecido = new Map(deParas.map((d) => [d.codigoFornecedor, d.produtoId]));
-  const itens = nfe.itens.map((i) => ({
-    numeroItem: i.numeroItem, codigoFornecedor: i.codigo, descricaoFornecedor: i.descricao, ncm: i.ncm, cfop: i.cfop,
-    unidade: i.unidade, quantidade: i.quantidade, valorUnitario: i.valorUnitario, valorTotal: i.valorTotal,
-    produtoId: conhecido.get(chaveDePara(i.codigo)) ?? null,
-  }));
+  const conhecido = new Map(deParas.map((d) => [d.codigoFornecedor, d]));
+  const itens = nfe.itens.map((i) => {
+    const dp = conhecido.get(chaveDePara(i.codigo));
+    // O fator aprendido só vale se o fornecedor manda na mesma unidade de antes (UN → 13,6 kg não serve para CX)
+    const fator = dp && (dp.unidadeOrigem == null || mesmaUnidade(dp.unidadeOrigem, i.unidade)) ? Number(dp.fatorConversao) : 1;
+    return {
+      numeroItem: i.numeroItem, codigoFornecedor: i.codigo, descricaoFornecedor: i.descricao, ncm: i.ncm, cfop: i.cfop,
+      cest: i.cest, gtin: i.ean, origem: i.origem, unidadeTributavel: i.unidadeTributavel,
+      unidade: i.unidade, quantidade: i.quantidade, valorUnitario: i.valorUnitario, valorTotal: i.valorTotal,
+      produtoId: dp?.produtoId ?? null, fatorConversao: fator,
+    };
+  });
 
   const avisos: string[] = [];
   const somaDup = arred(nfe.duplicatas.reduce((t, d) => t + d.valor, 0));
@@ -106,7 +118,17 @@ export async function carregarNota(empresaId: string, id: string) {
     where: { id, empresaId },
     include: {
       fornecedor: { select: { id: true, nome: true, documento: true } },
-      itens: { orderBy: { numeroItem: "asc" }, include: { produto: { select: { id: true, nome: true, unidade: true, saldo: true, ativo: true } } } },
+      itens: {
+        orderBy: { numeroItem: "asc" },
+        include: {
+          produto: {
+            select: {
+              id: true, nome: true, unidade: true, saldo: true, ativo: true, valorPadrao: true, margemVenda: true,
+              ncm: true, cest: true, gtin: true, origemMercadoria: true, unidadeTributavel: true,
+            },
+          },
+        },
+      },
       contasPagar: { orderBy: { dataVencimento: "asc" }, select: { id: true, numero: true, valorTotal: true, dataVencimento: true, status: true, descricao: true } },
       pedidoCompra: { select: { id: true, numero: true } },
       usuario: { select: { nome: true } },
@@ -127,11 +149,20 @@ export async function listarNotas(empresaId: string, { pagina = 1, porPagina = 2
 }
 
 /* ───────── Conciliar (de-para) ───────── */
-export type Escolha = { itemId: string; produtoId: string } | { itemId: string; novo: { nome: string; unidade?: string | null } };
+/** `fator`: 1 [unidade da nota] = fator [unidade do produto] (sem fator = 1). */
+export type Escolha = ({ itemId: string; produtoId: string } | { itemId: string; novo: { nome: string; unidade?: string | null } }) & { fator?: number };
+
+/** Dados fiscais do item da nota no formato do produto */
+const fiscalDoItem = (i: { ncm: string | null; cest: string | null; gtin: string | null; origem: string | null; unidadeTributavel: string | null }) =>
+  ({ ncm: i.ncm, cest: i.cest, gtin: i.gtin, origemMercadoria: i.origem, unidadeTributavel: i.unidadeTributavel });
+const CAMPOS_FISCAIS = [["ncm", "NCM"], ["cest", "CEST"], ["gtin", "GTIN/EAN"], ["origemMercadoria", "origem da mercadoria"], ["unidadeTributavel", "unidade tributável"]] as const;
 
 /** Aplica as escolhas na transação; devolve quantos itens ainda estão sem produto. Valida TUDO antes de gravar. */
 async function aplicarEscolhas(tx: Prisma.TransactionClient, empresaId: string, notaId: string, escolhas: Escolha[]) {
-  const itens = await tx.notaCompraItem.findMany({ where: { notaId }, select: { id: true, unidade: true, produtoId: true } });
+  const itens = await tx.notaCompraItem.findMany({
+    where: { notaId },
+    select: { id: true, unidade: true, produtoId: true, ncm: true, cest: true, gtin: true, origem: true, unidadeTributavel: true },
+  });
   const doItem = new Map(itens.map((i) => [i.id, i]));
   const vistos = new Set<string>();
   for (const e of escolhas) {
@@ -139,6 +170,7 @@ async function aplicarEscolhas(tx: Prisma.TransactionClient, empresaId: string, 
     if (vistos.has(e.itemId)) throw new ErroNota("Item escolhido duas vezes.");
     vistos.add(e.itemId);
     if ("novo" in e && e.novo.nome.trim().length < 2) throw new ErroNota("Dê um nome ao produto novo.");
+    if (e.fator !== undefined && !(Number.isFinite(e.fator) && e.fator > 0)) throw new ErroNota("O fator de conversão precisa ser maior que zero.");
   }
   const existentes = [...new Set(escolhas.flatMap((e) => ("produtoId" in e ? [e.produtoId] : [])))];
   if (existentes.length && (await tx.produto.count({ where: { id: { in: existentes }, empresaId } })) !== existentes.length)
@@ -146,10 +178,13 @@ async function aplicarEscolhas(tx: Prisma.TransactionClient, empresaId: string, 
 
   for (const e of escolhas) {
     const item = doItem.get(e.itemId)!;
-    // Produto novo: unidade da nota (conversão de unidade fica para depois)
+    // Produto novo: unidade escolhida (ou a da nota) e os dados fiscais do XML
     const produtoId = "produtoId" in e ? e.produtoId
-      : (await tx.produto.create({ data: { empresaId, nome: e.novo.nome.trim().slice(0, 200), unidade: (e.novo.unidade || item.unidade).trim().slice(0, 10) || "un" }, select: { id: true } })).id;
-    await tx.notaCompraItem.update({ where: { id: item.id }, data: { produtoId } });
+      : (await tx.produto.create({
+        data: { empresaId, nome: e.novo.nome.trim().slice(0, 200), unidade: (e.novo.unidade || item.unidade).trim().slice(0, 10) || "un", ...fiscalDoItem(item) },
+        select: { id: true },
+      })).id;
+    await tx.notaCompraItem.update({ where: { id: item.id }, data: { produtoId, fatorConversao: e.fator ?? 1 } });
     item.produtoId = produtoId;
   }
   return itens.filter((i) => !i.produtoId).length;
@@ -185,7 +220,13 @@ export async function lancarNota({ empresaId, usuarioId, notaId, escolhas = [], 
 
     const nota = await tx.notaCompra.findFirstOrThrow({
       where: { id: notaId, empresaId },
-      include: { itens: { orderBy: { numeroItem: "asc" }, include: { produto: { select: { nome: true, unidade: true } } } }, fornecedor: { select: { id: true, nome: true, documento: true } } },
+      include: {
+        itens: {
+          orderBy: { numeroItem: "asc" },
+          include: { produto: { select: { nome: true, unidade: true, valorPadrao: true, margemVenda: true, ncm: true, cest: true, gtin: true, origemMercadoria: true, unidadeTributavel: true } } },
+        },
+        fornecedor: { select: { id: true, nome: true, documento: true } },
+      },
     });
     const semProduto = nota.itens.filter((i) => !i.produtoId);
     if (semProduto.length) throw new ErroNota(`Falta escolher o produto de ${semProduto.length} item(ns): ${semProduto.map((i) => i.descricaoFornecedor).join("; ")}.`);
@@ -197,28 +238,57 @@ export async function lancarNota({ empresaId, usuarioId, notaId, escolhas = [], 
       if (pedido.contasPagar.length) throw new ErroNota(`O pedido ${pedido.numero} já tem a conta a pagar ${pedido.contasPagar[0].numero}: lance a nota sem vincular o pedido, ou cancele aquela conta antes.`, 409);
     }
 
-    // 1) Entrada no estoque — a função da E1, dentro desta transação
+    // Custo da compra anterior de cada produto (antes desta nota), para o aviso de custo
+    const custoAnterior = await ultimosCustos(empresaId, nota.itens.map((i) => i.produtoId!), { excetoNotaId: nota.id }, tx);
+
+    // 1) Entrada no estoque — a função da E1, dentro desta transação — já na unidade do produto
     const entradas = [];
     const avisos: string[] = [];
+    const avisosCusto: AvisoCusto[] = [];
     for (const it of nota.itens) {
+      const fator = Number(it.fatorConversao);
+      const { quantidade, custoUnitario } = converterItem(Number(it.quantidade), Number(it.valorUnitario), fator);
       const r = await movimentar({
-        empresaId, produtoId: it.produtoId!, operacao: "ENTRADA", valor: Number(it.quantidade), usuarioId,
-        custoUnitario: Number(it.valorUnitario), origem: "COMPRA", refId: nota.id,
-        observacao: `NF ${nota.numero}/${nota.serie} · ${nota.fornecedor.nome} · item ${it.numeroItem}`,
+        empresaId, produtoId: it.produtoId!, operacao: "ENTRADA", valor: quantidade, usuarioId,
+        custoUnitario, origem: "COMPRA", refId: nota.id,
+        observacao: `NF ${nota.numero}/${nota.serie} · ${nota.fornecedor.nome} · item ${it.numeroItem}`
+          + (fator !== 1 || !mesmaUnidade(it.unidade, it.produto!.unidade) ? ` · ${arred(Number(it.quantidade))} ${it.unidade} × ${fator}` : ""),
       }, tx);
-      entradas.push({ itemId: it.id, produto: it.produto!.nome, quantidade: arred(Number(it.quantidade)), custoUnitario: Number(it.valorUnitario), saldo: r.saldo });
-      if (it.produto!.unidade.trim().toLowerCase() !== it.unidade.trim().toLowerCase())
-        avisos.push(`${it.produto!.nome}: a nota vem em "${it.unidade}" e o produto é em "${it.produto!.unidade}" — entrou ${arred(Number(it.quantidade))} como está na nota (sem conversão).`);
+      entradas.push({ itemId: it.id, produto: it.produto!.nome, unidade: it.produto!.unidade, quantidade, custoUnitario, fator, saldo: r.saldo });
+      const aviso = avisoCusto({
+        produtoId: it.produtoId!, produto: it.produto!.nome, unidade: it.produto!.unidade,
+        custoAnterior: custoAnterior.get(it.produtoId!), custoNovo: custoUnitario,
+        preco: it.produto!.valorPadrao == null ? null : Number(it.produto!.valorPadrao),
+        margemAlvo: it.produto!.margemVenda == null ? null : Number(it.produto!.margemVenda),
+      });
+      if (aviso) avisosCusto.push(aviso);
     }
 
-    // 2) De-para aprendido (código do item neste fornecedor → produto)
+    // 2) De-para aprendido (código do item neste fornecedor → produto, com a unidade e o fator)
     for (const it of nota.itens) {
       const codigo = chaveDePara(it.codigoFornecedor);
+      const aprendido = { produtoId: it.produtoId!, descricaoFornecedor: it.descricaoFornecedor, unidadeOrigem: it.unidade, fatorConversao: it.fatorConversao };
       await tx.deParaProdutoFornecedor.upsert({
         where: { empresaId_fornecedorId_codigoFornecedor: { empresaId, fornecedorId: nota.fornecedorId, codigoFornecedor: codigo } },
-        create: { empresaId, fornecedorId: nota.fornecedorId, codigoFornecedor: codigo, descricaoFornecedor: it.descricaoFornecedor, produtoId: it.produtoId! },
-        update: { produtoId: it.produtoId!, descricaoFornecedor: it.descricaoFornecedor },
+        create: { empresaId, fornecedorId: nota.fornecedorId, codigoFornecedor: codigo, ...aprendido },
+        update: aprendido,
       });
+    }
+
+    // 2b) Dados fiscais: completa o que o produto ainda não tem; o que já tem fica (só avisa se a nota diz outra coisa)
+    const fiscalFeito = new Set<string>();
+    for (const it of nota.itens) {
+      if (fiscalFeito.has(it.produtoId!)) continue;
+      fiscalFeito.add(it.produtoId!);
+      const doItem = fiscalDoItem(it);
+      const novos: Record<string, string> = {};
+      for (const [campo, rotulo] of CAMPOS_FISCAIS) {
+        const v = doItem[campo], atual = it.produto![campo];
+        if (!v) continue;
+        if (!atual) novos[campo] = v;
+        else if (atual.trim() !== v.trim()) avisos.push(`${it.produto!.nome}: ${rotulo} do cadastro (${atual}) é diferente da nota (${v}) — mantido o do cadastro.`);
+      }
+      if (Object.keys(novos).length) await tx.produto.update({ where: { id: it.produtoId!, empresaId }, data: novos });
     }
 
     // 3) Contas a pagar: uma por duplicata (sem duplicata: uma, à vista, no valor da nota)
@@ -244,10 +314,11 @@ export async function lancarNota({ empresaId, usuarioId, notaId, escolhas = [], 
     // 4) Pedido de compra: o custo real da NF vai para os itens do pedido com o mesmo produto
     let itensPedido = 0;
     if (pedidoCompraId) {
+      // na unidade do produto (o pedido é feito nela): quantidade convertida, mesmo valor total
       const custo = new Map<string, { qtd: number; total: number }>();
       for (const it of nota.itens) {
         const c = custo.get(it.produtoId!) ?? { qtd: 0, total: 0 };
-        custo.set(it.produtoId!, { qtd: c.qtd + Number(it.quantidade), total: c.total + Number(it.quantidade) * Number(it.valorUnitario) });
+        custo.set(it.produtoId!, { qtd: c.qtd + Number(it.quantidade) * Number(it.fatorConversao), total: c.total + Number(it.quantidade) * Number(it.valorUnitario) });
       }
       for (const pi of await tx.pedidoCompraItem.findMany({ where: { pedidoId: pedidoCompraId, produtoId: { in: [...custo.keys()] } }, select: { id: true, produtoId: true } })) {
         const c = custo.get(pi.produtoId!)!;
@@ -264,6 +335,7 @@ export async function lancarNota({ empresaId, usuarioId, notaId, escolhas = [], 
       contas: contas.map((c) => ({ id: c.id, numero: c.numero, valor: Number(c.valorTotal), vencimento: c.dataVencimento })),
       itensPedido,
       avisos,
+      avisosCusto,
     };
   }, { timeout: 30_000 });
 }

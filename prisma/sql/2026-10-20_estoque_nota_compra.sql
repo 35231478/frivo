@@ -11,7 +11,15 @@
 --   4. tabela "de_para_produto_fornecedor" (código do item no fornecedor → produto; aprende);
 --   5. "contas_pagar"."nota_compra_id" (opcional) — a conta a pagar gerada pela nota;
 --   6. "movimentacoes_estoque"."custo_unitario" passa de DECIMAL(12,2) para DECIMAL(14,4): a NF
---      traz custo unitário com mais de 2 casas (alargar não perde nenhum valor existente).
+--      traz custo unitário com mais de 2 casas (alargar não perde nenhum valor existente);
+--   7. (ajuste) conversão de unidade que aprende, margem de venda e dados fiscais:
+--      - de-para: "unidade_origem" e "fator_conversao" (padrão 1 — os vínculos já aprendidos seguem 1:1);
+--      - itens da nota: "fator_conversao" (padrão 1) e os fiscais do XML ("cest", "gtin", "origem",
+--        "unidade_tributavel"; o "ncm" já existia);
+--      - produtos: "margem_venda" (% sobre a venda; vazia = preço fixo) e os fiscais "ncm", "cest",
+--        "gtin", "origem_mercadoria", "unidade_tributavel". O preço de venda é o "valor_padrao" que já
+--        existe (orçamentos, medições e tabelas de preço já usam).
+--      Só ADD COLUMN IF NOT EXISTS: vale para banco onde a versão anterior deste arquivo já rodou.
 -- Índices e chaves estrangeiras com os mesmos nomes que o Prisma usa.
 -- Nada é removido; nenhum dado existente muda.
 --
@@ -102,6 +110,21 @@ CREATE INDEX IF NOT EXISTS "contas_pagar_nota_compra_id_idx" ON "contas_pagar"("
 
 -- 6. Custo unitário com 4 casas (só alarga; rodar de novo não muda nada)
 ALTER TABLE "movimentacoes_estoque" ALTER COLUMN "custo_unitario" SET DATA TYPE DECIMAL(14,4);
+
+-- 7. Conversão de unidade, margem de venda e dados fiscais (ajuste da E2)
+ALTER TABLE "de_para_produto_fornecedor" ADD COLUMN IF NOT EXISTS "unidade_origem" TEXT;
+ALTER TABLE "de_para_produto_fornecedor" ADD COLUMN IF NOT EXISTS "fator_conversao" DECIMAL(15,6) NOT NULL DEFAULT 1;
+ALTER TABLE "notas_compra_itens" ADD COLUMN IF NOT EXISTS "fator_conversao" DECIMAL(15,6) NOT NULL DEFAULT 1;
+ALTER TABLE "notas_compra_itens" ADD COLUMN IF NOT EXISTS "cest" TEXT;
+ALTER TABLE "notas_compra_itens" ADD COLUMN IF NOT EXISTS "gtin" TEXT;
+ALTER TABLE "notas_compra_itens" ADD COLUMN IF NOT EXISTS "origem" TEXT;
+ALTER TABLE "notas_compra_itens" ADD COLUMN IF NOT EXISTS "unidade_tributavel" TEXT;
+ALTER TABLE "produtos" ADD COLUMN IF NOT EXISTS "margem_venda" DECIMAL(5,2);
+ALTER TABLE "produtos" ADD COLUMN IF NOT EXISTS "ncm" TEXT;
+ALTER TABLE "produtos" ADD COLUMN IF NOT EXISTS "cest" TEXT;
+ALTER TABLE "produtos" ADD COLUMN IF NOT EXISTS "gtin" TEXT;
+ALTER TABLE "produtos" ADD COLUMN IF NOT EXISTS "origem_mercadoria" TEXT;
+ALTER TABLE "produtos" ADD COLUMN IF NOT EXISTS "unidade_tributavel" TEXT;
 
 -- Chaves estrangeiras (só as que ainda não existem)
 DO $$

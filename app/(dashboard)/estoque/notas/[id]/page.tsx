@@ -9,8 +9,10 @@ import { cn, formatarCpfCnpj, formatarMoeda } from "@/lib/utils";
 import { formatarQtd } from "@/lib/estoque/regras";
 import { carregarNota } from "@/lib/compras/notas";
 import { chaveDePara, parcelasDaNota, type DuplicataNfe } from "@/lib/compras/nfe";
+import { ultimosCustos } from "@/lib/estoque/custo";
+import { avisoCusto, formatarFator, mesmaUnidade } from "@/lib/estoque/preco";
 import { chaveEmBlocos, COR_STATUS_NOTA, LABEL_STATUS_NOTA } from "@/lib/compras/rotulos";
-import { ConciliacaoNota } from "@/components/compras/conciliacao-nota";
+import { ConciliacaoNota, type ItemConciliacao } from "@/components/compras/conciliacao-nota";
 
 export const metadata: Metadata = { title: "Nota de compra" };
 
@@ -53,7 +55,7 @@ export default async function NotaCompraPage({ params }: { params: Promise<{ id:
         <p className="text-[11px] text-ink-subtle">Importada em {dataHoraBr(nota.criadoEm)}{nota.usuario && ` por ${nota.usuario.nome}`}{nota.lancadaEm && ` · lançada em ${dataHoraBr(nota.lancadaEm)}`}</p>
       </div>
 
-      {lancada ? <Resultado nota={nota} movs={await entradasDaNota(u.empresaId, nota.id)} /> : gerencia ? (
+      {lancada ? <Resultado nota={nota} movs={await entradasDaNota(u.empresaId, nota.id)} avisos={await avisosDeCusto(u.empresaId, nota)} /> : gerencia ? (
         <ConciliacaoNota
           notaId={nota.id}
           itens={await itensParaConciliar(u.empresaId, nota)}
@@ -61,6 +63,7 @@ export default async function NotaCompraPage({ params }: { params: Promise<{ id:
           podeLancar={financeiro}
           motivoSemLancar={financeiro ? null : "Lançar gera conta a pagar: precisa de Financeiro › fluxo de caixa. Você pode salvar os vínculos."}
           parcelas={parcelas.map((p) => ({ numero: p.numero, vencimento: diaBr(p.vencimento), valor: p.valor }))}
+          podePrecificar={pode(u.permissoes, "configuracoes", "gerenciar", u.role)}
         />
       ) : (
         <ItensSomenteLeitura nota={nota} />
@@ -71,18 +74,31 @@ export default async function NotaCompraPage({ params }: { params: Promise<{ id:
 
 type Nota = NonNullable<Awaited<ReturnType<typeof carregarNota>>>;
 
-async function itensParaConciliar(empresaId: string, nota: Nota) {
+async function itensParaConciliar(empresaId: string, nota: Nota): Promise<ItemConciliacao[]> {
   const deParas = await prisma.deParaProdutoFornecedor.findMany({
     where: { empresaId, fornecedorId: nota.fornecedorId, codigoFornecedor: { in: nota.itens.map((i) => chaveDePara(i.codigoFornecedor)) } },
-    select: { codigoFornecedor: true, produtoId: true },
+    select: { codigoFornecedor: true, produtoId: true, unidadeOrigem: true, fatorConversao: true },
   });
-  const aprendido = new Map(deParas.map((d) => [d.codigoFornecedor, d.produtoId]));
-  return nota.itens.map((i) => ({
-    id: i.id, numeroItem: i.numeroItem, codigoFornecedor: i.codigoFornecedor, descricaoFornecedor: i.descricaoFornecedor, ncm: i.ncm,
-    unidade: i.unidade, quantidade: Number(i.quantidade), valorUnitario: Number(i.valorUnitario), valorTotal: Number(i.valorTotal),
-    produto: i.produto ? { id: i.produto.id, nome: i.produto.nome, unidade: i.produto.unidade } : null,
-    aprendido: !!i.produtoId && aprendido.get(chaveDePara(i.codigoFornecedor)) === i.produtoId,
-  }));
+  const aprendido = new Map(deParas.map((d) => [d.codigoFornecedor, d]));
+  // último custo de compra de cada produto (fora desta nota): base do aviso "o custo mudou"
+  const custos = await ultimosCustos(empresaId, nota.itens.flatMap((i) => (i.produtoId ? [i.produtoId] : [])), { excetoNotaId: nota.id });
+  return nota.itens.map((i) => {
+    const dp = aprendido.get(chaveDePara(i.codigoFornecedor));
+    const p = i.produto;
+    return {
+      id: i.id, numeroItem: i.numeroItem, codigoFornecedor: i.codigoFornecedor, descricaoFornecedor: i.descricaoFornecedor,
+      unidade: i.unidade, quantidade: Number(i.quantidade), valorUnitario: Number(i.valorUnitario), valorTotal: Number(i.valorTotal),
+      fiscal: { ncm: i.ncm, cest: i.cest, gtin: i.gtin, origemMercadoria: i.origem, unidadeTributavel: i.unidadeTributavel },
+      fator: Number(i.fatorConversao),
+      fatorAprendido: dp && dp.produtoId === i.produtoId ? { unidade: dp.unidadeOrigem, fator: Number(dp.fatorConversao) } : null,
+      produto: p ? {
+        id: p.id, nome: p.nome, unidade: p.unidade, preco: p.valorPadrao == null ? null : Number(p.valorPadrao),
+        margemVenda: p.margemVenda == null ? null : Number(p.margemVenda), custo: custos.get(p.id) ?? null,
+        fiscal: { ncm: p.ncm, cest: p.cest, gtin: p.gtin, origemMercadoria: p.origemMercadoria, unidadeTributavel: p.unidadeTributavel },
+      } : null,
+      aprendido: !!i.produtoId && dp?.produtoId === i.produtoId,
+    };
+  });
 }
 
 /** Pedidos que ainda podem receber esta nota: abertos e sem conta a pagar */
@@ -118,18 +134,40 @@ async function entradasDaNota(empresaId: string, notaId: string) {
   });
 }
 
-function Resultado({ nota, movs }: { nota: Nota; movs: Awaited<ReturnType<typeof entradasDaNota>> }) {
-  const divergentes = nota.itens.filter((i) => i.produto && i.produto.unidade.trim().toLowerCase() !== i.unidade.trim().toLowerCase());
+/** Custo da nota ≠ compra anterior: só aviso (o preço não muda sozinho) */
+async function avisosDeCusto(empresaId: string, nota: Nota) {
+  const comProduto = nota.itens.filter((i) => i.produto);
+  const antes = await ultimosCustos(empresaId, comProduto.map((i) => i.produtoId!), { excetoNotaId: nota.id, antesDe: nota.lancadaEm });
+  return comProduto.flatMap((i) => {
+    const p = i.produto!;
+    const a = avisoCusto({
+      produtoId: p.id, produto: p.nome, unidade: p.unidade, custoAnterior: antes.get(p.id),
+      custoNovo: Math.round((Number(i.valorUnitario) / Number(i.fatorConversao)) * 1e4) / 1e4,
+      preco: p.valorPadrao == null ? null : Number(p.valorPadrao), margemAlvo: p.margemVenda == null ? null : Number(p.margemVenda),
+    });
+    return a ? [a] : [];
+  });
+}
+
+function Resultado({ nota, movs, avisos }: { nota: Nota; movs: Awaited<ReturnType<typeof entradasDaNota>>; avisos: Awaited<ReturnType<typeof avisosDeCusto>> }) {
+  const convertidos = nota.itens.filter((i) => i.produto && (Number(i.fatorConversao) !== 1 || !mesmaUnidade(i.unidade, i.produto.unidade)));
   const totalContas = nota.contasPagar.reduce((t, c) => t + Number(c.valorTotal), 0);
   return (
     <div className="space-y-4" data-resultado>
       <p className="flex items-center gap-2 text-sm font-semibold text-success-700 bg-success-50 border border-success-200 rounded-lg px-3 py-2">
         <CheckCircle2 className="w-4 h-4" /> Nota lançada: {movs.length} entrada(s) no estoque e {nota.contasPagar.length} conta(s) a pagar.
       </p>
-      {divergentes.length > 0 && (
-        <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 space-y-0.5" data-avisos>
-          {divergentes.map((i) => (
-            <p key={i.id} className="flex items-start gap-1"><AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" /> {i.produto!.nome}: a nota veio em “{i.unidade}” e o produto é em “{i.produto!.unidade}” — entrou {formatarQtd(Number(i.quantidade))} como estava na nota.</p>
+      {convertidos.length > 0 && (
+        <div className="text-xs text-primary-800 bg-primary-50 border border-primary-200 rounded-lg px-3 py-2 space-y-0.5" data-conversoes>
+          {convertidos.map((i) => (
+            <p key={i.id}>{i.produto!.nome}: 1 {i.unidade} = {formatarFator(Number(i.fatorConversao))} {i.produto!.unidade} — {formatarQtd(Number(i.quantidade))} {i.unidade} entraram como {formatarQtd(Number(i.quantidade) * Number(i.fatorConversao))} {i.produto!.unidade}.</p>
+          ))}
+        </div>
+      )}
+      {avisos.length > 0 && (
+        <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 space-y-1" data-avisos-custo>
+          {avisos.map((a) => (
+            <p key={a.produtoId} className="flex items-start gap-1"><AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" /> <span><strong>{a.produto}</strong> — {a.texto} <Link href={`/estoque/${a.produtoId}`} className="font-semibold text-primary-700 hover:underline">Ver preço</Link></span></p>
           ))}
         </div>
       )}

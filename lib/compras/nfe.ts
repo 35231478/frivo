@@ -23,6 +23,12 @@ export interface ItemNfe {
   ean: string | null;
   ncm: string | null;
   cfop: string | null;
+  cest: string | null;
+  /** origem da mercadoria (0 a 8) do grupo ICMS do item */
+  origem: string | null;
+  /** unidade tributável (uTrib) */
+  unidadeTributavel: string | null;
+  /** unidade comercial (uCom): a quantidade e o valor unitário estão nela */
   unidade: string;
   quantidade: number;
   valorUnitario: number;
@@ -109,14 +115,20 @@ export function lerNfe(xml: string): NotaNfe {
   if (!dets.length) throw new ErroNfe("A nota não tem itens.");
   const itens: ItemNfe[] = dets.map((d, i) => {
     const p = d.prod ?? {};
-    const ean = txt(p.cEAN);
+    const gtin = (v: unknown) => { const t = txt(v); return t && t.toUpperCase() !== "SEM GTIN" ? t : null; };
+    // ICMS vem num subgrupo que muda com a tributação (ICMS00, ICMS20, ICMSSN102…): a origem é igual em todos
+    const icms = Object.values((d.imposto?.ICMS ?? {}) as Record<string, unknown>).find((g) => g && typeof g === "object") as Record<string, unknown> | undefined;
+    const origem = txt(icms?.orig);
     return {
       numeroItem: Number(txt(d["@nItem"])) || i + 1,
       codigo: txt(p.cProd) || `ITEM-${i + 1}`,
       descricao: txt(p.xProd),
-      ean: ean && ean.toUpperCase() !== "SEM GTIN" ? ean : null,
+      ean: gtin(p.cEAN) ?? gtin(p.cEANTrib),
       ncm: opc(p.NCM),
       cfop: opc(p.CFOP),
+      cest: opc(p.CEST),
+      origem: /^[0-8]$/.test(origem) ? origem : null,
+      unidadeTributavel: opc(p.uTrib),
       unidade: txt(p.uCom) || "UN",
       quantidade: num(p.qCom, `qCom do item ${i + 1}`),
       valorUnitario: num(p.vUnCom, `vUnCom do item ${i + 1}`),

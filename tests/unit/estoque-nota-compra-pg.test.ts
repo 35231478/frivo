@@ -5,7 +5,9 @@
  *  - lançamento é tudo-ou-nada: se um item falha no meio, nada fica (nem estoque, nem conta, nem
  *    produto novo, nem de-para, e a nota volta a poder ser lançada);
  *  - duas confirmações simultâneas da mesma nota: só UMA lança;
- *  - duas importações simultâneas do mesmo XML: só UMA cria a nota.
+ *  - duas importações simultâneas do mesmo XML: só UMA cria a nota;
+ *  - conversão de unidade (1 UN = 13,6 kg) gravada nas casas certas, de-para aprende o fator, a 2ª nota
+ *    já vem com ele; aviso de custo compara com a compra ANTERIOR (ordem real do banco); preço não muda.
  *   PG_TESTE_URL="postgresql://root@localhost/postgres?host=/var/run/postgresql" npx vitest run tests/unit/estoque-nota-compra-pg
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -18,6 +20,8 @@ const SCHEMA = `teste_e2_pg_${process.pid}`;
 const RAIZ = path.resolve(__dirname, "../..");
 const XML1 = readFileSync(path.resolve(__dirname, "fixtures/nfe/nfe-4521-frigelar.xml"), "utf8");
 const XML2 = readFileSync(path.resolve(__dirname, "fixtures/nfe/nfe-4610-frigelar.xml"), "utf8");
+const XML_GAS1 = readFileSync(path.resolve(__dirname, "fixtures/nfe/nfe-4800-refrigas.xml"), "utf8");
+const XML_GAS2 = readFileSync(path.resolve(__dirname, "fixtures/nfe/nfe-4855-refrigas.xml"), "utf8");
 
 describe.skipIf(!URL_PG)("nota de compra no PostgreSQL real", () => {
   let prisma: any;
@@ -99,5 +103,30 @@ describe.skipIf(!URL_PG)("nota de compra no PostgreSQL real", () => {
     // e a 2ª nota do mesmo fornecedor já veio com o gás vinculado (aprendido no teste anterior)
     const nota = await prisma.notaCompra.findFirst({ where: { numero: "4610" }, include: { itens: { orderBy: { numeroItem: "asc" } } } });
     expect(nota.itens.map((i: any) => i.produtoId)).toEqual(["pGas", null]);
+  }, 60_000);
+
+  it("conversão 1 UN = 13,6 kg: 13,600 kg a 100,0000/kg; a 2ª nota já vem com o fator; custo mudou só avisa", async () => {
+    await prisma.produto.create({ data: { id: "pR404", empresaId: "e1", nome: "Gás R404A", unidade: "kg", valorPadrao: 142.86, margemVenda: 30 } });
+    const n1 = (await lib.importarNota({ empresaId: "e1", usuarioId: "u1", xml: XML_GAS1 })).nota;
+    const [gas1, val1] = await prisma.notaCompraItem.findMany({ where: { notaId: n1.id }, orderBy: { numeroItem: "asc" } });
+    expect([gas1.cest, gas1.gtin, gas1.origem, gas1.unidadeTributavel, gas1.fatorConversao.toString()]).toEqual(["0100100", "7891234500017", "1", "KG", "1"]);
+    await lib.lancarNota({ empresaId: "e1", usuarioId: "u1", notaId: n1.id, escolhas: [{ itemId: gas1.id, produtoId: "pR404", fator: 13.6 }, { itemId: val1.id, novo: { nome: "Válvula 1/4" } }] });
+    const [m1] = await prisma.movimentacaoEstoque.findMany({ where: { refId: n1.id, produtoId: "pR404" } });
+    expect([m1.quantidade.toString(), m1.custoUnitario.toString()]).toEqual(["13.6", "100"]);
+    const dp = await prisma.deParaProdutoFornecedor.findFirst({ where: { codigoFornecedor: "R404A-136" } });
+    expect([dp.unidadeOrigem, dp.fatorConversao.toString(), dp.produtoId]).toEqual(["UN", "13.6", "pR404"]);
+    const valvula = await prisma.produto.findFirst({ where: { nome: "Válvula 1/4" } });
+    expect([valvula.ncm, valvula.gtin, valvula.origemMercadoria, valvula.unidadeTributavel]).toEqual(["84818099", "7891234500024", "0", "PC"]);
+    expect((await prisma.produto.findUnique({ where: { id: "pR404" } })).ncm).toBe("29037990"); // estava vazio: veio da nota
+
+    const n2 = (await lib.importarNota({ empresaId: "e1", usuarioId: "u1", xml: XML_GAS2 })).nota;
+    const [gas2] = await prisma.notaCompraItem.findMany({ where: { notaId: n2.id } });
+    expect([gas2.produtoId, gas2.fatorConversao.toString()]).toEqual(["pR404", "13.6"]);
+    const r = await lib.lancarNota({ empresaId: "e1", usuarioId: "u1", notaId: n2.id });
+    expect(r.entradas[0]).toMatchObject({ quantidade: 27.2, custoUnitario: 105 });
+    expect(r.avisosCusto.map((a) => [a.custoAnterior, a.custoNovo, a.precoParaManter])).toEqual([[100, 105, 150]]);
+    expect(r.avisos).toEqual(["Gás R404A: NCM do cadastro (29037990) é diferente da nota (38247800) — mantido o do cadastro."]);
+    const depois = await prisma.produto.findUnique({ where: { id: "pR404" } });
+    expect([depois.valorPadrao.toString(), depois.margemVenda.toString(), depois.saldo.toString(), depois.ncm]).toEqual(["142.86", "30", "40.8", "29037990"]);
   }, 60_000);
 });

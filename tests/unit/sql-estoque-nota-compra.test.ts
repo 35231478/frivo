@@ -2,7 +2,8 @@
  * Estoque E2 — o SQL de produção (prisma/sql/2026-10-20_estoque_nota_compra.sql) rodado de
  * verdade num PostgreSQL: schema descartável no estado DEPOIS da E1 (com movimentacoes_estoque),
  * roda o arquivo DUAS vezes e confere. Um segundo schema SEM a E1 prova que o arquivo para sem
- * alterar nada.
+ * alterar nada. Um terceiro tem a 1ª VERSÃO deste arquivo já rodada (como pode estar em produção):
+ * a versão nova roda por cima e só acrescenta as colunas do ajuste (conversão, margem, fiscais).
  *   PG_TESTE_URL="postgresql://root@localhost/postgres?host=/var/run/postgresql" npx vitest run tests/unit/sql-estoque-nota-compra
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -13,6 +14,8 @@ const URL = process.env.PG_TESTE_URL;
 const ARQUIVO = path.resolve(__dirname, "../../prisma/sql/2026-10-20_estoque_nota_compra.sql");
 const SCHEMA = `teste_e2_${process.pid}`;
 const SEM_E1 = `teste_e2_sem_e1_${process.pid}`;
+const V1 = `teste_e2_v1_${process.pid}`;
+const ARQUIVO_V1 = path.resolve(__dirname, "fixtures/sql/estoque_nota_compra-v1.sql");
 
 function psql(schema: string, args: string[]) {
   return execFileSync("psql", [URL!, "-v", "ON_ERROR_STOP=1", "-q", "-At", ...args], {
@@ -38,7 +41,7 @@ const BASE = `
 
 describe.skipIf(!URL)("SQL de produção: nota de compra (PostgreSQL real)", () => {
   beforeAll(() => {
-    for (const s of [SCHEMA, SEM_E1]) execFileSync("psql", [URL!, "-v", "ON_ERROR_STOP=1", "-q", "-c", `DROP SCHEMA IF EXISTS ${s} CASCADE; CREATE SCHEMA ${s};`]);
+    for (const s of [SCHEMA, SEM_E1, V1]) execFileSync("psql", [URL!, "-v", "ON_ERROR_STOP=1", "-q", "-c", `DROP SCHEMA IF EXISTS ${s} CASCADE; CREATE SCHEMA ${s};`]);
     // Estado depois da E1: movimentacoes_estoque com custo DECIMAL(12,2) e um lançamento antigo
     sql(BASE + `
       CREATE TABLE "movimentacoes_estoque" ("id" TEXT PRIMARY KEY, "produto_id" TEXT NOT NULL, "quantidade" DECIMAL(12,3) NOT NULL, "custo_unitario" DECIMAL(12,2), "origem" TEXT, "ref_id" TEXT);
@@ -47,7 +50,45 @@ describe.skipIf(!URL)("SQL de produção: nota de compra (PostgreSQL real)", () 
     psql(SCHEMA, ["-f", ARQUIVO]);
     psql(SCHEMA, ["-f", ARQUIVO]);
   });
-  afterAll(() => { execFileSync("psql", [URL!, "-q", "-c", `DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE; DROP SCHEMA IF EXISTS ${SEM_E1} CASCADE;`]); });
+  afterAll(() => { execFileSync("psql", [URL!, "-q", "-c", `DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE; DROP SCHEMA IF EXISTS ${SEM_E1} CASCADE; DROP SCHEMA IF EXISTS ${V1} CASCADE;`]); });
+
+  const colunas = (schema: string, tabela: string, nomes: string[]) => psql(schema, ["-c",
+    `SELECT string_agg(column_name || ':' || data_type || COALESCE('(' || numeric_precision || ',' || numeric_scale || ')', '') || ':' || is_nullable || ':' || COALESCE(column_default, '-'), ' ' ORDER BY column_name)
+     FROM information_schema.columns WHERE table_schema = '${schema}' AND table_name = '${tabela}' AND column_name IN (${nomes.map((n) => `'${n}'`).join(", ")})`]);
+  const COLUNAS_AJUSTE = (schema: string) => ({
+    dePara: colunas(schema, "de_para_produto_fornecedor", ["unidade_origem", "fator_conversao"]),
+    item: colunas(schema, "notas_compra_itens", ["fator_conversao", "cest", "gtin", "origem", "unidade_tributavel"]),
+    produto: colunas(schema, "produtos", ["margem_venda", "ncm", "cest", "gtin", "origem_mercadoria", "unidade_tributavel"]),
+  });
+  const ESPERADAS = {
+    dePara: "fator_conversao:numeric(15,6):NO:1 unidade_origem:text:YES:-",
+    item: "cest:text:YES:- fator_conversao:numeric(15,6):NO:1 gtin:text:YES:- origem:text:YES:- unidade_tributavel:text:YES:-",
+    produto: "cest:text:YES:- gtin:text:YES:- margem_venda:numeric(5,2):YES:- ncm:text:YES:- origem_mercadoria:text:YES:- unidade_tributavel:text:YES:-",
+  };
+
+  it("ajuste: colunas de conversão (fator padrão 1), margem de venda e fiscais — banco novo, rodando 2x", () => {
+    expect(COLUNAS_AJUSTE(SCHEMA)).toEqual(ESPERADAS);
+    expect(sql(`SELECT COALESCE("margem_venda"::text, 'NULL') || '|' || COALESCE("ncm", 'NULL') FROM "produtos" WHERE "id" = 'p1'`)).toBe("NULL|NULL");
+  });
+
+  it("ajuste por cima da 1ª versão (já rodada em produção): só acrescenta; vínculos e itens antigos ficam com fator 1", () => {
+    psql(V1, ["-c", BASE + `CREATE TABLE "movimentacoes_estoque" ("id" TEXT PRIMARY KEY, "produto_id" TEXT NOT NULL, "quantidade" DECIMAL(12,3) NOT NULL, "custo_unitario" DECIMAL(12,2), "origem" TEXT, "ref_id" TEXT);`]);
+    psql(V1, ["-f", ARQUIVO_V1]);
+    psql(V1, ["-c", `
+      INSERT INTO "notas_compra" ("id", "empresa_id", "fornecedor_id", "chave_acesso", "numero", "serie", "data_emissao", "valor_total", "xml", "emitente_nome", "emitente_cnpj", "atualizado_em")
+        VALUES ('n1', 'e1', 'f1', '35261012345678000190550010000001231000001234', '123', '1', now(), 100, '<xml/>', 'F', '1', now());
+      INSERT INTO "notas_compra_itens" ("id", "nota_id", "numero_item", "codigo_fornecedor", "descricao_fornecedor", "ncm", "unidade", "quantidade", "valor_unitario", "valor_total", "produto_id")
+        VALUES ('i1', 'n1', 1, 'R410-11', 'GAS', '29037990', 'UN', 2, 50, 100, 'p1');
+      INSERT INTO "de_para_produto_fornecedor" ("id", "empresa_id", "fornecedor_id", "codigo_fornecedor", "descricao_fornecedor", "produto_id", "atualizado_em")
+        VALUES ('d1', 'e1', 'f1', 'R410-11', 'GAS', 'p1', now());`]);
+    expect(COLUNAS_AJUSTE(V1).dePara).toBe(""); // a 1ª versão não tinha
+    psql(V1, ["-f", ARQUIVO]);
+    psql(V1, ["-f", ARQUIVO]);
+    expect(COLUNAS_AJUSTE(V1)).toEqual(ESPERADAS);
+    expect(psql(V1, ["-c", `SELECT "fator_conversao" || '|' || COALESCE("unidade_origem", 'NULL') || '|' || "produto_id" FROM "de_para_produto_fornecedor"`])).toBe("1.000000|NULL|p1");
+    expect(psql(V1, ["-c", `SELECT "fator_conversao" || '|' || "ncm" || '|' || "quantidade" FROM "notas_compra_itens"`])).toBe("1.000000|29037990|2.0000");
+    expect(psql(V1, ["-c", `SELECT count(*) FROM "notas_compra"`])).toBe("1");
+  });
 
   it("cria o tipo, as 3 tabelas, índices e as 10 chaves — rodando 2x não duplica nem falha", () => {
     expect(sql(`SELECT string_agg(e.enumlabel, ',' ORDER BY e.enumsortorder) FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid JOIN pg_namespace n ON n.oid = t.typnamespace WHERE t.typname = 'StatusNotaCompra' AND n.nspname = '${SCHEMA}'`))

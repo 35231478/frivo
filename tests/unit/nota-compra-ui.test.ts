@@ -3,7 +3,8 @@
  * Estoque E2 — telas num DOM de verdade (happy-dom), API simulada:
  *  - upload: manda o arquivo; sucesso abre a nota; nota repetida mostra o aviso com o link; PDF recusado;
  *  - conciliação: aprendido já vinculado; buscar e escolher produto; criar novo (nome editável);
- *    aviso de unidade; "criar para todos"; o corpo enviado para lançar; botão travado sem vínculo/permissão.
+ *    unidade diferente pede o fator; "criar para todos"; o corpo enviado para lançar (com o fator);
+ *    botão travado sem vínculo/fator/permissão. (Conversão, preço e aviso de custo: estoque-e2-ajuste-ui.test.ts)
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
@@ -81,10 +82,12 @@ describe("upload do XML", () => {
   });
 });
 
+const SEM_FISCAL = { ncm: null, cest: null, gtin: null, origemMercadoria: null, unidadeTributavel: null };
+const produto = (id: string, nome: string, unidade: string) => ({ id, nome, unidade, preco: null, margemVenda: null, custo: null, fiscal: SEM_FISCAL });
 const ITENS = [
-  { id: "i1", numeroItem: 1, codigoFornecedor: "R410A-11", descricaoFornecedor: "GAS R410A 11,35KG", ncm: "29037990", unidade: "UN", quantidade: 2, valorUnitario: 689.9, valorTotal: 1379.8, produto: { id: "pGas", nome: "Gás R410A", unidade: "un" }, aprendido: true },
-  { id: "i2", numeroItem: 2, codigoFornecedor: "CAP-35UF", descricaoFornecedor: "CAPACITOR 35UF 440V", ncm: null, unidade: "PC", quantidade: 10, valorUnitario: 18.45, valorTotal: 184.5, produto: null, aprendido: false },
-  { id: "i3", numeroItem: 3, codigoFornecedor: "TUB-14-15", descricaoFornecedor: "TUBO COBRE 1/4", ncm: null, unidade: "M", quantidade: 15, valorUnitario: 12.3333, valorTotal: 185, produto: null, aprendido: false },
+  { id: "i1", numeroItem: 1, codigoFornecedor: "R410A-11", descricaoFornecedor: "GAS R410A 11,35KG", unidade: "UN", quantidade: 2, valorUnitario: 689.9, valorTotal: 1379.8, fiscal: { ...SEM_FISCAL, ncm: "29037990" }, fator: 1, fatorAprendido: { unidade: "UN", fator: 1 }, produto: produto("pGas", "Gás R410A", "un"), aprendido: true },
+  { id: "i2", numeroItem: 2, codigoFornecedor: "CAP-35UF", descricaoFornecedor: "CAPACITOR 35UF 440V", unidade: "PC", quantidade: 10, valorUnitario: 18.45, valorTotal: 184.5, fiscal: SEM_FISCAL, fator: 1, fatorAprendido: null, produto: null, aprendido: false },
+  { id: "i3", numeroItem: 3, codigoFornecedor: "TUB-14-15", descricaoFornecedor: "TUBO COBRE 1/4", unidade: "M", quantidade: 15, valorUnitario: 12.3333, valorTotal: 185, fiscal: SEM_FISCAL, fator: 1, fatorAprendido: null, produto: null, aprendido: false },
 ];
 const props = (extra: Record<string, unknown> = {}) => ({
   notaId: "n1", itens: ITENS, pedidos: [{ id: "ped1", numero: "PC-0312" }], podeLancar: true,
@@ -94,12 +97,13 @@ const props = (extra: Record<string, unknown> = {}) => ({
 const botao = (t: string) => [...caixa.querySelectorAll("button")].find((b) => b.textContent?.trim().endsWith(t)) as HTMLButtonElement;
 
 describe("conciliação (de-para)", () => {
-  it("aprendido já vinculado; busca + escolhe; cria novo; aviso de unidade; lança com o corpo certo", async () => {
+  it("aprendido já vinculado; busca + escolhe; cria novo; unidade diferente pede o fator; lança com o corpo certo", async () => {
     const { ConciliacaoNota } = await import("@/components/compras/conciliacao-nota");
     await montar(createElement(ConciliacaoNota, props()));
     expect($("[data-vinculados]")!.textContent).toBe("1");
     expect($('[data-item="1"] [data-aprendido]')).not.toBeNull();
-    expect($('[data-item="1"] [data-unidade-divergente]')).toBeNull(); // UN × un
+    expect(($('[data-fator-item="1"]') as HTMLInputElement).disabled).toBe(true); // UN × un: 1, travado
+    expect(($('[data-fator-item="1"]') as HTMLInputElement).value).toBe("1");
     expect(botao("Confirmar e lançar").disabled).toBe(true); // faltam 2
     const parcelas = $$("[data-parcelas] li").map((l) => l.textContent ?? "");
     expect(parcelas).toHaveLength(3);
@@ -114,13 +118,18 @@ describe("conciliação (de-para)", () => {
     await passar(400);
     expect(chamadas.length).toBe(n0);
     // item 2: busca "cap" (debounce) e escolhe o produto do cadastro
-    respostas["/api/compras/produtos"] = { status: 200, corpo: { produtos: [{ id: "pCap", nome: "Capacitor 35uF", unidade: "un", saldo: 3 }] } };
+    respostas["/api/compras/produtos"] = { status: 200, corpo: { produtos: [{ ...produto("pCap", "Capacitor 35uF", "un"), saldo: 3 }] } };
     await digitar($('[data-item="2"] [data-busca-produto]') as HTMLInputElement, "cap");
     await passar(300);
     expect(chamadas.at(-1)!.url).toBe("/api/compras/produtos?q=cap");
     await clicar($('[data-opcao-produto="pCap"]'));
     expect($('[data-item="2"] [data-vinculo]')!.getAttribute("data-vinculo")).toBe("existente");
-    expect($('[data-item="2"] [data-unidade-divergente]')!.textContent).toContain("A nota vem em “PC” e o produto é em “un”");
+    // PC × un: o fator vem em branco e a pessoa informa (sem ele, não conta como vinculado)
+    expect(($('[data-fator-item="2"]') as HTMLInputElement).value).toBe("");
+    expect($('[data-item="2"] [data-falta-fator]')!.textContent).toBe("Informe quantos un vêm em 1 PC.");
+    expect($("[data-vinculados]")!.textContent).toBe("1");
+    await digitar($('[data-fator-item="2"]') as HTMLInputElement, "1");
+    expect($('[data-item="2"] [data-entra]')!.textContent).toMatch(/Entra 10 un · custo R\$\s18,45\/un/);
 
     // item 3: produto novo com o nome da nota, editado
     await clicar($('[data-criar-novo="3"]'));
@@ -138,7 +147,7 @@ describe("conciliação (de-para)", () => {
     respostas["/api/compras/notas/n1/lancar"] = { status: 201, corpo: { entradas: [], contas: [] } };
     await clicar(botao("Confirmar e lançar"));
     expect(chamadas.at(-1)).toEqual({ url: "/api/compras/notas/n1/lancar", metodo: "POST", corpo: {
-      itens: [{ itemId: "i1", produtoId: "pGas" }, { itemId: "i2", produtoId: "pCap" }, { itemId: "i3", novo: { nome: "Tubo de cobre 1/4", unidade: "M" } }],
+      itens: [{ itemId: "i1", produtoId: "pGas", fator: 1 }, { itemId: "i2", produtoId: "pCap", fator: 1 }, { itemId: "i3", novo: { nome: "Tubo de cobre 1/4", unidade: "M" }, fator: 1 }],
       pedidoCompraId: "ped1",
     } });
     expect($('[role="status"]')!.textContent).toBe("Nota lançada.");
@@ -150,7 +159,7 @@ describe("conciliação (de-para)", () => {
     await montar(createElement(ConciliacaoNota, props()));
     respostas["/api/compras/notas/n1/conciliacao"] = { status: 200, corpo: { status: "IMPORTADA", faltam: 2 } };
     await clicar(botao("Salvar vínculos"));
-    expect(chamadas.at(-1)).toEqual({ url: "/api/compras/notas/n1/conciliacao", metodo: "PUT", corpo: { itens: [{ itemId: "i1", produtoId: "pGas" }] } });
+    expect(chamadas.at(-1)).toEqual({ url: "/api/compras/notas/n1/conciliacao", metodo: "PUT", corpo: { itens: [{ itemId: "i1", produtoId: "pGas", fator: 1 }] } });
     expect($('[role="status"]')!.textContent).toBe("Vínculos salvos. Faltam 2 item(ns).");
     await clicar($("[data-criar-todos]"));
     expect($$('[data-vinculo="novo"]')).toHaveLength(2);
@@ -168,7 +177,7 @@ describe("conciliação (de-para)", () => {
 
   it("sem Financeiro: lançar travado com o motivo; sem pedidos, sem o seletor", async () => {
     const { ConciliacaoNota } = await import("@/components/compras/conciliacao-nota");
-    await montar(createElement(ConciliacaoNota, props({ podeLancar: false, motivoSemLancar: "Lançar gera conta a pagar: precisa de Financeiro › fluxo de caixa.", pedidos: [], itens: ITENS.map((i) => ({ ...i, produto: { id: "p", nome: "P", unidade: i.unidade } })) })));
+    await montar(createElement(ConciliacaoNota, props({ podeLancar: false, motivoSemLancar: "Lançar gera conta a pagar: precisa de Financeiro › fluxo de caixa.", pedidos: [], itens: ITENS.map((i) => ({ ...i, produto: produto("p", "P", i.unidade) })) })));
     expect($("[data-vinculados]")!.textContent).toBe("3");
     expect(botao("Confirmar e lançar").disabled).toBe(true);
     expect($("[data-sem-lancar]")!.textContent).toContain("Financeiro › fluxo de caixa");

@@ -322,16 +322,18 @@ describe("lançar a nota", () => {
     expect(r.status).toBe(201);
     const tubo = T("produto").find((p) => p.nome === "Tubo de cobre 1/4");
     expect(r.json.entradas).toEqual([
-      { itemId: expect.any(String), produto: "Gás R410A 11,35 kg", quantidade: 2, custoUnitario: 689.9, saldo: 3 },
-      { itemId: expect.any(String), produto: "Capacitor 35uF", quantidade: 10, custoUnitario: 18.45, saldo: 10 },
-      { itemId: expect.any(String), produto: "Tubo de cobre 1/4", quantidade: 15, custoUnitario: 12.3333333333, saldo: 15 },
+      { itemId: expect.any(String), produto: "Gás R410A 11,35 kg", unidade: "un", quantidade: 2, custoUnitario: 689.9, fator: 1, saldo: 3 },
+      { itemId: expect.any(String), produto: "Capacitor 35uF", unidade: "un", quantidade: 10, custoUnitario: 18.45, fator: 1, saldo: 10 },
+      { itemId: expect.any(String), produto: "Tubo de cobre 1/4", unidade: "M", quantidade: 15, custoUnitario: 12.3333, fator: 1, saldo: 15 },
     ]);
     expect(T("movimentacaoEstoque").map((m) => [m.produtoId, m.tipo, m.origem, m.quantidade, m.saldoApos, m.custoUnitario, m.refId, m.usuarioId])).toEqual([
       ["pGas", "ENTRADA", "COMPRA", 2, 3, 689.9, id, "u1"],
       ["pCap", "ENTRADA", "COMPRA", 10, 10, 18.45, id, "u1"],
-      [tubo.id, "ENTRADA", "COMPRA", 15, 15, 12.3333333333, id, "u1"],
+      [tubo.id, "ENTRADA", "COMPRA", 15, 15, 12.3333, id, "u1"],
     ]);
     expect(T("movimentacaoEstoque")[0].observacao).toBe("NF 4521/1 · FRIGELAR COMERCIO E DISTRIBUICAO S.A. · item 1");
+    // unidade da nota diferente da do produto, sem fator informado: 1:1 e a observação registra a conversão
+    expect(T("movimentacaoEstoque")[1].observacao).toBe("NF 4521/1 · FRIGELAR COMERCIO E DISTRIBUICAO S.A. · item 2 · 10 PC × 1");
     expect([prod("pGas").saldo, prod("pCap").saldo, tubo.saldo]).toEqual([3, 10, 15]);
     expect(T("notaCompra")[0]).toMatchObject({ status: "LANCADA", lancadaEm: expect.any(Date), usuarioId: "u1" });
   });
@@ -386,11 +388,11 @@ describe("lançar a nota", () => {
     expect((await importar(XML1.replace(CHAVE1, CHAVE1).replace("<nNF>4521</nNF>", "<nNF>4521</nNF>"))).status).toBe(409);
   });
 
-  it("unidade divergente: entra como está na nota e avisa", async () => {
+  it("unidade divergente sem fator informado: entra 1:1 (como antes) e o de-para guarda a unidade e o fator", async () => {
     const id = await nota1Conciliada();
     const r = await lancarApi(id);
-    // Capacitor: nota em "PC", produto em "un"
-    expect(r.json.avisos).toEqual([`Capacitor 35uF: a nota vem em "PC" e o produto é em "un" — entrou 10 como está na nota (sem conversão).`]);
+    expect(r.json.avisos).toEqual([]);
+    expect(T("deParaProdutoFornecedor").find((d) => d.produtoId === "pCap")).toMatchObject({ unidadeOrigem: "PC", fatorConversao: 1 });
   });
 
   it("pedido de compra: recebe o custo real (valorReal) e as contas ficam ligadas a ele", async () => {
@@ -514,7 +516,7 @@ describe("telas", () => {
     expect(leitura).toContain("Só quem gerencia o Estoque concilia e lança a nota.");
   });
 
-  it("resultado: entradas com custo, contas a pagar e aviso de unidade; outra empresa = 404", async () => {
+  it("resultado: entradas com custo, contas a pagar e a conversão usada; outra empresa = 404", async () => {
     const id = await nota1Conciliada();
     await lancarApi(id);
     const h = await detalhe(id);
@@ -523,8 +525,8 @@ describe("telas", () => {
     expect(attrs(h, "data-conta")).toEqual([`CP-${ANO}-0008`, `CP-${ANO}-0009`, `CP-${ANO}-0010`]);
     expect(h).toMatch(/R\$\s12,3333/); // custo da NF com 4 casas (espaço do R$ é não separável)
     expect(h).toContain("vence 14/11/2026");
-    expect(h).toContain("data-avisos");
-    expect(h).toContain("Capacitor 35uF: a nota veio em “PC”");
+    expect(h).toContain("data-conversoes");
+    expect(h).toContain("Capacitor 35uF: 1 PC = 1 un — 10 PC entraram como 10 un.");
     expect(h).toContain("3526 1011 2223 3300 0181 5500 1000 0045 2110 0004 5217");
     logar(permissoesTotais(), "e2");
     await expect(detalhe(id)).rejects.toThrow("NEXT_NOT_FOUND");

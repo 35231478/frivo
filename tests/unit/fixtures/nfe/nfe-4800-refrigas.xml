@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
+  <NFe xmlns="http://www.portalfiscal.inf.br/nfe">
+    <infNFe Id="NFe35261133444555000162550010000048001000336004" versao="4.00">
+      <ide>
+        <cUF>35</cUF><cNF>00033600</cNF><natOp>VENDA DE MERCADORIA</natOp><mod>55</mod><serie>1</serie><nNF>4800</nNF>
+        <dhEmi>2026-11-05T09:30:00-03:00</dhEmi><tpNF>1</tpNF><idDest>1</idDest><cMunFG>3550308</cMunFG><tpImp>1</tpImp>
+        <tpEmis>1</tpEmis><cDV>4</cDV><tpAmb>1</tpAmb><finNFe>1</finNFe><indFinal>0</indFinal><indPres>9</indPres><procEmi>0</procEmi><verProc>ERP 3.0</verProc>
+      </ide>
+      <emit>
+        <CNPJ>33444555000162</CNPJ><xNome>REFRIGAS DISTRIBUIDORA DE GASES LTDA</xNome><xFant>REFRIGAS</xFant>
+        <enderEmit><xLgr>RUA DOS GASES</xLgr><nro>100</nro><xBairro>MOOCA</xBairro><cMun>3550308</cMun><xMun>SAO PAULO</xMun><UF>SP</UF><CEP>03100000</CEP><fone>1133334444</fone></enderEmit>
+        <IE>110042490999</IE><CRT>3</CRT>
+      </emit>
+      <dest><CNPJ>12345678000190</CNPJ><xNome>CLIMA TOTAL LTDA</xNome><indIEDest>1</indIEDest><IE>123456789110</IE></dest>
+      <det nItem="1">
+        <prod>
+          <cProd>R404A-136</cProd><cEAN>SEM GTIN</cEAN><xProd>GAS REFRIGERANTE R404A CILINDRO 13,6KG</xProd><NCM>29037990</NCM><CEST>0100100</CEST><CFOP>5102</CFOP>
+          <uCom>UN</uCom><qCom>1.0000</qCom><vUnCom>1360.0000000000</vUnCom><vProd>1360.00</vProd><cEANTrib>7891234500017</cEANTrib><uTrib>KG</uTrib><qTrib>13.6000</qTrib><vUnTrib>100.0000000000</vUnTrib><indTot>1</indTot>
+        </prod>
+        <imposto>
+          <ICMS><ICMS00><orig>1</orig><CST>00</CST><modBC>3</modBC><vBC>1360.00</vBC><pICMS>18.00</pICMS><vICMS>244.80</vICMS></ICMS00></ICMS>
+        </imposto>
+      </det>
+      <det nItem="2">
+        <prod>
+          <cProd>VLV-SERV-14</cProd><cEAN>7891234500024</cEAN><xProd>VALVULA DE SERVICO 1/4 FLANGE</xProd><NCM>84818099</NCM><CFOP>5102</CFOP>
+          <uCom>PC</uCom><qCom>6.0000</qCom><vUnCom>15.5000000000</vUnCom><vProd>93.00</vProd><cEANTrib>7891234500024</cEANTrib><uTrib>PC</uTrib><qTrib>6.0000</qTrib><vUnTrib>15.5000000000</vUnTrib><indTot>1</indTot>
+        </prod>
+        <imposto>
+          <ICMS><ICMSSN102><orig>0</orig><CSOSN>102</CSOSN></ICMSSN102></ICMS>
+        </imposto>
+      </det>
+      <total><ICMSTot><vProd>1453.00</vProd><vFrete>0.00</vFrete><vDesc>0.00</vDesc><vOutro>0.00</vOutro><vNF>1453.00</vNF></ICMSTot></total>
+      <transp><modFrete>0</modFrete></transp>
+      <cobr><fat><nFat>4800</nFat><vOrig>1453.00</vOrig><vLiq>1453.00</vLiq></fat><dup><nDup>001</nDup><dVenc>2026-12-05</dVenc><vDup>1453.00</vDup></dup></cobr>
+      <pag><detPag><indPag>1</indPag><tPag>15</tPag><vPag>1453.00</vPag></detPag></pag>
+    </infNFe>
+  </NFe>
+  <protNFe versao="4.00">
+    <infProt><tpAmb>1</tpAmb><chNFe>35261133444555000162550010000048001000336004</chNFe><dhRecbto>2026-11-05T09:30:00-03:00</dhRecbto><nProt>135260001204800</nProt><cStat>100</cStat><xMotivo>Autorizado o uso da NF-e</xMotivo></infProt>
+  </protNFe>
+</nfeProc>

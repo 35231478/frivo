@@ -2,52 +2,98 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Check, Link2, Loader2, PackagePlus, Search, Sparkles, X } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, Check, ChevronDown, Link2, Loader2, PackagePlus, Search, Sparkles, Tag, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn, formatarMoeda } from "@/lib/utils";
 import { formatarQtd } from "@/lib/estoque/regras";
+import { avisoCusto, converterItem, formatarFator, formatarPct, lerNumero, margemSobreVenda, mesmaUnidade } from "@/lib/estoque/preco";
+import { formatarNcm } from "@/lib/compras/rotulos";
+import { PrecoVenda } from "@/components/estoque/preco-venda";
 
+export interface FiscalProduto { ncm: string | null; cest: string | null; gtin: string | null; origemMercadoria: string | null; unidadeTributavel: string | null }
+export interface ProdutoConciliacao {
+  id: string; nome: string; unidade: string; saldo?: number;
+  /** preço de venda atual, margem alvo e último custo de compra (por unidade do produto) */
+  preco: number | null; margemVenda: number | null; custo: number | null;
+  fiscal: FiscalProduto;
+}
 export interface ItemConciliacao {
-  id: string; numeroItem: number; codigoFornecedor: string; descricaoFornecedor: string; ncm: string | null;
+  id: string; numeroItem: number; codigoFornecedor: string; descricaoFornecedor: string;
   unidade: string; quantidade: number; valorUnitario: number; valorTotal: number;
-  produto: { id: string; nome: string; unidade: string } | null;
+  fiscal: FiscalProduto;
+  /** fator salvo no item: 1 [unidade da nota] = fator [unidade do produto] */
+  fator: number;
+  /** o que o de-para deste fornecedor aprendeu para este código */
+  fatorAprendido: { unidade: string | null; fator: number } | null;
+  produto: ProdutoConciliacao | null;
   /** veio vinculado pelo de-para (aprendido de nota anterior deste fornecedor) */
   aprendido: boolean;
 }
-type ProdutoBusca = { id: string; nome: string; unidade: string; saldo?: number };
-type Escolha = { modo: "existente"; produto: ProdutoBusca } | { modo: "novo"; nome: string; unidade: string } | null;
+type Escolha = { modo: "existente"; produto: ProdutoConciliacao } | { modo: "novo"; nome: string; unidade: string } | null;
 
-const mesmaUnidade = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 const moeda4 = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 4 });
+const unidadeDoProduto = (i: ItemConciliacao, e: Escolha) => (e?.modo === "existente" ? e.produto.unidade : e?.modo === "novo" ? (e.unidade.trim() || i.unidade) : null);
+const CAMPOS_FISCAIS = [["ncm", "NCM"], ["cest", "CEST"], ["gtin", "GTIN"], ["origemMercadoria", "origem"], ["unidadeTributavel", "un. trib."]] as const;
+
+/** Fator para começar: mesma unidade = 1; o salvo/aprendido se houver; senão vazio (a pessoa informa). */
+function fatorInicial(i: ItemConciliacao): string {
+  if (!i.produto) return "";
+  if (mesmaUnidade(i.unidade, i.produto.unidade)) return "1";
+  const aprendidoValido = i.fatorAprendido && (i.fatorAprendido.unidade == null || mesmaUnidade(i.fatorAprendido.unidade, i.unidade));
+  return i.fator !== 1 || aprendidoValido ? formatarFator(i.fator) : "";
+}
+/** Fator em uso: mesma unidade = 1; senão o digitado (null = falta ou inválido) */
+function fatorEfetivo(i: ItemConciliacao, e: Escolha, txt: string): number | null {
+  const un = unidadeDoProduto(i, e);
+  if (un == null) return null;
+  if (mesmaUnidade(i.unidade, un)) return 1;
+  const f = lerNumero(txt);
+  return f != null && f > 0 ? f : null;
+}
 
 /**
  * Conciliação (de-para) da nota de compra: cada item da NF → produto existente (busca) OU produto
- * novo. Itens que o fornecedor já mandou antes chegam vinculados ("aprendido"). Unidade da nota
- * diferente da do produto: avisa (entra como está na nota; conversão fica para depois).
+ * novo. Itens que o fornecedor já mandou antes chegam vinculados ("aprendido"), com o fator de
+ * conversão aprendido. Unidade da nota diferente da do produto: "1 [unidade da nota] = ___ [unidade
+ * do produto]" — entra quantidade × fator, a custo = valor unitário ÷ fator. Custo diferente da compra
+ * anterior: só AVISA quanto o preço atual dá de margem agora (o preço só muda se a pessoa ajustar).
  */
-export function ConciliacaoNota({ notaId, itens, pedidos, podeLancar, motivoSemLancar, parcelas }: {
+export function ConciliacaoNota({ notaId, itens, pedidos, podeLancar, motivoSemLancar, parcelas, podePrecificar = false }: {
   notaId: string; itens: ItemConciliacao[]; pedidos: { id: string; numero: string }[];
   podeLancar: boolean; motivoSemLancar?: string | null;
   parcelas: { numero: string; vencimento: string; valor: number }[];
+  /** Configurações › gerenciar (cadastro de produtos): pode ajustar o preço daqui */
+  podePrecificar?: boolean;
 }) {
   const router = useRouter();
   const [escolhas, setEscolhas] = useState<Record<string, Escolha>>(() =>
     Object.fromEntries(itens.map((i) => [i.id, i.produto ? { modo: "existente", produto: i.produto } : null])));
+  const [fatores, setFatores] = useState<Record<string, string>>(() => Object.fromEntries(itens.map((i) => [i.id, fatorInicial(i)])));
   const [pedidoId, setPedidoId] = useState("");
   const [enviando, setEnviando] = useState<"salvar" | "lancar" | null>(null);
   const [msg, setMsg] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
 
-  const definir = (id: string, e: Escolha) => { setEscolhas((s) => ({ ...s, [id]: e })); setMsg(null); };
-  const vinculados = itens.filter((i) => {
+  const definir = (i: ItemConciliacao, e: Escolha) => {
+    setEscolhas((s) => ({ ...s, [i.id]: e }));
+    // trocou o produto: fator volta para 1 (mesma unidade) ou fica em branco para informar
+    const un = unidadeDoProduto(i, e);
+    setFatores((f) => ({ ...f, [i.id]: un != null && mesmaUnidade(i.unidade, un) ? "1" : e?.modo === "existente" && e.produto.id === i.produto?.id ? fatorInicial(i) : "" }));
+    setMsg(null);
+  };
+  const completo = (i: ItemConciliacao) => {
     const e = escolhas[i.id];
-    return e && (e.modo === "existente" || e.nome.trim().length >= 2);
-  }).length;
-  type CorpoItem = { itemId: string; produtoId: string } | { itemId: string; novo: { nome: string; unidade: string | null } };
+    return !!e && (e.modo === "existente" || e.nome.trim().length >= 2) && fatorEfetivo(i, e, fatores[i.id] ?? "") != null;
+  };
+  const vinculados = itens.filter(completo).length;
+  type CorpoItem = ({ itemId: string; produtoId: string } | { itemId: string; novo: { nome: string; unidade: string | null } }) & { fator?: number };
   const corpoItens = () => itens.flatMap((i): CorpoItem[] => {
     const e = escolhas[i.id];
     if (!e) return [];
-    return e.modo === "existente" ? [{ itemId: i.id, produtoId: e.produto.id }] : [{ itemId: i.id, novo: { nome: e.nome.trim(), unidade: e.unidade.trim() || null } }];
+    const fator = fatorEfetivo(i, e, fatores[i.id] ?? "") ?? undefined;
+    return e.modo === "existente"
+      ? [{ itemId: i.id, produtoId: e.produto.id, fator }]
+      : [{ itemId: i.id, novo: { nome: e.nome.trim(), unidade: e.unidade.trim() || null }, fator }];
   });
 
   async function enviar(acao: "salvar" | "lancar") {
@@ -73,20 +119,26 @@ export function ConciliacaoNota({ notaId, itens, pedidos, podeLancar, motivoSemL
           <p className="text-sm font-semibold text-ink">De-para dos itens <span className="text-ink-muted font-normal">· <span data-vinculados>{vinculados}</span> de {itens.length} com produto</span></p>
           {semVinculo.length > 0 && (
             <button type="button" className="text-xs font-semibold text-primary-600 hover:underline" data-criar-todos
-              onClick={() => setEscolhas((s) => ({ ...s, ...Object.fromEntries(semVinculo.map((i) => [i.id, { modo: "novo", nome: i.descricaoFornecedor, unidade: i.unidade }])) }))}>
+              onClick={() => semVinculo.forEach((i) => definir(i, { modo: "novo", nome: i.descricaoFornecedor, unidade: i.unidade }))}>
               {semVinculo.length === 1 ? "Criar produto novo para o item sem vínculo" : `Criar produto novo para os ${semVinculo.length} sem vínculo`}
             </button>
           )}
         </div>
         <ul className="divide-y divide-surface-border">
           {itens.map((i) => (
-            <li key={i.id} data-item={i.numeroItem} className="px-4 py-3 grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <div className="min-w-0">
-                <p className="text-[11px] text-ink-muted">Item {i.numeroItem} · cód. <span className="font-mono">{i.codigoFornecedor}</span>{i.ncm && ` · NCM ${i.ncm}`}</p>
-                <p className="text-sm font-semibold text-ink">{i.descricaoFornecedor}</p>
-                <p className="text-xs text-ink-muted mt-0.5 tabular-nums">{formatarQtd(i.quantidade)} {i.unidade} × {moeda4(i.valorUnitario)} = <span className="font-semibold text-ink">{formatarMoeda(i.valorTotal)}</span></p>
+            <li key={i.id} data-item={i.numeroItem} className="px-4 py-3 space-y-3">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] text-ink-muted">Item {i.numeroItem} · cód. <span className="font-mono">{i.codigoFornecedor}</span>{i.fiscal.ncm && ` · NCM ${formatarNcm(i.fiscal.ncm)}`}</p>
+                  <p className="text-sm font-semibold text-ink">{i.descricaoFornecedor}</p>
+                  <p className="text-xs text-ink-muted mt-0.5 tabular-nums">{formatarQtd(i.quantidade)} {i.unidade} × {moeda4(i.valorUnitario)} = <span className="font-semibold text-ink">{formatarMoeda(i.valorTotal)}</span></p>
+                </div>
+                <Vinculo item={i} escolha={escolhas[i.id]} onChange={(e) => definir(i, e)} />
               </div>
-              <Vinculo item={i} escolha={escolhas[i.id]} onChange={(e) => definir(i.id, e)} />
+              {escolhas[i.id] && (
+                <Conversao item={i} escolha={escolhas[i.id]} fatorTxt={fatores[i.id] ?? ""} podePrecificar={podePrecificar}
+                  onFator={(t) => { setFatores((f) => ({ ...f, [i.id]: t })); setMsg(null); }} />
+              )}
             </li>
           ))}
         </ul>
@@ -130,26 +182,19 @@ function Vinculo({ item, escolha, onChange }: { item: ItemConciliacao; escolha: 
   if (escolha?.modo === "existente") {
     const aprendido = item.aprendido && item.produto?.id === escolha.produto.id;
     return (
-      <div className="space-y-1.5" data-vinculo="existente">
-        <div className="flex items-center gap-2 rounded-lg border border-success-200 bg-success-50/60 px-3 py-2">
-          <Link2 className="w-4 h-4 text-success-700 shrink-0" />
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-ink truncate">{escolha.produto.nome}</p>
-            <p className="text-[11px] text-ink-muted">unidade {escolha.produto.unidade}{aprendido && <span className="ml-1.5 inline-flex items-center gap-0.5 font-semibold text-primary-700" data-aprendido><Sparkles className="w-3 h-3" /> aprendido de nota anterior</span>}</p>
-          </div>
-          <button type="button" onClick={() => onChange(null)} className="text-xs font-medium text-ink-muted hover:text-ink" aria-label="Trocar produto">Trocar</button>
+      <div className="flex items-center gap-2 rounded-lg border border-success-200 bg-success-50/60 px-3 py-2 self-start" data-vinculo="existente">
+        <Link2 className="w-4 h-4 text-success-700 shrink-0" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-ink truncate">{escolha.produto.nome}</p>
+          <p className="text-[11px] text-ink-muted">unidade {escolha.produto.unidade}{aprendido && <span className="ml-1.5 inline-flex items-center gap-0.5 font-semibold text-primary-700" data-aprendido><Sparkles className="w-3 h-3" /> aprendido de nota anterior</span>}</p>
         </div>
-        {!mesmaUnidade(escolha.produto.unidade, item.unidade) && (
-          <p className="text-[11px] text-amber-700 flex items-start gap-1" data-unidade-divergente>
-            <AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" /> A nota vem em “{item.unidade}” e o produto é em “{escolha.produto.unidade}”: entra {formatarQtd(item.quantidade)} como está na nota (sem conversão).
-          </p>
-        )}
+        <button type="button" onClick={() => onChange(null)} className="text-xs font-medium text-ink-muted hover:text-ink" aria-label="Trocar produto">Trocar</button>
       </div>
     );
   }
   if (escolha?.modo === "novo") {
     return (
-      <div className="rounded-lg border border-primary-200 bg-primary-50/50 px-3 py-2 space-y-2" data-vinculo="novo">
+      <div className="rounded-lg border border-primary-200 bg-primary-50/50 px-3 py-2 space-y-2 self-start" data-vinculo="novo">
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs font-semibold text-primary-700 flex items-center gap-1"><PackagePlus className="w-3.5 h-3.5" /> Produto novo</p>
           <button type="button" onClick={() => onChange(null)} className="text-ink-muted hover:text-ink" aria-label="Cancelar produto novo"><X className="w-4 h-4" /></button>
@@ -172,9 +217,91 @@ function Vinculo({ item, escolha, onChange }: { item: ItemConciliacao; escolha: 
   );
 }
 
-function BuscaProduto({ onEscolher, rotulo }: { onEscolher: (p: ProdutoBusca) => void; rotulo: string }) {
+/**
+ * Faixa do item já vinculado: conversão "1 UN = ___ kg" (aprendida ou a informar), o que entra e a que
+ * custo, aviso de custo diferente da última compra, preço/margem atuais e "Ajustar preço" (opcional).
+ */
+function Conversao({ item, escolha, fatorTxt, onFator, podePrecificar }: {
+  item: ItemConciliacao; escolha: Escolha; fatorTxt: string; onFator: (t: string) => void; podePrecificar: boolean;
+}) {
+  const [precoAberto, setPrecoAberto] = useState(false);
+  const un = unidadeDoProduto(item, escolha)!;
+  const igual = mesmaUnidade(item.unidade, un);
+  const fator = fatorEfetivo(item, escolha, fatorTxt);
+  const conv = fator ? converterItem(item.quantidade, item.valorUnitario, fator) : null;
+  const produto = escolha?.modo === "existente" ? escolha.produto : null;
+  const aprendido = !igual && item.fatorAprendido && produto?.id === item.produto?.id
+    && (item.fatorAprendido.unidade == null || mesmaUnidade(item.fatorAprendido.unidade, item.unidade)) && lerNumero(fatorTxt) === item.fatorAprendido.fator;
+  const unidadeMudou = !igual && item.fatorAprendido?.unidade && produto?.id === item.produto?.id && !mesmaUnidade(item.fatorAprendido.unidade, item.unidade)
+    ? item.fatorAprendido : null;
+  const aviso = produto && conv ? avisoCusto({
+    produtoId: produto.id, produto: produto.nome, unidade: un, custoAnterior: produto.custo, custoNovo: conv.custoUnitario, preco: produto.preco, margemAlvo: produto.margemVenda,
+  }) : null;
+  const divergencias = produto ? CAMPOS_FISCAIS.flatMap(([c, rot]) => {
+    const daNota = item.fiscal[c];
+    const doCadastro = produto.fiscal[c];
+    return daNota && doCadastro && daNota.trim() !== doCadastro.trim() ? [`${rot}: cadastro ${doCadastro} · nota ${daNota}`] : [];
+  }) : [];
+
+  return (
+    <div className="rounded-lg bg-surface-alt/50 border border-surface-border px-3 py-2.5 space-y-2 text-xs" data-conversao={item.numeroItem}>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <span className="inline-flex items-center gap-1.5 text-ink">
+          <ArrowRightLeft className="w-3.5 h-3.5 text-primary-600" />
+          1 {item.unidade} =
+          <Input value={igual ? "1" : fatorTxt} onChange={(e) => onFator(e.target.value)} disabled={igual} inputMode="decimal"
+            className={cn("h-8 w-24 text-right text-sm", !igual && fator == null && "border-amber-400")} aria-label={`Quantos ${un} vêm em 1 ${item.unidade} (item ${item.numeroItem})`} data-fator-item={item.numeroItem} />
+          {un}
+        </span>
+        {aprendido && <span className="inline-flex items-center gap-0.5 font-semibold text-primary-700" data-fator-aprendido><Sparkles className="w-3 h-3" /> fator aprendido da nota anterior</span>}
+        {conv ? (
+          <span className="text-ink-muted tabular-nums" data-entra>Entra <strong className="text-ink">{formatarQtd(conv.quantidade)} {un}</strong> · custo <strong className="text-ink">{moeda4(conv.custoUnitario)}/{un}</strong></span>
+        ) : (
+          <span className="text-amber-700 font-medium" data-falta-fator>Informe quantos {un} vêm em 1 {item.unidade}.</span>
+        )}
+      </div>
+      {unidadeMudou && (
+        <p className="text-amber-700 flex items-start gap-1" data-unidade-mudou><AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" /> Antes este item vinha em “{unidadeMudou.unidade}” (1 {unidadeMudou.unidade} = {formatarFator(unidadeMudou.fator)} {un}); nesta nota veio em “{item.unidade}”. Confira o fator.</p>
+      )}
+      {aviso && (
+        <p className="text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5 flex items-start gap-1.5" data-aviso-custo={item.numeroItem}><AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" /> {aviso.texto}</p>
+      )}
+      {produto && conv && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-ink-muted" data-preco-item={item.numeroItem}>
+          <span className="inline-flex items-center gap-1"><Tag className="w-3.5 h-3.5" /> Preço de venda: <strong className="text-ink">{produto.preco != null ? formatarMoeda(produto.preco) : "não definido"}</strong></span>
+          {produto.preco != null && <span>margem com o custo desta nota: <strong className="text-ink">{formatarPct(margemSobreVenda(produto.preco, conv.custoUnitario))}</strong></span>}
+          {podePrecificar && (
+            <button type="button" onClick={() => setPrecoAberto((v) => !v)} className="inline-flex items-center gap-0.5 font-semibold text-primary-600 hover:underline" data-ajustar-preco={item.numeroItem}>
+              Ajustar preço <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", precoAberto && "rotate-180")} />
+            </button>
+          )}
+        </div>
+      )}
+      {escolha?.modo === "novo" && <p className="text-ink-muted">O preço de venda do produto novo pode ser definido depois de lançar, na página dele no Estoque.</p>}
+      {produto && conv && precoAberto && (
+        <PrecoVenda produtoId={produto.id} unidade={un} custo={conv.custoUnitario} rotuloCusto="Custo nesta nota"
+          preco={produto.preco} margemVenda={produto.margemVenda} podeEditar={podePrecificar} className="pt-1" />
+      )}
+      <Fiscal item={item} divergencias={divergencias} />
+    </div>
+  );
+}
+
+function Fiscal({ item, divergencias }: { item: ItemConciliacao; divergencias: string[] }) {
+  const f = item.fiscal;
+  const partes = [f.ncm && `NCM ${formatarNcm(f.ncm)}`, f.cest && `CEST ${f.cest}`, f.gtin && `GTIN ${f.gtin}`, f.origemMercadoria && `origem ${f.origemMercadoria}`, f.unidadeTributavel && `un. trib. ${f.unidadeTributavel}`].filter(Boolean);
+  if (!partes.length && !divergencias.length) return null;
+  return (
+    <div className="text-ink-subtle" data-fiscal={item.numeroItem}>
+      {partes.length > 0 && <p>Fiscal da nota: {partes.join(" · ")} — vai para o cadastro do produto onde estiver vazio.</p>}
+      {divergencias.map((d) => <p key={d} className="text-amber-700" data-divergencia-fiscal>{d} (fica o do cadastro)</p>)}
+    </div>
+  );
+}
+
+function BuscaProduto({ onEscolher, rotulo }: { onEscolher: (p: ProdutoConciliacao) => void; rotulo: string }) {
   const [q, setQ] = useState("");
-  const [lista, setLista] = useState<ProdutoBusca[]>([]);
+  const [lista, setLista] = useState<ProdutoConciliacao[]>([]);
   const [carregando, setCarregando] = useState(false);
   const pedido = useRef(0);
   useEffect(() => {
