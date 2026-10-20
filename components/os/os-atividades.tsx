@@ -220,7 +220,6 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
                     atividadeId={a.id}
                     clienteId={clienteId}
                     unidadeId={unidadeId}
-                    temTipoOs={Boolean(a.tipoOs?.id ?? a.tipoOsId)}
                   />
                 </div>
               </div>

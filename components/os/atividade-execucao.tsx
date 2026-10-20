@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import {
   ArrowLeft, QrCode, X, CircleCheck, AlertCircle, Loader2, HardDrive, ListPlus, Lock, ClipboardCheck,
 } from "lucide-react";
+import { SeletorEquipamentos } from "@/components/os/seletor-equipamentos";
 import { EquipamentoExecucaoCard, type AcoesEquipamento, type CampoTela, type EquipamentoTela } from "@/components/os/execucao-equipamento";
 import { completo, faltasEquipamento, paraPendencia, textoFaltas, verificarConclusao, type ResultadoConclusao, type StatusItem } from "@/lib/execucao/pendencias";
 
@@ -283,22 +284,11 @@ export function AtividadeExecucao({ osId, atividadeId, titulo, osNumero, tipoOs 
 // ─────────────────────────────────────────────
 // Lista da unidade (vincular equipamento escolhendo)
 // ─────────────────────────────────────────────
-interface EquipLista { id: string; nome?: string | null; marca: string; modelo: string; localizacao?: string | null; patrimonio?: string | null; ativo?: boolean; tipoEquipamento?: { nome: string } | null }
 function ListaEquipamentos({ clienteId, unidadeId, jaVinculados, onFechar, onVincular }: {
   clienteId: string; unidadeId: string | null; jaVinculados: string[]; onFechar: () => void; onVincular: (ids: string[]) => Promise<void>;
 }) {
-  const [lista, setLista] = useState<EquipLista[] | null>(null);
   const [marcados, setMarcados] = useState<Set<string>>(new Set());
-  const [busca, setBusca] = useState("");
   const [salvando, setSalvando] = useState(false);
-  useEffect(() => {
-    const qs = unidadeId ? `unidadeId=${unidadeId}` : `clienteId=${clienteId}`;
-    fetch(`/api/equipamentos?${qs}`).then((r) => r.json()).then((d) => setLista(Array.isArray(d) ? d : [])).catch(() => setLista([]));
-  }, [clienteId, unidadeId]);
-  const ja = new Set(jaVinculados);
-  const termo = busca.trim().toLowerCase();
-  const candidatos = (lista ?? []).filter((e) => e.ativo !== false && !ja.has(e.id))
-    .filter((e) => !termo || [e.nome, e.marca, e.modelo, e.localizacao, e.patrimonio, e.tipoEquipamento?.nome].some((v) => (v ?? "").toLowerCase().includes(termo)));
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4" data-lista-equipamentos>
       <div className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl overflow-hidden max-h-[85vh] flex flex-col">
@@ -306,20 +296,8 @@ function ListaEquipamentos({ clienteId, unidadeId, jaVinculados, onFechar, onVin
           <span className="text-sm font-semibold text-gray-800">Equipamentos {unidadeId ? "da unidade" : "do cliente"}</span>
           <button onClick={onFechar} className="text-gray-400 hover:text-gray-600" aria-label="Fechar"><X className="w-5 h-5" /></button>
         </div>
-        <div className="p-3 border-b border-gray-100"><Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por nome, TAG, local…" aria-label="Buscar equipamento" /></div>
-        <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
-          {lista === null && <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-gray-300" /></div>}
-          {lista !== null && candidatos.length === 0 && <p className="text-sm text-gray-400 text-center py-6">{(lista ?? []).length ? "Nenhum outro equipamento para vincular." : "Nenhum equipamento cadastrado neste local."}</p>}
-          {candidatos.map((e) => (
-            <label key={e.id} className="flex items-center gap-3 border border-gray-100 rounded-lg px-3 py-2.5 cursor-pointer hover:border-primary-200" data-opcao-equipamento={e.id}>
-              <input type="checkbox" className="accent-primary-600 w-4 h-4" checked={marcados.has(e.id)}
-                onChange={() => setMarcados((m) => { const n = new Set(m); if (n.has(e.id)) n.delete(e.id); else n.add(e.id); return n; })} />
-              <span className="min-w-0">
-                <span className="block text-sm text-gray-800 truncate">{e.nome ? `${e.nome} — ` : ""}{e.marca} {e.modelo}</span>
-                <span className="block text-[11px] text-gray-400">{[e.tipoEquipamento?.nome, e.localizacao, e.patrimonio && `TAG ${e.patrimonio}`].filter(Boolean).join(" · ")}</span>
-              </span>
-            </label>
-          ))}
+        <div className="flex-1 overflow-y-auto p-3">
+          <SeletorEquipamentos clienteId={clienteId} unidadeId={unidadeId} excluir={jaVinculados} marcados={marcados} onChange={setMarcados} />
         </div>
         <div className="p-3 border-t border-gray-100">
           <Button type="button" className="w-full justify-center" disabled={!marcados.size} loading={salvando} data-vincular

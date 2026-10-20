@@ -136,16 +136,16 @@ export async function DELETE(_: NextRequest, { params }: Params) {
     where: { id: atividadeId, ordemServicoId: id, empresaId },
     select: {
       id: true, titulo: true, status: true,
-      _count: { select: { respostas: true, respostasEquipamento: true, relatorios: true } },
+      _count: { select: { respostas: true, respostasEquipamento: true, relatorios: true, checklistRespostas: true, fotosAtendimento: true } },
       equipamentos: { where: { feito: true }, select: { id: true }, take: 1 },
     },
   });
   if (!atividade) return NextResponse.json({ erro: "Atividade não encontrada" }, { status: 404 });
 
   const c = atividade._count;
-  if (atividade.status === "CONCLUIDA" || c.respostas || c.respostasEquipamento || c.relatorios || atividade.equipamentos.length) {
+  if (atividade.status === "CONCLUIDA" || c.respostas || c.respostasEquipamento || c.relatorios || c.checklistRespostas || c.fotosAtendimento || atividade.equipamentos.length) {
     return NextResponse.json({
-      erro: "Esta atividade já tem execução registrada (concluída, formulários/fotos, relatório ou equipamento atendido) e não pode ser excluída. Para tirá-la do fluxo, altere o status para Cancelada.",
+      erro: "Esta atividade já tem execução registrada (concluída, checklist, formulários/fotos, relatório ou equipamento atendido) e não pode ser excluída. Para tirá-la do fluxo, altere o status para Cancelada.",
     }, { status: 409 });
   }
 
