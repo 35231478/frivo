@@ -57,6 +57,9 @@ enum TipoEquipamento {
   CONDENSADORA
   EVAPORADORA
   OUTRO
+  PISO_TETO
+  CASSETE
+  SELF_CONTAINED
 }
 
 enum TipoContrato {
@@ -431,6 +434,9 @@ model Empresa {
   tiposOs                TipoOs[]
   formularios            FormularioTemplate[]
   tiposEquipamentoCustom TipoEquipamentoCustom[]
+  checklistTipoItens     ChecklistTipoItem[]
+  checklistRespostas     ChecklistResposta[]
+  fotosAtendimento       FotoAtendimento[]
   servicos               Servico[]
   produtos               Produto[]
   movimentacoesEstoque   MovimentacaoEstoque[]
@@ -658,6 +664,8 @@ model Usuario {
   contratoHistoricos   ContratoHistoricoStatus[]
   movimentacoesEstoque MovimentacaoEstoque[]
   notasCompra          NotaCompra[]
+  checklistRespostas   ChecklistResposta[]
+  fotosAtendimento     FotoAtendimento[]
   perfilAcessoId       String?                   @map("perfil_acesso_id")
   perfilAcesso         PerfilAcesso?             @relation(fields: [perfilAcessoId], references: [id])
 
@@ -1019,6 +1027,8 @@ model Equipamento {
   qrcode              Qrcode?
   atividades          AtividadeEquipamento[]
   respostasFormulario RespostaFormularioEquipamento[]
+  checklistRespostas  ChecklistResposta[]
+  fotosAtendimento    FotoAtendimento[]
 
   @@index([empresaId, ativo])
   @@index([unidadeId])
@@ -1247,9 +1257,10 @@ model TipoEquipamentoCustom {
   ativo     Boolean  @default(true)
   criadoEm  DateTime @default(now()) @map("criado_em")
 
-  empresa          Empresa           @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  empresa          Empresa             @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   equipamentos     Equipamento[]
   formTypeMappings FormTypeMapping[]
+  checklistItens   ChecklistTipoItem[]
 
   @@map("tipos_equipamento_custom")
 }
@@ -1554,6 +1565,8 @@ model AtividadeOs {
   relatorios           RelatorioOs[]
   equipamentos         AtividadeEquipamento[]
   respostasEquipamento RespostaFormularioEquipamento[]
+  checklistRespostas   ChecklistResposta[]
+  fotosAtendimento     FotoAtendimento[]
 
   @@index([ordemServicoId])
   @@index([tecnicoId])
@@ -1632,6 +1645,8 @@ model AtividadeEquipamento {
   feito         Boolean   @default(false)
   feitoEm       DateTime? @map("feito_em")
   feitoPorId    String?   @map("feito_por_id")
+  /// Observação do técnico sobre ESTE equipamento nesta atividade (sai no relatório e no histórico)
+  observacao    String?   @db.Text
   criadoEm      DateTime  @default(now()) @map("criado_em")
 
   atividade   AtividadeOs @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
@@ -1641,6 +1656,99 @@ model AtividadeEquipamento {
   @@unique([atividadeId, equipamentoId])
   @@index([equipamentoId])
   @@map("atividade_equipamentos")
+}
+
+/// Tipo de resposta de um item do checklist (por ora só OK / Atenção / Não se aplica).
+enum TipoRespostaChecklist {
+  OK_ATENCAO_NA
+}
+
+/// Resposta de um item do checklist de um equipamento atendido.
+enum RespostaChecklist {
+  OK
+  ATENCAO
+  NAO_SE_APLICA
+}
+
+/// Item do CHECKLIST do tipo de equipamento (o modelo que cada equipamento daquele tipo responde
+/// numa OS). Editável no cadastro do tipo; item removido vira inativo (as respostas antigas ficam).
+model ChecklistTipoItem {
+  id                String                @id @default(cuid())
+  empresaId         String                @map("empresa_id")
+  tipoEquipamentoId String                @map("tipo_equipamento_id")
+  texto             String
+  tipoResposta      TipoRespostaChecklist @default(OK_ATENCAO_NA) @map("tipo_resposta")
+  /// O técnico precisa anexar foto deste item (exceto quando responde "Não se aplica")
+  pedirFoto         Boolean               @default(false) @map("pedir_foto")
+  /// O técnico precisa escrever observação (ex.: o valor medido), exceto em "Não se aplica"
+  pedirObservacao   Boolean               @default(false) @map("pedir_observacao")
+  ordem             Int                   @default(0)
+  ativo             Boolean               @default(true)
+  criadoEm          DateTime              @default(now()) @map("criado_em")
+  atualizadoEm      DateTime              @updatedAt @map("atualizado_em")
+
+  empresa         Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  tipoEquipamento TipoEquipamentoCustom @relation(fields: [tipoEquipamentoId], references: [id], onDelete: Cascade)
+  respostas       ChecklistResposta[]
+  fotos           FotoAtendimento[]
+
+  @@index([tipoEquipamentoId, ativo, ordem])
+  @@index([empresaId])
+  @@map("checklist_tipo_itens")
+}
+
+/// Resposta de UM item do checklist para UM equipamento atendido numa atividade. Gravada item a
+/// item (nunca em lote): reabrir a execução não apaga nada.
+model ChecklistResposta {
+  id              String             @id @default(cuid())
+  empresaId       String             @map("empresa_id")
+  atividadeId     String             @map("atividade_id")
+  equipamentoId   String             @map("equipamento_id")
+  itemId          String             @map("item_id")
+  status          RespostaChecklist?
+  observacao      String?            @db.Text
+  /// Texto do item quando foi respondido (o relatório antigo continua fiel se o item mudar depois)
+  textoItem       String             @map("texto_item")
+  respondidoPorId String?            @map("respondido_por_id")
+  respondidoEm    DateTime           @default(now()) @map("respondido_em")
+  criadoEm        DateTime           @default(now()) @map("criado_em")
+  atualizadoEm    DateTime           @updatedAt @map("atualizado_em")
+
+  empresa       Empresa           @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  atividade     AtividadeOs       @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+  equipamento   Equipamento       @relation(fields: [equipamentoId], references: [id], onDelete: Cascade)
+  item          ChecklistTipoItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  respondidoPor Usuario?          @relation(fields: [respondidoPorId], references: [id], onDelete: SetNull)
+
+  @@unique([atividadeId, equipamentoId, itemId])
+  @@index([equipamentoId])
+  @@index([itemId])
+  @@map("checklist_respostas")
+}
+
+/// Foto de um equipamento atendido numa atividade — geral (itemId nulo) ou de um item do checklist.
+/// Cada equipamento tem as SUAS fotos (nada é replicado entre equipamentos).
+model FotoAtendimento {
+  id            String   @id @default(cuid())
+  empresaId     String   @map("empresa_id")
+  atividadeId   String   @map("atividade_id")
+  equipamentoId String   @map("equipamento_id")
+  itemId        String?  @map("item_id")
+  /// Imagem em data URL (base64), tipo conferido pelo conteúdo no upload
+  url           String   @db.Text
+  criadoPorId   String?  @map("criado_por_id")
+  criadoEm      DateTime @default(now()) @map("criado_em")
+
+  empresa     Empresa            @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  atividade   AtividadeOs        @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+  equipamento Equipamento        @relation(fields: [equipamentoId], references: [id], onDelete: Cascade)
+  item        ChecklistTipoItem? @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  criadoPor   Usuario?           @relation(fields: [criadoPorId], references: [id], onDelete: SetNull)
+
+  @@index([atividadeId, equipamentoId])
+  @@index([equipamentoId])
+  @@index([itemId])
+  @@map("fotos_atendimento")
 }
 
 // ─────────────────────────────────────────────

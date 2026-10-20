@@ -16,21 +16,24 @@ const prisma = new PrismaClient();
 
 // Espelha LABELS_TIPO_EQUIPAMENTO (lib/utils.ts) — chave do enum → nome amigável.
 const TIPOS: Array<[string, string]> = [
-  ["AR_CONDICIONADO_SPLIT", "Ar-cond. Split"],
+  ["AR_CONDICIONADO_SPLIT", "Split Hi-Wall (parede)"],
   ["AR_CONDICIONADO_JANELA", "Ar-cond. Janela"],
   ["AR_CONDICIONADO_CENTRAL", "Ar-cond. Central"],
   ["AR_CONDICIONADO_PORTATIL", "Ar-cond. Portátil"],
   ["CHILLER", "Chiller"],
   ["TORRE_RESFRIAMENTO", "Torre de Resfriamento"],
-  ["CAMARA_FRIA", "Câmara Fria"],
+  ["CAMARA_FRIA", "Câmara Fria/Refrigeração"],
   ["CAMARA_CLIMATIZADA", "Câmara Climatizada"],
   ["REFRIGERADOR_COMERCIAL", "Refrigerador Comercial"],
   ["CONGELADOR_COMERCIAL", "Congelador Comercial"],
-  ["VRF", "VRF"],
-  ["FANCOIL", "Fan Coil"],
+  ["VRF", "VRF/VRV"],
+  ["FANCOIL", "Fancoil"],
   ["CONDENSADORA", "Condensadora"],
   ["EVAPORADORA", "Evaporadora"],
   ["OUTRO", "Outro"],
+  ["PISO_TETO", "Piso-Teto"],
+  ["CASSETE", "Cassete"],
+  ["SELF_CONTAINED", "Self-Contained"],
 ];
 
 async function main() {
