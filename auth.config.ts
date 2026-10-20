@@ -1,4 +1,5 @@
 import type { NextAuthConfig } from "next-auth";
+import { SESSAO_LONGA_SEG, sessaoCurtaVencida } from "@/lib/acesso/sessao";
 
 /**
  * Configuração base do Auth.js, segura para o Edge (middleware).
@@ -8,7 +9,9 @@ import type { NextAuthConfig } from "next-auth";
  */
 export const authConfig = {
   trustHost: true,
-  session: { strategy: "jwt" },
+  // 30 dias renovados a cada uso (o padrão de sempre). Sem "Manter conectado" o próprio token
+  // vence 1 dia depois do login — conferido no callback jwt abaixo, que também roda no middleware.
+  session: { strategy: "jwt", maxAge: SESSAO_LONGA_SEG },
   pages: {
     signIn: "/login",
     error: "/login",
@@ -23,7 +26,11 @@ export const authConfig = {
         token.role = (user as any).role;
         token.permissoes = (user as any).permissoes;
         token.perfilNome = (user as any).perfilNome;
+        token.lembrar = (user as any).lembrar !== false; // "Manter conectado"
+        token.loginEm = Date.now();
+        token.fs = (user as any).fs; // impressão da senha: trocou a senha, as outras sessões caem (lib/sessao-ativa)
       }
+      if (sessaoCurtaVencida(token)) return null; // sem "Manter conectado": 1 dia desde o login
       // Atualização disparada por update() no client (perfil: nome/e-mail).
       // O avatar NÃO trafega no JWT (base64 estouraria o cookie) — vem do banco.
       if (trigger === "update" && session) {

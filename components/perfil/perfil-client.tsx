@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { cn } from "@/lib/utils";
+import { problemaSenha } from "@/lib/acesso/senha";
+import { RequisitosSenha } from "@/components/auth/requisitos-senha";
 import { User, Camera, Lock, Building2, ShieldCheck, FileCheck, AlertCircle, Briefcase } from "lucide-react";
 
 interface Initial {
@@ -137,7 +139,9 @@ export function PerfilClient({ initial }: { initial: Initial }) {
 
   async function salvarSenha() {
     setErro("");
-    if (novaSenha.length < 8) { setErro("A nova senha deve ter no mínimo 8 caracteres."); return; }
+    if (!senhaAtual) { setErro("Informe a senha atual."); return; }
+    const problema = problemaSenha(novaSenha);
+    if (problema) { setErro(problema); return; }
     if (novaSenha !== confirmar) { setErro("A confirmação da nova senha não coincide."); return; }
     setSalvandoSenha(true);
     try {
@@ -148,7 +152,7 @@ export function PerfilClient({ initial }: { initial: Initial }) {
       const data = await res.json();
       if (!res.ok) { setErro(data?.erro ?? "Erro ao alterar senha."); return; }
       setSenhaAtual(""); setNovaSenha(""); setConfirmar("");
-      mostrarToast("Senha alterada com sucesso!");
+      mostrarToast("Senha alterada! As outras sessões abertas com a senha antiga foram encerradas.");
     } catch { setErro("Erro de conexão."); }
     finally { setSalvandoSenha(false); }
   }
@@ -278,13 +282,15 @@ export function PerfilClient({ initial }: { initial: Initial }) {
                   </FormField>
                 </FormGrid>
                 <FormGrid>
-                  <FormField label="Nova senha" required hint="Mínimo de 8 caracteres">
+                  <FormField label="Nova senha" required>
                     <Input type="password" value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} autoComplete="new-password" />
+                    <RequisitosSenha senha={novaSenha} className="pt-1.5" />
                   </FormField>
                   <FormField label="Confirmar nova senha" required>
                     <Input type="password" value={confirmar} onChange={(e) => setConfirmar(e.target.value)} autoComplete="new-password" />
                   </FormField>
                 </FormGrid>
+                <p className="text-xs text-ink-muted">Ao trocar a senha, você continua conectado aqui; as sessões abertas em outros aparelhos são encerradas.</p>
               </FormSection>
             </Painel>
 

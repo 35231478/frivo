@@ -15,6 +15,7 @@ const SAMPLE: Record<string, string> = {
   numero_orcamento: "ORC-2026-0001", numero_contrato: "CT-2026-001", link_boleto: "#", link_documento: "#", link_orcamento: "#",
   empresa_nome: "Sua Empresa", empresa_telefone: "(11) 99999-0000", empresa_email: "contato@empresa.com.br",
   empresa_site: "www.empresa.com.br", mes_referencia: "Junho/2026", data_aprovacao: "01/07/2026",
+  usuario_nome: "Maria Souza", link_definir_senha: "#", validade_convite: "72 horas", validade_link: "60 minutos",
 };
 const EMPRESA_SAMPLE = { nome: "Sua Empresa", telefone: "(11) 99999-0000", email: "contato@empresa.com.br", site: "www.empresa.com.br", endereco: "Av. Exemplo, 100", cidade: "São Paulo", estado: "SP", logo: null };
 

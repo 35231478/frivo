@@ -1,35 +1,46 @@
 import { cache } from "react";
 import type { JWT } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
+import { impressaoDaSenha } from "@/lib/acesso/impressao-senha";
 
 /**
  * Sessão (JWT) x cadastro atual: o token é assinado no login e valeria até expirar, mesmo com o
- * usuário (ou a empresa) já inativados. A cada leitura da sessão no servidor (`auth()` em páginas
- * e APIs) conferimos no banco: inativo → a sessão deixa de existir na requisição seguinte.
+ * usuário (ou a empresa) já inativados ou com a senha já trocada. A cada leitura da sessão no
+ * servidor (`auth()` em páginas e APIs) conferimos no banco: inativo, ou senha trocada depois deste
+ * login → a sessão deixa de existir na requisição seguinte.
  *
  * Falha de banco não derruba ninguém (a própria requisição já vai falhar ao consultar o banco);
- * só um cadastro inativo ou removido encerra a sessão. `cache`: layout e página chamam `auth()`
- * na mesma renderização — uma consulta só por requisição (fora do React, não memoriza).
+ * só um cadastro inativo, removido ou com outra senha encerra a sessão. `cache`: layout e página
+ * chamam `auth()` na mesma renderização — uma consulta só por requisição (fora do React, não memoriza).
  */
-export const usuarioSegueAtivo = cache(async (usuarioId: string): Promise<boolean> => {
+const lerUsuario = cache(async (usuarioId: string) => {
   try {
     const u = await prisma.usuario.findUnique({
       where: { id: usuarioId },
-      select: { ativo: true, empresa: { select: { ativo: true } } },
+      select: { ativo: true, senha: true, empresa: { select: { ativo: true } } },
     });
-    return !!u && u.ativo && u.empresa.ativo;
+    return u ?? "removido";
   } catch (e) {
     console.error("[sessao] não foi possível conferir o usuário", e);
-    return true;
+    return null;
   }
 });
 
-/** Callback `jwt` do runtime Node: depois do login, a cada leitura confere se o usuário segue ativo. */
+/**
+ * Callback `jwt` do runtime Node: depois do login, a cada leitura confere se o usuário segue ativo e
+ * se a senha é a mesma do login (impressão `fs` no token). Sessão aberta antes de existir a impressão
+ * passa a carregar a da senha de agora — a partir daí, trocar a senha também a encerra.
+ */
 export async function conferirTokenAtivo(token: JWT | null, acabouDeEntrar: boolean): Promise<JWT | null> {
   if (!token || acabouDeEntrar) return token; // no login o authorize já exigiu usuário/empresa ativos
   const id = typeof token.id === "string" ? token.id : null;
   if (!id) return null;
-  return (await usuarioSegueAtivo(id)) ? token : null;
+  const u = await lerUsuario(id);
+  if (u === null) return token;
+  if (u === "removido" || !u.ativo || !u.empresa.ativo) return null;
+  const atual = impressaoDaSenha(u.senha ?? "");
+  if (typeof token.fs !== "string") return { ...token, fs: atual };
+  return token.fs === atual ? token : null;
 }
 
 /** Cookies da sessão do painel (com prefixo seguro e em pedaços). Não toca no cookie do portal. */

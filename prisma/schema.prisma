@@ -515,6 +515,10 @@ model Configuracao {
   // QR Code (acesso público, botões de contato, restrições) — armazenado como JSON
   qrConfig Json? @map("qr_config")
 
+  /// Impressão do relatório da OS: seções ligadas/desligadas e quem vê (cliente × só interno).
+  /// JSON { [secao]: { ativo, cliente } }; ausente = padrões de lib/relatorio-os/config.ts
+  relatorioOsConfig Json? @map("relatorio_os_config")
+
   empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
 
   @@map("configuracoes")
@@ -2922,4 +2926,19 @@ model DeParaProdutoFornecedor {
   @@unique([empresaId, fornecedorId, codigoFornecedor])
   @@index([produtoId])
   @@map("de_para_produto_fornecedor")
+}
+
+/// Tentativas que contam para o limite anti força bruta: senha errada no login, pedido de "esqueci a
+/// senha" e senha atual errada na troca. Sem empresa (o login acontece antes de saber a empresa).
+/// A chave guarda só o HASH do e-mail / IP / usuário, nunca o texto. Linhas com mais de 1 dia são
+/// apagadas no caminho (lib/acesso/limite.ts).
+model TentativaAcesso {
+  id       String   @id @default(cuid())
+  tipo     String
+  chave    String
+  criadoEm DateTime @default(now()) @map("criado_em")
+
+  @@index([tipo, chave, criadoEm])
+  @@index([criadoEm])
+  @@map("tentativas_acesso")
 }
