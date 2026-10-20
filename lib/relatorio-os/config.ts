@@ -51,7 +51,7 @@ const ehSecao = (k: string): k is SecaoRelatorioId => SECOES_RELATORIO.some((s) 
 /** Valor salvo (JSON qualquer) + padrões = config completa. Chaves desconhecidas são ignoradas. */
 export function mesclarConfigRelatorio(salvo: unknown): ConfigRelatorioOs {
   const out = Object.fromEntries(SECOES_RELATORIO.map((s) => [s.id, { ...CONFIG_RELATORIO_PADRAO[s.id] }])) as ConfigRelatorioOs;
-  if (!salvo || typeof salvo !== "object" || Array.isArray(salvo)) return out;
+  if (!salvo || typeof salvo !== "object") return out; // array: as chaves ("0"…) não são seções
   for (const [k, v] of Object.entries(salvo as Record<string, unknown>)) {
     if (!ehSecao(k) || !v || typeof v !== "object") continue;
     const { ativo, cliente } = v as Partial<SecaoConfig>;

@@ -106,7 +106,7 @@ function semear() {
         descricao: "Da outra", observacoes: null, criadoEm: new Date("2026-10-01T12:00:00Z"), dataInicio: null, dataConclusao: null, previsaoConclusao: null },
     ],
     atividadeOs: [{ id: "a1", ordemServicoId: "os1", titulo: "Preventiva mensal", status: "CONCLUIDA", tipoOsId: "to1", tecnicoId: "t1", equipeId: "eq1", veiculoId: "v1",
-      criadoEm: new Date("2026-10-02T12:00:00Z"), dataAgendada: new Date("2026-10-02T12:30:00Z"), duracaoMin: 95, observacao: null, resumo: "Limpeza de filtros e verificação elétrica." }],
+      criadoEm: new Date("2026-10-02T12:00:00Z"), dataAgendada: new Date("2026-10-02T12:30:00Z"), duracaoMin: 95, observacao: "Limpeza de filtros e verificação elétrica.", resumo: "O que foi feito: Troca do capacitor\nFoto geral: Foto anexada" }],
     atividadeTecnico: [{ atividadeId: "a1", tecnicoId: "t2" }],
     atividadeEquipamento: [
       { id: "ae1", atividadeId: "a1", equipamentoId: "eqA", feito: true },
@@ -117,7 +117,7 @@ function semear() {
       { atividadeId: "a1", equipamentoId: "eqA", formularioId: "f1", campoId: "cTemp", resposta: "12", arquivoUrl: null },
       { atividadeId: "a1", equipamentoId: "eqA", formularioId: "f1", campoId: "cFiltro", resposta: "sim", arquivoUrl: null },
       { atividadeId: "a1", equipamentoId: "eqA", formularioId: "f1", campoId: "cFoto", resposta: null, arquivoUrl: IMG("FOTO_A") },
-      { atividadeId: "a1", equipamentoId: "eqA", formularioId: "f1", campoId: "cAss", resposta: null, arquivoUrl: IMG("ASS") },
+      { atividadeId: "a1", equipamentoId: "eqA", formularioId: "f1", campoId: "cAss", resposta: "João Silva", arquivoUrl: IMG("ASS") },
       { atividadeId: "a1", equipamentoId: "eqA", formularioId: "f1", campoId: "cVazio", resposta: "  ", arquivoUrl: null },
       { atividadeId: "a1", equipamentoId: "eqB", formularioId: "f1", campoId: "cFiltro", resposta: "nao", arquivoUrl: null },
       { atividadeId: "a1", equipamentoId: "eqB", formularioId: "f1", campoId: "cTemp", resposta: "14", arquivoUrl: null },
@@ -254,6 +254,36 @@ describe("montagem do relatório por equipamento", () => {
     const v = montarRelatorioOs(await osCarregada(), null);
     expect([v.equipamentos, v.resultado.totalEquipamentos]).toEqual([[], 0]);
     expect(v.resultado.texto).toBe("Concluída · 1 de 1 atividade concluída. Limpeza de filtros e verificação elétrica.");
+  });
+
+  it("resultado usa o relato do técnico, nunca o despejo automático das respostas (resumo)", async () => {
+    const d = montarRelatorioOs(await osCarregada(), null);
+    expect(d.resultado.texto).not.toContain("Foto anexada");
+    T("atividadeOs")[0].observacao = null;
+    expect(montarRelatorioOs(await osCarregada(), null).resultado.texto).toBe("Concluída · 2 de 3 equipamentos atendidos · 1 de 1 atividade concluída");
+  });
+
+  it("equipe cujo nome já começa com 'Equipe' não repete a palavra", async () => {
+    T("equipe")[0].nome = "Equipe Alfa";
+    expect(montarRelatorioOs(await osCarregada(), null).equipe[0].tecnicos).toBe("Equipe Alfa: João Silva (responsável), Maria Souza");
+    T("atividadeTecnico").length = 0; T("atividadeOs")[0].tecnicoId = null;
+    expect(montarRelatorioOs(await osCarregada(), null).equipe[0].tecnicos).toBe("Equipe Alfa");
+    T("equipe")[0].nome = "Equipamentos especiais"; // "Equipamentos…" não é "Equipe …"
+    expect(montarRelatorioOs(await osCarregada(), null).equipe[0].tecnicos).toBe("Equipe Equipamentos especiais");
+  });
+
+  it("equipamento feito em QUALQUER atividade conta como atendido (a ordem das atividades não importa)", async () => {
+    T("atividadeOs").push({ id: "a2", ordemServicoId: "os1", titulo: "Retorno", status: "AGENDADA", tipoOsId: null, tecnicoId: null, equipeId: null, veiculoId: null,
+      criadoEm: new Date("2026-10-05T12:00:00Z"), dataAgendada: null, duracaoMin: null, observacao: null, resumo: null });
+    T("atividadeEquipamento").push({ id: "ae4", atividadeId: "a2", equipamentoId: "eqA", feito: false }, { id: "ae5", atividadeId: "a2", equipamentoId: "eqC", feito: true });
+    const d = montarRelatorioOs(await osCarregada(), null);
+    expect(d.equipamentos.map((b) => b.id).sort()).toEqual(["eqA", "eqB", "eqC"]);
+    expect(d.naoAtendidos).toEqual([]);
+  });
+
+  it("mesma observação na OS e no relatório sai uma vez", async () => {
+    const d = montarRelatorioOs(await osCarregada(), { numero: "R", observacao: "Cliente pediu retorno em 30 dias.", assinaturaUrl: null, assinadoPor: null, assinadoEm: null });
+    expect(d.observacoes).toEqual(["Cliente pediu retorno em 30 dias."]);
   });
 
   it("valores legíveis: Sim/Não, data, múltipla escolha", () => {
@@ -410,6 +440,10 @@ describe("versões do relatório", () => {
 
   it("isolamento e permissão: token inexistente/OS de outra empresa = 404; sem login = login; sem Ordens = sem permissão", async () => {
     await expect(publica("nao-existe")).rejects.toThrow("NEXT_NOT_FOUND");
+    // o link público usa a empresa DO RELATÓRIO (não a de quem estiver logado)
+    const b = await publica("tok-B");
+    expect(b).toContain("OS-B-1");
+    expect(b).not.toContain("OS-2026-0042");
     await expect(interna("osB")).rejects.toThrow("NEXT_NOT_FOUND"); // logado na e1
     logar(permissoesTotais(), "e2");
     expect(secoes(await interna("osB"))).toContain("cabecalho");

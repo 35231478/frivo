@@ -163,7 +163,9 @@ export function montarRelatorioOs(os: OsParaRelatorio, relatorio: RelatorioRef |
   }).sort((a, b) => a.titulo.localeCompare(b.titulo, "pt-BR"));
 
   const concluidas = ativs.filter((a) => a.status === "CONCLUIDA").length;
-  const relatos = ativs.map((a) => (a.resumo || a.observacao || "").trim()).filter(Boolean);
+  // Relato do técnico (texto livre da atividade). O `resumo` NÃO entra: é o despejo automático das
+  // respostas do formulário geral ("Campo: valor"), que já sai na seção do formulário.
+  const relatos = ativs.map((a) => (a.observacao ?? "").trim()).filter(Boolean);
   const situacao = LABELS_STATUS_OS[os.status] ?? os.status;
   const partes = [
     `${situacao}`,

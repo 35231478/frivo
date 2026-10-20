@@ -12,12 +12,15 @@ export function nomesTecnicosAtividade(a: TecnicosAtividadeInfo): string[] {
   return [...new Set([a.tecnico?.nome, ...(a.tecnicosEquipe ?? []).map((t) => t.tecnico.nome)].filter(Boolean) as string[])];
 }
 
+/** "Equipe Alfa" — sem repetir quando o nome já começa com "Equipe" ("Equipe Equipe Alfa") */
+const rotuloEquipe = (nome: string) => (/^equipe\b/i.test(nome.trim()) ? nome.trim() : `Equipe ${nome}`);
+
 /** "Equipe Alfa: João (responsável), Maria, Pedro" · "João" · null */
 export function textoTecnicosAtividade(a: TecnicosAtividadeInfo): string | null {
   const nomes = nomesTecnicosAtividade(a);
-  if (!nomes.length) return a.equipe ? `Equipe ${a.equipe.nome}` : null;
+  if (!nomes.length) return a.equipe ? rotuloEquipe(a.equipe.nome) : null;
   const lista = nomes.length > 1 ? [`${nomes[0]} (responsável)`, ...nomes.slice(1)].join(", ") : nomes[0];
-  return a.equipe ? `Equipe ${a.equipe.nome}: ${lista}` : lista;
+  return a.equipe ? `${rotuloEquipe(a.equipe.nome)}: ${lista}` : lista;
 }
 
 export const MSG_SEM_EXECUTOR_TELA = "Escolha quem executa: uma equipe ou um ou mais colaboradores.";
