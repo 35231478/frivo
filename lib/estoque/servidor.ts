@@ -8,7 +8,7 @@
  */
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { validarRefEmpresa } from "@/lib/ref-empresa";
+import { ErroRefEmpresa, validarRefEmpresa } from "@/lib/ref-empresa";
 import { janela, lerOrdem, lerPaginacao, ordemPrisma, paginaValida, um, type MapaOrdem, type ParamsUrl } from "@/lib/listagem";
 import { arred, avisoSaldo, calcularMovimento, situacaoEstoque, type Operacao, type OrigemMov, type Situacao, type TipoMov } from "@/lib/estoque/regras";
 
@@ -37,45 +37,54 @@ export interface Movimentado {
   aviso: string | null;
 }
 
-export async function movimentar(m: Movimentar): Promise<Movimentado> {
+/**
+ * Lança a movimentação (razão + saldo juntos). Sem `tx`: abre a própria transação. Com `tx`: roda
+ * DENTRO da transação de quem chama (ex.: lançamento da nota de compra, que grava várias entradas
+ * e as contas a pagar de uma vez — ou tudo, ou nada).
+ */
+export async function movimentar(m: Movimentar, tx?: Prisma.TransactionClient): Promise<Movimentado> {
   const defineSaldo = m.operacao === "AJUSTE" || m.operacao === "INVENTARIO";
   // Quantidade > 0 (o sinal vem da operação); saldo final ≥ 0. Também barra NaN/Infinity.
   if (!Number.isFinite(m.valor) || (defineSaldo ? m.valor < 0 : !(arred(m.valor) > 0)))
     throw new ErroEstoque(defineSaldo ? "O saldo informado não pode ser negativo." : "A quantidade precisa ser maior que zero.");
+  if (tx) return lancarNaTransacao(tx, m);
   await validarRefEmpresa("produto", m.produtoId, m.empresaId, "Produto");
-  return prisma.$transaction(async (tx) => {
-    // "saldo + 0" trava a linha do produto até o fim da transação e devolve o saldo atual:
-    // dois lançamentos simultâneos do mesmo produto entram em fila (nenhum se perde).
-    const atual = await tx.produto.update({
-      where: { id: m.produtoId, empresaId: m.empresaId },
-      data: { saldo: { increment: 0 } },
-      select: { saldo: true, unidade: true },
-    });
-    const saldoAtual = Number(atual.saldo);
-    const { tipo, origem, delta } = calcularMovimento(m.operacao, saldoAtual, m.valor);
-    if (m.operacao === "AJUSTE" && delta === 0) throw new ErroEstoque("O saldo já é esse — não há o que ajustar.");
+  return prisma.$transaction((t) => lancarNaTransacao(t, m));
+}
 
-    const novo = await tx.produto.update({
-      where: { id: m.produtoId, empresaId: m.empresaId },
-      data: { saldo: { increment: delta } },
-      select: { saldo: true },
-    });
-    const saldoApos = arred(Number(novo.saldo));
-    const mov = await tx.movimentacaoEstoque.create({
-      data: {
-        empresaId: m.empresaId, produtoId: m.produtoId, tipo, origem: m.origem ?? origem,
-        quantidade: delta, saldoApos,
-        custoUnitario: m.custoUnitario ?? null, refId: m.refId ?? null,
-        observacao: m.observacao?.trim() || null, usuarioId: m.usuarioId ?? null,
-      },
-      select: { id: true },
-    });
-    return {
-      movimentacao: { id: mov.id, tipo, origem: m.origem ?? origem, quantidade: delta, saldoApos },
-      saldo: saldoApos,
-      aviso: avisoSaldo(saldoApos, atual.unidade),
-    };
+async function lancarNaTransacao(tx: Prisma.TransactionClient, m: Movimentar): Promise<Movimentado> {
+  // "saldo + 0" trava a linha do produto até o fim da transação e devolve o saldo atual:
+  // dois lançamentos simultâneos do mesmo produto entram em fila (nenhum se perde).
+  // Produto de outra empresa (ou inexistente) não casa com o where → recusado.
+  const atual = await tx.produto.update({
+    where: { id: m.produtoId, empresaId: m.empresaId },
+    data: { saldo: { increment: 0 } },
+    select: { saldo: true, unidade: true },
+  }).catch((e: { code?: string }) => { throw e?.code === "P2025" ? new ErroRefEmpresa("Produto inválido(a).") : e; });
+  const saldoAtual = Number(atual.saldo);
+  const { tipo, origem, delta } = calcularMovimento(m.operacao, saldoAtual, m.valor);
+  if (m.operacao === "AJUSTE" && delta === 0) throw new ErroEstoque("O saldo já é esse — não há o que ajustar.");
+
+  const novo = await tx.produto.update({
+    where: { id: m.produtoId, empresaId: m.empresaId },
+    data: { saldo: { increment: delta } },
+    select: { saldo: true },
   });
+  const saldoApos = arred(Number(novo.saldo));
+  const mov = await tx.movimentacaoEstoque.create({
+    data: {
+      empresaId: m.empresaId, produtoId: m.produtoId, tipo, origem: m.origem ?? origem,
+      quantidade: delta, saldoApos,
+      custoUnitario: m.custoUnitario ?? null, refId: m.refId ?? null,
+      observacao: m.observacao?.trim() || null, usuarioId: m.usuarioId ?? null,
+    },
+    select: { id: true },
+  });
+  return {
+    movimentacao: { id: mov.id, tipo, origem: m.origem ?? origem, quantidade: delta, saldoApos },
+    saldo: saldoApos,
+    aviso: avisoSaldo(saldoApos, atual.unidade),
+  };
 }
 
 /* ───────── Lista ───────── */

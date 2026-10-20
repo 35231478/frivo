@@ -114,6 +114,7 @@ export function criarPrisma(db: Banco, relacoes: Relacoes = {}, aninhadas: Aninh
   const model = (m: string) => ({
     findFirst: async ({ where, select, include }: any = {}) => { const r = linhas(m, where)[0]; return r ? projetar(hidratar(m, r), select ?? include) : null; },
     findUnique: async ({ where, select, include }: any = {}) => { const r = linhas(m, where)[0]; return r ? projetar(hidratar(m, r), select ?? include) : null; },
+    findFirstOrThrow: async ({ where, select, include }: any = {}) => { const r = linhas(m, where)[0]; if (!r) throw naoAchou(); return projetar(hidratar(m, r), select ?? include); },
     findUniqueOrThrow: async ({ where, select, include }: any = {}) => { const r = linhas(m, where)[0]; if (!r) throw naoAchou(); return projetar(hidratar(m, r), select ?? include); },
     findMany: async ({ where, take, skip, orderBy, select, include }: any = {}) => {
       const hs = linhas(m, where).map((r) => hidratar(m, r));
