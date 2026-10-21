@@ -6,6 +6,7 @@ const SELECT_EQUIP_RELATORIO = {
   setor: true, capacidade: true, patrimonio: true, nome: true, tipoEquipamento: { select: { nome: true } },
 } as const;
 import { gerarNumeroRelatorio } from "@/lib/utils";
+import { tokenRelatorioNoFormato } from "@/lib/relatorio-atividade-link";
 
 /** Resumo automático de uma atividade: descrição/observação ou 1ª resposta do questionário. */
 function resumoAtividade(a: { observacao?: string | null; resumo?: string | null; respostas: { resposta: string | null; campo: { label: string } }[] }): string {
@@ -142,10 +143,15 @@ export async function carregarRelatorioPorToken(token: string) {
   return { relatorio, empresa: relatorio.empresa, os: relatorio.ordemServico, equipamentos };
 }
 
-/** Carrega os dados de uma atividade para o relatório individual (pela atividade id). */
-export async function carregarAtividade(atividadeId: string) {
+/**
+ * Relatório PÚBLICO de uma atividade (/relatorio/atividade/<id>?t=<token>). Procura SÓ pelo token
+ * (o segredo) e depois confere o id: sem token, token errado e id inexistente dão o mesmo `null`
+ * (→ a mesma 404), e o trabalho no banco não depende do id — trocar o id não revela nada.
+ */
+export async function carregarAtividade(atividadeId: string, token: unknown) {
+  if (!tokenRelatorioNoFormato(token)) return null;
   const atividade = await prisma.atividadeOs.findUnique({
-    where: { id: atividadeId },
+    where: { tokenRelatorio: token },
     include: {
       tecnico: { select: { nome: true } },
       equipe: { select: { nome: true } },
@@ -164,7 +170,7 @@ export async function carregarAtividade(atividadeId: string) {
       },
     },
   });
-  if (!atividade) return null;
+  if (!atividade || atividade.id !== atividadeId) return null;
 
   const os = atividade.ordemServico;
   const equipamentos = os.unidadeId
