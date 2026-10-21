@@ -7,6 +7,7 @@ const SELECT_EQUIP_RELATORIO = {
 } as const;
 import { gerarNumeroRelatorio } from "@/lib/utils";
 import { adicionaisDe, blocosAtendidos, SELECT_ADICIONAIS, SELECT_CHECKLIST, SELECT_FOTOS } from "@/lib/relatorio-os/dados";
+import { tokenRelatorioNoFormato } from "@/lib/relatorio-atividade-link";
 
 /** O que o relatório precisa para montar os blocos dos equipamentos ATENDIDOS (checklist, fotos, observação). */
 const INCLUDE_ATENDIMENTO = {
@@ -153,10 +154,15 @@ export async function carregarRelatorioPorToken(token: string) {
   return { relatorio, empresa: relatorio.empresa, os, equipamentos, blocos, adicionais: adicionaisDe(ativs) };
 }
 
-/** Carrega os dados de uma atividade para o relatório individual (pela atividade id). */
-export async function carregarAtividade(atividadeId: string) {
+/**
+ * Relatório PÚBLICO de uma atividade (/relatorio/atividade/<id>?t=<token>). Procura SÓ pelo token
+ * (o segredo) e depois confere o id: sem token, token errado e id inexistente dão o mesmo `null`
+ * (→ a mesma 404), e o trabalho no banco não depende do id — trocar o id não revela nada.
+ */
+export async function carregarAtividade(atividadeId: string, token: unknown) {
+  if (!tokenRelatorioNoFormato(token)) return null;
   const atividade = await prisma.atividadeOs.findUnique({
-    where: { id: atividadeId },
+    where: { tokenRelatorio: token },
     include: {
       tecnico: { select: { nome: true } },
       equipe: { select: { nome: true } },
@@ -176,7 +182,7 @@ export async function carregarAtividade(atividadeId: string) {
       },
     },
   });
-  if (!atividade) return null;
+  if (!atividade || atividade.id !== atividadeId) return null;
 
   const os = atividade.ordemServico;
   // SÓ os equipamentos atendidos nesta atividade, cada um com o checklist, as fotos e a observação dele

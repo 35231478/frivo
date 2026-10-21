@@ -4,6 +4,7 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { relatorioSchema } from "@/lib/validations";
 import { gerarNumeroRelatorio } from "@/lib/utils";
+import { linkRelatorioAtividade } from "@/lib/relatorio-atividade-link";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -54,7 +55,7 @@ export async function GET(_: NextRequest, { params }: Params) {
     return {
       id: a.id, titulo: a.titulo, status: a.status, criadoEm: a.criadoEm, duracaoMin: a.duracaoMin,
       tipoOsNome: a.tipoOs?.nome ?? null, tipoOsCor: a.tipoOs?.cor ?? null, tecnicoNome: textoTecnicosAtividade(a),
-      resumo, fotos, respostas: respostasPreenchidas,
+      resumo, fotos, respostas: respostasPreenchidas, linkRelatorio: linkRelatorioAtividade(a),
     };
   });
 

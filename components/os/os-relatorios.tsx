@@ -3,16 +3,19 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { LinkRelatorioAtividade } from "@/components/os/link-relatorio-atividade";
 import { cn, formatarData, formatarDataHora, LABELS_STATUS_OS } from "@/lib/utils";
 import {
-  FileText, FileBarChart, DollarSign, Camera, ListChecks, Wrench, Users, Clock,
-  CornerDownRight, ExternalLink, CalendarRange, AlertCircle, Lock,
+  FileBarChart, DollarSign, Camera, ListChecks, Wrench, Users, Clock,
+  CornerDownRight, CalendarRange, AlertCircle, Lock,
 } from "lucide-react";
 
 interface Atividade {
   id: string; titulo: string; status: string; criadoEm: string; duracaoMin: number | null;
   tipoOsNome: string | null; tipoOsCor: string | null; tecnicoNome: string | null;
   resumo: string; fotos: number; respostas: number;
+  /** Link público do relatório, já com o token. */
+  linkRelatorio: string;
 }
 interface Relatorio { id: string; numero: string; escopo: string; tokenPublico: string; status: string }
 interface Resumo {
@@ -52,6 +55,10 @@ export function OsRelatorios({ osId }: { osId: string }) {
   useEffect(() => { carregar(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
   const geral = relatorios.find((r) => r.escopo === "GERAL");
+
+  function trocarLink(atividadeId: string, linkRelatorio: string) {
+    setResumo((r) => r && { ...r, atividades: r.atividades.map((a) => (a.id === atividadeId ? { ...a, linkRelatorio } : a)) });
+  }
 
   async function gerarMedicao() {
     setGerando(true); setErro("");
@@ -102,7 +109,7 @@ export function OsRelatorios({ osId }: { osId: string }) {
               <Clock className="w-4 h-4" /> Status: <span className="font-medium text-ink">{LABELS_STATUS_OS[resumo.statusOs] ?? resumo.statusOs}</span>
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <a href={`/ordens/${osId}/relatorio`} target="_blank" rel="noopener" className="btn-secondary" data-relatorio-interno title="Todas as seções, inclusive as marcadas como só interno">
               <Lock className="w-4 h-4" /> Versão interna
             </a>
@@ -141,7 +148,7 @@ export function OsRelatorios({ osId }: { osId: string }) {
             <div key={a.id} className="relative">
               <CornerDownRight className="absolute -left-[26px] top-3 w-4 h-4 text-ink-subtle" />
               <div className="border border-surface-border rounded-lg p-3 bg-white hover:border-primary-200 transition-colors">
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold text-ink">{a.titulo}</p>
@@ -159,10 +166,7 @@ export function OsRelatorios({ osId }: { osId: string }) {
                       <span className="flex items-center gap-1"><ListChecks className="w-3.5 h-3.5" /> {a.respostas} resposta(s)</span>
                     </div>
                   </div>
-                  <a href={`/relatorio/atividade/${a.id}`} target="_blank" rel="noopener"
-                    className="shrink-0 inline-flex items-center gap-1.5 text-xs font-medium text-primary-600 hover:text-primary-700 hover:bg-primary-50 px-2.5 py-1.5 rounded-lg">
-                    <FileText className="w-3.5 h-3.5" /> Ver relatório <ExternalLink className="w-3 h-3" />
-                  </a>
+                  <LinkRelatorioAtividade osId={osId} atividadeId={a.id} link={a.linkRelatorio} onNovoLink={(link) => trocarLink(a.id, link)} />
                 </div>
               </div>
             </div>

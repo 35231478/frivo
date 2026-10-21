@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { linkRelatorioAtividade } from "@/lib/relatorio-atividade-link";
 
 /**
  * Linha do tempo de manutenção de um equipamento.
@@ -50,6 +51,8 @@ export interface EventoHistorico {
   resumo: string | null;
   os: { id: string; numero: string; status: string };
   atividadeId: string | null;
+  /** Link público do relatório da atividade, já com o token (null quando não há atividade). */
+  linkRelatorio: string | null;
   formularios: FormularioResumo[];
 }
 
@@ -69,7 +72,7 @@ export async function carregarHistoricoEquipamento(empresaId: string, equipament
       orderBy: { criadoEm: "desc" },
       take: LIMITE,
       select: {
-        id: true, titulo: true, status: true, dataAgendada: true, criadoEm: true, resumo: true,
+        id: true, titulo: true, status: true, dataAgendada: true, criadoEm: true, resumo: true, tokenRelatorio: true,
         tipoOs: { select: { nome: true, cor: true } },
         tecnico: { select: { nome: true } },
         ordemServico: { select: { id: true, numero: true, status: true, dataConclusao: true } },
@@ -159,6 +162,7 @@ export async function carregarHistoricoEquipamento(empresaId: string, equipament
       resumo: a.resumo ?? null,
       os: { id: a.ordemServico.id, numero: a.ordemServico.numero, status: a.ordemServico.status },
       atividadeId: a.id,
+      linkRelatorio: linkRelatorioAtividade(a),
       formularios: [...(formsPorAtividade.get(a.id)?.values() ?? [])],
     };
   });
@@ -182,6 +186,7 @@ export async function carregarHistoricoEquipamento(empresaId: string, equipament
       resumo: null,
       os: { id: o.id, numero: o.numero, status: o.status },
       atividadeId: null,
+      linkRelatorio: null,
       formularios: [],
     });
   }

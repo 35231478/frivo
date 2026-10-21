@@ -4,11 +4,15 @@ import { AtividadeDocumento } from "@/components/relatorio/atividade-documento";
 import { AutoPrint } from "@/components/orcamento/auto-print";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Relatório de Atividade", robots: { index: false, follow: false } };
+export const metadata = { title: "Relatório de Atividade", robots: { index: false, follow: false }, referrer: "no-referrer" as const };
 
-export default async function RelatorioAtividadePage({ params }: { params: Promise<{ id: string }> }) {
+/** Link público: /relatorio/atividade/<id>?t=<token>. Sem o token certo, 404 (a mesma do id inexistente). */
+export default async function RelatorioAtividadePage({
+  params, searchParams,
+}: { params: Promise<{ id: string }>; searchParams: Promise<{ t?: string | string[] }> }) {
   const { id } = await params;
-  const dados = await carregarAtividade(id);
+  const { t } = await searchParams;
+  const dados = await carregarAtividade(id, t);
   if (!dados) notFound();
   const { empresa, os, atividade, equipamentos, numero } = dados;
 

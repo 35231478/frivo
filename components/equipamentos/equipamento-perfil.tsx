@@ -551,8 +551,8 @@ function LinhaDoTempo({ eventos, onVerRespostas }: { eventos: EventoHistorico[];
                               <ClipboardList className="w-3 h-3" /> Ver respostas
                             </button>
                           )}
-                          {ev.atividadeId && ev.status === "CONCLUIDA" && (
-                            <a href={`/relatorio/atividade/${ev.atividadeId}`} target="_blank" rel="noreferrer" className="text-primary-600 hover:text-primary-700 inline-flex items-center gap-1">
+                          {ev.linkRelatorio && ev.status === "CONCLUIDA" && (
+                            <a href={ev.linkRelatorio} target="_blank" rel="noreferrer" data-link-relatorio className="text-primary-600 hover:text-primary-700 inline-flex items-center gap-1">
                               <FileText className="w-3 h-3" /> Relatório
                             </a>
                           )}

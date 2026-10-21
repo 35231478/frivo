@@ -1560,6 +1560,10 @@ model AtividadeOs {
   duracaoMin     Int?            @map("duracao_min")
   observacao     String?
   resumo         String?         @db.Text
+  /// Segredo do link público do relatório desta atividade (/relatorio/atividade/<id>?t=<token>):
+  /// 32 bytes aleatórios em base64url (43 caracteres). O banco gera ao criar a atividade (SQL
+  /// 2026-10-20_relatorio_atividade_token); "Gerar novo link" troca e o link antigo para de abrir.
+  tokenRelatorio String          @unique @default(dbgenerated("rtrim(translate(encode(sha256(convert_to((((gen_random_uuid())::text || (gen_random_uuid())::text) || (gen_random_uuid())::text), 'UTF8'::name)), 'base64'::text), '+/'::text, '-_'::text), '='::text)")) @map("token_relatorio")
   criadoEm       DateTime        @default(now()) @map("criado_em")
   atualizadoEm   DateTime        @updatedAt @map("atualizado_em")
 
