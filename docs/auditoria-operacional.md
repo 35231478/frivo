@@ -1,5 +1,7 @@
 # Auditoria operacional do Frivo — 06/10/2026
 
+> **Superada:** a auditoria atualizada, com a reconciliação destes itens, está em `docs/auditoria-operacional-2026-10-21.md`.
+
 > Etapa 1 de 2: **só diagnóstico**. Nenhum código foi corrigido e nenhum banco foi acessado.
 > Base auditada: `main` em `b1c8f0e` (após o PR #22).
 
