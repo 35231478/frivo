@@ -143,7 +143,9 @@ describe("tela de execução", () => {
       { url: `${BASE}/execucao/equipamentos/eqA/itens/i2`, metodo: "PUT", corpo: { status: "ATENCAO" } },
       { url: `${BASE}/execucao/equipamentos/eqA/itens/i2`, metodo: "PUT", corpo: { observacao: "6,2 A" } },
     ]);
-    expect(card("eqA").getAttribute("data-situacao")).toBe("completo");
+    // Etapa 2: "Atenção" também pede FOTO do item — ainda falta
+    expect(card("eqA").getAttribute("data-situacao")).toBe("pendente");
+    expect(txt("[data-equipamento-card=\"eqA\"] [data-faltas]")).toContain("foto em “Medição de corrente”");
     expect(escritas().some((c) => c.url.includes("/eqB/"))).toBe(false); // o outro do mesmo tipo não é tocado
   });
 
@@ -358,11 +360,11 @@ describe("relatório: bloco de cada equipamento atendido", () => {
       id: "eqA", local: { principal: "Sala 1", complemento: "1º andar", unidade: "Matriz" }, titulo: "Split Sala 1", descricao: "Split Hi-Wall", fabricante: "Daikin FTXS",
       tag: "AC-01", numeroSerie: null, checklist: [], observacoes: ["Dreno parcialmente obstruído — limpo."],
       checklistTipo: [{ atividade: "Preventiva", itens: [
-        { texto: "Limpeza dos filtros", status: "OK" as const, observacao: null },
-        { texto: "Medição de corrente", status: "ATENCAO" as const, observacao: "6,2 A — acima do nominal" },
-        { texto: "Bomba de dreno", status: "NAO_SE_APLICA" as const, observacao: null },
+        { texto: "Limpeza dos filtros", status: "OK" as const, observacao: null, medicao: null, audio: false },
+        { texto: "Medição de corrente", status: "ATENCAO" as const, observacao: "6,2 A — acima do nominal", medicao: null, audio: false },
+        { texto: "Bomba de dreno", status: "NAO_SE_APLICA" as const, observacao: null, medicao: null, audio: false },
       ] }],
-      resumoChecklist: { ok: 1, atencao: 1, naoSeAplica: 1 },
+      resumoChecklist: { ok: 1, atencao: 1, naoSeAplica: 1, medicoes: 0 },
       fotos: [{ url: "data:image/png;base64,AAAA", legenda: "Limpeza dos filtros" }],
     };
     await montar(createElement(BlocosEquipamentos, { blocos: [bloco] }));

@@ -4,35 +4,72 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  MSG_SEM_EQUIPAMENTO, completo, contarFotosPorItem, faltasEquipamento, listaCurta, paraPendencia, rotuloCurto, textoFaltas, verificarConclusao,
-  type EquipamentoParaPendencia,
+  MSG_SEM_EQUIPAMENTO, completo, contarFotosPorItem, respondido, faltasEquipamento, listaCurta, paraPendencia, rotuloCurto, textoFaltas, verificarConclusao,
+  type EquipamentoParaPendencia, type ItemExecucao, type RespostaItem, type StatusItem,
 } from "@/lib/execucao/pendencias";
 import { checklistSchema, planejarChecklist } from "@/lib/checklist/tipo";
-import { ITENS_BASE, TIPOS_PADRAO, checklistSugerido } from "@/lib/checklist/padrao";
+import { ITENS_BASE, ITENS_BASE_E1, TIPOS_PADRAO, TIPOS_PADRAO_E1, checklistSugerido } from "@/lib/checklist/padrao";
 
-const ITENS = [
-  { id: "i1", texto: "Limpeza dos filtros", pedirFoto: true, pedirObservacao: false, ativo: true },
-  { id: "i2", texto: "Medição de corrente", pedirFoto: false, pedirObservacao: true, ativo: true },
-  { id: "i3", texto: "Teste de funcionamento", pedirFoto: false, pedirObservacao: false, ativo: true },
+const ITENS: ItemExecucao[] = [
+  { id: "i1", texto: "Limpeza dos filtros", pedirFoto: true, pedirObservacao: false, ativo: true, tipoResposta: "OK_ATENCAO_NA", unidade: null },
+  { id: "i2", texto: "Medição de corrente", pedirFoto: false, pedirObservacao: true, ativo: true, tipoResposta: "OK_ATENCAO_NA", unidade: null },
+  { id: "i3", texto: "Teste de funcionamento", pedirFoto: false, pedirObservacao: false, ativo: true, tipoResposta: "OK_ATENCAO_NA", unidade: null },
 ];
+/** Uma resposta (medição/áudio vazios, a não ser que venham em `extra`) */
+const r = (status: StatusItem | null, observacao: string | null = null, extra: Partial<RespostaItem> = {}): RespostaItem =>
+  ({ status, observacao, valor: null, unidade: null, audio: false, ...extra });
 const equip = (extra: Partial<EquipamentoParaPendencia> = {}): EquipamentoParaPendencia => ({
   equipamentoId: "eqA", titulo: "Split Sala 1 (TAG AC-01)", feito: true, itens: ITENS, respostas: {}, fotosPorItem: {}, formulario: null, ...extra,
 });
 const tudoOk = {
-  i1: { status: "OK" as const, observacao: null }, i2: { status: "OK" as const, observacao: "6 A" }, i3: { status: "OK" as const, observacao: null },
+  i1: r("OK"), i2: r("OK", "6 A"), i3: r("OK"),
 };
 
 describe("o que falta em um equipamento", () => {
   it("item sem resposta; foto e observação que o item pede", () => {
     expect(faltasEquipamento(equip())).toEqual({ semResposta: ["Limpeza dos filtros", "Medição de corrente", "Teste de funcionamento"], semFoto: [], semObservacao: [], formulario: null });
-    const f = faltasEquipamento(equip({ respostas: { ...tudoOk, i2: { status: "ATENCAO", observacao: "  " } } }));
-    expect(f).toEqual({ semResposta: [], semFoto: ["Limpeza dos filtros"], semObservacao: ["Medição de corrente"], formulario: null });
+    const f = faltasEquipamento(equip({ respostas: { ...tudoOk, i2: r("ATENCAO", "  ") } }));
+    // "Atenção" (i2) pede foto do item + observação, além do que o item já pedia
+    expect(f).toEqual({ semResposta: [], semFoto: ["Limpeza dos filtros", "Medição de corrente"], semObservacao: ["Medição de corrente"], formulario: null });
     expect(completo(f)).toBe(false);
     expect(completo(faltasEquipamento(equip({ respostas: tudoOk, fotosPorItem: { i1: 1 } })))).toBe(true);
   });
 
+  it("“Atenção” SEMPRE exige foto do item + observação (escrita ou em áudio), mesmo se o item não pede", () => {
+    const base = { ...tudoOk, i3: r("ATENCAO") };
+    expect(faltasEquipamento(equip({ respostas: base, fotosPorItem: { i1: 1 } }))).toEqual({ semResposta: [], semFoto: ["Teste de funcionamento"], semObservacao: ["Teste de funcionamento"], formulario: null });
+    // foto de OUTRO item não vale
+    expect(faltasEquipamento(equip({ respostas: base, fotosPorItem: { i1: 3 } })).semFoto).toEqual(["Teste de funcionamento"]);
+    // observação só em áudio vale; escrita também
+    expect(completo(faltasEquipamento(equip({ respostas: { ...base, i3: r("ATENCAO", null, { audio: true }) }, fotosPorItem: { i1: 1, i3: 1 } })))).toBe(true);
+    expect(completo(faltasEquipamento(equip({ respostas: { ...base, i3: r("ATENCAO", "ruído no rolamento") }, fotosPorItem: { i1: 1, i3: 1 } })))).toBe(true);
+    // OK sem pedir nada continua sem exigir
+    expect(completo(faltasEquipamento(equip({ respostas: tudoOk, fotosPorItem: { i1: 1 } })))).toBe(true);
+    // áudio também conta para item que pede observação
+    expect(faltasEquipamento(equip({ respostas: { ...tudoOk, i2: r("OK", null, { audio: true }) }, fotosPorItem: { i1: 1 } })).semObservacao).toEqual([]);
+  });
+
+  it("medição: respondida com o NÚMERO (zero vale) ou “Não se aplica”; status sozinho não vale; nada de avaliar o valor", () => {
+    const med: ItemExecucao = { id: "m1", texto: "Pressão de sucção", pedirFoto: false, pedirObservacao: false, ativo: true, tipoResposta: "MEDICAO", unidade: "psi" };
+    const e = (resp?: RespostaItem) => equip({ itens: [med], respostas: resp ? { m1: resp } : {} });
+    expect(faltasEquipamento(e()).semResposta).toEqual(["Pressão de sucção"]);
+    expect(faltasEquipamento(e(r(null, "anotei", { valor: null }))).semResposta).toEqual(["Pressão de sucção"]);
+    expect(faltasEquipamento(e(r("OK"))).semResposta).toEqual(["Pressão de sucção"]);
+    expect(faltasEquipamento(e(r(null, null, { valor: Number.NaN }))).semResposta).toEqual(["Pressão de sucção"]);
+    expect(completo(faltasEquipamento(e(r(null, null, { valor: 0, unidade: "psi" }))))).toBe(true);
+    expect(completo(faltasEquipamento(e(r(null, null, { valor: -12.5, unidade: "°C" }))))).toBe(true);
+    expect(completo(faltasEquipamento(e(r(null, null, { valor: 999999, unidade: "psi" }))))).toBe(true); // valor "absurdo" não trava: o adm interpreta
+    expect(completo(faltasEquipamento(e(r("NAO_SE_APLICA"))))).toBe(true);
+    // medição que pede foto: com o número, a foto passa a faltar; N/A dispensa
+    const comFoto = { ...med, pedirFoto: true };
+    expect(faltasEquipamento(equip({ itens: [comFoto], respostas: { m1: r(null, null, { valor: 70 }) } })).semFoto).toEqual(["Pressão de sucção"]);
+    expect(completo(faltasEquipamento(equip({ itens: [comFoto], respostas: { m1: r("NAO_SE_APLICA") } })))).toBe(true);
+    expect(respondido(med, r(null, null, { valor: 1 }))).toBe(true);
+    expect(respondido(ITENS[0], r(null, null, { valor: 1 }))).toBe(false); // item comum não se responde com número
+  });
+
   it("“Não se aplica” dispensa a foto e a observação do item", () => {
-    const f = faltasEquipamento(equip({ respostas: { i1: { status: "NAO_SE_APLICA", observacao: null }, i2: { status: "NAO_SE_APLICA", observacao: null }, i3: tudoOk.i3 } }));
+    const f = faltasEquipamento(equip({ respostas: { i1: r("NAO_SE_APLICA"), i2: r("NAO_SE_APLICA"), i3: tudoOk.i3 } }));
     expect(completo(f)).toBe(true);
   });
 
@@ -92,10 +129,11 @@ describe("pode concluir?", () => {
 });
 
 describe("editar o checklist do tipo", () => {
+  const sem = { tipoResposta: "OK_ATENCAO_NA" as const, unidade: null };
   const atuais = [
-    { id: "i1", texto: "Limpeza dos filtros", pedirFoto: true, pedirObservacao: false, ordem: 1 },
-    { id: "i2", texto: "Medição de corrente", pedirFoto: false, pedirObservacao: true, ordem: 2 },
-    { id: "i3", texto: "Teste de funcionamento", pedirFoto: false, pedirObservacao: false, ordem: 3 },
+    { id: "i1", texto: "Limpeza dos filtros", pedirFoto: true, pedirObservacao: false, ordem: 1, ...sem },
+    { id: "i2", texto: "Medição de corrente", pedirFoto: false, pedirObservacao: true, ordem: 2, ...sem },
+    { id: "i3", texto: "Teste de funcionamento", pedirFoto: false, pedirObservacao: false, ordem: 3, ...sem },
   ];
   const it_ = (x: Record<string, unknown>) => ({ tipoResposta: "OK_ATENCAO_NA" as const, pedirFoto: false, pedirObservacao: false, ...x }) as any;
 
@@ -107,10 +145,10 @@ describe("editar o checklist do tipo", () => {
     ]);
     expect(r).toEqual({ ok: true, plano: {
       atualizar: [
-        { id: "i2", texto: "Medição de corrente", pedirFoto: false, pedirObservacao: true, ordem: 1 },
-        { id: "i1", texto: "Limpeza dos filtros", pedirFoto: false, pedirObservacao: false, ordem: 3 },
+        { id: "i2", texto: "Medição de corrente", pedirFoto: false, pedirObservacao: true, ordem: 1, ...sem },
+        { id: "i1", texto: "Limpeza dos filtros", pedirFoto: false, pedirObservacao: false, ordem: 3, ...sem },
       ],
-      criar: [{ texto: "Verificação do dreno", pedirFoto: false, pedirObservacao: false, ordem: 2 }],
+      criar: [{ texto: "Verificação do dreno", pedirFoto: false, pedirObservacao: false, ordem: 2, ...sem }],
       inativar: ["i3"],
     } });
   });
@@ -125,7 +163,31 @@ describe("editar o checklist do tipo", () => {
     expect(planejarChecklist(atuais, [it_({ id: "i1", texto: "A" }), it_({ id: "i1", texto: "B" })]).ok).toBe(false);
   });
 
-  it("corpo: só OK/Atenção/Não se aplica por ora; texto 2..300; no máximo 100 itens; campo estranho recusado", () => {
+  it("medição: unidade obrigatória e guardada; mudar a unidade atualiza; mudar o TIPO vira item novo (o antigo é inativado com as respostas)", () => {
+    const comMed = [...atuais, { id: "m1", texto: "Pressão de sucção", pedirFoto: false, pedirObservacao: false, ordem: 4, tipoResposta: "MEDICAO" as const, unidade: "psi" }];
+    const lista = comMed.map((a) => it_(a));
+    expect(planejarChecklist(comMed, lista)).toEqual({ ok: true, plano: { atualizar: [], criar: [], inativar: [] } });
+    // unidade muda (e espaços somem)
+    const r1 = planejarChecklist(comMed, [...lista.slice(0, 3), it_({ ...lista[3], unidade: " bar " })]);
+    expect(r1.ok && r1.plano.atualizar).toEqual([{ id: "m1", texto: "Pressão de sucção", pedirFoto: false, pedirObservacao: false, ordem: 4, tipoResposta: "MEDICAO", unidade: "bar" }]);
+    // OK/Atenção → medição: cria um novo e inativa o antigo
+    const r2 = planejarChecklist(comMed, [it_({ id: "i1", texto: "Limpeza dos filtros", pedirFoto: true }), it_({ id: "i2", texto: "Corrente do compressor", tipoResposta: "MEDICAO", unidade: "A" }), lista[2], lista[3]]);
+    expect(r2).toEqual({ ok: true, plano: {
+      atualizar: [],
+      criar: [{ texto: "Corrente do compressor", pedirFoto: false, pedirObservacao: false, ordem: 2, tipoResposta: "MEDICAO", unidade: "A" }],
+      inativar: ["i2"],
+    } });
+    // item comum não guarda unidade
+    const r3 = planejarChecklist([], [it_({ texto: "Dreno", unidade: "psi" })]);
+    expect(r3.ok && r3.plano.criar[0].unidade).toBeNull();
+    const ok = (itens: unknown[]) => checklistSchema.safeParse({ itens }).success;
+    expect(ok([{ texto: "Pressão", tipoResposta: "MEDICAO", unidade: "psi" }])).toBe(true);
+    expect(ok([{ texto: "Pressão", tipoResposta: "MEDICAO" }])).toBe(false);
+    expect(ok([{ texto: "Pressão", tipoResposta: "MEDICAO", unidade: "  " }])).toBe(false);
+    expect(ok([{ texto: "Pressão", tipoResposta: "MEDICAO", unidade: "x".repeat(21) }])).toBe(false);
+  });
+
+  it("corpo: OK/Atenção/Não se aplica ou Medição; texto 2..300; no máximo 100 itens; campo estranho recusado", () => {
     const ok = (itens: unknown[]) => checklistSchema.safeParse({ itens }).success;
     expect(ok([{ texto: "Limpeza" }])).toBe(true);
     expect(ok([{ texto: "Limpeza", tipoResposta: "TEXTO" }])).toBe(false);
@@ -141,8 +203,30 @@ describe("checklists sugeridos (boas práticas AVAC)", () => {
 
   it("os 8 tipos pré-cadastrados, cada um com o seu checklist", () => {
     expect(TIPOS_PADRAO.map((t) => t.nome)).toEqual(["Split Hi-Wall (parede)", "Piso-Teto", "Cassete", "VRF/VRV", "Chiller", "Self-Contained", "Fancoil", "Câmara Fria/Refrigeração"]);
-    expect(ITENS_BASE).toHaveLength(14);
+    expect(ITENS_BASE).toHaveLength(17);
+    expect(ITENS_BASE_E1).toHaveLength(14);
     expect(textos("AR_CONDICIONADO_SPLIT")).toEqual(ITENS_BASE.map((i) => i.texto));
+  });
+
+  it("etapa 2: cada \"Medição de …\" vira itens de MEDIÇÃO (número + unidade), no mesmo lugar; o resto não muda", () => {
+    const medicoes = ITENS_BASE.filter((i) => i.tipoResposta === "MEDICAO").map((i) => `${i.texto} (${i.unidade})`);
+    expect(medicoes).toEqual([
+      "Pressão de sucção (psi)", "Pressão de descarga (psi)",
+      "Corrente do compressor (A)", "Corrente dos ventiladores (A)",
+      "Temperatura de insuflamento (°C)", "Temperatura de retorno (°C)",
+    ]);
+    // nenhum item de medição pede foto/observação (só captura) e nenhum item "Medição de…" sobra
+    for (const t of TIPOS_PADRAO) {
+      expect(t.itens.some((i) => /^Medição de/.test(i.texto))).toBe(false);
+      for (const i of t.itens.filter((x) => x.tipoResposta === "MEDICAO")) expect([i.pedirFoto, i.pedirObservacao, !!i.unidade]).toEqual([undefined, undefined, true]);
+    }
+    // os itens que não são medição ficam iguais e na mesma ordem relativa
+    TIPOS_PADRAO_E1.forEach((e1, k) => {
+      const semMedicao = (itens: typeof ITENS_BASE) => itens.filter((i) => !i.tipoResposta && !/^Medição de|Temperatura de entrada e saída|Controle de temperatura da câmara/.test(i.texto)).map((i) => i.texto);
+      expect(semMedicao(TIPOS_PADRAO[k].itens)).toEqual(semMedicao(e1.itens));
+    });
+    expect(textos("CAMARA_FRIA")).toContain("Setpoint da câmara");
+    expect(textos("CHILLER")).toEqual(expect.arrayContaining(["Temperatura de entrada da água", "Temperatura de saída da água"]));
   });
 
   it("específicos: Cassete/Piso-Teto (bomba de dreno, aletas); VRF (erros, comunicação, pressões); Câmara (degelo, gaxetas)", () => {

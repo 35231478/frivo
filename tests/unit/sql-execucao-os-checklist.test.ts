@@ -8,7 +8,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
-import { TIPOS_PADRAO } from "@/lib/checklist/padrao";
+import { TIPOS_PADRAO_E1 as TIPOS_PADRAO } from "@/lib/checklist/padrao";
 
 const URL = process.env.PG_TESTE_URL;
 const ARQUIVO = path.resolve(__dirname, "../../prisma/sql/2026-10-20_execucao_os_checklist.sql");

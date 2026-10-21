@@ -13,12 +13,14 @@ async function carregar(empresaId: string, id: string) {
   const itens = await prisma.checklistTipoItem.findMany({
     where: { tipoEquipamentoId: id, ativo: true },
     orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }],
-    select: { id: true, texto: true, tipoResposta: true, pedirFoto: true, pedirObservacao: true, ordem: true, _count: { select: { respostas: true } } },
+    select: { id: true, texto: true, tipoResposta: true, unidade: true, pedirFoto: true, pedirObservacao: true, ordem: true, _count: { select: { respostas: true } } },
   });
   return {
     tipo,
     itens: itens.map(({ _count, ...i }) => ({ ...i, respostas: _count.respostas })),
-    sugestao: checklistSugerido(tipo.chaveEnum).map((i) => ({ texto: i.texto, pedirFoto: !!i.pedirFoto, pedirObservacao: !!i.pedirObservacao })),
+    sugestao: checklistSugerido(tipo.chaveEnum).map((i) => ({
+      texto: i.texto, pedirFoto: !!i.pedirFoto, pedirObservacao: !!i.pedirObservacao, tipoResposta: i.tipoResposta ?? "OK_ATENCAO_NA", unidade: i.unidade ?? null,
+    })),
   };
 }
 
@@ -49,7 +51,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   const atuais = await prisma.checklistTipoItem.findMany({
     where: { tipoEquipamentoId: id, ativo: true },
-    select: { id: true, texto: true, pedirFoto: true, pedirObservacao: true, ordem: true },
+    select: { id: true, texto: true, pedirFoto: true, pedirObservacao: true, ordem: true, tipoResposta: true, unidade: true },
   });
   const r = planejarChecklist(atuais, parsed.data.itens);
   if (!r.ok) return NextResponse.json({ erro: r.erro }, { status: 400 });

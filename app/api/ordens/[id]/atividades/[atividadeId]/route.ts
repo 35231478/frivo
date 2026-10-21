@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirAlgumaPermissao, exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { pode } from "@/lib/permissoes";
-import { carregarExecucao } from "@/lib/execucao/dados";
+import { respostaAcao, travaConclusao } from "@/lib/execucao/acoes";
+import { MSG_FORA_DO_ESCOPO, escopoDaSessao, filtroEscopo } from "@/lib/tecnico/escopo";
 import { ErroTecnicos, INCLUDE_TECNICOS_ATIVIDADE, gravarTecnicos, lerDefinicao, lerVeiculo, resolverTecnicos, resolverVeiculo } from "@/lib/atividade-tecnicos";
 
 type Params = { params: Promise<{ id: string; atividadeId: string }> };
@@ -17,6 +18,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   const existente = await prisma.atividadeOs.findFirst({ where: { id: atividadeId, ordemServicoId: id, empresaId } });
   if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
+  // Modo técnico: só as atividades dele
+  const escopo = escopoDaSessao(session);
+  if (escopo.restrito && !(await prisma.atividadeOs.findFirst({ where: { id: atividadeId, ...filtroEscopo(escopo) }, select: { id: true } })))
+    return NextResponse.json({ erro: MSG_FORA_DO_ESCOPO }, { status: 403 });
 
   const { status, titulo, tipoOsId, tecnicoId, dataAgendada, duracaoMin, observacao, resumo } = body;
 
@@ -58,13 +63,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
   // respondido (com a foto/observação que o item pede) e o formulário obrigatório preenchido. A
   // mensagem diz exatamente o que falta, equipamento por equipamento. Reabrir não apaga nada.
   if (status === "CONCLUIDA" && existente.status !== "CONCLUIDA") {
-    const exec = await carregarExecucao(empresaId, id, atividadeId);
-    if (exec && !exec.conclusao.ok) {
-      return NextResponse.json(
-        { erro: exec.conclusao.mensagem, pendencias: exec.conclusao.pendencias, semEquipamento: exec.conclusao.semEquipamento },
-        { status: 422 },
-      );
-    }
+    const trava = await travaConclusao(empresaId, id, atividadeId);
+    if (trava) return respostaAcao(trava);
   }
 
   const data: any = {};

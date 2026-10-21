@@ -8,6 +8,7 @@ import { permissoesDoUsuario } from "@/lib/permissoes";
 import { conferirTokenAtivo } from "@/lib/sessao-ativa";
 import { conferirBloqueio, ipDaRequisicao, limparTentativas, registrarTentativa } from "@/lib/acesso/limite";
 import { impressaoDaSenha } from "@/lib/acesso/impressao-senha";
+import { tecnicoDoUsuario } from "@/lib/tecnico/escopo";
 
 /** Muitas senhas erradas: o formulário recebe o código (com os minutos que faltam), não o motivo. */
 class AcessoBloqueado extends CredentialsSignin {
@@ -67,6 +68,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         // ADMIN = acesso total; perfil ativo = permissões do perfil; sem perfil = só o dashboard.
         const permissoes = permissoesDoUsuario(usuario);
+        // Técnico ligado a este usuário (mesmo e-mail): liga o modo técnico para o técnico puro
+        const tecnico = await tecnicoDoUsuario(usuario.empresaId, usuario.email);
 
         return {
           id: usuario.id,
@@ -79,6 +82,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           perfilNome: usuario.perfilAcesso?.ativo === false ? null : usuario.perfilAcesso?.nome ?? null,
           lembrar,
           fs: impressaoDaSenha(usuario.senha),
+          tecnicoId: tecnico?.id ?? null,
         };
       },
     }),

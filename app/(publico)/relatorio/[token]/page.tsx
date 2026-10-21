@@ -52,7 +52,7 @@ export default async function RelatorioPublicoPage({ params }: { params: Promise
           )}
 
           <div className="bg-white rounded-2xl shadow-card p-6 md:p-10">
-            <RelatorioDocumento relatorio={relatorio} empresa={empresa} os={os} equipamentos={equipamentos} blocos={blocos} />
+            <RelatorioDocumento relatorio={relatorio} empresa={empresa} os={os} equipamentos={equipamentos} blocos={blocos} adicionais={dados.adicionais} />
           </div>
 
           {podeAprovar && <AprovacaoRelatorio token={token} />}

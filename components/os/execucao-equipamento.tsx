@@ -6,10 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { ROTULO_STATUS, STATUS_ITEM, textoFaltas, type FaltasEquipamento, type StatusItem } from "@/lib/execucao/pendencias";
+import { ROTULO_STATUS, STATUS_ITEM, respondido, textoFaltas, type FaltasEquipamento, type RespostaItem, type StatusItem } from "@/lib/execucao/pendencias";
 
 /* ───────── Tipos (o JSON de GET .../execucao) ───────── */
-export interface ItemTela { id: string; texto: string; pedirFoto: boolean; pedirObservacao: boolean; ativo: boolean; ordem: number }
+export interface ItemTela { id: string; texto: string; pedirFoto: boolean; pedirObservacao: boolean; ativo: boolean; ordem: number; tipoResposta: "OK_ATENCAO_NA" | "MEDICAO"; unidade: string | null }
 export interface CampoTela { id: string; label: string; tipo: string; obrigatorio: boolean; ordem: number; opcoes: unknown; ativo: boolean }
 export interface EquipamentoTela {
   vinculoId: string;
@@ -17,8 +17,8 @@ export interface EquipamentoTela {
   observacao: string | null;
   equipamento: { id: string; titulo: string; descricao: string; fabricante: string; tag: string | null; numeroSerie: string | null; local: string | null; unidade: string | null; ativo: boolean; tipo: { id: string; nome: string } | null };
   itens: ItemTela[];
-  respostas: Record<string, { status: StatusItem | null; observacao: string | null }>;
-  fotos: { id: string; itemId: string | null; criadoEm: string }[];
+  respostas: Record<string, RespostaItem & { audioId: string | null }>;
+  fotos: { id: string; itemId: string | null; momento?: "ANTES" | "DEPOIS" | null; criadoEm: string }[];
   formulario: { id: string; nome: string; obrigatorioConcluir: boolean; campos: CampoTela[]; respostas: Record<string, { resposta: string | null; arquivoUrl: string | null }> } | null;
   faltas: FaltasEquipamento;
   completo: boolean;
@@ -26,6 +26,8 @@ export interface EquipamentoTela {
 
 export interface AcoesEquipamento {
   responder: (itemId: string, status: StatusItem) => void;
+  /** Medição: número + unidade (ou "Não se aplica") — sem avaliar o valor */
+  medir: (itemId: string, dados: { valor?: number | null; unidade?: string | null; status?: "NAO_SE_APLICA" | null }) => void;
   observarItem: (itemId: string, texto: string) => void;
   adicionarFoto: (itemId: string | null, arquivo: File) => void;
   removerFoto: (fotoId: string) => void;
@@ -43,8 +45,8 @@ const opcoesCampo = (o: unknown): string[] => Array.isArray(o) ? o.map(String) :
 
 /** Situação do equipamento na atividade (o chip do cabeçalho do cartão). */
 export function situacaoEquipamento(e: EquipamentoTela): { rotulo: string; classe: string; chave: string } {
-  const respondidos = e.itens.filter((i) => e.respostas[i.id]?.status).length;
-  if (!e.feito) return respondidos || e.fotos.length
+  const respondidos = e.itens.filter((i) => respondido(i, e.respostas[i.id])).length;
+  if (!e.feito) return respondidos || e.fotos.length || (e.observacao ?? "").trim()
     ? { chave: "nao-atendido", rotulo: "Não atendido", classe: "bg-slate-100 text-slate-600" }
     : { chave: "nao-iniciado", rotulo: "Não iniciado", classe: "bg-slate-100 text-slate-500" };
   if (e.completo) return { chave: "completo", rotulo: "Completo", classe: "bg-success-50 text-success-700" };
@@ -63,7 +65,7 @@ export function EquipamentoExecucaoCard({ e, aberto, onAlternar, acoes, somenteL
   const fotoRef = useRef<HTMLInputElement>(null);
   const alvoFoto = useRef<string | null>(null);
   const sit = situacaoEquipamento(e);
-  const respondidos = e.itens.filter((i) => i.ativo && e.respostas[i.id]?.status).length;
+  const respondidos = e.itens.filter((i) => i.ativo && respondido(i, e.respostas[i.id])).length;
   const totalAtivos = e.itens.filter((i) => i.ativo).length;
   const eq = e.equipamento;
 
@@ -112,11 +114,13 @@ export function EquipamentoExecucaoCard({ e, aberto, onAlternar, acoes, somenteL
                   const r = e.respostas[it.id];
                   const status = r?.status ?? null;
                   const fotosItem = e.fotos.filter((f) => f.itemId === it.id);
-                  const exigeExtra = status !== null && status !== "NAO_SE_APLICA";
+                  const medicao = it.tipoResposta === "MEDICAO";
+                  const exigeExtra = respondido(it, r) && status !== "NAO_SE_APLICA";
                   const mostraObs = it.pedirObservacao || status === "ATENCAO" || !!r?.observacao;
                   const mostraFoto = it.pedirFoto || status === "ATENCAO" || fotosItem.length > 0;
-                  const faltaFoto = it.ativo && exigeExtra && it.pedirFoto && fotosItem.length === 0;
-                  const faltaObs = it.ativo && exigeExtra && it.pedirObservacao && !(r?.observacao ?? "").trim();
+                  // "Atenção" pede foto + observação (escrita ou em áudio), mesmo se o item não pede
+                  const faltaFoto = it.ativo && exigeExtra && (it.pedirFoto || status === "ATENCAO") && fotosItem.length === 0;
+                  const faltaObs = it.ativo && exigeExtra && (it.pedirObservacao || status === "ATENCAO") && !(r?.observacao ?? "").trim() && !r?.audio;
                   return (
                     <li key={it.id} className="rounded-lg border border-gray-100 p-2.5 space-y-2" data-item={it.id}>
                       <div className="flex items-start gap-2">
@@ -128,6 +132,9 @@ export function EquipamentoExecucaoCard({ e, aberto, onAlternar, acoes, somenteL
                           {it.pedirObservacao && <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] text-gray-400"><MessageSquareText className="w-3 h-3" /> observação</span>}
                         </p>
                       </div>
+                      {medicao ? (
+                        <MedicaoItem it={it} r={r} somenteLeitura={somenteLeitura} onMedir={(d) => acoes.medir(it.id, d)} />
+                      ) : (
                       <div className="flex gap-1.5 pl-7" role="group" aria-label={`Resposta: ${it.texto}`}>
                         {STATUS_ITEM.map((s) => (
                           <button key={s} type="button" disabled={somenteLeitura} aria-pressed={status === s} data-resposta={s}
@@ -138,19 +145,25 @@ export function EquipamentoExecucaoCard({ e, aberto, onAlternar, acoes, somenteL
                           </button>
                         ))}
                       </div>
+                      )}
+                      {r?.audioId && (
+                        <div className="pl-7" data-audio-item={it.id}>
+                          <audio controls preload="none" src={`/api/checklist-respostas/${r.audioId}/audio`} className="h-9 w-full max-w-xs" aria-label={`Observação em áudio: ${it.texto}`} />
+                        </div>
+                      )}
                       {mostraObs && (
                         <div className="pl-7">
                           <Textarea rows={2} defaultValue={r?.observacao ?? ""} disabled={somenteLeitura} data-obs-item={it.id}
                             placeholder={it.pedirObservacao ? "Observação (ex.: o valor medido)" : "Descreva o que precisa de atenção"}
                             onBlur={(ev) => { if (ev.target.value.trim() !== (r?.observacao ?? "").trim()) acoes.observarItem(it.id, ev.target.value); }}
                             className={cn(faltaObs && "border-amber-400")} aria-label={`Observação: ${it.texto}`} />
-                          {faltaObs && <p className="text-[11px] text-amber-700 mt-0.5">Este item pede observação.</p>}
+                          {faltaObs && <p className="text-[11px] text-amber-700 mt-0.5">{status === "ATENCAO" ? "“Atenção” pede observação." : "Este item pede observação."}</p>}
                         </div>
                       )}
                       {mostraFoto && (
                         <div className="pl-7">
                           <Fotos fotos={fotosItem} somenteLeitura={somenteLeitura} onRemover={acoes.removerFoto} onAdicionar={() => escolherFoto(it.id)} dataAttr={`foto-item-${it.id}`} />
-                          {faltaFoto && <p className="text-[11px] text-amber-700 mt-0.5">Este item pede foto.</p>}
+                          {faltaFoto && <p className="text-[11px] text-amber-700 mt-0.5">{status === "ATENCAO" ? "“Atenção” pede foto." : "Este item pede foto."}</p>}
                         </div>
                       )}
                     </li>
@@ -205,12 +218,13 @@ export function EquipamentoExecucaoCard({ e, aberto, onAlternar, acoes, somenteL
 }
 
 function Fotos({ fotos, somenteLeitura, onRemover, onAdicionar, dataAttr }: {
-  fotos: { id: string }[]; somenteLeitura: boolean; onRemover: (id: string) => void; onAdicionar: () => void; dataAttr: string;
+  fotos: { id: string; momento?: "ANTES" | "DEPOIS" | null }[]; somenteLeitura: boolean; onRemover: (id: string) => void; onAdicionar: () => void; dataAttr: string;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2" data-fotos={dataAttr}>
       {fotos.map((f) => (
         <span key={f.id} className="relative" data-foto={f.id}>
+          {f.momento && <span className="absolute bottom-1 left-1 z-10 rounded bg-black/60 px-1 text-[10px] font-semibold text-white">{f.momento === "ANTES" ? "Antes" : "Depois"}</span>}
           <a href={`/api/fotos-atendimento/${f.id}`} target="_blank" rel="noreferrer">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={`/api/fotos-atendimento/${f.id}`} alt="Foto do atendimento" className="w-16 h-16 rounded-lg object-cover border border-gray-200" loading="lazy" />
@@ -233,7 +247,7 @@ function Fotos({ fotos, somenteLeitura, onRemover, onAdicionar, dataAttr }: {
 }
 
 /** Um campo do formulário do tipo; grava ao sair do campo (texto) ou ao escolher (botões/lista/foto). */
-function CampoFormulario({ campo: c, valor, somenteLeitura, onSalvar }: {
+export function CampoFormulario({ campo: c, valor, somenteLeitura, onSalvar }: {
   campo: CampoTela; valor?: { resposta: string | null; arquivoUrl: string | null }; somenteLeitura: boolean;
   onSalvar: (v: { resposta?: string | null; arquivoUrl?: string | null }) => void;
 }) {
@@ -292,3 +306,34 @@ function CampoFormulario({ campo: c, valor, somenteLeitura, onSalvar }: {
   );
 }
 
+/** Item de MEDIÇÃO: número + unidade (o técnico só registra; quem interpreta é o escritório). */
+function MedicaoItem({ it, r, somenteLeitura, onMedir }: {
+  it: ItemTela; r?: RespostaItem; somenteLeitura: boolean;
+  onMedir: (d: { valor?: number | null; unidade?: string | null; status?: "NAO_SE_APLICA" | null }) => void;
+}) {
+  const [erro, setErro] = useState<string | null>(null);
+  const na = r?.status === "NAO_SE_APLICA";
+  const unidade = r?.unidade ?? it.unidade ?? "";
+  return (
+    <div className="pl-7 space-y-1" data-medicao={it.id}>
+      <div className="flex items-center gap-1.5">
+        <Input key={`${r?.valor ?? ""}-${na}`} inputMode="decimal" defaultValue={r?.valor === null || r?.valor === undefined ? "" : String(r.valor).replace(".", ",")}
+          disabled={somenteLeitura || na} placeholder={na ? "Não se aplica" : "Valor medido"} aria-label={`${it.texto} (${unidade})`} className="max-w-[10rem]"
+          onBlur={(ev) => {
+            const t = ev.target.value.trim();
+            const normal = t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t;
+            if (!t) { if (r?.valor !== null && r?.valor !== undefined) onMedir({ valor: null }); setErro(null); return; }
+            if (!/^-?\d+(\.\d+)?$/.test(normal)) { setErro("Número inválido (use vírgula para decimais)."); return; }
+            setErro(null);
+            if (Number(normal) !== r?.valor) onMedir({ valor: Number(normal) });
+          }} />
+        <span className="text-sm font-semibold text-gray-600 min-w-8">{unidade}</span>
+        <button type="button" disabled={somenteLeitura} aria-pressed={na} data-resposta="NAO_SE_APLICA" onClick={() => onMedir({ status: na ? null : "NAO_SE_APLICA" })}
+          className={cn("min-h-9 px-3 rounded-lg text-xs font-semibold border", na ? COR_STATUS.NAO_SE_APLICA : "bg-white border-gray-200 text-gray-600 hover:border-gray-300")}>
+          {ROTULO_STATUS.NAO_SE_APLICA}
+        </button>
+      </div>
+      {erro && <p className="text-[11px] text-red-600">{erro}</p>}
+    </div>
+  );
+}

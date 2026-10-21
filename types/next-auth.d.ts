@@ -14,6 +14,8 @@ declare module "next-auth" {
       role: Role;
       permissoes: Permissoes;
       perfilNome?: string | null;
+      /** Técnico ligado ao usuário (mesmo e-mail), gravado no login */
+      tecnicoId?: string | null;
     };
   }
 
@@ -31,6 +33,7 @@ declare module "next-auth" {
     lembrar?: boolean;
     /** Impressão da senha no login (lib/acesso/impressao-senha) */
     fs?: string;
+    tecnicoId?: string | null;
   }
 }
 
@@ -47,5 +50,7 @@ declare module "next-auth/jwt" {
     loginEm?: number;
     /** Impressão da senha no login: senha trocada depois → sessão encerrada */
     fs?: string;
+    /** Técnico ligado ao usuário (modo técnico) */
+    tecnicoId?: string | null;
   }
 }

@@ -222,7 +222,8 @@ describe.skipIf(!URL_PG)("execução da OS por equipamento (PostgreSQL real)", (
     const r = await chamar(A, "PUT", p2(), { status: "CONCLUIDA" });
     expect(r.status).toBe(422);
     expect(r.json.erro).toBe(
-      "Para concluir, falta: Split Sala 1 (TAG AC-01) — 1 item sem resposta (“Teste de funcionamento”)"
+      // Etapa 2: "Atenção" (i2) exige foto do item, além da observação
+      "Para concluir, falta: Split Sala 1 (TAG AC-01) — 1 item sem resposta (“Teste de funcionamento”); foto em “Medição de corrente do compressor”"
       + " | Split Sala 2 (Sala 2) — 3 itens sem resposta (“Limpeza dos filtros”, “Medição de corrente do compressor”, “Teste de funcionamento”).",
     );
     expect(r.json.pendencias.map((p: any) => p.equipamentoId)).toEqual(["eqA", "eqB"]);
@@ -230,8 +231,9 @@ describe.skipIf(!URL_PG)("execução da OS por equipamento (PostgreSQL real)", (
     await prisma.fotoAtendimento.deleteMany({ where: { atividadeId: at2, equipamentoId: "eqA" } });
     await responder(p2(), "eqA", "i2", { observacao: "" });
     const faltas = equipDe(await exec(p2()), "eqA").faltas;
-    expect(faltas).toMatchObject({ semFoto: ["Limpeza dos filtros"], semObservacao: ["Medição de corrente do compressor"] });
+    expect(faltas).toMatchObject({ semFoto: ["Limpeza dos filtros", "Medição de corrente do compressor"], semObservacao: ["Medição de corrente do compressor"] });
     await chamar(FOTOS, "POST", { ...p2(), equipamentoId: "eqA" }, { dataUrl: FOTO_PNG, itemId: "i1" });
+    await chamar(FOTOS, "POST", { ...p2(), equipamentoId: "eqA" }, { dataUrl: FOTO_PNG, itemId: "i2" });
     await responder(p2(), "eqA", "i2", { observacao: "6,2 A — acima do nominal" });
   });
 
@@ -264,7 +266,7 @@ describe.skipIf(!URL_PG)("execução da OS por equipamento (PostgreSQL real)", (
     expect(semStatus(reaberta)).toEqual(semStatus(antesDeConcluir));
     expect((await chamar(A, "PUT", p2(), { status: "CONCLUIDA" })).status).toBe(200);
     expect(await prisma.checklistResposta.count({ where: { atividadeId: at2 } })).toBe(3);
-    expect(await prisma.fotoAtendimento.count({ where: { atividadeId: at2 } })).toBe(1);
+    expect(await prisma.fotoAtendimento.count({ where: { atividadeId: at2 } })).toBe(2);
   });
 
   it("tirar equipamento da atividade: com checklist/foto gravado é recusado (marque como não atendido); sem nada, sai", async () => {
@@ -310,12 +312,12 @@ describe.skipIf(!URL_PG)("execução da OS por equipamento (PostgreSQL real)", (
     expect(dados.naoAtendidos.map((e) => e.id)).toEqual(["eqD", "eqB"]);
     const b = dados.equipamentos[0];
     expect(b.checklistTipo).toEqual([{ atividade: expect.any(String), itens: [
-      { texto: "Limpeza dos filtros", status: "OK", observacao: null },
-      { texto: "Medição de corrente do compressor", status: "ATENCAO", observacao: "6,2 A — acima do nominal" },
-      { texto: "Teste de funcionamento", status: "OK", observacao: null },
+      { texto: "Limpeza dos filtros", status: "OK", observacao: null, medicao: null, audio: false },
+      { texto: "Medição de corrente do compressor", status: "ATENCAO", observacao: "6,2 A — acima do nominal", medicao: null, audio: false },
+      { texto: "Teste de funcionamento", status: "OK", observacao: null, medicao: null, audio: false },
     ] }]);
-    expect(b.resumoChecklist).toEqual({ ok: 2, atencao: 1, naoSeAplica: 0 });
-    expect(b.fotos.map((f) => [f.url, f.legenda])).toEqual([[FOTO_PNG, "Limpeza dos filtros"]]);
+    expect(b.resumoChecklist).toEqual({ ok: 2, atencao: 1, naoSeAplica: 0, medicoes: 0 });
+    expect(b.fotos.map((f) => [f.url, f.legenda])).toEqual([[FOTO_PNG, "Limpeza dos filtros"], [FOTO_PNG, "Medição de corrente do compressor"]]);
     expect(b.observacoes).toEqual(["Dreno parcialmente obstruído — limpo."]);
     expect(dados.resultado.texto).toBe("Concluída · 1 de 3 equipamentos atendido · 1 de 2 atividades concluída");
     expect(dados.equipamentos.some((x) => x.id === "eqI")).toBe(false); // nunca "todos os da unidade"
@@ -327,7 +329,7 @@ describe.skipIf(!URL_PG)("execução da OS por equipamento (PostgreSQL real)", (
     for (const rel of rels) {
       const d = (await carregarRelatorioPorToken(rel.tokenPublico))!;
       expect(d.equipamentos.map((e: any) => e.id)).toEqual(["eqA"]);
-      expect(d.blocos.map((x) => [x.id, x.checklistTipo[0].itens.length, x.fotos.length])).toEqual([["eqA", 3, 1]]);
+      expect(d.blocos.map((x) => [x.id, x.checklistTipo[0].itens.length, x.fotos.length])).toEqual([["eqA", 3, 2]]);
     }
   });
 
@@ -354,7 +356,7 @@ describe.skipIf(!URL_PG)("execução da OS por equipamento (PostgreSQL real)", (
     expect(dados.equipamentos.map((b) => b.id)).toEqual(["eqA", "eqB"]);
     expect(bloco("eqA").checklistTipo.map((g) => g.itens.map((i) => i.status))).toEqual([["OK", "ATENCAO", "OK"]]);
     expect(bloco("eqB").checklistTipo.map((g) => g.itens.map((i) => i.status))).toEqual([["NAO_SE_APLICA", "OK", "OK"]]);
-    expect([bloco("eqA").resumoChecklist, bloco("eqB").resumoChecklist]).toEqual([{ ok: 2, atencao: 1, naoSeAplica: 0 }, { ok: 2, atencao: 0, naoSeAplica: 1 }]);
+    expect([bloco("eqA").resumoChecklist, bloco("eqB").resumoChecklist]).toEqual([{ ok: 2, atencao: 1, naoSeAplica: 0, medicoes: 0 }, { ok: 2, atencao: 0, naoSeAplica: 1, medicoes: 0 }]);
     expect(bloco("eqA").fotos).toEqual([{ url: FOTO_PNG, legenda: "Limpeza dos filtros" }]);
     expect(bloco("eqB").fotos).toEqual([{ url: fotoB, legenda: "Foto do equipamento" }]);
 
@@ -376,12 +378,12 @@ describe.skipIf(!URL_PG)("execução da OS por equipamento (PostgreSQL real)", (
 
   it("histórico do equipamento: o atendimento entra sozinho, com o checklist, as fotos e a observação dele", async () => {
     const { carregarHistoricoEquipamento } = await import("@/lib/equipamento-historico");
-    const fotoId = (await prisma.fotoAtendimento.findFirst({ where: { atividadeId: at2, equipamentoId: "eqA" } })).id;
+    const fotoIds = (await prisma.fotoAtendimento.findMany({ where: { atividadeId: at2, equipamentoId: "eqA" }, orderBy: { criadoEm: "asc" } })).map((f: any) => f.id);
     const hA = (await carregarHistoricoEquipamento("e1", "eqA")).find((e) => e.atividadeId === at2)!;
     expect(hA).toMatchObject({
       equipamentoFeito: true, status: "CONCLUIDA", observacao: "Dreno parcialmente obstruído — limpo.",
       checklist: { ok: 2, atencao: 1, naoSeAplica: 0, total: 3, itensAtencao: ["Medição de corrente do compressor"] },
-      fotos: [`/api/fotos-atendimento/${fotoId}`],
+      fotos: fotoIds.map((id: string) => `/api/fotos-atendimento/${id}`),
     });
     const hB = (await carregarHistoricoEquipamento("e1", "eqB")).find((e) => e.atividadeId === at2)!;
     expect(hB).toMatchObject({ equipamentoFeito: false, checklist: null, fotos: [], observacao: null });

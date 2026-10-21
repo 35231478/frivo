@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { NextRequest } from "next/server";
 import { contextoExecucao } from "@/lib/execucao/contexto";
+import { removerFoto, respostaAcao } from "@/lib/execucao/acoes";
 
 type Params = { params: Promise<{ id: string; atividadeId: string; fotoId: string }> };
 
@@ -9,7 +9,6 @@ export async function DELETE(_: NextRequest, { params }: Params) {
   const { id, atividadeId, fotoId } = await params;
   const ctx = await contextoExecucao(id, atividadeId);
   if (!ctx.ok) return ctx.resposta;
-  const { count } = await prisma.fotoAtendimento.deleteMany({ where: { id: fotoId, atividadeId, empresaId: ctx.empresaId } });
-  if (!count) return NextResponse.json({ erro: "Foto não encontrada" }, { status: 404 });
-  return NextResponse.json({ ok: true });
+  const r = await removerFoto(ctx, { fotoId });
+  return respostaAcao(r.ok ? { ...r, dados: { ok: true } } : r);
 }

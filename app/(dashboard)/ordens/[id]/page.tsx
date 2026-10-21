@@ -33,6 +33,16 @@ export default async function OsDetalhePage({ params }: { params: Promise<{ id: 
       itensOrcamento: true,
       medicoes: { include: { itensFinanceiro: true }, orderBy: { numero: "asc" } },
       anexos: { select: { id: true, nome: true, tipo: true, tamanho: true, criadoEm: true }, orderBy: { criadoEm: "desc" } },
+      // Serviços adicionais pedidos na visita (app do técnico): destacados para o escritório decidir a cobrança
+      servicosAdicionais: {
+        where: { atividade: { status: { not: "CANCELADA" } } },
+        orderBy: { criadoEm: "asc" },
+        select: {
+          id: true, descricao: true, statusCobranca: true, criadoEm: true, atividade: { select: { titulo: true } },
+          equipamento: { select: { nome: true, marca: true, modelo: true, patrimonio: true } }, criadoPor: { select: { nome: true } },
+          fotos: { orderBy: { criadoEm: "asc" }, select: { id: true } },
+        },
+      },
       historico: { include: { usuario: { select: { nome: true } } }, orderBy: { criadoEm: "desc" } },
       orcamentos: {
         include: {

@@ -44,15 +44,15 @@ const botao = (t: string) => [...caixa.querySelectorAll("button")].find((b) => b
 describe("tela Impressão da OS", () => {
   it("mudar quem vê e ligar/desligar atualiza os contadores; salvar envia tudo", async () => {
     await montar();
-    expect(contas()).toEqual(["8", "10"]);
+    expect(contas()).toEqual(["9", "11"]);
     expect(quem("tempos", "interno").getAttribute("aria-checked")).toBe("true");
     await clicar(quem("tempos", "cliente"));
-    expect(contas()).toEqual(["9", "10"]);
+    expect(contas()).toEqual(["10", "11"]);
     await clicar(quem("fotos", "interno"));
-    expect(contas()).toEqual(["8", "10"]);
+    expect(contas()).toEqual(["9", "11"]);
     await clicar(chave("equipe"));
     expect(chave("equipe").getAttribute("aria-checked")).toBe("false");
-    expect(contas()).toEqual(["7", "9"]);
+    expect(contas()).toEqual(["8", "10"]);
     expect(quem("equipe", "cliente").disabled).toBe(true); // desligada: escolha travada
     await clicar(botao("Salvar"));
     expect(enviados).toEqual([{ url: "/api/configuracoes/impressao-os", metodo: "PUT", corpo: {
@@ -64,12 +64,12 @@ describe("tela Impressão da OS", () => {
 
   it("erro da API aparece; restaurar padrão volta tudo", async () => {
     await montar(true, { ...CONFIG_RELATORIO_PADRAO, fotos: { ativo: false, cliente: true } });
-    expect(contas()).toEqual(["7", "9"]);
+    expect(contas()).toEqual(["8", "10"]);
     resposta = { status: 403, corpo: { erro: "Sem permissão para esta ação" } };
     await clicar(botao("Salvar"));
     expect($('[role="alert"]')!.textContent).toBe("Sem permissão para esta ação");
     await clicar(botao("Restaurar padrão"));
-    expect(contas()).toEqual(["8", "10"]);
+    expect(contas()).toEqual(["9", "11"]);
     expect($('[role="alert"]')).toBeNull();
   });
 
@@ -80,6 +80,6 @@ describe("tela Impressão da OS", () => {
     expect(botao("Salvar")).toBeNull();
     expect($("[data-somente-leitura]")).not.toBeNull();
     await clicar(chave("fotos"));
-    expect(contas()).toEqual(["8", "10"]);
+    expect(contas()).toEqual(["9", "11"]);
   });
 });
