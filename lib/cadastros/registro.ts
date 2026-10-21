@@ -315,7 +315,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
     entidade: "tipos-equipamento", modelo: "tipoEquipamentoCustom", massa: true, singular: "tipo de equipamento", plural: "tipos de equipamento",
     modulo: "configuracoes", permissoes: PERMISSOES_CONFIG, chave: "id", editorProprio: true,
     busca: ["nome", "descricao"],
-    incluir: { _count: { select: { equipamentos: true, formTypeMappings: true } } },
+    incluir: { _count: { select: { equipamentos: true, formTypeMappings: true, checklistItens: { where: { ativo: true } } } } },
     campos: [
       { key: "nome", label: "Nome", obrigatorio: true, placeholder: "Ex: Split, Chiller, VRF" },
       { key: "descricao", label: "Observações", tipo: "textarea" },

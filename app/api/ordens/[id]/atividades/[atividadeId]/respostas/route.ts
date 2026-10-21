@@ -18,7 +18,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   const body = await req.json();
   const { respostas, formularioId } = body as {
     formularioId: string;
-    respostas: Array<{ campoId: string; resposta?: string; arquivoUrl?: string }>;
+    respostas: Array<{ campoId: string; resposta?: string | null; arquivoUrl?: string | null }>;
   };
 
   if (!Array.isArray(respostas) || !formularioId) {
@@ -46,9 +46,10 @@ export async function POST(req: NextRequest, { params }: Params) {
         resposta: r.resposta ?? null,
         arquivoUrl: r.arquivoUrl ?? null,
       },
+      // Incremental: só muda o que veio (campo não enviado não vira vazio — o bug do "reabrir apaga")
       update: {
-        resposta: r.resposta ?? null,
-        arquivoUrl: r.arquivoUrl ?? null,
+        ...(r.resposta !== undefined && { resposta: r.resposta }),
+        ...(r.arquivoUrl !== undefined && { arquivoUrl: r.arquivoUrl }),
       },
     });
   }

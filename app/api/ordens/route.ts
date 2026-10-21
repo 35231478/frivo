@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { equipamentosDoCliente } from "@/lib/execucao/vinculos";
 import { ErroTecnicos, MSG_SEM_EXECUTOR, gravarTecnicos, lerDefinicao, lerVeiculo, resolverTecnicos, resolverVeiculo } from "@/lib/atividade-tecnicos";
 
 const osCreateSchema = z.object({
@@ -12,6 +13,8 @@ const osCreateSchema = z.object({
   descricao: z.string().min(5),
   previsaoConclusao: z.string().optional(),
   observacoes: z.string().optional(),
+  /** Equipamentos atendidos já na abertura (opcional; dá para vincular depois, na execução) */
+  equipamentoIds: z.array(z.string().min(1)).max(200).optional(),
 });
 
 /** 1ª atividade da OS — é nela que fica QUEM EXECUTA (obrigatório) e o veículo. */
@@ -92,6 +95,13 @@ export async function POST(req: NextRequest) {
   // Cliente/endereço/contrato da mesma empresa
   if (!(await prisma.cliente.findFirst({ where: { id: parsed.data.clienteId, empresaId }, select: { id: true } })))
     return NextResponse.json({ erro: "Cliente inválido." }, { status: 400 });
+  // Equipamentos atendidos (opcional): só do cliente da OS e ativos
+  let equipamentoIds: string[] = [];
+  if (parsed.data.equipamentoIds?.length) {
+    const r = await equipamentosDoCliente(empresaId, parsed.data.clienteId, parsed.data.equipamentoIds);
+    if (r.erro) return NextResponse.json({ erro: r.erro }, { status: 400 });
+    equipamentoIds = r.validos;
+  }
 
   const ano = new Date().getFullYear();
   const ultimaOs = await prisma.ordemServico.findFirst({
@@ -129,6 +139,7 @@ export async function POST(req: NextRequest) {
     select: { id: true },
    });
    await gravarTecnicos(tx, atividade.id, tecnicos);
+   if (equipamentoIds.length) await tx.atividadeEquipamento.createMany({ data: equipamentoIds.map((equipamentoId) => ({ atividadeId: atividade.id, equipamentoId })) });
    await tx.osHistorico.create({
     data: { ordemServicoId: criada.id, usuarioId, acao: "OS criada", detalhes: `Ordem de serviço ${numero} criada.` },
    });

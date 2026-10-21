@@ -2,7 +2,8 @@ import { CalendarClock, Camera, ClipboardCheck, Lock, MapPin, Truck, Users } fro
 import { cn, formatarCpfCnpj, formatarData, formatarDataHora, formatarTelefone } from "@/lib/utils";
 import { enderecoStr } from "@/components/relatorio/cabecalho-relatorio";
 import { mostraSecao, type ConfigRelatorioOs, type SecaoRelatorioId, type VersaoRelatorio } from "@/lib/relatorio-os/config";
-import type { BlocoEquipamento, FotoRelatorio, GrupoChecklist, RelatorioOsDados } from "@/lib/relatorio-os/dados";
+import type { BlocoEquipamento, ChecklistTipoRelatorio, FotoRelatorio, GrupoChecklist, RelatorioOsDados } from "@/lib/relatorio-os/dados";
+import { ROTULO_STATUS, type StatusItem } from "@/lib/execucao/pendencias";
 
 /**
  * Relatório da OS — layout por equipamento. Mesmo componente para as duas versões:
@@ -217,8 +218,24 @@ function Dado({ rotulo, valor, destaque }: { rotulo: string; valor: string; dest
   );
 }
 
-function BlocoEquip({ b, checklist, fotos }: { b: BlocoEquipamento; checklist: boolean; fotos: boolean }) {
+/** Seção "Equipamentos atendidos" dos relatórios antigos (atividade e link do relatório): os mesmos blocos. */
+export function BlocosEquipamentos({ blocos }: { blocos: BlocoEquipamento[] }) {
+  if (!blocos.length) return null;
+  return (
+    <div className="py-4 border-b border-surface-border" data-equipamentos-relatorio>
+      <p className="text-xs uppercase tracking-wider text-ink-muted mb-2">Equipamentos atendidos ({blocos.length})</p>
+      <div className="space-y-3">
+        {blocos.map((b) => <BlocoEquip key={b.id} b={b} checklist fotos />)}
+      </div>
+    </div>
+  );
+}
+
+/** Um equipamento atendido: local, identificação, checklist do tipo, observação e as fotos DELE. */
+export function BlocoEquip({ b, checklist, fotos }: { b: BlocoEquipamento; checklist: boolean; fotos: boolean }) {
   const local = [b.local.principal, b.local.complemento].filter(Boolean).join(" · ");
+  const r = b.resumoChecklist;
+  const temChecklist = b.checklistTipo.length > 0 || b.checklist.length > 0;
   return (
     <div className="rounded-lg border border-surface-border overflow-hidden" style={{ breakInside: "avoid" }} data-equipamento={b.id}>
       <div className="px-3 py-2 bg-surface-alt/70 border-b border-surface-border">
@@ -228,11 +245,62 @@ function BlocoEquip({ b, checklist, fotos }: { b: BlocoEquipamento; checklist: b
           {b.tag && <span className="font-mono text-[11px] font-semibold bg-white border border-surface-border px-1.5 py-0.5 rounded" data-tag>TAG {b.tag}</span>}
         </p>
         <p className="text-xs text-ink-muted">{[b.titulo !== b.descricao ? b.descricao : null, b.fabricante, b.numeroSerie && `S/N ${b.numeroSerie}`].filter(Boolean).join(" · ")}</p>
+        {checklist && r.ok + r.atencao + r.naoSeAplica > 0 && (
+          <p className="mt-1 flex flex-wrap gap-1.5 text-[11px]" data-resumo-checklist>
+            <span className="px-1.5 py-0.5 rounded bg-success-50 text-success-700 font-semibold">{r.ok} OK</span>
+            {r.atencao > 0 && <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 font-semibold">{r.atencao} Atenção</span>}
+            {r.naoSeAplica > 0 && <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold">{r.naoSeAplica} Não se aplica</span>}
+          </p>
+        )}
       </div>
       <div className="px-3 py-2 space-y-2">
-        {checklist && (b.checklist.length > 0 ? <Checklist grupos={b.checklist} /> : <p className="text-xs text-ink-subtle">Sem checklist preenchido.</p>)}
+        {checklist && (temChecklist ? (
+          <>
+            <ChecklistTipo grupos={b.checklistTipo} />
+            <Checklist grupos={b.checklist} />
+          </>
+        ) : <p className="text-xs text-ink-subtle">Sem checklist preenchido.</p>)}
+        {checklist && b.observacoes.length > 0 && (
+          <div data-observacao-equipamento>
+            <p className="text-[11px] font-semibold text-ink-muted">Observação do técnico</p>
+            {b.observacoes.map((o, i) => <p key={i} className="text-sm whitespace-pre-wrap">{o}</p>)}
+          </div>
+        )}
         {fotos && <Fotos fotos={b.fotos} />}
       </div>
+    </div>
+  );
+}
+
+const COR_STATUS_REL: Record<StatusItem, string> = {
+  OK: "bg-success-50 text-success-700 border-success-200",
+  ATENCAO: "bg-amber-50 text-amber-800 border-amber-200",
+  NAO_SE_APLICA: "bg-slate-50 text-slate-600 border-slate-200",
+};
+
+/** Checklist do tipo de equipamento: item, situação (OK / Atenção / Não se aplica) e a observação do item. */
+function ChecklistTipo({ grupos }: { grupos: ChecklistTipoRelatorio[] }) {
+  if (!grupos.length) return null;
+  return (
+    <div className="space-y-2">
+      {grupos.map((g, i) => (
+        <div key={i} data-checklist-tipo>
+          {grupos.length > 1 && <p className="text-[11px] font-semibold text-ink-muted">Checklist — {g.atividade}</p>}
+          <ul className="divide-y divide-dashed divide-surface-border/80">
+            {g.itens.map((it, j) => (
+              <li key={j} className="py-1" data-item-relatorio data-status={it.status ?? ""}>
+                <div className="flex items-start justify-between gap-3">
+                  <span className="text-ink">{it.texto}</span>
+                  {it.status
+                    ? <span className={cn("shrink-0 text-[11px] font-semibold px-1.5 py-0.5 rounded border", COR_STATUS_REL[it.status])}>{ROTULO_STATUS[it.status]}</span>
+                    : <span className="shrink-0 text-[11px] text-ink-subtle">—</span>}
+                </div>
+                {it.observacao && <p className="text-xs text-ink-muted whitespace-pre-wrap mt-0.5">{it.observacao}</p>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
     </div>
   );
 }

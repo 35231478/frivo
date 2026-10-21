@@ -39,6 +39,7 @@ export async function GET(req: NextRequest) {
           cliente: { select: { id: true, nome: true, nomeFantasia: true } },
         },
       },
+      tipoEquipamento: { select: { id: true, nome: true } },
     },
     orderBy: { criadoEm: "desc" },
   });

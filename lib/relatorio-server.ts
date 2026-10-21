@@ -6,7 +6,16 @@ const SELECT_EQUIP_RELATORIO = {
   setor: true, capacidade: true, patrimonio: true, nome: true, tipoEquipamento: { select: { nome: true } },
 } as const;
 import { gerarNumeroRelatorio } from "@/lib/utils";
+import { blocosAtendidos, SELECT_CHECKLIST, SELECT_FOTOS } from "@/lib/relatorio-os/dados";
 import { tokenRelatorioNoFormato } from "@/lib/relatorio-atividade-link";
+
+/** O que o relatório precisa para montar os blocos dos equipamentos ATENDIDOS (checklist, fotos, observação). */
+const INCLUDE_ATENDIMENTO = {
+  equipamentos: { orderBy: { criadoEm: "asc" }, include: { equipamento: { select: SELECT_EQUIP_RELATORIO } } },
+  respostasEquipamento: { include: { campo: { select: { label: true, tipo: true, ordem: true } }, formulario: { select: { nome: true } } } },
+  checklistRespostas: SELECT_CHECKLIST,
+  fotosAtendimento: SELECT_FOTOS,
+} as const;
 
 /** Resumo automático de uma atividade: descrição/observação ou 1ª resposta do questionário. */
 function resumoAtividade(a: { observacao?: string | null; resumo?: string | null; respostas: { resposta: string | null; campo: { label: string } }[] }): string {
@@ -110,6 +119,7 @@ export async function carregarRelatorioPorToken(token: string) {
         include: {
           cliente: true,
           unidade: { select: { id: true, nome: true } },
+          equipamento: { select: SELECT_EQUIP_RELATORIO },
           contrato: {
             select: {
               numero: true, artNumero: true,
@@ -124,6 +134,7 @@ export async function carregarRelatorioPorToken(token: string) {
               tecnicosEquipe: { select: { tecnico: { select: { nome: true } } }, orderBy: { criadoEm: "asc" } },
               tipoOs: { select: { nome: true } },
               respostas: { include: { campo: { select: { label: true, tipo: true } } } },
+              ...INCLUDE_ATENDIMENTO,
             },
           },
         },
@@ -133,14 +144,15 @@ export async function carregarRelatorioPorToken(token: string) {
 
   if (!relatorio) return null;
 
-  const equipamentos = relatorio.ordemServico.unidadeId
-    ? await prisma.equipamento.findMany({
-        where: { unidadeId: relatorio.ordemServico.unidadeId, ativo: true },
-        select: SELECT_EQUIP_RELATORIO,
-      })
-    : [];
+  // SÓ os equipamentos atendidos (na atividade do relatório, ou na OS toda), nunca todos os da unidade
+  const os = relatorio.ordemServico;
+  const daAtividade = relatorio.escopo === "ATIVIDADE" && !!relatorio.atividadeId;
+  const { blocos, equipamentosAtendidos: equipamentos } = blocosAtendidos(
+    daAtividade ? os.atividades.filter((a) => a.id === relatorio.atividadeId) : os.atividades,
+    os.unidade?.nome ?? null, daAtividade ? null : os.equipamento, os.status === "CONCLUIDA",
+  );
 
-  return { relatorio, empresa: relatorio.empresa, os: relatorio.ordemServico, equipamentos };
+  return { relatorio, empresa: relatorio.empresa, os, equipamentos, blocos };
 }
 
 /**
@@ -158,6 +170,7 @@ export async function carregarAtividade(atividadeId: string, token: unknown) {
       tecnicosEquipe: { select: { tecnico: { select: { nome: true } } }, orderBy: { criadoEm: "asc" } },
       tipoOs: { select: { nome: true, cor: true } },
       respostas: { include: { campo: { select: { label: true, tipo: true } } } },
+      ...INCLUDE_ATENDIMENTO,
       ordemServico: {
         include: {
           empresa: true,
@@ -173,12 +186,8 @@ export async function carregarAtividade(atividadeId: string, token: unknown) {
   if (!atividade || atividade.id !== atividadeId) return null;
 
   const os = atividade.ordemServico;
-  const equipamentos = os.unidadeId
-    ? await prisma.equipamento.findMany({
-        where: { unidadeId: os.unidadeId, ativo: true },
-        select: SELECT_EQUIP_RELATORIO,
-      })
-    : [];
+  // SÓ os equipamentos atendidos nesta atividade, cada um com o checklist, as fotos e a observação dele
+  const { blocos: equipamentos } = blocosAtendidos([atividade], os.unidade?.nome ?? null);
 
   const rel = await prisma.relatorioOs.findFirst({
     where: { atividadeId, escopo: "ATIVIDADE" },

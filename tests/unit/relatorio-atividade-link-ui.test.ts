@@ -124,7 +124,7 @@ describe("histórico do equipamento", () => {
     const { EquipamentoPerfil } = await import("@/components/equipamentos/equipamento-perfil");
     const evento = (chave: string, status: string, linkRelatorio: string | null) => ({
       chave, data: "2026-10-20T13:00:00.000Z", titulo: "Limpeza", tipoServico: null, tecnico: "Bruno", status, origemStatus: "ATIVIDADE" as const,
-      equipamentoFeito: true, resumo: null, os: { id: "os1", numero: "OS-1", status: "CONCLUIDA" }, atividadeId: chave.slice(3), linkRelatorio, formularios: [],
+      equipamentoFeito: true, checklist: null, fotos: [], observacao: null, resumo: null, os: { id: "os1", numero: "OS-1", status: "CONCLUIDA" }, atividadeId: chave.slice(3), linkRelatorio, formularios: [],
     });
     await montar(createElement(EquipamentoPerfil, {
       equipamento: { id: "eq1", nome: null, marca: "Daikin", modelo: "FTX", ativo: true, unidade: { id: "un1", nome: "Loja 12", cliente: { id: "c1", nome: "Shopping Norte", nomeFantasia: null } }, qrcode: null, tipoEquipamento: null },

@@ -15,7 +15,7 @@ export default async function RelatorioPublicoPage({ params }: { params: Promise
   const { token } = await params;
   const dados = await carregarRelatorioPorToken(token);
   if (!dados) notFound();
-  const { relatorio, empresa, os, equipamentos } = dados;
+  const { relatorio, empresa, os, equipamentos, blocos } = dados;
 
   const aprovado = relatorio.status === "APROVADO";
   const reprovado = relatorio.status === "REPROVADO";
@@ -52,7 +52,7 @@ export default async function RelatorioPublicoPage({ params }: { params: Promise
           )}
 
           <div className="bg-white rounded-2xl shadow-card p-6 md:p-10">
-            <RelatorioDocumento relatorio={relatorio} empresa={empresa} os={os} equipamentos={equipamentos} />
+            <RelatorioDocumento relatorio={relatorio} empresa={empresa} os={os} equipamentos={equipamentos} blocos={blocos} />
           </div>
 
           {podeAprovar && <AprovacaoRelatorio token={token} />}

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirAlgumaPermissao, exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { pode } from "@/lib/permissoes";
+import { carregarExecucao } from "@/lib/execucao/dados";
 import { ErroTecnicos, INCLUDE_TECNICOS_ATIVIDADE, gravarTecnicos, lerDefinicao, lerVeiculo, resolverTecnicos, resolverVeiculo } from "@/lib/atividade-tecnicos";
 
 type Params = { params: Promise<{ id: string; atividadeId: string }> };
@@ -53,54 +54,16 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (veiculoPedido !== undefined) veiculoId = await resolverVeiculo(empresaId, veiculoPedido, { responsavel: null, equipeId: null });
   } catch (e) { if (e instanceof ErroTecnicos) return NextResponse.json({ erro: e.message }, { status: 400 }); throw e; }
 
-  // Gate "obrigatório para concluir": não finaliza a atividade sem responder os
-  // formulários marcados como obrigatórios (por tipo de OS + tipo de equipamento).
-  // Opt-in: só bloqueia quando algum vínculo tem obrigatorioConcluir = true.
-  if (status === "CONCLUIDA" && existente.status !== "CONCLUIDA" && existente.tipoOsId) {
-    const feitos = await prisma.atividadeEquipamento.findMany({
-      where: { atividadeId, feito: true },
-      select: { equipamentoId: true, equipamento: { select: { tipoEquipamentoId: true } } },
-    });
-    const tipoIds = [...new Set(feitos.map((f) => f.equipamento.tipoEquipamentoId).filter(Boolean) as string[])];
-    if (tipoIds.length > 0) {
-      const obrig = await prisma.formTypeMapping.findMany({
-        // Formulário inativo não é mais exigido (não trava atividades que já o usavam)
-        where: { empresaId, tipoOsId: existente.tipoOsId, tipoEquipamentoId: { in: tipoIds }, obrigatorioConcluir: true, formularioTemplate: { ativo: true } },
-        select: { tipoEquipamentoId: true, formularioTemplateId: true, formularioTemplate: { select: { nome: true, campos: { where: { ativo: true }, select: { id: true } } } } },
-      });
-      if (obrig.length > 0) {
-        const respostas = await prisma.respostaFormularioEquipamento.findMany({
-          where: { atividadeId },
-          select: { equipamentoId: true, formularioId: true, campoId: true },
-        });
-        const respMap = new Map<string, Set<string>>(); // `${equipId}|${formId}` -> Set(campoId)
-        for (const r of respostas) {
-          const k = `${r.equipamentoId}|${r.formularioId}`;
-          if (!respMap.has(k)) respMap.set(k, new Set());
-          respMap.get(k)!.add(r.campoId);
-        }
-        const mapByTipo = new Map(obrig.map((o) => [o.tipoEquipamentoId, o]));
-        const pendentes = new Set<string>();
-        for (const f of feitos) {
-          const tid = f.equipamento.tipoEquipamentoId;
-          if (!tid) continue;
-          const o = mapByTipo.get(tid);
-          if (!o) continue;
-          // Só campos ativos contam (campo removido na edição não é mais exigido)
-          const ativos = o.formularioTemplate.campos.map((c) => c.id);
-          const total = ativos.length;
-          if (total === 0) continue;
-          const resp = respMap.get(`${f.equipamentoId}|${o.formularioTemplateId}`);
-          const respondidos = ativos.filter((c) => resp?.has(c)).length;
-          if (respondidos < total) pendentes.add(o.formularioTemplate.nome);
-        }
-        if (pendentes.size > 0) {
-          return NextResponse.json(
-            { erro: `Responda o(s) formulário(s) obrigatório(s) antes de concluir: ${[...pendentes].join(", ")}.` },
-            { status: 400 },
-          );
-        }
-      }
+  // Trava da conclusão: pelo menos 1 equipamento ATENDIDO e, em cada atendido, o checklist do tipo
+  // respondido (com a foto/observação que o item pede) e o formulário obrigatório preenchido. A
+  // mensagem diz exatamente o que falta, equipamento por equipamento. Reabrir não apaga nada.
+  if (status === "CONCLUIDA" && existente.status !== "CONCLUIDA") {
+    const exec = await carregarExecucao(empresaId, id, atividadeId);
+    if (exec && !exec.conclusao.ok) {
+      return NextResponse.json(
+        { erro: exec.conclusao.mensagem, pendencias: exec.conclusao.pendencias, semEquipamento: exec.conclusao.semEquipamento },
+        { status: 422 },
+      );
     }
   }
 
@@ -173,16 +136,16 @@ export async function DELETE(_: NextRequest, { params }: Params) {
     where: { id: atividadeId, ordemServicoId: id, empresaId },
     select: {
       id: true, titulo: true, status: true,
-      _count: { select: { respostas: true, respostasEquipamento: true, relatorios: true } },
+      _count: { select: { respostas: true, respostasEquipamento: true, relatorios: true, checklistRespostas: true, fotosAtendimento: true } },
       equipamentos: { where: { feito: true }, select: { id: true }, take: 1 },
     },
   });
   if (!atividade) return NextResponse.json({ erro: "Atividade não encontrada" }, { status: 404 });
 
   const c = atividade._count;
-  if (atividade.status === "CONCLUIDA" || c.respostas || c.respostasEquipamento || c.relatorios || atividade.equipamentos.length) {
+  if (atividade.status === "CONCLUIDA" || c.respostas || c.respostasEquipamento || c.relatorios || c.checklistRespostas || c.fotosAtendimento || atividade.equipamentos.length) {
     return NextResponse.json({
-      erro: "Esta atividade já tem execução registrada (concluída, formulários/fotos, relatório ou equipamento atendido) e não pode ser excluída. Para tirá-la do fluxo, altere o status para Cancelada.",
+      erro: "Esta atividade já tem execução registrada (concluída, checklist, formulários/fotos, relatório ou equipamento atendido) e não pode ser excluída. Para tirá-la do fluxo, altere o status para Cancelada.",
     }, { status: 409 });
   }
 

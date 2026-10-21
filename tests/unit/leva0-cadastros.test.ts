@@ -109,7 +109,7 @@ const criou = (m: string) => db.escritas.some((e) => e.startsWith(`${m}.create`)
 const REF = /inválido\(a\)\./; // mensagem do validarRefEmpresa (não confundir com "Dados inválidos" do schema)
 const atividade = () => import("@/app/api/ordens/[id]/atividades/[atividadeId]/route");
 const atividades = () => import("@/app/api/ordens/[id]/atividades/route");
-const execForms = () => import("@/app/api/ordens/[id]/atividades/[atividadeId]/formularios/route");
+const execucao = () => import("@/app/api/ordens/[id]/atividades/[atividadeId]/execucao/route");
 
 // ─────────────────────────────────────────────
 describe("1. reeditar atividade com técnico/equipe inativados", () => {
@@ -220,17 +220,16 @@ describe("3. formulários", () => {
   it("controle: com o formulário ATIVO e sem resposta, a conclusão continua bloqueada", async () => {
     linha("formularioTemplate", "f1").ativo = true;
     const r = await chamar(atividade, "PUT", { id: "os1", atividadeId: "a2" }, { status: "CONCLUIDA" });
-    expect(r.status).toBe(400);
+    expect(r.status).toBe(422);
     expect(r.json.erro).toMatch(/PMOC Split/);
   });
 
   it("execução: formulário inativo some se a atividade não o usou; se já tem respostas, aparece sem ser obrigatório", async () => {
-    let r = await chamar(execForms, "GET", { id: "os1", atividadeId: "a2" });
-    expect(r.json.grupos).toHaveLength(0);
-    db.t.respostaFormularioEquipamento.push({ id: "r1", atividadeId: "a2", equipamentoId: "eqp1", formularioId: "f1", campoId: "c1" });
-    r = await chamar(execForms, "GET", { id: "os1", atividadeId: "a2" });
-    expect(r.json.grupos).toHaveLength(1);
-    expect(r.json.grupos[0]).toMatchObject({ obrigatorioConcluir: false, obrigatorioImpedimento: false, formulario: { id: "f1" } });
+    let r = await chamar(execucao, "GET", { id: "os1", atividadeId: "a2" });
+    expect(r.json.equipamentos[0].formulario).toBeNull();
+    db.t.respostaFormularioEquipamento.push({ id: "r1", atividadeId: "a2", equipamentoId: "eqp1", formularioId: "f1", campoId: "c1", resposta: "x" });
+    r = await chamar(execucao, "GET", { id: "os1", atividadeId: "a2" });
+    expect(r.json.equipamentos[0].formulario).toMatchObject({ id: "f1", obrigatorioConcluir: false });
   });
 });
 

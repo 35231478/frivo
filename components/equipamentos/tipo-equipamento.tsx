@@ -1,7 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   AirVent, AppWindow, Building2, Wind, Snowflake, Factory, Refrigerator, Container,
-  Thermometer, Server, Fan, Box, PanelTop,
+  Thermometer, Server, Fan, Box, PanelTop, LayoutGrid,
 } from "lucide-react";
 import { cn, LABELS_TIPO_EQUIPAMENTO } from "@/lib/utils";
 
@@ -25,6 +25,9 @@ const VISUAL: Record<string, { icone: LucideIcon; cor: string; fundo: string }> 
   FANCOIL:                  { icone: Fan,          cor: "text-teal-700",    fundo: "bg-teal-50" },
   CONDENSADORA:             { icone: Wind,         cor: "text-slate-700",   fundo: "bg-slate-100" },
   EVAPORADORA:              { icone: PanelTop,     cor: "text-slate-700",   fundo: "bg-slate-100" },
+  PISO_TETO:                { icone: AirVent,      cor: "text-sky-700",     fundo: "bg-sky-50" },
+  CASSETE:                  { icone: LayoutGrid,   cor: "text-sky-700",     fundo: "bg-sky-50" },
+  SELF_CONTAINED:           { icone: Building2,    cor: "text-blue-700",    fundo: "bg-blue-50" },
 };
 const PADRAO = { icone: Thermometer, cor: "text-slate-600", fundo: "bg-slate-100" };
 

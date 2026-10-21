@@ -15,6 +15,7 @@ import type { OpcaoCadastro } from "@/components/ui/select-cadastro-rapido";
 import { Inbox } from "lucide-react";
 import { SeletorExecucao, VALOR_EXECUCAO_VAZIO, corpoExecucao, temExecutor, useOpcoesExecucao, type ValorExecucao } from "@/components/os/seletor-execucao";
 import { MSG_SEM_EXECUTOR_TELA } from "@/lib/atividade-equipe";
+import { SeletorEquipamentos } from "@/components/os/seletor-equipamentos";
 
 type Item = { id: string; nome: string; nomeFantasia?: string | null };
 type UnidadeItem = { id: string; nome: string; cidade?: string | null };
@@ -56,6 +57,8 @@ export default function NovaOrdemPage() {
   const [agendarPara, setAgendarPara] = useState("");
   const [equipamentoId, setEquipamentoId] = useState("");
   const [equipamentos, setEquipamentos] = useState<EquipItem[]>([]);
+  // Equipamentos atendidos (opcional na abertura; dá para vincular na execução)
+  const [atendidos, setAtendidos] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetch("/api/clientes").then((r) => r.json()).then((d) => setClientes(Array.isArray(d) ? d : [])).catch(() => {})
@@ -136,6 +139,7 @@ export default function NovaOrdemPage() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form, clienteId,
+          ...(atendidos.size ? { equipamentoIds: [...atendidos] } : {}),
           execucao: { tipoOsId: tipoOsId || null, dataAgendada: agendarPara ? new Date(agendarPara).toISOString() : null, ...corpoExecucao(execucao) },
         }),
       });
@@ -171,7 +175,7 @@ export default function NovaOrdemPage() {
             ) : (
             <SelectCadastroRapido
               value={clienteId}
-              onChange={(v) => { setClienteId(v); setForm((f) => ({ ...f, unidadeId: "", contratoId: "" })); }}
+              onChange={(v) => { setClienteId(v); setAtendidos(new Set()); setForm((f) => ({ ...f, unidadeId: "", contratoId: "" })); }}
               opcoes={clientes.map(CLIENTE.opcao)}
               entidade={CLIENTE.entidade}
               placeholder="Selecione o cliente"
@@ -193,7 +197,7 @@ export default function NovaOrdemPage() {
             <FormField label="Endereço do cliente">
               <SelectCadastroRapido
                 value={form.unidadeId}
-                onChange={(v) => setForm((f) => ({ ...f, unidadeId: v }))}
+                onChange={(v) => { setForm((f) => ({ ...f, unidadeId: v })); setAtendidos(new Set()); }}
                 opcoes={unidades.map(UNIDADE.opcao)}
                 entidade={UNIDADE.entidade}
                 contexto="para este cliente"
@@ -264,6 +268,16 @@ export default function NovaOrdemPage() {
             </FormGrid>
           )}
         </FormSection>
+
+        {!solicitacao && clienteId && (
+          <FormSection title="Equipamentos atendidos">
+            <p className="text-xs text-ink-muted -mt-1" data-hint-equipamentos>
+              Opcional agora — dá para vincular depois, na execução (pelo QR Code ou pela lista). Para <strong>concluir</strong> a OS, pelo menos 1 equipamento precisa ser atendido, com o checklist dele respondido.
+            </p>
+            <SeletorEquipamentos clienteId={clienteId} unidadeId={form.unidadeId || null} marcados={atendidos} onChange={setAtendidos} />
+            {atendidos.size > 0 && <p className="text-xs text-frivo-700" data-qtd-atendidos>{atendidos.size === 1 ? "1 equipamento selecionado" : `${atendidos.size} equipamentos selecionados`}</p>}
+          </FormSection>
+        )}
 
         <FormSection title="Quem executa">
           {!solicitacao && (
