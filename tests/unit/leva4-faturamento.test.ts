@@ -86,10 +86,15 @@ describe.skipIf(!URL_PG)("Leva 4 — faturamento da OS (PostgreSQL real)", () =>
     expect(await prisma.relatorioOs.count({ where: { ordemServicoId: os.id } })).toBe(0);
   });
 
-  it("F1: OS não concluída não fatura por NENHUM caminho (400)", async () => {
+  it("F1: OS não concluída não fatura por NENHUM caminho, mesmo com itens executados prontos", async () => {
     const os = await novaOs({ status: "EM_ANDAMENTO", dataConclusao: null });
-    expect((await chamar("ordens/[id]/gerar-medicao", "POST", { id: os.id })).status).toBe(400);
-    expect((await chamar("ordens/[id]/gerar-medicao-completa", "POST", { id: os.id })).status).toBe(400);
+    await prisma.osItemOrcamento.create({ data: { ordemServicoId: os.id, descricao: "Já executado", quantidade: 1, valorUnitario: 400, valorTotal: 400, executado: true } });
+    const r1 = await chamar("ordens/[id]/gerar-medicao", "POST", { id: os.id });
+    expect([r1.status, r1.json.erro]).toEqual([400, expect.stringContaining("CONCLUÍDA")]);
+    const r2 = await chamar("ordens/[id]/gerar-medicao-completa", "POST", { id: os.id });
+    expect([r2.status, r2.json.erro]).toEqual([400, expect.stringContaining("CONCLUÍDA")]);
+    expect(await prisma.medicao.count({ where: { itens: { some: { ordemServicoId: os.id } } } })).toBe(0);
+    expect(await prisma.relatorioOs.count({ where: { ordemServicoId: os.id } })).toBe(0);
   });
 
   // ═══════════ Itens executados + adicionais "Cobrar" com preço (D1/D4) ═══════════
