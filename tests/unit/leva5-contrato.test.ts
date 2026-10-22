@@ -109,8 +109,11 @@ describe.skipIf(!URL_PG)("Leva 5 — contrato × previsão × medição (Postgre
     const { calcularDataFimContrato } = await import("@/lib/utils");
 
     const inicio = new Date(ANO, MES - 1, 1);
-    // Forma nova: fim = início + 12 meses - 1 dia (último dia do 12º mês)
-    const ct = await novoContrato({ dataInicio: inicio, dataFim: calcularDataFimContrato(inicio, 12) });
+    // Forma nova: fim = início + 12 meses - 1 dia (último dia do 12º mês), e não o aniversário
+    const fim12 = calcularDataFimContrato(inicio, 12)!;
+    const ultimoDia = new Date(ANO + 1, MES - 1, 0); // véspera do aniversário
+    expect([fim12.getFullYear(), fim12.getMonth(), fim12.getDate()]).toEqual([ultimoDia.getFullYear(), ultimoDia.getMonth(), ultimoDia.getDate()]);
+    const ct = await novoContrato({ dataInicio: inicio, dataFim: fim12 });
     expect(await gerarPrevisaoContratoContasReceber(ct.id)).toBe(12);
     const contas = await prisma.contaReceber.findMany({ where: { contratoId: ct.id }, orderBy: [{ refAno: "asc" }, { refMes: "asc" }] });
     expect(contas).toHaveLength(12);
