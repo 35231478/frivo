@@ -1508,7 +1508,6 @@ model OrdemServico {
   equipamento        Equipamento?          @relation(fields: [equipamentoId], references: [id])
   atividades         AtividadeOs[]
   itensOrcamento     OsItemOrcamento[]
-  medicoes           OsMedicao[]
   anexos             OsAnexo[]
   historico          OsHistorico[]
   orcamentos         OrcamentoOs[]
@@ -1800,6 +1799,8 @@ model ServicoAdicional {
   equipamentoId  String?                 @map("equipamento_id")
   descricao      String                  @db.Text
   statusCobranca StatusCobrancaAdicional @default(A_AVALIAR) @map("status_cobranca")
+  /// Preço definido pelo escritório ao marcar COBRAR; o adicional entra como item da medição da OS
+  valor          Decimal?                @db.Decimal(12, 2)
   /// Id gerado no aparelho: reenviar não duplica
   clientId       String?                 @unique @map("client_id")
   criadoPorId    String?                 @map("criado_por_id")
@@ -1901,7 +1902,6 @@ model OsItemOrcamento {
   executadoEm    DateTime? @map("executado_em")
 
   ordemServico    OrdemServico       @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
-  itensFinanceiro OsItemFinanceiro[]
 
   @@index([ordemServicoId])
   @@map("os_itens_orcamento")
@@ -1911,36 +1911,6 @@ enum StatusMedicao {
   RASCUNHO
   ENVIADA
   APROVADA
-}
-
-model OsMedicao {
-  id             String        @id @default(cuid())
-  ordemServicoId String        @map("ordem_servico_id")
-  numero         Int
-  dataMedicao    DateTime      @default(now()) @map("data_medicao")
-  valorTotal     Decimal       @map("valor_total") @db.Decimal(10, 2)
-  status         StatusMedicao @default(RASCUNHO)
-
-  ordemServico    OrdemServico       @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
-  itensFinanceiro OsItemFinanceiro[]
-
-  @@index([ordemServicoId])
-  @@map("os_medicoes")
-}
-
-model OsItemFinanceiro {
-  id              String  @id @default(cuid())
-  ordemServicoId  String  @map("ordem_servico_id")
-  itemOrcamentoId String  @map("item_orcamento_id")
-  medicaoId       String? @map("medicao_id")
-  descricao       String
-  quantidade      Decimal @db.Decimal(10, 2)
-  valorTotal      Decimal @map("valor_total") @db.Decimal(10, 2)
-
-  itemOrcamento OsItemOrcamento @relation(fields: [itemOrcamentoId], references: [id], onDelete: Cascade)
-  medicao       OsMedicao?      @relation(fields: [medicaoId], references: [id])
-
-  @@map("os_itens_financeiro")
 }
 
 // ─────────────────────────────────────────────

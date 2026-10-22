@@ -79,7 +79,6 @@ function semear() {
       { id: "osX", empresaId: "e2", numero: "OS-2026-0001", status: "ABERTA", origem: "MANUAL", descricao: "da outra empresa", criadoEm: new Date(), prioridade: "MEDIA" },
     ],
     medicaoItem: [{ id: "mi1", ordemServicoId: "os2", medicao: { numero: "MED-2026-0007", status: "ABERTA" } }],
-    osMedicao: [],
     osHistorico: [],
     orcamento: [
       { id: "or1", empresaId: "e1", codigo: "ORC-1", nome: "Prev", status: "ENVIADO" },

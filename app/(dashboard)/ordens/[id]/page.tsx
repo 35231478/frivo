@@ -31,14 +31,18 @@ export default async function OsDetalhePage({ params }: { params: Promise<{ id: 
         orderBy: { criadoEm: "asc" },
       },
       itensOrcamento: true,
-      medicoes: { include: { itensFinanceiro: true }, orderBy: { numero: "asc" } },
+      // Medições OFICIAIS em que a OS entrou (itens de medição → Medicao); a antiga
+      // "medição interna da OS" (OsMedicao) saiu: nunca virava conta a receber
+      medicaoItens: {
+        select: { medicao: { select: { id: true, numero: true, status: true, valorTotal: true, criadoEm: true, tokenPublico: true } } },
+      },
       anexos: { select: { id: true, nome: true, tipo: true, tamanho: true, criadoEm: true }, orderBy: { criadoEm: "desc" } },
       // Serviços adicionais pedidos na visita (app do técnico): destacados para o escritório decidir a cobrança
       servicosAdicionais: {
         where: { atividade: { status: { not: "CANCELADA" } } },
         orderBy: { criadoEm: "asc" },
         select: {
-          id: true, descricao: true, statusCobranca: true, criadoEm: true, atividade: { select: { titulo: true } },
+          id: true, descricao: true, statusCobranca: true, valor: true, criadoEm: true, atividade: { select: { titulo: true } },
           equipamento: { select: { nome: true, marca: true, modelo: true, patrimonio: true } }, criadoPor: { select: { nome: true } },
           fotos: { orderBy: { criadoEm: "asc" }, select: { id: true } },
         },
@@ -58,5 +62,11 @@ export default async function OsDetalhePage({ params }: { params: Promise<{ id: 
   });
   if (!os) notFound();
 
-  return <OsDetalhe os={os} />;
+  // A aba Financeiro recebe as medições OFICIAIS da OS (deduplicadas), não mais a OsMedicao interna
+  const vistas = new Set<string>();
+  const medicoesDaOs = os.medicaoItens
+    .map((mi) => mi.medicao)
+    .filter((m) => (vistas.has(m.id) ? false : (vistas.add(m.id), true)));
+
+  return <OsDetalhe os={{ ...os, medicoes: medicoesDaOs }} />;
 }

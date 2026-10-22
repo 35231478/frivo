@@ -90,10 +90,18 @@ export async function gerarContaReceberDoOrcamento(orcamentoId: string) {
 export async function criarMedicaoDeRelatorio(relatorioId: string) {
   const relatorio = await prisma.relatorioOs.findUnique({
     where: { id: relatorioId },
-    include: { ordemServico: { include: { cliente: true } } },
+    include: { ordemServico: { include: { cliente: true } }, medicao: { select: { id: true, status: true } } },
   });
   if (!relatorio) return null;
-  if (relatorio.medicaoId) return prisma.medicao.findUnique({ where: { id: relatorio.medicaoId } });
+  // F3: relatório COMUM de atividade aprovado NÃO fatura nada (a medição de R$ 0 que ele
+  // criava, de tipo mensal, calava o gerar-mes e a mensalidade do mês sumia em silêncio).
+  if (relatorio.escopo !== "MEDICAO_COMPLETA") return null;
+  const valorFinanceiro = relatorio.valorFinanceiro ? Number(relatorio.valorFinanceiro) : 0;
+  if (valorFinanceiro <= 0) return null;
+  // Medição VIVA já vinculada → devolve; CANCELADA → cria outra no lugar (F4)
+  if (relatorio.medicaoId && relatorio.medicao && relatorio.medicao.status !== "CANCELADA") {
+    return prisma.medicao.findUnique({ where: { id: relatorio.medicaoId } });
+  }
 
   const cliente = relatorio.ordemServico.cliente;
   const perfil = cliente.tipoFaturamento;
@@ -119,7 +127,9 @@ export async function criarMedicaoDeRelatorio(relatorioId: string) {
       clienteId: relatorio.ordemServico.clienteId,
       contratoId: relatorio.contratoId,
       numero,
-      tipo: "MENSAL_FIXO",
+      // Medição de contrato é a mensalidade (MENSAL_FIXO); sem contrato é serviço avulso
+      // (ADICIONAL) e NÃO pode calar o gerar-mes da mensalidade do cliente (F3/I25)
+      tipo: relatorio.contratoId ? "MENSAL_FIXO" : "ADICIONAL",
       mes: relatorio.mesReferencia,
       ano: relatorio.anoReferencia,
       descricao: `Relatório ${relatorio.numero}`,

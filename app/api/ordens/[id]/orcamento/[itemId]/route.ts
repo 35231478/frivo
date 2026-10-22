@@ -22,17 +22,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
       data: { executado: true, executadoEm: new Date() },
     });
 
-    // Cria item financeiro automaticamente
-    await prisma.osItemFinanceiro.create({
-      data: {
-        ordemServicoId: id,
-        itemOrcamentoId: itemId,
-        descricao: item.descricao,
-        quantidade: item.quantidade,
-        valorTotal: item.valorTotal,
-      },
-    });
-
+    // O item executado é faturado direto pelo "Gerar medição" da OS (fluxo único);
+    // o espelho antigo (OsItemFinanceiro) saiu junto com a medição interna.
     await prisma.osHistorico.create({
       data: { ordemServicoId: id, usuarioId: session.user!.id, acao: "Item executado", detalhes: item.descricao },
     });

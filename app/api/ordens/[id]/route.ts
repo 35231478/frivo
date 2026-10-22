@@ -38,7 +38,8 @@ export async function GET(_: NextRequest, { params }: Params) {
         orderBy: { criadoEm: "asc" },
       },
       itensOrcamento: true,
-      medicoes: { include: { itensFinanceiro: true }, orderBy: { numero: "asc" } },
+      // Medições OFICIAIS em que a OS entrou (a medição interna OsMedicao saiu do sistema)
+      medicaoItens: { select: { medicao: { select: { id: true, numero: true, status: true, valorTotal: true, criadoEm: true } } } },
       anexos: { select: { id: true, nome: true, tipo: true, tamanho: true, criadoEm: true }, orderBy: { criadoEm: "desc" } },
       historico: { include: { usuario: { select: { nome: true } } }, orderBy: { criadoEm: "desc" } },
       orcamentos: {
