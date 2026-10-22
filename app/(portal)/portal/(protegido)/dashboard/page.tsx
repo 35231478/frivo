@@ -15,10 +15,16 @@ export default async function PortalDashboard() {
   const agora = new Date();
   const em7dias = new Date(agora.getTime() + 7 * 864e5);
   const em30dias = new Date(agora.getTime() + 30 * 864e5);
+  // OS/agenda só para quem tem verOS (ou abrirChamados, que acompanha o que abre)
+  const verChamados = !!(permissoes.verOS || permissoes.abrirChamados);
 
   const [osAbertas, proxima, totalDocs, medicoesPend, boletos, contratosVencendo] = await Promise.all([
-    prisma.ordemServico.count({ where: { empresaId, clienteId, status: { in: ["ABERTA", "AGUARDANDO_ATENDIMENTO", "AGENDADA", "EM_ANDAMENTO", "PAUSADA"] } } }),
-    prisma.ordemServico.findFirst({ where: { empresaId, clienteId, status: "AGENDADA", previsaoConclusao: { gte: agora } }, orderBy: { previsaoConclusao: "asc" }, select: { numero: true, previsaoConclusao: true } }),
+    verChamados
+      ? prisma.ordemServico.count({ where: { empresaId, clienteId, status: { in: ["ABERTA", "AGUARDANDO_ATENDIMENTO", "AGENDADA", "EM_ANDAMENTO", "PAUSADA"] } } })
+      : Promise.resolve(0),
+    verChamados
+      ? prisma.ordemServico.findFirst({ where: { empresaId, clienteId, status: "AGENDADA", previsaoConclusao: { gte: agora } }, orderBy: { previsaoConclusao: "asc" }, select: { numero: true, previsaoConclusao: true } })
+      : Promise.resolve(null),
     prisma.relatorioOs.count({ where: { empresaId, ordemServico: { clienteId } } }),
     prisma.medicao.count({ where: { empresaId, clienteId, status: "AGUARDANDO_APROVACAO" } }),
     prisma.contaReceber.findMany({ where: { empresaId, clienteId, status: { in: ["A_RECEBER", "PREVISTO", "ATRASADO"] }, dataVencimento: { lte: em7dias } }, select: { dataVencimento: true, status: true } }),
@@ -39,8 +45,8 @@ export default async function PortalDashboard() {
   }
 
   const cards = [
-    { label: "OS abertas / em andamento", valor: osAbertas, icone: ClipboardList, href: "/portal/chamados" },
-    { label: "Próxima manutenção", valor: proxima ? formatarData(proxima.previsaoConclusao) : "—", icone: CalendarCheck, href: "/portal/agenda", texto: true },
+    ...(verChamados ? [{ label: "OS abertas / em andamento", valor: osAbertas, icone: ClipboardList, href: "/portal/chamados" }] : []),
+    ...(permissoes.verOS ? [{ label: "Próxima manutenção", valor: proxima ? formatarData(proxima.previsaoConclusao) : "—", icone: CalendarCheck, href: "/portal/agenda", texto: true }] : []),
     ...(permissoes.verDocumentos ? [{ label: "Documentos disponíveis", valor: totalDocs, icone: FileText, href: "/portal/documentos" }] : []),
     ...(permissoes.verFinanceiro ? [{ label: "Pendências", valor: medicoesPend + boletos.length, icone: AlertTriangle, href: "/portal/financeiro" }] : []),
   ];

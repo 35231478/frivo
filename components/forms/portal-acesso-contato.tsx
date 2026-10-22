@@ -50,7 +50,8 @@ export function PortalAcessoContato({
   async function salvar() {
     setFb(null);
     if (!email) { setFb({ t: "erro", m: "Informe o e-mail de acesso." }); return; }
-    if (!temAcesso && senha.length < 4) { setFb({ t: "erro", m: "Defina uma senha (mín. 4 caracteres)." }); return; }
+    if (!temAcesso && senha.length < 8) { setFb({ t: "erro", m: "Defina uma senha (mín. 8 caracteres)." }); return; }
+    if (temAcesso && senha && senha.length < 8) { setFb({ t: "erro", m: "A nova senha precisa de pelo menos 8 caracteres." }); return; }
     setSalvando(true); setAcao("salvar");
     try {
       const res = await fetch(`/api/clientes/${clienteId}/contatos/${contatoId}/acesso-portal`, {
@@ -155,7 +156,7 @@ export function PortalAcessoContato({
         </div>
         <div>
           <label className="text-[11px] font-semibold text-ink">{temAcesso ? "Nova senha (opcional)" : "Senha temporária"}</label>
-          <Input value={senha} onChange={(e) => setSenha(e.target.value)} type="text" placeholder={temAcesso ? "deixe em branco para manter" : "mín. 4 caracteres"} />
+          <Input value={senha} onChange={(e) => setSenha(e.target.value)} type="text" placeholder={temAcesso ? "deixe em branco para manter" : "mín. 8 caracteres"} />
         </div>
       </div>
 

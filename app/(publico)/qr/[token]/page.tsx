@@ -37,12 +37,14 @@ export default async function QrPublicoPage({ params }: { params: Promise<{ toke
   const qrcode = await prisma.qrcode.findUnique({
     where: { tokenPublico: token },
     include: {
-      equipamento: { include: { unidade: { select: { nome: true } } } },
+      equipamento: { include: { unidade: { select: { nome: true, clienteId: true } } } },
     },
   });
   if (!qrcode) notFound();
 
   const empresaId = qrcode.empresaId;
+  // QR inativado pela empresa não serve mais a página pública (etiqueta antiga, equipamento trocado…)
+  if (!qrcode.ativo) notFound();
 
   // Equipe interna logada (mesma empresa, com acesso a equipamentos) ganha atalho para o
   // histórico completo no sistema — vale mesmo com a página pública desativada.
@@ -57,8 +59,12 @@ export default async function QrPublicoPage({ params }: { params: Promise<{ toke
     prisma.configuracao.findUnique({ where: { empresaId }, select: { qrConfig: true } }),
   ]);
   const cfg = mesclarQrConfig(configRow?.qrConfig);
+  // "Logado" para as restrições do QR: contato do portal DA MESMA EMPRESA — e, para abrir
+  // chamado, do MESMO CLIENTE do equipamento (contato de outro cliente não abre OS aqui).
   const sessao = await getPortalSession();
-  const logado = !!sessao?.user;
+  const clienteDoEquip = qrcode.equipamento?.unidade?.clienteId ?? null;
+  const logado = !!sessao?.user && sessao.user.empresaId === empresaId
+    && (!clienteDoEquip || sessao.user.clienteId === clienteDoEquip);
 
   // ── Página pública desativada → acesso restrito ──
   if (!cfg.paginaPublicaAtiva) {

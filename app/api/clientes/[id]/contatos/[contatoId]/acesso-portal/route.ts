@@ -47,12 +47,16 @@ export async function PUT(req: NextRequest, { params }: Params) {
   });
   if (conflito) return NextResponse.json({ erro: "Já existe acesso de portal com este e-mail" }, { status: 409 });
 
+  // Senha mínima de 8: curta demais cai em força bruta (o login do portal é público)
+  if (d.senha && d.senha.length < 8) {
+    return NextResponse.json({ erro: "A senha do portal precisa ter pelo menos 8 caracteres" }, { status: 400 });
+  }
   const data: any = { email: d.email, permissoes: d.permissoes, senhaProvisoria: null };
-  const senhaDefinida = d.senha && d.senha.length >= 4 ? d.senha : null;
+  const senhaDefinida = d.senha && d.senha.length >= 8 ? d.senha : null;
   if (senhaDefinida) {
     data.senha = await bcrypt.hash(senhaDefinida, 12);
   } else if (!contato.senha) {
-    return NextResponse.json({ erro: "Defina uma senha de acesso (mín. 4 caracteres)" }, { status: 400 });
+    return NextResponse.json({ erro: "Defina uma senha de acesso (mín. 8 caracteres)" }, { status: 400 });
   }
   if (!contato.acessoConcedidoEm) data.acessoConcedidoEm = new Date();
 
