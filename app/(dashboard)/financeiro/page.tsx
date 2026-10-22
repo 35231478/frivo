@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
+import { pode } from "@/lib/permissoes";
+import { redirect } from "next/navigation";
 import { formatarMoeda, cn } from "@/lib/utils";
 import { resumoFinanceiro } from "@/lib/financeiro-server";
 import {
@@ -11,6 +13,7 @@ export const metadata: Metadata = { title: "Dashboard Financeiro" };
 
 export default async function FinanceiroDashboardPage() {
   const session = await auth();
+  if (!pode(session!.user!.permissoes, "financeiro", "visualizar", session!.user!.role)) redirect("/sem-permissao");
   const r = await resumoFinanceiro(session!.user!.empresaId);
 
   const cards = [

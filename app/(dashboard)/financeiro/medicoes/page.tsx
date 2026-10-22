@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
+import { pode } from "@/lib/permissoes";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import {
   cn, formatarData, formatarMoeda, nomeMes,
@@ -19,6 +21,7 @@ export default async function MedicoesPage({
 }) {
   const { busca = "", status = "", clienteId = "", tipo = "", dataInicio = "", dataFim = "" } = await searchParams;
   const session = await auth();
+  if (!pode(session!.user!.permissoes, "financeiro", "medicoes", session!.user!.role)) redirect("/sem-permissao");
   const empresaId = session!.user!.empresaId;
 
   const where: any = { empresaId };

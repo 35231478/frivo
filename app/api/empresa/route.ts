@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
@@ -45,9 +46,9 @@ export async function PUT(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
 
-  const role = session.user!.role;
-  if (role !== "ADMIN" && role !== "SUPER_ADMIN") {
-    return NextResponse.json({ erro: "Apenas administradores podem alterar as configurações." }, { status: 403 });
+  // Permissão, não role: quem tem "Configurações > Gerenciar" no perfil também pode (I5)
+  if (!pode(session.user!.permissoes, "configuracoes", "gerenciar", session.user!.role)) {
+    return NextResponse.json({ erro: "Sem permissão para alterar configurações." }, { status: 403 });
   }
 
   const body = await req.json();

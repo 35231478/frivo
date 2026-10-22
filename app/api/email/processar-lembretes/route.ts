@@ -1,22 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { enviarLembreteOrcamento } from "@/lib/email";
 
 /**
  * Processa os lembretes de orçamento (deve ser chamado 1x/dia por um cron).
- * Autoriza por: header Authorization: Bearer <CRON_SECRET>, ?secret=<CRON_SECRET>,
- * ou sessão de admin autenticada.
+ * SÓ autoriza por header `Authorization: Bearer <CRON_SECRET>` (S10): o segredo
+ * na URL (?secret=) ficava em logs/histórico, e a sessão de ADMIN/GERENTE
+ * permitia disparar o processamento de TODAS as empresas por um clique.
  */
-async function autorizado(req: NextRequest): Promise<boolean> {
+function autorizado(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const auth1 = req.headers.get("authorization");
-    if (auth1 === `Bearer ${secret}`) return true;
-    if (req.nextUrl.searchParams.get("secret") === secret) return true;
-  }
-  const session = await auth();
-  return !!session && (session.user.role === "ADMIN" || session.user.role === "SUPER_ADMIN" || session.user.role === "GERENTE");
+  if (!secret) return false; // sem segredo configurado, o cron fica desligado
+  return req.headers.get("authorization") === `Bearer ${secret}`;
 }
 
 async function processar(): Promise<{ enviados: number; detalhes: Record<string, number> }> {
@@ -83,11 +78,11 @@ async function processar(): Promise<{ enviados: number; detalhes: Record<string,
 }
 
 export async function GET(req: NextRequest) {
-  if (!(await autorizado(req))) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  if (!autorizado(req)) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
   return NextResponse.json(await processar());
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await autorizado(req))) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  if (!autorizado(req)) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
   return NextResponse.json(await processar());
 }

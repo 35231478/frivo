@@ -106,6 +106,7 @@ export function PerfilClient({ initial }: { initial: Initial }) {
   const [nome, setNome] = useState(initial.nome);
   const [email, setEmail] = useState(initial.email);
   const [confirmacaoEmail, setConfirmacaoEmail] = useState("");
+  const [senhaAtualEmail, setSenhaAtualEmail] = useState("");
   const [salvandoDados, setSalvandoDados] = useState(false);
   const emailMudou = email.trim().toLowerCase() !== initial.email.toLowerCase();
 
@@ -115,15 +116,16 @@ export function PerfilClient({ initial }: { initial: Initial }) {
     if (emailMudou && confirmacaoEmail.trim().toLowerCase() !== email.trim().toLowerCase()) {
       setErro("A confirmação de e-mail não coincide."); return;
     }
+    if (emailMudou && !senhaAtualEmail) { setErro("Informe a senha atual para trocar o e-mail de login."); return; }
     setSalvandoDados(true);
     try {
       const res = await fetch("/api/perfil", {
         method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome: nome.trim(), email: email.trim(), confirmacaoEmail: confirmacaoEmail.trim() || undefined }),
+        body: JSON.stringify({ nome: nome.trim(), email: email.trim(), confirmacaoEmail: confirmacaoEmail.trim() || undefined, senhaAtual: emailMudou ? senhaAtualEmail : undefined }),
       });
       const data = await res.json();
       if (!res.ok) { setErro(data?.erro ?? "Erro ao salvar."); return; }
-      setConfirmacaoEmail("");
+      setConfirmacaoEmail(""); setSenhaAtualEmail("");
       mostrarToast("Dados atualizados com sucesso!");
       await update({ name: data.nome, email: data.email }); // atualiza o JWT (sidebar/header)
       router.refresh();
@@ -241,6 +243,9 @@ export function PerfilClient({ initial }: { initial: Initial }) {
                   <FormGrid>
                     <FormField label="Confirmar e-mail" required hint="Repita o novo e-mail para confirmar a alteração">
                       <Input type="email" value={confirmacaoEmail} onChange={(e) => setConfirmacaoEmail(e.target.value)} />
+                    </FormField>
+                    <FormField label="Senha atual" required hint="Trocar o e-mail de login exige a sua senha">
+                      <Input type="password" value={senhaAtualEmail} onChange={(e) => setSenhaAtualEmail(e.target.value)} autoComplete="current-password" />
                     </FormField>
                   </FormGrid>
                 )}

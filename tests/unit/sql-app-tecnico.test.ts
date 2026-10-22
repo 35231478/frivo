@@ -91,7 +91,12 @@ describe.skipIf(!URL)("SQL de produção: app do técnico — medição, áudio,
     expect(cols("checklist_tipo_itens")).toEqual(["unidade:text"]);
     expect(cols("checklist_respostas")).toEqual(["audio_url:text", "unidade:text", "valor:numeric"]);
     expect(cols("fotos_atendimento")).toEqual(["client_id:text", "momento:USER-DEFINED"]);
-    expect(ordenadas(`SELECT indexname FROM pg_indexes WHERE schemaname = '${SCHEMA}' AND indexdef LIKE 'CREATE UNIQUE%' AND indexname LIKE '%client_id_key'`))
+    // Catálogos diretos, sem pg_indexes: a view computa indexdef (pg_get_indexdef) linha a linha
+    // e quebra se OUTRO teste em paralelo dropar um schema no meio ("could not open relation with OID")
+    expect(ordenadas(`SELECT c.relname FROM pg_index i
+        JOIN pg_class c ON c.oid = i.indexrelid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = '${SCHEMA}' AND i.indisunique AND c.relname LIKE '%client_id_key'`))
       .toEqual(["fotos_atendimento_client_id_key", "servicos_adicionais_client_id_key", "servicos_adicionais_fotos_client_id_key"]);
     expect(ordenadas(`SELECT conname || ':' || confdeltype::text FROM pg_constraint WHERE contype = 'f' AND conrelid::regclass::text IN ('servicos_adicionais', 'servicos_adicionais_fotos', 'sync_operacoes')`)).toEqual([
       "servicos_adicionais_atividade_id_fkey:c", "servicos_adicionais_criado_por_id_fkey:n", "servicos_adicionais_empresa_id_fkey:c",

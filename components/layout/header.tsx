@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "next-auth";
+import { pode } from "@/lib/permissoes";
 
 interface Alertas {
   prazosVencidos: number;
@@ -80,6 +81,8 @@ function gerarBreadcrumb(pathname: string) {
 
 export function Header({ session, avatarUrl }: HeaderProps) {
   const usuario = session.user;
+  // Atalhos do sino seguem o RBAC: cada item só aparece para quem pode abrir o destino (T1)
+  const podeVer = (modulo: string, acao?: string) => pode(usuario.permissoes, modulo, (acao as never) ?? "visualizar", usuario.role);
   const pathname = usePathname();
   const breadcrumb = useMemo(() => gerarBreadcrumb(pathname), [pathname]);
 
@@ -194,16 +197,16 @@ export function Header({ session, avatarUrl }: HeaderProps) {
                 <p className="text-sm text-ink-muted text-center py-6">Nenhum alerta no momento 🎉</p>
               ) : (
                 <div className="divide-y divide-surface-border">
-                  <AlertaItem href="/prazos?status=ATRASADO" icone={AlertTriangle} cor="text-red-600" label="Prazos vencidos" valor={alertas?.prazosVencidos ?? 0} onClick={() => setSinoAberto(false)} />
-                  <AlertaItem href="/prazos?status=ATIVO" icone={Clock} cor="text-amber-600" label="Vencendo hoje" valor={alertas?.etapasVencendoHoje ?? 0} onClick={() => setSinoAberto(false)} />
-                  <AlertaItem href="/compras/pedidos" icone={ShoppingCart} cor="text-orange-600" label="Compras pendentes" valor={alertas?.pedidosPendentes ?? 0} onClick={() => setSinoAberto(false)} />
-                  <AlertaItem href="/ordens?origem=PORTAL_CLIENTE" icone={Headset} cor="text-cyan-600" label="Chamados do portal" valor={alertas?.chamadosPortal ?? 0} onClick={() => setSinoAberto(false)} />
-                  <AlertaItem href="/ordens" icone={Timer} cor="text-red-600" label="Atendimentos em atraso" valor={alertas?.atendimentosAtraso ?? 0} onClick={() => setSinoAberto(false)} />
-                  <AlertaItem href="/veiculos/checklist" icone={ClipboardCheck} cor="text-blue-600" label="Checklists pendentes" valor={alertas?.checklistPendente ?? 0} onClick={() => setSinoAberto(false)} />
-                  <AlertaItem href="/veiculos" icone={AlertTriangle} cor="text-amber-600" label="Checklists com alertas" valor={alertas?.checklistsComAlertas ?? 0} onClick={() => setSinoAberto(false)} />
-                  <AlertaItem href="/veiculos" icone={FileWarning} cor="text-orange-600" label="Documentos de veículo vencendo" valor={alertas?.documentosVencendo ?? 0} onClick={() => setSinoAberto(false)} />
-                  <AlertaItem href="/veiculos" icone={Wrench} cor="text-violet-600" label="Veículos em manutenção" valor={alertas?.veiculosManutencao ?? 0} onClick={() => setSinoAberto(false)} />
-                  <AlertaItem href="/financeiro/contas-receber?status=RECEBIDO" icone={Barcode} cor="text-emerald-600" label="Boletos pagos hoje" valor={alertas?.boletosPagos ?? 0} onClick={() => setSinoAberto(false)} />
+                  {podeVer("ordens") && <AlertaItem href="/prazos?status=ATRASADO" icone={AlertTriangle} cor="text-red-600" label="Prazos vencidos" valor={alertas?.prazosVencidos ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("ordens") && <AlertaItem href="/prazos?status=ATIVO" icone={Clock} cor="text-amber-600" label="Vencendo hoje" valor={alertas?.etapasVencendoHoje ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("financeiro") && <AlertaItem href="/compras/pedidos" icone={ShoppingCart} cor="text-orange-600" label="Compras pendentes" valor={alertas?.pedidosPendentes ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("ordens") && <AlertaItem href="/ordens?origem=PORTAL_CLIENTE" icone={Headset} cor="text-cyan-600" label="Chamados do portal" valor={alertas?.chamadosPortal ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("ordens") && <AlertaItem href="/ordens" icone={Timer} cor="text-red-600" label="Atendimentos em atraso" valor={alertas?.atendimentosAtraso ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("veiculos") && <AlertaItem href="/veiculos/checklist" icone={ClipboardCheck} cor="text-blue-600" label="Checklists pendentes" valor={alertas?.checklistPendente ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={AlertTriangle} cor="text-amber-600" label="Checklists com alertas" valor={alertas?.checklistsComAlertas ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={FileWarning} cor="text-orange-600" label="Documentos de veículo vencendo" valor={alertas?.documentosVencendo ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={Wrench} cor="text-violet-600" label="Veículos em manutenção" valor={alertas?.veiculosManutencao ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("financeiro", "contasReceber") && <AlertaItem href="/financeiro/contas-receber?status=RECEBIDO" icone={Barcode} cor="text-emerald-600" label="Boletos pagos hoje" valor={alertas?.boletosPagos ?? 0} onClick={() => setSinoAberto(false)} />}
                 </div>
               )}
             </div>

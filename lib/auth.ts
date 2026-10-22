@@ -6,7 +6,7 @@ import { loginSchema } from "@/lib/validations";
 import { authConfig } from "@/auth.config";
 import { permissoesDoUsuario } from "@/lib/permissoes";
 import { conferirTokenAtivo } from "@/lib/sessao-ativa";
-import { conferirBloqueio, HASH_FICTICIO, ipDaRequisicao, limparTentativas, registrarTentativa } from "@/lib/acesso/limite";
+import { apagarTentativas, conferirBloqueio, HASH_FICTICIO, ipDaRequisicao, limparTentativas, registrarTentativa } from "@/lib/acesso/limite";
 import { impressaoDaSenha } from "@/lib/acesso/impressao-senha";
 import { tecnicoDoUsuario } from "@/lib/tecnico/escopo";
 
@@ -42,6 +42,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         const bloqueio = await conferirBloqueio("LOGIN", alvos);
         if (bloqueio.bloqueado) throw new AcessoBloqueado(bloqueio.minutos);
+        // Conta a tentativa ANTES do bcrypt: N requisições em paralelo não furam o limite (S6).
+        // Senha certa apaga os registros desta requisição (sucesso não conta contra o IP).
+        const registros = await registrarTentativa("LOGIN", alvos);
 
         const usuario = await prisma.usuario.findFirst({
           where: { email, ativo: true },
@@ -53,10 +56,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         const senhaCorreta = await bcrypt.compare(senha, usuario?.senha ?? HASH_FICTICIO);
         if (!usuario || !usuario.empresa.ativo || !senhaCorreta) {
-          await registrarTentativa("LOGIN", alvos);
           return null;
         }
         await limparTentativas("LOGIN", alvos);
+        await apagarTentativas(registros);
 
         await prisma.usuario.update({
           where: { id: usuario.id },

@@ -81,16 +81,24 @@ function montarEmailLead(data: LeadData, codigo: string): string {
   `;
 }
 
-/** empresaId do tenant Termofrio (env), com fallback para a primeira empresa. */
+/**
+ * empresaId do tenant Termofrio (env). Sem a env, só aceita quando existe UMA
+ * empresa ativa (instalação single-tenant) — com várias, o lead de um site não
+ * pode cair na empresa "mais antiga" de outro cliente do sistema (CO10).
+ */
 async function resolverEmpresaId(): Promise<string | null> {
   const env = process.env.TERMOFRIO_EMPRESA_ID;
   if (env) return env;
-  const empresa = await prisma.empresa.findFirst({
+  const empresas = await prisma.empresa.findMany({
     where: { ativo: true },
-    orderBy: { criadoEm: "asc" },
     select: { id: true },
+    take: 2,
   });
-  return empresa?.id ?? null;
+  if (empresas.length !== 1) {
+    console.error("[leads] TERMOFRIO_EMPRESA_ID não configurado e há mais de uma empresa ativa: lead recusado");
+    return null;
+  }
+  return empresas[0].id;
 }
 
 /** Usuário a quem o lead é atribuído (prefere ADMIN; senão, qualquer ativo). */
@@ -176,12 +184,9 @@ export async function POST(req: Request) {
     if (!cliente) {
       cliente = await prisma.cliente.upsert({
         where: { cpfCnpj_empresaId: { cpfCnpj: cpfCnpjPlaceholder, empresaId } },
-        update: {
-          nome: data.nome,
-          email: data.email,
-          celular: data.whatsapp,
-          cidade: data.cidade,
-        },
+        // Lead recorrente REAPROVEITA o cadastro: não renomeia nem sobrescreve um
+        // cliente que pode já ter virado cliente de verdade (CO10)
+        update: {},
         create: {
           empresaId,
           tipoPessoa: "FISICA",
