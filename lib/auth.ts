@@ -6,7 +6,7 @@ import { loginSchema } from "@/lib/validations";
 import { authConfig } from "@/auth.config";
 import { permissoesDoUsuario } from "@/lib/permissoes";
 import { conferirTokenAtivo } from "@/lib/sessao-ativa";
-import { conferirBloqueio, ipDaRequisicao, limparTentativas, registrarTentativa } from "@/lib/acesso/limite";
+import { conferirBloqueio, HASH_FICTICIO, ipDaRequisicao, limparTentativas, registrarTentativa } from "@/lib/acesso/limite";
 import { impressaoDaSenha } from "@/lib/acesso/impressao-senha";
 import { tecnicoDoUsuario } from "@/lib/tecnico/escopo";
 
@@ -17,9 +17,6 @@ class AcessoBloqueado extends CredentialsSignin {
     this.code = `bloqueado-${minutos}`;
   }
 }
-
-/** Hash de uma senha qualquer: e-mail sem cadastro também passa pelo bcrypt (mesmo tempo de resposta). */
-const HASH_FICTICIO = "$2a$12$7iO7A0TNVR0wJBH13ZoMZO3pBDvS3G3396vVIYEYECixnoKDcn1yW";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   ...authConfig,

@@ -65,10 +65,10 @@ export const acessoPortalSchema = z.object({
 
 // Abertura de chamado pelo portal
 export const chamadoPortalSchema = z.object({
-  unidadeId: z.string().optional().nullable(),
-  equipamentoId: z.string().optional().nullable(),
-  tipoProblema: z.string().optional().nullable(),
-  descricao: z.string().min(5, "Descreva o problema (mín. 5 caracteres)"),
+  unidadeId: z.string().max(40).optional().nullable(),
+  equipamentoId: z.string().max(40).optional().nullable(),
+  tipoProblema: z.string().max(100).optional().nullable(),
+  descricao: z.string().min(5, "Descreva o problema (mín. 5 caracteres)").max(2000, "Descrição muito longa (máx. 2000 caracteres)"),
   urgencia: z.enum(["NORMAL", "URGENTE", "CRITICO"]).default("NORMAL"),
   fotos: z.array(z.object({
     nome: z.string(),

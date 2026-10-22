@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
-import { requirePortalSession } from "@/lib/portal-server";
+import { requirePortalSession, exigePermissao } from "@/lib/portal-server";
+import { SemAcesso } from "@/components/portal/sem-acesso";
 import { formatarData, formatarDataHora } from "@/lib/utils";
 import { CalendarDays, CheckCircle2, Clock } from "lucide-react";
 
@@ -8,7 +9,9 @@ export const metadata: Metadata = { title: "Portal — Agenda" };
 export const dynamic = "force-dynamic";
 
 export default async function PortalAgenda() {
-  const { user } = await requirePortalSession();
+  const sessao = await requirePortalSession();
+  if (!exigePermissao(sessao, "verOS")) return <SemAcesso />;
+  const { user } = sessao;
   const agora = new Date();
 
   const [proximas, historico] = await Promise.all([

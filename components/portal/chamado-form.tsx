@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { reduzirImagem, FOTO_GALERIA } from "@/lib/imagem-cliente";
 import { AlertCircle, Upload, X, Send } from "lucide-react";
 
 interface Unidade { id: string; nome: string }
@@ -26,14 +27,16 @@ export function ChamadoForm({ unidades, equipamentos, tiposProblema }: { unidade
 
   async function addFotos(files: FileList | null) {
     if (!files) return;
+    setErro("");
     const novas: Foto[] = [];
     for (const f of Array.from(files).slice(0, 6)) {
-      const conteudo = await new Promise<string>((res) => {
-        const r = new FileReader();
-        r.onload = () => res(r.result as string);
-        r.readAsDataURL(f);
-      });
-      novas.push({ nome: f.name, tipo: f.type, tamanho: f.size, conteudo });
+      try {
+        // Foto do celular sai com vários MB: reduz e recomprime antes de enviar (o servidor limita o tamanho)
+        const { imagem } = await reduzirImagem(f, FOTO_GALERIA.ladoMax, FOTO_GALERIA.qualidade);
+        novas.push({ nome: f.name, tipo: "image/jpeg", tamanho: imagem.bytes, conteudo: imagem.dataUrl });
+      } catch {
+        setErro(`Não foi possível ler a imagem "${f.name}". Envie fotos JPG, PNG ou WEBP.`);
+      }
     }
     setFotos((p) => [...p, ...novas].slice(0, 6));
   }
