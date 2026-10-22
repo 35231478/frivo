@@ -30,7 +30,7 @@ const sessao = vi.hoisted(() => ({ atual: null as any }));
 vi.mock("@/lib/auth", () => ({ auth: vi.fn(async () => sessao.atual) }));
 // O webhook NUNCA confia no corpo: a baixa depende do que ESTA consulta responder
 const inter = vi.hoisted(() => ({ consultar: vi.fn() }));
-vi.mock("@/lib/inter-api", () => ({ consultarBoletoInter: inter.consultar, testarConexaoInter: vi.fn() }));
+vi.mock("@/lib/inter-api", () => ({ consultarBoletoInter: inter.consultar, testarConexaoInter: vi.fn(), configurarWebhookInter: vi.fn() }));
 
 const comoAdmin = () => { sessao.atual = { user: { id: "uA", name: "Ana", email: "ana@x.com", empresaId: "e1", role: "ADMIN", permissoes: permissoesTotais(), tecnicoId: null } }; };
 const comoTecnico = () => { sessao.atual = { user: { id: "uT", name: "João", email: "j@x.com", empresaId: "e1", role: "TECNICO", permissoes: PRESETS.TECNICO, tecnicoId: null } }; };

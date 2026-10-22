@@ -29,6 +29,8 @@ export function InterConfigClient() {
   const [gerandoWebhook, setGerandoWebhook] = useState(false);
   // A URL completa (com o segredo) só existe aqui logo depois de gerar — não volta em leitura nenhuma
   const [webhookUrl, setWebhookUrl] = useState("");
+  // Resultado do registro automático no Inter (null = ainda não gerou nesta visita)
+  const [registroInter, setRegistroInter] = useState<{ ok: boolean; pendente: string | null } | null>(null);
 
   const certRef = useRef<HTMLInputElement>(null);
   const chaveRef = useRef<HTMLInputElement>(null);
@@ -69,17 +71,21 @@ export function InterConfigClient() {
     } catch { setMsg("Erro de conexão."); } finally { setSalvando(false); }
   }
 
-  /** Gira o segredo do webhook: o link antigo para de valer e a URL nova aparece UMA vez. */
+  /** Gira o segredo do webhook (o link antigo para de valer, a URL nova aparece UMA vez)
+   *  e tenta registrar a URL nova no Inter na hora. */
   async function gerarWebhook() {
-    if (temWebhook && !confirm("Gerar uma nova URL de webhook? A URL atual para de funcionar na hora e você precisa atualizar o cadastro no painel do Inter.")) return;
-    setGerandoWebhook(true); setMsg("");
+    if (temWebhook && !confirm("Gerar uma nova URL de webhook? A URL atual para de funcionar na hora; com a integração ativa, a nova é registrada no Inter automaticamente.")) return;
+    setGerandoWebhook(true); setMsg(""); setRegistroInter(null);
     try {
       const res = await fetch("/api/integracoes/inter", {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ regerarWebhook: true }),
       });
       const d = await res.json();
-      if (res.ok && d.webhookUrl) { setWebhookUrl(d.webhookUrl); setTemWebhook(true); }
+      if (res.ok && d.webhookUrl) {
+        setWebhookUrl(d.webhookUrl); setTemWebhook(true);
+        setRegistroInter({ ok: !!d.registradoNoInter, pendente: d.registroPendente ?? null });
+      }
       else setMsg(d.erro ?? "Erro ao gerar a URL do webhook.");
     } catch { setMsg("Erro de conexão."); } finally { setGerandoWebhook(false); }
   }
@@ -170,7 +176,8 @@ export function InterConfigClient() {
         <p className="text-ink-muted">
           {temWebhook
             ? "Há uma URL de webhook ativa para esta empresa. Por segurança ela não é exibida: gere uma nova para ver (a antiga para de valer)."
-            : "Gere a URL e cadastre no painel do Inter (escopo Webhook) para os pagamentos baixarem sozinhos."}
+            : "Gere a URL para os pagamentos baixarem sozinhos."}
+          {" "}Com a integração ativa (credenciais + certificado), a URL é <strong>registrada no Inter automaticamente</strong>.
           {" "}Cada aviso recebido é conferido na API do Inter antes de baixar a conta.
         </p>
         <Button type="button" variant="secondary" loading={gerandoWebhook} onClick={gerarWebhook} data-gerar-webhook>
@@ -182,6 +189,23 @@ export function InterConfigClient() {
             <code className="block text-xs break-all select-all">{webhookUrl}</code>
             <button type="button" className="text-xs font-semibold text-primary-700 hover:underline"
               onClick={() => navigator.clipboard?.writeText(webhookUrl)}>Copiar</button>
+          </div>
+        )}
+        {registroInter?.ok && (
+          <div className="flex items-start gap-2 bg-success-50 border border-success-200 text-success-700 text-sm rounded-lg px-3 py-2" data-webhook-registrado>
+            <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>URL <strong>registrada no Inter automaticamente</strong> — os avisos de pagamento já chegam nela, nada mais a fazer.</span>
+          </div>
+        )}
+        {registroInter && !registroInter.ok && (
+          <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2" data-webhook-pendente>
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>
+              <strong>Registro no Inter PENDENTE</strong> — a URL acima vale do nosso lado, mas o Inter ainda não sabe dela.
+              Motivo: {registroInter.pendente ?? "erro desconhecido"}.
+              {" "}Resolva e clique em &ldquo;Gerar nova URL&rdquo; de novo (ela é registrada na hora), ou cadastre esta URL
+              via API do Inter (PUT /cobranca/v3/cobrancas/webhook).
+            </span>
           </div>
         )}
       </div>

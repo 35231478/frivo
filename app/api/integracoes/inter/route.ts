@@ -4,7 +4,7 @@ import { z } from "zod";
 import crypto from "crypto";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { criptografar } from "@/lib/crypto";
-import { testarConexaoInter } from "@/lib/inter-api";
+import { configurarWebhookInter, testarConexaoInter } from "@/lib/inter-api";
 
 const schema = z.object({
   ativo: z.boolean().optional(),
@@ -76,7 +76,29 @@ export async function PUT(req: NextRequest) {
   // A URL do webhook (com o segredo) aparece UMA única vez, quando é gerada/girada
   if (regerou) {
     const base = (process.env.NEXTAUTH_URL ?? req.nextUrl.origin).replace(/\/$/, "");
-    return NextResponse.json({ ok: true, webhookUrl: `${base}/api/webhooks/inter?token=${data.webhookSecret}` });
+    const webhookUrl = `${base}/api/webhooks/inter?token=${data.webhookSecret}`;
+
+    // Registro automático no Inter (PUT /cobranca/v3/cobrancas/webhook): só tenta com a
+    // integração ativa e completa. Se não der, a URL continua valendo do nosso lado e a
+    // pendência volta EXPLICADA para a tela (o segredo antigo já foi revogado de qualquer forma).
+    const faltas: string[] = [];
+    if (!data.ativo) faltas.push("a integração está desativada");
+    if (!data.clientId || !(d.clientSecret || atual?.clientSecret)) faltas.push("faltam o Client ID/Secret");
+    if (!(d.certificado || atual?.certificado) || !(d.chavePrivada || atual?.chavePrivada)) faltas.push("falta o certificado (.crt/.key)");
+
+    let registradoNoInter = false;
+    let registroPendente: string | null = null;
+    if (faltas.length > 0) {
+      registroPendente = faltas.join(", ");
+    } else {
+      try {
+        await configurarWebhookInter(empresaId, webhookUrl);
+        registradoNoInter = true;
+      } catch (e: any) {
+        registroPendente = e?.message ?? "erro desconhecido ao chamar a API do Inter";
+      }
+    }
+    return NextResponse.json({ ok: true, webhookUrl, registradoNoInter, registroPendente });
   }
   return NextResponse.json({ ok: true });
 }
