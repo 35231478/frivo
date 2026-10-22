@@ -431,8 +431,11 @@ describe.skipIf(!URL_PG)("app do técnico: Meu dia, escopo e sincronização off
     const t = await chamar("ordens/[id]/servicos-adicionais/[servicoId]", "PATCH", { id: "osA", servicoId: s.id }, { statusCobranca: "NAO_COBRAR" });
     expect([t.status, t.json.erro]).toEqual([403, "A cobrança do serviço adicional é decidida pelo escritório."]);
     comoEscritorio();
-    const r = await chamar("ordens/[id]/servicos-adicionais/[servicoId]", "PATCH", { id: "osA", servicoId: s.id }, { statusCobranca: "COBRAR" });
-    expect(r.json).toEqual({ id: s.id, statusCobranca: "COBRAR" });
+    // Leva 4 (D4): marcar COBRAR exige o preço — o adicional vira item da medição da OS
+    const semPreco = await chamar("ordens/[id]/servicos-adicionais/[servicoId]", "PATCH", { id: "osA", servicoId: s.id }, { statusCobranca: "COBRAR" });
+    expect(semPreco.status).toBe(400);
+    const r = await chamar("ordens/[id]/servicos-adicionais/[servicoId]", "PATCH", { id: "osA", servicoId: s.id }, { statusCobranca: "COBRAR", valor: 120 });
+    expect(r.json).toEqual({ id: s.id, statusCobranca: "COBRAR", valor: 120 });
     expect((await prisma.osHistorico.findFirst({ where: { acao: "Serviço adicional: cobrança" } })).detalhes).toBe("\"Instalar suporte novo\": A avaliar → Cobrar");
     expect((await chamar("ordens/[id]/servicos-adicionais/[servicoId]", "PATCH", { id: "osB", servicoId: s.id }, { statusCobranca: "COBRAR" })).status).toBe(404);
     expect((await chamar("ordens/[id]/servicos-adicionais/[servicoId]", "PATCH", { id: "osA", servicoId: s.id }, { statusCobranca: "TALVEZ" })).status).toBe(400);

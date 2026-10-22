@@ -345,8 +345,10 @@ describe("escritório: adicional na OS e no relatório", () => {
       expect($("[data-os-adicionais]")!.textContent).toContain("Serviços adicionais pedidos na visita (1)");
       expect($("[data-a-avaliar]")!.textContent).toBe("1 a avaliar para cobrança");
       expect($("[data-adicional-os=s1]")!.textContent).toContain("Split Sala 2 · TAG AC-02");
+      // Leva 4 (D4): marcar COBRAR pede o preço do serviço (vira item da medição da OS)
+      vi.stubGlobal("prompt", vi.fn(() => "180"));
       await clicar($("[data-cobranca=COBRAR]"));
-      expect(chamadas).toEqual([{ url: "/api/ordens/osA/servicos-adicionais/s1", corpo: { statusCobranca: "COBRAR" } }]);
+      expect(chamadas).toEqual([{ url: "/api/ordens/osA/servicos-adicionais/s1", corpo: { statusCobranca: "COBRAR", valor: 180 } }]);
       expect($("[data-cobranca=COBRAR]")!.getAttribute("aria-pressed")).toBe("true");
       expect($("[data-a-avaliar]")).toBeNull();
       ok = false;

@@ -100,7 +100,8 @@ export async function POST(req: NextRequest) {
           empresaId,
           clienteId,
           status: "APROVADO",
-          medicaoItens: { none: {} },
+          // Medição CANCELADA não prende o orçamento: ele volta ao gerar-mes (F4)
+          medicaoItens: { none: { medicao: { status: { not: "CANCELADA" } } } },
         },
       });
       for (const o of orcamentos) {

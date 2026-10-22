@@ -8,7 +8,7 @@ import { ROTULO_COBRANCA, type StatusCobranca } from "@/lib/execucao/adicional";
 import { ehTecnicoPuro } from "@/lib/tecnico/modo";
 
 export interface AdicionalOs {
-  id: string; descricao: string; statusCobranca: StatusCobranca; criadoEm: string | Date;
+  id: string; descricao: string; statusCobranca: StatusCobranca; valor?: number | string | null; criadoEm: string | Date;
   atividade: { titulo: string }; equipamento: { nome: string | null; marca: string; modelo: string; patrimonio: string | null } | null;
   criadoPor: { nome: string } | null; fotos: { id: string }[];
 }
@@ -33,11 +33,20 @@ export function OsAdicionais({ osId, adicionais }: { osId: string; adicionais: A
 
   async function mudar(a: AdicionalOs, statusCobranca: StatusCobranca) {
     setErro(null);
-    const antes = a.statusCobranca;
-    setLista((l) => l.map((x) => (x.id === a.id ? { ...x, statusCobranca } : x)));
-    const r = await fetch(`/api/ordens/${osId}/servicos-adicionais/${a.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ statusCobranca }) }).catch(() => null);
+    // Marcar COBRAR exige o preço: o adicional entra como item da medição da OS
+    let valor: number | undefined;
+    if (statusCobranca === "COBRAR") {
+      const sugestao = a.valor ? String(Number(a.valor)) : "";
+      const digitado = window.prompt("Preço do serviço adicional (R$):", sugestao);
+      if (digitado === null) return;
+      valor = Number(digitado.replace(/\./g, "").replace(",", "."));
+      if (!Number.isFinite(valor) || valor <= 0) { setErro("Informe um preço válido (maior que zero)."); return; }
+    }
+    const antes = { statusCobranca: a.statusCobranca, valor: a.valor };
+    setLista((l) => l.map((x) => (x.id === a.id ? { ...x, statusCobranca, valor: valor ?? x.valor } : x)));
+    const r = await fetch(`/api/ordens/${osId}/servicos-adicionais/${a.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ statusCobranca, ...(valor !== undefined ? { valor } : {}) }) }).catch(() => null);
     if (!r?.ok) {
-      setLista((l) => l.map((x) => (x.id === a.id ? { ...x, statusCobranca: antes } : x)));
+      setLista((l) => l.map((x) => (x.id === a.id ? { ...x, ...antes } : x)));
       setErro((await r?.json().catch(() => null))?.erro ?? "Não foi possível gravar a cobrança.");
     }
   }
@@ -59,6 +68,9 @@ export function OsAdicionais({ osId, adicionais }: { osId: string; adicionais: A
               <div className="min-w-0 flex-1 space-y-1">
                 <p className="text-sm text-ink whitespace-pre-wrap">{a.descricao}</p>
                 <p className="text-xs text-ink-muted">{[a.atividade.titulo, eq, a.criadoPor && `por ${a.criadoPor.nome}`, new Date(a.criadoEm).toLocaleDateString("pt-BR")].filter(Boolean).join(" · ")}</p>
+                {a.statusCobranca === "COBRAR" && a.valor != null && (
+                  <p className="text-xs font-semibold text-success-700" data-valor-adicional>Preço a cobrar: {Number(a.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+                )}
                 {a.fotos.length > 0 && (
                   <div className="flex gap-1.5 overflow-x-auto pt-1">
                     {a.fotos.map((f) => (

@@ -576,7 +576,8 @@ export const medicaoItemSchema = z.object({
 export const medicaoSchema = z.object({
   clienteId: z.string().min(1, "Cliente é obrigatório"),
   contratoId: z.string().optional().nullable(),
-  tipo: z.nativeEnum(TipoMedicao).default(TipoMedicao.MENSAL_FIXO),
+  // Medição manual avulsa não pode calar o gerar-mes da mensalidade (I25): o padrão é ADICIONAL
+  tipo: z.nativeEnum(TipoMedicao).default(TipoMedicao.ADICIONAL),
   mes: z.preprocess(
     (v) => (v === "" || v == null ? null : Number(v)),
     z.number().min(1).max(12).nullable()
