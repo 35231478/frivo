@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { cn, formatarData, formatarMoeda, formatarCpfCnpj } from "@/lib/utils";
@@ -19,6 +20,7 @@ export default async function ContasPagarPage({
 }) {
   const { status = "", fornecedor = "", fornecedorId = "", origem = "", dataInicio = "", dataFim = "", categoria = "", centro = "" } = await searchParams;
   const session = await auth();
+  if (!pode(session!.user!.permissoes, "financeiro", "visualizar", session!.user!.role)) redirect("/sem-permissao");
   const u = session!.user!;
   const empresaId = u.empresaId;
   // Atalho para a mesma importação de XML do Estoque (importar exige Estoque › gerenciar)

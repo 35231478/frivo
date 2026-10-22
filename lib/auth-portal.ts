@@ -3,7 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { portalLoginSchema } from "@/lib/validations";
-import { conferirBloqueio, HASH_FICTICIO, ipDaRequisicao, limparTentativas, registrarTentativa } from "@/lib/acesso/limite";
+import { apagarTentativas, conferirBloqueio, HASH_FICTICIO, ipDaRequisicao, limparTentativas, registrarTentativa } from "@/lib/acesso/limite";
 import { impressaoDaSenha } from "@/lib/acesso/impressao-senha";
 import { conferirTokenPortal } from "@/lib/sessao-portal";
 
@@ -48,6 +48,8 @@ export const {
         const alvos = { email, ip: ipDaRequisicao(request?.headers) };
         const bloqueio = await conferirBloqueio("PORTAL_LOGIN", alvos);
         if (bloqueio.bloqueado) throw new AcessoBloqueado(bloqueio.minutos);
+        // Conta a tentativa ANTES do bcrypt (requisições paralelas não furam o limite — S6)
+        const registros = await registrarTentativa("PORTAL_LOGIN", alvos);
 
         const contato = await prisma.contatoCliente.findFirst({
           where: {
@@ -62,10 +64,10 @@ export const {
         // E-mail sem acesso também passa pelo bcrypt: o tempo de resposta não revela quem existe
         const ok = await bcrypt.compare(senha, contato?.senha ?? HASH_FICTICIO);
         if (!contato || !contato.senha || !ok) {
-          await registrarTentativa("PORTAL_LOGIN", alvos);
           return null;
         }
         await limparTentativas("PORTAL_LOGIN", alvos);
+        await apagarTentativas(registros);
 
         await prisma.contatoCliente.update({
           where: { id: contato.id },

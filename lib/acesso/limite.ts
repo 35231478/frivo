@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -63,15 +63,33 @@ export async function conferirBloqueio(tipo: TipoTentativa, alvos: Alvos, agora 
   return { bloqueado: true, liberaEm, minutos: Math.max(1, Math.ceil((liberaEm.getTime() - agora.getTime()) / MIN)) };
 }
 
-/** Registra uma tentativa para cada alvo (e apaga as que já passaram de 1 dia). */
-export async function registrarTentativa(tipo: TipoTentativa, alvos: Alvos, agora = new Date()): Promise<void> {
+/**
+ * Registra uma tentativa para cada alvo (e apaga as que já passaram de 1 dia).
+ * Devolve os ids criados: um login que REGISTRA ANTES de validar a senha (para
+ * requisições paralelas não furarem o limite) apaga os seus com `apagarTentativas`
+ * quando a senha está certa — sucesso não conta contra o IP do escritório.
+ */
+export async function registrarTentativa(tipo: TipoTentativa, alvos: Alvos, agora = new Date()): Promise<string[]> {
   const cs = chaves(tipo, alvos);
-  if (!cs.length) return;
+  if (!cs.length) return [];
+  const linhas = cs.map(({ chave }) => ({ id: randomUUID(), tipo, chave, criadoEm: agora }));
   try {
-    await prisma.tentativaAcesso.createMany({ data: cs.map(({ chave }) => ({ tipo, chave, criadoEm: agora })) });
+    await prisma.tentativaAcesso.createMany({ data: linhas });
     await prisma.tentativaAcesso.deleteMany({ where: { criadoEm: { lt: new Date(agora.getTime() - RETENCAO_MS) } } });
+    return linhas.map((l) => l.id);
   } catch (e) {
     console.error("[acesso] não foi possível registrar a tentativa", e);
+    return [];
+  }
+}
+
+/** Apaga registros específicos (os da própria requisição, quando o login deu certo). */
+export async function apagarTentativas(ids: string[]): Promise<void> {
+  if (!ids.length) return;
+  try {
+    await prisma.tentativaAcesso.deleteMany({ where: { id: { in: ids } } });
+  } catch (e) {
+    console.error("[acesso] não foi possível apagar os registros", e);
   }
 }
 

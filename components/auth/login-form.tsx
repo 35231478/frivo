@@ -11,6 +11,12 @@ import { AlertCircle, Eye, EyeOff, Loader2, LogIn } from "lucide-react";
 
 const CHAVE_LEMBRAR = "frivo:manter-conectado";
 
+/** Só caminho LOCAL ("/..." e não "//..."): callbackUrl=https://evil não leva ninguém para fora (S7). */
+export function destinoPosLogin(callbackUrl: string | null | undefined): string {
+  const v = callbackUrl ?? "";
+  return v.startsWith("/") && !v.startsWith("//") ? v : "/dashboard";
+}
+
 /** Erro do login: senha errada (genérico, não diz se o e-mail existe) ou bloqueio por excesso de tentativas. */
 export function mensagemErroLogin(code: string | undefined): string {
   const minutos = /^bloqueado-(\d+)$/.exec(code ?? "")?.[1];
@@ -21,7 +27,7 @@ export function mensagemErroLogin(code: string | undefined): string {
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") ?? "/dashboard";
+  const callbackUrl = destinoPosLogin(searchParams.get("callbackUrl"));
   // Vindo de /sessao-encerrada: o acesso foi encerrado (usuário/empresa inativados ou sessão inválida)
   const sessaoEncerrada = searchParams.get("sessao") === "encerrada";
   // Vindo de /definir-senha (convite): senha criada, é só entrar
