@@ -271,6 +271,8 @@ export const contratoSchema = z.object({
   diasAposVencimento: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().min(0).max(365).nullable()).default(null),
   diaFixoMes: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().min(1).max(31).nullable()).default(null),
   ajusteFinsDeSemana: z.preprocess((v) => (v === "" || v == null ? null : v), z.nativeEnum(TratamentoFimSemana).nullable()).default(null),
+  // D3: adicionais do contrato em faturas separadas (padrão) ou consolidados na fatura mensal
+  faturamentoAdicionais: z.enum(["SEPARADO", "CONSOLIDADO"]).default("SEPARADO"),
 
   // Escopo: só a descrição (itens inclusos e visitas saíram do formulário; o já gravado fica como está)
   descricaoServicos: z.string().max(MAX_DESCRICAO_SERVICOS, `Descrição dos serviços: no máximo ${MAX_DESCRICAO_SERVICOS} caracteres.`).optional().nullable(),

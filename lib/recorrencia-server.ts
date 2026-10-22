@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { contratoGeraFinanceiro } from "@/lib/financeiro-server";
 import { proximasOcorrencias } from "@/lib/recorrencia-helpers";
 
 /**
@@ -19,7 +20,7 @@ export async function gerarOsRecorrentesContrato(
   });
   if (!ct) return 0;
   if (!ct.recorrencia || !ct.frequenciaRecorrencia) return 0;
-  if (ct.status === "ENCERRADO" || ct.status === "SUSPENSO") return 0;
+  if (!contratoGeraFinanceiro(ct.status)) return 0; // CO2: só ATIVO gera OS
 
   const ocorrencias = proximasOcorrencias({
     dataInicio: ct.dataInicio,
@@ -118,7 +119,7 @@ export async function gerarOsRecorrentesLocais(
     include: { recorrenciasLocais: true },
   });
   if (!ct) return 0;
-  if (ct.status === "ENCERRADO" || ct.status === "SUSPENSO" || ct.status === "CANCELADO") return 0;
+  if (!contratoGeraFinanceiro(ct.status)) return 0; // CO2: só ATIVO gera OS
 
   const ativos = ct.recorrenciasLocais.filter((r) => r.ativa && r.frequencia && r.dataPrimeiraOs);
   if (ativos.length === 0) return 0;

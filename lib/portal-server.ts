@@ -16,6 +16,12 @@ export function exigePermissao(sessao: PortalSession, chave: string): boolean {
 }
 
 /** Chamados e agenda do portal: exigem `verOS` (ou `abrirChamados`, para acompanhar o que o próprio contato abre). */
+/**
+ * F5: o cliente só vê COBRANÇAS reais (faturadas). PREVISTO é previsão interna do
+ * contrato — mostrá-la virava "12 boletos vencidos" no portal.
+ */
+export const STATUS_CONTA_PORTAL = ["A_RECEBER", "ATRASADO"] as const;
+
 export function podeVerChamados(sessao: PortalSession): boolean {
   return exigePermissao(sessao, "verOS") || exigePermissao(sessao, "abrirChamados");
 }

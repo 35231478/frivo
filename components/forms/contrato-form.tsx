@@ -194,6 +194,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
           tipoOsRecorrenciaId: initialData.tipoOsRecorrenciaId ?? "",
           tecnicoRecorrenciaId: initialData.tecnicoRecorrenciaId ?? "",
           // Faturamento
+          faturamentoAdicionais: (initialData as any).faturamentoAdicionais ?? "SEPARADO",
           diaFaturamento: initialData.diaFaturamento ?? undefined,
           tipoVencimento: initialData.tipoVencimento ?? undefined,
           diasAposVencimento: initialData.diasAposVencimento ?? undefined,
@@ -228,6 +229,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
           unidadeIds: [],
           numero: `CT-${new Date().getFullYear()}-`,
           recorrencia: false,
+          faturamentoAdicionais: "SEPARADO",
           diaFaturamento: undefined,
           tipoVencimento: "DIAS_APOS_FATURAMENTO",
           ajusteFinsDeSemana: "MANTER",
@@ -248,6 +250,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
   const notificarRenov = watch("notificarClienteRenovacao");
   const reajusteNotificarVal = watch("reajusteNotificar");
   const tipoVencimentoVal = watch("tipoVencimento");
+  const faturamentoAdicionaisVal = watch("faturamentoAdicionais");
   const statusVal = watch("status");
   const dataInicioVal = watch("dataInicio");
   const dataFimVal = watch("dataFim");
@@ -319,13 +322,15 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
     } catch { setErroGlobal("Erro de conexão."); } finally { setSalvandoStatus(false); }
   }
 
-  // Meses entre início e fim da vigência (inclusivo). null se indeterminado/ inválido.
+  // Meses COBRADOS na vigência (CO4): fim no aniversário do início conta até o mês anterior
+  // (01/01 → 01/01 do ano seguinte = 12 meses); qualquer dia depois disso inclui o mês do fim.
   const mesesVigencia = (() => {
     if (!dataInicioVal || !dataFimVal) return null;
     const a = new Date(`${dataInicioVal}T00:00:00`);
     const b = new Date(`${dataFimVal}T00:00:00`);
     if (b < a) return null;
-    return (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth()) + 1;
+    const diff = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
+    return b.getDate() < a.getDate() ? diff : b.getDate() === a.getDate() ? Math.max(diff, 1) : diff + 1;
   })();
   const valorMensalNum = typeof valorMensalVal === "number" && !isNaN(valorMensalVal) ? valorMensalVal : null;
   const valorTotalCalc = valorMensalNum != null && mesesVigencia != null ? valorMensalNum * mesesVigencia : null;
@@ -623,6 +628,26 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
                   {LABELS_TIPO_VENCIMENTO.DIA_FIXO_MES}
                 </span>
                 <Input {...register("diaFixoMes")} type="number" min={1} max={31} placeholder="10" disabled={tipoVencimentoVal !== "DIA_FIXO_MES"} />
+              </label>
+            </div>
+          </div>
+
+          <div className="space-y-2" data-faturamento-adicionais>
+            <p className="text-xs font-bold text-ink-muted uppercase tracking-wider">Serviços avulsos do contrato (itens executados e adicionais das OS)</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className={cn("flex flex-col gap-1 p-3 border rounded-lg cursor-pointer transition-colors", faturamentoAdicionaisVal !== "CONSOLIDADO" ? "border-primary-400 bg-primary-50/40" : "border-surface-border hover:border-primary-300")}>
+                <span className="flex items-center gap-2 text-sm font-medium text-ink">
+                  <input type="radio" checked={faturamentoAdicionaisVal !== "CONSOLIDADO"} onChange={() => setValue("faturamentoAdicionais", "SEPARADO")} className="accent-primary-600" />
+                  Faturas separadas
+                </span>
+                <span className="text-xs text-ink-muted">Cada OS gera a própria medição de adicional (padrão).</span>
+              </label>
+              <label className={cn("flex flex-col gap-1 p-3 border rounded-lg cursor-pointer transition-colors", faturamentoAdicionaisVal === "CONSOLIDADO" ? "border-primary-400 bg-primary-50/40" : "border-surface-border hover:border-primary-300")}>
+                <span className="flex items-center gap-2 text-sm font-medium text-ink">
+                  <input type="radio" checked={faturamentoAdicionaisVal === "CONSOLIDADO"} onChange={() => setValue("faturamentoAdicionais", "CONSOLIDADO")} className="accent-primary-600" />
+                  Consolidados na fatura do mês
+                </span>
+                <span className="text-xs text-ink-muted">Os serviços do mês entram junto da mensalidade na medição do contrato.</span>
               </label>
             </div>
           </div>

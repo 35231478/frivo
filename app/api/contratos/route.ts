@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { exigirAlgumaPermissao, exigirPermissao } from "@/lib/permissoes-server";
 import { contratoSchema } from "@/lib/validations";
-import { gerarPrevisaoContratoContasReceber } from "@/lib/financeiro-server";
+import { contratoGeraFinanceiro, gerarPrevisaoContratoContasReceber } from "@/lib/financeiro-server";
 import { gerarOsRecorrentesContrato, gerarOsRecorrentesLocais } from "@/lib/recorrencia-server";
 
 export async function GET(req: NextRequest) {
@@ -86,7 +86,10 @@ export async function POST(req: NextRequest) {
   }
 
   // Gera a previsão de contas a receber (idempotente).
-  await gerarPrevisaoContratoContasReceber(contrato.id).catch(() => 0);
+  // CO2: só contrato ATIVO movimenta financeiro/recorrência
+  if (contratoGeraFinanceiro(contrato.status)) {
+    await gerarPrevisaoContratoContasReceber(contrato.id).catch(() => 0);
+  }
   // Gera as OS recorrentes: por local (novo) + contrato-nível legado (idempotentes).
   await gerarOsRecorrentesLocais(contrato.id, session.user!.id).catch(() => 0);
   if (contrato.recorrencia) await gerarOsRecorrentesContrato(contrato.id, session.user!.id).catch(() => 0);

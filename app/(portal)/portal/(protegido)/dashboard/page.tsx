@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { requirePortalSession, getPortalBranding } from "@/lib/portal-server";
+import { requirePortalSession, getPortalBranding, STATUS_CONTA_PORTAL } from "@/lib/portal-server";
 import { formatarData } from "@/lib/utils";
 import { ClipboardList, CalendarCheck, FileText, AlertTriangle, Bell, Headset } from "lucide-react";
 
@@ -27,7 +27,7 @@ export default async function PortalDashboard() {
       : Promise.resolve(null),
     prisma.relatorioOs.count({ where: { empresaId, ordemServico: { clienteId } } }),
     prisma.medicao.count({ where: { empresaId, clienteId, status: "AGUARDANDO_APROVACAO" } }),
-    prisma.contaReceber.findMany({ where: { empresaId, clienteId, status: { in: ["A_RECEBER", "PREVISTO", "ATRASADO"] }, dataVencimento: { lte: em7dias } }, select: { dataVencimento: true, status: true } }),
+    prisma.contaReceber.findMany({ where: { empresaId, clienteId, status: { in: [...STATUS_CONTA_PORTAL] }, dataVencimento: { lte: em7dias } }, select: { dataVencimento: true, status: true } }),
     prisma.contrato.findMany({ where: { empresaId, clienteId, status: "ATIVO", dataFim: { gte: agora, lte: em30dias } }, select: { numero: true, dataFim: true } }),
   ]);
 

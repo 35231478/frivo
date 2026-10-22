@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
-import { requirePortalSession, exigePermissao } from "@/lib/portal-server";
+import { requirePortalSession, exigePermissao, STATUS_CONTA_PORTAL } from "@/lib/portal-server";
 import { SemAcesso } from "@/components/portal/sem-acesso";
 import { AprovacaoMedicao } from "@/components/medicao/aprovacao-medicao";
 import { BoletoAcoes } from "@/components/portal/boleto-acoes";
@@ -26,7 +26,7 @@ export default async function PortalFinanceiro() {
       orderBy: { criadoEm: "desc" },
     }),
     verBoletos ? prisma.contaReceber.findMany({
-      where: { empresaId: user.empresaId, clienteId: user.clienteId, status: { in: ["A_RECEBER", "PREVISTO", "ATRASADO"] } },
+      where: { empresaId: user.empresaId, clienteId: user.clienteId, status: { in: [...STATUS_CONTA_PORTAL] } },
       select: { id: true, numero: true, descricao: true, valor: true, dataVencimento: true, status: true, medicao: { select: { boletoUrl: true, boletoCodigoBarras: true } } },
       orderBy: { dataVencimento: "asc" },
     }) : Promise.resolve([]),

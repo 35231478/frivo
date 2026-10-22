@@ -321,13 +321,18 @@ export const VARIAVEIS_TERMO = [
   "{{art_numero}}",
 ] as const;
 
-/** Calcula a data fim somando `meses` à data de início. */
+/**
+ * Calcula a data fim somando `meses` à data de início — MENOS um dia (CO4):
+ * 12 meses a partir de 01/01 terminam em 31/12, e a cobrança é de 12 competências,
+ * não 13 (o aniversário é o primeiro dia FORA da vigência).
+ */
 export function calcularDataFimContrato(inicio: Date | string | null | undefined, meses: number | null | undefined): Date | null {
   if (!inicio || !meses) return null;
   const d = new Date(inicio);
   if (isNaN(d.getTime())) return null;
   const fim = new Date(d);
   fim.setMonth(fim.getMonth() + meses);
+  fim.setDate(fim.getDate() - 1);
   return fim;
 }
 

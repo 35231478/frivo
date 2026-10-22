@@ -5,7 +5,9 @@ import { MedicaoDocumento } from "@/components/medicao/medicao-documento";
 import { MedicaoEnvio } from "@/components/medicao/medicao-envio";
 import { AprovacaoMedicao } from "@/components/medicao/aprovacao-medicao";
 import { RelatorioGeralDocumento } from "@/components/relatorio/relatorio-geral-documento";
+import { RelatorioMensalContratoResumo } from "@/components/medicao/relatorio-mensal-contrato";
 import { carregarRelatorioPorToken } from "@/lib/relatorio-server";
+import { dadosRelatorioMensalContrato } from "@/lib/relatorio-mensal-contrato";
 import { FrivoLogo } from "@/components/layout/frivo-logo";
 import { LABELS_STATUS_MEDICAO, CLASSE_STATUS_MEDICAO, formatarData, cn } from "@/lib/utils";
 import { CheckCircle2, AlertTriangle } from "lucide-react";
@@ -41,6 +43,13 @@ export default async function MedicaoPublicaPage({ params }: { params: Promise<{
     select: { tokenPublico: true },
   });
   const consolidado = relVinculado ? await carregarRelatorioPorToken(relVinculado.tokenPublico) : null;
+
+  // D1 — medição mensal de contrato vira o RELATÓRIO MENSAL CONSOLIDADO: resumo das OS do
+  // período + próxima manutenção + os relatórios completos do mês (preventiva com fotos)
+  const mensal = medicao.contratoId ? await dadosRelatorioMensalContrato(medicao.id) : null;
+  const relatoriosDoMes = mensal
+    ? (await Promise.all(mensal.relatoriosDoMes.map((t) => carregarRelatorioPorToken(t)))).filter((r): r is NonNullable<typeof r> => !!r)
+    : [];
 
   const emailDestino = medicao.cliente.emailsFaturamento?.[0] ?? medicao.cliente.email ?? null;
   const whatsappDestino = medicao.cliente.whatsappFaturamento ?? medicao.cliente.celular ?? null;
@@ -92,6 +101,18 @@ export default async function MedicaoPublicaPage({ params }: { params: Promise<{
               />
             </div>
           )}
+
+          {mensal && (
+            <div className="bg-white rounded-2xl shadow-card p-6 md:p-10">
+              <RelatorioMensalContratoResumo dados={mensal} />
+            </div>
+          )}
+          {relatoriosDoMes.map((r, i) => (
+            <div key={i} className="bg-white rounded-2xl shadow-card p-6 md:p-10">
+              <p className="text-xs uppercase tracking-wider text-ink-muted mb-4 pb-2 border-b border-surface-border">Relatório técnico do período</p>
+              <RelatorioGeralDocumento relatorio={r.relatorio} empresa={r.empresa} os={r.os} equipamentos={r.equipamentos} />
+            </div>
+          ))}
 
           {aguardando && !jaAprovada && <AprovacaoMedicao token={token} />}
           {medicao.status === "RASCUNHO" && (
