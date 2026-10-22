@@ -37,7 +37,7 @@ export function ContratoDocumentos({ contratoId, anexosIniciais }: ContratoDocum
   const [anexos, setAnexos] = useState<Anexo[]>(anexosIniciais);
   const [uploading, setUploading] = useState<"ASSINADO" | "ANEXO" | null>(null);
   const [erro, setErro] = useState("");
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ url: string; ehImagem: boolean } | null>(null);
   const inputAssinado = useRef<HTMLInputElement>(null);
   const inputAnexo = useRef<HTMLInputElement>(null);
 
@@ -70,18 +70,14 @@ export function ContratoDocumentos({ contratoId, anexosIniciais }: ContratoDocum
     } catch { setErro("Erro de conexão."); }
   }
 
-  async function visualizar(id: string, tipo: string) {
-    try {
-      const res = await fetch(`/api/contratos/${contratoId}/anexos/${id}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      if (tipo.startsWith("image/") || tipo.includes("pdf")) {
-        setPreviewUrl(data.conteudo);
-      } else {
-        const link = document.createElement("a");
-        link.href = data.conteudo; link.download = data.nome; link.click();
-      }
-    } catch {}
+  // A rota serve o binário com o tipo real (nosniff): imagem/PDF abrem no modal; o resto baixa direto.
+  function visualizar(id: string, tipo: string) {
+    const url = `/api/contratos/${contratoId}/anexos/${id}`;
+    if (tipo.startsWith("image/") || tipo.includes("pdf")) {
+      setPreview({ url: `${url}?inline=1`, ehImagem: tipo.startsWith("image/") });
+    } else {
+      window.location.assign(url); // Content-Disposition: attachment
+    }
   }
 
   return (
@@ -130,16 +126,16 @@ export function ContratoDocumentos({ contratoId, anexosIniciais }: ContratoDocum
         </div>
       )}
 
-      {previewUrl && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setPreviewUrl(null)}>
+      {preview && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setPreview(null)}>
           <div className="relative bg-white rounded-xl max-w-4xl max-h-[90vh] overflow-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <button type="button" onClick={() => setPreviewUrl(null)} className="absolute top-3 right-3 bg-white/90 rounded-full p-1.5 shadow hover:bg-gray-100 z-10">
+            <button type="button" onClick={() => setPreview(null)} className="absolute top-3 right-3 bg-white/90 rounded-full p-1.5 shadow hover:bg-gray-100 z-10">
               <X className="w-4 h-4" />
             </button>
-            {previewUrl.startsWith("data:image/") ? (
-              <img src={previewUrl} alt="Preview" className="max-w-full max-h-[85vh] rounded-xl" />
+            {preview.ehImagem ? (
+              <img src={preview.url} alt="Preview" className="max-w-full max-h-[85vh] rounded-xl" />
             ) : (
-              <iframe src={previewUrl} className="w-[800px] h-[80vh] rounded-xl" />
+              <iframe src={preview.url} className="w-[800px] h-[80vh] rounded-xl" />
             )}
           </div>
         </div>

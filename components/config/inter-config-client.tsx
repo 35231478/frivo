@@ -25,6 +25,10 @@ export function InterConfigClient() {
   const [temSecret, setTemSecret] = useState(false);
   const [temCert, setTemCert] = useState(false);
   const [temChave, setTemChave] = useState(false);
+  const [temWebhook, setTemWebhook] = useState(false);
+  const [gerandoWebhook, setGerandoWebhook] = useState(false);
+  // A URL completa (com o segredo) só existe aqui logo depois de gerar — não volta em leitura nenhuma
+  const [webhookUrl, setWebhookUrl] = useState("");
 
   const certRef = useRef<HTMLInputElement>(null);
   const chaveRef = useRef<HTMLInputElement>(null);
@@ -34,6 +38,7 @@ export function InterConfigClient() {
       setAtivo(d.ativo); setAmbiente(d.ambiente); setClientId(d.clientId ?? "");
       setContaCorrente(d.contaCorrente ?? "");
       setTemSecret(d.temClientSecret); setTemCert(d.temCertificado); setTemChave(d.temChavePrivada);
+      setTemWebhook(!!d.temWebhookSecret);
     }).catch(() => {}).finally(() => setCarregando(false));
   }, []);
 
@@ -62,6 +67,21 @@ export function InterConfigClient() {
         setClientSecret(""); setCertificado(""); setChavePrivada("");
       } else { const e = await res.json(); setMsg(e.erro ?? "Erro ao salvar."); }
     } catch { setMsg("Erro de conexão."); } finally { setSalvando(false); }
+  }
+
+  /** Gira o segredo do webhook: o link antigo para de valer e a URL nova aparece UMA vez. */
+  async function gerarWebhook() {
+    if (temWebhook && !confirm("Gerar uma nova URL de webhook? A URL atual para de funcionar na hora e você precisa atualizar o cadastro no painel do Inter.")) return;
+    setGerandoWebhook(true); setMsg("");
+    try {
+      const res = await fetch("/api/integracoes/inter", {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ regerarWebhook: true }),
+      });
+      const d = await res.json();
+      if (res.ok && d.webhookUrl) { setWebhookUrl(d.webhookUrl); setTemWebhook(true); }
+      else setMsg(d.erro ?? "Erro ao gerar a URL do webhook.");
+    } catch { setMsg("Erro de conexão."); } finally { setGerandoWebhook(false); }
   }
 
   async function testar() {
@@ -143,6 +163,27 @@ export function InterConfigClient() {
       <div className="flex items-center justify-between gap-2 flex-wrap pt-2 border-t border-surface-border">
         <Button type="button" variant="secondary" loading={testando} onClick={testar}><Plug className="w-4 h-4" /> Testar conexão</Button>
         <Button type="button" loading={salvando} onClick={salvar}>Salvar configuração</Button>
+      </div>
+
+      <div className="bg-surface-alt border border-surface-border rounded-lg p-4 text-sm space-y-2">
+        <p className="font-semibold text-ink">Webhook de baixa automática</p>
+        <p className="text-ink-muted">
+          {temWebhook
+            ? "Há uma URL de webhook ativa para esta empresa. Por segurança ela não é exibida: gere uma nova para ver (a antiga para de valer)."
+            : "Gere a URL e cadastre no painel do Inter (escopo Webhook) para os pagamentos baixarem sozinhos."}
+          {" "}Cada aviso recebido é conferido na API do Inter antes de baixar a conta.
+        </p>
+        <Button type="button" variant="secondary" loading={gerandoWebhook} onClick={gerarWebhook} data-gerar-webhook>
+          {temWebhook ? "Gerar nova URL (revoga a atual)" : "Gerar URL do webhook"}
+        </Button>
+        {webhookUrl && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-1.5" data-webhook-url>
+            <p className="text-xs font-semibold text-amber-800">Copie agora — esta URL contém o segredo e não será mostrada de novo:</p>
+            <code className="block text-xs break-all select-all">{webhookUrl}</code>
+            <button type="button" className="text-xs font-semibold text-primary-700 hover:underline"
+              onClick={() => navigator.clipboard?.writeText(webhookUrl)}>Copiar</button>
+          </div>
+        )}
       </div>
 
       <div className="bg-primary-50 border border-primary-100 rounded-lg p-4 text-sm text-ink space-y-1.5">

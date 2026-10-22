@@ -7,7 +7,7 @@
  * tipo seguro.
  */
 
-export const TIPOS_IMAGEM = ["image/png", "image/jpeg", "image/webp", "image/heic"] as const;
+export const TIPOS_IMAGEM = ["image/png", "image/jpeg", "image/webp", "image/heic", "image/gif"] as const;
 
 export const TIPOS_DOCUMENTO = [
   "application/pdf",
@@ -21,7 +21,7 @@ export const TIPOS_DOCUMENTO = [
 export const TIPOS_ANEXO: readonly string[] = [...TIPOS_DOCUMENTO, ...TIPOS_IMAGEM];
 
 /** Tipos que podem abrir no navegador ("Visualizar"); o resto é sempre baixado. */
-export const TIPOS_INLINE: readonly string[] = ["image/png", "image/jpeg", "image/webp", "application/pdf"];
+export const TIPOS_INLINE: readonly string[] = ["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"];
 
 /** Valor do atributo `accept` dos inputs de arquivo de anexo. */
 export const ACCEPT_ANEXO = ".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.heic";
@@ -53,6 +53,7 @@ export function identificarTipo(bytes: Uint8Array, nome = ""): string | null {
   if (comeca(bytes, [0xff, 0xd8, 0xff])) return "image/jpeg";
   if (comeca(bytes, [0x52, 0x49, 0x46, 0x46]) && comeca(bytes, [0x57, 0x45, 0x42, 0x50], 8)) return "image/webp";
   if (comeca(bytes, [0x25, 0x50, 0x44, 0x46, 0x2d])) return "application/pdf"; // %PDF-
+  if (comeca(bytes, [0x47, 0x49, 0x46, 0x38])) return "image/gif"; // GIF87a/GIF89a
   // HEIC/HEIF (fotos de iPhone): "ftyp" no byte 4 + marca heic/heix/heim/heis/mif1/msf1
   if (comeca(bytes, [0x66, 0x74, 0x79, 0x70], 4)) {
     const marca = String.fromCharCode(...bytes.slice(8, 12));

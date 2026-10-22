@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
+import { validarFotos } from "@/lib/anexos-server";
 import { gerarQrCodeEquipamento } from "@/lib/qrcode-server";
 import { equipamentoSchema } from "@/lib/validations";
 import { resolverTipoEquipamento } from "@/lib/tipo-equipamento";
@@ -66,6 +67,10 @@ export async function POST(req: NextRequest) {
   });
   if (!unidade) return NextResponse.json({ erro: "Unidade não encontrada" }, { status: 404 });
 
+  // Fotos: tipo decidido pelos BYTES (HTML/SVG disfarçado é recusado); grava o data URL normalizado
+  const fotosValidadas = validarFotos(parsed.data.fotos);
+  if (!fotosValidadas.ok) return NextResponse.json({ erro: fotosValidadas.erro }, { status: 400 });
+
   const { dataInstalacao, dataFabricacao, garantiaInicio, garantiaAte, tipoEquipamentoId: tipoCustomId, ...resto } = parsed.data;
   if (garantiaInicio && garantiaAte && garantiaInicio > garantiaAte)
     return NextResponse.json({ erro: "O início da garantia deve ser anterior ao fim." }, { status: 400 });
@@ -74,6 +79,7 @@ export async function POST(req: NextRequest) {
   const equipamento = await prisma.equipamento.create({
     data: {
       ...resto,
+      fotos: fotosValidadas.fotos,
       tipo: tipoResolvido.tipo as any,
       empresaId,
       tipoEquipamentoId: tipoResolvido.tipoEquipamentoId,
