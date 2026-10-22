@@ -5,6 +5,7 @@ import { getPortalSession } from "@/lib/auth-portal";
 import { chamadoPortalSchema } from "@/lib/validations";
 import { validarDataUrl, type ArquivoValidado } from "@/lib/anexos-server";
 import { TIPOS_IMAGEM } from "@/lib/anexos";
+import { conferirBloqueio, ipDaRequisicao, registrarTentativa } from "@/lib/acesso/limite";
 
 const MAP_URGENCIA: Record<string, "NORMAL" | "ALTA" | "CRITICO"> = {
   NORMAL: "NORMAL", URGENTE: "ALTA", CRITICO: "CRITICO",
@@ -18,6 +19,14 @@ export async function POST(req: NextRequest) {
   }
   const { clienteId, empresaId } = sessao.user;
   const contatoId = sessao.user.id;
+
+  // Limite por contato e por IP: chamado legítimo sobra, flood para
+  const alvos = { usuarioId: contatoId, ip: ipDaRequisicao(req.headers) };
+  const bloqueio = await conferirBloqueio("CHAMADO_PUBLICO", alvos);
+  if (bloqueio.bloqueado) {
+    return NextResponse.json({ erro: `Muitos chamados em sequência. Tente de novo em ${bloqueio.minutos} min.` }, { status: 429 });
+  }
+  await registrarTentativa("CHAMADO_PUBLICO", alvos);
 
   const parsed = chamadoPortalSchema.safeParse(await req.json());
   if (!parsed.success) {

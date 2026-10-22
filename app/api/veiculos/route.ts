@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { validarDocumentoDataUrl, validarFotos } from "@/lib/anexos-server";
 import { veiculoSchema } from "@/lib/validations";
 import { organizarFotosVeiculo } from "@/lib/veiculo-fotos";
 import { exigirAlgumaPermissao, exigirPermissao } from "@/lib/permissoes-server";
@@ -51,8 +52,17 @@ export async function POST(req: NextRequest) {
   if (existente) return NextResponse.json({ erro: "Placa já cadastrada" }, { status: 409 });
 
   const { documentos, responsavelId, equipeId, proximaRevisaoData, seguroVencimento, fotos: fotosBrutas, fotosRotulos: rotulosBrutos, ...rest } = parsed.data;
+  // Fotos e documentos: tipo decidido pelos BYTES; grava o data URL normalizado
+  const fotosValidadas = validarFotos(fotosBrutas);
+  if (!fotosValidadas.ok) return NextResponse.json({ erro: fotosValidadas.erro }, { status: 400 });
+  const docsValidados: { tipo: typeof documentos[number]["tipo"]; nome: string; arquivoUrl: string | null; dataVencimento?: string | null }[] = [];
+  for (const d of documentos) {
+    const r = validarDocumentoDataUrl(d.arquivoUrl, d.nome);
+    if (!r.ok) return NextResponse.json({ erro: r.erro }, { status: 400 });
+    docsValidados.push({ ...d, arquivoUrl: r.conteudo });
+  }
   // Frente primeiro (capa), depois traseira, laterais e outros
-  const { fotos, fotosRotulos } = organizarFotosVeiculo(fotosBrutas, rotulosBrutos);
+  const { fotos, fotosRotulos } = organizarFotosVeiculo(fotosValidadas.fotos, rotulosBrutos);
 
   const veiculo = await prisma.veiculo.create({
     data: {
@@ -66,10 +76,10 @@ export async function POST(req: NextRequest) {
       proximaRevisaoData: proximaRevisaoData ? new Date(proximaRevisaoData) : null,
       seguroVencimento: seguroVencimento ? new Date(seguroVencimento) : null,
       documentos: {
-        create: documentos.map((d) => ({
+        create: docsValidados.map((d) => ({
           tipo: d.tipo,
           nome: d.nome,
-          arquivoUrl: d.arquivoUrl || null,
+          arquivoUrl: d.arquivoUrl,
           dataVencimento: d.dataVencimento ? new Date(d.dataVencimento) : null,
         })),
       },

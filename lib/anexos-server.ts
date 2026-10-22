@@ -1,5 +1,6 @@
+import { NextResponse } from "next/server";
 import {
-  identificarTipo, MSG_TIPO_NAO_PERMITIDO, nomeSeguro, podeVisualizarInline, TAMANHO_MAX_ANEXO, TIPOS_ANEXO,
+  identificarTipo, MSG_TIPO_NAO_PERMITIDO, nomeSeguro, podeVisualizarInline, TAMANHO_MAX_ANEXO, TIPOS_ANEXO, TIPOS_IMAGEM,
 } from "@/lib/anexos";
 
 export type ArquivoValidado = { nome: string; tipo: string; tamanho: number; conteudo: string };
@@ -78,4 +79,67 @@ export function respostaAnexo(anexo: { nome: string; conteudo: string }, inlineP
     headers["Content-Security-Policy"] = "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox";
   }
   return new Response(Buffer.from(bytes), { headers });
+}
+
+// ───────────────────────── Fotos (equipamento, veículo, avatar, logo) ─────────────────────────
+
+const MSG_FOTO = "Envie apenas imagens (JPG, PNG, WEBP ou HEIC).";
+const TAMANHO_MAX_FOTO = 3 * 1024 * 1024; // 3 MB por foto (as telas já reduzem para ~300 KB)
+
+/**
+ * Valida uma foto enviada como data URL: o tipo é decidido pelos BYTES (um HTML/SVG
+ * disfarçado de "image/png" é recusado) e o retorno traz o data URL normalizado com o
+ * MIME real — é esse valor que deve ser gravado.
+ */
+export function validarFoto(conteudo: string, op: Opcoes = {}): ResultadoValidacao {
+  return validarDataUrl(conteudo, "foto", { tipos: TIPOS_IMAGEM, tamanhoMax: TAMANHO_MAX_FOTO, mensagemTipo: MSG_FOTO, ...op });
+}
+
+/** Valida uma lista de fotos; devolve a lista normalizada (MIME real) ou o 1º erro. */
+export function validarFotos(fotos: readonly string[] | undefined, op: Opcoes = {}):
+  { ok: true; fotos: string[] } | { ok: false; erro: string } {
+  const lista = fotos ?? [];
+  const saida: string[] = [];
+  for (let i = 0; i < lista.length; i++) {
+    const r = validarFoto(lista[i], op);
+    if (!r.ok) return { ok: false, erro: `Foto ${i + 1}: ${r.erro}` };
+    saida.push(r.arquivo.conteudo);
+  }
+  return { ok: true, fotos: saida };
+}
+
+/**
+ * Valida o arquivo de um documento (colaborador/veículo) gravado como data URL:
+ * mesmos tipos dos anexos (PDF, Office e imagens), decididos pelos bytes.
+ */
+export function validarDocumentoDataUrl(arquivoUrl: string | null | undefined, nome: string):
+  { ok: true; conteudo: string | null } | { ok: false; erro: string } {
+  if (!arquivoUrl) return { ok: true, conteudo: null };
+  const r = validarDataUrl(arquivoUrl, nome);
+  if (!r.ok) return { ok: false, erro: `Documento "${nome}": ${r.erro}` };
+  return { ok: true, conteudo: r.arquivo.conteudo };
+}
+
+/**
+ * Serve uma foto gravada como data URL. O Content-Type sai dos BYTES reais e só imagem
+ * comum é servida — um HTML/SVG ou uma URL gravados no passado viram 404, nunca executam
+ * e nunca redirecionam. Sempre com `nosniff` + CSP sandbox.
+ */
+export function respostaFoto(valor: string | null | undefined): Response {
+  const semFoto = () => NextResponse.json({ erro: "Sem foto" }, { status: 404 });
+  if (!valor) return semFoto();
+  const bytes = decodificarDataUrl(valor);
+  if (!bytes) return semFoto();
+  const tipo = identificarTipo(bytes);
+  if (!tipo || !(TIPOS_IMAGEM as readonly string[]).includes(tipo)) return semFoto();
+  return new Response(Buffer.from(bytes), {
+    headers: {
+      "Content-Type": tipo,
+      "Content-Length": String(bytes.length),
+      "Content-Disposition": "inline",
+      "Cache-Control": "private, max-age=86400",
+      "X-Content-Type-Options": "nosniff",
+      "Content-Security-Policy": "default-src 'none'; sandbox",
+    },
+  });
 }

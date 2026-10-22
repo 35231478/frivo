@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
@@ -13,6 +13,8 @@ export default async function EditarColaboradorPage({ params }: { params: Promis
   const { id } = await params;
   const session = await auth();
   const empresaId = session!.user!.empresaId;
+  // Ficha completa (CPF, RG, endereço, documentos): mesma permissão que a API exige (CA9)
+  if (!pode(session!.user!.permissoes, "equipes", "gerenciar", session!.user!.role)) redirect("/sem-permissao");
 
   const colaborador = await prisma.tecnico.findFirst({
     where: { id, empresaId },

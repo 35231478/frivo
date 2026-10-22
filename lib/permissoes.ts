@@ -108,7 +108,7 @@ export function pode(
   acao: Acao = "visualizar",
   role?: string,
 ): boolean {
-  if (role === "ADMIN") return true;
+  if (role === "ADMIN" || role === "SUPER_ADMIN") return true;
   if (modulo === "dashboard") return true;
   if (!permissoes) return false;
   return permissoes[modulo]?.[acao] === true;
@@ -125,7 +125,7 @@ export function permissoesDoUsuario(usuario: {
   role?: string | null;
   perfilAcesso?: { ativo?: boolean | null; permissoes: unknown } | null;
 }): Permissoes {
-  if (usuario.role === "ADMIN") return permissoesTotais();
+  if (usuario.role === "ADMIN" || usuario.role === "SUPER_ADMIN") return permissoesTotais();
   const perfil = usuario.perfilAcesso;
   if (!perfil || perfil.ativo === false || !perfil.permissoes || typeof perfil.permissoes !== "object") {
     return permissoesVazias();
@@ -172,12 +172,18 @@ const ROTA_MODULO: Record<string, string> = {
   veiculos: "veiculos",
   estoque: "estoque",
   configuracoes: "configuracoes",
+  compras: "financeiro",        // pedidos de compra: mesma permissão da lista geral (API)
+  "leads-site": "orcamentos",   // leads do site são orçamentos (nome/WhatsApp/valores)
 };
 
 /** Retorna o módulo exigido para a rota, ou null se for rota sem gate de permissão. */
 export function moduloDaRota(pathname: string): string | null {
-  const seg = pathname.split("/").filter(Boolean)[0];
+  const segs = pathname.split("/").filter(Boolean);
+  const seg = segs[0];
   if (!seg) return null;
+  // Exceção: os modelos de checklist da frota moram em /configuracoes, mas o link fica no
+  // grupo Frota — quem tem "veiculos" entra sem precisar de "configuracoes" (I3)
+  if (seg === "configuracoes" && segs[1] === "checklists-veiculo") return "veiculos";
   return ROTA_MODULO[seg] ?? null;
 }
 

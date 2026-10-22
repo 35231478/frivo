@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
+import { pode } from "@/lib/permissoes";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { cn, formatarData, LABELS_STATUS_PEDIDO_COMPRA, CLASSE_STATUS_PEDIDO_COMPRA } from "@/lib/utils";
@@ -14,6 +16,7 @@ export default async function PedidosCompraPage({
 }) {
   const { status = "", compradorId = "" } = await searchParams;
   const session = await auth();
+  if (!pode(session!.user!.permissoes, "financeiro", "visualizar", session!.user!.role)) redirect("/sem-permissao");
   const empresaId = session!.user!.empresaId;
 
   const where: any = { empresaId };

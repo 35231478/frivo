@@ -2,26 +2,36 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { proximoNumeroOs } from "@/lib/os-server";
 import { mesclarQrConfig } from "@/lib/qr-config";
+import { getPortalSession } from "@/lib/auth-portal";
+import { conferirBloqueio, ipDaRequisicao, registrarTentativa } from "@/lib/acesso/limite";
 import { z } from "zod";
 
 type Params = { params: Promise<{ token: string }> };
 
 const chamadoSchema = z.object({
   tipo: z.enum(["CHAMADO", "ORCAMENTO"]).default("CHAMADO"),
-  nome: z.string().min(2, "Informe seu nome"),
-  email: z.string().email("E-mail inválido").optional().or(z.literal("")),
+  nome: z.string().min(2, "Informe seu nome").max(120),
+  email: z.string().email("E-mail inválido").max(160).optional().or(z.literal("")),
   telefone: z.string().max(20).optional().or(z.literal("")),
-  descricao: z.string().min(5, "Descreva o problema (mín. 5 caracteres)"),
+  descricao: z.string().min(5, "Descreva o problema (mín. 5 caracteres)").max(2000),
 });
 
 export async function POST(req: NextRequest, { params }: Params) {
   const { token } = await params;
 
+  // Rota pública: limite por IP para não encherem a fila de OS
+  const alvos = { ip: ipDaRequisicao(req.headers) };
+  const bloqueio = await conferirBloqueio("CHAMADO_PUBLICO", alvos);
+  if (bloqueio.bloqueado) {
+    return NextResponse.json({ erro: `Muitas solicitações. Tente de novo em ${bloqueio.minutos} min.` }, { status: 429 });
+  }
+  await registrarTentativa("CHAMADO_PUBLICO", alvos);
+
   const qrcode = await prisma.qrcode.findUnique({
     where: { tokenPublico: token },
     include: { equipamento: { select: { id: true, empresaId: true, unidadeId: true, unidade: { select: { clienteId: true } } } } },
   });
-  if (!qrcode || !qrcode.equipamento) {
+  if (!qrcode || !qrcode.equipamento || !qrcode.ativo) {
     return NextResponse.json({ erro: "QR Code inválido ou não vinculado a um equipamento." }, { status: 404 });
   }
   const equip = qrcode.equipamento;
@@ -39,12 +49,19 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
   const d = parsed.data;
 
+  // "Somente logado": vale o contato do portal DA MESMA EMPRESA e DO MESMO CLIENTE do equipamento
+  const sessao = await getPortalSession();
+  const logado = !!sessao?.user
+    && sessao.user.empresaId === empresaId
+    && sessao.user.clienteId === equip.unidade!.clienteId;
+  const contatoId = logado ? sessao!.user.id : null;
+
   // Gating por tipo, conforme configurações
   if (d.tipo === "ORCAMENTO") {
-    if (!cfg.botaoOrcamento || cfg.orcamentoSomenteLogado) {
+    if (!cfg.botaoOrcamento || (cfg.orcamentoSomenteLogado && !logado)) {
       return NextResponse.json({ erro: "Solicitação de orçamento pública não está disponível." }, { status: 403 });
     }
-  } else if (!cfg.botaoChamado || cfg.chamadoSomenteLogado) {
+  } else if (!cfg.botaoChamado || (cfg.chamadoSomenteLogado && !logado)) {
     return NextResponse.json({ erro: "Abertura de chamado pública não está disponível." }, { status: 403 });
   }
 
@@ -72,6 +89,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       clienteId: equip.unidade!.clienteId,
       unidadeId: equip.unidadeId,
       equipamentoId: equip.id,
+      contatoOrigemId: contatoId,
       criadoPorId: gestor.id,
       status: "AGUARDANDO_ATENDIMENTO",
       origem: "PORTAL_CLIENTE",

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
+import { pode } from "@/lib/permissoes";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { cn, formatarData, formatarMoeda, nomeMes, MESES_PT, LABELS_STATUS_CONTA_RECEBER, CLASSE_STATUS_CONTA_RECEBER } from "@/lib/utils";
 import { TrendingUp } from "lucide-react";
@@ -13,6 +15,7 @@ export default async function FluxoCaixaPage({
 }) {
   const sp = await searchParams;
   const session = await auth();
+  if (!pode(session!.user!.permissoes, "financeiro", "fluxoCaixa", session!.user!.role)) redirect("/sem-permissao");
   const empresaId = session!.user!.empresaId;
 
   const agora = new Date();

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
+import { pode } from "@/lib/permissoes";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ContasReceberView, type ContaView } from "@/components/financeiro/contas-receber-view";
 
@@ -12,6 +14,7 @@ export default async function ContasReceberPage({
 }) {
   const { clienteId = "" } = await searchParams;
   const session = await auth();
+  if (!pode(session!.user!.permissoes, "financeiro", "contasReceber", session!.user!.role)) redirect("/sem-permissao");
   const empresaId = session!.user!.empresaId;
 
   const hoje = new Date();

@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { podeVerPedido } from "@/lib/compras/pedidos";
 import { PageHeader } from "@/components/ui/page-header";
 import { PedidoStatusAcoes } from "@/components/compras/pedido-status-acoes";
 import { GerarContaPagar } from "@/components/compras/gerar-conta-pagar";
@@ -30,6 +31,8 @@ export default async function PedidoCompraDetalhe({ params }: { params: Promise<
     },
   });
   if (!pedido) notFound();
+  // Mesma regra da API: financeiro, comprador designado ou quem vê a origem (T1)
+  if (!podeVerPedido(session!.user!, pedido)) redirect("/sem-permissao");
 
   const passoAtual = PASSOS.indexOf(pedido.status);
   const totalEstimado = pedido.itens.reduce((acc, i) => acc + (i.valorEstimado ? Number(i.valorEstimado) : 0), 0);

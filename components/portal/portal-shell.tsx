@@ -15,18 +15,19 @@ interface Props {
   children: React.ReactNode;
 }
 
-const ITENS = [
-  { href: "/portal/dashboard", label: "Início", icone: LayoutDashboard, perm: null },
-  { href: "/portal/chamados", label: "Chamados", icone: Headset, perm: null },
-  { href: "/portal/equipamentos", label: "Equipamentos", icone: Thermometer, perm: "verEquipamentos" },
-  { href: "/portal/documentos", label: "Documentos", icone: FileText, perm: "verDocumentos" },
-  { href: "/portal/financeiro", label: "Financeiro", icone: Wallet, perm: "verFinanceiro" },
-  { href: "/portal/agenda", label: "Agenda", icone: CalendarDays, perm: null },
+type Perms = Record<string, boolean>;
+const ITENS: { href: string; label: string; icone: typeof LayoutDashboard; perm: (p: Perms) => boolean }[] = [
+  { href: "/portal/dashboard", label: "Início", icone: LayoutDashboard, perm: () => true },
+  { href: "/portal/chamados", label: "Chamados", icone: Headset, perm: (p) => !!(p?.verOS || p?.abrirChamados) },
+  { href: "/portal/equipamentos", label: "Equipamentos", icone: Thermometer, perm: (p) => !!p?.verEquipamentos },
+  { href: "/portal/documentos", label: "Documentos", icone: FileText, perm: (p) => !!p?.verDocumentos },
+  { href: "/portal/financeiro", label: "Financeiro", icone: Wallet, perm: (p) => !!p?.verFinanceiro },
+  { href: "/portal/agenda", label: "Agenda", icone: CalendarDays, perm: (p) => !!p?.verOS },
 ];
 
 export function PortalShell({ contatoNome, clienteNome, branding, permissoes, children }: Props) {
   const pathname = usePathname();
-  const itens = ITENS.filter((i) => !i.perm || permissoes?.[i.perm]);
+  const itens = ITENS.filter((i) => i.perm(permissoes ?? {}));
   const cor = branding.cor || "#0EA5E9";
 
   return (

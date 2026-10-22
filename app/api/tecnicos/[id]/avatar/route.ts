@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { respostaFoto } from "@/lib/anexos-server";
 import { exigirAlgumaPermissao } from "@/lib/permissoes-server";
 
 type Params = { params: Promise<{ id: string }> };
@@ -19,9 +20,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const foto = t?.avatar;
   if (!foto) return NextResponse.json({ erro: "Sem foto" }, { status: 404 });
 
-  const cache = { "Cache-Control": "private, max-age=86400" };
-  const m = foto.match(/^data:([^;,]+);base64,([\s\S]*)$/);
-  if (m) return new NextResponse(Buffer.from(m[2], "base64"), { headers: { "Content-Type": m[1], ...cache } });
-  if (/^https?:\/\//.test(foto) || foto.startsWith("/")) return NextResponse.redirect(new URL(foto, _req.url), { headers: cache });
-  return NextResponse.json({ erro: "Formato de foto não suportado" }, { status: 415 });
+  // O tipo sai dos BYTES e só imagem é servida (nosniff + sandbox); valor antigo
+  // que não seja imagem (HTML/SVG disfarçado, URL) vira 404 — nunca executa nem redireciona.
+  return respostaFoto(foto);
 }

@@ -15,6 +15,11 @@ export function exigePermissao(sessao: PortalSession, chave: string): boolean {
   return !!sessao.user.permissoes?.[chave];
 }
 
+/** Chamados e agenda do portal: exigem `verOS` (ou `abrirChamados`, para acompanhar o que o próprio contato abre). */
+export function podeVerChamados(sessao: PortalSession): boolean {
+  return exigePermissao(sessao, "verOS") || exigePermissao(sessao, "abrirChamados");
+}
+
 export async function getPortalBranding(empresaId: string) {
   const [empresa, config] = await Promise.all([
     prisma.empresa.findUnique({ where: { id: empresaId }, select: { nome: true, nomeFantasia: true, logo: true } }),

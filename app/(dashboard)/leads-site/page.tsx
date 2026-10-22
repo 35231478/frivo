@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
+import { pode } from "@/lib/permissoes";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Globe } from "lucide-react";
@@ -32,6 +34,7 @@ export default async function LeadsSitePage({
 }) {
   const { status = "todos" } = await searchParams;
   const session = await auth();
+  if (!pode(session!.user!.permissoes, "orcamentos", "visualizar", session!.user!.role)) redirect("/sem-permissao");
   const empresaId = session!.user!.empresaId;
 
   const filtro = FILTROS.find((f) => f.key === status) ?? FILTROS[0];

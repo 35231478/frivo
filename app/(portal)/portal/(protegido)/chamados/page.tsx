@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { requirePortalSession } from "@/lib/portal-server";
+import { requirePortalSession, podeVerChamados } from "@/lib/portal-server";
+import { SemAcesso } from "@/components/portal/sem-acesso";
 import { cn, formatarData, LABELS_STATUS_OS } from "@/lib/utils";
 import { Headset, Plus } from "lucide-react";
 
@@ -20,7 +21,9 @@ const COR_STATUS: Record<string, string> = {
 };
 
 export default async function PortalChamados() {
-  const { user } = await requirePortalSession();
+  const sessao = await requirePortalSession();
+  if (!podeVerChamados(sessao)) return <SemAcesso />;
+  const { user } = sessao;
   const ordens = await prisma.ordemServico.findMany({
     where: { empresaId: user.empresaId, clienteId: user.clienteId },
     select: { id: true, numero: true, chamadoNumero: true, descricao: true, status: true, origem: true, criadoEm: true },
