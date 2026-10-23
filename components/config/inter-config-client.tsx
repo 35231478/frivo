@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmar } from "@/components/ui/avisos";
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -74,7 +75,11 @@ export function InterConfigClient() {
   /** Gira o segredo do webhook (o link antigo para de valer, a URL nova aparece UMA vez)
    *  e tenta registrar a URL nova no Inter na hora. */
   async function gerarWebhook() {
-    if (temWebhook && !confirm("Gerar uma nova URL de webhook? A URL atual para de funcionar na hora; com a integração ativa, a nova é registrada no Inter automaticamente.")) return;
+    if (temWebhook && !(await confirmar({
+      titulo: "Gerar nova URL de webhook?",
+      mensagem: "A URL atual para de funcionar na hora; com a integração ativa, a nova é registrada no Inter automaticamente.",
+      perigo: true, confirmarTexto: "Gerar nova URL",
+    }))) return;
     setGerandoWebhook(true); setMsg(""); setRegistroInter(null);
     try {
       const res = await fetch("/api/integracoes/inter", {

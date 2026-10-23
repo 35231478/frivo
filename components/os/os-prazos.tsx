@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmar } from "@/components/ui/avisos";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
@@ -59,7 +60,7 @@ export function OsPrazos({ osId }: { osId: string }) {
   }
 
   async function cancelar(prazoId: string) {
-    if (!confirm("Cancelar este prazo?")) return;
+    if (!(await confirmar({ mensagem: "Cancelar este prazo?", perigo: true, confirmarTexto: "Cancelar prazo", cancelarTexto: "Voltar" }))) return;
     await fetch(`/api/os-prazos/${prazoId}`, { method: "DELETE" });
     carregar();
   }

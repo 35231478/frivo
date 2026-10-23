@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "@/components/ui/avisos";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -14,8 +15,8 @@ export function GerarContaPagar({ pedidoId, jaExiste }: { pedidoId: string; jaEx
     try {
       const res = await fetch(`/api/contas-pagar/do-pedido/${pedidoId}`, { method: "POST" });
       if (res.ok) router.push("/financeiro/contas-pagar");
-      else { const e = await res.json(); alert(e.erro ?? "Erro ao gerar conta a pagar."); }
-    } catch { alert("Erro de conexão."); } finally { setCarregando(false); }
+      else { const e = await res.json(); toast(e.erro ?? "Erro ao gerar conta a pagar.", "erro"); }
+    } catch { toast("Erro de conexão.", "erro"); } finally { setCarregando(false); }
   }
 
   return (

@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmar } from "@/components/ui/avisos";
 import { useState } from "react";
 import { Check, Copy, ExternalLink, FileText, RefreshCw } from "lucide-react";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
@@ -26,12 +27,13 @@ export function LinkRelatorioAtividade({
       setCopiado(true);
       setTimeout(() => setCopiado(false), 2000);
     } catch {
-      window.prompt("Copie o link do relatório:", url);
+      // Navegador bloqueou a área de transferência: mostra o link na tela para copiar à mão
+      setMsg({ tipo: "erro", texto: `Não foi possível copiar automaticamente — selecione e copie: ${url}` });
     }
   }
 
   async function gerarNovo() {
-    if (!window.confirm(CONFIRMAR_NOVO)) return;
+    if (!(await confirmar({ titulo: "Gerar novo link", mensagem: CONFIRMAR_NOVO, perigo: true, confirmarTexto: "Gerar novo link" }))) return;
     setGerando(true); setMsg(null);
     try {
       const res = await fetch(`/api/ordens/${osId}/atividades/${atividadeId}/link-relatorio`, { method: "POST" });

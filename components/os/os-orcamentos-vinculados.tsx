@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmar } from "@/components/ui/avisos";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -74,7 +75,7 @@ export function OsOrcamentosVinculados({ osId, clienteId, vinculados: iniciais }
   }
 
   async function desvincular(orcamentoId: string, codigo: string) {
-    if (!confirm(`Desvincular o orçamento ${codigo} desta OS?`)) return;
+    if (!(await confirmar({ mensagem: `Desvincular o orçamento ${codigo} desta OS?`, perigo: true, confirmarTexto: "Desvincular" }))) return;
     setSalvando(orcamentoId); setErro("");
     try {
       const res = await fetch(`/api/ordens/${osId}/orcamentos?orcamentoId=${orcamentoId}`, {

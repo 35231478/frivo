@@ -12,6 +12,7 @@ import { PermissoesProvider } from "@/components/providers/permissoes-provider";
 import { AuthSessionProvider } from "@/components/providers/session-provider";
 import { RecarregarAoVoltar } from "@/components/pwa/recarregar-ao-voltar";
 import { CascaTecnico } from "@/components/tecnico/casca-tecnico";
+import { Avisos } from "@/components/ui/avisos";
 import { emModoTecnico } from "@/lib/tecnico/modo";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -24,6 +25,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     return (
       <AuthSessionProvider session={session}>
         <PermissoesProvider role={session.user.role} permissoes={session.user.permissoes}>
+          <Avisos />
           <CascaTecnico>{children}</CascaTecnico>
         </PermissoesProvider>
       </AuthSessionProvider>
@@ -38,6 +40,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <AuthSessionProvider session={session}>
       <PermissoesProvider role={session.user.role} permissoes={session.user.permissoes}>
         <div className="flex h-screen overflow-hidden bg-surface-page">
+          <Avisos />
           <SplashScreen />
           <RecarregarAoVoltar />
           <Sidebar session={session} avatarUrl={avatarUrl} />

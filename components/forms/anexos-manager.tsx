@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmar } from "@/components/ui/avisos";
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { formatarData } from "@/lib/utils";
@@ -69,7 +70,7 @@ export function AnexosManager({ clienteId, anexosIniciais }: AnexosManagerProps)
   }
 
   async function remover(id: string) {
-    if (!confirm("Remover este anexo?")) return;
+    if (!(await confirmar({ mensagem: "Remover este anexo?", perigo: true, confirmarTexto: "Remover" }))) return;
     try {
       const res = await fetch(`/api/clientes/${clienteId}/anexos/${id}`, { method: "DELETE" });
       if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao remover."); return; }

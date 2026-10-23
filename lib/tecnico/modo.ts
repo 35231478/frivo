@@ -41,5 +41,6 @@ export function destinoModoTecnico(pathname: string): string | null {
   if (LIBERADAS.some((b) => dentro(pathname, b))) return null;
   const exec = /^\/ordens\/([^/]+)\/atividades\/([^/]+)\/executar\/?$/.exec(pathname);
   if (exec) return `${ROTA_TECNICO}?ver=os&a=${encodeURIComponent(exec[2])}`;
-  return ROTA_TECNICO;
+  // G12: área do escritório → app do técnico COM aviso (a raiz é só a entrada do app, sem aviso)
+  return pathname === "/" ? ROTA_TECNICO : `${ROTA_TECNICO}?aviso=restrito`;
 }

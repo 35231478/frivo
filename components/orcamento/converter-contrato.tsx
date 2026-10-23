@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmar } from "@/components/ui/avisos";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -17,7 +18,7 @@ export function ConverterContrato({ orcamentoId }: ConverterContratoProps) {
   const [sucesso, setSucesso] = useState<{ contratoId: string; numero: string } | null>(null);
 
   async function converter() {
-    if (!confirm("Converter esta proposta aprovada em um contrato ativo?")) return;
+    if (!(await confirmar({ mensagem: "Converter esta proposta aprovada em um contrato ativo?", confirmarTexto: "Converter em contrato" }))) return;
     setCarregando(true);
     setErro("");
     try {

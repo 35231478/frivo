@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmar } from "@/components/ui/avisos";
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { formatarData, cn } from "@/lib/utils";
@@ -62,7 +63,7 @@ export function ContratoDocumentos({ contratoId, anexosIniciais }: ContratoDocum
   }
 
   async function remover(id: string) {
-    if (!confirm("Remover este documento?")) return;
+    if (!(await confirmar({ mensagem: "Remover este documento?", perigo: true, confirmarTexto: "Remover" }))) return;
     try {
       const res = await fetch(`/api/contratos/${contratoId}/anexos/${id}`, { method: "DELETE" });
       if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao remover."); return; }

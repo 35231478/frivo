@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmar, toast } from "@/components/ui/avisos";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Ban, Loader2, RotateCcw } from "lucide-react";
@@ -30,7 +31,7 @@ export function EquipamentoAtivoBotao({
     const msg = ativo
       ? `Inativar o equipamento "${nome}"? Ele sai das listas de seleção (OS, orçamentos), mas o histórico e o QR Code são preservados.`
       : `Reativar o equipamento "${nome}"?`;
-    if (!confirm(msg)) return;
+    if (!(await confirmar({ mensagem: msg, perigo: ativo, confirmarTexto: ativo ? "Inativar" : "Reativar" }))) return;
     setCarregando(true);
     try {
       const res = ativo
@@ -42,12 +43,12 @@ export function EquipamentoAtivoBotao({
           });
       if (!res.ok) {
         const e = await res.json().catch(() => ({}));
-        alert(e.erro ?? "Erro ao alterar o status do equipamento.");
+        toast(e.erro ?? "Erro ao alterar o status do equipamento.", "erro");
         return;
       }
       router.refresh();
     } catch {
-      alert("Erro de conexão.");
+      toast("Erro de conexão.", "erro");
     } finally {
       setCarregando(false);
     }

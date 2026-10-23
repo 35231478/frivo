@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "@/components/ui/avisos";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,9 +47,18 @@ export function EmailTemplatesClient() {
 
   async function salvar() {
     setSalvando(true);
-    const res = await fetch(`/api/email/templates/${editando.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assunto, corpo, ativo }) });
-    if (res.ok) { const t = await res.json(); setTemplates((p) => p.map((x) => (x.id === t.id ? t : x))); setEditando(null); }
-    setSalvando(false);
+    try {
+      const res = await fetch(`/api/email/templates/${editando.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assunto, corpo, ativo }) });
+      if (res.ok) {
+        const t = await res.json();
+        setTemplates((p) => p.map((x) => (x.id === t.id ? t : x)));
+        setEditando(null);
+        toast("Template salvo.");
+      } else {
+        // Gravação nunca falha em silêncio (UX-3)
+        toast((await res.json().catch(() => null))?.erro ?? "Não foi possível salvar o template.", "erro");
+      }
+    } catch { toast("Erro de conexão. Tente novamente.", "erro"); } finally { setSalvando(false); }
   }
 
   const def = editando ? TEMPLATES_PADRAO.find((t) => t.tipo === editando.tipo) : undefined;

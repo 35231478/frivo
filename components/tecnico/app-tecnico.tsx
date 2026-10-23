@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
 import { CalendarDays, Loader2, Sun, UserRound } from "lucide-react";
+import { Avisos, toast } from "@/components/ui/avisos";
 import { cn } from "@/lib/utils";
 import { FrivoMark } from "@/components/layout/frivo-logo";
 import { IndicadorSync } from "@/components/tecnico/indicador-sync";
@@ -35,8 +37,19 @@ function Casca({ perfilInicial }: { perfilInicial: PerfilInicial }) {
   const { estado, semBanco, motor } = useTecnico();
   const vista = useVista();
   const ativa = vista?.ver === "os" ? "dia" : vista?.ver;
+
+  // G12/UX-3: quem clicou num link do escritório foi trazido para cá — avisa em vez de só "piscar"
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("aviso") !== "restrito") return;
+    toast("Essa área é do escritório — você está no app do técnico.", "info");
+    url.searchParams.delete("aviso");
+    window.history.replaceState(null, "", url.pathname + (url.search || "") + url.hash);
+  }, []);
+
   return (
     <div className="min-h-screen bg-surface-page">
+      <Avisos />
       <header className="sticky top-0 z-30 bg-sidebar text-white safe-top">
         <div className="flex items-center justify-between gap-2 px-4 h-14 max-w-2xl mx-auto">
           <button type="button" onClick={() => irPara({ ver: "dia" })} className="inline-flex items-center gap-2 font-bold">

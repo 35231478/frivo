@@ -164,12 +164,13 @@ describe("modo técnico (puro, roda no middleware)", () => {
   });
 
   it("para onde o técnico puro vai: o sistema leva a Meu dia; link antigo de execução abre a mesma atividade no app", () => {
-    expect(destinoModoTecnico("/dashboard")).toBe("/tecnico");
+    // G12 (UX-3): área do escritório leva ao app COM aviso; a raiz é só a entrada (sem aviso)
+    expect(destinoModoTecnico("/dashboard")).toBe("/tecnico?aviso=restrito");
     expect(destinoModoTecnico("/")).toBe("/tecnico");
-    expect(destinoModoTecnico("/ordens")).toBe("/tecnico");
-    expect(destinoModoTecnico("/clientes/123")).toBe("/tecnico");
+    expect(destinoModoTecnico("/ordens")).toBe("/tecnico?aviso=restrito");
+    expect(destinoModoTecnico("/clientes/123")).toBe("/tecnico?aviso=restrito");
     expect(destinoModoTecnico("/ordens/os1/atividades/at9/executar")).toBe("/tecnico?ver=os&a=at9");
-    expect(destinoModoTecnico("/tecnicos")).toBe("/tecnico"); // cadastro de técnicos ≠ app do técnico
+    expect(destinoModoTecnico("/tecnicos")).toBe("/tecnico?aviso=restrito"); // cadastro de técnicos ≠ app do técnico
     for (const livre of ["/tecnico", "/veiculos/checklist", "/sem-permissao", "/offline", "/api/tecnico/sync", "/api/ordens/1"]) expect(destinoModoTecnico(livre)).toBeNull();
   });
 

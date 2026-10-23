@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "@/components/ui/avisos";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -71,8 +72,9 @@ export function RelatorioContratosClient({ mes, ano, itens, tecnicos, clientes }
     setGerando(contratoId);
     try {
       const res = await fetch(`/api/contratos/${contratoId}/gerar-os`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mes, ano }) });
-      if (res.ok) router.refresh();
-    } finally { setGerando(null); }
+      if (res.ok) { toast("OS do mês gerada."); router.refresh(); }
+      else toast((await res.json().catch(() => null))?.erro ?? "Não foi possível gerar a OS.", "erro");
+    } catch { toast("Erro de conexão. Tente novamente.", "erro"); } finally { setGerando(null); }
   }
 
   return (

@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmar } from "@/components/ui/avisos";
 import { useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
 import { AlertTriangle, Car, ChevronDown, LogOut, RefreshCw, Trash2, UserRound } from "lucide-react";
@@ -34,7 +35,11 @@ export function PerfilTecnico({ perfilInicial }: { perfilInicial: React.Componen
   const aEnviar = fila.filter((o) => o.estado === "pendente");
 
   async function sair() {
-    if (estado.pendentes && !window.confirm(`Há ${estado.pendentes} gravação(ões) ainda no aparelho. Elas continuam guardadas e sobem quando você entrar de novo neste celular. Sair mesmo assim?`)) return;
+    if (estado.pendentes && !(await confirmar({
+      titulo: "Sair com gravações no aparelho?",
+      mensagem: `Há ${estado.pendentes} gravação(ões) ainda no aparelho. Elas continuam guardadas e sobem quando você entrar de novo neste celular.`,
+      confirmarTexto: "Sair mesmo assim", cancelarTexto: "Ficar",
+    }))) return;
     await signOut({ callbackUrl: "/login" });
   }
 
@@ -70,7 +75,7 @@ export function PerfilTecnico({ perfilInicial }: { perfilInicial: React.Componen
                   <p className="text-red-800">{o.erro}</p>
                   <p className="text-xs text-ink-muted">As gravações seguintes desta OS esperam esta ser resolvida. Se o escritório reabriu a atividade, toque em “Sincronizar agora”.</p>
                   <button type="button" className="inline-flex items-center gap-1 text-xs font-semibold text-red-700 py-1"
-                    onClick={async () => { if (window.confirm("Descartar esta gravação? Ela não vai para o escritório.")) await motor?.descartar(o.seq!); }}>
+                    onClick={async () => { if (await confirmar({ mensagem: "Descartar esta gravação? Ela não vai para o escritório.", perigo: true, confirmarTexto: "Descartar" })) await motor?.descartar(o.seq!); }}>
                     <Trash2 className="w-3.5 h-3.5" /> Descartar esta
                   </button>
                 </li>

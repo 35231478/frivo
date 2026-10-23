@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmar } from "@/components/ui/avisos";
 import { useState, useEffect, useCallback } from "react";
 import { useAutoGeocode } from "@/hooks/use-auto-geocode";
 import { Button } from "@/components/ui/button";
@@ -220,7 +221,7 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }
   async function remover(id: string) {
     const u = unidades.find((u) => u.id === id);
     if (u?.principal) { setErro("Não é possível remover o endereço principal."); return; }
-    if (!confirm("Tem certeza que deseja remover este endereço?")) return;
+    if (!(await confirmar({ mensagem: "Tem certeza que deseja remover este endereço?", perigo: true, confirmarTexto: "Remover" }))) return;
     setErro("");
     try {
       const res = await fetch(`/api/unidades/${id}`, { method: "DELETE" });

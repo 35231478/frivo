@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmar } from "@/components/ui/avisos";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -572,7 +573,7 @@ function ManutencoesPanel({ veiculoId, manutencoes, setManutencoes }: { veiculoI
   }
 
   async function remover(id: string) {
-    if (!confirm("Remover esta manutenção?")) return;
+    if (!(await confirmar({ mensagem: "Remover esta manutenção?", perigo: true, confirmarTexto: "Remover" }))) return;
     await fetch(`/api/veiculos/${veiculoId}/manutencoes?manutencaoId=${id}`, { method: "DELETE" });
     setManutencoes(manutencoes.filter((x) => x.id !== id));
   }

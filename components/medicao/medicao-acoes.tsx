@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmar } from "@/components/ui/avisos";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -164,7 +165,7 @@ export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status }: Medica
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => { if (confirm("Cancelar esta medição?")) executar("CANCELAR"); }}
+            onClick={async () => { if (await confirmar({ mensagem: "Cancelar esta medição?", perigo: true, confirmarTexto: "Cancelar medição", cancelarTexto: "Voltar" })) executar("CANCELAR"); }}
             loading={carregando === "CANCELAR"}
           >
             <Ban className="w-3.5 h-3.5" /> Cancelar

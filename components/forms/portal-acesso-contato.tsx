@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmar } from "@/components/ui/avisos";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -80,7 +81,7 @@ export function PortalAcessoContato({
   }
 
   async function revogar() {
-    if (!confirm("Revogar o acesso ao portal deste contato?")) return;
+    if (!(await confirmar({ mensagem: "Revogar o acesso ao portal deste contato?", perigo: true, confirmarTexto: "Revogar acesso" }))) return;
     setSalvando(true); setAcao("revogar");
     try {
       const res = await fetch(`/api/clientes/${clienteId}/contatos/${contatoId}/acesso-portal`, { method: "DELETE" });

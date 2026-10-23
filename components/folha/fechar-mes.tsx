@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmar } from "@/components/ui/avisos";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, Check, Loader2 } from "lucide-react";
@@ -14,7 +15,7 @@ export function FecharMes({ competencia, rotulo, jaFechado }: { competencia: str
     const pergunta = jaFechado
       ? `O mês de ${rotulo} já foi fechado. Refazer a foto com os dados de agora? A foto anterior deste mês será substituída.`
       : `Fechar ${rotulo}? Isso grava o custo de cada colaborador neste mês, para o histórico não mudar quando salários ou encargos mudarem depois.`;
-    if (!window.confirm(pergunta)) return;
+    if (!(await confirmar({ titulo: "Fechar o mês", mensagem: pergunta, confirmarTexto: "Fechar o mês" }))) return;
     setEnviando(true); setMsg(null);
     try {
       const r = await fetch("/api/folha/fechar-mes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ competencia }) });
