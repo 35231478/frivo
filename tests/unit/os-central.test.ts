@@ -47,6 +47,8 @@ describe("status automático da OS", () => {
     expect(resumoStatus({ status: "EM_ANDAMENTO", statusManual: false, ...fatos })).toEqual({ automatico: "EM_ANDAMENTO", exibido: "EM_ANDAMENTO", manual: false, divergente: false });
     expect(resumoStatus({ status: "PAUSADA", statusManual: true, ...fatos })).toEqual({ automatico: "EM_ANDAMENTO", exibido: "EM_ANDAMENTO", manual: true, divergente: true });
     expect(resumoStatus({ status: "EM_ANDAMENTO", statusManual: true, ...fatos }).divergente).toBe(false);
+    // manual "atrás" dos fatos: a barra mostra o que foi ajustado (Aberta), e avisa
+    expect(resumoStatus({ status: "ABERTA", statusManual: true, ...fatos })).toEqual({ automatico: "EM_ANDAMENTO", exibido: "ABERTA", manual: true, divergente: true });
     // sem ajuste, o automático manda mesmo que o gravado esteja atrasado
     expect(resumoStatus({ status: "ABERTA", statusManual: false, ...fatos }).exibido).toBe("EM_ANDAMENTO");
   });

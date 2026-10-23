@@ -140,6 +140,26 @@ describe("cabeçalho-resumo da OS", () => {
     expect(texto("[data-numero='valor']")).toMatch(/R\$\s?1\.200,00 · R\$\s?1\.200,00/);
   });
 
+  it("ajuste manual atrás dos fatos: a barra mostra o ajustado (Aberta) e avisa", async () => {
+    await montar(fixture({ status: "ABERTA", statusManual: true }));
+    expect($("[data-status-os]")?.getAttribute("data-status-os")).toBe("ABERTA");
+    expect($("[data-barra-progresso] [data-estado='atual']")?.getAttribute("data-etapa")).toBe("ABERTA");
+    expect($("[data-aviso-manual]")).toBeTruthy();
+  });
+
+  it("depois do router.refresh() (nova OS do servidor) o cabeçalho acompanha", async () => {
+    const os = fixture();
+    await montar(os);
+    expect($("[data-status-os]")?.getAttribute("data-status-os")).toBe("EM_ANDAMENTO");
+    const { OsDetalhe } = await import("@/components/os/os-detalhe");
+    const { PermissoesProvider } = await import("@/components/providers/permissoes-provider");
+    const nova = fixture({ status: "CONCLUIDA", atividades: [atividade("a1", { status: "CONCLUIDA", equipamentos: [{ feito: true }] })] });
+    await act(async () => { root.render(createElement(PermissoesProvider, { role: "OPERADOR", permissoes: permissoesTotais(), children: createElement(OsDetalhe, { os: nova }) })); });
+    await esperar();
+    expect($("[data-status-os]")?.getAttribute("data-status-os")).toBe("CONCLUIDA");
+    expect($("[data-pendencia-os='faturar']")).toBeTruthy();
+  });
+
   it("cancelada: faixa no lugar da barra e sem ajuste de status", async () => {
     await montar(fixture({ status: "CANCELADA" }));
     expect($("[data-barra-progresso]")).toBeNull();
@@ -162,6 +182,7 @@ describe("abas consolidadas e O que falta", () => {
     await clicar($("[data-pendencia-os='sla-atrasado']"));
     expect(abaAtiva()).toBe("atividades");
     expect($("[data-secao-sla]")).toBeTruthy(); // a antiga aba Prazos vive aqui
+    expect(chamadas.some((c) => c.metodo === "GET" && c.url === "/api/ordens/os1/prazos")).toBe(true); // com a gestão de SLA de antes
     expect(replace).toHaveBeenLastCalledWith(null, "", "?aba=atividades");
     await clicar($("[data-numero='pagamento']"));
     expect(abaAtiva()).toBe("financeiro");
