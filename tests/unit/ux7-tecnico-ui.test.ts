@@ -63,11 +63,14 @@ describe("Y10: miniatura de foto", () => {
 
 describe("Y11: tela de Usuários", () => {
   const USUARIOS = [
-    { id: "u1", nome: "Fernanda Técnica", email: "fernanda@x.com", role: "TECNICO", ativo: true, perfilAcesso: null, ultimoAcesso: null },
+    // Caixa diferente de propósito: a comparação não pode diferenciar maiúsculas
+    { id: "u1", nome: "Fernanda Técnica", email: "Fernanda@X.com", role: "TECNICO", ativo: true, perfilAcesso: null, ultimoAcesso: null },
     { id: "u2", nome: "Carlos Técnico", email: "carlos@x.com", role: "TECNICO", ativo: true, perfilAcesso: null, ultimoAcesso: null },
     { id: "u3", nome: "Olivia Operadora", email: "olivia@x.com", role: "OPERADOR", ativo: true, perfilAcesso: { id: "pf1", nome: "Operação", cor: "#0EA5E9", ativo: true }, ultimoAcesso: null },
+    // Inativo não precisa de aviso: não entra em lugar nenhum mesmo
+    { id: "u4", nome: "Tiago Inativo", email: "tiago@x.com", role: "TECNICO", ativo: false, perfilAcesso: null, ultimoAcesso: null },
   ];
-  const pagina = { itens: USUARIOS, total: 3, pagina: 1, porPagina: 25, contagens: { ativos: 3, inativos: 0, todos: 3 } };
+  const pagina = { itens: USUARIOS, total: 4, pagina: 1, porPagina: 25, contagens: { ativos: 3, inativos: 1, todos: 4 } };
 
   it("avisa SÓ o papel Técnico sem técnico ativo com o mesmo e-mail", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, json: async () => pagina })));
@@ -87,7 +90,7 @@ describe("Y11: tela de Usuários", () => {
     expect(caixa.textContent).toContain("sem técnico vinculado");
     for (const a of avisos) expect(a.closest("tr, li")!.textContent).toContain("Carlos Técnico");
     for (const l of $$("tr, li")) {
-      if (l.textContent!.includes("Fernanda Técnica") || l.textContent!.includes("Olivia Operadora")) {
+      if (/Fernanda Técnica|Olivia Operadora|Tiago Inativo/.test(l.textContent!)) {
         expect(l.querySelector("[data-aviso-tecnico]")).toBeNull();
       }
     }
