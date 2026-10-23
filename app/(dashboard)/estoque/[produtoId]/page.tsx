@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { AlertTriangle, ArrowLeft, FileText, Package, Tag } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
-import { cn } from "@/lib/utils";
+import { cn, formatarData } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";
 import { extratoProduto } from "@/lib/estoque/servidor";
 import { ultimosCustos } from "@/lib/estoque/custo";
@@ -17,7 +17,7 @@ import { ListaUrl, PaginacaoUrl } from "@/components/listagem/lista-url";
 
 export const metadata: Metadata = { title: "Extrato do estoque" };
 
-const dataHora = (d: Date) => new Date(d).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+const dataHora = (d: Date) => formatarData(d, "dd/MM/yyyy, HH:mm"); // Brasília
 const moeda = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 /** Extrato de um produto: cada movimentação (mais recente primeiro) com o saldo que resultou. */

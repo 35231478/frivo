@@ -26,7 +26,7 @@
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { formatarCpfCnpj, gerarNumeroContaPagar } from "@/lib/utils";
+import { formatarCpfCnpj, formatarData, gerarNumeroContaPagar } from "@/lib/utils";
 import { arred } from "@/lib/estoque/regras";
 import { movimentar } from "@/lib/estoque/servidor";
 import { ultimosCustos } from "@/lib/estoque/custo";
@@ -47,7 +47,7 @@ export class ErroNota extends Error {
 }
 
 const so = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
-const dataBr = (d: Date) => d.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+const dataBr = (d: Date) => formatarData(d); // dia de Brasília
 
 /* ───────── Importar ───────── */
 export async function importarNota({ empresaId, usuarioId, xml }: { empresaId: string; usuarioId: string | null; xml: string }) {
