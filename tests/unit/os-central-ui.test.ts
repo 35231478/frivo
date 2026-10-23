@@ -94,7 +94,7 @@ const fixture = (extra: Record<string, unknown> = {}) => ({
   atividades: [
     atividade("a1", { status: "CONCLUIDA", equipamentos: [{ feito: true }, { feito: true }], resumo: "Filtros limpos" }),
     atividade("a2", { status: "EM_ANDAMENTO", prazo: "2026-10-27T00:00:00.000Z", equipamentos: [{ feito: true }, { feito: false }] }),
-    atividade("a3", { status: "CANCELADA" }),
+    atividade("a3", { status: "CANCELADA", prazo: "2026-10-01T00:00:00.000Z" }), // encerrada: prazo antigo não vira atraso
   ],
   itensOrcamento: [{ id: "io1", descricao: "Capacitor", quantidade: 1, valorUnitario: 200, valorTotal: 200 }],
   orcamentos: [{ orcamento: { id: "orc1", codigo: "ORC-0007", nome: "Troca de compressor", status: "APROVADO", totalGeral: 1000, criadoEm: "2026-10-21T13:00:00Z", validadeEm: null, tokenPublico: "tk" } }],
