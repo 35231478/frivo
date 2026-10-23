@@ -9,6 +9,7 @@ import { gerarRelatoriosDaOs } from "@/lib/relatorio-server";
 import { verificarConclusaoOs } from "@/lib/execucao/dados";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 import { estagioAutomatico, statusCorresponde } from "@/lib/os/status";
+import { diaCivilUTC, ehDiaCivil, instanteBR, partesBR } from "@/lib/fuso";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -84,12 +85,12 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const [, ys, ms, ds] = m;
   const y = Number(ys), mo = Number(ms) - 1, d = Number(ds);
 
-  // Desloca a data mantendo o horário existente (setFullYear opera no fuso do servidor,
-  // o mesmo usado para posicionar os cards no calendário).
-  const desloca = (base: Date | null) => {
-    const dt = base ? new Date(base) : new Date(y, mo, d, 8, 0, 0, 0);
-    dt.setFullYear(y, mo, d);
-    return dt;
+  // Desloca para o dia escolhido mantendo o horário de BRASÍLIA (o mesmo que o calendário e o app
+  // mostram). Previsão só de dia (sem hora) continua só de dia; sem data, 08:00.
+  const desloca = (base: Date | null, soDia = false) => {
+    if (soDia && (!base || ehDiaCivil(base))) return diaCivilUTC(y, mo, d);
+    const p = base ? partesBR(base) : { hora: 8, minuto: 0 };
+    return instanteBR(y, mo, d, p.hora, p.minuto);
   };
 
   if (atividadeId) {
@@ -97,7 +98,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (!ativ) return NextResponse.json({ erro: "Atividade não encontrada." }, { status: 404 });
     await prisma.atividadeOs.update({ where: { id: atividadeId }, data: { dataAgendada: desloca(ativ.dataAgendada) } });
   } else {
-    await prisma.ordemServico.update({ where: { id }, data: { previsaoConclusao: desloca(os.previsaoConclusao) } });
+    await prisma.ordemServico.update({ where: { id }, data: { previsaoConclusao: desloca(os.previsaoConclusao, true) } });
   }
 
   await prisma.osHistorico.create({

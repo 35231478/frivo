@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { LoginForm } from "@/components/auth/login-form";
 import { FrivoLogo } from "@/components/layout/frivo-logo";
+import { anoBR } from "@/lib/fuso";
 
 export const metadata: Metadata = { title: "Entrar" };
 
@@ -31,7 +32,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-xs text-slate-300 mt-6">
-          © {new Date().getFullYear()} Frivo · by Termofrio
+          © {anoBR()} Frivo · by Termofrio
         </p>
       </div>
     </div>

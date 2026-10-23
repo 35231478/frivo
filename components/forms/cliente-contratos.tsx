@@ -8,6 +8,7 @@ import {
   formatarMoeda, formatarData, cn,
  comparaNatural } from "@/lib/utils";
 import { Plus, FileSignature, MapPin, ExternalLink, Loader2 } from "lucide-react";
+import { diasAteDiaCivil } from "@/lib/fuso";
 
 interface ContratoCard {
   id: string;
@@ -27,9 +28,7 @@ const ORDEM_STATUS: Record<string, number> = {
 
 function badgeVencimento(dataFim: string | null): { txt: string; cls: string } {
   if (!dataFim) return { txt: "Vigência indeterminada", cls: "bg-slate-100 text-slate-600" };
-  const fim = new Date(dataFim);
-  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-  const dias = Math.round((fim.getTime() - hoje.getTime()) / 86400000);
+  const dias = diasAteDiaCivil(dataFim)!; // vigência é dia civil: pelo dia de Brasília
   if (dias < 0) return { txt: `Vencido há ${Math.abs(dias)} dias`, cls: "bg-red-50 text-red-700" };
   if (dias <= 30) return { txt: `Vence em ${dias} dias`, cls: "bg-amber-50 text-amber-700" };
   return { txt: `Vence em ${dias} dias`, cls: "bg-success-50 text-success-700" };

@@ -14,6 +14,7 @@ import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
 import { BuscaUrl, ConteudoUrl, ListaUrl, PaginacaoUrl } from "@/components/listagem/lista-url";
 import { AvatarCliente } from "@/components/ui/avatar-cliente";
 import { InputData } from "@/components/ui/input-data";
+import { periodoInstanteBR } from "@/lib/fuso";
 
 export const metadata: Metadata = { title: "Medições" };
 
@@ -33,13 +34,7 @@ export default async function MedicoesPage({
   if (clienteId) where.clienteId = clienteId;
   if (tipo) where.tipo = tipo;
   if (dataInicio || dataFim) {
-    where.criadoEm = {};
-    if (dataInicio) where.criadoEm.gte = new Date(dataInicio);
-    if (dataFim) {
-      const fim = new Date(dataFim);
-      fim.setHours(23, 59, 59, 999);
-      where.criadoEm.lte = fim;
-    }
+    where.criadoEm = periodoInstanteBR(dataInicio, dataFim) ?? {}; // dias de Brasília
   }
   if (busca) {
     where.OR = [

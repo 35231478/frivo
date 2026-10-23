@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirAlgumaPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { intervaloMeses, ehOcorrencia, dataAgendadaRecorrencia } from "@/lib/recorrencia-helpers";
+import { anoBR, mesBR } from "@/lib/fuso";
 
 /**
  * Gera OS recorrentes para todos os contratos ativos com recorrência habilitada.
@@ -17,8 +18,8 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}));
   const agora = new Date();
-  const mes = Number(body?.mes) || agora.getMonth() + 1;
-  const ano = Number(body?.ano) || agora.getFullYear();
+  const mes = Number(body?.mes) || mesBR(agora);
+  const ano = Number(body?.ano) || anoBR(agora);
 
   const inicioMes = new Date(ano, mes - 1, 1, 0, 0, 0);
   const fimMes = new Date(ano, mes, 0, 23, 59, 59);

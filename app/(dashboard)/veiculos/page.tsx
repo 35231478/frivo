@@ -23,7 +23,7 @@ export default async function VeiculosPage({ searchParams }: { searchParams: Pro
   const empresaId = session!.user!.empresaId;
   const f = lerFiltrosVeiculos(await searchParams);
   const where = montarWhereVeiculos(empresaId, f);
-  const { inicioHoje, limite } = datasAviso();
+  const { inicioHoje, limite, inicioHojeInstante } = datasAviso();
 
   // ── Página atual (paginação no servidor; fotos NÃO vêm aqui — só se existem) ──
   const [linhas, total] = await Promise.all([
@@ -49,7 +49,7 @@ export default async function VeiculosPage({ searchParams }: { searchParams: Pro
       : Promise.resolve([]),
     ids.length
       ? prisma.checklistPreenchido.findMany({
-          where: { veiculoId: { in: ids }, criadoEm: { gte: inicioHoje } },
+          where: { veiculoId: { in: ids }, criadoEm: { gte: inicioHojeInstante } },
           select: { veiculoId: true, status: true }, orderBy: { criadoEm: "desc" },
         })
       : Promise.resolve([]),

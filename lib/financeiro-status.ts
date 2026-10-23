@@ -1,3 +1,5 @@
+import { diasAteDiaCivil } from "@/lib/fuso";
+
 /**
  * Status visual (puro — server/client) para contas a receber e a pagar.
  * Deriva o rótulo/cor a partir do status armazenado + data de vencimento.
@@ -21,14 +23,12 @@ const CLASSES: Record<string, string> = {
   PARCIAL: "bg-amber-50 text-amber-700",
 };
 
-/** Dias entre hoje (00:00) e a data (negativo = vencida). null se sem data. */
-export function diasAteVencimento(dataVencimento: Date | string | null | undefined): number | null {
-  if (!dataVencimento) return null;
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
-  const venc = new Date(dataVencimento);
-  venc.setHours(0, 0, 0, 0);
-  return Math.round((venc.getTime() - hoje.getTime()) / 86400000);
+/**
+ * Dias de hoje (em Brasília) até o vencimento (negativo = vencida). null se sem data. O vencimento
+ * é dia civil: no próprio dia é "Vence hoje" até a meia-noite de Brasília, em qualquer navegador.
+ */
+export function diasAteVencimento(dataVencimento: Date | string | null | undefined, agora: Date = new Date()): number | null {
+  return diasAteDiaCivil(dataVencimento, agora);
 }
 
 function badge(chave: StatusVisual["chave"], label: string, diasAtraso = 0): StatusVisual {

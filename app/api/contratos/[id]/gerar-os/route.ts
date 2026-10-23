@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirAlgumaPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { dataAgendadaRecorrencia } from "@/lib/recorrencia-helpers";
+import { anoBR, mesBR } from "@/lib/fuso";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -20,8 +21,8 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const body = await req.json().catch(() => ({}));
   const agora = new Date();
-  const mes = Number(body?.mes) || agora.getMonth() + 1;
-  const ano = Number(body?.ano) || agora.getFullYear();
+  const mes = Number(body?.mes) || mesBR(agora);
+  const ano = Number(body?.ano) || anoBR(agora);
   const periodo = `${ano}-${String(mes).padStart(2, "0")}`;
 
   const contrato = await prisma.contrato.findFirst({

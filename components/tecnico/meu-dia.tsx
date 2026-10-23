@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { CalendarDays, ChevronRight, Clock, HardDrive, MapPin, Navigation, Phone, RefreshCw, Sun } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatarData } from "@/lib/utils";
 import { irPara, useTecnico } from "@/components/tecnico/contexto";
 import type { CartaoTela, OperacaoFila } from "@/lib/tecnico/offline/tipos";
+import { diaCivilDeChave, diasAteDiaCivil, horaBR, partesBR } from "@/lib/fuso";
 
 export const ROTULO_STATUS_ATIVIDADE: Record<string, { rotulo: string; classe: string }> = {
   AGENDADA: { rotulo: "Agendada", classe: "bg-violet-100 text-violet-700" },
@@ -16,7 +17,7 @@ export const ROTULO_STATUS_ATIVIDADE: Record<string, { rotulo: string; classe: s
 /** Prioridades que merecem destaque no cartão */
 const PRIORIDADE: Record<string, string> = { ALTA: "Prioridade alta", URGENTE: "Urgente", CRITICO: "Crítica" };
 
-const horaBaixada = (ms: number | null) => (ms ? new Date(ms).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : null);
+const horaBaixada = (ms: number | null) => (ms ? horaBR(ms) : null);
 
 /** Situação que o técnico vê: a do servidor, ou a que ele já gravou no aparelho (iniciar/concluir ainda a enviar). */
 export function situacaoLocal(c: CartaoTela, fila: OperacaoFila[]) {
@@ -84,7 +85,7 @@ function useFila() {
 }
 
 function saudacao() {
-  const h = new Date().getHours();
+  const h = partesBR().hora; // saudação pela hora de Brasília
   return h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite";
 }
 
@@ -122,7 +123,7 @@ export function MeuDia() {
   return (
     <div className="space-y-4" data-vista="dia">
       <header className="space-y-1">
-        <p className="text-sm text-ink-muted inline-flex items-center gap-1.5"><Sun className="w-4 h-4" /> {new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })}</p>
+        <p className="text-sm text-ink-muted inline-flex items-center gap-1.5"><Sun className="w-4 h-4" /> {formatarData(new Date(), "EEEE, d 'de' MMMM")}</p>
         <h1 className="text-2xl font-bold text-ink">{saudacao()}, {primeiroNome}</h1>
         {d && d.tecnico && <p className="text-sm text-ink-muted">{d.atividades.length === 0 ? "Nenhuma OS para hoje." : d.atividades.length === 1 ? "1 OS para hoje." : `${d.atividades.length} OS para hoje, na ordem do horário.`}</p>}
         <AvisoAparelho baixadoEm={r?.baixadoEm ?? null} onAtualizar={carregar} atualizando={atualizando} />
@@ -157,11 +158,9 @@ export function MeuDia() {
 }
 
 const nomeDia = (dia: string) => {
-  const [a, m, d] = dia.split("-").map(Number);
-  const data = new Date(a, m - 1, d);
-  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-  const dif = Math.round((data.getTime() - hoje.getTime()) / 86_400_000);
-  const base = data.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "short" });
+  // `dia` é a chave "AAAA-MM-DD" do dia em Brasília; "hoje" também é o de Brasília
+  const dif = diasAteDiaCivil(diaCivilDeChave(dia)) ?? 0;
+  const base = formatarData(diaCivilDeChave(dia), "EEEE, d 'de' MMM");
   return dif === 0 ? `Hoje · ${base}` : dif === 1 ? `Amanhã · ${base}` : base;
 };
 

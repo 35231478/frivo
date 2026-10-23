@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { proximasOcorrencias } from "@/lib/recorrencia-helpers";
 import { LABELS_PERIODICIDADE } from "@/lib/utils";
+import { diaDoMesCivil } from "@/lib/fuso";
 
 /**
  * Indicadores derivados dos dados existentes (sem campos novos no banco).
@@ -79,7 +80,7 @@ export async function proximaManutencaoPorContrato(empresaId: string, unidadeId:
     const primeira = new Date(r.dataPrimeiraOs!);
     const [oc] = proximasOcorrencias({
       dataInicio: primeira, dataFim: r.contrato.dataFim, frequencia: r.frequencia,
-      diaRecorrencia: primeira.getDate(), fimSemana: r.fimSemana, limite: 1,
+      diaRecorrencia: diaDoMesCivil(primeira), fimSemana: r.fimSemana, limite: 1,
       aPartirDe: primeira > hoje ? primeira : hoje,
     });
     if (oc) candidatas.push({ data: oc.data, origem: `Contrato ${r.contrato.numero} · ${LABELS_PERIODICIDADE[r.frequencia!] ?? r.frequencia}` });

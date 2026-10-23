@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { hojeDiaCivil, inicioHojeBR } from "@/lib/fuso";
 
 /**
  * Marca de forma preguiçosa as etapas e prazos vencidos como ATRASADA/ATRASADO.
@@ -31,8 +32,7 @@ export async function contarAlertasPrazos(empresaId: string) {
   await marcarPrazosVencidos(empresaId);
 
   const agora = new Date();
-  const fimHoje = new Date(agora);
-  fimHoje.setHours(23, 59, 59, 999);
+  const fimHoje = new Date(inicioHojeBR(agora, 1).getTime() - 1); // fim do dia em Brasília
 
   const [prazosVencidos, etapasVencendoHoje, pedidosPendentes, atendimentosAtraso, chamadosPortal] = await Promise.all([
     prisma.osPrazo.count({ where: { ordemServico: { empresaId }, status: "ATRASADO" } }),
@@ -50,7 +50,7 @@ export async function contarAlertasPrazos(empresaId: string) {
       where: {
         empresaId,
         status: { notIn: ["CONCLUIDA", "CANCELADA"] },
-        previsaoConclusao: { lt: agora },
+        previsaoConclusao: { lt: hojeDiaCivil(agora) }, // previsão é dia: atrasa depois dele
       },
     }),
     prisma.ordemServico.count({

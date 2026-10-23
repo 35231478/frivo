@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { gerarNumeroRelatorio } from "@/lib/utils";
 import { criarMedicaoDeRelatorio } from "@/lib/financeiro-server";
 import { osJaFaturada } from "@/lib/faturamento-os";
+import { partesBR } from "@/lib/fuso";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -50,7 +51,7 @@ export async function POST(_: NextRequest, { params }: Params) {
     return NextResponse.json({ erro: `Esta OS já está na medição ${outra.numero}. Cancele-a antes de refaturar.` }, { status: 409 });
   }
 
-  const ref = os.dataConclusao ?? new Date();
+  const ref = partesBR(os.dataConclusao ?? new Date()); // mês/ano de Brasília
   // Sem contrato, o valor é o dos itens EXECUTADOS (não o orçado inteiro)
   const valor = os.itensOrcamento.filter((it) => it.executado).reduce((acc, it) => acc + Number(it.valorTotal), 0);
   if (valor <= 0) {
@@ -66,11 +67,11 @@ export async function POST(_: NextRequest, { params }: Params) {
         empresaId,
         ordemServicoId: os.id,
         contratoId: os.contratoId,
-        numero: gerarNumeroRelatorio(seq, ref.getFullYear()),
+        numero: gerarNumeroRelatorio(seq, ref.ano),
         tipo: "MEDICAO",
         escopo: "MEDICAO_COMPLETA",
-        mesReferencia: ref.getMonth() + 1,
-        anoReferencia: ref.getFullYear(),
+        mesReferencia: ref.mes + 1,
+        anoReferencia: ref.ano,
         valorFinanceiro: valor,
         status: "RASCUNHO",
         tokenPublico: crypto.randomUUID(),

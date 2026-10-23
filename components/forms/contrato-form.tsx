@@ -27,6 +27,8 @@ import {
   Paperclip, Repeat, StickyNote, Building2, FileCheck, AlertCircle, Wand2, DollarSign,
   Plus, CalendarDays, ChevronDown, CheckCircle2, PauseCircle, RefreshCw, XCircle, History, User, Trash2, SlidersHorizontal,
 } from "lucide-react";
+import { anoBR, chaveDiaCivil, diaCivilDeChave, diasAteDiaCivil } from "@/lib/fuso";
+import { InputData } from "@/components/ui/input-data";
 
 // Opções de mudança de status oferecidas no cabeçalho (ícone, cor e descrição).
 const STATUS_OPCOES: { valor: string; label: string; descricao: string; icone: any; cor: string }[] = [
@@ -50,8 +52,7 @@ const PERMISSAO_UNIDADE_CONTRATO: PermissaoCriar = [
 ];
 
 function toDateInput(date: Date | null | undefined) {
-  if (!date) return "";
-  return new Date(date).toISOString().split("T")[0];
+  return date ? chaveDiaCivil(date) : "";
 }
 
 type ClienteItem = { id: string; nome: string; nomeFantasia?: string | null };
@@ -141,7 +142,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
         frequencia: r.frequencia ?? "MENSAL",
         tipoOsId: r.tipoOsId ?? "",
         tecnicoId: r.tecnicoId ?? "",
-        dataPrimeiraOs: r.dataPrimeiraOs ? new Date(r.dataPrimeiraOs).toISOString().split("T")[0] : "",
+        dataPrimeiraOs: r.dataPrimeiraOs ? chaveDiaCivil(r.dataPrimeiraOs) : "",
       };
     }
     return o;
@@ -227,7 +228,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
           tipo: "MANUTENCAO_PREVENTIVA",
           periodicidade: "MENSAL",
           unidadeIds: [],
-          numero: `CT-${new Date().getFullYear()}-`,
+          numero: `CT-${anoBR()}-`,
           recorrencia: false,
           faturamentoAdicionais: "SEPARADO",
           diaFaturamento: undefined,
@@ -399,9 +400,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
 
   function badgeVigencia(): { txt: string; cls: string } {
     if (!dataFimVal) return { txt: "Vigência indeterminada", cls: "bg-slate-100 text-slate-600" };
-    const fim = new Date(`${dataFimVal}T00:00:00`);
-    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-    const dias = Math.round((fim.getTime() - hoje.getTime()) / 86400000);
+    const dias = diasAteDiaCivil(diaCivilDeChave(dataFimVal))!; // pelo dia de Brasília
     if (dias < 0) return { txt: `Vencido há ${Math.abs(dias)} dias`, cls: "bg-red-50 text-red-700" };
     if (dias <= 30) return { txt: `Vence em ${dias} dias`, cls: "bg-amber-50 text-amber-700" };
     return { txt: `Vence em ${dias} dias`, cls: "bg-success-50 text-success-700" };
@@ -586,10 +585,10 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
               )}
             </FormField>
             <FormField label="Início da vigência" required error={errors.dataInicio?.message}>
-              <Input {...register("dataInicio")} type="date" error={!!errors.dataInicio} />
+              <Controller name="dataInicio" control={control} render={({ field }) => <InputData value={(field.value as string) ?? ""} onChange={field.onChange} aria-label="Início da vigência" />} />
             </FormField>
             <FormField label="Fim da vigência" hint="Em branco = indeterminado">
-              <Input {...register("dataFim")} type="date" />
+              <Controller name="dataFim" control={control} render={({ field }) => <InputData value={(field.value as string) ?? ""} onChange={field.onChange} aria-label="Fim da vigência" />} />
             </FormField>
           </FormGrid>
           <p className="flex items-center gap-1.5 text-xs text-ink-muted -mt-2">
@@ -824,7 +823,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
           </FormGrid>
           <FormGrid>
             <FormField label="Vencimento da ART" hint="Se vazio, assume o fim da vigência do contrato">
-              <Input {...register("artVencimento")} type="date" />
+              <Controller name="artVencimento" control={control} render={({ field }) => <InputData value={(field.value as string) ?? ""} onChange={field.onChange} aria-label="Vencimento da ART" />} />
             </FormField>
           </FormGrid>
           <div className="border-t border-gray-100 pt-1 divide-y divide-gray-100">

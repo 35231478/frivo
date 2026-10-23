@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ErroOcr, chamarClaude, lerDataUrl, texto, umDe } from "@/lib/ocr-ia";
 import { CAMPOS_CRLV, COMBUSTIVEIS, TIPOS_VEICULO_OCR, type CampoCrlv } from "@/lib/veiculo-campos";
+import { anoBR } from "@/lib/fuso";
 
 /**
  * Leitura do documento do veículo (CRLV / CRLV-e) por IA, para preencher o cadastro.
@@ -92,7 +93,7 @@ function anoValido(v: string | null): string | null {
   const m = v ? /^(19|20)\d{2}$/.exec(v.replace(/\D/g, "")) : null;
   if (!m) return null;
   const n = Number(m[0]);
-  return n >= 1950 && n <= new Date().getFullYear() + 1 ? m[0] : null;
+  return n >= 1950 && n <= anoBR() + 1 ? m[0] : null;
 }
 
 /** Normaliza e confere cada campo; o que não passa vira null ou é marcado como duvidoso. */

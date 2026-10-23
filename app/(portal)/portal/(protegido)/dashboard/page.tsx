@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePortalSession, getPortalBranding, STATUS_CONTA_PORTAL } from "@/lib/portal-server";
 import { formatarData } from "@/lib/utils";
 import { ClipboardList, CalendarCheck, FileText, AlertTriangle, Bell, Headset } from "lucide-react";
+import { diaCivilPassou, diasAteDiaCivil, hojeDiaCivil } from "@/lib/fuso";
 
 export const metadata: Metadata = { title: "Portal — Início" };
 export const dynamic = "force-dynamic";
@@ -12,9 +13,10 @@ export default async function PortalDashboard() {
   const { user } = await requirePortalSession();
   const { clienteId, empresaId, permissoes } = user;
   const branding = await getPortalBranding(empresaId);
-  const agora = new Date();
-  const em7dias = new Date(agora.getTime() + 7 * 864e5);
-  const em30dias = new Date(agora.getTime() + 30 * 864e5);
+  // Previsão, vencimento e vigência são dias civis: "hoje" pelo calendário de Brasília
+  const hoje = hojeDiaCivil();
+  const em7dias = hojeDiaCivil(new Date(), 7);
+  const em30dias = hojeDiaCivil(new Date(), 30);
   // OS/agenda só para quem tem verOS (ou abrirChamados, que acompanha o que abre)
   const verChamados = !!(permissoes.verOS || permissoes.abrirChamados);
 
@@ -25,28 +27,28 @@ export default async function PortalDashboard() {
     // UX-8 (Y16): sem visita futura, a AGENDADA que ficou para trás aparece como "a reagendar"
     // (antes virava "—" e a visita atrasada sumia do radar do cliente)
     verChamados
-      ? prisma.ordemServico.findFirst({ where: { empresaId, clienteId, status: "AGENDADA", previsaoConclusao: { gte: agora } }, orderBy: { previsaoConclusao: "asc" }, select: { numero: true, previsaoConclusao: true } })
+      ? prisma.ordemServico.findFirst({ where: { empresaId, clienteId, status: "AGENDADA", previsaoConclusao: { gte: hoje } }, orderBy: { previsaoConclusao: "asc" }, select: { numero: true, previsaoConclusao: true } })
           .then((futura) => futura ? { ...futura, atrasada: false } : prisma.ordemServico.findFirst({
-            where: { empresaId, clienteId, status: { in: ["AGENDADA", "AGUARDANDO_ATENDIMENTO"] }, previsaoConclusao: { lt: agora } },
+            where: { empresaId, clienteId, status: { in: ["AGENDADA", "AGUARDANDO_ATENDIMENTO"] }, previsaoConclusao: { lt: hoje } },
             orderBy: { previsaoConclusao: "asc" }, select: { numero: true, previsaoConclusao: true },
           }).then((velha) => velha ? { ...velha, atrasada: true } : null))
       : Promise.resolve(null),
     prisma.relatorioOs.count({ where: { empresaId, ordemServico: { clienteId } } }),
     prisma.medicao.count({ where: { empresaId, clienteId, status: "AGUARDANDO_APROVACAO" } }),
     prisma.contaReceber.findMany({ where: { empresaId, clienteId, status: { in: [...STATUS_CONTA_PORTAL] }, dataVencimento: { lte: em7dias } }, select: { dataVencimento: true, status: true } }),
-    prisma.contrato.findMany({ where: { empresaId, clienteId, status: "ATIVO", dataFim: { gte: agora, lte: em30dias } }, select: { numero: true, dataFim: true } }),
+    prisma.contrato.findMany({ where: { empresaId, clienteId, status: "ATIVO", dataFim: { gte: hoje, lte: em30dias } }, select: { numero: true, dataFim: true } }),
   ]);
 
   const alertas: { tipo: "info" | "warn" | "danger"; texto: string }[] = [];
   if (permissoes.verFinanceiro && medicoesPend > 0) alertas.push({ tipo: "warn", texto: `Você tem ${medicoesPend} fatura(s) aguardando sua aprovação.` });
   if (permissoes.verBoletos) {
-    const vencidos = boletos.filter((b) => b.dataVencimento && b.dataVencimento < agora).length;
+    const vencidos = boletos.filter((b) => diaCivilPassou(b.dataVencimento)).length;
     const vencendo = boletos.length - vencidos;
     if (vencidos > 0) alertas.push({ tipo: "danger", texto: `${vencidos} boleto(s) vencido(s).` });
     if (vencendo > 0) alertas.push({ tipo: "warn", texto: `${vencendo} boleto(s) vencendo nos próximos 7 dias.` });
   }
   for (const c of contratosVencendo) {
-    const dias = Math.max(0, Math.ceil(((c.dataFim as Date).getTime() - agora.getTime()) / 864e5));
+    const dias = Math.max(0, diasAteDiaCivil(c.dataFim) ?? 0);
     alertas.push({ tipo: "info", texto: `Contrato ${c.numero} vence em ${dias} dia(s).` });
   }
 

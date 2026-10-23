@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { exigirAlgumaPermissao, exigirPermissao } from "@/lib/permissoes-server";
 import { z } from "zod";
 import { codigoQr, proximoSequencialQr } from "@/lib/qrcode-server";
+import { anoBR } from "@/lib/fuso";
 
 const gerarSchema = z.object({
   quantidade: z.number().int().min(1).max(100),
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
   }
 
-  const ano = new Date().getFullYear();
+  const ano = anoBR();
   const inicio = await proximoSequencialQr(empresaId, ano);
 
   const dados = Array.from({ length: parsed.data.quantidade }, (_, i) => ({

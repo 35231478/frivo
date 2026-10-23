@@ -8,6 +8,7 @@ import { pode } from "@/lib/permissoes";
 import { mesclarQrConfig } from "@/lib/qr-config";
 import { LABELS_TIPO_EQUIPAMENTO } from "@/lib/utils";
 import { QrPublicoClient } from "@/components/public/qr-publico-client";
+import { formatarData } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "QR Code", robots: { index: false, follow: false } };
@@ -26,10 +27,7 @@ const STATUS_LABEL: Record<string, { label: string; cor: string }> = {
 function soDigitos(v: string) {
   return (v || "").replace(/\D/g, "");
 }
-function dataBR(d: Date | string | null | undefined) {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
+const dataBR = (d: Date | string | null | undefined) => formatarData(d); // dia de Brasília
 
 export default async function QrPublicoPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;

@@ -5,7 +5,7 @@ import { AlertTriangle, ArrowLeft, Barcode, CheckCircle2, FileText, Package, Tag
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
-import { cn, formatarCpfCnpj, formatarMoeda, LABELS_FORMA_PAGAMENTO } from "@/lib/utils";
+import { LABELS_FORMA_PAGAMENTO, cn, formatarCpfCnpj, formatarData, formatarDataHora, formatarMoeda } from "@/lib/utils";
 import { formatarQtd } from "@/lib/estoque/regras";
 import { carregarNota, ErroNota, parcelasDoRascunho } from "@/lib/compras/notas";
 import { chaveDePara, diaNoBrasil, lerNfe, type DuplicataNfe } from "@/lib/compras/nfe";
@@ -18,9 +18,9 @@ import type { FinanceiroNota } from "@/components/compras/financeiro-nota";
 
 export const metadata: Metadata = { title: "Nota de compra" };
 
-const diaBr = (d: Date) => d.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+const diaBr = (d: Date) => formatarData(d); // dia de Brasília
 /** "19/10/2026 às 22:15" no horário de Brasília (o mesmo do aviso de nota repetida) */
-const dataHoraBr = (d: Date) => `${diaBr(d)} às ${d.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })}`;
+const dataHoraBr = (d: Date) => formatarDataHora(d);
 const moeda4 = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 4 });
 
 /**

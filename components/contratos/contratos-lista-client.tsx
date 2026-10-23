@@ -13,6 +13,7 @@ import {
   FileText, Plus, Search, SlidersHorizontal, X, ArrowUp, ArrowDown, ArrowUpDown,
   Filter, BarChart3, Wallet, CalendarClock, AlertTriangle,
 } from "lucide-react";
+import { InputData } from "@/components/ui/input-data";
 
 interface ContratoView {
   id: string; numero: string; cliente: string; clienteLogo: string | null; periodicidade: string; valorMensal: number | null;
@@ -150,8 +151,8 @@ export function ContratosListaClient({ contratos, total, pagina, porPagina, soma
 
           {avancado && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-surface-border">
-              <div><label className="text-[11px] font-semibold text-ink-muted">Vigência — início de</label><input type="date" defaultValue={get("vigenciaInicio")} onChange={(e) => setParams({ vigenciaInicio: e.target.value || null })} className={selectCls} /></div>
-              <div><label className="text-[11px] font-semibold text-ink-muted">Vigência — início até</label><input type="date" defaultValue={get("vigenciaFim")} onChange={(e) => setParams({ vigenciaFim: e.target.value || null })} className={selectCls} /></div>
+              <div><label className="text-[11px] font-semibold text-ink-muted">Vigência — início de</label><InputData defaultValue={get("vigenciaInicio")} onChange={(v) => setParams({ vigenciaInicio: v || null })} /></div>
+              <div><label className="text-[11px] font-semibold text-ink-muted">Vigência — início até</label><InputData defaultValue={get("vigenciaFim")} onChange={(v) => setParams({ vigenciaFim: v || null })} /></div>
               <div><label className="text-[11px] font-semibold text-ink-muted">Valor mensal — de</label><input type="number" min="0" step="0.01" value={valorMin} onChange={(e) => setValorMin(e.target.value)} placeholder="R$ mín." className={selectCls} /></div>
               <div><label className="text-[11px] font-semibold text-ink-muted">Valor mensal — até</label><input type="number" min="0" step="0.01" value={valorMax} onChange={(e) => setValorMax(e.target.value)} placeholder="R$ máx." className={selectCls} /></div>
               <div className="lg:col-span-2"><label className="text-[11px] font-semibold text-ink-muted">Cliente</label><BuscaSelect value={get("clienteId")} onChange={(v) => setParams({ clienteId: v || null })} options={opcoesClientes} placeholder="Todos" /></div>

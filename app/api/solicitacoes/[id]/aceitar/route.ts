@@ -4,6 +4,7 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { SOLICITACAO_PENDENTE } from "@/lib/solicitacoes";
 import { ErroTecnicos, MSG_SEM_EXECUTOR, gravarTecnicos, lerDefinicao, lerVeiculo, resolverTecnicos, resolverVeiculo } from "@/lib/atividade-tecnicos";
+import { instanteBR } from "@/lib/fuso";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -49,7 +50,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
   const d = parsed.data;
   const [y, mo, di, h, mi] = d.dataHora.split(/[-T:]/).map(Number);
-  const quando = new Date(y, mo - 1, di, h, mi, 0, 0);
+  // A data/hora escolhida é de Brasília (o servidor roda em UTC: antes gravava 3 h antes)
+  const quando = instanteBR(y, mo - 1, di, h, mi);
   if (Number.isNaN(quando.getTime())) return NextResponse.json({ erro: "Data inválida." }, { status: 400 });
 
   // Tudo precisa ser do mesmo cliente/empresa

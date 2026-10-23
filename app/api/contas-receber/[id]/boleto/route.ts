@@ -4,6 +4,7 @@ import { z } from "zod";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { emitirBoletoInter, cancelarBoletoInter, carregarConfigInter } from "@/lib/inter-api";
 import { enviarBoleto } from "@/lib/email";
+import { chaveDiaCivil, chaveHojeBR } from "@/lib/fuso";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   const d = parsed.data;
 
   const cli = conta.cliente;
-  const vencimento = (d.vencimento || (conta.dataVencimento ? conta.dataVencimento.toISOString().slice(0, 10) : "")) || new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
+  const vencimento = (d.vencimento || (conta.dataVencimento ? chaveDiaCivil(conta.dataVencimento) : "")) || chaveHojeBR(7);
 
   try {
     const emitido = await emitirBoletoInter(empresaId, {
