@@ -231,6 +231,19 @@ function AjusteStatus({ os, manual, automatico, onAtualizado }: { os: any; manua
     } catch { toast("Erro de conexão.", "erro"); } finally { setEnviando(false); }
   }
 
+  async function voltarAuto() {
+    setEnviando(true);
+    try {
+      const r = await fetch(`/api/ordens/${os.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ voltarAutomatico: true }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { toast(d.erro ?? "Não foi possível voltar ao automático.", "erro"); return; }
+      onAtualizado(d);
+      setAberto(false);
+      toast("Status voltou ao automático.", "sucesso");
+      router.refresh();
+    } catch { toast("Erro de conexão.", "erro"); } finally { setEnviando(false); }
+  }
+
   if (!aberto) {
     return (
       <button type="button" onClick={() => { setValor(os.status); setAberto(true); }} data-ajustar-status
@@ -246,6 +259,9 @@ function AjusteStatus({ os, manual, automatico, onAtualizado }: { os: any; manua
         {opcoes.map((v) => <option key={v} value={v}>{LABELS_STATUS_OS[v]}</option>)}
       </select>
       <button type="button" onClick={aplicar} disabled={enviando} data-aplicar-ajuste className="px-2.5 py-1 rounded bg-primary-500 text-white font-semibold disabled:opacity-60">Aplicar</button>
+      {manual && (
+        <button type="button" onClick={voltarAuto} disabled={enviando} data-painel-voltar-automatico className="px-2.5 py-1 rounded border border-surface-border font-semibold text-ink hover:bg-surface-page disabled:opacity-60">Voltar ao automático</button>
+      )}
       <button type="button" onClick={() => setAberto(false)} aria-label="Fechar ajuste" className="p-1 text-ink-subtle hover:text-ink"><X className="w-3.5 h-3.5" /></button>
     </div>
   );

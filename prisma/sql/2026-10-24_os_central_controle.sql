@@ -10,7 +10,8 @@ ALTER TABLE "atividades_os" ADD COLUMN IF NOT EXISTS "prazo" DATE;
 --      • Pausada / Aguardando peça (exceções que só existem à mão);
 --      • Concluída sem atividade, ou com atividade ainda aberta;
 --      • Em andamento sem nenhuma atividade iniciada ou concluída;
---      • Agendada sem nenhuma atividade com data marcada.
+--      • Agendada sem nenhuma atividade com data marcada (exceto OS sem atividade com data
+--        prevista — a de contrato/recorrência —, que o automático também chama de Agendada).
 --    O resto passa a ser automático (ex.: "Aberta" com atividade agendada vira "Agendada").
 DO $$ BEGIN
   IF NOT EXISTS (
@@ -27,6 +28,8 @@ DO $$ BEGIN
        OR (os."status" = 'EM_ANDAMENTO' AND NOT EXISTS (
              SELECT 1 FROM "atividades_os" a WHERE a."ordem_servico_id" = os."id" AND a."status" IN ('EM_ANDAMENTO', 'CONCLUIDA')))
        OR (os."status" = 'AGENDADA' AND NOT EXISTS (
-             SELECT 1 FROM "atividades_os" a WHERE a."ordem_servico_id" = os."id" AND a."status" <> 'CANCELADA' AND a."data_agendada" IS NOT NULL));
+             SELECT 1 FROM "atividades_os" a WHERE a."ordem_servico_id" = os."id" AND a."status" <> 'CANCELADA' AND a."data_agendada" IS NOT NULL)
+           AND NOT (os."previsao_conclusao" IS NOT NULL AND NOT EXISTS (
+             SELECT 1 FROM "atividades_os" a WHERE a."ordem_servico_id" = os."id" AND a."status" <> 'CANCELADA')));
   END IF;
 END $$;

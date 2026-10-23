@@ -8,6 +8,7 @@ import { CalendarioPainel } from "@/components/calendario/calendario-painel";
 import type { CelulaDia, CardOs } from "@/components/calendario/calendario-grid";
 import { SOLICITACAO_PENDENTE } from "@/lib/solicitacoes";
 import { pode } from "@/lib/permissoes";
+import { prazoVencido } from "@/lib/os/prazos";
 import { SolicitacoesGaveta } from "@/components/calendario/solicitacoes-gaveta";
 import { CalendarDays, ChevronLeft, ChevronRight, Repeat } from "lucide-react";
 
@@ -108,7 +109,6 @@ export default async function CalendarioPage({
   ]);
 
   // Monta os cards e os posiciona por dia (preferindo a atividade agendada; senão a previsão)
-  const agora = hoje.getTime();
   const eventosPorDia: Record<string, CardOs[]> = {};
   for (const os of ordens) {
     // Um card por DIA em que a OS tem atividade agendada (antes só a 1ª atividade
@@ -127,7 +127,7 @@ export default async function CalendarioPage({
       if (d >= gridInicio && d <= gridFim) porDia.set(chave(d), { data: d, ativ: null });
     }
 
-    const atrasada = !!os.previsaoConclusao && new Date(os.previsaoConclusao).getTime() < agora && !FINALIZADAS.includes(os.status);
+    const atrasada = prazoVencido(os.previsaoConclusao, hoje) && !FINALIZADAS.includes(os.status);
     for (const [k, { data: posData, ativ }] of porDia) {
       const card: CardOs = {
         chave: `${os.id}:${k}`,

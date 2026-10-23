@@ -195,6 +195,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
     }
   }
 
+  // Mudou a previsão (e não há ajuste manual): o automático pode mudar (ex.: OS sem atividade com data → Agendada)
+  if (previsaoConclusao !== undefined && !atualizado.statusManual && atualizado.status !== "CANCELADA") {
+    await sincronizarStatusOs(id, empresaId, usuarioId);
+    return NextResponse.json(await prisma.ordemServico.findUniqueOrThrow({ where: { id } }));
+  }
   return NextResponse.json(atualizado);
 }
 

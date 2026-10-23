@@ -20,7 +20,7 @@ export async function sincronizarStatusOs(osId: string, empresaId: string, usuar
   const os = await prisma.ordemServico.findFirst({
     where: { id: osId, empresaId },
     select: {
-      id: true, status: true, statusManual: true, dataInicio: true, dataConclusao: true, criadoPorId: true,
+      id: true, status: true, statusManual: true, previsaoConclusao: true, dataInicio: true, dataConclusao: true, criadoPorId: true,
       atividades: { select: { status: true, dataAgendada: true } },
       medicaoItens: { select: { medicao: { select: { status: true } } } },
     },
@@ -28,7 +28,7 @@ export async function sincronizarStatusOs(osId: string, empresaId: string, usuar
   if (!os) return null;
   if (os.statusManual || os.status === "CANCELADA") return os.status;
 
-  const estagio = estagioAutomatico({ status: os.status, atividades: os.atividades, medicoes: os.medicaoItens.map((m) => m.medicao) });
+  const estagio = estagioAutomatico({ status: os.status, previsaoConclusao: os.previsaoConclusao, atividades: os.atividades, medicoes: os.medicaoItens.map((m) => m.medicao) });
   if (statusCorresponde(os.status, estagio)) return os.status;
 
   let alvo: StatusOsGravado = statusDoEstagio(estagio);

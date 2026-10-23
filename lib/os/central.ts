@@ -48,7 +48,7 @@ export function situacaoPagamento(os: OsCentralEntrada, orcado: number): Situaca
 }
 
 export function centralDaOs(os: OsCentralEntrada, agora: Date = new Date()) {
-  const status = resumoStatus({ status: os.status, statusManual: os.statusManual, atividades: os.atividades, medicoes: os.medicoes });
+  const status = resumoStatus({ status: os.status, statusManual: os.statusManual, previsaoConclusao: os.previsaoConclusao, atividades: os.atividades, medicoes: os.medicoes });
   const encerrada = status.exibido === "CONCLUIDA" || status.exibido === "FATURADA" || status.exibido === "CANCELADA";
 
   const ativas = os.atividades.filter((a) => a.status !== "CANCELADA");

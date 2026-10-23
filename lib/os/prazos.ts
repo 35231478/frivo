@@ -9,9 +9,14 @@ import { chaveDiaBR } from "@/lib/fuso";
  * seguinte em UTC) ou formatar o dia no fuso do navegador (28/10 00:00 UTC aparece como 27/10).
  */
 
-/** "AAAA-MM-DD" de um dia civil gravado (lê as partes UTC — o dia não tem fuso). */
+/**
+ * "AAAA-MM-DD" de um dia civil gravado. Gravado como dia (meia-noite UTC): lê as partes UTC — o
+ * dia não tem fuso. Gravado com hora (ex.: OS criada pelo calendário com a hora da visita): é um
+ * instante, e vale o dia dele em Brasília.
+ */
 export function chaveDiaCivil(d: Date | string): string {
   const x = new Date(d);
+  if (x.getUTCHours() || x.getUTCMinutes() || x.getUTCSeconds() || x.getUTCMilliseconds()) return chaveDiaBR(x);
   return `${x.getUTCFullYear()}-${String(x.getUTCMonth() + 1).padStart(2, "0")}-${String(x.getUTCDate()).padStart(2, "0")}`;
 }
 
@@ -51,6 +56,10 @@ export function textoPrazo(s: ReturnType<typeof situacaoPrazo>, feminino = true)
     default: return "Sem prazo";
   }
 }
+
+/** Prazo (dia civil) já vencido hoje em Brasília — para listas e calendário. */
+export const prazoVencido = (prazo: Date | string | null | undefined, agora: Date = new Date()) =>
+  situacaoPrazo(prazo, false, agora).situacao === "ATRASADO";
 
 /** Atividade encerrada para fins de prazo. */
 export const atividadeEncerrada = (status: string) => status === "CONCLUIDA" || status === "CANCELADA";

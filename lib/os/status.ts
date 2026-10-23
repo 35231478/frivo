@@ -31,11 +31,13 @@ export const medicaoValida = (m: MedicaoParaStatus) => m.status !== "CANCELADA";
  *  - Concluída: tem atividade e TODAS as não canceladas estão concluídas (a conclusão de cada
  *    uma já passou pela trava de equipamento da Etapa 1) — e Faturada se já entrou em medição;
  *  - Em execução: alguma atividade começou (ou umas concluídas e outras não);
- *  - Agendada: alguma atividade está agendada COM data;
+ *  - Agendada: alguma atividade está agendada COM data — ou, sem atividade nenhuma, a OS tem
+ *    data prevista (OS gerada por contrato/recorrência sem tipo nem técnico definidos);
  *  - Aberta: nada disso ainda.
  */
 export function estagioAutomatico(os: {
   status: string;
+  previsaoConclusao?: Date | string | null;
   atividades: AtividadeParaStatus[];
   medicoes?: MedicaoParaStatus[];
 }): EstagioOs {
@@ -47,6 +49,7 @@ export function estagioAutomatico(os: {
   }
   if (ativas.some((a) => a.status === "EM_ANDAMENTO") || concluidas > 0) return "EM_ANDAMENTO";
   if (ativas.some((a) => a.status === "AGENDADA" && a.dataAgendada)) return "AGENDADA";
+  if (!ativas.length && os.previsaoConclusao) return "AGENDADA";
   return "ABERTA";
 }
 
@@ -80,6 +83,7 @@ export function statusCorresponde(status: string, estagio: EstagioOs): boolean {
 export function resumoStatus(os: {
   status: string;
   statusManual: boolean;
+  previsaoConclusao?: Date | string | null;
   atividades: AtividadeParaStatus[];
   medicoes?: MedicaoParaStatus[];
 }) {
