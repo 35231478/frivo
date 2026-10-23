@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Tabs } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -39,11 +39,14 @@ export function abaValida(aba: string | null | undefined): AbaOs {
 export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?: string }) {
   const router = useRouter();
   const [os, setOs] = useState(initialOs);
+  // router.refresh() traz a OS de novo do servidor (status automático, histórico): a central acompanha
+  useEffect(() => { setOs(initialOs); }, [initialOs]);
   const [aba, setAba] = useState<AbaOs>(abaValida(abaInicial));
   const [gerandoMedicao, setGerandoMedicao] = useState(false);
   const [erroAcao, setErroAcao] = useState("");
   const { pode } = usePermissoes();
-  const central = useMemo(() => centralDaOs(os), [os]);
+  // os.prazos = SLA por modelo de prazo (só id/status: o Resumo conta os atrasados)
+  const central = useMemo(() => centralDaOs({ ...os, prazosSla: os.prazos ?? [] }), [os]);
 
   function irPara(id: string) {
     const nova = abaValida(id);
@@ -110,7 +113,7 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
               {ativa === "atividades" && (
                 <div className="space-y-6">
                   {/* Atividades + execução/equipamentos (Etapa 1) + formulário respondido de cada uma */}
-                  <OsAtividades osId={os.id} atividades={os.atividades} clienteId={os.cliente.id} unidadeId={os.unidadeId} />
+                  <OsAtividades osId={os.id} atividades={os.atividades} clienteId={os.cliente.id} unidadeId={os.unidadeId} onMudou={() => router.refresh()} />
                   {/* Antiga aba "Prazos": os prazos/SLA por modelo continuam aqui, junto das atividades */}
                   <div className="border-t border-surface-border pt-5" data-secao-sla>
                     <OsPrazos osId={os.id} />

@@ -30,7 +30,8 @@ function paraInputLocal(iso?: string | Date | null) {
 const STATUS_LABELS: Record<string, string> = { AGENDADA: "Agendada", EM_ANDAMENTO: "Em Andamento", CONCLUIDA: "Concluída", CANCELADA: "Cancelada" };
 const STATUS_COR: Record<string, string> = { AGENDADA: "bg-purple-100 text-purple-700", EM_ANDAMENTO: "bg-yellow-100 text-yellow-700", CONCLUIDA: "bg-green-100 text-green-700", CANCELADA: "bg-red-100 text-red-700" };
 
-export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId }: { osId: string; atividades: any[]; clienteId?: string; unidadeId?: string | null }) {
+/** `onMudou`: avisa a central da OS (cabeçalho/Resumo) que algo mudou — o status automático pode ter andado. */
+export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId, onMudou }: { osId: string; atividades: any[]; clienteId?: string; unidadeId?: string | null; onMudou?: () => void }) {
   const [atividades, setAtividades] = useState(iniciais);
   const [expandido, setExpandido] = useState<Set<string>>(new Set());
   const [mostraForm, setMostraForm] = useState(false);
@@ -88,6 +89,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
       if (!res.ok) { setErroModal(data.erro ?? "Não foi possível salvar."); return; }
       setAtividades((p) => p.map((x) => (x.id === editando.id ? { ...x, ...data } : x)));
       setEditando(null);
+      onMudou?.();
     } catch { setErroModal("Erro de conexão."); } finally { setProcessando(false); }
   }
 
@@ -100,6 +102,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
       if (!res.ok) { setErroModal(data.erro ?? "Não foi possível excluir."); return; }
       setAtividades((p) => p.filter((x) => x.id !== excluindo.id));
       setExcluindo(null);
+      onMudou?.();
     } catch { setErroModal("Erro de conexão."); } finally { setProcessando(false); }
   }
 
@@ -128,6 +131,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
       setTecnicosNova(VALOR_EXECUCAO_VAZIO);
       setFaltaExecutor(false);
       setMostraForm(false);
+      onMudou?.();
     } catch { setErroForm("Erro de conexão."); } finally { setSalvando(false); }
   }
 
@@ -140,6 +144,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
     if (res.ok) {
       const atualizada = await res.json();
       setAtividades((p) => p.map((a) => (a.id === atividadeId ? atualizada : a)));
+      onMudou?.();
     } else {
       const e = await res.json().catch(() => ({}));
       setErroStatus(e?.erro ?? "Não foi possível alterar o status da atividade.");
