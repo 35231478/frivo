@@ -18,7 +18,7 @@ DO $$ BEGIN
     SELECT 1 FROM information_schema.columns
     WHERE table_schema = current_schema() AND table_name = 'ordens_servico' AND column_name = 'status_manual'
   ) THEN
-    ALTER TABLE "ordens_servico" ADD COLUMN "status_manual" BOOLEAN NOT NULL DEFAULT false;
+    ALTER TABLE "ordens_servico" ADD COLUMN IF NOT EXISTS "status_manual" BOOLEAN NOT NULL DEFAULT false;
 
     UPDATE "ordens_servico" os SET "status_manual" = true
     WHERE os."status" IN ('PAUSADA', 'AGUARDANDO_PECA')
