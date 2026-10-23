@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { LABELS_FORMA_PAGAMENTO } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -89,19 +88,17 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
                 Fornecedor antigo: “{textoAntigo}”{initialData?.fornecedorCnpj ? ` (${initialData.fornecedorCnpj})` : ""} — sem cadastro. Escolha o fornecedor para ligar esta conta.
               </p>
             )}
-            <p className="text-xs text-ink-muted mt-1">
-              Não está na lista? <Link href="/financeiro/fornecedores" target="_blank" className="text-primary-600 hover:underline">Cadastre o fornecedor</Link> e recarregue esta tela.
-            </p>
+            {/* Fornecedor novo? "+ Novo fornecedor…" no próprio seletor cria sem sair da tela */}
           </FormField>
           <FormGrid>
             <FormField label="Descrição" required><Input value={form.descricao} onChange={(e) => upd("descricao", e.target.value)} placeholder="Ex: Compra de peças" /></FormField>
-            <FormField label="Categoria" hint="Categorias em Configurações › Financeiro › Categorias">
+            <FormField label="Categoria">
               {/* Só ativas para nova escolha; a categoria atual segue visível mesmo inativa */}
               <SeletorCadastro entidade="categorias-financeiras" valor={form.categoriaId} vazio="Sem categoria" onChange={(v) => upd("categoriaId", v)} />
             </FormField>
           </FormGrid>
           <FormGrid>
-            <FormField label="Centro de custo" hint="Centros em Configurações › Financeiro › Centros de custo">
+            <FormField label="Centro de custo">
               <SeletorCadastro entidade="centros-custo" valor={form.centroCustoId} vazio="Sem centro de custo" onChange={(v) => upd("centroCustoId", v)} />
             </FormField>
           </FormGrid>

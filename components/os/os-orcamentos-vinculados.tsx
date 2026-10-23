@@ -42,6 +42,7 @@ export function OsOrcamentosVinculados({ osId, clienteId, vinculados: iniciais }
   const [disponiveis, setDisponiveis] = useState<OrcamentoDisponivel[]>([]);
   const [carregando, setCarregando] = useState(false);
   const [salvando, setSalvando] = useState<string | null>(null);
+  const [erro, setErro] = useState("");
 
   useEffect(() => {
     if (!mostraVincular) return;
@@ -54,7 +55,7 @@ export function OsOrcamentosVinculados({ osId, clienteId, vinculados: iniciais }
   }, [mostraVincular, osId]);
 
   async function vincular(orcamentoId: string) {
-    setSalvando(orcamentoId);
+    setSalvando(orcamentoId); setErro("");
     try {
       const res = await fetch(`/api/ordens/${osId}/orcamentos`, {
         method: "POST",
@@ -64,15 +65,17 @@ export function OsOrcamentosVinculados({ osId, clienteId, vinculados: iniciais }
       if (res.ok) {
         setMostraVincular(false);
         router.refresh();
+      } else {
+        setErro((await res.json().catch(() => null))?.erro ?? "Não foi possível vincular o orçamento.");
       }
-    } finally {
+    } catch { setErro("Erro de conexão. Tente novamente."); } finally {
       setSalvando(null);
     }
   }
 
   async function desvincular(orcamentoId: string, codigo: string) {
     if (!confirm(`Desvincular o orçamento ${codigo} desta OS?`)) return;
-    setSalvando(orcamentoId);
+    setSalvando(orcamentoId); setErro("");
     try {
       const res = await fetch(`/api/ordens/${osId}/orcamentos?orcamentoId=${orcamentoId}`, {
         method: "DELETE",
@@ -80,14 +83,17 @@ export function OsOrcamentosVinculados({ osId, clienteId, vinculados: iniciais }
       if (res.ok) {
         setVinculados((prev) => prev.filter((v) => v.orcamento.id !== orcamentoId));
         router.refresh();
+      } else {
+        setErro((await res.json().catch(() => null))?.erro ?? "Não foi possível desvincular o orçamento.");
       }
-    } finally {
+    } catch { setErro("Erro de conexão. Tente novamente."); } finally {
       setSalvando(null);
     }
   }
 
   return (
     <div className="space-y-4">
+      {erro && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-erro-vinculo>{erro}</p>}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-ink-muted">
           {vinculados.length === 0

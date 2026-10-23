@@ -33,7 +33,7 @@ export interface CampoRapido {
   obrigatorio?: boolean;
   placeholder?: string;
   /** "cep" preenche logradouro/bairro/cidade/estado (se existirem) via ViaCEP. */
-  tipo?: "texto" | "cep" | "uf" | "textarea" | "select";
+  tipo?: "texto" | "cep" | "uf" | "textarea" | "select" | "cor";
   /** Opções quando `tipo: "select"`. */
   opcoes?: { value: string; label: string }[];
   /** Colunas no grid de 6 (celular sempre ocupa a linha toda). */
@@ -313,6 +313,13 @@ function MiniCadastro({
                   <option value="">UF</option>
                   {UFS.map((u) => <option key={u} value={u}>{u}</option>)}
                 </select>
+              ) : c.tipo === "cor" ? (
+                <input
+                  type="color"
+                  value={valores[c.nome] || "#64748B"}
+                  onChange={(e) => set(c.nome, e.target.value)}
+                  className="h-10 w-16 rounded-lg border border-surface-border bg-white p-1 cursor-pointer"
+                />
               ) : c.tipo === "textarea" ? (
                 <textarea
                   value={valores[c.nome] ?? ""} onChange={(e) => set(c.nome, e.target.value)} rows={2}

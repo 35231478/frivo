@@ -345,10 +345,19 @@ describe("escritório: adicional na OS e no relatório", () => {
       expect($("[data-os-adicionais]")!.textContent).toContain("Serviços adicionais pedidos na visita (1)");
       expect($("[data-a-avaliar]")!.textContent).toBe("1 a avaliar para cobrança");
       expect($("[data-adicional-os=s1]")!.textContent).toContain("Split Sala 2 · TAG AC-02");
-      // Leva 4 (D4): marcar COBRAR pede o preço do serviço (vira item da medição da OS)
-      vi.stubGlobal("prompt", vi.fn(() => "180"));
+      // Leva 4 (D4) + UX-1: marcar COBRAR pede o preço num MODAL da casa (não window.prompt)
       await clicar($("[data-cobranca=COBRAR]"));
+      expect(chamadas).toEqual([]); // ainda não gravou: abriu o modal do preço
+      expect($("[data-modal-preco-adicional]")).not.toBeNull();
+      // preço inválido não grava e explica
+      await digitar($("[data-preco-adicional]"), "0");
+      await clicar($("[data-confirmar-preco]"));
+      expect($("[data-erro-preco]")!.textContent).toContain("preço válido");
+      expect(chamadas).toEqual([]);
+      await digitar($("[data-preco-adicional]"), "180");
+      await clicar($("[data-confirmar-preco]"));
       expect(chamadas).toEqual([{ url: "/api/ordens/osA/servicos-adicionais/s1", corpo: { statusCobranca: "COBRAR", valor: 180 } }]);
+      expect($("[data-modal-preco-adicional]")).toBeNull(); // modal fechou
       expect($("[data-cobranca=COBRAR]")!.getAttribute("aria-pressed")).toBe("true");
       expect($("[data-a-avaliar]")).toBeNull();
       ok = false;
