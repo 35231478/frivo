@@ -8,7 +8,8 @@ import { cn } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
 import { ScannerQR } from "@/components/os/scanner-qr";
 import { BotaoFoto, Miniatura, ObservacaoVoz } from "@/components/tecnico/captura";
-import { irPara, useAtividade } from "@/components/tecnico/contexto";
+import { irPara, useAtividade, useTecnico } from "@/components/tecnico/contexto";
+import { ConcluirSemEquipamento } from "@/components/os/concluir-sem-equipamento";
 import { srcFoto, TelaEquipamento } from "@/components/tecnico/equipamento";
 import { ROTULO_STATUS_ATIVIDADE } from "@/components/tecnico/meu-dia";
 import { equipamentoDoQr } from "@/lib/tecnico/offline/estado";
@@ -61,6 +62,7 @@ function Voltar() {
 function ResumoOs({ r, x, aEnviar, registrar }: { r: RetratoAtividade; x: ExecucaoTela; aEnviar: number; registrar: (ops: NovaOperacao[]) => Promise<void> }) {
   const c = r.cartao;
   const atividadeId = x.atividade.id;
+  const { motor } = useTecnico();
   const so = x.bloqueada;
   const [scan, setScan] = useState(false);
   const [lista, setLista] = useState(false);
@@ -177,7 +179,7 @@ function ResumoOs({ r, x, aEnviar, registrar }: { r: RetratoAtividade; x: Execuc
       {concluir && <ModalConcluir x={x} onFechar={() => setConcluir(false)} onConcluir={async (resumo) => {
         await registrar([{ tipo: "concluir", atividadeId, dados: resumo ? { resumo } : {} }]);
         setConcluir(false);
-      }} />}
+      }} onJustificado={async () => { setConcluir(false); await motor?.baixarRetrato(atividadeId); }} />}
     </div>
   );
 }
@@ -274,7 +276,7 @@ function ModalAdicional({ x, r, a, onFechar, registrar }: { x: ExecucaoTela; r: 
   );
 }
 
-function ModalConcluir({ x, onFechar, onConcluir }: { x: ExecucaoTela; onFechar: () => void; onConcluir: (resumo: string) => void }) {
+function ModalConcluir({ x, onFechar, onConcluir, onJustificado }: { x: ExecucaoTela; onFechar: () => void; onConcluir: (resumo: string) => void; onJustificado: () => void }) {
   const [resumo, setResumo] = useState("");
   const c = x.conclusao;
   return (
@@ -283,7 +285,16 @@ function ModalConcluir({ x, onFechar, onConcluir }: { x: ExecucaoTela; onFechar:
         <div className="space-y-3" data-pendencias>
           <p className="text-sm font-semibold text-red-700">Ainda não dá para concluir:</p>
           {c.semEquipamento
-            ? <p className="text-sm text-ink">{c.mensagem}</p>
+            ? (
+              <div className="space-y-3">
+                <p className="text-sm text-ink">{c.mensagem}</p>
+                {/* Exceção justificada: precisa de sinal (o motivo vai direto para o escritório) */}
+                {typeof navigator !== "undefined" && navigator.onLine && (
+                  <ConcluirSemEquipamento osId={x.os.id} atividadeId={x.atividade.id} onConcluido={onJustificado}
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 py-3 font-semibold touch-target" />
+                )}
+              </div>
+            )
             : (
               <ul className="space-y-2">
                 {c.pendencias.map((p) => (

@@ -9,6 +9,11 @@
  *  - e, se o tipo tem formulário obrigatório para concluir (tipo de OS × tipo de equipamento), todos
  *    os campos ativos dele preenchidos — POR EQUIPAMENTO, contando o valor (não só a linha gravada).
  * Equipamento vinculado e NÃO atendido não trava: sai como "não atendido" no relatório.
+ *
+ * Saídas da exigência de equipamento (os ATENDIDOS continuam exigindo o checklist completo):
+ *  - TIPO: o tipo de OS da atividade "não exige equipamento" (visita técnica, vistoria, orçamento);
+ *  - RECORRENTE: OS recorrente de contrato sem nenhum equipamento vinculado;
+ *  - JUSTIFICADA: exceção pontual, autorizada com motivo por quem pode concluir OS.
  */
 
 export type StatusItem = "OK" | "ATENCAO" | "NAO_SE_APLICA";
@@ -88,10 +93,16 @@ export function faltasEquipamento(e: EquipamentoParaPendencia): FaltasEquipament
 
 export const completo = (f: FaltasEquipamento) => !f.semResposta.length && !f.semFoto.length && !f.semObservacao.length && !f.formulario;
 
+export type MotivoDispensa = "TIPO" | "RECORRENTE" | "JUSTIFICADA";
+/** Por que esta atividade pode concluir sem equipamento atendido (null = a trava vale). */
+export interface DispensaEquipamento { motivo: MotivoDispensa; texto: string }
+
 export interface ResultadoConclusao {
   ok: boolean;
-  /** Nenhum equipamento atendido */
+  /** Nenhum equipamento atendido (e a exigência vale) */
   semEquipamento: boolean;
+  /** Concluiu/conclui sem equipamento atendido por uma das saídas (tipo, recorrente, justificada) */
+  dispensa: DispensaEquipamento | null;
   /** Só os atendidos com alguma falta */
   pendencias: PendenciaEquipamento[];
   atendidos: number;
@@ -118,14 +129,27 @@ export function textoFaltas(f: FaltasEquipamento): string {
 }
 
 export const MSG_SEM_EQUIPAMENTO = "Para concluir, vincule pelo menos 1 equipamento atendido (pelo QR Code ou pela lista da unidade) e responda o checklist dele.";
+/** As saídas, ditas junto da trava (todo caso sem equipamento termina com o que fazer). */
+export const MSG_SAIDAS_SEM_EQUIPAMENTO = "Serviço sem equipamento (visita técnica, vistoria)? Use um tipo de OS que não exige equipamento, ou conclua sem equipamento justificando o motivo (quem pode concluir OS).";
 
-/** Pode concluir? Se não, o que falta — por equipamento, com mensagem pronta. */
-export function verificarConclusao(equipamentos: EquipamentoParaPendencia[]): ResultadoConclusao {
+/** Texto da dispensa, para a tela e o histórico. */
+export function textoDispensa(motivo: MotivoDispensa, extra?: string | null): string {
+  if (motivo === "TIPO") return `O tipo de OS${extra ? ` “${extra}”` : ""} não exige equipamento: pode concluir sem equipamento atendido.`;
+  if (motivo === "RECORRENTE") return "OS recorrente do contrato sem equipamento vinculado: pode concluir sem equipamento atendido.";
+  return `Conclusão sem equipamento autorizada${extra ? `: “${extra}”` : ""}.`;
+}
+
+/**
+ * Pode concluir? Se não, o que falta — por equipamento, com mensagem pronta. `dispensa`: a atividade
+ * tem saída da exigência de equipamento (tipo, recorrente ou justificada).
+ */
+export function verificarConclusao(equipamentos: EquipamentoParaPendencia[], dispensa: DispensaEquipamento | null = null): ResultadoConclusao {
   const atendidos = equipamentos.filter((e) => e.feito);
   const naoAtendidos = equipamentos.length - atendidos.length;
   if (!atendidos.length) {
+    if (dispensa) return { ok: true, semEquipamento: false, dispensa, pendencias: [], atendidos: 0, naoAtendidos, mensagem: null };
     const extra = naoAtendidos ? ` Há ${naoAtendidos === 1 ? "1 equipamento vinculado" : `${naoAtendidos} equipamentos vinculados`} que ainda não ${naoAtendidos === 1 ? "foi atendido" : "foram atendidos"}.` : "";
-    return { ok: false, semEquipamento: true, pendencias: [], atendidos: 0, naoAtendidos, mensagem: MSG_SEM_EQUIPAMENTO + extra };
+    return { ok: false, semEquipamento: true, dispensa: null, pendencias: [], atendidos: 0, naoAtendidos, mensagem: `${MSG_SEM_EQUIPAMENTO}${extra} ${MSG_SAIDAS_SEM_EQUIPAMENTO}` };
   }
   const pendencias = atendidos
     .map((e) => ({ equipamentoId: e.equipamentoId, titulo: e.titulo, ...faltasEquipamento(e) }))
@@ -133,7 +157,7 @@ export function verificarConclusao(equipamentos: EquipamentoParaPendencia[]): Re
   const mensagem = pendencias.length
     ? `Para concluir, falta: ${pendencias.map((p) => `${p.titulo} — ${textoFaltas(p)}`).join(" | ")}.`
     : null;
-  return { ok: !pendencias.length, semEquipamento: false, pendencias, atendidos: atendidos.length, naoAtendidos, mensagem };
+  return { ok: !pendencias.length, semEquipamento: false, dispensa: null, pendencias, atendidos: atendidos.length, naoAtendidos, mensagem };
 }
 
 /** "Split Sala 3 (TAG AC-01)" — como o equipamento aparece nas mensagens de pendência. */

@@ -17,6 +17,7 @@ import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { SelectCadastroRapido } from "@/components/ui/select-cadastro-rapido";
 import { TIPO_OS } from "@/components/cadastro-rapido/definicoes";
 import { InputData } from "@/components/ui/input-data";
+import { ConcluirSemEquipamento } from "@/components/os/concluir-sem-equipamento";
 import { atividadeEncerrada, chaveDiaCivil, situacaoPrazo, textoPrazo } from "@/lib/os/prazos";
 
 /** ISO → valor de <input type="datetime-local"> no fuso do navegador. */
@@ -38,6 +39,8 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
   const [tiposOs, setTiposOs] = useState<any[]>([]);
   const [salvando, setSalvando] = useState(false);
   const [erroStatus, setErroStatus] = useState("");
+  /** Atividade que a trava de equipamento barrou (oferece "concluir sem equipamento — justificar") */
+  const [travadaSemEquip, setTravadaSemEquip] = useState<string | null>(null);
   const [form, setForm] = useState({ titulo: "", tipoOsId: "", dataAgendada: "", prazo: "", duracaoMin: "", observacao: "" });
   // Quem executa (equipe e/ou colaboradores; responsável = tecnicoId) + veículo da atividade
   const opcoesExecucao = useOpcoesExecucao();
@@ -136,7 +139,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
   }
 
   async function alterarStatusAtividade(atividadeId: string, novoStatus: string) {
-    setErroStatus("");
+    setErroStatus(""); setTravadaSemEquip(null);
     const res = await fetch(`/api/ordens/${osId}/atividades/${atividadeId}`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: novoStatus }),
@@ -148,14 +151,23 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
     } else {
       const e = await res.json().catch(() => ({}));
       setErroStatus(e?.erro ?? "Não foi possível alterar o status da atividade.");
+      if (e?.semEquipamento) setTravadaSemEquip(atividadeId);
     }
   }
 
   return (
     <div className="space-y-3">
       {erroStatus && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 flex items-start gap-2">
-          <X className="w-4 h-4 shrink-0 mt-0.5" /> {erroStatus}
+        <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 space-y-2" data-erro-status-atividade>
+          <p className="flex items-start gap-2"><X className="w-4 h-4 shrink-0 mt-0.5" /> {erroStatus}</p>
+          {travadaSemEquip && (
+            <ConcluirSemEquipamento osId={osId} atividadeId={travadaSemEquip}
+              onConcluido={() => {
+                setAtividades((p) => p.map((a) => (a.id === travadaSemEquip ? { ...a, status: "CONCLUIDA" } : a)));
+                setErroStatus(""); setTravadaSemEquip(null);
+                onMudou?.();
+              }} />
+          )}
         </div>
       )}
       {atividades.length === 0 && !mostraForm && (

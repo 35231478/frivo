@@ -12,7 +12,8 @@ import {
 import { SeletorEquipamentos } from "@/components/os/seletor-equipamentos";
 import { ScannerQR } from "@/components/os/scanner-qr";
 import { EquipamentoExecucaoCard, type AcoesEquipamento, type CampoTela, type EquipamentoTela } from "@/components/os/execucao-equipamento";
-import { completo, faltasEquipamento, paraPendencia, textoFaltas, verificarConclusao, type ResultadoConclusao, type StatusItem } from "@/lib/execucao/pendencias";
+import { ConcluirSemEquipamento } from "@/components/os/concluir-sem-equipamento";
+import { completo, faltasEquipamento, paraPendencia, textoFaltas, verificarConclusao, type DispensaEquipamento, type ResultadoConclusao, type StatusItem } from "@/lib/execucao/pendencias";
 
 interface Props {
   osId: string;
@@ -28,6 +29,8 @@ interface ExecucaoTela {
   bloqueada: boolean;
   equipamentos: EquipamentoTela[];
   conclusao: ResultadoConclusao;
+  /** Saída da exigência de equipamento (tipo, recorrente, justificada); ausente em retratos antigos */
+  dispensaEquipamento?: DispensaEquipamento | null;
 }
 /** `servidor`: recusa do servidor (fica até a próxima tentativa); senão é a conferência da tela, que some quando tudo fica respondido */
 type Pendencias = { erro: string; pendencias?: { equipamentoId: string; titulo: string }[]; servidor: boolean };
@@ -40,7 +43,7 @@ function recalcular(x: ExecucaoTela): ExecucaoTela {
     const faltas = faltasEquipamento(paraPendencia(e));
     return { ...e, faltas, completo: completo(faltas) };
   });
-  return { ...x, equipamentos, conclusao: verificarConclusao(equipamentos.map((e) => paraPendencia(e))) };
+  return { ...x, equipamentos, conclusao: verificarConclusao(equipamentos.map((e) => paraPendencia(e)), x.dispensaEquipamento ?? null) };
 }
 
 /**
@@ -247,7 +250,8 @@ export function AtividadeExecucao({ osId, atividadeId, titulo, osNumero, tipoOs 
             <div className="min-w-0">
               <p className="text-sm font-semibold text-gray-800">{resumo!.atendidos} de {resumo!.total} equipamento{resumo!.total === 1 ? "" : "s"} atendido{resumo!.atendidos === 1 ? "" : "s"}</p>
               <p className="text-xs text-gray-500">
-                {exec.conclusao.ok ? "Tudo respondido: pronto para concluir." : exec.conclusao.semEquipamento ? "Nenhum equipamento atendido ainda." : `${exec.conclusao.pendencias.length} equipamento${exec.conclusao.pendencias.length === 1 ? "" : "s"} com pendência.`}
+                {exec.conclusao.ok && exec.conclusao.dispensa ? <span data-dispensa-equipamento={exec.conclusao.dispensa.motivo}>{exec.conclusao.dispensa.texto}</span>
+                  : exec.conclusao.ok ? "Tudo respondido: pronto para concluir." : exec.conclusao.semEquipamento ? "Nenhum equipamento atendido ainda." : `${exec.conclusao.pendencias.length} equipamento${exec.conclusao.pendencias.length === 1 ? "" : "s"} com pendência.`}
               </p>
             </div>
             {exec.conclusao.ok ? <CircleCheck className="w-6 h-6 text-success-600 shrink-0" /> : <ClipboardCheck className="w-6 h-6 text-gray-300 shrink-0" />}
@@ -257,7 +261,9 @@ export function AtividadeExecucao({ osId, atividadeId, titulo, osNumero, tipoOs 
             <p className="text-sm text-gray-500 text-center py-8 flex flex-col items-center gap-2 bg-white rounded-xl border border-dashed border-gray-200" data-sem-equipamentos>
               <HardDrive className="w-6 h-6 text-gray-300" />
               Nenhum equipamento nesta atividade.
-              {!somenteLeitura && <span className="text-xs text-gray-400 px-6">Leia o QR Code do equipamento ou escolha na lista da unidade. Para concluir, é preciso pelo menos 1 equipamento atendido.</span>}
+              {!somenteLeitura && (exec.conclusao.dispensa
+                ? <span className="text-xs text-gray-500 px-6">{exec.conclusao.dispensa.texto}</span>
+                : <span className="text-xs text-gray-400 px-6">Leia o QR Code do equipamento ou escolha na lista da unidade. Para concluir, é preciso pelo menos 1 equipamento atendido.</span>)}
             </p>
           ) : (
             <div className="space-y-3">
@@ -273,7 +279,13 @@ export function AtividadeExecucao({ osId, atividadeId, titulo, osNumero, tipoOs 
           {pendencias && (pendencias.servidor || !exec.conclusao.ok) && (
             <div role="alert" className="mt-4 bg-red-50 border border-red-200 text-red-800 rounded-xl px-4 py-3 text-sm space-y-2" data-pendencias>
               <p className="font-semibold flex items-center gap-2"><AlertCircle className="w-4 h-4" /> Ainda não dá para concluir</p>
-              {exec.conclusao.semEquipamento ? <p>{exec.conclusao.mensagem}</p> : (
+              {exec.conclusao.semEquipamento ? (
+                <>
+                  <p>{exec.conclusao.mensagem}</p>
+                  <ConcluirSemEquipamento osId={osId} atividadeId={atividadeId}
+                    onConcluido={async () => { setPendencias(null); setMensagem({ tipo: "ok", texto: "Atividade concluída sem equipamento." }); await carregar(); }} />
+                </>
+              ) : (
                 <ul className="space-y-1.5 list-disc pl-5">
                   {exec.conclusao.pendencias.map((p) => <li key={p.equipamentoId}><strong>{p.titulo}</strong>: {textoFaltas(p)}.</li>)}
                 </ul>

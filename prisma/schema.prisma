@@ -1417,6 +1417,10 @@ model TipoOs {
   descricao String?
   cor       String   @default("#3b82f6")
   ativo     Boolean  @default(true)
+  /// Trava da conclusão: true (padrão) = a atividade deste tipo só conclui com pelo menos 1
+  /// equipamento atendido e completo; false = serviço sem equipamento (visita técnica, vistoria,
+  /// orçamento): conclui sem equipamento — os que forem atendidos continuam exigindo o checklist.
+  exigeEquipamento Boolean @default(true) @map("exige_equipamento")
   criadoEm  DateTime @default(now()) @map("criado_em")
 
   empresa                  Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
@@ -1500,6 +1504,9 @@ model OrdemServico {
   /// recalculado a cada mudança; true = alguém ajustou à mão (exceção) e o automático não
   /// sobrescreve até "Voltar ao automático". Quem/quando fica no histórico da OS.
   statusManual       Boolean    @default(false) @map("status_manual")
+  /// Exceção da trava de equipamento: motivo informado por quem tem "concluir OS" para concluir
+  /// esta OS sem equipamento atendido (quem/quando no histórico). null = trava normal.
+  semEquipamentoMotivo String? @map("sem_equipamento_motivo")
   origem             OrigemOS   @default(MANUAL)
   periodoRecorrencia String?    @map("periodo_recorrencia")
   chamadoNumero      String?    @map("chamado_numero")
