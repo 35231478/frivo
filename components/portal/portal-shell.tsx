@@ -21,7 +21,8 @@ const ITENS: { href: string; label: string; icone: typeof LayoutDashboard; perm:
   { href: "/portal/chamados", label: "Chamados", icone: Headset, perm: (p) => !!(p?.verOS || p?.abrirChamados) },
   { href: "/portal/equipamentos", label: "Equipamentos", icone: Thermometer, perm: (p) => !!p?.verEquipamentos },
   { href: "/portal/documentos", label: "Documentos", icone: FileText, perm: (p) => !!p?.verDocumentos },
-  { href: "/portal/financeiro", label: "Financeiro", icone: Wallet, perm: (p) => !!p?.verFinanceiro },
+  // "Faturas" (rótulo leigo — C1): é aqui que o boleto e a fatura do mês se entregam sozinhos
+  { href: "/portal/financeiro", label: "Faturas", icone: Wallet, perm: (p) => !!p?.verFinanceiro },
   { href: "/portal/agenda", label: "Agenda", icone: CalendarDays, perm: (p) => !!p?.verOS },
 ];
 

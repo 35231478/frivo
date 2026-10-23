@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import Link from "next/link";
 import { portalLogin, type LoginState } from "@/app/(portal)/portal/actions";
 import { AlertCircle, LogIn } from "lucide-react";
 
@@ -17,7 +18,9 @@ export function PortalLoginForm() {
       <div>
         <label className="text-sm font-semibold text-ink">E-mail</label>
         <input
+          // Y12: errou a senha? O e-mail digitado FICA (o action devolve e o reset do form usa o default)
           name="email" type="email" required autoComplete="email" placeholder="seu@email.com"
+          defaultValue={state?.email ?? ""}
           className="mt-1 w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all"
         />
       </div>
@@ -34,6 +37,12 @@ export function PortalLoginForm() {
       >
         <LogIn className="w-4 h-4" /> {pending ? "Entrando…" : "Entrar"}
       </button>
+      {/* Y13: o cliente travado fora do horário comercial tem saída sozinho */}
+      <p className="text-center">
+        <Link href="/portal/esqueci-senha" className="text-sm text-primary-600 hover:underline" data-esqueci-senha>
+          Esqueci minha senha
+        </Link>
+      </p>
     </form>
   );
 }
