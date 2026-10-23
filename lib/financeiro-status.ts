@@ -38,11 +38,13 @@ function badge(chave: StatusVisual["chave"], label: string, diasAtraso = 0): Sta
 export function statusVisualReceber(status: string, dataVencimento: Date | string | null): StatusVisual {
   if (status === "RECEBIDO") return badge("PAGO", "Pago");
   if (status === "CANCELADO") return badge("CANCELADO", "Cancelado");
+  // C6/F5: previsão de contrato ainda não faturada NÃO é cobrança vencida — o selo
+  // "Vencido" (e a linha vermelha) só valem para conta liberada (A_RECEBER/ATRASADO).
+  if (status === "PREVISTO") return badge("PREVISTO", "Previsto");
   const dias = diasAteVencimento(dataVencimento);
   if (dias === null) return badge("PREVISTO", "Previsto");
   if (dias < 0) return badge("VENCIDO", `Vencido ${-dias} ${-dias === 1 ? "dia" : "dias"}`, -dias);
   if (dias === 0) return badge("VENCE_HOJE", "Vence hoje");
-  if (status === "PREVISTO") return badge("PREVISTO", "Previsto");
   return badge("A_VENCER", "A vencer");
 }
 

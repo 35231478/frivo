@@ -244,6 +244,11 @@ describe.skipIf(!URL_PG)("Leva 5 — contrato × previsão × medição (Postgre
     await resumoFinanceiro("e1");
     expect((await prisma.contaReceber.findUnique({ where: { id: vencida.id } })).status).toBe("PREVISTO");
 
+    // O selo visual também não grita "vencido" para previsão
+    const { statusVisualReceber } = await import("@/lib/financeiro-status");
+    expect(statusVisualReceber("PREVISTO", new Date(ANO - 1, 0, 5)).chave).toBe("PREVISTO");
+    expect(statusVisualReceber("ATRASADO", new Date(ANO - 1, 0, 5)).chave).toBe("VENCIDO");
+
     // Portal: a lista de cobranças do cliente não inclui PREVISTO
     const { STATUS_CONTA_PORTAL } = await import("@/lib/portal-server");
     expect(STATUS_CONTA_PORTAL).not.toContain("PREVISTO");
