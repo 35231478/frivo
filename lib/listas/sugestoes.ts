@@ -88,6 +88,22 @@ export const SUGESTOES: Record<string, DefSugestao> = {
       orderBy: [{ nome: "asc" }, { id: "asc" }], take: CANDIDATOS,
     })).map((e: any) => ({ id: e.id, rotulo: e.nome, detalhe: e.status === "ATIVA" ? null : "inativa", href: `/equipes/${e.id}/editar` })),
   },
+  // UX-4 (Y4): busca live de Medições (o where espelha a busca da lista)
+  medicoes: {
+    modulo: "financeiro",
+    buscar: async (empresaId, q) => (await p.medicao.findMany({
+      where: {
+        empresaId,
+        OR: [
+          { numero: { contains: q, mode: "insensitive" } },
+          { descricao: { contains: q, mode: "insensitive" } },
+          { cliente: { nome: { contains: q, mode: "insensitive" } } },
+        ],
+      },
+      select: { id: true, numero: true, cliente: { select: { nome: true, nomeFantasia: true } } },
+      orderBy: [{ criadoEm: "desc" }, { id: "asc" }], take: CANDIDATOS,
+    })).map((m: any) => ({ id: m.id, rotulo: m.numero, detalhe: m.cliente?.nomeFantasia ?? m.cliente?.nome ?? null, href: `/financeiro/medicoes/${m.id}` })),
+  },
 };
 
 export const ehListaSugestao = (v: string) => Object.prototype.hasOwnProperty.call(SUGESTOES, v);

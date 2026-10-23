@@ -10,15 +10,19 @@ import { pode } from "@/lib/permissoes";
 import { ContaPagarAcoes } from "@/components/financeiro/conta-pagar-acoes";
 import { CategoriaBadge } from "@/components/financeiro/categoria-badge";
 import { fornecedorDaConta } from "@/lib/financeiro/fornecedor";
+import { whereContasPagar } from "@/lib/listas/filtros";
+import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
+import { ListaUrl, PaginacaoUrl } from "@/components/listagem/lista-url";
 
 export const metadata: Metadata = { title: "Contas a Pagar" };
 
 export default async function ContasPagarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; fornecedor?: string; fornecedorId?: string; origem?: string; dataInicio?: string; dataFim?: string; categoria?: string; centro?: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const { status = "", fornecedor = "", fornecedorId = "", origem = "", dataInicio = "", dataFim = "", categoria = "", centro = "" } = await searchParams;
+  const sp = await searchParams;
+  const { status = "", fornecedor = "", fornecedorId = "", origem = "", dataInicio = "", dataFim = "", categoria = "", centro = "" } = sp;
   const session = await auth();
   if (!pode(session!.user!.permissoes, "financeiro", "visualizar", session!.user!.role)) redirect("/sem-permissao");
   const u = session!.user!;
@@ -32,53 +36,45 @@ export default async function ContasPagarPage({
     data: { status: "VENCIDO" },
   });
 
-  const where: any = { empresaId };
-  if (status) where.status = status;
-  // Busca por texto: no nome do cadastro ligado e no texto antigo (contas sem cadastro)
-  if (fornecedor) where.OR = [
-    { fornecedorCadastro: { nome: { contains: fornecedor, mode: "insensitive" } } },
-    { fornecedor: { contains: fornecedor, mode: "insensitive" } },
-  ];
-  if (fornecedorId) where.fornecedorId = fornecedorId; // por id: renomear o fornecedor não tira do filtro
-  if (categoria) where.categoriaId = categoria; // por id: renomear a categoria não tira a conta do filtro
-  if (centro) where.centroCustoId = centro;
-  if (origem === "PEDIDO") where.pedidoCompraId = { not: null };
-  else if (origem === "NF") where.notaCompraId = { not: null };
-  else if (origem === "MANUAL") { where.pedidoCompraId = null; where.notaCompraId = null; }
-  if (dataInicio || dataFim) {
-    where.dataVencimento = {};
-    if (dataInicio) where.dataVencimento.gte = new Date(dataInicio);
-    if (dataFim) { const f = new Date(dataFim); f.setHours(23, 59, 59, 999); where.dataVencimento.lte = f; }
-  }
+  // UX-4 (E4): o filtro roda no BANCO (where único em whereContasPagar) e a lista é paginada —
+  // acabou o corte fixo de 300 em que contas sumiam da tela e dos totais
+  const where = whereContasPagar(empresaId, sp) as any;
+  const { pagina: paginaPedida, porPagina } = lerPaginacao(sp);
 
-  const [contas, categorias, fornecedores, centros] = await Promise.all([
-    prisma.contaPagar.findMany({
-      where,
-      include: {
-        pedidoCompra: { select: { numero: true } }, notaCompra: { select: { id: true, numero: true } },
-        centroCusto: { select: { id: true, nome: true, ativo: true } },
-        fornecedorCadastro: { select: { id: true, nome: true, documento: true, ativo: true } },
-      },
-      orderBy: [{ dataVencimento: "asc" }, { criadoEm: "desc" }],
-      take: 300,
-    }),
+  const [total, agFiltrado, agVencido, agAberto, categorias, fornecedores, centros] = await Promise.all([
+    prisma.contaPagar.count({ where }),
+    prisma.contaPagar.aggregate({ where, _sum: { valorTotal: true, valorPago: true } }),
+    prisma.contaPagar.aggregate({ where: { ...where, status: "VENCIDO" }, _sum: { saldoRestante: true } }),
+    prisma.contaPagar.aggregate({ where: { ...where, status: { in: ["PENDENTE", "PAGO_PARCIAL"] } }, _sum: { saldoRestante: true } }),
     // Todas (ativas e inativas): cor/nome das contas que já usam uma categoria inativa não somem
     prisma.categoriaFinanceira.findMany({ where: { empresaId }, select: { id: true, nome: true, cor: true, ativo: true }, orderBy: { nome: "asc" } }),
     prisma.fornecedor.findMany({ where: { empresaId }, select: { id: true, nome: true, ativo: true }, orderBy: { nome: "asc" } }),
     prisma.centroCusto.findMany({ where: { empresaId }, select: { id: true, nome: true, ativo: true }, orderBy: { nome: "asc" } }),
   ]);
+  const pagina = paginaValida(paginaPedida, porPagina, total);
+  const contas = total
+    ? await prisma.contaPagar.findMany({
+        where,
+        include: {
+          pedidoCompra: { select: { numero: true } }, notaCompra: { select: { id: true, numero: true } },
+          centroCusto: { select: { id: true, nome: true, ativo: true } },
+          fornecedorCadastro: { select: { id: true, nome: true, documento: true, ativo: true } },
+        },
+        orderBy: [{ dataVencimento: "asc" }, { criadoEm: "desc" }, { id: "asc" }],
+        ...janela(pagina, porPagina),
+      })
+    : [];
 
-  let totalFiltrado = 0, totalVencido = 0, totalAberto = 0, totalPago = 0;
-  for (const c of contas) {
-    totalFiltrado += Number(c.valorTotal);
-    totalPago += Number(c.valorPago);
-    if (c.status === "VENCIDO") totalVencido += Number(c.saldoRestante);
-    else if (c.status !== "PAGO_TOTAL" && c.status !== "CANCELADO") totalAberto += Number(c.saldoRestante);
-  }
+  // Totais do FILTRO inteiro (agregados no banco), não da página visível
+  const totalFiltrado = Number(agFiltrado._sum.valorTotal ?? 0);
+  const totalPago = Number(agFiltrado._sum.valorPago ?? 0);
+  const totalVencido = Number(agVencido._sum.saldoRestante ?? 0);
+  const totalAberto = Number(agAberto._sum.saldoRestante ?? 0);
 
   const inputCls = "bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all";
 
   return (
+    <ListaUrl chave="contas-pagar" paramBusca="fornecedor" qAtual={fornecedor}>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -200,7 +196,7 @@ export default async function ContasPagarPage({
             {contas.length > 0 && (
               <tfoot className="bg-surface-alt border-t border-surface-border">
                 <tr className="text-sm">
-                  <td colSpan={3} className="px-4 py-3 font-semibold text-ink">Totais ({contas.length})</td>
+                  <td colSpan={3} className="px-4 py-3 font-semibold text-ink">Totais do filtro ({total})</td>
                   <td className="px-4 py-3 text-right font-bold text-ink">{formatarMoeda(totalFiltrado)}</td>
                   <td className="px-4 py-3 text-right text-success-700 hidden md:table-cell">{formatarMoeda(totalPago)}</td>
                   <td colSpan={5} className="px-4 py-3">
@@ -214,7 +210,11 @@ export default async function ContasPagarPage({
             )}
           </table>
         </div>
+        <div className="px-4 py-3 border-t border-surface-border bg-surface-alt/40">
+          <PaginacaoUrl total={total} pagina={pagina} porPagina={porPagina} rotulo="contas" />
+        </div>
       </div>
     </div>
+    </ListaUrl>
   );
 }

@@ -4,16 +4,18 @@ import { pode } from "@/lib/permissoes";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { marcarContasReceberVencidas } from "@/lib/financeiro-server";
-import { ContasReceberView, type ContaView } from "@/components/financeiro/contas-receber-view";
+import { whereContasReceber, condCardReceber } from "@/lib/listas/filtros";
+import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
+import { ContasReceberView, type ContaView, type ResumoReceber } from "@/components/financeiro/contas-receber-view";
 
 export const metadata: Metadata = { title: "Contas a Receber" };
 
 export default async function ContasReceberPage({
   searchParams,
 }: {
-  searchParams: Promise<{ clienteId?: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const { clienteId = "" } = await searchParams;
+  const sp = await searchParams;
   const session = await auth();
   if (!pode(session!.user!.permissoes, "financeiro", "contasReceber", session!.user!.role)) redirect("/sem-permissao");
   const empresaId = session!.user!.empresaId;
@@ -21,26 +23,48 @@ export default async function ContasReceberPage({
   // PREVISTO não vira ATRASADO (C6/F5) — regra única em marcarContasReceberVencidas
   await marcarContasReceberVencidas(empresaId);
 
-  const [contas, clientes, categorias, integracao] = await Promise.all([
-    prisma.contaReceber.findMany({
-      where: { empresaId },
-      include: {
-        cliente: {
-          select: {
-            id: true, nome: true, nomeFantasia: true, logo: true, cpfCnpj: true,
-            email: true, telefone: true, celular: true, whatsappFaturamento: true, emailsFaturamento: true,
-          },
-        },
-      },
-      orderBy: [{ dataVencimento: "asc" }, { criadoEm: "desc" }],
-      take: 500,
-    }),
+  const agora = new Date();
+  // UX-4 (E4): o filtro roda no BANCO — nada some por corte de fatia
+  const where = whereContasReceber(empresaId, sp, agora);
+  const { pagina: paginaPedida, porPagina } = lerPaginacao(sp);
+
+  const soma = (card: string) =>
+    prisma.contaReceber.aggregate({ where: { empresaId, ...(condCardReceber(card, agora) as object) }, _sum: { valor: true }, _count: true });
+
+  const [total, somaFiltrada, agAReceber, agVencido, agHoje, agRecebido, clientes, categorias, integracao] = await Promise.all([
+    prisma.contaReceber.count({ where }),
+    prisma.contaReceber.aggregate({ where, _sum: { valor: true } }),
+    soma("A_RECEBER"), soma("VENCIDO"), soma("VENCE_HOJE"), soma("RECEBIDO"),
     prisma.cliente.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true, nomeFantasia: true }, orderBy: { nome: "asc" } }),
     // Todas (ativas e inativas): a cor das contas antigas não some e a edição mostra a categoria atual;
     // o SeletorCadastro só oferece as ativas para nova escolha
     prisma.categoriaFinanceira.findMany({ where: { empresaId }, select: { id: true, nome: true, cor: true, ativo: true }, orderBy: { nome: "asc" } }),
     prisma.integracaoInter.findUnique({ where: { empresaId }, select: { ativo: true } }),
   ]);
+
+  const pagina = paginaValida(paginaPedida, porPagina, total);
+  const contas = total
+    ? await prisma.contaReceber.findMany({
+        where,
+        include: {
+          cliente: {
+            select: {
+              id: true, nome: true, nomeFantasia: true, logo: true, cpfCnpj: true,
+              email: true, telefone: true, celular: true, whatsappFaturamento: true, emailsFaturamento: true,
+            },
+          },
+        },
+        orderBy: [{ dataVencimento: "asc" }, { criadoEm: "desc" }, { id: "asc" }],
+        ...janela(pagina, porPagina),
+      })
+    : [];
+
+  const resumo: ResumoReceber = {
+    aReceber: { v: Number(agAReceber._sum.valor ?? 0), q: agAReceber._count },
+    vencido: { v: Number(agVencido._sum.valor ?? 0), q: agVencido._count },
+    hoje: { v: Number(agHoje._sum.valor ?? 0), q: agHoje._count },
+    recebido: { v: Number(agRecebido._sum.valor ?? 0), q: agRecebido._count },
+  };
 
   const view: ContaView[] = contas.map((c) => ({
     id: c.id, numero: c.numero, descricao: c.descricao, categoriaId: c.categoriaId, categoria: c.categoria, valor: Number(c.valor),
@@ -67,7 +91,16 @@ export default async function ContasReceberPage({
       clientes={clientes.map((c) => ({ id: c.id, nome: c.nomeFantasia ?? c.nome }))}
       categorias={categorias}
       interAtivo={!!integracao?.ativo}
-      clienteIdInicial={clienteId}
+      resumo={resumo}
+      total={total}
+      totalFiltrado={Number(somaFiltrada._sum.valor ?? 0)}
+      pagina={pagina}
+      porPagina={porPagina}
+      filtros={{
+        q: sp.q ?? "", card: sp.card ?? "", clienteId: sp.clienteId ?? "", categoria: sp.categoria ?? "",
+        forma: sp.forma ?? "", banco: sp.banco ?? "", valorMin: sp.valorMin ?? "", valorMax: sp.valorMax ?? "",
+        vencDe: sp.vencDe ?? "", vencAte: sp.vencAte ?? "", status: sp.status ?? "",
+      }}
     />
   );
 }
