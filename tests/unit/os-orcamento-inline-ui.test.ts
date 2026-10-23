@@ -174,6 +174,16 @@ describe("criar orçamento sem sair da OS", () => {
     expect($("[data-orcamento-form]")).toBeNull();
   });
 
+  it("vincular existente: depois do router.refresh() a lista acompanha a OS recarregada", async () => {
+    await montar();
+    expect(caixa.textContent).toContain("Nenhum orçamento vinculado");
+    const [{ OsOrcamentosVinculados }, { PermissoesProvider }] = await Promise.all([import("@/components/os/os-orcamentos-vinculados"), import("@/components/providers/permissoes-provider")]);
+    const vinc = [{ id: "v9", orcamento: { id: "o9", codigo: "ORC-0009", nome: "Do servidor", status: "ENVIADO", totalGeral: 90, criadoEm: "2026-10-01T13:00:00Z", tokenPublico: "t" } }];
+    await act(async () => { root.render(createElement(PermissoesProvider, { role: "OPERADOR", permissoes: permissoesTotais(), children: createElement(OsOrcamentosVinculados, { osId: "os1", clienteId: "c1", numeroOs: "OS-2026-0301", vinculados: vinc }) })); });
+    await esperar();
+    expect(caixa.textContent).toContain("ORC-0009");
+  });
+
   it("RBAC na tela: sem orcamentos.criar não há 'Criar orçamento'; sem ordens.editar não há vincular/desvincular", async () => {
     const vinc = [{ id: "v1", orcamento: { id: "o1", codigo: "ORC-0001", nome: "Antigo", status: "APROVADO", totalGeral: 500, criadoEm: "2026-10-01T13:00:00Z", tokenPublico: "t" } }];
     await montar(sem("orcamentos", "criar"), vinc);
