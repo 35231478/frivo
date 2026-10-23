@@ -97,6 +97,9 @@ describe.skipIf(!URL_PG)("UX-5 — portal que cobra sozinho (PostgreSQL real)", 
     const { gerarTokenSenha } = await import("@/lib/usuarios/convite");
     const interno = gerarTokenSenha({ id: "uX", senha: "hash" }, "recuperacao");
     expect((await rec.verificarTokenPortal(interno)).ok).toBe(false);
+    // Nem um link interno forjado para o MESMO id e senha do contato: a marca "pc" é o que separa
+    const forjado = gerarTokenSenha({ id: c.id, senha: c.senha }, "recuperacao");
+    expect((await rec.verificarTokenPortal(forjado)).ok).toBe(false);
     // E o do portal não vale no fluxo interno
     const { verificarTokenConvite } = await import("@/lib/usuarios/convite");
     expect((await verificarTokenConvite(token)).ok).toBe(false);
