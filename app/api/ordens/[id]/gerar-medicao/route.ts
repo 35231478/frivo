@@ -3,6 +3,7 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { gerarNumeroMedicao } from "@/lib/utils";
 import { itensFaturaveisDaOs, osJaFaturada } from "@/lib/faturamento-os";
+import { partesBR } from "@/lib/fuso";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -42,7 +43,7 @@ export async function POST(_: NextRequest, { params }: Params) {
   }
 
   const agora = new Date();
-  const ano = agora.getFullYear();
+  const { ano, mes: mes0 } = partesBR(agora); // competência pelo mês de Brasília
   const sequencial = (await prisma.medicao.count({ where: { empresaId } })) + 1;
   const numero = gerarNumeroMedicao(sequencial, ano);
 
@@ -68,7 +69,7 @@ export async function POST(_: NextRequest, { params }: Params) {
       clienteId: os.clienteId,
       numero,
       tipo: "ADICIONAL",
-      mes: agora.getMonth() + 1,
+      mes: mes0 + 1,
       ano,
       descricao: `Adicional — OS ${os.numero}`,
       status: "RASCUNHO",

@@ -5,6 +5,7 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { orcamentoSchema } from "@/lib/validations";
 import { gerarCodigoOrcamento } from "@/lib/utils";
 import { calcularTotais, montarCamposProposta } from "@/lib/orcamento-helpers";
+import { anoBR, periodoInstanteBR } from "@/lib/fuso";
 
 export async function GET(req: NextRequest) {
   const guard = await exigirPermissao("orcamentos", "visualizar");
@@ -25,13 +26,7 @@ export async function GET(req: NextRequest) {
   if (tipo) where.tipo = tipo;
   if (clienteId) where.clienteId = clienteId;
   if (dataInicio || dataFim) {
-    where.criadoEm = {};
-    if (dataInicio) where.criadoEm.gte = new Date(dataInicio);
-    if (dataFim) {
-      const fim = new Date(dataFim);
-      fim.setHours(23, 59, 59, 999);
-      where.criadoEm.lte = fim;
-    }
+    where.criadoEm = periodoInstanteBR(dataInicio, dataFim) ?? {}; // dias de Brasília
   }
   if (busca) {
     where.OR = [
@@ -99,7 +94,7 @@ export async function POST(req: NextRequest) {
   const proposta = montarCamposProposta(data);
 
   // Numeração derivada do maior código existente do ano (evita reuso após exclusão); retry em colisão
-  const ano = new Date().getFullYear();
+  const ano = anoBR();
   let orcamento;
   for (let tentativa = 0; ; tentativa++) {
     const ultimo = await prisma.orcamento.findFirst({

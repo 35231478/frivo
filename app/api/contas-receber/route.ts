@@ -4,6 +4,7 @@ import { categoriaParaGravar, respostaRefEmpresa } from "@/lib/ref-empresa";
 import { z } from "zod";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { proximoNumeroContaReceber } from "@/lib/financeiro-server";
+import { anoBR } from "@/lib/fuso";
 
 const schema = z.object({
   clienteId: z.string().min(1, "Cliente é obrigatório"),
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest) {
   try { categoria = await categoriaParaGravar(d.categoriaId, empresaId); }
   catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
-  const numero = await proximoNumeroContaReceber(empresaId, new Date().getFullYear());
+  const numero = await proximoNumeroContaReceber(empresaId, anoBR());
   const conta = await prisma.contaReceber.create({
     data: {
       empresaId,

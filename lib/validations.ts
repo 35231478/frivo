@@ -17,6 +17,7 @@ import {
   TipoManutencaoVeiculo, TipoDocumentoVeiculo, FrequenciaChecklist, TipoItemChecklist,
   TipoComunicacao, CanalComunicacao,
 } from "@prisma/client";
+import { anoBR, mesBR } from "@/lib/fuso";
 
 const valorOpcional = z.preprocess(
   (v) =>
@@ -793,11 +794,11 @@ export type TabelaPrecoItemInput = z.infer<typeof tabelaPrecoItemSchema>;
 export const relatorioSchema = z.object({
   tipo: z.nativeEnum(TipoRelatorio).default(TipoRelatorio.PMOC),
   mesReferencia: z.preprocess(
-    (v) => (v === "" || v == null ? new Date().getMonth() + 1 : Number(v)),
+    (v) => (v === "" || v == null ? mesBR() : Number(v)),
     z.number().min(1).max(12)
   ),
   anoReferencia: z.preprocess(
-    (v) => (v === "" || v == null ? new Date().getFullYear() : Number(v)),
+    (v) => (v === "" || v == null ? anoBR() : Number(v)),
     z.number().min(2000).max(2100)
   ),
   valorFinanceiro: z.preprocess(

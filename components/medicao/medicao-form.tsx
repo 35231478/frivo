@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { ItensTabela, type ItemTabela, type CatalogoItem, type TabelaPrecoCliente } from "@/components/orcamento/itens-tabela";
 import { LABELS_TIPO_MEDICAO, MESES_PT, formatarMoeda } from "@/lib/utils";
 import { AlertCircle, Tags } from "lucide-react";
+import { anoBR, mesBR } from "@/lib/fuso";
 
 interface ClienteOpt {
   id: string;
@@ -68,8 +69,8 @@ export function MedicaoForm({
   const [clienteId, setClienteId] = useState(inicial?.clienteId ?? clienteIdInicial ?? "");
   const [contratoId, setContratoId] = useState(inicial?.contratoId ?? "");
   const [tipo, setTipo] = useState(inicial?.tipo ?? "MENSAL_FIXO");
-  const [mes, setMes] = useState<number>(inicial?.mes ?? agora.getMonth() + 1);
-  const [ano, setAno] = useState<number>(inicial?.ano ?? agora.getFullYear());
+  const [mes, setMes] = useState<number>(inicial?.mes ?? mesBR(agora));
+  const [ano, setAno] = useState<number>(inicial?.ano ?? anoBR(agora));
   const [descricao, setDescricao] = useState(inicial?.descricao ?? "");
   const [observacao, setObservacao] = useState(inicial?.observacao ?? "");
   const [descontoValor, setDescontoValor] = useState(Number(inicial?.descontoValor ?? 0));
@@ -245,7 +246,7 @@ export function MedicaoForm({
               </Select>
             </FormField>
             <FormField label="Ano de referência">
-              <Input type="number" min={2000} max={2100} value={ano} onChange={(e) => setAno(Number(e.target.value) || agora.getFullYear())} />
+              <Input type="number" min={2000} max={2100} value={ano} onChange={(e) => setAno(Number(e.target.value) || anoBR(agora))} />
             </FormField>
           </FormGrid>
           <FormField label="Descrição">

@@ -2,7 +2,7 @@ import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { relogioBR } from "@/lib/fuso";
+import { anoBR, chaveDiaCivil, relogioBR } from "@/lib/fuso";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -46,34 +46,34 @@ export function formatarTelefone(valor: string): string {
 }
 
 export function gerarNumeroOS(sequencial: number): string {
-  return `OS-${new Date().getFullYear()}-${String(sequencial).padStart(4, "0")}`;
+  return `OS-${anoBR()}-${String(sequencial).padStart(4, "0")}`;
 }
 
 export function gerarNumeroContrato(sequencial: number): string {
-  return `CT-${new Date().getFullYear()}-${String(sequencial).padStart(3, "0")}`;
+  return `CT-${anoBR()}-${String(sequencial).padStart(3, "0")}`;
 }
 
 export function gerarCodigoOrcamento(sequencial: number): string {
-  return `ORC-${new Date().getFullYear()}-${String(sequencial).padStart(4, "0")}`;
+  return `ORC-${anoBR()}-${String(sequencial).padStart(4, "0")}`;
 }
 
-export function gerarNumeroMedicao(sequencial: number, ano = new Date().getFullYear()): string {
+export function gerarNumeroMedicao(sequencial: number, ano = anoBR()): string {
   return `MED-${ano}-${String(sequencial).padStart(4, "0")}`;
 }
 
-export function gerarNumeroContaReceber(sequencial: number, ano = new Date().getFullYear()): string {
+export function gerarNumeroContaReceber(sequencial: number, ano = anoBR()): string {
   return `CR-${ano}-${String(sequencial).padStart(4, "0")}`;
 }
 
-export function gerarNumeroContaPagar(sequencial: number, ano = new Date().getFullYear()): string {
+export function gerarNumeroContaPagar(sequencial: number, ano = anoBR()): string {
   return `CP-${ano}-${String(sequencial).padStart(4, "0")}`;
 }
 
-export function gerarNumeroPedidoCompra(sequencial: number, ano = new Date().getFullYear()): string {
+export function gerarNumeroPedidoCompra(sequencial: number, ano = anoBR()): string {
   return `PCI-${ano}-${String(sequencial).padStart(4, "0")}`;
 }
 
-export function gerarNumeroRelatorio(sequencial: number, ano = new Date().getFullYear()): string {
+export function gerarNumeroRelatorio(sequencial: number, ano = anoBR()): string {
   return `REL-${ano}-${String(sequencial).padStart(4, "0")}`;
 }
 
@@ -338,10 +338,9 @@ export function calcularDataFimContrato(inicio: Date | string | null | undefined
   if (!inicio || !meses) return null;
   const d = new Date(inicio);
   if (isNaN(d.getTime())) return null;
-  const fim = new Date(d);
-  fim.setMonth(fim.getMonth() + meses);
-  fim.setDate(fim.getDate() - 1);
-  return fim;
+  // Dia civil: soma meses no dia GRAVADO (sem fuso) e volta um dia
+  const [a, m, dia] = chaveDiaCivil(d).split("-").map(Number);
+  return new Date(Date.UTC(a, m - 1 + meses, dia - 1));
 }
 
 export const LABELS_TIPO_DESCONTO: Record<string, string> = {

@@ -5,6 +5,7 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { proximoNumeroContaPagar } from "@/lib/financeiro-server";
 import { categoriaParaGravar, centroCustoParaGravar, fornecedorParaGravar, respostaRefEmpresa } from "@/lib/ref-empresa";
 import { boletoParaGravar } from "@/lib/financeiro/boleto-conta";
+import { anoBR } from "@/lib/fuso";
 
 export async function GET() {
   const guard = await exigirPermissao("financeiro", "visualizar");
@@ -48,7 +49,7 @@ export async function POST(req: NextRequest) {
     ]);
   } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
-  const numero = await proximoNumeroContaPagar(empresaId, new Date().getFullYear());
+  const numero = await proximoNumeroContaPagar(empresaId, anoBR());
   const conta = await prisma.contaPagar.create({
     data: {
       empresaId,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { gerarNumeroContrato } from "@/lib/utils";
+import { anoBR } from "@/lib/fuso";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -45,7 +46,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
     : [];
 
   // Numeração CT-AAAA-NNN derivada do maior do ano
-  const ano = new Date().getFullYear();
+  const ano = anoBR();
   const ultimo = await prisma.contrato.findFirst({
     where: { empresaId, numero: { startsWith: `CT-${ano}-` } },
     orderBy: { numero: "desc" },

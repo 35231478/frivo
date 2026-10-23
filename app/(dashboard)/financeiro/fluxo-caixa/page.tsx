@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { cn, formatarData, formatarMoeda, nomeMes, MESES_PT, LABELS_STATUS_CONTA_RECEBER, CLASSE_STATUS_CONTA_RECEBER } from "@/lib/utils";
 import { TrendingUp } from "lucide-react";
+import { anoBR, chaveDiaCivil, diaDoMesCivil, mesBR } from "@/lib/fuso";
 
 export const metadata: Metadata = { title: "Fluxo de Caixa" };
 
@@ -19,8 +20,8 @@ export default async function FluxoCaixaPage({
   const empresaId = session!.user!.empresaId;
 
   const agora = new Date();
-  const mes = Number(sp.mes) || agora.getMonth() + 1;
-  const ano = Number(sp.ano) || agora.getFullYear();
+  const mes = Number(sp.mes) || mesBR(agora);
+  const ano = Number(sp.ano) || anoBR(agora);
 
   const inicioMes = new Date(ano, mes - 1, 1, 0, 0, 0);
   const fimMes = new Date(ano, mes, 0, 23, 59, 59);
@@ -61,10 +62,10 @@ export default async function FluxoCaixaPage({
   }
   for (const c of contasJanela) {
     if (!c.dataVencimento) continue;
-    const d = new Date(c.dataVencimento);
+    const [va, vm] = chaveDiaCivil(c.dataVencimento).split("-").map(Number); // dia gravado, sem fuso
     const idx = meses.findIndex((_, i) => {
       const ref = new Date(ano, mes - 6 + i, 1);
-      return ref.getMonth() === d.getMonth() && ref.getFullYear() === d.getFullYear();
+      return ref.getMonth() + 1 === vm && ref.getFullYear() === va;
     });
     if (idx >= 0) {
       meses[idx].previsto += Number(c.valor);
@@ -76,7 +77,7 @@ export default async function FluxoCaixaPage({
   // Agrupa contas do mês por semana
   const semanas = new Map<number, typeof contasMes>();
   for (const c of contasMes) {
-    const dia = c.dataVencimento ? new Date(c.dataVencimento).getDate() : 1;
+    const dia = c.dataVencimento ? diaDoMesCivil(c.dataVencimento) : 1;
     const semana = Math.min(4, Math.floor((dia - 1) / 7)) + 1;
     const arr = semanas.get(semana) ?? [];
     arr.push(c);

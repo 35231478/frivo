@@ -10,6 +10,7 @@ import { proximasOcorrencias } from "@/lib/recorrencia-helpers";
 import { FREQUENCIAS_RECORRENCIA, LABELS_PERIODICIDADE, formatarData } from "@/lib/utils";
 import { MapPin, RefreshCw } from "lucide-react";
 import { InputData } from "@/components/ui/input-data";
+import { diaDoMesCivil } from "@/lib/fuso";
 
 export interface LocalConfig {
   ativa: boolean;
@@ -42,7 +43,7 @@ export function RecorrenciaLocais({ locais, tiposOs, tecnicos, value, onChange }
         const c = value[l.id] ?? cfgPadrao();
         const base = c.dataPrimeiraOs ? new Date(`${c.dataPrimeiraOs}T12:00:00`) : null;
         const preview = (c.ativa && c.frequencia && base)
-          ? proximasOcorrencias({ dataInicio: base, frequencia: c.frequencia, diaRecorrencia: base.getDate(), limite: 6, aPartirDe: base })
+          ? proximasOcorrencias({ dataInicio: base, frequencia: c.frequencia, diaRecorrencia: diaDoMesCivil(base), limite: 6, aPartirDe: base })
           : [];
         const tipoNome = tiposOs.find((t) => t.id === c.tipoOsId)?.nome ?? "Atendimento recorrente";
         const respNome = tecnicos.find((t) => t.id === c.tecnicoId)?.nome ?? "—";

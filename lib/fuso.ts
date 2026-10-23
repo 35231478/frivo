@@ -190,3 +190,12 @@ export function periodoDiaCivil(de?: string | null, ate?: string | null): { gte?
 
 /** "AAAA-MM-DD" de hoje em Brasília (+ `deslocDias`) — valor padrão de campo de data. */
 export const chaveHojeBR = (deslocDias = 0, agora: Date = new Date()) => chaveDiaBR(inicioHojeBR(agora, deslocDias));
+
+/** Ano corrente em Brasília (numeração "OS-2026-…", "CT-2026-…": não vira o ano às 21h de 31/12). */
+export const anoBR = (agora: Date = new Date()) => partesBR(agora).ano;
+
+/** Mês corrente (1-12) em Brasília. */
+export const mesBR = (agora: Date = new Date()) => partesBR(agora).mes + 1;
+
+/** Dia do mês (1-31) de um dia civil gravado (vencimento, primeira OS…) — o dia gravado, sem fuso. */
+export const diaDoMesCivil = (d: Date | string) => Number(chaveDiaCivil(d).slice(8, 10));

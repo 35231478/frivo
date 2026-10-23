@@ -5,6 +5,7 @@ import { z } from "zod";
 import { equipamentosDoCliente } from "@/lib/execucao/vinculos";
 import { ErroTecnicos, MSG_SEM_EXECUTOR, gravarTecnicos, lerDefinicao, lerVeiculo, resolverTecnicos, resolverVeiculo } from "@/lib/atividade-tecnicos";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
+import { anoBR } from "@/lib/fuso";
 
 const osCreateSchema = z.object({
   clienteId: z.string().min(1),
@@ -104,7 +105,7 @@ export async function POST(req: NextRequest) {
     equipamentoIds = r.validos;
   }
 
-  const ano = new Date().getFullYear();
+  const ano = anoBR();
   const ultimaOs = await prisma.ordemServico.findFirst({
     where: { empresaId, numero: { startsWith: `OS-${ano}-` } },
     orderBy: { numero: "desc" },

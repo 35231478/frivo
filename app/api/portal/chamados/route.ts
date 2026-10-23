@@ -6,6 +6,7 @@ import { chamadoPortalSchema } from "@/lib/validations";
 import { validarDataUrl, type ArquivoValidado } from "@/lib/anexos-server";
 import { TIPOS_IMAGEM } from "@/lib/anexos";
 import { conferirBloqueio, ipDaRequisicao, registrarTentativa } from "@/lib/acesso/limite";
+import { anoBR } from "@/lib/fuso";
 
 const MAP_URGENCIA: Record<string, "NORMAL" | "ALTA" | "CRITICO"> = {
   NORMAL: "NORMAL", URGENTE: "ALTA", CRITICO: "CRITICO",
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest) {
   }) ?? await prisma.usuario.findFirst({ where: { empresaId, ativo: true }, select: { id: true } });
   if (!gestor) return NextResponse.json({ erro: "Empresa sem usuário responsável" }, { status: 400 });
 
-  const ano = new Date().getFullYear();
+  const ano = anoBR();
   const numero = await proximoNumeroOs(empresaId, ano);
   const totalChamados = await prisma.ordemServico.count({ where: { empresaId, origem: "PORTAL_CLIENTE" } });
   const chamadoNumero = `CHM-${ano}-${String(totalChamados + 1).padStart(4, "0")}`;

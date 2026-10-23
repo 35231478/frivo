@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { exigirPermissao } from "@/lib/permissoes-server";
+import { anoBR } from "@/lib/fuso";
 
 /** Retorna o próximo número de contrato sugerido (CT-AAAA-NNN), incrementando o maior do ano. */
 export async function GET(_: NextRequest) {
@@ -9,7 +10,7 @@ export async function GET(_: NextRequest) {
   const { session } = guard;
   const empresaId = session.user!.empresaId;
 
-  const ano = new Date().getFullYear();
+  const ano = anoBR();
   const ultimo = await prisma.contrato.findFirst({
     where: { empresaId, numero: { startsWith: `CT-${ano}-` } },
     orderBy: { numero: "desc" },

@@ -5,7 +5,7 @@ import { CalendarDays, ChevronRight, Clock, HardDrive, MapPin, Navigation, Phone
 import { cn, formatarData } from "@/lib/utils";
 import { irPara, useTecnico } from "@/components/tecnico/contexto";
 import type { CartaoTela, OperacaoFila } from "@/lib/tecnico/offline/tipos";
-import { diaCivilDeChave, diasAteDiaCivil, horaBR } from "@/lib/fuso";
+import { diaCivilDeChave, diasAteDiaCivil, horaBR, partesBR } from "@/lib/fuso";
 
 export const ROTULO_STATUS_ATIVIDADE: Record<string, { rotulo: string; classe: string }> = {
   AGENDADA: { rotulo: "Agendada", classe: "bg-violet-100 text-violet-700" },
@@ -85,7 +85,7 @@ function useFila() {
 }
 
 function saudacao() {
-  const h = new Date().getHours();
+  const h = partesBR().hora; // saudação pela hora de Brasília
   return h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite";
 }
 

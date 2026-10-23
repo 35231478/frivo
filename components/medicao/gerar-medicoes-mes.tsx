@@ -7,13 +7,14 @@ import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { MESES_PT } from "@/lib/utils";
 import { CalendarRange, X, Check, AlertCircle } from "lucide-react";
+import { anoBR, mesBR } from "@/lib/fuso";
 
 export function GerarMedicoesMes() {
   const router = useRouter();
   const agora = new Date();
   const [aberto, setAberto] = useState(false);
-  const [mes, setMes] = useState(agora.getMonth() + 1);
-  const [ano, setAno] = useState(agora.getFullYear());
+  const [mes, setMes] = useState(mesBR(agora));
+  const [ano, setAno] = useState(anoBR(agora));
   const [gerando, setGerando] = useState(false);
   const [resultado, setResultado] = useState<{ criadas: number; ignoradas: number } | null>(null);
   const [erro, setErro] = useState("");
@@ -66,7 +67,7 @@ export function GerarMedicoesMes() {
         <Select value={String(mes)} onChange={(e) => setMes(Number(e.target.value))}>
           {MESES_PT.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
         </Select>
-        <Input type="number" value={ano} onChange={(e) => setAno(Number(e.target.value) || agora.getFullYear())} />
+        <Input type="number" value={ano} onChange={(e) => setAno(Number(e.target.value) || anoBR(agora))} />
       </div>
 
       {erro && (

@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { intervaloMeses, ehOcorrencia, dataAgendadaRecorrencia } from "@/lib/recorrencia-helpers";
 import { RelatorioContratosClient } from "@/components/contratos/relatorio-contratos-client";
-import { diaCivilPassou } from "@/lib/fuso";
+import { anoBR, diaCivilPassou, mesBR } from "@/lib/fuso";
 
 export const metadata: Metadata = { title: "Relatório de Contratos" };
 
@@ -15,8 +15,8 @@ export default async function RelatorioContratosPage({ searchParams }: { searchP
   const empresaId = session!.user!.empresaId;
 
   const agora = new Date();
-  const mes = Number(sp.mes) || agora.getMonth() + 1;
-  const ano = Number(sp.ano) || agora.getFullYear();
+  const mes = Number(sp.mes) || mesBR(agora);
+  const ano = Number(sp.ano) || anoBR(agora);
   const inicioMes = new Date(ano, mes - 1, 1, 0, 0, 0);
   const fimMes = new Date(ano, mes, 0, 23, 59, 59);
   const periodo = `${ano}-${String(mes).padStart(2, "0")}`;

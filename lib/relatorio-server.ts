@@ -8,6 +8,7 @@ const SELECT_EQUIP_RELATORIO = {
 import { gerarNumeroRelatorio } from "@/lib/utils";
 import { adicionaisDe, blocosAtendidos, SELECT_ADICIONAIS, SELECT_CHECKLIST, SELECT_FOTOS } from "@/lib/relatorio-os/dados";
 import { tokenRelatorioNoFormato } from "@/lib/relatorio-atividade-link";
+import { partesBR } from "@/lib/fuso";
 
 /** O que o relatório precisa para montar os blocos dos equipamentos ATENDIDOS (checklist, fotos, observação). */
 const INCLUDE_ATENDIMENTO = {
@@ -46,9 +47,9 @@ export async function gerarRelatoriosDaOs(osId: string, empresaId: string) {
   });
   if (!os) return { criados: 0 };
 
-  const ref = os.dataConclusao ?? new Date();
-  const mesReferencia = ref.getMonth() + 1;
-  const anoReferencia = ref.getFullYear();
+  const ref = partesBR(os.dataConclusao ?? new Date()); // mês/ano de Brasília
+  const mesReferencia = ref.mes + 1;
+  const anoReferencia = ref.ano;
 
   // Sequencial derivado do maior número de relatório do ano de referência (evita colisão entre anos)
   const ultimoRel = await prisma.relatorioOs.findFirst({

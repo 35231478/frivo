@@ -27,7 +27,7 @@ import {
   Paperclip, Repeat, StickyNote, Building2, FileCheck, AlertCircle, Wand2, DollarSign,
   Plus, CalendarDays, ChevronDown, CheckCircle2, PauseCircle, RefreshCw, XCircle, History, User, Trash2, SlidersHorizontal,
 } from "lucide-react";
-import { chaveDiaCivil } from "@/lib/fuso";
+import { anoBR, chaveDiaCivil, diaCivilDeChave, diasAteDiaCivil } from "@/lib/fuso";
 import { InputData } from "@/components/ui/input-data";
 
 // Opções de mudança de status oferecidas no cabeçalho (ícone, cor e descrição).
@@ -228,7 +228,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
           tipo: "MANUTENCAO_PREVENTIVA",
           periodicidade: "MENSAL",
           unidadeIds: [],
-          numero: `CT-${new Date().getFullYear()}-`,
+          numero: `CT-${anoBR()}-`,
           recorrencia: false,
           faturamentoAdicionais: "SEPARADO",
           diaFaturamento: undefined,
@@ -400,9 +400,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
 
   function badgeVigencia(): { txt: string; cls: string } {
     if (!dataFimVal) return { txt: "Vigência indeterminada", cls: "bg-slate-100 text-slate-600" };
-    const fim = new Date(`${dataFimVal}T00:00:00`);
-    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-    const dias = Math.round((fim.getTime() - hoje.getTime()) / 86400000);
+    const dias = diasAteDiaCivil(diaCivilDeChave(dataFimVal))!; // pelo dia de Brasília
     if (dias < 0) return { txt: `Vencido há ${Math.abs(dias)} dias`, cls: "bg-red-50 text-red-700" };
     if (dias <= 30) return { txt: `Vence em ${dias} dias`, cls: "bg-amber-50 text-amber-700" };
     return { txt: `Vence em ${dias} dias`, cls: "bg-success-50 text-success-700" };

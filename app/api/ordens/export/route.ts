@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { formatarData, LABELS_STATUS_OS, LABELS_PRIORIDADE } from "@/lib/utils";
-import { chaveHojeBR } from "@/lib/fuso";
+import { chaveHojeBR, periodoInstanteBR } from "@/lib/fuso";
 
 const SORT_MAP: Record<string, (dir: "asc" | "desc") => any> = {
   numero: (dir) => ({ numero: dir }),
@@ -42,9 +42,7 @@ export async function GET(req: NextRequest) {
   if (sp.get("tipoOsId")) where.atividades = { some: { tipoOsId: sp.get("tipoOsId") } };
   if (sp.get("numero")) where.numero = { contains: sp.get("numero")!, mode: "insensitive" };
   if (sp.get("dataInicio") || sp.get("dataFim")) {
-    where.criadoEm = {};
-    if (sp.get("dataInicio")) where.criadoEm.gte = new Date(sp.get("dataInicio")!);
-    if (sp.get("dataFim")) { const f = new Date(sp.get("dataFim")!); f.setHours(23, 59, 59, 999); where.criadoEm.lte = f; }
+    where.criadoEm = periodoInstanteBR(sp.get("dataInicio"), sp.get("dataFim")) ?? {};
   }
   if (sp.get("busca")) {
     const b = sp.get("busca")!;

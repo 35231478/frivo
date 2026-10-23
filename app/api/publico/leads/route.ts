@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { gerarCodigoOrcamento } from "@/lib/utils";
 import { enviarEmailInterno } from "@/lib/email";
 import { formatarData } from "@/lib/utils";
+import { anoBR } from "@/lib/fuso";
 
 /**
  * Endpoint público de lead vindo do site institucional (calculadora de BTU).
@@ -264,7 +265,7 @@ export async function POST(req: Request) {
     ].join("\n");
 
     // 7. Orçamento com numeração ORC-YYYY-NNNN (retry em colisão de unique)
-    const ano = new Date().getFullYear();
+    const ano = anoBR();
     let orcamento!: { id: string; codigo: string };
     for (let tentativa = 0; ; tentativa++) {
       const ultimo = await prisma.orcamento.findFirst({
