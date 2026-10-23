@@ -37,7 +37,15 @@ export function PortalAcessoContato({
   // A senha só existe aqui logo depois de definida/redefinida: o servidor guarda apenas o hash.
   const [senhaProvisoria, setSenhaProvisoria] = useState<string | null>(null);
   const [revelar, setRevelar] = useState(false);
-  const [perms, setPerms] = useState<Record<string, boolean>>(permissoesIniciais ?? {});
+  // UX-5 (C1): acesso NOVO já nasce vendo o essencial — inclusive as FATURAS (o portal
+  // existe para o boleto se entregar sozinho). O gestor desmarca o que não quiser.
+  const PERMISSOES_PADRAO_CONCESSAO: Record<string, boolean> = {
+    verOS: true, abrirChamados: true, verDocumentos: true, verEquipamentos: true,
+    verFinanceiro: true, verBoletos: true, verValores: true,
+  };
+  const [perms, setPerms] = useState<Record<string, boolean>>(
+    permissoesIniciais ?? (temAcessoInicial ? {} : PERMISSOES_PADRAO_CONCESSAO),
+  );
   const [salvando, setSalvando] = useState(false);
   const [acao, setAcao] = useState<"salvar" | "redefinir" | "revogar" | null>(null);
   const [fb, setFb] = useState<{ t: "ok" | "erro"; m: string } | null>(null);

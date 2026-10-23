@@ -42,7 +42,13 @@ export default async function PortalDocumentos() {
 
       <Secao titulo="PMOC e Relatórios" icone={FileText}>
         {relatorios.length === 0 ? <Vazio /> : relatorios.map((r) => (
-          <Linha key={r.id} principal={`${r.numero} · ${LABELS_TIPO_RELATORIO[r.tipo] ?? r.tipo}`} sec={`${nomeMes(r.mesReferencia)}/${r.anoReferencia} · ${formatarData(r.criadoEm)}`} href={`/relatorio/os/${r.tokenPublico}`} />
+          <Linha
+            key={r.id}
+            // C1: rótulo leigo — "Medição" é jargão interno; para o cliente é a fatura do mês
+            principal={r.tipo === "MEDICAO" ? `Fatura de ${nomeMes(r.mesReferencia)}/${r.anoReferencia}` : `${r.numero} · ${LABELS_TIPO_RELATORIO[r.tipo] ?? r.tipo}`}
+            sec={r.tipo === "MEDICAO" ? `${r.numero} · ${formatarData(r.criadoEm)}` : `${nomeMes(r.mesReferencia)}/${r.anoReferencia} · ${formatarData(r.criadoEm)}`}
+            href={`/relatorio/os/${r.tokenPublico}`}
+          />
         ))}
       </Secao>
 

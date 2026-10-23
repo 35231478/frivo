@@ -32,7 +32,7 @@ export default async function PortalDashboard() {
   ]);
 
   const alertas: { tipo: "info" | "warn" | "danger"; texto: string }[] = [];
-  if (permissoes.verFinanceiro && medicoesPend > 0) alertas.push({ tipo: "warn", texto: `Você tem ${medicoesPend} medição(ões) aguardando aprovação.` });
+  if (permissoes.verFinanceiro && medicoesPend > 0) alertas.push({ tipo: "warn", texto: `Você tem ${medicoesPend} fatura(s) aguardando sua aprovação.` });
   if (permissoes.verBoletos) {
     const vencidos = boletos.filter((b) => b.dataVencimento && b.dataVencimento < agora).length;
     const vencendo = boletos.length - vencidos;

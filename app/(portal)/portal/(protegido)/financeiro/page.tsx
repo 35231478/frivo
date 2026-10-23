@@ -39,28 +39,28 @@ export default async function PortalFinanceiro() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-ink flex items-center gap-2"><Wallet className="w-6 h-6 text-primary-600" /> Financeiro</h1>
+      <h1 className="text-2xl font-bold text-ink flex items-center gap-2"><Wallet className="w-6 h-6 text-primary-600" /> Faturas</h1>
 
-      {/* Medições pendentes de aprovação */}
+      {/* Faturas pendentes de aprovação (rótulo leigo — C1: "medição" é jargão interno) */}
       <section>
-        <h2 className="text-sm font-bold text-ink-muted uppercase tracking-wider mb-2">Medições aguardando aprovação</h2>
+        <h2 className="text-sm font-bold text-ink-muted uppercase tracking-wider mb-2">Faturas aguardando sua aprovação</h2>
         {medicoes.length === 0 ? (
-          <div className="bg-white rounded-xl border border-surface-border p-6 text-center text-ink-muted text-sm">Nenhuma medição pendente.</div>
+          <div className="bg-white rounded-xl border border-surface-border p-6 text-center text-ink-muted text-sm">Nenhuma fatura aguardando aprovação.</div>
         ) : (
           <div className="space-y-4">
             {medicoes.map((m) => (
               <div key={m.id} className="bg-white rounded-xl border border-surface-border p-4">
                 <div className="flex items-center justify-between gap-3 mb-3">
                   <div>
-                    <p className="font-mono text-sm font-semibold text-primary-600">{m.numero}</p>
-                    <p className="text-xs text-ink-muted">{m.mes ? `${nomeMes(m.mes)}/${m.ano}` : ""}</p>
+                    <p className="text-sm font-semibold text-ink" data-fatura-rotulo>{m.mes ? `Fatura de ${nomeMes(m.mes)}/${m.ano}` : "Fatura"}</p>
+                    <p className="font-mono text-xs text-ink-muted">{m.numero}</p>
                   </div>
                   {verValores && <p className="text-lg font-bold text-success-700">{formatarMoeda(Number(m.valorLiquido))}</p>}
                 </div>
                 {podeAprovar ? (
                   <AprovacaoMedicao token={m.tokenPublico} />
                 ) : (
-                  <p className="text-xs text-ink-subtle">Você não tem permissão para aprovar medições.</p>
+                  <p className="text-xs text-ink-subtle">Você não tem permissão para aprovar faturas.</p>
                 )}
               </div>
             ))}
