@@ -331,7 +331,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
           <div className={cn("space-y-8", aba !== "profissionais" && "hidden")}>
             <FormSection title="Função">
               <FormGrid>
-                <FormField label="Cargo" hint="Cadastre cargos em Configurações → Cargos">
+                <FormField label="Cargo">
                   {/* Só cargos ativos para nova escolha; o cargo atual segue visível mesmo inativo */}
                   <SeletorCadastro
                     entidade="cargos" valor={watch("cargoId") ?? ""} placeholder="Selecione…"

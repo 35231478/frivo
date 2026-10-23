@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Modal } from "@/components/ui/modal";
+import { Button } from "@/components/ui/button";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { ROTULO_COBRANCA, type StatusCobranca } from "@/lib/execucao/adicional";
 import { ehTecnicoPuro } from "@/lib/tecnico/modo";
@@ -28,20 +30,34 @@ export function OsAdicionais({ osId, adicionais }: { osId: string; adicionais: A
   const decide = pode("ordens", "editar") && !ehTecnicoPuro(role, permissoes);
   const [lista, setLista] = useState(adicionais);
   const [erro, setErro] = useState<string | null>(null);
+  // Marcar COBRAR exige o preço (modal da casa, não window.prompt): vira item da medição da OS
+  const [cobrando, setCobrando] = useState<AdicionalOs | null>(null);
+  const [preco, setPreco] = useState("");
+  const [erroPreco, setErroPreco] = useState("");
   if (!lista.length) return null;
   const aAvaliar = lista.filter((a) => a.statusCobranca === "A_AVALIAR").length;
 
-  async function mudar(a: AdicionalOs, statusCobranca: StatusCobranca) {
-    setErro(null);
-    // Marcar COBRAR exige o preço: o adicional entra como item da medição da OS
-    let valor: number | undefined;
+  function clicar(a: AdicionalOs, statusCobranca: StatusCobranca) {
     if (statusCobranca === "COBRAR") {
-      const sugestao = a.valor ? String(Number(a.valor)) : "";
-      const digitado = window.prompt("Preço do serviço adicional (R$):", sugestao);
-      if (digitado === null) return;
-      valor = Number(digitado.replace(/\./g, "").replace(",", "."));
-      if (!Number.isFinite(valor) || valor <= 0) { setErro("Informe um preço válido (maior que zero)."); return; }
+      setPreco(a.valor ? String(Number(a.valor)).replace(".", ",") : "");
+      setErroPreco("");
+      setCobrando(a);
+      return;
     }
+    void mudar(a, statusCobranca);
+  }
+
+  function confirmarCobranca() {
+    if (!cobrando) return;
+    const valor = Number(preco.trim().replace(/\./g, "").replace(",", "."));
+    if (!Number.isFinite(valor) || valor <= 0) { setErroPreco("Informe um preço válido (maior que zero)."); return; }
+    const a = cobrando;
+    setCobrando(null);
+    void mudar(a, "COBRAR", valor);
+  }
+
+  async function mudar(a: AdicionalOs, statusCobranca: StatusCobranca, valor?: number) {
+    setErro(null);
     const antes = { statusCobranca: a.statusCobranca, valor: a.valor };
     setLista((l) => l.map((x) => (x.id === a.id ? { ...x, statusCobranca, valor: valor ?? x.valor } : x)));
     const r = await fetch(`/api/ordens/${osId}/servicos-adicionais/${a.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ statusCobranca, ...(valor !== undefined ? { valor } : {}) }) }).catch(() => null);
@@ -85,7 +101,7 @@ export function OsAdicionais({ osId, adicionais }: { osId: string; adicionais: A
               {decide ? (
                 <div className="flex sm:flex-col gap-1 shrink-0" role="group" aria-label="Cobrança">
                   {(Object.keys(ROTULO_COBRANCA) as StatusCobranca[]).map((s) => (
-                    <button key={s} type="button" aria-pressed={a.statusCobranca === s} data-cobranca={s} onClick={() => a.statusCobranca !== s && mudar(a, s)}
+                    <button key={s} type="button" aria-pressed={a.statusCobranca === s} data-cobranca={s} onClick={() => a.statusCobranca !== s && clicar(a, s)}
                       className={cn("text-xs font-semibold rounded-lg border px-2.5 py-1.5", a.statusCobranca === s ? COR[s] : "bg-white border-gray-200 text-gray-500 hover:border-gray-300")}>
                       {ROTULO_COBRANCA[s]}
                     </button>
@@ -98,6 +114,27 @@ export function OsAdicionais({ osId, adicionais }: { osId: string; adicionais: A
           );
         })}
       </ul>
+
+      <Modal aberto={!!cobrando} onFechar={() => setCobrando(null)} titulo="Preço do serviço adicional" tamanho="sm">
+        <div className="space-y-4" data-modal-preco-adicional>
+          {cobrando && <p className="text-sm text-ink-muted whitespace-pre-wrap">{cobrando.descricao}</p>}
+          <label className="block">
+            <span className="block text-xs font-medium text-ink mb-1">Preço a cobrar (R$) <span className="text-red-500">*</span></span>
+            <input
+              autoFocus inputMode="decimal" value={preco} placeholder="0,00" data-preco-adicional
+              onChange={(e) => setPreco(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); confirmarCobranca(); } }}
+              className="w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10"
+            />
+          </label>
+          <p className="text-xs text-ink-muted">O serviço entra na medição da OS com este preço.</p>
+          {erroPreco && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-erro-preco>{erroPreco}</p>}
+          <div className="flex gap-2 justify-end">
+            <Button type="button" variant="secondary" onClick={() => setCobrando(null)}>Cancelar</Button>
+            <Button type="button" onClick={confirmarCobranca} data-confirmar-preco>Cobrar este serviço</Button>
+          </div>
+        </div>
+      </Modal>
     </section>
   );
 }

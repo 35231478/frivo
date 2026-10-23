@@ -11,14 +11,15 @@ export function OsOrcamento({ osId, itens: iniciais }: { osId: string; itens: an
   const [itens, setItens] = useState(iniciais);
   const [mostraForm, setMostraForm] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState("");
   const [form, setForm] = useState({ descricao: "", quantidade: "1", valorUnitario: "" });
 
   const total = itens.reduce((acc: number, i: any) => acc + Number(i.valorTotal), 0);
   const totalExecutado = itens.filter((i: any) => i.executado).reduce((acc: number, i: any) => acc + Number(i.valorTotal), 0);
 
   async function adicionar() {
-    if (!form.descricao || !form.valorUnitario) return;
-    setSalvando(true);
+    if (!form.descricao || !form.valorUnitario) { setErro("Preencha a descrição e o valor unitário."); return; }
+    setSalvando(true); setErro("");
     try {
       const res = await fetch(`/api/ordens/${osId}/orcamento`, {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -29,19 +30,27 @@ export function OsOrcamento({ osId, itens: iniciais }: { osId: string; itens: an
         setItens((p) => [...p, novo]);
         setForm({ descricao: "", quantidade: "1", valorUnitario: "" });
         setMostraForm(false);
+      } else {
+        // Gravação nunca falha em silêncio: o motivo aparece na tela
+        setErro((await res.json().catch(() => null))?.erro ?? "Não foi possível adicionar o item.");
       }
-    } catch {} finally { setSalvando(false); }
+    } catch { setErro("Erro de conexão. Tente novamente."); } finally { setSalvando(false); }
   }
 
   async function marcarExecutado(itemId: string) {
-    const res = await fetch(`/api/ordens/${osId}/orcamento/${itemId}`, {
-      method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ executado: true }),
-    });
-    if (res.ok) {
-      const atualizado = await res.json();
-      setItens((p) => p.map((i) => (i.id === itemId ? atualizado : i)));
-    }
+    setErro("");
+    try {
+      const res = await fetch(`/api/ordens/${osId}/orcamento/${itemId}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ executado: true }),
+      });
+      if (res.ok) {
+        const atualizado = await res.json();
+        setItens((p) => p.map((i) => (i.id === itemId ? atualizado : i)));
+      } else {
+        setErro((await res.json().catch(() => null))?.erro ?? "Não foi possível marcar como executado.");
+      }
+    } catch { setErro("Erro de conexão. Tente novamente."); }
   }
 
   return (
@@ -50,6 +59,8 @@ export function OsOrcamento({ osId, itens: iniciais }: { osId: string; itens: an
         <div className="text-sm"><span className="text-gray-500">Total do orçamento:</span> <span className="font-bold text-gray-900">{formatarMoeda(total)}</span></div>
         <div className="text-sm"><span className="text-gray-500">Executado:</span> <span className="font-bold text-green-700">{formatarMoeda(totalExecutado)}</span></div>
       </div>
+
+      {erro && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-erro-orcamento>{erro}</p>}
 
       {itens.length === 0 && !mostraForm && (
         <p className="text-sm text-gray-400 text-center py-6">Nenhum item no orçamento.</p>

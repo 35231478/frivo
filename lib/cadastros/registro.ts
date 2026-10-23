@@ -75,6 +75,8 @@ export interface DefCadastro {
   detalheSugestao?: string;
   /** O que os outros registros gravam ao escolher este cadastro (categoria: o NOME) */
   chave: "id" | "nome";
+  /** Tela do cadastro completo (link "Abrir cadastro completo" no cadastro rápido) */
+  rota?: string;
   schemaCriar: z.ZodTypeAny;
   schemaEditar: z.ZodTypeAny;
   /** Colunas que NUNCA saem em resposta nenhuma (ex.: senha do usuário) */
@@ -175,7 +177,7 @@ const emailOpcional = z.preprocess((v) => (vazio(v) ? null : typeof v === "strin
 export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
   produtos: {
     entidade: "produtos", modelo: "produto", massa: true, singular: "produto", plural: "produtos",
-    modulo: "configuracoes", permissoes: PERMISSOES_CONFIG, chave: "id",
+    modulo: "configuracoes", permissoes: PERMISSOES_CONFIG, chave: "id", rota: "/configuracoes/produtos",
     busca: ["nome", "descricao"],
     campos: [
       { key: "nome", label: "Nome", obrigatorio: true, placeholder: "Ex: Gás R410A" },
@@ -195,7 +197,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
   },
   servicos: {
     entidade: "servicos", modelo: "servico", massa: true, singular: "serviço", plural: "serviços",
-    modulo: "configuracoes", permissoes: PERMISSOES_CONFIG, chave: "id",
+    modulo: "configuracoes", permissoes: PERMISSOES_CONFIG, chave: "id", rota: "/configuracoes/servicos",
     busca: ["nome", "descricao", "codigoLc116", "codigoMunicipal"],
     campos: [
       { key: "nome", label: "Nome", obrigatorio: true, placeholder: "Ex: Manutenção Preventiva" },
@@ -227,7 +229,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
   },
   cargos: {
     entidade: "cargos", modelo: "cargo", massa: true, singular: "cargo", plural: "cargos",
-    modulo: "configuracoes", permissoes: PERMISSOES_CONFIG, chave: "id",
+    modulo: "configuracoes", permissoes: PERMISSOES_CONFIG, chave: "id", rota: "/configuracoes/cargos",
     busca: ["nome", "descricao"],
     campos: [
       { key: "nome", label: "Nome", obrigatorio: true, placeholder: "Ex: Técnico de Refrigeração" },
@@ -240,7 +242,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
     entidade: "categorias-financeiras", modelo: "categoriaFinanceira", massa: true, singular: "categoria", plural: "categorias", feminino: true,
     modulo: "configuracoes", permissoes: PERMISSOES_CONFIG,
     // As contas (a receber e a pagar) gravam o ID da categoria (Leva 5.1): renomear não desliga nada
-    chave: "id",
+    chave: "id", rota: "/configuracoes/financeiro/categorias",
     busca: ["nome"],
     campos: [
       { key: "nome", label: "Nome", obrigatorio: true, placeholder: "Ex: Contrato Mensal" },
@@ -393,7 +395,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       inativar: [["financeiro", "fluxoCaixa"], ["configuracoes", "gerenciar"]],
       reativar: [["financeiro", "fluxoCaixa"], ["configuracoes", "gerenciar"]],
     },
-    chave: "id",
+    chave: "id", rota: "/financeiro/fornecedores",
     busca: ["nome", "documento", "email", "telefone"], detalheSugestao: "documento",
     incluir: { _count: { select: { contasPagar: true } } },
     campos: [
@@ -412,7 +414,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
     entidade: "centros-custo", modelo: "centroCusto", massa: true, singular: "centro de custo", plural: "centros de custo",
     // Igual às categorias financeiras (a outra classificação da despesa): qualquer usuário logado lê
     // (seletor da conta a pagar e da nota de compra); gravar: Configurações › gerenciar
-    modulo: "configuracoes", permissoes: PERMISSOES_CONFIG, chave: "id",
+    modulo: "configuracoes", permissoes: PERMISSOES_CONFIG, chave: "id", rota: "/configuracoes/financeiro/centros-custo",
     busca: ["nome"],
     incluir: { _count: { select: { contasPagar: true } } },
     campos: [
