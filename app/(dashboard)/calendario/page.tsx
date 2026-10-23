@@ -9,7 +9,8 @@ import type { CelulaDia, CardOs } from "@/components/calendario/calendario-grid"
 import { SOLICITACAO_PENDENTE } from "@/lib/solicitacoes";
 import { pode } from "@/lib/permissoes";
 import { prazoVencido } from "@/lib/os/prazos";
-import { chaveDiaBR, chaveDiaCivil, diaCivilUTC, ehDiaCivil, horaBR, inicioDiaBR, partesBR } from "@/lib/fuso";
+import { chaveDiaBR, chaveDiaCivil, partesBR } from "@/lib/fuso";
+import { gridCalendario, posicaoNoCalendario } from "@/lib/calendario/grid";
 import { SolicitacoesGaveta } from "@/components/calendario/solicitacoes-gaveta";
 import { CalendarDays, ChevronLeft, ChevronRight, Repeat } from "lucide-react";
 
@@ -39,30 +40,9 @@ export default async function CalendarioPage({
   const ano = Number(sp.ano) || hojeBR.ano;
   const view = sp.view === "semanal" ? "semanal" : "mensal";
 
-  // Intervalo visível
-  let gridInicio: Date;
-  let gridFim: Date;
-  const dias: Date[] = [];
-
-  // Dias do grid como dias civis (meia-noite UTC); limites de busca em instantes de Brasília
-  if (view === "semanal") {
-    const diaRef = Number(sp.dia) || (hojeBR.mes + 1 === mes && hojeBR.ano === ano ? hojeBR.dia : 1);
-    const ref = diaCivilUTC(ano, mes - 1, diaRef);
-    const domingo = ref.getUTCDate() - ref.getUTCDay();
-    for (let i = 0; i < 7; i++) dias.push(diaCivilUTC(ref.getUTCFullYear(), ref.getUTCMonth(), domingo + i));
-  } else {
-    const primeiro = diaCivilUTC(ano, mes - 1, 1);
-    // 6 semanas cobrem qualquer mês (começando no domingo)
-    for (let i = 0; i < 42; i++) dias.push(diaCivilUTC(ano, mes - 1, 1 - primeiro.getUTCDay() + i));
-  }
-  const primeiroDia = dias[0], ultimoDia = dias[dias.length - 1];
-  gridInicio = inicioDiaBR(primeiroDia.getUTCFullYear(), primeiroDia.getUTCMonth(), primeiroDia.getUTCDate());
-  gridFim = new Date(inicioDiaBR(ultimoDia.getUTCFullYear(), ultimoDia.getUTCMonth(), ultimoDia.getUTCDate() + 1).getTime() - 1);
-  const chavesGrid = new Set(dias.map(chave));
-
-  // Atividade agendada = instante (dia de Brasília); previsão = dia civil (ou instante, se tem hora)
-  const periodo = { gte: gridInicio, lte: gridFim };
-  const periodoDia = { gte: primeiroDia, lt: diaCivilUTC(ultimoDia.getUTCFullYear(), ultimoDia.getUTCMonth(), ultimoDia.getUTCDate() + 1) };
+  // Grid e limites no relógio de Brasília (lib/calendario/grid.ts)
+  const diaRef = Number(sp.dia) || (hojeBR.mes + 1 === mes && hojeBR.ano === ano ? hojeBR.dia : 1);
+  const { dias, chaves: chavesGrid, periodo, periodoDia } = gridCalendario({ ano, mes, view, dia: diaRef });
 
   // Carrega TODAS as OS do período. Os filtros do painel são aplicados no cliente
   // (esmaecendo os cards que não correspondem, sem removê-los do calendário).
@@ -123,13 +103,13 @@ export default async function CalendarioPage({
     for (const at of os.atividades) {
       if (!at.dataAgendada) continue;
       const d = new Date(at.dataAgendada);
-      const k = chaveDiaBR(d);
+      const k = posicaoNoCalendario(d, true).chave;
       if (!chavesGrid.has(k)) continue;
       if (!porDia.has(k)) porDia.set(k, { data: d, ativ: at });
     }
     if (porDia.size === 0 && os.previsaoConclusao) {
       const d = new Date(os.previsaoConclusao);
-      const k = chaveDiaCivil(d);
+      const k = posicaoNoCalendario(d, false).chave;
       if (chavesGrid.has(k)) porDia.set(k, { data: d, ativ: null });
     }
 
@@ -149,7 +129,7 @@ export default async function CalendarioPage({
         unidade: os.unidade?.nome ?? null,
         tipoOs: ativ?.tipoOs?.nome ?? null,
         // Hora de Brasília; previsão só de dia (sem hora) não inventa "00:00"
-        hora: ativ || !ehDiaCivil(posData) ? horaBR(posData) : null,
+        hora: posicaoNoCalendario(posData, !!ativ).hora,
         dataFmt: formatarData(posData, "dd/MM/yyyy"),
         tecnicoNome: ativ?.tecnico?.nome ?? null,
         tecnicoAvatar: ativ?.tecnico?.avatar ?? null,
