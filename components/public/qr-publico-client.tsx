@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { MessageCircle, Globe, ClipboardList, FileText, Wrench, CalendarClock, MapPin, CheckCircle2, X } from "lucide-react";
+import { MessageCircle, Globe, ClipboardList, FileText, Wrench, CalendarClock, MapPin, CheckCircle2, Copy, Upload, X } from "lucide-react";
+import { reduzirImagem, FOTO_GALERIA } from "@/lib/imagem-cliente";
 
 type Botao = "login" | "form" | null;
 type Dados = {
@@ -21,7 +22,16 @@ type Dados = {
 };
 
 export function QrPublicoClient({ dados }: { dados: Dados }) {
-  const [form, setForm] = useState<"CHAMADO" | "ORCAMENTO" | null>(null);
+  // O formulário fica MONTADO depois da primeira abertura: fechar ou alternar o tipo
+  // não descarta o que a pessoa já digitou (Y14 — rascunho preservado).
+  const [tipoForm, setTipoForm] = useState<"CHAMADO" | "ORCAMENTO" | null>(null);
+  const [aberto, setAberto] = useState(false);
+  const form = aberto ? tipoForm : null;
+  const setForm = (t: "CHAMADO" | "ORCAMENTO" | null) => {
+    if (t === null) { setAberto(false); return; }
+    setTipoForm(t);
+    setAberto(true);
+  };
 
   return (
     <div className="min-h-screen bg-surface-page">
@@ -112,13 +122,11 @@ export function QrPublicoClient({ dados }: { dados: Dados }) {
           </a>
         )}
 
-        {/* Formulário inline */}
-        {form && (
-          <FormularioSolicitacao
-            tipo={form}
-            token={dados.token}
-            onFechar={() => setForm(null)}
-          />
+        {/* Formulário inline — montado de vez após a primeira abertura (rascunho preservado) */}
+        {tipoForm && (
+          <div hidden={!aberto}>
+            <FormularioSolicitacao tipo={tipoForm} token={dados.token} onFechar={() => setForm(null)} />
+          </div>
         )}
 
         {/* Botões de ação */}
@@ -128,24 +136,26 @@ export function QrPublicoClient({ dados }: { dados: Dados }) {
               <MessageCircle className="w-4 h-4" /> Falar conosco
             </a>
           )}
-          {dados.botoes.chamado && (
+          {/* Y14: com o formulário aberto, some o botão do tipo ativo — fica UM chamado à ação
+              (o Enviar do próprio formulário); o outro botão só troca o tipo, sem perder o texto. */}
+          {dados.botoes.chamado && form !== "CHAMADO" && (
             dados.botoes.chamado === "login" ? (
               <a href="/portal/login" className="flex items-center justify-center gap-2 w-full rounded-lg bg-primary-500 text-white px-4 py-3 text-sm font-semibold shadow-sm">
                 <ClipboardList className="w-4 h-4" /> Abrir chamado (entrar)
               </a>
             ) : (
-              <button onClick={() => setForm(form === "CHAMADO" ? null : "CHAMADO")} className="flex items-center justify-center gap-2 w-full rounded-lg bg-primary-500 text-white px-4 py-3 text-sm font-semibold shadow-sm">
+              <button data-abrir-chamado onClick={() => setForm("CHAMADO")} className="flex items-center justify-center gap-2 w-full rounded-lg bg-primary-500 text-white px-4 py-3 text-sm font-semibold shadow-sm">
                 <ClipboardList className="w-4 h-4" /> Abrir chamado
               </button>
             )
           )}
-          {dados.botoes.orcamento && (
+          {dados.botoes.orcamento && form !== "ORCAMENTO" && (
             dados.botoes.orcamento === "login" ? (
               <a href="/portal/login" className="flex items-center justify-center gap-2 w-full rounded-lg bg-white border border-primary-500 text-primary-600 px-4 py-3 text-sm font-semibold">
                 <FileText className="w-4 h-4" /> Solicitar orçamento (entrar)
               </a>
             ) : (
-              <button onClick={() => setForm(form === "ORCAMENTO" ? null : "ORCAMENTO")} className="flex items-center justify-center gap-2 w-full rounded-lg bg-white border border-primary-500 text-primary-600 px-4 py-3 text-sm font-semibold">
+              <button data-abrir-orcamento onClick={() => setForm("ORCAMENTO")} className="flex items-center justify-center gap-2 w-full rounded-lg bg-white border border-primary-500 text-primary-600 px-4 py-3 text-sm font-semibold">
                 <FileText className="w-4 h-4" /> Solicitar orçamento
               </button>
             )
@@ -172,16 +182,36 @@ function Info({ termo, valor }: { termo: string; valor: string }) {
   );
 }
 
+interface FotoQr { nome: string; tipo: string; tamanho: number; conteudo: string }
+
 function FormularioSolicitacao({ tipo, token, onFechar }: { tipo: "CHAMADO" | "ORCAMENTO"; token: string; onFechar: () => void }) {
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
   const [descricao, setDescricao] = useState("");
+  const [fotos, setFotos] = useState<FotoQr[]>([]);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState("");
   const [ok, setOk] = useState<string | null>(null);
+  const [copiado, setCopiado] = useState(false);
 
   const titulo = tipo === "ORCAMENTO" ? "Solicitar orçamento" : "Abrir chamado";
+
+  // C2: a pessoa está NA FRENTE do problema — mesma compressão do chamado do portal
+  async function addFotos(files: FileList | null) {
+    if (!files) return;
+    setErro("");
+    const novas: FotoQr[] = [];
+    for (const f of Array.from(files).slice(0, 6)) {
+      try {
+        const { imagem } = await reduzirImagem(f, FOTO_GALERIA.ladoMax, FOTO_GALERIA.qualidade);
+        novas.push({ nome: f.name, tipo: "image/jpeg", tamanho: imagem.bytes, conteudo: imagem.dataUrl });
+      } catch {
+        setErro(`Não foi possível ler a imagem "${f.name}". Envie fotos JPG, PNG ou WEBP.`);
+      }
+    }
+    setFotos((p) => [...p, ...novas].slice(0, 6));
+  }
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
@@ -190,39 +220,91 @@ function FormularioSolicitacao({ tipo, token, onFechar }: { tipo: "CHAMADO" | "O
       const res = await fetch(`/api/qr/${token}/chamado`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tipo, nome, email, telefone, descricao }),
+        body: JSON.stringify({ tipo, nome, email, telefone, descricao, fotos }),
       });
       const d = await res.json();
       if (!res.ok) { setErro(d.erro ?? "Erro ao enviar."); return; }
       setOk(d.chamadoNumero ?? "");
+      // Enviado: o rascunho cumpriu o papel
+      setNome(""); setEmail(""); setTelefone(""); setDescricao(""); setFotos([]);
     } catch { setErro("Erro de conexão."); } finally { setEnviando(false); }
   }
 
+  async function copiarProtocolo() {
+    if (!ok) return;
+    try { await navigator.clipboard.writeText(ok); setCopiado(true); setTimeout(() => setCopiado(false), 2500); }
+    catch { /* sem clipboard (http antigo): o protocolo segue visível para anotar */ }
+  }
+
+  // Y17: confirmação com protocolo COPIÁVEL e o próximo passo dito com todas as letras
   if (ok !== null) {
     return (
-      <section className="bg-white rounded-xl border border-green-200 shadow-sm p-5 text-center">
+      <section data-confirmacao-qr className="bg-white rounded-xl border border-green-200 shadow-sm p-5 text-center">
         <CheckCircle2 className="w-8 h-8 text-green-500 mx-auto mb-2" />
         <p className="font-semibold text-ink">Solicitação enviada!</p>
-        {ok && <p className="text-sm text-ink-muted mt-1">Protocolo: <span className="font-mono">{ok}</span></p>}
-        <button onClick={onFechar} className="text-sm text-primary-600 hover:underline mt-3">Fechar</button>
+        {ok && (
+          <>
+            <p className="text-sm text-ink-muted mt-2">Protocolo</p>
+            <p data-protocolo className="font-mono text-lg font-bold text-ink">{ok}</p>
+            <button type="button" data-copiar-protocolo onClick={copiarProtocolo} className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-primary-500 text-primary-600 px-3 py-1.5 text-sm font-semibold">
+              <Copy className="w-3.5 h-3.5" /> {copiado ? "Copiado!" : "Copiar protocolo"}
+            </button>
+          </>
+        )}
+        <p className="text-sm text-ink-muted mt-3">
+          Guarde o protocolo. Nossa equipe recebe a solicitação e entra em contato pelos dados que você informou.
+        </p>
+        <button onClick={() => { setOk(null); onFechar(); }} className="text-sm text-primary-600 hover:underline mt-3">Fechar</button>
       </section>
     );
   }
 
-  const inputCls = "w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10";
+  const inputCls = "mt-1 w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10";
+  const labelCls = "block text-sm font-semibold text-ink";
 
   return (
-    <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+    <section data-form-qr className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold text-ink">{titulo}</h2>
-        <button onClick={onFechar} className="text-ink-muted hover:text-ink"><X className="w-5 h-5" /></button>
+        <button onClick={onFechar} aria-label="Fechar formulário" className="text-ink-muted hover:text-ink"><X className="w-5 h-5" /></button>
       </div>
       {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 mb-3">{erro}</div>}
-      <form onSubmit={enviar} className="space-y-2.5">
-        <input className={inputCls} placeholder="Seu nome *" value={nome} onChange={(e) => setNome(e.target.value)} required />
-        <input className={inputCls} type="email" placeholder="E-mail" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <input className={inputCls} placeholder="Telefone / WhatsApp" value={telefone} onChange={(e) => setTelefone(e.target.value)} />
-        <textarea className={inputCls} rows={3} placeholder={tipo === "ORCAMENTO" ? "O que você precisa orçar? *" : "Descreva o problema *"} value={descricao} onChange={(e) => setDescricao(e.target.value)} required />
+      <form onSubmit={enviar} className="space-y-3">
+        <label className={labelCls}>
+          Seu nome <span className="text-red-500">*</span>
+          <input className={inputCls} placeholder="Como podemos te chamar" value={nome} onChange={(e) => setNome(e.target.value)} required />
+        </label>
+        <label className={labelCls}>
+          E-mail
+          <input className={inputCls} type="email" inputMode="email" autoComplete="email" placeholder="voce@empresa.com.br" value={email} onChange={(e) => setEmail(e.target.value)} />
+        </label>
+        <label className={labelCls}>
+          Telefone / WhatsApp
+          <input className={inputCls} type="tel" inputMode="tel" autoComplete="tel" placeholder="(11) 99999-0000" value={telefone} onChange={(e) => setTelefone(e.target.value)} />
+        </label>
+        <label className={labelCls}>
+          {tipo === "ORCAMENTO" ? "O que você precisa orçar?" : "Descreva o problema"} <span className="text-red-500">*</span>
+          <textarea className={inputCls} rows={3} placeholder={tipo === "ORCAMENTO" ? "Conte o que precisa ser feito" : "O que está acontecendo com o equipamento?"} value={descricao} onChange={(e) => setDescricao(e.target.value)} required />
+        </label>
+        <div>
+          <span className={labelCls}>Fotos (opcional)</span>
+          <div className="mt-1 flex flex-wrap gap-2">
+            {fotos.map((f, i) => (
+              <div key={i} data-foto-qr className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-200">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={f.conteudo} alt={f.nome} className="w-full h-full object-cover" />
+                <button type="button" onClick={() => setFotos((p) => p.filter((_, j) => j !== i))} aria-label={`Remover foto ${f.nome}`} className="absolute top-0.5 right-0.5 bg-black/50 text-white rounded-full p-0.5"><X className="w-3 h-3" /></button>
+              </div>
+            ))}
+            {fotos.length < 6 && (
+              <label className="w-20 h-20 rounded-lg border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-ink-subtle cursor-pointer hover:border-primary-300">
+                <Upload className="w-5 h-5" />
+                <span className="text-[10px]">Adicionar</span>
+                <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => addFotos(e.target.files)} />
+              </label>
+            )}
+          </div>
+        </div>
         <button type="submit" disabled={enviando} className="w-full rounded-lg bg-primary-500 text-white px-4 py-2.5 text-sm font-semibold disabled:opacity-60">
           {enviando ? "Enviando…" : "Enviar"}
         </button>

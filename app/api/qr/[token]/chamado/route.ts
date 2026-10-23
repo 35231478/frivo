@@ -4,6 +4,8 @@ import { proximoNumeroOs } from "@/lib/os-server";
 import { mesclarQrConfig } from "@/lib/qr-config";
 import { getPortalSession } from "@/lib/auth-portal";
 import { conferirBloqueio, ipDaRequisicao, registrarTentativa } from "@/lib/acesso/limite";
+import { validarDataUrl, type ArquivoValidado } from "@/lib/anexos-server";
+import { TIPOS_IMAGEM, MAX_FOTOS_CHAMADO } from "@/lib/anexos";
 import { z } from "zod";
 
 type Params = { params: Promise<{ token: string }> };
@@ -14,6 +16,13 @@ const chamadoSchema = z.object({
   email: z.string().email("E-mail inválido").max(160).optional().or(z.literal("")),
   telefone: z.string().max(20).optional().or(z.literal("")),
   descricao: z.string().min(5, "Descreva o problema (mín. 5 caracteres)").max(2000),
+  // Fotos no mesmo formato do chamado do portal (C2): data URL já reduzida no navegador
+  fotos: z.array(z.object({
+    nome: z.string(),
+    tipo: z.string(),
+    tamanho: z.number(),
+    conteudo: z.string(),
+  })).max(MAX_FOTOS_CHAMADO, `Envie no máximo ${MAX_FOTOS_CHAMADO} fotos`).default([]),
 });
 
 export async function POST(req: NextRequest, { params }: Params) {
@@ -54,7 +63,16 @@ export async function POST(req: NextRequest, { params }: Params) {
   const logado = !!sessao?.user
     && sessao.user.empresaId === empresaId
     && sessao.user.clienteId === equip.unidade!.clienteId;
-  const contatoId = logado ? sessao!.user.id : null;
+  let contatoId = logado ? sessao!.user.id : null;
+  // Y17: anônimo que informa o e-mail de um contato DO MESMO CLIENTE fica identificado para a
+  // triagem (só origem/registro — não dá acesso a nada; quem decide o atendimento é a equipe).
+  if (!contatoId && d.email) {
+    const conhecido = await prisma.contatoCliente.findFirst({
+      where: { empresaId, clienteId: equip.unidade!.clienteId!, ativo: true, email: { equals: d.email, mode: "insensitive" } },
+      select: { id: true },
+    });
+    contatoId = conhecido?.id ?? null;
+  }
 
   // Gating por tipo, conforme configurações
   if (d.tipo === "ORCAMENTO") {
@@ -63,6 +81,17 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
   } else if (!cfg.botaoChamado || (cfg.chamadoSomenteLogado && !logado)) {
     return NextResponse.json({ erro: "Abertura de chamado pública não está disponível." }, { status: 403 });
+  }
+
+  // Fotos (C2): só imagens, conferidas pelo CONTEÚDO — igual ao chamado do portal logado
+  const fotos: ArquivoValidado[] = [];
+  for (const f of d.fotos) {
+    const v = validarDataUrl(f.conteudo, f.nome, {
+      tipos: TIPOS_IMAGEM,
+      mensagemTipo: "Envie apenas fotos (JPG, PNG ou WEBP).",
+    });
+    if (!v.ok) return NextResponse.json({ erro: `Foto "${f.nome}": ${v.erro}` }, { status: 400 });
+    fotos.push(v.arquivo);
   }
 
   const gestor =
@@ -95,6 +124,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       origem: "PORTAL_CLIENTE",
       prioridade: "NORMAL",
       descricao,
+      anexos: fotos.length > 0 ? { create: fotos } : undefined,
     },
   });
 
