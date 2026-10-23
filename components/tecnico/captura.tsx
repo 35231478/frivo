@@ -44,8 +44,10 @@ export function Miniatura({ src, alt, pendente, onRemover }: { src: string; alt:
       <img src={src} alt={alt} className="w-20 h-20 rounded-lg object-cover border border-surface-border bg-surface-alt" />
       {pendente && <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1 text-[10px] font-semibold text-white">no aparelho</span>}
       {onRemover && (
-        <button type="button" aria-label={`Tirar ${alt}`} onClick={onRemover} className="absolute -top-2 -right-2 rounded-full bg-white border border-surface-border p-1 shadow">
-          <X className="w-3.5 h-3.5 text-ink-muted" />
+        // Y10: "Remover" (não "Tirar", que soa como fotografar) e alvo de toque ≥44px (hitbox invisível)
+        <button type="button" aria-label={`Remover ${alt}`} onClick={onRemover}
+          className="absolute -top-2 -right-2 rounded-full bg-white border border-surface-border p-1.5 shadow before:absolute before:-inset-2.5 before:content-['']">
+          <X className="w-4 h-4 text-ink-muted" />
         </button>
       )}
     </div>

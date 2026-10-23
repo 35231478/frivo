@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Mail, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Mail, ShieldCheck } from "lucide-react";
 import { CadastroPadrao } from "@/components/cadastros/cadastro-padrao";
 import { AvisoConvite, criarEditorUsuario, type ResultadoConvite } from "@/components/cadastros/editores/editor-usuario";
 import { formatarData } from "@/lib/utils";
@@ -12,7 +12,7 @@ import { formatarData } from "@/lib/utils";
  * administrador; ninguém altera o próprio perfil; quem não é administrador não mexe em quem tem
  * mais acesso. Usuário inativado perde o acesso na hora (sessão conferida a cada requisição).
  */
-export function UsuariosTela({ usuarioAtualId }: { usuarioAtualId: string }) {
+export function UsuariosTela({ usuarioAtualId, emailsTecnicos = [] }: { usuarioAtualId: string; emailsTecnicos?: string[] }) {
   const Editor = useMemo(() => criarEditorUsuario(usuarioAtualId), [usuarioAtualId]);
   const [convite, setConvite] = useState<{ nome: string; r: ResultadoConvite } | null>(null);
   const [erro, setErro] = useState("");
@@ -48,13 +48,22 @@ export function UsuariosTela({ usuarioAtualId }: { usuarioAtualId: string }) {
             </span>
           );
           if (col === "perfil") {
+            // Y11: papel Técnico só abre o APP quando existe Técnico ativo com o MESMO e-mail —
+            // sem isso a pessoa entra no sistema comum "vazio" e ninguém entende o porquê.
+            const avisoTecnico = u.role === "TECNICO" && u.ativo && !emailsTecnicos.includes((u.email ?? "").trim().toLowerCase()) && (
+              <span data-aviso-tecnico className="inline-flex items-center gap-1 text-[10px] font-semibold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full"
+                title="Não há técnico ativo com este e-mail em Equipes › Técnicos. Assim a pessoa entra no sistema comum (vazio) em vez do app do técnico. Cadastre o técnico com o mesmo e-mail.">
+                <AlertTriangle className="w-3 h-3" /> sem técnico vinculado — não cai no app
+              </span>
+            );
             if (u.role === "ADMIN") return <span className="inline-flex items-center gap-1 text-xs font-semibold bg-red-50 text-red-600 px-2 py-1 rounded-full"><ShieldCheck className="w-3.5 h-3.5" /> Acesso total</span>;
-            if (!u.perfilAcesso) return <span className="text-xs text-ink-muted">Sem perfil (sem acesso)</span>;
+            if (!u.perfilAcesso) return <span className="flex items-center gap-1.5 flex-wrap"><span className="text-xs text-ink-muted">Sem perfil (sem acesso)</span>{avisoTecnico}</span>;
             return (
-              <span className="flex items-center gap-1.5">
+              <span className="flex items-center gap-1.5 flex-wrap">
                 <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: u.perfilAcesso.cor }} />
                 <span>{u.perfilAcesso.nome}</span>
                 {!u.perfilAcesso.ativo && <span className="text-[10px] font-semibold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full" title="Perfil inativo: este usuário está sem acesso">perfil inativo · sem acesso</span>}
+                {avisoTecnico}
               </span>
             );
           }
