@@ -128,6 +128,7 @@ describe.skipIf(!URL_PG)("central da OS: status automático, ajuste manual e pra
     const nova = await chamar(ATS, "POST", { id: osId }, { titulo: "Retorno", tecnicoIds: ["t1"], responsavelId: "t1", prazo: "2026-11-05" });
     expect(nova.status).toBe(201);
     const at2 = nova.json.id;
+    expect((await prisma.atividadeOs.findUnique({ where: { id: at2 } })).prazo.toISOString()).toBe("2026-11-05T00:00:00.000Z");
     expect(await statusDe(osId)).toMatchObject({ status: "EM_ANDAMENTO" });
 
     // Trava: a 1ª atividade não conclui sem o checklist do equipamento
