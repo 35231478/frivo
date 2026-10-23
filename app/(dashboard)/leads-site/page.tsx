@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
+import { ListaUrl, PaginacaoUrl } from "@/components/listagem/lista-url";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { redirect } from "next/navigation";
@@ -30,9 +32,10 @@ const FILTROS: { key: string; label: string; status: string[] | null }[] = [
 export default async function LeadsSitePage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const { status = "todos" } = await searchParams;
+  const sp = await searchParams;
+  const { status = "todos" } = sp;
   const session = await auth();
   if (!pode(session!.user!.permissoes, "orcamentos", "visualizar", session!.user!.role)) redirect("/sem-permissao");
   const empresaId = session!.user!.empresaId;
@@ -43,17 +46,23 @@ export default async function LeadsSitePage({
   if (filtro.status) where.status = { in: filtro.status };
 
   const desde = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const [orcamentos, novos24h] = await Promise.all([
-    prisma.orcamento.findMany({
-      where,
-      include: { cliente: { select: { nome: true, celular: true, cidade: true } } },
-      orderBy: { criadoEm: "desc" },
-      take: 200,
-    }),
+  // UX-4 (Y5): paginação de servidor no lugar do corte fixo de 200
+  const { pagina: paginaPedida, porPagina } = lerPaginacao(sp);
+  const [total, novos24h] = await Promise.all([
+    prisma.orcamento.count({ where }),
     prisma.orcamento.count({
       where: { empresaId, nome: { startsWith: NOME_PREFIXO }, criadoEm: { gte: desde } },
     }),
   ]);
+  const pagina = paginaValida(paginaPedida, porPagina, total);
+  const orcamentos = total
+    ? await prisma.orcamento.findMany({
+        where,
+        include: { cliente: { select: { nome: true, celular: true, cidade: true } } },
+        orderBy: [{ criadoEm: "desc" }, { id: "asc" }],
+        ...janela(pagina, porPagina),
+      })
+    : [];
 
   const linhas = orcamentos.map((o) => {
     const valor = Number(o.totalGeral);
@@ -71,6 +80,7 @@ export default async function LeadsSitePage({
   });
 
   return (
+    <ListaUrl chave="leads-site" paramBusca="q" qAtual="">
     <div className="space-y-6">
       <header className="flex items-center gap-3">
         <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary-500/10 text-primary-600">
@@ -170,7 +180,11 @@ export default async function LeadsSitePage({
             </tbody>
           </table>
         )}
+        <div className="px-4 py-3 border-t border-surface-border bg-surface-alt/40">
+          <PaginacaoUrl total={total} pagina={pagina} porPagina={porPagina} rotulo="leads" />
+        </div>
       </div>
     </div>
+    </ListaUrl>
   );
 }

@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
+import { ListaUrl, PaginacaoUrl } from "@/components/listagem/lista-url";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -15,9 +17,10 @@ const PESO_STATUS: Record<string, number> = { ATRASADO: 0, ATIVO: 1, CONCLUIDO: 
 export default async function PrazosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; templateId?: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const { status = "", templateId = "" } = await searchParams;
+  const sp = await searchParams;
+  const { status = "", templateId = "" } = sp;
   const session = await auth();
   const empresaId = session!.user!.empresaId;
 
@@ -27,7 +30,12 @@ export default async function PrazosPage({
   if (status) where.status = status;
   if (templateId) where.templateId = templateId;
 
-  const [prazos, templates] = await Promise.all([
+  // UX-4 (Y5): a ordenação é por URGÊNCIA (calculada): busca o filtro inteiro (com teto alto),
+  // ordena e PAGINA em memória — a página some só quando o filtro passar do teto, não aos 300
+  const TETO_PRAZOS = 2000;
+  const { pagina: paginaPedida, porPagina } = lerPaginacao(sp);
+  const [total, prazos, templates] = await Promise.all([
+    prisma.osPrazo.count({ where }),
     prisma.osPrazo.findMany({
       where,
       include: {
@@ -35,7 +43,8 @@ export default async function PrazosPage({
         template: { select: { cor: true } },
         ordemServico: { select: { id: true, numero: true, cliente: { select: { nome: true, nomeFantasia: true } } } },
       },
-      take: 300,
+      orderBy: [{ criadoEm: "desc" }, { id: "asc" }],
+      take: TETO_PRAZOS,
     }),
     prisma.prazoTemplate.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
   ]);
@@ -51,13 +60,18 @@ export default async function PrazosPage({
     if (sa !== sb) return sa - sb;
     return a.limite - b.limite;
   });
+  const totalPaginavel = Math.min(total, TETO_PRAZOS);
+  const pagina = paginaValida(paginaPedida, porPagina, totalPaginavel);
+  const { skip, take } = janela(pagina, porPagina);
+  const paginaDePrazos = enriquecidos.slice(skip, skip + take);
 
   return (
+    <ListaUrl chave="prazos" paramBusca="q" qAtual="">
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <div className="p-2 bg-primary-50 rounded-lg"><Timer className="w-5 h-5 text-primary-600" /></div>
         <h1 className="page-title">Prazos</h1>
-        <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{prazos.length}</span>
+        <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{total}</span>
       </div>
 
       <div className="card overflow-hidden">
@@ -75,11 +89,11 @@ export default async function PrazosPage({
           </form>
         </div>
 
-        {enriquecidos.length === 0 ? (
+        {paginaDePrazos.length === 0 ? (
           <p className="text-center text-ink-subtle py-12">Nenhum prazo encontrado</p>
         ) : (
           <div className="divide-y divide-surface-border">
-            {enriquecidos.map(({ p, atual }) => {
+            {paginaDePrazos.map(({ p, atual }) => {
               const atrasado = p.status === "ATRASADO";
               return (
                 <Link key={p.id} href={`/ordens/${p.ordemServico.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-primary-50/40 transition-colors gap-3">
@@ -114,7 +128,11 @@ export default async function PrazosPage({
             })}
           </div>
         )}
+        <div className="px-4 py-3 border-t border-surface-border bg-surface-alt/40">
+          <PaginacaoUrl total={totalPaginavel} pagina={pagina} porPagina={porPagina} rotulo="prazos" />
+        </div>
       </div>
     </div>
+    </ListaUrl>
   );
 }

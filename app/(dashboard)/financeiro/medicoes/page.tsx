@@ -10,6 +10,8 @@ import {
 import Link from "next/link";
 import { FileBarChart, Plus } from "lucide-react";
 import { GerarMedicoesMes } from "@/components/medicao/gerar-medicoes-mes";
+import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
+import { BuscaUrl, ConteudoUrl, ListaUrl, PaginacaoUrl } from "@/components/listagem/lista-url";
 import { AvatarCliente } from "@/components/ui/avatar-cliente";
 
 export const metadata: Metadata = { title: "Medições" };
@@ -17,9 +19,10 @@ export const metadata: Metadata = { title: "Medições" };
 export default async function MedicoesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ busca?: string; status?: string; clienteId?: string; tipo?: string; dataInicio?: string; dataFim?: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const { busca = "", status = "", clienteId = "", tipo = "", dataInicio = "", dataFim = "" } = await searchParams;
+  const sp = await searchParams;
+  const { busca = "", status = "", clienteId = "", tipo = "", dataInicio = "", dataFim = "" } = sp;
   const session = await auth();
   if (!pode(session!.user!.permissoes, "financeiro", "medicoes", session!.user!.role)) redirect("/sem-permissao");
   const empresaId = session!.user!.empresaId;
@@ -45,13 +48,9 @@ export default async function MedicoesPage({
     ];
   }
 
-  const [medicoes, total, clientes] = await Promise.all([
-    prisma.medicao.findMany({
-      where,
-      include: { cliente: { select: { id: true, nome: true, nomeFantasia: true, logo: true } } },
-      orderBy: { criadoEm: "desc" },
-      take: 100,
-    }),
+  // UX-4 (Y4): Medições no padrão das listas — paginação de servidor (sem o corte fixo de 100)
+  const { pagina: paginaPedida, porPagina } = lerPaginacao(sp);
+  const [total, clientes] = await Promise.all([
     prisma.medicao.count({ where }),
     prisma.cliente.findMany({
       where: { empresaId, ativo: true },
@@ -59,8 +58,18 @@ export default async function MedicoesPage({
       orderBy: { nome: "asc" },
     }),
   ]);
+  const pagina = paginaValida(paginaPedida, porPagina, total);
+  const medicoes = total
+    ? await prisma.medicao.findMany({
+        where,
+        include: { cliente: { select: { id: true, nome: true, nomeFantasia: true, logo: true } } },
+        orderBy: [{ criadoEm: "desc" }, { id: "asc" }],
+        ...janela(pagina, porPagina),
+      })
+    : [];
 
   return (
+    <ListaUrl chave="medicoes" paramBusca="busca" qAtual={busca}>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -83,13 +92,10 @@ export default async function MedicoesPage({
 
       <div className="card overflow-hidden">
         <div className="p-4 border-b border-surface-border bg-surface-alt/40">
+          {/* Busca ao vivo (debounce no padrão das listas) + filtros por GET */}
+          <div className="mb-2"><BuscaUrl lista="medicoes" placeholder="Buscar por número, descrição ou cliente…" /></div>
           <form method="get" className="flex flex-wrap gap-2">
-            <input
-              name="busca"
-              defaultValue={busca}
-              placeholder="Buscar por número, descrição ou cliente..."
-              className="flex-1 min-w-[220px] bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all"
-            />
+            <input type="hidden" name="busca" value={busca} />
             <select name="status" defaultValue={status} className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all">
               <option value="">Todos status</option>
               {Object.entries(LABELS_STATUS_MEDICAO).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -108,7 +114,7 @@ export default async function MedicoesPage({
           </form>
         </div>
 
-        <div className="overflow-x-auto">
+        <ConteudoUrl className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-surface-alt border-b border-surface-border">
               <tr>
@@ -144,8 +150,12 @@ export default async function MedicoesPage({
               )}
             </tbody>
           </table>
+        </ConteudoUrl>
+        <div className="px-4 py-3 border-t border-surface-border bg-surface-alt/40">
+          <PaginacaoUrl total={total} pagina={pagina} porPagina={porPagina} rotulo="medições" />
         </div>
       </div>
     </div>
+    </ListaUrl>
   );
 }

@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
+import { ListaUrl, PaginacaoUrl } from "@/components/listagem/lista-url";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { redirect } from "next/navigation";
@@ -12,9 +14,10 @@ export const metadata: Metadata = { title: "Pedidos de Compra" };
 export default async function PedidosCompraPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; compradorId?: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const { status = "", compradorId = "" } = await searchParams;
+  const sp = await searchParams;
+  const { status = "", compradorId = "" } = sp;
   const session = await auth();
   if (!pode(session!.user!.permissoes, "financeiro", "visualizar", session!.user!.role)) redirect("/sem-permissao");
   const empresaId = session!.user!.empresaId;
@@ -23,22 +26,28 @@ export default async function PedidosCompraPage({
   if (status) where.status = status;
   if (compradorId) where.compradorId = compradorId;
 
-  const [pedidos, total, compradores] = await Promise.all([
-    prisma.pedidoCompraInterno.findMany({
-      where,
-      include: {
-        itens: true,
-        comprador: { select: { id: true, nome: true } },
-        ordemServico: { select: { id: true, numero: true, cliente: { select: { nome: true, nomeFantasia: true } } } },
-      },
-      orderBy: { criadoEm: "desc" },
-      take: 200,
-    }),
+  // UX-4 (Y5): paginação de servidor no lugar do corte fixo de 200
+  const { pagina: paginaPedida, porPagina } = lerPaginacao(sp);
+  const [total, compradores] = await Promise.all([
     prisma.pedidoCompraInterno.count({ where }),
     prisma.usuario.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
   ]);
+  const pagina = paginaValida(paginaPedida, porPagina, total);
+  const pedidos = total
+    ? await prisma.pedidoCompraInterno.findMany({
+        where,
+        include: {
+          itens: true,
+          comprador: { select: { id: true, nome: true } },
+          ordemServico: { select: { id: true, numero: true, cliente: { select: { nome: true, nomeFantasia: true } } } },
+        },
+        orderBy: [{ criadoEm: "desc" }, { id: "asc" }],
+        ...janela(pagina, porPagina),
+      })
+    : [];
 
   return (
+    <ListaUrl chave="pedidos-compra" paramBusca="q" qAtual="">
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <div className="p-2 bg-primary-50 rounded-lg"><ShoppingCart className="w-5 h-5 text-primary-600" /></div>
@@ -95,7 +104,11 @@ export default async function PedidosCompraPage({
             </tbody>
           </table>
         </div>
+        <div className="px-4 py-3 border-t border-surface-border bg-surface-alt/40">
+          <PaginacaoUrl total={total} pagina={pagina} porPagina={porPagina} rotulo="pedidos" />
+        </div>
       </div>
     </div>
+    </ListaUrl>
   );
 }

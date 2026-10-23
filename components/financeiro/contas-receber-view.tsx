@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { cn, formatarMoeda, formatarData, formatarCpfCnpj, LABELS_FORMA_PAGAMENTO } from "@/lib/utils";
 import { statusVisualReceber } from "@/lib/financeiro-status";
@@ -8,10 +8,11 @@ import { AvatarCliente } from "@/components/ui/avatar-cliente";
 import { ContaReceberAcoes } from "@/components/financeiro/conta-receber-acoes";
 import { SincronizarBoletos } from "@/components/financeiro/sincronizar-boletos";
 import { CategoriaBadge } from "@/components/financeiro/categoria-badge";
-import { categoriaDaConta } from "@/lib/financeiro/categoria";
+import { useListagemUrl } from "@/components/listagem/use-listagem-url";
+import { Paginacao } from "@/components/listagem/listagem-ui";
 import {
   Receipt, AlertTriangle, CalendarClock, CheckCircle2, Search, SlidersHorizontal,
-  Plus, Download, X, Barcode,
+  Plus, Download, X, Barcode, Loader2,
 } from "lucide-react";
 
 export interface ContaView {
@@ -27,78 +28,68 @@ export interface ContaView {
 }
 interface Opcao { id: string; nome: string }
 
+export interface ResumoReceber {
+  aReceber: { v: number; q: number }; vencido: { v: number; q: number };
+  hoje: { v: number; q: number }; recebido: { v: number; q: number };
+}
+
+export interface FiltrosReceber {
+  q: string; card: string; clienteId: string; categoria: string; forma: string; banco: string;
+  valorMin: string; valorMax: string; vencDe: string; vencAte: string;
+  /** chips de status visual, separados por vírgula */
+  status: string;
+}
+
 type CardKey = "A_RECEBER" | "VENCIDO" | "VENCE_HOJE" | "RECEBIDO";
 
-const inicioMes = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); };
+/**
+ * UX-4 (E4): busca, filtros e paginação rodam no SERVIDOR (a URL é a fonte da verdade) —
+ * acabou o corte fixo de 500 em que contas "sumiam" da tela. Os cartões de resumo vêm de
+ * agregados sobre o conjunto COMPLETO; a exportação CSV exporta o FILTRO, não a página.
+ */
+export function ContasReceberView({
+  contas, clientes, categorias, interAtivo, resumo, total, totalFiltrado, pagina, porPagina, filtros,
+}: {
+  contas: ContaView[]; clientes: Opcao[]; categorias: { id: string; nome: string; cor: string; ativo: boolean }[];
+  interAtivo: boolean; resumo: ResumoReceber; total: number; totalFiltrado: number;
+  pagina: number; porPagina: number; filtros: FiltrosReceber;
+}) {
+  const { busca, setBusca, navegar, pendente } = useListagemUrl({
+    chave: "contas-receber", qAtual: filtros.q, paramBusca: "q", lembrarFiltros: false,
+  });
+  const [painel, setPainel] = useState(
+    !!(filtros.clienteId || filtros.categoria || filtros.forma || filtros.banco || filtros.valorMin || filtros.valorMax || filtros.vencDe || filtros.vencAte),
+  );
+  // Painel: edita local e "Aplicar" manda tudo para a URL de uma vez
+  const [f, setF] = useState({
+    vencDe: filtros.vencDe, vencAte: filtros.vencAte, clienteId: filtros.clienteId, forma: filtros.forma,
+    banco: filtros.banco, categoria: filtros.categoria, valorMin: filtros.valorMin, valorMax: filtros.valorMax,
+  });
+  const statusChips = useMemo(() => new Set(filtros.status.split(",").filter(Boolean)), [filtros.status]);
+  const card = filtros.card as CardKey | "";
 
-export function ContasReceberView({ contas, clientes, categorias, interAtivo, clienteIdInicial = "" }: { contas: ContaView[]; clientes: Opcao[]; categorias: { id: string; nome: string; cor: string; ativo: boolean }[]; interAtivo: boolean; clienteIdInicial?: string }) {
-  const [card, setCard] = useState<CardKey | null>(null);
-  const [busca, setBusca] = useState("");
-  const [painel, setPainel] = useState(!!clienteIdInicial);
-  const [f, setF] = useState({ vencDe: "", vencAte: "", clienteId: clienteIdInicial, forma: "", banco: "", categoria: "", valorMin: "", valorMax: "", status: new Set<string>() });
-
-  // status visual por conta (memo)
   const comStatus = useMemo(() => contas.map((c) => ({ c, sv: statusVisualReceber(c.status, c.dataVencimento) })), [contas]);
+  const filtrosAtivos = Object.values(f).filter(Boolean).length + (statusChips.size ? 1 : 0);
 
-  // Cards (sobre o conjunto completo)
-  const resumo = useMemo(() => {
-    const ini = inicioMes().getTime();
-    let aReceber = { v: 0, q: 0 }, vencido = { v: 0, q: 0 }, hoje = { v: 0, q: 0 }, recebido = { v: 0, q: 0 };
-    for (const { c, sv } of comStatus) {
-      if (sv.chave === "PREVISTO" || sv.chave === "A_VENCER") { aReceber.v += c.valor; aReceber.q++; }
-      else if (sv.chave === "VENCIDO") { vencido.v += c.valor; vencido.q++; }
-      else if (sv.chave === "VENCE_HOJE") { hoje.v += c.valor; hoje.q++; }
-      if (sv.chave === "PAGO" && c.dataRecebimento && new Date(c.dataRecebimento).getTime() >= ini) { recebido.v += c.valor; recebido.q++; }
-    }
-    return { aReceber, vencido, hoje, recebido };
-  }, [comStatus]);
-
-  const filtrosAtivos =
-    (f.vencDe ? 1 : 0) + (f.vencAte ? 1 : 0) + (f.clienteId ? 1 : 0) + (f.forma ? 1 : 0) +
-    (f.banco ? 1 : 0) + (f.categoria ? 1 : 0) + (f.valorMin ? 1 : 0) + (f.valorMax ? 1 : 0) + (f.status.size ? 1 : 0);
-
-  const filtradas = useMemo(() => {
-    const q = busca.trim().toLowerCase();
-    return comStatus.filter(({ c, sv }) => {
-      // cards
-      if (card === "A_RECEBER" && !(sv.chave === "PREVISTO" || sv.chave === "A_VENCER")) return false;
-      if (card === "VENCIDO" && sv.chave !== "VENCIDO") return false;
-      if (card === "VENCE_HOJE" && sv.chave !== "VENCE_HOJE") return false;
-      if (card === "RECEBIDO" && sv.chave !== "PAGO") return false;
-      // busca
-      if (q && !(`${c.clienteNome} ${c.descricao} ${c.numero}`.toLowerCase().includes(q))) return false;
-      // painel
-      if (f.clienteId && c.clienteId !== f.clienteId) return false;
-      if (f.categoria && c.categoriaId !== f.categoria) return false; // por id: renomear não tira do filtro
-      if (f.forma && c.formaPagamento !== f.forma) return false;
-      if (f.banco && !(c.banco ?? "").toLowerCase().includes(f.banco.toLowerCase())) return false;
-      if (f.valorMin && c.valor < Number(f.valorMin)) return false;
-      if (f.valorMax && c.valor > Number(f.valorMax)) return false;
-      if (f.status.size && !f.status.has(sv.chave)) return false;
-      if (f.vencDe && (!c.dataVencimento || c.dataVencimento < f.vencDe)) return false;
-      if (f.vencAte && (!c.dataVencimento || c.dataVencimento.slice(0, 10) > f.vencAte)) return false;
-      return true;
+  function aplicar() {
+    navegar({
+      vencDe: f.vencDe || null, vencAte: f.vencAte || null, clienteId: f.clienteId || null, forma: f.forma || null,
+      banco: f.banco || null, categoria: f.categoria || null, valorMin: f.valorMin || null, valorMax: f.valorMax || null,
     });
-  }, [comStatus, card, busca, f]);
-
-  const totalFiltrado = filtradas.reduce((s, x) => s + x.c.valor, 0);
-
+    setPainel(false);
+  }
   function limpar() {
-    setF({ vencDe: "", vencAte: "", clienteId: "", forma: "", banco: "", categoria: "", valorMin: "", valorMax: "", status: new Set() });
+    setF({ vencDe: "", vencAte: "", clienteId: "", forma: "", banco: "", categoria: "", valorMin: "", valorMax: "" });
+    navegar({ vencDe: null, vencAte: null, clienteId: null, forma: null, banco: null, categoria: null, valorMin: null, valorMax: null, status: null });
   }
   function toggleStatus(chave: string) {
-    setF((p) => { const s = new Set(p.status); s.has(chave) ? s.delete(chave) : s.add(chave); return { ...p, status: s }; });
+    const s = new Set(statusChips);
+    s.has(chave) ? s.delete(chave) : s.add(chave);
+    navegar({ status: [...s].join(",") || null });
   }
+  /** Exporta o FILTRO inteiro (o servidor monta o CSV com o mesmo where da tela). */
   function exportar() {
-    const linhas = [["Número", "Cliente", "CNPJ", "Descrição", "Categoria", "Vencimento", "Valor", "Status"]];
-    for (const { c, sv } of filtradas) {
-      linhas.push([c.numero, c.clienteNome, c.clienteCnpj ?? "", c.descricao, categoriaDaConta(c, categorias)?.nome ?? "", c.dataVencimento ? formatarData(c.dataVencimento) : "", String(c.valor).replace(".", ","), sv.label]);
-    }
-    const csv = linhas.map((l) => l.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(";")).join("\n");
-    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "contas-a-receber.csv"; a.click();
-    URL.revokeObjectURL(url);
+    window.location.href = `/api/contas-receber/exportar${window.location.search}`;
   }
 
   const inputCls = "bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all";
@@ -124,12 +115,13 @@ export function ContasReceberView({ contas, clientes, categorias, interAtivo, cl
         </div>
       </div>
 
-      {/* Cards de resumo (clicáveis) */}
+      {/* Cards de resumo (clicáveis) — agregados sobre TODAS as contas da empresa */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {CARDS.map((c) => {
           const sel = card === c.key;
           return (
-            <button key={c.key} type="button" onClick={() => setCard(sel ? null : c.key)}
+            <button key={c.key} type="button" data-card={c.key} aria-pressed={sel}
+              onClick={() => navegar({ card: sel ? null : c.key })}
               className={cn(
                 "text-left rounded-xl border border-surface-border border-b-2 bg-white p-4 transition-all hover:shadow-card",
                 c.borda, sel ? `${c.bgSel} ring-2 ring-offset-1 ring-primary-200` : "hover:border-primary-200",
@@ -150,7 +142,9 @@ export function ContasReceberView({ contas, clientes, categorias, interAtivo, cl
       <div className="card overflow-hidden">
         <div className="p-3 border-b border-surface-border flex items-center gap-2 flex-wrap">
           <div className="relative flex-1 min-w-[220px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-subtle pointer-events-none" />
+            {pendente
+              ? <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-subtle animate-spin pointer-events-none" />
+              : <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-subtle pointer-events-none" />}
             <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por cliente, descrição ou número…" className={cn(inputCls, "w-full pl-9")} />
           </div>
           <button onClick={() => setPainel((v) => !v)} className={cn("inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-colors", painel || filtrosAtivos ? "bg-primary-50 border-primary-200 text-primary-700" : "bg-white border-surface-border text-ink-muted hover:bg-surface-alt")}>
@@ -191,8 +185,8 @@ export function ContasReceberView({ contas, clientes, categorias, interAtivo, cl
               <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider mb-1.5">Status</p>
               <div className="flex flex-wrap gap-1.5">
                 {(["PREVISTO", "A_VENCER", "VENCE_HOJE", "VENCIDO", "PAGO", "CANCELADO"] as const).map((s) => (
-                  <button key={s} type="button" onClick={() => toggleStatus(s)}
-                    className={cn("text-xs px-2.5 py-1 rounded-full border transition-colors", f.status.has(s) ? "bg-primary-500 border-primary-500 text-white" : "bg-white border-surface-border text-ink-muted hover:border-primary-300")}>
+                  <button key={s} type="button" data-chip-status={s} onClick={() => toggleStatus(s)}
+                    className={cn("text-xs px-2.5 py-1 rounded-full border transition-colors", statusChips.has(s) ? "bg-primary-500 border-primary-500 text-white" : "bg-white border-surface-border text-ink-muted hover:border-primary-300")}>
                     {LABEL_CHAVE[s]}
                   </button>
                 ))}
@@ -200,7 +194,7 @@ export function ContasReceberView({ contas, clientes, categorias, interAtivo, cl
             </div>
             <div className="flex justify-end gap-2 pt-1">
               <button onClick={limpar} className="text-sm text-ink-muted hover:text-ink px-3 py-1.5">Limpar</button>
-              <button onClick={() => setPainel(false)} className="text-sm font-semibold text-white bg-primary-500 hover:bg-primary-600 px-4 py-1.5 rounded-lg">Aplicar</button>
+              <button onClick={aplicar} className="text-sm font-semibold text-white bg-primary-500 hover:bg-primary-600 px-4 py-1.5 rounded-lg">Aplicar</button>
             </div>
           </div>
         )}
@@ -220,9 +214,9 @@ export function ContasReceberView({ contas, clientes, categorias, interAtivo, cl
               </tr>
             </thead>
             <tbody>
-              {filtradas.length === 0 ? (
+              {comStatus.length === 0 ? (
                 <tr><td colSpan={7} className="text-center text-ink-subtle py-12">Nenhuma cobrança encontrada</td></tr>
-              ) : filtradas.map(({ c, sv }) => {
+              ) : comStatus.map(({ c, sv }) => {
                 return (
                   <tr key={c.id} className={cn("border-b border-surface-border transition-colors", sv.linhaVermelha ? "bg-red-50 hover:bg-red-100/50" : "hover:bg-surface-alt/60")}>
                     <td className="px-4 py-3">
@@ -264,9 +258,11 @@ export function ContasReceberView({ contas, clientes, categorias, interAtivo, cl
           </table>
         </div>
 
-        <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-surface-border bg-surface-alt/40 text-sm flex-wrap">
-          <span className="text-ink-muted">Exibindo <strong className="text-ink">{filtradas.length}</strong> de <strong className="text-ink">{contas.length}</strong> cobranças</span>
-          <span className="text-ink-muted">Total filtrado: <strong className="text-ink">{formatarMoeda(totalFiltrado)}</strong></span>
+        <div className="px-4 py-3 border-t border-surface-border bg-surface-alt/40 space-y-2">
+          <Paginacao total={total} pagina={pagina} porPagina={porPagina} onNavegar={navegar} rotulo="cobranças" />
+          <p className="text-sm text-ink-muted" data-total-filtrado>
+            Total do filtro: <strong className="text-ink">{formatarMoeda(totalFiltrado)}</strong>
+          </p>
         </div>
       </div>
     </div>

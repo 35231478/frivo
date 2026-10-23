@@ -123,3 +123,88 @@ export function whereContratos(empresaId: string, sp: SP, agora = new Date()) {
   else if (sp.status === "VENCENDO") { where.status = "ATIVO"; where.dataFim = { gte: agora, lte: em30 }; }
   return where;
 }
+
+/* ───────── Financeiro (UX-4/E4): o filtro roda no BANCO — nada some por corte de fatia ───────── */
+
+/** Condição Prisma de cada status VISUAL das contas a receber (mesma régua de statusVisualReceber). */
+export function condStatusVisualReceber(chave: string, agora = new Date()) {
+  const hoje = new Date(agora); hoje.setHours(0, 0, 0, 0);
+  const amanha = new Date(hoje.getTime() + 864e5);
+  switch (chave) {
+    // Previsão do contrato (ou conta liberada sem data): não é cobrança vencida
+    case "PREVISTO": return { OR: [{ status: "PREVISTO" }, { status: { in: ["A_RECEBER", "ATRASADO"] }, dataVencimento: null }] };
+    case "A_VENCER": return { status: "A_RECEBER", dataVencimento: { gte: amanha } };
+    case "VENCE_HOJE": return { status: "A_RECEBER", dataVencimento: { gte: hoje, lt: amanha } };
+    case "VENCIDO": return { OR: [{ status: "ATRASADO" }, { status: "A_RECEBER", dataVencimento: { lt: hoje } }] };
+    case "PAGO": return { status: "RECEBIDO" };
+    case "CANCELADO": return { status: "CANCELADO" };
+    default: return null;
+  }
+}
+
+/** Os 4 cartões de resumo de Contas a Receber (sempre sobre o conjunto completo da empresa). */
+export function condCardReceber(card: string, agora = new Date()) {
+  const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1);
+  switch (card) {
+    case "A_RECEBER": return { OR: [condStatusVisualReceber("PREVISTO", agora)!, condStatusVisualReceber("A_VENCER", agora)!] };
+    case "VENCIDO": return condStatusVisualReceber("VENCIDO", agora);
+    case "VENCE_HOJE": return condStatusVisualReceber("VENCE_HOJE", agora);
+    case "RECEBIDO": return { status: "RECEBIDO", dataRecebimento: { gte: inicioMes } };
+    default: return null;
+  }
+}
+
+/** where de Contas a Receber a partir da URL (busca, painel de filtros, chips de status e cartão). */
+export function whereContasReceber(empresaId: string, sp: SP, agora = new Date()) {
+  const where: any = { empresaId };
+  const and: any[] = [];
+  const q = (sp.q ?? "").trim();
+  if (q) {
+    and.push({
+      OR: [
+        { numero: { contains: q, mode: "insensitive" } },
+        { descricao: { contains: q, mode: "insensitive" } },
+        { cliente: { OR: [{ nome: { contains: q, mode: "insensitive" } }, { nomeFantasia: { contains: q, mode: "insensitive" } }] } },
+      ],
+    });
+  }
+  if (sp.clienteId) where.clienteId = sp.clienteId;
+  if (sp.categoria) where.categoriaId = sp.categoria; // por id: renomear não tira do filtro
+  if (sp.forma) where.formaPagamento = sp.forma;
+  if (sp.banco) where.banco = { contains: sp.banco, mode: "insensitive" };
+  if (sp.valorMin) where.valor = { ...(where.valor ?? {}), gte: Number(sp.valorMin) };
+  if (sp.valorMax) where.valor = { ...(where.valor ?? {}), lte: Number(sp.valorMax) };
+  if (sp.vencDe) where.dataVencimento = { ...(where.dataVencimento ?? {}), gte: new Date(sp.vencDe) };
+  if (sp.vencAte) { const f = new Date(sp.vencAte); f.setHours(23, 59, 59, 999); where.dataVencimento = { ...(where.dataVencimento ?? {}), lte: f }; }
+  const chips = (sp.status ?? "").split(",").map((s) => condStatusVisualReceber(s, agora)).filter(Boolean);
+  if (chips.length) and.push({ OR: chips });
+  const card = condCardReceber(sp.card ?? "", agora);
+  if (card) and.push(card);
+  if (and.length) where.AND = and;
+  return where;
+}
+
+/** where de Contas a Pagar a partir da URL (os mesmos filtros que a tela já tinha). */
+export function whereContasPagar(empresaId: string, sp: SP) {
+  const where: any = { empresaId };
+  if (sp.status) where.status = sp.status;
+  // Busca por texto: no nome do cadastro ligado, no texto antigo, na descrição e no número
+  if (sp.fornecedor) where.OR = [
+    { fornecedorCadastro: { nome: { contains: sp.fornecedor, mode: "insensitive" } } },
+    { fornecedor: { contains: sp.fornecedor, mode: "insensitive" } },
+    { descricao: { contains: sp.fornecedor, mode: "insensitive" } },
+    { numero: { contains: sp.fornecedor, mode: "insensitive" } },
+  ];
+  if (sp.fornecedorId) where.fornecedorId = sp.fornecedorId;
+  if (sp.categoria) where.categoriaId = sp.categoria;
+  if (sp.centro) where.centroCustoId = sp.centro;
+  if (sp.origem === "PEDIDO") where.pedidoCompraId = { not: null };
+  else if (sp.origem === "NF") where.notaCompraId = { not: null };
+  else if (sp.origem === "MANUAL") { where.pedidoCompraId = null; where.notaCompraId = null; }
+  if (sp.dataInicio || sp.dataFim) {
+    where.dataVencimento = {};
+    if (sp.dataInicio) where.dataVencimento.gte = new Date(sp.dataInicio);
+    if (sp.dataFim) { const f = new Date(sp.dataFim); f.setHours(23, 59, 59, 999); where.dataVencimento.lte = f; }
+  }
+  return where;
+}
