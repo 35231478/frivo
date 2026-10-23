@@ -7,6 +7,7 @@ import {
 } from "@/lib/acoes-massa/acoes";
 import { EXECUTORES, gerarCsvExportacao, idsDoFiltro, linhasExportacao, rotulos } from "@/lib/acoes-massa/server";
 import type { ResultadoItem } from "@/lib/acoes-massa/regras";
+import { chaveHojeBR } from "@/lib/fuso";
 
 /**
  * Ações em massa — endpoint ÚNICO (a tela não faz uma chamada por registro).
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest) {
     return new NextResponse(gerarCsvExportacao(linhas), {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${entidade}-${new Date().toISOString().slice(0, 10)}.csv"`,
+        "Content-Disposition": `attachment; filename="${entidade}-${chaveHojeBR()}.csv"`,
         "Cache-Control": "no-store",
       },
     });

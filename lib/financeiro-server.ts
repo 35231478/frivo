@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { gerarNumeroContaReceber, gerarNumeroContaPagar, gerarNumeroMedicao } from "@/lib/utils";
+import { formatarData, gerarNumeroContaReceber, gerarNumeroContaPagar, gerarNumeroMedicao } from "@/lib/utils";
+import { diaCivilPassou, hojeDiaCivil, inicioMesDiaCivil, partesBR } from "@/lib/fuso";
 import { calcularVencimento } from "@/lib/medicao-helpers";
 
 /**
@@ -58,7 +59,7 @@ export async function gerarContaReceberDaMedicao(medicaoId: string) {
     }
   }
 
-  const ano = medicao.ano ?? new Date().getFullYear();
+  const ano = medicao.ano ?? partesBR().ano;
   const numero = await proximoNumeroContaReceber(medicao.empresaId, ano);
 
   return prisma.contaReceber.create({
@@ -103,7 +104,7 @@ export async function gerarContaReceberDoOrcamento(orcamentoId: string) {
   // previsões mensais criadas quando o contrato é gerado (senão o mesmo dinheiro entra 2×).
   if (orcamento.tipo === "PROPOSTA_CONTRATO") return null;
 
-  const numero = await proximoNumeroContaReceber(orcamento.empresaId, new Date().getFullYear());
+  const numero = await proximoNumeroContaReceber(orcamento.empresaId, partesBR().ano);
 
   return prisma.contaReceber.create({
     data: {
@@ -235,7 +236,7 @@ export function contratoGeraFinanceiro(status: string | null | undefined): boole
  */
 export function competenciasDoContrato(dataInicio: Date, dataFim: Date | null): { ano: number; mes: number }[] {
   const inicio = new Date(dataInicio);
-  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const hoje = hojeDiaCivil();
   const fim = dataFim ? new Date(dataFim) : addMonths(hoje, 13); // sem fim: ~12 meses à frente
   const out: { ano: number; mes: number }[] = [];
   for (let k = 0; k < 120; k++) {
@@ -264,7 +265,7 @@ export async function gerarPrevisaoContratoContasReceber(contratoId: string): Pr
   if (valor <= 0) return 0;
   if (!contratoGeraFinanceiro(contrato.status)) return 0;
 
-  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const hojeBR = partesBR(); // competência corrente pelo mês de Brasília
   const diaFat = contrato.diaFaturamento ?? contrato.diaFixoMes ?? contrato.diaVencimento ?? 1;
   const base = `${contrato.descricaoNFSe?.trim() || `Contrato ${contrato.numero}`}`;
 
@@ -279,7 +280,7 @@ export async function gerarPrevisaoContratoContasReceber(contratoId: string): Pr
     const mes0 = mes - 1;
     // Da competência CORRENTE em diante (o mês atual ainda vai ser faturado pelo gerar-mes;
     // meses já passados não nascem)
-    if (ano < hoje.getFullYear() || (ano === hoje.getFullYear() && mes0 < hoje.getMonth())) continue;
+    if (ano < hojeBR.ano || (ano === hojeBR.ano && mes0 < hojeBR.mes)) continue;
     const dataFaturamento = diaDoMes(ano, mes0, diaFat);
 
     // Vencimento
@@ -399,7 +400,7 @@ export async function recalcularContaPagar(contaPagarId: string) {
   const valorTotal = Number(conta.valorTotal);
   const valorPago = conta.pagamentos.reduce((s, p) => s + Number(p.valor), 0);
   const saldoRestante = Math.max(0, valorTotal - valorPago);
-  const venceu = conta.dataVencimento && new Date(conta.dataVencimento) < new Date();
+  const venceu = diaCivilPassou(conta.dataVencimento); // só depois do dia de Brasília
 
   let status: "PENDENTE" | "PAGO_PARCIAL" | "PAGO_TOTAL" | "VENCIDO";
   if (saldoRestante <= 0.001) status = "PAGO_TOTAL";
@@ -440,7 +441,7 @@ export async function gerarContaPagarDoPedido(pedidoCompraId: string) {
   // migração: maiúsculas e espaços não contam); senão fica só o texto, como sempre foi.
   const cadastrado = (await prisma.fornecedor.findMany({ where: { empresaId: pedido.empresaId, ativo: true }, select: { id: true, nome: true, documento: true } }))
     .find((f) => normalizarNome(f.nome) === normalizarNome(fornecedor));
-  const ano = new Date().getFullYear();
+  const ano = partesBR().ano;
   const numero = await proximoNumeroContaPagar(pedido.empresaId, ano);
 
   return prisma.contaPagar.create({
@@ -472,21 +473,22 @@ export async function gerarContaPagarDoPedido(pedidoCompraId: string) {
  * Único lugar da regra: dashboard e lista usam esta função.
  */
 export async function marcarContasReceberVencidas(empresaId: string) {
-  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  // Vencimento é dia civil: vence quando o dia de Brasília passou (não às 21h da véspera)
   return prisma.contaReceber.updateMany({
-    where: { empresaId, status: "A_RECEBER", dataVencimento: { lt: hoje } },
+    where: { empresaId, status: "A_RECEBER", dataVencimento: { lt: hojeDiaCivil() } },
     data: { status: "ATRASADO" },
   });
 }
 
 /** Agregações para o dashboard financeiro: cards do mês, série de 6 meses e alertas. */
 export async function resumoFinanceiro(empresaId: string) {
+  // Tudo pelo calendário de Brasília; vencimento/recebimento/pagamento são dias civis
   const agora = new Date();
-  const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1);
-  const fimMes = new Date(agora.getFullYear(), agora.getMonth() + 1, 0, 23, 59, 59, 999);
-  const hojeIni = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), 0, 0, 0, 0);
-  const hojeFim = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), 23, 59, 59, 999);
-  const tresDias = new Date(hojeIni.getTime() - 3 * 86400000);
+  const inicioMes = inicioMesDiaCivil(agora);
+  const fimMes = new Date(inicioMesDiaCivil(agora, 1).getTime() - 1);
+  const hojeIni = hojeDiaCivil(agora);
+  const hojeFim = new Date(hojeDiaCivil(agora, 1).getTime() - 1);
+  const tresDias = hojeDiaCivil(agora, -3);
 
   // Marca contas vencidas (receber e pagar)
   await marcarContasReceberVencidas(empresaId);
@@ -519,14 +521,14 @@ export async function resumoFinanceiro(empresaId: string) {
   // Série de 6 meses (entradas recebidas x saídas pagas)
   const meses: { mes: string; entradas: number; saidas: number }[] = [];
   for (let i = 5; i >= 0; i--) {
-    const ini = new Date(agora.getFullYear(), agora.getMonth() - i, 1);
-    const fim = new Date(agora.getFullYear(), agora.getMonth() - i + 1, 0, 23, 59, 59, 999);
+    const ini = inicioMesDiaCivil(agora, -i);
+    const fim = new Date(inicioMesDiaCivil(agora, -i + 1).getTime() - 1);
     const [ent, sai] = await Promise.all([
       prisma.contaReceber.aggregate({ where: { empresaId, status: "RECEBIDO", dataRecebimento: { gte: ini, lte: fim } }, _sum: { valor: true } }),
       prisma.pagamentoContaPagar.aggregate({ where: { contaPagar: { empresaId }, dataPagamento: { gte: ini, lte: fim } }, _sum: { valor: true } }),
     ]);
     meses.push({
-      mes: ini.toLocaleDateString("pt-BR", { month: "short" }),
+      mes: formatarData(ini, "MMM"),
       entradas: Number(ent._sum.valor ?? 0),
       saidas: Number(sai._sum.valor ?? 0),
     });

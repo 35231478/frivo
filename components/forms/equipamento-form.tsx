@@ -18,9 +18,10 @@ import { StatusSelo } from "@/components/equipamentos/selos";
 import { SelectCadastroRapido, type CampoRapido, type OpcaoCadastro } from "@/components/ui/select-cadastro-rapido";
 import { CLIENTE, UNIDADE } from "@/components/cadastro-rapido/definicoes";
 import Link from "next/link";
-import { LABELS_TIPO_EQUIPAMENTO, cn , comparaNatural } from "@/lib/utils";
+import { LABELS_TIPO_EQUIPAMENTO, cn, comparaNatural, formatarData } from "@/lib/utils";
 import { opcoesTipoEquipamento, PREFIXO_TIPO_CUSTOM, type TipoEquipamentoCadastro } from "@/lib/cadastros/tipos-equipamento";
 import { Thermometer, ImageIcon, MapPin, Cog, QrCode, History, CheckCircle2, ClipboardList, ChevronLeft, ExternalLink, Camera, Sparkles, ChevronDown, Circle } from "lucide-react";
+import { chaveDiaCivil } from "@/lib/fuso";
 
 
 /** Tipos personalizados (sem `chaveEnum`) entram no select como "custom:<id>". */
@@ -47,13 +48,9 @@ const STATUS_OS: Record<string, { label: string; cor: string }> = {
 };
 
 function toDateInput(date: any): string {
-  if (!date) return "";
-  return new Date(date).toISOString().split("T")[0];
+  return date ? chaveDiaCivil(date) : "";
 }
-function dataBR(d: any): string {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
+const dataBR = (d: any): string => formatarData(d);
 const UNIDADES_CAPACIDADE = ["BTU/h", "TR"];
 
 /** Separa "12.000 BTU/h" / "5 TR" em valor + unidade (valores antigos sem unidade = BTU/h). */

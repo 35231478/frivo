@@ -13,6 +13,7 @@ import {
   Mail, MessageCircle, Link2, Send, Ban, Pencil, Check, AlertCircle,
   FileCheck, ScrollText, Receipt, DollarSign,
 } from "lucide-react";
+import { chaveHojeBR } from "@/lib/fuso";
 
 interface MedicaoAcoesProps {
   medicaoId: string;
@@ -36,7 +37,7 @@ export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status }: Medica
   const [nfUrl, setNfUrl] = useState("");
   const [boletoUrl, setBoletoUrl] = useState("");
   const [boletoCodigo, setBoletoCodigo] = useState("");
-  const [dataPagamento, setDataPagamento] = useState(new Date().toISOString().slice(0, 10));
+  const [dataPagamento, setDataPagamento] = useState(chaveHojeBR());
   const [formaPagamento, setFormaPagamento] = useState("BOLETO");
 
   const publicUrl =

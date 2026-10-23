@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { hojeDiaCivil } from "@/lib/fuso";
 import { lerPaginacao, um, type ParamsUrl } from "@/lib/listagem";
 
 /**
@@ -55,8 +56,9 @@ export function lerFiltrosColaboradores(sp: ParamsUrl): FiltrosColaboradores {
 }
 
 export function datasAvisoColaborador(agora = new Date()) {
-  const inicioHoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
-  const limite = new Date(inicioHoje.getTime() + (DIAS_AVISO_COLABORADOR + 1) * 86_400_000);
+  // Vencimento de documento é dia civil: vence depois do dia de Brasília
+  const inicioHoje = hojeDiaCivil(agora);
+  const limite = hojeDiaCivil(agora, DIAS_AVISO_COLABORADOR + 1);
   return { inicioHoje, limite };
 }
 

@@ -27,6 +27,7 @@ import {
   Paperclip, Repeat, StickyNote, Building2, FileCheck, AlertCircle, Wand2, DollarSign,
   Plus, CalendarDays, ChevronDown, CheckCircle2, PauseCircle, RefreshCw, XCircle, History, User, Trash2, SlidersHorizontal,
 } from "lucide-react";
+import { chaveDiaCivil } from "@/lib/fuso";
 
 // Opções de mudança de status oferecidas no cabeçalho (ícone, cor e descrição).
 const STATUS_OPCOES: { valor: string; label: string; descricao: string; icone: any; cor: string }[] = [
@@ -50,8 +51,7 @@ const PERMISSAO_UNIDADE_CONTRATO: PermissaoCriar = [
 ];
 
 function toDateInput(date: Date | null | undefined) {
-  if (!date) return "";
-  return new Date(date).toISOString().split("T")[0];
+  return date ? chaveDiaCivil(date) : "";
 }
 
 type ClienteItem = { id: string; nome: string; nomeFantasia?: string | null };
@@ -141,7 +141,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
         frequencia: r.frequencia ?? "MENSAL",
         tipoOsId: r.tipoOsId ?? "",
         tecnicoId: r.tecnicoId ?? "",
-        dataPrimeiraOs: r.dataPrimeiraOs ? new Date(r.dataPrimeiraOs).toISOString().split("T")[0] : "",
+        dataPrimeiraOs: r.dataPrimeiraOs ? chaveDiaCivil(r.dataPrimeiraOs) : "",
       };
     }
     return o;

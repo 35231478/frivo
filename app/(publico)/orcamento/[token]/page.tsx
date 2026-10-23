@@ -8,6 +8,7 @@ import { AprovacaoPublica } from "@/components/orcamento/aprovacao-publica";
 import { FrivoLogo } from "@/components/layout/frivo-logo";
 import { LABELS_STATUS_ORCAMENTO, CLASSE_STATUS_ORCAMENTO, formatarData, cn } from "@/lib/utils";
 import { AlertTriangle, CheckCircle2, Printer } from "lucide-react";
+import { diaCivilPassou } from "@/lib/fuso";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +45,7 @@ export default async function OrcamentoPublicoPage({
       })).map((e) => ({ id: e.id, rotulo: [e.marca, e.modelo, e.numeroSerie ? `(${e.numeroSerie})` : "", e.unidade?.nome ? `— ${e.unidade.nome}` : ""].filter(Boolean).join(" ") }))
     : [];
 
-  const expirado = orcamento.validadeEm ? orcamento.validadeEm < new Date() : false;
+  const expirado = diaCivilPassou(orcamento.validadeEm); // vale até o fim do dia (Brasília)
   const cancelado = orcamento.status === "CANCELADO";
   const aprovado = orcamento.status === "APROVADO";
   const podeAprovar = orcamento.status === "ENVIADO" && !expirado;

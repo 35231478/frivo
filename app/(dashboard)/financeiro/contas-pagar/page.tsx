@@ -13,6 +13,7 @@ import { fornecedorDaConta } from "@/lib/financeiro/fornecedor";
 import { whereContasPagar } from "@/lib/listas/filtros";
 import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
 import { ListaUrl, PaginacaoUrl } from "@/components/listagem/lista-url";
+import { hojeDiaCivil } from "@/lib/fuso";
 
 export const metadata: Metadata = { title: "Contas a Pagar" };
 
@@ -30,7 +31,7 @@ export default async function ContasPagarPage({
   // Atalho para a mesma importação de XML do Estoque (importar exige Estoque › gerenciar)
   const podeImportarNf = pode(u.permissoes, "estoque", "gerenciar", u.role);
 
-  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const hoje = hojeDiaCivil(); // vencimento é dia civil: vencida só depois do dia de Brasília
   await prisma.contaPagar.updateMany({
     where: { empresaId, status: "PENDENTE", dataVencimento: { lt: hoje } },
     data: { status: "VENCIDO" },

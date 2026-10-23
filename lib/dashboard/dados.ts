@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { contarAlertasPrazos } from "@/lib/prazo-server";
 import { contarAlertasVeiculos } from "@/lib/veiculo-server";
 import { SOLICITACAO_PENDENTE } from "@/lib/solicitacoes";
-import { chaveDiaBR, inicioHojeBR, inicioMesBR } from "@/lib/fuso";
+import { chaveDiaBR, hojeDiaCivil, inicioHojeBR, inicioMesBR, inicioMesDiaCivil } from "@/lib/fuso";
 import type { BlocoId } from "@/lib/dashboard/blocos";
 import { comparaNatural } from "@/lib/utils";
 
@@ -122,10 +122,10 @@ export async function dadosAgenda(empresaId: string, agora = new Date()) {
 }
 
 export async function dadosComercial(empresaId: string, ver: { contratos: boolean; orcamentos: boolean }, agora = new Date()) {
-  const em60 = new Date(agora.getTime() + 60 * DIA);
+  const em60 = hojeDiaCivil(agora, 60); // dataFim é dia civil
   const [ativos, vencendo, orcAbertos, orcEnviadosValor] = await Promise.all([
     ver.contratos ? prisma.contrato.count({ where: { empresaId, status: "ATIVO" } }) : null,
-    ver.contratos ? prisma.contrato.count({ where: { empresaId, status: "ATIVO", dataFim: { gte: inicioHojeBR(agora), lte: em60 } } }) : null,
+    ver.contratos ? prisma.contrato.count({ where: { empresaId, status: "ATIVO", dataFim: { gte: hojeDiaCivil(agora), lte: em60 } } }) : null,
     ver.orcamentos ? prisma.orcamento.count({ where: { empresaId, status: { in: ["RASCUNHO", "ENVIADO"] } } }) : null,
     ver.orcamentos ? prisma.orcamento.aggregate({ where: { empresaId, status: "ENVIADO" }, _sum: { totalGeral: true }, _count: { _all: true } }) : null,
   ]);
@@ -142,10 +142,12 @@ export async function dadosComercial(empresaId: string, ver: { contratos: boolea
  * cobrança: é projeção, não título emitido (ver auditoria C6).
  */
 export async function dadosFinanceiro(empresaId: string, agora = new Date()) {
-  const hoje = inicioHojeBR(agora);
-  const em7 = inicioHojeBR(agora, 8);
-  const mesIni = inicioMesBR(agora);
-  const mesFim = inicioMesBR(agora, 1);
+  // Vencimento/recebimento são DIAS civis (meia-noite UTC): "hoje" e o mês pelo calendário de
+  // Brasília — a conta que vence hoje não entra em "Vencidos" e o dia 1 entra no faturado do mês
+  const hoje = hojeDiaCivil(agora);
+  const em7 = hojeDiaCivil(agora, 8);
+  const mesIni = inicioMesDiaCivil(agora);
+  const mesFim = inicioMesDiaCivil(agora, 1);
   const EM_ABERTO = ["A_RECEBER", "ATRASADO"] as const;
   const [faturado, recebido, aReceber, vencidos, inadimplentes, prox7] = await Promise.all([
     prisma.contaReceber.aggregate({
@@ -168,8 +170,8 @@ export async function dadosFinanceiro(empresaId: string, agora = new Date()) {
 }
 
 export async function dadosEquipamentos(empresaId: string, agora = new Date()) {
-  const hoje = inicioHojeBR(agora);
-  const em60 = new Date(agora.getTime() + 60 * DIA);
+  const hoje = hojeDiaCivil(agora); // garantia é dia civil: a que vence hoje ainda é vigente
+  const em60 = hojeDiaCivil(agora, 60);
   const [total, garantiaVencendo, garantiaVigente, semQr] = await Promise.all([
     prisma.equipamento.count({ where: { empresaId, ativo: true } }),
     prisma.equipamento.count({ where: { empresaId, ativo: true, garantiaAte: { gte: hoje, lte: em60 } } }),

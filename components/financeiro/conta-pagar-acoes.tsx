@@ -12,6 +12,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid } from "@/components/ui/form-field";
 import { DollarSign, History, Pencil, Ban, Upload } from "lucide-react";
+import { chaveHojeBR } from "@/lib/fuso";
 
 interface Conta {
   id: string; numero: string; fornecedor: string;
@@ -57,7 +58,7 @@ export function ContaPagarAcoes({ conta }: { conta: Conta }) {
 }
 
 function PagamentoParcial({ conta, onPronto }: { conta: Conta; onPronto: () => void }) {
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = chaveHojeBR();
   const [valor, setValor] = useState(String(conta.saldoRestante));
   const [data, setData] = useState(hoje);
   const [forma, setForma] = useState("");

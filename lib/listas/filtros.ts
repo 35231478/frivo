@@ -5,6 +5,7 @@
  */
 
 import { variantesDocumento } from "@/lib/listagem";
+import { hojeDiaCivil, inicioMesDiaCivil, periodoDiaCivil, periodoInstanteBR } from "@/lib/fuso";
 
 type SP = Record<string, string | undefined>;
 
@@ -24,26 +25,24 @@ export function whereOrdens(empresaId: string, sp: SP) {
   if (sp.numero) where.numero = { contains: sp.numero, mode: "insensitive" };
   if (sp.data) {
     // Navegação por dia: mostra OS com atividade agendada, previsão de conclusão
-    // ou abertura no dia selecionado (limites em horário local).
-    const [y, m, d] = sp.data.split("-").map(Number);
-    if (y && m && d) {
-      const inicio = new Date(y, m - 1, d, 0, 0, 0, 0);
-      const fim = new Date(y, m - 1, d, 23, 59, 59, 999);
+    // ou abertura no dia selecionado — o DIA DE BRASÍLIA (instantes) / o dia gravado (previsão)
+    const instante = periodoInstanteBR(sp.data, sp.data);
+    const dia = periodoDiaCivil(sp.data, sp.data);
+    if (instante && dia) {
       where.AND = [
         ...(where.AND ?? []),
         {
           OR: [
-            { atividades: { some: { dataAgendada: { gte: inicio, lte: fim } } } },
-            { previsaoConclusao: { gte: inicio, lte: fim } },
-            { criadoEm: { gte: inicio, lte: fim } },
+            { atividades: { some: { dataAgendada: instante } } },
+            { previsaoConclusao: dia },
+            { previsaoConclusao: instante }, // previsão gravada com hora (OS do calendário)
+            { criadoEm: instante },
           ],
         },
       ];
     }
   } else if (sp.dataInicio || sp.dataFim) {
-    where.criadoEm = {};
-    if (sp.dataInicio) where.criadoEm.gte = new Date(sp.dataInicio);
-    if (sp.dataFim) { const f = new Date(sp.dataFim); f.setHours(23, 59, 59, 999); where.criadoEm.lte = f; }
+    where.criadoEm = periodoInstanteBR(sp.dataInicio, sp.dataFim) ?? {};
   }
   if (sp.busca) {
     where.OR = [
@@ -82,13 +81,7 @@ export function whereOrcamentos(empresaId: string, sp: SP) {
   if (sp.tipo) where.tipo = sp.tipo;
   if (sp.clienteId) where.clienteId = sp.clienteId;
   if (sp.dataInicio || sp.dataFim) {
-    where.criadoEm = {};
-    if (sp.dataInicio) where.criadoEm.gte = new Date(sp.dataInicio);
-    if (sp.dataFim) {
-      const fim = new Date(sp.dataFim);
-      fim.setHours(23, 59, 59, 999);
-      where.criadoEm.lte = fim;
-    }
+    where.criadoEm = periodoInstanteBR(sp.dataInicio, sp.dataFim) ?? {};
   }
   if (sp.busca) {
     where.OR = [
@@ -101,7 +94,9 @@ export function whereOrcamentos(empresaId: string, sp: SP) {
 }
 
 export function whereContratos(empresaId: string, sp: SP, agora = new Date()) {
-  const em30 = new Date(agora.getTime() + 30 * 864e5);
+  // Vigência é dia civil: vencido só depois do último dia (em Brasília)
+  const hoje = hojeDiaCivil(agora);
+  const em30 = hojeDiaCivil(agora, 30);
   const where: any = { empresaId };
   if (sp.busca) {
     where.OR = [
@@ -111,16 +106,16 @@ export function whereContratos(empresaId: string, sp: SP, agora = new Date()) {
   }
   if (sp.frequencia) where.periodicidade = sp.frequencia;
   if (sp.clienteId) where.clienteId = sp.clienteId;
-  if (sp.vigenciaInicio) where.dataInicio = { ...(where.dataInicio ?? {}), gte: new Date(sp.vigenciaInicio) };
-  if (sp.vigenciaFim) { const f = new Date(sp.vigenciaFim); f.setHours(23, 59, 59, 999); where.dataInicio = { ...(where.dataInicio ?? {}), lte: f }; }
+  const vigencia = periodoDiaCivil(sp.vigenciaInicio, sp.vigenciaFim);
+  if (vigencia) where.dataInicio = vigencia;
   if (sp.valorMin) where.valorMensal = { ...(where.valorMensal ?? {}), gte: Number(sp.valorMin) };
   if (sp.valorMax) where.valorMensal = { ...(where.valorMensal ?? {}), lte: Number(sp.valorMax) };
   // Filtro de status: valores diretos do enum + computados (VENCIDO/VENCENDO)
   const STATUS_ENUM = ["ATIVO", "SUSPENSO", "ENCERRADO", "CANCELADO", "EM_RENOVACAO", "AGUARDANDO_ASSINATURA"];
   if (sp.status && STATUS_ENUM.includes(sp.status)) where.status = sp.status;
   else if (sp.status === "INATIVO") where.status = { in: ["SUSPENSO", "ENCERRADO", "CANCELADO"] };
-  else if (sp.status === "VENCIDO") { where.status = { notIn: ["ENCERRADO", "CANCELADO"] }; where.dataFim = { lt: agora }; }
-  else if (sp.status === "VENCENDO") { where.status = "ATIVO"; where.dataFim = { gte: agora, lte: em30 }; }
+  else if (sp.status === "VENCIDO") { where.status = { notIn: ["ENCERRADO", "CANCELADO"] }; where.dataFim = { lt: hoje }; }
+  else if (sp.status === "VENCENDO") { where.status = "ATIVO"; where.dataFim = { gte: hoje, lte: em30 }; }
   return where;
 }
 
@@ -128,8 +123,9 @@ export function whereContratos(empresaId: string, sp: SP, agora = new Date()) {
 
 /** Condição Prisma de cada status VISUAL das contas a receber (mesma régua de statusVisualReceber). */
 export function condStatusVisualReceber(chave: string, agora = new Date()) {
-  const hoje = new Date(agora); hoje.setHours(0, 0, 0, 0);
-  const amanha = new Date(hoje.getTime() + 864e5);
+  // Vencimento é dia civil: "hoje" pelo calendário de Brasília (vence hoje até a meia-noite BR)
+  const hoje = hojeDiaCivil(agora);
+  const amanha = hojeDiaCivil(agora, 1);
   switch (chave) {
     // Previsão do contrato (ou conta liberada sem data): não é cobrança vencida
     case "PREVISTO": return { OR: [{ status: "PREVISTO" }, { status: { in: ["A_RECEBER", "ATRASADO"] }, dataVencimento: null }] };
@@ -144,7 +140,7 @@ export function condStatusVisualReceber(chave: string, agora = new Date()) {
 
 /** Os 4 cartões de resumo de Contas a Receber (sempre sobre o conjunto completo da empresa). */
 export function condCardReceber(card: string, agora = new Date()) {
-  const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1);
+  const inicioMes = inicioMesDiaCivil(agora);
   switch (card) {
     case "A_RECEBER": return { OR: [condStatusVisualReceber("PREVISTO", agora)!, condStatusVisualReceber("A_VENCER", agora)!] };
     case "VENCIDO": return condStatusVisualReceber("VENCIDO", agora);
@@ -174,8 +170,8 @@ export function whereContasReceber(empresaId: string, sp: SP, agora = new Date()
   if (sp.banco) where.banco = { contains: sp.banco, mode: "insensitive" };
   if (sp.valorMin) where.valor = { ...(where.valor ?? {}), gte: Number(sp.valorMin) };
   if (sp.valorMax) where.valor = { ...(where.valor ?? {}), lte: Number(sp.valorMax) };
-  if (sp.vencDe) where.dataVencimento = { ...(where.dataVencimento ?? {}), gte: new Date(sp.vencDe) };
-  if (sp.vencAte) { const f = new Date(sp.vencAte); f.setHours(23, 59, 59, 999); where.dataVencimento = { ...(where.dataVencimento ?? {}), lte: f }; }
+  const venc = periodoDiaCivil(sp.vencDe, sp.vencAte);
+  if (venc) where.dataVencimento = { ...(where.dataVencimento ?? {}), ...venc };
   const chips = (sp.status ?? "").split(",").map((s) => condStatusVisualReceber(s, agora)).filter(Boolean);
   if (chips.length) and.push({ OR: chips });
   const card = condCardReceber(sp.card ?? "", agora);
@@ -203,8 +199,7 @@ export function whereContasPagar(empresaId: string, sp: SP) {
   else if (sp.origem === "MANUAL") { where.pedidoCompraId = null; where.notaCompraId = null; }
   if (sp.dataInicio || sp.dataFim) {
     where.dataVencimento = {};
-    if (sp.dataInicio) where.dataVencimento.gte = new Date(sp.dataInicio);
-    if (sp.dataFim) { const f = new Date(sp.dataFim); f.setHours(23, 59, 59, 999); where.dataVencimento.lte = f; }
+    Object.assign(where.dataVencimento, periodoDiaCivil(sp.dataInicio, sp.dataFim) ?? {});
   }
   return where;
 }

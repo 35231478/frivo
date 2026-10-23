@@ -2,14 +2,22 @@ import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { relogioBR } from "@/lib/fuso";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/**
+ * Data/hora SEMPRE no relógio de Brasília, qualquer que seja o fuso de quem roda (servidor em UTC,
+ * navegador em qualquer país). Dia civil gravado (meia-noite UTC: vencimento, validade…) mostra o
+ * próprio dia, nunca a véspera. Ver lib/fuso.ts.
+ */
 export function formatarData(data: Date | string | null | undefined, mascara = "dd/MM/yyyy"): string {
   if (!data) return "—";
-  return format(new Date(data), mascara, { locale: ptBR });
+  const d = new Date(data);
+  if (Number.isNaN(d.getTime())) return "—";
+  return format(relogioBR(d), mascara, { locale: ptBR });
 }
 
 export function formatarDataHora(data: Date | string | null | undefined): string {

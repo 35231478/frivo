@@ -6,6 +6,7 @@ import { respostaAcao, travaConclusao } from "@/lib/execucao/acoes";
 import { MSG_FORA_DO_ESCOPO, escopoDaSessao, filtroEscopo } from "@/lib/tecnico/escopo";
 import { ErroTecnicos, INCLUDE_TECNICOS_ATIVIDADE, gravarTecnicos, lerDefinicao, lerVeiculo, resolverTecnicos, resolverVeiculo } from "@/lib/atividade-tecnicos";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
+import { chaveDiaCivil } from "@/lib/fuso";
 
 type Params = { params: Promise<{ id: string; atividadeId: string }> };
 
@@ -101,7 +102,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
       mudouEquipe && "técnicos/equipe",
       veiculoId !== undefined && veiculoId !== existente.veiculoId && "veículo",
       dataAgendada !== undefined && "data agendada",
-      prazo !== undefined && String(prazo || "") !== (existente.prazo ? existente.prazo.toISOString().slice(0, 10) : "") && "prazo",
+      prazo !== undefined && String(prazo || "") !== (existente.prazo ? chaveDiaCivil(existente.prazo) : "") && "prazo",
       duracaoMin !== undefined && duracaoMin !== existente.duracaoMin && "duração",
       observacao !== undefined && observacao !== existente.observacao && "observação",
     ].filter(Boolean);

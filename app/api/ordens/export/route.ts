@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { formatarData, LABELS_STATUS_OS, LABELS_PRIORIDADE } from "@/lib/utils";
+import { chaveHojeBR } from "@/lib/fuso";
 
 const SORT_MAP: Record<string, (dir: "asc" | "desc") => any> = {
   numero: (dir) => ({ numero: dir }),
@@ -84,7 +85,7 @@ export async function GET(req: NextRequest) {
 
   // BOM + separador ";" para abrir corretamente no Excel pt-BR
   const csv = "﻿" + [cabecalho.map(csvCampo).join(";"), ...linhas].join("\r\n");
-  const dataArquivo = new Date().toISOString().slice(0, 10);
+  const dataArquivo = chaveHojeBR();
 
   return new Response(csv, {
     headers: {
