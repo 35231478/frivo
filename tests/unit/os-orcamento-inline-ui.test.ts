@@ -107,6 +107,7 @@ describe("criar orçamento sem sair da OS", () => {
     const cliente = [...form!.querySelectorAll("button[disabled]")].find((b) => b.textContent?.includes("Hospital Santa Clara"));
     expect(cliente).toBeTruthy();
     expect(form?.textContent).toContain("OS-2026-0301");
+    expect(form?.querySelector<HTMLInputElement>("input[aria-label='Validade']")?.placeholder).toBe("dd/mm/aaaa"); // data no padrão da casa (UX-8)
   });
 
   it("salvar: mesmo POST /api/orcamentos com a OS no vínculo; fecha, mostra na lista e recarrega a OS", async () => {

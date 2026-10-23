@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InputData } from "@/components/ui/input-data";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid, FormSection } from "@/components/ui/form-field";
 import { PageHeader } from "@/components/ui/page-header";
@@ -434,7 +435,7 @@ export function OrcamentoForm({
               />
             </FormField>
             <FormField label="Validade" hint="Após esta data o orçamento não pode mais ser aprovado">
-              <Input type="date" value={validadeEm} onChange={(e) => setValidadeEm(e.target.value)} />
+              <InputData value={validadeEm} onChange={setValidadeEm} aria-label="Validade" />
             </FormField>
           </FormGrid>
           <FormField label="Descrição" hint="Resumo da proposta para o cliente">
