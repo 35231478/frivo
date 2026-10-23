@@ -10,7 +10,7 @@ import { irPara } from "@/components/tecnico/contexto";
 import { novoClientId } from "@/lib/tecnico/offline/motor";
 import { proximoEquipamento } from "@/lib/tecnico/offline/estado";
 import { UNIDADES_SUGERIDAS } from "@/lib/checklist/tipo";
-import { respondido, textoFaltas, type StatusItem } from "@/lib/execucao/pendencias";
+import { listaCurta, respondido, type StatusItem } from "@/lib/execucao/pendencias";
 import type { EquipamentoTela, ExecucaoTela, FotoTela, ItemTela, NovaOperacao, RespostaTela } from "@/lib/tecnico/offline/tipos";
 
 export const srcFoto = (f: { id: string | null; local?: string }) => f.local ?? `/api/fotos-atendimento/${f.id}`;
@@ -58,6 +58,22 @@ export function TelaEquipamento({ x, e, registrar }: Props) {
   const faltando = useMemo(() => new Set([...e.faltas.semResposta, ...e.faltas.semFoto, ...e.faltas.semObservacao]), [e.faltas]);
   const posicao = x.equipamentos.findIndex((q) => q.equipamento.id === equipamentoId);
 
+  // Y8: cada pendência do banner vira um botão que PULA ao item (as faltas guardam o TEXTO do item)
+  const pendencias = useMemo(() => {
+    const idDoTexto = (t: string) => e.itens.find((i) => i.texto === t)?.id ?? null;
+    const lista: { chave: string; rotulo: string; alvo: string | null }[] = [];
+    for (const t of e.faltas.semResposta) lista.push({ chave: `r:${t}`, rotulo: `Responder: ${t}`, alvo: idDoTexto(t) });
+    for (const t of e.faltas.semFoto) lista.push({ chave: `f:${t}`, rotulo: `Foto: ${t}`, alvo: idDoTexto(t) });
+    for (const t of e.faltas.semObservacao) lista.push({ chave: `o:${t}`, rotulo: `Observação: ${t}`, alvo: idDoTexto(t) });
+    if (e.faltas.formulario) lista.push({ chave: "form", rotulo: `Formulário “${e.faltas.formulario.nome}”: ${listaCurta(e.faltas.formulario.campos)}`, alvo: "formulario" });
+    return lista;
+  }, [e.faltas, e.itens]);
+  const irAoItem = (alvo: string | null) => {
+    if (!alvo) return;
+    document.querySelector(alvo === "formulario" ? "[data-form-equipamento]" : `[data-item="${alvo}"]`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+
   /** Operação deste equipamento (a forma de cada tipo é conferida pelo servidor e pelo estado local). */
   const op = (o: { tipo: NovaOperacao["tipo"] } & Record<string, unknown>) => ({ ...o, atividadeId, equipamentoId }) as NovaOperacao;
   const responder = (itemId: string, dados: Record<string, unknown>) => registrar([op({ tipo: "resposta", itemId, dados })]);
@@ -101,13 +117,26 @@ export function TelaEquipamento({ x, e, registrar }: Props) {
           </div>
           <span className="text-xs font-semibold text-ink-muted" data-progresso>{feitos} de {ativos.length}</span>
         </div>
+        {/* G11: o número sozinho não diz O QUE está sendo contado */}
+        <p className="text-[11px] text-ink-muted" data-progresso-legenda>
+          Itens do checklist e medições respondidos. Fotos e observações pedidas contam à parte.
+        </p>
       </header>
 
       {so && <p className="rounded-xl bg-success-50 border border-success-200 p-3 text-sm text-success-800">Atividade concluída: só leitura.</p>}
       {mostrarFaltas && !e.completo && (
         <div className="rounded-xl bg-red-50 border border-red-200 p-3 text-sm text-red-800" role="alert" data-faltas>
           <p className="font-semibold">Para concluir este equipamento, falta:</p>
-          <p>{textoFaltas(e.faltas)}.</p>
+          <ul className="mt-1 space-y-0.5">
+            {pendencias.map((p) => (
+              <li key={p.chave}>
+                <button type="button" data-pendencia onClick={() => irAoItem(p.alvo)}
+                  className="w-full text-left py-1 underline underline-offset-2 decoration-red-300 active:text-red-950 touch-target">
+                  {p.rotulo} ›
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -135,11 +164,12 @@ export function TelaEquipamento({ x, e, registrar }: Props) {
               {(it.pedirFoto || e.respostas[it.id]?.status === "ATENCAO" || fotosDe(it.id, null).length > 0) && e.respostas[it.id]?.status !== "NAO_SE_APLICA" && (
                 <div className="flex flex-wrap items-center gap-2">
                   <Fotos fotos={fotosDe(it.id, null)} onRemover={so ? undefined : tirarFoto} />
-                  {!so && <BotaoFoto rotulo={it.pedirFoto ? "Foto (pedida)" : "Foto"} onFoto={(d) => foto(d, { itemId: it.id })} />}
+                  {/* Y9: depois de anexar, o rótulo confirma — o técnico não reabre "ver o que falta" à toa */}
+                  {!so && <BotaoFoto rotulo={fotosDe(it.id, null).length ? `Foto ✓ (${fotosDe(it.id, null).length})` : it.pedirFoto ? "Foto (pedida)" : "Foto"} onFoto={(d) => foto(d, { itemId: it.id })} />}
                 </div>
               )}
               {it.pedirObservacao && e.respostas[it.id]?.status !== "ATENCAO" && e.respostas[it.id]?.status !== "NAO_SE_APLICA" && (
-                <ObservacaoVoz rotulo="Observação (pedida)" valor={e.respostas[it.id]?.observacao ?? ""} desabilitado={so}
+                <ObservacaoVoz rotulo={(e.respostas[it.id]?.observacao ?? "").trim() || srcAudio(e.respostas[it.id]) ? "Observação ✓" : "Observação (pedida)"} valor={e.respostas[it.id]?.observacao ?? ""} desabilitado={so}
                   onSalvar={(t) => responder(it.id, { observacao: t })}
                   audio={srcAudio(e.respostas[it.id])} onAudio={(a) => registrar([op({ tipo: "audio", itemId: it.id, dataUrl: a })])} />
               )}
@@ -150,7 +180,7 @@ export function TelaEquipamento({ x, e, registrar }: Props) {
 
       {e.formulario && (
         <Secao titulo={`Formulário: ${e.formulario.nome}${e.formulario.obrigatorioConcluir ? " (obrigatório)" : ""}`} Icone={ClipboardList}>
-          <div className="space-y-3">
+          <div className="space-y-3" data-form-equipamento>
             {e.formulario.campos.map((c) => (
               <CampoFormulario key={c.id} campo={c} valor={e.formulario!.respostas[c.id]} somenteLeitura={so}
                 onSalvar={(v) => registrar([op({ tipo: "formulario", dados: { formularioId: e.formulario!.id, campoId: c.id, ...v } })])} />

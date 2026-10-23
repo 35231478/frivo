@@ -254,10 +254,19 @@ describe("execução guiada", () => {
     await esperarAte(() => situacao() === "offline", "indicador offline");
     // ainda falta a foto pedida pelo item 1 → concluir mostra o que falta
     await clicar($("[data-concluir-equipamento]"));
-    expect($("[data-faltas]")!.textContent).toContain("foto em “Limpeza dos filtros”");
+    // UX-7 (Y8): a pendência é um BOTÃO que leva ao item
+    const pendencia = $$("[data-faltas] [data-pendencia]").find((b) => b.textContent!.includes("Foto: Limpeza dos filtros"));
+    expect(pendencia).toBeTruthy();
+    const alvoPulo: Element[] = [];
+    (Element.prototype as any).scrollIntoView = function () { alvoPulo.push(this); };
+    await clicar(pendencia!);
+    expect(alvoPulo.some((el) => (el as HTMLElement).getAttribute("data-item") === "i1")).toBe(true);
     await foto($("[data-item=i1] input[data-foto-input]"));
     await esperarAte(() => !!$("[data-item=i1] [data-miniatura]"), "miniatura da foto");
     expect($("[data-item=i1] [data-miniatura]")!.textContent).toContain("no aparelho");
+    // UX-7 (Y9): depois de anexar, o botão confirma — e (G11) o progresso tem legenda
+    expect($$("[data-item=i1] button").some((b) => b.textContent!.includes("Foto ✓ (1)"))).toBe(true);
+    expect($("[data-progresso-legenda]")!.textContent).toContain("Itens do checklist e medições");
     await clicar($("[data-concluir-equipamento]"));
     await esperarAte(() => window.location.search === "?ver=os&a=aA&e=eqB", "foi para o próximo");
     // o sinal volta: sobe tudo, em ordem, e o indicador fica Sincronizado
@@ -297,6 +306,8 @@ describe("execução guiada", () => {
     await abrirOs("aA");
     expect($$("[data-equip-linha]").map((l) => l.getAttribute("data-situacao"))).toEqual(["nao-iniciado", "nao-iniciado"]);
     await clicar($("[data-novo-adicional]"));
+    // UX-7 (G13): a option diz QUAL equipamento (TAG e local), não só o nome repetido
+    expect($$("[data-modal-adicional] select option").some((o) => o.textContent!.includes("TAG AC-01 · Sala 1"))).toBe(true);
     const salvar = () => $("[data-salvar-adicional]")!;
     expect(salvar().hasAttribute("disabled")).toBe(true);
     await digitar($("[data-modal-adicional] textarea"), "Troca do controle remoto");

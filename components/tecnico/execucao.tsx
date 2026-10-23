@@ -227,9 +227,12 @@ function ModalAdicional({ x, r, a, onFechar, registrar }: { x: ExecucaoTela; r: 
   const [equipamentoId, setEquipamentoId] = useState(a?.equipamentoId ?? "");
   const [fotosNovas, setFotosNovas] = useState<string[]>([]);
   const ref = a?.clientId ? { clientId: a.clientId } : a?.id ? { id: a.id } : null;
+  // G13: "Split Hi-Wall" 2× não diz qual é qual — a TAG e o local diferenciam no select
+  const rotuloEquip = (q: { titulo: string; tag?: string | null; local?: string | null }) =>
+    [q.titulo, [q.tag && `TAG ${q.tag}`, q.local].filter(Boolean).join(" · ")].filter(Boolean).join(" — ");
   const opcoes = [
-    ...x.equipamentos.map((e) => ({ id: e.equipamento.id, titulo: e.equipamento.titulo })),
-    ...r.equipamentosUnidade.filter((u) => !x.equipamentos.some((e) => e.equipamento.id === u.id)).map((u) => ({ id: u.id, titulo: u.titulo })),
+    ...x.equipamentos.map((e) => ({ id: e.equipamento.id, titulo: rotuloEquip(e.equipamento) })),
+    ...r.equipamentosUnidade.filter((u) => !x.equipamentos.some((e) => e.equipamento.id === u.id)).map((u) => ({ id: u.id, titulo: rotuloEquip(u) })),
   ];
   async function salvar() {
     const clientId = a?.clientId ?? (a?.id ? undefined : novoClientId());
