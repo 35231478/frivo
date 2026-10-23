@@ -68,7 +68,7 @@ const esperar = () => act(async () => { for (let i = 0; i < 4; i++) await new Pr
 const $ = <T extends Element = HTMLElement>(sel: string) => document.querySelector(sel) as T | null;
 const $$ = (sel: string) => [...document.querySelectorAll(sel)] as HTMLElement[];
 const clicar = async (el: Element | null | undefined) => { expect(el).toBeTruthy(); await act(async () => { (el as HTMLElement).click(); }); await esperar(); };
-const botao = (texto: string, dentro = document.body) => [...dentro.querySelectorAll("button")].find((b) => b.textContent?.trim() === texto) as HTMLElement | undefined;
+const botao = (texto: string, dentro: Element = document.body) => [...dentro.querySelectorAll("button")].find((b) => b.textContent?.trim() === texto) as HTMLElement | undefined;
 async function digitar(el: Element | null | undefined, v: string) {
   expect(el).toBeTruthy();
   await act(async () => {
