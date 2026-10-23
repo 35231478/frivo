@@ -203,6 +203,12 @@ describe.skipIf(!URL_PG)("UX-4 — financeiro em escala (PostgreSQL real)", () =
     const porNumero = await SUGESTOES.medicoes.buscar("e1", "MED-2026");
     expect(porNumero.map((s: any) => s.rotulo)).toContain("MED-2026-0101");
     expect(porNumero[0].href).toMatch(/^\/financeiro\/medicoes\//);
+    // Outra empresa com número parecido: NUNCA vaza
+    await prisma.empresa.create({ data: { id: "e2", nome: "Outra", cnpj: "99.888.777/0001-66", email: "o@x.com" } });
+    await prisma.cliente.create({ data: { id: "c9", empresaId: "e2", nome: "Cliente da outra", cpfCnpj: "33.333.333/0001-33" } });
+    await prisma.medicao.create({ data: { empresaId: "e2", clienteId: "c9", numero: "MED-2026-0999", tokenPublico: "tok-ux4-outra", tipo: "MENSAL_FIXO", status: "RASCUNHO", valorTotal: 1, valorLiquido: 1 } });
+    const deNovo = await SUGESTOES.medicoes.buscar("e1", "MED-2026");
+    expect(deNovo.map((s: any) => s.rotulo)).not.toContain("MED-2026-0999");
     const porCliente = await SUGESTOES.medicoes.buscar("e1", "santa clara");
     expect(porCliente.length).toBe(1);
     expect(await SUGESTOES.medicoes.buscar("e1", "nada-disso")).toHaveLength(0);
