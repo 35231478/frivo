@@ -3,6 +3,7 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { gerarNumeroMedicao } from "@/lib/utils";
 import { calcularVencimento } from "@/lib/medicao-helpers";
+import { itensFaturaveisDaOs, osJaFaturada } from "@/lib/faturamento-os";
 
 /**
  * Gera as medições mensais de todos os clientes com contrato ativo.
@@ -76,6 +77,7 @@ export async function POST(req: NextRequest) {
       valorUnitario: number;
       valorTotal: number;
       orcamentoId?: string;
+      ordemServicoId?: string;
       ordem: number;
     }[] = [];
 
@@ -91,6 +93,46 @@ export async function POST(req: NextRequest) {
         valorTotal: valor,
         ordem: ordem++,
       });
+    }
+
+    // D3/D4: contrato CONSOLIDADO traz para a fatura do mês os serviços avulsos das OS do
+    // contrato concluídas no período (itens executados + adicionais "Cobrar" com preço) que
+    // ainda não entraram em nenhuma medição viva — a mesma trava única da OS (osJaFaturada).
+    const inicioMes = new Date(ano, mes - 1, 1);
+    const fimMes = new Date(ano, mes, 0, 23, 59, 59, 999);
+    for (const ct of contratosCliente) {
+      if (ct.faturamentoAdicionais !== "CONSOLIDADO") continue;
+      const ossDoMes = await prisma.ordemServico.findMany({
+        where: { empresaId, contratoId: ct.id, status: "CONCLUIDA", dataConclusao: { gte: inicioMes, lte: fimMes } },
+        select: { id: true, numero: true },
+        orderBy: { dataConclusao: "asc" },
+      });
+      for (const os of ossDoMes) {
+        if (await osJaFaturada(os.id)) continue;
+        const { itens: execucao, adicionais } = await itensFaturaveisDaOs(os.id);
+        for (const it of execucao) {
+          itens.push({
+            tipo: "SERVICO",
+            descricao: `OS ${os.numero} — ${it.descricao}`,
+            quantidade: Number(it.quantidade),
+            valorUnitario: Number(it.valorUnitario),
+            valorTotal: Number(it.valorTotal),
+            ordemServicoId: os.id,
+            ordem: ordem++,
+          });
+        }
+        for (const a of adicionais) {
+          itens.push({
+            tipo: "SERVICO",
+            descricao: `OS ${os.numero} — Serviço adicional: ${a.descricao}`,
+            quantidade: 1,
+            valorUnitario: Number(a.valor),
+            valorTotal: Number(a.valor),
+            ordemServicoId: os.id,
+            ordem: ordem++,
+          });
+        }
+      }
     }
 
     // Fatura única: agrega orçamentos aprovados do cliente ainda não faturados
@@ -129,7 +171,7 @@ export async function POST(req: NextRequest) {
     const numero = gerarNumeroMedicao(sequencial, ano);
     const vencimento = calcularVencimento(cliente.diaFaturamento, mes, ano);
 
-    await prisma.medicao.create({
+    const medicao = await prisma.medicao.create({
       data: {
         empresaId,
         clienteId,
@@ -154,11 +196,47 @@ export async function POST(req: NextRequest) {
             valorUnitario: it.valorUnitario,
             valorTotal: it.valorTotal,
             orcamentoId: it.orcamentoId ?? null,
+            ordemServicoId: it.ordemServicoId ?? null,
             ordem: it.ordem,
           })),
         },
       },
     });
+
+    // C6/D3: a medição do mês É a cobrança da previsão — liga a conta PREVISTO de cada
+    // contrato à medição (sem criar conta nova). Se a competência ainda não tem previsão
+    // (contrato antigo), cria uma já ligada. A conta segue PREVISTO até a aprovação/NF.
+    for (const ct of contratosCliente) {
+      const valorCt = ct.valorMensal ? Number(ct.valorMensal) : 0;
+      if (valorCt <= 0) continue;
+      const previsao = await prisma.contaReceber.findFirst({
+        where: { contratoId: ct.id, refAno: ano, refMes: mes, status: "PREVISTO", medicaoId: null },
+      });
+      if (previsao) {
+        await prisma.contaReceber.update({ where: { id: previsao.id }, data: { medicaoId: medicao.id } });
+      } else {
+        const jaLigada = await prisma.contaReceber.findFirst({ where: { contratoId: ct.id, refAno: ano, refMes: mes } });
+        if (!jaLigada) {
+          await prisma.contaReceber.create({
+            data: {
+              empresaId,
+              clienteId,
+              contratoId: ct.id,
+              refAno: ano,
+              refMes: mes,
+              medicaoId: medicao.id,
+              numero: `${ct.numero}/${ano}${String(mes).padStart(2, "0")}`,
+              descricao: `Contrato ${ct.numero} — Ref. ${String(mes).padStart(2, "0")}/${ano}`,
+              valor: valorCt,
+              status: "PREVISTO",
+              dataVencimento: vencimento,
+              categoria: "Contrato",
+              clienteCnpj: cliente.cpfCnpj ?? null,
+            },
+          });
+        }
+      }
+    }
 
     criadas++;
     resultado.push({ cliente: cliente.nomeFantasia ?? cliente.nome, numero, status: "criada" });

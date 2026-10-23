@@ -7,17 +7,11 @@ import { calcularVencimento } from "@/lib/medicao-helpers";
  * Se já existir conta vinculada à medição, retorna a existente.
  */
 export async function gerarContaReceberDaMedicao(medicaoId: string) {
-  const existente = await prisma.contaReceber.findFirst({ where: { medicaoId } });
-  if (existente) return existente;
-
   const medicao = await prisma.medicao.findUnique({
     where: { id: medicaoId },
     include: { cliente: { select: { cpfCnpj: true } } },
   });
   if (!medicao) return null;
-
-  const ano = medicao.ano ?? new Date().getFullYear();
-  const numero = await proximoNumeroContaReceber(medicao.empresaId, ano);
 
   // Status da conta acompanha o estágio da medição: se a NF já foi emitida,
   // a conta já está liberada para recebimento (corrige o perfil AUTOMATICO,
@@ -27,11 +21,54 @@ export async function gerarContaReceberDaMedicao(medicaoId: string) {
     medicao.status === "NF_EMITIDA" || medicao.status === "BOLETO_GERADO" ? "A_RECEBER" :
     "PREVISTO";
 
+  // C6/D3: a previsão do contrato JÁ É a conta da medição mensal — promove em vez de criar
+  // outra (fim da cobrança em dobro PREVISTO × medição). Quando for uma só, o valor passa a
+  // ser o da medição (cobre desconto e adicionais consolidados).
+  const vinculadas = await prisma.contaReceber.findMany({
+    where: { medicaoId, status: { notIn: ["RECEBIDO", "CANCELADO"] } },
+    orderBy: { criadoEm: "asc" },
+  });
+  if (vinculadas.length > 0) {
+    for (const c of vinculadas) {
+      await prisma.contaReceber.update({
+        where: { id: c.id },
+        data: {
+          status,
+          dataVencimento: medicao.dataVencimento ?? c.dataVencimento,
+          ...(vinculadas.length === 1 ? { valor: medicao.valorLiquido } : {}),
+        },
+      });
+    }
+    return prisma.contaReceber.findFirst({ where: { medicaoId }, orderBy: { criadoEm: "asc" } });
+  }
+  const jaRecebida = await prisma.contaReceber.findFirst({ where: { medicaoId } });
+  if (jaRecebida) return jaRecebida;
+
+  // Medição mensal de contrato sem conta ligada ainda: ADOTA a previsão da competência
+  // (contrato + mês/ano) em vez de criar uma segunda conta para o mesmo mês.
+  if (medicao.contratoId && medicao.mes && medicao.ano) {
+    const previsao = await prisma.contaReceber.findFirst({
+      where: { contratoId: medicao.contratoId, refAno: medicao.ano, refMes: medicao.mes, status: "PREVISTO", medicaoId: null },
+    });
+    if (previsao) {
+      return prisma.contaReceber.update({
+        where: { id: previsao.id },
+        data: { medicaoId: medicao.id, status, valor: medicao.valorLiquido, dataVencimento: medicao.dataVencimento ?? previsao.dataVencimento },
+      });
+    }
+  }
+
+  const ano = medicao.ano ?? new Date().getFullYear();
+  const numero = await proximoNumeroContaReceber(medicao.empresaId, ano);
+
   return prisma.contaReceber.create({
     data: {
       empresaId: medicao.empresaId,
       clienteId: medicao.clienteId,
       medicaoId: medicao.id,
+      contratoId: medicao.contratoId ?? null,
+      refMes: medicao.contratoId ? medicao.mes : null,
+      refAno: medicao.contratoId ? medicao.ano : null,
       numero,
       descricao: medicao.descricao || `Medição ${medicao.numero}`,
       valor: medicao.valorLiquido,
@@ -62,6 +99,9 @@ export async function gerarContaReceberDoOrcamento(orcamentoId: string) {
 
   const orcamento = await prisma.orcamento.findUnique({ where: { id: orcamentoId } });
   if (!orcamento) return null;
+  // CO3: proposta de CONTRATO assinada não vira conta avulsa — quem fatura o contrato são as
+  // previsões mensais criadas quando o contrato é gerado (senão o mesmo dinheiro entra 2×).
+  if (orcamento.tipo === "PROPOSTA_CONTRATO") return null;
 
   const numero = await proximoNumeroContaReceber(orcamento.empresaId, new Date().getFullYear());
 
@@ -179,16 +219,40 @@ function ajustarFimDeSemana(d: Date, modo: string | null | undefined): Date {
   else if (modo === "POSTERGAR") { if (wd === 6) return addDays(d, 2); if (wd === 0) return addDays(d, 1); }
   return d;
 }
-const PASSO_PERIODICIDADE: Record<string, number> = {
-  SEMANAL: 1, QUINZENAL: 1, MENSAL: 1, BIMESTRAL: 2, TRIMESTRAL: 3, SEMESTRAL: 6, ANUAL: 12,
-};
+/**
+ * CO2: só contrato ATIVO movimenta o financeiro e a recorrência. Cancelado, vencido,
+ * em renovação, aguardando assinatura, suspenso ou encerrado NÃO geram previsão nem OS.
+ */
+export function contratoGeraFinanceiro(status: string | null | undefined): boolean {
+  return status === "ATIVO";
+}
+
+/**
+ * CO4: competências (mês/ano) cobradas pela vigência. A regra é a do aniversário:
+ * um mês de referência conta enquanto o aniversário do início naquele mês for ANTERIOR
+ * ao fim — assim "01/01 a 01/01 do ano seguinte" e "01/01 a 31/12" são ambos 12 meses.
+ * Vigência indeterminada: 12 meses a partir de hoje.
+ */
+export function competenciasDoContrato(dataInicio: Date, dataFim: Date | null): { ano: number; mes: number }[] {
+  const inicio = new Date(dataInicio);
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const fim = dataFim ? new Date(dataFim) : addMonths(hoje, 13); // sem fim: ~12 meses à frente
+  const out: { ano: number; mes: number }[] = [];
+  for (let k = 0; k < 120; k++) {
+    const ref = addMonths(inicio, k); // dia 1 do mês de referência
+    const aniversario = diaDoMes(ref.getFullYear(), ref.getMonth(), inicio.getDate());
+    if (aniversario >= fim) break;
+    out.push({ ano: ref.getFullYear(), mes: ref.getMonth() + 1 });
+  }
+  return out;
+}
 
 /**
  * Gera (de forma idempotente) a previsão de contas a receber de um contrato.
- * Cria uma conta PREVISTO por período de faturamento, apenas para datas futuras
- * (de hoje em diante), até o fim da vigência ou, se indeterminada, +12 meses.
- * Não duplica períodos já gerados (chave: numero "<contrato>/AAAAMM").
- * Retorna a quantidade de contas criadas.
+ * D3: a cobrança do contrato é SEMPRE mensal (valor fixo por mês), independente da
+ * frequência das visitas (CO1). C6: cada previsão nasce LIGADA ao contrato e à
+ * competência (uma por contrato × mês — unique no banco). Só contrato ATIVO gera (CO2).
+ * Cria apenas competências de hoje em diante. Retorna a quantidade criada.
  */
 export async function gerarPrevisaoContratoContasReceber(contratoId: string): Promise<number> {
   const contrato = await prisma.contrato.findUnique({
@@ -198,13 +262,9 @@ export async function gerarPrevisaoContratoContasReceber(contratoId: string): Pr
   if (!contrato) return 0;
   const valor = contrato.valorMensal ? Number(contrato.valorMensal) : 0;
   if (valor <= 0) return 0;
-  if (contrato.status === "ENCERRADO" || contrato.status === "SUSPENSO") return 0;
+  if (!contratoGeraFinanceiro(contrato.status)) return 0;
 
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-  const inicio = new Date(contrato.dataInicio);
-  const fim = contrato.dataFim ? new Date(contrato.dataFim) : addMonths(hoje, 12);
-  const passo = PASSO_PERIODICIDADE[contrato.periodicidade] ?? 1;
-
   const diaFat = contrato.diaFaturamento ?? contrato.diaFixoMes ?? contrato.diaVencimento ?? 1;
   const base = `${contrato.descricaoNFSe?.trim() || `Contrato ${contrato.numero}`}`;
 
@@ -215,14 +275,12 @@ export async function gerarPrevisaoContratoContasReceber(contratoId: string): Pr
   });
 
   let criadas = 0;
-  for (let k = 0; k < 120; k++) {
-    const refMes = addMonths(inicio, k * passo);
-    if (refMes > fim) break;
-    const ano = refMes.getFullYear();
-    const mes0 = refMes.getMonth();
-
+  for (const { ano, mes } of competenciasDoContrato(contrato.dataInicio, contrato.dataFim)) {
+    const mes0 = mes - 1;
+    // Da competência CORRENTE em diante (o mês atual ainda vai ser faturado pelo gerar-mes;
+    // meses já passados não nascem)
+    if (ano < hoje.getFullYear() || (ano === hoje.getFullYear() && mes0 < hoje.getMonth())) continue;
     const dataFaturamento = diaDoMes(ano, mes0, diaFat);
-    if (dataFaturamento < hoje) continue; // apenas futuras
 
     // Vencimento
     let venc: Date;
@@ -233,21 +291,38 @@ export async function gerarPrevisaoContratoContasReceber(contratoId: string): Pr
     }
     venc = ajustarFimDeSemana(venc, contrato.ajusteFinsDeSemana);
 
-    const tag = `${ano}${String(mes0 + 1).padStart(2, "0")}`;
+    const tag = `${ano}${String(mes).padStart(2, "0")}`;
     const numero = `${contrato.numero}/${tag}`;
 
+    // Idempotência: pela competência ligada (C6) e, para dados antigos, pelo numero
     const existente = await prisma.contaReceber.findFirst({
-      where: { empresaId: contrato.empresaId, clienteId: contrato.clienteId, numero },
-      select: { id: true },
+      where: {
+        OR: [
+          { contratoId: contrato.id, refAno: ano, refMes: mes },
+          { empresaId: contrato.empresaId, clienteId: contrato.clienteId, numero },
+        ],
+      },
+      select: { id: true, status: true, medicaoId: true },
     });
-    if (existente) continue;
+    if (existente) {
+      // Contrato reativado (CO2): a previsão cancelada no encerramento REVIVE — não nasce
+      // uma segunda linha (a competência é única por contrato).
+      if (existente.status === "CANCELADO" && !existente.medicaoId) {
+        await prisma.contaReceber.update({ where: { id: existente.id }, data: { status: "PREVISTO", valor, dataVencimento: venc } });
+        criadas++;
+      }
+      continue;
+    }
 
     await prisma.contaReceber.create({
       data: {
         empresaId: contrato.empresaId,
         clienteId: contrato.clienteId,
+        contratoId: contrato.id,
+        refAno: ano,
+        refMes: mes,
         numero,
-        descricao: `${base} — Ref. ${String(mes0 + 1).padStart(2, "0")}/${ano}`,
+        descricao: `${base} — Ref. ${String(mes).padStart(2, "0")}/${ano}`,
         valor,
         status: "PREVISTO",
         dataVencimento: venc,
@@ -260,6 +335,41 @@ export async function gerarPrevisaoContratoContasReceber(contratoId: string): Pr
   }
 
   return criadas;
+}
+
+/**
+ * CO2: quando o contrato deixa de estar ATIVO (cancelado, encerrado, suspenso, vencido…),
+ * a receita fantasma é limpa: cancela as previsões (PREVISTO) ainda não faturadas do
+ * contrato e as OS AGENDADAS futuras e intocadas (sem execução e sem financeiro).
+ * Nada recebido/faturado é alterado. Retorna o que foi cancelado.
+ */
+export async function encerrarFinanceiroDoContrato(contratoId: string, motivo = "Contrato deixou de estar ativo", usuarioId?: string) {
+  const agora = new Date();
+  const previsoes = await prisma.contaReceber.updateMany({
+    where: { contratoId, status: "PREVISTO", medicaoId: null },
+    data: { status: "CANCELADO", observacao: motivo },
+  });
+
+  // OS futuras e intocadas: AGENDADA, nenhuma atividade fora de AGENDADA, nenhuma atividade
+  // passada, nada no financeiro (a trava osJaFaturada é por medição viva — aqui basta nenhum item)
+  const candidatas = await prisma.ordemServico.findMany({
+    where: {
+      contratoId,
+      status: "AGENDADA",
+      medicaoItens: { none: {} },
+      atividades: { none: { OR: [{ status: { not: "AGENDADA" } }, { dataAgendada: { lt: agora } }] } },
+    },
+    select: { id: true },
+  });
+  for (const os of candidatas) {
+    await prisma.ordemServico.update({ where: { id: os.id }, data: { status: "CANCELADA" } });
+    if (usuarioId) {
+      await prisma.osHistorico.create({
+        data: { ordemServicoId: os.id, usuarioId, acao: "OS cancelada", detalhes: motivo },
+      });
+    }
+  }
+  return { previsoesCanceladas: previsoes.count, osCanceladas: candidatas.length };
 }
 
 // ─────────────────────────────────────────────
@@ -355,6 +465,20 @@ export async function gerarContaPagarDoPedido(pedidoCompraId: string) {
 // DASHBOARD FINANCEIRO
 // ─────────────────────────────────────────────
 
+/**
+ * Marca como ATRASADO as contas a receber LIBERADAS (A_RECEBER) vencidas. PREVISTO não
+ * vira ATRASADO (C6/F5): previsão de contrato ainda não faturada não é cobrança vencida —
+ * era isso que marcava o cliente como inadimplente e enchia o portal de "boletos vencidos".
+ * Único lugar da regra: dashboard e lista usam esta função.
+ */
+export async function marcarContasReceberVencidas(empresaId: string) {
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  return prisma.contaReceber.updateMany({
+    where: { empresaId, status: "A_RECEBER", dataVencimento: { lt: hoje } },
+    data: { status: "ATRASADO" },
+  });
+}
+
 /** Agregações para o dashboard financeiro: cards do mês, série de 6 meses e alertas. */
 export async function resumoFinanceiro(empresaId: string) {
   const agora = new Date();
@@ -365,10 +489,7 @@ export async function resumoFinanceiro(empresaId: string) {
   const tresDias = new Date(hojeIni.getTime() - 3 * 86400000);
 
   // Marca contas vencidas (receber e pagar)
-  await prisma.contaReceber.updateMany({
-    where: { empresaId, status: { in: ["PREVISTO", "A_RECEBER"] }, dataVencimento: { lt: hojeIni } },
-    data: { status: "ATRASADO" },
-  });
+  await marcarContasReceberVencidas(empresaId);
   await prisma.contaPagar.updateMany({
     where: { empresaId, status: "PENDENTE", dataVencimento: { lt: hojeIni } },
     data: { status: "VENCIDO" },

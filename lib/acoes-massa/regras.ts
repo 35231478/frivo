@@ -1,5 +1,6 @@
 import type { StatusContrato } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { contratoGeraFinanceiro, encerrarFinanceiroDoContrato, gerarPrevisaoContratoContasReceber } from "@/lib/financeiro-server";
 import { motivoBloqueioInativacao } from "@/lib/os-server";
 import { anotarInativacao, impactoColaborador, impactoEquipe, impactoOrcamento, impactoVeiculo } from "@/lib/inativacao-server";
 import { gerarQrCodeEquipamento } from "@/lib/qrcode-server";
@@ -148,6 +149,13 @@ export async function mudarStatusContrato(id: string, novo: StatusContrato, ctx:
       include: { usuario: { select: { id: true, nome: true } } },
     }),
   ]);
+  // CO2: saiu de ATIVO → limpa a receita fantasma (previsões PREVISTO e OS futuras intocadas);
+  // voltou a ATIVO → regenera as previsões dali em diante.
+  if (!contratoGeraFinanceiro(novo)) {
+    await encerrarFinanceiroDoContrato(id, `Contrato ${novo.toLowerCase().replace(/_/g, " ")}${ctx.motivo ? ` — ${ctx.motivo}` : ""}`, ctx.usuarioId).catch(() => null);
+  } else {
+    await gerarPrevisaoContratoContasReceber(id).catch(() => 0);
+  }
   return ok(undefined, { historico });
 }
 

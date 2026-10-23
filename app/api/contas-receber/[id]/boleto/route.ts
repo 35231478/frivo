@@ -29,6 +29,14 @@ export async function POST(req: NextRequest, { params }: Params) {
     include: { cliente: true },
   });
   if (!conta) return NextResponse.json({ erro: "Conta não encontrada" }, { status: 404 });
+  // F5: previsão não é cobrança — boleto só depois que a medição for aprovada e a conta
+  // estiver liberada (A_RECEBER/ATRASADO). Emitir sobre a PREVISTO cobrava o cliente 2×.
+  if (conta.status === "PREVISTO") {
+    return NextResponse.json({ erro: "Esta conta ainda é uma PREVISÃO do contrato. Gere e aprove a medição do mês (a previsão vira a cobrança) antes de emitir o boleto." }, { status: 400 });
+  }
+  if (conta.status === "RECEBIDO" || conta.status === "CANCELADO") {
+    return NextResponse.json({ erro: "Conta recebida/cancelada não emite boleto." }, { status: 400 });
+  }
   if (conta.boletoId && conta.boletoStatus === "EMITIDO") {
     return NextResponse.json({ erro: "Já existe um boleto emitido para esta conta." }, { status: 400 });
   }

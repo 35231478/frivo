@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { marcarContasReceberVencidas } from "@/lib/financeiro-server";
 import { ContasReceberView, type ContaView } from "@/components/financeiro/contas-receber-view";
 
 export const metadata: Metadata = { title: "Contas a Receber" };
@@ -17,12 +18,8 @@ export default async function ContasReceberPage({
   if (!pode(session!.user!.permissoes, "financeiro", "contasReceber", session!.user!.role)) redirect("/sem-permissao");
   const empresaId = session!.user!.empresaId;
 
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
-  await prisma.contaReceber.updateMany({
-    where: { empresaId, status: { in: ["PREVISTO", "A_RECEBER"] }, dataVencimento: { lt: hoje } },
-    data: { status: "ATRASADO" },
-  });
+  // PREVISTO não vira ATRASADO (C6/F5) — regra única em marcarContasReceberVencidas
+  await marcarContasReceberVencidas(empresaId);
 
   const [contas, clientes, categorias, integracao] = await Promise.all([
     prisma.contaReceber.findMany({

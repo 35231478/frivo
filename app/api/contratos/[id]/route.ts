@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { contratoSchema } from "@/lib/validations";
-import { gerarPrevisaoContratoContasReceber } from "@/lib/financeiro-server";
+import { contratoGeraFinanceiro, encerrarFinanceiroDoContrato, gerarPrevisaoContratoContasReceber } from "@/lib/financeiro-server";
 import { gerarOsRecorrentesContrato, gerarOsRecorrentesLocais } from "@/lib/recorrencia-server";
 
 type Params = { params: Promise<{ id: string }> };
@@ -98,11 +98,17 @@ export async function PUT(req: NextRequest, { params }: Params) {
     return c;
   });
 
-  // Atualiza a previsão de contas a receber (idempotente).
-  await gerarPrevisaoContratoContasReceber(id).catch(() => 0);
-  // Gera as OS recorrentes: por local (novo) + contrato-nível legado (idempotentes).
-  await gerarOsRecorrentesLocais(id, session.user!.id).catch(() => 0);
-  if (atualizado.recorrencia) await gerarOsRecorrentesContrato(id, session.user!.id).catch(() => 0);
+  // CO2: só contrato ATIVO movimenta financeiro/recorrência; ao sair de ATIVO,
+  // a receita fantasma é limpa (previsões PREVISTO e OS agendadas intocadas).
+  if (contratoGeraFinanceiro(atualizado.status)) {
+    // Atualiza a previsão de contas a receber (idempotente).
+    await gerarPrevisaoContratoContasReceber(id).catch(() => 0);
+    // Gera as OS recorrentes: por local (novo) + contrato-nível legado (idempotentes).
+    await gerarOsRecorrentesLocais(id, session.user!.id).catch(() => 0);
+    if (atualizado.recorrencia) await gerarOsRecorrentesContrato(id, session.user!.id).catch(() => 0);
+  } else {
+    await encerrarFinanceiroDoContrato(id, `Contrato ${atualizado.numero} não está ativo (${atualizado.status})`, session.user!.id).catch(() => null);
+  }
 
   return NextResponse.json(atualizado);
 }

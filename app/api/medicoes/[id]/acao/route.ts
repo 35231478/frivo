@@ -146,10 +146,23 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     case "CANCELAR": {
       await prisma.medicao.update({ where: { id }, data: { status: "CANCELADA" } });
-      await prisma.contaReceber.updateMany({
+      // C6: a conta PREVISTA do CONTRATO não morre com a medição — ela volta a ser a
+      // previsão da competência (desligada e com o valor da mensalidade), para o mês
+      // poder ser refaturado (F4). Conta criada só para esta medição é cancelada.
+      const vinculadas = await prisma.contaReceber.findMany({
         where: { medicaoId: id, status: { notIn: ["RECEBIDO", "CANCELADO"] } },
-        data: { status: "CANCELADO" },
+        include: { contrato: { select: { valorMensal: true } } },
       });
+      for (const c of vinculadas) {
+        if (c.contratoId) {
+          await prisma.contaReceber.update({
+            where: { id: c.id },
+            data: { medicaoId: null, status: "PREVISTO", valor: c.contrato?.valorMensal ?? c.valor },
+          });
+        } else {
+          await prisma.contaReceber.update({ where: { id: c.id }, data: { status: "CANCELADO" } });
+        }
+      }
       return NextResponse.json({ ok: true, status: "CANCELADA" });
     }
 

@@ -146,16 +146,13 @@ describe("POST/PUT /api/contratos", () => {
     expect(db.t.contratoUnidade.filter((u) => u.contratoId === c.id).map((u) => u.unidadeId)).toEqual(["u1"]);
   });
 
-  it("faturamento segue a periodicidade: trimestral gera de 3 em 3 meses (nada quebrou)", async () => {
+  it("Leva 5 (CO1/D3): a COBRANÇA é sempre mensal — periodicidade trimestral é das visitas, não do dinheiro", async () => {
     const r = await chamar("POST", "/api/contratos", corpo({ periodicidade: "TRIMESTRAL" }));
+    expect(r.status).toBe(201);
     const contas = db.t.contaReceber.filter((cr) => cr.numero.startsWith("CT-2026-0100/")).map((cr) => cr.numero).sort();
     expect(contas.length).toBeGreaterThanOrEqual(4);
     const meses = contas.map((n: string) => { const t = n.split("/")[1]; return Number(t.slice(0, 4)) * 12 + Number(t.slice(4)); });
-    expect(meses.slice(1).map((m: number, i: number) => m - meses[i])).toEqual(meses.slice(1).map(() => 3));
-    expect(r.status).toBe(201);
-    const m = await chamar("POST", "/api/contratos", corpo({ numero: "CT-2026-0101" }));
-    expect(m.status).toBe(201);
-    expect(db.t.contaReceber.filter((cr) => cr.numero.startsWith("CT-2026-0101/")).length).toBeGreaterThan(contas.length);
+    expect(meses.slice(1).map((m: number, i: number) => m - meses[i])).toEqual(meses.slice(1).map(() => 1)); // mês a mês
   });
 
   it("recorrência de OS por local continua gerando as OS (nada quebrou)", async () => {
