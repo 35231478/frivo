@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmar, toast } from "@/components/ui/avisos";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -96,22 +97,22 @@ export function CrudCadastro({ titulo, apiUrl, campos, colunasLista }: CrudCadas
   }
 
   async function remover(id: string) {
-    if (!confirm("Desativar este item?")) return;
+    if (!(await confirmar({ mensagem: "Desativar este item?", perigo: true, confirmarTexto: "Desativar" }))) return;
     try {
       const res = await fetch(`${apiUrl}/${id}`, { method: "DELETE" });
-      if (!res.ok) { const e = await res.json().catch(() => ({})); alert(e.erro ?? "Não foi possível desativar."); return; }
+      if (!res.ok) { const e = await res.json().catch(() => ({})); toast(e.erro ?? "Não foi possível desativar.", "erro"); return; }
       setItens((p) => p.map((i) => (i.id === id ? { ...i, ativo: false } : i)));
-    } catch { alert("Erro de conexão."); }
+    } catch { toast("Erro de conexão.", "erro"); }
   }
 
   // Reativar manda só { ativo: true }: o servidor faz edição parcial e não mexe nos outros campos
   async function reativar(id: string) {
     try {
       const res = await fetch(`${apiUrl}/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ativo: true }) });
-      if (!res.ok) { const e = await res.json().catch(() => ({})); alert(e.erro ?? "Não foi possível reativar."); return; }
+      if (!res.ok) { const e = await res.json().catch(() => ({})); toast(e.erro ?? "Não foi possível reativar.", "erro"); return; }
       const atualizado = await res.json().catch(() => null);
       setItens((p) => p.map((x) => (x.id === id ? (atualizado?.id ? atualizado : { ...x, ativo: true }) : x)));
-    } catch { alert("Erro de conexão."); }
+    } catch { toast("Erro de conexão.", "erro"); }
   }
 
   const ativos = itens.filter((i) => i.ativo !== false);

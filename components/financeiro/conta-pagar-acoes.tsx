@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmar } from "@/components/ui/avisos";
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -24,7 +25,7 @@ export function ContaPagarAcoes({ conta }: { conta: Conta }) {
   const finalizada = conta.status === "PAGO_TOTAL" || conta.status === "CANCELADO";
 
   async function cancelar() {
-    if (!confirm(`Cancelar a conta ${conta.numero}?`)) return;
+    if (!(await confirmar({ mensagem: `Cancelar a conta ${conta.numero}?`, perigo: true, confirmarTexto: "Cancelar conta", cancelarTexto: "Voltar" }))) return;
     await fetch(`/api/contas-pagar/${conta.id}`, { method: "DELETE" });
     router.refresh();
   }

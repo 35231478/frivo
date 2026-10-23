@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmar, toast } from "@/components/ui/avisos";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -62,7 +63,7 @@ export function ContaReceberAcoes({ conta, categorias = [] }: { conta: Conta; ca
 
   async function cancelar() {
     setMenu(false);
-    if (!confirm(`Cancelar a cobrança ${conta.numero}?`)) return;
+    if (!(await confirmar({ mensagem: `Cancelar a cobrança ${conta.numero}?`, perigo: true, confirmarTexto: "Cancelar cobrança", cancelarTexto: "Voltar" }))) return;
     await fetch(`/api/contas-receber/${conta.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "CANCELADO" }) });
     router.refresh();
   }
@@ -275,18 +276,18 @@ function BoletoEmitido({ conta, boleto, onAlterado }: { conta: Conta; boleto: { 
     try {
       const res = await fetch(`/api/contas-receber/${conta.id}/boleto/pdf`);
       if (res.ok) { const d = await res.json(); window.open(d.pdf, "_blank"); }
-      else { const e = await res.json(); alert(e.erro ?? "Erro ao baixar PDF."); }
-    } catch { alert("Erro de conexão."); } finally { setBaixando(false); }
+      else { const e = await res.json(); toast(e.erro ?? "Erro ao baixar PDF.", "erro"); }
+    } catch { toast("Erro de conexão.", "erro"); } finally { setBaixando(false); }
   }
 
   async function cancelar() {
-    if (!confirm("Cancelar este boleto no Banco Inter?")) return;
+    if (!(await confirmar({ mensagem: "Cancelar este boleto no Banco Inter?", perigo: true, confirmarTexto: "Cancelar boleto", cancelarTexto: "Voltar" }))) return;
     setCancelando(true);
     try {
       const res = await fetch(`/api/contas-receber/${conta.id}/boleto`, { method: "DELETE" });
       if (res.ok) onAlterado();
-      else { const e = await res.json(); alert(e.erro ?? "Erro ao cancelar."); }
-    } catch { alert("Erro de conexão."); } finally { setCancelando(false); }
+      else { const e = await res.json(); toast(e.erro ?? "Erro ao cancelar.", "erro"); }
+    } catch { toast("Erro de conexão.", "erro"); } finally { setCancelando(false); }
   }
 
   const msgBoleto = `Olá ${conta.clienteNome}, segue seu boleto no valor de ${formatarMoeda(conta.valor)} com vencimento em ${formatarData(conta.boletoVencimento)}.\nLinha digitável: ${linha}`;

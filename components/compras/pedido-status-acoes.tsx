@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmar } from "@/components/ui/avisos";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -65,7 +66,7 @@ export function PedidoStatusAcoes({ pedidoId, status }: { pedidoId: string; stat
           </Button>
         )}
         {status !== "ENTREGUE" && status !== "CANCELADO" && (
-          <Button variant="ghost" size="sm" onClick={() => { if (confirm("Cancelar este pedido?")) mudar("CANCELADO"); }} loading={carregando === "CANCELADO"}>
+          <Button variant="ghost" size="sm" onClick={async () => { if (await confirmar({ mensagem: "Cancelar este pedido?", perigo: true, confirmarTexto: "Cancelar pedido", cancelarTexto: "Voltar" })) mudar("CANCELADO"); }} loading={carregando === "CANCELADO"}>
             <Ban className="w-3.5 h-3.5" /> Cancelar pedido
           </Button>
         )}

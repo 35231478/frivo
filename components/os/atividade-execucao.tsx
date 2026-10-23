@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmar } from "@/components/ui/avisos";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -126,7 +127,7 @@ export function AtividadeExecucao({ osId, atividadeId, titulo, osNumero, tipoOs 
         if (d) { mudarEquip(eq, (x) => ({ ...x, feito: true, fotos: [...x.fotos, { id: d.id, itemId: d.itemId, criadoEm: d.criadoEm }] })); setMensagem({ tipo: "ok", texto: "Foto salva." }); }
       },
       async removerFoto(fotoId: string) {
-        if (!window.confirm("Remover esta foto?")) return;
+        if (!(await confirmar({ mensagem: "Remover esta foto?", perigo: true, confirmarTexto: "Remover" }))) return;
         const d = await enviar(`${base}/execucao/fotos/${fotoId}`, { method: "DELETE" });
         if (d) mudarEquip(eq, (x) => ({ ...x, fotos: x.fotos.filter((f) => f.id !== fotoId) }));
       },
@@ -171,7 +172,11 @@ export function AtividadeExecucao({ osId, atividadeId, titulo, osNumero, tipoOs 
     setPendencias(null);
     if (!exec.conclusao.ok) { setPendencias({ erro: exec.conclusao.mensagem ?? "Faltam respostas.", pendencias: exec.conclusao.pendencias, servidor: false }); return; }
     const nao = exec.conclusao.naoAtendidos;
-    if (nao && !window.confirm(`${nao === 1 ? "1 equipamento vinculado não foi atendido e vai" : `${nao} equipamentos vinculados não foram atendidos e vão`} como “não atendido” no relatório. Concluir mesmo assim?`)) return;
+    if (nao && !(await confirmar({
+      titulo: "Concluir com pendência?",
+      mensagem: `${nao === 1 ? "1 equipamento vinculado não foi atendido e vai" : `${nao} equipamentos vinculados não foram atendidos e vão`} como “não atendido” no relatório.`,
+      confirmarTexto: "Concluir mesmo assim", cancelarTexto: "Voltar",
+    }))) return;
     setConcluindo(true);
     try {
       const r = await fetch(base, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "CONCLUIDA" }) });

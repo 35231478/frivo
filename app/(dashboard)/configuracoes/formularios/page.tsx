@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmar } from "@/components/ui/avisos";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
@@ -108,7 +109,7 @@ export default function FormulariosPage() {
   }
 
   async function remover(f: Formulario) {
-    if (!confirm(`Remover o formulário "${f.nome}"?`)) return;
+    if (!(await confirmar({ mensagem: `Remover o formulário "${f.nome}"?`, perigo: true, confirmarTexto: "Remover" }))) return;
     const res = await fetch(`/api/formularios/${f.id}`, { method: "DELETE" });
     if (res.ok) setFormularios((p) => p.filter((x) => x.id !== f.id));
   }

@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmar } from "@/components/ui/avisos";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -87,7 +88,7 @@ export function ChecklistTemplatesClient() {
   }
 
   async function remover(id: string) {
-    if (!confirm("Desativar este template?")) return;
+    if (!(await confirmar({ mensagem: "Desativar este template?", perigo: true, confirmarTexto: "Desativar" }))) return;
     await fetch(`/api/checklist-templates/${id}`, { method: "DELETE" });
     setTemplates((p) => p.map((t) => (t.id === id ? { ...t, ativo: false } : t)));
   }

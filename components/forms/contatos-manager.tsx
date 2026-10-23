@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmar } from "@/components/ui/avisos";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -88,7 +89,7 @@ export function ContatosManager({ clienteId, contatosIniciais }: ContatosManager
   }
 
   async function remover(id: string) {
-    if (!confirm("Remover este contato?")) return;
+    if (!(await confirmar({ mensagem: "Remover este contato?", perigo: true, confirmarTexto: "Remover" }))) return;
     try {
       const res = await fetch(`/api/clientes/${clienteId}/contatos/${id}`, { method: "DELETE" });
       if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro."); return; }
