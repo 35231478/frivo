@@ -169,6 +169,11 @@ describe.skipIf(!URL_PG)("UX-8 — consistência miúda (PostgreSQL real)", () =
     expect(html).toContain("Visita a reagendar");
     expect(html).not.toMatch(/Próxima manutenção[\s\S]{0,200}>—</);
 
+    // Na lista de chamados, a "Agendada" mostra a data DA VISITA — e que ficou para trás
+    const { default: Chamados } = await import("@/app/(portal)/portal/(protegido)/chamados/page");
+    html = renderToStaticMarkup(await Chamados());
+    expect(html).toMatch(/visita era \d{2}\/\d{2}\/\d{4} — a reagendar/);
+
     // Com uma visita FUTURA, o card volta a ser "Próxima manutenção" e a agenda não tem bloco de atraso para ela
     await prisma.ordemServico.update({ where: { id: osId }, data: { previsaoConclusao: amanha } });
     html = renderToStaticMarkup(await Inicio());
