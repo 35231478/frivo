@@ -126,7 +126,8 @@ describe("atividades da OS: saída justificada da trava de equipamento", () => {
     ]);
     expect($("[data-erro-status-atividade]")).toBeNull();
     expect($("[data-modal-sem-equipamento]")).toBeNull();
-    expect(caixa.textContent).toContain("Concluída");
+    const seletor = $$("select").find((s) => [...(s as HTMLSelectElement).options].some((o) => o.value === "CONCLUIDA")) as HTMLSelectElement;
+    expect(seletor.value).toBe("CONCLUIDA"); // a atividade já aparece concluída
     expect(onMudou).toHaveBeenCalled();
   });
 
@@ -183,6 +184,27 @@ describe("execução desktop: por que dá (ou não) para concluir sem equipament
     await clicar($("[data-concluir]"));
     expect(chamadas.find((c) => c.metodo === "PUT")).toMatchObject({ url: "/api/ordens/os1/atividades/a1", corpo: { status: "CONCLUIDA" } });
     expect($("[data-pendencias]")).toBeNull();
+  });
+
+  it("a tela recalcula com a dispensa: equipamento vinculado que volta a 'não atendido' não trava o tipo que não exige", async () => {
+    const dispensa = { motivo: "TIPO" as const, texto: textoDispensa("TIPO", "Vistoria") };
+    const eq = {
+      vinculoId: "v-eqA", feito: false, observacao: null,
+      equipamento: { id: "eqA", titulo: "Split Sala 1", descricao: "Split Sala 1", fabricante: "Daikin", tag: null, numeroSerie: null, local: "Sala", unidade: "Matriz", ativo: true, tipo: { id: "te1", nome: "Split" } },
+      itens: [{ id: "i1", texto: "Limpeza dos filtros", pedirFoto: false, pedirObservacao: false, ativo: true, ordem: 0, tipoResposta: "OK_ATENCAO_NA", unidade: null }],
+      respostas: {}, fotos: [], formulario: null, faltas: { semResposta: ["Limpeza dos filtros"], semFoto: [], semObservacao: [], formulario: null }, completo: false,
+    };
+    respostas["GET /api/ordens/os1/atividades/a1/execucao"] = { status: 200, corpo: { ...exec(dispensa), equipamentos: [eq], conclusao: verificarConclusao([], dispensa) } };
+    respostas["PUT /api/ordens/os1/atividades/a1/execucao/equipamentos/eqA/itens/i1"] = { status: 500, corpo: { erro: "Falhou" } };
+    respostas["PUT /api/ordens/os1/atividades/a1"] = { status: 200, corpo: {} };
+    const { AtividadeExecucao } = await import("@/components/os/atividade-execucao");
+    await montar(createElement(AtividadeExecucao, { osId: "os1", atividadeId: "a1", titulo: "Visita", osNumero: "OS-2026-0001", tipoOs: null }));
+    // toca OK (marca atendido na hora), o servidor recusa e a tela desfaz: o equipamento volta a "não atendido"
+    await clicar($("[data-equipamento-card='eqA'] [data-item='i1'] [data-resposta='OK']"));
+    vi.stubGlobal("confirm", vi.fn(() => true)); // "1 equipamento vinculado vai como não atendido" — confirma
+    await clicar($("[data-concluir]"));
+    expect($("[data-pendencias]")).toBeNull();
+    expect(chamadas.filter((c) => c.metodo === "PUT").map((c) => c.url)).toContain("/api/ordens/os1/atividades/a1");
   });
 
   it("OS recorrente sem equipamento: mesma coisa, com o texto do contrato", async () => {

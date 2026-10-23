@@ -190,9 +190,12 @@ describe.skipIf(!URL_PG)("OS sem equipamento: tipo que não exige, recorrente e 
     const r = await chamar(OS, "PUT", { id: os.id }, { status: "CONCLUIDA" });
     expect(r.status).toBe(200);
     expect(await statusOs(os.id)).toBe("CONCLUIDA");
-    // OS comum sem atividade continua travada
+    // OS comum sem atividade continua travada…
     const comum = await prisma.ordemServico.create({ data: { empresaId: "e1", numero: "OS-2026-9101", clienteId: "c1", criadoPorId: "u1", descricao: "Comum" } });
     expect((await chamar(OS, "PUT", { id: comum.id }, { status: "CONCLUIDA" })).status).toBe(422);
+    // …até alguém com "concluir OS" justificar a exceção
+    expect((await chamar(JUSTIFICAR, "POST", { id: comum.id }, { motivo: "Atendimento só por telefone" })).status).toBe(200);
+    expect((await chamar(OS, "PUT", { id: comum.id }, { status: "CONCLUIDA" })).status).toBe(200);
   });
 
   it("exceção justificada: motivo gravado na OS e no histórico (quem/quando), atividade concluída e OS concluída", async () => {
