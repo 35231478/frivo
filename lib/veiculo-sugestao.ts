@@ -1,3 +1,4 @@
+import { comparaNatural } from "@/lib/utils";
 /**
  * Veículo puxado automaticamente na atividade da OS (regra única, usada na tela e no servidor):
  * - escolheu uma EQUIPE → o veículo da equipe (o 1º ativo, por placa, se houver mais de um);
@@ -26,7 +27,7 @@ export function sugerirVeiculo(
 ): { veiculoId: string | null; origem: OrigemVeiculo } {
   const ativos = veiculos.filter((v) => v.status === "ATIVO");
   if (exec.equipeId) {
-    const daEquipe = ativos.filter((v) => v.equipeId === exec.equipeId).sort((a, b) => a.placa.localeCompare(b.placa));
+    const daEquipe = ativos.filter((v) => v.equipeId === exec.equipeId).sort((a, b) => comparaNatural(a.placa, b.placa));
     return daEquipe[0] ? { veiculoId: daEquipe[0].id, origem: "equipe" } : { veiculoId: null, origem: null };
   }
   if (exec.responsavelId) {

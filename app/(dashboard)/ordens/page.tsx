@@ -6,6 +6,7 @@ import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
 import { OrdensListaClient } from "@/components/ordens/ordens-lista-client";
 import { SelecaoMassaProvider } from "@/components/acoes-massa/selecao";
 import { BarraAcoesMassa } from "@/components/acoes-massa/barra";
+import { comparaNatural } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Ordens de Serviço" };
 
@@ -65,7 +66,7 @@ export default async function OrdensPage({ searchParams }: { searchParams: Promi
     const tecnicos = Array.from(
       // responsáveis + membros das equipes das atividades
       new Map(o.atividades.flatMap((a) => [a.tecnico, ...a.tecnicosEquipe.map((t) => t.tecnico)]).filter(Boolean).map((t) => [t!.id, t!])).values(),
-    ).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    ).sort((a, b) => comparaNatural(a.nome, b.nome));
 
     return {
       id: o.id,

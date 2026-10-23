@@ -13,6 +13,7 @@ import { EnderecoAutocomplete, type EnderecoSelecionado } from "@/components/ui/
 import { haversine, formatarDistancia } from "@/lib/geo";
 import type { Unidade } from "@prisma/client";
 import { Plus, Pencil, Trash2, X, Check, Building2, Star, ChevronDown, ChevronRight, MapPin, Navigation, Smartphone, Search } from "lucide-react";
+import { comparaNatural } from "@/lib/utils";
 
 const ESTADOS_BR = [
   "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
@@ -233,7 +234,7 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }
   const ordenadas = [...unidades].sort((a, b) => {
     if (a.principal && !b.principal) return -1;
     if (!a.principal && b.principal) return 1;
-    return a.nome.localeCompare(b.nome);
+    return comparaNatural(a.nome, b.nome);
   });
 
   function enderecoTexto(u: Unidade): string {

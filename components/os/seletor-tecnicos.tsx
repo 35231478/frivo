@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { AlertTriangle, Crown, Users, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
-import { SelectCadastroRapido } from "@/components/ui/select-cadastro-rapido";
+import { SelectCadastroRapido, usePodeCriar } from "@/components/ui/select-cadastro-rapido";
 import { TECNICO } from "@/components/cadastro-rapido/definicoes";
+import { toast } from "@/components/ui/avisos";
 
 export interface TecnicoOpcao { id: string; nome: string; competencias?: { id: string }[] }
 export interface EquipeOpcao { id: string; nome: string; cor: string; liderId: string | null; membroIds: string[] }
@@ -30,7 +31,7 @@ export function corpoTecnicos(v: ValorTecnicos) {
  * responsável) e/ou adicionar técnicos um a um — com o cadastro rápido (#9/#10).
  * Respeita a competência: com tipo de OS, só entra quem tem competência nele.
  */
-export function SeletorTecnicos({ tecnicos, equipes, tipoOsId, valor, onChange, carregando, onTecnicoCriado }: {
+export function SeletorTecnicos({ tecnicos, equipes, tipoOsId, valor, onChange, carregando, onTecnicoCriado, onCompetencia }: {
   tecnicos: TecnicoOpcao[];
   equipes: EquipeOpcao[];
   tipoOsId: string;
@@ -38,7 +39,25 @@ export function SeletorTecnicos({ tecnicos, equipes, tipoOsId, valor, onChange, 
   onChange: (v: ValorTecnicos) => void;
   carregando?: boolean;
   onTecnicoCriado?: (t: TecnicoOpcao) => void;
+  /** UX-8 (Y6): competência habilitada inline — o pai anota no estado para o técnico aparecer */
+  onCompetencia?: (tecnicoId: string) => void;
 }) {
+  const podeGerenciar = usePodeCriar(TECNICO.permissao);
+  const [habilitando, setHabilitando] = useState(false);
+
+  async function habilitarCompetencia(tecnicoId: string) {
+    if (!tecnicoId || !tipoOsId) return;
+    setHabilitando(true);
+    try {
+      const r = await fetch(`/api/tecnicos/${tecnicoId}/competencias`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tipoOsId }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { toast(d.erro ?? "Não foi possível habilitar a competência.", "erro"); return; }
+      onCompetencia?.(tecnicoId);
+      toast("Competência habilitada — o colaborador já aparece na lista.", "sucesso");
+    } catch { toast("Erro de conexão.", "erro"); } finally { setHabilitando(false); }
+  }
   const porId = useMemo(() => new Map(tecnicos.map((t) => [t.id, t])), [tecnicos]);
   const temCompetencia = (id: string) => !tipoOsId || (porId.get(id)?.competencias ?? []).some((c) => c.id === tipoOsId);
   const equipeSel = equipes.find((e) => e.id === valor.equipeId) ?? null;
@@ -127,10 +146,25 @@ export function SeletorTecnicos({ tecnicos, equipes, tipoOsId, valor, onChange, 
           : tipoOsId ? "Apenas colaboradores com competência neste tipo de OS." : "Obrigatório: escolha uma equipe ou um ou mais colaboradores."}
       </p>
       {ocultosCompetencia > 0 && (
-        <p data-ocultos-competencia className="text-[11px] text-ink-muted">
-          {ocultosCompetencia} colaborador{ocultosCompetencia > 1 ? "es" : ""} sem competência neste tipo de OS não aparece{ocultosCompetencia > 1 ? "m" : ""} na lista —
-          habilite em <a href="/colaboradores" target="_blank" rel="noreferrer" className="font-semibold text-primary-600 hover:underline">Colaboradores › Competências</a> ou deixe o tipo de OS em branco.
-        </p>
+        <div data-ocultos-competencia className="text-[11px] text-ink-muted space-y-1.5">
+          <p>
+            {ocultosCompetencia} colaborador{ocultosCompetencia > 1 ? "es" : ""} sem competência neste tipo de OS não aparece{ocultosCompetencia > 1 ? "m" : ""} na lista —
+            habilite em <a href="/colaboradores" target="_blank" rel="noreferrer" className="font-semibold text-primary-600 hover:underline">Colaboradores › Competências</a> ou deixe o tipo de OS em branco.
+          </p>
+          {/* Y6: saída INLINE — habilita a competência sem abandonar o formulário (quem pode gerenciar colaboradores) */}
+          {podeGerenciar && onCompetencia && (
+            <select
+              aria-label="Habilitar competência neste tipo de OS" data-habilitar-competencia value="" disabled={habilitando}
+              onChange={(e) => void habilitarCompetencia(e.target.value)}
+              className="w-full bg-white border border-dashed border-primary-300 text-primary-700 rounded-lg px-2.5 py-1.5 text-xs font-semibold focus:outline-none disabled:opacity-60"
+            >
+              <option value="">{habilitando ? "Habilitando…" : "＋ Habilitar a competência num colaborador…"}</option>
+              {tecnicos.filter((t) => !temCompetencia(t.id) && !valor.tecnicoIds.includes(t.id)).map((t) => (
+                <option key={t.id} value={t.id}>{t.nome}</option>
+              ))}
+            </select>
+          )}
+        </div>
       )}
       {foraDaEquipe.length > 0 && (
         <p data-fora-equipe className="flex items-start gap-1.5 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">

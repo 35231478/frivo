@@ -10,6 +10,7 @@ import { PhoneInput } from "@/components/ui/phone-input";
 import type { ContatoCliente } from "@prisma/client";
 import type { ContatoSeguro } from "@/lib/contato-cliente";
 import { Plus, Pencil, Trash2, X, Check, UserCircle, ChevronDown, ChevronRight, Star, Phone, Mail } from "lucide-react";
+import { comparaNatural } from "@/lib/utils";
 
 /** Contato como vem da API: sem hash/senha do portal. */
 type Contato = ContatoSeguro<ContatoCliente>;
@@ -126,7 +127,7 @@ export function ContatosManager({ clienteId, contatosIniciais }: ContatosManager
   const ordenados = [...contatos].sort((a, b) => {
     if (a.principal && !b.principal) return -1;
     if (!a.principal && b.principal) return 1;
-    return a.nome.localeCompare(b.nome);
+    return comparaNatural(a.nome, b.nome);
   });
 
   return (

@@ -10,12 +10,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { LABELS_PRIORIDADE } from "@/lib/utils";
 import { SelectCadastroRapido } from "@/components/ui/select-cadastro-rapido";
-import { CLIENTE, UNIDADE, EQUIPAMENTO } from "@/components/cadastro-rapido/definicoes";
+import { CLIENTE, UNIDADE, EQUIPAMENTO, TIPO_OS } from "@/components/cadastro-rapido/definicoes";
 import type { OpcaoCadastro } from "@/components/ui/select-cadastro-rapido";
 import { Inbox } from "lucide-react";
 import { SeletorExecucao, VALOR_EXECUCAO_VAZIO, corpoExecucao, temExecutor, useOpcoesExecucao, type ValorExecucao } from "@/components/os/seletor-execucao";
 import { MSG_SEM_EXECUTOR_TELA } from "@/lib/atividade-equipe";
 import { SeletorEquipamentos } from "@/components/os/seletor-equipamentos";
+import { InputData } from "@/components/ui/input-data";
 
 type Item = { id: string; nome: string; nomeFantasia?: string | null };
 type UnidadeItem = { id: string; nome: string; cidade?: string | null };
@@ -234,7 +235,7 @@ export default function NovaOrdemPage() {
               </FormField>
             ) : (
               <FormField label="Previsão de conclusão">
-                <Input type="date" value={form.previsaoConclusao} onChange={(e) => setForm((f) => ({ ...f, previsaoConclusao: e.target.value }))} />
+                <InputData value={form.previsaoConclusao} onChange={(v) => setForm((f) => ({ ...f, previsaoConclusao: v }))} />
               </FormField>
             )}
           </FormGrid>
@@ -283,9 +284,18 @@ export default function NovaOrdemPage() {
           {!solicitacao && (
             <FormGrid>
               <FormField label="Tipo de OS" hint="Filtra os colaboradores pela competência">
-                <Select value={tipoOsId} onChange={(e) => setTipoOsId(e.target.value)} placeholder="Sem tipo definido">
-                  {tiposOs.filter((t) => t.ativo !== false).map((t) => (<option key={t.id} value={t.id}>{t.nome}</option>))}
-                </Select>
+                {/* UX-8 (Y3): tipo novo nasce aqui mesmo, sem abandonar a OS */}
+                <SelectCadastroRapido
+                  value={tipoOsId} onChange={setTipoOsId}
+                  opcoes={tiposOs.filter((t) => t.ativo !== false).map((t) => ({ value: t.id, label: t.nome }))}
+                  entidade={TIPO_OS.entidade} placeholder="Sem tipo definido"
+                  campos={TIPO_OS.campos} campoBusca="nome" permissao={TIPO_OS.permissao} linkCadastroCompleto={TIPO_OS.link}
+                  criar={async (v) => {
+                    const t = await TIPO_OS.criar(v);
+                    setTiposOs((l) => [...l, { id: t.id, nome: t.nome, ativo: true }]);
+                    return { value: t.id, label: t.nome };
+                  }}
+                />
               </FormField>
               <FormField label="Agendar para" hint="Opcional — aparece no calendário">
                 <Input type="datetime-local" aria-label="Agendar para" value={agendarPara} onChange={(e) => setAgendarPara(e.target.value)} />

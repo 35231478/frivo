@@ -26,7 +26,7 @@ export default async function PortalChamados() {
   const { user } = sessao;
   const ordens = await prisma.ordemServico.findMany({
     where: { empresaId: user.empresaId, clienteId: user.clienteId },
-    select: { id: true, numero: true, chamadoNumero: true, descricao: true, status: true, origem: true, criadoEm: true },
+    select: { id: true, numero: true, chamadoNumero: true, descricao: true, status: true, origem: true, criadoEm: true, previsaoConclusao: true },
     orderBy: { criadoEm: "desc" },
     take: 100,
   });
@@ -58,7 +58,14 @@ export default async function PortalChamados() {
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
                   <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", COR_STATUS[o.status])}>{LABELS_STATUS_OS[o.status] ?? o.status}</span>
-                  <span className="text-xs text-ink-subtle">{formatarData(o.criadoEm)}</span>
+                  {/* UX-8 (Y16): "Agendada" mostra a data DA VISITA (e avisa quando ficou para trás), não a de abertura */}
+                  {o.status === "AGENDADA" && o.previsaoConclusao ? (
+                    o.previsaoConclusao < new Date()
+                      ? <span className="text-xs font-semibold text-amber-700">visita era {formatarData(o.previsaoConclusao)} — a reagendar</span>
+                      : <span className="text-xs text-ink-subtle">visita {formatarData(o.previsaoConclusao)}</span>
+                  ) : (
+                    <span className="text-xs text-ink-subtle">{formatarData(o.criadoEm)}</span>
+                  )}
                 </div>
               </div>
             </Link>

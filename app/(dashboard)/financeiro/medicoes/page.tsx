@@ -13,6 +13,7 @@ import { GerarMedicoesMes } from "@/components/medicao/gerar-medicoes-mes";
 import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
 import { BuscaUrl, ConteudoUrl, ListaUrl, PaginacaoUrl } from "@/components/listagem/lista-url";
 import { AvatarCliente } from "@/components/ui/avatar-cliente";
+import { InputData } from "@/components/ui/input-data";
 
 export const metadata: Metadata = { title: "Medições" };
 
@@ -108,8 +109,8 @@ export default async function MedicoesPage({
               <option value="">Todos clientes</option>
               {clientes.map((c) => <option key={c.id} value={c.id}>{c.nomeFantasia ?? c.nome}</option>)}
             </select>
-            <input type="date" name="dataInicio" defaultValue={dataInicio} title="Data inicial" className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all" />
-            <input type="date" name="dataFim" defaultValue={dataFim} title="Data final" className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all" />
+            <InputData name="dataInicio" defaultValue={dataInicio} title="Data inicial" aria-label="Data inicial" className="w-36" />
+            <InputData name="dataFim" defaultValue={dataFim} title="Data final" aria-label="Data final" className="w-36" />
             <button type="submit" className="bg-primary-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-600 transition-all shadow-sm">Filtrar</button>
           </form>
         </div>

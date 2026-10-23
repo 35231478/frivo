@@ -12,6 +12,7 @@ import { AlertCircle } from "lucide-react";
 import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
 import { CampoBoleto } from "@/components/financeiro/campo-boleto";
 import { lerBoleto } from "@/lib/financeiro/boleto";
+import { InputData } from "@/components/ui/input-data";
 
 export function ContaPagarForm({ initialData }: { initialData?: any }) {
   const router = useRouter();
@@ -107,7 +108,7 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
         <FormSection title="Pagamento">
           <FormGrid cols={3}>
             <FormField label="Valor total" required><Input type="number" step="0.01" value={form.valorTotal} onChange={(e) => upd("valorTotal", e.target.value)} placeholder="0,00" /></FormField>
-            <FormField label="Vencimento"><Input type="date" value={form.dataVencimento} onChange={(e) => upd("dataVencimento", e.target.value)} /></FormField>
+            <FormField label="Vencimento"><InputData value={form.dataVencimento} onChange={(v) => upd("dataVencimento", v)} /></FormField>
             <FormField label="Forma de pagamento">
               <Select value={form.formaPagamento} onChange={(e) => upd("formaPagamento", e.target.value)}>
                 <option value="">Selecione…</option>

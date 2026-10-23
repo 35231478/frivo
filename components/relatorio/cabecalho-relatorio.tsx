@@ -1,4 +1,4 @@
-import { formatarCpfCnpj, formatarTelefone } from "@/lib/utils";
+import { formatarCpfCnpj, formatarTelefone , comparaNatural } from "@/lib/utils";
 import { ambienteEquipamento, descricaoEquipamento, fabricanteModelo } from "@/lib/equipamento-descricao";
 
 export interface EmpresaInfo {
@@ -97,7 +97,7 @@ export function EquipamentosTabela({ equipamentos, unidadeNome, titulo = "Equipa
   if (equipamentos.length === 0) return null;
   const linhas = equipamentos
     .map((e) => ({ e, amb: ambienteEquipamento(e, unidadeNome) }))
-    .sort((a, b) => `${a.e.setor ?? ""}|${a.amb.principal ?? ""}`.localeCompare(`${b.e.setor ?? ""}|${b.amb.principal ?? ""}`, "pt-BR"));
+    .sort((a, b) => comparaNatural(`${a.e.setor ?? ""}|${a.amb.principal ?? ""}`, `${b.e.setor ?? ""}|${b.amb.principal ?? ""}`));
   return (
     <div className="py-4 border-b border-surface-border" data-equipamentos-relatorio>
       <p className="text-xs uppercase tracking-wider text-ink-muted mb-2">{titulo}</p>

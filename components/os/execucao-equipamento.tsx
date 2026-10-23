@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { AlertTriangle, Camera, ChevronDown, CircleCheck, CircleDashed, ImagePlus, MessageSquareText, X } from "lucide-react";
+import { AlertTriangle, Camera, CheckCheck, ChevronDown, CircleCheck, CircleDashed, ImagePlus, MessageSquareText, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
@@ -26,6 +26,8 @@ export interface EquipamentoTela {
 
 export interface AcoesEquipamento {
   responder: (itemId: string, status: StatusItem) => void;
+  /** UX-8 (G4): marca OK, num toque, os itens OK/Atenção/N.A. ainda sem resposta (como no app do técnico) */
+  tudoOk: () => void;
   /** Medição: número + unidade (ou "Não se aplica") — sem avaliar o valor */
   medir: (itemId: string, dados: { valor?: number | null; unidade?: string | null; status?: "NAO_SE_APLICA" | null }) => void;
   observarItem: (itemId: string, texto: string) => void;
@@ -104,6 +106,13 @@ export function EquipamentoExecucaoCard({ e, aberto, onAlternar, acoes, somenteL
           {/* ── Checklist do tipo ── */}
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Checklist{eq.tipo ? ` — ${eq.tipo.nome}` : ""}</p>
+            {/* G4: 17 itens não precisam de 17 cliques — igual ao app do técnico */}
+            {!somenteLeitura && e.itens.some((i) => i.ativo && i.tipoResposta === "OK_ATENCAO_NA" && !e.respostas[i.id]?.status) && (
+              <button type="button" onClick={() => acoes.tudoOk()} data-tudo-ok-desktop
+                className="w-full mb-2.5 rounded-lg bg-success-600 text-white py-2.5 text-sm font-bold inline-flex items-center justify-center gap-2 hover:bg-success-700">
+                <CheckCheck className="w-4 h-4" /> TUDO OK — marca OK o que está sem resposta
+              </button>
+            )}
             {e.itens.length === 0 ? (
               <p className="text-xs text-gray-400" data-sem-checklist>
                 {eq.tipo ? `O tipo “${eq.tipo.nome}” ainda não tem checklist: cadastre em Configurações › Tipos de equipamento.` : "Equipamento sem tipo: defina o tipo no cadastro para ter checklist."}

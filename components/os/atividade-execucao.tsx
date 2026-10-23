@@ -106,6 +106,14 @@ export function AtividadeExecucao({ osId, atividadeId, titulo, osNumero, tipoOs 
         const d = await enviar(`${urlEq}/itens/${itemId}`, { method: "PUT", body: JSON.stringify({ status }) });
         if (!d) mudarEquip(eq, (x) => ({ ...x, feito: e.feito, respostas: { ...x.respostas, [itemId]: antes ?? RESPOSTA_VAZIA } }));
       },
+      async tudoOk() {
+        const d = await enviar(`${urlEq}/tudo-ok`, { method: "POST", body: JSON.stringify({}) });
+        if (d) mudarEquip(eq, (x) => {
+          const respostas = { ...x.respostas };
+          for (const id of (d.marcados ?? []) as string[]) respostas[id] = { ...(respostas[id] ?? RESPOSTA_VAZIA), status: "OK" };
+          return { ...x, feito: d.feito ?? x.feito, respostas };
+        });
+      },
       async medir(itemId, dados) {
         const d = await enviar(`${urlEq}/itens/${itemId}`, { method: "PUT", body: JSON.stringify(dados) });
         if (d) mudarEquip(eq, (x) => ({ ...x, feito: d.feito ?? x.feito, respostas: { ...x.respostas, [itemId]: { ...(x.respostas[itemId] ?? RESPOSTA_VAZIA), status: d.status, valor: d.valor, unidade: d.unidade } } }));

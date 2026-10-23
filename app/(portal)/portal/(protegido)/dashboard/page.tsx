@@ -22,8 +22,14 @@ export default async function PortalDashboard() {
     verChamados
       ? prisma.ordemServico.count({ where: { empresaId, clienteId, status: { in: ["ABERTA", "AGUARDANDO_ATENDIMENTO", "AGENDADA", "EM_ANDAMENTO", "PAUSADA"] } } })
       : Promise.resolve(0),
+    // UX-8 (Y16): sem visita futura, a AGENDADA que ficou para trás aparece como "a reagendar"
+    // (antes virava "—" e a visita atrasada sumia do radar do cliente)
     verChamados
       ? prisma.ordemServico.findFirst({ where: { empresaId, clienteId, status: "AGENDADA", previsaoConclusao: { gte: agora } }, orderBy: { previsaoConclusao: "asc" }, select: { numero: true, previsaoConclusao: true } })
+          .then((futura) => futura ? { ...futura, atrasada: false } : prisma.ordemServico.findFirst({
+            where: { empresaId, clienteId, status: { in: ["AGENDADA", "AGUARDANDO_ATENDIMENTO"] }, previsaoConclusao: { lt: agora } },
+            orderBy: { previsaoConclusao: "asc" }, select: { numero: true, previsaoConclusao: true },
+          }).then((velha) => velha ? { ...velha, atrasada: true } : null))
       : Promise.resolve(null),
     prisma.relatorioOs.count({ where: { empresaId, ordemServico: { clienteId } } }),
     prisma.medicao.count({ where: { empresaId, clienteId, status: "AGUARDANDO_APROVACAO" } }),
@@ -46,7 +52,11 @@ export default async function PortalDashboard() {
 
   const cards = [
     ...(verChamados ? [{ label: "OS abertas / em andamento", valor: osAbertas, icone: ClipboardList, href: "/portal/chamados" }] : []),
-    ...(permissoes.verOS ? [{ label: "Próxima manutenção", valor: proxima ? formatarData(proxima.previsaoConclusao) : "—", icone: CalendarCheck, href: "/portal/agenda", texto: true }] : []),
+    ...(permissoes.verOS ? [{
+      label: proxima?.atrasada ? "Visita a reagendar" : "Próxima manutenção",
+      valor: proxima ? (proxima.atrasada ? `era ${formatarData(proxima.previsaoConclusao)}` : formatarData(proxima.previsaoConclusao)) : "—",
+      icone: CalendarCheck, href: "/portal/agenda", texto: true,
+    }] : []),
     ...(permissoes.verDocumentos ? [{ label: "Documentos disponíveis", valor: totalDocs, icone: FileText, href: "/portal/documentos" }] : []),
     ...(permissoes.verFinanceiro ? [{ label: "Pendências", valor: medicoesPend + boletos.length, icone: AlertTriangle, href: "/portal/financeiro" }] : []),
   ];

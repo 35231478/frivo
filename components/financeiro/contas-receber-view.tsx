@@ -10,6 +10,7 @@ import { SincronizarBoletos } from "@/components/financeiro/sincronizar-boletos"
 import { CategoriaBadge } from "@/components/financeiro/categoria-badge";
 import { useListagemUrl } from "@/components/listagem/use-listagem-url";
 import { Paginacao } from "@/components/listagem/listagem-ui";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
 import {
   Receipt, AlertTriangle, CalendarClock, CheckCircle2, Search, SlidersHorizontal,
   Plus, Download, X, Barcode, Loader2,
@@ -54,6 +55,8 @@ export function ContasReceberView({
   interAtivo: boolean; resumo: ResumoReceber; total: number; totalFiltrado: number;
   pagina: number; porPagina: number; filtros: FiltrosReceber;
 }) {
+  const { pode } = usePermissoes();
+  const podeCobrar = pode("financeiro", "contasReceber");
   const { busca, setBusca, navegar, pendente } = useListagemUrl({
     chave: "contas-receber", qAtual: filtros.q, paramBusca: "q", lembrarFiltros: false,
   });
@@ -111,7 +114,8 @@ export function ContasReceberView({
         <div className="flex items-center gap-2">
           {interAtivo && <SincronizarBoletos />}
           <button onClick={exportar} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-surface-border text-ink-muted hover:bg-surface-alt transition-colors"><Download className="w-4 h-4" /> Exportar</button>
-          <Link href="/financeiro/contas-receber/nova" className="inline-flex items-center gap-1.5 bg-success-500 hover:bg-success-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm"><Plus className="w-4 h-4" /> Nova Cobrança</Link>
+          {/* UX-8 (G14): o botão segue a MESMA permissão do POST de criação — nunca leva a um 403 */}
+          {podeCobrar && <Link href="/financeiro/contas-receber/nova" data-nova-cobranca className="inline-flex items-center gap-1.5 bg-success-500 hover:bg-success-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm"><Plus className="w-4 h-4" /> Nova Cobrança</Link>}
         </div>
       </div>
 

@@ -582,3 +582,10 @@ export function formatarPrazoHoras(horas: number): string {
   const resto = horas % 24;
   return resto ? `${dias}d ${resto}h` : `${dias}d`;
 }
+
+/**
+ * UX-8 (G3): ordenação NATURAL em pt-BR — "Sala 2" antes de "Sala 10", "Academia 19" antes de
+ * "Academia 103" (o localeCompare puro ordena como texto e embaralha números).
+ */
+export const comparaNatural = (a: string | null | undefined, b: string | null | undefined): number =>
+  (a ?? "").localeCompare(b ?? "", "pt-BR", { numeric: true, sensitivity: "base" });

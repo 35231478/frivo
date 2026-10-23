@@ -7,6 +7,7 @@ import { FormField, FormGrid } from "@/components/ui/form-field";
 import { WhatsAppInput } from "@/components/ui/whatsapp-input";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { Plus, Pencil, Trash2, X, Check, UserCircle, ChevronDown, ChevronRight, Star, Phone, Mail } from "lucide-react";
+import { comparaNatural } from "@/lib/utils";
 
 export interface ContatoLocal {
   _tempId: string;
@@ -75,7 +76,7 @@ export function ContatosLocal({ contatos, onChange }: ContatosLocalProps) {
   const ordenados = [...contatos].sort((a, b) => {
     if (a.principal && !b.principal) return -1;
     if (!a.principal && b.principal) return 1;
-    return a.nome.localeCompare(b.nome);
+    return comparaNatural(a.nome, b.nome);
   });
 
   function renderForm() {
