@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { clienteSchema, type ClienteInput } from "@/lib/validations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +39,7 @@ import {
   Search, Loader2, FileCheck, Lock, Pencil, X, AlertCircle,
   FileText, Phone, MapPin, Image as ImageIcon, Heart, Headset,
   Building2, DollarSign, Users, Paperclip, Star, MessageSquare, Globe, ArrowUpRight, Send, FileSignature,
+  ClipboardPlus, Calculator,
 } from "lucide-react";
 
 type ResponsavelItem = Pick<Tecnico, "id" | "nome" | "crea">;
@@ -82,6 +83,9 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
   const podeSalvar = pode("clientes", isEditing ? "editar" : "criar");
   const podeInativar = pode("clientes", "excluir");
   const podeReativar = pode("clientes", "editar");
+  // UX-2/E5: "cliente ligou → abrir OS" sem sair da ficha (RBAC igual ao resto do sistema)
+  const podeNovaOs = pode("ordens", "criar");
+  const podeNovoOrcamento = pode("orcamentos", "criar");
   const statusCalc: StatusFinanceiroCalc = statusFinanceiroCalc ?? "SEM_HISTORICO";
   const totalProx = totalProximos30Dias ?? 0;
   const qtdContratosAtivos = initialData?._count?.contratos ?? 0;
@@ -108,6 +112,17 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
   }
+
+  // UX-2/E5: salvar um cliente novo aterrissa NESTA ficha (?criado=1) — confirma e já oferece as ações
+  const searchParams = useSearchParams();
+  const chegouCriado = isEditing && searchParams.get("criado") === "1";
+  useEffect(() => {
+    if (chegouCriado) {
+      mostrarToast("Cliente cadastrado com sucesso!");
+      router.replace(`/clientes/${initialData!.id}/editar`, { scroll: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chegouCriado]);
 
   // Inativa (DELETE = soft-delete, exige "excluir") ou reativa (PATCH, exige "editar")
   // o cliente sem salvar o formulário inteiro.
@@ -263,10 +278,13 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
       });
       if (!res.ok) { const err = await res.json(); setErroGlobal(err.erro ?? "Erro ao salvar cliente."); return; }
       const saved = await res.json().catch(() => ({}));
-      if (continuar) {
-        mostrarToast(isEditing ? "Alterações salvas com sucesso!" : "Cliente cadastrado com sucesso!");
-        if (!isEditing && saved?.id) { router.push(`/clientes/${saved.id}/editar`); router.refresh(); }
-        else router.refresh();
+      // Cliente NOVO: qualquer salvar aterrissa na ficha do criado (UX-2/E5) —
+      // o fluxo do balcão continua dali ("Nova OS", contatos, endereços…)
+      if (!isEditing && saved?.id) {
+        router.push(`/clientes/${saved.id}/editar?criado=1`); router.refresh();
+      } else if (continuar) {
+        mostrarToast("Alterações salvas com sucesso!");
+        router.refresh();
       } else {
         router.push("/clientes"); router.refresh();
       }
@@ -299,12 +317,38 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
   // Inativar exige "excluir"; reativar exige "editar". Sem a permissão, o status vira só um selo.
   const podeAlterarStatus = ativoVal ? podeInativar : podeReativar;
 
+  // "Cliente ligou → abrir OS" sem sair da ficha (E5): atalhos no cabeçalho, só para cliente ativo
+  const AtalhosCliente = ({ compact = false }: { compact?: boolean }) => !isEditing || !ativoVal ? null : (
+    <>
+      {podeNovaOs && (
+        <Link
+          href={`/ordens/nova?clienteId=${initialData!.id}`} data-nova-os
+          className={cn("inline-flex items-center gap-1.5 font-semibold bg-primary-500 hover:bg-primary-600 text-white rounded-lg shadow-sm whitespace-nowrap",
+            compact ? "text-xs px-3 py-1.5" : "text-sm px-4 py-2.5")}
+        >
+          <ClipboardPlus className="w-4 h-4" /> Nova OS
+        </Link>
+      )}
+      {podeNovoOrcamento && (
+        <Link
+          href={`/orcamentos/novo?clienteId=${initialData!.id}`} data-novo-orcamento
+          className={cn("inline-flex items-center gap-1.5 font-medium bg-white border border-primary-500 text-primary-600 hover:bg-primary-50 rounded-lg whitespace-nowrap",
+            compact ? "text-xs px-3 py-1.5" : "text-sm px-4 py-2.5")}
+        >
+          <Calculator className="w-4 h-4" /> <span className={compact ? "hidden lg:inline" : ""}>Novo orçamento</span><span className={compact ? "lg:hidden" : "hidden"}>Orçamento</span>
+        </Link>
+      )}
+    </>
+  );
+
   const BotoesAcao = ({ compact = false }: { compact?: boolean }) => !podeSalvar ? (
     <div className="flex items-center gap-2 shrink-0">
+      <AtalhosCliente compact={compact} />
       <Button type="button" variant="secondary" size={compact ? "sm" : "md"} onClick={() => router.push("/clientes")}>Voltar</Button>
     </div>
   ) : (
     <div className="flex items-center gap-2 shrink-0">
+      <AtalhosCliente compact={compact} />
       <Button type="button" variant="secondary" size={compact ? "sm" : "md"} onClick={() => router.push("/clientes")}>Cancelar</Button>
       <Button type="button" variant="outline" size={compact ? "sm" : "md"} loading={isSubmitting} onClick={salvarEContinuar}>
         <span className={compact ? "hidden lg:inline" : ""}>Salvar e continuar</span>

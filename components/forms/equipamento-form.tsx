@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid } from "@/components/ui/form-field";
-import { ClienteCombobox } from "@/components/ui/cliente-combobox";
 import { GaleriaImagens } from "@/components/ui/galeria-imagens";
 import { aliviarFotos } from "@/lib/imagem-cliente";
 import { AvisoSerieDuplicada } from "@/components/equipamentos/aviso-serie-duplicada";
@@ -17,7 +16,7 @@ import { EquipamentoQrSection } from "@/components/forms/equipamento-qr-section"
 import { TipoBadge, TipoIcone } from "@/components/equipamentos/tipo-equipamento";
 import { StatusSelo } from "@/components/equipamentos/selos";
 import { SelectCadastroRapido, type CampoRapido, type OpcaoCadastro } from "@/components/ui/select-cadastro-rapido";
-import { UNIDADE } from "@/components/cadastro-rapido/definicoes";
+import { CLIENTE, UNIDADE } from "@/components/cadastro-rapido/definicoes";
 import Link from "next/link";
 import { LABELS_TIPO_EQUIPAMENTO, cn } from "@/lib/utils";
 import { opcoesTipoEquipamento, PREFIXO_TIPO_CUSTOM, type TipoEquipamentoCadastro } from "@/lib/cadastros/tipos-equipamento";
@@ -95,6 +94,8 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
 
   const [fotos, setFotos] = useState<string[]>(initialData?.fotos ?? []);
   const [clienteId, setClienteId] = useState<string>(initialData?.unidade?.clienteId ?? "");
+  const [clientes, setClientes] = useState<{ id: string; nome: string; nomeFantasia?: string | null }[]>([]);
+  const [carregandoClientes, setCarregandoClientes] = useState(true);
   const [unidades, setUnidades] = useState<UnidadeItem[]>([]);
   const [carregandoUnidades, setCarregandoUnidades] = useState(false);
   const [tiposCustom, setTiposCustom] = useState<TipoCustom[]>([]);
@@ -134,6 +135,15 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
     setForm((f) => ({ ...f, [campo]: valor }));
   }
 
+  // O MESMO seletor de cliente da Nova OS (busca + "+ Novo cliente" com RBAC) — UX-2/E1
+  useEffect(() => {
+    fetch("/api/clientes")
+      .then((r) => r.json())
+      .then((d) => setClientes(Array.isArray(d) ? d : []))
+      .catch(() => {})
+      .finally(() => setCarregandoClientes(false));
+  }, []);
+
   // Carrega unidades ao escolher cliente
   useEffect(() => {
     if (!clienteId) { setUnidades([]); return; }
@@ -165,6 +175,22 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
     () => unidades.map(UNIDADE.opcao),
     [unidades],
   );
+
+  // O cliente atual do equipamento continua selecionável mesmo fora da lista (ex.: inativado)
+  const opcoesCliente: OpcaoCadastro[] = useMemo(() => {
+    const ops = clientes.map(CLIENTE.opcao);
+    const atual = initialData?.unidade?.cliente;
+    if (clienteId && atual && !ops.some((o) => o.value === clienteId)) {
+      ops.unshift(CLIENTE.opcao({ id: clienteId, nome: atual.nome, nomeFantasia: atual.nomeFantasia }));
+    }
+    return ops;
+  }, [clientes, clienteId, initialData]);
+
+  async function criarCliente(v: Record<string, string>): Promise<OpcaoCadastro> {
+    const c = await CLIENTE.criar(v);
+    setClientes((lista) => [...lista, c].sort((x, y) => (x.nomeFantasia ?? x.nome).localeCompare(y.nomeFantasia ?? y.nome)));
+    return CLIENTE.opcao(c);
+  }
 
   async function criarUnidade(v: Record<string, string>): Promise<OpcaoCadastro> {
     const data = await UNIDADE.criar(clienteId, v, unidades.length === 0);
@@ -380,7 +406,12 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
         <Bloco numero={2} titulo="Localização" descricao="Onde ele está instalado: cliente, endereço e o ambiente (sala).">
           <FormGrid>
             <FormField label="Cliente" required>
-              <ClienteCombobox value={clienteId} onChange={(id) => { setClienteId(id); set("unidadeId", ""); }} />
+              <SelectCadastroRapido
+                value={clienteId} onChange={(id) => { setClienteId(id); set("unidadeId", ""); }}
+                opcoes={opcoesCliente} entidade={CLIENTE.entidade} placeholder="Selecione o cliente"
+                carregando={carregandoClientes} campos={CLIENTE.campos} valoresIniciais={CLIENTE.valoresIniciais}
+                campoBusca="nome" permissao={CLIENTE.permissao} linkCadastroCompleto={CLIENTE.link} criar={criarCliente}
+              />
             </FormField>
             <FormField label="Endereço / Unidade" required>
               <SelectCadastroRapido
@@ -585,11 +616,12 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
           {/* ABA 2 — Localização */}
           {aba === "localizacao" && (
             <div className="space-y-5">
-              <FormField label="Cliente" required hint="Digite 2+ letras para buscar">
-                <ClienteCombobox
-                  value={clienteId}
-                  initialLabel={initialData?.unidade?.cliente ? (initialData.unidade.cliente.nomeFantasia ?? initialData.unidade.cliente.nome) : undefined}
-                  onChange={(id) => { setClienteId(id); set("unidadeId", ""); }}
+              <FormField label="Cliente" required>
+                <SelectCadastroRapido
+                  value={clienteId} onChange={(id) => { setClienteId(id); set("unidadeId", ""); }}
+                  opcoes={opcoesCliente} entidade={CLIENTE.entidade} placeholder="Selecione o cliente"
+                  carregando={carregandoClientes} campos={CLIENTE.campos} valoresIniciais={CLIENTE.valoresIniciais}
+                  campoBusca="nome" permissao={CLIENTE.permissao} linkCadastroCompleto={CLIENTE.link} criar={criarCliente}
                 />
               </FormField>
               <FormField label="Endereço / Unidade" required>
