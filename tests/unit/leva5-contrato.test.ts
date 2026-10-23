@@ -342,9 +342,9 @@ describe.skipIf(!URL_PG)("Leva 5 — contrato × previsão × medição (Postgre
       mes: MES, ano: ANO, status: "PC_RECEBIDO", valorTotal: 999, valorLiquido: 999, tokenPublico: crypto.randomUUID(),
     } });
     const conta = await gerarContaReceberDaMedicao(medicao.id);
-    expect(conta.contratoId).toBe(ct.id);
+    expect(conta?.contratoId).toBe(ct.id);
     expect(await prisma.contaReceber.count({ where: { contratoId: ct.id, refMes: MES, refAno: ANO } })).toBe(1);
-    expect((await prisma.contaReceber.findFirst({ where: { contratoId: ct.id, refMes: MES, refAno: ANO } })).medicaoId).toBe(medicao.id);
+    expect((await prisma.contaReceber.findFirst({ where: { contratoId: ct.id, refMes: MES, refAno: ANO } }))?.medicaoId).toBe(medicao.id);
   });
 
   // ═══════════ D1 — relatório mensal consolidado ═══════════

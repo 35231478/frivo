@@ -465,6 +465,20 @@ export async function gerarContaPagarDoPedido(pedidoCompraId: string) {
 // DASHBOARD FINANCEIRO
 // ─────────────────────────────────────────────
 
+/**
+ * Marca como ATRASADO as contas a receber LIBERADAS (A_RECEBER) vencidas. PREVISTO não
+ * vira ATRASADO (C6/F5): previsão de contrato ainda não faturada não é cobrança vencida —
+ * era isso que marcava o cliente como inadimplente e enchia o portal de "boletos vencidos".
+ * Único lugar da regra: dashboard e lista usam esta função.
+ */
+export async function marcarContasReceberVencidas(empresaId: string) {
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  return prisma.contaReceber.updateMany({
+    where: { empresaId, status: "A_RECEBER", dataVencimento: { lt: hoje } },
+    data: { status: "ATRASADO" },
+  });
+}
+
 /** Agregações para o dashboard financeiro: cards do mês, série de 6 meses e alertas. */
 export async function resumoFinanceiro(empresaId: string) {
   const agora = new Date();
@@ -474,13 +488,8 @@ export async function resumoFinanceiro(empresaId: string) {
   const hojeFim = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), 23, 59, 59, 999);
   const tresDias = new Date(hojeIni.getTime() - 3 * 86400000);
 
-  // Marca contas vencidas (receber e pagar). PREVISTO não vira ATRASADO: previsão de
-  // contrato ainda não faturada não é cobrança vencida (C6/F5 — era isso que marcava o
-  // cliente como inadimplente e enchia o portal de "boletos vencidos" fantasmas).
-  await prisma.contaReceber.updateMany({
-    where: { empresaId, status: "A_RECEBER", dataVencimento: { lt: hojeIni } },
-    data: { status: "ATRASADO" },
-  });
+  // Marca contas vencidas (receber e pagar)
+  await marcarContasReceberVencidas(empresaId);
   await prisma.contaPagar.updateMany({
     where: { empresaId, status: "PENDENTE", dataVencimento: { lt: hojeIni } },
     data: { status: "VENCIDO" },
