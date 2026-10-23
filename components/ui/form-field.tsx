@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import type { ReactNode } from "react";
+import { cloneElement, isValidElement, useId, type ReactNode } from "react";
 
 interface FormFieldProps {
   label: string;
@@ -11,13 +11,19 @@ interface FormFieldProps {
 }
 
 export function FormField({ label, error, required, hint, className, children }: FormFieldProps) {
+  // UX-8 (G2): label ASSOCIADO ao campo (a11y + clique no rótulo foca o campo + automação).
+  // Quando o filho é um elemento único sem id, ele ganha o id gerado; filhos compostos ficam como estão.
+  const idGerado = useId();
+  const filhoUnico = isValidElement<{ id?: string }>(children) ? children : null;
+  const id = filhoUnico ? (filhoUnico.props.id ?? idGerado) : undefined;
+  const campo = filhoUnico && !filhoUnico.props.id ? cloneElement(filhoUnico, { id }) : children;
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
-      <label className="text-sm font-semibold text-ink">
+      <label htmlFor={id} className="text-sm font-semibold text-ink">
         {label}
         {required && <span className="text-red-500 ml-0.5">*</span>}
       </label>
-      {children}
+      {campo}
       {hint && !error && <p className="text-xs text-ink-muted">{hint}</p>}
       {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
     </div>

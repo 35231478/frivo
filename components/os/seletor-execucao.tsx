@@ -20,6 +20,8 @@ export interface OpcoesExecucao {
   veiculos: VeiculoResumo[];
   carregando: boolean;
   adicionarTecnico: (t: TecnicoOpcao) => void;
+  /** UX-8 (Y6): anota no estado a competência habilitada inline (o técnico passa a aparecer na lista) */
+  marcarCompetencia: (tecnicoId: string, tipoOsId: string) => void;
 }
 
 /** Carrega colaboradores (com competências e veículo padrão), equipes ativas e veículos — uma vez. */
@@ -35,7 +37,12 @@ export function useOpcoesExecucao(ativo = true): OpcoesExecucao {
       .then(([t, e, v]) => { setTecnicos(t); setEquipes(e); setVeiculos(v); })
       .finally(() => setCarregando(false));
   }, [ativo]);
-  return { tecnicos, equipes, veiculos, carregando, adicionarTecnico: (t) => setTecnicos((l) => [...l, t]) };
+  return {
+    tecnicos, equipes, veiculos, carregando,
+    adicionarTecnico: (t) => setTecnicos((l) => [...l, t]),
+    marcarCompetencia: (tecnicoId, tipoOsId) => setTecnicos((l) => l.map((t) =>
+      t.id === tecnicoId ? { ...t, competencias: [...(t.competencias ?? []), { id: tipoOsId }] } : t)),
+  };
 }
 
 export function valorExecucaoDaAtividade(a: any): ValorExecucao {
@@ -87,7 +94,7 @@ export function SeletorExecucao({ opcoes, tipoOsId, valor, onChange, erro }: {
       <div className={cn("rounded-lg", erro && !temExecutor(valor) && "ring-2 ring-red-300 ring-offset-2")} data-erro-executor={erro && !temExecutor(valor) ? "" : undefined}>
         <SeletorTecnicos
           tecnicos={opcoes.tecnicos} equipes={opcoes.equipes} tipoOsId={tipoOsId} valor={valor} onChange={mudarTecnicos}
-          carregando={opcoes.carregando} onTecnicoCriado={opcoes.adicionarTecnico}
+          carregando={opcoes.carregando} onTecnicoCriado={opcoes.adicionarTecnico} onCompetencia={(id) => opcoes.marcarCompetencia(id, tipoOsId)}
         />
       </div>
       <div data-seletor-veiculo>

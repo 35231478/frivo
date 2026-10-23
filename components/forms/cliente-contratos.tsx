@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   LABELS_STATUS_CONTRATO, COR_STATUS_CONTRATO, LABELS_TIPO_CONTRATO,
   formatarMoeda, formatarData, cn,
-} from "@/lib/utils";
+ comparaNatural } from "@/lib/utils";
 import { Plus, FileSignature, MapPin, ExternalLink, Loader2 } from "lucide-react";
 
 interface ContratoCard {
@@ -52,7 +52,7 @@ export function ClienteContratos({ clienteId }: { clienteId: string }) {
     if (a.dataFim && b.dataFim) return new Date(a.dataFim).getTime() - new Date(b.dataFim).getTime();
     if (a.dataFim) return -1;
     if (b.dataFim) return 1;
-    return a.numero.localeCompare(b.numero);
+    return comparaNatural(a.numero, b.numero);
   });
 
   const novoHref = `/contratos/novo?clienteId=${clienteId}`;

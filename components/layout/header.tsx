@@ -63,9 +63,45 @@ const ROTULOS_ROTA: Record<string, string> = {
   novo: "Novo",
   nova: "Nova",
   editar: "Editar",
+  // UX-8 (G5): fim do segmento cru ("Medicoes", "Contas-pagar", "Fluxo-caixa") no breadcrumb
+  medicoes: "Medições",
+  "contas-pagar": "Contas a pagar",
+  "contas-receber": "Contas a receber",
+  "fluxo-caixa": "Fluxo de caixa",
+  fornecedores: "Fornecedores",
+  "centros-custo": "Centros de custo",
+  categorias: "Categorias",
+  compras: "Compras",
+  pedidos: "Pedidos",
+  orcamentos: "Orçamentos",
+  calendario: "Calendário",
+  atividades: "Atividades",
+  prazos: "Prazos",
+  templates: "Modelos",
+  termos: "Termos",
+  "termos-referencia": "Termos de referência",
+  "modelos-prazo": "Modelos de prazo",
+  perfis: "Perfis de acesso",
+  "perfis-acesso": "Perfis de acesso",
+  usuarios: "Usuários",
+  integracoes: "Integrações",
+  inter: "Banco Inter",
+  "leads-site": "Leads do site",
+  qrcodes: "QR Codes",
+  "qr-code": "QR Code",
+  relatorio: "Relatório",
+  imprimir: "Imprimir",
+  executar: "Executar",
+  foto: "Foto",
+  instalar: "Instalar",
+  montador: "Montador",
+  email: "E-mail",
+  "formularios-por-tipo": "Formulários por tipo",
+  portal: "Portal",
+  "sem-permissao": "Sem permissão",
 };
 
-function gerarBreadcrumb(pathname: string) {
+export function gerarBreadcrumb(pathname: string) {
   const segs = pathname.split("/").filter(Boolean);
   const itens: { label: string; href: string }[] = [];
   let acc = "";

@@ -10,6 +10,7 @@ import { FormField, FormGrid } from "@/components/ui/form-field";
 import { MapaEndereco } from "@/components/ui/mapa-endereco";
 import { EnderecoAutocomplete, type EnderecoSelecionado } from "@/components/ui/endereco-autocomplete";
 import { Plus, Pencil, Trash2, X, Check, Building2, Star, ChevronDown, ChevronRight, MapPin, Search } from "lucide-react";
+import { comparaNatural } from "@/lib/utils";
 
 const ESTADOS_BR = [
   "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
@@ -149,7 +150,7 @@ export function UnidadesLocal({ unidades, onChange }: UnidadesLocalProps) {
   const ordenadas = [...unidades].sort((a, b) => {
     if (a.principal && !b.principal) return -1;
     if (!a.principal && b.principal) return 1;
-    return a.nome.localeCompare(b.nome);
+    return comparaNatural(a.nome, b.nome);
   });
 
   function enderecoTexto(u: UnidadeLocal): string {

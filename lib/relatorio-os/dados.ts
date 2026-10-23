@@ -18,7 +18,7 @@
  *    equipamento principal da OS conta como atendido (era assim que se registrava).
  */
 import { prisma } from "@/lib/prisma";
-import { LABELS_STATUS_OS } from "@/lib/utils";
+import { LABELS_STATUS_OS , comparaNatural } from "@/lib/utils";
 import { ambienteEquipamento, descricaoEquipamento, fabricanteModelo } from "@/lib/equipamento-descricao";
 import { textoTecnicosAtividade } from "@/lib/atividade-equipe";
 import { enderecoStr, type ClienteInfo, type ContratoInfo, type EmpresaInfo } from "@/components/relatorio/cabecalho-relatorio";
@@ -240,12 +240,12 @@ export function blocosAtendidos(ativs: Atividade[], unidade: string | null, prin
     }
     return { ...blocoEquipamento(e, unidade), checklistTipo, resumoChecklist, checklist, fotos, observacoes };
   }).sort((a, b) =>
-    `${a.local.complemento ?? ""}|${a.local.principal ?? ""}|${a.titulo}`.localeCompare(`${b.local.complemento ?? ""}|${b.local.principal ?? ""}|${b.titulo}`, "pt-BR"));
+    comparaNatural(`${a.local.complemento ?? ""}|${a.local.principal ?? ""}|${a.titulo}`, `${b.local.complemento ?? ""}|${b.local.principal ?? ""}|${b.titulo}`));
 
   const naoAtendidos = [...equips.values()].filter((x) => !x.atividades.size).map(({ e }) => {
     const b = blocoEquipamento(e, unidade);
     return { id: e.id, titulo: b.titulo, local: localTexto(b.local) };
-  }).sort((a, b) => a.titulo.localeCompare(b.titulo, "pt-BR"));
+  }).sort((a, b) => comparaNatural(a.titulo, b.titulo));
 
   const ids = new Set(blocos.map((b) => b.id));
   const equipamentosAtendidos = [...equips.values()].filter((x) => ids.has(x.e.id)).map((x) => x.e);

@@ -14,6 +14,8 @@ import { MSG_SEM_EXECUTOR_TELA, atividadeSemExecutor } from "@/lib/atividade-equ
 import { Plus, X, Check, ChevronDown, ChevronRight, Wrench, User, Users, Smartphone, Pencil, Trash2, Loader2, AlertTriangle, Car } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { SelectCadastroRapido } from "@/components/ui/select-cadastro-rapido";
+import { TIPO_OS } from "@/components/cadastro-rapido/definicoes";
 
 /** ISO → valor de <input type="datetime-local"> no fuso do navegador. */
 function paraInputLocal(iso?: string | Date | null) {
@@ -238,9 +240,18 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
             <Input value={form.titulo} onChange={(e) => setForm((f) => ({ ...f, titulo: e.target.value }))} placeholder="Descrição breve da atividade" />
           </FormField>
           <FormField label="Tipo de OS">
-            <Select value={form.tipoOsId} onChange={(e) => setForm((f) => ({ ...f, tipoOsId: e.target.value }))} placeholder="Selecione">
-              {tiposOs.filter((t) => t.ativo).map((t) => (<option key={t.id} value={t.id}>{t.nome}</option>))}
-            </Select>
+            {/* UX-8 (Y3): tipo novo nasce aqui mesmo, sem abandonar a atividade */}
+            <SelectCadastroRapido
+              value={form.tipoOsId} onChange={(v) => setForm((f) => ({ ...f, tipoOsId: v }))}
+              opcoes={tiposOs.filter((t) => t.ativo).map((t) => ({ value: t.id, label: t.nome }))}
+              entidade={TIPO_OS.entidade} placeholder="Selecione"
+              campos={TIPO_OS.campos} campoBusca="nome" permissao={TIPO_OS.permissao} linkCadastroCompleto={TIPO_OS.link}
+              criar={async (v) => {
+                const t = await TIPO_OS.criar(v);
+                setTiposOs((l: any[]) => [...l, { id: t.id, nome: t.nome, ativo: true }]);
+                return { value: t.id, label: t.nome };
+              }}
+            />
           </FormField>
           <FormField label="Quem executa" required>
             <SeletorExecucao opcoes={opcoesExecucao} tipoOsId={form.tipoOsId} valor={tecnicosNova} onChange={(v) => { setTecnicosNova(v); if (temExecutor(v)) setErroForm((e) => (e === MSG_SEM_EXECUTOR_TELA ? "" : e)); }} erro={faltaExecutor} />
@@ -278,9 +289,17 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
           </FormField>
           <FormGrid>
             <FormField label="Tipo de OS">
-              <Select value={formEdicao.tipoOsId} onChange={(e) => setFormEdicao((f) => ({ ...f, tipoOsId: e.target.value }))} placeholder="Sem tipo">
-                {tiposOs.filter((t) => t.ativo || t.id === formEdicao.tipoOsId).map((t) => (<option key={t.id} value={t.id}>{t.nome}</option>))}
-              </Select>
+              <SelectCadastroRapido
+                value={formEdicao.tipoOsId} onChange={(v) => setFormEdicao((f) => ({ ...f, tipoOsId: v }))}
+                opcoes={tiposOs.filter((t) => t.ativo || t.id === formEdicao.tipoOsId).map((t) => ({ value: t.id, label: t.nome }))}
+                entidade={TIPO_OS.entidade} placeholder="Sem tipo"
+                campos={TIPO_OS.campos} campoBusca="nome" permissao={TIPO_OS.permissao} linkCadastroCompleto={TIPO_OS.link}
+                criar={async (v) => {
+                  const t = await TIPO_OS.criar(v);
+                  setTiposOs((l: any[]) => [...l, { id: t.id, nome: t.nome, ativo: true }]);
+                  return { value: t.id, label: t.nome };
+                }}
+              />
             </FormField>
           </FormGrid>
           {atividadeSemExecutor(editando) && (

@@ -98,6 +98,19 @@ export const TECNICO = {
   },
 };
 
+/* ───────── Tipo de OS (UX-8/Y3: sem sair da Nova OS ou da atividade) ───────── */
+export const TIPO_OS = {
+  entidade: { singular: "tipo de OS", plural: "tipos de OS" },
+  permissao: { modulo: "configuracoes", acao: "gerenciar" } as PermissaoCriar,
+  link: "/configuracoes/tipos-os",
+  campos: [
+    { nome: "nome", label: "Nome do tipo", obrigatorio: true, placeholder: "Ex: Higienização" },
+  ] as CampoRapido[],
+  criar(v: Record<string, string>) {
+    return postar("/api/tipos-os", { nome: v.nome }, "Erro ao cadastrar o tipo de OS.");
+  },
+};
+
 /* ───────── Equipamento ───────── */
 export const EQUIPAMENTO = {
   entidade: { singular: "equipamento", plural: "equipamentos" },

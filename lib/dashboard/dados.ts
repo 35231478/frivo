@@ -9,6 +9,7 @@ import { contarAlertasVeiculos } from "@/lib/veiculo-server";
 import { SOLICITACAO_PENDENTE } from "@/lib/solicitacoes";
 import { chaveDiaBR, inicioHojeBR, inicioMesBR } from "@/lib/fuso";
 import type { BlocoId } from "@/lib/dashboard/blocos";
+import { comparaNatural } from "@/lib/utils";
 
 const OS_FINAIS = ["CONCLUIDA", "CANCELADA"] as const;
 const DIA = 864e5;
@@ -65,7 +66,7 @@ export async function dadosOsDoDia(empresaId: string, agora = new Date()) {
     if (!l.equipe && g.equipeId) l.equipe = nomeEq.get(g.equipeId) ?? null;
     linhas.set(chave, l);
   }
-  const lista = [...linhas.values()].sort((a, b) => b.total - a.total || a.nome.localeCompare(b.nome));
+  const lista = [...linhas.values()].sort((a, b) => b.total - a.total || comparaNatural(a.nome, b.nome));
   return { linhas: lista.slice(0, 8), outros: Math.max(0, lista.length - 8), total: lista.reduce((s, l) => s + l.total, 0) };
 }
 

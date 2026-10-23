@@ -18,7 +18,7 @@ import { StatusSelo } from "@/components/equipamentos/selos";
 import { SelectCadastroRapido, type CampoRapido, type OpcaoCadastro } from "@/components/ui/select-cadastro-rapido";
 import { CLIENTE, UNIDADE } from "@/components/cadastro-rapido/definicoes";
 import Link from "next/link";
-import { LABELS_TIPO_EQUIPAMENTO, cn } from "@/lib/utils";
+import { LABELS_TIPO_EQUIPAMENTO, cn , comparaNatural } from "@/lib/utils";
 import { opcoesTipoEquipamento, PREFIXO_TIPO_CUSTOM, type TipoEquipamentoCadastro } from "@/lib/cadastros/tipos-equipamento";
 import { Thermometer, ImageIcon, MapPin, Cog, QrCode, History, CheckCircle2, ClipboardList, ChevronLeft, ExternalLink, Camera, Sparkles, ChevronDown, Circle } from "lucide-react";
 
@@ -188,13 +188,13 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
 
   async function criarCliente(v: Record<string, string>): Promise<OpcaoCadastro> {
     const c = await CLIENTE.criar(v);
-    setClientes((lista) => [...lista, c].sort((x, y) => (x.nomeFantasia ?? x.nome).localeCompare(y.nomeFantasia ?? y.nome)));
+    setClientes((lista) => [...lista, c].sort((x, y) => comparaNatural(x.nomeFantasia ?? x.nome, y.nomeFantasia ?? y.nome)));
     return CLIENTE.opcao(c);
   }
 
   async function criarUnidade(v: Record<string, string>): Promise<OpcaoCadastro> {
     const data = await UNIDADE.criar(clienteId, v, unidades.length === 0);
-    setUnidades((lista) => [...lista, data].sort((x, y) => x.nome.localeCompare(y.nome)));
+    setUnidades((lista) => [...lista, data].sort((x, y) => comparaNatural(x.nome, y.nome)));
     return UNIDADE.opcao(data);
   }
 
@@ -206,7 +206,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.erro ?? "Erro ao cadastrar o tipo.");
-    setTiposCustom((lista) => [...lista, data].sort((a, b) => a.nome.localeCompare(b.nome)));
+    setTiposCustom((lista) => [...lista, data].sort((a, b) => comparaNatural(a.nome, b.nome)));
     return { value: `${PREFIXO_CUSTOM}${data.id}`, label: data.nome };
   }
 
@@ -218,7 +218,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
       .then((d) => {
         const lista: any[] = Array.isArray(d) ? d : [];
         const unicos = (vals: (string | null | undefined)[]) =>
-          [...new Set(vals.map((v) => (v ?? "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+          [...new Set(vals.map((v) => (v ?? "").trim()).filter(Boolean))].sort(comparaNatural);
         setSugestoesLocal({ setores: unicos(lista.map((e) => e.setor)), ambientes: unicos(lista.map((e) => e.localizacao)) });
       })
       .catch(() => {});
