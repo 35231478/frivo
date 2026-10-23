@@ -35,8 +35,12 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!os) return NextResponse.json({ erro: "Ordem de serviço não encontrada" }, { status: 404 });
   if (os.status === "CANCELADA") return NextResponse.json({ erro: "OS inativada: reabra antes de concluir." }, { status: 409 });
 
+  // No modo técnico a justificativa é sempre por uma atividade DELE (sem ela, autorizaria qualquer OS)
+  const ator = atorDaSessao(session);
+  if (ator.escopo.restrito && !atividadeId) return NextResponse.json({ erro: "Justifique pela atividade que você está executando." }, { status: 403 });
+
   // A atividade (se veio) precisa ser desta OS e estar aberta — confere antes de gravar o motivo
-  const ctx = atividadeId ? await carregarContexto(atorDaSessao(session), atividadeId, { osId: id }) : null;
+  const ctx = atividadeId ? await carregarContexto(ator, atividadeId, { osId: id }) : null;
   if (ctx && !ctx.ok) return ctx.resposta;
 
   await prisma.ordemServico.update({ where: { id }, data: { semEquipamentoMotivo: motivo } });

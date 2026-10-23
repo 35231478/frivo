@@ -248,6 +248,10 @@ describe.skipIf(!URL_PG)("OS sem equipamento: tipo que não exige, recorrente e 
     // técnico de fora da atividade não justifica por ela
     comoTecnico("t2", "uT2");
     expect((await chamar(JUSTIFICAR, "POST", { id: os }, { motivo: "Motivo suficiente aqui", atividadeId: at })).status).toBe(403);
+    // ...nem sem dizer a atividade (o técnico só justifica pela atividade dele)
+    comoTecnico("t1", "uT");
+    expect((await chamar(JUSTIFICAR, "POST", { id: os }, { motivo: "Motivo suficiente aqui" })).status).toBe(403);
+    expect((await prisma.ordemServico.findUnique({ where: { id: os } })).semEquipamentoMotivo).toBeNull();
     // o técnico da atividade pode (o perfil Técnico tem "concluir OS")
     comoTecnico("t1", "uT");
     expect((await chamar(JUSTIFICAR, "POST", { id: os }, { motivo: "Local fechado, só avaliação", atividadeId: at })).status).toBe(200);
