@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { gerarCodigoOrcamento } from "@/lib/utils";
 import { enviarEmailInterno } from "@/lib/email";
+import { formatarData } from "@/lib/utils";
 
 /**
  * Endpoint público de lead vindo do site institucional (calculadora de BTU).
@@ -233,11 +234,7 @@ export async function POST(req: Request) {
 
     // 6. Observação: texto formatado e legível (não JSON cru).
     const instalTotal = INSTALACAO_UNIT * qtd;
-    const dataHora = new Date().toLocaleString("pt-BR", {
-      timeZone: "America/Sao_Paulo",
-      dateStyle: "short",
-      timeStyle: "short",
-    });
+    const dataHora = formatarData(new Date(), "dd/MM/yyyy HH:mm"); // Brasília
     const linhasAmbientes = data.ambientes
       .map(
         (a) =>

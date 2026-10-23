@@ -411,11 +411,11 @@ function LinhaDoTempo({ eventos, onVerRespostas }: { eventos: EventoHistorico[];
   // Agrupa por mês/ano para leitura rápida
   const grupos: { chave: string; rotulo: string; itens: EventoHistorico[] }[] = [];
   for (const ev of eventos) {
-    const d = new Date(ev.data);
-    const chave = `${d.getFullYear()}-${d.getMonth()}`;
+    // Mês/ano do atendimento em Brasília
+    const chave = formatarData(ev.data, "yyyy-MM");
     let g = grupos[grupos.length - 1];
     if (!g || g.chave !== chave) {
-      const rotulo = d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+      const rotulo = formatarData(ev.data, "MMMM 'de' yyyy");
       g = { chave, rotulo: rotulo.charAt(0).toUpperCase() + rotulo.slice(1), itens: [] };
       grupos.push(g);
     }
@@ -429,7 +429,6 @@ function LinhaDoTempo({ eventos, onVerRespostas }: { eventos: EventoHistorico[];
           <p className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-2">{g.rotulo}</p>
           <ol className="relative ml-2 border-l-2 border-surface-border space-y-3">
             {g.itens.map((ev) => {
-              const d = new Date(ev.data);
               return (
                 <li key={ev.chave} className="relative pl-5">
                   <span className={cn("absolute -left-[7px] top-4 w-3 h-3 rounded-full ring-4 ring-surface-page", COR_PONTO[ev.status] ?? "bg-primary-400")} />
@@ -437,8 +436,8 @@ function LinhaDoTempo({ eventos, onVerRespostas }: { eventos: EventoHistorico[];
                     <div className="flex items-start gap-3">
                       {/* Data em destaque */}
                       <div className="text-center shrink-0 w-11">
-                        <p className="text-lg font-bold text-ink leading-none tabular-nums">{String(d.getDate()).padStart(2, "0")}</p>
-                        <p className="text-[10px] text-ink-muted uppercase mt-0.5">{d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "")}</p>
+                        <p className="text-lg font-bold text-ink leading-none tabular-nums">{formatarData(ev.data, "dd")}</p>
+                        <p className="text-[10px] text-ink-muted uppercase mt-0.5">{formatarData(ev.data, "MMM")}</p>
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-2">

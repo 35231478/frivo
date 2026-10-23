@@ -9,6 +9,7 @@ import { PerfilClient } from "@/components/perfil/perfil-client";
 import { rotuloSync } from "@/components/tecnico/indicador-sync";
 import { useTecnico } from "@/components/tecnico/contexto";
 import type { OperacaoFila } from "@/lib/tecnico/offline/tipos";
+import { horaBR } from "@/lib/fuso";
 
 const ROTULO_OPERACAO: Record<string, string> = {
   iniciar: "Início do atendimento", resposta: "Resposta do checklist", audio: "Observação em áudio", tudoOk: "TUDO OK",
@@ -58,7 +59,7 @@ export function PerfilTecnico({ perfilInicial }: { perfilInicial: React.Componen
           <h2 className="text-base font-bold text-ink">Sincronização</h2>
           <span className={cn("text-xs font-semibold rounded-full px-2.5 py-1", r.classe)}>{r.texto}</span>
         </div>
-        <p className="text-sm text-ink-muted">{r.detalhe}.{estado.ultimoSync ? ` Última sincronização às ${new Date(estado.ultimoSync).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}.` : ""}</p>
+        <p className="text-sm text-ink-muted">{r.detalhe}.{estado.ultimoSync ? ` Última sincronização às ${horaBR(estado.ultimoSync)}.` : ""}</p>
         <p className="text-sm text-ink">{aEnviar.length ? `${aEnviar.length} gravação(ões) a enviar.` : "Nada esperando para enviar."}</p>
         <button type="button" disabled={!motor || sincronizando} data-sincronizar
           onClick={async () => { setSincronizando(true); await motor!.tentarDeNovo(); setSincronizando(false); }}
