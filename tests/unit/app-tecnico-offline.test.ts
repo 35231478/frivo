@@ -36,7 +36,7 @@ function retrato(atividadeId = "aA", status = "AGENDADA"): RetratoAtividade {
         { vinculoId: "v2", feito: false, observacao: null, equipamento: info("eqB", "Split Sala 2"), itens: ITENS, respostas: {}, fotos: [], formulario: null, faltas: vazio, completo: false },
       ],
       adicionais: [],
-      conclusao: { ok: false, semEquipamento: true, pendencias: [], atendidos: 0, naoAtendidos: 2, mensagem: null },
+      conclusao: { ok: false, semEquipamento: true, dispensa: null, pendencias: [], atendidos: 0, naoAtendidos: 2, mensagem: null },
     },
     equipamentosUnidade: [
       { ...info("eqA", "Split Sala 1"), tipoEquipamentoId: "te1", qr: null },

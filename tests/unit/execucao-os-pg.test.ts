@@ -140,7 +140,7 @@ describe.skipIf(!URL_PG)("execução da OS por equipamento (PostgreSQL real)", (
 
     const a = await chamar(A, "PUT", p1(), { status: "CONCLUIDA" });
     expect(a.status).toBe(422);
-    expect(a.json).toMatchObject({ semEquipamento: true, erro: "Para concluir, vincule pelo menos 1 equipamento atendido (pelo QR Code ou pela lista da unidade) e responda o checklist dele." });
+    expect(a.json).toMatchObject({ semEquipamento: true, erro: "Para concluir, vincule pelo menos 1 equipamento atendido (pelo QR Code ou pela lista da unidade) e responda o checklist dele. Serviço sem equipamento (visita técnica, vistoria)? Use um tipo de OS que não exige equipamento, ou conclua sem equipamento justificando o motivo (quem pode concluir OS)." });
     const o = await chamar("ordens/[id]", "PUT", { id: os1 }, { status: "CONCLUIDA" });
     expect(o.status).toBe(422);
     expect(o.json.erro).toMatch(/vincule pelo menos 1 equipamento atendido/);

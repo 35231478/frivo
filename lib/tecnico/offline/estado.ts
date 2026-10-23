@@ -17,7 +17,7 @@ export function recalcular(x: ExecucaoTela): ExecucaoTela {
     const faltas = faltasEquipamento(paraPendencia(e));
     return { ...e, faltas, completo: completo(faltas) };
   });
-  return { ...x, equipamentos, conclusao: verificarConclusao(equipamentos.map((e) => paraPendencia(e))) };
+  return { ...x, equipamentos, conclusao: verificarConclusao(equipamentos.map((e) => paraPendencia(e)), x.dispensaEquipamento ?? null) };
 }
 
 const limpar = (v: string | null | undefined) => (v ?? "").trim() || null;

@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  MSG_SEM_EQUIPAMENTO, completo, contarFotosPorItem, respondido, faltasEquipamento, listaCurta, paraPendencia, rotuloCurto, textoFaltas, verificarConclusao,
+  MSG_SAIDAS_SEM_EQUIPAMENTO, MSG_SEM_EQUIPAMENTO, completo, contarFotosPorItem, respondido, faltasEquipamento, listaCurta, paraPendencia, rotuloCurto, textoFaltas, verificarConclusao,
   type EquipamentoParaPendencia, type ItemExecucao, type RespostaItem, type StatusItem,
 } from "@/lib/execucao/pendencias";
 import { checklistSchema, planejarChecklist } from "@/lib/checklist/tipo";
@@ -101,10 +101,11 @@ describe("o que falta em um equipamento", () => {
 
 describe("pode concluir?", () => {
   it("sem equipamento atendido: não (e diz quantos estão vinculados sem atendimento)", () => {
-    expect(verificarConclusao([])).toEqual({ ok: false, semEquipamento: true, pendencias: [], atendidos: 0, naoAtendidos: 0, mensagem: MSG_SEM_EQUIPAMENTO });
-    expect(verificarConclusao([equip({ feito: false })]).mensagem).toBe(`${MSG_SEM_EQUIPAMENTO} Há 1 equipamento vinculado que ainda não foi atendido.`);
+    // A mensagem sempre termina com as saídas (tipo que não exige equipamento / concluir justificando)
+    expect(verificarConclusao([])).toEqual({ ok: false, semEquipamento: true, dispensa: null, pendencias: [], atendidos: 0, naoAtendidos: 0, mensagem: `${MSG_SEM_EQUIPAMENTO} ${MSG_SAIDAS_SEM_EQUIPAMENTO}` });
+    expect(verificarConclusao([equip({ feito: false })]).mensagem).toBe(`${MSG_SEM_EQUIPAMENTO} Há 1 equipamento vinculado que ainda não foi atendido. ${MSG_SAIDAS_SEM_EQUIPAMENTO}`);
     expect(verificarConclusao([equip({ feito: false }), equip({ equipamentoId: "eqB", feito: false })]).mensagem)
-      .toBe(`${MSG_SEM_EQUIPAMENTO} Há 2 equipamentos vinculados que ainda não foram atendidos.`);
+      .toBe(`${MSG_SEM_EQUIPAMENTO} Há 2 equipamentos vinculados que ainda não foram atendidos. ${MSG_SAIDAS_SEM_EQUIPAMENTO}`);
   });
 
   it("com atendidos: só eles contam; o não atendido não trava; a mensagem diz equipamento e itens", () => {

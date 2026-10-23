@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField } from "@/components/ui/form-field";
+import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { Drawer } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
 import { Plus, Pencil, Trash2, Check, Search } from "lucide-react";
@@ -13,7 +14,11 @@ import { Plus, Pencil, Trash2, Check, Search } from "lucide-react";
 export interface CampoConfig {
   key: string;
   label: string;
-  tipo?: "text" | "textarea" | "number" | "color" | "select";
+  tipo?: "text" | "textarea" | "number" | "color" | "select" | "switch";
+  /** Valor de um registro novo (switch: padrão false) */
+  padrao?: unknown;
+  /** Texto de apoio (switch: a explicação ao lado da chave) */
+  ajuda?: string;
   placeholder?: string;
   opcoes?: { value: string; label: string }[];
   obrigatorio?: boolean;
@@ -42,7 +47,7 @@ export function CrudCadastro({ titulo, apiUrl, campos, colunasLista }: CrudCadas
 
   function abrirNovo() {
     const vazio: Record<string, any> = {};
-    campos.forEach((c) => { vazio[c.key] = c.tipo === "color" ? "#3b82f6" : ""; });
+    campos.forEach((c) => { vazio[c.key] = c.padrao !== undefined ? c.padrao : c.tipo === "color" ? "#3b82f6" : c.tipo === "switch" ? false : ""; });
     vazio.ativo = true;
     setForm(vazio);
     setEditando("novo");
@@ -51,7 +56,7 @@ export function CrudCadastro({ titulo, apiUrl, campos, colunasLista }: CrudCadas
 
   function abrirEditar(item: any) {
     const vals: Record<string, any> = {};
-    campos.forEach((c) => { vals[c.key] = item[c.key] ?? (c.tipo === "color" ? "#3b82f6" : ""); });
+    campos.forEach((c) => { vals[c.key] = item[c.key] ?? (c.padrao !== undefined ? c.padrao : c.tipo === "color" ? "#3b82f6" : c.tipo === "switch" ? false : ""); });
     vals.ativo = item.ativo;
     setForm(vals);
     setEditando(item.id);
@@ -208,7 +213,11 @@ export function CrudCadastro({ titulo, apiUrl, campos, colunasLista }: CrudCadas
       >
         {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 mb-4">{erro}</div>}
         <div className="space-y-4">
-          {campos.map((c) => (
+          {campos.map((c) => c.tipo === "switch" ? (
+            <div key={c.key} data-campo-switch={c.key} className="border-t border-surface-border">
+              <ToggleSwitch checked={!!form[c.key]} onChange={(v) => setForm((f) => ({ ...f, [c.key]: v }))} label={c.label} description={c.ajuda} />
+            </div>
+          ) : (
             <FormField key={c.key} label={c.label} required={c.obrigatorio}>
               {c.tipo === "textarea" ? (
                 <Textarea value={form[c.key] ?? ""} onChange={(e) => setForm((f) => ({ ...f, [c.key]: e.target.value }))} placeholder={c.placeholder} rows={3} />
