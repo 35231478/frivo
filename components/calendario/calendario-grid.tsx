@@ -13,6 +13,7 @@ import { SeletorExecucao, VALOR_EXECUCAO_VAZIO, corpoExecucao, temExecutor, useO
 import { MSG_SEM_EXECUTOR_TELA } from "@/lib/atividade-equipe";
 import { BuscaSelect, type OpcaoBusca } from "@/components/ui/busca-select";
 import { Repeat, MapPin, CalendarClock, Wrench, AlertTriangle, X, Plus, Check, Lock, Maximize2, Minimize2, GripHorizontal, Car } from "lucide-react";
+import { deLocalBR } from "@/lib/fuso";
 
 export interface CardOs {
   /** Chave única do card (OS + dia): uma OS com visitas em dias diferentes gera um card por dia. */
@@ -681,15 +682,16 @@ function CriarOsModal({
     if (!temExecutor(execucao)) { setFaltaExecutor(true); setErro(MSG_SEM_EXECUTOR_TELA); return; }
     setSalvando(true);
     try {
-      const dataAgendada = `${dateKey}T${hora || "08:00"}:00`;
+      // A hora escolhida é de Brasília (qualquer que seja o fuso do navegador)
+      const dataAgendada = deLocalBR(`${dateKey}T${hora || "08:00"}`)!.toISOString();
       // OS + atividade agendada (com quem executa e o veículo) numa única chamada — tudo ou nada
       const titulo = opcoes.tiposOs.find((t) => t.value === tipoOsId)?.label ?? "Atendimento agendado";
       const resOs = await fetch("/api/ordens", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          clienteId, descricao: descricao.trim(), prioridade, previsaoConclusao: dataAgendada,
-          execucao: { titulo, tipoOsId: tipoOsId || null, dataAgendada: new Date(dataAgendada).toISOString(), ...corpoExecucao(execucao) },
+          clienteId, descricao: descricao.trim(), prioridade, previsaoConclusao: dateKey, // previsão é o dia
+          execucao: { titulo, tipoOsId: tipoOsId || null, dataAgendada, ...corpoExecucao(execucao) },
         }),
       });
       if (!resOs.ok) {

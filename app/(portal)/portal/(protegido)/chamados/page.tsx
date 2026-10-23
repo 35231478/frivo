@@ -5,6 +5,7 @@ import { requirePortalSession, podeVerChamados } from "@/lib/portal-server";
 import { SemAcesso } from "@/components/portal/sem-acesso";
 import { cn, formatarData, LABELS_STATUS_OS } from "@/lib/utils";
 import { Headset, Plus } from "lucide-react";
+import { diaCivilPassou } from "@/lib/fuso";
 
 export const metadata: Metadata = { title: "Portal — Chamados" };
 export const dynamic = "force-dynamic";
@@ -60,7 +61,7 @@ export default async function PortalChamados() {
                   <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", COR_STATUS[o.status])}>{LABELS_STATUS_OS[o.status] ?? o.status}</span>
                   {/* UX-8 (Y16): "Agendada" mostra a data DA VISITA (e avisa quando ficou para trás), não a de abertura */}
                   {o.status === "AGENDADA" && o.previsaoConclusao ? (
-                    o.previsaoConclusao < new Date()
+                    diaCivilPassou(o.previsaoConclusao)
                       ? <span className="text-xs font-semibold text-amber-700">visita era {formatarData(o.previsaoConclusao)} — a reagendar</span>
                       : <span className="text-xs text-ink-subtle">visita {formatarData(o.previsaoConclusao)}</span>
                   ) : (

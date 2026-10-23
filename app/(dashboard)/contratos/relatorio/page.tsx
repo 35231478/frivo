@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { intervaloMeses, ehOcorrencia, dataAgendadaRecorrencia } from "@/lib/recorrencia-helpers";
 import { RelatorioContratosClient } from "@/components/contratos/relatorio-contratos-client";
+import { diaCivilPassou } from "@/lib/fuso";
 
 export const metadata: Metadata = { title: "Relatório de Contratos" };
 
@@ -62,7 +63,7 @@ export default async function RelatorioContratosPage({ searchParams }: { searchP
     let progresso: number;
     if (os) {
       if (os.status === "CONCLUIDA") { statusMes = "CONCLUIDO"; progresso = 100; }
-      else if (os.previsaoConclusao && os.previsaoConclusao < agora) { statusMes = "ATRASADO"; progresso = 50; }
+      else if (diaCivilPassou(os.previsaoConclusao, agora)) { statusMes = "ATRASADO"; progresso = 50; }
       else { statusMes = "EM_ANDAMENTO"; progresso = 50; }
     } else {
       if (agendada < agora) { statusMes = "ATRASADO"; progresso = 0; }

@@ -15,6 +15,7 @@ import {
   ChevronLeft, ChevronRight, ClipboardPlus, Printer, CalendarCheck, CalendarClock, Hash, ShieldCheck,
   Cpu, MapPin, IdCard, StickyNote, ListChecks,
 } from "lucide-react";
+import { diasAteDiaCivil } from "@/lib/fuso";
 
 interface Indicadores {
   ultimoAtendimento: string | null;
@@ -63,7 +64,7 @@ function haQuanto(iso: string) {
   return a === 1 ? "há 1 ano" : `há ${a} anos`;
 }
 function emQuanto(iso: string) {
-  const dias = Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000);
+  const dias = diasAteDiaCivil(iso) ?? 0; // pelo dia de Brasília
   if (dias <= 0) return "hoje";
   if (dias === 1) return "amanhã";
   return `em ${dias} dias`;

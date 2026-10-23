@@ -6,6 +6,7 @@ import { AprovacaoMedicao } from "@/components/medicao/aprovacao-medicao";
 import { BoletoAcoes } from "@/components/portal/boleto-acoes";
 import { cn, formatarData, formatarMoeda, nomeMes } from "@/lib/utils";
 import { Wallet, CheckCircle2 } from "lucide-react";
+import { diaCivilPassou } from "@/lib/fuso";
 
 export const metadata: Metadata = { title: "Portal — Financeiro" };
 export const dynamic = "force-dynamic";
@@ -17,7 +18,6 @@ export default async function PortalFinanceiro() {
   const verValores = exigePermissao(sessao, "verValores");
   const verBoletos = exigePermissao(sessao, "verBoletos");
   const podeAprovar = exigePermissao(sessao, "aprovarMedicoes");
-  const agora = new Date();
 
   const [medicoes, boletos, pagos] = await Promise.all([
     prisma.medicao.findMany({
@@ -77,7 +77,7 @@ export default async function PortalFinanceiro() {
           ) : (
             <div className="space-y-2">
               {boletos.map((b) => {
-                const vencido = b.dataVencimento && b.dataVencimento < agora;
+                const vencido = diaCivilPassou(b.dataVencimento); // vencido só depois do dia (Brasília)
                 return (
                   <div key={b.id} className="bg-white rounded-xl border border-surface-border p-4 flex items-center justify-between gap-3 flex-wrap">
                     <div className="min-w-0">
