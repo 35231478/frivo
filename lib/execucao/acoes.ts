@@ -14,6 +14,7 @@ import { carregarExecucao } from "@/lib/execucao/dados";
 import { itemDoEquipamento, marcarAtendido, type ContextoExecucao } from "@/lib/execucao/contexto";
 import { validarAudio } from "@/lib/execucao/audio";
 import { equipamentosDoCliente, nomeEquipamento } from "@/lib/execucao/vinculos";
+import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 
 export type ResultadoAcao<T = Record<string, unknown>> =
   | { ok: true; status: number; dados: T }
@@ -456,6 +457,7 @@ export async function iniciarAtividade(ctx: ContextoExecucao) {
     });
   }
   ctx.atividade.status = "EM_ANDAMENTO";
+  if (count) await sincronizarStatusOs(ctx.atividade.ordemServico.id, ctx.empresaId, ctx.usuarioId);
   return ok({ status: "EM_ANDAMENTO" });
 }
 
@@ -486,6 +488,7 @@ export async function concluirAtividade(ctx: ContextoExecucao, d: z.infer<typeof
     data: { ordemServicoId: atividade.ordemServico.id, usuarioId: ctx.usuarioId, acao: "Status da atividade alterado", detalhes: `"${atividade.titulo}": ${atividade.status} → CONCLUIDA` },
   });
   atividade.status = "CONCLUIDA";
+  await sincronizarStatusOs(atividade.ordemServico.id, ctx.empresaId, ctx.usuarioId);
   return ok({ status: "CONCLUIDA", jaEstava: false });
 }
 

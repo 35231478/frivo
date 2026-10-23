@@ -7,6 +7,7 @@ import { SOLICITACAO_PENDENTE } from "@/lib/solicitacoes";
 import { prisma } from "@/lib/prisma";
 import { gerarRelatoriosDaOs } from "@/lib/relatorio-server";
 import { verificarConclusaoOs } from "@/lib/execucao/dados";
+import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -101,6 +102,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   await prisma.osHistorico.create({
     data: { ordemServicoId: id, usuarioId, acao: "OS reagendada", detalhes: `Movida para ${ds}/${ms}/${ys}` },
   });
+  await sincronizarStatusOs(id, empresaId, usuarioId);
 
   return NextResponse.json({ ok: true });
 }
@@ -118,6 +120,21 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   const body = await req.json();
   const { status, prioridade, descricao, observacoes, unidadeId, contratoId, responsavelId, previsaoConclusao } = body;
+  // Central da OS: "Voltar ao automático" desliga o ajuste manual e recalcula pelos fatos
+  if (body.voltarAutomatico === true) {
+    if (existente.status === "CANCELADA")
+      return NextResponse.json({ erro: "OS inativada: use “Reabrir” para voltar a trabalhar nela." }, { status: 409 });
+    if (existente.statusManual) {
+      await prisma.ordemServico.update({ where: { id }, data: { statusManual: false } });
+      await prisma.osHistorico.create({ data: { ordemServicoId: id, usuarioId, acao: "Status voltou ao automático", detalhes: `Ajuste manual (${existente.status}) desligado` } });
+    }
+    await sincronizarStatusOs(id, empresaId, usuarioId);
+    return NextResponse.json(await prisma.ordemServico.findUniqueOrThrow({ where: { id } }));
+  }
+  // Reabrir (de Cancelada) devolve a OS ao status automático; trocar o status à mão em qualquer
+  // outro caso é um AJUSTE MANUAL: o automático para de sobrescrever até "Voltar ao automático".
+  const reabrindo = existente.status === "CANCELADA" && status !== undefined && status !== "CANCELADA";
+  const ajusteManual = status !== undefined && status !== existente.status && status !== "CANCELADA" && !reabrindo;
 
   // Mudanças de status com regra própria (o servidor decide, não só a tela)
   if (status !== undefined && status !== existente.status) {
@@ -140,6 +157,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   const data: any = {};
   if (status !== undefined) data.status = status;
+  if (ajusteManual) data.statusManual = true;
+  if (reabrindo) data.statusManual = false;
   if (prioridade !== undefined) data.prioridade = prioridade;
   if (descricao !== undefined) data.descricao = descricao;
   if (observacoes !== undefined) data.observacoes = observacoes;
@@ -155,8 +174,16 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   if (status && status !== existente.status) {
     await prisma.osHistorico.create({
-      data: { ordemServicoId: id, usuarioId, acao: "Status alterado", detalhes: `${existente.status} → ${status}` },
+      data: {
+        ordemServicoId: id, usuarioId,
+        acao: reabrindo ? "OS reaberta" : ajusteManual ? "Status ajustado manualmente" : "Status alterado",
+        detalhes: `${existente.status} → ${status}`,
+      },
     });
+  }
+  if (reabrindo) {
+    await sincronizarStatusOs(id, empresaId, usuarioId);
+    return NextResponse.json(await prisma.ordemServico.findUniqueOrThrow({ where: { id } }));
   }
 
   // Ao concluir a OS, gera automaticamente os relatórios (idempotente)

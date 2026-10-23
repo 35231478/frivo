@@ -3,13 +3,18 @@ import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { OsDetalhe } from "@/components/os/os-detalhe";
+import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 
 export const metadata: Metadata = { title: "Ordem de Serviço" };
 
-export default async function OsDetalhePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function OsDetalhePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ aba?: string }> }) {
   const { id } = await params;
+  const { aba } = await searchParams;
   const session = await auth();
   const empresaId = session!.user!.empresaId;
+  // Central da OS: o status automático acompanha os fatos — ao abrir, alinha OS antigas que
+  // ficaram para trás (idempotente; com ajuste manual não mexe)
+  await sincronizarStatusOs(id, empresaId, session!.user!.id).catch(() => null);
 
   const os = await prisma.ordemServico.findFirst({
     where: { id, empresaId },
@@ -27,6 +32,7 @@ export default async function OsDetalhePage({ params }: { params: Promise<{ id: 
           tecnicosEquipe: { select: { tecnico: { select: { id: true, nome: true } } }, orderBy: { criadoEm: "asc" } },
           veiculo: { select: { id: true, placa: true, modelo: true, marca: true } },
           respostas: { include: { campo: true } },
+          equipamentos: { select: { feito: true } },
         },
         orderBy: { criadoEm: "asc" },
       },
@@ -34,7 +40,15 @@ export default async function OsDetalhePage({ params }: { params: Promise<{ id: 
       // Medições OFICIAIS em que a OS entrou (itens de medição → Medicao); a antiga
       // "medição interna da OS" (OsMedicao) saiu: nunca virava conta a receber
       medicaoItens: {
-        select: { medicao: { select: { id: true, numero: true, status: true, valorTotal: true, criadoEm: true, tokenPublico: true } } },
+        select: {
+          medicao: {
+            select: {
+              id: true, numero: true, status: true, valorTotal: true, criadoEm: true, tokenPublico: true,
+              // Situação do pagamento no cabeçalho (Previsto / A receber / Vencido / Pago)
+              contasReceber: { select: { status: true, dataVencimento: true, valor: true } },
+            },
+          },
+        },
       },
       anexos: { select: { id: true, nome: true, tipo: true, tamanho: true, criadoEm: true }, orderBy: { criadoEm: "desc" } },
       // Serviços adicionais pedidos na visita (app do técnico): destacados para o escritório decidir a cobrança
@@ -48,6 +62,8 @@ export default async function OsDetalhePage({ params }: { params: Promise<{ id: 
         },
       },
       historico: { include: { usuario: { select: { nome: true } } }, orderBy: { criadoEm: "desc" } },
+      // SLA (modelos de prazo): o Resumo conta os atrasados; a gestão fica na aba Atividades
+      prazos: { select: { id: true, status: true } },
       orcamentos: {
         include: {
           orcamento: {
@@ -68,5 +84,5 @@ export default async function OsDetalhePage({ params }: { params: Promise<{ id: 
     .map((mi) => mi.medicao)
     .filter((m) => (vistas.has(m.id) ? false : (vistas.add(m.id), true)));
 
-  return <OsDetalhe os={{ ...os, medicoes: medicoesDaOs }} />;
+  return <OsDetalhe os={{ ...os, medicoes: medicoesDaOs }} abaInicial={aba} />;
 }
