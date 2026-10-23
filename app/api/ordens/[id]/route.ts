@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { gerarRelatoriosDaOs } from "@/lib/relatorio-server";
 import { verificarConclusaoOs } from "@/lib/execucao/dados";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
+import { estagioAutomatico, statusCorresponde } from "@/lib/os/status";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -133,8 +134,19 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
   // Reabrir (de Cancelada) devolve a OS ao status automático; trocar o status à mão em qualquer
   // outro caso é um AJUSTE MANUAL: o automático para de sobrescrever até "Voltar ao automático".
+  // Escolher à mão justamente o que os fatos dizem não é exceção: a OS segue (ou volta) no automático.
   const reabrindo = existente.status === "CANCELADA" && status !== undefined && status !== "CANCELADA";
-  const ajusteManual = status !== undefined && status !== existente.status && status !== "CANCELADA" && !reabrindo;
+  let ajusteManual = status !== undefined && status !== existente.status && status !== "CANCELADA" && !reabrindo;
+  let confirmaAutomatico = false;
+  if (ajusteManual) {
+    const fatos = await prisma.ordemServico.findUniqueOrThrow({
+      where: { id },
+      select: { atividades: { select: { status: true, dataAgendada: true } }, medicaoItens: { select: { medicao: { select: { status: true } } } } },
+    });
+    const automatico = estagioAutomatico({ status: existente.status, previsaoConclusao: existente.previsaoConclusao, atividades: fatos.atividades, medicoes: fatos.medicaoItens.map((m) => m.medicao) });
+    confirmaAutomatico = statusCorresponde(status, automatico);
+    ajusteManual = !confirmaAutomatico;
+  }
 
   // Mudanças de status com regra própria (o servidor decide, não só a tela)
   if (status !== undefined && status !== existente.status) {
@@ -158,7 +170,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const data: any = {};
   if (status !== undefined) data.status = status;
   if (ajusteManual) data.statusManual = true;
-  if (reabrindo) data.statusManual = false;
+  if (reabrindo || confirmaAutomatico) data.statusManual = false;
   if (prioridade !== undefined) data.prioridade = prioridade;
   if (descricao !== undefined) data.descricao = descricao;
   if (observacoes !== undefined) data.observacoes = observacoes;

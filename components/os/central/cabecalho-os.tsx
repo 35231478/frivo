@@ -226,7 +226,7 @@ function AjusteStatus({ os, manual, automatico, onAtualizado }: { os: any; manua
       if (!r.ok) { toast(d.erro ?? "Não foi possível ajustar o status.", "erro"); return; }
       onAtualizado(d);
       setAberto(false);
-      toast("Status ajustado manualmente — o automático fica pausado nesta OS.", "info");
+      toast(d.statusManual ? "Status ajustado manualmente — o automático fica pausado nesta OS." : "É o que os fatos dizem: a OS segue no automático.", "info");
       router.refresh();
     } catch { toast("Erro de conexão.", "erro"); } finally { setEnviando(false); }
   }

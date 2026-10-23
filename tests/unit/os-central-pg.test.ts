@@ -186,6 +186,13 @@ describe.skipIf(!URL_PG)("central da OS: status automático, ajuste manual e pra
     expect(await historico(id, "Status automático")).toEqual([["u1", "ABERTA → AGENDADA"]]);
 
     logar();
+    // Trocar à mão para o que os fatos dizem não é exceção: volta (ou segue) no automático
+    const confirma = await chamar(OS, "PUT", { id }, { status: "EM_ANDAMENTO" });
+    expect(confirma.json).toMatchObject({ status: "EM_ANDAMENTO", statusManual: false });
+    expect(await historico(id, "Status alterado")).toEqual([["u1", "AGUARDANDO_PECA → EM_ANDAMENTO"]]);
+    await chamar(OS, "PUT", { id }, { status: "AGUARDANDO_PECA" });
+    expect(await statusDe(id)).toMatchObject({ status: "AGUARDANDO_PECA", statusManual: true });
+
     const volta = await chamar(OS, "PUT", { id }, { voltarAutomatico: true });
     expect(volta.status).toBe(200);
     expect(volta.json).toMatchObject({ status: "EM_ANDAMENTO", statusManual: false });

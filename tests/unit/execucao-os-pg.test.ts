@@ -262,7 +262,8 @@ describe.skipIf(!URL_PG)("execução da OS por equipamento (PostgreSQL real)", (
     // Reabrir e voltar: tudo igual (respostas, observações, fotos)
     expect((await chamar(A, "PUT", p2(), { status: "EM_ANDAMENTO" })).status).toBe(200);
     const reaberta = await exec(p2());
-    const semStatus = (x: any) => ({ ...x, atividade: { ...x.atividade, status: null }, bloqueada: null });
+    // (o status da OS também muda: ele acompanha as atividades sozinho — central da OS)
+    const semStatus = (x: any) => ({ ...x, atividade: { ...x.atividade, status: null }, os: { ...x.os, status: null }, bloqueada: null });
     expect(semStatus(reaberta)).toEqual(semStatus(antesDeConcluir));
     expect((await chamar(A, "PUT", p2(), { status: "CONCLUIDA" })).status).toBe(200);
     expect(await prisma.checklistResposta.count({ where: { atividadeId: at2 } })).toBe(3);

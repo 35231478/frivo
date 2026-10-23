@@ -39,6 +39,8 @@ vi.mock("@/lib/prisma", async () => {
 });
 const sessao = vi.hoisted(() => ({ atual: null as any }));
 vi.mock("@/lib/auth", () => ({ auth: vi.fn(async () => sessao.atual) }));
+// O status automático da OS (central da OS) tem teste próprio no PostgreSQL real (os-central-pg)
+vi.mock("@/lib/os/sincronizar-status", () => ({ sincronizarStatusOs: vi.fn(async () => null) }));
 
 const CAMPO = (id: string, label: string, ordem: number, extra: Linha = {}) =>
   ({ id, formularioId: "f1", label, tipo: "TEXTO_CURTO", obrigatorio: true, ordem, opcoes: null, ativo: true, ...extra });
