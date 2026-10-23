@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { contratoGeraFinanceiro } from "@/lib/financeiro-server";
 import { proximasOcorrencias } from "@/lib/recorrencia-helpers";
+import { diaDoMesCivil } from "@/lib/fuso";
 
 /**
  * Gera (idempotente) as OS recorrentes futuras de um contrato, a partir de hoje,
@@ -153,7 +154,7 @@ export async function gerarOsRecorrentesLocais(
       dataInicio: primeira,
       dataFim: ct.dataFim,
       frequencia: r.frequencia,
-      diaRecorrencia: primeira.getDate(),
+      diaRecorrencia: diaDoMesCivil(primeira),
       fimSemana: r.fimSemana,
       limite,
       aPartirDe: primeira,

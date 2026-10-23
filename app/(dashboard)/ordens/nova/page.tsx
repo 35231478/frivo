@@ -17,6 +17,8 @@ import { SeletorExecucao, VALOR_EXECUCAO_VAZIO, corpoExecucao, temExecutor, useO
 import { MSG_SEM_EXECUTOR_TELA } from "@/lib/atividade-equipe";
 import { SeletorEquipamentos } from "@/components/os/seletor-equipamentos";
 import { InputData } from "@/components/ui/input-data";
+import { InputDataHora } from "@/components/ui/input-data-hora";
+import { paraLocalBR } from "@/lib/fuso";
 
 type Item = { id: string; nome: string; nomeFantasia?: string | null };
 type UnidadeItem = { id: string; nome: string; cidade?: string | null };
@@ -118,7 +120,8 @@ export default function NovaOrdemPage() {
       const res = await fetch(`/api/solicitacoes/${solicitacao.id}/aceitar`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          dataHora, descricao: form.descricao, prioridade: form.prioridade, unidadeId: form.unidadeId || null,
+          // dataHora vai como "AAAA-MM-DDTHH:mm" de Brasília (o que a rota de aceitar espera)
+          dataHora: paraLocalBR(dataHora), descricao: form.descricao, prioridade: form.prioridade, unidadeId: form.unidadeId || null,
           contratoId: form.contratoId || null, observacoes: form.observacoes || null,
           equipamentoId: equipamentoId || null, ...corpoExecucao(execucao),
         }),
@@ -141,7 +144,8 @@ export default function NovaOrdemPage() {
         body: JSON.stringify({
           ...form, clienteId,
           ...(atendidos.size ? { equipamentoIds: [...atendidos] } : {}),
-          execucao: { tipoOsId: tipoOsId || null, dataAgendada: agendarPara ? new Date(agendarPara).toISOString() : null, ...corpoExecucao(execucao) },
+          // dataAgendada: instante (ISO) da hora de Brasília escolhida
+          execucao: { tipoOsId: tipoOsId || null, dataAgendada: agendarPara || null, ...corpoExecucao(execucao) },
         }),
       });
       if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao criar OS."); return; }
@@ -231,7 +235,7 @@ export default function NovaOrdemPage() {
             </FormField>
             {solicitacao ? (
               <FormField label="Data e hora do atendimento" required>
-                <Input type="datetime-local" aria-label="Data e hora do atendimento" value={dataHora} onChange={(e) => setDataHora(e.target.value)} />
+                <InputDataHora aria-label="Data e hora do atendimento" value={dataHora} onChange={setDataHora} />
               </FormField>
             ) : (
               <FormField label="Previsão de conclusão">
@@ -298,7 +302,7 @@ export default function NovaOrdemPage() {
                 />
               </FormField>
               <FormField label="Agendar para" hint="Opcional — aparece no calendário">
-                <Input type="datetime-local" aria-label="Agendar para" value={agendarPara} onChange={(e) => setAgendarPara(e.target.value)} />
+                <InputDataHora aria-label="Agendar para" value={agendarPara} onChange={setAgendarPara} />
               </FormField>
             </FormGrid>
           )}

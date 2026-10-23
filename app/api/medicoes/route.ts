@@ -5,6 +5,7 @@ import { respostaRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { medicaoSchema } from "@/lib/validations";
 import { gerarNumeroMedicao } from "@/lib/utils";
 import { calcularTotaisMedicao } from "@/lib/medicao-helpers";
+import { anoBR, periodoInstanteBR } from "@/lib/fuso";
 
 export async function GET(req: NextRequest) {
   const guard = await exigirPermissao("financeiro", "medicoes");
@@ -25,13 +26,7 @@ export async function GET(req: NextRequest) {
   if (clienteId) where.clienteId = clienteId;
   if (tipo) where.tipo = tipo;
   if (dataInicio || dataFim) {
-    where.criadoEm = {};
-    if (dataInicio) where.criadoEm.gte = new Date(dataInicio);
-    if (dataFim) {
-      const fim = new Date(dataFim);
-      fim.setHours(23, 59, 59, 999);
-      where.criadoEm.lte = fim;
-    }
+    where.criadoEm = periodoInstanteBR(dataInicio, dataFim) ?? {}; // dias de Brasília
   }
   if (busca) {
     where.OR = [
@@ -82,7 +77,7 @@ export async function POST(req: NextRequest) {
     ]);
   } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
-  const ano = data.ano ?? new Date().getFullYear();
+  const ano = data.ano ?? anoBR();
   const ultimaMed = await prisma.medicao.findFirst({
     where: { empresaId, numero: { startsWith: `MED-${ano}-` } },
     orderBy: { numero: "desc" },

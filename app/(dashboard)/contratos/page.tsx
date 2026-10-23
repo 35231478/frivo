@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { whereContratos } from "@/lib/listas/filtros";
 import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
 import { ContratosListaClient } from "@/components/contratos/contratos-lista-client";
+import { hojeDiaCivil } from "@/lib/fuso";
 
 export const metadata: Metadata = { title: "Contratos" };
 
@@ -29,8 +30,10 @@ export default async function ContratosPage({ searchParams }: { searchParams: Pr
   const session = await auth();
   const empresaId = session!.user!.empresaId;
 
+  // Vigência é dia civil: vence depois do último dia, no calendário de Brasília
   const agora = new Date();
-  const em30 = new Date(agora.getTime() + 30 * 864e5);
+  const hoje = hojeDiaCivil(agora);
+  const em30 = hojeDiaCivil(agora, 30);
   const sort = sp.sort && SORT_MAP[sp.sort] ? sp.sort : "dataInicio";
   const dir: "asc" | "desc" = sp.dir === "asc" ? "asc" : "desc";
 
@@ -44,7 +47,7 @@ export default async function ContratosPage({ searchParams }: { searchParams: Pr
       where,
       include: {
         cliente: { select: { id: true, nome: true, nomeFantasia: true, logo: true } },
-        ordensServico: { where: { previsaoConclusao: { gte: agora } }, orderBy: { previsaoConclusao: "asc" }, take: 1, select: { id: true, numero: true, status: true, previsaoConclusao: true } },
+        ordensServico: { where: { previsaoConclusao: { gte: hoje } }, orderBy: { previsaoConclusao: "asc" }, take: 1, select: { id: true, numero: true, status: true, previsaoConclusao: true } },
       },
       orderBy: [SORT_MAP[sort](dir), { id: "asc" }],
       ...janela(pagina, porPagina),
@@ -52,8 +55,8 @@ export default async function ContratosPage({ searchParams }: { searchParams: Pr
     prisma.contrato.aggregate({ where, _sum: { valorMensal: true } }),
     prisma.contrato.count({ where: { empresaId, status: "ATIVO" } }),
     prisma.contrato.aggregate({ where: { empresaId, status: "ATIVO" }, _sum: { valorMensal: true } }),
-    prisma.contrato.count({ where: { empresaId, status: "ATIVO", dataFim: { gte: agora, lte: em30 } } }),
-    prisma.contrato.count({ where: { empresaId, status: { not: "ENCERRADO" }, dataFim: { lt: agora } } }),
+    prisma.contrato.count({ where: { empresaId, status: "ATIVO", dataFim: { gte: hoje, lte: em30 } } }),
+    prisma.contrato.count({ where: { empresaId, status: { not: "ENCERRADO" }, dataFim: { lt: hoje } } }),
     prisma.cliente.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true, nomeFantasia: true }, orderBy: { nome: "asc" } }),
   ]);
 
@@ -61,8 +64,8 @@ export default async function ContratosPage({ searchParams }: { searchParams: Pr
 
   const view = contratos.map((c) => {
     const fim = c.dataFim;
-    const vencido = !!fim && fim < agora && c.status !== "ENCERRADO";
-    const vencendo = !!fim && fim >= agora && fim <= em30 && c.status === "ATIVO";
+    const vencido = !!fim && fim < hoje && c.status !== "ENCERRADO";
+    const vencendo = !!fim && fim >= hoje && fim <= em30 && c.status === "ATIVO";
     return {
       id: c.id,
       numero: c.numero,

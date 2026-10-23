@@ -1,4 +1,5 @@
 import type { Periodicidade, TratamentoFimSemana } from "@prisma/client";
+import { chaveDiaCivil, diaCivilUTC, instanteBR, partesBR } from "@/lib/fuso";
 
 /** Intervalo em meses de uma frequência de recorrência. */
 export function intervaloMeses(freq: Periodicidade | string | null | undefined): number {
@@ -13,20 +14,20 @@ export function intervaloMeses(freq: Periodicidade | string | null | undefined):
 }
 
 /**
- * Ajusta uma data conforme o tratamento de fim de semana.
- * Recebe/retorna uma data ao meio-dia para evitar problemas de fuso.
+ * Ajusta uma data conforme o tratamento de fim de semana — pelo dia da semana EM BRASÍLIA (no
+ * servidor em UTC e em qualquer navegador). Mantém a hora; só desloca dias inteiros.
  */
 export function ajustarFimDeSemana(data: Date, tratamento: TratamentoFimSemana | string | null | undefined): Date {
-  const d = new Date(data);
-  const dow = d.getDay(); // 0 = domingo, 6 = sábado
+  const dow = partesBR(data).diaSemana; // 0 = domingo, 6 = sábado
+  let delta = 0;
   if (tratamento === "ADIANTAR") {
-    if (dow === 6) d.setDate(d.getDate() - 1); // sábado → sexta
-    else if (dow === 0) d.setDate(d.getDate() - 2); // domingo → sexta
+    if (dow === 6) delta = -1; // sábado → sexta
+    else if (dow === 0) delta = -2; // domingo → sexta
   } else if (tratamento === "POSTERGAR") {
-    if (dow === 6) d.setDate(d.getDate() + 2); // sábado → segunda
-    else if (dow === 0) d.setDate(d.getDate() + 1); // domingo → segunda
+    if (dow === 6) delta = 2; // sábado → segunda
+    else if (dow === 0) delta = 1; // domingo → segunda
   }
-  return d;
+  return new Date(data.getTime() + delta * 86_400_000);
 }
 
 /**
@@ -34,12 +35,13 @@ export function ajustarFimDeSemana(data: Date, tratamento: TratamentoFimSemana |
  * Ex.: trimestral a partir de jan → jan, abr, jul, out.
  */
 export function ehOcorrencia(dataInicio: Date, alvoAno: number, alvoMes: number, intervalo: number): boolean {
-  const inicio = new Date(dataInicio);
-  const diff = (alvoAno - inicio.getFullYear()) * 12 + (alvoMes - 1 - inicio.getMonth());
+  // Início é dia civil: mês/ano do dia gravado (no navegador em Brasília não volta para o mês anterior)
+  const [anoIni, mesIni] = chaveDiaCivil(dataInicio).split("-").map(Number);
+  const diff = (alvoAno - anoIni) * 12 + (alvoMes - mesIni);
   return diff >= 0 && diff % intervalo === 0;
 }
 
-/** Monta a data agendada (dia do mês, ao meio-dia) com tratamento de fim de semana aplicado. */
+/** Monta a data agendada (dia do mês, ao MEIO-DIA DE BRASÍLIA) com tratamento de fim de semana aplicado. */
 export function dataAgendadaRecorrencia(
   ano: number,
   mes: number,
@@ -47,7 +49,7 @@ export function dataAgendadaRecorrencia(
   tratamento: TratamentoFimSemana | string | null | undefined,
 ): Date {
   const diaSeguro = Math.min(Math.max(dia || 1, 1), 28);
-  const base = new Date(ano, mes - 1, diaSeguro, 12, 0, 0);
+  const base = instanteBR(ano, mes - 1, diaSeguro, 12, 0);
   return ajustarFimDeSemana(base, tratamento);
 }
 
@@ -75,24 +77,27 @@ export function proximasOcorrencias(opts: {
   const limite = opts.limite ?? 12;
   const intervalo = intervaloMeses(opts.frequencia);
   const inicio = new Date(opts.dataInicio);
-  const desde = opts.aPartirDe ? new Date(opts.aPartirDe) : new Date();
-  desde.setHours(0, 0, 0, 0);
-  const fim = opts.dataFim ? new Date(opts.dataFim) : null;
+  // "A partir de hoje" = início do dia em Brasília; o fim da vigência vale o dia inteiro (dia civil)
+  const { ano: anoDesde, mes: mesDesde, dia: diaDesde } = partesBR(opts.aPartirDe ?? new Date());
+  const desde = instanteBR(anoDesde, mesDesde, diaDesde);
+  const chaveFim = opts.dataFim ? chaveDiaCivil(opts.dataFim) : null;
+  const fim = chaveFim ? (() => { const [a, m, d] = chaveFim.split("-").map(Number); return instanteBR(a, m - 1, d + 1); })() : null;
 
   const out: OcorrenciaRecorrencia[] = [];
-  const cursor = new Date(inicio.getFullYear(), inicio.getMonth(), 1, 12, 0, 0);
+  const [anoIni, mesIni] = chaveDiaCivil(inicio).split("-").map(Number);
+  let cursorAno = anoIni, cursorMes0 = mesIni - 1;
 
   for (let i = 0; i < 600 && out.length < limite; i++) {
-    const ano = cursor.getFullYear();
-    const mes = cursor.getMonth() + 1;
-    if (fim && new Date(ano, mes - 1, 1) > fim) break;
+    const ano = cursorAno;
+    const mes = cursorMes0 + 1;
+    if (fim && diaCivilUTC(ano, mes - 1, 1) >= fim) break;
     if (ehOcorrencia(inicio, ano, mes, intervalo)) {
       const data = dataAgendadaRecorrencia(ano, mes, opts.diaRecorrencia ?? 1, opts.fimSemana);
-      if ((!fim || data <= fim) && data >= desde) {
+      if ((!fim || data < fim) && data >= desde) {
         out.push({ ano, mes, periodo: `${ano}-${String(mes).padStart(2, "0")}`, data });
       }
     }
-    cursor.setMonth(cursor.getMonth() + 1);
+    cursorMes0++; if (cursorMes0 > 11) { cursorMes0 = 0; cursorAno++; }
   }
   return out;
 }

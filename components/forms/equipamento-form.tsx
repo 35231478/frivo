@@ -18,9 +18,11 @@ import { StatusSelo } from "@/components/equipamentos/selos";
 import { SelectCadastroRapido, type CampoRapido, type OpcaoCadastro } from "@/components/ui/select-cadastro-rapido";
 import { CLIENTE, UNIDADE } from "@/components/cadastro-rapido/definicoes";
 import Link from "next/link";
-import { LABELS_TIPO_EQUIPAMENTO, cn , comparaNatural } from "@/lib/utils";
+import { LABELS_TIPO_EQUIPAMENTO, cn, comparaNatural, formatarData } from "@/lib/utils";
 import { opcoesTipoEquipamento, PREFIXO_TIPO_CUSTOM, type TipoEquipamentoCadastro } from "@/lib/cadastros/tipos-equipamento";
 import { Thermometer, ImageIcon, MapPin, Cog, QrCode, History, CheckCircle2, ClipboardList, ChevronLeft, ExternalLink, Camera, Sparkles, ChevronDown, Circle } from "lucide-react";
+import { chaveDiaCivil } from "@/lib/fuso";
+import { InputData } from "@/components/ui/input-data";
 
 
 /** Tipos personalizados (sem `chaveEnum`) entram no select como "custom:<id>". */
@@ -47,13 +49,9 @@ const STATUS_OS: Record<string, { label: string; cor: string }> = {
 };
 
 function toDateInput(date: any): string {
-  if (!date) return "";
-  return new Date(date).toISOString().split("T")[0];
+  return date ? chaveDiaCivil(date) : "";
 }
-function dataBR(d: any): string {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
+const dataBR = (d: any): string => formatarData(d);
 const UNIDADES_CAPACIDADE = ["BTU/h", "TR"];
 
 /** Separa "12.000 BTU/h" / "5 TR" em valor + unidade (valores antigos sem unidade = BTU/h). */
@@ -484,9 +482,9 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
             </summary>
             <div className="mt-4 space-y-4">
               <FormGrid cols={3}>
-                <FormField label="Data de instalação"><Input type="date" value={form.dataInstalacao} onChange={(e) => set("dataInstalacao", e.target.value)} /></FormField>
-                <FormField label="Início da garantia"><Input type="date" value={form.garantiaInicio} onChange={(e) => set("garantiaInicio", e.target.value)} /></FormField>
-                <FormField label="Fim da garantia"><Input type="date" value={form.garantiaAte} onChange={(e) => set("garantiaAte", e.target.value)} /></FormField>
+                <FormField label="Data de instalação"><InputData value={form.dataInstalacao} onChange={(v) => set("dataInstalacao", v)} /></FormField>
+                <FormField label="Início da garantia"><InputData value={form.garantiaInicio} onChange={(v) => set("garantiaInicio", v)} /></FormField>
+                <FormField label="Fim da garantia"><InputData value={form.garantiaAte} onChange={(v) => set("garantiaAte", v)} /></FormField>
               </FormGrid>
               <FormField label="Observações"><Textarea value={form.observacoes} onChange={(e) => set("observacoes", e.target.value)} rows={2} placeholder="Particularidades, acessórios…" /></FormField>
               <FormField label="Observações técnicas"><Textarea value={form.observacoesTecnicas} onChange={(e) => set("observacoesTecnicas", e.target.value)} rows={2} placeholder="Notas técnicas, peças trocadas…" /></FormField>
@@ -696,7 +694,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
               </FormGrid>
               <FormGrid cols={3}>
                 <FormField label="Data de instalação">
-                  <Input type="date" value={form.dataInstalacao} onChange={(e) => set("dataInstalacao", e.target.value)} />
+                  <InputData value={form.dataInstalacao} onChange={(v) => set("dataInstalacao", v)} />
                 </FormField>
                 <FormField label="Última manutenção" hint="Preenchido automaticamente">
                   <Input value={dataBR(ultimaManutencao)} disabled readOnly />
@@ -704,10 +702,10 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
               </FormGrid>
               <FormGrid cols={3}>
                 <FormField label="Início da garantia">
-                  <Input type="date" value={form.garantiaInicio} onChange={(e) => set("garantiaInicio", e.target.value)} />
+                  <InputData value={form.garantiaInicio} onChange={(v) => set("garantiaInicio", v)} />
                 </FormField>
                 <FormField label="Fim da garantia">
-                  <Input type="date" value={form.garantiaAte} onChange={(e) => set("garantiaAte", e.target.value)} />
+                  <InputData value={form.garantiaAte} onChange={(v) => set("garantiaAte", v)} />
                 </FormField>
               </FormGrid>
               <FormField label="Observações técnicas">

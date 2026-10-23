@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { ROTULO_STATUS, STATUS_ITEM, respondido, textoFaltas, type FaltasEquipamento, type RespostaItem, type StatusItem } from "@/lib/execucao/pendencias";
+import { InputData } from "@/components/ui/input-data";
 
 /* ───────── Tipos (o JSON de GET .../execucao) ───────── */
 export interface ItemTela { id: string; texto: string; pedirFoto: boolean; pedirObservacao: boolean; ativo: boolean; ordem: number; tipoResposta: "OK_ATENCAO_NA" | "MEDICAO"; unidade: string | null }
@@ -272,7 +273,7 @@ export function CampoFormulario({ campo: c, valor, somenteLeitura, onSalvar }: {
       {c.tipo === "TEXTO_CURTO" && <Input defaultValue={v} disabled={somenteLeitura} onBlur={(e) => aoSair(e.target.value)} aria-label={c.label} />}
       {c.tipo === "TEXTO_LONGO" && <Textarea rows={2} defaultValue={v} disabled={somenteLeitura} onBlur={(e) => aoSair(e.target.value)} aria-label={c.label} />}
       {c.tipo === "NUMERO" && <Input type="number" defaultValue={v} disabled={somenteLeitura} onBlur={(e) => aoSair(e.target.value)} aria-label={c.label} />}
-      {c.tipo === "DATA" && <Input type="date" defaultValue={v} disabled={somenteLeitura} onBlur={(e) => aoSair(e.target.value)} aria-label={c.label} />}
+      {c.tipo === "DATA" && <InputData defaultValue={v} disabled={somenteLeitura} onChange={(v) => aoSair(v)} aria-label={c.label} />}
       {c.tipo === "ASSINATURA" && <Input defaultValue={v} disabled={somenteLeitura} placeholder="Nome de quem assina" aria-label={c.label}
         onBlur={(e) => { if (e.target.value !== v) onSalvar({ resposta: e.target.value, arquivoUrl: e.target.value }); }} />}
       {c.tipo === "SIM_NAO" && (

@@ -17,6 +17,7 @@ import { PropostaCampos, PROPOSTA_VAZIA, type PropostaState } from "@/components
 import { cn, LABELS_TIPO_ORCAMENTO } from "@/lib/utils";
 import type { TipoDesconto, TipoOrcamento } from "@prisma/client";
 import { AlertCircle, Tags, Calculator, FileSignature } from "lucide-react";
+import { chaveDiaCivil } from "@/lib/fuso";
 
 interface ClienteOpt {
   id: string;
@@ -115,7 +116,7 @@ function propostaInicialToState(p?: PropostaInicial): PropostaState {
     valorMensal: toInput(p.valorMensal),
     frequenciaContrato: p.frequenciaContrato ?? "MENSAL",
     diaExecucao: toInput(p.diaExecucao),
-    dataInicioContrato: p.dataInicioContrato ? new Date(p.dataInicioContrato).toISOString().slice(0, 10) : "",
+    dataInicioContrato: p.dataInicioContrato ? chaveDiaCivil(p.dataInicioContrato) : "",
     vigenciaMeses: p.vigenciaMeses ? String(p.vigenciaMeses) : "12",
     condicaoPagamento: p.condicaoPagamento ?? "",
     diaFaturamento: toInput(p.diaFaturamento),
@@ -137,9 +138,7 @@ function novoId() {
 }
 
 function toInputDate(d: Date | string | null | undefined): string {
-  if (!d) return "";
-  const data = typeof d === "string" ? new Date(d) : d;
-  return data.toISOString().slice(0, 10);
+  return d ? chaveDiaCivil(d) : "";
 }
 
 export function OrcamentoForm({

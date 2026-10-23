@@ -7,6 +7,7 @@ import { conferirBloqueio, ipDaRequisicao, registrarTentativa } from "@/lib/aces
 import { validarDataUrl, type ArquivoValidado } from "@/lib/anexos-server";
 import { TIPOS_IMAGEM, MAX_FOTOS_CHAMADO } from "@/lib/anexos";
 import { z } from "zod";
+import { anoBR } from "@/lib/fuso";
 
 type Params = { params: Promise<{ token: string }> };
 
@@ -99,7 +100,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     (await prisma.usuario.findFirst({ where: { empresaId, ativo: true }, select: { id: true } }));
   if (!gestor) return NextResponse.json({ erro: "Empresa sem usuário responsável." }, { status: 400 });
 
-  const ano = new Date().getFullYear();
+  const ano = anoBR();
   const numero = await proximoNumeroOs(empresaId, ano);
   const totalChamados = await prisma.ordemServico.count({ where: { empresaId, origem: "PORTAL_CLIENTE" } });
   const chamadoNumero = `CHM-${ano}-${String(totalChamados + 1).padStart(4, "0")}`;

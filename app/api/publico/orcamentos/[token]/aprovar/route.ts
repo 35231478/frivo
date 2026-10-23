@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { aprovacaoPublicaSchema } from "@/lib/validations";
 import { gerarContaReceberDoOrcamento } from "@/lib/financeiro-server";
+import { diaCivilPassou } from "@/lib/fuso";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       { status: 400 }
     );
   }
-  if (orcamento.validadeEm && orcamento.validadeEm < new Date()) {
+  if (diaCivilPassou(orcamento.validadeEm)) { // validade é dia civil: aprova até o fim do dia (Brasília)
     return NextResponse.json({ erro: "Orçamento expirado" }, { status: 410 });
   }
 

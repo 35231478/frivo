@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { anoBR } from "@/lib/fuso";
 
 /** A OS existe e é da empresa? (toda rota de /api/ordens/[id]/** deve checar antes de agir) */
 export async function osDaEmpresa(id: string, empresaId: string) {
@@ -27,7 +28,7 @@ export async function motivoBloqueioInativacao(osId: string): Promise<string | n
  * (Contar as OS e somar 1 colide com números existentes e derrubava a abertura de
  * chamado pelo portal/QR com erro de número duplicado.)
  */
-export async function proximoNumeroOs(empresaId: string, ano = new Date().getFullYear()): Promise<string> {
+export async function proximoNumeroOs(empresaId: string, ano = anoBR()): Promise<string> {
   const prefixo = `OS-${ano}-`;
   const [r] = await prisma.$queryRaw<{ max: number | null }[]>`
     SELECT MAX(CAST(split_part(numero, '-', 3) AS INTEGER)) AS max

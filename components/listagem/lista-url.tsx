@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { useListagemUrl } from "@/components/listagem/use-listagem-url";
 import { CampoBusca, Paginacao, SelectFiltro, sugerirPorUrl, ThOrd, type Opcao } from "@/components/listagem/listagem-ui";
 import type { Sugestao } from "@/lib/listagem";
+import { InputData } from "@/components/ui/input-data";
 
 /**
  * Peças para listas renderizadas NO SERVIDOR (Clientes, Orçamentos…): a página continua montando
@@ -101,10 +102,9 @@ export function FiltroDataUrl({ param, titulo }: { param: string; titulo: string
   const { navegar } = useLista();
   const sp = useSearchParams();
   return (
-    <input
-      type="date" value={sp.get(param) ?? ""} title={titulo} aria-label={titulo}
-      onChange={(e) => navegar({ [param]: e.target.value || null })}
-      className="bg-white border border-surface-border rounded-lg px-2.5 py-1.5 text-sm text-ink focus:outline-none focus:border-primary-500"
+    <InputData
+      value={sp.get(param) ?? ""} title={titulo} aria-label={titulo} className="w-40"
+      onChange={(v) => navegar({ [param]: v || null })}
     />
   );
 }

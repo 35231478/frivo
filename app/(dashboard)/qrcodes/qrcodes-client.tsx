@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { QrCode, Printer, Link2, X, Plus } from "lucide-react";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { formatarData as formatarDataBR } from "@/lib/utils";
+import { anoBR } from "@/lib/fuso";
 
 type EquipamentoRef = { id: string; nome: string; local: string | null };
 type QrItem = {
@@ -22,9 +24,7 @@ interface Props {
   equipamentosLivres: { id: string; nome: string }[];
 }
 
-function formatarData(iso: string) {
-  return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
+const formatarData = (iso: string) => formatarDataBR(iso); // dia de Brasília
 
 export function QrcodesClient({ lista, equipamentosLivres }: Props) {
   const router = useRouter();
@@ -183,7 +183,7 @@ function ModalGerar({ onClose, onPronto, listaAtual }: { onClose: () => void; on
   const [erro, setErro] = useState("");
 
   const proximo = useMemo(() => {
-    const ano = new Date().getFullYear();
+    const ano = anoBR();
     const prefixo = `QR-${ano}-`;
     const max = listaAtual
       .filter((q) => q.codigo.startsWith(prefixo))

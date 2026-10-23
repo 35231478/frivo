@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { descriptografar } from "@/lib/crypto";
 import { TEMPLATES_PADRAO, substituirVariaveis, montarEmailHtml, type DadosEmpresaEmail } from "@/lib/email-templates";
 import { formatarMoeda, formatarData, nomeMes } from "@/lib/utils";
+import { diasAteDiaCivil } from "@/lib/fuso";
 
 export interface ResultadoEmail { ok: boolean; erro?: string }
 
@@ -221,7 +222,7 @@ export async function enviarLembreteVencimento(contaReceberId: string): Promise<
   if (!c.cliente.emailReceberLembretes) return { ok: false, erro: "Cliente não recebe lembretes." };
   const dest = montarDestinatarios(await getEmailsComunicacao(c.cliente.id, TipoComunicacao.FINANCEIRO), c.cliente);
   if (!dest) return { ok: false, erro: "Destinatário sem e-mail." };
-  const dias = c.dataVencimento ? Math.max(0, Math.round((new Date(c.dataVencimento).getTime() - Date.now()) / 86400000)) : 0;
+  const dias = Math.max(0, diasAteDiaCivil(c.dataVencimento) ?? 0);
   return enviarEmail(c.empresaId, {
     tipo: "LEMBRETE_VENCIMENTO", para: dest.para, cc: dest.cc, referenciaId: c.id, referenciaTipo: "ContaReceber",
     variaveis: { cliente_nome: c.cliente.nomeFantasia ?? c.cliente.nome, valor: formatarMoeda(Number(c.valor)), vencimento: c.dataVencimento ? formatarData(c.dataVencimento) : "—", dias_para_vencer: String(dias), descricao: c.descricao, link_boleto: c.boletoPdfUrl ?? "" },
@@ -281,7 +282,7 @@ export async function enviarLembreteOrcamento(orcamentoId: string, tipo: TipoLem
   if (!o.cliente.emailReceberOrcamentos) return { ok: false, erro: "Cliente não recebe orçamentos." };
   const dest = montarDestinatarios(await getEmailsComunicacao(o.cliente.id, TipoComunicacao.ORCAMENTOS), o.cliente);
   if (!dest) return { ok: false, erro: "Destinatário sem e-mail." };
-  const dias = o.validadeEm ? Math.round((new Date(o.validadeEm).getTime() - Date.now()) / 86400000) : 0;
+  const dias = diasAteDiaCivil(o.validadeEm) ?? 0;
   return enviarEmail(o.empresaId, {
     tipo: TIPO_TPL_ORC[tipo], para: dest.para, cc: dest.cc, referenciaId: o.id, referenciaTipo: "Orcamento",
     variaveis: { cliente_nome: o.cliente.nomeFantasia ?? o.cliente.nome, numero_orcamento: o.codigo, valor: formatarMoeda(Number(o.totalGeral)), dias_para_vencer: String(Math.max(0, dias)), data_aprovacao: o.assinadoEm ? formatarData(o.assinadoEm) : "", link_orcamento: `${baseUrl()}/orcamento/${o.tokenPublico}` },

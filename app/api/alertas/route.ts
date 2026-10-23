@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { pode } from "@/lib/permissoes";
 import { contarAlertasPrazos } from "@/lib/prazo-server";
 import { contarAlertasVeiculos } from "@/lib/veiculo-server";
+import { hojeDiaCivil } from "@/lib/fuso";
 
 export async function GET() {
   const session = await auth();
@@ -18,8 +19,7 @@ export async function GET() {
   const verVeiculos = pode(permissoes, "veiculos", "visualizar", role);
   const verBoletos = pode(permissoes, "financeiro", "contasReceber", role);
 
-  const inicioHoje = new Date();
-  inicioHoje.setHours(0, 0, 0, 0);
+  const inicioHoje = hojeDiaCivil(); // recebimento é dia civil: hoje em Brasília
 
   const zeroVeiculos = { checklistPendente: 0, checklistsComAlertas: 0, documentosVencendo: 0, veiculosManutencao: 0, revisaoChegando: 0 };
   const [prazosBrutos, veiculosBrutos, boletosPagos] = await Promise.all([

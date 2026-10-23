@@ -167,7 +167,7 @@ describe("1º local coberto vem do cadastro do cliente", () => {
     expect(pend.textContent).toContain("Rua A, 10, Centro, Belo Horizonte, MG");
     expect($('[data-excluir-local="pendente"]')).toBeTruthy();
     // Salvar: cria o local (uma vez) e manda o id no contrato; nada de campo que saiu
-    await digitar($<HTMLInputElement>('input[name="dataInicio"]')!, "2026-11-01");
+    await digitar($<HTMLInputElement>('input[aria-label="Início da vigência"]')!, "01/11/2026"); // campo pt-BR
     await clicar($$("button").find((b) => b.textContent?.trim() === "Salvar")!);
     const criarLocal = chamadas.filter((c) => c.metodo === "POST" && c.url === "/api/unidades");
     expect(criarLocal).toHaveLength(1);
@@ -184,7 +184,7 @@ describe("1º local coberto vem do cadastro do cliente", () => {
     await clicar($('[data-excluir-local="pendente"]'));
     expect($("[data-local-pendente]")).toBeNull();
     expect(painel("escopo").textContent).toContain("Nenhum local coberto ainda.");
-    await digitar($<HTMLInputElement>('input[name="dataInicio"]')!, "2026-11-01");
+    await digitar($<HTMLInputElement>('input[aria-label="Início da vigência"]')!, "01/11/2026"); // campo pt-BR
     await clicar($$("button").find((b) => b.textContent?.trim() === "Salvar")!);
     expect(chamadas.some((c) => c.metodo === "POST" && c.url === "/api/unidades")).toBe(false);
     expect(chamadas.find((c) => c.metodo === "POST" && c.url === "/api/contratos")!.corpo.unidadeIds).toEqual([]);

@@ -11,6 +11,7 @@
  * assinatura digital NÃO é conferida nesta fase (a captura pela SEFAZ, futura, traz a nota oficial).
  */
 import { XMLParser } from "fast-xml-parser";
+import { chaveDiaBR } from "@/lib/fuso";
 
 export const TAMANHO_MAX_XML = 2 * 1024 * 1024; // 2 MB
 
@@ -233,7 +234,8 @@ export function parcelasDaNota(n: { duplicatas: DuplicataNfe[]; valorTotal: numb
 }
 
 /** "AAAA-MM-DD" da data no fuso de Brasília (emissão às 23h30 continua sendo o mesmo dia) */
-export const diaNoBrasil = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+/** "AAAA-MM-DD" do dia em Brasília (helper único de fuso). */
+export const diaNoBrasil = (d: Date) => chaveDiaBR(d);
 
 /** CNPJ da nota é desta empresa? (mesma raiz de 8 dígitos = matriz ou filial) */
 export const mesmaRaizCnpj = (a: string | null | undefined, b: string | null | undefined) => {

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, KeyboardEvent } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
+import { chaveDiaCivil } from "@/lib/fuso";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { tecnicoSchema, type TecnicoInput } from "@/lib/validations";
@@ -20,6 +21,7 @@ import { AvisoInativacaoStatus } from "@/components/ui/aviso-inativacao-status";
 import {
   X, Plus, Upload, Trash2, AlertCircle, User, Briefcase, ListChecks, FileText, Wallet,
 } from "lucide-react";
+import { InputData } from "@/components/ui/input-data";
 
 const ESPECIALIDADES_SUGERIDAS = [
   "Split", "VRF", "Chiller", "Câmara Fria",
@@ -102,10 +104,10 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
     if (sugestao) setPerfilAcessoId(sugestao.id);
   }
 
-  const dataIso = (v: any) => (v ? String(v).slice(0, 10) : "");
+  const dataIso = (v: any) => (v ? chaveDiaCivil(v) : "");
 
   const {
-    register, handleSubmit, watch, setValue,
+    register, handleSubmit, watch, setValue, control,
     formState: { errors, isSubmitting },
   } = useForm<TecnicoInput>({
     resolver: zodResolver(tecnicoSchema),
@@ -291,7 +293,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
                   <Input {...register("rg")} placeholder="00.000.000-0" />
                 </FormField>
                 <FormField label="Data de nascimento">
-                  <Input type="date" {...register("dataNascimento")} />
+                  <Controller name="dataNascimento" control={control} render={({ field }) => <InputData value={(field.value as string) ?? ""} onChange={field.onChange} aria-label="Data de nascimento" />} />
                 </FormField>
                 <FormField label="E-mail" error={errors.email?.message}>
                   <Input {...register("email")} type="email" placeholder="colaborador@empresa.com.br" error={!!errors.email} />
@@ -374,7 +376,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
               )}
               <FormGrid>
                 <FormField label="Data de admissão">
-                  <Input type="date" {...register("dataAdmissao")} />
+                  <Controller name="dataAdmissao" control={control} render={({ field }) => <InputData value={(field.value as string) ?? ""} onChange={field.onChange} aria-label="Data de admissão" />} />
                 </FormField>
                 <FormField label="Status">
                   <Select {...register("statusColaborador")}>
@@ -504,7 +506,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
                             <Input value={doc.nome} onChange={(e) => updDoc(idx, "nome", e.target.value)} placeholder="Ex: CNH categoria D" />
                           </FormField>
                           <FormField label="Vencimento">
-                            <Input type="date" value={doc.dataVencimento ?? ""} onChange={(e) => updDoc(idx, "dataVencimento", e.target.value || null)} />
+                            <InputData value={doc.dataVencimento ?? ""} onChange={(v) => updDoc(idx, "dataVencimento", v || null)} />
                           </FormField>
                         </div>
                         <div className="flex items-center justify-between gap-2 flex-wrap">

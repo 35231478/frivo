@@ -18,14 +18,8 @@ import { SelectCadastroRapido } from "@/components/ui/select-cadastro-rapido";
 import { TIPO_OS } from "@/components/cadastro-rapido/definicoes";
 import { InputData } from "@/components/ui/input-data";
 import { atividadeEncerrada, chaveDiaCivil, situacaoPrazo, textoPrazo } from "@/lib/os/prazos";
+import { InputDataHora } from "@/components/ui/input-data-hora";
 
-/** ISO → valor de <input type="datetime-local"> no fuso do navegador. */
-function paraInputLocal(iso?: string | Date | null) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 const STATUS_LABELS: Record<string, string> = { AGENDADA: "Agendada", EM_ANDAMENTO: "Em Andamento", CONCLUIDA: "Concluída", CANCELADA: "Cancelada" };
 const STATUS_COR: Record<string, string> = { AGENDADA: "bg-purple-100 text-purple-700", EM_ANDAMENTO: "bg-yellow-100 text-yellow-700", CONCLUIDA: "bg-green-100 text-green-700", CANCELADA: "bg-red-100 text-red-700" };
@@ -60,7 +54,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
     setErroModal("");
     setFormEdicao({
       titulo: a.titulo ?? "", tipoOsId: a.tipoOs?.id ?? a.tipoOsId ?? "",
-      dataAgendada: paraInputLocal(a.dataAgendada), prazo: a.prazo ? chaveDiaCivil(a.prazo) : "", duracaoMin: a.duracaoMin ? String(a.duracaoMin) : "", observacao: a.observacao ?? "",
+      dataAgendada: a.dataAgendada ? new Date(a.dataAgendada).toISOString() : "", prazo: a.prazo ? chaveDiaCivil(a.prazo) : "", duracaoMin: a.duracaoMin ? String(a.duracaoMin) : "", observacao: a.observacao ?? "",
     });
     setTecnicosEdicao(valorExecucaoDaAtividade(a));
     setFaltaExecutor(false);
@@ -79,7 +73,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
           titulo: formEdicao.titulo.trim(),
           tipoOsId: formEdicao.tipoOsId,
           ...corpoExecucao(tecnicosEdicao),
-          dataAgendada: formEdicao.dataAgendada ? new Date(formEdicao.dataAgendada).toISOString() : "",
+          dataAgendada: formEdicao.dataAgendada, // instante (ISO) — hora de Brasília escolhida na tela
           prazo: formEdicao.prazo,
           duracaoMin: formEdicao.duracaoMin ? Number(formEdicao.duracaoMin) : null,
           observacao: formEdicao.observacao,
@@ -268,7 +262,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
           </FormField>
           <FormGrid>
             <FormField label="Data/hora agendada">
-              <Input type="datetime-local" value={form.dataAgendada} onChange={(e) => setForm((f) => ({ ...f, dataAgendada: e.target.value }))} />
+              <InputDataHora value={form.dataAgendada} onChange={(iso) => setForm((f) => ({ ...f, dataAgendada: iso }))} aria-label="Data/hora agendada" />
             </FormField>
             <FormField label="Prazo da atividade" hint="Até quando deve estar pronta">
               <InputData value={form.prazo} onChange={(iso) => setForm((f) => ({ ...f, prazo: iso }))} aria-label="Prazo da atividade" />
@@ -325,7 +319,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
           </FormField>
           <FormGrid>
             <FormField label="Data/hora agendada">
-              <Input type="datetime-local" value={formEdicao.dataAgendada} onChange={(e) => setFormEdicao((f) => ({ ...f, dataAgendada: e.target.value }))} />
+              <InputDataHora value={formEdicao.dataAgendada} onChange={(iso) => setFormEdicao((f) => ({ ...f, dataAgendada: iso }))} aria-label="Data/hora agendada" />
             </FormField>
             <FormField label="Prazo da atividade" hint="Até quando deve estar pronta">
               <InputData value={formEdicao.prazo} onChange={(iso) => setFormEdicao((f) => ({ ...f, prazo: iso }))} aria-label="Prazo da atividade" />

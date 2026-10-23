@@ -26,7 +26,7 @@
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { formatarCpfCnpj, gerarNumeroContaPagar } from "@/lib/utils";
+import { formatarCpfCnpj, formatarData, gerarNumeroContaPagar } from "@/lib/utils";
 import { arred } from "@/lib/estoque/regras";
 import { movimentar } from "@/lib/estoque/servidor";
 import { ultimosCustos } from "@/lib/estoque/custo";
@@ -37,6 +37,7 @@ import { parcelasDaNf, type ParcelaRascunho } from "@/lib/compras/parcelas";
 import { mensagemZod, parcelaSchema, type FinanceiroRascunho, type PrecoLinha } from "@/lib/compras/validacao";
 import { lerBoleto } from "@/lib/financeiro/boleto";
 import { validarRefEmpresa } from "@/lib/ref-empresa";
+import { anoBR } from "@/lib/fuso";
 
 /** Recusa com status HTTP e dados extras (ex.: a nota que já existe). */
 export { LABEL_STATUS_NOTA };
@@ -46,7 +47,7 @@ export class ErroNota extends Error {
 }
 
 const so = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
-const dataBr = (d: Date) => d.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+const dataBr = (d: Date) => formatarData(d); // dia de Brasília
 
 /* ───────── Importar ───────── */
 export async function importarNota({ empresaId, usuarioId, xml }: { empresaId: string; usuarioId: string | null; xml: string }) {
@@ -428,7 +429,7 @@ export async function lancarNota({ empresaId, usuarioId, notaId, escolhas = [], 
     // 3) Contas a pagar: uma por parcela (padrão = as duplicatas; sem duplicata, uma à vista), com a
     //    classificação, a forma de pagamento e o boleto do rascunho
     const ajustadas = nota.parcelas != null;
-    const ano = new Date().getFullYear();
+    const ano = anoBR();
     const ultimo = await tx.contaPagar.findFirst({ where: { empresaId, numero: { startsWith: `CP-${ano}-` } }, orderBy: { numero: "desc" }, select: { numero: true } });
     let seq = ultimo ? Number(ultimo.numero.split("-")[2]) : 0;
     const contas = [];

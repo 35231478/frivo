@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { gerarNumeroMedicao } from "@/lib/utils";
 import { calcularVencimento } from "@/lib/medicao-helpers";
 import { itensFaturaveisDaOs, osJaFaturada } from "@/lib/faturamento-os";
+import { anoBR, mesBR } from "@/lib/fuso";
 
 /**
  * Gera as medições mensais de todos os clientes com contrato ativo.
@@ -21,8 +22,8 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}));
   const agora = new Date();
-  const mes = Number(body?.mes) || agora.getMonth() + 1;
-  const ano = Number(body?.ano) || agora.getFullYear();
+  const mes = Number(body?.mes) || mesBR(agora);
+  const ano = Number(body?.ano) || anoBR(agora);
 
   const contratos = await prisma.contrato.findMany({
     where: { empresaId, status: "ATIVO" },

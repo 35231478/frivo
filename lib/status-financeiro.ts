@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { hojeDiaCivil } from "@/lib/fuso";
 
 /**
  * Status financeiro calculado dinamicamente a partir das contas a receber
@@ -23,11 +24,8 @@ export const COR_STATUS_FINANCEIRO_CALC: Record<StatusFinanceiroCalc, string> = 
   INADIMPLENTE: "bg-red-50 text-red-700",
 };
 
-function inicioDeHoje(): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
+/** Vencimento é dia civil: em atraso só depois do dia de Brasília (não às 21h da véspera). */
+const inicioDeHoje = () => hojeDiaCivil();
 
 /**
  * Calcula o status financeiro de um cliente com base nas contas a receber reais:
@@ -64,9 +62,7 @@ export async function calcularStatusFinanceiroDetalhado(
 ): Promise<{ status: StatusFinanceiroCalc; totalProximos30Dias: number }> {
   const where = { clienteId, ...(empresaId ? { empresaId } : {}) };
   const hoje = inicioDeHoje();
-  const em30Dias = new Date(hoje);
-  em30Dias.setDate(em30Dias.getDate() + 30);
-  em30Dias.setHours(23, 59, 59, 999);
+  const em30Dias = new Date(hojeDiaCivil(new Date(), 31).getTime() - 1); // até o fim do 30º dia
 
   const [total, vencidasEmAberto, proximos] = await Promise.all([
     prisma.contaReceber.count({ where }),

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Sparkles } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatarData } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
@@ -83,7 +83,7 @@ export function OsAdicionais({ osId, adicionais }: { osId: string; adicionais: A
             <li key={a.id} className="rounded-lg bg-white border border-violet-200 p-3 flex flex-col sm:flex-row sm:items-start gap-3" data-adicional-os={a.id}>
               <div className="min-w-0 flex-1 space-y-1">
                 <p className="text-sm text-ink whitespace-pre-wrap">{a.descricao}</p>
-                <p className="text-xs text-ink-muted">{[a.atividade.titulo, eq, a.criadoPor && `por ${a.criadoPor.nome}`, new Date(a.criadoEm).toLocaleDateString("pt-BR")].filter(Boolean).join(" · ")}</p>
+                <p className="text-xs text-ink-muted">{[a.atividade.titulo, eq, a.criadoPor && `por ${a.criadoPor.nome}`, formatarData(a.criadoEm)].filter(Boolean).join(" · ")}</p>
                 {a.statusCobranca === "COBRAR" && a.valor != null && (
                   <p className="text-xs font-semibold text-success-700" data-valor-adicional>Preço a cobrar: {Number(a.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
                 )}

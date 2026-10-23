@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { hojeDiaCivil, inicioHojeBR } from "@/lib/fuso";
 import { prisma } from "@/lib/prisma";
 import { lerPaginacao, um, type ParamsUrl } from "@/lib/listagem";
 
@@ -46,16 +47,20 @@ export function lerFiltrosVeiculos(sp: ParamsUrl): FiltrosVeiculos {
   };
 }
 
-/** Referências de data usadas nos avisos (mesma regra do sino de alertas: 30 dias). */
+/**
+ * Referências de data usadas nos avisos (mesma regra do sino de alertas: 30 dias), no calendário de
+ * Brasília. `inicioHoje`/`limite` comparam DIAS civis (vencimento, revisão); `inicioHojeInstante`
+ * compara instantes (checklist preenchido hoje).
+ */
 export function datasAviso(agora = new Date()) {
-  const inicioHoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
-  const limite = new Date(inicioHoje.getTime() + (DIAS_AVISO_VEICULO + 1) * 86_400_000);
-  return { inicioHoje, limite };
+  const inicioHoje = hojeDiaCivil(agora);
+  const limite = hojeDiaCivil(agora, DIAS_AVISO_VEICULO + 1);
+  return { inicioHoje, limite, inicioHojeInstante: inicioHojeBR(agora) };
 }
 
 /** `where` de cada aviso. Documento = qualquer documento com vencimento OU o seguro. */
 export function whereAviso(aviso: AvisoVeiculo, agora = new Date()): Prisma.VeiculoWhereInput | null {
-  const { inicioHoje, limite } = datasAviso(agora);
+  const { inicioHoje, limite, inicioHojeInstante } = datasAviso(agora);
   switch (aviso) {
     case "doc_vencido":
       return { OR: [{ documentos: { some: { dataVencimento: { lt: inicioHoje } } } }, { seguroVencimento: { lt: inicioHoje } }] };
@@ -68,7 +73,7 @@ export function whereAviso(aviso: AvisoVeiculo, agora = new Date()): Prisma.Veic
       return { proximaRevisaoData: { gte: inicioHoje, lt: limite } };
     case "sem_checklist":
       // Mesma regra do alerta "checklist pendente": veículo em uso sem checklist preenchido hoje
-      return { status: { not: "INATIVO" }, checklists: { none: { criadoEm: { gte: inicioHoje } } } };
+      return { status: { not: "INATIVO" }, checklists: { none: { criadoEm: { gte: inicioHojeInstante } } } };
     default:
       return null;
   }

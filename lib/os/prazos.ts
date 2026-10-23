@@ -1,4 +1,4 @@
-import { chaveDiaBR } from "@/lib/fuso";
+import { chaveDiaCivil, diasAteDiaCivil } from "@/lib/fuso";
 
 /**
  * Prazos da OS (previsão geral) e das atividades (prazo próprio). Os dois são DIAS civis: o
@@ -9,16 +9,7 @@ import { chaveDiaBR } from "@/lib/fuso";
  * seguinte em UTC) ou formatar o dia no fuso do navegador (28/10 00:00 UTC aparece como 27/10).
  */
 
-/**
- * "AAAA-MM-DD" de um dia civil gravado. Gravado como dia (meia-noite UTC): lê as partes UTC — o
- * dia não tem fuso. Gravado com hora (ex.: OS criada pelo calendário com a hora da visita): é um
- * instante, e vale o dia dele em Brasília.
- */
-export function chaveDiaCivil(d: Date | string): string {
-  const x = new Date(d);
-  if (x.getUTCHours() || x.getUTCMinutes() || x.getUTCSeconds() || x.getUTCMilliseconds()) return chaveDiaBR(x);
-  return `${x.getUTCFullYear()}-${String(x.getUTCMonth() + 1).padStart(2, "0")}-${String(x.getUTCDate()).padStart(2, "0")}`;
-}
+export { chaveDiaCivil };
 
 /** "dd/mm/aaaa" de um dia civil — igual em qualquer fuso de navegador. */
 export function formatarDiaCivil(d: Date | string | null | undefined): string {
@@ -26,9 +17,6 @@ export function formatarDiaCivil(d: Date | string | null | undefined): string {
   const [a, m, dia] = chaveDiaCivil(d).split("-");
   return `${dia}/${m}/${a}`;
 }
-
-const diasEntre = (de: string, ate: string) =>
-  Math.round((Date.parse(`${ate}T00:00:00Z`) - Date.parse(`${de}T00:00:00Z`)) / 86_400_000);
 
 export type SituacaoPrazo = "SEM_PRAZO" | "NO_PRAZO" | "VENCE_HOJE" | "ATRASADO" | "CUMPRIDO";
 
@@ -40,7 +28,7 @@ export function situacaoPrazo(prazo: Date | string | null | undefined, encerrado
   { situacao: SituacaoPrazo; diasAtraso: number; diasRestantes: number } {
   if (!prazo) return { situacao: "SEM_PRAZO", diasAtraso: 0, diasRestantes: 0 };
   if (encerrado) return { situacao: "CUMPRIDO", diasAtraso: 0, diasRestantes: 0 };
-  const dif = diasEntre(chaveDiaBR(agora), chaveDiaCivil(prazo)); // >0 = falta; <0 = passou
+  const dif = diasAteDiaCivil(prazo, agora)!; // >0 = falta; <0 = passou
   if (dif < 0) return { situacao: "ATRASADO", diasAtraso: -dif, diasRestantes: 0 };
   if (dif === 0) return { situacao: "VENCE_HOJE", diasAtraso: 0, diasRestantes: 0 };
   return { situacao: "NO_PRAZO", diasAtraso: 0, diasRestantes: dif };

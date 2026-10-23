@@ -13,6 +13,8 @@ import {
   Mail, MessageCircle, Link2, Send, Ban, Pencil, Check, AlertCircle,
   FileCheck, ScrollText, Receipt, DollarSign,
 } from "lucide-react";
+import { chaveHojeBR } from "@/lib/fuso";
+import { InputData } from "@/components/ui/input-data";
 
 interface MedicaoAcoesProps {
   medicaoId: string;
@@ -36,7 +38,7 @@ export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status }: Medica
   const [nfUrl, setNfUrl] = useState("");
   const [boletoUrl, setBoletoUrl] = useState("");
   const [boletoCodigo, setBoletoCodigo] = useState("");
-  const [dataPagamento, setDataPagamento] = useState(new Date().toISOString().slice(0, 10));
+  const [dataPagamento, setDataPagamento] = useState(chaveHojeBR());
   const [formaPagamento, setFormaPagamento] = useState("BOLETO");
 
   const publicUrl =
@@ -242,7 +244,7 @@ export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status }: Medica
           <h4 className="text-sm font-bold text-success-700">Registrar Pagamento</h4>
           <FormGrid cols={2}>
             <FormField label="Data do pagamento" required>
-              <Input type="date" value={dataPagamento} onChange={(e) => setDataPagamento(e.target.value)} />
+              <InputData value={dataPagamento} onChange={(v) => setDataPagamento(v)} />
             </FormField>
             <FormField label="Forma de pagamento">
               <Select value={formaPagamento} onChange={(e) => setFormaPagamento(e.target.value)}>

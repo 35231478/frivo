@@ -119,14 +119,15 @@ describe("parcelas", () => {
 
   it("todos os vencimentos de uma vez (mensal ou a cada N dias); valor editado → aviso de soma (não trava)", async () => {
     await central();
-    await digitar($('input[name="primeiroVencimento"]'), "2026-11-30");
+    // Campo de data pt-BR (InputData): digita dd/mm/aaaa no campo visível; o ISO vai no campo com nome
+    await digitar($('input[aria-label="Primeiro vencimento"]'), "30/11/2026");
     await escolher($('select[name="intervalo"]'), "15");
     await clicar($("[data-aplicar-vencimentos]"));
     expect([1, 2, 3].map((k) => valor(`input[name="vencimento-${k}"]`))).toEqual(["2026-11-30", "2026-12-15", "2026-12-30"]);
     await escolher($('select[name="intervalo"]'), "mensal");
     await clicar($("[data-aplicar-vencimentos]"));
     expect([1, 2, 3].map((k) => valor(`input[name="vencimento-${k}"]`))).toEqual(["2026-11-30", "2026-12-30", "2027-01-30"]);
-    await digitar($('input[name="vencimento-2"]'), "2026-12-24"); // um só
+    await digitar($('input[aria-label="Vencimento da parcela 2"]'), "24/12/2026"); // um só
     await digitar($('input[name="valor-3"]'), "500");
     expect(txt("[data-aviso-soma]")).toBe(" As parcelas somam R$ 1.666,20 e a nota é de R$ 1.749,30 (faltam R$ 83,10). As contas a pagar seguem as parcelas.");
     expect(botao("Confirmar e lançar").disabled).toBe(true); // o tubo ainda não tem produto
