@@ -89,7 +89,7 @@ export async function dispensaDaAtividade(
   a: { tipoOs: { nome: string; exigeEquipamento: boolean } | null },
   os: { origem: string; semEquipamentoMotivo: string | null },
 ): Promise<DispensaEquipamento | null> {
-  if (a.tipoOs && !a.tipoOs.exigeEquipamento) return { motivo: "TIPO", texto: textoDispensa("TIPO", a.tipoOs.nome) };
+  if (a.tipoOs?.exigeEquipamento === false) return { motivo: "TIPO", texto: textoDispensa("TIPO", a.tipoOs.nome) };
   if (os.origem === "RECORRENTE" && !(await temEquipamentoVinculado(empresaId, osId)))
     return { motivo: "RECORRENTE", texto: textoDispensa("RECORRENTE") };
   if (os.semEquipamentoMotivo) return { motivo: "JUSTIFICADA", texto: textoDispensa("JUSTIFICADA", os.semEquipamentoMotivo) };
@@ -112,8 +112,9 @@ export async function carregarExecucao(empresaId: string, osId: string, atividad
     },
   });
   if (!atividade) return null;
-  const { origem, semEquipamentoMotivo, ...os } = atividade.ordemServico;
-  const dispensaEquipamento = await dispensaDaAtividade(empresaId, osId, atividade, { origem, semEquipamentoMotivo });
+  const sel = atividade.ordemServico;
+  const os = sel && { id: sel.id, numero: sel.numero, status: sel.status, clienteId: sel.clienteId, unidadeId: sel.unidadeId };
+  const dispensaEquipamento = await dispensaDaAtividade(empresaId, osId, atividade, { origem: sel?.origem ?? "MANUAL", semEquipamentoMotivo: sel?.semEquipamentoMotivo ?? null });
 
   const vinculos = await prisma.atividadeEquipamento.findMany({
     where: { atividadeId },
