@@ -96,6 +96,12 @@ interface OrcamentoFormProps {
   clienteIdInicial?: string;
   osInicialId?: string;
   osInicial?: OsItem;
+  /**
+   * Construtor dentro de outra tela (gaveta "Criar orçamento" da OS): sem cabeçalho de página, o
+   * cliente fica o da OS, a OS nunca sai do vínculo, e salvar/cancelar devolvem para quem abriu
+   * em vez de navegar. O resto é o MESMO formulário e a MESMA API.
+   */
+  embutido?: { osId: string; onSalvo: (orcamento: any) => void; onCancelar: () => void };
 }
 
 function toInput(v: number | null | undefined): string {
@@ -146,6 +152,7 @@ export function OrcamentoForm({
   clienteIdInicial,
   osInicialId,
   osInicial,
+  embutido,
 }: OrcamentoFormProps) {
   const router = useRouter();
 
@@ -277,7 +284,8 @@ export function OrcamentoForm({
       tipoDesconto,
       servicos: servPayload,
       produtos: prodPayload,
-      ordensServicoIds: ordensIds,
+      // Embutido na OS: a OS de origem vai sempre (desmarcar na lista não a tira)
+      ordensServicoIds: embutido && !ordensIds.includes(embutido.osId) ? [...ordensIds, embutido.osId] : ordensIds,
     };
 
     if (tipo === "PROPOSTA_CONTRATO") {
@@ -317,6 +325,7 @@ export function OrcamentoForm({
         return;
       }
       const saved = await res.json();
+      if (embutido) { embutido.onSalvo(saved); return; }
       router.push(`/orcamentos/${saved.id}`);
       router.refresh();
     } catch {
@@ -327,8 +336,8 @@ export function OrcamentoForm({
   }
 
   return (
-    <form onSubmit={salvar} className="space-y-6">
-      <PageHeader
+    <form onSubmit={salvar} className="space-y-6" data-orcamento-form={embutido ? "embutido" : mode}>
+      {!embutido && <PageHeader
         title={mode === "novo" ? "Novo Orçamento" : `Editar ${inicial?.codigo ?? "Orçamento"}`}
         description={mode === "novo" ? "Crie uma proposta comercial para o cliente" : "Edite os dados deste orçamento"}
         backHref={mode === "novo" ? "/orcamentos" : `/orcamentos/${inicial?.id}`}
@@ -342,7 +351,7 @@ export function OrcamentoForm({
             </Button>
           </>
         }
-      />
+      />}
 
       {erro && (
         <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 flex items-center gap-2">
@@ -407,6 +416,8 @@ export function OrcamentoForm({
               <SelectCadastroRapido
                 value={clienteId}
                 onChange={setClienteId}
+                disabled={!!embutido}
+                textoDesabilitado={embutido ? clientes.filter((c) => c.id === clienteId).map((c) => CLIENTE.opcao(c).label)[0] ?? "Cliente da OS" : undefined}
                 opcoes={clientes.map(CLIENTE.opcao)}
                 entidade={CLIENTE.entidade}
                 placeholder="Selecione..."
@@ -494,7 +505,7 @@ export function OrcamentoForm({
       </div>
 
       <div className="flex justify-end gap-2 pb-4">
-        <Button type="button" variant="secondary" onClick={() => router.back()}>Cancelar</Button>
+        <Button type="button" variant="secondary" onClick={() => (embutido ? embutido.onCancelar() : router.back())}>Cancelar</Button>
         <Button type="submit" loading={salvando}>
           {mode === "novo" ? "Criar orçamento" : "Salvar alterações"}
         </Button>

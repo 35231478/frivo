@@ -5,8 +5,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Calculator, ExternalLink, Plus, Link2, X, Trash2 } from "lucide-react";
+import { Calculator, ExternalLink, Link2, X, Trash2 } from "lucide-react";
 import { formatarData, formatarMoeda, cn, LABELS_STATUS_ORCAMENTO, CLASSE_STATUS_ORCAMENTO } from "@/lib/utils";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { OsNovoOrcamento } from "@/components/os/os-novo-orcamento";
 
 interface OrcamentoVinculado {
   id: string; // OrcamentoOs.id (relação)
@@ -33,12 +35,18 @@ interface OrcamentoDisponivel {
 interface OsOrcamentosVinculadosProps {
   osId: string;
   clienteId: string;
+  /** Nº da OS (título da gaveta "Criar orçamento") */
+  numeroOs?: string;
   vinculados: OrcamentoVinculado[];
 }
 
-export function OsOrcamentosVinculados({ osId, clienteId, vinculados: iniciais }: OsOrcamentosVinculadosProps) {
+export function OsOrcamentosVinculados({ osId, clienteId, numeroOs, vinculados: iniciais }: OsOrcamentosVinculadosProps) {
   const router = useRouter();
+  const { pode } = usePermissoes();
+  const podeVincular = pode("ordens", "editar");
   const [vinculados, setVinculados] = useState(iniciais);
+  // Depois de vincular/criar, o router.refresh() traz a lista do servidor: a tela acompanha
+  useEffect(() => { setVinculados(iniciais); }, [iniciais]);
   const [mostraVincular, setMostraVincular] = useState(false);
   const [disponiveis, setDisponiveis] = useState<OrcamentoDisponivel[]>([]);
   const [carregando, setCarregando] = useState(false);
@@ -102,19 +110,25 @@ export function OsOrcamentosVinculados({ osId, clienteId, vinculados: iniciais }
             : `${vinculados.length} orçamento(s) vinculado(s).`}
         </p>
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setMostraVincular((v) => !v)}
-          >
-            <Link2 className="w-4 h-4" /> Vincular existente
-          </Button>
-          <Link
-            href={`/orcamentos/novo?osId=${osId}&clienteId=${clienteId}`}
-            className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-sm"
-          >
-            <Plus className="w-4 h-4" /> Criar novo orçamento
-          </Link>
+          {podeVincular && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setMostraVincular((v) => !v)}
+            >
+              <Link2 className="w-4 h-4" /> Vincular existente
+            </Button>
+          )}
+          {/* Construtor do comercial numa gaveta, sem sair da OS (orçamento já nasce vinculado) */}
+          {pode("orcamentos", "criar") && (
+            <OsNovoOrcamento
+              osId={osId} numeroOs={numeroOs ?? "OS"}
+              onCriado={(orc) => {
+                setVinculados((prev) => prev.some((v) => v.orcamento.id === orc.id) ? prev : [...prev, { id: `novo-${orc.id}`, orcamento: orc }]);
+                router.refresh();
+              }}
+            />
+          )}
         </div>
       </div>
 
@@ -194,7 +208,7 @@ export function OsOrcamentosVinculados({ osId, clienteId, vinculados: iniciais }
               <span className="text-sm font-semibold text-ink shrink-0">
                 {formatarMoeda(Number(v.orcamento.totalGeral))}
               </span>
-              <button
+              {podeVincular && <button
                 type="button"
                 onClick={() => desvincular(v.orcamento.id, v.orcamento.codigo)}
                 disabled={salvando === v.orcamento.id}
@@ -202,7 +216,7 @@ export function OsOrcamentosVinculados({ osId, clienteId, vinculados: iniciais }
                 title="Desvincular"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-              </button>
+              </button>}
             </div>
           ))}
         </div>
