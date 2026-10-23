@@ -18,7 +18,7 @@ export default function QrNaoEncontrado() {
         Precisa de atendimento? Fale com a empresa responsável pela manutenção do equipamento
         pelos canais de sempre (telefone ou WhatsApp).
       </p>
-      <div className="mt-8 opacity-60"><FrivoLogo size="sm" /></div>
+      <div className="mt-8 opacity-60"><FrivoLogo size="sm" variant="dark" /></div>
     </div>
   );
 }
