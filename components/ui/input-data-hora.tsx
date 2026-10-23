@@ -52,9 +52,9 @@ export function InputDataHora({ value, onChange, id, className, disabled, horaPa
   const horaInvalida = hora.length === 5 && !horaValida(hora);
 
   return (
-    <div className={cn("flex items-stretch gap-2", className)} data-input-data-hora>
+    <div className={cn("flex flex-wrap items-stretch gap-2", className)} data-input-data-hora>
       <InputData
-        id={id} className="flex-1 min-w-0" disabled={disabled}
+        id={id} className="flex-1 min-w-[8.5rem]" disabled={disabled}
         aria-label={ariaLabel ? `${ariaLabel} — data` : "Data"}
         value={dia}
         onChange={(d) => {
@@ -64,18 +64,18 @@ export function InputDataHora({ value, onChange, id, className, disabled, horaPa
           emitir(d, h);
         }}
       />
-      <div className="relative w-[6.5rem] shrink-0">
+      <div className="relative w-[5.5rem] shrink-0">
         <input
           type="text" inputMode="numeric" autoComplete="off" placeholder="hh:mm" disabled={disabled}
           aria-label={ariaLabel ? `${ariaLabel} — hora` : "Hora"} aria-invalid={horaInvalida || undefined} data-input-hora
           value={hora}
           onChange={(e) => { const h = mascararHora(e.target.value); setHora(h); emitir(dia, h); }}
           className={cn(
-            "w-full bg-white border rounded-lg pl-3 pr-8 py-2 text-sm text-ink tabular-nums focus:outline-none focus:ring-4 transition-all disabled:opacity-60",
+            "w-full bg-white border rounded-lg pl-3 pr-7 py-2 text-sm text-ink tabular-nums focus:outline-none focus:ring-4 transition-all disabled:opacity-60",
             horaInvalida ? "border-red-400 focus:border-red-500 focus:ring-red-500/10" : "border-surface-border focus:border-primary-500 focus:ring-primary-500/10",
           )}
         />
-        <Clock className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-subtle pointer-events-none" />
+        <Clock className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-subtle pointer-events-none" />
       </div>
     </div>
   );
