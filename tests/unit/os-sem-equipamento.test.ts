@@ -4,6 +4,7 @@
  * o equipamento que for atendido continua exigindo o checklist completo.
  */
 import { describe, expect, it } from "vitest";
+import { recalcular } from "@/lib/tecnico/offline/estado";
 import {
   MSG_SAIDAS_SEM_EQUIPAMENTO, MSG_SEM_EQUIPAMENTO, textoDispensa, verificarConclusao,
   type DispensaEquipamento, type EquipamentoParaPendencia,
@@ -48,5 +49,19 @@ describe("trava de equipamento com saídas", () => {
     expect(textoDispensa("TIPO")).toBe("O tipo de OS não exige equipamento: pode concluir sem equipamento atendido.");
     expect(textoDispensa("RECORRENTE")).toBe("OS recorrente do contrato sem equipamento vinculado: pode concluir sem equipamento atendido.");
     expect(textoDispensa("JUSTIFICADA", "Só avaliação")).toBe("Conclusão sem equipamento autorizada: “Só avaliação”.");
+  });
+});
+
+describe("app do técnico (offline): recalcula a conclusão com a saída que veio do servidor", () => {
+  const tela = (dispensaEquipamento?: DispensaEquipamento | null) => ({
+    atividade: { id: "a1", titulo: "Visita", status: "EM_ANDAMENTO", tipoOs: null },
+    os: { id: "os1", numero: "OS-1", status: "EM_ANDAMENTO", clienteId: "c1", unidadeId: null },
+    bloqueada: false, equipamentos: [], adicionais: [],
+    conclusao: verificarConclusao([]), ...(dispensaEquipamento !== undefined && { dispensaEquipamento }),
+  });
+  it("com dispensa: pronto para concluir sem equipamento; sem (ou retrato antigo sem o campo): trava", () => {
+    expect(recalcular(tela(TIPO) as any).conclusao).toMatchObject({ ok: true, dispensa: TIPO });
+    expect(recalcular(tela(null) as any).conclusao).toMatchObject({ ok: false, semEquipamento: true });
+    expect(recalcular(tela() as any).conclusao).toMatchObject({ ok: false, semEquipamento: true });
   });
 });
