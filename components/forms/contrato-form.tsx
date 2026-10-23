@@ -28,6 +28,7 @@ import {
   Plus, CalendarDays, ChevronDown, CheckCircle2, PauseCircle, RefreshCw, XCircle, History, User, Trash2, SlidersHorizontal,
 } from "lucide-react";
 import { chaveDiaCivil } from "@/lib/fuso";
+import { InputData } from "@/components/ui/input-data";
 
 // Opções de mudança de status oferecidas no cabeçalho (ícone, cor e descrição).
 const STATUS_OPCOES: { valor: string; label: string; descricao: string; icone: any; cor: string }[] = [
@@ -586,10 +587,10 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
               )}
             </FormField>
             <FormField label="Início da vigência" required error={errors.dataInicio?.message}>
-              <Input {...register("dataInicio")} type="date" error={!!errors.dataInicio} />
+              <Controller name="dataInicio" control={control} render={({ field }) => <InputData value={(field.value as string) ?? ""} onChange={field.onChange} aria-label="Início da vigência" />} />
             </FormField>
             <FormField label="Fim da vigência" hint="Em branco = indeterminado">
-              <Input {...register("dataFim")} type="date" />
+              <Controller name="dataFim" control={control} render={({ field }) => <InputData value={(field.value as string) ?? ""} onChange={field.onChange} aria-label="Fim da vigência" />} />
             </FormField>
           </FormGrid>
           <p className="flex items-center gap-1.5 text-xs text-ink-muted -mt-2">
@@ -824,7 +825,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
           </FormGrid>
           <FormGrid>
             <FormField label="Vencimento da ART" hint="Se vazio, assume o fim da vigência do contrato">
-              <Input {...register("artVencimento")} type="date" />
+              <Controller name="artVencimento" control={control} render={({ field }) => <InputData value={(field.value as string) ?? ""} onChange={field.onChange} aria-label="Vencimento da ART" />} />
             </FormField>
           </FormGrid>
           <div className="border-t border-gray-100 pt-1 divide-y divide-gray-100">

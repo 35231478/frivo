@@ -19,6 +19,7 @@ import { organizarFotosVeiculo, type RotuloFotoVeiculo } from "@/lib/veiculo-fot
 import {
   Truck, UserCog, FileText, Wrench, ClipboardCheck, AlertCircle, Plus, Trash2, Upload, X, ChevronLeft, CheckCircle2, Circle, ChevronDown, Lock,
 } from "lucide-react";
+import { InputData } from "@/components/ui/input-data";
 
 type Aba = "identificacao" | "responsavel" | "documentos" | "manutencoes" | "checklists";
 
@@ -207,7 +208,7 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
                     </Select>
                   </FormField>
                   <FormField label="Nome / descrição"><Input value={doc.nome} onChange={(e) => updDoc(i, "nome", e.target.value)} placeholder="Ex: CRLV 2026" /></FormField>
-                  <FormField label="Vencimento"><Input type="date" value={doc.dataVencimento ?? ""} onChange={(e) => updDoc(i, "dataVencimento", e.target.value || null)} /></FormField>
+                  <FormField label="Vencimento"><InputData value={doc.dataVencimento ?? ""} onChange={(v) => updDoc(i, "dataVencimento", v || null)} /></FormField>
                 </div>
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-2">
@@ -327,9 +328,9 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
 
         <Bloco numero={4} titulo="Documentos e revisão" descricao="Seguro, CRLV, IPVA e a próxima revisão — geram alertas antes de vencer." opcional>
           <FormGrid cols={3}>
-            <FormField label="Vencimento do seguro"><Input type="date" value={form.seguroVencimento} onChange={(e) => upd("seguroVencimento", e.target.value)} /></FormField>
+            <FormField label="Vencimento do seguro"><InputData value={form.seguroVencimento} onChange={(v) => upd("seguroVencimento", v)} /></FormField>
             <FormField label="Próxima revisão — km"><Input type="number" value={form.proximaRevisaoKm} onChange={(e) => upd("proximaRevisaoKm", e.target.value)} placeholder="Ex: 60000" /></FormField>
-            <FormField label="Próxima revisão — data"><Input type="date" value={form.proximaRevisaoData} onChange={(e) => upd("proximaRevisaoData", e.target.value)} /></FormField>
+            <FormField label="Próxima revisão — data"><InputData value={form.proximaRevisaoData} onChange={(v) => upd("proximaRevisaoData", v)} /></FormField>
           </FormGrid>
           <details className="group/det" open={documentos.length > 0}>
             <summary className="cursor-pointer list-none inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:text-primary-700">
@@ -457,7 +458,7 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
           <div className={cn("space-y-6", aba !== "documentos" && "hidden")}>
             <FormSection title="Vencimento do seguro">
               <FormField label="Data de vencimento do seguro" hint="Gera alerta no dashboard 30 dias antes de vencer">
-                <Input type="date" value={form.seguroVencimento} onChange={(e) => upd("seguroVencimento", e.target.value)} className="sm:max-w-xs" />
+                <InputData value={form.seguroVencimento} onChange={(v) => upd("seguroVencimento", v)} className="sm:max-w-xs" />
               </FormField>
             </FormSection>
             <FormSection title="Documentos do veículo">
@@ -470,7 +471,7 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
             <FormSection title="Próxima revisão">
               <FormGrid>
                 <FormField label="Próxima revisão — Quilometragem"><Input type="number" value={form.proximaRevisaoKm} onChange={(e) => upd("proximaRevisaoKm", e.target.value)} placeholder="Ex: 60000" /></FormField>
-                <FormField label="Próxima revisão — Data"><Input type="date" value={form.proximaRevisaoData} onChange={(e) => upd("proximaRevisaoData", e.target.value)} /></FormField>
+                <FormField label="Próxima revisão — Data"><InputData value={form.proximaRevisaoData} onChange={(v) => upd("proximaRevisaoData", v)} /></FormField>
               </FormGrid>
             </FormSection>
             {isEditing && <ManutencoesPanel veiculoId={veiculoId!} manutencoes={manutencoes} setManutencoes={setManutencoes} />}
@@ -611,13 +612,13 @@ function ManutencoesPanel({ veiculoId, manutencoes, setManutencoes }: { veiculoI
           </div>
           <FormGrid cols={3}>
             <FormField label="Tipo"><Select value={m.tipo} onChange={(e) => setM((s) => ({ ...s, tipo: e.target.value }))}>{TIPOS_MANUT.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}</Select></FormField>
-            <FormField label="Data" required><Input type="date" value={m.dataRealizacao} onChange={(e) => setM((s) => ({ ...s, dataRealizacao: e.target.value }))} /></FormField>
+            <FormField label="Data" required><InputData value={m.dataRealizacao} onChange={(v) => setM((s) => ({ ...s, dataRealizacao: v }))} /></FormField>
             <FormField label="Quilometragem"><Input type="number" value={m.quilometragem} onChange={(e) => setM((s) => ({ ...s, quilometragem: e.target.value }))} /></FormField>
           </FormGrid>
           <FormField label="Descrição" required><Input value={m.descricao} onChange={(e) => setM((s) => ({ ...s, descricao: e.target.value }))} placeholder="Ex: Troca de óleo e filtros" /></FormField>
           <FormGrid cols={3}>
             <FormField label="Custo"><Input type="number" step="0.01" value={m.custo} onChange={(e) => setM((s) => ({ ...s, custo: e.target.value }))} placeholder="0,00" /></FormField>
-            <FormField label="Próxima — Data"><Input type="date" value={m.proximaData} onChange={(e) => setM((s) => ({ ...s, proximaData: e.target.value }))} /></FormField>
+            <FormField label="Próxima — Data"><InputData value={m.proximaData} onChange={(v) => setM((s) => ({ ...s, proximaData: v }))} /></FormField>
             <FormField label="Próxima — Km"><Input type="number" value={m.proximaKm} onChange={(e) => setM((s) => ({ ...s, proximaKm: e.target.value }))} /></FormField>
           </FormGrid>
           <div className="flex justify-end gap-2">

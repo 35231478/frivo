@@ -15,6 +15,7 @@ import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
 import { categoriaDaConta } from "@/lib/financeiro/categoria";
 import { MessageCircle, MessageSquare, Mail, FileText, CheckCircle2, Eye, Settings, Download, Ban, MoreVertical, Pencil } from "lucide-react";
 import { chaveDiaCivil, chaveHojeBR } from "@/lib/fuso";
+import { InputData } from "@/components/ui/input-data";
 
 interface Conta {
   id: string; numero: string; descricao: string; categoriaId?: string | null; categoria?: string | null; valor: number;
@@ -207,7 +208,7 @@ function EditarCobranca({ conta, categorias, onPronto }: { conta: Conta; categor
         <FormField label="Valor"><Input type="number" step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} /></FormField>
       </FormGrid>
       <FormGrid>
-        <FormField label="Vencimento"><Input type="date" value={vencimento} onChange={(e) => setVencimento(e.target.value)} /></FormField>
+        <FormField label="Vencimento"><InputData value={vencimento} onChange={(v) => setVencimento(v)} /></FormField>
         <FormField label="Banco"><Input value={banco} onChange={(e) => setBanco(e.target.value)} /></FormField>
       </FormGrid>
       <div className="flex justify-end gap-2">
@@ -252,7 +253,7 @@ function EmitirBoleto({ conta, onEmitido }: { conta: Conta; onEmitido: (b: { lin
         <p className="text-ink-muted">Valor: <strong className="text-success-700">{formatarMoeda(conta.valor)}</strong></p>
       </div>
       <FormGrid>
-        <FormField label="Vencimento"><Input type="date" value={vencimento} onChange={(e) => setVencimento(e.target.value)} /></FormField>
+        <FormField label="Vencimento"><InputData value={vencimento} onChange={(v) => setVencimento(v)} /></FormField>
         <FormField label="Desconto (R$)" hint="Opcional"><Input type="number" step="0.01" value={desconto} onChange={(e) => setDesconto(e.target.value)} placeholder="0,00" /></FormField>
       </FormGrid>
       <FormGrid>
@@ -336,7 +337,7 @@ function RegistrarPagamento({ conta, onPronto }: { conta: Conta; onPronto: () =>
       {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
       <FormGrid>
         <FormField label="Valor recebido"><Input type="number" step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} /></FormField>
-        <FormField label="Data do pagamento"><Input type="date" value={data} onChange={(e) => setData(e.target.value)} /></FormField>
+        <FormField label="Data do pagamento"><InputData value={data} onChange={(v) => setData(v)} /></FormField>
       </FormGrid>
       <FormGrid>
         <FormField label="Forma de pagamento">

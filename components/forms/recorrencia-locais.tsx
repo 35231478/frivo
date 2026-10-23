@@ -9,6 +9,7 @@ import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { proximasOcorrencias } from "@/lib/recorrencia-helpers";
 import { FREQUENCIAS_RECORRENCIA, LABELS_PERIODICIDADE, formatarData } from "@/lib/utils";
 import { MapPin, RefreshCw } from "lucide-react";
+import { InputData } from "@/components/ui/input-data";
 
 export interface LocalConfig {
   ativa: boolean;
@@ -63,7 +64,7 @@ export function RecorrenciaLocais({ locais, tiposOs, tecnicos, value, onChange }
                     </Select>
                   </FormField>
                   <FormField label="Data da primeira OS">
-                    <Input type="date" value={c.dataPrimeiraOs} onChange={(e) => onChange(l.id, { dataPrimeiraOs: e.target.value })} />
+                    <InputData value={c.dataPrimeiraOs} onChange={(v) => onChange(l.id, { dataPrimeiraOs: v })} />
                   </FormField>
                 </FormGrid>
                 <FormGrid cols={2}>

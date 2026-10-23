@@ -10,6 +10,7 @@ import { aplicarVencimentos, avisoSomaParcelas, igualANf, MAX_PARCELAS, redistri
 import type { FormaPagamentoConta, PagamentoNfe } from "@/lib/compras/nfe";
 import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
 import { CampoBoleto } from "@/components/financeiro/campo-boleto";
+import { InputData } from "@/components/ui/input-data";
 
 /** O que a página manda para a parte financeira da central de lançamento. */
 export interface FinanceiroNota {
@@ -158,7 +159,7 @@ export function FinanceiroNotaEditor({ nota, valor, onChange, podeEditar }: {
             <div className="flex flex-wrap items-end gap-2" data-vencimentos-todos>
               <label className="block">
                 <span className="text-xs font-semibold text-ink flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" /> Todos os vencimentos: 1º em</span>
-                <Input type="date" value={primeiro} onChange={(e) => setPrimeiro(e.target.value)} className="mt-1 w-40" aria-label="Primeiro vencimento" name="primeiroVencimento" />
+                <InputData value={primeiro} onChange={(v) => setPrimeiro(v)} className="mt-1 w-40" aria-label="Primeiro vencimento" name="primeiroVencimento" />
               </label>
               <select value={intervalo} onChange={(e) => setIntervalo(e.target.value)} aria-label="Intervalo entre as parcelas" name="intervalo"
                 className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm">
@@ -183,7 +184,7 @@ export function FinanceiroNotaEditor({ nota, valor, onChange, podeEditar }: {
                 </div>
                 <label className="block">
                   <span className="sr-only">Vencimento da parcela {i + 1}</span>
-                  <Input type="date" value={p.vencimento} onChange={(e) => setParcela(i, { vencimento: e.target.value })} disabled={!podeEditar}
+                  <InputData value={p.vencimento} onChange={(v) => setParcela(i, { vencimento: v })} disabled={!podeEditar}
                     aria-label={`Vencimento da parcela ${i + 1}`} name={`vencimento-${i + 1}`} />
                 </label>
                 <label className="block">

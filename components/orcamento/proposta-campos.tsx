@@ -10,6 +10,7 @@ import {
   VARIAVEIS_TERMO, calcularDataFimContrato, formatarData,
 } from "@/lib/utils";
 import { FileText, Wrench, Clock } from "lucide-react";
+import { InputData } from "@/components/ui/input-data";
 
 export interface PropostaState {
   valorMensal: string;
@@ -92,8 +93,8 @@ export function PropostaCampos({ proposta, onChange, tecnicos, termoTemplates, e
                 onChange={(e) => onChange({ diaExecucao: e.target.value })} placeholder="Ex.: 5" />
             </FormField>
             <FormField label="Data de início">
-              <Input type="date" value={proposta.dataInicioContrato}
-                onChange={(e) => onChange({ dataInicioContrato: e.target.value })} />
+              <InputData value={proposta.dataInicioContrato}
+                onChange={(v) => onChange({ dataInicioContrato: v })} />
             </FormField>
             <FormField label="Vigência (meses)">
               <Select value={proposta.vigenciaMeses} onChange={(e) => onChange({ vigenciaMeses: e.target.value })}>

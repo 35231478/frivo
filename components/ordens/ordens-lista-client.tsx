@@ -13,10 +13,12 @@ import { BuscaSelect, type OpcaoBusca } from "@/components/ui/busca-select";
 import { AvatarCliente } from "@/components/ui/avatar-cliente";
 import { AvatarStack } from "@/components/ui/avatar-stack";
 import { formatarDiaCivil, prazoVencido } from "@/lib/os/prazos";
+import { chaveHojeBR } from "@/lib/fuso";
 import {
   ClipboardList, Plus, Search, SlidersHorizontal, X, ArrowUp, ArrowDown, ArrowUpDown,
   LayoutGrid, List, Download, Headset, Filter, ChevronLeft, ChevronRight, CalendarDays, CalendarCheck,
 } from "lucide-react";
+import { InputData } from "@/components/ui/input-data";
 
 interface TecnicoView { id: string; nome: string; avatar: string | null }
 interface OrdemView {
@@ -111,7 +113,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: 
 
   // --- Navegação por data ---
   const dataAtual = get("data");
-  const hojeStr = ymdLocal(new Date());
+  const hojeStr = chaveHojeBR(); // hoje em Brasília (não vira amanhã às 21h)
   const ehHoje = dataAtual === hojeStr;
 
   // Define o dia (limpa o intervalo "de/até" para não conflitar com a navegação)
@@ -119,7 +121,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: 
     setParams({ data: valor, dataInicio: null, dataFim: null });
   }
   function deslocarDia(dias: number) {
-    const base = dataAtual ? parseDia(dataAtual) : new Date();
+    const base = parseDia(dataAtual || hojeStr);
     base.setDate(base.getDate() + dias);
     setData(ymdLocal(base));
   }
@@ -207,6 +209,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: 
               className="p-2 rounded-lg border border-surface-border bg-white text-ink-muted hover:bg-surface-alt hover:text-ink transition-colors">
               <CalendarDays className="w-4 h-4" />
             </button>
+            {/* Só o calendário do aparelho (invisível, sobre o botão): nenhum texto de data aparece aqui */}
             <input type="date" value={dataAtual || hojeStr} onChange={(e) => e.target.value && setData(e.target.value)}
               aria-label="Selecionar data" className="absolute inset-0 opacity-0 cursor-pointer" />
           </div>
@@ -289,11 +292,11 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-surface-border">
               <div>
                 <label className="text-[11px] font-semibold text-ink-muted">Abertura — de</label>
-                <input type="date" defaultValue={get("dataInicio")} onChange={(e) => setParams({ dataInicio: e.target.value || null, data: null })} className={selectCls} />
+                <InputData defaultValue={get("dataInicio")} onChange={(v) => setParams({ dataInicio: v || null, data: null })} />
               </div>
               <div>
                 <label className="text-[11px] font-semibold text-ink-muted">Abertura — até</label>
-                <input type="date" defaultValue={get("dataFim")} onChange={(e) => setParams({ dataFim: e.target.value || null, data: null })} className={selectCls} />
+                <InputData defaultValue={get("dataFim")} onChange={(v) => setParams({ dataFim: v || null, data: null })} />
               </div>
               <div>
                 <label className="text-[11px] font-semibold text-ink-muted">Cliente</label>

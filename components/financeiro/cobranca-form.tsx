@@ -11,6 +11,7 @@ import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { ClienteCombobox } from "@/components/ui/cliente-combobox";
 import { AlertCircle } from "lucide-react";
 import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
+import { InputData } from "@/components/ui/input-data";
 
 export function CobrancaForm() {
   const router = useRouter();
@@ -59,7 +60,7 @@ export function CobrancaForm() {
           </FormGrid>
           <FormGrid cols={3}>
             <FormField label="Valor" required><Input type="number" step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" /></FormField>
-            <FormField label="Vencimento"><Input type="date" value={vencimento} onChange={(e) => setVencimento(e.target.value)} /></FormField>
+            <FormField label="Vencimento"><InputData value={vencimento} onChange={(v) => setVencimento(v)} /></FormField>
             <FormField label="Forma de pagamento">
               <Select value={forma} onChange={(e) => setForma(e.target.value)}>
                 <option value="">Selecione…</option>

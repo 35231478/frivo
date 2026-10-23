@@ -10,6 +10,7 @@ import { FormField, FormGrid } from "@/components/ui/form-field";
 import { cn, formatarData, formatarMoeda, LABELS_STATUS_PEDIDO_COMPRA, CLASSE_STATUS_PEDIDO_COMPRA } from "@/lib/utils";
 import { ShoppingCart, Plus, Trash2, X, Check, MessageCircle, AlertCircle } from "lucide-react";
 import { SeletorCadastro, useCadastro } from "@/components/cadastros/seletor-cadastro";
+import { InputData } from "@/components/ui/input-data";
 
 interface Usuario { id: string; nome: string; role: string }
 interface ItemForm { _id: string; produtoId: string; descricao: string; quantidade: number; unidade: string; valorEstimado: string }
@@ -147,7 +148,7 @@ export function ComprasSecao({ ordemServicoId, orcamentoId }: { ordemServicoId?:
           </div>
 
           <FormGrid cols={3}>
-            <FormField label="Prazo necessário"><Input type="date" value={prazo} onChange={(e) => setPrazo(e.target.value)} /></FormField>
+            <FormField label="Prazo necessário"><InputData value={prazo} onChange={(v) => setPrazo(v)} /></FormField>
             <FormField label="Comprador responsável">
               <Select value={compradorId} onChange={(e) => setCompradorId(e.target.value)} placeholder="Selecione">
                 {usuarios.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}

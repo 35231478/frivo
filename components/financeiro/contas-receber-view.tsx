@@ -15,6 +15,7 @@ import {
   Receipt, AlertTriangle, CalendarClock, CheckCircle2, Search, SlidersHorizontal,
   Plus, Download, X, Barcode, Loader2,
 } from "lucide-react";
+import { InputData } from "@/components/ui/input-data";
 
 export interface ContaView {
   id: string; numero: string; descricao: string; valor: number;
@@ -160,8 +161,8 @@ export function ContasReceberView({
         {painel && (
           <div className="p-4 border-b border-surface-border bg-surface-alt/40 space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <FiltroCampo label="Vencimento — de"><input type="date" value={f.vencDe} onChange={(e) => setF({ ...f, vencDe: e.target.value })} className={inputCls} /></FiltroCampo>
-              <FiltroCampo label="Vencimento — até"><input type="date" value={f.vencAte} onChange={(e) => setF({ ...f, vencAte: e.target.value })} className={inputCls} /></FiltroCampo>
+              <FiltroCampo label="Vencimento — de"><InputData value={f.vencDe} onChange={(v) => setF({ ...f, vencDe: v })} /></FiltroCampo>
+              <FiltroCampo label="Vencimento — até"><InputData value={f.vencAte} onChange={(v) => setF({ ...f, vencAte: v })} /></FiltroCampo>
               <FiltroCampo label="Cliente">
                 <select value={f.clienteId} onChange={(e) => setF({ ...f, clienteId: e.target.value })} className={inputCls}>
                   <option value="">Todos</option>

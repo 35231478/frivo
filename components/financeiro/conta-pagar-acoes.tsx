@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid } from "@/components/ui/form-field";
 import { DollarSign, History, Pencil, Ban, Upload } from "lucide-react";
 import { chaveHojeBR } from "@/lib/fuso";
+import { InputData } from "@/components/ui/input-data";
 
 interface Conta {
   id: string; numero: string; fornecedor: string;
@@ -113,7 +114,7 @@ function PagamentoParcial({ conta, onPronto }: { conta: Conta; onPronto: () => v
             <Button type="button" variant="secondary" onClick={() => setValor(String(conta.saldoRestante))} className="shrink-0 text-xs px-2.5">Total</Button>
           </div>
         </FormField>
-        <FormField label="Data do pagamento"><Input type="date" value={data} onChange={(e) => setData(e.target.value)} /></FormField>
+        <FormField label="Data do pagamento"><InputData value={data} onChange={(v) => setData(v)} /></FormField>
       </FormGrid>
       <FormGrid>
         <FormField label="Forma de pagamento">

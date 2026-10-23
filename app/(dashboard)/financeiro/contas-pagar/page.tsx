@@ -14,6 +14,7 @@ import { whereContasPagar } from "@/lib/listas/filtros";
 import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
 import { ListaUrl, PaginacaoUrl } from "@/components/listagem/lista-url";
 import { hojeDiaCivil } from "@/lib/fuso";
+import { InputData } from "@/components/ui/input-data";
 
 export const metadata: Metadata = { title: "Contas a Pagar" };
 
@@ -120,8 +121,8 @@ export default async function ContasPagarPage({
               <option value="PEDIDO">Pedido de compra</option>
               <option value="NF">Nota de compra (NF)</option>
             </select>
-            <input type="date" name="dataInicio" defaultValue={dataInicio} title="Vencimento de" className={inputCls} />
-            <input type="date" name="dataFim" defaultValue={dataFim} title="Vencimento até" className={inputCls} />
+            <InputData name="dataInicio" defaultValue={dataInicio} title="Vencimento de" />
+            <InputData name="dataFim" defaultValue={dataFim} title="Vencimento até" />
             <button type="submit" className="bg-primary-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-600 transition-all shadow-sm">Filtrar</button>
           </form>
         </div>
