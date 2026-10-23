@@ -1,12 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Tabs } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
-import { cn, formatarData, formatarDataHora, formatarMoeda, LABELS_STATUS_OS, LABELS_PRIORIDADE } from "@/lib/utils";
-import { PageHeader } from "@/components/ui/page-header";
 import { OsAtividades } from "@/components/os/os-atividades";
 import { OsOrcamento } from "@/components/os/os-orcamento";
 import { OsFinanceiro } from "@/components/os/os-financeiro";
@@ -17,32 +14,46 @@ import { ComprasSecao } from "@/components/compras/compras-secao";
 import { OsInativarBotao } from "@/components/os/os-inativar";
 import { OsAnexos } from "@/components/os/os-anexos";
 import { OsAdicionais } from "@/components/os/os-adicionais";
+import { CabecalhoOs } from "@/components/os/central/cabecalho-os";
+import { ResumoOs } from "@/components/os/central/resumo-os";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
-import { ChevronLeft, FileText, Clock, User, Building2, MapPin, AlertTriangle, FileBarChart } from "lucide-react";
-import Link from "next/link";
+import { centralDaOs } from "@/lib/os/central";
+import { AlertTriangle, FileBarChart } from "lucide-react";
 
-const COR_STATUS: Record<string, string> = {
-  ABERTA: "bg-blue-100 text-blue-700", AGUARDANDO_ATENDIMENTO: "bg-cyan-100 text-cyan-700",
-  AGENDADA: "bg-purple-100 text-purple-700",
-  EM_ANDAMENTO: "bg-yellow-100 text-yellow-700", PAUSADA: "bg-orange-100 text-orange-700",
-  AGUARDANDO_PECA: "bg-amber-100 text-amber-700", CONCLUIDA: "bg-green-100 text-green-700",
-  CANCELADA: "bg-red-100 text-red-700",
+/** As 6 abas da central (antes 11). As antigas continuam abrindo pelo link: viram a aba que as absorveu. */
+export const ABAS_OS = ["resumo", "atividades", "comercial", "materiais", "financeiro", "relatorios"] as const;
+export type AbaOs = (typeof ABAS_OS)[number];
+const ABA_ANTIGA: Record<string, AbaOs> = {
+  geral: "resumo", historico: "resumo",
+  prazos: "atividades", formularios: "atividades",
+  orcamentos: "comercial", orcamento: "comercial",
+  compras: "materiais",
+  anexos: "relatorios",
 };
-const COR_PRIORIDADE: Record<string, string> = {
-  BAIXA: "bg-gray-100 text-gray-600", NORMAL: "bg-blue-100 text-blue-600",
-  ALTA: "bg-orange-100 text-orange-600", URGENTE: "bg-red-100 text-red-700 font-semibold",
-  CRITICO: "bg-red-200 text-red-800 font-bold",
-};
+export function abaValida(aba: string | null | undefined): AbaOs {
+  if (!aba) return "resumo";
+  if ((ABAS_OS as readonly string[]).includes(aba)) return aba as AbaOs;
+  return ABA_ANTIGA[aba] ?? "resumo";
+}
 
-export function OsDetalhe({ os: initialOs }: { os: any }) {
+export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?: string }) {
   const router = useRouter();
   const [os, setOs] = useState(initialOs);
-  const [salvando, setSalvando] = useState(false);
+  // router.refresh() traz a OS de novo do servidor (status automático, histórico): a central acompanha
+  useEffect(() => { setOs(initialOs); }, [initialOs]);
+  const [aba, setAba] = useState<AbaOs>(abaValida(abaInicial));
   const [gerandoMedicao, setGerandoMedicao] = useState(false);
   const [erroAcao, setErroAcao] = useState("");
-  const [confirmarCancelamento, setConfirmarCancelamento] = useState(false);
   const { pode } = usePermissoes();
-  const podeEditar = pode("ordens", "editar");
+  // os.prazos = SLA por modelo de prazo (só id/status: o Resumo conta os atrasados)
+  const central = useMemo(() => centralDaOs({ ...os, prazosSla: os.prazos ?? [] }), [os]);
+
+  function irPara(id: string) {
+    const nova = abaValida(id);
+    setAba(nova);
+    // A aba fica no link (dá para mandar "?aba=financeiro" para alguém) sem recarregar a página
+    try { window.history.replaceState(null, "", nova === "resumo" ? window.location.pathname : `?aba=${nova}`); } catch { /* sem history */ }
+  }
 
   async function gerarMedicao() {
     setGerandoMedicao(true); setErroAcao("");
@@ -54,209 +65,94 @@ export function OsDetalhe({ os: initialOs }: { os: any }) {
     } catch { setErroAcao("Erro de conexão."); } finally { setGerandoMedicao(false); }
   }
 
-  async function alterarStatus(novoStatus: string) {
-    // Cancelar = inativar: passa pela confirmação (e pela regra de medição no servidor)
-    if (novoStatus === "CANCELADA") { setConfirmarCancelamento(true); return; }
-    setSalvando(true); setErroAcao("");
-    try {
-      const res = await fetch(`/api/ordens/${os.id}`, {
-        method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: novoStatus }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setOs((prev: any) => ({ ...prev, ...data }));
-        router.refresh();
-      } else {
-        setErroAcao(data.erro ?? "Não foi possível alterar o status.");
-      }
-    } catch { setErroAcao("Erro de conexão."); } finally { setSalvando(false); }
-  }
-
-  // Opções de status conforme a permissão (o servidor também valida)
-  const opcoesStatus = Object.entries(LABELS_STATUS_OS).filter(([v]) =>
-    v === os.status
-    || (v === "CANCELADA" ? pode("ordens", "excluir") : v === "CONCLUIDA" ? pode("ordens", "concluir") : true));
-
   const tabs = [
-    { id: "geral", label: "Geral" },
-    { id: "atividades", label: "Atividades", badge: os.atividades.length },
-    { id: "orcamentos", label: "Orçamentos", badge: os.orcamentos?.length ?? 0 },
-    { id: "orcamento", label: "Itens da OS", badge: os.itensOrcamento.length },
-    { id: "prazos", label: "Prazos" },
-    { id: "compras", label: "Compras" },
-    { id: "relatorios", label: "Relatórios" },
+    { id: "resumo", label: "Resumo", badge: central.falta.length },
+    { id: "atividades", label: "Atividades", badge: central.atividades.total },
+    { id: "comercial", label: "Comercial", badge: (os.orcamentos?.length ?? 0) + os.itensOrcamento.length },
+    { id: "materiais", label: "Materiais & Compras" },
     { id: "financeiro", label: "Financeiro", badge: os.medicoes.length },
-    { id: "formularios", label: "Formulários" },
-    { id: "anexos", label: "Anexos", badge: os.anexos.length },
-    { id: "historico", label: "Histórico", badge: os.historico.length },
+    { id: "relatorios", label: "Relatórios & Anexos", badge: os.anexos.length },
   ];
 
+  const acoes = (
+    <>
+      {os.status === "CONCLUIDA" && pode("financeiro", "medicoes") && (
+        <Button variant="outline" onClick={gerarMedicao} loading={gerandoMedicao}>
+          <FileBarChart className="w-4 h-4" /> Gerar medição
+        </Button>
+      )}
+      <OsInativarBotao
+        osId={os.id} numero={os.chamadoNumero ?? os.numero} status={os.status}
+        onAlterado={(novo) => setOs((prev: any) => ({ ...prev, status: novo, statusManual: false }))}
+      />
+    </>
+  );
+
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <Link href="/ordens" className="mt-0.5 p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
-            <ChevronLeft className="w-5 h-5" />
-          </Link>
-          <div>
-            <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-2xl font-bold text-gray-900 font-mono">{os.chamadoNumero ?? os.numero}</h1>
-              {os.origem === "PORTAL_CLIENTE" && (
-                <span className="inline-flex items-center gap-1 text-xs font-semibold bg-cyan-50 text-cyan-700 px-2 py-0.5 rounded-full">
-                  <FileBarChart className="w-3 h-3" /> Chamado do portal
-                </span>
-              )}
-              <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium", COR_STATUS[os.status])}>
-                {LABELS_STATUS_OS[os.status]}
-              </span>
-              <span className={cn("px-2 py-0.5 rounded-full text-xs", COR_PRIORIDADE[os.prioridade])}>
-                {LABELS_PRIORIDADE[os.prioridade]}
-              </span>
-            </div>
-            <p className="text-sm text-gray-500 mt-1">{os.cliente.nomeFantasia ?? os.cliente.nome}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap justify-end">
-          {os.status === "CONCLUIDA" && pode("financeiro", "medicoes") && (
-            <Button variant="outline" onClick={gerarMedicao} loading={gerandoMedicao}>
-              <FileBarChart className="w-4 h-4" /> Gerar medição
-            </Button>
-          )}
-          {podeEditar && (
-            <Select value={os.status} onChange={(e) => alterarStatus(e.target.value)} className="text-sm w-auto" disabled={salvando}>
-              {opcoesStatus.map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
-            </Select>
-          )}
-          <OsInativarBotao
-            osId={os.id} numero={os.chamadoNumero ?? os.numero} status={os.status}
-            onAlterado={(novo) => setOs((prev: any) => ({ ...prev, status: novo }))}
-          />
-          {confirmarCancelamento && (
-            <OsInativarBotao
-              osId={os.id} numero={os.chamadoNumero ?? os.numero} status={os.status}
-              variante="oculto" abrirAoMontar
-              onFechar={() => setConfirmarCancelamento(false)}
-              onAlterado={(novo) => setOs((prev: any) => ({ ...prev, status: novo }))}
-            />
-          )}
-        </div>
-      </div>
+    <div className="space-y-4" data-os-central>
+      <CabecalhoOs
+        os={os} central={central} acoes={acoes} onAba={irPara}
+        onAtualizado={(d) => setOs((prev: any) => ({ ...prev, ...d }))}
+      />
 
       {erroAcao && (
-        <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+        <div role="alert" className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> {erroAcao}
         </div>
       )}
-      {os.status === "CANCELADA" && (
-        <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-          Esta OS está inativada (cancelada). Ela não aparece nas listas padrão nem no calendário; use “Reabrir” para voltar a trabalhar nela.
-        </div>
-      )}
 
+      {/* Serviços adicionais pedidos na visita: decisão de cobrança à vista em qualquer aba */}
       <OsAdicionais osId={os.id} adicionais={os.servicosAdicionais ?? []} />
 
-      {/* Abas */}
-      <div className="bg-white rounded-xl border border-gray-200">
-        <Tabs tabs={tabs} defaultTab="geral">
-          {(activeTab) => (
-            <div className="p-5">
-              {activeTab === "geral" && <TabGeral os={os} />}
-              {activeTab === "atividades" && <OsAtividades osId={os.id} atividades={os.atividades} clienteId={os.cliente.id} unidadeId={os.unidadeId} />}
-              {activeTab === "orcamentos" && (
-                <OsOrcamentosVinculados
-                  osId={os.id}
-                  clienteId={os.cliente.id}
-                  vinculados={os.orcamentos ?? []}
-                />
+      <div className="bg-white rounded-xl border border-surface-border">
+        <Tabs tabs={tabs} active={aba} onChange={irPara}>
+          {(ativa) => (
+            <div className="p-4 sm:p-5 pt-0">
+              {ativa === "resumo" && <ResumoOs os={os} central={central} onAba={irPara} />}
+
+              {ativa === "atividades" && (
+                <div className="space-y-6">
+                  {/* Atividades + execução/equipamentos (Etapa 1) + formulário respondido de cada uma */}
+                  <OsAtividades osId={os.id} atividades={os.atividades} clienteId={os.cliente.id} unidadeId={os.unidadeId} onMudou={() => router.refresh()} />
+                  {/* Antiga aba "Prazos": os prazos/SLA por modelo continuam aqui, junto das atividades */}
+                  <div className="border-t border-surface-border pt-5" data-secao-sla>
+                    <OsPrazos osId={os.id} />
+                  </div>
+                </div>
               )}
-              {activeTab === "orcamento" && <OsOrcamento osId={os.id} itens={os.itensOrcamento} />}
-              {activeTab === "prazos" && <OsPrazos osId={os.id} />}
-              {activeTab === "compras" && <ComprasSecao ordemServicoId={os.id} />}
-              {activeTab === "relatorios" && <OsRelatorios osId={os.id} />}
-              {activeTab === "financeiro" && <OsFinanceiro osId={os.id} temContrato={!!os.contrato} medicoes={os.medicoes} itensOrcamento={os.itensOrcamento} />}
-              {activeTab === "formularios" && <TabFormularios atividades={os.atividades} />}
-              {activeTab === "anexos" && <OsAnexos osId={os.id} anexos={os.anexos} />}
-              {activeTab === "historico" && <TabHistorico historico={os.historico} />}
+
+              {ativa === "comercial" && (
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                  <section data-secao-orcamentos>
+                    <h3 className="section-title mb-3">Orçamentos do comercial</h3>
+                    <OsOrcamentosVinculados osId={os.id} clienteId={os.cliente.id} vinculados={os.orcamentos ?? []} />
+                  </section>
+                  <section data-secao-itens>
+                    <h3 className="section-title mb-3">Itens da OS</h3>
+                    <OsOrcamento osId={os.id} itens={os.itensOrcamento} />
+                  </section>
+                </div>
+              )}
+
+              {ativa === "materiais" && <ComprasSecao ordemServicoId={os.id} />}
+
+              {ativa === "financeiro" && (
+                <OsFinanceiro osId={os.id} temContrato={!!os.contrato} medicoes={os.medicoes} itensOrcamento={os.itensOrcamento} />
+              )}
+
+              {ativa === "relatorios" && (
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                  <section data-secao-relatorios><OsRelatorios osId={os.id} /></section>
+                  <section data-secao-anexos>
+                    <h3 className="section-title mb-3">Anexos</h3>
+                    <OsAnexos osId={os.id} anexos={os.anexos} />
+                  </section>
+                </div>
+              )}
             </div>
           )}
         </Tabs>
       </div>
-    </div>
-  );
-}
-
-function TabGeral({ os }: { os: any }) {
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Informações</h3>
-        <div className="space-y-3 text-sm">
-          <div className="flex items-center gap-2"><User className="w-4 h-4 text-gray-400" /> <span className="text-gray-500">Cliente:</span> <span className="font-medium">{os.cliente.nomeFantasia ?? os.cliente.nome}</span></div>
-          {os.unidade && <div className="flex items-center gap-2"><MapPin className="w-4 h-4 text-gray-400" /> <span className="text-gray-500">Endereço:</span> <span>{os.unidade.nome}{os.unidade.cidade ? ` — ${os.unidade.cidade}/${os.unidade.estado}` : ""}</span></div>}
-          {os.contrato && <div className="flex items-center gap-2"><FileText className="w-4 h-4 text-gray-400" /> <span className="text-gray-500">Contrato:</span> <span className="font-mono">{os.contrato.numero}</span></div>}
-          {os.responsavel && <div className="flex items-center gap-2"><User className="w-4 h-4 text-gray-400" /> <span className="text-gray-500">Responsável:</span> <span>{os.responsavel.nome}</span></div>}
-        </div>
-      </div>
-      <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Datas</h3>
-        <div className="space-y-3 text-sm">
-          <div className="flex items-center gap-2"><Clock className="w-4 h-4 text-gray-400" /> <span className="text-gray-500">Abertura:</span> <span>{formatarDataHora(os.criadoEm)}</span></div>
-          {os.previsaoConclusao && <div className="flex items-center gap-2"><Clock className="w-4 h-4 text-gray-400" /> <span className="text-gray-500">Previsão:</span> <span>{formatarData(os.previsaoConclusao)}</span></div>}
-          {os.dataInicio && <div className="flex items-center gap-2"><Clock className="w-4 h-4 text-gray-400" /> <span className="text-gray-500">Início:</span> <span>{formatarDataHora(os.dataInicio)}</span></div>}
-          {os.dataConclusao && <div className="flex items-center gap-2"><Clock className="w-4 h-4 text-gray-400" /> <span className="text-gray-500">Conclusão:</span> <span>{formatarDataHora(os.dataConclusao)}</span></div>}
-        </div>
-      </div>
-      <div className="col-span-full">
-        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Descrição</h3>
-        <p className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 rounded-lg p-3">{os.descricao}</p>
-      </div>
-      {os.observacoes && (
-        <div className="col-span-full">
-          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Observações</h3>
-          <p className="text-sm text-gray-600 whitespace-pre-wrap">{os.observacoes}</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TabFormularios({ atividades }: { atividades: any[] }) {
-  const comResumo = atividades.filter((a) => a.resumo);
-  if (comResumo.length === 0) return <p className="text-sm text-gray-400 text-center py-8">Nenhum formulário respondido.</p>;
-
-  return (
-    <div className="space-y-4">
-      {comResumo.map((a) => (
-        <div key={a.id} className="border border-gray-200 rounded-lg p-4">
-          <div className="flex items-center gap-2 mb-3">
-            {a.tipoOs && <span className="text-xs font-medium px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: a.tipoOs.cor }}>{a.tipoOs.nome}</span>}
-            <span className="text-sm font-medium text-gray-900">{a.titulo}</span>
-          </div>
-          <pre className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 rounded-lg p-3 font-sans">{a.resumo}</pre>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function TabHistorico({ historico }: { historico: any[] }) {
-  if (historico.length === 0) return <p className="text-sm text-gray-400 text-center py-8">Nenhum registro.</p>;
-
-  return (
-    <div className="relative ml-4 border-l-2 border-gray-200 space-y-0">
-      {historico.map((h: any) => (
-        <div key={h.id} className="relative pl-6 pb-4">
-          <div className="absolute -left-[5px] top-2 w-2.5 h-2.5 rounded-full bg-gray-300" />
-          <div className="text-xs text-gray-400">
-            {formatarDataHora(h.criadoEm)} — {h.usuario.nome}
-          </div>
-          <p className="text-sm text-gray-700 font-medium">{h.acao}</p>
-          {h.detalhes && <p className="text-xs text-gray-500">{h.detalhes}</p>}
-        </div>
-      ))}
     </div>
   );
 }

@@ -33,6 +33,8 @@ vi.mock("@/lib/prisma", async () => {
 });
 const sessao = vi.hoisted(() => ({ atual: null as any }));
 vi.mock("@/lib/auth", () => ({ auth: vi.fn(async () => sessao.atual) }));
+// O status automático da OS (central da OS) tem teste próprio no PostgreSQL real (os-central-pg)
+vi.mock("@/lib/os/sincronizar-status", () => ({ sincronizarStatusOs: vi.fn(async () => null) }));
 vi.mock("@/lib/financeiro-server", () => ({ gerarPrevisaoContratoContasReceber: vi.fn(async () => 0) }));
 vi.mock("@/lib/recorrencia-server", () => ({ gerarOsRecorrentesLocais: vi.fn(async () => 0), gerarOsRecorrentesContrato: vi.fn(async () => 0) }));
 

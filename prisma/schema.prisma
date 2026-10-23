@@ -1496,6 +1496,10 @@ model OrdemServico {
   criadoPorId        String     @map("criado_por_id")
   prioridade         Prioridade @default(NORMAL)
   status             StatusOS   @default(ABERTA)
+  /// Central da OS: false = o status segue o estado real (atividades, conclusão, medição) e é
+  /// recalculado a cada mudança; true = alguém ajustou à mão (exceção) e o automático não
+  /// sobrescreve até "Voltar ao automático". Quem/quando fica no histórico da OS.
+  statusManual       Boolean    @default(false) @map("status_manual")
   origem             OrigemOS   @default(MANUAL)
   periodoRecorrencia String?    @map("periodo_recorrencia")
   chamadoNumero      String?    @map("chamado_numero")
@@ -1567,6 +1571,9 @@ model AtividadeOs {
   titulo         String
   status         StatusAtividade @default(AGENDADA)
   dataAgendada   DateTime?       @map("data_agendada")
+  /// Prazo próprio da atividade (DIA civil, sem hora): atrasa quando o dia de hoje em Brasília
+  /// passa dele com a atividade ainda aberta (lib/os/prazos.ts).
+  prazo          DateTime?       @db.Date @map("prazo")
   duracaoMin     Int?            @map("duracao_min")
   observacao     String?
   resumo         String?         @db.Text

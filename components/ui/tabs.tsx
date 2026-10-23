@@ -12,11 +12,16 @@ interface Tab {
 interface TabsProps {
   tabs: Tab[];
   defaultTab?: string;
+  /** Modo controlado (opcional): a aba ativa vem de fora e muda por `onChange`. */
+  active?: string;
+  onChange?: (id: string) => void;
   children: (activeTab: string) => React.ReactNode;
 }
 
-export function Tabs({ tabs, defaultTab, children }: TabsProps) {
-  const [active, setActive] = useState(defaultTab ?? tabs[0]?.id ?? "");
+export function Tabs({ tabs, defaultTab, active: ativaControlada, onChange, children }: TabsProps) {
+  const [interna, setInterna] = useState(defaultTab ?? tabs[0]?.id ?? "");
+  const active = ativaControlada ?? interna;
+  const setActive = (id: string) => { if (ativaControlada === undefined) setInterna(id); onChange?.(id); };
 
   return (
     <div>
@@ -25,6 +30,9 @@ export function Tabs({ tabs, defaultTab, children }: TabsProps) {
           {tabs.map((tab) => (
             <button
               key={tab.id}
+              type="button"
+              data-aba={tab.id}
+              aria-current={active === tab.id ? "page" : undefined}
               onClick={() => setActive(tab.id)}
               className={cn(
                 "px-4 py-3 text-sm font-medium border-b-2 transition-all whitespace-nowrap",

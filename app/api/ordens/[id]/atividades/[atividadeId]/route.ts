@@ -5,6 +5,7 @@ import { pode } from "@/lib/permissoes";
 import { respostaAcao, travaConclusao } from "@/lib/execucao/acoes";
 import { MSG_FORA_DO_ESCOPO, escopoDaSessao, filtroEscopo } from "@/lib/tecnico/escopo";
 import { ErroTecnicos, INCLUDE_TECNICOS_ATIVIDADE, gravarTecnicos, lerDefinicao, lerVeiculo, resolverTecnicos, resolverVeiculo } from "@/lib/atividade-tecnicos";
+import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 
 type Params = { params: Promise<{ id: string; atividadeId: string }> };
 
@@ -23,13 +24,15 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (escopo.restrito && !(await prisma.atividadeOs.findFirst({ where: { id: atividadeId, ...filtroEscopo(escopo) }, select: { id: true } })))
     return NextResponse.json({ erro: MSG_FORA_DO_ESCOPO }, { status: 403 });
 
-  const { status, titulo, tipoOsId, tecnicoId, dataAgendada, duracaoMin, observacao, resumo } = body;
+  const { status, titulo, tipoOsId, tecnicoId, dataAgendada, duracaoMin, observacao, resumo, prazo } = body;
+  if (prazo !== undefined && prazo !== null && prazo !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(String(prazo)))
+    return NextResponse.json({ erro: "Prazo inválido." }, { status: 400 });
 
   // Editar os dados da atividade exige "editar"; quem só pode "concluir" (execução em campo)
   // continua podendo mudar o status e o resumo.
   const def = lerDefinicao(body);
   const veiculoPedido = lerVeiculo(body);
-  const editandoDados = [titulo, tipoOsId, tecnicoId, dataAgendada, duracaoMin, observacao, def, veiculoPedido].some((v) => v !== undefined);
+  const editandoDados = [titulo, tipoOsId, tecnicoId, dataAgendada, duracaoMin, observacao, def, veiculoPedido, prazo].some((v) => v !== undefined);
   if (editandoDados) {
     if (!pode(session.user!.permissoes, "ordens", "editar", session.user!.role))
       return NextResponse.json({ erro: "Sem permissão para editar a atividade" }, { status: 403 });
@@ -74,6 +77,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (veiculoId !== undefined) data.veiculoId = veiculoId;
   if (dataAgendada !== undefined) data.dataAgendada = dataAgendada ? new Date(dataAgendada) : null;
   if (duracaoMin !== undefined) data.duracaoMin = duracaoMin;
+  if (prazo !== undefined) data.prazo = prazo ? new Date(prazo) : null;
   if (observacao !== undefined) data.observacao = observacao;
   if (resumo !== undefined) data.resumo = resumo;
 
@@ -97,6 +101,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
       mudouEquipe && "técnicos/equipe",
       veiculoId !== undefined && veiculoId !== existente.veiculoId && "veículo",
       dataAgendada !== undefined && "data agendada",
+      prazo !== undefined && String(prazo || "") !== (existente.prazo ? existente.prazo.toISOString().slice(0, 10) : "") && "prazo",
       duracaoMin !== undefined && duracaoMin !== existente.duracaoMin && "duração",
       observacao !== undefined && observacao !== existente.observacao && "observação",
     ].filter(Boolean);
@@ -117,6 +122,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     });
   }
 
+  await sincronizarStatusOs(id, empresaId, session.user!.id);
   return NextResponse.json(atualizado);
 }
 
@@ -153,5 +159,6 @@ export async function DELETE(_: NextRequest, { params }: Params) {
   await prisma.osHistorico.create({
     data: { ordemServicoId: id, usuarioId: session.user!.id, acao: "Atividade excluída", detalhes: atividade.titulo },
   });
+  await sincronizarStatusOs(id, empresaId, session.user!.id);
   return NextResponse.json({ ok: true });
 }

@@ -12,6 +12,7 @@ import { cn, formatarData, MESES_PT, LABELS_STATUS_OS, LABELS_PRIORIDADE, LABELS
 import { BuscaSelect, type OpcaoBusca } from "@/components/ui/busca-select";
 import { AvatarCliente } from "@/components/ui/avatar-cliente";
 import { AvatarStack } from "@/components/ui/avatar-stack";
+import { formatarDiaCivil, prazoVencido } from "@/lib/os/prazos";
 import {
   ClipboardList, Plus, Search, SlidersHorizontal, X, ArrowUp, ArrowDown, ArrowUpDown,
   LayoutGrid, List, Download, Headset, Filter, ChevronLeft, ChevronRight, CalendarDays, CalendarCheck,
@@ -59,8 +60,8 @@ function dataPorExtenso(s: string): string {
 }
 // Cor do badge do dia conforme a situação geral das OS (atrasada > pendente > em andamento > concluídas)
 function corDoDia(ordens: OrdemView[]): string {
-  const agora = Date.now();
-  const atrasada = ordens.some((o) => o.previsaoConclusao && new Date(o.previsaoConclusao).getTime() < agora && !STATUS_FINALIZADA.includes(o.status));
+  // Atrasada só depois do dia da previsão (no fuso de Brasília), não às 21h da véspera
+  const atrasada = ordens.some((o) => prazoVencido(o.previsaoConclusao) && !STATUS_FINALIZADA.includes(o.status));
   if (atrasada) return "bg-red-50 text-red-700 border-red-200";
   if (ordens.some((o) => STATUS_PENDENTE.includes(o.status))) return "bg-amber-50 text-amber-700 border-amber-200";
   if (ordens.some((o) => STATUS_ANDAMENTO.includes(o.status))) return "bg-primary-50 text-primary-700 border-primary-200";
@@ -376,7 +377,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: 
                   <span className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider">Equipe:</span>
                   <AvatarStack tecnicos={os.tecnicos} size={28} />
                 </div>
-                <p className="text-[11px] text-ink-subtle mt-2">Aberta {formatarData(os.criadoEm)}{os.previsaoConclusao ? ` · Prev. ${formatarData(os.previsaoConclusao)}` : ""}</p>
+                <p className="text-[11px] text-ink-subtle mt-2">Aberta {formatarData(os.criadoEm)}{os.previsaoConclusao ? ` · Prev. ${formatarDiaCivil(os.previsaoConclusao)}` : ""}</p>
               </Link>
               <div className="absolute bottom-2 right-2"><OsInativarBotao osId={os.id} numero={os.chamadoNumero ?? os.numero} status={os.status} variante="icone" /></div>
               </div>
@@ -415,7 +416,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: 
                     </td>
                     <td className="px-4 py-3 text-ink-muted hidden lg:table-cell">{os.responsavel ?? "—"}</td>
                     <td className="px-4 py-3 text-ink-muted hidden lg:table-cell">{formatarData(os.criadoEm)}</td>
-                    <td className="px-4 py-3 text-ink-muted hidden xl:table-cell">{os.previsaoConclusao ? formatarData(os.previsaoConclusao) : "—"}</td>
+                    <td className="px-4 py-3 text-ink-muted hidden xl:table-cell">{formatarDiaCivil(os.previsaoConclusao)}</td>
                     <td className="px-4 py-3"><span className={CLASSE_STATUS[os.status]}>{LABELS_STATUS_OS[os.status]}</span></td>
                     <td className="px-4 py-3 hidden md:table-cell"><span className={CLASSE_PRIORIDADE[os.prioridade]}>{LABELS_PRIORIDADE[os.prioridade]}</span></td>
                     <td className="px-4 py-3"><div className="flex justify-end"><AvatarStack tecnicos={os.tecnicos} size={28} /></div></td>

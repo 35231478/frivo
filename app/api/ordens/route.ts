@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { equipamentosDoCliente } from "@/lib/execucao/vinculos";
 import { ErroTecnicos, MSG_SEM_EXECUTOR, gravarTecnicos, lerDefinicao, lerVeiculo, resolverTecnicos, resolverVeiculo } from "@/lib/atividade-tecnicos";
+import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 
 const osCreateSchema = z.object({
   clienteId: z.string().min(1),
@@ -146,5 +147,7 @@ export async function POST(req: NextRequest) {
    return criada;
   });
 
+  // Central da OS: a 1ª atividade agendada com data já põe a OS em "Agendada"
+  await sincronizarStatusOs(os.id, empresaId, usuarioId);
   return NextResponse.json(os, { status: 201 });
 }

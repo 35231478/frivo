@@ -234,7 +234,9 @@ describe.skipIf(!URL_PG)("app do técnico: Meu dia, escopo e sincronização off
     expect([a.status, a.resumo]).toEqual(["CONCLUIDA", "Preventiva feita; controle remoto trocado a pedido."]);
     const hist = await prisma.osHistorico.findMany({ where: { ordemServicoId: "osA" }, orderBy: { criadoEm: "asc" } });
     expect(hist.map((h: any) => h.detalhes)).toEqual([
-      "\"Preventiva mensal\": AGENDADA → EM_ANDAMENTO (app do técnico)", "\"Preventiva mensal\": EM_ANDAMENTO → CONCLUIDA",
+      "\"Preventiva mensal\": AGENDADA → EM_ANDAMENTO (app do técnico)",
+      "ABERTA → EM_ANDAMENTO", // central da OS: o status da OS acompanha sozinho ("Status automático")
+      "\"Preventiva mensal\": EM_ANDAMENTO → CONCLUIDA",
     ]);
     const resp = await prisma.checklistResposta.findMany({ where: { atividadeId: "aA", equipamentoId: "eqA" }, orderBy: { itemId: "asc" } });
     expect(resp.map((x: any) => [x.itemId, x.status, x.observacao, x.valor?.toNumber() ?? null, x.unidade, !!x.audioUrl, x.respondidoPorId])).toEqual([

@@ -16,6 +16,8 @@ import { Modal } from "@/components/ui/modal";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { SelectCadastroRapido } from "@/components/ui/select-cadastro-rapido";
 import { TIPO_OS } from "@/components/cadastro-rapido/definicoes";
+import { InputData } from "@/components/ui/input-data";
+import { atividadeEncerrada, chaveDiaCivil, situacaoPrazo, textoPrazo } from "@/lib/os/prazos";
 
 /** ISO → valor de <input type="datetime-local"> no fuso do navegador. */
 function paraInputLocal(iso?: string | Date | null) {
@@ -28,14 +30,15 @@ function paraInputLocal(iso?: string | Date | null) {
 const STATUS_LABELS: Record<string, string> = { AGENDADA: "Agendada", EM_ANDAMENTO: "Em Andamento", CONCLUIDA: "Concluída", CANCELADA: "Cancelada" };
 const STATUS_COR: Record<string, string> = { AGENDADA: "bg-purple-100 text-purple-700", EM_ANDAMENTO: "bg-yellow-100 text-yellow-700", CONCLUIDA: "bg-green-100 text-green-700", CANCELADA: "bg-red-100 text-red-700" };
 
-export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId }: { osId: string; atividades: any[]; clienteId?: string; unidadeId?: string | null }) {
+/** `onMudou`: avisa a central da OS (cabeçalho/Resumo) que algo mudou — o status automático pode ter andado. */
+export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId, onMudou }: { osId: string; atividades: any[]; clienteId?: string; unidadeId?: string | null; onMudou?: () => void }) {
   const [atividades, setAtividades] = useState(iniciais);
   const [expandido, setExpandido] = useState<Set<string>>(new Set());
   const [mostraForm, setMostraForm] = useState(false);
   const [tiposOs, setTiposOs] = useState<any[]>([]);
   const [salvando, setSalvando] = useState(false);
   const [erroStatus, setErroStatus] = useState("");
-  const [form, setForm] = useState({ titulo: "", tipoOsId: "", dataAgendada: "", duracaoMin: "", observacao: "" });
+  const [form, setForm] = useState({ titulo: "", tipoOsId: "", dataAgendada: "", prazo: "", duracaoMin: "", observacao: "" });
   // Quem executa (equipe e/ou colaboradores; responsável = tecnicoId) + veículo da atividade
   const opcoesExecucao = useOpcoesExecucao();
   const [tecnicosNova, setTecnicosNova] = useState<ValorExecucao>(VALOR_EXECUCAO_VAZIO);
@@ -48,7 +51,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
   const podeStatus = podeEditar || pode("ordens", "concluir");
   // Editar / excluir atividade
   const [editando, setEditando] = useState<any | null>(null);
-  const [formEdicao, setFormEdicao] = useState({ titulo: "", tipoOsId: "", dataAgendada: "", duracaoMin: "", observacao: "" });
+  const [formEdicao, setFormEdicao] = useState({ titulo: "", tipoOsId: "", dataAgendada: "", prazo: "", duracaoMin: "", observacao: "" });
   const [excluindo, setExcluindo] = useState<any | null>(null);
   const [processando, setProcessando] = useState(false);
   const [erroModal, setErroModal] = useState("");
@@ -57,7 +60,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
     setErroModal("");
     setFormEdicao({
       titulo: a.titulo ?? "", tipoOsId: a.tipoOs?.id ?? a.tipoOsId ?? "",
-      dataAgendada: paraInputLocal(a.dataAgendada), duracaoMin: a.duracaoMin ? String(a.duracaoMin) : "", observacao: a.observacao ?? "",
+      dataAgendada: paraInputLocal(a.dataAgendada), prazo: a.prazo ? chaveDiaCivil(a.prazo) : "", duracaoMin: a.duracaoMin ? String(a.duracaoMin) : "", observacao: a.observacao ?? "",
     });
     setTecnicosEdicao(valorExecucaoDaAtividade(a));
     setFaltaExecutor(false);
@@ -77,6 +80,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
           tipoOsId: formEdicao.tipoOsId,
           ...corpoExecucao(tecnicosEdicao),
           dataAgendada: formEdicao.dataAgendada ? new Date(formEdicao.dataAgendada).toISOString() : "",
+          prazo: formEdicao.prazo,
           duracaoMin: formEdicao.duracaoMin ? Number(formEdicao.duracaoMin) : null,
           observacao: formEdicao.observacao,
         }),
@@ -85,6 +89,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
       if (!res.ok) { setErroModal(data.erro ?? "Não foi possível salvar."); return; }
       setAtividades((p) => p.map((x) => (x.id === editando.id ? { ...x, ...data } : x)));
       setEditando(null);
+      onMudou?.();
     } catch { setErroModal("Erro de conexão."); } finally { setProcessando(false); }
   }
 
@@ -97,6 +102,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
       if (!res.ok) { setErroModal(data.erro ?? "Não foi possível excluir."); return; }
       setAtividades((p) => p.filter((x) => x.id !== excluindo.id));
       setExcluindo(null);
+      onMudou?.();
     } catch { setErroModal("Erro de conexão."); } finally { setProcessando(false); }
   }
 
@@ -121,10 +127,11 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
       const d = await res.json().catch(() => ({}));
       if (!res.ok) { setErroForm(d.erro ?? "Não foi possível adicionar a atividade."); return; }
       setAtividades((p) => [...p, d]);
-      setForm({ titulo: "", tipoOsId: "", dataAgendada: "", duracaoMin: "", observacao: "" });
+      setForm({ titulo: "", tipoOsId: "", dataAgendada: "", prazo: "", duracaoMin: "", observacao: "" });
       setTecnicosNova(VALOR_EXECUCAO_VAZIO);
       setFaltaExecutor(false);
       setMostraForm(false);
+      onMudou?.();
     } catch { setErroForm("Erro de conexão."); } finally { setSalvando(false); }
   }
 
@@ -137,6 +144,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
     if (res.ok) {
       const atualizada = await res.json();
       setAtividades((p) => p.map((a) => (a.id === atividadeId ? atualizada : a)));
+      onMudou?.();
     } else {
       const e = await res.json().catch(() => ({}));
       setErroStatus(e?.erro ?? "Não foi possível alterar o status da atividade.");
@@ -169,6 +177,8 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
                     <span className="text-sm font-medium text-gray-900">{a.titulo}</span>
                     {a.tipoOs && <span className="text-[10px] font-medium text-white px-1.5 py-0.5 rounded-full" style={{ backgroundColor: a.tipoOs.cor }}>{a.tipoOs.nome}</span>}
                     <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full", STATUS_COR[a.status])}>{STATUS_LABELS[a.status]}</span>
+                    <ChipPrazo a={a} />
+                    {a.resumo && <span data-formulario-respondido className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-sky-50 text-sky-700">Formulário respondido</span>}
                   </div>
                   <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
                     <TecnicosAtividade a={a} />
@@ -260,6 +270,9 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
             <FormField label="Data/hora agendada">
               <Input type="datetime-local" value={form.dataAgendada} onChange={(e) => setForm((f) => ({ ...f, dataAgendada: e.target.value }))} />
             </FormField>
+            <FormField label="Prazo da atividade" hint="Até quando deve estar pronta">
+              <InputData value={form.prazo} onChange={(iso) => setForm((f) => ({ ...f, prazo: iso }))} aria-label="Prazo da atividade" />
+            </FormField>
             <FormField label="Duração estimada (min)">
               <Input type="number" value={form.duracaoMin} onChange={(e) => setForm((f) => ({ ...f, duracaoMin: e.target.value }))} placeholder="120" />
             </FormField>
@@ -313,6 +326,9 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId 
           <FormGrid>
             <FormField label="Data/hora agendada">
               <Input type="datetime-local" value={formEdicao.dataAgendada} onChange={(e) => setFormEdicao((f) => ({ ...f, dataAgendada: e.target.value }))} />
+            </FormField>
+            <FormField label="Prazo da atividade" hint="Até quando deve estar pronta">
+              <InputData value={formEdicao.prazo} onChange={(iso) => setFormEdicao((f) => ({ ...f, prazo: iso }))} aria-label="Prazo da atividade" />
             </FormField>
             <FormField label="Duração estimada (min)">
               <Input type="number" value={formEdicao.duracaoMin} onChange={(e) => setFormEdicao((f) => ({ ...f, duracaoMin: e.target.value }))} />
@@ -368,6 +384,15 @@ function TecnicosAtividade({ a }: { a: any }) {
       <span className="truncate">{nomes.map((n, i) => (i === 0 && nomes.length > 1 ? `${n} (resp.)` : n)).join(", ") || "Sem técnico"}</span>
     </span>
   );
+}
+
+const COR_CHIP_PRAZO: Record<string, string> = { ATRASADO: "bg-red-100 text-red-700", VENCE_HOJE: "bg-amber-100 text-amber-800", NO_PRAZO: "bg-slate-100 text-slate-600" };
+
+/** Prazo próprio da atividade, com atraso contado no dia de Brasília. Concluída/cancelada não mostra. */
+function ChipPrazo({ a }: { a: any }) {
+  if (!a.prazo || atividadeEncerrada(a.status)) return null;
+  const s = situacaoPrazo(a.prazo, false);
+  return <span data-prazo-atividade={s.situacao} className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full", COR_CHIP_PRAZO[s.situacao])}>{textoPrazo(s, true)}</span>;
 }
 
 function ErroModal({ texto }: { texto: string }) {

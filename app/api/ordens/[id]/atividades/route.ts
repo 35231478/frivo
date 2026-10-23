@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { respostaRefEmpresa, validarRefEmpresa } from "@/lib/ref-empresa";
 import { z } from "zod";
 import { ErroTecnicos, INCLUDE_TECNICOS_ATIVIDADE, MSG_SEM_EXECUTOR, gravarTecnicos, lerDefinicao, lerVeiculo, resolverTecnicos, resolverVeiculo } from "@/lib/atividade-tecnicos";
+import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -12,6 +13,8 @@ const atividadeSchema = z.object({
   tipoOsId: z.string().optional(),
   tecnicoId: z.string().optional(),
   dataAgendada: z.string().optional(),
+  /** Prazo próprio da atividade: dia "AAAA-MM-DD" (vazio = sem prazo) */
+  prazo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Prazo inválido.").optional().or(z.literal("")),
   duracaoMin: z.number().optional(),
   observacao: z.string().optional(),
   status: z.string().optional(),
@@ -55,6 +58,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       tecnicoId: tecnicos.responsavel,
       veiculoId,
       dataAgendada: parsed.data.dataAgendada ? new Date(parsed.data.dataAgendada) : null,
+      prazo: parsed.data.prazo ? new Date(parsed.data.prazo) : null,
       duracaoMin: parsed.data.duracaoMin ?? null,
       observacao: parsed.data.observacao || null,
     },
@@ -75,5 +79,6 @@ export async function POST(req: NextRequest, { params }: Params) {
     },
   });
 
+  await sincronizarStatusOs(id, empresaId, session.user!.id);
   return NextResponse.json(atividade, { status: 201 });
 }
