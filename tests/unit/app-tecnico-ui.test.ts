@@ -259,7 +259,7 @@ describe("execução guiada", () => {
     expect(pendencia).toBeTruthy();
     const alvoPulo: Element[] = [];
     (Element.prototype as any).scrollIntoView = function () { alvoPulo.push(this); };
-    await clicar(pendencia);
+    await clicar(pendencia!);
     expect(alvoPulo.some((el) => (el as HTMLElement).getAttribute("data-item") === "i1")).toBe(true);
     await foto($("[data-item=i1] input[data-foto-input]"));
     await esperarAte(() => !!$("[data-item=i1] [data-miniatura]"), "miniatura da foto");
