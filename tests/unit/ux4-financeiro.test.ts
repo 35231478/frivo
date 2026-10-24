@@ -15,6 +15,7 @@
  *
  *   PG_TESTE_URL="postgresql://root@localhost/postgres?host=/var/run/postgresql" npx vitest run tests/unit/ux4-financeiro
  */
+import { hojeDiaCivil, inicioMesDiaCivil } from "@/lib/fuso";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
@@ -34,7 +35,9 @@ const logar = (permissoes = permissoesTotais()) => {
 };
 
 const agora = new Date();
-const hoje = new Date(agora); hoje.setHours(0, 0, 0, 0);
+// "Hoje" é o dia de BRASÍLIA (a régua do app): com o relógio do processo (UTC) o teste quebrava das
+// 21h à meia-noite de Brasília, quando o dia UTC já virou
+const hoje = hojeDiaCivil(agora);
 const dia = (n: number, hora = 12) => new Date(hoje.getTime() + n * 864e5 + hora * 36e5);
 
 vi.setConfig({ testTimeout: 60_000 });
@@ -80,7 +83,7 @@ describe.skipIf(!URL_PG)("UX-4 — financeiro em escala (PostgreSQL real)", () =
     for (let i = 0; i < 3; i++) await conta({ status: "ATRASADO", dataVencimento: dia(-5 - i) });
     await conta({ dataVencimento: dia(-1) });
     // Pagas: 2 neste mês, 1 no mês passado
-    const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1);
+    const inicioMes = inicioMesDiaCivil(agora);
     await conta({ status: "RECEBIDO", valor: 500, dataRecebimento: new Date(inicioMes.getTime() + 36e5) });
     await conta({ status: "RECEBIDO", valor: 300, dataRecebimento: agora });
     await conta({ status: "RECEBIDO", valor: 999, dataRecebimento: new Date(inicioMes.getTime() - 864e5) });
