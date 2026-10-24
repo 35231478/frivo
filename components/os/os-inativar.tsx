@@ -82,7 +82,7 @@ export function OsInativarBotao({
       {variante === "oculto" ? null : variante === "icone" ? (
         <button
           type="button" title={rotulo} onClick={() => setAberto(true)}
-          className={cn("p-1.5 rounded-md hover:bg-surface-alt text-ink-muted", cancelada ? "hover:text-emerald-600" : "hover:text-red-600")}
+          className={cn("p-1.5 rounded-md hover:bg-surface-alt text-ink-muted", cancelada ? "hover:text-ok" : "hover:text-atrasado")}
         >
           <Icone className="w-4 h-4" />
         </button>
@@ -91,7 +91,7 @@ export function OsInativarBotao({
           type="button" onClick={() => setAberto(true)}
           className={cn(
             "inline-flex items-center gap-1.5 text-sm border rounded-lg px-3 py-2 transition-colors",
-            cancelada ? "text-emerald-700 border-emerald-200 hover:bg-emerald-50" : "text-red-600 border-red-200 hover:bg-red-50",
+            cancelada ? "text-ok-texto border-ok/20 hover:bg-ok-claro" : "text-atrasado border-atrasado/20 hover:bg-atrasado-claro",
             className,
           )}
         >
@@ -135,7 +135,7 @@ export function OsInativarBotao({
             </>
           )}
           {erro && (
-            <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <div className="flex items-start gap-2 text-sm text-atrasado-texto bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> <span>{erro}</span>
             </div>
           )}
@@ -147,7 +147,7 @@ export function OsInativarBotao({
               type="button" onClick={confirmar} disabled={carregando}
               className={cn(
                 "inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold rounded-lg text-white disabled:opacity-60",
-                cancelada ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-600 hover:bg-red-700",
+                cancelada ? "bg-ok hover:bg-success-600" : "bg-atrasado hover:brightness-95",
               )}
             >
               {carregando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Icone className="w-4 h-4" />}

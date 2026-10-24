@@ -89,25 +89,25 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
   );
 
   return (
-    <div className="space-y-4" data-os-central>
+    <div className="space-y-5" data-os-central>
       <CabecalhoOs
         os={os} central={central} acoes={acoes} onAba={irPara}
         onAtualizado={(d) => setOs((prev: any) => ({ ...prev, ...d }))}
       />
 
       {erroAcao && (
-        <div role="alert" className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> {erroAcao}
+        <div role="alert" className="flex items-start gap-2 text-sm text-atrasado-texto bg-atrasado-claro rounded-lg px-3 py-2.5">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" /> {erroAcao}
         </div>
       )}
 
       {/* Serviços adicionais pedidos na visita: decisão de cobrança à vista em qualquer aba */}
       <OsAdicionais osId={os.id} adicionais={os.servicosAdicionais ?? []} />
 
-      <div className="bg-white rounded-xl border border-surface-border">
+      <div className="bg-white rounded-card border border-surface-border shadow-card">
         <Tabs tabs={tabs} active={aba} onChange={irPara}>
           {(ativa) => (
-            <div className="p-4 sm:p-5 pt-0">
+            <div className="px-4 pb-5 sm:px-6 sm:pb-6">
               {ativa === "resumo" && <ResumoOs os={os} central={central} onAba={irPara} />}
 
               {ativa === "atividades" && (
@@ -115,7 +115,7 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
                   {/* Atividades + execução/equipamentos (Etapa 1) + formulário respondido de cada uma */}
                   <OsAtividades osId={os.id} atividades={os.atividades} clienteId={os.cliente.id} unidadeId={os.unidadeId} onMudou={() => router.refresh()} />
                   {/* Antiga aba "Prazos": os prazos/SLA por modelo continuam aqui, junto das atividades */}
-                  <div className="border-t border-surface-border pt-5" data-secao-sla>
+                  <div className="border-t border-surface-linha pt-6" data-secao-sla>
                     <OsPrazos osId={os.id} />
                   </div>
                 </div>

@@ -85,24 +85,24 @@ export function AtividadeEquipamentos({ osId, atividadeId, clienteId, unidadeId 
   return (
     <div className="space-y-3" data-atividade-equipamentos>
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-gray-500 uppercase flex items-center gap-1.5">
+        <p className="text-xs font-semibold text-ink-muted uppercase flex items-center gap-1.5">
           <HardDrive className="w-3.5 h-3.5" /> Equipamentos atendidos
         </p>
         {podeVincular && !bloqueada && !mostraAdd && clienteId && (
-          <button onClick={() => setMostraAdd(true)} className="text-xs text-frivo-600 hover:text-frivo-700 flex items-center gap-1" data-adicionar-equipamento>
+          <button onClick={() => setMostraAdd(true)} className="text-xs text-acento hover:text-acento-hover flex items-center gap-1" data-adicionar-equipamento>
             <Plus className="w-3 h-3" /> Adicionar
           </button>
         )}
       </div>
 
       {erro && (
-        <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-2.5 py-2 flex items-start gap-1.5" data-erro-equipamentos>
+        <p className="text-xs text-atrasado-texto bg-atrasado-claro border border-atrasado/20 rounded-lg px-2.5 py-2 flex items-start gap-1.5" data-erro-equipamentos>
           <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {erro}
         </p>
       )}
 
       {execucao && equipamentos.length === 0 && !mostraAdd && (
-        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2 flex items-start gap-1.5" data-sem-equipamento>
+        <p className="text-xs text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-2.5 py-2 flex items-start gap-1.5" data-sem-equipamento>
           <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
           Nenhum equipamento vinculado. A atividade pode ser aberta assim, mas só é concluída com pelo menos 1 equipamento atendido e o checklist dele respondido.
         </p>
@@ -114,29 +114,29 @@ export function AtividadeEquipamentos({ osId, atividadeId, clienteId, unidadeId 
           const ativos = e.itens.filter((i) => i.ativo);
           const respondidos = ativos.filter((i) => e.respostas[i.id]?.status).length;
           return (
-            <div key={e.vinculoId} className="bg-white border border-gray-100 rounded-lg px-2.5 py-2" data-equipamento-vinculado={e.equipamento.id} data-situacao={sit.chave}>
+            <div key={e.vinculoId} className="bg-white border border-surface-linha rounded-lg px-2.5 py-2" data-equipamento-vinculado={e.equipamento.id} data-situacao={sit.chave}>
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                  <span className="text-sm text-gray-800 truncate">{e.equipamento.titulo}</span>
-                  {e.equipamento.tipo && <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full whitespace-nowrap">{e.equipamento.tipo.nome}</span>}
+                  <span className="text-sm text-ink truncate">{e.equipamento.titulo}</span>
+                  {e.equipamento.tipo && <span className="text-[10px] bg-surface-linha text-ink-muted px-1.5 py-0.5 rounded-full whitespace-nowrap">{e.equipamento.tipo.nome}</span>}
                   <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap", sit.classe)}>{sit.rotulo}</span>
                 </div>
                 {podeRemover && !bloqueada && (
-                  <button onClick={() => remover(e.vinculoId)} className="p-1 text-gray-300 hover:text-red-600 shrink-0" title="Tirar da atividade" aria-label={`Tirar ${e.equipamento.titulo} da atividade`}>
+                  <button onClick={() => remover(e.vinculoId)} className="p-1 text-ink-subtle hover:text-atrasado shrink-0" title="Tirar da atividade" aria-label={`Tirar ${e.equipamento.titulo} da atividade`}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
-              <div className="flex items-center gap-3 text-[11px] text-gray-500 mt-1">
+              <div className="flex items-center gap-3 text-[11px] text-ink-muted mt-1">
                 {ativos.length ? (
                   <span className="flex items-center gap-1" data-progresso-checklist><ListChecks className="w-3 h-3" /> Checklist {respondidos}/{ativos.length}</span>
                 ) : (
-                  <span className="text-amber-700" data-sem-checklist>Tipo sem checklist cadastrado</span>
+                  <span className="text-atencao-texto" data-sem-checklist>Tipo sem checklist cadastrado</span>
                 )}
                 <span className="flex items-center gap-1"><Camera className="w-3 h-3" /> {e.fotos.length} foto{e.fotos.length === 1 ? "" : "s"}</span>
                 {e.equipamento.tag && <span>TAG {e.equipamento.tag}</span>}
               </div>
-              {e.feito && !e.completo && <p className="text-[11px] text-amber-700 mt-1" data-faltas>Falta: {textoFaltas(e.faltas)}</p>}
+              {e.feito && !e.completo && <p className="text-[11px] text-atencao-texto mt-1" data-faltas>Falta: {textoFaltas(e.faltas)}</p>}
             </div>
           );
         })}
@@ -146,21 +146,21 @@ export function AtividadeEquipamentos({ osId, atividadeId, clienteId, unidadeId 
         <div className="border border-frivo-200 bg-frivo-50/30 rounded-lg p-3 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-frivo-800">Equipamentos {unidadeId ? "deste endereço" : "do cliente"}</span>
-            <button onClick={() => { setMostraAdd(false); setSelecionados(new Set()); }} className="text-gray-400 hover:text-gray-600" aria-label="Fechar"><X className="w-4 h-4" /></button>
+            <button onClick={() => { setMostraAdd(false); setSelecionados(new Set()); }} className="text-ink-muted hover:text-ink" aria-label="Fechar"><X className="w-4 h-4" /></button>
           </div>
           <SeletorEquipamentos
             clienteId={clienteId} unidadeId={unidadeId} versao={versaoLista}
             excluir={equipamentos.map((e) => e.equipamento.id)}
             marcados={selecionados} onChange={setSelecionados}
             vazio={podeCriarEquip && (
-              <button type="button" onClick={abrirNovoEquip} className="ml-1 font-semibold text-frivo-600 hover:text-frivo-700 inline-flex items-center gap-0.5">
+              <button type="button" onClick={abrirNovoEquip} className="ml-1 font-semibold text-acento hover:text-acento-hover inline-flex items-center gap-0.5">
                 <Plus className="w-3 h-3" /> Cadastrar agora
               </button>
             )}
           />
           <div className="flex items-center justify-between gap-2">
             {podeCriarEquip ? (
-              <button type="button" onClick={abrirNovoEquip} className="text-xs font-semibold text-frivo-600 hover:text-frivo-700 inline-flex items-center gap-1">
+              <button type="button" onClick={abrirNovoEquip} className="text-xs font-semibold text-acento hover:text-acento-hover inline-flex items-center gap-1">
                 <Plus className="w-3 h-3" /> Novo equipamento
               </button>
             ) : <span />}

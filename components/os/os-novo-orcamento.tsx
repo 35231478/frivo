@@ -46,7 +46,7 @@ export function OsNovoOrcamento({ osId, numeroOs, onCriado }: { osId: string; nu
       </button>
       <Drawer aberto={aberto} onFechar={fechar} titulo={`Novo orçamento — ${numeroOs}`} largura="w-full sm:w-[88vw] sm:max-w-[1180px]">
         <div data-gaveta-orcamento>
-          {erro && <p role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{erro}</p>}
+          {erro && <p role="alert" className="text-sm text-atrasado-texto bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2">{erro}</p>}
           {!erro && !dados && <p className="flex items-center gap-2 text-sm text-ink-muted"><Loader2 className="w-4 h-4 animate-spin" /> Abrindo o construtor de orçamento…</p>}
           {dados && (
             <OrcamentoForm

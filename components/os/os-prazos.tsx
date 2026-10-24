@@ -89,7 +89,7 @@ export function OsPrazos({ osId }: { osId: string }) {
             <Button onClick={adicionar} loading={acao === "add"} disabled={!templateId}>Criar</Button>
             <Button variant="secondary" onClick={() => { setAdicionando(false); setErro(""); }}>Cancelar</Button>
           </div>
-          {erro && <p role="alert" className="text-sm text-red-700">{erro}</p>}
+          {erro && <p role="alert" className="text-sm text-atrasado-texto">{erro}</p>}
         </div>
       )}
 
@@ -108,8 +108,8 @@ export function OsPrazos({ osId }: { osId: string }) {
                     <span className={cn(
                       "text-xs font-medium px-2 py-0.5 rounded-full",
                       p.status === "CONCLUIDO" ? "bg-success-50 text-success-700" :
-                      p.status === "ATRASADO" ? "bg-red-50 text-red-700" :
-                      p.status === "CANCELADO" ? "bg-slate-100 text-slate-500" : "bg-primary-50 text-primary-700",
+                      p.status === "ATRASADO" ? "bg-atrasado-claro text-atrasado-texto" :
+                      p.status === "CANCELADO" ? "bg-surface-linha text-ink-muted" : "bg-primary-50 text-primary-700",
                     )}>{LABELS_STATUS_OS_PRAZO[p.status]}</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -119,7 +119,7 @@ export function OsPrazos({ osId }: { osId: string }) {
                       </Button>
                     )}
                     {podeEditar && p.status !== "CANCELADO" && p.status !== "CONCLUIDO" && (
-                      <button onClick={() => cancelar(p.id)} className="p-1.5 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded" title="Cancelar prazo"><Trash2 className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => cancelar(p.id)} className="p-1.5 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded" title="Cancelar prazo"><Trash2 className="w-3.5 h-3.5" /></button>
                     )}
                   </div>
                 </div>
@@ -134,13 +134,13 @@ export function OsPrazos({ osId }: { osId: string }) {
                       <li key={e.id} className="ml-5">
                         <span className={cn(
                           "absolute -left-[11px] flex items-center justify-center w-5 h-5 rounded-full ring-4 ring-white",
-                          concluida ? "bg-success-500" : atrasada ? "bg-red-500" : emAndamento ? "bg-primary-500 animate-pulse" : "bg-slate-300",
+                          concluida ? "bg-success-500" : atrasada ? "bg-atrasado" : emAndamento ? "bg-acento animate-pulse" : "bg-surface-border",
                         )}>
                           {concluida ? <CheckCircle2 className="w-3 h-3 text-white" /> : atrasada ? <AlertTriangle className="w-3 h-3 text-white" /> : <Circle className="w-2 h-2 text-white fill-white" />}
                         </span>
                         <div className="flex items-center justify-between gap-2">
                           <div>
-                            <p className={cn("text-sm font-medium", concluida ? "text-ink-muted line-through" : atrasada ? "text-red-700" : "text-ink")}>
+                            <p className={cn("text-sm font-medium", concluida ? "text-ink-muted line-through" : atrasada ? "text-atrasado-texto" : "text-ink")}>
                               {e.nome}
                             </p>
                             <p className="text-xs text-ink-muted">

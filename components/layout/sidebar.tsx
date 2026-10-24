@@ -284,10 +284,8 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
   const secoesVisiveis = filtrar(VISTAS[vistaAtiva]);
   const mostrarSeletor = operacionalDisponivel && financeiroDisponivel;
 
-  // Tema por módulo: financeiro = azul royal (estilo Conta Azul); demais = navy padrão.
-  // Destaque de item ativo adaptável ao fundo (overlay branco no financeiro).
-  const temaFin = vistaAtiva === "financeiro";
-  const ativoBg = temaFin ? "bg-white/20" : "bg-primary-500";
+  // Sistema de design: um só tema (superfície clara, item ativo no acento claro) em todos os módulos.
+  const ativoBg = "bg-acento-claro";
 
   // Item ativo pelo prefixo mais longo dentro da vista atual
   const basesAtuais = secoesVisiveis.flatMap((s) =>
@@ -326,10 +324,10 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
 
   return (
     <aside
-      style={temaFin ? { backgroundColor: "#14498F" } : undefined}
+      aria-label="Menu principal"
       className={cn(
-        "flex flex-col bg-sidebar text-white shrink-0 shadow-xl",
-        montado && "transition-[width,background-color] duration-200 ease-in-out",
+        "flex flex-col bg-white text-ink border-r border-surface-border shrink-0",
+        montado && "transition-[width] duration-200 ease-in-out",
         variant === "mobile" ? "w-72 h-full" : cn("hidden lg:flex", colapsada ? "lg:w-16" : "lg:w-[280px]"),
       )}
     >
@@ -339,7 +337,8 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
           <button
             onClick={toggleRecolher}
             title={colapsada ? "Expandir menu" : "Recolher menu"}
-            className="p-1.5 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white transition-colors"
+            aria-label={colapsada ? "Expandir menu" : "Recolher menu"}
+            className="p-1.5 rounded-lg text-ink-muted hover:bg-surface-page hover:text-ink transition-colors"
           >
             {colapsada ? <PanelLeftOpen className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
           </button>
@@ -347,37 +346,38 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
       )}
 
       {/* Perfil do usuário */}
-      <div className="px-3 pt-2 pb-3 border-b border-white/5 relative">
+      <div className="px-3 pt-2 pb-3 border-b border-surface-linha relative">
         <button
           onClick={() => setMenuAberto((v) => !v)}
-          className={cn("flex items-center w-full rounded-lg p-2 hover:bg-white/5 transition-colors", colapsada ? "justify-center" : "gap-3")}
+          aria-haspopup="menu" aria-expanded={menuAberto}
+          className={cn("flex items-center w-full rounded-lg p-2 hover:bg-surface-page transition-colors", colapsada ? "justify-center" : "gap-3")}
         >
           <Avatar image={avatarUrl ?? usuario.image} name={usuario.name} />
           {!colapsada && (<>
             <span className="flex-1 min-w-0 text-left">
-              <span className="block text-sm font-medium text-white truncate">{usuario.name ?? "Usuário"}</span>
-              <span className="block text-[11px] text-slate-400 truncate">{usuario.email ?? ""}</span>
+              <span className="block text-sm font-medium text-ink truncate">{usuario.name ?? "Usuário"}</span>
+              <span className="block text-[11px] text-ink-muted truncate">{usuario.email ?? ""}</span>
             </span>
-            <MoreVertical className="w-4 h-4 text-slate-400 shrink-0" />
+            <MoreVertical className="w-4 h-4 text-ink-subtle shrink-0" />
           </>)}
         </button>
 
         {menuAberto && (<>
           <div className="fixed inset-0 z-10" onClick={() => setMenuAberto(false)} />
           <div className={cn(
-            "absolute z-20 mt-1 w-52 bg-white rounded-lg shadow-xl border border-gray-100 py-1",
+            "absolute z-20 mt-1 w-52 bg-white rounded-lg shadow-elevated border border-surface-border py-1",
             colapsada ? "left-full ml-2 top-2" : "left-3 right-3",
           )}>
-            <div className="px-3 pt-1.5 pb-2 mb-1 border-b border-gray-100" data-menu-conta>
-              <p className="text-xs text-gray-900 truncate" title={`${usuario.empresaNome} · ${perfilRotulo}`}>
+            <div className="px-3 pt-1.5 pb-2 mb-1 border-b border-surface-linha" data-menu-conta>
+              <p className="text-xs text-ink truncate" title={`${usuario.empresaNome} · ${perfilRotulo}`}>
                 <span className="font-semibold">{usuario.empresaNome || "Empresa"}</span>
-                <span className="text-gray-500"> · {perfilRotulo}</span>
+                <span className="text-ink-muted"> · {perfilRotulo}</span>
               </p>
             </div>
             <Link
               href="/perfil"
               onClick={() => setMenuAberto(false)}
-              className="flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              className="flex items-center gap-2.5 px-3 py-2 text-sm text-ink hover:bg-surface-page"
             >
               <UserCog className="w-4 h-4" /> Gerenciar perfil
             </Link>
@@ -385,7 +385,7 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
               <Link
                 href={configHref}
                 onClick={() => setMenuAberto(false)}
-                className="flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                className="flex items-center gap-2.5 px-3 py-2 text-sm text-ink hover:bg-surface-page"
                 data-acao="menu-configuracoes"
               >
                 <Settings className="w-4 h-4" /> Configurações
@@ -393,7 +393,7 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
             )}
             <button
               onClick={() => signOut({ callbackUrl: "/login" })}
-              className="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+              className="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-atrasado hover:bg-atrasado-claro"
             >
               <LogOut className="w-4 h-4" /> Sair
             </button>
@@ -404,7 +404,7 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
       {/* Seletor de módulos ("mundos") */}
       {mostrarSeletor && (
         <div className={cn("px-3 pt-3", colapsada ? "pb-1" : "pb-1")}>
-          <div className={cn("bg-white/5 rounded-xl p-1", colapsada ? "flex flex-col gap-1" : "grid grid-cols-2 gap-1")}>
+          <div className={cn("bg-surface-page border border-surface-border rounded-lg p-1", colapsada ? "flex flex-col gap-1" : "grid grid-cols-2 gap-1")}>
             <SeletorBotao
               ativo={vistaAtiva === "operacional"}
               ativoBg={ativoBg}
@@ -439,7 +439,7 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
                       title={e.label}
                       className={cn(
                         "relative flex items-center justify-center py-2.5 rounded-lg transition-all",
-                        grupoAtivo(e) ? cn(ativoBg, "text-white") : "text-slate-200 hover:bg-white/5 hover:text-white",
+                        grupoAtivo(e) ? cn(ativoBg, "text-acento") : "text-ink-muted hover:bg-surface-page hover:text-ink",
                       )}
                     >
                       <e.icone className="w-[18px] h-[18px]" />
@@ -451,11 +451,11 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
                         className={cn(
                           "relative flex items-center justify-between w-full pl-4 pr-3 py-2.5 rounded-lg text-sm transition-all",
                           grupoAtivo(e)
-                            ? cn(ativoBg, "text-white font-semibold")
-                            : "text-slate-200 hover:bg-white/5 hover:text-white",
+                            ? "text-acento font-semibold"
+                            : "text-ink-muted hover:bg-surface-page hover:text-ink",
                         )}
+                        aria-expanded={abertos.has(e.label)}
                       >
-                        {grupoAtivo(e) && <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r bg-success-500" />}
                         <span className="flex items-center gap-3 text-left leading-tight min-w-0">
                           <e.icone className="w-[18px] h-[18px] shrink-0" />
                           {e.label}
@@ -464,26 +464,27 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
                       </button>
 
                       {abertos.has(e.label) && (
-                        <div className="mt-1 ml-3 pl-3 pr-1 py-1 rounded-lg bg-white/5 border-l-2 border-white/15 space-y-0.5">
+                        <div className="mt-1 ml-5 pl-2 pr-1 py-1 border-l border-surface-border space-y-0.5">
                           {e.itens.map((i, k) => (
                             <div key={i.href + i.label}>
                               {i.subgrupo && i.subgrupo !== e.itens[k - 1]?.subgrupo && (
-                                <p className="px-3 pt-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400" data-subgrupo>{i.subgrupo}</p>
+                                <p className="px-3 pt-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-muted" data-subgrupo>{i.subgrupo}</p>
                               )}
                               <Link
                                 href={i.href}
                                 className={cn(
                                   "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
                                   itemAtivo(i)
-                                    ? "bg-white/15 text-white font-medium"
-                                    : "text-slate-200 hover:bg-white/10 hover:text-white",
+                                    ? "bg-acento-claro text-acento font-semibold"
+                                    : "text-ink-muted hover:bg-surface-page hover:text-ink",
                                 )}
+                                aria-current={itemAtivo(i) ? "page" : undefined}
                               >
                                 <i.icone className={cn("w-4 h-4 shrink-0", i.dica && "self-start mt-0.5")} />
                                 {i.dica ? (
                                   <span className="min-w-0">
                                     <span className="block">{i.label}</span>
-                                    <span className="block text-[11px] leading-snug text-slate-400 font-normal">{i.dica}</span>
+                                    <span className="block text-[11px] leading-snug text-ink-muted font-normal">{i.dica}</span>
                                   </span>
                                 ) : i.label}
                               </Link>
@@ -503,7 +504,7 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
       </nav>
 
       {/* Rodapé: configurações (Sistema) + instalar app + logo */}
-      <div className="px-3 pt-2 pb-3 border-t border-white/5 space-y-2">
+      <div className="px-3 pt-2 pb-3 border-t border-surface-linha space-y-2">
         {sistemaDisponivel && (
           <button
             onClick={() => setSistemaAberto((v) => !v)}
@@ -512,8 +513,8 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
               "flex items-center rounded-lg text-sm transition-colors w-full",
               colapsada ? "justify-center py-2" : "gap-3 pl-4 pr-3 py-2.5",
               sistemaAberto
-                ? cn(ativoBg, "text-white font-semibold")
-                : "text-slate-200 hover:bg-white/5 hover:text-white",
+                ? cn(ativoBg, "text-acento font-semibold")
+                : "text-ink-muted hover:bg-surface-page hover:text-ink",
             )}
           >
             <Settings className="w-[18px] h-[18px] shrink-0" />
@@ -524,7 +525,7 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
           href="/instalar"
           title={colapsada ? "Instalar app" : undefined}
           className={cn(
-            "flex items-center rounded-lg text-xs text-slate-300 hover:bg-white/5 hover:text-white transition-colors",
+            "flex items-center rounded-lg text-xs text-ink-muted hover:bg-surface-page hover:text-ink transition-colors",
             colapsada ? "justify-center py-2" : "gap-2.5 px-3 py-2",
           )}
         >
@@ -532,7 +533,7 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
           {!colapsada && "Instalar app no celular"}
         </Link>
         <div className={cn("flex pt-1", colapsada ? "justify-center" : "px-3")}>
-          {colapsada ? <FrivoMark size={28} /> : <FrivoLogo size="sm" />}
+          {colapsada ? <FrivoMark size={28} /> : <FrivoLogo size="sm" variant="dark" />}
         </div>
       </div>
     </aside>
@@ -553,12 +554,13 @@ function SeletorBotao({ ativo, ativoBg, onClick, icone: Icone, label, colapsada 
     <button
       onClick={onClick}
       title={colapsada ? label : undefined}
+      aria-pressed={ativo}
       className={cn(
-        "flex items-center justify-center rounded-lg text-xs font-medium transition-all",
+        "flex items-center justify-center rounded-md text-xs font-medium transition-colors",
         colapsada ? "py-2" : "gap-1.5 py-2 px-2",
         ativo
-          ? cn(ativoBg, "text-white shadow-sm")
-          : "text-slate-300 hover:bg-white/5 hover:text-white",
+          ? "bg-white text-acento font-semibold shadow-card border border-surface-border"
+          : "text-ink-muted hover:text-ink border border-transparent",
       )}
     >
       <Icone className={cn(colapsada ? "w-[18px] h-[18px]" : "w-4 h-4 shrink-0")} />
@@ -575,7 +577,7 @@ function Avatar({ image, name }: { image?: string | null; name?: string | null }
     return <img src={image} alt={name ?? "Usuário"} className="w-9 h-9 rounded-full object-cover shrink-0" />;
   }
   return (
-    <span className="w-9 h-9 rounded-full bg-gradient-to-br from-primary-500 to-success-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
+    <span className="w-9 h-9 rounded-full bg-acento-claro text-acento flex items-center justify-center font-display text-xs font-semibold shrink-0">
       {iniciais}
     </span>
   );
@@ -599,11 +601,11 @@ function SidebarLink({ href, icone: Icone, label, ativo, ativoBg, colapsada }: S
         "relative flex items-center rounded-lg text-sm transition-all",
         colapsada ? "justify-center py-2.5" : "gap-3 pl-4 pr-3 py-2.5",
         ativo
-          ? cn(ativoBg, "text-white font-semibold shadow-sm")
-          : "text-slate-200 hover:bg-white/5 hover:text-white",
+          ? cn(ativoBg, "text-acento font-semibold")
+          : "text-ink-muted hover:bg-surface-page hover:text-ink",
       )}
+      aria-current={ativo ? "page" : undefined}
     >
-      {ativo && !colapsada && <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r bg-success-500" />}
       <Icone className="w-[18px] h-[18px] shrink-0" />
       {!colapsada && <span className="truncate">{label}</span>}
     </Link>

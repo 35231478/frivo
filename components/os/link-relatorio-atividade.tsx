@@ -64,7 +64,7 @@ export function LinkRelatorioAtividade({
         </button>
       )}
       {msg && (
-        <p role="status" className={`w-full sm:w-auto px-2.5 sm:px-0 text-[11px] sm:max-w-[14rem] sm:text-right ${msg.tipo === "ok" ? "text-success-700" : "text-red-700"}`}>{msg.texto}</p>
+        <p role="status" className={`w-full sm:w-auto px-2.5 sm:px-0 text-[11px] sm:max-w-[14rem] sm:text-right ${msg.tipo === "ok" ? "text-success-700" : "text-atrasado-texto"}`}>{msg.texto}</p>
       )}
     </div>
   );

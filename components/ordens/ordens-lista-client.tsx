@@ -64,10 +64,10 @@ function dataPorExtenso(s: string): string {
 function corDoDia(ordens: OrdemView[]): string {
   // Atrasada só depois do dia da previsão (no fuso de Brasília), não às 21h da véspera
   const atrasada = ordens.some((o) => prazoVencido(o.previsaoConclusao) && !STATUS_FINALIZADA.includes(o.status));
-  if (atrasada) return "bg-red-50 text-red-700 border-red-200";
-  if (ordens.some((o) => STATUS_PENDENTE.includes(o.status))) return "bg-amber-50 text-amber-700 border-amber-200";
-  if (ordens.some((o) => STATUS_ANDAMENTO.includes(o.status))) return "bg-primary-50 text-primary-700 border-primary-200";
-  return "bg-success-50 text-success-700 border-success-200";
+  if (atrasada) return "pill-atrasado";
+  if (ordens.some((o) => STATUS_PENDENTE.includes(o.status))) return "pill-atencao";
+  if (ordens.some((o) => STATUS_ANDAMENTO.includes(o.status))) return "pill-acento";
+  return "pill-ok";
 }
 
 export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: { ordens: OrdemView[]; total: number; pagina: number; porPagina: number; opcoes: Opcoes }) {
@@ -168,45 +168,51 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: 
 
   function Seta({ campo }: { campo: string }) {
     if (sortAtual !== campo) return <ArrowUpDown className="inline w-3 h-3 ml-1 text-ink-subtle" />;
-    return dirAtual === "asc" ? <ArrowUp className="inline w-3 h-3 ml-1 text-primary-600" /> : <ArrowDown className="inline w-3 h-3 ml-1 text-primary-600" />;
+    return dirAtual === "asc" ? <ArrowUp className="inline w-3 h-3 ml-1 text-acento" /> : <ArrowDown className="inline w-3 h-3 ml-1 text-acento" />;
   }
 
-  const selectCls = "w-full bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all";
+  const selectCls = "input-base py-2";
+  // Botão quadrado de ícone (navegação por data, visão)
+  const btnIcone = "p-2 rounded-lg border border-surface-border bg-white text-ink-muted hover:bg-surface-page hover:text-ink transition-colors";
+  // Chip de filtro (status/prioridade): ligado = acento claro
+  const chip = (ligado: boolean) => cn("text-xs px-2.5 py-1 rounded-full border transition-colors",
+    ligado ? "bg-acento-claro border-acento/40 text-acento font-semibold" : "bg-white border-surface-border text-ink-muted hover:border-acento/40 hover:text-ink");
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary-50 rounded-lg"><ClipboardList className="w-5 h-5 text-primary-600" /></div>
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="p-2 bg-acento-claro rounded-lg"><ClipboardList className="w-5 h-5 text-acento" aria-hidden="true" /></div>
           <h1 className="page-title">Ordens de Serviço</h1>
-          <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{total}</span>
+          <span className="pill-previsto font-display tabular-nums">{total}</span>
         </div>
         {pode("ordens", "criar") && (
-          <Link href="/ordens/nova" className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow">
+          <Link href="/ordens/nova" className="btn-primary shrink-0">
             <Plus className="w-4 h-4" /> Nova OS
           </Link>
         )}
       </div>
 
       {/* Navegação por data */}
-      <div className="card p-3 flex flex-wrap items-center gap-3">
+      <div className="card px-4 py-3 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
-          <button type="button" onClick={() => deslocarDia(-1)} title="Dia anterior (←)"
-            className="p-2 rounded-lg border border-surface-border bg-white text-ink-muted hover:bg-surface-alt hover:text-ink transition-colors">
+          <button type="button" onClick={() => deslocarDia(-1)} title="Dia anterior (←)" aria-label="Dia anterior"
+            className={btnIcone}>
             <ChevronLeft className="w-4 h-4" />
           </button>
           <button type="button" onClick={irParaHoje} title="Voltar para hoje (T)"
+            aria-pressed={ehHoje}
             className={cn("inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border transition-colors",
-              ehHoje ? "bg-success-500 border-success-500 text-white shadow-sm" : "bg-white border-primary-500 text-primary-600 hover:bg-primary-50")}>
+              ehHoje ? "bg-acento border-acento text-white" : "bg-white border-surface-border text-acento hover:bg-acento-claro")}>
             <CalendarCheck className="w-4 h-4" /> Hoje
           </button>
-          <button type="button" onClick={() => deslocarDia(1)} title="Próximo dia (→)"
-            className="p-2 rounded-lg border border-surface-border bg-white text-ink-muted hover:bg-surface-alt hover:text-ink transition-colors">
+          <button type="button" onClick={() => deslocarDia(1)} title="Próximo dia (→)" aria-label="Próximo dia"
+            className={btnIcone}>
             <ChevronRight className="w-4 h-4" />
           </button>
           <div className="relative">
             <button type="button" title="Escolher data"
-              className="p-2 rounded-lg border border-surface-border bg-white text-ink-muted hover:bg-surface-alt hover:text-ink transition-colors">
+              className={btnIcone}>
               <CalendarDays className="w-4 h-4" />
             </button>
             {/* Só o calendário do aparelho (invisível, sobre o botão): nenhum texto de data aparece aqui */}
@@ -219,7 +225,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: 
           {dataAtual ? (
             <>
               <span className="text-sm font-semibold text-ink">{dataPorExtenso(dataAtual)}</span>
-              <span className={cn("inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full border", corDoDia(ordens))}>
+              <span className={cn(corDoDia(ordens), "font-semibold")}>
                 {total} {total === 1 ? "ordem de serviço" : "ordens de serviço"}
               </span>
             </>
@@ -233,7 +239,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: 
         <div className="flex items-center justify-end gap-2 min-w-[140px]">
           {dataAtual && (
             <button type="button" onClick={() => setData(null)}
-              className="inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700">
+              className="inline-flex items-center gap-1 text-xs font-medium text-acento hover:text-acento-hover">
               <X className="w-3.5 h-3.5" /> Ver todos os dias
             </button>
           )}
@@ -242,7 +248,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: 
 
       <div className="card overflow-hidden">
         {/* Filtros principais */}
-        <div className="p-4 border-b border-surface-border bg-surface-alt/40 space-y-3">
+        <div className="p-4 sm:p-5 border-b border-surface-border space-y-4">
           <div className="flex flex-wrap gap-2 items-center">
             <div className="flex-1 min-w-[220px]">
               <CampoBusca
@@ -251,15 +257,16 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: 
               />
             </div>
             <button type="button" onClick={() => setMostrarAvancados((v) => !v)}
-              className={cn("inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-colors", mostrarAvancados ? "bg-primary-50 border-primary-200 text-primary-700" : "bg-white border-surface-border text-ink-muted hover:bg-surface-alt")}>
+              aria-expanded={mostrarAvancados}
+              className={cn("inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-colors", mostrarAvancados ? "bg-acento-claro border-acento/40 text-acento" : "bg-white border-surface-border text-ink-muted hover:bg-surface-page hover:text-ink")}>
               <SlidersHorizontal className="w-4 h-4" /> Mais filtros
             </button>
             {/* Alternar visualização */}
-            <div className="flex rounded-lg border border-surface-border overflow-hidden">
-              <button type="button" onClick={() => setParams({ view: null })} className={cn("p-2", view === "tabela" ? "bg-primary-500 text-white" : "bg-white text-ink-muted hover:bg-surface-alt")} title="Tabela"><List className="w-4 h-4" /></button>
-              <button type="button" onClick={() => setParams({ view: "cards" })} className={cn("p-2", view === "cards" ? "bg-primary-500 text-white" : "bg-white text-ink-muted hover:bg-surface-alt")} title="Cards"><LayoutGrid className="w-4 h-4" /></button>
+            <div className="flex items-center bg-surface-page border border-surface-border rounded-lg p-0.5">
+              <button type="button" onClick={() => setParams({ view: null })} aria-pressed={view === "tabela"} className={cn("p-1.5 rounded-md transition-colors", view === "tabela" ? "bg-white text-acento shadow-card" : "text-ink-muted hover:text-ink")} title="Tabela"><List className="w-4 h-4" /></button>
+              <button type="button" onClick={() => setParams({ view: "cards" })} aria-pressed={view === "cards"} className={cn("p-1.5 rounded-md transition-colors", view === "cards" ? "bg-white text-acento shadow-card" : "text-ink-muted hover:text-ink")} title="Cards"><LayoutGrid className="w-4 h-4" /></button>
             </div>
-            <a href={exportUrl} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-surface-border text-ink-muted hover:bg-surface-alt transition-colors">
+            <a href={exportUrl} className="btn-secondary px-3 py-2 font-medium text-ink-muted">
               <Download className="w-4 h-4" /> Exportar
             </a>
           </div>
@@ -269,11 +276,11 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: 
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider mr-1">Status</span>
               {Object.entries(LABELS_STATUS_OS).map(([v, l]) => (
-                <button key={v} type="button" onClick={() => toggleLista("status", v)}
-                  className={cn("text-xs px-2 py-1 rounded-full border transition-colors", naLista("status", v) ? "bg-primary-500 border-primary-500 text-white" : "bg-white border-surface-border text-ink-muted hover:border-primary-300")}>{l}</button>
+                <button key={v} type="button" onClick={() => toggleLista("status", v)} aria-pressed={naLista("status", v)}
+                  className={chip(naLista("status", v))}>{l}</button>
               ))}
               {!get("status") && (
-                <span className="text-[11px] text-ink-subtle ml-1" title="OS inativadas ficam ocultas; marque “Cancelada” para vê-las">
+                <span className="text-[11px] text-ink-muted ml-1" title="OS inativadas ficam ocultas; marque “Cancelada” para vê-las">
                   (canceladas ocultas)
                 </span>
               )}
@@ -281,51 +288,51 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: 
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider mr-1">Prioridade</span>
               {Object.entries(LABELS_PRIORIDADE).map(([v, l]) => (
-                <button key={v} type="button" onClick={() => toggleLista("prioridade", v)}
-                  className={cn("text-xs px-2 py-1 rounded-full border transition-colors", naLista("prioridade", v) ? "bg-primary-500 border-primary-500 text-white" : "bg-white border-surface-border text-ink-muted hover:border-primary-300")}>{l}</button>
+                <button key={v} type="button" onClick={() => toggleLista("prioridade", v)} aria-pressed={naLista("prioridade", v)}
+                  className={chip(naLista("prioridade", v))}>{l}</button>
               ))}
             </div>
           </div>
 
           {/* Filtros avançados */}
           {mostrarAvancados && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-surface-border">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t border-surface-linha [&>div]:flex [&>div]:flex-col [&>div]:gap-1.5">
               <div>
-                <label className="text-[11px] font-semibold text-ink-muted">Abertura — de</label>
-                <InputData defaultValue={get("dataInicio")} onChange={(v) => setParams({ dataInicio: v || null, data: null })} />
+                <label htmlFor="f-os-de" className="text-xs font-medium text-ink-muted">Abertura — de</label>
+                <InputData id="f-os-de" defaultValue={get("dataInicio")} onChange={(v) => setParams({ dataInicio: v || null, data: null })} />
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-ink-muted">Abertura — até</label>
-                <InputData defaultValue={get("dataFim")} onChange={(v) => setParams({ dataFim: v || null, data: null })} />
+                <label htmlFor="f-os-ate" className="text-xs font-medium text-ink-muted">Abertura — até</label>
+                <InputData id="f-os-ate" defaultValue={get("dataFim")} onChange={(v) => setParams({ dataFim: v || null, data: null })} />
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-ink-muted">Cliente</label>
+                <span className="text-xs font-medium text-ink-muted">Cliente</span>
                 <BuscaSelect value={get("clienteId")} onChange={(v) => setParams({ clienteId: v || null })} options={opcoes.clientes} placeholder="Todos" />
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-ink-muted">Técnico responsável</label>
+                <span className="text-xs font-medium text-ink-muted">Técnico responsável</span>
                 <BuscaSelect value={get("responsavelId")} onChange={(v) => setParams({ responsavelId: v || null })} options={opcoes.usuarios} placeholder="Todos" />
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-ink-muted">Tipo de OS</label>
-                <select value={get("tipoOsId")} onChange={(e) => setParams({ tipoOsId: e.target.value || null })} className={selectCls}>
+                <label htmlFor="f-os-tipo" className="text-xs font-medium text-ink-muted">Tipo de OS</label>
+                <select id="f-os-tipo" value={get("tipoOsId")} onChange={(e) => setParams({ tipoOsId: e.target.value || null })} className={selectCls}>
                   <option value="">Todos</option>
                   {opcoes.tiposOs.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-ink-muted">Número da OS</label>
-                <input value={numeroLocal} onChange={(e) => setNumeroLocal(e.target.value)} placeholder="OS-2026-..." className={selectCls} />
+                <label htmlFor="f-os-numero" className="text-xs font-medium text-ink-muted">Número da OS</label>
+                <input id="f-os-numero" value={numeroLocal} onChange={(e) => setNumeroLocal(e.target.value)} placeholder="OS-2026-..." className={selectCls} />
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-ink-muted">Origem</label>
-                <select value={get("origem")} onChange={(e) => setParams({ origem: e.target.value || null })} className={selectCls}>
+                <label htmlFor="f-os-origem" className="text-xs font-medium text-ink-muted">Origem</label>
+                <select id="f-os-origem" value={get("origem")} onChange={(e) => setParams({ origem: e.target.value || null })} className={selectCls}>
                   <option value="">Todas</option>
                   {Object.entries(LABELS_ORIGEM_OS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                 </select>
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-ink-muted">Contrato</label>
+                <span className="text-xs font-medium text-ink-muted">Contrato</span>
                 <BuscaSelect value={get("contratoId")} onChange={(v) => setParams({ contratoId: v || null })} options={opcoes.contratos} placeholder="Todos" />
               </div>
             </div>
@@ -336,13 +343,13 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: 
             <div className="flex items-center gap-3 text-sm text-ink-muted">
               <span data-contador><strong className="text-ink">{total.toLocaleString("pt-BR")}</strong> {total === 1 ? "ordem de serviço" : "ordens de serviço"}</span>
               {filtrosAtivos > 0 && (
-                <span className="inline-flex items-center gap-1 text-xs font-semibold bg-primary-50 text-primary-700 px-2 py-0.5 rounded-full">
+                <span className="pill-acento font-semibold">
                   <Filter className="w-3 h-3" /> {filtrosAtivos} filtro(s) ativo(s)
                 </span>
               )}
             </div>
             {filtrosAtivos > 0 && (
-              <button type="button" onClick={limparFiltros} className="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-700">
+              <button type="button" onClick={limparFiltros} className="inline-flex items-center gap-1 text-xs font-medium text-ink-muted hover:text-ink">
                 <X className="w-3.5 h-3.5" /> Limpar filtros
               </button>
             )}
@@ -355,17 +362,17 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: 
           <div className="flex flex-col items-center gap-2 py-12 text-center" data-lista-vazia>
             <p className="text-sm font-medium text-ink">Nenhuma OS encontrada</p>
             <p className="text-xs text-ink-muted">{buscaLocal ? `Nada combina com “${buscaLocal}”.` : "Nenhuma OS com os filtros aplicados."}</p>
-            {filtrosAtivos > 0 && <button type="button" onClick={limparFiltros} className="text-sm text-primary-600 hover:underline">Limpar filtros</button>}
+            {filtrosAtivos > 0 && <button type="button" onClick={limparFiltros} className="text-sm font-medium text-acento hover:underline">Limpar filtros</button>}
           </div>
         ) : (<>
-          <div className={cn("p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3", view !== "cards" && "md:hidden")} data-cartoes>
+          <div className={cn("p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3", view !== "cards" && "md:hidden")} data-cartoes>
             {ordens.map((os) => (
               <div key={os.id} className="relative">
               {massa && <CheckboxLinha id={os.id} rotulo={os.chamadoNumero ?? os.numero} className="absolute top-3 right-3 z-10 bg-white rounded" />}
-              <Link href={`/ordens/${os.id}`} className="block h-full border border-surface-border rounded-xl p-4 hover:border-primary-200 hover:shadow-card transition-all">
+              <Link href={`/ordens/${os.id}`} className="block h-full bg-white border border-surface-border rounded-card p-4 shadow-card hover:border-acento/40 hover:shadow-card-hover transition-shadow">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono font-semibold text-primary-600">{os.chamadoNumero ?? os.numero}</span>
-                  {os.origem === "PORTAL_CLIENTE" && <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-cyan-50 text-cyan-700 px-1.5 py-0.5 rounded"><Headset className="w-3 h-3" /> Portal</span>}
+                  <span className="font-display font-semibold tabular-nums text-acento">{os.chamadoNumero ?? os.numero}</span>
+                  {os.origem === "PORTAL_CLIENTE" && <span className="pill-acento text-[11px] px-2"><Headset className="w-3 h-3" aria-hidden="true" /> Portal</span>}
                 </div>
                 <div className="flex items-center gap-2 mt-1">
                   <AvatarCliente nome={os.cliente} logoUrl={os.clienteLogo} size={28} />
@@ -380,7 +387,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: 
                   <span className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider">Equipe:</span>
                   <AvatarStack tecnicos={os.tecnicos} size={28} />
                 </div>
-                <p className="text-[11px] text-ink-subtle mt-2">Aberta {formatarData(os.criadoEm)}{os.previsaoConclusao ? ` · Prev. ${formatarDiaCivil(os.previsaoConclusao)}` : ""}</p>
+                <p className="text-[11px] text-ink-muted mt-2 tabular-nums">Aberta {formatarData(os.criadoEm)}{os.previsaoConclusao ? ` · Prev. ${formatarDiaCivil(os.previsaoConclusao)}` : ""}</p>
               </Link>
               <div className="absolute bottom-2 right-2"><OsInativarBotao osId={os.id} numero={os.chamadoNumero ?? os.numero} status={os.status} variante="icone" /></div>
               </div>
@@ -389,27 +396,27 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: 
           {view !== "cards" && (
           <div className="overflow-x-auto hidden md:block">
             <table className="w-full text-sm">
-              <thead className="bg-surface-alt border-b border-surface-border">
+              <thead className="bg-surface-page border-b border-surface-border">
                 <tr>
                   {massa && <th className="w-px pl-4 pr-1 py-3"><CheckboxPagina /></th>}
                   <Th onClick={() => ordenarPor("numero")}>Número <Seta campo="numero" /></Th>
                   <Th onClick={() => ordenarPor("cliente")}>Cliente <Seta campo="cliente" /></Th>
-                  <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden lg:table-cell">Técnico</th>
+                  <th scope="col" className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden lg:table-cell">Técnico</th>
                   <Th className="hidden lg:table-cell" onClick={() => ordenarPor("criadoEm")}>Abertura <Seta campo="criadoEm" /></Th>
                   <Th className="hidden xl:table-cell" onClick={() => ordenarPor("previsaoConclusao")}>Previsão <Seta campo="previsaoConclusao" /></Th>
                   <Th onClick={() => ordenarPor("status")}>Status <Seta campo="status" /></Th>
                   <Th className="hidden md:table-cell" onClick={() => ordenarPor("prioridade")}>Prioridade <Seta campo="prioridade" /></Th>
-                  <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Equipe</th>
+                  <th scope="col" className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Equipe</th>
                   <th className="w-px px-2 py-3"><span className="sr-only">Ações</span></th>
                 </tr>
               </thead>
               <tbody>
-                {ordens.map((os, idx) => (
-                  <tr key={os.id} className={cn("border-b border-surface-border hover:bg-primary-50/40 transition-colors", idx % 2 === 1 && "bg-surface-alt/30")}>
+                {ordens.map((os) => (
+                  <tr key={os.id} className="border-b border-surface-linha last:border-0 hover:bg-surface-page transition-colors">
                     {massa && <td className="w-px pl-4 pr-1 py-3"><CheckboxLinha id={os.id} rotulo={os.chamadoNumero ?? os.numero} /></td>}
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <Link href={`/ordens/${os.id}`} className="font-mono font-semibold text-primary-600 hover:underline">{os.chamadoNumero ?? os.numero}</Link>
-                      {os.origem === "PORTAL_CLIENTE" && <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-semibold bg-cyan-50 text-cyan-700 px-1.5 py-0.5 rounded"><Headset className="w-3 h-3" /> Portal</span>}
+                      <Link href={`/ordens/${os.id}`} className="font-display font-semibold tabular-nums text-acento hover:underline">{os.chamadoNumero ?? os.numero}</Link>
+                      {os.origem === "PORTAL_CLIENTE" && <span className="ml-2 pill-acento text-[11px] px-2"><Headset className="w-3 h-3" aria-hidden="true" /> Portal</span>}
                     </td>
                     <td className="px-4 py-3 text-ink font-medium">
                       <div className="flex items-center gap-2">
@@ -418,8 +425,8 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: 
                       </div>
                     </td>
                     <td className="px-4 py-3 text-ink-muted hidden lg:table-cell">{os.responsavel ?? "—"}</td>
-                    <td className="px-4 py-3 text-ink-muted hidden lg:table-cell">{formatarData(os.criadoEm)}</td>
-                    <td className="px-4 py-3 text-ink-muted hidden xl:table-cell">{formatarDiaCivil(os.previsaoConclusao)}</td>
+                    <td className="px-4 py-3 text-ink-muted tabular-nums hidden lg:table-cell">{formatarData(os.criadoEm)}</td>
+                    <td className="px-4 py-3 text-ink-muted tabular-nums hidden xl:table-cell">{formatarDiaCivil(os.previsaoConclusao)}</td>
                     <td className="px-4 py-3"><span className={CLASSE_STATUS[os.status]}>{LABELS_STATUS_OS[os.status]}</span></td>
                     <td className="px-4 py-3 hidden md:table-cell"><span className={CLASSE_PRIORIDADE[os.prioridade]}>{LABELS_PRIORIDADE[os.prioridade]}</span></td>
                     <td className="px-4 py-3"><div className="flex justify-end"><AvatarStack tecnicos={os.tecnicos} size={28} /></div></td>
@@ -432,7 +439,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: 
           )}
         </>)}
         </div>
-        <div className="px-4 py-3 border-t border-surface-border">
+        <div className="px-4 sm:px-5 py-3 border-t border-surface-border">
           <Paginacao total={total} pagina={pagina} porPagina={porPagina} rotulo={total === 1 ? "ordem de serviço" : "ordens de serviço"} onNavegar={setParams} />
         </div>
       </div>
@@ -440,10 +447,13 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: 
   );
 }
 
+/** Cabeçalho ordenável: o clique é num <button> real (teclado e leitor de tela), não no <th>. */
 function Th({ children, onClick, className }: { children: React.ReactNode; onClick: () => void; className?: string }) {
   return (
-    <th className={cn("text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider cursor-pointer select-none hover:text-ink", className)} onClick={onClick}>
-      {children}
+    <th scope="col" className={cn("text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider", className)}>
+      <button type="button" onClick={onClick} className="inline-flex items-center uppercase tracking-wider select-none hover:text-ink rounded">
+        {children}
+      </button>
     </th>
   );
 }
