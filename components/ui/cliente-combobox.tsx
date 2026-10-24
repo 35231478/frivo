@@ -11,7 +11,7 @@ export type ClienteOpcao = {
   cpfCnpj?: string | null;
 };
 
-const CORES = ["bg-sky-500", "bg-emerald-500", "bg-violet-500", "bg-amber-500", "bg-rose-500", "bg-indigo-500", "bg-teal-500", "bg-orange-500"];
+const CORES = ["bg-sky-500", "bg-ok", "bg-violet-500", "bg-atencao", "bg-rose-500", "bg-indigo-500", "bg-teal-500", "bg-orange-500"];
 
 function iniciais(nome: string) {
   return nome.trim().split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
@@ -92,7 +92,7 @@ export function ClienteCombobox({ value, onChange, initialLabel, error }: Props)
           onClick={() => { setAberto(true); setBusca(""); }}
           className={cn(
             "w-full flex items-center justify-between gap-2 bg-white border rounded-lg px-3 py-2.5 text-sm text-left transition-all",
-            error ? "border-red-400" : "border-surface-border hover:border-primary-400",
+            error ? "border-atrasado" : "border-surface-border hover:border-primary-400",
           )}
         >
           <span className="flex items-center gap-2.5 min-w-0">
@@ -102,12 +102,12 @@ export function ClienteCombobox({ value, onChange, initialLabel, error }: Props)
             <span className="truncate text-ink">{selecionadoLabel}</span>
           </span>
           <span className="flex items-center gap-1 shrink-0">
-            <span onClick={(e) => { e.stopPropagation(); limpar(); }} className="p-0.5 text-ink-muted hover:text-red-500"><X className="w-4 h-4" /></span>
+            <span onClick={(e) => { e.stopPropagation(); limpar(); }} className="p-0.5 text-ink-muted hover:text-atrasado"><X className="w-4 h-4" /></span>
             <ChevronDown className="w-4 h-4 text-ink-muted" />
           </span>
         </button>
       ) : (
-        <div className={cn("flex items-center gap-2 bg-white border rounded-lg px-3 py-2.5 transition-all", error ? "border-red-400" : "border-surface-border focus-within:border-primary-500 focus-within:ring-4 focus-within:ring-primary-500/10")}>
+        <div className={cn("flex items-center gap-2 bg-white border rounded-lg px-3 py-2.5 transition-all", error ? "border-atrasado" : "border-surface-border focus-within:border-primary-500 focus-within:ring-4 focus-within:ring-primary-500/10")}>
           <Search className="w-4 h-4 text-ink-subtle shrink-0" />
           <input
             autoFocus={aberto}

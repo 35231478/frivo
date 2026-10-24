@@ -129,7 +129,7 @@ export function SelectCadastroRapido({
   if (!disabled && !carregando && opcoes.length === 0) {
     return (
       <div className={cn("rounded-lg border border-dashed px-3 py-2.5 text-sm flex items-center justify-between gap-3 flex-wrap",
-        erro ? "border-red-300 bg-red-50/40" : "border-surface-border bg-surface-alt/50", className)}>
+        erro ? "border-atrasado/40 bg-atrasado-claro/60" : "border-surface-border bg-surface-page", className)}>
         <span className="text-ink-muted">{nenhum} {entidade.singular} {cadastrado}{contexto ? ` ${contexto}` : ""}</span>
         {podeCriar && (
           <button type="button" onClick={abrirCadastro} className="inline-flex items-center gap-1 font-semibold text-primary-600 hover:text-primary-700">
@@ -154,7 +154,7 @@ export function SelectCadastroRapido({
         className={cn(
           "w-full flex items-center justify-between gap-2 bg-white border rounded-lg px-3 py-2.5 text-sm text-left transition-all",
           "focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10",
-          erro ? "border-red-300" : "border-surface-border",
+          erro ? "border-atrasado/40" : "border-surface-border",
           disabled && "bg-surface-alt cursor-not-allowed",
         )}
       >
@@ -198,7 +198,7 @@ export function SelectCadastroRapido({
           {podeCriar && (
             <button
               type="button" onClick={abrirCadastro}
-              className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-semibold text-primary-600 hover:bg-primary-50 border-t border-surface-border bg-surface-alt/40"
+              className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-semibold text-primary-600 hover:bg-primary-50 border-t border-surface-border bg-surface-page"
             >
               <Plus className="w-4 h-4" />
               {busca.trim() && filtradas.length === 0 ? `Criar “${busca.trim()}”` : `${novo} ${entidade.singular}`}
@@ -300,16 +300,16 @@ function MiniCadastro({
           {campos.map((c, i) => (
             <label key={c.nome} className={cn("block", COLS[c.colunas ?? 6])}>
               <span className="block text-xs font-medium text-ink mb-1">
-                {c.label}{c.obrigatorio && <span className="text-red-500"> *</span>}
+                {c.label}{c.obrigatorio && <span className="text-atrasado"> *</span>}
                 {c.tipo === "cep" && buscandoCep && <Loader2 className="inline w-3 h-3 ml-1 animate-spin text-ink-subtle" />}
               </span>
               {c.tipo === "select" ? (
-                <select value={valores[c.nome] ?? ""} onChange={(e) => set(c.nome, e.target.value)} className={cn(inputCls, faltando.has(c.nome) && "border-red-300")}>
+                <select value={valores[c.nome] ?? ""} onChange={(e) => set(c.nome, e.target.value)} className={cn(inputCls, faltando.has(c.nome) && "border-atrasado/40")}>
                   {!c.obrigatorio || !(valores[c.nome]) ? <option value="">{c.placeholder ?? "Selecione"}</option> : null}
                   {(c.opcoes ?? []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               ) : c.tipo === "uf" ? (
-                <select value={valores[c.nome] ?? ""} onChange={(e) => set(c.nome, e.target.value)} className={cn(inputCls, faltando.has(c.nome) && "border-red-300")}>
+                <select value={valores[c.nome] ?? ""} onChange={(e) => set(c.nome, e.target.value)} className={cn(inputCls, faltando.has(c.nome) && "border-atrasado/40")}>
                   <option value="">UF</option>
                   {UFS.map((u) => <option key={u} value={u}>{u}</option>)}
                 </select>
@@ -324,7 +324,7 @@ function MiniCadastro({
                 <textarea
                   value={valores[c.nome] ?? ""} onChange={(e) => set(c.nome, e.target.value)} rows={2}
                   placeholder={c.placeholder} maxLength={c.maxLength}
-                  className={cn(inputCls, "resize-none", faltando.has(c.nome) && "border-red-300")}
+                  className={cn(inputCls, "resize-none", faltando.has(c.nome) && "border-atrasado/40")}
                 />
               ) : (
                 <input
@@ -333,14 +333,14 @@ function MiniCadastro({
                   onChange={(e) => { set(c.nome, e.target.value); if (c.tipo === "cep") buscarCep(e.target.value); }}
                   placeholder={c.placeholder} maxLength={c.maxLength ?? (c.tipo === "cep" ? 9 : undefined)}
                   inputMode={c.tipo === "cep" ? "numeric" : c.inputMode}
-                  className={cn(inputCls, faltando.has(c.nome) && "border-red-300 focus:border-red-400 focus:ring-red-500/10")}
+                  className={cn(inputCls, faltando.has(c.nome) && "border-atrasado/40 focus:border-atrasado focus:ring-red-500/10")}
                 />
               )}
             </label>
           ))}
         </div>
 
-        {erro && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{erro}</p>}
+        {erro && <p className="text-sm text-atrasado bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2">{erro}</p>}
 
         <div className="flex flex-col-reverse gap-3 pt-1">
           {linkCadastroCompleto ? (

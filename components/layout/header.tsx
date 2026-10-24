@@ -162,7 +162,7 @@ export function Header({ session, avatarUrl }: HeaderProps) {
       .toUpperCase() ?? "??";
 
   return (
-    <header className="bg-white border-b border-surface-border shadow-card px-4 sm:px-6 py-3 flex items-center justify-between gap-4 shrink-0">
+    <header className="bg-white border-b border-surface-border px-4 sm:px-6 py-3 flex items-center justify-between gap-4 shrink-0">
       {/* Hamburguer (mobile) */}
       <button
         type="button"
@@ -205,7 +205,7 @@ export function Header({ session, avatarUrl }: HeaderProps) {
           <input
             type="search"
             placeholder="Buscar..."
-            className="w-64 bg-surface-alt border border-surface-border rounded-lg pl-9 pr-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all"
+            className="w-64 bg-surface-page border border-surface-border rounded-lg pl-9 pr-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:bg-white focus:border-acento focus:ring-4 focus:ring-acento/15 transition-colors"
           />
         </div>
 
@@ -218,31 +218,31 @@ export function Header({ session, avatarUrl }: HeaderProps) {
           >
             <Bell className="w-5 h-5" />
             {total > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full ring-2 ring-white flex items-center justify-center">
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-atrasado text-white text-[10px] font-semibold tabular-nums rounded-full ring-2 ring-white flex items-center justify-center">
                 {total > 99 ? "99+" : total}
               </span>
             )}
           </button>
 
           {sinoAberto && (
-            <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-surface-border rounded-xl shadow-card-hover z-30 overflow-hidden">
+            <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-surface-border rounded-card shadow-elevated z-30 overflow-hidden">
               <div className="px-4 py-3 border-b border-surface-border">
-                <p className="text-sm font-bold text-ink">Alertas de prazos</p>
+                <p className="font-display text-sm font-semibold text-ink">Alertas de prazos</p>
               </div>
               {total === 0 ? (
-                <p className="text-sm text-ink-muted text-center py-6">Nenhum alerta no momento 🎉</p>
+                <p className="text-sm text-ink-muted text-center py-6">Nenhum alerta no momento.</p>
               ) : (
-                <div className="divide-y divide-surface-border">
-                  {podeVer("ordens") && <AlertaItem href="/prazos?status=ATRASADO" icone={AlertTriangle} cor="text-red-600" label="Prazos vencidos" valor={alertas?.prazosVencidos ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("ordens") && <AlertaItem href="/prazos?status=ATIVO" icone={Clock} cor="text-amber-600" label="Vencendo hoje" valor={alertas?.etapasVencendoHoje ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("financeiro") && <AlertaItem href="/compras/pedidos" icone={ShoppingCart} cor="text-orange-600" label="Compras pendentes" valor={alertas?.pedidosPendentes ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("ordens") && <AlertaItem href="/ordens?origem=PORTAL_CLIENTE" icone={Headset} cor="text-cyan-600" label="Chamados do portal" valor={alertas?.chamadosPortal ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("ordens") && <AlertaItem href="/ordens" icone={Timer} cor="text-red-600" label="Atendimentos em atraso" valor={alertas?.atendimentosAtraso ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("veiculos") && <AlertaItem href="/veiculos/checklist" icone={ClipboardCheck} cor="text-blue-600" label="Checklists pendentes" valor={alertas?.checklistPendente ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={AlertTriangle} cor="text-amber-600" label="Checklists com alertas" valor={alertas?.checklistsComAlertas ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={FileWarning} cor="text-orange-600" label="Documentos de veículo vencendo" valor={alertas?.documentosVencendo ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={Wrench} cor="text-violet-600" label="Veículos em manutenção" valor={alertas?.veiculosManutencao ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("financeiro", "contasReceber") && <AlertaItem href="/financeiro/contas-receber?status=RECEBIDO" icone={Barcode} cor="text-emerald-600" label="Boletos pagos hoje" valor={alertas?.boletosPagos ?? 0} onClick={() => setSinoAberto(false)} />}
+                <div className="divide-y divide-surface-linha">
+                  {podeVer("ordens") && <AlertaItem href="/prazos?status=ATRASADO" icone={AlertTriangle} cor="text-atrasado" label="Prazos vencidos" valor={alertas?.prazosVencidos ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("ordens") && <AlertaItem href="/prazos?status=ATIVO" icone={Clock} cor="text-atencao" label="Vencendo hoje" valor={alertas?.etapasVencendoHoje ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("financeiro") && <AlertaItem href="/compras/pedidos" icone={ShoppingCart} cor="text-atencao" label="Compras pendentes" valor={alertas?.pedidosPendentes ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("ordens") && <AlertaItem href="/ordens?origem=PORTAL_CLIENTE" icone={Headset} cor="text-acento" label="Chamados do portal" valor={alertas?.chamadosPortal ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("ordens") && <AlertaItem href="/ordens" icone={Timer} cor="text-atrasado" label="Atendimentos em atraso" valor={alertas?.atendimentosAtraso ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("veiculos") && <AlertaItem href="/veiculos/checklist" icone={ClipboardCheck} cor="text-acento" label="Checklists pendentes" valor={alertas?.checklistPendente ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={AlertTriangle} cor="text-atencao" label="Checklists com alertas" valor={alertas?.checklistsComAlertas ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={FileWarning} cor="text-atencao" label="Documentos de veículo vencendo" valor={alertas?.documentosVencendo ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={Wrench} cor="text-acento" label="Veículos em manutenção" valor={alertas?.veiculosManutencao ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("financeiro", "contasReceber") && <AlertaItem href="/financeiro/contas-receber?status=RECEBIDO" icone={Barcode} cor="text-ok" label="Boletos pagos hoje" valor={alertas?.boletosPagos ?? 0} onClick={() => setSinoAberto(false)} />}
                 </div>
               )}
             </div>
@@ -259,15 +259,15 @@ export function Header({ session, avatarUrl }: HeaderProps) {
           </div>
           {avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={avatarUrl} alt={usuario.name ?? "Usuário"} className="w-9 h-9 rounded-full object-cover shadow-sm" />
+            <img src={avatarUrl} alt={usuario.name ?? "Usuário"} className="w-9 h-9 rounded-full object-cover" />
           ) : (
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary-500 to-success-500 flex items-center justify-center text-white text-xs font-bold shadow-sm">
+            <div className="w-9 h-9 rounded-full bg-acento-claro text-acento flex items-center justify-center font-display text-xs font-semibold">
               {iniciais}
             </div>
           )}
           <button
             onClick={() => signOut({ callbackUrl: "/login" })}
-            className="text-ink-muted hover:text-red-500 hover:bg-red-50 transition-colors p-2 rounded-lg"
+            className="text-ink-muted hover:text-atrasado hover:bg-atrasado-claro transition-colors p-2 rounded-lg"
             title="Sair"
           >
             <LogOut className="w-4 h-4" />

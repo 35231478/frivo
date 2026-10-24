@@ -7,13 +7,13 @@ import { formatarMoeda, formatarData, LABELS_STATUS_MEDICAO } from "@/lib/utils"
 import { Receipt, ExternalLink } from "lucide-react";
 
 const COR_MEDICAO: Record<string, string> = {
-  RASCUNHO: "bg-gray-100 text-gray-600",
-  AGUARDANDO_APROVACAO: "bg-blue-100 text-blue-700",
-  AGUARDANDO_PC: "bg-amber-100 text-amber-700",
-  PC_RECEBIDO: "bg-violet-100 text-violet-700",
-  NF_EMITIDA: "bg-cyan-100 text-cyan-700",
-  PAGO: "bg-green-100 text-green-700",
-  CANCELADA: "bg-red-100 text-red-600",
+  RASCUNHO: "bg-surface-linha text-ink-muted",
+  AGUARDANDO_APROVACAO: "bg-acento-claro text-acento",
+  AGUARDANDO_PC: "bg-atencao-claro text-atencao-texto",
+  PC_RECEBIDO: "bg-ok-claro text-ok-texto",
+  NF_EMITIDA: "bg-acento-claro text-acento",
+  PAGO: "bg-ok-claro text-ok-texto",
+  CANCELADA: "bg-atrasado-claro text-atrasado-texto",
 };
 
 interface MedicaoResumo { id: string; numero: string; status: string; valorTotal: unknown; criadoEm: string | Date }
@@ -45,26 +45,26 @@ export function OsFinanceiro({ osId, temContrato, medicoes: iniciais, itensOrcam
 
   return (
     <div className="space-y-6">
-      {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
+      {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2">{erro}</div>}
 
       {/* Resumo */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="bg-gray-50 rounded-lg p-3 text-center">
-          <p className="text-xs text-gray-500">Orçamento total</p>
-          <p className="text-lg font-bold text-gray-900">{formatarMoeda(totalOrcamento)}</p>
+        <div className="bg-surface-page rounded-lg p-3 text-center">
+          <p className="text-xs text-ink-muted">Orçamento total</p>
+          <p className="text-lg font-bold text-ink">{formatarMoeda(totalOrcamento)}</p>
         </div>
-        <div className="bg-green-50 rounded-lg p-3 text-center">
-          <p className="text-xs text-green-600">Executado</p>
-          <p className="text-lg font-bold text-green-700">{formatarMoeda(totalExecutado)}</p>
+        <div className="bg-ok-claro rounded-lg p-3 text-center">
+          <p className="text-xs text-ok">Executado</p>
+          <p className="text-lg font-bold text-ok-texto">{formatarMoeda(totalExecutado)}</p>
         </div>
-        <div className="bg-blue-50 rounded-lg p-3 text-center">
-          <p className="text-xs text-blue-600">Medido</p>
-          <p className="text-lg font-bold text-blue-700">{formatarMoeda(totalMedido)}</p>
+        <div className="bg-acento-claro rounded-lg p-3 text-center">
+          <p className="text-xs text-acento">Medido</p>
+          <p className="text-lg font-bold text-acento">{formatarMoeda(totalMedido)}</p>
         </div>
       </div>
 
       {temContrato && (
-        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+        <p className="text-xs text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2">
           OS de contrato: a <strong>mensalidade</strong> é faturada pelo faturamento mensal do contrato
           (Medições &rsaquo; Gerar mês). Aqui saem só os itens executados e os adicionais marcados &ldquo;Cobrar&rdquo;.
         </p>
@@ -72,21 +72,21 @@ export function OsFinanceiro({ osId, temContrato, medicoes: iniciais, itensOrcam
 
       {/* Medições oficiais em que a OS entrou */}
       {medicoes.length === 0 ? (
-        <p className="text-sm text-gray-400 text-center py-6">Esta OS ainda não entrou em nenhuma medição.</p>
+        <p className="text-sm text-ink-muted text-center py-6">Esta OS ainda não entrou em nenhuma medição.</p>
       ) : (
         <div className="space-y-3">
           {medicoes.map((m) => (
-            <a key={m.id} href={`/financeiro/medicoes/${m.id}`} className="flex items-center justify-between border border-gray-200 rounded-lg p-4 hover:border-primary-300 transition-colors">
+            <a key={m.id} href={`/financeiro/medicoes/${m.id}`} className="flex items-center justify-between border border-surface-border rounded-lg p-4 hover:border-primary-300 transition-colors">
               <div className="flex items-center gap-2 min-w-0">
-                <Receipt className="w-4 h-4 text-gray-400 shrink-0" />
-                <span className="font-medium text-gray-900 truncate">Medição {m.numero}</span>
-                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${COR_MEDICAO[m.status] ?? "bg-gray-100 text-gray-600"}`}>
+                <Receipt className="w-4 h-4 text-ink-muted shrink-0" />
+                <span className="font-medium text-ink truncate">Medição {m.numero}</span>
+                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${COR_MEDICAO[m.status] ?? "bg-surface-linha text-ink-muted"}`}>
                   {LABELS_STATUS_MEDICAO?.[m.status as never] ?? m.status}
                 </span>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <span className="text-sm font-bold text-gray-900">{formatarMoeda(Number(m.valorTotal))}</span>
-                <ExternalLink className="w-3.5 h-3.5 text-gray-400" />
+                <span className="text-sm font-bold text-ink">{formatarMoeda(Number(m.valorTotal))}</span>
+                <ExternalLink className="w-3.5 h-3.5 text-ink-muted" />
               </div>
             </a>
           ))}

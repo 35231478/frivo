@@ -67,32 +67,32 @@ export function BarraAcoesMassa({ aoConcluir }: { aoConcluir?: () => void } = {}
       {n > 0 && (
         <div className="fixed z-40 inset-x-2 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 bottom-20 lg:bottom-6 sm:max-w-[min(960px,calc(100vw-2rem))]"
           role="region" aria-label="Ações em massa" data-barra-massa>
-          <div className="rounded-2xl bg-sidebar text-white shadow-2xl px-3 sm:px-4 py-2.5 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+          <div className="rounded-card bg-white text-ink border border-surface-border shadow-elevated px-3 sm:px-4 py-2.5 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
             <div className="flex items-center gap-2 min-w-0">
-              <button type="button" onClick={sel.limpar} className="p-1 rounded-md text-white/70 hover:text-white hover:bg-white/10" aria-label="Limpar seleção" title="Limpar seleção">
+              <button type="button" onClick={sel.limpar} className="p-1 rounded-md text-ink-muted hover:text-ink hover:bg-surface-page" aria-label="Limpar seleção" title="Limpar seleção">
                 <X className="w-4 h-4" />
               </button>
               <div className="min-w-0 text-sm">
-                <p className="font-semibold whitespace-nowrap" data-contagem>{fmt(n)} {n === 1 ? "selecionado" : "selecionados"}</p>
+                <p className="font-semibold tabular-nums whitespace-nowrap" data-contagem>{fmt(n)} {n === 1 ? "selecionado" : "selecionados"}</p>
                 {sel.todosDoFiltro ? (
-                  <p className="text-[11px] text-white/70">
+                  <p className="text-[11px] text-ink-muted">
                     {sel.total > MAX_SELECAO ? `Os primeiros ${fmt(MAX_SELECAO)} dos ${fmt(sel.total)} do filtro (máximo por vez)` : `Todos os ${fmt(sel.total)} que batem no filtro`}
                   </p>
                 ) : faltam > 0 ? (
                   <button type="button" onClick={sel.selecionarFiltro} disabled={sel.carregandoFiltro} data-acao="selecionar-filtro"
-                    className="text-[11px] text-primary-200 hover:text-white underline underline-offset-2 disabled:opacity-60 text-left">
+                    className="text-[11px] text-acento hover:text-acento-hover underline underline-offset-2 disabled:opacity-60 text-left">
                     {sel.carregandoFiltro ? "Selecionando…" : sel.total > MAX_SELECAO
                       ? `Selecionar os primeiros ${fmt(MAX_SELECAO)} dos ${fmt(sel.total)} do filtro`
                       : `Selecionar todos os ${fmt(sel.total)} que batem no filtro`}
                   </button>
                 ) : null}
-                {(sel.erroFiltro || erro) && <p className="text-[11px] text-red-300">{sel.erroFiltro || erro}</p>}
+                {(sel.erroFiltro || erro) && <p className="text-[11px] text-atrasado">{sel.erroFiltro || erro}</p>}
               </div>
             </div>
             <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 sm:ml-auto">
               {exportar && (
                 <button type="button" onClick={baixar} disabled={exportando} data-acao-massa="exportar"
-                  className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-white/10 hover:bg-white/20 px-3 py-1.5 text-sm font-medium disabled:opacity-60">
+                  className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-surface-border bg-white hover:bg-surface-page px-3 py-1.5 text-sm font-medium disabled:opacity-60">
                   {exportando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Exportar
                 </button>
               )}
@@ -102,12 +102,12 @@ export function BarraAcoesMassa({ aoConcluir }: { aoConcluir?: () => void } = {}
                 return (
                   <button key={a} type="button" onClick={() => setAcao(a)} data-acao-massa={a}
                     className={cn("shrink-0 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium whitespace-nowrap",
-                      d.perigo ? "bg-red-500/90 hover:bg-red-500" : "bg-white/10 hover:bg-white/20")}>
+                      d.perigo ? "bg-atrasado text-white hover:brightness-95" : "border border-surface-border bg-white hover:bg-surface-page")}>
                     <Icone className="w-4 h-4" /> {d.rotulo}
                   </button>
                 );
               })}
-              {!exportar && acoes.length === 0 && <span className="text-xs text-white/70">Seu perfil não tem ações em massa nesta lista.</span>}
+              {!exportar && acoes.length === 0 && <span className="text-xs text-ink-muted">Seu perfil não tem ações em massa nesta lista.</span>}
             </div>
           </div>
         </div>
@@ -185,10 +185,10 @@ function ExecucaoMassa({ acao, ids, podeImprimirQr, onFechar }: { acao: AcaoItem
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4" role="dialog" aria-modal="true" aria-label={`${def.rotulo} em massa`} data-modal-massa={etapa}>
-      <div className="absolute inset-0 bg-black/50" onClick={() => etapa === "confirmar" && onFechar(false)} />
-      <div className="relative bg-white w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto">
+      <div className="absolute inset-0 bg-ink/40" onClick={() => etapa === "confirmar" && onFechar(false)} />
+      <div className="relative bg-white w-full sm:max-w-lg rounded-t-card sm:rounded-card border border-surface-border shadow-elevated max-h-[92vh] overflow-y-auto">
         <div className="px-5 py-4 border-b border-surface-border flex items-center justify-between gap-3 sticky top-0 bg-white">
-          <h3 className="text-base font-bold text-ink">
+          <h3 className="font-display text-base font-semibold text-ink">
             {etapa === "resultado" ? "Resultado" : `${def.rotulo} ${fmt(total)} ${total === 1 ? ent.singular : ent.plural}`}
           </h3>
           {etapa !== "executando" && (
@@ -205,16 +205,16 @@ function ExecucaoMassa({ acao, ids, podeImprimirQr, onFechar }: { acao: AcaoItem
                 <label className="block text-sm font-semibold text-ink space-y-1.5">
                   <span>Motivo <span className="font-normal text-ink-muted">(opcional, vai para o histórico)</span></span>
                   <textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} maxLength={500} rows={2}
-                    className="w-full rounded-lg border border-surface-border px-3 py-2 text-sm font-normal focus:outline-none focus:border-primary-500" />
+                    className="w-full rounded-lg border border-surface-border px-3 py-2 text-sm font-normal focus:outline-none focus:border-acento focus:ring-4 focus:ring-acento/15" />
                 </label>
               )}
               {reforcada && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2" data-confirmacao-reforcada>
-                  <p className="flex gap-2 text-sm text-amber-800"><AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> Lote grande: {fmt(total)} registros de uma vez.</p>
-                  <label className="block text-sm text-amber-900">
+                <div className="rounded-lg border border-atencao/20 bg-atencao-claro p-3 space-y-2" data-confirmacao-reforcada>
+                  <p className="flex gap-2 text-sm text-atencao-texto"><AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> Lote grande: {fmt(total)} registros de uma vez.</p>
+                  <label className="block text-sm text-atencao-texto">
                     Para confirmar, digite <strong>{total}</strong>:
                     <input value={digitado} onChange={(e) => setDigitado(e.target.value)} inputMode="numeric" autoFocus aria-label="Digite a quantidade para confirmar"
-                      className="mt-1 block w-32 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm focus:outline-none focus:border-amber-500" />
+                      className="mt-1 block w-32 rounded-lg border border-atencao/40 bg-white px-3 py-1.5 text-sm focus:outline-none focus:border-atencao" />
                   </label>
                 </div>
               )}
@@ -222,7 +222,7 @@ function ExecucaoMassa({ acao, ids, podeImprimirQr, onFechar }: { acao: AcaoItem
                 <button type="button" onClick={() => onFechar(false)} className="btn-secondary text-sm">Cancelar</button>
                 <button type="button" onClick={executar} disabled={!podeConfirmar} data-acao="confirmar-massa"
                   className={cn("inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50",
-                    def.perigo ? "bg-red-600 hover:bg-red-700" : "bg-primary-600 hover:bg-primary-700")}>
+                    def.perigo ? "bg-atrasado hover:brightness-95" : "bg-primary-600 hover:bg-primary-700")}>
                   {def.rotulo} {fmt(total)}
                 </button>
               </div>
@@ -246,17 +246,17 @@ function ExecucaoMassa({ acao, ids, podeImprimirQr, onFechar }: { acao: AcaoItem
             <div className="space-y-4" data-resultado-massa>
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
                 <span className="flex items-center gap-1.5 font-semibold text-success-700"><CheckCircle2 className="w-4 h-4" /> {fmt(ok.length)} {ok.length === 1 ? "feita" : "feitas"}</span>
-                <span className={cn("flex items-center gap-1.5 font-semibold", falhas.length ? "text-red-700" : "text-ink-muted")}><XCircle className="w-4 h-4" /> {fmt(falhas.length)} não {falhas.length === 1 ? "pôde" : "puderam"}</span>
+                <span className={cn("flex items-center gap-1.5 font-semibold", falhas.length ? "text-atrasado-texto" : "text-ink-muted")}><XCircle className="w-4 h-4" /> {fmt(falhas.length)} não {falhas.length === 1 ? "pôde" : "puderam"}</span>
               </div>
               {jaEstavam > 0 && <p className="text-xs text-ink-muted">{fmt(jaEstavam)} já estavam assim (contam como feitas, nada mudou nelas).</p>}
               {falhas.length > 0 && (
-                <div className="rounded-lg border border-red-200">
-                  <p className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-red-700 border-b border-red-100 bg-red-50">Não puderam — motivo de cada um</p>
+                <div className="rounded-lg border border-atrasado/20">
+                  <p className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-atrasado-texto border-b border-atrasado/20 bg-atrasado-claro">Não puderam — motivo de cada um</p>
                   <ul className="divide-y divide-surface-border max-h-72 overflow-y-auto">
                     {falhas.map((f) => (
                       <li key={f.id} className="px-3 py-2 text-sm">
                         <p className="font-medium text-ink break-words">{f.rotulo}</p>
-                        <p className="text-xs text-red-700 break-words">{f.motivo}</p>
+                        <p className="text-xs text-atrasado-texto break-words">{f.motivo}</p>
                       </li>
                     ))}
                   </ul>

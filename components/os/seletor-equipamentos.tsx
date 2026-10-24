@@ -45,20 +45,20 @@ export function SeletorEquipamentos({ clienteId, unidadeId, excluir = [], marcad
   return (
     <div className="space-y-2" data-seletor-equipamentos>
       {disponiveis.length > 5 && <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por nome, TAG, local, tipo…" aria-label="Buscar equipamento" />}
-      {lista === null && <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-gray-300" /></div>}
+      {lista === null && <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-ink-subtle" /></div>}
       {lista !== null && candidatos.length === 0 && (
-        <p className="text-xs text-gray-400 py-2" data-seletor-vazio>
+        <p className="text-xs text-ink-muted py-2" data-seletor-vazio>
           {termo ? "Nenhum equipamento encontrado." : disponiveis.length || (lista ?? []).length ? "Todos os equipamentos deste local já estão na atividade." : "Nenhum equipamento cadastrado neste local."}
           {!termo && vazio}
         </p>
       )}
       <div className="max-h-64 overflow-y-auto space-y-1.5">
         {candidatos.map((e) => (
-          <label key={e.id} className="flex items-center gap-3 bg-white border border-gray-100 rounded-lg px-3 py-2 cursor-pointer hover:border-frivo-200" data-opcao-equipamento={e.id}>
+          <label key={e.id} className="flex items-center gap-3 bg-white border border-surface-linha rounded-lg px-3 py-2 cursor-pointer hover:border-frivo-200" data-opcao-equipamento={e.id}>
             <input type="checkbox" className="accent-frivo-600 w-4 h-4 shrink-0" checked={marcados.has(e.id)} onChange={() => alternar(e.id)} />
             <span className="min-w-0">
-              <span className="block text-sm text-gray-800 truncate">{rotuloEquipLista(e)}</span>
-              <span className="block text-[11px] text-gray-400 truncate">
+              <span className="block text-sm text-ink truncate">{rotuloEquipLista(e)}</span>
+              <span className="block text-[11px] text-ink-muted truncate">
                 {[e.tipoEquipamento?.nome, e.localizacao, e.patrimonio && `TAG ${e.patrimonio}`, !unidadeId && e.unidade?.nome].filter(Boolean).join(" · ")}
               </span>
             </span>

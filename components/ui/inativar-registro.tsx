@@ -93,7 +93,7 @@ export function InativarRegistro({
       {variante === "icone" ? (
         <button
           type="button" title={`${rotulo} ${entidade}`} aria-label={`${rotulo} ${entidade}`} onClick={abrir}
-          className={cn("p-1.5 rounded-md text-ink-muted hover:bg-surface-alt", ativo ? "hover:text-red-600" : "hover:text-emerald-600")}
+          className={cn("p-1.5 rounded-md text-ink-muted hover:bg-surface-alt", ativo ? "hover:text-atrasado" : "hover:text-ok")}
         >
           <Icone className="w-4 h-4" />
         </button>
@@ -102,7 +102,7 @@ export function InativarRegistro({
           type="button" onClick={abrir}
           className={cn(
             "inline-flex items-center gap-1.5 text-sm border rounded-lg px-3 py-2 transition-colors bg-white",
-            ativo ? "text-red-600 border-red-200 hover:bg-red-50" : "text-emerald-700 border-emerald-200 hover:bg-emerald-50",
+            ativo ? "text-atrasado border-atrasado/20 hover:bg-atrasado-claro" : "text-ok-texto border-ok/20 hover:bg-ok-claro",
           )}
         >
           <Icone className="w-4 h-4" /> {rotulo}
@@ -120,12 +120,12 @@ export function InativarRegistro({
           {checando && <p className="flex items-center gap-2 text-sm text-ink-muted"><Loader2 className="w-4 h-4 animate-spin" /> Verificando vínculos…</p>}
 
           {impacto?.bloqueio && (
-            <div data-bloqueio className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <div data-bloqueio className="flex items-start gap-2 text-sm text-atrasado-texto bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> <span>{impacto.bloqueio}</span>
             </div>
           )}
           {!bloqueado && !!impacto?.avisos.length && (
-            <div data-avisos className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            <div data-avisos className="text-sm text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2">
               <p className="flex items-center gap-1.5 font-semibold"><Info className="w-4 h-4" /> Antes de confirmar, saiba que:</p>
               <ul className="mt-1 ml-5 list-disc space-y-0.5">
                 {impacto.avisos.map((a) => <li key={a}>{a}</li>)}
@@ -152,7 +152,7 @@ export function InativarRegistro({
           )}
 
           {erro && (
-            <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <div className="flex items-start gap-2 text-sm text-atrasado-texto bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> <span>{erro}</span>
             </div>
           )}
@@ -165,7 +165,7 @@ export function InativarRegistro({
               type="button" onClick={confirmar} disabled={carregando || checando || bloqueado}
               className={cn(
                 "inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold rounded-lg text-white disabled:opacity-50",
-                ativo ? "bg-red-600 hover:bg-red-700" : "bg-emerald-600 hover:bg-emerald-700",
+                ativo ? "bg-atrasado hover:brightness-95" : "bg-ok hover:bg-success-600",
               )}
             >
               {carregando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Icone className="w-4 h-4" />}

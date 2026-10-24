@@ -46,7 +46,7 @@ export function ConcluirSemEquipamento({ osId, atividadeId, onConcluido, classNa
   return (
     <>
       <button type="button" onClick={() => { setErro(""); setAberto(true); }} data-concluir-sem-equipamento
-        className={className ?? "inline-flex items-center gap-1.5 text-sm font-semibold text-amber-800 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded-lg px-3 py-2"}>
+        className={className ?? "inline-flex items-center gap-1.5 text-sm font-semibold text-atencao-texto bg-atencao-claro border border-atencao/20 hover:bg-atencao-claro rounded-lg px-3 py-2"}>
         <ShieldAlert className="w-4 h-4" /> Concluir sem equipamento — justificar
       </button>
       <Modal aberto={aberto} onFechar={() => setAberto(false)} titulo="Concluir sem equipamento">
@@ -59,7 +59,7 @@ export function ConcluirSemEquipamento({ osId, atividadeId, onConcluido, classNa
             <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} maxLength={500} aria-label="Motivo"
               placeholder="Ex.: visita de avaliação do local, sem intervenção em equipamento" />
           </FormField>
-          {erro && <p role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{erro}</p>}
+          {erro && <p role="alert" className="text-sm text-atrasado-texto bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2">{erro}</p>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={() => setAberto(false)}>Cancelar</Button>
             <Button type="button" loading={enviando} onClick={enviar} data-confirmar-sem-equipamento>Concluir sem equipamento</Button>

@@ -61,7 +61,7 @@ export function OsAnexos({ osId, anexos: iniciais }: { osId: string; anexos: Ane
   return (
     <div className="space-y-3">
       {erro && (
-        <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+        <div className="flex items-start gap-2 text-sm text-atrasado-texto bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> {erro}
         </div>
       )}
@@ -94,7 +94,7 @@ export function OsAnexos({ osId, anexos: iniciais }: { osId: string; anexos: Ane
               </a>
               {podeEditar && (
                 <button type="button" title="Excluir anexo" onClick={() => setExcluindo(a)}
-                  className="p-2 rounded-md text-ink-muted hover:text-red-600 hover:bg-red-50">
+                  className="p-2 rounded-md text-ink-muted hover:text-atrasado hover:bg-atrasado-claro">
                   <Trash2 className="w-4 h-4" />
                 </button>
               )}
@@ -121,7 +121,7 @@ export function OsAnexos({ osId, anexos: iniciais }: { osId: string; anexos: Ane
           <div className="flex gap-2 justify-end">
             <button type="button" onClick={() => setExcluindo(null)} className="px-4 py-2.5 text-sm font-medium rounded-lg border border-surface-border text-ink hover:bg-surface-alt">Voltar</button>
             <button type="button" onClick={confirmarExclusao} disabled={processando}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold rounded-lg bg-red-600 hover:bg-red-700 text-white disabled:opacity-60">
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold rounded-lg bg-atrasado hover:brightness-95 text-white disabled:opacity-60">
               {processando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} Sim, excluir
             </button>
           </div>

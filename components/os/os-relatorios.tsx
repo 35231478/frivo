@@ -24,8 +24,8 @@ interface Resumo {
 }
 
 const STATUS_ATIVIDADE: Record<string, string> = {
-  AGENDADA: "bg-violet-50 text-violet-700", EM_ANDAMENTO: "bg-amber-50 text-amber-700",
-  CONCLUIDA: "bg-success-50 text-success-700", CANCELADA: "bg-red-50 text-red-700",
+  AGENDADA: "bg-acento-claro text-acento", EM_ANDAMENTO: "bg-atencao-claro text-atencao-texto",
+  CONCLUIDA: "bg-success-50 text-success-700", CANCELADA: "bg-atrasado-claro text-atrasado-texto",
 };
 const LABEL_STATUS_ATIVIDADE: Record<string, string> = {
   AGENDADA: "Agendada", EM_ANDAMENTO: "Em andamento", CONCLUIDA: "Concluída", CANCELADA: "Cancelada",
@@ -84,10 +84,10 @@ export function OsRelatorios({ osId }: { osId: string }) {
 
   return (
     <div className="space-y-5">
-      {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 flex items-center gap-2"><AlertCircle className="w-4 h-4" />{erro}</div>}
+      {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2 flex items-center gap-2"><AlertCircle className="w-4 h-4" />{erro}</div>}
 
       {/* Resumo geral */}
-      <div className="border border-surface-border rounded-xl p-4 bg-surface-alt/30">
+      <div className="border border-surface-border rounded-card p-4 bg-surface-page">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {cards.map((c) => (
             <div key={c.label} className="bg-white rounded-lg border border-surface-border p-3 flex items-center gap-3">

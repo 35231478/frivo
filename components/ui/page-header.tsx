@@ -15,12 +15,13 @@ export function PageHeader({ title, description, backHref, actions }: PageHeader
       <div className="flex items-start gap-3">
         <Link
           href={backHref}
-          className="mt-1 p-2 rounded-lg text-ink-muted hover:text-primary-600 hover:bg-surface-alt transition-colors"
+          aria-label="Voltar"
+          className="mt-1 p-2 rounded-lg text-ink-muted hover:text-acento hover:bg-white transition-colors"
         >
           <ChevronLeft className="w-5 h-5" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-ink tracking-tight">{title}</h1>
+          <h1 className="font-display text-2xl font-bold text-ink tracking-tight">{title}</h1>
           {description && <p className="text-sm text-ink-muted mt-1">{description}</p>}
         </div>
       </div>
