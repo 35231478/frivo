@@ -35,12 +35,12 @@ export function AvisoInativacaoStatus({ url, mostrar, motivo, onMotivo }: {
   return (
     <div className="space-y-2" data-aviso-inativacao>
       {carregando && <p className="flex items-center gap-2 text-sm text-ink-muted"><Loader2 className="w-4 h-4 animate-spin" /> Verificando vínculos…</p>}
-      {erro && <p className="text-sm text-red-700">{erro}</p>}
+      {erro && <p className="text-sm text-atrasado-texto">{erro}</p>}
       {impacto?.bloqueio && (
-        <p className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2"><AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> {impacto.bloqueio}</p>
+        <p className="flex items-start gap-2 text-sm text-atrasado-texto bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2"><AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> {impacto.bloqueio}</p>
       )}
       {!impacto?.bloqueio && avisos.length > 0 && (
-        <div className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+        <div className="text-sm text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2">
           <p className="flex items-center gap-1.5 font-semibold"><Info className="w-4 h-4" /> Ao salvar como inativo:</p>
           <ul className="mt-1 ml-5 list-disc space-y-0.5">{avisos.map((a) => <li key={a}>{a}</li>)}</ul>
         </div>

@@ -70,7 +70,7 @@ function responder(ok: boolean) {
 const ICONE: Record<TipoToast, typeof CheckCircle2> = { sucesso: CheckCircle2, erro: XCircle, info: Info };
 const COR: Record<TipoToast, string> = {
   sucesso: "bg-success-600 text-white",
-  erro: "bg-red-600 text-white",
+  erro: "bg-atrasado text-white",
   info: "bg-ink text-white",
 };
 
@@ -100,7 +100,7 @@ export function Avisos() {
           const Icone = ICONE[t.tipo];
           return (
             <div key={t.id} role="status" data-toast={t.tipo}
-              className={cn("pointer-events-auto flex items-start gap-2 max-w-sm text-sm font-medium rounded-xl px-4 py-3 shadow-card-hover animate-in fade-in slide-in-from-top-2", COR[t.tipo])}>
+              className={cn("pointer-events-auto flex items-start gap-2 max-w-sm text-sm font-medium rounded-card px-4 py-3 shadow-card-hover animate-in fade-in slide-in-from-top-2", COR[t.tipo])}>
               <Icone className="w-4 h-4 shrink-0 mt-0.5" />
               <span className="whitespace-pre-wrap">{t.mensagem}</span>
               <button type="button" aria-label="Fechar" className="opacity-70 hover:opacity-100 shrink-0"
@@ -116,9 +116,9 @@ export function Avisos() {
       {c && (
         <div className="fixed inset-0 z-[95] flex items-center justify-center p-4" role="dialog" aria-modal="true" data-confirmacao>
           <div className="absolute inset-0 bg-black/50" onClick={() => responder(false)} />
-          <div className="relative bg-white rounded-2xl shadow-card-hover w-full max-w-md p-5 space-y-4 text-left whitespace-normal">
+          <div className="relative bg-white rounded-card shadow-card-hover w-full max-w-md p-5 space-y-4 text-left whitespace-normal">
             <div className="flex items-start gap-3">
-              <span className={cn("w-9 h-9 rounded-full flex items-center justify-center shrink-0", c.perigo ? "bg-red-100 text-red-600" : "bg-primary-50 text-primary-600")}>
+              <span className={cn("w-9 h-9 rounded-full flex items-center justify-center shrink-0", c.perigo ? "bg-atrasado-claro text-atrasado" : "bg-primary-50 text-primary-600")}>
                 {c.perigo ? <AlertTriangle className="w-5 h-5" /> : <Info className="w-5 h-5" />}
               </span>
               <div className="min-w-0 space-y-1">
@@ -133,7 +133,7 @@ export function Avisos() {
               </button>
               <button type="button" autoFocus data-confirmar-sim onClick={() => responder(true)}
                 className={cn("px-4 py-2.5 text-sm font-semibold rounded-lg text-white",
-                  c.perigo ? "bg-red-500 hover:bg-red-600" : "bg-primary-500 hover:bg-primary-600")}>
+                  c.perigo ? "bg-atrasado hover:brightness-95" : "bg-primary-500 hover:bg-primary-600")}>
                 {c.confirmarTexto ?? "Confirmar"}
               </button>
             </div>

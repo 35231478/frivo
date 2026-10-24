@@ -75,7 +75,7 @@ export function GaleriaImagens({ fotos, onChange }: Props) {
       <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={adicionar} className="hidden" />
 
       {/* Visualizador / carrossel */}
-      <div className="relative bg-surface-alt border border-surface-border rounded-xl overflow-hidden aspect-video flex items-center justify-center">
+      <div className="relative bg-surface-alt border border-surface-border rounded-card overflow-hidden aspect-video flex items-center justify-center">
         {temFotos ? (
           <>
             <img src={fotos[indice]} alt={`Imagem ${indice + 1}`} className="w-full h-full object-contain" />
@@ -84,7 +84,7 @@ export function GaleriaImagens({ fotos, onChange }: Props) {
                 <Star className="w-3 h-3 fill-white" /> Principal
               </span>
             )}
-            <button type="button" onClick={() => remover(indice)} className="absolute top-2 right-2 bg-black/50 hover:bg-red-500 text-white rounded-full p-1.5" title="Remover">
+            <button type="button" onClick={() => remover(indice)} className="absolute top-2 right-2 bg-black/50 hover:bg-atrasado text-white rounded-full p-1.5" title="Remover">
               <X className="w-4 h-4" />
             </button>
             {fotos.length > 1 && (
@@ -125,7 +125,7 @@ export function GaleriaImagens({ fotos, onChange }: Props) {
               >
                 <img src={f} alt={`Miniatura ${i + 1}`} className="w-full h-full object-cover" />
               </button>
-              <button type="button" onClick={() => remover(i)} className="absolute -top-1.5 -right-1.5 bg-white border border-surface-border text-ink-muted hover:text-red-500 rounded-full p-0.5 shadow opacity-0 group-hover:opacity-100 transition-opacity">
+              <button type="button" onClick={() => remover(i)} className="absolute -top-1.5 -right-1.5 bg-white border border-surface-border text-ink-muted hover:text-atrasado rounded-full p-0.5 shadow opacity-0 group-hover:opacity-100 transition-opacity">
                 <X className="w-3 h-3" />
               </button>
             </div>
@@ -139,7 +139,7 @@ export function GaleriaImagens({ fotos, onChange }: Props) {
       )}
 
       {processando && <p data-galeria-processando className="flex items-center gap-1.5 text-xs text-ink-muted"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Otimizando a foto…</p>}
-      {erro && <p className="text-xs text-red-500">{erro}</p>}
+      {erro && <p className="text-xs text-atrasado">{erro}</p>}
       <p className="text-xs text-ink-subtle">Até {MAX_IMAGENS} imagens (JPG, PNG ou WEBP). A primeira é a principal — clique numa miniatura para defini-la. As fotos são otimizadas automaticamente.</p>
     </div>
   );

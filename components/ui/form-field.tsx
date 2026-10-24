@@ -19,13 +19,13 @@ export function FormField({ label, error, required, hint, className, children }:
   const campo = filhoUnico && !filhoUnico.props.id ? cloneElement(filhoUnico, { id }) : children;
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
-      <label htmlFor={id} className="text-sm font-semibold text-ink">
+      <label htmlFor={id} className="text-sm font-medium text-ink">
         {label}
-        {required && <span className="text-red-500 ml-0.5">*</span>}
+        {required && <span className="text-atrasado ml-0.5">*</span>}
       </label>
       {campo}
       {hint && !error && <p className="text-xs text-ink-muted">{hint}</p>}
-      {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
+      {error && <p className="text-xs text-atrasado font-medium">{error}</p>}
     </div>
   );
 }
@@ -33,8 +33,8 @@ export function FormField({ label, error, required, hint, className, children }:
 export function FormSection({ title, icon, children }: { title: string; icon?: ReactNode; children: ReactNode }) {
   return (
     <div className="space-y-4">
-      <h3 className="flex items-center gap-2 text-xs font-bold text-ink-muted uppercase tracking-wider pb-2 border-b-2 border-success-500/40">
-        {icon && <span className="text-success-600">{icon}</span>}
+      <h3 className="flex items-center gap-2 text-xs font-semibold text-ink-muted uppercase tracking-wider pb-2 border-b border-surface-border">
+        {icon && <span className="text-acento">{icon}</span>}
         {title}
       </h3>
       {children}

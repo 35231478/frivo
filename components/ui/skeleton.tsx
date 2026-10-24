@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 
 /** Bloco base de carregamento (shimmer). Reaproveitado pelos loading.tsx das rotas. */
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={cn("animate-pulse rounded-md bg-surface-border/70", className)} />;
+  return <div className={cn("animate-pulse rounded-md bg-surface-linha", className)} />;
 }
 
 /** Cabeçalho de página (título + ação) em estado de carregamento. */
@@ -39,7 +39,7 @@ export function SkeletonCards({ quantidade = 4 }: { quantidade?: number }) {
 export function SkeletonTable({ linhas = 8, colunas = 5 }: { linhas?: number; colunas?: number }) {
   return (
     <div className="card overflow-hidden">
-      <div className="p-4 border-b border-surface-border flex flex-wrap gap-3 bg-surface-alt/40">
+      <div className="p-4 border-b border-surface-border flex flex-wrap gap-3 bg-surface-page">
         <Skeleton className="h-10 flex-1 min-w-[200px] rounded-lg" />
         <Skeleton className="h-10 w-40 rounded-lg" />
         <Skeleton className="h-10 w-28 rounded-lg" />

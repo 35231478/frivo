@@ -123,7 +123,7 @@ export function SelecaoMassaProvider({ entidade, idsPagina, total, children }: {
   return <SelecaoCtx.Provider value={value}>{children}</SelecaoCtx.Provider>;
 }
 
-const clsCheckbox = "w-4 h-4 rounded border-surface-border text-primary-600 focus:ring-primary-500 cursor-pointer align-middle";
+const clsCheckbox = "w-4 h-4 rounded border-surface-border accent-acento cursor-pointer align-middle";
 
 /** Checkbox de uma linha. Não deixa o clique "vazar" para o link/linha clicável. */
 export function CheckboxLinha({ id, rotulo, className }: { id: string; rotulo?: string; className?: string }) {

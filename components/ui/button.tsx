@@ -8,13 +8,15 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   loading?: boolean;
 }
 
+// Sistema de design: primário = acento sólido; secundário = borda; fantasma = só texto.
+// "outline" é o secundário com texto no acento (ação destacada sem competir com o primário).
 const variants = {
-  primary:   "bg-primary-500 text-white hover:bg-primary-600 active:bg-primary-700 shadow-sm hover:shadow",
-  success:   "bg-success-500 text-white hover:bg-success-600 active:bg-success-700 shadow-sm hover:shadow",
-  outline:   "bg-white border border-primary-500 text-primary-600 hover:bg-primary-50",
-  secondary: "bg-white text-ink border border-surface-border hover:bg-surface-alt",
-  ghost:     "text-ink hover:bg-surface-alt",
-  danger:    "bg-red-500 text-white hover:bg-red-600 shadow-sm",
+  primary:   "bg-acento text-white hover:bg-acento-hover",
+  success:   "bg-ok text-white hover:bg-success-600",
+  outline:   "bg-white border border-surface-border text-acento hover:bg-acento-claro hover:border-acento/40",
+  secondary: "bg-white text-ink border border-surface-border hover:bg-surface-page",
+  ghost:     "text-ink-muted hover:text-ink hover:bg-surface-page",
+  danger:    "bg-atrasado text-white hover:brightness-95",
 };
 
 const sizes = {
@@ -37,7 +39,7 @@ export function Button({
       {...props}
       disabled={disabled || loading}
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-all disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-4 focus:ring-primary-500/20",
+        "inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-acento focus-visible:ring-offset-2",
         sizes[size],
         variants[variant],
         className

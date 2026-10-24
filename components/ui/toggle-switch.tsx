@@ -17,8 +17,8 @@ export function ToggleSwitch({ checked, onChange, label, description, disabled }
       disabled && "opacity-50 cursor-not-allowed",
     )}>
       <div className="min-w-0">
-        <p className="text-sm text-gray-800">{label}</p>
-        {description && <p className="text-xs text-gray-400 mt-0.5">{description}</p>}
+        <p className="text-sm text-ink">{label}</p>
+        {description && <p className="text-xs text-ink-muted mt-0.5">{description}</p>}
       </div>
       <button
         type="button"
@@ -27,8 +27,8 @@ export function ToggleSwitch({ checked, onChange, label, description, disabled }
         disabled={disabled}
         onClick={() => !disabled && onChange(!checked)}
         className={cn(
-          "relative inline-flex h-[26px] w-[46px] shrink-0 rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-frivo-500 focus-visible:ring-offset-2",
-          checked ? "bg-green-500" : "bg-gray-300",
+          "relative inline-flex h-[26px] w-[46px] shrink-0 rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-acento focus-visible:ring-offset-2",
+          checked ? "bg-acento" : "bg-surface-border",
           disabled && "pointer-events-none",
         )}
       >
@@ -53,10 +53,10 @@ export function ToggleGroup({ title, description, children }: ToggleGroupProps) 
   return (
     <div className="space-y-1">
       <div className="mb-3">
-        <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
-        {description && <p className="text-xs text-gray-400">{description}</p>}
+        <h3 className="text-sm font-semibold text-ink">{title}</h3>
+        {description && <p className="text-xs text-ink-muted">{description}</p>}
       </div>
-      <div className="divide-y divide-gray-100">
+      <div className="divide-y divide-surface-linha">
         {children}
       </div>
     </div>
