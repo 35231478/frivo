@@ -12,12 +12,14 @@ import { ItensTabela, type ItemTabela, type CatalogoItem, type TabelaPrecoClient
 import { SelectCadastroRapido } from "@/components/ui/select-cadastro-rapido";
 import { CLIENTE, PRODUTO, SERVICO } from "@/components/cadastro-rapido/definicoes";
 import { OsVinculadas } from "@/components/orcamento/os-vinculadas";
-import { TotaisBloco } from "@/components/orcamento/totais-bloco";
+import { TotaisBloco, type DescontoGrupoState } from "@/components/orcamento/totais-bloco";
 import { PropostaCampos, PROPOSTA_VAZIA, type PropostaState } from "@/components/orcamento/proposta-campos";
 import { cn, LABELS_TIPO_ORCAMENTO } from "@/lib/utils";
 import type { TipoDesconto, TipoOrcamento } from "@prisma/client";
-import { AlertCircle, Tags, Calculator, FileSignature } from "lucide-react";
-import { chaveDiaCivil } from "@/lib/fuso";
+import { AlertCircle, Tags, Calculator, FileSignature, Sparkles, RefreshCw } from "lucide-react";
+import { chaveDiaCivil, chaveHojeBR } from "@/lib/fuso";
+import { calcularOrcamento, DIAS_VALIDADE_PADRAO, totalDoItem, validadePadrao } from "@/lib/orcamentos/calculo";
+import { confirmar, toast } from "@/components/ui/avisos";
 
 interface ClienteOpt {
   id: string;
@@ -77,8 +79,12 @@ interface OrcamentoInicial {
   descricao?: string | null;
   observacao?: string | null;
   validadeEm?: Date | string | null;
-  desconto: number;
-  tipoDesconto: TipoDesconto;
+  descontoServicos: number;
+  tipoDescontoServicos: TipoDesconto;
+  descontoProdutos: number;
+  tipoDescontoProdutos: TipoDesconto;
+  /** Alíquota de ISS congelada neste orçamento */
+  issAliquota: number;
   servicos: ItemTabela[];
   produtos: ItemTabela[];
   ordensServicoIds: string[];
@@ -98,6 +104,10 @@ interface OrcamentoFormProps {
   clienteIdInicial?: string;
   osInicialId?: string;
   osInicial?: OsItem;
+  /** Alíquota de ISS da empresa hoje (%): o orçamento novo nasce com ela; na edição, oferece atualizar */
+  issAliquota?: number;
+  /** Há chave da IA no servidor? Sem ela o botão "Gerar descrição" fica desabilitado com aviso */
+  iaDisponivel?: boolean;
   /**
    * Construtor dentro de outra tela (gaveta "Criar orçamento" da OS): sem cabeçalho de página, o
    * cliente fica o da OS, a OS nunca sai do vínculo, e salvar/cancelar devolvem para quem abriu
@@ -152,6 +162,8 @@ export function OrcamentoForm({
   clienteIdInicial,
   osInicialId,
   osInicial,
+  issAliquota: issAliquotaEmpresa = 0,
+  iaDisponivel = false,
   embutido,
 }: OrcamentoFormProps) {
   const router = useRouter();
@@ -179,7 +191,9 @@ export function OrcamentoForm({
     },
   };
 
-  const [tipo, setTipo] = useState<TipoOrcamento>(inicial?.tipo ?? "COMUM");
+  // Dentro da OS só existe "Orçamento comum" (proposta de contrato é coisa do módulo Comercial)
+  const tiposPermitidos: TipoOrcamento[] = embutido ? ["COMUM"] : ["COMUM", "PROPOSTA_CONTRATO"];
+  const [tipo, setTipo] = useState<TipoOrcamento>(embutido ? "COMUM" : inicial?.tipo ?? "COMUM");
   const [proposta, setProposta] = useState<PropostaState>(propostaInicialToState(inicial?.proposta));
   const [equipamentos, setEquipamentos] = useState<EquipamentoOpt[]>([]);
   const patchProposta = (patch: Partial<PropostaState>) => setProposta((p) => ({ ...p, ...patch }));
@@ -188,9 +202,18 @@ export function OrcamentoForm({
   const [clienteId, setClienteId] = useState(inicial?.clienteId ?? clienteIdInicial ?? "");
   const [descricao, setDescricao] = useState(inicial?.descricao ?? "");
   const [observacao, setObservacao] = useState(inicial?.observacao ?? "");
-  const [validadeEm, setValidadeEm] = useState(toInputDate(inicial?.validadeEm ?? null));
-  const [desconto, setDesconto] = useState(Number(inicial?.desconto ?? 0));
-  const [tipoDesconto, setTipoDesconto] = useState<TipoDesconto>(inicial?.tipoDesconto ?? "VALOR");
+  // Validade: no novo, a data de hoje (a do orçamento) + 10 dias — editável
+  const [validadeEm, setValidadeEm] = useState(
+    inicial ? toInputDate(inicial.validadeEm ?? null) : validadePadrao(chaveHojeBR()),
+  );
+  const [descontoServicos, setDescontoServicos] = useState<DescontoGrupoState>({ valor: Number(inicial?.descontoServicos ?? 0), tipo: inicial?.tipoDescontoServicos ?? "VALOR" });
+  const [descontoProdutos, setDescontoProdutos] = useState<DescontoGrupoState>({ valor: Number(inicial?.descontoProdutos ?? 0), tipo: inicial?.tipoDescontoProdutos ?? "VALOR" });
+  // ISS: novo = a da empresa; edição = a congelada no orçamento (até alguém pedir a atual)
+  const [issAliquota, setIssAliquota] = useState(inicial ? Number(inicial.issAliquota ?? 0) : issAliquotaEmpresa);
+  const [atualizarIss, setAtualizarIss] = useState(false);
+  // IA: texto sugerido aguardando decisão (nunca substitui a descrição sem o usuário pedir)
+  const [gerandoIa, setGerandoIa] = useState(false);
+  const [sugestaoIa, setSugestaoIa] = useState<string | null>(null);
   const [servicos, setServicos] = useState<ItemTabela[]>(
     inicial?.servicos.map((s) => ({ ...s, id: s.id || novoId() })) ?? [],
   );
@@ -234,14 +257,49 @@ export function OrcamentoForm({
     return () => { ativo = false; };
   }, [clienteId]);
 
-  const totalServicos = useMemo(
-    () => servicos.reduce((acc, it) => acc + (Number(it.quantidade) || 0) * (Number(it.valorUnitario) || 0), 0),
-    [servicos],
-  );
-  const totalProdutos = useMemo(
-    () => produtos.reduce((acc, it) => acc + (Number(it.quantidade) || 0) * (Number(it.valorUnitario) || 0), 0),
-    [produtos],
-  );
+  // O mesmo cálculo que o servidor grava (lib/orcamentos/calculo.ts)
+  const totais = useMemo(() => calcularOrcamento({
+    servicos: servicos.filter((s) => s.descricao.trim()),
+    produtos: produtos.filter((p) => p.descricao.trim()),
+    descontoServicos: descontoServicos.valor, tipoDescontoServicos: descontoServicos.tipo,
+    descontoProdutos: descontoProdutos.valor, tipoDescontoProdutos: descontoProdutos.tipo,
+    issAliquota,
+  }), [servicos, produtos, descontoServicos, descontoProdutos, issAliquota]);
+
+  const osDaIa = embutido?.osId ?? (ordensIds.length === 1 ? ordensIds[0] : null);
+  async function gerarDescricaoIa() {
+    if (!iaDisponivel || gerandoIa) return;
+    const itens = (lista: ItemTabela[]) => lista.filter((i) => i.descricao.trim()).map((i) => ({ descricao: i.descricao.trim(), observacao: i.observacao ?? null }));
+    setGerandoIa(true);
+    try {
+      const res = await fetch("/api/orcamentos/descricao-ia", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ osId: osDaIa, nome: nome.trim() || null, servicos: itens(servicos), produtos: itens(produtos) }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.descricao) { toast(d.erro ?? "Não foi possível gerar a descrição.", "erro"); return; }
+      if (!descricao.trim()) {
+        setDescricao(d.descricao);
+        setSugestaoIa(null);
+        toast("Descrição gerada pela IA — revise antes de salvar.");
+      } else {
+        // Já havia texto: mostra a sugestão ao lado; só troca se o usuário pedir
+        setSugestaoIa(d.descricao);
+      }
+    } catch {
+      toast("Erro de conexão ao gerar a descrição.", "erro");
+    } finally {
+      setGerandoIa(false);
+    }
+  }
+  async function usarSugestaoIa() {
+    if (!sugestaoIa) return;
+    const ok = await confirmar({ titulo: "Substituir a descrição?", mensagem: "O texto atual da descrição será trocado pelo texto sugerido pela IA.", confirmarTexto: "Substituir" });
+    if (!ok) return;
+    setDescricao(sugestaoIa);
+    setSugestaoIa(null);
+  }
 
   const osPreCarregadas = useMemo<OsItem[]>(() => {
     const lista: OsItem[] = inicial?.osPreCarregadas ?? [];
@@ -268,7 +326,9 @@ export function OrcamentoForm({
       descricao: it.descricao.trim(),
       quantidade: Number(it.quantidade) || 0,
       valorUnitario: Number(it.valorUnitario) || 0,
-      observacao: it.observacao ?? null,
+      // O total que vale para a linha (o digitado manda; o servidor confere com unitário × qtd)
+      valorTotal: totalDoItem(it),
+      observacao: it.observacao?.trim() || null,
     });
     const servPayload = servicos.filter((s) => s.descricao.trim()).map(limpar);
     const prodPayload = produtos.filter((p) => p.descricao.trim()).map(limpar);
@@ -280,8 +340,11 @@ export function OrcamentoForm({
       descricao: descricao?.trim() || null,
       observacao: observacao?.trim() || null,
       validadeEm: validadeEm || null,
-      desconto: Number(desconto) || 0,
-      tipoDesconto,
+      descontoServicos: descontoServicos.valor,
+      tipoDescontoServicos: descontoServicos.tipo,
+      descontoProdutos: descontoProdutos.valor,
+      tipoDescontoProdutos: descontoProdutos.tipo,
+      atualizarIss,
       servicos: servPayload,
       produtos: prodPayload,
       // Embutido na OS: a OS de origem vai sempre (desmarcar na lista não a tira)
@@ -374,10 +437,10 @@ export function OrcamentoForm({
         </div>
       )}
 
-      <div className="card-padded">
+      {tiposPermitidos.length > 1 && <div className="card-padded">
         <FormSection title="Tipo de documento">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {(["COMUM", "PROPOSTA_CONTRATO"] as TipoOrcamento[]).map((t) => {
+            {tiposPermitidos.map((t) => {
               const ativo = tipo === t;
               const Icone = t === "COMUM" ? Calculator : FileSignature;
               return (
@@ -404,7 +467,7 @@ export function OrcamentoForm({
             })}
           </div>
         </FormSection>
-      </div>
+      </div>}
 
       <div className="card-padded space-y-6">
         <FormSection title="Identificação">
@@ -433,13 +496,48 @@ export function OrcamentoForm({
                 }}
               />
             </FormField>
-            <FormField label="Validade" hint="Após esta data o orçamento não pode mais ser aprovado">
+            <FormField label="Validade" hint={`Padrão: ${DIAS_VALIDADE_PADRAO} dias após a data do orçamento. Depois dela o orçamento não pode mais ser aprovado.`}>
               <InputData value={validadeEm} onChange={setValidadeEm} aria-label="Validade" />
             </FormField>
           </FormGrid>
-          <FormField label="Descrição" hint="Resumo da proposta para o cliente">
-            <Textarea value={descricao ?? ""} onChange={(e) => setDescricao(e.target.value)} rows={3} />
-          </FormField>
+          <div className="space-y-2" data-descricao-orcamento>
+            <FormField label="Descrição" hint="Resumo da proposta para o cliente">
+              <Textarea value={descricao ?? ""} onChange={(e) => setDescricao(e.target.value)} rows={Math.min(14, Math.max(5, (descricao ?? "").split("\n").length + 1))} />
+            </FormField>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={gerarDescricaoIa}
+                loading={gerandoIa}
+                disabled={!iaDisponivel}
+                data-gerar-descricao-ia
+                title={iaDisponivel ? "Rascunha o texto com a descrição da OS, os equipamentos, as fotos e os itens — revise antes de salvar" : "IA não configurada"}
+              >
+                {descricao.trim() ? <RefreshCw className="w-3.5 h-3.5" aria-hidden /> : <Sparkles className="w-3.5 h-3.5" aria-hidden />}
+                {descricao.trim() ? "Gerar outra descrição (IA)" : "Gerar descrição profissional (IA)"}
+              </Button>
+              {!iaDisponivel ? (
+                <span className="text-xs text-ink-muted" data-ia-indisponivel>IA não configurada</span>
+              ) : (
+                <span className="text-xs text-ink-muted">
+                  Usa {osDaIa ? "a OS (descrição, equipamentos e fotos) e " : ""}os itens do orçamento. Nada é inventado; revise antes de salvar.
+                </span>
+              )}
+            </div>
+            {sugestaoIa && (
+              <div className="rounded-lg border border-primary-200 bg-primary-50/60 p-3 space-y-2" data-sugestao-ia role="region" aria-label="Sugestão da IA">
+                <p className="text-xs font-semibold uppercase tracking-wider text-primary-700">Sugestão da IA</p>
+                <p className="text-sm text-ink whitespace-pre-line">{sugestaoIa}</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" size="sm" onClick={usarSugestaoIa}>Substituir a descrição</Button>
+                  <Button type="button" size="sm" variant="secondary" onClick={gerarDescricaoIa} loading={gerandoIa}>Gerar de novo</Button>
+                  <Button type="button" size="sm" variant="ghost" onClick={() => setSugestaoIa(null)}>Descartar</Button>
+                </div>
+              </div>
+            )}
+          </div>
           <FormField label="Observações internas">
             <Textarea value={observacao ?? ""} onChange={(e) => setObservacao(e.target.value)} rows={2} />
           </FormField>
@@ -455,6 +553,7 @@ export function OrcamentoForm({
           onChange={setServicos}
           tabela={tabelaPreco}
           cadastro={cadastroServico}
+          totalEditavel
         />
       </div>
 
@@ -467,6 +566,7 @@ export function OrcamentoForm({
           onChange={setProdutos}
           tabela={tabelaPreco}
           cadastro={cadastroProduto}
+          totalEditavel
         />
       </div>
 
@@ -494,12 +594,13 @@ export function OrcamentoForm({
 
         <div>
           <TotaisBloco
-            totalServicos={totalServicos}
-            totalProdutos={totalProdutos}
-            desconto={desconto}
-            tipoDesconto={tipoDesconto}
-            onDescontoChange={setDesconto}
-            onTipoDescontoChange={setTipoDesconto}
+            totais={totais}
+            descontoServicos={descontoServicos}
+            descontoProdutos={descontoProdutos}
+            onDescontoServicos={setDescontoServicos}
+            onDescontoProdutos={setDescontoProdutos}
+            issAliquotaEmpresa={mode === "editar" ? issAliquotaEmpresa : undefined}
+            onUsarIssEmpresa={() => { setIssAliquota(issAliquotaEmpresa); setAtualizarIss(true); }}
           />
         </div>
       </div>

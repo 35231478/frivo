@@ -93,7 +93,7 @@ export const SECOES_CONFIGURACOES: SecaoConfig[] = [
         titulo: "Empresa",
         itens: [
           { id: "empresa", href: "/configuracoes", icone: Building2, label: "Dados da empresa", dica: "Razão social, CNPJ, endereço e logo" },
-          { id: "preferencias", href: "/configuracoes", icone: Cog, label: "Preferências", dica: "Ajustes avançados e padrões do sistema" },
+          { id: "preferencias", href: "/configuracoes", icone: Cog, label: "Preferências", dica: "Ajustes avançados, padrões do sistema e ISS dos orçamentos" },
         ],
       },
       {

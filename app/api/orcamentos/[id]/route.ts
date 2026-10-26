@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { orcamentoSchema } from "@/lib/validations";
-import { calcularTotais, montarCamposProposta } from "@/lib/orcamento-helpers";
+import { montarValoresOrcamento, montarCamposProposta } from "@/lib/orcamento-helpers";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { pode } from "@/lib/permissoes";
 import { impactoOrcamento } from "@/lib/inativacao-server";
@@ -124,7 +124,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
   }
 
-  const totais = calcularTotais(data.servicos, data.produtos, data.desconto, data.tipoDesconto);
+  // ISS: mantém a alíquota congelada no orçamento; só troca pela atual da empresa se pedirem
+  const issAliquota = data.atualizarIss
+    ? Number((await prisma.configuracao.findUnique({ where: { empresaId }, select: { issAliquota: true } }))?.issAliquota ?? 0)
+    : Number(existente.issAliquota);
+  const valores = montarValoresOrcamento(data, issAliquota);
   const proposta = montarCamposProposta(data);
 
   const atualizado = await prisma.$transaction(async (tx) => {
@@ -140,34 +144,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         descricao: data.descricao ?? null,
         observacao: data.observacao ?? null,
         validadeEm: data.validadeEm ? new Date(data.validadeEm) : null,
-        desconto: data.desconto,
-        tipoDesconto: data.tipoDesconto,
-        totalServicos: totais.totalServicos,
-        totalProdutos: totais.totalProdutos,
-        totalGeral: totais.totalGeral,
+        ...valores.campos,
         ...proposta,
-        servicos: {
-          create: data.servicos.map((s, idx) => ({
-            servicoId: s.catalogoId || null,
-            descricao: s.descricao,
-            quantidade: s.quantidade,
-            valorUnitario: s.valorUnitario,
-            valorTotal: s.quantidade * s.valorUnitario,
-            observacao: s.observacao ?? null,
-            ordem: idx,
-          })),
-        },
-        produtos: {
-          create: data.produtos.map((p, idx) => ({
-            produtoId: p.catalogoId || null,
-            descricao: p.descricao,
-            quantidade: p.quantidade,
-            valorUnitario: p.valorUnitario,
-            valorTotal: p.quantidade * p.valorUnitario,
-            observacao: p.observacao ?? null,
-            ordem: idx,
-          })),
-        },
+        servicos: { create: valores.servicos },
+        produtos: { create: valores.produtos },
         ordensServico: {
           create: data.ordensServicoIds.map((osId) => ({ ordemServicoId: osId })),
         },
