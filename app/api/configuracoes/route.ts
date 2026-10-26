@@ -28,6 +28,12 @@ const configuracaoSchema = z.object({
   portalCorPrimaria: z.string().nullable().optional(),
   portalLogo: z.string().nullable().optional(),
   portalBoasVindas: z.string().nullable().optional(),
+  // ISS (%) sobre serviços nos orçamentos — 0 a 100, em centésimos
+  issAliquota: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : Number(String(v).replace(",", "."))),
+    z.number({ invalid_type_error: "Alíquota de ISS inválida" }).min(0, "A alíquota de ISS vai de 0 a 100%").max(100, "A alíquota de ISS vai de 0 a 100%")
+      .transform((v) => Math.round(v * 100) / 100).optional()
+  ),
 }).strict();
 
 export async function GET() {
@@ -59,11 +65,13 @@ export async function PUT(req: NextRequest) {
   const empresaId = session.user!.empresaId;
   const body = await req.json();
 
-  // Remove campos de controle antes de validar (id/empresaId não são editáveis aqui)
-  const { id: _id, empresaId: _empresaId, ...entrada } = body;
+  // Remove campos de controle antes de validar (id/empresaId não são editáveis aqui) e os que têm
+  // tela/rota própria (QR Code e impressão da OS) — a tela manda a configuração inteira de volta
+  const { id: _id, empresaId: _empresaId, qrConfig: _qr, relatorioOsConfig: _rel, ...entrada } = body;
   const parsed = configuracaoSchema.safeParse(entrada);
   if (!parsed.success) {
-    return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+    const iss = parsed.error.flatten().fieldErrors.issAliquota?.[0];
+    return NextResponse.json({ erro: iss ?? "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
   }
   const dados = parsed.data;
 

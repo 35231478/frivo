@@ -23,9 +23,11 @@ type BoolKey = {
   [K in keyof Configuracao]: Configuracao[K] extends boolean ? K : never;
 }[keyof Configuracao];
 
+type ConfigTela = Omit<Configuracao, "issAliquota"> & { issAliquota: number };
+
 interface Props {
   empresa: Empresa;
-  config: Configuracao;
+  config: ConfigTela;
 }
 
 export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialConfig }: Props) {
@@ -59,7 +61,9 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
     longitude: initialEmpresa.longitude,
   });
 
-  const [cfg, setCfg] = useState<Configuracao>(initialConfig);
+  const [cfg, setCfg] = useState<ConfigTela>(initialConfig);
+  // Texto livre (aceita vírgula); vai como número no salvar
+  const [issTexto, setIssTexto] = useState(String(initialConfig.issAliquota ?? 0).replace(".", ","));
 
   function updateEmp(field: string, value: any) {
     setEmp((f) => ({ ...f, [field]: value }));
@@ -130,7 +134,7 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
       const res = await fetch("/api/configuracoes", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(cfg),
+        body: JSON.stringify({ ...cfg, issAliquota: issTexto.trim() === "" ? 0 : issTexto }),
       });
       if (!res.ok) { const e = await res.json(); setErroConfig(e.erro ?? "Erro."); return; }
       setSucessoConfig(true);
@@ -289,6 +293,22 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
           <ToggleSwitch label="Mostrar distância da empresa no cadastro de cliente" checked={cfg.mostrarDistancia} onChange={() => toggleCfg("mostrarDistancia")} />
           <ToggleSwitch label="Mostrar card de técnico mais próximo" checked={cfg.mostrarTecnicoProximo} onChange={() => toggleCfg("mostrarTecnicoProximo")} />
         </ToggleGroup>
+
+        <FormSection title="Orçamentos">
+          <FormField
+            label="Alíquota de ISS sobre serviços (%)"
+            hint="Somada ao total dos serviços (depois do desconto deles). Na tela aparece em linha própria; no documento do cliente vem embutida nos preços. 0 = sem ISS. Vale para os orçamentos criados daqui em diante."
+          >
+            <Input
+              id="cfg-iss"
+              inputMode="decimal"
+              value={issTexto}
+              onChange={(e) => { setIssTexto(e.target.value.replace(/[^\d.,]/g, "")); setSucessoConfig(false); }}
+              className="max-w-[140px]"
+              placeholder="0"
+            />
+          </FormField>
+        </FormSection>
 
         <div className="flex justify-end pt-2 border-t border-surface-linha">
           <Button onClick={salvarConfig} loading={salvandoConfig}>Salvar configurações</Button>

@@ -1,49 +1,49 @@
-import type { TipoDesconto } from "@prisma/client";
-import type { OrcamentoItemInput, OrcamentoInput } from "./validations";
+import type { OrcamentoInput } from "./validations";
 import { calcularDataFimContrato } from "./utils";
+import { calcularOrcamento, descontoGeralPorGrupo, totalDoItem, type TotaisOrcamento } from "./orcamentos/calculo";
 
-export interface TotaisOrcamento {
-  totalServicos: number;
-  totalProdutos: number;
-  totalBruto: number;
-  desconto: number;
-  totalGeral: number;
-}
+/**
+ * Os valores do orçamento a gravar, pelo cálculo único (lib/orcamentos/calculo.ts):
+ *  - cada item guarda o total que vale (o digitado, se coerente com o unitário);
+ *  - `totalServicos`/`totalProdutos` = subtotais BRUTOS dos grupos (como sempre foram);
+ *  - `desconto` = soma dos descontos dos grupos em R$ (tipoDesconto VALOR) — leitores antigos continuam certos;
+ *  - `totalGeral` = serviços − desconto + ISS + produtos − desconto.
+ * `issAliquota` é a alíquota congelada neste orçamento (a da empresa na criação).
+ */
+export function montarValoresOrcamento(data: OrcamentoInput, issAliquota: number) {
+  const subtotal = (itens: OrcamentoInput["servicos"]) => itens.reduce((s, it) => s + totalDoItem(it), 0);
+  // Formato antigo (só o desconto geral): reparte nos grupos com a mesma soma
+  const porGrupo = data.descontoServicos === undefined && data.descontoProdutos === undefined && data.desconto > 0
+    ? { ...descontoGeralPorGrupo(subtotal(data.servicos), subtotal(data.produtos), data.desconto, data.tipoDesconto), tipoDescontoServicos: "VALOR" as const, tipoDescontoProdutos: "VALOR" as const }
+    : { descontoServicos: data.descontoServicos ?? 0, tipoDescontoServicos: data.tipoDescontoServicos, descontoProdutos: data.descontoProdutos ?? 0, tipoDescontoProdutos: data.tipoDescontoProdutos };
 
-export function calcularTotais(
-  servicos: OrcamentoItemInput[],
-  produtos: OrcamentoItemInput[],
-  descontoValor: number,
-  tipoDesconto: TipoDesconto,
-): TotaisOrcamento {
-  const totalServicos = servicos.reduce(
-    (acc, it) => acc + (Number(it.quantidade) || 0) * (Number(it.valorUnitario) || 0),
-    0,
-  );
-  const totalProdutos = produtos.reduce(
-    (acc, it) => acc + (Number(it.quantidade) || 0) * (Number(it.valorUnitario) || 0),
-    0,
-  );
-  const totalBruto = totalServicos + totalProdutos;
-
-  const desconto =
-    tipoDesconto === "PERCENTUAL"
-      ? Math.min(totalBruto * (descontoValor / 100), totalBruto)
-      : Math.min(descontoValor, totalBruto);
-
-  const totalGeral = Math.max(0, totalBruto - desconto);
-
+  const totais: TotaisOrcamento = calcularOrcamento({ servicos: data.servicos, produtos: data.produtos, issAliquota, ...porGrupo });
+  const item = (it: OrcamentoInput["servicos"][number], idx: number) => ({
+    descricao: it.descricao,
+    quantidade: it.quantidade,
+    valorUnitario: it.valorUnitario,
+    valorTotal: totalDoItem(it),
+    observacao: it.observacao?.trim() || null,
+    ordem: idx,
+  });
   return {
-    totalServicos: round2(totalServicos),
-    totalProdutos: round2(totalProdutos),
-    totalBruto: round2(totalBruto),
-    desconto: round2(desconto),
-    totalGeral: round2(totalGeral),
+    totais,
+    campos: {
+      desconto: totais.descontoTotal,
+      tipoDesconto: "VALOR" as const,
+      descontoServicos: porGrupo.descontoServicos,
+      tipoDescontoServicos: porGrupo.tipoDescontoServicos,
+      descontoProdutos: porGrupo.descontoProdutos,
+      tipoDescontoProdutos: porGrupo.tipoDescontoProdutos,
+      issAliquota: totais.issAliquota,
+      valorIss: totais.valorIss,
+      totalServicos: totais.subtotalServicos,
+      totalProdutos: totais.subtotalProdutos,
+      totalGeral: totais.totalGeral,
+    },
+    servicos: data.servicos.map((s, idx) => ({ servicoId: s.catalogoId || null, ...item(s, idx) })),
+    produtos: data.produtos.map((p, idx) => ({ produtoId: p.catalogoId || null, ...item(p, idx) })),
   };
-}
-
-function round2(v: number) {
-  return Math.round(v * 100) / 100;
 }
 
 /**

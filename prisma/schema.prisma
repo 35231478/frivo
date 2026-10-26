@@ -532,6 +532,9 @@ model Configuracao {
   // QR Code (acesso público, botões de contato, restrições) — armazenado como JSON
   qrConfig Json? @map("qr_config")
 
+  /// ISS (%) sobre serviços nos orçamentos: somado ao total; o cliente vê embutido nos preços
+  issAliquota Decimal @default(0) @map("iss_aliquota") @db.Decimal(5, 2)
+
   /// Impressão do relatório da OS: seções ligadas/desligadas e quem vê (cliente × só interno).
   /// JSON { [secao]: { ativo, cliente } }; ausente = padrões de lib/relatorio-os/config.ts
   relatorioOsConfig Json? @map("relatorio_os_config")
@@ -2031,9 +2034,20 @@ model Orcamento {
 
   totalServicos Decimal      @default(0) @map("total_servicos") @db.Decimal(12, 2)
   totalProdutos Decimal      @default(0) @map("total_produtos") @db.Decimal(12, 2)
+  /// Desconto total em R$ (soma dos descontos dos grupos) — mantido para quem lê o valor antigo
   desconto      Decimal      @default(0) @db.Decimal(12, 2)
   tipoDesconto  TipoDesconto @default(VALOR) @map("tipo_desconto")
   totalGeral    Decimal      @default(0) @map("total_geral") @db.Decimal(12, 2)
+
+  /// Desconto de cada grupo (valor em R$ ou %), aplicado no subtotal do grupo
+  descontoServicos     Decimal      @default(0) @map("desconto_servicos") @db.Decimal(12, 2)
+  tipoDescontoServicos TipoDesconto @default(VALOR) @map("tipo_desconto_servicos")
+  descontoProdutos     Decimal      @default(0) @map("desconto_produtos") @db.Decimal(12, 2)
+  tipoDescontoProdutos TipoDesconto @default(VALOR) @map("tipo_desconto_produtos")
+  /// ISS sobre os serviços (líquidos do desconto): a alíquota da empresa congelada no orçamento e o valor.
+  /// Somado ao total; no documento do cliente vem embutido nos preços.
+  issAliquota          Decimal      @default(0) @map("iss_aliquota") @db.Decimal(5, 2)
+  valorIss             Decimal      @default(0) @map("valor_iss") @db.Decimal(12, 2)
 
   tokenPublico      String    @unique @map("token_publico")
   enviadoEm         DateTime? @map("enviado_em")
