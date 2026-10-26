@@ -23,6 +23,7 @@ import { opcoesTipoEquipamento, PREFIXO_TIPO_CUSTOM, type TipoEquipamentoCadastr
 import { Thermometer, ImageIcon, MapPin, Cog, QrCode, History, CheckCircle2, ClipboardList, ChevronLeft, ExternalLink, Camera, Sparkles, ChevronDown, Circle } from "lucide-react";
 import { chaveDiaCivil } from "@/lib/fuso";
 import { InputData } from "@/components/ui/input-data";
+import { hrefSecaoConfig } from "@/lib/navegacao/configuracoes";
 
 
 /** Tipos personalizados (sem `chaveEnum`) entram no select como "custom:<id>". */
@@ -380,7 +381,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
               value={form.tipo} onChange={(v) => set("tipo", v)} opcoes={opcoesTipo}
               entidade={{ singular: "tipo de equipamento", plural: "tipos de equipamento" }} placeholder="Selecione o tipo"
               campos={CAMPOS_TIPO} campoBusca="nome" criar={criarTipo}
-              permissao={{ modulo: "configuracoes", acao: "gerenciar" }} linkCadastroCompleto="/configuracoes/tipos-equipamento"
+              permissao={{ modulo: "configuracoes", acao: "gerenciar" }} linkCadastroCompleto={hrefSecaoConfig("tipos-equipamento")}
             />
           </FormField>
           <FormGrid>
@@ -581,7 +582,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
                     campoBusca="nome"
                     criar={criarTipo}
                     permissao={{ modulo: "configuracoes", acao: "gerenciar" }}
-                    linkCadastroCompleto="/configuracoes/tipos-equipamento"
+                    linkCadastroCompleto={hrefSecaoConfig("tipos-equipamento")}
                   />
                 </FormField>
               </FormGrid>

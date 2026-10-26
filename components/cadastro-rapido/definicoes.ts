@@ -8,6 +8,7 @@
  */
 import { formatarCpfCnpj, LABELS_TIPO_EQUIPAMENTO } from "@/lib/utils";
 import type { CampoRapido, OpcaoCadastro, PermissaoCriar } from "@/components/ui/select-cadastro-rapido";
+import { hrefSecaoConfig } from "@/lib/navegacao/configuracoes";
 
 /** POST JSON; devolve o corpo ou lança Error com a mensagem da API. */
 async function postar<T = any>(url: string, corpo: unknown, erroPadrao: string): Promise<T> {
@@ -102,7 +103,7 @@ export const TECNICO = {
 export const TIPO_OS = {
   entidade: { singular: "tipo de OS", plural: "tipos de OS" },
   permissao: { modulo: "configuracoes", acao: "gerenciar" } as PermissaoCriar,
-  link: "/configuracoes/tipos-os",
+  link: hrefSecaoConfig("tipos-os"),
   campos: [
     { nome: "nome", label: "Nome do tipo", obrigatorio: true, placeholder: "Ex: Higienização" },
   ] as CampoRapido[],
@@ -156,7 +157,7 @@ export const PRODUTO = {
   entidade: { singular: "produto", plural: "produtos" },
   // Catálogo de produtos/serviços é cadastro de Configurações.
   permissao: { modulo: "configuracoes", acao: "gerenciar" } as PermissaoCriar,
-  link: "/configuracoes/produtos",
+  link: hrefSecaoConfig("produtos"),
   campos: camposCatalogo("Ex: Filtro de ar 30x30"),
   criar(v: Record<string, string>) {
     return postar("/api/produtos", { nome: v.nome, unidade: v.unidade || "un", valorPadrao: valorNumero(v.valorPadrao) }, "Erro ao cadastrar o produto.");
@@ -166,7 +167,7 @@ export const PRODUTO = {
 export const SERVICO = {
   entidade: { singular: "serviço", plural: "serviços" },
   permissao: { modulo: "configuracoes", acao: "gerenciar" } as PermissaoCriar,
-  link: "/configuracoes/servicos",
+  link: hrefSecaoConfig("servicos"),
   campos: camposCatalogo("Ex: Limpeza de split até 18.000 BTU"),
   criar(v: Record<string, string>) {
     return postar("/api/servicos", { nome: v.nome, unidade: v.unidade || "un", valorPadrao: valorNumero(v.valorPadrao) }, "Erro ao cadastrar o serviço.");

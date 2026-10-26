@@ -1,25 +1,7 @@
-import type { Metadata } from "next";
-import { auth } from "@/lib/auth";
-import { pode } from "@/lib/permissoes";
-import { getConfigRelatorio } from "@/lib/relatorio-os/config-server";
-import { PageHeader } from "@/components/ui/page-header";
-import { ImpressaoOsClient } from "@/components/config/impressao-os-client";
+import { redirect } from "next/navigation";
+import { hrefSecaoConfig } from "@/lib/navegacao/configuracoes";
 
-export const metadata: Metadata = { title: "Impressão da OS" };
-
-/** Configurações › Operacionais › Impressão da OS (rota protegida por Configurações › visualizar). */
-export default async function ImpressaoOsPage() {
-  const session = await auth();
-  const u = session!.user!;
-  const config = await getConfigRelatorio(u.empresaId);
-  return (
-    <div className="max-w-3xl mx-auto">
-      <PageHeader
-        title="Impressão da OS"
-        description="O que sai no relatório da OS e quem vê cada parte: o cliente ou só a equipe interna."
-        backHref="/configuracoes/operacionais"
-      />
-      <ImpressaoOsClient inicial={config} podeEditar={pode(u.permissoes, "configuracoes", "gerenciar", u.role)} />
-    </div>
-  );
+/** Link antigo: abre a mesma tela na gaveta da página de Configurações. */
+export default function Page() {
+  redirect(hrefSecaoConfig("impressao-os"));
 }

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { Landmark, ArrowRight, Building2 } from "lucide-react";
+import { hrefSecaoConfig } from "@/lib/navegacao/configuracoes";
 
 export const metadata: Metadata = { title: "Contas Bancárias" };
 
@@ -25,7 +26,7 @@ export default function ContasBancariasPage() {
         </p>
 
         <Link
-          href="/configuracoes/integracoes/inter"
+          href={hrefSecaoConfig("banco-inter")}
           className="inline-flex items-center gap-2 mt-6 bg-primary-500 hover:bg-primary-600 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-colors"
         >
           <Building2 className="w-4 h-4" /> Integração Banco Inter <ArrowRight className="w-4 h-4" />

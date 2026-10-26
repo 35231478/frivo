@@ -1,32 +1,34 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { ConfiguracoesClient } from "@/components/forms/configuracoes-client";
-import { Settings } from "lucide-react";
+import { ITENS_CONFIGURACOES, ehAbaConfig, itemConfig, podeVerItemConfig } from "@/lib/navegacao/configuracoes";
+import { PainelConfiguracoes } from "@/components/config/painel-configuracoes";
+import { TelaConfig, temTelaConfig } from "@/components/config/telas";
 
 export const metadata: Metadata = { title: "Configurações" };
 
-export default async function ConfiguracoesPage() {
+/**
+ * Configurações: uma página só — 3 abas com cartões, e a tela de cada item numa gaveta
+ * (?secao=…). A permissão de cada item é conferida aqui antes de montar a tela.
+ */
+export default async function ConfiguracoesPage({ searchParams }: { searchParams: Promise<{ aba?: string; secao?: string }> }) {
+  const { aba, secao } = await searchParams;
   const session = await auth();
-  const empresaId = session!.user!.empresaId;
+  const permissoes = session?.user?.permissoes;
+  const role = session?.user?.role;
 
-  const empresa = await prisma.empresa.findUnique({ where: { id: empresaId } });
-
-  let config = await prisma.configuracao.findUnique({ where: { empresaId } });
-  if (!config) {
-    config = await prisma.configuracao.create({ data: { empresaId } });
-  }
+  const visiveis = ITENS_CONFIGURACOES.filter((i) => podeVerItemConfig(i, permissoes, role)).map((i) => i.id);
+  const item = itemConfig(secao);
+  const liberado = !!item && visiveis.includes(item.id) && temTelaConfig(item.id);
+  const abaInicial = liberado ? item!.aba : ehAbaConfig(aba) ? aba : null;
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="p-2 bg-primary-50 rounded-lg">
-          <Settings className="w-5 h-5 text-primary-600" />
-        </div>
-        <h1 className="page-title">Configurações</h1>
-      </div>
-      {/* Decimal não atravessa para o cliente: vai como número */}
-      <ConfiguracoesClient empresa={empresa!} config={{ ...config, issAliquota: Number(config.issAliquota) }} />
-    </div>
+    <PainelConfiguracoes
+      visiveis={visiveis}
+      abaInicial={abaInicial}
+      secaoAberta={liberado ? item!.id : null}
+      secaoNegada={secao && !liberado ? secao : null}
+    >
+      {liberado ? <TelaConfig id={item!.id} /> : null}
+    </PainelConfiguracoes>
   );
 }

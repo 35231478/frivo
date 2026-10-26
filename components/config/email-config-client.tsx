@@ -8,6 +8,7 @@ import { Select } from "@/components/ui/select";
 import { FormField, FormGrid } from "@/components/ui/form-field";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { Mail, CheckCircle2, XCircle, Send, ExternalLink, FileText } from "lucide-react";
+import { hrefSecaoConfig } from "@/lib/navegacao/configuracoes";
 
 const NOTIFS: { key: string; label: string; desc: string }[] = [
   { key: "notifBoletoEmitido", label: "Enviar boleto ao emitir", desc: "Envia o boleto por e-mail assim que for emitido" },
@@ -139,7 +140,7 @@ export function EmailConfigClient() {
       </section>
 
       <div className="flex items-center justify-between gap-2 pt-4 border-t border-surface-border">
-        <Link href="/configuracoes/email/templates" className="inline-flex items-center gap-2 text-sm font-semibold text-primary-600 hover:text-primary-700"><FileText className="w-4 h-4" /> Editar templates de e-mail</Link>
+        <Link href={hrefSecaoConfig("email-templates")} scroll={false} className="inline-flex items-center gap-2 text-sm font-semibold text-primary-600 hover:text-primary-700"><FileText className="w-4 h-4" /> Editar templates de e-mail</Link>
         <div className="flex items-center gap-3">
           {msg && <span className="text-sm text-ink-muted">{msg}</span>}
           <Button type="button" loading={salvando} onClick={salvar}>Salvar configuração</Button>

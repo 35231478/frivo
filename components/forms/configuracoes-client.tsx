@@ -28,9 +28,11 @@ type ConfigTela = Omit<Configuracao, "issAliquota"> & { issAliquota: number };
 interface Props {
   empresa: Empresa;
   config: ConfigTela;
+  /** Qual bloco mostrar (cada um abre no seu cartão de Configurações); sem = os dois */
+  parte?: "empresa" | "preferencias";
 }
 
-export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialConfig }: Props) {
+export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialConfig, parte }: Props) {
   const router = useRouter();
   const [salvandoEmpresa, setSalvandoEmpresa] = useState(false);
   const [salvandoConfig, setSalvandoConfig] = useState(false);
@@ -145,7 +147,7 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
   return (
     <div className="space-y-8">
       {/* ========== DADOS DA EMPRESA ========== */}
-      <div className="bg-white rounded-card border border-surface-border p-6 space-y-6">
+      {parte !== "preferencias" && <div className="bg-white rounded-card border border-surface-border p-6 space-y-6">
         <div className="flex items-center gap-2">
           <Building2 className="w-5 h-5 text-frivo-600" />
           <h2 className="text-lg font-semibold text-ink">Dados da Empresa</h2>
@@ -243,10 +245,10 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
         <div className="flex justify-end pt-2 border-t border-surface-linha">
           <Button onClick={salvarEmpresa} loading={salvandoEmpresa}>Salvar dados da empresa</Button>
         </div>
-      </div>
+      </div>}
 
       {/* ========== CONFIGURAÇÕES AVANÇADAS ========== */}
-      <div id="preferencias" className="bg-white rounded-card border border-surface-border p-6 space-y-8 scroll-mt-20">
+      {parte !== "empresa" && <div id="preferencias" className="bg-white rounded-card border border-surface-border p-6 space-y-8 scroll-mt-20">
         <div className="flex items-center gap-2">
           <SlidersHorizontal className="w-5 h-5 text-frivo-600" />
           <h2 className="text-lg font-semibold text-ink">Configurações Avançadas</h2>
@@ -313,7 +315,7 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
         <div className="flex justify-end pt-2 border-t border-surface-linha">
           <Button onClick={salvarConfig} loading={salvandoConfig}>Salvar configurações</Button>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

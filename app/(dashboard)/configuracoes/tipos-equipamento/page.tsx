@@ -1,14 +1,7 @@
-import { PageHeader } from "@/components/ui/page-header";
-import { TiposEquipamentoTela } from "@/components/cadastros/telas/tipos-equipamento";
+import { redirect } from "next/navigation";
+import { hrefSecaoConfig } from "@/lib/navegacao/configuracoes";
 
-export default function TiposEquipamentoPage() {
-  return (
-    <div>
-      <PageHeader title="Tipos de Equipamento" description="Categorias de equipamentos e os formulários vinculados a cada tipo de OS" backHref="/configuracoes" />
-      {/* Cadastro padronizado (lib/cadastros): abas Ativos/Inativos/Todos, impacto, ações em massa */}
-      <div className="bg-white rounded-card border border-surface-border p-4 sm:p-6">
-        <TiposEquipamentoTela />
-      </div>
-    </div>
-  );
+/** Link antigo: abre a mesma tela na gaveta da página de Configurações. */
+export default function Page() {
+  redirect(hrefSecaoConfig("tipos-equipamento"));
 }

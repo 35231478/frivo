@@ -16,6 +16,7 @@ import { categoriaDaConta } from "@/lib/financeiro/categoria";
 import { MessageCircle, MessageSquare, Mail, FileText, CheckCircle2, Eye, Settings, Download, Ban, MoreVertical, Pencil } from "lucide-react";
 import { chaveDiaCivil, chaveHojeBR } from "@/lib/fuso";
 import { InputData } from "@/components/ui/input-data";
+import { hrefSecaoConfig } from "@/lib/navegacao/configuracoes";
 
 interface Conta {
   id: string; numero: string; descricao: string; categoriaId?: string | null; categoria?: string | null; valor: number;
@@ -119,7 +120,7 @@ export function ContaReceberAcoes({ conta, categorias = [] }: { conta: Conta; ca
         <p className="text-sm text-ink-muted">A integração com o Banco Inter ainda não está configurada/ativa. Configure as credenciais e o certificado para emitir boletos.</p>
         <div className="flex justify-end gap-2 mt-4">
           <Button variant="secondary" onClick={fechar}>Fechar</Button>
-          <Link href="/configuracoes/integracoes/inter" className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold"><Settings className="w-4 h-4" /> Configurar</Link>
+          <Link href={hrefSecaoConfig("banco-inter")} className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold"><Settings className="w-4 h-4" /> Configurar</Link>
         </div>
       </Modal>
 
