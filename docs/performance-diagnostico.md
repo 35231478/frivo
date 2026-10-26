@@ -84,6 +84,8 @@ série**, uma esperando a outra.
   - Em código, o equivalente é `"regions": ["gru1"]` no `vercel.json`.
   - Nenhuma linha de regra muda.
 - **É o maior ganho isolado do relatório.**
+- **Status:** `"regions": ["gru1"]` foi adicionado ao `vercel.json`. Validar depois do deploy pelo
+  cabeçalho `x-vercel-id`, que deve trazer `gru1` como região da função.
 
 ### 🔴 2. Cada `include` do Prisma vira uma consulta em série — **CÓDIGO**
 - **O que vi:**
