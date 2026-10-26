@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { contextoDaOsParaNome, contextoOsSelect } from "@/lib/orcamentos/nome-server";
 
 /**
  * Tudo o que o construtor de orçamento (components/forms/orcamento-form.tsx) precisa para abrir em
@@ -26,7 +27,7 @@ export async function dadosNovoOrcamento(empresaId: string, { clienteId, osId }:
     osId
       ? prisma.ordemServico.findFirst({
           where: { id: osId, empresaId },
-          select: { id: true, numero: true, descricao: true, status: true, clienteId: true },
+          select: { id: true, numero: true, descricao: true, status: true, clienteId: true, ...contextoOsSelect },
         })
       : Promise.resolve(null),
     prisma.tecnico.findMany({
@@ -51,6 +52,8 @@ export async function dadosNovoOrcamento(empresaId: string, { clienteId, osId }:
     clienteIdInicial: osInicial?.clienteId ?? clienteId ?? undefined,
     osInicialId: osInicial?.id,
     osInicial: osInicial ? { id: osInicial.id, numero: osInicial.numero, descricao: osInicial.descricao, status: osInicial.status } : undefined,
+    /** Tipo da OS, unidade e equipamento principal: a prévia do nome automático (mesma regra do servidor) */
+    contextoNome: contextoDaOsParaNome(osInicial),
     /** Alíquota de ISS da empresa hoje (%): o orçamento novo nasce com ela */
     issAliquota: Number(cfg?.issAliquota ?? 0),
     /** Botão "Gerar descrição (IA)" ativo? (sem a chave fica desabilitado com aviso) */

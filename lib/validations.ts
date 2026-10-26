@@ -500,9 +500,12 @@ const intOpcional = (min: number, max: number) =>
   ).default(null);
 
 export const orcamentoSchema = z.object({
-  nome: z.string().min(2, "Nome do orçamento é obrigatório"),
+  // Em branco = nome automático (lib/orcamentos/nome.ts), composto no servidor ao salvar
+  nome: z.string().trim().max(200, "Nome muito longo").optional().nullable(),
   clienteId: z.string().min(1, "Cliente é obrigatório"),
   tipo: z.nativeEnum(TipoOrcamento).default(TipoOrcamento.COMUM),
+  prazoExecucao: z.string().trim().max(200, "Prazo de execução muito longo").optional().nullable(),
+  formaPagamento: z.string().trim().max(200, "Forma de pagamento muito longa").optional().nullable(),
   descricao: z.string().optional().nullable(),
   observacao: z.string().optional().nullable(),
   validadeEm: z.string().optional().nullable(),

@@ -426,6 +426,15 @@ model Empresa {
   cep          String?
   latitude     Float?
   longitude    Float?
+  /// Dados bancários (saem no orçamento do cliente; sem banco/conta e sem PIX, o bloco não aparece)
+  bancoNome    String?  @map("banco_nome")
+  bancoAgencia String?  @map("banco_agencia")
+  bancoConta   String?  @map("banco_conta")
+  /// Corrente / Poupança / Pagamento (texto livre)
+  bancoTipoConta String? @map("banco_tipo_conta")
+  /// Titular da conta (vazio = razão social da empresa)
+  bancoTitular String?  @map("banco_titular")
+  pixChave     String?  @map("pix_chave")
   plano        Plano    @default(BASICO)
   ativo        Boolean  @default(true)
   criadoEm     DateTime @default(now()) @map("criado_em")
@@ -2047,6 +2056,10 @@ model Orcamento {
   /// ISS sobre os serviços (líquidos do desconto): a alíquota da empresa congelada no orçamento e o valor.
   /// Somado ao total; no documento do cliente vem embutido nos preços.
   issAliquota          Decimal      @default(0) @map("iss_aliquota") @db.Decimal(5, 2)
+  /// Prazo de execução dos serviços (texto curto: "5 dias úteis após aprovação"); sai no documento
+  prazoExecucao        String?      @map("prazo_execucao")
+  /// Forma de pagamento (à vista / parcelado / PIX / boleto…); sai no documento
+  formaPagamento       String?      @map("forma_pagamento")
   valorIss             Decimal      @default(0) @map("valor_iss") @db.Decimal(12, 2)
 
   tokenPublico      String    @unique @map("token_publico")

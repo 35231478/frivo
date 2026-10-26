@@ -4,7 +4,8 @@ import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { orcamentoSchema } from "@/lib/validations";
 import { gerarCodigoOrcamento } from "@/lib/utils";
-import { montarValoresOrcamento, montarCamposProposta } from "@/lib/orcamento-helpers";
+import { camposCondicoes, montarValoresOrcamento, montarCamposProposta } from "@/lib/orcamento-helpers";
+import { nomeDoOrcamento } from "@/lib/orcamentos/nome-server";
 import { anoBR, periodoInstanteBR } from "@/lib/fuso";
 
 export async function GET(req: NextRequest) {
@@ -94,6 +95,8 @@ export async function POST(req: NextRequest) {
   const cfg = await prisma.configuracao.findUnique({ where: { empresaId }, select: { issAliquota: true } });
   const valores = montarValoresOrcamento(data, Number(cfg?.issAliquota ?? 0));
   const proposta = montarCamposProposta(data);
+  // Nome em branco = automático (tipo da OS, equipamento, cliente/unidade ou itens)
+  const nome = await nomeDoOrcamento(empresaId, data);
 
   // Numeração derivada do maior código existente do ano (evita reuso após exclusão); retry em colisão
   const ano = anoBR();
@@ -112,7 +115,8 @@ export async function POST(req: NextRequest) {
         data: {
           empresaId,
           codigo,
-          nome: data.nome,
+          nome,
+          ...camposCondicoes(data),
           clienteId: data.clienteId,
           criadoPorId: usuarioId,
           descricao: data.descricao ?? null,

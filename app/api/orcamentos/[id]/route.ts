@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { orcamentoSchema } from "@/lib/validations";
-import { montarValoresOrcamento, montarCamposProposta } from "@/lib/orcamento-helpers";
+import { camposCondicoes, montarValoresOrcamento, montarCamposProposta } from "@/lib/orcamento-helpers";
+import { nomeDoOrcamento } from "@/lib/orcamentos/nome-server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { pode } from "@/lib/permissoes";
 import { impactoOrcamento } from "@/lib/inativacao-server";
@@ -130,6 +131,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     : Number(existente.issAliquota);
   const valores = montarValoresOrcamento(data, issAliquota);
   const proposta = montarCamposProposta(data);
+  // Nome em branco = automático (tipo da OS, equipamento, cliente/unidade ou itens)
+  const nome = await nomeDoOrcamento(empresaId, data);
 
   const atualizado = await prisma.$transaction(async (tx) => {
     await tx.orcamentoServico.deleteMany({ where: { orcamentoId: id } });
@@ -139,7 +142,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     return tx.orcamento.update({
       where: { id },
       data: {
-        nome: data.nome,
+        nome,
+        ...camposCondicoes(data),
         clienteId: data.clienteId,
         descricao: data.descricao ?? null,
         observacao: data.observacao ?? null,

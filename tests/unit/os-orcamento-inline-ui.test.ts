@@ -89,7 +89,7 @@ async function criar() {
   await esperar();
 }
 async function montarOrcamento() {
-  await digitar($("[data-gaveta-orcamento] input[placeholder^='Ex.: Manutenção']"), "Troca de capacitor");
+  await digitar($("[data-gaveta-orcamento] input[data-nome-orcamento]"), "Troca de capacitor");
   await digitar($("[data-gaveta-orcamento] input[placeholder='Buscar serviço por nome...']"), "Limpeza");
   await clicar([...document.querySelectorAll("[data-gaveta-orcamento] button")].find((b) => b.textContent?.includes("Limpeza de split")));
 }
@@ -158,7 +158,7 @@ describe("criar orçamento sem sair da OS", () => {
     await montarOrcamento();
     (window.confirm as any).mockReturnValueOnce(false);
     await clicar(botao("Cancelar", $("[data-gaveta-orcamento]")!));
-    expect($("[data-gaveta-orcamento] input[placeholder^='Ex.: Manutenção']")?.getAttribute("value") ?? ($("[data-gaveta-orcamento] input[placeholder^='Ex.: Manutenção']") as HTMLInputElement)?.value).toBe("Troca de capacitor");
+    expect($("[data-gaveta-orcamento] input[data-nome-orcamento]")?.getAttribute("value") ?? ($("[data-gaveta-orcamento] input[data-nome-orcamento]") as HTMLInputElement)?.value).toBe("Troca de capacitor");
     await clicar(botao("Cancelar", $("[data-gaveta-orcamento]")!));
     await act(async () => { await new Promise((r) => setTimeout(r, 350)); });
     expect(window.confirm).toHaveBeenCalledTimes(2);

@@ -104,7 +104,7 @@ function CampoNumero({ valor, onValor, casas, className, ...props }: {
         onValor(lerNumeroBR(t));
       }}
       className={cn(
-        "w-full text-right bg-white sm:bg-transparent border border-surface-border sm:border-transparent text-ink rounded-md px-2 py-1.5 sm:py-1",
+        "w-full text-right bg-white sm:bg-transparent border border-surface-border sm:border-transparent sm:hover:border-surface-border text-ink rounded-md px-2 py-1.5 sm:py-0.5",
         "focus:outline-none focus:border-acento focus:bg-white focus:ring-2 focus:ring-acento/15 tabular-nums",
         className,
       )}
@@ -112,7 +112,11 @@ function CampoNumero({ valor, onValor, casas, className, ...props }: {
   );
 }
 
-/** Observação do item: botão discreto que abre um campo de texto que cresce (bom no celular). */
+/**
+ * Observação do item — aparece no orçamento do cliente.
+ * Desktop: coluna própria à direita da descrição, uma linha que cresce com o texto.
+ * Celular: botão "Adicionar observação" que abre o campo no cartão do item.
+ */
 function ObservacaoItem({ valor, onChange, descricao }: { valor: string; onChange: (v: string) => void; descricao: string }) {
   const [aberta, setAberta] = useState(!!valor);
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -121,45 +125,53 @@ function ObservacaoItem({ valor, onChange, descricao }: { valor: string; onChang
     const el = ref.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 320)}px`;
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   };
   useEffect(() => { if (valor) setAberta(true); }, [valor]);
   useEffect(ajustar, [aberta, valor]);
+  const mostrar = aberta || !!valor;
 
-  if (!aberta) {
-    return (
-      <button
-        type="button"
-        onClick={() => { setAberta(true); setTimeout(() => ref.current?.focus(), 0); }}
-        className="inline-flex items-center gap-1.5 text-xs font-medium text-primary-600 hover:text-primary-700 hover:bg-primary-50 rounded-md px-2 py-1 -ml-2"
-        data-abrir-observacao
-      >
-        <MessageSquarePlus className="w-3.5 h-3.5" aria-hidden /> Adicionar observação
-      </button>
-    );
-  }
   return (
-    <div className="space-y-1" data-observacao-item>
-      <label htmlFor={id} className="block text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
-        Observação do item <span className="normal-case font-normal tracking-normal">· aparece no orçamento do cliente</span>
-      </label>
-      <textarea
-        id={id}
-        ref={ref}
-        rows={2}
-        value={valor}
-        aria-label={`Observação de ${descricao || "item"}`}
-        onChange={(e) => onChange(e.target.value)}
-        onInput={ajustar}
-        onBlur={() => { if (!valor.trim()) setAberta(false); }}
-        placeholder="Ex.: inclui deslocamento; peça com garantia do fabricante…"
-        className="w-full resize-none overflow-hidden bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-acento focus:ring-4 focus:ring-acento/15 min-h-[64px]"
-      />
+    <div className="min-w-0" data-observacao-item={mostrar ? "" : undefined}>
+      {!mostrar && (
+        <button
+          type="button"
+          onClick={() => { setAberta(true); setTimeout(() => ref.current?.focus(), 0); }}
+          className="sm:hidden inline-flex items-center gap-1.5 text-xs font-medium text-primary-600 hover:text-primary-700 hover:bg-primary-50 rounded-md px-2 py-1 -ml-2"
+          data-abrir-observacao
+        >
+          <MessageSquarePlus className="w-3.5 h-3.5" aria-hidden /> Adicionar observação
+        </button>
+      )}
+      <div className={cn(!mostrar && "hidden sm:block")}>
+        <label htmlFor={id} className="block sm:sr-only text-[11px] font-semibold uppercase tracking-wider text-ink-muted mb-0.5">
+          Observação do item <span className="normal-case font-normal tracking-normal">· aparece no orçamento do cliente</span>
+        </label>
+        <textarea
+          id={id}
+          ref={ref}
+          rows={1}
+          value={valor}
+          aria-label={`Observação de ${descricao || "item"}`}
+          title="Aparece no orçamento do cliente"
+          onChange={(e) => onChange(e.target.value)}
+          onInput={ajustar}
+          onBlur={() => { if (!valor.trim()) setAberta(false); }}
+          placeholder="Observação (sai para o cliente)"
+          className={cn(
+            "block w-full resize-none overflow-hidden rounded-md text-sm leading-snug text-ink placeholder:text-ink-subtle",
+            "bg-white border border-surface-border px-2.5 py-1.5 min-h-[56px]",
+            "sm:bg-transparent sm:border-transparent sm:px-2 sm:py-0.5 sm:min-h-0 sm:text-[13px] sm:text-ink-muted sm:hover:border-surface-border",
+            "focus:outline-none focus:bg-white focus:text-ink focus:border-acento focus:ring-2 focus:ring-acento/15",
+          )}
+        />
+      </div>
     </div>
   );
 }
 
-const COLUNAS = "grid grid-cols-3 sm:grid-cols-[minmax(0,1fr)_5.5rem_8.5rem_8.5rem_2.5rem] gap-x-2 sm:gap-x-3";
+// Desktop: Descrição | Observação | Qtd | Unitário | Total | (excluir) — linhas compactas, tipo planilha
+const COLUNAS = "grid grid-cols-3 sm:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_4.5rem_7.25rem_7.25rem_2rem] gap-x-2 sm:gap-x-3";
 const rotuloCelular = "block sm:sr-only text-[11px] font-semibold uppercase tracking-wider text-ink-muted mb-0.5";
 
 export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange, tabela, cadastro, totalEditavel = false }: ItensTabelaProps) {
@@ -228,9 +240,9 @@ export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange,
       </div>
 
       <div className="border border-surface-border rounded-lg overflow-hidden" role="table" aria-label={titulo}>
-        <div className={cn(COLUNAS, "hidden sm:grid bg-surface-alt border-b border-surface-border px-3 py-2")} role="row">
-          {["Descrição", "Qtd", "Unitário", "Total"].map((c, i) => (
-            <span key={c} role="columnheader" className={cn("font-semibold text-ink-muted text-xs uppercase tracking-wider", i > 0 && "text-right")}>{c}</span>
+        <div className={cn(COLUNAS, "hidden sm:grid bg-surface-alt border-b border-surface-border px-3 py-1.5")} role="row">
+          {["Descrição", "Observação", "Qtd", "Unitário", "Total"].map((c, i) => (
+            <span key={c} role="columnheader" className={cn("font-semibold text-ink-muted text-[11px] uppercase tracking-wider", i === 1 && "sm:pl-3", i > 1 && "text-right")}>{c}</span>
           ))}
           <span role="columnheader" className="sr-only">Ações</span>
         </div>
@@ -245,20 +257,20 @@ export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange,
             ? `Preço padrão: ${formatarMoeda(it.valorPadraoCadastro)} · Aplicado: ${formatarMoeda(Number(it.valorUnitario) || 0)}`
             : undefined;
           return (
-            <div key={it.id} role="row" data-item-linha className={cn(COLUNAS, "gap-y-2 border-b border-surface-border last:border-b-0 px-3 py-3 sm:py-2")}>
-              <div role="cell" className="col-span-3 sm:col-span-1 flex items-start gap-2 min-w-0">
-                <div className="flex-1 min-w-0">
+            <div key={it.id} role="row" data-item-linha className={cn(COLUNAS, "gap-y-2 sm:items-center border-b border-surface-border last:border-b-0 px-3 py-2.5 sm:py-1 hover:bg-surface-alt/40")}>
+              <div role="cell" className="col-span-3 sm:col-span-1 flex items-start sm:items-center gap-2 min-w-0">
+                <div className="flex-1 min-w-0 flex flex-wrap sm:flex-nowrap items-center gap-x-1.5">
                   <input
                     value={it.descricao}
                     onChange={(e) => atualizar(it.id, { descricao: e.target.value })}
                     placeholder="Descrição do item"
                     aria-label="Descrição do item"
-                    className="w-full bg-transparent text-ink font-medium sm:font-normal focus:outline-none focus:bg-primary-50/30 rounded px-1 py-1"
+                    className="basis-full sm:basis-auto flex-1 min-w-0 w-full bg-transparent text-ink font-medium sm:font-normal focus:outline-none focus:bg-primary-50/30 rounded px-1 py-1 sm:py-0.5"
                   />
                   {it.origemPreco && (
                     <span
                       className={cn(
-                        "inline-block mt-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded",
+                        "inline-flex items-center shrink-0 whitespace-nowrap text-[10px] leading-none font-semibold px-1.5 py-1 rounded",
                         it.origemPreco === "contrato" && "bg-ok-claro text-ok-texto",
                         it.origemPreco === "padrao" && "bg-surface-linha text-ink-muted",
                         it.origemPreco === "fora_tabela" && "bg-atencao-claro text-atencao-texto",
@@ -267,7 +279,7 @@ export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange,
                       {it.origemPreco === "contrato"
                         ? "Preço de contrato"
                         : it.origemPreco === "fora_tabela"
-                          ? <><AlertTriangle className="inline w-3 h-3 -mt-px mr-0.5" aria-hidden />Fora da tabela</>
+                          ? <><AlertTriangle className="w-3 h-3 mr-0.5" aria-hidden />Fora da tabela</>
                           : "Preço padrão"}
                     </span>
                   )}
@@ -283,6 +295,11 @@ export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange,
                 </button>
               </div>
 
+              {/* Observação: à direita da descrição no desktop (com divisória); no fim do cartão no celular */}
+              <div role="cell" className="col-span-3 order-last sm:order-none sm:col-span-1 sm:pl-3 sm:border-l sm:border-surface-linha min-w-0">
+                <ObservacaoItem valor={it.observacao ?? ""} onChange={(v) => atualizar(it.id, { observacao: v })} descricao={it.descricao} />
+              </div>
+
               <label role="cell" className="block">
                 <span className={rotuloCelular}>Qtd</span>
                 <CampoNumero valor={Number(it.quantidade) || 0} onValor={(v) => mudarQuantidade(it, v)} aria-label="Quantidade" data-campo="quantidade" />
@@ -292,7 +309,7 @@ export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange,
                 <span className={rotuloCelular}>Unitário</span>
                 {it.bloqueado ? (
                   <div
-                    className="flex items-center justify-end gap-1 bg-surface-alt text-ink-muted rounded px-1.5 py-1.5 sm:py-1 cursor-not-allowed"
+                    className="flex items-center justify-end gap-1 bg-surface-alt text-ink-muted rounded px-1.5 py-1.5 sm:py-0.5 cursor-not-allowed"
                     title="Preço definido em contrato — não pode ser alterado"
                   >
                     <Lock className="w-3 h-3 shrink-0" />
@@ -316,24 +333,20 @@ export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange,
                     className="font-semibold"
                   />
                 ) : (
-                  <div className="text-right font-semibold text-ink px-2 py-1.5 sm:py-1 tabular-nums">{formatarMoeda(total)}</div>
+                  <div className="text-right font-semibold text-ink px-2 py-1.5 sm:py-0.5 tabular-nums">{formatarMoeda(total)}</div>
                 )}
               </label>
 
-              <div role="cell" className="hidden sm:flex items-start justify-center pt-0.5">
+              <div role="cell" className="hidden sm:flex items-center justify-center">
                 <button
                   type="button"
                   onClick={() => remover(it.id)}
-                  className="p-1.5 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded transition-colors"
+                  className="p-1 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded transition-colors"
                   title="Remover"
                   aria-label={`Remover ${it.descricao || "item"}`}
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
-              </div>
-
-              <div role="cell" className="col-span-3 sm:col-span-5">
-                <ObservacaoItem valor={it.observacao ?? ""} onChange={(v) => atualizar(it.id, { observacao: v })} descricao={it.descricao} />
               </div>
             </div>
           );

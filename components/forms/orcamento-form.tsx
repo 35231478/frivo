@@ -20,6 +20,7 @@ import { AlertCircle, Tags, Calculator, FileSignature, Sparkles, RefreshCw } fro
 import { chaveDiaCivil, chaveHojeBR } from "@/lib/fuso";
 import { calcularOrcamento, DIAS_VALIDADE_PADRAO, totalDoItem, validadePadrao } from "@/lib/orcamentos/calculo";
 import { confirmar, toast } from "@/components/ui/avisos";
+import { nomeAutomaticoOrcamento, type ContextoNomeOrcamento } from "@/lib/orcamentos/nome";
 
 interface ClienteOpt {
   id: string;
@@ -79,6 +80,8 @@ interface OrcamentoInicial {
   descricao?: string | null;
   observacao?: string | null;
   validadeEm?: Date | string | null;
+  prazoExecucao?: string | null;
+  formaPagamento?: string | null;
   descontoServicos: number;
   tipoDescontoServicos: TipoDesconto;
   descontoProdutos: number;
@@ -108,6 +111,8 @@ interface OrcamentoFormProps {
   issAliquota?: number;
   /** Há chave da IA no servidor? Sem ela o botão "Gerar descrição" fica desabilitado com aviso */
   iaDisponivel?: boolean;
+  /** Da OS de origem: tipo, unidade e equipamento principal (prévia do nome automático) */
+  contextoNome?: Omit<ContextoNomeOrcamento, "cliente" | "itens">;
   /**
    * Construtor dentro de outra tela (gaveta "Criar orçamento" da OS): sem cabeçalho de página, o
    * cliente fica o da OS, a OS nunca sai do vínculo, e salvar/cancelar devolvem para quem abriu
@@ -143,6 +148,10 @@ function propostaInicialToState(p?: PropostaInicial): PropostaState {
   };
 }
 
+/** Sugestões (o campo é texto livre) */
+const PRAZOS_SUGERIDOS = ["Imediato, após aprovação", "1 dia útil após aprovação", "3 dias úteis após aprovação", "5 dias úteis após aprovação", "10 dias úteis após aprovação", "A combinar"];
+const FORMAS_PAGAMENTO_SUGERIDAS = ["À vista", "PIX à vista", "Boleto à vista", "Boleto em 2x (30/60 dias)", "Cartão de crédito em até 3x", "50% na aprovação e 50% na conclusão", "Transferência bancária"];
+
 function novoId() {
   return Math.random().toString(36).slice(2);
 }
@@ -164,6 +173,7 @@ export function OrcamentoForm({
   osInicial,
   issAliquota: issAliquotaEmpresa = 0,
   iaDisponivel = false,
+  contextoNome,
   embutido,
 }: OrcamentoFormProps) {
   const router = useRouter();
@@ -191,7 +201,7 @@ export function OrcamentoForm({
     },
   };
 
-  // Dentro da OS só existe "Orçamento comum" (proposta de contrato é coisa do módulo Comercial)
+  // Dentro da OS só existe "Orçamento" (proposta de contrato é coisa do módulo Comercial)
   const tiposPermitidos: TipoOrcamento[] = embutido ? ["COMUM"] : ["COMUM", "PROPOSTA_CONTRATO"];
   const [tipo, setTipo] = useState<TipoOrcamento>(embutido ? "COMUM" : inicial?.tipo ?? "COMUM");
   const [proposta, setProposta] = useState<PropostaState>(propostaInicialToState(inicial?.proposta));
@@ -201,6 +211,8 @@ export function OrcamentoForm({
   const [nome, setNome] = useState(inicial?.nome ?? "");
   const [clienteId, setClienteId] = useState(inicial?.clienteId ?? clienteIdInicial ?? "");
   const [descricao, setDescricao] = useState(inicial?.descricao ?? "");
+  const [prazoExecucao, setPrazoExecucao] = useState(inicial?.prazoExecucao ?? "");
+  const [formaPagamento, setFormaPagamento] = useState(inicial?.formaPagamento ?? "");
   const [observacao, setObservacao] = useState(inicial?.observacao ?? "");
   // Validade: no novo, a data de hoje (a do orçamento) + 10 dias — editável
   const [validadeEm, setValidadeEm] = useState(
@@ -266,6 +278,14 @@ export function OrcamentoForm({
     issAliquota,
   }), [servicos, produtos, descontoServicos, descontoProdutos, issAliquota]);
 
+  // Prévia do nome automático: tipo da OS, equipamento, cliente/unidade ou os itens
+  const clienteSel = clientes.find((c) => c.id === clienteId);
+  const nomeAuto = nomeAutomaticoOrcamento({
+    ...contextoNome,
+    cliente: clienteSel ? (clienteSel.nomeFantasia || clienteSel.nome) : null,
+    itens: [...servicos, ...produtos].map((i) => i.descricao),
+  });
+
   const osDaIa = embutido?.osId ?? (ordensIds.length === 1 ? ordensIds[0] : null);
   async function gerarDescricaoIa() {
     if (!iaDisponivel || gerandoIa) return;
@@ -313,7 +333,6 @@ export function OrcamentoForm({
     e.preventDefault();
     setErro("");
 
-    if (!nome.trim()) return setErro("Informe o nome do orçamento.");
     if (!clienteId) return setErro("Selecione um cliente.");
     if (servicos.length === 0 && produtos.length === 0) {
       return setErro("Adicione ao menos um serviço ou produto.");
@@ -334,7 +353,10 @@ export function OrcamentoForm({
     const prodPayload = produtos.filter((p) => p.descricao.trim()).map(limpar);
 
     const payload: Record<string, any> = {
-      nome: nome.trim(),
+      // Em branco = o servidor compõe o nome automático (a mesma regra da prévia)
+      nome: nome.trim() || null,
+      prazoExecucao: prazoExecucao.trim() || null,
+      formaPagamento: formaPagamento.trim() || null,
       clienteId,
       tipo,
       descricao: descricao?.trim() || null,
@@ -472,8 +494,8 @@ export function OrcamentoForm({
       <div className="card-padded space-y-6">
         <FormSection title="Identificação">
           <FormGrid cols={2}>
-            <FormField label="Nome do orçamento" required>
-              <Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Manutenção mensal — split sala XYZ" />
+            <FormField label="Nome do orçamento" hint={nome.trim() ? "Nome digitado por você (apague para voltar ao automático)" : "Automático pelo tipo da OS, equipamento, cliente ou itens — pode editar"}>
+              <Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder={nomeAuto} data-nome-orcamento />
             </FormField>
             <FormField label="Cliente" required>
               <SelectCadastroRapido
@@ -499,6 +521,20 @@ export function OrcamentoForm({
             <FormField label="Validade" hint={`Padrão: ${DIAS_VALIDADE_PADRAO} dias após a data do orçamento. Depois dela o orçamento não pode mais ser aprovado.`}>
               <InputData value={validadeEm} onChange={setValidadeEm} aria-label="Validade" />
             </FormField>
+            {tipo !== "PROPOSTA_CONTRATO" && (<>
+              <FormField label="Prazo de execução dos serviços" hint="Sai no orçamento do cliente">
+                <Input value={prazoExecucao} onChange={(e) => setPrazoExecucao(e.target.value)} list="sugestoes-prazo-execucao" maxLength={200} placeholder="Ex.: 5 dias úteis após aprovação" data-prazo-execucao />
+              </FormField>
+              <FormField label="Forma de pagamento" hint="Sai no orçamento do cliente">
+                <Input value={formaPagamento} onChange={(e) => setFormaPagamento(e.target.value)} list="sugestoes-forma-pagamento" maxLength={200} placeholder="Ex.: PIX à vista ou boleto em 2x" data-forma-pagamento />
+              </FormField>
+              <datalist id="sugestoes-prazo-execucao">
+                {PRAZOS_SUGERIDOS.map((v) => <option key={v} value={v} />)}
+              </datalist>
+              <datalist id="sugestoes-forma-pagamento">
+                {FORMAS_PAGAMENTO_SUGERIDAS.map((v) => <option key={v} value={v} />)}
+              </datalist>
+            </>)}
           </FormGrid>
           <div className="space-y-2" data-descricao-orcamento>
             <FormField label="Descrição" hint="Resumo da proposta para o cliente">

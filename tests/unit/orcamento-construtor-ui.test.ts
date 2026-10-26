@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 /**
  * Construtor de orçamento (o do comercial, também usado na gaveta da OS), num DOM de verdade:
- *  - dentro da OS só existe "Orçamento comum"; no Comercial, os dois tipos;
+ *  - dentro da OS só existe "Orçamento"; no Comercial, os dois tipos;
  *  - validade já vem com hoje + 10 dias;
  *  - unitário ↔ total por item (total digitado recalcula o unitário, ao centavo);
  *  - observação do item em campo que expande;
@@ -87,14 +87,14 @@ const linhas = () => $$("[data-item-linha]");
 const campo = (linha: Element, c: string) => linha.querySelector<HTMLInputElement>(`[data-campo='${c}']`)!;
 const valor = (dado: string) => $(`[data-valor='${dado}']`)?.textContent?.replace(/\s/g, " ");
 async function salvar() {
-  await digitar($("input[placeholder^='Ex.: Manutenção']"), "Corretiva UTI");
+  await digitar($("input[data-nome-orcamento]"), "Corretiva UTI");
   await act(async () => { $("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
   await esperar();
   return chamadas.find((c) => c.metodo === "POST" && c.url === "/api/orcamentos")?.corpo;
 }
 
 describe("tipo de documento e validade", () => {
-  it("dentro da OS: só 'Orçamento comum' (o card de tipo some); no Comercial: os dois tipos", async () => {
+  it("dentro da OS: só 'Orçamento' (o card de tipo some); no Comercial: os dois tipos", async () => {
     await montar({ embutido: { osId: "os1", onSalvo: () => {}, onCancelar: () => {} }, osInicialId: "os1" });
     expect(document.body.textContent).not.toContain("Proposta de Contrato");
     expect(document.body.textContent).not.toContain("Tipo de documento");
@@ -310,5 +310,66 @@ describe("documento do orçamento: cliente (ISS embutido) × interno (linha de I
     expect(texto(linhasServ[1])).toContain("R$ 100,00");
     expect(texto([...d.querySelectorAll("tfoot")][0])).toContain("Total serviços (com ISS)");
     expect(d.querySelector("[data-total-geral]")?.textContent?.replace(/\s/g, " ")).toBe("R$ 1.125,00");
+  });
+});
+
+describe("ajustes finos: nome automático, condições, observação ao lado, tipo na OS", () => {
+  const CTX = { tipoOs: "Manutenção Corretiva", unidade: "Bloco A", equipamento: "Samsung WindFree 18k" };
+
+  it("nome automático: prévia instantânea no campo; em branco vai vazio (o servidor compõe a mesma regra)", async () => {
+    await montar({ contextoNome: CTX, embutido: { osId: "os1", onSalvo: () => {}, onCancelar: () => {} }, osInicialId: "os1" });
+    const campo = $<HTMLInputElement>("input[data-nome-orcamento]")!;
+    expect(campo.placeholder).toBe("Manutenção Corretiva — Samsung WindFree 18k — Hospital Santa Clara · Bloco A");
+    expect(campo.value).toBe("");
+    await adicionar("Buscar serviço por nome...", "Limpeza de split");
+    await act(async () => { $("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
+    await esperar();
+    const corpo = chamadas.find((c) => c.metodo === "POST" && c.url === "/api/orcamentos")!.corpo;
+    expect(corpo.nome).toBeNull();
+    expect(document.body.textContent).not.toContain("Informe o nome");
+  });
+
+  it("sem OS: a prévia usa o 1º item e o cliente; o nome digitado é respeitado", async () => {
+    await montar();
+    await adicionar("Buscar serviço por nome...", "Limpeza de split");
+    await adicionar("Buscar produto por nome...", "Capacitor 35uF");
+    expect($<HTMLInputElement>("input[data-nome-orcamento]")!.placeholder).toBe("Limpeza de split + 1 item — Hospital Santa Clara");
+    const corpo = await salvar(); // digita "Corretiva UTI"
+    expect(corpo.nome).toBe("Corretiva UTI");
+  });
+
+  it("prazo de execução e forma de pagamento (com sugestões) vão no payload; somem na Proposta de Contrato", async () => {
+    await montar();
+    expect([...document.querySelectorAll("#sugestoes-forma-pagamento option")].map((o) => o.getAttribute("value"))).toContain("PIX à vista");
+    await digitar($("[data-prazo-execucao]"), "5 dias úteis após aprovação");
+    await digitar($("[data-forma-pagamento]"), "PIX à vista");
+    await adicionar("Buscar serviço por nome...", "Limpeza de split");
+    const corpo = await salvar();
+    expect(corpo).toMatchObject({ prazoExecucao: "5 dias úteis após aprovação", formaPagamento: "PIX à vista" });
+    await clicar($$("button").find((b) => b.textContent?.includes("Proposta de Contrato")));
+    expect($("[data-prazo-execucao]")).toBeNull();
+    expect($("[data-forma-pagamento]")).toBeNull();
+  });
+
+  it("dentro da OS: só 'Orçamento' (nada de Proposta de Contrato nem 'Orçamento comum'); no Comercial o rótulo é 'Orçamento'", async () => {
+    await montar({ embutido: { osId: "os1", onSalvo: () => {}, onCancelar: () => {} }, osInicialId: "os1" });
+    expect(document.body.textContent).not.toMatch(/Proposta de Contrato|Orçamento [Cc]omum/);
+    act(() => root.unmount()); caixa.remove();
+    await montar();
+    const tipos = $$("button").filter((b) => /Proposta comercial avulsa|Contrato de manutenção/.test(b.textContent ?? "")).map((b) => b.querySelector("p")?.textContent);
+    expect(tipos).toEqual(["Orçamento", "Proposta de Contrato"]);
+  });
+
+  it("observação na coluna ao lado da descrição (cabeçalho Descrição | Observação | Qtd | Unitário | Total), na mesma linha do item", async () => {
+    await montar();
+    await adicionar("Buscar serviço por nome...", "Limpeza de split");
+    const cabecalho = $$("[role='table'][aria-label='Serviços'] [role='columnheader']").map((c) => c.textContent);
+    expect(cabecalho.slice(0, 5)).toEqual(["Descrição", "Observação", "Qtd", "Unitário", "Total"]);
+    const linha = linhas()[0];
+    const celulas = [...linha.querySelectorAll(":scope > [role='cell']")];
+    expect(celulas[1].querySelector("textarea[aria-label='Observação de Limpeza de split']")).toBeTruthy(); // 2ª coluna = observação
+    await digitar(celulas[1].querySelector("textarea"), "Inclui deslocamento");
+    const corpo = await salvar();
+    expect(corpo.servicos[0].observacao).toBe("Inclui deslocamento");
   });
 });

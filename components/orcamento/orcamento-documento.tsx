@@ -1,5 +1,6 @@
 import { formatarCpfCnpj, formatarData, formatarMoeda, formatarTelefone, LABELS_STATUS_ORCAMENTO, CLASSE_STATUS_ORCAMENTO, cn } from "@/lib/utils";
 import { calcularOrcamento, versaoCliente, type EntradaCalculo, type TipoDesconto } from "@/lib/orcamentos/calculo";
+import { linhasDadosBancarios } from "@/lib/orcamentos/dados-bancarios";
 
 interface ItemDoc {
   descricao: string;
@@ -17,6 +18,9 @@ export interface OrcamentoDocumentoProps {
     descricao?: string | null;
     observacao?: string | null;
     validadeEm?: Date | string | null;
+    /** Prazo de execução dos serviços e forma de pagamento (texto curto); vazios não aparecem */
+    prazoExecucao?: string | null;
+    formaPagamento?: string | null;
     criadoEm: Date | string;
     enviadoEm?: Date | string | null;
     assinadoEm?: Date | string | null;
@@ -50,6 +54,13 @@ export interface OrcamentoDocumentoProps {
     cidade?: string | null;
     estado?: string | null;
     cep?: string | null;
+    /** Dados bancários do cadastro da empresa (sem conta e sem PIX, o bloco não aparece) */
+    bancoNome?: string | null;
+    bancoAgencia?: string | null;
+    bancoConta?: string | null;
+    bancoTipoConta?: string | null;
+    bancoTitular?: string | null;
+    pixChave?: string | null;
   };
   cliente: {
     nome: string;
@@ -96,6 +107,7 @@ export function OrcamentoDocumento({ orcamento, empresa, cliente, variante = "co
     issAliquota: orcamento.issAliquota,
   };
   const t = calcularOrcamento(entrada);
+  const banco = linhasDadosBancarios(empresa, formatarCpfCnpj);
   const vc = versao === "cliente" ? versaoCliente(entrada) : null;
   const grupoServicos: GrupoDoc = vc
     ? { itens: vc.servicos, subtotal: vc.subtotalServicos, desconto: vc.descontoServicos, total: vc.totalServicos }
@@ -218,6 +230,42 @@ export function OrcamentoDocumento({ orcamento, empresa, cliente, variante = "co
           )}
         </div>
       </div>
+
+      {/* Condições: prazo de execução e forma de pagamento (só os preenchidos) */}
+      {(orcamento.prazoExecucao?.trim() || orcamento.formaPagamento?.trim()) && (
+        <div className="py-5 border-t border-surface-border" data-condicoes-documento>
+          <p className="text-xs uppercase tracking-wider text-ink-muted mb-2">Condições</p>
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+            {orcamento.prazoExecucao?.trim() && (
+              <div data-prazo-execucao>
+                <dt className="text-ink-muted">Prazo de execução dos serviços</dt>
+                <dd className="font-medium text-ink">{orcamento.prazoExecucao}</dd>
+              </div>
+            )}
+            {orcamento.formaPagamento?.trim() && (
+              <div data-forma-pagamento>
+                <dt className="text-ink-muted">Forma de pagamento</dt>
+                <dd className="font-medium text-ink">{orcamento.formaPagamento}</dd>
+              </div>
+            )}
+          </dl>
+        </div>
+      )}
+
+      {/* Dados bancários (do cadastro da empresa) */}
+      {banco && (
+        <div className="py-5 border-t border-surface-border" data-dados-bancarios>
+          <p className="text-xs uppercase tracking-wider text-ink-muted mb-2">Dados para pagamento</p>
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
+            {banco.map((l) => (
+              <div key={l.rotulo} className={cn("flex gap-2", (l.rotulo === "Titular" || l.rotulo === "Chave PIX") && "sm:col-span-2")}>
+                <dt className="text-ink-muted shrink-0">{l.rotulo}:</dt>
+                <dd className="font-medium text-ink [overflow-wrap:anywhere]">{l.valor}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
 
       {/* Observações */}
       {orcamento.observacao && variante === "completa" && (

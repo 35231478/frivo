@@ -4,6 +4,9 @@ import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
+const textoBanco = (max: number) =>
+  z.string().trim().max(max).transform((v) => v || null).optional().nullable();
+
 const empresaUpdateSchema = z.object({
   nome: z.string().min(2).optional(),
   nomeFantasia: z.string().optional(),
@@ -22,6 +25,13 @@ const empresaUpdateSchema = z.object({
   cep: z.string().optional(),
   latitude: z.number().optional().nullable(),
   longitude: z.number().optional().nullable(),
+  // Dados bancários (saem no orçamento do cliente). Vazio = sem o campo.
+  bancoNome: textoBanco(80),
+  bancoAgencia: textoBanco(20),
+  bancoConta: textoBanco(30),
+  bancoTipoConta: textoBanco(30),
+  bancoTitular: textoBanco(120),
+  pixChave: textoBanco(120),
 });
 
 export async function GET() {
@@ -35,6 +45,7 @@ export async function GET() {
       telefone: true, celular: true, site: true, logo: true,
       endereco: true, numero: true, complemento: true, bairro: true,
       cidade: true, estado: true, cep: true, latitude: true, longitude: true,
+      bancoNome: true, bancoAgencia: true, bancoConta: true, bancoTipoConta: true, bancoTitular: true, pixChave: true,
       plano: true,
     },
   });

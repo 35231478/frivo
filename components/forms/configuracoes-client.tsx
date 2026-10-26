@@ -61,6 +61,12 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
     cep: initialEmpresa.cep ?? "",
     latitude: initialEmpresa.latitude,
     longitude: initialEmpresa.longitude,
+    bancoNome: initialEmpresa.bancoNome ?? "",
+    bancoAgencia: initialEmpresa.bancoAgencia ?? "",
+    bancoConta: initialEmpresa.bancoConta ?? "",
+    bancoTipoConta: initialEmpresa.bancoTipoConta ?? "",
+    bancoTitular: initialEmpresa.bancoTitular ?? "",
+    pixChave: initialEmpresa.pixChave ?? "",
   });
 
   const [cfg, setCfg] = useState<ConfigTela>(initialConfig);
@@ -240,6 +246,24 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
           {emp.latitude && emp.longitude && (
             <p className="text-xs text-ink-muted">Coordenadas: {emp.latitude.toFixed(6)}, {emp.longitude.toFixed(6)}</p>
           )}
+        </FormSection>
+
+        <FormSection title="Dados bancários">
+          <p className="text-xs text-ink-muted -mt-2 mb-3" data-dica-banco>Saem no orçamento enviado ao cliente (link e impressão). Deixe em branco para não mostrar.</p>
+          <FormGrid cols={3}>
+            <FormField label="Banco"><Input value={emp.bancoNome} onChange={(e) => updateEmp("bancoNome", e.target.value)} placeholder="Ex.: Banco Inter (077)" maxLength={80} /></FormField>
+            <FormField label="Agência"><Input value={emp.bancoAgencia} onChange={(e) => updateEmp("bancoAgencia", e.target.value)} placeholder="0001" maxLength={20} /></FormField>
+            <FormField label="Conta"><Input value={emp.bancoConta} onChange={(e) => updateEmp("bancoConta", e.target.value)} placeholder="12345-6" maxLength={30} /></FormField>
+          </FormGrid>
+          <FormGrid cols={3}>
+            <FormField label="Tipo de conta">
+              <Select value={emp.bancoTipoConta} onChange={(e) => updateEmp("bancoTipoConta", e.target.value)} placeholder="—">
+                {["Corrente", "Poupança", "Pagamento"].map((t) => (<option key={t} value={t}>{t}</option>))}
+              </Select>
+            </FormField>
+            <FormField label="Titular" hint="Vazio = razão social" className="sm:col-span-2"><Input value={emp.bancoTitular} onChange={(e) => updateEmp("bancoTitular", e.target.value)} maxLength={120} /></FormField>
+          </FormGrid>
+          <FormField label="Chave PIX"><Input value={emp.pixChave} onChange={(e) => updateEmp("pixChave", e.target.value)} placeholder="CNPJ, e-mail, telefone ou chave aleatória" maxLength={120} className="max-w-md" /></FormField>
         </FormSection>
 
         <div className="flex justify-end pt-2 border-t border-surface-linha">
