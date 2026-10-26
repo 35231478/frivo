@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
@@ -36,6 +36,7 @@ interface DrawerProps {
 export function Drawer({ aberto, onFechar, titulo, children, largura, rodape, abas, abaAtiva, onAbaChange }: DrawerProps) {
   const [montado, setMontado] = useState(false);
   const [entrando, setEntrando] = useState(false);
+  const idTitulo = useId();
 
   // Monta ao abrir; mantém montado durante a animação de saída.
   useEffect(() => {
@@ -72,6 +73,7 @@ export function Drawer({ aberto, onFechar, titulo, children, largura, rodape, ab
       <div
         role="dialog"
         aria-modal="true"
+        aria-labelledby={idTitulo}
         className={cn(
           "absolute right-0 top-0 h-full bg-white border-l border-surface-border shadow-elevated flex flex-col transition-transform duration-300 ease-out",
           largura ?? "w-full sm:w-[52vw] sm:min-w-[460px] sm:max-w-[780px]",
@@ -80,11 +82,12 @@ export function Drawer({ aberto, onFechar, titulo, children, largura, rodape, ab
       >
         {/* Header: superfície branca com divisória (sistema de design) */}
         <div className="flex items-center justify-between gap-3 px-5 py-4 bg-white border-b border-surface-border shrink-0">
-          <h3 className="font-display text-base font-semibold text-ink truncate">{titulo}</h3>
+          <h3 id={idTitulo} className="font-display text-base font-semibold text-ink truncate">{titulo}</h3>
           <button
             type="button"
             onClick={onFechar}
             title="Fechar"
+            aria-label="Fechar"
             className="p-1.5 -mr-1.5 rounded-lg text-ink-muted hover:text-ink hover:bg-surface-page transition-colors shrink-0"
           >
             <X className="w-5 h-5" />

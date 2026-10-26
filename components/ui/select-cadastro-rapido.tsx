@@ -86,6 +86,8 @@ interface Props {
   /** Nome do campo que recebe o texto digitado na busca ao clicar em "+ Criar 'x'". */
   campoBusca?: string;
   className?: string;
+  /** Ícone à esquerda do texto no botão (alinha com outros seletores que também têm ícone). */
+  icone?: React.ReactNode;
 }
 
 const UFS = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
@@ -95,7 +97,7 @@ const inputCls =
 
 export function SelectCadastroRapido({
   value, onChange, opcoes, entidade, campos, criar, permissao, linkCadastroCompleto, contexto,
-  placeholder, disabled, textoDesabilitado, carregando, erro, campoBusca, className, valoresIniciais,
+  placeholder, disabled, textoDesabilitado, carregando, erro, campoBusca, className, valoresIniciais, icone,
 }: Props) {
   const podeCriar = usePodeCriar(permissao);
 
@@ -158,9 +160,12 @@ export function SelectCadastroRapido({
           disabled && "bg-surface-alt cursor-not-allowed",
         )}
       >
-        <span className={cn("truncate", selecionada ? "text-ink" : "text-ink-subtle")}>
-          {disabled ? (textoDesabilitado ?? placeholder) : selecionada ? selecionada.label : (placeholder ?? `Selecione ${entidade.feminino ? "a" : "o"} ${entidade.singular}`)}
-          {selecionada?.descricao && <span className="text-ink-subtle"> — {selecionada.descricao}</span>}
+        <span className="flex items-center gap-2 min-w-0">
+          {icone && <span className="shrink-0 text-ink-subtle" aria-hidden="true">{icone}</span>}
+          <span className={cn("truncate", selecionada ? "text-ink" : "text-ink-subtle")}>
+            {disabled ? (textoDesabilitado ?? placeholder) : selecionada ? selecionada.label : (placeholder ?? `Selecione ${entidade.feminino ? "a" : "o"} ${entidade.singular}`)}
+            {selecionada?.descricao && <span className="text-ink-subtle"> — {selecionada.descricao}</span>}
+          </span>
         </span>
         {carregando ? <Loader2 className="w-4 h-4 text-ink-subtle animate-spin shrink-0" /> : <ChevronDown className="w-4 h-4 text-ink-subtle shrink-0" />}
       </button>

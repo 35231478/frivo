@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { AlertTriangle, Crown, Users, X } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { AlertTriangle, Check, ChevronDown, Crown, UserPlus, Users, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import { SelectCadastroRapido, usePodeCriar } from "@/components/ui/select-cadastro-rapido";
@@ -92,17 +92,12 @@ export function SeletorTecnicos({ tecnicos, equipes, tipoOsId, valor, onChange, 
   return (
     <div className="space-y-2.5" data-seletor-tecnicos>
       {equipes.length > 0 && (
-        <div className="flex items-center gap-2">
-          <Users className="w-4 h-4 text-ink-subtle shrink-0" />
-          <select
-            aria-label="Usar equipe" value={valor.equipeId ?? ""} onChange={(e) => usarEquipe(e.target.value)}
-            className={cn("flex-1 min-w-0 bg-white border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500",
-              valor.equipeId ? "border-primary-300 text-primary-700 bg-primary-50/40" : "border-surface-border text-ink")}
-          >
-            <option value="">{valor.tecnicoIds.length ? "Sem equipe (colaboradores avulsos)" : "Escolher uma equipe…"}</option>
-            {equipes.map((e) => <option key={e.id} value={e.id}>{e.nome} ({e.membroIds.length + (e.liderId && !e.membroIds.includes(e.liderId) ? 1 : 0)})</option>)}
-          </select>
-        </div>
+        <SeletorEquipe
+          equipes={equipes} nomeDe={(id) => porId.get(id)?.nome} valor={valor.equipeId}
+          placeholder={valor.tecnicoIds.length ? "Sem equipe (colaboradores avulsos)" : "Escolher uma equipe…"}
+          semEquipe={valor.tecnicoIds.length ? "Sem equipe (colaboradores avulsos)" : "Nenhuma equipe"}
+          onChange={usarEquipe}
+        />
       )}
 
       {valor.tecnicoIds.length > 0 && (
@@ -128,7 +123,7 @@ export function SeletorTecnicos({ tecnicos, equipes, tipoOsId, valor, onChange, 
       )}
 
       <SelectCadastroRapido
-        value="" onChange={adicionar} opcoes={opcoesAdicionar}
+        value="" onChange={adicionar} opcoes={opcoesAdicionar} icone={<UserPlus className="w-4 h-4" />}
         entidade={TECNICO.entidade} contexto={tipoOsId ? "com competência neste tipo de OS" : undefined}
         placeholder={valor.tecnicoIds.length ? "Adicionar outro colaborador…" : equipes.length ? "…ou escolha colaboradores" : "Selecione o colaborador"}
         carregando={carregando} campos={TECNICO.campos} campoBusca="nome" permissao={TECNICO.permissao} linkCadastroCompleto={TECNICO.link}
@@ -177,6 +172,125 @@ export function SeletorTecnicos({ tecnicos, equipes, tipoOsId, valor, onChange, 
           <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
           Sem competência neste tipo de OS: {semCompetencia.map((id) => porId.get(id)?.nome).join(", ")}. Remova ou troque o tipo de OS.
         </p>
+      )}
+    </div>
+  );
+}
+
+/** Líder primeiro, depois os demais (sem repetir), só quem está na lista de colaboradores. */
+export function integrantesDaEquipe(e: EquipeOpcao, nomeDe: (id: string) => string | undefined): string[] {
+  return [...new Set([e.liderId, ...e.membroIds].filter(Boolean) as string[])]
+    .map((id) => nomeDe(id)).filter((n): n is string => !!n);
+}
+
+/**
+ * Escolha da equipe: cada opção mostra o nome e, discretos embaixo (menor, cinza), os integrantes —
+ * para escolher sem precisar lembrar quem está em cada equipe. Lista acessível (listbox): setas,
+ * Home/End, Enter/Espaço escolhem, Esc fecha e devolve o foco ao botão.
+ */
+function SeletorEquipe({ equipes, nomeDe, valor, placeholder, semEquipe, onChange }: {
+  equipes: EquipeOpcao[];
+  nomeDe: (id: string) => string | undefined;
+  valor: string | null;
+  /** Texto do botão sem equipe escolhida. */
+  placeholder: string;
+  /** Rótulo da opção que tira a equipe. */
+  semEquipe: string;
+  onChange: (id: string) => void;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const [ativo, setAtivo] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+  const botaoRef = useRef<HTMLButtonElement>(null);
+  const listaRef = useRef<HTMLUListElement>(null);
+  const idLista = useId();
+  // Índice 0 = "sem equipe"; 1..n = equipes
+  const opcoes = useMemo(() => [{ id: "", nome: semEquipe, integrantes: [] as string[], cor: null as string | null },
+    ...equipes.map((e) => ({ id: e.id, nome: e.nome, integrantes: integrantesDaEquipe(e, nomeDe), cor: e.cor }))], [equipes, nomeDe, semEquipe]);
+  const sel = opcoes.find((o) => o.id && o.id === valor) ?? null;
+
+  useEffect(() => {
+    if (!aberto) return;
+    function fora(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setAberto(false); }
+    document.addEventListener("mousedown", fora);
+    listaRef.current?.focus();
+    return () => document.removeEventListener("mousedown", fora);
+  }, [aberto]);
+  useEffect(() => {
+    if (aberto) listaRef.current?.querySelector(`[data-indice="${ativo}"]`)?.scrollIntoView?.({ block: "nearest" });
+  }, [aberto, ativo]);
+
+  function abrir() {
+    setAtivo(Math.max(0, opcoes.findIndex((o) => o.id === (valor ?? ""))));
+    setAberto(true);
+  }
+  function escolher(i: number) {
+    onChange(opcoes[i].id);
+    setAberto(false);
+    botaoRef.current?.focus();
+  }
+  function teclas(e: React.KeyboardEvent) {
+    const ultimo = opcoes.length - 1;
+    if (e.key === "ArrowDown") { e.preventDefault(); setAtivo((i) => Math.min(ultimo, i + 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setAtivo((i) => Math.max(0, i - 1)); }
+    else if (e.key === "Home") { e.preventDefault(); setAtivo(0); }
+    else if (e.key === "End") { e.preventDefault(); setAtivo(ultimo); }
+    else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); escolher(ativo); }
+    else if (e.key === "Escape" || e.key === "Tab") { setAberto(false); if (e.key === "Escape") { e.preventDefault(); botaoRef.current?.focus(); } }
+  }
+
+  return (
+    <div ref={ref} className="relative" data-seletor-equipe>
+      <button
+        ref={botaoRef} type="button" aria-label="Usar equipe" aria-haspopup="listbox" aria-expanded={aberto} aria-controls={aberto ? idLista : undefined}
+        onClick={() => (aberto ? setAberto(false) : abrir())}
+        onKeyDown={(e) => { if ((e.key === "ArrowDown" || e.key === "ArrowUp") && !aberto) { e.preventDefault(); abrir(); } }}
+        className={cn("w-full flex items-center justify-between gap-2 bg-white border rounded-lg px-3 py-2.5 text-sm text-left transition-all",
+          "focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10",
+          sel ? "border-primary-300 bg-primary-50/40" : "border-surface-border")}
+      >
+        <span className="flex items-center gap-2 min-w-0">
+          <Users className="w-4 h-4 shrink-0 text-ink-subtle" aria-hidden="true" />
+          {sel ? (
+            <span className="truncate text-ink" data-equipe-escolhida>
+              {sel.nome}<span className="text-ink-muted"> · {sel.integrantes.length} {sel.integrantes.length === 1 ? "integrante" : "integrantes"}</span>
+            </span>
+          ) : <span className="truncate text-ink-subtle">{placeholder}</span>}
+        </span>
+        <ChevronDown className="w-4 h-4 text-ink-subtle shrink-0" aria-hidden="true" />
+      </button>
+
+      {aberto && (
+        <ul
+          ref={listaRef} id={idLista} role="listbox" aria-label="Equipes" tabIndex={-1}
+          aria-activedescendant={`${idLista}-${ativo}`} onKeyDown={teclas}
+          className="absolute z-40 left-0 right-0 top-full mt-1 max-h-72 overflow-y-auto bg-white border border-surface-border rounded-lg shadow-card-hover py-1 focus:outline-none"
+        >
+          {opcoes.map((o, i) => {
+            const escolhida = (valor ?? "") === o.id;
+            return (
+              <li
+                key={o.id || "sem-equipe"} id={`${idLista}-${i}`} role="option" aria-selected={escolhida} data-indice={i}
+                data-opcao-equipe={o.id || "sem-equipe"}
+                onMouseEnter={() => setAtivo(i)} onMouseDown={(e) => e.preventDefault()} onClick={() => escolher(i)}
+                className={cn("flex items-start gap-2 px-3 py-2 cursor-pointer text-sm",
+                  i === ativo && "bg-primary-50", escolhida ? "text-primary-700 font-medium" : "text-ink")}
+              >
+                {o.cor ? <span className="w-2 h-2 mt-1.5 rounded-full shrink-0" style={{ backgroundColor: o.cor }} aria-hidden="true" />
+                  : <span className="w-2 shrink-0" aria-hidden="true" />}
+                <span className="flex-1 min-w-0">
+                  <span className="block truncate">{o.nome}</span>
+                  {o.integrantes.length > 0 && (
+                    <span className="block truncate text-xs font-normal text-ink-muted" data-integrantes title={o.integrantes.join(", ")}>
+                      {o.integrantes.join(", ")}
+                    </span>
+                  )}
+                </span>
+                {escolhida && <Check className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />}
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );

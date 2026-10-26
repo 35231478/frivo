@@ -12,10 +12,11 @@ import { LABELS_PRIORIDADE } from "@/lib/utils";
 import { SelectCadastroRapido } from "@/components/ui/select-cadastro-rapido";
 import { CLIENTE, UNIDADE, EQUIPAMENTO, TIPO_OS } from "@/components/cadastro-rapido/definicoes";
 import type { OpcaoCadastro } from "@/components/ui/select-cadastro-rapido";
-import { Inbox } from "lucide-react";
+import { Inbox, Link2, Wrench, X } from "lucide-react";
 import { SeletorExecucao, VALOR_EXECUCAO_VAZIO, corpoExecucao, temExecutor, useOpcoesExecucao, type ValorExecucao } from "@/components/os/seletor-execucao";
 import { MSG_SEM_EXECUTOR_TELA } from "@/lib/atividade-equipe";
-import { SeletorEquipamentos } from "@/components/os/seletor-equipamentos";
+import { GavetaEquipamentos } from "@/components/os/gaveta-equipamentos";
+import { detalheEquipamento, rotuloEquipamento, type EquipamentoResumo } from "@/lib/os/vincular-equipamentos";
 import { InputData } from "@/components/ui/input-data";
 import { InputDataHora } from "@/components/ui/input-data-hora";
 import { paraLocalBR } from "@/lib/fuso";
@@ -60,8 +61,11 @@ export default function NovaOrdemPage() {
   const [agendarPara, setAgendarPara] = useState("");
   const [equipamentoId, setEquipamentoId] = useState("");
   const [equipamentos, setEquipamentos] = useState<EquipItem[]>([]);
-  // Equipamentos atendidos (opcional na abertura; dá para vincular na execução)
-  const [atendidos, setAtendidos] = useState<Set<string>>(new Set());
+  // Equipamentos atendidos (opcional na abertura; dá para vincular na execução) — escolhidos na gaveta
+  const [atendidos, setAtendidos] = useState<EquipamentoResumo[]>([]);
+  const [gavetaAberta, setGavetaAberta] = useState(false);
+  const [avisoSemCliente, setAvisoSemCliente] = useState(false);
+  const [verTodosAtendidos, setVerTodosAtendidos] = useState(false);
 
   useEffect(() => {
     fetch("/api/clientes").then((r) => r.json()).then((d) => setClientes(Array.isArray(d) ? d : [])).catch(() => {})
@@ -143,7 +147,7 @@ export default function NovaOrdemPage() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form, clienteId,
-          ...(atendidos.size ? { equipamentoIds: [...atendidos] } : {}),
+          ...(atendidos.length ? { equipamentoIds: atendidos.map((e) => e.id) } : {}),
           // dataAgendada: instante (ISO) da hora de Brasília escolhida
           execucao: { tipoOsId: tipoOsId || null, dataAgendada: agendarPara || null, ...corpoExecucao(execucao) },
         }),
@@ -180,7 +184,7 @@ export default function NovaOrdemPage() {
             ) : (
             <SelectCadastroRapido
               value={clienteId}
-              onChange={(v) => { setClienteId(v); setAtendidos(new Set()); setForm((f) => ({ ...f, unidadeId: "", contratoId: "" })); }}
+              onChange={(v) => { setClienteId(v); setAtendidos([]); setAvisoSemCliente(false); setForm((f) => ({ ...f, unidadeId: "", contratoId: "" })); }}
               opcoes={clientes.map(CLIENTE.opcao)}
               entidade={CLIENTE.entidade}
               placeholder="Selecione o cliente"
@@ -202,7 +206,7 @@ export default function NovaOrdemPage() {
             <FormField label="Endereço do cliente">
               <SelectCadastroRapido
                 value={form.unidadeId}
-                onChange={(v) => { setForm((f) => ({ ...f, unidadeId: v })); setAtendidos(new Set()); }}
+                onChange={(v) => setForm((f) => ({ ...f, unidadeId: v }))}
                 opcoes={unidades.map(UNIDADE.opcao)}
                 entidade={UNIDADE.entidade}
                 contexto="para este cliente"
@@ -238,8 +242,9 @@ export default function NovaOrdemPage() {
                 <InputDataHora aria-label="Data e hora do atendimento" value={dataHora} onChange={setDataHora} />
               </FormField>
             ) : (
-              <FormField label="Previsão de conclusão">
-                <InputData value={form.previsaoConclusao} onChange={(v) => setForm((f) => ({ ...f, previsaoConclusao: v }))} />
+              // Data e hora da 1ª atividade (é ela que aparece no calendário)
+              <FormField label="Agendar para" hint="Opcional — aparece no calendário">
+                <InputDataHora aria-label="Agendar para" value={agendarPara} onChange={setAgendarPara} />
               </FormField>
             )}
           </FormGrid>
@@ -274,13 +279,58 @@ export default function NovaOrdemPage() {
           )}
         </FormSection>
 
-        {!solicitacao && clienteId && (
+        {!solicitacao && (
           <FormSection title="Equipamentos atendidos">
             <p className="text-xs text-ink-muted -mt-1" data-hint-equipamentos>
               Opcional agora — dá para vincular depois, na execução (pelo QR Code ou pela lista). Para <strong>concluir</strong> a OS, pelo menos 1 equipamento precisa ser atendido, com o checklist dele respondido.
             </p>
-            <SeletorEquipamentos clienteId={clienteId} unidadeId={form.unidadeId || null} marcados={atendidos} onChange={setAtendidos} />
-            {atendidos.size > 0 && <p className="text-xs text-frivo-700" data-qtd-atendidos>{atendidos.size === 1 ? "1 equipamento selecionado" : `${atendidos.size} equipamentos selecionados`}</p>}
+            {atendidos.length > 0 && (
+              <div data-equipamentos-escolhidos>
+                <p className="text-xs font-medium text-ink-muted mb-1.5" data-qtd-atendidos>
+                  {atendidos.length === 1 ? "1 equipamento selecionado" : `${atendidos.length} equipamentos selecionados`}
+                </p>
+                <ul className="divide-y divide-surface-linha rounded-lg border border-surface-border bg-white">
+                  {(verTodosAtendidos ? atendidos : atendidos.slice(0, 5)).map((e) => (
+                    <li key={e.id} className="flex items-center gap-3 px-3 py-2" data-equipamento-escolhido={e.id}>
+                      <Wrench className="w-4 h-4 text-ink-subtle shrink-0" aria-hidden="true" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm text-ink truncate">{rotuloEquipamento(e)}</span>
+                        <span className="block text-xs text-ink-muted truncate">{detalheEquipamento(e, true)}</span>
+                      </span>
+                      <button type="button" onClick={() => setAtendidos((l) => l.filter((x) => x.id !== e.id))}
+                        aria-label={`Tirar ${rotuloEquipamento(e)} da OS`} className="p-1 rounded text-ink-subtle hover:text-atrasado hover:bg-atrasado-claro">
+                        <X className="w-4 h-4" aria-hidden="true" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                {atendidos.length > 5 && (
+                  <button type="button" onClick={() => setVerTodosAtendidos((v) => !v)} className="mt-1.5 text-xs font-semibold text-acento hover:underline" data-ver-todos-atendidos>
+                    {verTodosAtendidos ? "Mostrar menos" : `Mostrar todos (${atendidos.length})`}
+                  </button>
+                )}
+              </div>
+            )}
+            <div>
+              <Button
+                type="button" variant="secondary" data-vincular-equipamento aria-describedby={avisoSemCliente ? "aviso-sem-cliente" : undefined}
+                onClick={() => { if (!clienteId) { setAvisoSemCliente(true); return; } setGavetaAberta(true); }}
+              >
+                <Link2 className="w-4 h-4" aria-hidden="true" /> {atendidos.length ? "Alterar equipamentos" : "Vincular equipamento"}
+              </Button>
+              {avisoSemCliente && !clienteId && (
+                <p id="aviso-sem-cliente" role="alert" data-aviso-sem-cliente className="mt-2 text-xs text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2">
+                  Escolha o <strong>cliente</strong> primeiro — os equipamentos vêm dos endereços dele.
+                </p>
+              )}
+            </div>
+            {clienteId && (
+              <GavetaEquipamentos
+                aberto={gavetaAberta} onFechar={() => setGavetaAberta(false)}
+                clienteId={clienteId} unidadeId={form.unidadeId || null} unidades={unidades.map(UNIDADE.opcao)}
+                selecionados={atendidos} onConfirmar={setAtendidos}
+              />
+            )}
           </FormSection>
         )}
 
@@ -301,8 +351,9 @@ export default function NovaOrdemPage() {
                   }}
                 />
               </FormField>
-              <FormField label="Agendar para" hint="Opcional — aparece no calendário">
-                <InputDataHora aria-label="Agendar para" value={agendarPara} onChange={setAgendarPara} />
+              {/* O prazo da OS: é o que a central usa para dizer se está no prazo ou atrasada */}
+              <FormField label="Prazo para finalizar" hint="Opcional — passou do dia, a OS aparece como atrasada">
+                <InputData aria-label="Prazo para finalizar" value={form.previsaoConclusao} onChange={(v) => setForm((f) => ({ ...f, previsaoConclusao: v }))} />
               </FormField>
             </FormGrid>
           )}
