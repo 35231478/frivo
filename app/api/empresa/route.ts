@@ -32,6 +32,10 @@ const empresaUpdateSchema = z.object({
   bancoTipoConta: textoBanco(30),
   bancoTitular: textoBanco(120),
   pixChave: textoBanco(120),
+  // Timbre do orçamento: inscrições e responsável técnico padrão (vazio = sem)
+  inscricaoEstadual: textoBanco(30),
+  inscricaoMunicipal: textoBanco(30),
+  responsavelTecnicoId: z.string().trim().transform((v) => v || null).optional().nullable(),
 });
 
 export async function GET() {
@@ -46,6 +50,7 @@ export async function GET() {
       endereco: true, numero: true, complemento: true, bairro: true,
       cidade: true, estado: true, cep: true, latitude: true, longitude: true,
       bancoNome: true, bancoAgencia: true, bancoConta: true, bancoTipoConta: true, bancoTitular: true, pixChave: true,
+      inscricaoEstadual: true, inscricaoMunicipal: true, responsavelTecnicoId: true,
       plano: true,
     },
   });
@@ -66,6 +71,18 @@ export async function PUT(req: NextRequest) {
   const parsed = empresaUpdateSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+  }
+
+  // RT padrão: um responsável técnico (com CREA) DESTA empresa; trocar exige que esteja ativo
+  const rt = parsed.data.responsavelTecnicoId;
+  if (rt) {
+    const ok = await prisma.tecnico.count({
+      where: { id: rt, empresaId: session.user!.empresaId, tipo: "RESPONSAVEL_TECNICO", ativo: true },
+    });
+    const atual = await prisma.empresa.findUnique({ where: { id: session.user!.empresaId }, select: { responsavelTecnicoId: true } });
+    if (!ok && atual?.responsavelTecnicoId !== rt) {
+      return NextResponse.json({ erro: "Responsável técnico inválido: escolha um responsável técnico ativo da empresa." }, { status: 400 });
+    }
   }
 
   const empresa = await prisma.empresa.update({

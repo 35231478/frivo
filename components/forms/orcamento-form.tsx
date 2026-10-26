@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,11 @@ import { chaveDiaCivil, chaveHojeBR } from "@/lib/fuso";
 import { calcularOrcamento, DIAS_VALIDADE_PADRAO, totalDoItem, validadePadrao } from "@/lib/orcamentos/calculo";
 import { confirmar, toast } from "@/components/ui/avisos";
 import { nomeAutomaticoOrcamento, type ContextoNomeOrcamento } from "@/lib/orcamentos/nome";
+import { Select } from "@/components/ui/select";
+import { NOTA_ART_APOS_APROVACAO } from "@/lib/orcamentos/proposta";
+import {
+  GARANTIAS_PECAS_SUGERIDAS, GARANTIAS_SERVICO_SUGERIDAS, NaoInclusoCampo, NormasCampo,
+} from "@/components/orcamento/campos-corporativos";
 
 interface ClienteOpt {
   id: string;
@@ -82,6 +87,12 @@ interface OrcamentoInicial {
   validadeEm?: Date | string | null;
   prazoExecucao?: string | null;
   formaPagamento?: string | null;
+  garantiaServico?: string | null;
+  garantiaPecas?: string | null;
+  naoIncluso?: string | null;
+  normas?: string[];
+  unidadeId?: string | null;
+  contatoClienteId?: string | null;
   descontoServicos: number;
   tipoDescontoServicos: TipoDesconto;
   descontoProdutos: number;
@@ -119,6 +130,24 @@ interface OrcamentoFormProps {
    * em vez de navegar. O resto é o MESMO formulário e a MESMA API.
    */
   embutido?: { osId: string; onSalvo: (orcamento: any) => void; onCancelar: () => void };
+  /** Padrões de Configurações › Orçamentos (o orçamento NOVO abre com eles; cada um pode mudar) */
+  padroes?: PadroesOrcamentoForm;
+  /** Orçamento novo: destinatário sugerido (unidade da OS de origem, contato principal do cliente) */
+  destinatarioInicial?: { unidadeId: string | null; contatoClienteId: string | null };
+}
+
+export interface PadroesOrcamentoForm {
+  validadeDias: number;
+  garantiaServico: string | null;
+  garantiaPecas: string | null;
+  naoIncluso: string | null;
+  normas: string[];
+  responsavelTecnicoId: string | null;
+}
+
+interface OpcoesDestinatario {
+  unidades: { id: string; nome: string; principal: boolean; cidade: string | null; estado: string | null }[];
+  contatos: { id: string; nome: string; cargo: string | null; principal: boolean; email: string | null }[];
 }
 
 function toInput(v: number | null | undefined): string {
@@ -175,6 +204,8 @@ export function OrcamentoForm({
   iaDisponivel = false,
   contextoNome,
   embutido,
+  padroes,
+  destinatarioInicial,
 }: OrcamentoFormProps) {
   const router = useRouter();
 
@@ -204,7 +235,10 @@ export function OrcamentoForm({
   // Dentro da OS só existe "Orçamento" (proposta de contrato é coisa do módulo Comercial)
   const tiposPermitidos: TipoOrcamento[] = embutido ? ["COMUM"] : ["COMUM", "PROPOSTA_CONTRATO"];
   const [tipo, setTipo] = useState<TipoOrcamento>(embutido ? "COMUM" : inicial?.tipo ?? "COMUM");
-  const [proposta, setProposta] = useState<PropostaState>(propostaInicialToState(inicial?.proposta));
+  // RT/ART valem nos dois tipos; o orçamento novo nasce com o RT padrão da empresa
+  const [proposta, setProposta] = useState<PropostaState>(
+    inicial ? propostaInicialToState(inicial.proposta) : { ...PROPOSTA_VAZIA, responsavelTecnicoId: padroes?.responsavelTecnicoId ?? "" },
+  );
   const [equipamentos, setEquipamentos] = useState<EquipamentoOpt[]>([]);
   const patchProposta = (patch: Partial<PropostaState>) => setProposta((p) => ({ ...p, ...patch }));
 
@@ -214,9 +248,19 @@ export function OrcamentoForm({
   const [prazoExecucao, setPrazoExecucao] = useState(inicial?.prazoExecucao ?? "");
   const [formaPagamento, setFormaPagamento] = useState(inicial?.formaPagamento ?? "");
   const [observacao, setObservacao] = useState(inicial?.observacao ?? "");
-  // Validade: no novo, a data de hoje (a do orçamento) + 10 dias — editável
+  // Novo: garantias, não incluso e normas vêm dos padrões de Configurações; edição: os gravados
+  const [garantiaServico, setGarantiaServico] = useState((inicial ? inicial.garantiaServico : padroes?.garantiaServico) ?? "");
+  const [garantiaPecas, setGarantiaPecas] = useState((inicial ? inicial.garantiaPecas : padroes?.garantiaPecas) ?? "");
+  const [naoIncluso, setNaoIncluso] = useState((inicial ? inicial.naoIncluso : padroes?.naoIncluso) ?? "");
+  const [normas, setNormas] = useState<string[]>((inicial ? inicial.normas : padroes?.normas) ?? []);
+  // Destinatário ("Para:"): unidade do cliente e contato A/C
+  const [unidadeId, setUnidadeId] = useState((inicial ? inicial.unidadeId : destinatarioInicial?.unidadeId) ?? "");
+  const [contatoClienteId, setContatoClienteId] = useState((inicial ? inicial.contatoClienteId : destinatarioInicial?.contatoClienteId) ?? "");
+  const [destinos, setDestinos] = useState<OpcoesDestinatario>({ unidades: [], contatos: [] });
+  // Validade: no novo, a data de hoje (a do orçamento) + os dias do padrão (Configurações; 10) — editável
+  const diasValidade = padroes?.validadeDias ?? DIAS_VALIDADE_PADRAO;
   const [validadeEm, setValidadeEm] = useState(
-    inicial ? toInputDate(inicial.validadeEm ?? null) : validadePadrao(chaveHojeBR()),
+    inicial ? toInputDate(inicial.validadeEm ?? null) : validadePadrao(chaveHojeBR(), diasValidade),
   );
   const [descontoServicos, setDescontoServicos] = useState<DescontoGrupoState>({ valor: Number(inicial?.descontoServicos ?? 0), tipo: inicial?.tipoDescontoServicos ?? "VALOR" });
   const [descontoProdutos, setDescontoProdutos] = useState<DescontoGrupoState>({ valor: Number(inicial?.descontoProdutos ?? 0), tipo: inicial?.tipoDescontoProdutos ?? "VALOR" });
@@ -247,6 +291,19 @@ export function OrcamentoForm({
       .then((r) => r.json())
       .then((d) => { if (ativo) setTabelaPreco(d && d.itens ? d : null); })
       .catch(() => { if (ativo) setTabelaPreco(null); });
+    return () => { ativo = false; };
+  }, [clienteId]);
+
+  // Unidades e contatos do cliente para o "Para:"; trocar de cliente solta o que era do anterior
+  const clienteAnterior = useRef(clienteId);
+  useEffect(() => {
+    if (clienteAnterior.current !== clienteId) { setUnidadeId(""); setContatoClienteId(""); clienteAnterior.current = clienteId; }
+    if (!clienteId) { setDestinos({ unidades: [], contatos: [] }); return; }
+    let ativo = true;
+    fetch(`/api/orcamentos/destinatario?clienteId=${encodeURIComponent(clienteId)}`)
+      .then((r) => (r.ok ? r.json() : { unidades: [], contatos: [] }))
+      .then((d: OpcoesDestinatario) => { if (ativo) setDestinos({ unidades: d.unidades ?? [], contatos: d.contatos ?? [] }); })
+      .catch(() => { if (ativo) setDestinos({ unidades: [], contatos: [] }); });
     return () => { ativo = false; };
   }, [clienteId]);
 
@@ -357,6 +414,15 @@ export function OrcamentoForm({
       nome: nome.trim() || null,
       prazoExecucao: prazoExecucao.trim() || null,
       formaPagamento: formaPagamento.trim() || null,
+      garantiaServico: garantiaServico.trim() || null,
+      garantiaPecas: garantiaPecas.trim() || null,
+      naoIncluso: naoIncluso.trim() || null,
+      normas,
+      unidadeId: unidadeId || null,
+      contatoClienteId: contatoClienteId || null,
+      // Responsável técnico (nome/CREA no documento) e ART — nos dois tipos
+      responsavelTecnicoId: proposta.responsavelTecnicoId || null,
+      artNumero: proposta.artNumero?.trim() || null,
       clienteId,
       tipo,
       descricao: descricao?.trim() || null,
@@ -518,24 +584,32 @@ export function OrcamentoForm({
                 }}
               />
             </FormField>
-            <FormField label="Validade" hint={`Padrão: ${DIAS_VALIDADE_PADRAO} dias após a data do orçamento. Depois dela o orçamento não pode mais ser aprovado.`}>
+            <FormField label="Validade" hint={`Padrão: ${diasValidade} dias após a data do orçamento (Configurações › Orçamentos). Depois dela o orçamento não pode mais ser aprovado.`}>
               <InputData value={validadeEm} onChange={setValidadeEm} aria-label="Validade" />
             </FormField>
-            {tipo !== "PROPOSTA_CONTRATO" && (<>
-              <FormField label="Prazo de execução dos serviços" hint="Sai no orçamento do cliente">
-                <Input value={prazoExecucao} onChange={(e) => setPrazoExecucao(e.target.value)} list="sugestoes-prazo-execucao" maxLength={200} placeholder="Ex.: 5 dias úteis após aprovação" data-prazo-execucao />
-              </FormField>
-              <FormField label="Forma de pagamento" hint="Sai no orçamento do cliente">
-                <Input value={formaPagamento} onChange={(e) => setFormaPagamento(e.target.value)} list="sugestoes-forma-pagamento" maxLength={200} placeholder="Ex.: PIX à vista ou boleto em 2x" data-forma-pagamento />
-              </FormField>
-              <datalist id="sugestoes-prazo-execucao">
-                {PRAZOS_SUGERIDOS.map((v) => <option key={v} value={v} />)}
-              </datalist>
-              <datalist id="sugestoes-forma-pagamento">
-                {FORMAS_PAGAMENTO_SUGERIDAS.map((v) => <option key={v} value={v} />)}
-              </datalist>
-            </>)}
           </FormGrid>
+          {tipo !== "PROPOSTA_CONTRATO" && clienteId && (
+            <div data-destinatario>
+              <FormGrid cols={2}>
+                <FormField label="Unidade (endereço do “Para:”)" hint="Vazio = endereço do cadastro do cliente">
+                  <Select value={unidadeId} onChange={(e) => setUnidadeId(e.target.value)} placeholder="Endereço do cliente" data-unidade-orcamento>
+                    {unidadeId && !destinos.unidades.some((u) => u.id === unidadeId) && <option value={unidadeId}>Unidade atual</option>}
+                    {destinos.unidades.map((u) => (
+                      <option key={u.id} value={u.id}>{u.nome}{u.cidade ? ` — ${u.cidade}${u.estado ? `/${u.estado}` : ""}` : ""}</option>
+                    ))}
+                  </Select>
+                </FormField>
+                <FormField label="A/C (aos cuidados de)" hint="Contato do cliente que recebe a proposta">
+                  <Select value={contatoClienteId} onChange={(e) => setContatoClienteId(e.target.value)} placeholder="Sem contato A/C" data-contato-orcamento>
+                    {contatoClienteId && !destinos.contatos.some((c) => c.id === contatoClienteId) && <option value={contatoClienteId}>Contato atual</option>}
+                    {destinos.contatos.map((c) => (
+                      <option key={c.id} value={c.id}>{c.nome}{c.cargo ? ` (${c.cargo})` : ""}{c.principal ? " · principal" : ""}</option>
+                    ))}
+                  </Select>
+                </FormField>
+              </FormGrid>
+            </div>
+          )}
           <div className="space-y-2" data-descricao-orcamento>
             <FormField label="Descrição" hint="Resumo da proposta para o cliente">
               <Textarea value={descricao ?? ""} onChange={(e) => setDescricao(e.target.value)} rows={Math.min(14, Math.max(5, (descricao ?? "").split("\n").length + 1))} />
@@ -605,6 +679,51 @@ export function OrcamentoForm({
           totalEditavel
         />
       </div>
+
+      {tipo !== "PROPOSTA_CONTRATO" && (
+        <div className="card-padded space-y-6" data-condicoes-comerciais>
+          <FormSection title="Condições comerciais">
+            <p className="text-xs text-ink-muted -mt-2">Saem no documento do cliente (bloco “Condições”). Em branco = a linha não aparece.</p>
+            <FormGrid cols={2}>
+              <FormField label="Prazo de execução dos serviços">
+                <Input value={prazoExecucao} onChange={(e) => setPrazoExecucao(e.target.value)} list="sugestoes-prazo-execucao" maxLength={200} placeholder="Ex.: 5 dias úteis após aprovação" data-prazo-execucao />
+              </FormField>
+              <FormField label="Forma de pagamento">
+                <Input value={formaPagamento} onChange={(e) => setFormaPagamento(e.target.value)} list="sugestoes-forma-pagamento" maxLength={200} placeholder="Ex.: PIX à vista ou boleto em 2x" data-forma-pagamento />
+              </FormField>
+              <FormField label="Garantia dos serviços">
+                <Input value={garantiaServico} onChange={(e) => setGarantiaServico(e.target.value)} list="sugestoes-garantia-servico" maxLength={200} placeholder="Ex.: 90 dias" data-garantia-servico />
+              </FormField>
+              <FormField label="Garantia das peças">
+                <Input value={garantiaPecas} onChange={(e) => setGarantiaPecas(e.target.value)} list="sugestoes-garantia-pecas" maxLength={200} placeholder="Ex.: Conforme garantia do fabricante" data-garantia-pecas />
+              </FormField>
+            </FormGrid>
+            <datalist id="sugestoes-prazo-execucao">{PRAZOS_SUGERIDOS.map((v) => <option key={v} value={v} />)}</datalist>
+            <datalist id="sugestoes-forma-pagamento">{FORMAS_PAGAMENTO_SUGERIDAS.map((v) => <option key={v} value={v} />)}</datalist>
+            <datalist id="sugestoes-garantia-servico">{GARANTIAS_SERVICO_SUGERIDAS.map((v) => <option key={v} value={v} />)}</datalist>
+            <datalist id="sugestoes-garantia-pecas">{GARANTIAS_PECAS_SUGERIDAS.map((v) => <option key={v} value={v} />)}</datalist>
+            <FormField label="Não incluso" hint="Uma exclusão por linha; sai no documento como “Não incluso”">
+              <NaoInclusoCampo id="nao-incluso-orcamento" valor={naoIncluso} onChange={setNaoIncluso} />
+            </FormField>
+          </FormSection>
+
+          <FormSection title="Responsável técnico e normas">
+            <FormGrid cols={2}>
+              <FormField label="Responsável técnico" hint="Nome e CREA saem no documento. Vazio = sem o bloco">
+                <Select value={proposta.responsavelTecnicoId} onChange={(e) => patchProposta({ responsavelTecnicoId: e.target.value })} placeholder="Sem responsável técnico" data-rt-orcamento>
+                  {tecnicos.map((t) => <option key={t.id} value={t.id}>{t.nome}{t.crea ? ` — CREA ${t.crea}` : ""}</option>)}
+                </Select>
+              </FormField>
+              <FormField label="Nº da ART" hint={`Vazio = “${NOTA_ART_APOS_APROVACAO}”`}>
+                <Input value={proposta.artNumero} onChange={(e) => patchProposta({ artNumero: e.target.value })} maxLength={60} placeholder="Opcional" data-art-orcamento />
+              </FormField>
+            </FormGrid>
+            <FormField label="Normas atendidas" hint="Marque só o que se aplica: nenhuma marcada = o bloco não sai no documento">
+              <NormasCampo valor={normas} onChange={setNormas} />
+            </FormField>
+          </FormSection>
+        </div>
+      )}
 
       {tipo === "PROPOSTA_CONTRATO" && (
         <PropostaCampos

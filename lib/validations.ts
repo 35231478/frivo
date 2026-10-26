@@ -506,6 +506,13 @@ export const orcamentoSchema = z.object({
   tipo: z.nativeEnum(TipoOrcamento).default(TipoOrcamento.COMUM),
   prazoExecucao: z.string().trim().max(200, "Prazo de execução muito longo").optional().nullable(),
   formaPagamento: z.string().trim().max(200, "Forma de pagamento muito longa").optional().nullable(),
+  // Proposta corporativa: ausente (undefined) = padrão de Configurações no novo / mantém na edição
+  garantiaServico: z.string().trim().max(200, "Garantia dos serviços muito longa").optional().nullable(),
+  garantiaPecas: z.string().trim().max(200, "Garantia das peças muito longa").optional().nullable(),
+  naoIncluso: z.string().max(4000, "\"Não incluso\" muito longo").optional().nullable(),
+  normas: z.array(z.string().max(40)).max(20).optional(),
+  unidadeId: z.string().optional().nullable(),
+  contatoClienteId: z.string().optional().nullable(),
   descricao: z.string().optional().nullable(),
   observacao: z.string().optional().nullable(),
   validadeEm: z.string().optional().nullable(),

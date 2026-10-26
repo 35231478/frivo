@@ -30,9 +30,11 @@ interface Props {
   config: ConfigTela;
   /** Qual bloco mostrar (cada um abre no seu cartão de Configurações); sem = os dois */
   parte?: "empresa" | "preferencias";
+  /** Responsáveis técnicos (com CREA) para o RT padrão dos orçamentos */
+  tecnicosRt?: { id: string; nome: string; crea: string | null; ativo: boolean }[];
 }
 
-export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialConfig, parte }: Props) {
+export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialConfig, parte, tecnicosRt = [] }: Props) {
   const router = useRouter();
   const [salvandoEmpresa, setSalvandoEmpresa] = useState(false);
   const [salvandoConfig, setSalvandoConfig] = useState(false);
@@ -67,6 +69,9 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
     bancoTipoConta: initialEmpresa.bancoTipoConta ?? "",
     bancoTitular: initialEmpresa.bancoTitular ?? "",
     pixChave: initialEmpresa.pixChave ?? "",
+    inscricaoEstadual: initialEmpresa.inscricaoEstadual ?? "",
+    inscricaoMunicipal: initialEmpresa.inscricaoMunicipal ?? "",
+    responsavelTecnicoId: initialEmpresa.responsavelTecnicoId ?? "",
   });
 
   const [cfg, setCfg] = useState<ConfigTela>(initialConfig);
@@ -207,6 +212,16 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
               <Input value={emp.email} onChange={(e) => updateEmp("email", e.target.value)} type="email" />
             </FormField>
           </FormGrid>
+          <div data-campos-timbre>
+            <FormGrid>
+              <FormField label="Inscrição estadual" hint="Sai no cabeçalho do orçamento. Vazio = não aparece (ou “Isento”)">
+                <Input value={emp.inscricaoEstadual} onChange={(e) => updateEmp("inscricaoEstadual", e.target.value)} maxLength={30} placeholder="Ex.: 123.456.789.110" />
+              </FormField>
+              <FormField label="Inscrição municipal" hint="Sai no cabeçalho do orçamento. Vazio = não aparece">
+                <Input value={emp.inscricaoMunicipal} onChange={(e) => updateEmp("inscricaoMunicipal", e.target.value)} maxLength={30} />
+              </FormField>
+            </FormGrid>
+          </div>
           <FormGrid cols={3}>
             <FormField label="Telefone">
               <PhoneInput value={emp.telefone} onChange={(e: any) => updateEmp("telefone", e.target.value)} placeholder="(00) 0000-0000" />
@@ -264,6 +279,22 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
             <FormField label="Titular" hint="Vazio = razão social" className="sm:col-span-2"><Input value={emp.bancoTitular} onChange={(e) => updateEmp("bancoTitular", e.target.value)} maxLength={120} /></FormField>
           </FormGrid>
           <FormField label="Chave PIX"><Input value={emp.pixChave} onChange={(e) => updateEmp("pixChave", e.target.value)} placeholder="CNPJ, e-mail, telefone ou chave aleatória" maxLength={120} className="max-w-md" /></FormField>
+        </FormSection>
+
+        <FormSection title="Responsável técnico">
+          <p className="text-xs text-ink-muted -mt-2 mb-3" data-dica-rt>
+            O orçamento novo já vem com este responsável técnico (nome e CREA saem no documento, com “ART emitida após aprovação”). Pode trocar em cada orçamento.
+          </p>
+          <FormField label="Responsável técnico padrão" className="max-w-md">
+            <Select value={emp.responsavelTecnicoId} onChange={(e) => updateEmp("responsavelTecnicoId", e.target.value)} placeholder="Nenhum (o documento não mostra RT)" data-rt-padrao>
+              {tecnicosRt.filter((t) => t.ativo || t.id === emp.responsavelTecnicoId).map((t) => (
+                <option key={t.id} value={t.id}>{t.nome}{t.crea ? ` — CREA ${t.crea}` : ""}{t.ativo ? "" : " (inativo)"}</option>
+              ))}
+            </Select>
+          </FormField>
+          {tecnicosRt.length === 0 && (
+            <p className="text-xs text-ink-muted">Nenhum responsável técnico cadastrado. Cadastre em Equipes › Colaboradores com o tipo “Responsável Técnico” e o CREA.</p>
+          )}
         </FormSection>
 
         <div className="flex justify-end pt-2 border-t border-surface-linha">

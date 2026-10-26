@@ -4,10 +4,13 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { OrcamentoDocumento } from "@/components/orcamento/orcamento-documento";
+import { anexosDoDocumento, INCLUDE_DOCUMENTO_ORCAMENTO } from "@/lib/orcamentos/documento-server";
 import { PropostaDocumento } from "@/components/orcamento/proposta-documento";
 import { AcoesEnvio } from "@/components/orcamento/acoes-envio";
 import { ConverterContrato } from "@/components/orcamento/converter-contrato";
 import { ComprasSecao } from "@/components/compras/compras-secao";
+import { AnexosProposta } from "@/components/orcamento/anexos-proposta";
+import { pode } from "@/lib/permissoes";
 import { PageHeader } from "@/components/ui/page-header";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { LABELS_STATUS_OS, formatarData, cn } from "@/lib/utils";
@@ -28,12 +31,9 @@ export default async function OrcamentoDetalhePage({
     prisma.orcamento.findFirst({
       where: { id, empresaId },
       include: {
-        cliente: true,
+        ...INCLUDE_DOCUMENTO_ORCAMENTO,
         criadoPor: { select: { id: true, nome: true } },
-        responsavelTecnico: { select: { nome: true, crea: true } },
         contratoGerado: { select: { id: true, numero: true } },
-        servicos: { orderBy: { ordem: "asc" } },
-        produtos: { orderBy: { ordem: "asc" } },
         ordensServico: {
           include: {
             ordemServico: { select: { id: true, numero: true, status: true, descricao: true } },
@@ -116,9 +116,20 @@ export default async function OrcamentoDetalhePage({
             equipamentos={equipamentos}
           />
         ) : (
-          <OrcamentoDocumento orcamento={orcamento} empresa={empresa} cliente={orcamento.cliente} versao="interna" />
+          <OrcamentoDocumento orcamento={orcamento} empresa={empresa} cliente={orcamento.cliente} versao="interna" anexos={anexosDoDocumento(orcamento.anexos, `/api/orcamentos/${orcamento.id}/anexos`)} />
         )}
       </div>
+
+      {!ehProposta && (
+        <div className="card-padded">
+          <AnexosProposta
+            orcamentoId={orcamento.id}
+            editavel={podeEditar && pode(session!.user!.permissoes, "orcamentos", "editar", session!.user!.role)}
+            temOs={orcamento.ordensServico.length > 0}
+            podeVerOs={pode(session!.user!.permissoes, "ordens", "visualizar", session!.user!.role)}
+          />
+        </div>
+      )}
 
       <div className="card-padded">
         <ComprasSecao orcamentoId={orcamento.id} />

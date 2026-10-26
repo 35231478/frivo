@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { OrcamentoDocumento } from "@/components/orcamento/orcamento-documento";
+import { anexosDoDocumento, INCLUDE_DOCUMENTO_ORCAMENTO } from "@/lib/orcamentos/documento-server";
 import { PropostaDocumento } from "@/components/orcamento/proposta-documento";
 import { AprovacaoPublica } from "@/components/orcamento/aprovacao-publica";
 import { FrivoLogo } from "@/components/layout/frivo-logo";
@@ -26,13 +27,7 @@ export default async function OrcamentoPublicoPage({
 
   const orcamento = await prisma.orcamento.findUnique({
     where: { tokenPublico: token },
-    include: {
-      empresa: true,
-      cliente: true,
-      responsavelTecnico: { select: { nome: true, crea: true } },
-      servicos: { orderBy: { ordem: "asc" } },
-      produtos: { orderBy: { ordem: "asc" } },
-    },
+    include: INCLUDE_DOCUMENTO_ORCAMENTO,
   });
 
   if (!orcamento) notFound();
@@ -111,6 +106,7 @@ export default async function OrcamentoPublicoPage({
                 orcamento={orcamento}
                 empresa={orcamento.empresa}
                 cliente={orcamento.cliente}
+                anexos={anexosDoDocumento(orcamento.anexos, `/api/publico/orcamentos/${token}/anexos`)}
               />
             )}
           </div>

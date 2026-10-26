@@ -1,5 +1,5 @@
 import {
-  Building2, Clock, Cog, FileSpreadsheet, Headset, IdCard, Landmark, ListChecks, Mail, Package, Printer, QrCode, ScrollText, ShieldCheck, Tags,
+  Building2, Clock, Cog, FileSignature, FileSpreadsheet, Headset, IdCard, Landmark, ListChecks, Mail, Package, Printer, QrCode, ScrollText, ShieldCheck, Tags,
   Target, Thermometer, UserCog, Wallet, Wrench, type LucideIcon,
 } from "lucide-react";
 import { moduloDaRota, pode, type Permissoes } from "@/lib/permissoes";
@@ -53,6 +53,12 @@ export const SECOES_CONFIGURACOES: SecaoConfig[] = [
           { id: "termos", href: "/configuracoes/termos", icone: ScrollText, label: "Termos de referência", dica: "Modelos de termo usados nas propostas de contrato" },
           { id: "prazos", href: "/configuracoes/prazos", icone: Clock, label: "Modelos de prazo", dica: "Etapas, responsáveis e prazos (SLA) das OS" },
           { id: "impressao-os", href: "/configuracoes/impressao-os", icone: Printer, label: "Impressão da OS", dica: "Seções do relatório da OS e o que o cliente vê" },
+        ],
+      },
+      {
+        titulo: "Comercial",
+        itens: [
+          { id: "orcamento", href: "/configuracoes/orcamento", icone: FileSignature, label: "Orçamentos e propostas", dica: "Validade, garantias, não incluso e normas do orçamento novo" },
         ],
       },
       {

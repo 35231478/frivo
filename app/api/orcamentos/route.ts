@@ -3,9 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { orcamentoSchema } from "@/lib/validations";
-import { gerarCodigoOrcamento } from "@/lib/utils";
+import { proximoCodigoOrcamento } from "@/lib/orcamentos/numero-server";
 import { camposCondicoes, montarValoresOrcamento, montarCamposProposta } from "@/lib/orcamento-helpers";
 import { nomeDoOrcamento } from "@/lib/orcamentos/nome-server";
+import { destinatarioSugerido, padroesOrcamento, validadeDoPadrao, validarDestinatario } from "@/lib/orcamentos/padroes-server";
 import { anoBR, periodoInstanteBR } from "@/lib/fuso";
 
 export async function GET(req: NextRequest) {
@@ -74,6 +75,7 @@ export async function POST(req: NextRequest) {
       validarRefEmpresa("tecnico", data.responsavelTecnicoId, empresaId, "Responsável técnico"),
       validarRefsEmpresa("servico", data.servicos.map((s) => s.catalogoId), empresaId, "Serviço do catálogo"),
       validarRefsEmpresa("produto", data.produtos.map((p) => p.catalogoId), empresaId, "Produto do catálogo"),
+      validarDestinatario(empresaId, data.clienteId, data.unidadeId, data.contatoClienteId),
     ]);
   } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
@@ -94,7 +96,14 @@ export async function POST(req: NextRequest) {
   // ISS: a alíquota da empresa HOJE fica congelada no orçamento
   const cfg = await prisma.configuracao.findUnique({ where: { empresaId }, select: { issAliquota: true } });
   const valores = montarValoresOrcamento(data, Number(cfg?.issAliquota ?? 0));
-  const proposta = montarCamposProposta(data);
+  // Campo que não veio = padrão de Configurações (validade, garantias, não incluso, normas, RT padrão)
+  const padroes = await padroesOrcamento(empresaId);
+  const proposta = montarCamposProposta(
+    data.responsavelTecnicoId === undefined ? { ...data, responsavelTecnicoId: padroes.responsavelTecnicoId } : data,
+  );
+  const sugerido = data.unidadeId === undefined || data.contatoClienteId === undefined
+    ? await destinatarioSugerido(empresaId, data.clienteId, data.ordensServicoIds)
+    : null;
   // Nome em branco = automático (tipo da OS, equipamento, cliente/unidade ou itens)
   const nome = await nomeDoOrcamento(empresaId, data);
 
@@ -102,13 +111,7 @@ export async function POST(req: NextRequest) {
   const ano = anoBR();
   let orcamento;
   for (let tentativa = 0; ; tentativa++) {
-    const ultimo = await prisma.orcamento.findFirst({
-      where: { empresaId, codigo: { startsWith: `ORC-${ano}-` } },
-      orderBy: { codigo: "desc" },
-      select: { codigo: true },
-    });
-    const seq = ultimo ? Number(ultimo.codigo.split("-")[2]) + 1 : 1;
-    const codigo = gerarCodigoOrcamento(seq);
+    const codigo = await proximoCodigoOrcamento(empresaId, ano);
 
     try {
       orcamento = await prisma.orcamento.create({
@@ -116,12 +119,14 @@ export async function POST(req: NextRequest) {
           empresaId,
           codigo,
           nome,
-          ...camposCondicoes(data),
+          ...camposCondicoes(data, padroes),
           clienteId: data.clienteId,
+          unidadeId: data.unidadeId === undefined ? sugerido!.unidadeId : data.unidadeId || null,
+          contatoClienteId: data.contatoClienteId === undefined ? sugerido!.contatoClienteId : data.contatoClienteId || null,
           criadoPorId: usuarioId,
           descricao: data.descricao ?? null,
           observacao: data.observacao ?? null,
-          validadeEm: data.validadeEm ? new Date(data.validadeEm) : null,
+          validadeEm: data.validadeEm === undefined ? validadeDoPadrao(padroes.validadeDias) : data.validadeEm ? new Date(data.validadeEm) : null,
           ...valores.campos,
           tokenPublico,
           ...proposta,

@@ -408,38 +408,44 @@ enum EscopoRelatorio {
 // ─────────────────────────────────────────────
 
 model Empresa {
-  id           String   @id @default(cuid())
-  nome         String
-  nomeFantasia String?
-  cnpj         String   @unique
-  email        String
-  telefone     String?
-  celular      String?
-  site         String?
-  logo         String?
-  endereco     String?
-  numero       String?
-  complemento  String?
-  bairro       String?
-  cidade       String?
-  estado       String?
-  cep          String?
-  latitude     Float?
-  longitude    Float?
+  id                   String   @id @default(cuid())
+  nome                 String
+  nomeFantasia         String?
+  cnpj                 String   @unique
+  email                String
+  telefone             String?
+  celular              String?
+  site                 String?
+  logo                 String?
+  endereco             String?
+  numero               String?
+  complemento          String?
+  bairro               String?
+  cidade               String?
+  estado               String?
+  cep                  String?
+  latitude             Float?
+  longitude            Float?
   /// Dados bancários (saem no orçamento do cliente; sem banco/conta e sem PIX, o bloco não aparece)
-  bancoNome    String?  @map("banco_nome")
-  bancoAgencia String?  @map("banco_agencia")
-  bancoConta   String?  @map("banco_conta")
+  bancoNome            String?  @map("banco_nome")
+  bancoAgencia         String?  @map("banco_agencia")
+  bancoConta           String?  @map("banco_conta")
   /// Corrente / Poupança / Pagamento (texto livre)
-  bancoTipoConta String? @map("banco_tipo_conta")
+  bancoTipoConta       String?  @map("banco_tipo_conta")
   /// Titular da conta (vazio = razão social da empresa)
-  bancoTitular String?  @map("banco_titular")
-  pixChave     String?  @map("pix_chave")
-  plano        Plano    @default(BASICO)
-  ativo        Boolean  @default(true)
-  criadoEm     DateTime @default(now()) @map("criado_em")
-  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+  bancoTitular         String?  @map("banco_titular")
+  pixChave             String?  @map("pix_chave")
+  /// Timbre do orçamento: inscrições estadual/municipal (vazias = não aparecem no documento)
+  inscricaoEstadual    String?  @map("inscricao_estadual")
+  inscricaoMunicipal   String?  @map("inscricao_municipal")
+  /// Responsável técnico padrão (Tecnico RESPONSAVEL_TECNICO com CREA): o orçamento novo nasce com ele
+  responsavelTecnicoId String?  @map("responsavel_tecnico_id")
+  plano                Plano    @default(BASICO)
+  ativo                Boolean  @default(true)
+  criadoEm             DateTime @default(now()) @map("criado_em")
+  atualizadoEm         DateTime @updatedAt @map("atualizado_em")
 
+  responsavelTecnico     Tecnico?                  @relation("EmpresaResponsavelTecnico", fields: [responsavelTecnicoId], references: [id], onDelete: SetNull)
   usuarios               Usuario[]
   clientes               Cliente[]
   equipamentos           Equipamento[]
@@ -462,6 +468,7 @@ model Empresa {
   notasCompra            NotaCompra[]
   deParasProduto         DeParaProdutoFornecedor[]
   orcamentos             Orcamento[]
+  orcamentoAnexos        OrcamentoAnexo[]
   medicoes               Medicao[]
   contasReceber          ContaReceber[]
   prazoTemplates         PrazoTemplate[]
@@ -547,6 +554,14 @@ model Configuracao {
   /// Impressão do relatório da OS: seções ligadas/desligadas e quem vê (cliente × só interno).
   /// JSON { [secao]: { ativo, cliente } }; ausente = padrões de lib/relatorio-os/config.ts
   relatorioOsConfig Json? @map("relatorio_os_config")
+
+  /// Padrões do orçamento novo (cada orçamento grava os seus e pode editar)
+  orcamentoValidadeDias    Int      @default(10) @map("orcamento_validade_dias")
+  orcamentoGarantiaServico String?  @default("90 dias") @map("orcamento_garantia_servico")
+  orcamentoGarantiaPecas   String?  @default("Conforme garantia do fabricante") @map("orcamento_garantia_pecas")
+  orcamentoNaoIncluso      String?  @map("orcamento_nao_incluso") @db.Text
+  /// Normas atendidas que já vêm marcadas (lib/orcamentos/normas.ts); vazio = bloco desligado
+  orcamentoNormas          String[] @default([]) @map("orcamento_normas")
 
   empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
 
@@ -680,6 +695,7 @@ model Usuario {
   osHistorico          OsHistorico[]
   interacoesCliente    InteracaoCliente[]
   orcamentosCriados    Orcamento[]               @relation("OrcamentoCriador")
+  orcamentoAnexos      OrcamentoAnexo[]          @relation("OrcamentoAnexoAutor")
   pedidosSolicitados   PedidoCompraInterno[]     @relation("PedidoSolicitante")
   pedidosComprador     PedidoCompraInterno[]     @relation("PedidoComprador")
   pushSubscriptions    PushSubscription[]
@@ -774,6 +790,7 @@ model Tecnico {
   atividadesEquipe      AtividadeTecnico[]
   contratosRecorrencia  Contrato[]                      @relation("ContratoTecnicoRecorrencia")
   orcamentosResponsavel Orcamento[]                     @relation("OrcamentoResponsavelTecnico")
+  empresasResponsavel   Empresa[]                       @relation("EmpresaResponsavelTecnico")
   competencias          TipoOs[]                        @relation("ColaboradorCompetencias")
   documentos            ColaboradorDocumento[]
   equipesLideradas      Equipe[]                        @relation("EquipeLider")
@@ -902,6 +919,7 @@ model ContatoCliente {
 
   cliente                 Cliente                  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
   ordensAbertas           OrdemServico[]           @relation("OsContatoOrigem")
+  orcamentosAc            Orcamento[]
   comunicacaoPreferencias ComunicacaoPreferencia[]
 
   @@index([clienteId])
@@ -983,6 +1001,7 @@ model Unidade {
   equipamentos  Equipamento[]
   contratos     ContratoUnidade[]
   ordensServico OrdemServico[]
+  orcamentos    Orcamento[]
 
   @@index([clienteId])
   @@index([empresaId])
@@ -1425,17 +1444,17 @@ model MovimentacaoEstoque {
 // ─────────────────────────────────────────────
 
 model TipoOs {
-  id        String   @id @default(cuid())
-  empresaId String   @map("empresa_id")
-  nome      String
-  descricao String?
-  cor       String   @default("#3b82f6")
-  ativo     Boolean  @default(true)
+  id               String   @id @default(cuid())
+  empresaId        String   @map("empresa_id")
+  nome             String
+  descricao        String?
+  cor              String   @default("#3b82f6")
+  ativo            Boolean  @default(true)
   /// Trava da conclusão: true (padrão) = a atividade deste tipo só conclui com pelo menos 1
   /// equipamento atendido e completo; false = serviço sem equipamento (visita técnica, vistoria,
   /// orçamento): conclui sem equipamento — os que forem atendidos continuam exigindo o checklist.
-  exigeEquipamento Boolean @default(true) @map("exige_equipamento")
-  criadoEm  DateTime @default(now()) @map("criado_em")
+  exigeEquipamento Boolean  @default(true) @map("exige_equipamento")
+  criadoEm         DateTime @default(now()) @map("criado_em")
 
   empresa                  Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   formularios              FormularioTemplate[]
@@ -1504,35 +1523,35 @@ model FormularioCampo {
 // ─────────────────────────────────────────────
 
 model OrdemServico {
-  id                 String     @id @default(cuid())
-  empresaId          String     @map("empresa_id")
-  numero             String
-  clienteId          String     @map("cliente_id")
-  unidadeId          String?    @map("unidade_id")
-  contratoId         String?    @map("contrato_id")
-  responsavelId      String?    @map("responsavel_id")
-  criadoPorId        String     @map("criado_por_id")
-  prioridade         Prioridade @default(NORMAL)
-  status             StatusOS   @default(ABERTA)
+  id                   String     @id @default(cuid())
+  empresaId            String     @map("empresa_id")
+  numero               String
+  clienteId            String     @map("cliente_id")
+  unidadeId            String?    @map("unidade_id")
+  contratoId           String?    @map("contrato_id")
+  responsavelId        String?    @map("responsavel_id")
+  criadoPorId          String     @map("criado_por_id")
+  prioridade           Prioridade @default(NORMAL)
+  status               StatusOS   @default(ABERTA)
   /// Central da OS: false = o status segue o estado real (atividades, conclusão, medição) e é
   /// recalculado a cada mudança; true = alguém ajustou à mão (exceção) e o automático não
   /// sobrescreve até "Voltar ao automático". Quem/quando fica no histórico da OS.
-  statusManual       Boolean    @default(false) @map("status_manual")
+  statusManual         Boolean    @default(false) @map("status_manual")
   /// Exceção da trava de equipamento: motivo informado por quem tem "concluir OS" para concluir
   /// esta OS sem equipamento atendido (quem/quando no histórico). null = trava normal.
-  semEquipamentoMotivo String? @map("sem_equipamento_motivo")
-  origem             OrigemOS   @default(MANUAL)
-  periodoRecorrencia String?    @map("periodo_recorrencia")
-  chamadoNumero      String?    @map("chamado_numero")
-  contatoOrigemId    String?    @map("contato_origem_id")
-  equipamentoId      String?    @map("equipamento_id")
-  descricao          String
-  previsaoConclusao  DateTime?  @map("previsao_conclusao")
-  dataInicio         DateTime?  @map("data_inicio")
-  dataConclusao      DateTime?  @map("data_conclusao")
-  observacoes        String?
-  criadoEm           DateTime   @default(now()) @map("criado_em")
-  atualizadoEm       DateTime   @updatedAt @map("atualizado_em")
+  semEquipamentoMotivo String?    @map("sem_equipamento_motivo")
+  origem               OrigemOS   @default(MANUAL)
+  periodoRecorrencia   String?    @map("periodo_recorrencia")
+  chamadoNumero        String?    @map("chamado_numero")
+  contatoOrigemId      String?    @map("contato_origem_id")
+  equipamentoId        String?    @map("equipamento_id")
+  descricao            String
+  previsaoConclusao    DateTime?  @map("previsao_conclusao")
+  dataInicio           DateTime?  @map("data_inicio")
+  dataConclusao        DateTime?  @map("data_conclusao")
+  observacoes          String?
+  criadoEm             DateTime   @default(now()) @map("criado_em")
+  atualizadoEm         DateTime   @updatedAt @map("atualizado_em")
 
   empresa            Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   cliente            Cliente               @relation(fields: [clienteId], references: [id])
@@ -1594,7 +1613,7 @@ model AtividadeOs {
   dataAgendada   DateTime?       @map("data_agendada")
   /// Prazo próprio da atividade (DIA civil, sem hora): atrasa quando o dia de hoje em Brasília
   /// passa dele com a atividade ainda aberta (lib/os/prazos.ts).
-  prazo          DateTime?       @db.Date @map("prazo")
+  prazo          DateTime?       @map("prazo") @db.Date
   duracaoMin     Int?            @map("duracao_min")
   observacao     String?
   resumo         String?         @db.Text
@@ -1941,7 +1960,7 @@ model OsItemOrcamento {
   executado      Boolean   @default(false)
   executadoEm    DateTime? @map("executado_em")
 
-  ordemServico    OrdemServico       @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  ordemServico OrdemServico @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
 
   @@index([ordemServicoId])
   @@map("os_itens_orcamento")
@@ -2060,6 +2079,16 @@ model Orcamento {
   prazoExecucao        String?      @map("prazo_execucao")
   /// Forma de pagamento (à vista / parcelado / PIX / boleto…); sai no documento
   formaPagamento       String?      @map("forma_pagamento")
+  /// Garantias (texto curto: "90 dias", "Conforme fabricante"); saem nas Condições do documento
+  garantiaServico      String?      @map("garantia_servico")
+  garantiaPecas        String?      @map("garantia_pecas")
+  /// "Não incluso" (exclusões do escopo), uma por linha
+  naoIncluso           String?      @map("nao_incluso") @db.Text
+  /// Normas atendidas (códigos de lib/orcamentos/normas.ts); vazio = bloco não aparece
+  normas               String[]     @default([])
+  /// Destinatário: unidade do cliente (endereço do "Para:") e contato A/C
+  unidadeId            String?      @map("unidade_id")
+  contatoClienteId     String?      @map("contato_cliente_id")
   valorIss             Decimal      @default(0) @map("valor_iss") @db.Decimal(12, 2)
 
   tokenPublico      String    @unique @map("token_publico")
@@ -2080,6 +2109,9 @@ model Orcamento {
   cliente            Cliente               @relation(fields: [clienteId], references: [id])
   criadoPor          Usuario               @relation("OrcamentoCriador", fields: [criadoPorId], references: [id])
   responsavelTecnico Tecnico?              @relation("OrcamentoResponsavelTecnico", fields: [responsavelTecnicoId], references: [id])
+  unidade            Unidade?              @relation(fields: [unidadeId], references: [id], onDelete: SetNull)
+  contatoCliente     ContatoCliente?       @relation(fields: [contatoClienteId], references: [id], onDelete: SetNull)
+  anexos             OrcamentoAnexo[]
   servicos           OrcamentoServico[]
   produtos           OrcamentoProduto[]
   ordensServico      OrcamentoOs[]
@@ -2093,6 +2125,34 @@ model Orcamento {
   @@index([empresaId, criadoEm])
   @@index([clienteId])
   @@map("orcamentos")
+}
+
+/// Anexos que vão junto com a proposta: arquivos enviados (datasheet, catálogo) e fotos copiadas
+/// de Fotos & Anexos da OS (a proposta é um documento: a foto fica congelada nela).
+model OrcamentoAnexo {
+  id          String   @id @default(cuid())
+  empresaId   String   @map("empresa_id")
+  orcamentoId String   @map("orcamento_id")
+  /// ARQUIVO (enviado) ou FOTO (imagem: sai no registro fotográfico do documento)
+  tipo        String
+  nome        String
+  mime        String
+  tamanho     Int
+  conteudo    String   @db.Text
+  legenda     String?
+  /// De onde veio a foto (ex.: "OS-2026-0304 · Split Samsung"); nulo = enviada aqui
+  origem      String?
+  ordem       Int      @default(0)
+  criadoPorId String?  @map("criado_por_id")
+  criadoEm    DateTime @default(now()) @map("criado_em")
+
+  empresa   Empresa   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  orcamento Orcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+  criadoPor Usuario?  @relation("OrcamentoAnexoAutor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+
+  @@index([orcamentoId])
+  @@index([empresaId])
+  @@map("orcamento_anexos")
 }
 
 model OrcamentoServico {
@@ -2300,13 +2360,13 @@ model ContaReceber {
   contrato            Contrato?            @relation(fields: [contratoId], references: [id], onDelete: SetNull)
   categoriaFinanceira CategoriaFinanceira? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
 
+  @@unique([contratoId, refAno, refMes])
   @@index([categoriaId])
   @@index([empresaId, clienteId])
   @@index([empresaId, status, dataVencimento])
   @@index([empresaId, boletoStatus, dataRecebimento])
   @@index([clienteId])
   @@index([medicaoId])
-  @@unique([contratoId, refAno, refMes])
   @@index([contratoId])
   @@map("contas_receber")
 }

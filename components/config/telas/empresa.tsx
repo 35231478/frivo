@@ -13,6 +13,14 @@ export async function TelaEmpresa({ parte }: { parte: "empresa" | "preferencias"
     config = await prisma.configuracao.create({ data: { empresaId } });
   }
 
+  const tecnicosRt = parte === "empresa"
+    ? await prisma.tecnico.findMany({
+        where: { empresaId, tipo: "RESPONSAVEL_TECNICO" },
+        select: { id: true, nome: true, crea: true, ativo: true },
+        orderBy: { nome: "asc" },
+      })
+    : [];
+
   // Decimal não atravessa para o cliente: vai como número
-  return <ConfiguracoesClient empresa={empresa!} config={{ ...config, issAliquota: Number(config.issAliquota) }} parte={parte} />;
+  return <ConfiguracoesClient empresa={empresa!} config={{ ...config, issAliquota: Number(config.issAliquota) }} parte={parte} tecnicosRt={tecnicosRt} />;
 }

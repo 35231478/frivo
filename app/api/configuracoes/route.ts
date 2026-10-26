@@ -3,6 +3,11 @@ import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { linhasNaoIncluso, normasValidas } from "@/lib/orcamentos/proposta";
+
+/** Texto curto opcional: vazio = sem padrão (null) */
+const textoPadrao = (max: number) =>
+  z.string().trim().max(max, "Texto muito longo").nullable().optional().transform((v) => (v === undefined ? undefined : v || null));
 
 const configuracaoSchema = z.object({
   clienteEmailObrigatorio: z.boolean().optional(),
@@ -34,6 +39,17 @@ const configuracaoSchema = z.object({
     z.number({ invalid_type_error: "Alíquota de ISS inválida" }).min(0, "A alíquota de ISS vai de 0 a 100%").max(100, "A alíquota de ISS vai de 0 a 100%")
       .transform((v) => Math.round(v * 100) / 100).optional()
   ),
+  // Padrões do orçamento novo (cada orçamento grava os seus e pode editar)
+  orcamentoValidadeDias: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : Number(v)),
+    z.number({ invalid_type_error: "Validade inválida" }).int("A validade é em dias inteiros")
+      .min(1, "A validade vai de 1 a 365 dias").max(365, "A validade vai de 1 a 365 dias").optional()
+  ),
+  orcamentoGarantiaServico: textoPadrao(200),
+  orcamentoGarantiaPecas: textoPadrao(200),
+  orcamentoNaoIncluso: z.string().max(4000, "\"Não incluso\" muito longo").nullable().optional()
+    .transform((v) => (v === undefined ? undefined : linhasNaoIncluso(v).join("\n") || null)),
+  orcamentoNormas: z.array(z.string().max(40)).max(20).optional().transform((v) => (v === undefined ? undefined : normasValidas(v))),
 }).strict();
 
 export async function GET() {
@@ -70,8 +86,9 @@ export async function PUT(req: NextRequest) {
   const { id: _id, empresaId: _empresaId, qrConfig: _qr, relatorioOsConfig: _rel, ...entrada } = body;
   const parsed = configuracaoSchema.safeParse(entrada);
   if (!parsed.success) {
-    const iss = parsed.error.flatten().fieldErrors.issAliquota?.[0];
-    return NextResponse.json({ erro: iss ?? "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+    const campos = parsed.error.flatten().fieldErrors;
+    const msg = campos.issAliquota?.[0] ?? campos.orcamentoValidadeDias?.[0] ?? campos.orcamentoNaoIncluso?.[0];
+    return NextResponse.json({ erro: msg ?? "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
   }
   const dados = parsed.data;
 
