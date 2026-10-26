@@ -1,17 +1,7 @@
-import type { Metadata } from "next";
-import { PageHeader } from "@/components/ui/page-header";
-import { ModelosPrazoTela } from "@/components/cadastros/telas/modelos-prazo";
+import { redirect } from "next/navigation";
+import { hrefSecaoConfig } from "@/lib/navegacao/configuracoes";
 
-export const metadata: Metadata = { title: "Prazos e SLA" };
-
-export default function PrazosConfigPage() {
-  return (
-    <div>
-      <PageHeader title="Prazos e SLA" description="Modelos de prazo com etapas, responsáveis e notificações" backHref="/configuracoes" />
-      {/* Cadastro padronizado (lib/cadastros): abas Ativos/Inativos/Todos, impacto, ações em massa */}
-      <div className="bg-white rounded-card border border-surface-border p-4 sm:p-6">
-        <ModelosPrazoTela />
-      </div>
-    </div>
-  );
+/** Link antigo: abre a mesma tela na gaveta da página de Configurações. */
+export default function Page() {
+  redirect(hrefSecaoConfig("prazos"));
 }

@@ -1,16 +1,7 @@
-"use client";
+import { redirect } from "next/navigation";
+import { hrefSecaoConfig } from "@/lib/navegacao/configuracoes";
 
-import { CadastroPadrao } from "@/components/cadastros/cadastro-padrao";
-import { PageHeader } from "@/components/ui/page-header";
-
-/** Cadastro padronizado: campos, colunas, validação e permissões em lib/cadastros/registro.ts. */
-export default function ServicosPage() {
-  return (
-    <div>
-      <PageHeader title="Serviços" description="Catálogo de serviços prestados pela empresa" backHref="/configuracoes" />
-      <div className="bg-white rounded-card border border-surface-border p-4 sm:p-6">
-        <CadastroPadrao entidade="servicos" />
-      </div>
-    </div>
-  );
+/** Link antigo: abre a mesma tela na gaveta da página de Configurações. */
+export default function Page() {
+  redirect(hrefSecaoConfig("servicos"));
 }

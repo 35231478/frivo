@@ -17,6 +17,7 @@ import { UNIDADE } from "@/components/cadastro-rapido/definicoes";
 import { reduzirImagem, type QualidadeImagem } from "@/lib/imagem-cliente";
 import { AvisoSerieDuplicada } from "@/components/equipamentos/aviso-serie-duplicada";
 import { SlotFoto } from "@/components/ui/slot-foto";
+import { hrefSecaoConfig } from "@/lib/navegacao/configuracoes";
 
 /* ───────── Campos lidos da etiqueta (mesmos nomes do JSON pedido à IA) ───────── */
 type Campo =
@@ -313,7 +314,7 @@ export function CadastroPorFoto() {
           value={v} onChange={(x) => set("tipo", x)} opcoes={opcoesTipo}
           entidade={{ singular: "tipo de equipamento", plural: "tipos de equipamento" }} placeholder="Selecione o tipo"
           campos={CAMPOS_TIPO} campoBusca="nome" criar={criarTipo}
-          permissao={{ modulo: "configuracoes", acao: "gerenciar" }} linkCadastroCompleto="/configuracoes/tipos-equipamento"
+          permissao={{ modulo: "configuracoes", acao: "gerenciar" }} linkCadastroCompleto={hrefSecaoConfig("tipos-equipamento")}
         />
       );
     if (p.tipo === "capacidade")
