@@ -31,6 +31,9 @@ function unidadeParaHoras(valor: number, unidade: UnidadePrazo): number {
 }
 
 /** Editor de modelo de prazo (CadastroPadrao › modelos-prazo): nome, cor, descrição e as etapas (SLA). */
+// Cor que um registro novo recebe (dado salvo no cadastro; o usuário troca no seletor)
+const COR_PADRAO = "#0EA5E9";
+
 export function EditorModeloPrazo({ item, aberto, onFechar, onSalvo }: EditorCadastroProps) {
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
@@ -42,7 +45,7 @@ export function EditorModeloPrazo({ item, aberto, onFechar, onSalvo }: EditorCad
   useEffect(() => {
     if (!aberto) return;
     setErro("");
-    setNome(item?.nome ?? ""); setDescricao((item?.descricao as string | null) ?? ""); setCor(item?.cor ?? "#0EA5E9");
+    setNome(item?.nome ?? ""); setDescricao((item?.descricao as string | null) ?? ""); setCor(item?.cor ?? COR_PADRAO);
     setEtapas((Array.isArray(item?.etapas) ? item.etapas : []).map((e: any) => {
       const u = horasParaUnidade(Number(e.prazoHoras));
       return { _id: uid(), nome: e.nome, valor: u.valor, unidade: u.unidade, responsavel: e.responsavel, canal: e.canal, mensagem: e.mensagem ?? "" };
@@ -93,8 +96,8 @@ export function EditorModeloPrazo({ item, aberto, onFechar, onSalvo }: EditorCad
       </>}
     >
       <div className="space-y-4">
-        {erro && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
-        {item && item.ativo === false && <p className="text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2">Modelo inativo: não aparece em “Adicionar prazo” nas OS até ser reativado. Prazos já abertos continuam.</p>}
+        {erro && <div role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2">{erro}</div>}
+        {item && item.ativo === false && <p className="text-sm bg-atencao-claro border border-atencao/20 text-atencao-texto rounded-lg px-3 py-2">Modelo inativo: não aparece em “Adicionar prazo” nas OS até ser reativado. Prazos já abertos continuam.</p>}
 
         <FormGrid cols={2}>
           <FormField label="Nome do prazo" required>
@@ -128,7 +131,7 @@ export function EditorModeloPrazo({ item, aberto, onFechar, onSalvo }: EditorCad
                   <Input value={e.nome} onChange={(ev) => patchEtapa(e._id, { nome: ev.target.value })} placeholder="Nome da etapa" className="flex-1" />
                   <button type="button" onClick={() => mover(e._id, -1)} disabled={idx === 0} className="p-1.5 text-ink-muted hover:text-primary-600 disabled:opacity-30" aria-label="Subir etapa"><ArrowUp className="w-3.5 h-3.5" /></button>
                   <button type="button" onClick={() => mover(e._id, 1)} disabled={idx === etapas.length - 1} className="p-1.5 text-ink-muted hover:text-primary-600 disabled:opacity-30" aria-label="Descer etapa"><ArrowDown className="w-3.5 h-3.5" /></button>
-                  <button type="button" onClick={() => removerEtapa(e._id)} className="p-1.5 text-ink-muted hover:text-red-600" aria-label="Remover etapa"><Trash2 className="w-3.5 h-3.5" /></button>
+                  <button type="button" onClick={() => removerEtapa(e._id)} className="p-1.5 text-ink-muted hover:text-atrasado" aria-label="Remover etapa"><Trash2 className="w-3.5 h-3.5" /></button>
                 </div>
                 <FormGrid cols={3}>
                   <FormField label="Prazo">

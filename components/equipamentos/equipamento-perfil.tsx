@@ -16,6 +16,7 @@ import {
   Cpu, MapPin, IdCard, StickyNote, ListChecks,
 } from "lucide-react";
 import { diasAteDiaCivil } from "@/lib/fuso";
+import { status } from "@/lib/ui/tokens";
 
 interface Indicadores {
   ultimoAtendimento: string | null;
@@ -42,16 +43,16 @@ function resolverAba(aba?: string): Aba {
 }
 
 const COR_STATUS: Record<string, string> = {
-  CONCLUIDA: "text-emerald-700 bg-emerald-50",
-  CANCELADA: "text-red-600 bg-red-50",
-  EM_ANDAMENTO: "text-sky-700 bg-sky-50",
-  AGENDADA: "text-indigo-700 bg-indigo-50",
+  CONCLUIDA: "text-ok-texto bg-ok-claro",
+  CANCELADA: "text-atrasado-texto bg-atrasado-claro",
+  EM_ANDAMENTO: "text-atencao-texto bg-atencao-claro",
+  AGENDADA: "text-acento-hover bg-acento-claro",
 };
 const COR_PONTO: Record<string, string> = {
-  CONCLUIDA: "bg-emerald-500",
-  CANCELADA: "bg-red-400",
-  EM_ANDAMENTO: "bg-sky-500",
-  AGENDADA: "bg-indigo-400",
+  CONCLUIDA: "bg-ok",
+  CANCELADA: "bg-atrasado",
+  EM_ANDAMENTO: "bg-atencao",
+  AGENDADA: "bg-acento",
 };
 
 function haQuanto(iso: string) {
@@ -121,7 +122,7 @@ export function EquipamentoPerfil({ equipamento: e, tipoNome, historico, linhaDo
   return (
     <div className="max-w-5xl mx-auto space-y-4">
       {/* ── HERO ── */}
-      <section className="bg-white rounded-2xl border border-surface-border overflow-hidden">
+      <section className="bg-white rounded-card border border-surface-border overflow-hidden">
         <div className="flex flex-col md:flex-row">
           {/* Imagem principal */}
           <div className="relative md:w-72 shrink-0 bg-surface-alt h-36 sm:h-48 md:h-auto md:min-h-[240px]">
@@ -169,7 +170,7 @@ export function EquipamentoPerfil({ equipamento: e, tipoNome, historico, linhaDo
               <StatusSelo ativo={e.ativo} />
               <GarantiaSelo fim={e.garantiaAte} />
               {e.qrcode && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full text-slate-600 bg-slate-100 font-mono">
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full text-ink-muted bg-surface-linha font-mono">
                   <QrCode className="w-3 h-3" /> {e.qrcode.codigo}
                 </span>
               )}
@@ -228,7 +229,7 @@ export function EquipamentoPerfil({ equipamento: e, tipoNome, historico, linhaDo
                 : diasGarantia >= 0 ? `restantes · até ${formatarData(e.garantiaAte)}`
                   : `há ${Math.abs(diasGarantia)} dias · ${formatarData(e.garantiaAte)}`
             }
-            tom={situacao === "vencida" ? "text-red-600" : situacao === "vencendo" ? "text-amber-600" : undefined}
+            tom={situacao === "vencida" ? "text-atrasado" : situacao === "vencendo" ? "text-atencao-texto" : undefined}
           />
         </div>
       </section>
@@ -294,7 +295,7 @@ export function EquipamentoPerfil({ equipamento: e, tipoNome, historico, linhaDo
             vazio="Nenhum QR Code vinculado."
           />
           {(e.observacoesTecnicas || e.observacoes) && (
-            <section className="bg-white rounded-xl border border-surface-border p-4 space-y-3">
+            <section className="bg-white rounded-card border border-surface-border p-4 space-y-3">
               <h3 className="text-sm font-semibold text-ink flex items-center gap-2"><StickyNote className="w-4 h-4 text-primary-500" /> Observações</h3>
               {e.observacoesTecnicas && (
                 <div>
@@ -323,14 +324,14 @@ export function EquipamentoPerfil({ equipamento: e, tipoNome, historico, linhaDo
             <Vazio icone={ClipboardList} texto="Nenhum formulário respondido para este equipamento." />
           ) : (
             historico.map((h) => (
-              <div key={h.chave} className="bg-white rounded-xl border border-surface-border overflow-hidden">
+              <div key={h.chave} className="bg-white rounded-card border border-surface-border overflow-hidden">
                 <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-surface-alt border-b border-surface-border">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-ink flex items-center gap-2">
                       <ClipboardList className="w-3.5 h-3.5 text-primary-500" /> {h.formularioNome}
                     </p>
                     <p className="text-[11px] text-ink-muted mt-0.5 flex items-center gap-1.5 flex-wrap">
-                      {h.tipoOs && <span className="text-white px-1.5 py-px rounded-full" style={{ backgroundColor: h.tipoOs.cor }}>{h.tipoOs.nome}</span>}
+                      {h.tipoOs && <span className="inline-flex items-center gap-1 text-ink-muted bg-surface-page border border-surface-border px-1.5 py-px rounded-full"><span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: h.tipoOs.cor }} aria-hidden />{h.tipoOs.nome}</span>}
                       <span>{formatarDataHora(h.respondidoEm)}</span>
                       {h.respondidoPor && <span className="flex items-center gap-1"><User className="w-3 h-3" />{h.respondidoPor}</span>}
                     </p>
@@ -383,7 +384,7 @@ function CardFicha({ titulo, icone: Icone, itens, acao, vazio }: {
 }) {
   const preenchidos = itens.filter((i) => i.valor);
   return (
-    <section className="bg-white rounded-xl border border-surface-border p-4">
+    <section className="bg-white rounded-card border border-surface-border p-4">
       <div className="flex items-center justify-between gap-2 mb-3">
         <h3 className="text-sm font-semibold text-ink flex items-center gap-2"><Icone className="w-4 h-4 text-primary-500" /> {titulo}</h3>
         {acao}
@@ -432,7 +433,7 @@ function LinhaDoTempo({ eventos, onVerRespostas }: { eventos: EventoHistorico[];
               return (
                 <li key={ev.chave} className="relative pl-5">
                   <span className={cn("absolute -left-[7px] top-4 w-3 h-3 rounded-full ring-4 ring-surface-page", COR_PONTO[ev.status] ?? "bg-primary-400")} />
-                  <div className="bg-white rounded-xl border border-surface-border p-3.5 sm:p-4">
+                  <div className="bg-white rounded-card border border-surface-border p-3.5 sm:p-4">
                     <div className="flex items-start gap-3">
                       {/* Data em destaque */}
                       <div className="text-center shrink-0 w-11">
@@ -443,7 +444,8 @@ function LinhaDoTempo({ eventos, onVerRespostas }: { eventos: EventoHistorico[];
                         <div className="flex items-start justify-between gap-2">
                           <p className="text-sm font-semibold text-ink leading-snug">
                             {ev.tipoServico && (
-                              <span className="inline-block align-middle text-[10px] font-medium text-white px-1.5 py-px rounded-full mr-1.5" style={{ backgroundColor: ev.tipoServico.cor ?? "#64748B" }}>
+                              <span className="inline-flex items-center gap-1 align-middle text-[10px] font-medium text-ink-muted bg-surface-page border border-surface-border px-1.5 py-px rounded-full mr-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: ev.tipoServico.cor ?? status.previsto.DEFAULT }} aria-hidden />
                                 {ev.tipoServico.nome}
                               </span>
                             )}
@@ -455,7 +457,7 @@ function LinhaDoTempo({ eventos, onVerRespostas }: { eventos: EventoHistorico[];
                         </div>
                         <p className="text-[11px] text-ink-muted mt-1 flex items-center gap-3 flex-wrap">
                           {ev.tecnico && <span className="flex items-center gap-1"><Wrench className="w-3 h-3" />{ev.tecnico}</span>}
-                          {ev.equipamentoFeito && <span className="flex items-center gap-1 text-emerald-600"><CircleCheck className="w-3 h-3" />Equipamento atendido</span>}
+                          {ev.equipamentoFeito && <span className="flex items-center gap-1 text-ok-texto"><CircleCheck className="w-3 h-3" />Equipamento atendido</span>}
                           <span className="flex items-center gap-1"><Hash className="w-3 h-3" />{ev.os.numero}</span>
                         </p>
 
@@ -466,12 +468,12 @@ function LinhaDoTempo({ eventos, onVerRespostas }: { eventos: EventoHistorico[];
                           <div className="mt-2.5" data-checklist-historico>
                             <p className="text-xs text-ink-muted flex items-center gap-1.5 flex-wrap">
                               <ListChecks className="w-3.5 h-3.5 text-primary-500" />Checklist
-                              <span className="px-1.5 py-px rounded bg-emerald-50 text-emerald-700 font-semibold">{ev.checklist.ok} OK</span>
-                              {ev.checklist.atencao > 0 && <span className="px-1.5 py-px rounded bg-amber-50 text-amber-700 font-semibold">{ev.checklist.atencao} Atenção</span>}
-                              {ev.checklist.naoSeAplica > 0 && <span className="px-1.5 py-px rounded bg-slate-100 text-slate-600 font-semibold">{ev.checklist.naoSeAplica} N/A</span>}
+                              <span className="px-1.5 py-px rounded bg-ok-claro text-ok-texto font-semibold">{ev.checklist.ok} OK</span>
+                              {ev.checklist.atencao > 0 && <span className="px-1.5 py-px rounded bg-atencao-claro text-atencao-texto font-semibold">{ev.checklist.atencao} Atenção</span>}
+                              {ev.checklist.naoSeAplica > 0 && <span className="px-1.5 py-px rounded bg-surface-linha text-ink-muted font-semibold">{ev.checklist.naoSeAplica} N/A</span>}
                             </p>
                             {ev.checklist.itensAtencao.length > 0 && (
-                              <p className="text-[11px] text-amber-800 mt-1" data-itens-atencao>Atenção: {ev.checklist.itensAtencao.join(" · ")}</p>
+                              <p className="text-[11px] text-atencao-texto mt-1" data-itens-atencao>Atenção: {ev.checklist.itensAtencao.join(" · ")}</p>
                             )}
                           </div>
                         )}
@@ -495,13 +497,13 @@ function LinhaDoTempo({ eventos, onVerRespostas }: { eventos: EventoHistorico[];
                           </div>
                         ))}
                         {(ev.adicionais ?? []).map((ad, i) => (
-                          <div key={i} className="mt-2 rounded-lg border border-violet-200 bg-violet-50/60 px-2 py-1.5" data-adicional-historico>
-                            <p className="text-[11px]"><span className="font-bold uppercase tracking-wide text-violet-700">Adicional</span> <span className="text-ink">{ad.descricao}</span></p>
+                          <div key={i} className="mt-2 rounded-lg border border-acento/20 bg-acento-claro/60 px-2 py-1.5" data-adicional-historico>
+                            <p className="text-[11px]"><span className="font-bold uppercase tracking-wide text-acento-hover">Adicional</span> <span className="text-ink">{ad.descricao}</span></p>
                             {ad.fotos.length > 0 && (
                               <div className="flex gap-1.5 mt-1 overflow-x-auto">
                                 {ad.fotos.slice(0, 6).map((url) => (
                                   // eslint-disable-next-line @next/next/no-img-element
-                                  <a key={url} href={url} target="_blank" rel="noreferrer" className="shrink-0"><img src={url} alt="Foto do serviço adicional" loading="lazy" className="w-12 h-12 rounded object-cover border border-violet-200" /></a>
+                                  <a key={url} href={url} target="_blank" rel="noreferrer" className="shrink-0"><img src={url} alt="Foto do serviço adicional" loading="lazy" className="w-12 h-12 rounded object-cover border border-acento/20" /></a>
                                 ))}
                               </div>
                             )}
@@ -572,7 +574,7 @@ function LinhaDoTempo({ eventos, onVerRespostas }: { eventos: EventoHistorico[];
 
 function Vazio({ icone: Icone, texto }: { icone: typeof History; texto: string }) {
   return (
-    <div className="bg-white rounded-xl border border-surface-border text-center py-12">
+    <div className="bg-white rounded-card border border-surface-border text-center py-12">
       <Icone className="w-7 h-7 text-ink-subtle mx-auto mb-2" />
       <p className="text-sm text-ink-muted">{texto}</p>
     </div>
@@ -588,7 +590,7 @@ function renderValor(c: any) {
   }
   if (c.tipo === "SIM_NAO") {
     const sim = c.resposta === "Sim" || c.resposta === "true";
-    return <span className={cn("inline-flex items-center gap-1", sim ? "text-green-600" : "text-ink")}>{sim && <CircleCheck className="w-3.5 h-3.5" />}{c.resposta || "—"}</span>;
+    return <span className={cn("inline-flex items-center gap-1", sim ? "text-ok-texto" : "text-ink")}>{sim && <CircleCheck className="w-3.5 h-3.5" />}{c.resposta || "—"}</span>;
   }
   return <span>{c.resposta || "—"}</span>;
 }

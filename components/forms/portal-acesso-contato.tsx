@@ -126,7 +126,7 @@ export function PortalAcessoContato({
       </div>
 
       {fb && (
-        <div className={fb.t === "ok" ? "bg-success-50 border border-success-200 text-success-700 text-xs rounded px-2 py-1.5 flex items-center gap-1.5" : "bg-red-50 border border-red-200 text-red-700 text-xs rounded px-2 py-1.5 flex items-center gap-1.5"}>
+        <div className={fb.t === "ok" ? "bg-success-50 border border-success-200 text-success-700 text-xs rounded px-2 py-1.5 flex items-center gap-1.5" : "bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-xs rounded px-2 py-1.5 flex items-center gap-1.5"}>
           {fb.t === "ok" ? <Check className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />} {fb.m}
         </div>
       )}
@@ -148,7 +148,7 @@ export function PortalAcessoContato({
                     {revelar ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                   </button>
                 </div>
-                <p className="text-[10px] text-amber-700">Repasse agora: por segurança ela não será exibida de novo.</p>
+                <p className="text-[10px] text-atencao-texto">Repasse agora: por segurança ela não será exibida de novo.</p>
               </>
             ) : (
               <p className="text-xs text-ink-muted">Definida. Para enviar uma nova ao contato, use “Redefinir senha”.</p>
@@ -171,7 +171,7 @@ export function PortalAcessoContato({
 
       <div>
         <p className="text-[11px] font-semibold text-ink mb-1">Permissões</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 divide-y divide-gray-100 sm:divide-y-0">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 divide-y divide-surface-linha sm:divide-y-0">
           {PERMISSOES_PORTAL.map((p) => (
             <ToggleSwitch key={p.chave} label={p.label} checked={!!perms[p.chave]} onChange={(v) => setPerms((s) => ({ ...s, [p.chave]: v }))} />
           ))}
@@ -185,7 +185,7 @@ export function PortalAcessoContato({
             <Button type="button" variant="secondary" loading={salvando && acao === "redefinir"} onClick={redefinir} className="text-xs h-8"><RefreshCw className="w-3.5 h-3.5" /> Redefinir senha</Button>
             <a href={mailto} className="inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700"><Mail className="w-3.5 h-3.5" /> Convite e-mail</a>
             <a href={wpp} target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-xs font-medium text-success-700 hover:text-success-800"><MessageCircle className="w-3.5 h-3.5" /> Convite WhatsApp</a>
-            <button type="button" onClick={revogar} className="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-700 ml-auto"><ShieldOff className="w-3.5 h-3.5" /> Revogar acesso</button>
+            <button type="button" onClick={revogar} className="inline-flex items-center gap-1 text-xs font-medium text-atrasado hover:text-atrasado-texto ml-auto"><ShieldOff className="w-3.5 h-3.5" /> Revogar acesso</button>
           </>
         )}
       </div>

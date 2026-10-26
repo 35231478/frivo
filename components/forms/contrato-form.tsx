@@ -33,10 +33,10 @@ import { InputData } from "@/components/ui/input-data";
 // Opções de mudança de status oferecidas no cabeçalho (ícone, cor e descrição).
 const STATUS_OPCOES: { valor: string; label: string; descricao: string; icone: any; cor: string }[] = [
   { valor: "ATIVO", label: "Ativo", descricao: "Contrato vigente e em execução", icone: CheckCircle2, cor: "text-success-600" },
-  { valor: "SUSPENSO", label: "Suspenso", descricao: "Pausado temporariamente", icone: PauseCircle, cor: "text-amber-600" },
-  { valor: "EM_RENOVACAO", label: "Em renovação", descricao: "Em processo de renovação", icone: RefreshCw, cor: "text-blue-600" },
-  { valor: "ENCERRADO", label: "Encerrado", descricao: "Encerrado naturalmente ao fim da vigência", icone: FileCheck, cor: "text-slate-600" },
-  { valor: "CANCELADO", label: "Cancelado", descricao: "Cancelado antes do prazo", icone: XCircle, cor: "text-red-600" },
+  { valor: "SUSPENSO", label: "Suspenso", descricao: "Pausado temporariamente", icone: PauseCircle, cor: "text-atencao-texto" },
+  { valor: "EM_RENOVACAO", label: "Em renovação", descricao: "Em processo de renovação", icone: RefreshCw, cor: "text-acento" },
+  { valor: "ENCERRADO", label: "Encerrado", descricao: "Encerrado naturalmente ao fim da vigência", icone: FileCheck, cor: "text-ink-muted" },
+  { valor: "CANCELADO", label: "Cancelado", descricao: "Cancelado antes do prazo", icone: XCircle, cor: "text-atrasado" },
 ];
 
 // Endereço novo no contrato: campos do cadastro rápido de unidade + bairro/complemento (o painel antigo os tinha)
@@ -399,10 +399,10 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
   const titulo = isEditing ? (initialData?.numero || "Editar contrato") : "Novo contrato";
 
   function badgeVigencia(): { txt: string; cls: string } {
-    if (!dataFimVal) return { txt: "Vigência indeterminada", cls: "bg-slate-100 text-slate-600" };
+    if (!dataFimVal) return { txt: "Vigência indeterminada", cls: "bg-surface-linha text-ink-muted" };
     const dias = diasAteDiaCivil(diaCivilDeChave(dataFimVal))!; // pelo dia de Brasília
-    if (dias < 0) return { txt: `Vencido há ${Math.abs(dias)} dias`, cls: "bg-red-50 text-red-700" };
-    if (dias <= 30) return { txt: `Vence em ${dias} dias`, cls: "bg-amber-50 text-amber-700" };
+    if (dias < 0) return { txt: `Vencido há ${Math.abs(dias)} dias`, cls: "bg-atrasado-claro text-atrasado-texto" };
+    if (dias <= 30) return { txt: `Vence em ${dias} dias`, cls: "bg-atencao-claro text-atencao-texto" };
     return { txt: `Vence em ${dias} dias`, cls: "bg-success-50 text-success-700" };
   }
   const bv = badgeVigencia();
@@ -412,22 +412,22 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
   const locaisCobertos = unidades.filter((u) => unidadeIdsAtuais.includes(u.id)).map((u) => ({ id: u.id, nome: u.nome }));
 
   const BotoesAcao = ({ compact = false }: { compact?: boolean }) => (
-    <div className="flex items-center gap-2 shrink-0">
+    <div className="flex items-center gap-2 flex-wrap">
       <Button type="button" variant="secondary" size={compact ? "sm" : "md"} onClick={() => router.push("/contratos")}>Cancelar</Button>
       <Button type="button" variant="outline" size={compact ? "sm" : "md"} loading={isSubmitting} onClick={salvarEContinuar}>
         <span className={compact ? "hidden lg:inline" : ""}>Salvar e continuar</span>
         <span className={compact ? "lg:hidden" : "hidden"}>Continuar</span>
       </Button>
-      <Button type="button" variant="success" size={compact ? "sm" : "md"} loading={isSubmitting} onClick={salvar}>
+      <Button type="button" variant="primary" size={compact ? "sm" : "md"} loading={isSubmitting} onClick={salvar}>
         <FileCheck className="w-4 h-4" /> Salvar
       </Button>
     </div>
   );
 
   return (
-    <form onSubmit={salvar} className="min-h-full -m-6 bg-[#F8FAFC] p-4 sm:p-6">
+    <form onSubmit={salvar} className="min-h-full -m-6 bg-surface-page p-4 sm:p-6">
       {toast && (
-        <div className="fixed top-5 right-5 z-50 flex items-center gap-2 bg-success-600 text-white text-sm font-medium rounded-xl px-4 py-3 shadow-card-hover animate-in fade-in slide-in-from-top-2">
+        <div className="fixed top-5 right-5 z-50 flex items-center gap-2 bg-ok text-white text-sm font-medium rounded-card px-4 py-3 shadow-card-hover animate-in fade-in slide-in-from-top-2">
           <FileCheck className="w-4 h-4" /> {toast}
         </div>
       )}
@@ -435,7 +435,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
       {/* Modal de confirmação de mudança de status */}
       {statusAlvo && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => !salvandoStatus && setStatusAlvo(null)}>
-          <div className="bg-white rounded-2xl shadow-card-hover w-full max-w-md p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-card shadow-card-hover w-full max-w-md p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-base font-bold text-ink">Alterar status para “{LABELS_STATUS_CONTRATO[statusAlvo] ?? statusAlvo}”?</h3>
             <p className="text-sm text-ink-muted">{STATUS_OPCOES.find((o) => o.valor === statusAlvo)?.descricao}</p>
             <div>
@@ -444,7 +444,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="secondary" onClick={() => setStatusAlvo(null)} disabled={salvandoStatus}>Cancelar</Button>
-              <Button type="button" variant="success" loading={salvandoStatus} onClick={confirmarStatus}>Confirmar</Button>
+              <Button type="button" variant="primary" loading={salvandoStatus} onClick={confirmarStatus}>Confirmar</Button>
             </div>
           </div>
         </div>
@@ -452,7 +452,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
 
       <div className="max-w-7xl mx-auto space-y-5">
         {/* Cabeçalho fixo */}
-        <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-[#F8FAFC]/90 backdrop-blur border-b border-surface-border">
+        <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-surface-page/90 backdrop-blur border-b border-surface-border">
           <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3 flex-wrap min-w-0">
               <h1 className="text-xl font-bold text-ink truncate">{titulo}</h1>
@@ -462,14 +462,14 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
                     type="button"
                     onClick={() => setStatusMenuOpen((o) => !o)}
                     title="Alterar status do contrato"
-                    className={cn("inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full transition-opacity hover:opacity-80", COR_STATUS_CONTRATO[statusVal] ?? "bg-slate-100 text-slate-600")}
+                    className={cn("inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full transition-opacity hover:opacity-80", COR_STATUS_CONTRATO[statusVal] ?? "bg-surface-linha text-ink-muted")}
                   >
                     {LABELS_STATUS_CONTRATO[statusVal] ?? statusVal} <ChevronDown className="w-3 h-3" />
                   </button>
                   {statusMenuOpen && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setStatusMenuOpen(false)} />
-                      <div className="absolute left-0 mt-2 z-50 w-72 bg-white border border-surface-border rounded-xl shadow-card-hover p-1.5">
+                      <div className="absolute left-0 mt-2 z-50 w-72 bg-white border border-surface-border rounded-card shadow-card-hover p-1.5">
                         {STATUS_OPCOES.map((o) => {
                           const atual = o.valor === statusVal;
                           return (
@@ -491,7 +491,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
                   )}
                 </div>
               ) : (
-                <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full", COR_STATUS_CONTRATO[statusVal] ?? "bg-slate-100 text-slate-600")}>
+                <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full", COR_STATUS_CONTRATO[statusVal] ?? "bg-surface-linha text-ink-muted")}>
                   {LABELS_STATUS_CONTRATO[statusVal] ?? statusVal}
                 </span>
               )}
@@ -502,12 +502,12 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
         </div>
 
         {erroGlobal && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 flex items-center gap-2">
+          <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" /> {erroGlobal}
           </div>
         )}
 
-        <div className="bg-white rounded-2xl shadow-card border border-surface-border overflow-hidden">
+        <div className="bg-white rounded-card shadow-card border border-surface-border overflow-hidden">
           <nav className="flex gap-1.5 overflow-x-auto px-4 pt-4 pb-4 border-b border-surface-border" role="tablist">
             {ABAS_CONTRATO.map((t) => {
               const ativa = aba === t.id;
@@ -516,14 +516,14 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
                 <button
                   key={t.id} type="button" role="tab" onClick={() => setAba(t.id)} data-aba-contrato={t.id} aria-selected={ativa}
                   className={cn(
-                    "flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl whitespace-nowrap transition-all",
+                    "flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-card whitespace-nowrap transition-all",
                     ativa ? "bg-primary-500 text-white shadow-sm" : "text-ink-muted hover:text-ink hover:bg-surface-alt",
-                    comErro && !ativa && "text-red-600 bg-red-50",
+                    comErro && !ativa && "text-atrasado bg-atrasado-claro",
                   )}
                 >
                   <t.icone className="w-4 h-4" />
                   {t.label}
-                  {comErro && <AlertCircle className={cn("w-3.5 h-3.5", ativa ? "text-white" : "text-red-500")} />}
+                  {comErro && <AlertCircle className={cn("w-3.5 h-3.5", ativa ? "text-white" : "text-atrasado")} />}
                 </button>
               );
             })}
@@ -574,7 +574,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
             <FormField label="Status" required hint={isEditing ? "Altere pelo botão de status no cabeçalho" : undefined}>
               {isEditing ? (
                 <div className="flex h-10 items-center">
-                  <span className={cn("inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full", COR_STATUS_CONTRATO[statusVal] ?? "bg-slate-100 text-slate-600")}>
+                  <span className={cn("inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full", COR_STATUS_CONTRATO[statusVal] ?? "bg-surface-linha text-ink-muted")}>
                     {LABELS_STATUS_CONTRATO[statusVal] ?? statusVal}
                   </span>
                 </div>
@@ -693,7 +693,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
         <FormSection title="Escopo dos serviços" icon={<ClipboardList className="w-3.5 h-3.5" />}>
           <FormField label="Descrição dos serviços" hint="O que está incluso no contrato" error={errors.descricaoServicos?.message}>
             <Textarea {...register("descricaoServicos")} rows={5} maxLength={MAX_DESCRICAO_SERVICOS} placeholder="Descreva os serviços contratados…" data-descricao-servicos />
-            <p className={cn("text-xs text-right mt-1 tabular-nums", descricaoVal.length > MAX_DESCRICAO_SERVICOS ? "text-red-600 font-semibold" : descricaoVal.length > MAX_DESCRICAO_SERVICOS * 0.9 ? "text-amber-600" : "text-ink-subtle")} data-contador-descricao>
+            <p className={cn("text-xs text-right mt-1 tabular-nums", descricaoVal.length > MAX_DESCRICAO_SERVICOS ? "text-atrasado font-semibold" : descricaoVal.length > MAX_DESCRICAO_SERVICOS * 0.9 ? "text-atencao-texto" : "text-ink-subtle")} data-contador-descricao>
               {descricaoVal.length}/{MAX_DESCRICAO_SERVICOS}
             </p>
           </FormField>
@@ -714,21 +714,21 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
                       <p className="text-xs text-ink-subtle">{textoEndereco(localPendente) || "Sem endereço"}</p>
                       <p className="text-[11px] text-primary-700 mt-0.5">Preenchido com o endereço do cadastro do cliente — vira um local do cliente ao salvar.</p>
                     </div>
-                    <button type="button" onClick={() => setLocalPendente(null)} className="p-1.5 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded" title="Excluir este local" aria-label={`Excluir ${localPendente.nome}`} data-excluir-local="pendente">
+                    <button type="button" onClick={() => setLocalPendente(null)} className="p-1.5 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded" title="Excluir este local" aria-label={`Excluir ${localPendente.nome}`} data-excluir-local="pendente">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 )}
                 {unidades.filter((u) => unidadeIdsAtuais.includes(u.id)).map((u) => (
                   <div key={u.id} className="flex items-start gap-3 p-3 border border-surface-border rounded-lg" data-local={u.id}>
-                    <Building2 className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+                    <Building2 className="w-4 h-4 text-ink-muted shrink-0 mt-0.5" />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-ink">{u.nome}</p>
                       <p className="text-xs text-ink-subtle">{textoEndereco(u) || "Sem endereço"}</p>
                     </div>
                     <button
                       type="button" onClick={() => setValue("unidadeIds", unidadeIdsAtuais.filter((id) => id !== u.id))}
-                      className="p-1.5 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded" title="Excluir do contrato" aria-label={`Excluir ${u.nome}`} data-excluir-local={u.id}
+                      className="p-1.5 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded" title="Excluir do contrato" aria-label={`Excluir ${u.nome}`} data-excluir-local={u.id}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -790,11 +790,11 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
       {/* ABA 3 — Recorrência de OS por local (como estava) */}
       <Painel ativo={aba === "recorrencia"} id="recorrencia">
         <FormSection title="Recorrência de OS por local" icon={<Repeat className="w-3.5 h-3.5" />}>
-          <p className="text-xs text-gray-400 -mt-2 mb-1">
+          <p className="text-xs text-ink-muted -mt-2 mb-1">
             Cada local coberto pode ter sua própria recorrência (frequência, tipo de OS, responsável e data da primeira OS).
           </p>
           {localPendente && (
-            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            <p className="text-xs text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2">
               O local “{localPendente.nome}” é criado ao salvar; depois disso a recorrência dele aparece aqui.
             </p>
           )}
@@ -826,7 +826,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
               <Controller name="artVencimento" control={control} render={({ field }) => <InputData value={(field.value as string) ?? ""} onChange={field.onChange} aria-label="Vencimento da ART" />} />
             </FormField>
           </FormGrid>
-          <div className="border-t border-gray-100 pt-1 divide-y divide-gray-100">
+          <div className="border-t border-surface-linha pt-1 divide-y divide-surface-linha">
             <ToggleSwitch label="Exibir responsável técnico e ART no PDF/relatório da OS" description="" checked={!!watch("exibirRTPDF")} onChange={(v) => setValue("exibirRTPDF", v)} />
           </div>
         </FormSection>
@@ -850,7 +850,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
             onChange={(v) => setValue("reajusteAtivo", v)}
           />
           {reajusteAtivo && (
-            <div className="space-y-4 border-l-2 border-primary-200 pl-4 mt-2">
+            <div className="space-y-4 border-l-2 border-surface-border pl-4 mt-2">
               <FormGrid cols={3}>
                 <FormField label="Índice">
                   <Select {...register("reajusteIndice")} placeholder="Selecione">
@@ -868,7 +868,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
                   </Select>
                 </FormField>
               </FormGrid>
-              <div className="border-t border-gray-100 pt-1 divide-y divide-gray-100">
+              <div className="border-t border-surface-linha pt-1 divide-y divide-surface-linha">
                 <ToggleSwitch label="Notificar antes do reajuste" description="" checked={!!reajusteNotificarVal} onChange={(v) => setValue("reajusteNotificar", v)} />
               </div>
               {reajusteNotificarVal && (
@@ -916,7 +916,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
               </div>
             </FormField>
           </FormGrid>
-          <div className="border-t border-gray-100 pt-1 divide-y divide-gray-100">
+          <div className="border-t border-surface-linha pt-1 divide-y divide-surface-linha">
             <ToggleSwitch label="Enviar alerta de vencimento por e-mail ao cliente" description="" checked={!!watch("alertaEmailCliente")} onChange={(v) => setValue("alertaEmailCliente", v)} />
           </div>
         </FormSection>
@@ -929,11 +929,11 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
             onChange={(v) => setValue("renovacaoAutomatica", v)}
           />
           {renovacaoAtiva && (
-            <div className="space-y-4 border-l-2 border-primary-200 pl-4 mt-2">
+            <div className="space-y-4 border-l-2 border-surface-border pl-4 mt-2">
               <FormField label="Renovar por (meses)">
                 <Input {...register("renovacaoMeses")} type="number" min={1} placeholder="12" className="w-40" />
               </FormField>
-              <div className="border-t border-gray-100 pt-1 divide-y divide-gray-100">
+              <div className="border-t border-surface-linha pt-1 divide-y divide-surface-linha">
                 <ToggleSwitch label="Notificar cliente sobre renovação" description="" checked={!!notificarRenov} onChange={(v) => setValue("notificarClienteRenovacao", v)} />
               </div>
               {notificarRenov && (
@@ -959,11 +959,11 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
               {historicoStatus.map((h) => (
                 <div key={h.id} className="border border-surface-border rounded-lg p-3">
                   <div className="flex items-center gap-2 flex-wrap text-sm">
-                    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", COR_STATUS_CONTRATO[h.statusAnterior] ?? "bg-slate-100 text-slate-600")}>
+                    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", COR_STATUS_CONTRATO[h.statusAnterior] ?? "bg-surface-linha text-ink-muted")}>
                       {LABELS_STATUS_CONTRATO[h.statusAnterior] ?? h.statusAnterior}
                     </span>
                     <span className="text-ink-subtle">→</span>
-                    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", COR_STATUS_CONTRATO[h.statusNovo] ?? "bg-slate-100 text-slate-600")}>
+                    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", COR_STATUS_CONTRATO[h.statusNovo] ?? "bg-surface-linha text-ink-muted")}>
                       {LABELS_STATUS_CONTRATO[h.statusNovo] ?? h.statusNovo}
                     </span>
                     <span className="ml-auto text-xs text-ink-muted">{formatarDataHora(h.createdAt)}</span>

@@ -28,7 +28,7 @@ export function TotaisBloco({
   const totalGeral = Math.max(0, totalBruto - descontoCalculado);
 
   return (
-    <div className="bg-surface-alt border border-surface-border rounded-xl p-5 space-y-3">
+    <div className="bg-surface-alt border border-surface-border rounded-card p-5 space-y-3">
       <Linha label="Subtotal serviços" valor={totalServicos} />
       <Linha label="Subtotal produtos" valor={totalProdutos} />
       <Linha label="Subtotal bruto" valor={totalBruto} bold />
@@ -70,7 +70,7 @@ export function TotaisBloco({
       </div>
 
       {descontoCalculado > 0 && (
-        <Linha label="Desconto aplicado" valor={-descontoCalculado} cor="text-red-600" />
+        <Linha label="Desconto aplicado" valor={-descontoCalculado} cor="text-atrasado" />
       )}
 
       <div className="pt-3 border-t-2 border-success-500/40 flex items-center justify-between">

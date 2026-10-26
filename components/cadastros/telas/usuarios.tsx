@@ -35,7 +35,7 @@ export function UsuariosTela({ usuarioAtualId, emailsTecnicos = [] }: { usuarioA
         ajuda={<>
           Quem entra no sistema e com qual perfil. A senha é criada pela própria pessoa, pelo convite. Usuário <strong>sem perfil não tem acesso</strong> a nada além do início;
           o administrador tem acesso total. Mudanças de perfil valem no próximo acesso.
-          {erro && <span role="alert" className="block mt-2 text-red-700">{erro}</span>}
+          {erro && <span role="alert" className="block mt-2 text-atrasado-texto">{erro}</span>}
         </>}
         celula={(col, u) => {
           if (col === "nome") return (
@@ -51,23 +51,23 @@ export function UsuariosTela({ usuarioAtualId, emailsTecnicos = [] }: { usuarioA
             // Y11: papel Técnico só abre o APP quando existe Técnico ativo com o MESMO e-mail —
             // sem isso a pessoa entra no sistema comum "vazio" e ninguém entende o porquê.
             const avisoTecnico = u.role === "TECNICO" && u.ativo && !emailsTecnicos.includes((u.email ?? "").trim().toLowerCase()) && (
-              <span data-aviso-tecnico className="inline-flex items-center gap-1 text-[10px] font-semibold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full"
+              <span data-aviso-tecnico className="inline-flex items-center gap-1 text-[10px] font-semibold bg-atencao-claro text-atencao-texto px-2 py-0.5 rounded-full"
                 title="Não há técnico ativo com este e-mail em Equipes › Técnicos. Assim a pessoa entra no sistema comum (vazio) em vez do app do técnico. Cadastre o técnico com o mesmo e-mail.">
                 <AlertTriangle className="w-3 h-3" /> sem técnico vinculado — não cai no app
               </span>
             );
-            if (u.role === "ADMIN") return <span className="inline-flex items-center gap-1 text-xs font-semibold bg-red-50 text-red-600 px-2 py-1 rounded-full"><ShieldCheck className="w-3.5 h-3.5" /> Acesso total</span>;
+            if (u.role === "ADMIN") return <span className="inline-flex items-center gap-1 text-xs font-semibold bg-atrasado-claro text-atrasado px-2 py-1 rounded-full"><ShieldCheck className="w-3.5 h-3.5" /> Acesso total</span>;
             if (!u.perfilAcesso) return <span className="flex items-center gap-1.5 flex-wrap"><span className="text-xs text-ink-muted">Sem perfil (sem acesso)</span>{avisoTecnico}</span>;
             return (
               <span className="flex items-center gap-1.5 flex-wrap">
                 <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: u.perfilAcesso.cor }} />
                 <span>{u.perfilAcesso.nome}</span>
-                {!u.perfilAcesso.ativo && <span className="text-[10px] font-semibold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full" title="Perfil inativo: este usuário está sem acesso">perfil inativo · sem acesso</span>}
+                {!u.perfilAcesso.ativo && <span className="text-[10px] font-semibold bg-atencao-claro text-atencao-texto px-2 py-0.5 rounded-full" title="Perfil inativo: este usuário está sem acesso">perfil inativo · sem acesso</span>}
                 {avisoTecnico}
               </span>
             );
           }
-          if (col === "ultimoAcesso") return u.ultimoAcesso ? formatarData(u.ultimoAcesso) : <span className="text-xs text-amber-700">Ainda não entrou</span>;
+          if (col === "ultimoAcesso") return u.ultimoAcesso ? formatarData(u.ultimoAcesso) : <span className="text-xs text-atencao-texto">Ainda não entrou</span>;
           return undefined;
         }}
         acoesLinha={(u) => u.ativo && u.id !== usuarioAtualId && (

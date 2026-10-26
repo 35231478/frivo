@@ -27,10 +27,10 @@ const ORDEM_STATUS: Record<string, number> = {
 };
 
 function badgeVencimento(dataFim: string | null): { txt: string; cls: string } {
-  if (!dataFim) return { txt: "Vigência indeterminada", cls: "bg-slate-100 text-slate-600" };
+  if (!dataFim) return { txt: "Vigência indeterminada", cls: "bg-surface-linha text-ink-muted" };
   const dias = diasAteDiaCivil(dataFim)!; // vigência é dia civil: pelo dia de Brasília
-  if (dias < 0) return { txt: `Vencido há ${Math.abs(dias)} dias`, cls: "bg-red-50 text-red-700" };
-  if (dias <= 30) return { txt: `Vence em ${dias} dias`, cls: "bg-amber-50 text-amber-700" };
+  if (dias < 0) return { txt: `Vencido há ${Math.abs(dias)} dias`, cls: "bg-atrasado-claro text-atrasado-texto" };
+  if (dias <= 30) return { txt: `Vence em ${dias} dias`, cls: "bg-atencao-claro text-atencao-texto" };
   return { txt: `Vence em ${dias} dias`, cls: "bg-success-50 text-success-700" };
 }
 
@@ -85,13 +85,13 @@ export function ClienteContratos({ clienteId }: { clienteId: string }) {
           const bv = badgeVencimento(c.dataFim);
           const vigencia = `${c.dataInicio ? formatarData(c.dataInicio) : "—"} → ${c.dataFim ? formatarData(c.dataFim) : "Indeterminado"}`;
           return (
-            <div key={c.id} className="border border-surface-border rounded-xl p-4 hover:border-primary-300 transition-colors bg-white">
+            <div key={c.id} className="border border-surface-border rounded-card p-4 hover:border-primary-300 transition-colors bg-white">
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div className="min-w-0 space-y-2">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-semibold text-ink">{c.numero}</span>
                     <span className="text-xs text-ink-muted">{LABELS_TIPO_CONTRATO[c.tipo] ?? c.tipo}</span>
-                    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", COR_STATUS_CONTRATO[c.status] ?? "bg-slate-100 text-slate-600")}>
+                    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", COR_STATUS_CONTRATO[c.status] ?? "bg-surface-linha text-ink-muted")}>
                       {LABELS_STATUS_CONTRATO[c.status] ?? c.status}
                     </span>
                     <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", bv.cls)}>{bv.txt}</span>

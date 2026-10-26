@@ -91,7 +91,7 @@ export function AcoesEnvio({ orcamentoId, codigo, tokenPublico, status, podeEdit
           className={
             feedback.tipo === "ok"
               ? "bg-success-50 border border-success-200 text-success-700 text-sm rounded-lg px-3 py-2 flex items-center gap-2"
-              : "bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 flex items-center gap-2"
+              : "bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2 flex items-center gap-2"
           }
         >
           {feedback.tipo === "ok" ? <Check className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
@@ -110,7 +110,7 @@ export function AcoesEnvio({ orcamentoId, codigo, tokenPublico, status, podeEdit
               <Mail className="w-4 h-4" /> Enviar por E-mail
             </Button>
             <Button
-              variant="success"
+              variant="secondary"
               onClick={() => enviar("whatsapp")}
               loading={carregando === "whatsapp"}
             >

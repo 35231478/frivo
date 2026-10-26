@@ -29,7 +29,7 @@ export function AvisoSerieDuplicada({ numero, ignorarId }: { numero: string; ign
 
   if (!duplicados.length) return null;
   return (
-    <div data-aviso-serie className="mt-1.5 text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+    <div data-aviso-serie className="mt-1.5 text-xs text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2">
       <p className="flex items-center gap-1.5 font-semibold">
         <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
         Este nº de série já está cadastrado{duplicados.length > 1 ? ` em ${duplicados.length} equipamentos` : ""}. Confira se não é a mesma etiqueta.
@@ -37,14 +37,14 @@ export function AvisoSerieDuplicada({ numero, ignorarId }: { numero: string; ign
       <ul className="mt-1 ml-5 list-disc space-y-0.5">
         {duplicados.map((d) => (
           <li key={d.id}>
-            <Link href={`/equipamentos/${d.id}`} target="_blank" className="underline hover:text-amber-700">
+            <Link href={`/equipamentos/${d.id}`} target="_blank" className="underline hover:text-atencao-texto">
               {d.descricao}{d.fabricanteModelo ? ` · ${d.fabricanteModelo}` : ""}
             </Link>
             {d.local ? ` — ${d.local}` : ""}{!d.ativo ? " (inativo)" : ""}
           </li>
         ))}
       </ul>
-      <p className="mt-1 text-amber-800">É só um aviso: você pode salvar mesmo assim.</p>
+      <p className="mt-1 text-atencao-texto">É só um aviso: você pode salvar mesmo assim.</p>
     </div>
   );
 }

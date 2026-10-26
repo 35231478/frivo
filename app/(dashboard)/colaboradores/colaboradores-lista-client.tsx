@@ -34,10 +34,10 @@ interface Props {
 }
 
 const STATUS: Record<string, { txt: string; cls: string; dot: string }> = {
-  ATIVO: { txt: "Ativo", cls: "text-emerald-700 bg-emerald-50", dot: "bg-emerald-500" },
-  FERIAS: { txt: "Férias", cls: "text-sky-700 bg-sky-50", dot: "bg-sky-500" },
-  AFASTADO: { txt: "Afastado", cls: "text-amber-700 bg-amber-50", dot: "bg-amber-500" },
-  INATIVO: { txt: "Inativo", cls: "text-slate-500 bg-slate-100", dot: "bg-slate-400" },
+  ATIVO: { txt: "Ativo", cls: "text-ok-texto bg-ok-claro", dot: "bg-ok" },
+  FERIAS: { txt: "Férias", cls: "text-acento-hover bg-acento-claro", dot: "bg-acento" },
+  AFASTADO: { txt: "Afastado", cls: "text-atencao-texto bg-atencao-claro", dot: "bg-atencao" },
+  INATIVO: { txt: "Inativo", cls: "text-ink-muted bg-surface-linha", dot: "bg-ink-subtle" },
 };
 
 function StatusColaboradorSelo({ status, className }: { status: string; className?: string }) {
@@ -101,23 +101,23 @@ export function ColaboradoresListaClient({ itens, total, filtros: f, opcoes, res
       {/* ── Indicadores ── */}
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1" data-indicadores>
         <ChipResumo id="ativos" ativo={f.status === "ativo" && !f.aviso} onClick={() => navegar({ status: null, aviso: null })}
-          icone={CheckCircle2} cor="text-emerald-700" rotulo="Ativos" valor={resumo.ativos} />
+          icone={CheckCircle2} cor="text-ok-texto" rotulo="Ativos" valor={resumo.ativos} />
         <ChipResumo id="inativos" ativo={f.status === "inativo"} onClick={() => navegar({ status: f.status === "inativo" ? null : "inativo", aviso: null })}
-          icone={Ban} cor="text-slate-500" rotulo="Inativos" valor={resumo.inativos} />
+          icone={Ban} cor="text-ink-muted" rotulo="Inativos" valor={resumo.inativos} />
         <ChipResumo id="tecnicos" ativo={f.aviso === "tecnicos"} onClick={() => alternarAviso("tecnicos")}
           icone={Wrench} cor="text-primary-600" rotulo="Técnicos" valor={resumo.tecnicos} />
         <ChipResumo id="sem_equipe" ativo={f.aviso === "sem_equipe"} onClick={() => alternarAviso("sem_equipe")}
-          icone={UserX} cor="text-amber-700" rotulo="Sem equipe" valor={resumo.semEquipe} />
+          icone={UserX} cor="text-atencao-texto" rotulo="Sem equipe" valor={resumo.semEquipe} />
         <ChipResumo id="ausente" ativo={f.aviso === "ausente"} onClick={() => alternarAviso("ausente")}
-          icone={Plane} cor="text-sky-700" rotulo="Férias / afastados" valor={resumo.ausentes} />
+          icone={Plane} cor="text-acento-hover" rotulo="Férias / afastados" valor={resumo.ausentes} />
         <ChipResumo id="doc_vencido" ativo={f.aviso === "doc_vencido"} onClick={() => alternarAviso("doc_vencido")}
-          icone={FileX} cor="text-red-600" rotulo="Documento vencido" valor={resumo.docVencido} />
+          icone={FileX} cor="text-atrasado" rotulo="Documento vencido" valor={resumo.docVencido} />
         <ChipResumo id="doc_vencendo" ativo={f.aviso === "doc_vencendo"} onClick={() => alternarAviso("doc_vencendo")}
-          icone={FileWarning} cor="text-amber-700" rotulo="Documento vencendo" valor={resumo.docVencendo} />
+          icone={FileWarning} cor="text-atencao-texto" rotulo="Documento vencendo" valor={resumo.docVencendo} />
       </div>
 
       {/* ── Busca + filtros ── */}
-      <div className="bg-white border border-surface-border rounded-xl p-3 sm:p-4 space-y-3">
+      <div className="bg-white border border-surface-border rounded-card p-3 sm:p-4 space-y-3">
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.4fr)_auto] gap-2 items-center">
           <CampoBusca valor={busca} onChange={setBusca} carregando={pendente} sugerir={sugerir} onEscolher={(s) => s.href && roteador.push(s.href)} rotulo="Buscar colaborador" placeholder="Buscar nome, CPF, telefone, e-mail ou cargo…" />
           <button onClick={() => setFiltrosMobile((v) => !v)}
@@ -136,7 +136,7 @@ export function ColaboradoresListaClient({ itens, total, filtros: f, opcoes, res
               Mostrar inativos
             </label>
             {filtrosAtivos > 0 && (
-              <button onClick={limpar} className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-ink-muted hover:text-red-500">
+              <button onClick={limpar} className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-ink-muted hover:text-atrasado">
                 <X className="w-3.5 h-3.5" /> Limpar filtros ({filtrosAtivos})
               </button>
             )}
@@ -147,7 +147,7 @@ export function ColaboradoresListaClient({ itens, total, filtros: f, opcoes, res
       {/* ── Resultados ── */}
       <div className={cn("transition-opacity", pendente && "opacity-60")}>
         {itens.length === 0 ? (
-          <div className="bg-white border border-surface-border rounded-xl text-center py-16">
+          <div className="bg-white border border-surface-border rounded-card text-center py-16">
             <HardHat className="w-10 h-10 text-ink-subtle mx-auto mb-3" />
             <p className="text-ink font-medium">{f.q ? `Nenhum colaborador encontrado para “${f.q}”` : "Nenhum colaborador encontrado"}</p>
             <p className="text-sm text-ink-muted mt-1">{filtrosAtivos > 0 ? "Ajuste a busca ou os filtros." : "Cadastre o primeiro colaborador."}</p>
@@ -155,7 +155,7 @@ export function ColaboradoresListaClient({ itens, total, filtros: f, opcoes, res
           </div>
         ) : (
           <>
-            <div className="md:hidden bg-white border border-surface-border rounded-xl divide-y divide-surface-border overflow-hidden" data-visao="mobile">
+            <div className="md:hidden bg-white border border-surface-border rounded-card divide-y divide-surface-border overflow-hidden" data-visao="mobile">
               {itens.map((c) => (
                 <div key={c.id} className="flex items-stretch">
                   {massa && <div className="pl-3 pt-4"><CheckboxLinha id={c.id} rotulo={c.nome} /></div>}
@@ -200,10 +200,10 @@ export function ColaboradoresListaClient({ itens, total, filtros: f, opcoes, res
 
 /* ───────── Equipes / avisos ───────── */
 function Equipes({ c, max = 2 }: { c: ColaboradorLinha; max?: number }) {
-  if (c.semEquipe) return <span data-sem-equipe className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full text-amber-700 bg-amber-50"><UserX className="w-3 h-3" /> Sem equipe</span>;
+  if (c.semEquipe) return <span data-sem-equipe className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full text-atencao-texto bg-atencao-claro"><UserX className="w-3 h-3" /> Sem equipe</span>;
   return (
     <span className="inline-flex items-center gap-1 flex-wrap">
-      {c.lider && <span title="Líder de equipe" className="inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded-full text-amber-800 bg-amber-100"><Crown className="w-3 h-3" /> Líder</span>}
+      {c.lider && <span title="Líder de equipe" className="inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded-full text-atencao-texto bg-atencao-claro"><Crown className="w-3 h-3" /> Líder</span>}
       {c.equipes.slice(0, max).map((e) => (
         <span key={e.id} className="inline-flex items-center gap-1 text-[11px] text-ink bg-surface-alt border border-surface-border px-1.5 py-0.5 rounded-full max-w-[140px] truncate">
           <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: e.cor }} />{e.nome}
@@ -218,7 +218,7 @@ function DocSelo({ c }: { c: ColaboradorLinha }) {
   const v = c.documento.vencido;
   return (
     <span data-aviso="documento" title={`${c.documento.nome}: ${v ? "venceu" : "vence"} em ${formatarData(c.documento.data)}`}
-      className={cn("inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap", v ? "text-red-700 bg-red-50" : "text-amber-700 bg-amber-50")}>
+      className={cn("inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap", v ? "text-atrasado-texto bg-atrasado-claro" : "text-atencao-texto bg-atencao-claro")}>
       {v ? <FileX className="w-3 h-3" /> : <FileWarning className="w-3 h-3" />}
       {c.documento.nome.length > 14 ? "Documento" : c.documento.nome} {v ? "vencido" : formatarData(c.documento.data)}
     </span>
@@ -229,7 +229,7 @@ function DocSelo({ c }: { c: ColaboradorLinha }) {
 function Tabela({ massa, itens, f, onOrdenar }: { massa: boolean; itens: ColaboradorLinha[]; f: FiltrosColaboradores; onOrdenar: (k: OrdemColaboradores) => void }) {
   const router = useRouter();
   return (
-    <div className="bg-white border border-surface-border rounded-xl overflow-x-auto" data-visao="lista">
+    <div className="bg-white border border-surface-border rounded-card overflow-x-auto" data-visao="lista">
       <table className="w-full text-sm">
         <thead className="bg-surface-alt text-ink-muted text-[11px] uppercase tracking-wide border-b border-surface-border">
           <tr>
@@ -311,7 +311,7 @@ function Cards({ massa, itens }: { massa: boolean; itens: ColaboradorLinha[] }) 
         <div key={c.id} className="relative">
         {massa && <CheckboxLinha id={c.id} rotulo={c.nome} className="absolute top-2 left-2 z-10 bg-white rounded p-1.5 m-0 shadow-sm" />}
         <Link href={`/colaboradores/${c.id}/editar`} data-colaborador-id={c.id}
-          className={cn("h-full group bg-white border border-surface-border rounded-xl p-4 hover:shadow-md hover:border-primary-300 transition-all flex flex-col gap-3", !c.ativo && "opacity-60")}>
+          className={cn("h-full group bg-white border border-surface-border rounded-card p-4 hover:shadow-md hover:border-primary-300 transition-all flex flex-col gap-3", !c.ativo && "opacity-60")}>
           <div className="flex items-start gap-3">
             <AvatarTecnico nome={c.nome} fotoUrl={c.foto} size={56} />
             <div className="min-w-0 flex-1">

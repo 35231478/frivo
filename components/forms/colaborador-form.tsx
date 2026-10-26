@@ -231,12 +231,12 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
       {erroGlobal && (
-        <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+        <div className="flex items-center gap-2 bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3">
           <AlertCircle className="w-4 h-4 shrink-0" /> {erroGlobal}
         </div>
       )}
 
-      <div className="bg-white rounded-2xl shadow-card border border-surface-border overflow-hidden">
+      <div className="bg-white rounded-card shadow-card border border-surface-border overflow-hidden">
         <nav className="flex gap-1.5 overflow-x-auto px-4 pt-4 pb-4 border-b border-surface-border">
           {ABAS.map((t) => {
             const ativa = aba === t.id;
@@ -244,7 +244,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
               <button
                 key={t.id} type="button" onClick={() => setAba(t.id)}
                 className={cn(
-                  "flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl whitespace-nowrap transition-all",
+                  "flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-card whitespace-nowrap transition-all",
                   ativa ? "bg-primary-500 text-white shadow-sm" : "text-ink-muted hover:text-ink hover:bg-surface-alt",
                 )}
               >
@@ -271,12 +271,12 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
                       <Upload className="w-3.5 h-3.5" /> {avatar ? "Trocar foto" : "Enviar foto"}
                     </Button>
                     {avatar && (
-                      <Button type="button" variant="ghost" onClick={() => setAvatar(null)} className="text-xs text-red-500 hover:text-red-700 py-1 px-2.5 h-auto">
+                      <Button type="button" variant="ghost" onClick={() => setAvatar(null)} className="text-xs text-atrasado hover:text-atrasado-texto py-1 px-2.5 h-auto">
                         <Trash2 className="w-3.5 h-3.5" /> Remover
                       </Button>
                     )}
                     <p className="text-xs text-ink-subtle">PNG, JPG ou WEBP — máx. 2 MB</p>
-                    {erroFoto && <p className="text-xs text-red-600">{erroFoto}</p>}
+                    {erroFoto && <p className="text-xs text-atrasado">{erroFoto}</p>}
                   </div>
                 </div>
               </FormField>
@@ -515,10 +515,10 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
                               <Upload className="w-3.5 h-3.5" /> {doc.arquivoUrl ? "Trocar arquivo" : "Anexar arquivo"}
                             </Button>
                             {doc.arquivoUrl && <span className="text-xs text-success-600">Arquivo anexado</span>}
-                            {vencido && <span className="text-xs font-semibold bg-red-50 text-red-700 px-2 py-0.5 rounded-full">Vencido</span>}
-                            {alerta && <span className="text-xs font-semibold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full">Vence em 30 dias</span>}
+                            {vencido && <span className="text-xs font-semibold bg-atrasado-claro text-atrasado-texto px-2 py-0.5 rounded-full">Vencido</span>}
+                            {alerta && <span className="text-xs font-semibold bg-atencao-claro text-atencao-texto px-2 py-0.5 rounded-full">Vence em 30 dias</span>}
                           </div>
-                          <button type="button" onClick={() => removeDoc(idx)} className="text-red-500 hover:text-red-700 p-1.5"><Trash2 className="w-4 h-4" /></button>
+                          <button type="button" onClick={() => removeDoc(idx)} className="text-atrasado hover:text-atrasado-texto p-1.5"><Trash2 className="w-4 h-4" /></button>
                         </div>
                       </div>
                     );

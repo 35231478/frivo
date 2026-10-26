@@ -87,7 +87,7 @@ export function ComunicacaoPreferencias({ clienteId, ativo, onGerenciar }: { cli
 
   if (contatos.length === 0) {
     return (
-      <div className="text-center py-8 border border-dashed border-surface-border rounded-xl">
+      <div className="text-center py-8 border border-dashed border-surface-border rounded-card">
         <Send className="w-6 h-6 text-ink-subtle mx-auto mb-2" />
         <p className="text-sm text-ink-muted">Nenhum contato cadastrado ainda.</p>
         <button type="button" onClick={onGerenciar} className="inline-flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 mt-1">
@@ -107,7 +107,7 @@ export function ComunicacaoPreferencias({ clienteId, ativo, onGerenciar }: { cli
       </div>
 
       {SECOES_COMUNICACAO.map((s) => (
-        <div key={s.tipo} className="rounded-xl border border-surface-border overflow-hidden">
+        <div key={s.tipo} className="rounded-card border border-surface-border overflow-hidden">
           <div className="bg-surface-alt/60 px-4 py-3 border-b border-surface-border">
             <h4 className="text-sm font-semibold text-ink">{s.titulo}</h4>
             <p className="text-xs text-ink-muted mt-0.5">{s.descricao}</p>
@@ -138,7 +138,7 @@ export function ComunicacaoPreferencias({ clienteId, ativo, onGerenciar }: { cli
                   {marcado && (
                     <div className="flex items-center gap-2 shrink-0">
                       {semWhats && (
-                        <span title="Contato sem WhatsApp cadastrado" className="text-amber-500"><AlertCircle className="w-4 h-4" /></span>
+                        <span title="Contato sem WhatsApp cadastrado" className="text-atencao-texto"><AlertCircle className="w-4 h-4" /></span>
                       )}
                       <select
                         value={canal}
@@ -167,5 +167,5 @@ function StatusSalvamento({ status }: { status: "idle" | "salvando" | "salvo" | 
   if (status === "idle") return null;
   if (status === "salvando") return <span className="inline-flex items-center gap-1 text-xs text-ink-muted shrink-0"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Salvando…</span>;
   if (status === "salvo") return <span className="inline-flex items-center gap-1 text-xs text-success-700 shrink-0"><Check className="w-3.5 h-3.5" /> Salvo</span>;
-  return <span className="inline-flex items-center gap-1 text-xs text-red-600 shrink-0"><AlertCircle className="w-3.5 h-3.5" /> Erro ao salvar</span>;
+  return <span className="inline-flex items-center gap-1 text-xs text-atrasado shrink-0"><AlertCircle className="w-3.5 h-3.5" /> Erro ao salvar</span>;
 }

@@ -11,10 +11,10 @@ export function StatusSelo({ ativo, className }: { ativo: boolean; className?: s
   return (
     <span className={cn(
       "inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap",
-      ativo ? "text-emerald-700 bg-emerald-50" : "text-slate-500 bg-slate-100",
+      ativo ? "text-ok-texto bg-ok-claro" : "text-ink-muted bg-surface-linha",
       className,
     )}>
-      <span className={cn("w-1.5 h-1.5 rounded-full", ativo ? "bg-emerald-500" : "bg-slate-400")} />
+      <span className={cn("w-1.5 h-1.5 rounded-full", ativo ? "bg-ok" : "bg-ink-subtle")} />
       {ativo ? "Ativo" : "Inativo"}
     </span>
   );
@@ -30,7 +30,7 @@ export function GarantiaSelo({ fim, compacto, className }: { fim: Date | string 
     return compacto
       ? <span className="text-xs text-ink-subtle">—</span>
       : (
-        <span className={cn("inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full text-slate-500 bg-slate-100", className)}>
+        <span className={cn("inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full text-ink-muted bg-surface-linha", className)}>
           <ShieldOff className="w-3 h-3" /> Sem garantia
         </span>
       );

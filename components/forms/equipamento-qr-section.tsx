@@ -85,11 +85,11 @@ export function EquipamentoQrSection({ equipamentoId, qrInicial }: { equipamento
 
   return (
     <FormSection title="QR Code">
-      {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-2.5 mb-3">{erro}</div>}
+      {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-2.5 mb-3">{erro}</div>}
 
       {qr ? (
         <div className="flex flex-col sm:flex-row gap-5 items-start">
-          <div className="shrink-0 border border-gray-200 rounded-lg p-2 bg-white">
+          <div className="shrink-0 border border-surface-border rounded-lg p-2 bg-white">
             {imagem ? <img src={imagem} alt={qr.codigo} className="w-40 h-40" /> : <div className="w-40 h-40 flex items-center justify-center text-ink-subtle"><QrCode className="w-10 h-10" /></div>}
           </div>
           <div className="flex-1 min-w-0 space-y-2">
@@ -107,7 +107,7 @@ export function EquipamentoQrSection({ equipamentoId, qrInicial }: { equipamento
               <Button type="button" variant="secondary" size="sm" onClick={baixar} disabled={!imagem}>
                 <Download className="w-3.5 h-3.5" /> Baixar QR Code
               </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={desvincular} loading={carregando} className="text-red-500">
+              <Button type="button" variant="ghost" size="sm" onClick={desvincular} loading={carregando} className="text-atrasado">
                 <Unlink className="w-3.5 h-3.5" /> Desvincular
               </Button>
             </div>

@@ -342,36 +342,36 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
   );
 
   const BotoesAcao = ({ compact = false }: { compact?: boolean }) => !podeSalvar ? (
-    <div className="flex items-center gap-2 shrink-0">
+    <div className="flex items-center gap-2 flex-wrap">
       <AtalhosCliente compact={compact} />
       <Button type="button" variant="secondary" size={compact ? "sm" : "md"} onClick={() => router.push("/clientes")}>Voltar</Button>
     </div>
   ) : (
-    <div className="flex items-center gap-2 shrink-0">
+    <div className="flex items-center gap-2 flex-wrap">
       <AtalhosCliente compact={compact} />
       <Button type="button" variant="secondary" size={compact ? "sm" : "md"} onClick={() => router.push("/clientes")}>Cancelar</Button>
       <Button type="button" variant="outline" size={compact ? "sm" : "md"} loading={isSubmitting} onClick={salvarEContinuar}>
         <span className={compact ? "hidden lg:inline" : ""}>Salvar e continuar</span>
         <span className={compact ? "lg:hidden" : "hidden"}>Continuar</span>
       </Button>
-      <Button type="button" variant="success" size={compact ? "sm" : "md"} loading={isSubmitting} onClick={salvar}>
+      <Button type="button" variant="primary" size={compact ? "sm" : "md"} loading={isSubmitting} onClick={salvar}>
         <FileCheck className="w-4 h-4" /> Salvar
       </Button>
     </div>
   );
 
   return (
-    <form onSubmit={salvar} className="min-h-full -m-6 bg-[#F8FAFC] p-4 sm:p-6">
+    <form onSubmit={salvar} className="min-h-full -m-6 bg-surface-page p-4 sm:p-6">
       {/* Toast de sucesso */}
       {toast && (
-        <div className="fixed top-5 right-5 z-50 flex items-center gap-2 bg-success-600 text-white text-sm font-medium rounded-xl px-4 py-3 shadow-card-hover animate-in fade-in slide-in-from-top-2">
+        <div className="fixed top-5 right-5 z-50 flex items-center gap-2 bg-ok text-white text-sm font-medium rounded-card px-4 py-3 shadow-card-hover animate-in fade-in slide-in-from-top-2">
           <FileCheck className="w-4 h-4" /> {toast}
         </div>
       )}
 
       <div className="max-w-[1600px] mx-auto space-y-5">
         {/* Cabeçalho fixo: título + status + ações */}
-        <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-[#F8FAFC]/90 backdrop-blur border-b border-surface-border">
+        <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-surface-page/90 backdrop-blur border-b border-surface-border">
           <div className="max-w-[1600px] mx-auto flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3 flex-wrap min-w-0">
               <h1 className="text-xl font-bold text-ink truncate">{titulo}</h1>
@@ -383,8 +383,8 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
                   className={cn(
                     "inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-2.5 py-1 border transition-colors",
                     qtdContratosAtivos > 0
-                      ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
-                      : "bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200",
+                      ? "bg-ok-claro border-ok/20 text-ok-texto hover:brightness-95"
+                      : "bg-surface-linha border-surface-border text-ink-muted hover:bg-surface-border",
                   )}
                 >
                   <FileSignature className="w-3.5 h-3.5" />
@@ -399,9 +399,9 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
               {isEditing && !podeAlterarStatus ? (
                 <span className={cn(
                   "inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-2.5 py-1 border",
-                  ativoVal ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-red-50 border-red-200 text-red-600",
+                  ativoVal ? "bg-ok-claro border-ok/20 text-ok-texto" : "bg-atrasado-claro border-atrasado/20 text-atrasado",
                 )}>
-                  <span className={cn("w-1.5 h-1.5 rounded-full", ativoVal ? "bg-emerald-500" : "bg-red-500")} />
+                  <span className={cn("w-1.5 h-1.5 rounded-full", ativoVal ? "bg-ok" : "bg-atrasado")} />
                   {ativoVal ? "Ativo" : "Inativo"}
                 </span>
               ) : isEditing ? (
@@ -413,17 +413,17 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
                     className={cn(
                       "inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-2.5 py-1 border transition-colors",
                       ativoVal
-                        ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
-                        : "bg-red-50 border-red-200 text-red-600 hover:bg-red-100",
+                        ? "bg-ok-claro border-ok/20 text-ok-texto hover:brightness-95"
+                        : "bg-atrasado-claro border-atrasado/20 text-atrasado hover:brightness-95",
                     )}
                   >
-                    <span className={cn("w-1.5 h-1.5 rounded-full", ativoVal ? "bg-emerald-500" : "bg-red-500")} />
+                    <span className={cn("w-1.5 h-1.5 rounded-full", ativoVal ? "bg-ok" : "bg-atrasado")} />
                     {ativoVal ? "Ativo" : "Inativo"}
                   </button>
                   {statusOpen && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setStatusOpen(false)} />
-                      <div className="absolute left-0 mt-2 z-50 w-72 bg-white border border-surface-border rounded-xl shadow-card-hover p-3 space-y-3">
+                      <div className="absolute left-0 mt-2 z-50 w-72 bg-white border border-surface-border rounded-card shadow-card-hover p-3 space-y-3">
                         <p className="text-sm text-ink">
                           {ativoVal
                             ? "Deseja inativar este cliente? Ele não aparecerá nas listagens padrão, mas todo o histórico será preservado."
@@ -440,8 +440,8 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
                   )}
                 </div>
               ) : (
-                <span className="inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-2.5 py-1 border bg-emerald-50 border-emerald-200 text-emerald-700">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Ativo
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-2.5 py-1 border bg-ok-claro border-ok/20 text-ok-texto">
+                  <span className="w-1.5 h-1.5 rounded-full bg-ok" /> Ativo
                 </span>
               )}
             </div>
@@ -450,19 +450,19 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
         </div>
 
         {!podeSalvar && (
-          <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-4 py-3 flex items-center gap-2">
+          <div className="bg-atencao-claro border border-atencao/20 text-atencao-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2">
             <Lock className="w-4 h-4 shrink-0" /> Modo somente leitura: seu perfil não tem permissão para {isEditing ? "editar" : "cadastrar"} clientes.
           </div>
         )}
 
         {erroGlobal && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 flex items-center gap-2">
+          <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" /> {erroGlobal}
           </div>
         )}
 
         {/* Card central branco com abas + conteúdo */}
-        <div className="bg-white rounded-2xl shadow-card border border-surface-border overflow-hidden">
+        <div className="bg-white rounded-card shadow-card border border-surface-border overflow-hidden">
           <nav className="flex flex-wrap gap-1.5 px-4 pt-4 pb-4 border-b border-surface-border">
             {ABAS.map((t) => {
               const ativa = aba === t.id;
@@ -471,9 +471,9 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
                 <button
                   key={t.id} type="button" onClick={() => setAba(t.id)}
                   className={cn(
-                    "flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl whitespace-nowrap transition-all",
+                    "flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-card whitespace-nowrap transition-all",
                     ativa ? "bg-primary-500 text-white shadow-sm" : "text-ink-muted hover:text-ink hover:bg-surface-alt",
-                    comErro && !ativa && "text-red-600 bg-red-50",
+                    comErro && !ativa && "text-atrasado bg-atrasado-claro",
                   )}
                 >
                   <t.icone className="w-4 h-4" />
@@ -481,7 +481,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
                   {t.badge != null && t.badge > 0 && (
                     <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", ativa ? "bg-white/25 text-white" : "bg-surface-alt text-ink-muted")}>{t.badge}</span>
                   )}
-                  {comErro && <AlertCircle className={cn("w-3.5 h-3.5", ativa ? "text-white" : "text-red-500")} />}
+                  {comErro && <AlertCircle className={cn("w-3.5 h-3.5", ativa ? "text-white" : "text-atrasado")} />}
                 </button>
               );
             })}
@@ -504,7 +504,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
               <div className="flex gap-2">
                 <Input {...register("cpfCnpj")} placeholder={tipoPessoa === "FISICA" ? "000.000.000-00" : "00.000.000/0001-00"} error={!!errors.cpfCnpj} valido={!errors.cpfCnpj && !!cnpjInfo} className="flex-1" />
                 {tipoPessoa === "JURIDICA" && (
-                  <Button type="button" variant="success" loading={buscandoCnpj} onClick={buscarCnpj} className="shrink-0">
+                  <Button type="button" variant="secondary" loading={buscandoCnpj} onClick={buscarCnpj} className="shrink-0">
                     {!buscandoCnpj && <Search className="w-4 h-4" />}
                     <span className="hidden sm:inline ml-1">Buscar</span>
                   </Button>
@@ -513,7 +513,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
             </FormField>
           </FormGrid>
           {cnpjInfo && cnpjInfo.nome && (
-            <div className="flex items-start gap-3 bg-success-50 border border-success-200 rounded-xl px-4 py-3 animate-in fade-in">
+            <div className="flex items-start gap-3 bg-success-50 border border-success-200 rounded-card px-4 py-3 animate-in fade-in">
               <FileCheck className="w-5 h-5 text-success-600 shrink-0 mt-0.5" />
               <div className="text-sm min-w-0">
                 <p className="font-semibold text-success-800">Dados encontrados na Receita Federal</p>
@@ -530,10 +530,10 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
           <FormGrid>
             <FormField label={tipoPessoa === "FISICA" ? "Nome completo" : "Razão social"} required error={errors.nome?.message}>
               <div className="relative">
-                <Input {...register("nome")} error={!!errors.nome} valido={!errors.nome && razaoSocialBloqueada} readOnly={razaoSocialBloqueada} className={razaoSocialBloqueada ? "bg-gray-100 text-gray-600 pr-20" : ""} />
+                <Input {...register("nome")} error={!!errors.nome} valido={!errors.nome && razaoSocialBloqueada} readOnly={razaoSocialBloqueada} className={razaoSocialBloqueada ? "bg-surface-linha text-ink-muted pr-20" : ""} />
                 {razaoSocialBloqueada && (
                   <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                    <Lock className="w-3.5 h-3.5 text-gray-400" />
+                    <Lock className="w-3.5 h-3.5 text-ink-muted" />
                     <button type="button" onClick={() => setRazaoSocialBloqueada(false)} className="text-[11px] text-frivo-600 hover:underline flex items-center gap-0.5">
                       <Pencil className="w-3 h-3" /> Editar
                     </button>
@@ -579,7 +579,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
               {/* Só ativas para nova escolha; a do cliente continua visível mesmo inativa (“(inativa)”) */}
               <SeletorCadastro entidade="tabelas-preco" valor={tabelaPrecoId} onChange={(v) => setTabelaPrecoId(v)} vazio="Padrão (automático)" itens={tabelasPreco.itens} />
               {tabelaInativa && (
-                <p className="text-xs text-amber-700 mt-1" data-aviso-tabela-inativa>
+                <p className="text-xs text-atencao-texto mt-1" data-aviso-tabela-inativa>
                   “{tabelaInativa.nome}” está inativa: os preços deste cliente estão vindo da tabela Padrão. Escolha outra tabela ou reative-a.
                 </p>
               )}
@@ -605,12 +605,12 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
             </FormField>
           </FormGrid>
           {(tipoFaturamento === "COM_APROVACAO" || tipoFaturamento === "FATURA_UNICA") && (
-            <div className="border-t border-gray-100 pt-1">
+            <div className="border-t border-surface-linha pt-1">
               <ToggleSwitch label="Exige PC (Pedido de Compra) antes da NF" description="A nota fiscal só pode ser emitida após o registro do PC do cliente." checked={exigePcAntesNf} onChange={setExigePcAntesNf} />
             </div>
           )}
           {tipoFaturamento === "FATURA_UNICA" && (
-            <div className="divide-y divide-gray-100 border-t border-gray-100">
+            <div className="divide-y divide-surface-linha border-t border-surface-linha">
               <ToggleSwitch label="Agrupa adicionais do mês na fatura" description="Contrato e adicionais (OS/orçamentos) do mês entram numa fatura única." checked={agrupaAdicionais} onChange={setAgrupaAdicionais} />
               <ToggleSwitch label="Boleto único mensal" description="Gera um único boleto consolidando toda a fatura do mês." checked={boletoUnicoMensal} onChange={setBoletoUnicoMensal} />
             </div>
@@ -621,7 +621,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
       {/* ABA 3 — Contatos */}
       <Painel ativo={aba === "contatos"}>
         <FormSection title="Contatos do cliente" icon={<Users className="w-3.5 h-3.5" />}>
-          <p className="text-xs text-gray-400 -mt-2 mb-3">
+          <p className="text-xs text-ink-muted -mt-2 mb-3">
             {isEditing
               ? "Cadastre os contatos deste cliente. Defina quem recebe cada comunicação na aba Comunicação e o acesso ao portal na aba Portal."
               : "Adicione os contatos do cliente. O primeiro será marcado como principal."}
@@ -637,7 +637,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
       {/* ABA — Comunicação */}
       <Painel ativo={aba === "comunicacao"}>
         <FormSection title="Preferências de comunicação" icon={<Send className="w-3.5 h-3.5" />}>
-          <p className="text-xs text-gray-400 -mt-2 mb-3">
+          <p className="text-xs text-ink-muted -mt-2 mb-3">
             Defina quais contatos recebem cada tipo de comunicação e por qual canal. Os contatos são cadastrados na aba <strong>Contatos</strong>.
           </p>
           {isEditing ? (
@@ -651,7 +651,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
       {/* ABA 3 — Endereços */}
       <Painel ativo={aba === "enderecos"}>
         <FormSection title="Endereços do Cliente" icon={<MapPin className="w-3.5 h-3.5" />}>
-          <p className="text-xs text-gray-400 -mt-2 mb-3">
+          <p className="text-xs text-ink-muted -mt-2 mb-3">
             {isEditing
               ? "Gerencie os endereços do cliente. O endereço marcado com estrela é o principal."
               : config.clienteExigirUnidade
@@ -690,7 +690,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
             ? <AnexosManager clienteId={initialData!.id} anexosIniciais={initialData!.anexos ?? []} />
             : <AnexosLocal anexos={anexosNovos} onChange={setAnexosNovos} />}
         </FormSection>
-        {!isEditing && <p className="text-xs text-gray-400">A logomarca pode ser enviada após salvar o cliente.</p>}
+        {!isEditing && <p className="text-xs text-ink-muted">A logomarca pode ser enviada após salvar o cliente.</p>}
       </Painel>
 
       {/* ABA 6 — Relacionamento */}
@@ -716,7 +716,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
       {/* ABA 7 — Portal */}
       <Painel ativo={aba === "portal"}>
         <FormSection title="Portal do Cliente" icon={<Globe className="w-3.5 h-3.5" />}>
-          <p className="text-xs text-gray-400 -mt-2 mb-1">
+          <p className="text-xs text-ink-muted -mt-2 mb-1">
             Habilita o acesso do cliente ao portal externo e gerencia o acesso individual de cada contato (senha provisória, redefinição e revogação).
           </p>
           <ToggleSwitch
@@ -726,7 +726,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
             onChange={setPortalAtivo}
           />
           {!isEditing ? (
-            <p className="text-xs text-gray-400">Salve o cliente para conceder acesso de portal aos contatos.</p>
+            <p className="text-xs text-ink-muted">Salve o cliente para conceder acesso de portal aos contatos.</p>
           ) : (
             <PortalContatos clienteId={initialData!.id} ativo={aba === "portal"} onGerenciar={() => setAba("contatos")} />
           )}

@@ -29,6 +29,9 @@ function MiniToggle({ checked, onChange, rotulo }: { checked: boolean; onChange:
  * permissões), cor, descrição e a matriz de permissões. Grava pela rota genérica; as travas
  * contra autopromoção ficam no servidor (lib/cadastros/especificos.ts).
  */
+// Cor que um registro novo recebe (dado salvo no cadastro; o usuário troca no seletor)
+const COR_PADRAO = "#8B5CF6";
+
 export function EditorPerfil({ item, aberto, onFechar, onSalvo }: EditorCadastroProps) {
   const [nome, setNome] = useState("");
   const [tipo, setTipo] = useState("PERSONALIZADO");
@@ -41,7 +44,7 @@ export function EditorPerfil({ item, aberto, onFechar, onSalvo }: EditorCadastro
   useEffect(() => {
     if (!aberto) return;
     setErro("");
-    setNome(item?.nome ?? ""); setTipo(item?.tipo ?? "PERSONALIZADO"); setCor(item?.cor ?? "#8B5CF6"); setDescricao(item?.descricao ?? "");
+    setNome(item?.nome ?? ""); setTipo(item?.tipo ?? "PERSONALIZADO"); setCor(item?.cor ?? COR_PADRAO); setDescricao(item?.descricao ?? "");
     setPermissoes({ ...permissoesVazias(), ...(item?.permissoes ?? {}) });
   }, [aberto, item]);
 
@@ -81,7 +84,7 @@ export function EditorPerfil({ item, aberto, onFechar, onSalvo }: EditorCadastro
       </>}
     >
       <div className="space-y-5">
-        {erro && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
+        {erro && <div role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2">{erro}</div>}
         {item?.padraoSistema && <p className="text-xs text-ink-muted bg-surface-alt rounded-lg px-3 py-2">Perfil padrão do sistema: pode ser ajustado, mas não inativado.</p>}
         <FormGrid cols={3}>
           <FormField label="Nome do perfil" required className="sm:col-span-2"><Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex: Supervisor de Manutenção" /></FormField>
@@ -103,7 +106,7 @@ export function EditorPerfil({ item, aberto, onFechar, onSalvo }: EditorCadastro
 
         <div className="space-y-4">
           {SECOES.map((secao) => (
-            <div key={secao.id} className="border border-surface-border rounded-xl overflow-hidden">
+            <div key={secao.id} className="border border-surface-border rounded-card overflow-hidden">
               <div className="flex items-center justify-between px-4 py-2.5 bg-surface-alt border-b border-surface-border">
                 <p className="text-xs font-bold text-ink-muted uppercase tracking-wider">{secao.label}</p>
                 <div className="flex items-center gap-2">

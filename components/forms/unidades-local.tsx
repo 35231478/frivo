@@ -164,7 +164,7 @@ export function UnidadesLocal({ unidades, onChange }: UnidadesLocalProps) {
           <h4 className="text-sm font-semibold text-frivo-800">
             {editando === "novo" ? "Novo endereço" : "Editar endereço"}
           </h4>
-          <button type="button" onClick={cancelar} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
+          <button type="button" onClick={cancelar} className="text-ink-muted hover:text-ink"><X className="w-4 h-4" /></button>
         </div>
 
         <FormGrid>
@@ -235,7 +235,7 @@ export function UnidadesLocal({ unidades, onChange }: UnidadesLocalProps) {
   return (
     <div className="space-y-2">
       {ordenadas.length === 0 && !editando && (
-        <p className="text-sm text-gray-400 py-2">Nenhum endereço adicionado. Adicione pelo menos o endereço principal.</p>
+        <p className="text-sm text-ink-muted py-2">Nenhum endereço adicionado. Adicione pelo menos o endereço principal.</p>
       )}
 
       {ordenadas.map((u) => {
@@ -244,38 +244,38 @@ export function UnidadesLocal({ unidades, onChange }: UnidadesLocalProps) {
         const temEnd = !!(u.logradouro && u.cidade && u.estado);
 
         return (
-          <div key={u._tempId} className="border border-gray-200 rounded-lg overflow-hidden">
+          <div key={u._tempId} className="border border-surface-border rounded-lg overflow-hidden">
             <button type="button" onClick={() => toggleExpand(u._tempId)}
-              className="flex items-center justify-between w-full p-3 text-left hover:bg-gray-50 transition-colors">
+              className="flex items-center justify-between w-full p-3 text-left hover:bg-surface-page transition-colors">
               <div className="flex items-center gap-3 min-w-0">
-                <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
+                <Building2 className="w-4 h-4 text-ink-muted shrink-0" />
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-gray-900">{u.nome}</span>
+                    <span className="text-sm font-medium text-ink">{u.nome}</span>
                     {u.principal && (
-                      <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
+                      <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold bg-atencao-claro text-atencao-texto px-1.5 py-0.5 rounded-full">
                         <Star className="w-2.5 h-2.5 fill-current" /> Principal
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-gray-500 truncate">{enderecoTexto(u)}</p>
+                  <p className="text-xs text-ink-muted truncate">{enderecoTexto(u)}</p>
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                {temEnd && <MapPin className="w-3 h-3 text-green-500" />}
-                {aberto ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                {temEnd && <MapPin className="w-3 h-3 text-ok-texto" />}
+                {aberto ? <ChevronDown className="w-4 h-4 text-ink-muted" /> : <ChevronRight className="w-4 h-4 text-ink-muted" />}
               </div>
             </button>
 
             {aberto && (
-              <div className="border-t border-gray-100 p-3 space-y-3 bg-gray-50/50">
+              <div className="border-t border-surface-linha p-3 space-y-3 bg-surface-page/50">
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                  {u.logradouro && <div className="col-span-2"><span className="text-gray-400">Logradouro:</span> <span className="text-gray-700">{u.logradouro}{u.numero ? `, ${u.numero}` : ""}</span></div>}
-                  {u.complemento && <div className="col-span-2"><span className="text-gray-400">Complemento:</span> <span className="text-gray-700">{u.complemento}</span></div>}
-                  {u.bairro && <div><span className="text-gray-400">Bairro:</span> <span className="text-gray-700">{u.bairro}</span></div>}
-                  {u.cep && <div><span className="text-gray-400">CEP:</span> <span className="text-gray-700">{u.cep}</span></div>}
-                  {u.cidade && <div><span className="text-gray-400">Cidade:</span> <span className="text-gray-700">{u.cidade} — {u.estado}</span></div>}
-                  {u.telefone && <div><span className="text-gray-400">Telefone:</span> <span className="text-gray-700">{u.telefone}</span></div>}
+                  {u.logradouro && <div className="col-span-2"><span className="text-ink-muted">Logradouro:</span> <span className="text-ink">{u.logradouro}{u.numero ? `, ${u.numero}` : ""}</span></div>}
+                  {u.complemento && <div className="col-span-2"><span className="text-ink-muted">Complemento:</span> <span className="text-ink">{u.complemento}</span></div>}
+                  {u.bairro && <div><span className="text-ink-muted">Bairro:</span> <span className="text-ink">{u.bairro}</span></div>}
+                  {u.cep && <div><span className="text-ink-muted">CEP:</span> <span className="text-ink">{u.cep}</span></div>}
+                  {u.cidade && <div><span className="text-ink-muted">Cidade:</span> <span className="text-ink">{u.cidade} — {u.estado}</span></div>}
+                  {u.telefone && <div><span className="text-ink-muted">Telefone:</span> <span className="text-ink">{u.telefone}</span></div>}
                 </div>
 
                 {temEnd && (
@@ -288,10 +288,10 @@ export function UnidadesLocal({ unidades, onChange }: UnidadesLocalProps) {
                   </Button>
                   {!u.principal && (
                     <>
-                      <Button type="button" variant="ghost" onClick={() => marcarPrincipal(u._tempId)} className="text-xs h-7 px-2.5 text-amber-600 hover:text-amber-700">
+                      <Button type="button" variant="ghost" onClick={() => marcarPrincipal(u._tempId)} className="text-xs h-7 px-2.5 text-atencao-texto hover:text-atencao-texto">
                         <Star className="w-3 h-3" /> Tornar principal
                       </Button>
-                      <Button type="button" variant="ghost" onClick={() => remover(u._tempId)} className="text-xs h-7 px-2.5 text-red-500 hover:text-red-700">
+                      <Button type="button" variant="ghost" onClick={() => remover(u._tempId)} className="text-xs h-7 px-2.5 text-atrasado hover:text-atrasado-texto">
                         <Trash2 className="w-3 h-3" /> Remover
                       </Button>
                     </>

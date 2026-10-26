@@ -38,14 +38,14 @@ const TENSOES = ["110V", "127V", "220V", "380V", "440V"];
 const FASES = ["Monofásico", "Bifásico", "Trifásico"];
 
 const STATUS_OS: Record<string, { label: string; cor: string }> = {
-  ABERTA: { label: "Aberta", cor: "text-sky-600 bg-sky-50" },
-  AGUARDANDO_ATENDIMENTO: { label: "Aguardando", cor: "text-amber-600 bg-amber-50" },
-  AGENDADA: { label: "Agendada", cor: "text-indigo-600 bg-indigo-50" },
-  EM_ANDAMENTO: { label: "Em andamento", cor: "text-sky-600 bg-sky-50" },
-  PAUSADA: { label: "Pausada", cor: "text-gray-500 bg-gray-100" },
-  AGUARDANDO_PECA: { label: "Aguardando peça", cor: "text-amber-600 bg-amber-50" },
-  CONCLUIDA: { label: "Concluída", cor: "text-emerald-600 bg-emerald-50" },
-  CANCELADA: { label: "Cancelada", cor: "text-red-600 bg-red-50" },
+  ABERTA: { label: "Aberta", cor: "text-previsto-texto bg-previsto-claro" },
+  AGUARDANDO_ATENDIMENTO: { label: "Aguardando", cor: "text-previsto-texto bg-previsto-claro" },
+  AGENDADA: { label: "Agendada", cor: "text-acento-hover bg-acento-claro" },
+  EM_ANDAMENTO: { label: "Em andamento", cor: "text-atencao-texto bg-atencao-claro" },
+  PAUSADA: { label: "Pausada", cor: "text-atencao-texto bg-atencao-claro" },
+  AGUARDANDO_PECA: { label: "Aguardando peça", cor: "text-atencao-texto bg-atencao-claro" },
+  CONCLUIDA: { label: "Concluída", cor: "text-ok-texto bg-ok-claro" },
+  CANCELADA: { label: "Cancelada", cor: "text-atrasado-texto bg-atrasado-claro" },
 };
 
 function toDateInput(date: any): string {
@@ -339,9 +339,9 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
 
         {/* Caminho principal: IA */}
         <Link href={linkFoto} data-atalho-foto
-          className="group block rounded-2xl border border-primary-200 bg-gradient-to-br from-primary-50 via-white to-white p-5 sm:p-6 shadow-sm hover:shadow-md hover:border-primary-300 transition-all">
+          className="group block rounded-card border border-acento/30 bg-acento-claro p-5 sm:p-6 hover:border-acento/60 transition-all">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-            <span className="w-12 h-12 rounded-xl bg-primary-500 text-white flex items-center justify-center shrink-0 shadow-sm"><Camera className="w-6 h-6" /></span>
+            <span className="w-12 h-12 rounded-card bg-primary-500 text-white flex items-center justify-center shrink-0 shadow-sm"><Camera className="w-6 h-6" /></span>
             <div className="flex-1 min-w-0">
               <p className="flex items-center gap-2 flex-wrap">
                 <span className="text-lg font-semibold text-ink">Preencher com foto</span>
@@ -366,13 +366,13 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
         <div className="flex items-center gap-2 flex-wrap text-xs" data-progresso>
           <span className="font-semibold text-ink">Obrigatórios {feitos}/{obrigatorios.length}:</span>
           {obrigatorios.map(([rotulo, ok]) => (
-            <span key={rotulo} className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full border", ok ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-ink-muted bg-white border-surface-border")}>
+            <span key={rotulo} className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full border", ok ? "text-ok-texto bg-ok-claro border-ok/20" : "text-ink-muted bg-white border-surface-border")}>
               {ok ? <CheckCircle2 className="w-3 h-3" /> : <Circle className="w-3 h-3" />} {rotulo}
             </span>
           ))}
         </div>
 
-        {erroGlobal && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3" data-erro>{erroGlobal}</div>}
+        {erroGlobal && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3" data-erro>{erroGlobal}</div>}
 
         <Bloco numero={1} titulo="Identificação" descricao="O que é o equipamento.">
           <FormField label="Tipo de equipamento" required>
@@ -495,7 +495,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
         {/* Barra de ações fixa */}
         <div className="sticky bottom-20 lg:bottom-4 z-20" data-barra-acoes>
           <div>
-            <div className="flex items-center justify-between gap-3 bg-white/95 backdrop-blur border border-surface-border rounded-xl shadow-lg px-4 py-3">
+            <div className="flex items-center justify-between gap-3 bg-white/95 backdrop-blur border border-surface-border rounded-card shadow-lg px-4 py-3">
               <span className="text-xs text-ink-muted hidden sm:inline">{feitos === obrigatorios.length ? "Tudo pronto para cadastrar." : `Faltam ${obrigatorios.length - feitos} campo(s) obrigatório(s).`}</span>
               <div className="flex items-center gap-2 ml-auto">
                 <Button type="button" variant="secondary" onClick={() => router.back()}>Cancelar</Button>
@@ -511,7 +511,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
   return (
     <div className="space-y-5">
       {/* Cabeçalho fixo — mesmo vocabulário visual da ficha (ícone do tipo, selos, local) */}
-      <div className="sticky top-0 z-20 bg-white border border-surface-border rounded-xl shadow-sm px-3 sm:px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+      <div className="sticky top-0 z-20 bg-white border border-surface-border rounded-card shadow-sm px-3 sm:px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
           <Link href={isEditing ? `/equipamentos/${initialData.id}` : "/equipamentos"} title="Voltar" className="p-1.5 -ml-1 rounded-lg text-ink-muted hover:text-primary-600 hover:bg-surface-alt">
             <ChevronLeft className="w-5 h-5" />
@@ -537,10 +537,10 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
         </div>
       </div>
 
-      {erroGlobal && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{erroGlobal}</div>}
+      {erroGlobal && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3">{erroGlobal}</div>}
 
       {/* Abas */}
-      <div className="bg-white border border-surface-border rounded-xl overflow-hidden">
+      <div className="bg-white border border-surface-border rounded-card overflow-hidden">
         <div className="flex border-b border-surface-border overflow-x-auto">
           {abas.filter((a) => !a.oculta).map((a) => {
             const Icone = a.icone;
@@ -752,9 +752,9 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
                         <th className="text-left px-4 py-2.5 font-semibold">Status</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y divide-surface-linha">
                       {(initialData.ordensServico as any[]).map((o) => {
-                        const st = STATUS_OS[o.status] ?? { label: o.status, cor: "text-gray-500 bg-gray-100" };
+                        const st = STATUS_OS[o.status] ?? { label: o.status, cor: "text-ink-muted bg-surface-linha" };
                         return (
                           <tr key={o.id} className="hover:bg-surface-alt/50">
                             <td className="px-4 py-2.5 font-mono text-ink">{o.numero}</td>

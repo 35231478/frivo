@@ -57,7 +57,7 @@ export function RecorrenciaLocais({ locais, tiposOs, tecnicos, value, onChange }
               onChange={(v) => onChange(l.id, { ativa: v })}
             />
             {c.ativa && (
-              <div className="space-y-4 border-l-2 border-primary-200 pl-4">
+              <div className="space-y-4 border-l-2 border-surface-border pl-4">
                 <FormGrid cols={2}>
                   <FormField label="Frequência">
                     <Select value={c.frequencia} onChange={(e) => onChange(l.id, { frequencia: e.target.value })}>

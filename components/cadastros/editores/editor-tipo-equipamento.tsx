@@ -87,8 +87,8 @@ export function EditorTipoEquipamento({ item, aberto, onFechar, onSalvo }: Edito
         <Button type="button" variant="secondary" onClick={fechar}>Fechar</Button>
       )}
     >
-      {erro && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 mb-4">{erro}</div>}
-      {atual && atual.ativo === false && <p className="text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2 mb-4">Tipo inativo: não aparece para novos equipamentos até ser reativado.</p>}
+      {erro && <div role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2 mb-4">{erro}</div>}
+      {atual && atual.ativo === false && <p className="text-sm bg-atencao-claro border border-atencao/20 text-atencao-texto rounded-lg px-3 py-2 mb-4">Tipo inativo: não aparece para novos equipamentos até ser reativado.</p>}
       {salvo && aba === "checklist" && <p className="text-sm bg-success-50 border border-success-200 text-success-700 rounded-lg px-3 py-2 mb-4">Tipo criado. Monte o checklist abaixo (ou feche).</p>}
 
       {aba === "geral" ? (
@@ -207,7 +207,7 @@ function FormulariosVinculados({ equipId, formOpts, tiposOs }: { equipId: string
 
   return (
     <div className="space-y-3">
-      {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
+      {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2">{erro}</div>}
 
       {/* Busca de formulário */}
       <div className="relative">
@@ -233,7 +233,7 @@ function FormulariosVinculados({ equipId, formOpts, tiposOs }: { equipId: string
 
       {/* Formulários vinculados */}
       {vinculos.length === 0 ? (
-        <div className="text-center py-8 border border-dashed border-surface-border rounded-xl">
+        <div className="text-center py-8 border border-dashed border-surface-border rounded-card">
           <Boxes className="w-6 h-6 text-ink-subtle mx-auto mb-2" />
           <p className="text-sm text-ink-muted">Nenhum formulário vinculado. Pesquise acima para adicionar.</p>
         </div>
@@ -247,7 +247,7 @@ function FormulariosVinculados({ equipId, formOpts, tiposOs }: { equipId: string
                   {v.formulario.nome}
                   <span className="text-xs font-normal text-ink-subtle">({v.formulario.qtdPerguntas} pergunta{v.formulario.qtdPerguntas === 1 ? "" : "s"})</span>
                 </p>
-                <button type="button" onClick={() => remover(v)} title="Remover formulário" className="p-1 text-ink-subtle hover:text-red-600 shrink-0"><X className="w-4 h-4" /></button>
+                <button type="button" onClick={() => remover(v)} title="Remover formulário" className="p-1 text-ink-subtle hover:text-atrasado shrink-0"><X className="w-4 h-4" /></button>
               </div>
 
               <div className="flex flex-col sm:flex-row sm:items-center gap-2">
@@ -275,7 +275,7 @@ function FormulariosVinculados({ equipId, formOpts, tiposOs }: { equipId: string
                   />
                 </div>
               </div>
-              {!v.id && <p className="text-xs text-amber-600">Selecione o tipo de OS para salvar este vínculo.</p>}
+              {!v.id && <p className="text-xs text-atencao-texto">Selecione o tipo de OS para salvar este vínculo.</p>}
             </div>
           ))}
         </div>
@@ -289,7 +289,7 @@ function FormulariosVinculados({ equipId, formOpts, tiposOs }: { equipId: string
 function ChipToggle({ ativo, disabled, onClick, cor, icone, label }: {
   ativo: boolean; disabled?: boolean; onClick: () => void; cor: "verde" | "ambar"; icone: React.ReactNode; label: string;
 }) {
-  const on = cor === "verde" ? "bg-success-50 border-success-300 text-success-700" : "bg-amber-50 border-amber-300 text-amber-700";
+  const on = cor === "verde" ? "bg-success-50 border-success-300 text-success-700" : "bg-atencao-claro border-atencao/40 text-atencao-texto";
   return (
     <button
       type="button" onClick={onClick} disabled={disabled} title={label}

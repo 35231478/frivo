@@ -39,7 +39,7 @@ export function ConverterContrato({ orcamentoId }: ConverterContratoProps) {
 
   if (sucesso) {
     return (
-      <div className="bg-success-50 border-2 border-success-500 text-success-700 rounded-xl px-5 py-4 flex items-center justify-between gap-3 flex-wrap">
+      <div className="bg-success-50 border-2 border-success-500 text-success-700 rounded-card px-5 py-4 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <CheckCircle2 className="w-6 h-6 shrink-0" />
           <p className="font-semibold">Contrato {sucesso.numero} criado com sucesso!</p>
@@ -52,11 +52,11 @@ export function ConverterContrato({ orcamentoId }: ConverterContratoProps) {
   }
 
   return (
-    <div className="bg-success-50/60 border border-success-500/40 rounded-xl px-5 py-4 flex items-center justify-between gap-3 flex-wrap">
+    <div className="bg-success-50/60 border border-success-500/40 rounded-card px-5 py-4 flex items-center justify-between gap-3 flex-wrap">
       <div>
         <p className="font-semibold text-ink flex items-center gap-2"><FileSignature className="w-4 h-4 text-success-600" /> Proposta aprovada pelo cliente</p>
         <p className="text-sm text-ink-muted">Gere o contrato com recorrência de OS já configurada a partir desta proposta.</p>
-        {erro && <p className="text-sm text-red-600 mt-1 flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" /> {erro}</p>}
+        {erro && <p className="text-sm text-atrasado mt-1 flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" /> {erro}</p>}
       </div>
       <Button type="button" variant="primary" loading={carregando} onClick={converter}>
         <FileSignature className="w-4 h-4" /> Converter em Contrato
