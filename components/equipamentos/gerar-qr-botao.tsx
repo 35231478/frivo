@@ -27,7 +27,7 @@ export function GerarQrBotao({ equipamentoId, variante = "link" }: { equipamento
 
   return (
     <span className="inline-flex items-center gap-2">
-      {erro && <span className="text-xs text-red-600">{erro}</span>}
+      {erro && <span className="text-xs text-atrasado">{erro}</span>}
       <button
         type="button" onClick={gerar} disabled={carregando} data-gerar-qr
         className={variante === "botao"

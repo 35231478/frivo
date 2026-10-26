@@ -29,7 +29,7 @@ export default async function EditarEquipePage({ params }: { params: Promise<{ i
         actions={<InativarRegistro url={`/api/equipes/${equipe.id}`} modulo="equipes" acaoReativar="gerenciar" variante="botao" ativo={equipe.status === "ATIVA"} nome={equipe.nome} entidade="equipe" feminino />}
       />
       {equipe.status !== "ATIVA" && (
-        <div data-aviso-inativo className="mb-4 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-3 text-sm">
+        <div data-aviso-inativo className="mb-4 bg-surface-page border border-surface-border text-ink rounded-card px-4 py-3 text-sm">
           Esta equipe está <strong>inativa</strong> e não aparece na lista padrão. Use “Reativar” para voltar a usá-la.
         </div>
       )}

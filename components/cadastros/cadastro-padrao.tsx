@@ -220,7 +220,7 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda }: CadastroPadra
         </div>
 
         {erroLista ? (
-          <div className="flex flex-col items-center gap-2 py-8 text-sm text-red-700" data-erro-lista>
+          <div className="flex flex-col items-center gap-2 py-8 text-sm text-atrasado-texto" data-erro-lista>
             <span className="flex items-center gap-2"><AlertCircle className="w-4 h-4" /> {erroLista}</span>
             <Button type="button" variant="secondary" size="sm" onClick={carregar}><RefreshCw className="w-4 h-4" /> Tentar de novo</Button>
           </div>
@@ -275,7 +275,7 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda }: CadastroPadra
                       {def.colunas.map((col, i) => <td key={col.key} className="px-4 py-3">{valor(col, item, i)}</td>)}
                       {aba === "todos" && (
                         <td className="px-4 py-3">
-                          <span className={cn("text-[11px] font-semibold px-2 py-0.5 rounded-full", item.ativo ? "bg-emerald-50 text-emerald-700" : "bg-surface-alt text-ink-muted")}>
+                          <span className={cn("text-[11px] font-semibold px-2 py-0.5 rounded-full", item.ativo ? "bg-ok-claro text-ok-texto" : "bg-surface-alt text-ink-muted")}>
                             {item.ativo ? "Ativo" : "Inativo"}
                           </span>
                         </td>
@@ -366,9 +366,9 @@ function FormularioCadastro({
         <Button type="button" loading={salvando} onClick={salvar}><Check className="w-4 h-4" /> {item ? "Salvar" : "Adicionar"}</Button>
       </>}
     >
-      {erro && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 mb-4">{erro}</div>}
+      {erro && <div role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2 mb-4">{erro}</div>}
       {item && !item.ativo && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-3 py-2 mb-4">
+        <div className="bg-atencao-claro border border-atencao/20 text-atencao-texto text-sm rounded-lg px-3 py-2 mb-4">
           {titulo} inativ{def.feminino ? "a" : "o"}: não aparece para novas escolhas até ser reativad{def.feminino ? "a" : "o"}.
         </div>
       )}
@@ -395,7 +395,7 @@ function CampoForm({ campo: c, valor, onChange }: { campo: CampoCadastro; valor:
   if (c.tipo === "cor") {
     return (
       <div className="flex items-center gap-2">
-        <input type="color" value={valor || "#64748B"} onChange={(e) => onChange(e.target.value)} className="w-10 h-10 rounded border border-gray-300 cursor-pointer" aria-label={c.label} />
+        <input type="color" value={valor || "#64748B"} onChange={(e) => onChange(e.target.value)} className="w-10 h-10 rounded border border-surface-border cursor-pointer" aria-label={c.label} />
         <Input value={valor} onChange={(e) => onChange(e.target.value)} className="flex-1 font-mono text-xs" />
       </div>
     );

@@ -97,6 +97,15 @@ const VARRIDAS: Record<string, string[]> = {
     "components/os", "app/(dashboard)/ordens", "components/tecnico", "app/tecnico", "components/calendario", "app/(dashboard)/calendario",
     "components/dashboard", "app/(dashboard)/dashboard", "app/(dashboard)/financeiro/page.tsx", "app/(dashboard)/prazos",
   ],
+  "lote 2 (cadastros)": [
+    "components/forms", "!components/forms/configuracoes-client.tsx", "components/clientes", "app/(dashboard)/clientes",
+    "components/contratos", "app/(dashboard)/contratos", "components/equipamentos", "app/(dashboard)/equipamentos",
+    "app/(dashboard)/colaboradores", "app/(dashboard)/tecnicos", "components/equipes", "app/(dashboard)/equipes",
+    "components/veiculos", "app/(dashboard)/veiculos", "components/cadastros", "app/(dashboard)/orcamentos",
+    // documento e aprovação pública do orçamento ficam para o lote 4 (fora do painel)
+    "components/orcamento", "!components/orcamento/aprovacao-publica.tsx", "!components/orcamento/proposta-documento.tsx",
+    "!components/orcamento/orcamento-documento.tsx",
+  ],
 };
 
 // Paleta solta do Tailwind (com variantes e opacidade): tudo deve vir dos tokens
@@ -106,11 +115,17 @@ const DEGRADE = /bg-gradient|linearGradient|radialGradient|\b(?:from|via|to)-(?:
 const BORDA_ESQUERDA = /border-l-(?:\[\d+px\]|[2-8])\b[^"`]*\bborder-l?-?(?:acento|ok|atencao|atrasado|primary|success|[a-z]+-\d{2,3})\b|\bborder-l-(?:acento|ok|atencao|atrasado|primary-\d+|success-\d+)\b|absolute left-0[^"]*w-1[^"]*rounded-r/;
 const NAVY = /#14498F|#0F2744|bg-sidebar|from-sidebar/;
 // Hex usado para PINTAR (style/fill/stroke ou fallback de cor): deve vir de lib/ui/tokens.ts.
-// Hex como dado (ex.: valor padrão de um campo "cor" que o usuário escolhe) não conta.
-const HEX = /(?:backgroundColor|color|borderColor|fill|stroke|stopColor)\s*[:=]\s*\{?\s*["'`]#[0-9A-Fa-f]{3,6}|\?\?\s*["'`]#[0-9A-Fa-f]{3,6}/;
+// Hex como dado (ex.: valor padrão de um campo "cor" que o usuário escolhe) não conta. Classe arbitrária
+// com hex (ex.: bg-[#F8FAFC]) também é pintura.
+const HEX = /(?:backgroundColor|color|borderColor|fill|stroke|stopColor)\s*[:=]\s*\{?\s*["'`]#[0-9A-Fa-f]{3,6}|\?\?\s*["'`]#[0-9A-Fa-f]{3,6}|\b[a-z-]+-\[#[0-9A-Fa-f]{3,8}\]/;
 
 describe("regras da identidade nas telas varridas", () => {
-  const casos = Object.entries(VARRIDAS).flatMap(([lote, alvos]) => [...new Set(alvos.flatMap(tsx))].map((f) => [lote, f] as const));
+  // "!caminho" tira um arquivo da pasta do lote (ele é varrido em outro lote)
+  const arquivos = (alvos: string[]) => {
+    const fora = new Set(alvos.filter((a) => a.startsWith("!")).map((a) => a.slice(1)));
+    return [...new Set(alvos.filter((a) => !a.startsWith("!")).flatMap(tsx))].filter((f) => !fora.has(f));
+  };
+  const casos = Object.entries(VARRIDAS).flatMap(([lote, alvos]) => arquivos(alvos).map((f) => [lote, f] as const));
   it("cada lote cobre arquivos de verdade", () => {
     for (const lote of Object.keys(VARRIDAS)) expect(casos.filter(([l]) => l === lote).length).toBeGreaterThan(3);
   });

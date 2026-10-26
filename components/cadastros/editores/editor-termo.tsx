@@ -54,8 +54,8 @@ export function EditorTermo({ item, aberto, onFechar, onSalvo }: EditorCadastroP
       </>}
     >
       <div className="space-y-4">
-        {erro && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
-        {item && item.ativo === false && <p className="text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2">Termo inativo: não aparece em “Carregar de um template” nas propostas até ser reativado.</p>}
+        {erro && <div role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2">{erro}</div>}
+        {item && item.ativo === false && <p className="text-sm bg-atencao-claro border border-atencao/20 text-atencao-texto rounded-lg px-3 py-2">Termo inativo: não aparece em “Carregar de um template” nas propostas até ser reativado.</p>}
         <FormField label="Nome" required>
           <Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Termo Contrato Anual" maxLength={160} />
         </FormField>

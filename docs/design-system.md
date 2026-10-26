@@ -102,6 +102,18 @@ emoji e hex usado para pintar.
 - Dashboard e Dashboard financeiro (`components/dashboard/*`, `app/(dashboard)/financeiro/page.tsx`),
   Nova OS, Prazos e SLA.
 
+**Lote 2: cadastros** (feito)
+- Cliente: ficha em abas (dados, contatos, endereços, comunicação, faturamento, contratos, portal,
+  documentos, relacionamento) e lista. O "Salvar" passou a ser o botão primário (acento), não o verde.
+  No celular, os botões do cabeçalho quebram linha em vez de sair da tela.
+- Contratos: lista, formulário em abas, documentos e relatório de manutenções. A periodicidade é
+  categoria e ficou neutra.
+- Equipamentos: lista, perfil, formulário (sem degradê), cadastro por foto, tipo de equipamento e selos.
+  O status da OS no histórico usa os mesmos tons da central.
+- Colaboradores, equipes (montador sem emoji), frota (formulário, selos, CRLV por foto sem degradê,
+  checklist), cadastros no padrão e os editores, orçamentos (lista, itens e envio).
+- Hex em classe arbitrária (`bg-[#F8FAFC]`) também entrou na guarda.
+
 ## Varredura seguinte: o que falta
 
 Inventário pelo código, com o número de classes de cor fora do sistema (`gray-*`, `red-*`, `blue-*`…),
@@ -115,7 +127,8 @@ cores soltas pelos tokens e conferir respiro e status.
 4. Dashboard (`components/dashboard/*`) e Dashboard financeiro (`app/(dashboard)/financeiro/page.tsx`).
 5. Nova OS / Editar OS (`app/(dashboard)/ordens/nova`).
 
-**Prioridade 2: cadastros e formulários**
+**Prioridade 2: cadastros e formulários** (feito no lote 2; o documento e a aprovação pública do
+orçamento passaram para o lote 4)
 6. Cliente: `components/forms/cliente-form.tsx` (52), `unidades-manager` (42), `unidades-local` (31), `contatos-*`, `interacoes-manager`, `anexos-*`, `cliente-contratos`.
 7. Contratos: `contrato-form` (45), `contratos-lista-client` (38), `contrato-documentos`, `relatorio-contratos-client`.
 8. Equipamentos: `tipo-equipamento` (36), `cadastro-por-foto` (32), `equipamento-perfil` (29), `equipamento-form` (degradê), `selos`.

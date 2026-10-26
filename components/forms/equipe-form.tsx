@@ -18,6 +18,9 @@ interface VeiculoOpt { id: string; placa: string; modelo: string; equipe: { id: 
 
 const CORES = ["#0EA5E9", "#10B981", "#8B5CF6", "#F59E0B", "#EF4444", "#EC4899", "#06B6D4", "#6366F1"];
 
+// Cor que um registro novo recebe (dado salvo no cadastro; o usuário troca no seletor)
+const COR_PADRAO = "#0EA5E9";
+
 export function EquipeForm({ initialData }: { initialData?: any }) {
   const router = useRouter();
   const isEditing = !!initialData;
@@ -25,7 +28,7 @@ export function EquipeForm({ initialData }: { initialData?: any }) {
   const [salvando, setSalvando] = useState(false);
 
   const [nome, setNome] = useState(initialData?.nome ?? "");
-  const [cor, setCor] = useState(initialData?.cor ?? "#0EA5E9");
+  const [cor, setCor] = useState(initialData?.cor ?? COR_PADRAO);
   const [liderId, setLiderId] = useState(initialData?.liderId ?? "");
   const [membroIds, setMembroIds] = useState<string[]>(initialData?.membros?.map((m: any) => m.id) ?? []);
   // Todos os veículos da equipe (antes só 1 — salvar desvinculava os demais sem avisar)
@@ -84,12 +87,12 @@ export function EquipeForm({ initialData }: { initialData?: any }) {
   return (
     <div className="space-y-5">
       {erro && (
-        <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+        <div className="flex items-center gap-2 bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3">
           <AlertCircle className="w-4 h-4 shrink-0" /> {erro}
         </div>
       )}
 
-      <div className="bg-white rounded-2xl shadow-card border border-surface-border p-5 sm:p-6 lg:p-8 space-y-8">
+      <div className="bg-white rounded-card shadow-card border border-surface-border p-5 sm:p-6 lg:p-8 space-y-8">
         <FormSection title="Identificação">
           <FormGrid>
             <FormField label="Nome da equipe" required>
@@ -147,7 +150,7 @@ export function EquipeForm({ initialData }: { initialData?: any }) {
               </div>
             )}
             {(saindo.length > 0 || vindoDeOutra.length > 0) && (
-              <div data-aviso-veiculos className="mt-2 text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 space-y-0.5">
+              <div data-aviso-veiculos className="mt-2 text-xs text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2 space-y-0.5">
                 {saindo.length > 0 && <p className="flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5 shrink-0" /> Ao salvar, {saindo.map((v) => v.placa).join(", ")} {saindo.length === 1 ? "será desvinculado" : "serão desvinculados"} desta equipe.</p>}
                 {vindoDeOutra.length > 0 && <p className="flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {vindoDeOutra.map((v) => `${v.placa} sai da equipe ${v.equipe!.nome}`).join("; ")} e passa para esta.</p>}
               </div>

@@ -26,11 +26,11 @@ const ICONE_TIPO: Record<string, React.ReactNode> = {
 };
 
 const COR_TIPO: Record<string, string> = {
-  LIGACAO: "bg-blue-100 text-blue-600",
-  VISITA: "bg-purple-100 text-purple-600",
-  EMAIL: "bg-gray-100 text-gray-600",
-  WHATSAPP: "bg-green-100 text-green-600",
-  REUNIAO: "bg-orange-100 text-orange-600",
+  LIGACAO: "bg-previsto-claro text-previsto-texto",
+  VISITA: "bg-previsto-claro text-previsto-texto",
+  EMAIL: "bg-previsto-claro text-previsto-texto",
+  WHATSAPP: "bg-previsto-claro text-previsto-texto",
+  REUNIAO: "bg-previsto-claro text-previsto-texto",
 };
 
 interface InteracoesManagerProps {
@@ -65,13 +65,13 @@ export function InteracoesManager({ clienteId, interacoesIniciais }: InteracoesM
 
   return (
     <div className="space-y-3">
-      {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
+      {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2">{erro}</div>}
 
       {mostraForm ? (
         <div className="border border-frivo-200 bg-frivo-50/30 rounded-lg p-4 space-y-3">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-semibold text-frivo-800">Registrar interação</h4>
-            <button type="button" onClick={() => setMostraForm(false)} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
+            <button type="button" onClick={() => setMostraForm(false)} className="text-ink-muted hover:text-ink"><X className="w-4 h-4" /></button>
           </div>
           <FormGrid>
             <FormField label="Tipo">
@@ -95,25 +95,25 @@ export function InteracoesManager({ clienteId, interacoesIniciais }: InteracoesM
       )}
 
       {interacoes.length === 0 && !mostraForm && (
-        <p className="text-sm text-gray-400 py-2 text-center">Nenhuma interação registrada.</p>
+        <p className="text-sm text-ink-muted py-2 text-center">Nenhuma interação registrada.</p>
       )}
 
       {interacoes.length > 0 && (
-        <div className="relative ml-4 border-l-2 border-gray-200 space-y-0">
+        <div className="relative ml-4 border-l-2 border-surface-border space-y-0">
           {interacoes.map((i) => (
             <div key={i.id} className="relative pl-6 pb-4">
-              <div className={`absolute -left-[11px] top-1 w-5 h-5 rounded-full flex items-center justify-center ${COR_TIPO[i.tipo] ?? "bg-gray-100 text-gray-600"}`}>
+              <div className={`absolute -left-[11px] top-1 w-5 h-5 rounded-full flex items-center justify-center ${COR_TIPO[i.tipo] ?? "bg-surface-linha text-ink-muted"}`}>
                 {ICONE_TIPO[i.tipo] ?? <MessageCircle className="w-3.5 h-3.5" />}
               </div>
               <div>
-                <div className="flex items-center gap-2 text-xs text-gray-400">
-                  <span className="font-medium text-gray-600">{LABELS_TIPO_INTERACAO[i.tipo] ?? i.tipo}</span>
+                <div className="flex items-center gap-2 text-xs text-ink-muted">
+                  <span className="font-medium text-ink-muted">{LABELS_TIPO_INTERACAO[i.tipo] ?? i.tipo}</span>
                   <span>•</span>
                   <span>{formatarDataHora(i.criadoEm)}</span>
                   <span>•</span>
                   <span>{i.usuario.nome}</span>
                 </div>
-                <p className="text-sm text-gray-700 mt-0.5">{i.descricao}</p>
+                <p className="text-sm text-ink mt-0.5">{i.descricao}</p>
               </div>
             </div>
           ))}

@@ -30,7 +30,7 @@ const assinatura = (eqs: EquipeMontador[]) => JSON.stringify(eqs.map((e) => [e.c
  * Montador visual de equipes: pool de colaboradores à esquerda e as equipes como blocos.
  * - Arrastar do pool para uma equipe ADICIONA (a pessoa pode estar em mais de uma equipe);
  * - arrastar de uma equipe para outra MOVE; para o pool, TIRA da equipe;
- * - soltar na faixa "Líder" (ou clicar na 👑) define o líder.
+ * - soltar na faixa "Líder" (ou clicar no ícone de coroa) define o líder.
  * No celular: segurar para arrastar, ou usar o botão "+" do colaborador.
  * Nada é gravado até "Salvar composição". Veículos não são alterados aqui.
  */
@@ -145,14 +145,14 @@ export function MontadorEquipes({ equipesIniciais, colaboradores, podeGerenciar 
             <h1 className="text-2xl font-bold text-ink tracking-tight">Montar equipes</h1>
             <p className="text-sm text-ink-muted mt-0.5">
               {podeGerenciar
-                ? <>Arraste os colaboradores para dentro das equipes. Solte na faixa <Crown className="inline w-3.5 h-3.5 text-amber-500" /> para definir o líder.</>
+                ? <>Arraste os colaboradores para dentro das equipes. Solte na faixa <Crown className="inline w-3.5 h-3.5 text-atencao-texto" /> para definir o líder.</>
                 : <>Somente consulta — você não tem permissão para alterar equipes.</>}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2 text-sm" data-resumo-montador>
           <span className="inline-flex items-center gap-1.5 rounded-lg border border-surface-border bg-white px-3 py-2"><Users className="w-4 h-4 text-primary-600" /><b className="tabular-nums">{equipes.length}</b> equipes</span>
-          <span className={cn("inline-flex items-center gap-1.5 rounded-lg border px-3 py-2", semEquipe.length ? "border-amber-200 bg-amber-50 text-amber-800" : "border-surface-border bg-white")} data-sem-equipe-total>
+          <span className={cn("inline-flex items-center gap-1.5 rounded-lg border px-3 py-2", semEquipe.length ? "border-atencao/20 bg-atencao-claro text-atencao-texto" : "border-surface-border bg-white")} data-sem-equipe-total>
             <UserX className="w-4 h-4" /><b className="tabular-nums">{semEquipe.length}</b> sem equipe
           </span>
         </div>
@@ -206,7 +206,7 @@ export function MontadorEquipes({ equipesIniciais, colaboradores, podeGerenciar 
             ))}
             {podeGerenciar && (
               <button type="button" onClick={novaEquipe} data-nova-equipe
-                className="min-h-[180px] rounded-2xl border-2 border-dashed border-surface-border hover:border-primary-400 text-ink-muted hover:text-primary-600 flex flex-col items-center justify-center gap-1.5 transition-colors">
+                className="min-h-[180px] rounded-card border-2 border-dashed border-surface-border hover:border-primary-400 text-ink-muted hover:text-primary-600 flex flex-col items-center justify-center gap-1.5 transition-colors">
                 <Plus className="w-6 h-6" /><span className="text-sm font-semibold">Nova equipe</span>
               </button>
             )}
@@ -226,7 +226,7 @@ export function MontadorEquipes({ equipesIniciais, colaboradores, podeGerenciar 
       {/* Adicionar sem arrastar (celular / acessibilidade) */}
       {adicionarDe && (
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={() => setAdicionarDe(null)}>
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-4 space-y-3" onClick={(ev) => ev.stopPropagation()} data-escolher-equipe>
+          <div className="bg-white rounded-card shadow-2xl w-full max-w-sm p-4 space-y-3" onClick={(ev) => ev.stopPropagation()} data-escolher-equipe>
             <p className="font-semibold text-ink">Adicionar {porId.get(adicionarDe)?.nome} em…</p>
             <div className="space-y-1.5 max-h-72 overflow-y-auto">
               {equipes.map((e) => {
@@ -247,8 +247,8 @@ export function MontadorEquipes({ equipesIniciais, colaboradores, podeGerenciar 
       {/* Barra de salvar */}
       {podeGerenciar && (
         <div className="fixed bottom-16 lg:bottom-4 inset-x-0 lg:left-auto lg:right-6 z-30 px-4 lg:px-0" data-barra-montador>
-          <div className="mx-auto lg:mx-0 max-w-xl flex items-center gap-3 bg-white/95 backdrop-blur border border-surface-border rounded-xl shadow-lg px-4 py-3">
-            <span className={cn("text-xs flex-1", erro ? "text-red-600" : ok ? "text-emerald-700" : alterado ? "text-amber-700" : "text-ink-muted")} data-status-montador>
+          <div className="mx-auto lg:mx-0 max-w-xl flex items-center gap-3 bg-white/95 backdrop-blur border border-surface-border rounded-card shadow-lg px-4 py-3">
+            <span className={cn("text-xs flex-1", erro ? "text-atrasado" : ok ? "text-ok-texto" : alterado ? "text-atencao-texto" : "text-ink-muted")} data-status-montador>
               {erro ? <><AlertTriangle className="inline w-3.5 h-3.5" /> {erro}</> : ok ? <><Check className="inline w-3.5 h-3.5" /> {ok}</> : alterado ? "Há alterações não salvas." : "Nenhuma alteração."}
             </span>
             <button type="button" disabled={!alterado || salvando} onClick={() => { setEquipes(base); setErro(""); }}
@@ -268,7 +268,7 @@ export function MontadorEquipes({ equipesIniciais, colaboradores, podeGerenciar 
 function Pool({ children }: { children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id: POOL });
   return (
-    <section ref={setNodeRef} className={cn("bg-white border rounded-2xl lg:sticky lg:top-20 transition-colors", isOver ? "border-primary-400 bg-primary-50/40" : "border-surface-border")}>
+    <section ref={setNodeRef} className={cn("bg-white border rounded-card lg:sticky lg:top-20 transition-colors", isOver ? "border-primary-400 bg-primary-50/40" : "border-surface-border")}>
       {children}
     </section>
   );
@@ -281,7 +281,7 @@ function CartaoColab({ id, c, equipes, desabilitado, onAdicionar }: {
   return (
     <li ref={setNodeRef} data-colab-pool={c.id} data-sem-equipe={!equipes.length || undefined}
       className={cn("flex items-center gap-2 rounded-lg border px-2 py-1.5 bg-white", isDragging && "opacity-40",
-        !equipes.length ? "border-amber-200 bg-amber-50/40" : "border-surface-border")}>
+        !equipes.length ? "border-atencao/20 bg-atencao-claro/40" : "border-surface-border")}>
       <span {...listeners} {...attributes} className={cn("flex items-center gap-2 min-w-0 flex-1 touch-none", !desabilitado && "cursor-grab active:cursor-grabbing")}>
         {!desabilitado && <GripVertical className="w-3.5 h-3.5 text-ink-subtle shrink-0" />}
         <AvatarTecnico nome={c.nome} fotoUrl={c.foto} size={28} />
@@ -293,7 +293,7 @@ function CartaoColab({ id, c, equipes, desabilitado, onAdicionar }: {
       <span className="flex items-center gap-0.5 shrink-0">
         {equipes.length
           ? equipes.slice(0, 3).map((e) => <span key={e.chave} title={e.nome} className="w-2.5 h-2.5 rounded-full border border-white" style={{ backgroundColor: e.cor }} />)
-          : <span className="text-[10px] font-semibold text-amber-700">sem equipe</span>}
+          : <span className="text-[10px] font-semibold text-atencao-texto">sem equipe</span>}
       </span>
       {onAdicionar && (
         <button type="button" onClick={onAdicionar} title="Adicionar a uma equipe" aria-label={`Adicionar ${c.nome} a uma equipe`}
@@ -314,7 +314,7 @@ function CaixaEquipe({ e, porId, podeGerenciar, onNome, onCor, onLider, onRemove
   const membros = e.membros.filter((m) => m !== e.liderId);
   return (
     <section ref={caixa.setNodeRef} data-equipe={e.chave} data-equipe-nome={e.nome}
-      className={cn("bg-white border-2 rounded-2xl overflow-hidden transition-colors", caixa.isOver ? "border-primary-400 bg-primary-50/30" : "border-surface-border")}>
+      className={cn("bg-white border-2 rounded-card overflow-hidden transition-colors", caixa.isOver ? "border-primary-400 bg-primary-50/30" : "border-surface-border")}>
       <header className="flex items-center gap-2 px-3 py-2.5 border-b border-surface-border" style={{ borderTop: `4px solid ${e.cor}` }}>
         <button type="button" onClick={onCor} disabled={!podeGerenciar} title="Trocar cor" className="w-4 h-4 rounded-full shrink-0 border border-white shadow" style={{ backgroundColor: e.cor }} />
         {podeGerenciar ? (
@@ -323,7 +323,7 @@ function CaixaEquipe({ e, porId, podeGerenciar, onNome, onCor, onLider, onRemove
         ) : <h3 className="flex-1 min-w-0 font-semibold text-ink truncate">{e.nome}</h3>}
         <span className="text-xs text-ink-muted tabular-nums shrink-0" data-qtd-membros>{e.membros.length} {e.membros.length === 1 ? "pessoa" : "pessoas"}</span>
         {podeGerenciar && !e.id && (
-          <button type="button" onClick={onDescartarNova} title="Descartar equipe nova" className="p-1 rounded text-ink-subtle hover:text-red-600"><X className="w-4 h-4" /></button>
+          <button type="button" onClick={onDescartarNova} title="Descartar equipe nova" className="p-1 rounded text-ink-subtle hover:text-atrasado"><X className="w-4 h-4" /></button>
         )}
         {podeGerenciar && e.id && <Pencil className="w-3.5 h-3.5 text-ink-subtle shrink-0" aria-hidden />}
         {e.id && <InativarRegistro url={`/api/equipes/${e.id}`} modulo="equipes" acaoReativar="gerenciar" ativo nome={e.nome} entidade="equipe" feminino aoConcluir={onInativada} />}
@@ -332,8 +332,8 @@ function CaixaEquipe({ e, porId, podeGerenciar, onNome, onCor, onLider, onRemove
       {/* Líder */}
       <div ref={lider.setNodeRef} data-lider-zona={e.chave}
         className={cn("mx-3 mt-3 rounded-lg border border-dashed px-2.5 py-2 flex items-center gap-2 transition-colors",
-          lider.isOver ? "border-amber-400 bg-amber-50" : liderC ? "border-amber-200 bg-amber-50/50" : "border-surface-border")}>
-        <Crown className="w-4 h-4 text-amber-500 shrink-0" />
+          lider.isOver ? "border-atencao bg-atencao-claro" : liderC ? "border-atencao/20 bg-atencao-claro/50" : "border-surface-border")}>
+        <Crown className="w-4 h-4 text-atencao-texto shrink-0" />
         {liderC
           ? <ChipMembro chave={e.chave} c={liderC} lider podeGerenciar={podeGerenciar} onRemover={() => onRemover(liderC.id)} />
           : <span className="text-xs text-ink-subtle">{podeGerenciar ? "Solte aqui o líder" : "Sem líder"}</span>}
@@ -364,17 +364,17 @@ function ChipMembro({ chave, c, lider, podeGerenciar, onLider, onRemover }: {
   return (
     <span ref={setNodeRef} role="listitem" data-membro={c.id} data-lider={lider || undefined}
       className={cn("inline-flex items-center gap-1.5 rounded-full border pl-0.5 pr-1 py-0.5 text-sm bg-white", isDragging && "opacity-40",
-        lider ? "border-amber-300" : "border-surface-border")}>
+        lider ? "border-atencao/40" : "border-surface-border")}>
       <span {...listeners} {...attributes} className={cn("inline-flex items-center gap-1.5 touch-none", podeGerenciar && "cursor-grab active:cursor-grabbing")}>
         <AvatarTecnico nome={c.nome} fotoUrl={c.foto} size={24} />
         <span className="max-w-[130px] truncate">{c.nome}</span>
-        {c.ausente && <span className="text-[10px] text-sky-700">{c.ausente}</span>}
+        {c.ausente && <span className="text-[10px] text-acento-hover">{c.ausente}</span>}
       </span>
       {podeGerenciar && !lider && onLider && (
-        <button type="button" onClick={onLider} title="Tornar líder" aria-label={`Tornar ${c.nome} líder`} className="p-0.5 rounded text-ink-subtle hover:text-amber-600"><Crown className="w-3.5 h-3.5" /></button>
+        <button type="button" onClick={onLider} title="Tornar líder" aria-label={`Tornar ${c.nome} líder`} className="p-0.5 rounded text-ink-subtle hover:text-atencao-texto"><Crown className="w-3.5 h-3.5" /></button>
       )}
       {podeGerenciar && (
-        <button type="button" onClick={onRemover} title="Tirar da equipe" aria-label={`Tirar ${c.nome} da equipe`} className="p-0.5 rounded text-ink-subtle hover:text-red-600"><X className="w-3.5 h-3.5" /></button>
+        <button type="button" onClick={onRemover} title="Tirar da equipe" aria-label={`Tirar ${c.nome} da equipe`} className="p-0.5 rounded text-ink-subtle hover:text-atrasado"><X className="w-3.5 h-3.5" /></button>
       )}
     </span>
   );

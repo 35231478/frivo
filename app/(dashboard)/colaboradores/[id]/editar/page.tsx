@@ -45,7 +45,7 @@ export default async function EditarColaboradorPage({ params }: { params: Promis
         actions={<InativarRegistro url={`/api/tecnicos/${colaborador.id}`} modulo="equipes" acaoReativar="gerenciar" variante="botao" ativo={colaborador.ativo} nome={colaborador.nome} entidade="colaborador" />}
       />
       {!colaborador.ativo && (
-        <div data-aviso-inativo className="mb-4 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-3 text-sm">
+        <div data-aviso-inativo className="mb-4 bg-surface-page border border-surface-border text-ink rounded-card px-4 py-3 text-sm">
           Este colaborador está <strong>inativo</strong>: não aparece nas listas nem nos seletores de técnico. Use “Reativar” para voltar a usá-lo.
         </div>
       )}

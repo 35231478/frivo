@@ -26,13 +26,13 @@ const LABELS_STATUS: Record<string, string> = {
   ATIVO: "Ativo", SUSPENSO: "Suspenso", EM_RENOVACAO: "Em renovação", ENCERRADO: "Encerrado", CANCELADO: "Cancelado", VENCIDO: "Vencido", AGUARDANDO_ASSINATURA: "Aguard. Assinatura",
 };
 const COR_STATUS: Record<string, string> = {
-  ATIVO: "bg-success-50 text-success-700", SUSPENSO: "bg-amber-50 text-amber-700", EM_RENOVACAO: "bg-blue-50 text-blue-700",
-  ENCERRADO: "bg-slate-100 text-slate-600", CANCELADO: "bg-red-50 text-red-700", VENCIDO: "bg-red-50 text-red-700", AGUARDANDO_ASSINATURA: "bg-primary-50 text-primary-700",
+  ATIVO: "bg-ok-claro text-ok-texto", SUSPENSO: "bg-atencao-claro text-atencao-texto", EM_RENOVACAO: "bg-acento-claro text-acento-hover",
+  ENCERRADO: "bg-surface-linha text-ink-muted", CANCELADO: "bg-previsto-claro text-previsto-texto", VENCIDO: "bg-atrasado-claro text-atrasado-texto", AGUARDANDO_ASSINATURA: "bg-acento-claro text-acento-hover",
 };
 const COR_FREQ: Record<string, string> = {
-  SEMANAL: "bg-slate-100 text-slate-600", QUINZENAL: "bg-slate-100 text-slate-600",
-  MENSAL: "bg-primary-50 text-primary-700", BIMESTRAL: "bg-cyan-50 text-cyan-700",
-  TRIMESTRAL: "bg-violet-50 text-violet-700", SEMESTRAL: "bg-amber-50 text-amber-700", ANUAL: "bg-success-50 text-success-700",
+  SEMANAL: "bg-previsto-claro text-previsto-texto", QUINZENAL: "bg-previsto-claro text-previsto-texto",
+  MENSAL: "bg-previsto-claro text-previsto-texto", BIMESTRAL: "bg-previsto-claro text-previsto-texto",
+  TRIMESTRAL: "bg-previsto-claro text-previsto-texto", SEMESTRAL: "bg-previsto-claro text-previsto-texto", ANUAL: "bg-previsto-claro text-previsto-texto",
 };
 
 const FILTROS = ["busca", "status", "frequencia", "vigenciaInicio", "vigenciaFim", "valorMin", "valorMax", "clienteId"];
@@ -86,8 +86,8 @@ export function ContratosListaClient({ contratos, total, pagina, porPagina, soma
     { label: "Contratos ativos", valor: String(resumo.ativos), icone: FileText, cor: "text-primary-600", bg: "bg-primary-50" },
     { label: "Valor mensal total", valor: formatarMoeda(resumo.valorMensalTotal), icone: Wallet, cor: "text-success-700", bg: "bg-success-50" },
     { label: "Valor anual total", valor: formatarMoeda(resumo.valorAnualTotal), icone: BarChart3, cor: "text-success-700", bg: "bg-success-50" },
-    { label: "Vencendo em 30 dias", valor: String(resumo.vencendo), icone: CalendarClock, cor: "text-amber-600", bg: "bg-amber-50" },
-    { label: "Vencidos", valor: String(resumo.vencidos), icone: AlertTriangle, cor: "text-red-600", bg: "bg-red-50" },
+    { label: "Vencendo em 30 dias", valor: String(resumo.vencendo), icone: CalendarClock, cor: "text-atencao-texto", bg: "bg-atencao-claro" },
+    { label: "Vencidos", valor: String(resumo.vencidos), icone: AlertTriangle, cor: "text-atrasado", bg: "bg-atrasado-claro" },
   ];
 
   return (
@@ -161,7 +161,7 @@ export function ContratosListaClient({ contratos, total, pagina, porPagina, soma
 
           <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
             <span className="text-sm text-ink-muted" data-contador><strong className="text-ink">{total.toLocaleString("pt-BR")}</strong> contrato(s){filtrosAtivos > 0 && <span className="ml-2 inline-flex items-center gap-1 text-xs font-semibold bg-primary-50 text-primary-700 px-2 py-0.5 rounded-full"><Filter className="w-3 h-3" /> {filtrosAtivos} filtro(s)</span>}</span>
-            {filtrosAtivos > 0 && <button type="button" onClick={limpar} className="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-700"><X className="w-3.5 h-3.5" /> Limpar filtros</button>}
+            {filtrosAtivos > 0 && <button type="button" onClick={limpar} className="inline-flex items-center gap-1 text-xs font-medium text-atrasado hover:text-atrasado-texto"><X className="w-3.5 h-3.5" /> Limpar filtros</button>}
           </div>
         </div>
 
@@ -176,14 +176,14 @@ export function ContratosListaClient({ contratos, total, pagina, porPagina, soma
         {/* Celular: um cartão por contrato */}
         <ul className="md:hidden divide-y divide-surface-border" data-cartoes>
           {contratos.map((ct) => (
-            <li key={ct.id} data-cartao={ct.id} className={cn("flex items-start gap-3 px-4 py-3", ct.vencido && "bg-red-50/60", (ct.status === "ENCERRADO" || ct.status === "CANCELADO") && "opacity-60")}>
+            <li key={ct.id} data-cartao={ct.id} className={cn("flex items-start gap-3 px-4 py-3", ct.vencido && "bg-atrasado-claro/60", (ct.status === "ENCERRADO" || ct.status === "CANCELADO") && "opacity-60")}>
               {massa && <span className="pt-0.5"><CheckboxLinha id={ct.id} rotulo={ct.numero} /></span>}
               <Link href={`/contratos/${ct.id}`} className="min-w-0 flex-1">
                 <p className="text-sm"><span className="font-mono font-semibold text-primary-600">{ct.numero}</span> <span className="text-ink font-medium">{ct.cliente}</span></p>
                 <p className="text-xs text-ink-muted">{LABELS_PERIODICIDADE[ct.periodicidade] ?? ct.periodicidade} · {ct.dataFim ? `até ${formatarData(ct.dataFim)}` : "indeterminado"}</p>
                 <div className="mt-1.5 flex items-center gap-2">
-                  {ct.vencido ? <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-700">Vencido</span>
-                    : ct.vencendo ? <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">Vence em breve</span>
+                  {ct.vencido ? <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-atrasado-claro text-atrasado-texto">Vencido</span>
+                    : ct.vencendo ? <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-atencao-claro text-atencao-texto">Vence em breve</span>
                     : <span className={cn("text-[11px] font-semibold px-2 py-0.5 rounded-full", COR_STATUS[ct.status])}>{LABELS_STATUS[ct.status] ?? ct.status}</span>}
                   <span className="ml-auto text-sm font-semibold text-ink">{formatarMoeda(ct.valorMensal)}<span className="text-xs font-normal text-ink-muted">/mês</span></span>
                 </div>
@@ -209,7 +209,7 @@ export function ContratosListaClient({ contratos, total, pagina, porPagina, soma
             </thead>
             <tbody>
               {contratos.map((ct, idx) => (
-                <tr key={ct.id} className={cn("border-b border-surface-border hover:bg-primary-50/40 transition-colors", idx % 2 === 1 && "bg-surface-alt/30", ct.vencido && "bg-red-50/60 hover:bg-red-50", (ct.status === "ENCERRADO" || ct.status === "CANCELADO") && "opacity-60")}>
+                <tr key={ct.id} className={cn("border-b border-surface-border hover:bg-primary-50/40 transition-colors", idx % 2 === 1 && "bg-surface-alt/30", ct.vencido && "bg-atrasado-claro/60 hover:bg-atrasado-claro", (ct.status === "ENCERRADO" || ct.status === "CANCELADO") && "opacity-60")}>
                   {massa && <td className="w-px pl-4 pr-1 py-3"><CheckboxLinha id={ct.id} rotulo={ct.numero} /></td>}
                   <td className="px-4 py-3 whitespace-nowrap">
                     <Link href={`/contratos/${ct.id}`} className="font-mono font-semibold text-primary-600 hover:underline">{ct.numero}</Link>
@@ -224,12 +224,12 @@ export function ContratosListaClient({ contratos, total, pagina, porPagina, soma
                   <td className="px-4 py-3 text-right text-ink font-medium">{formatarMoeda(ct.valorMensal)}</td>
                   <td className="px-4 py-3 text-right text-ink-muted hidden md:table-cell">{ct.valorMensal != null ? formatarMoeda(ct.valorMensal * 12) : "—"}</td>
                   <td className="px-4 py-3 text-ink-muted hidden lg:table-cell">{formatarData(ct.dataInicio)}</td>
-                  <td className={cn("px-4 py-3 hidden lg:table-cell", ct.vencido ? "text-red-600 font-medium" : "text-ink-muted")}>{ct.dataFim ? formatarData(ct.dataFim) : "indeterminado"}</td>
+                  <td className={cn("px-4 py-3 hidden lg:table-cell", ct.vencido ? "text-atrasado font-medium" : "text-ink-muted")}>{ct.dataFim ? formatarData(ct.dataFim) : "indeterminado"}</td>
                   <td className="px-4 py-3">
                     {ct.vencido ? (
-                      <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-red-50 text-red-700">Vencido</span>
+                      <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-atrasado-claro text-atrasado-texto">Vencido</span>
                     ) : ct.vencendo ? (
-                      <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700">Vence em breve</span>
+                      <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-atencao-claro text-atencao-texto">Vence em breve</span>
                     ) : (
                       <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full", COR_STATUS[ct.status])}>{LABELS_STATUS[ct.status] ?? ct.status}</span>
                     )}

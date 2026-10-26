@@ -72,7 +72,7 @@ export default async function OrcamentoDetalhePage({
         }
       />
       {orcamento.status === "CANCELADO" && (
-        <div data-aviso-inativo className="bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-3 text-sm">
+        <div data-aviso-inativo className="bg-surface-page border border-surface-border text-ink rounded-card px-4 py-3 text-sm">
           Este orçamento está <strong>cancelado</strong> (inativado) e não aparece na lista padrão. Use “Reabrir” para voltar a editá-lo.
         </div>
       )}
@@ -91,7 +91,7 @@ export default async function OrcamentoDetalhePage({
       {ehProposta && orcamento.status === "APROVADO" && (
         <>
           {orcamento.assinadoEm && (
-            <div className="bg-success-50 border-2 border-success-500 text-success-700 rounded-xl px-5 py-3 flex items-center gap-2 text-sm font-semibold">
+            <div className="bg-success-50 border-2 border-success-500 text-success-700 rounded-card px-5 py-3 flex items-center gap-2 text-sm font-semibold">
               <CheckCircle2 className="w-5 h-5 shrink-0" /> Aprovada pelo cliente em {formatarData(orcamento.assinadoEm, "dd/MM/yyyy 'às' HH:mm")}
             </div>
           )}
@@ -100,7 +100,7 @@ export default async function OrcamentoDetalhePage({
       )}
       {ehProposta && orcamento.contratoGerado && (
         <Link href={`/contratos/${orcamento.contratoGerado.id}/editar`}
-          className="bg-primary-50 border-2 border-primary-300 text-primary-700 rounded-xl px-5 py-3 flex items-center gap-2 text-sm font-semibold hover:bg-primary-100 transition-colors">
+          className="bg-primary-50 border-2 border-primary-300 text-primary-700 rounded-card px-5 py-3 flex items-center gap-2 text-sm font-semibold hover:bg-primary-100 transition-colors">
           <FileSignature className="w-5 h-5 shrink-0" /> Convertida em contrato {orcamento.contratoGerado.numero}
           <ExternalLink className="w-3.5 h-3.5" />
         </Link>

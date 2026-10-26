@@ -66,7 +66,7 @@ export function EquipamentoAtivoBotao({
         onClick={executar}
         className={cn(
           "p-1 rounded-md hover:bg-surface-alt disabled:opacity-50",
-          ativo ? "text-ink-muted hover:text-red-600" : "text-ink-muted hover:text-emerald-600",
+          ativo ? "text-ink-muted hover:text-atrasado" : "text-ink-muted hover:text-ok-texto",
         )}
       >
         <Icone className={cn("w-4 h-4", carregando && "animate-spin")} />
@@ -82,8 +82,8 @@ export function EquipamentoAtivoBotao({
       className={cn(
         "inline-flex items-center gap-1.5 text-sm border rounded-lg px-3 py-2 disabled:opacity-50 transition-colors",
         ativo
-          ? "text-red-600 border-red-200 hover:bg-red-50"
-          : "text-emerald-700 border-emerald-200 hover:bg-emerald-50",
+          ? "text-atrasado border-atrasado/20 hover:bg-atrasado-claro"
+          : "text-ok-texto border-ok/20 hover:bg-ok-claro",
       )}
     >
       <Icone className={cn("w-4 h-4", carregando && "animate-spin")} /> {rotulo}

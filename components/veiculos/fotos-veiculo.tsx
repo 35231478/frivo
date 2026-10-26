@@ -96,7 +96,7 @@ export function FotosVeiculo({ fotos, rotulos, onChange, somenteLeitura }: {
         ))}
       </div>
 
-      <div data-slot="OUTRO" className="rounded-xl border border-surface-border p-2.5">
+      <div data-slot="OUTRO" className="rounded-card border border-surface-border p-2.5">
         <div className="flex items-center justify-between gap-2 mb-2">
           <p className="text-xs font-semibold text-ink">Outros <span className="font-normal text-ink-muted">(painel, interior, avarias…)</span></p>
           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-surface-alt text-ink-muted">Opcional · até {MAX_OUTRAS_FOTOS}</span>
@@ -109,7 +109,7 @@ export function FotosVeiculo({ fotos, rotulos, onChange, somenteLeitura }: {
               <img src={f} alt={`Outra foto ${i + 1}`} className="w-20 h-20 rounded-lg object-cover border border-surface-border" />
               {!somenteLeitura && (
                 <button type="button" title="Remover foto" onClick={() => emitir(porAngulo, outros.filter((_, j) => j !== i))}
-                  className="absolute -top-1.5 -right-1.5 bg-white border border-surface-border text-ink-muted hover:text-red-500 rounded-full p-0.5 shadow">
+                  className="absolute -top-1.5 -right-1.5 bg-white border border-surface-border text-ink-muted hover:text-atrasado rounded-full p-0.5 shadow">
                   <X className="w-3 h-3" />
                 </button>
               )}
@@ -125,7 +125,7 @@ export function FotosVeiculo({ fotos, rotulos, onChange, somenteLeitura }: {
       </div>
 
       {processando && <p className="flex items-center gap-1.5 text-xs text-ink-muted" data-fotos-processando><Loader2 className="w-3.5 h-3.5 animate-spin" /> Otimizando a foto…</p>}
-      {erro && <p className="text-xs text-red-600">{erro}</p>}
+      {erro && <p className="text-xs text-atrasado">{erro}</p>}
       <p className="text-xs text-ink-subtle">
         A foto da <strong className="text-ink-muted">Frente</strong> é a capa do veículo (lista e cadastro). As fotos são otimizadas automaticamente antes de salvar.
         {!porAngulo.FRENTE && fotos.length > 0 && " Sem a frente, a capa fica com a próxima foto."}

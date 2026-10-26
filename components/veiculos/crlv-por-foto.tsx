@@ -102,8 +102,8 @@ export function CrlvPorFoto({ onAplicar, onConferindo, compacto }: {
   );
 
   const privacidade = (
-    <div data-aviso-privacidade className="flex items-start gap-2 text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-      <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-slate-500" />
+    <div data-aviso-privacidade className="flex items-start gap-2 text-xs text-ink bg-surface-page border border-surface-border rounded-lg px-3 py-2">
+      <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-ink-muted" />
       <span>
         <strong>Privacidade:</strong> a foto do documento é enviada para a <strong>Anthropic</strong> (IA Claude), fora do Frivo, só para ler o texto, e
         <strong> não é guardada</strong> no sistema. Lemos apenas os dados do <strong>veículo</strong>: nome, CPF/CNPJ e endereço do proprietário são ignorados e nunca salvos.
@@ -114,11 +114,11 @@ export function CrlvPorFoto({ onAplicar, onConferindo, compacto }: {
   /* ── Aplicado ── */
   if (etapa === "aplicado") {
     return (
-      <div data-crlv-aplicado className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/60 px-4 py-3">
-        <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-        <p className="text-sm text-emerald-900 flex-1">Dados do documento conferidos e aplicados. Revise os campos abaixo, adicione as fotos e salve.</p>
+      <div data-crlv-aplicado className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-card border border-ok/20 bg-ok-claro/60 px-4 py-3">
+        <CheckCircle2 className="w-5 h-5 text-ok-texto shrink-0" />
+        <p className="text-sm text-ok-texto flex-1">Dados do documento conferidos e aplicados. Revise os campos abaixo, adicione as fotos e salve.</p>
         {inputs}
-        <button type="button" onClick={() => { recomecar(); camera.current?.click(); }} className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-800 hover:text-emerald-900">
+        <button type="button" onClick={() => { recomecar(); camera.current?.click(); }} className="inline-flex items-center gap-1.5 text-sm font-medium text-ok-texto hover:text-ok-texto">
           <RotateCcw className="w-4 h-4" /> Ler outro documento
         </button>
       </div>
@@ -129,14 +129,14 @@ export function CrlvPorFoto({ onAplicar, onConferindo, compacto }: {
   if (etapa === "conferencia") {
     const marcados = CAMPOS_CRLV.filter((c) => duvidosos.has(c)).length;
     return (
-      <section data-conferencia-crlv className="rounded-2xl border border-primary-200 bg-white shadow-sm overflow-hidden">
+      <section data-conferencia-crlv className="rounded-card border border-primary-200 bg-white shadow-sm overflow-hidden">
         <header className="flex items-start gap-3 px-5 py-4 border-b border-surface-border bg-primary-50/40">
           <Sparkles className="w-5 h-5 text-primary-600 shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
             <h2 className="font-semibold text-ink">Confira o que a IA leu do documento</h2>
             <p className="text-xs text-ink-muted mt-0.5">
               Nada foi salvo ainda. Corrija o que estiver errado e confirme para preencher o cadastro.
-              {marcados > 0 && <> <strong className="text-amber-700">{marcados} campo(s) com dúvida</strong> estão destacados.</>}
+              {marcados > 0 && <> <strong className="text-atencao-texto">{marcados} campo(s) com dúvida</strong> estão destacados.</>}
             </p>
           </div>
         </header>
@@ -152,12 +152,12 @@ export function CrlvPorFoto({ onAplicar, onConferindo, compacto }: {
             {CAMPOS_CRLV.map((c) => {
               const duv = duvidosos.has(c); const naoLido = !lidos.has(c);
               const rot = CAMPOS_CRLV_CADASTRO[c].rotulo;
-              const cls = cn(duv && "border-amber-400 bg-amber-50 focus:border-amber-500");
+              const cls = cn(duv && "border-atencao bg-atencao-claro focus:border-atencao");
               return (
                 <label key={c} className="block" data-campo-crlv={c} data-duvidoso={duv || undefined}>
                   <span className="flex items-center gap-1.5 text-xs font-semibold text-ink mb-1">
                     {rot}
-                    {duv && <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 rounded">confira</span>}
+                    {duv && <span className="text-[10px] font-bold text-atencao-texto bg-atencao-claro px-1.5 rounded">confira</span>}
                     {naoLido && <span className="text-[10px] font-medium text-ink-subtle">não lido</span>}
                   </span>
                   {c === "combustivel" ? (
@@ -203,12 +203,12 @@ export function CrlvPorFoto({ onAplicar, onConferindo, compacto }: {
   const lendo = etapa === "lendo";
   return (
     <div data-atalho-crlv className={cn(
-      "rounded-2xl border border-primary-200 bg-gradient-to-br from-primary-50 via-white to-white shadow-sm",
+      "rounded-card border border-acento/30 bg-acento-claro",
       compacto ? "p-4" : "p-5 sm:p-6",
     )}>
       {inputs}
       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-        <span className={cn("rounded-xl bg-primary-500 text-white flex items-center justify-center shrink-0 shadow-sm", compacto ? "w-10 h-10" : "w-12 h-12")}>
+        <span className={cn("rounded-card bg-primary-500 text-white flex items-center justify-center shrink-0 shadow-sm", compacto ? "w-10 h-10" : "w-12 h-12")}>
           {lendo ? <Loader2 className="w-6 h-6 animate-spin" /> : <FileText className="w-6 h-6" />}
         </span>
         <div className="flex-1 min-w-0">
@@ -233,10 +233,10 @@ export function CrlvPorFoto({ onAplicar, onConferindo, compacto }: {
         </div>
       </div>
       {qualidade && (qualidade.escura || qualidade.borrada) && !erro && lendo && (
-        <p className="mt-3 text-xs text-amber-800">A foto parece {qualidade.escura ? "escura" : "tremida"} — se a leitura falhar, tente de novo com mais luz.</p>
+        <p className="mt-3 text-xs text-atencao-texto">A foto parece {qualidade.escura ? "escura" : "tremida"} — se a leitura falhar, tente de novo com mais luz.</p>
       )}
       {erro && (
-        <div data-erro-crlv className="mt-3 flex items-start gap-2 text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+        <div data-erro-crlv className="mt-3 flex items-start gap-2 text-sm text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> <span>{erro}</span>
         </div>
       )}

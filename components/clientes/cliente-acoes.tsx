@@ -88,7 +88,7 @@ export function ClienteAcoes({ id, nome, ativo = true }: { id: string; nome?: st
                 <button
                   type="button"
                   onClick={inativar}
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-atrasado hover:bg-atrasado-claro"
                 >
                   <Ban className="w-3.5 h-3.5" /> Inativar cliente
                 </button>

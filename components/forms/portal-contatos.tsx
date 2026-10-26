@@ -49,7 +49,7 @@ export function PortalContatos({ clienteId, ativo, onGerenciar }: { clienteId: s
 
   if (contatos.length === 0) {
     return (
-      <div className="text-center py-8 border border-dashed border-surface-border rounded-xl">
+      <div className="text-center py-8 border border-dashed border-surface-border rounded-card">
         <Headset className="w-6 h-6 text-ink-subtle mx-auto mb-2" />
         <p className="text-sm text-ink-muted">Nenhum contato cadastrado para conceder acesso.</p>
         <button type="button" onClick={onGerenciar} className="inline-flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 mt-1">
@@ -73,7 +73,7 @@ export function PortalContatos({ clienteId, ativo, onGerenciar }: { clienteId: s
                 <p className="text-sm font-semibold text-ink flex items-center gap-1.5"><UserCircle className="w-4 h-4 text-primary-600" /> {c.nome}</p>
                 <p className="text-xs text-ink-muted flex items-center gap-1"><Mail className="w-3 h-3" /> {c.email || "sem e-mail"}</p>
               </div>
-              <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", temAcesso ? "bg-success-50 text-success-700" : "bg-slate-100 text-slate-500")}>
+              <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", temAcesso ? "bg-success-50 text-success-700" : "bg-surface-linha text-ink-muted")}>
                 {temAcesso ? "Acesso ativo" : "Sem acesso"}
               </span>
             </div>

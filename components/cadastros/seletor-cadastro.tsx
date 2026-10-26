@@ -125,7 +125,7 @@ export function SeletorCadastro({
           <option value={VALOR_CRIAR} data-criar>＋ {def.feminino ? "Nova" : "Novo"} {def.singular}…</option>
         )}
       </Select>
-      {!itensProp && proprio.erro && <p className="text-xs text-red-600 mt-1">{proprio.erro}</p>}
+      {!itensProp && proprio.erro && <p className="text-xs text-atrasado mt-1">{proprio.erro}</p>}
       {comCriar && (
         <CadastroRapidoModal
           aberto={modal} onFechar={() => setModal(false)}

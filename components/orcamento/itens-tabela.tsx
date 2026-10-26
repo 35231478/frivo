@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { cn, formatarMoeda } from "@/lib/utils";
-import { Plus, Trash2, Search, X, Lock, LockOpen } from "lucide-react";
+import { AlertTriangle, Plus, Trash2, Search, X, Lock, LockOpen } from "lucide-react";
 import {
   CadastroRapidoModal, usePodeCriar, type CampoRapido, type EntidadeCadastro, type PermissaoCriar,
 } from "@/components/ui/select-cadastro-rapido";
@@ -153,15 +153,15 @@ export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange,
                       <span
                         className={cn(
                           "inline-block mt-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded",
-                          it.origemPreco === "contrato" && "bg-success-50 text-success-700",
-                          it.origemPreco === "padrao" && "bg-slate-100 text-slate-500",
-                          it.origemPreco === "fora_tabela" && "bg-amber-50 text-amber-700",
+                          it.origemPreco === "contrato" && "bg-ok-claro text-ok-texto",
+                          it.origemPreco === "padrao" && "bg-surface-linha text-ink-muted",
+                          it.origemPreco === "fora_tabela" && "bg-atencao-claro text-atencao-texto",
                         )}
                       >
                         {it.origemPreco === "contrato"
                           ? "Preço de contrato"
                           : it.origemPreco === "fora_tabela"
-                            ? "⚠️ Fora da tabela"
+                            ? <><AlertTriangle className="inline w-3 h-3 -mt-px mr-0.5" aria-hidden />Fora da tabela</>
                             : "Preço padrão"}
                       </span>
                     )}
@@ -216,7 +216,7 @@ export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange,
                     <button
                       type="button"
                       onClick={() => remover(it.id)}
-                      className="p-1.5 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                      className="p-1.5 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded transition-colors"
                       title="Remover"
                     >
                       <Trash2 className="w-3.5 h-3.5" />

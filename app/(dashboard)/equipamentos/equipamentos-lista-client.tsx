@@ -126,24 +126,24 @@ export function EquipamentosListaClient({ itens, total, filtros: f, opcoes, resu
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
         <ChipResumo
           ativo={!f.garantia && !f.qr} onClick={() => navegar({ garantia: null, qr: null })}
-          icone={CheckCircle2} cor="text-emerald-700" rotulo="Ativos" valor={resumo.ativos}
+          icone={CheckCircle2} cor="text-ok-texto" rotulo="Ativos" valor={resumo.ativos}
         />
         <ChipResumo
           ativo={f.garantia === "vencendo"} onClick={() => navegar({ garantia: f.garantia === "vencendo" ? null : "vencendo" })}
-          icone={ShieldAlert} cor="text-amber-700" rotulo="Garantia vencendo" valor={resumo.vencendo}
+          icone={ShieldAlert} cor="text-atencao-texto" rotulo="Garantia vencendo" valor={resumo.vencendo}
         />
         <ChipResumo
           ativo={f.garantia === "vencida"} onClick={() => navegar({ garantia: f.garantia === "vencida" ? null : "vencida" })}
-          icone={ShieldX} cor="text-red-600" rotulo="Garantia vencida" valor={resumo.vencidas}
+          icone={ShieldX} cor="text-atrasado" rotulo="Garantia vencida" valor={resumo.vencidas}
         />
         <ChipResumo
           ativo={f.qr === "sem"} onClick={() => navegar({ qr: f.qr === "sem" ? null : "sem" })}
-          icone={QrCode} cor="text-slate-600" rotulo="Sem QR" valor={resumo.semQr}
+          icone={QrCode} cor="text-ink-muted" rotulo="Sem QR" valor={resumo.semQr}
         />
       </div>
 
       {/* ── Busca + filtros ── */}
-      <div className="bg-white border border-surface-border rounded-xl p-3 sm:p-4 space-y-3">
+      <div className="bg-white border border-surface-border rounded-card p-3 sm:p-4 space-y-3">
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2">
           <CampoBusca valor={busca} onChange={setBusca} carregando={pendente} sugerir={sugerir} onEscolher={(s) => s.href && roteador.push(s.href)} placeholder="Buscar nome, modelo, marca, nº série, TAG, cliente, setor…" />
           <div className="flex items-center gap-2">
@@ -218,7 +218,7 @@ export function EquipamentosListaClient({ itens, total, filtros: f, opcoes, resu
             </>
           )}
           {filtrosAtivos > 0 && (
-            <button onClick={limpar} className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-ink-muted hover:text-red-500">
+            <button onClick={limpar} className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-ink-muted hover:text-atrasado">
               <X className="w-3.5 h-3.5" /> Limpar filtros ({filtrosAtivos})
             </button>
           )}
@@ -238,7 +238,7 @@ export function EquipamentosListaClient({ itens, total, filtros: f, opcoes, resu
       {/* ── Resultados ── */}
       <div className={cn("transition-opacity", pendente && "opacity-60")}>
         {itens.length === 0 ? (
-          <div className="bg-white border border-surface-border rounded-xl text-center py-16">
+          <div className="bg-white border border-surface-border rounded-card text-center py-16">
             <Thermometer className="w-10 h-10 text-ink-subtle mx-auto mb-3" />
             <p className="text-ink font-medium">Nenhum equipamento encontrado</p>
             <p className="text-sm text-ink-muted mt-1">
@@ -249,7 +249,7 @@ export function EquipamentosListaClient({ itens, total, filtros: f, opcoes, resu
         ) : (
           <>
             {/* Celular: lista compacta (sempre) */}
-            <div className="md:hidden bg-white border border-surface-border rounded-xl divide-y divide-surface-border overflow-hidden">
+            <div className="md:hidden bg-white border border-surface-border rounded-card divide-y divide-surface-border overflow-hidden">
               {itens.map((e) => (
                 <div key={e.id} className="flex items-stretch">
                   {massa && <div className="pl-3 pt-4"><CheckboxLinha id={e.id} rotulo={descricaoEquipamento(e)} /></div>}
@@ -282,7 +282,7 @@ function Tabela({
 }) {
   const router = useRouter();
   return (
-    <div className="bg-white border border-surface-border rounded-xl overflow-x-auto">
+    <div className="bg-white border border-surface-border rounded-card overflow-x-auto">
       <table className="w-full text-sm">
         <thead className="bg-surface-alt text-ink-muted text-[11px] uppercase tracking-wide border-b border-surface-border">
           <tr>
@@ -357,7 +357,7 @@ function AcoesLinha({ e, podeEditar }: { e: EquipLinha; podeEditar: boolean }) {
           <Link
             href={`/equipamentos/${e.id}/editar?aba=qrcode`}
             title={e.qrcodeId ? "QR Code vinculado" : "Gerar/vincular QR Code"}
-            className={cn(btn, e.qrcodeId && "text-emerald-600")}
+            className={cn(btn, e.qrcodeId && "text-ok-texto")}
           >
             <QrCode className="w-4 h-4" />
           </Link>
@@ -403,7 +403,7 @@ function Cards({ itens, massa }: { itens: EquipLinha[]; massa: boolean }) {
       {itens.map((e) => (
         <div key={e.id} className="relative">
         {massa && <CheckboxLinha id={e.id} rotulo={descricaoEquipamento(e)} className="absolute top-2 left-2 z-10 bg-white rounded p-1.5 m-0 shadow-sm" />}
-        <Link href={`/equipamentos/${e.id}`} className={cn("block h-full group bg-white border border-surface-border rounded-xl overflow-hidden hover:shadow-md hover:border-primary-300 transition-all", !e.ativo && "opacity-60")}>
+        <Link href={`/equipamentos/${e.id}`} className={cn("block h-full group bg-white border border-surface-border rounded-card overflow-hidden hover:shadow-md hover:border-primary-300 transition-all", !e.ativo && "opacity-60")}>
           <div className="aspect-[16/9] bg-surface-alt overflow-hidden">
             {e.foto
               // eslint-disable-next-line @next/next/no-img-element

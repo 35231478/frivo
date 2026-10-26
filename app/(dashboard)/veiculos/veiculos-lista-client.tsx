@@ -93,27 +93,27 @@ export function VeiculosListaClient({ itens, total, filtros: f, tipos, resumo }:
       {/* ── Indicadores da frota (atalhos de filtro) ── */}
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1" data-indicadores>
         <ChipResumo id="ativos" ativo={f.status === "ativo" && !f.aviso} onClick={() => navegar({ status: null, aviso: null })}
-          icone={CheckCircle2} cor="text-emerald-700" rotulo="Em uso" valor={resumo.ativos} />
+          icone={CheckCircle2} cor="text-ok-texto" rotulo="Em uso" valor={resumo.ativos} />
         <ChipResumo id="manutencao" ativo={f.status === "manutencao"} onClick={() => navegar({ status: f.status === "manutencao" ? null : "manutencao", aviso: null })}
-          icone={Wrench} cor="text-amber-700" rotulo="Em manutenção" valor={resumo.manutencao} />
+          icone={Wrench} cor="text-atencao-texto" rotulo="Em manutenção" valor={resumo.manutencao} />
         <ChipResumo id="inativos" ativo={f.status === "inativo"} onClick={() => navegar({ status: f.status === "inativo" ? null : "inativo", aviso: null })}
-          icone={Ban} cor="text-slate-500" rotulo="Inativos" valor={resumo.inativos} />
+          icone={Ban} cor="text-ink-muted" rotulo="Inativos" valor={resumo.inativos} />
         <ChipResumo id="doc_vencido" ativo={f.aviso === "doc_vencido"} onClick={() => alternarAviso("doc_vencido")}
-          icone={FileX} cor="text-red-600" rotulo="Documento vencido" valor={resumo.docVencido} />
+          icone={FileX} cor="text-atrasado" rotulo="Documento vencido" valor={resumo.docVencido} />
         <ChipResumo id="doc_vencendo" ativo={f.aviso === "doc_vencendo"} onClick={() => alternarAviso("doc_vencendo")}
-          icone={FileWarning} cor="text-amber-700" rotulo="Documento vencendo" valor={resumo.docVencendo} />
+          icone={FileWarning} cor="text-atencao-texto" rotulo="Documento vencendo" valor={resumo.docVencendo} />
         <ChipResumo id="revisao_vencida" ativo={f.aviso === "revisao_vencida"} onClick={() => alternarAviso("revisao_vencida")}
-          icone={Wrench} cor="text-red-600" rotulo="Revisão vencida" valor={resumo.revisaoVencida} />
+          icone={Wrench} cor="text-atrasado" rotulo="Revisão vencida" valor={resumo.revisaoVencida} />
         <ChipResumo id="revisao_proxima" ativo={f.aviso === "revisao_proxima"} onClick={() => alternarAviso("revisao_proxima")}
-          icone={Wrench} cor="text-amber-700" rotulo="Revisão em 30 dias" valor={resumo.revisaoProxima} />
+          icone={Wrench} cor="text-atencao-texto" rotulo="Revisão em 30 dias" valor={resumo.revisaoProxima} />
         {resumo.semChecklist != null && (
           <ChipResumo id="sem_checklist" ativo={f.aviso === "sem_checklist"} onClick={() => alternarAviso("sem_checklist")}
-            icone={ClipboardX} cor="text-slate-600" rotulo="Sem checklist hoje" valor={resumo.semChecklist} />
+            icone={ClipboardX} cor="text-ink-muted" rotulo="Sem checklist hoje" valor={resumo.semChecklist} />
         )}
       </div>
 
       {/* ── Busca + filtros ── */}
-      <div className="bg-white border border-surface-border rounded-xl p-3 sm:p-4 space-y-3">
+      <div className="bg-white border border-surface-border rounded-card p-3 sm:p-4 space-y-3">
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.6fr)_auto] gap-2 items-center">
           <CampoBusca valor={busca} onChange={setBusca} carregando={pendente} sugerir={sugerir} onEscolher={(s) => s.href && roteador.push(s.href)} rotulo="Buscar veículo" placeholder="Buscar placa, modelo, marca, RENAVAM, responsável ou equipe…" />
           <button
@@ -136,7 +136,7 @@ export function VeiculosListaClient({ itens, total, filtros: f, tipos, resumo }:
               Mostrar inativos
             </label>
             {filtrosAtivos > 0 && (
-              <button onClick={limpar} className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-ink-muted hover:text-red-500">
+              <button onClick={limpar} className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-ink-muted hover:text-atrasado">
                 <X className="w-3.5 h-3.5" /> Limpar filtros ({filtrosAtivos})
               </button>
             )}
@@ -147,7 +147,7 @@ export function VeiculosListaClient({ itens, total, filtros: f, tipos, resumo }:
       {/* ── Resultados ── */}
       <div className={cn("transition-opacity", pendente && "opacity-60")}>
         {itens.length === 0 ? (
-          <div className="bg-white border border-surface-border rounded-xl text-center py-16">
+          <div className="bg-white border border-surface-border rounded-card text-center py-16">
             <Truck className="w-10 h-10 text-ink-subtle mx-auto mb-3" />
             <p className="text-ink font-medium">{f.q ? `Nenhum veículo encontrado para “${f.q}”` : "Nenhum veículo encontrado"}</p>
             <p className="text-sm text-ink-muted mt-1">{filtrosAtivos > 0 ? "Ajuste a busca ou os filtros." : "Cadastre o primeiro veículo da frota."}</p>
@@ -156,7 +156,7 @@ export function VeiculosListaClient({ itens, total, filtros: f, tipos, resumo }:
         ) : (
           <>
             {/* Celular: lista compacta (sempre) */}
-            <div className="md:hidden bg-white border border-surface-border rounded-xl divide-y divide-surface-border overflow-hidden" data-visao="mobile">
+            <div className="md:hidden bg-white border border-surface-border rounded-card divide-y divide-surface-border overflow-hidden" data-visao="mobile">
               {itens.map((v) => (
                 <div key={v.id} className="flex items-stretch">
                   {massa && <div className="pl-3 pt-4"><CheckboxLinha id={v.id} rotulo={v.placa} /></div>}
@@ -200,7 +200,7 @@ function Tabela({ massa, itens, f, onOrdenar, podeGerenciar, podeChecklist }: {
 }) {
   const router = useRouter();
   return (
-    <div className="bg-white border border-surface-border rounded-xl overflow-x-auto" data-visao="lista">
+    <div className="bg-white border border-surface-border rounded-card overflow-x-auto" data-visao="lista">
       <table className="w-full text-sm">
         <thead className="bg-surface-alt text-ink-muted text-[11px] uppercase tracking-wide border-b border-surface-border">
           <tr>
@@ -290,7 +290,7 @@ function Cards({ massa, itens }: { massa: boolean; itens: VeiculoLinha[] }) {
         <div key={v.id} className="relative">
         {massa && <CheckboxLinha id={v.id} rotulo={v.placa} className="absolute top-2 left-2 z-10 bg-white rounded p-1.5 m-0 shadow-sm" />}
         <Link href={`/veiculos/${v.id}/editar`} data-veiculo-id={v.id}
-          className={cn("block h-full group bg-white border border-surface-border rounded-xl overflow-hidden hover:shadow-md hover:border-primary-300 transition-all", v.status === "INATIVO" && "opacity-60")}>
+          className={cn("block h-full group bg-white border border-surface-border rounded-card overflow-hidden hover:shadow-md hover:border-primary-300 transition-all", v.status === "INATIVO" && "opacity-60")}>
           <div className="aspect-[16/9] bg-surface-alt overflow-hidden relative">
             {v.foto
               // eslint-disable-next-line @next/next/no-img-element

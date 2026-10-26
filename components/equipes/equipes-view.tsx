@@ -115,7 +115,7 @@ export function EquipesView({ aba, q, grupos, colaboradores, perfis, contagens, 
 
       <div className={cn("space-y-4 transition-opacity", pendente && "opacity-60")} aria-busy={pendente}>
       {total === 0 && (
-        <div className="bg-white border border-surface-border rounded-xl">
+        <div className="bg-white border border-surface-border rounded-card">
           <ListaVazia mensagem={vazio} busca={q || undefined} onLimpar={() => setBusca("")} />
         </div>
       )}
@@ -123,7 +123,7 @@ export function EquipesView({ aba, q, grupos, colaboradores, perfis, contagens, 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {grupos.map((e) => (
               <div key={e.id} data-card-id={e.id} className="relative">
-              <Link href={`/equipes/${e.id}/editar`} className={cn("block h-full bg-white border border-surface-border rounded-xl p-4 pb-10 hover:border-primary-300 hover:shadow-card-hover transition-all", e.status !== "ATIVA" && "opacity-70")}>
+              <Link href={`/equipes/${e.id}/editar`} className={cn("block h-full bg-white border border-surface-border rounded-card p-4 pb-10 hover:border-primary-300 hover:shadow-card-hover transition-all", e.status !== "ATIVA" && "opacity-70")}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="w-3.5 h-3.5 rounded-full shrink-0" style={{ backgroundColor: e.cor }} />
@@ -135,7 +135,7 @@ export function EquipesView({ aba, q, grupos, colaboradores, perfis, contagens, 
                   <div className="flex items-center gap-2 mt-3">
                     <AvatarTecnico nome={e.lider.nome} fotoUrl={e.lider.avatar} size={28} />
                     <div className="min-w-0">
-                      <p className="text-xs text-ink-muted flex items-center gap-1"><Crown className="w-3 h-3 text-amber-500" /> Líder</p>
+                      <p className="text-xs text-ink-muted flex items-center gap-1"><Crown className="w-3 h-3 text-atencao-texto" /> Líder</p>
                       <p className="text-sm text-ink truncate">{e.lider.nome}</p>
                     </div>
                   </div>
@@ -167,7 +167,7 @@ function ListaColaboradores({ lista }: { lista: Colaborador[] }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {lista.map((c) => (
-        <Link key={c.id} href={`/colaboradores/${c.id}/editar`} className="flex items-center gap-3 p-4 bg-white border border-surface-border rounded-xl hover:border-primary-300 hover:shadow-card-hover transition-all">
+        <Link key={c.id} href={`/colaboradores/${c.id}/editar`} className="flex items-center gap-3 p-4 bg-white border border-surface-border rounded-card hover:border-primary-300 hover:shadow-card-hover transition-all">
           <AvatarTecnico nome={c.nome} fotoUrl={c.avatar} size={44} />
           <div className="min-w-0 flex-1">
             <p className="font-semibold text-ink truncate">{c.nome}</p>

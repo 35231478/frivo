@@ -108,9 +108,9 @@ export function ChecklistPreenchimento({ veiculos, templates, colaboradores, vei
 
   if (concluido) {
     return (
-      <div className="bg-white rounded-2xl shadow-card border border-surface-border p-8 text-center space-y-4">
-        <div className={cn("w-16 h-16 rounded-full mx-auto flex items-center justify-center", concluido === "COM_ALERTAS" ? "bg-amber-50" : "bg-success-50")}>
-          {concluido === "COM_ALERTAS" ? <AlertCircle className="w-8 h-8 text-amber-600" /> : <CheckCircle2 className="w-8 h-8 text-success-600" />}
+      <div className="bg-white rounded-card shadow-card border border-surface-border p-8 text-center space-y-4">
+        <div className={cn("w-16 h-16 rounded-full mx-auto flex items-center justify-center", concluido === "COM_ALERTAS" ? "bg-atencao-claro" : "bg-success-50")}>
+          {concluido === "COM_ALERTAS" ? <AlertCircle className="w-8 h-8 text-atencao-texto" /> : <CheckCircle2 className="w-8 h-8 text-success-600" />}
         </div>
         <div>
           <h3 className="text-lg font-bold text-ink">{concluido === "COM_ALERTAS" ? "Checklist enviado com alertas" : "Checklist concluído"}</h3>
@@ -129,13 +129,13 @@ export function ChecklistPreenchimento({ veiculos, templates, colaboradores, vei
   return (
     <div className="space-y-4">
       {erro && (
-        <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+        <div className="flex items-center gap-2 bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3">
           <AlertCircle className="w-4 h-4 shrink-0" /> {erro}
         </div>
       )}
       <input ref={fotoRef} type="file" accept="image/*" capture="environment" onChange={handleFoto} className="hidden" />
 
-      <div className="bg-white rounded-2xl shadow-card border border-surface-border p-4 sm:p-6 space-y-4">
+      <div className="bg-white rounded-card shadow-card border border-surface-border p-4 sm:p-6 space-y-4">
         <div className="grid grid-cols-1 gap-3">
           <FormField label="Veículo" required>
             <Select value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)}>
@@ -161,7 +161,7 @@ export function ChecklistPreenchimento({ veiculos, templates, colaboradores, vei
       </div>
 
       {template && categorias.map(([categoria, itens]) => (
-        <div key={categoria} className="bg-white rounded-2xl shadow-card border border-surface-border overflow-hidden">
+        <div key={categoria} className="bg-white rounded-card shadow-card border border-surface-border overflow-hidden">
           <div className="px-4 py-2.5 bg-surface-alt border-b border-surface-border">
             <p className="text-xs font-bold text-ink-muted uppercase tracking-wider">{categoria}</p>
           </div>
@@ -172,8 +172,8 @@ export function ChecklistPreenchimento({ veiculos, templates, colaboradores, vei
               return (
                 <div key={it.id} className="p-4 space-y-2">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-medium text-ink">{it.descricao}{it.obrigatorio && <span className="text-red-500 ml-0.5">*</span>}</p>
-                    {alerta && <span className="text-[10px] font-semibold bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-full shrink-0">Alerta</span>}
+                    <p className="text-sm font-medium text-ink">{it.descricao}{it.obrigatorio && <span className="text-atrasado ml-0.5">*</span>}</p>
+                    {alerta && <span className="text-[10px] font-semibold bg-atencao-claro text-atencao-texto px-1.5 py-0.5 rounded-full shrink-0">Alerta</span>}
                   </div>
 
                   {(it.tipo === "OK_NOK" || it.tipo === "NIVEL") && (
@@ -186,7 +186,7 @@ export function ChecklistPreenchimento({ veiculos, templates, colaboradores, vei
                             className={cn(
                               "px-3 py-2 rounded-lg text-sm font-medium border transition-colors",
                               sel
-                                ? ehSaudavel ? "bg-success-500 border-success-500 text-white" : "bg-amber-500 border-amber-500 text-white"
+                                ? ehSaudavel ? "bg-success-500 border-success-500 text-white" : "bg-atencao border-atencao text-white"
                                 : "bg-white border-surface-border text-ink-muted hover:border-primary-300",
                             )}>
                             {op}
@@ -210,7 +210,7 @@ export function ChecklistPreenchimento({ veiculos, templates, colaboradores, vei
                         <Camera className="w-4 h-4" /> {r?.foto ? "Trocar foto" : "Tirar foto"}
                       </Button>
                       {r?.foto && (
-                        <button type="button" onClick={() => setRespostas((p) => ({ ...p, [it.id]: { valor: p[it.id]?.valor ?? null, foto: null } }))} className="text-red-500 hover:text-red-700"><X className="w-4 h-4" /></button>
+                        <button type="button" onClick={() => setRespostas((p) => ({ ...p, [it.id]: { valor: p[it.id]?.valor ?? null, foto: null } }))} className="text-atrasado hover:text-atrasado-texto"><X className="w-4 h-4" /></button>
                       )}
                     </div>
                   )}
@@ -222,7 +222,7 @@ export function ChecklistPreenchimento({ veiculos, templates, colaboradores, vei
       ))}
 
       {template && (
-        <div className="bg-white rounded-2xl shadow-card border border-surface-border p-4 sm:p-6 space-y-4">
+        <div className="bg-white rounded-card shadow-card border border-surface-border p-4 sm:p-6 space-y-4">
           <FormField label="Observação geral">
             <Textarea value={observacaoGeral} onChange={(e) => setObservacaoGeral(e.target.value)} rows={3} placeholder="Observações sobre o veículo…" />
           </FormField>

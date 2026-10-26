@@ -126,8 +126,8 @@ export function EditorTabelaPreco({ item, aberto, onFechar, onSalvo }: EditorCad
       </>}
     >
       <div className="space-y-4">
-        {erro && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
-        {item && item.ativo === false && <p className="text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2">Tabela inativa: os clientes ligados a ela usam a tabela Padrão até ela ser reativada.</p>}
+        {erro && <div role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2">{erro}</div>}
+        {item && item.ativo === false && <p className="text-sm bg-atencao-claro border border-atencao/20 text-atencao-texto rounded-lg px-3 py-2">Tabela inativa: os clientes ligados a ela usam a tabela Padrão até ela ser reativada.</p>}
 
         <FormGrid cols={2}>
           <FormField label="Nome" required><Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Contrato, Belma" maxLength={120} /></FormField>
@@ -160,12 +160,12 @@ export function EditorTabelaPreco({ item, aberto, onFechar, onSalvo }: EditorCad
                 <div key={it._id} className="border border-surface-border rounded-lg p-3 bg-white space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                      <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded", it.kind === "SERVICO" ? "bg-primary-50 text-primary-700" : "bg-violet-50 text-violet-700")}>{it.kind === "SERVICO" ? "Serviço" : "Produto"}</span>
+                      <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded", it.kind === "SERVICO" ? "bg-primary-50 text-primary-700" : "bg-acento-claro text-acento-hover")}>{it.kind === "SERVICO" ? "Serviço" : "Produto"}</span>
                       <span className="text-sm font-medium text-ink truncate">{it.nome}</span>
-                      {it.inativo && <span className="text-[10px] font-semibold bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded" title="Inativo no catálogo: o preço continua valendo nesta tabela">inativo</span>}
+                      {it.inativo && <span className="text-[10px] font-semibold bg-atencao-claro text-atencao-texto px-1.5 py-0.5 rounded" title="Inativo no catálogo: o preço continua valendo nesta tabela">inativo</span>}
                       <span className="text-xs text-ink-subtle">(padrão {formatarMoeda(it.valorPadrao)})</span>
                     </div>
-                    <button type="button" onClick={() => setItens((a) => a.filter((x) => x._id !== it._id))} className="p-1.5 text-ink-muted hover:text-red-600" aria-label={`Tirar ${it.nome} da tabela`}><Trash2 className="w-3.5 h-3.5" /></button>
+                    <button type="button" onClick={() => setItens((a) => a.filter((x) => x._id !== it._id))} className="p-1.5 text-ink-muted hover:text-atrasado" aria-label={`Tirar ${it.nome} da tabela`}><Trash2 className="w-3.5 h-3.5" /></button>
                   </div>
                   <FormGrid cols={3}>
                     <FormField label="Tipo de preço">
@@ -224,7 +224,7 @@ function BuscaCatalogo({ catalogo, jaAdicionados, onSelect }: { catalogo: Catalo
             <button key={c.id} type="button" onClick={() => { onSelect(c); setQuery(""); setAberto(false); }}
               className="w-full text-left px-3 py-2 hover:bg-primary-50 border-b border-surface-border last:border-0 flex items-center justify-between gap-3">
               <span className="flex items-center gap-2 min-w-0">
-                <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded", c.kind === "SERVICO" ? "bg-primary-50 text-primary-700" : "bg-violet-50 text-violet-700")}>{c.kind === "SERVICO" ? "S" : "P"}</span>
+                <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded", c.kind === "SERVICO" ? "bg-primary-50 text-primary-700" : "bg-acento-claro text-acento-hover")}>{c.kind === "SERVICO" ? "S" : "P"}</span>
                 <span className="text-sm text-ink truncate">{c.nome}</span>
               </span>
               <span className="text-xs font-mono text-ink-muted shrink-0">{formatarMoeda(c.valorPadrao)}</span>

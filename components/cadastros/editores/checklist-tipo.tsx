@@ -115,7 +115,7 @@ export function ChecklistTipo({ tipoId, podeEditar }: { tipoId: string; podeEdit
                 <div className="flex items-center shrink-0">
                   <button type="button" onClick={() => mover(i, -1)} disabled={i === 0} className="p-1.5 text-ink-subtle hover:text-ink disabled:opacity-30" aria-label={`Subir item ${i + 1}`}><ArrowUp className="w-4 h-4" /></button>
                   <button type="button" onClick={() => mover(i, 1)} disabled={i === itens.length - 1} className="p-1.5 text-ink-subtle hover:text-ink disabled:opacity-30" aria-label={`Descer item ${i + 1}`}><ArrowDown className="w-4 h-4" /></button>
-                  <button type="button" onClick={() => mudar((l) => l.filter((_, j) => j !== i))} className="p-1.5 text-ink-subtle hover:text-red-600" aria-label={`Remover item ${i + 1}`}><Trash2 className="w-4 h-4" /></button>
+                  <button type="button" onClick={() => mudar((l) => l.filter((_, j) => j !== i))} className="p-1.5 text-ink-subtle hover:text-atrasado" aria-label={`Remover item ${i + 1}`}><Trash2 className="w-4 h-4" /></button>
                 </div>
               )}
             </div>
@@ -136,7 +136,7 @@ export function ChecklistTipo({ tipoId, podeEditar }: { tipoId: string; podeEdit
                 </label>
               )}
               {!!it.id && !!it.respostas && it.tipoOriginal !== it.tipoResposta && (
-                <span className="text-amber-700" data-aviso-troca-tipo>Mudar o tipo cria um item novo; as respostas antigas ficam no histórico.</span>
+                <span className="text-atencao-texto" data-aviso-troca-tipo>Mudar o tipo cria um item novo; as respostas antigas ficam no histórico.</span>
               )}
               <label className="inline-flex items-center gap-1.5 cursor-pointer">
                 <input type="checkbox" checked={it.pedirFoto} disabled={!podeEditar} onChange={(e) => editar(i, { pedirFoto: e.target.checked })} className="accent-primary-600" name={`foto-${i + 1}`} />
@@ -152,7 +152,7 @@ export function ChecklistTipo({ tipoId, podeEditar }: { tipoId: string; podeEdit
         ))}
       </ol>
 
-      {msg && <p role={msg.tipo === "erro" ? "alert" : "status"} className={cn("text-sm rounded-lg px-3 py-2 border", msg.tipo === "ok" ? "bg-success-50 border-success-200 text-success-700" : "bg-red-50 border-red-200 text-red-700")}>{msg.texto}</p>}
+      {msg && <p role={msg.tipo === "erro" ? "alert" : "status"} className={cn("text-sm rounded-lg px-3 py-2 border", msg.tipo === "ok" ? "bg-success-50 border-success-200 text-success-700" : "bg-atrasado-claro border-atrasado/20 text-atrasado-texto")}>{msg.texto}</p>}
 
       {podeEditar && (
         <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
@@ -160,7 +160,7 @@ export function ChecklistTipo({ tipoId, podeEditar }: { tipoId: string; podeEdit
             <Plus className="w-4 h-4" /> Adicionar item
           </Button>
           <div className="flex items-center gap-2">
-            {sujo && <span className="text-xs text-amber-700">Alterações não salvas</span>}
+            {sujo && <span className="text-xs text-atencao-texto">Alterações não salvas</span>}
             <Button type="button" onClick={salvar} loading={salvando} disabled={!sujo} data-salvar-checklist>
               <Check className="w-4 h-4" /> Salvar checklist
             </Button>

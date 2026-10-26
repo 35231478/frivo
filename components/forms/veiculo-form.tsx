@@ -216,10 +216,10 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
                       <Upload className="w-3.5 h-3.5" /> {doc.arquivoUrl ? "Trocar arquivo" : "Anexar arquivo"}
                     </Button>
                     {doc.arquivoUrl && <span className="text-xs text-success-600">Arquivo anexado</span>}
-                    {vencido && <span className="text-xs font-semibold bg-red-50 text-red-700 px-2 py-0.5 rounded-full">Vencido</span>}
-                    {alerta && <span className="text-xs font-semibold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full">Vence em 30 dias</span>}
+                    {vencido && <span className="text-xs font-semibold bg-atrasado-claro text-atrasado-texto px-2 py-0.5 rounded-full">Vencido</span>}
+                    {alerta && <span className="text-xs font-semibold bg-atencao-claro text-atencao-texto px-2 py-0.5 rounded-full">Vence em 30 dias</span>}
                   </div>
-                  <button type="button" onClick={() => removeDoc(i)} className="text-red-500 hover:text-red-700 p-1.5"><Trash2 className="w-4 h-4" /></button>
+                  <button type="button" onClick={() => removeDoc(i)} className="text-atrasado hover:text-atrasado-texto p-1.5"><Trash2 className="w-4 h-4" /></button>
                 </div>
               </div>
             );
@@ -265,13 +265,13 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
         <div className="flex items-center gap-2 flex-wrap text-xs" data-progresso>
           <span className="font-semibold text-ink">Obrigatórios {feitos}/{obrigatorios.length}:</span>
           {obrigatorios.map(([rotulo, ok]) => (
-            <span key={rotulo} className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full border", ok ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-ink-muted bg-white border-surface-border")}>
+            <span key={rotulo} className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full border", ok ? "text-ok-texto bg-ok-claro border-ok/20" : "text-ink-muted bg-white border-surface-border")}>
               {ok ? <CheckCircle2 className="w-3 h-3" /> : <Circle className="w-3 h-3" />} {rotulo}
             </span>
           ))}
         </div>
 
-        {erro && <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3" data-erro><AlertCircle className="w-4 h-4 shrink-0" /> {erro}</div>}
+        {erro && <div className="flex items-center gap-2 bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3" data-erro><AlertCircle className="w-4 h-4 shrink-0" /> {erro}</div>}
 
         <Bloco numero={1} titulo="Identificação" descricao="Os dados do documento do veículo (CRLV).">
           <FormGrid cols={3}>
@@ -344,7 +344,7 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
         </Bloco>
 
         <div className="sticky bottom-20 lg:bottom-4 z-20" data-barra-acoes>
-          <div className="flex items-center justify-between gap-3 bg-white/95 backdrop-blur border border-surface-border rounded-xl shadow-lg px-4 py-3">
+          <div className="flex items-center justify-between gap-3 bg-white/95 backdrop-blur border border-surface-border rounded-card shadow-lg px-4 py-3">
             <span className="text-xs text-ink-muted hidden sm:inline">{feitos === obrigatorios.length ? "Tudo pronto para cadastrar." : `Faltam ${obrigatorios.length - feitos} campo(s) obrigatório(s).`}</span>
             <div className="flex items-center gap-2 ml-auto">
               <Button type="button" variant="secondary" onClick={() => router.back()}>Cancelar</Button>
@@ -360,13 +360,13 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
   return (
     <div className="space-y-5">
       {erro && (
-        <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+        <div className="flex items-center gap-2 bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3">
           <AlertCircle className="w-4 h-4 shrink-0" /> {erro}
         </div>
       )}
       <input ref={docRef} type="file" onChange={handleDocFile} className="hidden" />
 
-      <div className="bg-white rounded-2xl shadow-card border border-surface-border overflow-hidden">
+      <div className="bg-white rounded-card shadow-card border border-surface-border overflow-hidden">
         <nav className="flex gap-1.5 overflow-x-auto px-4 pt-4 pb-4 border-b border-surface-border">
           {ABAS.map((t) => {
             const ativa = aba === t.id;
@@ -374,7 +374,7 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
             return (
               <button key={t.id} type="button" disabled={desativada} onClick={() => setAba(t.id)}
                 className={cn(
-                  "flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl whitespace-nowrap transition-all",
+                  "flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-card whitespace-nowrap transition-all",
                   ativa ? "bg-primary-500 text-white shadow-sm" : "text-ink-muted hover:text-ink hover:bg-surface-alt",
                   desativada && "opacity-40 cursor-not-allowed hover:bg-transparent hover:text-ink-muted",
                 )}>
@@ -502,7 +502,7 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
                           <td className="px-4 py-2.5 text-ink-muted">{c.colaborador?.nome ?? "—"}</td>
                           <td className="px-4 py-2.5">
                             <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full",
-                              c.status === "COM_ALERTAS" ? "bg-amber-50 text-amber-700" : c.status === "CONCLUIDO" ? "bg-success-50 text-success-700" : "bg-surface-alt text-ink-muted")}>
+                              c.status === "COM_ALERTAS" ? "bg-atencao-claro text-atencao-texto" : c.status === "CONCLUIDO" ? "bg-success-50 text-success-700" : "bg-surface-alt text-ink-muted")}>
                               {c.status === "COM_ALERTAS" ? "Com alertas" : c.status === "CONCLUIDO" ? "Concluído" : "Pendente"}
                             </span>
                           </td>
@@ -522,7 +522,7 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
                       <div key={o.descricao} className="flex items-center gap-3">
                         <span className="text-sm text-ink w-48 shrink-0 truncate" title={o.descricao}>{o.descricao}</span>
                         <div className="flex-1 bg-surface-alt rounded-full h-4 overflow-hidden">
-                          <div className="bg-amber-400 h-full rounded-full" style={{ width: `${(o.count / max) * 100}%` }} />
+                          <div className="bg-atencao h-full rounded-full" style={{ width: `${(o.count / max) * 100}%` }} />
                         </div>
                         <span className="text-xs font-semibold text-ink-muted w-8 text-right">{o.count}</span>
                       </div>
@@ -598,7 +598,7 @@ function ManutencoesPanel({ veiculoId, manutencoes, setManutencoes }: { veiculoI
                   {mn.custo != null && ` · ${formatarMoeda(Number(mn.custo))}`}
                 </p>
               </div>
-              <button type="button" onClick={() => remover(mn.id)} className="text-red-500 hover:text-red-700 p-1.5 shrink-0"><Trash2 className="w-4 h-4" /></button>
+              <button type="button" onClick={() => remover(mn.id)} className="text-atrasado hover:text-atrasado-texto p-1.5 shrink-0"><Trash2 className="w-4 h-4" /></button>
             </div>
           ))}
         </div>

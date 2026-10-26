@@ -17,7 +17,7 @@ export function PerfisAcessoTela() {
       Editor={EditorPerfil}
       ajuda={<>
         Defina o que cada perfil pode ver e fazer. Inativar um perfil <strong>tira o acesso</strong> de quem o usa — o sistema mostra quem antes de confirmar.
-        {erro && <span role="alert" className="block mt-2 text-red-700">{erro}</span>}
+        {erro && <span role="alert" className="block mt-2 text-atrasado-texto">{erro}</span>}
       </>}
       celula={(col, p) => {
         if (col === "nome") return (

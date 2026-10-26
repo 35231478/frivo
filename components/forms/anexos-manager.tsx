@@ -21,11 +21,11 @@ function formatarTamanho(bytes: number): string {
 }
 
 function iconeDoTipo(tipo: string) {
-  if (tipo.startsWith("image/")) return <Image className="w-4 h-4 text-purple-500" />;
-  if (tipo.includes("pdf")) return <FileText className="w-4 h-4 text-red-500" />;
-  if (tipo.includes("word") || tipo.includes("document")) return <FileText className="w-4 h-4 text-blue-500" />;
-  if (tipo.includes("excel") || tipo.includes("spreadsheet")) return <FileText className="w-4 h-4 text-green-500" />;
-  return <File className="w-4 h-4 text-gray-400" />;
+  if (tipo.startsWith("image/")) return <Image className="w-4 h-4 text-acento" />;
+  if (tipo.includes("pdf")) return <FileText className="w-4 h-4 text-atrasado" />;
+  if (tipo.includes("word") || tipo.includes("document")) return <FileText className="w-4 h-4 text-acento" />;
+  if (tipo.includes("excel") || tipo.includes("spreadsheet")) return <FileText className="w-4 h-4 text-ok-texto" />;
+  return <File className="w-4 h-4 text-ink-muted" />;
 }
 
 interface AnexosManagerProps {
@@ -93,7 +93,7 @@ export function AnexosManager({ clienteId, anexosIniciais }: AnexosManagerProps)
   return (
     <div className="space-y-3">
       {erro && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>
+        <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2">{erro}</div>
       )}
 
       <input
@@ -107,17 +107,17 @@ export function AnexosManager({ clienteId, anexosIniciais }: AnexosManagerProps)
       {anexos.length > 0 && (
         <div className="space-y-2">
           {anexos.map((a) => (
-            <div key={a.id} className="flex items-center gap-3 p-2.5 border border-gray-200 rounded-lg group hover:border-gray-300">
+            <div key={a.id} className="flex items-center gap-3 p-2.5 border border-surface-border rounded-lg group hover:border-surface-border">
               {iconeDoTipo(a.tipo)}
               <div className="flex-1 min-w-0">
-                <p className="text-sm text-gray-800 truncate">{a.nome}</p>
-                <p className="text-xs text-gray-400">{formatarTamanho(a.tamanho)} — {formatarData(a.criadoEm)}</p>
+                <p className="text-sm text-ink truncate">{a.nome}</p>
+                <p className="text-xs text-ink-muted">{formatarTamanho(a.tamanho)} — {formatarData(a.criadoEm)}</p>
               </div>
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button type="button" onClick={() => visualizar(a.id, a.tipo)} className="p-1 text-gray-400 hover:text-frivo-600 rounded" title="Visualizar">
+                <button type="button" onClick={() => visualizar(a.id, a.tipo)} className="p-1 text-ink-muted hover:text-frivo-600 rounded" title="Visualizar">
                   <Eye className="w-3.5 h-3.5" />
                 </button>
-                <button type="button" onClick={() => remover(a.id)} className="p-1 text-gray-400 hover:text-red-600 rounded" title="Remover">
+                <button type="button" onClick={() => remover(a.id)} className="p-1 text-ink-muted hover:text-atrasado rounded" title="Remover">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -136,19 +136,19 @@ export function AnexosManager({ clienteId, anexosIniciais }: AnexosManagerProps)
         <Upload className="w-4 h-4" />
         {uploading ? "Enviando..." : "Enviar anexo"}
       </Button>
-      <p className="text-xs text-gray-400 text-center">PDF, DOC, XLS ou imagens — máx. 5 MB</p>
+      <p className="text-xs text-ink-muted text-center">PDF, DOC, XLS ou imagens — máx. 5 MB</p>
 
       {/* Modal de preview */}
       {preview && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setPreview(null)}>
-          <div className="relative bg-white rounded-xl max-w-4xl max-h-[90vh] overflow-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <button type="button" onClick={() => setPreview(null)} className="absolute top-3 right-3 bg-white/90 rounded-full p-1.5 shadow hover:bg-gray-100 z-10">
+          <div className="relative bg-white rounded-card max-w-4xl max-h-[90vh] overflow-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <button type="button" onClick={() => setPreview(null)} className="absolute top-3 right-3 bg-white/90 rounded-full p-1.5 shadow hover:bg-surface-linha z-10">
               <X className="w-4 h-4" />
             </button>
             {preview.ehImagem ? (
-              <img src={preview.url} alt="Preview" className="max-w-full max-h-[85vh] rounded-xl" />
+              <img src={preview.url} alt="Preview" className="max-w-full max-h-[85vh] rounded-card" />
             ) : (
-              <iframe src={preview.url} className="w-[800px] h-[80vh] rounded-xl" />
+              <iframe src={preview.url} className="w-[800px] h-[80vh] rounded-card" />
             )}
           </div>
         </div>

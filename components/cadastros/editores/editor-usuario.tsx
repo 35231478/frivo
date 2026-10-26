@@ -18,7 +18,7 @@ export function AvisoConvite({ convite, nome, onFechar }: { convite: ResultadoCo
   return (
     <Modal aberto={!!convite} onFechar={onFechar} titulo="Convite de acesso" tamanho="sm">
       {convite?.enviadoPorEmail ? (
-        <p className="text-sm text-ink flex items-start gap-2"><Mail className="w-4 h-4 mt-0.5 text-emerald-600 shrink-0" /> Enviamos para {nome} um e-mail com o link para definir a senha. O link vale por 72 horas e só pode ser usado uma vez.</p>
+        <p className="text-sm text-ink flex items-start gap-2"><Mail className="w-4 h-4 mt-0.5 text-ok-texto shrink-0" /> Enviamos para {nome} um e-mail com o link para definir a senha. O link vale por 72 horas e só pode ser usado uma vez.</p>
       ) : convite ? (
         <div className="space-y-3" data-convite-link>
           <p className="text-sm text-ink">Não deu para enviar o e-mail{convite.erroEmail ? ` (${convite.erroEmail.replace(/\.$/, "")})` : ""}. Repasse este link para {nome} definir a própria senha — ele vale por 72 horas e só pode ser usado uma vez:</p>
@@ -83,14 +83,14 @@ export function criarEditorUsuario(usuarioAtualId: string) {
           </>}
         >
           <div className="space-y-4">
-            {erro && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
+            {erro && <div role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2">{erro}</div>}
             <FormField label="Nome" required><Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome completo" /></FormField>
             <FormField label="E-mail (login)" required hint={item ? "O e-mail é o login: não muda depois de criado." : "Vai receber o convite para definir a própria senha."}>
               <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={!!item} placeholder="nome@empresa.com.br" />
             </FormField>
             <FormField label="Perfil de acesso" hint="Define o que a pessoa vê e faz. Sem perfil = sem acesso (só o início).">
               {admin ? (
-                <p className="inline-flex items-center gap-1 text-xs font-semibold bg-red-50 text-red-600 px-2 py-1 rounded-full"><ShieldCheck className="w-3.5 h-3.5" /> Administrador: acesso total</p>
+                <p className="inline-flex items-center gap-1 text-xs font-semibold bg-atrasado-claro text-atrasado px-2 py-1 rounded-full"><ShieldCheck className="w-3.5 h-3.5" /> Administrador: acesso total</p>
               ) : proprio ? (
                 <p className="text-sm text-ink-muted">{item?.perfilAcesso?.nome ?? "Sem perfil"} · ninguém altera o próprio perfil de acesso</p>
               ) : (

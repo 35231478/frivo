@@ -306,7 +306,7 @@ export function CadastroPorFoto() {
   const campoInput = (p: (typeof PERGUNTAS)[number], autoFocus = false) => {
     const v = valores[p.campo];
     const duvida = duvidosos.has(p.campo);
-    const cls = cn(duvida && "border-amber-400 bg-amber-50/50");
+    const cls = cn(duvida && "border-atencao bg-atencao-claro/50");
     if (p.tipo === "tipo")
       return (
         <SelectCadastroRapido
@@ -357,17 +357,17 @@ export function CadastroPorFoto() {
 
       {aviso && (
         <div data-aviso-ia={aviso.tipo} className={cn("flex items-start gap-2 text-sm rounded-lg px-3 py-2 border",
-          aviso.tipo === "ruim" ? "text-amber-900 bg-amber-50 border-amber-200" : "text-red-700 bg-red-50 border-red-200")}>
+          aviso.tipo === "ruim" ? "text-atencao-texto bg-atencao-claro border-atencao/20" : "text-atrasado-texto bg-atrasado-claro border-atrasado/20")}>
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> <span>{aviso.texto}</span>
         </div>
       )}
 
-      <div className="bg-white border border-surface-border rounded-xl p-4 sm:p-5 space-y-4">
+      <div className="bg-white border border-surface-border rounded-card p-4 sm:p-5 space-y-4">
         {/* ── 1. Foto ── */}
         {etapa === "foto" && (
           <>
-            <div data-aviso-privacidade className="flex items-start gap-2 text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-              <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-slate-500" />
+            <div data-aviso-privacidade className="flex items-start gap-2 text-xs text-ink bg-surface-page border border-surface-border rounded-lg px-3 py-2">
+              <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-ink-muted" />
               <span>
                 <strong>Privacidade:</strong> só a foto da <strong>etiqueta</strong> é enviada para a <strong>Anthropic</strong> (IA Claude), fora do Frivo, para ler o texto.
                 As fotos do equipamento ficam só no Frivo. Evite pessoas, documentos ou telas nas fotos.
@@ -375,7 +375,7 @@ export function CadastroPorFoto() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" data-slots-fotos>
               <SlotFoto
-                id="etiqueta" titulo="1. Etiqueta" selo="A IA lê esta" seloCor="bg-violet-100 text-violet-800" icone={Tag}
+                id="etiqueta" titulo="1. Etiqueta" selo="A IA lê esta" seloCor="bg-acento-claro text-acento-hover" icone={Tag}
                 dica="De frente, bem perto, sem reflexo" obrigatoria url={foto} rotuloAria="Foto da etiqueta"
                 onArquivo={(f) => aoEscolherFoto("etiqueta", f)} onRemover={() => remover("etiqueta")}
               />
@@ -391,7 +391,7 @@ export function CadastroPorFoto() {
               />
             </div>
             {qualidade && foto && (qualidade.escura || qualidade.borrada) && (
-              <p data-aviso-qualidade className="flex items-start gap-2 text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <p data-aviso-qualidade className="flex items-start gap-2 text-xs text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
                 A foto da etiqueta parece {qualidade.escura ? "escura" : "tremida/sem foco"}. A leitura pode falhar — se puder, tire outra mais de perto e com luz.
               </p>
@@ -416,7 +416,7 @@ export function CadastroPorFoto() {
             <div>
               <h2 className="font-semibold text-ink">Confira o que a IA leu</h2>
               <p className="text-sm text-ink-muted">A IA pode errar: compare com a foto e corrija o que for preciso.
-                {duvidosos.size > 0 && <> Campos em <span className="bg-amber-100 text-amber-900 px-1 rounded">amarelo</span> foram lidos com dúvida.</>}
+                {duvidosos.size > 0 && <> Campos em <span className="bg-atencao-claro text-atencao-texto px-1 rounded">amarelo</span> foram lidos com dúvida.</>}
               </p>
             </div>
             {foto && (
@@ -455,7 +455,7 @@ export function CadastroPorFoto() {
             <p className="text-xs font-semibold text-ink-muted">Pergunta {idxPergunta + 1} de {faltantes.length}{perguntaAtual.obrigatorio ? " · obrigatória" : ""}</p>
             <h2 className="text-lg font-semibold text-ink">{perguntaAtual.pergunta}</h2>
             {campoInput(perguntaAtual, true)}
-            {erroEtapa && <p className="text-sm text-red-600">{erroEtapa}</p>}
+            {erroEtapa && <p className="text-sm text-atrasado">{erroEtapa}</p>}
             <div className="flex gap-2">
               {idxPergunta > 0 && (
                 <button type="button" onClick={() => { setErroEtapa(""); setIdxPergunta((i) => i - 1); }} className="px-3 py-2.5 rounded-lg border border-surface-border text-sm text-ink hover:bg-surface-alt" title="Pergunta anterior">
@@ -497,7 +497,7 @@ export function CadastroPorFoto() {
             </button>
             <p className="text-[11px] text-ink-subtle -mt-2">A foto da placa também vai para a Anthropic só para leitura e não é guardada. Sem placa? É só digitar.</p>
             {avisoPlaca && (
-              <p data-aviso-placa={avisoPlaca.tipo} className={cn("text-xs rounded-lg px-3 py-2 border", avisoPlaca.tipo === "ok" ? "text-emerald-800 bg-emerald-50 border-emerald-200" : "text-amber-900 bg-amber-50 border-amber-200")}>
+              <p data-aviso-placa={avisoPlaca.tipo} className={cn("text-xs rounded-lg px-3 py-2 border", avisoPlaca.tipo === "ok" ? "text-ok-texto bg-ok-claro border-ok/20" : "text-atencao-texto bg-atencao-claro border-atencao/20")}>
                 {avisoPlaca.texto}
               </p>
             )}
@@ -509,7 +509,7 @@ export function CadastroPorFoto() {
                 <Input aria-label="Ambiente" value={ambiente} onChange={(e) => setAmbiente(e.target.value)} placeholder="Ex: Sala 201" />
               </FormField>
             </div>
-            {erroEtapa && <p className="text-sm text-red-600">{erroEtapa}</p>}
+            {erroEtapa && <p className="text-sm text-atrasado">{erroEtapa}</p>}
             <button type="button" onClick={confirmarLocal} className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold">
               Continuar <ChevronRight className="w-4 h-4" />
             </button>
@@ -555,7 +555,7 @@ export function CadastroPorFoto() {
                 </div>
               </div>
             )}
-            {erroEtapa && <p className="text-sm text-red-600">{erroEtapa}</p>}
+            {erroEtapa && <p className="text-sm text-atrasado">{erroEtapa}</p>}
             <button type="button" onClick={salvar} disabled={salvando} className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold disabled:opacity-60">
               {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <QrCode className="w-4 h-4" />} Salvar e gerar QR Code
             </button>
@@ -565,11 +565,11 @@ export function CadastroPorFoto() {
         {/* ── Pronto ── */}
         {etapa === "pronto" && salvo && (
           <div className="text-center space-y-3 py-4" data-pronto>
-            <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto" />
+            <CheckCircle2 className="w-12 h-12 text-ok-texto mx-auto" />
             <h2 className="text-lg font-semibold text-ink">Equipamento cadastrado!</h2>
             {salvo.qr
               ? <p className="text-sm text-ink-muted">QR Code gerado: <strong className="font-mono text-ink" data-qr>{salvo.qr}</strong></p>
-              : <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{salvo.avisoQr ?? "O QR Code não foi gerado. Gere pela ficha do equipamento (botão “Gerar QR”)."}</p>}
+              : <p className="text-sm text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2">{salvo.avisoQr ?? "O QR Code não foi gerado. Gere pela ficha do equipamento (botão “Gerar QR”)."}</p>}
             <div className="flex flex-col sm:flex-row gap-2 justify-center">
               <Link href={`/equipamentos/${salvo.id}?aba=qrcode`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold">
                 <QrCode className="w-4 h-4" /> Ver e imprimir o QR Code

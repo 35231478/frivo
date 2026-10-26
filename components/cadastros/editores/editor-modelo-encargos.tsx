@@ -59,8 +59,8 @@ export function EditorModeloEncargos({ item, aberto, onFechar, onSalvo }: Editor
       </>}
     >
       <div className="space-y-4">
-        {erro && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
-        {item && !item.ativo && <p className="text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2">Modelo inativo: não aparece para novas escolhas até ser reativado.</p>}
+        {erro && <div role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2">{erro}</div>}
+        {item && !item.ativo && <p className="text-sm bg-atencao-claro border border-atencao/20 text-atencao-texto rounded-lg px-3 py-2">Modelo inativo: não aparece para novas escolhas até ser reativado.</p>}
         <FormGrid>
           <FormField label="Nome" required><Input value={nome} onChange={(e) => setNome(e.target.value)} maxLength={80} /></FormField>
           <FormField label="Tipo de contrato">
@@ -82,7 +82,7 @@ export function EditorModeloEncargos({ item, aberto, onFechar, onSalvo }: Editor
                 <Input value={i.percentual} onChange={(e) => upd(idx, "percentual", e.target.value)} inputMode="decimal" placeholder="0,00" className="pr-7" aria-label="Percentual" />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-ink-subtle">%</span>
               </div>
-              <button type="button" onClick={() => setItens((xs) => xs.filter((_, j) => j !== idx))} className="p-2 text-red-500 hover:text-red-700" aria-label="Remover encargo"><Trash2 className="w-4 h-4" /></button>
+              <button type="button" onClick={() => setItens((xs) => xs.filter((_, j) => j !== idx))} className="p-2 text-atrasado hover:text-atrasado-texto" aria-label="Remover encargo"><Trash2 className="w-4 h-4" /></button>
             </div>
           ))}
           <div className="flex items-center justify-between">

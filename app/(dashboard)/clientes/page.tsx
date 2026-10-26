@@ -77,7 +77,7 @@ export default async function ClientesPage({
     return (
       <span className="inline-flex items-center gap-0.5" title={`${n} de 5`}>
         {Array.from({ length: 5 }, (_, i) => (
-          <Star key={i} className={cn("w-3 h-3", i < n ? "text-amber-400 fill-amber-400" : "text-surface-border")} />
+          <Star key={i} className={cn("w-3 h-3", i < n ? "text-atencao-texto fill-atencao" : "text-surface-border")} />
         ))}
       </span>
     );
@@ -141,7 +141,7 @@ export default async function ClientesPage({
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
                     <span className={cn("font-semibold px-2 py-0.5 rounded-full", COR_STATUS_FINANCEIRO_CALC[sf])}>{LABELS_STATUS_FINANCEIRO_CALC[sf]}</span>
                     <span className="text-ink-subtle">{c._count.unidades} end. · {c._count.ordensServico} OS</span>
-                    {!c.ativo && <span className="font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">Inativo</span>}
+                    {!c.ativo && <span className="font-bold bg-surface-linha text-ink-muted px-2 py-0.5 rounded-full">Inativo</span>}
                   </div>
                 </div>
                 <ClienteAcoes id={c.id} nome={c.nomeFantasia ?? c.nome} ativo={c.ativo} />
@@ -177,7 +177,7 @@ export default async function ClientesPage({
                         {c.nomeFantasia ?? c.nome}
                       </Link>
                       {!c.ativo && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full whitespace-nowrap">Inativo</span>
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-surface-linha text-ink-muted px-2 py-0.5 rounded-full whitespace-nowrap">Inativo</span>
                       )}
                       {c._count.contratos > 0 && (
                         <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-success-50 text-success-700 px-2 py-0.5 rounded-full whitespace-nowrap">
