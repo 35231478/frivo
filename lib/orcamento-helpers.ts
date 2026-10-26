@@ -46,6 +46,12 @@ export function montarValoresOrcamento(data: OrcamentoInput, issAliquota: number
   };
 }
 
+/** Condições que saem no documento do cliente (texto curto, opcionais) */
+export const camposCondicoes = (data: OrcamentoInput) => ({
+  prazoExecucao: data.prazoExecucao?.trim() || null,
+  formaPagamento: data.formaPagamento?.trim() || null,
+});
+
 /**
  * Monta os campos da proposta de contrato a partir do payload validado.
  * Para tipo COMUM, zera/anula todos os campos específicos de proposta.

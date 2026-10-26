@@ -310,7 +310,7 @@ export const CLASSE_STATUS_ORCAMENTO: Record<string, string> = {
 };
 
 export const LABELS_TIPO_ORCAMENTO: Record<string, string> = {
-  COMUM: "Orçamento Comum",
+  COMUM: "Orçamento",
   PROPOSTA_CONTRATO: "Proposta de Contrato",
 };
 

@@ -71,6 +71,8 @@ export default async function EditarOrcamentoPage({
     descricao: orcamento.descricao,
     observacao: orcamento.observacao,
     validadeEm: orcamento.validadeEm,
+    prazoExecucao: orcamento.prazoExecucao,
+    formaPagamento: orcamento.formaPagamento,
     descontoServicos: Number(orcamento.descontoServicos),
     tipoDescontoServicos: orcamento.tipoDescontoServicos,
     descontoProdutos: Number(orcamento.descontoProdutos),
