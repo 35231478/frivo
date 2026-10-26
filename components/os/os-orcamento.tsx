@@ -55,41 +55,41 @@ export function OsOrcamento({ osId, itens: iniciais }: { osId: string; itens: an
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
-        <div className="text-sm"><span className="text-gray-500">Total do orçamento:</span> <span className="font-bold text-gray-900">{formatarMoeda(total)}</span></div>
-        <div className="text-sm"><span className="text-gray-500">Executado:</span> <span className="font-bold text-green-700">{formatarMoeda(totalExecutado)}</span></div>
+      <div className="flex items-center justify-between bg-surface-page rounded-lg p-3">
+        <div className="text-sm"><span className="text-ink-muted">Total do orçamento:</span> <span className="font-bold text-ink">{formatarMoeda(total)}</span></div>
+        <div className="text-sm"><span className="text-ink-muted">Executado:</span> <span className="font-bold text-ok-texto">{formatarMoeda(totalExecutado)}</span></div>
       </div>
 
-      {erro && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-erro-orcamento>{erro}</p>}
+      {erro && <p className="text-sm text-atrasado bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2" data-erro-orcamento>{erro}</p>}
 
       {itens.length === 0 && !mostraForm && (
-        <p className="text-sm text-gray-400 text-center py-6">Nenhum item no orçamento.</p>
+        <p className="text-sm text-ink-muted text-center py-6">Nenhum item no orçamento.</p>
       )}
 
       <table className="w-full text-sm">
-        <thead className="bg-gray-50">
+        <thead className="bg-surface-page">
           <tr>
-            <th className="text-left px-3 py-2 font-medium text-gray-600">Descrição</th>
-            <th className="text-right px-3 py-2 font-medium text-gray-600 w-20">Qtd</th>
-            <th className="text-right px-3 py-2 font-medium text-gray-600 w-28">Unitário</th>
-            <th className="text-right px-3 py-2 font-medium text-gray-600 w-28">Total</th>
-            <th className="text-center px-3 py-2 font-medium text-gray-600 w-24">Status</th>
+            <th className="text-left px-3 py-2 font-medium text-ink-muted">Descrição</th>
+            <th className="text-right px-3 py-2 font-medium text-ink-muted w-20">Qtd</th>
+            <th className="text-right px-3 py-2 font-medium text-ink-muted w-28">Unitário</th>
+            <th className="text-right px-3 py-2 font-medium text-ink-muted w-28">Total</th>
+            <th className="text-center px-3 py-2 font-medium text-ink-muted w-24">Status</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-50">
+        <tbody className="divide-y divide-surface-linha">
           {itens.map((i: any) => (
-            <tr key={i.id} className={i.executado ? "bg-green-50/50" : ""}>
-              <td className="px-3 py-2 text-gray-800">{i.descricao}</td>
-              <td className="px-3 py-2 text-right text-gray-500">{Number(i.quantidade)}</td>
-              <td className="px-3 py-2 text-right text-gray-500">{formatarMoeda(Number(i.valorUnitario))}</td>
-              <td className="px-3 py-2 text-right font-medium text-gray-900">{formatarMoeda(Number(i.valorTotal))}</td>
+            <tr key={i.id} className={i.executado ? "bg-ok-claro/60" : ""}>
+              <td className="px-3 py-2 text-ink">{i.descricao}</td>
+              <td className="px-3 py-2 text-right text-ink-muted">{Number(i.quantidade)}</td>
+              <td className="px-3 py-2 text-right text-ink-muted">{formatarMoeda(Number(i.valorUnitario))}</td>
+              <td className="px-3 py-2 text-right font-medium text-ink">{formatarMoeda(Number(i.valorTotal))}</td>
               <td className="px-3 py-2 text-center">
                 {i.executado ? (
-                  <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-ok-texto bg-ok-claro px-1.5 py-0.5 rounded-full">
                     <CheckCircle className="w-3 h-3" /> Executado
                   </span>
                 ) : (
-                  <Button type="button" variant="ghost" onClick={() => marcarExecutado(i.id)} className="text-[10px] h-6 px-2 text-blue-600">
+                  <Button type="button" variant="ghost" onClick={() => marcarExecutado(i.id)} className="text-[10px] h-6 px-2 text-acento">
                     Marcar executado
                   </Button>
                 )}
@@ -108,7 +108,7 @@ export function OsOrcamento({ osId, itens: iniciais }: { osId: string; itens: an
             <FormField label="Quantidade"><Input type="number" value={form.quantidade} onChange={(e) => setForm((f) => ({ ...f, quantidade: e.target.value }))} min="1" /></FormField>
             <FormField label="Valor unitário (R$)"><Input type="number" step="0.01" value={form.valorUnitario} onChange={(e) => setForm((f) => ({ ...f, valorUnitario: e.target.value }))} placeholder="0,00" /></FormField>
             <FormField label="Total" className="flex items-end">
-              <p className="text-sm font-medium text-gray-900 py-2">{formatarMoeda((Number(form.quantidade) || 0) * (Number(form.valorUnitario) || 0))}</p>
+              <p className="text-sm font-medium text-ink py-2">{formatarMoeda((Number(form.quantidade) || 0) * (Number(form.valorUnitario) || 0))}</p>
             </FormField>
           </FormGrid>
           <div className="flex justify-end gap-2">

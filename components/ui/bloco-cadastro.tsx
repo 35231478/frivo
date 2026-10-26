@@ -3,7 +3,7 @@ import { Tag } from "lucide-react";
 /** Bloco numerado do cadastro em página única (equipamento, veículo): título + descrição à esquerda no desktop. */
 export function Bloco({ numero, titulo, descricao, opcional, children }: { numero: number; titulo: string; descricao: string; opcional?: boolean; children: React.ReactNode }) {
   return (
-    <section className="bg-white border border-surface-border rounded-2xl p-5 sm:p-6 lg:grid lg:grid-cols-[220px_1fr] lg:gap-8" data-bloco={titulo}>
+    <section className="bg-white border border-surface-border rounded-card p-5 sm:p-6 lg:grid lg:grid-cols-[220px_1fr] lg:gap-8" data-bloco={titulo}>
       <header className="mb-4 lg:mb-0">
         <div className="flex items-center gap-2">
           <span className="w-6 h-6 rounded-full bg-primary-50 text-primary-700 text-xs font-bold flex items-center justify-center">{numero}</span>

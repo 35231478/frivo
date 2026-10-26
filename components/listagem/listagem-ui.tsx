@@ -79,7 +79,7 @@ export function MultiSelect({ titulo, opcoes, selecionados, onChange, icone }: {
         <ChevronDown className="w-3.5 h-3.5 text-ink-muted" />
       </button>
       {aberto && (
-        <div className="absolute z-30 mt-1 w-64 bg-white border border-surface-border rounded-lg shadow-lg max-h-72 overflow-y-auto py-1">
+        <div className="absolute z-30 mt-1 w-64 bg-white border border-surface-border rounded-lg shadow-elevated max-h-72 overflow-y-auto py-1">
           {opcoes.map((o) => (
             <label key={o.value} className="flex items-center gap-2 px-3 py-1.5 hover:bg-surface-alt cursor-pointer text-sm">
               <input type="checkbox" checked={selecionados.includes(o.value)} onChange={() => toggle(o.value)} className="accent-primary-600" />
@@ -195,7 +195,7 @@ export function CampoBusca({ valor, onChange, placeholder, rotulo, sugerir, onEs
           else if (e.key === "ArrowUp") { e.preventDefault(); setDestaque((i) => Math.max(i - 1, -1)); }
           else if (e.key === "Enter" && destaque >= 0) { e.preventDefault(); escolher(sugestoes[destaque]); }
         }}
-        className="w-full bg-white border border-surface-border rounded-lg pl-9 pr-16 py-2.5 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 [&::-webkit-search-cancel-button]:hidden"
+        className="w-full bg-white border border-surface-border rounded-lg pl-9 pr-16 py-2.5 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-acento focus:ring-4 focus:ring-acento/15 [&::-webkit-search-cancel-button]:hidden"
       />
       <span className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
         {carregando && <Loader2 className="w-3.5 h-3.5 text-ink-subtle animate-spin" aria-label="Buscando" />}
@@ -208,7 +208,7 @@ export function CampoBusca({ valor, onChange, placeholder, rotulo, sugerir, onEs
         ) : null}
       </span>
       {aberto && (
-        <ul role="listbox" className="absolute z-40 left-0 right-0 mt-1 bg-white border border-surface-border rounded-lg shadow-lg py-1 text-sm" data-sugestoes>
+        <ul role="listbox" className="absolute z-40 left-0 right-0 mt-1 bg-white border border-surface-border rounded-lg shadow-elevated py-1 text-sm" data-sugestoes>
           {sugestoes.map((sug, i) => (
             <li key={sug.id} role="option" aria-selected={i === destaque}>
               <button
@@ -317,13 +317,13 @@ export function ListaVazia({ mensagem, busca, onLimpar }: { mensagem: string; bu
 /** Esqueleto enquanto a lista carrega (mantém a altura: nada "pula"). */
 export function SkeletonLista({ linhas = 6 }: { linhas?: number }) {
   return (
-    <div className="divide-y divide-surface-border" aria-busy="true" aria-label="Carregando" data-skeleton>
+    <div className="divide-y divide-surface-linha" aria-busy="true" aria-label="Carregando" data-skeleton>
       {Array.from({ length: linhas }, (_, i) => (
         <div key={i} className="flex items-center gap-4 px-4 py-3.5 animate-pulse">
-          <div className="h-3.5 rounded bg-surface-alt flex-1 max-w-[40%]" />
-          <div className="h-3.5 rounded bg-surface-alt w-24 hidden sm:block" />
-          <div className="h-3.5 rounded bg-surface-alt w-16 hidden sm:block" />
-          <div className="h-3.5 rounded bg-surface-alt w-10 ml-auto" />
+          <div className="h-3.5 rounded bg-surface-linha flex-1 max-w-[40%]" />
+          <div className="h-3.5 rounded bg-surface-linha w-24 hidden sm:block" />
+          <div className="h-3.5 rounded bg-surface-linha w-16 hidden sm:block" />
+          <div className="h-3.5 rounded bg-surface-linha w-10 ml-auto" />
         </div>
       ))}
     </div>

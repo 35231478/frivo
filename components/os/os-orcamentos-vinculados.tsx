@@ -102,7 +102,7 @@ export function OsOrcamentosVinculados({ osId, clienteId, numeroOs, vinculados: 
 
   return (
     <div className="space-y-4">
-      {erro && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-erro-vinculo>{erro}</p>}
+      {erro && <p className="text-sm text-atrasado bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2" data-erro-vinculo>{erro}</p>}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-ink-muted">
           {vinculados.length === 0
@@ -133,7 +133,7 @@ export function OsOrcamentosVinculados({ osId, clienteId, numeroOs, vinculados: 
       </div>
 
       {mostraVincular && (
-        <div className="border-2 border-primary-200 bg-primary-50/30 rounded-xl p-4 space-y-3">
+        <div className="border-2 border-primary-200 bg-primary-50/30 rounded-card p-4 space-y-3">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-bold text-primary-700">Vincular orçamento existente</h4>
             <button
@@ -212,7 +212,7 @@ export function OsOrcamentosVinculados({ osId, clienteId, numeroOs, vinculados: 
                 type="button"
                 onClick={() => desvincular(v.orcamento.id, v.orcamento.codigo)}
                 disabled={salvando === v.orcamento.id}
-                className="p-1.5 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                className="p-1.5 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded transition-colors disabled:opacity-50"
                 title="Desvincular"
               >
                 <Trash2 className="w-3.5 h-3.5" />

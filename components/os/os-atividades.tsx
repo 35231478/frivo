@@ -23,7 +23,7 @@ import { InputDataHora } from "@/components/ui/input-data-hora";
 
 
 const STATUS_LABELS: Record<string, string> = { AGENDADA: "Agendada", EM_ANDAMENTO: "Em Andamento", CONCLUIDA: "Concluída", CANCELADA: "Cancelada" };
-const STATUS_COR: Record<string, string> = { AGENDADA: "bg-purple-100 text-purple-700", EM_ANDAMENTO: "bg-yellow-100 text-yellow-700", CONCLUIDA: "bg-green-100 text-green-700", CANCELADA: "bg-red-100 text-red-700" };
+const STATUS_COR: Record<string, string> = { AGENDADA: "bg-acento-claro text-acento", EM_ANDAMENTO: "bg-atencao-claro text-atencao-texto", CONCLUIDA: "bg-ok-claro text-ok-texto", CANCELADA: "bg-atrasado-claro text-atrasado-texto" };
 
 /** `onMudou`: avisa a central da OS (cabeçalho/Resumo) que algo mudou — o status automático pode ter andado. */
 export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId, onMudou }: { osId: string; atividades: any[]; clienteId?: string; unidadeId?: string | null; onMudou?: () => void }) {
@@ -152,7 +152,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
   return (
     <div className="space-y-3">
       {erroStatus && (
-        <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 space-y-2" data-erro-status-atividade>
+        <div role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2 space-y-2" data-erro-status-atividade>
           <p className="flex items-start gap-2"><X className="w-4 h-4 shrink-0 mt-0.5" /> {erroStatus}</p>
           {travadaSemEquip && (
             <ConcluirSemEquipamento osId={osId} atividadeId={travadaSemEquip}
@@ -165,7 +165,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
         </div>
       )}
       {atividades.length === 0 && !mostraForm && (
-        <div data-os-sem-executor className="flex items-start gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
+        <div data-os-sem-executor className="flex items-start gap-2 text-sm text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2.5">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
           <span>Esta OS ainda não tem <strong>quem execute</strong>. {podeEditar ? "Adicione uma atividade escolhendo a equipe ou os colaboradores." : "Peça a quem pode editar a OS para definir a equipe ou os colaboradores."}</span>
         </div>
@@ -174,19 +174,19 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
       {atividades.map((a) => {
         const aberto = expandido.has(a.id);
         return (
-          <div key={a.id} className="border border-gray-200 rounded-lg overflow-hidden">
-            <button type="button" onClick={() => toggleExpand(a.id)} className="flex items-center justify-between w-full p-3 text-left hover:bg-gray-50 transition-colors">
+          <div key={a.id} className="border border-surface-border rounded-lg overflow-hidden">
+            <button type="button" onClick={() => toggleExpand(a.id)} className="flex items-center justify-between w-full p-3 text-left hover:bg-surface-page transition-colors">
               <div className="flex items-center gap-3 min-w-0">
-                <Wrench className="w-4 h-4 text-gray-400 shrink-0" />
+                <Wrench className="w-4 h-4 text-ink-muted shrink-0" />
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-gray-900">{a.titulo}</span>
+                    <span className="text-sm font-medium text-ink">{a.titulo}</span>
                     {a.tipoOs && <span className="text-[10px] font-medium text-white px-1.5 py-0.5 rounded-full" style={{ backgroundColor: a.tipoOs.cor }}>{a.tipoOs.nome}</span>}
                     <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full", STATUS_COR[a.status])}>{STATUS_LABELS[a.status]}</span>
                     <ChipPrazo a={a} />
-                    {a.resumo && <span data-formulario-respondido className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-sky-50 text-sky-700">Formulário respondido</span>}
+                    {a.resumo && <span data-formulario-respondido className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-acento-claro text-acento">Formulário respondido</span>}
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
+                  <div className="flex items-center gap-3 text-xs text-ink-muted mt-0.5">
                     <TecnicosAtividade a={a} />
                     {a.veiculo && <span className="flex items-center gap-1 shrink-0" data-veiculo-atividade><Car className="w-3 h-3" />{a.veiculo.placa}</span>}
                     {a.dataAgendada && <span>{formatarDataHora(a.dataAgendada)}</span>}
@@ -194,16 +194,16 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
                   </div>
                 </div>
               </div>
-              {aberto ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+              {aberto ? <ChevronDown className="w-4 h-4 text-ink-muted" /> : <ChevronRight className="w-4 h-4 text-ink-muted" />}
             </button>
 
             {aberto && (
-              <div className="border-t border-gray-100 p-3 space-y-3 bg-gray-50/50">
-                {a.observacao && <p className="text-sm text-gray-600">{a.observacao}</p>}
+              <div className="border-t border-surface-linha p-3 space-y-3 bg-surface-page">
+                {a.observacao && <p className="text-sm text-ink-muted">{a.observacao}</p>}
                 {a.resumo && (
                   <div>
-                    <p className="text-xs font-semibold text-gray-500 mb-1">Resumo do formulário:</p>
-                    <pre className="text-sm text-gray-700 whitespace-pre-wrap bg-white rounded-lg p-3 border border-gray-100 font-sans">{a.resumo}</pre>
+                    <p className="text-xs font-semibold text-ink-muted mb-1">Resumo do formulário:</p>
+                    <pre className="text-sm text-ink whitespace-pre-wrap bg-white rounded-lg p-3 border border-surface-linha font-sans">{a.resumo}</pre>
                   </div>
                 )}
                 <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -215,24 +215,24 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
                     )}
                     {podeEditar && (
                       <button type="button" onClick={() => abrirEdicao(a)} title="Editar atividade"
-                        className="p-2 rounded-md text-gray-500 hover:text-frivo-600 hover:bg-white">
+                        className="p-2 rounded-md text-ink-muted hover:text-acento hover:bg-white">
                         <Pencil className="w-4 h-4" />
                       </button>
                     )}
                     {podeExcluir && (
                       <button type="button" onClick={() => { setErroModal(""); setExcluindo(a); }} title="Excluir atividade"
-                        className="p-2 rounded-md text-gray-500 hover:text-red-600 hover:bg-red-50">
+                        className="p-2 rounded-md text-ink-muted hover:text-atrasado hover:bg-atrasado-claro">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     )}
                   </div>
                   <Link href={`/ordens/${osId}/atividades/${a.id}/executar`}
-                    className="inline-flex items-center gap-1.5 text-xs font-medium text-frivo-600 hover:text-frivo-700 bg-frivo-50 hover:bg-frivo-100 px-2.5 py-1.5 rounded-lg">
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-acento hover:text-acento-hover bg-frivo-50 hover:bg-frivo-100 px-2.5 py-1.5 rounded-lg">
                     <Smartphone className="w-3.5 h-3.5" /> Executar
                   </Link>
                 </div>
 
-                <div className="border-t border-gray-100 pt-3">
+                <div className="border-t border-surface-linha pt-3">
                   <AtividadeEquipamentos
                     osId={osId}
                     atividadeId={a.id}
@@ -250,7 +250,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
         <div className="border border-frivo-200 bg-frivo-50/30 rounded-lg p-4 space-y-4">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-semibold text-frivo-800">Nova atividade</h4>
-            <button type="button" onClick={() => setMostraForm(false)} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
+            <button type="button" onClick={() => setMostraForm(false)} className="text-ink-muted hover:text-ink"><X className="w-4 h-4" /></button>
           </div>
           <FormField label="Título" required>
             <Input value={form.titulo} onChange={(e) => setForm((f) => ({ ...f, titulo: e.target.value }))} placeholder="Descrição breve da atividade" />
@@ -322,7 +322,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
             </FormField>
           </FormGrid>
           {atividadeSemExecutor(editando) && (
-            <p data-aviso-sem-executor className="flex items-start gap-1.5 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+            <p data-aviso-sem-executor className="flex items-start gap-1.5 text-xs text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-2.5 py-1.5">
               <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> Atividade antiga sem executor: para salvar, escolha a equipe ou os colaboradores.
             </p>
           )}
@@ -362,7 +362,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={() => setExcluindo(null)}>Voltar</Button>
             <button type="button" onClick={confirmarExclusao} disabled={processando}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold rounded-lg bg-red-600 hover:bg-red-700 text-white disabled:opacity-60">
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold rounded-lg bg-atrasado hover:brightness-95 text-white disabled:opacity-60">
               {processando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} Sim, excluir
             </button>
           </div>
@@ -377,7 +377,7 @@ function TecnicosAtividade({ a }: { a: any }) {
   const nomes: string[] = [a.tecnico?.nome, ...(a.tecnicosEquipe ?? []).map((t: any) => t.tecnico?.nome)].filter(Boolean);
   if (!nomes.length && !a.equipe) {
     return (
-      <span data-sem-executor className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">
+      <span data-sem-executor className="inline-flex items-center gap-1 text-[10px] font-semibold text-atencao-texto bg-atencao-claro border border-atencao/20 px-1.5 py-0.5 rounded-full">
         <AlertTriangle className="w-3 h-3" /> Sem executor
       </span>
     );
@@ -385,14 +385,14 @@ function TecnicosAtividade({ a }: { a: any }) {
   return (
     <span className="flex items-center gap-1 min-w-0" data-tecnicos-atividade>
       {a.equipe
-        ? <><Users className="w-3 h-3 shrink-0" /><span className="inline-flex items-center gap-1 font-medium text-gray-600"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: a.equipe.cor }} />{a.equipe.nome}</span><span>·</span></>
+        ? <><Users className="w-3 h-3 shrink-0" /><span className="inline-flex items-center gap-1 font-medium text-ink-muted"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: a.equipe.cor }} />{a.equipe.nome}</span><span>·</span></>
         : nomes.length > 1 ? <Users className="w-3 h-3 shrink-0" /> : <User className="w-3 h-3 shrink-0" />}
       <span className="truncate">{nomes.map((n, i) => (i === 0 && nomes.length > 1 ? `${n} (resp.)` : n)).join(", ") || "Sem técnico"}</span>
     </span>
   );
 }
 
-const COR_CHIP_PRAZO: Record<string, string> = { ATRASADO: "bg-red-100 text-red-700", VENCE_HOJE: "bg-amber-100 text-amber-800", NO_PRAZO: "bg-slate-100 text-slate-600" };
+const COR_CHIP_PRAZO: Record<string, string> = { ATRASADO: "bg-atrasado-claro text-atrasado-texto", VENCE_HOJE: "bg-atencao-claro text-atencao-texto", NO_PRAZO: "bg-surface-linha text-ink-muted" };
 
 /** Prazo próprio da atividade, com atraso contado no dia de Brasília. Concluída/cancelada não mostra. */
 function ChipPrazo({ a }: { a: any }) {
@@ -403,7 +403,7 @@ function ChipPrazo({ a }: { a: any }) {
 
 function ErroModal({ texto }: { texto: string }) {
   return (
-    <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+    <div className="flex items-start gap-2 text-sm text-atrasado-texto bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2">
       <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> <span>{texto}</span>
     </div>
   );

@@ -72,7 +72,7 @@ export function InputDataHora({ value, onChange, id, className, disabled, horaPa
           onChange={(e) => { const h = mascararHora(e.target.value); setHora(h); emitir(dia, h); }}
           className={cn(
             "w-full bg-white border rounded-lg pl-3 pr-7 py-2 text-sm text-ink tabular-nums focus:outline-none focus:ring-4 transition-all disabled:opacity-60",
-            horaInvalida ? "border-red-400 focus:border-red-500 focus:ring-red-500/10" : "border-surface-border focus:border-primary-500 focus:ring-primary-500/10",
+            horaInvalida ? "border-atrasado focus:border-atrasado focus:ring-red-500/10" : "border-surface-border focus:border-primary-500 focus:ring-primary-500/10",
           )}
         />
         <Clock className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-subtle pointer-events-none" />

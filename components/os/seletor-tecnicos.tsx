@@ -112,15 +112,15 @@ export function SeletorTecnicos({ tecnicos, equipes, tipoOsId, valor, onChange, 
             return (
               <li key={id} data-tecnico-chip={id} data-responsavel={resp || undefined}
                 className={cn("inline-flex items-center gap-1.5 pl-1 pr-1.5 py-1 rounded-full border text-sm",
-                  !apto ? "border-red-300 bg-red-50 text-red-700" : resp ? "border-amber-300 bg-amber-50 text-ink" : "border-surface-border bg-white text-ink")}>
+                  !apto ? "border-atrasado/40 bg-atrasado-claro text-atrasado-texto" : resp ? "border-atencao/40 bg-atencao-claro text-ink" : "border-surface-border bg-white text-ink")}>
                 <AvatarTecnico nome={t?.nome ?? "?"} size={22} />
                 <span className="max-w-[160px] truncate">{t?.nome ?? "Técnico"}</span>
                 <button type="button" onClick={() => onChange({ ...valor, responsavelId: id })} title={resp ? "Responsável" : "Tornar responsável"}
                   aria-label={resp ? `${t?.nome} é o responsável` : `Tornar ${t?.nome} responsável`}
-                  className={cn("p-0.5 rounded", resp ? "text-amber-600" : "text-ink-subtle hover:text-amber-600")}>
+                  className={cn("p-0.5 rounded", resp ? "text-atencao" : "text-ink-subtle hover:text-atencao")}>
                   <Crown className="w-3.5 h-3.5" />
                 </button>
-                <button type="button" onClick={() => remover(id)} title="Remover" aria-label={`Remover ${t?.nome}`} className="p-0.5 rounded text-ink-subtle hover:text-red-600"><X className="w-3.5 h-3.5" /></button>
+                <button type="button" onClick={() => remover(id)} title="Remover" aria-label={`Remover ${t?.nome}`} className="p-0.5 rounded text-ink-subtle hover:text-atrasado"><X className="w-3.5 h-3.5" /></button>
               </li>
             );
           })}
@@ -142,7 +142,7 @@ export function SeletorTecnicos({ tecnicos, equipes, tipoOsId, valor, onChange, 
 
       <p className="text-[11px] text-ink-subtle">
         {valor.tecnicoIds.length > 1
-          ? <>A <Crown className="inline w-3 h-3 text-amber-600" /> marca o responsável; todos podem executar e concluir a atividade.</>
+          ? <>A <Crown className="inline w-3 h-3 text-atencao" /> marca o responsável; todos podem executar e concluir a atividade.</>
           : tipoOsId ? "Apenas colaboradores com competência neste tipo de OS." : "Obrigatório: escolha uma equipe ou um ou mais colaboradores."}
       </p>
       {ocultosCompetencia > 0 && (
@@ -167,13 +167,13 @@ export function SeletorTecnicos({ tecnicos, equipes, tipoOsId, valor, onChange, 
         </div>
       )}
       {foraDaEquipe.length > 0 && (
-        <p data-fora-equipe className="flex items-start gap-1.5 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+        <p data-fora-equipe className="flex items-start gap-1.5 text-xs text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-2.5 py-1.5">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
           Ficaram de fora por não ter competência neste tipo de OS: {foraDaEquipe.map((id) => porId.get(id)?.nome).join(", ")}.
         </p>
       )}
       {semCompetencia.length > 0 && (
-        <p className="flex items-start gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-2.5 py-1.5">
+        <p className="flex items-start gap-1.5 text-xs text-atrasado-texto bg-atrasado-claro border border-atrasado/20 rounded-lg px-2.5 py-1.5">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
           Sem competência neste tipo de OS: {semCompetencia.map((id) => porId.get(id)?.nome).join(", ")}. Remova ou troque o tipo de OS.
         </p>

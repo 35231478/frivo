@@ -23,7 +23,7 @@ export function MobileBottomNav() {
   const itens = ITENS.filter((i) => pode(i.modulo));
 
   return (
-    <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-surface-border shadow-[0_-2px_8px_rgba(0,0,0,0.04)] safe-bottom">
+    <nav aria-label="Navegação principal" className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-surface-border safe-bottom">
       <div className={cn("grid", itens.length === 4 ? "grid-cols-5" : itens.length === 3 ? "grid-cols-4" : itens.length === 2 ? "grid-cols-3" : "grid-cols-2")}>
         {itens.map(({ href, icone: Icone, label }) => {
           const ativo = pathname === href || pathname.startsWith(href + "/");
@@ -31,9 +31,10 @@ export function MobileBottomNav() {
             <Link
               key={href}
               href={href}
+              aria-current={ativo ? "page" : undefined}
               className={cn(
                 "flex flex-col items-center justify-center gap-0.5 py-2 touch-target transition-colors",
-                ativo ? "text-primary-600" : "text-ink-muted hover:text-ink",
+                ativo ? "text-acento font-semibold" : "text-ink-muted hover:text-ink",
               )}
             >
               <Icone className="w-5 h-5" />

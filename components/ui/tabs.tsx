@@ -26,7 +26,7 @@ export function Tabs({ tabs, defaultTab, active: ativaControlada, onChange, chil
   return (
     <div>
       <div className="border-b border-surface-border overflow-x-auto">
-        <nav className="flex gap-0 -mb-px">
+        <nav className="flex gap-1 -mb-px px-1">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -35,9 +35,10 @@ export function Tabs({ tabs, defaultTab, active: ativaControlada, onChange, chil
               aria-current={active === tab.id ? "page" : undefined}
               onClick={() => setActive(tab.id)}
               className={cn(
-                "px-4 py-3 text-sm font-medium border-b-2 transition-all whitespace-nowrap",
+                "px-3.5 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap rounded-t-md",
+                "focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-acento",
                 active === tab.id
-                  ? "border-primary-500 text-primary-600"
+                  ? "border-acento text-acento font-semibold"
                   : "border-transparent text-ink-muted hover:text-ink hover:border-surface-border",
               )}
             >
@@ -47,8 +48,8 @@ export function Tabs({ tabs, defaultTab, active: ativaControlada, onChange, chil
                   className={cn(
                     "ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full",
                     active === tab.id
-                      ? "bg-primary-100 text-primary-700"
-                      : "bg-surface-alt text-ink-muted"
+                      ? "bg-acento-claro text-acento"
+                      : "bg-surface-linha text-ink-muted"
                   )}
                 >
                   {tab.badge}
@@ -58,7 +59,7 @@ export function Tabs({ tabs, defaultTab, active: ativaControlada, onChange, chil
           ))}
         </nav>
       </div>
-      <div className="pt-4">{children(active)}</div>
+      <div className="pt-5">{children(active)}</div>
     </div>
   );
 }

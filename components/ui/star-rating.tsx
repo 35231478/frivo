@@ -32,8 +32,8 @@ export function StarRating({ value, onChange, size = "md", readOnly = !onChange 
             className={cn(
               sizeClass,
               n <= current
-                ? "text-amber-400 fill-amber-400"
-                : "text-gray-300",
+                ? "text-atencao fill-amber-400"
+                : "text-ink-subtle",
             )}
           />
         </button>

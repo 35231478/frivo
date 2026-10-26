@@ -96,8 +96,8 @@ export function MapaEndereco(props: MapaEnderecoProps) {
 
   if (loading) {
     return (
-      <div className="h-[200px] rounded-lg bg-gray-100 flex items-center justify-center">
-        <span className="text-xs text-gray-400">Carregando mapa…</span>
+      <div className="h-[200px] rounded-lg bg-surface-linha flex items-center justify-center">
+        <span className="text-xs text-ink-muted">Carregando mapa…</span>
       </div>
     );
   }
@@ -111,7 +111,7 @@ export function MapaEndereco(props: MapaEnderecoProps) {
         href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         crossOrigin=""
       />
-      <div className="rounded-lg overflow-hidden border border-gray-200">
+      <div className="rounded-lg overflow-hidden border border-surface-border">
         <MapContainer
           center={[coords.lat, coords.lng]}
           zoom={16}
@@ -127,12 +127,12 @@ export function MapaEndereco(props: MapaEnderecoProps) {
             <Popup>
               <div className="text-xs space-y-1">
                 <p className="font-medium">{props.logradouro}{props.numero ? `, ${props.numero}` : ""}</p>
-                <p className="text-gray-500">{props.cidade} — {props.estado}</p>
+                <p className="text-ink-muted">{props.cidade} — {props.estado}</p>
                 <a
                   href={googleMapsUrl(coords, query)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-blue-600 hover:underline mt-1"
+                  className="inline-flex items-center gap-1 text-acento hover:underline mt-1"
                 >
                   <ExternalLink className="w-3 h-3" />
                   Abrir no Google Maps
