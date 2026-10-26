@@ -7,7 +7,7 @@
  *  - editor do checklist do tipo: adicionar, remover, reordenar e salvar a lista inteira; sugestão AVAC;
  *    quem só visualiza não edita;
  *  - detalhe da OS: progresso do checklist e fotos por equipamento; remover recusado mostra o motivo;
- *  - nova OS: escolher os equipamentos atendidos da unidade e enviá-los na criação (opcional).
+ *  - nova OS: vincular os equipamentos atendidos pela gaveta e enviá-los na criação (opcional).
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
@@ -323,13 +323,13 @@ describe("detalhe da OS: equipamentos atendidos", () => {
 
 /* ───────── Nova OS ───────── */
 describe("nova OS: equipamentos atendidos (opcional)", () => {
-  it("lista os da unidade; os marcados vão no corpo da criação (na 1ª atividade)", async () => {
+  it("vincula pela gaveta (equipamentos do cliente); os escolhidos vão no corpo da criação (na 1ª atividade)", async () => {
     window.history.replaceState(null, "", "/ordens/nova?clienteId=c1&unidadeId=un1&descricao=Preventiva%20mensal");
     respostas["/api/clientes"] = { status: 200, corpo: [{ id: "c1", nome: "Hospital Santa Luzia" }] };
     respostas["/api/unidades"] = { status: 200, corpo: [{ id: "un1", nome: "Matriz" }, { id: "un2", nome: "Anexo" }] };
     respostas["/api/equipamentos"] = { status: 200, corpo: [
-      { id: "eqA", nome: "Split Sala 1", marca: "Daikin", modelo: "FTXS", ativo: true, tipoEquipamento: TIPO },
-      { id: "eqB", nome: "Split Sala 2", marca: "Daikin", modelo: "FTXS", ativo: true, tipoEquipamento: TIPO },
+      { id: "eqA", nome: "Split Sala 1", marca: "Daikin", modelo: "FTXS", ativo: true, unidadeId: "un1", unidade: { id: "un1", nome: "Matriz" }, tipoEquipamento: TIPO },
+      { id: "eqB", nome: "Split Sala 2", marca: "Daikin", modelo: "FTXS", ativo: true, unidadeId: "un1", unidade: { id: "un1", nome: "Matriz" }, tipoEquipamento: TIPO },
     ] };
     respostas["/api/contratos"] = { status: 200, corpo: [] };
     respostas["/api/tecnicos"] = { status: 200, corpo: [{ id: "t1", nome: "João Silva", competencias: [] }] };
@@ -339,12 +339,16 @@ describe("nova OS: equipamentos atendidos (opcional)", () => {
     await montar(createElement(NovaOrdemPage));
 
     expect(txt("[data-hint-equipamentos]")).toContain("Opcional agora");
-    expect(chamadas.find((c) => c.url.startsWith("/api/equipamentos"))!.url).toBe("/api/equipamentos?unidadeId=un1");
-    expect($$("[data-opcao-equipamento]").map((o) => o.getAttribute("data-opcao-equipamento"))).toEqual(["eqA", "eqB"]);
-    await clicar($('[data-opcao-equipamento="eqB"] input'));
+    // A gaveta é um portal (fora da caixa): procura no documento
+    await clicar($("[data-vincular-equipamento]"));
+    expect(chamadas.find((c) => c.url.startsWith("/api/equipamentos"))!.url).toBe("/api/equipamentos?clienteId=c1&resumo=1");
+    expect([...document.querySelectorAll("[data-opcao-equipamento]")].map((o) => o.getAttribute("data-opcao-equipamento"))).toEqual(["eqA", "eqB"]);
+    await clicar(document.querySelector('[data-opcao-equipamento="eqB"] input'));
+    await clicar(document.querySelector("[data-confirmar-equipamentos]"));
     expect(txt("[data-qtd-atendidos]")).toBe("1 equipamento selecionado");
 
-    await escolher($('select[aria-label="Usar equipe"]'), "eq1");
+    await clicar($("[data-seletor-equipe] button"));
+    await clicar($('[data-opcao-equipe="eq1"]'));
     await clicar([...caixa.querySelectorAll("button")].find((b) => b.textContent?.includes("Abrir ordem de serviço"))!);
     const post = escritas().find((c) => c.url === "/api/ordens")!;
     expect(post.corpo).toMatchObject({ clienteId: "c1", unidadeId: "un1", equipamentoIds: ["eqB"], execucao: { equipeId: "eq1", tecnicoIds: ["t1"] } });

@@ -24,13 +24,30 @@ export async function GET(req: NextRequest) {
   const unidadeId = searchParams.get("unidadeId");
   const clienteId = searchParams.get("clienteId");
 
+  const where = {
+    empresaId,
+    ativo: true,
+    ...(unidadeId && { unidadeId }),
+    ...(clienteId && { unidade: { clienteId } }),
+  };
+
+  // ?resumo=1: só o que um seletor precisa (sem as fotos em base64, que pesam na lista)
+  if (searchParams.get("resumo") === "1") {
+    const resumo = await prisma.equipamento.findMany({
+      where,
+      select: {
+        id: true, nome: true, marca: true, modelo: true, capacidade: true, potencia: true, patrimonio: true,
+        setor: true, localizacao: true, ativo: true, unidadeId: true,
+        unidade: { select: { id: true, nome: true } },
+        tipoEquipamento: { select: { id: true, nome: true } },
+      },
+      orderBy: { criadoEm: "desc" },
+    });
+    return NextResponse.json(resumo);
+  }
+
   const equipamentos = await prisma.equipamento.findMany({
-    where: {
-      empresaId,
-      ativo: true,
-      ...(unidadeId && { unidadeId }),
-      ...(clienteId && { unidade: { clienteId } }),
-    },
+    where,
     include: {
       unidade: {
         select: {
