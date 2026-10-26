@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { acento } from "@/lib/ui/tokens";
 import { useRouter } from "next/navigation";
 import {
   DndContext, DragOverlay, useDraggable, useDroppable,
@@ -61,26 +62,33 @@ const DIAS_SEMANA = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
 const DIAS_LONGO = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
 const FINALIZADAS = ["CONCLUIDA", "CANCELADA"];
 
-const PRIORIDADE_BG: Record<string, string> = {
-  BAIXA: "bg-slate-100 hover:bg-slate-200",
-  NORMAL: "bg-primary-50 hover:bg-primary-100",
-  ALTA: "bg-orange-50 hover:bg-orange-100",
-  URGENTE: "bg-red-50 hover:bg-red-100",
-  CRITICO: "bg-red-100 hover:bg-red-200",
+// Sistema de design: cartão neutro (sem borda colorida à esquerda, sem fundo tingido). O STATUS vira
+// um ponto com a cor da função e a PRIORIDADE alta/urgente um ícone de alerta.
+const STATUS_PONTO: Record<string, string> = {
+  ABERTA: "bg-acento",
+  AGUARDANDO_ATENDIMENTO: "bg-acento",
+  AGENDADA: "bg-acento",
+  EM_ANDAMENTO: "bg-atencao",
+  PAUSADA: "bg-atencao",
+  AGUARDANDO_PECA: "bg-atencao",
+  CONCLUIDA: "bg-ok",
+  CANCELADA: "bg-ink-subtle",
 };
-const STATUS_BORDA: Record<string, string> = {
-  ABERTA: "border-l-blue-500",
-  AGUARDANDO_ATENDIMENTO: "border-l-sky-400",
-  AGENDADA: "border-l-blue-500",
-  EM_ANDAMENTO: "border-l-amber-500",
-  PAUSADA: "border-l-amber-400",
-  AGUARDANDO_PECA: "border-l-orange-400",
-  CONCLUIDA: "border-l-green-500",
-  CANCELADA: "border-l-slate-400",
-};
+const PRIORIDADE_ICONE: Record<string, string> = { ALTA: "text-atencao", URGENTE: "text-atrasado", CRITICO: "text-atrasado" };
 
-const corBorda = (c: CardOs) => (c.atrasada ? "border-l-red-500" : STATUS_BORDA[c.status] ?? "border-l-slate-300");
-const corFundo = (c: CardOs) => PRIORIDADE_BG[c.prioridade] ?? PRIORIDADE_BG.NORMAL;
+const corPonto = (c: CardOs) => (c.atrasada ? "bg-atrasado" : STATUS_PONTO[c.status] ?? "bg-ink-subtle");
+const corFundo = (_c: CardOs) => "bg-white border border-surface-border hover:bg-surface-page";
+
+/** Ponto do status + alerta de prioridade (a palavra está no título/legenda; a cor só reforça). */
+function MarcasCard({ card, grande }: { card: CardOs; grande?: boolean }) {
+  const alerta = PRIORIDADE_ICONE[card.prioridade];
+  return (
+    <>
+      <span className={cn("rounded-full shrink-0", grande ? "w-2.5 h-2.5" : "w-2 h-2", corPonto(card))} aria-hidden="true" data-ponto-status />
+      {alerta && <AlertTriangle className={cn("shrink-0", grande ? "w-3.5 h-3.5" : "w-2.5 h-2.5", alerta)} aria-label={`Prioridade ${card.prioridade.toLowerCase()}`} />}
+    </>
+  );
+}
 const badgeStatus = (s: string) => `badge-status-${s.toLowerCase()}`;
 const badgePrioridade = (p: string) => `badge-prioridade-${p.toLowerCase()}`;
 const bloqueada = (c: CardOs) => FINALIZADAS.includes(c.status);
@@ -268,7 +276,7 @@ export function CalendarioGrid({
         {toasts.map((t) => (
           <div key={t.id} className={cn(
             "anim-tooltip flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-xl text-sm font-medium text-white",
-            t.tipo === "ok" ? "bg-ink" : "bg-red-600",
+            t.tipo === "ok" ? "bg-ink" : "bg-atrasado",
           )}>
             {t.tipo === "ok" ? <Check className="w-4 h-4 text-success-400" /> : <AlertTriangle className="w-4 h-4" />}
             {t.texto}
@@ -303,7 +311,7 @@ function Celula({
   });
 
   if (!cel.inMonth) {
-    return <div className="min-h-[56px] md:min-h-[120px]" style={{ backgroundColor: "#F8FAFC" }} />;
+    return <div className="min-h-[56px] md:min-h-[120px] bg-surface-page" />;
   }
 
   // As OS que batem com o filtro vêm primeiro (as esmaecidas não "roubam" as vagas visíveis)
@@ -359,7 +367,7 @@ function Celula({
         </span>
         {cards.length > 0 && (
           <span className={cn("text-[10px] font-bold px-1.5 rounded-full tabular-nums",
-            cards.some((c) => c.atrasada) ? "bg-red-100 text-red-700" : "bg-primary-100 text-primary-700")}>
+            cards.some((c) => c.atrasada) ? "bg-atrasado-claro text-atrasado-texto" : "bg-primary-100 text-primary-700")}>
             {cards.length}
           </span>
         )}
@@ -498,7 +506,8 @@ function CardArrastavel({
 
 function CardVisual({ card, travada, className }: { card: CardOs; travada?: boolean; className?: string }) {
   return (
-    <div className={cn("flex items-center gap-1.5 border-l-[3px] rounded px-1.5 py-1 transition-colors", corFundo(card), corBorda(card), className)}>
+    <div className={cn("flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors", corFundo(card), className)}>
+      <MarcasCard card={card} />
       <span className="text-[10px] font-semibold text-ink-muted tabular-nums shrink-0">{card.hora ?? "--:--"}</span>
       <span className="flex items-center gap-0.5 text-[11px] font-medium text-ink truncate flex-1 min-w-0">
         {travada && <Lock className="w-2.5 h-2.5 shrink-0 text-ink-subtle" />}
@@ -539,12 +548,12 @@ function EquipeCard({ card }: { card: CardOs }) {
     <div className="pt-1.5 border-t border-surface-border space-y-1.5" data-equipe-card>
       {card.equipeNome && (
         <p className="flex items-center gap-1.5 text-xs font-semibold text-ink">
-          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: card.equipeCor ?? "#0EA5E9" }} />Equipe {card.equipeNome}
+          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: card.equipeCor ?? acento.DEFAULT }} />Equipe {card.equipeNome}
         </p>
       )}
       <ul className="space-y-1">
         {card.tecnicoNome && (
-          <li className="flex items-center gap-2 text-xs text-ink"><AvatarTecnico nome={card.tecnicoNome} fotoUrl={card.tecnicoAvatar} size={20} />{card.tecnicoNome}<span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 rounded">responsável</span></li>
+          <li className="flex items-center gap-2 text-xs text-ink"><AvatarTecnico nome={card.tecnicoNome} fotoUrl={card.tecnicoAvatar} size={20} />{card.tecnicoNome}<span className="text-[10px] text-atencao-texto bg-atencao-claro px-1.5 rounded">responsável</span></li>
         )}
         {membros.map((m) => (
           <li key={m.nome} className="flex items-center gap-2 text-xs text-ink-muted"><AvatarTecnico nome={m.nome} fotoUrl={m.avatar} size={20} />{m.nome}</li>
@@ -587,7 +596,7 @@ function Tooltip({ card, rect }: { card: CardOs; rect: DOMRect }) {
         <div className="flex items-center gap-2 flex-wrap">
           <span className={badgePrioridade(card.prioridade)}>{LABELS_PRIORIDADE[card.prioridade] ?? card.prioridade}</span>
           {card.atrasada && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded-full">
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-atrasado-claro text-atrasado-texto border border-atrasado/20 px-2 py-0.5 rounded-full">
               <AlertTriangle className="w-3 h-3" /> Atrasada
             </span>
           )}
@@ -607,7 +616,7 @@ function ModalDia({
   }, [onClose]);
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col anim-tooltip" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-card shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col anim-tooltip" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between gap-3 p-4 border-b border-surface-border">
           <div>
             <h3 className="font-semibold text-ink capitalize">{diaPorExtenso(dateKey)}</h3>
@@ -622,8 +631,9 @@ function ModalDia({
               key={card.chave}
               type="button"
               onClick={() => onNavegar(card)}
-              className={cn("w-full flex items-center gap-2.5 border-l-4 rounded-lg px-3 py-2.5 text-left transition-colors", corFundo(card), corBorda(card), dimmedIds?.has(card.chave) && "opacity-40")}
+              className={cn("w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition-colors", corFundo(card), dimmedIds?.has(card.chave) && "opacity-40")}
             >
+              <MarcasCard card={card} grande />
               <span className="text-xs font-semibold text-ink-muted tabular-nums shrink-0 w-10">{card.hora ?? "--:--"}</span>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-ink truncate flex items-center gap-1">
@@ -711,7 +721,7 @@ function CriarOsModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col anim-tooltip" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-card shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col anim-tooltip" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between gap-3 p-4 border-b border-surface-border">
           <div>
             <h3 className="font-semibold text-ink">Nova OS</h3>
@@ -721,7 +731,7 @@ function CriarOsModal({
         </div>
 
         <div className="overflow-y-auto p-4 space-y-3">
-          {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
+          {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2">{erro}</div>}
 
           <div>
             <label className="text-[11px] font-semibold text-ink-muted">Cliente *</label>

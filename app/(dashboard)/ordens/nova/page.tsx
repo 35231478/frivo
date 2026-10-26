@@ -160,10 +160,10 @@ export default function NovaOrdemPage() {
         title={solicitacao ? `Aceitar solicitação ${solicitacao.numero}` : "Nova ordem de serviço"}
         backHref={solicitacao ? "/calendario" : "/ordens"}
       />
-      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-6">
-        {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{erro}</div>}
+      <div className="bg-white rounded-card border border-surface-border p-6 space-y-6">
+        {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3">{erro}</div>}
         {solicitacao && (
-          <div className="flex items-start gap-3 bg-cyan-50 border border-cyan-200 text-cyan-900 text-sm rounded-lg px-4 py-3">
+          <div className="flex items-start gap-3 bg-acento-claro border border-acento/20 text-acento-hover text-sm rounded-lg px-4 py-3">
             <Inbox className="w-4 h-4 shrink-0 mt-0.5" />
             <p>
               Solicitação enviada pelo cliente, já preenchida com o que ele mandou. Escolha a <strong>data e a hora</strong> do
@@ -320,7 +320,7 @@ export default function NovaOrdemPage() {
           </FormField>
         </FormSection>
 
-        <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
+        <div className="flex items-center justify-end gap-3 pt-2 border-t border-surface-linha">
           <Button variant="secondary" onClick={() => router.back()}>Cancelar</Button>
           {solicitacao ? (
             <Button loading={salvando} onClick={aceitarSolicitacao} disabled={!solicitacao.pendente || carregandoSolicitacao}>Aceitar e agendar</Button>

@@ -51,14 +51,14 @@ export function BlocoOsDoDia({ d }: { d: DadosBloco["os-do-dia"] }) {
             return (
               <li key={l.chave} className="py-2.5 flex items-center gap-3">
                 <div className="min-w-0 flex-1">
-                  <p className={cn("text-sm font-medium truncate", l.chave === "sem-tecnico" ? "text-amber-700" : "text-ink")}>{l.nome}</p>
+                  <p className={cn("text-sm font-medium truncate", l.chave === "sem-tecnico" ? "text-atencao-texto" : "text-ink")}>{l.nome}</p>
                   <p className="text-xs text-ink-subtle truncate">
                     {l.equipe ? `Equipe ${l.equipe} · ` : ""}{plural(l.concluidas, "concluída", "concluídas")}
                     {l.emAndamento ? ` · ${l.emAndamento} em andamento` : ""}
                   </p>
                 </div>
                 <div className="w-24 sm:w-32 shrink-0" title={`${l.concluidas} de ${l.total} concluídas`}>
-                  <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden" role="meter" aria-valuemin={0} aria-valuemax={l.total} aria-valuenow={l.concluidas} aria-label={`${l.nome}: ${l.concluidas} de ${l.total} concluídas`}>
+                  <div className="h-1.5 rounded-full bg-surface-linha overflow-hidden" role="meter" aria-valuemin={0} aria-valuemax={l.total} aria-valuenow={l.concluidas} aria-label={`${l.nome}: ${l.concluidas} de ${l.total} concluídas`}>
                     <div className="h-full rounded-full bg-primary-500" style={{ width: `${pct}%` }} />
                   </div>
                 </div>
@@ -81,13 +81,13 @@ export function BlocoSolicitacoes({ d }: { d: DadosBloco["solicitacoes"] }) {
           {d.recentes.map((s) => (
             <li key={s.id}>
               <Link href={`/ordens/${s.id}`} className="py-2.5 flex items-start gap-3 hover:bg-surface-alt -mx-2 px-2 rounded-lg">
-                <Inbox className="w-4 h-4 text-cyan-600 mt-0.5 shrink-0" aria-hidden />
+                <Inbox className="w-4 h-4 text-acento mt-0.5 shrink-0" aria-hidden />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-ink truncate"><span className="font-mono text-xs font-semibold text-primary-600 mr-1.5">{s.numero}</span>{s.cliente}</p>
                   <p className="text-xs text-ink-subtle truncate">{s.resumo}</p>
                 </div>
                 {s.prioridade !== "NORMAL" && s.prioridade !== "BAIXA" && (
-                  <span className="text-[11px] font-semibold text-red-700 bg-red-50 rounded px-1.5 py-0.5 shrink-0 inline-flex items-center gap-1">
+                  <span className="text-[11px] font-semibold text-atrasado-texto bg-atrasado-claro rounded px-1.5 py-0.5 shrink-0 inline-flex items-center gap-1">
                     <AlertTriangle className="w-3 h-3" aria-hidden />{LABELS_PRIORIDADE[s.prioridade] ?? s.prioridade}
                   </span>
                 )}

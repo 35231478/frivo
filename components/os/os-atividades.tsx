@@ -181,7 +181,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-medium text-ink">{a.titulo}</span>
-                    {a.tipoOs && <span className="text-[10px] font-medium text-white px-1.5 py-0.5 rounded-full" style={{ backgroundColor: a.tipoOs.cor }}>{a.tipoOs.nome}</span>}
+                    {a.tipoOs && <span className="inline-flex items-center gap-1 text-[10px] font-medium text-ink-muted bg-surface-page border border-surface-border px-1.5 py-0.5 rounded-full"><span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: a.tipoOs.cor }} aria-hidden />{a.tipoOs.nome}</span>}
                     <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full", STATUS_COR[a.status])}>{STATUS_LABELS[a.status]}</span>
                     <ChipPrazo a={a} />
                     {a.resumo && <span data-formulario-respondido className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-acento-claro text-acento">Formulário respondido</span>}

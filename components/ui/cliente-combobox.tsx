@@ -11,7 +11,7 @@ export type ClienteOpcao = {
   cpfCnpj?: string | null;
 };
 
-const CORES = ["bg-sky-500", "bg-ok", "bg-violet-500", "bg-atencao", "bg-rose-500", "bg-indigo-500", "bg-teal-500", "bg-orange-500"];
+const CORES = ["bg-acento", "bg-ok", "bg-acento", "bg-atencao", "bg-atrasado", "bg-acento", "bg-ok", "bg-atencao"];
 
 function iniciais(nome: string) {
   return nome.trim().split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();

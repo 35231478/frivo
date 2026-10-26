@@ -22,11 +22,11 @@ export function situacao(e: EquipamentoTela) {
   if (!e.feito) {
     // Marcado como não atendido (com o motivo) ou já mexido: "Não atendido"; senão ainda "A fazer"
     const mexeu = Object.values(e.respostas).some((r) => r.status || r.valor !== null) || e.fotos.length > 0 || !!e.observacao;
-    return mexeu ? { chave: "nao-atendido", rotulo: "Não atendido", classe: "bg-slate-100 text-slate-600" } : { chave: "nao-iniciado", rotulo: "A fazer", classe: "bg-primary-50 text-primary-700" };
+    return mexeu ? { chave: "nao-atendido", rotulo: "Não atendido", classe: "bg-surface-linha text-ink-muted" } : { chave: "nao-iniciado", rotulo: "A fazer", classe: "bg-primary-50 text-primary-700" };
   }
   if (e.completo) return { chave: "completo", rotulo: "Completo", classe: "bg-success-100 text-success-700" };
   const n = e.faltas.semResposta.length + e.faltas.semFoto.length + e.faltas.semObservacao.length + (e.faltas.formulario ? 1 : 0);
-  return { chave: "pendente", rotulo: n === 1 ? "Falta 1" : `Faltam ${n}`, classe: "bg-amber-100 text-amber-800" };
+  return { chave: "pendente", rotulo: n === 1 ? "Falta 1" : `Faltam ${n}`, classe: "bg-atencao-claro text-atencao-texto" };
 }
 
 /** A OS no app: local, equipamentos (com o que falta), serviço extra e a conclusão (com a trava da Etapa 1). */
@@ -38,7 +38,7 @@ export function VistaOs({ atividadeId, equipamentoId }: { atividadeId: string; e
     return (
       <div className="space-y-4" data-vista="os-indisponivel">
         <Voltar />
-        <div className="rounded-2xl bg-white border border-surface-border p-6 text-center space-y-2">
+        <div className="rounded-card bg-white border border-surface-border p-6 text-center space-y-2">
           <WifiOff className="w-8 h-8 text-ink-subtle mx-auto" />
           <p className="font-semibold text-ink">Esta OS ainda não está no aparelho</p>
           <p className="text-sm text-ink-muted">Abra-a uma vez com sinal (ou abra o Meu dia com internet: as OS do dia já ficam guardadas).</p>
@@ -69,7 +69,7 @@ function ResumoOs({ r, x, aEnviar, registrar }: { r: RetratoAtividade; x: Execuc
   const [adicional, setAdicional] = useState<AdicionalTela | "novo" | null>(null);
   const [concluir, setConcluir] = useState(false);
   const [aviso, setAviso] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
-  const st = ROTULO_STATUS_ATIVIDADE[x.atividade.status] ?? { rotulo: x.atividade.status, classe: "bg-slate-100 text-slate-700" };
+  const st = ROTULO_STATUS_ATIVIDADE[x.atividade.status] ?? { rotulo: x.atividade.status, classe: "bg-surface-linha text-ink" };
   const atendidos = x.equipamentos.filter((e) => e.feito).length;
 
   async function lerQr(valor: string) {
@@ -85,7 +85,7 @@ function ResumoOs({ r, x, aEnviar, registrar }: { r: RetratoAtividade; x: Execuc
   return (
     <div className="space-y-4 pb-32" data-vista="os">
       <Voltar />
-      <header className="bg-white rounded-2xl border border-surface-border overflow-hidden">
+      <header className="bg-white rounded-card border border-surface-border overflow-hidden">
         <div className="p-4 space-y-1.5">
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm font-semibold text-ink-muted">{c.osNumero}{x.atividade.tipoOs ? ` · ${x.atividade.tipoOs.nome}` : ""}</p>
@@ -104,23 +104,23 @@ function ResumoOs({ r, x, aEnviar, registrar }: { r: RetratoAtividade; x: Execuc
         )}
       </header>
 
-      {aEnviar > 0 && <p className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-900" data-a-enviar>{aEnviar === 1 ? "1 gravação" : `${aEnviar} gravações`} desta OS no aparelho — sobe sozinho quando houver sinal.</p>}
-      {so && <p className="rounded-xl bg-success-50 border border-success-200 px-3 py-2 text-sm text-success-800 inline-flex items-center gap-2 w-full"><CheckCircle2 className="w-4 h-4" /> Atividade concluída{aEnviar ? " no aparelho (a enviar)" : ""}. Só leitura.</p>}
-      {aviso && <p role="status" className={cn("rounded-xl px-3 py-2 text-sm", aviso.tipo === "ok" ? "bg-success-50 text-success-800" : "bg-red-50 text-red-800")}>{aviso.texto}</p>}
+      {aEnviar > 0 && <p className="rounded-card bg-atencao-claro border border-atencao/20 px-3 py-2 text-sm text-atencao-texto" data-a-enviar>{aEnviar === 1 ? "1 gravação" : `${aEnviar} gravações`} desta OS no aparelho — sobe sozinho quando houver sinal.</p>}
+      {so && <p className="rounded-card bg-success-50 border border-success-200 px-3 py-2 text-sm text-success-800 inline-flex items-center gap-2 w-full"><CheckCircle2 className="w-4 h-4" /> Atividade concluída{aEnviar ? " no aparelho (a enviar)" : ""}. Só leitura.</p>}
+      {aviso && <p role="status" className={cn("rounded-card px-3 py-2 text-sm", aviso.tipo === "ok" ? "bg-success-50 text-success-800" : "bg-atrasado-claro text-atrasado-texto")}>{aviso.texto}</p>}
 
       <section className="space-y-2">
         <div className="flex items-end justify-between">
           <h2 className="text-base font-bold text-ink">Equipamentos</h2>
           <span className="text-sm text-ink-muted" data-atendidos>{atendidos} de {x.equipamentos.length} atendidos</span>
         </div>
-        {!x.equipamentos.length && <p className="rounded-xl bg-white border border-surface-border p-4 text-sm text-ink-muted">Nenhum equipamento nesta OS ainda. Escaneie o QR do equipamento ou escolha na lista da unidade.</p>}
+        {!x.equipamentos.length && <p className="rounded-card bg-white border border-surface-border p-4 text-sm text-ink-muted">Nenhum equipamento nesta OS ainda. Escaneie o QR do equipamento ou escolha na lista da unidade.</p>}
         <ul className="space-y-2">
           {x.equipamentos.map((e) => {
             const s = situacao(e);
             return (
               <li key={e.equipamento.id}>
                 <button type="button" onClick={() => irPara({ ver: "os", a: atividadeId, e: e.equipamento.id })} data-equip-linha={e.equipamento.id} data-situacao={s.chave}
-                  className="w-full text-left bg-white rounded-xl border border-surface-border p-3 flex items-center gap-3 active:bg-surface-alt">
+                  className="w-full text-left bg-white rounded-card border border-surface-border p-3 flex items-center gap-3 active:bg-surface-alt">
                   {s.chave === "completo" ? <CheckCircle2 className="w-6 h-6 text-success-600 shrink-0" /> : s.chave === "nao-iniciado" ? <CircleDashed className="w-6 h-6 text-ink-subtle shrink-0" /> : <HardDrive className="w-6 h-6 text-ink-muted shrink-0" />}
                   <span className="min-w-0 flex-1">
                     <span className="block font-semibold text-ink truncate">{e.equipamento.titulo}</span>
@@ -135,22 +135,22 @@ function ResumoOs({ r, x, aEnviar, registrar }: { r: RetratoAtividade; x: Execuc
         </ul>
         {!so && (
           <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => setScan(true)} className="rounded-xl border border-primary-200 bg-primary-50 text-primary-700 py-3 text-sm font-semibold inline-flex items-center justify-center gap-2 touch-target"><QrCode className="w-5 h-5" /> Ler QR Code</button>
-            <button type="button" onClick={() => setLista(true)} className="rounded-xl border border-surface-border bg-white text-ink py-3 text-sm font-semibold inline-flex items-center justify-center gap-2 touch-target"><ListPlus className="w-5 h-5" /> Da lista</button>
+            <button type="button" onClick={() => setScan(true)} className="rounded-card border border-primary-200 bg-primary-50 text-primary-700 py-3 text-sm font-semibold inline-flex items-center justify-center gap-2 touch-target"><QrCode className="w-5 h-5" /> Ler QR Code</button>
+            <button type="button" onClick={() => setLista(true)} className="rounded-card border border-surface-border bg-white text-ink py-3 text-sm font-semibold inline-flex items-center justify-center gap-2 touch-target"><ListPlus className="w-5 h-5" /> Da lista</button>
           </div>
         )}
       </section>
 
       <section className="space-y-2" data-adicionais>
-        <h2 className="text-base font-bold text-ink inline-flex items-center gap-1.5"><Sparkles className="w-4 h-4 text-violet-600" /> Serviço extra pedido na visita</h2>
+        <h2 className="text-base font-bold text-ink inline-flex items-center gap-1.5"><Sparkles className="w-4 h-4 text-acento" /> Serviço extra pedido na visita</h2>
         {x.adicionais.map((a, i) => {
           const eq = a.equipamentoId ? (x.equipamentos.find((e) => e.equipamento.id === a.equipamentoId)?.equipamento ?? r.equipamentosUnidade.find((u) => u.id === a.equipamentoId)) : null;
           return (
             <button key={a.clientId ?? a.id ?? i} type="button" disabled={so} onClick={() => setAdicional(a)} data-adicional
-              className="w-full text-left rounded-xl border-2 border-violet-200 bg-violet-50 p-3 space-y-1 disabled:opacity-90">
+              className="w-full text-left rounded-card border-2 border-acento/20 bg-acento-claro p-3 space-y-1 disabled:opacity-90">
               <span className="flex items-center justify-between gap-2">
-                <span className="text-xs font-bold uppercase tracking-wide text-violet-700">Adicional</span>
-                <span className="text-xs font-semibold rounded-full bg-white text-violet-700 px-2 py-0.5">{a.pendente ? "no aparelho" : "escritório avalia a cobrança"}</span>
+                <span className="text-xs font-bold uppercase tracking-wide text-acento-hover">Adicional</span>
+                <span className="text-xs font-semibold rounded-full bg-white text-acento-hover px-2 py-0.5">{a.pendente ? "no aparelho" : "escritório avalia a cobrança"}</span>
               </span>
               <span className="block text-sm font-semibold text-ink">{a.descricao}</span>
               <span className="block text-xs text-ink-muted">{[eq?.titulo, a.fotos.length ? `${a.fotos.length} foto${a.fotos.length > 1 ? "s" : ""}` : null].filter(Boolean).join(" · ") || "Sem equipamento"}</span>
@@ -158,16 +158,16 @@ function ResumoOs({ r, x, aEnviar, registrar }: { r: RetratoAtividade; x: Execuc
           );
         })}
         {!so && (
-          <button type="button" onClick={() => setAdicional("novo")} data-novo-adicional className="w-full rounded-xl border-2 border-dashed border-violet-300 text-violet-700 py-3 text-sm font-semibold inline-flex items-center justify-center gap-2 touch-target">
+          <button type="button" onClick={() => setAdicional("novo")} data-novo-adicional className="w-full rounded-card border-2 border-dashed border-acento/40 text-acento-hover py-3 text-sm font-semibold inline-flex items-center justify-center gap-2 touch-target">
             <Plus className="w-5 h-5" /> Adicionar serviço extra
           </button>
         )}
       </section>
 
       {!so && (
-        <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 px-4 pb-2 pt-2 bg-gradient-to-t from-surface-page via-surface-page to-transparent">
+        <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 px-4 pb-2 pt-2 bg-surface-page/95 backdrop-blur border-t border-surface-border">
           <button type="button" onClick={() => setConcluir(true)} data-concluir-atividade
-            className={cn("w-full rounded-2xl py-4 text-base font-bold shadow-elevated inline-flex items-center justify-center gap-2 touch-target", x.conclusao.ok ? "bg-success-600 text-white" : "bg-white text-ink border border-surface-border")}>
+            className={cn("w-full rounded-card py-4 text-base font-bold shadow-elevated inline-flex items-center justify-center gap-2 touch-target", x.conclusao.ok ? "bg-success-600 text-white" : "bg-white text-ink border border-surface-border")}>
             <ClipboardCheck className="w-5 h-5" /> Concluir atividade
           </button>
         </div>
@@ -198,7 +198,7 @@ function ListaUnidade({ r, x, onFechar, onVincular }: { r: RetratoAtividade; x: 
         <div className="relative">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle" />
           <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por nome, TAG, local" aria-label="Buscar equipamento"
-            className="w-full rounded-xl border border-surface-border pl-9 pr-3 py-3 text-base" />
+            className="w-full rounded-card border border-surface-border pl-9 pr-3 py-3 text-base" />
         </div>
         {!lista.length && <p className="text-sm text-ink-muted">Nenhum outro equipamento ativo nesta unidade.</p>}
         <ul className="divide-y divide-surface-border max-h-[50vh] overflow-y-auto">
@@ -214,7 +214,7 @@ function ListaUnidade({ r, x, onFechar, onVincular }: { r: RetratoAtividade; x: 
             </li>
           ))}
         </ul>
-        <button type="button" disabled={!marcados.size} onClick={() => onVincular([...marcados])} className="w-full rounded-xl bg-primary-600 text-white py-3 font-semibold disabled:opacity-40 touch-target">
+        <button type="button" disabled={!marcados.size} onClick={() => onVincular([...marcados])} className="w-full rounded-card bg-primary-600 text-white py-3 font-semibold disabled:opacity-40 touch-target">
           Vincular {marcados.size || ""}
         </button>
       </div>
@@ -250,7 +250,7 @@ function ModalAdicional({ x, r, a, onFechar, registrar }: { x: ExecucaoTela; r: 
         <ObservacaoVoz rotulo="O que foi feito / pedido" obrigatoria valor={descricao} onSalvar={setDescricao} aoDigitar={setDescricao} placeholder="Ex.: troca do controle remoto da sala 2" />
         <label className="block space-y-1">
           <span className="text-sm font-semibold text-ink">Equipamento (opcional)</span>
-          <select value={equipamentoId} onChange={(e) => setEquipamentoId(e.target.value)} className="w-full rounded-xl border border-surface-border bg-white px-3 py-3 text-base" aria-label="Equipamento do serviço extra">
+          <select value={equipamentoId} onChange={(e) => setEquipamentoId(e.target.value)} className="w-full rounded-card border border-surface-border bg-white px-3 py-3 text-base" aria-label="Equipamento do serviço extra">
             <option value="">Nenhum</option>
             {opcoes.map((o) => <option key={o.id} value={o.id}>{o.titulo}</option>)}
           </select>
@@ -264,12 +264,12 @@ function ModalAdicional({ x, r, a, onFechar, registrar }: { x: ExecucaoTela; r: 
           </div>
           <BotaoFoto rotulo="Foto do serviço extra" onFoto={(d) => setFotosNovas((l) => [...l, d])} />
         </div>
-        <button type="button" disabled={descricao.trim().length < 3} onClick={salvar} data-salvar-adicional className="w-full rounded-xl bg-violet-600 text-white py-4 text-base font-bold disabled:opacity-40 touch-target">
+        <button type="button" disabled={descricao.trim().length < 3} onClick={salvar} data-salvar-adicional className="w-full rounded-card bg-acento text-white py-4 text-base font-bold disabled:opacity-40 touch-target">
           {a ? "Salvar" : "Adicionar à OS"}
         </button>
         {a && ref && (
           <button type="button" onClick={async () => { await registrar([{ tipo: "adicionalRemover", atividadeId, dados: ref }]); onFechar(); }}
-            className="w-full inline-flex items-center justify-center gap-1.5 text-sm font-semibold text-red-600 py-2 touch-target"><Trash2 className="w-4 h-4" /> Tirar este serviço extra</button>
+            className="w-full inline-flex items-center justify-center gap-1.5 text-sm font-semibold text-atrasado py-2 touch-target"><Trash2 className="w-4 h-4" /> Tirar este serviço extra</button>
         )}
       </div>
     </Modal>
@@ -283,7 +283,7 @@ function ModalConcluir({ x, onFechar, onConcluir, onJustificado }: { x: Execucao
     <Modal aberto titulo="Concluir atividade" onFechar={onFechar}>
       {!c.ok ? (
         <div className="space-y-3" data-pendencias>
-          <p className="text-sm font-semibold text-red-700">Ainda não dá para concluir:</p>
+          <p className="text-sm font-semibold text-atrasado-texto">Ainda não dá para concluir:</p>
           {c.semEquipamento
             ? (
               <div className="space-y-3">
@@ -291,7 +291,7 @@ function ModalConcluir({ x, onFechar, onConcluir, onJustificado }: { x: Execucao
                 {/* Exceção justificada: precisa de sinal (o motivo vai direto para o escritório) */}
                 {typeof navigator !== "undefined" && navigator.onLine && (
                   <ConcluirSemEquipamento osId={x.os.id} atividadeId={x.atividade.id} onConcluido={onJustificado}
-                    className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 py-3 font-semibold touch-target" />
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-card border border-atencao/20 bg-atencao-claro text-atencao-texto py-3 font-semibold touch-target" />
                 )}
               </div>
             )
@@ -300,21 +300,21 @@ function ModalConcluir({ x, onFechar, onConcluir, onJustificado }: { x: Execucao
                 {c.pendencias.map((p) => (
                   <li key={p.equipamentoId}>
                     <button type="button" onClick={() => { onFechar(); irPara({ ver: "os", a: x.atividade.id, e: p.equipamentoId }); }}
-                      className="w-full text-left rounded-xl border border-red-200 bg-red-50 p-3 text-sm">
+                      className="w-full text-left rounded-card border border-atrasado/20 bg-atrasado-claro p-3 text-sm">
                       <span className="block font-semibold text-ink">{p.titulo}</span>
-                      <span className="block text-red-800">{textoFaltas(p)}</span>
+                      <span className="block text-atrasado-texto">{textoFaltas(p)}</span>
                     </button>
                   </li>
                 ))}
               </ul>
             )}
-          <button type="button" onClick={onFechar} className="w-full rounded-xl border border-surface-border py-3 font-semibold touch-target">Voltar</button>
+          <button type="button" onClick={onFechar} className="w-full rounded-card border border-surface-border py-3 font-semibold touch-target">Voltar</button>
         </div>
       ) : (
         <div className="space-y-4">
           <p className="text-sm text-ink">{c.atendidos === 1 ? "1 equipamento atendido" : `${c.atendidos} equipamentos atendidos`}{c.naoAtendidos ? ` · ${c.naoAtendidos} não atendido${c.naoAtendidos > 1 ? "s" : ""}` : ""}{x.adicionais.length ? ` · ${x.adicionais.length} serviço${x.adicionais.length > 1 ? "s" : ""} extra` : ""}.</p>
           <ObservacaoVoz rotulo="Resumo para o escritório (opcional)" valor={resumo} onSalvar={setResumo} aoDigitar={setResumo} />
-          <button type="button" onClick={() => onConcluir(resumo.trim())} data-confirmar-conclusao className="w-full rounded-xl bg-success-600 text-white py-4 text-base font-bold touch-target">Concluir atividade</button>
+          <button type="button" onClick={() => onConcluir(resumo.trim())} data-confirmar-conclusao className="w-full rounded-card bg-success-600 text-white py-4 text-base font-bold touch-target">Concluir atividade</button>
         </div>
       )}
     </Modal>

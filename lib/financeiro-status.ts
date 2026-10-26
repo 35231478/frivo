@@ -16,11 +16,11 @@ export interface StatusVisual {
 const CLASSES: Record<string, string> = {
   PREVISTO: "bg-primary-50 text-primary-700",
   A_VENCER: "bg-success-50 text-success-700",
-  VENCE_HOJE: "bg-amber-50 text-amber-700",
-  VENCIDO: "bg-red-100 text-red-700",
+  VENCE_HOJE: "bg-atencao-claro text-atencao-texto",
+  VENCIDO: "bg-atrasado-claro text-atrasado-texto",
   PAGO: "bg-success-100 text-success-700",
-  CANCELADO: "bg-slate-100 text-slate-500",
-  PARCIAL: "bg-amber-50 text-amber-700",
+  CANCELADO: "bg-surface-linha text-ink-muted",
+  PARCIAL: "bg-atencao-claro text-atencao-texto",
 };
 
 /**

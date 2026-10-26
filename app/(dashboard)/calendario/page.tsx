@@ -12,7 +12,7 @@ import { prazoVencido } from "@/lib/os/prazos";
 import { chaveDiaBR, chaveDiaCivil, partesBR } from "@/lib/fuso";
 import { gridCalendario, posicaoNoCalendario } from "@/lib/calendario/grid";
 import { SolicitacoesGaveta } from "@/components/calendario/solicitacoes-gaveta";
-import { CalendarDays, ChevronLeft, ChevronRight, Repeat } from "lucide-react";
+import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, Repeat } from "lucide-react";
 
 export const metadata: Metadata = { title: "Calendário" };
 
@@ -218,16 +218,14 @@ export default async function CalendarioPage({
 
         {/* Legenda */}
         <div className="px-4 py-3 border-t border-surface-border flex flex-wrap items-center gap-4 text-xs text-ink-muted">
-          <span className="font-semibold text-ink-subtle uppercase tracking-wider">Prioridade:</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-slate-200" /> Baixa</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-primary-100" /> Normal</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-orange-100" /> Alta</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-red-100" /> Urgente</span>
-          <span className="font-semibold text-ink-subtle uppercase tracking-wider ml-2">Status (borda):</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm border-l-2 border-l-blue-500 bg-surface-alt" /> Aberta</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm border-l-2 border-l-amber-500 bg-surface-alt" /> Em andamento</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm border-l-2 border-l-green-500 bg-surface-alt" /> Concluída</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm border-l-2 border-l-red-500 bg-surface-alt" /> Atrasada</span>
+          <span className="font-semibold text-ink-muted uppercase tracking-wider">Status:</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-acento" /> Aberta / agendada</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-atencao" /> Em andamento</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-ok" /> Concluída</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-atrasado" /> Atrasada</span>
+          <span className="font-semibold text-ink-muted uppercase tracking-wider ml-2">Prioridade:</span>
+          <span className="flex items-center gap-1.5"><AlertTriangle className="w-3 h-3 text-atencao" /> Alta</span>
+          <span className="flex items-center gap-1.5"><AlertTriangle className="w-3 h-3 text-atrasado" /> Urgente</span>
           <span className="flex items-center gap-1.5"><Repeat className="w-3 h-3" /> OS recorrente</span>
         </div>
       </div>
