@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { OsDetalhe } from "@/components/os/os-detalhe";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
+import { carregarGaleria } from "@/lib/os/galeria-server";
 
 export const metadata: Metadata = { title: "Ordem de Serviço" };
 
@@ -50,7 +51,6 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
           },
         },
       },
-      anexos: { select: { id: true, nome: true, tipo: true, tamanho: true, criadoEm: true }, orderBy: { criadoEm: "desc" } },
       // Serviços adicionais pedidos na visita (app do técnico): destacados para o escritório decidir a cobrança
       servicosAdicionais: {
         where: { atividade: { status: { not: "CANCELADA" } } },
@@ -84,5 +84,8 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
     .map((mi) => mi.medicao)
     .filter((m) => (vistas.has(m.id) ? false : (vistas.add(m.id), true)));
 
-  return <OsDetalhe os={{ ...os, medicoes: medicoesDaOs }} abaInicial={aba} />;
+  // Fotos & anexos do serviço (só metadados; as imagens são servidas à parte)
+  const galeria = await carregarGaleria(empresaId, os.id);
+
+  return <OsDetalhe os={{ ...os, medicoes: medicoesDaOs, galeria }} abaInicial={aba} />;
 }

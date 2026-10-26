@@ -2,7 +2,7 @@
  * Testes das rotas de anexo com banco e sessão simulados (sem Postgres).
  * Cobrem o item C1 da auditoria: anexo não pode virar HTML/script servido pelo painel.
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { HTML, PNG, SVG, dataUrl } from "./arquivos-exemplo";
 
@@ -25,9 +25,17 @@ vi.mock("@/lib/auth-portal", () => ({ getPortalSession: vi.fn(async () => portal
 
 const params = <T,>(p: T) => ({ params: Promise.resolve(p) });
 
+// Carrega as rotas uma vez (o import a frio passa dos 5 s de um teste em máquina carregada)
+beforeAll(async () => {
+  await Promise.all([import("@/app/api/ordens/[id]/anexos/route"), import("@/app/api/ordens/[id]/anexos/[anexoId]/route"), import("@/app/api/portal/chamados/route")]);
+}, 120_000);
+
 beforeEach(() => {
   vi.clearAllMocks();
-  db.osAnexo.create.mockImplementation(async ({ data }: any) => ({ id: "a1", nome: data.nome, tipo: data.tipo, tamanho: data.tamanho }));
+  db.osAnexo.create.mockImplementation(async ({ data }: any) => ({
+    id: "a1", nome: data.nome, tipo: data.tipo, tamanho: data.tamanho, legenda: data.legenda ?? null, equipamentoId: data.equipamentoId ?? null,
+    criadoEm: new Date("2026-10-26T12:00:00Z"), atividade: null, criadoPor: { nome: "Ana" },
+  }));
 });
 
 describe("GET /api/ordens/[id]/anexos/[anexoId]", () => {
@@ -60,9 +68,10 @@ describe("GET /api/ordens/[id]/anexos/[anexoId]", () => {
 });
 
 describe("POST /api/ordens/[id]/anexos", () => {
-  async function enviar(bytes: Uint8Array, nome: string, tipoDeclarado: string) {
+  async function enviar(bytes: Uint8Array, nome: string, tipoDeclarado: string, extra: Record<string, string> = {}) {
     const fd = new FormData();
     fd.append("arquivo", new File([new Uint8Array(bytes)], nome, { type: tipoDeclarado }));
+    for (const [k, v] of Object.entries(extra)) fd.append(k, v);
     const { POST } = await import("@/app/api/ordens/[id]/anexos/route");
     const req = new NextRequest("http://localhost/api/ordens/os1/anexos", { method: "POST", body: fd });
     return POST(req, params({ id: "os1" }));
@@ -80,8 +89,14 @@ describe("POST /api/ordens/[id]/anexos", () => {
     expect(db.osAnexo.create).not.toHaveBeenCalled();
   });
 
+  it("foto sem dizer a que se refere (equipamento ou Geral) e sem legenda é recusada", async () => {
+    expect((await enviar(PNG, "foto.png", "image/png")).status).toBe(400);
+    expect((await enviar(PNG, "foto.png", "image/png", { referencia: "GERAL" })).status).toBe(400);
+    expect(db.osAnexo.create).not.toHaveBeenCalled();
+  });
+
   it("aceita foto e grava o tipo detectado (não o declarado)", async () => {
-    const r = await enviar(PNG, "foto.png", "application/octet-stream");
+    const r = await enviar(PNG, "foto.png", "application/octet-stream", { referencia: "GERAL", legenda: "Fachada do prédio" });
     expect(r.status).toBe(201);
     const data = db.osAnexo.create.mock.calls[0][0].data;
     expect(data.tipo).toBe("image/png");

@@ -53,6 +53,9 @@ export interface ServicoAdicionalTela {
   criadoPor: string | null; criadoEm: Date;
 }
 
+/** Fotos do serviço (galeria da OS) tiradas nesta atividade: equipamento da OS ou Geral (null) + legenda */
+export interface FotoServicoTela { id: string; clientId: string | null; equipamentoId: string | null; legenda: string | null }
+
 export type CampoFormularioTela = { id: string; label: string; tipo: string; obrigatorio: boolean; ordem: number; opcoes: unknown; ativo: boolean };
 export interface EquipamentoExecucao {
   vinculoId: string;
@@ -74,6 +77,8 @@ export interface Execucao {
   equipamentos: EquipamentoExecucao[];
   /** Serviços a mais pedidos na visita (mesma OS, mesmo relatório, destacados como "Adicional") */
   adicionais: ServicoAdicionalTela[];
+  /** Fotos do serviço tiradas nesta atividade (fora do checklist), com a referência e a legenda */
+  fotosServico: FotoServicoTela[];
   conclusao: ResultadoConclusao;
   /** Saída da exigência de equipamento desta atividade (a tela e o app recalculam a conclusão com ela) */
   dispensaEquipamento: DispensaEquipamento | null;
@@ -123,7 +128,7 @@ export async function carregarExecucao(empresaId: string, osId: string, atividad
   });
   const tipoIds = [...new Set(vinculos.map((v) => v.equipamento.tipoEquipamentoId).filter((x): x is string => !!x))];
 
-  const [itensAtivos, respostas, comAudio, fotos, mappings, respForm, adicionais] = await Promise.all([
+  const [itensAtivos, respostas, comAudio, fotos, mappings, respForm, adicionais, fotosServico] = await Promise.all([
     tipoIds.length ? prisma.checklistTipoItem.findMany({
       where: { tipoEquipamentoId: { in: tipoIds }, ativo: true },
       orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }],
@@ -167,6 +172,11 @@ export async function carregarExecucao(empresaId: string, osId: string, atividad
         id: true, clientId: true, descricao: true, equipamentoId: true, statusCobranca: true, criadoEm: true,
         criadoPor: { select: { nome: true } }, fotos: { orderBy: { criadoEm: "asc" }, select: { id: true, clientId: true } },
       },
+    }),
+    prisma.osAnexo.findMany({
+      where: { atividadeId, ordemServicoId: osId, tipo: { startsWith: "image/" } },
+      orderBy: { criadoEm: "asc" },
+      select: { id: true, clientId: true, equipamentoId: true, legenda: true },
     }),
   ]);
   const audios = new Set(comAudio.map((r) => r.id));
@@ -220,6 +230,7 @@ export async function carregarExecucao(empresaId: string, osId: string, atividad
     bloqueada: STATUS_BLOQUEADOS.includes(atividade.status),
     equipamentos,
     adicionais: adicionais.map(({ criadoPor, ...a }) => ({ ...a, criadoPor: criadoPor?.nome ?? null })),
+    fotosServico,
     conclusao,
     dispensaEquipamento,
   };

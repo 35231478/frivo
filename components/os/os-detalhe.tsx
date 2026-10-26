@@ -12,7 +12,7 @@ import { OsPrazos } from "@/components/os/os-prazos";
 import { OsRelatorios } from "@/components/os/os-relatorios";
 import { ComprasSecao } from "@/components/compras/compras-secao";
 import { OsInativarBotao } from "@/components/os/os-inativar";
-import { OsAnexos } from "@/components/os/os-anexos";
+import { OsFotosAnexos } from "@/components/os/os-fotos-anexos";
 import { OsAdicionais } from "@/components/os/os-adicionais";
 import { CabecalhoOs } from "@/components/os/central/cabecalho-os";
 import { ResumoOs } from "@/components/os/central/resumo-os";
@@ -71,7 +71,7 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
     { id: "comercial", label: "Comercial", badge: (os.orcamentos?.length ?? 0) + os.itensOrcamento.length },
     { id: "materiais", label: "Materiais & Compras" },
     { id: "financeiro", label: "Financeiro", badge: os.medicoes.length },
-    { id: "relatorios", label: "Relatórios & Anexos", badge: os.anexos.length },
+    { id: "relatorios", label: "Relatórios & Anexos", badge: (os.galeria?.fotos.length ?? 0) + (os.galeria?.documentos.length ?? 0) },
   ];
 
   const acoes = (
@@ -141,11 +141,12 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
               )}
 
               {ativa === "relatorios" && (
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div className="space-y-8">
                   <section data-secao-relatorios><OsRelatorios osId={os.id} /></section>
-                  <section data-secao-anexos>
-                    <h3 className="section-title mb-3">Anexos</h3>
-                    <OsAnexos osId={os.id} anexos={os.anexos} />
+                  {/* Fotos & anexos em LARGURA TOTAL, embaixo dos relatórios: por equipamento + Geral + Documentos */}
+                  <section data-secao-anexos className="border-t border-surface-linha pt-6">
+                    <OsFotosAnexos osId={os.id} galeria={os.galeria ?? { equipamentos: [], fotos: [], documentos: [] }}
+                      onMudou={(galeria) => setOs((prev: any) => ({ ...prev, galeria }))} />
                   </section>
                 </div>
               )}

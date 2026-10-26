@@ -15,6 +15,8 @@ import { itemDoEquipamento, marcarAtendido, type ContextoExecucao } from "@/lib/
 import { validarAudio } from "@/lib/execucao/audio";
 import { equipamentosDoCliente, nomeEquipamento } from "@/lib/execucao/vinculos";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
+import { equipamentosDaOs } from "@/lib/os/galeria-server";
+import { limparLegenda, MSG_EQUIPAMENTO_FORA, MSG_LEGENDA, nomeArquivoFoto } from "@/lib/os/galeria";
 
 export type ResultadoAcao<T = Record<string, unknown>> =
   | { ok: true; status: number; dados: T }
@@ -26,6 +28,8 @@ const erro = (status: number, mensagem: string, extra?: Record<string, unknown>)
 /** Fotos por equipamento numa atividade */
 export const MAX_FOTOS_EQUIPAMENTO = 40;
 export const MAX_FOTOS_ADICIONAL = 20;
+/** Fotos + documentos enviados à OS (galeria "Fotos & Anexos do serviço") */
+export const MAX_ANEXOS_OS = 300;
 const TAMANHO_MAX_FOTO = 5 * 1024 * 1024;
 const MSG_FOTO = "Envie uma foto (JPG, PNG, WEBP ou HEIC).";
 /** Maior número que cabe na coluna (DECIMAL 12,3 — o banco arredonda em 3 casas) */
@@ -266,6 +270,74 @@ export async function removerFoto(ctx: ContextoExecucao, ref: { fotoId?: string;
   // Pelo id do aparelho, "não achei" = já foi tirada (repetir não é erro)
   if (!count && ref.fotoId) return erro(404, "Foto não encontrada");
   return ok({ removidas: count });
+}
+
+/* ───────────────────────── Foto do serviço (galeria da OS) ───────────────────────── */
+
+export const fotoOsSchema = z.object({
+  dataUrl: z.string().min(30),
+  /** Equipamento DA OS a que a foto se refere; null = "Geral da OS" (escolha obrigatória: o campo tem de vir) */
+  equipamentoId: z.string().min(1).nullable(),
+  legenda: z.string().refine((v) => !!limparLegenda(v), MSG_LEGENDA),
+  clientId: clientIdSchema.optional(),
+}).strict();
+
+/**
+ * Foto do serviço tirada no app (fora do checklist): vai para "Fotos & Anexos do serviço" da OS
+ * com a referência (equipamento da OS ou Geral) e a legenda. Reenviar o mesmo `clientId` não duplica.
+ */
+export async function adicionarFotoOs(ctx: ContextoExecucao, d: z.infer<typeof fotoOsSchema>) {
+  const osId = ctx.atividade.ordemServico.id;
+  const select = { id: true, clientId: true, equipamentoId: true, legenda: true } as const;
+  if (d.clientId) {
+    const ja = await prisma.osAnexo.findUnique({ where: { clientId: d.clientId }, select: { ...select, ordemServicoId: true, atividadeId: true } });
+    if (ja) {
+      if (ja.ordemServicoId !== osId || ja.atividadeId !== ctx.atividade.id) return erro(409, "Esta foto já foi enviada para outro atendimento.");
+      const { ordemServicoId: _o, atividadeId: _a, ...foto } = ja;
+      return ok(foto);
+    }
+  }
+  const legenda = limparLegenda(d.legenda)!;
+  let referencia = "Geral da OS";
+  if (d.equipamentoId) {
+    const eq = (await equipamentosDaOs(ctx.empresaId, osId)).find((e) => e.id === d.equipamentoId);
+    if (!eq) return erro(400, MSG_EQUIPAMENTO_FORA);
+    referencia = eq.titulo;
+  }
+  const v = validarDataUrl(d.dataUrl, nomeArquivoFoto(legenda, d.clientId ?? Date.now().toString(36)), { tipos: TIPOS_IMAGEM, tamanhoMax: TAMANHO_MAX_FOTO, mensagemTipo: MSG_FOTO });
+  if (!v.ok) return erro(400, v.erro);
+  if ((await prisma.osAnexo.count({ where: { ordemServicoId: osId } })) >= MAX_ANEXOS_OS) return erro(400, `Limite de ${MAX_ANEXOS_OS} fotos e documentos por OS.`);
+  try {
+    const foto = await prisma.osAnexo.create({
+      data: {
+        ordemServicoId: osId, atividadeId: ctx.atividade.id, equipamentoId: d.equipamentoId, legenda,
+        nome: v.arquivo.nome, tipo: v.arquivo.tipo, tamanho: v.arquivo.tamanho, conteudo: v.arquivo.conteudo,
+        criadoPorId: ctx.usuarioId, clientId: d.clientId ?? null,
+      },
+      select,
+    });
+    await prisma.osHistorico.create({
+      data: { ordemServicoId: osId, usuarioId: ctx.usuarioId, acao: "Foto adicionada", detalhes: `${legenda} — ${referencia} (app do técnico)` },
+    });
+    return ok(foto, 201);
+  } catch (e) {
+    if (ehDuplicado(e) && d.clientId) return adicionarFotoOs(ctx, d); // enviada em paralelo: devolve a que ficou
+    throw e;
+  }
+}
+
+/** Tira UMA foto do serviço tirada NESTA atividade (pelo id ou pelo id do aparelho), com a atividade aberta. */
+export async function removerFotoOs(ctx: ContextoExecucao, ref: { fotoId?: string; clientId?: string }) {
+  if (!ref.fotoId && !ref.clientId) return erro(400, "Diga qual foto.");
+  const where = { atividadeId: ctx.atividade.id, ordemServicoId: ctx.atividade.ordemServico.id, ...(ref.fotoId ? { id: ref.fotoId } : { clientId: ref.clientId }) };
+  const foto = await prisma.osAnexo.findFirst({ where, select: { id: true, legenda: true } });
+  // Pelo id do aparelho, "não achei" = já foi tirada (repetir não é erro)
+  if (!foto) return ref.fotoId ? erro(404, "Foto não encontrada") : ok({ removidas: 0 });
+  await prisma.osAnexo.delete({ where: { id: foto.id } });
+  await prisma.osHistorico.create({
+    data: { ordemServicoId: ctx.atividade.ordemServico.id, usuarioId: ctx.usuarioId, acao: "Foto excluída", detalhes: `${foto.legenda ?? "Foto"} (app do técnico)` },
+  });
+  return ok({ removidas: 1 });
 }
 
 /* ───────────────────────── Equipamento na atividade ───────────────────────── */

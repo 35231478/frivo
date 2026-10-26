@@ -101,3 +101,13 @@ export function avaliarQualidade(origem: HTMLCanvasElement): QualidadeImagem {
   // Limiares conservadores: só avisam em casos claros (escuro de verdade / sem nenhuma borda)
   return { escura: brilho < 45, borrada: nitidez < 40, nitidez: Math.round(nitidez), brilho: Math.round(brilho) };
 }
+
+/** data URL (já comprimida) → arquivo, para enviar num FormData como o input de arquivo faria. */
+export function dataUrlParaArquivo(dataUrl: string, nome: string): File {
+  const [cabecalho, base64 = ""] = dataUrl.split(",");
+  const tipo = /data:([^;]+)/.exec(cabecalho)?.[1] ?? "image/jpeg";
+  const bin = atob(base64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new File([bytes], nome, { type: tipo });
+}

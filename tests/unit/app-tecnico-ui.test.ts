@@ -326,6 +326,59 @@ describe("execução guiada", () => {
     expect($("[data-pendencias]")!.textContent).toContain("vincule pelo menos 1 equipamento atendido");
     expect((await fila()).some((o) => o.tipo === "concluir")).toBe(false);
   });
+
+  it("foto do serviço: exige a que se refere (equipamento ou Geral) + legenda + foto; vai para a fila e aparece na OS; remover pede confirmação", async () => {
+    await motor.baixarRetrato("aA");
+    online = false;
+    await abrirOs("aA");
+    expect($("[data-fotos-servico]")!.textContent).toContain("Cada foto vai com o equipamento a que se refere");
+    const escolher = async (el: Element | null, v: string) => {
+      await act(async () => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(el, v); el!.dispatchEvent(new Event("change", { bubbles: true })); });
+      await esperar();
+    };
+    const salvar = () => $<HTMLButtonElement>("[data-salvar-foto-servico]")!;
+
+    await clicar($("[data-nova-foto-servico]"));
+    expect($$("[data-modal-foto-servico] [data-referencia] option").map((o) => o.getAttribute("value"))).toEqual(["", "eqA", "eqB", "GERAL"]);
+    expect($$("[data-modal-foto-servico] [data-referencia] option")[1].textContent).toBe("Split Sala 1 — Daikin FTXS — TAG AC-01 — Sala 1");
+    expect(salvar().disabled).toBe(true);
+    await foto($("[data-modal-foto-servico] input[data-foto-input]"));
+    await digitar($("[data-modal-foto-servico] [data-legenda]"), "Placa da condensadora");
+    await esperar();
+    expect(salvar().disabled).toBe(true); // falta dizer a que se refere
+    await escolher($("[data-modal-foto-servico] [data-referencia]"), "eqA");
+    expect(salvar().disabled).toBe(false);
+    await clicar(salvar());
+    await esperarAte(() => $$("[data-foto-servico]").length === 1, "foto na lista");
+    expect($("[data-foto-servico]")!.textContent).toContain("Placa da condensadora");
+    expect($("[data-foto-servico] [data-referencia-foto]")!.textContent).toBe("Split Sala 1 · Daikin FTXS · TAG AC-01");
+    expect($("[data-foto-servico]")!.textContent).toContain("no aparelho");
+
+    await clicar($("[data-nova-foto-servico]"));
+    await escolher($("[data-modal-foto-servico] [data-referencia]"), "GERAL");
+    await digitar($("[data-modal-foto-servico] [data-legenda]"), "Quadro elétrico");
+    await foto($("[data-modal-foto-servico] input[data-foto-input]"));
+    await clicar(salvar());
+    await esperarAte(() => $$("[data-foto-servico]").length === 2, "2ª foto");
+    expect($$("[data-foto-servico] [data-referencia-foto]").map((e) => e.textContent)).toEqual(["Split Sala 1 · Daikin FTXS · TAG AC-01", "Geral da OS"]);
+
+    let ops = await fila();
+    expect(ops.map((o) => o.tipo)).toEqual(["iniciar", "fotoOs", "fotoOs"]);
+    const [, f1, f2] = ops as any[];
+    expect(f1).toMatchObject({ atividadeId: "aA", dados: { equipamentoId: "eqA", legenda: "Placa da condensadora", dataUrl: "data:image/jpeg;base64,/9j/FOTO", clientId: expect.any(String) } });
+    expect(f2.dados).toMatchObject({ equipamentoId: null, legenda: "Quadro elétrico" });
+
+    // Remover: confirmação (sem host de avisos, cai no confirm do navegador); cancelar não remove
+    const confirmar = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    await clicar($$("[data-foto-servico] button[aria-label^='Remover']")[0]);
+    expect((await fila()).map((o) => o.tipo)).toEqual(["iniciar", "fotoOs", "fotoOs"]);
+    await clicar($$("[data-foto-servico] button[aria-label^='Remover']")[0]);
+    await esperarAte(() => $$("[data-foto-servico]").length === 1, "foto removida");
+    ops = await fila();
+    expect(ops.at(-1)).toMatchObject({ tipo: "fotoOsRemover", dados: { clientId: f1.dados.clientId } });
+    expect(confirmar).toHaveBeenCalledTimes(2);
+    confirmar.mockRestore();
+  });
 });
 
 /* ═════════════════════════ escritório ═════════════════════════ */

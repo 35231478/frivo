@@ -3,6 +3,8 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { osDaEmpresa } from "@/lib/os-server";
 import { respostaAnexo } from "@/lib/anexos-server";
+import { nomeEquipamento } from "@/lib/execucao/vinculos";
+import { ehImagem } from "@/lib/os/galeria";
 
 type Params = { params: Promise<{ id: string; anexoId: string }> };
 
@@ -20,7 +22,7 @@ export async function GET(req: NextRequest, { params }: Params) {
   return respostaAnexo(anexo, req.nextUrl.searchParams.get("inline") === "1");
 }
 
-/** Exclui o anexo da OS (registra no histórico). */
+/** Exclui a foto/documento enviado à OS (exige editar a OS; registra no histórico quem excluiu). */
 export async function DELETE(_: NextRequest, { params }: Params) {
   const guard = await exigirPermissao("ordens", "editar");
   if (guard.erro) return guard.resposta;
@@ -28,12 +30,23 @@ export async function DELETE(_: NextRequest, { params }: Params) {
   const { id, anexoId } = await params;
   if (!(await osDaEmpresa(id, session.user!.empresaId))) return NextResponse.json({ erro: "OS não encontrada" }, { status: 404 });
 
-  const anexo = await prisma.osAnexo.findFirst({ where: { id: anexoId, ordemServicoId: id }, select: { id: true, nome: true } });
+  const anexo = await prisma.osAnexo.findFirst({
+    where: { id: anexoId, ordemServicoId: id },
+    select: { id: true, nome: true, tipo: true, legenda: true, equipamento: { select: { nome: true, marca: true, modelo: true } } },
+  });
   if (!anexo) return NextResponse.json({ erro: "Anexo não encontrado" }, { status: 404 });
 
   await prisma.osAnexo.delete({ where: { id: anexoId } });
+  // Quem excluiu fica no histórico (o usuário da sessão), com o que era a foto/documento
+  const foto = ehImagem(anexo.tipo);
   await prisma.osHistorico.create({
-    data: { ordemServicoId: id, usuarioId: session.user!.id, acao: "Anexo excluído", detalhes: anexo.nome },
+    data: {
+      ordemServicoId: id, usuarioId: session.user!.id,
+      acao: foto ? "Foto excluída" : "Documento excluído",
+      detalhes: foto
+        ? `${anexo.legenda ?? anexo.nome} — ${anexo.equipamento ? nomeEquipamento(anexo.equipamento) : "Geral da OS"}`
+        : anexo.nome,
+    },
   });
   return NextResponse.json({ ok: true });
 }
