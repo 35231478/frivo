@@ -151,13 +151,13 @@ export default async function ContasPagarPage({
                   const sv = statusVisualPagar(c.status, c.dataVencimento);
                   const forn = fornecedorDaConta(c);
                   return (
-                    <tr key={c.id} className={cn("border-b border-surface-border transition-colors", sv.linhaVermelha ? "bg-red-50 hover:bg-red-100/60" : "hover:bg-primary-50/40")}>
+                    <tr key={c.id} className={cn("border-b border-surface-border transition-colors", sv.linhaVermelha ? "bg-atrasado-claro hover:bg-atrasado-claro/60" : "hover:bg-primary-50/40")}>
                       <td className="px-4 py-3">
                         <Link href={`/financeiro/contas-pagar/${c.id}`} className="text-[11px] font-semibold text-primary-600 hover:underline" data-detalhe-conta={c.numero}>{c.numero}</Link>
                         <p className="font-medium text-ink truncate max-w-[180px]" data-fornecedor={forn.id ?? "sem-cadastro"}>
                           {forn.nome}
                           {!forn.ativo && <span className="ml-1 text-[10px] font-semibold text-ink-muted">(inativo)</span>}
-                          {forn.semCadastro && <span className="ml-1 text-[10px] font-semibold text-amber-700" title="Fornecedor só em texto: escolha o cadastro na edição">(sem cadastro)</span>}
+                          {forn.semCadastro && <span className="ml-1 text-[10px] font-semibold text-atencao-texto" title="Fornecedor só em texto: escolha o cadastro na edição">(sem cadastro)</span>}
                         </p>
                         {forn.documento && <p className="text-xs text-ink-subtle">{formatarCpfCnpj(forn.documento)}</p>}
                       </td>
@@ -182,7 +182,7 @@ export default async function ContasPagarPage({
                         {c.notaCompra ? (
                           <Link href={`/estoque/notas/${c.notaCompra.id}`} className="inline-flex items-center gap-1 text-[11px] font-semibold bg-primary-50 text-primary-700 px-2 py-0.5 rounded-full hover:underline"><FileText className="w-3 h-3" /> NF {c.notaCompra.numero}</Link>
                         ) : c.pedidoCompra ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-cyan-50 text-cyan-700 px-2 py-0.5 rounded-full"><ShoppingCart className="w-3 h-3" /> Pedido {c.pedidoCompra.numero}</span>
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-acento-claro text-acento-hover px-2 py-0.5 rounded-full"><ShoppingCart className="w-3 h-3" /> Pedido {c.pedidoCompra.numero}</span>
                         ) : (
                           <span className="text-[11px] font-semibold bg-surface-alt text-ink-muted px-2 py-0.5 rounded-full">Manual</span>
                         )}
@@ -203,8 +203,8 @@ export default async function ContasPagarPage({
                   <td className="px-4 py-3 text-right text-success-700 hidden md:table-cell">{formatarMoeda(totalPago)}</td>
                   <td colSpan={5} className="px-4 py-3">
                     <div className="flex items-center justify-end gap-4 text-xs">
-                      <span className="text-red-700 font-semibold">Vencido: {formatarMoeda(totalVencido)}</span>
-                      <span className="text-amber-700 font-semibold">Em aberto: {formatarMoeda(totalAberto)}</span>
+                      <span className="text-atrasado-texto font-semibold">Vencido: {formatarMoeda(totalVencido)}</span>
+                      <span className="text-atencao-texto font-semibold">Em aberto: {formatarMoeda(totalAberto)}</span>
                     </div>
                   </td>
                 </tr>

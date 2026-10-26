@@ -40,10 +40,10 @@ export function QrConfigClient({ inicial }: { inicial: QrConfig }) {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-8">
-      {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{erro}</div>}
+    <div className="bg-white rounded-card border border-surface-border p-6 space-y-8">
+      {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3">{erro}</div>}
       {sucesso && (
-        <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3 flex items-center gap-2">
+        <div className="bg-ok-claro border border-ok/20 text-ok-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2">
           <Check className="w-4 h-4" /> Configurações salvas.
         </div>
       )}
@@ -80,7 +80,7 @@ export function QrConfigClient({ inicial }: { inicial: QrConfig }) {
         <ToggleSwitch label="Formulário de orçamento somente para clientes logados" checked={cfg.orcamentoSomenteLogado} onChange={() => toggle("orcamentoSomenteLogado")} />
       </ToggleGroup>
 
-      <div className="flex justify-end pt-2 border-t border-gray-100">
+      <div className="flex justify-end pt-2 border-t border-surface-linha">
         <Button onClick={salvar} loading={salvando}>Salvar configurações</Button>
       </div>
     </div>

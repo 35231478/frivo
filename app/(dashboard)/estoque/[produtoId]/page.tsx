@@ -94,13 +94,13 @@ export default async function ExtratoEstoquePage({ params, searchParams }: {
         </div>
 
         {p.situacao === "negativo" && (
-          <p role="alert" className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          <p role="alert" className="flex items-start gap-2 text-sm text-atrasado-texto bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2">
             <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" /> Saldo negativo: saiu mais do que entrou. Confira as entradas ou faça um inventário.
           </p>
         )}
         {somaRazao !== p.saldo && (
           // Não deve acontecer (saldo e lançamento são gravados juntos); se acontecer, fica visível
-          <p role="alert" data-divergencia className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          <p role="alert" data-divergencia className="text-sm text-atrasado-texto bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2">
             O saldo gravado ({formatarQtd(p.saldo)}) não bate com a soma das movimentações ({formatarQtd(somaRazao)}). Avise o suporte.
           </p>
         )}
@@ -118,9 +118,9 @@ export default async function ExtratoEstoquePage({ params, searchParams }: {
                   <li key={m.id} data-mov={m.id} className="px-4 py-3">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm font-semibold text-ink">{LABEL_TIPO[m.tipo]} <span className="text-xs font-normal text-ink-muted">· {LABEL_ORIGEM[m.origem]}</span></span>
-                      <span className={cn("font-semibold tabular-nums", m.quantidade < 0 ? "text-red-600" : "text-success-700")}>{formatarDelta(m.quantidade)}</span>
+                      <span className={cn("font-semibold tabular-nums", m.quantidade < 0 ? "text-atrasado" : "text-success-700")}>{formatarDelta(m.quantidade)}</span>
                     </div>
-                    <p className="text-xs text-ink-muted mt-0.5">{dataHora(m.data)} · {m.usuario ?? "—"} · saldo <strong className={cn(m.saldoApos < 0 && "text-red-600")}>{formatarQtd(m.saldoApos)}</strong></p>
+                    <p className="text-xs text-ink-muted mt-0.5">{dataHora(m.data)} · {m.usuario ?? "—"} · saldo <strong className={cn(m.saldoApos < 0 && "text-atrasado")}>{formatarQtd(m.saldoApos)}</strong></p>
                     {m.observacao && <p className="text-xs text-ink-subtle mt-0.5">{m.observacao}</p>}
                   </li>
                 ))}
@@ -144,8 +144,8 @@ export default async function ExtratoEstoquePage({ params, searchParams }: {
                       <td className="px-4 py-3 text-ink-muted whitespace-nowrap">{dataHora(m.data)}</td>
                       <td className="px-4 py-3 font-medium text-ink">{LABEL_TIPO[m.tipo]}</td>
                       <td className="px-4 py-3 text-ink-muted">{LABEL_ORIGEM[m.origem]}</td>
-                      <td className={cn("px-4 py-3 text-right font-semibold tabular-nums", m.quantidade < 0 ? "text-red-600" : "text-success-700")}>{formatarDelta(m.quantidade)}</td>
-                      <td className={cn("px-4 py-3 text-right tabular-nums", m.saldoApos < 0 ? "text-red-600 font-semibold" : "text-ink")}>{formatarQtd(m.saldoApos)}</td>
+                      <td className={cn("px-4 py-3 text-right font-semibold tabular-nums", m.quantidade < 0 ? "text-atrasado" : "text-success-700")}>{formatarDelta(m.quantidade)}</td>
+                      <td className={cn("px-4 py-3 text-right tabular-nums", m.saldoApos < 0 ? "text-atrasado font-semibold" : "text-ink")}>{formatarQtd(m.saldoApos)}</td>
                       <td className="px-4 py-3 text-right text-ink-muted tabular-nums hidden lg:table-cell">{m.custoUnitario != null ? moeda(m.custoUnitario) : "—"}</td>
                       <td className="px-4 py-3 text-ink-muted">{m.usuario ?? "—"}</td>
                       <td className="px-4 py-3 text-ink-muted hidden lg:table-cell max-w-xs truncate" title={m.observacao ?? undefined}>{m.observacao ?? "—"}</td>

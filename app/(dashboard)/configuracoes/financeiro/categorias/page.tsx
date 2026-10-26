@@ -8,7 +8,7 @@ export default function CategoriasFinanceirasPage() {
   return (
     <div>
       <PageHeader title="Categorias Financeiras" description="Classifique cobranças e despesas (ex: Contrato Mensal, Serviço Avulso)" backHref="/configuracoes" />
-      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
+      <div className="bg-white rounded-card border border-surface-border p-4 sm:p-6">
         <CadastroPadrao entidade="categorias-financeiras" />
       </div>
     </div>

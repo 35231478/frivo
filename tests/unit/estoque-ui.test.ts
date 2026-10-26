@@ -104,7 +104,7 @@ describe("Lançar estoque", () => {
   it("aviso de saldo negativo da API aparece em destaque; erro da API fica no formulário", async () => {
     await montar(-1);
     await clicar($("[data-lancar]"));
-    expect($("strong.text-red-600")!.textContent).toBe("-1 kg"); // saldo atual negativo destacado
+    expect($("strong.text-atrasado")!.textContent).toBe("-1 kg"); // saldo atual negativo destacado
     await digitar("valor", "0");
     await enviar();
     expect($('[role="alert"]')!.textContent).toBe("A quantidade precisa ser maior que zero.");

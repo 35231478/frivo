@@ -104,7 +104,7 @@ export function QrcodesClient({ lista, equipamentosLivres }: Props) {
       </div>
 
       {/* Tabela */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-card border border-surface-border overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-surface-alt text-ink-muted text-xs uppercase tracking-wide">
             <tr>
@@ -118,7 +118,7 @@ export function QrcodesClient({ lista, equipamentosLivres }: Props) {
               <th className="text-right px-4 py-3 font-semibold">Ações</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-surface-linha">
             {filtrada.length === 0 && (
               <tr><td colSpan={6} className="px-4 py-10 text-center text-ink-muted">Nenhum QR Code encontrado.</td></tr>
             )}
@@ -136,7 +136,7 @@ export function QrcodesClient({ lista, equipamentosLivres }: Props) {
                   )}
                 </td>
                 <td className="px-4 py-3">
-                  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${q.ativo ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${q.ativo ? "bg-ok-claro text-ok-texto" : "bg-surface-linha text-ink-muted"}`}>
                     {q.ativo ? "Ativo" : "Inativo"}
                   </span>
                 </td>
@@ -170,7 +170,7 @@ export function QrcodesClient({ lista, equipamentosLivres }: Props) {
 function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-card shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
         {children}
       </div>
     </div>
@@ -211,12 +211,12 @@ function ModalGerar({ onClose, onPronto, listaAtual }: { onClose: () => void; on
 
   return (
     <Overlay onClose={onClose}>
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-surface-linha">
         <h2 className="text-lg font-semibold text-ink">Gerar QR Codes</h2>
         <button onClick={onClose} className="text-ink-muted hover:text-ink"><X className="w-5 h-5" /></button>
       </div>
       <div className="p-5 space-y-4">
-        {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-2.5">{erro}</div>}
+        {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-2.5">{erro}</div>}
         <div>
           <label className="block text-sm font-medium text-ink mb-1.5">Quantidade a gerar (1 a 100)</label>
           <Input type="number" min={1} max={100} value={quantidade}
@@ -230,7 +230,7 @@ function ModalGerar({ onClose, onPronto, listaAtual }: { onClose: () => void; on
           </ul>
         </div>
       </div>
-      <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
+      <div className="flex justify-end gap-2 px-5 py-4 border-t border-surface-linha">
         <Button variant="secondary" onClick={onClose}>Cancelar</Button>
         <Button onClick={gerar} loading={gerando}>Gerar</Button>
       </div>
@@ -259,12 +259,12 @@ function ModalVincular({ qrId, equipamentos, onClose, onPronto }: { qrId: string
 
   return (
     <Overlay onClose={onClose}>
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-surface-linha">
         <h2 className="text-lg font-semibold text-ink">Vincular a um equipamento</h2>
         <button onClick={onClose} className="text-ink-muted hover:text-ink"><X className="w-5 h-5" /></button>
       </div>
       <div className="p-5 space-y-4">
-        {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-2.5">{erro}</div>}
+        {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-2.5">{erro}</div>}
         {equipamentos.length === 0 ? (
           <p className="text-sm text-ink-muted">Não há equipamentos sem QR Code disponíveis.</p>
         ) : (
@@ -273,7 +273,7 @@ function ModalVincular({ qrId, equipamentos, onClose, onPronto }: { qrId: string
           </Select>
         )}
       </div>
-      <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
+      <div className="flex justify-end gap-2 px-5 py-4 border-t border-surface-linha">
         <Button variant="secondary" onClick={onClose}>Cancelar</Button>
         <Button onClick={vincular} loading={salvando} disabled={equipamentos.length === 0}>Vincular</Button>
       </div>

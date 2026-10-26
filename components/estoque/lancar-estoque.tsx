@@ -86,7 +86,7 @@ export function LancarEstoque({ produto, compacto = false }: { produto: ProdutoL
               <CheckCircle2 className="w-4 h-4" /> Lançado. Saldo agora: {formatarQtd(feito.saldo)} {un}
             </p>
             {feito.aviso && (
-              <p role="alert" className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              <p role="alert" className="flex items-start gap-2 text-sm text-atrasado-texto bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2">
                 <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" /> {feito.aviso}
               </p>
             )}
@@ -106,7 +106,7 @@ export function LancarEstoque({ produto, compacto = false }: { produto: ProdutoL
                 >{o.label}</button>
               ))}
             </div>
-            <p className="text-xs text-ink-muted">{OPS.find((o) => o.id === op)!.dica} Saldo atual: <strong className={cn(produto.saldo < 0 && "text-red-600")}>{formatarQtd(produto.saldo)} {un}</strong></p>
+            <p className="text-xs text-ink-muted">{OPS.find((o) => o.id === op)!.dica} Saldo atual: <strong className={cn(produto.saldo < 0 && "text-atrasado")}>{formatarQtd(produto.saldo)} {un}</strong></p>
 
             <FormField label={op === "ENTRADA" ? `Quantidade (${un})` : op === "AJUSTE" ? `Saldo correto (${un})` : `Quantidade contada (${un})`} required>
               <Input inputMode="decimal" autoFocus value={valor} onChange={(e) => setValor(e.target.value)} name="valor" placeholder="0" />
@@ -123,10 +123,10 @@ export function LancarEstoque({ produto, compacto = false }: { produto: ProdutoL
             {previa && (op !== "ENTRADA" || previa.delta > 0) && (
               <p className="text-xs text-ink-muted" data-previa>
                 Lançamento: <strong>{formatarDelta(previa.delta)} {un}</strong> → saldo fica{" "}
-                <strong className={cn(arred(produto.saldo + previa.delta) < 0 && "text-red-600")}>{formatarQtd(arred(produto.saldo + previa.delta))} {un}</strong>
+                <strong className={cn(arred(produto.saldo + previa.delta) < 0 && "text-atrasado")}>{formatarQtd(arred(produto.saldo + previa.delta))} {un}</strong>
               </p>
             )}
-            {erro && <p role="alert" className="text-sm text-red-600 font-medium">{erro}</p>}
+            {erro && <p role="alert" className="text-sm text-atrasado font-medium">{erro}</p>}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="secondary" onClick={fechar}>Cancelar</Button>
               <Button type="submit" loading={enviando}>Lançar</Button>

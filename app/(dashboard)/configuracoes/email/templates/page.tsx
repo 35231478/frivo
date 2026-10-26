@@ -8,7 +8,7 @@ export default function EmailTemplatesPage() {
   return (
     <div className="max-w-5xl mx-auto">
       <PageHeader title="Templates de E-mail" description="Personalize o assunto e o corpo dos e-mails automáticos" backHref="/configuracoes/email" />
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <div className="bg-white rounded-card border border-surface-border p-6">
         <EmailTemplatesClient />
       </div>
     </div>

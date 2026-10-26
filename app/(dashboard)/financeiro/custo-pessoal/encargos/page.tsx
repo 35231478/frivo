@@ -16,7 +16,7 @@ export default async function ModelosEncargosPage() {
   return (
     <div className="max-w-5xl mx-auto space-y-4">
       <PageHeader title="Modelos de encargos" description="Percentuais por tipo de contrato, aplicados sobre salário + adicionais + horas extras" backHref="/financeiro/custo-pessoal" />
-      <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs sm:text-sm text-amber-800">
+      <div className="flex gap-2 rounded-lg border border-atencao/20 bg-atencao-claro px-3 py-2.5 text-xs sm:text-sm text-atencao-texto">
         <Info className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
         <p>
           Os valores iniciais são <strong>referência</strong> para empresa do regime geral (Lucro Presumido/Real). No Simples Nacional, por exemplo,
@@ -24,7 +24,7 @@ export default async function ModelosEncargosPage() {
         </p>
       </div>
       {/* Cadastro padronizado (lib/cadastros): os modelos padrão são criados na primeira listagem */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
+      <div className="bg-white rounded-card border border-surface-border p-4 sm:p-6">
         <ModelosEncargosTela />
       </div>
     </div>

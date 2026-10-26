@@ -51,7 +51,7 @@ export function ImportarNota({ de }: { de?: string | null }) {
         onDragOver={(e) => { e.preventDefault(); setArrastando(true); }}
         onDragLeave={() => setArrastando(false)}
         onDrop={(e) => { e.preventDefault(); setArrastando(false); enviar(e.dataTransfer.files?.[0]); }}
-        className={cn("flex flex-col sm:flex-row items-center gap-3 rounded-xl border-2 border-dashed px-5 py-5 cursor-pointer transition-colors text-center sm:text-left",
+        className={cn("flex flex-col sm:flex-row items-center gap-3 rounded-card border-2 border-dashed px-5 py-5 cursor-pointer transition-colors text-center sm:text-left",
           arrastando ? "border-primary-500 bg-primary-50" : "border-surface-border bg-white hover:border-primary-300 hover:bg-primary-50/40")}
       >
         <div className="p-3 rounded-full bg-primary-50 shrink-0">
@@ -64,7 +64,7 @@ export function ImportarNota({ de }: { de?: string | null }) {
         <input ref={input} type="file" accept=".xml,text/xml,application/xml" className="hidden" onChange={(e) => enviar(e.target.files?.[0])} data-input-xml />
       </div>
       {erro && (
-        <p role="alert" className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+        <p role="alert" className="flex items-start gap-2 text-sm text-atrasado-texto bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2">
           <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
           <span>{erro.texto}{erro.notaId && <> <Link href={`/estoque/notas/${erro.notaId}${sufixo}`} className="font-semibold underline">Abrir a nota importada</Link></>}</span>
         </p>

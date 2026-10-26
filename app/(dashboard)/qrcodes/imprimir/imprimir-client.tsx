@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { Printer, ChevronLeft } from "lucide-react";
+import { neutro } from "@/lib/ui/tokens";
 
 type Etiqueta = {
   id: string;
@@ -52,7 +53,7 @@ export function ImprimirClient({ etiquetas, empresa }: { etiquetas: Etiqueta[]; 
           <Button onClick={() => window.print()}><Printer className="w-4 h-4" /> Imprimir</Button>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white rounded-card border border-surface-border p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-ink mb-1.5">Tamanho da etiqueta</label>
@@ -83,14 +84,14 @@ export function ImprimirClient({ etiquetas, empresa }: { etiquetas: Etiqueta[]; 
 
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-ink mb-1.5">Dados na etiqueta</label>
-            <div className="grid grid-cols-2 divide-x divide-gray-100">
-              <div className="pr-3 divide-y divide-gray-100">
+            <div className="grid grid-cols-2 divide-x divide-surface-linha">
+              <div className="pr-3 divide-y divide-surface-linha">
                 <ToggleSwitch label="Logo da empresa" checked={dados.logo} onChange={() => toggle("logo")} />
                 <ToggleSwitch label="Nome da empresa" checked={dados.nomeEmpresa} onChange={() => toggle("nomeEmpresa")} />
                 <ToggleSwitch label="Telefone" checked={dados.telefone} onChange={() => toggle("telefone")} />
                 <ToggleSwitch label="E-mail" checked={dados.email} onChange={() => toggle("email")} />
               </div>
-              <div className="pl-3 divide-y divide-gray-100">
+              <div className="pl-3 divide-y divide-surface-linha">
                 <ToggleSwitch label="Site" checked={dados.site} onChange={() => toggle("site")} />
                 <ToggleSwitch label="Nome do equipamento" checked={dados.equipamento} onChange={() => toggle("equipamento")} />
                 <ToggleSwitch label="Localização/Unidade" checked={dados.local} onChange={() => toggle("local")} />
@@ -133,7 +134,7 @@ export function ImprimirClient({ etiquetas, empresa }: { etiquetas: Etiqueta[]; 
               {dados.site && empresa.site && <div>{empresa.site}</div>}
               {dados.equipamento && et.equipamento && <div style={{ fontWeight: 600 }}>{et.equipamento}</div>}
               {dados.local && et.local && <div>{et.local}</div>}
-              {dados.codigo && <div style={{ fontFamily: "monospace", color: "#64748b" }}>{et.codigo}</div>}
+              {dados.codigo && <div style={{ fontFamily: "monospace", color: neutro.secundario }}>{et.codigo}</div>}
             </div>
           </div>
         ))}

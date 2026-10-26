@@ -58,7 +58,7 @@ export function ContaReceberAcoes({ conta, categorias = [] }: { conta: Conta; ca
   const Acao = ({ icone: I, titulo, onClick, oculto, destaque }: any) =>
     oculto ? null : (
       <button type="button" title={titulo} onClick={onClick}
-        className={`p-1 rounded transition-colors ${destaque ? "text-emerald-600 hover:text-emerald-700" : "text-ink-muted hover:text-primary-600"}`}>
+        className={`p-1 rounded transition-colors ${destaque ? "text-ok-texto hover:text-ok-texto" : "text-ink-muted hover:text-primary-600"}`}>
         <I className="w-4 h-4" />
       </button>
     );
@@ -86,7 +86,7 @@ export function ContaReceberAcoes({ conta, categorias = [] }: { conta: Conta; ca
               <div className="absolute right-0 top-full mt-1 z-30 w-40 bg-white border border-surface-border rounded-lg shadow-card-hover py-1 text-left">
                 <button type="button" onClick={() => { setMenu(false); setModal("editar"); }} className="flex items-center gap-2 w-full px-3 py-2 text-sm text-ink hover:bg-surface-alt"><Pencil className="w-3.5 h-3.5" /> Editar</button>
                 {conta.status !== "CANCELADO" && conta.status !== "RECEBIDO" && (
-                  <button type="button" onClick={cancelar} className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50"><Ban className="w-3.5 h-3.5" /> Cancelar</button>
+                  <button type="button" onClick={cancelar} className="flex items-center gap-2 w-full px-3 py-2 text-sm text-atrasado hover:bg-atrasado-claro"><Ban className="w-3.5 h-3.5" /> Cancelar</button>
                 )}
               </div>
             </>
@@ -195,14 +195,14 @@ function EditarCobranca({ conta, categorias, onPronto }: { conta: Conta; categor
 
   return (
     <div className="space-y-4">
-      {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
+      {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2">{erro}</div>}
       <FormField label="Descrição"><Input value={descricao} onChange={(e) => setDescricao(e.target.value)} /></FormField>
       <FormGrid>
         <FormField label="Categoria">
           {/* Só ativas para nova escolha; a categoria atual segue visível mesmo inativa */}
           <SeletorCadastro entidade="categorias-financeiras" itens={categorias} valor={categoriaId} vazio={textoAntigo ? "Escolha a categoria…" : "Sem categoria"} onChange={setCategoriaId} />
           {textoAntigo && !categoriaId && (
-            <p className="text-xs text-amber-700 mt-1" data-categoria-antiga>Categoria antiga: “{textoAntigo}” (sem cadastro). Escolha uma categoria para ligar esta conta.</p>
+            <p className="text-xs text-atencao-texto mt-1" data-categoria-antiga>Categoria antiga: “{textoAntigo}” (sem cadastro). Escolha uma categoria para ligar esta conta.</p>
           )}
         </FormField>
         <FormField label="Valor"><Input type="number" step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} /></FormField>
@@ -247,7 +247,7 @@ function EmitirBoleto({ conta, onEmitido }: { conta: Conta; onEmitido: (b: { lin
 
   return (
     <div className="space-y-4">
-      {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
+      {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2">{erro}</div>}
       <div className="bg-surface-alt rounded-lg p-3 text-sm">
         <p className="font-semibold text-ink">{conta.clienteNome}</p>
         <p className="text-ink-muted">Valor: <strong className="text-success-700">{formatarMoeda(conta.valor)}</strong></p>
@@ -304,7 +304,7 @@ function BoletoEmitido({ conta, boleto, onAlterado }: { conta: Conta; boleto: { 
         <Button variant="secondary" loading={baixando} onClick={baixarPdf}><Download className="w-4 h-4" /> Baixar PDF</Button>
         {conta.whatsapp && <Button variant="secondary" onClick={() => window.open(whatsappLink(conta.whatsapp, msgBoleto), "_blank")}><MessageCircle className="w-4 h-4" /> WhatsApp</Button>}
         {conta.email && <Button variant="secondary" onClick={() => { window.location.href = `mailto:${conta.email}?subject=${encodeURIComponent(`Boleto — ${conta.numero}`)}&body=${encodeURIComponent(msgBoleto)}`; }}><Mail className="w-4 h-4" /> E-mail</Button>}
-        <Button variant="secondary" loading={cancelando} onClick={cancelar} className="text-red-600"><Ban className="w-4 h-4" /> Cancelar boleto</Button>
+        <Button variant="secondary" loading={cancelando} onClick={cancelar} className="text-atrasado"><Ban className="w-4 h-4" /> Cancelar boleto</Button>
       </div>
     </div>
   );
@@ -334,7 +334,7 @@ function RegistrarPagamento({ conta, onPronto }: { conta: Conta; onPronto: () =>
 
   return (
     <div className="space-y-4">
-      {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
+      {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2">{erro}</div>}
       <FormGrid>
         <FormField label="Valor recebido"><Input type="number" step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} /></FormField>
         <FormField label="Data do pagamento"><InputData value={data} onChange={(v) => setData(v)} /></FormField>

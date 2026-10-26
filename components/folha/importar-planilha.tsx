@@ -16,8 +16,8 @@ import type { Analise, StatusLinha } from "@/lib/folha/importacao";
 const STATUS: Record<StatusLinha, { rotulo: string; cls: string }> = {
   novo: { rotulo: "Novo", cls: "bg-success-50 text-success-700 border-success-200" },
   atualizar: { rotulo: "Atualizar", cls: "bg-primary-50 text-primary-700 border-primary-200" },
-  existente: { rotulo: "Já cadastrado (ignorado)", cls: "bg-slate-50 text-slate-600 border-slate-200" },
-  erro: { rotulo: "Erro", cls: "bg-red-50 text-red-700 border-red-200" },
+  existente: { rotulo: "Já cadastrado (ignorado)", cls: "bg-surface-page text-ink-muted border-surface-border" },
+  erro: { rotulo: "Erro", cls: "bg-atrasado-claro text-atrasado-texto border-atrasado/20" },
 };
 
 export function ImportarPlanilha() {
@@ -102,12 +102,12 @@ export function ImportarPlanilha() {
             <span className="block text-xs text-ink-muted">Desmarcado: quem já está cadastrado é ignorado. Células vazias nunca apagam o que já existe.</span></span>
         </label>
         <p className="text-xs text-ink-muted">CSV ou Excel (.xlsx), até 2 MB e 500 linhas. Nada é gravado antes da sua confirmação.</p>
-        {erro && <p className="flex items-start gap-2 text-sm text-red-600" role="alert"><AlertCircle className="w-4 h-4 mt-0.5 shrink-0" /> {erro}</p>}
+        {erro && <p className="flex items-start gap-2 text-sm text-atrasado" role="alert"><AlertCircle className="w-4 h-4 mt-0.5 shrink-0" /> {erro}</p>}
       </section>
 
       {/* 3. Prévia */}
       {analise && etapa !== "feito" && (
-        <section className="bg-white rounded-xl border border-surface-border shadow-card" data-previa>
+        <section className="bg-white rounded-card border border-surface-border shadow-card" data-previa>
           <div className="px-4 sm:px-5 py-4 border-b border-surface-border space-y-3">
             <h2 className="card-title">3. Confira a prévia</h2>
             <div className="flex flex-wrap gap-2 text-sm" role="tablist">
@@ -140,8 +140,8 @@ export function ImportarPlanilha() {
                       {l.dados.salario != null ? ` · R$ ${l.dados.salario.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : ""}
                     </p>
                   )}
-                  {l.erros.map((e) => <p key={e} className="text-xs text-red-600">• {e}</p>)}
-                  {l.avisos.map((a) => <p key={a} className="text-xs text-amber-700">• {a}</p>)}
+                  {l.erros.map((e) => <p key={e} className="text-xs text-atrasado">• {e}</p>)}
+                  {l.avisos.map((a) => <p key={a} className="text-xs text-atencao-texto">• {a}</p>)}
                 </div>
                 <span className={cn("self-start text-[11px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap", STATUS[l.status].cls)}>{STATUS[l.status].rotulo}</span>
               </li>

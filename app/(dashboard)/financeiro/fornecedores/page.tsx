@@ -9,7 +9,7 @@ export default function FornecedoresPage() {
   return (
     <div>
       <PageHeader title="Fornecedores" description="Quem a empresa paga: ligado às contas a pagar" backHref="/financeiro/contas-pagar" />
-      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
+      <div className="bg-white rounded-card border border-surface-border p-4 sm:p-6">
         <FornecedoresTela />
       </div>
     </div>

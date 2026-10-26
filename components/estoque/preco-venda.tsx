@@ -123,7 +123,7 @@ export function PrecoVenda({ produtoId, unidade, custo, rotuloCusto = "Último c
   const situacao = simulando ? (rascunho ? "rascunho" : "simulacao") : "atual";
   return (
     <div className={cn(compacto ? "space-y-2" : "space-y-3", className)} data-preco-venda={produtoId ?? "novo"}>
-      <p className={cn("text-[11px] font-semibold uppercase tracking-wider", simulando ? "text-amber-700" : "text-ink-muted")} data-situacao-preco={situacao}>
+      <p className={cn("text-[11px] font-semibold uppercase tracking-wider", simulando ? "text-atencao-texto" : "text-ink-muted")} data-situacao-preco={situacao}>
         {!simulando ? (produtoId ? "Preço atual" : "Produto novo — sem preço ainda") : rascunho ? "Novo preço — vai para o produto ao confirmar e lançar" : "Simulação — ainda não salvo"}
       </p>
       <div className={cn("grid gap-2", compacto ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2 lg:grid-cols-4")}>
@@ -175,7 +175,7 @@ export function PrecoVenda({ produtoId, unidade, custo, rotuloCusto = "Último c
       ) : (
         <p className="text-xs text-ink-muted">Para mudar o preço, precisa de Configurações › gerenciar (o mesmo do cadastro de produtos).</p>
       )}
-      {(erroMargem || erroPreco) && <p className="text-xs text-red-600" role="alert">{erroMargem ?? erroPreco}</p>}
+      {(erroMargem || erroPreco) && <p className="text-xs text-atrasado" role="alert">{erroMargem ?? erroPreco}</p>}
       {podeEditar && precoDaMargemAlvo != null && salvo.preco != null && Math.abs(precoDaMargemAlvo - salvo.preco) >= 0.01 && (
         <p className="text-xs text-ink-muted" data-sugestao-margem-alvo>
           Com a margem alvo de {formatarPct(salvo.margemVenda)} e este custo, o preço seria <strong className="text-ink">{moeda(precoDaMargemAlvo)}</strong>.{" "}
@@ -193,7 +193,7 @@ export function PrecoVenda({ produtoId, unidade, custo, rotuloCusto = "Último c
         </p>
       )}
       {msg && (
-        <p role={msg.tipo === "erro" ? "alert" : "status"} className={cn("text-sm font-medium flex items-center gap-1", msg.tipo === "ok" ? "text-success-700" : "text-red-600")}>
+        <p role={msg.tipo === "erro" ? "alert" : "status"} className={cn("text-sm font-medium flex items-center gap-1", msg.tipo === "ok" ? "text-success-700" : "text-atrasado")}>
           {msg.tipo === "ok" && <CheckCircle2 className="w-4 h-4" />} {msg.texto}
         </p>
       )}

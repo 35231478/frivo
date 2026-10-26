@@ -105,10 +105,10 @@ export function FrivoIA() {
     <>
       <button type="button" onClick={() => setAberto(true)} data-acao="abrir-frivo-ia"
         className={cn(
-          "fixed z-40 right-4 bottom-20 lg:bottom-6 inline-flex items-center gap-2 rounded-full bg-sidebar text-white pl-3.5 pr-4 py-2.5 shadow-lg",
-          "hover:bg-sidebar-700 transition-colors", aberto && "hidden",
+          "fixed z-40 right-4 bottom-20 lg:bottom-6 inline-flex items-center gap-2 rounded-full bg-acento text-white pl-3.5 pr-4 py-2.5 shadow-lg",
+          "hover:bg-acento-hover transition-colors", aberto && "hidden",
         )}>
-        <Sparkles className="w-4 h-4 text-primary-300" aria-hidden /> <span className="text-sm font-semibold">Frivo IA</span>
+        <Sparkles className="w-4 h-4" aria-hidden /> <span className="text-sm font-semibold">Frivo IA</span>
       </button>
 
       {aberto && (
@@ -117,7 +117,7 @@ export function FrivoIA() {
           <section className="relative flex flex-col bg-white w-full sm:w-[440px] h-full sm:shadow-2xl" data-painel="frivo-ia">
             <header className="flex items-center justify-between gap-3 px-4 py-3 border-b border-surface-border">
               <div className="flex items-center gap-2 min-w-0">
-                <span className="p-1.5 rounded-lg bg-sidebar"><Sparkles className="w-4 h-4 text-primary-300" aria-hidden /></span>
+                <span className="p-1.5 rounded-lg bg-acento-claro"><Sparkles className="w-4 h-4 text-acento" aria-hidden /></span>
                 <div className="min-w-0">
                   <h2 className="text-sm font-semibold text-ink">Frivo IA</h2>
                   <p className="text-[11px] text-ink-subtle truncate">Consulta os dados do sistema · não altera nada</p>
@@ -133,7 +133,7 @@ export function FrivoIA() {
                 <p className="flex items-center gap-2 text-sm text-ink-muted"><Loader2 className="w-4 h-4 animate-spin" aria-hidden /> Carregando…</p>
               )}
               {estado && !estado.disponivel && (
-                <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                <div className="flex gap-2 rounded-lg border border-atencao/20 bg-atencao-claro p-3 text-sm text-atencao-texto">
                   <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
                   O Frivo IA está indisponível no momento (chave da Anthropic não configurada). O resto do sistema funciona normalmente.
                 </div>
@@ -159,9 +159,9 @@ export function FrivoIA() {
               {mensagens.map((m, i) => (
                 <div key={i} className={cn("flex", m.papel === "usuario" ? "justify-end" : "justify-start")}>
                   <div className={cn(
-                    "max-w-[88%] rounded-2xl px-3.5 py-2.5",
+                    "max-w-[88%] rounded-card px-3.5 py-2.5",
                     m.papel === "usuario" ? "bg-primary-600 text-white rounded-br-md text-sm whitespace-pre-wrap break-words"
-                      : m.erro ? "bg-red-50 border border-red-200 text-red-700 rounded-bl-md text-sm"
+                      : m.erro ? "bg-atrasado-claro border border-atrasado/20 text-atrasado-texto rounded-bl-md text-sm"
                         : "bg-white border border-surface-border text-ink rounded-bl-md",
                   )}>
                     {m.papel === "assistente" && !m.erro ? (
@@ -186,9 +186,9 @@ export function FrivoIA() {
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); perguntar(texto); } }}
                 placeholder={estado?.disponivel === false ? "Indisponível no momento" : "Pergunte algo… (Enter envia)"}
                 disabled={enviando || estado?.disponivel === false} aria-label="Pergunta para o Frivo IA"
-                className="flex-1 resize-none max-h-32 rounded-xl border border-surface-border px-3 py-2.5 text-sm focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 disabled:bg-surface-alt" />
+                className="flex-1 resize-none max-h-32 rounded-card border border-surface-border px-3 py-2.5 text-sm focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 disabled:bg-surface-alt" />
               <button type="submit" disabled={enviando || !texto.trim() || estado?.disponivel === false} aria-label="Enviar"
-                className="p-2.5 rounded-xl bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-40">
+                className="p-2.5 rounded-card bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-40">
                 <Send className="w-4 h-4" />
               </button>
             </form>

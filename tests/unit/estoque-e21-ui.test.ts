@@ -296,7 +296,7 @@ describe("atalho e conta a pagar manual", () => {
     await digitar($('input[name="boleto"]'), BOLETO.slice(0, 46) + "9");
     expect(txt("[data-boleto-erro]")).toMatch(/^Dígito verificador não confere/);
     await clicar(botao("Criar conta a pagar"));
-    expect(txt('.bg-red-50')).toMatch(/Boleto: Dígito verificador não confere/);
+    expect(txt('.bg-atrasado-claro')).toMatch(/Boleto: Dígito verificador não confere/);
     expect(ultima("/api/contas-pagar")).toBeUndefined();
     await digitar($('input[name="boleto"]'), BOLETO);
     expect(txt("[data-boleto-ok]")).toMatch(/^Caixa \(104\)· R\$ 214,03/);

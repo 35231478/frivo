@@ -41,16 +41,16 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
 
         {/* Aviso no topo: quantos estão no mínimo (ou abaixo) e quantos negativos — clicar filtra */}
         {(alertas.abaixo > 0 || alertas.negativo > 0) && (
-          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm" data-alertas>
-            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+          <div className="flex flex-wrap items-center gap-2 rounded-card border border-atencao/20 bg-atencao-claro px-4 py-3 text-sm" data-alertas>
+            <AlertTriangle className="w-4 h-4 text-atencao-texto shrink-0" />
             {alertas.abaixo > 0 && (
-              <Link href="/estoque?situacao=abaixo" className="font-semibold text-amber-800 hover:underline" data-alerta="abaixo">
+              <Link href="/estoque?situacao=abaixo" className="font-semibold text-atencao-texto hover:underline" data-alerta="abaixo">
                 {alertas.abaixo} {alertas.abaixo === 1 ? "produto" : "produtos"} no mínimo ou abaixo
               </Link>
             )}
-            {alertas.abaixo > 0 && alertas.negativo > 0 && <span className="text-amber-700">·</span>}
+            {alertas.abaixo > 0 && alertas.negativo > 0 && <span className="text-atencao-texto">·</span>}
             {alertas.negativo > 0 && (
-              <Link href="/estoque?situacao=negativo" className="font-semibold text-red-700 hover:underline" data-alerta="negativo">
+              <Link href="/estoque?situacao=negativo" className="font-semibold text-atrasado-texto hover:underline" data-alerta="negativo">
                 {alertas.negativo} com saldo negativo
               </Link>
             )}
@@ -107,11 +107,11 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
                     {itens.map((p, idx) => (
                       <tr key={p.id} data-linha={p.id} className={cn(
                         "border-b border-surface-border hover:bg-primary-50/40 transition-colors",
-                        idx % 2 === 1 && "bg-surface-alt/30", p.situacao === "negativo" && "bg-red-50/50", !p.ativo && "opacity-60",
+                        idx % 2 === 1 && "bg-surface-alt/30", p.situacao === "negativo" && "bg-atrasado-claro/50", !p.ativo && "opacity-60",
                       )}>
                         <td className="px-4 py-3">
                           <Link href={`/estoque/${p.id}`} className="font-semibold text-ink hover:text-primary-600">{p.nome}</Link>
-                          {!p.ativo && <span className="ml-2 text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">Inativo</span>}
+                          {!p.ativo && <span className="ml-2 text-[10px] font-bold bg-surface-linha text-ink-muted px-2 py-0.5 rounded-full">Inativo</span>}
                           {p.descricao && <p className="text-xs text-ink-subtle mt-0.5 truncate max-w-md">{p.descricao}</p>}
                         </td>
                         <td className="px-4 py-3 text-ink-muted">{p.unidade}</td>

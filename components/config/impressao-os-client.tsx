@@ -46,7 +46,7 @@ export function ImpressaoOsClient({ inicial, podeEditar }: { inicial: ConfigRela
           </div>
         </div>
         <div className="card p-4 flex items-start gap-3">
-          <div className="p-2 rounded-lg bg-slate-100"><Lock className="w-4 h-4 text-slate-600" /></div>
+          <div className="p-2 rounded-lg bg-surface-linha"><Lock className="w-4 h-4 text-ink-muted" /></div>
           <div>
             <p className="text-sm font-semibold text-ink">Versão interna</p>
             <p className="text-xs text-ink-muted">Só para quem tem login (aba Relatórios da OS) · <strong data-conta="interna">{conta("interna")}</strong> seções + cabeçalho</p>
@@ -69,7 +69,7 @@ export function ImpressaoOsClient({ inicial, podeEditar }: { inicial: ConfigRela
                   <button
                     type="button" role="switch" aria-checked={c.ativo} aria-label={`Incluir ${s.label}`} disabled={!podeEditar}
                     onClick={() => mudar(s.id, { ativo: !c.ativo })}
-                    className={cn("relative mt-0.5 inline-flex h-[22px] w-[40px] shrink-0 rounded-full transition-colors disabled:opacity-60", c.ativo ? "bg-success-500" : "bg-slate-300")}
+                    className={cn("relative mt-0.5 inline-flex h-[22px] w-[40px] shrink-0 rounded-full transition-colors disabled:opacity-60", c.ativo ? "bg-success-500" : "bg-surface-border")}
                   >
                     <span className={cn("inline-block h-[18px] w-[18px] mt-[2px] rounded-full bg-white shadow transition-transform", c.ativo ? "translate-x-[20px]" : "translate-x-[2px]")} />
                   </button>
@@ -84,7 +84,7 @@ export function ImpressaoOsClient({ inicial, podeEditar }: { inicial: ConfigRela
                       key={rot} type="button" role="radio" aria-checked={c.cliente === v} disabled={!podeEditar || !c.ativo}
                       onClick={() => mudar(s.id, { cliente: v })} data-quem={v ? "cliente" : "interno"}
                       className={cn("inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-semibold transition-colors",
-                        c.cliente === v ? (v ? "bg-white text-primary-700 shadow-sm" : "bg-white text-slate-700 shadow-sm") : "text-ink-muted hover:text-ink")}
+                        c.cliente === v ? (v ? "bg-white text-primary-700 shadow-sm" : "bg-white text-ink shadow-sm") : "text-ink-muted hover:text-ink")}
                     ><Icone className="w-3.5 h-3.5" /> {rot}</button>
                   ))}
                 </div>
@@ -96,7 +96,7 @@ export function ImpressaoOsClient({ inicial, podeEditar }: { inicial: ConfigRela
 
       <p className="text-xs text-ink-muted flex items-center gap-1.5"><Printer className="w-3.5 h-3.5" /> Seção desligada não sai em versão nenhuma. Seção sem dado na OS simplesmente não aparece.</p>
 
-      {msg && <p role={msg.tipo === "erro" ? "alert" : "status"} className={cn("text-sm font-medium flex items-center gap-1.5", msg.tipo === "ok" ? "text-success-700" : "text-red-600")}>{msg.tipo === "ok" && <Check className="w-4 h-4" />}{msg.texto}</p>}
+      {msg && <p role={msg.tipo === "erro" ? "alert" : "status"} className={cn("text-sm font-medium flex items-center gap-1.5", msg.tipo === "ok" ? "text-success-700" : "text-atrasado")}>{msg.tipo === "ok" && <Check className="w-4 h-4" />}{msg.texto}</p>}
       {podeEditar ? (
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={() => { setCfg(CONFIG_RELATORIO_PADRAO); setMsg(null); }}>Restaurar padrão</Button>

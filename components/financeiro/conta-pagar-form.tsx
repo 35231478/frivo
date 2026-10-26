@@ -77,15 +77,15 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
 
   return (
     <div className="space-y-5">
-      {erro && <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3"><AlertCircle className="w-4 h-4 shrink-0" /> {erro}</div>}
+      {erro && <div className="flex items-center gap-2 bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3"><AlertCircle className="w-4 h-4 shrink-0" /> {erro}</div>}
 
-      <div className="bg-white rounded-2xl shadow-card border border-surface-border p-5 sm:p-6 space-y-8">
+      <div className="bg-white rounded-card shadow-card border border-surface-border p-5 sm:p-6 space-y-8">
         <FormSection title="Fornecedor">
           <FormField label="Fornecedor" required>
             {/* Só ativos para nova escolha; o fornecedor atual segue visível mesmo inativo (“(inativo)”) */}
             <SeletorCadastro entidade="fornecedores" valor={form.fornecedorId} vazio={textoAntigo ? "Escolha o fornecedor…" : "Selecione o fornecedor…"} onChange={(v) => upd("fornecedorId", v)} />
             {textoAntigo && !form.fornecedorId && (
-              <p className="text-xs text-amber-700 mt-1" data-fornecedor-antigo>
+              <p className="text-xs text-atencao-texto mt-1" data-fornecedor-antigo>
                 Fornecedor antigo: “{textoAntigo}”{initialData?.fornecedorCnpj ? ` (${initialData.fornecedorCnpj})` : ""} — sem cadastro. Escolha o fornecedor para ligar esta conta.
               </p>
             )}

@@ -120,8 +120,8 @@ export default function FormulariosPage() {
   return (
     <div>
       <PageHeader title="Formulários" description="Templates de formulário para atividades de OS" backHref="/configuracoes" />
-      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-        {erro && !editando && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
+      <div className="bg-white rounded-card border border-surface-border p-6 space-y-4">
+        {erro && !editando && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2">{erro}</div>}
 
         {/* Barra: busca + Novo */}
         <div className="flex items-center gap-3">
@@ -152,13 +152,13 @@ export default function FormulariosPage() {
                 <tr key={f.id} className={cn("border-b border-surface-border last:border-0 hover:bg-primary-50/40 transition-colors", idx % 2 === 1 && "bg-surface-alt/30")}>
                   <td className="px-4 py-3 font-medium text-ink">{f.nome}</td>
                   <td className="px-4 py-3 hidden sm:table-cell">
-                    {f.tipoOs ? <span className="text-[11px] text-white px-2 py-0.5 rounded-full" style={{ backgroundColor: f.tipoOs.cor }}>{f.tipoOs.nome}</span> : <span className="text-ink-subtle">Genérico</span>}
+                    {f.tipoOs ? <span className="inline-flex items-center gap-1.5 text-[11px] text-ink-muted bg-surface-page border border-surface-border px-2 py-0.5 rounded-full"><span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: f.tipoOs.cor }} aria-hidden />{f.tipoOs.nome}</span> : <span className="text-ink-subtle">Genérico</span>}
                   </td>
                   <td className="px-4 py-3 text-center text-ink-muted">{f.campos.length}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-1">
                       <button onClick={() => abrirEditar(f)} title="Editar" className="p-1.5 text-ink-muted hover:text-primary-600 hover:bg-primary-50 rounded transition-colors"><Pencil className="w-4 h-4" /></button>
-                      <button onClick={() => remover(f)} title="Remover" className="p-1.5 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded transition-colors"><Trash2 className="w-4 h-4" /></button>
+                      <button onClick={() => remover(f)} title="Remover" className="p-1.5 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded transition-colors"><Trash2 className="w-4 h-4" /></button>
                     </div>
                   </td>
                 </tr>
@@ -195,7 +195,7 @@ export default function FormulariosPage() {
           <FormularioHistorico formId={editando} />
         ) : (
           <div className="space-y-4">
-            {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
+            {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2">{erro}</div>}
             <FormGrid>
               <FormField label="Nome" required>
                 <Input value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} placeholder="Ex: Checklist Manutenção Preventiva" />
@@ -211,21 +211,21 @@ export default function FormulariosPage() {
             </FormField>
 
             <div className="space-y-2">
-              <p className="text-xs font-semibold text-gray-500 uppercase">Campos do formulário</p>
+              <p className="text-xs font-semibold text-ink-muted uppercase">Campos do formulário</p>
               {campos.map((c, i) => (
-                <div key={i} className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg p-2">
-                  <GripVertical className="w-4 h-4 text-gray-300 shrink-0" />
-                  <span className="text-xs text-gray-400 w-4">{i + 1}</span>
+                <div key={i} className="flex items-center gap-2 bg-white border border-surface-border rounded-lg p-2">
+                  <GripVertical className="w-4 h-4 text-ink-subtle shrink-0" />
+                  <span className="text-xs text-ink-muted w-4">{i + 1}</span>
                   <Input value={c.label} onChange={(e) => updateCampo(i, "label", e.target.value)} placeholder="Label do campo" className="flex-1 text-sm h-8" />
                   <select value={c.tipo} onChange={(e) => updateCampo(i, "tipo", e.target.value)}
-                    className="border border-gray-300 rounded px-2 py-1 text-xs bg-white w-32">
+                    className="border border-surface-border rounded px-2 py-1 text-xs bg-white w-32">
                     {TIPOS_CAMPO.map((t) => (<option key={t.value} value={t.value}>{t.label}</option>))}
                   </select>
-                  <label className="flex items-center gap-1 text-xs text-gray-500 whitespace-nowrap">
+                  <label className="flex items-center gap-1 text-xs text-ink-muted whitespace-nowrap">
                     <input type="checkbox" checked={c.obrigatorio} onChange={(e) => updateCampo(i, "obrigatorio", e.target.checked)} className="accent-frivo-600" />
                     Obrig.
                   </label>
-                  <button onClick={() => removeCampo(i)} className="p-1 text-gray-400 hover:text-red-600"><Trash2 className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => removeCampo(i)} className="p-1 text-ink-muted hover:text-atrasado"><Trash2 className="w-3.5 h-3.5" /></button>
                 </div>
               ))}
               <Button type="button" variant="ghost" onClick={addCampo} className="text-xs h-7 px-2.5">
@@ -266,7 +266,7 @@ function FormularioVinculos({ formId }: { formId: string }) {
   if (vinculos === null) return <div className="flex items-center gap-2 text-sm text-ink-muted py-3"><Loader2 className="w-4 h-4 animate-spin" /> Carregando vínculos…</div>;
   if (vinculos.length === 0) {
     return (
-      <div className="text-center py-8 border border-dashed border-surface-border rounded-xl">
+      <div className="text-center py-8 border border-dashed border-surface-border rounded-card">
         <Boxes className="w-6 h-6 text-ink-subtle mx-auto mb-2" />
         <p className="text-sm text-ink-muted">Este formulário ainda não está vinculado a nenhum equipamento.</p>
       </div>
@@ -281,11 +281,11 @@ function FormularioVinculos({ formId }: { formId: string }) {
             <span className="inline-flex items-center gap-1.5 text-ink"><Boxes className="w-3.5 h-3.5 text-ink-subtle" /> {v.tipoEquipamento.nome}</span>
             <span className="text-ink-subtle">·</span>
             <span className="inline-flex items-center gap-1"><Wrench className="w-3.5 h-3.5 text-ink-subtle" /></span>
-            <span className="text-[11px] text-white px-1.5 py-0.5 rounded-full" style={{ backgroundColor: v.tipoOs.cor }}>{v.tipoOs.nome}</span>
+            <span className="inline-flex items-center gap-1 text-[11px] text-ink-muted bg-surface-page border border-surface-border px-1.5 py-0.5 rounded-full"><span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: v.tipoOs.cor }} aria-hidden />{v.tipoOs.nome}</span>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             {v.obrigatorioConcluir && <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-success-50 text-success-700 px-2 py-0.5 rounded-full"><Check className="w-3 h-3" /> Concluir</span>}
-            {v.obrigatorioImpedimento && <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full"><AlertTriangle className="w-3 h-3" /> Impedimento</span>}
+            {v.obrigatorioImpedimento && <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-atencao-claro text-atencao-texto px-2 py-0.5 rounded-full"><AlertTriangle className="w-3 h-3" /> Impedimento</span>}
           </div>
         </div>
       ))}
@@ -317,7 +317,7 @@ function FormularioHistorico({ formId }: { formId: string }) {
   if (sessoes === null) return <div className="flex items-center gap-2 text-sm text-ink-muted py-3"><Loader2 className="w-4 h-4 animate-spin" /> Carregando histórico…</div>;
   if (sessoes.length === 0) {
     return (
-      <div className="text-center py-8 border border-dashed border-surface-border rounded-xl">
+      <div className="text-center py-8 border border-dashed border-surface-border rounded-card">
         <History className="w-6 h-6 text-ink-subtle mx-auto mb-2" />
         <p className="text-sm text-ink-muted">Nenhuma resposta registrada ainda.</p>
       </div>

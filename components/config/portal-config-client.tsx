@@ -54,7 +54,7 @@ export function PortalConfigClient() {
               <div className="relative">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={logo} alt="Logo" className="h-10 w-auto max-w-[120px] object-contain rounded border border-surface-border" />
-                <button type="button" onClick={() => setLogo(null)} className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5"><X className="w-3 h-3" /></button>
+                <button type="button" onClick={() => setLogo(null)} className="absolute -top-1.5 -right-1.5 bg-atrasado text-white rounded-full p-0.5"><X className="w-3 h-3" /></button>
               </div>
             )}
             <label className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-600 hover:text-primary-700 cursor-pointer">

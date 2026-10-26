@@ -68,7 +68,7 @@ export default async function CustoPessoalPage() {
         </div>
       </div>
 
-      <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs sm:text-sm text-amber-800" data-aviso-gestao>
+      <div className="flex gap-2 rounded-lg border border-atencao/20 bg-atencao-claro px-3 py-2.5 text-xs sm:text-sm text-atencao-texto" data-aviso-gestao>
         <Info className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
         <p>{AVISO_GESTAO} Os percentuais de encargos devem ser conferidos com o contador.</p>
       </div>
@@ -83,7 +83,7 @@ export default async function CustoPessoalPage() {
 
       {pendentes.length > 0 && (
         <div className="flex gap-2 rounded-lg border border-surface-border bg-white px-3 py-2.5 text-sm text-ink" data-pendentes>
-          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" aria-hidden />
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-atencao-texto" aria-hidden />
           <p>
             <strong>{pendentes.length} colaborador(es) sem salário/dados de folha</strong> (entram com custo zero):{" "}
             {pendentes.slice(0, 6).map((p, i) => (
@@ -129,7 +129,7 @@ export default async function CustoPessoalPage() {
       </div>
 
       {/* Por colaborador */}
-      <section className="bg-white rounded-xl border border-surface-border shadow-card" aria-labelledby="titulo-colaboradores">
+      <section className="bg-white rounded-card border border-surface-border shadow-card" aria-labelledby="titulo-colaboradores">
         <div className="flex items-center justify-between gap-2 px-4 sm:px-5 py-4 border-b border-surface-border">
           <h2 id="titulo-colaboradores" className="card-title">Por colaborador</h2>
           <span className="text-xs text-ink-muted">{linhas.length} ativo(s)</span>
@@ -185,7 +185,7 @@ export default async function CustoPessoalPage() {
                       </td>
                       <td className="px-3 py-2.5 text-ink-muted whitespace-nowrap">{REGIME_LABEL[l.regime]}</td>
                       {l.semDados ? (
-                        <td colSpan={7} className="px-3 py-2.5 text-right text-xs text-amber-700">Sem salário/dados de folha</td>
+                        <td colSpan={7} className="px-3 py-2.5 text-right text-xs text-atencao-texto">Sem salário/dados de folha</td>
                       ) : (
                         <>
                           <Num v={l.custo.base} />
@@ -237,14 +237,14 @@ function Num({ v, negativo, forte }: { v: number; negativo?: boolean; forte?: bo
 
 function Indicador({ titulo, valor, detalhe, icone: Icone }: { titulo: string; valor: string; detalhe: string; icone: React.ComponentType<{ className?: string }> }) {
   return (
-    <div className="bg-white rounded-xl border border-surface-border p-4 sm:p-5 shadow-card min-w-0">
+    <div className="bg-white rounded-card border border-surface-border p-4 sm:p-5 shadow-card min-w-0">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">{titulo}</p>
           <p className="text-2xl font-bold text-ink mt-2 tabular-nums whitespace-nowrap">{valor}</p>
           <p className="text-xs text-ink-subtle mt-1">{detalhe}</p>
         </div>
-        <div className="p-2.5 rounded-xl shrink-0 bg-primary-50"><Icone className="w-5 h-5 text-primary-600" /></div>
+        <div className="p-2.5 rounded-card shrink-0 bg-primary-50"><Icone className="w-5 h-5 text-primary-600" /></div>
       </div>
     </div>
   );
