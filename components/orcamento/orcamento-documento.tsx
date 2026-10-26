@@ -445,14 +445,15 @@ function TabelaGrupo({ titulo, rotulo, itens, grupo }: { titulo: string; rotulo:
   return (
     <section className="py-5" data-grupo-documento={rotulo}>
       <Rotulo>{titulo}</Rotulo>
-      <div className="overflow-x-auto print:overflow-visible">
+      <div className="print:overflow-visible">
         <table className="w-full text-sm">
           <thead className="[display:table-header-group]">
             <tr className="bg-surface-alt border-b border-surface-border">
               <th scope="col" className="text-left px-3 py-2 font-semibold text-ink-muted text-xs uppercase">Descrição</th>
-              <th scope="col" className="text-right px-3 py-2 font-semibold text-ink-muted text-xs uppercase w-16">Qtd</th>
-              <th scope="col" className="text-right px-3 py-2 font-semibold text-ink-muted text-xs uppercase w-28">Unitário</th>
-              <th scope="col" className="text-right px-3 py-2 font-semibold text-ink-muted text-xs uppercase w-32">Total</th>
+              {/* Celular: Qtd e Unitário vão para baixo da descrição (a tabela não rola nem corta) */}
+              <th scope="col" className="hidden sm:table-cell text-right px-3 py-2 font-semibold text-ink-muted text-xs uppercase w-16">Qtd</th>
+              <th scope="col" className="hidden sm:table-cell text-right px-3 py-2 font-semibold text-ink-muted text-xs uppercase w-28">Unitário</th>
+              <th scope="col" className="text-right px-3 py-2 font-semibold text-ink-muted text-xs uppercase w-28 sm:w-32">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -461,9 +462,10 @@ function TabelaGrupo({ titulo, rotulo, itens, grupo }: { titulo: string; rotulo:
                 <td className="px-3 py-2.5 text-ink">
                   {it.descricao}
                   {it.observacao && <p className="text-xs text-ink-muted italic whitespace-pre-line">{it.observacao}</p>}
+                  <p className="sm:hidden text-xs text-ink-muted tabular-nums mt-0.5" data-qtd-unitario-celular>{n(it.quantidade)} × {formatarMoeda(grupo.itens[i]?.valorUnitario ?? 0)}</p>
                 </td>
-                <td className="px-3 py-2.5 text-right text-ink-muted tabular-nums">{n(it.quantidade)}</td>
-                <td className="px-3 py-2.5 text-right text-ink-muted tabular-nums whitespace-nowrap">{formatarMoeda(grupo.itens[i]?.valorUnitario ?? 0)}</td>
+                <td className="hidden sm:table-cell px-3 py-2.5 text-right text-ink-muted tabular-nums">{n(it.quantidade)}</td>
+                <td className="hidden sm:table-cell px-3 py-2.5 text-right text-ink-muted tabular-nums whitespace-nowrap">{formatarMoeda(grupo.itens[i]?.valorUnitario ?? 0)}</td>
                 <td className="px-3 py-2.5 text-right font-semibold text-ink tabular-nums whitespace-nowrap">{formatarMoeda(grupo.itens[i]?.valorTotal ?? 0)}</td>
               </tr>
             ))}

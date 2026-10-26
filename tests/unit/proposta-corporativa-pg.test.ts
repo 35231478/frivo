@@ -187,6 +187,16 @@ describe.skipIf(!URL_PG)("Proposta corporativa: numeração, padrões, destinat�
     expect(f.json.destinatarioInicial).toEqual({ unidadeId: "un1", contatoClienteId: "ct1" });
   });
 
+  it("RT padrão que deixou de valer (inativo ou não é mais RT) não entra no orçamento novo", async () => {
+    await prisma.tecnico.update({ where: { id: "rt1" }, data: { ativo: false } });
+    let r = await chamar("orcamentos", "POST", { clienteId: "c1", servicos: [ITEM], produtos: [] });
+    expect(r.json.responsavelTecnicoId).toBeNull();
+    await prisma.tecnico.update({ where: { id: "rt1" }, data: { ativo: true, tipo: "TECNICO_CAMPO" } });
+    r = await chamar("orcamentos", "POST", { clienteId: "c1", servicos: [ITEM], produtos: [] });
+    expect(r.json.responsavelTecnicoId).toBeNull();
+    await prisma.tecnico.update({ where: { id: "rt1" }, data: { tipo: "RESPONSAVEL_TECNICO" } });
+  });
+
   it("o que vem no corpo vence o padrão (inclusive vazio = apagado)", async () => {
     const r = await chamar("orcamentos", "POST", {
       clienteId: "c1", servicos: [ITEM], produtos: [], validadeEm: null, garantiaServico: " 6 meses ", garantiaPecas: "", naoIncluso: null, normas: [],

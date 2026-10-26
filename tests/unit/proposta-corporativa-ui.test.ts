@@ -149,6 +149,8 @@ describe("construtor: padrões, destinatário e campos corporativos", () => {
     expect($<HTMLButtonElement>("[data-sugestao-nao-incluso='Rede elétrica além do ponto de força']")!.disabled).toBe(true);
     await clicar($("[data-norma='NBR_13971']"));
     await clicar($("[data-norma='NBR_16401']"));
+    await clicar($("[data-norma='PMOC']"));
+    await clicar($("[data-norma='PMOC']")); // marca e desmarca
     await escolher($("[data-rt-orcamento]"), "rt2");
     await digitar($("[data-art-orcamento]"), " 2620261234567 ");
     await adicionarServico();
