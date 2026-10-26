@@ -87,7 +87,7 @@ export default async function LeadsSitePage({
           <Globe className="h-5 w-5" />
         </span>
         <div>
-          <h1 className="flex items-center gap-2 text-xl font-bold text-gray-900">
+          <h1 className="flex items-center gap-2 text-xl font-bold text-ink">
             Leads do Site
             {novos24h > 0 && (
               <span className="inline-flex items-center rounded-full bg-success-500 px-2 py-0.5 text-xs font-semibold text-white">
@@ -95,7 +95,7 @@ export default async function LeadsSitePage({
               </span>
             )}
           </h1>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-ink-muted">
             Orçamentos gerados pela calculadora de BTU do site.
           </p>
         </div>
@@ -111,7 +111,7 @@ export default async function LeadsSitePage({
               "rounded-full border px-4 py-1.5 text-sm font-medium transition-colors",
               filtro.key === f.key
                 ? "border-primary-500 bg-primary-500 text-white"
-                : "border-gray-200 bg-white text-gray-600 hover:border-gray-300",
+                : "border-surface-border bg-white text-ink-muted hover:border-ink-subtle",
             )}
           >
             {f.label}
@@ -120,16 +120,16 @@ export default async function LeadsSitePage({
       </div>
 
       {/* Tabela */}
-      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+      <div className="overflow-x-auto rounded-card border border-surface-border bg-white">
         {linhas.length === 0 ? (
-          <div className="p-12 text-center text-gray-500">
-            <Globe className="mx-auto h-8 w-8 text-gray-300" />
+          <div className="p-12 text-center text-ink-muted">
+            <Globe className="mx-auto h-8 w-8 text-ink-subtle" />
             <p className="mt-3 text-sm">Nenhum lead encontrado para este filtro.</p>
           </div>
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500">
+              <tr className="border-b border-surface-border text-left text-xs uppercase tracking-wide text-ink-muted">
                 <th className="px-4 py-3 font-medium">Data</th>
                 <th className="px-4 py-3 font-medium">Cliente</th>
                 <th className="px-4 py-3 font-medium">Cidade</th>
@@ -143,9 +143,9 @@ export default async function LeadsSitePage({
               {linhas.map((l) => (
                 <tr
                   key={l.id}
-                  className="border-b border-gray-100 last:border-0 hover:bg-gray-50"
+                  className="border-b border-surface-linha last:border-0 hover:bg-surface-page"
                 >
-                  <td className="whitespace-nowrap px-4 py-3 text-gray-500">
+                  <td className="whitespace-nowrap px-4 py-3 text-ink-muted">
                     {formatarDataHora(l.data)}
                   </td>
                   <td className="px-4 py-3">
@@ -155,21 +155,21 @@ export default async function LeadsSitePage({
                     >
                       {l.nome}
                     </Link>
-                    <div className="font-mono text-xs text-gray-400">{l.codigo}</div>
+                    <div className="font-mono text-xs text-ink-muted">{l.codigo}</div>
                   </td>
-                  <td className="px-4 py-3 text-gray-600">{l.cidade}</td>
-                  <td className="whitespace-nowrap px-4 py-3 text-gray-600">
+                  <td className="px-4 py-3 text-ink-muted">{l.cidade}</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-ink-muted">
                     {l.whatsapp}
                   </td>
-                  <td className="px-4 py-3 text-gray-600">{l.recomendacao}</td>
-                  <td className="whitespace-nowrap px-4 py-3 text-gray-700">
+                  <td className="px-4 py-3 text-ink-muted">{l.recomendacao}</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-ink">
                     {l.valor}
                   </td>
                   <td className="px-4 py-3">
                     <span
                       className={
                         CLASSE_STATUS_ORCAMENTO[l.status] ??
-                        "inline-flex rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600"
+                        "inline-flex rounded-full bg-surface-linha px-2.5 py-0.5 text-xs font-medium text-ink-muted"
                       }
                     >
                       {LABELS_STATUS_ORCAMENTO[l.status] ?? l.status}

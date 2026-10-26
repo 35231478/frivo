@@ -8,7 +8,7 @@ export default function ServicosPage() {
   return (
     <div>
       <PageHeader title="Serviços" description="Catálogo de serviços prestados pela empresa" backHref="/configuracoes" />
-      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
+      <div className="bg-white rounded-card border border-surface-border p-4 sm:p-6">
         <CadastroPadrao entidade="servicos" />
       </div>
     </div>

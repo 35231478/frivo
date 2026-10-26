@@ -53,7 +53,7 @@ export function GerarMedicoesMes() {
   }
 
   return (
-    <div className="absolute right-0 top-full mt-2 z-20 w-80 bg-white border border-surface-border rounded-xl shadow-card-hover p-4 space-y-3">
+    <div className="absolute right-0 top-full mt-2 z-20 w-80 bg-white border border-surface-border rounded-card shadow-card-hover p-4 space-y-3">
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-bold text-ink">Gerar medições mensais</h4>
         <button onClick={() => { setAberto(false); setResultado(null); setErro(""); }} className="text-ink-muted hover:text-ink">
@@ -71,7 +71,7 @@ export function GerarMedicoesMes() {
       </div>
 
       {erro && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg px-3 py-2 flex items-center gap-2">
+        <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-xs rounded-lg px-3 py-2 flex items-center gap-2">
           <AlertCircle className="w-3.5 h-3.5" /> {erro}
         </div>
       )}

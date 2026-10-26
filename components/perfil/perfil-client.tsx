@@ -170,30 +170,30 @@ export function PerfilClient({ initial }: { initial: Initial }) {
 
   const BotaoSalvar = ({ compact = false }: { compact?: boolean }) =>
     acao ? (
-      <Button type="button" variant="success" size={compact ? "sm" : "md"} loading={acao.saving} disabled={acao.disabled} onClick={acao.fn}>
+      <Button type="button" variant="primary" size={compact ? "sm" : "md"} loading={acao.saving} disabled={acao.disabled} onClick={acao.fn}>
         <FileCheck className="w-4 h-4" /> {acao.label}
       </Button>
     ) : null;
 
   return (
-    <div className="min-h-full -m-6 bg-[#F8FAFC] p-4 sm:p-6">
+    <div className="min-h-full -m-6 bg-surface-page p-4 sm:p-6">
       {/* Toast de sucesso */}
       {toast && (
-        <div className="fixed top-5 right-5 z-50 flex items-center gap-2 bg-success-600 text-white text-sm font-medium rounded-xl px-4 py-3 shadow-card-hover animate-in fade-in slide-in-from-top-2">
+        <div className="fixed top-5 right-5 z-50 flex items-center gap-2 bg-success-600 text-white text-sm font-medium rounded-card px-4 py-3 shadow-card-hover animate-in fade-in slide-in-from-top-2">
           <FileCheck className="w-4 h-4" /> {toast}
         </div>
       )}
 
       <div className="max-w-5xl mx-auto space-y-5">
         {/* Cabeçalho fixo: título + badges + ação */}
-        <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-[#F8FAFC]/90 backdrop-blur border-b border-surface-border">
+        <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-surface-page/90 backdrop-blur border-b border-surface-border">
           <div className="max-w-5xl mx-auto flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3 flex-wrap min-w-0">
               <h1 className="text-xl font-bold text-ink truncate">{nome || "Meu Perfil"}</h1>
-              <span className="inline-flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-medium rounded-lg px-2.5 py-1">
+              <span className="inline-flex items-center gap-1.5 bg-acento-claro border border-acento/20 text-acento-hover text-xs font-medium rounded-lg px-2.5 py-1">
                 <ShieldCheck className="w-3.5 h-3.5" /> {initial.perfilNome ?? initial.cargo}
               </span>
-              <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full bg-surface-linha text-ink-muted">
                 <Briefcase className="w-3 h-3" /> {initial.cargo}
               </span>
             </div>
@@ -202,7 +202,7 @@ export function PerfilClient({ initial }: { initial: Initial }) {
         </div>
 
         {/* Card central branco com abas + conteúdo */}
-        <div className="bg-white rounded-2xl shadow-card border border-surface-border overflow-hidden">
+        <div className="bg-white rounded-card shadow-card border border-surface-border overflow-hidden">
           <nav className="flex gap-1.5 overflow-x-auto px-4 pt-4 pb-4 border-b border-surface-border">
             {ABAS.map((t) => {
               const ativa = aba === t.id;
@@ -210,7 +210,7 @@ export function PerfilClient({ initial }: { initial: Initial }) {
                 <button
                   key={t.id} type="button" onClick={() => trocarAba(t.id)}
                   className={cn(
-                    "flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl whitespace-nowrap transition-all",
+                    "flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-card whitespace-nowrap transition-all",
                     ativa ? "bg-primary-500 text-white shadow-sm" : "text-ink-muted hover:text-ink hover:bg-surface-alt",
                   )}
                 >
@@ -223,7 +223,7 @@ export function PerfilClient({ initial }: { initial: Initial }) {
 
           <div className="p-5 sm:p-6 lg:p-8">
             {erro && (
-              <div className="mb-6 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 flex items-center gap-2">
+              <div className="mb-6 bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" /> {erro}
               </div>
             )}
@@ -260,7 +260,7 @@ export function PerfilClient({ initial }: { initial: Initial }) {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={(preview ?? avatar)!} alt="Foto de perfil" className="w-32 h-32 rounded-full object-cover border-4 border-white shadow-card" />
                   ) : (
-                    <span className="w-32 h-32 rounded-full bg-gradient-to-br from-primary-500 to-success-500 flex items-center justify-center text-white text-4xl font-bold shadow-card">{iniciais}</span>
+                    <span className="w-32 h-32 rounded-full bg-acento-claro flex items-center justify-center text-acento-hover text-4xl font-bold shadow-card">{iniciais}</span>
                   )}
                   <input ref={fotoRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={onFoto} className="hidden" />
                   <div className="flex items-center gap-2">
@@ -304,15 +304,15 @@ export function PerfilClient({ initial }: { initial: Initial }) {
               <FormSection title="Informações da conta" icon={<Building2 className="w-3.5 h-3.5" />}>
                 <FormGrid>
                   <FormField label="Empresa">
-                    <Input value={initial.empresaNome} disabled readOnly className="bg-gray-100 text-gray-600" />
+                    <Input value={initial.empresaNome} disabled readOnly className="bg-surface-linha text-ink-muted" />
                   </FormField>
                   <FormField label="Perfil de acesso">
-                    <Input value={initial.perfilNome ?? initial.cargo} disabled readOnly className="bg-gray-100 text-gray-600" />
+                    <Input value={initial.perfilNome ?? initial.cargo} disabled readOnly className="bg-surface-linha text-ink-muted" />
                   </FormField>
                 </FormGrid>
                 <FormGrid>
                   <FormField label="Cargo / função">
-                    <Input value={initial.cargo} disabled readOnly className="bg-gray-100 text-gray-600" />
+                    <Input value={initial.cargo} disabled readOnly className="bg-surface-linha text-ink-muted" />
                   </FormField>
                 </FormGrid>
                 <p className="text-xs text-ink-muted">Estes dados são definidos por um administrador e não podem ser editados aqui.</p>

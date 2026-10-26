@@ -46,8 +46,8 @@ export function CobrancaForm() {
 
   return (
     <div className="space-y-5">
-      {erro && <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3"><AlertCircle className="w-4 h-4 shrink-0" /> {erro}</div>}
-      <div className="bg-white rounded-2xl shadow-card border border-surface-border p-5 sm:p-6 space-y-8">
+      {erro && <div className="flex items-center gap-2 bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3"><AlertCircle className="w-4 h-4 shrink-0" /> {erro}</div>}
+      <div className="bg-white rounded-card shadow-card border border-surface-border p-5 sm:p-6 space-y-8">
         <FormSection title="Cobrança">
           <FormField label="Cliente" required>
             <ClienteCombobox value={clienteId} onChange={setClienteId} />

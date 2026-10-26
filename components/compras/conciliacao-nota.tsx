@@ -192,7 +192,7 @@ export function ConciliacaoNota({ notaId, itens, pedidos, podeLancar, motivoSemL
         </div>
       )}
 
-      {msg && <p role={msg.tipo === "erro" ? "alert" : "status"} className={cn("text-sm font-medium", msg.tipo === "ok" ? "text-success-700" : "text-red-600")}>{msg.texto}</p>}
+      {msg && <p role={msg.tipo === "erro" ? "alert" : "status"} className={cn("text-sm font-medium", msg.tipo === "ok" ? "text-success-700" : "text-atrasado")}>{msg.texto}</p>}
       <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-2">
         {!podeLancar && motivoSemLancar && <p className="text-xs text-ink-muted sm:mr-auto" data-sem-lancar>{motivoSemLancar}</p>}
         {podeLancar && <p className="text-xs text-ink-muted sm:mr-auto">Nada vai para o estoque nem para o financeiro antes de confirmar: até lá, é rascunho.</p>}
@@ -232,14 +232,14 @@ function Vinculo({ item, escolha, onChange }: { item: ItemConciliacao; escolha: 
           <label className="block">
             <span className="text-[11px] font-semibold text-ink">Nome do produto</span>
             <Input value={escolha.nome} onChange={(e) => onChange({ ...escolha, nome: e.target.value })} aria-label="Nome do produto novo" name={`novo-nome-${item.numeroItem}`}
-              maxLength={200} data-novo-nome={item.numeroItem} className={cn("mt-0.5", escolha.nome.trim().length < 2 && "border-red-400")} />
+              maxLength={200} data-novo-nome={item.numeroItem} className={cn("mt-0.5", escolha.nome.trim().length < 2 && "border-atrasado")} />
           </label>
           <label className="block">
             <span className="text-[11px] font-semibold text-ink">Unidade</span>
             <Input value={escolha.unidade} onChange={(e) => onChange({ ...escolha, unidade: e.target.value })} aria-label="Unidade" name={`novo-un-${item.numeroItem}`} maxLength={10} className="mt-0.5" />
           </label>
         </div>
-        {escolha.nome.trim().length < 2 && <p className="text-[11px] text-red-600">Dê um nome ao produto novo.</p>}
+        {escolha.nome.trim().length < 2 && <p className="text-[11px] text-atrasado">Dê um nome ao produto novo.</p>}
       </div>
     );
   }
@@ -290,21 +290,21 @@ function Linha({ item, escolha, fatorTxt, onFator, podePrecificar, preco, onPrec
           <ArrowRightLeft className="w-3.5 h-3.5 text-primary-600" />
           1 {item.unidade} =
           <Input value={igual ? "1" : fatorTxt} onChange={(e) => onFator(e.target.value)} disabled={igual} inputMode="decimal"
-            className={cn("h-8 w-24 text-right text-sm", !igual && fator == null && "border-amber-400")} aria-label={`Quantos ${un} vêm em 1 ${item.unidade} (item ${item.numeroItem})`} data-fator-item={item.numeroItem} />
+            className={cn("h-8 w-24 text-right text-sm", !igual && fator == null && "border-atencao")} aria-label={`Quantos ${un} vêm em 1 ${item.unidade} (item ${item.numeroItem})`} data-fator-item={item.numeroItem} />
           {un}
         </span>
         {aprendido && <span className="inline-flex items-center gap-0.5 font-semibold text-primary-700" data-fator-aprendido><Sparkles className="w-3 h-3" /> fator aprendido da nota anterior</span>}
         {conv ? (
           <span className="text-ink-muted tabular-nums" data-entra>Entra <strong className="text-ink">{formatarQtd(conv.quantidade)} {un}</strong> · custo <strong className="text-ink">{moeda4(conv.custoUnitario)}/{un}</strong></span>
         ) : (
-          <span className="text-amber-700 font-medium" data-falta-fator>Informe quantos {un} vêm em 1 {item.unidade}.</span>
+          <span className="text-atencao-texto font-medium" data-falta-fator>Informe quantos {un} vêm em 1 {item.unidade}.</span>
         )}
       </div>
       {unidadeMudou && (
-        <p className="text-amber-700 flex items-start gap-1" data-unidade-mudou><AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" /> Antes este item vinha em “{unidadeMudou.unidade}” (1 {unidadeMudou.unidade} = {formatarFator(unidadeMudou.fator)} {un}); nesta nota veio em “{item.unidade}”. Confira o fator.</p>
+        <p className="text-atencao-texto flex items-start gap-1" data-unidade-mudou><AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" /> Antes este item vinha em “{unidadeMudou.unidade}” (1 {unidadeMudou.unidade} = {formatarFator(unidadeMudou.fator)} {un}); nesta nota veio em “{item.unidade}”. Confira o fator.</p>
       )}
       {aviso && (
-        <p className="text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5 flex items-start gap-1.5" data-aviso-custo={item.numeroItem}><AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" /> {aviso.texto}</p>
+        <p className="text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-md px-2.5 py-1.5 flex items-start gap-1.5" data-aviso-custo={item.numeroItem}><AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" /> {aviso.texto}</p>
       )}
       {conv && (
         <div data-preco-item={item.numeroItem}>
@@ -325,7 +325,7 @@ function Fiscal({ item, divergencias }: { item: ItemConciliacao; divergencias: s
   return (
     <div className="text-ink-subtle" data-fiscal={item.numeroItem}>
       {partes.length > 0 && <p>Fiscal da nota: {partes.join(" · ")} — vai para o cadastro do produto onde estiver vazio.</p>}
-      {divergencias.map((d) => <p key={d} className="text-amber-700" data-divergencia-fiscal>{d} (fica o do cadastro)</p>)}
+      {divergencias.map((d) => <p key={d} className="text-atencao-texto" data-divergencia-fiscal>{d} (fica o do cadastro)</p>)}
     </div>
   );
 }

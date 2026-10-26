@@ -9,7 +9,7 @@
  *  - ordenar clicando no cabeçalho (asc → desc); estado vazio claro; esqueleto ao carregar;
  *  - atalho "/" foca a busca; no celular, cartões.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { permissoesTotais } from "@/lib/permissoes";
@@ -96,6 +96,13 @@ async function escolher(el: HTMLSelectElement, valor: string) {
   });
   await flush();
 }
+
+// Carrega os módulos uma vez, com tempo real e prazo próprio: o import a frio da lista é pesado e, com a
+// suíte inteira em paralelo, estourava os 5 s do primeiro teste (e os seguintes caíam em cascata).
+beforeAll(async () => {
+  await import("@/components/cadastros/cadastro-padrao");
+  await import("@/components/providers/permissoes-provider");
+}, 60_000);
 
 beforeEach(() => {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;

@@ -83,7 +83,7 @@ export function EmailConfigClient() {
           <FormField label="E-mail de resposta (reply-to)"><Input value={c.replyTo ?? ""} onChange={(e) => set("replyTo", e.target.value)} placeholder="financeiro@suaempresa.com.br" /></FormField>
         </FormGrid>
         {resultado && (
-          <div className={`flex items-center gap-2 text-sm rounded-lg px-3 py-2 ${resultado.ok ? "bg-success-50 text-success-700" : "bg-red-50 text-red-700"}`}>
+          <div className={`flex items-center gap-2 text-sm rounded-lg px-3 py-2 ${resultado.ok ? "bg-success-50 text-success-700" : "bg-atrasado-claro text-atrasado-texto"}`}>
             {resultado.ok ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
             {resultado.ok ? "E-mail de teste enviado! Verifique sua caixa de entrada." : `Falha: ${resultado.erro}`}
           </div>

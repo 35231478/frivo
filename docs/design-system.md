@@ -114,6 +114,18 @@ emoji e hex usado para pintar.
   checklist), cadastros no padrão e os editores, orçamentos (lista, itens e envio).
 - Hex em classe arbitrária (`bg-[#F8FAFC]`) também entrou na guarda.
 
+**Lote 3: financeiro, estoque e configurações** (feito)
+- Contas a receber e a pagar (lista, ações, formulário, boleto, cobrança), fluxo de caixa, contas
+  bancárias, fornecedores, custo de pessoal e encargos, medições (lista, formulário, ações; o
+  documento e a aprovação pública ficam no lote 4).
+- Compras (pedidos, importar nota, conciliação, financeiro da nota) e estoque (lista, extrato,
+  lançamento, preço de venda, situação).
+- Configurações (seções, formulários, Inter, e-mail, portal, QR, impressão da OS, checklists),
+  perfil (avatar sem degradê, "Salvar" no acento), leads do site, QR codes, importação de planilha,
+  folha, "Sem permissão".
+- Frivo IA: o botão flutuante e o cabeçalho do painel deixaram o navy (agora acento).
+- "Enviar por WhatsApp" é secundário ao lado do e-mail (primário) também na medição.
+
 ## Varredura seguinte: o que falta
 
 Inventário pelo código, com o número de classes de cor fora do sistema (`gray-*`, `red-*`, `blue-*`…),
@@ -136,7 +148,7 @@ orçamento passaram para o lote 4)
 10. Frota: `veiculo-form`, `veiculos/selos`, `crlv-por-foto` (degradê), `checklist-preenchimento`, `veiculos-lista-client`.
 11. Cadastros no padrão: `cadastros/cadastro-padrao`, editores (`tipo-equipamento`, `tabela-preco`).
 
-**Prioridade 3: financeiro, estoque e configurações**
+**Prioridade 3: financeiro, estoque e configurações** (feito no lote 3)
 12. Contas a receber/pagar (ações), medições (`components/medicao/*`, degradê), compras/notas (`conciliacao-nota`), estoque.
 13. Configurações: `configuracoes-client`, `configuracoes/formularios`, Inter, QR, perfil (degradê).
 14. Leads do site, QR codes, importação de planilha, folha.

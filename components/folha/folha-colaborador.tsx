@@ -109,7 +109,7 @@ export function FolhaColaborador({ colaboradorId }: { colaboradorId: string }) {
   }
 
   if (carregando) return <p className="flex items-center gap-2 text-sm text-ink-muted"><Loader2 className="w-4 h-4 animate-spin" /> Carregando dados financeiros…</p>;
-  if (!e || !custo) return <p className="text-sm text-red-600">{erro || "Não foi possível carregar os dados financeiros."}</p>;
+  if (!e || !custo) return <p className="text-sm text-atrasado">{erro || "Não foi possível carregar os dados financeiros."}</p>;
 
   const diarista = e.regime === "DIARISTA";
   const campo = (k: CampoValor, rotulo: string, opts: { hint?: string; prefixo?: string; placeholder?: string } = {}) => (
@@ -130,7 +130,7 @@ export function FolhaColaborador({ colaboradorId }: { colaboradorId: string }) {
 
   return (
     <div className="space-y-6" data-secao="folha">
-      <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+      <div className="flex gap-2 rounded-lg border border-atencao/20 bg-atencao-claro px-3 py-2.5 text-xs text-atencao-texto">
         <Info className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
         <p>{AVISO_GESTAO}</p>
       </div>
@@ -150,7 +150,7 @@ export function FolhaColaborador({ colaboradorId }: { colaboradorId: string }) {
                   {opcoesModelo.filter((o) => !o.avulso).map((o) => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
                 </Select>
                 {escolhido && !escolhido.ativo && (
-                  <p className="text-xs text-amber-700 mt-1" data-aviso-modelo-inativo>
+                  <p className="text-xs text-atencao-texto mt-1" data-aviso-modelo-inativo>
                     “{escolhido.nome}” está inativo: o custo está sendo calculado pelo padrão{padrao ? ` (“${padrao.nome}”)` : ""}. Escolha outro modelo ou reative-o.
                   </p>
                 )}
@@ -215,7 +215,7 @@ export function FolhaColaborador({ colaboradorId }: { colaboradorId: string }) {
           </FormSection>
         </div>
 
-        <aside className="lg:sticky lg:top-4 rounded-xl border border-surface-border bg-surface-alt/60 p-4 text-sm space-y-1.5" data-resumo-custo>
+        <aside className="lg:sticky lg:top-4 rounded-card border border-surface-border bg-surface-alt/60 p-4 text-sm space-y-1.5" data-resumo-custo>
           <p className="text-xs font-bold uppercase tracking-wider text-ink-muted mb-2">Custo mensal estimado</p>
           {linhaResumo(diarista ? "Base (diárias)" : "Salário/base", custo.base)}
           {custo.adicional > 0 && linhaResumo(ADICIONAL_LABEL[e.adicionalTipo], custo.adicional)}
@@ -239,7 +239,7 @@ export function FolhaColaborador({ colaboradorId }: { colaboradorId: string }) {
         </aside>
       </div>
 
-      {erro && <p className="flex items-center gap-2 text-sm text-red-600"><AlertCircle className="w-4 h-4" /> {erro}</p>}
+      {erro && <p className="flex items-center gap-2 text-sm text-atrasado"><AlertCircle className="w-4 h-4" /> {erro}</p>}
       <div className="flex items-center justify-end gap-3">
         {ok && <span className="flex items-center gap-1 text-sm text-success-600"><Check className="w-4 h-4" /> Dados financeiros salvos</span>}
         <Button type="button" onClick={salvar} loading={salvando} data-acao="salvar-folha">Salvar dados financeiros</Button>

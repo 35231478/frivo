@@ -192,7 +192,7 @@ export function MedicaoForm({
       />
 
       {erro && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 flex items-center gap-2">
+        <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
           {erro}
         </div>
@@ -204,7 +204,7 @@ export function MedicaoForm({
             <Tags className="w-3.5 h-3.5" /> Tabela: {tabelaPreco.nome}
           </span>
           {tabelaPreco.vinculadaInativa && (
-            <span className="text-xs text-amber-700" data-aviso-tabela-inativa>A tabela do cliente (“{tabelaPreco.vinculadaInativa.nome}”) está inativa: valem os preços da Padrão.</span>
+            <span className="text-xs text-atencao-texto" data-aviso-tabela-inativa>A tabela do cliente (“{tabelaPreco.vinculadaInativa.nome}”) está inativa: valem os preços da Padrão.</span>
           )}
           {tabelaPreco.precosBloqueados && (
             <span className="text-xs text-ink-muted">Preços bloqueados por contrato</span>
@@ -284,7 +284,7 @@ export function MedicaoForm({
             {desconto > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-ink-muted">Desconto</span>
-                <span className="font-mono text-red-600">- {formatarMoeda(desconto)}</span>
+                <span className="font-mono text-atrasado">- {formatarMoeda(desconto)}</span>
               </div>
             )}
             <div className="flex justify-between pt-2 border-t-2 border-success-500/40">

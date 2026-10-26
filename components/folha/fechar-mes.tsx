@@ -31,7 +31,7 @@ export function FecharMes({ competencia, rotulo, jaFechado }: { competencia: str
 
   return (
     <div className="flex items-center gap-2">
-      {msg && <span className={msg.ok ? "flex items-center gap-1 text-xs text-success-600" : "text-xs text-red-600"}>{msg.ok && <Check className="w-3.5 h-3.5" />}{msg.texto}</span>}
+      {msg && <span className={msg.ok ? "flex items-center gap-1 text-xs text-success-600" : "text-xs text-atrasado"}>{msg.ok && <Check className="w-3.5 h-3.5" />}{msg.texto}</span>}
       <button type="button" onClick={fechar} disabled={enviando} data-acao="fechar-mes"
         className="btn-primary inline-flex items-center gap-1.5 text-sm disabled:opacity-60">
         {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}

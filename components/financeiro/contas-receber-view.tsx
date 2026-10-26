@@ -100,8 +100,8 @@ export function ContasReceberView({
 
   const CARDS: { key: CardKey; label: string; icone: any; cor: string; bgSel: string; borda: string; v: number; q: number }[] = [
     { key: "A_RECEBER", label: "A Receber", icone: Receipt, cor: "text-primary-600", bgSel: "bg-primary-50", borda: "border-b-primary-500", v: resumo.aReceber.v, q: resumo.aReceber.q },
-    { key: "VENCIDO", label: "Vencido", icone: AlertTriangle, cor: "text-red-600", bgSel: "bg-red-50", borda: "border-b-red-500", v: resumo.vencido.v, q: resumo.vencido.q },
-    { key: "VENCE_HOJE", label: "Vence Hoje", icone: CalendarClock, cor: "text-amber-600", bgSel: "bg-amber-50", borda: "border-b-amber-500", v: resumo.hoje.v, q: resumo.hoje.q },
+    { key: "VENCIDO", label: "Vencido", icone: AlertTriangle, cor: "text-atrasado", bgSel: "bg-atrasado-claro", borda: "border-b-atrasado", v: resumo.vencido.v, q: resumo.vencido.q },
+    { key: "VENCE_HOJE", label: "Vence Hoje", icone: CalendarClock, cor: "text-atencao-texto", bgSel: "bg-atencao-claro", borda: "border-b-atencao", v: resumo.hoje.v, q: resumo.hoje.q },
     { key: "RECEBIDO", label: "Recebido (mês)", icone: CheckCircle2, cor: "text-success-600", bgSel: "bg-success-50", borda: "border-b-success-500", v: resumo.recebido.v, q: resumo.recebido.q },
   ];
 
@@ -128,7 +128,7 @@ export function ContasReceberView({
             <button key={c.key} type="button" data-card={c.key} aria-pressed={sel}
               onClick={() => navegar({ card: sel ? null : c.key })}
               className={cn(
-                "text-left rounded-xl border border-surface-border border-b-2 bg-white p-4 transition-all hover:shadow-card",
+                "text-left rounded-card border border-surface-border border-b-2 bg-white p-4 transition-all hover:shadow-card",
                 c.borda, sel ? `${c.bgSel} ring-2 ring-offset-1 ring-primary-200` : "hover:border-primary-200",
               )}>
               <div className="flex items-start justify-between">
@@ -223,7 +223,7 @@ export function ContasReceberView({
                 <tr><td colSpan={7} className="text-center text-ink-subtle py-12">Nenhuma cobrança encontrada</td></tr>
               ) : comStatus.map(({ c, sv }) => {
                 return (
-                  <tr key={c.id} className={cn("border-b border-surface-border transition-colors", sv.linhaVermelha ? "bg-red-50 hover:bg-red-100/50" : "hover:bg-surface-alt/60")}>
+                  <tr key={c.id} className={cn("border-b border-surface-border transition-colors", sv.linhaVermelha ? "bg-atrasado-claro hover:bg-atrasado-claro/50" : "hover:bg-surface-alt/60")}>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
                         <AvatarCliente nome={c.clienteNome} logoUrl={c.clienteLogo} size={32} />
@@ -244,7 +244,7 @@ export function ContasReceberView({
                         <span className={cn("inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full", sv.classe)}>
                           {sv.linhaVermelha && <AlertTriangle className="w-3 h-3" />}{sv.label}
                         </span>
-                        {c.boletoStatus === "EMITIDO" && <Barcode className="w-4 h-4 text-emerald-600" aria-label="Boleto emitido" />}
+                        {c.boletoStatus === "EMITIDO" && <Barcode className="w-4 h-4 text-ok-texto" aria-label="Boleto emitido" />}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">

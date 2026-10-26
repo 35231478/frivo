@@ -106,6 +106,15 @@ const VARRIDAS: Record<string, string[]> = {
     "components/orcamento", "!components/orcamento/aprovacao-publica.tsx", "!components/orcamento/proposta-documento.tsx",
     "!components/orcamento/orcamento-documento.tsx",
   ],
+  "lote 3 (financeiro, estoque e configurações)": [
+    "components/financeiro", "app/(dashboard)/financeiro", "components/compras", "app/(dashboard)/compras",
+    "components/estoque", "app/(dashboard)/estoque", "components/config", "app/(dashboard)/configuracoes",
+    "components/forms/configuracoes-client.tsx", "components/perfil", "app/(dashboard)/perfil", "app/(dashboard)/leads-site",
+    "app/(dashboard)/qrcodes", "components/importacao", "components/folha", "components/ia", "app/(dashboard)/sem-permissao",
+    "app/(dashboard)/instalar", "app/(dashboard)/layout.tsx",
+    // aprovação pública e documento da medição ficam para o lote 4 (fora do painel)
+    "components/medicao", "!components/medicao/aprovacao-medicao.tsx", "!components/medicao/medicao-documento.tsx",
+  ],
 };
 
 // Paleta solta do Tailwind (com variantes e opacidade): tudo deve vir dos tokens

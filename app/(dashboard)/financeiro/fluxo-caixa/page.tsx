@@ -48,10 +48,10 @@ export default async function FluxoCaixaPage({
   const totalAtrasadoMes = contasMes.filter((c) => c.status === "ATRASADO").reduce((acc, c) => acc + Number(c.valor), 0);
 
   const cards = [
-    { label: "Previsto no mês", valor: totalPrevistoMes, cor: "text-slate-700", bg: "bg-slate-50" },
+    { label: "Previsto no mês", valor: totalPrevistoMes, cor: "text-ink", bg: "bg-surface-page" },
     { label: "A receber", valor: totalAReceberMes, cor: "text-primary-700", bg: "bg-primary-50" },
     { label: "Recebido", valor: totalRecebidoMes, cor: "text-success-700", bg: "bg-success-50" },
-    { label: "Atrasado", valor: totalAtrasadoMes, cor: "text-red-700", bg: "bg-red-50" },
+    { label: "Atrasado", valor: totalAtrasadoMes, cor: "text-atrasado-texto", bg: "bg-atrasado-claro" },
   ];
 
   // Gráfico últimos 6 meses

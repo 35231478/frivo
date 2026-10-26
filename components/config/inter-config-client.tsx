@@ -113,13 +113,13 @@ export function InterConfigClient() {
   return (
     <div className="space-y-6">
       {ambiente === "SANDBOX" && ativo && (
-        <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1.5 rounded-full">
+        <div className="inline-flex items-center gap-1.5 bg-atencao-claro text-atencao-texto text-xs font-bold px-3 py-1.5 rounded-full">
           <AlertTriangle className="w-3.5 h-3.5" /> MODO SANDBOX — boletos de teste, sem valor real
         </div>
       )}
 
       <div className="flex items-center gap-3">
-        <div className="p-2.5 bg-orange-50 rounded-lg"><Landmark className="w-5 h-5 text-orange-600" /></div>
+        <div className="p-2.5 bg-atencao-claro rounded-lg"><Landmark className="w-5 h-5 text-atencao-texto" /></div>
         <div className="flex-1">
           <ToggleSwitch checked={ativo} onChange={setAtivo} label="Integração ativa" description="Habilita a emissão de boletos pelo Banco Inter" />
         </div>
@@ -165,7 +165,7 @@ export function InterConfigClient() {
 
       {msg && <div className="text-sm text-ink bg-surface-alt rounded-lg px-3 py-2">{msg}</div>}
       {resultadoTeste && (
-        <div className={`flex items-center gap-2 text-sm rounded-lg px-3 py-2 ${resultadoTeste.ok ? "bg-success-50 text-success-700" : "bg-red-50 text-red-700"}`}>
+        <div className={`flex items-center gap-2 text-sm rounded-lg px-3 py-2 ${resultadoTeste.ok ? "bg-success-50 text-success-700" : "bg-atrasado-claro text-atrasado-texto"}`}>
           {resultadoTeste.ok ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
           {resultadoTeste.ok ? "Conexão bem-sucedida com o Banco Inter!" : `Falha: ${resultadoTeste.erro}`}
         </div>
@@ -189,8 +189,8 @@ export function InterConfigClient() {
           {temWebhook ? "Gerar nova URL (revoga a atual)" : "Gerar URL do webhook"}
         </Button>
         {webhookUrl && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-1.5" data-webhook-url>
-            <p className="text-xs font-semibold text-amber-800">Copie agora — esta URL contém o segredo e não será mostrada de novo:</p>
+          <div className="bg-atencao-claro border border-atencao/20 rounded-lg p-3 space-y-1.5" data-webhook-url>
+            <p className="text-xs font-semibold text-atencao-texto">Copie agora — esta URL contém o segredo e não será mostrada de novo:</p>
             <code className="block text-xs break-all select-all">{webhookUrl}</code>
             <button type="button" className="text-xs font-semibold text-primary-700 hover:underline"
               onClick={() => navigator.clipboard?.writeText(webhookUrl)}>Copiar</button>
@@ -203,7 +203,7 @@ export function InterConfigClient() {
           </div>
         )}
         {registroInter && !registroInter.ok && (
-          <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2" data-webhook-pendente>
+          <div className="flex items-start gap-2 bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2" data-webhook-pendente>
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
             <span>
               <strong>Registro no Inter PENDENTE</strong> — a URL acima vale do nosso lado, mas o Inter ainda não sabe dela.

@@ -203,12 +203,12 @@ function Resultado({ nota, movs, avisos }: { nota: Nota; movs: Awaited<ReturnTyp
         </div>
       )}
       {divergenciasFiscais.length > 0 && (
-        <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 space-y-0.5" data-divergencias-fiscais>
+        <div className="text-xs text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2 space-y-0.5" data-divergencias-fiscais>
           {divergenciasFiscais.map((t) => <p key={t} className="flex items-start gap-1"><AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" /> {t}</p>)}
         </div>
       )}
       {avisos.length > 0 && (
-        <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 space-y-1" data-avisos-custo>
+        <div className="text-xs text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2 space-y-1" data-avisos-custo>
           {avisos.map((a) => (
             <p key={a.produtoId} className="flex items-start gap-1"><AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" /> <span><strong>{a.produto}</strong> — {a.texto} <Link href={`/estoque/${a.produtoId}`} className="font-semibold text-primary-700 hover:underline">Ver preço</Link></span></p>
           ))}

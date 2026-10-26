@@ -36,14 +36,14 @@ export function ContaPagarAcoes({ conta }: { conta: Conta }) {
     <>
       <div className="flex items-center justify-end gap-0.5">
         {!finalizada && (
-          <button type="button" title="Registrar pagamento" onClick={() => setModal("pagar")} className="p-1.5 rounded text-emerald-600 hover:bg-surface-alt"><DollarSign className="w-4 h-4" /></button>
+          <button type="button" title="Registrar pagamento" onClick={() => setModal("pagar")} className="p-1.5 rounded text-ok-texto hover:bg-surface-alt"><DollarSign className="w-4 h-4" /></button>
         )}
         <button type="button" title="Histórico de pagamentos" onClick={() => setModal("historico")} className="p-1.5 rounded text-ink-muted hover:bg-surface-alt"><History className="w-4 h-4" /></button>
         {!finalizada && (
           <Link href={`/financeiro/contas-pagar/${conta.id}/editar`} title="Editar" className="p-1.5 rounded text-primary-600 hover:bg-surface-alt"><Pencil className="w-4 h-4" /></Link>
         )}
         {conta.status !== "CANCELADO" && (
-          <button type="button" title="Cancelar conta" onClick={cancelar} className="p-1.5 rounded text-red-600 hover:bg-red-50"><Ban className="w-4 h-4" /></button>
+          <button type="button" title="Cancelar conta" onClick={cancelar} className="p-1.5 rounded text-atrasado hover:bg-atrasado-claro"><Ban className="w-4 h-4" /></button>
         )}
       </div>
 
@@ -99,12 +99,12 @@ function PagamentoParcial({ conta, onPronto }: { conta: Conta; onPronto: () => v
 
   return (
     <div className="space-y-4">
-      {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
+      {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2">{erro}</div>}
 
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-surface-alt rounded-lg p-3 text-center"><p className="text-xs text-ink-muted">Valor total</p><p className="text-sm font-bold text-ink mt-1">{formatarMoeda(conta.valorTotal)}</p></div>
         <div className="bg-surface-alt rounded-lg p-3 text-center"><p className="text-xs text-ink-muted">Já pago</p><p className="text-sm font-bold text-success-700 mt-1">{formatarMoeda(conta.valorPago)}</p></div>
-        <div className="bg-amber-50 rounded-lg p-3 text-center"><p className="text-xs text-ink-muted">Após este pagamento</p><p className="text-sm font-bold text-amber-700 mt-1">{formatarMoeda(saldoApos)}</p></div>
+        <div className="bg-atencao-claro rounded-lg p-3 text-center"><p className="text-xs text-ink-muted">Após este pagamento</p><p className="text-sm font-bold text-atencao-texto mt-1">{formatarMoeda(saldoApos)}</p></div>
       </div>
 
       <FormGrid>

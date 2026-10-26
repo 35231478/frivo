@@ -21,7 +21,7 @@ interface Resultado { criados: number; atualizados: number; comErro: number; err
 const STATUS: Record<StatusLinha, { rotulo: string; cls: string }> = {
   criar: { rotulo: "Criar", cls: "bg-success-50 text-success-700 border-success-200" },
   atualizar: { rotulo: "Atualizar", cls: "bg-primary-50 text-primary-700 border-primary-200" },
-  erro: { rotulo: "Erro", cls: "bg-red-50 text-red-700 border-red-200" },
+  erro: { rotulo: "Erro", cls: "bg-atrasado-claro text-atrasado-texto border-atrasado/20" },
 };
 
 export function ImportarPlanilha({ entidade, onConcluido, className }: { entidade: EntidadeImportacao; onConcluido?: () => void; className?: string }) {
@@ -140,17 +140,17 @@ function Assistente({ entidade, onConcluido }: { entidade: EntidadeImportacao; o
           <p className="text-xs text-ink-muted">Excel (.xlsx) ou CSV, até 5 MB e 5.000 linhas. Nada é gravado antes da sua confirmação.</p>
         </section>
       )}
-      {erro && <p className="flex items-start gap-2 text-sm text-red-600" role="alert"><AlertCircle className="w-4 h-4 mt-0.5 shrink-0" /> {erro}</p>}
+      {erro && <p className="flex items-start gap-2 text-sm text-atrasado" role="alert"><AlertCircle className="w-4 h-4 mt-0.5 shrink-0" /> {erro}</p>}
 
       {/* 3. Prévia */}
       {analise && etapa !== "feito" && (
-        <section className="bg-white rounded-xl border border-surface-border shadow-card" data-previa>
+        <section className="bg-white rounded-card border border-surface-border shadow-card" data-previa>
           <div className="px-4 py-4 border-b border-surface-border space-y-3">
             <h2 className="card-title">3. Confira a prévia</h2>
             <div className="grid grid-cols-3 gap-2 text-center">
               <Contador valor={analise.resumo.criar} rotulo="serão criados" cls="text-success-700" dado="criar" />
               <Contador valor={analise.resumo.atualizar} rotulo="serão atualizados" cls="text-primary-700" dado="atualizar" />
-              <Contador valor={analise.resumo.erros} rotulo="com erro" cls="text-red-700" dado="erro" />
+              <Contador valor={analise.resumo.erros} rotulo="com erro" cls="text-atrasado-texto" dado="erro" />
             </div>
             <div className="flex flex-wrap gap-2 text-sm" role="tablist">
               {([["todos", `Todas (${analise.resumo.total})`], ["criar", `Criar (${analise.resumo.criar})`],
@@ -164,7 +164,7 @@ function Assistente({ entidade, onConcluido }: { entidade: EntidadeImportacao; o
                 ))}
             </div>
             {!podeAtualizar && (
-              <p className="text-xs text-amber-700">Você pode criar mas não editar {def.plural}: quem já existe aparece como erro e não é alterado.</p>
+              <p className="text-xs text-atencao-texto">Você pode criar mas não editar {def.plural}: quem já existe aparece como erro e não é alterado.</p>
             )}
             {analise.colunasIgnoradas.length > 0 && (
               <p className="text-xs text-ink-muted">Colunas não reconhecidas (ignoradas): {analise.colunasIgnoradas.join(", ")}</p>
@@ -176,7 +176,7 @@ function Assistente({ entidade, onConcluido }: { entidade: EntidadeImportacao; o
                 <span className="text-xs text-ink-subtle tabular-nums w-14 shrink-0 pt-0.5">linha {l.linha}</span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-ink truncate">{l.rotulo || "(sem nome)"}</p>
-                  {l.erros.map((e) => <p key={e} className="text-xs text-red-600 break-words">• {e}</p>)}
+                  {l.erros.map((e) => <p key={e} className="text-xs text-atrasado break-words">• {e}</p>)}
                 </div>
                 <span className={cn("text-[11px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap", STATUS[l.status].cls)}>{STATUS[l.status].rotulo}</span>
               </li>
@@ -212,7 +212,7 @@ function Assistente({ entidade, onConcluido }: { entidade: EntidadeImportacao; o
           </p>
           {resultado.comErro > 0 && (
             <>
-              <ul className="text-xs text-red-600 space-y-0.5 max-h-48 overflow-y-auto">
+              <ul className="text-xs text-atrasado space-y-0.5 max-h-48 overflow-y-auto">
                 {resultado.erros.slice(0, 50).map((e) => <li key={e.linha}>linha {e.linha}{e.rotulo ? ` (${e.rotulo})` : ""}: {e.erros.join(" ")}</li>)}
                 {resultado.erros.length > 50 && <li>… e mais {resultado.erros.length - 50} — veja todas na planilha de erros.</li>}
               </ul>

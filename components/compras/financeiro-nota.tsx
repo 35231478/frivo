@@ -192,7 +192,7 @@ export function FinanceiroNotaEditor({ nota, valor, onChange, podeEditar }: {
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink-muted">R$</span>
                     <Input value={p.valorTxt} onChange={(e) => setParcela(i, { valorTxt: e.target.value })} disabled={!podeEditar} inputMode="decimal"
-                      className={cn("pl-9 text-right tabular-nums", (v == null || !(v > 0)) && "border-red-400")} aria-label={`Valor da parcela ${i + 1}`} name={`valor-${i + 1}`} />
+                      className={cn("pl-9 text-right tabular-nums", (v == null || !(v > 0)) && "border-atrasado")} aria-label={`Valor da parcela ${i + 1}`} name={`valor-${i + 1}`} />
                   </div>
                 </label>
                 {podeEditar ? (
@@ -206,7 +206,7 @@ export function FinanceiroNotaEditor({ nota, valor, onChange, podeEditar }: {
           })}
         </ul>
 
-        {avisoSoma && <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5 flex items-start gap-1.5" data-aviso-soma><AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" /> {avisoSoma}</p>}
+        {avisoSoma && <p className="text-xs text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-md px-2.5 py-1.5 flex items-start gap-1.5" data-aviso-soma><AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" /> {avisoSoma}</p>}
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink-muted">
           <span data-origem-parcelas>{comoNaNf ? (nota.parcelasNf.some((p) => p.duplicata) ? "Como veio na NF (duplicatas)." : "Sem duplicata na NF: à vista, no valor da nota.") : "Parcelas ajustadas aqui (a NF trazia outras)."}</span>
           {podeEditar && !comoNaNf && (

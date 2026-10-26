@@ -111,7 +111,7 @@ export function ComprasSecao({ ordemServicoId, orcamentoId }: { ordemServicoId?:
             <button onClick={() => setAberto(false)} className="text-ink-muted hover:text-ink"><X className="w-4 h-4" /></button>
           </div>
 
-          {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 flex items-center gap-2"><AlertCircle className="w-4 h-4" />{erro}</div>}
+          {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2 flex items-center gap-2"><AlertCircle className="w-4 h-4" />{erro}</div>}
 
           <div className="space-y-2">
             {itens.map((it) => (
@@ -137,7 +137,7 @@ export function ComprasSecao({ ordemServicoId, orcamentoId }: { ordemServicoId?:
                   <Input type="number" min="0" step="0.01" value={it.valorEstimado} onChange={(e) => patchItem(it._id, { valorEstimado: e.target.value })} placeholder="R$" />
                 </div>
                 <div className="col-span-1 flex justify-center pb-1.5">
-                  <button type="button" onClick={() => setItens((p) => p.filter((x) => x._id !== it._id))} className="p-1.5 text-ink-muted hover:text-red-600"><Trash2 className="w-3.5 h-3.5" /></button>
+                  <button type="button" onClick={() => setItens((p) => p.filter((x) => x._id !== it._id))} className="p-1.5 text-ink-muted hover:text-atrasado"><Trash2 className="w-3.5 h-3.5" /></button>
                 </div>
               </div>
             ))}

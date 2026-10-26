@@ -97,7 +97,7 @@ export function ChecklistTemplatesClient() {
 
   return (
     <div className="space-y-4">
-      {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
+      {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2">{erro}</div>}
 
       {loading ? (
         <p className="text-sm text-ink-subtle text-center py-8">Carregando…</p>
@@ -112,7 +112,7 @@ export function ChecklistTemplatesClient() {
               </div>
               <div className="flex items-center gap-1">
                 <button onClick={() => abrirEditar(t)} className="p-1.5 text-ink-muted hover:text-primary-600 hover:bg-primary-50 rounded" title="Editar"><Pencil className="w-4 h-4" /></button>
-                <button onClick={() => remover(t.id)} className="p-1.5 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded" title="Desativar"><Trash2 className="w-4 h-4" /></button>
+                <button onClick={() => remover(t.id)} className="p-1.5 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded" title="Desativar"><Trash2 className="w-4 h-4" /></button>
               </div>
             </div>
           ))}
@@ -146,7 +146,7 @@ export function ChecklistTemplatesClient() {
                     <Input value={it.categoria} onChange={(e) => updItem(i, "categoria", e.target.value)} placeholder="Categoria (ex: Motor)" />
                     <Input value={it.descricao} onChange={(e) => updItem(i, "descricao", e.target.value)} placeholder="Item (ex: Nível do óleo)" />
                   </div>
-                  <button type="button" onClick={() => removeItem(i)} className="text-red-500 hover:text-red-700 p-1.5 shrink-0"><Trash2 className="w-4 h-4" /></button>
+                  <button type="button" onClick={() => removeItem(i)} className="text-atrasado hover:text-atrasado-texto p-1.5 shrink-0"><Trash2 className="w-4 h-4" /></button>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:pl-6">
                   <Select value={it.tipo} onChange={(e) => updItem(i, "tipo", e.target.value)}>{TIPOS_ITEM.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}</Select>

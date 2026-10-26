@@ -11,6 +11,9 @@ import { Drawer } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
 import { Plus, Pencil, Trash2, Check, Search } from "lucide-react";
 
+// Cor que um registro novo recebe no seletor (dado salvo no cadastro, não pintura da tela)
+const COR_PADRAO = "#3b82f6";
+
 export interface CampoConfig {
   key: string;
   label: string;
@@ -173,7 +176,7 @@ export function CrudCadastro({ titulo, apiUrl, campos, colunasLista }: CrudCadas
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button onClick={() => abrirEditar(item)} className="p-1.5 text-ink-muted hover:text-primary-600 hover:bg-primary-50 rounded transition-colors" title="Editar"><Pencil className="w-4 h-4" /></button>
-                        <button onClick={() => remover(item.id)} className="p-1.5 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Desativar"><Trash2 className="w-4 h-4" /></button>
+                        <button onClick={() => remover(item.id)} className="p-1.5 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded transition-colors" title="Desativar"><Trash2 className="w-4 h-4" /></button>
                       </div>
                     </td>
                   </tr>
@@ -211,7 +214,7 @@ export function CrudCadastro({ titulo, apiUrl, campos, colunasLista }: CrudCadas
           </>
         }
       >
-        {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 mb-4">{erro}</div>}
+        {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2 mb-4">{erro}</div>}
         <div className="space-y-4">
           {campos.map((c) => c.tipo === "switch" ? (
             <div key={c.key} data-campo-switch={c.key} className="border-t border-surface-border">
@@ -223,7 +226,7 @@ export function CrudCadastro({ titulo, apiUrl, campos, colunasLista }: CrudCadas
                 <Textarea value={form[c.key] ?? ""} onChange={(e) => setForm((f) => ({ ...f, [c.key]: e.target.value }))} placeholder={c.placeholder} rows={3} />
               ) : c.tipo === "color" ? (
                 <div className="flex items-center gap-2">
-                  <input type="color" value={form[c.key] ?? "#3b82f6"} onChange={(e) => setForm((f) => ({ ...f, [c.key]: e.target.value }))} className="w-10 h-10 rounded border border-gray-300 cursor-pointer" />
+                  <input type="color" value={form[c.key] ?? COR_PADRAO} onChange={(e) => setForm((f) => ({ ...f, [c.key]: e.target.value }))} className="w-10 h-10 rounded border border-surface-border cursor-pointer" />
                   <Input value={form[c.key] ?? ""} onChange={(e) => setForm((f) => ({ ...f, [c.key]: e.target.value }))} className="flex-1 font-mono text-xs" />
                 </div>
               ) : c.tipo === "select" && c.opcoes ? (

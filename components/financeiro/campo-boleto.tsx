@@ -37,9 +37,9 @@ export function CampoBoleto({ valor, onChange, valorParcela, vencimentoParcela, 
         <Barcode className="w-4 h-4 text-ink-subtle absolute left-3 top-1/2 -translate-y-1/2" />
         <Input value={valor} onChange={(e) => onChange(e.target.value)} inputMode="numeric" autoComplete="off" spellCheck={false}
           placeholder="Cole a linha digitável do boleto" aria-label={rotulo} name={name}
-          className={cn("pl-9 font-mono text-xs", leitura && !leitura.ok && "border-red-400", b && "border-success-400")} />
+          className={cn("pl-9 font-mono text-xs", leitura && !leitura.ok && "border-atrasado", b && "border-success-400")} />
       </div>
-      {leitura && !leitura.ok && <p className="text-xs text-red-600" role="alert" data-boleto-erro>{leitura.erro}</p>}
+      {leitura && !leitura.ok && <p className="text-xs text-atrasado" role="alert" data-boleto-erro>{leitura.erro}</p>}
       {b && (
         <p className="text-xs text-success-700 flex flex-wrap items-center gap-x-1.5" data-boleto-ok>
           <CheckCircle2 className="w-3.5 h-3.5" />
@@ -50,7 +50,7 @@ export function CampoBoleto({ valor, onChange, valorParcela, vencimentoParcela, 
           {formatarLinhaDigitavel(b.linhaDigitavel) !== valor.trim() && <span className="text-ink-subtle font-mono break-all">· {formatarLinhaDigitavel(b.linhaDigitavel)}</span>}
         </p>
       )}
-      {avisos.map((a) => <p key={a} className="text-xs text-amber-700 flex items-start gap-1" data-boleto-aviso><AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" />{a}</p>)}
+      {avisos.map((a) => <p key={a} className="text-xs text-atencao-texto flex items-start gap-1" data-boleto-aviso><AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" />{a}</p>)}
     </div>
   );
 }

@@ -141,15 +141,15 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
   return (
     <div className="space-y-8">
       {/* ========== DADOS DA EMPRESA ========== */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-6">
+      <div className="bg-white rounded-card border border-surface-border p-6 space-y-6">
         <div className="flex items-center gap-2">
           <Building2 className="w-5 h-5 text-frivo-600" />
-          <h2 className="text-lg font-semibold text-gray-900">Dados da Empresa</h2>
+          <h2 className="text-lg font-semibold text-ink">Dados da Empresa</h2>
         </div>
 
-        {erroEmpresa && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{erroEmpresa}</div>}
+        {erroEmpresa && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3">{erroEmpresa}</div>}
         {sucessoEmpresa && (
-          <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3 flex items-center gap-2">
+          <div className="bg-ok-claro border border-ok/20 text-ok-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2">
             <Check className="w-4 h-4" /> Dados da empresa salvos.
           </div>
         )}
@@ -159,21 +159,21 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
           <input ref={logoInputRef} type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
           {logo ? (
             <div className="flex items-center gap-4">
-              <img src={logo} alt="Logo" className="w-20 h-20 object-contain rounded-lg border border-gray-200 bg-white p-1" />
+              <img src={logo} alt="Logo" className="w-20 h-20 object-contain rounded-lg border border-surface-border bg-white p-1" />
               <div className="flex flex-col gap-1.5">
                 <Button type="button" variant="secondary" onClick={() => logoInputRef.current?.click()} loading={uploadingLogo} className="text-xs py-1 px-2.5 h-auto">
                   <Upload className="w-3 h-3" /> Trocar
                 </Button>
-                <Button type="button" variant="ghost" onClick={removerLogo} className="text-xs text-red-500 py-1 px-2.5 h-auto">
+                <Button type="button" variant="ghost" onClick={removerLogo} className="text-xs text-atrasado py-1 px-2.5 h-auto">
                   <Trash2 className="w-3 h-3" /> Remover
                 </Button>
               </div>
             </div>
           ) : (
             <button type="button" onClick={() => logoInputRef.current?.click()}
-              className="flex flex-col items-center justify-center w-24 h-24 border-2 border-dashed border-gray-300 rounded-lg hover:border-frivo-400 transition-colors cursor-pointer">
-              <ImageIcon className="w-6 h-6 text-gray-300" />
-              <span className="text-xs text-gray-400 mt-1">Enviar logo</span>
+              className="flex flex-col items-center justify-center w-24 h-24 border-2 border-dashed border-surface-border rounded-lg hover:border-frivo-400 transition-colors cursor-pointer">
+              <ImageIcon className="w-6 h-6 text-ink-subtle" />
+              <span className="text-xs text-ink-muted mt-1">Enviar logo</span>
             </button>
           )}
         </FormSection>
@@ -209,7 +209,7 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
         </FormSection>
 
         <FormSection title="Endereço">
-          <p className="text-xs text-gray-400 -mt-2 mb-3">Usado para calcular distância até os clientes.</p>
+          <p className="text-xs text-ink-muted -mt-2 mb-3">Usado para calcular distância até os clientes.</p>
           <FormField label="Logradouro" hint="Digite para buscar automaticamente">
             <EnderecoAutocomplete value={emp.endereco} onChange={(v) => updateEmp("endereco", v)} onSelect={handleEnderecoSelect} placeholder="Rua, Av., etc." />
           </FormField>
@@ -232,25 +232,25 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
             <MapaEndereco logradouro={emp.endereco} numero={emp.numero} cidade={emp.cidade} estado={emp.estado} cep={emp.cep} />
           )}
           {emp.latitude && emp.longitude && (
-            <p className="text-xs text-gray-400">Coordenadas: {emp.latitude.toFixed(6)}, {emp.longitude.toFixed(6)}</p>
+            <p className="text-xs text-ink-muted">Coordenadas: {emp.latitude.toFixed(6)}, {emp.longitude.toFixed(6)}</p>
           )}
         </FormSection>
 
-        <div className="flex justify-end pt-2 border-t border-gray-100">
+        <div className="flex justify-end pt-2 border-t border-surface-linha">
           <Button onClick={salvarEmpresa} loading={salvandoEmpresa}>Salvar dados da empresa</Button>
         </div>
       </div>
 
       {/* ========== CONFIGURAÇÕES AVANÇADAS ========== */}
-      <div id="preferencias" className="bg-white rounded-xl border border-gray-200 p-6 space-y-8 scroll-mt-20">
+      <div id="preferencias" className="bg-white rounded-card border border-surface-border p-6 space-y-8 scroll-mt-20">
         <div className="flex items-center gap-2">
           <SlidersHorizontal className="w-5 h-5 text-frivo-600" />
-          <h2 className="text-lg font-semibold text-gray-900">Configurações Avançadas</h2>
+          <h2 className="text-lg font-semibold text-ink">Configurações Avançadas</h2>
         </div>
 
-        {erroConfig && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{erroConfig}</div>}
+        {erroConfig && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3">{erroConfig}</div>}
         {sucessoConfig && (
-          <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3 flex items-center gap-2">
+          <div className="bg-ok-claro border border-ok/20 text-ok-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2">
             <Check className="w-4 h-4" /> Configurações salvas.
           </div>
         )}
@@ -290,7 +290,7 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
           <ToggleSwitch label="Mostrar card de técnico mais próximo" checked={cfg.mostrarTecnicoProximo} onChange={() => toggleCfg("mostrarTecnicoProximo")} />
         </ToggleGroup>
 
-        <div className="flex justify-end pt-2 border-t border-gray-100">
+        <div className="flex justify-end pt-2 border-t border-surface-linha">
           <Button onClick={salvarConfig} loading={salvandoConfig}>Salvar configurações</Button>
         </div>
       </div>

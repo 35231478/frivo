@@ -450,8 +450,8 @@ describe("telas", () => {
     const h = await lista();
     expect(attrs(h, "data-cartao")).toEqual(["p3", "p2", "p1"]);
     expect(attrs(h, "data-situacao")).toEqual(expect.arrayContaining(["negativo", "abaixo", "ok"]));
-    expect(h).toMatch(/data-saldo="-1.5" class="[^"]*text-red-600/);
-    expect(h).toMatch(/data-saldo="0" class="[^"]*text-amber-600/);
+    expect(h).toMatch(/data-saldo="-1.5" class="[^"]*text-atrasado(?!-)/);
+    expect(h).toMatch(/data-saldo="0" class="[^"]*text-atencao-texto/);
     expect(h).toMatch(/data-alerta="abaixo"[^>]*>2 produtos no mínimo ou abaixo</);
     expect(h).toMatch(/data-alerta="negativo"[^>]*>1 com saldo negativo</);
     expect(h).toContain('href="/estoque?situacao=negativo"');
@@ -476,14 +476,14 @@ describe("telas", () => {
     await mov("p1", "SAIDA", 4);
     const h = await extrato("p1");
     expect(h).toContain("Gás R410A");
-    expect(h).toMatch(/data-saldo="-1" class="[^"]*text-red-600/);
+    expect(h).toMatch(/data-saldo="-1" class="[^"]*text-atrasado(?!-)/);
     expect(h).toContain("tabular-nums\">5 kg</p>"); // mínimo
     expect(h).toContain("Saldo negativo: saiu mais do que entrou.");
     expect(h).not.toContain("data-divergencia");
     expect([...new Set(attrs(h, "data-mov"))]).toEqual(movs("p1").map((m) => m.id).reverse());
     // quantidade com sinal no cartão (celular) E na tabela
     expect(h.split("−4").length - 1).toBe(2);
-    expect(h).toMatch(/text-red-600">−4<\/td>/);
+    expect(h).toMatch(/text-atrasado">−4<\/td>/);
     expect(h).toMatch(/text-success-700">\+3<\/td>/);
     expect(h).toContain("Bruno");
     expect(attrs(h, "data-lancar")).toEqual(["p1"]);

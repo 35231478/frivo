@@ -7,7 +7,7 @@ export default function TiposOsPage() {
   return (
     <div>
       <PageHeader title="Tipos de OS" description="Defina os tipos de serviço executados pela empresa" backHref="/configuracoes" />
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <div className="bg-white rounded-card border border-surface-border p-6">
         <CrudCadastro
           titulo="Tipo de OS"
           apiUrl="/api/tipos-os"
@@ -34,7 +34,7 @@ export default function TiposOsPage() {
             {
               key: "exigeEquipamento", label: "Equipamento",
               render: (item: any) => item.exigeEquipamento === false
-                ? <span data-exige-equipamento="nao" className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">Não exige</span>
+                ? <span data-exige-equipamento="nao" className="text-xs font-semibold text-atencao-texto bg-atencao-claro border border-atencao/20 px-2 py-0.5 rounded-full">Não exige</span>
                 : <span data-exige-equipamento="sim" className="text-xs font-medium text-ink-muted">Exige para concluir</span>,
             },
           ]}
