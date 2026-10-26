@@ -4,7 +4,7 @@ import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { orcamentoSchema } from "@/lib/validations";
 import { gerarCodigoOrcamento } from "@/lib/utils";
-import { calcularTotais, montarCamposProposta } from "@/lib/orcamento-helpers";
+import { montarValoresOrcamento, montarCamposProposta } from "@/lib/orcamento-helpers";
 import { anoBR, periodoInstanteBR } from "@/lib/fuso";
 
 export async function GET(req: NextRequest) {
@@ -90,7 +90,9 @@ export async function POST(req: NextRequest) {
   }
 
   const tokenPublico = crypto.randomUUID();
-  const totais = calcularTotais(data.servicos, data.produtos, data.desconto, data.tipoDesconto);
+  // ISS: a alíquota da empresa HOJE fica congelada no orçamento
+  const cfg = await prisma.configuracao.findUnique({ where: { empresaId }, select: { issAliquota: true } });
+  const valores = montarValoresOrcamento(data, Number(cfg?.issAliquota ?? 0));
   const proposta = montarCamposProposta(data);
 
   // Numeração derivada do maior código existente do ano (evita reuso após exclusão); retry em colisão
@@ -116,35 +118,11 @@ export async function POST(req: NextRequest) {
           descricao: data.descricao ?? null,
           observacao: data.observacao ?? null,
           validadeEm: data.validadeEm ? new Date(data.validadeEm) : null,
-          desconto: data.desconto,
-          tipoDesconto: data.tipoDesconto,
-          totalServicos: totais.totalServicos,
-          totalProdutos: totais.totalProdutos,
-          totalGeral: totais.totalGeral,
+          ...valores.campos,
           tokenPublico,
           ...proposta,
-          servicos: {
-            create: data.servicos.map((s, idx) => ({
-              servicoId: s.catalogoId || null,
-              descricao: s.descricao,
-              quantidade: s.quantidade,
-              valorUnitario: s.valorUnitario,
-              valorTotal: s.quantidade * s.valorUnitario,
-              observacao: s.observacao ?? null,
-              ordem: idx,
-            })),
-          },
-          produtos: {
-            create: data.produtos.map((p, idx) => ({
-              produtoId: p.catalogoId || null,
-              descricao: p.descricao,
-              quantidade: p.quantidade,
-              valorUnitario: p.valorUnitario,
-              valorTotal: p.quantidade * p.valorUnitario,
-              observacao: p.observacao ?? null,
-              ordem: idx,
-            })),
-          },
+          servicos: { create: valores.servicos },
+          produtos: { create: valores.produtos },
           ordensServico: {
             create: data.ordensServicoIds.map((osId) => ({ ordemServicoId: osId })),
           },

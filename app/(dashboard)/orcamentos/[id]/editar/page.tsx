@@ -33,7 +33,7 @@ export default async function EditarOrcamentoPage({
     redirect(`/orcamentos/${id}`);
   }
 
-  const [clientes, servicos, produtos, tecnicos, termoTemplates] = await Promise.all([
+  const [clientes, servicos, produtos, tecnicos, termoTemplates, cfg] = await Promise.all([
     prisma.cliente.findMany({
       where: { empresaId, ativo: true },
       select: { id: true, nome: true, nomeFantasia: true },
@@ -59,6 +59,7 @@ export default async function EditarOrcamentoPage({
       select: { id: true, nome: true, conteudo: true },
       orderBy: { nome: "asc" },
     }),
+    prisma.configuracao.findUnique({ where: { empresaId }, select: { issAliquota: true } }),
   ]);
 
   const inicial = {
@@ -70,8 +71,11 @@ export default async function EditarOrcamentoPage({
     descricao: orcamento.descricao,
     observacao: orcamento.observacao,
     validadeEm: orcamento.validadeEm,
-    desconto: Number(orcamento.desconto),
-    tipoDesconto: orcamento.tipoDesconto,
+    descontoServicos: Number(orcamento.descontoServicos),
+    tipoDescontoServicos: orcamento.tipoDescontoServicos,
+    descontoProdutos: Number(orcamento.descontoProdutos),
+    tipoDescontoProdutos: orcamento.tipoDescontoProdutos,
+    issAliquota: Number(orcamento.issAliquota),
     proposta: {
       valorMensal: orcamento.valorMensal ? Number(orcamento.valorMensal) : null,
       frequenciaContrato: orcamento.frequenciaContrato,
@@ -97,6 +101,7 @@ export default async function EditarOrcamentoPage({
       descricao: s.descricao,
       quantidade: Number(s.quantidade),
       valorUnitario: Number(s.valorUnitario),
+      valorTotal: Number(s.valorTotal),
       observacao: s.observacao,
     })),
     produtos: orcamento.produtos.map((p) => ({
@@ -105,6 +110,7 @@ export default async function EditarOrcamentoPage({
       descricao: p.descricao,
       quantidade: Number(p.quantidade),
       valorUnitario: Number(p.valorUnitario),
+      valorTotal: Number(p.valorTotal),
       observacao: p.observacao,
     })),
     ordensServicoIds: orcamento.ordensServico.map((o) => o.ordemServicoId),
@@ -125,6 +131,8 @@ export default async function EditarOrcamentoPage({
       tecnicos={tecnicos}
       termoTemplates={termoTemplates}
       inicial={inicial}
+      issAliquota={Number(cfg?.issAliquota ?? 0)}
+      iaDisponivel={!!process.env.ANTHROPIC_API_KEY}
     />
   );
 }

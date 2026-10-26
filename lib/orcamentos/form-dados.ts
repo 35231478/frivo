@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
  * A OS (quando vem) é sempre da empresa da sessão.
  */
 export async function dadosNovoOrcamento(empresaId: string, { clienteId, osId }: { clienteId?: string | null; osId?: string | null } = {}) {
-  const [clientes, servicos, produtos, osInicial, tecnicos, termoTemplates] = await Promise.all([
+  const [clientes, servicos, produtos, osInicial, tecnicos, termoTemplates, cfg] = await Promise.all([
     prisma.cliente.findMany({
       where: { empresaId, ativo: true },
       select: { id: true, nome: true, nomeFantasia: true },
@@ -39,6 +39,7 @@ export async function dadosNovoOrcamento(empresaId: string, { clienteId, osId }:
       select: { id: true, nome: true, conteudo: true },
       orderBy: { nome: "asc" },
     }),
+    prisma.configuracao.findUnique({ where: { empresaId }, select: { issAliquota: true } }),
   ]);
 
   return {
@@ -50,6 +51,10 @@ export async function dadosNovoOrcamento(empresaId: string, { clienteId, osId }:
     clienteIdInicial: osInicial?.clienteId ?? clienteId ?? undefined,
     osInicialId: osInicial?.id,
     osInicial: osInicial ? { id: osInicial.id, numero: osInicial.numero, descricao: osInicial.descricao, status: osInicial.status } : undefined,
+    /** Alíquota de ISS da empresa hoje (%): o orçamento novo nasce com ela */
+    issAliquota: Number(cfg?.issAliquota ?? 0),
+    /** Botão "Gerar descrição (IA)" ativo? (sem a chave fica desabilitado com aviso) */
+    iaDisponivel: !!process.env.ANTHROPIC_API_KEY,
   };
 }
 

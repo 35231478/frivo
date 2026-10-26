@@ -1,4 +1,5 @@
 import { formatarCpfCnpj, formatarData, formatarMoeda, formatarTelefone, LABELS_STATUS_ORCAMENTO, CLASSE_STATUS_ORCAMENTO, cn } from "@/lib/utils";
+import { calcularOrcamento, versaoCliente, type EntradaCalculo, type TipoDesconto } from "@/lib/orcamentos/calculo";
 
 interface ItemDoc {
   descricao: string;
@@ -24,8 +25,11 @@ export interface OrcamentoDocumentoProps {
     assinaturaUrl?: string | null;
     totalServicos: unknown;
     totalProdutos: unknown;
-    desconto: unknown;
-    tipoDesconto: string;
+    descontoServicos?: unknown;
+    tipoDescontoServicos?: string | null;
+    descontoProdutos?: unknown;
+    tipoDescontoProdutos?: string | null;
+    issAliquota?: unknown;
     totalGeral: unknown;
     servicos: ItemDoc[];
     produtos: ItemDoc[];
@@ -62,6 +66,11 @@ export interface OrcamentoDocumentoProps {
     cep?: string | null;
   };
   variante?: "completa" | "compacta";
+  /**
+   * "cliente" (link público/impressão): ISS EMBUTIDO nos preços dos serviços, sem linha própria, com a
+   * nota discreta "valores com impostos inclusos". "interna" (tela do escritório): ISS em linha própria.
+   */
+  versao?: "cliente" | "interna";
 }
 
 function n(v: unknown): number {
@@ -78,13 +87,22 @@ function enderecoCompleto(e: OrcamentoDocumentoProps["empresa"] | OrcamentoDocum
   return parts.join(" — ");
 }
 
-export function OrcamentoDocumento({ orcamento, empresa, cliente, variante = "completa" }: OrcamentoDocumentoProps) {
-  const totalBruto = n(orcamento.totalServicos) + n(orcamento.totalProdutos);
-  const desconto = n(orcamento.desconto);
-  const descontoCalculado =
-    orcamento.tipoDesconto === "PERCENTUAL"
-      ? Math.min(totalBruto * (desconto / 100), totalBruto)
-      : Math.min(desconto, totalBruto);
+export function OrcamentoDocumento({ orcamento, empresa, cliente, variante = "completa", versao = "cliente" }: OrcamentoDocumentoProps) {
+  // Mesmo cálculo da tela e do servidor (lib/orcamentos/calculo.ts), a partir do que está gravado
+  const entrada: EntradaCalculo = {
+    servicos: orcamento.servicos, produtos: orcamento.produtos,
+    descontoServicos: orcamento.descontoServicos, tipoDescontoServicos: (orcamento.tipoDescontoServicos ?? "VALOR") as TipoDesconto,
+    descontoProdutos: orcamento.descontoProdutos, tipoDescontoProdutos: (orcamento.tipoDescontoProdutos ?? "VALOR") as TipoDesconto,
+    issAliquota: orcamento.issAliquota,
+  };
+  const t = calcularOrcamento(entrada);
+  const vc = versao === "cliente" ? versaoCliente(entrada) : null;
+  const grupoServicos: GrupoDoc = vc
+    ? { itens: vc.servicos, subtotal: vc.subtotalServicos, desconto: vc.descontoServicos, total: vc.totalServicos }
+    : { itens: orcamento.servicos.map((s) => ({ quantidade: n(s.quantidade), valorUnitario: n(s.valorUnitario), valorTotal: n(s.valorTotal) })), subtotal: t.subtotalServicos, desconto: t.descontoServicos, total: t.totalServicos, issAliquota: t.issAliquota, valorIss: t.valorIss };
+  const grupoProdutos: GrupoDoc = vc
+    ? { itens: vc.produtos, subtotal: vc.subtotalProdutos, desconto: vc.descontoProdutos, total: vc.totalProdutos }
+    : { itens: orcamento.produtos.map((p) => ({ quantidade: n(p.quantidade), valorUnitario: n(p.valorUnitario), valorTotal: n(p.valorTotal) })), subtotal: t.subtotalProdutos, desconto: t.descontoProdutos, total: t.totalProdutos };
 
   return (
     <div className="bg-white">
@@ -163,97 +181,41 @@ export function OrcamentoDocumento({ orcamento, empresa, cliente, variante = "co
         </div>
       )}
 
-      {/* Serviços */}
       {orcamento.servicos.length > 0 && (
-        <div className="py-5">
-          <p className="text-xs uppercase tracking-wider text-ink-muted mb-3">Serviços</p>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-surface-alt border-b border-surface-border">
-                <th className="text-left px-3 py-2 font-semibold text-ink-muted text-xs uppercase">Descrição</th>
-                <th className="text-right px-3 py-2 font-semibold text-ink-muted text-xs uppercase w-16">Qtd</th>
-                <th className="text-right px-3 py-2 font-semibold text-ink-muted text-xs uppercase w-28">Unitário</th>
-                <th className="text-right px-3 py-2 font-semibold text-ink-muted text-xs uppercase w-32">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orcamento.servicos.map((s, i) => (
-                <tr key={i} className="border-b border-surface-border">
-                  <td className="px-3 py-2.5 text-ink">
-                    {s.descricao}
-                    {s.observacao && <p className="text-xs text-ink-muted italic">{s.observacao}</p>}
-                  </td>
-                  <td className="px-3 py-2.5 text-right text-ink-muted">{n(s.quantidade)}</td>
-                  <td className="px-3 py-2.5 text-right text-ink-muted">{formatarMoeda(n(s.valorUnitario))}</td>
-                  <td className="px-3 py-2.5 text-right font-semibold text-ink">{formatarMoeda(n(s.valorTotal))}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colSpan={3} className="px-3 py-2 text-right font-semibold text-ink-muted">Subtotal serviços</td>
-                <td className="px-3 py-2 text-right font-bold text-ink">{formatarMoeda(n(orcamento.totalServicos))}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+        <TabelaGrupo titulo="Serviços" rotulo="serviços" itens={orcamento.servicos} grupo={grupoServicos} />
       )}
 
-      {/* Produtos */}
       {orcamento.produtos.length > 0 && (
-        <div className="py-5 border-t border-surface-border">
-          <p className="text-xs uppercase tracking-wider text-ink-muted mb-3">Produtos</p>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-surface-alt border-b border-surface-border">
-                <th className="text-left px-3 py-2 font-semibold text-ink-muted text-xs uppercase">Descrição</th>
-                <th className="text-right px-3 py-2 font-semibold text-ink-muted text-xs uppercase w-16">Qtd</th>
-                <th className="text-right px-3 py-2 font-semibold text-ink-muted text-xs uppercase w-28">Unitário</th>
-                <th className="text-right px-3 py-2 font-semibold text-ink-muted text-xs uppercase w-32">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orcamento.produtos.map((p, i) => (
-                <tr key={i} className="border-b border-surface-border">
-                  <td className="px-3 py-2.5 text-ink">
-                    {p.descricao}
-                    {p.observacao && <p className="text-xs text-ink-muted italic">{p.observacao}</p>}
-                  </td>
-                  <td className="px-3 py-2.5 text-right text-ink-muted">{n(p.quantidade)}</td>
-                  <td className="px-3 py-2.5 text-right text-ink-muted">{formatarMoeda(n(p.valorUnitario))}</td>
-                  <td className="px-3 py-2.5 text-right font-semibold text-ink">{formatarMoeda(n(p.valorTotal))}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colSpan={3} className="px-3 py-2 text-right font-semibold text-ink-muted">Subtotal produtos</td>
-                <td className="px-3 py-2 text-right font-bold text-ink">{formatarMoeda(n(orcamento.totalProdutos))}</td>
-              </tr>
-            </tfoot>
-          </table>
+        <div className="border-t border-surface-border">
+          <TabelaGrupo titulo="Produtos" rotulo="produtos" itens={orcamento.produtos} grupo={grupoProdutos} />
         </div>
       )}
 
       {/* Totais */}
-      <div className="py-5 border-t-2 border-primary-500 flex justify-end">
+      <div className="py-5 border-t-2 border-primary-500 flex justify-end" data-totais-documento>
         <div className="w-full md:w-96 space-y-2">
-          <div className="flex justify-between text-sm">
-            <span className="text-ink-muted">Subtotal bruto</span>
-            <span className="font-mono text-ink">{formatarMoeda(totalBruto)}</span>
-          </div>
-          {descontoCalculado > 0 && (
-            <div className="flex justify-between text-sm">
-              <span className="text-ink-muted">
-                Desconto {orcamento.tipoDesconto === "PERCENTUAL" ? `(${desconto}%)` : ""}
-              </span>
-              <span className="font-mono text-atrasado">- {formatarMoeda(descontoCalculado)}</span>
-            </div>
+          {orcamento.servicos.length > 0 && orcamento.produtos.length > 0 && (
+            <>
+              <div className="flex justify-between text-sm">
+                <span className="text-ink-muted">Total serviços</span>
+                <span className="font-mono text-ink">{formatarMoeda(grupoServicos.total)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-ink-muted">Total produtos</span>
+                <span className="font-mono text-ink">{formatarMoeda(grupoProdutos.total)}</span>
+              </div>
+            </>
           )}
           <div className="flex justify-between pt-2 border-t-2 border-success-500/40">
             <span className="text-sm font-bold uppercase tracking-wider text-ink-muted">Total geral</span>
-            <span className="text-2xl font-bold text-success-700">{formatarMoeda(n(orcamento.totalGeral))}</span>
+            <span className="text-2xl font-bold text-success-700" data-total-geral>{formatarMoeda(t.totalGeral)}</span>
           </div>
+          {vc?.impostosInclusos && (
+            <p className="text-right text-[11px] text-ink-subtle" data-impostos-inclusos>Valores com impostos inclusos.</p>
+          )}
+          {versao === "interna" && t.valorIss > 0 && (
+            <p className="text-right text-[11px] text-ink-subtle print:hidden">Versão interna: no documento do cliente o ISS vem embutido nos preços dos serviços.</p>
+          )}
         </div>
       </div>
 
@@ -304,6 +266,75 @@ export function OrcamentoDocumento({ orcamento, empresa, cliente, variante = "co
           {empresa.telefone && ` · ${formatarTelefone(empresa.telefone)}`}
         </p>
         <p className="mt-1">Documento gerado em {formatarData(new Date(), "dd/MM/yyyy 'às' HH:mm")}</p>
+      </div>
+    </div>
+  );
+}
+
+interface GrupoDoc {
+  itens: { quantidade: number; valorUnitario: number; valorTotal: number }[];
+  subtotal: number;
+  desconto: number;
+  total: number;
+  /** Só na versão interna: o ISS em linha própria */
+  issAliquota?: number;
+  valorIss?: number;
+}
+
+function TabelaGrupo({ titulo, rotulo, itens, grupo }: { titulo: string; rotulo: string; itens: ItemDoc[]; grupo: GrupoDoc }) {
+  const comIss = (grupo.valorIss ?? 0) > 0;
+  const mostrarTotal = grupo.desconto > 0 || comIss;
+  return (
+    <div className="py-5">
+      <p className="text-xs uppercase tracking-wider text-ink-muted mb-3">{titulo}</p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-surface-alt border-b border-surface-border">
+              <th className="text-left px-3 py-2 font-semibold text-ink-muted text-xs uppercase">Descrição</th>
+              <th className="text-right px-3 py-2 font-semibold text-ink-muted text-xs uppercase w-16">Qtd</th>
+              <th className="text-right px-3 py-2 font-semibold text-ink-muted text-xs uppercase w-28">Unitário</th>
+              <th className="text-right px-3 py-2 font-semibold text-ink-muted text-xs uppercase w-32">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {itens.map((it, i) => (
+              <tr key={i} className="border-b border-surface-border">
+                <td className="px-3 py-2.5 text-ink">
+                  {it.descricao}
+                  {it.observacao && <p className="text-xs text-ink-muted italic whitespace-pre-line">{it.observacao}</p>}
+                </td>
+                <td className="px-3 py-2.5 text-right text-ink-muted">{n(it.quantidade)}</td>
+                <td className="px-3 py-2.5 text-right text-ink-muted tabular-nums">{formatarMoeda(grupo.itens[i]?.valorUnitario ?? 0)}</td>
+                <td className="px-3 py-2.5 text-right font-semibold text-ink tabular-nums">{formatarMoeda(grupo.itens[i]?.valorTotal ?? 0)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colSpan={3} className="px-3 py-2 text-right font-semibold text-ink-muted">Subtotal {rotulo}</td>
+              <td className="px-3 py-2 text-right font-bold text-ink tabular-nums">{formatarMoeda(grupo.subtotal)}</td>
+            </tr>
+            {grupo.desconto > 0 && (
+              <tr>
+                <td colSpan={3} className="px-3 py-1 text-right text-ink-muted">Desconto {rotulo}</td>
+                <td className="px-3 py-1 text-right font-mono text-atrasado tabular-nums">− {formatarMoeda(grupo.desconto)}</td>
+              </tr>
+            )}
+            {comIss && (
+              <tr data-linha-iss-documento>
+                <td colSpan={3} className="px-3 py-1 text-right font-semibold text-primary-700">ISS ({String(grupo.issAliquota).replace(".", ",")}%)</td>
+                <td className="px-3 py-1 text-right font-mono font-semibold text-primary-700 tabular-nums">+ {formatarMoeda(grupo.valorIss!)}</td>
+              </tr>
+            )}
+            {mostrarTotal && (
+              <tr>
+                <td colSpan={3} className="px-3 py-2 text-right font-semibold text-ink">Total {rotulo}{comIss ? " (com ISS)" : ""}</td>
+                <td className="px-3 py-2 text-right font-bold text-ink tabular-nums">{formatarMoeda(grupo.total)}</td>
+              </tr>
+            )}
+          </tfoot>
+        </table>
       </div>
     </div>
   );

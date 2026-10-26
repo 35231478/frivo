@@ -116,7 +116,7 @@ export default async function OrcamentoDetalhePage({
             equipamentos={equipamentos}
           />
         ) : (
-          <OrcamentoDocumento orcamento={orcamento} empresa={empresa} cliente={orcamento.cliente} />
+          <OrcamentoDocumento orcamento={orcamento} empresa={empresa} cliente={orcamento.cliente} versao="interna" />
         )}
       </div>
 

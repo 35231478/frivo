@@ -25,7 +25,8 @@ export default async function ConfiguracoesPage() {
         </div>
         <h1 className="page-title">Configurações</h1>
       </div>
-      <ConfiguracoesClient empresa={empresa!} config={config} />
+      {/* Decimal não atravessa para o cliente: vai como número */}
+      <ConfiguracoesClient empresa={empresa!} config={{ ...config, issAliquota: Number(config.issAliquota) }} />
     </div>
   );
 }

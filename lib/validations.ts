@@ -480,8 +480,18 @@ export const orcamentoItemSchema = z.object({
     (v) => (v === "" || v == null ? 0 : Number(v)),
     z.number().nonnegative("Valor não pode ser negativo")
   ),
+  /** Total da linha como foi digitado (o total manda); o servidor confere com unitário × qtd */
+  valorTotal: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : Number(v)),
+    z.number().nonnegative("Valor não pode ser negativo").optional()
+  ),
   observacao: z.string().optional().nullable(),
 });
+
+const descontoGrupo = z.preprocess(
+  (v) => (v === "" || v == null ? undefined : Number(v)),
+  z.number().nonnegative("Desconto não pode ser negativo").optional()
+);
 
 const intOpcional = (min: number, max: number) =>
   z.preprocess(
@@ -501,6 +511,13 @@ export const orcamentoSchema = z.object({
     z.number().nonnegative("Desconto não pode ser negativo")
   ).default(0),
   tipoDesconto: z.nativeEnum(TipoDesconto).default(TipoDesconto.VALOR),
+  // Desconto de cada grupo (R$ ou %). Sem eles, o `desconto` geral acima (formato antigo) é repartido.
+  descontoServicos: descontoGrupo,
+  tipoDescontoServicos: z.nativeEnum(TipoDesconto).default(TipoDesconto.VALOR),
+  descontoProdutos: descontoGrupo,
+  tipoDescontoProdutos: z.nativeEnum(TipoDesconto).default(TipoDesconto.VALOR),
+  /** Na edição: trocar a alíquota de ISS congelada no orçamento pela atual da empresa */
+  atualizarIss: z.boolean().default(false),
   servicos: z.array(orcamentoItemSchema).default([]),
   produtos: z.array(orcamentoItemSchema).default([]),
   ordensServicoIds: z.array(z.string()).default([]),
