@@ -679,6 +679,7 @@ model Usuario {
   servicosAdicionais   ServicoAdicional[]
   fotosAdicionais      ServicoAdicionalFoto[]
   syncOperacoes        SyncOperacao[]
+  anexosOs             OsAnexo[]
   perfilAcessoId       String?                   @map("perfil_acesso_id")
   perfilAcesso         PerfilAcesso?             @relation(fields: [perfilAcessoId], references: [id])
 
@@ -1043,6 +1044,7 @@ model Equipamento {
   checklistRespostas  ChecklistResposta[]
   fotosAtendimento    FotoAtendimento[]
   servicosAdicionais  ServicoAdicional[]
+  anexosOs            OsAnexo[]
 
   @@index([empresaId, ativo])
   @@index([unidadeId])
@@ -1604,6 +1606,7 @@ model AtividadeOs {
   checklistRespostas   ChecklistResposta[]
   fotosAtendimento     FotoAtendimento[]
   servicosAdicionais   ServicoAdicional[]
+  anexosOs             OsAnexo[]
 
   @@index([ordemServicoId])
   @@index([tecnicoId])
@@ -1949,11 +1952,24 @@ model OsAnexo {
   tipo           String
   tamanho        Int
   conteudo       String   @db.Text
+  /// Foto: o equipamento da OS a que se refere (nulo = "Geral da OS"). Documento não tem.
+  equipamentoId  String?  @map("equipamento_id")
+  /// Atividade em que a foto foi tirada (app do técnico); nulo = enviada pelo escritório
+  atividadeId    String?  @map("atividade_id")
+  legenda        String?
+  criadoPorId    String?  @map("criado_por_id")
+  /// Id gerado no aparelho (app offline): reenviar a mesma foto não duplica
+  clientId       String?  @unique @map("client_id")
   criadoEm       DateTime @default(now()) @map("criado_em")
 
   ordemServico OrdemServico @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  equipamento  Equipamento? @relation(fields: [equipamentoId], references: [id], onDelete: SetNull)
+  atividade    AtividadeOs? @relation(fields: [atividadeId], references: [id], onDelete: SetNull)
+  criadoPor    Usuario?     @relation(fields: [criadoPorId], references: [id], onDelete: SetNull)
 
   @@index([ordemServicoId])
+  @@index([equipamentoId])
+  @@index([atividadeId])
   @@map("os_anexos")
 }
 

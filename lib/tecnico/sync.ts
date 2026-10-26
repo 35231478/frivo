@@ -13,7 +13,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { carregarContexto, type Ator } from "@/lib/execucao/contexto";
 import {
-  adicionalSchema, adicionarFoto, concluirAtividade, concluirSchema, equipamentoSchema, formularioSchema, fotoAdicional, fotoAdicionalSchema, fotoSchema,
+  adicionalSchema, adicionarFoto, adicionarFotoOs, concluirAtividade, fotoOsSchema, removerFotoOs, concluirSchema, equipamentoSchema, formularioSchema, fotoAdicional, fotoAdicionalSchema, fotoSchema,
   gravarAudio, iniciarAtividade, marcarEquipamento, removerAdicional, removerFoto, removerFotoAdicional, respostaSchema, responderItem,
   responderFormulario, salvarAdicional, tudoOk, vincularEquipamentos, vincularPorQr, type ResultadoAcao,
 } from "@/lib/execucao/acoes";
@@ -41,6 +41,8 @@ export const operacaoSchema = z.discriminatedUnion("tipo", [
   z.object({ ...base, tipo: z.literal("adicionalRemover"), dados: ref }).strict(),
   z.object({ ...base, tipo: z.literal("adicionalFoto"), dados: fotoAdicionalSchema }).strict(),
   z.object({ ...base, tipo: z.literal("adicionalFotoRemover"), dados: ref }).strict(),
+  z.object({ ...base, tipo: z.literal("fotoOs"), dados: fotoOsSchema }).strict(),
+  z.object({ ...base, tipo: z.literal("fotoOsRemover"), dados: ref }).strict(),
   z.object({ ...base, tipo: z.literal("concluir"), dados: concluirSchema }).strict(),
 ]);
 export type Operacao = z.infer<typeof operacaoSchema>;
@@ -80,6 +82,8 @@ async function executar(ator: Ator, op: Operacao): Promise<ResultadoAcao<unknown
     case "adicionalRemover": return removerAdicional(ctx, op.dados);
     case "adicionalFoto": return fotoAdicional(ctx, op.dados);
     case "adicionalFotoRemover": return removerFotoAdicional(ctx, { fotoId: op.dados.id, clientId: op.dados.clientId });
+    case "fotoOs": return adicionarFotoOs(ctx, op.dados);
+    case "fotoOsRemover": return removerFotoOs(ctx, { fotoId: op.dados.id, clientId: op.dados.clientId });
     case "concluir": return concluirAtividade(ctx, op.dados);
   }
 }

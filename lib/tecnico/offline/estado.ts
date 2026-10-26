@@ -169,6 +169,20 @@ export function aplicar(r: RetratoAtividade, x: ExecucaoTela, op: OperacaoFila):
       return mudarAdicional({ id: op.dados.servicoId, clientId: op.dados.servicoClientId }, (a) =>
         (op.dados.clientId && a.fotos.some((f) => f.clientId === op.dados.clientId) ? a : { ...a, fotos: [...a.fotos, { id: null, clientId: op.dados.clientId ?? null, local: op.dados.dataUrl }] }));
 
+    case "fotoOs": {
+      const lista = x.fotosServico ?? [];
+      if (op.dados.clientId && lista.some((f) => f.clientId === op.dados.clientId)) return x;
+      return {
+        ...x,
+        fotosServico: [...lista, {
+          id: null, clientId: op.dados.clientId ?? null, equipamentoId: op.dados.equipamentoId, legenda: limpar(op.dados.legenda), local: op.dados.dataUrl, pendente: true,
+        }],
+      };
+    }
+
+    case "fotoOsRemover":
+      return { ...x, fotosServico: (x.fotosServico ?? []).filter((f) => !((op.dados.clientId && f.clientId === op.dados.clientId) || (op.dados.id && f.id === op.dados.id))) };
+
     case "adicionalFotoRemover":
       return {
         ...x,
@@ -188,6 +202,7 @@ export function estadoDaAtividade(r: RetratoAtividade, fila: OperacaoFila[]): Ex
   const base: ExecucaoTela = {
     ...r.execucao,
     adicionais: r.execucao.adicionais ?? [],
+    fotosServico: r.execucao.fotosServico ?? [],
     equipamentos: r.execucao.equipamentos.map((e) => ({ ...e, respostas: { ...e.respostas } })),
   };
   return recalcular(ops.reduce((x, op) => aplicar(r, x, op), base));

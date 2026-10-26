@@ -55,12 +55,21 @@ export interface AdicionalTela {
   criadoPor: string | null;
   pendente?: boolean;
 }
+/** Foto do serviço (galeria da OS): equipamento da OS ou Geral (null) + legenda */
+export interface FotoServicoTela {
+  id: string | null; clientId: string | null; equipamentoId: string | null; legenda: string | null;
+  /** Imagem guardada no aparelho (ainda não enviada) */
+  local?: string;
+  pendente?: boolean;
+}
 export interface ExecucaoTela {
   atividade: { id: string; titulo: string; status: string; tipoOs: { id: string; nome: string; cor: string } | null };
   os: { id: string; numero: string; status: string; clienteId: string; unidadeId: string | null };
   bloqueada: boolean;
   equipamentos: EquipamentoTela[];
   adicionais: AdicionalTela[];
+  /** Fotos do serviço tiradas nesta atividade; ausente em retratos antigos */
+  fotosServico?: FotoServicoTela[];
   conclusao: ResultadoConclusao;
   /** Saída da exigência de equipamento (tipo, recorrente, justificada); ausente em retratos antigos */
   dispensaEquipamento?: DispensaEquipamento | null;

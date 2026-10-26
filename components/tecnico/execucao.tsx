@@ -2,10 +2,11 @@
 
 import { useMemo, useState } from "react";
 import {
-  ArrowLeft, CheckCircle2, ChevronRight, CircleDashed, ClipboardCheck, HardDrive, ListPlus, Loader2, MapPin, Navigation, Phone, Plus, QrCode, Search, Sparkles, Trash2, WifiOff,
+  ArrowLeft, Camera, CheckCircle2, ChevronRight, CircleDashed, ClipboardCheck, HardDrive, ListPlus, Loader2, MapPin, Navigation, Phone, Plus, QrCode, Search, Sparkles, Trash2, WifiOff,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
+import { confirmar, toast } from "@/components/ui/avisos";
 import { ScannerQR } from "@/components/os/scanner-qr";
 import { BotaoFoto, Miniatura, ObservacaoVoz } from "@/components/tecnico/captura";
 import { irPara, useAtividade, useTecnico } from "@/components/tecnico/contexto";
@@ -15,7 +16,8 @@ import { ROTULO_STATUS_ATIVIDADE } from "@/components/tecnico/meu-dia";
 import { equipamentoDoQr } from "@/lib/tecnico/offline/estado";
 import { novoClientId } from "@/lib/tecnico/offline/motor";
 import { textoFaltas } from "@/lib/execucao/pendencias";
-import type { AdicionalTela, EquipamentoTela, ExecucaoTela, NovaOperacao, RetratoAtividade } from "@/lib/tecnico/offline/tipos";
+import { LEGENDA_MAX, limparLegenda, REFERENCIA_GERAL } from "@/lib/os/galeria";
+import type { AdicionalTela, EquipamentoTela, ExecucaoTela, FotoServicoTela, NovaOperacao, RetratoAtividade } from "@/lib/tecnico/offline/tipos";
 
 /** Situação do equipamento (chip da lista). */
 export function situacao(e: EquipamentoTela) {
@@ -68,6 +70,7 @@ function ResumoOs({ r, x, aEnviar, registrar }: { r: RetratoAtividade; x: Execuc
   const [lista, setLista] = useState(false);
   const [adicional, setAdicional] = useState<AdicionalTela | "novo" | null>(null);
   const [concluir, setConcluir] = useState(false);
+  const [fotoServico, setFotoServico] = useState(false);
   const [aviso, setAviso] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
   const st = ROTULO_STATUS_ATIVIDADE[x.atividade.status] ?? { rotulo: x.atividade.status, classe: "bg-surface-linha text-ink" };
   const atendidos = x.equipamentos.filter((e) => e.feito).length;
@@ -141,6 +144,8 @@ function ResumoOs({ r, x, aEnviar, registrar }: { r: RetratoAtividade; x: Execuc
         )}
       </section>
 
+      <FotosServico x={x} so={so} onAdicionar={() => setFotoServico(true)} registrar={registrar} />
+
       <section className="space-y-2" data-adicionais>
         <h2 className="text-base font-bold text-ink inline-flex items-center gap-1.5"><Sparkles className="w-4 h-4 text-acento" /> Serviço extra pedido na visita</h2>
         {x.adicionais.map((a, i) => {
@@ -175,12 +180,110 @@ function ResumoOs({ r, x, aEnviar, registrar }: { r: RetratoAtividade; x: Execuc
 
       {scan && <ScannerQR onFechar={() => setScan(false)} onLer={lerQr} />}
       {lista && <ListaUnidade r={r} x={x} onFechar={() => setLista(false)} onVincular={async (ids) => { setLista(false); await registrar([{ tipo: "vincular", atividadeId, equipamentoIds: ids }]); }} />}
+      {fotoServico && <ModalFotoServico x={x} onFechar={() => setFotoServico(false)} registrar={registrar} />}
       {adicional && <ModalAdicional x={x} r={r} a={adicional === "novo" ? null : adicional} onFechar={() => setAdicional(null)} registrar={registrar} />}
       {concluir && <ModalConcluir x={x} onFechar={() => setConcluir(false)} onConcluir={async (resumo) => {
         await registrar([{ tipo: "concluir", atividadeId, dados: resumo ? { resumo } : {} }]);
         setConcluir(false);
       }} onJustificado={async () => { setConcluir(false); await motor?.baixarRetrato(atividadeId); }} />}
     </div>
+  );
+}
+
+const srcFotoServico = (osId: string, f: FotoServicoTela) => f.local ?? `/api/ordens/${osId}/anexos/${f.id}?inline=1`;
+
+/**
+ * Fotos do serviço (fora do checklist): toda foto diz A QUE SE REFERE — um equipamento da OS ou
+ * "Geral da OS" — e tem legenda. Vão para "Fotos & Anexos do serviço" da OS (organizadas por equipamento).
+ */
+function FotosServico({ x, so, onAdicionar, registrar }: { x: ExecucaoTela; so: boolean; onAdicionar: () => void; registrar: (ops: NovaOperacao[]) => Promise<void> }) {
+  const fotos = x.fotosServico ?? [];
+  const nomeRef = (id: string | null) => {
+    if (!id) return "Geral da OS";
+    const e = x.equipamentos.find((q) => q.equipamento.id === id)?.equipamento;
+    return e ? [e.titulo, e.fabricante, e.tag && `TAG ${e.tag}`].filter(Boolean).join(" · ") : "Equipamento da OS";
+  };
+  async function remover(f: FotoServicoTela) {
+    const ok = await confirmar({ titulo: "Remover foto?", mensagem: `A foto “${f.legenda ?? "sem legenda"}” sai desta OS.`, perigo: true, confirmarTexto: "Remover" });
+    if (!ok) return;
+    await registrar([{ tipo: "fotoOsRemover", atividadeId: x.atividade.id, dados: f.clientId ? { clientId: f.clientId } : { id: f.id! } }]);
+    toast("Foto removida.");
+  }
+  return (
+    <section className="space-y-2" data-fotos-servico>
+      <h2 className="text-base font-bold text-ink inline-flex items-center gap-1.5"><Camera className="w-4 h-4 text-ink-muted" /> Fotos do serviço</h2>
+      {!fotos.length && (
+        <p className="rounded-card bg-white border border-surface-border p-3 text-sm text-ink-muted">
+          Fachada, quadro elétrico, a peça trocada… Cada foto vai com o equipamento a que se refere (ou “Geral da OS”) e uma legenda.
+          As fotos do checklist e de antes/depois continuam dentro de cada equipamento.
+        </p>
+      )}
+      {fotos.length > 0 && (
+        <ul className="space-y-2">
+          {fotos.map((f, i) => (
+            <li key={f.clientId ?? f.id ?? i} className="rounded-card border border-surface-border bg-white p-2.5 flex gap-3 items-center" data-foto-servico>
+              <Miniatura src={srcFotoServico(x.os.id, f)} alt={f.legenda ?? `foto ${i + 1}`} pendente={f.pendente} onRemover={so ? undefined : () => remover(f)} />
+              <span className="min-w-0 text-sm">
+                <span className="block font-semibold text-ink line-clamp-2">{f.legenda}</span>
+                <span className="block text-ink-muted truncate" data-referencia-foto>{nomeRef(f.equipamentoId)}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {!so && (
+        <button type="button" onClick={onAdicionar} data-nova-foto-servico
+          className="w-full rounded-card border-2 border-dashed border-primary-300 bg-primary-50 text-primary-700 py-3 text-sm font-semibold inline-flex items-center justify-center gap-2 touch-target">
+          <Camera className="w-5 h-5" /> Adicionar foto do serviço
+        </button>
+      )}
+    </section>
+  );
+}
+
+/** Foto do serviço: a QUE SE REFERE (obrigatório) + legenda (obrigatória) + a foto (comprimida no aparelho). Grava no aparelho. */
+function ModalFotoServico({ x, onFechar, registrar }: { x: ExecucaoTela; onFechar: () => void; registrar: (ops: NovaOperacao[]) => Promise<void> }) {
+  const [referencia, setReferencia] = useState("");
+  const [legenda, setLegenda] = useState("");
+  const [foto, setFoto] = useState<string | null>(null);
+  const pronta = !!referencia && !!limparLegenda(legenda) && !!foto;
+  async function salvar() {
+    if (!pronta) return;
+    await registrar([{
+      tipo: "fotoOs", atividadeId: x.atividade.id,
+      dados: { dataUrl: foto!, equipamentoId: referencia === REFERENCIA_GERAL ? null : referencia, legenda: legenda.trim(), clientId: novoClientId() },
+    }]);
+    toast(typeof navigator !== "undefined" && !navigator.onLine ? "Foto guardada no aparelho: sobe sozinha quando houver sinal." : "Foto adicionada à OS.");
+    onFechar();
+  }
+  return (
+    <Modal aberto titulo="Foto do serviço" onFechar={onFechar}>
+      <div className="space-y-4" data-modal-foto-servico>
+        <label className="block space-y-1">
+          <span className="text-sm font-semibold text-ink">A que esta foto se refere? <span className="text-atrasado">*</span></span>
+          <select value={referencia} onChange={(e) => setReferencia(e.target.value)} aria-label="A que a foto se refere" data-referencia
+            className="w-full rounded-card border border-surface-border bg-white px-3 py-3 text-base">
+            <option value="">Escolha…</option>
+            {x.equipamentos.map((e) => (
+              <option key={e.equipamento.id} value={e.equipamento.id}>{[e.equipamento.titulo, e.equipamento.fabricante, e.equipamento.tag && `TAG ${e.equipamento.tag}`, e.equipamento.local].filter(Boolean).join(" — ")}</option>
+            ))}
+            <option value={REFERENCIA_GERAL}>Geral da OS (não é de um equipamento)</option>
+          </select>
+        </label>
+        <label className="block space-y-1">
+          <span className="text-sm font-semibold text-ink">Legenda <span className="text-atrasado">*</span></span>
+          <input value={legenda} onChange={(e) => setLegenda(e.target.value)} maxLength={LEGENDA_MAX} aria-label="Legenda da foto" data-legenda
+            placeholder="Ex.: placa da condensadora" className="w-full rounded-card border border-surface-border px-3 py-3 text-base" />
+        </label>
+        <div className="space-y-2">
+          {foto && <Miniatura src={foto} alt="foto nova" pendente onRemover={() => setFoto(null)} />}
+          {!foto && <BotaoFoto grande rotulo="Tirar a foto" onFoto={setFoto} />}
+        </div>
+        {!pronta && <p className="text-xs text-ink-muted">Para adicionar: escolha a que a foto se refere, escreva a legenda e tire a foto.</p>}
+        <button type="button" disabled={!pronta} onClick={salvar} data-salvar-foto-servico
+          className="w-full rounded-card bg-primary-600 text-white py-4 text-base font-bold disabled:opacity-40 touch-target">Adicionar à OS</button>
+      </div>
+    </Modal>
   );
 }
 

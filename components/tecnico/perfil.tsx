@@ -15,7 +15,8 @@ const ROTULO_OPERACAO: Record<string, string> = {
   iniciar: "Início do atendimento", resposta: "Resposta do checklist", audio: "Observação em áudio", tudoOk: "TUDO OK",
   foto: "Foto", fotoRemover: "Foto retirada", equipamento: "Equipamento atendido/observação", formulario: "Formulário",
   vincular: "Equipamento vinculado", scan: "QR Code lido", adicional: "Serviço extra", adicionalRemover: "Serviço extra retirado",
-  adicionalFoto: "Foto do serviço extra", adicionalFotoRemover: "Foto do serviço extra retirada", concluir: "Conclusão da atividade",
+  adicionalFoto: "Foto do serviço extra", adicionalFotoRemover: "Foto do serviço extra retirada",
+  fotoOs: "Foto do serviço", fotoOsRemover: "Foto do serviço retirada", concluir: "Conclusão da atividade",
 };
 
 /** Perfil do técnico: situação da sincronização (com o motivo das recusadas), dados, checklist do veículo, sair. */

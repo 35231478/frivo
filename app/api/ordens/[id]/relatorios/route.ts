@@ -42,11 +42,24 @@ export async function GET(_: NextRequest, { params }: Params) {
     ? await prisma.equipamento.count({ where: { unidadeId: os.unidadeId, ativo: true } })
     : 0;
 
+  // Fotos = as mesmas da galeria "Fotos & Anexos do serviço": execução, serviços adicionais e as
+  // enviadas (escritório/app), além das do formulário da atividade
+  const [porExecucao, porAdicional, anexosFoto] = await Promise.all([
+    prisma.fotoAtendimento.groupBy({ by: ["atividadeId"], where: { empresaId, atividade: { ordemServicoId: id } }, _count: { _all: true } }),
+    prisma.servicoAdicionalFoto.findMany({ where: { empresaId, servico: { ordemServicoId: id } }, select: { servico: { select: { atividadeId: true } } } }),
+    prisma.osAnexo.findMany({ where: { ordemServicoId: id, tipo: { startsWith: "image/" } }, select: { atividadeId: true } }),
+  ]);
+  const fotosDaAtividade = new Map<string | null, number>();
+  const somar = (atividadeId: string | null, n = 1) => fotosDaAtividade.set(atividadeId, (fotosDaAtividade.get(atividadeId) ?? 0) + n);
+  for (const g of porExecucao) somar(g.atividadeId, g._count._all);
+  for (const f of porAdicional) somar(f.servico.atividadeId);
+  for (const a of anexosFoto) somar(a.atividadeId);
+
   const tecnicos = new Set<string>();
-  let totalFotos = 0;
+  let totalFotos = fotosDaAtividade.get(null) ?? 0; // enviadas pelo escritório (sem atividade)
   const atividades = os.atividades.map((a) => {
     nomesTecnicosAtividade(a).forEach((n) => tecnicos.add(n));
-    const fotos = a.respostas.filter((r) => ehFoto(r.arquivoUrl, r.campo.tipo)).length;
+    const fotos = a.respostas.filter((r) => ehFoto(r.arquivoUrl, r.campo.tipo)).length + (fotosDaAtividade.get(a.id) ?? 0);
     totalFotos += fotos;
     const respostasPreenchidas = a.respostas.filter((r) => (r.resposta ?? "").trim()).length;
     const base = (a.observacao || a.resumo || "").trim();
