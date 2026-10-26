@@ -45,11 +45,11 @@ export default async function PortalFinanceiro() {
       <section>
         <h2 className="text-sm font-bold text-ink-muted uppercase tracking-wider mb-2">Faturas aguardando sua aprovação</h2>
         {medicoes.length === 0 ? (
-          <div className="bg-white rounded-xl border border-surface-border p-6 text-center text-ink-muted text-sm">Nenhuma fatura aguardando aprovação.</div>
+          <div className="bg-white rounded-card border border-surface-border p-6 text-center text-ink-muted text-sm">Nenhuma fatura aguardando aprovação.</div>
         ) : (
           <div className="space-y-4">
             {medicoes.map((m) => (
-              <div key={m.id} className="bg-white rounded-xl border border-surface-border p-4">
+              <div key={m.id} className="bg-white rounded-card border border-surface-border p-4">
                 <div className="flex items-center justify-between gap-3 mb-3">
                   <div>
                     <p className="text-sm font-semibold text-ink" data-fatura-rotulo>{m.mes ? `Fatura de ${nomeMes(m.mes)}/${m.ano}` : "Fatura"}</p>
@@ -73,22 +73,22 @@ export default async function PortalFinanceiro() {
         <section>
           <h2 className="text-sm font-bold text-ink-muted uppercase tracking-wider mb-2">Boletos em aberto</h2>
           {boletos.length === 0 ? (
-            <div className="bg-white rounded-xl border border-surface-border p-6 text-center text-ink-muted text-sm">Nenhum boleto em aberto.</div>
+            <div className="bg-white rounded-card border border-surface-border p-6 text-center text-ink-muted text-sm">Nenhum boleto em aberto.</div>
           ) : (
             <div className="space-y-2">
               {boletos.map((b) => {
                 const vencido = diaCivilPassou(b.dataVencimento); // vencido só depois do dia (Brasília)
                 return (
-                  <div key={b.id} className="bg-white rounded-xl border border-surface-border p-4 flex items-center justify-between gap-3 flex-wrap">
+                  <div key={b.id} className="bg-white rounded-card border border-surface-border p-4 flex items-center justify-between gap-3 flex-wrap">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-ink truncate">{b.descricao}</p>
                       <p className="text-xs text-ink-muted">
                         Venc.: {formatarData(b.dataVencimento)}
-                        {vencido && <span className="ml-2 text-[10px] font-bold bg-red-100 text-red-700 px-1.5 py-0.5 rounded">VENCIDO</span>}
+                        {vencido && <span className="ml-2 text-[10px] font-bold bg-atrasado-claro text-atrasado-texto px-1.5 py-0.5 rounded">VENCIDO</span>}
                       </p>
                       <div className="mt-1"><BoletoAcoes boletoUrl={b.medicao?.boletoUrl} codigoBarras={b.medicao?.boletoCodigoBarras} /></div>
                     </div>
-                    {verValores && <p className={cn("font-bold", vencido ? "text-red-600" : "text-ink")}>{formatarMoeda(Number(b.valor))}</p>}
+                    {verValores && <p className={cn("font-bold", vencido ? "text-atrasado" : "text-ink")}>{formatarMoeda(Number(b.valor))}</p>}
                   </div>
                 );
               })}
@@ -101,11 +101,11 @@ export default async function PortalFinanceiro() {
       <section>
         <h2 className="text-sm font-bold text-ink-muted uppercase tracking-wider mb-2">Histórico de pagamentos</h2>
         {pagos.length === 0 ? (
-          <div className="bg-white rounded-xl border border-surface-border p-6 text-center text-ink-muted text-sm">Nenhum pagamento registrado.</div>
+          <div className="bg-white rounded-card border border-surface-border p-6 text-center text-ink-muted text-sm">Nenhum pagamento registrado.</div>
         ) : (
           <div className="space-y-2">
             {pagos.map((p) => (
-              <div key={p.id} className="bg-white rounded-xl border border-surface-border p-3 flex items-center justify-between gap-3">
+              <div key={p.id} className="bg-white rounded-card border border-surface-border p-3 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 min-w-0">
                   <CheckCircle2 className="w-4 h-4 text-success-600 shrink-0" />
                   <div className="min-w-0"><p className="text-sm text-ink truncate">{p.descricao}</p><p className="text-xs text-ink-muted">Pago em {formatarData(p.dataRecebimento)}</p></div>

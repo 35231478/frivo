@@ -28,7 +28,7 @@ export function RelatorioOsDocumento({ dados: d, config, versao }: { dados: Rela
               // eslint-disable-next-line @next/next/no-img-element
               <img src={d.empresa.logo} alt={d.empresa.nome} className="w-16 h-16 object-contain rounded-lg border border-surface-border shrink-0" />
             ) : (
-              <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-primary-500 to-success-500 flex items-center justify-center text-white text-xl font-bold shrink-0">
+              <div className="w-16 h-16 rounded-lg bg-acento flex items-center justify-center text-white font-display text-xl font-bold shrink-0">
                 {d.empresa.nome.slice(0, 2).toUpperCase()}
               </div>
             )}
@@ -44,7 +44,7 @@ export function RelatorioOsDocumento({ dados: d, config, versao }: { dados: Rela
             <p className="font-mono text-xl font-bold text-primary-600" data-numero-os>{d.numeroOs}</p>
             {d.numeroRelatorio && <p className="text-xs text-ink-muted">Relatório {d.numeroRelatorio}</p>}
             {versao === "interna" && (
-              <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider bg-slate-800 text-white px-2 py-0.5 rounded" data-marca-interna>
+              <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider bg-ink text-white px-2 py-0.5 rounded" data-marca-interna>
                 <Lock className="w-3 h-3" /> Versão interna
               </p>
             )}
@@ -62,7 +62,7 @@ export function RelatorioOsDocumento({ dados: d, config, versao }: { dados: Rela
 
       {/* ── Resultado (linha curta no topo) ── */}
       {ve("resultado") && d.resultado.texto && (
-        <section className="mt-4 rounded-lg border-l-4 border-primary-500 bg-primary-50/60 px-4 py-3" data-secao="resultado">
+        <section className="mt-4 rounded-lg border border-acento/20 bg-acento-claro px-4 py-3" data-secao="resultado">
           <p className="text-[11px] uppercase tracking-wider font-semibold text-primary-700">Resultado</p>
           <p className="text-sm text-ink mt-0.5">{d.resultado.texto}</p>
           {d.solicitacao && <p className="text-xs text-ink-muted mt-1"><span className="font-semibold">Solicitação:</span> {d.solicitacao}</p>}
@@ -217,7 +217,7 @@ function Dado({ rotulo, valor, destaque }: { rotulo: string; valor: string; dest
   return (
     <div className="rounded-md bg-surface-alt px-2.5 py-1.5">
       <dt className="text-[10px] uppercase tracking-wider text-ink-muted">{rotulo}</dt>
-      <dd className={cn("font-semibold", destaque === "ok" ? "text-success-700" : destaque === "erro" ? "text-red-600" : "text-ink")}>{valor}</dd>
+      <dd className={cn("font-semibold", destaque === "ok" ? "text-success-700" : destaque === "erro" ? "text-atrasado" : "text-ink")}>{valor}</dd>
     </div>
   );
 }
@@ -246,10 +246,10 @@ export function SecaoAdicionais({ adicionais, fotos, interna }: { adicionais: Ad
       <Titulo icone={<Sparkles className="w-3.5 h-3.5" />}>Serviços adicionais ({adicionais.length})</Titulo>
       <div className="space-y-2">
         {adicionais.map((a) => (
-          <div key={a.id} className="rounded-lg border-2 border-violet-300 bg-violet-50/60 px-3 py-2 space-y-1" data-adicional-relatorio>
+          <div key={a.id} className="rounded-lg border-2 border-acento/40 bg-acento-claro/60 px-3 py-2 space-y-1" data-adicional-relatorio>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider bg-violet-600 text-white px-1.5 py-0.5 rounded">Adicional</span>
-              {interna && <span className="text-[11px] font-semibold border border-violet-300 bg-white text-violet-800 px-1.5 py-0.5 rounded" data-cobranca={a.statusCobranca}>Cobrança: {ROTULO_COBRANCA[a.statusCobranca]}</span>}
+              <span className="text-[10px] font-bold uppercase tracking-wider bg-acento text-white px-1.5 py-0.5 rounded">Adicional</span>
+              {interna && <span className="text-[11px] font-semibold border border-acento/40 bg-white text-acento-hover px-1.5 py-0.5 rounded" data-cobranca={a.statusCobranca}>Cobrança: {ROTULO_COBRANCA[a.statusCobranca]}</span>}
               <span className="text-[11px] text-ink-muted">{[a.atividade, a.equipamento].filter(Boolean).join(" · ")}</span>
             </div>
             <p className="text-sm text-ink whitespace-pre-wrap">{a.descricao}</p>
@@ -278,9 +278,9 @@ export function BlocoEquip({ b, checklist, fotos, interna = false }: { b: BlocoE
         <p className="text-xs text-ink-muted">{[b.titulo !== b.descricao ? b.descricao : null, b.fabricante, b.numeroSerie && `S/N ${b.numeroSerie}`].filter(Boolean).join(" · ")}</p>
         {checklist && r.ok + r.atencao + r.naoSeAplica + (r.medicoes ?? 0) > 0 && (
           <p className="mt-1 flex flex-wrap gap-1.5 text-[11px]" data-resumo-checklist>
-            <span className="px-1.5 py-0.5 rounded bg-success-50 text-success-700 font-semibold">{r.ok} OK</span>
-            {r.atencao > 0 && <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 font-semibold">{r.atencao} Atenção</span>}
-            {r.naoSeAplica > 0 && <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold">{r.naoSeAplica} Não se aplica</span>}
+            <span className="px-1.5 py-0.5 rounded bg-ok-claro text-ok-texto font-semibold">{r.ok} OK</span>
+            {r.atencao > 0 && <span className="px-1.5 py-0.5 rounded bg-atencao-claro text-atencao-texto font-semibold">{r.atencao} Atenção</span>}
+            {r.naoSeAplica > 0 && <span className="px-1.5 py-0.5 rounded bg-surface-linha text-ink-muted font-semibold">{r.naoSeAplica} Não se aplica</span>}
             {(r.medicoes ?? 0) > 0 && <span className="px-1.5 py-0.5 rounded bg-primary-50 text-primary-700 font-semibold">{r.medicoes} {r.medicoes === 1 ? "medição" : "medições"}</span>}
           </p>
         )}
@@ -305,9 +305,9 @@ export function BlocoEquip({ b, checklist, fotos, interna = false }: { b: BlocoE
 }
 
 const COR_STATUS_REL: Record<StatusItem, string> = {
-  OK: "bg-success-50 text-success-700 border-success-200",
-  ATENCAO: "bg-amber-50 text-amber-800 border-amber-200",
-  NAO_SE_APLICA: "bg-slate-50 text-slate-600 border-slate-200",
+  OK: "bg-ok-claro text-ok-texto border-ok/20",
+  ATENCAO: "bg-atencao-claro text-atencao-texto border-atencao/20",
+  NAO_SE_APLICA: "bg-surface-page text-ink-muted border-surface-border",
 };
 
 /** Valor medido para leitura: "118,5 psi" (sem avaliação — o número como o técnico registrou). */
@@ -337,7 +337,7 @@ function ChecklistTipo({ grupos, interna }: { grupos: ChecklistTipoRelatorio[]; 
                       : <span className="shrink-0 text-[11px] text-ink-subtle">—</span>}
                 </div>
                 {it.observacao && <p className="text-xs text-ink-muted whitespace-pre-wrap mt-0.5">{it.observacao}</p>}
-                {interna && it.audio && <p className="text-[11px] text-violet-700 mt-0.5 inline-flex items-center gap-1" data-audio-relatorio><Mic className="w-3 h-3" /> Observação em áudio (ouvir na OS)</p>}
+                {interna && it.audio && <p className="text-[11px] text-acento-hover mt-0.5 inline-flex items-center gap-1" data-audio-relatorio><Mic className="w-3 h-3" /> Observação em áudio (ouvir na OS)</p>}
               </li>
             ))}
           </ul>
@@ -358,7 +358,7 @@ function Checklist({ grupos }: { grupos: GrupoChecklist[] }) {
             {g.itens.map((it, j) => (
               <div key={j} className="flex justify-between gap-3 py-0.5 border-b border-dashed border-surface-border/80">
                 <dt className="text-ink-muted">{it.label}</dt>
-                <dd className={cn("font-medium text-right whitespace-pre-wrap", it.tipo === "SIM_NAO" && (it.valor === "Sim" ? "text-success-700" : "text-red-600"))}>{it.valor}</dd>
+                <dd className={cn("font-medium text-right whitespace-pre-wrap", it.tipo === "SIM_NAO" && (it.valor === "Sim" ? "text-success-700" : "text-atrasado"))}>{it.valor}</dd>
               </div>
             ))}
           </dl>

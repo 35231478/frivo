@@ -115,13 +115,22 @@ const VARRIDAS: Record<string, string[]> = {
     // aprovação pública e documento da medição ficam para o lote 4 (fora do painel)
     "components/medicao", "!components/medicao/aprovacao-medicao.tsx", "!components/medicao/medicao-documento.tsx",
   ],
+  "lote 4 (fora do painel)": [
+    "app/(auth)", "components/auth", "app/(portal)", "components/portal", "app/(publico)", "components/public",
+    "components/relatorio", "app/offline", "components/pwa", "app/(impressao)", "app/sessao-encerrada", "app/layout.tsx",
+    "components/orcamento/aprovacao-publica.tsx", "components/orcamento/proposta-documento.tsx",
+    "components/orcamento/orcamento-documento.tsx", "components/medicao/aprovacao-medicao.tsx",
+    "components/medicao/medicao-documento.tsx",
+  ],
 };
 
 // Paleta solta do Tailwind (com variantes e opacidade): tudo deve vir dos tokens
 const COR_SOLTA = /\b(?:bg|text|border|ring|divide|fill|stroke|outline|accent|placeholder|decoration|shadow)-(?:gray|slate|zinc|neutral|stone|red|amber|orange|yellow|green|emerald|blue|sky|cyan|indigo|violet|purple|fuchsia|pink|rose|teal|lime)-\d{2,3}\b/;
-const DEGRADE = /bg-gradient|linearGradient|radialGradient|\b(?:from|via|to)-(?:[a-z]+-\d{2,3}|surface|ink|acento|ok|atencao|atrasado|previsto|primary|success|sidebar)\b/;
+const DEGRADE = /bg-gradient|linearGradient|radialGradient|linear-gradient|radial-gradient|\b(?:from|via|to)-(?:[a-z]+-\d{2,3}|surface|ink|acento|ok|atencao|atrasado|previsto|primary|success|sidebar)\b/;
 // Borda grossa à esquerda com cor (o "card com faixa colorida"), em qualquer forma
 const BORDA_ESQUERDA = /border-l-(?:\[\d+px\]|[2-8])\b[^"`]*\bborder-l?-?(?:acento|ok|atencao|atrasado|primary|success|[a-z]+-\d{2,3})\b|\bborder-l-(?:acento|ok|atencao|atrasado|primary-\d+|success-\d+)\b|absolute left-0[^"]*w-1[^"]*rounded-r/;
+// Emoji. ©, ® e ™ são sinais tipográficos (o Unicode também os marca como pictográficos) e podem ficar.
+const EMOJI = /(?![\u00A9\u00AE\u2122])\p{Extended_Pictographic}/u;
 const NAVY = /#14498F|#0F2744|bg-sidebar|from-sidebar/;
 // Hex usado para PINTAR (style/fill/stroke ou fallback de cor): deve vir de lib/ui/tokens.ts.
 // Hex como dado (ex.: valor padrão de um campo "cor" que o usuário escolhe) não conta. Classe arbitrária
@@ -142,7 +151,7 @@ describe("regras da identidade nas telas varridas", () => {
     const src = ler(rel);
     expect(src).not.toMatch(DEGRADE);
     expect(src).not.toMatch(BORDA_ESQUERDA);
-    expect(src).not.toMatch(/\p{Extended_Pictographic}/u);
+    expect(src).not.toMatch(EMOJI);
     expect(src).not.toMatch(COR_SOLTA);
     expect(src).not.toMatch(NAVY);
     expect(src).not.toMatch(HEX);

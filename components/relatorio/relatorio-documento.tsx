@@ -70,7 +70,7 @@ export function RelatorioDocumento({ relatorio, empresa, os, equipamentos, bloco
             // eslint-disable-next-line @next/next/no-img-element
             <img src={empresa.logo} alt={empresa.nome} className="w-20 h-20 object-contain rounded-lg border border-surface-border" />
           ) : (
-            <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-primary-500 to-success-500 flex items-center justify-center text-white text-2xl font-bold">
+            <div className="w-20 h-20 rounded-lg bg-acento flex items-center justify-center text-white font-display text-2xl font-bold">
               {empresa.nome.slice(0, 2).toUpperCase()}
             </div>
           )}

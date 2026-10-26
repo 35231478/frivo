@@ -26,29 +26,29 @@ export default function OfflinePage() {
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-6 bg-sidebar text-white px-6 text-center">
+    <div className="min-h-screen flex flex-col items-center justify-center gap-6 bg-surface-page text-ink px-6 text-center">
       <FrivoMark size={72} />
       <div className="space-y-2">
-        <div className="flex items-center justify-center gap-2 text-slate-300">
+        <div className="flex items-center justify-center gap-2 text-ink-muted">
           <WifiOff className="w-5 h-5" />
           <span className="text-sm font-medium uppercase tracking-wider">Sem conexão</span>
         </div>
-        <h1 className="text-2xl font-bold">Você está sem conexão</h1>
-        <p className="text-sm text-slate-300 max-w-sm">
+        <h1 className="text-2xl font-bold text-ink">Você está sem conexão</h1>
+        <p className="text-sm text-ink-muted max-w-sm">
           As últimas informações carregadas ainda estão disponíveis. Reconecte-se à internet para
           ver os dados mais recentes.
         </p>
       </div>
       <div className="flex flex-col sm:flex-row gap-3">
         {appTecnico && (
-          <a href="/tecnico" className="inline-flex items-center justify-center gap-2 bg-success-500 hover:bg-success-600 text-white px-5 py-3 rounded-lg text-sm font-semibold transition-colors touch-target">
+          <a href="/tecnico" className="inline-flex items-center justify-center gap-2 bg-acento hover:bg-acento-hover text-white px-5 py-3 rounded-lg text-sm font-semibold transition-colors touch-target">
             <Wrench className="w-4 h-4" /> Abrir o app do técnico (funciona sem sinal)
           </a>
         )}
         <button
           type="button"
           onClick={() => window.location.reload()}
-          className="inline-flex items-center justify-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-5 py-3 rounded-lg text-sm font-semibold transition-colors touch-target"
+          className="inline-flex items-center justify-center gap-2 bg-white border border-surface-border hover:bg-surface-page text-ink px-5 py-3 rounded-lg text-sm font-semibold transition-colors touch-target"
         >
           <RotateCw className="w-4 h-4" /> Tentar novamente
         </button>

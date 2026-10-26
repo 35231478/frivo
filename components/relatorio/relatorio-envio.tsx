@@ -28,13 +28,13 @@ export function RelatorioEnvio({ token, numero, empresaNome, emailDestino, whats
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <a href={printUrl} target="_blank" rel="noopener" className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold px-3 py-2 rounded-lg transition-colors">
+      <a href={printUrl} target="_blank" rel="noopener" className="inline-flex items-center gap-2 bg-white border border-surface-border hover:bg-surface-page text-ink text-sm font-semibold px-3 py-2 rounded-lg transition-colors">
         <Printer className="w-4 h-4" /> Baixar PDF
       </a>
-      <a href={mailto} className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold px-3 py-2 rounded-lg transition-colors">
+      <a href={mailto} className="inline-flex items-center gap-2 bg-white border border-surface-border hover:bg-surface-page text-ink text-sm font-semibold px-3 py-2 rounded-lg transition-colors">
         <Mail className="w-4 h-4" /> Enviar por E-mail
       </a>
-      <a href={wpp} target="_blank" rel="noopener" className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold px-3 py-2 rounded-lg transition-colors">
+      <a href={wpp} target="_blank" rel="noopener" className="inline-flex items-center gap-2 bg-white border border-surface-border hover:bg-surface-page text-ink text-sm font-semibold px-3 py-2 rounded-lg transition-colors">
         <MessageCircle className="w-4 h-4" /> WhatsApp
       </a>
     </div>

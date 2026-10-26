@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import QRCode from "qrcode";
 import { prisma } from "@/lib/prisma";
 import { getPortalSession, type PortalSession } from "@/lib/auth-portal";
+import { neutro } from "@/lib/ui/tokens";
 
 /** Garante uma sessão de portal; redireciona para o login se ausente. */
 export async function requirePortalSession(): Promise<PortalSession> {
@@ -42,7 +43,7 @@ export async function getPortalBranding(empresaId: string) {
 /** Gera um QR Code como data URL (PNG) para um texto/URL. */
 export async function gerarQrDataUrl(texto: string): Promise<string> {
   try {
-    return await QRCode.toDataURL(texto, { width: 220, margin: 1, color: { dark: "#0F2744", light: "#FFFFFF" } });
+    return await QRCode.toDataURL(texto, { width: 220, margin: 1, color: { dark: neutro.texto, light: "#FFFFFF" } });
   } catch {
     return "";
   }

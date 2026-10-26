@@ -66,21 +66,21 @@ export function LoginForm() {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
       {senhaDefinida && !erro && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm rounded-lg px-3 py-2.5 flex items-center gap-2" role="status">
+        <div className="bg-ok-claro border border-ok/20 text-ok-texto text-sm rounded-lg px-3 py-2.5 flex items-center gap-2" role="status">
           <AlertCircle className="w-4 h-4 shrink-0" />
           Senha definida! Entre com o seu e-mail e a nova senha.
         </div>
       )}
 
       {sessaoEncerrada && !erro && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-3 py-2.5 flex items-center gap-2" role="status">
+        <div className="bg-atencao-claro border border-atencao/20 text-atencao-texto text-sm rounded-lg px-3 py-2.5 flex items-center gap-2" role="status">
           <AlertCircle className="w-4 h-4 shrink-0" />
           Sua sessão foi encerrada. Entre novamente para continuar.
         </div>
       )}
 
       {erro && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2.5 flex items-center gap-2">
+        <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2.5 flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
           {erro}
         </div>
@@ -97,7 +97,7 @@ export function LoginForm() {
           disabled={isSubmitting}
         />
         {errors.email && (
-          <p className="text-xs text-red-600 font-medium">{errors.email.message}</p>
+          <p className="text-xs text-atrasado font-medium">{errors.email.message}</p>
         )}
       </div>
 
@@ -127,7 +127,7 @@ export function LoginForm() {
           </button>
         </div>
         {errors.senha && (
-          <p className="text-xs text-red-600 font-medium">{errors.senha.message}</p>
+          <p className="text-xs text-atrasado font-medium">{errors.senha.message}</p>
         )}
       </div>
 
@@ -151,7 +151,7 @@ export function LoginForm() {
       <button
         type="submit"
         disabled={isSubmitting}
-        className="w-full bg-success-500 hover:bg-success-600 active:bg-success-700 text-white font-semibold py-3 rounded-lg text-sm transition-all disabled:opacity-60 flex items-center justify-center gap-2 shadow-sm hover:shadow-md focus:outline-none focus:ring-4 focus:ring-success-500/20"
+        className="w-full bg-acento hover:bg-acento-hover text-white font-semibold py-3 rounded-lg text-sm transition-colors disabled:opacity-60 flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-4 focus-visible:ring-acento/30"
       >
         {isSubmitting ? (
           <>

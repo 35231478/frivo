@@ -53,13 +53,13 @@ export default async function OrcamentoPublicoPage({
   return (
     <div className="min-h-screen flex flex-col">
       {/* Topo */}
-      <header className="bg-sidebar text-white py-4 px-6 shadow-sm">
+      <header className="bg-white border-b border-surface-border py-4 px-6">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
-          <FrivoLogo size="sm" showSubtitle={false} />
+          <FrivoLogo size="sm" showSubtitle={false} variant="dark" />
           <Link
             href={`/orcamento/${token}/imprimir`}
             target="_blank"
-            className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold px-3 py-2 rounded-lg transition-colors"
+            className="inline-flex items-center gap-2 bg-white border border-surface-border hover:bg-surface-page text-ink text-sm font-semibold px-3 py-2 rounded-lg transition-colors"
           >
             <Printer className="w-4 h-4" /> Imprimir / PDF
           </Link>
@@ -84,7 +84,7 @@ export default async function OrcamentoPublicoPage({
             />
           )}
           {aprovado && (
-            <div className="bg-success-50 border-2 border-success-500 text-success-700 rounded-xl px-5 py-4 flex items-center gap-3">
+            <div className="bg-ok-claro border border-ok/30 text-ok-texto rounded-card px-5 py-4 flex items-center gap-3">
               <CheckCircle2 className="w-6 h-6 shrink-0" />
               <div>
                 <p className="font-bold">Orçamento aprovado!</p>
@@ -97,7 +97,7 @@ export default async function OrcamentoPublicoPage({
           )}
 
           {/* Documento */}
-          <div className="bg-white rounded-2xl shadow-card p-6 md:p-10">
+          <div className="bg-white rounded-card shadow-card p-6 md:p-10">
             {proposta ? (
               <PropostaDocumento
                 orcamento={orcamento}
@@ -118,7 +118,7 @@ export default async function OrcamentoPublicoPage({
           {/* Aprovação */}
           {podeAprovar && <AprovacaoPublica token={token} />}
           {orcamento.status === "RASCUNHO" && (
-            <div className="bg-white border border-surface-border rounded-xl px-5 py-4 text-center">
+            <div className="bg-white border border-surface-border rounded-card px-5 py-4 text-center">
               <span className={cn("inline-flex mb-2", CLASSE_STATUS_ORCAMENTO[orcamento.status])}>
                 {LABELS_STATUS_ORCAMENTO[orcamento.status]}
               </span>
@@ -143,10 +143,10 @@ export default async function OrcamentoPublicoPage({
 
 function StatusAviso({ tipo, titulo, mensagem }: { tipo: "erro" | "atencao"; titulo: string; mensagem: string }) {
   const classes = tipo === "erro"
-    ? "bg-red-50 border-red-300 text-red-700"
-    : "bg-amber-50 border-amber-300 text-amber-700";
+    ? "bg-atrasado-claro border-atrasado/40 text-atrasado-texto"
+    : "bg-atencao-claro border-atencao/40 text-atencao-texto";
   return (
-    <div className={cn("border-2 rounded-xl px-5 py-4 flex items-center gap-3", classes)}>
+    <div className={cn("border-2 rounded-card px-5 py-4 flex items-center gap-3", classes)}>
       <AlertTriangle className="w-6 h-6 shrink-0" />
       <div>
         <p className="font-bold">{titulo}</p>

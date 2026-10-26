@@ -56,9 +56,9 @@ export default async function MedicaoPublicaPage({ params }: { params: Promise<{
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="bg-sidebar text-white py-4 px-6 shadow-sm">
+      <header className="bg-white border-b border-surface-border py-4 px-6">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-4 flex-wrap">
-          <FrivoLogo size="sm" showSubtitle={false} />
+          <FrivoLogo size="sm" showSubtitle={false} variant="dark" />
           <MedicaoEnvio token={token} numero={medicao.numero} empresaNome={medicao.empresa.nomeFantasia ?? medicao.empresa.nome} emailDestino={emailDestino} whatsappDestino={whatsappDestino} />
         </div>
       </header>
@@ -66,7 +66,7 @@ export default async function MedicaoPublicaPage({ params }: { params: Promise<{
       <main className="flex-1 py-8 px-4">
         <div className="max-w-4xl mx-auto space-y-6">
           {cancelada && (
-            <div className="bg-red-50 border-2 border-red-300 text-red-700 rounded-xl px-5 py-4 flex items-center gap-3">
+            <div className="bg-atrasado-claro border-2 border-atrasado/40 text-atrasado-texto rounded-card px-5 py-4 flex items-center gap-3">
               <AlertTriangle className="w-6 h-6 shrink-0" />
               <div>
                 <p className="font-bold">Medição cancelada</p>
@@ -75,7 +75,7 @@ export default async function MedicaoPublicaPage({ params }: { params: Promise<{
             </div>
           )}
           {jaAprovada && (
-            <div className="bg-success-50 border-2 border-success-500 text-success-700 rounded-xl px-5 py-4 flex items-center gap-3">
+            <div className="bg-ok-claro border border-ok/30 text-ok-texto rounded-card px-5 py-4 flex items-center gap-3">
               <CheckCircle2 className="w-6 h-6 shrink-0" />
               <div>
                 <p className="font-bold">Medição aprovada!</p>
@@ -86,12 +86,12 @@ export default async function MedicaoPublicaPage({ params }: { params: Promise<{
             </div>
           )}
 
-          <div className="bg-white rounded-2xl shadow-card p-6 md:p-10">
+          <div className="bg-white rounded-card shadow-card p-6 md:p-10">
             <MedicaoDocumento medicao={medicao} empresa={medicao.empresa} cliente={medicao.cliente} />
           </div>
 
           {consolidado && (
-            <div className="bg-white rounded-2xl shadow-card p-6 md:p-10">
+            <div className="bg-white rounded-card shadow-card p-6 md:p-10">
               <p className="text-xs uppercase tracking-wider text-ink-muted mb-4 pb-2 border-b border-surface-border">Relatório técnico completo</p>
               <RelatorioGeralDocumento
                 relatorio={consolidado.relatorio}
@@ -103,12 +103,12 @@ export default async function MedicaoPublicaPage({ params }: { params: Promise<{
           )}
 
           {mensal && (
-            <div className="bg-white rounded-2xl shadow-card p-6 md:p-10">
+            <div className="bg-white rounded-card shadow-card p-6 md:p-10">
               <RelatorioMensalContratoResumo dados={mensal} />
             </div>
           )}
           {relatoriosDoMes.map((r, i) => (
-            <div key={i} className="bg-white rounded-2xl shadow-card p-6 md:p-10">
+            <div key={i} className="bg-white rounded-card shadow-card p-6 md:p-10">
               <p className="text-xs uppercase tracking-wider text-ink-muted mb-4 pb-2 border-b border-surface-border">Relatório técnico do período</p>
               <RelatorioGeralDocumento relatorio={r.relatorio} empresa={r.empresa} os={r.os} equipamentos={r.equipamentos} />
             </div>
@@ -116,7 +116,7 @@ export default async function MedicaoPublicaPage({ params }: { params: Promise<{
 
           {aguardando && !jaAprovada && <AprovacaoMedicao token={token} />}
           {medicao.status === "RASCUNHO" && (
-            <div className="bg-white border border-surface-border rounded-xl px-5 py-4 text-center">
+            <div className="bg-white border border-surface-border rounded-card px-5 py-4 text-center">
               <span className={cn("inline-flex mb-2", CLASSE_STATUS_MEDICAO[medicao.status])}>
                 {LABELS_STATUS_MEDICAO[medicao.status]}
               </span>

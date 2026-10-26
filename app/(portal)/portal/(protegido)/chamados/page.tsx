@@ -12,13 +12,13 @@ export const dynamic = "force-dynamic";
 
 const COR_STATUS: Record<string, string> = {
   ABERTA: "bg-primary-50 text-primary-700",
-  AGUARDANDO_ATENDIMENTO: "bg-cyan-50 text-cyan-700",
-  AGENDADA: "bg-violet-50 text-violet-700",
-  EM_ANDAMENTO: "bg-amber-50 text-amber-700",
-  PAUSADA: "bg-orange-50 text-orange-700",
-  AGUARDANDO_PECA: "bg-yellow-50 text-yellow-700",
-  CONCLUIDA: "bg-success-50 text-success-700",
-  CANCELADA: "bg-red-50 text-red-700",
+  AGUARDANDO_ATENDIMENTO: "bg-acento-claro text-acento-hover",
+  AGENDADA: "bg-acento-claro text-acento-hover",
+  EM_ANDAMENTO: "bg-atencao-claro text-atencao-texto",
+  PAUSADA: "bg-atencao-claro text-atencao-texto",
+  AGUARDANDO_PECA: "bg-atencao-claro text-atencao-texto",
+  CONCLUIDA: "bg-ok-claro text-ok-texto",
+  CANCELADA: "bg-atrasado-claro text-atrasado-texto",
 };
 
 export default async function PortalChamados() {
@@ -44,11 +44,11 @@ export default async function PortalChamados() {
       </div>
 
       {ordens.length === 0 ? (
-        <div className="bg-white rounded-xl border border-surface-border p-10 text-center text-ink-muted">Nenhum chamado registrado.</div>
+        <div className="bg-white rounded-card border border-surface-border p-10 text-center text-ink-muted">Nenhum chamado registrado.</div>
       ) : (
         <div className="space-y-2">
           {ordens.map((o) => (
-            <Link key={o.id} href={`/portal/chamados/${o.id}`} className="block bg-white rounded-xl border border-surface-border p-4 hover:border-primary-200 hover:shadow-card transition-all">
+            <Link key={o.id} href={`/portal/chamados/${o.id}`} className="block bg-white rounded-card border border-surface-border p-4 hover:border-primary-200 hover:shadow-card transition-all">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
@@ -62,7 +62,7 @@ export default async function PortalChamados() {
                   {/* UX-8 (Y16): "Agendada" mostra a data DA VISITA (e avisa quando ficou para trás), não a de abertura */}
                   {o.status === "AGENDADA" && o.previsaoConclusao ? (
                     diaCivilPassou(o.previsaoConclusao)
-                      ? <span className="text-xs font-semibold text-amber-700">visita era {formatarData(o.previsaoConclusao)} — a reagendar</span>
+                      ? <span className="text-xs font-semibold text-atencao-texto">visita era {formatarData(o.previsaoConclusao)} — a reagendar</span>
                       : <span className="text-xs text-ink-subtle">visita {formatarData(o.previsaoConclusao)}</span>
                   ) : (
                     <span className="text-xs text-ink-subtle">{formatarData(o.criadoEm)}</span>
