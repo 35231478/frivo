@@ -7,13 +7,13 @@ import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { moduloDaRota, pode, type Acao } from "@/lib/permissoes";
 import { FrivoLogo, FrivoMark } from "./frivo-logo";
-import { SECOES_CONFIGURACOES } from "@/lib/navegacao/configuracoes";
+import { secoesVisiveis as secoesVisiveisConfig } from "@/lib/navegacao/configuracoes";
 import type { Session } from "next-auth";
 import {
   LayoutDashboard, Users, Thermometer, ClipboardList, FileText, HardHat, Settings, ChevronDown, ChevronRight,
   Wrench, Calculator, Wallet, Receipt, TrendingUp, FileBarChart, ShoppingCart, Timer, CalendarDays, QrCode,
   Truck, UsersRound, BadgeDollarSign, ClipboardCheck, Smartphone, UserCog, Upload, Landmark, Globe, Coins,
-  PanelLeftClose, PanelLeftOpen, MoreVertical, LogOut, LayoutGrid, Package,
+  PanelLeftClose, PanelLeftOpen, MoreVertical, LogOut, Package,
 } from "lucide-react";
 
 type Icone = React.ComponentType<{ className?: string }>;
@@ -22,16 +22,10 @@ interface Item {
   href: string;
   icone: Icone;
   label: string;
-  /** Sobrescreve o alvo de ativação (ex.: itens com mesma rota). "__nunca__" = nunca ativo. */
-  matchHref?: string;
   /** Sobrescreve o módulo de permissão (quando o 1º segmento da rota não reflete o gate correto). */
   modulo?: string;
   /** Ação exigida (padrão: "visualizar"). Ex.: Custo de pessoal exige "Financeiro › folha". */
   acao?: Acao;
-  /** Subtítulo do subgrupo dentro do grupo (ex.: "Catálogo") */
-  subgrupo?: string;
-  /** Microtexto abaixo do item (ex.: Usuários = quem faz login) */
-  dica?: string;
 }
 interface Grupo {
   tipo: "grupo";
@@ -148,37 +142,25 @@ const FINANCEIRO: Secao[] = [
   },
 ];
 
-/**
- * Bloco SISTEMA — configurações, acessível pelo rodapé e pelo menu do usuário. Três seções
- * (operacionais, financeiras, conta) com subgrupos, geradas de lib/navegacao/configuracoes.ts
- * (a mesma fonte das telas de cada seção). Cada grupo começa com a "Visão geral" da seção.
- */
-const SISTEMA: Secao[] = [
-  {
-    titulo: "Sistema",
-    entries: SECOES_CONFIGURACOES.map((sec): Grupo => ({
-      tipo: "grupo", label: sec.label, icone: sec.icone,
-      itens: [
-        { href: sec.href, icone: LayoutGrid, label: "Visão geral" },
-        ...sec.subgrupos.flatMap((sg) => sg.itens.map((i): Item => ({
-          href: i.href, icone: i.icone, label: i.label, matchHref: i.matchHref, subgrupo: sg.titulo, dica: i.dicaNoMenu ? i.dica : undefined,
-        }))),
-      ],
-    })),
-  },
-];
-
 type Modulo = "operacional" | "financeiro";
-type Vista = Modulo | "sistema";
+type Vista = Modulo;
 
-const VISTAS: Record<Vista, Secao[]> = { operacional: OPERACIONAL, financeiro: FINANCEIRO, sistema: SISTEMA };
+const VISTAS: Record<Vista, Secao[]> = { operacional: OPERACIONAL, financeiro: FINANCEIRO };
 
-const baseHref = (i: Item) => i.matchHref ?? i.href.split("#")[0];
+/**
+ * Configurações: item ÚNICO no rodapé (sem submenu). Abre a página de Configurações, onde cada
+ * item abre numa gaveta (lib/navegacao/configuracoes.ts). Ativo em /configuracoes e nas rotas
+ * antigas dos itens (que redirecionam para lá) — menos os checklists da frota, que são do Frota.
+ */
+const CONFIG_HREF = "/configuracoes";
+const ehRotaConfiguracoes = (pathname: string) =>
+  (pathname === CONFIG_HREF || pathname.startsWith(CONFIG_HREF + "/")) && !pathname.startsWith("/configuracoes/checklists-veiculo");
+
+const baseHref = (i: Item) => i.href.split("#")[0];
 
 /** Todas as bases de rota marcadas com sua vista (para descobrir a qual módulo uma rota pertence). */
 const BASES_POR_VISTA: { base: string; vista: Vista }[] = (Object.keys(VISTAS) as Vista[]).flatMap((vista) =>
-  VISTAS[vista].flatMap((s) => s.entries.flatMap((e) => (ehGrupo(e) ? e.itens : [e]).map((i) => ({ base: baseHref(i), vista }))))
-    .filter((b) => b.base !== "__nunca__"),
+  VISTAS[vista].flatMap((s) => s.entries.flatMap((e) => (ehGrupo(e) ? e.itens : [e]).map((i) => ({ base: baseHref(i), vista })))),
 );
 
 /** Descobre a vista (módulo) de uma rota pelo prefixo mais longo; null se não pertencer a nenhuma. */
@@ -208,9 +190,8 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
   const [montado, setMontado] = useState(false);
   const [menuAberto, setMenuAberto] = useState(false);
 
-  // Módulo ativo ("mundo") + overlay de configurações (Sistema)
+  // Módulo ativo ("mundo")
   const [modulo, setModulo] = useState<Modulo>("operacional");
-  const [sistemaAberto, setSistemaAberto] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -224,8 +205,7 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
   // Troca automática de vista conforme a rota atual (o menu segue a página).
   useEffect(() => {
     const v = vistaDaRota(pathname);
-    if (v === "sistema") setSistemaAberto(true);
-    else if (v) { setModulo(v); setSistemaAberto(false); }
+    if (v) setModulo(v);
   }, [pathname]);
 
   // Persiste o módulo escolhido
@@ -268,10 +248,9 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
   // Disponibilidade de cada mundo conforme RBAC
   const operacionalDisponivel = temItens(filtrar(OPERACIONAL));
   const financeiroDisponivel = temItens(filtrar(FINANCEIRO));
-  const sistemaDisponivel = temItens(filtrar(SISTEMA));
-  // Atalho do menu do usuário: a primeira seção de configurações que o perfil pode ver
-  const primeiroGrupoSistema = filtrar(SISTEMA)[0]?.entries.find(ehGrupo);
-  const configHref = primeiroGrupoSistema ? primeiroGrupoSistema.itens[0].href : null;
+  // Configurações: aparece para quem pode ver ao menos um item (mesma regra dos cartões)
+  const configDisponivel = secoesVisiveisConfig(permissoes, role).length > 0;
+  const configAtiva = ehRotaConfiguracoes(pathname);
   const perfilRotulo = role === "ADMIN" ? "ADMIN" : usuario.perfilNome || "Sem perfil de acesso";
 
   // Módulo efetivo (cai para o disponível se o escolhido não estiver acessível)
@@ -279,7 +258,7 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
     modulo === "financeiro" && !financeiroDisponivel ? "operacional"
       : modulo === "operacional" && !operacionalDisponivel && financeiroDisponivel ? "financeiro"
         : modulo;
-  const vistaAtiva: Vista = sistemaAberto && sistemaDisponivel ? "sistema" : moduloEfetivo;
+  const vistaAtiva: Vista = moduloEfetivo;
 
   const secoesVisiveis = filtrar(VISTAS[vistaAtiva]);
   const mostrarSeletor = operacionalDisponivel && financeiroDisponivel;
@@ -290,7 +269,7 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
   // Item ativo pelo prefixo mais longo dentro da vista atual
   const basesAtuais = secoesVisiveis.flatMap((s) =>
     s.entries.flatMap((e) => (ehGrupo(e) ? e.itens : [e]).map((i) => baseHref(i))),
-  ).filter((b) => b !== "__nunca__");
+  );
   let ativoHref: string | null = null;
   for (const b of basesAtuais) {
     if (pathname === b || pathname.startsWith(b + "/")) {
@@ -318,7 +297,6 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
 
   const escolherModulo = (m: Modulo) => {
     setModulo(m);
-    setSistemaAberto(false);
     router.push(m === "financeiro" ? "/financeiro" : "/dashboard");
   };
 
@@ -381,9 +359,9 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
             >
               <UserCog className="w-4 h-4" /> Gerenciar perfil
             </Link>
-            {configHref && (
+            {configDisponivel && (
               <Link
-                href={configHref}
+                href={CONFIG_HREF}
                 onClick={() => setMenuAberto(false)}
                 className="flex items-center gap-2.5 px-3 py-2 text-sm text-ink hover:bg-surface-page"
                 data-acao="menu-configuracoes"
@@ -465,11 +443,8 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
 
                       {abertos.has(e.label) && (
                         <div className="mt-1 ml-5 pl-2 pr-1 py-1 border-l border-surface-border space-y-0.5">
-                          {e.itens.map((i, k) => (
+                          {e.itens.map((i) => (
                             <div key={i.href + i.label}>
-                              {i.subgrupo && i.subgrupo !== e.itens[k - 1]?.subgrupo && (
-                                <p className="px-3 pt-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-muted" data-subgrupo>{i.subgrupo}</p>
-                              )}
                               <Link
                                 href={i.href}
                                 className={cn(
@@ -480,13 +455,8 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
                                 )}
                                 aria-current={itemAtivo(i) ? "page" : undefined}
                               >
-                                <i.icone className={cn("w-4 h-4 shrink-0", i.dica && "self-start mt-0.5")} />
-                                {i.dica ? (
-                                  <span className="min-w-0">
-                                    <span className="block">{i.label}</span>
-                                    <span className="block text-[11px] leading-snug text-ink-muted font-normal">{i.dica}</span>
-                                  </span>
-                                ) : i.label}
+                                <i.icone className="w-4 h-4 shrink-0" />
+                                {i.label}
                               </Link>
                             </div>
                           ))}
@@ -503,23 +473,25 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
         ))}
       </nav>
 
-      {/* Rodapé: configurações (Sistema) + instalar app + logo */}
+      {/* Rodapé: configurações (item único) + instalar app + logo */}
       <div className="px-3 pt-2 pb-3 border-t border-surface-linha space-y-2">
-        {sistemaDisponivel && (
-          <button
-            onClick={() => setSistemaAberto((v) => !v)}
+        {configDisponivel && (
+          <Link
+            href={CONFIG_HREF}
             title={colapsada ? "Configurações" : undefined}
+            aria-current={configAtiva ? "page" : undefined}
+            data-acao="rodape-configuracoes"
             className={cn(
               "flex items-center rounded-lg text-sm transition-colors w-full",
               colapsada ? "justify-center py-2" : "gap-3 pl-4 pr-3 py-2.5",
-              sistemaAberto
+              configAtiva
                 ? cn(ativoBg, "text-acento font-semibold")
                 : "text-ink-muted hover:bg-surface-page hover:text-ink",
             )}
           >
             <Settings className="w-[18px] h-[18px] shrink-0" />
             {!colapsada && <span className="truncate">Configurações</span>}
-          </button>
+          </Link>
         )}
         <Link
           href="/instalar"

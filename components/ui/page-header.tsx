@@ -16,6 +16,7 @@ export function PageHeader({ title, description, backHref, actions }: PageHeader
         <Link
           href={backHref}
           aria-label="Voltar"
+          data-voltar
           className="mt-1 p-2 rounded-lg text-ink-muted hover:text-acento hover:bg-white transition-colors"
         >
           <ChevronLeft className="w-5 h-5" />

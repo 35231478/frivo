@@ -465,8 +465,8 @@ describe("versões do relatório", () => {
 // ═════════════════════════ Tela de configuração ═════════════════════════
 describe("tela Configurações › Impressão da OS", () => {
   const tela = async () => {
-    const { default: P } = await import("@/app/(dashboard)/configuracoes/impressao-os/page");
-    return renderToStaticMarkup(await P());
+    const { TelaImpressaoOs } = await import("@/components/config/telas/impressao-os");
+    return renderToStaticMarkup(await TelaImpressaoOs());
   };
   it("lista as seções com o estado salvo; quem só visualiza vê em modo leitura", async () => {
     salvarConfig(comConfig({ fotos: { ativo: false, cliente: true }, tempos: { ativo: true, cliente: true } }));
@@ -482,7 +482,7 @@ describe("tela Configurações › Impressão da OS", () => {
     expect(r).not.toContain(">Salvar<");
   });
 
-  it("menu: item na seção operacional, protegido por Configurações", async () => {
+  it("cartão na aba Operacionais, protegido por Configurações", async () => {
     const { SECOES_CONFIGURACOES, secoesVisiveis } = await import("@/lib/navegacao/configuracoes");
     const itens = (s: typeof SECOES_CONFIGURACOES) => s.flatMap((x) => x.subgrupos.flatMap((g) => g.itens.map((i) => i.href)));
     expect(itens(SECOES_CONFIGURACOES)).toContain("/configuracoes/impressao-os");

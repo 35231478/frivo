@@ -1,8 +1,7 @@
-import type { Metadata } from "next";
-import { SecaoConfiguracoes } from "@/components/config/secao-configuracoes";
+import { redirect } from "next/navigation";
+import { hrefAbaConfig } from "@/lib/navegacao/configuracoes";
 
-export const metadata: Metadata = { title: "Configurações financeiras" };
-
+/** Link antigo: a aba na página de Configurações. */
 export default function Page() {
-  return <SecaoConfiguracoes id="financeiras" />;
+  redirect(hrefAbaConfig("financeiras"));
 }

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
+import { abrirCamada, fecharCamada, noTopo, prenderFoco } from "@/components/ui/camadas";
 
 type Icone = React.ComponentType<{ className?: string }>;
 
@@ -32,11 +33,16 @@ interface DrawerProps {
  * Painel lateral deslizante (drawer) reutilizável — desliza a partir da direita,
  * com overlay que escurece o fundo, fechamento por clique fora / ESC, header no
  * tema do sistema, abas opcionais e rodapé de ações. Padrão de cadastro do Frivo.
+ * Acessível: foco vai para o painel ao abrir, fica preso nele (Tab) e volta para quem abriu;
+ * com camadas uma dentro da outra, Esc fecha só a de cima.
  */
 export function Drawer({ aberto, onFechar, titulo, children, largura, rodape, abas, abaAtiva, onAbaChange }: DrawerProps) {
   const [montado, setMontado] = useState(false);
   const [entrando, setEntrando] = useState(false);
   const idTitulo = useId();
+  const painelRef = useRef<HTMLDivElement>(null);
+  const fecharRef = useRef(onFechar);
+  fecharRef.current = onFechar;
 
   // Monta ao abrir; mantém montado durante a animação de saída.
   useEffect(() => {
@@ -52,15 +58,30 @@ export function Drawer({ aberto, onFechar, titulo, children, largura, rodape, ab
     }
   }, [aberto, montado]);
 
-  // ESC fecha + trava o scroll do body enquanto aberto.
+  // ESC fecha (só a camada do topo) + foco preso no painel + scroll do body travado enquanto aberto.
   useEffect(() => {
     if (!aberto) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onFechar(); };
+    const camada = abrirCamada();
+    const antes = document.activeElement as HTMLElement | null;
+    const onKey = (e: KeyboardEvent) => {
+      if (!noTopo(camada)) return;
+      if (e.key === "Escape") { e.stopPropagation(); fecharRef.current(); return; }
+      prenderFoco(e, painelRef.current);
+    };
     document.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
-  }, [aberto, onFechar]);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      fecharCamada(camada);
+      if (antes && document.contains(antes)) antes.focus?.();
+    };
+  }, [aberto]);
+
+  // Ao abrir, o foco entra no painel (leitor de tela anuncia o título) — sem tirar de um campo
+  // que já pegou o foco sozinho (autoFocus)
+  useEffect(() => {
+    const p = painelRef.current;
+    if (aberto && montado && p && !p.contains(document.activeElement)) p.focus();
+  }, [aberto, montado]);
 
   if (!montado || typeof document === "undefined") return null;
 
@@ -71,11 +92,13 @@ export function Drawer({ aberto, onFechar, titulo, children, largura, rodape, ab
         className={cn("absolute inset-0 bg-ink/40 transition-opacity duration-300", entrando ? "opacity-100" : "opacity-0")}
       />
       <div
+        ref={painelRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby={idTitulo}
         className={cn(
-          "absolute right-0 top-0 h-full bg-white border-l border-surface-border shadow-elevated flex flex-col transition-transform duration-300 ease-out",
+          "absolute right-0 top-0 h-full bg-white border-l border-surface-border shadow-elevated flex flex-col transition-transform duration-300 ease-out outline-none",
           largura ?? "w-full sm:w-[52vw] sm:min-w-[460px] sm:max-w-[780px]",
           entrando ? "translate-x-0" : "translate-x-full",
         )}

@@ -32,7 +32,7 @@ const MSG_TRAVA = `${MSG_SEM_EQUIPAMENTO} ${MSG_SAIDAS_SEM_EQUIPAMENTO}`;
 beforeAll(async () => {
   await Promise.all([
     import("@/components/os/os-atividades"), import("@/components/os/atividade-execucao"),
-    import("@/app/(dashboard)/configuracoes/tipos-os/page"), import("@/components/providers/permissoes-provider"),
+    import("@/components/config/telas/tipos-os"), import("@/components/providers/permissoes-provider"),
   ]);
 }, 120_000);
 
@@ -243,7 +243,7 @@ describe("cadastro de Tipos de OS", () => {
       { id: "t2", nome: "Visita Técnica", descricao: null, cor: "#10b981", ativo: true, exigeEquipamento: false },
     ] };
     respostas["POST /api/tipos-os"] = { status: 201, corpo: { id: "t3", nome: "Vistoria", descricao: "", cor: "#3b82f6", ativo: true, exigeEquipamento: false } };
-    const { default: Pagina } = await import("@/app/(dashboard)/configuracoes/tipos-os/page");
+    const { TelaTiposOs: Pagina } = await import("@/components/config/telas/tipos-os");
     await montar(createElement(Pagina));
     expect($$("[data-exige-equipamento]").map((e) => [e.getAttribute("data-exige-equipamento"), e.textContent])).toEqual([["sim", "Exige para concluir"], ["nao", "Não exige"]]);
     await clicar($$("button").find((b) => /Novo|Adicionar/.test(b.textContent ?? "")) ?? null);
