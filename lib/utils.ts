@@ -99,10 +99,10 @@ export function iniciais(nome: string | null | undefined): string {
   return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
 }
 
-// Paleta de avatares: azul, verde, roxo, laranja, rosa, ciano (fundo sólido, texto branco)
+// Avatares (sistema de design): tons da identidade, sem cor de status (verde/vermelho têm função).
+// Cada item traz fundo E texto; o nome sempre escolhe o mesmo tom.
 export const CORES_AVATAR = [
-  "bg-blue-500", "bg-emerald-500", "bg-violet-500",
-  "bg-orange-500", "bg-pink-500", "bg-cyan-500",
+  "bg-acento-claro text-acento-hover", "bg-acento text-white", "bg-previsto-claro text-previsto-texto",
 ];
 
 // Cor consistente para o mesmo nome (hash simples da string)
@@ -223,9 +223,9 @@ export const LABELS_STATUS_FINANCEIRO: Record<string, string> = {
 
 export const COR_STATUS_FINANCEIRO: Record<string, string> = {
   ADIMPLENTE: "bg-success-50 text-success-700",
-  INADIMPLENTE: "bg-red-50 text-red-700",
-  EM_NEGOCIACAO: "bg-amber-50 text-amber-700",
-  AGUARDANDO_VENCIMENTO: "bg-orange-50 text-orange-700",
+  INADIMPLENTE: "bg-atrasado-claro text-atrasado-texto",
+  EM_NEGOCIACAO: "bg-atencao-claro text-atencao-texto",
+  AGUARDANDO_VENCIMENTO: "bg-atencao-claro text-atencao-texto",
 };
 
 export const LABELS_TIPO_CONTATO: Record<string, string> = {
@@ -274,12 +274,13 @@ export const SECOES_COMUNICACAO = [
 
 // Cores dos badges por tipo de contato (cobre todos os valores de TipoContato).
 export const COR_TIPO_CONTATO: Record<string, string> = {
-  OPERACIONAL: "bg-blue-50 text-blue-700",
-  FINANCEIRO: "bg-emerald-50 text-emerald-700",
-  CONTRATUAL: "bg-purple-50 text-purple-700",
-  TECNICO: "bg-amber-50 text-amber-700",
-  DIRETORIA: "bg-slate-100 text-slate-600",
-  OUTRO: "bg-gray-100 text-gray-600",
+  // Categoria (não é status): neutro, com o acento só no que é operacional
+  OPERACIONAL: "bg-acento-claro text-acento-hover",
+  FINANCEIRO: "bg-previsto-claro text-previsto-texto",
+  CONTRATUAL: "bg-previsto-claro text-previsto-texto",
+  TECNICO: "bg-previsto-claro text-previsto-texto",
+  DIRETORIA: "bg-previsto-claro text-previsto-texto",
+  OUTRO: "bg-previsto-claro text-previsto-texto",
 };
 
 export const LABELS_TIPO_INTERACAO: Record<string, string> = {
@@ -397,11 +398,11 @@ export const LABELS_STATUS_CONTA_RECEBER: Record<string, string> = {
 };
 
 export const CLASSE_STATUS_CONTA_RECEBER: Record<string, string> = {
-  PREVISTO: "badge-base bg-slate-100 text-slate-600",
+  PREVISTO: "badge-base bg-surface-linha text-ink-muted",
   A_RECEBER: "badge-base bg-primary-50 text-primary-700",
   RECEBIDO: "badge-base bg-success-50 text-success-700",
-  CANCELADO: "badge-base bg-slate-100 text-slate-500",
-  ATRASADO: "badge-base bg-red-50 text-red-700",
+  CANCELADO: "badge-base bg-surface-linha text-ink-muted",
+  ATRASADO: "badge-base bg-atrasado-claro text-atrasado-texto",
 };
 
 export const LABELS_FORMA_PAGAMENTO: Record<string, string> = {
@@ -440,10 +441,10 @@ export const LABELS_STATUS_PEDIDO_COMPRA: Record<string, string> = {
 
 export const CLASSE_STATUS_PEDIDO_COMPRA: Record<string, string> = {
   SOLICITADO: "badge-base bg-primary-50 text-primary-700",
-  COTANDO: "badge-base bg-amber-50 text-amber-700",
-  COMPRADO: "badge-base bg-violet-50 text-violet-700",
+  COTANDO: "badge-base bg-atencao-claro text-atencao-texto",
+  COMPRADO: "badge-base bg-acento-claro text-acento-hover",
   ENTREGUE: "badge-base bg-success-50 text-success-700",
-  CANCELADO: "badge-base bg-slate-100 text-slate-500",
+  CANCELADO: "badge-base bg-surface-linha text-ink-muted",
 };
 
 export const LABELS_STATUS_OS_PRAZO: Record<string, string> = {
@@ -514,12 +515,12 @@ export const LABELS_STATUS_CONTRATO: Record<string, string> = {
 
 export const COR_STATUS_CONTRATO: Record<string, string> = {
   ATIVO: "bg-success-50 text-success-700",
-  SUSPENSO: "bg-amber-50 text-amber-700",
-  ENCERRADO: "bg-slate-100 text-slate-600",
-  CANCELADO: "bg-red-50 text-red-700",
-  VENCIDO: "bg-red-50 text-red-700",
-  AGUARDANDO_ASSINATURA: "bg-slate-100 text-slate-600",
-  EM_RENOVACAO: "bg-blue-50 text-blue-700",
+  SUSPENSO: "bg-atencao-claro text-atencao-texto",
+  ENCERRADO: "bg-surface-linha text-ink-muted",
+  CANCELADO: "bg-atrasado-claro text-atrasado-texto",
+  VENCIDO: "bg-atrasado-claro text-atrasado-texto",
+  AGUARDANDO_ASSINATURA: "bg-surface-linha text-ink-muted",
+  EM_RENOVACAO: "bg-acento-claro text-acento-hover",
 };
 
 // Status oferecidos no formulário/gerenciamento de contrato (subconjunto do enum).
@@ -569,10 +570,10 @@ export const LABELS_STATUS_RELATORIO: Record<string, string> = {
 };
 
 export const CLASSE_STATUS_RELATORIO: Record<string, string> = {
-  RASCUNHO: "badge-base bg-slate-100 text-slate-600",
+  RASCUNHO: "badge-base bg-surface-linha text-ink-muted",
   ENVIADO: "badge-base bg-primary-50 text-primary-700",
   APROVADO: "badge-base bg-success-50 text-success-700",
-  REPROVADO: "badge-base bg-red-50 text-red-700",
+  REPROVADO: "badge-base bg-atrasado-claro text-atrasado-texto",
 };
 
 /** Substitui variáveis {{nome}} em um template de mensagem. */

@@ -1,7 +1,8 @@
 # Sistema de design do Frivo
 
 Fase 1 entregue: fundação (tokens, fontes, componentes-base), o shell global e duas telas-vitrine
-(a central da OS e a lista de OS). Este guia vale para as próximas varreduras.
+(a central da OS e a lista de OS). Fase 2 em lotes: a varredura das demais telas, um PR por lote
+(ver "Fase 2" abaixo). Este guia vale para as próximas varreduras.
 
 ## Princípios
 
@@ -77,13 +78,37 @@ inteiro já herdou o acento. Em código novo, prefira os nomes semânticos.
 - **Base**: todos os componentes de `components/ui` e a infraestrutura de listas
   (`components/listagem`), que as demais listas compartilham.
 
+## Fase 2: varredura por lotes
+
+Cada lote troca as cores soltas pelos tokens, tira degradê, emoji e borda colorida à esquerda e entra
+na guarda do teste `tests/unit/design-system.test.ts` (lista `VARRIDAS`). A guarda reprova, nas pastas
+varridas: classe de cor da paleta do Tailwind, degradê, `border-l-*` colorido, navy (`bg-sidebar`),
+emoji e hex usado para pintar.
+
+**Decisões que valem para todos os lotes**
+- Categoria não é status: avatar, tipo de interação e afins usam acento ou neutro (previsto), nunca
+  verde/âmbar/vermelho.
+- Cor cadastrada pelo usuário (tipo de OS, equipe) aparece como **ponto** dentro de uma pílula neutra,
+  nunca como fundo de texto branco (não dá para garantir contraste com uma cor qualquer).
+- Linha de tempo com traço neutro à esquerda é permitida; faixa colorida não.
+- O "✓" tipográfico (U+2713) não é emoji e pode ficar.
+
+**Lote 1: uso diário** (feito)
+- Execução da OS no escritório (`components/os/*`, `app/(dashboard)/ordens`), incluindo QR e checklist.
+- App do técnico (`components/tecnico/*`, `app/tecnico`): cabeçalho branco no lugar do navy, barra de
+  ações sem degradê, indicador de sincronização em pílulas claras, "Concluída" com ícone em vez de emoji.
+- Calendário (mês, semana, gaveta de solicitações): o cartão mostra o status por ponto e a prioridade
+  por ícone (antes: fundo tingido + borda colorida à esquerda); legenda refeita.
+- Dashboard e Dashboard financeiro (`components/dashboard/*`, `app/(dashboard)/financeiro/page.tsx`),
+  Nova OS, Prazos e SLA.
+
 ## Varredura seguinte: o que falta
 
 Inventário pelo código, com o número de classes de cor fora do sistema (`gray-*`, `red-*`, `blue-*`…),
 degradês e emojis. Essas telas já herdam o acento, as fontes e os componentes-base; falta trocar as
 cores soltas pelos tokens e conferir respiro e status.
 
-**Prioridade 1: telas de uso diário**
+**Prioridade 1: telas de uso diário** (feito no lote 1)
 1. Execução da OS no escritório: `components/os/execucao-equipamento.tsx` (65), `atividade-execucao.tsx` (32), `scanner-qr.tsx`.
 2. App do técnico: casca/cabeçalho próprios, `components/tecnico/*` (Meu dia, execução, equipamento; tem degradê e emoji).
 3. Calendário: `components/calendario/calendario-grid.tsx`, `solicitacoes-gaveta.tsx`.

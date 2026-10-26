@@ -209,28 +209,28 @@ export function AtividadeExecucao({ osId, atividadeId, titulo, osNumero, tipoOs 
   return (
     <div className="max-w-2xl mx-auto pb-28" data-execucao>
       <div className="flex items-center gap-3 mb-4">
-        <Link href={`/ordens/${osId}`} className="p-2 -ml-2 text-gray-500 hover:text-gray-800" aria-label="Voltar para a OS"><ArrowLeft className="w-5 h-5" /></Link>
+        <Link href={`/ordens/${osId}`} className="p-2 -ml-2 text-ink-muted hover:text-ink" aria-label="Voltar para a OS"><ArrowLeft className="w-5 h-5" /></Link>
         <div className="min-w-0">
-          <p className="text-xs text-gray-400 font-mono">OS {osNumero}</p>
-          <h1 className="text-lg font-bold text-gray-900 truncate">{titulo}</h1>
+          <p className="text-xs text-ink-muted font-mono">OS {osNumero}</p>
+          <h1 className="text-lg font-bold text-ink truncate">{titulo}</h1>
         </div>
-        {tipoOs && <span className="ml-auto text-[11px] font-medium text-white px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: tipoOs.cor }}>{tipoOs.nome}</span>}
+        {tipoOs && <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] font-medium text-ink-muted bg-surface-page border border-surface-border px-2 py-0.5 rounded-full whitespace-nowrap"><span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tipoOs.cor }} aria-hidden />{tipoOs.nome}</span>}
       </div>
 
       {mensagem && (
         <div role={mensagem.tipo === "erro" ? "alert" : "status"} className={cn("flex items-center gap-2 text-sm rounded-lg px-3 py-2 mb-3 border",
-          mensagem.tipo === "ok" ? "bg-green-50 border-green-200 text-green-700" : "bg-red-50 border-red-200 text-red-700")} data-mensagem>
+          mensagem.tipo === "ok" ? "bg-ok-claro border-ok/20 text-ok-texto" : "bg-atrasado-claro border-atrasado/20 text-atrasado-texto")} data-mensagem>
           {mensagem.tipo === "ok" ? <CircleCheck className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />} <span className="flex-1">{mensagem.texto}</span>
           {mensagem.tipo === "erro" && <button type="button" onClick={() => setMensagem(null)} aria-label="Fechar"><X className="w-4 h-4" /></button>}
         </div>
       )}
 
       {!exec ? (
-        <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-gray-300" /></div>
+        <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-ink-subtle" /></div>
       ) : (
         <>
           {somenteLeitura && (
-            <p className="text-sm bg-slate-50 border border-slate-200 text-slate-700 rounded-lg px-3 py-2 mb-3 flex items-center gap-2" data-somente-leitura>
+            <p className="text-sm bg-surface-page border border-surface-border text-ink rounded-lg px-3 py-2 mb-3 flex items-center gap-2" data-somente-leitura>
               <Lock className="w-4 h-4 shrink-0" /> Atividade {exec.atividade.status === "CANCELADA" ? "cancelada" : "concluída"}: só leitura. Para alterar, reabra a atividade na OS — nada do que foi respondido se perde.
             </p>
           )}
@@ -246,24 +246,24 @@ export function AtividadeExecucao({ osId, atividadeId, titulo, osNumero, tipoOs 
             </div>
           )}
 
-          <div className="bg-white rounded-xl border border-gray-200 px-4 py-3 mb-3 flex items-center justify-between gap-3" data-resumo-execucao>
+          <div className="bg-white rounded-card border border-surface-border px-4 py-3 mb-3 flex items-center justify-between gap-3" data-resumo-execucao>
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-gray-800">{resumo!.atendidos} de {resumo!.total} equipamento{resumo!.total === 1 ? "" : "s"} atendido{resumo!.atendidos === 1 ? "" : "s"}</p>
-              <p className="text-xs text-gray-500">
+              <p className="text-sm font-semibold text-ink">{resumo!.atendidos} de {resumo!.total} equipamento{resumo!.total === 1 ? "" : "s"} atendido{resumo!.atendidos === 1 ? "" : "s"}</p>
+              <p className="text-xs text-ink-muted">
                 {exec.conclusao.ok && exec.conclusao.dispensa ? <span data-dispensa-equipamento={exec.conclusao.dispensa.motivo}>{exec.conclusao.dispensa.texto}</span>
                   : exec.conclusao.ok ? "Tudo respondido: pronto para concluir." : exec.conclusao.semEquipamento ? "Nenhum equipamento atendido ainda." : `${exec.conclusao.pendencias.length} equipamento${exec.conclusao.pendencias.length === 1 ? "" : "s"} com pendência.`}
               </p>
             </div>
-            {exec.conclusao.ok ? <CircleCheck className="w-6 h-6 text-success-600 shrink-0" /> : <ClipboardCheck className="w-6 h-6 text-gray-300 shrink-0" />}
+            {exec.conclusao.ok ? <CircleCheck className="w-6 h-6 text-success-600 shrink-0" /> : <ClipboardCheck className="w-6 h-6 text-ink-subtle shrink-0" />}
           </div>
 
           {exec.equipamentos.length === 0 ? (
-            <p className="text-sm text-gray-500 text-center py-8 flex flex-col items-center gap-2 bg-white rounded-xl border border-dashed border-gray-200" data-sem-equipamentos>
-              <HardDrive className="w-6 h-6 text-gray-300" />
+            <p className="text-sm text-ink-muted text-center py-8 flex flex-col items-center gap-2 bg-white rounded-card border border-dashed border-surface-border" data-sem-equipamentos>
+              <HardDrive className="w-6 h-6 text-ink-subtle" />
               Nenhum equipamento nesta atividade.
               {!somenteLeitura && (exec.conclusao.dispensa
-                ? <span className="text-xs text-gray-500 px-6">{exec.conclusao.dispensa.texto}</span>
-                : <span className="text-xs text-gray-400 px-6">Leia o QR Code do equipamento ou escolha na lista da unidade. Para concluir, é preciso pelo menos 1 equipamento atendido.</span>)}
+                ? <span className="text-xs text-ink-muted px-6">{exec.conclusao.dispensa.texto}</span>
+                : <span className="text-xs text-ink-muted px-6">Leia o QR Code do equipamento ou escolha na lista da unidade. Para concluir, é preciso pelo menos 1 equipamento atendido.</span>)}
             </p>
           ) : (
             <div className="space-y-3">
@@ -277,7 +277,7 @@ export function AtividadeExecucao({ osId, atividadeId, titulo, osNumero, tipoOs 
           )}
 
           {pendencias && (pendencias.servidor || !exec.conclusao.ok) && (
-            <div role="alert" className="mt-4 bg-red-50 border border-red-200 text-red-800 rounded-xl px-4 py-3 text-sm space-y-2" data-pendencias>
+            <div role="alert" className="mt-4 bg-atrasado-claro border border-atrasado/20 text-atrasado-texto rounded-card px-4 py-3 text-sm space-y-2" data-pendencias>
               <p className="font-semibold flex items-center gap-2"><AlertCircle className="w-4 h-4" /> Ainda não dá para concluir</p>
               {exec.conclusao.semEquipamento ? (
                 <>
@@ -295,7 +295,7 @@ export function AtividadeExecucao({ osId, atividadeId, titulo, osNumero, tipoOs 
           )}
 
           {!somenteLeitura && (
-            <div className="fixed inset-x-0 z-30 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] bg-white/95 backdrop-blur border-t border-gray-200 px-4 py-3 md:static md:bg-transparent md:border-0 md:px-0 md:mt-5" data-barra-concluir>
+            <div className="fixed inset-x-0 z-30 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] bg-white/95 backdrop-blur border-t border-surface-border px-4 py-3 md:static md:bg-transparent md:border-0 md:px-0 md:mt-5" data-barra-concluir>
               <div className="max-w-2xl mx-auto">
                 <Button type="button" variant={exec.conclusao.ok ? "success" : "secondary"} onClick={concluir} loading={concluindo} className="w-full justify-center" data-concluir>
                   <CircleCheck className="w-4 h-4" /> Concluir atividade
@@ -324,15 +324,15 @@ function ListaEquipamentos({ clienteId, unidadeId, jaVinculados, onFechar, onVin
   const [salvando, setSalvando] = useState(false);
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4" data-lista-equipamentos>
-      <div className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl overflow-hidden max-h-[85vh] flex flex-col">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-          <span className="text-sm font-semibold text-gray-800">Equipamentos {unidadeId ? "da unidade" : "do cliente"}</span>
-          <button onClick={onFechar} className="text-gray-400 hover:text-gray-600" aria-label="Fechar"><X className="w-5 h-5" /></button>
+      <div className="bg-white w-full sm:max-w-md sm:rounded-card rounded-t-card overflow-hidden max-h-[85vh] flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-surface-linha">
+          <span className="text-sm font-semibold text-ink">Equipamentos {unidadeId ? "da unidade" : "do cliente"}</span>
+          <button onClick={onFechar} className="text-ink-muted hover:text-ink" aria-label="Fechar"><X className="w-5 h-5" /></button>
         </div>
         <div className="flex-1 overflow-y-auto p-3">
           <SeletorEquipamentos clienteId={clienteId} unidadeId={unidadeId} excluir={jaVinculados} marcados={marcados} onChange={setMarcados} />
         </div>
-        <div className="p-3 border-t border-gray-100">
+        <div className="p-3 border-t border-surface-linha">
           <Button type="button" className="w-full justify-center" disabled={!marcados.size} loading={salvando} data-vincular
             onClick={async () => { setSalvando(true); try { await onVincular([...marcados]); } finally { setSalvando(false); } }}>
             Vincular {marcados.size ? `(${marcados.size})` : ""}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { acento } from "@/lib/ui/tokens";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { LinkRelatorioAtividade } from "@/components/os/link-relatorio-atividade";
@@ -153,7 +154,7 @@ export function OsRelatorios({ osId }: { osId: string }) {
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold text-ink">{a.titulo}</p>
                       {a.tipoOsNome && (
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded text-white" style={{ backgroundColor: a.tipoOsCor ?? "#0EA5E9" }}>{a.tipoOsNome}</span>
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full text-ink-muted bg-surface-page border border-surface-border"><span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: a.tipoOsCor ?? acento.DEFAULT }} aria-hidden />{a.tipoOsNome}</span>
                       )}
                       <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded", STATUS_ATIVIDADE[a.status])}>{LABEL_STATUS_ATIVIDADE[a.status] ?? a.status}</span>
                     </div>

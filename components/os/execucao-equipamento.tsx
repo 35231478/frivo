@@ -41,8 +41,8 @@ export interface AcoesEquipamento {
 
 const COR_STATUS: Record<StatusItem, string> = {
   OK: "bg-success-600 border-success-600 text-white",
-  ATENCAO: "bg-amber-500 border-amber-500 text-white",
-  NAO_SE_APLICA: "bg-slate-500 border-slate-500 text-white",
+  ATENCAO: "bg-atencao border-atencao text-white",
+  NAO_SE_APLICA: "bg-ink-muted border-ink-subtle text-white",
 };
 const opcoesCampo = (o: unknown): string[] => Array.isArray(o) ? o.map(String) : o && Array.isArray((o as { opcoes?: unknown[] }).opcoes) ? (o as { opcoes: unknown[] }).opcoes.map(String) : [];
 
@@ -50,11 +50,11 @@ const opcoesCampo = (o: unknown): string[] => Array.isArray(o) ? o.map(String) :
 export function situacaoEquipamento(e: EquipamentoTela): { rotulo: string; classe: string; chave: string } {
   const respondidos = e.itens.filter((i) => respondido(i, e.respostas[i.id])).length;
   if (!e.feito) return respondidos || e.fotos.length || (e.observacao ?? "").trim()
-    ? { chave: "nao-atendido", rotulo: "Não atendido", classe: "bg-slate-100 text-slate-600" }
-    : { chave: "nao-iniciado", rotulo: "Não iniciado", classe: "bg-slate-100 text-slate-500" };
+    ? { chave: "nao-atendido", rotulo: "Não atendido", classe: "bg-surface-linha text-ink-muted" }
+    : { chave: "nao-iniciado", rotulo: "Não iniciado", classe: "bg-surface-linha text-ink-muted" };
   if (e.completo) return { chave: "completo", rotulo: "Completo", classe: "bg-success-50 text-success-700" };
   const n = e.faltas.semResposta.length + e.faltas.semFoto.length + e.faltas.semObservacao.length + (e.faltas.formulario ? 1 : 0);
-  return { chave: "pendente", rotulo: `Falta${n === 1 ? "" : "m"} ${n}`, classe: "bg-amber-50 text-amber-700" };
+  return { chave: "pendente", rotulo: `Falta${n === 1 ? "" : "m"} ${n}`, classe: "bg-atencao-claro text-atencao-texto" };
 }
 
 /**
@@ -80,33 +80,33 @@ export function EquipamentoExecucaoCard({ e, aberto, onAlternar, acoes, somenteL
   }
 
   return (
-    <section className={cn("bg-white rounded-xl border overflow-hidden", sit.chave === "completo" ? "border-success-200" : "border-gray-200")} data-equipamento-card={eq.id} data-situacao={sit.chave}>
-      <button type="button" onClick={onAlternar} aria-expanded={aberto} className="w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-gray-50">
+    <section className={cn("bg-white rounded-card border overflow-hidden", sit.chave === "completo" ? "border-success-200" : "border-surface-border")} data-equipamento-card={eq.id} data-situacao={sit.chave}>
+      <button type="button" onClick={onAlternar} aria-expanded={aberto} className="w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-surface-page">
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-2 flex-wrap">
-            <span className="font-semibold text-gray-900">{eq.titulo}</span>
-            {eq.tag && <span className="font-mono text-[10px] font-semibold border border-gray-200 rounded px-1.5 py-0.5 text-gray-600">TAG {eq.tag}</span>}
+            <span className="font-semibold text-ink">{eq.titulo}</span>
+            {eq.tag && <span className="font-mono text-[10px] font-semibold border border-surface-border rounded px-1.5 py-0.5 text-ink-muted">TAG {eq.tag}</span>}
           </span>
-          <span className="block text-xs text-gray-500 mt-0.5">{[eq.tipo?.nome, eq.local, eq.fabricante].filter(Boolean).join(" · ")}</span>
-          {totalAtivos > 0 && <span className="block text-[11px] text-gray-400 mt-0.5" data-progresso>{respondidos} de {totalAtivos} itens respondidos</span>}
+          <span className="block text-xs text-ink-muted mt-0.5">{[eq.tipo?.nome, eq.local, eq.fabricante].filter(Boolean).join(" · ")}</span>
+          {totalAtivos > 0 && <span className="block text-[11px] text-ink-muted mt-0.5" data-progresso>{respondidos} de {totalAtivos} itens respondidos</span>}
         </span>
         <span className={cn("text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap", sit.classe)} data-chip-situacao>{sit.rotulo}</span>
-        <ChevronDown className={cn("w-4 h-4 text-gray-400 shrink-0 mt-0.5 transition-transform", aberto && "rotate-180")} />
+        <ChevronDown className={cn("w-4 h-4 text-ink-muted shrink-0 mt-0.5 transition-transform", aberto && "rotate-180")} />
       </button>
 
       {aberto && (
-        <div className="border-t border-gray-100 px-4 py-3 space-y-4">
+        <div className="border-t border-surface-linha px-4 py-3 space-y-4">
           <input ref={fotoRef} type="file" accept="image/*" capture="environment" multiple onChange={aoEscolherFoto} className="hidden" data-input-foto={eq.id} />
 
           {e.feito && !e.completo && (
-            <p className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2 flex gap-2" data-faltas>
+            <p className="text-xs bg-atencao-claro border border-atencao/20 text-atencao-texto rounded-lg px-3 py-2 flex gap-2" data-faltas>
               <AlertTriangle className="w-4 h-4 shrink-0" /> <span>Falta: {textoFaltas(e.faltas)}.</span>
             </p>
           )}
 
           {/* ── Checklist do tipo ── */}
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Checklist{eq.tipo ? ` — ${eq.tipo.nome}` : ""}</p>
+            <p className="text-xs font-semibold text-ink-muted uppercase mb-2">Checklist{eq.tipo ? ` — ${eq.tipo.nome}` : ""}</p>
             {/* G4: 17 itens não precisam de 17 cliques — igual ao app do técnico */}
             {!somenteLeitura && e.itens.some((i) => i.ativo && i.tipoResposta === "OK_ATENCAO_NA" && !e.respostas[i.id]?.status) && (
               <button type="button" onClick={() => acoes.tudoOk()} data-tudo-ok-desktop
@@ -115,7 +115,7 @@ export function EquipamentoExecucaoCard({ e, aberto, onAlternar, acoes, somenteL
               </button>
             )}
             {e.itens.length === 0 ? (
-              <p className="text-xs text-gray-400" data-sem-checklist>
+              <p className="text-xs text-ink-muted" data-sem-checklist>
                 {eq.tipo ? `O tipo “${eq.tipo.nome}” ainda não tem checklist: cadastre em Configurações › Tipos de equipamento.` : "Equipamento sem tipo: defina o tipo no cadastro para ter checklist."}
               </p>
             ) : (
@@ -132,14 +132,14 @@ export function EquipamentoExecucaoCard({ e, aberto, onAlternar, acoes, somenteL
                   const faltaFoto = it.ativo && exigeExtra && (it.pedirFoto || status === "ATENCAO") && fotosItem.length === 0;
                   const faltaObs = it.ativo && exigeExtra && (it.pedirObservacao || status === "ATENCAO") && !(r?.observacao ?? "").trim() && !r?.audio;
                   return (
-                    <li key={it.id} className="rounded-lg border border-gray-100 p-2.5 space-y-2" data-item={it.id}>
+                    <li key={it.id} className="rounded-lg border border-surface-linha p-2.5 space-y-2" data-item={it.id}>
                       <div className="flex items-start gap-2">
-                        <span className="text-xs text-gray-400 w-5 shrink-0 pt-0.5 text-right">{n + 1}.</span>
-                        <p className={cn("text-sm flex-1", it.ativo ? "text-gray-800" : "text-gray-400")}>
+                        <span className="text-xs text-ink-muted w-5 shrink-0 pt-0.5 text-right">{n + 1}.</span>
+                        <p className={cn("text-sm flex-1", it.ativo ? "text-ink" : "text-ink-muted")}>
                           {it.texto}
-                          {!it.ativo && <span className="ml-1.5 text-[10px] font-semibold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">saiu do checklist</span>}
-                          {it.pedirFoto && <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] text-gray-400"><Camera className="w-3 h-3" /> foto</span>}
-                          {it.pedirObservacao && <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] text-gray-400"><MessageSquareText className="w-3 h-3" /> observação</span>}
+                          {!it.ativo && <span className="ml-1.5 text-[10px] font-semibold bg-surface-linha text-ink-muted px-1.5 py-0.5 rounded">saiu do checklist</span>}
+                          {it.pedirFoto && <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] text-ink-muted"><Camera className="w-3 h-3" /> foto</span>}
+                          {it.pedirObservacao && <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] text-ink-muted"><MessageSquareText className="w-3 h-3" /> observação</span>}
                         </p>
                       </div>
                       {medicao ? (
@@ -150,7 +150,7 @@ export function EquipamentoExecucaoCard({ e, aberto, onAlternar, acoes, somenteL
                           <button key={s} type="button" disabled={somenteLeitura} aria-pressed={status === s} data-resposta={s}
                             onClick={() => acoes.responder(it.id, s)}
                             className={cn("flex-1 min-h-9 px-2 rounded-lg text-xs font-semibold border transition-colors disabled:cursor-default",
-                              status === s ? COR_STATUS[s] : "bg-white border-gray-200 text-gray-600 hover:border-gray-300")}>
+                              status === s ? COR_STATUS[s] : "bg-white border-surface-border text-ink-muted hover:border-surface-border")}>
                             {ROTULO_STATUS[s]}
                           </button>
                         ))}
@@ -166,14 +166,14 @@ export function EquipamentoExecucaoCard({ e, aberto, onAlternar, acoes, somenteL
                           <Textarea rows={2} defaultValue={r?.observacao ?? ""} disabled={somenteLeitura} data-obs-item={it.id}
                             placeholder={it.pedirObservacao ? "Observação (ex.: o valor medido)" : "Descreva o que precisa de atenção"}
                             onBlur={(ev) => { if (ev.target.value.trim() !== (r?.observacao ?? "").trim()) acoes.observarItem(it.id, ev.target.value); }}
-                            className={cn(faltaObs && "border-amber-400")} aria-label={`Observação: ${it.texto}`} />
-                          {faltaObs && <p className="text-[11px] text-amber-700 mt-0.5">{status === "ATENCAO" ? "“Atenção” pede observação." : "Este item pede observação."}</p>}
+                            className={cn(faltaObs && "border-atencao")} aria-label={`Observação: ${it.texto}`} />
+                          {faltaObs && <p className="text-[11px] text-atencao-texto mt-0.5">{status === "ATENCAO" ? "“Atenção” pede observação." : "Este item pede observação."}</p>}
                         </div>
                       )}
                       {mostraFoto && (
                         <div className="pl-7">
                           <Fotos fotos={fotosItem} somenteLeitura={somenteLeitura} onRemover={acoes.removerFoto} onAdicionar={() => escolherFoto(it.id)} dataAttr={`foto-item-${it.id}`} />
-                          {faltaFoto && <p className="text-[11px] text-amber-700 mt-0.5">{status === "ATENCAO" ? "“Atenção” pede foto." : "Este item pede foto."}</p>}
+                          {faltaFoto && <p className="text-[11px] text-atencao-texto mt-0.5">{status === "ATENCAO" ? "“Atenção” pede foto." : "Este item pede foto."}</p>}
                         </div>
                       )}
                     </li>
@@ -185,11 +185,11 @@ export function EquipamentoExecucaoCard({ e, aberto, onAlternar, acoes, somenteL
 
           {/* ── Fotos e observação DESTE equipamento ── */}
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Fotos do equipamento</p>
+            <p className="text-xs font-semibold text-ink-muted uppercase mb-2">Fotos do equipamento</p>
             <Fotos fotos={e.fotos.filter((f) => !f.itemId)} somenteLeitura={somenteLeitura} onRemover={acoes.removerFoto} onAdicionar={() => escolherFoto(null)} dataAttr="fotos-equipamento" />
           </div>
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Observação do equipamento</p>
+            <p className="text-xs font-semibold text-ink-muted uppercase mb-2">Observação do equipamento</p>
             <Textarea rows={2} defaultValue={e.observacao ?? ""} disabled={somenteLeitura} data-obs-equipamento placeholder="O que foi feito, peças trocadas, recomendações…"
               onBlur={(ev) => { if (ev.target.value.trim() !== (e.observacao ?? "").trim()) acoes.observarEquipamento(ev.target.value); }} aria-label="Observação do equipamento" />
           </div>
@@ -199,7 +199,7 @@ export function EquipamentoExecucaoCard({ e, aberto, onAlternar, acoes, somenteL
             <div className="rounded-lg border border-primary-100 bg-primary-50/30 p-3 space-y-3" data-formulario={e.formulario.id}>
               <p className="text-xs font-semibold text-primary-800">
                 Formulário: {e.formulario.nome}
-                {e.formulario.obrigatorioConcluir && <span className="ml-1.5 text-[10px] font-semibold bg-red-50 text-red-600 px-1.5 py-0.5 rounded-full">obrigatório para concluir</span>}
+                {e.formulario.obrigatorioConcluir && <span className="ml-1.5 text-[10px] font-semibold bg-atrasado-claro text-atrasado px-1.5 py-0.5 rounded-full">obrigatório para concluir</span>}
               </p>
               {e.formulario.campos.map((c) => (
                 <CampoFormulario key={c.id} campo={c} valor={e.formulario!.respostas[c.id]} somenteLeitura={somenteLeitura}
@@ -211,7 +211,7 @@ export function EquipamentoExecucaoCard({ e, aberto, onAlternar, acoes, somenteL
           {!somenteLeitura && (
             <div className="flex justify-end">
               {e.feito ? (
-                <button type="button" onClick={() => acoes.marcarAtendido(false)} className="text-xs font-medium text-gray-500 hover:text-gray-800 inline-flex items-center gap-1" data-nao-atendido>
+                <button type="button" onClick={() => acoes.marcarAtendido(false)} className="text-xs font-medium text-ink-muted hover:text-ink inline-flex items-center gap-1" data-nao-atendido>
                   <CircleDashed className="w-3.5 h-3.5" /> Marcar como não atendido
                 </button>
               ) : (
@@ -237,21 +237,21 @@ function Fotos({ fotos, somenteLeitura, onRemover, onAdicionar, dataAttr }: {
           {f.momento && <span className="absolute bottom-1 left-1 z-10 rounded bg-black/60 px-1 text-[10px] font-semibold text-white">{f.momento === "ANTES" ? "Antes" : "Depois"}</span>}
           <a href={`/api/fotos-atendimento/${f.id}`} target="_blank" rel="noreferrer">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={`/api/fotos-atendimento/${f.id}`} alt="Foto do atendimento" className="w-16 h-16 rounded-lg object-cover border border-gray-200" loading="lazy" />
+            <img src={`/api/fotos-atendimento/${f.id}`} alt="Foto do atendimento" className="w-16 h-16 rounded-lg object-cover border border-surface-border" loading="lazy" />
           </a>
           {!somenteLeitura && (
-            <button type="button" onClick={() => onRemover(f.id)} aria-label="Remover foto" className="absolute -top-1.5 -right-1.5 bg-white border border-gray-200 rounded-full p-0.5 text-gray-500 hover:text-red-600">
+            <button type="button" onClick={() => onRemover(f.id)} aria-label="Remover foto" className="absolute -top-1.5 -right-1.5 bg-white border border-surface-border rounded-full p-0.5 text-ink-muted hover:text-atrasado">
               <X className="w-3 h-3" />
             </button>
           )}
         </span>
       ))}
       {!somenteLeitura && (
-        <button type="button" onClick={onAdicionar} className="w-16 h-16 rounded-lg border border-dashed border-gray-300 text-gray-400 hover:text-primary-600 hover:border-primary-300 flex flex-col items-center justify-center text-[10px] gap-0.5" data-adicionar-foto>
+        <button type="button" onClick={onAdicionar} className="w-16 h-16 rounded-lg border border-dashed border-surface-border text-ink-muted hover:text-primary-600 hover:border-primary-300 flex flex-col items-center justify-center text-[10px] gap-0.5" data-adicionar-foto>
           <ImagePlus className="w-4 h-4" /> Foto
         </button>
       )}
-      {somenteLeitura && fotos.length === 0 && <span className="text-xs text-gray-400">Sem fotos.</span>}
+      {somenteLeitura && fotos.length === 0 && <span className="text-xs text-ink-muted">Sem fotos.</span>}
     </div>
   );
 }
@@ -267,8 +267,8 @@ export function CampoFormulario({ campo: c, valor, somenteLeitura, onSalvar }: {
   const aoSair = (novo: string) => { if (novo !== v) onSalvar({ resposta: novo }); };
   return (
     <div className="space-y-1" data-campo-form={c.id}>
-      <label className={cn("text-sm font-medium", c.ativo ? "text-gray-700" : "text-gray-400")}>
-        {c.label}{c.obrigatorio && <span className="text-red-500 ml-0.5">*</span>}{!c.ativo && <span className="ml-1 text-[10px]">(removido)</span>}
+      <label className={cn("text-sm font-medium", c.ativo ? "text-ink" : "text-ink-muted")}>
+        {c.label}{c.obrigatorio && <span className="text-atrasado ml-0.5">*</span>}{!c.ativo && <span className="ml-1 text-[10px]">(removido)</span>}
       </label>
       {c.tipo === "TEXTO_CURTO" && <Input defaultValue={v} disabled={somenteLeitura} onBlur={(e) => aoSair(e.target.value)} aria-label={c.label} />}
       {c.tipo === "TEXTO_LONGO" && <Textarea rows={2} defaultValue={v} disabled={somenteLeitura} onBlur={(e) => aoSair(e.target.value)} aria-label={c.label} />}
@@ -280,7 +280,7 @@ export function CampoFormulario({ campo: c, valor, somenteLeitura, onSalvar }: {
         <div className="flex gap-2">
           {["Sim", "Não"].map((op) => (
             <button key={op} type="button" disabled={somenteLeitura} aria-pressed={v === op} onClick={() => onSalvar({ resposta: op })}
-              className={cn("px-4 py-2 rounded-lg text-sm font-medium border", v === op ? "bg-primary-600 border-primary-600 text-white" : "bg-white border-gray-200 text-gray-600")}>{op}</button>
+              className={cn("px-4 py-2 rounded-lg text-sm font-medium border", v === op ? "bg-primary-600 border-primary-600 text-white" : "bg-white border-surface-border text-ink-muted")}>{op}</button>
           ))}
         </div>
       )}
@@ -293,10 +293,10 @@ export function CampoFormulario({ campo: c, valor, somenteLeitura, onSalvar }: {
         <div className="flex items-center gap-3">
           {valor?.arquivoUrl && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={valor.arquivoUrl} alt={c.label} className="w-16 h-16 rounded-lg object-cover border border-gray-200" />
+            <img src={valor.arquivoUrl} alt={c.label} className="w-16 h-16 rounded-lg object-cover border border-surface-border" />
           )}
           {!somenteLeitura && (
-            <button type="button" disabled={lendo} onClick={() => fotoRef.current?.click()} className="text-xs font-medium border border-gray-200 rounded-lg px-3 py-1.5 inline-flex items-center gap-1 text-gray-600 hover:border-gray-300">
+            <button type="button" disabled={lendo} onClick={() => fotoRef.current?.click()} className="text-xs font-medium border border-surface-border rounded-lg px-3 py-1.5 inline-flex items-center gap-1 text-ink-muted hover:border-surface-border">
               <Camera className="w-4 h-4" /> {valor?.arquivoUrl ? "Trocar foto" : "Tirar foto"}
             </button>
           )}
@@ -337,13 +337,13 @@ function MedicaoItem({ it, r, somenteLeitura, onMedir }: {
             setErro(null);
             if (Number(normal) !== r?.valor) onMedir({ valor: Number(normal) });
           }} />
-        <span className="text-sm font-semibold text-gray-600 min-w-8">{unidade}</span>
+        <span className="text-sm font-semibold text-ink-muted min-w-8">{unidade}</span>
         <button type="button" disabled={somenteLeitura} aria-pressed={na} data-resposta="NAO_SE_APLICA" onClick={() => onMedir({ status: na ? null : "NAO_SE_APLICA" })}
-          className={cn("min-h-9 px-3 rounded-lg text-xs font-semibold border", na ? COR_STATUS.NAO_SE_APLICA : "bg-white border-gray-200 text-gray-600 hover:border-gray-300")}>
+          className={cn("min-h-9 px-3 rounded-lg text-xs font-semibold border", na ? COR_STATUS.NAO_SE_APLICA : "bg-white border-surface-border text-ink-muted hover:border-surface-border")}>
           {ROTULO_STATUS.NAO_SE_APLICA}
         </button>
       </div>
-      {erro && <p className="text-[11px] text-red-600">{erro}</p>}
+      {erro && <p className="text-[11px] text-atrasado">{erro}</p>}
     </div>
   );
 }

@@ -108,7 +108,7 @@ export function ThOrd<K extends string>({ label, k, ordem, dir, onOrdenar, class
   );
 }
 
-/** Alternância Lista ↔ Cards (desktop; no celular a lista compacta é sempre usada). */
+/** Alternância Lista / Cards (desktop; no celular a lista compacta é sempre usada). */
 export function AlternarVisao({ visao, onTrocar }: { visao: Visao; onTrocar: (v: Visao) => void }) {
   return (
     <div className="hidden md:flex items-center bg-surface-alt border border-surface-border rounded-lg p-0.5" data-alternar-visao>

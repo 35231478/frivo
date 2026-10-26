@@ -333,7 +333,7 @@ function MiniCadastro({
                   onChange={(e) => { set(c.nome, e.target.value); if (c.tipo === "cep") buscarCep(e.target.value); }}
                   placeholder={c.placeholder} maxLength={c.maxLength ?? (c.tipo === "cep" ? 9 : undefined)}
                   inputMode={c.tipo === "cep" ? "numeric" : c.inputMode}
-                  className={cn(inputCls, faltando.has(c.nome) && "border-atrasado/40 focus:border-atrasado focus:ring-red-500/10")}
+                  className={cn(inputCls, faltando.has(c.nome) && "border-atrasado/40 focus:border-atrasado focus:ring-atrasado/10")}
                 />
               )}
             </label>

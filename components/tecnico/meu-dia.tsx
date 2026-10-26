@@ -8,10 +8,10 @@ import type { CartaoTela, OperacaoFila } from "@/lib/tecnico/offline/tipos";
 import { diaCivilDeChave, diasAteDiaCivil, horaBR, partesBR } from "@/lib/fuso";
 
 export const ROTULO_STATUS_ATIVIDADE: Record<string, { rotulo: string; classe: string }> = {
-  AGENDADA: { rotulo: "Agendada", classe: "bg-violet-100 text-violet-700" },
-  EM_ANDAMENTO: { rotulo: "Em andamento", classe: "bg-amber-100 text-amber-800" },
+  AGENDADA: { rotulo: "Agendada", classe: "bg-acento-claro text-acento-hover" },
+  EM_ANDAMENTO: { rotulo: "Em andamento", classe: "bg-atencao-claro text-atencao-texto" },
   CONCLUIDA: { rotulo: "Concluída", classe: "bg-success-100 text-success-700" },
-  CANCELADA: { rotulo: "Cancelada", classe: "bg-red-100 text-red-700" },
+  CANCELADA: { rotulo: "Cancelada", classe: "bg-atrasado-claro text-atrasado-texto" },
 };
 
 /** Prioridades que merecem destaque no cartão */
@@ -28,9 +28,9 @@ export function situacaoLocal(c: CartaoTela, fila: OperacaoFila[]) {
 
 export function CartaoAtividade({ c, fila, mostrarDia }: { c: CartaoTela; fila: OperacaoFila[]; mostrarDia?: boolean }) {
   const { status, aEnviar } = situacaoLocal(c, fila);
-  const st = ROTULO_STATUS_ATIVIDADE[status] ?? { rotulo: status, classe: "bg-slate-100 text-slate-700" };
+  const st = ROTULO_STATUS_ATIVIDADE[status] ?? { rotulo: status, classe: "bg-surface-linha text-ink" };
   return (
-    <article className="bg-white rounded-2xl border border-surface-border shadow-card overflow-hidden" data-cartao={c.atividadeId}>
+    <article className="bg-white rounded-card border border-surface-border shadow-card overflow-hidden" data-cartao={c.atividadeId}>
       <button type="button" onClick={() => irPara({ ver: "os", a: c.atividadeId })} className="w-full text-left p-4 flex gap-3 active:bg-surface-alt">
         <div className="w-16 shrink-0 text-center">
           <div className="text-xl font-bold text-ink leading-tight" data-hora>{c.hora ?? "—"}</div>
@@ -48,11 +48,11 @@ export function CartaoAtividade({ c, fila, mostrarDia }: { c: CartaoTela; fila: 
           {c.endereco && <p className="text-sm text-ink mt-1 flex gap-1"><MapPin className="w-4 h-4 text-ink-subtle shrink-0 mt-0.5" /><span className="line-clamp-2">{c.endereco}</span></p>}
           <div className="flex flex-wrap items-center gap-1.5 mt-2">
             <span className={cn("text-xs font-semibold rounded-full px-2 py-0.5", st.classe)} data-status={status}>{st.rotulo}</span>
-            <span className="text-xs font-medium rounded-full px-2 py-0.5 bg-slate-100 text-slate-700 inline-flex items-center gap-1" data-equipamentos={c.equipamentos}>
+            <span className="text-xs font-medium rounded-full px-2 py-0.5 bg-surface-linha text-ink inline-flex items-center gap-1" data-equipamentos={c.equipamentos}>
               <HardDrive className="w-3 h-3" /> {c.equipamentos === 1 ? "1 equipamento" : `${c.equipamentos} equipamentos`}
             </span>
-            {PRIORIDADE[c.prioridade] && <span className="text-xs font-semibold rounded-full px-2 py-0.5 bg-red-100 text-red-700">{PRIORIDADE[c.prioridade]}</span>}
-            {aEnviar > 0 && <span className="text-xs font-semibold rounded-full px-2 py-0.5 bg-amber-100 text-amber-800">{aEnviar} a enviar</span>}
+            {PRIORIDADE[c.prioridade] && <span className="text-xs font-semibold rounded-full px-2 py-0.5 bg-atrasado-claro text-atrasado-texto">{PRIORIDADE[c.prioridade]}</span>}
+            {aEnviar > 0 && <span className="text-xs font-semibold rounded-full px-2 py-0.5 bg-atencao-claro text-atencao-texto">{aEnviar} a enviar</span>}
           </div>
         </div>
       </button>
@@ -129,9 +129,9 @@ export function MeuDia() {
         <AvisoAparelho baixadoEm={r?.baixadoEm ?? null} onAtualizar={carregar} atualizando={atualizando} />
       </header>
 
-      {!r && <div className="space-y-3">{[0, 1].map((i) => <div key={i} className="h-32 rounded-2xl bg-white border border-surface-border animate-pulse" />)}</div>}
-      {r && !d && <p className="rounded-xl bg-white border border-surface-border p-4 text-sm text-ink-muted">Sem sinal e nada guardado no aparelho ainda. Abra o app com internet uma vez para baixar o seu dia.</p>}
-      {d?.aviso && <p className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-900" data-aviso>{d.aviso}</p>}
+      {!r && <div className="space-y-3">{[0, 1].map((i) => <div key={i} className="h-32 rounded-card bg-white border border-surface-border animate-pulse" />)}</div>}
+      {r && !d && <p className="rounded-card bg-white border border-surface-border p-4 text-sm text-ink-muted">Sem sinal e nada guardado no aparelho ainda. Abra o app com internet uma vez para baixar o seu dia.</p>}
+      {d?.aviso && <p className="rounded-card bg-atencao-claro border border-atencao/20 p-4 text-sm text-atencao-texto" data-aviso>{d.aviso}</p>}
 
       {d && d.anteriores.length > 0 && (
         <section className="space-y-2">
@@ -146,7 +146,7 @@ export function MeuDia() {
         </section>
       )}
       {d && d.tecnico && !d.atividades.length && !d.anteriores.length && (
-        <div className="rounded-2xl bg-white border border-surface-border p-6 text-center space-y-2">
+        <div className="rounded-card bg-white border border-surface-border p-6 text-center space-y-2">
           <Clock className="w-8 h-8 text-ink-subtle mx-auto" />
           <p className="font-semibold text-ink">Dia livre por enquanto</p>
           <p className="text-sm text-ink-muted">Quando o escritório agendar uma OS para você, ela aparece aqui.</p>
@@ -185,9 +185,9 @@ export function Agenda() {
         <p className="text-sm text-ink-muted">Hoje e os próximos 14 dias.</p>
         <AvisoAparelho baixadoEm={r?.baixadoEm ?? null} onAtualizar={carregar} atualizando={atualizando} />
       </header>
-      {!r && <div className="h-32 rounded-2xl bg-white border border-surface-border animate-pulse" />}
-      {d?.aviso && <p className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-900">{d.aviso}</p>}
-      {d && d.tecnico && !d.dias.length && <p className="rounded-xl bg-white border border-surface-border p-4 text-sm text-ink-muted">Nada agendado nos próximos dias.</p>}
+      {!r && <div className="h-32 rounded-card bg-white border border-surface-border animate-pulse" />}
+      {d?.aviso && <p className="rounded-card bg-atencao-claro border border-atencao/20 p-4 text-sm text-atencao-texto">{d.aviso}</p>}
+      {d && d.tecnico && !d.dias.length && <p className="rounded-card bg-white border border-surface-border p-4 text-sm text-ink-muted">Nada agendado nos próximos dias.</p>}
       {d?.dias.map((g) => (
         <section key={g.dia} className="space-y-2">
           <h2 className="text-sm font-bold text-ink capitalize">{nomeDia(g.dia)} <span className="text-ink-muted font-medium">· {g.atividades.length}</span></h2>

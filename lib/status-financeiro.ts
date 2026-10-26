@@ -19,9 +19,9 @@ export const LABELS_STATUS_FINANCEIRO_CALC: Record<StatusFinanceiroCalc, string>
 };
 
 export const COR_STATUS_FINANCEIRO_CALC: Record<StatusFinanceiroCalc, string> = {
-  SEM_HISTORICO: "bg-slate-100 text-slate-600",
+  SEM_HISTORICO: "bg-surface-linha text-ink-muted",
   ADIMPLENTE: "bg-success-50 text-success-700",
-  INADIMPLENTE: "bg-red-50 text-red-700",
+  INADIMPLENTE: "bg-atrasado-claro text-atrasado-texto",
 };
 
 /** Vencimento é dia civil: em atraso só depois do dia de Brasília (não às 21h da véspera). */

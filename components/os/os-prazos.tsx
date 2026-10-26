@@ -1,6 +1,7 @@
 "use client";
 
 import { confirmar } from "@/components/ui/avisos";
+import { acento } from "@/lib/ui/tokens";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
@@ -103,7 +104,7 @@ export function OsPrazos({ osId }: { osId: string }) {
               <div key={p.id} className="border border-surface-border rounded-lg p-4">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full" style={{ backgroundColor: p.template?.cor ?? "#0EA5E9" }} />
+                    <span className="w-3 h-3 rounded-full" style={{ backgroundColor: p.template?.cor ?? acento.DEFAULT }} />
                     <span className="font-semibold text-ink">{p.nome}</span>
                     <span className={cn(
                       "text-xs font-medium px-2 py-0.5 rounded-full",
@@ -147,7 +148,7 @@ export function OsPrazos({ osId }: { osId: string }) {
                               {LABELS_RESPONSAVEL_PRAZO[e.responsavel]} · prazo {formatarPrazoHoras(e.prazoHoras)} · limite {formatarDataHora(e.prazoLimite)}
                             </p>
                             {concluida && e.concluidaEm && (
-                              <p className="text-[11px] text-success-700">✅ Concluída em {formatarDataHora(e.concluidaEm)}{e.concluidaPor ? ` por ${e.concluidaPor}` : ""}</p>
+                              <p className="inline-flex items-center gap-1 text-[11px] text-ok-texto"><CheckCircle2 className="w-3 h-3" aria-hidden="true" /> Concluída em {formatarDataHora(e.concluidaEm)}{e.concluidaPor ? ` por ${e.concluidaPor}` : ""}</p>
                             )}
                           </div>
                         </div>

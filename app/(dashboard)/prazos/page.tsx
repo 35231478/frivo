@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { acento } from "@/lib/ui/tokens";
 import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
 import { ListaUrl, PaginacaoUrl } from "@/components/listagem/lista-url";
 import Link from "next/link";
@@ -98,7 +99,7 @@ export default async function PrazosPage({
               return (
                 <Link key={p.id} href={`/ordens/${p.ordemServico.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-primary-50/40 transition-colors gap-3">
                   <div className="flex items-center gap-3 min-w-0">
-                    <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: p.template?.cor ?? "#0EA5E9" }} />
+                    <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: p.template?.cor ?? acento.DEFAULT }} />
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-ink truncate">
                         <span className="font-mono text-primary-600">{p.ordemServico.numero}</span> · {p.nome}
@@ -111,7 +112,7 @@ export default async function PrazosPage({
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     {atual && (
-                      <span className={cn("text-xs flex items-center gap-1", atrasado ? "text-red-700 font-semibold" : "text-ink-muted")}>
+                      <span className={cn("text-xs flex items-center gap-1", atrasado ? "text-atrasado-texto font-semibold" : "text-ink-muted")}>
                         {atrasado ? <AlertTriangle className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
                         {formatarDataHora(atual.prazoLimite)}
                       </span>
@@ -119,8 +120,8 @@ export default async function PrazosPage({
                     <span className={cn(
                       "text-xs font-medium px-2 py-0.5 rounded-full",
                       p.status === "CONCLUIDO" ? "bg-success-50 text-success-700" :
-                      atrasado ? "bg-red-50 text-red-700" :
-                      p.status === "CANCELADO" ? "bg-slate-100 text-slate-500" : "bg-primary-50 text-primary-700",
+                      atrasado ? "bg-atrasado-claro text-atrasado-texto" :
+                      p.status === "CANCELADO" ? "bg-surface-linha text-ink-muted" : "bg-primary-50 text-primary-700",
                     )}>{LABELS_STATUS_OS_PRAZO[p.status]}</span>
                   </div>
                 </Link>

@@ -15,11 +15,11 @@ export function BotaoFoto({ onFoto, rotulo = "Tirar foto", grande, desabilitado,
   return (
     <>
       <button type="button" disabled={desabilitado || lendo} onClick={() => ref.current?.click()}
-        className={cn("inline-flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primary-300 bg-primary-50 text-primary-700 font-semibold touch-target disabled:opacity-50",
+        className={cn("inline-flex items-center justify-center gap-2 rounded-card border-2 border-dashed border-primary-300 bg-primary-50 text-primary-700 font-semibold touch-target disabled:opacity-50",
           grande ? "px-4 py-4 text-base w-full" : "px-3 py-2 text-sm", className)}>
         {lendo ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />} {rotulo}
       </button>
-      {erro && <p className="text-xs text-red-600 mt-1">{erro}</p>}
+      {erro && <p className="text-xs text-atrasado mt-1">{erro}</p>}
       <input ref={ref} type="file" accept="image/*" capture="environment" className="hidden" data-foto-input onChange={async (e) => {
         const f = e.target.files?.[0];
         e.target.value = "";
@@ -152,22 +152,22 @@ export function ObservacaoVoz({ valor, onSalvar, aoDigitar, audio, onAudio, rotu
   return (
     <div className="space-y-2" data-observacao-voz>
       <label className="block text-sm font-semibold text-ink">
-        {rotulo}{obrigatoria && <span className="text-red-600 ml-0.5">*</span>}
+        {rotulo}{obrigatoria && <span className="text-atrasado ml-0.5">*</span>}
       </label>
       <textarea value={texto} rows={2} disabled={desabilitado} autoFocus={autoFocus} placeholder={placeholder ?? "Escreva, dite ou grave um áudio"}
         onChange={(e) => { setTexto(e.target.value); aoDigitar?.(e.target.value); }} onBlur={(e) => salvar(e.target.value)} aria-label={rotulo}
-        className="w-full rounded-xl border border-surface-border px-3 py-2.5 text-base focus:outline-none focus:ring-4 focus:ring-primary-500/20 disabled:bg-surface-alt" />
+        className="w-full rounded-card border border-surface-border px-3 py-2.5 text-base focus:outline-none focus:ring-4 focus:ring-primary-500/20 disabled:bg-surface-alt" />
       <div className="flex flex-wrap items-center gap-2">
         {ditar && (
           <button type="button" onClick={() => (ouvindo ? rec.current?.stop() : iniciarDitado())} data-ditar
-            className={cn("inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold touch-target", ouvindo ? "bg-red-600 text-white animate-pulse" : "bg-primary-50 text-primary-700 border border-primary-200")}>
+            className={cn("inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold touch-target", ouvindo ? "bg-atrasado text-white animate-pulse" : "bg-primary-50 text-primary-700 border border-primary-200")}>
             <Mic className="w-4 h-4" /> {ouvindo ? "Ouvindo… toque para parar" : "Ditar"}
           </button>
         )}
         {gravar && !audio && (
           <button type="button" onClick={() => (gravando ? gravador.current?.parar() : iniciarGravacao())} data-gravar
-            className={cn("inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold touch-target", gravando ? "bg-red-600 text-white" : "bg-white text-ink border border-surface-border")}>
-            {gravando ? <><Square className="w-4 h-4" /> Parar ({gravando}s)</> : <><span className="w-2.5 h-2.5 rounded-full bg-red-600" /> Gravar áudio</>}
+            className={cn("inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold touch-target", gravando ? "bg-atrasado text-white" : "bg-white text-ink border border-surface-border")}>
+            {gravando ? <><Square className="w-4 h-4" /> Parar ({gravando}s)</> : <><span className="w-2.5 h-2.5 rounded-full bg-atrasado" /> Gravar áudio</>}
           </button>
         )}
         {!online && !ditar && (
@@ -177,14 +177,14 @@ export function ObservacaoVoz({ valor, onSalvar, aoDigitar, audio, onAudio, rotu
         )}
       </div>
       {audio && (
-        <div className="flex items-center gap-2 rounded-xl bg-surface-alt border border-surface-border p-2" data-audio>
+        <div className="flex items-center gap-2 rounded-card bg-surface-alt border border-surface-border p-2" data-audio>
           <audio controls src={audio} className="h-9 flex-1 min-w-0" preload="none" />
           {onAudio && !desabilitado && (
-            <button type="button" onClick={() => onAudio(null)} aria-label="Apagar áudio" className="p-2 text-ink-muted hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
+            <button type="button" onClick={() => onAudio(null)} aria-label="Apagar áudio" className="p-2 text-ink-muted hover:text-atrasado"><Trash2 className="w-4 h-4" /></button>
           )}
         </div>
       )}
-      {aviso && <p className="text-xs text-amber-700">{aviso}</p>}
+      {aviso && <p className="text-xs text-atencao-texto">{aviso}</p>}
     </div>
   );
 }

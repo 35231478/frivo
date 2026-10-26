@@ -76,21 +76,52 @@ describe("tokens: definidos uma vez e com contraste acessível (4.5:1)", () => {
   });
 });
 
-describe("regras da identidade no shell e nas telas-vitrine", () => {
-  const arquivos = [
-    ...readdirSync(path.join(RAIZ, "components/layout")).map((f) => `components/layout/${f}`),
-    ...readdirSync(path.join(RAIZ, "components/os/central")).map((f) => `components/os/central/${f}`),
-    "components/os/os-detalhe.tsx", "components/ordens/ordens-lista-client.tsx", "components/acoes-massa/barra.tsx",
-    ...["button", "card", "status-pill", "stepper", "kpi", "tabs", "modal", "drawer", "input", "select", "textarea", "form-field", "toggle-switch", "page-header"]
-      .map((f) => `components/ui/${f}.tsx`),
-  ];
-  it.each(arquivos)("%s: sem degradê, sem borda colorida à esquerda, sem emoji, sem cor fora do sistema", (rel) => {
+/** Todos os .tsx de uma pasta (recursivo) ou o próprio arquivo. */
+function tsx(rel: string): string[] {
+  const abs = path.join(RAIZ, rel);
+  if (rel.endsWith(".tsx")) return [rel];
+  return readdirSync(abs, { withFileTypes: true }).flatMap((d) =>
+    d.isDirectory() ? tsx(`${rel}/${d.name}`) : d.name.endsWith(".tsx") ? [`${rel}/${d.name}`] : []);
+}
+
+/**
+ * Telas já varridas pelo sistema de design, por fase/lote. Cada lote novo entra aqui e passa a ser
+ * protegido pelas regras da identidade.
+ */
+const VARRIDAS: Record<string, string[]> = {
+  "fase 1 (shell + vitrines)": [
+    "components/layout", "components/os/central", "components/os/os-detalhe.tsx", "components/ordens/ordens-lista-client.tsx",
+    "components/acoes-massa", "components/listagem", "components/ui",
+  ],
+  "lote 1 (uso diário)": [
+    "components/os", "app/(dashboard)/ordens", "components/tecnico", "app/tecnico", "components/calendario", "app/(dashboard)/calendario",
+    "components/dashboard", "app/(dashboard)/dashboard", "app/(dashboard)/financeiro/page.tsx", "app/(dashboard)/prazos",
+  ],
+};
+
+// Paleta solta do Tailwind (com variantes e opacidade): tudo deve vir dos tokens
+const COR_SOLTA = /\b(?:bg|text|border|ring|divide|fill|stroke|outline|accent|placeholder|decoration|shadow)-(?:gray|slate|zinc|neutral|stone|red|amber|orange|yellow|green|emerald|blue|sky|cyan|indigo|violet|purple|fuchsia|pink|rose|teal|lime)-\d{2,3}\b/;
+const DEGRADE = /bg-gradient|linearGradient|radialGradient|\b(?:from|via|to)-(?:[a-z]+-\d{2,3}|surface|ink|acento|ok|atencao|atrasado|previsto|primary|success|sidebar)\b/;
+// Borda grossa à esquerda com cor (o "card com faixa colorida"), em qualquer forma
+const BORDA_ESQUERDA = /border-l-(?:\[\d+px\]|[2-8])\b[^"`]*\bborder-l?-?(?:acento|ok|atencao|atrasado|primary|success|[a-z]+-\d{2,3})\b|\bborder-l-(?:acento|ok|atencao|atrasado|primary-\d+|success-\d+)\b|absolute left-0[^"]*w-1[^"]*rounded-r/;
+const NAVY = /#14498F|#0F2744|bg-sidebar|from-sidebar/;
+// Hex usado para PINTAR (style/fill/stroke ou fallback de cor): deve vir de lib/ui/tokens.ts.
+// Hex como dado (ex.: valor padrão de um campo "cor" que o usuário escolhe) não conta.
+const HEX = /(?:backgroundColor|color|borderColor|fill|stroke|stopColor)\s*[:=]\s*\{?\s*["'`]#[0-9A-Fa-f]{3,6}|\?\?\s*["'`]#[0-9A-Fa-f]{3,6}/;
+
+describe("regras da identidade nas telas varridas", () => {
+  const casos = Object.entries(VARRIDAS).flatMap(([lote, alvos]) => [...new Set(alvos.flatMap(tsx))].map((f) => [lote, f] as const));
+  it("cada lote cobre arquivos de verdade", () => {
+    for (const lote of Object.keys(VARRIDAS)) expect(casos.filter(([l]) => l === lote).length).toBeGreaterThan(3);
+  });
+  it.each(casos)("[%s] %s: sem degradê, faixa à esquerda, emoji, navy, hex ou cor fora do sistema", (_lote, rel) => {
     const src = ler(rel);
-    expect(src).not.toMatch(/bg-gradient|linearGradient|from-[a-z]+-\d{2,3}/);
-    expect(src).not.toMatch(/border-l-[2-8]\s[^"]*border-(?!surface)[a-z]+-\d{2,3}|absolute left-0[^"]*w-1[^"]*rounded-r/);
+    expect(src).not.toMatch(DEGRADE);
+    expect(src).not.toMatch(BORDA_ESQUERDA);
     expect(src).not.toMatch(/\p{Extended_Pictographic}/u);
-    expect(src).not.toMatch(/\b(?:bg|text|border|ring|divide)-(?:gray|slate|red|amber|orange|yellow|green|emerald|blue|sky|cyan|indigo|violet|purple|pink|rose|teal|lime)-\d{2,3}\b/);
-    expect(src).not.toMatch(/#14498F|bg-sidebar/); // o azul do módulo Financeiro e o navy saíram do shell
+    expect(src).not.toMatch(COR_SOLTA);
+    expect(src).not.toMatch(NAVY);
+    expect(src).not.toMatch(HEX);
   });
 });
 

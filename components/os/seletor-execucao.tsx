@@ -91,7 +91,7 @@ export function SeletorExecucao({ opcoes, tipoOsId, valor, onChange, erro }: {
 
   return (
     <div className="space-y-3" data-seletor-execucao>
-      <div className={cn("rounded-lg", erro && !temExecutor(valor) && "ring-2 ring-red-300 ring-offset-2")} data-erro-executor={erro && !temExecutor(valor) ? "" : undefined}>
+      <div className={cn("rounded-lg", erro && !temExecutor(valor) && "ring-2 ring-atrasado/40 ring-offset-2")} data-erro-executor={erro && !temExecutor(valor) ? "" : undefined}>
         <SeletorTecnicos
           tecnicos={opcoes.tecnicos} equipes={opcoes.equipes} tipoOsId={tipoOsId} valor={valor} onChange={mudarTecnicos}
           carregando={opcoes.carregando} onTecnicoCriado={opcoes.adicionarTecnico} onCompetencia={(id) => opcoes.marcarCompetencia(id, tipoOsId)}

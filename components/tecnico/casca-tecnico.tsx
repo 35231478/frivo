@@ -8,9 +8,9 @@ import { ArrowLeft } from "lucide-react";
 export function CascaTecnico({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-surface-page">
-      <header className="sticky top-0 z-30 bg-sidebar text-white safe-top">
+      <header className="sticky top-0 z-30 bg-white border-b border-surface-border safe-top">
         <div className="flex items-center gap-2 px-3 h-14">
-          <Link href="/tecnico" className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold hover:bg-white/10 touch-target">
+          <Link href="/tecnico" className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-ink hover:bg-surface-page touch-target">
             <ArrowLeft className="w-5 h-5" /> Meu dia
           </Link>
         </div>

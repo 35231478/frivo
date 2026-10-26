@@ -32,7 +32,7 @@ export function StarRating({ value, onChange, size = "md", readOnly = !onChange 
             className={cn(
               sizeClass,
               n <= current
-                ? "text-atencao fill-amber-400"
+                ? "text-atencao fill-atencao"
                 : "text-ink-subtle",
             )}
           />

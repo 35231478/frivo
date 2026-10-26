@@ -50,15 +50,15 @@ function Casca({ perfilInicial }: { perfilInicial: PerfilInicial }) {
   return (
     <div className="min-h-screen bg-surface-page">
       <Avisos />
-      <header className="sticky top-0 z-30 bg-sidebar text-white safe-top">
+      <header className="sticky top-0 z-30 bg-white border-b border-surface-border safe-top">
         <div className="flex items-center justify-between gap-2 px-4 h-14 max-w-2xl mx-auto">
-          <button type="button" onClick={() => irPara({ ver: "dia" })} className="inline-flex items-center gap-2 font-bold">
-            <FrivoMark size={28} /> <span>Frivo <span className="font-medium text-slate-300">· Técnico</span></span>
+          <button type="button" onClick={() => irPara({ ver: "dia" })} className="inline-flex items-center gap-2 rounded-lg font-display font-bold text-ink">
+            <FrivoMark size={28} /> <span>Frivo <span className="font-sans font-medium text-ink-muted">· Técnico</span></span>
           </button>
           <IndicadorSync estado={estado} onClick={() => irPara({ ver: "perfil" })} />
         </div>
       </header>
-      {semBanco && <p className="bg-red-600 text-white text-sm px-4 py-2">Este navegador não guarda dados no aparelho (modo anônimo?). Sem sinal, nada pode ser gravado.</p>}
+      {semBanco && <p className="bg-atrasado text-white text-sm px-4 py-2">Este navegador não guarda dados no aparelho (modo anônimo?). Sem sinal, nada pode ser gravado.</p>}
       <main className="max-w-2xl mx-auto px-4 pt-4 pb-28">
         {!vista || !motor ? <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-ink-subtle" /></div> : <Conteudo vista={vista} perfilInicial={perfilInicial} />}
       </main>
@@ -66,7 +66,7 @@ function Casca({ perfilInicial }: { perfilInicial: PerfilInicial }) {
         <div className="grid grid-cols-3 max-w-2xl mx-auto">
           {NAV.map(({ ver, rotulo, Icone }) => (
             <button key={ver} type="button" onClick={() => irPara({ ver } as Vista)} aria-current={ativa === ver ? "page" : undefined} data-nav={ver}
-              className={cn("flex flex-col items-center justify-center gap-0.5 py-2.5 touch-target", ativa === ver ? "text-primary-600" : "text-ink-muted")}>
+              className={cn("flex flex-col items-center justify-center gap-0.5 py-2.5 touch-target", ativa === ver ? "text-acento" : "text-ink-muted")}>
               <Icone className="w-6 h-6" />
               <span className="text-xs font-semibold">{rotulo}</span>
             </button>

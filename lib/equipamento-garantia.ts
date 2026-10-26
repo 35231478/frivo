@@ -24,9 +24,9 @@ export const LABELS_SITUACAO_GARANTIA: Record<SituacaoGarantia, string> = {
 };
 
 export const COR_SITUACAO_GARANTIA: Record<SituacaoGarantia, string> = {
-  vigente: "text-emerald-700 bg-emerald-50",
-  vencendo: "text-amber-700 bg-amber-50",
-  vencida: "text-red-600 bg-red-50",
+  vigente: "text-ok-texto bg-ok-claro",
+  vencendo: "text-atencao-texto bg-atencao-claro",
+  vencida: "text-atrasado bg-atrasado-claro",
 };
 
 /** Dias até o fim da garantia (negativo = vencida há N dias). */

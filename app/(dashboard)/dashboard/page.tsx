@@ -77,7 +77,7 @@ export default async function DashboardPage() {
       </div>
 
       {visiveis.length === 0 ? (
-        <div className="bg-white rounded-xl border border-dashed border-surface-border p-10 text-center">
+        <div className="bg-white rounded-card border border-dashed border-surface-border p-10 text-center">
           <LayoutDashboard className="w-8 h-8 text-ink-subtle mx-auto mb-2" />
           <p className="text-sm text-ink-muted">
             {todos.length === 0

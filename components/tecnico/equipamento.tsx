@@ -27,8 +27,8 @@ const mostrarNumero = (v: number | null) => (v === null ? "" : String(v).replace
 
 const CHIP: Record<StatusItem, { rotulo: string; ativo: string; Icone: typeof Check }> = {
   OK: { rotulo: "OK", ativo: "bg-success-600 border-success-600 text-white", Icone: Check },
-  ATENCAO: { rotulo: "Atenção", ativo: "bg-amber-500 border-amber-500 text-white", Icone: AlertTriangle },
-  NAO_SE_APLICA: { rotulo: "N/A", ativo: "bg-slate-600 border-slate-600 text-white", Icone: CircleSlash },
+  ATENCAO: { rotulo: "Atenção", ativo: "bg-atencao border-atencao text-white", Icone: AlertTriangle },
+  NAO_SE_APLICA: { rotulo: "N/A", ativo: "bg-ink-muted border-ink-muted text-white", Icone: CircleSlash },
 };
 
 interface Props {
@@ -105,7 +105,7 @@ export function TelaEquipamento({ x, e, registrar }: Props) {
         <ArrowLeft className="w-4 h-4" /> Equipamentos da OS
       </button>
 
-      <header className="bg-white rounded-2xl border border-surface-border p-4 space-y-2">
+      <header className="bg-white rounded-card border border-surface-border p-4 space-y-2">
         <p className="text-xs font-semibold text-ink-muted">Equipamento {posicao + 1} de {x.equipamentos.length}</p>
         <h1 className="text-xl font-bold text-ink leading-tight">{e.equipamento.titulo}</h1>
         <p className="text-sm text-ink-muted">
@@ -123,15 +123,15 @@ export function TelaEquipamento({ x, e, registrar }: Props) {
         </p>
       </header>
 
-      {so && <p className="rounded-xl bg-success-50 border border-success-200 p-3 text-sm text-success-800">Atividade concluída: só leitura.</p>}
+      {so && <p className="rounded-card bg-success-50 border border-success-200 p-3 text-sm text-success-800">Atividade concluída: só leitura.</p>}
       {mostrarFaltas && !e.completo && (
-        <div className="rounded-xl bg-red-50 border border-red-200 p-3 text-sm text-red-800" role="alert" data-faltas>
+        <div className="rounded-card bg-atrasado-claro border border-atrasado/20 p-3 text-sm text-atrasado-texto" role="alert" data-faltas>
           <p className="font-semibold">Para concluir este equipamento, falta:</p>
           <ul className="mt-1 space-y-0.5">
             {pendencias.map((p) => (
               <li key={p.chave}>
                 <button type="button" data-pendencia onClick={() => irAoItem(p.alvo)}
-                  className="w-full text-left py-1 underline underline-offset-2 decoration-red-300 active:text-red-950 touch-target">
+                  className="w-full text-left py-1 underline underline-offset-2 decoration-atrasado-claro active:text-atrasado-texto touch-target">
                   {p.rotulo} ›
                 </button>
               </li>
@@ -147,7 +147,7 @@ export function TelaEquipamento({ x, e, registrar }: Props) {
 
       {ativos.length > 0 && !so && (
         <button type="button" onClick={() => registrar([op({ tipo: "tudoOk" })])} disabled={!semResposta} data-tudo-ok
-          className="w-full rounded-2xl bg-success-600 text-white py-5 text-lg font-extrabold tracking-wide shadow-card active:bg-success-700 disabled:bg-success-200 disabled:text-success-700 inline-flex items-center justify-center gap-2 touch-target">
+          className="w-full rounded-card bg-success-600 text-white py-5 text-lg font-extrabold tracking-wide shadow-card active:bg-success-700 disabled:bg-success-200 disabled:text-success-700 inline-flex items-center justify-center gap-2 touch-target">
           <CheckCheck className="w-6 h-6" /> {semResposta ? "TUDO OK" : "Tudo respondido"}
         </button>
       )}
@@ -157,7 +157,7 @@ export function TelaEquipamento({ x, e, registrar }: Props) {
         {!e.itens.length && <p className="text-sm text-ink-muted">Este tipo de equipamento ainda não tem checklist. Registre as fotos e a observação.</p>}
         <ol className="space-y-3">
           {e.itens.map((it) => (
-            <li key={it.id} data-item={it.id} className={cn("rounded-xl border p-3 space-y-2 bg-white", mostrarFaltas && faltando.has(it.texto) ? "border-red-400 ring-2 ring-red-100" : "border-surface-border", !it.ativo && "opacity-70")}>
+            <li key={it.id} data-item={it.id} className={cn("rounded-card border p-3 space-y-2 bg-white", mostrarFaltas && faltando.has(it.texto) ? "border-atrasado ring-2 ring-atrasado/20" : "border-surface-border", !it.ativo && "opacity-70")}>
               {it.tipoResposta === "MEDICAO"
                 ? <ItemMedicao item={it} r={e.respostas[it.id]} so={so} onResponder={(d) => responder(it.id, d)} />
                 : <ItemChips item={it} r={e.respostas[it.id]} so={so} onStatus={(s) => tocarStatus(it, s)} onEditarAtencao={() => setAtencao(it)} />}
@@ -208,9 +208,9 @@ export function TelaEquipamento({ x, e, registrar }: Props) {
       )}
 
       {!so && (
-        <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 px-4 pb-2 pt-2 bg-gradient-to-t from-surface-page via-surface-page to-transparent">
+        <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 px-4 pb-2 pt-2 bg-surface-page/95 backdrop-blur border-t border-surface-border">
           <button type="button" onClick={concluirEquipamento} data-concluir-equipamento
-            className={cn("w-full rounded-2xl py-4 text-base font-bold shadow-elevated inline-flex items-center justify-center gap-2 touch-target", e.completo ? "bg-primary-600 text-white active:bg-primary-700" : "bg-white text-ink border border-surface-border")}>
+            className={cn("w-full rounded-card py-4 text-base font-bold shadow-elevated inline-flex items-center justify-center gap-2 touch-target", e.completo ? "bg-primary-600 text-white active:bg-primary-700" : "bg-white text-ink border border-surface-border")}>
             {e.completo ? <>Concluir equipamento <ArrowRight className="w-5 h-5" /></> : <>Concluir equipamento — ver o que falta</>}
           </button>
         </div>
@@ -228,7 +228,7 @@ export function TelaEquipamento({ x, e, registrar }: Props) {
           <div className="space-y-3">
             <p className="text-sm text-ink-muted">O que já foi registrado fica guardado. O equipamento sai como “não atendido” no relatório. Diga o motivo, se puder.</p>
             <ObservacaoVoz rotulo="Motivo" valor={e.observacao ?? ""} onSalvar={(t) => registrar([op({ tipo: "equipamento", dados: { observacao: t } })])} />
-            <button type="button" className="w-full rounded-xl bg-slate-700 text-white py-3 font-semibold touch-target"
+            <button type="button" className="w-full rounded-card bg-ink text-white py-3 font-semibold touch-target"
               onClick={async () => {
                 await registrar([op({ tipo: "equipamento", dados: { feito: false } })]);
                 setNaoAtendido(false);
@@ -275,14 +275,14 @@ function ItemChips({ item, r, so, onStatus, onEditarAtencao }: {
           const ativo = r?.status === s;
           return (
             <button key={s} type="button" disabled={so} aria-pressed={ativo} data-chip={s} onClick={() => onStatus(s)}
-              className={cn("rounded-xl border-2 py-3 text-sm font-bold inline-flex items-center justify-center gap-1 touch-target transition-colors", ativo ? c.ativo : "bg-white border-surface-border text-ink-muted active:bg-surface-alt")}>
+              className={cn("rounded-card border-2 py-3 text-sm font-bold inline-flex items-center justify-center gap-1 touch-target transition-colors", ativo ? c.ativo : "bg-white border-surface-border text-ink-muted active:bg-surface-alt")}>
               <c.Icone className="w-4 h-4" /> {c.rotulo}
             </button>
           );
         })}
       </div>
       {r?.status === "ATENCAO" && (
-        <button type="button" onClick={onEditarAtencao} disabled={so} className="w-full text-left rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-900" data-resumo-atencao>
+        <button type="button" onClick={onEditarAtencao} disabled={so} className="w-full text-left rounded-lg bg-atencao-claro border border-atencao/20 px-3 py-2 text-sm text-atencao-texto" data-resumo-atencao>
           {r.observacao ? `“${r.observacao}”` : r.audio ? "Observação em áudio" : "Falta a observação"}{!so && <span className="ml-1 font-semibold underline">editar</span>}
         </button>
       )}
@@ -316,15 +316,15 @@ function ItemMedicao({ item, r, so, onResponder }: { item: ItemTela; r?: Respost
         <input type="text" inputMode="decimal" enterKeyHint="done" autoComplete="off" disabled={so || na} value={na ? "" : texto} placeholder={na ? "Não se aplica" : "0,0"}
           aria-label={`${item.texto} (${unidade})`} onFocus={() => setFocado(true)}
           onChange={(ev) => { setTexto(ev.target.value); setErro(null); }} onBlur={gravar} onKeyDown={(ev) => { if (ev.key === "Enter") (ev.target as HTMLInputElement).blur(); }}
-          className="min-w-0 flex-1 rounded-xl border-2 border-surface-border px-3 py-3 text-xl font-bold text-ink focus:outline-none focus:border-primary-500 disabled:bg-surface-alt" />
+          className="min-w-0 flex-1 rounded-card border-2 border-surface-border px-3 py-3 text-xl font-bold text-ink focus:outline-none focus:border-primary-500 disabled:bg-surface-alt" />
         <select aria-label="Unidade" disabled={so || na} value={unidade} onChange={(ev) => onResponder(r?.valor !== null && r?.valor !== undefined ? { valor: r.valor, unidade: ev.target.value } : { unidade: ev.target.value })}
-          className="w-24 rounded-xl border-2 border-surface-border bg-white px-2 text-base font-semibold text-ink">
+          className="w-24 rounded-card border-2 border-surface-border bg-white px-2 text-base font-semibold text-ink">
           {opcoes.map((u) => <option key={u} value={u}>{u}</option>)}
         </select>
         <button type="button" disabled={so} aria-pressed={na} data-chip="NAO_SE_APLICA" onClick={() => onResponder(na ? { status: null } : { status: "NAO_SE_APLICA" })}
-          className={cn("rounded-xl border-2 px-3 text-sm font-bold touch-target", na ? CHIP.NAO_SE_APLICA.ativo : "bg-white border-surface-border text-ink-muted")}>N/A</button>
+          className={cn("rounded-card border-2 px-3 text-sm font-bold touch-target", na ? CHIP.NAO_SE_APLICA.ativo : "bg-white border-surface-border text-ink-muted")}>N/A</button>
       </div>
-      {erro && <p className="text-xs text-red-600">{erro}</p>}
+      {erro && <p className="text-xs text-atrasado">{erro}</p>}
     </div>
   );
 }
@@ -342,7 +342,7 @@ function ModalAtencao({ item, r, fotos, onFechar, onFoto, onRemoverFoto, onAudio
       <div className="space-y-4" data-modal-atencao>
         <p className="text-base font-semibold text-ink">{item.texto}</p>
         <div className="space-y-2">
-          <p className="text-sm font-semibold text-ink">Foto do problema <span className="text-red-600">*</span></p>
+          <p className="text-sm font-semibold text-ink">Foto do problema <span className="text-atrasado">*</span></p>
           <div className="flex flex-wrap gap-2">
             {fotos.map((f, i) => <Miniatura key={f.clientId ?? f.id ?? i} src={srcFoto(f)} alt={`foto ${i + 1}`} pendente={f.pendente} onRemover={() => onRemoverFoto(f)} />)}
           </div>
@@ -350,9 +350,9 @@ function ModalAtencao({ item, r, fotos, onFechar, onFoto, onRemoverFoto, onAudio
         </div>
         <ObservacaoVoz rotulo="O que está errado" obrigatoria valor={obs} onSalvar={setObs} aoDigitar={setObs} audio={srcAudio(r)} onAudio={onAudio}
           placeholder="Ex.: bandeja com lodo, dreno entupido" />
-        {!pode && <p className="text-xs text-amber-700">Para marcar Atenção: pelo menos 1 foto e a observação (escrita, ditada ou em áudio).</p>}
+        {!pode && <p className="text-xs text-atencao-texto">Para marcar Atenção: pelo menos 1 foto e a observação (escrita, ditada ou em áudio).</p>}
         <button type="button" disabled={!pode} onClick={() => onSalvar(obs.trim())} data-salvar-atencao
-          className="w-full rounded-xl bg-amber-500 text-white py-4 text-base font-bold disabled:opacity-40 touch-target">Marcar Atenção</button>
+          className="w-full rounded-card bg-atencao text-white py-4 text-base font-bold disabled:opacity-40 touch-target">Marcar Atenção</button>
       </div>
     </Modal>
   );

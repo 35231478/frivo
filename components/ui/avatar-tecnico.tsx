@@ -35,7 +35,7 @@ export function AvatarTecnico({ nome, fotoUrl, size = 24, className, title }: Av
       title={title ?? nome ?? undefined}
       style={{ ...dim, fontSize: fonte }}
       className={cn(
-        "rounded-full flex items-center justify-center font-semibold text-white border border-white shadow-sm shrink-0 select-none",
+        "rounded-full flex items-center justify-center font-semibold border border-white shrink-0 select-none",
         corAvatar(nome),
         className,
       )}
