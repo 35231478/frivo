@@ -27,14 +27,6 @@ const config: Config = {
         atencao: status.atencao,
         atrasado: status.atrasado,
         previsto: status.previsto,
-        // Legado: navy das páginas públicas/login (fora do shell; entra na varredura seguinte)
-        sidebar: {
-          DEFAULT: "#0F2744",
-          900: "#0F2744",
-          800: "#172F4F",
-          700: "#1F3A60",
-          hover: "#1B3556",
-        },
         primary: escalaAcento,
         success: escalaOk,
         ink: {

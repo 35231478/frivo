@@ -37,7 +37,7 @@ export default async function PortalDocumentos() {
       {/* Alertas de vencimento */}
       {contratos.filter((c) => c.dataFim && c.dataFim >= agora && c.dataFim <= em30).map((c) => {
         const dias = Math.ceil(((c.dataFim as Date).getTime() - agora.getTime()) / 864e5);
-        return <div key={c.id} className="bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-lg px-3 py-2 flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Contrato {c.numero} vence em {dias} dia(s).</div>;
+        return <div key={c.id} className="bg-atencao-claro border border-atencao/20 text-atencao-texto text-sm rounded-lg px-3 py-2 flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Contrato {c.numero} vence em {dias} dia(s).</div>;
       })}
 
       <Secao titulo="PMOC e Relatórios" icone={FileText}>
@@ -69,7 +69,7 @@ export default async function PortalDocumentos() {
 
 function Secao({ titulo, icone: Icone, children }: { titulo: string; icone: React.ComponentType<{ className?: string }>; children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-xl border border-surface-border overflow-hidden">
+    <div className="bg-white rounded-card border border-surface-border overflow-hidden">
       <div className="px-4 py-3 border-b border-surface-border flex items-center gap-2"><Icone className="w-4 h-4 text-primary-600" /> <span className="text-sm font-bold text-ink">{titulo}</span></div>
       <div className="divide-y divide-surface-border">{children}</div>
     </div>

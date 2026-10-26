@@ -114,7 +114,7 @@ export function PropostaDocumento({ orcamento: o, empresa, cliente, responsavelT
               // eslint-disable-next-line @next/next/no-img-element
               <img src={empresa.logo} alt={empresa.nome} className="w-24 h-24 object-contain rounded-lg border border-surface-border" />
             ) : (
-              <div className="w-24 h-24 rounded-lg bg-gradient-to-br from-primary-500 to-success-500 flex items-center justify-center text-white text-3xl font-bold">
+              <div className="w-24 h-24 rounded-lg bg-acento flex items-center justify-center text-white font-display text-3xl font-bold">
                 {empresa.nome.slice(0, 2).toUpperCase()}
               </div>
             )}
@@ -158,7 +158,7 @@ export function PropostaDocumento({ orcamento: o, empresa, cliente, responsavelT
             <p className="text-sm text-ink-muted">{cliente.telefone ? formatarTelefone(cliente.telefone) : ""}{cliente.email ? ` · ${cliente.email}` : ""}</p>
           </div>
 
-          <div className="rounded-xl border-2 border-success-500/40 bg-success-50/40 p-6 text-center mb-6">
+          <div className="rounded-card border border-ok/30 bg-ok-claro/60 p-6 text-center mb-6">
             <p className="text-xs uppercase tracking-wider text-success-700">Valor mensal</p>
             <p className="text-4xl font-bold text-success-700 mt-1">{formatarMoeda(n(o.valorMensal))}</p>
             <p className="text-xs text-ink-muted mt-1">Frequência: {freqLabel}</p>

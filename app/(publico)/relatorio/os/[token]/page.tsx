@@ -20,15 +20,15 @@ export default async function RelatorioOsPage({ params }: { params: Promise<{ to
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="bg-sidebar text-white py-4 px-6 shadow-sm">
+      <header className="bg-white border-b border-surface-border py-4 px-6">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-4 flex-wrap">
-          <FrivoLogo size="sm" showSubtitle={false} />
+          <FrivoLogo size="sm" showSubtitle={false} variant="dark" />
           <RelatorioEnvio token={token} numero={dados.numeroRelatorio ?? dados.numeroOs} empresaNome={empresaNome} emailDestino={dados.envio.email} whatsappDestino={dados.envio.whatsapp} publicPath={`/relatorio/os/${token}`} />
         </div>
       </header>
 
       <main className="flex-1 py-6 px-3 sm:px-4">
-        <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-card p-4 sm:p-6 md:p-10">
+        <div className="max-w-4xl mx-auto bg-white rounded-card shadow-card p-4 sm:p-6 md:p-10">
           <RelatorioOsDocumento dados={dados} config={config} versao="cliente" />
         </div>
       </main>

@@ -81,7 +81,7 @@ export default async function QrPublicoPage({ params }: { params: Promise<{ toke
           </a>
         )}
         {wpp && (
-          <a href={`https://wa.me/55${wpp}`} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-green-500 text-white px-4 py-2.5 text-sm font-medium">
+          <a href={`https://wa.me/55${wpp}`} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-white border border-surface-border text-ink hover:bg-surface-page px-4 py-2.5 text-sm font-medium">
             Entre em contato pelo WhatsApp
           </a>
         )}

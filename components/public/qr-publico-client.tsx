@@ -36,22 +36,23 @@ export function QrPublicoClient({ dados }: { dados: Dados }) {
   return (
     <div className="min-h-screen bg-surface-page">
       {/* Cabeçalho */}
-      <header className="text-white px-5 pt-8 pb-10" style={{ background: "linear-gradient(135deg, #0F2744 0%, " + dados.cor + " 140%)" }}>
+      {/* A cor da empresa marca o topo; o texto fica em tinta, com contraste garantido */}
+      <header className="bg-white border-b border-surface-border border-t-4 px-5 pt-8 pb-8" style={{ borderTopColor: dados.cor }}>
         <div className="max-w-md mx-auto text-center">
           {dados.logo ? (
-            <img src={dados.logo} alt={dados.empresaNome} className="h-14 mx-auto object-contain mb-3 bg-white/95 rounded-lg p-1.5" />
+            <img src={dados.logo} alt={dados.empresaNome} className="h-14 mx-auto object-contain mb-3 rounded-lg" />
           ) : (
-            <h1 className="text-2xl font-bold">{dados.empresaNome}</h1>
+            <h1 className="font-display text-2xl font-bold text-ink">{dados.empresaNome}</h1>
           )}
-          {dados.logo && <p className="font-semibold text-white/90">{dados.empresaNome}</p>}
-          {dados.boasVindas && <p className="text-sm text-white/80 mt-2">{dados.boasVindas}</p>}
+          {dados.logo && <p className="font-semibold text-ink">{dados.empresaNome}</p>}
+          {dados.boasVindas && <p className="text-sm text-ink-muted mt-2">{dados.boasVindas}</p>}
         </div>
       </header>
 
-      <main className="max-w-md mx-auto px-4 -mt-6 pb-10 space-y-4">
+      <main className="max-w-md mx-auto px-4 mt-5 pb-10 space-y-4">
         {/* Dados do equipamento */}
         {dados.equipamento && (
-          <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+          <section className="bg-white rounded-card border border-surface-border shadow-sm p-5">
             <div className="flex items-center gap-2 mb-3 text-ink">
               <Wrench className="w-4 h-4 text-primary-600" />
               <h2 className="font-semibold">{dados.equipamento.nome}</h2>
@@ -67,7 +68,7 @@ export function QrPublicoClient({ dados }: { dados: Dados }) {
 
         {/* Localização */}
         {dados.localizacao && (dados.localizacao.unidade || dados.localizacao.local) && (
-          <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+          <section className="bg-white rounded-card border border-surface-border shadow-sm p-5">
             <div className="flex items-center gap-2 mb-2 text-ink">
               <MapPin className="w-4 h-4 text-primary-600" />
               <h2 className="font-semibold">Localização</h2>
@@ -80,7 +81,7 @@ export function QrPublicoClient({ dados }: { dados: Dados }) {
 
         {/* Próxima manutenção */}
         {dados.proxima && (
-          <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+          <section className="bg-white rounded-card border border-surface-border shadow-sm p-5">
             <div className="flex items-center gap-2 mb-2 text-ink">
               <CalendarClock className="w-4 h-4 text-primary-600" />
               <h2 className="font-semibold">Próxima manutenção</h2>
@@ -92,7 +93,7 @@ export function QrPublicoClient({ dados }: { dados: Dados }) {
 
         {/* Histórico */}
         {dados.historico.length > 0 && (
-          <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+          <section className="bg-white rounded-card border border-surface-border shadow-sm p-5">
             <div className="flex items-center gap-2 mb-3 text-ink">
               <ClipboardList className="w-4 h-4 text-primary-600" />
               <h2 className="font-semibold">Histórico de manutenções</h2>
@@ -132,7 +133,7 @@ export function QrPublicoClient({ dados }: { dados: Dados }) {
         {/* Botões de ação */}
         <div className="space-y-2.5 pt-1">
           {dados.botoes.whatsapp && (
-            <a href={dados.botoes.whatsapp} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 w-full rounded-lg bg-green-500 text-white px-4 py-3 text-sm font-semibold shadow-sm">
+            <a href={dados.botoes.whatsapp} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 w-full rounded-lg bg-white border border-surface-border text-ink hover:bg-surface-page px-4 py-3 text-sm font-semibold">
               <MessageCircle className="w-4 h-4" /> Falar conosco
             </a>
           )}
@@ -161,7 +162,7 @@ export function QrPublicoClient({ dados }: { dados: Dados }) {
             )
           )}
           {dados.botoes.site && (
-            <a href={dados.botoes.site} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 w-full rounded-lg bg-white border border-gray-200 text-ink px-4 py-3 text-sm font-semibold">
+            <a href={dados.botoes.site} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 w-full rounded-lg bg-white border border-surface-border text-ink px-4 py-3 text-sm font-semibold">
               <Globe className="w-4 h-4" /> Nosso site
             </a>
           )}
@@ -239,8 +240,8 @@ function FormularioSolicitacao({ tipo, token, onFechar }: { tipo: "CHAMADO" | "O
   // Y17: confirmação com protocolo COPIÁVEL e o próximo passo dito com todas as letras
   if (ok !== null) {
     return (
-      <section data-confirmacao-qr className="bg-white rounded-xl border border-green-200 shadow-sm p-5 text-center">
-        <CheckCircle2 className="w-8 h-8 text-green-500 mx-auto mb-2" />
+      <section data-confirmacao-qr className="bg-white rounded-card border border-ok/20 shadow-sm p-5 text-center">
+        <CheckCircle2 className="w-8 h-8 text-ok-texto mx-auto mb-2" />
         <p className="font-semibold text-ink">Solicitação enviada!</p>
         {ok && (
           <>
@@ -259,19 +260,19 @@ function FormularioSolicitacao({ tipo, token, onFechar }: { tipo: "CHAMADO" | "O
     );
   }
 
-  const inputCls = "mt-1 w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10";
+  const inputCls = "mt-1 w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10";
   const labelCls = "block text-sm font-semibold text-ink";
 
   return (
-    <section data-form-qr className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+    <section data-form-qr className="bg-white rounded-card border border-surface-border shadow-sm p-5">
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold text-ink">{titulo}</h2>
         <button onClick={onFechar} aria-label="Fechar formulário" className="text-ink-muted hover:text-ink"><X className="w-5 h-5" /></button>
       </div>
-      {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 mb-3">{erro}</div>}
+      {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2 mb-3">{erro}</div>}
       <form onSubmit={enviar} className="space-y-3">
         <label className={labelCls}>
-          Seu nome <span className="text-red-500">*</span>
+          Seu nome <span className="text-atrasado">*</span>
           <input className={inputCls} placeholder="Como podemos te chamar" value={nome} onChange={(e) => setNome(e.target.value)} required />
         </label>
         <label className={labelCls}>
@@ -283,21 +284,21 @@ function FormularioSolicitacao({ tipo, token, onFechar }: { tipo: "CHAMADO" | "O
           <input className={inputCls} type="tel" inputMode="tel" autoComplete="tel" placeholder="(11) 99999-0000" value={telefone} onChange={(e) => setTelefone(e.target.value)} />
         </label>
         <label className={labelCls}>
-          {tipo === "ORCAMENTO" ? "O que você precisa orçar?" : "Descreva o problema"} <span className="text-red-500">*</span>
+          {tipo === "ORCAMENTO" ? "O que você precisa orçar?" : "Descreva o problema"} <span className="text-atrasado">*</span>
           <textarea className={inputCls} rows={3} placeholder={tipo === "ORCAMENTO" ? "Conte o que precisa ser feito" : "O que está acontecendo com o equipamento?"} value={descricao} onChange={(e) => setDescricao(e.target.value)} required />
         </label>
         <div>
           <span className={labelCls}>Fotos (opcional)</span>
           <div className="mt-1 flex flex-wrap gap-2">
             {fotos.map((f, i) => (
-              <div key={i} data-foto-qr className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-200">
+              <div key={i} data-foto-qr className="relative w-20 h-20 rounded-lg overflow-hidden border border-surface-border">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={f.conteudo} alt={f.nome} className="w-full h-full object-cover" />
                 <button type="button" onClick={() => setFotos((p) => p.filter((_, j) => j !== i))} aria-label={`Remover foto ${f.nome}`} className="absolute top-0.5 right-0.5 bg-black/50 text-white rounded-full p-0.5"><X className="w-3 h-3" /></button>
               </div>
             ))}
             {fotos.length < 6 && (
-              <label className="w-20 h-20 rounded-lg border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-ink-subtle cursor-pointer hover:border-primary-300">
+              <label className="w-20 h-20 rounded-lg border-2 border-dashed border-surface-border flex flex-col items-center justify-center text-ink-subtle cursor-pointer hover:border-primary-300">
                 <Upload className="w-5 h-5" />
                 <span className="text-[10px]">Adicionar</span>
                 <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => addFotos(e.target.files)} />

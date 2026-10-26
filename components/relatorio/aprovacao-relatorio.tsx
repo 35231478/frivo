@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import SignatureCanvas from "react-signature-canvas";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, CheckCircle2, Eraser, PenLine } from "lucide-react";
+import { neutro } from "@/lib/ui/tokens";
 
 function mascararCpf(v: string): string {
   const n = v.replace(/\D/g, "").slice(0, 11);
@@ -52,11 +53,11 @@ export function AprovacaoRelatorio({ token }: { token: string }) {
 
   if (!aberto) {
     return (
-      <div className="bg-gradient-to-br from-primary-500 to-success-500 rounded-2xl p-6 text-center shadow-elevated">
-        <h3 className="text-white text-xl font-bold mb-2">Aprovar este relatório</h3>
-        <p className="text-primary-50 text-sm mb-4">Confirme a aprovação digitalmente com sua assinatura.</p>
+      <div className="bg-white border border-surface-border rounded-card p-6 text-center shadow-card">
+        <h3 className="font-display text-ink text-xl font-bold mb-2">Aprovar este relatório</h3>
+        <p className="text-ink-muted text-sm mb-4">Confirme a aprovação digitalmente com sua assinatura.</p>
         <button type="button" onClick={() => setAberto(true)}
-          className="inline-flex items-center gap-2 bg-white text-primary-700 hover:bg-primary-50 font-bold px-6 py-3 rounded-lg transition-all shadow-sm hover:shadow-md">
+          className="inline-flex items-center gap-2 bg-acento text-white hover:bg-acento-hover font-bold px-6 py-3 rounded-lg transition-colors">
           <PenLine className="w-5 h-5" /> Aprovar relatório
         </button>
       </div>
@@ -64,12 +65,12 @@ export function AprovacaoRelatorio({ token }: { token: string }) {
   }
 
   return (
-    <div className="bg-white border-2 border-success-500 rounded-2xl p-6 space-y-4 shadow-elevated">
+    <div className="bg-white border border-acento/40 rounded-card p-6 space-y-4 shadow-card">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-bold text-ink flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-success-600" /> Confirmar aprovação</h3>
         <button type="button" onClick={() => setAberto(false)} className="text-xs text-ink-muted hover:text-ink">cancelar</button>
       </div>
-      {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 flex items-center gap-2"><AlertCircle className="w-4 h-4 shrink-0" /> {erro}</div>}
+      {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2 flex items-center gap-2"><AlertCircle className="w-4 h-4 shrink-0" /> {erro}</div>}
       <div className="space-y-3">
         <div>
           <label className="text-sm font-semibold text-ink">Nome completo</label>
@@ -87,7 +88,7 @@ export function AprovacaoRelatorio({ token }: { token: string }) {
             <button type="button" onClick={() => sigRef.current?.clear()} className="text-xs text-ink-muted hover:text-primary-600 inline-flex items-center gap-1"><Eraser className="w-3 h-3" /> Limpar</button>
           </div>
           <div className="bg-surface-alt border-2 border-dashed border-surface-border rounded-lg overflow-hidden touch-none">
-            <SignatureCanvas ref={sigRef} penColor="#0F2744" canvasProps={{ className: "w-full h-40 bg-white" }} />
+            <SignatureCanvas ref={sigRef} penColor={neutro.texto} canvasProps={{ className: "w-full h-40 bg-white" }} />
           </div>
           <p className="text-xs text-ink-subtle mt-1">Use o dedo (celular) ou mouse para assinar.</p>
         </div>

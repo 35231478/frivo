@@ -126,6 +126,22 @@ emoji e hex usado para pintar.
 - Frivo IA: o botão flutuante e o cabeçalho do painel deixaram o navy (agora acento).
 - "Enviar por WhatsApp" é secundário ao lado do e-mail (primário) também na medição.
 
+**Lote 4: fora do painel** (feito)
+- Login, esqueci e definir senha (painel e portal): o degradê navy virou fundo neutro; cartão branco com
+  borda; logo escuro; "Entrar" no acento.
+- Portal do cliente: cabeçalho branco com um filete no topo na cor da empresa (configurada no portal);
+  texto e item ativo no acento, que tem contraste garantido. Sem emoji.
+- Páginas públicas (relatório, relatório da OS, medição, orçamento, QR): cabeçalho branco no lugar do
+  navy; o QR troca o degradê navy pelo mesmo filete na cor da empresa. Blocos de aprovação sem degradê;
+  a caneta da assinatura usa o token de texto.
+- Documentos (relatório, medição, orçamento, proposta): o selo com as iniciais da empresa ficou sólido
+  no acento; "Resultado" sem faixa colorida à esquerda; Sim/Não com ícone em vez de emoji.
+- Offline, splash e banner de instalação: base clara, sem navy, sem emoji.
+- PWA: `manifest.json` com `theme_color` branco e `background_color` igual ao fundo; ícones regerados
+  (`scripts/gen-pwa-icons.mjs`) em acento sólido.
+- E-mails transacionais (`lib/email-templates.ts`) e QR do portal leem as cores dos tokens.
+- O apelido `sidebar` (navy) saiu do `tailwind.config.ts`: nenhuma tela usa mais.
+
 ## Varredura seguinte: o que falta
 
 Inventário pelo código, com o número de classes de cor fora do sistema (`gray-*`, `red-*`, `blue-*`…),
@@ -153,14 +169,15 @@ orçamento passaram para o lote 4)
 13. Configurações: `configuracoes-client`, `configuracoes/formularios`, Inter, QR, perfil (degradê).
 14. Leads do site, QR codes, importação de planilha, folha.
 
-**Prioridade 4: fora do painel**
+**Prioridade 4: fora do painel** (feito no lote 4)
 15. Login, esqueci/definir senha: fundo em degradê navy → base neutra.
 16. Portal do cliente (`app/(portal)`, `components/portal`): degradê e emoji.
 17. Páginas públicas (orçamento, medição, relatório, QR) e o documento do relatório da OS: cabeçalho navy (`bg-sidebar`) e degradê.
 18. Offline, splash do PWA e `manifest.json` (`theme_color`/`background_color` ainda navy).
 
-Para medir o progresso, conte as classes de cor fora do sistema que sobraram em `app/` e
-`components/` (a proteção do teste `design-system` cobre as telas já restilizadas):
+Com o lote 4, a varredura da fase 2 cobre todas as pastas de `app/` e `components/`: a contagem abaixo
+dá zero, e o teste `design-system` reprova qualquer volta de cor solta, degradê, faixa colorida à
+esquerda, navy, emoji ou hex de pintura. Para conferir:
 
 ```bash
 grep -rEo "\b(bg|text|border|ring|divide)-(gray|slate|red|amber|orange|yellow|green|emerald|blue|sky|cyan|indigo|violet|purple|pink|rose|teal|lime)-[0-9]{2,3}\b" app components | wc -l

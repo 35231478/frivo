@@ -9,7 +9,7 @@ export function RequisitosSenha({ senha, className }: { senha: string; className
       {REQUISITOS_SENHA.map((r) => {
         const ok = r.ok(senha);
         return (
-          <li key={r.id} data-requisito={r.id} data-ok={ok} className={cn("inline-flex items-center gap-1", ok ? "text-emerald-700" : "text-ink-muted")}>
+          <li key={r.id} data-requisito={r.id} data-ok={ok} className={cn("inline-flex items-center gap-1", ok ? "text-ok-texto" : "text-ink-muted")}>
             {ok ? <Check className="w-3.5 h-3.5" /> : <Circle className="w-3 h-3" />} {r.texto}
           </li>
         );

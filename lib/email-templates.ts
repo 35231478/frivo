@@ -1,7 +1,8 @@
 /**
  * Templates de e-mail transacional e layout HTML profissional (compatível com
- * Gmail/Outlook). Puro — sem dependências de Node.
+ * Gmail/Outlook). Puro — sem dependências de Node. As cores vêm dos tokens do sistema de design.
  */
+import { acento, neutro } from "@/lib/ui/tokens";
 
 export interface DefTemplate {
   tipo: string;
@@ -80,7 +81,7 @@ export interface DadosEmpresaEmail {
 export function montarEmailHtml(opts: { empresa: DadosEmpresaEmail; corpoHtml: string; botaoLabel?: string; botaoUrl?: string }): string {
   const { empresa, corpoHtml, botaoLabel, botaoUrl } = opts;
   const botao = botaoLabel && botaoUrl
-    ? `<tr><td style="padding:8px 0 24px;text-align:center;"><a href="${botaoUrl}" style="display:inline-block;background:#10B981;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 28px;border-radius:8px;">${botaoLabel}</a></td></tr>`
+    ? `<tr><td style="padding:8px 0 24px;text-align:center;"><a href="${botaoUrl}" style="display:inline-block;background:${acento.DEFAULT};color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 28px;border-radius:8px;">${botaoLabel}</a></td></tr>`
     : "";
   const logo = empresa.logo
     ? `<img src="${empresa.logo}" alt="${empresa.nome}" width="40" height="40" style="border-radius:8px;vertical-align:middle;margin-right:10px;" />`
@@ -89,22 +90,22 @@ export function montarEmailHtml(opts: { empresa: DadosEmpresaEmail; corpoHtml: s
   const contatos = [empresa.telefone, empresa.email, empresa.site].filter(Boolean).join(" · ");
 
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
-<body style="margin:0;padding:0;background:#F1F5F9;font-family:Arial,Helvetica,sans-serif;color:#1E293B;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F1F5F9;padding:24px 12px;">
+<body style="margin:0;padding:0;background:${neutro.fundo};font-family:Arial,Helvetica,sans-serif;color:${neutro.texto};">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${neutro.fundo};padding:24px 12px;">
     <tr><td align="center">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #E2E8F0;">
-        <tr><td style="background:#0F2744;padding:20px 28px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid ${neutro.borda};">
+        <tr><td style="background:${acento.DEFAULT};padding:20px 28px;">
           ${logo}<span style="color:#ffffff;font-size:18px;font-weight:700;vertical-align:middle;">${empresa.nome}</span>
         </td></tr>
-        <tr><td style="padding:28px;font-size:15px;line-height:1.6;color:#1E293B;">
+        <tr><td style="padding:28px;font-size:15px;line-height:1.6;color:${neutro.texto};">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td>${corpoHtml}</td></tr>${botao}</table>
         </td></tr>
-        <tr><td style="padding:18px 28px;background:#F8FAFC;border-top:1px solid #E2E8F0;font-size:12px;color:#64748B;line-height:1.5;">
-          <strong style="color:#334155;">${empresa.nome}</strong><br/>
+        <tr><td style="padding:18px 28px;background:${neutro.fundo};border-top:1px solid ${neutro.borda};font-size:12px;color:${neutro.secundario};line-height:1.5;">
+          <strong style="color:${neutro.texto};">${empresa.nome}</strong><br/>
           ${endereco ? endereco + "<br/>" : ""}${contatos}
         </td></tr>
       </table>
-      <p style="font-size:11px;color:#94A3B8;margin:14px 0 0;">Este é um e-mail automático. Por favor, não responda diretamente.</p>
+      <p style="font-size:11px;color:${neutro.secundario};margin:14px 0 0;">Este é um e-mail automático. Por favor, não responda diretamente.</p>
     </td></tr>
   </table>
 </body></html>`;

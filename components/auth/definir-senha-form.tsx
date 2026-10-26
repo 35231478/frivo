@@ -54,7 +54,7 @@ export function DefinirSenhaForm() {
   if (erroLink) return (
     <div className="space-y-3">
       <h2 className="text-xl font-bold text-ink">{finalidadeErro === "recuperacao" ? "Criar nova senha" : "Definir senha"}</h2>
-      <p role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2.5 flex items-center gap-2"><AlertCircle className="w-4 h-4 shrink-0" /> {erroLink}</p>
+      <p role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2.5 flex items-center gap-2"><AlertCircle className="w-4 h-4 shrink-0" /> {erroLink}</p>
       {finalidadeErro === "recuperacao" && (
         <Link href="/esqueci-senha" className="inline-block text-sm font-semibold text-primary-600 hover:text-primary-700">Pedir um novo link</Link>
       )}
@@ -73,7 +73,7 @@ export function DefinirSenhaForm() {
             : <>Defina a senha de acesso para <strong>{usuario?.email}</strong>.</>}
         </p>
       </div>
-      {erro && <p role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2.5 flex items-center gap-2"><AlertCircle className="w-4 h-4 shrink-0" /> {erro}</p>}
+      {erro && <p role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2.5 flex items-center gap-2"><AlertCircle className="w-4 h-4 shrink-0" /> {erro}</p>}
       <label className="block space-y-1.5">
         <span className="text-sm font-semibold text-ink">Nova senha</span>
         <div className="relative">
@@ -88,7 +88,7 @@ export function DefinirSenhaForm() {
         <span className="text-sm font-semibold text-ink">Confirme a senha</span>
         <input type={mostrar ? "text" : "password"} value={confirmar} onChange={(e) => setConfirmar(e.target.value)} autoComplete="new-password" className={cls} />
       </label>
-      <button type="submit" disabled={salvando} className="w-full inline-flex items-center justify-center gap-2 bg-success-500 hover:bg-success-600 text-white font-semibold rounded-lg py-2.5 disabled:opacity-60">
+      <button type="submit" disabled={salvando} className="w-full inline-flex items-center justify-center gap-2 bg-acento hover:bg-acento-hover text-white font-semibold rounded-lg py-2.5 disabled:opacity-60">
         {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} {recuperacao ? "Salvar nova senha" : "Definir senha e entrar"}
       </button>
     </form>

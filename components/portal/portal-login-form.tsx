@@ -11,7 +11,7 @@ export function PortalLoginForm() {
   return (
     <form action={formAction} className="space-y-4">
       {state?.erro && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 flex items-center gap-2">
+        <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2 flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" /> {state.erro}
         </div>
       )}

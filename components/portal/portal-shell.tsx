@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { portalLogout } from "@/app/(portal)/portal/actions";
 import { LayoutDashboard, Headset, Thermometer, FileText, Wallet, CalendarDays, LogOut } from "lucide-react";
+import { acento } from "@/lib/ui/tokens";
 
 interface Branding { empresaNome: string; logo: string | null; cor: string }
 interface Props {
@@ -29,29 +30,30 @@ const ITENS: { href: string; label: string; icone: typeof LayoutDashboard; perm:
 export function PortalShell({ contatoNome, clienteNome, branding, permissoes, children }: Props) {
   const pathname = usePathname();
   const itens = ITENS.filter((i) => i.perm(permissoes ?? {}));
-  const cor = branding.cor || "#0EA5E9";
+  // A cor da empresa (configurada no portal) marca o topo; texto e item ativo ficam no acento, que tem contraste garantido
+  const cor = branding.cor || acento.DEFAULT;
 
   return (
     <div className="min-h-screen flex flex-col" style={{ ["--portal-cor" as any]: cor }}>
       {/* Header */}
-      <header className="text-white shadow-sm" style={{ backgroundColor: "#0F2744" }}>
+      <header className="bg-white border-b border-surface-border border-t-4" style={{ borderTopColor: cor }}>
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             {branding.logo ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={branding.logo} alt={branding.empresaNome} className="h-9 w-auto max-w-[140px] object-contain rounded bg-white/10 p-1" />
+              <img src={branding.logo} alt={branding.empresaNome} className="h-9 w-auto max-w-[140px] object-contain rounded" />
             ) : (
-              <span className="font-bold text-lg">{branding.empresaNome}</span>
+              <span className="font-display font-bold text-lg text-ink">{branding.empresaNome}</span>
             )}
             <div className="hidden sm:block min-w-0">
-              <p className="text-xs text-white/60 leading-none">Portal do Cliente</p>
-              <p className="text-sm font-semibold truncate">{clienteNome}</p>
+              <p className="text-xs text-ink-muted leading-none">Portal do Cliente</p>
+              <p className="text-sm font-semibold text-ink truncate">{clienteNome}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-sm hidden md:inline">Olá, {contatoNome.split(" ")[0]}</span>
+            <span className="text-sm text-ink-muted hidden md:inline">Olá, {contatoNome.split(" ")[0]}</span>
             <form action={portalLogout}>
-              <button type="submit" className="inline-flex items-center gap-1.5 text-sm bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg transition-colors">
+              <button type="submit" className="inline-flex items-center gap-1.5 text-sm text-ink bg-white border border-surface-border hover:bg-surface-page px-3 py-1.5 rounded-lg transition-colors">
                 <LogOut className="w-4 h-4" /> Sair
               </button>
             </form>
@@ -59,13 +61,13 @@ export function PortalShell({ contatoNome, clienteNome, branding, permissoes, ch
         </div>
 
         {/* Nav desktop */}
-        <nav className="hidden md:block border-t border-white/10">
+        <nav className="hidden md:block border-t border-surface-linha">
           <div className="max-w-5xl mx-auto px-4 flex gap-1">
             {itens.map((i) => {
               const ativo = pathname === i.href || pathname.startsWith(i.href + "/");
               return (
                 <Link key={i.href} href={i.href}
-                  className={cn("flex items-center gap-2 px-3 py-2.5 text-sm border-b-2 transition-colors", ativo ? "border-white text-white font-semibold" : "border-transparent text-white/70 hover:text-white")}>
+                  className={cn("flex items-center gap-2 px-3 py-2.5 text-sm border-b-2 transition-colors", ativo ? "border-acento text-acento font-semibold" : "border-transparent text-ink-muted hover:text-ink")}>
                   <i.icone className="w-4 h-4" /> {i.label}
                 </Link>
               );
@@ -82,8 +84,7 @@ export function PortalShell({ contatoNome, clienteNome, branding, permissoes, ch
           const ativo = pathname === i.href || pathname.startsWith(i.href + "/");
           return (
             <Link key={i.href} href={i.href}
-              className={cn("flex-1 flex flex-col items-center gap-0.5 py-2 text-[10px]", ativo ? "font-semibold" : "text-ink-muted")}
-              style={ativo ? { color: cor } : undefined}>
+              className={cn("flex-1 flex flex-col items-center gap-0.5 py-2 text-[10px]", ativo ? "font-semibold text-acento" : "text-ink-muted")}>
               <i.icone className="w-5 h-5" /> {i.label}
             </Link>
           );

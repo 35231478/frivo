@@ -8,13 +8,13 @@ export const dynamic = "force-dynamic";
 /** UX-5 (Y13): cliente travado fora do horário comercial pede uma nova senha sozinho. */
 export default function PortalEsqueciSenhaPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-sidebar via-sidebar to-primary-600">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-surface-page">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-6">
-          <FrivoLogo size="lg" />
-          <p className="text-slate-200 text-sm mt-3">Portal do Cliente</p>
+          <FrivoLogo size="lg" variant="dark" />
+          <p className="text-ink-muted text-sm mt-3">Portal do Cliente</p>
         </div>
-        <div className="bg-white rounded-2xl shadow-elevated p-6 md:p-8">
+        <div className="bg-white rounded-card shadow-card p-6 md:p-8 border border-surface-border">
           <PortalEsqueciSenhaForm />
         </div>
       </div>

@@ -66,13 +66,13 @@ export default async function PortalDashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-ink">Olá, {(user.name ?? "Cliente").split(" ")[0]}! 👋</h1>
+        <h1 className="text-2xl font-bold text-ink">Olá, {(user.name ?? "Cliente").split(" ")[0]}!</h1>
         <p className="text-sm text-ink-muted mt-1">{branding.boasVindas || `Bem-vindo ao portal de ${branding.empresaNome}.`}</p>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {cards.map((c) => (
-          <Link key={c.label} href={c.href} className="bg-white rounded-xl border border-surface-border p-4 shadow-card hover:shadow-card-hover hover:border-primary-200 transition-all">
+          <Link key={c.label} href={c.href} className="bg-white rounded-card border border-surface-border p-4 shadow-card hover:shadow-card-hover hover:border-primary-200 transition-all">
             <div className="p-2 rounded-lg bg-primary-50 w-fit mb-2"><c.icone className="w-5 h-5 text-primary-600" /></div>
             <p className={c.texto ? "text-base font-bold text-ink" : "text-2xl font-bold text-ink"}>{c.valor}</p>
             <p className="text-xs text-ink-muted mt-0.5">{c.label}</p>
@@ -80,16 +80,16 @@ export default async function PortalDashboard() {
         ))}
       </div>
 
-      <div className="bg-white rounded-xl border border-surface-border p-5 shadow-card">
+      <div className="bg-white rounded-card border border-surface-border p-5 shadow-card">
         <h2 className="text-sm font-bold text-ink flex items-center gap-2 mb-3"><Bell className="w-4 h-4 text-primary-600" /> Avisos</h2>
         {alertas.length === 0 ? (
-          <p className="text-sm text-ink-muted">Nenhum aviso no momento. 🎉</p>
+          <p className="text-sm text-ink-muted">Nenhum aviso no momento.</p>
         ) : (
           <ul className="space-y-2">
             {alertas.map((a, i) => (
               <li key={i} className={
                 "text-sm rounded-lg px-3 py-2 border " +
-                (a.tipo === "danger" ? "bg-red-50 border-red-200 text-red-700" : a.tipo === "warn" ? "bg-amber-50 border-amber-200 text-amber-700" : "bg-primary-50 border-primary-200 text-primary-700")
+                (a.tipo === "danger" ? "bg-atrasado-claro border-atrasado/20 text-atrasado-texto" : a.tipo === "warn" ? "bg-atencao-claro border-atencao/20 text-atencao-texto" : "bg-primary-50 border-primary-200 text-primary-700")
               }>{a.texto}</li>
             ))}
           </ul>

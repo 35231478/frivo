@@ -39,15 +39,15 @@ export default async function PortalAgenda() {
 
       {atrasadas.length > 0 && (
         <section data-reagendar>
-          <h2 className="text-sm font-bold text-amber-700 uppercase tracking-wider mb-2 flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> Visitas a reagendar</h2>
+          <h2 className="text-sm font-bold text-atencao-texto uppercase tracking-wider mb-2 flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> Visitas a reagendar</h2>
           <div className="space-y-2">
             {atrasadas.map((o) => (
-              <div key={o.id} className="bg-amber-50 rounded-xl border border-amber-200 p-4 flex items-center justify-between gap-3">
+              <div key={o.id} className="bg-atencao-claro rounded-card border border-atencao/20 p-4 flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-ink line-clamp-1">{o.descricao}</p>
                   <p className="text-xs text-ink-muted">{o.numero}{o.responsavel ? ` · ${o.responsavel.nome}` : ""}</p>
                 </div>
-                <span className="text-xs font-semibold text-amber-700 shrink-0">era {formatarData(o.previsaoConclusao)} — a reagendar</span>
+                <span className="text-xs font-semibold text-atencao-texto shrink-0">era {formatarData(o.previsaoConclusao)} — a reagendar</span>
               </div>
             ))}
           </div>
@@ -57,11 +57,11 @@ export default async function PortalAgenda() {
       <section>
         <h2 className="text-sm font-bold text-ink-muted uppercase tracking-wider mb-2 flex items-center gap-1.5"><Clock className="w-4 h-4" /> Próximas manutenções</h2>
         {proximas.length === 0 ? (
-          <div className="bg-white rounded-xl border border-surface-border p-6 text-center text-ink-muted text-sm">Nenhuma manutenção agendada.</div>
+          <div className="bg-white rounded-card border border-surface-border p-6 text-center text-ink-muted text-sm">Nenhuma manutenção agendada.</div>
         ) : (
           <div className="space-y-2">
             {proximas.map((o) => (
-              <div key={o.id} className="bg-white rounded-xl border border-surface-border p-4 flex items-center justify-between gap-3">
+              <div key={o.id} className="bg-white rounded-card border border-surface-border p-4 flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-ink line-clamp-1">{o.descricao}</p>
                   <p className="text-xs text-ink-muted">{o.numero}{o.responsavel ? ` · ${o.responsavel.nome}` : ""}</p>
@@ -76,11 +76,11 @@ export default async function PortalAgenda() {
       <section>
         <h2 className="text-sm font-bold text-ink-muted uppercase tracking-wider mb-2 flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4" /> Visitas realizadas</h2>
         {historico.length === 0 ? (
-          <div className="bg-white rounded-xl border border-surface-border p-6 text-center text-ink-muted text-sm">Nenhuma visita registrada.</div>
+          <div className="bg-white rounded-card border border-surface-border p-6 text-center text-ink-muted text-sm">Nenhuma visita registrada.</div>
         ) : (
           <div className="space-y-2">
             {historico.map((o) => (
-              <div key={o.id} className="bg-white rounded-xl border border-surface-border p-4 flex items-center justify-between gap-3">
+              <div key={o.id} className="bg-white rounded-card border border-surface-border p-4 flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-ink line-clamp-1">{o.descricao}</p>
                   <p className="text-xs text-ink-muted">{o.numero}{o.responsavel ? ` · ${o.responsavel.nome}` : ""}</p>

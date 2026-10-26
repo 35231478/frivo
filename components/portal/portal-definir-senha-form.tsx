@@ -34,7 +34,7 @@ export function PortalDefinirSenhaForm() {
 
   if (!token) return (
     <div className="space-y-4">
-      <p role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2.5">
+      <p role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2.5">
         Link inválido. Peça um novo em “Esqueci minha senha”, na tela de entrada do portal.
       </p>
       <Link href="/portal/esqueci-senha" className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary-600"><ArrowLeft className="w-4 h-4" /> Pedir um novo link</Link>
@@ -56,7 +56,7 @@ export function PortalDefinirSenhaForm() {
         <h2 className="text-xl font-bold text-ink">Criar nova senha</h2>
         <p className="text-sm text-ink-muted mt-1">Escolha a senha que você vai usar para entrar no portal.</p>
       </div>
-      {erro && <p role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2.5 flex items-center gap-2"><AlertCircle className="w-4 h-4 shrink-0" /> {erro}</p>}
+      {erro && <p role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2.5 flex items-center gap-2"><AlertCircle className="w-4 h-4 shrink-0" /> {erro}</p>}
       <label className="block space-y-1.5">
         <span className="text-sm font-semibold text-ink">Nova senha</span>
         <input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} autoComplete="new-password" disabled={salvando}
