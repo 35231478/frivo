@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { pode } from "@/lib/permissoes";
 import { AuthSessionProvider } from "@/components/providers/session-provider";
+import { PermissoesProvider } from "@/components/providers/permissoes-provider";
 import { AppTecnico } from "@/components/tecnico/app-tecnico";
 
 export const metadata: Metadata = { title: "Meu dia" };
@@ -22,16 +23,19 @@ export default async function TecnicoPage() {
   const db = await prisma.usuario.findUnique({ where: { id: u.id }, select: { avatar: true } });
   return (
     <AuthSessionProvider session={session}>
-      <AppTecnico
-        usuario={{
-          id: u.id, nome: u.name ?? "", email: u.email ?? "", empresaNome: u.empresaNome ?? "",
-          podeGravar: pode(u.permissoes, "ordens", "editar", u.role) || pode(u.permissoes, "ordens", "concluir", u.role),
-        }}
-        perfilInicial={{
-          nome: u.name ?? "", email: u.email ?? "", avatar: db?.avatar ?? null, empresaNome: u.empresaNome ?? "",
-          perfilNome: u.perfilNome ?? null, cargo: ROLE_LABELS[u.role] ?? u.role,
-        }}
-      />
+      {/* Fora do layout do painel: as permissões da tela (ex.: "concluir sem equipamento") vêm daqui */}
+      <PermissoesProvider role={u.role} permissoes={u.permissoes}>
+        <AppTecnico
+          usuario={{
+            id: u.id, nome: u.name ?? "", email: u.email ?? "", empresaNome: u.empresaNome ?? "",
+            podeGravar: pode(u.permissoes, "ordens", "editar", u.role) || pode(u.permissoes, "ordens", "concluir", u.role),
+          }}
+          perfilInicial={{
+            nome: u.name ?? "", email: u.email ?? "", avatar: db?.avatar ?? null, empresaNome: u.empresaNome ?? "",
+            perfilNome: u.perfilNome ?? null, cargo: ROLE_LABELS[u.role] ?? u.role,
+          }}
+        />
+      </PermissoesProvider>
     </AuthSessionProvider>
   );
 }

@@ -3,7 +3,7 @@
  * (GET /api/tecnico/atividades/:id) e fica guardado no IndexedDB; cada gravação do técnico vira uma
  * OPERAÇÃO na fila (com id próprio). A tela mostra: retrato + operações ainda não confirmadas.
  */
-import type { ItemExecucao, RespostaItem, ResultadoConclusao, FaltasEquipamento, FormularioExecucao } from "@/lib/execucao/pendencias";
+import type { DispensaEquipamento, ItemExecucao, RespostaItem, ResultadoConclusao, FaltasEquipamento, FormularioExecucao } from "@/lib/execucao/pendencias";
 import type { Operacao } from "@/lib/tecnico/sync";
 
 export type { Operacao };
@@ -62,6 +62,8 @@ export interface ExecucaoTela {
   equipamentos: EquipamentoTela[];
   adicionais: AdicionalTela[];
   conclusao: ResultadoConclusao;
+  /** Saída da exigência de equipamento (tipo, recorrente, justificada); ausente em retratos antigos */
+  dispensaEquipamento?: DispensaEquipamento | null;
 }
 
 /** O que o servidor manda (e o aparelho guarda) de uma atividade */

@@ -9,6 +9,8 @@ const tipoOsSchema = z.object({
   descricao: z.string().optional(),
   cor: z.string().default("#3b82f6"),
   ativo: z.boolean().default(true),
+  /** Trava da conclusão: false = serviço sem equipamento (visita técnica, vistoria, orçamento) */
+  exigeEquipamento: z.boolean().default(true),
 });
 
 export async function GET() {

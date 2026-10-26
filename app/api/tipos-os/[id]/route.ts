@@ -10,6 +10,7 @@ const tipoOsUpdateSchema = z.object({
   descricao: z.string().optional(),
   cor: z.string().optional(),
   ativo: z.boolean().optional(),
+  exigeEquipamento: z.boolean().optional(),
 });
 
 export async function PUT(req: NextRequest, { params }: Params) {

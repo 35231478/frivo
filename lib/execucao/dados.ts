@@ -8,8 +8,8 @@
 import { prisma } from "@/lib/prisma";
 import { ambienteEquipamento, descricaoEquipamento, fabricanteModelo } from "@/lib/equipamento-descricao";
 import {
-  completo, faltasEquipamento, paraPendencia, verificarConclusao, MSG_SEM_EQUIPAMENTO,
-  type EquipamentoParaPendencia, type FaltasEquipamento, type FormularioExecucao, type ItemExecucao, type RespostaItem, type ResultadoConclusao, type StatusItem,
+  completo, faltasEquipamento, paraPendencia, verificarConclusao, textoDispensa, MSG_SEM_EQUIPAMENTO, MSG_SAIDAS_SEM_EQUIPAMENTO,
+  type DispensaEquipamento, type EquipamentoParaPendencia, type FaltasEquipamento, type FormularioExecucao, type ItemExecucao, type RespostaItem, type ResultadoConclusao, type StatusItem,
 } from "@/lib/execucao/pendencias";
 
 export const STATUS_BLOQUEADOS = ["CONCLUIDA", "CANCELADA"];
@@ -75,6 +75,30 @@ export interface Execucao {
   /** Serviços a mais pedidos na visita (mesma OS, mesmo relatório, destacados como "Adicional") */
   adicionais: ServicoAdicionalTela[];
   conclusao: ResultadoConclusao;
+  /** Saída da exigência de equipamento desta atividade (a tela e o app recalculam a conclusão com ela) */
+  dispensaEquipamento: DispensaEquipamento | null;
+}
+
+/**
+ * A atividade pode concluir sem equipamento atendido? Nesta ordem: o tipo de OS dela não exige
+ * equipamento; a OS é recorrente de contrato e não tem equipamento vinculado em nenhuma atividade;
+ * a OS tem a exceção justificada. null = a trava vale.
+ */
+export async function dispensaDaAtividade(
+  empresaId: string, osId: string,
+  a: { tipoOs: { nome: string; exigeEquipamento: boolean } | null },
+  os: { origem: string; semEquipamentoMotivo: string | null },
+): Promise<DispensaEquipamento | null> {
+  if (a.tipoOs?.exigeEquipamento === false) return { motivo: "TIPO", texto: textoDispensa("TIPO", a.tipoOs.nome) };
+  if (os.origem === "RECORRENTE" && !(await temEquipamentoVinculado(empresaId, osId)))
+    return { motivo: "RECORRENTE", texto: textoDispensa("RECORRENTE") };
+  if (os.semEquipamentoMotivo) return { motivo: "JUSTIFICADA", texto: textoDispensa("JUSTIFICADA", os.semEquipamentoMotivo) };
+  return null;
+}
+
+/** Algum equipamento vinculado em alguma atividade (não cancelada) da OS? */
+async function temEquipamentoVinculado(empresaId: string, osId: string) {
+  return (await prisma.atividadeEquipamento.count({ where: { atividade: { ordemServicoId: osId, empresaId, status: { not: "CANCELADA" } } } })) > 0;
 }
 
 const numero = (v: { toNumber(): number } | number | null | undefined) => (v === null || v === undefined ? null : typeof v === "number" ? v : v.toNumber());
@@ -83,11 +107,14 @@ export async function carregarExecucao(empresaId: string, osId: string, atividad
   const atividade = await prisma.atividadeOs.findFirst({
     where: { id: atividadeId, ordemServicoId: osId, empresaId },
     select: {
-      id: true, titulo: true, status: true, tipoOsId: true, tipoOs: { select: { id: true, nome: true, cor: true } },
-      ordemServico: { select: { id: true, numero: true, status: true, clienteId: true, unidadeId: true } },
+      id: true, titulo: true, status: true, tipoOsId: true, tipoOs: { select: { id: true, nome: true, cor: true, exigeEquipamento: true } },
+      ordemServico: { select: { id: true, numero: true, status: true, clienteId: true, unidadeId: true, origem: true, semEquipamentoMotivo: true } },
     },
   });
   if (!atividade) return null;
+  const sel = atividade.ordemServico;
+  const os = sel && { id: sel.id, numero: sel.numero, status: sel.status, clienteId: sel.clienteId, unidadeId: sel.unidadeId };
+  const dispensaEquipamento = await dispensaDaAtividade(empresaId, osId, atividade, { origem: sel?.origem ?? "MANUAL", semEquipamentoMotivo: sel?.semEquipamentoMotivo ?? null });
 
   const vinculos = await prisma.atividadeEquipamento.findMany({
     where: { atividadeId },
@@ -184,21 +211,25 @@ export async function carregarExecucao(empresaId: string, osId: string, atividad
     const faltas = faltasEquipamento(entrada);
     return { vinculoId: v.id, feito: v.feito, observacao: v.observacao, equipamento, itens, respostas: resp, fotos: minhasFotos, formulario, faltas, completo: completo(faltas) };
   });
-  const conclusao = verificarConclusao(paraConclusao);
+  const conclusao = verificarConclusao(paraConclusao, dispensaEquipamento);
+  const tipoOs = atividade.tipoOs ? { id: atividade.tipoOs.id, nome: atividade.tipoOs.nome, cor: atividade.tipoOs.cor } : null;
 
   return {
-    atividade: { id: atividade.id, titulo: atividade.titulo, status: atividade.status, tipoOs: atividade.tipoOs },
-    os: atividade.ordemServico,
+    atividade: { id: atividade.id, titulo: atividade.titulo, status: atividade.status, tipoOs },
+    os,
     bloqueada: STATUS_BLOQUEADOS.includes(atividade.status),
     equipamentos,
     adicionais: adicionais.map(({ criadoPor, ...a }) => ({ ...a, criadoPor: criadoPor?.nome ?? null })),
     conclusao,
+    dispensaEquipamento,
   };
 }
 
 /**
  * Pode concluir a OS? Junta as atividades (menos as canceladas): precisa de pelo menos 1 equipamento
- * atendido na OS e de todos os atendidos completos. Mensagem já diz a atividade de cada pendência.
+ * atendido na OS — salvo as saídas (todas as atividades de tipo que não exige equipamento, OS
+ * recorrente de contrato sem equipamento vinculado, ou exceção justificada) — e de todos os atendidos
+ * completos. Mensagem já diz a atividade de cada pendência.
  */
 export async function verificarConclusaoOs(empresaId: string, osId: string): Promise<{ ok: boolean; mensagem: string | null; pendencias: { atividade: string; pendencias: ResultadoConclusao["pendencias"] }[] }> {
   const atividades = await prisma.atividadeOs.findMany({
@@ -207,7 +238,15 @@ export async function verificarConclusaoOs(empresaId: string, osId: string): Pro
   });
   const execs = (await Promise.all(atividades.map((a) => carregarExecucao(empresaId, osId, a.id)))).filter((x): x is Execucao => !!x);
   const atendidos = execs.reduce((n, x) => n + x.conclusao.atendidos, 0);
-  if (!atendidos) return { ok: false, mensagem: MSG_SEM_EQUIPAMENTO, pendencias: [] };
+  if (!atendidos) {
+    const os = await prisma.ordemServico.findFirst({ where: { id: osId, empresaId }, select: { origem: true, semEquipamentoMotivo: true } });
+    const dispensada = !!os && (
+      !!os.semEquipamentoMotivo
+      || (os.origem === "RECORRENTE" && !(await temEquipamentoVinculado(empresaId, osId)))
+      || (execs.length > 0 && execs.every((x) => x.dispensaEquipamento))
+    );
+    if (!dispensada) return { ok: false, mensagem: `${MSG_SEM_EQUIPAMENTO} ${MSG_SAIDAS_SEM_EQUIPAMENTO}`, pendencias: [] };
+  }
   const pendencias = execs.filter((x) => x.conclusao.pendencias.length).map((x) => ({ atividade: x.atividade.titulo, pendencias: x.conclusao.pendencias }));
   if (!pendencias.length) return { ok: true, mensagem: null, pendencias };
   const linhas = execs.filter((x) => x.conclusao.pendencias.length).map((x) => `Atividade “${x.atividade.titulo}”: ${x.conclusao.mensagem!.replace(/^Para concluir, falta: /, "").replace(/\.$/, "")}`);
