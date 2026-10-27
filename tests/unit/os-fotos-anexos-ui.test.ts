@@ -17,10 +17,13 @@ import type { Galeria } from "@/lib/os/galeria";
 
 const avisos = vi.hoisted(() => ({ toast: vi.fn(), confirmar: vi.fn(async () => true) }));
 vi.mock("@/components/ui/avisos", () => ({ toast: avisos.toast, confirmar: avisos.confirmar }));
+// O mock nasce UMA vez (hoisted): se a fábrica do vi.mock rodar 2× ao mesmo tempo (import dinâmico da tela + o do
+// teste, num CI lento), as duas cópias do módulo usam a mesma função — o teste confere as chamadas certas.
+const reduzirImagemMock = vi.hoisted(() => vi.fn(async (..._a: unknown[]) => ({ imagem: { dataUrl: "data:image/jpeg;base64,/9j/RkFLRQ==", largura: 10, altura: 10, bytes: 9 }, qualidade: {} })));
 vi.mock("@/lib/imagem-cliente", async (original) => ({
   ...(await original<typeof import("@/lib/imagem-cliente")>()),
   FOTO_GALERIA: { ladoMax: 1280, qualidade: 0.8 },
-  reduzirImagem: vi.fn(async () => ({ imagem: { dataUrl: "data:image/jpeg;base64,/9j/RkFLRQ==", largura: 10, altura: 10, bytes: 9 }, qualidade: {} })),
+  reduzirImagem: reduzirImagemMock,
 }));
 
 let root: Root;
@@ -228,8 +231,12 @@ describe("adicionar foto", () => {
     respostas["POST /api/ordens/os1/anexos"] = { status: 201, corpo: { tipo: "foto", foto: foto("ANEXO:novo", { legenda: "Placa da condensadora", equipamentoId: "eqB", enviadoEm: "2026-10-26T12:00:00.000Z" }) } };
     await clicar($("[data-adicionar-foto-secao]", secao("eqB")));
     await anexar($("[data-input-foto]"), new File([new Uint8Array([0xff, 0xd8, 0xff])], "IMG_9999.jpg", { type: "image/jpeg" }));
-    const { reduzirImagem } = await import("@/lib/imagem-cliente");
-    expect(vi.mocked(reduzirImagem).mock.calls.map((c) => [(c[0] as File).name, c[1], c[2]])).toEqual([["IMG_9999.jpg", 1280, 0.8]]);
+    // A tela carrega a compressão com import() dinâmico: a 1ª carga pode levar mais que alguns ticks (CI lento).
+    // Espera a chamada de verdade e a prévia que vem dela, em vez de um número fixo de ticks.
+    await vi.waitFor(() => expect(reduzirImagemMock).toHaveBeenCalled(), { timeout: 3000 });
+    await vi.waitFor(() => expect($("[data-previa-foto]")).not.toBeNull(), { timeout: 3000 });
+    await esperar();
+    expect(reduzirImagemMock.mock.calls.map((c) => [(c[0] as File).name, c[1], c[2]])).toEqual([["IMG_9999.jpg", 1280, 0.8]]);
     expect($("[data-previa-foto]")!.getAttribute("src")).toBe("data:image/jpeg;base64,/9j/RkFLRQ==");
     await digitar($("[data-legenda-foto]"), "Placa da condensadora");
     await clicar($("[data-enviar-foto]"));
