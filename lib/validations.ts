@@ -9,7 +9,7 @@ import {
   TipoDesconto, TipoOrcamento,
   PerfilFaturamento, TipoMedicao, TipoItemMedicao,
   StatusMedicaoFin, StatusContaReceber, FormaPagamento,
-  ResponsavelPrazo, CanalNotificacao, StatusPedidoCompra,
+  ResponsavelPrazo, CanalNotificacao,
   TipoTabelaPreco, TipoPrecoTabela,
   TratamentoFimSemana, TipoRelatorio,
   TipoVencimento, IndiceReajuste, PeriodoRefNFSe, PeriodoVisita,
@@ -742,41 +742,47 @@ export const prazoTemplateSchema = z.object({
 });
 
 export const pedidoCompraItemSchema = z.object({
+  /** Item já gravado (edição): o histórico compara por ele; vazio = item novo */
+  id: z.string().optional().nullable(),
   produtoId: z.string().optional().nullable(),
-  descricao: z.string().min(1, "Descrição é obrigatória"),
+  descricao: z.string().trim().min(1, "Descrição é obrigatória"),
   quantidade: z.preprocess(
     (v) => (v === "" || v == null ? 1 : Number(v)),
     z.number().positive("Quantidade deve ser > 0")
   ),
-  unidade: z.string().default("un"),
+  unidade: z.string().trim().min(1).default("un"),
   valorEstimado: z.preprocess(
     (v) => (v === "" || v == null ? null : Number(v)),
     z.number().nonnegative().nullable()
   ).optional(),
-  fornecedor: z.string().optional().nullable(),
   observacao: z.string().optional().nullable(),
 });
+
+/** Campos editáveis do pedido (criar e editar) */
+const pedidoCompraCampos = {
+  compradorId: z.string().optional().nullable(),
+  fornecedorId: z.string().optional().nullable(),
+  prazoNecessario: z.string().optional().nullable(),
+  observacao: z.string().optional().nullable(),
+  itens: z.array(pedidoCompraItemSchema).min(1, "Adicione ao menos um item"),
+};
 
 export const pedidoCompraSchema = z.object({
   ordemServicoId: z.string().optional().nullable(),
   orcamentoId: z.string().optional().nullable(),
-  compradorId: z.string().optional().nullable(),
-  prazoNecessario: z.string().optional().nullable(),
-  observacao: z.string().optional().nullable(),
-  itens: z.array(pedidoCompraItemSchema).min(1, "Adicione ao menos um item"),
+  /** PC avulso (sem OS/orçamento): o motivo, ex. "Reposição de estoque" */
+  motivo: z.string().trim().max(200).optional().nullable(),
+  ...pedidoCompraCampos,
 });
 
-export const pedidoCompraStatusSchema = z.object({
-  status: z.nativeEnum(StatusPedidoCompra),
+/** Edição inline (a origem não muda) */
+export const pedidoCompraEdicaoSchema = z.object({
+  motivo: z.string().trim().max(200).optional().nullable(),
+  ...pedidoCompraCampos,
 });
 
-export const pedidoCompraItemUpdateSchema = z.object({
-  valorReal: z.preprocess(
-    (v) => (v === "" || v == null ? null : Number(v)),
-    z.number().nonnegative().nullable()
-  ).optional(),
-  fornecedor: z.string().optional().nullable(),
-});
+/** Baixar ou enviar o PC ao fornecedor */
+export const pedidoCompraEnvioSchema = z.object({ canal: z.enum(["BAIXAR", "EMAIL", "WHATSAPP"]) });
 
 export const osPrazoSchema = z.object({
   templateId: z.string().min(1, "Selecione um template de prazo"),

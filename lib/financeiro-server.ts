@@ -418,50 +418,6 @@ export async function recalcularContaPagar(contaPagarId: string) {
   });
 }
 
-/** Nome para comparar fornecedores: minúsculas, sem espaços nas pontas nem repetidos (igual ao SQL). */
-export const normalizarNome = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
-
-/** Cria (idempotente) uma conta a pagar a partir de um pedido de compra interno. */
-export async function gerarContaPagarDoPedido(pedidoCompraId: string) {
-  const existente = await prisma.contaPagar.findFirst({ where: { pedidoCompraId } });
-  if (existente) return existente;
-
-  const pedido = await prisma.pedidoCompraInterno.findUnique({
-    where: { id: pedidoCompraId },
-    include: { itens: true },
-  });
-  if (!pedido) return null;
-
-  const valorTotal = pedido.itens.reduce(
-    (s, i) => s + Number(i.valorReal ?? i.valorEstimado ?? 0) * Number(i.quantidade ?? 1),
-    0,
-  );
-  const fornecedor = pedido.itens.find((i) => i.fornecedor)?.fornecedor ?? "Fornecedor a definir";
-  // Liga ao cadastro quando o nome do item bate com um fornecedor ATIVO da empresa (mesma regra da
-  // migração: maiúsculas e espaços não contam); senão fica só o texto, como sempre foi.
-  const cadastrado = (await prisma.fornecedor.findMany({ where: { empresaId: pedido.empresaId, ativo: true }, select: { id: true, nome: true, documento: true } }))
-    .find((f) => normalizarNome(f.nome) === normalizarNome(fornecedor));
-  const ano = partesBR().ano;
-  const numero = await proximoNumeroContaPagar(pedido.empresaId, ano);
-
-  return prisma.contaPagar.create({
-    data: {
-      empresaId: pedido.empresaId,
-      numero,
-      fornecedor: cadastrado?.nome ?? fornecedor,
-      fornecedorId: cadastrado?.id ?? null,
-      fornecedorCnpj: cadastrado?.documento ?? null,
-      descricao: `Pedido de compra ${pedido.numero}`,
-      valorTotal,
-      valorPago: 0,
-      saldoRestante: valorTotal,
-      status: "PENDENTE",
-      dataVencimento: pedido.prazoNecessario,
-      pedidoCompraId: pedido.id,
-    },
-  });
-}
-
 // ─────────────────────────────────────────────
 // DASHBOARD FINANCEIRO
 // ─────────────────────────────────────────────

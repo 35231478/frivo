@@ -195,14 +195,6 @@ describe("conta a pagar ligada ao fornecedor", () => {
     expect(linha("contaPagar", "cp-texto")).toMatchObject({ fornecedorId: "f-posto", fornecedor: "Posto Ipiranga" });
   });
 
-  it("conta gerada do pedido de compra liga o fornecedor ativo de mesmo nome (maiúsculas/espaços não contam)", async () => {
-    db.t.pedidoCompraInterno = [{ id: "pc1", empresaId: "e1", numero: "PC-0001", prazoNecessario: null }];
-    db.t.pedidoCompraItem = [{ id: "pi1", pedidoId: "pc1", fornecedor: "  FRIGELAR distribuidora ", quantidade: 2, valorEstimado: 10, valorReal: null }];
-    const { gerarContaPagarDoPedido } = await import("@/lib/financeiro-server");
-    const c: any = await gerarContaPagarDoPedido("pc1");
-    expect(linha("contaPagar", c.id)).toMatchObject({ fornecedorId: "f-frigelar", fornecedor: "Frigelar Distribuidora", fornecedorCnpj: "12345678000199" });
-  });
-
   it("SeletorCadastro: o inativo já usado aparece “(inativo)”; em nova escolha não é oferecido", async () => {
     const { SeletorCadastro } = await import("@/components/cadastros/seletor-cadastro");
     const itens = db.t.fornecedor.filter((f) => f.empresaId === "e1").map((f) => ({ id: f.id, nome: f.nome, ativo: f.ativo }));

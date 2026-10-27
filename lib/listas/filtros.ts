@@ -214,3 +214,38 @@ export function whereContasPagar(empresaId: string, sp: SP) {
   }
   return where;
 }
+
+/** Status que a lista de pedidos de compra filtra (os legados entram junto do equivalente novo) */
+const STATUS_PEDIDO_FILTRO: Record<string, string[]> = {
+  SOLICITADO: ["SOLICITADO"], COTANDO: ["COTANDO", "COMPRADO"], PARCIAL: ["PARCIAL"],
+  CONCLUIDO: ["CONCLUIDO", "ENTREGUE"], CANCELADO: ["CANCELADO"],
+};
+
+/**
+ * Lista central de Compras: status (os legados junto do equivalente), comprador, origem (OS,
+ * orçamento, avulso), "abertos" (nem concluído nem cancelado) e a busca no número, nos itens, no
+ * fornecedor, na OS/orçamento de origem e no motivo.
+ */
+export function wherePedidosCompra(empresaId: string, sp: SP) {
+  const where: any = { empresaId };
+  const and: any[] = [];
+  if (sp.status && STATUS_PEDIDO_FILTRO[sp.status]) where.status = { in: STATUS_PEDIDO_FILTRO[sp.status] };
+  else if (sp.abertos === "1") where.status = { in: ["SOLICITADO", "COTANDO", "COMPRADO", "PARCIAL"] };
+  if (sp.compradorId) where.compradorId = sp.compradorId;
+  if (sp.origem === "OS") and.push({ OR: [{ ordemServicoId: { not: null } }, { orcamento: { ordensServico: { some: {} } } }] });
+  else if (sp.origem === "ORCAMENTO") and.push({ ordemServicoId: null, orcamentoId: { not: null }, orcamento: { ordensServico: { none: {} } } });
+  else if (sp.origem === "AVULSO") and.push({ ordemServicoId: null, orcamentoId: null });
+  const q = sp.q?.trim();
+  if (q) {
+    const c = { contains: q, mode: "insensitive" };
+    and.push({ OR: [
+      { numero: c }, { motivo: c }, { observacao: c },
+      { itens: { some: { descricao: c } } },
+      { fornecedor: { nome: c } },
+      { ordemServico: { numero: c } },
+      { orcamento: { codigo: c } },
+    ] });
+  }
+  if (and.length) where.AND = and;
+  return where;
+}

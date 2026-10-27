@@ -385,11 +385,11 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
   },
   fornecedores: {
     entidade: "fornecedores", modelo: "fornecedor", massa: true, singular: "fornecedor", plural: "fornecedores",
-    // Ver: quem usa o financeiro (a conta a pagar escolhe o fornecedor); gravar: quem lança contas a pagar
-    // ou gerencia as configurações
+    // Ver: quem usa o financeiro (a conta a pagar escolhe o fornecedor) ou Compras / quem edita o pedido de
+    // compra na OS/orçamento (o PC vai ao fornecedor); gravar: quem lança contas a pagar ou gerencia as configurações
     modulo: "financeiro",
     permissoes: {
-      listar: [["financeiro", "visualizar"], ["configuracoes", "visualizar"]],
+      listar: [["financeiro", "visualizar"], ["configuracoes", "visualizar"], ["compras", "visualizar"], ["ordens", "editar"], ["orcamentos", "editar"]],
       criar: [["financeiro", "fluxoCaixa"], ["configuracoes", "gerenciar"]],
       editar: [["financeiro", "fluxoCaixa"], ["configuracoes", "gerenciar"]],
       inativar: [["financeiro", "fluxoCaixa"], ["configuracoes", "gerenciar"]],

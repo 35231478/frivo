@@ -65,10 +65,6 @@ export function gerarNumeroContaPagar(sequencial: number, ano = anoBR()): string
   return `CP-${ano}-${String(sequencial).padStart(4, "0")}`;
 }
 
-export function gerarNumeroPedidoCompra(sequencial: number, ano = anoBR()): string {
-  return `PCI-${ano}-${String(sequencial).padStart(4, "0")}`;
-}
-
 export function gerarNumeroRelatorio(sequencial: number, ano = anoBR()): string {
   return `REL-${ano}-${String(sequencial).padStart(4, "0")}`;
 }
@@ -425,22 +421,6 @@ export const LABELS_CANAL_NOTIFICACAO: Record<string, string> = {
   WHATSAPP: "WhatsApp",
   EMAIL: "E-mail",
   SISTEMA: "Sistema",
-};
-
-export const LABELS_STATUS_PEDIDO_COMPRA: Record<string, string> = {
-  SOLICITADO: "Solicitado",
-  COTANDO: "Cotando",
-  COMPRADO: "Comprado",
-  ENTREGUE: "Entregue",
-  CANCELADO: "Cancelado",
-};
-
-export const CLASSE_STATUS_PEDIDO_COMPRA: Record<string, string> = {
-  SOLICITADO: "badge-base bg-primary-50 text-primary-700",
-  COTANDO: "badge-base bg-atencao-claro text-atencao-texto",
-  COMPRADO: "badge-base bg-acento-claro text-acento-hover",
-  ENTREGUE: "badge-base bg-success-50 text-success-700",
-  CANCELADO: "badge-base bg-surface-linha text-ink-muted",
 };
 
 export const LABELS_STATUS_OS_PRAZO: Record<string, string> = {

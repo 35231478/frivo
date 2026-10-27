@@ -78,6 +78,7 @@ const OPERACIONAL: Secao[] = [
         tipo: "grupo", label: "Estoque", icone: Package, itens: [
           { href: "/estoque", icone: Package, label: "Saldos e extrato" },
           { href: "/estoque/notas", icone: FileText, label: "Notas de compra" },
+          { href: "/compras/pedidos", icone: ShoppingCart, label: "Pedidos de compra", modulo: "compras" },
         ],
       },
       {
@@ -124,7 +125,7 @@ const FINANCEIRO: Secao[] = [
       {
         tipo: "grupo", label: "Pagamentos", icone: Upload, itens: [
           { href: "/financeiro/contas-pagar", icone: Upload, label: "Contas a pagar", modulo: "financeiro" },
-          { href: "/compras/pedidos", icone: ShoppingCart, label: "Pedidos de compra", modulo: "financeiro" },
+          { href: "/compras/pedidos", icone: ShoppingCart, label: "Pedidos de compra", modulo: "compras" },
           { href: "/financeiro/fornecedores", icone: Truck, label: "Fornecedores", modulo: "financeiro" },
         ],
       },

@@ -205,7 +205,7 @@ const usuarios: RegrasCadastro = {
   async impacto(u, empresaId) {
     const [os, pedidos] = await Promise.all([
       prisma.ordemServico.count({ where: { empresaId, responsavelId: u.id, status: { notIn: ["CONCLUIDA", "CANCELADA"] } } }),
-      prisma.pedidoCompraInterno.count({ where: { empresaId, compradorId: u.id, status: { notIn: ["ENTREGUE", "CANCELADO"] } } }),
+      prisma.pedidoCompraInterno.count({ where: { empresaId, compradorId: u.id, status: { notIn: ["ENTREGUE", "CONCLUIDO", "CANCELADO"] } } }),
     ]);
     const avisos = ["Ele perde o acesso ao sistema na hora (na próxima tela que abrir). Nada do que ele fez é apagado e dá para reativar depois."];
     if (os) avisos.push(`É responsável por ${pl(os, "OS em aberto", "OS em aberto")}: reatribua se for o caso.`);

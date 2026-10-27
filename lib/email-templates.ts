@@ -21,6 +21,7 @@ export const VARIAVEIS_DISPONIVEIS = [
   "empresa_nome", "empresa_telefone", "empresa_email", "empresa_site",
   "mes_referencia", "data_aprovacao",
   "usuario_nome", "link_definir_senha", "validade_convite", "validade_link",
+  "fornecedor_nome", "numero_pedido", "prazo_necessario", "link_pedido",
 ] as const;
 
 export const TEMPLATES_PADRAO: DefTemplate[] = [
@@ -66,6 +67,10 @@ export const TEMPLATES_PADRAO: DefTemplate[] = [
   { tipo: "RECUPERACAO_SENHA", nome: "Recuperação de senha", assunto: "Criar nova senha — {{empresa_nome}}",
     corpo: "<p>Olá <strong>{{usuario_nome}}</strong>,</p><p>Recebemos um pedido para criar uma nova senha de acesso ao sistema da <strong>{{empresa_nome}}</strong>. Clique no botão abaixo para definir a nova senha.</p><p style=\"color:#64748b;font-size:13px\">O link vale por {{validade_link}} e só pode ser usado uma vez. Se não foi você quem pediu, ignore este e-mail: a sua senha atual continua valendo.</p>",
     botaoLabel: "Criar nova senha", botaoVar: "link_definir_senha" },
+  // Compras: o Pedido de Compra (sem preços) vai ao contato do fornecedor para cotação
+  { tipo: "PEDIDO_COMPRA", nome: "Pedido de Compra ao fornecedor", assunto: "Pedido de Compra {{numero_pedido}} — {{empresa_nome}}",
+    corpo: "<p>Olá <strong>{{fornecedor_nome}}</strong>,</p><p>Segue o Pedido de Compra <strong>{{numero_pedido}}</strong> para cotação{{prazo_necessario}}. Por favor, informe preço, validade da proposta e prazo de entrega de cada item.</p>",
+    botaoLabel: "Ver pedido de compra", botaoVar: "link_pedido" },
 ];
 
 export function substituirVariaveis(texto: string, vars: Record<string, string>): string {

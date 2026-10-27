@@ -15,7 +15,7 @@ export async function GET() {
   // O sino só conta o que o usuário PODE ver: técnico/auxiliar não recebe
   // "Compras pendentes" nem "Boletos pagos" (T1).
   const verOrdens = pode(permissoes, "ordens", "visualizar", role);
-  const verCompras = pode(permissoes, "financeiro", "visualizar", role);
+  const verCompras = pode(permissoes, "compras", "visualizar", role);
   const verVeiculos = pode(permissoes, "veiculos", "visualizar", role);
   const verBoletos = pode(permissoes, "financeiro", "contasReceber", role);
   const verOrcamentos = pode(permissoes, "orcamentos", "visualizar", role);
