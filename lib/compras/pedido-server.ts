@@ -8,8 +8,8 @@ import { prisma } from "@/lib/prisma";
 import { anoBR, chaveDiaCivil } from "@/lib/fuso";
 import { permissoesDoUsuario } from "@/lib/permissoes";
 import {
-  codigoPedidoCompra, origemDoPedido, pedidoEditavel, podeEditarPedido, podeEnviarPedido, temAcessoCompras,
-  type PedidoTela, type StatusPedido, type UltimaCompra, type UsuarioPedido,
+  codigoPedidoCompra, origemDoPedido, pedidoEditavel, podeEditarPedido, podeEnviarPedido, podeVincularNf, temAcessoCompras,
+  type NotaDoPedidoTela, type PedidoTela, type StatusPedido, type UltimaCompra, type UsuarioPedido,
 } from "@/lib/compras/pedido";
 
 type Tx = Prisma.TransactionClient | typeof prisma;
@@ -112,6 +112,14 @@ export const INCLUDE_PEDIDO = {
   ordemServico: { select: { id: true, numero: true, cliente: { select: { nome: true, nomeFantasia: true } } } },
   orcamento: { select: { id: true, codigo: true, ordensServico: { select: { ordemServico: { select: { id: true, numero: true } } }, take: 1 } } },
   eventos: { orderBy: { criadoEm: "desc" }, include: { usuario: { select: { nome: true } } } },
+  vinculos: {
+    orderBy: [{ criadoEm: "asc" }, { id: "asc" }],
+    select: {
+      pedidoItemId: true, quantidade: true, automatico: true,
+      nota: { select: { id: true, numero: true, serie: true, emitenteNome: true, dataEmissao: true } },
+      pedidoItem: { select: { descricao: true, unidade: true } },
+    },
+  },
 } satisfies Prisma.PedidoCompraInternoInclude;
 
 export type PedidoCompleto = Prisma.PedidoCompraInternoGetPayload<{ include: typeof INCLUDE_PEDIDO }>;
@@ -134,6 +142,18 @@ export function origemDoPedidoCompleto(p: {
 
 /** O pedido como a tela usa (datas em texto, decimais em número) e o que este usuário pode fazer nele */
 export function pedidoParaTela(p: PedidoCompleto, u: UsuarioPedido): PedidoTela {
+  const recebido = new Map<string, number>();
+  const notas = new Map<string, NotaDoPedidoTela>();
+  for (const v of p.vinculos) {
+    recebido.set(v.pedidoItemId, (recebido.get(v.pedidoItemId) ?? 0) + Number(v.quantidade));
+    const n = notas.get(v.nota.id) ?? {
+      notaId: v.nota.id, numero: `${v.nota.numero}/${v.nota.serie}`, emitente: v.nota.emitenteNome,
+      dataEmissao: v.nota.dataEmissao.toISOString(), automatico: v.automatico, itens: [],
+    };
+    n.automatico = n.automatico && v.automatico;
+    n.itens.push({ descricao: v.pedidoItem.descricao, quantidade: Number(v.quantidade), unidade: v.pedidoItem.unidade });
+    notas.set(v.nota.id, n);
+  }
   return {
     id: p.id, numero: p.numero, status: p.status as StatusPedido, statusEm: p.statusEm.toISOString(), criadoEm: p.criadoEm.toISOString(),
     prazoNecessario: p.prazoNecessario ? chaveDiaCivil(p.prazoNecessario) : null,
@@ -144,9 +164,12 @@ export function pedidoParaTela(p: PedidoCompleto, u: UsuarioPedido): PedidoTela 
     itens: p.itens.map((i) => ({
       id: i.id, produtoId: i.produtoId, produtoNome: i.produto?.nome ?? null, descricao: i.descricao, quantidade: Number(i.quantidade), unidade: i.unidade,
       valorEstimado: i.valorEstimado == null ? null : Number(i.valorEstimado), valorReal: i.valorReal == null ? null : Number(i.valorReal),
+      recebido: Math.round((recebido.get(i.id) ?? 0) * 10_000) / 10_000,
     })),
     eventos: p.eventos.map((e) => ({ id: e.id, tipo: e.tipo, detalhe: e.detalhe, criadoEm: e.criadoEm.toISOString(), usuarioNome: e.usuario?.nome ?? null })),
+    notas: [...notas.values()],
     podeEditar: podeEditarPedido(u, p) && pedidoEditavel(p.status),
     podeEnviar: podeEnviarPedido(u, p),
+    podeDesvincular: podeVincularNf(u),
   };
 }

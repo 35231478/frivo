@@ -89,14 +89,15 @@ const PEDIDO: PedidoTela = {
   fornecedor: { id: "fFrig", nome: "Frigelar", email: "vendas@frigelar.com.br", telefone: "1133334444", ativo: true },
   origem: { tipo: "OS", os: { id: "os1", numero: "OS-2026-0012" }, orcamento: { id: "o1", codigo: "ORC-2026-0003" } },
   itens: [
-    { id: "i1", produtoId: "pFiltro", produtoNome: "Filtro secador", descricao: "Filtro secador", quantidade: 4, unidade: "un", valorEstimado: 18.45, valorReal: null },
-    { id: "i2", produtoId: null, produtoNome: null, descricao: "Gás R410A", quantidade: 11.35, unidade: "kg", valorEstimado: null, valorReal: 99.9 },
+    { id: "i1", produtoId: "pFiltro", produtoNome: "Filtro secador", descricao: "Filtro secador", quantidade: 4, unidade: "un", valorEstimado: 18.45, valorReal: null, recebido: 0 },
+    { id: "i2", produtoId: null, produtoNome: null, descricao: "Gás R410A", quantidade: 11.35, unidade: "kg", valorEstimado: null, valorReal: 99.9, recebido: 0 },
   ],
   eventos: [
     { id: "e2", tipo: "EDITADO", detalhe: "Quantidade de Filtro secador: 2 un → 4 un", criadoEm: "2026-10-27T13:00:00Z", usuarioNome: "Paulo Compras" },
     { id: "e1", tipo: "CRIADO", detalhe: "2 itens", criadoEm: "2026-10-27T12:00:00Z", usuarioNome: "Ana" },
   ],
-  podeEditar: true, podeEnviar: true,
+  notas: [],
+  podeEditar: true, podeEnviar: true, podeDesvincular: true,
 };
 
 describe("editor do pedido", () => {

@@ -23,7 +23,7 @@ export async function GET() {
   const inicioHoje = hojeDiaCivil(); // recebimento é dia civil: hoje em Brasília
 
   const zeroVeiculos = { checklistPendente: 0, checklistsComAlertas: 0, documentosVencendo: 0, veiculosManutencao: 0, revisaoChegando: 0 };
-  const [prazosBrutos, veiculosBrutos, boletosPagos, orcamentosRespondidos] = await Promise.all([
+  const [prazosBrutos, veiculosBrutos, boletosPagos, orcamentosRespondidos, nfsDoPedido] = await Promise.all([
     verOrdens || verCompras ? contarAlertasPrazos(empresaId) : Promise.resolve(null),
     verVeiculos ? contarAlertasVeiculos(empresaId) : Promise.resolve(null),
     verBoletos
@@ -33,6 +33,12 @@ export async function GET() {
     verOrcamentos
       ? prisma.orcamento.count({ where: { empresaId, status: { in: ["APROVADO", "REPROVADO"] }, respostaVistaEm: null } })
       : Promise.resolve(0),
+    // Chegou NF num pedido de compra que ESTE usuário pediu e ele ainda não abriu (Compras 2/2).
+    // Não depende de permissão: quem pediu sempre vê o próprio pedido (lib/compras/pedido podeVerPedido).
+    prisma.pedidoCompraInterno.findMany({
+      where: { empresaId, solicitanteId: session.user!.id, nfVinculadaEm: { not: null }, nfVistaEm: null },
+      select: { id: true }, orderBy: { nfVinculadaEm: "desc" }, take: 50,
+    }),
   ]);
 
   const prazos = {
@@ -52,6 +58,8 @@ export async function GET() {
     ...veiculos,
     boletosPagos,
     orcamentosRespondidos,
-    total: totalPrazos + totalVeiculos + boletosPagos + orcamentosRespondidos,
+    nfPedidos: nfsDoPedido.length,
+    nfPedidoId: nfsDoPedido[0]?.id ?? null,
+    total: totalPrazos + totalVeiculos + boletosPagos + orcamentosRespondidos + nfsDoPedido.length,
   });
 }

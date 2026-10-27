@@ -187,6 +187,10 @@ export function moduloDaRota(pathname: string): string | null {
   // Exceção: os modelos de checklist da frota moram em /configuracoes, mas o link fica no
   // grupo Frota — quem tem "veiculos" entra sem precisar de "configuracoes" (I3)
   if (seg === "configuracoes" && segs[1] === "checklists-veiculo") return "veiculos";
+  // Exceção: o DETALHE de um pedido de compra decide sozinho quem entra (podeVerPedido: Compras,
+  // comprador designado, quem pediu ou quem vê a OS/orçamento) — é para lá que o sino do
+  // solicitante leva quando chega a NF do pedido dele (Compras 2/2)
+  if (seg === "compras" && segs[1] === "pedidos" && segs.length === 3 && segs[2] !== "novo") return null;
   return ROTA_MODULO[seg] ?? null;
 }
 

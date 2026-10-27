@@ -38,6 +38,7 @@ import { parcelasDaNf, type ParcelaRascunho } from "@/lib/compras/parcelas";
 import { mensagemZod, parcelaSchema, type FinanceiroRascunho, type PrecoLinha } from "@/lib/compras/validacao";
 import { lerBoleto } from "@/lib/financeiro/boleto";
 import { validarRefEmpresa } from "@/lib/ref-empresa";
+import { sugestoesDaNota, vincularNota } from "@/lib/compras/conciliacao-server";
 import { anoBR } from "@/lib/fuso";
 
 /** Recusa com status HTTP e dados extras (ex.: a nota que já existe). */
@@ -298,13 +299,16 @@ export function parcelasParaLancar(nota: { parcelas: unknown; duplicatas: unknow
 }
 
 /* ───────── Lançar ───────── */
-export async function lancarNota({ empresaId, usuarioId, notaId, escolhas = [], pedidoCompraId = null, financeiro, podePrecificar = false }: {
+export async function lancarNota({ empresaId, usuarioId, notaId, escolhas = [], pedidoCompraId = null, financeiro, podePrecificar = false, podeVincularPedido = false }: {
   empresaId: string; usuarioId: string | null; notaId: string; escolhas?: Escolha[]; pedidoCompraId?: string | null;
   /** o que estiver na tela na hora de confirmar (grava no rascunho antes de lançar) */
   financeiro?: FinanceiroRascunho;
   /** Configurações › gerenciar: o preço de venda da linha só é aplicado por quem pode precificar */
   podePrecificar?: boolean;
+  /** Compras › gerenciar: escolher o pedido de compra da nota (o idêntico vincula sozinho, sem precisar) */
+  podeVincularPedido?: boolean;
 }) {
+  if (pedidoCompraId && !podeVincularPedido) throw new ErroNota("Vincular a nota a um pedido de compra precisa de Compras › gerenciar.", 403);
   // Quem lança já tem Financeiro › fluxo de caixa (a rota exige): o financeiro da tela é aceito
   const poderes: Poderes = { podePrecificar, podeFinanceiro: true };
   return prisma.$transaction(async (tx) => {
@@ -348,12 +352,21 @@ export async function lancarNota({ empresaId, usuarioId, notaId, escolhas = [], 
     const comPreco = nota.itens.filter((i) => i.precoVenda != null || i.margemVenda != null);
     const parcelas = parcelasParaLancar(nota);
 
-    // Pedido de compra (opcional): da empresa e ainda sem conta a pagar (senão duplicaria a dívida)
+    // Pedido de compra (opcional): da empresa e sem conta a pagar lançada à mão (essa duplicaria a dívida).
+    // Conta de OUTRA NF não trava: entrega parcial = uma NF (e uma dívida) por entrega.
     if (pedidoCompraId) {
-      const pedido = await tx.pedidoCompraInterno.findFirst({ where: { id: pedidoCompraId, empresaId }, select: { id: true, numero: true, contasPagar: { select: { numero: true }, take: 1 } } });
+      const pedido = await tx.pedidoCompraInterno.findFirst({ where: { id: pedidoCompraId, empresaId }, select: { id: true, numero: true, contasPagar: { where: { notaCompraId: null }, select: { numero: true }, take: 1 } } });
       if (!pedido) throw new ErroNota("Pedido de compra inválido.");
       if (pedido.contasPagar.length) throw new ErroNota(`O pedido ${pedido.numero} já tem a conta a pagar ${pedido.contasPagar[0].numero}: lance a nota sem vincular o pedido, ou cancele aquela conta antes.`, 409);
     }
+
+    // Pedido idêntico (mesmo fornecedor, todos os itens, mesmas quantidades): vincula sozinho — reversível.
+    // Com o pedido escolhido na tela, vale o escolhido.
+    const automatico = pedidoCompraId ? null : (await sugestoesDaNota(empresaId, notaId, tx))?.automatico ?? null;
+    const pedidoDaNota = pedidoCompraId ?? automatico?.pedidoId ?? null;
+    // a conta a pagar aponta para o pedido (o escolhido; o idêntico só se não tiver conta lançada à mão)
+    const pedidoDaConta = pedidoCompraId
+      ?? (automatico && !(await tx.contaPagar.count({ where: { pedidoCompraId: automatico.pedidoId, notaCompraId: null } })) ? automatico.pedidoId : null);
 
     // Custo da compra anterior de cada produto (antes desta nota), para o aviso de custo
     const custoAnterior = await ultimosCustos(empresaId, nota.itens.map((i) => i.produtoId!), { excetoNotaId: nota.id }, tx);
@@ -444,7 +457,7 @@ export async function lancarNota({ empresaId, usuarioId, notaId, escolhas = [], 
           fornecedorId: nota.fornecedorId, fornecedor: nota.fornecedor.nome, fornecedorCnpj: nota.fornecedor.documento ?? nota.emitenteCnpj,
           descricao: `NF ${nota.numero}/${nota.serie}${parcelas.length > 1 ? ` — parcela ${i + 1}/${parcelas.length}` : ""}`,
           valorTotal: valor, valorPago: 0, saldoRestante: valor, status: "PENDENTE", dataVencimento: new Date(`${p.vencimento}T12:00:00.000Z`),
-          notaCompraId: nota.id, pedidoCompraId: pedidoCompraId ?? null,
+          notaCompraId: nota.id, pedidoCompraId: pedidoDaConta,
           categoriaId: nota.categoriaId, centroCustoId: nota.centroCustoId, formaPagamento: nota.formaPagamento,
           linhaDigitavel: boleto?.ok ? boleto.boleto.linhaDigitavel : null, codigoBarrasBoleto: boleto?.ok ? boleto.boleto.codigoBarras : null,
           observacao: p.duplicata ? `Duplicata ${p.duplicata} da NF-e ${nota.chaveAcesso}`
@@ -459,29 +472,21 @@ export async function lancarNota({ empresaId, usuarioId, notaId, escolhas = [], 
     const aprender = { ...(nota.categoriaId && { categoriaPadraoId: nota.categoriaId }), ...(nota.centroCustoId && { centroCustoPadraoId: nota.centroCustoId }) };
     if (Object.keys(aprender).length) await tx.fornecedor.update({ where: { id: nota.fornecedorId }, data: aprender });
 
-    // 4) Pedido de compra: o custo real da NF vai para os itens do pedido com o mesmo produto
-    let itensPedido = 0;
-    if (pedidoCompraId) {
-      // na unidade do produto (o pedido é feito nela): quantidade convertida, mesmo valor total
-      const custo = new Map<string, { qtd: number; total: number }>();
-      for (const it of nota.itens) {
-        const c = custo.get(it.produtoId!) ?? { qtd: 0, total: 0 };
-        custo.set(it.produtoId!, { qtd: c.qtd + Number(it.quantidade) * Number(it.fatorConversao), total: c.total + Number(it.quantidade) * Number(it.valorUnitario) });
-      }
-      for (const pi of await tx.pedidoCompraItem.findMany({ where: { pedidoId: pedidoCompraId, produtoId: { in: [...custo.keys()] } }, select: { id: true, produtoId: true } })) {
-        const c = custo.get(pi.produtoId!)!;
-        await tx.pedidoCompraItem.update({ where: { id: pi.id }, data: { valorReal: Math.round((c.total / c.qtd) * 100) / 100 } });
-        itensPedido++;
-      }
-    }
+    // 4) Pedido de compra: vínculo POR ITEM (quantidade e custo real da NF nos itens, status Parcial/Concluída,
+    //    histórico). O escolhido que não casa com nada fica só como o pedido da nota, como antes.
+    const vinculoPedido = pedidoDaNota
+      ? await vincularNota(tx, { empresaId, usuarioId, notaId, pedidoId: pedidoDaNota, automatico: !pedidoCompraId, exigirCasamento: false })
+      : null;
+    const itensPedido = vinculoPedido?.itens.length ?? 0;
 
     // (quem lançou fica em cada movimentação; usuarioId da nota continua sendo quem importou)
-    await tx.notaCompra.update({ where: { id: notaId }, data: { pedidoCompraId: pedidoCompraId ?? null } });
+    if (pedidoCompraId) await tx.notaCompra.update({ where: { id: notaId }, data: { pedidoCompraId } });
     return {
       notaId,
       entradas,
       contas: contas.map((c) => ({ id: c.id, numero: c.numero, valor: Number(c.valorTotal), vencimento: c.dataVencimento, boleto: !!c.linhaDigitavel })),
       itensPedido,
+      vinculoPedido,
       avisos,
       avisosCusto,
       precosAplicados,

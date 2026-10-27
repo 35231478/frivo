@@ -476,6 +476,7 @@ model Empresa {
   orcamentoAnexos        OrcamentoAnexo[]
   orcamentoEventos       OrcamentoEvento[]
   pedidoCompraEventos    PedidoCompraEvento[]
+  pedidoCompraVinculos   PedidoCompraVinculo[]
   medicoes               Medicao[]
   contasReceber          ContaReceber[]
   prazoTemplates         PrazoTemplate[]
@@ -705,6 +706,7 @@ model Usuario {
   orcamentoAnexos      OrcamentoAnexo[]          @relation("OrcamentoAnexoAutor")
   orcamentoEventos     OrcamentoEvento[]         @relation("OrcamentoEventoAutor")
   pedidoCompraEventos  PedidoCompraEvento[]      @relation("PedidoCompraEventoAutor")
+  pedidoCompraVinculos PedidoCompraVinculo[]     @relation("PedidoCompraVinculoAutor")
   pedidosSolicitados   PedidoCompraInterno[]     @relation("PedidoSolicitante")
   pedidosComprador     PedidoCompraInterno[]     @relation("PedidoComprador")
   pushSubscriptions    PushSubscription[]
@@ -2634,19 +2636,23 @@ model PedidoCompraInterno {
   motivo          String?
   /// Link do PDF para o fornecedor (sem login)
   tokenPublico    String             @unique @default(uuid()) @map("token_publico")
+  /// Aviso ao solicitante: uma NF foi vinculada (o sino acende enquanto nfVistaEm estiver vazio)
+  nfVinculadaEm   DateTime?          @map("nf_vinculada_em")
+  nfVistaEm       DateTime?          @map("nf_vista_em")
   criadoEm        DateTime           @default(now()) @map("criado_em")
   atualizadoEm    DateTime           @updatedAt @map("atualizado_em")
 
-  empresa      Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  ordemServico OrdemServico?        @relation(fields: [ordemServicoId], references: [id])
-  orcamento    Orcamento?           @relation(fields: [orcamentoId], references: [id])
-  solicitante  Usuario              @relation("PedidoSolicitante", fields: [solicitanteId], references: [id])
-  comprador    Usuario?             @relation("PedidoComprador", fields: [compradorId], references: [id])
-  fornecedor   Fornecedor?          @relation(fields: [fornecedorId], references: [id], onDelete: SetNull)
+  empresa      Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  ordemServico OrdemServico?         @relation(fields: [ordemServicoId], references: [id])
+  orcamento    Orcamento?            @relation(fields: [orcamentoId], references: [id])
+  solicitante  Usuario               @relation("PedidoSolicitante", fields: [solicitanteId], references: [id])
+  comprador    Usuario?              @relation("PedidoComprador", fields: [compradorId], references: [id])
+  fornecedor   Fornecedor?           @relation(fields: [fornecedorId], references: [id], onDelete: SetNull)
   itens        PedidoCompraItem[]
   contasPagar  ContaPagar[]
   notasCompra  NotaCompra[]
   eventos      PedidoCompraEvento[]
+  vinculos     PedidoCompraVinculo[]
 
   @@unique([numero, empresaId])
   @@index([empresaId, status])
@@ -2688,10 +2694,48 @@ model PedidoCompraItem {
   fornecedor    String?
   observacao    String?
 
-  pedido  PedidoCompraInterno @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
-  produto Produto?            @relation(fields: [produtoId], references: [id])
+  pedido   PedidoCompraInterno   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  produto  Produto?              @relation(fields: [produtoId], references: [id])
+  vinculos PedidoCompraVinculo[]
 
   @@map("pedidos_compra_item")
+}
+
+/// Conciliação NF ↔ Pedido de Compra, POR ITEM: este item da NF atende esta quantidade deste item do
+/// pedido (na unidade do produto: quantidade da NF × fator). Vincular 2× não duplica (único por par);
+/// desvincular apaga a linha e volta o status e o valor real do item.
+model PedidoCompraVinculo {
+  id                String   @id @default(cuid())
+  empresaId         String   @map("empresa_id")
+  pedidoId          String   @map("pedido_id")
+  pedidoItemId      String   @map("pedido_item_id")
+  notaId            String   @map("nota_id")
+  notaItemId        String   @map("nota_item_id")
+  /// Quanto deste item da NF foi para o item do pedido (unidade do produto)
+  quantidade        Decimal  @db.Decimal(15, 4)
+  /// Custo real por unidade do produto (valor unitário da NF ÷ fator)
+  valorUnitario     Decimal  @map("valor_unitario") @db.Decimal(15, 4)
+  /// Valor real do item do pedido ANTES do 1º vínculo (volta a ele quando o último vínculo sai)
+  valorRealAnterior Decimal? @map("valor_real_anterior") @db.Decimal(12, 2)
+  /// Casou pelo produto (PRODUTO) ou pela semelhança da descrição (DESCRICAO)
+  criterio          String   @default("PRODUTO")
+  /// Vinculado sozinho no lançamento (idêntico) — reversível como qualquer outro
+  automatico        Boolean  @default(false)
+  usuarioId         String?  @map("usuario_id")
+  criadoEm          DateTime @default(now()) @map("criado_em")
+
+  empresa    Empresa             @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  pedido     PedidoCompraInterno @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  pedidoItem PedidoCompraItem    @relation(fields: [pedidoItemId], references: [id], onDelete: Cascade)
+  nota       NotaCompra          @relation(fields: [notaId], references: [id], onDelete: Cascade)
+  notaItem   NotaCompraItem      @relation(fields: [notaItemId], references: [id], onDelete: Cascade)
+  usuario    Usuario?            @relation("PedidoCompraVinculoAutor", fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@unique([pedidoItemId, notaItemId])
+  @@index([notaId])
+  @@index([pedidoId])
+  @@index([empresaId])
+  @@map("pedido_compra_vinculos")
 }
 
 // ─────────────────────────────────────────────
@@ -3309,14 +3353,15 @@ model NotaCompra {
   criadoEm       DateTime         @default(now()) @map("criado_em")
   atualizadoEm   DateTime         @updatedAt @map("atualizado_em")
 
-  empresa      Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  fornecedor   Fornecedor           @relation(fields: [fornecedorId], references: [id])
-  pedidoCompra PedidoCompraInterno? @relation(fields: [pedidoCompraId], references: [id], onDelete: SetNull)
-  categoria    CategoriaFinanceira? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
-  centroCusto  CentroCusto?         @relation(fields: [centroCustoId], references: [id], onDelete: SetNull)
-  usuario      Usuario?             @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
-  itens        NotaCompraItem[]
-  contasPagar  ContaPagar[]
+  empresa        Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  fornecedor     Fornecedor            @relation(fields: [fornecedorId], references: [id])
+  pedidoCompra   PedidoCompraInterno?  @relation(fields: [pedidoCompraId], references: [id], onDelete: SetNull)
+  categoria      CategoriaFinanceira?  @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  centroCusto    CentroCusto?          @relation(fields: [centroCustoId], references: [id], onDelete: SetNull)
+  usuario        Usuario?              @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  itens          NotaCompraItem[]
+  contasPagar    ContaPagar[]
+  vinculosPedido PedidoCompraVinculo[]
 
   @@unique([empresaId, chaveAcesso])
   @@index([empresaId, status, criadoEm])
@@ -3357,8 +3402,9 @@ model NotaCompraItem {
   produtoId           String?  @map("produto_id")
   criadoEm            DateTime @default(now()) @map("criado_em")
 
-  nota    NotaCompra @relation(fields: [notaId], references: [id], onDelete: Cascade)
-  produto Produto?   @relation(fields: [produtoId], references: [id], onDelete: SetNull)
+  nota           NotaCompra            @relation(fields: [notaId], references: [id], onDelete: Cascade)
+  produto        Produto?              @relation(fields: [produtoId], references: [id], onDelete: SetNull)
+  vinculosPedido PedidoCompraVinculo[]
 
   @@unique([notaId, numeroItem])
   @@index([produtoId])
