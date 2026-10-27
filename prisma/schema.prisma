@@ -469,6 +469,7 @@ model Empresa {
   deParasProduto         DeParaProdutoFornecedor[]
   orcamentos             Orcamento[]
   orcamentoAnexos        OrcamentoAnexo[]
+  orcamentoEventos       OrcamentoEvento[]
   medicoes               Medicao[]
   contasReceber          ContaReceber[]
   prazoTemplates         PrazoTemplate[]
@@ -696,6 +697,7 @@ model Usuario {
   interacoesCliente    InteracaoCliente[]
   orcamentosCriados    Orcamento[]               @relation("OrcamentoCriador")
   orcamentoAnexos      OrcamentoAnexo[]          @relation("OrcamentoAnexoAutor")
+  orcamentoEventos     OrcamentoEvento[]         @relation("OrcamentoEventoAutor")
   pedidosSolicitados   PedidoCompraInterno[]     @relation("PedidoSolicitante")
   pedidosComprador     PedidoCompraInterno[]     @relation("PedidoComprador")
   pushSubscriptions    PushSubscription[]
@@ -2101,6 +2103,18 @@ model Orcamento {
   assinadoPor       String?   @map("assinado_por")
   assinadoCpf       String?   @map("assinado_cpf")
   assinaturaUrl     String?   @db.Text
+  /// Aceite digital: IP e navegador de quem aprovou no link público
+  aprovadoIp        String?   @map("aprovado_ip")
+  aprovadoUserAgent String?   @map("aprovado_user_agent")
+  /// Recusa pelo cliente no link público (status REPROVADO = "Recusado")
+  recusadoEm        DateTime? @map("recusado_em")
+  recusadoPor       String?   @map("recusado_por")
+  recusaMotivo      String?   @map("recusa_motivo") @db.Text
+  recusadoIp        String?   @map("recusado_ip")
+  /// Quantas vezes o cliente abriu o link (a 1ª fica em visualizadoEm)
+  visualizacoes     Int       @default(0)
+  /// Resposta do cliente (aprovou/recusou) já vista pela equipe: some do sino
+  respostaVistaEm   DateTime? @map("resposta_vista_em")
 
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
@@ -2112,6 +2126,7 @@ model Orcamento {
   unidade            Unidade?              @relation(fields: [unidadeId], references: [id], onDelete: SetNull)
   contatoCliente     ContatoCliente?       @relation(fields: [contatoClienteId], references: [id], onDelete: SetNull)
   anexos             OrcamentoAnexo[]
+  eventos            OrcamentoEvento[]
   servicos           OrcamentoServico[]
   produtos           OrcamentoProduto[]
   ordensServico      OrcamentoOs[]
@@ -2153,6 +2168,30 @@ model OrcamentoAnexo {
   @@index([orcamentoId])
   @@index([empresaId])
   @@map("orcamento_anexos")
+}
+
+/// Linha do tempo do orçamento: envio (e-mail, WhatsApp, link), visualização, aprovação, recusa,
+/// mudanças de status. Só acrescenta: nunca é editado.
+model OrcamentoEvento {
+  id          String   @id @default(cuid())
+  empresaId   String   @map("empresa_id")
+  orcamentoId String   @map("orcamento_id")
+  /// ENVIADO_EMAIL, ENVIADO_WHATSAPP, LINK_COPIADO, ENVIADO, VISUALIZADO, APROVADO, RECUSADO, STATUS
+  tipo        String
+  /// Texto curto para a linha do tempo (destinatário, motivo, de → para…)
+  detalhe     String?  @db.Text
+  /// Quem fez (usuário do sistema); nulo = o cliente pelo link público
+  usuarioId   String?  @map("usuario_id")
+  ip          String?
+  criadoEm    DateTime @default(now()) @map("criado_em")
+
+  empresa   Empresa   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  orcamento Orcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+  usuario   Usuario?  @relation("OrcamentoEventoAutor", fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([orcamentoId, criadoEm])
+  @@index([empresaId])
+  @@map("orcamento_eventos")
 }
 
 model OrcamentoServico {

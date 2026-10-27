@@ -6,7 +6,7 @@ import { TEMPLATES_PADRAO, substituirVariaveis, montarEmailHtml, type DadosEmpre
 import { formatarMoeda, formatarData, nomeMes } from "@/lib/utils";
 import { diasAteDiaCivil } from "@/lib/fuso";
 
-export interface ResultadoEmail { ok: boolean; erro?: string }
+export interface ResultadoEmail { ok: boolean; erro?: string; para?: string; cc?: string[] }
 
 function baseUrl(): string {
   return (process.env.NEXTAUTH_URL || process.env.APP_URL || "").replace(/\/$/, "");
@@ -257,15 +257,18 @@ export async function enviarMedicao(medicaoId: string): Promise<ResultadoEmail> 
 }
 
 export async function enviarOrcamento(orcamentoId: string): Promise<ResultadoEmail> {
-  const o = await prisma.orcamento.findUnique({ where: { id: orcamentoId }, include: { cliente: true } });
+  const o = await prisma.orcamento.findUnique({ where: { id: orcamentoId }, include: { cliente: true, contatoCliente: { select: { email: true, ativo: true } } } });
   if (!o) return { ok: false, erro: "Orçamento não encontrado." };
   if (!o.cliente.emailReceberOrcamentos) return { ok: false, erro: "Cliente não recebe orçamentos." };
-  const dest = montarDestinatarios(await getEmailsComunicacao(o.cliente.id, TipoComunicacao.ORCAMENTOS), o.cliente);
+  // O contato A/C do orçamento recebe primeiro; os de comunicação de orçamentos vão em cópia
+  const aosCuidados = o.contatoCliente?.ativo !== false && o.contatoCliente?.email ? [o.contatoCliente.email] : [];
+  const dest = montarDestinatarios([...aosCuidados, ...await getEmailsComunicacao(o.cliente.id, TipoComunicacao.ORCAMENTOS)], o.cliente);
   if (!dest) return { ok: false, erro: "Destinatário sem e-mail." };
-  return enviarEmail(o.empresaId, {
+  const r = await enviarEmail(o.empresaId, {
     tipo: "ORCAMENTO_ENVIADO", para: dest.para, cc: dest.cc, referenciaId: o.id, referenciaTipo: "Orcamento",
     variaveis: { cliente_nome: o.cliente.nomeFantasia ?? o.cliente.nome, cliente_cnpj: o.cliente.cpfCnpj, numero_orcamento: o.codigo, valor: formatarMoeda(Number(o.totalGeral)), link_orcamento: `${baseUrl()}/orcamento/${o.tokenPublico}` },
   });
+  return { ...r, para: dest.para, cc: dest.cc };
 }
 
 type TipoLembreteOrc = "nao_respondido" | "vencendo" | "vencido" | "aprovado_sem_os";

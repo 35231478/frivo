@@ -5,11 +5,14 @@ import { prisma } from "@/lib/prisma";
 import { OrcamentoDocumento } from "@/components/orcamento/orcamento-documento";
 import { anexosDoDocumento, INCLUDE_DOCUMENTO_ORCAMENTO } from "@/lib/orcamentos/documento-server";
 import { PropostaDocumento } from "@/components/orcamento/proposta-documento";
-import { AprovacaoPublica } from "@/components/orcamento/aprovacao-publica";
+import { RespostaPublica } from "@/components/orcamento/resposta-publica";
 import { FrivoLogo } from "@/components/layout/frivo-logo";
 import { LABELS_STATUS_ORCAMENTO, CLASSE_STATUS_ORCAMENTO, formatarData, cn } from "@/lib/utils";
-import { AlertTriangle, CheckCircle2, Printer } from "lucide-react";
-import { diaCivilPassou } from "@/lib/fuso";
+import { AlertTriangle, CheckCircle2, Printer, XCircle } from "lucide-react";
+import { headers } from "next/headers";
+import { auth } from "@/lib/auth";
+import { ehAberturaDaPagina, etapaCiclo, ipDaRequisicao } from "@/lib/orcamentos/ciclo";
+import { registrarVisualizacao } from "@/lib/orcamentos/ciclo-server";
 
 export const dynamic = "force-dynamic";
 
@@ -40,10 +43,19 @@ export default async function OrcamentoPublicoPage({
       })).map((e) => ({ id: e.id, rotulo: [e.marca, e.modelo, e.numeroSerie ? `(${e.numeroSerie})` : "", e.unidade?.nome ? `— ${e.unidade.nome}` : ""].filter(Boolean).join(" ") }))
     : [];
 
-  const expirado = diaCivilPassou(orcamento.validadeEm); // vale até o fim do dia (Brasília)
-  const cancelado = orcamento.status === "CANCELADO";
-  const aprovado = orcamento.status === "APROVADO";
-  const podeAprovar = orcamento.status === "ENVIADO" && !expirado;
+  // O cliente abriu o link: "Visualizado" (não contam: a própria empresa logada, robô de prévia, prefetch e o service worker)
+  const sessao = await auth().catch(() => null);
+  const cab = await headers();
+  if (ehAberturaDaPagina(cab)) {
+    await registrarVisualizacao(orcamento, { empresaIdSessao: sessao?.user?.empresaId ?? null, ip: ipDaRequisicao(cab), userAgent: cab.get("user-agent") });
+  }
+
+  const etapa = etapaCiclo(orcamento); // validade vale até o fim do dia (Brasília)
+  const expirado = etapa === "EXPIRADO";
+  const cancelado = etapa === "CANCELADO";
+  const aprovado = etapa === "APROVADO" || etapa === "CONVERTIDO";
+  const recusado = etapa === "RECUSADO";
+  const podeAprovar = etapa === "ENVIADO" || etapa === "VISUALIZADO";
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -71,7 +83,7 @@ export default async function OrcamentoPublicoPage({
               mensagem="Este orçamento foi cancelado pela empresa e não pode mais ser aprovado."
             />
           )}
-          {expirado && !aprovado && !cancelado && (
+          {expirado && (
             <StatusAviso
               tipo="atencao"
               titulo="Orçamento expirado"
@@ -86,6 +98,20 @@ export default async function OrcamentoPublicoPage({
                 <p className="text-sm">
                   Aprovado por {orcamento.assinadoPor} em{" "}
                   {formatarData(orcamento.assinadoEm, "dd/MM/yyyy 'às' HH:mm")}.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {recusado && (
+            <div className="bg-surface-alt border border-surface-border text-ink rounded-card px-5 py-4 flex items-center gap-3" data-aviso-recusado>
+              <XCircle className="w-6 h-6 shrink-0 text-atrasado" aria-hidden />
+              <div>
+                <p className="font-bold">Proposta recusada</p>
+                <p className="text-sm text-ink-muted">
+                  {orcamento.recusadoPor ? `Recusada por ${orcamento.recusadoPor}` : "Recusada"}
+                  {orcamento.recusadoEm && ` em ${formatarData(orcamento.recusadoEm, "dd/MM/yyyy 'às' HH:mm")}`}.
+                  {" "}Obrigado pelo retorno. Se mudar de ideia, fale com a empresa para uma nova proposta.
                 </p>
               </div>
             </div>
@@ -112,7 +138,7 @@ export default async function OrcamentoPublicoPage({
           </div>
 
           {/* Aprovação */}
-          {podeAprovar && <AprovacaoPublica token={token} />}
+          {podeAprovar && <RespostaPublica token={token} />}
           {orcamento.status === "RASCUNHO" && (
             <div className="bg-white border border-surface-border rounded-card px-5 py-4 text-center">
               <span className={cn("inline-flex mb-2", CLASSE_STATUS_ORCAMENTO[orcamento.status])}>

@@ -5,9 +5,11 @@ import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { whereOrcamentos } from "@/lib/listas/filtros";
-import { cn, formatarData, formatarMoeda, LABELS_STATUS_ORCAMENTO, CLASSE_STATUS_ORCAMENTO, LABELS_TIPO_ORCAMENTO, CLASSE_TIPO_ORCAMENTO } from "@/lib/utils";
+import { cn, formatarData, formatarMoeda, LABELS_TIPO_ORCAMENTO, CLASSE_TIPO_ORCAMENTO } from "@/lib/utils";
+import { LABELS_ETAPA, dataDaEtapa, etapaCiclo } from "@/lib/orcamentos/ciclo";
+import { PilulaEtapa } from "@/components/orcamento/ciclo-orcamento";
 import Link from "next/link";
-import { Calculator, Plus } from "lucide-react";
+import { Calculator, Plus, X } from "lucide-react";
 import { AvatarCliente } from "@/components/ui/avatar-cliente";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
 import type { Prisma } from "@prisma/client";
@@ -23,14 +25,15 @@ export default async function OrcamentosPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const sp = await searchParams;
-  const { busca = "", status = "", tipo = "", clienteId = "", dataInicio = "", dataFim = "", inativos = "" } = sp;
+  const { busca = "", status = "", tipo = "", clienteId = "", dataInicio = "", dataFim = "", inativos = "", resposta = "" } = sp;
   const session = await auth();
   const empresaId = session!.user!.empresaId;
   const massa = temAcaoMassa(session!.user!.permissoes, session!.user!.role, "orcamentos");
   const { pagina: paginaPedida, porPagina } = lerPaginacao(sp);
   const orderBy = ordemPrisma(lerOrdem(sp, ORDEM_ORCAMENTOS), ORDEM_ORCAMENTOS, ORDEM_PADRAO_ORCAMENTOS) as Prisma.OrcamentoOrderByWithRelationInput[];
 
-  const where = whereOrcamentos(empresaId, { busca, status, tipo, clienteId, dataInicio, dataFim, inativos });
+  const where = whereOrcamentos(empresaId, { busca, status, tipo, clienteId, dataInicio, dataFim, inativos, resposta });
+  const agora = new Date();
 
   const [total, clientes] = await Promise.all([
     prisma.orcamento.count({ where }),
@@ -78,11 +81,16 @@ export default async function OrcamentosPage({
               <BuscaUrl lista="orcamentos" placeholder="Buscar por código, nome ou cliente…" rotulo="Buscar orçamentos" />
             </div>
             <FiltroSelectUrl param="tipo" vazio="Todos os tipos" opcoes={Object.entries(LABELS_TIPO_ORCAMENTO).map(([value, label]) => ({ value, label }))} />
-            <FiltroSelectUrl param="status" vazio="Todos status" opcoes={Object.entries(LABELS_STATUS_ORCAMENTO).map(([value, label]) => ({ value, label }))} />
+            <FiltroSelectUrl param="status" vazio="Todos status" opcoes={Object.entries(LABELS_ETAPA).map(([value, label]) => ({ value, label }))} />
             <FiltroSelectUrl param="clienteId" vazio="Todos clientes" opcoes={clientes.map((c) => ({ value: c.id, label: c.nomeFantasia ?? c.nome }))} />
             <FiltroDataUrl param="dataInicio" titulo="Data inicial" />
             <FiltroDataUrl param="dataFim" titulo="Data final" />
             <FiltroCheckUrl param="inativos" rotulo="Mostrar cancelados" />
+            {resposta === "nova" && (
+              <Link href="/orcamentos" className="inline-flex items-center gap-1.5 rounded-full bg-acento-claro text-acento text-xs font-semibold px-3 py-1.5" data-filtro-resposta>
+                Respostas novas do cliente <X className="w-3.5 h-3.5" aria-hidden /><span className="sr-only">Limpar filtro</span>
+              </Link>
+            )}
           </div>
         </div>
 
@@ -104,7 +112,7 @@ export default async function OrcamentosPage({
                 <p className="text-sm"><span className="font-mono font-semibold text-primary-600">{o.codigo}</span> <span className="text-ink font-medium">{o.nome}</span></p>
                 <p className="text-xs text-ink-muted truncate">{o.cliente.nomeFantasia ?? o.cliente.nome} · {formatarData(o.criadoEm)}</p>
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                  <span className={CLASSE_STATUS_ORCAMENTO[o.status]}>{LABELS_STATUS_ORCAMENTO[o.status]}</span>
+                  <PilulaEtapa etapa={etapaCiclo(o, agora)} desde={dataDaEtapa(o, agora)} />
                   <span className="text-sm font-semibold text-ink ml-auto">{formatarMoeda(Number(o.totalGeral))}</span>
                 </div>
               </Link>
@@ -155,9 +163,7 @@ export default async function OrcamentosPage({
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={CLASSE_STATUS_ORCAMENTO[o.status]}>
-                        {LABELS_STATUS_ORCAMENTO[o.status]}
-                      </span>
+                      <PilulaEtapa etapa={etapaCiclo(o, agora)} desde={dataDaEtapa(o, agora)} />
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">
                       {formatarMoeda(Number(o.totalGeral))}

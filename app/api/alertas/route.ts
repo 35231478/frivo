@@ -18,15 +18,20 @@ export async function GET() {
   const verCompras = pode(permissoes, "financeiro", "visualizar", role);
   const verVeiculos = pode(permissoes, "veiculos", "visualizar", role);
   const verBoletos = pode(permissoes, "financeiro", "contasReceber", role);
+  const verOrcamentos = pode(permissoes, "orcamentos", "visualizar", role);
 
   const inicioHoje = hojeDiaCivil(); // recebimento é dia civil: hoje em Brasília
 
   const zeroVeiculos = { checklistPendente: 0, checklistsComAlertas: 0, documentosVencendo: 0, veiculosManutencao: 0, revisaoChegando: 0 };
-  const [prazosBrutos, veiculosBrutos, boletosPagos] = await Promise.all([
+  const [prazosBrutos, veiculosBrutos, boletosPagos, orcamentosRespondidos] = await Promise.all([
     verOrdens || verCompras ? contarAlertasPrazos(empresaId) : Promise.resolve(null),
     verVeiculos ? contarAlertasVeiculos(empresaId) : Promise.resolve(null),
     verBoletos
       ? prisma.contaReceber.count({ where: { empresaId, boletoStatus: "PAGO", dataRecebimento: { gte: inicioHoje } } })
+      : Promise.resolve(0),
+    // Cliente aprovou/recusou pelo link e ninguém abriu o orçamento ainda (lib/orcamentos/ciclo)
+    verOrcamentos
+      ? prisma.orcamento.count({ where: { empresaId, status: { in: ["APROVADO", "REPROVADO"] }, respostaVistaEm: null } })
       : Promise.resolve(0),
   ]);
 
@@ -46,6 +51,7 @@ export async function GET() {
     ...prazos,
     ...veiculos,
     boletosPagos,
-    total: totalPrazos + totalVeiculos + boletosPagos,
+    orcamentosRespondidos,
+    total: totalPrazos + totalVeiculos + boletosPagos + orcamentosRespondidos,
   });
 }

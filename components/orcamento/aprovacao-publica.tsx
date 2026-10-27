@@ -15,7 +15,11 @@ function mascararCpf(v: string): string {
   return `${n.slice(0, 3)}.${n.slice(3, 6)}.${n.slice(6, 9)}-${n.slice(9)}`;
 }
 
-export function AprovacaoPublica({ token }: { token: string }) {
+/**
+ * Aceite no link público: nome, CPF e assinatura. O servidor grava também data/hora e IP (o texto
+ * avisa). `onRecusar` mostra, ao lado, o caminho para recusar com motivo (RecusaPublica).
+ */
+export function AprovacaoPublica({ token, onRecusar }: { token: string; onRecusar?: () => void }) {
   const router = useRouter();
   const sigRef = useRef<SignatureCanvas | null>(null);
   const [aberto, setAberto] = useState(false);
@@ -59,19 +63,32 @@ export function AprovacaoPublica({ token }: { token: string }) {
 
   if (!aberto) {
     return (
-      <div className="bg-white border border-surface-border rounded-card p-6 text-center shadow-card">
-        <h3 className="font-display text-ink text-xl font-bold mb-2">Aprovar este orçamento</h3>
+      <div className="bg-white border border-surface-border rounded-card p-6 text-center shadow-card" data-resposta-publica>
+        <h3 className="font-display text-ink text-xl font-bold mb-2">Responder esta proposta</h3>
         <p className="text-ink-muted text-sm mb-4">
-          Confirme sua aprovação digitalmente com sua assinatura.
+          Aprove com sua assinatura digital ou, se não for seguir, recuse e conte o motivo.
         </p>
-        <button
-          type="button"
-          onClick={() => setAberto(true)}
-          className="inline-flex items-center gap-2 bg-acento text-white hover:bg-acento-hover font-bold px-6 py-3 rounded-lg transition-colors"
-        >
-          <PenLine className="w-5 h-5" />
-          Aprovar orçamento
-        </button>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+          <button
+            type="button"
+            onClick={() => setAberto(true)}
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-acento text-white hover:bg-acento-hover font-bold px-6 py-3 rounded-lg transition-colors"
+            data-abrir-aprovacao
+          >
+            <PenLine className="w-5 h-5" />
+            Aprovar proposta
+          </button>
+          {onRecusar && (
+            <button
+              type="button"
+              onClick={onRecusar}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-white border border-surface-border text-ink hover:bg-surface-alt font-semibold px-6 py-3 rounded-lg transition-colors"
+              data-abrir-recusa
+            >
+              Recusar
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -144,6 +161,10 @@ export function AprovacaoPublica({ token }: { token: string }) {
           <p className="text-xs text-ink-subtle mt-1">Use o dedo (celular) ou mouse para assinar.</p>
         </div>
       </div>
+
+      <p className="text-xs text-ink-muted" data-aviso-registro>
+        Ao confirmar, registramos seu nome, CPF, a data e a hora e o endereço IP desta aprovação.
+      </p>
 
       <Button
         variant="success"

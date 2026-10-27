@@ -10,6 +10,9 @@ import { AcoesEnvio } from "@/components/orcamento/acoes-envio";
 import { ConverterContrato } from "@/components/orcamento/converter-contrato";
 import { ComprasSecao } from "@/components/compras/compras-secao";
 import { AnexosProposta } from "@/components/orcamento/anexos-proposta";
+import { CicloOrcamento } from "@/components/orcamento/ciclo-orcamento";
+import { etapaCiclo } from "@/lib/orcamentos/ciclo";
+import { marcarRespostaVista } from "@/lib/orcamentos/ciclo-server";
 import { pode } from "@/lib/permissoes";
 import { PageHeader } from "@/components/ui/page-header";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
@@ -45,6 +48,15 @@ export default async function OrcamentoDetalhePage({
   ]);
 
   if (!orcamento || !empresa) notFound();
+
+  // Abrir o orçamento respondido pelo cliente = resposta vista (sai do sino)
+  await marcarRespostaVista(orcamento, empresaId);
+  const eventos = await prisma.orcamentoEvento.findMany({
+    where: { orcamentoId: id, empresaId },
+    orderBy: { criadoEm: "desc" },
+    take: 50,
+    select: { id: true, tipo: true, detalhe: true, ip: true, criadoEm: true, usuario: { select: { nome: true } } },
+  });
 
   const podeEditar = orcamento.status === "RASCUNHO";
   const ehProposta = orcamento.tipo === "PROPOSTA_CONTRATO";
@@ -84,7 +96,12 @@ export default async function OrcamentoDetalhePage({
           tokenPublico={orcamento.tokenPublico}
           status={orcamento.status}
           podeEditar={podeEditar}
+          etapa={etapaCiclo(orcamento)}
         />
+      </div>
+
+      <div className="card-padded">
+        <CicloOrcamento orcamento={orcamento} eventos={eventos} />
       </div>
 
       {/* Indicadores e conversão da proposta de contrato */}

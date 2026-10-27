@@ -3,10 +3,17 @@ import { prisma } from "@/lib/prisma";
 import { aprovacaoPublicaSchema } from "@/lib/validations";
 import { gerarContaReceberDoOrcamento } from "@/lib/financeiro-server";
 import { diaCivilPassou } from "@/lib/fuso";
+import { ipDaRequisicao } from "@/lib/orcamentos/ciclo";
+import { avisarResponsavel, registrarEvento } from "@/lib/orcamentos/ciclo-server";
 
+/**
+ * Aceite digital no link público: nome, CPF e assinatura de quem aprova, com data/hora, IP e
+ * navegador gravados. Só um orçamento ENVIADO e dentro da validade; a troca de status é atômica
+ * (dois cliques não aprovam duas vezes). Avisa o responsável (e-mail + sino).
+ */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
 
   const parsed = aprovacaoPublicaSchema.safeParse(body);
   if (!parsed.success) {
@@ -29,20 +36,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   }
 
   const cpfLimpo = parsed.data.cpf.replace(/\D/g, "");
+  const ip = ipDaRequisicao(req.headers);
+  const nome = parsed.data.nome.trim();
 
-  const aprovado = await prisma.orcamento.update({
-    where: { id: orcamento.id },
+  const r = await prisma.orcamento.updateMany({
+    where: { id: orcamento.id, status: "ENVIADO" },
     data: {
       status: "APROVADO",
       assinadoEm: new Date(),
-      assinadoPor: parsed.data.nome.trim(),
+      assinadoPor: nome,
       assinadoCpf: cpfLimpo,
       assinaturaUrl: parsed.data.assinaturaUrl,
+      aprovadoIp: ip,
+      aprovadoUserAgent: req.headers.get("user-agent")?.slice(0, 300) ?? null,
     },
   });
+  if (r.count !== 1) return NextResponse.json({ erro: "Este orçamento não está disponível para aprovação" }, { status: 400 });
+  await registrarEvento({ empresaId: orcamento.empresaId, orcamentoId: orcamento.id, tipo: "APROVADO", detalhe: nome, ip });
 
   // Orçamento aprovado entra em contas a receber como PREVISTO
   await gerarContaReceberDoOrcamento(orcamento.id);
+  await avisarResponsavel(orcamento.id, "APROVADO");
 
-  return NextResponse.json({ ok: true, status: aprovado.status });
+  return NextResponse.json({ ok: true, status: "APROVADO" });
 }
