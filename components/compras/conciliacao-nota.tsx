@@ -14,6 +14,8 @@ import { corpoFinanceiro, FinanceiroNotaEditor, financeiroInicial, type Financei
 
 export interface FiscalProduto { ncm: string | null; cest: string | null; gtin: string | null; origemMercadoria: string | null; unidadeTributavel: string | null }
 export interface ProdutoConciliacao {
+  /** Código do produto (a busca também acha por ele) */
+  codigo?: number | null;
   id: string; nome: string; unidade: string; saldo?: number;
   /** preço de venda atual, margem alvo e último custo de compra (por unidade do produto) */
   preco: number | null; margemVenda: number | null; custo: number | null;
@@ -360,7 +362,7 @@ function BuscaProduto({ onEscolher, rotulo }: { onEscolher: (p: ProdutoConciliac
             <li key={p.id}>
               <button type="button" role="option" aria-selected={false} onClick={() => { onEscolher(p); setQ(""); setLista([]); }}
                 className="w-full text-left px-3 py-2 text-sm hover:bg-primary-50 flex justify-between gap-2" data-opcao-produto={p.id}>
-                <span className="truncate">{p.nome}</span><span className="text-xs text-ink-muted shrink-0">{p.unidade}{p.saldo != null && ` · saldo ${formatarQtd(p.saldo)}`}</span>
+                <span className="truncate">{p.codigo != null && <span className="font-mono text-xs text-ink-muted mr-1.5">{p.codigo}</span>}{p.nome}</span><span className="text-xs text-ink-muted shrink-0">{p.unidade}{p.saldo != null && ` · saldo ${formatarQtd(p.saldo)}`}</span>
               </button>
             </li>
           ))}

@@ -5,6 +5,7 @@ import {
 } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { PRESETS, CORES_PERFIL } from "../lib/permissoes";
+import { proximoCodigoServico } from "../lib/cadastros/codigos";
 
 const prisma = new PrismaClient();
 
@@ -202,8 +203,12 @@ async function main() {
     { nome: "Limpeza de Filtro", unidade: "un", valorPadrao: 80 },
     { nome: "Higienização", unidade: "un", valorPadrao: 180 },
   ];
+  // Códigos como o sistema gera: 4 letras do nome + sequencial (lib/cadastros/codigos.ts)
+  const codigosServico: string[] = [];
   for (const s of servicos) {
-    await prisma.servico.create({ data: { empresaId: empresa.id, ...s } });
+    const codigo = proximoCodigoServico(s.nome, codigosServico);
+    codigosServico.push(codigo);
+    await prisma.servico.create({ data: { empresaId: empresa.id, codigo, ...s } });
   }
   console.log(`Serviços criados: ${servicos.length}`);
 
@@ -216,8 +221,8 @@ async function main() {
     { nome: "Contactor", unidade: "un", valorPadrao: 60, estoqueMinimo: 3 },
     { nome: "Válvula de Expansão", unidade: "un", valorPadrao: 180, estoqueMinimo: 2 },
   ];
-  for (const p of produtos) {
-    await prisma.produto.create({ data: { empresaId: empresa.id, ...p } });
+  for (const [i, p] of produtos.entries()) {
+    await prisma.produto.create({ data: { empresaId: empresa.id, codigo: i + 1, ...p } });
   }
   console.log(`Produtos criados: ${produtos.length}`);
 

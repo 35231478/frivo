@@ -656,7 +656,7 @@ export function OrcamentoForm({
       <div className="card-padded">
         <ItensTabela
           titulo={tipo === "PROPOSTA_CONTRATO" ? "Serviços inclusos no contrato" : "Serviços"}
-          labelAdicionar="Buscar serviço por nome..."
+          labelAdicionar="Buscar serviço por nome ou código..."
           catalogo={catalogoServicos}
           itens={servicos}
           onChange={setServicos}
@@ -669,7 +669,7 @@ export function OrcamentoForm({
       <div className="card-padded">
         <ItensTabela
           titulo="Produtos"
-          labelAdicionar="Buscar produto por nome..."
+          labelAdicionar="Buscar produto por nome ou código..."
           catalogo={catalogoProdutos}
           itens={produtos}
           onChange={setProdutos}

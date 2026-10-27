@@ -4,7 +4,11 @@
  *  - lê o cabeçalho (nome exato do modelo ou apelidos; sem acento/maiúsculas), ignora o que não reconhece;
  *  - valida linha a linha — uma linha com erro NUNCA derruba as outras;
  *  - deduplica: dentro da planilha (a 2ª ocorrência vira erro) e contra o cadastro DA EMPRESA
- *    (achou → "atualizar"; sem permissão de editar → erro explicando);
+ *    (achou → "atualizar"; sem permissão de editar → erro explicando). As chaves vêm em ordem de
+ *    preferência (id_sistema → código / CNPJ-CPF → nome); duas chaves da mesma linha apontando para
+ *    registros DIFERENTES = erro (nunca atualiza o registro errado);
+ *  - linha que sumiu da planilha não apaga nada: a importação só cria e atualiza;
+ *  - exporta no MESMO formato (as mesmas colunas), para baixar → editar → subir de novo;
  *  - teto de linhas, para não estourar o tempo da requisição.
  * A gravação fica no servidor (lib/importacao/servidor.ts), que analisa o arquivo DE NOVO ao
  * confirmar — a prévia que o navegador mostrou nunca é a fonte da verdade.
@@ -52,6 +56,13 @@ export interface DefImportacao {
   /** "CNPJ/CPF", "nome"… — explica a dedup nas mensagens */
   chaveDescricao: string;
   colunas: ColunaImportacao[];
+  /**
+   * Chaves que, informadas, PRECISAM existir na empresa (ex.: id_sistema, código do produto): se não
+   * existir, a linha vira erro com esta mensagem (nunca cria um registro "novo" com id de outra empresa).
+   */
+  chavesQueExistem?: { prefixo: string; erro: (valor: string) => string }[];
+  /** Exportação: o registro do cadastro → o valor de cada coluna, no formato que a importação lê de volta */
+  exportar: (registro: Record<string, unknown>, refs: Record<string, OpcaoRef[]>) => Record<string, string>;
   /**
    * Valida e converte uma linha. `chaves` = chaves de dedup em ordem de preferência (ex.: documento,
    * depois nome); a primeira que existir no cadastro decide o "atualizar". Campos vazios ficam
@@ -168,15 +179,24 @@ export function analisar(tabela: Tabela, def: DefImportacao, ctx: ContextoImport
     if (!r.ok) return { linha, status: "erro", rotulo: r.rotulo, erros: r.erros, valores };
 
     // Repetida na própria planilha (a 1ª ocorrência vale)
-    const repetida = r.chaves.map((k) => vistas.get(k)).find((x) => x !== undefined);
-    if (repetida !== undefined)
-      return { linha, status: "erro", rotulo: r.rotulo, erros: [`Repete a linha ${repetida} (mesmo ${def.chaveDescricao}).`], valores };
+    const kRep = r.chaves.find((k) => vistas.has(k));
+    if (kRep !== undefined)
+      return { linha, status: "erro", rotulo: r.rotulo, erros: [`Repete a linha ${vistas.get(kRep)} (mesmo ${tipoChave(kRep)}).`], valores };
     for (const k of r.chaves) vistas.set(k, linha);
 
-    const chave = r.chaves.find((k) => ctx.existentes.has(k));
+    const naoExiste = def.chavesQueExistem?.map((c) => {
+      const k = r.chaves.find((x) => x.startsWith(c.prefixo) && !ctx.existentes.has(x));
+      return k ? c.erro(k.slice(c.prefixo.length)) : null;
+    }).find(Boolean);
+    if (naoExiste) return { linha, status: "erro", rotulo: r.rotulo, erros: [naoExiste], valores };
+    // Chaves que casaram com registros DIFERENTES (ex.: id_sistema de um, código de outro): não adivinha
+    const achadas = r.chaves.filter((k) => ctx.existentes.has(k));
+    if (new Set(achadas.map((k) => ctx.existentes.get(k))).size > 1)
+      return { linha, status: "erro", rotulo: r.rotulo, erros: [`Esta linha aponta para ${def.plural} diferentes: ${achadas.map(descreverChave).join(" e ")} são de cadastros distintos. Confira a planilha.`], valores };
+    const chave = achadas[0];
     const existenteId = chave ? ctx.existentes.get(chave) : undefined;
     if (existenteId && !ctx.podeAtualizar)
-      return { linha, status: "erro", rotulo: r.rotulo, erros: [`Já existe ${def.singular} com este ${def.chaveDescricao} e você não tem permissão para editar — não dá para atualizar.`], valores };
+      return { linha, status: "erro", rotulo: r.rotulo, erros: [`Já existe ${def.singular} com este ${tipoChave(chave!)} e você não tem permissão para editar — não dá para atualizar.`], valores };
     return { linha, status: existenteId ? "atualizar" : "criar", rotulo: r.rotulo, erros: [], existenteId, chave: existenteId ? chave : undefined, dados: r.dados, valores };
   });
 
@@ -192,19 +212,40 @@ export function analisar(tabela: Tabela, def: DefImportacao, ctx: ContextoImport
   };
 }
 
-/* ───────────────────────── Modelo e planilha de erros ───────────────────────── */
+const TIPOS_CHAVE: Record<string, string> = { id: "id_sistema", cod: "código", doc: "CNPJ/CPF", nome: "nome" };
+/** "doc:123" → "CNPJ/CPF" (qual chave casou, para as mensagens) */
+export const tipoChave = (k: string) => TIPOS_CHAVE[k.slice(0, k.indexOf(":"))] ?? "identificador";
+/** "id:abc" → "o id_sistema abc"; "cod:LIMP01" → "o código LIMP01"… */
+export const descreverChave = (k: string) => `o ${tipoChave(k)} ${k.slice(k.indexOf(":") + 1)}`;
+
+/* ───────────────────────── Modelo, exportação e planilha de erros ───────────────────────── */
+
+/**
+ * Exportação: as MESMAS colunas do modelo (e da importação), uma linha por registro — baixar, editar e
+ * subir de novo atualiza (id_sistema / código / CNPJ-CPF casam o registro) em vez de duplicar.
+ */
+export function linhasExportacao(def: DefImportacao, registros: Record<string, unknown>[], refs: Record<string, OpcaoRef[]> = {}) {
+  return [
+    def.colunas.map((c) => c.titulo),
+    ...registros.map((r) => { const v = def.exportar(r, refs); return def.colunas.map((c) => v[c.chave] ?? ""); }),
+  ];
+}
+
 
 /** Modelo: cabeçalho + 1 linha de exemplo preenchida; aba de instruções com obrigatórias e opções. */
-export function linhasModelo(def: DefImportacao, refs: Record<string, OpcaoRef[]> = {}) {
+export function linhasModelo(def: DefImportacao, refs: Record<string, OpcaoRef[]> = {}, o: { exportada?: boolean } = {}) {
   const cabecalho = def.colunas.map((c) => c.titulo);
   const exemplo = def.colunas.map((c) => c.exemplo);
   const instrucoes = [
     ["coluna", "obrigatória", "o que preencher", "valores aceitos"],
     ...def.colunas.map((c) => [c.titulo, c.obrig ? "sim" : "não", c.ajuda, (c.opcoes ?? refs[c.chave]?.map((o) => o.rotulo) ?? []).join(", ")]),
     [],
-    ["Importante", "", `A linha de exemplo (linha 2) é só um modelo: apague ou troque pelos seus dados antes de enviar.`, ""],
+    o.exportada
+      ? ["Importante", "", `Esta planilha veio do sistema: edite e envie de volta em “Importar planilha”. Cada linha ATUALIZA o seu cadastro pelo id_sistema — não altere essa coluna. Linhas novas (id_sistema vazio) são cadastradas.`, ""]
+      : ["Importante", "", `A linha de exemplo (linha 2) é só um modelo: apague ou troque pelos seus dados antes de enviar.`, ""],
     ["", "", `${def.plural[0].toUpperCase()}${def.plural.slice(1)} que já existem (mesmo ${def.chaveDescricao}) são ATUALIZADOS; células vazias não apagam nada.`, ""],
     ["", "", `Até ${MAX_LINHAS_IMPORTACAO} linhas por arquivo. Nada é gravado antes da sua confirmação na prévia.`, ""],
+    ["", "", "Linha apagada da planilha NÃO apaga nada no sistema: a importação só cria e atualiza.", ""],
   ];
   return { cabecalho, exemplo, instrucoes };
 }

@@ -6,6 +6,8 @@ import { ErroRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref
 import { calcularValorFinalTabela } from "@/lib/tabela-preco-helpers";
 import { enviarConvite, senhaInicialAleatoria } from "@/lib/usuarios/convite";
 import type { EntidadeCadastro } from "@/lib/cadastros/registro";
+import { normalizarCodigoServico } from "@/lib/cadastros/codigos";
+import { colisaoDeCodigo, criarProdutoComCodigo, criarServicoComCodigo, servicoComCodigo } from "@/lib/cadastros/codigos-server";
 
 /**
  * Regras ESPECÍFICAS de alguns cadastros padronizados (perfis de acesso, modelos de encargos,
@@ -400,6 +402,55 @@ const fornecedores: RegrasCadastro = {
   },
 };
 
+/* ───────────────────────── Produtos e serviços: código ───────────────────────── */
+/** Produto: código numérico sequencial da empresa, gerado aqui (não vem do formulário). */
+const produtos: RegrasCadastro = {
+  async criar(dados, ator) {
+    const item = await criarProdutoComCodigo(ator.empresaId, (codigo) =>
+      prisma.produto.create({ data: { ...(dados as any), codigo, empresaId: ator.empresaId, ativo: true } }));
+    return { ok: true, item };
+  },
+};
+
+const msgCodigoServico = (codigo: string, s: { nome: string }) => `O código ${codigo} já é do serviço “${s.nome}”. Escolha outro.`;
+
+/** Serviço: código digitado (normalizado, único na empresa) ou gerado pelo nome; vazio ao editar mantém o atual. */
+const servicos: RegrasCadastro = {
+  async criar(dados, ator) {
+    const n = normalizarCodigoServico(dados.codigo);
+    if (n.erro) return falha(400, n.erro);
+    if (n.codigo) { const dup = await servicoComCodigo(ator.empresaId, n.codigo); if (dup) return falha(409, msgCodigoServico(n.codigo, dup)); }
+    try {
+      const item = await criarServicoComCodigo(ator.empresaId, String(dados.nome), n.codigo, (codigo) =>
+        prisma.servico.create({ data: { ...(dados as any), codigo, empresaId: ator.empresaId, ativo: true } }));
+      return { ok: true, item };
+    } catch (e) {
+      if (n.codigo && colisaoDeCodigo(e)) return falha(409, `O código ${n.codigo} acabou de ser usado em outro serviço. Escolha outro.`);
+      throw e;
+    }
+  },
+  async editar(existente, dados, ator) {
+    const data = { ...dados };
+    if ("codigo" in data) {
+      const n = normalizarCodigoServico(data.codigo);
+      if (n.erro) return falha(400, n.erro);
+      if (!n.codigo || n.codigo === existente.codigo) delete data.codigo;
+      else {
+        const dup = await servicoComCodigo(ator.empresaId, n.codigo, existente.id);
+        if (dup) return falha(409, msgCodigoServico(n.codigo, dup));
+        data.codigo = n.codigo;
+      }
+    }
+    if (!Object.keys(data).length) return { ok: true, item: existente };
+    try {
+      return { ok: true, item: await prisma.servico.update({ where: { id: existente.id }, data: data as any }) };
+    } catch (e) {
+      if (colisaoDeCodigo(e)) return falha(409, `O código ${String(data.codigo)} acabou de ser usado em outro serviço. Escolha outro.`);
+      throw e;
+    }
+  },
+};
+
 /* ───────────────────────── Centros de custo ───────────────────────── */
 /** Nome único na empresa, sem diferença de maiúsculas/minúsculas (ativo ou inativo). */
 async function centroComNome(empresaId: string, nome: string, exceto?: string) {
@@ -449,6 +500,8 @@ const centrosCusto: RegrasCadastro = {
 };
 
 export const REGRAS: Partial<Record<EntidadeCadastro, RegrasCadastro>> = {
+  produtos,
+  servicos,
   "perfis-acesso": perfis,
   "modelos-encargos": modelos,
   usuarios,

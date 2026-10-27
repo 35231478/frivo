@@ -90,7 +90,7 @@ async function criar() {
 }
 async function montarOrcamento() {
   await digitar($("[data-gaveta-orcamento] input[data-nome-orcamento]"), "Troca de capacitor");
-  await digitar($("[data-gaveta-orcamento] input[placeholder='Buscar serviço por nome...']"), "Limpeza");
+  await digitar($("[data-gaveta-orcamento] input[placeholder='Buscar serviço por nome ou código...']"), "Limpeza");
   await clicar([...document.querySelectorAll("[data-gaveta-orcamento] button")].find((b) => b.textContent?.includes("Limpeza de split")));
 }
 

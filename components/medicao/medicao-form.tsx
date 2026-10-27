@@ -259,11 +259,11 @@ export function MedicaoForm({
       </div>
 
       <div className="card-padded">
-        <ItensTabela titulo="Serviços" labelAdicionar="Buscar serviço por nome..." catalogo={catalogoServicos} itens={servicos} onChange={setServicos} tabela={tabelaPreco} />
+        <ItensTabela titulo="Serviços" labelAdicionar="Buscar serviço por nome ou código..." catalogo={catalogoServicos} itens={servicos} onChange={setServicos} tabela={tabelaPreco} />
       </div>
 
       <div className="card-padded">
-        <ItensTabela titulo="Produtos" labelAdicionar="Buscar produto por nome..." catalogo={catalogoProdutos} itens={produtos} onChange={setProdutos} tabela={tabelaPreco} />
+        <ItensTabela titulo="Produtos" labelAdicionar="Buscar produto por nome ou código..." catalogo={catalogoProdutos} itens={produtos} onChange={setProdutos} tabela={tabelaPreco} />
       </div>
 
       <div className="card-padded">

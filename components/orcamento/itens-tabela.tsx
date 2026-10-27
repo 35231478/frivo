@@ -1,5 +1,6 @@
 "use client";
 
+import { casaCodigo } from "@/lib/cadastros/codigos";
 import { useState, useRef, useEffect, useId, type InputHTMLAttributes } from "react";
 import { cn, formatarMoeda } from "@/lib/utils";
 import { AlertTriangle, Plus, Trash2, Search, X, Lock, LockOpen, MessageSquarePlus } from "lucide-react";
@@ -24,6 +25,8 @@ export interface ItemTabela {
 
 export interface CatalogoItem {
   id: string;
+  /** Código do produto (número) ou do serviço (ex.: LIMP01): a busca acha por ele */
+  codigo?: string | number | null;
   nome: string;
   descricao?: string | null;
   unidade?: string | null;
@@ -403,7 +406,7 @@ function BuscaCatalogo({
 
   const q = query.trim().toLowerCase();
   const filtrados = q
-    ? base.filter((c) => c.nome.toLowerCase().includes(q) || (c.descricao ?? "").toLowerCase().includes(q))
+    ? base.filter((c) => c.nome.toLowerCase().includes(q) || (c.descricao ?? "").toLowerCase().includes(q) || casaCodigo(c.codigo, q))
     : base;
 
   // Preço exibido no dropdown: o da tabela quando o item pertence a ela.
@@ -456,7 +459,10 @@ function BuscaCatalogo({
                   className="w-full text-left px-3 py-2 hover:bg-primary-50 border-b border-surface-border last:border-0 flex items-center justify-between gap-3"
                 >
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-ink truncate">{c.nome}</p>
+                    <p className="text-sm font-medium text-ink truncate">
+                      {c.codigo != null && <span className="font-mono text-xs text-ink-muted mr-1.5" data-codigo-item>{c.codigo}</span>}
+                      {c.nome}
+                    </p>
                     {c.descricao && <p className="text-xs text-ink-muted truncate">{c.descricao}</p>}
                   </div>
                   <span className={cn(

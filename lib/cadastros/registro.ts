@@ -71,6 +71,8 @@ export interface DefCadastro {
   colunas: ColunaCadastro[];
   /** Campos usados na busca (?q=) */
   busca: string[];
+  /** Campos numéricos que a busca acha quando se digita só o número (ex.: código do produto) */
+  buscaNumero?: string[];
   /** Campo mostrado ao lado do nome nas sugestões da busca (ex.: CNPJ do fornecedor) */
   detalheSugestao?: string;
   /** O que os outros registros gravam ao escolher este cadastro (categoria: o NOME) */
@@ -178,7 +180,8 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
   produtos: {
     entidade: "produtos", modelo: "produto", massa: true, singular: "produto", plural: "produtos",
     modulo: "configuracoes", permissoes: PERMISSOES_CONFIG, chave: "id", rota: "/configuracoes/produtos",
-    busca: ["nome", "descricao"],
+    // Código: número gerado pelo sistema ao criar (não é campo do formulário); a busca acha por ele
+    busca: ["nome", "descricao"], buscaNumero: ["codigo"], detalheSugestao: "codigo",
     campos: [
       { key: "nome", label: "Nome", obrigatorio: true, placeholder: "Ex: Gás R410A" },
       { key: "descricao", label: "Descrição", tipo: "textarea" },
@@ -187,6 +190,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       { key: "estoqueMinimo", label: "Estoque mínimo", tipo: "inteiro", placeholder: "0" },
     ],
     colunas: [
+      { key: "codigo", label: "Cód.", ordenar: "codigo" },
       { key: "nome", label: "Nome", ordenar: "nome" }, { key: "unidade", label: "Unidade", ordenar: "unidade" },
       { key: "valorPadrao", label: "Valor padrão", formato: "moeda", ordenar: "valorPadrao" }, { key: "estoqueMinimo", label: "Est. mín.", ordenar: "estoqueMinimo" },
     ],
@@ -198,9 +202,10 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
   servicos: {
     entidade: "servicos", modelo: "servico", massa: true, singular: "serviço", plural: "serviços",
     modulo: "configuracoes", permissoes: PERMISSOES_CONFIG, chave: "id", rota: "/configuracoes/servicos",
-    busca: ["nome", "descricao", "codigoLc116", "codigoMunicipal"],
+    busca: ["codigo", "nome", "descricao", "codigoLc116", "codigoMunicipal"], detalheSugestao: "codigo",
     campos: [
       { key: "nome", label: "Nome", obrigatorio: true, placeholder: "Ex: Manutenção Preventiva" },
+      { key: "codigo", label: "Código", placeholder: "Vazio = gerado pelo nome (ex.: MANU01)" },
       { key: "descricao", label: "Descrição", tipo: "textarea" },
       { key: "unidade", label: "Unidade", tipo: "select", opcoes: UNIDADES_SERVICO },
       { key: "valorPadrao", label: "Valor padrão (R$)", tipo: "moeda", placeholder: "0,00" },
@@ -214,16 +219,18 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       { key: "observacaoFiscal", label: "Observação fiscal", tipo: "textarea", grupo: "Dados fiscais" },
     ],
     colunas: [
+      { key: "codigo", label: "Código", ordenar: "codigo" },
       { key: "nome", label: "Nome", ordenar: "nome" }, { key: "unidade", label: "Unidade", ordenar: "unidade" },
       { key: "codigoLc116", label: "LC 116", ordenar: "codigoLc116" }, { key: "valorPadrao", label: "Valor padrão", formato: "moeda", ordenar: "valorPadrao" },
     ],
     ...schemas({
-      nome, descricao: textoOpcional(), unidade, valorPadrao: numero(),
+      // Código: normalizado e conferido (único na empresa) pela regra do cadastro (especificos.ts)
+      nome, codigo: textoOpcional(40), descricao: textoOpcional(), unidade, valorPadrao: numero(),
       codigoMunicipal: textoOpcional(50), codigoLc116: textoOpcional(50),
       aliquotaISS: numero(), aliquotaPIS: numero(), aliquotaCOFINS: numero(), aliquotaCSLL: numero(), aliquotaIR: numero(),
       observacaoFiscal: textoOpcional(),
     }, {
-      descricao: null, unidade: "un", valorPadrao: null, codigoMunicipal: null, codigoLc116: null,
+      codigo: null, descricao: null, unidade: "un", valorPadrao: null, codigoMunicipal: null, codigoLc116: null,
       aliquotaISS: null, aliquotaPIS: null, aliquotaCOFINS: null, aliquotaCSLL: null, aliquotaIR: null, observacaoFiscal: null,
     }),
   },
@@ -448,7 +455,11 @@ export function whereCadastro(def: DefCadastro, empresaId: string, f: { ativo: F
   return {
     empresaId,
     ...(f.ativo === "sim" ? { ativo: true } : f.ativo === "nao" ? { ativo: false } : {}),
-    ...(q ? { OR: def.busca.map((k) => ({ [k]: { contains: q, mode: "insensitive" as const } })) } : {}),
+    ...(q ? { OR: [
+      ...def.busca.map((k) => ({ [k]: { contains: q, mode: "insensitive" as const } })),
+      // Só o número digitado: acha também pelo código numérico (produto 15)
+      ...(/^\d{1,9}$/.test(q) ? (def.buscaNumero ?? []).map((k) => ({ [k]: Number(q) })) : []),
+    ] } : {}),
   };
 }
 

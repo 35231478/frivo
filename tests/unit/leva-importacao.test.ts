@@ -432,7 +432,8 @@ describe("modelo e planilha de erros", () => {
     expect(r.status).toBe(200);
     const t = lerXlsx(Buffer.from(await r.arrayBuffer()));
     expect(t[0]).toEqual([...IMPORTACOES.produtos.colunas.map((x) => x.titulo), "linha_original", "motivo_do_erro"]);
-    expect(t[1].map((c) => c ?? "")).toEqual(["Ruim", "", "", "abc", "", "3", "valor_padrao: “abc” não é um número."]);
+    // Colunas do modelo: codigo, nome, descricao, unidade, valor_padrao, estoque_minimo, id_sistema
+    expect(t[1].map((c) => c ?? "")).toEqual(["", "Ruim", "", "", "abc", "", "", "3", "valor_padrao: “abc” não é um número."]);
     expect(t).toHaveLength(2);
   });
 });

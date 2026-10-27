@@ -122,6 +122,10 @@ function Assistente({ entidade, onConcluido }: { entidade: EntidadeImportacao; o
             <Download className="w-4 h-4" /> Modelo CSV
           </a>
         </div>
+        <p className="text-xs text-ink-muted" data-dica-exportar>
+          Quer editar o que já está cadastrado? Use <strong>Baixar planilha</strong> na lista: ela vem no mesmo formato, com o
+          <strong> id_sistema</strong>{def.colunas.some((c) => c.chave === "codigo") ? " e o código" : ""} de cada {def.singular} — edite e envie aqui de novo que ele é <strong>atualizado</strong>, sem duplicar.
+        </p>
       </section>
 
       {/* 2. Envio */}

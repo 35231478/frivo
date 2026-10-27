@@ -18,6 +18,7 @@ import { lerTamanho, proximaOrdem, TAMANHO_PADRAO, type Ordem } from "@/lib/list
 import { CampoBusca, ListaVazia, lerTamanhoPreferido, Paginacao, SkeletonLista, sugerirPorUrl, ThOrd } from "@/components/listagem/listagem-ui";
 import { DEBOUNCE_BUSCA_MS } from "@/components/listagem/use-listagem-url";
 import { ImportarPlanilha } from "@/components/importacao/importar-planilha";
+import { BaixarPlanilha } from "@/components/importacao/baixar-planilha";
 import { ehEntidadeImportacao } from "@/lib/importacao/entidades";
 import { CADASTROS, type AcaoCadastro, type CampoCadastro, type ColunaCadastro, type DefCadastro, type EntidadeCadastro } from "@/lib/cadastros/registro";
 
@@ -208,15 +209,19 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda }: CadastroPadra
               sugerir={sugerir} carregando={carregando && !!dados}
             />
           </div>
-          {podeCad("criar") && (
-            <div className="flex gap-2 sm:ml-auto shrink-0">
-              {/* Importação em massa: mesma permissão de criar (o servidor confere de novo) */}
-              {ehEntidadeImportacao(entidade) && <ImportarPlanilha entidade={entidade} onConcluido={() => void carregar()} className="flex-1 sm:flex-none" />}
-              <Button type="button" onClick={() => setEditando("novo")} className="flex-1 sm:flex-none shrink-0">
-                <Plus className="w-4 h-4" /> Nov{def.feminino ? "a" : "o"} {def.singular}
-              </Button>
-            </div>
-          )}
+          <div className="flex gap-2 sm:ml-auto shrink-0 empty:hidden">
+            {/* Baixar a planilha (mesmo formato da importação): quem vê o módulo; o servidor confere de novo */}
+            {ehEntidadeImportacao(entidade) && <BaixarPlanilha entidade={entidade} className="flex-1 sm:flex-none" />}
+            {podeCad("criar") && (
+              <>
+                {/* Importação em massa: mesma permissão de criar (o servidor confere de novo) */}
+                {ehEntidadeImportacao(entidade) && <ImportarPlanilha entidade={entidade} onConcluido={() => void carregar()} className="flex-1 sm:flex-none" />}
+                <Button type="button" onClick={() => setEditando("novo")} className="flex-1 sm:flex-none shrink-0">
+                  <Plus className="w-4 h-4" /> Nov{def.feminino ? "a" : "o"} {def.singular}
+                </Button>
+              </>
+            )}
+          </div>
         </div>
 
         {erroLista ? (
