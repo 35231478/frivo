@@ -42,7 +42,12 @@ vi.mock("@/lib/prisma", async () => {
       notaCompraItem: (i, T) => ({ produto: por(T, "produto", i.produtoId) }),
       movimentacaoEstoque: (m, T) => ({ produto: por(T, "produto", m.produtoId), data: quando(m), criadoEm: quando(m) }),
       deParaProdutoFornecedor: (d, T) => { const p = por(T, "produto", d.produtoId); return { produto: p && { ...p, ativo: p.ativo ?? true } }; },
-      pedidoCompraInterno: (p, T) => ({ contasPagar: T("contaPagar").filter((c) => c.pedidoCompraId === p.id) }),
+      pedidoCompraInterno: (p, T) => ({
+        contasPagar: T("contaPagar").filter((c) => c.pedidoCompraId === p.id),
+        itens: T("pedidoCompraItem").filter((i) => i.pedidoId === p.id).map((i) => ({ ...i, vinculos: T("pedidoCompraVinculo").filter((v) => v.pedidoItemId === i.id) })),
+        eventos: T("pedidoCompraEvento").filter((e) => e.pedidoId === p.id),
+      }),
+      pedidoCompraItem: (i, T) => ({ vinculos: T("pedidoCompraVinculo").filter((v) => v.pedidoItemId === i.id) }),
     }, { notaCompra: { itens: ["notaCompraItem", "notaId"] } }),
   };
 });
@@ -76,7 +81,8 @@ function semear() {
     ],
     notaCompra: [], notaCompraItem: [], deParaProdutoFornecedor: [], movimentacaoEstoque: [],
     contaPagar: [],
-    pedidoCompraInterno: [{ id: "ped1", empresaId: "e1", numero: "PC-0400", status: "COMPRADO" }],
+    // (o legado "Comprado" já virou "Em cotação" no SQL do Compras 1/2)
+    pedidoCompraInterno: [{ id: "ped1", empresaId: "e1", numero: "PC-0400", status: "COTANDO", criadoEm: new Date("2026-10-01T12:00:00Z") }],
     pedidoCompraItem: [{ id: "pi1", pedidoId: "ped1", produtoId: "pGas", descricao: "Gás R404A", quantidade: 13.6, valorEstimado: 95, valorReal: null }],
   };
 }

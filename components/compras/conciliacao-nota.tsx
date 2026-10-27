@@ -11,6 +11,7 @@ import { avisoCusto, converterItem, formatarFator, lerNumero, mesmaUnidade } fro
 import { formatarNcm } from "@/lib/compras/rotulos";
 import { PrecoVenda, type PrecoDefinido } from "@/components/estoque/preco-venda";
 import { corpoFinanceiro, FinanceiroNotaEditor, financeiroInicial, type FinanceiroNota, type FinanceiroUi } from "@/components/compras/financeiro-nota";
+import { SugestoesPedido, type SugestaoPedidoTela } from "@/components/compras/pedido-da-nota";
 
 export interface FiscalProduto { ncm: string | null; cest: string | null; gtin: string | null; origemMercadoria: string | null; unidadeTributavel: string | null }
 export interface ProdutoConciliacao {
@@ -69,8 +70,12 @@ function fatorEfetivo(i: ItemConciliacao, e: Escolha, txt: string): number | nul
  *    parcelas editáveis, com o boleto de cada uma.
  * "Salvar rascunho" grava tudo sem lançar; "Confirmar e lançar" faz tudo numa transação.
  */
-export function ConciliacaoNota({ notaId, itens, pedidos, podeLancar, motivoSemLancar, financeiro, podePrecificar = false }: {
-  notaId: string; itens: ItemConciliacao[]; pedidos: { id: string; numero: string }[];
+export function ConciliacaoNota({ notaId, itens, pedidos, podeLancar, motivoSemLancar, financeiro, podePrecificar = false, sugestoes = [], automaticoId = null }: {
+  notaId: string; itens: ItemConciliacao[];
+  /** Pedidos em aberto que o usuário pode escolher (Compras › gerenciar; vazio = não escolhe) */
+  pedidos: { id: string; numero: string }[];
+  /** Pedidos que combinam com a NF e por quê; `automaticoId` = o idêntico, que vincula sozinho ao lançar */
+  sugestoes?: SugestaoPedidoTela[]; automaticoId?: string | null;
   /** Financeiro › fluxo de caixa: lança e mexe no financeiro */
   podeLancar: boolean; motivoSemLancar?: string | null;
   financeiro: FinanceiroNota;
@@ -180,17 +185,21 @@ export function ConciliacaoNota({ notaId, itens, pedidos, podeLancar, motivoSemL
 
       <FinanceiroNotaEditor nota={financeiro} valor={fin} onChange={(v) => { setFin(v); setMsg(null); }} podeEditar={podeLancar} />
 
-      {pedidos.length > 0 && (
-        <div className="card p-4">
-          <label className="block text-sm max-w-md">
-            <span className="text-[11px] uppercase tracking-wider font-semibold text-ink-muted">Pedido de compra (opcional)</span>
-            <select value={pedidoId} onChange={(e) => setPedidoId(e.target.value)} data-pedido
-              className="mt-1 w-full bg-white border border-surface-border rounded-lg px-3 py-2 text-sm">
-              <option value="">Sem pedido</option>
-              {pedidos.map((p) => <option key={p.id} value={p.id}>{p.numero}</option>)}
-            </select>
-            <span className="text-xs text-ink-muted">O custo real da nota vai para os itens do pedido com o mesmo produto.</span>
-          </label>
+      {(pedidos.length > 0 || sugestoes.length > 0) && (
+        <div className="card p-4 space-y-3" data-pedido-compra>
+          <SugestoesPedido sugestoes={sugestoes} automaticoId={automaticoId} escolhido={pedidoId} podeEscolher={pedidos.length > 0}
+            onEscolher={(id) => { setPedidoId(id); setMsg(null); }} />
+          {pedidos.length > 0 && (
+            <label className="block text-sm max-w-md">
+              <span className="text-[11px] uppercase tracking-wider font-semibold text-ink-muted">Pedido de compra (opcional)</span>
+              <select value={pedidoId} onChange={(e) => setPedidoId(e.target.value)} data-pedido
+                className="mt-1 w-full bg-white border border-surface-border rounded-lg px-3 py-2 text-sm">
+                <option value="">{automaticoId ? "Automático (o pedido idêntico)" : "Sem pedido"}</option>
+                {pedidos.map((p) => <option key={p.id} value={p.id}>{p.numero}</option>)}
+              </select>
+              <span className="text-xs text-ink-muted">Os itens da nota são casados com os do pedido (produto e quantidade): o custo real vai para o pedido e ele fica Parcial ou Concluído.</span>
+            </label>
+          )}
         </div>
       )}
 

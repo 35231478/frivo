@@ -39,7 +39,12 @@ vi.mock("@/lib/prisma", async () => {
       movimentacaoEstoque: (m, T) => ({ produto: por(T, "produto", m.produtoId) }),
       // produto criado pela rota não traz `ativo` (no banco é default true)
       deParaProdutoFornecedor: (d, T) => { const p = por(T, "produto", d.produtoId); return { produto: p && { ...p, ativo: p.ativo ?? true } }; },
-      pedidoCompraInterno: (p, T) => ({ contasPagar: T("contaPagar").filter((c) => c.pedidoCompraId === p.id) }),
+      pedidoCompraInterno: (p, T) => ({
+        contasPagar: T("contaPagar").filter((c) => c.pedidoCompraId === p.id),
+        itens: T("pedidoCompraItem").filter((i) => i.pedidoId === p.id).map((i) => ({ ...i, vinculos: T("pedidoCompraVinculo").filter((v) => v.pedidoItemId === i.id) })),
+        eventos: T("pedidoCompraEvento").filter((e) => e.pedidoId === p.id),
+      }),
+      pedidoCompraItem: (i, T) => ({ vinculos: T("pedidoCompraVinculo").filter((v) => v.pedidoItemId === i.id) }),
     }, { notaCompra: { itens: ["notaCompraItem", "notaId"] } }),
   };
 });
@@ -75,7 +80,7 @@ function semear() {
     ],
     notaCompra: [], notaCompraItem: [], deParaProdutoFornecedor: [], movimentacaoEstoque: [],
     contaPagar: [{ id: "cp-antiga", empresaId: "e1", numero: `CP-${ANO}-0007`, valorTotal: 10, notaCompraId: null, pedidoCompraId: null }],
-    pedidoCompraInterno: [{ id: "ped1", empresaId: "e1", numero: "PC-0312" }, { id: "pedB", empresaId: "e2", numero: "PC-B" }],
+    pedidoCompraInterno: [{ id: "ped1", empresaId: "e1", numero: "PC-0312", status: "COTANDO", criadoEm: new Date("2026-10-01T12:00:00Z") }, { id: "pedB", empresaId: "e2", numero: "PC-B" }],
     pedidoCompraItem: [
       { id: "pi1", pedidoId: "ped1", produtoId: "pGas", descricao: "Gás", quantidade: 2, valorEstimado: 650, valorReal: null },
       { id: "pi2", pedidoId: "ped1", produtoId: "pOutro", descricao: "Outro", quantidade: 1, valorEstimado: 10, valorReal: null },
@@ -493,7 +498,7 @@ describe("telas", () => {
   });
 
   it("conciliação: itens, aprendido marcado, aviso de unidade, parcelas e pedidos; sem Financeiro não lança", async () => {
-    T("pedidoCompraInterno")[0].status = "COMPRADO";
+    T("pedidoCompraInterno")[0].status = "COTANDO"; // aberto para NF (o legado "Comprado" já virou "Em cotação")
     const id1 = await nota1Conciliada();
     await lancarApi(id1);
     const id2 = (await importar(XML2)).json.nota.id;

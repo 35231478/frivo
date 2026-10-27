@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Ban, Download, History, Mail, MessageCircle, Pencil } from "lucide-react";
+import { Ban, Download, FileText, History, Mail, MessageCircle, Pencil, Unlink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { confirmar, toast } from "@/components/ui/avisos";
 import { abaPendente } from "@/components/orcamento/envio-proposta";
@@ -90,6 +90,22 @@ export function PedidoPainel({ inicial, onMudou, compacto, semNumero }: {
       }
       await recarregar();
     } catch { aba?.fechar(); toast("Erro de conexão.", "erro"); } finally { setOcupado(null); }
+  }
+
+  async function desvincular(nota: PedidoTela["notas"][number]) {
+    if (!(await confirmar({
+      titulo: `Desvincular a NF ${nota.numero}?`,
+      mensagem: `O pedido ${pedido.numero} volta a esperar estes itens, o valor real que veio desta NF sai dos itens e fica registrado no histórico. A nota em si (estoque e contas) não muda.`,
+      confirmarTexto: "Desvincular", cancelarTexto: "Voltar", perigo: true,
+    }))) return;
+    setOcupado(`NF-${nota.notaId}`);
+    try {
+      const res = await fetch(`/api/compras/notas/${nota.notaId}/vinculos?pedidoId=${encodeURIComponent(pedido.id)}`, { method: "DELETE" });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { toast(d.erro ?? "Não foi possível desvincular.", "erro"); return; }
+      toast(`NF ${nota.numero} desvinculada.`);
+      await recarregar();
+    } catch { toast("Erro de conexão.", "erro"); } finally { setOcupado(null); }
   }
 
   async function cancelar() {
@@ -191,7 +207,14 @@ export function PedidoPainel({ inicial, onMudou, compacto, semNumero }: {
                         Estimado {i.valorEstimado != null ? formatarMoeda(i.valorEstimado) : "—"}{i.valorReal != null ? ` · Real ${formatarMoeda(i.valorReal)}` : ""}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-right text-ink-muted whitespace-nowrap tabular-nums">{qtd(i.quantidade)} {i.unidade}</td>
+                    <td className="px-3 py-2 text-right text-ink-muted whitespace-nowrap tabular-nums">
+                      {qtd(i.quantidade)} {i.unidade}
+                      {i.recebido > 0 && (
+                        <span className={cn("block text-[11px] font-semibold", i.recebido >= i.quantidade ? "text-success-700" : "text-acento")} data-recebido-item={i.id}>
+                          recebido {qtd(i.recebido)}{i.recebido < i.quantidade ? ` de ${qtd(i.quantidade)}` : ""}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-right text-ink-muted tabular-nums hidden sm:table-cell">{i.valorEstimado != null ? formatarMoeda(i.valorEstimado) : "—"}</td>
                     <td className="px-3 py-2 text-right font-semibold text-ink tabular-nums hidden sm:table-cell">{i.valorReal != null ? formatarMoeda(i.valorReal) : "—"}</td>
                   </tr>
@@ -208,6 +231,31 @@ export function PedidoPainel({ inicial, onMudou, compacto, semNumero }: {
             </table>
           </div>
         </>
+      )}
+
+      {pedido.notas.length > 0 && (
+        <section data-notas-pedido>
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-ink-muted flex items-center gap-1.5 mb-2"><FileText className="w-3.5 h-3.5" /> Notas fiscais</h4>
+          <ul className="space-y-2">
+            {pedido.notas.map((n) => (
+              <li key={n.notaId} className="border border-surface-border rounded-lg px-3 py-2 flex flex-col sm:flex-row sm:items-start justify-between gap-2" data-nota-pedido={n.notaId}>
+                <div className="min-w-0 text-sm">
+                  <p className="text-ink">
+                    <Link href={`/estoque/notas/${n.notaId}`} className="font-semibold text-primary-700 hover:underline">NF {n.numero}</Link>
+                    <span className="text-ink-muted"> · {n.emitente} · {formatarData(n.dataEmissao)}</span>
+                    {n.automatico && <span className="ml-1.5 badge-base bg-primary-50 text-primary-700" data-nota-automatica>vinculada sozinha</span>}
+                  </p>
+                  <p className="text-xs text-ink-muted">{n.itens.map((it) => `${it.descricao}: ${qtd(it.quantidade)} ${it.unidade}`).join(" · ")}</p>
+                </div>
+                {pedido.podeDesvincular && (
+                  <Button variant="ghost" size="sm" onClick={() => desvincular(n)} disabled={!!ocupado} loading={ocupado === `NF-${n.notaId}`} className="shrink-0 self-start" data-desvincular-nota={n.notaId}>
+                    <Unlink className="w-4 h-4" /> Desvincular
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       <section data-historico-pedido>

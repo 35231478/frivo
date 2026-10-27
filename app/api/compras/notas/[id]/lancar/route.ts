@@ -4,6 +4,7 @@ import { pode, type Permissoes } from "@/lib/permissoes";
 import { ErroRefEmpresa } from "@/lib/ref-empresa";
 import { ErroEstoque } from "@/lib/estoque/servidor";
 import { ErroNota, lancarNota } from "@/lib/compras/notas";
+import { avisarSolicitanteNf, ErroConciliacao } from "@/lib/compras/conciliacao-server";
 import { lancarSchema, mensagemZod } from "@/lib/compras/validacao";
 
 type Params = { params: Promise<{ id: string }> };
@@ -12,6 +13,8 @@ type Params = { params: Promise<{ id: string }> };
  * POST /api/compras/notas/:id/lancar { itens?, pedidoCompraId?, financeiro? } — entrada no estoque + contas a pagar,
  * numa transação só. Precisa de Estoque › gerenciar (entrada) E Financeiro › fluxo de caixa (gera conta a pagar).
  * Preço de venda definido na linha: só é aplicado por quem tem Configurações › gerenciar.
+ * Pedido de compra: o escolhido (Compras › gerenciar) ou o idêntico (sozinho) é vinculado item a item;
+ * o solicitante do pedido é avisado (sino + e-mail).
  */
 export async function POST(req: NextRequest, { params }: Params) {
   const guard = await exigirPermissao("estoque", "gerenciar");
@@ -26,10 +29,13 @@ export async function POST(req: NextRequest, { params }: Params) {
     const r = await lancarNota({
       empresaId: user.empresaId, usuarioId: user.id, notaId: id, escolhas: parsed.data.itens ?? [], pedidoCompraId: parsed.data.pedidoCompraId ?? null,
       financeiro: parsed.data.financeiro, podePrecificar: pode(user.permissoes as Permissoes, "configuracoes", "gerenciar", user.role),
+      podeVincularPedido: pode(user.permissoes as Permissoes, "compras", "gerenciar", user.role),
     });
+    if (r.vinculoPedido?.criados) await avisarSolicitanteNf(r.vinculoPedido.pedidoId, id);
     return NextResponse.json(r, { status: 201 });
   } catch (e) {
     if (e instanceof ErroNota) return NextResponse.json({ erro: e.message, ...e.extra }, { status: e.status });
+    if (e instanceof ErroConciliacao) return NextResponse.json({ erro: e.message }, { status: e.status });
     if (e instanceof ErroEstoque || e instanceof ErroRefEmpresa) return NextResponse.json({ erro: e.message }, { status: 400 });
     throw e;
   }

@@ -15,6 +15,9 @@ import { avisoCusto, formatarFator, formatarPct, mesmaUnidade } from "@/lib/esto
 import { chaveEmBlocos, COR_STATUS_NOTA, LABEL_STATUS_NOTA } from "@/lib/compras/rotulos";
 import { ConciliacaoNota, type ItemConciliacao } from "@/components/compras/conciliacao-nota";
 import type { FinanceiroNota } from "@/components/compras/financeiro-nota";
+import { PedidoDaNota, type SugestaoPedidoTela } from "@/components/compras/pedido-da-nota";
+import { sugestoesDaNota, vinculosDaNota } from "@/lib/compras/conciliacao-server";
+import { PEDIDO_ABERTO_PARA_NF, type Avaliacao } from "@/lib/compras/conciliacao";
 
 export const metadata: Metadata = { title: "Nota de compra" };
 
@@ -37,6 +40,9 @@ export default async function NotaCompraPage({ params, searchParams }: { params:
   const gerencia = pode(u.permissoes, "estoque", "gerenciar", u.role);
   const financeiro = pode(u.permissoes, "financeiro", "fluxoCaixa", u.role);
   const lancada = nota.status === "LANCADA";
+  // Conciliação com o pedido de compra: quem vê a nota vê a sugestão; confirmar/desvincular = Compras › gerenciar
+  const compras = pode(u.permissoes, "compras", "gerenciar", u.role);
+  const conc = await sugestoesDaNota(u.empresaId, nota.id);
 
   return (
     <div className="space-y-5 max-w-5xl">
@@ -63,11 +69,16 @@ export default async function NotaCompraPage({ params, searchParams }: { params:
         <p className="text-[11px] text-ink-subtle">Importada em {dataHoraBr(nota.criadoEm)}{nota.usuario && ` por ${nota.usuario.nome}`}{nota.lancadaEm && ` · lançada em ${dataHoraBr(nota.lancadaEm)}`}</p>
       </div>
 
-      {lancada ? <Resultado nota={nota} movs={await entradasDaNota(u.empresaId, nota.id)} avisos={await avisosDeCusto(u.empresaId, nota)} /> : gerencia ? (
+      {lancada ? (
+        <Resultado nota={nota} movs={await entradasDaNota(u.empresaId, nota.id)} avisos={await avisosDeCusto(u.empresaId, nota)}
+          pedido={<PedidoDaNota notaId={nota.id} vinculos={await vinculosDaNota(u.empresaId, nota.id)} sugestoes={paraTela(conc?.sugestoes ?? [])} podeGerenciar={compras} />} />
+      ) : gerencia ? (
         <ConciliacaoNota
           notaId={nota.id}
           itens={await itensParaConciliar(u.empresaId, nota)}
-          pedidos={financeiro ? await pedidosAbertos(u.empresaId) : []}
+          pedidos={financeiro && compras ? await pedidosAbertos(u.empresaId) : []}
+          sugestoes={paraTela(conc?.sugestoes ?? [])}
+          automaticoId={conc?.automatico?.pedidoId ?? null}
           podeLancar={financeiro}
           motivoSemLancar={financeiro ? null : "Lançar gera conta a pagar: precisa de Financeiro › fluxo de caixa. Você pode salvar o rascunho dos itens."}
           financeiro={financeiroDaNota(nota)}
@@ -130,10 +141,13 @@ async function itensParaConciliar(empresaId: string, nota: Nota): Promise<ItemCo
   });
 }
 
-/** Pedidos que ainda podem receber esta nota: abertos e sem conta a pagar */
+const paraTela = (as: Avaliacao[]): SugestaoPedidoTela[] =>
+  as.map((a) => ({ pedidoId: a.pedidoId, numero: a.numero, pontos: a.pontos, identico: a.identico, motivos: a.motivos }));
+
+/** Pedidos que ainda podem receber NF: Solicitado, Em cotação ou Parcial (entrega parcial recebe a próxima NF) */
 async function pedidosAbertos(empresaId: string) {
   return prisma.pedidoCompraInterno.findMany({
-    where: { empresaId, status: { in: ["SOLICITADO", "COTANDO", "PARCIAL", "COMPRADO"] }, contasPagar: { none: {} } },
+    where: { empresaId, status: { in: [...PEDIDO_ABERTO_PARA_NF] } },
     select: { id: true, numero: true }, orderBy: { criadoEm: "desc" }, take: 50,
   });
 }
@@ -178,7 +192,7 @@ async function avisosDeCusto(empresaId: string, nota: Nota) {
   });
 }
 
-function Resultado({ nota, movs, avisos }: { nota: Nota; movs: Awaited<ReturnType<typeof entradasDaNota>>; avisos: Awaited<ReturnType<typeof avisosDeCusto>> }) {
+function Resultado({ nota, movs, avisos, pedido }: { nota: Nota; movs: Awaited<ReturnType<typeof entradasDaNota>>; avisos: Awaited<ReturnType<typeof avisosDeCusto>>; pedido: React.ReactNode }) {
   const convertidos = nota.itens.filter((i) => i.produto && (Number(i.fatorConversao) !== 1 || !mesmaUnidade(i.unidade, i.produto.unidade)));
   // fiscal da nota ≠ cadastro (o vazio já foi preenchido no lançamento; o que sobra é diferença — ficou o do cadastro)
   const divergenciasFiscais = nota.itens.flatMap((i) => {
@@ -261,9 +275,10 @@ function Resultado({ nota, movs, avisos }: { nota: Nota; movs: Awaited<ReturnTyp
               </li>
             ))}
           </ul>
-          {nota.pedidoCompra && <p className="px-4 py-2.5 border-t border-surface-border text-xs text-ink-muted">Pedido de compra <Link href={`/compras/pedidos/${nota.pedidoCompra.id}`} className="font-semibold text-primary-600 hover:underline">{nota.pedidoCompra.numero}</Link>: custo real atualizado nos itens.</p>}
+          {nota.pedidoCompra && <p className="px-4 py-2.5 border-t border-surface-border text-xs text-ink-muted" data-pedido-da-conta>Pedido de compra <Link href={`/compras/pedidos/${nota.pedidoCompra.id}`} className="font-semibold text-primary-600 hover:underline">{nota.pedidoCompra.numero}</Link>.</p>}
         </div>
       </div>
+      {pedido}
     </div>
   );
 }

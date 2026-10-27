@@ -84,11 +84,15 @@ export interface PedidoAcesso {
   solicitanteId?: string | null;
 }
 
-/** Ver (e baixar/enviar o PC): Compras, o comprador designado ou quem vê a OS/orçamento de origem */
+/**
+ * Ver: Compras, o comprador designado, quem pediu (recebe o aviso quando a NF chega) ou quem vê a
+ * OS/orçamento de origem
+ */
 export function podeVerPedido(user: UsuarioPedido, pedido: PedidoAcesso): boolean {
   const p = user.permissoes as Permissoes;
   return pode(p, "compras", "visualizar", user.role)
     || pedido.compradorId === user.id
+    || (!!pedido.solicitanteId && pedido.solicitanteId === user.id)
     || (!!pedido.ordemServicoId && pode(p, "ordens", "visualizar", user.role))
     || (!!pedido.orcamentoId && pode(p, "orcamentos", "visualizar", user.role));
 }
@@ -179,7 +183,13 @@ export const ROTULO_EVENTO_PEDIDO: Record<string, string> = {
   ENVIADO_WHATSAPP: "Enviado ao fornecedor por WhatsApp",
   STATUS: "Status alterado",
   CANCELADO: "Pedido cancelado",
+  NF_VINCULADA: "NF vinculada",
+  NF_DESVINCULADA: "NF desvinculada",
 };
+
+/** Vincular/desvincular NF ao pedido (confirmar a sugestão, desfazer): Compras › gerenciar */
+export const podeVincularNf = (user: Pick<UsuarioPedido, "role" | "permissoes">) =>
+  pode(user.permissoes as Permissoes, "compras", "gerenciar", user.role);
 
 /** Mensagem do WhatsApp para o fornecedor (com o link do PC) */
 export function mensagemFornecedor(p: { numero: string; empresa: string; contato?: string | null; prazo?: string | null; link: string }): string {
@@ -192,6 +202,13 @@ export function mensagemFornecedor(p: { numero: string; empresa: string; contato
 export interface ItemPedidoTela {
   id: string; produtoId: string | null; produtoNome: string | null; descricao: string;
   quantidade: number; unidade: string; valorEstimado: number | null; valorReal: number | null;
+  /** já recebido pelas NFs vinculadas (unidade do produto) */
+  recebido: number;
+}
+/** Uma NF vinculada ao pedido e o que ela trouxe de cada item */
+export interface NotaDoPedidoTela {
+  notaId: string; numero: string; emitente: string; dataEmissao: string; automatico: boolean;
+  itens: { descricao: string; quantidade: number; unidade: string }[];
 }
 export interface EventoPedidoTela { id: string; tipo: string; detalhe: string | null; criadoEm: string; usuarioNome: string | null }
 export interface PedidoTela {
@@ -205,8 +222,11 @@ export interface PedidoTela {
   origem: Origem;
   itens: ItemPedidoTela[];
   eventos: EventoPedidoTela[];
+  notas: NotaDoPedidoTela[];
   podeEditar: boolean;
   podeEnviar: boolean;
+  /** Compras › gerenciar: desfazer o vínculo de uma NF */
+  podeDesvincular: boolean;
 }
 
 /** Total estimado (quantidade × valor estimado; itens sem estimativa não contam) */
