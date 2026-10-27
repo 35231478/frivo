@@ -1,6 +1,7 @@
 "use client";
 
 import { casaCodigo } from "@/lib/cadastros/codigos";
+import { descricaoDoCatalogo } from "@/lib/orcamentos/proposta";
 import { useState, useRef, useEffect, useId, type InputHTMLAttributes } from "react";
 import { cn, formatarMoeda } from "@/lib/utils";
 import { AlertTriangle, Plus, Trash2, Search, X, Lock, LockOpen, MessageSquarePlus } from "lucide-react";
@@ -218,7 +219,7 @@ export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange,
       {
         id: novoId(),
         catalogoId: c.id,
-        descricao: c.descricao ? `${c.nome} — ${c.descricao}` : c.nome,
+        descricao: descricaoDoCatalogo(c.nome, c.descricao),
         quantidade: 1,
         valorUnitario,
         bloqueado,

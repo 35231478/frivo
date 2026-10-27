@@ -5,16 +5,44 @@ import { CLASSE_ETAPA, LABELS_ETAPA, etapaCiclo } from "@/lib/orcamentos/ciclo";
 import { linhasDadosBancarios } from "@/lib/orcamentos/dados-bancarios";
 import {
   quantidadesAlinhadas, valorSemMoeda,
-  destinatarioOrcamento, linhasCondicoes, linhasNaoIncluso, normasDoDocumento, numeroFormalOrcamento, textoArt, timbreEmpresa,
+  destinatarioOrcamento, linhasCondicoes, linhasNaoIncluso, normasDoDocumento, numeroFormalOrcamento, partesItemDocumento, textoArt, timbreEmpresa,
   type ContatoPara, type UnidadePara,
 } from "@/lib/orcamentos/proposta";
 
-interface ItemDoc {
+export interface ItemDoc {
   descricao: string;
   quantidade: unknown;
   valorUnitario: unknown;
   valorTotal: unknown;
   observacao?: string | null;
+  /** Vínculo com o catálogo: separa "Nome — descrição cadastrada" em nome (destaque) + descrição (discreta) */
+  servicoId?: string | null;
+  produtoId?: string | null;
+  servico?: { nome: string } | null;
+  produto?: { nome: string } | null;
+}
+
+/**
+ * Texto do item no documento, em hierarquia: nome (destaque, como sempre) → descrição cadastrada (linha
+ * de baixo, menor e cinza) → observação do item (menor, cinza, itálico, com "Obs.:"). Item digitado à mão
+ * fica como estava (tudo é o nome).
+ */
+export function TextoItemDocumento({ item }: { item: ItemDoc }) {
+  const { nome, detalhe } = partesItemDocumento(item.descricao, {
+    vinculado: !!(item.servicoId || item.produtoId), nome: item.servico?.nome ?? item.produto?.nome,
+  });
+  const obs = (item.observacao ?? "").trim();
+  return (
+    <>
+      <span className="text-ink" data-nome-item>{nome}</span>
+      {detalhe && <p className="mt-0.5 text-[11px] print:text-[10px] leading-snug text-ink-muted whitespace-pre-line" data-descricao-item>{detalhe}</p>}
+      {obs && (
+        <p className="mt-0.5 text-[11px] print:text-[10px] leading-snug text-ink-muted italic whitespace-pre-line" data-observacao-item>
+          <span className="not-italic font-semibold">Obs.:</span> {obs}
+        </p>
+      )}
+    </>
+  );
 }
 
 /** Anexo da proposta já com o link (público ou interno) — ver lib/orcamentos/documento-server.ts */
@@ -477,8 +505,7 @@ function TabelaGrupo({ titulo, rotulo, itens, grupo }: { titulo: string; rotulo:
               <tr key={i} className="border-b border-surface-linha even:bg-surface-alt/60 break-inside-avoid print:[print-color-adjust:exact]" data-linha-item>
                 <td className={cn(td, "text-right text-ink-subtle tabular-nums")}>{i + 1}</td>
                 <td className={cn(td, "text-ink")}>
-                  {it.descricao}
-                  {it.observacao && <p className="text-[11px] print:text-[10px] text-ink-muted italic whitespace-pre-line">{it.observacao}</p>}
+                  <TextoItemDocumento item={it} />
                   <p className="sm:hidden text-[11px] text-ink-muted tabular-nums" data-qtd-unitario-celular>{qtds[i]} × {formatarMoeda(grupo.itens[i]?.valorUnitario ?? 0)}</p>
                 </td>
                 <td className={cn(td, "hidden sm:table-cell text-right text-ink-muted tabular-nums whitespace-nowrap")} data-qtd>{qtds[i]}</td>

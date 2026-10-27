@@ -113,6 +113,52 @@ export function quantidadesAlinhadas(qtds: readonly number[]): string[] {
 export const valorSemMoeda = (v: number) =>
   (Number(v) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// ───────────────────────── Item do documento ─────────────────────────
+
+/** Separador que o construtor põe entre o nome do catálogo e a descrição cadastrada: "Nome — descrição" */
+export const SEPARADOR_DESCRICAO_ITEM = " — ";
+
+/** O texto do item como o construtor grava ao escolher do catálogo (o documento separa de volta) */
+export const descricaoDoCatalogo = (nome: string, descricao?: string | null) =>
+  t(descricao) ? `${nome}${SEPARADOR_DESCRICAO_ITEM}${t(descricao)}` : nome;
+
+/**
+ * Separa o nome do item (destaque) da descrição cadastrada (linha de baixo, discreta). Só separa o que
+ * veio do catálogo: com o nome atual do serviço/produto, pelo prefixo "Nome — "; vinculado mas renomeado
+ * depois, no 1º " — ". Item digitado à mão (sem vínculo) fica inteiro como nome — nada muda nele.
+ */
+export function partesItemDocumento(
+  descricao: string, catalogo: { vinculado: boolean; nome?: string | null } = { vinculado: false },
+): { nome: string; detalhe: string | null } {
+  const texto = t(descricao);
+  const nomeCat = t(catalogo.nome);
+  if (nomeCat && texto.startsWith(nomeCat + SEPARADOR_DESCRICAO_ITEM)) {
+    return { nome: nomeCat, detalhe: t(texto.slice(nomeCat.length + SEPARADOR_DESCRICAO_ITEM.length)) };
+  }
+  // (o texto já vem aparado: o separador nunca está no início nem sobra descrição vazia depois dele)
+  const i = catalogo.vinculado ? texto.indexOf(SEPARADOR_DESCRICAO_ITEM) : -1;
+  if (i > 0) return { nome: texto.slice(0, i).trim(), detalhe: t(texto.slice(i + SEPARADOR_DESCRICAO_ITEM.length)) };
+  return { nome: texto, detalhe: null };
+}
+
+// ───────────────────────── Nome do arquivo (PDF) ─────────────────────────
+
+/** Tira o que não pode em nome de arquivo (/ \ : * ? " < > | e controles); espaços repetidos viram um */
+export function limparNomeArquivo(v: string, max = 150): string {
+  const limpo = v.replace(/[\\/:*?"<>|\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim();
+  return limpo.slice(0, max).trim().replace(/[. ]+$/, "");
+}
+
+/**
+ * Título da página do documento = nome sugerido ao salvar em PDF:
+ * "Orçamento 2026-0015 - CENTRO DE ATIVIDADES SESI RIO VERDE" (sem cliente: só "Orçamento 2026-0015").
+ */
+export function tituloArquivoOrcamento(codigo: string, cliente?: string | null): string {
+  const base = `Orçamento ${numeroFormalOrcamento(codigo)}`;
+  const c = t(cliente);
+  return limparNomeArquivo(c ? `${base} - ${c}` : base);
+}
+
 // ───────────────────────── Condições ─────────────────────────
 
 export interface CondicoesEntrada {
