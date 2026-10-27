@@ -212,14 +212,15 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda }: CadastroPadra
               sugerir={sugerir} carregando={carregando && !!dados}
             />
           </div>
-          <div className="flex gap-2 sm:ml-auto shrink-0 empty:hidden">
+          {/* No celular: Baixar | Importar numa linha e "Novo" embaixo, na largura toda (os três não cabem lado a lado) */}
+          <div className="flex flex-wrap sm:flex-nowrap gap-2 sm:ml-auto shrink-0 empty:hidden">
             {/* Baixar a planilha (mesmo formato da importação): quem vê o módulo; o servidor confere de novo */}
             {ehEntidadeImportacao(entidade) && <BaixarPlanilha entidade={entidade} className="flex-1 sm:flex-none" />}
             {podeCad("criar") && (
               <>
                 {/* Importação em massa: mesma permissão de criar (o servidor confere de novo) */}
                 {ehEntidadeImportacao(entidade) && <ImportarPlanilha entidade={entidade} onConcluido={() => void carregar()} className="flex-1 sm:flex-none" />}
-                <Button type="button" onClick={() => setEditando("novo")} className="flex-1 sm:flex-none shrink-0">
+                <Button type="button" onClick={() => setEditando("novo")} className="basis-full sm:basis-auto sm:flex-none shrink-0" data-acao="novo-cadastro">
                   <Plus className="w-4 h-4" /> Nov{def.feminino ? "a" : "o"} {def.singular}
                 </Button>
               </>

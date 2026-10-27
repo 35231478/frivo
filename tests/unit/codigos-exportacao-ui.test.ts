@@ -84,6 +84,11 @@ describe("Baixar planilha", () => {
     await renderizar(createElement(CadastroPadrao, { entidade: "produtos" }));
     expect($('[data-acao="baixar-planilha"]')).toBeTruthy();
     expect($('[data-acao="importar-planilha"]')).toBeTruthy();
+    // celular: os três não cabem lado a lado — "Novo" desce para a linha de baixo, na largura toda
+    const novo = $('[data-acao="novo-cadastro"]')!;
+    expect(novo.className).toContain("basis-full");
+    expect(novo.parentElement!.className).toContain("flex-wrap");
+    expect([...novo.parentElement!.children].map((e) => e.getAttribute("data-acao"))).toEqual(["baixar-planilha", "importar-planilha", "novo-cadastro"]);
   });
 });
 

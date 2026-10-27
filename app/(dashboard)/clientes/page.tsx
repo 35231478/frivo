@@ -96,14 +96,15 @@ export default async function ClientesPage({
           <h1 className="page-title">Clientes</h1>
           <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{total}</span>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <BaixarPlanilha entidade="clientes" />
+        {/* No celular: Baixar | Importar numa linha e "Novo Cliente" embaixo, na largura toda */}
+        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
+          <BaixarPlanilha entidade="clientes" className="flex-1 sm:flex-none" />
         {podeCriar && (
           <>
-            <ImportarClientes />
+            <ImportarClientes className="flex-1 sm:flex-none" />
             <Link
               href="/clientes/novo"
-              className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow"
+              className="basis-full sm:basis-auto inline-flex items-center justify-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow"
             >
               <Plus className="w-4 h-4" /> Novo Cliente
             </Link>
