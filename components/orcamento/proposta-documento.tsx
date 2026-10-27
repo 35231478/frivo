@@ -2,14 +2,8 @@ import {
   formatarCpfCnpj, formatarData, formatarMoeda, formatarTelefone,
   aplicarVariaveis, LABELS_PERIODICIDADE, LABELS_PERFIL_FATURAMENTO,
 } from "@/lib/utils";
+import { TextoItemDocumento, type ItemDoc } from "@/components/orcamento/orcamento-documento";
 
-interface ItemDoc {
-  descricao: string;
-  quantidade: unknown;
-  valorUnitario: unknown;
-  valorTotal: unknown;
-  observacao?: string | null;
-}
 
 export interface PropostaDocumentoProps {
   orcamento: {
@@ -195,7 +189,7 @@ export function PropostaDocumento({ orcamento: o, empresa, cliente, responsavelT
                 <tbody>
                   {o.servicos.map((s, i) => (
                     <tr key={i} className="border-b border-surface-border">
-                      <td className="px-3 py-2.5 text-ink">{s.descricao}{s.observacao && <p className="text-xs text-ink-muted italic">{s.observacao}</p>}</td>
+                      <td className="px-3 py-2.5 text-ink"><TextoItemDocumento item={s} /></td>
                       <td className="px-3 py-2.5 text-right text-ink-muted">{n(s.quantidade)}</td>
                     </tr>
                   ))}

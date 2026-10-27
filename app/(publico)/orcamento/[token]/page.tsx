@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { OrcamentoDocumento } from "@/components/orcamento/orcamento-documento";
-import { anexosDoDocumento, INCLUDE_DOCUMENTO_ORCAMENTO } from "@/lib/orcamentos/documento-server";
+import { anexosDoDocumento, INCLUDE_DOCUMENTO_ORCAMENTO, metadataDocumentoOrcamento } from "@/lib/orcamentos/documento-server";
 import { PropostaDocumento } from "@/components/orcamento/proposta-documento";
 import { RespostaPublica } from "@/components/orcamento/resposta-publica";
 import { FrivoLogo } from "@/components/layout/frivo-logo";
@@ -16,10 +16,10 @@ import { registrarVisualizacao } from "@/lib/orcamentos/ciclo-server";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Orçamento",
-  robots: { index: false, follow: false },
-};
+// Título = nome do arquivo ao salvar/imprimir em PDF: "Orçamento 2026-0015 - CLIENTE"
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  return { ...(await metadataDocumentoOrcamento((await params).token)), robots: { index: false, follow: false } };
+}
 
 export default async function OrcamentoPublicoPage({
   params,

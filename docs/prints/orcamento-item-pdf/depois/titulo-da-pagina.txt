@@ -1,0 +1,4 @@
+desktop-link: Orçamento 2026-0049 - Hospital Santa Clara
+desktop-imprimir: Orçamento 2026-0049 - Hospital Santa Clara
+cel-link: Orçamento 2026-0049 - Hospital Santa Clara
+cel-imprimir: Orçamento 2026-0049 - Hospital Santa Clara
