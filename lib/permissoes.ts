@@ -40,6 +40,9 @@ export const SECOES: SecaoDef[] = [
       { id: "qrcodes", label: "QR Codes", icone: "📊", acoes: ["visualizar", "gerenciar"] },
       // Estoque: ver saldos/extrato; gerenciar = lançar entrada, ajuste e inventário
       { id: "estoque", label: "Estoque", icone: "📦", acoes: ["visualizar", "gerenciar"] },
+      // Compras: ver pedidos de compra, baixar/enviar o PC ao fornecedor; gerenciar = criar PC avulso,
+      // editar e cancelar qualquer pedido. Só quem tem Compras pode ser o comprador responsável.
+      { id: "compras", label: "Compras", icone: "🛒", acoes: ["visualizar", "gerenciar"] },
     ],
   },
   {
@@ -172,7 +175,7 @@ const ROTA_MODULO: Record<string, string> = {
   veiculos: "veiculos",
   estoque: "estoque",
   configuracoes: "configuracoes",
-  compras: "financeiro",        // pedidos de compra: mesma permissão da lista geral (API)
+  compras: "compras",
   "leads-site": "orcamentos",   // leads do site são orçamentos (nome/WhatsApp/valores)
 };
 
@@ -210,6 +213,7 @@ export const PRESETS: Record<string, Permissoes> = {
     contratos: ["visualizar", "criar", "editar"],
     licitacoes: ["visualizar", "gerenciar"],
     financeiro: ["visualizar", "medicoes", "contasReceber", "fluxoCaixa", "folha"],
+    compras: ["visualizar", "gerenciar"],
     estoque: ["visualizar"],
     relatorios: ["visualizar", "exportar"],
   }),

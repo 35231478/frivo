@@ -44,7 +44,7 @@ export async function contarAlertasPrazos(empresaId: string) {
       },
     }),
     prisma.pedidoCompraInterno.count({
-      where: { empresaId, status: { in: ["SOLICITADO", "COTANDO", "COMPRADO"] } },
+      where: { empresaId, status: { in: ["SOLICITADO", "COTANDO", "COMPRADO", "PARCIAL"] } },
     }),
     prisma.ordemServico.count({
       where: {

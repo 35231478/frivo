@@ -149,7 +149,7 @@ describe.skipIf(!URL_PG)("Leva 3 — acessos internos (PostgreSQL real)", () => 
 
   it("I5/T1/I3: pode() reconhece SUPER_ADMIN; compras/leads-site/checklists da frota entram no mapa do middleware", () => {
     expect(pode(permissoesVazias(), "financeiro", "contasReceber", "SUPER_ADMIN")).toBe(true);
-    expect(moduloDaRota("/compras/pedidos")).toBe("financeiro");
+    expect(moduloDaRota("/compras/pedidos")).toBe("compras");
     expect(moduloDaRota("/leads-site")).toBe("orcamentos");
     expect(moduloDaRota("/configuracoes/checklists-veiculo")).toBe("veiculos");
     expect(moduloDaRota("/configuracoes")).toBe("configuracoes");

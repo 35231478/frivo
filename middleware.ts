@@ -24,6 +24,7 @@ const rotasPublicas = [
   "/api/portal-auth",
   "/api/portal/",
   "/orcamento/",
+  "/pedido-compra/",  // PC para o fornecedor (link com token, sem preço)
   "/medicao/",
   "/relatorio/",
   "/api/publico/",

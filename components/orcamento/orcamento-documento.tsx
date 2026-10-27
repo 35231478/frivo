@@ -1,3 +1,4 @@
+import { TimbreEmpresa } from "@/components/documento/timbre-empresa";
 import { formatarCpfCnpj, formatarData, formatarMoeda, formatarTelefone, cn } from "@/lib/utils";
 import { calcularOrcamento, versaoCliente, type EntradaCalculo, type TipoDesconto } from "@/lib/orcamentos/calculo";
 import { CLASSE_ETAPA, LABELS_ETAPA, etapaCiclo } from "@/lib/orcamentos/ciclo";
@@ -170,24 +171,7 @@ export function OrcamentoDocumento({ orcamento, empresa, cliente, anexos = [], v
   return (
     <div className="bg-white text-ink print:text-[12px]" data-documento-orcamento={versao}>
       {/* Timbre: logo, razão social, CNPJ/IE/IM, endereço e contatos — do cadastro da empresa */}
-      <header className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 sm:gap-6 pb-5 border-b-2 border-primary-500 break-inside-avoid" data-timbre>
-        <div className="flex items-start gap-4 flex-1 min-w-0">
-          {empresa.logo ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={empresa.logo} alt={`Logo ${timbre.titulo}`} className="w-16 h-16 sm:w-20 sm:h-20 object-contain shrink-0" data-logo-empresa />
-          ) : (
-            <div className="w-16 h-16 sm:w-20 sm:h-20 shrink-0 rounded-lg bg-acento flex items-center justify-center text-white font-display text-2xl font-bold" aria-hidden>
-              {timbre.titulo.slice(0, 2).toUpperCase()}
-            </div>
-          )}
-          <div className="min-w-0 space-y-0.5">
-            <p className="text-lg sm:text-xl font-bold text-ink leading-tight">{timbre.titulo}</p>
-            {timbre.razaoSocial && <p className="text-xs text-ink-muted">{timbre.razaoSocial}</p>}
-            <p className="text-xs text-ink-muted" data-timbre-documentos>{timbre.documentos}</p>
-            {timbre.endereco && <p className="text-xs text-ink-muted">{timbre.endereco}</p>}
-            {timbre.contato && <p className="text-xs text-ink-muted [overflow-wrap:anywhere]" data-timbre-contato>{timbre.contato}</p>}
-          </div>
-        </div>
+      <TimbreEmpresa empresa={empresa}>
         <div className="sm:text-right shrink-0" data-numero-orcamento>
           <p className="text-xs uppercase tracking-wider text-ink-muted">Orçamento Nº</p>
           <p className="font-mono text-2xl font-bold text-primary-600 tabular-nums">{numeroFormalOrcamento(orcamento.codigo)}</p>
@@ -197,7 +181,7 @@ export function OrcamentoDocumento({ orcamento, empresa, cliente, anexos = [], v
             </span>
           )}
         </div>
-      </header>
+      </TimbreEmpresa>
 
       {/* Para: (cliente destinatário) + datas */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-5 py-5 border-b border-surface-border break-inside-avoid">

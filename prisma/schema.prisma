@@ -335,12 +335,17 @@ enum CanalNotificacao {
   SISTEMA
 }
 
+/// Ciclo automático: SOLICITADO → COTANDO ("Em cotação", ao baixar/enviar o PC) → PARCIAL / CONCLUIDO
+/// (a NF casou parte/todos os itens) | CANCELADO. COMPRADO e ENTREGUE são legados (o SQL migra para
+/// COTANDO/CONCLUIDO) e não são mais gravados.
 enum StatusPedidoCompra {
   SOLICITADO
   COTANDO
   COMPRADO
   ENTREGUE
   CANCELADO
+  PARCIAL
+  CONCLUIDO
 }
 
 enum StatusOsPrazo {
@@ -470,6 +475,7 @@ model Empresa {
   orcamentos             Orcamento[]
   orcamentoAnexos        OrcamentoAnexo[]
   orcamentoEventos       OrcamentoEvento[]
+  pedidoCompraEventos    PedidoCompraEvento[]
   medicoes               Medicao[]
   contasReceber          ContaReceber[]
   prazoTemplates         PrazoTemplate[]
@@ -698,6 +704,7 @@ model Usuario {
   orcamentosCriados    Orcamento[]               @relation("OrcamentoCriador")
   orcamentoAnexos      OrcamentoAnexo[]          @relation("OrcamentoAnexoAutor")
   orcamentoEventos     OrcamentoEvento[]         @relation("OrcamentoEventoAutor")
+  pedidoCompraEventos  PedidoCompraEvento[]      @relation("PedidoCompraEventoAutor")
   pedidosSolicitados   PedidoCompraInterno[]     @relation("PedidoSolicitante")
   pedidosComprador     PedidoCompraInterno[]     @relation("PedidoComprador")
   pushSubscriptions    PushSubscription[]
@@ -2471,6 +2478,7 @@ model Fornecedor {
   contasPagar       ContaPagar[]
   notasCompra       NotaCompra[]
   deParas           DeParaProdutoFornecedor[]
+  pedidosCompra     PedidoCompraInterno[]
 
   @@unique([empresaId, documento])
   @@index([empresaId, ativo])
@@ -2608,24 +2616,56 @@ model PedidoCompraInterno {
   solicitanteId   String             @map("solicitante_id")
   compradorId     String?            @map("comprador_id")
   status          StatusPedidoCompra @default(SOLICITADO)
+  /// Quando entrou no status atual (a lista mostra "Em cotação desde 27/10")
+  statusEm        DateTime           @default(now()) @map("status_em")
   prazoNecessario DateTime?          @map("prazo_necessario")
   observacao      String?            @db.Text
+  /// Fornecedor a quem o PC é enviado (e-mail/WhatsApp do cadastro); opcional
+  fornecedorId    String?            @map("fornecedor_id")
+  /// PC avulso (sem OS/orçamento): o motivo, ex. "Reposição de estoque"
+  motivo          String?
+  /// Link do PDF para o fornecedor (sem login)
+  tokenPublico    String             @unique @default(uuid()) @map("token_publico")
   criadoEm        DateTime           @default(now()) @map("criado_em")
   atualizadoEm    DateTime           @updatedAt @map("atualizado_em")
 
-  empresa      Empresa            @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  ordemServico OrdemServico?      @relation(fields: [ordemServicoId], references: [id])
-  orcamento    Orcamento?         @relation(fields: [orcamentoId], references: [id])
-  solicitante  Usuario            @relation("PedidoSolicitante", fields: [solicitanteId], references: [id])
-  comprador    Usuario?           @relation("PedidoComprador", fields: [compradorId], references: [id])
+  empresa      Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  ordemServico OrdemServico?        @relation(fields: [ordemServicoId], references: [id])
+  orcamento    Orcamento?           @relation(fields: [orcamentoId], references: [id])
+  solicitante  Usuario              @relation("PedidoSolicitante", fields: [solicitanteId], references: [id])
+  comprador    Usuario?             @relation("PedidoComprador", fields: [compradorId], references: [id])
+  fornecedor   Fornecedor?          @relation(fields: [fornecedorId], references: [id], onDelete: SetNull)
   itens        PedidoCompraItem[]
   contasPagar  ContaPagar[]
   notasCompra  NotaCompra[]
+  eventos      PedidoCompraEvento[]
 
   @@unique([numero, empresaId])
   @@index([empresaId, status])
   @@index([ordemServicoId])
+  @@index([fornecedorId])
   @@map("pedidos_compra_interno")
+}
+
+/// Histórico do pedido de compra: criado, editado (o que mudou), baixado/enviado ao fornecedor,
+/// status, cancelado. Nunca apagado.
+model PedidoCompraEvento {
+  id        String   @id @default(cuid())
+  empresaId String   @map("empresa_id")
+  pedidoId  String   @map("pedido_id")
+  /// CRIADO | EDITADO | BAIXADO | ENVIADO_EMAIL | ENVIADO_WHATSAPP | STATUS | CANCELADO
+  tipo      String
+  detalhe   String?  @db.Text
+  usuarioId String?  @map("usuario_id")
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  empresa Empresa             @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  pedido  PedidoCompraInterno @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  usuario Usuario?            @relation("PedidoCompraEventoAutor", fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([pedidoId, criadoEm])
+  @@index([empresaId])
+  @@map("pedido_compra_eventos")
 }
 
 model PedidoCompraItem {

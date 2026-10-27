@@ -218,7 +218,7 @@ export async function carregarBlocos(ids: BlocoId[], ctx: ContextoUsuario, agora
     financeiro: () => dadosFinanceiro(empresaId, agora),
     equipamentos: () => dadosEquipamentos(empresaId, agora),
     frota: () => dadosFrota(empresaId),
-    prazos: () => dadosPrazos(empresaId, podeVer("financeiro")),
+    prazos: () => dadosPrazos(empresaId, podeVer("compras")),
   };
   const resultados = await Promise.allSettled(ids.map((id) => carregadores[id]()));
   const dados: Partial<{ [K in BlocoId]: DadosBloco[K] | { erro: true } }> = {};

@@ -133,7 +133,7 @@ async function itensParaConciliar(empresaId: string, nota: Nota): Promise<ItemCo
 /** Pedidos que ainda podem receber esta nota: abertos e sem conta a pagar */
 async function pedidosAbertos(empresaId: string) {
   return prisma.pedidoCompraInterno.findMany({
-    where: { empresaId, status: { in: ["SOLICITADO", "COTANDO", "COMPRADO"] }, contasPagar: { none: {} } },
+    where: { empresaId, status: { in: ["SOLICITADO", "COTANDO", "PARCIAL", "COMPRADO"] }, contasPagar: { none: {} } },
     select: { id: true, numero: true }, orderBy: { criadoEm: "desc" }, take: 50,
   });
 }

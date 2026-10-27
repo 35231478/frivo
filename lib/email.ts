@@ -305,3 +305,24 @@ export async function enviarOS(ordemServicoId: string, tipo: "aberta" | "conclui
     variaveis: { cliente_nome: os.cliente.nomeFantasia ?? os.cliente.nome, numero_os: os.numero, link_documento: "" },
   });
 }
+
+/**
+ * Compras: o Pedido de Compra (sem preços) ao e-mail do fornecedor do cadastro, com o link público
+ * do PC (o fornecedor abre/imprime sem login e responde com preço, validade e prazo).
+ */
+export async function enviarPedidoCompra(pedidoId: string): Promise<ResultadoEmail> {
+  const p = await prisma.pedidoCompraInterno.findUnique({ where: { id: pedidoId }, include: { fornecedor: { select: { nome: true, email: true } } } });
+  if (!p) return { ok: false, erro: "Pedido não encontrado." };
+  const para = p.fornecedor?.email?.trim();
+  if (!p.fornecedor) return { ok: false, erro: "Escolha o fornecedor do pedido." };
+  if (!para) return { ok: false, erro: `O fornecedor ${p.fornecedor.nome} não tem e-mail no cadastro.` };
+  const r = await enviarEmail(p.empresaId, {
+    tipo: "PEDIDO_COMPRA", para, referenciaId: p.id, referenciaTipo: "PedidoCompraInterno",
+    variaveis: {
+      fornecedor_nome: p.fornecedor.nome, numero_pedido: p.numero,
+      prazo_necessario: p.prazoNecessario ? ` (necessário até ${formatarData(p.prazoNecessario)})` : "",
+      link_pedido: `${baseUrl()}/pedido-compra/${p.tokenPublico}`,
+    },
+  });
+  return { ...r, para };
+}

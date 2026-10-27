@@ -5,7 +5,7 @@
  * Devolve só id, rótulo, um detalhe curto e o link do registro (nada além do que a lista mostra).
  */
 import { prisma } from "@/lib/prisma";
-import { whereClientes, whereContratos, whereOrcamentos, whereOrdens } from "@/lib/listas/filtros";
+import { whereClientes, whereContratos, whereOrcamentos, whereOrdens, wherePedidosCompra } from "@/lib/listas/filtros";
 import { lerFiltros, montarWhere } from "@/lib/equipamento-listagem";
 import { lerFiltrosVeiculos, montarWhereVeiculos } from "@/lib/veiculo-listagem";
 import { lerFiltrosColaboradores, montarWhereColaboradores } from "@/lib/colaborador-listagem";
@@ -73,6 +73,13 @@ export const SUGESTOES: Record<string, DefSugestao> = {
       where: montarWhereColaboradores(empresaId, lerFiltrosColaboradores({ q })), select: { id: true, nome: true, cargo: { select: { nome: true } } },
       orderBy: [{ nome: "asc" }, { id: "asc" }], take: CANDIDATOS,
     })).map((t: any) => ({ id: t.id, rotulo: t.nome, detalhe: t.cargo?.nome ?? null, href: `/colaboradores/${t.id}/editar` })),
+  },
+  "pedidos-compra": {
+    modulo: "compras",
+    buscar: async (empresaId, q) => (await p.pedidoCompraInterno.findMany({
+      where: wherePedidosCompra(empresaId, { q }), select: { id: true, numero: true, itens: { select: { descricao: true }, take: 2, orderBy: { id: "asc" } }, fornecedor: { select: { nome: true } } },
+      orderBy: [{ criadoEm: "desc" }, { id: "asc" }], take: CANDIDATOS,
+    })).map((x: any) => ({ id: x.id, rotulo: `${x.numero} · ${x.itens.map((i: any) => i.descricao).join(", ")}`, detalhe: x.fornecedor?.nome ?? null, href: `/compras/pedidos/${x.id}` })),
   },
   estoque: {
     modulo: "estoque",
