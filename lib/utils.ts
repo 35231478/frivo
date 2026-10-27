@@ -53,10 +53,6 @@ export function gerarNumeroContrato(sequencial: number): string {
   return `CT-${anoBR()}-${String(sequencial).padStart(3, "0")}`;
 }
 
-export function gerarCodigoOrcamento(sequencial: number): string {
-  return `ORC-${anoBR()}-${String(sequencial).padStart(4, "0")}`;
-}
-
 export function gerarNumeroMedicao(sequencial: number, ano = anoBR()): string {
   return `MED-${ano}-${String(sequencial).padStart(4, "0")}`;
 }

@@ -1,6 +1,7 @@
 import type { OrcamentoInput } from "./validations";
 import { calcularDataFimContrato } from "./utils";
 import { calcularOrcamento, descontoGeralPorGrupo, totalDoItem, type TotaisOrcamento } from "./orcamentos/calculo";
+import { linhasNaoIncluso, normasValidas } from "./orcamentos/proposta";
 
 /**
  * Os valores do orçamento a gravar, pelo cálculo único (lib/orcamentos/calculo.ts):
@@ -46,10 +47,25 @@ export function montarValoresOrcamento(data: OrcamentoInput, issAliquota: number
   };
 }
 
-/** Condições que saem no documento do cliente (texto curto, opcionais) */
-export const camposCondicoes = (data: OrcamentoInput) => ({
-  prazoExecucao: data.prazoExecucao?.trim() || null,
-  formaPagamento: data.formaPagamento?.trim() || null,
+/** O que vale quando o campo não veio no corpo: no novo, os padrões de Configurações; na edição, o gravado. */
+export interface BaseCondicoes {
+  garantiaServico?: string | null;
+  garantiaPecas?: string | null;
+  naoIncluso?: string | null;
+  normas?: readonly string[] | null;
+}
+
+const textoOuNulo = (v: string | null | undefined) => v?.trim() || null;
+
+/** Condições que saem no documento do cliente (prazo, pagamento, garantias, não incluso, normas) */
+export const camposCondicoes = (data: OrcamentoInput, base: BaseCondicoes = {}) => ({
+  prazoExecucao: textoOuNulo(data.prazoExecucao),
+  formaPagamento: textoOuNulo(data.formaPagamento),
+  // undefined = não veio (usa a base); null/"" = apagado de propósito
+  garantiaServico: textoOuNulo(data.garantiaServico === undefined ? base.garantiaServico : data.garantiaServico),
+  garantiaPecas: textoOuNulo(data.garantiaPecas === undefined ? base.garantiaPecas : data.garantiaPecas),
+  naoIncluso: linhasNaoIncluso(data.naoIncluso === undefined ? base.naoIncluso : data.naoIncluso).join("\n") || null,
+  normas: normasValidas(data.normas === undefined ? base.normas : data.normas),
 });
 
 /**
@@ -63,7 +79,9 @@ export function montarCamposProposta(data: OrcamentoInput) {
       valorMensal: null, frequenciaContrato: null, diaExecucao: null,
       dataInicioContrato: null, vigenciaMeses: null, dataFimContrato: null,
       condicaoPagamento: null, diaFaturamento: null, perfilFaturamento: null,
-      exigePcAntesNf: false, responsavelTecnicoId: null, artNumero: null,
+      exigePcAntesNf: false,
+      // Responsável técnico e ART valem também no orçamento comum (bloco RT do documento)
+      responsavelTecnicoId: data.responsavelTecnicoId || null, artNumero: data.artNumero?.trim() || null,
       termoReferencia: null, visitasPorPeriodo: null, equipamentosCobertos: [],
       prazoEmergencial: null, prazoNormal: null, horarioAtendimento: null,
     };

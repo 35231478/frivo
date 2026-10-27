@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { gerarCodigoOrcamento } from "@/lib/utils";
+import { proximoCodigoOrcamento } from "@/lib/orcamentos/numero-server";
 import { enviarEmailInterno } from "@/lib/email";
 import { formatarData } from "@/lib/utils";
 import { anoBR } from "@/lib/fuso";
@@ -268,13 +268,7 @@ export async function POST(req: Request) {
     const ano = anoBR();
     let orcamento!: { id: string; codigo: string };
     for (let tentativa = 0; ; tentativa++) {
-      const ultimo = await prisma.orcamento.findFirst({
-        where: { empresaId, codigo: { startsWith: `ORC-${ano}-` } },
-        orderBy: { codigo: "desc" },
-        select: { codigo: true },
-      });
-      const seq = ultimo ? Number(ultimo.codigo.split("-")[2]) + 1 : 1;
-      const codigo = gerarCodigoOrcamento(seq);
+      const codigo = await proximoCodigoOrcamento(empresaId, ano);
       try {
         orcamento = await prisma.orcamento.create({
           data: {

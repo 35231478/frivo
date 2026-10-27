@@ -289,7 +289,9 @@ describe("documento do orçamento: cliente (ISS embutido) × interno (linha de I
     expect(texto(linhasServ[0])).toContain("R$ 472,50");
     expect(texto(linhasServ[0])).toContain("R$ 945,00");
     expect(texto(linhasServ[1])).toContain("R$ 105,00");
-    const rodape = texto([...d.querySelectorAll("tfoot")][0]);
+    // Subtotais fora da tabela (num tfoot a impressão repetiria o "Subtotal" em toda página)
+    expect(d.querySelector("tfoot")).toBeNull();
+    const rodape = texto(d.querySelector("[data-subtotais-grupo='serviços']")!);
     expect(rodape).toContain("Subtotal serviços");
     expect(rodape).toContain("R$ 1.050,00");
     expect(rodape).toContain("− R$ 105,00");
@@ -308,7 +310,7 @@ describe("documento do orçamento: cliente (ISS embutido) × interno (linha de I
     expect(texto(linhasServ[0])).toContain("R$ 450,00");
     expect(texto(linhasServ[1])).toContain("R$ 33,33");
     expect(texto(linhasServ[1])).toContain("R$ 100,00");
-    expect(texto([...d.querySelectorAll("tfoot")][0])).toContain("Total serviços (com ISS)");
+    expect(texto(d.querySelector("[data-subtotais-grupo='serviços']")!)).toContain("Total serviços (com ISS)");
     expect(d.querySelector("[data-total-geral]")?.textContent?.replace(/\s/g, " ")).toBe("R$ 1.125,00");
   });
 });

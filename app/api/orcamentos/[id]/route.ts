@@ -4,6 +4,7 @@ import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib
 import { orcamentoSchema } from "@/lib/validations";
 import { camposCondicoes, montarValoresOrcamento, montarCamposProposta } from "@/lib/orcamento-helpers";
 import { nomeDoOrcamento } from "@/lib/orcamentos/nome-server";
+import { validarDestinatario } from "@/lib/orcamentos/padroes-server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { pode } from "@/lib/permissoes";
 import { impactoOrcamento } from "@/lib/inativacao-server";
@@ -109,6 +110,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       validarRefEmpresa("tecnico", data.responsavelTecnicoId, empresaId, "Responsável técnico"),
       validarRefsEmpresa("servico", data.servicos.map((s) => s.catalogoId), empresaId, "Serviço do catálogo"),
       validarRefsEmpresa("produto", data.produtos.map((p) => p.catalogoId), empresaId, "Produto do catálogo"),
+      validarDestinatario(empresaId, data.clienteId, data.unidadeId, data.contatoClienteId),
     ]);
   } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
@@ -125,12 +127,22 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
   }
 
+  // Destinatário que não veio: mantém o gravado se o cliente for o mesmo (trocou de cliente = solta)
+  const mesmoCliente = data.clienteId === existente.clienteId;
+  const destino = (novo: string | null | undefined, atual: string | null) =>
+    (novo === undefined ? (mesmoCliente ? atual : null) : novo || null);
+
   // ISS: mantém a alíquota congelada no orçamento; só troca pela atual da empresa se pedirem
   const issAliquota = data.atualizarIss
     ? Number((await prisma.configuracao.findUnique({ where: { empresaId }, select: { issAliquota: true } }))?.issAliquota ?? 0)
     : Number(existente.issAliquota);
   const valores = montarValoresOrcamento(data, issAliquota);
-  const proposta = montarCamposProposta(data);
+  // RT/ART que não vieram: mantém os do orçamento (como garantias, normas e destinatário)
+  const proposta = montarCamposProposta({
+    ...data,
+    responsavelTecnicoId: data.responsavelTecnicoId === undefined ? existente.responsavelTecnicoId : data.responsavelTecnicoId,
+    artNumero: data.artNumero === undefined ? existente.artNumero : data.artNumero,
+  });
   // Nome em branco = automático (tipo da OS, equipamento, cliente/unidade ou itens)
   const nome = await nomeDoOrcamento(empresaId, data);
 
@@ -143,11 +155,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       where: { id },
       data: {
         nome,
-        ...camposCondicoes(data),
+        // Garantias/não incluso/normas que não vieram: mantém o que o orçamento já tem
+        ...camposCondicoes(data, existente),
         clienteId: data.clienteId,
+        unidadeId: destino(data.unidadeId, existente.unidadeId),
+        contatoClienteId: destino(data.contatoClienteId, existente.contatoClienteId),
         descricao: data.descricao ?? null,
         observacao: data.observacao ?? null,
-        validadeEm: data.validadeEm ? new Date(data.validadeEm) : null,
+        validadeEm: data.validadeEm === undefined ? existente.validadeEm : data.validadeEm ? new Date(data.validadeEm) : null,
         ...valores.campos,
         ...proposta,
         servicos: { create: valores.servicos },

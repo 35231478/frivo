@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { contextoDaOsParaNome, contextoOsSelect } from "@/lib/orcamentos/nome-server";
+import { destinatarioSugerido, padroesOrcamento } from "@/lib/orcamentos/padroes-server";
 
 /**
  * Tudo o que o construtor de orçamento (components/forms/orcamento-form.tsx) precisa para abrir em
@@ -43,6 +44,14 @@ export async function dadosNovoOrcamento(empresaId: string, { clienteId, osId }:
     prisma.configuracao.findUnique({ where: { empresaId }, select: { issAliquota: true } }),
   ]);
 
+  const clienteInicial = osInicial?.clienteId ?? clienteId ?? null;
+  const [padroes, destinatarioInicial] = await Promise.all([
+    padroesOrcamento(empresaId),
+    clienteInicial && clientes.some((c) => c.id === clienteInicial)
+      ? destinatarioSugerido(empresaId, clienteInicial, osInicial ? [osInicial.id] : [])
+      : Promise.resolve(undefined),
+  ]);
+
   return {
     clientes,
     catalogoServicos: servicos.map((s) => ({ ...s, valorPadrao: s.valorPadrao ? Number(s.valorPadrao) : null })),
@@ -56,6 +65,10 @@ export async function dadosNovoOrcamento(empresaId: string, { clienteId, osId }:
     contextoNome: contextoDaOsParaNome(osInicial),
     /** Alíquota de ISS da empresa hoje (%): o orçamento novo nasce com ela */
     issAliquota: Number(cfg?.issAliquota ?? 0),
+    /** Padrões de Configurações › Orçamentos: validade, garantias, não incluso, normas e RT padrão */
+    padroes,
+    /** "Para:" sugerido: unidade da OS de origem e contato principal do cliente */
+    destinatarioInicial,
     /** Botão "Gerar descrição (IA)" ativo? (sem a chave fica desabilitado com aviso) */
     iaDisponivel: !!process.env.ANTHROPIC_API_KEY,
   };

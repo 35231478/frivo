@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { OrcamentoForm } from "@/components/forms/orcamento-form";
+import { padroesOrcamento } from "@/lib/orcamentos/padroes-server";
 
 export const metadata: Metadata = { title: "Editar Orçamento" };
 
@@ -61,6 +62,8 @@ export default async function EditarOrcamentoPage({
     }),
     prisma.configuracao.findUnique({ where: { empresaId }, select: { issAliquota: true } }),
   ]);
+  // Só para os textos de ajuda (ex.: validade padrão); os valores do orçamento são os gravados
+  const padroes = await padroesOrcamento(empresaId);
 
   const inicial = {
     id: orcamento.id,
@@ -73,6 +76,12 @@ export default async function EditarOrcamentoPage({
     validadeEm: orcamento.validadeEm,
     prazoExecucao: orcamento.prazoExecucao,
     formaPagamento: orcamento.formaPagamento,
+    garantiaServico: orcamento.garantiaServico,
+    garantiaPecas: orcamento.garantiaPecas,
+    naoIncluso: orcamento.naoIncluso,
+    normas: orcamento.normas,
+    unidadeId: orcamento.unidadeId,
+    contatoClienteId: orcamento.contatoClienteId,
     descontoServicos: Number(orcamento.descontoServicos),
     tipoDescontoServicos: orcamento.tipoDescontoServicos,
     descontoProdutos: Number(orcamento.descontoProdutos),
@@ -135,6 +144,7 @@ export default async function EditarOrcamentoPage({
       inicial={inicial}
       issAliquota={Number(cfg?.issAliquota ?? 0)}
       iaDisponivel={!!process.env.ANTHROPIC_API_KEY}
+      padroes={padroes}
     />
   );
 }
