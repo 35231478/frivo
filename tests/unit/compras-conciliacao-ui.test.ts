@@ -210,8 +210,9 @@ describe("painel da NF lançada", () => {
     await painel({ vinculos: [], sugestoes: [] });
     expect($("[data-pedido-da-nota]")).toBeNull();
     await act(async () => root.unmount()); caixa.remove();
-    await painel({ vinculos: [] });
+    await painel({ vinculos: [], sugestoes: [SUG_B, SUG_A] });
     expect(txt($('[data-sugestao-pedido="pcB"]'))).toContain("Esta NF parece ser do Pedido PCI-2026-0002 — vincular?");
+    expect(txt($('[data-sugestao-pedido="pcA"]'))).toContain("Também pode ser do Pedido PCI-2026-0001 — vincular?");
   });
 });
 

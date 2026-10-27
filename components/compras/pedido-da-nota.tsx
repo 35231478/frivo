@@ -139,11 +139,11 @@ export function PedidoDaNota({ notaId, vinculos, sugestoes, podeGerenciar }: {
       )}
       {sugestoes.length > 0 && (
         <div className={cn("px-4 py-3 space-y-2", vinculos.length > 0 && "border-t border-surface-border")} data-sugestoes-pos>
-          {sugestoes.map((s) => (
+          {sugestoes.map((s, idx) => (
             <div key={s.pedidoId} className="flex flex-col sm:flex-row sm:items-start justify-between gap-2" data-sugestao-pedido={s.pedidoId}>
               <div className="min-w-0 text-sm">
                 <p className="text-ink flex items-start gap-1.5"><Lightbulb className="w-4 h-4 mt-0.5 shrink-0 text-primary-600" />
-                  <span>{vinculos.length ? "O restante desta NF parece ser do " : "Esta NF parece ser do "}<strong>Pedido {s.numero}</strong> — vincular?</span></p>
+                  <span>{vinculos.length ? "O restante desta NF parece ser do " : idx === 0 ? "Esta NF parece ser do " : "Também pode ser do "}<strong>Pedido {s.numero}</strong> — vincular?</span></p>
                 <Motivos motivos={s.motivos} />
               </div>
               {podeGerenciar && (

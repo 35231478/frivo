@@ -124,7 +124,8 @@ describe.skipIf(!URL_PG)("Conciliação NF ↔ Pedido de Compra (PostgreSQL real
       { id: "bFil", produtoId: "pFil", descricao: "Filtro secador", quantidade: 4, unidade: "un", valorEstimado: 25 },
     ], { criadoEm: D("2026-10-06") });
     await pc("pcFechado", "PCI-2026-0003", [{ produtoId: "pCap", descricao: "Capacitor", quantidade: 1 }], { status: "CONCLUIDO" });
-    await prisma.pedidoCompraInterno.create({ data: { id: "pcE2", empresaId: "e2", numero: "PCI-2026-0001", solicitanteId: "uOutra", status: "COTANDO",
+    // da outra empresa, aberto, antes das NFs e com "Gás R410A" sem produto: casaria pela descrição se a empresa não filtrasse
+    await prisma.pedidoCompraInterno.create({ data: { id: "pcE2", empresaId: "e2", numero: "PCI-2026-0001", solicitanteId: "uOutra", status: "COTANDO", criadoEm: D("2026-10-01"),
       itens: { create: [{ produtoId: null, descricao: "Gás R410A", quantidade: 1 }] } } });
   }, 120_000);
 

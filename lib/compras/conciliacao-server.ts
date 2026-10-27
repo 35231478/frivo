@@ -114,6 +114,7 @@ export async function vinculosDaNota(empresaId: string, notaId: string, db: Db =
     });
     porPedido.set(v.pedido.id, g);
   }
+  for (const g of porPedido.values()) g.itens.sort((a, b) => a.notaItem - b.notaItem);
   return [...porPedido.values()];
 }
 
