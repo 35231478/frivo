@@ -124,6 +124,9 @@ describe.skipIf(!URL_PG)("Pedido de Compra completo (PostgreSQL real)", () => {
       { empresaId: "e1", produtoId: "pFiltro", tipo: "ENTRADA", origem: "COMPRA", quantidade: 4, saldoApos: 8, custoUnitario: 18.45, refId: "nf1", data: new Date("2026-10-16T12:00:00Z") },
       { empresaId: "e1", produtoId: "pFiltro", tipo: "SAIDA", origem: "OS", quantidade: -1, saldoApos: 7, custoUnitario: 99, data: new Date("2026-10-20T12:00:00Z") },
     ] });
+    // Item de NF do Filtro mais ANTIGO que a entrada da nf1: a entrada (mais recente) é que vale
+    await prisma.notaCompra.create({ data: { id: "nf0", empresaId: "e1", fornecedorId: "fSemContato", chaveAcesso: "0".repeat(44), numero: "100", serie: "1", dataEmissao: new Date("2026-08-01T12:00:00Z"), valorTotal: 15, xml: "<x/>", emitenteNome: "ANTIGO", emitenteCnpj: "0" } });
+    await prisma.notaCompraItem.create({ data: { notaId: "nf0", numeroItem: 1, codigoFornecedor: "F0", descricaoFornecedor: "FILTRO", unidade: "UN", quantidade: 1, valorUnitario: 15, valorTotal: 15, produtoId: "pFiltro" } });
     await prisma.notaCompraItem.create({ data: { notaId: "nf2", numeroItem: 1, codigoFornecedor: "G1", descricaoFornecedor: "GAS R410A CIL 11,35KG", unidade: "CIL", quantidade: 1, valorUnitario: 1135, valorTotal: 1135, fatorConversao: 11.35, produtoId: "pGas" } });
     await prisma.emailConfig.create({ data: { empresaId: "e1", ativo: true, apiKey: criptografar("re_teste"), remetente: "compras@ct.com.br", nomeRemetente: "Clima Total" } });
     // Pedido da outra empresa com o número que seria o próximo daqui: não conta
@@ -237,6 +240,9 @@ describe.skipIf(!URL_PG)("Pedido de Compra completo (PostgreSQL real)", () => {
     // Sem permissão (só vê a OS) e de outra empresa
     logar(montarPermissoes({ ordens: ["visualizar"] }), "uOutroTec");
     expect((await chamar("pedidos-compra/[id]", "PUT", { itens: [item("X")] }, { id })).status).toBe(403);
+    expect((await chamar("pedidos-compra/[id]", "GET", undefined, { id })).status).toBe(200); // vê a OS: vê o pedido
+    logar(montarPermissoes({ clientes: ["visualizar"] }), "uX");
+    expect((await chamar("pedidos-compra/[id]", "GET", undefined, { id })).status).toBe(403);
     logar(permissoesTotais(), "uOutra", "e2");
     expect((await chamar("pedidos-compra/[id]", "PUT", { itens: [item("X")] }, { id })).status).toBe(404);
     expect((await chamar("pedidos-compra/[id]", "GET", undefined, { id })).status).toBe(404);
@@ -280,7 +286,7 @@ describe.skipIf(!URL_PG)("Pedido de Compra completo (PostgreSQL real)", () => {
 
     // Fornecedor sem contato: avisa por canal
     await prisma.pedidoCompraInterno.update({ where: { id }, data: { fornecedorId: "fSemContato" } });
-    expect((await chamar("pedidos-compra/[id]/enviar", "POST", { canal: "EMAIL" }, { id })).json.erro).toBe("O fornecedor Sem Contato Ltda não tem e-mail no cadastro.");
+    expect(await chamar("pedidos-compra/[id]/enviar", "POST", { canal: "EMAIL" }, { id })).toMatchObject({ status: 400, json: { erro: "O fornecedor Sem Contato Ltda não tem e-mail no cadastro." } });
     expect((await chamar("pedidos-compra/[id]/enviar", "POST", { canal: "WHATSAPP" }, { id })).json.erro).toBe("O fornecedor Sem Contato Ltda não tem telefone no cadastro.");
 
     // Com contato: WhatsApp para o telefone do cadastro, com o link público
