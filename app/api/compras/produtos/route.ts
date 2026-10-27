@@ -13,7 +13,8 @@ export async function GET(req: NextRequest) {
   const guard = await exigirPermissao("estoque", "gerenciar");
   if (guard.erro) return guard.resposta;
   const q = (req.nextUrl.searchParams.get("q") ?? "").trim().slice(0, 100);
-  if (q.length < 2) return NextResponse.json({ produtos: [] });
+  // Só o número (código do produto) vale com 1 dígito: o produto 6 é achado por "6"
+  if (q.length < 2 && !/^\d$/.test(q)) return NextResponse.json({ produtos: [] });
   const empresaId = guard.session.user!.empresaId;
   const achados = await prisma.produto.findMany({
     where: { empresaId, ativo: true, OR: [

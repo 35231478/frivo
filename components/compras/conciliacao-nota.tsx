@@ -339,7 +339,8 @@ function BuscaProduto({ onEscolher, rotulo }: { onEscolher: (p: ProdutoConciliac
   const pedido = useRef(0);
   useEffect(() => {
     const termo = q.trim();
-    if (termo.length < 2) { setLista([]); return; }
+    // 1 dígito já busca: é o código do produto ("6")
+    if (termo.length < 2 && !/^\d$/.test(termo)) { setLista([]); return; }
     const n = ++pedido.current;
     const t = setTimeout(async () => {
       setCarregando(true);
@@ -354,7 +355,7 @@ function BuscaProduto({ onEscolher, rotulo }: { onEscolher: (p: ProdutoConciliac
   return (
     <div className="relative">
       <Search className="w-4 h-4 text-ink-subtle absolute left-3 top-1/2 -translate-y-1/2" />
-      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar produto do cadastro…" aria-label={rotulo} className="pl-9" data-busca-produto />
+      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar produto por nome ou código…" aria-label={rotulo} className="pl-9" data-busca-produto />
       {carregando && <Loader2 className="w-4 h-4 animate-spin text-ink-subtle absolute right-3 top-1/2 -translate-y-1/2" />}
       {lista.length > 0 && (
         <ul role="listbox" className="absolute z-20 mt-1 w-full bg-white border border-surface-border rounded-lg shadow-card-hover max-h-64 overflow-auto">

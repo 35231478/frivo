@@ -142,6 +142,14 @@ describe.skipIf(!URL_PG)("Códigos e planilha de ida e volta (PostgreSQL real)",
     const nomes = (s.json.itens ?? s.json).map((x: any) => x.codigo);
     expect(nomes).toEqual(expect.arrayContaining(["LIMP01", "LIMP02", "LIMP05", "LIMP06"]));
     expect(nomes).not.toContain("HIGI10");
+    // De-para da NF de compra: o número basta (até com 1 dígito); só a empresa da sessão
+    const nf = async (q: string) => (await chamar("compras/produtos", "GET", {}, undefined, `http://localhost/api/compras/produtos?q=${q}`)).json.produtos;
+    // acha pelo código (e pelo nome que tem “6”)
+    const r6 = await nf("6");
+    expect([r6[0].codigo, r6[0].nome]).toEqual([6, "Capacitor 35uF"]);
+    expect(r6.map((x: any) => x.nome)).toEqual(["Capacitor 35uF", "Paralelo 6"]); // o código da “Paralelo 6” depende da corrida
+    expect(await nf("900")).toEqual([]);
+    expect((await nf("gás")).map((x: any) => x.codigo)).toEqual([1]);
   });
 
   it("baixar: permissão de ver o módulo; colunas do modelo; todos os registros DA EMPRESA (inativos também)", async () => {
