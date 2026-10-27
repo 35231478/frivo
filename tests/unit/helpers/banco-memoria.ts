@@ -164,6 +164,7 @@ export function criarPrisma(db: Banco, relacoes: Relacoes = {}, aninhadas: Aninh
     get: (_t, m: string) => {
       if (m === "$transaction") return async (arg: any) => (typeof arg === "function" ? arg(prisma) : Promise.all(arg));
       if (m === "$queryRaw") return async () => [{ max: 0 }];
+      if (m === "$executeRaw") return async () => 0; // travas (advisory lock) não fazem nada aqui
       if (typeof m !== "string" || m === "then") return undefined;
       return (cache[m] ??= model(m));
     },

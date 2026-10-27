@@ -48,7 +48,8 @@ export interface CampoCadastro {
 export interface ColunaCadastro {
   key: string;
   label: string;
-  formato?: "texto" | "moeda" | "cor-nome";
+  /** "codigo": código do item (fonte mono; no celular vai junto do nome no título do cartão) */
+  formato?: "texto" | "moeda" | "cor-nome" | "codigo";
   /**
    * Ordenar clicando no cabeçalho: nome do campo (escalar) ou o orderBy do Prisma para a direção
    * (relação/contagem). Sem isto a coluna não é ordenável — o servidor só aceita a lista branca.
@@ -190,7 +191,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       { key: "estoqueMinimo", label: "Estoque mínimo", tipo: "inteiro", placeholder: "0" },
     ],
     colunas: [
-      { key: "codigo", label: "Cód.", ordenar: "codigo" },
+      { key: "codigo", label: "Cód.", formato: "codigo", ordenar: "codigo" },
       { key: "nome", label: "Nome", ordenar: "nome" }, { key: "unidade", label: "Unidade", ordenar: "unidade" },
       { key: "valorPadrao", label: "Valor padrão", formato: "moeda", ordenar: "valorPadrao" }, { key: "estoqueMinimo", label: "Est. mín.", ordenar: "estoqueMinimo" },
     ],
@@ -219,7 +220,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       { key: "observacaoFiscal", label: "Observação fiscal", tipo: "textarea", grupo: "Dados fiscais" },
     ],
     colunas: [
-      { key: "codigo", label: "Código", ordenar: "codigo" },
+      { key: "codigo", label: "Código", formato: "codigo", ordenar: "codigo" },
       { key: "nome", label: "Nome", ordenar: "nome" }, { key: "unidade", label: "Unidade", ordenar: "unidade" },
       { key: "codigoLc116", label: "LC 116", ordenar: "codigoLc116" }, { key: "valorPadrao", label: "Valor padrão", formato: "moeda", ordenar: "valorPadrao" },
     ],

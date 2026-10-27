@@ -232,7 +232,7 @@ async function aplicarEscolhas(tx: Prisma.TransactionClient, empresaId: string, 
     const item = doItem.get(e.itemId)!;
     // Produto novo: unidade escolhida (ou a da nota) e os dados fiscais do XML
     const produtoId = "produtoId" in e ? e.produtoId
-      : (await criarProdutoComCodigo(empresaId, (codigo) => tx.produto.create({
+      : (await criarProdutoComCodigo(empresaId, (codigo, t) => t.produto.create({
         data: { empresaId, codigo, nome: e.novo.nome.trim().slice(0, 200), unidade: (e.novo.unidade || item.unidade).trim().slice(0, 10) || "un", ...fiscalDoItem(item) },
         select: { id: true },
       }), tx)).id;

@@ -183,14 +183,16 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda }: CadastroPadra
       )}
     </div>
   );
-  const valor = (col: ColunaCadastro, item: Item, i: number) => celula?.(col.key, item) ?? <Celula col={col} item={item} primeira={i === 0} />;
+  // Título (em destaque) = 1ª coluna — ou código + nome, quando a 1ª é o código (produto/serviço)
+  const nTitulo = def.colunas[0]?.formato === "codigo" ? 2 : 1;
+  const valor = (col: ColunaCadastro, item: Item, i: number) => celula?.(col.key, item) ?? <Celula col={col} item={item} primeira={i === nTitulo - 1} />;
 
   return (
     <ComSelecao ativo={!!def.massa} entidade={entidade} ids={itens.map((i) => i.id)} total={dados?.total ?? 0}>
       <div className="space-y-4" data-cadastro={entidade}>
         {ajuda && <div className="text-sm text-ink-muted">{ajuda}</div>}
         {/* Abas + busca + Novo */}
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3">
           <div className="flex rounded-lg border border-surface-border p-0.5 bg-surface-alt w-full sm:w-auto" role="tablist">
             {ABAS.map((a) => (
               <button
@@ -203,7 +205,8 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda }: CadastroPadra
               </button>
             ))}
           </div>
-          <div className="flex-1 sm:max-w-sm">
+          {/* A busca não fica espremida: com pouco espaço, os botões descem para a linha de baixo */}
+          <div className="flex-1 sm:min-w-[240px] sm:max-w-sm">
             <CampoBusca
               valor={busca} onChange={setBusca} placeholder={`Buscar ${def.plural}…`} rotulo={`Buscar ${def.plural}`}
               sugerir={sugerir} carregando={carregando && !!dados}
@@ -244,13 +247,16 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda }: CadastroPadra
                   <div className="flex items-start gap-2">
                     {massa && <span className="pt-0.5"><CheckboxLinha id={item.id} rotulo={item.nome} /></span>}
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm">{valor(def.colunas[0], item, 0)}</div>
+                      {/* Coluna de código (produto/serviço): vai junto do nome no título do cartão */}
+                      <div className="text-sm flex items-baseline gap-1.5 min-w-0">
+                        {def.colunas.slice(0, nTitulo).map((col, i) => <span key={col.key} className="min-w-0">{valor(col, item, i)}</span>)}
+                      </div>
                       {!item.ativo && <span className="mt-1 inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full bg-surface-alt text-ink-muted">Inativo</span>}
                       <dl className="mt-1.5 grid grid-cols-[auto,1fr] gap-x-3 gap-y-0.5 text-xs">
-                        {def.colunas.slice(1).map((col, i) => (
+                        {def.colunas.slice(nTitulo).map((col, i) => (
                           <div key={col.key} className="contents">
                             <dt className="text-ink-subtle">{col.label}</dt>
-                            <dd className="text-ink min-w-0 truncate">{valor(col, item, i + 1)}</dd>
+                            <dd className="text-ink min-w-0 truncate">{valor(col, item, i + nTitulo)}</dd>
                           </div>
                         ))}
                       </dl>
@@ -316,6 +322,7 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda }: CadastroPadra
 function Celula({ col, item, primeira }: { col: ColunaCadastro; item: Item; primeira: boolean }) {
   const v = item[col.key];
   if (col.formato === "moeda") return <>{v != null && v !== "" ? formatarMoeda(Number(v)) : "—"}</>;
+  if (col.formato === "codigo") return <span className="font-mono text-xs font-semibold text-ink-muted" data-codigo>{v != null && v !== "" ? String(v) : "—"}</span>;
   if (col.formato === "cor-nome") {
     return (
       <span className="flex items-center gap-2">

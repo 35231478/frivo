@@ -406,8 +406,8 @@ const fornecedores: RegrasCadastro = {
 /** Produto: código numérico sequencial da empresa, gerado aqui (não vem do formulário). */
 const produtos: RegrasCadastro = {
   async criar(dados, ator) {
-    const item = await criarProdutoComCodigo(ator.empresaId, (codigo) =>
-      prisma.produto.create({ data: { ...(dados as any), codigo, empresaId: ator.empresaId, ativo: true } }));
+    const item = await criarProdutoComCodigo(ator.empresaId, (codigo, tx) =>
+      tx.produto.create({ data: { ...(dados as any), codigo, empresaId: ator.empresaId, ativo: true } }));
     return { ok: true, item };
   },
 };
@@ -421,8 +421,8 @@ const servicos: RegrasCadastro = {
     if (n.erro) return falha(400, n.erro);
     if (n.codigo) { const dup = await servicoComCodigo(ator.empresaId, n.codigo); if (dup) return falha(409, msgCodigoServico(n.codigo, dup)); }
     try {
-      const item = await criarServicoComCodigo(ator.empresaId, String(dados.nome), n.codigo, (codigo) =>
-        prisma.servico.create({ data: { ...(dados as any), codigo, empresaId: ator.empresaId, ativo: true } }));
+      const item = await criarServicoComCodigo(ator.empresaId, String(dados.nome), n.codigo, (codigo, tx) =>
+        tx.servico.create({ data: { ...(dados as any), codigo, empresaId: ator.empresaId, ativo: true } }));
       return { ok: true, item };
     } catch (e) {
       if (n.codigo && colisaoDeCodigo(e)) return falha(409, `O código ${n.codigo} acabou de ser usado em outro serviço. Escolha outro.`);

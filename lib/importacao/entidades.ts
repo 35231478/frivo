@@ -72,7 +72,7 @@ const COLUNA_ID: ColunaImportacao = {
 function lerId(v: Celula, erros: string[]) {
   const t = texto(v);
   if (!t) return undefined;
-  if (!/^[A-Za-z0-9_-]{8,64}$/.test(t)) { erros.push(`id_sistema: “${t}” não é um identificador do sistema. Não altere essa coluna (linha nova: deixe vazia).`); return undefined; }
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(t)) { erros.push(`id_sistema: “${t}” não é um identificador do sistema. Não altere essa coluna (linha nova: deixe vazia).`); return undefined; }
   return t;
 }
 const chaveIdQueExiste = (singular: string) => ({
