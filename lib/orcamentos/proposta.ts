@@ -43,15 +43,33 @@ export function normasDoDocumento(codigos: readonly string[] | null | undefined)
 
 // ───────────────────────── Não incluso ─────────────────────────
 
-/** Sugestões rápidas do "Não incluso" (o campo é texto livre, uma exclusão por linha). */
+/**
+ * Sugestões rápidas do "Não incluso" (o campo é texto livre, uma exclusão por linha; a sugestão
+ * entra como linha nova e dá para editar depois — ex.: trocar os "3 metros"). As primeiras
+ * NAO_INCLUSO_VISIVEIS aparecem sempre; o resto, em "mais sugestões".
+ */
 export const NAO_INCLUSO_SUGESTOES = [
   "Obra civil (alvenaria, forro, pintura e acabamentos)",
-  "Rede elétrica além do ponto de força",
+  "Infraestrutura elétrica além do ponto de força",
+  "Tubulação frigorígena além de 3 metros",
+  "Dreno além de 3 metros",
+  "Remoção e descarte do equipamento antigo",
   "Andaimes, plataforma elevatória ou equipamento de acesso",
-  "Taxas de acesso, liberação ou integração no local",
+  "Suportes e mão-francesa",
+  "Bomba de dreno",
+  "Furação em concreto ou alvenaria",
+  "Projeto e ART (quando cobrados à parte)",
+  "Içamento ou guindaste",
+  "Trabalho noturno, em fim de semana ou feriado",
+  "Materiais de acabamento",
+  "Pintura",
+  "Limpeza pós-obra",
   "Remoção de entulho e descarte",
-  "Serviços fora do horário comercial",
+  "Deslocamento fora da região de atendimento",
+  "Taxas de acesso, liberação ou integração no local",
 ] as const;
+
+export const NAO_INCLUSO_VISIVEIS = 8;
 
 /** Uma exclusão por linha: sem vazias, sem marcador ("-", "•", "*") e sem repetir. */
 export function linhasNaoIncluso(texto: string | null | undefined): string[] {
@@ -73,6 +91,27 @@ export function adicionarNaoIncluso(texto: string, item: string): string {
   if (linhas.some((l) => l.toLocaleLowerCase("pt-BR") === item.toLocaleLowerCase("pt-BR"))) return texto;
   return [...(texto.trim() ? [texto.replace(/\s+$/, "")] : []), item].join("\n");
 }
+
+// ───────────────────────── Tabela de itens ─────────────────────────
+
+const casasDecimais = (n: number) => {
+  const s = String(n);
+  const i = s.indexOf(".");
+  return i < 0 || /e/i.test(s) ? 0 : s.length - i - 1;
+};
+
+/**
+ * Quantidades de um grupo alinhadas pela vírgula (coluna à direita): se alguma tem casas decimais,
+ * todas saem com o mesmo número de casas (até 3) — "1,00 / 2,50"; tudo inteiro fica "1 / 3".
+ */
+export function quantidadesAlinhadas(qtds: readonly number[]): string[] {
+  const casas = Math.min(3, Math.max(0, ...qtds.map((q) => casasDecimais(Number(q) || 0))));
+  return qtds.map((q) => (Number(q) || 0).toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas }));
+}
+
+/** Valor em reais sem o "R$" (a coluna diz "(R$)"), sempre com 2 casas: alinha pela vírgula. */
+export const valorSemMoeda = (v: number) =>
+  (Number(v) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // ───────────────────────── Condições ─────────────────────────
 

@@ -77,15 +77,15 @@ describe.skipIf(!URL_PG)("Orçamento: nome automático, condições e dados banc
 
   const ITEM = { descricao: "Troca de capacitor", quantidade: 1, valorUnitario: 380 };
 
-  it("nome em branco, criado da OS: tipo — equipamento atendido — cliente · unidade", async () => {
+  it("nome em branco, criado da OS: tipo — cliente (curto, cabe numa linha da lista)", async () => {
     const r = await chamar("orcamentos", "POST", { nome: "  ", clienteId: "c1", ordensServicoIds: ["os1"], servicos: [ITEM], produtos: [] });
     expect(r.status).toBe(201);
-    expect(r.json.nome).toBe("Manutenção Corretiva — Samsung WindFree 18k — Hospital Santa Luzia · Bloco A");
+    expect(r.json.nome).toBe("Manutenção Corretiva — Hospital Santa Luzia");
   });
 
-  it("sem tipo na OS: equipamento da própria OS (apelido) e o 1º item; sem OS: itens — cliente", async () => {
+  it("sem tipo na OS: o 1º item (+N) — cliente; sem OS: itens — cliente", async () => {
     let r = await chamar("orcamentos", "POST", { clienteId: "c1", ordensServicoIds: ["os2"], servicos: [ITEM, { ...ITEM, descricao: "Limpeza" }], produtos: [] });
-    expect(r.json.nome).toBe("Troca de capacitor + 1 item — Split da UTI — Hospital Santa Luzia");
+    expect(r.json.nome).toBe("Troca de capacitor +1 — Hospital Santa Luzia");
     r = await chamar("orcamentos", "POST", { nome: null, clienteId: "c2", servicos: [], produtos: [{ descricao: "Capacitor 35uF", quantidade: 2, valorUnitario: 50 }] });
     expect(r.json.nome).toBe("Capacitor 35uF — Padaria Pão Quente");
   });
@@ -94,7 +94,7 @@ describe.skipIf(!URL_PG)("Orçamento: nome automático, condições e dados banc
     const r = await chamar("orcamentos", "POST", { nome: "  Proposta especial  ", clienteId: "c1", ordensServicoIds: ["os1"], servicos: [ITEM], produtos: [] });
     expect(r.json.nome).toBe("Proposta especial");
     const e = await chamar("orcamentos/[id]", "PUT", { nome: "", clienteId: "c1", ordensServicoIds: ["os1"], servicos: [ITEM], produtos: [] }, { id: r.json.id });
-    expect(e.json.nome).toBe("Manutenção Corretiva — Samsung WindFree 18k — Hospital Santa Luzia · Bloco A");
+    expect(e.json.nome).toBe("Manutenção Corretiva — Hospital Santa Luzia");
   });
 
   it("a prévia da tela recebe o mesmo contexto da OS (tipo, unidade, equipamento)", async () => {
@@ -102,7 +102,7 @@ describe.skipIf(!URL_PG)("Orçamento: nome automático, condições e dados banc
     expect(r.json.contextoNome).toEqual({ tipoOs: "Manutenção Corretiva", unidade: "Bloco A", equipamento: "Samsung WindFree 18k" });
     const { nomeAutomaticoOrcamento } = await import("@/lib/orcamentos/nome");
     expect(nomeAutomaticoOrcamento({ ...r.json.contextoNome, cliente: "Hospital Santa Luzia", itens: ["Troca de capacitor"] }))
-      .toBe("Manutenção Corretiva — Samsung WindFree 18k — Hospital Santa Luzia · Bloco A");
+      .toBe("Manutenção Corretiva — Hospital Santa Luzia");
   });
 
   let orcId = "";
@@ -140,10 +140,10 @@ describe.skipIf(!URL_PG)("Orçamento: nome automático, condições e dados banc
     expect(h).toContain("data-condicoes-documento");
     expect(texto(h)).toContain("Prazo de execução dos serviços 5 dias úteis");
     expect(texto(h)).toContain("Forma de pagamento PIX à vista");
-    expect(texto(h)).toContain("Banco: Banco Inter (077)");
-    expect(texto(h)).toContain("Conta corrente: 12345-6");
-    expect(texto(h)).toContain("Titular: Clima Total Ltda — CNPJ 12.345.678/0001-90");
-    expect(texto(h)).toContain("Chave PIX: 12.345.678/0001-90");
+    expect(texto(h)).toContain("Banco Banco Inter (077) Agência 0001 Conta corrente 12345-6");
+    expect(texto(h)).toContain("Titular Clima Total Ltda CNPJ 12.345.678/0001-90 Chave PIX 12.345.678/0001-90");
+    // Duas colunas: conta à esquerda, favorecido à direita
+    expect(h).toMatch(/data-coluna-banco="conta"[\s\S]*Conta corrente[\s\S]*data-coluna-banco="favorecido"[\s\S]*Chave PIX/);
   });
 
   it("sem dados bancários e sem condições: nenhum bloco (nem campo vazio); orçamento antigo segue igual", async () => {

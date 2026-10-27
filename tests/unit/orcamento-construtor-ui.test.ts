@@ -79,6 +79,14 @@ async function digitar(el: Element | null | undefined, v: string) {
   });
   await esperar();
 }
+async function escolherOpcao(sel: Element | null | undefined, v: string) {
+  expect(sel).toBeTruthy();
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(sel, v);
+    sel!.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await esperar();
+}
 async function adicionar(busca: string, nome: string) {
   await digitar($(`input[placeholder='${busca}']`), nome.slice(0, 5));
   await clicar($$("button").find((b) => b.textContent?.includes(nome)));
@@ -286,9 +294,12 @@ describe("documento do orçamento: cliente (ISS embutido) × interno (linha de I
     expect(d.querySelector("[data-impostos-inclusos]")?.textContent).toBe("Valores com impostos inclusos.");
     const linhasServ = [...d.querySelectorAll("tbody")][0].querySelectorAll("tr");
     // 900 e 100 crescem 5% (ISS) → 945 e 105; subtotal 1050; desconto 105; total 945
-    expect(texto(linhasServ[0])).toContain("R$ 472,50");
-    expect(texto(linhasServ[0])).toContain("R$ 945,00");
-    expect(texto(linhasServ[1])).toContain("R$ 105,00");
+    // Estilo planilha: colunas numéricas sem "R$" (o cabeçalho diz "(R$)"), 2 casas, alinhadas pela vírgula
+    const cel = (tr: Element, k: string) => tr.querySelector(`[data-${k}]`)?.textContent;
+    expect([cel(linhasServ[0], "qtd"), cel(linhasServ[0], "unitario"), cel(linhasServ[0], "total-item")]).toEqual(["2", "472,50", "945,00"]);
+    expect(cel(linhasServ[1], "total-item")).toBe("105,00");
+    expect(texto(linhasServ[0].querySelector("[data-qtd-unitario-celular]")!)).toBe("2 × R$ 472,50");
+    expect([...d.querySelectorAll("thead th")].map((th) => th.textContent)).toEqual(["#", "Descrição", "Qtd", "Unitário (R$)", "Total (R$)", "#", "Descrição", "Qtd", "Unitário (R$)", "Total (R$)"].slice(0, d.querySelectorAll("thead th").length));
     // Subtotais fora da tabela (num tfoot a impressão repetiria o "Subtotal" em toda página)
     expect(d.querySelector("tfoot")).toBeNull();
     const rodape = texto(d.querySelector("[data-subtotais-grupo='serviços']")!);
@@ -307,9 +318,9 @@ describe("documento do orçamento: cliente (ISS embutido) × interno (linha de I
     expect(texto(d.querySelector("[data-linha-iss-documento]")!)).toContain("ISS (5%)");
     expect(texto(d.querySelector("[data-linha-iss-documento]")!)).toContain("+ R$ 45,00");
     const linhasServ = [...d.querySelectorAll("tbody")][0].querySelectorAll("tr");
-    expect(texto(linhasServ[0])).toContain("R$ 450,00");
-    expect(texto(linhasServ[1])).toContain("R$ 33,33");
-    expect(texto(linhasServ[1])).toContain("R$ 100,00");
+    const cel = (tr: Element, k: string) => tr.querySelector(`[data-${k}]`)?.textContent;
+    expect(cel(linhasServ[0], "unitario")).toBe("450,00");
+    expect([cel(linhasServ[1], "qtd"), cel(linhasServ[1], "unitario"), cel(linhasServ[1], "total-item")]).toEqual(["3", "33,33", "100,00"]);
     expect(texto(d.querySelector("[data-subtotais-grupo='serviços']")!)).toContain("Total serviços (com ISS)");
     expect(d.querySelector("[data-total-geral]")?.textContent?.replace(/\s/g, " ")).toBe("R$ 1.125,00");
   });
@@ -321,7 +332,7 @@ describe("ajustes finos: nome automático, condições, observação ao lado, ti
   it("nome automático: prévia instantânea no campo; em branco vai vazio (o servidor compõe a mesma regra)", async () => {
     await montar({ contextoNome: CTX, embutido: { osId: "os1", onSalvo: () => {}, onCancelar: () => {} }, osInicialId: "os1" });
     const campo = $<HTMLInputElement>("input[data-nome-orcamento]")!;
-    expect(campo.placeholder).toBe("Manutenção Corretiva — Samsung WindFree 18k — Hospital Santa Clara · Bloco A");
+    expect(campo.placeholder).toBe("Manutenção Corretiva — Hospital Santa Clara");
     expect(campo.value).toBe("");
     await adicionar("Buscar serviço por nome...", "Limpeza de split");
     await act(async () => { $("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
@@ -335,19 +346,18 @@ describe("ajustes finos: nome automático, condições, observação ao lado, ti
     await montar();
     await adicionar("Buscar serviço por nome...", "Limpeza de split");
     await adicionar("Buscar produto por nome...", "Capacitor 35uF");
-    expect($<HTMLInputElement>("input[data-nome-orcamento]")!.placeholder).toBe("Limpeza de split + 1 item — Hospital Santa Clara");
+    expect($<HTMLInputElement>("input[data-nome-orcamento]")!.placeholder).toBe("Limpeza de split +1 — Hospital Santa Clara");
     const corpo = await salvar(); // digita "Corretiva UTI"
     expect(corpo.nome).toBe("Corretiva UTI");
   });
 
-  it("prazo de execução e forma de pagamento (com sugestões) vão no payload; somem na Proposta de Contrato", async () => {
+  it("prazo de execução e forma de pagamento (uma opção da lista) vão no payload; somem na Proposta de Contrato", async () => {
     await montar();
-    expect([...document.querySelectorAll("#sugestoes-forma-pagamento option")].map((o) => o.getAttribute("value"))).toContain("PIX à vista");
     await digitar($("[data-prazo-execucao]"), "5 dias úteis após aprovação");
-    await digitar($("[data-forma-pagamento]"), "PIX à vista");
+    await escolherOpcao($("[data-forma-pagamento-opcao]"), "PIX");
     await adicionar("Buscar serviço por nome...", "Limpeza de split");
     const corpo = await salvar();
-    expect(corpo).toMatchObject({ prazoExecucao: "5 dias úteis após aprovação", formaPagamento: "PIX à vista" });
+    expect(corpo).toMatchObject({ prazoExecucao: "5 dias úteis após aprovação", formaPagamento: "PIX" });
     await clicar($$("button").find((b) => b.textContent?.includes("Proposta de Contrato")));
     expect($("[data-prazo-execucao]")).toBeNull();
     expect($("[data-forma-pagamento]")).toBeNull();

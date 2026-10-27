@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { confirmar } from "@/components/ui/avisos";
 import { Mail, MessageCircle, Link2, Printer, Pencil, Check, AlertCircle, Undo2, XCircle } from "lucide-react";
 import type { EtapaCiclo } from "@/lib/orcamentos/ciclo";
+import { abaPendente, pedirEnvio, resultadoEmail, SEM_WHATSAPP, type CanalEnvio } from "@/components/orcamento/envio-proposta";
 
 interface AcoesEnvioProps {
   orcamentoId: string;
@@ -18,7 +19,6 @@ interface AcoesEnvioProps {
   etapa?: EtapaCiclo;
 }
 
-type Canal = "EMAIL" | "WHATSAPP" | "LINK";
 
 /**
  * Envio rastreável: cada botão manda a proposta por um canal e o servidor registra na linha do
@@ -32,31 +32,28 @@ export function AcoesEnvio({ orcamentoId, tokenPublico, status, podeEditar, etap
   const printUrl = `/orcamento/${tokenPublico}/imprimir`;
   const e = etapa ?? (status === "REPROVADO" ? "RECUSADO" : (status as EtapaCiclo));
 
-  async function enviar(canal: Canal) {
+  async function enviar(canal: CanalEnvio) {
     setCarregando(canal);
     setFeedback(null);
+    const aba = canal === "WHATSAPP" ? abaPendente() : null;
     try {
-      const res = await fetch(`/api/orcamentos/${orcamentoId}/enviar`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ canal }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) { setFeedback({ tipo: "erro", msg: data.erro ?? "Erro ao enviar." }); return; }
+      const { ok, dados: data } = await pedirEnvio(orcamentoId, canal);
+      if (!ok) { aba?.fechar(); setFeedback({ tipo: "erro", msg: data.erro ?? "Erro ao enviar." }); return; }
 
       if (canal === "EMAIL") {
-        if (data.emailEnviado) setFeedback({ tipo: "ok", msg: `E-mail enviado para ${data.para}.` });
-        else if (data.erroEmail) setFeedback({ tipo: "erro", msg: `${data.erroEmail}${data.mailtoUrl ? " Abrimos o seu e-mail para enviar manualmente." : ""}` });
-        else if (!data.mailtoUrl) setFeedback({ tipo: "erro", msg: "Cliente sem e-mail cadastrado (nem no contato A/C)." });
-        else setFeedback({ tipo: "ok", msg: "E-mail da empresa não configurado: abrimos o seu e-mail com a proposta." });
-        if (!data.emailEnviado && data.mailtoUrl) window.location.href = data.mailtoUrl;
+        const r = resultadoEmail(data);
+        setFeedback({ tipo: r.tipo, msg: r.msg });
+        if (r.abrirMailto && data.mailtoUrl) window.location.href = data.mailtoUrl;
       } else if (canal === "WHATSAPP") {
-        if (data.whatsappUrl) window.open(data.whatsappUrl, "_blank", "noopener");
-        else setFeedback({ tipo: "erro", msg: "Cliente sem telefone/WhatsApp cadastrado (nem no contato A/C)." });
+        if (data.whatsappUrl) aba?.ir(data.whatsappUrl);
+        else { aba?.fechar(); setFeedback({ tipo: "erro", msg: SEM_WHATSAPP }); }
       } else {
-        await navigator.clipboard?.writeText(data.publicUrl).catch(() => {});
+        await navigator.clipboard?.writeText(data.publicUrl ?? "").catch(() => {});
         setFeedback({ tipo: "ok", msg: "Link copiado!" });
       }
       router.refresh();
     } catch {
+      aba?.fechar();
       setFeedback({ tipo: "erro", msg: "Erro de conexão." });
     } finally {
       setCarregando(null);

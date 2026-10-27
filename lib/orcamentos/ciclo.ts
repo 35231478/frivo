@@ -75,6 +75,19 @@ export function podeResponder(o: OrcamentoCiclo, agora: Date = new Date()): bool
   return o.status === "ENVIADO" && !diaCivilPassou(o.validadeEm ?? null, agora);
 }
 
+export const MSG_ENVIO_ENCERRADO = "Orçamento já encerrado, não é possível reenviar";
+export const MSG_ENVIO_VENCIDO = "A validade deste orçamento já venceu. Volte para rascunho, ajuste a validade e envie de novo.";
+
+/**
+ * Por que a proposta não pode ser enviada agora (null = pode): encerrado (aprovado, cancelado,
+ * convertido) ou validade vencida. A rota de envio e os ícones da lista usam a mesma regra.
+ */
+export function bloqueioEnvio(o: OrcamentoCiclo, agora: Date = new Date()): string | null {
+  if (o.status === "APROVADO" || o.status === "CANCELADO" || o.status === "CONVERTIDA") return MSG_ENVIO_ENCERRADO;
+  if (diaCivilPassou(o.validadeEm ?? null, agora)) return MSG_ENVIO_VENCIDO;
+  return null;
+}
+
 /** Dia seguinte ao último dia da validade (quando virou "Expirado"), como dia civil "AAAA-MM-DD". */
 function diaSeguinte(d: Date | string): Date {
   const x = new Date(d);

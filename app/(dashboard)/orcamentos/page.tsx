@@ -6,7 +6,9 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { whereOrcamentos } from "@/lib/listas/filtros";
 import { cn, formatarData, formatarMoeda, LABELS_TIPO_ORCAMENTO, CLASSE_TIPO_ORCAMENTO } from "@/lib/utils";
-import { LABELS_ETAPA, dataDaEtapa, etapaCiclo } from "@/lib/orcamentos/ciclo";
+import { LABELS_ETAPA, bloqueioEnvio, dataDaEtapa, etapaCiclo } from "@/lib/orcamentos/ciclo";
+import { AcoesLinhaOrcamento } from "@/components/orcamento/acoes-linha-orcamento";
+import { pode } from "@/lib/permissoes";
 import { PilulaEtapa } from "@/components/orcamento/ciclo-orcamento";
 import Link from "next/link";
 import { Calculator, Plus, X } from "lucide-react";
@@ -29,6 +31,8 @@ export default async function OrcamentosPage({
   const session = await auth();
   const empresaId = session!.user!.empresaId;
   const massa = temAcaoMassa(session!.user!.permissoes, session!.user!.role, "orcamentos");
+  // Enviar (e-mail/WhatsApp) exige editar orçamentos, como a rota de envio; baixar o PDF basta ver
+  const podeEnviar = pode(session!.user!.permissoes, "orcamentos", "editar", session!.user!.role);
   const { pagina: paginaPedida, porPagina } = lerPaginacao(sp);
   const orderBy = ordemPrisma(lerOrdem(sp, ORDEM_ORCAMENTOS), ORDEM_ORCAMENTOS, ORDEM_PADRAO_ORCAMENTOS) as Prisma.OrcamentoOrderByWithRelationInput[];
 
@@ -109,13 +113,17 @@ export default async function OrcamentosPage({
             <li key={o.id} data-cartao={o.id} className="flex items-start gap-3 px-4 py-3">
               {massa && <span className="pt-0.5"><CheckboxLinha id={o.id} rotulo={o.codigo} /></span>}
               <Link href={`/orcamentos/${o.id}`} className="min-w-0 flex-1">
-                <p className="text-sm"><span className="font-mono font-semibold text-primary-600">{o.codigo}</span> <span className="text-ink font-medium">{o.nome}</span></p>
+                <p className="text-sm font-mono font-semibold text-primary-600">{o.codigo}</p>
+                <p className="text-sm text-ink font-medium truncate" title={o.nome} data-nome-orcamento>{o.nome}</p>
                 <p className="text-xs text-ink-muted truncate">{o.cliente.nomeFantasia ?? o.cliente.nome} · {formatarData(o.criadoEm)}</p>
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                   <PilulaEtapa etapa={etapaCiclo(o, agora)} desde={dataDaEtapa(o, agora)} />
                   <span className="text-sm font-semibold text-ink ml-auto">{formatarMoeda(Number(o.totalGeral))}</span>
                 </div>
               </Link>
+              <div className="shrink-0 -mr-2">
+                <AcoesLinhaOrcamento orcamentoId={o.id} codigo={o.codigo} tokenPublico={o.tokenPublico} podeEnviar={podeEnviar} bloqueio={bloqueioEnvio(o, agora)} />
+              </div>
             </li>
           ))}
         </ul>
@@ -124,15 +132,15 @@ export default async function OrcamentosPage({
             <thead className="bg-surface-alt border-b border-surface-border">
               <tr>
                 {massa && <th className="w-px pl-4 pr-1 py-3"><CheckboxPagina /></th>}
-                <ThOrdUrl label="Código" k="codigo" className="px-4 py-3 text-ink-muted text-xs tracking-wider" />
-                <ThOrdUrl label="Nome" k="nome" className="px-4 py-3 text-ink-muted text-xs tracking-wider" />
-                <ThOrdUrl label="Cliente" k="cliente" className="px-4 py-3 text-ink-muted text-xs tracking-wider" />
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Tipo</th>
-                <ThOrdUrl label="Status" k="status" className="px-4 py-3 text-ink-muted text-xs tracking-wider" />
-                <ThOrdUrl label="Total" k="valor" className="px-4 py-3 text-ink-muted text-xs tracking-wider" />
-                <th className="text-center px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden md:table-cell">OS</th>
-                <ThOrdUrl label="Criado" k="criado" padrao="criado" className="px-4 py-3 text-ink-muted text-xs tracking-wider hidden lg:table-cell" />
-                <th className="w-10 px-2 py-3"><span className="sr-only">Ações</span></th>
+                <ThOrdUrl label="Código" k="codigo" className="px-3 py-3 text-ink-muted text-xs tracking-wider" />
+                <ThOrdUrl label="Nome" k="nome" className="px-3 py-3 text-ink-muted text-xs tracking-wider" />
+                <ThOrdUrl label="Cliente" k="cliente" className="px-3 py-3 text-ink-muted text-xs tracking-wider" />
+                <th className="text-left px-3 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden 2xl:table-cell">Tipo</th>
+                <ThOrdUrl label="Status" k="status" className="px-3 py-3 text-ink-muted text-xs tracking-wider" />
+                <ThOrdUrl label="Total" k="valor" className="px-3 py-3 text-ink-muted text-xs tracking-wider" />
+                <th className="text-center px-3 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden 2xl:table-cell">OS</th>
+                <ThOrdUrl label="Criado" k="criado" padrao="criado" className="px-3 py-3 text-ink-muted text-xs tracking-wider hidden lg:table-cell" />
+                <th className="px-2 py-3"><span className="sr-only">Ações</span></th>
               </tr>
             </thead>
             <tbody>
@@ -145,36 +153,41 @@ export default async function OrcamentosPage({
                     )}
                   >
                     {massa && <td className="w-px pl-4 pr-1 py-3"><CheckboxLinha id={o.id} rotulo={o.codigo} /></td>}
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-3 whitespace-nowrap">
                       <Link href={`/orcamentos/${o.id}`} className="font-mono font-semibold text-primary-600 hover:underline">
                         {o.codigo}
                       </Link>
                     </td>
-                    <td className="px-4 py-3 text-ink font-medium">{o.nome}</td>
-                    <td className="px-4 py-3 text-ink-muted">
-                      <div className="flex items-center gap-2">
+                    <td className="px-3 py-3 text-ink font-medium max-w-[15rem]">
+                      {/* Uma linha só: o nome inteiro aparece no hover */}
+                      <span className="block truncate" title={o.nome} data-nome-orcamento>{o.nome}</span>
+                    </td>
+                    <td className="px-3 py-3 text-ink-muted max-w-[13rem]">
+                      <div className="flex items-center gap-2 min-w-0">
                         <AvatarCliente nome={o.cliente.nomeFantasia ?? o.cliente.nome} logoUrl={o.cliente.logo} size={28} />
-                        <span className="truncate">{o.cliente.nomeFantasia ?? o.cliente.nome}</span>
+                        <span className="truncate" title={o.cliente.nomeFantasia ?? o.cliente.nome}>{o.cliente.nomeFantasia ?? o.cliente.nome}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-3 hidden 2xl:table-cell">
                       <span className={CLASSE_TIPO_ORCAMENTO[o.tipo]}>
                         {LABELS_TIPO_ORCAMENTO[o.tipo]}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-3">
                       <PilulaEtapa etapa={etapaCiclo(o, agora)} desde={dataDaEtapa(o, agora)} />
                     </td>
-                    <td className="px-4 py-3 text-right font-semibold text-ink">
+                    <td className="px-3 py-3 text-right font-semibold text-ink whitespace-nowrap">
                       {formatarMoeda(Number(o.totalGeral))}
                     </td>
-                    <td className="px-4 py-3 text-center text-ink-muted hidden md:table-cell">
+                    <td className="px-3 py-3 text-center text-ink-muted hidden 2xl:table-cell">
                       {o._count.ordensServico}
                     </td>
-                    <td className="px-4 py-3 text-ink-muted hidden lg:table-cell">
+                    <td className="px-3 py-3 text-ink-muted hidden lg:table-cell whitespace-nowrap">
                       {formatarData(o.criadoEm)}
                     </td>
                     <td className="px-2 py-3 text-right">
+                      <div className="flex items-center justify-end gap-0.5">
+                      <AcoesLinhaOrcamento orcamentoId={o.id} codigo={o.codigo} tokenPublico={o.tokenPublico} podeEnviar={podeEnviar} bloqueio={bloqueioEnvio(o, agora)} />
                       <InativarRegistro
                         url={`/api/orcamentos/${o.id}`} modulo="orcamentos" acaoReativar="editar"
                         ativo={o.status !== "CANCELADO"} nome={o.codigo} entidade="orçamento"
@@ -182,6 +195,7 @@ export default async function OrcamentosPage({
                         textoInativar="Tem certeza? O orçamento passa para Cancelado e sai da lista padrão. Nada é apagado: itens, vínculos e o link público ficam preservados, e ele pode ser reaberto (volta para Rascunho)."
                         textoReativar="O orçamento volta para Rascunho (editável) e reaparece na lista."
                       />
+                      </div>
                     </td>
                   </tr>
                 ))}

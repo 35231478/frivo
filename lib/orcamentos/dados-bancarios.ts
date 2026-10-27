@@ -14,7 +14,8 @@ export interface EmpresaBanco {
   pixChave?: string | null;
 }
 
-export interface LinhaBanco { rotulo: string; valor: string }
+/** "conta" = banco/agência/conta (coluna da esquerda); "favorecido" = titular, CNPJ e PIX (direita) */
+export interface LinhaBanco { rotulo: string; valor: string; coluna: "conta" | "favorecido" }
 
 const t = (v: string | null | undefined) => (v ?? "").trim();
 
@@ -24,11 +25,12 @@ export function linhasDadosBancarios(e: EmpresaBanco, formatarDoc: (d: string) =
   if (!temConta && !temPix) return null;
   const linhas: LinhaBanco[] = [];
   if (temConta) {
-    linhas.push({ rotulo: "Banco", valor: t(e.bancoNome) });
-    if (t(e.bancoAgencia)) linhas.push({ rotulo: "Agência", valor: t(e.bancoAgencia) });
-    linhas.push({ rotulo: t(e.bancoTipoConta) ? `Conta ${t(e.bancoTipoConta).toLowerCase()}` : "Conta", valor: t(e.bancoConta) });
+    linhas.push({ rotulo: "Banco", valor: t(e.bancoNome), coluna: "conta" });
+    if (t(e.bancoAgencia)) linhas.push({ rotulo: "Agência", valor: t(e.bancoAgencia), coluna: "conta" });
+    linhas.push({ rotulo: t(e.bancoTipoConta) ? `Conta ${t(e.bancoTipoConta).toLowerCase()}` : "Conta", valor: t(e.bancoConta), coluna: "conta" });
   }
-  linhas.push({ rotulo: "Titular", valor: `${t(e.bancoTitular) || e.nome} — CNPJ ${formatarDoc(e.cnpj)}` });
-  if (temPix) linhas.push({ rotulo: "Chave PIX", valor: t(e.pixChave) });
+  linhas.push({ rotulo: "Titular", valor: t(e.bancoTitular) || e.nome, coluna: "favorecido" });
+  linhas.push({ rotulo: "CNPJ", valor: formatarDoc(e.cnpj), coluna: "favorecido" });
+  if (temPix) linhas.push({ rotulo: "Chave PIX", valor: t(e.pixChave), coluna: "favorecido" });
   return linhas;
 }

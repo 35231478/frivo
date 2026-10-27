@@ -26,7 +26,7 @@ export function PilulaEtapa({ etapa, desde }: { etapa: EtapaCiclo; desde?: Date 
   return (
     <span className="inline-flex flex-col items-start gap-0.5" data-etapa={etapa}>
       <span className={CLASSE_ETAPA[etapa]}>{LABELS_ETAPA[etapa]}</span>
-      {desde && <span className="text-[11px] text-ink-subtle tabular-nums">desde {formatarData(desde, etapa === "EXPIRADO" ? "dd/MM" : "dd/MM HH:mm")}</span>}
+      {desde && <span className="text-[11px] text-ink-subtle tabular-nums whitespace-nowrap">desde {formatarData(desde, etapa === "EXPIRADO" ? "dd/MM" : "dd/MM HH:mm")}</span>}
     </span>
   );
 }
