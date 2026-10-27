@@ -144,6 +144,19 @@ describe("motor: chave que precisa existir, conflito e mensagens", () => {
     expect(a.linhas[2].erros[0]).toContain("codigo: Código “MAN-1”: use só letras e números");
     expect(a.linhas[3].chave).toBe("nome:recarga");
   });
+  it("cliente com id_sistema que não é desta empresa = erro (mesmo com CNPJ novo, não cria)", () => {
+    const cab = IMPORTACOES.clientes.colunas.map((c) => c.titulo);
+    const linha = cab.map((t) => ({ nome: "Hospital", cnpj_cpf: "11.222.333/0001-81", id_sistema: "cmdeoutraempresa00000000" } as Record<string, string>)[t] ?? "");
+    const a = analisar([cab, linha], IMPORTACOES.clientes, ctx());
+    expect(a.linhas[0].status).toBe("erro");
+    expect(a.linhas[0].erros[0]).toBe("id_sistema “cmdeoutraempresa00000000” não é de nenhum cliente desta empresa. Não altere essa coluna; para cadastrar um novo, deixe-a vazia.");
+  });
+  it("fornecedores sem CNPJ com o MESMO nome: cada um pelo seu id_sistema (não é linha repetida)", () => {
+    const cab = IMPORTACOES.fornecedores.colunas.map((c) => c.titulo);
+    const l = (nome: string, id: string) => [nome, "", "", "", "", id];
+    const a = analisar([cab, l("Posto", "f1"), l("Posto", "f2")], IMPORTACOES.fornecedores, ctx({ "id:f1": "f1", "id:f2": "f2", "nome:posto": "f1" }));
+    expect(a.linhas.map((x) => [x.status, x.existenteId, x.erros])).toEqual([["atualizar", "f1", []], ["atualizar", "f2", []]]);
+  });
   it("id_sistema mexido (texto qualquer) = erro claro; a coluna 'id' de outro sistema é ignorada", () => {
     const a = analisar(tab(linhaP({ nome: "A", id: "abc def" }), linhaP({ nome: "B", id: "abc" })), IMPORTACOES.produtos, ctx());
     expect(a.linhas[0].erros[0]).toBe("id_sistema: “abc def” não é um identificador do sistema. Não altere essa coluna (linha nova: deixe vazia).");
@@ -207,6 +220,13 @@ describe("exportação = mesmas colunas, lidas de volta (round-trip)", () => {
     const [, f1, f2] = linhasExportacao(IMPORTACOES.fornecedores, REG.fornecedores as any);
     expect(f1).toEqual(["Frigelar", "11.444.777/0001-61", "1133334444", "v@f.com", "", "cmfornaaaaaaaaaaaaa1"]);
     expect(f2[1]).toBe("");
+  });
+
+  it("cada valor vai na coluna do seu título (a ordem é a das colunas, não a do exportar; faltou = vazio)", () => {
+    const def = { ...IMPORTACOES.produtos, exportar: () => ({ id_sistema: "X1", nome: "Gás", codigo: "7" }) };
+    const [cab, l] = linhasExportacao(def, [{}]);
+    expect(cab).toEqual(["codigo", "nome", "descricao", "unidade", "valor_padrao", "estoque_minimo", "id_sistema"]);
+    expect(l).toEqual(["7", "Gás", "", "", "", "", "X1"]);
   });
 
   it("instruções: a planilha exportada explica o id_sistema; o modelo, a linha de exemplo; nada é apagado", () => {

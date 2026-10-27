@@ -436,7 +436,7 @@ const servicos: RegrasCadastro = {
       if (n.erro) return falha(400, n.erro);
       if (!n.codigo || n.codigo === existente.codigo) delete data.codigo;
       else {
-        const dup = await servicoComCodigo(ator.empresaId, n.codigo, existente.id);
+        const dup = await servicoComCodigo(ator.empresaId, n.codigo);
         if (dup) return falha(409, msgCodigoServico(n.codigo, dup));
         data.codigo = n.codigo;
       }

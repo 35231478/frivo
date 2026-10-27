@@ -56,7 +56,7 @@ export function criarServicoComCodigo<T>(
   return comTrava(db, empresaId, "servico", async (tx) => criar(informado || await proximoCodigoServicoDaEmpresa(empresaId, nome, tx), tx));
 }
 
-/** Quem já usa este código de serviço na empresa (fora o próprio, ao editar) */
-export function servicoComCodigo(empresaId: string, codigo: string, exceto?: string, db: Db = prisma) {
-  return db.servico.findFirst({ where: { empresaId, codigo, ...(exceto && { id: { not: exceto } }) }, select: { id: true, nome: true } });
+/** Quem já usa este código de serviço na empresa (ao editar, só se consulta um código DIFERENTE do próprio) */
+export function servicoComCodigo(empresaId: string, codigo: string, db: Db = prisma) {
+  return db.servico.findFirst({ where: { empresaId, codigo }, select: { id: true, nome: true } });
 }

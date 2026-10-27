@@ -129,7 +129,9 @@ describe.skipIf(!URL_PG)("Códigos e planilha de ida e volta (PostgreSQL real)",
   it("editar o código do serviço: muda, normaliza, recusa repetido; vazio mantém o atual", async () => {
     const s = await prisma.servico.findFirst({ where: { empresaId: "e1", codigo: "MANU01" } });
     expect((await editar("servicos", s.id, { codigo: "prev01" })).json.codigo).toBe("PREV01");
-    expect((await editar("servicos", s.id, { codigo: "LIMP01" })).status).toBe(409);
+    expect(await editar("servicos", s.id, { codigo: "limp01" })).toMatchObject({ status: 409, json: { erro: "O código LIMP01 já é do serviço “Limpeza de Filtro”. Escolha outro." } });
+    expect(await editar("servicos", s.id, { codigo: "PREV-1" })).toMatchObject({ status: 400, json: { erro: "Código “PREV-1”: use só letras e números (ex.: LIMP01)." } });
+    expect((await prisma.servico.findUnique({ where: { id: s.id } })).codigo).toBe("PREV01");
     const v = await editar("servicos", s.id, { codigo: "", nome: "Manutenção preventiva split" });
     expect(v.json).toMatchObject({ codigo: "PREV01", nome: "Manutenção preventiva split" });
     expect((await editar("servicos", s.id, { codigo: "PREV01" })).status).toBe(200); // o próprio código: ok
