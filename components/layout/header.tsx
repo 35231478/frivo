@@ -1,7 +1,7 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import { Bell, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer, Headset, ClipboardCheck, FileWarning, Wrench, Menu, Barcode } from "lucide-react";
+import { Bell, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer, Headset, ClipboardCheck, FileWarning, Wrench, Menu, Barcode, MessageSquareReply } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -19,6 +19,7 @@ interface Alertas {
   documentosVencendo: number;
   veiculosManutencao: number;
   boletosPagos: number;
+  orcamentosRespondidos: number;
   total: number;
 }
 
@@ -214,7 +215,7 @@ export function Header({ session, avatarUrl }: HeaderProps) {
           <button
             onClick={() => setSinoAberto((v) => !v)}
             className="relative p-2 rounded-lg text-ink-muted hover:text-primary-600 hover:bg-surface-alt transition-colors"
-            title="Alertas de prazos"
+            title="Alertas"
           >
             <Bell className="w-5 h-5" />
             {total > 0 && (
@@ -227,12 +228,13 @@ export function Header({ session, avatarUrl }: HeaderProps) {
           {sinoAberto && (
             <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-surface-border rounded-card shadow-elevated z-30 overflow-hidden">
               <div className="px-4 py-3 border-b border-surface-border">
-                <p className="font-display text-sm font-semibold text-ink">Alertas de prazos</p>
+                <p className="font-display text-sm font-semibold text-ink">Alertas</p>
               </div>
               {total === 0 ? (
                 <p className="text-sm text-ink-muted text-center py-6">Nenhum alerta no momento.</p>
               ) : (
                 <div className="divide-y divide-surface-linha">
+                  {podeVer("orcamentos") && <AlertaItem href="/orcamentos?resposta=nova" icone={MessageSquareReply} cor="text-acento" label="Respostas de orçamentos" valor={alertas?.orcamentosRespondidos ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("ordens") && <AlertaItem href="/prazos?status=ATRASADO" icone={AlertTriangle} cor="text-atrasado" label="Prazos vencidos" valor={alertas?.prazosVencidos ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("ordens") && <AlertaItem href="/prazos?status=ATIVO" icone={Clock} cor="text-atencao" label="Vencendo hoje" valor={alertas?.etapasVencendoHoje ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("financeiro") && <AlertaItem href="/compras/pedidos" icone={ShoppingCart} cor="text-atencao" label="Compras pendentes" valor={alertas?.pedidosPendentes ?? 0} onClick={() => setSinoAberto(false)} />}

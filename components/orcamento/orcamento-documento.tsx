@@ -1,5 +1,6 @@
-import { formatarCpfCnpj, formatarData, formatarMoeda, formatarTelefone, LABELS_STATUS_ORCAMENTO, CLASSE_STATUS_ORCAMENTO, cn } from "@/lib/utils";
+import { formatarCpfCnpj, formatarData, formatarMoeda, formatarTelefone, cn } from "@/lib/utils";
 import { calcularOrcamento, versaoCliente, type EntradaCalculo, type TipoDesconto } from "@/lib/orcamentos/calculo";
+import { CLASSE_ETAPA, LABELS_ETAPA, etapaCiclo } from "@/lib/orcamentos/ciclo";
 import { linhasDadosBancarios } from "@/lib/orcamentos/dados-bancarios";
 import {
   destinatarioOrcamento, linhasCondicoes, linhasNaoIncluso, normasDoDocumento, numeroFormalOrcamento, textoArt, timbreEmpresa,
@@ -48,6 +49,7 @@ export interface OrcamentoDocumentoProps {
     contatoCliente?: ContatoPara | null;
     criadoEm: Date | string;
     enviadoEm?: Date | string | null;
+    visualizadoEm?: Date | string | null;
     assinadoEm?: Date | string | null;
     assinadoPor?: string | null;
     assinadoCpf?: string | null;
@@ -189,8 +191,8 @@ export function OrcamentoDocumento({ orcamento, empresa, cliente, anexos = [], v
           <p className="text-xs uppercase tracking-wider text-ink-muted">Orçamento Nº</p>
           <p className="font-mono text-2xl font-bold text-primary-600 tabular-nums">{numeroFormalOrcamento(orcamento.codigo)}</p>
           {versao === "interna" && (
-            <span className={cn("mt-2 inline-flex", CLASSE_STATUS_ORCAMENTO[orcamento.status])}>
-              {LABELS_STATUS_ORCAMENTO[orcamento.status]}
+            <span className={cn("mt-2 inline-flex", CLASSE_ETAPA[etapaCiclo(orcamento)])} data-etapa-documento>
+              {LABELS_ETAPA[etapaCiclo(orcamento)]}
             </span>
           )}
         </div>

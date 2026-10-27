@@ -6,6 +6,7 @@
 
 import { variantesDocumento } from "@/lib/listagem";
 import { hojeDiaCivil, inicioMesDiaCivil, periodoDiaCivil, periodoInstanteBR } from "@/lib/fuso";
+import { whereEtapa } from "@/lib/orcamentos/ciclo";
 
 type SP = Record<string, string | undefined>;
 
@@ -73,11 +74,21 @@ export function whereClientes(empresaId: string, sp: SP) {
   return { where, statusFiltro };
 }
 
-export function whereOrcamentos(empresaId: string, sp: SP) {
+/** Status gravado antigo na URL → etapa do ciclo (links antigos continuam funcionando) */
+const ETAPA_DO_STATUS: Record<string, string> = { REPROVADO: "RECUSADO", CONVERTIDA: "CONVERTIDO" };
+
+export function whereOrcamentos(empresaId: string, sp: SP, agora = new Date()) {
   const where: any = { empresaId };
+  const e: any[] = [];
+  // Filtro pela etapa do ciclo (Visualizado/Expirado dependem das datas: lib/orcamentos/ciclo.ts)
+  const etapa = sp.status ? ETAPA_DO_STATUS[sp.status] ?? sp.status : "";
+  const porEtapa = etapa ? whereEtapa(etapa, hojeDiaCivil(agora)) : null;
   // Cancelado = orçamento inativado: fica fora da lista padrão (filtre o status ou marque "Mostrar cancelados")
-  if (sp.status) where.status = sp.status;
+  if (porEtapa) e.push(porEtapa);
   else if (sp.inativos !== "1") where.status = { not: "CANCELADO" };
+  // Sino: respostas do cliente (aprovou/recusou) que ninguém abriu ainda
+  if (sp.resposta === "nova") e.push({ status: { in: ["APROVADO", "REPROVADO"] }, respostaVistaEm: null });
+  if (e.length) where.AND = e;
   if (sp.tipo) where.tipo = sp.tipo;
   if (sp.clienteId) where.clienteId = sp.clienteId;
   if (sp.dataInicio || sp.dataFim) {

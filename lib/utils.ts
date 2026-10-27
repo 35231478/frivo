@@ -291,7 +291,7 @@ export const LABELS_STATUS_ORCAMENTO: Record<string, string> = {
   RASCUNHO: "Rascunho",
   ENVIADO: "Enviado",
   APROVADO: "Aprovado",
-  REPROVADO: "Reprovado",
+  REPROVADO: "Recusado",
   CANCELADO: "Cancelado",
   CONVERTIDA: "Convertida",
 };

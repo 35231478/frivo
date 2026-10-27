@@ -5,6 +5,10 @@ import { orcamentoSchema } from "@/lib/validations";
 import { camposCondicoes, montarValoresOrcamento, montarCamposProposta } from "@/lib/orcamento-helpers";
 import { nomeDoOrcamento } from "@/lib/orcamentos/nome-server";
 import { validarDestinatario } from "@/lib/orcamentos/padroes-server";
+import { podeMudarStatus } from "@/lib/orcamentos/ciclo";
+import { diaCivilPassou } from "@/lib/fuso";
+import { registrarEvento } from "@/lib/orcamentos/ciclo-server";
+import { LABELS_STATUS_ORCAMENTO } from "@/lib/utils";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { pode } from "@/lib/permissoes";
 import { impactoOrcamento } from "@/lib/inativacao-server";
@@ -36,17 +40,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   return NextResponse.json(orcamento);
 }
 
-/**
- * Mudanças de status permitidas pelo PUT `{ status }` (origem → destino).
- * APROVADO só vem da assinatura do cliente na página pública (que também gera o financeiro);
- * CONVERTIDA, da conversão em contrato; voltar a RASCUNHO, do "Reativar" (PATCH).
- */
-const TRANSICOES_STATUS: Record<string, string[]> = {
-  ENVIADO: ["RASCUNHO", "ENVIADO", "REPROVADO"],
-  REPROVADO: ["ENVIADO"],
-  CANCELADO: ["RASCUNHO", "ENVIADO", "APROVADO", "REPROVADO"],
-};
-
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const guard = await exigirPermissao("orcamentos", "editar");
   if (guard.erro) return guard.resposta;
@@ -63,11 +56,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (body.status && Object.keys(body).length === 1) {
     const novo = String(body.status);
     if (novo === existente.status) return NextResponse.json(existente);
-    if (!TRANSICOES_STATUS[novo]?.includes(existente.status)) {
+    // Transições da equipe: lib/orcamentos/ciclo.ts (aprovar é só do cliente, pelo link, com assinatura)
+    if (!podeMudarStatus(existente.status, novo)) {
       const motivo = novo === "APROVADO"
         ? "A aprovação é feita pelo cliente, com assinatura, no link do orçamento."
         : `Não é possível mudar o orçamento de ${existente.status} para ${novo}.`;
       return NextResponse.json({ erro: motivo }, { status: 400 });
+    }
+    if (novo === "ENVIADO" && diaCivilPassou(existente.validadeEm)) {
+      return NextResponse.json({ erro: "A validade deste orçamento já venceu. Volte para rascunho, ajuste a validade e envie de novo." }, { status: 400 });
     }
     // Cancelar = inativar o orçamento: mesma regra do botão (exige "excluir" e não pode ter virado contrato/financeiro)
     if (novo === "CANCELADO") {
@@ -76,12 +73,21 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       const impacto = await impactoOrcamento(id, empresaId);
       if (impacto?.bloqueio) return NextResponse.json({ erro: impacto.bloqueio }, { status: 409 });
     }
+    const agora = new Date();
     const atualizado = await prisma.orcamento.update({
       where: { id },
       data: {
         status: novo as typeof existente.status,
-        enviadoEm: novo === "ENVIADO" ? new Date() : existente.enviadoEm,
+        enviadoEm: novo === "ENVIADO" ? existente.enviadoEm ?? agora : existente.enviadoEm,
+        // Voltar para rascunho (para corrigir e reenviar): o ciclo recomeça; a linha do tempo guarda o histórico
+        ...(novo === "RASCUNHO" && { enviadoEm: null, visualizadoEm: null, visualizacoes: 0 }),
+        // Recusa registrada pela equipe (o cliente avisou por fora do link)
+        ...(novo === "REPROVADO" && { recusadoEm: agora, recusadoPor: `Registrado por ${session.user!.name ?? "usuário"}`, recusaMotivo: null, recusadoIp: null, respostaVistaEm: agora }),
       },
+    });
+    await registrarEvento({
+      empresaId, orcamentoId: id, tipo: "STATUS", usuarioId: session.user!.id,
+      detalhe: `${LABELS_STATUS_ORCAMENTO[existente.status] ?? existente.status} → ${LABELS_STATUS_ORCAMENTO[novo] ?? novo}`,
     });
     return NextResponse.json(atualizado);
   }
