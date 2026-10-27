@@ -73,7 +73,7 @@ export function PedidoCompraDocumento({ pedido, empresa }: { pedido: DadosDocume
                 <th scope="col" className={cn(th, "text-right w-16")}>Qtd</th>
                 <th scope="col" className={cn(th, "text-left w-12")}>Un.</th>
                 <th scope="col" className={cn(th, "text-left w-28")} data-coluna-fornecedor>Preço unit. (R$)</th>
-                <th scope="col" className={cn(th, "text-left w-28")} data-coluna-fornecedor>Prazo entrega</th>
+                <th scope="col" className={cn(th, "hidden sm:table-cell text-left w-28")} data-coluna-fornecedor>Prazo entrega</th>
               </tr>
             </thead>
             <tbody>
@@ -87,7 +87,7 @@ export function PedidoCompraDocumento({ pedido, empresa }: { pedido: DadosDocume
                   <td className={cn(td, "text-right tabular-nums whitespace-nowrap")} data-qtd>{qtds[i]}</td>
                   <td className={cn(td, "text-ink-muted")}>{it.unidade}</td>
                   <td className={td}><span className={cn("block h-4", branco)} /></td>
-                  <td className={td}><span className={cn("block h-4", branco)} /></td>
+                  <td className={cn(td, "hidden sm:table-cell")}><span className={cn("block h-4", branco)} /></td>
                 </tr>
               ))}
             </tbody>

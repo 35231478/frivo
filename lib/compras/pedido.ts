@@ -163,9 +163,9 @@ export function textoUltimaCompra(u: UltimaCompra, fmt: { moeda: (n: number) => 
   return ["Última compra: " + fmt.moeda(u.valorUnitario), u.fornecedor, fmt.data(u.data)].filter(Boolean).join(" — ");
 }
 
-/** Valor sugerido para o estimado: o da última compra arredondado a centavos (vazio sem histórico) */
+/** Valor sugerido para o estimado: o da última compra arredondado a centavos, "18,45" (vazio sem histórico) */
 export const valorSugerido = (u: UltimaCompra | null | undefined): string =>
-  u && Number.isFinite(u.valorUnitario) && u.valorUnitario > 0 ? (Math.round(u.valorUnitario * 100) / 100).toFixed(2) : "";
+  u && Number.isFinite(u.valorUnitario) && u.valorUnitario > 0 ? (Math.round(u.valorUnitario * 100) / 100).toFixed(2).replace(".", ",") : "";
 
 // ───────────────────────── Envio ao fornecedor ─────────────────────────
 

@@ -27,8 +27,8 @@ interface ItemForm {
 let seq = 0;
 const novoItem = (): ItemForm => ({ _k: `n${++seq}`, id: null, produtoId: "", descricao: "", quantidade: "1", unidade: "un", valorEstimado: "", _auto: false });
 const doPedido = (i: PedidoTela["itens"][number]): ItemForm => ({
-  _k: i.id, id: i.id, produtoId: i.produtoId ?? "", descricao: i.descricao, quantidade: String(i.quantidade), unidade: i.unidade,
-  valorEstimado: i.valorEstimado == null ? "" : String(i.valorEstimado), _auto: false,
+  _k: i.id, id: i.id, produtoId: i.produtoId ?? "", descricao: i.descricao, quantidade: String(i.quantidade).replace(".", ","), unidade: i.unidade,
+  valorEstimado: i.valorEstimado == null ? "" : i.valorEstimado.toFixed(2).replace(".", ","), _auto: false,
 });
 
 const fmtDica = { moeda: formatarMoeda, data: (d: string | Date) => formatarData(d) };

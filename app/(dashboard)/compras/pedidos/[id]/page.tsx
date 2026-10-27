@@ -21,7 +21,7 @@ export default async function PedidoCompraDetalhe({ params }: { params: Promise<
     <div className="space-y-6 max-w-5xl mx-auto">
       <PageHeader title={`Pedido ${pedido.numero}`} description={`Solicitado por ${pedido.solicitante.nome}`} backHref="/compras/pedidos" />
       <div className="card-padded">
-        <PedidoPainel inicial={pedidoParaTela(pedido, u)} />
+        <PedidoPainel inicial={pedidoParaTela(pedido, u)} semNumero />
       </div>
     </div>
   );

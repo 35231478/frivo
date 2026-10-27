@@ -22,7 +22,7 @@ export function OrigemPedido({ pedido, className }: { pedido: Pick<PedidoTela, "
     <span className={cn("inline-flex flex-wrap items-center gap-x-1", className)} data-origem-pedido={origem.tipo}>
       {origem.os ? (
         <>OS <Link href={`/ordens/${origem.os.id}?aba=materiais`} className="font-mono font-semibold text-acento hover:underline">{origem.os.numero}</Link>
-          {origem.orcamento && <span className="text-ink-muted">(orçamento <Link href={`/orcamentos/${origem.orcamento.id}`} className="font-mono hover:underline">{origem.orcamento.codigo}</Link>)</span>}
+          {origem.orcamento && <span className="text-ink-muted"> (orçamento <Link href={`/orcamentos/${origem.orcamento.id}`} className="font-mono hover:underline">{origem.orcamento.codigo}</Link>)</span>}
         </>
       ) : origem.orcamento ? (
         <>Orçamento <Link href={`/orcamentos/${origem.orcamento.id}`} className="font-mono font-semibold text-acento hover:underline">{origem.orcamento.codigo}</Link></>
@@ -47,12 +47,14 @@ export function StatusPedidoBadge({ status, desde }: { status: PedidoTela["statu
  * Baixar PDF / E-mail / WhatsApp ao fornecedor (cada um no histórico; "Solicitado" vira "Em cotação"),
  * edição inline até concluir/cancelar, itens e histórico.
  */
-export function PedidoPainel({ inicial, onMudou, compacto }: {
+export function PedidoPainel({ inicial, onMudou, compacto, semNumero }: {
   inicial: PedidoTela;
   /** Avisa quem lista os pedidos (status/itens mudaram) */
   onMudou?: (p: PedidoTela) => void;
   /** Dentro da OS/orçamento: sem repetir número/origem no topo */
   compacto?: boolean;
+  /** Na página do pedido o número já está no título */
+  semNumero?: boolean;
 }) {
   const [pedido, setPedido] = useState(inicial);
   const [editando, setEditando] = useState(false);
@@ -62,7 +64,8 @@ export function PedidoPainel({ inicial, onMudou, compacto }: {
   async function recarregar() {
     const r = await fetch(`/api/pedidos-compra/${pedido.id}`, { cache: "no-store" });
     if (!r.ok) return;
-    const p: PedidoTela = await r.json();
+    const p: PedidoTela | null = await r.json().catch(() => null);
+    if (!p?.id) return;
     setPedido(p);
     onMudou?.(p);
   }
@@ -116,7 +119,7 @@ export function PedidoPainel({ inicial, onMudou, compacto }: {
     <div className="space-y-4" data-painel-pedido={pedido.id}>
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div className="space-y-1 min-w-0">
-          {!compacto && <p className="font-mono text-lg font-bold text-acento">{pedido.numero}</p>}
+          {!compacto && !semNumero && <p className="font-mono text-lg font-bold text-acento">{pedido.numero}</p>}
           <StatusPedidoBadge status={pedido.status} desde={pedido.statusEm} />
           {!compacto && <p className="text-sm text-ink"><span className="text-ink-muted">Origem:</span> <OrigemPedido pedido={pedido} /></p>}
         </div>

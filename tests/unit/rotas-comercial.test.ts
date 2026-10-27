@@ -56,6 +56,7 @@ const rotas = {
   proximoNumero: () => import("@/app/api/contratos/proximo-numero/route"),
   pedidos: () => import("@/app/api/pedidos-compra/route"),
   pedido: () => import("@/app/api/pedidos-compra/[id]/route"),
+  enviarPedido: () => import("@/app/api/pedidos-compra/[id]/enviar/route"),
 };
 
 /** Chamadas de rotas comerciais que um técnico (sem orçamentos/contratos/financeiro) NÃO pode fazer. */
@@ -128,12 +129,13 @@ describe("usos legítimos fora do módulo comercial continuam funcionando", () =
     expect((await (await rotas.pedidos()).POST(req("/api/pedidos-compra", "POST", corpo))).status).toBe(404);
   });
 
-  it("comprador designado anda com o status do pedido; outro técnico não", async () => {
-    overrides.set("pedidoCompraInterno.findFirst", async () => ({ id: "pc1", numero: "PC-1", compradorId: "comprador", ordemServicoId: "os1", orcamentoId: null, ordemServico: null }));
+  // O status agora anda sozinho (baixar/enviar o PC → "Em cotação"); quem baixa/envia é Compras ou o comprador
+  it("comprador designado baixa/envia o PC do pedido; outro técnico não", async () => {
+    overrides.set("pedidoCompraInterno.findFirst", async () => ({ id: "pc1", numero: "PC-1", status: "SOLICITADO", tokenPublico: "t", compradorId: "comprador", ordemServicoId: "os1", orcamentoId: null, ordemServico: null, fornecedor: null }));
     logar(PRESETS.TECNICO, "comprador");
-    expect(await passou(async () => (await rotas.pedido()).PUT(req("/x", "PUT", { status: "COTANDO" }), p({ id: "pc1" })))).toBe(true);
+    expect(await passou(async () => (await rotas.enviarPedido()).POST(req("/x", "POST", { canal: "BAIXAR" }), p({ id: "pc1" })))).toBe(true);
     logar(PRESETS.TECNICO, "outro");
-    expect((await (await rotas.pedido()).PUT(req("/x", "PUT", { status: "COTANDO" }), p({ id: "pc1" }))).status).toBe(403);
+    expect((await (await rotas.enviarPedido()).POST(req("/x", "POST", { canal: "BAIXAR" }), p({ id: "pc1" }))).status).toBe(403);
   });
 });
 
