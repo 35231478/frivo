@@ -24,7 +24,7 @@ import { nomeAutomaticoOrcamento, type ContextoNomeOrcamento } from "@/lib/orcam
 import { Select } from "@/components/ui/select";
 import { NOTA_ART_APOS_APROVACAO } from "@/lib/orcamentos/proposta";
 import {
-  GARANTIAS_PECAS_SUGERIDAS, GARANTIAS_SERVICO_SUGERIDAS, NaoInclusoCampo, NormasCampo,
+  FormaPagamentoCampo, GARANTIAS_PECAS_SUGERIDAS, GARANTIAS_SERVICO_SUGERIDAS, NaoInclusoCampo, NormasCampo,
 } from "@/components/orcamento/campos-corporativos";
 
 interface ClienteOpt {
@@ -179,7 +179,6 @@ function propostaInicialToState(p?: PropostaInicial): PropostaState {
 
 /** Sugestões (o campo é texto livre) */
 const PRAZOS_SUGERIDOS = ["Imediato, após aprovação", "1 dia útil após aprovação", "3 dias úteis após aprovação", "5 dias úteis após aprovação", "10 dias úteis após aprovação", "A combinar"];
-const FORMAS_PAGAMENTO_SUGERIDAS = ["À vista", "PIX à vista", "Boleto à vista", "Boleto em 2x (30/60 dias)", "Cartão de crédito em até 3x", "50% na aprovação e 50% na conclusão", "Transferência bancária"];
 
 function novoId() {
   return Math.random().toString(36).slice(2);
@@ -689,7 +688,7 @@ export function OrcamentoForm({
                 <Input value={prazoExecucao} onChange={(e) => setPrazoExecucao(e.target.value)} list="sugestoes-prazo-execucao" maxLength={200} placeholder="Ex.: 5 dias úteis após aprovação" data-prazo-execucao />
               </FormField>
               <FormField label="Forma de pagamento">
-                <Input value={formaPagamento} onChange={(e) => setFormaPagamento(e.target.value)} list="sugestoes-forma-pagamento" maxLength={200} placeholder="Ex.: PIX à vista ou boleto em 2x" data-forma-pagamento />
+                <FormaPagamentoCampo id="forma-pagamento-orcamento" valor={formaPagamento} onChange={setFormaPagamento} />
               </FormField>
               <FormField label="Garantia dos serviços">
                 <Input value={garantiaServico} onChange={(e) => setGarantiaServico(e.target.value)} list="sugestoes-garantia-servico" maxLength={200} placeholder="Ex.: 90 dias" data-garantia-servico />
@@ -699,7 +698,6 @@ export function OrcamentoForm({
               </FormField>
             </FormGrid>
             <datalist id="sugestoes-prazo-execucao">{PRAZOS_SUGERIDOS.map((v) => <option key={v} value={v} />)}</datalist>
-            <datalist id="sugestoes-forma-pagamento">{FORMAS_PAGAMENTO_SUGERIDAS.map((v) => <option key={v} value={v} />)}</datalist>
             <datalist id="sugestoes-garantia-servico">{GARANTIAS_SERVICO_SUGERIDAS.map((v) => <option key={v} value={v} />)}</datalist>
             <datalist id="sugestoes-garantia-pecas">{GARANTIAS_PECAS_SUGERIDAS.map((v) => <option key={v} value={v} />)}</datalist>
             <FormField label="Não incluso" hint="Uma exclusão por linha; sai no documento como “Não incluso”">

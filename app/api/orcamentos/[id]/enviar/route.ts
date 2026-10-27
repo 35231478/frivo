@@ -5,9 +5,9 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { buildPublicUrl, buildMailtoLink } from "@/lib/orcamento-helpers";
 import { whatsappLink } from "@/lib/utils";
 import { emailConfigAtiva, enviarOrcamento } from "@/lib/email";
-import { diaCivilPassou } from "@/lib/fuso";
 import { numeroFormalOrcamento } from "@/lib/orcamentos/proposta";
 import { registrarEvento } from "@/lib/orcamentos/ciclo-server";
+import { bloqueioEnvio } from "@/lib/orcamentos/ciclo";
 
 const corpoSchema = z.object({ canal: z.enum(["EMAIL", "WHATSAPP", "LINK"]).optional() }).nullable();
 
@@ -38,16 +38,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     },
   });
   if (!orcamento) return NextResponse.json({ erro: "Orçamento não encontrado" }, { status: 404 });
-  if (orcamento.status === "APROVADO" || orcamento.status === "CANCELADO" || orcamento.status === "CONVERTIDA") {
-    return NextResponse.json(
-      { erro: "Orçamento já encerrado, não é possível reenviar" },
-      { status: 400 }
-    );
-  }
-  // Mandar um link que o cliente não consegue mais aprovar não serve: ajuste a validade antes
-  if (diaCivilPassou(orcamento.validadeEm)) {
-    return NextResponse.json({ erro: "A validade deste orçamento já venceu. Volte para rascunho, ajuste a validade e envie de novo." }, { status: 400 });
-  }
+  // Encerrado (aprovado/cancelado/convertido) ou validade vencida: um link que o cliente não consegue
+  // mais aprovar não serve — mesma regra dos ícones da lista (lib/orcamentos/ciclo.ts)
+  const bloqueio = bloqueioEnvio(orcamento);
+  if (bloqueio) return NextResponse.json({ erro: bloqueio }, { status: 400 });
 
   const atualizado = await prisma.orcamento.update({
     where: { id },

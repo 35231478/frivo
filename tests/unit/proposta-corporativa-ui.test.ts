@@ -142,11 +142,14 @@ describe("construtor: padrões, destinatário e campos corporativos", () => {
 
   it("sugestão do 'Não incluso' acrescenta a linha (e fica marcada); normas ligam/desligam; ART e RT editáveis", async () => {
     await montarForm({ padroes: { ...PADROES, naoIncluso: null, normas: [] } });
-    const sug = $<HTMLButtonElement>("[data-sugestao-nao-incluso='Rede elétrica além do ponto de força']")!;
+    const sug = $<HTMLButtonElement>("[data-sugestao-nao-incluso='Infraestrutura elétrica além do ponto de força']")!;
     await clicar(sug);
+    // As menos comuns ficam em "mais sugestões"
+    expect($("[data-sugestao-nao-incluso='Taxas de acesso, liberação ou integração no local']")).toBeNull();
+    await clicar($("[data-mais-sugestoes-nao-incluso]"));
     await clicar($("[data-sugestao-nao-incluso='Taxas de acesso, liberação ou integração no local']"));
-    expect($<HTMLTextAreaElement>("[data-nao-incluso] textarea")!.value).toBe("Rede elétrica além do ponto de força\nTaxas de acesso, liberação ou integração no local");
-    expect($<HTMLButtonElement>("[data-sugestao-nao-incluso='Rede elétrica além do ponto de força']")!.disabled).toBe(true);
+    expect($<HTMLTextAreaElement>("[data-nao-incluso] textarea")!.value).toBe("Infraestrutura elétrica além do ponto de força\nTaxas de acesso, liberação ou integração no local");
+    expect($<HTMLButtonElement>("[data-sugestao-nao-incluso='Infraestrutura elétrica além do ponto de força']")!.disabled).toBe(true);
     await clicar($("[data-norma='NBR_13971']"));
     await clicar($("[data-norma='NBR_16401']"));
     await clicar($("[data-norma='PMOC']"));
@@ -208,13 +211,13 @@ describe("Configurações › Orçamentos e propostas", () => {
     await renderizar(createElement(OrcamentoPadroesClient, { inicial: INICIAL, podeEditar: true }));
     await digitar($("[data-validade-dias]"), "20");
     await digitar($("[data-garantia-pecas]"), "6 meses");
-    await clicar($("[data-sugestao-nao-incluso='Remoção de entulho e descarte']"));
+    await clicar($("[data-sugestao-nao-incluso='Remoção e descarte do equipamento antigo']"));
     await clicar($("[data-norma='PMOC']"));
     await clicar($("[data-salvar-padroes-orcamento]"));
     const put = chamadas.find((c) => c.metodo === "PUT" && c.url === "/api/configuracoes")!.corpo;
     expect(put).toEqual({
       orcamentoValidadeDias: "20", orcamentoGarantiaServico: "90 dias", orcamentoGarantiaPecas: "6 meses",
-      orcamentoNaoIncluso: "Remoção de entulho e descarte", orcamentoNormas: ["PMOC"],
+      orcamentoNaoIncluso: "Remoção e descarte do equipamento antigo", orcamentoNormas: ["PMOC"],
     });
     expect(document.body.textContent).toContain("Padrões salvos");
   });

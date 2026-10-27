@@ -318,7 +318,10 @@ describe.skipIf(!URL_PG)("Proposta corporativa: numeração, padrões, destinat�
     expect(t).toContain("Para Hospital Santa Clara S/A");
     expect(t).toContain("CNPJ 22.101.333/0001-11 · IE ISENTO");
     expect(t).toContain("A/C Juliana Ramos (Compras)");
-    expect(t).toContain("Matriz — Av. Afonso Pena, 2300 — Belo Horizonte/MG");
+    expect(t).toContain("Local Matriz Av. Afonso Pena, 2300 — Belo Horizonte/MG");
+    // Hierarquia do "Para:": razão social em destaque, documentos numa linha, A/C e local alinhados
+    expect(h).toMatch(/data-para-razao="true"[^>]*>Hospital Santa Clara S\/A</);
+    expect(h).toMatch(/data-para-documentos="true"[^>]*>CNPJ 22\.101\.333\/0001-11 · IE ISENTO</);
     expect(t).toContain("Garantia dos serviços 120 dias");
     expect(t).toContain("Garantia das peças 12 meses");
     expect(t).toContain("Prazo de execução dos serviços 5 dias úteis");
