@@ -91,8 +91,6 @@ async function gravarLinha(entidade: EntidadeImportacao, l: LinhaAnalisada, empr
     await tabela(entidade).create({ data: { ...base, ...(codigo !== undefined && { codigo }), empresaId, ativo: true } });
     return "criado";
   }
-  // O código do produto é do sistema: a planilha não o muda (casar por ele já foi decidido na análise)
-  if (entidade === "produtos") delete dados.codigo;
   // Casou pelo nome: o nome é a chave — "gas r410a" na planilha não renomeia o "Gás R410A" do cadastro
   if (l.chave?.startsWith("nome:")) delete dados.nome;
   const r = await tabela(entidade).updateMany({ where: { id: l.existenteId, empresaId }, data: dados });

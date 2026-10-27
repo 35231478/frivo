@@ -42,7 +42,8 @@ const listar = (entidade: string, q: string) => chamar("cadastros/[entidade]", "
 async function baixar(entidade: string) {
   const mod = await import("@/app/api/importacao/[entidade]/exportar/route");
   const res: Response = await mod.GET(new Request("http://localhost/x"), { params: Promise.resolve({ entidade }) });
-  return { status: res.status, res, tabela: res.ok ? lerXlsx(Buffer.from(await res.arrayBuffer())).map((l) => l.map((c) => (c == null ? "" : String(c)))) : null };
+  const bruto = res.ok ? Buffer.from(await res.arrayBuffer()) : null;
+  return { status: res.status, res, bruto: bruto?.toString("utf8") ?? "", tabela: bruto ? lerXlsx(bruto).map((l) => l.map((c) => (c == null ? "" : String(c)))) : null };
 }
 const arquivo = (linhas: string[][]) => new File([new Uint8Array(gerarXlsx([{ nome: "Dados", linhas }]))], "dados.xlsx");
 async function importar(entidade: string, linhas: string[][], etapa: "previa" | "confirmar") {
@@ -159,8 +160,13 @@ describe.skipIf(!URL_PG)("Códigos e planilha de ida e volta (PostgreSQL real)",
     expect((await baixar("produtos")).status).toBe(403);
     expect((await baixar("clientes")).status).toBe(200);
     expect((await baixar("usuarios")).status).toBe(404);
+    sessao.atual = null;
+    expect((await baixar("clientes")).status).toBe(401);
     logar(montarPermissoes({ configuracoes: ["visualizar"] }));
-    const { status, res, tabela } = await baixar("produtos");
+    const { status, res, tabela, bruto } = await baixar("produtos");
+    // Aba "Instruções" da planilha EXPORTADA (não a do modelo); o .xlsx é gravado sem compressão
+    expect(bruto).toContain("Esta planilha veio do sistema");
+    expect(bruto).not.toContain("A linha de exemplo (linha 2)");
     expect(status).toBe(200);
     expect(res.headers.get("Content-Disposition")).toMatch(/^attachment; filename="produtos-\d{4}-\d{2}-\d{2}\.xlsx"$/);
     expect(tabela![0]).toEqual(IMPORTACOES.produtos.colunas.map((c) => c.titulo));
@@ -226,11 +232,12 @@ describe.skipIf(!URL_PG)("Códigos e planilha de ida e volta (PostgreSQL real)",
     linhaS1[col(t, "codigo")] = "filt01";
     linhaS1[col(t, "nome")] = "Limpeza de filtro (renomeada)";
     const novo = (codigo: string, nome: string) => t[0].map((c) => (c === "codigo" ? codigo : c === "nome" ? nome : ""));
-    const c = await importar("servicos", [t[0], linhaS1, novo("INST07", "Instalação split"), novo("", "Instalação cassete"), novo("", "Limpeza de duto")], "confirmar");
-    expect(c.json).toMatchObject({ criados: 3, atualizados: 1, comErro: 0 });
+    const c = await importar("servicos", [t[0], linhaS1, novo("INST07", "Instalação split"), novo("", "Instalação cassete"), novo("", "Limpeza de duto"), novo("", "Limpeza de serpentina")], "confirmar");
+    expect(c.json).toMatchObject({ criados: 4, atualizados: 1, comErro: 0 });
     expect(await prisma.servico.findUnique({ where: { id: "s1" } })).toMatchObject({ codigo: "FILT01", nome: "Limpeza de filtro (renomeada)" });
     const cod = async (nome: string) => (await prisma.servico.findFirst({ where: { empresaId: "e1", nome } })).codigo;
-    expect([await cod("Instalação split"), await cod("Instalação cassete"), await cod("Limpeza de duto")]).toEqual(["INST07", "INST08", "LIMP07"]);
+    // dois novos do mesmo prefixo na mesma planilha: códigos seguidos, sem repetir
+    expect([await cod("Instalação split"), await cod("Instalação cassete"), await cod("Limpeza de duto"), await cod("Limpeza de serpentina")]).toEqual(["INST07", "INST08", "LIMP07", "LIMP08"]);
   });
 
   it("fornecedor sem CNPJ: renomeado na planilha casa pelo id_sistema (antes viraria outro cadastro)", async () => {
@@ -246,15 +253,20 @@ describe.skipIf(!URL_PG)("Códigos e planilha de ida e volta (PostgreSQL real)",
   });
 
   it("clientes: baixar → reupload sem mudança = só atualizar; troca de CNPJ casa pelo id_sistema", async () => {
-    await prisma.cliente.create({ data: { id: "c1", empresaId: "e1", nome: "Hospital", cpfCnpj: "11.222.333/0001-81", segmento: "SAUDE" } });
+    await prisma.tabelaPreco.create({ data: { id: "tp1", empresaId: "e1", nome: "Tabela VIP" } });
+    await prisma.cliente.create({ data: { id: "c1", empresaId: "e1", nome: "Hospital", cpfCnpj: "11.222.333/0001-81", segmento: "SAUDE", tabelaPrecoId: "tp1" } });
+    await prisma.cliente.create({ data: { id: "c2", empresaId: "e1", nome: "Clínica antiga", cpfCnpj: "11.444.777/0001-61", ativo: false } });
     const { tabela } = await baixar("clientes");
     const t = tabela!;
+    const linhaC1 = t.find((l) => l[col(t, "id_sistema")] === "c1")!;
+    expect(t.slice(1).map((l) => l[col(t, "id_sistema")]).sort()).toEqual(["c1", "c2"]); // o inativo também
+    expect(linhaC1[col(t, "tabela_preco")]).toBe("Tabela VIP"); // o nome da tabela, que a importação lê de volta
     const p = await importar("clientes", t, "previa");
-    expect(p.json.analise.resumo).toMatchObject({ criar: 0, atualizar: 1, erros: 0 });
-    t[1][col(t, "cnpj_cpf")] = "529.982.247-25";
-    t[1][col(t, "tipo_pessoa")] = "";
+    expect(p.json.analise.resumo).toMatchObject({ criar: 0, atualizar: 2, erros: 0 });
+    linhaC1[col(t, "cnpj_cpf")] = "529.982.247-25";
+    linhaC1[col(t, "tipo_pessoa")] = "";
     const c = await importar("clientes", t, "confirmar");
-    expect(c.json).toMatchObject({ criados: 0, atualizados: 1 });
+    expect(c.json).toMatchObject({ criados: 0, atualizados: 2 });
     expect(await prisma.cliente.findUnique({ where: { id: "c1" } })).toMatchObject({ cpfCnpj: "529.982.247-25", segmento: "SAUDE" });
   });
 });

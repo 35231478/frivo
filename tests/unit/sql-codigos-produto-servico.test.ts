@@ -44,7 +44,7 @@ describe.skipIf(!URL)("SQL de produção: códigos de produto e serviço (Postgr
     sql(`
       CREATE TABLE "produtos" ("id" TEXT PRIMARY KEY, "empresa_id" TEXT NOT NULL, "nome" TEXT NOT NULL, "criado_em" TIMESTAMP(3) NOT NULL DEFAULT now());
       CREATE TABLE "servicos" ("id" TEXT PRIMARY KEY, "empresa_id" TEXT NOT NULL, "nome" TEXT NOT NULL, "criado_em" TIMESTAMP(3) NOT NULL DEFAULT now());
-      INSERT INTO "produtos" VALUES ('p3', 'e1', 'Gás', '2026-03-01'), ('p1', 'e1', 'Filtro', '2026-01-01'), ('p2', 'e1', 'Fita', '2026-02-01'), ('p9', 'e2', 'Outro', '2026-01-01');
+      INSERT INTO "produtos" VALUES ('p3', 'e1', 'Gás', '2026-01-01'), ('p1', 'e1', 'Filtro', '2026-03-01'), ('p2', 'e1', 'Fita', '2026-02-01'), ('p9', 'e2', 'Outro', '2026-01-01');
       INSERT INTO "servicos" VALUES ${SERVICOS.map(([id, e, n, d]) => `('${id}', '${e}', '${n}', '${d}')`).join(", ")};
     `);
     rodar();
@@ -52,7 +52,7 @@ describe.skipIf(!URL)("SQL de produção: códigos de produto e serviço (Postgr
   afterAll(() => { execFileSync("psql", [URL!, "-q", "-c", `DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE;`]); });
 
   it("produto: 1, 2, 3… na ordem de cadastro, por empresa", () => {
-    expect(codigos("produtos", "e1")).toBe("p1=1,p2=2,p3=3");
+    expect(codigos("produtos", "e1")).toBe("p1=3,p2=2,p3=1"); // ordem de cadastro (criado_em), não do id
     expect(codigos("produtos", "e2")).toBe("p9=1");
   });
 
@@ -83,7 +83,7 @@ describe.skipIf(!URL)("SQL de produção: códigos de produto e serviço (Postgr
     expect(sql(`SELECT codigo FROM servicos WHERE id = 's9'`)).toBe("LIMP08");
     expect(sql(`SELECT codigo FROM servicos WHERE id = 's1'`)).toBe(antes.match(/s1=(\w+)/)![1]);
     expect(sql(`SELECT codigo FROM produtos WHERE id = 'p4'`)).toBe("4");
-    expect(codigos("produtos", "e1")).toBe("p1=1,p2=2,p3=3,p4=4");
+    expect(codigos("produtos", "e1")).toBe("p1=3,p2=2,p3=1,p4=4");
     const tudo = sql(`SELECT string_agg(id || '=' || codigo, ',' ORDER BY id) FROM servicos`);
     rodar();
     expect(sql(`SELECT string_agg(id || '=' || codigo, ',' ORDER BY id) FROM servicos`)).toBe(tudo);

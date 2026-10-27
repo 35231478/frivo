@@ -112,7 +112,7 @@ describe("busca de itens do orçamento", () => {
     const campo = $<HTMLInputElement>('input[placeholder="Buscar serviço por nome ou código..."]')!;
     await act(async () => {
       campo.focus();
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(campo, "limp");
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(campo, "limp01"); // só o código: o nome “Limpeza…” não contém “limp01”
       campo.dispatchEvent(new Event("input", { bubbles: true }));
     });
     await esperar();
