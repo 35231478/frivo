@@ -23,6 +23,7 @@
  *
  * Empresa SEMPRE a da sessão (quem chama passa); nota/produto/pedido de outra empresa = recusado.
  */
+import { criarProdutoComCodigo } from "@/lib/cadastros/codigos-server";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -231,10 +232,10 @@ async function aplicarEscolhas(tx: Prisma.TransactionClient, empresaId: string, 
     const item = doItem.get(e.itemId)!;
     // Produto novo: unidade escolhida (ou a da nota) e os dados fiscais do XML
     const produtoId = "produtoId" in e ? e.produtoId
-      : (await tx.produto.create({
-        data: { empresaId, nome: e.novo.nome.trim().slice(0, 200), unidade: (e.novo.unidade || item.unidade).trim().slice(0, 10) || "un", ...fiscalDoItem(item) },
+      : (await criarProdutoComCodigo(empresaId, (codigo, t) => t.produto.create({
+        data: { empresaId, codigo, nome: e.novo.nome.trim().slice(0, 200), unidade: (e.novo.unidade || item.unidade).trim().slice(0, 10) || "un", ...fiscalDoItem(item) },
         select: { id: true },
-      })).id;
+      }), tx)).id;
     const fator = e.fator ?? 1;
     // Preço da linha: o que veio; sem preço no corpo e o produto mudou, o rascunho antigo (de outro produto) sai
     const preco = e.preco !== undefined ? precoDoItem(e.preco, item, fator)

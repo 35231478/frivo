@@ -106,7 +106,7 @@ describe("tipo de documento e validade", () => {
     await montar({ embutido: { osId: "os1", onSalvo: () => {}, onCancelar: () => {} }, osInicialId: "os1" });
     expect(document.body.textContent).not.toContain("Proposta de Contrato");
     expect(document.body.textContent).not.toContain("Tipo de documento");
-    await adicionar("Buscar serviço por nome...", "Limpeza de split");
+    await adicionar("Buscar serviço por nome ou código...", "Limpeza de split");
     const corpo = await salvar();
     expect(corpo.tipo).toBe("COMUM");
     act(() => root.unmount()); caixa.remove();
@@ -122,7 +122,7 @@ describe("tipo de documento e validade", () => {
     const esperado = `${String(alvo.getUTCDate()).padStart(2, "0")}/${String(alvo.getUTCMonth() + 1).padStart(2, "0")}/${alvo.getUTCFullYear()}`;
     expect($<HTMLInputElement>("input[aria-label='Validade']")!.value).toBe(esperado);
     expect(document.body.textContent).toContain("Padrão: 10 dias após a data do orçamento");
-    await adicionar("Buscar serviço por nome...", "Limpeza de split");
+    await adicionar("Buscar serviço por nome ou código...", "Limpeza de split");
     const corpo = await salvar();
     expect(corpo.validadeEm).toBe(alvo.toISOString().slice(0, 10));
   });
@@ -136,7 +136,7 @@ describe("tipo de documento e validade", () => {
 describe("itens: unitário ↔ total e observação", () => {
   it("digitar o TOTAL recalcula o unitário (100 ÷ 3 = 33,33) e o total digitado manda no subtotal", async () => {
     await montar();
-    await adicionar("Buscar serviço por nome...", "Limpeza de split");
+    await adicionar("Buscar serviço por nome ou código...", "Limpeza de split");
     const l = linhas()[0];
     expect(campo(l, "unitario").value).toBe("500,00");
     expect(campo(l, "total").value).toBe("500,00");
@@ -156,7 +156,7 @@ describe("itens: unitário ↔ total e observação", () => {
 
   it("observação: botão abre um campo que expande; o texto vai no payload", async () => {
     await montar();
-    await adicionar("Buscar produto por nome...", "Capacitor 35uF");
+    await adicionar("Buscar produto por nome ou código...", "Capacitor 35uF");
     expect($("[data-observacao-item]")).toBeNull();
     await clicar($("[data-abrir-observacao]"));
     const area = $<HTMLTextAreaElement>("[data-observacao-item] textarea")!;
@@ -170,9 +170,9 @@ describe("itens: unitário ↔ total e observação", () => {
 describe("descontos por grupo, ISS e totais", () => {
   it("desconto % nos serviços, R$ nos produtos, ISS 5% sobre os serviços líquidos; payload com tudo", async () => {
     await montar({ issAliquota: 5 });
-    await adicionar("Buscar serviço por nome...", "Limpeza de split");
+    await adicionar("Buscar serviço por nome ou código...", "Limpeza de split");
     await digitar(campo(linhas()[0], "quantidade"), "2"); // 1000
-    await adicionar("Buscar produto por nome...", "Capacitor 35uF");
+    await adicionar("Buscar produto por nome ou código...", "Capacitor 35uF");
     await digitar(campo(linhas()[1], "quantidade"), "4"); // 200
     const [dServ, dProd] = $$("[data-desconto-grupo]");
     await digitar(dServ.querySelector("input"), "10");
@@ -223,7 +223,7 @@ describe("Gerar descrição profissional (IA)", () => {
   it("descrição vazia: preenche com o texto da IA (pedido leva a OS e os itens, sem preços)", async () => {
     respostas["POST /api/orcamentos/descricao-ia"] = { status: 200, corpo: { descricao: "Proposta para limpeza do split." } };
     await montar({ iaDisponivel: true, embutido: { osId: "os1", onSalvo: () => {}, onCancelar: () => {} }, osInicialId: "os1" });
-    await adicionar("Buscar serviço por nome...", "Limpeza de split");
+    await adicionar("Buscar serviço por nome ou código...", "Limpeza de split");
     await clicar($("[data-gerar-descricao-ia]"));
     const pedido = chamadas.find((c) => c.url === "/api/orcamentos/descricao-ia")!;
     expect(pedido.corpo).toEqual({ osId: "os1", nome: null, servicos: [{ descricao: "Limpeza de split", observacao: null }], produtos: [] });
@@ -234,7 +234,7 @@ describe("Gerar descrição profissional (IA)", () => {
   it("com texto já escrito: só sugere; 'Descartar' mantém; 'Substituir' pede confirmação", async () => {
     respostas["POST /api/orcamentos/descricao-ia"] = { status: 200, corpo: { descricao: "Texto da IA." } };
     await montar({ iaDisponivel: true });
-    await adicionar("Buscar serviço por nome...", "Limpeza de split");
+    await adicionar("Buscar serviço por nome ou código...", "Limpeza de split");
     const area = () => $<HTMLTextAreaElement>("[data-descricao-orcamento] textarea")!;
     await digitar(area(), "Meu texto");
     await clicar($("[data-gerar-descricao-ia]"));
@@ -255,7 +255,7 @@ describe("Gerar descrição profissional (IA)", () => {
   it("erro do servidor vira toast; nada muda na descrição", async () => {
     respostas["POST /api/orcamentos/descricao-ia"] = { status: 503, corpo: { erro: "IA não configurada." } };
     await montar({ iaDisponivel: true });
-    await adicionar("Buscar serviço por nome...", "Limpeza de split");
+    await adicionar("Buscar serviço por nome ou código...", "Limpeza de split");
     const { Avisos } = await import("@/components/ui/avisos");
     const host = document.createElement("div"); document.body.appendChild(host);
     const r2 = createRoot(host);
@@ -334,7 +334,7 @@ describe("ajustes finos: nome automático, condições, observação ao lado, ti
     const campo = $<HTMLInputElement>("input[data-nome-orcamento]")!;
     expect(campo.placeholder).toBe("Manutenção Corretiva — Hospital Santa Clara");
     expect(campo.value).toBe("");
-    await adicionar("Buscar serviço por nome...", "Limpeza de split");
+    await adicionar("Buscar serviço por nome ou código...", "Limpeza de split");
     await act(async () => { $("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
     await esperar();
     const corpo = chamadas.find((c) => c.metodo === "POST" && c.url === "/api/orcamentos")!.corpo;
@@ -344,8 +344,8 @@ describe("ajustes finos: nome automático, condições, observação ao lado, ti
 
   it("sem OS: a prévia usa o 1º item e o cliente; o nome digitado é respeitado", async () => {
     await montar();
-    await adicionar("Buscar serviço por nome...", "Limpeza de split");
-    await adicionar("Buscar produto por nome...", "Capacitor 35uF");
+    await adicionar("Buscar serviço por nome ou código...", "Limpeza de split");
+    await adicionar("Buscar produto por nome ou código...", "Capacitor 35uF");
     expect($<HTMLInputElement>("input[data-nome-orcamento]")!.placeholder).toBe("Limpeza de split +1 — Hospital Santa Clara");
     const corpo = await salvar(); // digita "Corretiva UTI"
     expect(corpo.nome).toBe("Corretiva UTI");
@@ -355,7 +355,7 @@ describe("ajustes finos: nome automático, condições, observação ao lado, ti
     await montar();
     await digitar($("[data-prazo-execucao]"), "5 dias úteis após aprovação");
     await escolherOpcao($("[data-forma-pagamento-opcao]"), "PIX");
-    await adicionar("Buscar serviço por nome...", "Limpeza de split");
+    await adicionar("Buscar serviço por nome ou código...", "Limpeza de split");
     const corpo = await salvar();
     expect(corpo).toMatchObject({ prazoExecucao: "5 dias úteis após aprovação", formaPagamento: "PIX" });
     await clicar($$("button").find((b) => b.textContent?.includes("Proposta de Contrato")));
@@ -374,7 +374,7 @@ describe("ajustes finos: nome automático, condições, observação ao lado, ti
 
   it("observação na coluna ao lado da descrição (cabeçalho Descrição | Observação | Qtd | Unitário | Total), na mesma linha do item", async () => {
     await montar();
-    await adicionar("Buscar serviço por nome...", "Limpeza de split");
+    await adicionar("Buscar serviço por nome ou código...", "Limpeza de split");
     const cabecalho = $$("[role='table'][aria-label='Serviços'] [role='columnheader']").map((c) => c.textContent);
     expect(cabecalho.slice(0, 5)).toEqual(["Descrição", "Observação", "Qtd", "Unitário", "Total"]);
     const linha = linhas()[0];

@@ -109,7 +109,7 @@ async function escolher(sel: HTMLSelectElement | null, v: string) {
   await esperar();
 }
 async function adicionarServico() {
-  await digitar($("input[placeholder='Buscar serviço por nome...']"), "Limpe");
+  await digitar($("input[placeholder='Buscar serviço por nome ou código...']"), "Limpe");
   await clicar($$("button").find((b) => b.textContent?.includes("Limpeza de split")));
 }
 async function salvar() {

@@ -1332,6 +1332,9 @@ model TipoEquipamentoCustom {
 model Servico {
   id          String   @id @default(cuid())
   empresaId   String   @map("empresa_id")
+  /// Código alfanumérico (ex.: "LIMP01"): gerado ao criar pelas 4 primeiras letras do nome + sequencial,
+  /// editável; único na empresa (maiúsculas). Chave da planilha e atalho de busca.
+  codigo      String?
   nome        String
   descricao   String?
   unidade     String   @default("un")
@@ -1355,6 +1358,7 @@ model Servico {
   medicaoItens   MedicaoItem[]
   tabelaItens    TabelaPrecoItem[]
 
+  @@unique([empresaId, codigo])
   @@map("servicos")
 }
 
@@ -1365,6 +1369,9 @@ model Servico {
 model Produto {
   id                String   @id @default(cuid())
   empresaId         String   @map("empresa_id")
+  /// Código numérico do produto, sequencial por empresa (1, 2, 3…), gerado ao criar; único na empresa.
+  /// Chave da planilha (exportar → editar → importar atualiza em vez de duplicar).
+  codigo            Int?
   nome              String
   descricao         String?
   unidade           String   @default("un")
@@ -1397,6 +1404,7 @@ model Produto {
   notaItens      NotaCompraItem[]
   deParas        DeParaProdutoFornecedor[]
 
+  @@unique([empresaId, codigo])
   @@map("produtos")
 }
 

@@ -123,6 +123,11 @@ describe("conciliação (de-para)", () => {
     await digitar($('[data-item="2"] [data-busca-produto]') as HTMLInputElement, "c");
     await passar(400);
     expect(chamadas.length).toBe(n0);
+    // 1 dígito busca (é o código do produto)
+    await digitar($('[data-item="2"] [data-busca-produto]') as HTMLInputElement, "6");
+    await passar(300);
+    expect(chamadas.at(-1)!.url).toBe("/api/compras/produtos?q=6");
+    expect(($('[data-item="2"] [data-busca-produto]') as HTMLInputElement).placeholder).toBe("Buscar produto por nome ou código…");
     // item 2: busca "cap" (debounce) e escolhe o produto do cadastro
     respostas["/api/compras/produtos"] = { status: 200, corpo: { produtos: [{ ...produto("pCap", "Capacitor 35uF", "un"), saldo: 3 }] } };
     await digitar($('[data-item="2"] [data-busca-produto]') as HTMLInputElement, "cap");

@@ -14,6 +14,8 @@ import { corpoFinanceiro, FinanceiroNotaEditor, financeiroInicial, type Financei
 
 export interface FiscalProduto { ncm: string | null; cest: string | null; gtin: string | null; origemMercadoria: string | null; unidadeTributavel: string | null }
 export interface ProdutoConciliacao {
+  /** Código do produto (a busca também acha por ele) */
+  codigo?: number | null;
   id: string; nome: string; unidade: string; saldo?: number;
   /** preço de venda atual, margem alvo e último custo de compra (por unidade do produto) */
   preco: number | null; margemVenda: number | null; custo: number | null;
@@ -337,7 +339,8 @@ function BuscaProduto({ onEscolher, rotulo }: { onEscolher: (p: ProdutoConciliac
   const pedido = useRef(0);
   useEffect(() => {
     const termo = q.trim();
-    if (termo.length < 2) { setLista([]); return; }
+    // 1 dígito já busca: é o código do produto ("6")
+    if (termo.length < 2 && !/^\d$/.test(termo)) { setLista([]); return; }
     const n = ++pedido.current;
     const t = setTimeout(async () => {
       setCarregando(true);
@@ -352,7 +355,7 @@ function BuscaProduto({ onEscolher, rotulo }: { onEscolher: (p: ProdutoConciliac
   return (
     <div className="relative">
       <Search className="w-4 h-4 text-ink-subtle absolute left-3 top-1/2 -translate-y-1/2" />
-      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar produto do cadastro…" aria-label={rotulo} className="pl-9" data-busca-produto />
+      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar produto por nome ou código…" aria-label={rotulo} className="pl-9" data-busca-produto />
       {carregando && <Loader2 className="w-4 h-4 animate-spin text-ink-subtle absolute right-3 top-1/2 -translate-y-1/2" />}
       {lista.length > 0 && (
         <ul role="listbox" className="absolute z-20 mt-1 w-full bg-white border border-surface-border rounded-lg shadow-card-hover max-h-64 overflow-auto">
@@ -360,7 +363,7 @@ function BuscaProduto({ onEscolher, rotulo }: { onEscolher: (p: ProdutoConciliac
             <li key={p.id}>
               <button type="button" role="option" aria-selected={false} onClick={() => { onEscolher(p); setQ(""); setLista([]); }}
                 className="w-full text-left px-3 py-2 text-sm hover:bg-primary-50 flex justify-between gap-2" data-opcao-produto={p.id}>
-                <span className="truncate">{p.nome}</span><span className="text-xs text-ink-muted shrink-0">{p.unidade}{p.saldo != null && ` · saldo ${formatarQtd(p.saldo)}`}</span>
+                <span className="truncate">{p.codigo != null && <span className="font-mono text-xs text-ink-muted mr-1.5">{p.codigo}</span>}{p.nome}</span><span className="text-xs text-ink-muted shrink-0">{p.unidade}{p.saldo != null && ` · saldo ${formatarQtd(p.saldo)}`}</span>
               </button>
             </li>
           ))}

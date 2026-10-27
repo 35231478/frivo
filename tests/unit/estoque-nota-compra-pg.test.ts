@@ -106,7 +106,7 @@ describe.skipIf(!URL_PG)("nota de compra no PostgreSQL real", () => {
   }, 60_000);
 
   it("conversão 1 UN = 13,6 kg: 13,600 kg a 100,0000/kg; a 2ª nota já vem com o fator; custo mudou só avisa", async () => {
-    await prisma.produto.create({ data: { id: "pR404", empresaId: "e1", nome: "Gás R404A", unidade: "kg", valorPadrao: 142.86, margemVenda: 30 } });
+    await prisma.produto.create({ data: { id: "pR404", empresaId: "e1", codigo: 7, nome: "Gás R404A", unidade: "kg", valorPadrao: 142.86, margemVenda: 30 } });
     const n1 = (await lib.importarNota({ empresaId: "e1", usuarioId: "u1", xml: XML_GAS1 })).nota;
     const [gas1, val1] = await prisma.notaCompraItem.findMany({ where: { notaId: n1.id }, orderBy: { numeroItem: "asc" } });
     expect([gas1.cest, gas1.gtin, gas1.origem, gas1.unidadeTributavel, gas1.fatorConversao.toString()]).toEqual(["0100100", "7891234500017", "1", "KG", "1"]);
@@ -117,6 +117,7 @@ describe.skipIf(!URL_PG)("nota de compra no PostgreSQL real", () => {
     expect([dp.unidadeOrigem, dp.fatorConversao.toString(), dp.produtoId]).toEqual(["UN", "13.6", "pR404"]);
     const valvula = await prisma.produto.findFirst({ where: { nome: "Válvula 1/4" } });
     expect([valvula.ncm, valvula.gtin, valvula.origemMercadoria, valvula.unidadeTributavel]).toEqual(["84818099", "7891234500024", "0", "PC"]);
+    expect(valvula.codigo).toBe(8); // produto novo da nota ganha o próximo código da empresa
     expect((await prisma.produto.findUnique({ where: { id: "pR404" } })).ncm).toBe("29037990"); // estava vazio: veio da nota
 
     const n2 = (await lib.importarNota({ empresaId: "e1", usuarioId: "u1", xml: XML_GAS2 })).nota;

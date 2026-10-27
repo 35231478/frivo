@@ -42,12 +42,12 @@ export default async function EditarOrcamentoPage({
     }),
     prisma.servico.findMany({
       where: { empresaId, ativo: true },
-      select: { id: true, nome: true, descricao: true, unidade: true, valorPadrao: true },
+      select: { id: true, codigo: true, nome: true, descricao: true, unidade: true, valorPadrao: true },
       orderBy: { nome: "asc" },
     }),
     prisma.produto.findMany({
       where: { empresaId, ativo: true },
-      select: { id: true, nome: true, descricao: true, unidade: true, valorPadrao: true },
+      select: { id: true, codigo: true, nome: true, descricao: true, unidade: true, valorPadrao: true },
       orderBy: { nome: "asc" },
     }),
     prisma.tecnico.findMany({
