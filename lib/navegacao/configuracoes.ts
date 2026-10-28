@@ -1,8 +1,8 @@
 import {
-  Building2, Clock, Cog, FileSignature, FileSpreadsheet, Headset, IdCard, Landmark, ListChecks, Mail, Package, Printer, QrCode, ScrollText, ShieldCheck, Tags,
+  Building2, Clock, Cog, FileBadge, FileSignature, FileSpreadsheet, Headset, IdCard, Landmark, ListChecks, Mail, Package, Printer, QrCode, ScrollText, ShieldCheck, Tags,
   Target, Thermometer, UserCog, Wallet, Wrench, type LucideIcon,
 } from "lucide-react";
-import { moduloDaRota, pode, type Permissoes } from "@/lib/permissoes";
+import { moduloDaRota, pode, type Acao, type Permissoes } from "@/lib/permissoes";
 
 /**
  * Configurações: UMA página (/configuracoes) com 3 abas (operacionais, financeiras, conta), cada
@@ -21,6 +21,9 @@ export interface ItemConfig {
   icone: LucideIcon;
   /** Uma linha explicando para que serve (aparece no cartão) */
   dica: string;
+  /** Permissão quando não é a do módulo da rota antiga: módulo e ação (padrão: visualizar) — ex.: Financeiro › Fiscal */
+  modulo?: string;
+  acao?: Acao;
 }
 
 export interface SubgrupoConfig { titulo: string; itens: ItemConfig[] }
@@ -89,6 +92,12 @@ export const SECOES_CONFIGURACOES: SecaoConfig[] = [
           { id: "banco-inter", href: "/configuracoes/integracoes/inter", icone: Landmark, label: "Banco Inter", dica: "Boletos e baixa automática dos pagamentos" },
         ],
       },
+      {
+        titulo: "Fiscal",
+        itens: [
+          { id: "dados-fiscais", href: "/configuracoes/dados-fiscais", modulo: "financeiro", acao: "fiscal", icone: FileBadge, label: "Dados fiscais (NFS-e)", dica: "A empresa como emitente: regime, município, certificado A1 e o PlugNotas" },
+        ],
+      },
     ],
   },
   {
@@ -151,10 +160,10 @@ export function hrefSecaoConfig(id: string) {
   return i ? `/configuracoes?aba=${i.aba}&secao=${i.id}` : "/configuracoes";
 }
 
-/** O perfil pode abrir este item? (mesma regra do cartão: permissão do módulo da rota antiga) */
+/** O perfil pode abrir este item? (permissão do módulo da rota antiga, ou o módulo/ação próprios do item) */
 export function podeVerItemConfig(i: ItemConfig, permissoes: Permissoes | null | undefined, role?: string) {
-  const m = moduloDaRota(i.href.split("#")[0]);
-  return !m || pode(permissoes, m, "visualizar", role);
+  const m = i.modulo ?? moduloDaRota(i.href.split("#")[0]);
+  return !m || pode(permissoes, m, i.acao ?? "visualizar", role);
 }
 
 /** Abas/subgrupos/itens que o perfil vê (permissão do módulo da rota antiga de cada item). */

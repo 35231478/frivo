@@ -477,6 +477,7 @@ model Empresa {
   orcamentoEventos       OrcamentoEvento[]
   pedidoCompraEventos    PedidoCompraEvento[]
   pedidoCompraVinculos   PedidoCompraVinculo[]
+  fiscal                 EmpresaFiscal?
   medicoes               Medicao[]
   contasReceber          ContaReceber[]
   prazoTemplates         PrazoTemplate[]
@@ -697,30 +698,31 @@ model Usuario {
   criadoEm     DateTime  @default(now()) @map("criado_em")
   atualizadoEm DateTime  @updatedAt @map("atualizado_em")
 
-  empresa              Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  ordensEmitidas       OrdemServico[]            @relation("UsuarioCriador")
-  ordensResponsavel    OrdemServico[]            @relation("OsResponsavel")
-  osHistorico          OsHistorico[]
-  interacoesCliente    InteracaoCliente[]
-  orcamentosCriados    Orcamento[]               @relation("OrcamentoCriador")
-  orcamentoAnexos      OrcamentoAnexo[]          @relation("OrcamentoAnexoAutor")
-  orcamentoEventos     OrcamentoEvento[]         @relation("OrcamentoEventoAutor")
-  pedidoCompraEventos  PedidoCompraEvento[]      @relation("PedidoCompraEventoAutor")
-  pedidoCompraVinculos PedidoCompraVinculo[]     @relation("PedidoCompraVinculoAutor")
-  pedidosSolicitados   PedidoCompraInterno[]     @relation("PedidoSolicitante")
-  pedidosComprador     PedidoCompraInterno[]     @relation("PedidoComprador")
-  pushSubscriptions    PushSubscription[]
-  contratoHistoricos   ContratoHistoricoStatus[]
-  movimentacoesEstoque MovimentacaoEstoque[]
-  notasCompra          NotaCompra[]
-  checklistRespostas   ChecklistResposta[]
-  fotosAtendimento     FotoAtendimento[]
-  servicosAdicionais   ServicoAdicional[]
-  fotosAdicionais      ServicoAdicionalFoto[]
-  syncOperacoes        SyncOperacao[]
-  anexosOs             OsAnexo[]
-  perfilAcessoId       String?                   @map("perfil_acesso_id")
-  perfilAcesso         PerfilAcesso?             @relation(fields: [perfilAcessoId], references: [id])
+  empresa                Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  ordensEmitidas         OrdemServico[]            @relation("UsuarioCriador")
+  ordensResponsavel      OrdemServico[]            @relation("OsResponsavel")
+  osHistorico            OsHistorico[]
+  interacoesCliente      InteracaoCliente[]
+  orcamentosCriados      Orcamento[]               @relation("OrcamentoCriador")
+  orcamentoAnexos        OrcamentoAnexo[]          @relation("OrcamentoAnexoAutor")
+  orcamentoEventos       OrcamentoEvento[]         @relation("OrcamentoEventoAutor")
+  pedidoCompraEventos    PedidoCompraEvento[]      @relation("PedidoCompraEventoAutor")
+  pedidoCompraVinculos   PedidoCompraVinculo[]     @relation("PedidoCompraVinculoAutor")
+  empresasFiscalEditadas EmpresaFiscal[]           @relation("EmpresaFiscalAutor")
+  pedidosSolicitados     PedidoCompraInterno[]     @relation("PedidoSolicitante")
+  pedidosComprador       PedidoCompraInterno[]     @relation("PedidoComprador")
+  pushSubscriptions      PushSubscription[]
+  contratoHistoricos     ContratoHistoricoStatus[]
+  movimentacoesEstoque   MovimentacaoEstoque[]
+  notasCompra            NotaCompra[]
+  checklistRespostas     ChecklistResposta[]
+  fotosAtendimento       FotoAtendimento[]
+  servicosAdicionais     ServicoAdicional[]
+  fotosAdicionais        ServicoAdicionalFoto[]
+  syncOperacoes          SyncOperacao[]
+  anexosOs               OsAnexo[]
+  perfilAcessoId         String?                   @map("perfil_acesso_id")
+  perfilAcesso           PerfilAcesso?             @relation(fields: [perfilAcessoId], references: [id])
 
   @@unique([email, empresaId])
   @@index([empresaId, ativo])
@@ -3449,4 +3451,49 @@ model TentativaAcesso {
   @@index([tipo, chave, criadoEm])
   @@index([criadoEm])
   @@map("tentativas_acesso")
+}
+
+/// NFS-e — a empresa como EMITENTE (gateway PlugNotas). 1:1 com a empresa (empresa da sessão).
+/// O arquivo do certificado A1 e a senha NÃO ficam aqui: vão direto ao PlugNotas e são descartados;
+/// guardamos só as referências (id do certificado e CNPJ do emitente lá) e o que se lê do certificado.
+/// A inscrição municipal é a da própria empresa (empresas.inscricao_municipal).
+model EmpresaFiscal {
+  id                     String    @id @default(cuid())
+  empresaId              String    @unique @map("empresa_id")
+  /// SIMPLES_NACIONAL | LUCRO_PRESUMIDO | LUCRO_REAL | MEI (texto + CHECK no banco, sem enum)
+  regimeTributario       String?   @map("regime_tributario")
+  /// Regime especial de tributação do município (opcional)
+  regimeEspecial         String?   @map("regime_especial")
+  incentivoFiscal        Boolean   @default(false) @map("incentivo_fiscal")
+  incentivadorCultural   Boolean   @default(false) @map("incentivador_cultural")
+  /// HOMOLOGACAO (padrão) | PRODUCAO
+  ambiente               String    @default("HOMOLOGACAO")
+  /// Município de prestação/emissão (código IBGE de 7 dígitos)
+  codigoMunicipio        String?   @map("codigo_municipio") @db.VarChar(7)
+  municipioNome          String?   @map("municipio_nome")
+  municipioUf            String?   @map("municipio_uf") @db.VarChar(2)
+  /// Certificado A1: id no PlugNotas + o que foi lido do .pfx (titular, CNPJ, validade)
+  certificadoId          String?   @map("certificado_id")
+  certificadoTitular     String?   @map("certificado_titular")
+  certificadoCnpj        String?   @map("certificado_cnpj") @db.VarChar(14)
+  certificadoValidoAte   DateTime? @map("certificado_valido_ate")
+  certificadoEnviadoEm   DateTime? @map("certificado_enviado_em")
+  /// Referência do emitente no PlugNotas (o cpfCnpj) e em que ambiente foi cadastrado
+  emitenteCnpj           String?   @map("emitente_cnpj") @db.VarChar(14)
+  emitenteAmbiente       String?   @map("emitente_ambiente")
+  emitenteSincronizadoEm DateTime? @map("emitente_sincronizado_em")
+  /// NAO_CONFIGURADO | PENDENTE | ATIVO | ERRO
+  status                 String    @default("NAO_CONFIGURADO")
+  ultimoErro             String?   @map("ultimo_erro")
+  ultimoTesteEm          DateTime? @map("ultimo_teste_em")
+  ultimoTesteOk          Boolean?  @map("ultimo_teste_ok")
+  ultimoTesteMensagem    String?   @map("ultimo_teste_mensagem")
+  atualizadoPorId        String?   @map("atualizado_por_id")
+  criadoEm               DateTime  @default(now()) @map("criado_em")
+  atualizadoEm           DateTime  @updatedAt @map("atualizado_em")
+
+  empresa       Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  atualizadoPor Usuario? @relation("EmpresaFiscalAutor", fields: [atualizadoPorId], references: [id], onDelete: SetNull)
+
+  @@map("empresa_fiscal")
 }

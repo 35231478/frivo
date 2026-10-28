@@ -13,7 +13,7 @@ import {
   LayoutDashboard, Users, Thermometer, ClipboardList, FileText, HardHat, Settings, ChevronDown, ChevronRight,
   Wrench, Calculator, Wallet, Receipt, TrendingUp, FileBarChart, ShoppingCart, Timer, CalendarDays, QrCode,
   Truck, UsersRound, BadgeDollarSign, ClipboardCheck, Smartphone, UserCog, Upload, Landmark, Globe, Coins,
-  PanelLeftClose, PanelLeftOpen, MoreVertical, LogOut, Package,
+  PanelLeftClose, PanelLeftOpen, MoreVertical, LogOut, Package, FileBadge,
 } from "lucide-react";
 
 type Icone = React.ComponentType<{ className?: string }>;
@@ -132,6 +132,11 @@ const FINANCEIRO: Secao[] = [
       {
         tipo: "grupo", label: "Tesouraria", icone: Landmark, itens: [
           { href: "/financeiro/contas-bancarias", icone: Landmark, label: "Contas bancárias", modulo: "financeiro" },
+        ],
+      },
+      {
+        tipo: "grupo", label: "Fiscal", icone: FileBadge, itens: [
+          { href: "/financeiro/fiscal", icone: FileBadge, label: "Dados fiscais (NFS-e)", modulo: "financeiro", acao: "fiscal" },
         ],
       },
       {
