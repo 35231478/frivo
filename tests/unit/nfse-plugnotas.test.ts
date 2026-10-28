@@ -153,6 +153,16 @@ describe("empresa (emitente)", () => {
     expect([fora?.status, fora?.message]).toEqual([422, "Falha na validação do JSON de Empresa. Campos: telefone (Campo não permitido); endereco.tipoLogradouro (Campo obrigatório)."]);
     expect((await erroDe(salvarEmpresa("HOMOLOGACAO", { cpfCnpj: "2" } as any, true)))?.message).toBe("Empresa não encontrada");
   });
+  it("senha da prefeitura que o PlugNotas ecoa no erro do cadastro sai da mensagem (como o token)", async () => {
+    plug.estado.falhas["POST /empresa"] = { status: 400, corpo: { error: { message: "Prefeitura recusou o acesso com Pref-Chave-55 (token-sandbox)" } } };
+    const corpo = corpoEmpresaPlugNotas(
+      { cnpj: "12345678000190", nome: "Clima", endereco: "Rua A", numero: "1", bairro: "B", cep: "01001000", inscricaoMunicipal: "1" },
+      { regimeTributario: "SIMPLES_NACIONAL", regimeEspecial: null, incentivoFiscal: false, incentivadorCultural: false, ambiente: "HOMOLOGACAO", codigoMunicipio: "3550308", municipioNome: "SP", municipioUf: "SP" },
+      "c", { login: "clima", senha: "Pref-Chave-55" },
+    );
+    const e = await erroDe(salvarEmpresa("HOMOLOGACAO", corpo, false));
+    expect([e?.status, e?.message]).toEqual([422, "Prefeitura recusou o acesso com ••• (•••)"]);
+  });
   it("rede caída e tempo esgotado: mensagens próprias (504)", async () => {
     plug.estado.falhas["GET /empresa/1"] = "rede";
     expect(await erroDe(consultarEmpresa("HOMOLOGACAO", "1"))).toMatchObject({ status: 504, message: "Não foi possível falar com o PlugNotas (rede). Tente de novo." });

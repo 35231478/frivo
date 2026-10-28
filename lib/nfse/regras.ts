@@ -128,11 +128,24 @@ export function separarLogradouro(logradouro: string): { tipoLogradouro: string;
   return { tipoLogradouro: "Rua", logradouro: l };
 }
 
+/** Login/senha do portal de NFS-e da prefeitura (alguns municípios usam só a senha) */
+export interface CredencialPrefeitura { login?: string | null; senha?: string | null }
+
+/** `nfse.config.prefeitura` só com o que foi preenchido; nada preenchido = não vai */
+export function prefeituraPlugNotas(c: CredencialPrefeitura | null | undefined): { login?: string; senha?: string } | undefined {
+  const login = c?.login?.trim();
+  const senha = c?.senha ?? "";
+  if (!login && !senha) return undefined;
+  return { ...(login ? { login } : {}), ...(senha ? { senha } : {}) };
+}
+
 /**
  * Corpo do emitente para POST /empresa e PATCH /empresa/{cpfCnpj} no PlugNotas — exatamente os
- * campos do exemplo oficial da coleção do sandbox (nada além: campo desconhecido reprova o JSON).
+ * campos do exemplo oficial da coleção do sandbox (nada além: campo desconhecido reprova o JSON),
+ * mais `nfse.config.prefeitura` quando há credencial da prefeitura.
  */
-export function corpoEmpresaPlugNotas(e: EmpresaEmitente, f: DadosFiscais, certificadoId: string) {
+export function corpoEmpresaPlugNotas(e: EmpresaEmitente, f: DadosFiscais, certificadoId: string, credencialPrefeitura?: CredencialPrefeitura | null) {
+  const prefeitura = prefeituraPlugNotas(credencialPrefeitura);
   const regime = f.regimeTributario!;
   const simples = regime === "SIMPLES_NACIONAL" || regime === "MEI";
   const especial = regime === "MEI" ? 5 : REGIMES_ESPECIAIS.find((r) => r.id === f.regimeEspecial)?.codigo ?? 0;
@@ -162,7 +175,10 @@ export function corpoEmpresaPlugNotas(e: EmpresaEmitente, f: DadosFiscais, certi
       cep: soDigitos(e.cep),
     },
     // Só NFS-e por enquanto; producao=false = homologação. O Frivo envia a nota por conta própria.
-    nfse: { ativo: true, tipoContrato: 0, config: { producao: f.ambiente === "PRODUCAO", email: { envio: false } } },
+    nfse: {
+      ativo: true, tipoContrato: 0,
+      config: { producao: f.ambiente === "PRODUCAO", email: { envio: false }, ...(prefeitura ? { prefeitura } : {}) },
+    },
   };
 }
 
@@ -224,7 +240,8 @@ export function mensagemErroPlugNotas(status: number, corpo: unknown): string {
   const campos = fields !== undefined ? camposReprovados(fields) : data ? Object.keys(data).slice(0, 5) : [];
   const t = msg.toLowerCase();
   if (status === 401 || status === 403) return "O PlugNotas recusou o acesso: o token da integração (PLUGNOTAS_API_TOKEN) é inválido ou não tem permissão.";
-  if (/senha/.test(t)) return "O PlugNotas recusou o certificado: a senha não confere.";
+  // só a senha DO CERTIFICADO vira a frase pronta; a da prefeitura (ou outra) segue com o texto deles
+  if (/senha/.test(t) && /certificad/.test(t)) return "O PlugNotas recusou o certificado: a senha não confere.";
   if (/vencid|expirad/.test(t)) return "O PlugNotas recusou o certificado: ele está vencido.";
   if (status === 429) return "O PlugNotas limitou as requisições agora. Tente de novo em alguns minutos.";
   if (status >= 500) return `O PlugNotas está fora do ar ou com erro (${status}). Tente de novo mais tarde.`;

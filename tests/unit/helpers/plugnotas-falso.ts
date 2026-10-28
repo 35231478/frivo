@@ -23,6 +23,8 @@ export function criarPlugNotasFalso() {
     viacep: {} as Record<string, unknown>,
     ibge: {} as Record<string, unknown>,
     seq: 0,
+    /** município que exige a autenticação da prefeitura (nfse.config.prefeitura) */
+    exigirPrefeitura: false,
   };
 
   const resposta = (status: number, corpo: unknown) => new Response(corpo === undefined ? null : JSON.stringify(corpo), { status, headers: { "Content-Type": "application/json" } });
@@ -46,6 +48,10 @@ export function criarPlugNotasFalso() {
     if (e.codigoCidade !== undefined && !/^\d{7}$/.test(e.codigoCidade)) fields["endereco.codigoCidade"] = "Código IBGE com 7 dígitos";
     if (corpo.regimeTributario !== undefined && ![0, 1, 2, 3, 4].includes(corpo.regimeTributario)) fields.regimeTributario = "Valor inválido";
     if (corpo.regimeTributarioEspecial !== undefined && ![0, 1, 2, 3, 4, 5, 6].includes(corpo.regimeTributarioEspecial)) fields.regimeTributarioEspecial = "Valor inválido";
+    const pref = corpo.nfse?.config?.prefeitura;
+    if (pref !== undefined && (typeof pref !== "object" || !Object.keys(pref).length || Object.entries(pref).some(([k, v]) => !["login", "senha"].includes(k) || typeof v !== "string" || !v))) fields["nfse.config.prefeitura"] = "Formato inválido";
+    if (estado.exigirPrefeitura && !parcial && pref === undefined) fields["nfse.config.prefeitura"] = "Preenchimento obrigatório";
+    if (estado.exigirPrefeitura && parcial && corpo.nfse && pref === undefined) fields["nfse.config.prefeitura"] = "Preenchimento obrigatório";
     const n = corpo.nfse;
     if (n && (typeof n.config?.producao !== "boolean" || typeof n.config?.email?.envio !== "boolean")) fields["nfse.config"] = "producao e email.envio obrigatórios";
     return fields;
@@ -136,7 +142,7 @@ export function criarPlugNotasFalso() {
     },
     zerar() {
       estado.chamadas = []; estado.empresas = {}; estado.certificados = {}; estado.falhas = {}; estado.viacep = {}; estado.ibge = {};
-      estado.vencimentoCertificado = "2027-10-01T00:00:00.000Z";
+      estado.vencimentoCertificado = "2027-10-01T00:00:00.000Z"; estado.exigirPrefeitura = false;
       fetchMock.mockClear();
     },
     /** só as chamadas ao PlugNotas, como "METODO /caminho" */

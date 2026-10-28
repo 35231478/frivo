@@ -71,7 +71,7 @@ const BASE: EmitenteTela = {
   dados: { regimeTributario: null, regimeEspecial: null, incentivoFiscal: false, incentivadorCultural: false, ambiente: "HOMOLOGACAO", codigoMunicipio: null, municipioNome: null, municipioUf: null, inscricaoMunicipal: "" },
   empresa: { cnpj: "12345678000190", nome: "Clima Total", endereco: "Rua das Flores, 100, Centro", cidade: "São Paulo", estado: "SP", cep: "01001-000" },
   status: "NAO_CONFIGURADO", statusLabel: "Não configurado", emitente: null, certificado: null, ultimoErro: null, ultimoTeste: null,
-  pendencias: ["Inscrição municipal", "Certificado digital A1 (.pfx) e a senha"],
+  pendencias: ["Inscrição municipal", "Certificado digital A1 (.pfx) e a senha"], prefeitura: null,
   ambientesDisponiveis: { HOMOLOGACAO: true, PRODUCAO: false },
 };
 const ATIVO: EmitenteTela = {
@@ -294,6 +294,64 @@ describe("formulário", () => {
     await clicar($("[data-salvar-fiscal]"));
     expect(txt($('[data-mensagem="erro"]'))).toBe("Sem conexão. Tente de novo.");
     expect(senha().value).toBe("");
+  });
+
+  it("autenticação da prefeitura: ajuda; login/senha só vão se preenchidos; somem da tela depois; guardada aparece sem os valores", async () => {
+    const guardada = { temLogin: true, temSenha: true, ilegivel: false, atualizadaEm: "2026-10-28T15:00:00.000Z" };
+    respostas["POST /api/fiscal/emitente"] = { status: 200, corpo: { sincronizado: true, mensagem: "ok", emitente: { ...ATIVO, prefeitura: guardada } } };
+    await montar(ATIVO);
+    expect(txt($("[data-ajuda-prefeitura]"))).toBe("Login e senha da sua empresa no portal de NFS-e da prefeitura. Alguns municípios exigem só a senha.");
+    expect($('[name="prefeituraSenha"]')!.getAttribute("type")).toBe("password");
+    expect($('[name="prefeituraSenha"]')!.getAttribute("autocomplete")).toBe("new-password");
+    expect($("[data-prefeitura-guardada]")).toBeNull();
+    // vazio: nada de prefeitura no envio
+    await clicar($("[data-salvar-fiscal]"));
+    let corpo = chamadas.find((c) => c.metodo === "POST")!.corpo!;
+    expect(["prefeituraLogin", "prefeituraSenha", "prefeituraRemover"].map((k) => corpo.has(k))).toEqual([false, false, false]);
+    // preenchido: vai (login aparado, senha como digitada) e some da tela
+    chamadas.length = 0;
+    await digitar($('[name="prefeituraLogin"]'), "  clima.total ");
+    await digitar($('[name="prefeituraSenha"]'), " P#ss ");
+    await clicar($("[data-salvar-fiscal]"));
+    corpo = chamadas.find((c) => c.metodo === "POST")!.corpo!;
+    expect([corpo.get("prefeituraLogin"), corpo.get("prefeituraSenha"), corpo.has("prefeituraRemover")]).toEqual(["clima.total", " P#ss ", false]);
+    expect([$<HTMLInputElement>('[name="prefeituraLogin"]')!.value, $<HTMLInputElement>('[name="prefeituraSenha"]')!.value]).toEqual(["", ""]);
+    // a guardada: só "login e senha" e a data, nunca os valores; os campos sugerem manter
+    expect(txt($("[data-prefeitura-guardada]"))).toBe("Guardada (login e senha, em 28/10/2026). Deixe em branco para manter.Remover");
+    expect(caixa.innerHTML).not.toContain("P#ss");
+    expect($('[name="prefeituraSenha"]')!.getAttribute("placeholder")).toBe("Guardada — digite para trocar");
+    expect($('[name="prefeituraLogin"]')!.getAttribute("placeholder")).toBe("Guardado — digite para trocar");
+  });
+
+  it("prefeitura: remover (e manter de novo); remover + digitado = vale o digitado; só senha; ilegível avisa; senha some mesmo com erro", async () => {
+    respostas["POST /api/fiscal/emitente"] = { status: 400, corpo: { erro: "Senha da prefeitura longa demais." } };
+    await montar({ ...ATIVO, prefeitura: { temLogin: false, temSenha: true, ilegivel: false, atualizadaEm: null } });
+    expect(txt($("[data-prefeitura-guardada]"))).toBe("Guardada (senha). Deixe em branco para manter.Remover");
+    expect($('[name="prefeituraLogin"]')!.getAttribute("placeholder")).toBe("");
+    await clicar($("[data-remover-prefeitura]"));
+    expect(txt($("[data-prefeitura-guardada]"))).toBe("Será removida ao salvar.Manter");
+    await clicar($("[data-remover-prefeitura]"));
+    expect(txt($("[data-prefeitura-guardada]"))).toContain("Guardada (senha)");
+    await clicar($("[data-remover-prefeitura]"));
+    await clicar($("[data-salvar-fiscal]"));
+    expect(chamadas.find((c) => c.metodo === "POST")!.corpo!.get("prefeituraRemover")).toBe("true");
+    // erro do servidor: a senha digitada não fica na tela
+    chamadas.length = 0;
+    await digitar($('[name="prefeituraSenha"]'), "x".repeat(10));
+    await clicar($("[data-salvar-fiscal]"));
+    let corpo = chamadas.find((c) => c.metodo === "POST")!.corpo!;
+    expect([corpo.get("prefeituraSenha"), corpo.has("prefeituraRemover"), corpo.has("prefeituraLogin")]).toEqual(["xxxxxxxxxx", false, false]);
+    expect(txt($('[data-mensagem="erro"]'))).toBe("Senha da prefeitura longa demais.");
+    expect($<HTMLInputElement>('[name="prefeituraSenha"]')!.value).toBe("");
+    // remover ainda marcado + login digitado: vai o login, não o remover
+    chamadas.length = 0;
+    await digitar($('[name="prefeituraLogin"]'), "novo");
+    await clicar($("[data-salvar-fiscal]"));
+    corpo = chamadas.find((c) => c.metodo === "POST")!.corpo!;
+    expect([corpo.get("prefeituraLogin"), corpo.has("prefeituraRemover")]).toEqual(["novo", false]);
+    act(() => root.unmount()); caixa.remove();
+    await montar({ ...ATIVO, prefeitura: { temLogin: false, temSenha: false, ilegivel: true, atualizadaEm: "2026-10-28T15:00:00.000Z" } });
+    expect(txt($("[data-prefeitura-guardada]"))).toBe("A credencial guardada não pôde ser lida neste servidor. Digite o login e a senha de novo.Remover");
   });
 
   it("Testar conexão: mostra o resultado (ok e erro) e atualiza a situação", async () => {
