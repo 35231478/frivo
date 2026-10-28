@@ -18,7 +18,7 @@ import { analisar, descreverChave, linhasExportacao, linhasModelo, tipoChave, ty
 import { IMPORTACOES, PERMISSOES_EXPORTACAO } from "@/lib/importacao/entidades";
 
 const ctx = (existentes: Record<string, string> = {}, refs = {}, podeAtualizar = true): ContextoImportacao =>
-  ({ existentes: new Map(Object.entries(existentes)), refs, podeAtualizar });
+  ({ existentes: new Map(Object.entries(existentes)), refs, podeAtualizar, permitido: () => true });
 const ID_P = "cmprodutoaaaaaaaaaaaa1";
 const ID_Q = "cmprodutobbbbbbbbbbbb2";
 

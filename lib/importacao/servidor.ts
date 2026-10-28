@@ -26,7 +26,9 @@ export function temRequisito(req: Requisito, permissoes: Permissoes, role?: stri
 }
 
 /** O que já existe na empresa (chaves de dedup → id) e as opções dos campos referenciados. */
-export async function carregarContexto(entidade: EntidadeImportacao, empresaId: string, podeAtualizar: boolean): Promise<ContextoImportacao> {
+export async function carregarContexto(
+  entidade: EntidadeImportacao, empresaId: string, podeAtualizar: boolean, permitido?: ContextoImportacao["permitido"],
+): Promise<ContextoImportacao> {
   const existentes = new Map<string, string>();
   const refs: Record<string, OpcaoRef[]> = {};
   // id_sistema da planilha exportada: só os ids DESTA empresa casam
@@ -55,7 +57,7 @@ export async function carregarContexto(entidade: EntidadeImportacao, empresaId: 
     case "servicos": { const ss = await prisma.servico.findMany({ where: { empresaId }, select: { id: true, nome: true, codigo: true } }); porId(ss); porCodigo(ss); porNome(ss); break; }
     case "produtos": { const ps = await prisma.produto.findMany({ where: { empresaId }, select: { id: true, nome: true, codigo: true } }); porId(ps); porCodigo(ps); porNome(ps); break; }
   }
-  return { existentes, refs, podeAtualizar };
+  return { existentes, refs, podeAtualizar, permitido };
 }
 
 /** Todos os registros DA EMPRESA para a planilha exportada (ativos e inativos), na ordem da lista */

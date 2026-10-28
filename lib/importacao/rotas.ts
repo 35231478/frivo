@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import type { Permissoes } from "@/lib/permissoes";
+import { pode, type Acao, type Permissoes } from "@/lib/permissoes";
 import { ehEntidadeImportacao, IMPORTACOES, type EntidadeImportacao } from "@/lib/importacao/entidades";
 import { PERMISSOES_IMPORTACAO, temRequisito } from "@/lib/importacao/servidor";
 import { PERMISSOES_EXPORTACAO } from "@/lib/importacao/entidades";
@@ -12,7 +12,7 @@ export type Ctx = { params: Promise<{ entidade: string }> };
  * A empresa vem SEMPRE da sessão — nada da planilha decide empresa.
  */
 export async function exigirImportacao(ctx: Ctx): Promise<
-  | { ok: true; entidade: EntidadeImportacao; empresaId: string; podeAtualizar: boolean }
+  | { ok: true; entidade: EntidadeImportacao; empresaId: string; podeAtualizar: boolean; permitido: (m: string, a: Acao) => boolean }
   | { ok: false; resposta: NextResponse }
 > {
   const { entidade } = await ctx.params;
@@ -24,7 +24,10 @@ export async function exigirImportacao(ctx: Ctx): Promise<
   const req = PERMISSOES_IMPORTACAO[entidade];
   if (!temRequisito(req.criar, permissoes, u.role))
     return { ok: false, resposta: NextResponse.json({ erro: `Sem permissão para importar ${IMPORTACOES[entidade].plural} (precisa poder criar).` }, { status: 403 }) };
-  return { ok: true, entidade, empresaId: u.empresaId, podeAtualizar: temRequisito(req.editar, permissoes, u.role) };
+  return {
+    ok: true, entidade, empresaId: u.empresaId, podeAtualizar: temRequisito(req.editar, permissoes, u.role),
+    permitido: (m, a) => pode(permissoes, m, a, u.role),
+  };
 }
 
 /** Baixar a planilha: sessão + cadastro + permissão de VER o módulo da lista. Empresa sempre da sessão. */

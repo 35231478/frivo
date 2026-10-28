@@ -4,7 +4,8 @@
  * (lib/cadastros/registro.ts): o que a tela recusa, a planilha também recusa.
  */
 import type { Celula } from "@/lib/folha/planilha";
-import { CADASTROS, mensagemValidacao, type DefCadastro, type Requisito } from "@/lib/cadastros/registro";
+import { CADASTROS, camposSemPermissao, mensagemValidacao, type DefCadastro, type Requisito } from "@/lib/cadastros/registro";
+import { rotuloPermissao } from "@/lib/permissoes";
 import { digitos, formatarDocumento, tipoDocumento } from "@/lib/documento";
 import { LABELS_ORIGEM, LABELS_SEGMENTO } from "@/lib/utils";
 import { normalizarCodigoProduto, normalizarCodigoServico } from "@/lib/cadastros/codigos";
@@ -43,10 +44,16 @@ function lerNumero(v: Celula, campo: string, erros: string[], o: { inteiro?: boo
  * Valida os campos INFORMADOS pelo schema de edição do cadastro (sem padrões: vazio continua vazio,
  * e ao atualizar não apaga nada). Os padrões de criação são aplicados só na hora de criar.
  */
-function validarPeloCadastro(def: DefCadastro, dados: Record<string, unknown>, erros: string[], rotulo: string, chaves: string[]): ResultadoLinha {
+function validarPeloCadastro(
+  def: DefCadastro, dados: Record<string, unknown>, erros: string[], rotulo: string, chaves: string[], ctx: ContextoImportacao,
+): ResultadoLinha {
   const informados = Object.fromEntries(Object.entries(dados).filter(([, v]) => v !== undefined));
   const r = def.schemaEditar.safeParse(informados);
   if (!r.success) erros.push(mensagemValidacao(r.error, def));
+  // Campo com permissão própria (ex.: dados fiscais da NFS-e): preenchido sem ela = erro na linha (sem contexto = sem permissão)
+  const travados = camposSemPermissao(def, ctx.permitido ?? (() => false), informados);
+  if (travados.length)
+    erros.push(`${travados.map((c) => c.label).join(", ")}: exige a permissão ${rotuloPermissao(travados[0].permissao!)}. Deixe essas colunas vazias ou peça a quem tem a permissão.`);
   return erros.length ? { ok: false, erros, rotulo } : { ok: true, dados: r.success ? r.data : informados, chaves, rotulo };
 }
 
@@ -175,7 +182,7 @@ const fornecedores: DefImportacao = {
     nome: txt(f.nome), cnpj_cpf: f.documento ? formatarDocumento(String(f.documento)) : "", telefone: txt(f.telefone), email: txt(f.email),
     observacoes: txt(f.observacoes), id_sistema: txt(f.id),
   }),
-  validar(v) {
+  validar(v, ctx) {
     const erros: string[] = [];
     const rotulo = texto(v.nome) ?? "";
     if (!rotulo) erros.push("nome: obrigatório.");
@@ -187,7 +194,7 @@ const fornecedores: DefImportacao = {
     const chaves = [...(id ? [`id:${id}`] : []), ...(doc ? [`doc:${doc}`] : []), ...(!id && !doc ? [`nome:${chaveNome(rotulo)}`] : [])];
     return validarPeloCadastro(CADASTROS.fornecedores, {
       nome: rotulo || undefined, documento: doc, telefone: texto(v.telefone), email: email?.toLowerCase(), observacoes: texto(v.observacoes),
-    }, erros, rotulo, chaves);
+    }, erros, rotulo, chaves, ctx);
   },
 };
 
@@ -208,9 +215,9 @@ const servicos: DefImportacao = {
     { chave: "descricao", titulo: "descricao", ajuda: "Descrição", exemplo: "Limpeza de filtros e serpentina" },
     { chave: "unidade", titulo: "unidade", ajuda: "Unidade de cobrança (vazio = un)", exemplo: "un", opcoes: UNIDADES_SERVICO.map((u) => u.rotulo), apelidos: ["un", "und"] },
     { chave: "valor_padrao", titulo: "valor_padrao", ajuda: "Valor em R$ (ex.: 250,00)", exemplo: "250,00", apelidos: ["valor", "preco", "preco_padrao"] },
-    { chave: "codigo_municipal", titulo: "codigo_municipal", ajuda: "Código do serviço na prefeitura (NFS-e)", exemplo: "", apelidos: ["codigo_servico"] },
-    { chave: "codigo_lc116", titulo: "codigo_lc116", ajuda: "Item da LC 116 (ex.: 14.01)", exemplo: "14.01", apelidos: ["lc116", "item_lc116"] },
-    { chave: "aliquota_iss", titulo: "aliquota_iss", ajuda: "Alíquota de ISS em %", exemplo: "5", apelidos: ["iss"] },
+    { chave: "codigo_municipal", titulo: "codigo_municipal", ajuda: "Código de tributação na prefeitura (NFS-e). Dado fiscal: exige a permissão Financeiro › Fiscal (NFS-e)", exemplo: "", apelidos: ["codigo_servico"] },
+    { chave: "codigo_lc116", titulo: "codigo_lc116", ajuda: "Item da LC 116 (ex.: 14.01). Dado fiscal: exige a permissão Financeiro › Fiscal (NFS-e)", exemplo: "14.01", apelidos: ["lc116", "item_lc116"] },
+    { chave: "aliquota_iss", titulo: "aliquota_iss", ajuda: "Alíquota de ISS em % (0 a 100). Dado fiscal: exige a permissão Financeiro › Fiscal (NFS-e)", exemplo: "5", apelidos: ["iss"] },
     COLUNA_ID,
   ],
   chavesQueExistem: [chaveIdQueExiste("serviço")],
@@ -219,7 +226,7 @@ const servicos: DefImportacao = {
     valor_padrao: num(s.valorPadrao, 2), codigo_municipal: txt(s.codigoMunicipal), codigo_lc116: txt(s.codigoLc116),
     aliquota_iss: num(s.aliquotaISS), id_sistema: txt(s.id),
   }),
-  validar(v) {
+  validar(v, ctx) {
     const erros: string[] = [];
     const rotulo = texto(v.nome) ?? "";
     if (!rotulo) erros.push("nome: obrigatório.");
@@ -233,7 +240,7 @@ const servicos: DefImportacao = {
     return validarPeloCadastro(CADASTROS.servicos, {
       codigo: cod.codigo ?? undefined, nome: rotulo || undefined, descricao: texto(v.descricao), unidade: un.valor, valorPadrao: valor,
       codigoMunicipal: texto(v.codigo_municipal), codigoLc116: texto(v.codigo_lc116), aliquotaISS: iss,
-    }, erros, rotulo, chavesItem(id, cod.codigo, rotulo));
+    }, erros, rotulo, chavesItem(id, cod.codigo, rotulo), ctx);
   },
 };
 
@@ -256,7 +263,7 @@ const produtos: DefImportacao = {
     codigo: txt(p.codigo), nome: txt(p.nome), descricao: txt(p.descricao), unidade: rotuloDe(UNIDADES_PRODUTO, p.unidade),
     valor_padrao: num(p.valorPadrao, 2), estoque_minimo: num(p.estoqueMinimo), id_sistema: txt(p.id),
   }),
-  validar(v) {
+  validar(v, ctx) {
     const erros: string[] = [];
     const rotulo = texto(v.nome) ?? "";
     if (!rotulo) erros.push("nome: obrigatório.");
@@ -269,7 +276,7 @@ const produtos: DefImportacao = {
     const estoque = lerNumero(v.estoque_minimo, "estoque_minimo", erros, { inteiro: true });
     return validarPeloCadastro(CADASTROS.produtos, {
       nome: rotulo || undefined, descricao: texto(v.descricao), unidade: un.valor, valorPadrao: valor, estoqueMinimo: estoque,
-    }, erros, rotulo, chavesItem(id, cod.codigo, rotulo));
+    }, erros, rotulo, chavesItem(id, cod.codigo, rotulo), ctx);
   },
 };
 

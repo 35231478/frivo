@@ -412,7 +412,7 @@ describe("modelo e planilha de erros", () => {
       expect(r.status).toBe(200);
       const t = lerCsv(await r.text());
       expect(t[0]).toEqual(IMPORTACOES[e].colunas.map((c) => c.titulo));
-      expect(analisar(t, IMPORTACOES[e], { existentes: new Map(), refs: {}, podeAtualizar: true }).resumo).toMatchObject({ total: 1, erros: 0 });
+      expect(analisar(t, IMPORTACOES[e], { existentes: new Map(), refs: {}, podeAtualizar: true, permitido: () => true }).resumo).toMatchObject({ total: 1, erros: 0 });
     }
   });
 

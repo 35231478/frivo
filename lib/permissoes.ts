@@ -103,6 +103,10 @@ export function montarPermissoes(parcial: Record<string, Acao[]>): Permissoes {
   return p;
 }
 
+/** "Financeiro › Fiscal (NFS-e)": nome da permissão como aparece no cadastro de perfis. */
+export const rotuloPermissao = ([modulo, acao]: [string, Acao]) =>
+  `${MODULOS.find((m) => m.id === modulo)?.label ?? modulo} › ${ACOES_LABEL[acao]}`;
+
 /**
  * Verifica permissão. Usuário com role ADMIN tem acesso total (administrador
  * master), independente do perfil.
