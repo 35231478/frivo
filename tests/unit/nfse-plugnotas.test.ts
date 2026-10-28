@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ambienteDisponivel, consultarCertificado, consultarEmpresa, enviarCertificado, ErroPlugNotas, salvarEmpresa, semSegredos } from "@/lib/nfse/plugnotas";
 import { buscarMunicipio, normalizarNome } from "@/lib/nfse/municipio";
 import { criarPlugNotasFalso, PRODUCAO, SANDBOX } from "./helpers/plugnotas-falso";
+import { corpoEmpresaPlugNotas } from "@/lib/nfse/regras";
 
 const plug = criarPlugNotasFalso();
 beforeEach(() => { plug.zerar(); plug.instalar(); });
@@ -16,6 +17,12 @@ afterEach(() => { vi.unstubAllGlobals(); });
 
 const erroDe = async (p: Promise<unknown>) => { try { await p; return null; } catch (e) { return e as ErroPlugNotas; } };
 const PFX = Buffer.from("conteudo-binario-do-pfx");
+/** Um corpo de empresa que passa na validação do JSON (o mesmo que o servidor monta) */
+const corpoValido = (certificado: string) => corpoEmpresaPlugNotas(
+  { cnpj: "12345678000190", nome: "Clima Total", endereco: "Rua A", numero: "1", bairro: "Centro", cep: "01001000", inscricaoMunicipal: "123" },
+  { regimeTributario: "SIMPLES_NACIONAL", regimeEspecial: null, incentivoFiscal: false, incentivadorCultural: false, ambiente: "HOMOLOGACAO", codigoMunicipio: "3550308", municipioNome: "São Paulo", municipioUf: "SP" },
+  certificado,
+);
 
 describe("ambiente e token", () => {
   it("homologação usa o sandbox com x-api-key; produção usa a base de produção com o token dela", async () => {
@@ -30,7 +37,7 @@ describe("ambiente e token", () => {
     await consultarEmpresa("HOMOLOGACAO", "1");
     await enviarCertificado("HOMOLOGACAO", PFX, "a.pfx", "s3nh@");
     await consultarCertificado("HOMOLOGACAO", "cert-x").catch(() => {});
-    await salvarEmpresa("HOMOLOGACAO", { cpfCnpj: "1" }, false).catch(() => {});
+    await salvarEmpresa("HOMOLOGACAO", corpoValido("cert-x"), false).catch(() => {});
     expect(plug.estado.chamadas.map((c) => c.redirect)).toEqual(["error", "error", "error", "error"]);
   });
   it("transporte: base sem https é recusada antes de qualquer envio (http só em localhost)", async () => {
@@ -91,13 +98,13 @@ describe("certificado", () => {
     expect(await enviarCertificado("HOMOLOGACAO", PFX, "", "x")).toEqual({ id: "cert-antigo" });
     expect(plug.estado.chamadas[0].form?.arquivo?.nome).toBe("certificado.pfx");
   });
-  it("mensagem do PlugNotas que ecoa a senha ou o token: os dois saem dela (e mensagem enorme é cortada)", async () => {
+  it("mensagem do PlugNotas que ecoa a senha ou o token: os dois saem dela (e mensagem enorme é cortada em 600)", async () => {
     plug.estado.falhas["POST /certificado"] = { status: 400, corpo: { error: { message: "Falha ao abrir o arquivo com a chave 'Minha#Chave2026' (cliente token-sandbox)", data: { arquivo: "x" } } } };
     const e = await erroDe(enviarCertificado("HOMOLOGACAO", PFX, "a.pfx", "Minha#Chave2026"));
-    expect([e?.status, e?.message]).toEqual([422, "Falha ao abrir o arquivo com a chave '•••' (cliente •••) Campos: arquivo."]);
-    plug.estado.falhas["GET /empresa/1"] = { status: 422, corpo: { error: { message: `token-sandbox ${"x".repeat(500)}` } } };
+    expect([e?.status, e?.message]).toEqual([422, "Falha ao abrir o arquivo com a chave '•••' (cliente •••). Campos: arquivo."]);
+    plug.estado.falhas["GET /empresa/1"] = { status: 422, corpo: { error: { message: `token-sandbox ${"x".repeat(900)}` } } };
     const longo = await erroDe(consultarEmpresa("HOMOLOGACAO", "1"));
-    expect([longo?.message.length, longo?.message.startsWith("••• xxx"), longo?.message.endsWith("…")]).toEqual([300, true, true]);
+    expect([longo?.message.length, longo?.message.startsWith("••• xxx"), longo?.message.endsWith("…")]).toEqual([600, true, true]);
     // segredo curto demais não é "procurado" (estragaria o texto); vazio/nulo não quebram
     expect(semSegredos("abc 123 abc", ["abc", "", null, undefined])).toBe("abc 123 abc");
     expect(semSegredos("abcd 1234 abcd", ["abcd"])).toBe("••• 1234 •••");
@@ -129,9 +136,9 @@ describe("empresa (emitente)", () => {
   it("404 = não cadastrado; POST cadastra; GET devolve; PATCH atualiza", async () => {
     expect(await consultarEmpresa("HOMOLOGACAO", "12345678000190")).toBeNull();
     const { id } = await enviarCertificado("HOMOLOGACAO", PFX, "a.pfx", "x");
-    expect(await salvarEmpresa("HOMOLOGACAO", { cpfCnpj: "12345678000190", certificado: id } as any, false)).toBe("cadastrado");
+    expect(await salvarEmpresa("HOMOLOGACAO", corpoValido(id), false)).toBe("cadastrado");
     expect(await consultarEmpresa("HOMOLOGACAO", "12345678000190")).toMatchObject({ cpfCnpj: "12345678000190" });
-    expect(await salvarEmpresa("HOMOLOGACAO", { cpfCnpj: "12345678000190", razaoSocial: "Nova" } as any, true)).toBe("atualizado");
+    expect(await salvarEmpresa("HOMOLOGACAO", { ...corpoValido(id), razaoSocial: "Nova" }, true)).toBe("atualizado");
     expect(plug.rotas()).toEqual(["GET /empresa/12345678000190", "POST /certificado", "POST /empresa", "GET /empresa/12345678000190", "PATCH /empresa/12345678000190"]);
     expect(plug.estado.empresas[`${SANDBOX}|12345678000190`]).toMatchObject({ razaoSocial: "Nova", certificado: id });
   });
@@ -139,8 +146,11 @@ describe("empresa (emitente)", () => {
     plug.estado.falhas["GET /empresa*"] = { status: 500, corpo: null };
     expect((await erroDe(consultarEmpresa("HOMOLOGACAO", "1")))?.status).toBe(502);
     plug.zerar(); plug.instalar();
-    const e = await erroDe(salvarEmpresa("HOMOLOGACAO", { cpfCnpj: "1", certificado: "nao" } as any, false));
-    expect([e?.status, e?.message]).toEqual([422, "Certificado não encontrado Campos: certificado."]);
+    const e = await erroDe(salvarEmpresa("HOMOLOGACAO", corpoValido("nao"), false));
+    expect([e?.status, e?.message]).toEqual([422, "Certificado não encontrado. Campos: certificado."]);
+    // corpo fora do schema: o detalhe de cada campo chega na mensagem (era só "Campos: fields")
+    const fora = await erroDe(salvarEmpresa("HOMOLOGACAO", { ...corpoValido("c"), telefone: { ddd: "11" }, endereco: { ...corpoValido("c").endereco, tipoLogradouro: "" } } as any, false));
+    expect([fora?.status, fora?.message]).toEqual([422, "Falha na validação do JSON de Empresa. Campos: telefone (Campo não permitido); endereco.tipoLogradouro (Campo obrigatório)."]);
     expect((await erroDe(salvarEmpresa("HOMOLOGACAO", { cpfCnpj: "2" } as any, true)))?.message).toBe("Empresa não encontrada");
   });
   it("rede caída e tempo esgotado: mensagens próprias (504)", async () => {

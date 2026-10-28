@@ -22,7 +22,7 @@
  *   - a mensagem que vem do PlugNotas é repassada à tela e guardada em `ultimo_erro`: antes disso,
  *     o token e a senha são tirados dela, caso a API os ecoe.
  */
-import { mensagemErroPlugNotas, type Ambiente } from "@/lib/nfse/regras";
+import { mensagemErroPlugNotas, type Ambiente, type CorpoEmpresaPlugNotas } from "@/lib/nfse/regras";
 
 export class ErroPlugNotas extends Error {
   constructor(message: string, public status = 502) { super(message); }
@@ -34,7 +34,7 @@ const BASES: Record<Ambiente, { url: string; envUrl: string; envToken: string }>
 };
 const TIMEOUT_MS = 20_000;
 /** Tamanho máximo da mensagem do PlugNotas que repassamos (tela e `ultimo_erro`) */
-const MAX_MENSAGEM = 300;
+const MAX_MENSAGEM = 600;
 const LOCAL = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 /** A base só vale com https (ou http no próprio computador, para desenvolvimento) */
@@ -127,7 +127,7 @@ export async function consultarEmpresa(ambiente: Ambiente, cnpj: string): Promis
 }
 
 /** Cadastra (POST) ou atualiza (PATCH) o emitente; devolve qual foi */
-export async function salvarEmpresa(ambiente: Ambiente, corpo: { cpfCnpj: string }, existe: boolean): Promise<"cadastrado" | "atualizado"> {
+export async function salvarEmpresa(ambiente: Ambiente, corpo: CorpoEmpresaPlugNotas, existe: boolean): Promise<"cadastrado" | "atualizado"> {
   const r = existe
     ? await chamar(ambiente, `/empresa/${corpo.cpfCnpj}`, { method: "PATCH", json: corpo })
     : await chamar(ambiente, "/empresa", { method: "POST", json: corpo });

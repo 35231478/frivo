@@ -27,6 +27,31 @@ export function criarPlugNotasFalso() {
 
   const resposta = (status: number, corpo: unknown) => new Response(corpo === undefined ? null : JSON.stringify(corpo), { status, headers: { "Content-Type": "application/json" } });
 
+  /**
+   * Validação do JSON de Empresa como o PlugNotas faz: obrigatórios presentes e NENHUM campo fora do
+   * schema (é assim que "Falha na validação do JSON de Empresa" aparecia). Devolve `fields` com o
+   * campo e o motivo, no formato { "endereco.tipoLogradouro": "motivo" }.
+   */
+  function validarEmpresa(corpo: Record<string, any>, parcial: boolean): Record<string, string> {
+    const fields: Record<string, string> = {};
+    const raiz = ["cpfCnpj", "razaoSocial", "inscricaoMunicipal", "simplesNacional", "regimeTributario", "regimeTributarioEspecial", "incentivoFiscal", "incentivadorCultural", "certificado", "endereco", "nfse"];
+    const end = ["codigoPais", "descricaoPais", "tipoLogradouro", "logradouro", "numero", "complemento", "tipoBairro", "bairro", "codigoCidade", "descricaoCidade", "estado", "cep"];
+    const endOpcionais = ["complemento"];
+    for (const k of Object.keys(corpo)) if (!raiz.includes(k)) fields[k] = "Campo não permitido";
+    if (!parcial) for (const k of raiz) if (corpo[k] === undefined) fields[k] = "Campo obrigatório";
+    const e = corpo.endereco ?? {};
+    for (const k of Object.keys(e)) if (!end.includes(k)) fields[`endereco.${k}`] = "Campo não permitido";
+    if (!parcial || corpo.endereco) for (const k of end) if (!endOpcionais.includes(k) && (e[k] === undefined || e[k] === "")) fields[`endereco.${k}`] = "Campo obrigatório";
+    if (e.cep !== undefined && !/^\d{8}$/.test(e.cep)) fields["endereco.cep"] = "Deve ter 8 dígitos";
+    if (e.codigoCidade !== undefined && !/^\d{7}$/.test(e.codigoCidade)) fields["endereco.codigoCidade"] = "Código IBGE com 7 dígitos";
+    if (corpo.regimeTributario !== undefined && ![0, 1, 2, 3, 4].includes(corpo.regimeTributario)) fields.regimeTributario = "Valor inválido";
+    if (corpo.regimeTributarioEspecial !== undefined && ![0, 1, 2, 3, 4, 5, 6].includes(corpo.regimeTributarioEspecial)) fields.regimeTributarioEspecial = "Valor inválido";
+    const n = corpo.nfse;
+    if (n && (typeof n.config?.producao !== "boolean" || typeof n.config?.email?.envio !== "boolean")) fields["nfse.config"] = "producao e email.envio obrigatórios";
+    return fields;
+  }
+  const falhaValidacao = (fields: Record<string, string>) => resposta(400, { error: { message: "Falha na validação do JSON de Empresa", data: { fields } } });
+
   async function fetchFalso(entrada: string | URL, init: RequestInit = {}): Promise<Response> {
     const url = String(entrada);
     if (url.startsWith("https://viacep.com.br/ws/")) {
@@ -79,6 +104,8 @@ export function criarPlugNotasFalso() {
       return e ? resposta(200, e) : resposta(404, { error: { message: "Empresa não encontrada" } });
     }
     if (metodo === "POST" && caminho === "/empresa") {
+      const invalidos = validarEmpresa(ch.json, false);
+      if (Object.keys(invalidos).length) return falhaValidacao(invalidos);
       const k = `${base}|${ch.json.cpfCnpj}`;
       if (estado.empresas[k]) return resposta(409, { error: { message: "Empresa já cadastrada" } });
       if (!estado.certificados[ch.json.certificado]) return resposta(400, { error: { message: "Certificado não encontrado", data: { certificado: ch.json.certificado } } });
@@ -86,6 +113,8 @@ export function criarPlugNotasFalso() {
       return resposta(200, { message: "Empresa cadastrada com sucesso", data: { cnpj: ch.json.cpfCnpj } });
     }
     if (metodo === "PATCH" && mEmp) {
+      const invalidos = validarEmpresa(ch.json, true);
+      if (Object.keys(invalidos).length) return falhaValidacao(invalidos);
       const k = `${base}|${mEmp[1]}`;
       if (!estado.empresas[k]) return resposta(404, { error: { message: "Empresa não encontrada" } });
       estado.empresas[k] = { ...estado.empresas[k], ...ch.json };

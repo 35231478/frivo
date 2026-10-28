@@ -244,8 +244,8 @@ describe.skipIf(!URL_PG)("NFS-e: dados fiscais e emitente no PlugNotas (PostgreS
     delete plug.estado.empresas[`${SANDBOX}|12345678000190`];
     plug.estado.falhas["POST /empresa"] = { status: 400, corpo: { error: { message: "Inscrição municipal inválida para o município", data: { inscricaoMunicipal: "x" } } } };
     const r = await salvar({ regimeTributario: "LUCRO_REAL" }, {});
-    expect([r.status, r.json.sincronizado, r.json.erro]).toEqual([502, false, "Inscrição municipal inválida para o município Campos: inscricaoMunicipal."]);
-    expect(await fiscal()).toMatchObject({ status: "ERRO", ultimoErro: "Inscrição municipal inválida para o município Campos: inscricaoMunicipal.", regimeTributario: "LUCRO_REAL", certificadoId: Object.keys(plug.estado.certificados).at(-1) }); // o que acabou de subir
+    expect([r.status, r.json.sincronizado, r.json.erro]).toEqual([502, false, "Inscrição municipal inválida para o município. Campos: inscricaoMunicipal."]);
+    expect(await fiscal()).toMatchObject({ status: "ERRO", ultimoErro: "Inscrição municipal inválida para o município. Campos: inscricaoMunicipal.", regimeTributario: "LUCRO_REAL", certificadoId: Object.keys(plug.estado.certificados).at(-1) }); // o que acabou de subir
     expect(r.json.emitente.statusLabel).toBe("Erro no PlugNotas");
     // se o PlugNotas ecoar a senha ou o token na mensagem, nem o banco nem a resposta ficam com eles
     const chave = "Chave#2026xyz";
@@ -256,6 +256,17 @@ describe.skipIf(!URL_PG)("NFS-e: dados fiscais e emitente no PlugNotas (PostgreS
     expect(JSON.stringify(eco.json)).not.toMatch(/Chave#2026xyz|token-sandbox/);
     expect(JSON.stringify(logs)).not.toContain(chave);
     delete plug.estado.falhas["POST /certificado"];
+    // validação do JSON de Empresa: QUAIS campos falharam e por quê vão para a tela e para o ultimo_erro
+    // (antes só "Campos: fields"); o detalhe também passa pela redação do token
+    plug.estado.falhas["POST /empresa"] = { status: 400, corpo: { error: { message: "Falha na validação do JSON de Empresa", data: { fields: {
+      "nfse.config.rps": "Obrigatório para o município 3550308", "endereco.tipoBairro": "Valor inválido", certificado: "não pertence à conta token-sandbox",
+    } } } } };
+    const val = await salvar({ regimeTributario: "LUCRO_REAL" });
+    const detalhe = "Falha na validação do JSON de Empresa. Campos: nfse.config.rps (Obrigatório para o município 3550308); endereco.tipoBairro (Valor inválido); certificado (não pertence à conta •••).";
+    expect([val.status, val.json.erro]).toEqual([502, detalhe]);
+    expect(await fiscal()).toMatchObject({ status: "ERRO", ultimoErro: detalhe });
+    expect(val.json.emitente.ultimoErro).toBe(detalhe);
+    plug.estado.falhas["POST /empresa"] = { status: 400, corpo: { error: { message: "Inscrição municipal inválida para o município", data: { inscricaoMunicipal: "x" } } } };
     // corrige do lado de lá e salva de novo sem reenviar o arquivo
     delete plug.estado.falhas["POST /empresa"];
     expect((await salvar({ regimeTributario: "LUCRO_REAL" })).json.sincronizado).toBe(true);
@@ -279,7 +290,7 @@ describe.skipIf(!URL_PG)("NFS-e: dados fiscais e emitente no PlugNotas (PostgreS
     const r = await salvar({ ambiente: "PRODUCAO" }, {});
     expect(r.json.sincronizado).toBe(true);
     expect(plug.estado.chamadas.every((c) => c.base === PRODUCAO && c.token === "token-producao")).toBe(true);
-    expect(plug.estado.chamadas.at(-1)!.json.nfse).toEqual({ ativo: true, tipoContrato: 0, config: { producao: true } });
+    expect(plug.estado.chamadas.at(-1)!.json.nfse).toEqual({ ativo: true, tipoContrato: 0, config: { producao: true, email: { envio: false } } });
     expect(await fiscal()).toMatchObject({ ambiente: "PRODUCAO", emitenteAmbiente: "PRODUCAO", status: "ATIVO" });
     // volta para homologação (reenviando) para os próximos testes
     expect((await salvar({ ambiente: "HOMOLOGACAO" }, {})).json.sincronizado).toBe(true);
