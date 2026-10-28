@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  corpoEmpresaPlugNotas, DIAS_AVISO_CERTIFICADO, diasParaVencer, ehCodigoIbge, mensagemErroPlugNotas, pendenciasEmitente,
+  ACEITA_CERTIFICADO, corpoEmpresaPlugNotas, DIAS_AVISO_CERTIFICADO, diasParaVencer, ehArquivoCertificado, ehCodigoIbge, mensagemErroPlugNotas, pendenciasEmitente,
   situacaoCertificado, type DadosFiscais, type EmpresaEmitente,
 } from "@/lib/nfse/regras";
 
@@ -129,5 +129,10 @@ describe("certificado: dias e situação", () => {
     expect(ehCodigoIbge("355030")).toBe(false);
     expect(ehCodigoIbge("35503080")).toBe(false);
     expect(ehCodigoIbge(null)).toBe(false);
+  });
+  it("arquivo do certificado A1: termina em .pfx ou .p12 (maiúscula também); o resto não", () => {
+    for (const ok of ["clima.pfx", "CLIMA.PFX", "a1.p12", " empresa 2026.P12 "]) expect(ehArquivoCertificado(ok), ok).toBe(true);
+    for (const nao of ["clima.pfx.txt", "clima.cer", "clima.pem", "pfx", "clima.p7b", "", null, undefined]) expect(ehArquivoCertificado(nao), String(nao)).toBe(false);
+    expect(ACEITA_CERTIFICADO).toBe(".pfx,.p12,application/x-pkcs12");
   });
 });

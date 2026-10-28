@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, FileKey2, FlaskConical, Info, Loader2, MapPin, PlugZap, Save, ShieldCheck, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileKey2, FileUp, FlaskConical, Info, Loader2, MapPin, PlugZap, Save, ShieldCheck, X, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -12,9 +12,10 @@ import { StatusPill, type TomStatus } from "@/components/ui/status-pill";
 import { toast } from "@/components/ui/avisos";
 import { cn, formatarCpfCnpj, formatarData, formatarDataHora } from "@/lib/utils";
 import { hrefSecaoConfig } from "@/lib/navegacao/configuracoes";
-import { LABEL_AMBIENTE, LABEL_REGIME, REGIMES, REGIMES_ESPECIAIS, type Ambiente, type StatusEmitente } from "@/lib/nfse/regras";
+import { ACEITA_CERTIFICADO, ehArquivoCertificado, LABEL_AMBIENTE, LABEL_REGIME, REGIMES, REGIMES_ESPECIAIS, type Ambiente, type StatusEmitente } from "@/lib/nfse/regras";
 import type { EmitenteTela } from "@/lib/nfse/emitente-server";
 
+const AJUDA_CERTIFICADO = "O certificado digital A1 é um arquivo que termina em .pfx ou .p12";
 const TOM_STATUS: Record<StatusEmitente, TomStatus> = { NAO_CONFIGURADO: "previsto", PENDENTE: "atencao", ATIVO: "ok", ERRO: "atrasado" };
 
 /**
@@ -28,9 +29,25 @@ export function DadosFiscaisClient({ inicial }: { inicial: EmitenteTela }) {
   const [senha, setSenha] = useState("");
   const [arquivo, setArquivo] = useState<File | null>(null);
   const arquivoRef = useRef<HTMLInputElement>(null);
+  const [arrastando, setArrastando] = useState(false);
   const [ocupado, setOcupado] = useState<"salvar" | "testar" | "municipio" | null>(null);
   const [msg, setMsg] = useState<{ tipo: "ok" | "erro" | "aviso"; texto: string } | null>(null);
   const muda = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => { setF((s) => ({ ...s, [k]: v })); setMsg(null); };
+
+  /** Arquivo escolhido no seletor ou solto na área: só .pfx/.p12 (soltar não passa pelo filtro do seletor). Fica só na memória da tela até o envio. */
+  function escolherArquivo(novo: File | null | undefined) {
+    if (!novo) return;
+    if (!ehArquivoCertificado(novo.name)) {
+      setMsg({ tipo: "erro", texto: "Envie o certificado A1 no formato .pfx ou .p12." });
+      if (arquivoRef.current) arquivoRef.current.value = "";
+      return;
+    }
+    setArquivo(novo); setMsg(null);
+  }
+  function tirarArquivo() {
+    setArquivo(null); setSenha("");
+    if (arquivoRef.current) arquivoRef.current.value = "";
+  }
 
   async function buscarMunicipio() {
     setOcupado("municipio");
@@ -203,9 +220,38 @@ export function DadosFiscaisClient({ inicial }: { inicial: EmitenteTela }) {
 
       <FormSection title="Certificado digital A1" icon={<FileKey2 className="w-4 h-4" />}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <FormField label={c ? "Enviar novo certificado (opcional)" : "Arquivo do certificado (.pfx ou .p12)"} required={!c}>
-            <input ref={arquivoRef} type="file" accept=".pfx,.p12" onChange={(ev) => { setArquivo(ev.target.files?.[0] ?? null); setMsg(null); }} data-arquivo-certificado
-              className="block w-full text-sm text-ink file:mr-3 file:rounded-lg file:border-0 file:bg-surface-alt file:px-3 file:py-2 file:text-sm file:font-medium file:text-ink hover:file:bg-surface-border" />
+          <FormField label={c ? "Enviar novo certificado (opcional)" : "Arquivo do certificado (.pfx ou .p12)"} required={!c} hint={AJUDA_CERTIFICADO}>
+            <div
+              role="button" tabIndex={0} data-area-certificado data-arrastando={arrastando || undefined} aria-description={AJUDA_CERTIFICADO}
+              onClick={() => arquivoRef.current?.click()}
+              onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); arquivoRef.current?.click(); } }}
+              onDragOver={(ev) => { ev.preventDefault(); setArrastando(true); }}
+              onDragLeave={() => setArrastando(false)}
+              onDrop={(ev) => { ev.preventDefault(); setArrastando(false); escolherArquivo(ev.dataTransfer.files?.[0]); }}
+              className={cn("flex items-center gap-3 rounded-lg border-2 border-dashed px-3 py-3 cursor-pointer transition-colors",
+                arrastando ? "border-acento bg-acento-claro/40" : "border-surface-border hover:border-acento/60 hover:bg-surface-alt/60")}
+            >
+              <span className="p-2 rounded-full bg-surface-alt shrink-0">
+                {arquivo ? <FileKey2 className="w-5 h-5 text-acento" /> : <FileUp className="w-5 h-5 text-acento" />}
+              </span>
+              <span className="min-w-0 flex-1 text-sm">
+                {arquivo ? (
+                  <>
+                    <span className="block font-medium text-ink truncate" data-arquivo-escolhido>{arquivo.name}</span>
+                    <span className="block text-xs text-ink-muted">Clique ou arraste outro para trocar</span>
+                  </>
+                ) : (
+                  <span className="block font-medium text-ink">{arrastando ? "Solte o certificado aqui" : "Arraste o certificado aqui ou clique para escolher"}</span>
+                )}
+              </span>
+              {arquivo && (
+                <button type="button" aria-label="Tirar o certificado escolhido" data-tirar-certificado
+                  onClick={(ev) => { ev.stopPropagation(); tirarArquivo(); }}
+                  className="p-1.5 rounded-md text-ink-muted hover:text-ink hover:bg-surface-border shrink-0"><X className="w-4 h-4" /></button>
+              )}
+              <input ref={arquivoRef} type="file" accept={ACEITA_CERTIFICADO} className="hidden" tabIndex={-1} data-arquivo-certificado
+                onChange={(ev) => escolherArquivo(ev.target.files?.[0])} />
+            </div>
           </FormField>
           <FormField label="Senha do certificado" required={!!arquivo}>
             <Input type="password" value={senha} onChange={(ev) => { setSenha(ev.target.value); setMsg(null); }} autoComplete="new-password" disabled={!arquivo} placeholder={arquivo ? "" : "Escolha o arquivo primeiro"} name="senhaCertificado" />

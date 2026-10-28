@@ -45,6 +45,12 @@ export const LABEL_STATUS: Record<StatusEmitente, string> = {
 
 /** Avisar a renovação do certificado quando faltar até isto */
 export const DIAS_AVISO_CERTIFICADO = 30;
+
+/** O certificado A1 é um arquivo PKCS#12: termina em .pfx ou .p12 */
+export const EXTENSOES_CERTIFICADO = [".pfx", ".p12"] as const;
+/** `accept` do input: as extensões e o tipo MIME (alguns celulares filtram só pelo tipo) */
+export const ACEITA_CERTIFICADO = `${EXTENSOES_CERTIFICADO.join(",")},application/x-pkcs12`;
+export const ehArquivoCertificado = (nome: string | null | undefined) => /\.(pfx|p12)$/i.test((nome ?? "").trim());
 const DIA = 86_400_000;
 
 export const soDigitos = (v: string | null | undefined) => (v ?? "").replace(/\D/g, "");
