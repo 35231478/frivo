@@ -7,6 +7,8 @@
  *  - produção desabilitada quando o servidor não liberou; senha só com o arquivo escolhido;
  *  - salvar manda multipart com os campos, o .pfx e a senha; a senha some da tela depois;
  *    erro e pendências aparecem; "Testar conexão" só com emitente, e mostra o resultado.
+ *  - upload do certificado: `accept` filtra .pfx/.p12, ajuda visível, clique/teclado abrem o seletor,
+ *    arrastar e soltar (destaque, só .pfx/.p12, trocar/tirar) e o arquivo solto é o que vai no envio.
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
@@ -50,6 +52,13 @@ async function escolher(el: Element | null, v: string) {
     Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(el, v);
     el!.dispatchEvent(new Event("change", { bubbles: true }));
   });
+}
+/** Arrastar e soltar: o React lê `dataTransfer` do evento nativo */
+async function arrastarSoltar(el: Element | null, arquivos: File[], tipo: "dragover" | "dragleave" | "drop" = "drop") {
+  const ev = new Event(tipo, { bubbles: true, cancelable: true });
+  Object.defineProperty(ev, "dataTransfer", { value: { files: arquivos, types: ["Files"] } });
+  await act(async () => { el!.dispatchEvent(ev); });
+  return ev;
 }
 async function anexar(el: Element | null, arquivo: File) {
   await act(async () => {
@@ -196,6 +205,78 @@ describe("formulário", () => {
     respostas["POST /api/fiscal/emitente"] = { status: 400, corpo: { erro: "Senha do certificado incorreta." } };
     await clicar($("[data-salvar-fiscal]"));
     expect(txt($('[data-mensagem="erro"]'))).toBe("Senha do certificado incorreta.");
+  });
+
+  it("upload do certificado: seletor filtra .pfx/.p12, ajuda visível, clique e teclado abrem o seletor", async () => {
+    await montar(BASE);
+    const input = $<HTMLInputElement>("[data-arquivo-certificado]")!;
+    expect(input.type).toBe("file");
+    expect(input.accept).toBe(".pfx,.p12,application/x-pkcs12");
+    expect(txt(caixa)).toContain("O certificado digital A1 é um arquivo que termina em .pfx ou .p12");
+    const area = $("[data-area-certificado]")!;
+    expect([area.getAttribute("role"), area.getAttribute("tabindex")]).toEqual(["button", "0"]);
+    expect(txt(area)).toBe("Arraste o certificado aqui ou clique para escolher");
+    let aberturas = 0;
+    input.click = () => { aberturas++; };
+    await clicar(area);
+    await act(async () => { area.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); });
+    await act(async () => { area.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true })); });
+    await act(async () => { area.dispatchEvent(new KeyboardEvent("keydown", { key: "a", bubbles: true })); });
+    expect(aberturas).toBe(3);
+  });
+
+  it("arrastar e soltar: destaca a área, aceita .pfx/.p12 (libera a senha), recusa outro arquivo; trocar e tirar", async () => {
+    respostas["POST /api/fiscal/emitente"] = { status: 200, corpo: { sincronizado: true, mensagem: "ok", emitente: ATIVO } };
+    await montar(BASE);
+    const area = $("[data-area-certificado]")!;
+    const senha = () => $<HTMLInputElement>('[name="senhaCertificado"]')!;
+    const p12 = new File([new Uint8Array([1])], "Empresa.P12", { type: "application/x-pkcs12" });
+    // o navegador não pode abrir o arquivo na aba: dragover e drop são "consumidos" pela área
+    const erros: unknown[] = [];
+    const pegaErro = (ev: ErrorEvent) => { erros.push(ev.error ?? ev.message); ev.preventDefault(); };
+    window.addEventListener("error", pegaErro);
+    expect((await arrastarSoltar(area, [p12], "dragover")).defaultPrevented).toBe(true);
+    expect(area.getAttribute("data-arrastando")).toBe("true");
+    expect(txt(area)).toBe("Solte o certificado aqui");
+    await arrastarSoltar(area, [], "dragleave");
+    expect(area.hasAttribute("data-arrastando")).toBe(false);
+    // arquivo errado solto: erro claro, nada escolhido, senha continua travada
+    await arrastarSoltar(area, [p12], "dragover");
+    await arrastarSoltar(area, [new File(["x"], "certificado.cer")]);
+    expect(area.hasAttribute("data-arrastando")).toBe(false);
+    expect(txt($('[data-mensagem="erro"]'))).toBe("Envie o certificado A1 no formato .pfx ou .p12.");
+    expect($("[data-arquivo-escolhido]")).toBeNull();
+    expect(senha().disabled).toBe(true);
+    // o certificado certo: nome na área, erro some, senha liberada
+    expect((await arrastarSoltar(area, [p12, new File(["y"], "outro.pfx")])).defaultPrevented).toBe(true);
+    expect(txt($("[data-arquivo-escolhido]"))).toBe("Empresa.P12");
+    expect($("[data-mensagem]")).toBeNull();
+    expect(senha().disabled).toBe(false);
+    // o seletor com "todos os arquivos" também passa pela conferência, sem perder o que já estava escolhido
+    await anexar($("[data-arquivo-certificado]"), new File(["z"], "foto.png"));
+    expect(txt($('[data-mensagem="erro"]'))).toBe("Envie o certificado A1 no formato .pfx ou .p12.");
+    expect(txt($("[data-arquivo-escolhido]"))).toBe("Empresa.P12");
+    // soltar sem arquivo (ex.: texto arrastado) não muda nada nem quebra a tela
+    await arrastarSoltar(area, []);
+    expect(txt($("[data-arquivo-escolhido]"))).toBe("Empresa.P12");
+    window.removeEventListener("error", pegaErro);
+    expect(erros).toEqual([]);
+    // tirar: volta ao vazio e apaga a senha digitada; não abre o seletor
+    await digitar(senha(), "s3nh@");
+    let aberturas = 0;
+    $<HTMLInputElement>("[data-arquivo-certificado]")!.click = () => { aberturas++; };
+    await clicar($("[data-tirar-certificado]"));
+    expect(aberturas).toBe(0);
+    expect($("[data-arquivo-escolhido]")).toBeNull();
+    expect([senha().value, senha().disabled]).toEqual(["", true]);
+    // solto de novo e salvo: o arquivo solto é o que vai no envio
+    const pfx = new File([new Uint8Array([9, 9])], "clima.pfx");
+    await arrastarSoltar(area, [pfx]);
+    await digitar(senha(), "s3nh@");
+    await clicar($("[data-salvar-fiscal]"));
+    const corpo = chamadas.find((c) => c.metodo === "POST")!.corpo!;
+    expect([(corpo.get("certificado") as File).name, corpo.get("senha")]).toEqual(["clima.pfx", "s3nh@"]);
+    expect($("[data-arquivo-escolhido]")).toBeNull();
   });
 
   it("Testar conexão: mostra o resultado (ok e erro) e atualiza a situação", async () => {

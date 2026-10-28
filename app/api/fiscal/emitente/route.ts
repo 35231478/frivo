@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { exigirPermissao } from "@/lib/permissoes-server";
-import { AMBIENTES, REGIMES, REGIMES_ESPECIAIS } from "@/lib/nfse/regras";
+import { AMBIENTES, ehArquivoCertificado, REGIMES, REGIMES_ESPECIAIS } from "@/lib/nfse/regras";
 import { TAMANHO_MAX_CERTIFICADO } from "@/lib/nfse/certificado";
 import { carregarEmitente, ErroFiscal, salvarEmitente } from "@/lib/nfse/emitente-server";
 
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
   let certificado: { arquivo: Buffer; nome: string; senha: string } | null = null;
   if (arquivo && typeof arquivo !== "string" && arquivo.size > 0) {
     if (arquivo.size > TAMANHO_MAX_CERTIFICADO) return NextResponse.json({ erro: "Arquivo grande demais para um certificado A1 (.pfx)." }, { status: 400 });
-    if (!/\.(pfx|p12)$/i.test(arquivo.name)) return NextResponse.json({ erro: "Envie o certificado A1 no formato .pfx ou .p12." }, { status: 400 });
+    if (!ehArquivoCertificado(arquivo.name)) return NextResponse.json({ erro: "Envie o certificado A1 no formato .pfx ou .p12." }, { status: 400 });
     certificado = { arquivo: Buffer.from(await arquivo.arrayBuffer()), nome: arquivo.name, senha: texto("senha") };
   }
   try {
