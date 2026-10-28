@@ -9,7 +9,7 @@ import { vi } from "vitest";
 export const SANDBOX = "https://api.sandbox.plugnotas.com.br";
 export const PRODUCAO = "https://api.plugnotas.com.br";
 
-export interface Chamada { metodo: string; url: string; base: string; caminho: string; token: string | null; json?: any; form?: { campos: Record<string, string>; arquivo?: { nome: string; tamanho: number; tipo: string } } }
+export interface Chamada { metodo: string; url: string; base: string; caminho: string; token: string | null; redirect?: RequestRedirect; json?: any; form?: { campos: Record<string, string>; arquivo?: { nome: string; tamanho: number; tipo: string } } }
 
 export function criarPlugNotasFalso() {
   const estado = {
@@ -42,7 +42,7 @@ export function criarPlugNotasFalso() {
     const caminho = url.slice(base.length);
     const metodo = String(init.method ?? "GET");
     const headers = new Headers(init.headers);
-    const ch: Chamada = { metodo, url, base, caminho, token: headers.get("x-api-key") };
+    const ch: Chamada = { metodo, url, base, caminho, token: headers.get("x-api-key"), redirect: init.redirect };
     if (init.body instanceof FormData) {
       const campos: Record<string, string> = {};
       let arquivo: { nome: string; tamanho: number; tipo: string } | undefined;

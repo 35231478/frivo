@@ -79,12 +79,16 @@ export function DadosFiscaisClient({ inicial }: { inicial: EmitenteTela }) {
       const r = await fetch("/api/fiscal/emitente", { method: "POST", body: corpo });
       const d = await r.json().catch(() => ({}));
       if (d.emitente) { setE(d.emitente); setF(d.emitente.dados); }
+      // recusado aqui (senha errada, vencido, outro CNPJ…): o arquivo fica para tentar de novo, a senha não
       if (!r.ok && !d.emitente) { setMsg({ tipo: "erro", texto: d.erro ?? "Não foi possível salvar." }); return; }
-      // a senha e o arquivo saem da tela assim que o envio termina (deu certo ou não)
-      setSenha(""); setArquivo(null); if (arquivoRef.current) arquivoRef.current.value = "";
+      // chegou ao servidor e foi processado: a senha e o arquivo saem da tela
+      setArquivo(null); if (arquivoRef.current) arquivoRef.current.value = "";
       if (d.sincronizado) { toast(d.mensagem); setMsg({ tipo: "ok", texto: d.mensagem }); }
       else setMsg({ tipo: d.erro ? "erro" : "aviso", texto: d.mensagem ?? d.erro });
-    } catch { setMsg({ tipo: "erro", texto: "Sem conexão. Tente de novo." }); } finally { setOcupado(null); }
+    } catch { setMsg({ tipo: "erro", texto: "Sem conexão. Tente de novo." }); } finally {
+      // a senha nunca fica na tela depois de um envio, dê certo ou não
+      setSenha(""); setOcupado(null);
+    }
   }
 
   async function testar() {
