@@ -279,6 +279,23 @@ describe("formulário", () => {
     expect($("[data-arquivo-escolhido]")).toBeNull();
   });
 
+  it("senha some da tela depois de qualquer envio: recusado no servidor (arquivo fica para tentar de novo) e sem conexão", async () => {
+    respostas["POST /api/fiscal/emitente"] = { status: 400, corpo: { erro: "Senha do certificado incorreta." } };
+    await montar(BASE);
+    const senha = () => $<HTMLInputElement>('[name="senhaCertificado"]')!;
+    await anexar($("[data-arquivo-certificado]"), new File([new Uint8Array([1])], "clima.pfx"));
+    await digitar(senha(), "errada");
+    await clicar($("[data-salvar-fiscal]"));
+    expect(txt($('[data-mensagem="erro"]'))).toBe("Senha do certificado incorreta.");
+    expect([senha().value, senha().disabled, txt($("[data-arquivo-escolhido]"))]).toEqual(["", false, "clima.pfx"]);
+    // sem conexão: a senha também não fica
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("Failed to fetch"); }));
+    await digitar(senha(), "outra");
+    await clicar($("[data-salvar-fiscal]"));
+    expect(txt($('[data-mensagem="erro"]'))).toBe("Sem conexão. Tente de novo.");
+    expect(senha().value).toBe("");
+  });
+
   it("Testar conexão: mostra o resultado (ok e erro) e atualiza a situação", async () => {
     respostas["POST /api/fiscal/emitente/testar"] = { status: 200, corpo: { ok: true, mensagem: "Conexão OK: emitente ativo", emitente: { ...ATIVO, ultimoTeste: { em: "2026-10-28T15:00:00.000Z", ok: true, mensagem: "Conexão OK: emitente ativo" } } } };
     await montar(ATIVO);

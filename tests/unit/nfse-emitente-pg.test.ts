@@ -247,6 +247,15 @@ describe.skipIf(!URL_PG)("NFS-e: dados fiscais e emitente no PlugNotas (PostgreS
     expect([r.status, r.json.sincronizado, r.json.erro]).toEqual([502, false, "Inscrição municipal inválida para o município Campos: inscricaoMunicipal."]);
     expect(await fiscal()).toMatchObject({ status: "ERRO", ultimoErro: "Inscrição municipal inválida para o município Campos: inscricaoMunicipal.", regimeTributario: "LUCRO_REAL", certificadoId: Object.keys(plug.estado.certificados).at(-1) }); // o que acabou de subir
     expect(r.json.emitente.statusLabel).toBe("Erro no PlugNotas");
+    // se o PlugNotas ecoar a senha ou o token na mensagem, nem o banco nem a resposta ficam com eles
+    const chave = "Chave#2026xyz";
+    plug.estado.falhas["POST /certificado"] = { status: 400, corpo: { error: { message: `Arquivo recusado: chave ${chave} / token-sandbox` } } };
+    const eco = await salvar({ regimeTributario: "LUCRO_REAL" }, { arquivo: gerarPfx({ senha: chave }), senha: chave });
+    expect([eco.status, eco.json.erro]).toEqual([502, "Arquivo recusado: chave ••• / •••"]);
+    expect(JSON.stringify(await fiscal())).not.toMatch(/Chave#2026xyz|token-sandbox/);
+    expect(JSON.stringify(eco.json)).not.toMatch(/Chave#2026xyz|token-sandbox/);
+    expect(JSON.stringify(logs)).not.toContain(chave);
+    delete plug.estado.falhas["POST /certificado"];
     // corrige do lado de lá e salva de novo sem reenviar o arquivo
     delete plug.estado.falhas["POST /empresa"];
     expect((await salvar({ regimeTributario: "LUCRO_REAL" })).json.sincronizado).toBe(true);

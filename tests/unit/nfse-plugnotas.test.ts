@@ -6,7 +6,7 @@
  * E a busca do código IBGE (ViaCEP pelo CEP; senão BrasilAPI pela UF + cidade).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ambienteDisponivel, consultarCertificado, consultarEmpresa, enviarCertificado, ErroPlugNotas, salvarEmpresa } from "@/lib/nfse/plugnotas";
+import { ambienteDisponivel, consultarCertificado, consultarEmpresa, enviarCertificado, ErroPlugNotas, salvarEmpresa, semSegredos } from "@/lib/nfse/plugnotas";
 import { buscarMunicipio, normalizarNome } from "@/lib/nfse/municipio";
 import { criarPlugNotasFalso, PRODUCAO, SANDBOX } from "./helpers/plugnotas-falso";
 
@@ -24,6 +24,32 @@ describe("ambiente e token", () => {
     process.env.PLUGNOTAS_API_TOKEN_PRODUCAO = "token-producao";
     await consultarEmpresa("PRODUCAO", "12345678000190");
     expect(plug.estado.chamadas[1]).toMatchObject({ base: PRODUCAO, token: "token-producao" });
+  });
+  it("transporte: toda chamada recusa redirecionamento (o x-api-key e o .pfx não seguem para outro endereço)", async () => {
+    plug.estado.falhas["POST /certificado"] = { status: 200, corpo: { data: { id: "cert-x" } } };
+    await consultarEmpresa("HOMOLOGACAO", "1");
+    await enviarCertificado("HOMOLOGACAO", PFX, "a.pfx", "s3nh@");
+    await consultarCertificado("HOMOLOGACAO", "cert-x").catch(() => {});
+    await salvarEmpresa("HOMOLOGACAO", { cpfCnpj: "1" }, false).catch(() => {});
+    expect(plug.estado.chamadas.map((c) => c.redirect)).toEqual(["error", "error", "error", "error"]);
+  });
+  it("transporte: base sem https é recusada antes de qualquer envio (http só em localhost)", async () => {
+    for (const url of ["http://api.sandbox.plugnotas.com.br", "http://10.0.0.5:8080", "ftp://x", "api.sandbox.plugnotas.com.br", "https//x"]) {
+      process.env.PLUGNOTAS_API_URL = url;
+      expect(ambienteDisponivel("HOMOLOGACAO")).toBe(true);
+      const e = await erroDe(enviarCertificado("HOMOLOGACAO", PFX, "a.pfx", "s3nh@"));
+      expect([e?.status, e?.message], url).toEqual([503, "O endereço do PlugNotas (PLUGNOTAS_API_URL) precisa começar com https://. Nada foi enviado."]);
+    }
+    process.env.PLUGNOTAS_API_TOKEN_PRODUCAO = "token-producao";
+    process.env.PLUGNOTAS_API_URL_PRODUCAO = "http://api.plugnotas.com.br/";
+    expect((await erroDe(consultarEmpresa("PRODUCAO", "1")))?.message).toBe("O endereço do PlugNotas (PLUGNOTAS_API_URL_PRODUCAO) precisa começar com https://. Nada foi enviado.");
+    expect(plug.fetchMock).not.toHaveBeenCalled();
+    // desenvolvimento: um simulador no próprio computador pode ser http
+    for (const local of ["http://localhost:3999", "http://127.0.0.1:3999/", "http://[::1]:3999"]) {
+      process.env.PLUGNOTAS_API_URL = local;
+      await erroDe(consultarEmpresa("HOMOLOGACAO", "9"));
+      expect(String(plug.fetchMock.mock.calls.at(-1)?.[0])).toBe(`${local.replace(/\/$/, "")}/empresa/9`);
+    }
   });
   it("sem token: homologação e produção recusadas com mensagem clara; base sobrescrita por variável", async () => {
     expect(ambienteDisponivel("HOMOLOGACAO")).toBe(true);
@@ -64,6 +90,17 @@ describe("certificado", () => {
     plug.estado.falhas["POST /certificado"] = { status: 409, corpo: { error: { message: "Certificado já cadastrado", data: { id: "cert-antigo" } } } };
     expect(await enviarCertificado("HOMOLOGACAO", PFX, "", "x")).toEqual({ id: "cert-antigo" });
     expect(plug.estado.chamadas[0].form?.arquivo?.nome).toBe("certificado.pfx");
+  });
+  it("mensagem do PlugNotas que ecoa a senha ou o token: os dois saem dela (e mensagem enorme é cortada)", async () => {
+    plug.estado.falhas["POST /certificado"] = { status: 400, corpo: { error: { message: "Falha ao abrir o arquivo com a chave 'Minha#Chave2026' (cliente token-sandbox)", data: { arquivo: "x" } } } };
+    const e = await erroDe(enviarCertificado("HOMOLOGACAO", PFX, "a.pfx", "Minha#Chave2026"));
+    expect([e?.status, e?.message]).toEqual([422, "Falha ao abrir o arquivo com a chave '•••' (cliente •••) Campos: arquivo."]);
+    plug.estado.falhas["GET /empresa/1"] = { status: 422, corpo: { error: { message: `token-sandbox ${"x".repeat(500)}` } } };
+    const longo = await erroDe(consultarEmpresa("HOMOLOGACAO", "1"));
+    expect([longo?.message.length, longo?.message.startsWith("••• xxx"), longo?.message.endsWith("…")]).toEqual([300, true, true]);
+    // segredo curto demais não é "procurado" (estragaria o texto); vazio/nulo não quebram
+    expect(semSegredos("abc 123 abc", ["abc", "", null, undefined])).toBe("abc 123 abc");
+    expect(semSegredos("abcd 1234 abcd", ["abcd"])).toBe("••• 1234 •••");
   });
   it("recusado (senha) ou sem id na resposta: erro em português, sem a senha", async () => {
     plug.estado.falhas["POST /certificado"] = { status: 400, corpo: { error: { message: "Senha do certificado incorreta" } } };

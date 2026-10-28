@@ -15,6 +15,12 @@
  *
  * Segurança: o certificado e a senha só passam por aqui em memória, vão por HTTPS e não são
  * gravados nem registrados em log; as mensagens de erro nunca incluem o token, o arquivo ou a senha.
+ *   - a base precisa ser https:// (http só para localhost, em desenvolvimento): uma URL errada no
+ *     ambiente não pode mandar token, .pfx e senha em texto aberto;
+ *   - redirecionamento é recusado (`redirect: "error"`): o fetch repassaria o `x-api-key` (e, num
+ *     307/308, o .pfx e a senha) para outro endereço;
+ *   - a mensagem que vem do PlugNotas é repassada à tela e guardada em `ultimo_erro`: antes disso,
+ *     o token e a senha são tirados dela, caso a API os ecoe.
  */
 import { mensagemErroPlugNotas, type Ambiente } from "@/lib/nfse/regras";
 
@@ -27,6 +33,25 @@ const BASES: Record<Ambiente, { url: string; envUrl: string; envToken: string }>
   PRODUCAO: { url: "https://api.plugnotas.com.br", envUrl: "PLUGNOTAS_API_URL_PRODUCAO", envToken: "PLUGNOTAS_API_TOKEN_PRODUCAO" },
 };
 const TIMEOUT_MS = 20_000;
+/** Tamanho máximo da mensagem do PlugNotas que repassamos (tela e `ultimo_erro`) */
+const MAX_MENSAGEM = 300;
+const LOCAL = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/** A base só vale com https (ou http no próprio computador, para desenvolvimento) */
+function baseSegura(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" || (u.protocol === "http:" && LOCAL.has(u.hostname));
+  } catch {
+    return false;
+  }
+}
+
+/** Tira do texto qualquer segredo (token, senha) que o PlugNotas tenha ecoado na mensagem */
+export function semSegredos(texto: string, segredos: (string | null | undefined)[]): string {
+  const limpo = segredos.reduce<string>((t, s) => (s && s.length >= 4 ? t.split(s).join("•••") : t), texto);
+  return limpo.length > MAX_MENSAGEM ? `${limpo.slice(0, MAX_MENSAGEM - 1)}…` : limpo;
+}
 
 /** O servidor tem o token deste ambiente? (a tela usa para avisar antes de tentar) */
 export function ambienteDisponivel(ambiente: Ambiente): boolean {
@@ -41,7 +66,9 @@ function conexao(ambiente: Ambiente) {
       ? "Produção ainda não está liberada neste servidor (falta PLUGNOTAS_API_TOKEN_PRODUCAO). Use homologação."
       : "A integração com o PlugNotas não está configurada neste servidor (falta PLUGNOTAS_API_TOKEN).", 503);
   }
-  return { base: (process.env[b.envUrl]?.trim() || b.url).replace(/\/$/, ""), token };
+  const base = (process.env[b.envUrl]?.trim() || b.url).replace(/\/$/, "");
+  if (!baseSegura(base)) throw new ErroPlugNotas(`O endereço do PlugNotas (${b.envUrl}) precisa começar com https://. Nada foi enviado.`, 503);
+  return { base, token };
 }
 
 async function chamar(ambiente: Ambiente, caminho: string, init: { method: string; json?: unknown; form?: FormData }) {
@@ -54,16 +81,19 @@ async function chamar(ambiente: Ambiente, caminho: string, init: { method: strin
       body: init.form ?? (init.json !== undefined ? JSON.stringify(init.json) : undefined),
       signal: AbortSignal.timeout(TIMEOUT_MS),
       cache: "no-store",
+      redirect: "error",
     });
   } catch (e) {
     const tempo = (e as Error)?.name === "TimeoutError";
     throw new ErroPlugNotas(tempo ? "O PlugNotas não respondeu a tempo. Tente de novo." : "Não foi possível falar com o PlugNotas (rede). Tente de novo.", 504);
   }
   const corpo = await res.json().catch(() => null);
-  return { status: res.status, ok: res.ok, corpo };
+  return { status: res.status, ok: res.ok, corpo, token };
 }
 
-const falha = (r: { status: number; corpo: unknown }) => new ErroPlugNotas(mensagemErroPlugNotas(r.status, r.corpo), r.status >= 500 ? 502 : 422);
+/** Erro do PlugNotas em português, sem o token nem os outros segredos da chamada (a senha) */
+const falha = (r: { status: number; corpo: unknown; token: string }, ...segredos: string[]) =>
+  new ErroPlugNotas(semSegredos(mensagemErroPlugNotas(r.status, r.corpo), [r.token, ...segredos]), r.status >= 500 ? 502 : 422);
 
 /** Envia o .pfx e a senha; devolve o id do certificado no PlugNotas */
 export async function enviarCertificado(ambiente: Ambiente, arquivo: Buffer, nomeArquivo: string, senha: string): Promise<{ id: string }> {
@@ -75,7 +105,7 @@ export async function enviarCertificado(ambiente: Ambiente, arquivo: Buffer, nom
   // Certificado que já estava lá: o PlugNotas devolve o id existente junto do erro
   const id = corpo?.data?.id ?? corpo?.id ?? (r.status === 409 ? corpo?.error?.data?.id : undefined);
   if ((r.ok || r.status === 409) && typeof id === "string" && id) return { id };
-  throw falha(r);
+  throw falha(r, senha);
 }
 
 /** Vencimento do certificado no PlugNotas (null se a resposta não trouxer) */
