@@ -12,7 +12,7 @@ export interface Municipio { codigo: string; nome: string; uf: string; fonte: "c
 const TIMEOUT_MS = 8000;
 
 /** "São Paulo" → "sao paulo" (para comparar nomes de cidade) */
-export const normalizarNome = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+export const normalizarNome = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
 async function json(url: string): Promise<unknown> {
   try {
