@@ -42,6 +42,10 @@ describe("pendenciasEmitente", () => {
       "Endereço da empresa: número, CEP (em Dados da empresa)", "UF do município",
     ]);
     expect(pendenciasEmitente({ ...EMPRESA, inscricaoMunicipal: "--" }, FISCAL, true)).toEqual(["Inscrição municipal"]);
+    // CPF (11) ou CNPJ com dígito faltando (13) também não servem: emitente de NFS-e aqui é PJ
+    for (const cnpj of ["123.456.789-01", "1234567800019"]) {
+      expect(pendenciasEmitente({ ...EMPRESA, cnpj }, FISCAL, true)).toEqual(["CNPJ da empresa (14 dígitos) em Dados da empresa"]);
+    }
   });
 });
 

@@ -36,9 +36,10 @@ describe("ambiente e token", () => {
     expect(h?.message).toBe("A integração com o PlugNotas não está configurada neste servidor (falta PLUGNOTAS_API_TOKEN).");
     expect(plug.estado.chamadas).toEqual([]);
     process.env.PLUGNOTAS_API_TOKEN = "token-sandbox";
-    process.env.PLUGNOTAS_API_URL = `${SANDBOX}/`;
-    await consultarEmpresa("HOMOLOGACAO", "9");
-    expect(plug.estado.chamadas[0].url).toBe(`${SANDBOX}/empresa/9`);
+    // PLUGNOTAS_API_URL troca o host (barra final ignorada); aqui aponta para outro host conhecido do falso
+    process.env.PLUGNOTAS_API_URL = `${PRODUCAO}/`;
+    await erroDe(consultarEmpresa("HOMOLOGACAO", "9"));
+    expect(plug.estado.chamadas[0].url).toBe(`${PRODUCAO}/empresa/9`);
   });
   it("token recusado (401): mensagem sem o token", async () => {
     process.env.PLUGNOTAS_API_TOKEN = "token-que-vazaria";
@@ -132,6 +133,9 @@ describe("município (código IBGE)", () => {
     expect(await buscarMunicipio({ cep: null, cidade: "Campinas", uf: "SP" })).toBeNull();
     expect(await buscarMunicipio({ cep: "123", cidade: "São Paulo", uf: "São Paulo" })).toBeNull();
     expect(await buscarMunicipio({ cidade: "", uf: "SP" })).toBeNull();
+    // UF fora do formato nem é consultada (mesmo que alguém respondesse por ela)
+    plug.estado.ibge.S1 = [{ nome: "SAO PAULO", codigo_ibge: "3550308" }];
+    expect(await buscarMunicipio({ cidade: "São Paulo", uf: "S1" })).toBeNull();
     plug.estado.viacep["01001000"] = { ibge: "355", localidade: "São Paulo", uf: "SP" };
     expect(await buscarMunicipio({ cep: "01001000", cidade: "São Paulo", uf: "SP" })).toMatchObject({ fonte: "cidade" });
     plug.estado.ibge.MG = { message: "não é lista" };

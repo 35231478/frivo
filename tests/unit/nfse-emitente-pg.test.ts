@@ -131,6 +131,21 @@ describe.skipIf(!URL_PG)("NFS-e: dados fiscais e emitente no PlugNotas (PostgreS
     expect((await prisma.empresa.findUnique({ where: { id: "e1" } })).inscricaoMunicipal).toBe("1234567-8");
     expect(await fiscal()).toMatchObject({ status: "PENDENTE", ambiente: "HOMOLOGACAO", municipioUf: "SP", atualizadoPorId: "uFin", certificadoId: null });
     expect(plug.estado.chamadas).toEqual([]);
+    // Testar conexão com os dados salvos mas sem emitente lá ainda: orienta, não chama o PlugNotas
+    const t = await testar();
+    expect([t.status, t.json.erro]).toEqual([400, "Salve os dados fiscais e o certificado primeiro: o emitente ainda não foi cadastrado no PlugNotas."]);
+    // MEI não tem regime especial (o MEI já é o especial 5): o que viesse no campo é descartado
+    await salvar({ regimeTributario: "MEI", regimeEspecial: "ESTIMATIVA" });
+    expect(await fiscal()).toMatchObject({ regimeTributario: "MEI", regimeEspecial: null });
+    // o servidor também apara a IM (quem chama sem passar pela rota)
+    const { salvarEmitente } = await import("@/lib/nfse/emitente-server");
+    await salvarEmitente({ empresaId: "e1", usuarioId: "uFin", inscricaoMunicipal: "  777  ", dados: {
+      regimeTributario: "SIMPLES_NACIONAL", regimeEspecial: null, incentivoFiscal: false, incentivadorCultural: false,
+      ambiente: "HOMOLOGACAO", codigoMunicipio: "3550308", municipioNome: "São Paulo", municipioUf: "SP",
+    } });
+    expect((await prisma.empresa.findUnique({ where: { id: "e1" } })).inscricaoMunicipal).toBe("777");
+    expect(plug.estado.chamadas).toEqual([]);
+    await salvar({ inscricaoMunicipal: "1234567-8" });
   });
 
   it("validação dos campos: IBGE com 7 dígitos, UF, regime e ambiente válidos", async () => {
@@ -162,6 +177,8 @@ describe.skipIf(!URL_PG)("NFS-e: dados fiscais e emitente no PlugNotas (PostgreS
     expect(await fiscal()).toEqual(antes);
     expect(plug.estado.chamadas).toEqual([]);
     expect((await salvar({}, { arquivo: Buffer.alloc(100 * 1024 + 1, 1) })).json.erro).toBe("Arquivo grande demais para um certificado A1 (.pfx).");
+    // o limite vale já na entrada, antes de qualquer outra conferência (mesmo sem a senha)
+    expect((await salvar({}, { arquivo: Buffer.alloc(100 * 1024 + 1, 1), senha: "" })).json.erro).toBe("Arquivo grande demais para um certificado A1 (.pfx).");
   });
 
   it("completo: envia certificado, cadastra o emitente (POST) e fica ATIVO; banco/resposta/log sem senha nem arquivo", async () => {
@@ -276,6 +293,10 @@ describe.skipIf(!URL_PG)("NFS-e: dados fiscais e emitente no PlugNotas (PostgreS
     plug.estado.viacep = {};
     const r = await chamar("fiscal/municipio", "GET");
     expect([r.status, r.json.erro]).toEqual([404, "Não achei o código IBGE pelo endereço da empresa. Confira CEP, cidade e UF em Dados da empresa, ou digite o código."]);
+    // o endereço é o da empresa da sessão
+    plug.estado.viacep["13010000"] = { ibge: "3509502", localidade: "Campinas", uf: "SP" };
+    logar(FISCAL, "uOutra", "e2");
+    expect((await chamar("fiscal/municipio", "GET")).json).toMatchObject({ codigo: "3509502", nome: "Campinas" });
   });
 
   it("Configurações e a página: o cartão e a tela só com Financeiro › Fiscal", async () => {

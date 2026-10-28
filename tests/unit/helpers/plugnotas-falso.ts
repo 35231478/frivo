@@ -48,7 +48,8 @@ export function criarPlugNotasFalso() {
       let arquivo: { nome: string; tamanho: number; tipo: string } | undefined;
       for (const [k, v] of init.body.entries()) {
         if (typeof v === "string") campos[k] = v;
-        else arquivo = { nome: (v as File).name, tamanho: (v as Blob).size, tipo: (v as Blob).type };
+        else if (k === "arquivo") arquivo = { nome: (v as File).name, tamanho: (v as Blob).size, tipo: (v as Blob).type };
+        else campos[k] = `(arquivo ${(v as File).name})`; // arquivo em campo com outro nome: o PlugNotas não acharia
       }
       ch.form = { campos, arquivo };
     } else if (typeof init.body === "string") ch.json = JSON.parse(init.body);
