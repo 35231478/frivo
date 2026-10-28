@@ -6,7 +6,7 @@
 
 export type Acao =
   | "visualizar" | "criar" | "editar" | "excluir" | "concluir" | "aprovar"
-  | "gerenciar" | "medicoes" | "contasReceber" | "fluxoCaixa" | "folha" | "checklist" | "exportar";
+  | "gerenciar" | "medicoes" | "contasReceber" | "fluxoCaixa" | "folha" | "fiscal" | "checklist" | "exportar";
 
 export type Permissoes = Record<string, Partial<Record<Acao, boolean>>>;
 
@@ -25,6 +25,7 @@ export const ACOES_LABEL: Record<Acao, string> = {
   contasReceber: "Contas a Receber",
   fluxoCaixa: "Fluxo de Caixa",
   folha: "Custo de pessoal",
+  fiscal: "Fiscal (NFS-e)",
   checklist: "Checklist",
   exportar: "Exportar",
 };
@@ -55,7 +56,8 @@ export const SECOES: SecaoDef[] = [
   {
     id: "financeiro", label: "Financeiro", modulos: [
       // "folha" = Custo de pessoal (RH): salários, benefícios, encargos e importação de colaboradores
-      { id: "financeiro", label: "Financeiro", icone: "💵", acoes: ["visualizar", "medicoes", "contasReceber", "fluxoCaixa", "folha"] },
+      // "fiscal" = dados fiscais da empresa como emitente de NFS-e (certificado, regime, PlugNotas)
+      { id: "financeiro", label: "Financeiro", icone: "💵", acoes: ["visualizar", "medicoes", "contasReceber", "fluxoCaixa", "folha", "fiscal"] },
     ],
   },
   {
@@ -216,7 +218,7 @@ export const PRESETS: Record<string, Permissoes> = {
     orcamentos: ["visualizar", "criar", "editar", "aprovar"],
     contratos: ["visualizar", "criar", "editar"],
     licitacoes: ["visualizar", "gerenciar"],
-    financeiro: ["visualizar", "medicoes", "contasReceber", "fluxoCaixa", "folha"],
+    financeiro: ["visualizar", "medicoes", "contasReceber", "fluxoCaixa", "folha", "fiscal"],
     compras: ["visualizar", "gerenciar"],
     estoque: ["visualizar"],
     relatorios: ["visualizar", "exportar"],

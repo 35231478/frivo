@@ -57,6 +57,7 @@ const ROTULOS_ROTA: Record<string, string> = {
   "impressao-os": "Impressão da OS",
   financeiro: "Financeiro",
   "custo-pessoal": "Custo de Pessoal",
+  fiscal: "Dados fiscais",
   colaborador: "Colaborador",
   encargos: "Encargos",
   importar: "Importar",

@@ -60,7 +60,7 @@ describe("estrutura: 3 abas com cartões; cada item tem id, tela e a rota antiga
       ["Comercial", ["Orçamentos e propostas"]],
       ["Catálogo", ["Tipos de equipamento", "Serviços", "Produtos", "Tabelas de preços"]],
     ]);
-    expect(sub("financeiras")).toEqual([["Classificação", ["Categorias financeiras", "Centros de custo"]], ["Integrações", ["Banco Inter"]]]);
+    expect(sub("financeiras")).toEqual([["Classificação", ["Categorias financeiras", "Centros de custo"]], ["Integrações", ["Banco Inter"]], ["Fiscal", ["Dados fiscais (NFS-e)"]]]);
     expect(sub("conta")).toEqual([
       ["Empresa", ["Dados da empresa", "Preferências"]],
       ["Acesso e pessoas", ["Usuários", "Perfis de acesso", "Cargos"]],
