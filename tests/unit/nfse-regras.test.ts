@@ -5,8 +5,8 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  ACEITA_CERTIFICADO, corpoEmpresaPlugNotas, DIAS_AVISO_CERTIFICADO, diasParaVencer, ehArquivoCertificado, ehCodigoIbge, mensagemErroPlugNotas, pendenciasEmitente,
-  situacaoCertificado, type DadosFiscais, type EmpresaEmitente,
+  ACEITA_CERTIFICADO, camposReprovados, corpoEmpresaPlugNotas, DIAS_AVISO_CERTIFICADO, diasParaVencer, ehArquivoCertificado, ehCodigoIbge, mensagemErroPlugNotas, pendenciasEmitente,
+  separarLogradouro, situacaoCertificado, type DadosFiscais, type EmpresaEmitente,
 } from "@/lib/nfse/regras";
 
 const EMPRESA: EmpresaEmitente = {
@@ -50,42 +50,65 @@ describe("pendenciasEmitente", () => {
 });
 
 describe("corpoEmpresaPlugNotas", () => {
-  it("Simples Nacional em homologação: dígitos, nomes aparados, endereço com IBGE, telefone, nfse.producao=false", () => {
-    expect(corpoEmpresaPlugNotas(EMPRESA, FISCAL, "cert-1")).toEqual({
-      cpfCnpj: "12345678000190", inscricaoMunicipal: "12345678", inscricaoEstadual: "123456789000",
-      razaoSocial: "Clima Total Refrigeração Ltda", nomeFantasia: "Clima Total", certificado: "cert-1",
-      simplesNacional: true, regimeTributario: 1, regimeTributarioEspecial: 0, incentivoFiscal: false, incentivadorCultural: false,
+  it("Simples Nacional em homologação: exatamente os campos do exemplo oficial do sandbox (nada além)", () => {
+    expect(corpoEmpresaPlugNotas(EMPRESA, FISCAL, "cert-1")).toStrictEqual({
+      cpfCnpj: "12345678000190",
+      razaoSocial: "Clima Total Refrigeração Ltda",
+      inscricaoMunicipal: "12345678",
+      simplesNacional: true,
+      regimeTributario: 1,
+      regimeTributarioEspecial: 0,
+      incentivoFiscal: false,
+      incentivadorCultural: false,
+      certificado: "cert-1",
       endereco: {
-        logradouro: "Rua das Flores", numero: "100", complemento: "Sala 2", bairro: "Centro", codigoPais: "1058", descricaoPais: "Brasil",
-        codigoCidade: "3550308", descricaoCidade: "São Paulo", estado: "SP", cep: "01001000",
+        codigoPais: "1058", descricaoPais: "Brasil",
+        tipoLogradouro: "Rua", logradouro: "das Flores",
+        numero: "100", complemento: "Sala 2",
+        tipoBairro: "Bairro", bairro: "Centro",
+        codigoCidade: "3550308", descricaoCidade: "São Paulo",
+        estado: "SP", cep: "01001000",
       },
-      telefone: { ddd: "11", numero: "33334444" }, email: "fiscal@ct.com.br",
-      nfse: { ativo: true, tipoContrato: 0, config: { producao: false } },
+      nfse: { ativo: true, tipoContrato: 0, config: { producao: false, email: { envio: false } } },
     });
+    // a ordem das chaves também é a do exemplo (fica fácil comparar com a coleção do PlugNotas)
+    const c = corpoEmpresaPlugNotas(EMPRESA, FISCAL, "cert-1");
+    expect(Object.keys(c)).toEqual(["cpfCnpj", "razaoSocial", "inscricaoMunicipal", "simplesNacional", "regimeTributario", "regimeTributarioEspecial", "incentivoFiscal", "incentivadorCultural", "certificado", "endereco", "nfse"]);
+    expect(Object.keys(c.endereco)).toEqual(["codigoPais", "descricaoPais", "tipoLogradouro", "logradouro", "numero", "complemento", "tipoBairro", "bairro", "codigoCidade", "descricaoCidade", "estado", "cep"]);
   });
-  it("regimes: MEI (especial 5 sempre), Lucro Presumido/Real (normal 3), regime especial escolhido", () => {
+  it("regimes pelos códigos do PlugNotas: Simples 1, MEI 1 + especial 5, Presumido 3, Real 4; regime especial escolhido", () => {
     const c = (f: Partial<DadosFiscais>) => corpoEmpresaPlugNotas(EMPRESA, { ...FISCAL, ...f }, "c");
     expect(c({ regimeTributario: "MEI", regimeEspecial: "COOPERATIVA" })).toMatchObject({ simplesNacional: true, regimeTributario: 1, regimeTributarioEspecial: 5 });
     expect(c({ regimeTributario: "LUCRO_PRESUMIDO" })).toMatchObject({ simplesNacional: false, regimeTributario: 3, regimeTributarioEspecial: 0 });
-    expect(c({ regimeTributario: "LUCRO_REAL", regimeEspecial: "SOCIEDADE_PROFISSIONAIS" })).toMatchObject({ simplesNacional: false, regimeTributario: 3, regimeTributarioEspecial: 3 });
-    expect(c({ regimeEspecial: "ME_EPP_SIMPLES" }).regimeTributarioEspecial).toBe(6);
+    expect(c({ regimeTributario: "LUCRO_REAL", regimeEspecial: "SOCIEDADE_PROFISSIONAIS" })).toMatchObject({ simplesNacional: false, regimeTributario: 4, regimeTributarioEspecial: 3 });
+    // o exemplo oficial: Simples + ME/EPP = 1 / 6
+    expect(c({ regimeEspecial: "ME_EPP_SIMPLES" })).toMatchObject({ simplesNacional: true, regimeTributario: 1, regimeTributarioEspecial: 6 });
     expect(c({ regimeEspecial: "MICROEMPRESA_MUNICIPAL" }).regimeTributarioEspecial).toBe(1);
     expect(c({ regimeEspecial: "ESTIMATIVA" }).regimeTributarioEspecial).toBe(2);
     expect(c({ incentivoFiscal: true, incentivadorCultural: true })).toMatchObject({ incentivoFiscal: true, incentivadorCultural: true });
-    expect(c({ ambiente: "PRODUCAO" }).nfse).toEqual({ ativo: true, tipoContrato: 0, config: { producao: true } });
+    expect(c({ ambiente: "PRODUCAO" }).nfse).toEqual({ ativo: true, tipoContrato: 0, config: { producao: true, email: { envio: false } } });
   });
-  it("opcionais ausentes não vão: IE, complemento, telefone curto, e-mail; fantasia cai na razão; cidade do cadastro se faltar a do município", () => {
+  it("Goiânia: codigoCidade = IBGE 5208707, nome da cidade, UF em maiúscula, CEP só números; complemento vazio não vai", () => {
     const corpo = corpoEmpresaPlugNotas(
-      { ...EMPRESA, inscricaoEstadual: "ISENTO", complemento: " ", telefone: "3333-4444", email: "  ", nomeFantasia: "" },
-      { ...FISCAL, municipioNome: null }, "c",
+      { ...EMPRESA, endereco: "Av. T-63", numero: "1296", complemento: " ", bairro: "Setor Bueno", cidade: "Goiânia", estado: "GO", cep: "74.230-100" },
+      { ...FISCAL, codigoMunicipio: "5208707", municipioNome: null, municipioUf: "go" }, "c",
     );
-    expect(corpo).not.toHaveProperty("inscricaoEstadual");
-    expect(corpo).not.toHaveProperty("telefone");
-    expect(corpo).not.toHaveProperty("email");
-    expect(corpo.endereco).not.toHaveProperty("complemento");
-    expect(corpo.nomeFantasia).toBe("Clima Total Refrigeração Ltda");
-    expect(corpo.endereco.descricaoCidade).toBe("São Paulo");
+    expect(corpo.endereco).toStrictEqual({
+      codigoPais: "1058", descricaoPais: "Brasil", tipoLogradouro: "Avenida", logradouro: "T-63", numero: "1296",
+      tipoBairro: "Bairro", bairro: "Setor Bueno", codigoCidade: "5208707", descricaoCidade: "Goiânia", estado: "GO", cep: "74230100",
+    });
     expect(corpoEmpresaPlugNotas({ ...EMPRESA, cidade: null }, { ...FISCAL, municipioNome: null }, "c").endereco.descricaoCidade).toBe("");
+  });
+  it("tipo do logradouro: abreviações conhecidas viram o tipo; sem tipo reconhecível, Rua com o texto inteiro", () => {
+    const casos: [string, string, string][] = [
+      ["Av. Paulista", "Avenida", "Paulista"], ["AVENIDA  Brasil", "Avenida", "Brasil"], ["Avda Goiás", "Avenida", "Goiás"],
+      ["R. Bahia", "Rua", "Bahia"], ["Rua 7", "Rua", "7"], ["Rod. BR-153", "Rodovia", "BR-153"], ["Rodovia dos Bandeirantes", "Rodovia", "dos Bandeirantes"],
+      ["Al. Santos", "Alameda", "Santos"], ["Tv. do Ouvidor", "Travessa", "do Ouvidor"], ["Estr. Velha", "Estrada", "Velha"],
+      ["Pç. da Sé", "Praça", "da Sé"], ["Praça Cívica", "Praça", "Cívica"], ["Largo do Arouche", "Largo", "do Arouche"], ["Qd. 10", "Quadra", "10"], ["Via Expressa", "Via", "Expressa"],
+      ["Ruas Unidas", "Rua", "Ruas Unidas"], ["Avenidas", "Rua", "Avenidas"], ["Rodoanel Norte", "Rua", "Rodoanel Norte"], ["Av.", "Rua", "Av."], ["  Rua   ", "Rua", "Rua"],
+      ["Rua  das   Flores", "Rua", "das Flores"], ["Sem   Tipo  Nenhum", "Rua", "Sem Tipo Nenhum"],
+    ];
+    for (const [entrada, tipo, resto] of casos) expect(separarLogradouro(entrada), entrada).toEqual({ tipoLogradouro: tipo, logradouro: resto });
   });
 });
 
@@ -100,12 +123,41 @@ describe("mensagemErroPlugNotas", () => {
     expect(mensagemErroPlugNotas(503, null)).toBe("O PlugNotas está fora do ar ou com erro (503). Tente de novo mais tarde.");
     expect(mensagemErroPlugNotas(500, { error: { message: "x" } })).toBe("O PlugNotas está fora do ar ou com erro (500). Tente de novo mais tarde.");
   });
-  it("mensagem deles + até 5 campos; sem mensagem, a genérica com o status", () => {
+  it("sem `fields`: mensagem deles + até 5 nomes de campos de `data`; sem mensagem, a genérica com o status", () => {
     expect(mensagemErroPlugNotas(400, { error: { message: "Falha na validação", data: { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6 } } }))
-      .toBe("Falha na validação Campos: a, b, c, d, e.");
+      .toBe("Falha na validação. Campos: a; b; c; d; e.");
     expect(mensagemErroPlugNotas(422, { error: { message: "  CNPJ já cadastrado  " } })).toBe("CNPJ já cadastrado");
     expect(mensagemErroPlugNotas(400, { error: { data: { cpfCnpj: "x" } } })).toBe("O PlugNotas recusou os dados (400). Campos: cpfCnpj.");
     expect(mensagemErroPlugNotas(404, "texto")).toBe("O PlugNotas recusou os dados (404).");
+  });
+  it("validação do JSON: lista QUAIS campos falharam e por quê (antes: \"Campos: fields\")", () => {
+    const erro = (fields: unknown, onde: "data" | "error" = "data") => mensagemErroPlugNotas(400, {
+      error: { message: "Falha na validação do JSON de Empresa", ...(onde === "data" ? { data: { fields } } : { fields }) },
+    });
+    // objeto campo → motivo (com caminho aninhado e motivo em lista)
+    expect(erro({ "endereco.tipoLogradouro": "Campo obrigatório", nfse: { config: { rps: ["obrigatório", "deve ser objeto"] } } }))
+      .toBe("Falha na validação do JSON de Empresa. Campos: endereco.tipoLogradouro (Campo obrigatório); nfse.config.rps (obrigatório; deve ser objeto).");
+    // lista de objetos { field|campo|dataPath, message|mensagem } e params.missingProperty (estilo AJV)
+    expect(erro([
+      { field: "cpfCnpj", message: "CNPJ inválido" },
+      { campo: "endereco.cep", mensagem: "deve ter 8 dígitos" },
+      { dataPath: ".endereco", message: "should have required property 'tipoBairro'", params: { missingProperty: "tipoBairro" } },
+      { instancePath: "/nfse/config", message: "must have required property 'rps'" },
+    ], "error")).toBe("Falha na validação do JSON de Empresa. Campos: cpfCnpj (CNPJ inválido); endereco.cep (deve ter 8 dígitos); "
+      + "endereco.tipoBairro (should have required property 'tipoBairro'); nfse.config (must have required property 'rps').");
+    // lista de textos; repetidos uma vez só; vazio não inventa nada
+    expect(erro(["razaoSocial é obrigatório", "razaoSocial é obrigatório", "", null])).toBe("Falha na validação do JSON de Empresa. Campos: razaoSocial é obrigatório.");
+    expect(erro({})).toBe("Falha na validação do JSON de Empresa");
+    expect(erro("cep")).toBe("Falha na validação do JSON de Empresa. Campos: cep.");
+  });
+  it("detalhe dos campos: no máximo 8, motivo de até 120 caracteres; não desce sem fim", () => {
+    const muitos = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`c${i}`, "x"]));
+    expect(camposReprovados(muitos)).toEqual(Array.from({ length: 8 }, (_, i) => `c${i} (x)`));
+    expect(camposReprovados({ a: "m".repeat(200) })).toEqual([`a (${"m".repeat(120)})`]);
+    // até 4 níveis de objeto; o 5º já não é aberto
+    expect(camposReprovados({ a: { b: { c: { d: { e: "fundo" } } } } })).toEqual([]);
+    expect(camposReprovados({ a: { b: { c: { d: "ok" } } } })).toEqual(["a.b.c.d (ok)"]);
+    expect(camposReprovados({ n: 3, ok: true })).toEqual(["n (3)", "ok (true)"]);
   });
 });
 

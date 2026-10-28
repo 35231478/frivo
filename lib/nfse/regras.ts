@@ -3,11 +3,15 @@
  * mesmas). Rótulos dos regimes, o que ainda falta para cadastrar o emitente, o corpo que vai para o
  * PlugNotas (POST/PATCH /empresa), o status mostrado na tela e as mensagens de erro em português.
  *
- * Mapeamento para o PlugNotas (campos `simplesNacional`, `regimeTributario`, `regimeTributarioEspecial`):
+ * Mapeamento para o PlugNotas (campos `simplesNacional`, `regimeTributario`, `regimeTributarioEspecial`),
+ * pelos códigos da documentação do cadastro de empresa deles:
+ *   regimeTributario: 0 Nenhum · 1 Simples Nacional · 2 Simples Nacional (excesso de sublimite)
+ *                     · 3 Normal – Lucro Presumido · 4 Normal – Lucro Real
  *   Simples Nacional → simplesNacional true,  regimeTributario 1
  *   MEI              → simplesNacional true,  regimeTributario 1, regimeTributarioEspecial 5
- *   Lucro Presumido  → simplesNacional false, regimeTributario 3 (regime normal)
- *   Lucro Real       → simplesNacional false, regimeTributario 3 (regime normal)
+ *   Lucro Presumido  → simplesNacional false, regimeTributario 3
+ *   Lucro Real       → simplesNacional false, regimeTributario 4
+ *   regimeTributarioEspecial: 0 nenhum, ou o código de REGIMES_ESPECIAIS (1 a 6)
  */
 
 export const REGIMES = ["SIMPLES_NACIONAL", "LUCRO_PRESUMIDO", "LUCRO_REAL", "MEI"] as const;
@@ -94,58 +98,130 @@ export function pendenciasEmitente(e: EmpresaEmitente, f: DadosFiscais, temCerti
   return p;
 }
 
-/** Telefone no formato do PlugNotas ({ ddd, numero }) ou nada */
-function telefonePlug(t: string | null | undefined) {
-  const d = soDigitos(t);
-  return d.length >= 10 ? { ddd: d.slice(0, 2), numero: d.slice(2) } : undefined;
+/** Código do PlugNotas para o regime tributário (ver o cabeçalho) */
+export const CODIGO_REGIME: Record<Regime, number> = { SIMPLES_NACIONAL: 1, MEI: 1, LUCRO_PRESUMIDO: 3, LUCRO_REAL: 4 };
+
+/** Abreviações/nomes comuns no começo do logradouro → o `tipoLogradouro` do PlugNotas */
+const TIPOS_LOGRADOURO: [RegExp, string][] = [
+  [/^(av|avda|avenida)\.?\s+/i, "Avenida"],
+  [/^(rod|rodovia)\.?\s+/i, "Rodovia"],
+  [/^(r|rua)\.?\s+/i, "Rua"],
+  [/^(al|alameda)\.?\s+/i, "Alameda"],
+  [/^(tv|trav|travessa)\.?\s+/i, "Travessa"],
+  [/^(estr|estrada)\.?\s+/i, "Estrada"],
+  [/^(pç|pc|pca|pça|praça|praca)\.?\s+/i, "Praça"],
+  [/^(lg|lgo|largo)\.?\s+/i, "Largo"],
+  [/^(qd|quadra)\.?\s+/i, "Quadra"],
+  [/^via\s+/i, "Via"],
+];
+
+/**
+ * Separa o tipo do logradouro ("Av. Paulista" → Avenida + "Paulista"). Sem tipo reconhecível, vai
+ * "Rua" com o logradouro inteiro (o PlugNotas exige o campo; a prefeitura recebe o texto completo).
+ */
+export function separarLogradouro(logradouro: string): { tipoLogradouro: string; logradouro: string } {
+  const l = logradouro.trim().replace(/\s+/g, " ");
+  for (const [re, tipo] of TIPOS_LOGRADOURO) {
+    const resto = l.replace(re, "");
+    if (resto !== l) return { tipoLogradouro: tipo, logradouro: resto };
+  }
+  return { tipoLogradouro: "Rua", logradouro: l };
 }
 
-/** Corpo do emitente para POST /empresa e PATCH /empresa/{cpfCnpj} no PlugNotas */
+/**
+ * Corpo do emitente para POST /empresa e PATCH /empresa/{cpfCnpj} no PlugNotas — exatamente os
+ * campos do exemplo oficial da coleção do sandbox (nada além: campo desconhecido reprova o JSON).
+ */
 export function corpoEmpresaPlugNotas(e: EmpresaEmitente, f: DadosFiscais, certificadoId: string) {
   const regime = f.regimeTributario!;
   const simples = regime === "SIMPLES_NACIONAL" || regime === "MEI";
   const especial = regime === "MEI" ? 5 : REGIMES_ESPECIAIS.find((r) => r.id === f.regimeEspecial)?.codigo ?? 0;
-  const telefone = telefonePlug(e.telefone);
+  const { tipoLogradouro, logradouro } = separarLogradouro(e.endereco!);
   return {
     cpfCnpj: soDigitos(e.cnpj),
-    inscricaoMunicipal: soDigitos(e.inscricaoMunicipal),
-    ...(soDigitos(e.inscricaoEstadual) ? { inscricaoEstadual: soDigitos(e.inscricaoEstadual) } : {}),
     razaoSocial: e.nome.trim(),
-    nomeFantasia: (e.nomeFantasia?.trim() || e.nome).trim(),
-    certificado: certificadoId,
+    inscricaoMunicipal: soDigitos(e.inscricaoMunicipal),
     simplesNacional: simples,
-    regimeTributario: simples ? 1 : 3,
+    regimeTributario: CODIGO_REGIME[regime],
     regimeTributarioEspecial: especial,
     incentivoFiscal: f.incentivoFiscal,
     incentivadorCultural: f.incentivadorCultural,
+    certificado: certificadoId,
     endereco: {
-      logradouro: e.endereco!.trim(),
-      numero: e.numero!.trim(),
-      ...(e.complemento?.trim() ? { complemento: e.complemento.trim() } : {}),
-      bairro: e.bairro!.trim(),
       codigoPais: "1058",
       descricaoPais: "Brasil",
+      tipoLogradouro,
+      logradouro,
+      numero: e.numero!.trim(),
+      ...(e.complemento?.trim() ? { complemento: e.complemento.trim() } : {}),
+      tipoBairro: "Bairro",
+      bairro: e.bairro!.trim(),
       codigoCidade: f.codigoMunicipio!,
       descricaoCidade: f.municipioNome?.trim() || e.cidade?.trim() || "",
       estado: f.municipioUf!.toUpperCase(),
       cep: soDigitos(e.cep),
     },
-    ...(telefone ? { telefone } : {}),
-    ...(e.email?.trim() ? { email: e.email.trim() } : {}),
-    // Só NFS-e por enquanto; producao=false = homologação na prefeitura
-    nfse: { ativo: true, tipoContrato: 0, config: { producao: f.ambiente === "PRODUCAO" } },
+    // Só NFS-e por enquanto; producao=false = homologação. O Frivo envia a nota por conta própria.
+    nfse: { ativo: true, tipoContrato: 0, config: { producao: f.ambiente === "PRODUCAO", email: { envio: false } } },
   };
 }
+
+export type CorpoEmpresaPlugNotas = ReturnType<typeof corpoEmpresaPlugNotas>;
 
 /**
  * Mensagem em português para um erro do PlugNotas ({ error: { message, data } }), sem repetir
  * nada sensível (o corpo de erro deles nunca traz o certificado nem a senha; mesmo assim só lemos
  * a mensagem e os nomes de campos).
  */
+const MAX_CAMPOS = 8;
+const texto = (v: unknown) => (typeof v === "string" ? v.trim() : typeof v === "number" || typeof v === "boolean" ? String(v) : "");
+
+/**
+ * Os campos reprovados na validação do PlugNotas, como "campo (motivo)". Aceita os formatos que a
+ * API usa para `fields`: objeto { "endereco.cep": "motivo" } (aninhado ou não, motivo em texto ou
+ * lista) ou lista de textos / de { campo|field|path|dataPath, mensagem|message } .
+ */
+export function camposReprovados(fields: unknown): string[] {
+  const saida: string[] = [];
+  const add = (campo: string, motivo: string) => {
+    if (saida.length >= MAX_CAMPOS) return;
+    const c = campo.replace(/^[./]+/, "").replace(/\//g, ".");
+    const m = motivo.slice(0, 120);
+    const item = c && m ? `${c} (${m})` : c || m;
+    if (item && !saida.includes(item)) saida.push(item);
+  };
+  const andar = (v: unknown, caminho: string, prof: number) => {
+    if (prof > 4 || saida.length >= MAX_CAMPOS) return;
+    if (Array.isArray(v)) {
+      if (v.every((x) => texto(x) || x == null)) { add(caminho, v.map(texto).filter(Boolean).join("; ")); return; }
+      for (const x of v) andar(x, caminho, prof + 1);
+      return;
+    }
+    if (v && typeof v === "object") {
+      const o = v as Record<string, unknown>;
+      const campoItem = texto(o.campo ?? o.field ?? o.path ?? o.dataPath ?? o.instancePath ?? o.property ?? o.name);
+      const motivoItem = texto(o.mensagem ?? o.message ?? o.msg ?? o.error ?? o.erro);
+      const faltando = texto((o.params as Record<string, unknown> | undefined)?.missingProperty);
+      if (campoItem || motivoItem) {
+        add([caminho, campoItem, faltando].filter(Boolean).join("."), motivoItem);
+        return;
+      }
+      for (const [k, filho] of Object.entries(o)) andar(filho, caminho ? `${caminho}.${k}` : k, prof + 1);
+      return;
+    }
+    add(caminho, texto(v));
+  };
+  andar(fields, "", 0);
+  return saida;
+}
+
 export function mensagemErroPlugNotas(status: number, corpo: unknown): string {
-  const err = (corpo as { error?: { message?: unknown; data?: unknown } } | null)?.error;
+  const err = (corpo as { error?: { message?: unknown; data?: unknown; fields?: unknown } } | null)?.error;
   const msg = typeof err?.message === "string" ? err.message.trim() : "";
-  const campos = err?.data && typeof err.data === "object" ? Object.keys(err.data as object).slice(0, 5) : [];
+  const data = err?.data && typeof err.data === "object" ? (err.data as Record<string, unknown>) : null;
+  const fields = err?.fields ?? data?.fields;
+  // Validação do JSON: o detalhe (qual campo e por quê) vem em `fields`; sem ele, só os nomes em `data`
+  const campos = fields !== undefined ? camposReprovados(fields) : data ? Object.keys(data).slice(0, 5) : [];
   const t = msg.toLowerCase();
   if (status === 401 || status === 403) return "O PlugNotas recusou o acesso: o token da integração (PLUGNOTAS_API_TOKEN) é inválido ou não tem permissão.";
   if (/senha/.test(t)) return "O PlugNotas recusou o certificado: a senha não confere.";
@@ -153,7 +229,7 @@ export function mensagemErroPlugNotas(status: number, corpo: unknown): string {
   if (status === 429) return "O PlugNotas limitou as requisições agora. Tente de novo em alguns minutos.";
   if (status >= 500) return `O PlugNotas está fora do ar ou com erro (${status}). Tente de novo mais tarde.`;
   const base = msg || `O PlugNotas recusou os dados (${status}).`;
-  return campos.length ? `${base} Campos: ${campos.join(", ")}.` : base;
+  return campos.length ? `${base.replace(/[.!:;\s]+$/, "")}. Campos: ${campos.join("; ")}.` : base;
 }
 
 /** Como a tela mostra o certificado: validade, dias que faltam e o tom do aviso */
