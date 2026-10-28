@@ -3478,6 +3478,9 @@ model EmpresaFiscal {
   certificadoCnpj        String?   @map("certificado_cnpj") @db.VarChar(14)
   certificadoValidoAte   DateTime? @map("certificado_valido_ate")
   certificadoEnviadoEm   DateTime? @map("certificado_enviado_em")
+  /// Login/senha do portal de NFS-e da prefeitura, CRIPTOGRAFADOS (AES-256-GCM, lib/crypto): nunca em texto
+  prefeituraCripto       String?   @map("prefeitura_cripto")
+  prefeituraAtualizadaEm DateTime? @map("prefeitura_atualizada_em")
   /// Referência do emitente no PlugNotas (o cpfCnpj) e em que ambiente foi cadastrado
   emitenteCnpj           String?   @map("emitente_cnpj") @db.VarChar(14)
   emitenteAmbiente       String?   @map("emitente_ambiente")

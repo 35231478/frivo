@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, FileKey2, FileUp, FlaskConical, Info, Loader2, MapPin, PlugZap, Save, ShieldCheck, X, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileKey2, FileUp, FlaskConical, Info, Landmark, Loader2, MapPin, PlugZap, Save, ShieldCheck, X, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -30,6 +30,10 @@ export function DadosFiscaisClient({ inicial }: { inicial: EmitenteTela }) {
   const [arquivo, setArquivo] = useState<File | null>(null);
   const arquivoRef = useRef<HTMLInputElement>(null);
   const [arrastando, setArrastando] = useState(false);
+  // Autenticação da prefeitura: digitada só para este envio (a guardada nunca volta para a tela)
+  const [prefLogin, setPrefLogin] = useState("");
+  const [prefSenha, setPrefSenha] = useState("");
+  const [removerPref, setRemoverPref] = useState(false);
   const [ocupado, setOcupado] = useState<"salvar" | "testar" | "municipio" | null>(null);
   const [msg, setMsg] = useState<{ tipo: "ok" | "erro" | "aviso"; texto: string } | null>(null);
   const muda = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => { setF((s) => ({ ...s, [k]: v })); setMsg(null); };
@@ -74,6 +78,9 @@ export function DadosFiscaisClient({ inicial }: { inicial: EmitenteTela }) {
     corpo.append("municipioNome", f.municipioNome ?? "");
     corpo.append("municipioUf", f.municipioUf ?? "");
     if (arquivo) { corpo.append("certificado", arquivo); corpo.append("senha", senha); }
+    if (prefLogin.trim()) corpo.append("prefeituraLogin", prefLogin.trim());
+    if (prefSenha) corpo.append("prefeituraSenha", prefSenha);
+    if (removerPref && !prefLogin.trim() && !prefSenha) corpo.append("prefeituraRemover", "true");
     setOcupado("salvar");
     try {
       const r = await fetch("/api/fiscal/emitente", { method: "POST", body: corpo });
@@ -81,13 +88,14 @@ export function DadosFiscaisClient({ inicial }: { inicial: EmitenteTela }) {
       if (d.emitente) { setE(d.emitente); setF(d.emitente.dados); }
       // recusado aqui (senha errada, vencido, outro CNPJ…): o arquivo fica para tentar de novo, a senha não
       if (!r.ok && !d.emitente) { setMsg({ tipo: "erro", texto: d.erro ?? "Não foi possível salvar." }); return; }
-      // chegou ao servidor e foi processado: a senha e o arquivo saem da tela
+      // chegou ao servidor e foi processado: a senha e o arquivo saem da tela; a prefeitura já está guardada
       setArquivo(null); if (arquivoRef.current) arquivoRef.current.value = "";
+      setPrefLogin(""); setRemoverPref(false);
       if (d.sincronizado) { toast(d.mensagem); setMsg({ tipo: "ok", texto: d.mensagem }); }
       else setMsg({ tipo: d.erro ? "erro" : "aviso", texto: d.mensagem ?? d.erro });
     } catch { setMsg({ tipo: "erro", texto: "Sem conexão. Tente de novo." }); } finally {
-      // a senha nunca fica na tela depois de um envio, dê certo ou não
-      setSenha(""); setOcupado(null);
+      // as senhas nunca ficam na tela depois de um envio, dê certo ou não
+      setSenha(""); setPrefSenha(""); setOcupado(null);
     }
   }
 
@@ -220,6 +228,37 @@ export function DadosFiscaisClient({ inicial }: { inicial: EmitenteTela }) {
             );
           })}
         </div>
+      </FormSection>
+
+      <FormSection title="Autenticação da Prefeitura" icon={<Landmark className="w-4 h-4" />}>
+        <p className="-mt-2 text-xs text-ink-muted" data-ajuda-prefeitura>Login e senha da sua empresa no portal de NFS-e da prefeitura. Alguns municípios exigem só a senha.</p>
+        {e.prefeitura && (
+          <div data-prefeitura-guardada className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-xs",
+            e.prefeitura.ilegivel ? "border-atencao/30 bg-atencao-claro text-atencao-texto" : "border-surface-border bg-surface-alt/60 text-ink-muted")}>
+            {e.prefeitura.ilegivel ? (
+              <span className="flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5 shrink-0" /> A credencial guardada não pôde ser lida neste servidor. Digite o login e a senha de novo.</span>
+            ) : (
+              <span className="flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 shrink-0 text-ok" />
+                {removerPref ? "Será removida ao salvar." : `Guardada (${[e.prefeitura.temLogin && "login", e.prefeitura.temSenha && "senha"].filter(Boolean).join(" e ")}${e.prefeitura.atualizadaEm ? `, em ${formatarData(e.prefeitura.atualizadaEm)}` : ""}). Deixe em branco para manter.`}
+              </span>
+            )}
+            <button type="button" data-remover-prefeitura onClick={() => { setRemoverPref((v) => !v); setMsg(null); }}
+              className="ml-auto font-medium text-acento hover:underline">{removerPref ? "Manter" : "Remover"}</button>
+          </div>
+        )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <FormField label="Login (opcional)">
+            <Input value={prefLogin} onChange={(ev) => { setPrefLogin(ev.target.value); setMsg(null); }} name="prefeituraLogin" autoComplete="off" maxLength={120}
+              placeholder={e.prefeitura?.temLogin ? "Guardado — digite para trocar" : ""} />
+          </FormField>
+          <FormField label="Senha (opcional)">
+            <Input type="password" value={prefSenha} onChange={(ev) => { setPrefSenha(ev.target.value); setMsg(null); }} name="prefeituraSenha" autoComplete="new-password" maxLength={200}
+              placeholder={e.prefeitura?.temSenha ? "Guardada — digite para trocar" : ""} />
+          </FormField>
+        </div>
+        <p className="text-xs text-ink-muted flex items-start gap-1.5"><ShieldCheck className="w-3.5 h-3.5 mt-px shrink-0 text-ok" />
+          Vai ao PlugNotas por conexão segura (HTTPS) e fica guardada só criptografada, para reenviar quando os dados fiscais forem salvos de novo. Nunca aparece de volta na tela.</p>
       </FormSection>
 
       <FormSection title="Certificado digital A1" icon={<FileKey2 className="w-4 h-4" />}>

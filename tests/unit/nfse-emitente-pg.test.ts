@@ -8,7 +8,9 @@
  *  - salvar de novo: PATCH (sem reenviar o certificado); erro do PlugNotas: dados ficam, status ERRO;
  *  - Testar conexão: OK / emitente sumiu / certificado vencido lá; produção bloqueada sem token próprio;
  *    trocar de ambiente exige reenviar o certificado; cada empresa é um emitente separado;
- *  - município pelo endereço (ViaCEP), item de Configurações e a página com a permissão.
+ *  - município pelo endereço (ViaCEP), item de Configurações e a página com a permissão;
+ *  - autenticação da prefeitura: vai em nfse.config.prefeitura, fica só cifrada (AES-256-GCM), é
+ *    reenviada nas edições, nunca volta na resposta/log/erro; só senha; chave trocada; remover.
  *   PG_TESTE_URL="postgresql://root@localhost/postgres?host=/var/run/postgresql" npx vitest run tests/unit/nfse-emitente-pg
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -20,6 +22,7 @@ import { montarPermissoes, permissoesTotais, type Permissoes } from "@/lib/permi
 import { itemConfig, podeVerItemConfig } from "@/lib/navegacao/configuracoes";
 import { gerarPfx } from "./helpers/pfx";
 import { criarPlugNotasFalso, PRODUCAO, SANDBOX } from "./helpers/plugnotas-falso";
+import { criptografar, descriptografar } from "@/lib/crypto";
 
 const URL_PG = process.env.PG_TESTE_URL;
 const SCHEMA = `teste_nfse_emitente_${process.pid}`;
@@ -52,7 +55,7 @@ const CAMPOS = {
   inscricaoMunicipal: "1234567-8", regimeTributario: "SIMPLES_NACIONAL", regimeEspecial: "", incentivoFiscal: "false", incentivadorCultural: "false",
   ambiente: "HOMOLOGACAO", codigoMunicipio: "3550308", municipioNome: "São Paulo", municipioUf: "SP",
 };
-function formulario(campos: Partial<Record<keyof typeof CAMPOS, string>> = {}, cert?: { arquivo?: Buffer; nome?: string; senha?: string }) {
+function formulario(campos: Partial<Record<keyof typeof CAMPOS | "prefeituraLogin" | "prefeituraSenha" | "prefeituraRemover", string>> = {}, cert?: { arquivo?: Buffer; nome?: string; senha?: string }) {
   const f = new FormData();
   for (const [k, v] of Object.entries({ ...CAMPOS, ...campos })) f.append(k, v);
   if (cert) {
@@ -210,6 +213,74 @@ describe.skipIf(!URL_PG)("NFS-e: dados fiscais e emitente no PlugNotas (PostgreS
     expect([r.status, r.json.mensagem]).toEqual([200, "Emitente atualizado no PlugNotas (homologação (testes))."]);
     expect(plug.rotas()).toEqual(["GET /empresa/12345678000190", "PATCH /empresa/12345678000190"]);
     expect(plug.estado.chamadas[1].json).toMatchObject({ certificado: "cert-1", simplesNacional: false, regimeTributario: 3, incentivoFiscal: true });
+  });
+
+  it("autenticação da prefeitura: nfse.config.prefeitura, só cifrada no banco, reenviada nas edições, nunca volta; só senha; chave trocada; remover", async () => {
+    const chaveOriginal = process.env.ENCRYPTION_KEY;
+    process.env.ENCRYPTION_KEY = "chave-de-teste-da-prefeitura-0123456789";
+    const PREF = "Pref#Chave-2026";
+    plug.estado.exigirPrefeitura = true;
+    // sem credencial, o município exige: o detalhe do campo aparece (#91)
+    let r = await salvar({});
+    expect([r.status, r.json.erro]).toEqual([502, "Falha na validação do JSON de Empresa. Campos: nfse.config.prefeitura (Preenchimento obrigatório)."]);
+    expect(r.json.emitente.prefeitura).toBeNull();
+    // login + senha: vão ao PlugNotas (login aparado), ficam SÓ cifrados, não voltam
+    r = await salvar({ prefeituraLogin: "  clima.total  ", prefeituraSenha: PREF });
+    expect([r.status, r.json.sincronizado]).toEqual([200, true]);
+    expect(plug.estado.chamadas.at(-1)!).toMatchObject({ metodo: "PATCH", json: { nfse: { config: { producao: false, email: { envio: false }, prefeitura: { login: "clima.total", senha: PREF } } } } });
+    let f = await fiscal();
+    expect(f.prefeituraCripto).toMatch(/^[A-Za-z0-9+/=]+\.[A-Za-z0-9+/=]+\.[A-Za-z0-9+/=]+$/);
+    expect(descriptografar(f.prefeituraCripto)).toBe(JSON.stringify({ login: "clima.total", senha: PREF }));
+    const linha = JSON.stringify(await prisma.$queryRawUnsafe(`SELECT * FROM empresa_fiscal`));
+    expect(linha).not.toContain(PREF);
+    expect(linha).not.toContain("clima.total");
+    expect(r.texto).not.toContain(PREF);
+    expect(r.texto).not.toContain("clima.total");
+    expect(r.json.emitente.prefeitura).toEqual({ temLogin: true, temSenha: true, ilegivel: false, atualizadaEm: f.prefeituraAtualizadaEm.toISOString() });
+    expect((await chamar("fiscal/emitente", "GET")).texto).not.toContain(PREF);
+    // edição sem digitar de novo: a guardada é reenviada (o PATCH manda o nfse.config inteiro)
+    r = await salvar({ regimeTributario: "LUCRO_PRESUMIDO" });
+    expect(r.json.sincronizado).toBe(true);
+    expect(plug.estado.chamadas.at(-1)!.json.nfse.config.prefeitura).toEqual({ login: "clima.total", senha: PREF });
+    expect((await fiscal()).prefeituraCripto).toBe(f.prefeituraCripto); // não regravou
+    // só a senha (municípios sem login): substitui a guardada inteira
+    r = await salvar({ prefeituraSenha: "So-Chave-99" });
+    expect(plug.estado.chamadas.at(-1)!.json.nfse.config.prefeitura).toEqual({ senha: "So-Chave-99" });
+    expect(r.json.emitente.prefeitura).toMatchObject({ temLogin: false, temSenha: true, ilegivel: false });
+    // o PlugNotas ecoa a senha da prefeitura no erro: sai da mensagem, do banco e da resposta
+    plug.estado.falhas["PATCH /empresa*"] = { status: 400, corpo: { error: { message: "Login na prefeitura recusado (So-Chave-99)" } } };
+    r = await salvar({});
+    expect([r.status, r.json.erro]).toEqual([502, "Login na prefeitura recusado (•••)"]);
+    expect(JSON.stringify(await fiscal()) + r.texto).not.toContain("So-Chave-99");
+    delete plug.estado.falhas["PATCH /empresa*"];
+    // chave do servidor trocada: a guardada fica ilegível — não manda lixo, avisa na tela
+    process.env.ENCRYPTION_KEY = "outra-chave-de-teste-9876543210";
+    r = await salvar({});
+    expect(r.json.erro).toBe("Falha na validação do JSON de Empresa. Campos: nfse.config.prefeitura (Preenchimento obrigatório).");
+    expect(plug.estado.chamadas.at(-1)!.json.nfse.config).not.toHaveProperty("prefeitura");
+    expect(r.json.emitente.prefeitura).toMatchObject({ temLogin: false, temSenha: false, ilegivel: true });
+    // decifra mas não é o JSON esperado (dado corrompido): também ilegível, sem quebrar a tela
+    await prisma.empresaFiscal.update({ where: { empresaId: "e1" }, data: { prefeituraCripto: criptografar("não é json") } });
+    const g = await chamar("fiscal/emitente", "GET");
+    expect([g.status, g.json.prefeitura]).toEqual([200, expect.objectContaining({ ilegivel: true, temSenha: false })]);
+    // remover (sem digitar nada): apaga a guardada e não envia
+    plug.estado.exigirPrefeitura = false;
+    r = await salvar({ prefeituraRemover: "true" });
+    expect(r.json.sincronizado).toBe(true);
+    f = await fiscal();
+    expect([f.prefeituraCripto, f.prefeituraAtualizadaEm, r.json.emitente.prefeitura]).toEqual([null, null, null]);
+    expect(plug.estado.chamadas.at(-1)!.json.nfse.config).not.toHaveProperty("prefeitura");
+    // digitou E pediu remover: vale o que foi digitado; campos longos demais são recusados sem eco
+    r = await salvar({ prefeituraSenha: "Nova-Chave-7", prefeituraRemover: "true" });
+    expect(plug.estado.chamadas.at(-1)!.json.nfse.config.prefeitura).toEqual({ senha: "Nova-Chave-7" });
+    const longa = "x".repeat(201);
+    expect((await salvar({ prefeituraSenha: longa })).json).toEqual({ erro: "Senha da prefeitura longa demais." });
+    expect((await salvar({ prefeituraLogin: "l".repeat(121) })).json).toEqual({ erro: "Login da prefeitura longo demais." });
+    await salvar({ prefeituraRemover: "true" });
+    expect((await fiscal()).prefeituraCripto).toBeNull();
+    // nada disso no log
+    expect(JSON.stringify(logs)).not.toMatch(/Pref#Chave-2026|So-Chave-99|Nova-Chave-7|clima\.total/);
+    if (chaveOriginal === undefined) delete process.env.ENCRYPTION_KEY; else process.env.ENCRYPTION_KEY = chaveOriginal;
   });
 
   it("Testar conexão: OK com a validade; emitente sumido lá; certificado vencido lá; PlugNotas fora do ar", async () => {

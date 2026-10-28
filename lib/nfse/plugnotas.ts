@@ -20,7 +20,7 @@
  *   - redirecionamento é recusado (`redirect: "error"`): o fetch repassaria o `x-api-key` (e, num
  *     307/308, o .pfx e a senha) para outro endereço;
  *   - a mensagem que vem do PlugNotas é repassada à tela e guardada em `ultimo_erro`: antes disso,
- *     o token e a senha são tirados dela, caso a API os ecoe.
+ *     o token e as senhas (do certificado e da prefeitura) são tirados dela, caso a API os ecoe.
  */
 import { mensagemErroPlugNotas, type Ambiente, type CorpoEmpresaPlugNotas } from "@/lib/nfse/regras";
 
@@ -131,6 +131,7 @@ export async function salvarEmpresa(ambiente: Ambiente, corpo: CorpoEmpresaPlugN
   const r = existe
     ? await chamar(ambiente, `/empresa/${corpo.cpfCnpj}`, { method: "PATCH", json: corpo })
     : await chamar(ambiente, "/empresa", { method: "POST", json: corpo });
-  if (!r.ok) throw falha(r);
+  // a senha da prefeitura vai no corpo: se a API a ecoar no erro, sai da mensagem como o token
+  if (!r.ok) throw falha(r, corpo.nfse?.config?.prefeitura?.senha ?? "");
   return existe ? "atualizado" : "cadastrado";
 }

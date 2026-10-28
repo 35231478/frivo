@@ -3,14 +3,17 @@
  * fiscais (+ certificado A1) e cadastrar/atualizar o emitente lá, e "Testar conexão".
  * Empresa SEMPRE a da sessão (quem chama passa). O .pfx e a senha só existem na memória desta
  * requisição: são lidos, enviados ao PlugNotas e descartados — nunca gravados nem logados.
+ * O login/senha da prefeitura (nfse.config.prefeitura) precisa ser reenviado a cada PATCH, então
+ * fica guardado SÓ criptografado (AES-256-GCM, lib/crypto) e nunca volta para a tela nem para o log.
  */
 import { prisma } from "@/lib/prisma";
+import { criptografar, descriptografar } from "@/lib/crypto";
 import { formatarCpfCnpj, formatarData } from "@/lib/utils";
 import { ErroCertificado, lerCertificadoA1 } from "@/lib/nfse/certificado";
 import { ambienteDisponivel, consultarCertificado, consultarEmpresa, enviarCertificado, ErroPlugNotas, salvarEmpresa } from "@/lib/nfse/plugnotas";
 import {
-  corpoEmpresaPlugNotas, LABEL_AMBIENTE, LABEL_STATUS, pendenciasEmitente, situacaoCertificado, soDigitos,
-  type Ambiente, type DadosFiscais, type RegimeEspecial, type Regime, type StatusEmitente,
+  corpoEmpresaPlugNotas, LABEL_AMBIENTE, LABEL_STATUS, pendenciasEmitente, prefeituraPlugNotas, situacaoCertificado, soDigitos,
+  type Ambiente, type CredencialPrefeitura, type DadosFiscais, type RegimeEspecial, type Regime, type StatusEmitente,
 } from "@/lib/nfse/regras";
 
 export class ErroFiscal extends Error {
@@ -41,6 +44,18 @@ const dadosDe = (f: Fiscal | null): DadosFiscais => ({
   municipioUf: f?.municipioUf ?? null,
 });
 
+/** Credencial da prefeitura guardada: decifra o JSON { login?, senha? }; ilegível (chave trocada, dado corrompido) = null */
+function lerPrefeitura(cripto: string | null | undefined): CredencialPrefeitura | null {
+  const texto = descriptografar(cripto);
+  if (!texto) return null;
+  try {
+    const c = JSON.parse(texto) as CredencialPrefeitura;
+    return prefeituraPlugNotas(c) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** O que a tela "Dados fiscais" recebe (nunca o certificado nem a senha: eles nem existem aqui) */
 export async function carregarEmitente(empresaId: string) {
   const { empresa, fiscal } = await carregarTudo(empresaId);
@@ -65,6 +80,12 @@ export async function carregarEmitente(empresaId: string) {
           dias: sit?.dias ?? null, vencido: sit?.vencido ?? false, vencendo: sit?.vencendo ?? false,
         }
       : null,
+    // da prefeitura, só SE há login/senha guardados (nunca os valores)
+    prefeitura: (() => {
+      if (!fiscal?.prefeituraCripto) return null;
+      const c = lerPrefeitura(fiscal.prefeituraCripto);
+      return { temLogin: !!c?.login, temSenha: !!c?.senha, ilegivel: !c, atualizadaEm: fiscal.prefeituraAtualizadaEm?.toISOString() ?? null };
+    })(),
     ultimoErro: fiscal?.ultimoErro ?? null,
     ultimoTeste: fiscal?.ultimoTesteEm ? { em: fiscal.ultimoTesteEm.toISOString(), ok: !!fiscal.ultimoTesteOk, mensagem: fiscal.ultimoTesteMensagem } : null,
     pendencias: pendenciasEmitente(empresa, dados, !!fiscal?.certificadoId),
@@ -82,6 +103,10 @@ export interface CertificadoEnviado { arquivo: Buffer; nome: string; senha: stri
  */
 export async function salvarEmitente(p: {
   empresaId: string; usuarioId: string; dados: DadosFiscais; inscricaoMunicipal: string; certificado?: CertificadoEnviado | null;
+  /** Login/senha do portal da prefeitura digitados agora (vazio = manter o que está guardado) */
+  prefeitura?: CredencialPrefeitura | null;
+  /** Apagar a credencial guardada (só vale se nada novo foi digitado) */
+  removerPrefeitura?: boolean;
 }) {
   const { empresa, fiscal } = await carregarTudo(p.empresaId);
   const agora = new Date();
@@ -112,7 +137,19 @@ export async function salvarEmitente(p: {
     throw new ErroFiscal(`Para mudar para ${LABEL_AMBIENTE[p.dados.ambiente].toLowerCase()}, envie o certificado de novo (cada ambiente do PlugNotas tem o seu cadastro).`);
   }
 
-  // 3) Grava os dados (o que a pessoa digitou não se perde se o PlugNotas falhar)
+  // 3) Credencial da prefeitura: a digitada agora (cifrada antes de gravar) > remover > a guardada
+  const novaPrefeitura = prefeituraPlugNotas(p.prefeitura);
+  let prefeituraCripto: string | null | undefined;
+  if (novaPrefeitura) {
+    try {
+      prefeituraCripto = criptografar(JSON.stringify(novaPrefeitura));
+    } catch {
+      throw new ErroFiscal("O servidor não tem a chave de criptografia (ENCRYPTION_KEY) para guardar a senha da prefeitura.", 503);
+    }
+  } else if (p.removerPrefeitura) prefeituraCripto = null;
+  const credencialPrefeitura = novaPrefeitura ?? (p.removerPrefeitura ? null : lerPrefeitura(fiscal?.prefeituraCripto));
+
+  // 4) Grava os dados (o que a pessoa digitou não se perde se o PlugNotas falhar)
   const im = p.inscricaoMunicipal.trim() || null;
   await prisma.empresa.update({ where: { id: p.empresaId }, data: { inscricaoMunicipal: im } });
   const base = {
@@ -120,6 +157,7 @@ export async function salvarEmitente(p: {
     incentivoFiscal: p.dados.incentivoFiscal, incentivadorCultural: p.dados.incentivadorCultural, ambiente: p.dados.ambiente,
     codigoMunicipio: p.dados.codigoMunicipio, municipioNome: p.dados.municipioNome?.trim() || null, municipioUf: p.dados.municipioUf?.toUpperCase() || null,
     atualizadoPorId: p.usuarioId,
+    ...(prefeituraCripto !== undefined ? { prefeituraCripto, prefeituraAtualizadaEm: prefeituraCripto ? new Date() : null } : {}),
   };
   await prisma.empresaFiscal.upsert({
     where: { empresaId: p.empresaId },
@@ -127,7 +165,7 @@ export async function salvarEmitente(p: {
     update: base,
   });
 
-  // 4) Falta algo? Fica PENDENTE (sem chamar o PlugNotas)
+  // 5) Falta algo? Fica PENDENTE (sem chamar o PlugNotas)
   const empresaAtual = { ...empresa, inscricaoMunicipal: im };
   const dados = { ...p.dados, regimeEspecial: base.regimeEspecial as RegimeEspecial | null };
   const pendencias = pendenciasEmitente(empresaAtual, dados, !!lido || !!fiscal?.certificadoId);
@@ -136,7 +174,7 @@ export async function salvarEmitente(p: {
     return { sincronizado: false as const, pendencias, mensagem: "Dados salvos. Ainda falta preencher o que está na lista para cadastrar no PlugNotas." };
   }
 
-  // 5) PlugNotas: certificado (se veio) → emitente (cadastra ou atualiza)
+  // 6) PlugNotas: certificado (se veio) → emitente (cadastra ou atualiza)
   const ambiente = p.dados.ambiente;
   const cnpj = soDigitos(empresa.cnpj);
   try {
@@ -150,7 +188,7 @@ export async function salvarEmitente(p: {
       });
     }
     const existe = !!(await consultarEmpresa(ambiente, cnpj));
-    const acao = await salvarEmpresa(ambiente, corpoEmpresaPlugNotas(empresaAtual, dados, certificadoId!), existe);
+    const acao = await salvarEmpresa(ambiente, corpoEmpresaPlugNotas(empresaAtual, dados, certificadoId!, credencialPrefeitura), existe);
     await prisma.empresaFiscal.update({
       where: { empresaId: p.empresaId },
       data: { emitenteCnpj: cnpj, emitenteAmbiente: ambiente, emitenteSincronizadoEm: new Date(), status: "ATIVO", ultimoErro: null },

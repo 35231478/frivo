@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ACEITA_CERTIFICADO, camposReprovados, corpoEmpresaPlugNotas, DIAS_AVISO_CERTIFICADO, diasParaVencer, ehArquivoCertificado, ehCodigoIbge, mensagemErroPlugNotas, pendenciasEmitente,
-  separarLogradouro, situacaoCertificado, type DadosFiscais, type EmpresaEmitente,
+  prefeituraPlugNotas, separarLogradouro, situacaoCertificado, type DadosFiscais, type EmpresaEmitente,
 } from "@/lib/nfse/regras";
 
 const EMPRESA: EmpresaEmitente = {
@@ -99,6 +99,17 @@ describe("corpoEmpresaPlugNotas", () => {
     });
     expect(corpoEmpresaPlugNotas({ ...EMPRESA, cidade: null }, { ...FISCAL, municipioNome: null }, "c").endereco.descricaoCidade).toBe("");
   });
+  it("autenticação da prefeitura: nfse.config.prefeitura só com o preenchido (login aparado; senha como digitada); vazio não vai", () => {
+    const cfg = (c?: { login?: string | null; senha?: string | null } | null) => corpoEmpresaPlugNotas(EMPRESA, FISCAL, "c", c).nfse.config;
+    expect(cfg({ login: " clima.total ", senha: " s3nh@ " })).toStrictEqual({ producao: false, email: { envio: false }, prefeitura: { login: "clima.total", senha: " s3nh@ " } });
+    expect(cfg({ senha: "só-senha" }).prefeitura).toStrictEqual({ senha: "só-senha" });
+    expect(cfg({ login: "so-login", senha: "" }).prefeitura).toStrictEqual({ login: "so-login" });
+    for (const vazio of [undefined, null, {}, { login: "   ", senha: "" }, { login: null, senha: null }]) {
+      expect(cfg(vazio as never), JSON.stringify(vazio)).toStrictEqual({ producao: false, email: { envio: false } });
+    }
+    expect(prefeituraPlugNotas({ login: "  ", senha: "x" })).toStrictEqual({ senha: "x" });
+    expect(prefeituraPlugNotas(undefined)).toBeUndefined();
+  });
   it("tipo do logradouro: abreviações conhecidas viram o tipo; sem tipo reconhecível, Rua com o texto inteiro", () => {
     const casos: [string, string, string][] = [
       ["Av. Paulista", "Avenida", "Paulista"], ["AVENIDA  Brasil", "Avenida", "Brasil"], ["Avda Goiás", "Avenida", "Goiás"],
@@ -117,6 +128,9 @@ describe("mensagemErroPlugNotas", () => {
     expect(mensagemErroPlugNotas(401, null)).toMatch(/token da integração \(PLUGNOTAS_API_TOKEN\) é inválido/);
     expect(mensagemErroPlugNotas(403, {})).toMatch(/recusou o acesso/);
     expect(mensagemErroPlugNotas(400, { error: { message: "Senha do certificado inválida" } })).toBe("O PlugNotas recusou o certificado: a senha não confere.");
+    expect(mensagemErroPlugNotas(400, { error: { message: "Certificado: senha incorreta" } })).toBe("O PlugNotas recusou o certificado: a senha não confere.");
+    // senha da PREFEITURA (ou outra) não vira "certificado": segue o texto deles
+    expect(mensagemErroPlugNotas(400, { error: { message: "Senha da prefeitura inválida" } })).toBe("Senha da prefeitura inválida");
     expect(mensagemErroPlugNotas(400, { error: { message: "Certificado expirado" } })).toBe("O PlugNotas recusou o certificado: ele está vencido.");
     expect(mensagemErroPlugNotas(400, { error: { message: "Certificado vencido em 2025" } })).toBe("O PlugNotas recusou o certificado: ele está vencido.");
     expect(mensagemErroPlugNotas(429, null)).toBe("O PlugNotas limitou as requisições agora. Tente de novo em alguns minutos.");

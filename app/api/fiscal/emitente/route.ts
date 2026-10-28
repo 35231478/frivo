@@ -24,7 +24,9 @@ const camposSchema = z.object({
  * GET /api/fiscal/emitente — dados fiscais da empresa da sessão e o status do emitente no PlugNotas.
  * POST (multipart) — salva os dados e, com tudo preenchido, cadastra/atualiza o emitente no PlugNotas.
  *   Campos de texto + `certificado` (.pfx, opcional se já enviado) + `senha`. O arquivo e a senha só
- *   vivem nesta requisição (vão ao PlugNotas e são descartados). Financeiro › Fiscal.
+ *   vivem nesta requisição (vão ao PlugNotas e são descartados). `prefeituraLogin`/`prefeituraSenha`
+ *   (opcionais) vão em nfse.config.prefeitura e ficam guardados só criptografados; `prefeituraRemover`
+ *   apaga os guardados. Financeiro › Fiscal.
  */
 export async function GET() {
   const guard = await exigirPermissao("financeiro", "fiscal");
@@ -50,8 +52,16 @@ export async function POST(req: NextRequest) {
     if (!ehArquivoCertificado(arquivo.name)) return NextResponse.json({ erro: "Envie o certificado A1 no formato .pfx ou .p12." }, { status: 400 });
     certificado = { arquivo: Buffer.from(await arquivo.arrayBuffer()), nome: arquivo.name, senha: texto("senha") };
   }
+  // Autenticação da prefeitura (opcional): vazio = manter a guardada. A senha nunca volta nem vai para log.
+  const prefeitura = { login: texto("prefeituraLogin").trim(), senha: texto("prefeituraSenha") };
+  if (prefeitura.login.length > 120) return NextResponse.json({ erro: "Login da prefeitura longo demais." }, { status: 400 });
+  if (prefeitura.senha.length > 200) return NextResponse.json({ erro: "Senha da prefeitura longa demais." }, { status: 400 });
+  const removerPrefeitura = texto("prefeituraRemover") === "true";
   try {
-    const r = await salvarEmitente({ empresaId: user.empresaId, usuarioId: user.id, dados: dados as Parameters<typeof salvarEmitente>[0]["dados"], inscricaoMunicipal, certificado });
+    const r = await salvarEmitente({
+      empresaId: user.empresaId, usuarioId: user.id, dados: dados as Parameters<typeof salvarEmitente>[0]["dados"], inscricaoMunicipal, certificado,
+      prefeitura, removerPrefeitura,
+    });
     return NextResponse.json({ ...r, emitente: await carregarEmitente(user.empresaId) }, { status: r.sincronizado ? 200 : "erro" in r ? 502 : 200 });
   } catch (e) {
     if (e instanceof ErroFiscal) return NextResponse.json({ erro: e.message }, { status: e.status });
