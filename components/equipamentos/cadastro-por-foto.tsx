@@ -342,7 +342,7 @@ export function CadastroPorFoto() {
         <Link href="/equipamentos/novo" className="p-2 rounded-lg text-ink-muted hover:bg-surface-alt" title="Voltar ao cadastro manual"><ChevronLeft className="w-5 h-5" /></Link>
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-ink flex items-center gap-2"><Sparkles className="w-5 h-5 text-primary-500" /> Cadastro pela foto</h1>
-          <p className="text-sm text-ink-muted">Fotografe a etiqueta e a IA preenche a ficha. Você confere tudo antes de salvar.</p>
+          <p className="text-sm text-ink-muted">A IA lê a etiqueta e preenche a ficha para conferência antes de salvar.</p>
         </div>
       </div>
 
@@ -370,8 +370,8 @@ export function CadastroPorFoto() {
             <div data-aviso-privacidade className="flex items-start gap-2 text-xs text-ink bg-surface-page border border-surface-border rounded-lg px-3 py-2">
               <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-ink-muted" />
               <span>
-                <strong>Privacidade:</strong> só a foto da <strong>etiqueta</strong> é enviada para a <strong>Anthropic</strong> (IA Claude), fora do Frivo, para ler o texto.
-                As fotos do equipamento ficam só no Frivo. Evite pessoas, documentos ou telas nas fotos.
+                <strong>Privacidade:</strong> apenas a foto da <strong>etiqueta</strong> é enviada à <strong>Anthropic</strong> (IA Claude), fora do Frivo, para leitura do texto.
+                As fotos do equipamento ficam somente no Frivo. Evite pessoas, documentos ou telas nas fotos.
               </span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" data-slots-fotos>
@@ -394,11 +394,11 @@ export function CadastroPorFoto() {
             {qualidade && foto && (qualidade.escura || qualidade.borrada) && (
               <p data-aviso-qualidade className="flex items-start gap-2 text-xs text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
-                A foto da etiqueta parece {qualidade.escura ? "escura" : "tremida/sem foco"}. A leitura pode falhar — se puder, tire outra mais de perto e com luz.
+                A foto da etiqueta parece {qualidade.escura ? "escura" : "tremida ou sem foco"}. A leitura pode falhar; se possível, fotografe mais de perto e com boa iluminação.
               </p>
             )}
             <p className="text-xs text-ink-muted">
-              A <strong className="text-ink">capa</strong> do equipamento (lista e ficha) será a foto 2 — nunca a etiqueta, que fica guardada como foto de apoio.
+              A <strong className="text-ink">capa</strong> do equipamento será a foto 2; a etiqueta fica como foto de apoio.
             </p>
             <button type="button" onClick={lerEtiqueta} disabled={lendo || !foto}
               className="w-full inline-flex items-center justify-center gap-2 px-3 py-3 rounded-lg bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold disabled:opacity-50">
@@ -416,7 +416,7 @@ export function CadastroPorFoto() {
           <>
             <div>
               <h2 className="font-semibold text-ink">Confira o que a IA leu</h2>
-              <p className="text-sm text-ink-muted">A IA pode errar: compare com a foto e corrija o que for preciso.
+              <p className="text-sm text-ink-muted">Compare cada campo com a foto e corrija se necessário.
                 {duvidosos.size > 0 && <> Campos em <span className="bg-atencao-claro text-atencao-texto px-1 rounded">amarelo</span> foram lidos com dúvida.</>}
               </p>
             </div>
@@ -426,19 +426,19 @@ export function CadastroPorFoto() {
             )}
             <div className="space-y-3" data-conferencia>
               {PERGUNTAS.filter((p) => lidosPelaIa.has(p.campo)).map((p) => (
-                <FormField key={p.campo} label={p.rotulo} hint={duvidosos.has(p.campo) ? "Lido com dúvida — confira" : undefined}>
+                <FormField key={p.campo} label={p.rotulo} hint={duvidosos.has(p.campo) ? "Leitura com dúvida: confira" : undefined}>
                   {campoInput(p)}
                 </FormField>
               ))}
               {outrasInfos && (
-                <FormField label="Outras informações da etiqueta" hint="Vai para as observações técnicas">
+                <FormField label="Outras informações da etiqueta" dica="Incluídas nas observações técnicas do equipamento.">
                   <Input value={outrasInfos} onChange={(e) => setOutrasInfos(e.target.value)} />
                 </FormField>
               )}
             </div>
             {faltantes.length > 0 && (
               <p className="text-xs text-ink-muted bg-surface-alt rounded-lg px-3 py-2" data-nao-lidos>
-                A IA não leu: <strong>{faltantes.map((c) => ROTULO[c]).join(", ")}</strong>. Vamos perguntar a seguir (os opcionais dá para pular).
+                Não lidos pela IA: <strong>{faltantes.map((c) => ROTULO[c]).join(", ")}</strong>. Serão solicitados a seguir; os opcionais podem ser pulados.
               </p>
             )}
             <div className="flex gap-2">
@@ -479,7 +479,7 @@ export function CadastroPorFoto() {
         {etapa === "local" && (
           <div className="space-y-4">
             <h2 className="font-semibold text-ink">Onde ele está instalado?</h2>
-            <FormField label="Cliente" required hint="Digite 2+ letras para buscar">
+            <FormField label="Cliente" required dica="Digite ao menos 2 letras para buscar.">
               <ClienteCombobox value={clienteId} onChange={(id) => { setClienteId(id); setUnidadeId(""); }} />
             </FormField>
             <FormField label="Endereço / Unidade" required>
@@ -496,17 +496,17 @@ export function CadastroPorFoto() {
               {lendoPlaca ? <Loader2 className="w-4 h-4 animate-spin" /> : <DoorOpen className="w-4 h-4" />}
               {lendoPlaca ? "Lendo a placa…" : "Fotografar a placa da porta/sala"}
             </button>
-            <p className="text-[11px] text-ink-subtle -mt-2">A foto da placa também vai para a Anthropic só para leitura e não é guardada. Sem placa? É só digitar.</p>
+            <p className="text-[11px] text-ink-muted -mt-2">A foto da placa é enviada à Anthropic apenas para leitura e não é armazenada. Sem placa, preencha manualmente.</p>
             {avisoPlaca && (
               <p data-aviso-placa={avisoPlaca.tipo} className={cn("text-xs rounded-lg px-3 py-2 border", avisoPlaca.tipo === "ok" ? "text-ok-texto bg-ok-claro border-ok/20" : "text-atencao-texto bg-atencao-claro border-atencao/20")}>
                 {avisoPlaca.texto}
               </p>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <FormField label="Setor" hint="Andar, bloco ou área">
+              <FormField label="Setor" dica="Andar, bloco ou área dentro do endereço.">
                 <Input aria-label="Setor" value={setor} onChange={(e) => setSetor(e.target.value)} placeholder="Ex: 2º andar" />
               </FormField>
-              <FormField label="Ambiente" hint="Sala onde está instalado">
+              <FormField label="Ambiente" dica="Sala ou ambiente de instalação.">
                 <Input aria-label="Ambiente" value={ambiente} onChange={(e) => setAmbiente(e.target.value)} placeholder="Ex: Sala 201" />
               </FormField>
             </div>

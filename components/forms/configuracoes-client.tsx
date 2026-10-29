@@ -166,7 +166,7 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
       {parte !== "preferencias" && <div className="bg-white rounded-card border border-surface-border p-6 space-y-6">
         <div className="flex items-center gap-2">
           <Building2 className="w-5 h-5 text-frivo-600" />
-          <h2 className="text-lg font-semibold text-ink">Dados da Empresa</h2>
+          <h2 className="text-lg font-semibold text-ink">Dados da empresa</h2>
         </div>
 
         {erroEmpresa && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3">{erroEmpresa}</div>}
@@ -219,10 +219,10 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
           </FormGrid>
           <div data-campos-timbre>
             <FormGrid>
-              <FormField label="Inscrição estadual" hint="Sai no cabeçalho do orçamento. Vazio = não aparece (ou “Isento”)">
+              <FormField label="Inscrição estadual" dica="Impressa no cabeçalho do orçamento. Em branco, não é exibida. Informe “Isento” quando for o caso.">
                 <Input value={emp.inscricaoEstadual} onChange={(e) => updateEmp("inscricaoEstadual", e.target.value)} maxLength={30} placeholder="Ex.: 123.456.789.110" />
               </FormField>
-              <FormField label="Inscrição municipal" hint="Sai no cabeçalho do orçamento. Vazio = não aparece">
+              <FormField label="Inscrição municipal" dica="Impressa no cabeçalho do orçamento. Em branco, não é exibida.">
                 <Input value={emp.inscricaoMunicipal} onChange={(e) => updateEmp("inscricaoMunicipal", e.target.value)} maxLength={30} />
               </FormField>
             </FormGrid>
@@ -230,9 +230,8 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
           <FormGrid>
             <FormField
               label="CNAE principal"
-              hint={podeFiscal
-                ? "Os serviços sem CNAE próprio usam este na NFS-e. Ex.: 4322-3/02"
-                : "Só leitura: alterar exige a permissão Financeiro › Fiscal (NFS-e)."}
+              dica="Usado na NFS-e dos serviços que não têm CNAE próprio. Formato: 0000-0/00."
+              hint={podeFiscal ? undefined : "Somente leitura: requer a permissão Financeiro › Fiscal."}
             >
               <Input
                 value={emp.cnaePrincipal} onChange={(e) => updateEmp("cnaePrincipal", e.target.value)}
@@ -253,10 +252,9 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
           </FormGrid>
         </FormSection>
 
-        <FormSection title="Endereço">
-          <p className="text-xs text-ink-muted -mt-2 mb-3">Usado para calcular distância até os clientes.</p>
-          <FormField label="Logradouro" hint="Digite para buscar automaticamente">
-            <EnderecoAutocomplete value={emp.endereco} onChange={(v) => updateEmp("endereco", v)} onSelect={handleEnderecoSelect} placeholder="Rua, Av., etc." />
+        <FormSection title="Endereço" dica="Usado no cálculo da distância até os clientes e na busca do município da NFS-e.">
+          <FormField label="Logradouro">
+            <EnderecoAutocomplete value={emp.endereco} onChange={(v) => updateEmp("endereco", v)} onSelect={handleEnderecoSelect} placeholder="Digite para buscar o endereço" />
           </FormField>
           <FormGrid cols={3}>
             <FormField label="Número"><Input value={emp.numero} onChange={(e) => updateEmp("numero", e.target.value)} /></FormField>
@@ -281,8 +279,7 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
           )}
         </FormSection>
 
-        <FormSection title="Dados bancários">
-          <p className="text-xs text-ink-muted -mt-2 mb-3" data-dica-banco>Saem no orçamento enviado ao cliente (link e impressão). Deixe em branco para não mostrar.</p>
+        <FormSection title="Dados bancários" dica="Exibidos no orçamento enviado ao cliente (link e impressão). Campos em branco não são exibidos.">
           <FormGrid cols={3}>
             <FormField label="Banco"><Input value={emp.bancoNome} onChange={(e) => updateEmp("bancoNome", e.target.value)} placeholder="Ex.: Banco Inter (077)" maxLength={80} /></FormField>
             <FormField label="Agência"><Input value={emp.bancoAgencia} onChange={(e) => updateEmp("bancoAgencia", e.target.value)} placeholder="0001" maxLength={20} /></FormField>
@@ -294,15 +291,12 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
                 {["Corrente", "Poupança", "Pagamento"].map((t) => (<option key={t} value={t}>{t}</option>))}
               </Select>
             </FormField>
-            <FormField label="Titular" hint="Vazio = razão social" className="sm:col-span-2"><Input value={emp.bancoTitular} onChange={(e) => updateEmp("bancoTitular", e.target.value)} maxLength={120} /></FormField>
+            <FormField label="Titular" dica="Em branco, é exibida a razão social." className="sm:col-span-2"><Input value={emp.bancoTitular} onChange={(e) => updateEmp("bancoTitular", e.target.value)} maxLength={120} /></FormField>
           </FormGrid>
           <FormField label="Chave PIX"><Input value={emp.pixChave} onChange={(e) => updateEmp("pixChave", e.target.value)} placeholder="CNPJ, e-mail, telefone ou chave aleatória" maxLength={120} className="max-w-md" /></FormField>
         </FormSection>
 
-        <FormSection title="Responsável técnico">
-          <p className="text-xs text-ink-muted -mt-2 mb-3" data-dica-rt>
-            O orçamento novo já vem com este responsável técnico (nome e CREA saem no documento, com “ART emitida após aprovação”). Pode trocar em cada orçamento.
-          </p>
+        <FormSection title="Responsável técnico" dica="Preenchido em cada novo orçamento; nome e CREA são impressos no documento, com a menção “ART emitida após aprovação”. Pode ser alterado em cada orçamento.">
           <FormField label="Responsável técnico padrão" className="max-w-md">
             <Select value={emp.responsavelTecnicoId} onChange={(e) => updateEmp("responsavelTecnicoId", e.target.value)} placeholder="Nenhum (o documento não mostra RT)" data-rt-padrao>
               {tecnicosRt.filter((t) => t.ativo || t.id === emp.responsavelTecnicoId).map((t) => (
@@ -311,7 +305,7 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
             </Select>
           </FormField>
           {tecnicosRt.length === 0 && (
-            <p className="text-xs text-ink-muted">Nenhum responsável técnico cadastrado. Cadastre em Equipes › Colaboradores com o tipo “Responsável Técnico” e o CREA.</p>
+            <p className="text-xs text-ink-muted">Nenhum responsável técnico cadastrado. Cadastre em Equipes › Colaboradores, com o tipo “Responsável técnico” e o CREA.</p>
           )}
         </FormSection>
 
@@ -324,7 +318,7 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
       {parte !== "empresa" && <div id="preferencias" className="bg-white rounded-card border border-surface-border p-6 space-y-8 scroll-mt-20">
         <div className="flex items-center gap-2">
           <SlidersHorizontal className="w-5 h-5 text-frivo-600" />
-          <h2 className="text-lg font-semibold text-ink">Configurações Avançadas</h2>
+          <h2 className="text-lg font-semibold text-ink">Preferências</h2>
         </div>
 
         {erroConfig && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3">{erroConfig}</div>}
@@ -334,7 +328,7 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
           </div>
         )}
 
-        <ToggleGroup title="Campos obrigatórios no cadastro de clientes" description="Defina quais campos devem ser preenchidos obrigatoriamente">
+        <ToggleGroup title="Campos obrigatórios no cadastro de clientes">
           <ToggleSwitch label="E-mail obrigatório" checked={cfg.clienteEmailObrigatorio} onChange={() => toggleCfg("clienteEmailObrigatorio")} />
           <ToggleSwitch label="WhatsApp obrigatório" checked={cfg.clienteWhatsappObrigatorio} onChange={() => toggleCfg("clienteWhatsappObrigatorio")} />
           <ToggleSwitch label="Telefone obrigatório" checked={cfg.clienteTelefoneObrigatorio} onChange={() => toggleCfg("clienteTelefoneObrigatorio")} />
@@ -344,19 +338,19 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
         </ToggleGroup>
 
         <ToggleGroup title="Regras de cadastro">
-          <ToggleSwitch label="Exigir pelo menos um endereço no cadastro de cliente" description="Bloqueia o salvamento se não houver nenhum endereço cadastrado" checked={cfg.clienteExigirUnidade} onChange={() => toggleCfg("clienteExigirUnidade")} />
+          <ToggleSwitch label="Exigir pelo menos um endereço no cadastro de cliente" dica="O cadastro não é salvo sem ao menos um endereço." checked={cfg.clienteExigirUnidade} onChange={() => toggleCfg("clienteExigirUnidade")} />
           <ToggleSwitch label="Exigir CPF/CNPJ no cadastro de cliente" checked={cfg.clienteExigirDocumento} onChange={() => toggleCfg("clienteExigirDocumento")} />
         </ToggleGroup>
 
         <ToggleGroup title="Ordens de serviço">
-          <ToggleSwitch label="Exigir foto para concluir OS" description="O técnico precisa anexar pelo menos uma foto antes de concluir" checked={cfg.osExigirFoto} onChange={() => toggleCfg("osExigirFoto")} />
+          <ToggleSwitch label="Exigir foto para concluir OS" dica="A OS só é concluída com ao menos uma foto anexada pelo técnico." checked={cfg.osExigirFoto} onChange={() => toggleCfg("osExigirFoto")} />
           <ToggleSwitch label="Exigir assinatura do cliente na OS" checked={cfg.osExigirAssinatura} onChange={() => toggleCfg("osExigirAssinatura")} />
           <ToggleSwitch label="Permitir OS sem contrato vinculado" checked={cfg.osPermitirSemContrato} onChange={() => toggleCfg("osPermitirSemContrato")} />
           <ToggleSwitch label="Exigir questionário preenchido para concluir OS" checked={cfg.osExigirQuestionario} onChange={() => toggleCfg("osExigirQuestionario")} />
           <ToggleSwitch label="Permitir técnico editar OS após concluída" checked={cfg.osPermitirEdicaoConcluida} onChange={() => toggleCfg("osPermitirEdicaoConcluida")} />
         </ToggleGroup>
 
-        <ToggleGroup title="Notificações" description="Ações automáticas ao criar ou concluir ordens de serviço">
+        <ToggleGroup title="Notificações" dica="Mensagens enviadas automaticamente ao cliente na abertura e na conclusão das ordens de serviço.">
           <ToggleSwitch label="Notificar cliente por e-mail ao abrir OS" checked={cfg.notifEmailAbrirOs} onChange={() => toggleCfg("notifEmailAbrirOs")} />
           <ToggleSwitch label="Notificar cliente por e-mail ao concluir OS" checked={cfg.notifEmailConcluirOs} onChange={() => toggleCfg("notifEmailConcluirOs")} />
           <ToggleSwitch label="Notificar cliente por WhatsApp ao abrir OS" checked={cfg.notifWhatsappAbrirOs} onChange={() => toggleCfg("notifWhatsappAbrirOs")} />
@@ -372,7 +366,8 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
         <FormSection title="Orçamentos">
           <FormField
             label="Alíquota de ISS sobre serviços (%)"
-            hint="Somada ao total dos serviços (depois do desconto deles). Na tela aparece em linha própria; no documento do cliente vem embutida nos preços. 0 = sem ISS. Vale para os orçamentos criados daqui em diante."
+            hint="Vale para os orçamentos criados a partir de agora."
+            dica="Somada ao total dos serviços, após o desconto. No orçamento, aparece em linha própria; no documento do cliente, embutida nos preços. Use 0 para não aplicar."
           >
             <Input
               id="cfg-iss"

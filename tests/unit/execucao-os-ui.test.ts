@@ -338,7 +338,9 @@ describe("nova OS: equipamentos atendidos (opcional)", () => {
     const { default: NovaOrdemPage } = await import("@/app/(dashboard)/ordens/nova/page");
     await montar(createElement(NovaOrdemPage));
 
-    expect(txt("[data-hint-equipamentos]")).toContain("Opcional agora");
+    // Princípio 7: a regra fica no ⓘ da seção "Equipamentos atendidos"
+    const dicaEquip = $('[data-dica][aria-label="Ajuda: Equipamentos atendidos"]')!;
+    expect(document.getElementById(dicaEquip.getAttribute("aria-describedby")!)!.textContent).toContain("Para concluir a OS, ao menos um equipamento precisa ser atendido");
     // A gaveta é um portal (fora da caixa): procura no documento
     await clicar($("[data-vincular-equipamento]"));
     expect(chamadas.find((c) => c.url.startsWith("/api/equipamentos"))!.url).toBe("/api/equipamentos?clienteId=c1&resumo=1");

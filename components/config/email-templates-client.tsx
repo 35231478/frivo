@@ -76,7 +76,7 @@ export function EmailTemplatesClient() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <div className="space-y-4">
             <h3 className="font-bold text-ink">{editando.nome}</h3>
-            <ToggleSwitch checked={ativo} onChange={setAtivo} label="Template ativo" description="Quando inativo, este e-mail não é enviado" />
+            <ToggleSwitch checked={ativo} onChange={setAtivo} label="Modelo ativo" dica="Inativo, este e-mail não é enviado." />
             <FormField label="Assunto"><Input value={assunto} onChange={(e) => setAssunto(e.target.value)} /></FormField>
             <FormField label="Corpo (HTML)"><Textarea value={corpo} onChange={(e) => setCorpo(e.target.value)} rows={10} className="font-mono text-xs" /></FormField>
             <div>
@@ -105,7 +105,7 @@ export function EmailTemplatesClient() {
     <div className="space-y-4">
       {templates.length === 0 ? (
         <div className="text-center py-10 border border-dashed border-surface-border rounded-xl space-y-3">
-          <p className="text-sm text-ink-muted">Nenhum template personalizado. Os textos padrão já são usados automaticamente.</p>
+          <p className="text-sm text-ink-muted">Nenhum modelo personalizado. São usados os textos padrão.</p>
           <Button onClick={restaurarPadroes}>Carregar templates padrão para editar</Button>
         </div>
       ) : (

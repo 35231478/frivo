@@ -15,10 +15,8 @@ export function PerfisAcessoTela() {
     <CadastroPadrao
       entidade="perfis-acesso"
       Editor={EditorPerfil}
-      ajuda={<>
-        Defina o que cada perfil pode ver e fazer. Inativar um perfil <strong>tira o acesso</strong> de quem o usa — o sistema mostra quem antes de confirmar.
-        {erro && <span role="alert" className="block mt-2 text-atrasado-texto">{erro}</span>}
-      </>}
+      ajuda="Permissões de cada perfil. Inativar um perfil remove o acesso de quem o utiliza; os afetados são listados antes da confirmação."
+      aviso={erro && <p role="alert" className="text-sm text-atrasado-texto">{erro}</p>}
       celula={(col, p) => {
         if (col === "nome") return (
           <span className="flex items-center gap-2 flex-wrap">

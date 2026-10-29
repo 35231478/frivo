@@ -14,7 +14,7 @@ export async function TelaUsuarios() {
   const emailsTecnicos = tecnicos.map((t) => t.email!.trim().toLowerCase()).filter(Boolean);
   return (
     <div className="max-w-5xl mx-auto">
-      <PageHeader title="Usuários" description="Quem faz login no sistema e com qual perfil de acesso" backHref="/configuracoes" />
+      <PageHeader title="Usuários" description="Pessoas com acesso ao sistema e seus perfis" backHref="/configuracoes" />
       <div className="bg-white rounded-card border border-surface-border p-4 sm:p-6">
         <UsuariosTela usuarioAtualId={session?.user?.id ?? ""} emailsTecnicos={emailsTecnicos} />
       </div>

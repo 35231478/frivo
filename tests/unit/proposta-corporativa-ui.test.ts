@@ -123,7 +123,10 @@ describe("construtor: padrões, destinatário e campos corporativos", () => {
     await montarForm();
     const alvo = validadePadrao(chaveHojeBR(), 15);
     expect($<HTMLInputElement>("input[aria-label='Validade']")!.value).toBe(`${alvo.slice(8, 10)}/${alvo.slice(5, 7)}/${alvo.slice(0, 4)}`);
-    expect(document.body.textContent).toContain("Padrão: 15 dias após a data do orçamento");
+    // Princípio 7: a regra da validade fica no ⓘ do campo (balão no body), não no formulário
+    const dicaValidade = document.querySelector('[data-dica][aria-label="Ajuda: Validade"]')!;
+    expect(document.getElementById(dicaValidade.getAttribute("aria-describedby")!)!.textContent).toContain("Padrão: 15 dias após a data do orçamento");
+    expect(document.querySelector("[data-orcamento-form]")!.textContent).not.toContain("dias após a data do orçamento");
     expect($<HTMLInputElement>("[data-garantia-servico]")!.value).toBe("90 dias");
     expect($<HTMLInputElement>("[data-garantia-pecas]")!.value).toBe("Conforme garantia do fabricante");
     expect($<HTMLTextAreaElement>("[data-nao-incluso] textarea")!.value).toBe(PADROES.naoIncluso);

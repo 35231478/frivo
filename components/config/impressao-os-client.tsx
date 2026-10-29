@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Check, Eye, FileText, Lock, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dica } from "@/components/ui/dica";
 import { cn } from "@/lib/utils";
 import {
   CONFIG_RELATORIO_PADRAO, mostraSecao, SECOES_RELATORIO, type ConfigRelatorioOs, type SecaoRelatorioId,
@@ -58,7 +59,7 @@ export function ImpressaoOsClient({ inicial, podeEditar }: { inicial: ConfigRela
         <div className="px-4 py-3 border-b border-surface-border bg-surface-alt/40 flex items-center gap-2 text-sm">
           <FileText className="w-4 h-4 text-ink-muted" />
           <span className="font-semibold text-ink">Cabeçalho</span>
-          <span className="text-ink-muted">— empresa, nº da OS, tipo, situação e datas. Sai sempre, nas duas versões.</span>
+          <Dica texto="Empresa, número da OS, tipo, situação e datas. Impresso sempre, nas duas versões." rotulo="Cabeçalho" lado="direita" />
         </div>
         <ul className="divide-y divide-surface-border">
           {SECOES_RELATORIO.map((s) => {
@@ -94,7 +95,7 @@ export function ImpressaoOsClient({ inicial, podeEditar }: { inicial: ConfigRela
         </ul>
       </div>
 
-      <p className="text-xs text-ink-muted flex items-center gap-1.5"><Printer className="w-3.5 h-3.5" /> Seção desligada não sai em versão nenhuma. Seção sem dado na OS simplesmente não aparece.</p>
+      <p className="text-xs text-ink-muted flex items-center gap-1.5"><Printer className="w-3.5 h-3.5" /> Seções desligadas não são impressas; seções sem dados na OS são omitidas.</p>
 
       {msg && <p role={msg.tipo === "erro" ? "alert" : "status"} className={cn("text-sm font-medium flex items-center gap-1.5", msg.tipo === "ok" ? "text-success-700" : "text-atrasado")}>{msg.tipo === "ok" && <Check className="w-4 h-4" />}{msg.texto}</p>}
       {podeEditar ? (
@@ -103,7 +104,7 @@ export function ImpressaoOsClient({ inicial, podeEditar }: { inicial: ConfigRela
           <Button type="button" onClick={salvar} loading={salvando}>Salvar</Button>
         </div>
       ) : (
-        <p className="text-sm text-ink-muted" data-somente-leitura>Você pode ver esta configuração, mas só quem gerencia Configurações pode alterar.</p>
+        <p className="text-sm text-ink-muted" data-somente-leitura>Somente leitura: requer a permissão Configurações › Gerenciar.</p>
       )}
     </div>
   );

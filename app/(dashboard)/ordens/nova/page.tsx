@@ -33,6 +33,9 @@ const rotuloEquip = (e: EquipItem) => {
 };
 const opcaoEquip = (e: EquipItem): OpcaoCadastro => ({ value: e.id, label: rotuloEquip(e), descricao: e.unidade?.nome });
 
+/** Princípio 7: a regra de vínculo dos equipamentos fica no ⓘ da seção */
+const DICA_EQUIPAMENTOS = "Opcional na abertura: os equipamentos podem ser vinculados durante a execução, pelo QR Code ou pela lista. Para concluir a OS, ao menos um equipamento precisa ser atendido, com o checklist respondido.";
+
 export default function NovaOrdemPage() {
   const router = useRouter();
   const [clientes, setClientes] = useState<Item[]>([]);
@@ -170,9 +173,8 @@ export default function NovaOrdemPage() {
           <div className="flex items-start gap-3 bg-acento-claro border border-acento/20 text-acento-hover text-sm rounded-lg px-4 py-3">
             <Inbox className="w-4 h-4 shrink-0 mt-0.5" />
             <p>
-              Solicitação enviada pelo cliente, já preenchida com o que ele mandou. Escolha a <strong>data e a hora</strong> do
-              atendimento: ao salvar, esta mesma OS (chamado <strong>{solicitacao.numero}</strong>) passa para <strong>Agendada</strong> e
-              entra no calendário.
+              Solicitação <strong>{solicitacao.numero}</strong>, preenchida pelo cliente. Defina a <strong>data e a hora</strong> do atendimento:
+              ao salvar, a OS passa para <strong>Agendada</strong> e entra no calendário.
             </p>
           </div>
         )}
@@ -243,7 +245,7 @@ export default function NovaOrdemPage() {
               </FormField>
             ) : (
               // Data e hora da 1ª atividade (é ela que aparece no calendário)
-              <FormField label="Agendar para" hint="Opcional — aparece no calendário">
+              <FormField label="Agendar para" dica="Opcional. Data e hora da primeira atividade, exibida no calendário.">
                 <InputDataHora aria-label="Agendar para" value={agendarPara} onChange={setAgendarPara} />
               </FormField>
             )}
@@ -280,10 +282,7 @@ export default function NovaOrdemPage() {
         </FormSection>
 
         {!solicitacao && (
-          <FormSection title="Equipamentos atendidos">
-            <p className="text-xs text-ink-muted -mt-1" data-hint-equipamentos>
-              Opcional agora — dá para vincular depois, na execução (pelo QR Code ou pela lista). Para <strong>concluir</strong> a OS, pelo menos 1 equipamento precisa ser atendido, com o checklist dele respondido.
-            </p>
+          <FormSection title="Equipamentos atendidos" dica={DICA_EQUIPAMENTOS}>
             {atendidos.length > 0 && (
               <div data-equipamentos-escolhidos>
                 <p className="text-xs font-medium text-ink-muted mb-1.5" data-qtd-atendidos>
@@ -320,7 +319,7 @@ export default function NovaOrdemPage() {
               </Button>
               {avisoSemCliente && !clienteId && (
                 <p id="aviso-sem-cliente" role="alert" data-aviso-sem-cliente className="mt-2 text-xs text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2">
-                  Escolha o <strong>cliente</strong> primeiro — os equipamentos vêm dos endereços dele.
+                  Selecione o <strong>cliente</strong> antes: os equipamentos vêm dos endereços dele.
                 </p>
               )}
             </div>
@@ -337,7 +336,7 @@ export default function NovaOrdemPage() {
         <FormSection title="Quem executa">
           {!solicitacao && (
             <FormGrid>
-              <FormField label="Tipo de OS" hint="Filtra os colaboradores pela competência">
+              <FormField label="Tipo de OS" dica="Filtra os colaboradores pela competência no tipo de serviço.">
                 {/* UX-8 (Y3): tipo novo nasce aqui mesmo, sem abandonar a OS */}
                 <SelectCadastroRapido
                   value={tipoOsId} onChange={setTipoOsId}
@@ -352,7 +351,7 @@ export default function NovaOrdemPage() {
                 />
               </FormField>
               {/* O prazo da OS: é o que a central usa para dizer se está no prazo ou atrasada */}
-              <FormField label="Prazo para finalizar" hint="Opcional — passou do dia, a OS aparece como atrasada">
+              <FormField label="Prazo para finalizar" dica="Opcional. Após esta data, a OS é sinalizada como atrasada.">
                 <InputData aria-label="Prazo para finalizar" value={form.previsaoConclusao} onChange={(v) => setForm((f) => ({ ...f, previsaoConclusao: v }))} />
               </FormField>
             </FormGrid>

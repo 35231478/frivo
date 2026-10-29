@@ -8,7 +8,7 @@ export function FornecedoresTela() {
   return (
     <CadastroPadrao
       entidade="fornecedores"
-      ajuda="Fornecedores das contas a pagar. Inativar tira o fornecedor das contas novas; as contas que já são dele continuam ligadas. O CNPJ/CPF não se repete na empresa."
+      ajuda="Fornecedores das contas a pagar. Inativar um fornecedor o retira das contas novas; as existentes permanecem vinculadas. O CNPJ/CPF é único na empresa."
       celula={(col, f) => {
         if (col === "documento") return f.documento ? <span className="tabular-nums">{formatarCpfCnpj(f.documento)}</span> : "—";
         if (col === "contato") {

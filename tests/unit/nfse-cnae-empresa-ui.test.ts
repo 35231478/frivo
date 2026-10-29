@@ -61,7 +61,10 @@ describe("CNAE principal da empresa", () => {
     await montar(GESTOR_FISCAL);
     expect(cnae().value).toBe("4322-3/02");
     expect(cnae().disabled).toBe(false);
-    expect(ajuda()).toBe("Os serviços sem CNAE próprio usam este na NFS-e. Ex.: 4322-3/02");
+    // Princípio 7: a explicação vai para o ⓘ; sem texto fixo embaixo do campo
+    expect(ajuda()).toBe("");
+    const b = cnae().closest(".flex-col")!.querySelector("[data-dica]")!;
+    expect(document.getElementById(b.getAttribute("aria-describedby")!)!.textContent).toBe("Usado na NFS-e dos serviços que não têm CNAE próprio. Formato: 0000-0/00.");
     const label = caixa.querySelector(`label[for="${cnae().id}"]`);
     expect(label?.textContent).toBe("CNAE principal");
     await act(async () => {
@@ -82,7 +85,8 @@ describe("CNAE principal da empresa", () => {
   it("sem Financeiro › Fiscal: só leitura com o aviso; o valor gravado volta igual (o servidor aceita)", async () => {
     await montar(GESTOR);
     expect(cnae().disabled).toBe(true);
-    expect(ajuda()).toBe("Só leitura: alterar exige a permissão Financeiro › Fiscal (NFS-e).");
+    // Estado (sem permissão) continua visível na tela
+    expect(ajuda()).toBe("Somente leitura: requer a permissão Financeiro › Fiscal.");
     await salvarEmpresa();
     expect(enviados[0].cnaePrincipal).toBe("4322-3/02");
   });

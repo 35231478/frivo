@@ -10,7 +10,7 @@ export function ModelosPrazoTela() {
     <CadastroPadrao
       entidade="modelos-prazo"
       Editor={EditorModeloPrazo}
-      ajuda="Etapas, responsáveis e prazos (SLA) usados em “Adicionar prazo” nas OS. Inativar tira o modelo das novas escolhas; os prazos já abertos continuam correndo."
+      ajuda="Etapas, responsáveis e prazos (SLA) usados em “Adicionar prazo” nas OS. Inativar um modelo o retira das novas seleções; os prazos em andamento continuam valendo."
       celula={(col, m) => {
         if (col === "etapas") {
           const n = Array.isArray(m.etapas) ? m.etapas.length : 0;

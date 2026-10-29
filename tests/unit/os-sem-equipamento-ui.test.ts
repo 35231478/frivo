@@ -249,7 +249,9 @@ describe("cadastro de Tipos de OS", () => {
     await clicar($$("button").find((b) => /Novo|Adicionar/.test(b.textContent ?? "")) ?? null);
     const chave = () => document.querySelector("[data-campo-switch='exigeEquipamento'] [role='switch']") as HTMLElement;
     expect(chave().getAttribute("aria-checked")).toBe("true");
-    expect(document.querySelector("[data-campo-switch='exigeEquipamento']")?.textContent).toContain("visita técnica, vistoria, orçamento");
+    // Princípio 7: a regra fica no ⓘ do switch
+    const dicaSwitch = document.querySelector("[data-campo-switch='exigeEquipamento'] [data-dica]")!;
+    expect(document.getElementById(dicaSwitch.getAttribute("aria-describedby")!)!.textContent).toContain("como visita técnica, vistoria e orçamento");
     await clicar(chave());
     expect(chave().getAttribute("aria-checked")).toBe("false");
     const nome = [...document.querySelectorAll("input")].find((i) => i.placeholder?.startsWith("Ex: Manutenção")) ?? null;

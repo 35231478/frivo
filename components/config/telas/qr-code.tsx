@@ -12,7 +12,7 @@ export async function TelaQrCode() {
     <div className="max-w-3xl mx-auto">
       <PageHeader
         title="QR Code"
-        description="Configure a página pública acessada pelo QR Code dos equipamentos"
+        description="Página pública aberta pelo QR Code dos equipamentos"
         backHref="/configuracoes"
       />
       <QrConfigClient inicial={config} />

@@ -48,7 +48,7 @@ export function PortalConfigClient() {
             <Input value={cor} onChange={(e) => setCor(e.target.value)} className="flex-1 font-mono text-xs" />
           </div>
         </FormField>
-        <FormField label="Logo do portal" hint="Usado no cabeçalho do portal; se vazio, usa o logo da empresa">
+        <FormField label="Logo do portal" dica="Exibido no cabeçalho do portal. Em branco, é usado o logo da empresa.">
           <div className="flex items-center gap-2">
             {logo && (
               <div className="relative">
@@ -64,12 +64,12 @@ export function PortalConfigClient() {
           </div>
         </FormField>
       </FormGrid>
-      <FormField label="Mensagem de boas-vindas" hint="Exibida no painel inicial do portal">
+      <FormField label="Mensagem de boas-vindas" dica="Exibida no painel inicial do portal.">
         <Textarea value={boasVindas} onChange={(e) => setBoasVindas(e.target.value)} rows={3} placeholder="Bem-vindo ao nosso portal! Aqui você acompanha suas ordens de serviço, documentos e financeiro." />
       </FormField>
       <div className="flex items-center gap-3">
         <Button onClick={salvar} loading={salvando}><Check className="w-4 h-4" /> Salvar</Button>
-        {ok && <span className="text-sm text-success-700">Salvo!</span>}
+        {ok && <span className="text-sm text-success-700">Alterações salvas.</span>}
       </div>
     </div>
   );

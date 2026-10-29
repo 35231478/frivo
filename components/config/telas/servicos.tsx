@@ -11,7 +11,7 @@ const GRUPOS = { [GRUPO_NFSE]: SecaoFiscalServico, "Outros tributos": GrupoDuasC
 export function TelaServicos() {
   return (
     <div>
-      <PageHeader title="Serviços" description="Catálogo de serviços prestados pela empresa" backHref="/configuracoes" />
+      <PageHeader title="Serviços" description="Serviços prestados pela empresa" backHref="/configuracoes" />
       <div className="bg-white rounded-card border border-surface-border p-4 sm:p-6">
         <CadastroPadrao entidade="servicos" grupos={GRUPOS} />
       </div>

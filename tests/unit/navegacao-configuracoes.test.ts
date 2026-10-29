@@ -64,7 +64,7 @@ describe("estrutura: 3 abas com cartões; cada item tem id, tela e a rota antiga
     expect(sub("conta")).toEqual([
       ["Empresa", ["Dados da empresa", "Preferências"]],
       ["Acesso e pessoas", ["Usuários", "Perfis de acesso", "Cargos"]],
-      ["Integrações", ["E-mail transacional", "Portal do cliente", "Config. QR Code"]],
+      ["Integrações", ["E-mail transacional", "Portal do cliente", "QR Code"]],
     ]);
   });
 

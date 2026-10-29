@@ -48,22 +48,22 @@ export function QrConfigClient({ inicial }: { inicial: QrConfig }) {
         </div>
       )}
 
-      <ToggleGroup title="Acesso Público" description="O que aparece na página aberta pelo QR Code">
-        <ToggleSwitch label="Página pública ativa" description="Desligue para bloquear totalmente o acesso público" checked={cfg.paginaPublicaAtiva} onChange={() => toggle("paginaPublicaAtiva")} />
+      <ToggleGroup title="Acesso público" dica="Informações exibidas na página aberta pelo QR Code.">
+        <ToggleSwitch label="Página pública ativa" dica="Desativada, a página pública fica inacessível." checked={cfg.paginaPublicaAtiva} onChange={() => toggle("paginaPublicaAtiva")} />
         <ToggleSwitch label="Mostrar histórico de manutenções" checked={cfg.mostrarHistorico} onChange={() => toggle("mostrarHistorico")} />
         <ToggleSwitch label="Mostrar próxima manutenção agendada" checked={cfg.mostrarProximaManutencao} onChange={() => toggle("mostrarProximaManutencao")} />
-        <ToggleSwitch label="Mostrar dados do equipamento" description="Modelo, marca e número de série" checked={cfg.mostrarDadosEquipamento} onChange={() => toggle("mostrarDadosEquipamento")} />
+        <ToggleSwitch label="Mostrar dados do equipamento" dica="Modelo, marca e número de série." checked={cfg.mostrarDadosEquipamento} onChange={() => toggle("mostrarDadosEquipamento")} />
         <ToggleSwitch label="Mostrar localização do equipamento" checked={cfg.mostrarLocalizacao} onChange={() => toggle("mostrarLocalizacao")} />
       </ToggleGroup>
 
-      <ToggleGroup title="Botões de Contato" description="Ações disponíveis para quem acessa o QR Code">
+      <ToggleGroup title="Botões de contato" dica="Ações disponíveis para quem acessa o QR Code.">
         <ToggleSwitch label='Botão "Falar conosco" via WhatsApp' checked={cfg.botaoWhatsapp} onChange={() => toggle("botaoWhatsapp")} />
         <ToggleSwitch label='Botão "Solicitar orçamento"' checked={cfg.botaoOrcamento} onChange={() => toggle("botaoOrcamento")} />
         <ToggleSwitch label='Botão "Abrir chamado"' checked={cfg.botaoChamado} onChange={() => toggle("botaoChamado")} />
       </ToggleGroup>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <FormField label="Número WhatsApp para contato" hint="Com DDD, ex: (11) 99999-9999">
+        <FormField label="WhatsApp para contato">
           <Input value={cfg.whatsappNumero} onChange={(e) => campo("whatsappNumero", e.target.value)} placeholder="(11) 99999-9999" />
         </FormField>
         <FormField label="Link do site">
@@ -74,7 +74,7 @@ export function QrConfigClient({ inicial }: { inicial: QrConfig }) {
         <Textarea value={cfg.mensagemBoasVindas} onChange={(e) => campo("mensagemBoasVindas", e.target.value)} rows={2} placeholder="Mensagem exibida no topo da página pública" />
       </FormField>
 
-      <ToggleGroup title="Restrições" description="Exigir login no portal do cliente para certas ações">
+      <ToggleGroup title="Restrições" dica="Ações que exigem login no portal do cliente.">
         <ToggleSwitch label="Chamado somente para clientes logados no portal" checked={cfg.chamadoSomenteLogado} onChange={() => toggle("chamadoSomenteLogado")} />
         <ToggleSwitch label="Histórico completo somente para clientes logados" checked={cfg.historicoSomenteLogado} onChange={() => toggle("historicoSomenteLogado")} />
         <ToggleSwitch label="Formulário de orçamento somente para clientes logados" checked={cfg.orcamentoSomenteLogado} onChange={() => toggle("orcamentoSomenteLogado")} />

@@ -218,7 +218,7 @@ export function CrudCadastro({ titulo, apiUrl, campos, colunasLista }: CrudCadas
         <div className="space-y-4">
           {campos.map((c) => c.tipo === "switch" ? (
             <div key={c.key} data-campo-switch={c.key} className="border-t border-surface-border">
-              <ToggleSwitch checked={!!form[c.key]} onChange={(v) => setForm((f) => ({ ...f, [c.key]: v }))} label={c.label} description={c.ajuda} />
+              <ToggleSwitch checked={!!form[c.key]} onChange={(v) => setForm((f) => ({ ...f, [c.key]: v }))} label={c.label} dica={c.ajuda} />
             </div>
           ) : (
             <FormField key={c.key} label={c.label} required={c.obrigatorio}>

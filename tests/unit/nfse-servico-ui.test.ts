@@ -84,6 +84,11 @@ function campo<T extends HTMLElement = HTMLInputElement>(rotulo: string): T {
   return document.getElementById(label!.htmlFor) as T;
 }
 const ajudaDe = (rotulo: string) => texto(campo(rotulo).closest(".flex-col")!.querySelector(":scope > p"));
+/** Texto do ⓘ ao lado do rótulo (Princípio 7: a explicação do campo fica na dica) */
+const dicaDe = (rotulo: string) => {
+  const b = campo(rotulo).closest(".flex-col")!.querySelector("[data-dica]");
+  return b ? texto(document.getElementById(b.getAttribute("aria-describedby")!)) : null;
+};
 const bloco = (titulo: string) => document.querySelector(`section[aria-label="${titulo}"]`) as HTMLElement;
 const rotulosEm = (el: Element) => [...el.querySelectorAll("label, [data-campo=cnae] > span")].map((l) => texto(l)).filter(Boolean);
 const caixaCnae = () => document.querySelector('[data-campo="cnae"] input[type="checkbox"]') as HTMLInputElement;
@@ -113,7 +118,7 @@ describe("Layout da seção fiscal", () => {
     const secao = document.querySelector("[data-secao-fiscal]")!;
     expect([...secao.querySelectorAll("section")].map((s) => s.getAttribute("aria-label"))).toEqual(["Classificação do serviço", "Tributação", "Discriminação"]);
     expect(rotulosEm(bloco("Classificação do serviço"))).toEqual(["Código do serviço (LC 116)", "Código municipal", "CNAE", "Usar o CNAE principal da empresa"]);
-    expect(rotulosEm(bloco("Tributação"))).toEqual(["Tributação do ISS", "Alíquota de ISS (%)", "ISS retido pelo tomadorO cliente retém e recolhe o ISS desta nota."]);
+    expect(rotulosEm(bloco("Tributação"))).toEqual(["Tributação do ISS", "Alíquota de ISS (%)", "ISS retido pelo tomador"]);
     expect(rotulosEm(bloco("Discriminação"))).toEqual(["Discriminação padrão"]);
     // pares lado a lado (uma coluna no celular)
     const grade = (rotulo: string) => campo(rotulo).closest(".grid")!.className;
@@ -127,21 +132,34 @@ describe("Layout da seção fiscal", () => {
     expect(campo("Alíquota PIS (%)").closest(".flex-col")!.className).not.toContain("col-span");
   });
 
-  it("ajudas curtas; LC 116 descreve o código; alíquota vazia mostra o ISS da empresa", async () => {
+  it("Princípio 7: explicação no ⓘ; a descrição do código LC 116 fica visível; alíquota vazia mostra o ISS da empresa", async () => {
     await abrir(GESTOR_FISCAL, { nome: "Instalação" });
+    // O que o código significa é dado fiscal: fica na tela
     expect(ajudaDe("Código do serviço (LC 116)")).toMatch(/^14\.06 — Instalação e montagem/);
-    expect(ajudaDe("Código municipal")).toBe("Só se a prefeitura usar um código próprio.");
-    expect(ajudaDe("Alíquota de ISS (%)")).toBe("Vazio = o ISS da empresa.");
-    expect(campo("Alíquota de ISS (%)").placeholder).toBe("Vazio = 3,50 (empresa)");
-    expect(campo("Código municipal").placeholder).toBe("Vazio = o código LC 116");
+    // As explicações saem da tela e vão para o ⓘ
+    expect(ajudaDe("Código municipal")).toBe("");
+    expect(ajudaDe("Alíquota de ISS (%)")).toBe("");
+    expect(dicaDe("Código municipal")).toBe("Preencha apenas se a prefeitura adotar codificação própria de serviços. Em branco, a nota usa o código LC 116.");
+    expect(dicaDe("Alíquota de ISS (%)")).toBe("Em branco, a nota usa a alíquota de ISS da empresa.");
+    expect(dicaDe("Código do serviço (LC 116)")).toBe("Subitem da lista de serviços da Lei Complementar 116/2003, no formato NN.NN.");
+    expect(dicaDe("Discriminação padrão")).toBe("Texto-base da discriminação da NFS-e. Pode ser ajustado no momento da emissão.");
+    expect(dicaDe("Tributação do ISS")).toBeNull();
+    // CNAE e ISS retido também com ⓘ
+    const dicas = [...document.querySelectorAll('[data-campo="cnae"] [data-dica], [data-secao-fiscal] [data-dica][aria-label="Ajuda: ISS retido pelo tomador"]')];
+    expect(dicas.map((b) => texto(document.getElementById(b.getAttribute("aria-describedby")!)))).toEqual([
+      "Em branco, a nota usa o CNAE principal da empresa.", "Marque quando o tomador (cliente) retém e recolhe o ISS desta nota.",
+    ]);
+    expect(campo("Alíquota de ISS (%)").placeholder).toBe("Em branco: 3,50 (empresa)");
+    expect(campo("Código municipal").placeholder).toBe("Em branco: código LC 116");
+    // Código fora da lista: não há descrição para mostrar
     await digitar(campo("Código do serviço (LC 116)"), "17.99");
-    expect(ajudaDe("Código do serviço (LC 116)")).toBe("Subitem da lista da LC 116, no formato NN.NN.");
+    expect(ajudaDe("Código do serviço (LC 116)")).toBe("");
   });
 
   it("ISS da empresa zero também aparece; resposta de erro do apoio é ignorada", async () => {
     apoio = { cnaeEmpresa: null, issEmpresa: 0, servicos: [] };
     await abrir(GESTOR_FISCAL);
-    expect(campo("Alíquota de ISS (%)").placeholder).toBe("Vazio = 0,00 (empresa)");
+    expect(campo("Alíquota de ISS (%)").placeholder).toBe("Em branco: 0,00 (empresa)");
     await fechar();
     act(() => root.unmount()); caixa.remove();
     const original = (globalThis.fetch as any).getMockImplementation();
@@ -149,7 +167,7 @@ describe("Layout da seção fiscal", () => {
       ? new Response(JSON.stringify({ cnaeEmpresa: "9999999", issEmpresa: 9, servicos: [] }), { status: 403 })
       : original(url, init))));
     await abrir(GESTOR_FISCAL);
-    expect(texto(document.querySelector("[data-cnae-herdado]"))).toBe("A empresa ainda não tem CNAE principal (Configurações › Dados da empresa).");
+    expect(texto(document.querySelector("[data-cnae-herdado]"))).toBe("Empresa sem CNAE principal. Informe em Configurações › Dados da empresa.");
     expect(campo("Alíquota de ISS (%)").placeholder).toBe("Ex: 5,00");
   });
 
@@ -275,7 +293,7 @@ describe("CNAE herdado da empresa", () => {
     await abrir(GESTOR_FISCAL);
     expect(caixaCnae().checked).toBe(true);
     expect(cnaeProprio()).toBeNull();
-    expect(texto(document.querySelector("[data-cnae-herdado]"))).toBe("Vai na nota: 4322-3/02");
+    expect(texto(document.querySelector("[data-cnae-herdado]"))).toBe("CNAE na nota: 4322-3/02");
     await digitar(campo("Nome"), "Limpeza 2");
     await salvar();
     expect(enviados).toEqual([{ metodo: "PATCH", corpo: { nome: "Limpeza 2" } }]);
@@ -320,7 +338,7 @@ describe("CNAE herdado da empresa", () => {
   it("empresa sem CNAE principal: avisa onde informar", async () => {
     apoio = { cnaeEmpresa: null, issEmpresa: 5, servicos: [] };
     await abrir(GESTOR_FISCAL);
-    expect(texto(document.querySelector("[data-cnae-herdado]"))).toBe("A empresa ainda não tem CNAE principal (Configurações › Dados da empresa).");
+    expect(texto(document.querySelector("[data-cnae-herdado]"))).toBe("Empresa sem CNAE principal. Informe em Configurações › Dados da empresa.");
   });
 });
 
