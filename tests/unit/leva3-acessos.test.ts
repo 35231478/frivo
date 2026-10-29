@@ -34,6 +34,8 @@ process.env.CRON_SECRET = "cron-segredo-de-teste";
 const sessao = vi.hoisted(() => ({ atual: null as any }));
 // O espião do S6 conta as tentativas JÁ REGISTRADAS no instante em que o bcrypt roda
 const espiao = vi.hoisted(() => ({ ativo: false, contagens: [] as number[] }));
+// O sino (/api/alertas) agenda a reconciliação das NFS-e com after(), que só existe numa requisição do Next: aqui não roda
+vi.mock("next/server", async (orig) => ({ ...(await orig<typeof import("next/server")>()), after: () => {} }));
 vi.mock("@/lib/auth", async (orig) => ({
   ...(await orig<typeof import("@/lib/auth")>()),
   auth: vi.fn(async () => sessao.atual),

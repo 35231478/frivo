@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { criptografar, descriptografar } from "@/lib/crypto";
 import { formatarCpfCnpj, formatarData } from "@/lib/utils";
 import { ErroCertificado, lerCertificadoA1 } from "@/lib/nfse/certificado";
+import { situacaoWebhook } from "@/lib/nfse/webhook-server";
 import { ambienteDisponivel, consultarCertificado, consultarEmpresa, enviarCertificado, ErroPlugNotas, salvarEmpresa } from "@/lib/nfse/plugnotas";
 import {
   corpoEmpresaPlugNotas, LABEL_AMBIENTE, LABEL_STATUS, pendenciasEmitente, prefeituraPlugNotas, situacaoCertificado, soDigitos,
@@ -89,6 +90,7 @@ export async function carregarEmitente(empresaId: string) {
     ultimoErro: fiscal?.ultimoErro ?? null,
     ultimoTeste: fiscal?.ultimoTesteEm ? { em: fiscal.ultimoTesteEm.toISOString(), ok: !!fiscal.ultimoTesteOk, mensagem: fiscal.ultimoTesteMensagem } : null,
     pendencias: pendenciasEmitente(empresa, dados, !!fiscal?.certificadoId),
+    webhook: situacaoWebhook(fiscal),
     ambientesDisponiveis: { HOMOLOGACAO: ambienteDisponivel("HOMOLOGACAO"), PRODUCAO: ambienteDisponivel("PRODUCAO") },
   };
 }

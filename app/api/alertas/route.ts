@@ -1,10 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { pode } from "@/lib/permissoes";
 import { contarAlertasPrazos } from "@/lib/prazo-server";
 import { contarAlertasVeiculos } from "@/lib/veiculo-server";
 import { hojeDiaCivil } from "@/lib/fuso";
+import { avisosNfse, reconciliarEmpresa } from "@/lib/nfse/webhook-server";
 
 export async function GET() {
   const session = await auth();
@@ -19,11 +20,17 @@ export async function GET() {
   const verVeiculos = pode(permissoes, "veiculos", "visualizar", role);
   const verBoletos = pode(permissoes, "financeiro", "contasReceber", role);
   const verOrcamentos = pode(permissoes, "orcamentos", "visualizar", role);
+  const verFiscal = pode(permissoes, "financeiro", "fiscal", role);
+
+  // NFS-e paradas sem aviso do PlugNotas: o sino (2 em 2 min) puxa a reconciliação da empresa
+  // DEPOIS de responder (no máximo 1 rodada por minuto por empresa; não atrasa o sino)
+  after(() => reconciliarEmpresa(empresaId).catch((e) => console.error("[nfse] reconciliação", (e as Error)?.name)));
 
   const inicioHoje = hojeDiaCivil(); // recebimento é dia civil: hoje em Brasília
 
   const zeroVeiculos = { checklistPendente: 0, checklistsComAlertas: 0, documentosVencendo: 0, veiculosManutencao: 0, revisaoChegando: 0 };
-  const [prazosBrutos, veiculosBrutos, boletosPagos, orcamentosRespondidos, nfsDoPedido] = await Promise.all([
+  const zeroNfse = { nfseAutorizadas: 0, nfseAutorizadaMedicaoId: null, nfseRejeitadas: 0, nfseRejeitadaMedicaoId: null, nfseAguardando: 0, nfseAguardandoMedicaoId: null };
+  const [prazosBrutos, veiculosBrutos, boletosPagos, orcamentosRespondidos, nfsDoPedido, nfse] = await Promise.all([
     verOrdens || verCompras ? contarAlertasPrazos(empresaId) : Promise.resolve(null),
     verVeiculos ? contarAlertasVeiculos(empresaId) : Promise.resolve(null),
     verBoletos
@@ -39,6 +46,8 @@ export async function GET() {
       where: { empresaId, solicitanteId: session.user!.id, nfVinculadaEm: { not: null }, nfVistaEm: null },
       select: { id: true }, orderBy: { nfVinculadaEm: "desc" }, take: 50,
     }),
+    // NFS-e: autorizada/rejeitada que ninguém viu e nota parada há 30 min (Financeiro › Fiscal)
+    verFiscal ? avisosNfse(empresaId) : Promise.resolve(zeroNfse),
   ]);
 
   const prazos = {
@@ -60,6 +69,7 @@ export async function GET() {
     orcamentosRespondidos,
     nfPedidos: nfsDoPedido.length,
     nfPedidoId: nfsDoPedido[0]?.id ?? null,
-    total: totalPrazos + totalVeiculos + boletosPagos + orcamentosRespondidos + nfsDoPedido.length,
+    ...nfse,
+    total: totalPrazos + totalVeiculos + boletosPagos + orcamentosRespondidos + nfsDoPedido.length + nfse.nfseAutorizadas + nfse.nfseRejeitadas + nfse.nfseAguardando,
   });
 }

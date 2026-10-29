@@ -183,7 +183,7 @@ export interface OpcoesEmitir {
   discriminacoes?: Record<string, string>;
 }
 
-async function registrar(notaId: string, tipo: "ENVIO" | "CONSULTA" | "STATUS" | "ERRO", o: { usuarioId?: string | null; status?: string | null; mensagem?: string | null }) {
+export async function registrar(notaId: string, tipo: "ENVIO" | "CONSULTA" | "STATUS" | "ERRO", o: { usuarioId?: string | null; status?: string | null; mensagem?: string | null }) {
   await prisma.notaFiscalEvento.create({ data: { notaId, tipo, usuarioId: o.usuarioId ?? null, status: o.status ?? null, mensagem: o.mensagem ?? null } });
 }
 
@@ -343,11 +343,16 @@ async function efeitosAutorizacao(notaId: string, usuarioId: string | null) {
  * 5 s por nota). Sem o id do PlugNotas (o envio ficou sem resposta), consulta pelo nosso id: se lá
  * não existe registro depois de 2 min, a nota fica INTERROMPIDA e pode ser emitida de novo.
  */
-export async function consultarNota(ator: Ator | { id: null; empresaId: string }, notaId: string, agora = new Date()) {
+export async function consultarNota(
+  ator: Ator | { id: null; empresaId: string }, notaId: string, agora = new Date(),
+  /** O aviso do PlugNotas consulta mesmo logo depois da tela (só não repete no mesmo segundo) */
+  opcoes: { intervaloMs?: number } = {},
+) {
   const nota = await prisma.notaFiscal.findFirst({ where: { id: notaId, empresaId: ator.empresaId } });
   if (!nota) throw new ErroEmissao("Nota não encontrada.", 404);
   if (!aguardandoResposta(nota.status)) return nota;
-  if (nota.ultimaConsultaEm && agora.getTime() - nota.ultimaConsultaEm.getTime() < INTERVALO_CONSULTA_MS) return nota;
+  const intervalo = opcoes.intervaloMs ?? INTERVALO_CONSULTA_MS;
+  if (nota.ultimaConsultaEm && agora.getTime() - nota.ultimaConsultaEm.getTime() < intervalo) return nota;
   const fiscal = await prisma.empresaFiscal.findUnique({ where: { empresaId: ator.empresaId }, select: { emitenteCnpj: true } });
   await prisma.notaFiscal.update({ where: { id: nota.id }, data: { consultas: { increment: 1 }, ultimaConsultaEm: agora } });
   let corpo: unknown;

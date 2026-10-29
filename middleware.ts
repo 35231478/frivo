@@ -20,6 +20,7 @@ const rotasPublicas = [
   "/api/auth",        // endpoints internos do Auth.js
   "/api/webhooks",    // webhooks externos (ex.: Banco Inter)
   "/api/email/processar-lembretes", // cron (valida CRON_SECRET internamente)
+  "/api/fiscal/reconciliar", // cron das NFS-e paradas (valida CRON_SECRET internamente)
   "/portal",          // inclui /portal/login
   "/api/portal-auth",
   "/api/portal/",

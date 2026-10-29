@@ -4,6 +4,10 @@
     {
       "path": "/api/email/processar-lembretes",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/fiscal/reconciliar",
+      "schedule": "17 10 * * *"
     }
   ]
 }

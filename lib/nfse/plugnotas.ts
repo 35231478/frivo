@@ -16,6 +16,7 @@
  *   GET   /nfse/consultar/{id}    situação da nota (id do PlugNotas); sem a rota "consultar", tenta /nfse/{id}
  *   GET   /nfse/consultar/{idIntegracao}/{cnpj}  a mesma consulta pelo NOSSO id (quando o envio ficou sem resposta)
  *   GET   /nfse/pdf/{id}, /nfse/xml/{id}         o DANFSE e o XML (a tela baixa pelo nosso servidor: exigem o token)
+ *   POST  /empresa/{cpfCnpj}/webhook  cadastra o aviso automático da empresa (já existe = PUT no mesmo caminho)
  *
  * Segurança: o certificado e a senha só passam por aqui em memória, vão por HTTPS e não são
  * gravados nem registrados em log; as mensagens de erro nunca incluem o token, o arquivo ou a senha.
@@ -199,4 +200,17 @@ export async function baixarNfse(ambiente: Ambiente, tipo: keyof typeof TIPOS_AR
   const bytes = new Uint8Array(await res.arrayBuffer());
   if (bytes.byteLength > MAX_ARQUIVO_NFSE) throw new ErroPlugNotas("O arquivo da nota veio grande demais.", 502);
   return { bytes, contentType: tipo === "pdf" ? "application/pdf" : "application/xml" };
+}
+
+/**
+ * Cadastra no PlugNotas o aviso automático (webhook) da empresa: a nossa URL (com o segredo da
+ * empresa na query) e, de reforço, o mesmo segredo no cabeçalho Authorization. Já cadastrado (409)
+ * = atualiza com PUT. Mensagem de erro sem o token, o segredo e a URL.
+ */
+export async function cadastrarWebhookNfse(ambiente: Ambiente, cnpj: string, url: string, segredo: string): Promise<void> {
+  const corpo = { url, method: "POST", headers: { Authorization: `Bearer ${segredo}` } };
+  const caminho = `/empresa/${encodeURIComponent(cnpj)}/webhook`;
+  let r = await chamar(ambiente, caminho, { method: "POST", json: corpo });
+  if (r.status === 409) r = await chamar(ambiente, caminho, { method: "PUT", json: corpo });
+  if (!r.ok) throw falha(r, url, segredo);
 }
