@@ -311,3 +311,16 @@ describe("prazo da atividade", () => {
     expect($$("[data-prazo-atividade]").map((c) => c.getAttribute("data-prazo-atividade"))).toEqual(["NO_PRAZO"]);
   });
 });
+
+describe("OS gerada de um orçamento (Gerar OS)", () => {
+  it("o cabeçalho mostra o orçamento de origem com link; OS comum não mostra", async () => {
+    await montar(fixture({ orcamentoOrigem: { id: "orc1", codigo: "ORC-0007" } }));
+    const pilula = $<HTMLAnchorElement>("[data-orcamento-origem]")!;
+    expect(pilula.getAttribute("href")).toBe("/orcamentos/orc1");
+    expect(pilula.textContent?.replace(/\s+/g, " ").trim()).toBe("Do orçamento ORC-0007");
+    expect(pilula.closest("[data-cabecalho-os]")).not.toBeNull();
+    act(() => root.unmount()); caixa.remove();
+    await montar(fixture({ orcamentoOrigem: null }));
+    expect($("[data-orcamento-origem]")).toBeNull();
+  });
+});

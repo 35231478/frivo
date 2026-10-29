@@ -11,6 +11,7 @@ import { ConverterContrato } from "@/components/orcamento/converter-contrato";
 import { ComprasSecao } from "@/components/compras/compras-secao";
 import { AnexosProposta } from "@/components/orcamento/anexos-proposta";
 import { CicloOrcamento } from "@/components/orcamento/ciclo-orcamento";
+import { GerarOs, type OsDoOrcamento } from "@/components/orcamento/gerar-os";
 import { etapaCiclo } from "@/lib/orcamentos/ciclo";
 import { marcarRespostaVista } from "@/lib/orcamentos/ciclo-server";
 import { pode } from "@/lib/permissoes";
@@ -37,9 +38,10 @@ export default async function OrcamentoDetalhePage({
         ...INCLUDE_DOCUMENTO_ORCAMENTO,
         criadoPor: { select: { id: true, nome: true } },
         contratoGerado: { select: { id: true, numero: true } },
+        osGerada: { select: { id: true, numero: true } },
         ordensServico: {
           include: {
-            ordemServico: { select: { id: true, numero: true, status: true, descricao: true } },
+            ordemServico: { select: { id: true, numero: true, status: true, descricao: true, criadoEm: true } },
           },
         },
       },
@@ -59,6 +61,12 @@ export default async function OrcamentoDetalhePage({
   });
 
   const podeEditar = orcamento.status === "RASCUNHO";
+  const u = session!.user!;
+  // A OS do orçamento: a que ele gerou ou, se não gerou, a 1ª vinculada (o "Gerar OS" nunca cria outra)
+  const primeiraVinculada = [...orcamento.ordensServico].sort((a, b) => a.ordemServico.criadoEm.getTime() - b.ordemServico.criadoEm.getTime())[0]?.ordemServico;
+  const osDoOrcamento: OsDoOrcamento | null = orcamento.osGerada
+    ? { ...orcamento.osGerada, gerada: true }
+    : primeiraVinculada ? { id: primeiraVinculada.id, numero: primeiraVinculada.numero, gerada: false } : null;
   const ehProposta = orcamento.tipo === "PROPOSTA_CONTRATO";
   const equipamentos = ehProposta && orcamento.equipamentosCobertos.length
     ? (await prisma.equipamento.findMany({
@@ -99,6 +107,17 @@ export default async function OrcamentoDetalhePage({
           etapa={etapaCiclo(orcamento)}
         />
       </div>
+
+      {/* Faturamento avulso, caminho inverso: orçamento aprovado → OS */}
+      {orcamento.tipo === "COMUM" && (orcamento.status === "APROVADO" || osDoOrcamento) && (
+        <div className="card-padded" data-secao-gerar-os>
+          <GerarOs
+            orcamentoId={orcamento.id} codigo={orcamento.codigo} os={osDoOrcamento}
+            itens={orcamento.servicos.length + orcamento.produtos.length}
+            podeCriar={pode(u.permissoes, "ordens", "criar", u.role)} podeVer={pode(u.permissoes, "ordens", "visualizar", u.role)}
+          />
+        </div>
+      )}
 
       <div className="card-padded">
         <CicloOrcamento orcamento={orcamento} eventos={eventos} />
@@ -154,7 +173,7 @@ export default async function OrcamentoDetalhePage({
 
       {orcamento.ordensServico.length > 0 && (
         <div className="card-padded">
-          <h2 className="card-title mb-3">Ordens de Serviço vinculadas</h2>
+          <h2 className="card-title mb-3">Ordens de serviço vinculadas</h2>
           <div className="divide-y divide-surface-border">
             {orcamento.ordensServico.map((vinc) => (
               <Link
@@ -170,6 +189,9 @@ export default async function OrcamentoDetalhePage({
                   <span className="text-sm text-ink truncate">{vinc.ordemServico.descricao}</span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  {vinc.ordemServico.id === orcamento.osGerada?.id && (
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-acento-claro text-acento" data-os-gerada>Gerada deste orçamento</span>
+                  )}
                   <span className={cn(
                     "text-xs font-semibold px-2 py-0.5 rounded-full",
                     "bg-surface-alt text-ink-muted"
