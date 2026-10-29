@@ -92,6 +92,11 @@ export async function POST(req: NextRequest, { params }: Params) {
         return NextResponse.json({ erro: "Medição não está liberada para NF" }, { status: 400 });
       }
       if (!a.nfNumero) return NextResponse.json({ erro: "Informe o número da NF" }, { status: 400 });
+      // NFS-e emitida aqui pelo PlugNotas (enviando, processando ou autorizada): registrar outra à mão duplicaria a NF
+      const nfse = await prisma.notaFiscal.count({ where: { medicaoId: id, status: { in: ["ENVIANDO", "PROCESSANDO", "CONCLUIDO"] } } });
+      if (nfse) {
+        return NextResponse.json({ erro: "Esta medição já tem NFS-e emitida pelo sistema (veja “Notas fiscais (NFS-e)”). Não registre outra à mão." }, { status: 409 });
+      }
       await prisma.medicao.update({
         where: { id },
         data: {
