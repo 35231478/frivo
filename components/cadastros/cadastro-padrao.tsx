@@ -13,7 +13,7 @@ import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { BarraAcoesMassa } from "@/components/acoes-massa/barra";
 import { CheckboxLinha, CheckboxPagina, SelecaoMassaProvider } from "@/components/acoes-massa/selecao";
-import { podeAcao, podeExportar, type AcaoItem, type Entidade } from "@/lib/acoes-massa/acoes";
+import { ENTIDADE, podeAcao, podeExportar, type AcaoItem, type Entidade } from "@/lib/acoes-massa/acoes";
 import { rotuloPermissao } from "@/lib/permissoes";
 import { cn, formatarMoeda } from "@/lib/utils";
 import { lerTamanho, proximaOrdem, TAMANHO_PADRAO, type Ordem } from "@/lib/listagem";
@@ -97,7 +97,7 @@ function useMassa(def: DefCadastro) {
   const { permissoes, role } = usePermissoes();
   if (!def.massa) return false;
   const e = def.entidade as Entidade;
-  return podeExportar(permissoes, role, e) || (["inativar", "reativar"] as AcaoItem[]).some((a) => podeAcao(permissoes, role, e, a));
+  return podeExportar(permissoes, role, e) || (Object.keys(ENTIDADE[e].acoes) as AcaoItem[]).some((a) => podeAcao(permissoes, role, e, a));
 }
 
 function ComSelecao({ ativo, entidade, ids, total, children }: { ativo: boolean; entidade: EntidadeCadastro; ids: string[]; total: number; children: ReactNode }) {

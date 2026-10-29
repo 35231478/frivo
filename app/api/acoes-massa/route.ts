@@ -8,13 +8,16 @@ import {
 import { EXECUTORES, gerarCsvExportacao, idsDoFiltro, linhasExportacao, rotulos } from "@/lib/acoes-massa/server";
 import type { ResultadoItem } from "@/lib/acoes-massa/regras";
 import { chaveHojeBR } from "@/lib/fuso";
+import { camposParaAplicar } from "@/lib/nfse/aplicar-fiscal";
 
 /**
  * Ações em massa — endpoint ÚNICO (a tela não faz uma chamada por registro).
- * - acao "inativar" | "reativar" | "gerar-qr": até 500 ids por requisição; a tela divide seleções
+ * - acao "inativar" | "reativar" | "gerar-qr" | "aplicar-fiscal": até 500 ids por requisição; a tela divide seleções
  *   maiores em partes (barra de progresso). Cada id passa pela MESMA regra e permissão da ação
  *   individual; id de outra empresa = "não encontrado". Nunca falha o lote inteiro em silêncio:
  *   devolve o resultado de cada id ("X feitas · Y não puderam, com o motivo").
+ * - "aplicar-fiscal" (serviços) leva `dados` (só os campos preenchidos), validados UMA vez aqui com o
+ *   schema do cadastro; cada serviço grava só o que muda, pela mesma edição da rota individual.
  * - acao "exportar": CSV dos ids escolhidos (ver a lista + "Relatórios › Exportar").
  * - acao "ids-do-filtro": ids que batem no filtro atual da lista (mesmo where da página).
  * Cada requisição é registrada no log do servidor (quem, quando, o quê, quantos).
@@ -30,6 +33,8 @@ const schema = z.object({
   ids: z.array(id).max(MAX_SELECAO).optional(),
   filtro: z.string().max(4000).optional(),
   motivo: z.string().trim().max(500).optional(),
+  /** Campos do formulário da ação (só "aplicar-fiscal") */
+  dados: z.record(z.string(), z.unknown()).optional(),
   /** Agrupa as partes de uma mesma ação no log */
   lote: z.object({ id: z.string().max(40), parte: z.number().int().min(1), partes: z.number().int().min(1) }).strict().optional(),
 }).strict();
@@ -88,9 +93,16 @@ export async function POST(req: NextRequest) {
     registrar({ ...quem, entidade, acao, total: ids.length, recusado: "sem_permissao", lote });
     return NextResponse.json({ erro: "Sem permissão para esta ação" }, { status: 403 });
   }
+  // Formulário da ação: validado uma vez (o que é inválido não chega a nenhum registro)
+  let dados: Record<string, unknown> | undefined;
+  if (def.formulario) {
+    const prep = camposParaAplicar(parsed.data.dados ?? {});
+    if (!prep.ok) return NextResponse.json({ erro: prep.erro }, { status: 400 });
+    dados = prep.dados;
+  }
 
   const nomes = await rotulos(entidade, ids, empresaId); // só os da empresa da sessão aparecem aqui
-  const ctx = { empresaId, usuarioId: user.id, usuarioNome: user.name ?? "usuário", origem: "massa" as const, motivo, role: user.role, permissoes };
+  const ctx = { empresaId, usuarioId: user.id, usuarioNome: user.name ?? "usuário", origem: "massa" as const, motivo, role: user.role, permissoes, dados };
   const inicio = Date.now();
   const resultados: ItemResultado[] = [];
 
@@ -123,6 +135,7 @@ export async function POST(req: NextRequest) {
   const feitas = resultados.filter((r) => r.ok).length;
   registrar({
     ...quem, entidade, acao, lote, total: ids.length, feitas, naoPuderam: ids.length - feitas, duracaoMs: Date.now() - inicio,
+    ...(dados && { campos: Object.keys(dados) }),
     falhas: resultados.filter((r) => !r.ok).slice(0, 50).map((r) => ({ id: r.id, codigo: r.codigo })),
   });
   return NextResponse.json({ resultados, resumo: { total: ids.length, feitas, naoPuderam: ids.length - feitas } });

@@ -7,6 +7,7 @@ import { whereClientes, whereContratos, whereOrcamentos, whereOrdens } from "@/l
 import { calcularStatusFinanceiroEmLote } from "@/lib/status-financeiro";
 import { MAX_SELECAO, type AcaoItem, type Entidade } from "@/lib/acoes-massa/acoes";
 import { idsCadastro, linhasCadastro, rotulosCadastro } from "@/lib/cadastros/servidor";
+import { aplicarFiscalServico } from "@/lib/acoes-massa/fiscal-servicos";
 import type { EntidadeCadastro } from "@/lib/cadastros/registro";
 import {
   cancelarOrcamento, cancelarOs, definirAtivoCadastro, definirAtivoCliente, definirAtivoEquipamento, gerarQrEquipamento, inativarColaborador,
@@ -28,7 +29,7 @@ export const EXECUTORES: Record<Entidade, Partial<Record<AcaoItem, (id: string, 
   veiculos: { inativar: inativarVeiculo, reativar: reativarVeiculo },
   colaboradores: { inativar: inativarColaborador, reativar: reativarColaborador },
   produtos: cadastro("produtos"),
-  servicos: cadastro("servicos"),
+  servicos: { ...cadastro("servicos"), "aplicar-fiscal": aplicarFiscalServico },
   cargos: cadastro("cargos"),
   "categorias-financeiras": cadastro("categorias-financeiras"),
   "perfis-acesso": cadastro("perfis-acesso"),

@@ -16,7 +16,7 @@ export interface ApoioFiscal {
   servicos: { codigoMunicipal: string | null; nome: string }[];
 }
 
-function useApoioFiscal() {
+export function useApoioFiscal() {
   const [apoio, setApoio] = useState<ApoioFiscal | null>(null);
   useEffect(() => {
     let vivo = true;

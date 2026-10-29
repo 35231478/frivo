@@ -5,8 +5,8 @@ import { pode, type Acao, type Permissoes } from "@/lib/permissoes";
  * permissão cada uma exige. A permissão é a MESMA da ação individual (RBAC do C4); o servidor
  * confere de novo, por item, em /api/acoes-massa.
  *
- * Só ações reversíveis e seguras: inativar/reativar (soft-delete), exportar e gerar QR.
- * Exclusão definitiva em massa não existe de propósito.
+ * Só ações reversíveis e seguras: inativar/reativar (soft-delete), exportar, gerar QR e aplicar
+ * dados fiscais nos serviços (só os campos preenchidos). Exclusão definitiva em massa não existe de propósito.
  */
 
 export const ENTIDADES = [
@@ -17,7 +17,7 @@ export const ENTIDADES = [
 ] as const;
 export type Entidade = (typeof ENTIDADES)[number];
 
-export const ACOES_ITEM = ["inativar", "reativar", "gerar-qr"] as const;
+export const ACOES_ITEM = ["inativar", "reativar", "gerar-qr", "aplicar-fiscal"] as const;
 export type AcaoItem = (typeof ACOES_ITEM)[number];
 
 /** Por requisição: acima disso o servidor recusa (evita timeout). A tela manda em partes menores. */
@@ -42,6 +42,12 @@ export interface DefAcao {
   perigo?: boolean;
   /** Pede motivo (só onde ele é gravado: histórico da OS/contrato, observações de veículo/colaborador) */
   comMotivo?: boolean;
+  /** Exige TAMBÉM todas estas (além de uma de `permissao`) */
+  exigeTambem?: Requisito[];
+  /** Formulário no modal antes de confirmar (os valores vão junto com o lote) */
+  formulario?: "fiscal-servico";
+  /** Resultado: "12 aplicados" (padrão: "12 feitas") */
+  resultado?: [singular: string, plural: string];
 }
 
 export interface DefEntidade {
@@ -112,7 +118,18 @@ export const ENTIDADE: Record<Entidade, DefEntidade> = {
   },
   // Cadastros padronizados: inativar/reativar com a permissão do registro (lib/cadastros/registro.ts)
   produtos: acoesCadastro("produto", "produtos"),
-  servicos: acoesCadastro("serviço", "serviços"),
+  servicos: {
+    ...acoesCadastro("serviço", "serviços"),
+    acoes: {
+      ...acoesCadastro("serviço", "serviços").acoes,
+      // Mesmas permissões de editar o serviço + mudar dados fiscais (a trava por campo do registro)
+      "aplicar-fiscal": {
+        rotulo: "Aplicar dados fiscais (NFS-e)", feito: "atualizados", formulario: "fiscal-servico", resultado: ["aplicado", "aplicados"],
+        permissao: [["financeiro", "fiscal"]], exigeTambem: [["configuracoes", "gerenciar"]],
+        impacto: "Os campos preenchidos abaixo são gravados em todos os serviços selecionados. Campo vazio não muda nada. Cada serviço passa pela mesma validação do cadastro.",
+      },
+    },
+  },
   cargos: acoesCadastro("cargo", "cargos"),
   "categorias-financeiras": acoesCadastro("categoria", "categorias", true),
   // Travas de cada um (perfil padrão, o próprio perfil, modelo padrão) valem por item no lote
@@ -148,7 +165,8 @@ export function requisitosExportar(entidade: Entidade): Requisito[][] {
 
 export function podeAcao(permissoes: Permissoes | null | undefined, role: string | undefined, entidade: Entidade, acao: AcaoItem) {
   const def = ENTIDADE[entidade].acoes[acao];
-  return !!def && def.permissao.some(([m, a]) => pode(permissoes, m, a, role));
+  return !!def && def.permissao.some(([m, a]) => pode(permissoes, m, a, role))
+    && (def.exigeTambem ?? []).every(([m, a]) => pode(permissoes, m, a, role));
 }
 
 export function podeExportar(permissoes: Permissoes | null | undefined, role: string | undefined, entidade: Entidade) {
