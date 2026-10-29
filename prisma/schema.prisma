@@ -1589,6 +1589,9 @@ model OrdemServico {
   chamadoNumero        String?    @map("chamado_numero")
   contatoOrigemId      String?    @map("contato_origem_id")
   equipamentoId        String?    @map("equipamento_id")
+  /// Orçamento aprovado que GEROU esta OS ("Gerar OS" no orçamento). Único: um orçamento gera no
+  /// máximo uma OS (dois cliques não duplicam). O vínculo de leitura continua em OrcamentoOs.
+  orcamentoOrigemId    String?    @unique @map("orcamento_origem_id")
   descricao            String
   previsaoConclusao    DateTime?  @map("previsao_conclusao")
   dataInicio           DateTime?  @map("data_inicio")
@@ -1605,6 +1608,7 @@ model OrdemServico {
   criadoPor          Usuario               @relation("UsuarioCriador", fields: [criadoPorId], references: [id])
   contatoOrigem      ContatoCliente?       @relation("OsContatoOrigem", fields: [contatoOrigemId], references: [id])
   equipamento        Equipamento?          @relation(fields: [equipamentoId], references: [id])
+  orcamentoOrigem    Orcamento?            @relation("OrcamentoOsGerada", fields: [orcamentoOrigemId], references: [id], onDelete: SetNull)
   atividades         AtividadeOs[]
   itensOrcamento     OsItemOrcamento[]
   anexos             OsAnexo[]
@@ -2178,6 +2182,7 @@ model Orcamento {
   contasReceber      ContaReceber[]
   pedidosCompra      PedidoCompraInterno[]
   contratoGerado     Contrato?             @relation("OrcamentoContrato")
+  osGerada           OrdemServico?         @relation("OrcamentoOsGerada")
 
   @@unique([codigo, empresaId])
   @@index([empresaId, status])

@@ -113,6 +113,19 @@ describe("central da OS (números-chave, pagamento, o que falta)", () => {
     expect(c.valor).toEqual({ orcado: 1200, medido: 800 });
   });
 
+  it("OS gerada do orçamento (Gerar OS): o total do orçamento de origem não soma de novo aos itens copiados", () => {
+    const entrada = base({
+      itensOrcamento: [{ valorTotal: "380" }, { valorTotal: "1500" }, { valorTotal: "4000" }],
+      orcamentos: [
+        { orcamentoId: "orcOrigem", orcamento: { status: "APROVADO", totalGeral: "5880" } },
+        { orcamentoId: "orcExtra", orcamento: { status: "APROVADO", totalGeral: "300" } },
+      ],
+    });
+    expect(centralDaOs({ ...entrada, orcamentoOrigemId: "orcOrigem" }, AGORA).valor.orcado).toBe(6180);
+    // OS comum (sem origem): segue somando todos os aprovados, como antes
+    expect(centralDaOs({ ...entrada, orcamentoOrigemId: null }, AGORA).valor.orcado).toBe(12060);
+  });
+
   it("pagamento pelas contas a receber das medições válidas", () => {
     const conta = (status: string, venc: string) => ({ status, dataVencimento: venc });
     const os = (contas: any[]) => base({ medicoes: [{ status: "GERADA", valorTotal: 1, contasReceber: contas }] });

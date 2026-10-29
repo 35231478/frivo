@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  AlertTriangle, Building2, CalendarClock, ChevronLeft, CircleDollarSign, ClipboardCheck,
+  AlertTriangle, Building2, CalendarClock, ChevronLeft, CircleDollarSign, ClipboardCheck, FileSignature,
   FileBarChart, Pencil, RotateCcw, SlidersHorizontal, User, Wrench, X,
 } from "lucide-react";
 import { formatarDataHora, formatarMoeda, LABELS_PRIORIDADE, LABELS_STATUS_OS } from "@/lib/utils";
@@ -63,6 +63,12 @@ export function CabecalhoOs({ os, central, acoes, onAba, onAtualizado }: {
                 <StatusPill tom="acento">
                   <FileBarChart className="w-3 h-3" /> Chamado do portal
                 </StatusPill>
+              )}
+              {os.orcamentoOrigem && (
+                <Link href={`/orcamentos/${os.orcamentoOrigem.id}`} data-orcamento-origem={os.orcamentoOrigem.id}
+                  className="inline-flex items-center gap-1 rounded-full bg-acento-claro px-2.5 py-0.5 text-xs font-semibold text-acento hover:underline">
+                  <FileSignature className="w-3 h-3" aria-hidden="true" /> Do orçamento {os.orcamentoOrigem.codigo}
+                </Link>
               )}
             </div>
             <p className="text-sm text-ink mt-1.5 flex items-center gap-1.5 flex-wrap">

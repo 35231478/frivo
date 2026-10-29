@@ -18,7 +18,9 @@ export interface OsCentralEntrada {
   atividades: AtividadeCentral[];
   medicoes: { status: string; valorTotal: unknown; contasReceber?: { status: string; dataVencimento: Date | string | null; valor?: unknown }[] }[];
   itensOrcamento: { valorTotal: unknown }[];
-  orcamentos: { orcamento: { status: string; totalGeral: unknown } }[];
+  orcamentos: { orcamentoId?: string; orcamento: { status: string; totalGeral: unknown } }[];
+  /** Orçamento que GEROU a OS: os itens dele já estão em itensOrcamento (não somar o total de novo) */
+  orcamentoOrigemId?: string | null;
   servicosAdicionais?: { statusCobranca: string }[];
   prazosSla?: { status: string }[];
 }
@@ -55,9 +57,11 @@ export function centralDaOs(os: OsCentralEntrada, agora: Date = new Date()) {
   const concluidas = ativas.filter((a) => a.status === "CONCLUIDA").length;
   const equipamentosAtendidos = ativas.reduce((n, a) => n + (a.equipamentos ?? []).filter((e) => e.feito).length, 0);
 
-  // Valor: orçado = itens da OS + orçamentos vinculados APROVADOS; medido = medições válidas
+  // Valor: orçado = itens da OS + orçamentos vinculados APROVADOS (menos o de origem, cujos itens
+  // já vieram para a OS); medido = medições válidas
   const orcado = os.itensOrcamento.reduce((s, i) => s + num(i.valorTotal), 0)
-    + os.orcamentos.filter((o) => o.orcamento.status === "APROVADO").reduce((s, o) => s + num(o.orcamento.totalGeral), 0);
+    + os.orcamentos.filter((o) => o.orcamento.status === "APROVADO" && !(os.orcamentoOrigemId && o.orcamentoId === os.orcamentoOrigemId))
+      .reduce((s, o) => s + num(o.orcamento.totalGeral), 0);
   const medido = os.medicoes.filter(medicaoValida).reduce((s, m) => s + num(m.valorTotal), 0);
   const pagamento = situacaoPagamento(os, orcado);
 

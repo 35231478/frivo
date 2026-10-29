@@ -23,6 +23,8 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
       cliente: { select: { id: true, nome: true, nomeFantasia: true } },
       unidade: { select: { id: true, nome: true, cidade: true, estado: true } },
       contrato: { select: { id: true, numero: true } },
+      // Orçamento aprovado que gerou a OS ("Gerar OS"): vira um atalho no cabeçalho
+      orcamentoOrigem: { select: { id: true, codigo: true } },
       responsavel: { select: { id: true, nome: true } },
       criadoPor: { select: { id: true, nome: true } },
       atividades: {
