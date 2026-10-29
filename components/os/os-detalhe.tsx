@@ -18,7 +18,7 @@ import { CabecalhoOs } from "@/components/os/central/cabecalho-os";
 import { ResumoOs } from "@/components/os/central/resumo-os";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { centralDaOs } from "@/lib/os/central";
-import { AlertTriangle, FileBarChart } from "lucide-react";
+import { AlertTriangle, FileBarChart, Send } from "lucide-react";
 
 /** As 6 abas da central (antes 11). As antigas continuam abrindo pelo link: viram a aba que as absorveu. */
 export const ABAS_OS = ["resumo", "atividades", "comercial", "materiais", "financeiro", "relatorios"] as const;
@@ -43,6 +43,7 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
   useEffect(() => { setOs(initialOs); }, [initialOs]);
   const [aba, setAba] = useState<AbaOs>(abaValida(abaInicial));
   const [gerandoMedicao, setGerandoMedicao] = useState(false);
+  const [abrirNfse, setAbrirNfse] = useState(false);
   const [erroAcao, setErroAcao] = useState("");
   const { pode } = usePermissoes();
   // os.prazos = SLA por modelo de prazo (só id/status: o Resumo conta os atrasados)
@@ -79,6 +80,11 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
       {os.status === "CONCLUIDA" && pode("financeiro", "medicoes") && (
         <Button variant="outline" onClick={gerarMedicao} loading={gerandoMedicao}>
           <FileBarChart className="w-4 h-4" /> Gerar medição
+        </Button>
+      )}
+      {os.status === "CONCLUIDA" && pode("financeiro", "fiscal") && (
+        <Button variant="outline" onClick={() => { setAbrirNfse(true); irPara("financeiro"); }} data-acao="emitir-nfse-os">
+          <Send className="w-4 h-4" /> Emitir NFS-e
         </Button>
       )}
       <OsInativarBotao
@@ -137,7 +143,7 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
               {ativa === "materiais" && <ComprasSecao ordemServicoId={os.id} />}
 
               {ativa === "financeiro" && (
-                <OsFinanceiro osId={os.id} temContrato={!!os.contrato} medicoes={os.medicoes} itensOrcamento={os.itensOrcamento} />
+                <OsFinanceiro osId={os.id} temContrato={!!os.contrato} medicoes={os.medicoes} itensOrcamento={os.itensOrcamento} abrirNfse={abrirNfse} onAbriuNfse={() => setAbrirNfse(false)} />
               )}
 
               {ativa === "relatorios" && (

@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { formatarMoeda, formatarData, LABELS_STATUS_MEDICAO } from "@/lib/utils";
 import { Receipt, ExternalLink } from "lucide-react";
+import { NotasFiscais } from "@/components/fiscal/nfse-notas";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
 
 const COR_MEDICAO: Record<string, string> = {
   RASCUNHO: "bg-surface-linha text-ink-muted",
@@ -22,8 +24,13 @@ interface MedicaoResumo { id: string; numero: string; status: string; valorTotal
  * Aba Financeiro da OS — fluxo ÚNICO: a OS entra numa medição oficial (que vira conta e boleto)
  * pelo botão abaixo. A antiga "medição interna" (OsMedicao) saiu: nunca virava conta a receber.
  */
-export function OsFinanceiro({ osId, temContrato, medicoes: iniciais, itensOrcamento }: { osId: string; temContrato?: boolean; medicoes: MedicaoResumo[]; itensOrcamento: any[] }) {
+export function OsFinanceiro({ osId, temContrato, medicoes: iniciais, itensOrcamento, abrirNfse, onAbriuNfse }: {
+  osId: string; temContrato?: boolean; medicoes: MedicaoResumo[]; itensOrcamento: any[];
+  /** Botão "Emitir NFS-e" do cabeçalho: abre a emissão ao chegar na aba */
+  abrirNfse?: boolean; onAbriuNfse?: () => void;
+}) {
   const router = useRouter();
+  const { pode } = usePermissoes();
   const [medicoes] = useState(iniciais);
   const [gerando, setGerando] = useState(false);
   const [erro, setErro] = useState("");
@@ -90,6 +97,14 @@ export function OsFinanceiro({ osId, temContrato, medicoes: iniciais, itensOrcam
               </div>
             </a>
           ))}
+        </div>
+      )}
+
+      {/* NFS-e: sai da medição da OS (a mesma trava de faturamento: uma medição viva por OS).
+          Quem não vê medições nem o fiscal não vê as notas */}
+      {(pode("financeiro", "fiscal") || pode("financeiro", "medicoes")) && (
+        <div className="border-t border-surface-linha pt-5">
+          <NotasFiscais osId={osId} origem="OS" abrirEmissao={abrirNfse} onAbriu={onAbriuNfse} />
         </div>
       )}
 

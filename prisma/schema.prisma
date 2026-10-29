@@ -510,6 +510,8 @@ model Empresa {
   integracaoInter IntegracaoInter?
   emailConfig     EmailConfig?
 
+  notasFiscais NotaFiscal[]
+
   @@map("empresas")
 }
 
@@ -726,6 +728,9 @@ model Usuario {
   perfilAcessoId         String?                   @map("perfil_acesso_id")
   perfilAcesso           PerfilAcesso?             @relation(fields: [perfilAcessoId], references: [id])
 
+  notasFiscaisEmitidas NotaFiscal[]       @relation("NotaFiscalEmissor")
+  notasFiscaisEventos  NotaFiscalEvento[] @relation("NotaFiscalEventoAutor")
+
   @@unique([email, empresaId])
   @@index([empresaId, ativo])
   @@map("usuarios")
@@ -895,6 +900,8 @@ model Cliente {
   medicoes                Medicao[]
   contasReceber           ContaReceber[]
   tabelaPreco             TabelaPreco?             @relation(fields: [tabelaPrecoId], references: [id])
+
+  notasFiscais NotaFiscal[]
 
   @@unique([cpfCnpj, empresaId])
   @@index([empresaId, ativo])
@@ -1349,9 +1356,9 @@ model Servico {
   // Campos fiscais (preenchidos pelo usuário, sem padrão). NFS-e (lib/nfse/servico.ts):
   //   codigoLc116 = servico.codigo ("NN.NN"); codigoMunicipal = servico.codigoTributacao (vazio = o LC 116);
   //   aliquotaISS = iss.aliquota (vazio = o ISS da empresa)
-  codigoMunicipal  String?  @map("codigo_municipal")
-  codigoLc116      String?  @map("codigo_lc116")
-  aliquotaISS      Decimal? @map("aliquota_iss") @db.Decimal(5, 2)
+  codigoMunicipal     String?  @map("codigo_municipal")
+  codigoLc116         String?  @map("codigo_lc116")
+  aliquotaISS         Decimal? @map("aliquota_iss") @db.Decimal(5, 2)
   /// Tributação do ISS na NFS-e (escolha amigável → iss.tipoTributacao + iss.exigibilidade do PlugNotas):
   /// TRIBUTAVEL | ISENTO | IMUNE | NAO_INCIDENCIA | SUSPENSA_JUDICIAL | SUSPENSA_ADMINISTRATIVA (texto + CHECK).
   /// Vazio = TRIBUTAVEL (tributável no município, exigível)
@@ -1362,11 +1369,11 @@ model Servico {
   cnae                String?  @db.VarChar(7)
   /// Texto base da discriminação do serviço na nota (editável na hora de emitir)
   discriminacaoPadrao String?  @map("discriminacao_padrao")
-  aliquotaPIS      Decimal? @map("aliquota_pis") @db.Decimal(5, 2)
-  aliquotaCOFINS   Decimal? @map("aliquota_cofins") @db.Decimal(5, 2)
-  aliquotaCSLL     Decimal? @map("aliquota_csll") @db.Decimal(5, 2)
-  aliquotaIR       Decimal? @map("aliquota_ir") @db.Decimal(5, 2)
-  observacaoFiscal String?  @map("observacao_fiscal")
+  aliquotaPIS         Decimal? @map("aliquota_pis") @db.Decimal(5, 2)
+  aliquotaCOFINS      Decimal? @map("aliquota_cofins") @db.Decimal(5, 2)
+  aliquotaCSLL        Decimal? @map("aliquota_csll") @db.Decimal(5, 2)
+  aliquotaIR          Decimal? @map("aliquota_ir") @db.Decimal(5, 2)
+  observacaoFiscal    String?  @map("observacao_fiscal")
 
   ativo    Boolean  @default(true)
   criadoEm DateTime @default(now()) @map("criado_em")
@@ -1375,6 +1382,8 @@ model Servico {
   orcamentoItens OrcamentoServico[]
   medicaoItens   MedicaoItem[]
   tabelaItens    TabelaPrecoItem[]
+
+  notasFiscaisItens NotaFiscalItem[]
 
   @@unique([empresaId, codigo])
   @@map("servicos")
@@ -1606,6 +1615,8 @@ model OrdemServico {
   prazos             OsPrazo[]
   relatorios         RelatorioOs[]
   servicosAdicionais ServicoAdicional[]
+
+  notasFiscais NotaFiscal[]
 
   @@unique([numero, empresaId])
   @@index([empresaId, status])
@@ -2330,6 +2341,8 @@ model Medicao {
   contasReceber ContaReceber[]
   relatorios    RelatorioOs[]
 
+  notasFiscais NotaFiscal[]
+
   @@unique([numero, empresaId])
   @@index([empresaId, status])
   @@index([clienteId])
@@ -2365,6 +2378,8 @@ model MedicaoItem {
   produto      Produto?      @relation(fields: [produtoId], references: [id])
   ordemServico OrdemServico? @relation(fields: [ordemServicoId], references: [id])
   orcamento    Orcamento?    @relation(fields: [orcamentoId], references: [id])
+
+  notasFiscaisItens NotaFiscalItem[]
 
   @@map("medicao_itens")
 }
@@ -2431,6 +2446,8 @@ model ContaReceber {
   orcamento           Orcamento?           @relation(fields: [orcamentoId], references: [id])
   contrato            Contrato?            @relation(fields: [contratoId], references: [id], onDelete: SetNull)
   categoriaFinanceira CategoriaFinanceira? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+
+  notasFiscais NotaFiscal[]
 
   @@unique([contratoId, refAno, refMes])
   @@index([categoriaId])
@@ -3513,4 +3530,104 @@ model EmpresaFiscal {
   atualizadoPor Usuario? @relation("EmpresaFiscalAutor", fields: [atualizadoPorId], references: [id], onDelete: SetNull)
 
   @@map("empresa_fiscal")
+}
+
+// ─────────────────────────────────────────────
+// NFS-e — NOTAS EMITIDAS (PlugNotas). SQL: prisma/sql/2026-11-08_nfse_notas.sql
+// ─────────────────────────────────────────────
+
+/// Uma NFS-e enviada ao PlugNotas. Sai da medição (o documento de cobrança); a OS concluída emite pela
+/// medição dela. Uma nota por código de serviço/regra de ISS (lib/nfse/nota.ts). Nada de token aqui.
+model NotaFiscal {
+  id                String    @id @default(cuid())
+  empresaId         String    @map("empresa_id")
+  medicaoId         String?   @map("medicao_id")
+  ordemServicoId    String?   @map("ordem_servico_id")
+  clienteId         String    @map("cliente_id")
+  contaReceberId    String?   @map("conta_receber_id")
+  /// OS | MEDICAO (de que tela partiu)
+  origem            String
+  /// HOMOLOGACAO | PRODUCAO (o ambiente do emitente no envio)
+  ambiente          String
+  /// ENVIANDO | PROCESSANDO | CONCLUIDO | REJEITADO | CANCELADO | INTERROMPIDO
+  status            String    @default("ENVIANDO")
+  /// Chave do agrupamento (código municipal + LC 116 + regra de ISS)
+  grupo             String
+  codigoLc116       String?   @map("codigo_lc116") @db.VarChar(5)
+  codigoTributacao  String?   @map("codigo_tributacao")
+  aliquotaIss       Decimal?  @map("aliquota_iss") @db.Decimal(5, 2)
+  issRetido         Boolean   @default(false) @map("iss_retido")
+  valorServicos     Decimal   @map("valor_servicos") @db.Decimal(12, 2)
+  valorDesconto     Decimal   @default(0) @map("valor_desconto") @db.Decimal(12, 2)
+  discriminacao     String
+  tomadorCpfCnpj    String    @map("tomador_cpf_cnpj") @db.VarChar(14)
+  tomadorNome       String    @map("tomador_nome")
+  /// Identificação da nota no PlugNotas (o idIntegracao enviado é o nosso `id`)
+  plugnotasId       String?   @unique @map("plugnotas_id")
+  protocolo         String?
+  numero            String?
+  codigoVerificacao String?   @map("codigo_verificacao")
+  autorizadaEm      DateTime? @map("autorizada_em")
+  /// Endereços do PDF/XML no PlugNotas (exigem o token: a tela baixa pelo nosso servidor)
+  pdfUrl            String?   @map("pdf_url")
+  xmlUrl            String?   @map("xml_url")
+  /// Motivo da rejeição (mensagem do PlugNotas/prefeitura, sem segredos)
+  motivo            String?
+  consultas         Int       @default(0)
+  ultimaConsultaEm  DateTime? @map("ultima_consulta_em")
+  emitidaPorId      String?   @map("emitida_por_id")
+  criadoEm          DateTime  @default(now()) @map("criado_em")
+  atualizadoEm      DateTime  @updatedAt @map("atualizado_em")
+
+  empresa      Empresa            @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  medicao      Medicao?           @relation(fields: [medicaoId], references: [id], onDelete: SetNull)
+  ordemServico OrdemServico?      @relation(fields: [ordemServicoId], references: [id], onDelete: SetNull)
+  cliente      Cliente            @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  contaReceber ContaReceber?      @relation(fields: [contaReceberId], references: [id], onDelete: SetNull)
+  emitidaPor   Usuario?           @relation("NotaFiscalEmissor", fields: [emitidaPorId], references: [id], onDelete: SetNull)
+  itens        NotaFiscalItem[]
+  eventos      NotaFiscalEvento[]
+
+  @@index([empresaId, status])
+  @@index([medicaoId])
+  @@index([ordemServicoId])
+  @@index([contaReceberId])
+  @@index([clienteId])
+  @@map("notas_fiscais")
+}
+
+model NotaFiscalItem {
+  id            String  @id @default(cuid())
+  notaId        String  @map("nota_id")
+  medicaoItemId String? @map("medicao_item_id")
+  servicoId     String? @map("servico_id")
+  descricao     String
+  quantidade    Decimal @db.Decimal(10, 2)
+  valorTotal    Decimal @map("valor_total") @db.Decimal(12, 2)
+  valorDesconto Decimal @default(0) @map("valor_desconto") @db.Decimal(12, 2)
+
+  nota        NotaFiscal   @relation(fields: [notaId], references: [id], onDelete: Cascade)
+  medicaoItem MedicaoItem? @relation(fields: [medicaoItemId], references: [id], onDelete: SetNull)
+  servico     Servico?     @relation(fields: [servicoId], references: [id], onDelete: SetNull)
+
+  @@index([notaId])
+  @@index([medicaoItemId])
+  @@map("notas_fiscais_itens")
+}
+
+/// Histórico da nota: ENVIO | CONSULTA | STATUS | ERRO
+model NotaFiscalEvento {
+  id        String   @id @default(cuid())
+  notaId    String   @map("nota_id")
+  usuarioId String?  @map("usuario_id")
+  tipo      String
+  status    String?
+  mensagem  String?
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  nota    NotaFiscal @relation(fields: [notaId], references: [id], onDelete: Cascade)
+  usuario Usuario?   @relation("NotaFiscalEventoAutor", fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([notaId])
+  @@map("notas_fiscais_eventos")
 }

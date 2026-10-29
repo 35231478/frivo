@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { MedicaoDocumento } from "@/components/medicao/medicao-documento";
 import { MedicaoAcoes } from "@/components/medicao/medicao-acoes";
+import { NotasFiscais } from "@/components/fiscal/nfse-notas";
 import { PageHeader } from "@/components/ui/page-header";
 import { formatarData, formatarMoeda, LABELS_STATUS_CONTA_RECEBER, CLASSE_STATUS_CONTA_RECEBER } from "@/lib/utils";
 import { Receipt } from "lucide-react";
@@ -45,6 +46,11 @@ export default async function MedicaoDetalhePage({ params }: { params: Promise<{
           tokenPublico={medicao.tokenPublico}
           status={medicao.status}
         />
+      </div>
+
+      {/* NFS-e: emitida pelo PlugNotas a partir desta medição (uma nota por código de serviço) */}
+      <div className="card-padded" id="nfse">
+        <NotasFiscais medicaoId={medicao.id} origem="MEDICAO" />
       </div>
 
       <div className="card-padded">

@@ -12,6 +12,10 @@
  *   GET   /empresa/{cpfCnpj}      o emitente (404 = não cadastrado)
  *   POST  /empresa                cadastra o emitente
  *   PATCH /empresa/{cpfCnpj}      atualiza o emitente
+ *   POST  /nfse                   emite (array de notas; mandamos uma por vez) → { documents: [{ id }], protocol }
+ *   GET   /nfse/consultar/{id}    situação da nota (id do PlugNotas); sem a rota "consultar", tenta /nfse/{id}
+ *   GET   /nfse/consultar/{idIntegracao}/{cnpj}  a mesma consulta pelo NOSSO id (quando o envio ficou sem resposta)
+ *   GET   /nfse/pdf/{id}, /nfse/xml/{id}         o DANFSE e o XML (a tela baixa pelo nosso servidor: exigem o token)
  *
  * Segurança: o certificado e a senha só passam por aqui em memória, vão por HTTPS e não são
  * gravados nem registrados em log; as mensagens de erro nunca incluem o token, o arquivo ou a senha.
@@ -23,9 +27,12 @@
  *     o token e as senhas (do certificado e da prefeitura) são tirados dela, caso a API os ecoe.
  */
 import { mensagemErroPlugNotas, type Ambiente, type CorpoEmpresaPlugNotas } from "@/lib/nfse/regras";
+import { lerEmissao } from "@/lib/nfse/nota";
 
 export class ErroPlugNotas extends Error {
   constructor(message: string, public status = 502) { super(message); }
+  /** Não dá para saber se o PlugNotas recebeu (rede, tempo, erro 5xx deles): consulte antes de reenviar */
+  get incerto() { return this.status >= 500; }
 }
 
 const BASES: Record<Ambiente, { url: string; envUrl: string; envToken: string }> = {
@@ -53,6 +60,11 @@ export function semSegredos(texto: string, segredos: (string | null | undefined)
   return limpo.length > MAX_MENSAGEM ? `${limpo.slice(0, MAX_MENSAGEM - 1)}…` : limpo;
 }
 
+/** Mensagem vinda do PlugNotas (consulta/webhook) pronta para gravar/mostrar: sem os tokens do servidor */
+export const mensagemLimpa = (texto: string) =>
+  semSegredos(texto, AMBIENTES_TOKEN.map((a) => process.env[BASES[a].envToken]?.trim()));
+const AMBIENTES_TOKEN: Ambiente[] = ["HOMOLOGACAO", "PRODUCAO"];
+
 /** O servidor tem o token deste ambiente? (a tela usa para avisar antes de tentar) */
 export function ambienteDisponivel(ambiente: Ambiente): boolean {
   return !!process.env[BASES[ambiente].envToken]?.trim();
@@ -71,13 +83,13 @@ function conexao(ambiente: Ambiente) {
   return { base, token };
 }
 
-async function chamar(ambiente: Ambiente, caminho: string, init: { method: string; json?: unknown; form?: FormData }) {
+async function requisitar(ambiente: Ambiente, caminho: string, init: { method: string; json?: unknown; form?: FormData; accept?: string }) {
   const { base, token } = conexao(ambiente);
   let res: Response;
   try {
     res = await fetch(`${base}${caminho}`, {
       method: init.method,
-      headers: { "x-api-key": token, Accept: "application/json", ...(init.json !== undefined ? { "Content-Type": "application/json" } : {}) },
+      headers: { "x-api-key": token, Accept: init.accept ?? "application/json", ...(init.json !== undefined ? { "Content-Type": "application/json" } : {}) },
       body: init.form ?? (init.json !== undefined ? JSON.stringify(init.json) : undefined),
       signal: AbortSignal.timeout(TIMEOUT_MS),
       cache: "no-store",
@@ -87,6 +99,11 @@ async function chamar(ambiente: Ambiente, caminho: string, init: { method: strin
     const tempo = (e as Error)?.name === "TimeoutError";
     throw new ErroPlugNotas(tempo ? "O PlugNotas não respondeu a tempo. Tente de novo." : "Não foi possível falar com o PlugNotas (rede). Tente de novo.", 504);
   }
+  return { res, token };
+}
+
+async function chamar(ambiente: Ambiente, caminho: string, init: { method: string; json?: unknown; form?: FormData }) {
+  const { res, token } = await requisitar(ambiente, caminho, init);
   const corpo = await res.json().catch(() => null);
   return { status: res.status, ok: res.ok, corpo, token };
 }
@@ -134,4 +151,52 @@ export async function salvarEmpresa(ambiente: Ambiente, corpo: CorpoEmpresaPlugN
   // a senha da prefeitura vai no corpo: se a API a ecoar no erro, sai da mensagem como o token
   if (!r.ok) throw falha(r, corpo.nfse?.config?.prefeitura?.senha ?? "");
   return existe ? "atualizado" : "cadastrado";
+}
+
+/* ───────── NFS-e ───────── */
+
+/**
+ * Envia UMA nota (o POST /nfse recebe um array). Devolve o id dela no PlugNotas e o protocolo.
+ * Recusa de validação = ErroPlugNotas 422 (com os campos); sem resposta/5xx = `incerto` (pode ter
+ * chegado: a consulta pelo idIntegracao decide). Aceito sem o id = também incerto.
+ */
+export async function emitirNfse(ambiente: Ambiente, nota: { idIntegracao: string }): Promise<{ id: string; protocolo: string | null }> {
+  const r = await chamar(ambiente, "/nfse", { method: "POST", json: [nota] });
+  if (!r.ok) throw falha(r);
+  const lido = lerEmissao(r.corpo, nota.idIntegracao);
+  if (!lido) throw new ErroPlugNotas("O PlugNotas recebeu o envio mas não devolveu o identificador da nota. Consulte o status antes de reenviar.", 502);
+  return lido;
+}
+
+/** Situação da nota pelo id do PlugNotas ou pelo nosso idIntegracao (+ CNPJ do prestador). null = não existe lá */
+export async function consultarNfse(ambiente: Ambiente, ref: { id?: string | null; idIntegracao: string; cnpj: string }): Promise<unknown | null> {
+  const caminhos = ref.id
+    ? [`/nfse/consultar/${encodeURIComponent(ref.id)}`, `/nfse/${encodeURIComponent(ref.id)}`]
+    : [`/nfse/consultar/${encodeURIComponent(ref.idIntegracao)}/${encodeURIComponent(ref.cnpj)}`];
+  for (const caminho of caminhos) {
+    const r = await chamar(ambiente, caminho, { method: "GET" });
+    if (r.status === 404) continue;
+    if (!r.ok) throw falha(r);
+    return r.corpo;
+  }
+  return null;
+}
+
+const TIPOS_ARQUIVO = { pdf: /^application\/pdf/i, xml: /(\/|\+)xml/i } as const;
+/** Limite do arquivo baixado (um DANFSE tem dezenas de KB) */
+export const MAX_ARQUIVO_NFSE = 10 * 1024 * 1024;
+
+/** O PDF (DANFSE) ou o XML da nota, em bytes, para a tela baixar pelo nosso servidor */
+export async function baixarNfse(ambiente: Ambiente, tipo: keyof typeof TIPOS_ARQUIVO, id: string): Promise<{ bytes: Uint8Array; contentType: string }> {
+  const { res, token } = await requisitar(ambiente, `/nfse/${tipo}/${encodeURIComponent(id)}`, { method: "GET", accept: tipo === "pdf" ? "application/pdf" : "application/xml" });
+  const contentType = res.headers.get("content-type") ?? "";
+  if (!res.ok || !TIPOS_ARQUIVO[tipo].test(contentType)) {
+    const corpo = await res.json().catch(() => null);
+    throw falha({ status: res.ok ? 502 : res.status, corpo, token });
+  }
+  const tamanho = Number(res.headers.get("content-length") ?? 0);
+  if (tamanho > MAX_ARQUIVO_NFSE) throw new ErroPlugNotas("O arquivo da nota veio grande demais.", 502);
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.byteLength > MAX_ARQUIVO_NFSE) throw new ErroPlugNotas("O arquivo da nota veio grande demais.", 502);
+  return { bytes, contentType: tipo === "pdf" ? "application/pdf" : "application/xml" };
 }
