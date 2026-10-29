@@ -136,6 +136,7 @@ const FINANCEIRO: Secao[] = [
       },
       {
         tipo: "grupo", label: "Fiscal", icone: FileBadge, itens: [
+          { href: "/financeiro/notas-fiscais", icone: FileText, label: "Notas fiscais", modulo: "financeiro", acao: "fiscal" },
           { href: "/financeiro/fiscal", icone: FileBadge, label: "Dados fiscais (NFS-e)", modulo: "financeiro", acao: "fiscal" },
         ],
       },

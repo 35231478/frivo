@@ -11,8 +11,12 @@ import { Receipt } from "lucide-react";
 
 export const metadata: Metadata = { title: "Medição" };
 
-export default async function MedicaoDetalhePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function MedicaoDetalhePage({ params, searchParams }: {
+  params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const { id } = await params;
+  // ?nfse=emitir: "Corrigir e reemitir" da central de notas abre a emissão (com o que falta corrigir)
+  const abrirEmissao = (await searchParams).nfse === "emitir";
   const session = await auth();
   const empresaId = session!.user!.empresaId;
 
@@ -50,7 +54,7 @@ export default async function MedicaoDetalhePage({ params }: { params: Promise<{
 
       {/* NFS-e: emitida pelo PlugNotas a partir desta medição (uma nota por código de serviço) */}
       <div className="card-padded" id="nfse">
-        <NotasFiscais medicaoId={medicao.id} origem="MEDICAO" />
+        <NotasFiscais medicaoId={medicao.id} origem="MEDICAO" abrirEmissao={abrirEmissao} />
       </div>
 
       <div className="card-padded">

@@ -299,6 +299,26 @@ describe("o modal Emitir NFS-e", () => {
   });
 });
 
+describe("pela central de notas (Corrigir e reemitir → ?nfse=emitir)", () => {
+  it("a medição abre a emissão UMA vez: depois de emitir, a lista recarrega e o modal não volta", async () => {
+    await montar({ medicaoId: "m1", origem: "MEDICAO", abrirEmissao: true });
+    expect(modal()).toBeTruthy();
+    await clicar(confirmar());
+    expect(enviados.at(-1)!.corpo).toMatchObject({ medicaoId: "m1", origem: "MEDICAO" });
+    expect(modal()).toBeNull();
+    const listagens = (fetch as any).mock.calls.filter((c: any[]) => String(c[0]) === "/api/fiscal/notas?medicaoId=m1").length;
+    expect(listagens).toBeGreaterThanOrEqual(2); // recarregou depois de emitir…
+    expect(modal()).toBeNull(); // …e não reabriu
+  });
+
+  it("sem permissão de emitir, não abre (só a lista)", async () => {
+    lista = { ...lista, podeEmitir: false };
+    await montar({ medicaoId: "m1", origem: "MEDICAO", abrirEmissao: true });
+    expect(modal()).toBeNull();
+    expect(document.querySelector("[data-nfse-notas]")).toBeTruthy();
+  });
+});
+
 describe("pela OS", () => {
   it("o botão do cabeçalho abre a emissão já na aba Financeiro, com origem OS e a OS no envio", async () => {
     const aoAbrir = vi.fn();
