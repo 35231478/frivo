@@ -49,7 +49,7 @@ async function importar(linhas: string[][]) {
   return { status: res.status, json: await res.json().catch(() => null) as any };
 }
 
-const MSG_403 = "Sem permissão para alterar: Código do serviço (LC 116), CNAE (opcional). Exige a permissão Financeiro › Fiscal (NFS-e).";
+const MSG_403 = "Sem permissão para alterar: Código do serviço (LC 116), CNAE. Exige a permissão Financeiro › Fiscal (NFS-e).";
 
 describe.skipIf(!URL_PG)("NFS-e: dados fiscais do serviço (PostgreSQL real)", () => {
   let prisma: any;
@@ -105,7 +105,7 @@ describe.skipIf(!URL_PG)("NFS-e: dados fiscais do serviço (PostgreSQL real)", (
   it("inválidos = 400 com a mensagem do campo, nada gravado", async () => {
     const antes = await prisma.servico.count();
     expect(await criar({ nome: "X", codigoLc116: "14-01" })).toMatchObject({ status: 400, json: { erro: expect.stringMatching(/^Código do serviço \(LC 116\): Código LC 116 inválido/) } });
-    expect(await criar({ nome: "X", cnae: "43221" })).toMatchObject({ status: 400, json: { erro: expect.stringMatching(/^CNAE \(opcional\): CNAE inválido/) } });
+    expect(await criar({ nome: "X", cnae: "43221" })).toMatchObject({ status: 400, json: { erro: expect.stringMatching(/^CNAE: CNAE inválido/) } });
     expect(await criar({ nome: "X", aliquotaISS: 101 })).toMatchObject({ status: 400, json: { erro: "Alíquota de ISS (%): Alíquota de ISS deve estar entre 0 e 100%." } });
     expect(await criar({ nome: "X", nfseTributacao: "TRIBUTAVEL_FORA" })).toMatchObject({ status: 400, json: { erro: "Tributação do ISS: Tributação do ISS inválida." } });
     expect((await editar("s1", { aliquotaISS: "100,01" })).status).toBe(400);

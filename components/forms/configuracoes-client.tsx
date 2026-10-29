@@ -12,6 +12,8 @@ import { EnderecoAutocomplete, type EnderecoSelecionado } from "@/components/ui/
 import { MapaEndereco } from "@/components/ui/mapa-endereco";
 import { ToggleSwitch, ToggleGroup } from "@/components/ui/toggle-switch";
 import type { Empresa, Configuracao } from "@prisma/client";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { formatarCnae } from "@/lib/nfse/servico";
 import { Upload, Trash2, ImageIcon, Check, Building2, SlidersHorizontal } from "lucide-react";
 
 const ESTADOS_BR = [
@@ -36,6 +38,8 @@ interface Props {
 
 export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialConfig, parte, tecnicosRt = [] }: Props) {
   const router = useRouter();
+  // CNAE principal é dado fiscal: sem Financeiro › Fiscal fica só para leitura (o servidor confere)
+  const podeFiscal = usePermissoes().pode("financeiro", "fiscal");
   const [salvandoEmpresa, setSalvandoEmpresa] = useState(false);
   const [salvandoConfig, setSalvandoConfig] = useState(false);
   const [erroEmpresa, setErroEmpresa] = useState("");
@@ -71,6 +75,7 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
     pixChave: initialEmpresa.pixChave ?? "",
     inscricaoEstadual: initialEmpresa.inscricaoEstadual ?? "",
     inscricaoMunicipal: initialEmpresa.inscricaoMunicipal ?? "",
+    cnaePrincipal: formatarCnae(initialEmpresa.cnaePrincipal),
     responsavelTecnicoId: initialEmpresa.responsavelTecnicoId ?? "",
   });
 
@@ -222,6 +227,19 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
               </FormField>
             </FormGrid>
           </div>
+          <FormGrid>
+            <FormField
+              label="CNAE principal"
+              hint={podeFiscal
+                ? "Os serviços sem CNAE próprio usam este na NFS-e. Ex.: 4322-3/02"
+                : "Só leitura: alterar exige a permissão Financeiro › Fiscal (NFS-e)."}
+            >
+              <Input
+                value={emp.cnaePrincipal} onChange={(e) => updateEmp("cnaePrincipal", e.target.value)}
+                disabled={!podeFiscal} maxLength={12} inputMode="numeric" placeholder="Ex.: 4322-3/02" data-campo="cnae-principal"
+              />
+            </FormField>
+          </FormGrid>
           <FormGrid cols={3}>
             <FormField label="Telefone">
               <PhoneInput value={emp.telefone} onChange={(e: any) => updateEmp("telefone", e.target.value)} placeholder="(00) 0000-0000" />

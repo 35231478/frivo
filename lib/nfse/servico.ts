@@ -55,6 +55,13 @@ export function normalizarCnae(v: unknown): { cnae: string | null; erro?: string
   return { cnae: d };
 }
 
+/**
+ * CNAE que vai na nota: o próprio do serviço; vazio = o CNAE principal da empresa; nenhum = null.
+ * (O cadastro do serviço guarda o próprio só quando a pessoa desmarca "Usar o CNAE principal da empresa".)
+ */
+export const cnaeEfetivo = (cnaeServico: string | null | undefined, cnaeEmpresa: string | null | undefined) =>
+  normalizarCnae(cnaeServico).cnae ?? normalizarCnae(cnaeEmpresa).cnae;
+
 /** "4321500" → "4321-5/00" (só para mostrar) */
 export const formatarCnae = (c: string | null | undefined) => (c && /^\d{7}$/.test(c) ? `${c.slice(0, 4)}-${c[4]}/${c.slice(5)}` : c ?? "");
 
@@ -92,13 +99,16 @@ export function pendenciasServicoNfse(s: ServicoFiscal, aliquotaPadrao?: number 
 /**
  * O objeto `servico` da emissão no PlugNotas (PR3 completa o `valor` e o resto da nota):
  * { codigo, codigoTributacao, discriminacao, cnae?, iss: { tipoTributacao, exigibilidade, aliquota, retido }, responsavelRetencao?, valor }
- * `codigoTributacao` vazio = o próprio código LC 116; `discriminacao` vazia = a padrão do serviço, senão o nome.
+ * `codigoTributacao` vazio = o próprio código LC 116; `discriminacao` vazia = a padrão do serviço, senão o nome;
+ * `cnae` = o do serviço, senão o principal da empresa (`cnaeEmpresa`).
  */
-export function servicoPlugNotas(s: ServicoFiscal, o: { valor: number; discriminacao?: string | null; aliquotaPadrao?: number | null }) {
+export function servicoPlugNotas(
+  s: ServicoFiscal, o: { valor: number; discriminacao?: string | null; aliquotaPadrao?: number | null; cnaeEmpresa?: string | null },
+) {
   const codigo = normalizarLc116(s.codigoLc116).codigo;
   if (!codigo) throw new Error(`O serviço “${s.nome}” não tem o código LC 116.`);
   const trib = tributacaoIss(s.nfseTributacao);
-  const cnae = normalizarCnae(s.cnae).cnae;
+  const cnae = cnaeEfetivo(s.cnae, o.cnaeEmpresa);
   return {
     codigo,
     codigoTributacao: s.codigoMunicipal?.trim() || codigo,

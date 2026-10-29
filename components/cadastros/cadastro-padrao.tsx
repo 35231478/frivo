@@ -1,12 +1,13 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, Check, Pencil, Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField } from "@/components/ui/form-field";
+import { ComboboxCodigo } from "@/components/ui/combobox-codigo";
 import { Drawer } from "@/components/ui/drawer";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
@@ -48,6 +49,18 @@ export interface CadastroPadraoProps {
   acoesLinha?: (item: Item, recarregar: () => void) => ReactNode;
   /** Texto acima da lista */
   ajuda?: ReactNode;
+  /** Seções do formulário com desenho próprio, pelo nome do grupo (ex.: "Dados fiscais (NFS-e)" do serviço) */
+  grupos?: Partial<Record<string, ComponentType<GrupoFormProps>>>;
+}
+
+/** O que uma seção de desenho próprio recebe: os campos do grupo e o estado do formulário genérico. */
+export interface GrupoFormProps {
+  campos: CampoCadastro[];
+  valores: Record<string, string>;
+  mudar: (key: string, valor: string) => void;
+  /** Campo sem a permissão própria: só leitura (e não é enviado) */
+  bloqueado: (c: CampoCadastro) => boolean;
+  item: ItemCadastroTela | null;
 }
 
 /** Grava pela rota genérica (POST cria / PATCH edita) — usado pelos editores próprios. */
@@ -96,7 +109,7 @@ function ComSelecao({ ativo, entidade, ids, total, children }: { ativo: boolean;
 interface PaginaLista { itens: Item[]; total: number; pagina: number; porPagina: number; contagens: Record<Aba, number> }
 const FILTRO_ABA: Record<Aba, string> = { ativos: "sim", inativos: "nao", todos: "todos" };
 
-function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda }: CadastroPadraoProps) {
+function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda, grupos }: CadastroPadraoProps) {
   const def = CADASTROS[entidade];
   const podeCad = usePodeCadastro(def);
   const massa = useMassa(def);
@@ -312,7 +325,7 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda }: CadastroPadra
         />
       ) : (
         <FormularioCadastro
-          def={def} titulo={Titulo} editando={editando} onFechar={() => setEditando(null)}
+          def={def} titulo={Titulo} editando={editando} onFechar={() => setEditando(null)} grupos={grupos}
           onSalvo={() => { setEditando(null); void carregar(); }}
         />
       )}
@@ -338,9 +351,14 @@ function Celula({ col, item, primeira }: { col: ColunaCadastro; item: Item; prim
 
 /* ───────── Painel de criar/editar ───────── */
 function FormularioCadastro({
-  def, titulo, editando, onFechar, onSalvo,
-}: { def: DefCadastro; titulo: string; editando: Item | "novo" | null; onFechar: () => void; onSalvo: (i: Item) => void }) {
+  def, titulo, editando, onFechar, onSalvo, grupos = {},
+}: {
+  def: DefCadastro; titulo: string; editando: Item | "novo" | null; onFechar: () => void; onSalvo: (i: Item) => void;
+  grupos?: CadastroPadraoProps["grupos"];
+}) {
   const [form, setForm] = useState<Record<string, string>>({});
+  // Cada abertura remonta as seções próprias (estado local delas começa do registro aberto)
+  const [abertura, setAbertura] = useState(0);
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
   const item = editando && editando !== "novo" ? editando : null;
@@ -351,6 +369,7 @@ function FormularioCadastro({
   useEffect(() => {
     if (!editando) return;
     setErro("");
+    setAbertura((n) => n + 1);
     setForm(Object.fromEntries(def.campos.map((c) => [c.key, item ? valorParaForm(c, item[c.key]) : vazioParaForm(c)])));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editando]);
@@ -376,7 +395,7 @@ function FormularioCadastro({
   // Campo com permissão própria (ex.: dados fiscais da NFS-e): sem ela fica só leitura e não é enviado
   const { pode } = usePermissoes();
   const bloqueado = (c: CampoCadastro) => !!c.permissao && !pode(...c.permissao);
-  const prefixoLista = useId();
+  const mudar = (key: string, v: string) => setForm((f) => ({ ...f, [key]: v }));
   let grupoAnterior: string | undefined;
   return (
     <Drawer
@@ -398,6 +417,8 @@ function FormularioCadastro({
           const cabecalho = c.grupo && c.grupo !== grupoAnterior ? c.grupo : null;
           grupoAnterior = c.grupo;
           const travado = cabecalho ? def.campos.find((x) => x.grupo === cabecalho && bloqueado(x)) : undefined;
+          const Grupo = c.grupo ? grupos[c.grupo] : undefined;
+          if (Grupo && !cabecalho) return null; // o grupo inteiro já saiu no primeiro campo dele
           return (
             <div key={c.key}>
               {cabecalho && <h4 className="text-xs font-semibold uppercase tracking-wider text-ink-muted pt-2 pb-1 border-b border-surface-border mb-3">{cabecalho}</h4>}
@@ -406,13 +427,11 @@ function FormularioCadastro({
                   Somente leitura: alterar estes dados exige a permissão {rotuloPermissao(travado.permissao!)}.
                 </p>
               )}
-              <FormField label={c.label} required={c.obrigatorio} hint={c.descrever?.(form[c.key] ?? "") ?? c.ajuda}>
-                <CampoForm campo={c} valor={form[c.key] ?? ""} disabled={bloqueado(c)} listaId={`${prefixoLista}-${c.key}`} onChange={(v) => setForm((f) => ({ ...f, [c.key]: v }))} />
-              </FormField>
-              {/* Sugestões: lista do navegador (busca pelo código e pela descrição); qualquer valor continua valendo */}
-              {c.sugestoes?.length ? (
-                <datalist id={`${prefixoLista}-${c.key}`}>{c.sugestoes.map((o) => <option key={o.value} value={o.value} label={o.label} />)}</datalist>
-              ) : null}
+              {Grupo ? (
+                <Grupo key={abertura} campos={def.campos.filter((x) => x.grupo === c.grupo)} valores={form} mudar={mudar} bloqueado={bloqueado} item={item} />
+              ) : (
+                <CampoCadastroForm campo={c} valores={form} mudar={mudar} bloqueado={bloqueado(c)} />
+              )}
             </div>
           );
         })}
@@ -421,10 +440,34 @@ function FormularioCadastro({
   );
 }
 
-function CampoForm({ campo: c, valor, disabled, listaId, id, onChange }: {
-  // `id` vem do FormField (rótulo ligado ao campo)
-  campo: CampoCadastro; valor: string; disabled?: boolean; listaId?: string; id?: string; onChange: (v: string) => void;
+/** Seção compacta: campos curtos em duas colunas (uma no celular); textos longos na largura toda. */
+export function GrupoDuasColunas({ campos, valores, mudar, bloqueado }: GrupoFormProps) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3" data-grupo-colunas>
+      {campos.map((c) => (
+        <CampoCadastroForm key={c.key} campo={c} valores={valores} mudar={mudar} bloqueado={bloqueado(c)} className={c.tipo === "textarea" ? "sm:col-span-2" : undefined} />
+      ))}
+    </div>
+  );
+}
+
+/** Um campo do registro com rótulo, ajuda (fixa ou que descreve o valor) e o controle do tipo. */
+export function CampoCadastroForm({ campo: c, valores, mudar, bloqueado, className }: {
+  campo: CampoCadastro; valores: Record<string, string>; mudar: (key: string, v: string) => void; bloqueado: boolean; className?: string;
 }) {
+  return (
+    <FormField label={c.label} required={c.obrigatorio} hint={c.descrever?.(valores[c.key] ?? "") ?? c.ajuda} className={className}>
+      <CampoForm campo={c} valor={valores[c.key] ?? ""} disabled={bloqueado} onChange={(v) => mudar(c.key, v)} />
+    </FormField>
+  );
+}
+
+function CampoForm({ campo: c, valor, disabled, id, onChange }: {
+  // `id` vem do FormField (rótulo ligado ao campo)
+  campo: CampoCadastro; valor: string; disabled?: boolean; id?: string; onChange: (v: string) => void;
+}) {
+  // Códigos com lista (ex.: LC 116): busca-e-seleção; o digitado também vale
+  if (c.opcoesCodigo) return <ComboboxCodigo id={id} value={valor} onChange={onChange} opcoes={c.opcoesCodigo} placeholder={c.placeholder} disabled={disabled} />;
   if (c.tipo === "textarea") return <Textarea id={id} value={valor} onChange={(e) => onChange(e.target.value)} placeholder={c.placeholder} rows={3} disabled={disabled} />;
   if (c.tipo === "cor") {
     return (
@@ -449,7 +492,6 @@ function CampoForm({ campo: c, valor, disabled, listaId, id, onChange }: {
     <Input
       id={id} type="text" inputMode={numerico ? (c.tipo === "inteiro" ? "numeric" : "decimal") : undefined}
       value={valor} onChange={(e) => onChange(e.target.value)} placeholder={c.placeholder} disabled={disabled}
-      list={c.sugestoes?.length ? listaId : undefined}
     />
   );
 }
