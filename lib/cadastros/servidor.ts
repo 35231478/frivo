@@ -1,10 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import type { Impacto } from "@/lib/inativacao-server";
 import {
-  CADASTROS, mapaOrdemCadastro, mensagemValidacao, whereCadastro, type DefCadastro, type EntidadeCadastro, type FiltroAtivo,
+  CADASTROS, camposSemPermissao, mapaOrdemCadastro, mensagemValidacao, whereCadastro, type DefCadastro, type EntidadeCadastro, type FiltroAtivo,
 } from "@/lib/cadastros/registro";
 import { janela, lerOrdem, lerPaginacao, ordemPrisma, paginaValida, ranquearSugestoes, type ParamsUrl, type Sugestao } from "@/lib/listagem";
 import { REGRAS, type Ator, type Registro } from "@/lib/cadastros/especificos";
+import { pode, rotuloPermissao } from "@/lib/permissoes";
 
 /**
  * Cadastros padronizados — lado do servidor (Prisma). Toda operação recebe o empresaId da SESSÃO;
@@ -19,6 +20,14 @@ type Delegate = {
   update: (a: object) => Promise<Record<string, unknown>>;
 };
 export const tabela = (def: DefCadastro) => (prisma as unknown as Record<string, Delegate>)[def.modelo];
+
+/** Campo com permissão própria (ex.: dados fiscais da NFS-e = Financeiro › Fiscal) mudado sem ela = 403. */
+function bloqueioDeCampo(def: DefCadastro, ator: Ator, dados: Record<string, unknown>, existente?: Record<string, unknown>) {
+  const campos = camposSemPermissao(def, (m, a) => pode(ator.permissoes, m, a, ator.role), dados, existente);
+  if (!campos.length) return null;
+  const exige = [...new Set(campos.map((c) => rotuloPermissao(c.permissao!)))].join(", ");
+  return { ok: false as const, status: 403, erro: `Sem permissão para alterar: ${campos.map((c) => c.label).join(", ")}. Exige a permissão ${exige}.` };
+}
 
 export type ResultadoGravacao = { ok: true; item: Record<string, unknown> } | { ok: false; status: number; erro: string };
 
@@ -92,6 +101,8 @@ export async function obterCadastro(def: DefCadastro, empresaId: string, id: str
 export async function criarCadastro(def: DefCadastro, ator: Ator, corpo: unknown): Promise<ResultadoGravacao> {
   const parsed = def.schemaCriar.safeParse(corpo ?? {});
   if (!parsed.success) return { ok: false, status: 400, erro: mensagemValidacao(parsed.error, def) };
+  const bloqueio = bloqueioDeCampo(def, ator, parsed.data as Record<string, unknown>);
+  if (bloqueio) return bloqueio;
   const especifico = REGRAS[def.entidade]?.criar;
   const r = especifico
     ? await especifico(parsed.data as Record<string, unknown>, ator)
@@ -107,6 +118,8 @@ export async function editarCadastro(def: DefCadastro, ator: Ator, id: string, c
   if (!parsed.success) return { ok: false, status: 400, erro: mensagemValidacao(parsed.error, def) };
   const data = Object.fromEntries(Object.entries(parsed.data as object).filter(([, v]) => v !== undefined));
   if (!Object.keys(data).length) return { ok: true, item: limpar(def, existente) };
+  const bloqueio = bloqueioDeCampo(def, ator, data, existente);
+  if (bloqueio) return bloqueio;
   const especifico = REGRAS[def.entidade]?.editar;
   const r = especifico
     ? await especifico(existente as Registro, data, ator)

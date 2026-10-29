@@ -14,6 +14,7 @@
  * confirmar — a prévia que o navegador mostrou nunca é a fonte da verdade.
  */
 import type { Celula, Tabela } from "@/lib/folha/planilha";
+import type { Acao } from "@/lib/permissoes";
 
 export const MAX_LINHAS_IMPORTACAO = 5000;
 export const MAX_BYTES_IMPORTACAO = 5 * 1024 * 1024;
@@ -43,6 +44,8 @@ export interface ContextoImportacao {
   refs: Record<string, OpcaoRef[]>;
   /** O usuário pode editar? Sem isso, duplicado não é atualizado (vira erro). */
   podeAtualizar: boolean;
+  /** Permissões do usuário, para campos com permissão própria (ex.: dados fiscais). Ausente = nenhuma. */
+  permitido?: (modulo: string, acao: Acao) => boolean;
 }
 
 export type ResultadoLinha =

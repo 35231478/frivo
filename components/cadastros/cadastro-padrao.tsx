@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, Check, Pencil, Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { BarraAcoesMassa } from "@/components/acoes-massa/barra";
 import { CheckboxLinha, CheckboxPagina, SelecaoMassaProvider } from "@/components/acoes-massa/selecao";
 import { podeAcao, podeExportar, type AcaoItem, type Entidade } from "@/lib/acoes-massa/acoes";
+import { rotuloPermissao } from "@/lib/permissoes";
 import { cn, formatarMoeda } from "@/lib/utils";
 import { lerTamanho, proximaOrdem, TAMANHO_PADRAO, type Ordem } from "@/lib/listagem";
 import { CampoBusca, ListaVazia, lerTamanhoPreferido, Paginacao, SkeletonLista, sugerirPorUrl, ThOrd } from "@/components/listagem/listagem-ui";
@@ -76,7 +77,7 @@ function usePodeCadastro(def: DefCadastro) {
 }
 
 const vazioParaForm = (c: CampoCadastro) => (c.tipo === "cor" ? "#64748B" : c.tipo === "select" ? c.opcoes?.[0]?.value ?? "" : "");
-const valorParaForm = (c: CampoCadastro, v: unknown) => (v == null ? (c.tipo === "cor" ? "#64748B" : "") : String(v));
+const valorParaForm = (c: CampoCadastro, v: unknown) => (v == null ? (c.tipo === "cor" ? "#64748B" : "") : c.formatar ? c.formatar(String(v)) : String(v));
 
 /** Seleção em massa: só cadastros registrados nas ações em massa e com alguma ação permitida. */
 function useMassa(def: DefCadastro) {
@@ -343,6 +344,9 @@ function FormularioCadastro({
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
   const item = editando && editando !== "novo" ? editando : null;
+  // Erro aparece no topo da gaveta: rola até ele (o campo errado pode estar lá embaixo)
+  const erroRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (erro) erroRef.current?.scrollIntoView?.({ block: "nearest" }); }, [erro]);
 
   useEffect(() => {
     if (!editando) return;
@@ -369,6 +373,10 @@ function FormularioCadastro({
     } catch { setErro("Erro de conexão: nada foi salvo."); } finally { setSalvando(false); }
   }
 
+  // Campo com permissão própria (ex.: dados fiscais da NFS-e): sem ela fica só leitura e não é enviado
+  const { pode } = usePermissoes();
+  const bloqueado = (c: CampoCadastro) => !!c.permissao && !pode(...c.permissao);
+  const prefixoLista = useId();
   let grupoAnterior: string | undefined;
   return (
     <Drawer
@@ -379,7 +387,7 @@ function FormularioCadastro({
         <Button type="button" loading={salvando} onClick={salvar}><Check className="w-4 h-4" /> {item ? "Salvar" : "Adicionar"}</Button>
       </>}
     >
-      {erro && <div role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2 mb-4">{erro}</div>}
+      {erro && <div ref={erroRef} role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2 mb-4">{erro}</div>}
       {item && !item.ativo && (
         <div className="bg-atencao-claro border border-atencao/20 text-atencao-texto text-sm rounded-lg px-3 py-2 mb-4">
           {titulo} inativ{def.feminino ? "a" : "o"}: não aparece para novas escolhas até ser reativad{def.feminino ? "a" : "o"}.
@@ -389,12 +397,22 @@ function FormularioCadastro({
         {def.campos.map((c) => {
           const cabecalho = c.grupo && c.grupo !== grupoAnterior ? c.grupo : null;
           grupoAnterior = c.grupo;
+          const travado = cabecalho ? def.campos.find((x) => x.grupo === cabecalho && bloqueado(x)) : undefined;
           return (
             <div key={c.key}>
               {cabecalho && <h4 className="text-xs font-semibold uppercase tracking-wider text-ink-muted pt-2 pb-1 border-b border-surface-border mb-3">{cabecalho}</h4>}
-              <FormField label={c.label} required={c.obrigatorio}>
-                <CampoForm campo={c} valor={form[c.key] ?? ""} onChange={(v) => setForm((f) => ({ ...f, [c.key]: v }))} />
+              {travado && (
+                <p data-somente-leitura className="text-xs text-ink-muted bg-surface-page border border-surface-border rounded-lg px-3 py-2 mb-3">
+                  Somente leitura: alterar estes dados exige a permissão {rotuloPermissao(travado.permissao!)}.
+                </p>
+              )}
+              <FormField label={c.label} required={c.obrigatorio} hint={c.descrever?.(form[c.key] ?? "") ?? c.ajuda}>
+                <CampoForm campo={c} valor={form[c.key] ?? ""} disabled={bloqueado(c)} listaId={`${prefixoLista}-${c.key}`} onChange={(v) => setForm((f) => ({ ...f, [c.key]: v }))} />
               </FormField>
+              {/* Sugestões: lista do navegador (busca pelo código e pela descrição); qualquer valor continua valendo */}
+              {c.sugestoes?.length ? (
+                <datalist id={`${prefixoLista}-${c.key}`}>{c.sugestoes.map((o) => <option key={o.value} value={o.value} label={o.label} />)}</datalist>
+              ) : null}
             </div>
           );
         })}
@@ -403,12 +421,15 @@ function FormularioCadastro({
   );
 }
 
-function CampoForm({ campo: c, valor, onChange }: { campo: CampoCadastro; valor: string; onChange: (v: string) => void }) {
-  if (c.tipo === "textarea") return <Textarea value={valor} onChange={(e) => onChange(e.target.value)} placeholder={c.placeholder} rows={3} />;
+function CampoForm({ campo: c, valor, disabled, listaId, id, onChange }: {
+  // `id` vem do FormField (rótulo ligado ao campo)
+  campo: CampoCadastro; valor: string; disabled?: boolean; listaId?: string; id?: string; onChange: (v: string) => void;
+}) {
+  if (c.tipo === "textarea") return <Textarea id={id} value={valor} onChange={(e) => onChange(e.target.value)} placeholder={c.placeholder} rows={3} disabled={disabled} />;
   if (c.tipo === "cor") {
     return (
       <div className="flex items-center gap-2">
-        <input type="color" value={valor || "#64748B"} onChange={(e) => onChange(e.target.value)} className="w-10 h-10 rounded border border-surface-border cursor-pointer" aria-label={c.label} />
+        <input id={id} type="color" value={valor || "#64748B"} onChange={(e) => onChange(e.target.value)} className="w-10 h-10 rounded border border-surface-border cursor-pointer" aria-label={c.label} />
         <Input value={valor} onChange={(e) => onChange(e.target.value)} className="flex-1 font-mono text-xs" />
       </div>
     );
@@ -418,7 +439,7 @@ function CampoForm({ campo: c, valor, onChange }: { campo: CampoCadastro; valor:
     const opcoes = c.opcoes ?? [];
     const extra = valor && !opcoes.some((o) => o.value === valor) ? [{ value: valor, label: `${valor} (valor antigo)` }] : [];
     return (
-      <select value={valor} onChange={(e) => onChange(e.target.value)} className="w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10">
+      <select id={id} value={valor} disabled={disabled} onChange={(e) => onChange(e.target.value)} className="disabled:bg-surface-page disabled:text-ink-muted disabled:cursor-not-allowed w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10">
         {[...opcoes, ...extra].map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
     );
@@ -426,8 +447,9 @@ function CampoForm({ campo: c, valor, onChange }: { campo: CampoCadastro; valor:
   const numerico = c.tipo === "moeda" || c.tipo === "numero" || c.tipo === "inteiro";
   return (
     <Input
-      type="text" inputMode={numerico ? (c.tipo === "inteiro" ? "numeric" : "decimal") : undefined}
-      value={valor} onChange={(e) => onChange(e.target.value)} placeholder={c.placeholder}
+      id={id} type="text" inputMode={numerico ? (c.tipo === "inteiro" ? "numeric" : "decimal") : undefined}
+      value={valor} onChange={(e) => onChange(e.target.value)} placeholder={c.placeholder} disabled={disabled}
+      list={c.sugestoes?.length ? listaId : undefined}
     />
   );
 }

@@ -27,7 +27,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   let analise;
   try {
     const tabela = lerPlanilha(Buffer.from(await arquivo.arrayBuffer()), (arquivo as File).name ?? "", MAX_BYTES_IMPORTACAO);
-    analise = analisar(tabela, def, await carregarContexto(g.entidade, g.empresaId, g.podeAtualizar));
+    analise = analisar(tabela, def, await carregarContexto(g.entidade, g.empresaId, g.podeAtualizar, g.permitido));
   } catch (e) {
     if (e instanceof ErroPlanilha || e instanceof ErroImportacao) return NextResponse.json({ erro: e.message }, { status: 400 });
     throw e;

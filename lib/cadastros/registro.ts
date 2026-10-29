@@ -3,6 +3,8 @@ import type { Acao } from "@/lib/permissoes";
 import { REGIMES, REGIME_LABEL } from "@/lib/folha/calculo";
 import { itensEncargoSchema } from "@/lib/folha/validacao";
 import type { Direcao, MapaOrdem } from "@/lib/listagem";
+import { descricaoLc116, LISTA_LC116 } from "@/lib/nfse/lc116";
+import { erroAliquota, formatarCnae, normalizarCnae, normalizarLc116, TRIBUTACOES_ISS } from "@/lib/nfse/servico";
 
 /**
  * Cadastros padronizados — registro DECLARATIVO (mesmo espírito do ENTIDADE das ações em massa).
@@ -43,6 +45,19 @@ export interface CampoCadastro {
   placeholder?: string;
   /** Agrupa no formulário (ex.: "Dados fiscais") */
   grupo?: string;
+  /** Texto de ajuda discreto embaixo do campo */
+  ajuda?: string;
+  /** Como mostrar o valor gravado no formulário (ex.: CNAE 4321500 → 4321-5/00); o servidor normaliza de volta */
+  formatar?: (v: string) => string;
+  /** Ajuda que depende do que foi digitado (ex.: a descrição do código LC 116); null = a `ajuda` fixa */
+  descrever?: (v: string) => string | null;
+  /** Sugestões enquanto digita (lista do navegador, busca também pela descrição); o campo continua livre */
+  sugestoes?: { value: string; label: string }[];
+  /**
+   * Permissão a mais para ALTERAR este campo (além de editar o cadastro). Sem ela, a tela mostra o
+   * campo só para leitura e o servidor recusa a mudança (lib/cadastros/especificos.ts).
+   */
+  permissao?: [modulo: string, acao: Acao];
 }
 
 export interface ColunaCadastro {
@@ -132,6 +147,45 @@ function schemas<T extends z.ZodRawShape>(shape: T, padroes: Partial<Record<keyo
   return { schemaCriar: criar, schemaEditar: editar };
 }
 
+/* ───────── Dados fiscais do serviço (NFS-e) ───────── */
+/** Texto passado por uma normalização que devolve { valor | erro } (a normalização já trata o vazio = null) */
+const normalizado = (fn: (v: unknown) => { valor: string | null; erro?: string }) =>
+  z.union([z.null(), z.string()]).transform((v, ctx) => {
+    if (v === null) return null;
+    const r = fn(v);
+    if (r.erro) { ctx.addIssue({ code: z.ZodIssueCode.custom, message: r.erro }); return z.NEVER; }
+    return r.valor;
+  });
+const lc116 = normalizado((v) => { const r = normalizarLc116(v); return { valor: r.codigo, erro: r.erro }; });
+const cnae = normalizado((v) => { const r = normalizarCnae(v); return { valor: r.cnae, erro: r.erro }; });
+const aliquotaIss = numero().refine((v) => !erroAliquota(v), "Alíquota de ISS deve estar entre 0 e 100%.");
+/** "true"/"false" do formulário (ou booleano); vazio/ausente = false */
+const booleano = z.preprocess((v) => (v === "true" ? true : v === "false" || vazio(v) ? false : v), z.boolean());
+const nfseTributacao = z.preprocess((v) => (vazio(v) ? null : v),
+  z.enum(TRIBUTACOES_ISS.map((t) => t.id) as [string, ...string[]], { errorMap: () => ({ message: "Tributação do ISS inválida." }) }).nullable());
+
+const GRUPO_NFSE = "Dados fiscais (NFS-e)";
+const FISCAL: [string, Acao] = ["financeiro", "fiscal"];
+/** Campos da NFS-e no cadastro do serviço: alterar exige Financeiro › Fiscal (tela e servidor) */
+export const CAMPOS_NFSE_SERVICO: CampoCadastro[] = [
+  { key: "codigoLc116", label: "Código do serviço (LC 116)", placeholder: "Ex: 14.01 — digite o código ou parte da descrição", grupo: GRUPO_NFSE, permissao: FISCAL,
+    sugestoes: LISTA_LC116.map((i) => ({ value: i.codigo, label: `${i.codigo} — ${i.descricao}` })),
+    ajuda: "Subitem da lista da LC 116, no formato NN.NN.",
+    descrever: (v) => { const n = normalizarLc116(v).codigo; const d = descricaoLc116(n); return d ? `${n} — ${d}` : null; } },
+  { key: "codigoMunicipal", label: "Código de tributação municipal", placeholder: "Vazio = o próprio código LC 116", grupo: GRUPO_NFSE, permissao: FISCAL,
+    ajuda: "O código do serviço na prefeitura, quando for diferente do LC 116." },
+  { key: "aliquotaISS", label: "Alíquota de ISS (%)", tipo: "numero", placeholder: "Ex: 5,00", grupo: GRUPO_NFSE, permissao: FISCAL,
+    ajuda: "Vazio = usa o ISS da empresa (o mesmo dos orçamentos)." },
+  { key: "nfseTributacao", label: "Tributação do ISS", tipo: "select", grupo: GRUPO_NFSE, permissao: FISCAL,
+    opcoes: [{ value: "", label: `${TRIBUTACOES_ISS[0].label} (padrão)` }, ...TRIBUTACOES_ISS.slice(1).map((t) => ({ value: t.id, label: t.label }))] },
+  { key: "issRetido", label: "ISS retido pelo tomador", tipo: "select", grupo: GRUPO_NFSE, permissao: FISCAL,
+    opcoes: [{ value: "false", label: "Não" }, { value: "true", label: "Sim — o tomador retém e recolhe o ISS" }] },
+  { key: "cnae", label: "CNAE (opcional)", placeholder: "Ex: 4321-5/00", grupo: GRUPO_NFSE, permissao: FISCAL, formatar: formatarCnae },
+  { key: "discriminacaoPadrao", label: "Discriminação padrão (opcional)", tipo: "textarea", grupo: GRUPO_NFSE, permissao: FISCAL,
+    placeholder: "Ex: Manutenção preventiva de equipamentos de ar-condicionado conforme contrato.",
+    ajuda: "Texto base que descreve o serviço na nota. Dá para editar na hora de emitir." },
+];
+
 const SO_GESTOR: Requisito = [["configuracoes", "gerenciar"]];
 const SO_FOLHA: Requisito = [["financeiro", "folha"]];
 const PERMISSOES_CONFIG: Record<AcaoCadastro, Requisito> = {
@@ -210,14 +264,12 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       { key: "descricao", label: "Descrição", tipo: "textarea" },
       { key: "unidade", label: "Unidade", tipo: "select", opcoes: UNIDADES_SERVICO },
       { key: "valorPadrao", label: "Valor padrão (R$)", tipo: "moeda", placeholder: "0,00" },
-      { key: "codigoMunicipal", label: "Código do serviço municipal", placeholder: "Ex: 1401", grupo: "Dados fiscais" },
-      { key: "codigoLc116", label: "Código LC 116", placeholder: "Ex: 14.01", grupo: "Dados fiscais" },
-      { key: "aliquotaISS", label: "Alíquota ISS (%)", tipo: "numero", placeholder: "Ex: 5,00", grupo: "Dados fiscais" },
-      { key: "aliquotaPIS", label: "Alíquota PIS (%)", tipo: "numero", placeholder: "Ex: 0,65", grupo: "Dados fiscais" },
-      { key: "aliquotaCOFINS", label: "Alíquota COFINS (%)", tipo: "numero", placeholder: "Ex: 3,00", grupo: "Dados fiscais" },
-      { key: "aliquotaCSLL", label: "Alíquota CSLL (%)", tipo: "numero", placeholder: "Ex: 1,00", grupo: "Dados fiscais" },
-      { key: "aliquotaIR", label: "Alíquota IR (%)", tipo: "numero", placeholder: "Ex: 1,50", grupo: "Dados fiscais" },
-      { key: "observacaoFiscal", label: "Observação fiscal", tipo: "textarea", grupo: "Dados fiscais" },
+      ...CAMPOS_NFSE_SERVICO,
+      { key: "aliquotaPIS", label: "Alíquota PIS (%)", tipo: "numero", placeholder: "Ex: 0,65", grupo: "Outros tributos" },
+      { key: "aliquotaCOFINS", label: "Alíquota COFINS (%)", tipo: "numero", placeholder: "Ex: 3,00", grupo: "Outros tributos" },
+      { key: "aliquotaCSLL", label: "Alíquota CSLL (%)", tipo: "numero", placeholder: "Ex: 1,00", grupo: "Outros tributos" },
+      { key: "aliquotaIR", label: "Alíquota IR (%)", tipo: "numero", placeholder: "Ex: 1,50", grupo: "Outros tributos" },
+      { key: "observacaoFiscal", label: "Observação fiscal", tipo: "textarea", grupo: "Outros tributos" },
     ],
     colunas: [
       { key: "codigo", label: "Código", formato: "codigo", ordenar: "codigo" },
@@ -227,12 +279,14 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
     ...schemas({
       // Código: normalizado e conferido (único na empresa) pela regra do cadastro (especificos.ts)
       nome, codigo: textoOpcional(40), descricao: textoOpcional(), unidade, valorPadrao: numero(),
-      codigoMunicipal: textoOpcional(50), codigoLc116: textoOpcional(50),
-      aliquotaISS: numero(), aliquotaPIS: numero(), aliquotaCOFINS: numero(), aliquotaCSLL: numero(), aliquotaIR: numero(),
+      codigoMunicipal: textoOpcional(50), codigoLc116: lc116,
+      aliquotaISS: aliquotaIss, aliquotaPIS: numero(), aliquotaCOFINS: numero(), aliquotaCSLL: numero(), aliquotaIR: numero(),
       observacaoFiscal: textoOpcional(),
+      nfseTributacao, issRetido: booleano, cnae, discriminacaoPadrao: textoOpcional(),
     }, {
       codigo: null, descricao: null, unidade: "un", valorPadrao: null, codigoMunicipal: null, codigoLc116: null,
       aliquotaISS: null, aliquotaPIS: null, aliquotaCOFINS: null, aliquotaCSLL: null, aliquotaIR: null, observacaoFiscal: null,
+      nfseTributacao: null, cnae: null, discriminacaoPadrao: null,
     }),
   },
   cargos: {
@@ -462,6 +516,23 @@ export function whereCadastro(def: DefCadastro, empresaId: string, f: { ativo: F
       ...(/^\d{1,9}$/.test(q) ? (def.buscaNumero ?? []).map((k) => ({ [k]: Number(q) })) : []),
     ] } : {}),
   };
+}
+
+/** Mesmo valor para fins de permissão (Decimal do Prisma × número do formulário; null × ausente). */
+const mesmoValor = (a: unknown, b: unknown) => (a ?? null) === (b ?? null) || (a != null && b != null && String(a) === String(b));
+
+/**
+ * Campos com `permissao` própria que o ator está tentando MUDAR sem ter essa permissão.
+ * Criar: conta qualquer valor preenchido (null/false/"" = o padrão). Editar: conta só o que difere do gravado.
+ * Vazio = pode gravar.
+ */
+export function camposSemPermissao(
+  def: DefCadastro, permitido: (modulo: string, acao: Acao) => boolean,
+  dados: Record<string, unknown>, existente?: Record<string, unknown> | null,
+): CampoCadastro[] {
+  return def.campos
+    .filter((c) => c.permissao && !permitido(...c.permissao) && dados[c.key] !== undefined)
+    .filter((c) => (existente ? !mesmoValor(dados[c.key], existente[c.key]) : dados[c.key] != null && dados[c.key] !== false && dados[c.key] !== ""));
 }
 
 /** Mensagem legível do erro de validação (campo desconhecido incluso). */
