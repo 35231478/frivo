@@ -48,7 +48,7 @@ const codigoNota = (n: Pick<Nota, "codigoTributacao" | "codigoLc116">) =>
 
 export function NotasFiscais({ medicaoId, osId, origem, abrirEmissao, onAbriu }: {
   medicaoId?: string; osId?: string; origem: "OS" | "MEDICAO";
-  /** Abre a emissão ao carregar (botão "Emitir NFS-e" do cabeçalho da OS) */
+  /** Abre a emissão ao carregar (botão "Emitir NFS-e" do cabeçalho da OS; "Corrigir e reemitir" da central) */
   abrirEmissao?: boolean; onAbriu?: () => void;
 }) {
   const [dados, setDados] = useState<{ medicaoId: string | null; podeEmitir: boolean; notas: Nota[] } | null>(null);
@@ -68,8 +68,11 @@ export function NotasFiscais({ medicaoId, osId, origem, abrirEmissao, onAbriu }:
   }, [query]);
   useEffect(() => { void carregar(); }, [carregar]);
 
+  // Uma vez por pedido: recarregar as notas (ex.: depois de emitir) não reabre a emissão
+  const abriu = useRef(false);
   useEffect(() => {
-    if (abrirEmissao && dados?.podeEmitir && dados.medicaoId) { setEmitindo(true); onAbriu?.(); }
+    if (!abrirEmissao) { abriu.current = false; return; }
+    if (!abriu.current && dados?.podeEmitir && dados.medicaoId) { abriu.current = true; setEmitindo(true); onAbriu?.(); }
   }, [abrirEmissao, dados, onAbriu]);
 
   const consultar = useCallback(async (id: string, manual = false) => {
