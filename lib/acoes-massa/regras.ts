@@ -27,6 +27,8 @@ export interface ContextoItem {
   /** Papel e acessos de quem age (travas que dependem do ator: perfil/usuário com mais acesso que ele) */
   role?: string;
   permissoes?: Permissoes;
+  /** Valores do formulário da ação (ex.: "aplicar dados fiscais"), já validados pela rota */
+  dados?: Record<string, unknown>;
 }
 
 export type CodigoFalha = "nao_encontrado" | "sem_permissao" | "bloqueado" | "invalido" | "erro";

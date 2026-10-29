@@ -1,12 +1,20 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
 import { abrirCamada, fecharCamada, noTopo, prenderFoco } from "@/components/ui/camadas";
 
 type Icone = React.ComponentType<{ className?: string }>;
+
+/**
+ * O painel da gaveta onde o conteúdo está (null = página). Barras e modais flutuantes que nascem de
+ * um conteúdo dentro da gaveta (ex.: ações em massa de um cadastro em Configurações) usam este
+ * painel como destino: ficam na mesma camada da gaveta (acima do escurecido) e não atrás dela.
+ */
+const PainelGavetaCtx = createContext<HTMLElement | null>(null);
+export const usePainelGaveta = () => useContext(PainelGavetaCtx);
 
 export interface DrawerAba {
   id: string;
@@ -41,6 +49,9 @@ export function Drawer({ aberto, onFechar, titulo, children, largura, rodape, ab
   const [entrando, setEntrando] = useState(false);
   const idTitulo = useId();
   const painelRef = useRef<HTMLDivElement>(null);
+  const [painel, setPainel] = useState<HTMLDivElement | null>(null);
+  // Referência estável (uma função nova a cada render faria o React chamar null/painel de novo sempre)
+  const refPainel = useCallback((el: HTMLDivElement | null) => { painelRef.current = el; setPainel(el); }, []);
   const fecharRef = useRef(onFechar);
   fecharRef.current = onFechar;
 
@@ -92,7 +103,7 @@ export function Drawer({ aberto, onFechar, titulo, children, largura, rodape, ab
         className={cn("absolute inset-0 bg-ink/40 transition-opacity duration-300", entrando ? "opacity-100" : "opacity-0")}
       />
       <div
-        ref={painelRef}
+        ref={refPainel}
         tabIndex={-1}
         role="dialog"
         aria-modal="true"
@@ -137,7 +148,7 @@ export function Drawer({ aberto, onFechar, titulo, children, largura, rodape, ab
         )}
 
         {/* Conteúdo (rolável) */}
-        <div className="flex-1 overflow-y-auto p-5">{children}</div>
+        <div className="flex-1 overflow-y-auto p-5"><PainelGavetaCtx.Provider value={painel}>{children}</PainelGavetaCtx.Provider></div>
 
         {/* Rodapé de ações */}
         {rodape && (

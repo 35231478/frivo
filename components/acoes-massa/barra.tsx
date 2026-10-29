@@ -3,13 +3,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Ban, CheckCircle2, Download, Loader2, Printer, QrCode, RotateCcw, X, XCircle } from "lucide-react";
+import { AlertTriangle, Ban, CheckCircle2, Download, FileText, Loader2, Printer, QrCode, RotateCcw, X, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { usePainelGaveta } from "@/components/ui/drawer";
+import { abrirCamada, fecharCamada, noTopo } from "@/components/ui/camadas";
 import { useSelecaoMassa } from "@/components/acoes-massa/selecao";
 import {
   ENTIDADE, LIMITE_CONFIRMACAO_REFORCADA, MAX_SELECAO, TAMANHO_PARTE, podeAcao, podeExportar, type AcaoItem,
 } from "@/lib/acoes-massa/acoes";
+import { FormAplicarFiscalMassa } from "@/components/servicos/aplicar-fiscal-massa";
+import { dadosDoForm, FORM_VAZIO, totalCampos, type FormAplicarFiscal } from "@/lib/nfse/aplicar-fiscal";
 
 /**
  * Barra de ação em massa: aparece quando há seleção, mostra "N selecionados", as ações que o
@@ -19,7 +23,7 @@ import {
 
 interface Item { id: string; rotulo: string; ok: boolean; detalhe?: string; codigo?: string; motivo?: string; qrcodeId?: string }
 
-const ICONE: Record<AcaoItem, React.ComponentType<{ className?: string }>> = { inativar: Ban, reativar: RotateCcw, "gerar-qr": QrCode };
+const ICONE: Record<AcaoItem, React.ComponentType<{ className?: string }>> = { inativar: Ban, reativar: RotateCcw, "gerar-qr": QrCode, "aplicar-fiscal": FileText };
 const fmt = (n: number) => n.toLocaleString("pt-BR");
 
 /** `aoConcluir`: listas carregadas no cliente recarregam por aqui (padrão: router.refresh()). */
@@ -32,6 +36,8 @@ export function BarraAcoesMassa({ aoConcluir }: { aoConcluir?: () => void } = {}
   const [acao, setAcao] = useState<AcaoItem | null>(null);
   const [exportando, setExportando] = useState(false);
   const [erro, setErro] = useState("");
+  // Lista dentro de uma gaveta (ex.: cadastros em Configurações): barra e modal vão para o painel dela
+  const painel = usePainelGaveta();
   useEffect(() => setMontado(true), []);
 
   const acoes = (Object.keys(def.acoes) as AcaoItem[]).filter((a) => podeAcao(permissoes, role, sel.entidade, a));
@@ -120,7 +126,7 @@ export function BarraAcoesMassa({ aoConcluir }: { aoConcluir?: () => void } = {}
         />
       )}
     </>,
-    document.body,
+    painel ?? document.body,
   );
 }
 
@@ -135,12 +141,18 @@ function ExecucaoMassa({ acao, ids, podeImprimirQr, onFechar }: { acao: AcaoItem
   const [motivo, setMotivo] = useState("");
   const [feitos, setFeitos] = useState(0);
   const [itens, setItens] = useState<Item[]>([]);
+  // Formulário da ação (ex.: dados fiscais): só os campos preenchidos vão junto com cada parte do lote
+  const [form, setForm] = useState<FormAplicarFiscal>(FORM_VAZIO);
+  const dados = def.formulario ? dadosDoForm(form) : undefined;
 
+  // É uma camada: com ela aberta, o Esc e o Tab não vão para a gaveta de baixo (se houver)
+  const [camada] = useState(() => abrirCamada());
+  useEffect(() => () => fecharCamada(camada), [camada]);
   useEffect(() => {
-    const fechar = (e: KeyboardEvent) => { if (e.key === "Escape" && etapa === "confirmar") onFechar(false); };
+    const fechar = (e: KeyboardEvent) => { if (e.key === "Escape" && etapa === "confirmar" && noTopo(camada)) onFechar(false); };
     document.addEventListener("keydown", fechar);
     return () => document.removeEventListener("keydown", fechar);
-  }, [etapa, onFechar]);
+  }, [etapa, onFechar, camada]);
 
   async function executar() {
     setEtapa("executando");
@@ -157,7 +169,7 @@ function ExecucaoMassa({ acao, ids, podeImprimirQr, onFechar }: { acao: AcaoItem
         try {
           const r = await fetch("/api/acoes-massa", {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ entidade: sel.entidade, acao, ids: parte, motivo: motivo.trim() || undefined, lote: { id: loteId, parte: p + 1, partes: partes.length } }),
+            body: JSON.stringify({ entidade: sel.entidade, acao, ids: parte, motivo: motivo.trim() || undefined, dados, lote: { id: loteId, parte: p + 1, partes: partes.length } }),
           });
           const d = await r.json().catch(() => ({}));
           if (r.ok) acumulado.push(...(d.resultados as Item[]));
@@ -181,12 +193,14 @@ function ExecucaoMassa({ acao, ids, podeImprimirQr, onFechar }: { acao: AcaoItem
   const jaEstavam = ok.filter((i) => i.detalhe?.startsWith("Já")).length;
   const qrIds = useMemo(() => itens.map((i) => i.qrcodeId).filter(Boolean) as string[], [itens]);
   const pct = total ? Math.round((feitos / total) * 100) : 0;
-  const podeConfirmar = !reforcada || digitado.replace(/\D/g, "") === String(total);
+  const podeConfirmar = (!reforcada || digitado.replace(/\D/g, "") === String(total)) && (!def.formulario || totalCampos(form) > 0);
+  const [um, varios] = def.resultado ?? ["feita", "feitas"];
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4" role="dialog" aria-modal="true" aria-label={`${def.rotulo} em massa`} data-modal-massa={etapa}>
       <div className="absolute inset-0 bg-ink/40" onClick={() => etapa === "confirmar" && onFechar(false)} />
-      <div className="relative bg-white w-full sm:max-w-lg rounded-t-card sm:rounded-card border border-surface-border shadow-elevated max-h-[92vh] overflow-y-auto">
+      <div className={cn("relative bg-white w-full rounded-t-card sm:rounded-card border border-surface-border shadow-elevated max-h-[92vh] overflow-y-auto",
+        def.formulario ? "sm:max-w-2xl" : "sm:max-w-lg")}>
         <div className="px-5 py-4 border-b border-surface-border flex items-center justify-between gap-3 sticky top-0 bg-white">
           <h3 className="font-display text-base font-semibold text-ink">
             {etapa === "resultado" ? "Resultado" : `${def.rotulo} ${fmt(total)} ${total === 1 ? ent.singular : ent.plural}`}
@@ -200,6 +214,7 @@ function ExecucaoMassa({ acao, ids, podeImprimirQr, onFechar }: { acao: AcaoItem
           {etapa === "confirmar" && (
             <>
               <p className="text-sm text-ink">{def.impacto}</p>
+              {def.formulario === "fiscal-servico" && <FormAplicarFiscalMassa valor={form} onChange={setForm} />}
               {sel.todosDoFiltro && <p className="text-xs text-ink-muted">Inclui registros de outras páginas (todos os que batem no filtro atual).</p>}
               {def.comMotivo && (
                 <label className="block text-sm font-semibold text-ink space-y-1.5">
@@ -245,10 +260,10 @@ function ExecucaoMassa({ acao, ids, podeImprimirQr, onFechar }: { acao: AcaoItem
           {etapa === "resultado" && (
             <div className="space-y-4" data-resultado-massa>
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                <span className="flex items-center gap-1.5 font-semibold text-success-700"><CheckCircle2 className="w-4 h-4" /> {fmt(ok.length)} {ok.length === 1 ? "feita" : "feitas"}</span>
+                <span className="flex items-center gap-1.5 font-semibold text-success-700"><CheckCircle2 className="w-4 h-4" /> {fmt(ok.length)} {ok.length === 1 ? um : varios}</span>
                 <span className={cn("flex items-center gap-1.5 font-semibold", falhas.length ? "text-atrasado-texto" : "text-ink-muted")}><XCircle className="w-4 h-4" /> {fmt(falhas.length)} não {falhas.length === 1 ? "pôde" : "puderam"}</span>
               </div>
-              {jaEstavam > 0 && <p className="text-xs text-ink-muted">{fmt(jaEstavam)} já estavam assim (contam como feitas, nada mudou nelas).</p>}
+              {jaEstavam > 0 && <p className="text-xs text-ink-muted">{jaEstavam === 1 ? `1 já estava assim (conta como ${um}; nada mudou).` : `${fmt(jaEstavam)} já estavam assim (contam como ${varios}; nada mudou).`}</p>}
               {falhas.length > 0 && (
                 <div className="rounded-lg border border-atrasado/20">
                   <p className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-atrasado-texto border-b border-atrasado/20 bg-atrasado-claro">Não puderam — motivo de cada um</p>

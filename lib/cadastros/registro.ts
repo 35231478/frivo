@@ -524,7 +524,7 @@ export function whereCadastro(def: DefCadastro, empresaId: string, f: { ativo: F
 }
 
 /** Mesmo valor para fins de permissão (Decimal do Prisma × número do formulário; null × ausente). */
-const mesmoValor = (a: unknown, b: unknown) => (a ?? null) === (b ?? null) || (a != null && b != null && String(a) === String(b));
+export const mesmoValor = (a: unknown, b: unknown) => (a ?? null) === (b ?? null) || (a != null && b != null && String(a) === String(b));
 
 /**
  * Campos com `permissao` própria que o ator está tentando MUDAR sem ter essa permissão.
