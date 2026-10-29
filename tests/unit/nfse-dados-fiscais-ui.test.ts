@@ -72,6 +72,7 @@ const BASE: EmitenteTela = {
   empresa: { cnpj: "12345678000190", nome: "Clima Total", endereco: "Rua das Flores, 100, Centro", cidade: "São Paulo", estado: "SP", cep: "01001-000" },
   status: "NAO_CONFIGURADO", statusLabel: "Não configurado", emitente: null, certificado: null, ultimoErro: null, ultimoTeste: null,
   pendencias: ["Inscrição municipal", "Certificado digital A1 (.pfx) e a senha"], prefeitura: null,
+  webhook: { ativo: false, podeGerar: false, geradoEm: null, ambiente: null, registradoEm: null, erro: null, recebidoEm: null, desatualizado: false },
   ambientesDisponiveis: { HOMOLOGACAO: true, PRODUCAO: false },
 };
 const ATIVO: EmitenteTela = {

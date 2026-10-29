@@ -26,6 +26,8 @@ const SCHEMA = `teste_orc_ciclo_${process.pid}`;
 const RAIZ = path.resolve(__dirname, "../..");
 
 const sessao = vi.hoisted(() => ({ atual: null as any }));
+// O sino (/api/alertas) agenda a reconciliação das NFS-e com after(), que só existe numa requisição do Next: aqui não roda
+vi.mock("next/server", async (orig) => ({ ...(await orig<typeof import("next/server")>()), after: () => {} }));
 vi.mock("@/lib/auth", () => ({ auth: vi.fn(async () => sessao.atual) }));
 const logar = (permissoes: Permissoes = permissoesTotais(), empresaId = "e1", id = "u1") => {
   sessao.atual = { user: { id, name: id === "u1" ? "Ana" : "Bia", email: `${id}@x.com`, empresaId, role: "OPERADOR", permissoes } };

@@ -14,6 +14,7 @@ import { cn, formatarCpfCnpj, formatarData, formatarDataHora } from "@/lib/utils
 import { hrefSecaoConfig } from "@/lib/navegacao/configuracoes";
 import { ACEITA_CERTIFICADO, ehArquivoCertificado, LABEL_AMBIENTE, LABEL_REGIME, REGIMES, REGIMES_ESPECIAIS, type Ambiente, type StatusEmitente } from "@/lib/nfse/regras";
 import type { EmitenteTela } from "@/lib/nfse/emitente-server";
+import { AvisoPlugNotas } from "@/components/fiscal/aviso-plugnotas";
 
 const AJUDA_CERTIFICADO = "O certificado digital A1 é um arquivo que termina em .pfx ou .p12";
 const TOM_STATUS: Record<StatusEmitente, TomStatus> = { NAO_CONFIGURADO: "previsto", PENDENTE: "atencao", ATIVO: "ok", ERRO: "atrasado" };
@@ -151,6 +152,8 @@ export function DadosFiscaisClient({ inicial }: { inicial: EmitenteTela }) {
           <p className="text-xs text-atrasado-texto flex items-start gap-1.5" data-ultimo-erro><XCircle className="w-3.5 h-3.5 mt-px shrink-0" /> {e.ultimoErro}</p>
         )}
       </div>
+
+      <AvisoPlugNotas webhook={e.webhook} onAtualizar={(webhook) => setE((s) => ({ ...s, webhook }))} />
 
       {e.dados.ambiente === "HOMOLOGACAO" && (
         <p className="text-xs text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2 flex items-start gap-1.5" data-aviso-homologacao>

@@ -5,12 +5,14 @@ import { pode, type Permissoes } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { osJaFaturada } from "@/lib/faturamento-os";
 import { emitirNotas, ErroEmissao, listarNotas, previaEmissao } from "@/lib/nfse/emissao-server";
+import { marcarAvisosVistos } from "@/lib/nfse/webhook-server";
 
 /**
  * NFS-e da medição (ou da OS concluída, pela medição dela).
  *   GET  ?medicaoId=… | ?osId=…  [&previa=1]  as notas (e, com previa, o que falta e as notas que vão sair)
  *   POST { medicaoId, origem, ordemServicoId?, discriminacoes? }  emite (Financeiro › Fiscal)
- * Ver: Fiscal ou Medições. Empresa sempre a da sessão; id de outra empresa = 404.
+ * Ver: Fiscal ou Medições. Empresa sempre a da sessão; id de outra empresa = 404. Quem tem Fiscal e
+ * abre as notas tira do sino o resultado delas (autorizada/rejeitada).
  */
 const VER: [string, "fiscal" | "medicoes"][] = [["financeiro", "fiscal"], ["financeiro", "medicoes"]];
 
@@ -40,6 +42,8 @@ export async function GET(req: NextRequest) {
   const podeEmitir = pode(user.permissoes as Permissoes, "financeiro", "fiscal", user.role);
   try {
     const notas = await listarNotas(empresaId, osId ? { ordemServicoId: osId } : { medicaoId: medicaoId! });
+    // Quem cuida do fiscal viu o resultado das notas: sai do sino
+    if (podeEmitir) await marcarAvisosVistos(empresaId, notas.map((n) => n.id));
     const previa = sp.get("previa") === "1" && medicaoId ? await previaEmissao(empresaId, medicaoId) : null;
     return NextResponse.json({ medicaoId, podeEmitir, notas, previa });
   } catch (e) { return erro(e); }

@@ -3522,6 +3522,15 @@ model EmpresaFiscal {
   ultimoTesteEm          DateTime? @map("ultimo_teste_em")
   ultimoTesteOk          Boolean?  @map("ultimo_teste_ok")
   ultimoTesteMensagem    String?   @map("ultimo_teste_mensagem")
+  /// Aviso automático (webhook) do PlugNotas: só o HASH (SHA-256) do segredo da URL; a URL aparece uma vez
+  webhookTokenHash       String?   @unique @map("webhook_token_hash") @db.VarChar(64)
+  webhookGeradoEm        DateTime? @map("webhook_gerado_em")
+  /// Ambiente em que a URL foi cadastrada no PlugNotas (HOMOLOGACAO | PRODUCAO)
+  webhookAmbiente        String?   @map("webhook_ambiente")
+  webhookRegistradoEm    DateTime? @map("webhook_registrado_em")
+  /// Por que o cadastro automático no PlugNotas não deu certo (sem segredos)
+  webhookErro            String?   @map("webhook_erro")
+  webhookRecebidoEm      DateTime? @map("webhook_recebido_em")
   atualizadoPorId        String?   @map("atualizado_por_id")
   criadoEm               DateTime  @default(now()) @map("criado_em")
   atualizadoEm           DateTime  @updatedAt @map("atualizado_em")
@@ -3575,6 +3584,8 @@ model NotaFiscal {
   motivo            String?
   consultas         Int       @default(0)
   ultimaConsultaEm  DateTime? @map("ultima_consulta_em")
+  /// Resultado (autorizada/rejeitada) já visto na tela; NULL = o sino avisa
+  avisoVistoEm      DateTime? @map("aviso_visto_em")
   emitidaPorId      String?   @map("emitida_por_id")
   criadoEm          DateTime  @default(now()) @map("criado_em")
   atualizadoEm      DateTime  @updatedAt @map("atualizado_em")
@@ -3593,6 +3604,7 @@ model NotaFiscal {
   @@index([ordemServicoId])
   @@index([contaReceberId])
   @@index([clienteId])
+  @@index([empresaId, avisoVistoEm])
   @@map("notas_fiscais")
 }
 

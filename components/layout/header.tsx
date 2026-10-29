@@ -1,7 +1,7 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import { Bell, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer, Headset, ClipboardCheck, FileWarning, Wrench, Menu, Barcode, MessageSquareReply, PackageCheck } from "lucide-react";
+import { Bell, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer, Headset, ClipboardCheck, FileWarning, Wrench, Menu, Barcode, MessageSquareReply, PackageCheck, FileCheck2, FileX2, Hourglass } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -22,6 +22,12 @@ interface Alertas {
   orcamentosRespondidos: number;
   nfPedidos: number;
   nfPedidoId: string | null;
+  nfseAutorizadas?: number;
+  nfseAutorizadaMedicaoId?: string | null;
+  nfseRejeitadas?: number;
+  nfseRejeitadaMedicaoId?: string | null;
+  nfseAguardando?: number;
+  nfseAguardandoMedicaoId?: string | null;
   total: number;
 }
 
@@ -229,7 +235,7 @@ export function Header({ session, avatarUrl }: HeaderProps) {
           </button>
 
           {sinoAberto && (
-            <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-surface-border rounded-card shadow-elevated z-30 overflow-hidden">
+            <div data-sino-menu className="fixed inset-x-4 top-16 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full mt-2 sm:w-80 max-h-[calc(100dvh-6rem)] overflow-y-auto bg-white border border-surface-border rounded-card shadow-elevated z-30">
               <div className="px-4 py-3 border-b border-surface-border">
                 <p className="font-display text-sm font-semibold text-ink">Alertas</p>
               </div>
@@ -238,6 +244,10 @@ export function Header({ session, avatarUrl }: HeaderProps) {
               ) : (
                 <div className="divide-y divide-surface-linha">
                   {podeVer("orcamentos") && <AlertaItem href="/orcamentos?resposta=nova" icone={MessageSquareReply} cor="text-acento" label="Respostas de orçamentos" valor={alertas?.orcamentosRespondidos ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {/* NFS-e: só aparece quando há o que ver (resultado não visto ou nota parada) */}
+                  {podeVer("financeiro", "fiscal") && (alertas?.nfseRejeitadas ?? 0) > 0 && <AlertaItem href={hrefMedicao(alertas?.nfseRejeitadaMedicaoId)} icone={FileX2} cor="text-atrasado" label="NFS-e não aceitas" valor={alertas?.nfseRejeitadas ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("financeiro", "fiscal") && (alertas?.nfseAguardando ?? 0) > 0 && <AlertaItem href={hrefMedicao(alertas?.nfseAguardandoMedicaoId)} icone={Hourglass} cor="text-atencao" label="NFS-e aguardando a prefeitura" valor={alertas?.nfseAguardando ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("financeiro", "fiscal") && (alertas?.nfseAutorizadas ?? 0) > 0 && <AlertaItem href={hrefMedicao(alertas?.nfseAutorizadaMedicaoId)} icone={FileCheck2} cor="text-ok" label="NFS-e autorizadas" valor={alertas?.nfseAutorizadas ?? 0} onClick={() => setSinoAberto(false)} />}
                   {(alertas?.nfPedidos ?? 0) > 0 && <AlertaItem href={`/compras/pedidos/${alertas?.nfPedidoId ?? ""}`} icone={PackageCheck} cor="text-ok" label="NF chegou nos seus pedidos" valor={alertas?.nfPedidos ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("ordens") && <AlertaItem href="/prazos?status=ATRASADO" icone={AlertTriangle} cor="text-atrasado" label="Prazos vencidos" valor={alertas?.prazosVencidos ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("ordens") && <AlertaItem href="/prazos?status=ATIVO" icone={Clock} cor="text-atencao" label="Vencendo hoje" valor={alertas?.etapasVencendoHoje ?? 0} onClick={() => setSinoAberto(false)} />}
@@ -283,6 +293,9 @@ export function Header({ session, avatarUrl }: HeaderProps) {
     </header>
   );
 }
+
+/** A medição da nota mais recente (onde ficam as notas); sem ela, a lista de medições */
+const hrefMedicao = (id: string | null | undefined) => (id ? `/financeiro/medicoes/${id}` : "/financeiro/medicoes");
 
 function AlertaItem({
   href, icone: Icone, cor, label, valor, onClick,

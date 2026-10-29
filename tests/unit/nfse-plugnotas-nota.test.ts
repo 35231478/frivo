@@ -5,7 +5,7 @@
  * O token nunca sai na mensagem; toda chamada vai com x-api-key, https e sem seguir redirecionamento.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { baixarNfse, consultarNfse, emitirNfse, ErroPlugNotas, MAX_ARQUIVO_NFSE, mensagemLimpa } from "@/lib/nfse/plugnotas";
+import { baixarNfse, cadastrarWebhookNfse, consultarNfse, emitirNfse, ErroPlugNotas, MAX_ARQUIVO_NFSE, mensagemLimpa } from "@/lib/nfse/plugnotas";
 
 const SANDBOX = "https://api.sandbox.plugnotas.com.br";
 type Resp = { status: number; corpo?: unknown; tipo?: string; bruto?: BodyInit; headers?: Record<string, string> } | "rede" | "tempo";
@@ -122,6 +122,49 @@ describe("baixarNfse", () => {
     expect((await erroDe(baixarNfse("HOMOLOGACAO", "pdf", "pn2")))!.message).toBe("O arquivo da nota veio grande demais.");
     rotas["GET /nfse/pdf/pn3"] = { status: 200, bruto: new Uint8Array(MAX_ARQUIVO_NFSE), tipo: "application/pdf" };
     expect((await baixarNfse("HOMOLOGACAO", "pdf", "pn3")).bytes.byteLength).toBe(MAX_ARQUIVO_NFSE);
+  });
+});
+
+describe("cadastrarWebhookNfse", () => {
+  const SEG = "f".repeat(64);
+  const URL_AVISO = `https://app.frivo.com.br/api/webhooks/plugnotas?token=${SEG}`;
+  const CAMINHO = "/empresa/12345678000190/webhook";
+
+  it("POST /empresa/{cnpj}/webhook com a URL, o método e o segredo no Authorization; x-api-key, sem redirecionamento", async () => {
+    rotas[`POST ${CAMINHO}`] = { status: 200, corpo: { message: "Webhook cadastrado" } };
+    await cadastrarWebhookNfse("HOMOLOGACAO", "12345678000190", URL_AVISO, SEG);
+    expect(chamadas).toHaveLength(1);
+    const [{ url, init }] = chamadas;
+    expect(url).toBe(`${SANDBOX}${CAMINHO}`);
+    expect([init.method, init.redirect, new Headers(init.headers).get("x-api-key")]).toEqual(["POST", "error", "tok-SANDBOX-0001"]);
+    expect(JSON.parse(String(init.body))).toEqual({ url: URL_AVISO, method: "POST", headers: { Authorization: `Bearer ${SEG}` } });
+  });
+
+  it("já cadastrado (409): atualiza com PUT no mesmo caminho", async () => {
+    rotas[`POST ${CAMINHO}`] = { status: 409, corpo: { error: { message: "Já existe" } } };
+    rotas[`PUT ${CAMINHO}`] = { status: 200, corpo: {} };
+    await cadastrarWebhookNfse("HOMOLOGACAO", "12345678000190", URL_AVISO, SEG);
+    expect(chamadas.map((c) => c.init.method)).toEqual(["POST", "PUT"]);
+    expect(JSON.parse(String(chamadas[1].init.body)).url).toBe(URL_AVISO);
+  });
+
+  it("recusa: ErroPlugNotas com a mensagem deles, sem o token, o segredo nem a URL", async () => {
+    rotas[`POST ${CAMINHO}`] = { status: 400, corpo: { error: { message: `URL inválida: ${URL_AVISO} (tok-SANDBOX-0001) ${SEG}` } } };
+    const e = await erroDe(cadastrarWebhookNfse("HOMOLOGACAO", "12345678000190", URL_AVISO, SEG));
+    expect(e).toBeInstanceOf(ErroPlugNotas);
+    expect(e!.status).toBe(422);
+    expect(e!.message).not.toContain("tok-SANDBOX-0001");
+    expect(e!.message).not.toContain(SEG);
+    expect(e!.message).toBe("URL inválida: ••• (•••) •••");
+    rotas[`POST ${CAMINHO}`] = { status: 409, corpo: {} };
+    rotas[`PUT ${CAMINHO}`] = { status: 500, corpo: {} };
+    expect((await erroDe(cadastrarWebhookNfse("HOMOLOGACAO", "12345678000190", URL_AVISO, SEG)))!.incerto).toBe(true);
+  });
+
+  it("produção sem o token próprio: não chama nada", async () => {
+    vi.stubEnv("PLUGNOTAS_API_TOKEN_PRODUCAO", "");
+    expect((await erroDe(cadastrarWebhookNfse("PRODUCAO", "12345678000190", URL_AVISO, SEG)))!.status).toBe(503);
+    expect(chamadas).toEqual([]);
   });
 });
 
