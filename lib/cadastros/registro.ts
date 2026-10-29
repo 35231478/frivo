@@ -4,6 +4,7 @@ import { REGIMES, REGIME_LABEL } from "@/lib/folha/calculo";
 import { itensEncargoSchema } from "@/lib/folha/validacao";
 import type { Direcao, MapaOrdem } from "@/lib/listagem";
 import { descricaoLc116, LISTA_LC116 } from "@/lib/nfse/lc116";
+import type { OpcaoCodigo } from "@/lib/nfse/busca-codigo";
 import { erroAliquota, formatarCnae, normalizarCnae, normalizarLc116, TRIBUTACOES_ISS } from "@/lib/nfse/servico";
 
 /**
@@ -51,8 +52,8 @@ export interface CampoCadastro {
   formatar?: (v: string) => string;
   /** Ajuda que depende do que foi digitado (ex.: a descrição do código LC 116); null = a `ajuda` fixa */
   descrever?: (v: string) => string | null;
-  /** Sugestões enquanto digita (lista do navegador, busca também pela descrição); o campo continua livre */
-  sugestoes?: { value: string; label: string }[];
+  /** Lista de códigos para a busca-e-seleção (filtra por código ou descrição); o digitado também vale */
+  opcoesCodigo?: readonly OpcaoCodigo[];
   /**
    * Permissão a mais para ALTERAR este campo (além de editar o cadastro). Sem ela, a tela mostra o
    * campo só para leitura e o servidor recusa a mudança (lib/cadastros/especificos.ts).
@@ -164,26 +165,30 @@ const booleano = z.preprocess((v) => (v === "true" ? true : v === "false" || vaz
 const nfseTributacao = z.preprocess((v) => (vazio(v) ? null : v),
   z.enum(TRIBUTACOES_ISS.map((t) => t.id) as [string, ...string[]], { errorMap: () => ({ message: "Tributação do ISS inválida." }) }).nullable());
 
-const GRUPO_NFSE = "Dados fiscais (NFS-e)";
+export const GRUPO_NFSE = "Dados fiscais (NFS-e)";
 const FISCAL: [string, Acao] = ["financeiro", "fiscal"];
 /** Campos da NFS-e no cadastro do serviço: alterar exige Financeiro › Fiscal (tela e servidor) */
 export const CAMPOS_NFSE_SERVICO: CampoCadastro[] = [
-  { key: "codigoLc116", label: "Código do serviço (LC 116)", placeholder: "Ex: 14.01 — digite o código ou parte da descrição", grupo: GRUPO_NFSE, permissao: FISCAL,
-    sugestoes: LISTA_LC116.map((i) => ({ value: i.codigo, label: `${i.codigo} — ${i.descricao}` })),
+  // Classificação do serviço
+  { key: "codigoLc116", label: "Código do serviço (LC 116)", placeholder: "Busque pelo código ou pela descrição", grupo: GRUPO_NFSE, permissao: FISCAL,
+    opcoesCodigo: LISTA_LC116,
     ajuda: "Subitem da lista da LC 116, no formato NN.NN.",
     descrever: (v) => { const n = normalizarLc116(v).codigo; const d = descricaoLc116(n); return d ? `${n} — ${d}` : null; } },
-  { key: "codigoMunicipal", label: "Código de tributação municipal", placeholder: "Vazio = o próprio código LC 116", grupo: GRUPO_NFSE, permissao: FISCAL,
-    ajuda: "O código do serviço na prefeitura, quando for diferente do LC 116." },
-  { key: "aliquotaISS", label: "Alíquota de ISS (%)", tipo: "numero", placeholder: "Ex: 5,00", grupo: GRUPO_NFSE, permissao: FISCAL,
-    ajuda: "Vazio = usa o ISS da empresa (o mesmo dos orçamentos)." },
+  { key: "codigoMunicipal", label: "Código municipal", placeholder: "Vazio = o código LC 116", grupo: GRUPO_NFSE, permissao: FISCAL,
+    ajuda: "Só se a prefeitura usar um código próprio." },
+  { key: "cnae", label: "CNAE", placeholder: "Ex: 4322-3/02", grupo: GRUPO_NFSE, permissao: FISCAL, formatar: formatarCnae,
+    ajuda: "Vazio = o CNAE principal da empresa." },
+  // Tributação
   { key: "nfseTributacao", label: "Tributação do ISS", tipo: "select", grupo: GRUPO_NFSE, permissao: FISCAL,
     opcoes: [{ value: "", label: `${TRIBUTACOES_ISS[0].label} (padrão)` }, ...TRIBUTACOES_ISS.slice(1).map((t) => ({ value: t.id, label: t.label }))] },
+  { key: "aliquotaISS", label: "Alíquota de ISS (%)", tipo: "numero", placeholder: "Ex: 5,00", grupo: GRUPO_NFSE, permissao: FISCAL,
+    ajuda: "Vazio = o ISS da empresa." },
   { key: "issRetido", label: "ISS retido pelo tomador", tipo: "select", grupo: GRUPO_NFSE, permissao: FISCAL,
     opcoes: [{ value: "false", label: "Não" }, { value: "true", label: "Sim — o tomador retém e recolhe o ISS" }] },
-  { key: "cnae", label: "CNAE (opcional)", placeholder: "Ex: 4321-5/00", grupo: GRUPO_NFSE, permissao: FISCAL, formatar: formatarCnae },
-  { key: "discriminacaoPadrao", label: "Discriminação padrão (opcional)", tipo: "textarea", grupo: GRUPO_NFSE, permissao: FISCAL,
+  // Discriminação
+  { key: "discriminacaoPadrao", label: "Discriminação padrão", tipo: "textarea", grupo: GRUPO_NFSE, permissao: FISCAL,
     placeholder: "Ex: Manutenção preventiva de equipamentos de ar-condicionado conforme contrato.",
-    ajuda: "Texto base que descreve o serviço na nota. Dá para editar na hora de emitir." },
+    ajuda: "Texto base da nota; dá para editar na hora de emitir." },
 ];
 
 const SO_GESTOR: Requisito = [["configuracoes", "gerenciar"]];

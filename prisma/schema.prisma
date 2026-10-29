@@ -443,6 +443,8 @@ model Empresa {
   /// Timbre do orçamento: inscrições estadual/municipal (vazias = não aparecem no documento)
   inscricaoEstadual    String?  @map("inscricao_estadual")
   inscricaoMunicipal   String?  @map("inscricao_municipal")
+  /// CNAE principal (subclasse, 7 dígitos). Serviço sem CNAE próprio usa este na NFS-e (lib/nfse/servico.ts)
+  cnaePrincipal        String?  @map("cnae_principal") @db.VarChar(7)
   /// Responsável técnico padrão (Tecnico RESPONSAVEL_TECNICO com CREA): o orçamento novo nasce com ele
   responsavelTecnicoId String?  @map("responsavel_tecnico_id")
   plano                Plano    @default(BASICO)
@@ -1356,7 +1358,7 @@ model Servico {
   nfseTributacao      String?  @map("nfse_tributacao")
   /// ISS retido pelo tomador (iss.retido + responsavelRetencao = tomador)
   issRetido           Boolean  @default(false) @map("iss_retido")
-  /// CNAE (subclasse, 7 dígitos) — opcional
+  /// CNAE próprio (subclasse, 7 dígitos). Vazio = usa o CNAE principal da empresa
   cnae                String?  @db.VarChar(7)
   /// Texto base da discriminação do serviço na nota (editável na hora de emitir)
   discriminacaoPadrao String?  @map("discriminacao_padrao")

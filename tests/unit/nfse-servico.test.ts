@@ -152,7 +152,7 @@ describe("Cadastro de serviço: validação dos campos fiscais (tela, rota e pla
   const erro = (r: ReturnType<typeof criar>) => (r.success ? null : mensagemValidacao(r.error, def));
 
   it("seção própria, na ordem pedida, todos travados por Financeiro › Fiscal", () => {
-    expect(CAMPOS_NFSE_SERVICO.map((c) => c.key)).toEqual(["codigoLc116", "codigoMunicipal", "aliquotaISS", "nfseTributacao", "issRetido", "cnae", "discriminacaoPadrao"]);
+    expect(CAMPOS_NFSE_SERVICO.map((c) => c.key)).toEqual(["codigoLc116", "codigoMunicipal", "cnae", "nfseTributacao", "aliquotaISS", "issRetido", "discriminacaoPadrao"]);
     for (const c of CAMPOS_NFSE_SERVICO) {
       expect(c.grupo).toBe("Dados fiscais (NFS-e)");
       expect(c.permissao).toEqual(["financeiro", "fiscal"]);
@@ -161,10 +161,9 @@ describe("Cadastro de serviço: validação dos campos fiscais (tela, rota e pla
     expect(rotuloPermissao(["financeiro", "fiscal"])).toBe("Financeiro › Fiscal (NFS-e)");
     expect(rotuloPermissao(["xpto", "editar"])).toBe("xpto › Editar");
   });
-  it("busca da LC 116: uma sugestão por item, com código e descrição", () => {
-    const sug = CAMPOS_NFSE_SERVICO[0].sugestoes!;
-    expect(sug).toHaveLength(LISTA_LC116.length);
-    expect(sug.find((s) => s.value === "14.01")?.label).toBe(`14.01 — ${descricaoLc116("14.01")}`);
+  it("busca da LC 116: a própria lista (código + descrição) alimenta a caixa de busca", () => {
+    expect(CAMPOS_NFSE_SERVICO[0].opcoesCodigo).toBe(LISTA_LC116);
+    expect(CAMPOS_NFSE_SERVICO.filter((c) => c.opcoesCodigo).map((c) => c.key)).toEqual(["codigoLc116"]);
   });
   it("LC 116 descreve o código digitado; CNAE aparece formatado no formulário", () => {
     const lc = CAMPOS_NFSE_SERVICO[0];
@@ -196,12 +195,12 @@ describe("Cadastro de serviço: validação dos campos fiscais (tela, rota e pla
   });
   it("recusa com mensagem do campo", () => {
     expect(erro(criar({ codigoLc116: "14-01" }))).toBe(`Código do serviço (LC 116): ${ERRO_LC}`);
-    expect(erro(criar({ cnae: "123" }))).toBe(`CNAE (opcional): ${ERRO_CNAE}`);
+    expect(erro(criar({ cnae: "123" }))).toBe(`CNAE: ${ERRO_CNAE}`);
     expect(erro(criar({ aliquotaISS: "101" }))).toBe("Alíquota de ISS (%): Alíquota de ISS deve estar entre 0 e 100%.");
     expect(erro(criar({ aliquotaISS: "-1" }))).toBe("Alíquota de ISS (%): Não pode ser negativo.");
     expect(erro(criar({ nfseTributacao: "6" }))).toBe("Tributação do ISS: Tributação do ISS inválida.");
     expect(erro(criar({ issRetido: "sim" }))).toMatch(/^ISS retido pelo tomador: /);
-    expect(erro(criar({ discriminacaoPadrao: "x".repeat(2001) }))).toMatch(/^Discriminação padrão \(opcional\): /);
+    expect(erro(criar({ discriminacaoPadrao: "x".repeat(2001) }))).toMatch(/^Discriminação padrão: /);
     expect(criar({ discriminacaoPadrao: "x".repeat(2000) }).success).toBe(true);
     expect(criar({ aliquotaISS: "100" }).success).toBe(true);
   });
@@ -226,7 +225,7 @@ describe("Trava por campo (Financeiro › Fiscal)", () => {
   it("editar: só o que MUDA conta (Decimal gravado × número; null × ausente)", () => {
     const gravado = { codigoLc116: "14.01", aliquotaISS: { toString: () => "5" }, issRetido: false, cnae: null, nome: "S" };
     expect(camposSemPermissao(def, nega, { codigoLc116: "14.01", aliquotaISS: 5, issRetido: false, cnae: null, nome: "Outro" }, gravado)).toEqual([]);
-    expect(chaves(camposSemPermissao(def, nega, { aliquotaISS: 2, cnae: "4321500" }, gravado))).toEqual(["aliquotaISS", "cnae"]);
+    expect(chaves(camposSemPermissao(def, nega, { aliquotaISS: 2, cnae: "4321500" }, gravado))).toEqual(["cnae", "aliquotaISS"]);
     expect(chaves(camposSemPermissao(def, nega, { codigoLc116: null }, gravado))).toEqual(["codigoLc116"]);
     expect(chaves(camposSemPermissao(def, nega, { discriminacaoPadrao: "T" }, { discriminacaoPadrao: undefined }))).toEqual(["discriminacaoPadrao"]);
     expect(camposSemPermissao(def, nega, { discriminacaoPadrao: null }, {})).toEqual([]);
