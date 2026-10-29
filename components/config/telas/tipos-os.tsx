@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/ui/page-header";
 export function TelaTiposOs() {
   return (
     <div>
-      <PageHeader title="Tipos de OS" description="Defina os tipos de serviço executados pela empresa" backHref="/configuracoes" />
+      <PageHeader title="Tipos de OS" description="Tipos de serviço executados pela empresa" backHref="/configuracoes" />
       <div className="bg-white rounded-card border border-surface-border p-6">
         <CrudCadastro
           titulo="Tipo de OS"
@@ -17,7 +17,7 @@ export function TelaTiposOs() {
             { key: "cor", label: "Cor", tipo: "color" },
             {
               key: "exigeEquipamento", label: "Exige equipamento para concluir", tipo: "switch", padrao: true,
-              ajuda: "Ligado: a OS só conclui com pelo menos 1 equipamento atendido e o checklist dele completo (manutenção, instalação). Desligue para serviços sem equipamento: visita técnica, vistoria, orçamento.",
+              ajuda: "Ligado, a OS só é concluída com ao menos um equipamento atendido e o respectivo checklist completo (manutenção, instalação). Desligue para serviços sem equipamento, como visita técnica, vistoria e orçamento.",
             },
           ]}
           colunasLista={[

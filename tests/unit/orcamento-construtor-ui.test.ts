@@ -121,7 +121,10 @@ describe("tipo de documento e validade", () => {
     const alvo = new Date(Date.UTC(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 10));
     const esperado = `${String(alvo.getUTCDate()).padStart(2, "0")}/${String(alvo.getUTCMonth() + 1).padStart(2, "0")}/${alvo.getUTCFullYear()}`;
     expect($<HTMLInputElement>("input[aria-label='Validade']")!.value).toBe(esperado);
-    expect(document.body.textContent).toContain("Padrão: 10 dias após a data do orçamento");
+    // Princípio 7: a regra da validade fica no ⓘ do campo (balão no body), não no formulário
+    const dicaValidade = document.querySelector('[data-dica][aria-label="Ajuda: Validade"]')!;
+    expect(document.getElementById(dicaValidade.getAttribute("aria-describedby")!)!.textContent).toContain("Padrão: 10 dias após a data do orçamento");
+    expect(document.querySelector("[data-orcamento-form]")!.textContent).not.toContain("dias após a data do orçamento");
     await adicionar("Buscar serviço por nome ou código...", "Limpeza de split");
     const corpo = await salvar();
     expect(corpo.validadeEm).toBe(alvo.toISOString().slice(0, 10));

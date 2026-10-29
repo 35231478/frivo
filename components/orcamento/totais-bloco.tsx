@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { formatarMoeda, cn } from "@/lib/utils";
 import type { TipoDesconto } from "@prisma/client";
 import { Landmark } from "lucide-react";
+import { Dica } from "@/components/ui/dica";
 import type { TotaisOrcamento } from "@/lib/orcamentos/calculo";
 import { lerNumeroBR } from "@/components/orcamento/itens-tabela";
 
@@ -42,6 +43,7 @@ export function TotaisBloco({
           <div className="flex items-center justify-between gap-3 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2" data-linha-iss>
             <span className="flex items-center gap-1.5 text-sm font-semibold text-primary-700">
               <Landmark className="w-4 h-4" aria-hidden /> ISS ({pct(t.issAliquota)})
+              <Dica rotulo="ISS" lado="direita" texto="No documento do cliente, o ISS vem embutido nos preços dos serviços, sem linha própria." />
             </span>
             <span className="font-mono font-bold text-primary-700 tabular-nums" data-valor="iss">+ {formatarMoeda(t.valorIss)}</span>
           </div>
@@ -68,9 +70,6 @@ export function TotaisBloco({
         <span className="text-sm font-bold uppercase tracking-wider text-ink-muted">Total geral</span>
         <span className="text-2xl font-bold text-success-700 tabular-nums" data-valor="total-geral">{formatarMoeda(t.totalGeral)}</span>
       </div>
-      {t.valorIss > 0 && (
-        <p className="text-xs text-ink-muted">No documento do cliente o ISS vem embutido nos preços dos serviços (sem linha própria).</p>
-      )}
     </div>
   );
 }

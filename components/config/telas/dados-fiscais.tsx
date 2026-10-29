@@ -15,7 +15,8 @@ export async function TelaDadosFiscais({ voltar = "/configuracoes" }: { voltar?:
   if (!pode(u.permissoes, "financeiro", "fiscal", u.role)) redirect("/sem-permissao");
   return (
     <div className="max-w-3xl mx-auto">
-      <PageHeader title="Dados fiscais (NFS-e)" description="A empresa como emitente de notas fiscais de serviço, pelo PlugNotas" backHref={voltar} />
+      <PageHeader title="Dados fiscais (NFS-e)" description="Emitente de NFS-e no PlugNotas"
+        dica="Regime tributário, município, ambiente, autenticação na prefeitura e certificado digital A1 usados na emissão das notas fiscais de serviço." backHref={voltar} />
       <div className="bg-white rounded-card border border-surface-border p-4 sm:p-6">
         <DadosFiscaisClient inicial={await carregarEmitente(u.empresaId)} />
       </div>

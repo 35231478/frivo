@@ -56,7 +56,7 @@ export function NotasCentralView({ dados }: { dados: DadosCentral }) {
       <div className="flex items-center gap-3">
         <div className="p-2 bg-primary-50 rounded-lg"><FileText className="w-5 h-5 text-primary-600" /></div>
         <h1 className="page-title">Notas fiscais de serviço</h1>
-        <Dica texto="NFS-e emitidas pelo PlugNotas a partir das medições e das OS concluídas." lado="direita" />
+        <Dica texto="NFS-e emitidas pelo PlugNotas a partir das medições e das OS concluídas." rotulo="Notas fiscais de serviço" lado="direita" />
       </div>
 
       <BarraPeriodo periodo={filtros.periodo} navegar={navegar} />
@@ -218,7 +218,7 @@ function Card({ id, rotulo, icone: Icone, cor, q, v, legenda, unidade, dica, hre
         <Icone className={cn("w-5 h-5", cor)} />
         {ativo && <X className="w-3.5 h-3.5 text-ink-subtle" />}
       </div>
-      <p className="text-xs text-ink-muted mt-2 flex items-center gap-1">{rotulo}{dica && <Dica texto={dica} />}</p>
+      <p className="text-xs text-ink-muted mt-2 flex items-center gap-1">{rotulo}{dica && <Dica texto={dica} rotulo={rotulo} />}</p>
       <p className="text-lg font-bold text-ink mt-0.5 tabular-nums" data-card-valor>{formatarMoeda(v)}</p>
       <p className="text-[11px] text-ink-subtle mt-0.5" data-card-qtd>{legenda ?? `${q} ${unidade ? (q === 1 ? unidade[0] : unidade[1]) : q === 1 ? "nota" : "notas"}`}</p>
     </>
@@ -320,7 +320,7 @@ function ItemMenu({ icone: Icone, children, onClick, href, novaAba, desabilitado
   if (desabilitado) {
     return (
       <span role="menuitem" aria-disabled="true" title={motivo} className={cls} data-item={id} data-desabilitado="">
-        <Icone className="w-3.5 h-3.5" /><span className="flex-1">{children}</span>{motivo && <Dica texto={motivo} lado="esquerda" />}
+        <Icone className="w-3.5 h-3.5" /><span className="flex-1">{children}</span>{motivo && <Dica texto={motivo} rotulo={typeof children === "string" ? children : undefined} lado="esquerda" />}
       </span>
     );
   }

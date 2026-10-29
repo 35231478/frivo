@@ -11,7 +11,7 @@ export function TabelasPrecoTela() {
     <CadastroPadrao
       entidade="tabelas-preco"
       Editor={EditorTabelaPreco}
-      ajuda="Preços por serviço/produto, vinculados a clientes. Cliente com tabela inativa continua ligado a ela, mas os preços passam a vir da tabela Padrão."
+      ajuda="Preços por serviço e produto, vinculados a clientes. O cliente com tabela inativa permanece vinculado a ela, mas os preços passam a vir da tabela Padrão."
       celula={(col, t) => {
         if (col === "nome") return (
           <span className="inline-flex flex-col">

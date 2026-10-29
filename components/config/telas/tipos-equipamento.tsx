@@ -4,7 +4,7 @@ import { TiposEquipamentoTela } from "@/components/cadastros/telas/tipos-equipam
 export function TelaTiposEquipamento() {
   return (
     <div>
-      <PageHeader title="Tipos de Equipamento" description="Categorias de equipamentos e os formulários vinculados a cada tipo de OS" backHref="/configuracoes" />
+      <PageHeader title="Tipos de equipamento" description="Categorias de equipamento e seus formulários" backHref="/configuracoes" />
       {/* Cadastro padronizado (lib/cadastros): abas Ativos/Inativos/Todos, impacto, ações em massa */}
       <div className="bg-white rounded-card border border-surface-border p-4 sm:p-6">
         <TiposEquipamentoTela />

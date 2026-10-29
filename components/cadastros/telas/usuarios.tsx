@@ -32,11 +32,8 @@ export function UsuariosTela({ usuarioAtualId, emailsTecnicos = [] }: { usuarioA
       <CadastroPadrao
         entidade="usuarios"
         Editor={Editor}
-        ajuda={<>
-          Quem entra no sistema e com qual perfil. A senha é criada pela própria pessoa, pelo convite. Usuário <strong>sem perfil não tem acesso</strong> a nada além do início;
-          o administrador tem acesso total. Mudanças de perfil valem no próximo acesso.
-          {erro && <span role="alert" className="block mt-2 text-atrasado-texto">{erro}</span>}
-        </>}
+        ajuda="Pessoas com acesso ao sistema e seus perfis. A senha é criada pela própria pessoa, a partir do convite. Usuário sem perfil acessa apenas a tela inicial; o administrador tem acesso total. Alterações de perfil valem a partir do próximo acesso."
+        aviso={erro && <p role="alert" className="text-sm text-atrasado-texto">{erro}</p>}
         celula={(col, u) => {
           if (col === "nome") return (
             <span className="block min-w-0">

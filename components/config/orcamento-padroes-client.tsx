@@ -58,13 +58,13 @@ export function OrcamentoPadroesClient({ inicial, podeEditar }: { inicial: Padro
       <fieldset disabled={!podeEditar} className="space-y-8 disabled:opacity-90">
         <FormSection title="Validade e garantias">
           <FormGrid cols={3}>
-            <FormField label="Validade padrão (dias)" hint="O orçamento novo vale até hoje + estes dias. Editável em cada orçamento.">
+            <FormField label="Validade padrão (dias)" dica="A validade do novo orçamento é a data de criação somada a este número de dias. Pode ser alterada em cada orçamento.">
               <Input type="number" inputMode="numeric" min={1} max={365} value={validade} onChange={(e) => mudou(setValidade)(e.target.value)} data-validade-dias />
             </FormField>
-            <FormField label="Garantia dos serviços" hint="Sai nas Condições do documento">
+            <FormField label="Garantia dos serviços" dica="Impressa nas Condições do orçamento.">
               <Input value={garantiaServico} onChange={(e) => mudou(setGarantiaServico)(e.target.value)} list="padrao-garantia-servico" maxLength={200} placeholder="Ex.: 90 dias" data-garantia-servico />
             </FormField>
-            <FormField label="Garantia das peças" hint="Sai nas Condições do documento">
+            <FormField label="Garantia das peças" dica="Impressa nas Condições do orçamento.">
               <Input value={garantiaPecas} onChange={(e) => mudou(setGarantiaPecas)(e.target.value)} list="padrao-garantia-pecas" maxLength={200} placeholder="Ex.: Conforme garantia do fabricante" data-garantia-pecas />
             </FormField>
           </FormGrid>
@@ -72,13 +72,11 @@ export function OrcamentoPadroesClient({ inicial, podeEditar }: { inicial: Padro
           <datalist id="padrao-garantia-pecas">{GARANTIAS_PECAS_SUGERIDAS.map((v) => <option key={v} value={v} />)}</datalist>
         </FormSection>
 
-        <FormSection title="Não incluso">
-          <p className="text-xs text-ink-muted -mt-2 mb-3" id="padrao-nao-incluso-dica">O que já vem listado como “Não incluso” no orçamento novo. Vazio = o bloco só aparece se alguém preencher no orçamento.</p>
+        <FormSection title="Não incluso" dica="Itens listados como “Não incluso” em cada novo orçamento. Em branco, o bloco aparece apenas quando preenchido no orçamento.">
           <NaoInclusoCampo id="padrao-nao-incluso" valor={naoIncluso} onChange={mudou(setNaoIncluso)} />
         </FormSection>
 
-        <FormSection title="Normas atendidas">
-          <p className="text-xs text-ink-muted -mt-2 mb-3">Marcadas aqui = já vêm ligadas no orçamento novo. Deixe todas desmarcadas para não poluir orçamentos simples (liga no orçamento que precisar).</p>
+        <FormSection title="Normas atendidas" dica="As normas marcadas vêm selecionadas em cada novo orçamento. Para orçamentos simples, deixe-as desmarcadas e selecione no orçamento quando necessário.">
           <NormasCampo valor={normas} onChange={mudou(setNormas)} />
         </FormSection>
       </fieldset>
@@ -93,7 +91,7 @@ export function OrcamentoPadroesClient({ inicial, podeEditar }: { inicial: Padro
           <Button onClick={salvar} loading={salvando} data-salvar-padroes-orcamento>Salvar padrões do orçamento</Button>
         </div>
       ) : (
-        <p className="text-xs text-ink-muted">Somente leitura: alterar exige “Configurações › Gerenciar”.</p>
+        <p className="text-xs text-ink-muted">Somente leitura: requer a permissão Configurações › Gerenciar.</p>
       )}
     </div>
   );

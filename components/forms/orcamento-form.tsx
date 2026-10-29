@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { InputData } from "@/components/ui/input-data";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid, FormSection } from "@/components/ui/form-field";
+import { Dica } from "@/components/ui/dica";
 import { PageHeader } from "@/components/ui/page-header";
 import { ItensTabela, type ItemTabela, type CatalogoItem, type TabelaPrecoCliente, type CadastroCatalogo } from "@/components/orcamento/itens-tabela";
 import { SelectCadastroRapido } from "@/components/ui/select-cadastro-rapido";
@@ -488,8 +489,8 @@ export function OrcamentoForm({
   return (
     <form onSubmit={salvar} className="space-y-6" data-orcamento-form={embutido ? "embutido" : mode}>
       {!embutido && <PageHeader
-        title={mode === "novo" ? "Novo Orçamento" : `Editar ${inicial?.codigo ?? "Orçamento"}`}
-        description={mode === "novo" ? "Crie uma proposta comercial para o cliente" : "Edite os dados deste orçamento"}
+        title={mode === "novo" ? "Novo orçamento" : `Editar ${inicial?.codigo ?? "orçamento"}`}
+        description={mode === "novo" ? "Proposta comercial para o cliente" : undefined}
         backHref={mode === "novo" ? "/orcamentos" : `/orcamentos/${inicial?.id}`}
         actions={
           <>
@@ -546,7 +547,7 @@ export function OrcamentoForm({
                   <div>
                     <p className="text-sm font-semibold text-ink">{LABELS_TIPO_ORCAMENTO[t]}</p>
                     <p className="text-xs text-ink-muted">
-                      {t === "COMUM" ? "Proposta comercial avulsa de serviços/produtos." : "Contrato de manutenção que pode ser convertido em contrato ao ser aprovado."}
+                      {t === "COMUM" ? "Proposta comercial avulsa de serviços e produtos." : "Contrato de manutenção, convertido em contrato após a aprovação."}
                     </p>
                   </div>
                 </button>
@@ -559,7 +560,7 @@ export function OrcamentoForm({
       <div className="card-padded space-y-6">
         <FormSection title="Identificação">
           <FormGrid cols={2}>
-            <FormField label="Nome do orçamento" hint={nome.trim() ? "Nome digitado por você (apague para voltar ao automático)" : "Automático pelo tipo da OS, equipamento, cliente ou itens — pode editar"}>
+            <FormField label="Nome do orçamento" dica="Gerado automaticamente a partir do tipo da OS, do equipamento, do cliente ou dos itens. Pode ser editado; apague o texto para voltar ao nome automático.">
               <Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder={nomeAuto} data-nome-orcamento />
             </FormField>
             <FormField label="Cliente" required>
@@ -583,14 +584,14 @@ export function OrcamentoForm({
                 }}
               />
             </FormField>
-            <FormField label="Validade" hint={`Padrão: ${diasValidade} dias após a data do orçamento (Configurações › Orçamentos). Depois dela o orçamento não pode mais ser aprovado.`}>
+            <FormField label="Validade" dica={`Padrão: ${diasValidade} dias após a data do orçamento (Configurações › Orçamentos). Após a validade, o orçamento não pode ser aprovado.`}>
               <InputData value={validadeEm} onChange={setValidadeEm} aria-label="Validade" />
             </FormField>
           </FormGrid>
           {tipo !== "PROPOSTA_CONTRATO" && clienteId && (
             <div data-destinatario>
               <FormGrid cols={2}>
-                <FormField label="Unidade (endereço do “Para:”)" hint="Vazio = endereço do cadastro do cliente">
+                <FormField label="Unidade (endereço do “Para:”)" dica="Endereço exibido no campo “Para:” do documento. Em branco, é usado o endereço do cadastro do cliente.">
                   <Select value={unidadeId} onChange={(e) => setUnidadeId(e.target.value)} placeholder="Endereço do cliente" data-unidade-orcamento>
                     {unidadeId && !destinos.unidades.some((u) => u.id === unidadeId) && <option value={unidadeId}>Unidade atual</option>}
                     {destinos.unidades.map((u) => (
@@ -598,7 +599,7 @@ export function OrcamentoForm({
                     ))}
                   </Select>
                 </FormField>
-                <FormField label="A/C (aos cuidados de)" hint="Contato do cliente que recebe a proposta">
+                <FormField label="A/C (aos cuidados de)" dica="Contato do cliente que recebe a proposta.">
                   <Select value={contatoClienteId} onChange={(e) => setContatoClienteId(e.target.value)} placeholder="Sem contato A/C" data-contato-orcamento>
                     {contatoClienteId && !destinos.contatos.some((c) => c.id === contatoClienteId) && <option value={contatoClienteId}>Contato atual</option>}
                     {destinos.contatos.map((c) => (
@@ -610,7 +611,7 @@ export function OrcamentoForm({
             </div>
           )}
           <div className="space-y-2" data-descricao-orcamento>
-            <FormField label="Descrição" hint="Resumo da proposta para o cliente">
+            <FormField label="Descrição" dica="Resumo da proposta, exibido ao cliente.">
               <Textarea value={descricao ?? ""} onChange={(e) => setDescricao(e.target.value)} rows={Math.min(14, Math.max(5, (descricao ?? "").split("\n").length + 1))} />
             </FormField>
             <div className="flex flex-wrap items-center gap-2">
@@ -630,9 +631,8 @@ export function OrcamentoForm({
               {!iaDisponivel ? (
                 <span className="text-xs text-ink-muted" data-ia-indisponivel>IA não configurada</span>
               ) : (
-                <span className="text-xs text-ink-muted">
-                  Usa {osDaIa ? "a OS (descrição, equipamentos e fotos) e " : ""}os itens do orçamento. Nada é inventado; revise antes de salvar.
-                </span>
+                <Dica rotulo="Descrição pela IA" lado="direita"
+                  texto={`Rascunho gerado a partir ${osDaIa ? "da OS (descrição, equipamentos e fotos) e " : ""}dos itens do orçamento, sem inventar informações. Revise antes de salvar.`} />
               )}
             </div>
             {sugestaoIa && (
@@ -681,8 +681,7 @@ export function OrcamentoForm({
 
       {tipo !== "PROPOSTA_CONTRATO" && (
         <div className="card-padded space-y-6" data-condicoes-comerciais>
-          <FormSection title="Condições comerciais">
-            <p className="text-xs text-ink-muted -mt-2">Saem no documento do cliente (bloco “Condições”). Em branco = a linha não aparece.</p>
+          <FormSection title="Condições comerciais" dica="Exibidas no bloco “Condições” do documento do cliente. Campos em branco não são exibidos.">
             <FormGrid cols={2}>
               <FormField label="Prazo de execução dos serviços">
                 <Input value={prazoExecucao} onChange={(e) => setPrazoExecucao(e.target.value)} list="sugestoes-prazo-execucao" maxLength={200} placeholder="Ex.: 5 dias úteis após aprovação" data-prazo-execucao />
@@ -700,23 +699,23 @@ export function OrcamentoForm({
             <datalist id="sugestoes-prazo-execucao">{PRAZOS_SUGERIDOS.map((v) => <option key={v} value={v} />)}</datalist>
             <datalist id="sugestoes-garantia-servico">{GARANTIAS_SERVICO_SUGERIDAS.map((v) => <option key={v} value={v} />)}</datalist>
             <datalist id="sugestoes-garantia-pecas">{GARANTIAS_PECAS_SUGERIDAS.map((v) => <option key={v} value={v} />)}</datalist>
-            <FormField label="Não incluso" hint="Uma exclusão por linha; sai no documento como “Não incluso”">
+            <FormField label="Não incluso" dica="Uma exclusão por linha, exibida no documento como “Não incluso”.">
               <NaoInclusoCampo id="nao-incluso-orcamento" valor={naoIncluso} onChange={setNaoIncluso} />
             </FormField>
           </FormSection>
 
           <FormSection title="Responsável técnico e normas">
             <FormGrid cols={2}>
-              <FormField label="Responsável técnico" hint="Nome e CREA saem no documento. Vazio = sem o bloco">
+              <FormField label="Responsável técnico" dica="Nome e CREA impressos no documento. Em branco, o bloco não é exibido.">
                 <Select value={proposta.responsavelTecnicoId} onChange={(e) => patchProposta({ responsavelTecnicoId: e.target.value })} placeholder="Sem responsável técnico" data-rt-orcamento>
                   {tecnicos.map((t) => <option key={t.id} value={t.id}>{t.nome}{t.crea ? ` — CREA ${t.crea}` : ""}</option>)}
                 </Select>
               </FormField>
-              <FormField label="Nº da ART" hint={`Vazio = “${NOTA_ART_APOS_APROVACAO}”`}>
+              <FormField label="Nº da ART" dica={`Em branco, o documento exibe “${NOTA_ART_APOS_APROVACAO}”.`}>
                 <Input value={proposta.artNumero} onChange={(e) => patchProposta({ artNumero: e.target.value })} maxLength={60} placeholder="Opcional" data-art-orcamento />
               </FormField>
             </FormGrid>
-            <FormField label="Normas atendidas" hint="Marque só o que se aplica: nenhuma marcada = o bloco não sai no documento">
+            <FormField label="Normas atendidas" dica="Marque apenas as normas aplicáveis. Sem nenhuma marcada, o bloco não é exibido.">
               <NormasCampo valor={normas} onChange={setNormas} />
             </FormField>
           </FormSection>

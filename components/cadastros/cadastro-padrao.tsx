@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField } from "@/components/ui/form-field";
+import { Dica } from "@/components/ui/dica";
 import { ComboboxCodigo } from "@/components/ui/combobox-codigo";
 import { Drawer } from "@/components/ui/drawer";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
@@ -47,8 +48,10 @@ export interface CadastroPadraoProps {
   celula?: (coluna: string, item: Item) => ReactNode | undefined;
   /** Botões extras na linha (ex.: reenviar convite) */
   acoesLinha?: (item: Item, recarregar: () => void) => ReactNode;
-  /** Texto acima da lista */
+  /** Explicação do cadastro: vai para o ⓘ ao lado das abas (Princípio 7) */
   ajuda?: ReactNode;
+  /** Mensagem que precisa ficar VISÍVEL acima da lista (erro, alerta) */
+  aviso?: ReactNode;
   /** Seções do formulário com desenho próprio, pelo nome do grupo (ex.: "Dados fiscais (NFS-e)" do serviço) */
   grupos?: Partial<Record<string, ComponentType<GrupoFormProps>>>;
 }
@@ -109,7 +112,7 @@ function ComSelecao({ ativo, entidade, ids, total, children }: { ativo: boolean;
 interface PaginaLista { itens: Item[]; total: number; pagina: number; porPagina: number; contagens: Record<Aba, number> }
 const FILTRO_ABA: Record<Aba, string> = { ativos: "sim", inativos: "nao", todos: "todos" };
 
-function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda, grupos }: CadastroPadraoProps) {
+function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda, aviso, grupos }: CadastroPadraoProps) {
   const def = CADASTROS[entidade];
   const podeCad = usePodeCadastro(def);
   const massa = useMassa(def);
@@ -204,20 +207,23 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda, grupos }: Cadas
   return (
     <ComSelecao ativo={!!def.massa} entidade={entidade} ids={itens.map((i) => i.id)} total={dados?.total ?? 0}>
       <div className="space-y-4" data-cadastro={entidade}>
-        {ajuda && <div className="text-sm text-ink-muted">{ajuda}</div>}
+        {aviso}
         {/* Abas + busca + Novo */}
         <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3">
-          <div className="flex rounded-lg border border-surface-border p-0.5 bg-surface-alt w-full sm:w-auto" role="tablist">
+          <div className="flex items-center gap-1.5 w-full sm:w-auto">
+          <div className="flex flex-1 rounded-lg border border-surface-border p-0.5 bg-surface-alt sm:flex-none" role="tablist">
             {ABAS.map((a) => (
               <button
                 key={a.id} type="button" role="tab" aria-selected={aba === a.id} data-aba={a.id}
                 onClick={() => mudarUrl({ aba: a.id === "ativos" ? null : a.id })}
-                className={cn("flex-1 sm:flex-none px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                className={cn("flex-1 sm:flex-none px-2 sm:px-3 py-1.5 text-sm font-medium rounded-md transition-colors whitespace-nowrap",
                   aba === a.id ? "bg-white text-primary-700 shadow-sm" : "text-ink-muted hover:text-ink")}
               >
                 {a.label} <span className="text-xs text-ink-subtle tabular-nums">({contagem ? contagem[a.id].toLocaleString("pt-BR") : "…"})</span>
               </button>
             ))}
+          </div>
+          {ajuda && <Dica texto={ajuda} rotulo={`Sobre ${def.plural}`} lado="direita" />}
           </div>
           {/* A busca não fica espremida: com pouco espaço, os botões descem para a linha de baixo */}
           <div className="flex-1 sm:min-w-[240px] sm:max-w-sm">
@@ -456,7 +462,8 @@ export function CampoCadastroForm({ campo: c, valores, mudar, bloqueado, classNa
   campo: CampoCadastro; valores: Record<string, string>; mudar: (key: string, v: string) => void; bloqueado: boolean; className?: string;
 }) {
   return (
-    <FormField label={c.label} required={c.obrigatorio} hint={c.descrever?.(valores[c.key] ?? "") ?? c.ajuda} className={className}>
+    // O que o valor significa (ex.: a descrição do código LC 116) fica visível; a explicação do campo vai para o ⓘ
+    <FormField label={c.label} required={c.obrigatorio} hint={c.descrever?.(valores[c.key] ?? "") ?? undefined} dica={c.ajuda} className={className}>
       <CampoForm campo={c} valor={valores[c.key] ?? ""} disabled={bloqueado} onChange={(v) => mudar(c.key, v)} />
     </FormField>
   );

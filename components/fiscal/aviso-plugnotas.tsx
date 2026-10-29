@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AlertTriangle, BellRing, CheckCircle2, Copy, Info, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
+import { Dica } from "@/components/ui/dica";
 import { confirmar, toast } from "@/components/ui/avisos";
 import { formatarDataHora } from "@/lib/utils";
 import { LABEL_AMBIENTE } from "@/lib/nfse/regras";
@@ -46,6 +47,8 @@ export function AvisoPlugNotas({ webhook: w, onAtualizar }: { webhook: SituacaoW
       <div className="flex flex-wrap items-center gap-2">
         <BellRing className="w-4 h-4 text-acento" />
         <h3 id="titulo-aviso-plugnotas" className="text-sm font-semibold text-ink">Aviso automático do PlugNotas</h3>
+        <Dica rotulo="Aviso automático do PlugNotas" lado="direita"
+          texto="Quando a prefeitura autoriza ou rejeita uma nota, o PlugNotas notifica o Frivo e a situação da nota é atualizada na hora. Sem o aviso, o Frivo consulta periodicamente as notas pendentes." />
         <StatusPill tom={!w.ativo ? "previsto" : pendente || w.desatualizado ? "atencao" : "ok"} data-situacao-webhook={!w.ativo ? "desligado" : pendente ? "pendente" : w.desatualizado ? "desatualizado" : "ligado"}>
           {!w.ativo ? "Desligado" : pendente ? "Cadastro pendente no PlugNotas" : w.desatualizado ? "Gere de novo (ambiente mudou)" : "Ligado"}
         </StatusPill>
@@ -53,13 +56,9 @@ export function AvisoPlugNotas({ webhook: w, onAtualizar }: { webhook: SituacaoW
           {w.ativo ? <><RefreshCw className="w-4 h-4" /> Gerar nova URL</> : <><BellRing className="w-4 h-4" /> Ligar aviso automático</>}
         </Button>
       </div>
-      <p className="text-xs text-ink-muted">
-        Quando a prefeitura autoriza ou recusa uma nota, o PlugNotas avisa o Frivo na hora e a nota se atualiza sozinha.
-        Sem o aviso, o Frivo confere as notas paradas de tempos em tempos.
-      </p>
       {!w.podeGerar && (
         <p className="text-xs text-ink-muted flex items-start gap-1.5" data-webhook-sem-emitente>
-          <Info className="w-3.5 h-3.5 mt-px shrink-0" /> Salve os dados fiscais abaixo (cadastro da empresa no PlugNotas) para ligar o aviso.
+          <Info className="w-3.5 h-3.5 mt-px shrink-0" /> Disponível após salvar os dados fiscais (cadastro da empresa no PlugNotas).
         </p>
       )}
       {w.ativo && (
@@ -72,18 +71,18 @@ export function AvisoPlugNotas({ webhook: w, onAtualizar }: { webhook: SituacaoW
       )}
       {w.ativo && w.registradoEm && !url && (
         <p className="text-xs text-ok-texto flex items-start gap-1.5" data-webhook-registrado>
-          <CheckCircle2 className="w-3.5 h-3.5 mt-px shrink-0" /> Cadastrado no PlugNotas em {formatarDataHora(w.registradoEm)}. Por segurança, a URL não é mostrada de novo.
+          <CheckCircle2 className="w-3.5 h-3.5 mt-px shrink-0" /> Cadastrado no PlugNotas em {formatarDataHora(w.registradoEm)}. Por segurança, a URL não é exibida novamente.
         </p>
       )}
       {pendente && w.erro && (
         <p className="text-xs text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2 flex items-start gap-1.5" data-webhook-erro>
           <AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" />
-          <span>O PlugNotas não aceitou o cadastro automático: {w.erro} A URL vale do nosso lado: cole-a no painel do PlugNotas (Webhook da empresa) ou tente gerar de novo.</span>
+          <span>O PlugNotas recusou o cadastro automático: {w.erro} A URL continua válida no Frivo: cadastre-a no painel do PlugNotas (Webhook da empresa) ou gere uma nova.</span>
         </p>
       )}
       {url && (
         <div className="rounded-lg border border-atencao/20 bg-atencao-claro p-3 space-y-2" data-webhook-url>
-          <p className="text-xs font-semibold text-atencao-texto">Esta URL leva o segredo da empresa e só aparece agora. Gerar outra invalida esta.</p>
+          <p className="text-xs font-semibold text-atencao-texto">Esta URL contém o segredo da empresa e é exibida somente agora. Gerar outra invalida esta.</p>
           <div className="flex flex-col sm:flex-row gap-2">
             <code className="min-w-0 flex-1 rounded-md bg-surface px-2 py-1.5 text-xs break-all select-all border border-surface-border">{url}</code>
             <Button variant="secondary" size="sm" onClick={copiar} data-copiar-webhook><Copy className="w-4 h-4" /> Copiar</Button>

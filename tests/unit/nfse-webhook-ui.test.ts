@@ -84,9 +84,13 @@ describe("Dados fiscais › Aviso automático do PlugNotas", () => {
     expect([situacao(), txt($("[data-situacao-webhook]"))]).toEqual(["desligado", "Desligado"]);
     expect(botao().disabled).toBe(true);
     expect(txt(botao())).toBe("Ligar aviso automático");
-    expect(txt($("[data-webhook-sem-emitente]"))).toBe("Salve os dados fiscais abaixo (cadastro da empresa no PlugNotas) para ligar o aviso.");
+    expect(txt($("[data-webhook-sem-emitente]"))).toBe("Disponível após salvar os dados fiscais (cadastro da empresa no PlugNotas).");
     expect($("[data-webhook-gerado]")).toBeNull();
-    expect(txt($("[data-aviso-plugnotas]"))).toContain("o PlugNotas avisa o Frivo na hora");
+    // Princípio 7: a explicação do aviso fica no ⓘ do título, não num parágrafo
+    const b = $('[data-aviso-plugnotas] [data-dica]')!;
+    expect(b.getAttribute("aria-label")).toBe("Ajuda: Aviso automático do PlugNotas");
+    expect(document.getElementById(b.getAttribute("aria-describedby")!)!.textContent).toContain("o PlugNotas notifica o Frivo e a situação da nota é atualizada na hora");
+    expect(txt($("[data-aviso-plugnotas]"))).not.toContain("o PlugNotas notifica o Frivo");
   });
 
   it("ligar: POST sem confirmação; a URL aparece UMA vez com Copiar; cadastrado lá = ligado + toast", async () => {
@@ -97,7 +101,7 @@ describe("Dados fiscais › Aviso automático do PlugNotas", () => {
     expect(avisos.perguntas).toEqual([]);
     expect(chamadas).toEqual([{ url: "/api/fiscal/webhook", metodo: "POST" }]);
     expect(txt($("[data-webhook-url] code"))).toBe(URL_NOVA);
-    expect(txt($("[data-webhook-url]"))).toContain("só aparece agora. Gerar outra invalida esta.");
+    expect(txt($("[data-webhook-url]"))).toContain("Esta URL contém o segredo da empresa e é exibida somente agora. Gerar outra invalida esta.");
     expect(situacao()).toBe("ligado");
     expect(txt($("[data-webhook-recebido]"))).toBe("Nenhum ainda");
     expect(txt($("[data-webhook-gerado]"))).toContain("Homologação (testes)");
@@ -116,7 +120,7 @@ describe("Dados fiscais › Aviso automático do PlugNotas", () => {
     await tela(LIGADO);
     expect(situacao()).toBe("ligado");
     expect($("[data-webhook-url]")).toBeNull();
-    expect(txt($("[data-webhook-registrado]"))).toMatch(/^Cadastrado no PlugNotas em \d\d\/\d\d\/2026.*Por segurança, a URL não é mostrada de novo\.$/);
+    expect(txt($("[data-webhook-registrado]"))).toMatch(/^Cadastrado no PlugNotas em \d\d\/\d\d\/2026.*Por segurança, a URL não é exibida novamente\.$/);
     expect(txt($("[data-webhook-recebido]"))).toMatch(/^29\/10\/2026/);
   });
 
@@ -126,7 +130,7 @@ describe("Dados fiscais › Aviso automático do PlugNotas", () => {
     await tela(DESLIGADO);
     await clicar(botao());
     expect([situacao(), txt($("[data-situacao-webhook]"))]).toEqual(["pendente", "Cadastro pendente no PlugNotas"]);
-    expect(txt($("[data-webhook-erro]"))).toBe("O PlugNotas não aceitou o cadastro automático: URL não aceita: ••• A URL vale do nosso lado: cole-a no painel do PlugNotas (Webhook da empresa) ou tente gerar de novo.");
+    expect(txt($("[data-webhook-erro]"))).toBe("O PlugNotas recusou o cadastro automático: URL não aceita: ••• A URL continua válida no Frivo: cadastre-a no painel do PlugNotas (Webhook da empresa) ou gere uma nova.");
     expect(txt($("[data-webhook-url] code"))).toBe(URL_NOVA);
     expect(avisos.toasts).toEqual([]);
   });

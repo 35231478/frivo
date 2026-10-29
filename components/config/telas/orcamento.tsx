@@ -21,7 +21,8 @@ export async function TelaOrcamento() {
     <div className="max-w-3xl mx-auto">
       <PageHeader
         title="Orçamentos e propostas"
-        description="O que o orçamento novo já traz preenchido. Cada orçamento pode mudar; os já criados não mudam."
+        description="Padrões do orçamento novo"
+        dica="Valores preenchidos em cada novo orçamento. Podem ser alterados em cada orçamento; os já criados não são afetados."
         backHref="/configuracoes/operacionais"
       />
       <OrcamentoPadroesClient inicial={cfg} podeEditar={pode(u.permissoes, "configuracoes", "gerenciar", u.role)} />

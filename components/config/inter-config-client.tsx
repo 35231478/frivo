@@ -121,7 +121,7 @@ export function InterConfigClient() {
       <div className="flex items-center gap-3">
         <div className="p-2.5 bg-atencao-claro rounded-lg"><Landmark className="w-5 h-5 text-atencao-texto" /></div>
         <div className="flex-1">
-          <ToggleSwitch checked={ativo} onChange={setAtivo} label="Integração ativa" description="Habilita a emissão de boletos pelo Banco Inter" />
+          <ToggleSwitch checked={ativo} onChange={setAtivo} label="Integração ativa" dica="Habilita a emissão de boletos pelo Banco Inter." />
         </div>
       </div>
 
@@ -147,7 +147,7 @@ export function InterConfigClient() {
       </FormGrid>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <FormField label="Certificado (.crt / .pem)" hint="Emitido no Internet Banking Inter PJ">
+        <FormField label="Certificado (.crt / .pem)" dica="Emitido no Internet Banking Inter PJ, junto com a chave privada.">
           <input ref={certRef} type="file" accept=".crt,.pem,.cer,.txt" onChange={(e) => lerArquivo(e, setCertificado)} className="hidden" />
           <div className="flex items-center gap-2">
             <Button type="button" variant="secondary" onClick={() => certRef.current?.click()} className="text-xs py-1.5 px-3"><Upload className="w-3.5 h-3.5" /> Enviar</Button>
@@ -167,7 +167,7 @@ export function InterConfigClient() {
       {resultadoTeste && (
         <div className={`flex items-center gap-2 text-sm rounded-lg px-3 py-2 ${resultadoTeste.ok ? "bg-success-50 text-success-700" : "bg-atrasado-claro text-atrasado-texto"}`}>
           {resultadoTeste.ok ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-          {resultadoTeste.ok ? "Conexão bem-sucedida com o Banco Inter!" : `Falha: ${resultadoTeste.erro}`}
+          {resultadoTeste.ok ? "Conexão estabelecida com o Banco Inter." : `Falha: ${resultadoTeste.erro}`}
         </div>
       )}
 

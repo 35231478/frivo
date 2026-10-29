@@ -172,23 +172,23 @@ export const CAMPOS_NFSE_SERVICO: CampoCadastro[] = [
   // Classificação do serviço
   { key: "codigoLc116", label: "Código do serviço (LC 116)", placeholder: "Busque pelo código ou pela descrição", grupo: GRUPO_NFSE, permissao: FISCAL,
     opcoesCodigo: LISTA_LC116,
-    ajuda: "Subitem da lista da LC 116, no formato NN.NN.",
+    ajuda: "Subitem da lista de serviços da Lei Complementar 116/2003, no formato NN.NN.",
     descrever: (v) => { const n = normalizarLc116(v).codigo; const d = descricaoLc116(n); return d ? `${n} — ${d}` : null; } },
-  { key: "codigoMunicipal", label: "Código municipal", placeholder: "Vazio = o código LC 116", grupo: GRUPO_NFSE, permissao: FISCAL,
-    ajuda: "Só se a prefeitura usar um código próprio." },
+  { key: "codigoMunicipal", label: "Código municipal", placeholder: "Em branco: código LC 116", grupo: GRUPO_NFSE, permissao: FISCAL,
+    ajuda: "Preencha apenas se a prefeitura adotar codificação própria de serviços. Em branco, a nota usa o código LC 116." },
   { key: "cnae", label: "CNAE", placeholder: "Ex: 4322-3/02", grupo: GRUPO_NFSE, permissao: FISCAL, formatar: formatarCnae,
-    ajuda: "Vazio = o CNAE principal da empresa." },
+    ajuda: "Em branco, a nota usa o CNAE principal da empresa." },
   // Tributação
   { key: "nfseTributacao", label: "Tributação do ISS", tipo: "select", grupo: GRUPO_NFSE, permissao: FISCAL,
     opcoes: [{ value: "", label: `${TRIBUTACOES_ISS[0].label} (padrão)` }, ...TRIBUTACOES_ISS.slice(1).map((t) => ({ value: t.id, label: t.label }))] },
   { key: "aliquotaISS", label: "Alíquota de ISS (%)", tipo: "numero", placeholder: "Ex: 5,00", grupo: GRUPO_NFSE, permissao: FISCAL,
-    ajuda: "Vazio = o ISS da empresa." },
+    ajuda: "Em branco, a nota usa a alíquota de ISS da empresa." },
   { key: "issRetido", label: "ISS retido pelo tomador", tipo: "select", grupo: GRUPO_NFSE, permissao: FISCAL,
     opcoes: [{ value: "false", label: "Não" }, { value: "true", label: "Sim — o tomador retém e recolhe o ISS" }] },
   // Discriminação
   { key: "discriminacaoPadrao", label: "Discriminação padrão", tipo: "textarea", grupo: GRUPO_NFSE, permissao: FISCAL,
     placeholder: "Ex: Manutenção preventiva de equipamentos de ar-condicionado conforme contrato.",
-    ajuda: "Texto base da nota; dá para editar na hora de emitir." },
+    ajuda: "Texto-base da discriminação da NFS-e. Pode ser ajustado no momento da emissão." },
 ];
 
 const SO_GESTOR: Requisito = [["configuracoes", "gerenciar"]];

@@ -46,7 +46,7 @@ export interface SecaoConfig {
 export const SECOES_CONFIGURACOES: SecaoConfig[] = [
   {
     id: "operacionais", href: "/configuracoes/operacionais", label: "Configurações operacionais", curto: "Operacionais", icone: Cog,
-    descricao: "Como as ordens de serviço funcionam e o catálogo do que a empresa vende e executa.",
+    descricao: "Funcionamento das ordens de serviço e catálogo de serviços e produtos.",
     subgrupos: [
       {
         titulo: "Ordens de serviço",
@@ -77,13 +77,13 @@ export const SECOES_CONFIGURACOES: SecaoConfig[] = [
   },
   {
     id: "financeiras", href: "/configuracoes/financeiras", label: "Configurações financeiras", curto: "Financeiras", icone: Wallet,
-    descricao: "Classificação das cobranças e despesas. Novos ajustes do financeiro entram aqui.",
+    descricao: "Classificação financeira, cobrança bancária e emissão fiscal.",
     subgrupos: [
       {
         titulo: "Classificação",
         itens: [
           { id: "categorias-financeiras", href: "/configuracoes/financeiro/categorias", icone: Tags, label: "Categorias financeiras", dica: "Classificam cobranças e despesas (ex.: Contrato Mensal)" },
-          { id: "centros-custo", href: "/configuracoes/financeiro/centros-custo", icone: Target, label: "Centros de custo", dica: "Onde a despesa pesa (ex.: uma obra, a frota) — em toda conta a pagar" },
+          { id: "centros-custo", href: "/configuracoes/financeiro/centros-custo", icone: Target, label: "Centros de custo", dica: "Alocação das despesas (ex.: obra, frota)" },
         ],
       },
       {
@@ -95,27 +95,27 @@ export const SECOES_CONFIGURACOES: SecaoConfig[] = [
       {
         titulo: "Fiscal",
         itens: [
-          { id: "dados-fiscais", href: "/configuracoes/dados-fiscais", modulo: "financeiro", acao: "fiscal", icone: FileBadge, label: "Dados fiscais (NFS-e)", dica: "A empresa como emitente: regime, município, certificado A1 e o PlugNotas" },
+          { id: "dados-fiscais", href: "/configuracoes/dados-fiscais", modulo: "financeiro", acao: "fiscal", icone: FileBadge, label: "Dados fiscais (NFS-e)", dica: "Emitente de NFS-e: regime, município e certificado A1" },
         ],
       },
     ],
   },
   {
     id: "conta", href: "/configuracoes/conta", label: "Configurações da conta", curto: "Conta", icone: Building2,
-    descricao: "Dados da empresa, quem acessa o sistema e as integrações.",
+    descricao: "Dados da empresa, acessos e integrações.",
     subgrupos: [
       {
         titulo: "Empresa",
         itens: [
           { id: "empresa", href: "/configuracoes", icone: Building2, label: "Dados da empresa", dica: "Razão social, CNPJ, endereço e logo" },
-          { id: "preferencias", href: "/configuracoes", icone: Cog, label: "Preferências", dica: "Ajustes avançados, padrões do sistema e ISS dos orçamentos" },
+          { id: "preferencias", href: "/configuracoes", icone: Cog, label: "Preferências", dica: "Regras de cadastro, OS, notificações e ISS" },
         ],
       },
       {
         titulo: "Acesso e pessoas",
         itens: [
-          { id: "usuarios", href: "/configuracoes/usuarios", icone: UserCog, label: "Usuários", dica: "Quem faz login no sistema" },
-          { id: "perfis", href: "/configuracoes/perfis", icone: ShieldCheck, label: "Perfis de acesso", dica: "O que cada um pode fazer" },
+          { id: "usuarios", href: "/configuracoes/usuarios", icone: UserCog, label: "Usuários", dica: "Pessoas com acesso ao sistema" },
+          { id: "perfis", href: "/configuracoes/perfis", icone: ShieldCheck, label: "Perfis de acesso", dica: "Permissões de cada perfil" },
           { id: "cargos", href: "/configuracoes/cargos", icone: IdCard, label: "Cargos", dica: "Cargo do funcionário (usado no Custo de Pessoal)" },
         ],
       },
@@ -124,7 +124,7 @@ export const SECOES_CONFIGURACOES: SecaoConfig[] = [
         itens: [
           { id: "email", href: "/configuracoes/email", icone: Mail, label: "E-mail transacional", dica: "Envio de e-mails automáticos (remetente e modelos)" },
           { id: "portal", href: "/configuracoes/portal", icone: Headset, label: "Portal do cliente", dica: "Tipos de problema, aparência e mensagem do portal" },
-          { id: "qr-code", href: "/configuracoes/qr-code", icone: QrCode, label: "Config. QR Code", dica: "Página pública aberta pelo QR dos equipamentos" },
+          { id: "qr-code", href: "/configuracoes/qr-code", icone: QrCode, label: "QR Code", dica: "Página pública aberta pelo QR dos equipamentos" },
         ],
       },
     ],

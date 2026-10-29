@@ -16,7 +16,7 @@ import { ACEITA_CERTIFICADO, ehArquivoCertificado, LABEL_AMBIENTE, LABEL_REGIME,
 import type { EmitenteTela } from "@/lib/nfse/emitente-server";
 import { AvisoPlugNotas } from "@/components/fiscal/aviso-plugnotas";
 
-const AJUDA_CERTIFICADO = "O certificado digital A1 é um arquivo que termina em .pfx ou .p12";
+const AJUDA_CERTIFICADO = "Arquivo do certificado digital A1, com extensão .pfx ou .p12.";
 const TOM_STATUS: Record<StatusEmitente, TomStatus> = { NAO_CONFIGURADO: "previsto", PENDENTE: "atencao", ATIVO: "ok", ERRO: "atrasado" };
 
 /**
@@ -158,13 +158,13 @@ export function DadosFiscaisClient({ inicial }: { inicial: EmitenteTela }) {
       {e.dados.ambiente === "HOMOLOGACAO" && (
         <p className="text-xs text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2 flex items-start gap-1.5" data-aviso-homologacao>
           <Info className="w-3.5 h-3.5 mt-px shrink-0" />
-          Ambiente de homologação (testes): o cadastro e as notas daqui não têm valor fiscal. Produção só depois de validar tudo aqui.
+          Ambiente de homologação: cadastro e notas sem valor fiscal. Passe para produção após validar a emissão.
         </p>
       )}
 
       {e.pendencias.length > 0 && (
         <div className="text-sm text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2" data-pendencias>
-          <p className="font-semibold flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> Falta para cadastrar no PlugNotas:</p>
+          <p className="font-semibold flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> Pendências para o cadastro no PlugNotas:</p>
           <ul className="mt-1 list-disc pl-5 space-y-0.5 text-xs">{e.pendencias.map((p) => <li key={p}>{p}</li>)}</ul>
         </div>
       )}
@@ -180,7 +180,7 @@ export function DadosFiscaisClient({ inicial }: { inicial: EmitenteTela }) {
             </Select>
           </FormField>
           {f.regimeTributario !== "MEI" && (
-            <FormField label="Regime especial (opcional)" hint="Só se a prefeitura enquadrou a empresa num regime especial">
+            <FormField label="Regime especial" dica="Preencha apenas se a prefeitura enquadrou a empresa em regime especial de tributação.">
               <Select value={f.regimeEspecial ?? ""} onChange={(ev) => muda("regimeEspecial", (ev.target.value || null) as typeof f.regimeEspecial)} placeholder="Nenhum" name="regimeEspecial">
                 {REGIMES_ESPECIAIS.filter((r) => r.id !== "MEI").map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
               </Select>
@@ -188,15 +188,15 @@ export function DadosFiscaisClient({ inicial }: { inicial: EmitenteTela }) {
           )}
         </div>
         <div className="divide-y divide-surface-border border-y border-surface-border">
-          <ToggleSwitch label="Incentivo fiscal" description="A empresa tem incentivo fiscal do município" checked={f.incentivoFiscal} onChange={(v) => muda("incentivoFiscal", v)} />
-          <ToggleSwitch label="Incentivador cultural" description="A empresa é incentivadora cultural" checked={f.incentivadorCultural} onChange={(v) => muda("incentivadorCultural", v)} />
+          <ToggleSwitch label="Incentivo fiscal" dica="Ative se a empresa possui incentivo fiscal concedido pelo município." checked={f.incentivoFiscal} onChange={(v) => muda("incentivoFiscal", v)} />
+          <ToggleSwitch label="Incentivador cultural" dica="Ative se a empresa é incentivadora cultural." checked={f.incentivadorCultural} onChange={(v) => muda("incentivadorCultural", v)} />
         </div>
       </FormSection>
 
-      <FormSection title="Município da emissão" icon={<MapPin className="w-4 h-4" />}>
+      <FormSection title="Município da emissão" icon={<MapPin className="w-4 h-4" />} dica="Município onde a empresa emite a NFS-e, identificado pelo código IBGE de 7 dígitos.">
         <p className="text-xs text-ink-muted" data-endereco-empresa>
           Endereço da empresa: {[e.empresa.endereco, e.empresa.cidade && `${e.empresa.cidade}/${e.empresa.estado}`, e.empresa.cep].filter(Boolean).join(" · ") || "não preenchido"}
-          {" "}— <Link href={hrefSecaoConfig("empresa")} className="font-medium text-primary-700 hover:underline">editar em Dados da empresa</Link>
+          {" "}· <Link href={hrefSecaoConfig("empresa")} className="font-medium text-primary-700 hover:underline">Editar</Link>
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-[10rem_1fr_5rem] gap-4 items-end">
           <FormField label="Código IBGE" required>
@@ -214,7 +214,7 @@ export function DadosFiscaisClient({ inicial }: { inicial: EmitenteTela }) {
         </Button>
       </FormSection>
 
-      <FormSection title="Ambiente" icon={<FlaskConical className="w-4 h-4" />}>
+      <FormSection title="Ambiente" icon={<FlaskConical className="w-4 h-4" />} dica="Homologação é o ambiente de testes do PlugNotas, sem valor fiscal. Produção emite notas válidas perante a prefeitura.">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Ambiente do PlugNotas">
           {(["HOMOLOGACAO", "PRODUCAO"] as Ambiente[]).map((a) => {
             const bloqueado = a === "PRODUCAO" && !producaoLiberada;
@@ -224,7 +224,7 @@ export function DadosFiscaisClient({ inicial }: { inicial: EmitenteTela }) {
                 <span>
                   <span className="font-medium text-ink">{LABEL_AMBIENTE[a]}</span>
                   <span className="block text-xs text-ink-muted">
-                    {a === "HOMOLOGACAO" ? "Padrão. Para testar sem valor fiscal." : bloqueado ? "Ainda não liberada neste servidor." : "Notas com valor fiscal."}
+                    {a === "HOMOLOGACAO" ? "Padrão. Testes sem valor fiscal." : bloqueado ? "Não liberada neste servidor." : "Notas com valor fiscal."}
                   </span>
                 </span>
               </label>
@@ -233,17 +233,17 @@ export function DadosFiscaisClient({ inicial }: { inicial: EmitenteTela }) {
         </div>
       </FormSection>
 
-      <FormSection title="Autenticação da Prefeitura" icon={<Landmark className="w-4 h-4" />}>
-        <p className="-mt-2 text-xs text-ink-muted" data-ajuda-prefeitura>Login e senha da sua empresa no portal de NFS-e da prefeitura. Alguns municípios exigem só a senha.</p>
+      <FormSection title="Autenticação na prefeitura" icon={<Landmark className="w-4 h-4" />}
+        dica="Login e senha da empresa no portal de NFS-e da prefeitura. Alguns municípios exigem apenas a senha.">
         {e.prefeitura && (
           <div data-prefeitura-guardada className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-xs",
             e.prefeitura.ilegivel ? "border-atencao/30 bg-atencao-claro text-atencao-texto" : "border-surface-border bg-surface-alt/60 text-ink-muted")}>
             {e.prefeitura.ilegivel ? (
-              <span className="flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5 shrink-0" /> A credencial guardada não pôde ser lida neste servidor. Digite o login e a senha de novo.</span>
+              <span className="flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5 shrink-0" /> A credencial armazenada não pôde ser lida neste servidor. Informe o login e a senha novamente.</span>
             ) : (
               <span className="flex items-center gap-1.5">
                 <ShieldCheck className="w-3.5 h-3.5 shrink-0 text-ok" />
-                {removerPref ? "Será removida ao salvar." : `Guardada (${[e.prefeitura.temLogin && "login", e.prefeitura.temSenha && "senha"].filter(Boolean).join(" e ")}${e.prefeitura.atualizadaEm ? `, em ${formatarData(e.prefeitura.atualizadaEm)}` : ""}). Deixe em branco para manter.`}
+                {removerPref ? "Será removida ao salvar." : `Armazenada (${[e.prefeitura.temLogin && "login", e.prefeitura.temSenha && "senha"].filter(Boolean).join(" e ")}${e.prefeitura.atualizadaEm ? `, em ${formatarData(e.prefeitura.atualizadaEm)}` : ""}). Deixe em branco para manter.`}
               </span>
             )}
             <button type="button" data-remover-prefeitura onClick={() => { setRemoverPref((v) => !v); setMsg(null); }}
@@ -251,22 +251,22 @@ export function DadosFiscaisClient({ inicial }: { inicial: EmitenteTela }) {
           </div>
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <FormField label="Login (opcional)">
+          <FormField label="Login">
             <Input value={prefLogin} onChange={(ev) => { setPrefLogin(ev.target.value); setMsg(null); }} name="prefeituraLogin" autoComplete="off" maxLength={120}
-              placeholder={e.prefeitura?.temLogin ? "Guardado — digite para trocar" : ""} />
+              placeholder={e.prefeitura?.temLogin ? "Armazenado. Digite para alterar" : "Opcional"} />
           </FormField>
-          <FormField label="Senha (opcional)">
+          <FormField label="Senha">
             <Input type="password" value={prefSenha} onChange={(ev) => { setPrefSenha(ev.target.value); setMsg(null); }} name="prefeituraSenha" autoComplete="new-password" maxLength={200}
-              placeholder={e.prefeitura?.temSenha ? "Guardada — digite para trocar" : ""} />
+              placeholder={e.prefeitura?.temSenha ? "Armazenada. Digite para alterar" : "Opcional"} />
           </FormField>
         </div>
         <p className="text-xs text-ink-muted flex items-start gap-1.5"><ShieldCheck className="w-3.5 h-3.5 mt-px shrink-0 text-ok" />
-          Vai ao PlugNotas por conexão segura (HTTPS) e fica guardada só criptografada, para reenviar quando os dados fiscais forem salvos de novo. Nunca aparece de volta na tela.</p>
+          Enviada ao PlugNotas por conexão segura (HTTPS) e armazenada criptografada. Não é exibida novamente.</p>
       </FormSection>
 
       <FormSection title="Certificado digital A1" icon={<FileKey2 className="w-4 h-4" />}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <FormField label={c ? "Enviar novo certificado (opcional)" : "Arquivo do certificado (.pfx ou .p12)"} required={!c} hint={AJUDA_CERTIFICADO}>
+          <FormField label={c ? "Enviar novo certificado (opcional)" : "Arquivo do certificado (.pfx ou .p12)"} required={!c} dica={AJUDA_CERTIFICADO}>
             <div
               role="button" tabIndex={0} data-area-certificado data-arrastando={arrastando || undefined} aria-description={AJUDA_CERTIFICADO}
               onClick={() => arquivoRef.current?.click()}
@@ -284,7 +284,7 @@ export function DadosFiscaisClient({ inicial }: { inicial: EmitenteTela }) {
                 {arquivo ? (
                   <>
                     <span className="block font-medium text-ink truncate" data-arquivo-escolhido>{arquivo.name}</span>
-                    <span className="block text-xs text-ink-muted">Clique ou arraste outro para trocar</span>
+                    <span className="block text-xs text-ink-muted">Clique ou arraste outro arquivo para substituir</span>
                   </>
                 ) : (
                   <span className="block font-medium text-ink">{arrastando ? "Solte o certificado aqui" : "Arraste o certificado aqui ou clique para escolher"}</span>
@@ -300,11 +300,11 @@ export function DadosFiscaisClient({ inicial }: { inicial: EmitenteTela }) {
             </div>
           </FormField>
           <FormField label="Senha do certificado" required={!!arquivo}>
-            <Input type="password" value={senha} onChange={(ev) => { setSenha(ev.target.value); setMsg(null); }} autoComplete="new-password" disabled={!arquivo} placeholder={arquivo ? "" : "Escolha o arquivo primeiro"} name="senhaCertificado" />
+            <Input type="password" value={senha} onChange={(ev) => { setSenha(ev.target.value); setMsg(null); }} autoComplete="new-password" disabled={!arquivo} placeholder={arquivo ? "" : "Selecione o arquivo antes"} name="senhaCertificado" />
           </FormField>
         </div>
         <p className="text-xs text-ink-muted flex items-start gap-1.5"><ShieldCheck className="w-3.5 h-3.5 mt-px shrink-0 text-ok" />
-          O arquivo e a senha são conferidos aqui e vão direto ao PlugNotas por conexão segura (HTTPS). O Frivo não guarda o arquivo nem a senha — só a referência do certificado lá e a validade.</p>
+          Arquivo e senha são validados e enviados diretamente ao PlugNotas por conexão segura (HTTPS). O Frivo não armazena o arquivo nem a senha.</p>
       </FormSection>
 
       {msg && (
@@ -312,7 +312,7 @@ export function DadosFiscaisClient({ inicial }: { inicial: EmitenteTela }) {
           className={cn("text-sm font-medium", msg.tipo === "ok" ? "text-ok-texto" : msg.tipo === "aviso" ? "text-atencao-texto" : "text-atrasado")}>{msg.texto}</p>
       )}
       <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-end gap-2">
-        {ocupado === "salvar" && <p className="text-xs text-ink-muted sm:mr-auto flex items-center gap-1"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Conferindo e enviando ao PlugNotas…</p>}
+        {ocupado === "salvar" && <p className="text-xs text-ink-muted sm:mr-auto flex items-center gap-1"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Validando e enviando ao PlugNotas…</p>}
         <Button onClick={salvar} disabled={!!ocupado} loading={ocupado === "salvar"} data-salvar-fiscal>
           <Save className="w-4 h-4" /> Salvar e cadastrar no PlugNotas
         </Button>

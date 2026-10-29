@@ -13,7 +13,8 @@ export async function TelaImpressaoOs() {
     <div className="max-w-3xl mx-auto">
       <PageHeader
         title="Impressão da OS"
-        description="O que sai no relatório da OS e quem vê cada parte: o cliente ou só a equipe interna."
+        description="Seções do relatório da OS"
+        dica="Define o que é impresso no relatório da OS e o que é exibido ao cliente ou apenas à equipe interna."
         backHref="/configuracoes/operacionais"
       />
       <ImpressaoOsClient inicial={config} podeEditar={pode(u.permissoes, "configuracoes", "gerenciar", u.role)} />

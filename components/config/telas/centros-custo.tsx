@@ -5,7 +5,7 @@ import { CentrosCustoTela } from "@/components/cadastros/telas/centros-custo";
 export function TelaCentrosCusto() {
   return (
     <div>
-      <PageHeader title="Centros de custo" description="Onde a despesa pesa: usado em toda conta a pagar e aprendido por fornecedor na nota de compra" backHref="/configuracoes/financeiras" />
+      <PageHeader title="Centros de custo" description="Alocação das despesas por obra, área ou frota" backHref="/configuracoes/financeiras" />
       <div className="bg-white rounded-card border border-surface-border p-4 sm:p-6">
         <CentrosCustoTela />
       </div>

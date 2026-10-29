@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { CampoCadastroForm, type GrupoFormProps } from "@/components/cadastros/cadastro-padrao";
 import { FormField } from "@/components/ui/form-field";
+import { Dica } from "@/components/ui/dica";
 import { Input } from "@/components/ui/input";
 import type { CampoCadastro } from "@/lib/cadastros/registro";
 import { LISTA_LC116 } from "@/lib/nfse/lc116";
@@ -54,7 +55,7 @@ export function SecaoFiscalServico({ campos, valores, mudar, bloqueado }: GrupoF
   const opcoesMunicipais = useMemo(() => opcoesCodigoMunicipal(apoio?.servicos ?? [], LISTA_LC116), [apoio]);
   const municipal = { ...campo("codigoMunicipal"), opcoesCodigo: opcoesMunicipais };
   const iss = campo("aliquotaISS");
-  const aliquota = apoio?.issEmpresa != null ? { ...iss, placeholder: `Vazio = ${percentual(apoio.issEmpresa)} (empresa)` } : iss;
+  const aliquota = apoio?.issEmpresa != null ? { ...iss, placeholder: `Em branco: ${percentual(apoio.issEmpresa)} (empresa)` } : iss;
 
   // CNAE: vazio = herda o da empresa. A caixa começa marcada quando o serviço não tem CNAE próprio.
   const [cnaeProprio, setCnaeProprio] = useState(!!valores.cnae);
@@ -71,7 +72,9 @@ export function SecaoFiscalServico({ campos, valores, mudar, bloqueado }: GrupoF
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
           <CampoCadastroForm {...props("codigoMunicipal")} campo={municipal} />
           <div className="flex flex-col gap-1.5" data-campo="cnae">
-            <span className="text-sm font-medium text-ink">CNAE</span>
+            <span className="text-sm font-medium text-ink flex items-center gap-1">
+              CNAE<Dica texto={campo("cnae").ajuda} rotulo="CNAE" lado="direita" />
+            </span>
             <label className="flex items-start gap-2 text-sm text-ink cursor-pointer">
               <input
                 type="checkbox" className="mt-0.5 w-4 h-4 accent-acento" checked={!cnaeProprio} disabled={travado("cnae")}
@@ -89,8 +92,8 @@ export function SecaoFiscalServico({ campos, valores, mudar, bloqueado }: GrupoF
             ) : (
               <p className="text-xs text-ink-muted" data-cnae-herdado>
                 {cnaeEmpresa
-                  ? <>Vai na nota: <span className="font-mono font-semibold text-ink">{cnaeEmpresa}</span></>
-                  : "A empresa ainda não tem CNAE principal (Configurações › Dados da empresa)."}
+                  ? <>CNAE na nota: <span className="font-mono font-semibold text-ink">{cnaeEmpresa}</span></>
+                  : "Empresa sem CNAE principal. Informe em Configurações › Dados da empresa."}
               </p>
             )}
           </div>
@@ -102,16 +105,16 @@ export function SecaoFiscalServico({ campos, valores, mudar, bloqueado }: GrupoF
           <CampoCadastroForm {...props("nfseTributacao")} />
           <CampoCadastroForm {...props("aliquotaISS")} campo={aliquota} />
         </div>
-        <label className="flex items-start gap-2 text-sm text-ink cursor-pointer" data-campo="issRetido">
-          <input
-            type="checkbox" className="mt-0.5 w-4 h-4 accent-acento" checked={valores.issRetido === "true"} disabled={travado("issRetido")}
-            onChange={(e) => mudar("issRetido", e.target.checked ? "true" : "false")}
-          />
-          <span>
-            ISS retido pelo tomador
-            <span className="block text-xs text-ink-muted">O cliente retém e recolhe o ISS desta nota.</span>
-          </span>
-        </label>
+        <div className="flex items-center gap-1">
+          <label className="flex items-start gap-2 text-sm text-ink cursor-pointer" data-campo="issRetido">
+            <input
+              type="checkbox" className="mt-0.5 w-4 h-4 accent-acento" checked={valores.issRetido === "true"} disabled={travado("issRetido")}
+              onChange={(e) => mudar("issRetido", e.target.checked ? "true" : "false")}
+            />
+            <span>ISS retido pelo tomador</span>
+          </label>
+          <Dica texto="Marque quando o tomador (cliente) retém e recolhe o ISS desta nota." rotulo="ISS retido pelo tomador" lado="direita" />
+        </div>
       </Bloco>
 
       <Bloco titulo="Discriminação">

@@ -334,7 +334,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
           <Link href="/equipamentos" title="Voltar" className="mt-1 p-1.5 -ml-1 rounded-lg text-ink-muted hover:text-primary-600 hover:bg-surface-alt"><ChevronLeft className="w-5 h-5" /></Link>
           <div>
             <h1 className="text-2xl font-bold text-ink tracking-tight">Novo equipamento</h1>
-            <p className="text-sm text-ink-muted mt-0.5">Só 5 campos são obrigatórios. O resto pode ser completado depois.</p>
+            <p className="text-sm text-ink-muted mt-0.5">Cinco campos obrigatórios; os demais podem ser preenchidos depois.</p>
           </div>
         </div>
 
@@ -349,8 +349,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
                 <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-primary-700 bg-primary-100 px-2 py-0.5 rounded-full"><Sparkles className="w-3 h-3" /> Recomendado</span>
               </p>
               <p className="text-sm text-ink-muted mt-1">
-                Tire 2 fotos — a <strong className="text-ink">etiqueta</strong> e o <strong className="text-ink">equipamento por completo</strong>. A IA lê marca, modelo,
-                capacidade, tensão e gás, e você só confere.
+                Fotografe a <strong className="text-ink">etiqueta</strong> e o <strong className="text-ink">equipamento</strong>: a IA lê marca, modelo, capacidade, tensão e gás para conferência.
               </p>
             </div>
             <span className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-primary-500 group-hover:bg-primary-600 text-white text-sm font-semibold shrink-0">
@@ -375,7 +374,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
 
         {erroGlobal && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3" data-erro>{erroGlobal}</div>}
 
-        <Bloco numero={1} titulo="Identificação" descricao="O que é o equipamento.">
+        <Bloco numero={1} titulo="Identificação" descricao="Tipo, marca e modelo do equipamento.">
           <FormField label="Tipo de equipamento" required>
             <SelectCadastroRapido
               value={form.tipo} onChange={(v) => set("tipo", v)} opcoes={opcoesTipo}
@@ -402,7 +401,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
           </Opcionais>
         </Bloco>
 
-        <Bloco numero={2} titulo="Localização" descricao="Onde ele está instalado: cliente, endereço e o ambiente (sala).">
+        <Bloco numero={2} titulo="Localização" descricao="Cliente, endereço e ambiente de instalação.">
           <FormGrid>
             <FormField label="Cliente" required>
               <SelectCadastroRapido
@@ -421,13 +420,13 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
               />
             </FormField>
           </FormGrid>
-          <Opcionais rotulo="Ambiente (recomendado: aparece na lista e no relatório da OS)">
+          <Opcionais rotulo="Ambiente (recomendado)">
             <FormGrid>
-              <FormField label="Ambiente / sala" hint="Ex: Recepção, Sala 201, CPD">
+              <FormField label="Ambiente / sala" dica="Sala ou ambiente de instalação, exibido na lista de equipamentos e no relatório da OS. Ex.: Recepção, Sala 201, CPD.">
                 <Input aria-label="Ambiente" value={form.localizacao} onChange={(e) => set("localizacao", e.target.value)} placeholder="Ex: Recepção" list="sugestoes-ambiente-novo" />
                 <datalist id="sugestoes-ambiente-novo">{sugestoesLocal.ambientes.map((v) => <option key={v} value={v} />)}</datalist>
               </FormField>
-              <FormField label="Setor" hint="Andar, bloco ou área">
+              <FormField label="Setor" dica="Andar, bloco ou área dentro do endereço.">
                 <Input aria-label="Setor" value={form.setor} onChange={(e) => set("setor", e.target.value)} placeholder="Ex: 2º andar" list="sugestoes-setor-novo" />
                 <datalist id="sugestoes-setor-novo">{sugestoesLocal.setores.map((v) => <option key={v} value={v} />)}</datalist>
               </FormField>
@@ -435,7 +434,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
           </Opcionais>
         </Bloco>
 
-        <Bloco numero={3} titulo="Dados técnicos" descricao="Pode completar depois — mas capacidade e tensão ajudam muito no atendimento." opcional>
+        <Bloco numero={3} titulo="Dados técnicos" descricao="Capacidade e tensão agilizam o atendimento." opcional>
           <FormGrid cols={3}>
             <FormField label="Capacidade">
               <div className="flex gap-2">
@@ -475,7 +474,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
           </details>
         </Bloco>
 
-        <Bloco numero={4} titulo="Fotos e outros detalhes" descricao="A 1ª foto é a capa: use a do equipamento por completo (não a da etiqueta)." opcional>
+        <Bloco numero={4} titulo="Fotos e outros detalhes" descricao="A primeira foto é a capa: use a do equipamento inteiro, não a da etiqueta." opcional>
           <GaleriaImagens fotos={fotos} onChange={setFotos} />
           <details className="group/det">
             <summary className="cursor-pointer list-none inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:text-primary-700">
@@ -568,7 +567,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
             <div className="space-y-5">
               <GaleriaImagens fotos={fotos} onChange={setFotos} />
               <FormGrid>
-                <FormField label="Nome do equipamento" hint="Apelido/identificação (opcional)">
+                <FormField label="Nome do equipamento" dica="Apelido ou identificação interna. Opcional.">
                   <Input value={form.nome} onChange={(e) => set("nome", e.target.value)} placeholder="Ex: Split Sala de Reuniões" />
                 </FormField>
                 <FormField label="Tipo de equipamento" required>
@@ -599,7 +598,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
                 </FormField>
               </FormGrid>
               <FormGrid>
-                <FormField label="Patrimônio / TAG" hint="Código de patrimônio do cliente ou etiqueta do equipamento">
+                <FormField label="Patrimônio / TAG" dica="Código de patrimônio do cliente ou etiqueta do equipamento.">
                   <Input value={form.patrimonio} onChange={(e) => set("patrimonio", e.target.value)} placeholder="Ex: PAT-00123, TAG AC-07" />
                 </FormField>
                 <FormField label="Ano de fabricação">
@@ -642,11 +641,11 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
                 />
               </FormField>
               <FormGrid>
-                <FormField label="Setor" hint="Andar, bloco ou área dentro do endereço">
+                <FormField label="Setor" dica="Andar, bloco ou área dentro do endereço.">
                   <Input value={form.setor} onChange={(e) => set("setor", e.target.value)} placeholder="Ex: 2º andar, Bloco B, Administrativo" list="sugestoes-setor" />
                   <datalist id="sugestoes-setor">{sugestoesLocal.setores.map((v) => <option key={v} value={v} />)}</datalist>
                 </FormField>
-                <FormField label="Ambiente" hint="Sala/ambiente onde está instalado">
+                <FormField label="Ambiente" dica="Sala ou ambiente de instalação.">
                   <Input value={form.localizacao} onChange={(e) => set("localizacao", e.target.value)} placeholder="Ex: Sala de Reuniões, Recepção, CPD" list="sugestoes-ambiente" />
                   <datalist id="sugestoes-ambiente">{sugestoesLocal.ambientes.map((v) => <option key={v} value={v} />)}</datalist>
                 </FormField>
@@ -697,7 +696,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
                 <FormField label="Data de instalação">
                   <InputData value={form.dataInstalacao} onChange={(v) => set("dataInstalacao", v)} />
                 </FormField>
-                <FormField label="Última manutenção" hint="Preenchido automaticamente">
+                <FormField label="Última manutenção" hint="Preenchida automaticamente">
                   <Input value={dataBR(ultimaManutencao)} disabled readOnly />
                 </FormField>
               </FormGrid>

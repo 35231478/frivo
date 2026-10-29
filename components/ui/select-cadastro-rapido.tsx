@@ -299,7 +299,7 @@ function MiniCadastro({
           if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT") { e.preventDefault(); e.stopPropagation(); salvar(); }
         }}
       >
-        {contexto && <p className="text-xs text-ink-muted -mt-1">Cadastro rápido {contexto}. Os dados já preenchidos no formulário continuam lá.</p>}
+        {contexto && <p className="text-xs text-ink-muted -mt-1">Cadastro rápido {contexto}. Os dados já preenchidos no formulário são mantidos.</p>}
 
         <div className="grid grid-cols-1 sm:grid-cols-6 gap-3">
           {campos.map((c, i) => (

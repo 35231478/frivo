@@ -63,7 +63,7 @@ export function PainelConfiguracoes({ visiveis, abaInicial, secaoAberta, secaoNe
         <div className="p-2 bg-primary-50 rounded-lg"><Settings className="w-5 h-5 text-primary-600" /></div>
         <div>
           <h1 className="page-title">Configurações</h1>
-          <p className="page-subtitle">Ajustes do sistema organizados por assunto — cada item abre aqui mesmo, sem sair da página</p>
+          <p className="page-subtitle">Parâmetros do sistema, organizados por assunto</p>
         </div>
       </div>
 

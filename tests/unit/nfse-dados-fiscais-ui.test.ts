@@ -17,6 +17,11 @@ import type { EmitenteTela } from "@/lib/nfse/emitente-server";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => {}, refresh: () => {} }), usePathname: () => "/financeiro/fiscal" }));
+/** Texto do ⓘ pelo nome acessível do botão ("Ajuda: <rótulo>") */
+const dica = (rotulo: string) => {
+  const b = document.querySelector(`[data-dica][aria-label="Ajuda: ${rotulo}"]`);
+  return b ? (document.getElementById(b.getAttribute("aria-describedby")!)?.textContent ?? null) : null;
+};
 const avisos = vi.hoisted(() => ({ toasts: [] as string[] }));
 vi.mock("@/components/ui/avisos", () => ({ toast: (m: string) => { avisos.toasts.push(m); }, confirmar: async () => true }));
 
@@ -213,7 +218,12 @@ describe("formulário", () => {
     const input = $<HTMLInputElement>("[data-arquivo-certificado]")!;
     expect(input.type).toBe("file");
     expect(input.accept).toBe(".pfx,.p12,application/x-pkcs12");
-    expect(txt(caixa)).toContain("O certificado digital A1 é um arquivo que termina em .pfx ou .p12");
+    // Princípio 7: a explicação do arquivo vai para o ⓘ do campo
+    expect(dica("Arquivo do certificado (.pfx ou .p12)")).toBe("Arquivo do certificado digital A1, com extensão .pfx ou .p12.");
+    expect($("[data-area-certificado]")!.getAttribute("aria-description")).toBe("Arquivo do certificado digital A1, com extensão .pfx ou .p12.");
+    // Os avisos de segurança continuam VISÍVEIS na tela (não vão para a dica)
+    expect(txt(caixa)).toContain("Arquivo e senha são validados e enviados diretamente ao PlugNotas por conexão segura (HTTPS). O Frivo não armazena o arquivo nem a senha.");
+    expect(txt(caixa)).toContain("Enviada ao PlugNotas por conexão segura (HTTPS) e armazenada criptografada. Não é exibida novamente.");
     const area = $("[data-area-certificado]")!;
     expect([area.getAttribute("role"), area.getAttribute("tabindex")]).toEqual(["button", "0"]);
     expect(txt(area)).toBe("Arraste o certificado aqui ou clique para escolher");
@@ -301,7 +311,7 @@ describe("formulário", () => {
     const guardada = { temLogin: true, temSenha: true, ilegivel: false, atualizadaEm: "2026-10-28T15:00:00.000Z" };
     respostas["POST /api/fiscal/emitente"] = { status: 200, corpo: { sincronizado: true, mensagem: "ok", emitente: { ...ATIVO, prefeitura: guardada } } };
     await montar(ATIVO);
-    expect(txt($("[data-ajuda-prefeitura]"))).toBe("Login e senha da sua empresa no portal de NFS-e da prefeitura. Alguns municípios exigem só a senha.");
+    expect(dica("Autenticação na prefeitura")).toBe("Login e senha da empresa no portal de NFS-e da prefeitura. Alguns municípios exigem apenas a senha.");
     expect($('[name="prefeituraSenha"]')!.getAttribute("type")).toBe("password");
     expect($('[name="prefeituraSenha"]')!.getAttribute("autocomplete")).toBe("new-password");
     expect($("[data-prefeitura-guardada]")).toBeNull();
@@ -318,21 +328,21 @@ describe("formulário", () => {
     expect([corpo.get("prefeituraLogin"), corpo.get("prefeituraSenha"), corpo.has("prefeituraRemover")]).toEqual(["clima.total", " P#ss ", false]);
     expect([$<HTMLInputElement>('[name="prefeituraLogin"]')!.value, $<HTMLInputElement>('[name="prefeituraSenha"]')!.value]).toEqual(["", ""]);
     // a guardada: só "login e senha" e a data, nunca os valores; os campos sugerem manter
-    expect(txt($("[data-prefeitura-guardada]"))).toBe("Guardada (login e senha, em 28/10/2026). Deixe em branco para manter.Remover");
+    expect(txt($("[data-prefeitura-guardada]"))).toBe("Armazenada (login e senha, em 28/10/2026). Deixe em branco para manter.Remover");
     expect(caixa.innerHTML).not.toContain("P#ss");
-    expect($('[name="prefeituraSenha"]')!.getAttribute("placeholder")).toBe("Guardada — digite para trocar");
-    expect($('[name="prefeituraLogin"]')!.getAttribute("placeholder")).toBe("Guardado — digite para trocar");
+    expect($('[name="prefeituraSenha"]')!.getAttribute("placeholder")).toBe("Armazenada. Digite para alterar");
+    expect($('[name="prefeituraLogin"]')!.getAttribute("placeholder")).toBe("Armazenado. Digite para alterar");
   });
 
   it("prefeitura: remover (e manter de novo); remover + digitado = vale o digitado; só senha; ilegível avisa; senha some mesmo com erro", async () => {
     respostas["POST /api/fiscal/emitente"] = { status: 400, corpo: { erro: "Senha da prefeitura longa demais." } };
     await montar({ ...ATIVO, prefeitura: { temLogin: false, temSenha: true, ilegivel: false, atualizadaEm: null } });
-    expect(txt($("[data-prefeitura-guardada]"))).toBe("Guardada (senha). Deixe em branco para manter.Remover");
-    expect($('[name="prefeituraLogin"]')!.getAttribute("placeholder")).toBe("");
+    expect(txt($("[data-prefeitura-guardada]"))).toBe("Armazenada (senha). Deixe em branco para manter.Remover");
+    expect($('[name="prefeituraLogin"]')!.getAttribute("placeholder")).toBe("Opcional");
     await clicar($("[data-remover-prefeitura]"));
     expect(txt($("[data-prefeitura-guardada]"))).toBe("Será removida ao salvar.Manter");
     await clicar($("[data-remover-prefeitura]"));
-    expect(txt($("[data-prefeitura-guardada]"))).toContain("Guardada (senha)");
+    expect(txt($("[data-prefeitura-guardada]"))).toContain("Armazenada (senha)");
     await clicar($("[data-remover-prefeitura]"));
     await clicar($("[data-salvar-fiscal]"));
     expect(chamadas.find((c) => c.metodo === "POST")!.corpo!.get("prefeituraRemover")).toBe("true");
@@ -352,7 +362,7 @@ describe("formulário", () => {
     expect([corpo.get("prefeituraLogin"), corpo.has("prefeituraRemover")]).toEqual(["novo", false]);
     act(() => root.unmount()); caixa.remove();
     await montar({ ...ATIVO, prefeitura: { temLogin: false, temSenha: false, ilegivel: true, atualizadaEm: "2026-10-28T15:00:00.000Z" } });
-    expect(txt($("[data-prefeitura-guardada]"))).toBe("A credencial guardada não pôde ser lida neste servidor. Digite o login e a senha de novo.Remover");
+    expect(txt($("[data-prefeitura-guardada]"))).toBe("A credencial armazenada não pôde ser lida neste servidor. Informe o login e a senha novamente.Remover");
   });
 
   it("Testar conexão: mostra o resultado (ok e erro) e atualiza a situação", async () => {

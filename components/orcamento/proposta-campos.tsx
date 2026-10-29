@@ -88,7 +88,7 @@ export function PropostaCampos({ proposta, onChange, tecnicos, termoTemplates, e
                 ))}
               </Select>
             </FormField>
-            <FormField label="Dia de execução" hint="Dia do mês para a visita">
+            <FormField label="Dia de execução" dica="Dia do mês previsto para a visita.">
               <Input type="number" min="1" max="31" value={proposta.diaExecucao}
                 onChange={(e) => onChange({ diaExecucao: e.target.value })} placeholder="Ex.: 5" />
             </FormField>
@@ -104,11 +104,11 @@ export function PropostaCampos({ proposta, onChange, tecnicos, termoTemplates, e
             <FormField label="Data fim (calculada)">
               <Input value={dataFim ? formatarData(dataFim) : "—"} disabled readOnly />
             </FormField>
-            <FormField label="Condição de pagamento" hint="Ex.: 30 dias após medição">
+            <FormField label="Condição de pagamento" dica="Exemplos: 30 dias após a medição; todo dia 05.">
               <Input value={proposta.condicaoPagamento}
                 onChange={(e) => onChange({ condicaoPagamento: e.target.value })} placeholder="Ex.: todo dia 05" />
             </FormField>
-            <FormField label="Dia de faturamento" hint="1 a 28">
+            <FormField label="Dia de faturamento" dica="Dia do mês para o faturamento, de 1 a 28.">
               <Input type="number" min="1" max="28" value={proposta.diaFaturamento}
                 onChange={(e) => onChange({ diaFaturamento: e.target.value })} placeholder="Ex.: 1" />
             </FormField>
@@ -168,7 +168,7 @@ export function PropostaCampos({ proposta, onChange, tecnicos, termoTemplates, e
             <Wrench className="w-3.5 h-3.5" /> Os serviços inclusos são os listados na tabela de <strong>Serviços</strong> acima.
           </div>
           <FormGrid cols={2}>
-            <FormField label="Visitas por período" hint="Quantidade de visitas em cada ciclo">
+            <FormField label="Visitas por período" dica="Quantidade de visitas em cada ciclo de recorrência.">
               <Input type="number" min="1" value={proposta.visitasPorPeriodo}
                 onChange={(e) => onChange({ visitasPorPeriodo: e.target.value })} placeholder="Ex.: 1" />
             </FormField>

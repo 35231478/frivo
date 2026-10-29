@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, Download, FileSpreadsheet, FileUp, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dica } from "@/components/ui/dica";
 import { Drawer } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
 import { IMPORTACOES, type EntidadeImportacao } from "@/lib/importacao/entidades";
@@ -106,13 +107,15 @@ function Assistente({ entidade, onConcluido }: { entidade: EntidadeImportacao; o
     <div className="space-y-5" data-importacao={entidade}>
       {/* 1. Modelo */}
       <section className="card-padded space-y-3">
-        <h2 className="card-title">1. Baixe o modelo</h2>
+        <h2 className="card-title flex items-center gap-1">
+          1. Baixe o modelo
+          <Dica rotulo="Modelo de importação" lado="direita" texto="O modelo traz uma linha de exemplo e a aba “Instruções”, com a descrição de cada coluna e os valores aceitos." />
+        </h2>
         <p className="text-sm text-ink-muted">
           Uma linha por {def.singular}. Obrigatória{obrigatorias.length > 1 ? "s" : ""}: {obrigatorias.map((t, i) => <span key={t}>{i > 0 && ", "}<strong>{t}</strong></span>)}.
-          O modelo vem com uma linha de exemplo e a aba “Instruções” explica cada coluna e os valores aceitos.
         </p>
         <p className="text-xs text-ink-muted">
-          {def.plural[0].toUpperCase() + def.plural.slice(1)} que já existem (mesmo <strong>{def.chaveDescricao}</strong>) são <strong>atualizados</strong>; células vazias não apagam nada. Nada é excluído.
+          {def.plural[0].toUpperCase() + def.plural.slice(1)} existentes (mesmo <strong>{def.chaveDescricao}</strong>) são <strong>atualizados</strong>; células vazias não apagam dados. Nenhum registro é excluído.
         </p>
         <div className="flex flex-wrap gap-2">
           <a href={`/api/importacao/${entidade}/modelo?formato=xlsx`} className="btn-secondary inline-flex items-center gap-1.5 text-sm" data-acao="baixar-modelo-xlsx">
@@ -122,9 +125,12 @@ function Assistente({ entidade, onConcluido }: { entidade: EntidadeImportacao; o
             <Download className="w-4 h-4" /> Modelo CSV
           </a>
         </div>
-        <p className="text-xs text-ink-muted" data-dica-exportar>
-          Quer editar o que já está cadastrado? Use <strong>Baixar planilha</strong> na lista: ela vem no mesmo formato, com o
-          <strong> id_sistema</strong>{def.colunas.some((c) => c.chave === "codigo") ? " e o código" : ""} de cada {def.singular} — edite e envie aqui de novo que ele é <strong>atualizado</strong>, sem duplicar.
+        <p className="text-xs text-ink-muted flex items-center gap-1" data-dica-exportar>
+          Edição em massa de cadastros existentes
+          <Dica rotulo="Edição em massa" lado="direita" texto={<>
+            Use <strong>Baixar planilha</strong> na lista: o arquivo vem no mesmo formato, com o <strong>id_sistema</strong>
+            {def.colunas.some((c) => c.chave === "codigo") ? " e o código" : ""} de cada {def.singular}. Edite e envie aqui: o registro é <strong>atualizado</strong>, sem duplicar.
+          </>} />
         </p>
       </section>
 
@@ -141,7 +147,7 @@ function Assistente({ entidade, onConcluido }: { entidade: EntidadeImportacao; o
             {arquivo && <span className="flex items-center gap-1.5 text-sm text-ink min-w-0"><FileSpreadsheet className="w-4 h-4 text-ink-muted shrink-0" /><span className="truncate">{arquivo.name}</span></span>}
             {etapa === "analisando" && <span className="flex items-center gap-1.5 text-sm text-ink-muted"><Loader2 className="w-4 h-4 animate-spin" /> Analisando…</span>}
           </div>
-          <p className="text-xs text-ink-muted">Excel (.xlsx) ou CSV, até 5 MB e 5.000 linhas. Nada é gravado antes da sua confirmação.</p>
+          <p className="text-xs text-ink-muted">Excel (.xlsx) ou CSV, até 5 MB e 5.000 linhas. Nenhum dado é gravado antes da confirmação.</p>
         </section>
       )}
       {erro && <p className="flex items-start gap-2 text-sm text-atrasado" role="alert"><AlertCircle className="w-4 h-4 mt-0.5 shrink-0" /> {erro}</p>}
@@ -220,7 +226,7 @@ function Assistente({ entidade, onConcluido }: { entidade: EntidadeImportacao; o
                 {resultado.erros.slice(0, 50).map((e) => <li key={e.linha}>linha {e.linha}{e.rotulo ? ` (${e.rotulo})` : ""}: {e.erros.join(" ")}</li>)}
                 {resultado.erros.length > 50 && <li>… e mais {resultado.erros.length - 50} — veja todas na planilha de erros.</li>}
               </ul>
-              <p className="text-xs text-ink-muted">Baixe a planilha de erros, corrija as linhas (o motivo está na última coluna) e importe de novo.</p>
+              <p className="text-xs text-ink-muted">Baixe a planilha de erros, corrija as linhas (motivo na última coluna) e importe novamente.</p>
             </>
           )}
           <div className="flex flex-wrap gap-2">

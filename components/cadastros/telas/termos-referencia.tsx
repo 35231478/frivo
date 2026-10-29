@@ -10,7 +10,7 @@ export function TermosReferenciaTela() {
     <CadastroPadrao
       entidade="termos-referencia"
       Editor={EditorTermo}
-      ajuda="Modelos de termo usados nas propostas de contrato, com variáveis automáticas. A proposta copia o texto: inativar um termo não muda as propostas já feitas."
+      ajuda="Modelos de termo das propostas de contrato, com variáveis preenchidas automaticamente. A proposta copia o texto: inativar um termo não altera as propostas já emitidas."
       celula={(col, t) => {
         if (col === "nome") return <span className="inline-flex items-center gap-2 font-medium"><FileText className="w-4 h-4 text-primary-600 shrink-0" /> {t.nome}</span>;
         if (col === "descricao") return t.descricao || "—";

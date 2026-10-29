@@ -11,7 +11,7 @@ export function TiposEquipamentoTela() {
     <CadastroPadrao
       entidade="tipos-equipamento"
       Editor={EditorTipoEquipamento}
-      ajuda="Tipos de equipamento, o checklist que cada equipamento do tipo responde na OS e os formulários por tipo de OS. Inativar tira o tipo das novas escolhas; os equipamentos que já são dele continuam como estão."
+      ajuda="Tipos de equipamento, o checklist respondido por equipamento na OS e os formulários por tipo de OS. Inativar um tipo o retira das novas seleções; os equipamentos já vinculados permanecem inalterados."
       celula={(col, t) => {
         if (col === "nome") return (
           <span className="font-medium">{t.nome}{t.chaveEnum && <span className="ml-2 text-[10px] font-semibold bg-surface-alt text-ink-muted px-1.5 py-0.5 rounded">padrão</span>}</span>

@@ -109,7 +109,8 @@ async function tecla(el: Element | null, key: string) {
   await esperar();
 }
 /** O bloco (FormField) de um rótulo. */
-const campo = (rotulo: string) => [...caixa.querySelectorAll("label")].find((l) => txt(l).replace(/\*$/, "").trim() === rotulo)?.parentElement ?? null;
+// O campo inteiro (FormField): com ⓘ, o rótulo fica numa linha própria dentro dele
+const campo = (rotulo: string) => [...caixa.querySelectorAll("label")].find((l) => txt(l).replace(/\*$/, "").trim() === rotulo)?.closest(".flex-col") ?? null;
 /** A seção (FormSection) de um título. */
 const secao = (titulo: string) => [...caixa.querySelectorAll("h3")].find((h) => txt(h) === titulo)?.parentElement ?? null;
 async function escolherNoSelect(rotulo: string, opcao: string) {
@@ -132,13 +133,18 @@ describe("datas da Nova OS", () => {
     expect(secao("Informações gerais")!.contains(agendar)).toBe(true);
     expect(agendar.querySelector("input[aria-label='Agendar para — data']")).not.toBeNull();
     expect(agendar.querySelector("input[aria-label='Agendar para — hora']")).not.toBeNull();
-    expect(txt(agendar)).toContain("aparece no calendário");
+    // Princípio 7: a explicação vai para o ⓘ do rótulo
+    const dicaAgendar = agendar.querySelector("[data-dica]")!;
+    expect(dicaAgendar.getAttribute("aria-label")).toBe("Ajuda: Agendar para");
+    expect(document.getElementById(dicaAgendar.getAttribute("aria-describedby")!)!.textContent).toBe("Opcional. Data e hora da primeira atividade, exibida no calendário.");
+    expect(txt(agendar)).not.toContain("calendário");
 
     const prazo = campo("Prazo para finalizar")!;
     expect(secao("Quem executa")!.contains(prazo)).toBe(true);
     expect(prazo.querySelectorAll("input[data-input-data]")).toHaveLength(1);
     expect(prazo.querySelector("[data-input-hora]")).toBeNull(); // só a data
-    expect(txt(prazo)).toContain("atrasada");
+    const dicaPrazo = prazo.querySelector("[data-dica]")!;
+    expect(document.getElementById(dicaPrazo.getAttribute("aria-describedby")!)!.textContent).toBe("Opcional. Após esta data, a OS é sinalizada como atrasada.");
   });
 
   it("o prazo vai como previsaoConclusao (o prazo da OS na central); o agendamento vai como dataAgendada da 1ª atividade (hora de Brasília)", async () => {
@@ -246,7 +252,7 @@ describe("vincular equipamento pela gaveta", () => {
     await clicar($("[data-vincular-equipamento]"));
     const aviso = $("[data-aviso-sem-cliente]")!;
     expect(aviso.getAttribute("role")).toBe("alert");
-    expect(txt(aviso)).toContain("Escolha o cliente primeiro");
+    expect(txt(aviso)).toBe("Selecione o cliente antes: os equipamentos vêm dos endereços dele.");
     expect($("[data-vincular-equipamento]")!.getAttribute("aria-describedby")).toBe(aviso.id);
     expect($d("[data-gaveta-equipamentos]")).toBeNull();
     expect(chamadas.some((c) => c.url.startsWith("/api/equipamentos"))).toBe(false);

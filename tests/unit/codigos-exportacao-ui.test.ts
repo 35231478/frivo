@@ -134,12 +134,14 @@ describe("assistente de importação", () => {
     await renderizar(createElement(ImportarPlanilha, { entidade: "servicos" }));
     await act(async () => { $<HTMLButtonElement>('[data-acao="importar-planilha"]')!.click(); });
     await esperar();
-    expect(texto(document.querySelector("[data-dica-exportar]"))).toContain("id_sistema e o código de cada serviço");
+    // Princípio 7: a explicação fica no ⓘ (balão com o texto completo)
+    const balaoExportar = () => document.getElementById(document.querySelector("[data-dica-exportar] [data-dica]")!.getAttribute("aria-describedby")!);
+    expect(texto(balaoExportar())).toContain("id_sistema e o código de cada serviço");
     act(() => root.unmount()); caixa.remove(); document.body.innerHTML = "";
     await renderizar(createElement(ImportarPlanilha, { entidade: "clientes" }));
     await act(async () => { $<HTMLButtonElement>('[data-acao="importar-planilha"]')!.click(); });
     await esperar();
-    const dica = texto(document.querySelector("[data-dica-exportar]"));
+    const dica = texto(balaoExportar());
     expect(dica).toContain("id_sistema de cada cliente");
     expect(dica).not.toContain("código");
   });
