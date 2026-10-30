@@ -28,7 +28,7 @@ BEGIN
        WHERE medicao_id IS NOT NULL AND contrato_id IS NULL AND status <> 'CANCELADO' AND excluida_em IS NULL
        GROUP BY medicao_id HAVING count(*) > 1) d;
     IF dup = 0 THEN
-      CREATE UNIQUE INDEX "contas_receber_medicao_avulsa_viva_key" ON "contas_receber" ("medicao_id")
+      CREATE UNIQUE INDEX IF NOT EXISTS "contas_receber_medicao_avulsa_viva_key" ON "contas_receber" ("medicao_id")
         WHERE medicao_id IS NOT NULL AND contrato_id IS NULL AND status <> 'CANCELADO' AND excluida_em IS NULL;
     ELSE
       RAISE WARNING 'Trava (b) NÃO criada: % medição(ões) já têm mais de uma conta a receber avulsa viva. Veja o diagnóstico.', dup;
@@ -41,7 +41,7 @@ BEGIN
        WHERE orcamento_id IS NOT NULL AND status <> 'CANCELADO' AND excluida_em IS NULL
        GROUP BY orcamento_id HAVING count(*) > 1) d;
     IF dup = 0 THEN
-      CREATE UNIQUE INDEX "contas_receber_orcamento_viva_key" ON "contas_receber" ("orcamento_id")
+      CREATE UNIQUE INDEX IF NOT EXISTS "contas_receber_orcamento_viva_key" ON "contas_receber" ("orcamento_id")
         WHERE orcamento_id IS NOT NULL AND status <> 'CANCELADO' AND excluida_em IS NULL;
     ELSE
       RAISE WARNING 'Trava (c) NÃO criada: % orçamento(s) já têm mais de uma conta a receber viva. Veja o diagnóstico.', dup;
