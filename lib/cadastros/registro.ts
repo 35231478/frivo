@@ -162,6 +162,7 @@ const normalizado = (fn: (v: unknown) => { valor: string | null; erro?: string }
 const lc116 = normalizado((v) => { const r = normalizarLc116(v); return { valor: r.codigo, erro: r.erro }; });
 const cnae = normalizado((v) => { const r = normalizarCnae(v); return { valor: r.cnae, erro: r.erro }; });
 const aliquotaIss = numero().refine((v) => !erroAliquota(v), "Alíquota de ISS deve estar entre 0 e 100%.");
+const aliquota = (rotulo: string) => numero().refine((v) => !erroAliquota(v), `Alíquota de ${rotulo} deve estar entre 0 e 100%.`);
 /** "true"/"false" do formulário (ou booleano); vazio/ausente = false */
 const booleano = z.preprocess((v) => (v === "true" ? true : v === "false" || vazio(v) ? false : v), z.boolean());
 const nfseTributacao = z.preprocess((v) => (vazio(v) ? null : v),
@@ -192,6 +193,23 @@ export const CAMPOS_NFSE_SERVICO: CampoCadastro[] = [
     placeholder: "Ex: Manutenção preventiva de equipamentos de ar-condicionado conforme contrato.",
     ajuda: "Texto-base da discriminação da NFS-e. Pode ser ajustado no momento da emissão." },
 ];
+
+/**
+ * Retenções na fonte que o faturamento herda do serviço: caixinha "reter" + a alíquota do serviço.
+ * Padrão Simples Nacional: desmarcadas. (O ISS retido é o issRetido + aliquotaISS, acima.)
+ */
+export const RETENCOES_FEDERAIS_SERVICO = [
+  { reter: "retIr", aliquota: "aliquotaIR", rotulo: "IR", exemplo: "1,50" },
+  { reter: "retPis", aliquota: "aliquotaPIS", rotulo: "PIS", exemplo: "0,65" },
+  { reter: "retCofins", aliquota: "aliquotaCOFINS", rotulo: "COFINS", exemplo: "3,00" },
+  { reter: "retCsll", aliquota: "aliquotaCSLL", rotulo: "CSLL", exemplo: "1,00" },
+  { reter: "retInss", aliquota: "aliquotaINSS", rotulo: "INSS", exemplo: "11,00" },
+] as const;
+export const CAMPOS_RETENCAO_SERVICO: CampoCadastro[] = RETENCOES_FEDERAIS_SERVICO.flatMap((r) => [
+  { key: r.reter, label: `Reter ${r.rotulo}`, tipo: "select" as const, grupo: GRUPO_NFSE, permissao: FISCAL,
+    opcoes: [{ value: "false", label: "Não" }, { value: "true", label: `Sim — o tomador retém o ${r.rotulo}` }] },
+  { key: r.aliquota, label: `Alíquota ${r.rotulo} (%)`, tipo: "numero" as const, placeholder: `Ex: ${r.exemplo}`, grupo: GRUPO_NFSE, permissao: FISCAL },
+]);
 
 const SO_GESTOR: Requisito = [["configuracoes", "gerenciar"]];
 const SO_FOLHA: Requisito = [["financeiro", "folha"]];
@@ -272,10 +290,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       { key: "unidade", label: "Unidade", tipo: "select", opcoes: UNIDADES_SERVICO },
       { key: "valorPadrao", label: "Valor padrão (R$)", tipo: "moeda", placeholder: "0,00" },
       ...CAMPOS_NFSE_SERVICO,
-      { key: "aliquotaPIS", label: "Alíquota PIS (%)", tipo: "numero", placeholder: "Ex: 0,65", grupo: "Outros tributos" },
-      { key: "aliquotaCOFINS", label: "Alíquota COFINS (%)", tipo: "numero", placeholder: "Ex: 3,00", grupo: "Outros tributos" },
-      { key: "aliquotaCSLL", label: "Alíquota CSLL (%)", tipo: "numero", placeholder: "Ex: 1,00", grupo: "Outros tributos" },
-      { key: "aliquotaIR", label: "Alíquota IR (%)", tipo: "numero", placeholder: "Ex: 1,50", grupo: "Outros tributos" },
+      ...CAMPOS_RETENCAO_SERVICO,
       { key: "observacaoFiscal", label: "Observação fiscal", tipo: "textarea", grupo: "Outros tributos" },
     ],
     colunas: [
@@ -287,12 +302,14 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       // Código: normalizado e conferido (único na empresa) pela regra do cadastro (especificos.ts)
       nome, codigo: textoOpcional(40), descricao: textoOpcional(), unidade, valorPadrao: numero(),
       codigoMunicipal: textoOpcional(50), codigoLc116: lc116,
-      aliquotaISS: aliquotaIss, aliquotaPIS: numero(), aliquotaCOFINS: numero(), aliquotaCSLL: numero(), aliquotaIR: numero(),
+      aliquotaISS: aliquotaIss, aliquotaPIS: aliquota("PIS"), aliquotaCOFINS: aliquota("COFINS"), aliquotaCSLL: aliquota("CSLL"),
+      aliquotaIR: aliquota("IR"), aliquotaINSS: aliquota("INSS"),
+      retIr: booleano, retPis: booleano, retCofins: booleano, retCsll: booleano, retInss: booleano,
       observacaoFiscal: textoOpcional(),
       nfseTributacao, issRetido: booleano, cnae, discriminacaoPadrao: textoOpcional(),
     }, {
       codigo: null, descricao: null, unidade: "un", valorPadrao: null, codigoMunicipal: null, codigoLc116: null,
-      aliquotaISS: null, aliquotaPIS: null, aliquotaCOFINS: null, aliquotaCSLL: null, aliquotaIR: null, observacaoFiscal: null,
+      aliquotaISS: null, aliquotaPIS: null, aliquotaCOFINS: null, aliquotaCSLL: null, aliquotaIR: null, aliquotaINSS: null, observacaoFiscal: null,
       nfseTributacao: null, cnae: null, discriminacaoPadrao: null,
     }),
   },

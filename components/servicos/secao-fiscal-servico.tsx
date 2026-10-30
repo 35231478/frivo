@@ -5,7 +5,7 @@ import { CampoCadastroForm, type GrupoFormProps } from "@/components/cadastros/c
 import { FormField } from "@/components/ui/form-field";
 import { Dica } from "@/components/ui/dica";
 import { Input } from "@/components/ui/input";
-import type { CampoCadastro } from "@/lib/cadastros/registro";
+import { RETENCOES_FEDERAIS_SERVICO, type CampoCadastro } from "@/lib/cadastros/registro";
 import { LISTA_LC116 } from "@/lib/nfse/lc116";
 import { opcoesCodigoMunicipal } from "@/lib/nfse/busca-codigo";
 import { formatarCnae } from "@/lib/nfse/servico";
@@ -39,12 +39,13 @@ function Bloco({ titulo, children }: { titulo: string; children: ReactNode }) {
 }
 
 /**
- * Seção "Dados fiscais (NFS-e)" do cadastro de serviço, compacta: três blocos (Classificação do
- * serviço · Tributação · Discriminação), duas colunas onde cabe (uma no celular). Os campos e a
+ * Seção "Dados fiscais (NFS-e)" do cadastro de serviço, compacta: quatro blocos (Classificação do
+ * serviço · Tributação · Retenções na fonte · Discriminação), duas colunas onde cabe (uma no celular). Os campos e a
  * validação continuam os do registro (lib/cadastros/registro.ts); aqui só muda o desenho, mais:
  * - CNAE: "Usar o CNAE principal da empresa" (padrão) ou um CNAE próprio (vazio = herda);
  * - código municipal: busca nos códigos já usados nos serviços + LC 116 de apoio;
- * - ISS retido: uma caixa de marcar.
+ * - Retenções na fonte: "ISS retido" + "Reter" IR/PIS/COFINS/CSLL/INSS com a alíquota ao lado
+ *   (o faturamento herda; Simples Nacional = federais desmarcados).
  */
 export function SecaoFiscalServico({ campos, valores, mudar, bloqueado }: GrupoFormProps) {
   const apoio = useApoioFiscal();
@@ -105,6 +106,10 @@ export function SecaoFiscalServico({ campos, valores, mudar, bloqueado }: GrupoF
           <CampoCadastroForm {...props("nfseTributacao")} />
           <CampoCadastroForm {...props("aliquotaISS")} campo={aliquota} />
         </div>
+      </Bloco>
+
+      <Bloco titulo="Retenções na fonte">
+        <p className="text-xs text-ink-muted -mt-1">O faturamento já sai com o que estiver marcado. Simples Nacional: deixe os federais desmarcados.</p>
         <div className="flex items-center gap-1">
           <label className="flex items-start gap-2 text-sm text-ink cursor-pointer" data-campo="issRetido">
             <input
@@ -113,8 +118,30 @@ export function SecaoFiscalServico({ campos, valores, mudar, bloqueado }: GrupoF
             />
             <span>ISS retido pelo tomador</span>
           </label>
-          <Dica texto="Marque quando o tomador (cliente) retém e recolhe o ISS desta nota." rotulo="ISS retido pelo tomador" lado="direita" />
+          <Dica texto="Marque quando o tomador (cliente) retém e recolhe o ISS desta nota. Usa a alíquota de ISS acima." rotulo="ISS retido pelo tomador" lado="direita" />
         </div>
+        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+          {RETENCOES_FEDERAIS_SERVICO.map((r) => {
+            const marcado = valores[r.reter] === "true";
+            return (
+              <li key={r.reter} className="flex items-center gap-2 min-w-0" data-campo={r.reter}>
+                <label className="flex items-center gap-2 text-sm text-ink cursor-pointer flex-1 min-w-0">
+                  <input
+                    type="checkbox" className="w-4 h-4 accent-acento" checked={marcado} disabled={travado(r.reter)}
+                    onChange={(e) => mudar(r.reter, e.target.checked ? "true" : "false")}
+                  />
+                  <span className="truncate">Reter {r.rotulo}</span>
+                </label>
+                <input
+                  inputMode="decimal" aria-label={`Alíquota ${r.rotulo} (%)`} placeholder={r.exemplo}
+                  className="input-base w-20 text-right py-1" value={valores[r.aliquota] ?? ""} disabled={travado(r.aliquota)}
+                  onChange={(e) => mudar(r.aliquota, e.target.value.replace(/[^\d,.]/g, ""))} data-aliquota={r.aliquota}
+                />
+                <span className="text-xs text-ink-muted shrink-0">%</span>
+              </li>
+            );
+          })}
+        </ul>
       </Bloco>
 
       <Bloco titulo="Discriminação">

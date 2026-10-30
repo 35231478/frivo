@@ -53,7 +53,7 @@ export default async function ContasReceberPage({
               email: true, telefone: true, celular: true, whatsappFaturamento: true, emailsFaturamento: true,
             },
           },
-          medicao: { select: { numero: true } },
+          medicao: { select: { numero: true, avulsa: true } },
           orcamento: { select: { codigo: true } },
           contrato: { select: { numero: true } },
           notasFiscais: { select: { status: true } },
@@ -89,7 +89,7 @@ export default async function ContasReceberPage({
     boletoCodigoBarras: c.boletoCodigoBarras,
     observacao: c.observacao, centroCustoId: c.centroCustoId, contaBancariaId: c.contaBancariaId,
     medicaoId: c.medicaoId, orcamentoId: c.orcamentoId, contratoId: c.contratoId,
-    medicaoNumero: c.medicao?.numero ?? null, orcamentoCodigo: c.orcamento?.codigo ?? null, contratoNumero: c.contrato?.numero ?? null,
+    medicaoNumero: c.medicao?.numero ?? null, medicaoAvulsa: c.medicao?.avulsa ?? false, orcamentoCodigo: c.orcamento?.codigo ?? null, contratoNumero: c.contrato?.numero ?? null,
     notas: c.notasFiscais,
   }));
 

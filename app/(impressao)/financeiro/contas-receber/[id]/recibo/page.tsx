@@ -28,7 +28,7 @@ export default async function ReciboPage({ params }: { params: Promise<{ id: str
       where: { id, empresaId: u.empresaId, excluidaEm: null },
       include: {
         cliente: { select: { nome: true, nomeFantasia: true, cpfCnpj: true } },
-        medicao: { select: { numero: true } }, orcamento: { select: { codigo: true } }, contrato: { select: { numero: true } },
+        medicao: { select: { numero: true, avulsa: true } }, orcamento: { select: { codigo: true } }, contrato: { select: { numero: true } },
         contaBancaria: { select: { nome: true } },
       },
     }),
@@ -52,7 +52,7 @@ export default async function ReciboPage({ params }: { params: Promise<{ id: str
   }
 
   const valor = Number(conta.valor);
-  const origem = origemComLink({ ...conta, medicaoNumero: conta.medicao?.numero, orcamentoCodigo: conta.orcamento?.codigo, contratoNumero: conta.contrato?.numero });
+  const origem = origemComLink({ ...conta, medicaoNumero: conta.medicao?.numero, medicaoAvulsa: conta.medicao?.avulsa, orcamentoCodigo: conta.orcamento?.codigo, contratoNumero: conta.contrato?.numero });
   const pagador = conta.cliente.nomeFantasia ?? conta.cliente.nome;
   const doc = conta.clienteCnpj ?? conta.cliente.cpfCnpj;
   const recebidoEm = conta.dataRecebimento ?? conta.atualizadoEm;

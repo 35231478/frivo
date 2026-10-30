@@ -8,12 +8,13 @@ import { janela, paginaValida, type ParamsUrl } from "@/lib/listagem";
 import { LABEL_STATUS_NOTA, STATUS_VIVOS, type StatusNota } from "@/lib/nfse/nota";
 import { marcarAvisosVistos } from "@/lib/nfse/webhook-server";
 import { GRUPOS_SITUACAO, lerFiltros, whereNotas, wherePeriodo, type GrupoSituacao } from "@/lib/nfse/central";
+import { rotuloMedicao } from "@/lib/faturamento/fatura";
 
 const SELECT_LINHA = {
   id: true, status: true, numero: true, autorizadaEm: true, criadoEm: true, tomadorNome: true, tomadorCpfCnpj: true,
   origem: true, medicaoId: true, ordemServicoId: true, valorServicos: true, ambiente: true, motivo: true,
   plugnotasId: true, pdfUrl: true, xmlUrl: true,
-  medicao: { select: { numero: true } },
+  medicao: { select: { numero: true, avulsa: true } },
   ordemServico: { select: { numero: true } },
 } as const;
 
@@ -40,6 +41,8 @@ function paraTela(n: Linha) {
     numero: n.numero, autorizadaEm: n.autorizadaEm?.toISOString() ?? null, criadoEm: n.criadoEm.toISOString(),
     tomadorNome: n.tomadorNome, tomadorCpfCnpj: n.tomadorCpfCnpj, origem: n.origem,
     medicaoId: n.medicaoId, medicaoNumero: n.medicao?.numero ?? null,
+    /** "Fatura 2026-0012" (avulsa) ou "Medição MED-…" */
+    medicaoRotulo: n.medicao ? rotuloMedicao(n.medicao) : null,
     ordemServicoId: n.ordemServicoId, osNumero: n.ordemServico?.numero ?? null,
     valorServicos: Number(n.valorServicos), ambiente: n.ambiente, motivo: n.motivo,
     temPdf: !!n.plugnotasId && !!n.pdfUrl, temXml: !!n.plugnotasId && !!n.xmlUrl,
@@ -111,7 +114,7 @@ export async function detalheNota(empresaId: string, id: string, agora = new Dat
       itens: { select: { descricao: true, quantidade: true, valorTotal: true, valorDesconto: true } },
       eventos: { orderBy: { criadoEm: "desc" }, take: 100, select: { tipo: true, status: true, mensagem: true, criadoEm: true, usuario: { select: { nome: true } } } },
       emitidaPor: { select: { nome: true } },
-      medicao: { select: { id: true, numero: true } },
+      medicao: { select: { id: true, numero: true, avulsa: true } },
       ordemServico: { select: { id: true, numero: true } },
       contaReceber: { select: { id: true, numero: true } },
     },

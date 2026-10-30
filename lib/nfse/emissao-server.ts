@@ -10,6 +10,7 @@
  * liberada. Rejeitada: o motivo fica na nota e os itens voltam a poder ser emitidos.
  */
 import { prisma } from "@/lib/prisma";
+import { referenciaNota, rotuloMedicao } from "@/lib/faturamento/fatura";
 import { digitos } from "@/lib/documento";
 import { LABELS_STATUS_MEDICAO } from "@/lib/utils";
 import { buscarMunicipio, normalizarNome } from "@/lib/nfse/municipio";
@@ -125,7 +126,7 @@ async function preparar(empresaId: string, medicaoId: string) {
   };
   const itens = itensDe(c);
   const opcoes = { aliquotaPadrao: c.aliquotaPadrao, cnaeEmpresa: c.cnaeEmpresa };
-  const grupos = agruparNotas(itens, Number(c.medicao.valorTotal) - Number(c.medicao.valorLiquido), opcoes, { medicaoNumero: c.medicao.numero, osNumeros: numerosOs(c) });
+  const grupos = agruparNotas(itens, Number(c.medicao.valorTotal) - Number(c.medicao.valorLiquido), opcoes, { medicaoNumero: c.medicao.numero, osNumeros: numerosOs(c), referencia: referenciaNota(c.medicao) });
   const tomador = tomadorDe(c, await codigoCidadeTomador(c.medicao.cliente, c.fiscal));
   const pendencias = [
     ...pendenciasEmitente(emitente),
@@ -147,7 +148,7 @@ export async function previaEmissao(empresaId: string, medicaoId: string) {
   const p = await preparar(empresaId, medicaoId);
   const produtos = p.itens.filter((i) => i.tipo === "PRODUTO");
   return {
-    medicao: { id: p.c.medicao.id, numero: p.c.medicao.numero, status: p.c.medicao.status },
+    medicao: { id: p.c.medicao.id, numero: p.c.medicao.numero, status: p.c.medicao.status, rotulo: rotuloMedicao(p.c.medicao) },
     ambiente: p.ambiente,
     ambienteLabel: LABEL_AMBIENTE[p.ambiente],
     tomador: { nome: p.tomador.nome, cpfCnpj: p.tomador.cpfCnpj },
@@ -262,7 +263,7 @@ export async function emitirNotas(ator: Ator, medicaoId: string, o: OpcoesEmitir
     }
   }
   await historicoOs(osIds, ator.id, "NFS-e enviada",
-    `${notas.length} ${notas.length === 1 ? "nota" : "notas"} da medição ${p.c.medicao.numero} (${LABEL_AMBIENTE[p.ambiente]}): ${grupos.map((g) => g.rotulo).join("; ")}`);
+    `${notas.length} ${notas.length === 1 ? "nota" : "notas"} da ${rotuloMedicao(p.c.medicao).replace(/^\w/, (l) => l.toLowerCase())} (${LABEL_AMBIENTE[p.ambiente]}): ${grupos.map((g) => g.rotulo).join("; ")}`);
   return resultado;
 }
 
@@ -335,7 +336,7 @@ async function efeitosAutorizacao(notaId: string, usuarioId: string | null) {
     await prisma.contaReceber.updateMany({ where: { medicaoId: medicao.id, status: "PREVISTO" }, data: { status: "A_RECEBER" } });
   }
   const os = await osDaNota(nota.id);
-  await historicoOs([nota.ordemServicoId, ...os], usuarioId, "NFS-e autorizada", `NFS-e nº ${numeroNf} da medição ${medicao.numero}`);
+  await historicoOs([nota.ordemServicoId, ...os], usuarioId, "NFS-e autorizada", `NFS-e nº ${numeroNf} da ${rotuloMedicao(medicao).replace(/^\w/, (l) => l.toLowerCase())}`);
 }
 
 /**
@@ -382,7 +383,7 @@ const SELECT_NOTA = {
   valorServicos: true, valorDesconto: true, discriminacao: true, tomadorNome: true, tomadorCpfCnpj: true, protocolo: true,
   numero: true, codigoVerificacao: true, autorizadaEm: true, motivo: true, criadoEm: true, medicaoId: true, ordemServicoId: true,
   contaReceber: { select: { id: true, numero: true } },
-  medicao: { select: { id: true, numero: true } },
+  medicao: { select: { id: true, numero: true, avulsa: true } },
   emitidaPor: { select: { nome: true } },
   itens: { select: { descricao: true, valorTotal: true } },
   eventos: { orderBy: { criadoEm: "desc" as const }, take: 20, select: { tipo: true, status: true, mensagem: true, criadoEm: true, usuario: { select: { nome: true } } } },
@@ -395,6 +396,7 @@ export async function listarNotas(empresaId: string, filtro: { medicaoId?: strin
   const notas = await prisma.notaFiscal.findMany({ where, orderBy: { criadoEm: "desc" }, select: SELECT_NOTA });
   return notas.map((n) => ({
     ...n,
+    medicao: n.medicao ? { id: n.medicao.id, numero: n.medicao.numero, rotulo: rotuloMedicao(n.medicao) } : null,
     statusLabel: LABEL_STATUS_NOTA[n.status as StatusNota] ?? n.status,
     valorServicos: Number(n.valorServicos), valorDesconto: Number(n.valorDesconto), aliquotaIss: n.aliquotaIss != null ? Number(n.aliquotaIss) : null,
     itens: n.itens.map((i) => ({ descricao: i.descricao, valorTotal: Number(i.valorTotal) })),

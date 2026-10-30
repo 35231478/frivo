@@ -5,13 +5,15 @@ export interface MedicaoDaOs {
   id: string;
   numero: string;
   tokenPublico: string | null;
+  /** Fatura avulsa ("Faturar") — aparece como "Fatura AAAA-NNNN" */
+  avulsa: boolean;
 }
 
 type Db = Prisma.TransactionClient | typeof prisma;
 const VIVA = { status: { not: "CANCELADA" as const } };
 /** Medição viva — fora a que está sendo editada (ela pode manter os próprios itens) */
 const viva = (ignorar?: string) => (ignorar ? { ...VIVA, id: { not: ignorar } } : VIVA);
-const SELECT_MED = { id: true, numero: true, tokenPublico: true } as const;
+const SELECT_MED = { id: true, numero: true, tokenPublico: true, avulsa: true } as const;
 
 /**
  * Fonte ÚNICA da trava de faturamento da OS (F1/C7): a OS já entrou em alguma medição VIVA?
@@ -79,7 +81,11 @@ export async function travarParaFaturar(tx: Prisma.TransactionClient, o: {
  */
 export async function itensFaturaveisDaOs(osId: string) {
   const [itens, adicionais] = await Promise.all([
-    prisma.osItemOrcamento.findMany({ where: { ordemServicoId: osId, executado: true }, orderBy: { id: "asc" } }),
+    prisma.osItemOrcamento.findMany({
+      where: { ordemServicoId: osId, executado: true }, orderBy: { id: "asc" },
+      // O serviço do orçamento de origem (copiado pelo "Gerar OS") leva os dados fiscais até a nota
+      include: { orcamentoServico: { select: { servicoId: true } } },
+    }),
     prisma.servicoAdicional.findMany({
       where: { ordemServicoId: osId, statusCobranca: "COBRAR", valor: { gt: 0 } },
       orderBy: { criadoEm: "asc" },

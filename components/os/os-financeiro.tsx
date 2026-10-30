@@ -8,6 +8,8 @@ import { formatarMoeda, formatarData, LABELS_STATUS_MEDICAO } from "@/lib/utils"
 import { Receipt, ExternalLink } from "lucide-react";
 import { NotasFiscais } from "@/components/fiscal/nfse-notas";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { BotaoFaturar, type FaturaExistente } from "@/components/faturamento/botao-faturar";
+import { rotuloMedicao } from "@/lib/faturamento/fatura";
 
 const COR_MEDICAO: Record<string, string> = {
   RASCUNHO: "bg-surface-linha text-ink-muted",
@@ -19,14 +21,19 @@ const COR_MEDICAO: Record<string, string> = {
   CANCELADA: "bg-atrasado-claro text-atrasado-texto",
 };
 
-interface MedicaoResumo { id: string; numero: string; status: string; valorTotal: unknown; criadoEm: string | Date }
+interface MedicaoResumo { id: string; numero: string; status: string; valorTotal: unknown; criadoEm: string | Date; avulsa?: boolean | null }
 
 /**
- * Aba Financeiro da OS — fluxo ÚNICO: a OS entra numa medição oficial (que vira conta e boleto)
- * pelo botão abaixo. A antiga "medição interna" (OsMedicao) saiu: nunca virava conta a receber.
+ * Aba Financeiro da OS. OS avulsa (sem contrato): "Faturar" — vira a fatura (medição avulsa já
+ * liberada) e abre a emissão da NFS-e. OS de contrato: entra numa medição oficial ("Gerar medição").
+ * A antiga "medição interna" (OsMedicao) saiu: nunca virava conta a receber.
  */
-export function OsFinanceiro({ osId, temContrato, medicoes: iniciais, itensOrcamento, contasReceber = [], abrirNfse, onAbriuNfse }: {
+export function OsFinanceiro({ osId, temContrato, concluida, fatura, medicoes: iniciais, itensOrcamento, contasReceber = [], abrirNfse, onAbriuNfse }: {
   osId: string; temContrato?: boolean; medicoes: MedicaoResumo[]; itensOrcamento: any[];
+  /** Faturar só com a OS concluída */
+  concluida?: boolean;
+  /** A fatura/medição viva que já cobre esta OS (nunca fatura de novo) */
+  fatura?: FaturaExistente | null;
   /** Contas a receber da OS (medição ou orçamento ligado) — o outro lado do vínculo da conta */
   contasReceber?: ContaVinculada[];
   /** Botão "Emitir NFS-e" do cabeçalho: abre a emissão ao chegar na aba */
@@ -68,7 +75,7 @@ export function OsFinanceiro({ osId, temContrato, medicoes: iniciais, itensOrcam
           <p className="text-lg font-bold text-ok-texto">{formatarMoeda(totalExecutado)}</p>
         </div>
         <div className="bg-acento-claro rounded-lg p-3 text-center">
-          <p className="text-xs text-acento">Medido</p>
+          <p className="text-xs text-acento">{temContrato ? "Medido" : "Faturado"}</p>
           <p className="text-lg font-bold text-acento">{formatarMoeda(totalMedido)}</p>
         </div>
       </div>
@@ -82,14 +89,14 @@ export function OsFinanceiro({ osId, temContrato, medicoes: iniciais, itensOrcam
 
       {/* Medições oficiais em que a OS entrou */}
       {medicoes.length === 0 ? (
-        <p className="text-sm text-ink-muted text-center py-6">Esta OS ainda não entrou em nenhuma medição.</p>
+        <p className="text-sm text-ink-muted text-center py-6">{temContrato ? "Esta OS ainda não entrou em nenhuma medição." : "Esta OS ainda não foi faturada."}</p>
       ) : (
         <div className="space-y-3">
           {medicoes.map((m) => (
-            <a key={m.id} href={`/financeiro/medicoes/${m.id}`} className="flex items-center justify-between border border-surface-border rounded-lg p-4 hover:border-primary-300 transition-colors">
+            <a key={m.id} href={m.avulsa ? `/financeiro/faturas/${m.id}` : `/financeiro/medicoes/${m.id}`} className="flex items-center justify-between border border-surface-border rounded-lg p-4 hover:border-primary-300 transition-colors">
               <div className="flex items-center gap-2 min-w-0">
                 <Receipt className="w-4 h-4 text-ink-muted shrink-0" />
-                <span className="font-medium text-ink truncate">Medição {m.numero}</span>
+                <span className="font-medium text-ink truncate">{rotuloMedicao(m)}</span>
                 <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${COR_MEDICAO[m.status] ?? "bg-surface-linha text-ink-muted"}`}>
                   {LABELS_STATUS_MEDICAO?.[m.status as never] ?? m.status}
                 </span>
@@ -113,14 +120,23 @@ export function OsFinanceiro({ osId, temContrato, medicoes: iniciais, itensOrcam
           Quem não vê medições nem o fiscal não vê as notas */}
       {(pode("financeiro", "fiscal") || pode("financeiro", "medicoes")) && (
         <div className="border-t border-surface-linha pt-5">
-          <NotasFiscais osId={osId} origem="OS" abrirEmissao={abrirNfse} onAbriu={onAbriuNfse} />
+          <NotasFiscais osId={osId} origem="OS" avulsa={!temContrato} abrirEmissao={abrirNfse} onAbriu={onAbriuNfse} />
         </div>
       )}
 
-      {/* Ação única: itens executados + adicionais "Cobrar" viram UMA medição (trava no servidor) */}
-      <Button type="button" onClick={gerarMedicao} loading={gerando}>
-        <Receipt className="w-4 h-4" /> Gerar medição (itens executados + adicionais)
-      </Button>
+      {/* Ação única: itens executados + adicionais "Cobrar" viram UMA fatura/medição (trava no servidor) */}
+      {temContrato ? (
+        <Button type="button" onClick={gerarMedicao} loading={gerando}>
+          <Receipt className="w-4 h-4" /> Gerar medição (itens executados + adicionais)
+        </Button>
+      ) : fatura || (concluida && pode("financeiro", "medicoes")) ? (
+        <div className="border-t border-surface-linha pt-5">
+          <BotaoFaturar url={`/api/ordens/${osId}/faturar`} origem="OS" fatura={fatura ?? null}
+            podeFaturar={!!concluida && pode("financeiro", "medicoes")} podeVer={pode("financeiro", "visualizar")} />
+        </div>
+      ) : pode("financeiro", "medicoes") && (
+        <p className="text-xs text-ink-muted" data-faturar-depois>Conclua a OS para faturar.</p>
+      )}
     </div>
   );
 }

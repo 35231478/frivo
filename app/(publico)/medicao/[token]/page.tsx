@@ -11,13 +11,15 @@ import { dadosRelatorioMensalContrato } from "@/lib/relatorio-mensal-contrato";
 import { FrivoLogo } from "@/components/layout/frivo-logo";
 import { LABELS_STATUS_MEDICAO, CLASSE_STATUS_MEDICAO, formatarData, cn } from "@/lib/utils";
 import { CheckCircle2, AlertTriangle } from "lucide-react";
+import { referenciaNota } from "@/lib/faturamento/fatura";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Medição",
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  const { token } = await params;
+  const m = await prisma.medicao.findUnique({ where: { tokenPublico: token }, select: { numero: true, avulsa: true } });
+  return { title: m ? referenciaNota(m) : "Medição", robots: { index: false, follow: false } };
+}
 
 export default async function MedicaoPublicaPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -34,6 +36,7 @@ export default async function MedicaoPublicaPage({ params }: { params: Promise<{
   if (!medicao) notFound();
 
   const cancelada = medicao.status === "CANCELADA";
+  const doc = medicao.avulsa ? "Fatura" : "Medição";
   const aguardando = medicao.status === "AGUARDANDO_APROVACAO";
   const jaAprovada = !!medicao.assinaturaUrl;
 
@@ -59,7 +62,7 @@ export default async function MedicaoPublicaPage({ params }: { params: Promise<{
       <header className="bg-white border-b border-surface-border py-4 px-6">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-4 flex-wrap">
           <FrivoLogo size="sm" showSubtitle={false} variant="dark" />
-          <MedicaoEnvio token={token} numero={medicao.numero} empresaNome={medicao.empresa.nomeFantasia ?? medicao.empresa.nome} emailDestino={emailDestino} whatsappDestino={whatsappDestino} />
+          <MedicaoEnvio token={token} numero={medicao.numero} avulsa={medicao.avulsa} empresaNome={medicao.empresa.nomeFantasia ?? medicao.empresa.nome} emailDestino={emailDestino} whatsappDestino={whatsappDestino} />
         </div>
       </header>
 
@@ -69,8 +72,8 @@ export default async function MedicaoPublicaPage({ params }: { params: Promise<{
             <div className="bg-atrasado-claro border-2 border-atrasado/40 text-atrasado-texto rounded-card px-5 py-4 flex items-center gap-3">
               <AlertTriangle className="w-6 h-6 shrink-0" />
               <div>
-                <p className="font-bold">Medição cancelada</p>
-                <p className="text-sm">Esta medição foi cancelada pela empresa.</p>
+                <p className="font-bold">{doc} cancelada</p>
+                <p className="text-sm">Esta {doc.toLowerCase()} foi cancelada pela empresa.</p>
               </div>
             </div>
           )}

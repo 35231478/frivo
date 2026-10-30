@@ -4,6 +4,7 @@ import { orcamentoJaFaturado, travarParaFaturar } from "@/lib/faturamento-os";
 import { formatarData, formatarMoeda, gerarNumeroContaReceber, gerarNumeroContaPagar, gerarNumeroMedicao } from "@/lib/utils";
 import { diaCivilPassou, hojeDiaCivil, inicioMesDiaCivil, partesBR } from "@/lib/fuso";
 import { calcularVencimento } from "@/lib/medicao-helpers";
+import { rotuloMedicao } from "@/lib/faturamento/fatura";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
@@ -143,7 +144,7 @@ async function contaDaMedicao(tx: Prisma.TransactionClient, medicaoId: string) {
     await tx.contaReceberEvento.create({
       data: {
         empresaId: medicao.empresaId, contaReceberId: conta.id, tipo: "FATURADA",
-        detalhe: `Previsão do orçamento virou a cobrança da medição ${medicao.numero} (${formatarMoeda(Number(adotada.valor))} → ${formatarMoeda(valor)}).`,
+        detalhe: `Previsão do orçamento virou a cobrança da ${rotuloMedicao(medicao).replace(/^\S/, (c) => c.toLowerCase())} (${formatarMoeda(Number(adotada.valor))} → ${formatarMoeda(valor)}).`,
       },
     });
     await absorverPrevisoes(tx, medicao, conta, previsoes);

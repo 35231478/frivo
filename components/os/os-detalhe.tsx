@@ -19,6 +19,7 @@ import { ResumoOs } from "@/components/os/central/resumo-os";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { centralDaOs } from "@/lib/os/central";
 import { AlertTriangle, FileBarChart, Send } from "lucide-react";
+import { BotaoFaturar } from "@/components/faturamento/botao-faturar";
 
 /** As 6 abas da central (antes 11). As antigas continuam abrindo pelo link: viram a aba que as absorveu. */
 export const ABAS_OS = ["resumo", "atividades", "comercial", "materiais", "financeiro", "relatorios"] as const;
@@ -77,7 +78,13 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
 
   const acoes = (
     <>
-      {os.status === "CONCLUIDA" && pode("financeiro", "medicoes") && (
+      {/* OS avulsa: "Faturar" (direto para a nota). OS de contrato: segue pela medição */}
+      {!os.contrato ? (
+        <BotaoFaturar
+          url={`/api/ordens/${os.id}/faturar`} origem="OS" fatura={os.fatura ?? null} compacto
+          podeFaturar={os.status === "CONCLUIDA" && pode("financeiro", "medicoes")} podeVer={pode("financeiro", "visualizar")}
+        />
+      ) : os.status === "CONCLUIDA" && pode("financeiro", "medicoes") && (
         <Button variant="outline" onClick={gerarMedicao} loading={gerandoMedicao}>
           <FileBarChart className="w-4 h-4" /> Gerar medição
         </Button>
@@ -143,7 +150,7 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
               {ativa === "materiais" && <ComprasSecao ordemServicoId={os.id} />}
 
               {ativa === "financeiro" && (
-                <OsFinanceiro osId={os.id} temContrato={!!os.contrato} medicoes={os.medicoes} itensOrcamento={os.itensOrcamento} contasReceber={os.contasReceber ?? []} abrirNfse={abrirNfse} onAbriuNfse={() => setAbrirNfse(false)} />
+                <OsFinanceiro osId={os.id} temContrato={!!os.contrato} concluida={os.status === "CONCLUIDA"} fatura={os.fatura ?? null} medicoes={os.medicoes} itensOrcamento={os.itensOrcamento} contasReceber={os.contasReceber ?? []} abrirNfse={abrirNfse} onAbriuNfse={() => setAbrirNfse(false)} />
               )}
 
               {ativa === "relatorios" && (

@@ -22,7 +22,7 @@ interface Nota {
   id: string; status: string; statusLabel: string; ambiente: string; codigoLc116: string | null; codigoTributacao: string | null;
   aliquotaIss: number | null; issRetido: boolean; valorServicos: number; valorDesconto: number; discriminacao: string;
   protocolo: string | null; numero: string | null; codigoVerificacao: string | null; autorizadaEm: string | null; motivo: string | null;
-  criadoEm: string; medicao: { id: string; numero: string } | null; contaReceber: { id: string; numero: string } | null;
+  criadoEm: string; medicao: { id: string; numero: string; rotulo?: string } | null; contaReceber: { id: string; numero: string } | null;
   emitidaPor: { nome: string } | null; itens: { descricao: string; valorTotal: number }[]; eventos: Evento[];
 }
 interface Grupo {
@@ -31,7 +31,7 @@ interface Grupo {
   itens: { id: string; descricao: string; quantidade: number; valorTotal: number; desconto: number }[];
 }
 interface Previa {
-  medicao: { id: string; numero: string; status: string }; ambiente: string; ambienteLabel: string;
+  medicao: { id: string; numero: string; status: string; rotulo?: string }; ambiente: string; ambienteLabel: string;
   tomador: { nome: string; cpfCnpj: string }; pendencias: Pendencia[]; grupos: Grupo[];
   itensSemServico: { id: string; descricao: string; valorTotal: number }[]; jaEmNota: number; produtos: { quantidade: number; valor: number };
 }
@@ -46,8 +46,10 @@ const MAX_RODADAS = 30;
 const codigoNota = (n: Pick<Nota, "codigoTributacao" | "codigoLc116">) =>
   `Código ${n.codigoTributacao ?? n.codigoLc116 ?? "—"}${n.codigoTributacao && n.codigoLc116 && n.codigoTributacao !== n.codigoLc116 ? ` (LC 116 ${n.codigoLc116})` : ""}`;
 
-export function NotasFiscais({ medicaoId, osId, origem, abrirEmissao, onAbriu }: {
+export function NotasFiscais({ medicaoId, osId, origem, avulsa, abrirEmissao, onAbriu }: {
   medicaoId?: string; osId?: string; origem: "OS" | "MEDICAO";
+  /** OS avulsa (sem contrato): a nota sai da fatura ("Faturar"), não de uma medição */
+  avulsa?: boolean;
   /** Abre a emissão ao carregar (botão "Emitir NFS-e" do cabeçalho da OS; "Corrigir e reemitir" da central) */
   abrirEmissao?: boolean; onAbriu?: () => void;
 }) {
@@ -116,7 +118,9 @@ export function NotasFiscais({ medicaoId, osId, origem, abrirEmissao, onAbriu }:
 
       {!dados.medicaoId && (
         <p className="text-sm text-ink-muted bg-surface-page rounded-lg px-3 py-2.5" data-sem-medicao>
-          A NFS-e sai da medição (o documento de cobrança). Gere a medição desta OS e aprove-a para emitir a nota.
+          {avulsa
+            ? "A NFS-e sai da fatura. Use “Faturar” para emitir a nota."
+            : "A NFS-e sai da medição (o documento de cobrança). Gere a medição desta OS e aprove-a para emitir a nota."}
         </p>
       )}
       {dados.medicaoId && dados.notas.length === 0 && <p className="text-sm text-ink-muted">Nenhuma nota emitida ainda.</p>}
@@ -137,7 +141,7 @@ export function NotasFiscais({ medicaoId, osId, origem, abrirEmissao, onAbriu }:
                   {n.ambiente === "HOMOLOGACAO" && <StatusPill tom="acento" tamanho="sm" data-homologacao="">Homologação</StatusPill>}
                 </p>
                 <p className="text-xs text-ink-muted mt-0.5">
-                  {n.medicao && origem === "OS" ? <>Medição {n.medicao.numero} · </> : null}
+                  {n.medicao && origem === "OS" ? <>{n.medicao.rotulo ?? `Medição ${n.medicao.numero}`} · </> : null}
                   Enviada em {formatarDataHora(n.criadoEm)}{n.emitidaPor ? ` por ${n.emitidaPor.nome}` : ""}
                 </p>
               </div>
@@ -260,7 +264,7 @@ export function EmitirNfseModal({ medicaoId, origem, ordemServicoId, onFechar, o
   const bloqueado = !previa || previa.pendencias.length > 0 || n === 0 || discInvalida;
 
   return (
-    <Modal aberto onFechar={onFechar} titulo={previa ? `Emitir NFS-e — medição ${previa.medicao.numero}` : "Emitir NFS-e"} tamanho="lg">
+    <Modal aberto onFechar={onFechar} titulo={previa ? `Emitir NFS-e — ${(previa.medicao.rotulo ?? `Medição ${previa.medicao.numero}`).replace(/^\w/, (l) => l.toLowerCase())}` : "Emitir NFS-e"} tamanho="lg">
       {!previa ? (
         erro ? <p className="text-sm text-atrasado-texto">{erro}</p> : <p className="text-sm text-ink-muted flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Conferindo os dados…</p>
       ) : (

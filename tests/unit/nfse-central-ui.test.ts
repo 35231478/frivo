@@ -53,7 +53,7 @@ const ultimaUrl = () => String(nav.replace.mock.calls.at(-1)?.[0] ?? "");
 const linha = (o: Partial<NotaLinha> & { id: string; status: NotaLinha["status"] }): NotaLinha => ({
   statusLabel: { ENVIANDO: "Enviando", PROCESSANDO: "Processando na prefeitura", CONCLUIDO: "Autorizada", REJEITADO: "Rejeitada", CANCELADO: "Cancelada", INTERROMPIDO: "Interrompida" }[o.status],
   numero: null, autorizadaEm: null, criadoEm: "2026-10-15T15:00:00.000Z", tomadorNome: "Hospital Santa Clara", tomadorCpfCnpj: "60701190000104",
-  origem: "MEDICAO", medicaoId: "m1", medicaoNumero: "MED-2026-0009", ordemServicoId: null, osNumero: null, valorServicos: 180,
+  origem: "MEDICAO", medicaoId: "m1", medicaoNumero: "MED-2026-0009", medicaoRotulo: null, ordemServicoId: null, osNumero: null, valorServicos: 180,
   ambiente: "HOMOLOGACAO", motivo: null, temPdf: false, temXml: false, ...o,
 });
 const NOTAS: NotaLinha[] = [

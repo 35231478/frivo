@@ -7,6 +7,7 @@ import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 import { carregarGaleria } from "@/lib/os/galeria-server";
 import { contasVinculadas } from "@/lib/financeiro/conta-receber-server";
 import { pode } from "@/lib/permissoes";
+import { osJaFaturada } from "@/lib/faturamento-os";
 
 export const metadata: Metadata = { title: "Ordem de Serviço" };
 
@@ -48,7 +49,7 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
         select: {
           medicao: {
             select: {
-              id: true, numero: true, status: true, valorTotal: true, criadoEm: true, tokenPublico: true,
+              id: true, numero: true, status: true, valorTotal: true, criadoEm: true, tokenPublico: true, avulsa: true,
               // Situação do pagamento no cabeçalho (Previsto / A receber / Vencido / Pago)
               contasReceber: { select: { status: true, dataVencimento: true, valor: true } },
             },
@@ -94,5 +95,8 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
   const u = session!.user!;
   const contasReceber = pode(u.permissoes, "financeiro", "visualizar", u.role) ? await contasVinculadas(empresaId, { ordemServicoId: os.id }) : [];
 
-  return <OsDetalhe os={{ ...os, medicoes: medicoesDaOs, galeria, contasReceber }} abaInicial={aba} />;
+  // Faturar: a OS já está numa fatura/medição viva (direto, relatório ou o orçamento de origem)? Nunca oferece de novo
+  const fatura = await osJaFaturada(os.id);
+
+  return <OsDetalhe os={{ ...os, medicoes: medicoesDaOs, galeria, contasReceber, fatura }} abaInicial={aba} />;
 }

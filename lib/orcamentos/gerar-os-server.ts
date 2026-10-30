@@ -39,7 +39,7 @@ export async function gerarOsDoOrcamento(p: { empresaId: string; usuarioId: stri
     where: { id: orcamentoId, empresaId },
     select: {
       id: true, codigo: true, nome: true, descricao: true, status: true, tipo: true, clienteId: true, unidadeId: true,
-      servicos: { select: { descricao: true, quantidade: true, valorUnitario: true, valorTotal: true, ordem: true } },
+      servicos: { select: { id: true, descricao: true, quantidade: true, valorUnitario: true, valorTotal: true, ordem: true } },
       produtos: { select: { descricao: true, quantidade: true, valorUnitario: true, valorTotal: true, ordem: true } },
     },
   });
