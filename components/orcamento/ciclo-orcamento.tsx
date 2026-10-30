@@ -22,11 +22,17 @@ const ICONE_EVENTO: Record<string, typeof Circle> = {
 };
 
 /** Pílula da etapa do ciclo (lista e tela) */
-export function PilulaEtapa({ etapa, desde }: { etapa: EtapaCiclo; desde?: Date | string | null }) {
+export function PilulaEtapa({ etapa, desde, compacta }: {
+  etapa: EtapaCiclo; desde?: Date | string | null;
+  /** Tabela densa (planilha): uma linha só — o "desde" vai para o hover */
+  compacta?: boolean;
+}) {
+  const quando = desde ? `desde ${formatarData(desde, etapa === "EXPIRADO" ? "dd/MM" : "dd/MM HH:mm")}` : null;
+  if (compacta) return <span className={CLASSE_ETAPA[etapa]} title={quando ?? undefined} data-etapa={etapa}>{LABELS_ETAPA[etapa]}</span>;
   return (
     <span className="inline-flex flex-col items-start gap-0.5" data-etapa={etapa}>
       <span className={CLASSE_ETAPA[etapa]}>{LABELS_ETAPA[etapa]}</span>
-      {desde && <span className="text-[11px] text-ink-subtle tabular-nums whitespace-nowrap">desde {formatarData(desde, etapa === "EXPIRADO" ? "dd/MM" : "dd/MM HH:mm")}</span>}
+      {quando && <span className="text-[11px] text-ink-subtle tabular-nums whitespace-nowrap">{quando}</span>}
     </span>
   );
 }
