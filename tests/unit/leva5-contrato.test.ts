@@ -172,7 +172,7 @@ describe.skipIf(!URL_PG)("Leva 5 — contrato × previsão × medição (Postgre
 
   // ═══════════ CO3 — proposta de contrato não vira conta avulsa ═══════════
 
-  it("CO3: aprovar proposta de CONTRATO não cria conta; orçamento COMUM continua criando", async () => {
+  it("CO3: aprovar proposta de CONTRATO não cria conta; COMUM também não (Opção A: fica 'a faturar')", async () => {
     const base = {
       empresaId: "e1", clienteId: "c1", criadoPorId: "uA", status: "ENVIADO" as const,
       totalGeral: 5000, validadeEm: new Date(Date.now() + 7 * 86400000),
@@ -186,7 +186,8 @@ describe.skipIf(!URL_PG)("Leva 5 — contrato × previsão × medição (Postgre
 
     const r2 = await chamar("publico/orcamentos/[token]/aprovar", "POST", { token: comum.tokenPublico }, ASSINATURA);
     expect(r2.status).toBe(200);
-    expect(await prisma.contaReceber.count({ where: { orcamentoId: comum.id } })).toBe(1);
+    // Opção A (P2): a aprovação não cria mais a conta — a cobrança nasce no "Faturar"
+    expect(await prisma.contaReceber.count({ where: { orcamentoId: comum.id } })).toBe(0);
   });
 
   // ═══════════ C6/D3 — uma conta só: previsão → medição → aprovação → NF ═══════════

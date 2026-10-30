@@ -2,7 +2,7 @@ import type { StatusContrato } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { contratoGeraFinanceiro, encerrarFinanceiroDoContrato, gerarPrevisaoContratoContasReceber } from "@/lib/financeiro-server";
 import { motivoBloqueioInativacao } from "@/lib/os-server";
-import { anotarInativacao, impactoColaborador, impactoEquipe, impactoOrcamento, impactoVeiculo } from "@/lib/inativacao-server";
+import { anotarInativacao, cancelarPrevistasDoOrcamento, impactoColaborador, impactoEquipe, impactoOrcamento, impactoVeiculo } from "@/lib/inativacao-server";
 import { gerarQrCodeEquipamento } from "@/lib/qrcode-server";
 import { CADASTROS, type EntidadeCadastro } from "@/lib/cadastros/registro";
 import { REGRAS, type Registro } from "@/lib/cadastros/especificos";
@@ -122,12 +122,16 @@ export async function definirAtivoCliente(id: string, ativo: boolean, ctx: Conte
 
 /* ───────── Orçamento: inativar = CANCELADO (com bloqueios); reativar = RASCUNHO ───────── */
 export async function cancelarOrcamento(id: string, ctx: ContextoItem): Promise<ResultadoItem> {
-  const o = await prisma.orcamento.findFirst({ where: { id, empresaId: ctx.empresaId }, select: { status: true } });
+  const o = await prisma.orcamento.findFirst({ where: { id, empresaId: ctx.empresaId }, select: { status: true, codigo: true } });
   if (!o) return NAO_ENCONTRADO;
   if (o.status === "CANCELADO") return ok("Já estava cancelado");
   const impacto = await impactoOrcamento(id, ctx.empresaId);
   if (impacto?.bloqueio) return falha("bloqueado", impacto.bloqueio);
-  await prisma.orcamento.update({ where: { id }, data: { status: "CANCELADO", lembretesAtivos: false } });
+  // Opção A (P2): a previsão antiga (conta PREVISTO da aprovação) é cancelada junto, com motivo e evento
+  await prisma.$transaction(async (tx) => {
+    await tx.orcamento.update({ where: { id }, data: { status: "CANCELADO", lembretesAtivos: false } });
+    await cancelarPrevistasDoOrcamento(tx, { id, codigo: o.codigo, empresaId: ctx.empresaId }, ctx.usuarioId);
+  });
   return ok();
 }
 
