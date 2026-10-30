@@ -165,7 +165,7 @@ export function BlocoComercial({ d }: { d: DadosBloco["comercial"] }) {
         )}
         {d.orcamentosAbertos !== null && <Kpi rotulo="Orçamentos em aberto" valor={d.orcamentosAbertos} icone={ClipboardList} tom="info" href="/orcamentos" detalhe="rascunho ou enviado" />}
         {d.orcamentosEnviados && (
-          <Kpi rotulo="Aguardando cliente" valor={d.orcamentosEnviados.valor} moeda icone={TrendingUp} tom="neutro" href="/orcamentos?status=ENVIADO"
+          <Kpi rotulo="Aguardando cliente" valor={d.orcamentosEnviados.valor} moeda icone={TrendingUp} tom="neutro" href="/orcamentos?status=ENVIADO&periodo=todos"
             detalhe={plural(d.orcamentosEnviados.quantidade, "orçamento enviado", "orçamentos enviados")} />
         )}
       </GradeKpi>

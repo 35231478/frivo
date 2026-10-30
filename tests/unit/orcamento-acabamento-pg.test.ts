@@ -115,7 +115,8 @@ describe.skipIf(!URL_PG)("Acabamento: ações da lista, forma de pagamento e doc
 
   it("nome em 1 linha (reticências) com o nome inteiro no hover; existente não muda", async () => {
     const h = await lista();
-    expect(h).toMatch(new RegExp(`<span class="block truncate" title="${NOME_LONGO}" data-nome-orcamento="true">${NOME_LONGO}</span>`));
+    // planilha: a célula trunca ("…") e o title traz o nome inteiro
+    expect(h).toMatch(new RegExp(`<td class="[^"]*truncate[^"]*" title="${NOME_LONGO}" data-nome-orcamento="true">${NOME_LONGO}</td>`));
     expect((await prisma.orcamento.findUnique({ where: { id: "oRasc" } })).nome).toBe(NOME_LONGO);
   });
 

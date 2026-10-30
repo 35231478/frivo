@@ -288,6 +288,9 @@ describe("andamento da proposta", () => {
     expect(h).toContain("desde 03/10 11:05");
     expect(renderToStaticMarkup(createElement(PilulaEtapa, { etapa: "RASCUNHO", desde: null }))).not.toContain("desde");
     expect(renderToStaticMarkup(createElement(PilulaEtapa, { etapa: "EXPIRADO", desde: "2026-10-11T00:00:00Z" }))).toMatch(/desde 11\/10<\/span>/);
+    // compacta (planilha): uma linha só, o "desde" no hover
+    const c = renderToStaticMarkup(createElement(PilulaEtapa, { etapa: "VISUALIZADO", desde: "2026-10-03T14:05:00Z", compacta: true }));
+    expect(c).toMatch(/^<span class="[^"]+" title="desde 03\/10 11:05" data-etapa="VISUALIZADO">Visualizado<\/span>$/);
   });
 });
 
@@ -311,7 +314,7 @@ describe("sino: respostas do cliente", () => {
     const { permissoesTotais } = await import("@/lib/permissoes");
     await abrirSino(permissoesTotais());
     const a = $$<HTMLAnchorElement>("a").find((x) => x.textContent?.includes("Respostas de orçamentos"));
-    expect(a?.getAttribute("href")).toBe("/orcamentos?resposta=nova");
+    expect(a?.getAttribute("href")).toBe("/orcamentos?resposta=nova&periodo=todos"); // respostas de qualquer mês
     expect(a?.textContent).toContain("3");
   });
 

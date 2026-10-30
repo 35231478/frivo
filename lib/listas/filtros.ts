@@ -235,6 +235,49 @@ export function whereListaReceber(empresaId: string, sp: SP, periodo: Periodo, a
   return { ...base, ...(and.length ? { AND: and } : {}) };
 }
 
+/* ───────── Orçamentos: período + cards de funil (o mesmo padrão das telas financeiras) ───────── */
+
+/** Os cards de funil do período de Orçamentos, na ordem da tela */
+export const CARDS_PERIODO_ORCAMENTOS = ["EM_ABERTO", "APROVADO", "RECUSADO", "VENCIDO", "TOTAL"] as const;
+export type CardPeriodoOrcamentos = (typeof CARDS_PERIODO_ORCAMENTOS)[number];
+
+/**
+ * where de um card de funil (a validade é dia civil de Brasília, como no ciclo):
+ * Em aberto = enviado ainda na validade (visto ou não); Aprovados inclui os que já viraram contrato;
+ * Vencidos = enviado com a validade vencida sem resposta; Total = todos menos os cancelados.
+ */
+export function condCardPeriodoOrcamentos(card: string, agora = new Date()) {
+  const hoje = hojeDiaCivil(agora);
+  switch (card) {
+    case "EM_ABERTO": return { status: "ENVIADO", OR: [{ validadeEm: null }, { validadeEm: { gte: hoje } }] };
+    case "APROVADO": return { status: { in: ["APROVADO", "CONVERTIDA"] } };
+    case "RECUSADO": return { status: "REPROVADO" };
+    case "VENCIDO": return { status: "ENVIADO", validadeEm: { lt: hoje } };
+    case "TOTAL": return { status: { not: "CANCELADO" } };
+    default: return null;
+  }
+}
+
+/** O período sobre um INSTANTE (data de criação): [gte, lt) do relógio de Brasília; todo o período (sem limites) = null */
+export function condPeriodoCriacao(p: Periodo) {
+  if (!p.gte && !p.lt) return null;
+  return { criadoEm: { ...(p.gte && { gte: p.gte }), ...(p.lt && { lt: p.lt }) } };
+}
+
+/**
+ * where da LISTA de Orçamentos: os filtros da URL (whereOrcamentos, sem as datas antigas do painel —
+ * o período faz esse papel) + o período pela data de criação + o card de funil clicado.
+ */
+export function whereListaOrcamentos(empresaId: string, sp: SP, periodo: Periodo, agora = new Date()) {
+  const base = whereOrcamentos(empresaId, { ...sp, dataInicio: undefined, dataFim: undefined }, agora);
+  const and: object[] = [...(base.AND ?? [])];
+  const per = condPeriodoCriacao(periodo);
+  if (per) and.push(per);
+  const card = condCardPeriodoOrcamentos(sp.card ?? "", agora);
+  if (card) and.push(card);
+  return { ...base, ...(and.length ? { AND: and } : {}) };
+}
+
 /* ───────── Contas a Pagar: período + cards (o mesmo padrão de Contas a Receber) ───────── */
 
 /** Os cards do período de Contas a Pagar, na ordem da tela */
