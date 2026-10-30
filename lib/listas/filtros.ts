@@ -235,6 +235,52 @@ export function whereListaReceber(empresaId: string, sp: SP, periodo: Periodo, a
   return { ...base, ...(and.length ? { AND: and } : {}) };
 }
 
+/* ───────── Contas a Pagar: período + cards (o mesmo padrão de Contas a Receber) ───────── */
+
+/** Os cards do período de Contas a Pagar, na ordem da tela */
+export const CARDS_PERIODO_PAGAR = ["VENCIDO", "VENCE_HOJE", "A_VENCER", "PAGO", "TOTAL"] as const;
+export type CardPeriodoPagar = (typeof CARDS_PERIODO_PAGAR)[number];
+
+/** Conta a pagar ainda devendo algo (o "pago parcial" entra aqui, pelo saldo) */
+const PAGAR_ABERTA = ["PENDENTE", "PAGO_PARCIAL", "VENCIDO"];
+
+/**
+ * O que cada card soma: abertos pelo SALDO RESTANTE (o pago parcial conta pelo que falta),
+ * "Pagos" pelo VALOR PAGO e o "Total" pelo valor das contas do período.
+ */
+export const CAMPO_CARD_PAGAR: Record<CardPeriodoPagar, "saldoRestante" | "valorPago" | "valorTotal"> = {
+  VENCIDO: "saldoRestante", VENCE_HOJE: "saldoRestante", A_VENCER: "saldoRestante", PAGO: "valorPago", TOTAL: "valorTotal",
+};
+
+/** where de um card do período de Contas a Pagar (vencimento é dia civil de Brasília) */
+export function condCardPeriodoPagar(card: string, agora = new Date()) {
+  const hoje = hojeDiaCivil(agora);
+  const amanha = hojeDiaCivil(agora, 1);
+  switch (card) {
+    case "VENCIDO": return { status: { in: PAGAR_ABERTA }, dataVencimento: { lt: hoje } };
+    case "VENCE_HOJE": return { status: { in: PAGAR_ABERTA }, dataVencimento: { gte: hoje, lt: amanha } };
+    // Sem vencimento ainda não venceu: fica em "A vencer"
+    case "A_VENCER": return { status: { in: PAGAR_ABERTA }, OR: [{ dataVencimento: { gte: amanha } }, { dataVencimento: null }] };
+    case "PAGO": return { status: "PAGO_TOTAL" };
+    case "TOTAL": return { status: { not: "CANCELADO" } };
+    default: return null;
+  }
+}
+
+/**
+ * where da LISTA de Contas a Pagar: os filtros da URL (whereContasPagar, sem as datas antigas do
+ * painel — o período faz esse papel) + o período pelo vencimento + o card do período clicado.
+ */
+export function whereListaPagar(empresaId: string, sp: SP, periodo: Periodo, agora = new Date()) {
+  const base = whereContasPagar(empresaId, { ...sp, dataInicio: undefined, dataFim: undefined });
+  const and: object[] = [];
+  const per = condPeriodoVencimento(periodo);
+  if (per) and.push(per);
+  const card = condCardPeriodoPagar(sp.card ?? "", agora);
+  if (card) and.push(card);
+  return { ...base, ...(and.length ? { AND: and } : {}) };
+}
+
 /** where de Contas a Pagar a partir da URL (os mesmos filtros que a tela já tinha). */
 export function whereContasPagar(empresaId: string, sp: SP) {
   const where: any = { empresaId };

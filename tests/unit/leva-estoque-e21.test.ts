@@ -589,18 +589,22 @@ describe("conta a pagar (manual também): centro de custo e boleto", () => {
     await contaApi("POST", { ...base, centroCustoId: "ccObra", boleto: BOLETO_CAIXA.linha });
     const id = await nota1();
     await lancarApi(id, { itens: escolhas(id), financeiro: { centroCustoId: "ccFrota" } });
-    const h = await listaContas();
+    // A lista abre no mês corrente (padrão da casa): estas contas vencem em nov/dez → todo o período
+    const h = await listaContas({ periodo: "todos" });
     expect(h).toContain('data-centro-custo="ccObra"');
     expect(h.match(/data-tem-boleto/g)).toHaveLength(1);
     expect(h).toMatch(/<a [^>]*data-detalhe-conta="[^"]+"[^>]*>|<a [^>]*href="\/financeiro\/contas-pagar\/[^"]+"[^>]*data-detalhe-conta/);
     expect(h).toMatch(/<a (?=[^>]*data-detalhe-conta)(?=[^>]*href="\/financeiro\/contas-pagar\/[^"]+")/);
-    expect(h).toContain("<option value=\"ccObra\">Obra Shopping Norte</option>");
-    expect(h).toContain("Obra encerrada (inativo)");
-    const soFrota = await listaContas({ centro: "ccFrota" });
-    expect(texto(soFrota).match(/NF 4521\/1 — parcela/g)).toHaveLength(3);
+    const soFrota = await listaContas({ centro: "ccFrota", periodo: "todos" });
+    // Com filtro ativo o painel já vem aberto: o select de centro traz os ativos e os inativos (marcados)
+    expect(soFrota).toContain("<option value=\"ccObra\">Obra Shopping Norte</option>");
+    expect(soFrota).toContain("Obra encerrada (inativo)");
+    // as 3 parcelas da NF (uma linha na planilha do desktop; o celular repete em cartões)
+    expect(soFrota.match(/<tr [^>]*data-linha-conta=/g)).toHaveLength(3);
+    expect(texto(soFrota)).toContain("NF 4521/1 — parcela");
     expect(soFrota).not.toContain('data-centro-custo="ccObra"');
-    expect(texto(await listaContas({ origem: "NF" }))).not.toContain("Peças");
-    expect(texto(await listaContas({ origem: "MANUAL" }))).not.toContain("NF 4521/1");
+    expect(texto(await listaContas({ origem: "NF", periodo: "todos" }))).not.toContain("Peças");
+    expect(texto(await listaContas({ origem: "MANUAL", periodo: "todos" }))).not.toContain("NF 4521/1");
   });
 });
 
