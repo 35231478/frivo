@@ -32,7 +32,7 @@ export interface ContaView {
   /** Gestão (CR robusto) */
   observacao?: string | null; centroCustoId?: string | null; contaBancariaId?: string | null;
   medicaoId?: string | null; orcamentoId?: string | null; contratoId?: string | null;
-  medicaoNumero?: string | null; orcamentoCodigo?: string | null; contratoNumero?: string | null;
+  medicaoNumero?: string | null; orcamentoCodigo?: string | null; contratoNumero?: string | null; medicaoAvulsa?: boolean | null;
   notas?: { status: string }[];
 }
 interface Opcao { id: string; nome: string }

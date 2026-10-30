@@ -226,4 +226,5 @@ export const ROTULO_EVENTO: Record<string, string> = {
   RECUSADO: "Recusado pelo cliente",
   STATUS: "Status alterado",
   OS_GERADA: "OS gerada",
+  FATURADO: "Faturado",
 };

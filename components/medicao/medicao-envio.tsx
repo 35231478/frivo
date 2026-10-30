@@ -2,22 +2,27 @@
 
 import { Printer, Mail, MessageCircle } from "lucide-react";
 import { whatsappLink } from "@/lib/utils";
+import { numeroFatura, referenciaNota } from "@/lib/faturamento/fatura";
 
 interface Props {
   token: string;
   numero: string;
+  /** Fatura avulsa ("Faturar"): "Fatura nº …" no lugar de "Medição MED-…" */
+  avulsa?: boolean | null;
   empresaNome: string;
   emailDestino?: string | null;
   whatsappDestino?: string | null;
 }
 
-export function MedicaoEnvio({ token, numero, empresaNome, emailDestino, whatsappDestino }: Props) {
+export function MedicaoEnvio({ token, numero, avulsa, empresaNome, emailDestino, whatsappDestino }: Props) {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const publicUrl = `${origin}/medicao/${token}`;
   const printUrl = `/medicao/${token}/imprimir`;
 
-  const assunto = `Medição ${numero} — ${empresaNome}`;
-  const corpo = `Olá,\n\nSegue a medição ${numero} (fatura + relatório) para sua avaliação:\n\n${publicUrl}\n\nAtenciosamente,\n${empresaNome}`;
+  const assunto = `${referenciaNota({ numero, avulsa })} — ${empresaNome}`;
+  const corpo = avulsa
+    ? `Olá,\n\nSegue a fatura nº ${numeroFatura(numero)}:\n\n${publicUrl}\n\nAtenciosamente,\n${empresaNome}`
+    : `Olá,\n\nSegue a medição ${numero} (fatura + relatório) para sua avaliação:\n\n${publicUrl}\n\nAtenciosamente,\n${empresaNome}`;
   const mailto = emailDestino
     ? `mailto:${encodeURIComponent(emailDestino)}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`
     : `mailto:?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`;

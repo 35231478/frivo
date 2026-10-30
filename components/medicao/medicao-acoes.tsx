@@ -21,11 +21,13 @@ interface MedicaoAcoesProps {
   numero: string;
   tokenPublico: string;
   status: string;
+  /** Fatura avulsa: textos dizem "fatura" */
+  avulsa?: boolean;
 }
 
 type Painel = "PC" | "NF" | "BOLETO" | "PAGAMENTO" | null;
 
-export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status }: MedicaoAcoesProps) {
+export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status, avulsa }: MedicaoAcoesProps) {
   const router = useRouter();
   const [carregando, setCarregando] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ tipo: "ok" | "erro"; msg: string } | null>(null);
@@ -167,7 +169,7 @@ export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status }: Medica
           <Button
             variant="ghost"
             size="sm"
-            onClick={async () => { if (await confirmar({ mensagem: "Cancelar esta medição?", perigo: true, confirmarTexto: "Cancelar medição", cancelarTexto: "Voltar" })) executar("CANCELAR"); }}
+            onClick={async () => { if (await confirmar({ mensagem: avulsa ? "Cancelar esta fatura?" : "Cancelar esta medição?", perigo: true, confirmarTexto: avulsa ? "Cancelar fatura" : "Cancelar medição", cancelarTexto: "Voltar" })) executar("CANCELAR"); }}
             loading={carregando === "CANCELAR"}
           >
             <Ban className="w-3.5 h-3.5" /> Cancelar

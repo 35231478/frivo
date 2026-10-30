@@ -7,6 +7,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { origemDaConta } from "@/lib/financeiro/conta-receber-gestao";
 import { calcularRetencoes, retencoesDaMedicao } from "@/lib/financeiro/retencoes";
+import { rotuloMedicao } from "@/lib/faturamento/fatura";
 
 type Cliente = Prisma.TransactionClient | typeof prisma;
 
@@ -38,7 +39,7 @@ export async function detalhesDaConta(empresaId: string, id: string) {
       contaBancaria: { select: { id: true, nome: true, ativo: true } },
       medicao: {
         select: {
-          id: true, numero: true, status: true, valorLiquido: true, valorRetencoes: true,
+          id: true, numero: true, status: true, avulsa: true, valorLiquido: true, valorRetencoes: true,
           retIssAliquota: true, retIrAliquota: true, retPisAliquota: true, retCofinsAliquota: true, retCsllAliquota: true, retInssAliquota: true,
           itens: { select: { descricao: true, quantidade: true, valorUnitario: true, valorTotal: true, ordemServicoId: true }, orderBy: { ordem: "asc" } },
           relatorios: { select: { id: true, numero: true, ordemServicoId: true } },
@@ -85,7 +86,7 @@ export async function detalhesDaConta(empresaId: string, id: string) {
     centroCusto: c.centroCusto, contaBancaria: c.contaBancaria,
     cliente: { id: c.cliente.id, nome: c.cliente.nomeFantasia ?? c.cliente.nome, cpfCnpj: c.clienteCnpj ?? c.cliente.cpfCnpj },
     origem: origemDaConta(c),
-    medicao: c.medicao ? { id: c.medicao.id, numero: c.medicao.numero, relatorios: c.medicao.relatorios.map((r) => ({ id: r.id, numero: r.numero })) } : null,
+    medicao: c.medicao ? { id: c.medicao.id, numero: c.medicao.numero, rotulo: rotuloMedicao(c.medicao), relatorios: c.medicao.relatorios.map((r) => ({ id: r.id, numero: r.numero })) } : null,
     // Bruto, cada retenção e o líquido — só quando a medição tem retenção marcada
     retencoes: c.medicao && num(c.medicao.valorRetencoes) > 0 ? calcularRetencoes(num(c.medicao.valorLiquido), retencoesDaMedicao(c.medicao)) : null,
     orcamento: c.orcamento ? { id: c.orcamento.id, codigo: c.orcamento.codigo, nome: c.orcamento.nome } : null,

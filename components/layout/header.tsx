@@ -50,6 +50,7 @@ const ROTULOS_ROTA: Record<string, string> = {
   cargos: "Cargos",
   "checklists-veiculo": "Checklists de Veículo",
   "contas-bancarias": "Contas Bancárias",
+  faturas: "Faturas",
   perfil: "Meu Perfil",
   configuracoes: "Configurações",
   formularios: "Formulários",

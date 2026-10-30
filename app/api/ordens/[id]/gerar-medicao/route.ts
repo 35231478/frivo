@@ -48,12 +48,14 @@ export async function POST(_: NextRequest, { params }: Params) {
 
   const linhas = [
     ...itens.map((it) => ({
+      servicoId: it.orcamentoServico?.servicoId ?? null,
       descricao: it.descricao,
       quantidade: Number(it.quantidade),
       valorUnitario: Number(it.valorUnitario),
       valorTotal: Number(it.valorTotal),
     })),
     ...adicionais.map((a) => ({
+      servicoId: null as string | null,
       descricao: `Serviço adicional — ${a.descricao}`,
       quantidade: 1,
       valorUnitario: Number(a.valor),
@@ -84,6 +86,7 @@ export async function POST(_: NextRequest, { params }: Params) {
           create: linhas.map((l, idx) => ({
             tipo: "SERVICO" as const,
             ordemServicoId: os.id,
+            servicoId: l.servicoId,
             descricao: l.descricao,
             quantidade: l.quantidade,
             valorUnitario: l.valorUnitario,

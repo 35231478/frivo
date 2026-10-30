@@ -3,7 +3,7 @@ import { z } from "zod";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { valorACobrarDaMedicao } from "@/lib/financeiro-server";
-import { calcularRetencoes, camposDaMedicao, motivoRetencaoInvalida, RETENCOES, type Retencoes } from "@/lib/financeiro/retencoes";
+import { baseRetencoes, calcularRetencoes, camposDaMedicao, motivoRetencaoInvalida, RETENCOES, type Retencoes } from "@/lib/financeiro/retencoes";
 import { formatarMoeda } from "@/lib/utils";
 
 type Params = { params: Promise<{ id: string }> };
@@ -36,13 +36,17 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   const medicao = await prisma.medicao.findFirst({
     where: { id, empresaId },
-    include: { contasReceber: { where: { status: { not: "CANCELADO" }, excluidaEm: null }, select: { id: true, numero: true, status: true, valor: true, boletoStatus: true } } },
+    include: {
+      contasReceber: { where: { status: { not: "CANCELADO" }, excluidaEm: null }, select: { id: true, numero: true, status: true, valor: true, boletoStatus: true } },
+      itens: { select: { tipo: true, valorTotal: true } },
+    },
   });
   if (!medicao) return NextResponse.json({ erro: "Medição não encontrada" }, { status: 404 });
   if (medicao.status === "PAGO" || medicao.status === "CANCELADA") {
     return NextResponse.json({ erro: medicao.status === "PAGO" ? "Medição paga: as retenções não mudam mais." : "Medição cancelada." }, { status: 409 });
   }
-  const base = Number(medicao.valorLiquido);
+  // Base = o valor da nota (os serviços); a conta continua sendo o líquido − retenções
+  const base = baseRetencoes(medicao);
   const invalida = motivoRetencaoInvalida(base, novas);
   if (invalida) return NextResponse.json({ erro: invalida }, { status: 400 });
 
@@ -53,7 +57,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   const detalhe = calcularRetencoes(base, novas);
   const conta = contas[0];
-  const valorNovo = valorACobrarDaMedicao({ valorLiquido: base, valorRetencoes: detalhe.total });
+  const valorNovo = valorACobrarDaMedicao({ valorLiquido: medicao.valorLiquido, valorRetencoes: detalhe.total });
 
   try {
     await prisma.$transaction(async (tx) => {

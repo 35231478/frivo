@@ -11,17 +11,23 @@ export function motivoNaoGerarOs(o: { status: string; tipo: string }): string | 
   return null;
 }
 
-interface ItemOrcamento { descricao: string; quantidade: unknown; valorUnitario: unknown; valorTotal: unknown; ordem?: number | null }
+interface ItemOrcamento { id?: string; descricao: string; quantidade: unknown; valorUnitario: unknown; valorTotal: unknown; ordem?: number | null }
 
-/** Itens da OS: serviços e depois produtos, na ordem do orçamento, com os mesmos valores. */
+/**
+ * Itens da OS: serviços e depois produtos, na ordem do orçamento, com os mesmos valores. O serviço
+ * guarda de qual item do orçamento veio (`orcamentoServicoId`): é por ele que o serviço do catálogo
+ * (dados fiscais) chega à nota quando a OS é faturada.
+ */
 export function itensParaOs(servicos: ItemOrcamento[], produtos: ItemOrcamento[]) {
   const ordenar = (l: ItemOrcamento[]) => [...l].sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
-  return [...ordenar(servicos), ...ordenar(produtos)].map((i) => ({
+  const linha = (i: ItemOrcamento, orcamentoServicoId: string | null) => ({
     descricao: i.descricao.trim().slice(0, 500),
     quantidade: Number(i.quantidade),
     valorUnitario: Number(i.valorUnitario),
     valorTotal: Number(i.valorTotal),
-  }));
+    orcamentoServicoId,
+  });
+  return [...ordenar(servicos).map((i) => linha(i, i.id ?? null)), ...ordenar(produtos).map((i) => linha(i, null))];
 }
 
 /** Descrição da OS: nome do orçamento (com o código) e, se houver, o resumo da proposta. */

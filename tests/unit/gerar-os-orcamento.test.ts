@@ -23,8 +23,8 @@ describe("itensParaOs", () => {
   it("serviços e depois produtos, cada grupo na ordem do orçamento, valores em número", () => {
     const itens = itensParaOs(
       [
-        { descricao: "Mão de obra", quantidade: dec(1), valorUnitario: dec(600), valorTotal: dec(600), ordem: 2 },
-        { descricao: "  Diagnóstico  ", quantidade: dec(2), valorUnitario: dec(90), valorTotal: dec(180), ordem: 0 },
+        { id: "os-mo", descricao: "Mão de obra", quantidade: dec(1), valorUnitario: dec(600), valorTotal: dec(600), ordem: 2 },
+        { id: "os-dg", descricao: "  Diagnóstico  ", quantidade: dec(2), valorUnitario: dec(90), valorTotal: dec(180), ordem: 0 },
       ],
       [
         { descricao: "Gás", quantidade: dec(1.5), valorUnitario: dec(100), valorTotal: dec(150), ordem: 1 },
@@ -32,10 +32,11 @@ describe("itensParaOs", () => {
       ],
     );
     expect(itens).toEqual([
-      { descricao: "Diagnóstico", quantidade: 2, valorUnitario: 90, valorTotal: 180 },
-      { descricao: "Mão de obra", quantidade: 1, valorUnitario: 600, valorTotal: 600 },
-      { descricao: "Compressor", quantidade: 1, valorUnitario: 900, valorTotal: 900 },
-      { descricao: "Gás", quantidade: 1.5, valorUnitario: 100, valorTotal: 150 },
+      // Serviço guarda de qual item do orçamento veio (o serviço do catálogo chega à NFS-e); produto não
+      { descricao: "Diagnóstico", quantidade: 2, valorUnitario: 90, valorTotal: 180, orcamentoServicoId: "os-dg" },
+      { descricao: "Mão de obra", quantidade: 1, valorUnitario: 600, valorTotal: 600, orcamentoServicoId: "os-mo" },
+      { descricao: "Compressor", quantidade: 1, valorUnitario: 900, valorTotal: 900, orcamentoServicoId: null },
+      { descricao: "Gás", quantidade: 1.5, valorUnitario: 100, valorTotal: 150, orcamentoServicoId: null },
     ]);
   });
   it("sem ordem vale 0; não altera as listas de entrada; descrição longa é cortada em 500", () => {

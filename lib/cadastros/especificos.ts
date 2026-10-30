@@ -8,6 +8,7 @@ import { enviarConvite, senhaInicialAleatoria } from "@/lib/usuarios/convite";
 import type { EntidadeCadastro } from "@/lib/cadastros/registro";
 import { normalizarCodigoServico } from "@/lib/cadastros/codigos";
 import { colisaoDeCodigo, criarProdutoComCodigo, criarServicoComCodigo, servicoComCodigo } from "@/lib/cadastros/codigos-server";
+import { motivoRetencaoServicoInvalida, type RetencoesDoServico } from "@/lib/financeiro/retencoes";
 
 /**
  * Regras ESPECÍFICAS de alguns cadastros padronizados (perfis de acesso, modelos de encargos,
@@ -417,6 +418,8 @@ const msgCodigoServico = (codigo: string, s: { nome: string }) => `O código ${c
 /** Serviço: código digitado (normalizado, único na empresa) ou gerado pelo nome; vazio ao editar mantém o atual. */
 const servicos: RegrasCadastro = {
   async criar(dados, ator) {
+    const ret = motivoRetencaoServicoInvalida(dados as RetencoesDoServico);
+    if (ret) return falha(400, ret);
     const n = normalizarCodigoServico(dados.codigo);
     if (n.erro) return falha(400, n.erro);
     if (n.codigo) { const dup = await servicoComCodigo(ator.empresaId, n.codigo); if (dup) return falha(409, msgCodigoServico(n.codigo, dup)); }
@@ -431,6 +434,9 @@ const servicos: RegrasCadastro = {
   },
   async editar(existente, dados, ator) {
     const data = { ...dados };
+    // "Reter" exige alíquota, olhando o que fica gravado (o que veio + o que já estava)
+    const ret = motivoRetencaoServicoInvalida({ ...existente, ...data } as RetencoesDoServico);
+    if (ret) return falha(400, ret);
     if ("codigo" in data) {
       const n = normalizarCodigoServico(data.codigo);
       if (n.erro) return falha(400, n.erro);

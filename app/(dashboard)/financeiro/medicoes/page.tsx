@@ -15,6 +15,7 @@ import { BuscaUrl, ConteudoUrl, ListaUrl, PaginacaoUrl } from "@/components/list
 import { AvatarCliente } from "@/components/ui/avatar-cliente";
 import { InputData } from "@/components/ui/input-data";
 import { periodoInstanteBR } from "@/lib/fuso";
+import { numeroFatura, rotuloStatusMedicao } from "@/lib/faturamento/fatura";
 
 export const metadata: Metadata = { title: "Medições" };
 
@@ -129,7 +130,7 @@ export default async function MedicoesPage({
                 medicoes.map((m, idx) => (
                   <tr key={m.id} className={cn("border-b border-surface-border hover:bg-primary-50/40 transition-colors", idx % 2 === 1 && "bg-surface-alt/30")}>
                     <td className="px-4 py-3">
-                      <Link href={`/financeiro/medicoes/${m.id}`} className="font-mono font-semibold text-primary-600 hover:underline">{m.numero}</Link>
+                      <Link href={m.avulsa ? `/financeiro/faturas/${m.id}` : `/financeiro/medicoes/${m.id}`} className="font-mono font-semibold text-primary-600 hover:underline">{m.avulsa ? `Fatura ${numeroFatura(m.numero)}` : m.numero}</Link>
                     </td>
                     <td className="px-4 py-3 text-ink font-medium">
                       <div className="flex items-center gap-2">
@@ -137,9 +138,9 @@ export default async function MedicoesPage({
                         <span className="truncate">{m.cliente.nomeFantasia ?? m.cliente.nome}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-ink-muted hidden md:table-cell">{LABELS_TIPO_MEDICAO[m.tipo]}</td>
+                    <td className="px-4 py-3 text-ink-muted hidden md:table-cell">{m.avulsa ? "Avulsa" : LABELS_TIPO_MEDICAO[m.tipo]}</td>
                     <td className="px-4 py-3 text-ink-muted hidden lg:table-cell">{m.mes ? `${nomeMes(m.mes)}/${m.ano}` : formatarData(m.criadoEm)}</td>
-                    <td className="px-4 py-3"><span className={CLASSE_STATUS_MEDICAO[m.status]}>{LABELS_STATUS_MEDICAO[m.status]}</span></td>
+                    <td className="px-4 py-3"><span className={CLASSE_STATUS_MEDICAO[m.status]}>{rotuloStatusMedicao(m, LABELS_STATUS_MEDICAO)}</span></td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{formatarMoeda(Number(m.valorLiquido))}</td>
                   </tr>
                 ))

@@ -9,7 +9,7 @@ import {
   servicoPlugNotas, TRIBUTACAO_PADRAO, TRIBUTACOES_ISS, tributacaoIss,
 } from "@/lib/nfse/servico";
 import { descricaoLc116, LISTA_LC116 } from "@/lib/nfse/lc116";
-import { CADASTROS, CAMPOS_NFSE_SERVICO, camposSemPermissao, mensagemValidacao } from "@/lib/cadastros/registro";
+import { CADASTROS, CAMPOS_NFSE_SERVICO, CAMPOS_RETENCAO_SERVICO, camposSemPermissao, mensagemValidacao } from "@/lib/cadastros/registro";
 import { rotuloPermissao } from "@/lib/permissoes";
 import { IMPORTACOES } from "@/lib/importacao/entidades";
 
@@ -157,7 +157,10 @@ describe("Cadastro de serviço: validação dos campos fiscais (tela, rota e pla
       expect(c.grupo).toBe("Dados fiscais (NFS-e)");
       expect(c.permissao).toEqual(["financeiro", "fiscal"]);
     }
-    expect(def.campos.filter((c) => c.grupo === "Dados fiscais (NFS-e)")).toEqual(CAMPOS_NFSE_SERVICO);
+    // + as retenções na fonte herdadas pelo faturamento ("reter" + alíquota), também do Fiscal
+    expect(CAMPOS_RETENCAO_SERVICO.map((c) => c.key)).toEqual(["retIr", "aliquotaIR", "retPis", "aliquotaPIS", "retCofins", "aliquotaCOFINS", "retCsll", "aliquotaCSLL", "retInss", "aliquotaINSS"]);
+    for (const c of CAMPOS_RETENCAO_SERVICO) expect([c.grupo, c.permissao]).toEqual(["Dados fiscais (NFS-e)", ["financeiro", "fiscal"]]);
+    expect(def.campos.filter((c) => c.grupo === "Dados fiscais (NFS-e)")).toEqual([...CAMPOS_NFSE_SERVICO, ...CAMPOS_RETENCAO_SERVICO]);
     expect(rotuloPermissao(["financeiro", "fiscal"])).toBe("Financeiro › Fiscal (NFS-e)");
     expect(rotuloPermissao(["xpto", "editar"])).toBe("xpto › Editar");
   });
@@ -233,8 +236,9 @@ describe("Trava por campo (Financeiro › Fiscal)", () => {
     expect(camposSemPermissao(def, nega, { codigoLc116: undefined, nome: "X" }, gravado)).toEqual([]);
     expect(chaves(camposSemPermissao(def, nega, { discriminacaoPadrao: "null" }, { discriminacaoPadrao: null }))).toEqual(["discriminacaoPadrao"]);
   });
-  it("campos comuns do serviço não têm trava própria", () => {
-    expect(camposSemPermissao(def, nega, { nome: "S", valorPadrao: 10, aliquotaPIS: 1, observacaoFiscal: "x" })).toEqual([]);
+  it("campos comuns do serviço não têm trava própria; retenções (reter + alíquota) são do Fiscal", () => {
+    expect(camposSemPermissao(def, nega, { nome: "S", valorPadrao: 10, observacaoFiscal: "x" })).toEqual([]);
+    expect(camposSemPermissao(def, nega, { nome: "S", aliquotaPIS: 1, retIr: true }).map((c) => c.key)).toEqual(["retIr", "aliquotaPIS"]);
   });
 });
 

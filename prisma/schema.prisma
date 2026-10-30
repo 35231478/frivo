@@ -1376,6 +1376,14 @@ model Servico {
   aliquotaCOFINS      Decimal? @map("aliquota_cofins") @db.Decimal(5, 2)
   aliquotaCSLL        Decimal? @map("aliquota_csll") @db.Decimal(5, 2)
   aliquotaIR          Decimal? @map("aliquota_ir") @db.Decimal(5, 2)
+  aliquotaINSS        Decimal? @map("aliquota_inss") @db.Decimal(5, 2)
+  /// Retenções na fonte herdadas pelo faturamento ("reter"), com a alíquota do próprio serviço acima.
+  /// Padrão Simples Nacional: desmarcadas. O ISS retido é o issRetido (+ aliquotaISS).
+  retIr               Boolean  @default(false) @map("ret_ir")
+  retPis              Boolean  @default(false) @map("ret_pis")
+  retCofins           Boolean  @default(false) @map("ret_cofins")
+  retCsll             Boolean  @default(false) @map("ret_csll")
+  retInss             Boolean  @default(false) @map("ret_inss")
   observacaoFiscal    String?  @map("observacao_fiscal")
 
   ativo    Boolean  @default(true)
@@ -2004,18 +2012,22 @@ model RespostaFormularioEquipamento {
 // ─────────────────────────────────────────────
 
 model OsItemOrcamento {
-  id             String    @id @default(cuid())
-  ordemServicoId String    @map("ordem_servico_id")
-  descricao      String
-  quantidade     Decimal   @db.Decimal(10, 2)
-  valorUnitario  Decimal   @map("valor_unitario") @db.Decimal(10, 2)
-  valorTotal     Decimal   @map("valor_total") @db.Decimal(10, 2)
-  executado      Boolean   @default(false)
-  executadoEm    DateTime? @map("executado_em")
+  id                 String    @id @default(cuid())
+  ordemServicoId     String    @map("ordem_servico_id")
+  /// Item do orçamento de onde a linha foi copiada ("Gerar OS"): leva o serviço (dados fiscais) até a nota
+  orcamentoServicoId String?   @map("orcamento_servico_id")
+  descricao          String
+  quantidade         Decimal   @db.Decimal(10, 2)
+  valorUnitario      Decimal   @map("valor_unitario") @db.Decimal(10, 2)
+  valorTotal         Decimal   @map("valor_total") @db.Decimal(10, 2)
+  executado          Boolean   @default(false)
+  executadoEm        DateTime? @map("executado_em")
 
-  ordemServico OrdemServico @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  ordemServico     OrdemServico      @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  orcamentoServico OrcamentoServico? @relation(fields: [orcamentoServicoId], references: [id], onDelete: SetNull)
 
   @@index([ordemServicoId])
+  @@index([orcamentoServicoId])
   @@map("os_itens_orcamento")
 }
 
@@ -2257,8 +2269,9 @@ model OrcamentoServico {
   observacao    String?
   ordem         Int     @default(0)
 
-  orcamento Orcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
-  servico   Servico?  @relation(fields: [servicoId], references: [id])
+  orcamento Orcamento         @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+  servico   Servico?          @relation(fields: [servicoId], references: [id])
+  osItens   OsItemOrcamento[]
 
   @@map("orcamento_servicos")
 }
@@ -2323,6 +2336,10 @@ model Medicao {
   retCsllAliquota   Decimal? @map("ret_csll_aliquota") @db.Decimal(5, 2)
   retInssAliquota   Decimal? @map("ret_inss_aliquota") @db.Decimal(5, 2)
   valorRetencoes    Decimal  @default(0) @map("valor_retencoes") @db.Decimal(12, 2)
+
+  /// Fatura avulsa (botão "Faturar" do orçamento/OS): mesma engine, nasce liberada para a nota, sem
+  /// a aprovação do cliente; na tela e na nota aparece como "Fatura" (o número MED-… não muda)
+  avulsa Boolean @default(false)
 
   dataEnvio      DateTime? @map("data_envio")
   dataAprovacao  DateTime? @map("data_aprovacao")

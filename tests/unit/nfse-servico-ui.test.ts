@@ -113,23 +113,27 @@ async function salvar() {
 }
 
 describe("Layout da seção fiscal", () => {
-  it("três blocos na ordem, cada campo no seu bloco, duas colunas onde cabe", async () => {
+  it("quatro blocos na ordem, cada campo no seu bloco, duas colunas onde cabe", async () => {
     await abrir(GESTOR_FISCAL);
     const secao = document.querySelector("[data-secao-fiscal]")!;
-    expect([...secao.querySelectorAll("section")].map((s) => s.getAttribute("aria-label"))).toEqual(["Classificação do serviço", "Tributação", "Discriminação"]);
+    expect([...secao.querySelectorAll("section")].map((s) => s.getAttribute("aria-label"))).toEqual(["Classificação do serviço", "Tributação", "Retenções na fonte", "Discriminação"]);
     expect(rotulosEm(bloco("Classificação do serviço"))).toEqual(["Código do serviço (LC 116)", "Código municipal", "CNAE", "Usar o CNAE principal da empresa"]);
-    expect(rotulosEm(bloco("Tributação"))).toEqual(["Tributação do ISS", "Alíquota de ISS (%)", "ISS retido pelo tomador"]);
+    expect(rotulosEm(bloco("Tributação"))).toEqual(["Tributação do ISS", "Alíquota de ISS (%)"]);
+    // Retenções: ISS retido + "Reter" federal com a alíquota ao lado (Simples Nacional: desmarcados)
+    expect(rotulosEm(bloco("Retenções na fonte"))).toEqual(["ISS retido pelo tomador", "Reter IR", "Reter PIS", "Reter COFINS", "Reter CSLL", "Reter INSS"]);
+    expect([...bloco("Retenções na fonte").querySelectorAll("[data-aliquota]")].map((i) => i.getAttribute("aria-label")))
+      .toEqual(["Alíquota IR (%)", "Alíquota PIS (%)", "Alíquota COFINS (%)", "Alíquota CSLL (%)", "Alíquota INSS (%)"]);
+    expect(bloco("Retenções na fonte").querySelector("ul")!.className).toContain("grid-cols-1 sm:grid-cols-2");
     expect(rotulosEm(bloco("Discriminação"))).toEqual(["Discriminação padrão"]);
     // pares lado a lado (uma coluna no celular)
     const grade = (rotulo: string) => campo(rotulo).closest(".grid")!.className;
     for (const r of ["Código municipal", "Tributação do ISS", "Alíquota de ISS (%)"]) expect(grade(r)).toContain("grid-cols-1 sm:grid-cols-2");
     expect(campo("Código do serviço (LC 116)").closest(".grid")).toBeNull();
-    // seção abaixo do título; "Outros tributos" logo depois, também em duas colunas, observação na largura toda
+    // seção abaixo do título; "Outros tributos" (só a observação, na largura toda) logo depois
     const titulos = [...document.querySelectorAll("h4")].map(texto);
     expect(titulos.slice(-2)).toEqual(["Dados fiscais (NFS-e)", "Outros tributos"]);
-    expect(campo("Alíquota PIS (%)").closest("[data-grupo-colunas]")!.className).toContain("sm:grid-cols-2");
+    expect(campo("Observação fiscal").closest("[data-grupo-colunas]")!.className).toContain("sm:grid-cols-2");
     expect(campo("Observação fiscal").closest(".flex-col")!.className).toContain("sm:col-span-2");
-    expect(campo("Alíquota PIS (%)").closest(".flex-col")!.className).not.toContain("col-span");
   });
 
   it("Princípio 7: explicação no ⓘ; a descrição do código LC 116 fica visível; alíquota vazia mostra o ISS da empresa", async () => {
@@ -147,7 +151,7 @@ describe("Layout da seção fiscal", () => {
     // CNAE e ISS retido também com ⓘ
     const dicas = [...document.querySelectorAll('[data-campo="cnae"] [data-dica], [data-secao-fiscal] [data-dica][aria-label="Ajuda: ISS retido pelo tomador"]')];
     expect(dicas.map((b) => texto(document.getElementById(b.getAttribute("aria-describedby")!)))).toEqual([
-      "Em branco, a nota usa o CNAE principal da empresa.", "Marque quando o tomador (cliente) retém e recolhe o ISS desta nota.",
+      "Em branco, a nota usa o CNAE principal da empresa.", "Marque quando o tomador (cliente) retém e recolhe o ISS desta nota. Usa a alíquota de ISS acima.",
     ]);
     expect(campo("Alíquota de ISS (%)").placeholder).toBe("Em branco: 3,50 (empresa)");
     expect(campo("Código municipal").placeholder).toBe("Em branco: código LC 116");
@@ -381,6 +385,20 @@ describe("Tributação e salvar", () => {
   });
 });
 
+describe("Retenções na fonte (herdadas pelo faturamento)", () => {
+  const reter = (k: string) => document.querySelector(`[data-campo="${k}"] input[type="checkbox"]`) as HTMLInputElement;
+  const aliquota = (k: string) => document.querySelector(`[data-aliquota="${k}"]`) as HTMLInputElement;
+  it("Simples Nacional: federais desmarcados; marcar \"Reter IR\" + alíquota vai no salvar (só o que mudou)", async () => {
+    await abrir(GESTOR_FISCAL);
+    for (const k of ["retIr", "retPis", "retCofins", "retCsll", "retInss"]) expect(reter(k).checked, k).toBe(false);
+    await clicar(reter("retIr"));
+    await digitar(aliquota("aliquotaIR"), "1,5a");
+    expect(aliquota("aliquotaIR").value).toBe("1,5");
+    await salvar();
+    expect(enviados).toEqual([{ metodo: "PATCH", corpo: { retIr: "true", aliquotaIR: "1,5" } }]);
+  });
+});
+
 describe("Permissão Financeiro › Fiscal", () => {
   it("sem ela: tudo só leitura (aviso uma vez), o resto edita e o salvar não manda dado fiscal", async () => {
     await abrir(GESTOR);
@@ -395,7 +413,9 @@ describe("Permissão Financeiro › Fiscal", () => {
     expect(campo("Código do serviço (LC 116)").value).toBe("14.01");
     await focar(campo("Código do serviço (LC 116)"));
     expect(opcoes()).toHaveLength(0); // travado: a lista não abre
-    for (const r of ["Nome", "Alíquota PIS (%)"]) expect(campo(r).hasAttribute("disabled"), r).toBe(false);
+    // Retenções também são do Fiscal: caixinhas e alíquotas travadas
+    for (const el of bloco("Retenções na fonte").querySelectorAll("input")) expect((el as HTMLInputElement).disabled).toBe(true);
+    expect(campo("Nome").hasAttribute("disabled")).toBe(false);
     await digitar(campo("Nome"), "Limpeza de split 9000");
     await salvar();
     expect(enviados).toEqual([{ metodo: "PATCH", corpo: { nome: "Limpeza de split 9000" } }]);

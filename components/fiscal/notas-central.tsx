@@ -252,7 +252,7 @@ function Origem({ n }: { n: NotaLinha }) {
     <span className="inline-flex flex-col gap-0.5" data-origem>
       {os && <Link href={hrefOs(n.ordemServicoId!)} className="text-acento hover:underline whitespace-nowrap">OS {n.osNumero}</Link>}
       {n.medicaoId && n.medicaoNumero && (
-        <Link href={hrefMedicao(n.medicaoId)} className={cn("hover:underline whitespace-nowrap", os ? "text-xs text-ink-muted" : "text-acento")}>Medição {n.medicaoNumero}</Link>
+        <Link href={hrefMedicao(n.medicaoId)} className={cn("hover:underline whitespace-nowrap", os ? "text-xs text-ink-muted" : "text-acento")}>{n.medicaoRotulo ?? `Medição ${n.medicaoNumero}`}</Link>
       )}
       {!os && !n.medicaoId && <span className="text-ink-subtle">—</span>}
     </span>
@@ -272,7 +272,7 @@ function AcoesNota({ n, onDetalhes, onReconsultar, consultando }: { n: NotaLinha
         {(fechar) => (
           <>
             <ItemMenu icone={Eye} onClick={() => { fechar(); onDetalhes(); }} id="detalhes">Ver detalhes</ItemMenu>
-            {a.origem && <ItemMenu icone={ExternalLink} href={a.origem} id="origem">{n.origem === "OS" && n.osNumero ? `Abrir OS ${n.osNumero}` : `Abrir medição${n.medicaoNumero ? ` ${n.medicaoNumero}` : ""}`}</ItemMenu>}
+            {a.origem && <ItemMenu icone={ExternalLink} href={a.origem} id="origem">{n.origem === "OS" && n.osNumero ? `Abrir OS ${n.osNumero}` : (n.medicaoRotulo ? `Abrir ${n.medicaoRotulo.replace(/^\S/, (c) => c.toLowerCase())}` : `Abrir medição${n.medicaoNumero ? ` ${n.medicaoNumero}` : ""}`)}</ItemMenu>}
             <ItemMenu icone={Download} href={`/api/fiscal/notas/${n.id}/arquivo?tipo=pdf`} novaAba desabilitado={!a.pdf} motivo={motivoSemArquivo(n.status, "pdf")} id="pdf">Baixar DANFSE (PDF)</ItemMenu>
             <ItemMenu icone={Download} href={`/api/fiscal/notas/${n.id}/arquivo?tipo=xml`} desabilitado={!a.xml} motivo={motivoSemArquivo(n.status, "xml")} id="xml">Baixar XML</ItemMenu>
             {a.reconsultar && <ItemMenu icone={RefreshCw} onClick={() => { fechar(); onReconsultar(); }} id="reconsultar">Reconsultar status</ItemMenu>}

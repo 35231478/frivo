@@ -2,6 +2,7 @@ import {
   formatarCpfCnpj, formatarData, formatarMoeda, formatarTelefone,
   LABELS_STATUS_MEDICAO, CLASSE_STATUS_MEDICAO, LABELS_TIPO_MEDICAO, nomeMes, cn,
 } from "@/lib/utils";
+import { numeroFatura, rotuloStatusMedicao } from "@/lib/faturamento/fatura";
 
 interface ItemDoc {
   descricao: string;
@@ -16,6 +17,8 @@ export interface MedicaoDocumentoProps {
     numero: string;
     tipo: string;
     status: string;
+    /** Fatura avulsa ("Faturar"): aparece como "Fatura AAAA-NNNN" */
+    avulsa?: boolean | null;
     mes?: number | null;
     ano?: number | null;
     descricao?: string | null;
@@ -108,10 +111,10 @@ export function MedicaoDocumento({ medicao, empresa, cliente }: MedicaoDocumento
           </div>
         </div>
         <div className="text-right shrink-0">
-          <p className="text-xs uppercase tracking-wider text-ink-muted">Medição</p>
-          <p className="font-mono text-2xl font-bold text-primary-600">{medicao.numero}</p>
+          <p className="text-xs uppercase tracking-wider text-ink-muted">{medicao.avulsa ? "Fatura" : "Medição"}</p>
+          <p className="font-mono text-2xl font-bold text-primary-600">{medicao.avulsa ? numeroFatura(medicao.numero) : medicao.numero}</p>
           <span className={cn("mt-2 inline-flex", CLASSE_STATUS_MEDICAO[medicao.status])}>
-            {LABELS_STATUS_MEDICAO[medicao.status]}
+            {rotuloStatusMedicao(medicao, LABELS_STATUS_MEDICAO)}
           </span>
         </div>
       </div>
@@ -120,7 +123,7 @@ export function MedicaoDocumento({ medicao, empresa, cliente }: MedicaoDocumento
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 py-5 border-b border-surface-border">
         <div className="md:col-span-2">
           <p className="text-xs uppercase tracking-wider text-ink-muted">Tipo</p>
-          <p className="text-lg font-semibold text-ink">{LABELS_TIPO_MEDICAO[medicao.tipo] ?? medicao.tipo}</p>
+          <p className="text-lg font-semibold text-ink">{medicao.avulsa ? "Faturamento avulso" : LABELS_TIPO_MEDICAO[medicao.tipo] ?? medicao.tipo}</p>
           {medicao.descricao && <p className="text-sm text-ink-muted mt-0.5">{medicao.descricao}</p>}
         </div>
         <div className="text-sm space-y-1">

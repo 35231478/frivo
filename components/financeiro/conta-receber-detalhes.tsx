@@ -24,7 +24,7 @@ export interface DetalheConta {
   centroCusto: { nome: string; ativo: boolean } | null; contaBancaria: { nome: string; ativo: boolean } | null;
   cliente: { id: string; nome: string; cpfCnpj: string | null };
   origem: OrigemConta;
-  medicao: { id: string; numero: string; relatorios: { id: string; numero: string }[] } | null;
+  medicao: { id: string; numero: string; rotulo?: string; relatorios: { id: string; numero: string }[] } | null;
   retencoes?: Detalhamento | null;
   orcamento: { id: string; codigo: string; nome: string } | null;
   contrato: { id: string; numero: string } | null;
@@ -77,7 +77,7 @@ export function ContaReceberDetalhes({ id, onFechar, versao = 0 }: { id: string 
               <div className="flex flex-wrap gap-2" data-detalhe-origem={d.origem}>
                 {d.origem === "MANUAL" && <span className="text-sm text-ink-muted">{ROTULO_ORIGEM.MANUAL}</span>}
                 {d.orcamento && <Vinculo href={hrefOrcamento(d.orcamento.id)}>Orçamento {d.orcamento.codigo}</Vinculo>}
-                {d.medicao && <Vinculo href={hrefMedicao(d.medicao.id)}>Medição {d.medicao.numero}</Vinculo>}
+                {d.medicao && <Vinculo href={hrefMedicao(d.medicao.id)}>{d.medicao.rotulo ?? `Medição ${d.medicao.numero}`}</Vinculo>}
                 {d.medicao?.relatorios.map((r) => <span key={r.id} className="text-xs px-2 py-1 rounded-full bg-surface-alt text-ink-muted">Relatório {r.numero}</span>)}
                 {d.contrato && <Vinculo href={hrefContrato(d.contrato.id)}>Contrato {d.contrato.numero}</Vinculo>}
                 {d.ordens.map((o) => <Vinculo key={o.id} href={hrefOs(o.id)}>OS {o.numero}</Vinculo>)}

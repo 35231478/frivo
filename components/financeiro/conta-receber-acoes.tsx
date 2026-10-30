@@ -32,7 +32,7 @@ export interface ContaAcoes {
   formaPagamento?: string | null; observacao?: string | null;
   centroCustoId?: string | null; contaBancariaId?: string | null;
   medicaoId?: string | null; orcamentoId?: string | null; contratoId?: string | null;
-  medicaoNumero?: string | null; orcamentoCodigo?: string | null; contratoNumero?: string | null;
+  medicaoNumero?: string | null; orcamentoCodigo?: string | null; contratoNumero?: string | null; medicaoAvulsa?: boolean | null;
   /** Status das notas fiscais ligadas (só o status importa para as regras) */
   notas?: { status: string }[];
   interAtivo: boolean;

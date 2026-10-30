@@ -3,6 +3,7 @@
  * com ela em cada situação (receber, cancelar, excluir, recibo) e quais campos ficam travados.
  * A tela usa estas regras para habilitar o menu ⋮ e o servidor usa as MESMAS para recusar.
  */
+import { rotuloMedicao } from "@/lib/faturamento/fatura";
 
 export type OrigemConta = "MANUAL" | "MEDICAO" | "ORCAMENTO" | "CONTRATO";
 
@@ -166,6 +167,8 @@ export const hrefOrcamento = (id: string) => `/orcamentos/${id}`;
 export const hrefMedicao = (id: string) => `/financeiro/medicoes/${id}`;
 export const hrefContrato = (id: string) => `/contratos/${id}`;
 export const hrefOs = (id: string) => `/ordens/${id}`;
+/** A fatura avulsa ("Faturar") abre a mesma tela da medição, com o breadcrumb "Faturas" */
+export const hrefFatura = (id: string) => `/financeiro/faturas/${id}`;
 /** Abre a conta direto na gaveta de detalhes da lista de Contas a Receber. */
 export const hrefContaReceber = (id: string) => `/financeiro/contas-receber?conta=${id}`;
 
@@ -173,8 +176,13 @@ export const hrefContaReceber = (id: string) => `/financeiro/contas-receber?cont
 export function origemComLink(c: {
   medicaoId?: string | null; orcamentoId?: string | null; contratoId?: string | null;
   medicaoNumero?: string | null; orcamentoCodigo?: string | null; contratoNumero?: string | null;
+  /** Fatura avulsa ("Faturar"): aparece como "Fatura 2026-0012" */
+  medicaoAvulsa?: boolean | null;
 }): { rotulo: string; href: string } | null {
-  if (c.medicaoId) return { rotulo: `Medição ${c.medicaoNumero ?? ""}`.trim(), href: hrefMedicao(c.medicaoId) };
+  if (c.medicaoId) {
+    const rotulo = c.medicaoNumero ? rotuloMedicao({ numero: c.medicaoNumero, avulsa: c.medicaoAvulsa }) : c.medicaoAvulsa ? "Fatura" : "Medição";
+    return { rotulo, href: c.medicaoAvulsa ? hrefFatura(c.medicaoId) : hrefMedicao(c.medicaoId) };
+  }
   if (c.orcamentoId) return { rotulo: `Orçamento ${c.orcamentoCodigo ?? ""}`.trim(), href: hrefOrcamento(c.orcamentoId) };
   if (c.contratoId) return { rotulo: `Contrato ${c.contratoNumero ?? ""}`.trim(), href: hrefContrato(c.contratoId) };
   return null;

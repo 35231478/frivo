@@ -202,7 +202,11 @@ export interface GrupoNota {
   discriminacao: string;
 }
 
-export interface ContextoDiscriminacao { medicaoNumero: string; osNumeros?: string[] }
+export interface ContextoDiscriminacao {
+  medicaoNumero: string; osNumeros?: string[];
+  /** Referência pronta ("Fatura nº 2026-0012" no avulso); sem ela, "Medição MED-…" */
+  referencia?: string;
+}
 
 /** Valor em reais com espaço comum (o Intl usa espaço sem quebra, que algumas prefeituras recusam) */
 const reais = (v: number) => formatarMoeda(v).replace(/\s/g, " ");
@@ -217,7 +221,7 @@ export function discriminacaoPadrao(g: Pick<GrupoNota, "itens">, ctx: ContextoDi
       ? `${item.descricao.trim()} — ${String(q).replace(".", ",")} x ${reais(unit)} = ${reais(item.valorTotal)}`
       : `${item.descricao.trim()} — ${reais(item.valorTotal)}`;
   });
-  const ref = [`Medição ${ctx.medicaoNumero}`, ...(ctx.osNumeros?.length ? [`OS ${ctx.osNumeros.join(", ")}`] : [])].join(" · ");
+  const ref = [ctx.referencia ?? `Medição ${ctx.medicaoNumero}`, ...(ctx.osNumeros?.length ? [`OS ${ctx.osNumeros.join(", ")}`] : [])].join(" · ");
   return [...bases, ...linhas, `Ref.: ${ref}`].join(" | ");
 }
 
