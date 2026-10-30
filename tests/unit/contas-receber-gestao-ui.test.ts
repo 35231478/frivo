@@ -17,10 +17,10 @@ import { permissoesTotais, type Permissoes } from "@/lib/permissoes";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
-const nav = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn() }));
+const nav = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn(), qs: "" }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: nav.push, refresh: nav.refresh, replace: nav.replace, back: () => {} }),
-  usePathname: () => "/financeiro/contas-receber", useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/financeiro/contas-receber", useSearchParams: () => new URLSearchParams(nav.qs),
 }));
 const avisos = vi.hoisted(() => ({ toast: vi.fn() }));
 vi.mock("@/components/ui/avisos", async (original) => ({ ...(await original<object>()), toast: avisos.toast }));
@@ -375,9 +375,15 @@ describe("período + cards do período + cara de planilha (padrão da casa)", ()
     expect(ultimaUrl()).toBe("/financeiro/contas-receber?periodo=todos");
     await clicar($("[data-alternar-periodo]"));
     expect($("[data-intervalo]")).not.toBeNull();
-    await montarTela({ periodo: { tipo: "todos", mes: null, de: null, ate: null, rotulo: "Todo o período" } });
-    expect(txt($("[data-mes-rotulo]"))).toBe("Todo o período");
-    expect(txt($("[data-alternar-periodo]"))).toBe("Voltar ao mês atual");
+    // Em "todo o período" (URL atual com periodo=todos): voltar ao mês tira o período da URL e mantém a busca
+    nav.qs = "periodo=todos&q=hospital";
+    try {
+      await montarTela({ periodo: { tipo: "todos", mes: null, de: null, ate: null, rotulo: "Todo o período" } });
+      expect(txt($("[data-mes-rotulo]"))).toBe("Todo o período");
+      expect(txt($("[data-alternar-periodo]"))).toBe("Voltar ao mês atual");
+      await clicar($("[data-alternar-periodo]"));
+      expect(ultimaUrl()).toBe("/financeiro/contas-receber?q=hospital");
+    } finally { nav.qs = ""; }
   });
 
   it("desktop em cara de planilha: cabeçalho compacto, Valor (R$) à direita com números tabulares, sem \"R$\" na célula", async () => {

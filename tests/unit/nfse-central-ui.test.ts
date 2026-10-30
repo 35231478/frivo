@@ -128,6 +128,7 @@ describe("período, busca e filtros (na URL)", () => {
     expect(ultimaUrl()).toBe("/financeiro/notas-fiscais?mes=2026-02");
     await clicar($("[data-mes-seguinte]"));
     expect(ultimaUrl()).toBe("/financeiro/notas-fiscais?mes=2026-04");
+    expect($("[data-todo-periodo]")).toBeNull(); // "Todo o período" só onde a tela permite (Contas a Receber)
   });
 
   it("período personalizado: de/até → Aplicar (sai o mês); 'Voltar ao mês atual' limpa", async () => {
