@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { orcamentoJaFaturado, travarParaFaturar } from "@/lib/faturamento-os";
+import { aFaturar, chaveMesBR } from "@/lib/financeiro/a-faturar";
 import { formatarData, formatarMoeda, gerarNumeroContaReceber, gerarNumeroContaPagar, gerarNumeroMedicao } from "@/lib/utils";
 import { diaCivilPassou, hojeDiaCivil, inicioMesDiaCivil, partesBR } from "@/lib/fuso";
 import { calcularVencimento } from "@/lib/medicao-helpers";
@@ -656,11 +657,21 @@ export async function resumoFinanceiro(empresaId: string) {
   }
 
   const num = (v: any) => Number(v ?? 0);
-  const totalAReceberMes = num(aReceberMes._sum?.valor);
+  // Opção A (P3): os orçamentos aprovados "a faturar" do mês (sem conta desde a P2) entram na previsão
+  // no lugar da conta Prevista que a aprovação criava — mesmo número no card e no saldo
+  const mesAtual = chaveMesBR(agora);
+  const faturar = await aFaturar(empresaId, { de: mesAtual, ate: mesAtual }, agora);
+  const contasAReceberMes = num(aReceberMes._sum?.valor);
+  const totalAReceberMes = Math.round((contasAReceberMes + faturar.valor) * 100) / 100;
   const totalAPagarMes = num(aPagarMesAgg._sum?.saldoRestante);
 
   return {
-    aReceberMes: { valor: totalAReceberMes, qtd: aReceberMes._count },
+    aReceberMes: {
+      valor: totalAReceberMes, qtd: aReceberMes._count,
+      /** Só as contas em aberto do mês (sem o "a faturar") */
+      contas: contasAReceberMes,
+      aFaturar: { valor: faturar.valor, qtd: faturar.qtd },
+    },
     recebidoMes: { valor: num(recebidoMes._sum?.valor), qtd: recebidoMes._count },
     vencidoReceber: { valor: num(vencidoReceber._sum?.valor), qtd: vencidoReceber._count },
     aPagarMes: { valor: totalAPagarMes, qtd: aPagarMesAgg._count },

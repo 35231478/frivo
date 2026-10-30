@@ -195,7 +195,7 @@ describe.skipIf(!URL_PG)("Ciclo do orçamento: link público, aceite/recusa, env
   });
 
   describe("aprovar no link", () => {
-    it("grava nome, CPF, assinatura, data/hora, IP e navegador; evento; conta a receber; avisa o responsável", async () => {
+    it("grava nome, CPF, assinatura, data/hora, IP e navegador; evento; SEM conta a receber (fica a faturar); avisa o responsável", async () => {
       const o = await criar();
       deslogar();
       const r = await aprovar(o.tokenPublico, { nome: "  Juliana Ramos  " });
@@ -205,7 +205,8 @@ describe.skipIf(!URL_PG)("Ciclo do orçamento: link público, aceite/recusa, env
       expect(Date.now() - db.assinadoEm.getTime()).toBeLessThan(60_000);
       const ev = await eventos(o.id);
       expect(ev.at(-1)).toMatchObject({ tipo: "APROVADO", detalhe: "Juliana Ramos", ip: "200.10.20.30", usuarioId: null });
-      expect(await prisma.contaReceber.count({ where: { orcamentoId: o.id } })).toBeGreaterThan(0);
+      // Opção A (P2): aprovar não cria conta — o orçamento fica "a faturar" até o Faturar
+      expect(await prisma.contaReceber.count({ where: { orcamentoId: o.id } })).toBe(0);
       // E-mail ao responsável (quem criou), pelo Resend da empresa
       expect(resend.enviados).toHaveLength(1);
       expect(resend.enviados[0]).toMatchObject({ to: "ana@ct.com.br", from: "Clima Total <orcamentos@ct.com.br>" });
@@ -235,12 +236,12 @@ describe.skipIf(!URL_PG)("Ciclo do orçamento: link público, aceite/recusa, env
       expect((await prisma.orcamento.findUnique({ where: { id: o.id } })).status).toBe("ENVIADO");
     });
 
-    it("dois cliques ao mesmo tempo: aprova uma vez (um evento, uma conta a receber)", async () => {
+    it("dois cliques ao mesmo tempo: aprova uma vez (um evento, nenhuma conta a receber)", async () => {
       const o = await criar();
       const rs = await Promise.all([aprovar(o.tokenPublico), aprovar(o.tokenPublico), aprovar(o.tokenPublico)]);
       expect(rs.filter((r) => r.status === 200)).toHaveLength(1);
       expect((await eventos(o.id)).filter((e: any) => e.tipo === "APROVADO")).toHaveLength(1);
-      expect(await prisma.contaReceber.count({ where: { orcamentoId: o.id } })).toBe(1);
+      expect(await prisma.contaReceber.count({ where: { orcamentoId: o.id } })).toBe(0);
     });
 
     it("IP lixo não é gravado; sem e-mail configurado a aprovação continua valendo", async () => {

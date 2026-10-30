@@ -11,7 +11,7 @@ import { registrarEvento } from "@/lib/orcamentos/ciclo-server";
 import { LABELS_STATUS_ORCAMENTO } from "@/lib/utils";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { pode } from "@/lib/permissoes";
-import { impactoOrcamento } from "@/lib/inativacao-server";
+import { cancelarPrevistasDoOrcamento, impactoOrcamento } from "@/lib/inativacao-server";
 import { cancelarOrcamento, reativarOrcamento, statusHttp } from "@/lib/acoes-massa/regras";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -74,7 +74,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       if (impacto?.bloqueio) return NextResponse.json({ erro: impacto.bloqueio }, { status: 409 });
     }
     const agora = new Date();
-    const atualizado = await prisma.orcamento.update({
+    const atualizado = await prisma.$transaction(async (tx) => {
+     const o = await tx.orcamento.update({
       where: { id },
       data: {
         status: novo as typeof existente.status,
@@ -84,6 +85,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         // Recusa registrada pela equipe (o cliente avisou por fora do link)
         ...(novo === "REPROVADO" && { recusadoEm: agora, recusadoPor: `Registrado por ${session.user!.name ?? "usuário"}`, recusaMotivo: null, recusadoIp: null, respostaVistaEm: agora }),
       },
+     });
+     // Opção A (P2): cancelar leva junto a previsão antiga (conta PREVISTO da aprovação), com motivo e evento
+     if (novo === "CANCELADO") await cancelarPrevistasDoOrcamento(tx, { id, codigo: existente.codigo, empresaId }, session.user!.id);
+     return o;
     });
     await registrarEvento({
       empresaId, orcamentoId: id, tipo: "STATUS", usuarioId: session.user!.id,

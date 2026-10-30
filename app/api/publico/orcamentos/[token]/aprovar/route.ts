@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { aprovacaoPublicaSchema } from "@/lib/validations";
-import { gerarContaReceberDoOrcamento } from "@/lib/financeiro-server";
 import { diaCivilPassou } from "@/lib/fuso";
 import { ipDaRequisicao } from "@/lib/orcamentos/ciclo";
 import { avisarResponsavel, registrarEvento } from "@/lib/orcamentos/ciclo-server";
@@ -9,7 +8,8 @@ import { avisarResponsavel, registrarEvento } from "@/lib/orcamentos/ciclo-serve
 /**
  * Aceite digital no link público: nome, CPF e assinatura de quem aprova, com data/hora, IP e
  * navegador gravados. Só um orçamento ENVIADO e dentro da validade; a troca de status é atômica
- * (dois cliques não aprovam duas vezes). Avisa o responsável (e-mail + sino).
+ * (dois cliques não aprovam duas vezes). Avisa o responsável (e-mail + sino). Não cria conta a
+ * receber: o aprovado fica "a faturar" até o "Faturar" (Opção A, P2).
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -54,8 +54,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   if (r.count !== 1) return NextResponse.json({ erro: "Este orçamento não está disponível para aprovação" }, { status: 400 });
   await registrarEvento({ empresaId: orcamento.empresaId, orcamentoId: orcamento.id, tipo: "APROVADO", detalhe: nome, ip });
 
-  // Orçamento aprovado entra em contas a receber como PREVISTO
-  await gerarContaReceberDoOrcamento(orcamento.id);
+  // Opção A (P2): aprovar NÃO cria conta a receber. O orçamento aprovado fica "a faturar" (calculado:
+  // lib/financeiro/a-faturar.ts) e entra na previsão do painel; a cobrança nasce no "Faturar".
   await avisarResponsavel(orcamento.id, "APROVADO");
 
   return NextResponse.json({ ok: true, status: "APROVADO" });
