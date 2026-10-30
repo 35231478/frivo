@@ -18,7 +18,7 @@ import { prisma } from "@/lib/prisma";
 export type ModeloRef =
   | "cliente" | "cargo" | "perfilAcesso" | "tipoOs" | "tabelaPreco" | "servico" | "produto"
   | "checklistTemplate" | "unidade" | "tecnico" | "equipe" | "veiculo" | "formularioTemplate"
-  | "prazoTemplate" | "tipoEquipamentoCustom" | "categoriaFinanceira" | "fornecedor" | "centroCusto";
+  | "prazoTemplate" | "tipoEquipamentoCustom" | "categoriaFinanceira" | "fornecedor" | "centroCusto" | "contaBancaria";
 
 export class ErroRefEmpresa extends Error {}
 
@@ -92,6 +92,20 @@ export async function centroCustoParaGravar(centroCustoId: string | null | undef
   if (!centroCustoId) return { centroCustoId: null };
   await validarRefEmpresa("centroCusto", centroCustoId, empresaId, "Centro de custo", { novoAtivo: true, manter: [atual] });
   return { centroCustoId };
+}
+
+/**
+ * Conta bancária de uma conta a receber — o vínculo é o ID. `undefined` = não mexe; vazio/null = sem
+ * conta. Senão: conta da empresa; escolha NOVA precisa estar ativa (manter a `atual` é aceito). Devolve
+ * também o nome, gravado em `banco` (texto) como histórico/fallback e para o filtro da lista.
+ */
+export async function contaBancariaParaGravar(contaBancariaId: string | null | undefined, empresaId: string, atual?: string | null):
+  Promise<{ contaBancariaId?: string | null; banco?: string | null }> {
+  if (contaBancariaId === undefined) return {};
+  if (!contaBancariaId) return { contaBancariaId: null };
+  await validarRefEmpresa("contaBancaria", contaBancariaId, empresaId, "Conta bancária", { novoAtivo: true, manter: [atual] });
+  const c = await prisma.contaBancaria.findFirst({ where: { id: contaBancariaId, empresaId }, select: { nome: true } });
+  return { contaBancariaId, banco: c?.nome ?? null };
 }
 
 /** Converte o erro em resposta 400 (ou devolve null se não for erro de vínculo). */

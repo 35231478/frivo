@@ -1,5 +1,6 @@
 "use client";
 
+import { ContasReceberVinculadas, type ContaVinculada } from "@/components/financeiro/contas-receber-vinculadas";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -24,8 +25,10 @@ interface MedicaoResumo { id: string; numero: string; status: string; valorTotal
  * Aba Financeiro da OS — fluxo ÚNICO: a OS entra numa medição oficial (que vira conta e boleto)
  * pelo botão abaixo. A antiga "medição interna" (OsMedicao) saiu: nunca virava conta a receber.
  */
-export function OsFinanceiro({ osId, temContrato, medicoes: iniciais, itensOrcamento, abrirNfse, onAbriuNfse }: {
+export function OsFinanceiro({ osId, temContrato, medicoes: iniciais, itensOrcamento, contasReceber = [], abrirNfse, onAbriuNfse }: {
   osId: string; temContrato?: boolean; medicoes: MedicaoResumo[]; itensOrcamento: any[];
+  /** Contas a receber da OS (medição ou orçamento ligado) — o outro lado do vínculo da conta */
+  contasReceber?: ContaVinculada[];
   /** Botão "Emitir NFS-e" do cabeçalho: abre a emissão ao chegar na aba */
   abrirNfse?: boolean; onAbriuNfse?: () => void;
 }) {
@@ -97,6 +100,12 @@ export function OsFinanceiro({ osId, temContrato, medicoes: iniciais, itensOrcam
               </div>
             </a>
           ))}
+        </div>
+      )}
+
+      {contasReceber.length > 0 && (
+        <div className="border-t border-surface-linha pt-5">
+          <ContasReceberVinculadas contas={contasReceber} podeAbrir={pode("financeiro", "contasReceber")} />
         </div>
       )}
 

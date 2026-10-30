@@ -1,14 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle, Ban, CalendarRange, CheckCircle2, ChevronLeft, ChevronRight, Download, ExternalLink, Eye, FileText,
-  Loader2, MoreVertical, RefreshCw, RotateCcw, Search, Send, Sigma, X, XCircle, FileClock,
+  Loader2, RefreshCw, RotateCcw, Search, Send, Sigma, X, XCircle, FileClock,
 } from "lucide-react";
 import { Drawer } from "@/components/ui/drawer";
+import { ItemMenu, MenuAcoes } from "@/components/ui/menu-acoes";
 import { Dica } from "@/components/ui/dica";
 import { InputData } from "@/components/ui/input-data";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -170,7 +170,6 @@ export function NotasCentralView({ dados }: { dados: DadosCentral }) {
 }
 
 /** Altura máxima do menu ⋮ (7 itens): abaixo disso de espaço, ele abre para cima */
-const ALTURA_MENU = 300;
 const INPUT = "bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all";
 const TH = "text-left px-3 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider whitespace-nowrap";
 
@@ -263,39 +262,15 @@ function Ambiente({ a }: { a: string }) {
   return <StatusPill tom={a === "PRODUCAO" ? "ok-solido" : "acento"} tamanho="sm" data-ambiente={a}>{a === "PRODUCAO" ? "Produção" : "Homologação"}</StatusPill>;
 }
 
-/* ───────── Ações por nota: menu ⋮ (fixo na tela, em portal: nem a tabela nem a coluna fixa o cobrem) ───────── */
+/* ───────── Ações por nota: ícone de detalhes + menu ⋮ (components/ui/menu-acoes) ───────── */
 function AcoesNota({ n, onDetalhes, onReconsultar, consultando }: { n: NotaLinha; onDetalhes: () => void; onReconsultar: () => void; consultando: boolean }) {
-  const [aberto, setAberto] = useState(false);
-  const [pos, setPos] = useState<{ top?: number; bottom?: number; right: number } | null>(null);
-  const botao = useRef<HTMLButtonElement>(null);
   const a = acoesDaNota(n);
-  useLayoutEffect(() => {
-    if (!aberto || !botao.current) return;
-    const r = botao.current.getBoundingClientRect();
-    const right = Math.max(8, window.innerWidth - r.right);
-    // Perto do rodapé da tela: abre para cima (o menu nunca fica fora da área visível)
-    setPos(window.innerHeight - r.bottom < ALTURA_MENU ? { bottom: window.innerHeight - r.top + 4, right } : { top: r.bottom + 4, right });
-  }, [aberto]);
-  useEffect(() => {
-    if (!aberto) return;
-    const fechar = () => setAberto(false);
-    window.addEventListener("scroll", fechar, true);
-    window.addEventListener("resize", fechar);
-    return () => { window.removeEventListener("scroll", fechar, true); window.removeEventListener("resize", fechar); };
-  }, [aberto]);
-  const fechar = () => setAberto(false);
   return (
     <div className="inline-flex items-center gap-1">
       <button type="button" onClick={onDetalhes} title="Ver detalhes" aria-label="Ver detalhes" className="p-1.5 rounded text-ink-muted hover:text-primary-600" data-acao="detalhes"><Eye className="w-4 h-4" /></button>
-      <button ref={botao} type="button" onClick={() => setAberto((v) => !v)} aria-haspopup="menu" aria-expanded={aberto} aria-label="Mais ações"
-        className="p-1.5 rounded text-ink-muted hover:text-primary-600" data-acao="menu">
-        {consultando ? <Loader2 className="w-4 h-4 animate-spin" /> : <MoreVertical className="w-4 h-4" />}
-      </button>
-      {aberto && pos && createPortal(
-        <>
-          <div className="fixed inset-0 z-40" onClick={fechar} />
-          <div role="menu" style={pos} className="fixed z-50 w-60 bg-white border border-surface-border rounded-lg shadow-card-hover py-1 text-left" data-menu-acoes
-            onKeyDown={(e) => { if (e.key === "Escape") fechar(); }}>
+      <MenuAcoes ocupado={consultando}>
+        {(fechar) => (
+          <>
             <ItemMenu icone={Eye} onClick={() => { fechar(); onDetalhes(); }} id="detalhes">Ver detalhes</ItemMenu>
             {a.origem && <ItemMenu icone={ExternalLink} href={a.origem} id="origem">{n.origem === "OS" && n.osNumero ? `Abrir OS ${n.osNumero}` : `Abrir medição${n.medicaoNumero ? ` ${n.medicaoNumero}` : ""}`}</ItemMenu>}
             <ItemMenu icone={Download} href={`/api/fiscal/notas/${n.id}/arquivo?tipo=pdf`} novaAba desabilitado={!a.pdf} motivo={motivoSemArquivo(n.status, "pdf")} id="pdf">Baixar DANFSE (PDF)</ItemMenu>
@@ -303,33 +278,11 @@ function AcoesNota({ n, onDetalhes, onReconsultar, consultando }: { n: NotaLinha
             {a.reconsultar && <ItemMenu icone={RefreshCw} onClick={() => { fechar(); onReconsultar(); }} id="reconsultar">Reconsultar status</ItemMenu>}
             {a.reemitir && <ItemMenu icone={RotateCcw} href={a.reemitir} id="reemitir">Corrigir e reemitir</ItemMenu>}
             {a.cancelar && <ItemMenu icone={Ban} desabilitado motivo="Em breve: o cancelamento pelo PlugNotas ainda não está disponível." perigo id="cancelar">Cancelar nota</ItemMenu>}
-          </div>
-        </>,
-        document.body,
-      )}
+          </>
+        )}
+      </MenuAcoes>
     </div>
   );
-}
-
-function ItemMenu({ icone: Icone, children, onClick, href, novaAba, desabilitado, motivo, perigo, id }: {
-  icone: React.ComponentType<{ className?: string }>; children: React.ReactNode; onClick?: () => void; href?: string; novaAba?: boolean;
-  desabilitado?: boolean; motivo?: string; perigo?: boolean; id: string;
-}) {
-  // Desabilitado vence tudo: vira texto (sem link nem clique) com o motivo na dica
-  const cls = cn("flex items-center gap-2 w-full px-3 py-2 text-sm", desabilitado ? "text-ink-subtle cursor-not-allowed" : perigo ? "text-atrasado hover:bg-atrasado-claro" : "text-ink hover:bg-surface-alt");
-  if (desabilitado) {
-    return (
-      <span role="menuitem" aria-disabled="true" title={motivo} className={cls} data-item={id} data-desabilitado="">
-        <Icone className="w-3.5 h-3.5" /><span className="flex-1">{children}</span>{motivo && <Dica texto={motivo} rotulo={typeof children === "string" ? children : undefined} lado="esquerda" />}
-      </span>
-    );
-  }
-  if (href) {
-    return novaAba || href.startsWith("/api/")
-      ? <a role="menuitem" href={href} target={novaAba ? "_blank" : undefined} rel="noreferrer" className={cls} data-item={id}><Icone className="w-3.5 h-3.5" />{children}</a>
-      : <Link role="menuitem" href={href} className={cls} data-item={id}><Icone className="w-3.5 h-3.5" />{children}</Link>;
-  }
-  return <button type="button" role="menuitem" onClick={onClick} className={cls} data-item={id}><Icone className="w-3.5 h-3.5" />{children}</button>;
 }
 
 /* ───────── Gaveta: detalhe da nota ───────── */

@@ -6,7 +6,8 @@ import { MedicaoDocumento } from "@/components/medicao/medicao-documento";
 import { MedicaoAcoes } from "@/components/medicao/medicao-acoes";
 import { NotasFiscais } from "@/components/fiscal/nfse-notas";
 import { PageHeader } from "@/components/ui/page-header";
-import { formatarData, formatarMoeda, LABELS_STATUS_CONTA_RECEBER, CLASSE_STATUS_CONTA_RECEBER } from "@/lib/utils";
+import { ContasReceberVinculadas } from "@/components/financeiro/contas-receber-vinculadas";
+import { pode } from "@/lib/permissoes";
 import { Receipt } from "lucide-react";
 
 export const metadata: Metadata = { title: "Medição" };
@@ -27,7 +28,7 @@ export default async function MedicaoDetalhePage({ params, searchParams }: {
         cliente: true,
         contrato: { select: { id: true, numero: true } },
         itens: { orderBy: { ordem: "asc" } },
-        contasReceber: true,
+        contasReceber: { where: { excluidaEm: null }, orderBy: { criadoEm: "asc" } },
       },
     }),
     prisma.empresa.findUnique({ where: { id: empresaId } }),
@@ -66,20 +67,10 @@ export default async function MedicaoDetalhePage({ params, searchParams }: {
           <h2 className="card-title mb-3 flex items-center gap-2">
             <Receipt className="w-4 h-4 text-primary-600" /> Contas a receber
           </h2>
-          <div className="divide-y divide-surface-border">
-            {medicao.contasReceber.map((c) => (
-              <div key={c.id} className="flex items-center justify-between py-3">
-                <div>
-                  <p className="font-mono text-sm font-semibold text-ink">{c.numero}</p>
-                  <p className="text-xs text-ink-muted">Venc.: {formatarData(c.dataVencimento)}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className={CLASSE_STATUS_CONTA_RECEBER[c.status]}>{LABELS_STATUS_CONTA_RECEBER[c.status]}</span>
-                  <span className="font-semibold text-ink">{formatarMoeda(Number(c.valor))}</span>
-                </div>
-              </div>
-            ))}
-          </div>
+          <ContasReceberVinculadas
+            contas={medicao.contasReceber.map((c) => ({ id: c.id, numero: c.numero, valor: Number(c.valor), status: c.status, dataVencimento: c.dataVencimento }))}
+            podeAbrir={pode(session!.user!.permissoes, "financeiro", "contasReceber", session!.user!.role)}
+          />
         </div>
       )}
     </div>

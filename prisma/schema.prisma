@@ -501,6 +501,8 @@ model Empresa {
   contasPagar            ContaPagar[]
   categoriasFinanceiras  CategoriaFinanceira[]
   centrosCusto           CentroCusto[]
+  contasBancarias        ContaBancaria[]
+  contaReceberEventos    ContaReceberEvento[]
   fornecedores           Fornecedor[]
   emailTemplates         EmailTemplate[]
   emailLogs              EmailLog[]
@@ -710,6 +712,7 @@ model Usuario {
   orcamentosCriados      Orcamento[]               @relation("OrcamentoCriador")
   orcamentoAnexos        OrcamentoAnexo[]          @relation("OrcamentoAnexoAutor")
   orcamentoEventos       OrcamentoEvento[]         @relation("OrcamentoEventoAutor")
+  contaReceberEventos    ContaReceberEvento[]      @relation("ContaReceberEventoUsuario")
   pedidoCompraEventos    PedidoCompraEvento[]      @relation("PedidoCompraEventoAutor")
   pedidoCompraVinculos   PedidoCompraVinculo[]     @relation("PedidoCompraVinculoAutor")
   empresasFiscalEditadas EmpresaFiscal[]           @relation("EmpresaFiscalAutor")
@@ -2439,14 +2442,25 @@ model ContaReceber {
 
   // Categoria financeira: o vínculo é o ID (Leva 5.1). `categoria` (nome) fica como histórico/fallback
   // das contas antigas cujo nome não casou com nenhuma categoria cadastrada.
-  categoriaId  String?  @map("categoria_id")
-  categoria    String?
-  observacao   String?
-  criadoEm     DateTime @default(now()) @map("criado_em")
-  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+  categoriaId        String?   @map("categoria_id")
+  categoria          String?
+  observacao         String?
+  /// Gestão (CR robusto): centro de custo e conta bancária por ID. `banco` (texto) fica como
+  /// histórico/fallback e recebe o nome da conta bancária escolhida.
+  centroCustoId      String?   @map("centro_custo_id")
+  contaBancariaId    String?   @map("conta_bancaria_id")
+  canceladaEm        DateTime? @map("cancelada_em")
+  motivoCancelamento String?   @map("motivo_cancelamento")
+  /// Exclusão LÓGICA (só conta manual sem nota fiscal): some das listas, o registro e o histórico ficam
+  excluidaEm         DateTime? @map("excluida_em")
+  criadoEm           DateTime  @default(now()) @map("criado_em")
+  atualizadoEm       DateTime  @updatedAt @map("atualizado_em")
 
   empresa             Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   cliente             Cliente              @relation(fields: [clienteId], references: [id])
+  centroCusto         CentroCusto?         @relation(fields: [centroCustoId], references: [id], onDelete: SetNull)
+  contaBancaria       ContaBancaria?       @relation(fields: [contaBancariaId], references: [id], onDelete: SetNull)
+  eventos             ContaReceberEvento[]
   medicao             Medicao?             @relation(fields: [medicaoId], references: [id])
   orcamento           Orcamento?           @relation(fields: [orcamentoId], references: [id])
   contrato            Contrato?            @relation(fields: [contratoId], references: [id], onDelete: SetNull)
@@ -2456,6 +2470,8 @@ model ContaReceber {
 
   @@unique([contratoId, refAno, refMes])
   @@index([categoriaId])
+  @@index([centroCustoId])
+  @@index([contaBancariaId])
   @@index([empresaId, clienteId])
   @@index([empresaId, status, dataVencimento])
   @@index([empresaId, boletoStatus, dataRecebimento])
@@ -2463,6 +2479,46 @@ model ContaReceber {
   @@index([medicaoId])
   @@index([contratoId])
   @@map("contas_receber")
+}
+
+/// Linha do tempo da conta a receber (edição, baixa, cancelamento, exclusão, boleto, cobrança).
+model ContaReceberEvento {
+  id             String   @id @default(cuid())
+  empresaId      String   @map("empresa_id")
+  contaReceberId String   @map("conta_receber_id")
+  /// EDITADA | RECEBIDA | CANCELADA | EXCLUIDA | BOLETO_EMITIDO | BOLETO_CANCELADO | COBRANCA_ENVIADA | CRIADA
+  tipo           String
+  detalhe        String?  @db.Text
+  usuarioId      String?  @map("usuario_id")
+  criadoEm       DateTime @default(now()) @map("criado_em")
+
+  empresa      Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  contaReceber ContaReceber @relation(fields: [contaReceberId], references: [id], onDelete: Cascade)
+  usuario      Usuario?     @relation("ContaReceberEventoUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([contaReceberId, criadoEm])
+  @@index([empresaId])
+  @@map("conta_receber_eventos")
+}
+
+/// Conta bancária da empresa (onde o dinheiro entra/sai). Cadastro padronizado (lib/cadastros).
+model ContaBancaria {
+  id           String   @id @default(cuid())
+  empresaId    String   @map("empresa_id")
+  /// Apelido mostrado nos seletores (ex.: "Inter PJ", "Itaú — conta movimento")
+  nome         String
+  banco        String?
+  agencia      String?
+  conta        String?
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  empresa       Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  contasReceber ContaReceber[]
+
+  @@index([empresaId, ativo])
+  @@map("contas_bancarias")
 }
 
 model CategoriaFinanceira {
@@ -2494,8 +2550,9 @@ model CentroCusto {
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  empresa            Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  empresa            Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   contasPagar        ContaPagar[]
+  contasReceber      ContaReceber[]
   fornecedoresPadrao Fornecedor[]
   notasCompra        NotaCompra[]
 

@@ -26,10 +26,12 @@ function casa(row: Linha, where: Linha = {}): boolean {
     if (k === "OR") return (v as Linha[]).some((w) => casa(row, w));
     if (k === "NOT") return !casa(row, v);
     if (ehObjeto(v)) {
-      if (!(k in row)) return casa(row, v); // chave composta (ex.: cpf_empresaId)
+      // Chave composta (ex.: cpf_empresaId): nenhum operador, só campos — casa com a própria linha
+      const OPERADORES = ["in", "notIn", "not", "has", "contains", "equals", "some", "lt", "lte", "gt", "gte", "is", "isNot"];
+      if (!(k in row) && !Object.keys(v).some((op) => OPERADORES.includes(op))) return casa(row, v);
       if ("in" in v) return v.in.includes(row[k]);
       if ("notIn" in v) return !v.notIn.includes(row[k]);
-      if ("not" in v) return row[k] !== v.not;
+      if ("not" in v) return v.not === null ? row[k] != null : row[k] !== v.not;
       if ("has" in v) return (row[k] ?? []).includes(v.has);
       if ("contains" in v) return String(row[k] ?? "").toLowerCase().includes(String(v.contains).toLowerCase());
       if ("equals" in v) return v.mode === "insensitive" ? String(row[k] ?? "").toLowerCase() === String(v.equals).toLowerCase() : row[k] === v.equals;
@@ -44,7 +46,8 @@ function casa(row: Linha, where: Linha = {}): boolean {
       if (row[k] === null && !("is" in v) && !("isNot" in v)) return false; // relação vazia não casa (como o Prisma)
       return true;
     }
-    return row[k] === v;
+    // Coluna ausente na linha de teste = NULL (como uma coluna nova, nula, no banco)
+    return v === null ? row[k] == null : row[k] === v;
   });
 }
 

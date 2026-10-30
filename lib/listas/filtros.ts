@@ -163,7 +163,8 @@ export function condCardReceber(card: string, agora = new Date()) {
 
 /** where de Contas a Receber a partir da URL (busca, painel de filtros, chips de status e cartão). */
 export function whereContasReceber(empresaId: string, sp: SP, agora = new Date()) {
-  const where: any = { empresaId };
+  // Excluída (exclusão lógica) não aparece em lugar nenhum da lista/exportação
+  const where: any = { empresaId, excluidaEm: null };
   const and: any[] = [];
   const q = (sp.q ?? "").trim();
   if (q) {
