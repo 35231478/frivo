@@ -160,7 +160,8 @@ describe.skipIf(!URL_PG)("UX-4 — financeiro em escala (PostgreSQL real)", () =
     const { GET } = await import("@/app/api/contas-receber/exportar/route");
     const pedir = (qs: string) => GET(new NextRequest(`http://localhost/api/contas-receber/exportar${qs}`));
 
-    const res = await pedir("?status=A_VENCER");
+    // A exportação segue o período da tela (padrão: o mês); aqui, todo o período
+    const res = await pedir("?status=A_VENCER&periodo=todos");
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/csv");
     const csv = await res.text();

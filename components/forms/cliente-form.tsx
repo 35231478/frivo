@@ -558,7 +558,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
                 </span>
                 {isEditing && statusCalc !== "SEM_HISTORICO" && totalProx > 0 && (
                   <Link
-                    href={`/financeiro/contas-receber?clienteId=${initialData!.id}`}
+                    href={`/financeiro/contas-receber?clienteId=${initialData!.id}&periodo=todos`}
                     className="inline-flex w-fit items-center gap-1 text-xs text-ink-muted hover:text-primary-600 transition-colors"
                   >
                     A receber (30 dias): {formatarMoeda(totalProx)}

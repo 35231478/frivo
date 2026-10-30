@@ -1,10 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ComponentType } from "react";
 import Link from "next/link";
 import { cn, formatarMoeda, formatarData, formatarCpfCnpj, LABELS_FORMA_PAGAMENTO } from "@/lib/utils";
 import { statusVisualReceber } from "@/lib/financeiro-status";
-import { AvatarCliente } from "@/components/ui/avatar-cliente";
 import { ContaReceberAcoes } from "@/components/financeiro/conta-receber-acoes";
 import { ContaReceberDetalhes } from "@/components/financeiro/conta-receber-detalhes";
 import { origemComLink } from "@/lib/financeiro/conta-receber-gestao";
@@ -15,9 +14,10 @@ import { Paginacao } from "@/components/listagem/listagem-ui";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import {
   Receipt, AlertTriangle, CalendarClock, CheckCircle2, Search, SlidersHorizontal,
-  Plus, Download, X, Barcode, Loader2,
+  Plus, Download, Barcode, Loader2, Sigma,
 } from "lucide-react";
-import { InputData } from "@/components/ui/input-data";
+import { BarraPeriodo, CardResumo, GradeCards, type PeriodoTela } from "@/components/listagem/periodo-cards";
+import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
 
 export interface ContaView {
   id: string; numero: string; descricao: string; valor: number;
@@ -37,10 +37,8 @@ export interface ContaView {
 }
 interface Opcao { id: string; nome: string }
 
-export interface ResumoReceber {
-  aReceber: { v: number; q: number }; vencido: { v: number; q: number };
-  hoje: { v: number; q: number }; recebido: { v: number; q: number };
-}
+/** Cards do período (lib/listas/filtros: CARDS_PERIODO_RECEBER): quantidade + R$ */
+export type ResumoReceber = Record<CardKey, { v: number; q: number }>;
 
 export interface FiltrosReceber {
   q: string; card: string; clienteId: string; categoria: string; forma: string; banco: string;
@@ -51,19 +49,20 @@ export interface FiltrosReceber {
   conta?: string;
 }
 
-type CardKey = "A_RECEBER" | "VENCIDO" | "VENCE_HOJE" | "RECEBIDO";
+type CardKey = "VENCIDO" | "VENCE_HOJE" | "A_VENCER" | "RECEBIDO" | "TOTAL";
 
 /**
- * UX-4 (E4): busca, filtros e paginação rodam no SERVIDOR (a URL é a fonte da verdade) —
- * acabou o corte fixo de 500 em que contas "sumiam" da tela. Os cartões de resumo vêm de
- * agregados sobre o conjunto COMPLETO; a exportação CSV exporta o FILTRO, não a página.
+ * Contas a Receber no padrão da casa: período (‹ mês ›, personalizado ou todo o período — pelo
+ * VENCIMENTO) + cards do período clicáveis como filtro, e a lista em "cara de planilha" no desktop
+ * (cartões no celular). Busca, filtros, período e paginação rodam no SERVIDOR (a URL é a fonte da
+ * verdade); a exportação CSV exporta o FILTRO (com o período), não a página.
  */
 export function ContasReceberView({
-  contas, clientes, categorias, interAtivo, resumo, total, totalFiltrado, pagina, porPagina, filtros,
+  contas, clientes, categorias, interAtivo, resumo, total, totalFiltrado, pagina, porPagina, filtros, periodo,
 }: {
   contas: ContaView[]; clientes: Opcao[]; categorias: { id: string; nome: string; cor: string; ativo: boolean }[];
   interAtivo: boolean; resumo: ResumoReceber; total: number; totalFiltrado: number;
-  pagina: number; porPagina: number; filtros: FiltrosReceber;
+  pagina: number; porPagina: number; filtros: FiltrosReceber; periodo: PeriodoTela;
 }) {
   const { pode } = usePermissoes();
   const podeCobrar = pode("financeiro", "contasReceber");
@@ -71,11 +70,11 @@ export function ContasReceberView({
     chave: "contas-receber", qAtual: filtros.q, paramBusca: "q", lembrarFiltros: false,
   });
   const [painel, setPainel] = useState(
-    !!(filtros.clienteId || filtros.categoria || filtros.forma || filtros.banco || filtros.valorMin || filtros.valorMax || filtros.vencDe || filtros.vencAte),
+    !!(filtros.clienteId || filtros.categoria || filtros.forma || filtros.banco || filtros.valorMin || filtros.valorMax),
   );
-  // Painel: edita local e "Aplicar" manda tudo para a URL de uma vez
+  // Painel: edita local e "Aplicar" manda tudo para a URL de uma vez (o vencimento é o período, lá em cima)
   const [f, setF] = useState({
-    vencDe: filtros.vencDe, vencAte: filtros.vencAte, clienteId: filtros.clienteId, forma: filtros.forma,
+    clienteId: filtros.clienteId, forma: filtros.forma,
     banco: filtros.banco, categoria: filtros.categoria, valorMin: filtros.valorMin, valorMax: filtros.valorMax,
   });
   const [detalheId, setDetalheId] = useState<string | null>(filtros.conta || null);
@@ -91,13 +90,13 @@ export function ContasReceberView({
 
   function aplicar() {
     navegar({
-      vencDe: f.vencDe || null, vencAte: f.vencAte || null, clienteId: f.clienteId || null, forma: f.forma || null,
+      clienteId: f.clienteId || null, forma: f.forma || null,
       banco: f.banco || null, categoria: f.categoria || null, valorMin: f.valorMin || null, valorMax: f.valorMax || null,
     });
     setPainel(false);
   }
   function limpar() {
-    setF({ vencDe: "", vencAte: "", clienteId: "", forma: "", banco: "", categoria: "", valorMin: "", valorMax: "" });
+    setF({ clienteId: "", forma: "", banco: "", categoria: "", valorMin: "", valorMax: "" });
     navegar({ vencDe: null, vencAte: null, clienteId: null, forma: null, banco: null, categoria: null, valorMin: null, valorMax: null, status: null });
   }
   function toggleStatus(chave: string) {
@@ -110,13 +109,24 @@ export function ContasReceberView({
     window.location.href = `/api/contas-receber/exportar${window.location.search}`;
   }
 
+  // Nada no período: oferece todo o período (busca de uma conta antiga, link de outra tela)
+  const Vazio = () => (
+    <div className="flex flex-col items-center gap-2 py-10 text-center" data-lista-vazia>
+      <p className="text-sm font-medium text-ink">{periodo.tipo === "todos" ? "Nenhuma cobrança encontrada" : `Nenhuma cobrança em ${periodo.tipo === "mes" ? periodo.rotulo.toLowerCase() : "o período"}`}</p>
+      {periodo.tipo !== "todos" && (
+        <button type="button" onClick={() => navegar({ mes: null, de: null, ate: null, periodo: "todos" })} className="text-sm text-primary-600 hover:underline" data-ver-todo-periodo>Ver todo o período</button>
+      )}
+    </div>
+  );
+
   const inputCls = "bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all";
 
-  const CARDS: { key: CardKey; label: string; icone: any; cor: string; bgSel: string; borda: string; v: number; q: number }[] = [
-    { key: "A_RECEBER", label: "A Receber", icone: Receipt, cor: "text-primary-600", bgSel: "bg-primary-50", borda: "border-b-primary-500", v: resumo.aReceber.v, q: resumo.aReceber.q },
-    { key: "VENCIDO", label: "Vencido", icone: AlertTriangle, cor: "text-atrasado", bgSel: "bg-atrasado-claro", borda: "border-b-atrasado", v: resumo.vencido.v, q: resumo.vencido.q },
-    { key: "VENCE_HOJE", label: "Vence Hoje", icone: CalendarClock, cor: "text-atencao-texto", bgSel: "bg-atencao-claro", borda: "border-b-atencao", v: resumo.hoje.v, q: resumo.hoje.q },
-    { key: "RECEBIDO", label: "Recebido (mês)", icone: CheckCircle2, cor: "text-success-600", bgSel: "bg-success-50", borda: "border-b-success-500", v: resumo.recebido.v, q: resumo.recebido.q },
+  const CARDS: { key: CardKey; rotulo: string; icone: ComponentType<{ className?: string }>; cor: string; dica?: string }[] = [
+    { key: "VENCIDO", rotulo: "Vencidos", icone: AlertTriangle, cor: "text-atrasado" },
+    { key: "VENCE_HOJE", rotulo: "Vencem hoje", icone: CalendarClock, cor: "text-atencao-texto" },
+    { key: "A_VENCER", rotulo: "A vencer", icone: Receipt, cor: "text-primary-600", dica: "Inclui as previsões (contratos e orçamentos aprovados)." },
+    { key: "RECEBIDO", rotulo: "Recebidos", icone: CheckCircle2, cor: "text-success-600" },
+    { key: "TOTAL", rotulo: "Total do período", icone: Sigma, cor: "text-ink", dica: "Todas as cobranças do período, menos as canceladas." },
   ];
 
   return (
@@ -134,28 +144,15 @@ export function ContasReceberView({
         </div>
       </div>
 
-      {/* Cards de resumo (clicáveis) — agregados sobre TODAS as contas da empresa */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {CARDS.map((c) => {
-          const sel = card === c.key;
-          return (
-            <button key={c.key} type="button" data-card={c.key} aria-pressed={sel}
-              onClick={() => navegar({ card: sel ? null : c.key })}
-              className={cn(
-                "text-left rounded-card border border-surface-border border-b-2 bg-white p-4 transition-all hover:shadow-card",
-                c.borda, sel ? `${c.bgSel} ring-2 ring-offset-1 ring-primary-200` : "hover:border-primary-200",
-              )}>
-              <div className="flex items-start justify-between">
-                <c.icone className={cn("w-5 h-5", c.cor)} />
-                {sel && <X className="w-3.5 h-3.5 text-ink-subtle" />}
-              </div>
-              <p className="text-xs text-ink-muted mt-2">{c.label}</p>
-              <p className="text-xl font-bold text-ink mt-0.5">{formatarMoeda(c.v)}</p>
-              <p className="text-[11px] text-ink-subtle mt-0.5">{c.q} cobrança{c.q === 1 ? "" : "s"}</p>
-            </button>
-          );
-        })}
-      </div>
+      {/* Período (pelo vencimento) + cards do período, clicáveis como filtro — padrão da casa */}
+      <BarraPeriodo periodo={periodo} navegar={navegar} permitirTodos dica="Pela data de vencimento." />
+      <GradeCards colunas={5}>
+        {CARDS.map((c) => (
+          <CardResumo key={c.key} id={c.key} rotulo={c.rotulo} icone={c.icone} cor={c.cor} dica={c.dica}
+            v={resumo[c.key].v} q={resumo[c.key].q} unidade={["cobrança", "cobranças"]}
+            ativo={card === c.key} onClick={() => navegar({ card: card === c.key ? null : c.key })} />
+        ))}
+      </GradeCards>
 
       {/* Busca + filtros */}
       <div className="card overflow-hidden">
@@ -175,8 +172,6 @@ export function ContasReceberView({
         {painel && (
           <div className="p-4 border-b border-surface-border bg-surface-alt/40 space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <FiltroCampo label="Vencimento — de"><InputData value={f.vencDe} onChange={(v) => setF({ ...f, vencDe: v })} /></FiltroCampo>
-              <FiltroCampo label="Vencimento — até"><InputData value={f.vencAte} onChange={(v) => setF({ ...f, vencAte: v })} /></FiltroCampo>
               <FiltroCampo label="Cliente">
                 <select value={f.clienteId} onChange={(e) => setF({ ...f, clienteId: e.target.value })} className={inputCls}>
                   <option value="">Todos</option>
@@ -221,7 +216,7 @@ export function ContasReceberView({
         {/* Celular: um cartão por conta (toque abre os detalhes; ações no ⋮) */}
         <ul className="md:hidden divide-y divide-surface-border" data-cartoes-receber>
           {comStatus.length === 0 ? (
-            <li className="text-center text-ink-subtle py-12">Nenhuma cobrança encontrada</li>
+            <li><Vazio /></li>
           ) : comStatus.map(({ c, sv }) => {
             const origem = origemComLink(c);
             return (
@@ -245,58 +240,51 @@ export function ContasReceberView({
           })}
         </ul>
 
-        {/* Desktop: tabela */}
-        <div className="hidden md:block overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-surface-alt border-b border-surface-border">
-              <tr>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Cliente</th>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden lg:table-cell">Descrição</th>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden md:table-cell">Categoria</th>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden md:table-cell">Vencimento</th>
-                <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Valor</th>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Status</th>
-                <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Ações</th>
+        {/* Desktop: "cara de planilha" (lib/planilha — o mesmo estilo do documento do orçamento) */}
+        <div className="hidden md:block overflow-x-auto" data-tabela-receber>
+          <table className={cn(PLANILHA.tabela, "table-fixed")} data-tabela-planilha>
+            <thead>
+              <tr className={PLANILHA.cabecalho}>
+                <th scope="col" className={cn(PLANILHA.th, "text-left w-[5.75rem]")}>Vencimento</th>
+                <th scope="col" className={cn(PLANILHA.th, "text-left hidden lg:table-cell w-[8.5rem]")}>Nº</th>
+                <th scope="col" className={cn(PLANILHA.th, "text-left w-[17%]")}>Cliente</th>
+                <th scope="col" className={cn(PLANILHA.th, "text-left hidden lg:table-cell")}>Descrição</th>
+                <th scope="col" className={cn(PLANILHA.th, "text-left hidden xl:table-cell w-[10rem]")}>Categoria</th>
+                <th scope="col" className={cn(PLANILHA.th, "text-left w-[8rem]")}>Situação</th>
+                <th scope="col" className={cn(PLANILHA.th, "text-right w-[7.5rem]")}>Valor (R$)</th>
+                <th scope="col" className={cn(PLANILHA.th, "w-10")}><span className="sr-only">Ações</span></th>
               </tr>
             </thead>
             <tbody>
               {comStatus.length === 0 ? (
-                <tr><td colSpan={7} className="text-center text-ink-subtle py-12">Nenhuma cobrança encontrada</td></tr>
+                <tr><td colSpan={8}><Vazio /></td></tr>
               ) : comStatus.map(({ c, sv }) => {
+                const origem = origemComLink(c);
                 return (
-                  <tr key={c.id} className={cn("border-b border-surface-border transition-colors", sv.linhaVermelha ? "bg-atrasado-claro hover:bg-atrasado-claro/50" : "hover:bg-surface-alt/60")}>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2.5">
-                        <AvatarCliente nome={c.clienteNome} logoUrl={c.clienteLogo} size={32} />
-                        <div className="min-w-0">
-                          <p className="font-medium text-ink truncate max-w-[180px]">{c.clienteNome}</p>
-                          {c.clienteCnpj && <p className="text-xs text-ink-subtle">{formatarCpfCnpj(c.clienteCnpj)}</p>}
-                        </div>
+                  <tr key={c.id} data-linha-conta={c.id}
+                    className={cn(PLANILHA.linha, "hover:bg-primary-50/40", sv.linhaVermelha && "even:bg-atrasado-claro bg-atrasado-claro hover:bg-atrasado-claro/70")}>
+                    <td className={cn(PLANILHA.td, "align-middle tabular-nums whitespace-nowrap text-ink-muted")}>{c.dataVencimento ? formatarData(c.dataVencimento) : "—"}</td>
+                    <td className={cn(PLANILHA.td, "align-middle hidden lg:table-cell truncate font-mono text-[11px] text-ink-subtle")} title={c.numero} data-numero-conta>{c.numero}</td>
+                    <td className={cn(PLANILHA.td, "align-middle")}>
+                      <p className="font-medium text-ink truncate" title={c.clienteCnpj ? `${c.clienteNome} · ${formatarCpfCnpj(c.clienteCnpj)}` : c.clienteNome}>{c.clienteNome}</p>
+                    </td>
+                    <td className={cn(PLANILHA.td, "align-middle hidden lg:table-cell")}>
+                      <div className="flex items-baseline gap-1.5 min-w-0">
+                        <button type="button" onClick={() => setDetalheId(c.id)} title={c.descricao} className="min-w-0 text-left text-ink hover:text-primary-600 truncate" data-abrir-detalhes={c.id}>{c.descricao}</button>
+                        {origem && <Link href={origem.href} title={origem.rotulo} className="shrink-0 max-w-[45%] truncate text-[11px] text-acento hover:underline" data-origem-conta>{origem.rotulo}</Link>}
                       </div>
                     </td>
-                    <td className="px-4 py-3 hidden lg:table-cell max-w-[240px]">
-                      <button type="button" onClick={() => setDetalheId(c.id)} className="block text-left text-ink-muted hover:text-primary-600 truncate max-w-full" data-abrir-detalhes={c.id}>{c.descricao}</button>
-                      <span className="flex items-center gap-1.5 text-xs text-ink-subtle">
-                        <span className="font-mono">{c.numero}</span>
-                        {(() => { const o = origemComLink(c); return o ? <Link href={o.href} className="text-acento hover:underline" data-origem-conta>{o.rotulo}</Link> : null; })()}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 hidden md:table-cell">
-                      <CategoriaBadge conta={c} categorias={categorias} />
-                    </td>
-                    <td className="px-4 py-3 text-ink-muted hidden md:table-cell">{c.dataVencimento ? formatarData(c.dataVencimento) : "—"}</td>
-                    <td className="px-4 py-3 text-right font-bold text-success-700">{formatarMoeda(c.valor)}</td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className={cn("inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full", sv.classe)}>
+                    <td className={cn(PLANILHA.td, "align-middle hidden xl:table-cell")}><CategoriaBadge conta={c} categorias={categorias} linhaUnica /></td>
+                    <td className={cn(PLANILHA.td, "align-middle")}>
+                      <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                        <span className={cn("inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full", sv.classe)} data-situacao>
                           {sv.linhaVermelha && <AlertTriangle className="w-3 h-3" />}{sv.label}
                         </span>
-                        {c.boletoStatus === "EMITIDO" && <Barcode className="w-4 h-4 text-ok-texto" aria-label="Boleto emitido" />}
+                        {c.boletoStatus === "EMITIDO" && <Barcode className="w-3.5 h-3.5 text-ok-texto" aria-label="Boleto emitido" />}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      {acoes(c)}
-                    </td>
+                    <td className={cn(PLANILHA.td, PLANILHA.numero, "align-middle font-semibold text-ink")} data-valor>{valorSemMoeda(c.valor)}</td>
+                    <td className={cn(PLANILHA.td, "align-middle text-right py-0.5")}>{acoes(c)}</td>
                   </tr>
                 );
               })}

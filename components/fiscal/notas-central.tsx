@@ -4,22 +4,22 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  AlertTriangle, Ban, CalendarRange, CheckCircle2, ChevronLeft, ChevronRight, Download, ExternalLink, Eye, FileText,
-  Loader2, RefreshCw, RotateCcw, Search, Send, Sigma, X, XCircle, FileClock,
+  AlertTriangle, Ban, CheckCircle2, Download, ExternalLink, Eye, FileText,
+  Loader2, RefreshCw, RotateCcw, Search, Send, Sigma, XCircle, FileClock,
 } from "lucide-react";
 import { Drawer } from "@/components/ui/drawer";
 import { ItemMenu, MenuAcoes } from "@/components/ui/menu-acoes";
 import { Dica } from "@/components/ui/dica";
-import { InputData } from "@/components/ui/input-data";
 import { StatusPill } from "@/components/ui/status-pill";
 import { toast } from "@/components/ui/avisos";
 import { Paginacao, ListaVazia } from "@/components/listagem/listagem-ui";
+import { BarraPeriodo, CardResumo, GradeCards } from "@/components/listagem/periodo-cards";
 import { useListagemUrl } from "@/components/listagem/use-listagem-url";
 import { cn, formatarData, formatarDataHora, formatarMoeda } from "@/lib/utils";
 import { formatarDocumento } from "@/lib/documento";
 import { LABEL_AMBIENTE } from "@/lib/nfse/regras";
 import {
-  acoesDaNota, dataDaNota, GRUPOS_SITUACAO, hrefMedicao, hrefOs, mesAtual, mesVizinho, motivoSemArquivo, rotuloMes,
+  acoesDaNota, dataDaNota, GRUPOS_SITUACAO, hrefMedicao, hrefOs, motivoSemArquivo,
   TOM_STATUS_NOTA, type GrupoSituacao,
 } from "@/lib/nfse/central";
 import type { DadosCentral, DetalheNota, NotaLinha } from "@/lib/nfse/central-server";
@@ -62,17 +62,17 @@ export function NotasCentralView({ dados }: { dados: DadosCentral }) {
       <BarraPeriodo periodo={filtros.periodo} navegar={navegar} />
 
       {/* Cards do período (e do ambiente escolhido) */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3" data-cards>
-        <Card id="aberto" rotulo="Em aberto" icone={FileClock} cor="text-previsto-texto" q={resumo.aberto.q} v={resumo.aberto.v}
+      <GradeCards colunas={6}>
+        <CardResumo id="aberto" rotulo="Em aberto" icone={FileClock} cor="text-previsto-texto" q={resumo.aberto.q} v={resumo.aberto.v}
           unidade={["medição", "medições"]}
           dica="Medições aprovadas no período (pedido de compra recebido) ainda sem NFS-e." href="/financeiro/medicoes?status=PC_RECEBIDO" />
-        <Card id="transmissao" rotulo="Em transmissão" icone={Send} cor="text-atencao-texto" q={resumo.transmissao.q} v={resumo.transmissao.v} {...cardSituacao("transmissao")} />
-        <Card id="emitidas" rotulo="Emitidas" icone={CheckCircle2} cor="text-ok-texto" q={resumo.emitidas.q} v={resumo.emitidas.v} {...cardSituacao("emitidas")} />
-        <Card id="falha" rotulo="Com falha" icone={XCircle} cor="text-atrasado-texto" q={resumo.falha.q} v={resumo.falha.v} {...cardSituacao("falha")} />
-        <Card id="canceladas" rotulo="Canceladas" icone={Ban} cor="text-ink-muted" q={resumo.canceladas.q} v={resumo.canceladas.v} {...cardSituacao("canceladas")} />
-        <Card id="total" rotulo="Total emitido" icone={Sigma} cor="text-primary-600" v={resumo.total.v}
+        <CardResumo id="transmissao" rotulo="Em transmissão" icone={Send} cor="text-atencao-texto" q={resumo.transmissao.q} v={resumo.transmissao.v} {...cardSituacao("transmissao")} />
+        <CardResumo id="emitidas" rotulo="Emitidas" icone={CheckCircle2} cor="text-ok-texto" q={resumo.emitidas.q} v={resumo.emitidas.v} {...cardSituacao("emitidas")} />
+        <CardResumo id="falha" rotulo="Com falha" icone={XCircle} cor="text-atrasado-texto" q={resumo.falha.q} v={resumo.falha.v} {...cardSituacao("falha")} />
+        <CardResumo id="canceladas" rotulo="Canceladas" icone={Ban} cor="text-ink-muted" q={resumo.canceladas.q} v={resumo.canceladas.v} {...cardSituacao("canceladas")} />
+        <CardResumo id="total" rotulo="Total emitido" icone={Sigma} cor="text-primary-600" v={resumo.total.v}
           legenda={`${resumo.total.q} ${resumo.total.q === 1 ? "nota" : "notas"} no período`} dica="Soma dos serviços das notas autorizadas no período." />
-      </div>
+      </GradeCards>
 
       <div className="card overflow-hidden">
         {/* Busca + situação + ambiente */}
@@ -172,62 +172,6 @@ export function NotasCentralView({ dados }: { dados: DadosCentral }) {
 /** Altura máxima do menu ⋮ (7 itens): abaixo disso de espaço, ele abre para cima */
 const INPUT = "bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all";
 const TH = "text-left px-3 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider whitespace-nowrap";
-
-/* ───────── Período: ‹ mês › ou intervalo personalizado ───────── */
-function BarraPeriodo({ periodo, navegar }: { periodo: DadosCentral["filtros"]["periodo"]; navegar: (m: Record<string, string | null>) => void }) {
-  const [personalizado, setPersonalizado] = useState(periodo.tipo === "intervalo");
-  const [de, setDe] = useState(periodo.de ?? "");
-  const [ate, setAte] = useState(periodo.ate ?? "");
-  const mes = periodo.mes ?? mesAtual();
-  const irMes = (m: string) => { setPersonalizado(false); navegar({ mes: m === mesAtual() ? null : m, de: null, ate: null }); };
-  return (
-    <div className="flex flex-wrap items-center gap-2" data-periodo={periodo.tipo}>
-      {!personalizado ? (
-        <div className="inline-flex items-center rounded-lg border border-surface-border bg-white">
-          <button type="button" onClick={() => irMes(mesVizinho(mes, -1))} aria-label="Mês anterior" className="p-2 text-ink-muted hover:text-primary-600" data-mes-anterior><ChevronLeft className="w-4 h-4" /></button>
-          <span className="px-2 min-w-[9.5rem] text-center text-sm font-semibold text-ink" data-mes-rotulo>{rotuloMes(mes)}</span>
-          <button type="button" onClick={() => irMes(mesVizinho(mes, 1))} aria-label="Mês seguinte" className="p-2 text-ink-muted hover:text-primary-600" data-mes-seguinte><ChevronRight className="w-4 h-4" /></button>
-        </div>
-      ) : (
-        <div className="flex flex-wrap items-end gap-2" data-intervalo>
-          <div className="w-40"><InputData value={de} onChange={setDe} aria-label="De" /></div>
-          <span className="text-sm text-ink-muted pb-2">até</span>
-          <div className="w-40"><InputData value={ate} onChange={setAte} aria-label="Até" /></div>
-          <button type="button" onClick={() => navegar({ de: de || null, ate: ate || null, mes: null })} disabled={!de && !ate}
-            className="text-sm font-semibold text-white bg-primary-500 hover:bg-primary-600 px-4 py-2 rounded-lg disabled:opacity-50" data-aplicar-intervalo>Aplicar</button>
-        </div>
-      )}
-      <button type="button" onClick={() => (personalizado ? irMes(mesAtual()) : setPersonalizado(true))}
-        className="inline-flex items-center gap-1.5 text-sm text-acento hover:underline px-1" data-alternar-periodo>
-        {personalizado ? <><X className="w-3.5 h-3.5" /> Voltar ao mês atual</> : <><CalendarRange className="w-3.5 h-3.5" /> Período personalizado</>}
-      </button>
-      {periodo.tipo === "intervalo" && <span className="text-xs text-ink-muted" data-periodo-rotulo>{periodo.rotulo}</span>}
-    </div>
-  );
-}
-
-/* ───────── Card de resumo ───────── */
-function Card({ id, rotulo, icone: Icone, cor, q, v, legenda, unidade, dica, href, ativo, onClick }: {
-  id: string; rotulo: string; icone: React.ComponentType<{ className?: string }>; cor: string; q?: number; v: number;
-  legenda?: string; unidade?: [string, string]; dica?: string; href?: string; ativo?: boolean; onClick?: () => void;
-}) {
-  const corpo = (
-    <>
-      <div className="flex items-start justify-between gap-1">
-        <Icone className={cn("w-5 h-5", cor)} />
-        {ativo && <X className="w-3.5 h-3.5 text-ink-subtle" />}
-      </div>
-      <p className="text-xs text-ink-muted mt-2 flex items-center gap-1">{rotulo}{dica && <Dica texto={dica} rotulo={rotulo} />}</p>
-      <p className="text-lg font-bold text-ink mt-0.5 tabular-nums" data-card-valor>{formatarMoeda(v)}</p>
-      <p className="text-[11px] text-ink-subtle mt-0.5" data-card-qtd>{legenda ?? `${q} ${unidade ? (q === 1 ? unidade[0] : unidade[1]) : q === 1 ? "nota" : "notas"}`}</p>
-    </>
-  );
-  const cls = cn("block text-left rounded-card border border-surface-border bg-white p-3.5 transition-all", (href || onClick) && "hover:shadow-card hover:border-primary-200",
-    ativo && "bg-primary-50 ring-2 ring-offset-1 ring-primary-200");
-  if (href) return <Link href={href} className={cls} data-card={id}>{corpo}</Link>;
-  if (onClick) return <button type="button" onClick={onClick} aria-pressed={!!ativo} className={cls} data-card={id}>{corpo}</button>;
-  return <div className={cls} data-card={id}>{corpo}</div>;
-}
 
 /* ───────── Células ───────── */
 function Situacao({ n }: { n: NotaLinha }) {
@@ -351,7 +295,7 @@ function GavetaNota({ id, versao, onFechar, onReconsultar, consultando }: {
               <Campo rotulo="Serviços">{formatarMoeda(n.valorServicos)}</Campo>
               <Campo rotulo="Desconto">{formatarMoeda(n.valorDesconto)}</Campo>
               <Campo rotulo="Valor líquido"><strong>{formatarMoeda(n.valorServicos - n.valorDesconto)}</strong></Campo>
-              {n.contaReceber && <Campo rotulo="Conta a receber"><Link href={`/financeiro/contas-receber?q=${encodeURIComponent(n.contaReceber.numero)}`} className="text-acento hover:underline">{n.contaReceber.numero}</Link></Campo>}
+              {n.contaReceber && <Campo rotulo="Conta a receber"><Link href={`/financeiro/contas-receber?q=${encodeURIComponent(n.contaReceber.numero)}&periodo=todos`} className="text-acento hover:underline">{n.contaReceber.numero}</Link></Campo>}
             </Secao>
 
             <div>

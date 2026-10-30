@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
-import { whereContasReceber } from "@/lib/listas/filtros";
+import { whereListaReceber } from "@/lib/listas/filtros";
+import { lerPeriodo } from "@/lib/periodo";
 import { paramsDe } from "@/lib/listagem";
 import { statusVisualReceber } from "@/lib/financeiro-status";
 import { categoriaDaConta } from "@/lib/financeiro/categoria";
@@ -13,7 +14,7 @@ const MAX_LINHAS = 20000;
 
 /**
  * UX-4 (E4): exporta o FILTRO da tela de Contas a Receber (mesmo where da lista),
- * não só a página visível. GET /api/contas-receber/exportar?q=&status=&card=&…
+ * não só a página visível. GET /api/contas-receber/exportar?mes=|de=&ate=|periodo=todos&q=&status=&card=&…
  */
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -23,7 +24,9 @@ export async function GET(req: NextRequest) {
   const empresaId = session.user!.empresaId;
 
   const sp = paramsDe(new URL(req.url).searchParams) as Record<string, string | undefined>;
-  const where = whereContasReceber(empresaId, sp);
+  // O mesmo where da tela: filtros + período (vencimento) + card do período
+  const agora = new Date();
+  const where = whereListaReceber(empresaId, sp, lerPeriodo(sp, agora, { permitirTodos: true }), agora);
 
   const [contas, categorias] = await Promise.all([
     prisma.contaReceber.findMany({

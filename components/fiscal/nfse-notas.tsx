@@ -172,7 +172,7 @@ export function NotasFiscais({ medicaoId, osId, origem, avulsa, abrirEmissao, on
             )}
 
             <div className="flex flex-wrap items-center gap-3 text-xs text-ink-muted">
-              {n.contaReceber && <a href={`/financeiro/contas-receber?q=${encodeURIComponent(n.contaReceber.numero)}`} className="inline-flex items-center gap-1 text-acento hover:underline">Conta a receber {n.contaReceber.numero} <ExternalLink className="w-3 h-3" /></a>}
+              {n.contaReceber && <a href={`/financeiro/contas-receber?q=${encodeURIComponent(n.contaReceber.numero)}&periodo=todos`} className="inline-flex items-center gap-1 text-acento hover:underline">Conta a receber {n.contaReceber.numero} <ExternalLink className="w-3 h-3" /></a>}
               {n.protocolo && <span>Protocolo {n.protocolo}</span>}
               {aguardandoResposta(n.status) && (
                 <button type="button" onClick={() => consultar(n.id, true)} disabled={atualizando === n.id} className="inline-flex items-center gap-1 text-acento hover:underline disabled:opacity-60" data-acao="atualizar-status">

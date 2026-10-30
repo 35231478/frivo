@@ -7,6 +7,7 @@
 import { variantesDocumento } from "@/lib/listagem";
 import { hojeDiaCivil, inicioMesDiaCivil, periodoDiaCivil, periodoInstanteBR } from "@/lib/fuso";
 import { whereEtapa } from "@/lib/orcamentos/ciclo";
+import { faixaDiaCivil, type Periodo } from "@/lib/periodo";
 
 type SP = Record<string, string | undefined>;
 
@@ -190,6 +191,48 @@ export function whereContasReceber(empresaId: string, sp: SP, agora = new Date()
   if (card) and.push(card);
   if (and.length) where.AND = and;
   return where;
+}
+
+/* ───────── Contas a Receber: período + cards (padrão da casa) ───────── */
+
+/** Os cards do período de Contas a Receber, na ordem da tela */
+export const CARDS_PERIODO_RECEBER = ["VENCIDO", "VENCE_HOJE", "A_VENCER", "RECEBIDO", "TOTAL"] as const;
+export type CardPeriodoReceber = (typeof CARDS_PERIODO_RECEBER)[number];
+
+/**
+ * Condição de cada card (o período já limita o vencimento): Vencidos · Vencem hoje · A vencer
+ * (previsões + a vencer, como o antigo "A receber") · Recebidos · Total (tudo menos as canceladas).
+ * "A_RECEBER" (links antigos) = A vencer.
+ */
+export function condCardPeriodoReceber(card: string, agora = new Date()) {
+  switch (card) {
+    case "VENCIDO": return condStatusVisualReceber("VENCIDO", agora);
+    case "VENCE_HOJE": return condStatusVisualReceber("VENCE_HOJE", agora);
+    case "A_VENCER": case "A_RECEBER": return { OR: [condStatusVisualReceber("PREVISTO", agora)!, condStatusVisualReceber("A_VENCER", agora)!] };
+    case "RECEBIDO": return { status: "RECEBIDO" };
+    case "TOTAL": return { status: { not: "CANCELADO" } };
+    default: return null;
+  }
+}
+
+/** Condição do período sobre o VENCIMENTO (dia civil); todo o período = sem condição */
+export function condPeriodoVencimento(p: Periodo) {
+  const faixa = faixaDiaCivil(p);
+  return faixa ? { dataVencimento: faixa } : null;
+}
+
+/**
+ * where da LISTA de Contas a Receber (tela e exportação): os filtros da URL (whereContasReceber,
+ * sem o card antigo) + o período pelo vencimento + o card do período clicado.
+ */
+export function whereListaReceber(empresaId: string, sp: SP, periodo: Periodo, agora = new Date()) {
+  const base = whereContasReceber(empresaId, { ...sp, card: undefined }, agora);
+  const and: object[] = [...(base.AND ?? [])];
+  const per = condPeriodoVencimento(periodo);
+  if (per) and.push(per);
+  const card = condCardPeriodoReceber(sp.card ?? "", agora);
+  if (card) and.push(card);
+  return { ...base, ...(and.length ? { AND: and } : {}) };
 }
 
 /** where de Contas a Pagar a partir da URL (os mesmos filtros que a tela já tinha). */

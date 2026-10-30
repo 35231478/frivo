@@ -113,7 +113,7 @@ describe("cards e cabeçalho", () => {
 
   it("dica ⓘ: texto curto ao tocar (sem bloco de texto na tela)", async () => {
     await tela();
-    const botao = $('[data-card="aberto"] [data-dica]')!;
+    const botao = $('[data-card-caixa="aberto"] [data-dica]')!;
     await clicar(botao);
     const balao = document.getElementById(botao.getAttribute("aria-describedby")!)!;
     expect([balao.hidden, txt(balao), botao.getAttribute("aria-label")]).toEqual([false, "Medições aprovadas no período (pedido de compra recebido) ainda sem NFS-e.", "Ajuda: Em aberto"]);

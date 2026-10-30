@@ -1,6 +1,7 @@
 import { TimbreEmpresa } from "@/components/documento/timbre-empresa";
 import { formatarCpfCnpj, formatarData, formatarMoeda, formatarTelefone, cn } from "@/lib/utils";
 import { calcularOrcamento, versaoCliente, type EntradaCalculo, type TipoDesconto } from "@/lib/orcamentos/calculo";
+import { PLANILHA } from "@/lib/planilha";
 import { CLASSE_ETAPA, LABELS_ETAPA, etapaCiclo } from "@/lib/orcamentos/ciclo";
 import { linhasDadosBancarios } from "@/lib/orcamentos/dados-bancarios";
 import {
@@ -482,16 +483,17 @@ function TabelaGrupo({ titulo, rotulo, itens, grupo }: { titulo: string; rotulo:
   const comIss = (grupo.valorIss ?? 0) > 0;
   const mostrarTotal = grupo.desconto > 0 || comIss;
   const qtds = quantidadesAlinhadas(itens.map((it) => n(it.quantidade)));
-  const th = "px-2 py-1.5 font-semibold text-ink-muted text-[10px] uppercase tracking-wider";
-  const td = "px-2 py-1.5 print:py-1 align-top";
+  // O estilo de planilha da casa (lib/planilha.ts), com o ajuste de impressão
+  const th = PLANILHA.th;
+  const td = cn(PLANILHA.td, "print:py-1");
   return (
     <section className="py-4" data-grupo-documento={rotulo}>
       <Rotulo>{titulo}</Rotulo>
       <div className="print:overflow-visible">
         {/* Estilo planilha: linhas baixas, fios finos, zebrado leve; números à direita, alinhados pela vírgula */}
-        <table className="w-full border-collapse text-[13px] print:text-[11px] leading-snug" data-tabela-planilha>
+        <table className={cn(PLANILHA.tabela, "print:text-[11px]")} data-tabela-planilha>
           <thead className="[display:table-header-group]">
-            <tr className="bg-surface-alt border-y border-ink/15 print:[print-color-adjust:exact]">
+            <tr className={cn(PLANILHA.cabecalho, "print:[print-color-adjust:exact]")}>
               <th scope="col" className={cn(th, "text-right w-8")}>#</th>
               <th scope="col" className={cn(th, "text-left")}>Descrição</th>
               {/* Celular: Qtd e Unitário vão para baixo da descrição (a tabela não rola nem corta) */}
@@ -502,7 +504,7 @@ function TabelaGrupo({ titulo, rotulo, itens, grupo }: { titulo: string; rotulo:
           </thead>
           <tbody>
             {itens.map((it, i) => (
-              <tr key={i} className="border-b border-surface-linha even:bg-surface-alt/60 break-inside-avoid print:[print-color-adjust:exact]" data-linha-item>
+              <tr key={i} className={cn(PLANILHA.linha, "break-inside-avoid print:[print-color-adjust:exact]")} data-linha-item>
                 <td className={cn(td, "text-right text-ink-subtle tabular-nums")}>{i + 1}</td>
                 <td className={cn(td, "text-ink")}>
                   <TextoItemDocumento item={it} />
