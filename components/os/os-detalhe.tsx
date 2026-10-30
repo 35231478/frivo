@@ -143,7 +143,7 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
               {ativa === "materiais" && <ComprasSecao ordemServicoId={os.id} />}
 
               {ativa === "financeiro" && (
-                <OsFinanceiro osId={os.id} temContrato={!!os.contrato} medicoes={os.medicoes} itensOrcamento={os.itensOrcamento} abrirNfse={abrirNfse} onAbriuNfse={() => setAbrirNfse(false)} />
+                <OsFinanceiro osId={os.id} temContrato={!!os.contrato} medicoes={os.medicoes} itensOrcamento={os.itensOrcamento} contasReceber={os.contasReceber ?? []} abrirNfse={abrirNfse} onAbriuNfse={() => setAbrirNfse(false)} />
               )}
 
               {ativa === "relatorios" && (

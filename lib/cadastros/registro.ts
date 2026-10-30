@@ -28,10 +28,12 @@ export const ENTIDADES_CADASTRO = [
   "fornecedores",
   // E2.1: centro de custo (toda conta a pagar; aprendido por fornecedor na nota de compra)
   "centros-custo",
+  // CR robusto: onde o dinheiro entra (a conta a receber escolhe a conta bancária por ID)
+  "contas-bancarias",
 ] as const;
 export type EntidadeCadastro = (typeof ENTIDADES_CADASTRO)[number];
 export type ModeloCadastro = "produto" | "servico" | "cargo" | "categoriaFinanceira" | "perfilAcesso" | "modeloEncargos" | "usuario"
-  | "tipoEquipamentoCustom" | "tabelaPreco" | "termoReferenciaTemplate" | "prazoTemplate" | "fornecedor" | "centroCusto";
+  | "tipoEquipamentoCustom" | "tabelaPreco" | "termoReferenciaTemplate" | "prazoTemplate" | "fornecedor" | "centroCusto" | "contaBancaria";
 export type AcaoCadastro = "listar" | "criar" | "editar" | "inativar" | "reativar";
 
 /** Basta UMA das permissões. `null` = qualquer usuário logado (catálogo lido nos seletores de outras telas). */
@@ -490,6 +492,32 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
     colunas: [{ key: "nome", label: "Centro de custo", ordenar: "nome" }, { key: "uso", label: "Contas a pagar", ordenar: (dir) => ({ contasPagar: { _count: dir } }) }],
     // Nome único na empresa (sem diferença de maiúsculas): regra em especificos.ts
     ...schemas({ nome: nome.max(120) }),
+  },
+  "contas-bancarias": {
+    entidade: "contas-bancarias", modelo: "contaBancaria", singular: "conta bancária", plural: "contas bancárias",
+    // Ler: quem usa o financeiro (a conta a receber escolhe onde o dinheiro entra); gravar: quem lança o
+    // fluxo de caixa ou gerencia as configurações (igual ao fornecedor)
+    modulo: "financeiro",
+    permissoes: {
+      listar: [["financeiro", "visualizar"], ["configuracoes", "visualizar"]],
+      criar: [["financeiro", "fluxoCaixa"], ["configuracoes", "gerenciar"]],
+      editar: [["financeiro", "fluxoCaixa"], ["configuracoes", "gerenciar"]],
+      inativar: [["financeiro", "fluxoCaixa"], ["configuracoes", "gerenciar"]],
+      reativar: [["financeiro", "fluxoCaixa"], ["configuracoes", "gerenciar"]],
+    },
+    chave: "id", rota: "/financeiro/contas-bancarias",
+    busca: ["nome", "banco", "agencia", "conta"], detalheSugestao: "banco",
+    incluir: { _count: { select: { contasReceber: true } } },
+    campos: [
+      { key: "nome", label: "Nome", obrigatorio: true, placeholder: "Ex: Inter PJ, Itaú movimento" },
+      { key: "banco", label: "Banco", placeholder: "Ex: Banco Inter (077)" },
+      { key: "agencia", label: "Agência", placeholder: "0001" },
+      { key: "conta", label: "Conta", placeholder: "12345-6" },
+    ],
+    colunas: [{ key: "nome", label: "Conta bancária", ordenar: "nome" }, { key: "banco", label: "Banco", ordenar: "banco" }, { key: "agconta", label: "Agência / conta" }, { key: "uso", label: "Contas a receber", ordenar: (dir) => ({ contasReceber: { _count: dir } }) }],
+    // Nome único na empresa (sem diferença de maiúsculas): regra em especificos.ts
+    ...schemas({ nome: nome.max(120), banco: textoOpcional(120), agencia: textoOpcional(20), conta: textoOpcional(30) },
+      { banco: null, agencia: null, conta: null }),
   },
 };
 

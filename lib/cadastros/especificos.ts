@@ -451,6 +451,41 @@ const servicos: RegrasCadastro = {
   },
 };
 
+/* ───────────────────────── Contas bancárias ───────────────────────── */
+/** Nome único na empresa, sem diferença de maiúsculas/minúsculas (ativa ou inativa). */
+async function contaBancariaComNome(empresaId: string, nome: string, exceto?: string) {
+  return prisma.contaBancaria.findFirst({
+    where: { empresaId, nome: { equals: nome.trim(), mode: "insensitive" }, ...(exceto && { id: { not: exceto } }) },
+    select: { nome: true, ativo: true },
+  });
+}
+const msgContaBancaria = (c: { nome: string; ativo: boolean }) =>
+  `Já existe a conta bancária “${c.nome}”${c.ativo ? "" : " (inativa — reative-a em vez de cadastrar de novo)"}.`;
+
+const contasBancarias: RegrasCadastro = {
+  async criar(dados, ator) {
+    const dup = await contaBancariaComNome(ator.empresaId, String(dados.nome));
+    if (dup) return falha(409, msgContaBancaria(dup));
+    const item = await prisma.contaBancaria.create({ data: { ...(dados as { nome: string }), empresaId: ator.empresaId, ativo: true } });
+    return { ok: true, item };
+  },
+  async editar(existente, dados, ator) {
+    if (typeof dados.nome === "string") {
+      const dup = await contaBancariaComNome(ator.empresaId, dados.nome, existente.id);
+      if (dup) return falha(409, msgContaBancaria(dup));
+    }
+    const item = await prisma.contaBancaria.update({ where: { id: existente.id }, data: dados as { nome?: string } });
+    return { ok: true, item };
+  },
+  async impacto(c, empresaId) {
+    const abertas = await prisma.contaReceber.count({ where: { empresaId, contaBancariaId: c.id, excluidaEm: null, status: { notIn: ["RECEBIDO", "CANCELADO"] } } });
+    return {
+      usos: [{ rotulo: pl(abertas, "conta a receber em aberto", "contas a receber em aberto"), total: abertas }],
+      avisos: abertas ? [`Está em ${pl(abertas, "conta a receber em aberto", "contas a receber em aberto")}. Elas continuam com esta conta (aparece como “inativa”); ela só deixa de ser oferecida nas próximas.`] : [],
+    };
+  },
+};
+
 /* ───────────────────────── Centros de custo ───────────────────────── */
 /** Nome único na empresa, sem diferença de maiúsculas/minúsculas (ativo ou inativo). */
 async function centroComNome(empresaId: string, nome: string, exceto?: string) {
@@ -511,4 +546,5 @@ export const REGRAS: Partial<Record<EntidadeCadastro, RegrasCadastro>> = {
   "modelos-prazo": modelosPrazo,
   fornecedores,
   "centros-custo": centrosCusto,
+  "contas-bancarias": contasBancarias,
 };

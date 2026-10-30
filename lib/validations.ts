@@ -661,7 +661,16 @@ export const contaReceberUpdateSchema = z.object({
   dataRecebimento: z.string().optional().nullable(),
   formaPagamento: z.nativeEnum(FormaPagamento).optional().nullable(),
   banco: z.string().optional().nullable(),
-  observacao: z.string().optional().nullable(),
+  observacao: z.string().max(2000).optional().nullable(),
+  /** Gestão (CR robusto): por ID, da empresa */
+  centroCustoId: z.string().optional().nullable(),
+  contaBancariaId: z.string().optional().nullable(),
+  /** Obrigatório ao cancelar */
+  motivoCancelamento: z.string().trim().max(500).optional().nullable(),
+  /** Só conta manual sem boleto/nota (regra em lib/financeiro/conta-receber-gestao) */
+  clienteId: z.string().min(1).optional(),
+  /** Comentário da baixa: vai para a linha do tempo (não sobrescreve as observações da conta) */
+  comentario: z.string().trim().max(500).optional().nullable(),
 });
 
 // ─────────────────────────────────────────────

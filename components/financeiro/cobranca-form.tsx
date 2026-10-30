@@ -24,7 +24,8 @@ export function CobrancaForm() {
   const [valor, setValor] = useState("");
   const [vencimento, setVencimento] = useState("");
   const [forma, setForma] = useState("");
-  const [banco, setBanco] = useState("");
+  const [contaBancariaId, setContaBancariaId] = useState("");
+  const [centroCustoId, setCentroCustoId] = useState("");
   const [obs, setObs] = useState("");
 
   async function salvar() {
@@ -36,7 +37,7 @@ export function CobrancaForm() {
     try {
       const res = await fetch("/api/contas-receber", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clienteId, descricao, categoriaId: categoriaId || null, valor: Number(valor), dataVencimento: vencimento || null, formaPagamento: forma || null, banco: banco || null, observacao: obs || null }),
+        body: JSON.stringify({ clienteId, descricao, categoriaId: categoriaId || null, valor: Number(valor), dataVencimento: vencimento || null, formaPagamento: forma || null, contaBancariaId: contaBancariaId || null, centroCustoId: centroCustoId || null, observacao: obs || null }),
       });
       if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao criar cobrança."); return; }
       router.push("/financeiro/contas-receber");
@@ -69,7 +70,12 @@ export function CobrancaForm() {
             </FormField>
           </FormGrid>
           <FormGrid>
-            <FormField label="Banco para recebimento"><Input value={banco} onChange={(e) => setBanco(e.target.value)} /></FormField>
+            <FormField label="Conta bancária" dica="Onde o dinheiro entra. Cadastre em Financeiro › Contas bancárias.">
+              <SeletorCadastro entidade="contas-bancarias" valor={contaBancariaId} vazio="Não definida" onChange={setContaBancariaId} nome="contaBancariaId" />
+            </FormField>
+            <FormField label="Centro de custo">
+              <SeletorCadastro entidade="centros-custo" valor={centroCustoId} vazio="Sem centro de custo" onChange={setCentroCustoId} nome="centroCustoId" />
+            </FormField>
           </FormGrid>
           <FormField label="Observação"><Textarea value={obs} onChange={(e) => setObs(e.target.value)} rows={2} /></FormField>
         </FormSection>

@@ -12,6 +12,8 @@ import { ComprasSecao } from "@/components/compras/compras-secao";
 import { AnexosProposta } from "@/components/orcamento/anexos-proposta";
 import { CicloOrcamento } from "@/components/orcamento/ciclo-orcamento";
 import { GerarOs, type OsDoOrcamento } from "@/components/orcamento/gerar-os";
+import { ContasReceberVinculadas } from "@/components/financeiro/contas-receber-vinculadas";
+import { contasVinculadas } from "@/lib/financeiro/conta-receber-server";
 import { etapaCiclo } from "@/lib/orcamentos/ciclo";
 import { marcarRespostaVista } from "@/lib/orcamentos/ciclo-server";
 import { pode } from "@/lib/permissoes";
@@ -62,6 +64,8 @@ export default async function OrcamentoDetalhePage({
 
   const podeEditar = orcamento.status === "RASCUNHO";
   const u = session!.user!;
+  // Conta a receber do orçamento aprovado (o outro lado do vínculo): só para quem vê o financeiro
+  const contasReceber = pode(u.permissoes, "financeiro", "visualizar", u.role) ? await contasVinculadas(empresaId, { orcamentoId: orcamento.id }) : [];
   // A OS do orçamento: a que ele gerou ou, se não gerou, a 1ª vinculada (o "Gerar OS" nunca cria outra)
   const primeiraVinculada = [...orcamento.ordensServico].sort((a, b) => a.ordemServico.criadoEm.getTime() - b.ordemServico.criadoEm.getTime())[0]?.ordemServico;
   const osDoOrcamento: OsDoOrcamento | null = orcamento.osGerada
@@ -116,6 +120,12 @@ export default async function OrcamentoDetalhePage({
             itens={orcamento.servicos.length + orcamento.produtos.length}
             podeCriar={pode(u.permissoes, "ordens", "criar", u.role)} podeVer={pode(u.permissoes, "ordens", "visualizar", u.role)}
           />
+        </div>
+      )}
+
+      {contasReceber.length > 0 && (
+        <div className="card-padded" data-secao-conta-receber>
+          <ContasReceberVinculadas contas={contasReceber} podeAbrir={pode(u.permissoes, "financeiro", "contasReceber", u.role)} />
         </div>
       )}
 

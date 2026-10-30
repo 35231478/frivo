@@ -29,7 +29,7 @@ export default async function ContasReceberPage({
   const { pagina: paginaPedida, porPagina } = lerPaginacao(sp);
 
   const soma = (card: string) =>
-    prisma.contaReceber.aggregate({ where: { empresaId, ...(condCardReceber(card, agora) as object) }, _sum: { valor: true }, _count: true });
+    prisma.contaReceber.aggregate({ where: { empresaId, excluidaEm: null, ...(condCardReceber(card, agora) as object) }, _sum: { valor: true }, _count: true });
 
   const [total, somaFiltrada, agAReceber, agVencido, agHoje, agRecebido, clientes, categorias, integracao] = await Promise.all([
     prisma.contaReceber.count({ where }),
@@ -53,6 +53,10 @@ export default async function ContasReceberPage({
               email: true, telefone: true, celular: true, whatsappFaturamento: true, emailsFaturamento: true,
             },
           },
+          medicao: { select: { numero: true } },
+          orcamento: { select: { codigo: true } },
+          contrato: { select: { numero: true } },
+          notasFiscais: { select: { status: true } },
         },
         orderBy: [{ dataVencimento: "asc" }, { criadoEm: "desc" }, { id: "asc" }],
         ...janela(pagina, porPagina),
@@ -83,6 +87,10 @@ export default async function ContasReceberPage({
     boletoVencimento: c.boletoVencimento ? c.boletoVencimento.toISOString() : null,
     boletoLinhaDigitavel: c.boletoLinhaDigitavel,
     boletoCodigoBarras: c.boletoCodigoBarras,
+    observacao: c.observacao, centroCustoId: c.centroCustoId, contaBancariaId: c.contaBancariaId,
+    medicaoId: c.medicaoId, orcamentoId: c.orcamentoId, contratoId: c.contratoId,
+    medicaoNumero: c.medicao?.numero ?? null, orcamentoCodigo: c.orcamento?.codigo ?? null, contratoNumero: c.contrato?.numero ?? null,
+    notas: c.notasFiscais,
   }));
 
   return (
@@ -99,7 +107,7 @@ export default async function ContasReceberPage({
       filtros={{
         q: sp.q ?? "", card: sp.card ?? "", clienteId: sp.clienteId ?? "", categoria: sp.categoria ?? "",
         forma: sp.forma ?? "", banco: sp.banco ?? "", valorMin: sp.valorMin ?? "", valorMax: sp.valorMax ?? "",
-        vencDe: sp.vencDe ?? "", vencAte: sp.vencAte ?? "", status: sp.status ?? "",
+        vencDe: sp.vencDe ?? "", vencAte: sp.vencAte ?? "", status: sp.status ?? "", conta: sp.conta ?? "",
       }}
     />
   );

@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { OsDetalhe } from "@/components/os/os-detalhe";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 import { carregarGaleria } from "@/lib/os/galeria-server";
+import { contasVinculadas } from "@/lib/financeiro/conta-receber-server";
+import { pode } from "@/lib/permissoes";
 
 export const metadata: Metadata = { title: "Ordem de Serviço" };
 
@@ -88,6 +90,9 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
 
   // Fotos & anexos do serviço (só metadados; as imagens são servidas à parte)
   const galeria = await carregarGaleria(empresaId, os.id);
+  // Contas a receber da OS (pela medição ou pelo orçamento ligado): só para quem vê o financeiro
+  const u = session!.user!;
+  const contasReceber = pode(u.permissoes, "financeiro", "visualizar", u.role) ? await contasVinculadas(empresaId, { ordemServicoId: os.id }) : [];
 
-  return <OsDetalhe os={{ ...os, medicoes: medicoesDaOs, galeria }} abaInicial={aba} />;
+  return <OsDetalhe os={{ ...os, medicoes: medicoesDaOs, galeria, contasReceber }} abaInicial={aba} />;
 }

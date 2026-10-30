@@ -6,6 +6,8 @@ import { cn, formatarMoeda, formatarData, formatarCpfCnpj, LABELS_FORMA_PAGAMENT
 import { statusVisualReceber } from "@/lib/financeiro-status";
 import { AvatarCliente } from "@/components/ui/avatar-cliente";
 import { ContaReceberAcoes } from "@/components/financeiro/conta-receber-acoes";
+import { ContaReceberDetalhes } from "@/components/financeiro/conta-receber-detalhes";
+import { origemComLink } from "@/lib/financeiro/conta-receber-gestao";
 import { SincronizarBoletos } from "@/components/financeiro/sincronizar-boletos";
 import { CategoriaBadge } from "@/components/financeiro/categoria-badge";
 import { useListagemUrl } from "@/components/listagem/use-listagem-url";
@@ -27,6 +29,11 @@ export interface ContaView {
   whatsapp: string | null; email: string | null; notificacaoEnviadaEm: string | null;
   boletoStatus: string | null; boletoEmitidoEm: string | null; boletoVencimento: string | null;
   boletoLinhaDigitavel: string | null; boletoCodigoBarras: string | null;
+  /** Gestão (CR robusto) */
+  observacao?: string | null; centroCustoId?: string | null; contaBancariaId?: string | null;
+  medicaoId?: string | null; orcamentoId?: string | null; contratoId?: string | null;
+  medicaoNumero?: string | null; orcamentoCodigo?: string | null; contratoNumero?: string | null;
+  notas?: { status: string }[];
 }
 interface Opcao { id: string; nome: string }
 
@@ -40,6 +47,8 @@ export interface FiltrosReceber {
   valorMin: string; valorMax: string; vencDe: string; vencAte: string;
   /** chips de status visual, separados por vírgula */
   status: string;
+  /** ?conta=<id>: abre a conta direto na gaveta de detalhes (links do orçamento/medição/OS) */
+  conta?: string;
 }
 
 type CardKey = "A_RECEBER" | "VENCIDO" | "VENCE_HOJE" | "RECEBIDO";
@@ -69,6 +78,11 @@ export function ContasReceberView({
     vencDe: filtros.vencDe, vencAte: filtros.vencAte, clienteId: filtros.clienteId, forma: filtros.forma,
     banco: filtros.banco, categoria: filtros.categoria, valorMin: filtros.valorMin, valorMax: filtros.valorMax,
   });
+  const [detalheId, setDetalheId] = useState<string | null>(filtros.conta || null);
+  const fecharDetalhe = () => { setDetalheId(null); if (filtros.conta) navegar({ conta: null }); };
+  const acoes = (c: ContaView) => (
+    <ContaReceberAcoes conta={{ ...c, interAtivo }} categorias={categorias} clientes={clientes} onDetalhes={() => setDetalheId(c.id)} />
+  );
   const statusChips = useMemo(() => new Set(filtros.status.split(",").filter(Boolean)), [filtros.status]);
   const card = filtros.card as CardKey | "";
 
@@ -204,8 +218,35 @@ export function ContasReceberView({
           </div>
         )}
 
-        {/* Tabela */}
-        <div className="overflow-x-auto">
+        {/* Celular: um cartão por conta (toque abre os detalhes; ações no ⋮) */}
+        <ul className="md:hidden divide-y divide-surface-border" data-cartoes-receber>
+          {comStatus.length === 0 ? (
+            <li className="text-center text-ink-subtle py-12">Nenhuma cobrança encontrada</li>
+          ) : comStatus.map(({ c, sv }) => {
+            const origem = origemComLink(c);
+            return (
+              <li key={c.id} className={cn("flex items-start gap-3 px-4 py-3", sv.linhaVermelha && "bg-atrasado-claro")} data-cartao-conta={c.id}>
+                <button type="button" onClick={() => setDetalheId(c.id)} className="flex-1 min-w-0 text-left" aria-label={`Ver detalhes de ${c.numero}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-medium text-ink truncate">{c.clienteNome}</p>
+                    <p className="font-bold text-success-700 shrink-0">{formatarMoeda(c.valor)}</p>
+                  </div>
+                  <p className="text-xs text-ink-muted truncate">{c.numero} · {c.descricao}</p>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5">
+                    <span className={cn("inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full", sv.classe)}>{sv.label}</span>
+                    <span className="text-xs text-ink-subtle">{c.dataVencimento ? `Vence ${formatarData(c.dataVencimento)}` : "Sem vencimento"}</span>
+                    {origem && <span className="text-xs text-acento">{origem.rotulo}</span>}
+                    {c.boletoStatus === "EMITIDO" && <Barcode className="w-3.5 h-3.5 text-ok-texto" aria-label="Boleto emitido" />}
+                  </div>
+                </button>
+                <div className="shrink-0 -mr-1">{acoes(c)}</div>
+              </li>
+            );
+          })}
+        </ul>
+
+        {/* Desktop: tabela */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-surface-alt border-b border-surface-border">
               <tr>
@@ -233,7 +274,13 @@ export function ContasReceberView({
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-ink-muted hidden lg:table-cell truncate max-w-[200px]">{c.descricao}</td>
+                    <td className="px-4 py-3 hidden lg:table-cell max-w-[240px]">
+                      <button type="button" onClick={() => setDetalheId(c.id)} className="block text-left text-ink-muted hover:text-primary-600 truncate max-w-full" data-abrir-detalhes={c.id}>{c.descricao}</button>
+                      <span className="flex items-center gap-1.5 text-xs text-ink-subtle">
+                        <span className="font-mono">{c.numero}</span>
+                        {(() => { const o = origemComLink(c); return o ? <Link href={o.href} className="text-acento hover:underline" data-origem-conta>{o.rotulo}</Link> : null; })()}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 hidden md:table-cell">
                       <CategoriaBadge conta={c} categorias={categorias} />
                     </td>
@@ -248,13 +295,7 @@ export function ContasReceberView({
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <ContaReceberAcoes conta={{
-                        id: c.id, numero: c.numero, descricao: c.descricao, categoriaId: c.categoriaId, categoria: c.categoria, valor: c.valor,
-                        dataVencimento: c.dataVencimento, status: c.status, banco: c.banco,
-                        clienteNome: c.clienteNome, whatsapp: c.whatsapp, email: c.email, notificacaoEnviadaEm: c.notificacaoEnviadaEm,
-                        interAtivo, boletoStatus: c.boletoStatus, boletoEmitidoEm: c.boletoEmitidoEm, boletoVencimento: c.boletoVencimento,
-                        boletoLinhaDigitavel: c.boletoLinhaDigitavel, boletoCodigoBarras: c.boletoCodigoBarras,
-                      }} categorias={categorias} />
+                      {acoes(c)}
                     </td>
                   </tr>
                 );
@@ -270,6 +311,7 @@ export function ContasReceberView({
           </p>
         </div>
       </div>
+      <ContaReceberDetalhes id={detalheId} onFechar={fecharDetalhe} />
     </div>
   );
 }
