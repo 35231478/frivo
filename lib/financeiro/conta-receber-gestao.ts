@@ -128,6 +128,7 @@ export function descreverAlteracoes(antes: AlteracaoConta, depois: AlteracaoCont
 export const ROTULO_EVENTO_CR: Record<string, string> = {
   CRIADA: "Criada", EDITADA: "Editada", RECEBIDA: "Recebimento informado", CANCELADA: "Cancelada", EXCLUIDA: "Excluída",
   BOLETO_EMITIDO: "Boleto emitido", BOLETO_CANCELADO: "Boleto cancelado", COBRANCA_ENVIADA: "Cobrança enviada",
+  FATURADA: "Faturada", REABERTA: "Voltou a ser previsão", RETENCOES: "Retenções",
 };
 
 /** Valor por extenso (reais e centavos) para o recibo. Até 999.999.999,99. */

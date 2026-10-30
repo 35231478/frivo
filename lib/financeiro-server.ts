@@ -1,16 +1,84 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { formatarData, gerarNumeroContaReceber, gerarNumeroContaPagar, gerarNumeroMedicao } from "@/lib/utils";
+import { orcamentoJaFaturado, travarParaFaturar } from "@/lib/faturamento-os";
+import { formatarData, formatarMoeda, gerarNumeroContaReceber, gerarNumeroContaPagar, gerarNumeroMedicao } from "@/lib/utils";
 import { diaCivilPassou, hojeDiaCivil, inicioMesDiaCivil, partesBR } from "@/lib/fuso";
 import { calcularVencimento } from "@/lib/medicao-helpers";
+
+type Db = Prisma.TransactionClient | typeof prisma;
+
+/** P2002 = a trava única do banco (C6/C7) pegou uma corrida: a conta já existe */
+const ehDuplicada = (e: unknown) => e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002";
 
 /**
  * Cria (de forma idempotente) uma conta a receber a partir de uma medição.
  * Se já existir conta vinculada à medição, retorna a existente.
+ * Trava (b): roda numa transação com a medição TRANCADA — dois "Aprovar" ao mesmo tempo esperam na
+ * fila e o segundo encontra a conta do primeiro; o índice único do banco é a última barreira.
+ * Trava (c): a previsão (PREVISTO) do orçamento que a medição fatura VIRA a cobrança da medição
+ * (em vez de nascer outra conta para o mesmo serviço).
  */
 export async function gerarContaReceberDaMedicao(medicaoId: string) {
-  const medicao = await prisma.medicao.findUnique({
+  try {
+    return await prisma.$transaction((tx) => contaDaMedicao(tx, medicaoId), { timeout: 20_000 });
+  } catch (e) {
+    if (!ehDuplicada(e)) throw e;
+    return prisma.contaReceber.findFirst({ where: { medicaoId, status: { not: "CANCELADO" } }, orderBy: { criadoEm: "asc" } });
+  }
+}
+
+/** Valor que a conta da medição cobra: valor da nota (líquido de desconto) − retenções marcadas */
+export function valorACobrarDaMedicao(m: { valorLiquido: unknown; valorRetencoes?: unknown }) {
+  return Math.round((Number(m.valorLiquido) - Number(m.valorRetencoes ?? 0)) * 100) / 100;
+}
+
+/** Orçamentos que a medição fatura: direto (item) ou pela OS gerada deles (itens copiados) */
+async function orcamentosDaMedicao(tx: Db, m: { itens: { orcamentoId: string | null; ordemServicoId: string | null }[]; relatorios: { ordemServicoId: string }[] }) {
+  const osIds = [...new Set([...m.itens.map((i) => i.ordemServicoId), ...m.relatorios.map((r) => r.ordemServicoId)].filter(Boolean))] as string[];
+  const origens = osIds.length
+    ? (await tx.ordemServico.findMany({ where: { id: { in: osIds }, orcamentoOrigemId: { not: null } }, select: { orcamentoOrigemId: true } })).map((o) => o.orcamentoOrigemId)
+    : [];
+  return [...new Set([...m.itens.map((i) => i.orcamentoId), ...origens].filter(Boolean))] as string[];
+}
+
+/** Previsões (PREVISTO, ainda sem medição) dos orçamentos que a medição fatura — candidatas a virar a cobrança */
+async function previsoesDeOrcamento(tx: Db, m: { id: string; empresaId: string; clienteId: string }, orcamentoIds: string[]) {
+  if (!orcamentoIds.length) return [];
+  return tx.contaReceber.findMany({
+    where: {
+      empresaId: m.empresaId, clienteId: m.clienteId, orcamentoId: { in: orcamentoIds }, medicaoId: null, contratoId: null,
+      excluidaEm: null, status: "PREVISTO", OR: [{ boletoStatus: null }, { boletoStatus: { not: "EMITIDO" } }],
+    },
+    orderBy: { criadoEm: "asc" },
+  });
+}
+
+/** Motivo gravado nas previsões absorvidas (é por ele que o cancelamento da medição as revive) */
+export const motivoFaturadaNaMedicao = (numero: string) => `Faturada na medição ${numero}`;
+
+/** As previsões de orçamento cobertas pela conta da medição deixam de valer (o valor está na conta da medição) */
+async function absorverPrevisoes(tx: Db, m: { empresaId: string; numero: string }, cobranca: { id: string; numero: string }, previsoes: { id: string }[]) {
+  for (const p of previsoes) {
+    if (p.id === cobranca.id) continue;
+    await tx.contaReceber.update({
+      where: { id: p.id },
+      data: { status: "CANCELADO", canceladaEm: new Date(), motivoCancelamento: motivoFaturadaNaMedicao(m.numero) },
+    });
+    await tx.contaReceberEvento.create({
+      data: { empresaId: m.empresaId, contaReceberId: p.id, tipo: "CANCELADA", detalhe: `Cobrada na conta ${cobranca.numero} (medição ${m.numero}).` },
+    });
+  }
+}
+
+async function contaDaMedicao(tx: Prisma.TransactionClient, medicaoId: string) {
+  await tx.$queryRaw`SELECT id FROM medicoes WHERE id = ${medicaoId} FOR UPDATE`;
+  const medicao = await tx.medicao.findUnique({
     where: { id: medicaoId },
-    include: { cliente: { select: { cpfCnpj: true } } },
+    include: {
+      cliente: { select: { cpfCnpj: true } },
+      itens: { select: { orcamentoId: true, ordemServicoId: true } },
+      relatorios: { select: { ordemServicoId: true } },
+    },
   });
   if (!medicao) return null;
 
@@ -21,48 +89,71 @@ export async function gerarContaReceberDaMedicao(medicaoId: string) {
     medicao.status === "PAGO" ? "RECEBIDO" :
     medicao.status === "NF_EMITIDA" || medicao.status === "BOLETO_GERADO" ? "A_RECEBER" :
     "PREVISTO";
+  const valor = valorACobrarDaMedicao(medicao);
+  const previsoes = await previsoesDeOrcamento(tx, medicao, await orcamentosDaMedicao(tx, medicao));
 
   // C6/D3: a previsão do contrato JÁ É a conta da medição mensal — promove em vez de criar
   // outra (fim da cobrança em dobro PREVISTO × medição). Quando for uma só, o valor passa a
   // ser o da medição (cobre desconto e adicionais consolidados).
-  const vinculadas = await prisma.contaReceber.findMany({
+  const vinculadas = await tx.contaReceber.findMany({
     where: { medicaoId, status: { notIn: ["RECEBIDO", "CANCELADO"] } },
     orderBy: { criadoEm: "asc" },
   });
   if (vinculadas.length > 0) {
     for (const c of vinculadas) {
-      await prisma.contaReceber.update({
+      await tx.contaReceber.update({
         where: { id: c.id },
         data: {
           status,
           dataVencimento: medicao.dataVencimento ?? c.dataVencimento,
-          ...(vinculadas.length === 1 ? { valor: medicao.valorLiquido } : {}),
+          ...(vinculadas.length === 1 ? { valor } : {}),
         },
       });
     }
-    return prisma.contaReceber.findFirst({ where: { medicaoId }, orderBy: { criadoEm: "asc" } });
+    // Uma conta só leva o valor da medição inteira (inclui os orçamentos da fatura única)
+    if (vinculadas.length === 1) await absorverPrevisoes(tx, medicao, vinculadas[0], previsoes);
+    return tx.contaReceber.findFirst({ where: { medicaoId }, orderBy: { criadoEm: "asc" } });
   }
-  const jaRecebida = await prisma.contaReceber.findFirst({ where: { medicaoId } });
+  const jaRecebida = await tx.contaReceber.findFirst({ where: { medicaoId } });
   if (jaRecebida) return jaRecebida;
 
   // Medição mensal de contrato sem conta ligada ainda: ADOTA a previsão da competência
   // (contrato + mês/ano) em vez de criar uma segunda conta para o mesmo mês.
   if (medicao.contratoId && medicao.mes && medicao.ano) {
-    const previsao = await prisma.contaReceber.findFirst({
+    const previsao = await tx.contaReceber.findFirst({
       where: { contratoId: medicao.contratoId, refAno: medicao.ano, refMes: medicao.mes, status: "PREVISTO", medicaoId: null },
     });
     if (previsao) {
-      return prisma.contaReceber.update({
+      const conta = await tx.contaReceber.update({
         where: { id: previsao.id },
-        data: { medicaoId: medicao.id, status, valor: medicao.valorLiquido, dataVencimento: medicao.dataVencimento ?? previsao.dataVencimento },
+        data: { medicaoId: medicao.id, status, valor, dataVencimento: medicao.dataVencimento ?? previsao.dataVencimento },
       });
+      await absorverPrevisoes(tx, medicao, conta, previsoes);
+      return conta;
     }
   }
 
-  const ano = medicao.ano ?? partesBR().ano;
-  const numero = await proximoNumeroContaReceber(medicao.empresaId, ano);
+  // C6 (c): o orçamento aprovado já tinha uma previsão — ela VIRA a cobrança desta medição
+  if (previsoes.length) {
+    const [adotada] = previsoes;
+    const conta = await tx.contaReceber.update({
+      where: { id: adotada.id },
+      data: { medicaoId: medicao.id, status, valor, dataVencimento: medicao.dataVencimento ?? adotada.dataVencimento },
+    });
+    await tx.contaReceberEvento.create({
+      data: {
+        empresaId: medicao.empresaId, contaReceberId: conta.id, tipo: "FATURADA",
+        detalhe: `Previsão do orçamento virou a cobrança da medição ${medicao.numero} (${formatarMoeda(Number(adotada.valor))} → ${formatarMoeda(valor)}).`,
+      },
+    });
+    await absorverPrevisoes(tx, medicao, conta, previsoes);
+    return conta;
+  }
 
-  return prisma.contaReceber.create({
+  const ano = medicao.ano ?? partesBR().ano;
+  const numero = await proximoNumeroContaReceber(medicao.empresaId, ano, tx);
+
+  return tx.contaReceber.create({
     data: {
       empresaId: medicao.empresaId,
       clienteId: medicao.clienteId,
@@ -72,7 +163,7 @@ export async function gerarContaReceberDaMedicao(medicaoId: string) {
       refAno: medicao.contratoId ? medicao.ano : null,
       numero,
       descricao: medicao.descricao || `Medição ${medicao.numero}`,
-      valor: medicao.valorLiquido,
+      valor,
       status,
       dataVencimento: medicao.dataVencimento,
       clienteCnpj: medicao.cliente?.cpfCnpj ?? null,
@@ -81,8 +172,8 @@ export async function gerarContaReceberDaMedicao(medicaoId: string) {
 }
 
 /** Próximo número sequencial de conta a receber (CR-AAAA-NNNN) baseado no maior do ano. */
-export async function proximoNumeroContaReceber(empresaId: string, ano: number) {
-  const ultimo = await prisma.contaReceber.findFirst({
+export async function proximoNumeroContaReceber(empresaId: string, ano: number, db: Db = prisma) {
+  const ultimo = await db.contaReceber.findFirst({
     where: { empresaId, numero: { startsWith: `CR-${ano}-` } },
     orderBy: { numero: "desc" },
     select: { numero: true },
@@ -93,31 +184,90 @@ export async function proximoNumeroContaReceber(empresaId: string, ano: number) 
 
 /**
  * Cria (de forma idempotente) uma conta a receber a partir de um orçamento aprovado.
+ * Trava (c): orçamento trancado na transação; se ele (ou a OS gerada dele) JÁ entrou numa medição
+ * viva, não nasce previsão nenhuma — a cobrança é a da medição.
  */
 export async function gerarContaReceberDoOrcamento(orcamentoId: string) {
-  const existente = await prisma.contaReceber.findFirst({ where: { orcamentoId } });
-  if (existente) return existente;
+  try {
+    return await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM orcamentos WHERE id = ${orcamentoId} FOR UPDATE`;
+      const existente = await tx.contaReceber.findFirst({ where: { orcamentoId } });
+      if (existente) return existente;
 
-  const orcamento = await prisma.orcamento.findUnique({ where: { id: orcamentoId } });
-  if (!orcamento) return null;
-  // CO3: proposta de CONTRATO assinada não vira conta avulsa — quem fatura o contrato são as
-  // previsões mensais criadas quando o contrato é gerado (senão o mesmo dinheiro entra 2×).
-  if (orcamento.tipo === "PROPOSTA_CONTRATO") return null;
+      const orcamento = await tx.orcamento.findUnique({ where: { id: orcamentoId } });
+      if (!orcamento) return null;
+      // CO3: proposta de CONTRATO assinada não vira conta avulsa — quem fatura o contrato são as
+      // previsões mensais criadas quando o contrato é gerado (senão o mesmo dinheiro entra 2×).
+      if (orcamento.tipo === "PROPOSTA_CONTRATO") return null;
+      if (await orcamentoJaFaturado(orcamentoId, tx)) return null;
 
-  const numero = await proximoNumeroContaReceber(orcamento.empresaId, partesBR().ano);
+      const numero = await proximoNumeroContaReceber(orcamento.empresaId, partesBR().ano, tx);
 
-  return prisma.contaReceber.create({
-    data: {
-      empresaId: orcamento.empresaId,
-      clienteId: orcamento.clienteId,
-      orcamentoId: orcamento.id,
-      numero,
-      descricao: `Orçamento ${orcamento.codigo} — ${orcamento.nome}`,
-      valor: orcamento.totalGeral,
-      status: "PREVISTO",
-      dataVencimento: orcamento.validadeEm,
-    },
+      return tx.contaReceber.create({
+        data: {
+          empresaId: orcamento.empresaId,
+          clienteId: orcamento.clienteId,
+          orcamentoId: orcamento.id,
+          numero,
+          descricao: `Orçamento ${orcamento.codigo} — ${orcamento.nome}`,
+          valor: orcamento.totalGeral,
+          status: "PREVISTO",
+          dataVencimento: orcamento.validadeEm,
+        },
+      });
+    }, { timeout: 20_000 });
+  } catch (e) {
+    if (!ehDuplicada(e)) throw e;
+    return prisma.contaReceber.findFirst({ where: { orcamentoId, status: { not: "CANCELADO" } } });
+  }
+}
+
+/**
+ * Medição cancelada (F4): as contas voltam ao que eram antes dela, para o serviço poder ser refaturado.
+ * - de CONTRATO: volta a ser a previsão da competência (desligada, valor da mensalidade) — C6;
+ * - previsão de ORÇAMENTO que virou a cobrança: volta a ser a previsão do orçamento (total dele);
+ * - previsões de orçamento que ela absorveu: revivem;
+ * - conta criada só para esta medição: cancelada.
+ */
+export async function desfazerContasDaMedicao(m: { id: string; numero: string; empresaId: string }, usuarioId?: string | null) {
+  const evento = (contaReceberId: string, tipo: string, detalhe: string) =>
+    prisma.contaReceberEvento.create({ data: { empresaId: m.empresaId, contaReceberId, tipo, detalhe, usuarioId: usuarioId ?? null } });
+  const vinculadas = await prisma.contaReceber.findMany({
+    where: { medicaoId: m.id, status: { notIn: ["RECEBIDO", "CANCELADO"] } },
+    include: { contrato: { select: { valorMensal: true } }, orcamento: { select: { totalGeral: true } } },
   });
+  for (const c of vinculadas) {
+    if (c.contratoId) {
+      await prisma.contaReceber.update({
+        where: { id: c.id },
+        data: { medicaoId: null, status: "PREVISTO", valor: c.contrato?.valorMensal ?? c.valor },
+      });
+    } else if (c.orcamentoId) {
+      await prisma.contaReceber.update({
+        where: { id: c.id },
+        data: { medicaoId: null, status: "PREVISTO", valor: c.orcamento?.totalGeral ?? c.valor },
+      });
+      await evento(c.id, "REABERTA", `Medição ${m.numero} cancelada: volta a ser a previsão do orçamento.`);
+    } else {
+      await prisma.contaReceber.update({
+        where: { id: c.id },
+        data: { status: "CANCELADO", canceladaEm: new Date(), motivoCancelamento: `Medição ${m.numero} cancelada` },
+      });
+      await evento(c.id, "CANCELADA", `Medição ${m.numero} cancelada.`);
+    }
+  }
+  const absorvidas = await prisma.contaReceber.findMany({
+    where: { empresaId: m.empresaId, status: "CANCELADO", excluidaEm: null, motivoCancelamento: motivoFaturadaNaMedicao(m.numero) },
+    select: { id: true },
+  });
+  for (const a of absorvidas) {
+    try {
+      await prisma.contaReceber.update({ where: { id: a.id }, data: { status: "PREVISTO", canceladaEm: null, motivoCancelamento: null } });
+      await evento(a.id, "REABERTA", `Medição ${m.numero} cancelada: volta a ser a previsão do orçamento.`);
+    } catch (e) {
+      if (!ehDuplicada(e)) throw e; // o orçamento já tem outra conta viva: esta fica cancelada
+    }
+  }
 }
 
 /**
@@ -139,61 +289,75 @@ export async function criarMedicaoDeRelatorio(relatorioId: string) {
   if (relatorio.escopo !== "MEDICAO_COMPLETA") return null;
   const valorFinanceiro = relatorio.valorFinanceiro ? Number(relatorio.valorFinanceiro) : 0;
   if (valorFinanceiro <= 0) return null;
-  // Medição VIVA já vinculada → devolve; CANCELADA → cria outra no lugar (F4)
-  if (relatorio.medicaoId && relatorio.medicao && relatorio.medicao.status !== "CANCELADA") {
-    return prisma.medicao.findUnique({ where: { id: relatorio.medicaoId } });
-  }
-
   const cliente = relatorio.ordemServico.cliente;
   const perfil = cliente.tipoFaturamento;
-  const status =
-    perfil === "COM_APROVACAO" ? "AGUARDANDO_PC" :
-    perfil === "AUTOMATICO" ? "NF_EMITIDA" :
-    perfil === "FATURA_UNICA" ? "RASCUNHO" :
-    "PC_RECEBIDO";
+  // Trava (a): relatório e OS trancados na transação. Medição VIVA já vinculada → devolve;
+  // CANCELADA → cria outra no lugar (F4). A OS já numa OUTRA medição viva (botão "Gerar medição",
+  // medição manual, fatura única) → não nasce a segunda cobrança.
+  const r = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM relatorios_os WHERE id = ${relatorioId} FOR UPDATE`;
+    const atual = await tx.relatorioOs.findUnique({ where: { id: relatorioId }, select: { medicao: { select: { id: true, status: true } } } });
+    if (atual?.medicao && atual.medicao.status !== "CANCELADA") {
+      return { medicao: await tx.medicao.findUnique({ where: { id: atual.medicao.id } }), nova: false };
+    }
+    const travadas = await travarParaFaturar(tx, { osIds: [relatorio.ordemServicoId] });
+    if (travadas.os.length) {
+      console.warn("[faturamento] OS já faturada; relatório não gera outra medição", relatorio.ordemServicoId, travadas.os[0].medicao.numero);
+      return { medicao: null, nova: false };
+    }
 
-  const valor = relatorio.valorFinanceiro ? Number(relatorio.valorFinanceiro) : 0;
-  const ultimaMed = await prisma.medicao.findFirst({
-    where: { empresaId: relatorio.empresaId, numero: { startsWith: `MED-${relatorio.anoReferencia}-` } },
-    orderBy: { numero: "desc" },
-    select: { numero: true },
-  });
-  const seq = ultimaMed ? Number(ultimaMed.numero.split("-")[2]) + 1 : 1;
-  const numero = gerarNumeroMedicao(seq, relatorio.anoReferencia);
-  const vencimento = calcularVencimento(cliente.diaFaturamento, relatorio.mesReferencia, relatorio.anoReferencia);
+    const status =
+      perfil === "COM_APROVACAO" ? "AGUARDANDO_PC" :
+      perfil === "AUTOMATICO" ? "NF_EMITIDA" :
+      perfil === "FATURA_UNICA" ? "RASCUNHO" :
+      "PC_RECEBIDO";
 
-  const medicao = await prisma.medicao.create({
-    data: {
-      empresaId: relatorio.empresaId,
-      clienteId: relatorio.ordemServico.clienteId,
-      contratoId: relatorio.contratoId,
-      numero,
-      // Medição de contrato é a mensalidade (MENSAL_FIXO); sem contrato é serviço avulso
-      // (ADICIONAL) e NÃO pode calar o gerar-mes da mensalidade do cliente (F3/I25)
-      tipo: relatorio.contratoId ? "MENSAL_FIXO" : "ADICIONAL",
-      mes: relatorio.mesReferencia,
-      ano: relatorio.anoReferencia,
-      descricao: `Relatório ${relatorio.numero}`,
-      status: status as any,
-      valorTotal: valor,
-      valorLiquido: valor,
-      dataAprovacao: new Date(),
-      dataVencimento: vencimento,
-      tokenPublico: crypto.randomUUID(),
-      itens: {
-        create: [{
-          tipo: "SERVICO",
-          descricao: `Serviço do período — ${relatorio.numero}`,
-          quantidade: 1,
-          valorUnitario: valor,
-          valorTotal: valor,
-          ordem: 0,
-        }],
+    const valor = relatorio.valorFinanceiro ? Number(relatorio.valorFinanceiro) : 0;
+    const ultimaMed = await tx.medicao.findFirst({
+      where: { empresaId: relatorio.empresaId, numero: { startsWith: `MED-${relatorio.anoReferencia}-` } },
+      orderBy: { numero: "desc" },
+      select: { numero: true },
+    });
+    const seq = ultimaMed ? Number(ultimaMed.numero.split("-")[2]) + 1 : 1;
+    const numero = gerarNumeroMedicao(seq, relatorio.anoReferencia);
+    const vencimento = calcularVencimento(cliente.diaFaturamento, relatorio.mesReferencia, relatorio.anoReferencia);
+
+    const medicao = await tx.medicao.create({
+      data: {
+        empresaId: relatorio.empresaId,
+        clienteId: relatorio.ordemServico.clienteId,
+        contratoId: relatorio.contratoId,
+        numero,
+        // Medição de contrato é a mensalidade (MENSAL_FIXO); sem contrato é serviço avulso
+        // (ADICIONAL) e NÃO pode calar o gerar-mes da mensalidade do cliente (F3/I25)
+        tipo: relatorio.contratoId ? "MENSAL_FIXO" : "ADICIONAL",
+        mes: relatorio.mesReferencia,
+        ano: relatorio.anoReferencia,
+        descricao: `Relatório ${relatorio.numero}`,
+        status: status as any,
+        valorTotal: valor,
+        valorLiquido: valor,
+        dataAprovacao: new Date(),
+        dataVencimento: vencimento,
+        tokenPublico: crypto.randomUUID(),
+        itens: {
+          create: [{
+            tipo: "SERVICO",
+            descricao: `Serviço do período — ${relatorio.numero}`,
+            quantidade: 1,
+            valorUnitario: valor,
+            valorTotal: valor,
+            ordem: 0,
+          }],
+        },
       },
-    },
-  });
+    });
 
-  await prisma.relatorioOs.update({ where: { id: relatorioId }, data: { medicaoId: medicao.id } });
+    await tx.relatorioOs.update({ where: { id: relatorioId }, data: { medicaoId: medicao.id } });
+    return { medicao, nova: true };
+  }, { timeout: 20_000 });
+  if (!r.medicao || !r.nova) return r.medicao;
+  const medicao = r.medicao;
 
   // Gera conta a receber, exceto quando aguarda agrupamento (perfil fatura única)
   if (perfil !== "FATURA_UNICA") {

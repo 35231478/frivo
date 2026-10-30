@@ -1,11 +1,12 @@
 /**
  * Contas a Receber — gestão (servidor). A empresa vem sempre de quem chama (sessão). Não cria conta:
- * onde/quando a conta nasce continua em lib/financeiro-server.ts (gerarContaReceberDoOrcamento /
- * gerarContaReceberDaMedicao), intocado.
+ * onde/quando a conta nasce fica em lib/financeiro-server.ts (gerarContaReceberDoOrcamento /
+ * gerarContaReceberDaMedicao).
  */
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { origemDaConta } from "@/lib/financeiro/conta-receber-gestao";
+import { calcularRetencoes, retencoesDaMedicao } from "@/lib/financeiro/retencoes";
 
 type Cliente = Prisma.TransactionClient | typeof prisma;
 
@@ -37,7 +38,8 @@ export async function detalhesDaConta(empresaId: string, id: string) {
       contaBancaria: { select: { id: true, nome: true, ativo: true } },
       medicao: {
         select: {
-          id: true, numero: true, status: true,
+          id: true, numero: true, status: true, valorLiquido: true, valorRetencoes: true,
+          retIssAliquota: true, retIrAliquota: true, retPisAliquota: true, retCofinsAliquota: true, retCsllAliquota: true, retInssAliquota: true,
           itens: { select: { descricao: true, quantidade: true, valorUnitario: true, valorTotal: true, ordemServicoId: true }, orderBy: { ordem: "asc" } },
           relatorios: { select: { id: true, numero: true, ordemServicoId: true } },
         },
@@ -84,6 +86,8 @@ export async function detalhesDaConta(empresaId: string, id: string) {
     cliente: { id: c.cliente.id, nome: c.cliente.nomeFantasia ?? c.cliente.nome, cpfCnpj: c.clienteCnpj ?? c.cliente.cpfCnpj },
     origem: origemDaConta(c),
     medicao: c.medicao ? { id: c.medicao.id, numero: c.medicao.numero, relatorios: c.medicao.relatorios.map((r) => ({ id: r.id, numero: r.numero })) } : null,
+    // Bruto, cada retenção e o líquido — só quando a medição tem retenção marcada
+    retencoes: c.medicao && num(c.medicao.valorRetencoes) > 0 ? calcularRetencoes(num(c.medicao.valorLiquido), retencoesDaMedicao(c.medicao)) : null,
     orcamento: c.orcamento ? { id: c.orcamento.id, codigo: c.orcamento.codigo, nome: c.orcamento.nome } : null,
     contrato: c.contrato,
     ordens,

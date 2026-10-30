@@ -3,7 +3,7 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { gerarNumeroMedicao } from "@/lib/utils";
 import { calcularVencimento } from "@/lib/medicao-helpers";
-import { itensFaturaveisDaOs, osJaFaturada } from "@/lib/faturamento-os";
+import { itensFaturaveisDaOs, orcamentoJaFaturado, osJaFaturada, travarParaFaturar } from "@/lib/faturamento-os";
 import { anoBR, mesBR } from "@/lib/fuso";
 
 /**
@@ -148,6 +148,8 @@ export async function POST(req: NextRequest) {
         },
       });
       for (const o of orcamentos) {
+        // (c) a OS gerada deste orçamento já foi faturada (itens copiados): não cobra de novo
+        if (await orcamentoJaFaturado(o.id)) continue;
         const valor = Number(o.totalGeral);
         itens.push({
           tipo: "SERVICO",
@@ -172,37 +174,50 @@ export async function POST(req: NextRequest) {
     const numero = gerarNumeroMedicao(sequencial, ano);
     const vencimento = calcularVencimento(cliente.diaFaturamento, mes, ano);
 
-    const medicao = await prisma.medicao.create({
-      data: {
-        empresaId,
-        clienteId,
-        contratoId: !faturaUnica && contratosCliente.length === 1 ? contratosCliente[0].id : null,
-        numero,
-        tipo: faturaUnica ? "FATURA_UNICA" : "MENSAL_FIXO",
-        mes,
-        ano,
-        descricao: faturaUnica
-          ? `Fatura única ${String(mes).padStart(2, "0")}/${ano}`
-          : `Medição mensal ${String(mes).padStart(2, "0")}/${ano}`,
-        status: "RASCUNHO",
-        valorTotal,
-        valorLiquido: valorTotal,
-        dataVencimento: vencimento,
-        tokenPublico: crypto.randomUUID(),
-        itens: {
-          create: itens.map((it) => ({
-            tipo: it.tipo,
-            descricao: it.descricao,
-            quantidade: it.quantidade,
-            valorUnitario: it.valorUnitario,
-            valorTotal: it.valorTotal,
-            orcamentoId: it.orcamentoId ?? null,
-            ordemServicoId: it.ordemServicoId ?? null,
-            ordem: it.ordem,
-          })),
+    // Trava (a/c): OS e orçamentos desta fatura TRANCADOS; se outro caminho faturou algum deles
+    // enquanto a lista era montada, este cliente fica para a próxima rodada (nada sai em dobro)
+    const medicao = await prisma.$transaction(async (tx) => {
+      const travadas = await travarParaFaturar(tx, { osIds: itens.map((i) => i.ordemServicoId), orcamentoIds: itens.map((i) => i.orcamentoId) });
+      if (travadas.os.length || travadas.orcamentos.length) return null;
+      const criada = await tx.medicao.create({
+        data: {
+          empresaId,
+          clienteId,
+          contratoId: !faturaUnica && contratosCliente.length === 1 ? contratosCliente[0].id : null,
+          numero,
+          tipo: faturaUnica ? "FATURA_UNICA" : "MENSAL_FIXO",
+          mes,
+          ano,
+          descricao: faturaUnica
+            ? `Fatura única ${String(mes).padStart(2, "0")}/${ano}`
+            : `Medição mensal ${String(mes).padStart(2, "0")}/${ano}`,
+          status: "RASCUNHO",
+          valorTotal,
+          valorLiquido: valorTotal,
+          dataVencimento: vencimento,
+          tokenPublico: crypto.randomUUID(),
+          itens: {
+            create: itens.map((it) => ({
+              tipo: it.tipo,
+              descricao: it.descricao,
+              quantidade: it.quantidade,
+              valorUnitario: it.valorUnitario,
+              valorTotal: it.valorTotal,
+              orcamentoId: it.orcamentoId ?? null,
+              ordemServicoId: it.ordemServicoId ?? null,
+              ordem: it.ordem,
+            })),
+          },
         },
-      },
-    });
+      });
+      return criada;
+    }, { timeout: 20_000 });
+    if (!medicao) {
+      sequencial--;
+      ignoradas++;
+      resultado.push({ cliente: cliente.nomeFantasia ?? cliente.nome, status: "item já faturado em outra medição — gere de novo" });
+      continue;
+    }
 
     // C6/D3: a medição do mês É a cobrança da previsão — liga a conta PREVISTO de cada
     // contrato à medição (sem criar conta nova). Se a competência ainda não tem previsão
