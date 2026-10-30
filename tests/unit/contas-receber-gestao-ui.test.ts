@@ -17,10 +17,10 @@ import { permissoesTotais, type Permissoes } from "@/lib/permissoes";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
-const nav = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn() }));
+const nav = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn(), qs: "" }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: nav.push, refresh: nav.refresh, replace: nav.replace, back: () => {} }),
-  usePathname: () => "/financeiro/contas-receber", useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/financeiro/contas-receber", useSearchParams: () => new URLSearchParams(nav.qs),
 }));
 const avisos = vi.hoisted(() => ({ toast: vi.fn() }));
 vi.mock("@/components/ui/avisos", async (original) => ({ ...(await original<object>()), toast: avisos.toast }));
@@ -262,7 +262,8 @@ const DETALHE = {
 describe("gaveta de detalhes e a lista", () => {
   const props = {
     contas: [{ ...base, medicaoId: "m1", medicaoNumero: "MED-2026-0003" }], clientes: CLIENTES, categorias: [], interAtivo: true,
-    resumo: { aReceber: { v: 0, q: 0 }, vencido: { v: 0, q: 0 }, hoje: { v: 0, q: 0 }, recebido: { v: 0, q: 0 } },
+    resumo: { VENCIDO: { v: 0, q: 0 }, VENCE_HOJE: { v: 0, q: 0 }, A_VENCER: { v: 0, q: 0 }, RECEBIDO: { v: 0, q: 0 }, TOTAL: { v: 0, q: 0 } },
+    periodo: { tipo: "mes", mes: "2026-11", de: null, ate: null, rotulo: "Novembro de 2026" },
     total: 1, totalFiltrado: 1234.56, pagina: 1, porPagina: 25,
     filtros: { q: "", card: "", clienteId: "", categoria: "", forma: "", banco: "", valorMin: "", valorMax: "", vencDe: "", vencAte: "", status: "", conta: "" },
   };
@@ -320,5 +321,101 @@ describe("vínculo do outro lado (orçamento, medição, OS)", () => {
     act(() => root.unmount()); caixa.remove();
     await montar(createElement(ContasReceberVinculadas, { contas: [], podeAbrir: true }));
     expect($("[data-contas-vinculadas]")).toBeNull();
+  });
+});
+
+describe("período + cards do período + cara de planilha (padrão da casa)", () => {
+  const resumo = {
+    VENCIDO: { v: 400, q: 1 }, VENCE_HOJE: { v: 500, q: 1 }, A_VENCER: { v: 1300, q: 2 }, RECEBIDO: { v: 300, q: 1 }, TOTAL: { v: 2500, q: 5 },
+  };
+  const props = (o: Record<string, unknown> = {}) => ({
+    contas: [base, { ...base, id: "cr2", numero: "CR-2026-0043", valor: 98765.4, status: "ATRASADO", dataVencimento: "2026-11-02T00:00:00.000Z", orcamentoId: "o1", orcamentoCodigo: "ORC-2026-0007", categoria: "Manutenção preventiva de contratos grandes" }],
+    clientes: CLIENTES, categorias: [], interAtivo: false, resumo,
+    periodo: { tipo: "mes", mes: "2026-11", de: null, ate: null, rotulo: "Novembro de 2026" },
+    total: 2, totalFiltrado: 99999.96, pagina: 1, porPagina: 25,
+    filtros: { q: "", card: "", clienteId: "", categoria: "", forma: "", banco: "", valorMin: "", valorMax: "", vencDe: "", vencAte: "", status: "", conta: "" },
+    ...o,
+  });
+  const ultimaUrl = () => String(nav.replace.mock.calls.at(-1)?.[0] ?? "");
+  // "Hoje" = 15/11/2026 (só o relógio: o resto do DOM roda normal)
+  beforeEach(() => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date("2026-11-15T15:00:00.000Z")); });
+  afterEach(() => { vi.useRealTimers(); });
+  const montarTela = async (o: Record<string, unknown> = {}) => {
+    if (caixa?.isConnected) { act(() => root.unmount()); caixa.remove(); }
+    nav.replace.mockClear();
+    const { ContasReceberView } = await import("@/components/financeiro/contas-receber-view");
+    await montar(createElement(ContasReceberView, props(o) as any));
+  };
+
+  it("5 cards do período, na ordem, com R$ e quantidade; clicar filtra (card na URL) e clicar de novo tira", async () => {
+    await montarTela();
+    expect($$("[data-card]").map((c) => c.getAttribute("data-card"))).toEqual(["VENCIDO", "VENCE_HOJE", "A_VENCER", "RECEBIDO", "TOTAL"]);
+    const vencidos = $("[data-card=VENCIDO]")!;
+    expect(txt(vencidos)).toMatch(/^Vencidos.*R\$\s?400,00.*1 cobrança$/);
+    expect(txt($("[data-card=TOTAL]"))).toMatch(/Total do período.*R\$\s?2\.500,00.*5 cobranças$/);
+    // ⓘ fora do botão do card (botão dentro de botão quebra a hidratação — React #418)
+    expect($("[data-card=A_VENCER] [data-dica]")).toBeNull();
+    expect($("[data-card-caixa=A_VENCER] [data-dica]")).not.toBeNull();
+    await clicar(vencidos);
+    expect(ultimaUrl()).toBe("/financeiro/contas-receber?card=VENCIDO");
+    await montarTela({ filtros: { ...props().filtros, card: "VENCIDO" } });
+    expect($("[data-card=VENCIDO]")!.getAttribute("aria-pressed")).toBe("true");
+    await clicar($("[data-card=VENCIDO]"));
+    expect(ultimaUrl()).toBe("/financeiro/contas-receber");
+  });
+
+  it("período: ‹ › trocam o mês na URL; o mês atual sai da URL; todo o período e personalizado", async () => {
+    await montarTela();
+    expect(txt($("[data-mes-rotulo]"))).toBe("Novembro de 2026");
+    await clicar($("[data-mes-anterior]"));
+    expect(ultimaUrl()).toBe("/financeiro/contas-receber?mes=2026-10");
+    await clicar($("[data-mes-seguinte]"));
+    expect(ultimaUrl()).toBe("/financeiro/contas-receber?mes=2026-12");
+    await clicar($("[data-todo-periodo]"));
+    expect(ultimaUrl()).toBe("/financeiro/contas-receber?periodo=todos");
+    await clicar($("[data-alternar-periodo]"));
+    expect($("[data-intervalo]")).not.toBeNull();
+    // Em "todo o período" (URL atual com periodo=todos): voltar ao mês tira o período da URL e mantém a busca
+    nav.qs = "periodo=todos&q=hospital";
+    try {
+      await montarTela({ periodo: { tipo: "todos", mes: null, de: null, ate: null, rotulo: "Todo o período" } });
+      expect(txt($("[data-mes-rotulo]"))).toBe("Todo o período");
+      expect(txt($("[data-alternar-periodo]"))).toBe("Voltar ao mês atual");
+      await clicar($("[data-alternar-periodo]"));
+      expect(ultimaUrl()).toBe("/financeiro/contas-receber?q=hospital");
+    } finally { nav.qs = ""; }
+  });
+
+  it("desktop em cara de planilha: cabeçalho compacto, Valor (R$) à direita com números tabulares, sem \"R$\" na célula", async () => {
+    await montarTela();
+    const tabela = $("[data-tabela-receber] table[data-tabela-planilha]")!;
+    expect(tabela.className).toContain("text-[13px]");
+    expect(tabela.className).toContain("table-fixed"); // colunas cabem na tela: Valor nunca some para a direita
+    expect($$("[data-tabela-receber] th").map(txt)).toEqual(["Vencimento", "Nº", "Cliente", "Descrição", "Categoria", "Situação", "Valor (R$)", "Ações"]);
+    const linha = $("[data-linha-conta=cr2]")!;
+    expect(linha.className).toContain("border-surface-linha");
+    expect(linha.querySelector("[data-numero-conta]")!.className).toContain("font-mono");
+    const cat = linha.querySelector<HTMLElement>("[data-categoria]")!; // uma linha só, com o nome inteiro no title
+    expect(cat.className).toContain("truncate");
+    expect(cat.title).toContain("Categoria antiga");
+    expect(linha.className).toContain("bg-atrasado-claro"); // vencida continua destacada
+    const valor = linha.querySelector("[data-valor]")!;
+    expect(txt(valor)).toBe("98.765,40");
+    expect(valor.className).toContain("text-right");
+    expect(valor.className).toContain("tabular-nums");
+    expect(txt(linha)).toContain("02/11/2026");
+    expect(linha.querySelector("[data-origem-conta]")!.getAttribute("href")).toBe("/orcamentos/o1");
+    // celular continua em cartões
+    expect($("[data-cartoes-receber]")!.className).toContain("md:hidden");
+    expect($("[data-tabela-receber]")!.className).toContain("hidden md:block");
+  });
+
+  it("nada no período: mensagem do mês + \"Ver todo o período\"; em todo o período, só a mensagem", async () => {
+    await montarTela({ contas: [], total: 0, totalFiltrado: 0 });
+    expect(txt($("[data-tabela-receber] [data-lista-vazia]"))).toContain("Nenhuma cobrança em novembro de 2026");
+    await clicar($("[data-tabela-receber] [data-ver-todo-periodo]"));
+    expect(ultimaUrl()).toBe("/financeiro/contas-receber?periodo=todos");
+    await montarTela({ contas: [], total: 0, totalFiltrado: 0, periodo: { tipo: "todos", mes: null, de: null, ate: null, rotulo: "Todo o período" } });
+    expect($("[data-ver-todo-periodo]")).toBeNull();
   });
 });

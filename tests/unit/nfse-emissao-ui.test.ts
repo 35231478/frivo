@@ -105,7 +105,7 @@ describe("as notas da medição", () => {
     expect((n.querySelector('[data-baixar="xml"]') as HTMLAnchorElement).getAttribute("href")).toBe("/api/fiscal/notas/n1/arquivo?tipo=xml");
     expect(texto(n)).toContain("R$ 360,00");
     expect(texto(n)).toContain("serviços R$ 400,00 − desconto R$ 40,00");
-    expect((n.querySelector('a[href^="/financeiro/contas-receber"]') as HTMLAnchorElement).getAttribute("href")).toBe("/financeiro/contas-receber?q=CR-0001");
+    expect((n.querySelector('a[href^="/financeiro/contas-receber"]') as HTMLAnchorElement).getAttribute("href")).toBe("/financeiro/contas-receber?q=CR-0001&periodo=todos"); // acha mesmo fora do mês
     expect(n.querySelector('[data-acao="atualizar-status"]')).toBeNull();
     expect(n.querySelector("[data-motivo]")).toBeNull();
     // itens e histórico

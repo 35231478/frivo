@@ -259,7 +259,7 @@ export function Header({ session, avatarUrl }: HeaderProps) {
                   {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={AlertTriangle} cor="text-atencao" label="Checklists com alertas" valor={alertas?.checklistsComAlertas ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={FileWarning} cor="text-atencao" label="Documentos de veículo vencendo" valor={alertas?.documentosVencendo ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={Wrench} cor="text-acento" label="Veículos em manutenção" valor={alertas?.veiculosManutencao ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("financeiro", "contasReceber") && <AlertaItem href="/financeiro/contas-receber?status=RECEBIDO" icone={Barcode} cor="text-ok" label="Boletos pagos hoje" valor={alertas?.boletosPagos ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("financeiro", "contasReceber") && <AlertaItem href="/financeiro/contas-receber?card=RECEBIDO&periodo=todos" icone={Barcode} cor="text-ok" label="Boletos pagos hoje" valor={alertas?.boletosPagos ?? 0} onClick={() => setSinoAberto(false)} />}
                 </div>
               )}
             </div>

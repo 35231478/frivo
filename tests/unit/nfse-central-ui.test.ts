@@ -113,7 +113,7 @@ describe("cards e cabeçalho", () => {
 
   it("dica ⓘ: texto curto ao tocar (sem bloco de texto na tela)", async () => {
     await tela();
-    const botao = $('[data-card="aberto"] [data-dica]')!;
+    const botao = $('[data-card-caixa="aberto"] [data-dica]')!;
     await clicar(botao);
     const balao = document.getElementById(botao.getAttribute("aria-describedby")!)!;
     expect([balao.hidden, txt(balao), botao.getAttribute("aria-label")]).toEqual([false, "Medições aprovadas no período (pedido de compra recebido) ainda sem NFS-e.", "Ajuda: Em aberto"]);
@@ -128,6 +128,7 @@ describe("período, busca e filtros (na URL)", () => {
     expect(ultimaUrl()).toBe("/financeiro/notas-fiscais?mes=2026-02");
     await clicar($("[data-mes-seguinte]"));
     expect(ultimaUrl()).toBe("/financeiro/notas-fiscais?mes=2026-04");
+    expect($("[data-todo-periodo]")).toBeNull(); // "Todo o período" só onde a tela permite (Contas a Receber)
   });
 
   it("período personalizado: de/até → Aplicar (sai o mês); 'Voltar ao mês atual' limpa", async () => {
