@@ -3,7 +3,7 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { acaoMedicaoSchema } from "@/lib/validations";
 import { statusAposAprovacao, calcularVencimento, buildMedicaoPublicUrl } from "@/lib/medicao-helpers";
-import { gerarContaReceberDaMedicao } from "@/lib/financeiro-server";
+import { desfazerContasDaMedicao, gerarContaReceberDaMedicao } from "@/lib/financeiro-server";
 import { whatsappLink } from "@/lib/utils";
 
 type Params = { params: Promise<{ id: string }> };
@@ -62,10 +62,12 @@ export async function POST(req: NextRequest, { params }: Params) {
       }
       const proximo = statusAposAprovacao(cliente.exigePcAntesNf);
       const vencimento = calcularVencimento(cliente.diaFaturamento, medicao.mes, medicao.ano);
-      await prisma.medicao.update({
-        where: { id },
+      // Atômico (b): o 2º "Aprovar" simultâneo não passa daqui; a conta nasce uma vez só
+      const { count } = await prisma.medicao.updateMany({
+        where: { id, status: "AGUARDANDO_APROVACAO" },
         data: { status: proximo, dataAprovacao: new Date(), dataVencimento: vencimento },
       });
+      if (count !== 1) return NextResponse.json({ erro: "Medição não está aguardando aprovação" }, { status: 409 });
       await gerarContaReceberDaMedicao(id);
       return NextResponse.json({ ok: true, status: proximo });
     }
@@ -151,23 +153,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     case "CANCELAR": {
       await prisma.medicao.update({ where: { id }, data: { status: "CANCELADA" } });
-      // C6: a conta PREVISTA do CONTRATO não morre com a medição — ela volta a ser a
-      // previsão da competência (desligada e com o valor da mensalidade), para o mês
-      // poder ser refaturado (F4). Conta criada só para esta medição é cancelada.
-      const vinculadas = await prisma.contaReceber.findMany({
-        where: { medicaoId: id, status: { notIn: ["RECEBIDO", "CANCELADO"] } },
-        include: { contrato: { select: { valorMensal: true } } },
-      });
-      for (const c of vinculadas) {
-        if (c.contratoId) {
-          await prisma.contaReceber.update({
-            where: { id: c.id },
-            data: { medicaoId: null, status: "PREVISTO", valor: c.contrato?.valorMensal ?? c.valor },
-          });
-        } else {
-          await prisma.contaReceber.update({ where: { id: c.id }, data: { status: "CANCELADO" } });
-        }
-      }
+      await desfazerContasDaMedicao({ id, numero: medicao.numero, empresaId }, session.user!.id);
       return NextResponse.json({ ok: true, status: "CANCELADA" });
     }
 

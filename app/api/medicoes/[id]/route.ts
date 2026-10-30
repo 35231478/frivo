@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { travarParaFaturar } from "@/lib/faturamento-os";
+import { calcularRetencoes, retencoesDaMedicao } from "@/lib/financeiro/retencoes";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { respostaRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
@@ -52,11 +54,23 @@ export async function PUT(req: NextRequest, { params }: Params) {
     await Promise.all([
       validarRefsEmpresa("servico", data.itens.map((i) => i.servicoId), empresaId, "Serviço"),
       validarRefsEmpresa("produto", data.itens.map((i) => i.produtoId), empresaId, "Produto"),
+      validarRefsEmpresa("ordemServico", data.itens.map((i) => i.ordemServicoId), empresaId, "OS"),
+      validarRefsEmpresa("orcamento", data.itens.map((i) => i.orcamentoId), empresaId, "Orçamento"),
     ]);
   } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
   const totais = calcularTotaisMedicao(data.itens, data.descontoValor, data.descontoPercent);
+  // Retenções marcadas continuam as mesmas; o valor delas acompanha o novo valor da nota
+  const retencoes = calcularRetencoes(totais.valorLiquido, retencoesDaMedicao(existente));
+  if (retencoes.liquido < 0) return NextResponse.json({ erro: "As retenções passam do novo valor. Ajuste as retenções antes." }, { status: 400 });
 
-  const atualizada = await prisma.medicao.update({
+  // Trava (a/c): a edição não pode trazer OS/orçamento já faturado em OUTRA medição viva
+  const r = await prisma.$transaction(async (tx) => {
+    const travadas = await travarParaFaturar(tx, {
+      osIds: data.itens.map((i) => i.ordemServicoId), orcamentoIds: data.itens.map((i) => i.orcamentoId), ignorarMedicaoId: id,
+    });
+    const ja = [...travadas.os, ...travadas.orcamentos][0];
+    if (ja) return { conflito: `Um item já está faturado na medição ${ja.medicao.numero}. Cancele-a antes de faturar de novo.` };
+    return { atualizada: await tx.medicao.update({
     where: { id },
     data: {
       clienteId: data.clienteId,
@@ -70,6 +84,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
       descontoValor: data.descontoValor,
       descontoPercent: data.descontoPercent,
       valorLiquido: totais.valorLiquido,
+      valorRetencoes: retencoes.total,
       itens: {
         deleteMany: {},
         create: data.itens.map((it, idx) => ({
@@ -93,9 +108,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
         })),
       },
     },
-  });
-
-  return NextResponse.json(atualizada);
+    }) };
+  }, { timeout: 20_000 });
+  if ("conflito" in r) return NextResponse.json({ erro: r.conflito }, { status: 409 });
+  return NextResponse.json(r.atualizada);
 }
 
 export async function DELETE(_: NextRequest, { params }: Params) {

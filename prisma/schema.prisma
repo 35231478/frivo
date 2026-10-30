@@ -2314,6 +2314,16 @@ model Medicao {
   descontoPercent Decimal @default(0) @map("desconto_percent") @db.Decimal(5, 2)
   valorLiquido    Decimal @default(0) @map("valor_liquido") @db.Decimal(12, 2)
 
+  /// Retenções na fonte marcadas pelo usuário (alíquota %; NULL = desmarcada). Base = valorLiquido
+  /// (valor dos serviços da nota). A conta a receber/boleto sai por valorLiquido − valorRetencoes.
+  retIssAliquota    Decimal? @map("ret_iss_aliquota") @db.Decimal(5, 2)
+  retIrAliquota     Decimal? @map("ret_ir_aliquota") @db.Decimal(5, 2)
+  retPisAliquota    Decimal? @map("ret_pis_aliquota") @db.Decimal(5, 2)
+  retCofinsAliquota Decimal? @map("ret_cofins_aliquota") @db.Decimal(5, 2)
+  retCsllAliquota   Decimal? @map("ret_csll_aliquota") @db.Decimal(5, 2)
+  retInssAliquota   Decimal? @map("ret_inss_aliquota") @db.Decimal(5, 2)
+  valorRetencoes    Decimal  @default(0) @map("valor_retencoes") @db.Decimal(12, 2)
+
   dataEnvio      DateTime? @map("data_envio")
   dataAprovacao  DateTime? @map("data_aprovacao")
   dataVencimento DateTime? @map("data_vencimento")

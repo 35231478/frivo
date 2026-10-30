@@ -12,6 +12,7 @@ import {
   hrefContrato, hrefMedicao, hrefOrcamento, hrefOs, ROTULO_EVENTO_CR, ROTULO_ORIGEM, type OrigemConta,
 } from "@/lib/financeiro/conta-receber-gestao";
 import { abrirPdfBoleto } from "@/components/financeiro/conta-receber-acoes";
+import type { Detalhamento } from "@/lib/financeiro/retencoes";
 
 /** O que GET /api/contas-receber/[id] devolve (datas em texto). */
 export interface DetalheConta {
@@ -24,6 +25,7 @@ export interface DetalheConta {
   cliente: { id: string; nome: string; cpfCnpj: string | null };
   origem: OrigemConta;
   medicao: { id: string; numero: string; relatorios: { id: string; numero: string }[] } | null;
+  retencoes?: Detalhamento | null;
   orcamento: { id: string; codigo: string; nome: string } | null;
   contrato: { id: string; numero: string } | null;
   ordens: { id: string; numero: string }[];
@@ -91,6 +93,15 @@ export function ContaReceberDetalhes({ id, onFechar, versao = 0 }: { id: string 
                 <Linha rotulo="Categoria" valor={d.categoriaFinanceira ? `${d.categoriaFinanceira.nome}${d.categoriaFinanceira.ativo ? "" : " (inativa)"}` : d.categoria ? `${d.categoria} (sem cadastro)` : "—"} />
                 <Linha rotulo="Centro de custo" valor={d.centroCusto ? `${d.centroCusto.nome}${d.centroCusto.ativo ? "" : " (inativo)"}` : "—"} />
               </dl>
+              {d.retencoes && (
+                <dl className="mt-3 rounded-lg bg-surface-alt p-3 text-sm space-y-1" data-detalhe-retencoes>
+                  <div className="flex justify-between"><dt className="text-ink-muted">Valor da nota</dt><dd>{formatarMoeda(d.retencoes.bruto)}</dd></div>
+                  {d.retencoes.linhas.map((l) => (
+                    <div key={l.chave} className="flex justify-between"><dt className="text-ink-muted">{l.rotulo} ({String(l.aliquota).replace(".", ",")}%)</dt><dd>− {formatarMoeda(l.valor)}</dd></div>
+                  ))}
+                  <div className="flex justify-between font-semibold border-t border-surface-border pt-1"><dt>Líquido</dt><dd>{formatarMoeda(d.retencoes.liquido)}</dd></div>
+                </dl>
+              )}
               {d.observacao && <p className="text-sm text-ink mt-2 whitespace-pre-wrap" data-detalhe-obs>{d.observacao}</p>}
               {d.status === "CANCELADO" && d.motivoCancelamento && (
                 <p className="text-sm text-atrasado-texto mt-2" data-detalhe-cancelamento>Cancelada{d.canceladaEm ? ` em ${formatarData(d.canceladaEm)}` : ""}: {d.motivoCancelamento}</p>

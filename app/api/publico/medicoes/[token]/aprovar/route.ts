@@ -27,8 +27,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const proximo = statusAposAprovacao(medicao.cliente.exigePcAntesNf);
   const vencimento = calcularVencimento(medicao.cliente.diaFaturamento, medicao.mes, medicao.ano);
 
-  await prisma.medicao.update({
-    where: { id: medicao.id },
+  // Atômico: dois envios da aprovação (clique duplo/outra aba) — só o primeiro muda o status
+  const r = await prisma.medicao.updateMany({
+    where: { id: medicao.id, status: "AGUARDANDO_APROVACAO" },
     data: {
       status: proximo,
       dataAprovacao: new Date(),
@@ -38,6 +39,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       assinaturaUrl: parsed.data.assinaturaUrl,
     },
   });
+  if (r.count !== 1) return NextResponse.json({ erro: "Esta medição não está disponível para aprovação" }, { status: 400 });
 
   await gerarContaReceberDaMedicao(medicao.id);
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { travarParaFaturar } from "@/lib/faturamento-os";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { respostaRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
@@ -74,6 +75,8 @@ export async function POST(req: NextRequest) {
     await Promise.all([
       validarRefsEmpresa("servico", data.itens.map((i) => i.servicoId), empresaId, "Serviço"),
       validarRefsEmpresa("produto", data.itens.map((i) => i.produtoId), empresaId, "Produto"),
+      validarRefsEmpresa("ordemServico", data.itens.map((i) => i.ordemServicoId), empresaId, "OS"),
+      validarRefsEmpresa("orcamento", data.itens.map((i) => i.orcamentoId), empresaId, "Orçamento"),
     ]);
   } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
@@ -102,49 +105,61 @@ export async function POST(req: NextRequest) {
     : [];
   const fiscalPorServico = new Map(servicosFiscais.map((s) => [s.id, s]));
 
-  const medicao = await prisma.medicao.create({
-    data: {
-      empresaId,
-      clienteId: data.clienteId,
-      contratoId: data.contratoId || null,
-      numero,
-      tipo: data.tipo,
-      mes: data.mes ?? null,
-      ano: data.ano ?? null,
-      descricao: data.descricao ?? null,
-      observacao: data.observacao ?? null,
-      status: "RASCUNHO",
-      valorTotal: totais.valorTotal,
-      descontoValor: data.descontoValor,
-      descontoPercent: data.descontoPercent,
-      valorLiquido: totais.valorLiquido,
-      tokenPublico,
-      itens: {
-        create: data.itens.map((it, idx) => {
-          const f = it.servicoId ? fiscalPorServico.get(it.servicoId) : undefined;
-          return {
-            tipo: it.tipo,
-            servicoId: it.servicoId || null,
-            produtoId: it.produtoId || null,
-            ordemServicoId: it.ordemServicoId || null,
-            orcamentoId: it.orcamentoId || null,
-            descricao: it.descricao,
-            quantidade: it.quantidade,
-            valorUnitario: it.valorUnitario,
-            valorTotal: it.quantidade * it.valorUnitario,
-            codigoMunicipal: it.codigoMunicipal ?? f?.codigoMunicipal ?? null,
-            aliquotaISS: it.aliquotaISS ?? f?.aliquotaISS ?? null,
-            aliquotaPIS: it.aliquotaPIS ?? f?.aliquotaPIS ?? null,
-            aliquotaCOFINS: it.aliquotaCOFINS ?? f?.aliquotaCOFINS ?? null,
-            aliquotaCSLL: it.aliquotaCSLL ?? f?.aliquotaCSLL ?? null,
-            aliquotaIR: it.aliquotaIR ?? f?.aliquotaIR ?? null,
-            observacao: it.observacao ?? null,
-            ordem: idx,
-          };
-        }),
+  // Trava (a/c): OS e orçamentos dos itens TRANCADOS na transação; já numa medição viva = 409
+  // (a medição manual não pode cobrar de novo o que outro caminho já faturou)
+  const r = await prisma.$transaction(async (tx) => {
+    const travadas = await travarParaFaturar(tx, {
+      osIds: data.itens.map((i) => i.ordemServicoId), orcamentoIds: data.itens.map((i) => i.orcamentoId),
+    });
+    const ja = [...travadas.os, ...travadas.orcamentos][0];
+    if (ja) return { conflito: `Um item desta medição já está faturado na medição ${ja.medicao.numero}. Cancele-a antes de faturar de novo.` };
+    const medicao = await tx.medicao.create({
+      data: {
+        empresaId,
+        clienteId: data.clienteId,
+        contratoId: data.contratoId || null,
+        numero,
+        tipo: data.tipo,
+        mes: data.mes ?? null,
+        ano: data.ano ?? null,
+        descricao: data.descricao ?? null,
+        observacao: data.observacao ?? null,
+        status: "RASCUNHO",
+        valorTotal: totais.valorTotal,
+        descontoValor: data.descontoValor,
+        descontoPercent: data.descontoPercent,
+        valorLiquido: totais.valorLiquido,
+        tokenPublico,
+        itens: {
+          create: data.itens.map((it, idx) => {
+            const f = it.servicoId ? fiscalPorServico.get(it.servicoId) : undefined;
+            return {
+              tipo: it.tipo,
+              servicoId: it.servicoId || null,
+              produtoId: it.produtoId || null,
+              ordemServicoId: it.ordemServicoId || null,
+              orcamentoId: it.orcamentoId || null,
+              descricao: it.descricao,
+              quantidade: it.quantidade,
+              valorUnitario: it.valorUnitario,
+              valorTotal: it.quantidade * it.valorUnitario,
+              codigoMunicipal: it.codigoMunicipal ?? f?.codigoMunicipal ?? null,
+              aliquotaISS: it.aliquotaISS ?? f?.aliquotaISS ?? null,
+              aliquotaPIS: it.aliquotaPIS ?? f?.aliquotaPIS ?? null,
+              aliquotaCOFINS: it.aliquotaCOFINS ?? f?.aliquotaCOFINS ?? null,
+              aliquotaCSLL: it.aliquotaCSLL ?? f?.aliquotaCSLL ?? null,
+              aliquotaIR: it.aliquotaIR ?? f?.aliquotaIR ?? null,
+              observacao: it.observacao ?? null,
+              ordem: idx,
+            };
+          }),
+        },
       },
-    },
-  });
+    });
+    return { medicao };
+  }, { timeout: 20_000 });
+  if ("conflito" in r) return NextResponse.json({ erro: r.conflito }, { status: 409 });
+  const { medicao } = r;
 
   return NextResponse.json(medicao, { status: 201 });
 }
