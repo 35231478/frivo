@@ -22,7 +22,7 @@ export default async function FinanceiroDashboardPage() {
     { titulo: "Recebido este mês", valor: r.recebidoMes.valor, qtd: r.recebidoMes.qtd, icone: CheckCircle, cor: "text-success-600", bg: "bg-success-50", href: "/financeiro/contas-receber?card=RECEBIDO" },
     { titulo: "Vencido (a receber)", valor: r.vencidoReceber.valor, qtd: r.vencidoReceber.qtd, icone: AlertTriangle, cor: "text-atrasado", bg: "bg-atrasado-claro", href: "/financeiro/contas-receber?card=VENCIDO&periodo=todos", alerta: r.vencidoReceber.qtd > 0 },
     { titulo: "A pagar este mês", valor: r.aPagarMes.valor, qtd: r.aPagarMes.qtd, icone: Upload, cor: "text-atencao", bg: "bg-atencao-claro", href: "/financeiro/contas-pagar" },
-    { titulo: "Contas a pagar vencidas", valor: r.pagasVencidas.valor, qtd: r.pagasVencidas.qtd, icone: AlertTriangle, cor: "text-atrasado", bg: "bg-atrasado-claro", href: "/financeiro/contas-pagar?status=VENCIDO", alerta: r.pagasVencidas.qtd > 0 },
+    { titulo: "Contas a pagar vencidas", valor: r.pagasVencidas.valor, qtd: r.pagasVencidas.qtd, icone: AlertTriangle, cor: "text-atrasado", bg: "bg-atrasado-claro", href: "/financeiro/contas-pagar?card=VENCIDO&periodo=todos", alerta: r.pagasVencidas.qtd > 0 },
     { titulo: "Saldo previsto", valor: r.saldoPrevisto, icone: Wallet, cor: r.saldoPrevisto >= 0 ? "text-success-600" : "text-atrasado", bg: r.saldoPrevisto >= 0 ? "bg-success-50" : "bg-atrasado-claro", href: "/financeiro" },
   ];
 

@@ -200,7 +200,10 @@ describe("lista", () => {
     expect(txt(a)).toContain("16/10/2026"); // data da autorização
     expect(txt(a)).toContain("60.701.190/0001-04");
     expect($("[data-origem] a", a)!.getAttribute("href")).toBe("/financeiro/medicoes/m1");
-    expect(txt(a)).toContain("R$ 180,00");
+    expect(txt($("[data-valor]", a))).toBe("180,00"); // planilha: R$ no cabeçalho, número à direita e tabular
+    expect($("[data-valor]", a)!.className).toContain("tabular-nums");
+    expect($("[data-tabela]")!.className).toContain("text-[13px]");
+    expect([...caixa.querySelectorAll("[data-tabela] th")].map((t) => txt(t))).toContain("Valor (R$)");
     const b = linhaTabela("nB");
     // emitida pela OS: a OS em destaque e a medição (por onde a nota saiu) embaixo
     expect($$("[data-origem] a", b).map((l) => [txt(l), l.getAttribute("href")])).toEqual([["OS OS-2026-8802", "/ordens/os1"], ["Medição MED-2026-0009", "/financeiro/medicoes/m1"]]);

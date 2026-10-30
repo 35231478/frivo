@@ -16,6 +16,7 @@ import { Paginacao, ListaVazia } from "@/components/listagem/listagem-ui";
 import { BarraPeriodo, CardResumo, GradeCards } from "@/components/listagem/periodo-cards";
 import { useListagemUrl } from "@/components/listagem/use-listagem-url";
 import { cn, formatarData, formatarDataHora, formatarMoeda } from "@/lib/utils";
+import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
 import { formatarDocumento } from "@/lib/documento";
 import { LABEL_AMBIENTE } from "@/lib/nfse/regras";
 import {
@@ -99,34 +100,36 @@ export function NotasCentralView({ dados }: { dados: DadosCentral }) {
           <ListaVazia mensagem={`Nenhuma nota em ${filtros.periodo.tipo === "mes" ? filtros.periodo.rotulo.toLowerCase() : "o período"}`} busca={filtros.q || undefined} onLimpar={() => { setBusca(""); navegar({ q: null }); }} />
         ) : (
           <>
-            {/* Desktop: tabela. Ações fixas à direita: com nomes/motivos longos a tabela rola, as ações não somem */}
+            {/* Desktop: "cara de planilha" (lib/planilha — o mesmo estilo de Contas a Receber/Pagar e do orçamento).
+                Ações fixas à direita: com nomes/motivos longos a tabela rola, as ações não somem */}
             <div className="hidden md:block overflow-x-auto" data-tabela-rolagem>
-              <table className="w-full text-sm" data-tabela>
-                <thead className="bg-surface-alt border-b border-surface-border">
-                  <tr>
-                    {["Situação", "Número", "Data", "Tomador", "Origem"].map((h) => <th key={h} className={TH}>{h}</th>)}
-                    <th className={cn(TH, "text-right")}>Valor dos serviços</th>
-                    <th className={cn(TH, "hidden 2xl:table-cell")}>Ambiente</th>
-                    <th className={cn(TH, "text-right sticky right-0 bg-surface-alt")}><span className="sr-only">Ações</span></th>
+              <table className={PLANILHA.tabela} data-tabela data-tabela-planilha>
+                <thead>
+                  <tr className={PLANILHA.cabecalho}>
+                    {["Situação", "Número", "Data", "Tomador", "Origem"].map((h) => <th key={h} scope="col" className={TH}>{h}</th>)}
+                    <th scope="col" className={cn(TH, "text-right")}>Valor (R$)</th>
+                    <th scope="col" className={cn(TH, "hidden 2xl:table-cell")}>Ambiente</th>
+                    <th scope="col" className={cn(TH, "text-right sticky right-0 bg-surface-alt")}><span className="sr-only">Ações</span></th>
                   </tr>
                 </thead>
                 <tbody>
                   {dados.notas.map((n) => (
-                    <tr key={n.id} className="group border-b border-surface-border last:border-b-0 hover:bg-surface-alt/60 align-top" data-nota={n.id} data-status={n.status}>
-                      <td className="px-3 py-3">
+                    <tr key={n.id} className={cn("group", PLANILHA.linha, "hover:bg-primary-50/40")} data-nota={n.id} data-status={n.status}>
+                      <td className={PLANILHA.td}>
                         <Situacao n={n} />
                         <span className="2xl:hidden mt-1 inline-flex"><Ambiente a={n.ambiente} /></span>
                       </td>
-                      <td className="px-3 py-3 font-mono text-ink whitespace-nowrap">{n.numero ?? "—"}</td>
-                      <td className="px-3 py-3 text-ink-muted whitespace-nowrap"><DataNota n={n} /></td>
-                      <td className="px-3 py-3 max-w-[200px]">
+                      <td className={cn(PLANILHA.td, "font-mono text-[12px] text-ink whitespace-nowrap")}>{n.numero ?? "—"}</td>
+                      <td className={cn(PLANILHA.td, "text-ink-muted whitespace-nowrap tabular-nums")}><DataNota n={n} /></td>
+                      <td className={cn(PLANILHA.td, "max-w-[220px]")}>
                         <p className="font-medium text-ink truncate" title={n.tomadorNome}>{n.tomadorNome}</p>
-                        <p className="text-xs text-ink-subtle whitespace-nowrap">{formatarDocumento(n.tomadorCpfCnpj)}</p>
+                        <p className="text-[11px] text-ink-subtle whitespace-nowrap tabular-nums">{formatarDocumento(n.tomadorCpfCnpj)}</p>
                       </td>
-                      <td className="px-3 py-3"><Origem n={n} /></td>
-                      <td className="px-3 py-3 text-right font-semibold tabular-nums text-ink whitespace-nowrap">{formatarMoeda(n.valorServicos)}</td>
-                      <td className="px-3 py-3 hidden 2xl:table-cell"><Ambiente a={n.ambiente} /></td>
-                      <td className="px-2 py-2.5 text-right sticky right-0 bg-white group-hover:bg-surface-alt" data-celula-acoes>
+                      <td className={PLANILHA.td}><Origem n={n} /></td>
+                      <td className={cn(PLANILHA.td, PLANILHA.numero, "font-semibold text-ink")} data-valor>{valorSemMoeda(n.valorServicos)}</td>
+                      <td className={cn(PLANILHA.td, "hidden 2xl:table-cell")}><Ambiente a={n.ambiente} /></td>
+                      {/* A célula fixa precisa de fundo opaco: o mesmo tom da linha (branca, zebrada ou com o mouse) */}
+                      <td className={cn(PLANILHA.td, "py-0.5 text-right sticky right-0 bg-white group-even:bg-[#FAFBFC] group-hover:bg-primary-50")} data-celula-acoes>
                         <AcoesNota n={n} onDetalhes={() => setDetalheId(n.id)} onReconsultar={() => reconsultar(n.id)} consultando={consultando === n.id} />
                       </td>
                     </tr>
@@ -171,7 +174,7 @@ export function NotasCentralView({ dados }: { dados: DadosCentral }) {
 
 /** Altura máxima do menu ⋮ (7 itens): abaixo disso de espaço, ele abre para cima */
 const INPUT = "bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all";
-const TH = "text-left px-3 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider whitespace-nowrap";
+const TH = cn(PLANILHA.th, "text-left whitespace-nowrap");
 
 /* ───────── Células ───────── */
 function Situacao({ n }: { n: NotaLinha }) {

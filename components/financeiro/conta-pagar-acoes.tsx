@@ -11,7 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid } from "@/components/ui/form-field";
-import { DollarSign, History, Pencil, Ban, Upload } from "lucide-react";
+import { DollarSign, History, Pencil, Ban, Upload, Eye } from "lucide-react";
+import { ItemMenu, MenuAcoes, SeparadorMenu } from "@/components/ui/menu-acoes";
 import { chaveHojeBR } from "@/lib/fuso";
 import { InputData } from "@/components/ui/input-data";
 
@@ -20,7 +21,11 @@ interface Conta {
   valorTotal: number; valorPago: number; saldoRestante: number; status: string;
 }
 
-export function ContaPagarAcoes({ conta }: { conta: Conta }) {
+/**
+ * Ações de uma conta a pagar. `menu`: na lista, tudo num ⋮ único (o mesmo menu de Contas a Receber);
+ * sem ele (detalhe da conta), os botões de ícone.
+ */
+export function ContaPagarAcoes({ conta, menu }: { conta: Conta; menu?: boolean }) {
   const router = useRouter();
   const [modal, setModal] = useState<null | "pagar" | "historico">(null);
   const fechar = () => setModal(null);
@@ -34,6 +39,26 @@ export function ContaPagarAcoes({ conta }: { conta: Conta }) {
 
   return (
     <>
+      {menu ? (
+        <div className="flex items-center justify-end">
+          <MenuAcoes rotulo={`Ações da conta ${conta.numero}`}>
+            {(f) => (
+              <>
+                <ItemMenu icone={Eye} href={`/financeiro/contas-pagar/${conta.id}`} id="detalhes">Ver detalhes</ItemMenu>
+                {!finalizada && <ItemMenu icone={DollarSign} onClick={() => { f(); setModal("pagar"); }} id="pagar">Registrar pagamento</ItemMenu>}
+                <ItemMenu icone={History} onClick={() => { f(); setModal("historico"); }} id="historico">Histórico de pagamentos</ItemMenu>
+                {!finalizada && <ItemMenu icone={Pencil} href={`/financeiro/contas-pagar/${conta.id}/editar`} id="editar">Editar</ItemMenu>}
+                {conta.status !== "CANCELADO" && (
+                  <>
+                    <SeparadorMenu />
+                    <ItemMenu icone={Ban} onClick={() => { f(); cancelar(); }} perigo id="cancelar">Cancelar conta</ItemMenu>
+                  </>
+                )}
+              </>
+            )}
+          </MenuAcoes>
+        </div>
+      ) : (
       <div className="flex items-center justify-end gap-0.5">
         {!finalizada && (
           <button type="button" title="Registrar pagamento" onClick={() => setModal("pagar")} className="p-1.5 rounded text-ok-texto hover:bg-surface-alt"><DollarSign className="w-4 h-4" /></button>
@@ -46,6 +71,7 @@ export function ContaPagarAcoes({ conta }: { conta: Conta }) {
           <button type="button" title="Cancelar conta" onClick={cancelar} className="p-1.5 rounded text-atrasado hover:bg-atrasado-claro"><Ban className="w-4 h-4" /></button>
         )}
       </div>
+      )}
 
       <Modal aberto={modal === "pagar"} onFechar={fechar} titulo={`Pagamento — ${conta.numero}`} tamanho="lg">
         <PagamentoParcial conta={conta} onPronto={() => { fechar(); router.refresh(); }} />
