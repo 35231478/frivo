@@ -94,6 +94,9 @@ describe("plano de sincronização das previsões abertas", () => {
       ["nov", 1200, undefined], ["dez", 1200, undefined], ["jan", 1200, undefined], ["abr", 1200, undefined],
     ]);
     expect(sp(p.atualizar[2].detalhe)).toBe("Pelo contrato: contrato CT-9 alterado — valor R$ 900,00 → R$ 1.200,00.");
+    // o vencimento ajustado à mão numa previsão fica quando só o valor mudou
+    const mao = planoSincronizacao([prev("m", 2027, 2, 1000, "2027-02-25")], { ...base, valorMensal: 1200 }, { valor: true, vencimento: false }, HOJE);
+    expect(mao.atualizar.map((a) => [a.id, a.valor, a.dataVencimento])).toEqual([["m", 1200, undefined]]);
     // o valor igual ao novo não gera edição nem evento
     expect(planoSincronizacao([prev("x", 2026, 12, 1200)], { ...base, valorMensal: 1200 }, { valor: true, vencimento: false }, HOJE).atualizar).toEqual([]);
   });

@@ -122,7 +122,11 @@ describe.skipIf(!URL_PG)("Contrato recorrente PR1 — previsões acompanham o co
     const dez = await daCompetencia(ct.id, 2026, 12);
     await prisma.contaReceber.update({ where: { id: dez.id }, data: { boletoStatus: "EMITIDO" } });
 
+    // Fevereiro com vencimento combinado à mão: mudar só o valor não mexe nele
+    const fev = await daCompetencia(ct.id, 2027, 2);
+    expect((await chamar("contas-receber/[id]", "PUT", { id: fev.id }, { dataVencimento: "2027-02-25" })).status).toBe(200);
     const r = await editar(ct, { valorMensal: 1200 });
+    expect(ymd((await daCompetencia(ct.id, 2027, 2)).dataVencimento)).toBe("2027-02-25");
     expect(r.status).toBe(200);
     const depois = await previsoes(ct.id);
     expect(depois.map((c: any) => [`${c.refMes}/${c.refAno}`, Number(c.valor), c.status])).toEqual([
