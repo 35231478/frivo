@@ -43,7 +43,7 @@ export async function previaCobrancaContrato(empresaId: string, servicoId: strin
   ]);
   if (!servico) return null;
   const issPadrao = config?.issAliquota != null ? Number(config.issAliquota) : null;
-  const bruto = Math.max(0, Math.round((Number.isFinite(valor) ? valor : 0) * 100) / 100);
+  const bruto = Math.max(0, Number.isFinite(valor) ? valor : 0); // calcularRetencoes trabalha no centavo
   const { retencoes } = retencoesDosServicos([{ tipo: "SERVICO", valorTotal: bruto, servico }], issPadrao);
   const det = calcularRetencoes(bruto, motivoRetencaoInvalida(bruto, retencoes) ? {} : retencoes);
   const aliquotaISS = servico.aliquotaISS != null ? Number(servico.aliquotaISS) : null;
