@@ -18,8 +18,10 @@ import {
 } from "@/lib/financeiro/conta-receber-gestao";
 import {
   MessageCircle, MessageSquare, Mail, FileText, CheckCircle2, Eye, Settings, Download, Ban, Pencil, Trash2, Receipt, ExternalLink, Split,
-  TrendingDown, RotateCcw, Undo2,
+  TrendingDown, RotateCcw, Undo2, Handshake, Unlink,
 } from "lucide-react";
+import { RenegociarCobrancas } from "@/components/financeiro/renegociar-modal";
+import { motivoNaoRenegociar, motivoTextoDesfazer } from "@/lib/financeiro/renegociacao";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import {
   ORIGEM_RECEBIMENTO, motivoNaoEstornar, motivoNaoMarcarPerda, motivoTextoInvalido, temBaixaAntiga,
@@ -55,10 +57,13 @@ export interface ContaAcoes {
   lancamentoId?: string | null; lancamentoNumero?: string | null; parcelaNumero?: number | null; parcelaTotal?: number | null;
   /** Perda: quanto foi dado como perdido (o saldo na hora da marcação) */
   valorPerda?: number | null;
+  /** Faz parte de uma renegociação (a conta nova ou parcela dela) / renegociada em qual */
+  renegociacao?: boolean;
+  renegociadaEmNumero?: string | null;
 }
 type Categoria = { id: string; nome: string; cor: string; ativo: boolean };
 type Modais = null | "whatsapp" | "email" | "receber" | "parcelar" | "editar" | "cancelar" | "excluir" | "boletoEmitir" | "boletoConfig" | "boletoEmitido"
-  | "perda" | "reverterPerda" | "estornar";
+  | "perda" | "reverterPerda" | "estornar" | "renegociar" | "desfazerReneg";
 
 /** Quem não tem a permissão vê a ação apagada com o porquê (o servidor recusa do mesmo jeito) */
 export const SEM_PERMISSAO_PERDAS = "Sem permissão: Financeiro › Perdas (peça a um gerente).";
@@ -81,8 +86,9 @@ export function ContaReceberAcoes({ conta, categorias = [], clientes = [], onDet
 
   const regra = { ...conta, notas: conta.notas ?? [] };
   const emPerda = conta.status === "PERDA";
-  // Em perda: nada de cobrar/receber direto — o caminho é "Reverter perda"
-  const quitada = conta.status === "RECEBIDO" || conta.status === "CANCELADO" || emPerda;
+  const renegociada = conta.status === "RENEGOCIADO";
+  // Em perda: nada de cobrar/receber direto — o caminho é "Reverter perda". Renegociada: o dinheiro está na renegociação
+  const quitada = conta.status === "RECEBIDO" || conta.status === "CANCELADO" || emPerda || renegociada;
   const boletoEmitido = conta.boletoStatus === "EMITIDO";
   const naoReceber = motivoNaoReceber(regra);
   const naoCancelar = motivoNaoCancelar(regra);
@@ -91,7 +97,9 @@ export function ContaReceberAcoes({ conta, categorias = [], clientes = [], onDet
   const naoParcelar = motivoNaoParcelar(regra);
   const naoPerda = podePerdas ? motivoNaoMarcarPerda(conta) : SEM_PERMISSAO_PERDAS;
   const temEstorno = (conta.valorRecebido ?? 0) > 0 || temBaixaAntiga(conta);
-  const naoEstornar = emPerda ? motivoNaoEstornar(conta) : null;
+  const naoEstornar = emPerda || renegociada ? motivoNaoEstornar(conta) : null;
+  const naoRenegociar = podePerdas ? motivoNaoRenegociar(conta) : SEM_PERMISSAO_PERDAS;
+  const podeDesfazer = !!conta.renegociacao && conta.status !== "CANCELADO";
   const saldo = saldoDaConta(conta);
   const venc = conta.dataVencimento ? formatarData(conta.dataVencimento) : "—";
   // A cobrança é do que falta (a parte já paga não se cobra de novo)
@@ -123,6 +131,12 @@ export function ContaReceberAcoes({ conta, categorias = [], clientes = [], onDet
               {!quitada && <ItemMenu icone={Split} onClick={() => { f(); setModal("parcelar"); }} desabilitado={!!naoParcelar} motivo={naoParcelar} id="parcelar">Parcelar</ItemMenu>}
               {emPerda && (
                 <ItemMenu icone={RotateCcw} onClick={() => { f(); setModal("reverterPerda"); }} desabilitado={!podePerdas} motivo={podePerdas ? null : SEM_PERMISSAO_PERDAS} id="reverter-perda">Reverter perda</ItemMenu>
+              )}
+              {!quitada && conta.status !== "PARCELADO" && (
+                <ItemMenu icone={Handshake} onClick={() => { f(); setModal("renegociar"); }} desabilitado={!!naoRenegociar} motivo={naoRenegociar} id="renegociar">Renegociar</ItemMenu>
+              )}
+              {podeDesfazer && (
+                <ItemMenu icone={Unlink} onClick={() => { f(); setModal("desfazerReneg"); }} desabilitado={!podePerdas} motivo={podePerdas ? null : SEM_PERMISSAO_PERDAS} id="desfazer-renegociacao">Desfazer renegociação</ItemMenu>
               )}
               {temEstorno && <ItemMenu icone={Undo2} onClick={() => { f(); setModal("estornar"); }} desabilitado={!!naoEstornar} motivo={naoEstornar} id="estornar">Estornar recebimento</ItemMenu>}
               <SeparadorMenu />
@@ -205,6 +219,12 @@ export function ContaReceberAcoes({ conta, categorias = [], clientes = [], onDet
       </Modal>
       <Modal aberto={modal === "estornar"} onFechar={fechar} titulo={`Estornar recebimento — ${conta.numero}`}>
         <EstornarRecebimento conta={conta} onPronto={pronto} onCancelar={fechar} />
+      </Modal>
+      <Modal aberto={modal === "renegociar"} onFechar={fechar} titulo={`Renegociar — ${conta.clienteNome}`} tamanho="lg">
+        {modal === "renegociar" && <RenegociarCobrancas clienteId={conta.clienteId} clienteNome={conta.clienteNome} iniciais={[conta.id]} onPronto={pronto} onCancelar={fechar} />}
+      </Modal>
+      <Modal aberto={modal === "desfazerReneg"} onFechar={fechar} titulo={`Desfazer renegociação — ${conta.numero}`} tamanho="sm">
+        <DesfazerRenegociacao conta={conta} onPronto={pronto} onCancelar={fechar} />
       </Modal>
     </>
   );
@@ -690,6 +710,41 @@ function EstornarRecebimento({ conta, onPronto, onCancelar }: { conta: ContaAcoe
       <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
         <Button variant="secondary" onClick={onCancelar} disabled={salvando}>Voltar</Button>
         <Button variant="danger" loading={salvando} onClick={estornar} disabled={!escolhido} data-confirmar-estorno><Undo2 className="w-4 h-4" /> Estornar {escolhido ? formatarMoeda(valorEscolhido) : ""}</Button>
+      </div>
+    </div>
+  );
+}
+
+/** Desfazer a renegociação: a conta nova é cancelada e as cobranças originais voltam a receber */
+function DesfazerRenegociacao({ conta, onPronto, onCancelar }: { conta: ContaAcoes; onPronto: () => void; onCancelar: () => void }) {
+  const [motivo, setMotivo] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState("");
+  async function desfazer() {
+    const inv = motivoTextoDesfazer(motivo);
+    if (inv) { setErro(inv); return; }
+    setErro(""); setSalvando(true);
+    try {
+      const res = await fetch(`/api/contas-receber/${conta.id}/renegociacao/desfazer`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motivo: motivo.trim() }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { setErro(d.erro ?? "Não foi possível desfazer."); return; }
+      toast(`Renegociação ${d.numero} desfeita: ${(d.originais as string[]).join(", ")} voltaram a receber.`, "sucesso");
+      onPronto();
+    } catch { setErro("Sem conexão. Tente novamente."); } finally { setSalvando(false); }
+  }
+  return (
+    <div className="space-y-4" data-desfazer-renegociacao>
+      <Erro texto={erro} />
+      <p className="text-sm text-ink-muted">
+        A renegociação é cancelada e as cobranças originais voltam a receber.
+        {" "}<Dica rotulo="Desfazer" texto="Só dá enquanto nenhuma cobrança da renegociação teve recebimento, boleto emitido, perda ou outra renegociação." />
+      </p>
+      <FormField label="Motivo" required>
+        <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={2} maxLength={500} placeholder="Ex.: cliente desistiu do acordo; valores errados" aria-label="Motivo" />
+      </FormField>
+      <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+        <Button variant="secondary" onClick={onCancelar} disabled={salvando}>Voltar</Button>
+        <Button variant="danger" loading={salvando} onClick={desfazer} data-confirmar-desfazer><Unlink className="w-4 h-4" /> Desfazer renegociação</Button>
       </div>
     </div>
   );

@@ -96,7 +96,7 @@ describe("os leitores conhecem a PERDA", () => {
     expect(condStatusVisualReceber("PERDA")).toEqual({ status: "PERDA" });
     expect(CARDS_PERIODO_RECEBER).toEqual(["VENCIDO", "VENCE_HOJE", "A_VENCER", "RECEBIDO", "PERDA", "TOTAL"]);
     expect(condCardPeriodoReceber("PERDA", new Date("2026-11-15T15:00:00Z"))).toEqual({ status: "PERDA" });
-    expect(condCardPeriodoReceber("TOTAL", new Date("2026-11-15T15:00:00Z"))).toEqual({ status: { not: "CANCELADO" } });
+    expect(condCardPeriodoReceber("TOTAL", new Date("2026-11-15T15:00:00Z"))).toEqual({ status: { not: "CANCELADO" }, renegociadas: { none: {} }, OR: [{ lancamentoId: null }, { lancamento: { renegociadas: { none: {} } } }] });
     expect(CAMPO_CARD_RECEBER.PERDA).toBe("valorPerda");
   });
   it("OS: todas as cobranças pagas ou perdidas, com alguma perdida = 'Perda'; uma em aberto continua mandando", () => {

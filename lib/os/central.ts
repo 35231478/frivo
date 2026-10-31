@@ -44,10 +44,11 @@ const num = (v: unknown) => Number(v ?? 0) || 0;
  * Previsto. Sem medição: "Previsto" se há valor orçado, senão "Sem cobrança".
  */
 export function situacaoPagamento(os: OsCentralEntrada, orcado: number): SituacaoPagamento {
-  const contas = os.medicoes.filter(medicaoValida).flatMap((m) => m.contasReceber ?? [])
-    .flatMap((c) => (c.status === "PARCELADO" ? c.parcelas ?? [] : [c])).filter((c) => c.status !== "CANCELADO");
+  const contas = os.medicoes.filter(medicaoValida).flatMap((m) => (m.contasReceber ?? []).map((c) => ({ ...c, medicaoPaga: m.status === "PAGO" })))
+    .flatMap((c) => (c.status === "PARCELADO" ? (c.parcelas ?? []).map((x) => ({ ...x, medicaoPaga: c.medicaoPaga })) : [c])).filter((c) => c.status !== "CANCELADO");
   if (!contas.length) return orcado > 0 || os.medicoes.some(medicaoValida) ? "PREVISTO" : "SEM_COBRANCA";
-  const vis = contas.map((c) => statusVisualReceber(c.status, c.dataVencimento).chave);
+  // Renegociada: o dinheiro está na renegociação — paga quando ela foi quitada (a fatura fica PAGA), senão a receber
+  const vis = contas.map((c) => (c.status === "RENEGOCIADO" ? (c.medicaoPaga ? "PAGO" : "A_VENCER") : statusVisualReceber(c.status, c.dataVencimento).chave));
   if (vis.every((v) => v === "PAGO")) return "PAGO";
   if (vis.some((v) => v === "VENCIDO")) return "VENCIDO";
   if (vis.some((v) => v === "A_VENCER" || v === "VENCE_HOJE")) return "A_RECEBER";

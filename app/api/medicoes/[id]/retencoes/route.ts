@@ -54,6 +54,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const contas = medicao.contasReceber;
   if (contas.some((c) => c.status === "RECEBIDO")) return NextResponse.json({ erro: "Conta já recebida: as retenções não mudam mais." }, { status: 409 });
   if (contas.some((c) => c.status === "PERDA")) return NextResponse.json({ erro: "Conta em perda: as retenções não mudam mais." }, { status: 409 });
+  if (contas.some((c) => c.status === "RENEGOCIADO")) return NextResponse.json({ erro: "Conta renegociada: as retenções não mudam mais." }, { status: 409 });
   if (contas.some((c) => c.boletoStatus === "EMITIDO")) return NextResponse.json({ erro: "Boleto emitido: cancele o boleto antes de mudar as retenções." }, { status: 409 });
   if (contas.length > 1) return NextResponse.json({ erro: "Esta medição tem várias contas (contratos): retenção não disponível aqui." }, { status: 409 });
 
@@ -77,7 +78,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
         });
       } else if (conta) {
         const { count } = await tx.contaReceber.updateMany({
-          where: { id: conta.id, status: { notIn: ["RECEBIDO", "CANCELADO", "PERDA"] }, OR: [{ boletoStatus: null }, { boletoStatus: { not: "EMITIDO" } }] },
+          where: { id: conta.id, status: { notIn: ["RECEBIDO", "CANCELADO", "PERDA", "RENEGOCIADO"] }, OR: [{ boletoStatus: null }, { boletoStatus: { not: "EMITIDO" } }] },
           data: { valor: valorNovo },
         });
         if (count !== 1) throw new ConflitoConta();

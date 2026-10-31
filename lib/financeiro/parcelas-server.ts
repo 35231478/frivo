@@ -31,7 +31,7 @@ export class ErroConta extends Error {
   constructor(public status: number, mensagem: string) { super(mensagem); }
 }
 
-const travarConta = (tx: Prisma.TransactionClient, id: string) => tx.$queryRaw`SELECT id FROM contas_receber WHERE id = ${id} FOR UPDATE`;
+export const travarConta = (tx: Prisma.TransactionClient, id: string) => tx.$queryRaw`SELECT id FROM contas_receber WHERE id = ${id} FOR UPDATE`;
 
 /** Contas que são COBRANÇA (o lançamento parcelado fica de fora: o dinheiro está nas parcelas) */
 export const SO_COBRANCAS = { status: { not: "PARCELADO" as const } };
@@ -122,26 +122,58 @@ export async function registrarRecebimento(tx: Prisma.TransactionClient, p: Novo
   return { recebimentoId: recebimento.id, valor, quitou, saldo: saldoDepois };
 }
 
+/** Profundidade máxima seguindo renegociação de renegociação (defesa contra ciclo) */
+const MAX_CADEIA = 10;
+type CobrancaQuitacao = { status: string; renegociadaEmId: string | null };
+
+/** Quitada de vez: recebida, cancelada, ou renegociada numa renegociação que já foi quitada */
+async function cobrancaQuitada(tx: Prisma.TransactionClient, c: CobrancaQuitacao, prof = 0): Promise<boolean> {
+  if (c.status === "RECEBIDO" || c.status === "CANCELADO") return true;
+  if (c.status === "RENEGOCIADO" && c.renegociadaEmId && prof < MAX_CADEIA) return renegociacaoQuitada(tx, c.renegociadaEmId, prof + 1);
+  return false;
+}
+
+/** A renegociação (conta à vista ou lançamento parcelado) está quitada? Desfeita (cancelada) não quita nada */
+export async function renegociacaoQuitada(tx: Prisma.TransactionClient, id: string, prof = 0): Promise<boolean> {
+  const r = await tx.contaReceber.findUnique({ where: { id }, select: { status: true, renegociadaEmId: true } });
+  if (!r || r.status === "CANCELADO") return false;
+  if (r.status !== "PARCELADO") return cobrancaQuitada(tx, r, prof);
+  const ps = await tx.contaReceber.findMany({ where: { lancamentoId: id, excluidaEm: null }, select: { status: true, renegociadaEmId: true } });
+  if (!ps.length) return false;
+  for (const x of ps) if (!(await cobrancaQuitada(tx, x, prof))) return false;
+  return true;
+}
+
 /**
  * Conta quitada → a medição de origem fica PAGA quando TODAS as cobranças dela estão quitadas (conta
- * direta: ela mesma; parcela: todas as parcelas do lançamento).
+ * direta: ela mesma; parcela: todas as parcelas do lançamento). Renegociada conta como quitada quando a
+ * renegociação dela foi quitada; e quitar uma renegociação quita a origem de cada cobrança renegociada
+ * (a medição de origem fica PAGA quando a renegociação é quitada — inclusive renegociação de renegociação).
  */
-async function quitarOrigem(tx: Prisma.TransactionClient, conta: { id: string; medicaoId: string | null; lancamentoId: string | null }, p: NovoRecebimento) {
+async function quitarOrigem(tx: Prisma.TransactionClient, conta: { id: string; medicaoId: string | null; lancamentoId: string | null }, p: NovoRecebimento, prof = 0) {
   let medicaoId = conta.medicaoId;
   if (conta.lancamentoId) {
+    medicaoId = null;
     const lanc = await tx.contaReceber.findUnique({ where: { id: conta.lancamentoId }, select: { medicaoId: true } });
-    if (!lanc?.medicaoId) return;
-    const abertas = await tx.contaReceber.count({
-      where: { lancamentoId: conta.lancamentoId, excluidaEm: null, status: { notIn: ["RECEBIDO", "CANCELADO"] } },
-    });
-    if (abertas) return;
-    medicaoId = lanc.medicaoId;
+    if (lanc?.medicaoId) {
+      const parcelas = await tx.contaReceber.findMany({ where: { lancamentoId: conta.lancamentoId, excluidaEm: null }, select: { status: true, renegociadaEmId: true } });
+      let todas = true;
+      for (const x of parcelas) if (!(await cobrancaQuitada(tx, x))) { todas = false; break; }
+      if (todas) medicaoId = lanc.medicaoId;
+    }
   }
-  if (!medicaoId) return;
-  await tx.medicao.updateMany({
-    where: { id: medicaoId, status: { notIn: ["PAGO", "CANCELADA"] } },
-    data: { status: "PAGO", dataPagamento: p.data, ...(p.formaPagamento ? { formaPagamento: p.formaPagamento } : {}) },
-  });
+  if (medicaoId) {
+    await tx.medicao.updateMany({
+      where: { id: medicaoId, status: { notIn: ["PAGO", "CANCELADA"] } },
+      data: { status: "PAGO", dataPagamento: p.data, ...(p.formaPagamento ? { formaPagamento: p.formaPagamento } : {}) },
+    });
+  }
+  // Esta cobrança é (parte de) uma renegociação: quitada a renegociação inteira, as originais seguem
+  const raiz = conta.lancamentoId ?? conta.id;
+  if (prof >= MAX_CADEIA) return;
+  const originais = await tx.contaReceber.findMany({ where: { renegociadaEmId: raiz, status: "RENEGOCIADO" }, select: { id: true, medicaoId: true, lancamentoId: true } });
+  if (!originais.length || !(await renegociacaoQuitada(tx, raiz))) return;
+  for (const o of originais) await quitarOrigem(tx, o, p, prof + 1);
 }
 
 /** Faixa de datas (dia civil): gte/lte ou gte/lt */
@@ -233,6 +265,7 @@ export async function reajustarParcelas(tx: Prisma.TransactionClient, p: { empre
   if (parcelas.some((x) => x.boletoStatus === "EMITIDO")) return "Parcela com boleto emitido: cancele o boleto antes.";
   if (parcelas.some((x) => x.status === "CANCELADO")) return "Parcela cancelada: o valor das parcelas não muda mais.";
   if (parcelas.some((x) => x.status === "PERDA")) return "Parcela em perda: o valor das parcelas não muda mais.";
+  if (parcelas.some((x) => x.status === "RENEGOCIADO")) return "Parcela renegociada: o valor das parcelas não muda mais.";
   if (Number(lanc.valor) === p.novoTotal) return null;
   const novos = reajustarValores(parcelas.map((x) => Number(x.valor)), p.novoTotal);
   if (novos.some((v) => !(v > 0))) return "O valor novo não dá para dividir nas parcelas.";
@@ -249,15 +282,15 @@ export async function reajustarParcelas(tx: Prisma.TransactionClient, p: { empre
 
 /**
  * Cobranças de uma medição que impedem cancelá-la (o dinheiro já se mexeu): parcela recebida (total ou
- * parte), com boleto emitido ou em perda, ou conta direta com recebimento parcial ou em perda.
+ * parte), com boleto emitido, em perda ou renegociada, ou conta direta com recebimento parcial, em perda ou renegociada.
  */
 export function cobrancasQueTravamMedicao(medicaoId: string, db: Db = prisma) {
   return db.contaReceber.findMany({
     where: {
       excluidaEm: null,
       OR: [
-        { lancamento: { medicaoId }, OR: [{ status: "RECEBIDO" }, { status: "PERDA" }, { valorRecebido: { gt: 0 } }, { boletoStatus: "EMITIDO" }] },
-        { medicaoId, status: { notIn: ["RECEBIDO", "CANCELADO", "PARCELADO"] }, OR: [{ valorRecebido: { gt: 0 } }, { status: "PERDA" }] },
+        { lancamento: { medicaoId }, OR: [{ status: "RECEBIDO" }, { status: "PERDA" }, { status: "RENEGOCIADO" }, { valorRecebido: { gt: 0 } }, { boletoStatus: "EMITIDO" }] },
+        { medicaoId, status: { notIn: ["RECEBIDO", "CANCELADO", "PARCELADO"] }, OR: [{ valorRecebido: { gt: 0 } }, { status: "PERDA" }, { status: "RENEGOCIADO" }] },
       ],
     },
     select: { numero: true },

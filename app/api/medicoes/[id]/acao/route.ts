@@ -133,12 +133,19 @@ export async function POST(req: NextRequest, { params }: Params) {
       if (medicao.status === "CANCELADA") {
         return NextResponse.json({ erro: "Medição cancelada" }, { status: 400 });
       }
-      // Cobrança em perda: o pagamento entra pelo "Reverter perda" (a recuperação), não marcando a fatura paga
-      const emPerda = await prisma.contaReceber.findMany({
-        where: { ...cobrancasDaMedicao(id), excluidaEm: null, status: "PERDA" }, select: { numero: true }, orderBy: { criadoEm: "asc" },
+      // Cobrança em perda: o pagamento entra pelo "Reverter perda" (a recuperação), não marcando a fatura paga.
+      // Renegociada: o pagamento entra pelas cobranças da renegociação (quitada ela, a fatura fica PAGA)
+      const travadas = await prisma.contaReceber.findMany({
+        where: { ...cobrancasDaMedicao(id), excluidaEm: null, status: { in: ["PERDA", "RENEGOCIADO"] } },
+        select: { numero: true, status: true, renegociadaEm: { select: { numero: true } } }, orderBy: { criadoEm: "asc" },
       });
+      const emPerda = travadas.filter((c) => c.status === "PERDA");
       if (emPerda.length) {
         return NextResponse.json({ erro: `${emPerda.map((c) => c.numero).join(", ")} está em perda: registre o que o cliente pagou em “Reverter perda”, no Contas a Receber.` }, { status: 409 });
+      }
+      if (travadas.length) {
+        const r = travadas[0];
+        return NextResponse.json({ erro: `${travadas.map((c) => c.numero).join(", ")} foi renegociada: informe o recebimento na renegociação${r.renegociadaEm ? ` (${r.renegociadaEm.numero})` : ""}. Quitada ela, a fatura fica paga.` }, { status: 409 });
       }
       const dataPg = a.dataPagamento ? new Date(a.dataPagamento) : new Date();
       await prisma.medicao.update({
@@ -151,7 +158,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       });
       // Cada cobrança em aberto (conta ou parcela) recebe o que falta, pelo caminho único da baixa
       const abertas = await prisma.contaReceber.findMany({
-        where: { ...cobrancasDaMedicao(id), excluidaEm: null, status: { notIn: ["RECEBIDO", "CANCELADO", "PERDA"] } },
+        where: { ...cobrancasDaMedicao(id), excluidaEm: null, status: { notIn: ["RECEBIDO", "CANCELADO", "PERDA", "RENEGOCIADO"] } },
         select: { id: true }, orderBy: { criadoEm: "asc" },
       });
       for (const c of abertas) {

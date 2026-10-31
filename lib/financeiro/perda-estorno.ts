@@ -27,6 +27,7 @@ export function motivoNaoMarcarPerda(c: ContaPerda): string | null {
   if (c.excluidaEm) return "Esta conta foi excluída.";
   if (c.status === "PERDA") return "Esta conta já está marcada como perda.";
   if (c.status === "PARCELADO") return "Conta parcelada: marque a perda em cada parcela.";
+  if (c.status === "RENEGOCIADO") return "Conta renegociada: marque a perda nas parcelas da renegociação.";
   if (c.status === "RECEBIDO") return "Conta recebida não vira perda.";
   if (c.status === "CANCELADO") return "Conta cancelada não vira perda.";
   if (c.status === "PREVISTO") return "Ainda é previsão: não é cobrança.";
@@ -51,6 +52,7 @@ export const temBaixaAntiga = (c: { status: string; valorRecebido?: unknown }) =
 export function motivoNaoEstornar(c: ContaPerda, r?: RecebimentoEstorno | null): string | null {
   if (c.excluidaEm) return "Esta conta foi excluída.";
   if (c.status === "PERDA") return "Conta em perda: reverta a perda antes de estornar.";
+  if (c.status === "RENEGOCIADO") return "Conta renegociada: desfaça a renegociação antes de estornar.";
   if (r) {
     if (r.estornadoEm) return "Este recebimento já foi estornado.";
     if (r.origem === "BOLETO") return "Pago pelo boleto no banco: o estorno é com o banco, não aqui.";

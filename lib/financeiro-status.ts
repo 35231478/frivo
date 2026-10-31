@@ -6,7 +6,7 @@ import { diasAteDiaCivil } from "@/lib/fuso";
  */
 
 export interface StatusVisual {
-  chave: "PREVISTO" | "A_VENCER" | "VENCE_HOJE" | "VENCIDO" | "PAGO" | "CANCELADO" | "PARCIAL" | "PARCELADO" | "PERDA";
+  chave: "PREVISTO" | "A_VENCER" | "VENCE_HOJE" | "VENCIDO" | "PAGO" | "CANCELADO" | "PARCIAL" | "PARCELADO" | "PERDA" | "RENEGOCIADO";
   label: string;
   classe: string;
   diasAtraso: number;
@@ -23,6 +23,7 @@ const CLASSES: Record<string, string> = {
   PARCIAL: "bg-atencao-claro text-atencao-texto",
   PARCELADO: "bg-acento-claro text-acento",
   PERDA: "bg-ink/10 text-ink",
+  RENEGOCIADO: "bg-acento-claro text-acento",
 };
 
 /**
@@ -44,6 +45,8 @@ export function statusVisualReceber(status: string, dataVencimento: Date | strin
   if (status === "PARCELADO") return badge("PARCELADO", "Parcelado");
   // Inadimplência dada como perdida: fora do a receber (não é "vencido" — não pinta a linha)
   if (status === "PERDA") return badge("PERDA", "Perda");
+  // O saldo foi para uma renegociação (a cobrança nova está na lista): não é "vencido"
+  if (status === "RENEGOCIADO") return badge("RENEGOCIADO", "Renegociada");
   // C6/F5: previsão de contrato ainda não faturada NÃO é cobrança vencida — o selo
   // "Vencido" (e a linha vermelha) só valem para conta liberada (A_RECEBER/ATRASADO).
   if (status === "PREVISTO") return badge("PREVISTO", "Previsto");

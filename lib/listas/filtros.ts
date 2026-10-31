@@ -150,6 +150,8 @@ export function condStatusVisualReceber(chave: string, agora = new Date()) {
     case "PARCIAL": return { status: { in: ["A_RECEBER", "ATRASADO"] }, valorRecebido: { gt: 0 } };
     // Inadimplência dada como perdida (fora do a receber)
     case "PERDA": return { status: "PERDA" };
+    // O saldo foi para uma renegociação (fora do a receber; a cobrança nova está na lista)
+    case "RENEGOCIADO": return { status: "RENEGOCIADO" };
     default: return null;
   }
 }
@@ -206,7 +208,8 @@ export type CardPeriodoReceber = (typeof CARDS_PERIODO_RECEBER)[number];
 
 /**
  * Condição de cada card (o período já limita o vencimento): Vencidos · Vencem hoje · A vencer
- * (previsões + a vencer, como o antigo "A receber") · Recebidos · Total (tudo menos as canceladas).
+ * (previsões + a vencer, como o antigo "A receber") · Recebidos · Total (tudo menos as canceladas e
+ * sem contar duas vezes a renegociação).
  * "A_RECEBER" (links antigos) = A vencer. Parcela é uma cobrança como outra: a vencida conta em
  * "Vencidos"; o lançamento parcelado fica de fora (CARD_SO_COBRANCAS).
  */
@@ -217,10 +220,21 @@ export function condCardPeriodoReceber(card: string, agora = new Date()) {
     case "A_VENCER": case "A_RECEBER": return { OR: [condStatusVisualReceber("PREVISTO", agora)!, condStatusVisualReceber("A_VENCER", agora)!] };
     case "RECEBIDO": return { status: "RECEBIDO" };
     case "PERDA": return { status: "PERDA" };
-    case "TOTAL": return { status: { not: "CANCELADO" } };
+    // A renegociação não soma de novo: no total vale a cobrança original (RENEGOCIADO), não a nova
+    case "TOTAL": return { status: { not: "CANCELADO" }, ...NAO_E_RENEGOCIACAO };
     default: return null;
   }
 }
+
+/**
+ * As cobranças que NÃO são renegociação (nem a conta nova à vista, nem parcela do lançamento dela). No
+ * faturamento e no "Total do período" vale a cobrança original: o mesmo dinheiro não conta duas vezes,
+ * e juros/multa da renegociação (receita financeira) não inflam o faturamento.
+ */
+export const NAO_E_RENEGOCIACAO = {
+  renegociadas: { none: {} },
+  OR: [{ lancamentoId: null }, { lancamento: { renegociadas: { none: {} } } }],
+};
 
 /** Os cards contam só cobranças: o lançamento parcelado (o total dividido) fica de fora */
 export const CARD_SO_COBRANCAS = { status: { not: "PARCELADO" } } as const;

@@ -45,6 +45,15 @@ export interface DetalheConta {
   baixaAntiga?: boolean;
   /** Marcada como perda: quanto, quando, por quê, quem */
   perda?: { valor: number; em: string | null; motivo: string | null; por: string | null } | null;
+  /** Renegociada: a renegociação para onde foi o saldo */
+  renegociadaEm?: { id: string; numero: string; status: string; valor: number } | null;
+  /** É (parte de) uma renegociação: de onde veio, encargos, quanto entrou */
+  renegociacao?: {
+    id: string; numero: string; status: string; total: number; saldo: number; juros: number; multa: number; desconto: number; recebido: number;
+    composicao: { principal: number; encargos: number; desconto: number };
+    originais: { id: string; numero: string; saldo: number; recebido: number }[];
+    motivoNaoDesfazer: string | null;
+  } | null;
   /** Parcelas: a própria (n/N), o lançamento e as irmãs */
   parcelaNumero?: number | null; parcelaTotal?: number | null; lancamentoId?: string | null;
   lancamento?: { id: string; numero: string; valor: number } | null;
@@ -140,6 +149,15 @@ export function ContaReceberDetalhes({ id, onFechar, versao = 0, onAbrirConta }:
                   {(d.valorRecebido ?? 0) > 0 && <span className="block text-xs text-ink-muted mt-0.5">Já recebido antes: {formatarMoeda(d.valorRecebido ?? 0)} (continua recebido).</span>}
                 </p>
               )}
+              {d.renegociadaEm && (
+                <p className="text-sm text-ink mt-2 rounded-lg bg-acento-claro px-3 py-2" data-detalhe-renegociada>
+                  Saldo renegociado em{" "}
+                  {onAbrirConta
+                    ? <button type="button" onClick={() => onAbrirConta(d.renegociadaEm!.id)} className="font-semibold text-acento hover:underline" data-abrir-renegociacao>{d.renegociadaEm.numero}</button>
+                    : <strong>{d.renegociadaEm.numero}</strong>}
+                  {(d.valorRecebido ?? 0) > 0 && <span className="block text-xs text-ink-muted mt-0.5">Já recebido antes: {formatarMoeda(d.valorRecebido ?? 0)} (continua recebido).</span>}
+                </p>
+              )}
               {d.status === "CANCELADO" && d.motivoCancelamento && (
                 <p className="text-sm text-atrasado-texto mt-2" data-detalhe-cancelamento>Cancelada{d.canceladaEm ? ` em ${formatarData(d.canceladaEm)}` : ""}: {d.motivoCancelamento}</p>
               )}
@@ -168,6 +186,39 @@ export function ContaReceberDetalhes({ id, onFechar, versao = 0, onAbrirConta }:
                     );
                   })}
                 </ul>
+              </Secao>
+            )}
+
+            {d.renegociacao && (
+              <Secao titulo={`Renegociação ${d.renegociacao.numero}`}>
+                <div className="space-y-2 text-sm" data-detalhe-renegociacao>
+                  <p className="text-ink-muted">
+                    De:{" "}
+                    {d.renegociacao.originais.map((o, k) => (
+                      <span key={o.id}>
+                        {k > 0 && ", "}
+                        {onAbrirConta
+                          ? <button type="button" onClick={() => onAbrirConta(o.id)} className="text-acento hover:underline" data-abrir-original={o.id}>{o.numero}</button>
+                          : o.numero}
+                        {" "}<span className="tabular-nums">({formatarMoeda(o.saldo)})</span>
+                      </span>
+                    ))}
+                  </p>
+                  <dl className="bg-surface-alt rounded-lg p-3 space-y-0.5" data-composicao-renegociacao>
+                    <div className="flex justify-between"><dt className="text-ink-muted">Saldo renegociado</dt><dd className="tabular-nums">{formatarMoeda(d.renegociacao.saldo)}</dd></div>
+                    {d.renegociacao.juros > 0 && <div className="flex justify-between"><dt className="text-ink-muted">+ Juros</dt><dd className="tabular-nums">{formatarMoeda(d.renegociacao.juros)}</dd></div>}
+                    {d.renegociacao.multa > 0 && <div className="flex justify-between"><dt className="text-ink-muted">+ Multa</dt><dd className="tabular-nums">{formatarMoeda(d.renegociacao.multa)}</dd></div>}
+                    {d.renegociacao.desconto > 0 && <div className="flex justify-between"><dt className="text-ink-muted">− Desconto</dt><dd className="tabular-nums">{formatarMoeda(d.renegociacao.desconto)}</dd></div>}
+                    <div className="flex justify-between font-semibold border-t border-surface-border pt-1"><dt>Total</dt><dd className="tabular-nums">{formatarMoeda(d.renegociacao.total)}</dd></div>
+                  </dl>
+                  {d.renegociacao.recebido > 0 && (
+                    <p className="text-xs text-ink-muted" data-recebido-renegociacao>
+                      Recebido na renegociação: {formatarMoeda(d.renegociacao.recebido)}
+                      {d.renegociacao.composicao.encargos > 0 && ` · ${formatarMoeda(d.renegociacao.composicao.encargos)} de juros/multa (receita financeira)`}
+                    </p>
+                  )}
+                  {d.renegociacao.status === "CANCELADO" && <p className="text-xs text-atrasado-texto">Renegociação desfeita.</p>}
+                </div>
               </Secao>
             )}
 

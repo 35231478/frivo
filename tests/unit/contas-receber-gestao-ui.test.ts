@@ -105,7 +105,7 @@ describe("menu ⋮ por situação", () => {
   it("conta manual em aberto: tudo à mão; recibo apagado com o motivo; excluir liberado", async () => {
     await menu();
     expect($$("[data-menu-acoes] [data-item]").map((i) => i.getAttribute("data-item"))).toEqual([
-      "detalhes", "editar", "receber", "parcelar", "boleto", "cobrar-whatsapp", "cobrar-email", "recibo", "perda", "cancelar", "excluir",
+      "detalhes", "editar", "receber", "parcelar", "renegociar", "boleto", "cobrar-whatsapp", "cobrar-email", "recibo", "perda", "cancelar", "excluir",
     ]);
     expect(desabilitado("parcelar")).toBe(false);
     expect(desabilitado("excluir")).toBe(false);
@@ -396,7 +396,7 @@ describe("período + cards do período + cara de planilha (padrão da casa)", ()
     const tabela = $("[data-tabela-receber] table[data-tabela-planilha]")!;
     expect(tabela.className).toContain("text-[13px]");
     expect(tabela.className).toContain("table-fixed"); // colunas cabem na tela: Valor nunca some para a direita
-    expect($$("[data-tabela-receber] th").map(txt)).toEqual(["Vencimento", "Nº", "Cliente", "Descrição", "Categoria", "Situação", "Valor (R$)", "Em aberto (R$)", "Ações"]);
+    expect($$("[data-tabela-receber] th").map(txt)).toEqual(["Escolher para renegociar", "Vencimento", "Nº", "Cliente", "Descrição", "Categoria", "Situação", "Valor (R$)", "Em aberto (R$)", "Ações"]);
     const linha = $("[data-linha-conta=cr2]")!;
     expect(linha.className).toContain("border-surface-linha");
     expect(linha.querySelector("[data-numero-conta]")!.className).toContain("font-mono");
