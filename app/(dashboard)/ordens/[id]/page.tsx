@@ -51,7 +51,7 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
             select: {
               id: true, numero: true, status: true, valorTotal: true, criadoEm: true, tokenPublico: true, avulsa: true,
               // Situação do pagamento no cabeçalho (Previsto / A receber / Vencido / Pago)
-              contasReceber: { select: { status: true, dataVencimento: true, valor: true } },
+              contasReceber: { select: { status: true, dataVencimento: true, valor: true, parcelas: { where: { excluidaEm: null }, select: { status: true, dataVencimento: true } } } },
             },
           },
         },

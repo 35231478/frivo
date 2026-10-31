@@ -70,7 +70,7 @@ export async function calcularStatusFinanceiroDetalhado(
       where: { ...where, status: { in: [...STATUS_EM_ABERTO] }, dataVencimento: { lt: hoje } },
     }),
     prisma.contaReceber.aggregate({
-      _sum: { valor: true },
+      _sum: { valor: true, valorRecebido: true },
       where: { ...where, status: { in: [...STATUS_EM_ABERTO] }, dataVencimento: { gte: hoje, lte: em30Dias } },
     }),
   ]);
@@ -78,7 +78,8 @@ export async function calcularStatusFinanceiroDetalhado(
   const status: StatusFinanceiroCalc =
     total === 0 ? "SEM_HISTORICO" : vencidasEmAberto > 0 ? "INADIMPLENTE" : "ADIMPLENTE";
 
-  return { status, totalProximos30Dias: Number(proximos._sum.valor ?? 0) };
+  // Pelo que falta receber (a baixa parcial já entrou)
+  return { status, totalProximos30Dias: Math.round((Number(proximos._sum.valor ?? 0) - Number(proximos._sum.valorRecebido ?? 0)) * 100) / 100 };
 }
 
 /**

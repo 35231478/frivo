@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { recebidoDaConta, saldoDaConta } from "@/lib/financeiro/parcelas";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
@@ -38,7 +39,9 @@ export async function GET(req: NextRequest) {
     prisma.categoriaFinanceira.findMany({ where: { empresaId }, select: { id: true, nome: true, cor: true, ativo: true } }),
   ]);
 
-  const linhas = [["Número", "Cliente", "CNPJ", "Descrição", "Categoria", "Vencimento", "Valor", "Status"]];
+  // Parcela e baixa parcial no fim (as colunas de antes ficam no mesmo lugar)
+  const linhas = [["Número", "Cliente", "CNPJ", "Descrição", "Categoria", "Vencimento", "Valor", "Status", "Parcela", "Recebido", "Em aberto"]];
+  const reais = (v: number) => String(v).replace(".", ",");
   for (const c of contas) {
     const sv = statusVisualReceber(c.status, c.dataVencimento);
     linhas.push([
@@ -50,6 +53,9 @@ export async function GET(req: NextRequest) {
       c.dataVencimento ? formatarData(c.dataVencimento) : "",
       String(Number(c.valor)).replace(".", ","),
       sv.label,
+      c.parcelaNumero && c.parcelaTotal ? `${c.parcelaNumero}/${c.parcelaTotal}` : "",
+      reais(recebidoDaConta(c)),
+      reais(saldoDaConta(c)),
     ]);
   }
   const csv = linhas.map((l) => l.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(";")).join("\n");

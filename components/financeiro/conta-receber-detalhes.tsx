@@ -33,12 +33,25 @@ export interface DetalheConta {
   boleto: { status: string; emitidoEm: string | null; vencimento: string | null; linhaDigitavel: string | null; temPdf: boolean } | null;
   notas: { id: string; numero: string | null; status: string }[];
   eventos: { id: string; tipo: string; detalhe: string | null; criadoEm: string; usuario: string | null }[];
+  /** Baixa parcial: quanto entrou, quanto falta e cada recebimento */
+  valorRecebido?: number; saldo?: number;
+  recebimentos?: { id: string; valor: number; data: string; formaPagamento: string | null; origem: string; observacao: string | null; contaBancaria: string | null; usuario: string | null }[];
+  /** Parcelas: a própria (n/N), o lançamento e as irmãs */
+  parcelaNumero?: number | null; parcelaTotal?: number | null; lancamentoId?: string | null;
+  lancamento?: { id: string; numero: string; valor: number } | null;
+  parcelas?: { id: string; numero: string; valor: number; status: string; dataVencimento: string | null; parcelaNumero: number | null; parcelaTotal: number | null; boletoStatus: string | null; valorRecebido: number; saldo: number }[];
 }
+
+const ORIGEM_RECEBIMENTO: Record<string, string> = { MANUAL: "Informado à mão", BOLETO: "Boleto Banco Inter", MEDICAO: "Pagamento da fatura/medição" };
 
 const STATUS_BOLETO: Record<string, string> = { PENDENTE: "Pendente", EMITIDO: "Emitido", PAGO: "Pago", CANCELADO: "Cancelado", VENCIDO: "Vencido" };
 
 /** Gaveta "Ver detalhes": origem com links, itens, recebimento, documentos (boleto, NFS-e) e a linha do tempo. */
-export function ContaReceberDetalhes({ id, onFechar, versao = 0 }: { id: string | null; onFechar: () => void; versao?: number }) {
+export function ContaReceberDetalhes({ id, onFechar, versao = 0, onAbrirConta }: {
+  id: string | null; onFechar: () => void; versao?: number;
+  /** Abre outra conta na mesma gaveta (a parcela irmã) */
+  onAbrirConta?: (id: string) => void;
+}) {
   const [d, setD] = useState<DetalheConta | null>(null);
   const [erro, setErro] = useState("");
   const [baixando, setBaixando] = useState(false);
@@ -72,6 +85,14 @@ export function ContaReceberDetalhes({ id, onFechar, versao = 0 }: { id: string 
                 <span className={cn("inline-flex text-xs font-semibold px-2.5 py-1 rounded-full mt-1", sv.classe)} data-detalhe-status>{sv.label}</span>
               </div>
             </div>
+
+            {/* Baixa parcial: o que entrou × o que falta (como no Conta Azul) */}
+            {(d.valorRecebido ?? 0) > 0 && d.status !== "RECEBIDO" && (
+              <dl className="grid grid-cols-2 gap-2 text-sm" data-detalhe-parcial>
+                <div className="rounded-lg bg-success-50 px-3 py-2"><dt className="text-xs text-ink-muted">Valor recebido</dt><dd className="font-semibold text-success-700 tabular-nums">{formatarMoeda(d.valorRecebido ?? 0)}</dd></div>
+                <div className="rounded-lg bg-atencao-claro px-3 py-2"><dt className="text-xs text-ink-muted">Valor em aberto</dt><dd className="font-semibold text-atencao-texto tabular-nums" data-detalhe-saldo>{formatarMoeda(d.saldo ?? 0)}</dd></div>
+              </dl>
+            )}
 
             <Secao titulo="Origem">
               <div className="flex flex-wrap gap-2" data-detalhe-origem={d.origem}>
@@ -107,6 +128,48 @@ export function ContaReceberDetalhes({ id, onFechar, versao = 0 }: { id: string 
                 <p className="text-sm text-atrasado-texto mt-2" data-detalhe-cancelamento>Cancelada{d.canceladaEm ? ` em ${formatarData(d.canceladaEm)}` : ""}: {d.motivoCancelamento}</p>
               )}
             </Secao>
+
+            {(d.parcelas?.length ?? 0) > 0 && (
+              <Secao titulo={d.lancamento ? `Parcelas de ${d.lancamento.numero} · total ${formatarMoeda(d.lancamento.valor)}` : "Parcelas"}>
+                <ul className="divide-y divide-surface-border text-sm border border-surface-border rounded-lg" data-detalhe-parcelas>
+                  {d.parcelas!.map((p) => {
+                    const svp = statusVisualReceber(p.status, p.dataVencimento);
+                    const atual = p.id === d.id;
+                    const linha = (
+                      <>
+                        <span className="tabular-nums text-ink-muted w-10 shrink-0">{p.parcelaNumero}/{p.parcelaTotal}</span>
+                        <span className="tabular-nums text-ink-muted shrink-0">{p.dataVencimento ? formatarData(p.dataVencimento) : "—"}</span>
+                        <span className={cn("text-[11px] font-semibold px-2 py-0.5 rounded-full", svp.classe)}>{svp.label}</span>
+                        <span className="ml-auto font-medium text-ink tabular-nums">{formatarMoeda(p.valor)}</span>
+                      </>
+                    );
+                    return (
+                      <li key={p.id} data-parcela-detalhe={p.parcelaNumero} aria-current={atual ? "true" : undefined}>
+                        {atual || !onAbrirConta
+                          ? <div className={cn("flex items-center gap-3 px-3 py-2", atual && "bg-primary-50/60")}>{linha}</div>
+                          : <button type="button" onClick={() => onAbrirConta(p.id)} className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-surface-alt/60" aria-label={`Abrir a parcela ${p.parcelaNumero}`}>{linha}</button>}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </Secao>
+            )}
+
+            {(d.recebimentos?.length ?? 0) > 0 && (
+              <Secao titulo="Recebimentos">
+                <ol className="space-y-1.5 text-sm" data-detalhe-recebimentos>
+                  {d.recebimentos!.map((r) => (
+                    <li key={r.id} className="flex items-start justify-between gap-3" data-recebimento={r.id}>
+                      <div className="min-w-0">
+                        <p className="text-ink">{formatarData(r.data)} · {ORIGEM_RECEBIMENTO[r.origem] ?? r.origem}</p>
+                        <p className="text-xs text-ink-subtle">{[r.formaPagamento ? LABELS_FORMA_PAGAMENTO[r.formaPagamento] ?? r.formaPagamento : null, r.contaBancaria, r.usuario, r.observacao].filter(Boolean).join(" · ")}</p>
+                      </div>
+                      <span className="font-semibold text-success-700 tabular-nums shrink-0">{formatarMoeda(r.valor)}</span>
+                    </li>
+                  ))}
+                </ol>
+              </Secao>
+            )}
 
             {d.itens.length > 0 && (
               <Secao titulo="Itens">

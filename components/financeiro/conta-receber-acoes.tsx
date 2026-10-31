@@ -11,15 +11,18 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid } from "@/components/ui/form-field";
-import { Dica } from "@/components/ui/dica";
 import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
 import { ItemMenu, MenuAcoes, SeparadorMenu } from "@/components/ui/menu-acoes";
 import {
   motivoNaoCancelar, motivoNaoExcluir, motivoNaoReceber, motivoNaoRecibo, motivoNaoTrocarCliente, origemComLink, travasDaConta,
 } from "@/lib/financeiro/conta-receber-gestao";
 import {
-  MessageCircle, MessageSquare, Mail, FileText, CheckCircle2, Eye, Settings, Download, Ban, Pencil, Trash2, Receipt, ExternalLink,
+  MessageCircle, MessageSquare, Mail, FileText, CheckCircle2, Eye, Settings, Download, Ban, Pencil, Trash2, Receipt, ExternalLink, Split,
 } from "lucide-react";
+import {
+  motivoNaoParcelar, motivoParcialComBoleto, motivoValorRecebimento, quitaConta, saldoDaConta, type ParcelaPlano,
+} from "@/lib/financeiro/parcelas";
+import { EditorParcelas } from "@/components/financeiro/editor-parcelas";
 import { chaveDiaCivil, chaveHojeBR } from "@/lib/fuso";
 import { InputData } from "@/components/ui/input-data";
 import { hrefSecaoConfig } from "@/lib/navegacao/configuracoes";
@@ -41,9 +44,12 @@ export interface ContaAcoes {
   boletoVencimento: string | null;
   boletoLinhaDigitavel: string | null;
   boletoCodigoBarras: string | null;
+  /** Baixa parcial (quanto já entrou) e parcela (de qual lançamento, n/N) */
+  valorRecebido?: number;
+  lancamentoId?: string | null; lancamentoNumero?: string | null; parcelaNumero?: number | null; parcelaTotal?: number | null;
 }
 type Categoria = { id: string; nome: string; cor: string; ativo: boolean };
-type Modais = null | "whatsapp" | "email" | "receber" | "editar" | "cancelar" | "excluir" | "boletoEmitir" | "boletoConfig" | "boletoEmitido";
+type Modais = null | "whatsapp" | "email" | "receber" | "parcelar" | "editar" | "cancelar" | "excluir" | "boletoEmitir" | "boletoConfig" | "boletoEmitido";
 
 /**
  * Ações da conta a receber num menu ⋮ só (o que o status permite; o que não pode aparece apagado com ⓘ
@@ -66,8 +72,11 @@ export function ContaReceberAcoes({ conta, categorias = [], clientes = [], onDet
   const naoCancelar = motivoNaoCancelar(regra);
   const naoExcluir = motivoNaoExcluir(regra);
   const naoRecibo = motivoNaoRecibo(regra);
+  const naoParcelar = motivoNaoParcelar(regra);
+  const saldo = saldoDaConta(conta);
   const venc = conta.dataVencimento ? formatarData(conta.dataVencimento) : "—";
-  const msg = `Olá ${conta.clienteNome}, lembramos que há uma pendência financeira no valor de ${formatarMoeda(conta.valor)} com vencimento em ${venc}. Entre em contato para regularização.`;
+  // A cobrança é do que falta (a parte já paga não se cobra de novo)
+  const msg = `Olá ${conta.clienteNome}, lembramos que há uma pendência financeira no valor de ${formatarMoeda(saldo || conta.valor)} com vencimento em ${venc}. Entre em contato para regularização.`;
 
   async function registrarCobranca(canal: "whatsapp" | "email") {
     try { await fetch(`/api/contas-receber/${conta.id}/notificar`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ canal }) }); } catch {}
@@ -92,6 +101,7 @@ export function ContaReceberAcoes({ conta, categorias = [], clientes = [], onDet
               <ItemMenu icone={Eye} onClick={() => { f(); onDetalhes(); }} id="detalhes">Ver detalhes</ItemMenu>
               <ItemMenu icone={Pencil} onClick={() => { f(); setModal("editar"); }} id="editar">Editar</ItemMenu>
               {!quitada && <ItemMenu icone={CheckCircle2} onClick={() => { f(); setModal("receber"); }} desabilitado={!!naoReceber} motivo={naoReceber} id="receber">Informar recebimento</ItemMenu>}
+              {!quitada && <ItemMenu icone={Split} onClick={() => { f(); setModal("parcelar"); }} desabilitado={!!naoParcelar} motivo={naoParcelar} id="parcelar">Parcelar</ItemMenu>}
               <SeparadorMenu />
               {(!quitada || boletoEmitido) && (
                 <ItemMenu icone={FileText} onClick={() => { f(); abrirBoleto(); }} id="boleto">{boletoEmitido ? "Boleto (linha digitável)" : "Emitir boleto"}</ItemMenu>
@@ -148,6 +158,9 @@ export function ContaReceberAcoes({ conta, categorias = [], clientes = [], onDet
 
       <Modal aberto={modal === "receber"} onFechar={fechar} titulo={`Informar recebimento — ${conta.numero}`}>
         <InformarRecebimento conta={conta} onPronto={pronto} onCancelar={fechar} />
+      </Modal>
+      <Modal aberto={modal === "parcelar"} onFechar={fechar} titulo={`Parcelar ${conta.numero}`} tamanho="lg">
+        <ParcelarConta conta={conta} onPronto={pronto} onCancelar={fechar} />
       </Modal>
       <Modal aberto={modal === "editar"} onFechar={fechar} titulo={`Editar ${conta.numero}`} tamanho="lg">
         <EditarCobranca conta={conta} categorias={categorias} clientes={clientes} onPronto={pronto} onCancelar={fechar} />
@@ -293,6 +306,10 @@ function EditarCobranca({ conta, categorias, clientes, onPronto, onCancelar }: {
 }
 
 function InformarRecebimento({ conta, onPronto, onCancelar }: { conta: ContaAcoes; onPronto: () => void; onCancelar: () => void }) {
+  const saldo = saldoDaConta(conta);
+  const recebido = conta.valorRecebido ?? 0;
+  // Padrão: o que falta (baixa total). Menos que isso = baixa PARCIAL: o resto continua em aberto
+  const [valor, setValor] = useState(String(saldo));
   const [data, setData] = useState(chaveHojeBR());
   const [forma, setForma] = useState(conta.formaPagamento ?? "");
   const [contaBancariaId, setContaBancariaId] = useState(conta.contaBancariaId ?? "");
@@ -300,31 +317,44 @@ function InformarRecebimento({ conta, onPronto, onCancelar }: { conta: ContaAcoe
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
 
+  const v = Number(valor);
+  const parcial = v > 0 && !quitaConta(conta, v);
+  const invalido = motivoValorRecebimento(conta, v) ?? motivoParcialComBoleto(conta, v);
+
   async function confirmarBaixa() {
     if (!data) { setErro("Informe a data do recebimento."); return; }
+    if (invalido) { setErro(invalido); return; }
     setErro(""); setSalvando(true);
-    const e = await enviar(`/api/contas-receber/${conta.id}`, "PUT", {
-      status: "RECEBIDO", dataRecebimento: data, formaPagamento: forma || null, comentario: comentario.trim() || null,
+    const e = await enviar(`/api/contas-receber/${conta.id}/recebimentos`, "POST", {
+      valor: v, data, formaPagamento: forma || null, comentario: comentario.trim() || null,
+      // Só se mudou (a conta bancária da conta vale por padrão; inativa não é escolha nova)
       ...(contaBancariaId !== (conta.contaBancariaId ?? "") && { contaBancariaId: contaBancariaId || null }),
     });
     setSalvando(false);
     if (e) { setErro(e); return; }
-    toast(`${conta.numero} recebida.`, "sucesso");
+    toast(parcial ? `Recebimento parcial de ${formatarMoeda(v)} em ${conta.numero}. Falta ${formatarMoeda(Math.round((saldo - v) * 100) / 100)}.` : `${conta.numero} recebida.`, "sucesso");
     onPronto();
   }
 
   return (
     <div className="space-y-4" data-informar-recebimento>
       <Erro texto={erro} />
-      <div className="bg-surface-alt rounded-lg p-3 text-sm flex items-center justify-between gap-2">
-        <span className="text-ink-muted">{conta.clienteNome}</span>
-        <span className="inline-flex items-center gap-1 font-semibold text-success-700" data-valor-baixa>
-          {formatarMoeda(conta.valor)}
-          <Dica rotulo="Valor da baixa" lado="esquerda" texto="A baixa é pelo valor total da conta. Recebimento parcial ainda não existe: ajuste o valor em Editar antes, se for o caso." />
-        </span>
-      </div>
+      <dl className="bg-surface-alt rounded-lg p-3 text-sm grid grid-cols-3 gap-2" data-resumo-baixa>
+        <div><dt className="text-xs text-ink-muted">Valor da conta</dt><dd className="font-semibold text-ink tabular-nums">{formatarMoeda(conta.valor)}</dd></div>
+        <div><dt className="text-xs text-ink-muted">Já recebido</dt><dd className="font-semibold text-success-700 tabular-nums">{formatarMoeda(recebido)}</dd></div>
+        <div><dt className="text-xs text-ink-muted">Falta receber</dt><dd className="font-semibold text-atencao-texto tabular-nums" data-valor-baixa>{formatarMoeda(saldo)}</dd></div>
+      </dl>
       <FormGrid>
+        <FormField label="Valor recebido" required dica="Menos que o que falta = recebimento parcial: o restante continua em aberto, no mesmo vencimento.">
+          <Input type="number" step="0.01" min="0.01" max={saldo} value={valor} onChange={(e) => setValor(e.target.value)} aria-label="Valor recebido" data-valor-recebido />
+        </FormField>
         <FormField label="Data do recebimento" required><InputData value={data} onChange={setData} aria-label="Data do recebimento" /></FormField>
+      </FormGrid>
+      {parcial && !invalido && (
+        <p className="text-sm text-atencao-texto" data-aviso-parcial>Recebimento parcial: continuam em aberto <strong>{formatarMoeda(Math.round((saldo - v) * 100) / 100)}</strong>.</p>
+      )}
+      {invalido && valor !== "" && <p role="alert" className="text-sm text-atrasado-texto" data-invalido-baixa>{invalido}</p>}
+      <FormGrid>
         <FormField label="Forma de pagamento">
           <Select value={forma} onChange={(e) => setForma(e.target.value)} aria-label="Forma de pagamento">
             <option value="">Não informada</option>
@@ -338,7 +368,37 @@ function InformarRecebimento({ conta, onPronto, onCancelar }: { conta: ContaAcoe
       <FormField label="Comentário" dica="Fica na linha do tempo da conta."><Textarea value={comentario} onChange={(e) => setComentario(e.target.value)} rows={2} maxLength={500} /></FormField>
       <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
         <Button variant="secondary" onClick={onCancelar} disabled={salvando}>Cancelar</Button>
-        <Button loading={salvando} onClick={confirmarBaixa} data-confirmar-recebimento><CheckCircle2 className="w-4 h-4" /> Confirmar recebimento</Button>
+        <Button loading={salvando} onClick={confirmarBaixa} disabled={!!invalido} data-confirmar-recebimento><CheckCircle2 className="w-4 h-4" /> {parcial ? "Confirmar recebimento parcial" : "Confirmar recebimento"}</Button>
+      </div>
+    </div>
+  );
+}
+
+function ParcelarConta({ conta, onPronto, onCancelar }: { conta: ContaAcoes; onPronto: () => void; onCancelar: () => void }) {
+  const [plano, setPlano] = useState<ParcelaPlano[]>([]);
+  const [motivo, setMotivo] = useState<string | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState("");
+  async function parcelar() {
+    if (motivo) { setErro(motivo); return; }
+    setErro(""); setSalvando(true);
+    const e = await enviar(`/api/contas-receber/${conta.id}/parcelar`, "POST", { parcelas: plano });
+    setSalvando(false);
+    if (e) { setErro(e); return; }
+    toast(`${conta.numero} dividida em ${plano.length} parcelas.`, "sucesso");
+    onPronto();
+  }
+  return (
+    <div className="space-y-4" data-parcelar-conta>
+      <Erro texto={erro} />
+      <p className="text-sm text-ink-muted">
+        <strong className="text-ink">{conta.clienteNome}</strong> · {formatarMoeda(conta.valor)}. Cada parcela vira uma cobrança, com vencimento e boleto próprios.
+      </p>
+      <EditorParcelas total={conta.valor} primeiroVencimento={conta.dataVencimento ? chaveDiaCivil(conta.dataVencimento) : null}
+        onChange={(p, m) => { setPlano(p); setMotivo(m); }} />
+      <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+        <Button variant="secondary" onClick={onCancelar} disabled={salvando}>Voltar</Button>
+        <Button loading={salvando} onClick={parcelar} disabled={!!motivo} data-confirmar-parcelar><Split className="w-4 h-4" /> Parcelar em {plano.length}×</Button>
       </div>
     </div>
   );
@@ -425,7 +485,7 @@ function EmitirBoleto({ conta, onEmitido }: { conta: ContaAcoes; onEmitido: (b: 
       <Erro texto={erro} />
       <div className="bg-surface-alt rounded-lg p-3 text-sm">
         <p className="font-semibold text-ink">{conta.clienteNome}</p>
-        <p className="text-ink-muted">Valor: <strong className="text-success-700">{formatarMoeda(conta.valor)}</strong></p>
+        <p className="text-ink-muted">Valor: <strong className="text-success-700">{formatarMoeda(saldoDaConta(conta))}</strong>{(conta.valorRecebido ?? 0) > 0 && <span> (o que falta receber)</span>}</p>
       </div>
       <FormGrid>
         <FormField label="Vencimento"><InputData value={vencimento} onChange={(v) => setVencimento(v)} /></FormField>

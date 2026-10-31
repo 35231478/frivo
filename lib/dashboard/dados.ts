@@ -3,6 +3,7 @@
  * curtas com `take`. Toda consulta filtra por `empresaId`. "Hoje"/"mês" seguem o fuso
  * de Brasília (lib/fuso), não o do servidor.
  */
+import { recebidoNoPeriodo, saldoDoAgregado } from "@/lib/financeiro/parcelas-server";
 import { prisma } from "@/lib/prisma";
 import { contarAlertasPrazos } from "@/lib/prazo-server";
 import { contarAlertasVeiculos } from "@/lib/veiculo-server";
@@ -154,18 +155,20 @@ export async function dadosFinanceiro(empresaId: string, agora = new Date()) {
       where: { empresaId, status: { in: ["A_RECEBER", "ATRASADO", "RECEBIDO"] }, dataVencimento: { gte: mesIni, lt: mesFim } },
       _sum: { valor: true },
     }),
-    prisma.contaReceber.aggregate({ where: { empresaId, status: "RECEBIDO", dataRecebimento: { gte: mesIni, lt: mesFim } }, _sum: { valor: true } }),
-    prisma.contaReceber.aggregate({ where: { empresaId, status: { in: [...EM_ABERTO] } }, _sum: { valor: true }, _count: { _all: true } }),
-    prisma.contaReceber.aggregate({ where: { empresaId, status: { in: [...EM_ABERTO] }, dataVencimento: { lt: hoje } }, _sum: { valor: true }, _count: { _all: true } }),
+    // Recebido pela data de cada recebimento (parcial ou total) + as recebidas antigas
+    recebidoNoPeriodo(empresaId, { gte: mesIni, lt: mesFim }),
+    // Em aberto pelo SALDO (a baixa parcial já entrou)
+    prisma.contaReceber.aggregate({ where: { empresaId, status: { in: [...EM_ABERTO] } }, _sum: { valor: true, valorRecebido: true }, _count: { _all: true } }),
+    prisma.contaReceber.aggregate({ where: { empresaId, status: { in: [...EM_ABERTO] }, dataVencimento: { lt: hoje } }, _sum: { valor: true, valorRecebido: true }, _count: { _all: true } }),
     prisma.contaReceber.groupBy({ by: ["clienteId"], where: { empresaId, status: { in: [...EM_ABERTO] }, dataVencimento: { lt: hoje } } }),
-    prisma.contaReceber.aggregate({ where: { empresaId, status: { in: [...EM_ABERTO] }, dataVencimento: { gte: hoje, lt: em7 } }, _sum: { valor: true }, _count: { _all: true } }),
+    prisma.contaReceber.aggregate({ where: { empresaId, status: { in: [...EM_ABERTO] }, dataVencimento: { gte: hoje, lt: em7 } }, _sum: { valor: true, valorRecebido: true }, _count: { _all: true } }),
   ]);
   return {
     faturadoMes: num(faturado._sum.valor),
-    recebidoMes: num(recebido._sum.valor),
-    aReceber: { valor: num(aReceber._sum.valor), quantidade: aReceber._count._all },
-    vencidos: { valor: num(vencidos._sum.valor), quantidade: vencidos._count._all, clientes: inadimplentes.length },
-    proximos7: { valor: num(prox7._sum.valor), quantidade: prox7._count._all },
+    recebidoMes: recebido.valor,
+    aReceber: { valor: saldoDoAgregado(aReceber), quantidade: aReceber._count._all },
+    vencidos: { valor: saldoDoAgregado(vencidos), quantidade: vencidos._count._all, clientes: inadimplentes.length },
+    proximos7: { valor: saldoDoAgregado(prox7), quantidade: prox7._count._all },
   };
 }
 

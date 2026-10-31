@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { saldoDaConta } from "@/lib/financeiro/parcelas";
 import { prisma } from "@/lib/prisma";
 import { requirePortalSession, exigePermissao, STATUS_CONTA_PORTAL } from "@/lib/portal-server";
 import { SemAcesso } from "@/components/portal/sem-acesso";
@@ -19,7 +20,7 @@ export default async function PortalFinanceiro() {
   const verBoletos = exigePermissao(sessao, "verBoletos");
   const podeAprovar = exigePermissao(sessao, "aprovarMedicoes");
 
-  const [medicoes, boletos, pagos] = await Promise.all([
+  const [medicoes, boletosBrutos, pagos] = await Promise.all([
     prisma.medicao.findMany({
       where: { empresaId: user.empresaId, clienteId: user.clienteId, status: "AGUARDANDO_APROVACAO" },
       select: { id: true, numero: true, mes: true, ano: true, valorLiquido: true, tokenPublico: true },
@@ -27,7 +28,7 @@ export default async function PortalFinanceiro() {
     }),
     verBoletos ? prisma.contaReceber.findMany({
       where: { empresaId: user.empresaId, clienteId: user.clienteId, status: { in: [...STATUS_CONTA_PORTAL] } },
-      select: { id: true, numero: true, descricao: true, valor: true, dataVencimento: true, status: true, medicao: { select: { boletoUrl: true, boletoCodigoBarras: true } } },
+      select: { id: true, numero: true, descricao: true, valor: true, valorRecebido: true, dataVencimento: true, status: true, medicao: { select: { boletoUrl: true, boletoCodigoBarras: true } } },
       orderBy: { dataVencimento: "asc" },
     }) : Promise.resolve([]),
     prisma.contaReceber.findMany({
@@ -36,6 +37,9 @@ export default async function PortalFinanceiro() {
       orderBy: { dataRecebimento: "desc" }, take: 20,
     }),
   ]);
+
+  // O cliente vê o que falta pagar (a parte já paga de uma conta não aparece de novo)
+  const boletos = boletosBrutos.map((b) => ({ ...b, valor: saldoDaConta(b) }));
 
   return (
     <div className="space-y-6">

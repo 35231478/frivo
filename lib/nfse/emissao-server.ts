@@ -9,6 +9,7 @@
  * → autorizada: PDF/XML pelo nosso servidor, nº na medição, medição "NF emitida" e conta a receber
  * liberada. Rejeitada: o motivo fica na nota e os itens voltam a poder ser emitidos.
  */
+import { liberarCobrancasDaMedicao } from "@/lib/financeiro/parcelas-server";
 import { prisma } from "@/lib/prisma";
 import { referenciaNota, rotuloMedicao } from "@/lib/faturamento/fatura";
 import { digitos } from "@/lib/documento";
@@ -333,7 +334,7 @@ async function efeitosAutorizacao(notaId: string, usuarioId: string | null) {
     data: { nfNumero: numeros || numeroNf, ...(completa && medicao.status === "PC_RECEBIDO" ? { status: "NF_EMITIDA" as const } : {}) },
   });
   if (completa) {
-    await prisma.contaReceber.updateMany({ where: { medicaoId: medicao.id, status: "PREVISTO" }, data: { status: "A_RECEBER" } });
+    await liberarCobrancasDaMedicao(medicao.id);
   }
   const os = await osDaNota(nota.id);
   await historicoOs([nota.ordemServicoId, ...os], usuarioId, "NFS-e autorizada", `NFS-e nº ${numeroNf} da ${rotuloMedicao(medicao).replace(/^\w/, (l) => l.toLowerCase())}`);

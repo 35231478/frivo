@@ -4,11 +4,12 @@ import { prisma } from "@/lib/prisma";
 import { categoriaParaGravar, centroCustoParaGravar, contaBancariaParaGravar, respostaRefEmpresa } from "@/lib/ref-empresa";
 import { contaReceberUpdateSchema } from "@/lib/validations";
 import { chaveDiaCivil } from "@/lib/fuso";
-import { formatarMoeda, formatarData, LABELS_FORMA_PAGAMENTO } from "@/lib/utils";
+import { formatarMoeda, LABELS_FORMA_PAGAMENTO } from "@/lib/utils";
 import {
   descreverAlteracoes, motivoNaoCancelar, motivoNaoExcluir, motivoNaoReceber, motivoNaoTrocarCliente, travasDaConta,
 } from "@/lib/financeiro/conta-receber-gestao";
 import { detalhesDaConta, registrarEventoCR } from "@/lib/financeiro/conta-receber-server";
+import { ErroConta, registrarRecebimento } from "@/lib/financeiro/parcelas-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -23,8 +24,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
 }
 
 /**
- * Edição completa, baixa (status RECEBIDO) e cancelamento (status CANCELADO, com motivo). As regras
- * (o que pode e o que fica travado) são as mesmas da tela: lib/financeiro/conta-receber-gestao.
+ * Edição completa, baixa TOTAL (status RECEBIDO — pelo mesmo caminho único da baixa parcial:
+ * registrarRecebimento) e cancelamento (status CANCELADO, com motivo). As regras (o que pode e o que
+ * fica travado) são as mesmas da tela: lib/financeiro/conta-receber-gestao.
  */
 export async function PUT(req: NextRequest, { params }: Params) {
   const guard = await exigirPermissao("financeiro", "contasReceber");
@@ -42,6 +44,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
     },
   });
   if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
+  // O lançamento parcelado não se edita: o dinheiro (e as ações) estão nas parcelas
+  if (existente.status === "PARCELADO") return NextResponse.json({ erro: "Conta parcelada: edite as parcelas." }, { status: 409 });
 
   const parsed = contaReceberUpdateSchema.safeParse(await req.json());
   if (!parsed.success) {
@@ -97,19 +101,35 @@ export async function PUT(req: NextRequest, { params }: Params) {
     ? (contaBancaria.contaBancariaId ? contaBancaria.banco : d.banco === undefined ? null : d.banco || null)
     : d.banco === undefined ? undefined : d.banco || null;
 
-  // Corrida (dois cliques ao mesmo tempo): só UM pedido vira a conta para recebida/cancelada
-  if (mudaStatus && (d.status === "RECEBIDO" || d.status === "CANCELADO")) {
+  // Baixa total: o saldo que falta, com a conta trancada (dois cliques não recebem 2×); grava o
+  // recebimento, o evento e quita a medição de origem
+  const recebendo = mudaStatus && d.status === "RECEBIDO";
+  if (recebendo) {
+    try {
+      await prisma.$transaction((tx) => registrarRecebimento(tx, {
+        empresaId, contaId: id, data: dataRecebimento!, formaPagamento: d.formaPagamento ?? null,
+        contaBancariaId: contaBancaria.contaBancariaId !== undefined ? contaBancaria.contaBancariaId : existente.contaBancariaId,
+        origem: "MANUAL", observacao: d.comentario || null, usuarioId,
+      }), { timeout: 20_000 });
+    } catch (e) {
+      if (e instanceof ErroConta) return NextResponse.json({ erro: e.message }, { status: e.status });
+      throw e;
+    }
+  }
+  // Corrida (dois cliques ao mesmo tempo): só UM pedido cancela
+  if (mudaStatus && d.status === "CANCELADO") {
     const virou = await prisma.contaReceber.updateMany({
-      where: { id, empresaId, excluidaEm: null, status: { notIn: ["RECEBIDO", "CANCELADO"] } },
+      where: { id, empresaId, excluidaEm: null, status: { notIn: ["RECEBIDO", "CANCELADO", "PARCELADO"] }, valorRecebido: 0 },
       data: { status: d.status },
     });
-    if (!virou.count) return NextResponse.json({ erro: d.status === "RECEBIDO" ? "Esta conta já foi recebida." : "Esta conta já está cancelada." }, { status: 409 });
+    if (!virou.count) return NextResponse.json({ erro: "Esta conta já está cancelada (ou mudou). Atualize a tela." }, { status: 409 });
   }
 
   const atualizada = await prisma.contaReceber.update({
     where: { id },
     data: {
-      status: d.status,
+      // A baixa já gravou status/data (registrarRecebimento)
+      status: recebendo ? undefined : d.status,
       descricao: d.descricao ?? undefined,
       // Sem categoriaId no corpo, nada muda (inclusive o texto antigo de contas ainda sem categoria ligada)
       categoriaId: categoria.categoriaId,
@@ -121,7 +141,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
       banco,
       observacao: d.observacao === undefined ? undefined : d.observacao || null,
       dataVencimento: d.dataVencimento ? new Date(d.dataVencimento) : d.dataVencimento === null && !travas.vencimento ? null : undefined,
-      dataRecebimento,
+      dataRecebimento: recebendo ? undefined : dataRecebimento,
       ...(novoCliente && { clienteId: novoCliente.id, clienteCnpj: novoCliente.cpfCnpj }),
       ...(mudaStatus && d.status === "CANCELADO" && { canceladaEm: new Date(), motivoCancelamento: d.motivoCancelamento }),
     },
@@ -131,16 +151,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
     },
   });
 
-  // Linha do tempo: baixa, cancelamento e o que mudou na edição
+  // Linha do tempo: cancelamento e o que mudou na edição (a baixa grava o dela)
   const evento = (tipo: string, detalhe: string | null) => registrarEventoCR({ empresaId, contaReceberId: id, tipo, detalhe, usuarioId });
-  if (mudaStatus && d.status === "RECEBIDO") {
-    await evento("RECEBIDA", [
-      `${formatarMoeda(Number(atualizada.valor))} em ${formatarData(dataRecebimento!)}`,
-      atualizada.formaPagamento ? LABELS_FORMA_PAGAMENTO[atualizada.formaPagamento] : null,
-      atualizada.contaBancaria?.nome ?? atualizada.banco,
-      d.comentario || null,
-    ].filter(Boolean).join(" · "));
-  } else if (mudaStatus && d.status === "CANCELADO") {
+  if (mudaStatus && d.status === "CANCELADO") {
     await evento("CANCELADA", d.motivoCancelamento!);
   }
   const resumo = (c: typeof existente | typeof atualizada) => ({
@@ -154,16 +167,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (mudancas) await evento("EDITADA", mudancas);
   }
 
-  // Ao quitar uma conta vinda de medição, marca a medição como PAGO.
-  if (d.status === "RECEBIDO" && existente.medicaoId) {
-    await prisma.medicao.updateMany({
-      where: { id: existente.medicaoId, status: { notIn: ["PAGO", "CANCELADA"] } },
-      data: { status: "PAGO", dataPagamento: dataRecebimento ?? new Date(), formaPagamento: d.formaPagamento ?? undefined },
-    });
-  }
-
   // Confirmação de pagamento por e-mail (a função verifica toggle + preferência do cliente)
-  if (d.status === "RECEBIDO" && existente.status !== "RECEBIDO") {
+  if (recebendo) {
     const { enviarConfirmacaoPagamento } = await import("@/lib/email");
     await enviarConfirmacaoPagamento(id).catch(() => {});
   }

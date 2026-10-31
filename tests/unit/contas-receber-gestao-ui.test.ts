@@ -105,8 +105,9 @@ describe("menu ⋮ por situação", () => {
   it("conta manual em aberto: tudo à mão; recibo apagado com o motivo; excluir liberado", async () => {
     await menu();
     expect($$("[data-menu-acoes] [data-item]").map((i) => i.getAttribute("data-item"))).toEqual([
-      "detalhes", "editar", "receber", "boleto", "cobrar-whatsapp", "cobrar-email", "recibo", "cancelar", "excluir",
+      "detalhes", "editar", "receber", "parcelar", "boleto", "cobrar-whatsapp", "cobrar-email", "recibo", "cancelar", "excluir",
     ]);
+    expect(desabilitado("parcelar")).toBe(false);
     expect(desabilitado("excluir")).toBe(false);
     expect(desabilitado("recibo")).toBe(true);
     expect(motivo("recibo")).toBe("O recibo sai depois de informar o recebimento.");
@@ -205,19 +206,22 @@ describe("edição completa", () => {
 });
 
 describe("receber, cancelar, excluir", () => {
-  it("informar recebimento: valor da conta (sem campo 'valor recebido'), data, forma, conta bancária e comentário", async () => {
+  it("informar recebimento: o valor vem com o que falta (baixa total), data, forma, conta bancária e comentário", async () => {
     await menu();
     await clicar(itemMenu("receber"));
     const m = $("[data-informar-recebimento]")!;
-    expect(txt(m.querySelector("[data-valor-baixa]"))).toMatch(/R\$\s?1\.234,56/);
-    expect(m.querySelector('input[type="number"]')).toBeNull();
+    expect(txt(m.querySelector("[data-valor-baixa]"))).toMatch(/R\$\s?1\.234,56/); // falta receber
+    expect(m.querySelector<HTMLInputElement>("[data-valor-recebido]")!.value).toBe("1234.56");
+    expect(m.querySelector("[data-aviso-parcial]")).toBeNull();
     await escolher(m.querySelector('select[aria-label="Forma de pagamento"]'), "PIX");
     await escolher(m.querySelector('select[data-seletor-cadastro="contas-bancarias"]'), "cb1");
     await digitar(m.querySelector("textarea"), "Comprovante no e-mail");
+    expect(txt($("[data-confirmar-recebimento]"))).toBe("Confirmar recebimento");
     await clicar($("[data-confirmar-recebimento]"));
-    const [put] = enviados("PUT");
-    expect(put.corpo).toMatchObject({ status: "RECEBIDO", formaPagamento: "PIX", contaBancariaId: "cb1", comentario: "Comprovante no e-mail" });
-    expect(put.corpo.dataRecebimento).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    const [post] = enviados("POST");
+    expect(post.url).toBe("/api/contas-receber/cr1/recebimentos");
+    expect(post.corpo).toMatchObject({ valor: 1234.56, formaPagamento: "PIX", contaBancariaId: "cb1", comentario: "Comprovante no e-mail" });
+    expect(post.corpo.data).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(avisos.toast).toHaveBeenCalledWith("CR-2026-0042 recebida.", "sucesso");
   });
 
@@ -391,7 +395,7 @@ describe("período + cards do período + cara de planilha (padrão da casa)", ()
     const tabela = $("[data-tabela-receber] table[data-tabela-planilha]")!;
     expect(tabela.className).toContain("text-[13px]");
     expect(tabela.className).toContain("table-fixed"); // colunas cabem na tela: Valor nunca some para a direita
-    expect($$("[data-tabela-receber] th").map(txt)).toEqual(["Vencimento", "Nº", "Cliente", "Descrição", "Categoria", "Situação", "Valor (R$)", "Ações"]);
+    expect($$("[data-tabela-receber] th").map(txt)).toEqual(["Vencimento", "Nº", "Cliente", "Descrição", "Categoria", "Situação", "Valor (R$)", "Em aberto (R$)", "Ações"]);
     const linha = $("[data-linha-conta=cr2]")!;
     expect(linha.className).toContain("border-surface-linha");
     expect(linha.querySelector("[data-numero-conta]")!.className).toContain("font-mono");
