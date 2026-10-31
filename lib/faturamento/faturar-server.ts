@@ -15,7 +15,7 @@ import { itensFaturaveisDaOs, orcamentoJaFaturado, osJaFaturada, travarParaFatur
 import { registrarEvento } from "@/lib/orcamentos/ciclo-server";
 import { chaveDiaCivil, chaveHojeBR, partesBR } from "@/lib/fuso";
 import { gerarNumeroMedicao } from "@/lib/utils";
-import { baseRetencoes, calcularRetencoes, camposDaMedicao, motivoRetencaoInvalida, retencoesDosServicos, SELECT_RETENCOES_SERVICO } from "@/lib/financeiro/retencoes";
+import { retencoesHerdadas } from "@/lib/financeiro/retencoes-server";
 import {
   faturaDaOs, faturaDoOrcamento, motivoNaoFaturarOrcamento, motivoNaoFaturarOs, numeroFatura, vencimentoAvulso, type Fatura,
 } from "@/lib/faturamento/fatura";
@@ -48,27 +48,9 @@ interface Origem {
   parcelamento?: ParcelamentoFaturar | null;
 }
 
-/** Retenções que a fatura herda dos serviços da nota (cadastro: "ISS retido" / "Reter …" + alíquota) */
-async function retencoesHerdadas(empresaId: string, fatura: Fatura) {
-  const ids = [...new Set(fatura.linhas.map((l) => l.servicoId).filter((x): x is string => !!x))];
-  const [servicos, config] = await Promise.all([
-    ids.length ? prisma.servico.findMany({ where: { id: { in: ids }, empresaId }, select: SELECT_RETENCOES_SERVICO }) : [],
-    prisma.configuracao.findUnique({ where: { empresaId }, select: { issAliquota: true } }),
-  ]);
-  const porId = new Map(servicos.map((s) => [s.id, s]));
-  const { retencoes } = retencoesDosServicos(
-    fatura.linhas.map((l) => ({ tipo: l.tipo, valorTotal: l.valorTotal, servico: l.servicoId ? porId.get(l.servicoId) ?? null : null })),
-    config?.issAliquota != null ? Number(config.issAliquota) : null,
-  );
-  // Base = o valor da nota (só os serviços). Retenção que passaria dele não entra (ajuste no "Editar")
-  const base = baseRetencoes({ valorTotal: fatura.valorTotal, valorLiquido: fatura.valorLiquido, itens: fatura.linhas });
-  if (motivoRetencaoInvalida(base, retencoes)) return { campos: camposDaMedicao({}), total: 0 };
-  return { campos: camposDaMedicao(retencoes), total: calcularRetencoes(base, retencoes).total };
-}
-
 async function criarFatura(o: Origem): Promise<ResultadoFaturar> {
   const agora = partesBR();
-  const ret = await retencoesHerdadas(o.empresaId, o.fatura);
+  const ret = await retencoesHerdadas(o.empresaId, { valorTotal: o.fatura.valorTotal, valorLiquido: o.fatura.valorLiquido, linhas: o.fatura.linhas });
   const r = await prisma.$transaction(async (tx) => {
     const travadas = await travarParaFaturar(tx, o.trava);
     const ja = [...travadas.os, ...travadas.orcamentos][0];

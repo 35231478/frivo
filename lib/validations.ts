@@ -268,6 +268,8 @@ export const contratoSchema = z.object({
   // Faturamento (a NFS-e saiu do contrato: serviços da nota, período de referência, nº do contrato
   // e vencimento na descrição não são mais gravados — o que já existia no banco fica como está)
   diaFaturamento: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().min(1).max(28).nullable()).default(null),
+  // Serviço padrão da mensalidade (NFS-e e retenções). Ausente = não mexe; vazio = sem serviço
+  servicoId: z.preprocess((v) => (v === "" ? null : v), z.string().min(1).nullable().optional()),
   tipoVencimento: z.preprocess((v) => (v === "" || v == null ? null : v), z.nativeEnum(TipoVencimento).nullable()).default(null),
   diasAposVencimento: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().min(0).max(365).nullable()).default(null),
   diaFixoMes: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().min(1).max(31).nullable()).default(null),
