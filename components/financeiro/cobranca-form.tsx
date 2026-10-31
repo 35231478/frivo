@@ -12,6 +12,9 @@ import { ClienteCombobox } from "@/components/ui/cliente-combobox";
 import { AlertCircle } from "lucide-react";
 import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
 import { InputData } from "@/components/ui/input-data";
+import { EditorParcelas } from "@/components/financeiro/editor-parcelas";
+import { Dica } from "@/components/ui/dica";
+import type { ParcelaPlano } from "@/lib/financeiro/parcelas";
 
 export function CobrancaForm() {
   const router = useRouter();
@@ -27,17 +30,22 @@ export function CobrancaForm() {
   const [contaBancariaId, setContaBancariaId] = useState("");
   const [centroCustoId, setCentroCustoId] = useState("");
   const [obs, setObs] = useState("");
+  // À vista (uma cobrança) ou parcelado (uma cobrança por parcela, cada uma com seu vencimento/boleto)
+  const [parcelado, setParcelado] = useState(false);
+  const [plano, setPlano] = useState<ParcelaPlano[]>([]);
+  const [motivoPlano, setMotivoPlano] = useState<string | null>(null);
 
   async function salvar() {
     setErro("");
     if (!clienteId) { setErro("Selecione o cliente."); return; }
     if (!descricao.trim()) { setErro("Informe a descrição."); return; }
     if (!valor || Number(valor) <= 0) { setErro("Informe um valor válido."); return; }
+    if (parcelado && motivoPlano) { setErro(motivoPlano); return; }
     setSalvando(true);
     try {
       const res = await fetch("/api/contas-receber", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clienteId, descricao, categoriaId: categoriaId || null, valor: Number(valor), dataVencimento: vencimento || null, formaPagamento: forma || null, contaBancariaId: contaBancariaId || null, centroCustoId: centroCustoId || null, observacao: obs || null }),
+        body: JSON.stringify({ clienteId, descricao, categoriaId: categoriaId || null, valor: Number(valor), dataVencimento: vencimento || null, formaPagamento: forma || null, contaBancariaId: contaBancariaId || null, centroCustoId: centroCustoId || null, observacao: obs || null, ...(parcelado && { parcelas: plano }) }),
       });
       if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao criar cobrança."); return; }
       router.push("/financeiro/contas-receber");
@@ -61,7 +69,7 @@ export function CobrancaForm() {
           </FormGrid>
           <FormGrid cols={3}>
             <FormField label="Valor" required><Input type="number" step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" /></FormField>
-            <FormField label="Vencimento"><InputData value={vencimento} onChange={(v) => setVencimento(v)} /></FormField>
+            {!parcelado && <FormField label="Vencimento"><InputData value={vencimento} onChange={(v) => setVencimento(v)} /></FormField>}
             <FormField label="Forma de pagamento">
               <Select value={forma} onChange={(e) => setForma(e.target.value)}>
                 <option value="">Selecione…</option>
@@ -69,6 +77,24 @@ export function CobrancaForm() {
               </Select>
             </FormField>
           </FormGrid>
+          <div className="space-y-1.5">
+            <p className="text-sm font-medium text-ink flex items-center gap-1" id="rotulo-condicao">
+              Condição <Dica rotulo="Condição" texto="Parcelado: cada parcela vira uma cobrança, com vencimento e boleto próprios." />
+            </p>
+            <div className="inline-flex rounded-lg border border-surface-border p-0.5 bg-surface-alt" role="radiogroup" aria-labelledby="rotulo-condicao" data-condicao>
+              {([["vista", "À vista"], ["parcelado", "Parcelado"]] as const).map(([k, rotulo]) => (
+                <button key={k} type="button" role="radio" aria-checked={(k === "parcelado") === parcelado} onClick={() => setParcelado(k === "parcelado")}
+                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${(k === "parcelado") === parcelado ? "bg-white shadow-sm text-ink font-semibold" : "text-ink-muted hover:text-ink"}`} data-condicao-opcao={k}>
+                  {rotulo}
+                </button>
+              ))}
+            </div>
+          </div>
+          {parcelado && (
+            Number(valor) > 0
+              ? <EditorParcelas total={Number(valor)} primeiroVencimento={vencimento || null} onChange={(p, m) => { setPlano(p); setMotivoPlano(m); }} />
+              : <p className="text-sm text-ink-muted" data-parcelar-sem-valor>Informe o valor para dividir em parcelas.</p>
+          )}
           <FormGrid>
             <FormField label="Conta bancária" dica="Onde o dinheiro entra. Cadastre em Financeiro › Contas bancárias.">
               <SeletorCadastro entidade="contas-bancarias" valor={contaBancariaId} vazio="Não definida" onChange={setContaBancariaId} nome="contaBancariaId" />

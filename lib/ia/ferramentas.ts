@@ -278,12 +278,13 @@ export const FERRAMENTAS: Ferramenta[] = [
         prisma.contaReceber.findMany({
           where: { empresaId: ctx.empresaId, status: { in: ["A_RECEBER", "ATRASADO"] }, dataVencimento: { lt: inicioHojeBR(agora) } },
           orderBy: { valor: "desc" }, take: 5,
-          select: { numero: true, valor: true, dataVencimento: true, cliente: { select: { nome: true, nomeFantasia: true } } },
+          select: { numero: true, valor: true, valorRecebido: true, dataVencimento: true, cliente: { select: { nome: true, nomeFantasia: true } } },
         }),
       ]);
       return {
         ...resumo,
-        maioresVencidos: vencidos.map((c) => ({ titulo: c.numero, cliente: nomeCli(c.cliente), valor: num(c.valor), vencimento: dataBR(c.dataVencimento) })),
+        // Pelo que falta receber (a baixa parcial já entrou)
+        maioresVencidos: vencidos.map((c) => ({ titulo: c.numero, cliente: nomeCli(c.cliente), valor: Number(c.valor) - Number(c.valorRecebido), vencimento: dataBR(c.dataVencimento) })),
         observacao: "Valores em reais. Contas 'previstas' de contrato não entram (são projeção, não cobrança emitida).",
       };
     },

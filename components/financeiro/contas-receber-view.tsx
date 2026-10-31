@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { BarraPeriodo, CardResumo, GradeCards, type PeriodoTela } from "@/components/listagem/periodo-cards";
 import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
+import { recebidaEmParte, saldoDaConta } from "@/lib/financeiro/parcelas";
 
 export interface ContaView {
   id: string; numero: string; descricao: string; valor: number;
@@ -34,6 +35,10 @@ export interface ContaView {
   medicaoId?: string | null; orcamentoId?: string | null; contratoId?: string | null;
   medicaoNumero?: string | null; orcamentoCodigo?: string | null; contratoNumero?: string | null; medicaoAvulsa?: boolean | null;
   notas?: { status: string }[];
+  /** Baixa parcial: quanto já entrou (o saldo é valor − valorRecebido) */
+  valorRecebido?: number;
+  /** Parcela: o lançamento de onde saiu e "n/N" */
+  lancamentoId?: string | null; lancamentoNumero?: string | null; parcelaNumero?: number | null; parcelaTotal?: number | null;
 }
 interface Opcao { id: string; nome: string }
 
@@ -58,10 +63,12 @@ type CardKey = "VENCIDO" | "VENCE_HOJE" | "A_VENCER" | "RECEBIDO" | "TOTAL";
  * verdade); a exportação CSV exporta o FILTRO (com o período), não a página.
  */
 export function ContasReceberView({
-  contas, clientes, categorias, interAtivo, resumo, total, totalFiltrado, pagina, porPagina, filtros, periodo,
+  contas, clientes, categorias, interAtivo, resumo, total, totalFiltrado, abertoFiltrado, pagina, porPagina, filtros, periodo,
 }: {
   contas: ContaView[]; clientes: Opcao[]; categorias: { id: string; nome: string; cor: string; ativo: boolean }[];
   interAtivo: boolean; resumo: ResumoReceber; total: number; totalFiltrado: number;
+  /** O que falta receber no filtro (abertas, pelo saldo) */
+  abertoFiltrado?: number;
   pagina: number; porPagina: number; filtros: FiltrosReceber; periodo: PeriodoTela;
 }) {
   const { pode } = usePermissoes();
@@ -122,9 +129,9 @@ export function ContasReceberView({
   const inputCls = "bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all";
 
   const CARDS: { key: CardKey; rotulo: string; icone: ComponentType<{ className?: string }>; cor: string; dica?: string }[] = [
-    { key: "VENCIDO", rotulo: "Vencidos", icone: AlertTriangle, cor: "text-atrasado" },
+    { key: "VENCIDO", rotulo: "Vencidos", icone: AlertTriangle, cor: "text-atrasado", dica: "Pelo que falta receber: a parte já recebida não entra." },
     { key: "VENCE_HOJE", rotulo: "Vencem hoje", icone: CalendarClock, cor: "text-atencao-texto" },
-    { key: "A_VENCER", rotulo: "A vencer", icone: Receipt, cor: "text-primary-600", dica: "Inclui as previsões (contratos e orçamentos aprovados)." },
+    { key: "A_VENCER", rotulo: "A vencer", icone: Receipt, cor: "text-primary-600", dica: "Inclui as previsões (contratos e orçamentos aprovados). Pelo que falta receber." },
     { key: "RECEBIDO", rotulo: "Recebidos", icone: CheckCircle2, cor: "text-success-600" },
     { key: "TOTAL", rotulo: "Total do período", icone: Sigma, cor: "text-ink", dica: "Todas as cobranças do período, menos as canceladas." },
   ];
@@ -198,7 +205,7 @@ export function ContasReceberView({
             <div>
               <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider mb-1.5">Status</p>
               <div className="flex flex-wrap gap-1.5">
-                {(["PREVISTO", "A_VENCER", "VENCE_HOJE", "VENCIDO", "PAGO", "CANCELADO"] as const).map((s) => (
+                {(["PREVISTO", "A_VENCER", "VENCE_HOJE", "VENCIDO", "PARCIAL", "PAGO", "CANCELADO"] as const).map((s) => (
                   <button key={s} type="button" data-chip-status={s} onClick={() => toggleStatus(s)}
                     className={cn("text-xs px-2.5 py-1 rounded-full border transition-colors", statusChips.has(s) ? "bg-primary-500 border-primary-500 text-white" : "bg-white border-surface-border text-ink-muted hover:border-primary-300")}>
                     {LABEL_CHAVE[s]}
@@ -227,8 +234,14 @@ export function ContasReceberView({
                     <p className="font-bold text-success-700 shrink-0">{formatarMoeda(c.valor)}</p>
                   </div>
                   <p className="text-xs text-ink-muted truncate">{c.numero} · {c.descricao}</p>
+                  {recebidaEmParte(c) && (
+                    <p className="text-xs text-ink-muted mt-0.5" data-parcial-cartao>
+                      Recebido {formatarMoeda(c.valorRecebido ?? 0)} · <strong className="text-ink">falta {formatarMoeda(saldoDaConta(c))}</strong>
+                    </p>
+                  )}
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5">
                     <span className={cn("inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full", sv.classe)}>{sv.label}</span>
+                    {recebidaEmParte(c) && <SeloParcial />}
                     <span className="text-xs text-ink-subtle">{c.dataVencimento ? `Vence ${formatarData(c.dataVencimento)}` : "Sem vencimento"}</span>
                     {origem && <span className="text-xs text-acento">{origem.rotulo}</span>}
                     {c.boletoStatus === "EMITIDO" && <Barcode className="w-3.5 h-3.5 text-ok-texto" aria-label="Boleto emitido" />}
@@ -252,12 +265,13 @@ export function ContasReceberView({
                 <th scope="col" className={cn(PLANILHA.th, "text-left hidden xl:table-cell w-[10rem]")}>Categoria</th>
                 <th scope="col" className={cn(PLANILHA.th, "text-left w-[8rem]")}>Situação</th>
                 <th scope="col" className={cn(PLANILHA.th, "text-right w-[7.5rem]")}>Valor (R$)</th>
+                <th scope="col" className={cn(PLANILHA.th, "text-right hidden lg:table-cell w-[7.5rem]")}>Em aberto (R$)</th>
                 <th scope="col" className={cn(PLANILHA.th, "w-10")}><span className="sr-only">Ações</span></th>
               </tr>
             </thead>
             <tbody>
               {comStatus.length === 0 ? (
-                <tr><td colSpan={8}><Vazio /></td></tr>
+                <tr><td colSpan={9}><Vazio /></td></tr>
               ) : comStatus.map(({ c, sv }) => {
                 const origem = origemComLink(c);
                 return (
@@ -280,10 +294,15 @@ export function ContasReceberView({
                         <span className={cn("inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full", sv.classe)} data-situacao>
                           {sv.linhaVermelha && <AlertTriangle className="w-3 h-3" />}{sv.label}
                         </span>
+                        {recebidaEmParte(c) && <SeloParcial />}
                         {c.boletoStatus === "EMITIDO" && <Barcode className="w-3.5 h-3.5 text-ok-texto" aria-label="Boleto emitido" />}
                       </span>
                     </td>
                     <td className={cn(PLANILHA.td, PLANILHA.numero, "align-middle font-semibold text-ink")} data-valor>{valorSemMoeda(c.valor)}</td>
+                    {/* O que falta: igual ao valor sem baixa; menor na baixa parcial; 0 na recebida/cancelada */}
+                    <td className={cn(PLANILHA.td, PLANILHA.numero, "align-middle hidden lg:table-cell", recebidaEmParte(c) ? "font-semibold text-atencao-texto" : "text-ink-muted")} data-em-aberto>
+                      {c.status === "CANCELADO" ? "—" : valorSemMoeda(saldoDaConta(c))}
+                    </td>
                     <td className={cn(PLANILHA.td, "align-middle text-right py-0.5")}>{acoes(c)}</td>
                   </tr>
                 );
@@ -296,15 +315,21 @@ export function ContasReceberView({
           <Paginacao total={total} pagina={pagina} porPagina={porPagina} onNavegar={navegar} rotulo="cobranças" />
           <p className="text-sm text-ink-muted" data-total-filtrado>
             Total do filtro: <strong className="text-ink">{formatarMoeda(totalFiltrado)}</strong>
+            {abertoFiltrado != null && <> · em aberto: <strong className="text-ink" data-aberto-filtrado>{formatarMoeda(abertoFiltrado)}</strong></>}
           </p>
         </div>
       </div>
-      <ContaReceberDetalhes id={detalheId} onFechar={fecharDetalhe} />
+      <ContaReceberDetalhes id={detalheId} onFechar={fecharDetalhe} onAbrirConta={setDetalheId} />
     </div>
   );
 }
 
-const LABEL_CHAVE: Record<string, string> = { PREVISTO: "Previsto", A_VENCER: "A vencer", VENCE_HOJE: "Vence hoje", VENCIDO: "Vencido", PAGO: "Pago", CANCELADO: "Cancelado" };
+const LABEL_CHAVE: Record<string, string> = { PREVISTO: "Previsto", A_VENCER: "A vencer", VENCE_HOJE: "Vence hoje", VENCIDO: "Vencido", PARCIAL: "Recebido em parte", PAGO: "Pago", CANCELADO: "Cancelado" };
+
+/** Baixa parcial: entrou uma parte e ainda falta (a situação continua a do vencimento) */
+function SeloParcial() {
+  return <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-atencao-claro text-atencao-texto" data-selo-parcial>Parcial</span>;
+}
 
 function FiltroCampo({ label, children }: { label: string; children: React.ReactNode }) {
   return <div><label className="text-[11px] font-semibold text-ink-muted">{label}</label><div className="mt-1">{children}</div></div>;

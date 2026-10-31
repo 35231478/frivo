@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { contasVinculadas } from "@/lib/financeiro/conta-receber-server";
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -101,7 +102,7 @@ export default async function MedicaoDetalhePage({ params, searchParams }: {
             <Receipt className="w-4 h-4 text-primary-600" /> Contas a receber
           </h2>
           <ContasReceberVinculadas
-            contas={medicao.contasReceber.map((c) => ({ id: c.id, numero: c.numero, valor: Number(c.valor), status: c.status, dataVencimento: c.dataVencimento }))}
+            contas={await contasVinculadas(empresaId, { medicaoId: medicao.id })}
             podeAbrir={pode(session!.user!.permissoes, "financeiro", "contasReceber", session!.user!.role)}
           />
         </div>

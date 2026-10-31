@@ -16,7 +16,11 @@ export interface AtividadeCentral {
 export interface OsCentralEntrada {
   status: string; statusManual: boolean; previsaoConclusao: Date | string | null;
   atividades: AtividadeCentral[];
-  medicoes: { status: string; valorTotal: unknown; contasReceber?: { status: string; dataVencimento: Date | string | null; valor?: unknown }[] }[];
+  medicoes: {
+    status: string; valorTotal: unknown;
+    /** Conta PARCELADA traz as parcelas: a situação é a delas */
+    contasReceber?: { status: string; dataVencimento: Date | string | null; valor?: unknown; parcelas?: { status: string; dataVencimento: Date | string | null }[] }[];
+  }[];
   itensOrcamento: { valorTotal: unknown }[];
   orcamentos: { orcamentoId?: string; orcamento: { status: string; totalGeral: unknown } }[];
   /** Orçamento que GEROU a OS: os itens dele já estão em itensOrcamento (não somar o total de novo) */
@@ -40,7 +44,8 @@ const num = (v: unknown) => Number(v ?? 0) || 0;
  * Previsto. Sem medição: "Previsto" se há valor orçado, senão "Sem cobrança".
  */
 export function situacaoPagamento(os: OsCentralEntrada, orcado: number): SituacaoPagamento {
-  const contas = os.medicoes.filter(medicaoValida).flatMap((m) => m.contasReceber ?? []).filter((c) => c.status !== "CANCELADO");
+  const contas = os.medicoes.filter(medicaoValida).flatMap((m) => m.contasReceber ?? [])
+    .flatMap((c) => (c.status === "PARCELADO" ? c.parcelas ?? [] : [c])).filter((c) => c.status !== "CANCELADO");
   if (!contas.length) return orcado > 0 || os.medicoes.some(medicaoValida) ? "PREVISTO" : "SEM_COBRANCA";
   const vis = contas.map((c) => statusVisualReceber(c.status, c.dataVencimento).chave);
   if (vis.every((v) => v === "PAGO")) return "PAGO";

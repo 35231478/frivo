@@ -9,9 +9,11 @@
 
 import { prisma } from "@/lib/prisma";
 import { gerarContaReceberDaMedicao } from "@/lib/financeiro-server";
+import { ErroConta, parcelarConta } from "@/lib/financeiro/parcelas-server";
+import { dividirEmParcelas, MAX_PARCELAS } from "@/lib/financeiro/parcelas";
 import { itensFaturaveisDaOs, orcamentoJaFaturado, osJaFaturada, travarParaFaturar } from "@/lib/faturamento-os";
 import { registrarEvento } from "@/lib/orcamentos/ciclo-server";
-import { partesBR } from "@/lib/fuso";
+import { chaveDiaCivil, chaveHojeBR, partesBR } from "@/lib/fuso";
 import { gerarNumeroMedicao } from "@/lib/utils";
 import { baseRetencoes, calcularRetencoes, camposDaMedicao, motivoRetencaoInvalida, retencoesDosServicos, SELECT_RETENCOES_SERVICO } from "@/lib/financeiro/retencoes";
 import {
@@ -24,7 +26,14 @@ export type ResultadoFaturar =
   | { tipo: "bloqueado"; erro: string }
   | { tipo: "vazio"; erro: string }
   | { tipo: "existente"; fatura: FaturaResumo }
-  | { tipo: "criada"; fatura: FaturaResumo };
+  | { tipo: "criada"; fatura: FaturaResumo; parcelas?: number; avisoParcelas?: string };
+
+/** "Faturar em N×": o servidor divide o valor FINAL da conta (líquido − retenções) a partir do 1º vencimento */
+export interface ParcelamentoFaturar {
+  quantidade: number;
+  /** Sem data: o vencimento da fatura (dia de faturamento do cliente), senão daqui a 30 dias */
+  primeiroVencimento?: string | null;
+}
 
 interface Origem {
   empresaId: string;
@@ -36,6 +45,7 @@ interface Origem {
   trava: { osIds?: string[]; orcamentoIds?: string[] };
   /** Registro na origem (histórico da OS / linha do tempo do orçamento), dentro da transação */
   registrar: (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0], numero: string) => Promise<unknown>;
+  parcelamento?: ParcelamentoFaturar | null;
 }
 
 /** Retenções que a fatura herda dos serviços da nota (cadastro: "ISS retido" / "Reter …" + alíquota) */
@@ -95,12 +105,29 @@ async function criarFatura(o: Origem): Promise<ResultadoFaturar> {
   }, { timeout: 20_000 });
 
   // A cobrança: conta a receber pelo líquido (a previsão do orçamento, se houver, vira esta conta)
-  if (r.tipo === "criada") await gerarContaReceberDaMedicao(r.fatura.id);
+  if (r.tipo !== "criada") return r;
+  const conta = await gerarContaReceberDaMedicao(r.fatura.id);
+  // Parcelada no próprio Faturar: o valor final da conta dividido em N parcelas mensais. A fatura já
+  // existe: se o parcelamento for recusado, ela fica inteira e o aviso volta para a tela
+  const parc = o.parcelamento;
+  if (conta && parc && parc.quantidade > 1) {
+    try {
+      const qtd = Math.min(MAX_PARCELAS, Math.floor(parc.quantidade));
+      await prisma.$transaction((tx) => parcelarConta(tx, {
+        empresaId: o.empresaId, contaId: conta.id, usuarioId: o.usuarioId,
+        parcelas: dividirEmParcelas(Number(conta.valor), qtd, parc.primeiroVencimento || (conta.dataVencimento ? chaveDiaCivil(conta.dataVencimento) : chaveHojeBR(30))),
+      }), { timeout: 20_000 });
+      return { ...r, parcelas: qtd };
+    } catch (e) {
+      if (!(e instanceof ErroConta)) throw e;
+      return { ...r, avisoParcelas: `Fatura criada sem parcelar: ${e.message}` };
+    }
+  }
   return r;
 }
 
 /** Faturar o orçamento aprovado (com ou sem OS): os itens como o cliente aprovou */
-export async function faturarOrcamento(p: { empresaId: string; usuarioId: string; orcamentoId: string }): Promise<ResultadoFaturar> {
+export async function faturarOrcamento(p: { empresaId: string; usuarioId: string; orcamentoId: string; parcelamento?: ParcelamentoFaturar | null }): Promise<ResultadoFaturar> {
   const orc = await prisma.orcamento.findFirst({
     where: { id: p.orcamentoId, empresaId: p.empresaId },
     select: {
@@ -121,13 +148,13 @@ export async function faturarOrcamento(p: { empresaId: string; usuarioId: string
   if (!fatura.linhas.length || fatura.valorLiquido <= 0) return { tipo: "vazio", erro: "Nada a faturar: o orçamento não tem itens com valor." };
   return criarFatura({
     empresaId: p.empresaId, usuarioId: p.usuarioId, clienteId: orc.clienteId, diaFaturamento: orc.cliente.diaFaturamento,
-    descricao: `Orçamento ${orc.codigo} — ${orc.nome}`.slice(0, 300), fatura, trava: { orcamentoIds: [orc.id] },
+    descricao: `Orçamento ${orc.codigo} — ${orc.nome}`.slice(0, 300), fatura, trava: { orcamentoIds: [orc.id] }, parcelamento: p.parcelamento,
     registrar: (tx, numero) => registrarEvento({ empresaId: p.empresaId, orcamentoId: orc.id, tipo: "FATURADO", detalhe: `Fatura ${numeroFatura(numero)}`, usuarioId: p.usuarioId }, tx),
   });
 }
 
 /** Faturar a OS concluída (sem contrato): itens executados + adicionais "Cobrar" com preço */
-export async function faturarOs(p: { empresaId: string; usuarioId: string; osId: string }): Promise<ResultadoFaturar> {
+export async function faturarOs(p: { empresaId: string; usuarioId: string; osId: string; parcelamento?: ParcelamentoFaturar | null }): Promise<ResultadoFaturar> {
   const os = await prisma.ordemServico.findFirst({
     where: { id: p.osId, empresaId: p.empresaId },
     select: { id: true, numero: true, status: true, contratoId: true, clienteId: true, descricao: true, cliente: { select: { diaFaturamento: true } } },
@@ -146,7 +173,7 @@ export async function faturarOs(p: { empresaId: string; usuarioId: string; osId:
   const titulo = (os.descricao ?? "").split("\n")[0].trim();
   return criarFatura({
     empresaId: p.empresaId, usuarioId: p.usuarioId, clienteId: os.clienteId, diaFaturamento: os.cliente.diaFaturamento,
-    descricao: `OS ${os.numero}${titulo ? ` — ${titulo}` : ""}`.slice(0, 300), fatura, trava: { osIds: [os.id] },
+    descricao: `OS ${os.numero}${titulo ? ` — ${titulo}` : ""}`.slice(0, 300), fatura, trava: { osIds: [os.id] }, parcelamento: p.parcelamento,
     registrar: (tx, numero) => tx.osHistorico.create({
       data: { ordemServicoId: os.id, usuarioId: p.usuarioId, acao: "OS faturada", detalhes: `Fatura ${numeroFatura(numero)}` },
     }),

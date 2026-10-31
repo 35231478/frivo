@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { recebidoDaConta, saldoDaConta } from "@/lib/financeiro/parcelas";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { redirect } from "next/navigation";
@@ -34,13 +35,14 @@ export default async function FluxoCaixaPage({
 
   const [contasMes, contasJanela, aFaturarTodos] = await Promise.all([
     prisma.contaReceber.findMany({
-      where: { empresaId, dataVencimento: { gte: inicioMes, lte: fimMes }, status: { not: "CANCELADO" } },
+      // Cobranças: a conta parcelada (o lançamento) fica de fora — as parcelas entram, cada uma no seu mês
+      where: { empresaId, dataVencimento: { gte: inicioMes, lte: fimMes }, status: { notIn: ["CANCELADO", "PARCELADO"] } },
       include: { cliente: { select: { nome: true, nomeFantasia: true } } },
       orderBy: { dataVencimento: "asc" },
     }),
     prisma.contaReceber.findMany({
-      where: { empresaId, dataVencimento: { gte: inicioJanela, lte: fimMes }, status: { not: "CANCELADO" } },
-      select: { valor: true, status: true, dataVencimento: true },
+      where: { empresaId, dataVencimento: { gte: inicioJanela, lte: fimMes }, status: { notIn: ["CANCELADO", "PARCELADO"] } },
+      select: { valor: true, valorRecebido: true, status: true, dataVencimento: true },
     }),
     // Opção A (P3): orçamentos aprovados ainda sem fatura, no mês da previsão (lib/financeiro/a-faturar)
     itensAFaturar(empresaId, agora),
@@ -51,9 +53,10 @@ export default async function FluxoCaixaPage({
 
   // Cards do mês
   const totalPrevistoMes = contasMes.reduce((acc, c) => acc + Number(c.valor), 0);
-  const totalRecebidoMes = contasMes.filter((c) => c.status === "RECEBIDO").reduce((acc, c) => acc + Number(c.valor), 0);
-  const totalAReceberMes = contasMes.filter((c) => c.status === "A_RECEBER" || c.status === "PREVISTO").reduce((acc, c) => acc + Number(c.valor), 0);
-  const totalAtrasadoMes = contasMes.filter((c) => c.status === "ATRASADO").reduce((acc, c) => acc + Number(c.valor), 0);
+  // Baixa parcial: o que entrou vai para "Recebido" e o que falta fica em "A receber"/"Atrasado"
+  const totalRecebidoMes = contasMes.reduce((acc, c) => acc + recebidoDaConta(c), 0);
+  const totalAReceberMes = contasMes.filter((c) => c.status === "A_RECEBER" || c.status === "PREVISTO").reduce((acc, c) => acc + saldoDaConta(c), 0);
+  const totalAtrasadoMes = contasMes.filter((c) => c.status === "ATRASADO").reduce((acc, c) => acc + saldoDaConta(c), 0);
 
   const cards = [
     { label: "Previsto no mês", valor: totalPrevistoMes, cor: "text-ink", bg: "bg-surface-page" },
@@ -85,7 +88,7 @@ export default async function FluxoCaixaPage({
     });
     if (idx >= 0) {
       meses[idx].previsto += Number(c.valor);
-      if (c.status === "RECEBIDO") meses[idx].recebido += Number(c.valor);
+      meses[idx].recebido += recebidoDaConta(c);
     }
   }
   const maxBar = Math.max(1, ...meses.map((m) => Math.max(m.previsto, m.recebido, m.aFaturar)));

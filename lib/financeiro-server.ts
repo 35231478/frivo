@@ -6,6 +6,7 @@ import { formatarData, formatarMoeda, gerarNumeroContaReceber, gerarNumeroContaP
 import { diaCivilPassou, hojeDiaCivil, inicioMesDiaCivil, partesBR } from "@/lib/fuso";
 import { calcularVencimento } from "@/lib/medicao-helpers";
 import { rotuloMedicao } from "@/lib/faturamento/fatura";
+import { cancelarParcelas, reajustarParcelas, recebidoNoPeriodo, saldoDoAgregado } from "@/lib/financeiro/parcelas-server";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
@@ -98,9 +99,17 @@ async function contaDaMedicao(tx: Prisma.TransactionClient, medicaoId: string) {
   // outra (fim da cobrança em dobro PREVISTO × medição). Quando for uma só, o valor passa a
   // ser o da medição (cobre desconto e adicionais consolidados).
   const vinculadas = await tx.contaReceber.findMany({
-    where: { medicaoId, status: { notIn: ["RECEBIDO", "CANCELADO"] } },
+    where: { medicaoId, status: { notIn: ["RECEBIDO", "CANCELADO", "PARCELADO"] } },
     orderBy: { criadoEm: "asc" },
   });
+  // Conta da medição já PARCELADA: a cobrança está nas parcelas — elas acompanham o estágio da medição
+  // (previstas → a receber) e o total (reajuste na proporção, se ainda nenhuma se mexeu)
+  const parcelada = await tx.contaReceber.findFirst({ where: { medicaoId, status: "PARCELADO", excluidaEm: null } });
+  if (parcelada && !vinculadas.length) {
+    if (status === "A_RECEBER") await tx.contaReceber.updateMany({ where: { lancamentoId: parcelada.id, status: "PREVISTO" }, data: { status: "A_RECEBER" } });
+    if (Number(parcelada.valor) !== valor) await reajustarParcelas(tx, { empresaId: medicao.empresaId, lancamentoId: parcelada.id, novoTotal: valor, motivo: `Valor da ${rotuloMedicao(medicao).replace(/^\S/, (c) => c.toLowerCase())}` });
+    return parcelada;
+  }
   if (vinculadas.length > 0) {
     for (const c of vinculadas) {
       await tx.contaReceber.update({
@@ -180,7 +189,8 @@ export async function proximoNumeroContaReceber(empresaId: string, ano: number, 
     orderBy: { numero: "desc" },
     select: { numero: true },
   });
-  const seq = ultimo ? Number(ultimo.numero.split("-")[2]) + 1 : 1;
+  // parseInt: a parcela "CR-2026-0042/3" conta como a 0042 (o lançamento dela)
+  const seq = ultimo ? (parseInt(ultimo.numero.split("-")[2], 10) || 0) + 1 : 1;
   return gerarNumeroContaReceber(seq, ano);
 }
 
@@ -239,6 +249,9 @@ export async function desfazerContasDaMedicao(m: { id: string; numero: string; e
     include: { contrato: { select: { valorMensal: true } }, orcamento: { select: { totalGeral: true } } },
   });
   for (const c of vinculadas) {
+    // Conta parcelada (quem chama já recusou se alguma parcela teve dinheiro/boleto): as parcelas são
+    // canceladas e o lançamento segue a regra da origem, como uma conta comum
+    if (c.status === "PARCELADO") await cancelarParcelas(prisma, { lancamentoId: c.id, empresaId: m.empresaId, motivo: `Medição ${m.numero} cancelada`, usuarioId });
     if (c.contratoId) {
       await prisma.contaReceber.update({
         where: { id: c.id },
@@ -626,9 +639,11 @@ export async function resumoFinanceiro(empresaId: string) {
     aReceberMes, recebidoMes, vencidoReceber, aPagarMesAgg, pagasVencidas,
     vencemHojeReceber, vencemHojePagar,
   ] = await Promise.all([
-    prisma.contaReceber.aggregate({ where: { empresaId, status: { in: naoRecebido }, dataVencimento: { gte: inicioMes, lte: fimMes } }, _sum: { valor: true }, _count: true }),
-    prisma.contaReceber.aggregate({ where: { empresaId, status: "RECEBIDO", dataRecebimento: { gte: inicioMes, lte: fimMes } }, _sum: { valor: true }, _count: true }),
-    prisma.contaReceber.aggregate({ where: { empresaId, status: "ATRASADO" }, _sum: { valor: true }, _count: true }),
+    // Em aberto pelo SALDO (a baixa parcial já entrou: valor − valorRecebido)
+    prisma.contaReceber.aggregate({ where: { empresaId, status: { in: naoRecebido }, dataVencimento: { gte: inicioMes, lte: fimMes } }, _sum: { valor: true, valorRecebido: true }, _count: true }),
+    // Recebido pela data de cada recebimento (parcial ou total) + as recebidas antigas
+    recebidoNoPeriodo(empresaId, { gte: inicioMes, lte: fimMes }),
+    prisma.contaReceber.aggregate({ where: { empresaId, status: "ATRASADO" }, _sum: { valor: true, valorRecebido: true }, _count: true }),
     prisma.contaPagar.aggregate({ where: { empresaId, status: { in: naoPago }, dataVencimento: { gte: inicioMes, lte: fimMes } }, _sum: { saldoRestante: true }, _count: true }),
     prisma.contaPagar.aggregate({ where: { empresaId, status: "VENCIDO" }, _sum: { saldoRestante: true }, _count: true }),
     prisma.contaReceber.count({ where: { empresaId, status: { in: naoRecebido }, dataVencimento: { gte: hojeIni, lte: hojeFim } } }),
@@ -646,12 +661,12 @@ export async function resumoFinanceiro(empresaId: string) {
     const ini = inicioMesDiaCivil(agora, -i);
     const fim = new Date(inicioMesDiaCivil(agora, -i + 1).getTime() - 1);
     const [ent, sai] = await Promise.all([
-      prisma.contaReceber.aggregate({ where: { empresaId, status: "RECEBIDO", dataRecebimento: { gte: ini, lte: fim } }, _sum: { valor: true } }),
+      recebidoNoPeriodo(empresaId, { gte: ini, lte: fim }),
       prisma.pagamentoContaPagar.aggregate({ where: { contaPagar: { empresaId }, dataPagamento: { gte: ini, lte: fim } }, _sum: { valor: true } }),
     ]);
     meses.push({
       mes: formatarData(ini, "MMM"),
-      entradas: Number(ent._sum.valor ?? 0),
+      entradas: ent.valor,
       saidas: Number(sai._sum.valor ?? 0),
     });
   }
@@ -661,7 +676,7 @@ export async function resumoFinanceiro(empresaId: string) {
   // no lugar da conta Prevista que a aprovação criava — mesmo número no card e no saldo
   const mesAtual = chaveMesBR(agora);
   const faturar = await aFaturar(empresaId, { de: mesAtual, ate: mesAtual }, agora);
-  const contasAReceberMes = num(aReceberMes._sum?.valor);
+  const contasAReceberMes = saldoDoAgregado(aReceberMes);
   const totalAReceberMes = Math.round((contasAReceberMes + faturar.valor) * 100) / 100;
   const totalAPagarMes = num(aPagarMesAgg._sum?.saldoRestante);
 
@@ -672,8 +687,8 @@ export async function resumoFinanceiro(empresaId: string) {
       contas: contasAReceberMes,
       aFaturar: { valor: faturar.valor, qtd: faturar.qtd },
     },
-    recebidoMes: { valor: num(recebidoMes._sum?.valor), qtd: recebidoMes._count },
-    vencidoReceber: { valor: num(vencidoReceber._sum?.valor), qtd: vencidoReceber._count },
+    recebidoMes: { valor: recebidoMes.valor, qtd: recebidoMes.qtd },
+    vencidoReceber: { valor: saldoDoAgregado(vencidoReceber), qtd: vencidoReceber._count },
     aPagarMes: { valor: totalAPagarMes, qtd: aPagarMesAgg._count },
     pagasVencidas: { valor: num(pagasVencidas._sum?.saldoRestante), qtd: pagasVencidas._count },
     saldoPrevisto: totalAReceberMes - totalAPagarMes,

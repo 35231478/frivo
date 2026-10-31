@@ -288,6 +288,9 @@ enum StatusContaReceber {
   RECEBIDO
   CANCELADO
   ATRASADO
+  /// A conta foi dividida em parcelas: ela vira o LANÇAMENTO (guarda a origem, o total e as notas) e
+  /// as parcelas (linhas com lancamento_id) são as cobranças. Fora de todas as somas e listas.
+  PARCELADO
 }
 
 enum FormaPagamento {
@@ -503,6 +506,7 @@ model Empresa {
   centrosCusto           CentroCusto[]
   contasBancarias        ContaBancaria[]
   contaReceberEventos    ContaReceberEvento[]
+  recebimentosReceber    ContaReceberRecebimento[]
   fornecedores           Fornecedor[]
   emailTemplates         EmailTemplate[]
   emailLogs              EmailLog[]
@@ -713,6 +717,7 @@ model Usuario {
   orcamentoAnexos        OrcamentoAnexo[]          @relation("OrcamentoAnexoAutor")
   orcamentoEventos       OrcamentoEvento[]         @relation("OrcamentoEventoAutor")
   contaReceberEventos    ContaReceberEvento[]      @relation("ContaReceberEventoUsuario")
+  recebimentosReceber    ContaReceberRecebimento[] @relation("ContaReceberRecebimentoUsuario")
   pedidoCompraEventos    PedidoCompraEvento[]      @relation("PedidoCompraEventoAutor")
   pedidoCompraVinculos   PedidoCompraVinculo[]     @relation("PedidoCompraVinculoAutor")
   empresasFiscalEditadas EmpresaFiscal[]           @relation("EmpresaFiscalAutor")
@@ -2480,18 +2485,30 @@ model ContaReceber {
   motivoCancelamento String?   @map("motivo_cancelamento")
   /// Exclusão LÓGICA (só conta manual sem nota fiscal): some das listas, o registro e o histórico ficam
   excluidaEm         DateTime? @map("excluida_em")
+  /// Baixa parcial: soma dos recebimentos (conta_receber_recebimentos). Saldo em aberto = valor − valorRecebido.
+  /// Conta RECEBIDA antiga (antes dos recebimentos) fica com 0: o recebido dela é o próprio valor.
+  valorRecebido      Decimal   @default(0) @map("valor_recebido") @db.Decimal(12, 2)
+  /// Parcela: aponta para o LANÇAMENTO (a conta original, agora PARCELADO), que guarda a origem
+  /// (medição/orçamento/contrato), o total e as notas fiscais. Parcela não tem origem própria.
+  lancamentoId       String?   @map("lancamento_id")
+  /// "2 de 3": na parcela, o número dela; no lançamento, só o total
+  parcelaNumero      Int?      @map("parcela_numero")
+  parcelaTotal       Int?      @map("parcela_total")
   criadoEm           DateTime  @default(now()) @map("criado_em")
   atualizadoEm       DateTime  @updatedAt @map("atualizado_em")
 
-  empresa             Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  cliente             Cliente              @relation(fields: [clienteId], references: [id])
-  centroCusto         CentroCusto?         @relation(fields: [centroCustoId], references: [id], onDelete: SetNull)
-  contaBancaria       ContaBancaria?       @relation(fields: [contaBancariaId], references: [id], onDelete: SetNull)
+  empresa             Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  lancamento          ContaReceber?             @relation("ParcelasDoLancamento", fields: [lancamentoId], references: [id], onDelete: Restrict)
+  parcelas            ContaReceber[]            @relation("ParcelasDoLancamento")
+  recebimentos        ContaReceberRecebimento[]
+  cliente             Cliente                   @relation(fields: [clienteId], references: [id])
+  centroCusto         CentroCusto?              @relation(fields: [centroCustoId], references: [id], onDelete: SetNull)
+  contaBancaria       ContaBancaria?            @relation(fields: [contaBancariaId], references: [id], onDelete: SetNull)
   eventos             ContaReceberEvento[]
-  medicao             Medicao?             @relation(fields: [medicaoId], references: [id])
-  orcamento           Orcamento?           @relation(fields: [orcamentoId], references: [id])
-  contrato            Contrato?            @relation(fields: [contratoId], references: [id], onDelete: SetNull)
-  categoriaFinanceira CategoriaFinanceira? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  medicao             Medicao?                  @relation(fields: [medicaoId], references: [id])
+  orcamento           Orcamento?                @relation(fields: [orcamentoId], references: [id])
+  contrato            Contrato?                 @relation(fields: [contratoId], references: [id], onDelete: SetNull)
+  categoriaFinanceira CategoriaFinanceira?      @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
 
   notasFiscais NotaFiscal[]
 
@@ -2505,7 +2522,35 @@ model ContaReceber {
   @@index([clienteId])
   @@index([medicaoId])
   @@index([contratoId])
+  @@index([lancamentoId])
   @@map("contas_receber")
+}
+
+/// Baixa (total ou parcial) de uma conta a receber: cada recebimento informado à mão, pago pelo boleto
+/// ou pela medição. O "recebido no mês" (painel, fluxo) soma estes, pela data de cada um.
+model ContaReceberRecebimento {
+  id              String          @id @default(cuid())
+  empresaId       String          @map("empresa_id")
+  contaReceberId  String          @map("conta_receber_id")
+  valor           Decimal         @db.Decimal(12, 2)
+  /// Dia do recebimento (dia civil, meia-noite UTC — como data_recebimento)
+  data            DateTime
+  formaPagamento  FormaPagamento? @map("forma_pagamento")
+  contaBancariaId String?         @map("conta_bancaria_id")
+  /// MANUAL (Informar recebimento) | BOLETO (Banco Inter) | MEDICAO (pagamento registrado na medição)
+  origem          String          @default("MANUAL")
+  observacao      String?
+  usuarioId       String?         @map("usuario_id")
+  criadoEm        DateTime        @default(now()) @map("criado_em")
+
+  empresa       Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  contaReceber  ContaReceber   @relation(fields: [contaReceberId], references: [id], onDelete: Cascade)
+  contaBancaria ContaBancaria? @relation(fields: [contaBancariaId], references: [id], onDelete: SetNull)
+  usuario       Usuario?       @relation("ContaReceberRecebimentoUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([contaReceberId, data])
+  @@index([empresaId, data])
+  @@map("conta_receber_recebimentos")
 }
 
 /// Linha do tempo da conta a receber (edição, baixa, cancelamento, exclusão, boleto, cobrança).
@@ -2541,8 +2586,9 @@ model ContaBancaria {
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  empresa       Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  empresa       Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   contasReceber ContaReceber[]
+  recebimentos  ContaReceberRecebimento[]
 
   @@index([empresaId, ativo])
   @@map("contas_bancarias")

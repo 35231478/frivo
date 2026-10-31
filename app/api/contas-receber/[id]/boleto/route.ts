@@ -7,6 +7,7 @@ import { enviarBoleto } from "@/lib/email";
 import { chaveDiaCivil, chaveHojeBR } from "@/lib/fuso";
 import { formatarData } from "@/lib/utils";
 import { registrarEventoCR } from "@/lib/financeiro/conta-receber-server";
+import { saldoDaConta } from "@/lib/financeiro/parcelas";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -40,6 +41,9 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (conta.status === "RECEBIDO" || conta.status === "CANCELADO") {
     return NextResponse.json({ erro: "Conta recebida/cancelada não emite boleto." }, { status: 400 });
   }
+  if (conta.status === "PARCELADO") {
+    return NextResponse.json({ erro: "Conta parcelada: emita o boleto em cada parcela." }, { status: 400 });
+  }
   if (conta.boletoId && conta.boletoStatus === "EMITIDO") {
     return NextResponse.json({ erro: "Já existe um boleto emitido para esta conta." }, { status: 400 });
   }
@@ -54,7 +58,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   try {
     const emitido = await emitirBoletoInter(empresaId, {
       seuNumero: conta.numero.replace(/\D/g, "").slice(-15) || conta.id.slice(-15),
-      valorNominal: Number(conta.valor),
+      // O que falta receber (baixa parcial já descontada); parcela = o valor dela
+      valorNominal: saldoDaConta(conta),
       dataVencimento: vencimento,
       mensagem: d.mensagem,
       descontoValor: d.descontoValor,

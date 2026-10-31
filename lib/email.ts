@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { saldoDaConta } from "@/lib/financeiro/parcelas";
 import { TipoContato, TipoComunicacao, CanalComunicacao } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { descriptografar } from "@/lib/crypto";
@@ -212,7 +213,7 @@ export async function enviarBoleto(contaReceberId: string): Promise<ResultadoEma
   return enviarEmail(c.empresaId, {
     tipo: "BOLETO_EMITIDO", para: dest.para, cc: dest.cc,
     referenciaId: c.id, referenciaTipo: "ContaReceber",
-    variaveis: { cliente_nome: c.cliente.nomeFantasia ?? c.cliente.nome, cliente_cnpj: c.cliente.cpfCnpj, valor: formatarMoeda(Number(c.valor)), vencimento: c.dataVencimento ? formatarData(c.dataVencimento) : "—", descricao: c.descricao, link_boleto: c.boletoPdfUrl ?? c.boletoUrl ?? "" },
+    variaveis: { cliente_nome: c.cliente.nomeFantasia ?? c.cliente.nome, cliente_cnpj: c.cliente.cpfCnpj, valor: formatarMoeda(saldoDaConta(c)), vencimento: c.dataVencimento ? formatarData(c.dataVencimento) : "—", descricao: c.descricao, link_boleto: c.boletoPdfUrl ?? c.boletoUrl ?? "" },
   });
 }
 
@@ -225,7 +226,8 @@ export async function enviarLembreteVencimento(contaReceberId: string): Promise<
   const dias = Math.max(0, diasAteDiaCivil(c.dataVencimento) ?? 0);
   return enviarEmail(c.empresaId, {
     tipo: "LEMBRETE_VENCIMENTO", para: dest.para, cc: dest.cc, referenciaId: c.id, referenciaTipo: "ContaReceber",
-    variaveis: { cliente_nome: c.cliente.nomeFantasia ?? c.cliente.nome, valor: formatarMoeda(Number(c.valor)), vencimento: c.dataVencimento ? formatarData(c.dataVencimento) : "—", dias_para_vencer: String(dias), descricao: c.descricao, link_boleto: c.boletoPdfUrl ?? "" },
+    // O que falta pagar (o boleto sai pelo saldo quando já houve recebimento parcial)
+    variaveis: { cliente_nome: c.cliente.nomeFantasia ?? c.cliente.nome, valor: formatarMoeda(saldoDaConta(c)), vencimento: c.dataVencimento ? formatarData(c.dataVencimento) : "—", dias_para_vencer: String(dias), descricao: c.descricao, link_boleto: c.boletoPdfUrl ?? "" },
   });
 }
 

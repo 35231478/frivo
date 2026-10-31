@@ -14,8 +14,12 @@ export interface ContaGestao {
   contratoId?: string | null;
   boletoStatus?: string | null;
   excluidaEm?: Date | string | null;
-  /** Notas fiscais ligadas à conta (só o status importa) */
+  /** Notas fiscais ligadas à conta (só o status importa; na parcela, as do lançamento) */
   notas?: { status: string }[];
+  /** Baixa parcial: quanto já entrou */
+  valorRecebido?: unknown;
+  /** Parcela: o lançamento (conta PARCELADO) de onde ela saiu */
+  lancamentoId?: string | null;
 }
 
 /** Medição vem antes de contrato: a mensalidade aprovada é uma medição do contrato. */
@@ -35,6 +39,8 @@ const STATUS_NOTA_VALIDA = new Set(["ENVIANDO", "PROCESSANDO", "CONCLUIDO"]);
 export const temDocumentoFiscal = (notas: { status: string }[] = []) => notas.some((n) => STATUS_NOTA_VALIDA.has(n.status));
 
 const quitada = (s: string) => s === "RECEBIDO" || s === "CANCELADO";
+const temRecebimento = (c: ContaGestao) => Number(c.valorRecebido ?? 0) > 0;
+const MSG_PARCELADA = "Conta parcelada: as ações ficam em cada parcela.";
 const boletoAtivo = (b?: string | null) => b === "EMITIDO";
 
 export const MSG_EXCLUIR_NOTA = "Conta com nota fiscal: use Cancelar.";
@@ -45,6 +51,9 @@ export const MSG_EXCLUIR_NOTA = "Conta com nota fiscal: use Cancelar.";
  */
 export function motivoNaoExcluir(c: ContaGestao): string | null {
   if (c.excluidaEm) return "Esta conta já foi excluída.";
+  if (c.status === "PARCELADO") return MSG_PARCELADA;
+  if (c.lancamentoId) return "Parcela: use Cancelar.";
+  if (temRecebimento(c)) return "Já tem recebimento: não pode ser excluída.";
   if (temDocumentoFiscal(c.notas)) return MSG_EXCLUIR_NOTA;
   const origem = origemDaConta(c);
   if (origem === "MEDICAO") return "Conta de medição: use Cancelar.";
@@ -58,6 +67,8 @@ export function motivoNaoCancelar(c: ContaGestao): string | null {
   if (c.excluidaEm) return "Esta conta foi excluída.";
   if (c.status === "CANCELADO") return "Esta conta já está cancelada.";
   if (c.status === "RECEBIDO") return "Conta recebida não pode ser cancelada.";
+  if (c.status === "PARCELADO") return MSG_PARCELADA;
+  if (temRecebimento(c)) return "Já tem recebimento parcial: não pode ser cancelada.";
   if (boletoAtivo(c.boletoStatus)) return "Cancele o boleto antes: o cliente ainda consegue pagá-lo.";
   return null;
 }
@@ -66,6 +77,7 @@ export function motivoNaoReceber(c: ContaGestao): string | null {
   if (c.excluidaEm) return "Esta conta foi excluída.";
   if (c.status === "RECEBIDO") return "Esta conta já foi recebida.";
   if (c.status === "CANCELADO") return "Conta cancelada não recebe baixa.";
+  if (c.status === "PARCELADO") return "Conta parcelada: informe o recebimento em cada parcela.";
   return null;
 }
 
@@ -79,6 +91,7 @@ export const motivoNaoRecibo = (c: ContaGestao): string | null =>
  *  - nota fiscal emitida: o valor é o da nota.
  */
 export function travasDaConta(c: ContaGestao): { valor: string | null; vencimento: string | null } {
+  if (c.status === "PARCELADO") return { valor: MSG_PARCELADA, vencimento: MSG_PARCELADA };
   if (quitada(c.status)) {
     const m = c.status === "RECEBIDO" ? "Conta recebida." : "Conta cancelada.";
     return { valor: m, vencimento: m };
@@ -87,11 +100,14 @@ export function travasDaConta(c: ContaGestao): { valor: string | null; venciment
     const m = "Boleto emitido: cancele o boleto para mudar.";
     return { valor: m, vencimento: m };
   }
+  if (temRecebimento(c)) return { valor: "Já tem recebimento: o valor não muda.", vencimento: null };
+  if (c.lancamentoId) return { valor: "Parcela: o valor vem do parcelamento.", vencimento: null };
   return { valor: temDocumentoFiscal(c.notas) ? "Valor da nota fiscal emitida." : null, vencimento: null };
 }
 
 /** Cliente só muda na conta manual sem boleto nem nota (nas outras, ele vem da origem). */
 export function motivoNaoTrocarCliente(c: ContaGestao): string | null {
+  if (c.lancamentoId || c.status === "PARCELADO") return "O cliente vem do lançamento parcelado.";
   if (origemDaConta(c) !== "MANUAL") return "O cliente vem da origem da conta.";
   if (boletoAtivo(c.boletoStatus)) return "Boleto emitido para este cliente: cancele o boleto para trocar.";
   if (temDocumentoFiscal(c.notas)) return "Nota fiscal emitida para este cliente.";
@@ -130,6 +146,7 @@ export const ROTULO_EVENTO_CR: Record<string, string> = {
   CRIADA: "Criada", EDITADA: "Editada", RECEBIDA: "Recebimento informado", CANCELADA: "Cancelada", EXCLUIDA: "Excluída",
   BOLETO_EMITIDO: "Boleto emitido", BOLETO_CANCELADO: "Boleto cancelado", COBRANCA_ENVIADA: "Cobrança enviada",
   FATURADA: "Faturada", REABERTA: "Voltou a ser previsão", RETENCOES: "Retenções",
+  PARCELADA: "Parcelada", RECEBIMENTO_PARCIAL: "Recebimento parcial", REAJUSTADA: "Parcelas reajustadas",
 };
 
 /** Valor por extenso (reais e centavos) para o recibo. Até 999.999.999,99. */

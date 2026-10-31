@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { valorACobrarDaMedicao } from "@/lib/financeiro-server";
 import { baseRetencoes, calcularRetencoes, camposDaMedicao, motivoRetencaoInvalida, RETENCOES, type Retencoes } from "@/lib/financeiro/retencoes";
 import { formatarMoeda } from "@/lib/utils";
+import { reajustarParcelas } from "@/lib/financeiro/parcelas-server";
 
 type Params = { params: Promise<{ id: string }> };
 class ConflitoConta extends Error {}
@@ -62,7 +63,18 @@ export async function PUT(req: NextRequest, { params }: Params) {
   try {
     await prisma.$transaction(async (tx) => {
       // Só grava se ninguém emitiu boleto/recebeu no meio (mesma regra de cima, agora atômica)
-      if (conta) {
+      if (conta?.status === "PARCELADO") {
+        // Conta parcelada: o total novo se reparte nas parcelas (na mesma proporção), enquanto nenhuma
+        // teve recebimento/boleto; senão recusa com o motivo
+        const motivo = await reajustarParcelas(tx, { empresaId, lancamentoId: conta.id, novoTotal: valorNovo, usuarioId: session.user!.id, motivo: "Retenções" });
+        if (motivo) throw new ConflitoConta(motivo);
+        await tx.contaReceberEvento.create({
+          data: {
+            empresaId, contaReceberId: conta.id, tipo: "RETENCOES", usuarioId: session.user!.id,
+            detalhe: `${texto(novas, base)} · valor ${formatarMoeda(Number(conta.valor))} → ${formatarMoeda(valorNovo)}`,
+          },
+        });
+      } else if (conta) {
         const { count } = await tx.contaReceber.updateMany({
           where: { id: conta.id, status: { notIn: ["RECEBIDO", "CANCELADO"] }, OR: [{ boletoStatus: null }, { boletoStatus: { not: "EMITIDO" } }] },
           data: { valor: valorNovo },
@@ -79,7 +91,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     });
   } catch (e) {
     if (!(e instanceof ConflitoConta)) throw e;
-    return NextResponse.json({ erro: "A conta mudou enquanto você editava (boleto ou recebimento). Atualize a tela." }, { status: 409 });
+    return NextResponse.json({ erro: e.message || "A conta mudou enquanto você editava (boleto ou recebimento). Atualize a tela." }, { status: 409 });
   }
   return NextResponse.json({ ok: true, ...detalhe, contaReceber: conta ? { id: conta.id, numero: conta.numero, valor: valorNovo } : null });
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ErroConta, registrarRecebimento } from "@/lib/financeiro/parcelas-server";
 import { prisma } from "@/lib/prisma";
 import { consultarBoletoInter } from "@/lib/inter-api";
 
@@ -62,17 +63,16 @@ export async function POST(req: NextRequest) {
 
     if (SITUACOES_PAGAS.includes(situacao) && SITUACOES_PAGAS.includes(confirmada)) {
       const dataPg = ev.dataHoraSituacao ? new Date(ev.dataHoraSituacao) : new Date();
-      await prisma.contaReceber.updateMany({
-        where: { id: conta.id, status: { notIn: ["CANCELADO", "RECEBIDO"] } },
-        data: { status: "RECEBIDO", boletoStatus: "PAGO", dataRecebimento: dataPg, formaPagamento: "BOLETO" },
-      });
-      if (conta.medicaoId) {
-        await prisma.medicao.updateMany({
-          where: { id: conta.medicaoId, status: { notIn: ["PAGO", "CANCELADA"] } },
-          data: { status: "PAGO", dataPagamento: dataPg, formaPagamento: "BOLETO" },
-        });
+      // O boleto saiu pelo que faltava: recebe o saldo (caminho único da baixa — grava o recebimento,
+      // quita a conta e, quando todas as cobranças dela estão pagas, a medição/fatura de origem)
+      try {
+        await prisma.$transaction((tx) => registrarRecebimento(tx, {
+          empresaId, contaId: conta.id, data: dataPg, formaPagamento: "BOLETO", origem: "BOLETO", boletoPago: true,
+        }), { timeout: 20_000 });
+        processados++;
+      } catch (e) {
+        if (!(e instanceof ErroConta)) throw e; // recebida/cancelada no meio do caminho: nada a fazer
       }
-      processados++;
     } else if ((situacao === "CANCELADO" || situacao === "EXPIRADO") && ["CANCELADO", "EXPIRADO"].includes(confirmada)) {
       await prisma.contaReceber.update({
         where: { id: conta.id },

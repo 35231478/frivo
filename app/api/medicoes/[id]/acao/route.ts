@@ -5,6 +5,7 @@ import { acaoMedicaoSchema } from "@/lib/validations";
 import { statusAposAprovacao, calcularVencimento, buildMedicaoPublicUrl } from "@/lib/medicao-helpers";
 import { desfazerContasDaMedicao, gerarContaReceberDaMedicao } from "@/lib/financeiro-server";
 import { whatsappLink } from "@/lib/utils";
+import { cobrancasDaMedicao, cobrancasQueTravamMedicao, liberarCobrancasDaMedicao, registrarRecebimento } from "@/lib/financeiro/parcelas-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -108,11 +109,8 @@ export async function POST(req: NextRequest, { params }: Params) {
           nfs: { create: { numero: a.nfNumero, url: a.nfUrl || null } },
         },
       });
-      // Conta a receber passa a "A receber" quando a NF é emitida
-      await prisma.contaReceber.updateMany({
-        where: { medicaoId: id, status: "PREVISTO" },
-        data: { status: "A_RECEBER" },
-      });
+      // Conta a receber (ou as parcelas dela) passa a "A receber" quando a NF é emitida
+      await liberarCobrancasDaMedicao(id);
       return NextResponse.json({ ok: true, status: "NF_EMITIDA" });
     }
 
@@ -144,14 +142,26 @@ export async function POST(req: NextRequest, { params }: Params) {
           formaPagamento: a.formaPagamento || null,
         },
       });
-      await prisma.contaReceber.updateMany({
-        where: { medicaoId: id, status: { not: "CANCELADO" } },
-        data: { status: "RECEBIDO", dataRecebimento: dataPg, formaPagamento: a.formaPagamento || null },
+      // Cada cobrança em aberto (conta ou parcela) recebe o que falta, pelo caminho único da baixa
+      const abertas = await prisma.contaReceber.findMany({
+        where: { ...cobrancasDaMedicao(id), excluidaEm: null, status: { notIn: ["RECEBIDO", "CANCELADO"] } },
+        select: { id: true }, orderBy: { criadoEm: "asc" },
       });
+      for (const c of abertas) {
+        await prisma.$transaction((tx) => registrarRecebimento(tx, {
+          empresaId, contaId: c.id, data: dataPg, formaPagamento: a.formaPagamento || null,
+          origem: "MEDICAO", usuarioId: session.user!.id,
+        }), { timeout: 20_000 });
+      }
       return NextResponse.json({ ok: true, status: "PAGO" });
     }
 
     case "CANCELAR": {
+      // O dinheiro já se mexeu numa parcela (ou parte da conta entrou): resolver no Contas a Receber antes
+      const travam = await cobrancasQueTravamMedicao(id);
+      if (travam.length) {
+        return NextResponse.json({ erro: `Há recebimento ou boleto emitido em ${travam.map((t) => t.numero).join(", ")}. Resolva no Contas a Receber antes de cancelar.` }, { status: 409 });
+      }
       await prisma.medicao.update({ where: { id }, data: { status: "CANCELADA" } });
       await desfazerContasDaMedicao({ id, numero: medicao.numero, empresaId }, session.user!.id);
       return NextResponse.json({ ok: true, status: "CANCELADA" });

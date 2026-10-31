@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { origemDaConta } from "@/lib/financeiro/conta-receber-gestao";
 import { calcularRetencoes, retencoesDaMedicao } from "@/lib/financeiro/retencoes";
 import { rotuloMedicao } from "@/lib/faturamento/fatura";
+import { recebidoDaConta, saldoDaConta } from "@/lib/financeiro/parcelas";
 
 type Cliente = Prisma.TransactionClient | typeof prisma;
 
@@ -28,15 +29,8 @@ export function contaParaGestao(empresaId: string, id: string) {
   });
 }
 
-/** Detalhes para a gaveta: origem com links, OS ligadas, boleto, notas e a linha do tempo. */
-export async function detalhesDaConta(empresaId: string, id: string) {
-  const c = await prisma.contaReceber.findFirst({
-    where: { id, empresaId, excluidaEm: null },
-    include: {
-      cliente: { select: { id: true, nome: true, nomeFantasia: true, cpfCnpj: true } },
-      categoriaFinanceira: { select: { id: true, nome: true, cor: true, ativo: true } },
-      centroCusto: { select: { id: true, nome: true, ativo: true } },
-      contaBancaria: { select: { id: true, nome: true, ativo: true } },
+/** O que a gaveta precisa da origem (a parcela usa a do lançamento) */
+const INCLUDE_ORIGEM = {
       medicao: {
         select: {
           id: true, numero: true, status: true, avulsa: true, valorLiquido: true, valorRetencoes: true,
@@ -56,10 +50,42 @@ export async function detalhesDaConta(empresaId: string, id: string) {
       },
       contrato: { select: { id: true, numero: true } },
       notasFiscais: { select: { id: true, numero: true, status: true }, orderBy: { criadoEm: "asc" } },
+} satisfies Prisma.ContaReceberInclude;
+
+/** Detalhes para a gaveta: origem com links, OS ligadas, boleto, notas, parcelas, recebimentos e a linha do tempo. */
+export async function detalhesDaConta(empresaId: string, id: string) {
+  const conta = await prisma.contaReceber.findFirst({
+    where: { id, empresaId, excluidaEm: null },
+    include: {
+      ...INCLUDE_ORIGEM,
+      cliente: { select: { id: true, nome: true, nomeFantasia: true, cpfCnpj: true } },
+      categoriaFinanceira: { select: { id: true, nome: true, cor: true, ativo: true } },
+      centroCusto: { select: { id: true, nome: true, ativo: true } },
+      contaBancaria: { select: { id: true, nome: true, ativo: true } },
       eventos: { orderBy: { criadoEm: "desc" }, take: 50, select: { id: true, tipo: true, detalhe: true, criadoEm: true, usuario: { select: { nome: true } } } },
+      recebimentos: {
+        orderBy: [{ data: "asc" }, { criadoEm: "asc" }],
+        select: { id: true, valor: true, data: true, formaPagamento: true, origem: true, observacao: true, contaBancaria: { select: { nome: true } }, usuario: { select: { nome: true } } },
+      },
     },
   });
-  if (!c) return null;
+  if (!conta) return null;
+  // Parcela: origem, itens, retenções e notas são os do lançamento (a conta que foi dividida)
+  const lanc = conta.lancamentoId
+    ? await prisma.contaReceber.findFirst({ where: { id: conta.lancamentoId, empresaId }, include: INCLUDE_ORIGEM })
+    : null;
+  const c = { ...conta, ...(lanc ? {
+    medicaoId: lanc.medicaoId, orcamentoId: lanc.orcamentoId, contratoId: lanc.contratoId,
+    medicao: lanc.medicao, orcamento: lanc.orcamento, contrato: lanc.contrato, notasFiscais: lanc.notasFiscais,
+  } : {}) };
+  // As parcelas do mesmo parcelamento (a parcela vê as irmãs; o lançamento vê todas)
+  const grupo = lanc?.id ?? (conta.status === "PARCELADO" ? conta.id : null);
+  const parcelas = grupo
+    ? await prisma.contaReceber.findMany({
+        where: { lancamentoId: grupo, empresaId, excluidaEm: null }, orderBy: { parcelaNumero: "asc" },
+        select: { id: true, numero: true, valor: true, valorRecebido: true, status: true, dataVencimento: true, parcelaNumero: true, parcelaTotal: true, boletoStatus: true },
+      })
+    : [];
 
   const idsOs = new Set<string>();
   c.medicao?.itens.forEach((i) => i.ordemServicoId && idsOs.add(i.ordemServicoId));
@@ -79,6 +105,20 @@ export async function detalhesDaConta(empresaId: string, id: string) {
 
   return {
     id: c.id, numero: c.numero, descricao: c.descricao, valor: num(c.valor), status: c.status,
+    // Baixa parcial: quanto entrou e quanto falta; cada recebimento
+    valorRecebido: recebidoDaConta(c), saldo: saldoDaConta(c),
+    recebimentos: conta.recebimentos.map((r) => ({
+      id: r.id, valor: num(r.valor), data: r.data, formaPagamento: r.formaPagamento, origem: r.origem, observacao: r.observacao,
+      contaBancaria: r.contaBancaria?.nome ?? null, usuario: r.usuario?.nome ?? null,
+    })),
+    // Parcelas: a própria (n/N), o lançamento e as irmãs
+    parcelaNumero: conta.parcelaNumero, parcelaTotal: conta.parcelaTotal, lancamentoId: conta.lancamentoId,
+    lancamento: lanc ? { id: lanc.id, numero: lanc.numero, valor: num(lanc.valor) } : null,
+    parcelas: parcelas.map((x) => ({
+      id: x.id, numero: x.numero, valor: num(x.valor), status: x.status, dataVencimento: x.dataVencimento,
+      parcelaNumero: x.parcelaNumero, parcelaTotal: x.parcelaTotal, boletoStatus: x.boletoStatus,
+      valorRecebido: recebidoDaConta(x), saldo: saldoDaConta(x),
+    })),
     dataVencimento: c.dataVencimento, dataRecebimento: c.dataRecebimento, criadoEm: c.criadoEm,
     formaPagamento: c.formaPagamento, banco: c.banco, observacao: c.observacao,
     canceladaEm: c.canceladaEm, motivoCancelamento: c.motivoCancelamento,
@@ -99,26 +139,41 @@ export async function detalhesDaConta(empresaId: string, id: string) {
     } : null,
     notas: c.notasFiscais,
     notificacaoEnviadaEm: c.notificacaoEnviadaEm,
-    eventos: c.eventos.map((e) => ({ id: e.id, tipo: e.tipo, detalhe: e.detalhe, criadoEm: e.criadoEm, usuario: e.usuario?.nome ?? null })),
+    eventos: conta.eventos.map((e) => ({ id: e.id, tipo: e.tipo, detalhe: e.detalhe, criadoEm: e.criadoEm, usuario: e.usuario?.nome ?? null })),
     notasParaRegra: c.notasFiscais.map((n) => ({ status: n.status })),
     medicaoId: c.medicaoId, orcamentoId: c.orcamentoId, contratoId: c.contratoId, boletoStatus: c.boletoStatus,
   };
 }
 
-export interface ContaResumo { id: string; numero: string; valor: number; status: string; dataVencimento: Date | null }
+export interface ContaResumo {
+  id: string; numero: string; valor: number; status: string; dataVencimento: Date | null;
+  valorRecebido: number; parcelaNumero: number | null; parcelaTotal: number | null;
+}
 
-const RESUMO = { id: true, numero: true, valor: true, status: true, dataVencimento: true } as const;
-const resumir = (xs: { id: string; numero: string; valor: unknown; status: string; dataVencimento: Date | null }[]): ContaResumo[] =>
-  xs.map((x) => ({ ...x, valor: Number(x.valor) }));
+const RESUMO = { id: true, numero: true, valor: true, status: true, dataVencimento: true, valorRecebido: true, parcelaNumero: true, parcelaTotal: true } as const;
+type LinhaResumo = { id: string; numero: string; valor: unknown; status: string; dataVencimento: Date | null; valorRecebido: unknown; parcelaNumero: number | null; parcelaTotal: number | null };
+
+/** A conta parcelada (o lançamento) aparece pelas parcelas dela — são elas as cobranças */
+async function resumir(xs: LinhaResumo[]): Promise<ContaResumo[]> {
+  const lancamentos = xs.filter((x) => x.status === "PARCELADO").map((x) => x.id);
+  const parcelas = lancamentos.length
+    ? await prisma.contaReceber.findMany({ where: { lancamentoId: { in: lancamentos }, excluidaEm: null }, select: { ...RESUMO, lancamentoId: true }, orderBy: [{ parcelaNumero: "asc" }] })
+    : [];
+  const linhas = xs.flatMap((x) => (x.status === "PARCELADO" ? parcelas.filter((p) => p.lancamentoId === x.id) : [x]));
+  return linhas.map((x) => ({
+    id: x.id, numero: x.numero, valor: Number(x.valor), status: x.status, dataVencimento: x.dataVencimento,
+    valorRecebido: Number(x.valorRecebido), parcelaNumero: x.parcelaNumero, parcelaTotal: x.parcelaTotal,
+  }));
+}
 
 /** Contas a receber de um orçamento, de uma medição ou de uma OS (pela medição ou pelo orçamento ligado). */
 export async function contasVinculadas(empresaId: string, de: { orcamentoId?: string; medicaoId?: string; ordemServicoId?: string }): Promise<ContaResumo[]> {
   const base = { empresaId, excluidaEm: null };
-  if (de.orcamentoId) return resumir(await prisma.contaReceber.findMany({ where: { ...base, orcamentoId: de.orcamentoId }, select: RESUMO, orderBy: { criadoEm: "asc" } }));
-  if (de.medicaoId) return resumir(await prisma.contaReceber.findMany({ where: { ...base, medicaoId: de.medicaoId }, select: RESUMO, orderBy: { criadoEm: "asc" } }));
+  if (de.orcamentoId) return await resumir(await prisma.contaReceber.findMany({ where: { ...base, orcamentoId: de.orcamentoId }, select: RESUMO, orderBy: { criadoEm: "asc" } }));
+  if (de.medicaoId) return await resumir(await prisma.contaReceber.findMany({ where: { ...base, medicaoId: de.medicaoId }, select: RESUMO, orderBy: { criadoEm: "asc" } }));
   if (de.ordemServicoId) {
     const os = de.ordemServicoId;
-    return resumir(await prisma.contaReceber.findMany({
+    return await resumir(await prisma.contaReceber.findMany({
       where: {
         ...base,
         OR: [

@@ -146,6 +146,8 @@ export function condStatusVisualReceber(chave: string, agora = new Date()) {
     case "VENCIDO": return { OR: [{ status: "ATRASADO" }, { status: "A_RECEBER", dataVencimento: { lt: hoje } }] };
     case "PAGO": return { status: "RECEBIDO" };
     case "CANCELADO": return { status: "CANCELADO" };
+    // Baixa parcial: entrou uma parte e ainda falta (o status continua o do vencimento)
+    case "PARCIAL": return { status: { in: ["A_RECEBER", "ATRASADO"] }, valorRecebido: { gt: 0 } };
     default: return null;
   }
 }
@@ -164,9 +166,10 @@ export function condCardReceber(card: string, agora = new Date()) {
 
 /** where de Contas a Receber a partir da URL (busca, painel de filtros, chips de status e cartão). */
 export function whereContasReceber(empresaId: string, sp: SP, agora = new Date()) {
-  // Excluída (exclusão lógica) não aparece em lugar nenhum da lista/exportação
+  // Excluída (exclusão lógica) não aparece em lugar nenhum da lista/exportação; a conta PARCELADA
+  // (o lançamento) também não — as cobranças dela são as parcelas, que aparecem cada uma na sua linha
   const where: any = { empresaId, excluidaEm: null };
-  const and: any[] = [];
+  const and: any[] = [{ status: { not: "PARCELADO" } }];
   const q = (sp.q ?? "").trim();
   if (q) {
     and.push({
@@ -202,7 +205,8 @@ export type CardPeriodoReceber = (typeof CARDS_PERIODO_RECEBER)[number];
 /**
  * Condição de cada card (o período já limita o vencimento): Vencidos · Vencem hoje · A vencer
  * (previsões + a vencer, como o antigo "A receber") · Recebidos · Total (tudo menos as canceladas).
- * "A_RECEBER" (links antigos) = A vencer.
+ * "A_RECEBER" (links antigos) = A vencer. Parcela é uma cobrança como outra: a vencida conta em
+ * "Vencidos"; o lançamento parcelado fica de fora (CARD_SO_COBRANCAS).
  */
 export function condCardPeriodoReceber(card: string, agora = new Date()) {
   switch (card) {
@@ -214,6 +218,17 @@ export function condCardPeriodoReceber(card: string, agora = new Date()) {
     default: return null;
   }
 }
+
+/** Os cards contam só cobranças: o lançamento parcelado (o total dividido) fica de fora */
+export const CARD_SO_COBRANCAS = { status: { not: "PARCELADO" } } as const;
+
+/**
+ * O que cada card soma: os abertos pelo SALDO (a baixa parcial conta pelo que falta: valor −
+ * valorRecebido); "Recebidos" e "Total" pelo valor das contas.
+ */
+export const CARD_RECEBER_PELO_SALDO: Record<CardPeriodoReceber, boolean> = {
+  VENCIDO: true, VENCE_HOJE: true, A_VENCER: true, RECEBIDO: false, TOTAL: false,
+};
 
 /** Condição do período sobre o VENCIMENTO (dia civil); todo o período = sem condição */
 export function condPeriodoVencimento(p: Periodo) {
