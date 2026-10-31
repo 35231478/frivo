@@ -326,6 +326,11 @@ describe("serviço da nota e prévia: cobrança − retenções = cobrado", () =
     await digitar($<HTMLInputElement>('input[name="valorMensal"]')!, "");
     await esperar();
     expect($("[data-previa-sem-valor]")!.textContent).toBe("Informe o valor mensal para ver quanto entra de fato.");
+    // Valor zero também não calcula (não há cobrança)
+    await digitar($<HTMLInputElement>('input[name="valorMensal"]')!, "0");
+    await esperar();
+    expect($("[data-previa-sem-valor]")).toBeTruthy();
+    expect(previas().some((c) => c.url.endsWith("valor=0"))).toBe(false);
     await digitar($<HTMLInputElement>('input[name="valorMensal"]')!, "777");
     await esperar();
     expect($("[data-previa-erro]")!.textContent).toBe("Não foi possível calcular a prévia.");
