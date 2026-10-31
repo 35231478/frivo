@@ -179,6 +179,14 @@ describe.skipIf(!URL_PG)("Faturar (avulso) + retenções herdadas do serviço (P
     expect(Number(conta.valor)).toBe(3300 - 56);
   });
 
+  it("com desconto: a retenção sai sobre o valor da nota já com desconto (não sobre o bruto)", async () => {
+    // 1.000 com 10% de desconto = 900 na nota; ISS retido 2% = 18,00 (e não 20,00)
+    const orc = await novoOrcamento({ servicos: [{ servicoId: "sISS", v: 1000 }], desconto: 10 });
+    const m = await medicao((await faturarOrc(orc.id)).json.id);
+    expect([Number(m.valorTotal), Number(m.valorLiquido), Number(m.retIssAliquota), Number(m.valorRetencoes)]).toEqual([1000, 900, 2, 18]);
+    expect(Number((await vivas({ medicaoId: m.id }))[0].valor)).toBe(882);
+  });
+
   it("federal com \"reter\" (IR 1,5%) vale; alíquota sem \"reter\" (PIS) não; serviço que não retém junto → fica de fora (parcial)", async () => {
     const soIr = await novoOrcamento({ servicos: [{ servicoId: "sIR", v: 1000 }] });
     const m1 = await medicao((await faturarOrc(soIr.id)).json.id);
