@@ -3,6 +3,7 @@
  * curtas com `take`. Toda consulta filtra por `empresaId`. "Hoje"/"mês" seguem o fuso
  * de Brasília (lib/fuso), não o do servidor.
  */
+import { NAO_E_RENEGOCIACAO } from "@/lib/listas/filtros";
 import { recebidoNoPeriodo, saldoDoAgregado } from "@/lib/financeiro/parcelas-server";
 import { prisma } from "@/lib/prisma";
 import { contarAlertasPrazos } from "@/lib/prazo-server";
@@ -152,8 +153,9 @@ export async function dadosFinanceiro(empresaId: string, agora = new Date()) {
   const EM_ABERTO = ["A_RECEBER", "ATRASADO"] as const;
   const [faturado, recebido, aReceber, vencidos, inadimplentes, prox7] = await Promise.all([
     prisma.contaReceber.aggregate({
-      // Faturado: a perda conta (a receita original não é estornada — a perda é despesa à parte)
-      where: { empresaId, status: { in: ["A_RECEBER", "ATRASADO", "RECEBIDO", "PERDA"] }, dataVencimento: { gte: mesIni, lt: mesFim } },
+      // Faturado: a perda conta (a receita original não é estornada — a perda é despesa à parte); a
+      // renegociada também (a receita é dela) e a renegociação não (seria o mesmo dinheiro de novo)
+      where: { empresaId, status: { in: ["A_RECEBER", "ATRASADO", "RECEBIDO", "PERDA", "RENEGOCIADO"] }, dataVencimento: { gte: mesIni, lt: mesFim }, ...NAO_E_RENEGOCIACAO },
       _sum: { valor: true },
     }),
     // Recebido pela data de cada recebimento (parcial ou total) + as recebidas antigas

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ehRenegociacao } from "@/lib/financeiro/renegociacao-server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { categoriaParaGravar, centroCustoParaGravar, contaBancariaParaGravar, respostaRefEmpresa } from "@/lib/ref-empresa";
@@ -52,7 +53,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
   }
   const d = parsed.data;
-  const regra = { ...existente, notas: existente.notasFiscais };
+  const regra = { ...existente, notas: existente.notasFiscais, renegociacao: await ehRenegociacao(prisma, existente) };
   const mudaStatus = d.status !== undefined && d.status !== existente.status;
 
   // Baixa e cancelamento repetidos (duplo clique, outra aba) são recusados com o motivo
@@ -119,7 +120,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   // Corrida (dois cliques ao mesmo tempo): só UM pedido cancela
   if (mudaStatus && d.status === "CANCELADO") {
     const virou = await prisma.contaReceber.updateMany({
-      where: { id, empresaId, excluidaEm: null, status: { notIn: ["RECEBIDO", "CANCELADO", "PARCELADO", "PERDA"] }, valorRecebido: 0 },
+      where: { id, empresaId, excluidaEm: null, status: { notIn: ["RECEBIDO", "CANCELADO", "PARCELADO", "PERDA", "RENEGOCIADO"] }, valorRecebido: 0 },
       data: { status: d.status },
     });
     if (!virou.count) return NextResponse.json({ erro: "Esta conta já está cancelada (ou mudou). Atualize a tela." }, { status: 409 });
@@ -190,7 +191,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
 
   const conta = await prisma.contaReceber.findFirst({ where: { id, empresaId }, include: { notasFiscais: { select: { status: true } } } });
   if (!conta) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
-  const motivo = motivoNaoExcluir({ ...conta, notas: conta.notasFiscais });
+  const motivo = motivoNaoExcluir({ ...conta, notas: conta.notasFiscais, renegociacao: await ehRenegociacao(prisma, conta) });
   if (motivo) return NextResponse.json({ erro: motivo }, { status: 409 });
   const corpo = await req.json().catch(() => ({}));
   const justificativa = typeof corpo?.motivo === "string" ? corpo.motivo.trim().slice(0, 500) : "";

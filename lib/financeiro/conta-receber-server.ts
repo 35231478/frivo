@@ -9,6 +9,7 @@ import { origemDaConta } from "@/lib/financeiro/conta-receber-gestao";
 import { calcularRetencoes, retencoesDaMedicao } from "@/lib/financeiro/retencoes";
 import { rotuloMedicao } from "@/lib/faturamento/fatura";
 import { recebidoDaConta, saldoDaConta } from "@/lib/financeiro/parcelas";
+import { detalheDaRenegociacao } from "@/lib/financeiro/renegociacao-server";
 import { temBaixaAntiga } from "@/lib/financeiro/perda-estorno";
 
 type Cliente = Prisma.TransactionClient | typeof prisma;
@@ -102,6 +103,8 @@ export async function detalhesDaConta(empresaId: string, id: string) {
     : [];
 
   const num = (v: unknown) => Number(v ?? 0);
+  // Renegociação: para onde foi (original) e de onde veio (a conta nova ou parcela dela)
+  const reneg = await detalheDaRenegociacao(prisma, conta);
   const itens = c.medicao
     ? c.medicao.itens.map((i) => ({ descricao: i.descricao, quantidade: num(i.quantidade), valorUnitario: num(i.valorUnitario), valorTotal: num(i.valorTotal) }))
     : c.orcamento
@@ -123,6 +126,8 @@ export async function detalhesDaConta(empresaId: string, id: string) {
     perda: conta.status === "PERDA" ? {
       valor: num(conta.valorPerda), em: conta.perdaEm, motivo: conta.motivoPerda, por: conta.perdaPor?.nome ?? null,
     } : null,
+    renegociadaEm: reneg.renegociadaEm,
+    renegociacao: reneg.renegociacao,
     // Parcelas: a própria (n/N), o lançamento e as irmãs
     parcelaNumero: conta.parcelaNumero, parcelaTotal: conta.parcelaTotal, lancamentoId: conta.lancamentoId,
     lancamento: lanc ? { id: lanc.id, numero: lanc.numero, valor: num(lanc.valor) } : null,

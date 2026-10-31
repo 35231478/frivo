@@ -81,6 +81,7 @@ export function motivoNaoParcelar(c: ContaParcelavel): string | null {
   if (c.status === "RECEBIDO") return "Conta recebida não se parcela.";
   if (c.status === "CANCELADO") return "Conta cancelada não se parcela.";
   if (c.status === "PERDA") return "Conta em perda não se parcela.";
+  if (c.status === "RENEGOCIADO") return "Conta renegociada não se parcela.";
   if (Number(c.valorRecebido ?? 0) > 0) return "Já tem recebimento: não dá mais para parcelar.";
   if (c.boletoStatus === "EMITIDO") return "Cancele o boleto antes de parcelar (cada parcela terá o seu).";
   if (c.status === "PREVISTO" && !c.medicaoId) return "Ainda é previsão: fature antes de parcelar.";
@@ -100,9 +101,9 @@ export function recebidoDaConta(c: ContaSaldo): number {
   return rec;
 }
 
-/** O que falta receber (recebida, cancelada, em perda ou parcelada = 0: a parcelada está nas parcelas) */
+/** O que falta receber (recebida, cancelada, em perda, renegociada ou parcelada = 0: o dinheiro está noutra conta) */
 export function saldoDaConta(c: ContaSaldo): number {
-  if (c.status === "RECEBIDO" || c.status === "CANCELADO" || c.status === "PARCELADO" || c.status === "PERDA") return 0;
+  if (c.status === "RECEBIDO" || c.status === "CANCELADO" || c.status === "PARCELADO" || c.status === "PERDA" || c.status === "RENEGOCIADO") return 0;
   return reais(Math.max(0, cent(Number(c.valor)) - cent(Number(c.valorRecebido ?? 0))));
 }
 

@@ -42,7 +42,8 @@ export default async function ContasReceberPage({
 
   const [total, somaFiltrada, abertoAgg, aggCards, clientes, categorias, integracao] = await Promise.all([
     prisma.contaReceber.count({ where }),
-    prisma.contaReceber.aggregate({ where, _sum: { valor: true } }),
+    // A renegociada não soma de novo (o saldo dela está nas cobranças da renegociação, que estão na lista)
+    prisma.contaReceber.aggregate({ where: { AND: [where, { status: { not: "RENEGOCIADO" } }] }, _sum: { valor: true } }),
     // O que falta receber no filtro (só as abertas, pelo saldo)
     prisma.contaReceber.aggregate({ where: { AND: [where, { status: { in: ["PREVISTO", "A_RECEBER", "ATRASADO"] } }] }, _sum: { valor: true, valorRecebido: true } }),
     Promise.all(CARDS_PERIODO_RECEBER.map(soma)),
@@ -68,10 +69,13 @@ export default async function ContasReceberPage({
           orcamento: { select: { codigo: true } },
           contrato: { select: { numero: true } },
           notasFiscais: { select: { status: true } },
+          // Renegociação: de onde veio (esta é a conta nova) e para onde foi (esta é a original)
+          renegociadaEm: { select: { numero: true } },
+          _count: { select: { renegociadas: true } },
           // Parcela: a origem e as notas são as do lançamento (a conta que foi dividida)
           lancamento: {
             select: {
-              numero: true, medicaoId: true, orcamentoId: true, contratoId: true,
+              numero: true, medicaoId: true, orcamentoId: true, contratoId: true, _count: { select: { renegociadas: true } },
               medicao: { select: { numero: true, avulsa: true } }, orcamento: { select: { codigo: true } }, contrato: { select: { numero: true } },
               notasFiscais: { select: { status: true } },
             },
@@ -97,6 +101,8 @@ export default async function ContasReceberPage({
     id: c.id, numero: c.numero, descricao: c.descricao, categoriaId: c.categoriaId, categoria: c.categoria, valor: Number(c.valor),
     valorRecebido: Number(c.valorRecebido),
     valorPerda: c.valorPerda == null ? null : Number(c.valorPerda),
+    renegociacao: c._count.renegociadas > 0 || (c.lancamento?._count.renegociadas ?? 0) > 0,
+    renegociadaEmNumero: c.renegociadaEm?.numero ?? null,
     lancamentoId: c.lancamentoId, lancamentoNumero: c.lancamento?.numero ?? null, parcelaNumero: c.parcelaNumero, parcelaTotal: c.parcelaTotal,
     dataVencimento: c.dataVencimento ? c.dataVencimento.toISOString() : null,
     dataRecebimento: c.dataRecebimento ? c.dataRecebimento.toISOString() : null,

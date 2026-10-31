@@ -294,6 +294,9 @@ enum StatusContaReceber {
   /// Inadimplência: o saldo foi dado como perdido (valor_perda). Sai do a receber; o que já entrou
   /// continua recebido; a receita original não é estornada (a perda é despesa na data da marcação).
   PERDA
+  /// O saldo foi renegociado: entrou numa conta nova (renegociada_em_id) com juros/multa/desconto e
+  /// parcelas próprias. Sai do a receber; o que já entrou continua recebido; a receita original fica.
+  RENEGOCIADO
 }
 
 enum FormaPagamento {
@@ -2504,12 +2507,21 @@ model ContaReceber {
   motivoPerda        String?   @map("motivo_perda")
   valorPerda         Decimal?  @map("valor_perda") @db.Decimal(12, 2)
   perdaPorId         String?   @map("perda_por_id")
+  /// Renegociada: a conta nova (a renegociação) para onde foi o saldo desta
+  renegociadaEmId    String?   @map("renegociada_em_id")
+  /// Na conta da renegociação: encargos (receita financeira) e desconto concedido. O valor dela é
+  /// soma dos saldos renegociados + juros + multa − desconto.
+  renegJuros         Decimal?  @map("renegociacao_juros") @db.Decimal(12, 2)
+  renegMulta         Decimal?  @map("renegociacao_multa") @db.Decimal(12, 2)
+  renegDesconto      Decimal?  @map("renegociacao_desconto") @db.Decimal(12, 2)
   criadoEm           DateTime  @default(now()) @map("criado_em")
   atualizadoEm       DateTime  @updatedAt @map("atualizado_em")
 
   empresa             Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   lancamento          ContaReceber?             @relation("ParcelasDoLancamento", fields: [lancamentoId], references: [id], onDelete: Restrict)
   perdaPor            Usuario?                  @relation("ContaReceberPerdaPor", fields: [perdaPorId], references: [id], onDelete: SetNull)
+  renegociadaEm       ContaReceber?             @relation("Renegociacao", fields: [renegociadaEmId], references: [id], onDelete: SetNull)
+  renegociadas        ContaReceber[]            @relation("Renegociacao")
   parcelas            ContaReceber[]            @relation("ParcelasDoLancamento")
   recebimentos        ContaReceberRecebimento[]
   cliente             Cliente                   @relation(fields: [clienteId], references: [id])
@@ -2535,6 +2547,7 @@ model ContaReceber {
   @@index([contratoId])
   @@index([lancamentoId])
   @@index([empresaId, perdaEm])
+  @@index([renegociadaEmId])
   @@map("contas_receber")
 }
 

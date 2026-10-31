@@ -50,9 +50,10 @@ export default async function FluxoCaixaPage({
     // Perdas do mês: pela data da MARCAÇÃO (é quando a inadimplência vira despesa), não pelo vencimento
     perdasNoPeriodo(empresaId, { gte: inicioMes, lte: fimMes }),
   ]);
-  // A perda sai do previsto: da conta em perda só conta o que entrou de fato
-  const previstoDaConta = (c: { valor: unknown; valorPerda?: unknown; status: string }) =>
-    Number(c.valor) - (c.status === "PERDA" ? Number(c.valorPerda ?? 0) : 0);
+  // A perda sai do previsto: da conta em perda só conta o que entrou de fato. Da renegociada também
+  // (o saldo dela foi para as cobranças da renegociação, que entram cada uma no seu mês)
+  const previstoDaConta = (c: { valor: unknown; valorPerda?: unknown; valorRecebido?: unknown; status: string }) =>
+    c.status === "RENEGOCIADO" ? Number(c.valorRecebido ?? 0) : Number(c.valor) - (c.status === "PERDA" ? Number(c.valorPerda ?? 0) : 0);
   const chaveMes = (a: number, m: number) => `${a}-${String(m).padStart(2, "0")}`;
   const aFaturarMes = aFaturarTodos.filter((i) => i.mes === chaveMes(ano, mes));
   const totalAFaturarMes = aFaturarMes.reduce((acc, i) => acc + i.valor, 0);

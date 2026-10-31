@@ -39,7 +39,8 @@ describe("período", () => {
   });
   it("cards de Contas a Receber: A_RECEBER antigo = A vencer; Total tira canceladas; desconhecido = sem filtro", () => {
     expect(condCardPeriodoReceber("A_RECEBER", AGORA)).toEqual(condCardPeriodoReceber("A_VENCER", AGORA));
-    expect(condCardPeriodoReceber("TOTAL", AGORA)).toEqual({ status: { not: "CANCELADO" } });
+    // Total: tudo menos as canceladas, sem contar a renegociação de novo (vale a cobrança original)
+    expect(condCardPeriodoReceber("TOTAL", AGORA)).toEqual({ status: { not: "CANCELADO" }, renegociadas: { none: {} }, OR: [{ lancamentoId: null }, { lancamento: { renegociadas: { none: {} } } }] });
     expect(condCardPeriodoReceber("RECEBIDO", AGORA)).toEqual({ status: "RECEBIDO" });
     expect(condCardPeriodoReceber("xyz", AGORA)).toBeNull();
   });

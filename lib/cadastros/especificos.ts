@@ -484,7 +484,7 @@ const contasBancarias: RegrasCadastro = {
     return { ok: true, item };
   },
   async impacto(c, empresaId) {
-    const abertas = await prisma.contaReceber.count({ where: { empresaId, contaBancariaId: c.id, excluidaEm: null, status: { notIn: ["RECEBIDO", "CANCELADO", "PARCELADO", "PERDA"] } } });
+    const abertas = await prisma.contaReceber.count({ where: { empresaId, contaBancariaId: c.id, excluidaEm: null, status: { notIn: ["RECEBIDO", "CANCELADO", "PARCELADO", "PERDA", "RENEGOCIADO"] } } });
     return {
       usos: [{ rotulo: pl(abertas, "conta a receber em aberto", "contas a receber em aberto"), total: abertas }],
       avisos: abertas ? [`Está em ${pl(abertas, "conta a receber em aberto", "contas a receber em aberto")}. Elas continuam com esta conta (aparece como “inativa”); ela só deixa de ser oferecida nas próximas.`] : [],

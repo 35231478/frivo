@@ -2,6 +2,10 @@
 
 import { useMemo, useState, type ComponentType } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Modal } from "@/components/ui/modal";
+import { RenegociarCobrancas } from "@/components/financeiro/renegociar-modal";
+import { motivoNaoRenegociar, motivoSelecaoInvalida } from "@/lib/financeiro/renegociacao";
 import { cn, formatarMoeda, formatarData, formatarCpfCnpj, LABELS_FORMA_PAGAMENTO } from "@/lib/utils";
 import { statusVisualReceber } from "@/lib/financeiro-status";
 import { ContaReceberAcoes } from "@/components/financeiro/conta-receber-acoes";
@@ -14,7 +18,7 @@ import { Paginacao } from "@/components/listagem/listagem-ui";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import {
   Receipt, AlertTriangle, CalendarClock, CheckCircle2, Search, SlidersHorizontal,
-  Plus, Download, Barcode, Loader2, Sigma, TrendingDown,
+  Plus, Download, Barcode, Loader2, Sigma, TrendingDown, Handshake, X,
 } from "lucide-react";
 import { BarraPeriodo, CardResumo, GradeCards, type PeriodoTela } from "@/components/listagem/periodo-cards";
 import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
@@ -41,6 +45,9 @@ export interface ContaView {
   lancamentoId?: string | null; lancamentoNumero?: string | null; parcelaNumero?: number | null; parcelaTotal?: number | null;
   /** Perda: o saldo dado como perdido na marcação */
   valorPerda?: number | null;
+  /** Faz parte de uma renegociação (a conta nova ou parcela dela) / a renegociação para onde foi o saldo */
+  renegociacao?: boolean;
+  renegociadaEmNumero?: string | null;
 }
 interface Opcao { id: string; nome: string }
 
@@ -91,6 +98,18 @@ export function ContasReceberView({
   const acoes = (c: ContaView) => (
     <ContaReceberAcoes conta={{ ...c, interAtivo }} categorias={categorias} clientes={clientes} onDetalhes={() => setDetalheId(c.id)} />
   );
+  // Renegociar: escolher 1+ cobranças em aberto do mesmo cliente (só quem tem Financeiro › Perdas vê as caixas)
+  const router = useRouter();
+  const podeRenegociar = pode("financeiro", "perdas");
+  const [escolhidas, setEscolhidas] = useState<Map<string, ContaView>>(new Map());
+  const [renegociando, setRenegociando] = useState(false);
+  const alternarEscolha = (c: ContaView) => setEscolhidas((m) => { const n = new Map(m); n.has(c.id) ? n.delete(c.id) : n.set(c.id, c); return n; });
+  const listaEscolhidas = [...escolhidas.values()];
+  const motivoEscolha = listaEscolhidas.length ? motivoSelecaoInvalida(listaEscolhidas) : null;
+  const saldoEscolhidas = listaEscolhidas.reduce((s, c) => s + saldoDaConta(c), 0);
+  const caixa = (c: ContaView) => podeRenegociar && !motivoNaoRenegociar(c)
+    ? <input type="checkbox" className="w-4 h-4 accent-acento align-middle" checked={escolhidas.has(c.id)} onChange={() => alternarEscolha(c)} aria-label={`Escolher ${c.numero} para renegociar`} data-escolher-conta={c.id} />
+    : null;
   const statusChips = useMemo(() => new Set(filtros.status.split(",").filter(Boolean)), [filtros.status]);
   const card = filtros.card as CardKey | "";
 
@@ -136,7 +155,7 @@ export function ContasReceberView({
     { key: "A_VENCER", rotulo: "A vencer", icone: Receipt, cor: "text-primary-600", dica: "Inclui as previsões (contratos e orçamentos aprovados). Pelo que falta receber." },
     { key: "RECEBIDO", rotulo: "Recebidos", icone: CheckCircle2, cor: "text-success-600" },
     { key: "PERDA", rotulo: "Perdas", icone: TrendingDown, cor: "text-atrasado-texto", dica: "Cobranças do período dadas como perdidas, pelo valor perdido. O relatório por cliente fica em Perdas." },
-    { key: "TOTAL", rotulo: "Total do período", icone: Sigma, cor: "text-ink", dica: "Todas as cobranças do período, menos as canceladas." },
+    { key: "TOTAL", rotulo: "Total do período", icone: Sigma, cor: "text-ink", dica: "Todas as cobranças do período, menos as canceladas. A renegociação não soma de novo: conta a cobrança original." },
   ];
 
   return (
@@ -210,7 +229,7 @@ export function ContasReceberView({
             <div>
               <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider mb-1.5">Status</p>
               <div className="flex flex-wrap gap-1.5">
-                {(["PREVISTO", "A_VENCER", "VENCE_HOJE", "VENCIDO", "PARCIAL", "PAGO", "PERDA", "CANCELADO"] as const).map((s) => (
+                {(["PREVISTO", "A_VENCER", "VENCE_HOJE", "VENCIDO", "PARCIAL", "PAGO", "PERDA", "RENEGOCIADO", "CANCELADO"] as const).map((s) => (
                   <button key={s} type="button" data-chip-status={s} onClick={() => toggleStatus(s)}
                     className={cn("text-xs px-2.5 py-1 rounded-full border transition-colors", statusChips.has(s) ? "bg-primary-500 border-primary-500 text-white" : "bg-white border-surface-border text-ink-muted hover:border-primary-300")}>
                     {LABEL_CHAVE[s]}
@@ -233,12 +252,18 @@ export function ContasReceberView({
             const origem = origemComLink(c);
             return (
               <li key={c.id} className={cn("flex items-start gap-3 px-4 py-3", sv.linhaVermelha && "bg-atrasado-claro")} data-cartao-conta={c.id}>
+                {podeRenegociar && <div className="pt-1 w-4 shrink-0">{caixa(c)}</div>}
                 <button type="button" onClick={() => setDetalheId(c.id)} className="flex-1 min-w-0 text-left" aria-label={`Ver detalhes de ${c.numero}`}>
                   <div className="flex items-start justify-between gap-2">
                     <p className="font-medium text-ink truncate">{c.clienteNome}</p>
                     <p className="font-bold text-success-700 shrink-0">{formatarMoeda(c.valor)}</p>
                   </div>
                   <p className="text-xs text-ink-muted truncate">{c.numero} · {c.descricao}</p>
+                  {c.status === "RENEGOCIADO" && (
+                    <p className="text-xs text-ink-muted mt-0.5" data-renegociada-cartao>
+                      Renegociada{c.renegociadaEmNumero ? ` em ${c.renegociadaEmNumero}` : ""}{(c.valorRecebido ?? 0) > 0 && ` · recebido ${formatarMoeda(c.valorRecebido ?? 0)}`}
+                    </p>
+                  )}
                   {c.status === "PERDA" && (
                     <p className="text-xs text-ink-muted mt-0.5" data-perda-cartao>
                       Perdido <strong className="text-ink">{formatarMoeda(c.valorPerda ?? 0)}</strong>{(c.valorRecebido ?? 0) > 0 && ` · recebido ${formatarMoeda(c.valorRecebido ?? 0)}`}
@@ -268,6 +293,7 @@ export function ContasReceberView({
           <table className={cn(PLANILHA.tabela, "table-fixed")} data-tabela-planilha>
             <thead>
               <tr className={PLANILHA.cabecalho}>
+                {podeRenegociar && <th scope="col" className={cn(PLANILHA.th, "w-8")}><span className="sr-only">Escolher para renegociar</span></th>}
                 <th scope="col" className={cn(PLANILHA.th, "text-left w-[5.75rem]")}>Vencimento</th>
                 <th scope="col" className={cn(PLANILHA.th, "text-left hidden lg:table-cell w-[8.5rem]")}>Nº</th>
                 <th scope="col" className={cn(PLANILHA.th, "text-left w-[17%]")}>Cliente</th>
@@ -281,12 +307,13 @@ export function ContasReceberView({
             </thead>
             <tbody>
               {comStatus.length === 0 ? (
-                <tr><td colSpan={9}><Vazio /></td></tr>
+                <tr><td colSpan={podeRenegociar ? 10 : 9}><Vazio /></td></tr>
               ) : comStatus.map(({ c, sv }) => {
                 const origem = origemComLink(c);
                 return (
                   <tr key={c.id} data-linha-conta={c.id}
                     className={cn(PLANILHA.linha, "hover:bg-primary-50/40", sv.linhaVermelha && "even:bg-atrasado-claro bg-atrasado-claro hover:bg-atrasado-claro/70")}>
+                    {podeRenegociar && <td className={cn(PLANILHA.td, "align-middle")}>{caixa(c)}</td>}
                     <td className={cn(PLANILHA.td, "align-middle tabular-nums whitespace-nowrap text-ink-muted")}>{c.dataVencimento ? formatarData(c.dataVencimento) : "—"}</td>
                     <td className={cn(PLANILHA.td, "align-middle hidden lg:table-cell truncate font-mono text-[11px] text-ink-subtle")} title={c.numero} data-numero-conta>{c.numero}</td>
                     <td className={cn(PLANILHA.td, "align-middle")}>
@@ -313,6 +340,7 @@ export function ContasReceberView({
                     <td className={cn(PLANILHA.td, PLANILHA.numero, "align-middle hidden lg:table-cell", recebidaEmParte(c) ? "font-semibold text-atencao-texto" : "text-ink-muted")} data-em-aberto>
                       {c.status === "CANCELADO" ? "—"
                         : c.status === "PERDA" ? <span title={`Perdido: ${formatarMoeda(c.valorPerda ?? 0)}`} data-perdido>—</span>
+                        : c.status === "RENEGOCIADO" ? <span title={c.renegociadaEmNumero ? `Renegociada em ${c.renegociadaEmNumero}` : "Renegociada"} data-renegociada>—</span>
                         : valorSemMoeda(saldoDaConta(c))}
                     </td>
                     <td className={cn(PLANILHA.td, "align-middle text-right py-0.5")}>{acoes(c)}</td>
@@ -332,11 +360,36 @@ export function ContasReceberView({
         </div>
       </div>
       <ContaReceberDetalhes id={detalheId} onFechar={fecharDetalhe} onAbrirConta={setDetalheId} />
+
+      {/* Barra da escolha: quantas, quanto falta, e "Renegociar" (mesmo cliente) */}
+      {listaEscolhidas.length > 0 && (
+        <div className="fixed inset-x-0 bottom-16 md:bottom-4 z-30 flex justify-center px-4 pointer-events-none" data-barra-renegociar>
+          <div className="pointer-events-auto flex flex-wrap items-center gap-x-3 gap-y-2 rounded-card border border-surface-border bg-white shadow-card-hover px-4 py-3 max-w-full">
+            <span className="text-sm text-ink">
+              <strong>{listaEscolhidas.length}</strong> {listaEscolhidas.length === 1 ? "cobrança" : "cobranças"} · falta <strong className="tabular-nums">{formatarMoeda(saldoEscolhidas)}</strong>
+            </span>
+            {motivoEscolha && <span role="alert" className="text-xs text-atencao-texto" data-motivo-escolha>{motivoEscolha}</span>}
+            <div className="flex items-center gap-2 ml-auto">
+              <button type="button" onClick={() => setEscolhidas(new Map())} className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink px-2 py-1.5" data-limpar-escolha><X className="w-3.5 h-3.5" /> Limpar</button>
+              <button type="button" onClick={() => setRenegociando(true)} disabled={!!motivoEscolha}
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-primary-500 hover:bg-primary-600 px-4 py-2 rounded-lg disabled:opacity-50" data-abrir-renegociar>
+                <Handshake className="w-4 h-4" /> Renegociar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <Modal aberto={renegociando} onFechar={() => setRenegociando(false)} titulo={`Renegociar — ${listaEscolhidas[0]?.clienteNome ?? ""}`} tamanho="lg">
+        {renegociando && listaEscolhidas.length > 0 && (
+          <RenegociarCobrancas clienteId={listaEscolhidas[0].clienteId} clienteNome={listaEscolhidas[0].clienteNome} iniciais={listaEscolhidas.map((c) => c.id)}
+            onPronto={() => { setRenegociando(false); setEscolhidas(new Map()); router.refresh(); }} onCancelar={() => setRenegociando(false)} />
+        )}
+      </Modal>
     </div>
   );
 }
 
-const LABEL_CHAVE: Record<string, string> = { PREVISTO: "Previsto", A_VENCER: "A vencer", VENCE_HOJE: "Vence hoje", VENCIDO: "Vencido", PARCIAL: "Recebido em parte", PAGO: "Pago", PERDA: "Perda", CANCELADO: "Cancelado" };
+const LABEL_CHAVE: Record<string, string> = { PREVISTO: "Previsto", A_VENCER: "A vencer", VENCE_HOJE: "Vence hoje", VENCIDO: "Vencido", PARCIAL: "Recebido em parte", PAGO: "Pago", PERDA: "Perda", RENEGOCIADO: "Renegociada", CANCELADO: "Cancelado" };
 
 /** Baixa parcial: entrou uma parte e ainda falta (a situação continua a do vencimento) */
 function SeloParcial() {

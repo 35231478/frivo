@@ -100,7 +100,7 @@ async function contaDaMedicao(tx: Prisma.TransactionClient, medicaoId: string) {
   // ser o da medição (cobre desconto e adicionais consolidados).
   const vinculadas = await tx.contaReceber.findMany({
     // Em perda também não acompanha mais a medição (quem desfaz é o "Reverter perda")
-    where: { medicaoId, status: { notIn: ["RECEBIDO", "CANCELADO", "PARCELADO", "PERDA"] } },
+    where: { medicaoId, status: { notIn: ["RECEBIDO", "CANCELADO", "PARCELADO", "PERDA", "RENEGOCIADO"] } },
     orderBy: { criadoEm: "asc" },
   });
   // Conta da medição já PARCELADA: a cobrança está nas parcelas — elas acompanham o estágio da medição
