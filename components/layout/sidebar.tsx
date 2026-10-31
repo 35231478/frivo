@@ -13,7 +13,7 @@ import {
   LayoutDashboard, Users, Thermometer, ClipboardList, FileText, HardHat, Settings, ChevronDown, ChevronRight,
   Wrench, Calculator, Wallet, Receipt, TrendingUp, FileBarChart, ShoppingCart, Timer, CalendarDays, QrCode,
   Truck, UsersRound, BadgeDollarSign, ClipboardCheck, Smartphone, UserCog, Upload, Landmark, Globe, Coins,
-  PanelLeftClose, PanelLeftOpen, MoreVertical, LogOut, Package, FileBadge,
+  PanelLeftClose, PanelLeftOpen, MoreVertical, LogOut, Package, FileBadge, TrendingDown,
 } from "lucide-react";
 
 type Icone = React.ComponentType<{ className?: string }>;
@@ -120,6 +120,7 @@ const FINANCEIRO: Secao[] = [
         tipo: "grupo", label: "Recebimentos", icone: Receipt, itens: [
           { href: "/financeiro/contas-receber", icone: Receipt, label: "Contas a receber", modulo: "financeiro" },
           { href: "/financeiro/medicoes", icone: FileBarChart, label: "Medições", modulo: "financeiro" },
+          { href: "/financeiro/perdas", icone: TrendingDown, label: "Perdas", modulo: "financeiro", acao: "contasReceber" },
         ],
       },
       {

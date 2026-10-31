@@ -9,6 +9,7 @@ import { origemDaConta } from "@/lib/financeiro/conta-receber-gestao";
 import { calcularRetencoes, retencoesDaMedicao } from "@/lib/financeiro/retencoes";
 import { rotuloMedicao } from "@/lib/faturamento/fatura";
 import { recebidoDaConta, saldoDaConta } from "@/lib/financeiro/parcelas";
+import { temBaixaAntiga } from "@/lib/financeiro/perda-estorno";
 
 type Cliente = Prisma.TransactionClient | typeof prisma;
 
@@ -65,8 +66,12 @@ export async function detalhesDaConta(empresaId: string, id: string) {
       eventos: { orderBy: { criadoEm: "desc" }, take: 50, select: { id: true, tipo: true, detalhe: true, criadoEm: true, usuario: { select: { nome: true } } } },
       recebimentos: {
         orderBy: [{ data: "asc" }, { criadoEm: "asc" }],
-        select: { id: true, valor: true, data: true, formaPagamento: true, origem: true, observacao: true, contaBancaria: { select: { nome: true } }, usuario: { select: { nome: true } } },
+        select: {
+          id: true, valor: true, data: true, formaPagamento: true, origem: true, observacao: true, contaBancaria: { select: { nome: true } }, usuario: { select: { nome: true } },
+          estornadoEm: true, motivoEstorno: true, estornadoPor: { select: { nome: true } },
+        },
       },
+      perdaPor: { select: { nome: true } },
     },
   });
   if (!conta) return null;
@@ -110,7 +115,14 @@ export async function detalhesDaConta(empresaId: string, id: string) {
     recebimentos: conta.recebimentos.map((r) => ({
       id: r.id, valor: num(r.valor), data: r.data, formaPagamento: r.formaPagamento, origem: r.origem, observacao: r.observacao,
       contaBancaria: r.contaBancaria?.nome ?? null, usuario: r.usuario?.nome ?? null,
+      estornadoEm: r.estornadoEm, motivoEstorno: r.motivoEstorno, estornadoPor: r.estornadoPor?.nome ?? null,
     })),
+    // Baixa total antiga (de antes do histórico): estornável como um recebimento só
+    baixaAntiga: temBaixaAntiga(conta) && !conta.recebimentos.some((r) => !r.estornadoEm),
+    // Perda: quanto, quando, por quê e quem marcou
+    perda: conta.status === "PERDA" ? {
+      valor: num(conta.valorPerda), em: conta.perdaEm, motivo: conta.motivoPerda, por: conta.perdaPor?.nome ?? null,
+    } : null,
     // Parcelas: a própria (n/N), o lançamento e as irmãs
     parcelaNumero: conta.parcelaNumero, parcelaTotal: conta.parcelaTotal, lancamentoId: conta.lancamentoId,
     lancamento: lanc ? { id: lanc.id, numero: lanc.numero, valor: num(lanc.valor) } : null,

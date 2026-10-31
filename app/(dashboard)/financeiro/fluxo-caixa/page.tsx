@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { perdasNoPeriodo } from "@/lib/financeiro/perda-estorno-server";
 import { recebidoDaConta, saldoDaConta } from "@/lib/financeiro/parcelas";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
@@ -33,7 +34,7 @@ export default async function FluxoCaixaPage({
   // Janela dos últimos 6 meses (incluindo o mês selecionado)
   const inicioJanela = new Date(ano, mes - 6, 1, 0, 0, 0);
 
-  const [contasMes, contasJanela, aFaturarTodos] = await Promise.all([
+  const [contasMes, contasJanela, aFaturarTodos, perdasMes] = await Promise.all([
     prisma.contaReceber.findMany({
       // Cobranças: a conta parcelada (o lançamento) fica de fora — as parcelas entram, cada uma no seu mês
       where: { empresaId, dataVencimento: { gte: inicioMes, lte: fimMes }, status: { notIn: ["CANCELADO", "PARCELADO"] } },
@@ -42,17 +43,22 @@ export default async function FluxoCaixaPage({
     }),
     prisma.contaReceber.findMany({
       where: { empresaId, dataVencimento: { gte: inicioJanela, lte: fimMes }, status: { notIn: ["CANCELADO", "PARCELADO"] } },
-      select: { valor: true, valorRecebido: true, status: true, dataVencimento: true },
+      select: { valor: true, valorRecebido: true, valorPerda: true, status: true, dataVencimento: true },
     }),
     // Opção A (P3): orçamentos aprovados ainda sem fatura, no mês da previsão (lib/financeiro/a-faturar)
     itensAFaturar(empresaId, agora),
+    // Perdas do mês: pela data da MARCAÇÃO (é quando a inadimplência vira despesa), não pelo vencimento
+    perdasNoPeriodo(empresaId, { gte: inicioMes, lte: fimMes }),
   ]);
+  // A perda sai do previsto: da conta em perda só conta o que entrou de fato
+  const previstoDaConta = (c: { valor: unknown; valorPerda?: unknown; status: string }) =>
+    Number(c.valor) - (c.status === "PERDA" ? Number(c.valorPerda ?? 0) : 0);
   const chaveMes = (a: number, m: number) => `${a}-${String(m).padStart(2, "0")}`;
   const aFaturarMes = aFaturarTodos.filter((i) => i.mes === chaveMes(ano, mes));
   const totalAFaturarMes = aFaturarMes.reduce((acc, i) => acc + i.valor, 0);
 
   // Cards do mês
-  const totalPrevistoMes = contasMes.reduce((acc, c) => acc + Number(c.valor), 0);
+  const totalPrevistoMes = contasMes.reduce((acc, c) => acc + previstoDaConta(c), 0);
   // Baixa parcial: o que entrou vai para "Recebido" e o que falta fica em "A receber"/"Atrasado"
   const totalRecebidoMes = contasMes.reduce((acc, c) => acc + recebidoDaConta(c), 0);
   const totalAReceberMes = contasMes.filter((c) => c.status === "A_RECEBER" || c.status === "PREVISTO").reduce((acc, c) => acc + saldoDaConta(c), 0);
@@ -66,6 +72,10 @@ export default async function FluxoCaixaPage({
     {
       label: "A faturar (orçamentos aprovados)", valor: totalAFaturarMes, cor: "text-acento", bg: "bg-acento-claro",
       dica: "Orçamentos aprovados ainda sem fatura, no mês da previsão de conclusão da OS (sem OS, o mês corrente). Ainda não são contas: viram conta a receber no Faturar.",
+    },
+    {
+      label: "Perdas do mês", valor: perdasMes.valor, cor: "text-ink", bg: "bg-surface-alt",
+      dica: "Cobranças marcadas como perda neste mês (o saldo dado como perdido). Saíram do previsto; o que já tinha entrado continua em Recebido.",
     },
   ] as { label: string; valor: number; cor: string; bg: string; dica?: string }[];
 
@@ -87,7 +97,7 @@ export default async function FluxoCaixaPage({
       return ref.getMonth() + 1 === vm && ref.getFullYear() === va;
     });
     if (idx >= 0) {
-      meses[idx].previsto += Number(c.valor);
+      meses[idx].previsto += previstoDaConta(c);
       meses[idx].recebido += recebidoDaConta(c);
     }
   }
@@ -120,7 +130,7 @@ export default async function FluxoCaixaPage({
         </form>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 [&>*:last-child:nth-child(odd)]:col-span-2 lg:[&>*:last-child:nth-child(odd)]:col-span-1">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
         {cards.map((c) => (
           <div key={c.label} className={cn("card p-4", c.bg)} data-card-fluxo={c.label}>
             <p className="text-xs uppercase tracking-wider text-ink-muted flex items-center gap-1">{c.label}{c.dica && <Dica rotulo={c.label} texto={c.dica} />}</p>

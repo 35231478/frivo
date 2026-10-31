@@ -148,6 +148,8 @@ export function condStatusVisualReceber(chave: string, agora = new Date()) {
     case "CANCELADO": return { status: "CANCELADO" };
     // Baixa parcial: entrou uma parte e ainda falta (o status continua o do vencimento)
     case "PARCIAL": return { status: { in: ["A_RECEBER", "ATRASADO"] }, valorRecebido: { gt: 0 } };
+    // Inadimplência dada como perdida (fora do a receber)
+    case "PERDA": return { status: "PERDA" };
     default: return null;
   }
 }
@@ -199,7 +201,7 @@ export function whereContasReceber(empresaId: string, sp: SP, agora = new Date()
 /* ───────── Contas a Receber: período + cards (padrão da casa) ───────── */
 
 /** Os cards do período de Contas a Receber, na ordem da tela */
-export const CARDS_PERIODO_RECEBER = ["VENCIDO", "VENCE_HOJE", "A_VENCER", "RECEBIDO", "TOTAL"] as const;
+export const CARDS_PERIODO_RECEBER = ["VENCIDO", "VENCE_HOJE", "A_VENCER", "RECEBIDO", "PERDA", "TOTAL"] as const;
 export type CardPeriodoReceber = (typeof CARDS_PERIODO_RECEBER)[number];
 
 /**
@@ -214,6 +216,7 @@ export function condCardPeriodoReceber(card: string, agora = new Date()) {
     case "VENCE_HOJE": return condStatusVisualReceber("VENCE_HOJE", agora);
     case "A_VENCER": case "A_RECEBER": return { OR: [condStatusVisualReceber("PREVISTO", agora)!, condStatusVisualReceber("A_VENCER", agora)!] };
     case "RECEBIDO": return { status: "RECEBIDO" };
+    case "PERDA": return { status: "PERDA" };
     case "TOTAL": return { status: { not: "CANCELADO" } };
     default: return null;
   }
@@ -224,10 +227,11 @@ export const CARD_SO_COBRANCAS = { status: { not: "PARCELADO" } } as const;
 
 /**
  * O que cada card soma: os abertos pelo SALDO (a baixa parcial conta pelo que falta: valor −
- * valorRecebido); "Recebidos" e "Total" pelo valor das contas.
+ * valorRecebido); "Perdas" pelo valor perdido (o saldo na hora da marcação); "Recebidos" e "Total" pelo
+ * valor das contas.
  */
-export const CARD_RECEBER_PELO_SALDO: Record<CardPeriodoReceber, boolean> = {
-  VENCIDO: true, VENCE_HOJE: true, A_VENCER: true, RECEBIDO: false, TOTAL: false,
+export const CAMPO_CARD_RECEBER: Record<CardPeriodoReceber, "saldo" | "valorPerda" | "valor"> = {
+  VENCIDO: "saldo", VENCE_HOJE: "saldo", A_VENCER: "saldo", RECEBIDO: "valor", PERDA: "valorPerda", TOTAL: "valor",
 };
 
 /** Condição do período sobre o VENCIMENTO (dia civil); todo o período = sem condição */

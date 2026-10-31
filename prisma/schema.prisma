@@ -291,6 +291,9 @@ enum StatusContaReceber {
   /// A conta foi dividida em parcelas: ela vira o LANÇAMENTO (guarda a origem, o total e as notas) e
   /// as parcelas (linhas com lancamento_id) são as cobranças. Fora de todas as somas e listas.
   PARCELADO
+  /// Inadimplência: o saldo foi dado como perdido (valor_perda). Sai do a receber; o que já entrou
+  /// continua recebido; a receita original não é estornada (a perda é despesa na data da marcação).
+  PERDA
 }
 
 enum FormaPagamento {
@@ -718,6 +721,8 @@ model Usuario {
   orcamentoEventos       OrcamentoEvento[]         @relation("OrcamentoEventoAutor")
   contaReceberEventos    ContaReceberEvento[]      @relation("ContaReceberEventoUsuario")
   recebimentosReceber    ContaReceberRecebimento[] @relation("ContaReceberRecebimentoUsuario")
+  estornosReceber        ContaReceberRecebimento[] @relation("ContaReceberRecebimentoEstorno")
+  perdasReceber          ContaReceber[]            @relation("ContaReceberPerdaPor")
   pedidoCompraEventos    PedidoCompraEvento[]      @relation("PedidoCompraEventoAutor")
   pedidoCompraVinculos   PedidoCompraVinculo[]     @relation("PedidoCompraVinculoAutor")
   empresasFiscalEditadas EmpresaFiscal[]           @relation("EmpresaFiscalAutor")
@@ -2494,11 +2499,17 @@ model ContaReceber {
   /// "2 de 3": na parcela, o número dela; no lançamento, só o total
   parcelaNumero      Int?      @map("parcela_numero")
   parcelaTotal       Int?      @map("parcela_total")
+  /// Marcada como perda: quando, por quê, quanto (o saldo naquele momento) e quem marcou
+  perdaEm            DateTime? @map("perda_em")
+  motivoPerda        String?   @map("motivo_perda")
+  valorPerda         Decimal?  @map("valor_perda") @db.Decimal(12, 2)
+  perdaPorId         String?   @map("perda_por_id")
   criadoEm           DateTime  @default(now()) @map("criado_em")
   atualizadoEm       DateTime  @updatedAt @map("atualizado_em")
 
   empresa             Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   lancamento          ContaReceber?             @relation("ParcelasDoLancamento", fields: [lancamentoId], references: [id], onDelete: Restrict)
+  perdaPor            Usuario?                  @relation("ContaReceberPerdaPor", fields: [perdaPorId], references: [id], onDelete: SetNull)
   parcelas            ContaReceber[]            @relation("ParcelasDoLancamento")
   recebimentos        ContaReceberRecebimento[]
   cliente             Cliente                   @relation(fields: [clienteId], references: [id])
@@ -2523,6 +2534,7 @@ model ContaReceber {
   @@index([medicaoId])
   @@index([contratoId])
   @@index([lancamentoId])
+  @@index([empresaId, perdaEm])
   @@map("contas_receber")
 }
 
@@ -2537,16 +2549,22 @@ model ContaReceberRecebimento {
   data            DateTime
   formaPagamento  FormaPagamento? @map("forma_pagamento")
   contaBancariaId String?         @map("conta_bancaria_id")
-  /// MANUAL (Informar recebimento) | BOLETO (Banco Inter) | MEDICAO (pagamento registrado na medição)
+  /// MANUAL (Informar recebimento) | BOLETO (Banco Inter) | MEDICAO (pagamento registrado na medição) |
+  /// RECUPERACAO (cliente pagou depois da perda) | LEGADO (baixa antiga, registrada só no estorno)
   origem          String          @default("MANUAL")
   observacao      String?
   usuarioId       String?         @map("usuario_id")
+  /// Estorno (baixa errada desfeita): o recebimento fica no histórico, riscado, e sai de todas as somas
+  estornadoEm     DateTime?       @map("estornado_em")
+  motivoEstorno   String?         @map("motivo_estorno")
+  estornadoPorId  String?         @map("estornado_por_id")
   criadoEm        DateTime        @default(now()) @map("criado_em")
 
   empresa       Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   contaReceber  ContaReceber   @relation(fields: [contaReceberId], references: [id], onDelete: Cascade)
   contaBancaria ContaBancaria? @relation(fields: [contaBancariaId], references: [id], onDelete: SetNull)
   usuario       Usuario?       @relation("ContaReceberRecebimentoUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
+  estornadoPor  Usuario?       @relation("ContaReceberRecebimentoEstorno", fields: [estornadoPorId], references: [id], onDelete: SetNull)
 
   @@index([contaReceberId, data])
   @@index([empresaId, data])

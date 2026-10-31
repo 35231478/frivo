@@ -6,7 +6,7 @@
 
 export type Acao =
   | "visualizar" | "criar" | "editar" | "excluir" | "concluir" | "aprovar"
-  | "gerenciar" | "medicoes" | "contasReceber" | "fluxoCaixa" | "folha" | "fiscal" | "checklist" | "exportar";
+  | "gerenciar" | "medicoes" | "contasReceber" | "fluxoCaixa" | "folha" | "fiscal" | "perdas" | "checklist" | "exportar";
 
 export type Permissoes = Record<string, Partial<Record<Acao, boolean>>>;
 
@@ -26,6 +26,7 @@ export const ACOES_LABEL: Record<Acao, string> = {
   fluxoCaixa: "Fluxo de Caixa",
   folha: "Custo de pessoal",
   fiscal: "Fiscal (NFS-e)",
+  perdas: "Perdas (marcar/reverter)",
   checklist: "Checklist",
   exportar: "Exportar",
 };
@@ -57,7 +58,8 @@ export const SECOES: SecaoDef[] = [
     id: "financeiro", label: "Financeiro", modulos: [
       // "folha" = Custo de pessoal (RH): salários, benefícios, encargos e importação de colaboradores
       // "fiscal" = dados fiscais da empresa como emitente de NFS-e (certificado, regime, PlugNotas)
-      { id: "financeiro", label: "Financeiro", icone: "💵", acoes: ["visualizar", "medicoes", "contasReceber", "fluxoCaixa", "folha", "fiscal"] },
+      // "perdas" = marcar uma cobrança como perda (inadimplência) e reverter — gerente/administrador
+      { id: "financeiro", label: "Financeiro", icone: "💵", acoes: ["visualizar", "medicoes", "contasReceber", "fluxoCaixa", "folha", "fiscal", "perdas"] },
     ],
   },
   {

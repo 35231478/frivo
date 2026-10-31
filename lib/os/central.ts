@@ -29,9 +29,9 @@ export interface OsCentralEntrada {
   prazosSla?: { status: string }[];
 }
 
-export type SituacaoPagamento = "SEM_COBRANCA" | "PREVISTO" | "A_RECEBER" | "VENCIDO" | "PAGO";
+export type SituacaoPagamento = "SEM_COBRANCA" | "PREVISTO" | "A_RECEBER" | "VENCIDO" | "PAGO" | "PERDA";
 export const ROTULO_PAGAMENTO: Record<SituacaoPagamento, string> = {
-  SEM_COBRANCA: "Sem cobrança", PREVISTO: "Previsto", A_RECEBER: "A receber", VENCIDO: "Vencido", PAGO: "Pago",
+  SEM_COBRANCA: "Sem cobrança", PREVISTO: "Previsto", A_RECEBER: "A receber", VENCIDO: "Vencido", PAGO: "Pago", PERDA: "Perda",
 };
 
 export interface Pendencia { chave: string; texto: string; aba: string; nivel: "alerta" | "acao" }
@@ -51,6 +51,8 @@ export function situacaoPagamento(os: OsCentralEntrada, orcado: number): Situaca
   if (vis.every((v) => v === "PAGO")) return "PAGO";
   if (vis.some((v) => v === "VENCIDO")) return "VENCIDO";
   if (vis.some((v) => v === "A_VENCER" || v === "VENCE_HOJE")) return "A_RECEBER";
+  // Nada mais a receber, mas parte foi dada como perdida
+  if (vis.some((v) => v === "PERDA") && vis.every((v) => v === "PAGO" || v === "PERDA")) return "PERDA";
   return "PREVISTO";
 }
 

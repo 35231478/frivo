@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { calcularStatusFinanceiroDetalhado } from "@/lib/status-financeiro";
+import { perdasRecentesDoCliente } from "@/lib/financeiro/perda-estorno-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -21,6 +22,7 @@ export async function GET(_: NextRequest, { params }: Params) {
   const cliente = await prisma.cliente.findFirst({ where: { id, empresaId }, select: { id: true } });
   if (!cliente) return NextResponse.json({ erro: "Cliente não encontrado" }, { status: 404 });
 
-  const dados = await calcularStatusFinanceiroDetalhado(id, empresaId);
-  return NextResponse.json(dados);
+  const [dados, perdas12m] = await Promise.all([calcularStatusFinanceiroDetalhado(id, empresaId), perdasRecentesDoCliente(id, empresaId)]);
+  // Perdas nos últimos 12 meses: alerta informativo (não bloqueia) no cadastro e antes de atender
+  return NextResponse.json({ ...dados, perdas12m });
 }

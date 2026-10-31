@@ -168,7 +168,7 @@ describe("Informar recebimento: total ou parcial", () => {
 describe("lista, celular e gaveta", () => {
   const props = (contas: Record<string, unknown>[]) => ({
     contas: contas.map((c) => ({ ...base, ...c })), clientes: [], categorias: [], interAtivo: true,
-    resumo: { VENCIDO: { v: 0, q: 0 }, VENCE_HOJE: { v: 0, q: 0 }, A_VENCER: { v: 600, q: 1 }, RECEBIDO: { v: 0, q: 0 }, TOTAL: { v: 1000, q: 1 } },
+    resumo: { VENCIDO: { v: 0, q: 0 }, VENCE_HOJE: { v: 0, q: 0 }, A_VENCER: { v: 600, q: 1 }, RECEBIDO: { v: 0, q: 0 }, PERDA: { v: 0, q: 0 }, TOTAL: { v: 1000, q: 1 } },
     periodo: { tipo: "todos", mes: "2026-11", de: null, ate: null, rotulo: "Todo o período" },
     total: contas.length, totalFiltrado: 1500, abertoFiltrado: 1100, pagina: 1, porPagina: 25,
     filtros: { q: "", card: "", clienteId: "", categoria: "", forma: "", banco: "", valorMin: "", valorMax: "", vencDe: "", vencAte: "", status: "", conta: "" },

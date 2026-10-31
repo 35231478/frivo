@@ -133,6 +133,13 @@ export async function POST(req: NextRequest, { params }: Params) {
       if (medicao.status === "CANCELADA") {
         return NextResponse.json({ erro: "Medição cancelada" }, { status: 400 });
       }
+      // Cobrança em perda: o pagamento entra pelo "Reverter perda" (a recuperação), não marcando a fatura paga
+      const emPerda = await prisma.contaReceber.findMany({
+        where: { ...cobrancasDaMedicao(id), excluidaEm: null, status: "PERDA" }, select: { numero: true }, orderBy: { criadoEm: "asc" },
+      });
+      if (emPerda.length) {
+        return NextResponse.json({ erro: `${emPerda.map((c) => c.numero).join(", ")} está em perda: registre o que o cliente pagou em “Reverter perda”, no Contas a Receber.` }, { status: 409 });
+      }
       const dataPg = a.dataPagamento ? new Date(a.dataPagamento) : new Date();
       await prisma.medicao.update({
         where: { id },
@@ -144,7 +151,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       });
       // Cada cobrança em aberto (conta ou parcela) recebe o que falta, pelo caminho único da baixa
       const abertas = await prisma.contaReceber.findMany({
-        where: { ...cobrancasDaMedicao(id), excluidaEm: null, status: { notIn: ["RECEBIDO", "CANCELADO"] } },
+        where: { ...cobrancasDaMedicao(id), excluidaEm: null, status: { notIn: ["RECEBIDO", "CANCELADO", "PERDA"] } },
         select: { id: true }, orderBy: { criadoEm: "asc" },
       });
       for (const c of abertas) {

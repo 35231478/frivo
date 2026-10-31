@@ -13,6 +13,7 @@ import {
 } from "@/lib/financeiro/conta-receber-gestao";
 import { abrirPdfBoleto } from "@/components/financeiro/conta-receber-acoes";
 import type { Detalhamento } from "@/lib/financeiro/retencoes";
+import { ORIGEM_RECEBIMENTO } from "@/lib/financeiro/perda-estorno";
 
 /** O que GET /api/contas-receber/[id] devolve (datas em texto). */
 export interface DetalheConta {
@@ -35,14 +36,21 @@ export interface DetalheConta {
   eventos: { id: string; tipo: string; detalhe: string | null; criadoEm: string; usuario: string | null }[];
   /** Baixa parcial: quanto entrou, quanto falta e cada recebimento */
   valorRecebido?: number; saldo?: number;
-  recebimentos?: { id: string; valor: number; data: string; formaPagamento: string | null; origem: string; observacao: string | null; contaBancaria: string | null; usuario: string | null }[];
+  recebimentos?: {
+    id: string; valor: number; data: string; formaPagamento: string | null; origem: string; observacao: string | null; contaBancaria: string | null; usuario: string | null;
+    /** Estornado: riscado, fora das somas */
+    estornadoEm?: string | null; motivoEstorno?: string | null; estornadoPor?: string | null;
+  }[];
+  /** Recebida antes do histórico de recebimentos (estornável como um recebimento só) */
+  baixaAntiga?: boolean;
+  /** Marcada como perda: quanto, quando, por quê, quem */
+  perda?: { valor: number; em: string | null; motivo: string | null; por: string | null } | null;
   /** Parcelas: a própria (n/N), o lançamento e as irmãs */
   parcelaNumero?: number | null; parcelaTotal?: number | null; lancamentoId?: string | null;
   lancamento?: { id: string; numero: string; valor: number } | null;
   parcelas?: { id: string; numero: string; valor: number; status: string; dataVencimento: string | null; parcelaNumero: number | null; parcelaTotal: number | null; boletoStatus: string | null; valorRecebido: number; saldo: number }[];
 }
 
-const ORIGEM_RECEBIMENTO: Record<string, string> = { MANUAL: "Informado à mão", BOLETO: "Boleto Banco Inter", MEDICAO: "Pagamento da fatura/medição" };
 
 const STATUS_BOLETO: Record<string, string> = { PENDENTE: "Pendente", EMITIDO: "Emitido", PAGO: "Pago", CANCELADO: "Cancelado", VENCIDO: "Vencido" };
 
@@ -124,6 +132,14 @@ export function ContaReceberDetalhes({ id, onFechar, versao = 0, onAbrirConta }:
                 </dl>
               )}
               {d.observacao && <p className="text-sm text-ink mt-2 whitespace-pre-wrap" data-detalhe-obs>{d.observacao}</p>}
+              {d.perda && (
+                <p className="text-sm text-ink mt-2 rounded-lg bg-surface-alt px-3 py-2" data-detalhe-perda>
+                  <strong className="font-semibold">Perda de {formatarMoeda(d.perda.valor)}</strong>
+                  {d.perda.em ? ` em ${formatarData(d.perda.em)}` : ""}{d.perda.por ? ` por ${d.perda.por}` : ""}
+                  {d.perda.motivo ? ` — ${d.perda.motivo}` : ""}
+                  {(d.valorRecebido ?? 0) > 0 && <span className="block text-xs text-ink-muted mt-0.5">Já recebido antes: {formatarMoeda(d.valorRecebido ?? 0)} (continua recebido).</span>}
+                </p>
+              )}
               {d.status === "CANCELADO" && d.motivoCancelamento && (
                 <p className="text-sm text-atrasado-texto mt-2" data-detalhe-cancelamento>Cancelada{d.canceladaEm ? ` em ${formatarData(d.canceladaEm)}` : ""}: {d.motivoCancelamento}</p>
               )}
@@ -159,12 +175,17 @@ export function ContaReceberDetalhes({ id, onFechar, versao = 0, onAbrirConta }:
               <Secao titulo="Recebimentos">
                 <ol className="space-y-1.5 text-sm" data-detalhe-recebimentos>
                   {d.recebimentos!.map((r) => (
-                    <li key={r.id} className="flex items-start justify-between gap-3" data-recebimento={r.id}>
+                    <li key={r.id} className="flex items-start justify-between gap-3" data-recebimento={r.id} data-estornado={r.estornadoEm ? "" : undefined}>
                       <div className="min-w-0">
-                        <p className="text-ink">{formatarData(r.data)} · {ORIGEM_RECEBIMENTO[r.origem] ?? r.origem}</p>
+                        <p className={cn("text-ink", r.estornadoEm && "line-through text-ink-subtle")}>{formatarData(r.data)} · {ORIGEM_RECEBIMENTO[r.origem] ?? r.origem}</p>
                         <p className="text-xs text-ink-subtle">{[r.formaPagamento ? LABELS_FORMA_PAGAMENTO[r.formaPagamento] ?? r.formaPagamento : null, r.contaBancaria, r.usuario, r.observacao].filter(Boolean).join(" · ")}</p>
+                        {r.estornadoEm && (
+                          <p className="text-xs text-atrasado-texto" data-estorno-detalhe>
+                            Estornado em {formatarData(r.estornadoEm)}{r.estornadoPor ? ` por ${r.estornadoPor}` : ""}{r.motivoEstorno ? ` — ${r.motivoEstorno}` : ""}
+                          </p>
+                        )}
                       </div>
-                      <span className="font-semibold text-success-700 tabular-nums shrink-0">{formatarMoeda(r.valor)}</span>
+                      <span className={cn("font-semibold tabular-nums shrink-0", r.estornadoEm ? "line-through text-ink-subtle" : "text-success-700")}>{formatarMoeda(r.valor)}</span>
                     </li>
                   ))}
                 </ol>

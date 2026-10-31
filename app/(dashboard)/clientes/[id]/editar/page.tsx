@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { ClienteForm } from "@/components/forms/cliente-form";
 import { calcularStatusFinanceiroDetalhado } from "@/lib/status-financeiro";
 import { contatoSeguro } from "@/lib/contato-cliente";
+import { perdasRecentesDoCliente } from "@/lib/financeiro/perda-estorno-server";
 
 export const metadata: Metadata = { title: "Editar Cliente" };
 
@@ -26,10 +27,13 @@ export default async function EditarClientePage({ params }: { params: Promise<{ 
   });
   if (!cliente) notFound();
 
-  const { status, totalProximos30Dias } = await calcularStatusFinanceiroDetalhado(id, empresaId);
+  const [{ status, totalProximos30Dias }, perdas12m] = await Promise.all([
+    calcularStatusFinanceiroDetalhado(id, empresaId),
+    perdasRecentesDoCliente(id, empresaId),
+  ]);
 
   // Contatos vão para o client sem hash/senha do portal
   const dados = { ...cliente, contatosCliente: cliente.contatosCliente.map(contatoSeguro) };
 
-  return <ClienteForm initialData={dados} statusFinanceiroCalc={status} totalProximos30Dias={totalProximos30Dias} />;
+  return <ClienteForm initialData={dados} statusFinanceiroCalc={status} totalProximos30Dias={totalProximos30Dias} perdas12m={perdas12m} />;
 }

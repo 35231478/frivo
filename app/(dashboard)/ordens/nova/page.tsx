@@ -20,6 +20,7 @@ import { detalheEquipamento, rotuloEquipamento, type EquipamentoResumo } from "@
 import { InputData } from "@/components/ui/input-data";
 import { InputDataHora } from "@/components/ui/input-data-hora";
 import { paraLocalBR } from "@/lib/fuso";
+import { AlertaPerdasCliente, type PerdasCliente } from "@/components/financeiro/alerta-perdas-cliente";
 
 type Item = { id: string; nome: string; nomeFantasia?: string | null };
 type UnidadeItem = { id: string; nome: string; cidade?: string | null };
@@ -110,6 +111,18 @@ export default function NovaOrdemPage() {
     fetch(`/api/unidades?clienteId=${clienteId}`).then((r) => r.json()).then((d) => setUnidades(Array.isArray(d) ? d : [])).catch(() => {})
       .finally(() => setCarregandoUnidades(false));
     fetch(`/api/contratos?clienteId=${clienteId}`).then((r) => r.json()).then(setContratos).catch(() => {});
+  }, [clienteId]);
+
+  // Aviso antes de atender: o cliente teve perda (inadimplência) nos últimos 12 meses — só informa.
+  // Sem permissão para ver o cliente (403) ou erro: nenhum aviso.
+  const [perdas12m, setPerdas12m] = useState<PerdasCliente | null>(null);
+  useEffect(() => {
+    setPerdas12m(null);
+    if (!clienteId) return;
+    let vivo = true;
+    fetch(`/api/clientes/${clienteId}/status-financeiro`).then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (vivo) setPerdas12m(d?.perdas12m ?? null); }).catch(() => {});
+    return () => { vivo = false; };
   }, [clienteId]);
 
   useEffect(() => {
@@ -203,6 +216,7 @@ export default function NovaOrdemPage() {
               }}
             />
             )}
+            {clienteId && <AlertaPerdasCliente clienteId={clienteId} perdas={perdas12m} className="mt-2" />}
           </FormField>
           <FormGrid>
             <FormField label="Endereço do cliente">

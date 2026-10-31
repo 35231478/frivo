@@ -388,6 +388,7 @@ export const LABELS_STATUS_CONTA_RECEBER: Record<string, string> = {
   CANCELADO: "Cancelado",
   ATRASADO: "Atrasado",
   PARCELADO: "Parcelado",
+  PERDA: "Perda",
 };
 
 export const CLASSE_STATUS_CONTA_RECEBER: Record<string, string> = {
@@ -397,6 +398,7 @@ export const CLASSE_STATUS_CONTA_RECEBER: Record<string, string> = {
   CANCELADO: "badge-base bg-surface-linha text-ink-muted",
   ATRASADO: "badge-base bg-atrasado-claro text-atrasado-texto",
   PARCELADO: "badge-base bg-acento-claro text-acento",
+  PERDA: "badge-base bg-ink/10 text-ink",
 };
 
 export const LABELS_FORMA_PAGAMENTO: Record<string, string> = {

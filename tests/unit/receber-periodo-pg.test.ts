@@ -103,7 +103,7 @@ describe.skipIf(!URL_PG)("Contas a Receber — período e cards (PostgreSQL real
     const { resumo } = await tela();
     expect(resumo).toEqual({
       VENCIDO: { q: 1, v: 400 }, VENCE_HOJE: { q: 1, v: 500 }, A_VENCER: { q: 2, v: 1300 },
-      RECEBIDO: { q: 1, v: 300 }, TOTAL: { q: 5, v: 2500 },
+      RECEBIDO: { q: 1, v: 300 }, PERDA: { q: 0, v: 0 }, TOTAL: { q: 5, v: 2500 },
     });
     // Outro mês: os cards são daquele mês
     const out = await tela({ mes: "2026-10" });

@@ -152,7 +152,8 @@ export async function dadosFinanceiro(empresaId: string, agora = new Date()) {
   const EM_ABERTO = ["A_RECEBER", "ATRASADO"] as const;
   const [faturado, recebido, aReceber, vencidos, inadimplentes, prox7] = await Promise.all([
     prisma.contaReceber.aggregate({
-      where: { empresaId, status: { in: ["A_RECEBER", "ATRASADO", "RECEBIDO"] }, dataVencimento: { gte: mesIni, lt: mesFim } },
+      // Faturado: a perda conta (a receita original não é estornada — a perda é despesa à parte)
+      where: { empresaId, status: { in: ["A_RECEBER", "ATRASADO", "RECEBIDO", "PERDA"] }, dataVencimento: { gte: mesIni, lt: mesFim } },
       _sum: { valor: true },
     }),
     // Recebido pela data de cada recebimento (parcial ou total) + as recebidas antigas

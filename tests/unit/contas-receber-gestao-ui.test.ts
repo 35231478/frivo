@@ -105,7 +105,7 @@ describe("menu ⋮ por situação", () => {
   it("conta manual em aberto: tudo à mão; recibo apagado com o motivo; excluir liberado", async () => {
     await menu();
     expect($$("[data-menu-acoes] [data-item]").map((i) => i.getAttribute("data-item"))).toEqual([
-      "detalhes", "editar", "receber", "parcelar", "boleto", "cobrar-whatsapp", "cobrar-email", "recibo", "cancelar", "excluir",
+      "detalhes", "editar", "receber", "parcelar", "boleto", "cobrar-whatsapp", "cobrar-email", "recibo", "perda", "cancelar", "excluir",
     ]);
     expect(desabilitado("parcelar")).toBe(false);
     expect(desabilitado("excluir")).toBe(false);
@@ -135,7 +135,8 @@ describe("menu ⋮ por situação", () => {
   it("recebida: sem receber/cobrar/cancelar; recibo liberado (abre em nova aba)", async () => {
     await menu({ status: "RECEBIDO" });
     const ids = $$("[data-menu-acoes] [data-item]").map((i) => i.getAttribute("data-item"));
-    expect(ids).toEqual(["detalhes", "editar", "recibo", "excluir"]);
+    // A baixa antiga (sem histórico de recebimentos) pode ser estornada
+    expect(ids).toEqual(["detalhes", "editar", "estornar", "recibo", "excluir"]);
     const r = itemMenu("recibo") as HTMLAnchorElement;
     expect(r.getAttribute("href")).toBe("/financeiro/contas-receber/cr1/recibo");
     expect(r.getAttribute("target")).toBe("_blank");
@@ -266,7 +267,7 @@ const DETALHE = {
 describe("gaveta de detalhes e a lista", () => {
   const props = {
     contas: [{ ...base, medicaoId: "m1", medicaoNumero: "MED-2026-0003" }], clientes: CLIENTES, categorias: [], interAtivo: true,
-    resumo: { VENCIDO: { v: 0, q: 0 }, VENCE_HOJE: { v: 0, q: 0 }, A_VENCER: { v: 0, q: 0 }, RECEBIDO: { v: 0, q: 0 }, TOTAL: { v: 0, q: 0 } },
+    resumo: { VENCIDO: { v: 0, q: 0 }, VENCE_HOJE: { v: 0, q: 0 }, A_VENCER: { v: 0, q: 0 }, RECEBIDO: { v: 0, q: 0 }, PERDA: { v: 0, q: 0 }, TOTAL: { v: 0, q: 0 } },
     periodo: { tipo: "mes", mes: "2026-11", de: null, ate: null, rotulo: "Novembro de 2026" },
     total: 1, totalFiltrado: 1234.56, pagina: 1, porPagina: 25,
     filtros: { q: "", card: "", clienteId: "", categoria: "", forma: "", banco: "", valorMin: "", valorMax: "", vencDe: "", vencAte: "", status: "", conta: "" },
@@ -330,7 +331,7 @@ describe("vínculo do outro lado (orçamento, medição, OS)", () => {
 
 describe("período + cards do período + cara de planilha (padrão da casa)", () => {
   const resumo = {
-    VENCIDO: { v: 400, q: 1 }, VENCE_HOJE: { v: 500, q: 1 }, A_VENCER: { v: 1300, q: 2 }, RECEBIDO: { v: 300, q: 1 }, TOTAL: { v: 2500, q: 5 },
+    VENCIDO: { v: 400, q: 1 }, VENCE_HOJE: { v: 500, q: 1 }, A_VENCER: { v: 1300, q: 2 }, RECEBIDO: { v: 300, q: 1 }, PERDA: { v: 0, q: 0 }, TOTAL: { v: 2500, q: 5 },
   };
   const props = (o: Record<string, unknown> = {}) => ({
     contas: [base, { ...base, id: "cr2", numero: "CR-2026-0043", valor: 98765.4, status: "ATRASADO", dataVencimento: "2026-11-02T00:00:00.000Z", orcamentoId: "o1", orcamentoCodigo: "ORC-2026-0007", categoria: "Manutenção preventiva de contratos grandes" }],
@@ -351,9 +352,9 @@ describe("período + cards do período + cara de planilha (padrão da casa)", ()
     await montar(createElement(ContasReceberView, props(o) as any));
   };
 
-  it("5 cards do período, na ordem, com R$ e quantidade; clicar filtra (card na URL) e clicar de novo tira", async () => {
+  it("6 cards do período, na ordem, com R$ e quantidade; clicar filtra (card na URL) e clicar de novo tira", async () => {
     await montarTela();
-    expect($$("[data-card]").map((c) => c.getAttribute("data-card"))).toEqual(["VENCIDO", "VENCE_HOJE", "A_VENCER", "RECEBIDO", "TOTAL"]);
+    expect($$("[data-card]").map((c) => c.getAttribute("data-card"))).toEqual(["VENCIDO", "VENCE_HOJE", "A_VENCER", "RECEBIDO", "PERDA", "TOTAL"]);
     const vencidos = $("[data-card=VENCIDO]")!;
     expect(txt(vencidos)).toMatch(/^Vencidos.*R\$\s?400,00.*1 cobrança$/);
     expect(txt($("[data-card=TOTAL]"))).toMatch(/Total do período.*R\$\s?2\.500,00.*5 cobranças$/);
