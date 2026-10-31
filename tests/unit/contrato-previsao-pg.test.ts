@@ -191,7 +191,7 @@ describe.skipIf(!URL_PG)("Contrato recorrente PR1 — previsões acompanham o co
     ]);
     const marDepois = longo[4];
     expect([marDepois.canceladaEm, marDepois.motivoCancelamento, marDepois.observacao]).toEqual([null, null, "Nota do financeiro"]);
-    expect((await eventos(mar.id)).map((e: any) => e.tipo)).toEqual(["CANCELADA", "REABERTA"]);
+    expect((await eventos(mar.id)).map((e: any) => [e.tipo, e.usuarioId])).toEqual([["CANCELADA", "uA"], ["REABERTA", "uA"]]);
     expect((await eventos(mar.id))[1].detalhe).toBe(`Pelo contrato: contrato ${ct.body.numero} vale de novo nesta competência. A previsão volta.`);
     // Início mais tarde: o mês que saiu do começo é cancelado
     expect((await editar(ct, { dataInicio: "2026-12-01" })).status).toBe(200);
