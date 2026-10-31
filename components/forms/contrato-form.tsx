@@ -29,6 +29,8 @@ import {
 } from "lucide-react";
 import { anoBR, chaveDiaCivil, diaCivilDeChave, diasAteDiaCivil } from "@/lib/fuso";
 import { InputData } from "@/components/ui/input-data";
+import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
+import { PreviaCobrancaContrato } from "@/components/contratos/previa-cobranca";
 
 // Opções de mudança de status oferecidas no cabeçalho (ícone, cor e descrição).
 const STATUS_OPCOES: { valor: string; label: string; descricao: string; icone: any; cor: string }[] = [
@@ -98,7 +100,7 @@ type AbaContrato = (typeof ABAS_CONTRATO)[number]["id"];
 const CAMPO_ABA: Record<string, AbaContrato> = {
   clienteId: "contrato", numero: "contrato", tipo: "contrato", status: "contrato", periodicidade: "contrato",
   valorMensal: "contrato", valorTotal: "contrato", dataInicio: "contrato", dataFim: "contrato",
-  diaFaturamento: "contrato", diasAposVencimento: "contrato", diaFixoMes: "contrato", ajusteFinsDeSemana: "contrato",
+  diaFaturamento: "contrato", servicoId: "contrato", diasAposVencimento: "contrato", diaFixoMes: "contrato", ajusteFinsDeSemana: "contrato",
   descricaoServicos: "escopo", unidadeIds: "escopo",
   artNumero: "rt", artVencimento: "rt", responsavelTecnicoId: "rt",
   reajusteIndice: "gestao", reajustePercentual: "gestao", reajusteMesAniversario: "gestao", reajusteNotificarDias: "gestao",
@@ -197,6 +199,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
           // Faturamento
           faturamentoAdicionais: (initialData as any).faturamentoAdicionais ?? "SEPARADO",
           diaFaturamento: initialData.diaFaturamento ?? undefined,
+          servicoId: (initialData as { servicoId?: string | null }).servicoId ?? "",
           tipoVencimento: initialData.tipoVencimento ?? undefined,
           diasAposVencimento: initialData.diasAposVencimento ?? undefined,
           diaFixoMes: initialData.diaFixoMes ?? undefined,
@@ -256,6 +259,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
   const dataInicioVal = watch("dataInicio");
   const dataFimVal = watch("dataFim");
   const valorMensalVal = watch("valorMensal");
+  const servicoIdVal = watch("servicoId");
   const descricaoVal = watch("descricaoServicos") ?? "";
 
   useEffect(() => {
@@ -610,6 +614,24 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
               <Input {...register("diaFaturamento")} type="number" min={1} max={28} placeholder="1" />
             </FormField>
           </FormGrid>
+
+          <div className="space-y-2" data-servico-padrao>
+            <FormField
+              label="Serviço da nota"
+              hint="Recomendado"
+              dica="O serviço do catálogo que vai na NFS-e da mensalidade. Dele vêm o código fiscal e as retenções (ISS retido, IR, PIS, COFINS, CSLL, INSS)."
+              error={errors.servicoId?.message}
+            >
+              <Controller
+                control={control}
+                name="servicoId"
+                render={({ field }) => (
+                  <SeletorCadastro entidade="servicos" id="servicoId" nome="servicoId" valor={field.value ?? ""} vazio="Sem serviço padrão" onChange={(v) => field.onChange(v || "")} />
+                )}
+              />
+            </FormField>
+            <PreviaCobrancaContrato servicoId={servicoIdVal || null} valor={typeof valorMensalVal === "number" ? valorMensalVal : null} />
+          </div>
 
           <div className="space-y-2">
             <p className="text-xs font-bold text-ink-muted uppercase tracking-wider">Tipo de vencimento</p>

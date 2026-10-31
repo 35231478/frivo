@@ -6,6 +6,7 @@ import { calcularVencimento } from "@/lib/medicao-helpers";
 import { itensFaturaveisDaOs, orcamentoJaFaturado, osJaFaturada, travarParaFaturar } from "@/lib/faturamento-os";
 import { anoBR, mesBR } from "@/lib/fuso";
 import { contratoCobraNaCompetencia } from "@/lib/financeiro/contrato-previsao";
+import { retencoesHerdadas } from "@/lib/financeiro/retencoes-server";
 
 /**
  * Gera as medições mensais de todos os clientes com contrato ativo.
@@ -84,6 +85,7 @@ export async function POST(req: NextRequest) {
       valorTotal: number;
       orcamentoId?: string;
       ordemServicoId?: string;
+      servicoId?: string | null;
       ordem: number;
     }[] = [];
 
@@ -97,6 +99,8 @@ export async function POST(req: NextRequest) {
         quantidade: 1,
         valorUnitario: valor,
         valorTotal: valor,
+        // PR2: o serviço padrão do contrato vai no item (NFS-e sem pendência; retenções do serviço)
+        servicoId: ct.servicoId ?? null,
         ordem: ordem++,
       });
     }
@@ -178,6 +182,8 @@ export async function POST(req: NextRequest) {
     sequencial++;
     const numero = gerarNumeroMedicao(sequencial, ano);
     const vencimento = calcularVencimento(cliente.diaFaturamento, mes, ano);
+    // Retenções herdadas dos serviços dos itens — a mesma regra do "Faturar" (sem serviço = sem retenção)
+    const ret = await retencoesHerdadas(empresaId, { valorTotal, valorLiquido: valorTotal, linhas: itens });
 
     // Trava (a/c): OS e orçamentos desta fatura TRANCADOS; se outro caminho faturou algum deles
     // enquanto a lista era montada, este cliente fica para a próxima rodada (nada sai em dobro)
@@ -199,6 +205,8 @@ export async function POST(req: NextRequest) {
           status: "RASCUNHO",
           valorTotal,
           valorLiquido: valorTotal,
+          ...ret.campos,
+          valorRetencoes: ret.total,
           dataVencimento: vencimento,
           tokenPublico: crypto.randomUUID(),
           itens: {
@@ -210,6 +218,7 @@ export async function POST(req: NextRequest) {
               valorTotal: it.valorTotal,
               orcamentoId: it.orcamentoId ?? null,
               ordemServicoId: it.ordemServicoId ?? null,
+              servicoId: it.servicoId ?? null,
               ordem: it.ordem,
             })),
           },

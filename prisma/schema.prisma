@@ -1156,6 +1156,10 @@ model Contrato {
   periodicidade        Periodicidade  @default(MENSAL)
   valorMensal          Decimal?       @map("valor_mensal") @db.Decimal(10, 2)
   valorTotal           Decimal?       @map("valor_total") @db.Decimal(10, 2)
+  /// Serviço padrão da mensalidade: a medição do contrato nasce com ele no item (NFS-e sem a
+  /// pendência "vincule o serviço" e retenções herdadas do cadastro do serviço). Opcional.
+  servicoId            String?        @map("servico_id")
+  servico              Servico?       @relation("ContratoServicoPadrao", fields: [servicoId], references: [id], onDelete: SetNull)
   dataInicio           DateTime       @map("data_inicio")
   dataFim              DateTime?      @map("data_fim")
   diaVencimento        Int?           @map("dia_vencimento")
@@ -1243,6 +1247,7 @@ model Contrato {
   @@index([empresaId, dataFim])
   @@index([clienteId])
   @@index([responsavelTecnicoId])
+  @@index([servicoId])
   @@map("contratos")
 }
 
@@ -1402,10 +1407,11 @@ model Servico {
   ativo    Boolean  @default(true)
   criadoEm DateTime @default(now()) @map("criado_em")
 
-  empresa        Empresa            @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  orcamentoItens OrcamentoServico[]
-  medicaoItens   MedicaoItem[]
-  tabelaItens    TabelaPrecoItem[]
+  empresa         Empresa            @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  orcamentoItens  OrcamentoServico[]
+  medicaoItens    MedicaoItem[]
+  tabelaItens     TabelaPrecoItem[]
+  contratosPadrao Contrato[]         @relation("ContratoServicoPadrao")
 
   notasFiscaisItens NotaFiscalItem[]
 

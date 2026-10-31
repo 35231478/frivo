@@ -74,6 +74,19 @@ beforeEach(() => {
     "GET /api/tecnicos": [],
     "POST /api/unidades": (init?: RequestInit) => ({ id: "u-novo", ...JSON.parse(String(init?.body)) }),
     "POST /api/contratos": { id: "ct-novo" },
+    "GET /api/cadastros/servicos?ativo=todos": [
+      { id: "s1", nome: "Manutenção preventiva", ativo: true }, { id: "s2", nome: "Consultoria", ativo: true }, { id: "s9", nome: "Antigo", ativo: false },
+    ],
+    "GET /api/contratos/previa-cobranca?servicoId=s1&valor=1000": {
+      servico: { id: "s1", nome: "Manutenção preventiva", codigo: "MANU01", ativo: true }, bruto: 1000, total: 65, liquido: 935, pendenciasNfse: [],
+      linhas: [{ chave: "iss", rotulo: "ISS retido", aliquota: 5, valor: 50 }, { chave: "ir", rotulo: "IR", aliquota: 1.5, valor: 15 }],
+    },
+    "GET /api/contratos/previa-cobranca?servicoId=s2&valor=1000": {
+      servico: { id: "s2", nome: "Consultoria", codigo: "CONS01", ativo: true }, bruto: 1000, total: 0, liquido: 1000, linhas: [], pendenciasNfse: ["Código do serviço (LC 116)"],
+    },
+    "GET /api/contratos/previa-cobranca?servicoId=s9&valor=1000": {
+      servico: { id: "s9", nome: "Antigo", codigo: null, ativo: false }, bruto: 1000, total: 0, liquido: 1000, linhas: [], pendenciasNfse: [],
+    },
   };
   globalThis.fetch = vi.fn(async (u: any, init?: RequestInit) => {
     const metodo = (init?.method ?? "GET").toUpperCase();
@@ -248,5 +261,86 @@ describe("1º local coberto vem do cadastro do cliente", () => {
     await montar({ ...permissoesVazias(), contratos: { visualizar: true }, clientes: { visualizar: true } });
     await aba("escopo");
     expect($("[data-local-pendente]")).toBeNull();
+  });
+});
+
+// ═════════════════════════ Serviço padrão + prévia da cobrança (PR2) ═════════════════════════
+describe("serviço da nota e prévia: cobrança − retenções = cobrado", () => {
+  const esperar = async (ms = 300) => { await act(async () => { await new Promise((r) => setTimeout(r, ms)); }); await flush(); };
+  const seletor = () => $<HTMLSelectElement>('[data-servico-padrao] select[name="servicoId"]')!;
+  const escolher = async (v: string) => {
+    await act(async () => { seletor().value = v; seletor().dispatchEvent(new Event("change", { bubbles: true })); });
+    await esperar();
+  };
+  const previas = () => chamadas.filter((c) => c.url.startsWith("/api/contratos/previa-cobranca"));
+  const editar = (extra: Record<string, unknown> = {}) => ({
+    id: "ct1", clienteId: "c1", numero: "CT-1", tipo: "MANUTENCAO_PREVENTIVA", status: "ATIVO", periodicidade: "MENSAL",
+    dataInicio: new Date("2026-11-01"), valorMensal: 1000, unidades: [], anexos: [], reajustes: [], historicoStatus: [], recorrenciasLocais: [], ...extra,
+  });
+
+  it("sem serviço: aviso curto + ⓘ (fora de botão) dizendo que definir libera a emissão automática; nada é calculado", async () => {
+    await montar();
+    expect(painel("contrato").textContent).toContain("Serviço da nota");
+    expect(seletor().value).toBe("");
+    expect([...seletor().options].map((o) => o.textContent)).toEqual(expect.arrayContaining(["Sem serviço padrão", "Manutenção preventiva", "Consultoria"]));
+    expect([...seletor().options].some((o) => o.textContent?.startsWith("Antigo"))).toBe(false); // inativo não é escolha nova
+    const aviso = $("[data-sem-servico]")!;
+    expect(aviso.textContent).toContain("Sem serviço padrão, a nota da mensalidade fica pendente até alguém escolher o serviço.");
+    const dica = aviso.querySelector<HTMLButtonElement>('button[aria-label*="Serviço padrão"]')!;
+    expect(dica.parentElement!.closest("button, a")).toBeNull();
+    expect(document.getElementById(dica.getAttribute("aria-describedby")!)!.textContent).toContain("libera a emissão automática");
+    expect(previas()).toHaveLength(0);
+  });
+
+  it("com serviço que retém: “Cobrança R$ 1.000,00 − retenções R$ 65,00 = cobrado R$ 935,00” e o detalhe; salvar manda o serviço", async () => {
+    nav.sp = new URLSearchParams();
+    rotas["PUT /api/contratos/ct1"] = { id: "ct1" };
+    await montar(permissoesTotais(), editar({ servicoId: "s1" }));
+    await esperar();
+    expect(seletor().value).toBe("s1");
+    const p = $("[data-previa-cobranca]")!;
+    expect(p.textContent!.replace(/\s+/g, " ")).toContain("Cobrança R$ 1.000,00 − retenções R$ 65,00 = cobrado R$ 935,00");
+    expect($("[data-previa-retencoes]")!.textContent!.replace(/\s/g, " ")).toBe("ISS retido 5% (−R$ 50,00) · IR 1,5% (−R$ 15,00)");
+    expect($("[data-sem-servico]")).toBeNull();
+    // Trocar para um serviço sem retenção e sem código: "Sem retenção" + o que falta, com link
+    await escolher("s2");
+    expect($("[data-previa-cobranca]")!.textContent!.replace(/\s/g, " ")).toContain("Sem retenção: cobrado R$ 1.000,00");
+    expect($("[data-previa-retencoes]")).toBeNull();
+    const falta = $("[data-previa-pendencias]")!;
+    expect(falta.textContent).toContain("Para a nota sair, falta no serviço: Código do serviço (LC 116).");
+    expect(falta.querySelector("a")!.getAttribute("href")).toBe("/configuracoes/servicos");
+    // Tirar o serviço: volta o aviso; salvar manda servicoId nulo (o servidor grava "sem serviço")
+    await escolher("");
+    expect($("[data-sem-servico]")).toBeTruthy();
+    await clicar($$("button").find((b) => b.textContent?.trim() === "Salvar")!);
+    const put = chamadas.find((c) => c.metodo === "PUT" && c.url === "/api/contratos/ct1")!;
+    expect(put.corpo.servicoId).toBeNull();
+  });
+
+  it("serviço inativo já gravado continua no contrato (com aviso); valor vazio pede o valor; erro do servidor aparece", async () => {
+    nav.sp = new URLSearchParams();
+    await montar(permissoesTotais(), editar({ servicoId: "s9" }));
+    await esperar();
+    expect(seletor().value).toBe("s9");
+    expect($("[data-servico-inativo]")!.textContent).toBe("Este serviço está inativo. Ele continua valendo neste contrato.");
+    await digitar($<HTMLInputElement>('input[name="valorMensal"]')!, "");
+    await esperar();
+    expect($("[data-previa-sem-valor]")!.textContent).toBe("Informe o valor mensal para ver quanto entra de fato.");
+    // Valor zero também não calcula (não há cobrança)
+    await digitar($<HTMLInputElement>('input[name="valorMensal"]')!, "0");
+    await esperar();
+    expect($("[data-previa-sem-valor]")).toBeTruthy();
+    expect(previas().some((c) => c.url.endsWith("valor=0"))).toBe(false);
+    await digitar($<HTMLInputElement>('input[name="valorMensal"]')!, "777");
+    await esperar();
+    expect($("[data-previa-erro]")!.textContent).toBe("Não foi possível calcular a prévia.");
+  });
+
+  it("contrato novo: escolher o serviço já entra no POST", async () => {
+    await montar();
+    await escolher("s1");
+    await digitar($<HTMLInputElement>('input[aria-label="Início da vigência"]')!, "01/11/2026");
+    await clicar($$("button").find((b) => b.textContent?.trim() === "Salvar")!);
+    expect(chamadas.find((c) => c.metodo === "POST" && c.url === "/api/contratos")!.corpo.servicoId).toBe("s1");
   });
 });

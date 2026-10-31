@@ -60,6 +60,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
       validarRefsEmpresa("unidade", unidadeIds, empresaId, "Local"),
       validarRefsEmpresa("tipoOs", [tipoOsRecorrenciaId, ...recorrenciasLocais.map((r) => r.tipoOsId)], empresaId, "Tipo de OS"),
       validarRefsEmpresa("tecnico", [responsavelTecnicoId, tecnicoRecorrenciaId, ...recorrenciasLocais.map((r) => r.tecnicoId)], empresaId, "Técnico"),
+      // Serviço padrão: da empresa; escolha nova precisa estar ativo (manter o atual, mesmo inativo, vale)
+      validarRefEmpresa("servico", resto.servicoId, empresaId, "Serviço padrão", { novoAtivo: true, manter: [existente.servicoId] }),
     ]);
   } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
