@@ -199,6 +199,17 @@ describe.skipIf(!URL_PG)("Contrato recorrente PR1 — previsões acompanham o co
     expect((await daCompetencia(ct.id, 2026, 12)).status).toBe("PREVISTO");
   });
 
+  it("contrato que não está ativo não sincroniza nada (nem uma previsão antiga que tenha sobrado)", async () => {
+    const { sincronizarPrevisoesDoContrato } = await import("@/lib/financeiro-server");
+    const ct = await prisma.contrato.create({ data: { empresaId: "e1", clienteId: "c1", numero: "CT-SUSP", tipo: "MANUTENCAO_PREVENTIVA", status: "SUSPENSO", valorMensal: 1500, dataInicio: new Date("2026-09-01T00:00:00Z"), dataFim: new Date("2026-12-31T00:00:00Z"), diaFaturamento: 10 } });
+    const sobra = await prisma.contaReceber.create({ data: { empresaId: "e1", clienteId: "c1", contratoId: ct.id, refAno: 2027, refMes: 3, numero: "CT-SUSP/202703", descricao: "Sobra", valor: 1000, status: "PREVISTO", dataVencimento: new Date("2027-03-10T00:00:00Z") } });
+    const antes = { ...ct, valorMensal: 1000, dataFim: new Date("2027-12-31T00:00:00Z") };
+    expect(await sincronizarPrevisoesDoContrato(ct.id, antes, "uA")).toEqual({ atualizadas: 0, canceladas: 0 });
+    const depois = await prisma.contaReceber.findUnique({ where: { id: sobra.id } });
+    expect([depois.status, Number(depois.valor)]).toEqual(["PREVISTO", 1000]);
+    expect(await eventos(sobra.id)).toEqual([]);
+  });
+
   it("sem valor mensal: as abertas saem; com valor de novo, voltam", async () => {
     const ct = await criar();
     expect((await editar(ct, { valorMensal: "" })).status).toBe(200);
