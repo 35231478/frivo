@@ -50,7 +50,7 @@ export interface NovoRecebimento {
   data: Date;
   formaPagamento?: FormaPagamento | null;
   contaBancariaId?: string | null;
-  origem: "MANUAL" | "BOLETO" | "MEDICAO";
+  origem: "MANUAL" | "BOLETO" | "MEDICAO" | "RECUPERACAO";
   /** Comentário (fica no recebimento e na linha do tempo) */
   observacao?: string | null;
   usuarioId?: string | null;
@@ -76,7 +76,7 @@ export async function registrarRecebimento(tx: Prisma.TransactionClient, p: Novo
   const valor = p.valor ?? saldoAntes;
   const invalido = motivoValorRecebimento(conta, valor);
   if (invalido) throw new ErroConta(400, invalido);
-  if (p.origem === "MANUAL") {
+  if (p.origem === "MANUAL" || p.origem === "RECUPERACAO") {
     const comBoleto = motivoParcialComBoleto(conta, valor);
     if (comBoleto) throw new ErroConta(409, comBoleto);
   }
@@ -101,7 +101,8 @@ export async function registrarRecebimento(tx: Prisma.TransactionClient, p: Novo
     },
   });
 
-  const origemTexto = p.origem === "BOLETO" ? "Boleto pago no Banco Inter" : p.origem === "MEDICAO" ? "Pagamento registrado na fatura/medição" : null;
+  const origemTexto = p.origem === "BOLETO" ? "Boleto pago no Banco Inter" : p.origem === "MEDICAO" ? "Pagamento registrado na fatura/medição"
+    : p.origem === "RECUPERACAO" ? "Recuperação de perda" : null;
   await tx.contaReceberEvento.create({
     data: {
       empresaId: p.empresaId, contaReceberId: conta.id, usuarioId: p.usuarioId ?? null,
@@ -152,7 +153,8 @@ type Faixa = { gte: Date; lte?: Date; lt?: Date };
  */
 export async function recebidoNoPeriodo(empresaId: string, faixa: Faixa, db: Db = prisma) {
   const [rec, antigas] = await Promise.all([
-    db.contaReceberRecebimento.aggregate({ where: { empresaId, data: faixa }, _sum: { valor: true }, _count: true }),
+    // Estornado não entrou (baixa errada desfeita)
+    db.contaReceberRecebimento.aggregate({ where: { empresaId, data: faixa, estornadoEm: null }, _sum: { valor: true }, _count: true }),
     db.contaReceber.aggregate({ where: { empresaId, status: "RECEBIDO", valorRecebido: 0, dataRecebimento: faixa }, _sum: { valor: true }, _count: true }),
   ]);
   return {
@@ -230,6 +232,7 @@ export async function reajustarParcelas(tx: Prisma.TransactionClient, p: { empre
   if (parcelas.some((x) => x.status === "RECEBIDO" || Number(x.valorRecebido) > 0)) return "Parcela com recebimento: o valor das parcelas não muda mais.";
   if (parcelas.some((x) => x.boletoStatus === "EMITIDO")) return "Parcela com boleto emitido: cancele o boleto antes.";
   if (parcelas.some((x) => x.status === "CANCELADO")) return "Parcela cancelada: o valor das parcelas não muda mais.";
+  if (parcelas.some((x) => x.status === "PERDA")) return "Parcela em perda: o valor das parcelas não muda mais.";
   if (Number(lanc.valor) === p.novoTotal) return null;
   const novos = reajustarValores(parcelas.map((x) => Number(x.valor)), p.novoTotal);
   if (novos.some((v) => !(v > 0))) return "O valor novo não dá para dividir nas parcelas.";
@@ -246,15 +249,15 @@ export async function reajustarParcelas(tx: Prisma.TransactionClient, p: { empre
 
 /**
  * Cobranças de uma medição que impedem cancelá-la (o dinheiro já se mexeu): parcela recebida (total ou
- * parte) ou com boleto emitido, ou conta direta com recebimento parcial.
+ * parte), com boleto emitido ou em perda, ou conta direta com recebimento parcial ou em perda.
  */
 export function cobrancasQueTravamMedicao(medicaoId: string, db: Db = prisma) {
   return db.contaReceber.findMany({
     where: {
       excluidaEm: null,
       OR: [
-        { lancamento: { medicaoId }, OR: [{ status: "RECEBIDO" }, { valorRecebido: { gt: 0 } }, { boletoStatus: "EMITIDO" }] },
-        { medicaoId, status: { notIn: ["RECEBIDO", "CANCELADO", "PARCELADO"] }, valorRecebido: { gt: 0 } },
+        { lancamento: { medicaoId }, OR: [{ status: "RECEBIDO" }, { status: "PERDA" }, { valorRecebido: { gt: 0 } }, { boletoStatus: "EMITIDO" }] },
+        { medicaoId, status: { notIn: ["RECEBIDO", "CANCELADO", "PARCELADO"] }, OR: [{ valorRecebido: { gt: 0 } }, { status: "PERDA" }] },
       ],
     },
     select: { numero: true },

@@ -4,7 +4,7 @@ import { pode } from "@/lib/permissoes";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { marcarContasReceberVencidas } from "@/lib/financeiro-server";
-import { CARD_RECEBER_PELO_SALDO, CARD_SO_COBRANCAS, CARDS_PERIODO_RECEBER, condCardPeriodoReceber, condPeriodoVencimento, whereListaReceber } from "@/lib/listas/filtros";
+import { CAMPO_CARD_RECEBER, CARD_SO_COBRANCAS, CARDS_PERIODO_RECEBER, condCardPeriodoReceber, condPeriodoVencimento, whereListaReceber } from "@/lib/listas/filtros";
 import { saldoDoAgregado } from "@/lib/financeiro/parcelas-server";
 import { lerPeriodo } from "@/lib/periodo";
 import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
@@ -37,7 +37,7 @@ export default async function ContasReceberPage({
   const soma = (card: string) =>
     prisma.contaReceber.aggregate({
       where: { empresaId, excluidaEm: null, AND: [CARD_SO_COBRANCAS, noPeriodo ?? {}, condCardPeriodoReceber(card, agora) ?? {}] as object[] },
-      _sum: { valor: true, valorRecebido: true }, _count: true,
+      _sum: { valor: true, valorRecebido: true, valorPerda: true }, _count: true,
     });
 
   const [total, somaFiltrada, abertoAgg, aggCards, clientes, categorias, integracao] = await Promise.all([
@@ -83,7 +83,11 @@ export default async function ContasReceberPage({
     : [];
 
   const resumo = Object.fromEntries(CARDS_PERIODO_RECEBER.map((k, i) => [
-    k, { v: CARD_RECEBER_PELO_SALDO[k] ? saldoDoAgregado(aggCards[i]) : Number(aggCards[i]._sum?.valor ?? 0), q: aggCards[i]._count },
+    k, {
+      v: CAMPO_CARD_RECEBER[k] === "saldo" ? saldoDoAgregado(aggCards[i])
+        : CAMPO_CARD_RECEBER[k] === "valorPerda" ? Number(aggCards[i]._sum?.valorPerda ?? 0) : Number(aggCards[i]._sum?.valor ?? 0),
+      q: aggCards[i]._count,
+    },
   ])) as ResumoReceber;
 
   const view: ContaView[] = contas.map((c) => {
@@ -92,6 +96,7 @@ export default async function ContasReceberPage({
     return {
     id: c.id, numero: c.numero, descricao: c.descricao, categoriaId: c.categoriaId, categoria: c.categoria, valor: Number(c.valor),
     valorRecebido: Number(c.valorRecebido),
+    valorPerda: c.valorPerda == null ? null : Number(c.valorPerda),
     lancamentoId: c.lancamentoId, lancamentoNumero: c.lancamento?.numero ?? null, parcelaNumero: c.parcelaNumero, parcelaTotal: c.parcelaTotal,
     dataVencimento: c.dataVencimento ? c.dataVencimento.toISOString() : null,
     dataRecebimento: c.dataRecebimento ? c.dataRecebimento.toISOString() : null,

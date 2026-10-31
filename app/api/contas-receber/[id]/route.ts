@@ -119,7 +119,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   // Corrida (dois cliques ao mesmo tempo): só UM pedido cancela
   if (mudaStatus && d.status === "CANCELADO") {
     const virou = await prisma.contaReceber.updateMany({
-      where: { id, empresaId, excluidaEm: null, status: { notIn: ["RECEBIDO", "CANCELADO", "PARCELADO"] }, valorRecebido: 0 },
+      where: { id, empresaId, excluidaEm: null, status: { notIn: ["RECEBIDO", "CANCELADO", "PARCELADO", "PERDA"] }, valorRecebido: 0 },
       data: { status: d.status },
     });
     if (!virou.count) return NextResponse.json({ erro: "Esta conta já está cancelada (ou mudou). Atualize a tela." }, { status: 409 });

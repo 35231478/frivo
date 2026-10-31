@@ -14,7 +14,7 @@ import { Paginacao } from "@/components/listagem/listagem-ui";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import {
   Receipt, AlertTriangle, CalendarClock, CheckCircle2, Search, SlidersHorizontal,
-  Plus, Download, Barcode, Loader2, Sigma,
+  Plus, Download, Barcode, Loader2, Sigma, TrendingDown,
 } from "lucide-react";
 import { BarraPeriodo, CardResumo, GradeCards, type PeriodoTela } from "@/components/listagem/periodo-cards";
 import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
@@ -39,6 +39,8 @@ export interface ContaView {
   valorRecebido?: number;
   /** Parcela: o lançamento de onde saiu e "n/N" */
   lancamentoId?: string | null; lancamentoNumero?: string | null; parcelaNumero?: number | null; parcelaTotal?: number | null;
+  /** Perda: o saldo dado como perdido na marcação */
+  valorPerda?: number | null;
 }
 interface Opcao { id: string; nome: string }
 
@@ -54,7 +56,7 @@ export interface FiltrosReceber {
   conta?: string;
 }
 
-type CardKey = "VENCIDO" | "VENCE_HOJE" | "A_VENCER" | "RECEBIDO" | "TOTAL";
+type CardKey = "VENCIDO" | "VENCE_HOJE" | "A_VENCER" | "RECEBIDO" | "PERDA" | "TOTAL";
 
 /**
  * Contas a Receber no padrão da casa: período (‹ mês ›, personalizado ou todo o período — pelo
@@ -133,6 +135,7 @@ export function ContasReceberView({
     { key: "VENCE_HOJE", rotulo: "Vencem hoje", icone: CalendarClock, cor: "text-atencao-texto" },
     { key: "A_VENCER", rotulo: "A vencer", icone: Receipt, cor: "text-primary-600", dica: "Inclui as previsões (contratos e orçamentos aprovados). Pelo que falta receber." },
     { key: "RECEBIDO", rotulo: "Recebidos", icone: CheckCircle2, cor: "text-success-600" },
+    { key: "PERDA", rotulo: "Perdas", icone: TrendingDown, cor: "text-atrasado-texto", dica: "Cobranças do período dadas como perdidas, pelo valor perdido. O relatório por cliente fica em Perdas." },
     { key: "TOTAL", rotulo: "Total do período", icone: Sigma, cor: "text-ink", dica: "Todas as cobranças do período, menos as canceladas." },
   ];
 
@@ -143,7 +146,9 @@ export function ContasReceberView({
           <div className="p-2 bg-primary-50 rounded-lg"><Receipt className="w-5 h-5 text-primary-600" /></div>
           <h1 className="page-title">Contas a Receber</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* No celular só o ícone (a linha de botões não pode estourar a largura) */}
+          <Link href="/financeiro/perdas" aria-label="Perdas" title="Perdas com clientes" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-surface-border text-ink-muted hover:bg-surface-alt transition-colors" data-link-perdas><TrendingDown className="w-4 h-4" /><span className="hidden sm:inline">Perdas</span></Link>
           {interAtivo && <SincronizarBoletos />}
           <button onClick={exportar} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-surface-border text-ink-muted hover:bg-surface-alt transition-colors"><Download className="w-4 h-4" /> Exportar</button>
           {/* UX-8 (G14): o botão segue a MESMA permissão do POST de criação — nunca leva a um 403 */}
@@ -153,7 +158,7 @@ export function ContasReceberView({
 
       {/* Período (pelo vencimento) + cards do período, clicáveis como filtro — padrão da casa */}
       <BarraPeriodo periodo={periodo} navegar={navegar} permitirTodos dica="Pela data de vencimento." />
-      <GradeCards colunas={5}>
+      <GradeCards colunas={6}>
         {CARDS.map((c) => (
           <CardResumo key={c.key} id={c.key} rotulo={c.rotulo} icone={c.icone} cor={c.cor} dica={c.dica}
             v={resumo[c.key].v} q={resumo[c.key].q} unidade={["cobrança", "cobranças"]}
@@ -205,7 +210,7 @@ export function ContasReceberView({
             <div>
               <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider mb-1.5">Status</p>
               <div className="flex flex-wrap gap-1.5">
-                {(["PREVISTO", "A_VENCER", "VENCE_HOJE", "VENCIDO", "PARCIAL", "PAGO", "CANCELADO"] as const).map((s) => (
+                {(["PREVISTO", "A_VENCER", "VENCE_HOJE", "VENCIDO", "PARCIAL", "PAGO", "PERDA", "CANCELADO"] as const).map((s) => (
                   <button key={s} type="button" data-chip-status={s} onClick={() => toggleStatus(s)}
                     className={cn("text-xs px-2.5 py-1 rounded-full border transition-colors", statusChips.has(s) ? "bg-primary-500 border-primary-500 text-white" : "bg-white border-surface-border text-ink-muted hover:border-primary-300")}>
                     {LABEL_CHAVE[s]}
@@ -234,6 +239,11 @@ export function ContasReceberView({
                     <p className="font-bold text-success-700 shrink-0">{formatarMoeda(c.valor)}</p>
                   </div>
                   <p className="text-xs text-ink-muted truncate">{c.numero} · {c.descricao}</p>
+                  {c.status === "PERDA" && (
+                    <p className="text-xs text-ink-muted mt-0.5" data-perda-cartao>
+                      Perdido <strong className="text-ink">{formatarMoeda(c.valorPerda ?? 0)}</strong>{(c.valorRecebido ?? 0) > 0 && ` · recebido ${formatarMoeda(c.valorRecebido ?? 0)}`}
+                    </p>
+                  )}
                   {recebidaEmParte(c) && (
                     <p className="text-xs text-ink-muted mt-0.5" data-parcial-cartao>
                       Recebido {formatarMoeda(c.valorRecebido ?? 0)} · <strong className="text-ink">falta {formatarMoeda(saldoDaConta(c))}</strong>
@@ -301,7 +311,9 @@ export function ContasReceberView({
                     <td className={cn(PLANILHA.td, PLANILHA.numero, "align-middle font-semibold text-ink")} data-valor>{valorSemMoeda(c.valor)}</td>
                     {/* O que falta: igual ao valor sem baixa; menor na baixa parcial; 0 na recebida/cancelada */}
                     <td className={cn(PLANILHA.td, PLANILHA.numero, "align-middle hidden lg:table-cell", recebidaEmParte(c) ? "font-semibold text-atencao-texto" : "text-ink-muted")} data-em-aberto>
-                      {c.status === "CANCELADO" ? "—" : valorSemMoeda(saldoDaConta(c))}
+                      {c.status === "CANCELADO" ? "—"
+                        : c.status === "PERDA" ? <span title={`Perdido: ${formatarMoeda(c.valorPerda ?? 0)}`} data-perdido>—</span>
+                        : valorSemMoeda(saldoDaConta(c))}
                     </td>
                     <td className={cn(PLANILHA.td, "align-middle text-right py-0.5")}>{acoes(c)}</td>
                   </tr>
@@ -324,7 +336,7 @@ export function ContasReceberView({
   );
 }
 
-const LABEL_CHAVE: Record<string, string> = { PREVISTO: "Previsto", A_VENCER: "A vencer", VENCE_HOJE: "Vence hoje", VENCIDO: "Vencido", PARCIAL: "Recebido em parte", PAGO: "Pago", CANCELADO: "Cancelado" };
+const LABEL_CHAVE: Record<string, string> = { PREVISTO: "Previsto", A_VENCER: "A vencer", VENCE_HOJE: "Vence hoje", VENCIDO: "Vencido", PARCIAL: "Recebido em parte", PAGO: "Pago", PERDA: "Perda", CANCELADO: "Cancelado" };
 
 /** Baixa parcial: entrou uma parte e ainda falta (a situação continua a do vencimento) */
 function SeloParcial() {

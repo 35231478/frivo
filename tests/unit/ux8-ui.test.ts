@@ -260,7 +260,7 @@ describe("G3/G5: ordenação natural e breadcrumbs", () => {
 describe("G14: 'Nova Cobrança' segue a permissão de criar cobrança", () => {
   const props = {
     contas: [], clientes: [], categorias: [], interAtivo: false,
-    resumo: { VENCIDO: { v: 0, q: 0 }, VENCE_HOJE: { v: 0, q: 0 }, A_VENCER: { v: 0, q: 0 }, RECEBIDO: { v: 0, q: 0 }, TOTAL: { v: 0, q: 0 } },
+    resumo: { VENCIDO: { v: 0, q: 0 }, VENCE_HOJE: { v: 0, q: 0 }, A_VENCER: { v: 0, q: 0 }, RECEBIDO: { v: 0, q: 0 }, PERDA: { v: 0, q: 0 }, TOTAL: { v: 0, q: 0 } },
     periodo: { tipo: "mes", mes: "2026-11", de: null, ate: null, rotulo: "Novembro de 2026" },
     total: 0, totalFiltrado: 0, pagina: 1, porPagina: 25,
     filtros: { q: "", card: "", clienteId: "", categoria: "", forma: "", banco: "", valorMin: "", valorMax: "", vencDe: "", vencAte: "", status: "" },

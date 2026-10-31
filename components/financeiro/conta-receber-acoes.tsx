@@ -1,7 +1,7 @@
 "use client";
 
 import { confirmar, toast } from "@/components/ui/avisos";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { whatsappLink, formatarMoeda, formatarData, LABELS_FORMA_PAGAMENTO } from "@/lib/utils";
@@ -18,7 +18,12 @@ import {
 } from "@/lib/financeiro/conta-receber-gestao";
 import {
   MessageCircle, MessageSquare, Mail, FileText, CheckCircle2, Eye, Settings, Download, Ban, Pencil, Trash2, Receipt, ExternalLink, Split,
+  TrendingDown, RotateCcw, Undo2,
 } from "lucide-react";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
+import {
+  ORIGEM_RECEBIMENTO, motivoNaoEstornar, motivoNaoMarcarPerda, motivoTextoInvalido, temBaixaAntiga,
+} from "@/lib/financeiro/perda-estorno";
 import {
   motivoNaoParcelar, motivoParcialComBoleto, motivoValorRecebimento, quitaConta, saldoDaConta, type ParcelaPlano,
 } from "@/lib/financeiro/parcelas";
@@ -26,6 +31,7 @@ import { EditorParcelas } from "@/components/financeiro/editor-parcelas";
 import { chaveDiaCivil, chaveHojeBR } from "@/lib/fuso";
 import { InputData } from "@/components/ui/input-data";
 import { hrefSecaoConfig } from "@/lib/navegacao/configuracoes";
+import { Dica } from "@/components/ui/dica";
 
 export interface ContaAcoes {
   id: string; numero: string; descricao: string; categoriaId?: string | null; categoria?: string | null; valor: number;
@@ -47,9 +53,15 @@ export interface ContaAcoes {
   /** Baixa parcial (quanto já entrou) e parcela (de qual lançamento, n/N) */
   valorRecebido?: number;
   lancamentoId?: string | null; lancamentoNumero?: string | null; parcelaNumero?: number | null; parcelaTotal?: number | null;
+  /** Perda: quanto foi dado como perdido (o saldo na hora da marcação) */
+  valorPerda?: number | null;
 }
 type Categoria = { id: string; nome: string; cor: string; ativo: boolean };
-type Modais = null | "whatsapp" | "email" | "receber" | "parcelar" | "editar" | "cancelar" | "excluir" | "boletoEmitir" | "boletoConfig" | "boletoEmitido";
+type Modais = null | "whatsapp" | "email" | "receber" | "parcelar" | "editar" | "cancelar" | "excluir" | "boletoEmitir" | "boletoConfig" | "boletoEmitido"
+  | "perda" | "reverterPerda" | "estornar";
+
+/** Quem não tem a permissão vê a ação apagada com o porquê (o servidor recusa do mesmo jeito) */
+export const SEM_PERMISSAO_PERDAS = "Sem permissão: Financeiro › Perdas (peça a um gerente).";
 
 /**
  * Ações da conta a receber num menu ⋮ só (o que o status permite; o que não pode aparece apagado com ⓘ
@@ -59,6 +71,8 @@ export function ContaReceberAcoes({ conta, categorias = [], clientes = [], onDet
   conta: ContaAcoes; categorias?: Categoria[]; clientes?: { id: string; nome: string }[]; onDetalhes: () => void;
 }) {
   const router = useRouter();
+  const { pode } = usePermissoes();
+  const podePerdas = pode("financeiro", "perdas");
   const [modal, setModal] = useState<Modais>(null);
   const [boleto, setBoleto] = useState({ linhaDigitavel: conta.boletoLinhaDigitavel, codigoBarras: conta.boletoCodigoBarras });
   const [baixando, setBaixando] = useState(false);
@@ -66,13 +80,18 @@ export function ContaReceberAcoes({ conta, categorias = [], clientes = [], onDet
   const pronto = () => { fechar(); router.refresh(); };
 
   const regra = { ...conta, notas: conta.notas ?? [] };
-  const quitada = conta.status === "RECEBIDO" || conta.status === "CANCELADO";
+  const emPerda = conta.status === "PERDA";
+  // Em perda: nada de cobrar/receber direto — o caminho é "Reverter perda"
+  const quitada = conta.status === "RECEBIDO" || conta.status === "CANCELADO" || emPerda;
   const boletoEmitido = conta.boletoStatus === "EMITIDO";
   const naoReceber = motivoNaoReceber(regra);
   const naoCancelar = motivoNaoCancelar(regra);
   const naoExcluir = motivoNaoExcluir(regra);
   const naoRecibo = motivoNaoRecibo(regra);
   const naoParcelar = motivoNaoParcelar(regra);
+  const naoPerda = podePerdas ? motivoNaoMarcarPerda(conta) : SEM_PERMISSAO_PERDAS;
+  const temEstorno = (conta.valorRecebido ?? 0) > 0 || temBaixaAntiga(conta);
+  const naoEstornar = emPerda ? motivoNaoEstornar(conta) : null;
   const saldo = saldoDaConta(conta);
   const venc = conta.dataVencimento ? formatarData(conta.dataVencimento) : "—";
   // A cobrança é do que falta (a parte já paga não se cobra de novo)
@@ -102,6 +121,10 @@ export function ContaReceberAcoes({ conta, categorias = [], clientes = [], onDet
               <ItemMenu icone={Pencil} onClick={() => { f(); setModal("editar"); }} id="editar">Editar</ItemMenu>
               {!quitada && <ItemMenu icone={CheckCircle2} onClick={() => { f(); setModal("receber"); }} desabilitado={!!naoReceber} motivo={naoReceber} id="receber">Informar recebimento</ItemMenu>}
               {!quitada && <ItemMenu icone={Split} onClick={() => { f(); setModal("parcelar"); }} desabilitado={!!naoParcelar} motivo={naoParcelar} id="parcelar">Parcelar</ItemMenu>}
+              {emPerda && (
+                <ItemMenu icone={RotateCcw} onClick={() => { f(); setModal("reverterPerda"); }} desabilitado={!podePerdas} motivo={podePerdas ? null : SEM_PERMISSAO_PERDAS} id="reverter-perda">Reverter perda</ItemMenu>
+              )}
+              {temEstorno && <ItemMenu icone={Undo2} onClick={() => { f(); setModal("estornar"); }} desabilitado={!!naoEstornar} motivo={naoEstornar} id="estornar">Estornar recebimento</ItemMenu>}
               <SeparadorMenu />
               {(!quitada || boletoEmitido) && (
                 <ItemMenu icone={FileText} onClick={() => { f(); abrirBoleto(); }} id="boleto">{boletoEmitido ? "Boleto (linha digitável)" : "Emitir boleto"}</ItemMenu>
@@ -111,6 +134,9 @@ export function ContaReceberAcoes({ conta, categorias = [], clientes = [], onDet
               {!quitada && conta.email && <ItemMenu icone={Mail} onClick={() => { f(); setModal("email"); }} id="cobrar-email">Enviar cobrança por e-mail</ItemMenu>}
               <ItemMenu icone={Receipt} href={`/financeiro/contas-receber/${conta.id}/recibo`} novaAba desabilitado={!!naoRecibo} motivo={naoRecibo} id="recibo">Emitir recibo (PDF)</ItemMenu>
               <SeparadorMenu />
+              {!quitada && conta.status !== "PARCELADO" && (
+                <ItemMenu icone={TrendingDown} onClick={() => { f(); setModal("perda"); }} desabilitado={!!naoPerda} motivo={naoPerda} perigo id="perda">Marcar como perda</ItemMenu>
+              )}
               {conta.status !== "CANCELADO" && conta.status !== "RECEBIDO" && (
                 <ItemMenu icone={Ban} onClick={() => { f(); setModal("cancelar"); }} desabilitado={!!naoCancelar} motivo={naoCancelar} perigo id="cancelar">Cancelar</ItemMenu>
               )}
@@ -170,6 +196,15 @@ export function ContaReceberAcoes({ conta, categorias = [], clientes = [], onDet
       </Modal>
       <Modal aberto={modal === "excluir"} onFechar={fechar} titulo={`Excluir ${conta.numero}`} tamanho="sm">
         <ExcluirConta conta={conta} onPronto={pronto} onCancelar={fechar} />
+      </Modal>
+      <Modal aberto={modal === "perda"} onFechar={fechar} titulo={`Marcar ${conta.numero} como perda`} tamanho="sm">
+        <MarcarPerda conta={conta} onPronto={pronto} onCancelar={fechar} />
+      </Modal>
+      <Modal aberto={modal === "reverterPerda"} onFechar={fechar} titulo={`Reverter perda — ${conta.numero}`}>
+        <ReverterPerda conta={conta} onPronto={pronto} onCancelar={fechar} />
+      </Modal>
+      <Modal aberto={modal === "estornar"} onFechar={fechar} titulo={`Estornar recebimento — ${conta.numero}`}>
+        <EstornarRecebimento conta={conta} onPronto={pronto} onCancelar={fechar} />
       </Modal>
     </>
   );
@@ -453,6 +488,208 @@ function ExcluirConta({ conta, onPronto, onCancelar }: { conta: ContaAcoes; onPr
       <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
         <Button variant="secondary" onClick={onCancelar} disabled={salvando}>Voltar</Button>
         <Button variant="danger" loading={salvando} onClick={excluir} data-confirmar-excluir><Trash2 className="w-4 h-4" /> Excluir</Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Marcar como perda (inadimplência): o que falta receber sai do a receber e vira perda. O já recebido
+ * continua recebido; a nota fiscal não é cancelada. Volta atrás por "Reverter perda".
+ */
+function MarcarPerda({ conta, onPronto, onCancelar }: { conta: ContaAcoes; onPronto: () => void; onCancelar: () => void }) {
+  const saldo = saldoDaConta(conta);
+  const recebido = conta.valorRecebido ?? 0;
+  const [motivo, setMotivo] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState("");
+  async function marcar() {
+    const inv = motivoTextoInvalido(motivo, "o motivo da perda");
+    if (inv) { setErro(inv); return; }
+    setErro(""); setSalvando(true);
+    const e = await enviar(`/api/contas-receber/${conta.id}/perda`, "POST", { motivo: motivo.trim() });
+    setSalvando(false);
+    if (e) { setErro(e); return; }
+    toast(`${conta.numero}: perda de ${formatarMoeda(saldo)} registrada.`, "sucesso");
+    onPronto();
+  }
+  return (
+    <div className="space-y-4" data-marcar-perda>
+      <Erro texto={erro} />
+      <dl className="bg-surface-alt rounded-lg p-3 text-sm grid grid-cols-2 gap-2">
+        <div><dt className="text-xs text-ink-muted">Vira perda</dt><dd className="font-semibold text-atrasado-texto tabular-nums" data-valor-perda-modal>{formatarMoeda(saldo)}</dd></div>
+        <div><dt className="text-xs text-ink-muted">Já recebido (continua)</dt><dd className="font-semibold text-success-700 tabular-nums">{formatarMoeda(recebido)}</dd></div>
+      </dl>
+      <p className="text-sm text-ink-muted">
+        Sai do a receber. A nota fiscal continua emitida.
+        {" "}<Dica rotulo="Perda" texto="Use quando o cliente não vai pagar (falência, acordo perdido, valor pequeno demais para cobrar). Se ele pagar depois, use “Reverter perda”." />
+      </p>
+      <FormField label="Motivo" required>
+        <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={2} maxLength={500} placeholder="Ex.: cliente faliu; sem retorno há 6 meses" aria-label="Motivo da perda" />
+      </FormField>
+      <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+        <Button variant="secondary" onClick={onCancelar} disabled={salvando}>Voltar</Button>
+        <Button variant="danger" loading={salvando} onClick={marcar} data-confirmar-perda><TrendingDown className="w-4 h-4" /> Marcar como perda</Button>
+      </div>
+    </div>
+  );
+}
+
+/** Reverter perda: volta a receber, ou o cliente pagou (registra o recebimento da recuperação) */
+function ReverterPerda({ conta, onPronto, onCancelar }: { conta: ContaAcoes; onPronto: () => void; onCancelar: () => void }) {
+  const perdido = Number(conta.valorPerda ?? 0) || Math.max(0, Math.round((conta.valor - (conta.valorRecebido ?? 0)) * 100) / 100);
+  const [modo, setModo] = useState<"REABRIR" | "RECUPERAR">("RECUPERAR");
+  const [valor, setValor] = useState(String(perdido));
+  const [data, setData] = useState(chaveHojeBR());
+  const [forma, setForma] = useState(conta.formaPagamento ?? "");
+  const [contaBancariaId, setContaBancariaId] = useState(conta.contaBancariaId ?? "");
+  const [motivo, setMotivo] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState("");
+  const v = Number(valor);
+  const parcial = modo === "RECUPERAR" && v > 0 && Math.round(v * 100) < Math.round(perdido * 100);
+  const invalido = modo === "RECUPERAR" ? (!(v > 0) ? "Informe o valor recebido." : Math.round(v * 100) > Math.round(perdido * 100) ? `O valor passa do que estava perdido (${formatarMoeda(perdido)}).` : null) : null;
+
+  async function reverter() {
+    if (modo === "RECUPERAR" && !data) { setErro("Informe a data do recebimento."); return; }
+    if (invalido) { setErro(invalido); return; }
+    setErro(""); setSalvando(true);
+    const e = await enviar(`/api/contas-receber/${conta.id}/perda/reverter`, "POST", {
+      modo, motivo: motivo.trim() || null,
+      ...(modo === "RECUPERAR" && {
+        valor: v, data, formaPagamento: forma || null,
+        ...(contaBancariaId !== (conta.contaBancariaId ?? "") && { contaBancariaId: contaBancariaId || null }),
+      }),
+    });
+    setSalvando(false);
+    if (e) { setErro(e); return; }
+    toast(modo === "RECUPERAR" ? `${conta.numero}: recuperação de ${formatarMoeda(v)} registrada.` : `${conta.numero} voltou a receber.`, "sucesso");
+    onPronto();
+  }
+  const opcao = (m: typeof modo, titulo: string, texto: string) => (
+    <label className={`flex items-start gap-2 rounded-lg border p-3 cursor-pointer ${modo === m ? "border-primary-300 bg-primary-50" : "border-surface-border"}`}>
+      <input type="radio" name="modo-reverter" checked={modo === m} onChange={() => setModo(m)} className="mt-1 accent-primary-600" data-modo-reverter={m} />
+      <span><span className="block text-sm font-semibold text-ink">{titulo}</span><span className="block text-xs text-ink-muted">{texto}</span></span>
+    </label>
+  );
+  return (
+    <div className="space-y-4" data-reverter-perda>
+      <Erro texto={erro} />
+      <p className="text-sm text-ink-muted"><strong className="text-ink">{conta.clienteNome}</strong> · perda de <strong className="text-ink">{formatarMoeda(perdido)}</strong></p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {opcao("RECUPERAR", "O cliente pagou", "Volta e já registra o recebimento.")}
+        {opcao("REABRIR", "Voltar a cobrar", "Volta para o a receber, sem recebimento.")}
+      </div>
+      {modo === "RECUPERAR" && (
+        <>
+          <FormGrid>
+            <FormField label="Valor recebido" required dica="Menos que o perdido = o restante volta a ficar em aberto.">
+              <Input type="number" step="0.01" min="0.01" max={perdido} value={valor} onChange={(e) => setValor(e.target.value)} aria-label="Valor recebido" data-valor-recuperado />
+            </FormField>
+            <FormField label="Data do recebimento" required><InputData value={data} onChange={setData} aria-label="Data do recebimento" /></FormField>
+          </FormGrid>
+          {parcial && !invalido && <p className="text-sm text-atencao-texto" data-aviso-parcial>Continuam em aberto <strong>{formatarMoeda(Math.round((perdido - v) * 100) / 100)}</strong>.</p>}
+          {invalido && valor !== "" && <p role="alert" className="text-sm text-atrasado-texto" data-invalido-recuperacao>{invalido}</p>}
+          <FormGrid>
+            <FormField label="Forma de pagamento">
+              <Select value={forma} onChange={(e) => setForma(e.target.value)} aria-label="Forma de pagamento">
+                <option value="">Não informada</option>
+                {Object.entries(LABELS_FORMA_PAGAMENTO).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+              </Select>
+            </FormField>
+            <FormField label="Conta bancária">
+              <SeletorCadastro entidade="contas-bancarias" valor={contaBancariaId} vazio="Não informada" onChange={setContaBancariaId} nome="contaBancariaId" />
+            </FormField>
+          </FormGrid>
+        </>
+      )}
+      <FormField label="Comentário" dica="Fica na linha do tempo da conta."><Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={2} maxLength={500} aria-label="Comentário" /></FormField>
+      <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+        <Button variant="secondary" onClick={onCancelar} disabled={salvando}>Voltar</Button>
+        <Button loading={salvando} onClick={reverter} disabled={!!invalido} data-confirmar-reverter>
+          <RotateCcw className="w-4 h-4" /> {modo === "RECUPERAR" ? "Registrar recuperação" : "Voltar a cobrar"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+interface RecebimentoLista {
+  id: string; valor: number; data: string; origem: string; formaPagamento: string | null; usuario: string | null; estornadoEm: string | null;
+}
+
+/**
+ * Estornar recebimento (baixa informada errada): escolhe qual — ou a baixa antiga, de antes do histórico —
+ * e o motivo. O valor volta a faltar; o estorno fica riscado no histórico. O pago pelo boleto não se estorna aqui.
+ */
+function EstornarRecebimento({ conta, onPronto, onCancelar }: { conta: ContaAcoes; onPronto: () => void; onCancelar: () => void }) {
+  const [lista, setLista] = useState<RecebimentoLista[] | null>(null);
+  const [escolhido, setEscolhido] = useState<string>("");
+  const [motivo, setMotivo] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState("");
+  const antiga = temBaixaAntiga(conta);
+  useEffect(() => {
+    let vivo = true;
+    fetch(`/api/contas-receber/${conta.id}/recebimentos`).then((r) => (r.ok ? r.json() : [])).catch(() => [])
+      .then((d: RecebimentoLista[]) => {
+        if (!vivo) return;
+        const ativos = d.filter((r) => !r.estornadoEm);
+        setLista(ativos);
+        // Um só que dá para estornar: já vem escolhido
+        const podem = ativos.filter((r) => !motivoNaoEstornar(conta, r));
+        if (podem.length === 1 && !antiga) setEscolhido(podem[0].id);
+        else if (antiga && ativos.length === 0) setEscolhido("ANTIGA");
+      });
+    return () => { vivo = false; };
+  }, [conta.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const valorEscolhido = escolhido === "ANTIGA" ? conta.valor : lista?.find((r) => r.id === escolhido)?.valor ?? 0;
+  async function estornar() {
+    if (!escolhido) { setErro("Escolha o recebimento a estornar."); return; }
+    const inv = motivoTextoInvalido(motivo, "o motivo do estorno");
+    if (inv) { setErro(inv); return; }
+    setErro(""); setSalvando(true);
+    const e = await enviar(`/api/contas-receber/${conta.id}/recebimentos/estornar`, "POST", {
+      ...(escolhido !== "ANTIGA" && { recebimentoId: escolhido }), motivo: motivo.trim(),
+    });
+    setSalvando(false);
+    if (e) { setErro(e); return; }
+    toast(`Estorno de ${formatarMoeda(valorEscolhido)} em ${conta.numero}. O valor volta a faltar.`, "sucesso");
+    onPronto();
+  }
+  const linha = (id: string, rotulo: string, detalhe: string, valor: number, bloqueio: string | null) => (
+    <li key={id}>
+      <label className={`flex items-start gap-2 px-3 py-2 ${bloqueio ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:bg-surface-alt"} ${escolhido === id ? "bg-primary-50" : ""}`} data-opcao-estorno={id}>
+        <input type="radio" name="recebimento-estorno" disabled={!!bloqueio} checked={escolhido === id} onChange={() => setEscolhido(id)} className="mt-1 accent-primary-600" />
+        <span className="flex-1 min-w-0">
+          <span className="flex justify-between gap-2"><span className="text-sm font-medium text-ink">{rotulo}</span><span className="text-sm font-semibold tabular-nums text-ink">{formatarMoeda(valor)}</span></span>
+          <span className="block text-xs text-ink-muted">{detalhe}</span>
+          {bloqueio && <span className="block text-xs text-atencao-texto" data-bloqueio-estorno>{bloqueio}</span>}
+        </span>
+      </label>
+    </li>
+  );
+  return (
+    <div className="space-y-4" data-estornar-recebimento>
+      <Erro texto={erro} />
+      <p className="text-sm text-ink-muted">
+        Para desfazer um recebimento informado errado. O valor volta a faltar e o estorno fica no histórico.
+        {" "}<Dica rotulo="Estorno" texto="Pago pelo boleto no banco não se estorna aqui: o banco confirmou o pagamento. Se a fatura estava paga, ela volta ao passo anterior." />
+      </p>
+      {lista === null ? <p className="text-sm text-ink-muted" data-carregando-recebimentos>Carregando recebimentos…</p> : (
+        <ul className="border border-surface-border rounded-lg divide-y divide-surface-border overflow-hidden" data-lista-estorno>
+          {lista.map((r) => linha(r.id, formatarData(r.data), [ORIGEM_RECEBIMENTO[r.origem] ?? r.origem, r.formaPagamento ? LABELS_FORMA_PAGAMENTO[r.formaPagamento] ?? r.formaPagamento : null, r.usuario].filter(Boolean).join(" · "), r.valor, motivoNaoEstornar(conta, r)))}
+          {antiga && lista.length === 0 && linha("ANTIGA", "Baixa antiga", "Recebida antes do histórico de recebimentos.", conta.valor, motivoNaoEstornar(conta))}
+          {lista.length === 0 && !antiga && <li className="px-3 py-2 text-sm text-ink-muted">Nenhum recebimento para estornar.</li>}
+        </ul>
+      )}
+      <FormField label="Motivo" required>
+        <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={2} maxLength={500} placeholder="Ex.: baixa lançada na conta errada; cheque devolvido" aria-label="Motivo do estorno" />
+      </FormField>
+      <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+        <Button variant="secondary" onClick={onCancelar} disabled={salvando}>Voltar</Button>
+        <Button variant="danger" loading={salvando} onClick={estornar} disabled={!escolhido} data-confirmar-estorno><Undo2 className="w-4 h-4" /> Estornar {escolhido ? formatarMoeda(valorEscolhido) : ""}</Button>
       </div>
     </div>
   );

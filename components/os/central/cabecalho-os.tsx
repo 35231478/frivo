@@ -19,7 +19,7 @@ import { Kpi } from "@/components/ui/kpi";
 
 /** Situação do pagamento → cor do texto (status com função: previsto, atenção, atrasado, ok). */
 const COR_PAGAMENTO: Record<string, string> = {
-  SEM_COBRANCA: "text-ink-muted", PREVISTO: "text-previsto-texto", A_RECEBER: "text-atencao-texto", VENCIDO: "text-atrasado-texto", PAGO: "text-ok-texto",
+  SEM_COBRANCA: "text-ink-muted", PREVISTO: "text-previsto-texto", A_RECEBER: "text-atencao-texto", VENCIDO: "text-atrasado-texto", PAGO: "text-ok-texto", PERDA: "text-ink",
 };
 
 /** Status que dá para ESCOLHER à mão (Cancelada é o "Inativar", com confirmação própria). */

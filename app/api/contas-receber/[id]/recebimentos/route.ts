@@ -24,9 +24,14 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const lista = await prisma.contaReceberRecebimento.findMany({
     where: { contaReceberId: id, empresaId: guard.session.user!.empresaId },
     orderBy: [{ data: "asc" }, { criadoEm: "asc" }],
-    select: { id: true, valor: true, data: true, formaPagamento: true, origem: true, observacao: true, contaBancaria: { select: { nome: true } }, usuario: { select: { nome: true } } },
+    select: {
+      id: true, valor: true, data: true, formaPagamento: true, origem: true, observacao: true, contaBancaria: { select: { nome: true } }, usuario: { select: { nome: true } },
+      estornadoEm: true, motivoEstorno: true, estornadoPor: { select: { nome: true } },
+    },
   });
-  return NextResponse.json(lista.map((r) => ({ ...r, valor: Number(r.valor), contaBancaria: r.contaBancaria?.nome ?? null, usuario: r.usuario?.nome ?? null })));
+  return NextResponse.json(lista.map((r) => ({
+    ...r, valor: Number(r.valor), contaBancaria: r.contaBancaria?.nome ?? null, usuario: r.usuario?.nome ?? null, estornadoPor: r.estornadoPor?.nome ?? null,
+  })));
 }
 
 /**

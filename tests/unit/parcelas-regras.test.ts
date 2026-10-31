@@ -8,7 +8,7 @@ import {
   numeroParcela, quitaConta, reajustarValores, recebidaEmParte, recebidoDaConta, rotuloParcela, saldoDaConta, somaParcelas, somarMeses,
 } from "@/lib/financeiro/parcelas";
 import { motivoNaoCancelar, motivoNaoExcluir, motivoNaoReceber, motivoNaoTrocarCliente, travasDaConta } from "@/lib/financeiro/conta-receber-gestao";
-import { condStatusVisualReceber, CARD_RECEBER_PELO_SALDO, whereContasReceber } from "@/lib/listas/filtros";
+import { condStatusVisualReceber, CAMPO_CARD_RECEBER, whereContasReceber } from "@/lib/listas/filtros";
 import { statusVisualReceber } from "@/lib/financeiro-status";
 import { situacaoPagamento } from "@/lib/os/central";
 
@@ -135,7 +135,7 @@ describe("lista, filtros e situação", () => {
   it("o lançamento parcelado nunca entra na lista; chip 'Recebido em parte'; cards abertos pelo saldo", () => {
     expect(whereContasReceber("e1", {}).AND).toContainEqual({ status: { not: "PARCELADO" } });
     expect(condStatusVisualReceber("PARCIAL")).toEqual({ status: { in: ["A_RECEBER", "ATRASADO"] }, valorRecebido: { gt: 0 } });
-    expect(CARD_RECEBER_PELO_SALDO).toEqual({ VENCIDO: true, VENCE_HOJE: true, A_VENCER: true, RECEBIDO: false, TOTAL: false });
+    expect(CAMPO_CARD_RECEBER).toEqual({ VENCIDO: "saldo", VENCE_HOJE: "saldo", A_VENCER: "saldo", RECEBIDO: "valor", PERDA: "valorPerda", TOTAL: "valor" });
     expect(statusVisualReceber("PARCELADO", null)).toMatchObject({ chave: "PARCELADO", label: "Parcelado", linhaVermelha: false });
   });
   it("OS: a conta parcelada conta pelas parcelas (uma vencida = Vencido; todas pagas = Pago)", () => {

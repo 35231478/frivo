@@ -41,6 +41,9 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (conta.status === "RECEBIDO" || conta.status === "CANCELADO") {
     return NextResponse.json({ erro: "Conta recebida/cancelada não emite boleto." }, { status: 400 });
   }
+  if (conta.status === "PERDA") {
+    return NextResponse.json({ erro: "Conta em perda: reverta a perda antes de cobrar." }, { status: 400 });
+  }
   if (conta.status === "PARCELADO") {
     return NextResponse.json({ erro: "Conta parcelada: emita o boleto em cada parcela." }, { status: 400 });
   }

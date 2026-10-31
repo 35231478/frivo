@@ -41,6 +41,7 @@ import {
   Building2, DollarSign, Users, Paperclip, Star, MessageSquare, Globe, ArrowUpRight, Send, FileSignature,
   ClipboardPlus, Calculator,
 } from "lucide-react";
+import { AlertaPerdasCliente, type PerdasCliente } from "@/components/financeiro/alerta-perdas-cliente";
 
 type ResponsavelItem = Pick<Tecnico, "id" | "nome" | "crea">;
 type AnexoItem = { id: string; nome: string; tipo: string; tamanho: number; criadoEm: string | Date };
@@ -59,6 +60,8 @@ interface ClienteFormProps {
   statusFinanceiroCalc?: StatusFinanceiroCalc;
   /** Total a receber nos próximos 30 dias (parcelas em aberto). */
   totalProximos30Dias?: number;
+  /** Perdas (inadimplência) nos últimos 12 meses: alerta informativo, não bloqueia */
+  perdas12m?: PerdasCliente | null;
 }
 
 // Mapeia cada campo (RHF) à aba onde ele está, para destacar abas com erro
@@ -75,7 +78,7 @@ function Painel({ ativo, children }: { ativo: boolean; children: React.ReactNode
   return <div className={cn("space-y-8", !ativo && "hidden")}>{children}</div>;
 }
 
-export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30Dias }: ClienteFormProps) {
+export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30Dias, perdas12m }: ClienteFormProps) {
   const router = useRouter();
   const isEditing = !!initialData;
   // RBAC (o servidor também valida): sem permissão de salvar, a ficha abre somente leitura.
@@ -454,6 +457,8 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
             <Lock className="w-4 h-4 shrink-0" /> Modo somente leitura: seu perfil não tem permissão para {isEditing ? "editar" : "cadastrar"} clientes.
           </div>
         )}
+
+        {isEditing && <AlertaPerdasCliente clienteId={initialData!.id} perdas={perdas12m} />}
 
         {erroGlobal && (
           <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2">
