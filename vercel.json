@@ -1,5 +1,7 @@
 {
-  "regions": ["gru1"],
+  "regions": [
+    "gru1"
+  ],
   "crons": [
     {
       "path": "/api/email/processar-lembretes",
@@ -8,6 +10,10 @@
     {
       "path": "/api/fiscal/reconciliar",
       "schedule": "17 10 * * *"
+    },
+    {
+      "path": "/api/cron/faturar-contratos",
+      "schedule": "23 11 * * *"
     }
   ]
 }

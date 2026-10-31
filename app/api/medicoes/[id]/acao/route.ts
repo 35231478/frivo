@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { acaoMedicaoSchema } from "@/lib/validations";
-import { statusAposAprovacao, calcularVencimento, buildMedicaoPublicUrl } from "@/lib/medicao-helpers";
-import { desfazerContasDaMedicao, gerarContaReceberDaMedicao } from "@/lib/financeiro-server";
+import { buildMedicaoPublicUrl } from "@/lib/medicao-helpers";
+import { desfazerContasDaMedicao } from "@/lib/financeiro-server";
+import { aprovarMedicao, marcarEnviada } from "@/lib/faturamento/aprovar-medicao-server";
 import { whatsappLink } from "@/lib/utils";
 import { cobrancasDaMedicao, cobrancasQueTravamMedicao, liberarCobrancasDaMedicao, registrarRecebimento } from "@/lib/financeiro/parcelas-server";
 
@@ -36,10 +37,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       if (medicao.status !== "RASCUNHO" && medicao.status !== "AGUARDANDO_APROVACAO") {
         return NextResponse.json({ erro: "Medição não pode ser enviada neste status" }, { status: 400 });
       }
-      await prisma.medicao.update({
-        where: { id },
-        data: { status: "AGUARDANDO_APROVACAO", dataEnvio: medicao.dataEnvio ?? new Date() },
-      });
+      if (!(await marcarEnviada(id))) return NextResponse.json({ erro: "Medição não pode ser enviada neste status" }, { status: 409 });
       const publicUrl = buildMedicaoPublicUrl(medicao.tokenPublico, origin);
       const emailDestino = cliente.emailsFaturamento[0] ?? cliente.email ?? null;
       const whatsappDestino = cliente.whatsappFaturamento ?? cliente.celular ?? null;
@@ -61,16 +59,10 @@ export async function POST(req: NextRequest, { params }: Params) {
       if (medicao.status !== "AGUARDANDO_APROVACAO") {
         return NextResponse.json({ erro: "Medição não está aguardando aprovação" }, { status: 400 });
       }
-      const proximo = statusAposAprovacao(cliente.exigePcAntesNf);
-      const vencimento = calcularVencimento(cliente.diaFaturamento, medicao.mes, medicao.ano);
-      // Atômico (b): o 2º "Aprovar" simultâneo não passa daqui; a conta nasce uma vez só
-      const { count } = await prisma.medicao.updateMany({
-        where: { id, status: "AGUARDANDO_APROVACAO" },
-        data: { status: proximo, dataAprovacao: new Date(), dataVencimento: vencimento },
-      });
-      if (count !== 1) return NextResponse.json({ erro: "Medição não está aguardando aprovação" }, { status: 409 });
-      await gerarContaReceberDaMedicao(id);
-      return NextResponse.json({ ok: true, status: proximo });
+      // Atômico (b): o 2º "Aprovar" simultâneo não passa daqui; a conta nasce uma vez só (núcleo único, D2 no vencimento)
+      const aprovada = await aprovarMedicao(id);
+      if (!aprovada) return NextResponse.json({ erro: "Medição não está aguardando aprovação" }, { status: 409 });
+      return NextResponse.json({ ok: true, status: aprovada.status });
     }
 
     case "REGISTRAR_PC": {
