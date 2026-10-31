@@ -216,6 +216,8 @@ describe.skipIf(!URL_PG)("Contrato PR2 — serviço padrão: NFS-e sem pendênci
     // centavos: 333,33 × 5% = 16,67; × 1,5% = 5,00 → 311,66
     expect((await previa("sRet", "333.33")).json).toMatchObject({ total: 21.67, liquido: 311.66 });
     expect((await previa("sRet", "abc")).json).toMatchObject({ bruto: 0, total: 0, liquido: 0 });
+    // valor com mais de 2 casas: a prévia trabalha no centavo (como a medição)
+    expect((await previa("sRet", "100.126")).json).toMatchObject({ bruto: 100.13 });
     expect((await chamar("contratos/previa-cobranca", "GET", {}, undefined, "?valor=10")).status).toBe(400);
     expect((await previa("sOutra", "1000")).status).toBe(404);
     // Usuário comum sem "ver contratos": 403 (o administrador passa sempre)
