@@ -676,7 +676,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
                       {Object.entries(LABELS_TIPO_CONTRATO).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
                     </Select>
                   </FormField>
-                  <FormField label="Periodicidade de cobrança" required hint="De quantos em quantos meses a previsão de contas a receber é gerada">
+                  <FormField label="Periodicidade de cobrança" required hint="Hoje a cobrança sai todo mês" dica="A previsão no Contas a Receber e a medição do contrato saem uma por mês, pelo valor mensal. Este campo fica registrado no contrato, mas ainda não muda o intervalo da cobrança.">
                     <Select {...register("periodicidade")}>
                       {Object.entries(LABELS_PERIODICIDADE).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
                     </Select>

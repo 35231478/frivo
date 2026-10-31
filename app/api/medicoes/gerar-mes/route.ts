@@ -5,6 +5,7 @@ import { gerarNumeroMedicao } from "@/lib/utils";
 import { calcularVencimento } from "@/lib/medicao-helpers";
 import { itensFaturaveisDaOs, orcamentoJaFaturado, osJaFaturada, travarParaFaturar } from "@/lib/faturamento-os";
 import { anoBR, mesBR } from "@/lib/fuso";
+import { contratoCobraNaCompetencia } from "@/lib/financeiro/contrato-previsao";
 
 /**
  * Gera as medições mensais de todos os clientes com contrato ativo.
@@ -13,6 +14,8 @@ import { anoBR, mesBR } from "@/lib/fuso";
  * - Clientes perfil "Fatura única": agrupa todos os contratos + orçamentos
  *   aprovados do mês ainda não faturados em uma única medição (FATURA_UNICA).
  * - Demais clientes: uma medição MENSAL_FIXO por cliente com os contratos ativos.
+ * - CO4: só entra o contrato cuja VIGÊNCIA cobre a competência (regra do aniversário) — o que
+ *   começa depois ou já terminou não gera mensalidade, mesmo com status ATIVO.
  */
 export async function POST(req: NextRequest) {
   const guard = await exigirPermissao("financeiro", "medicoes");
@@ -25,10 +28,12 @@ export async function POST(req: NextRequest) {
   const mes = Number(body?.mes) || mesBR(agora);
   const ano = Number(body?.ano) || anoBR(agora);
 
-  const contratos = await prisma.contrato.findMany({
+  const ativos = await prisma.contrato.findMany({
     where: { empresaId, status: "ATIVO" },
     include: { cliente: true },
   });
+  const contratos = ativos.filter((c) => contratoCobraNaCompetencia(c.dataInicio, c.dataFim, ano, mes));
+  const foraDaVigencia = ativos.filter((c) => !contratos.includes(c)).map((c) => c.numero);
 
   // Agrupa contratos por cliente
   const porCliente = new Map<string, typeof contratos>();
@@ -258,5 +263,5 @@ export async function POST(req: NextRequest) {
     resultado.push({ cliente: cliente.nomeFantasia ?? cliente.nome, numero, status: "criada" });
   }
 
-  return NextResponse.json({ ok: true, mes, ano, criadas, ignoradas, resultado });
+  return NextResponse.json({ ok: true, mes, ano, criadas, ignoradas, foraDaVigencia, resultado });
 }

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { contratoSchema } from "@/lib/validations";
-import { contratoGeraFinanceiro, encerrarFinanceiroDoContrato, gerarPrevisaoContratoContasReceber } from "@/lib/financeiro-server";
+import { contratoGeraFinanceiro, encerrarFinanceiroDoContrato, gerarPrevisaoContratoContasReceber, sincronizarPrevisoesDoContrato } from "@/lib/financeiro-server";
 import { gerarOsRecorrentesContrato, gerarOsRecorrentesLocais } from "@/lib/recorrencia-server";
 
 type Params = { params: Promise<{ id: string }> };
@@ -101,8 +101,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
   // CO2: só contrato ATIVO movimenta financeiro/recorrência; ao sair de ATIVO,
   // a receita fantasma é limpa (previsões PREVISTO e OS agendadas intocadas).
   if (contratoGeraFinanceiro(atualizado.status)) {
-    // Atualiza a previsão de contas a receber (idempotente).
-    await gerarPrevisaoContratoContasReceber(id).catch(() => 0);
+    // As previsões abertas acompanham o contrato (valor, vencimento, vigência) e depois
+    // nascem os meses que entraram na vigência (idempotente).
+    await sincronizarPrevisoesDoContrato(id, existente, session.user!.id).catch((e) => console.error("[contrato] sincronizar previsões", id, e));
+    await gerarPrevisaoContratoContasReceber(id, session.user!.id).catch(() => 0);
     // Gera as OS recorrentes: por local (novo) + contrato-nível legado (idempotentes).
     await gerarOsRecorrentesLocais(id, session.user!.id).catch(() => 0);
     if (atualizado.recorrencia) await gerarOsRecorrentesContrato(id, session.user!.id).catch(() => 0);
@@ -123,6 +125,16 @@ export async function DELETE(_: NextRequest, { params }: Params) {
   const existente = await prisma.contrato.findFirst({ where: { id, empresaId } });
   if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
 
-  await prisma.contrato.update({ where: { id }, data: { status: "ENCERRADO" } });
-  return NextResponse.json({ ok: true });
+  // Excluir = encerrar (o contrato fica no histórico). CO2: como em qualquer saída de ATIVO,
+  // a receita fantasma sai junto — previsões ainda abertas e OS futuras intocadas.
+  if (existente.status !== "ENCERRADO") {
+    await prisma.$transaction([
+      prisma.contrato.update({ where: { id }, data: { status: "ENCERRADO" } }),
+      prisma.contratoHistoricoStatus.create({
+        data: { empresaId, contratoId: id, statusAnterior: existente.status, statusNovo: "ENCERRADO", motivo: "Contrato excluído", usuarioId: session.user!.id },
+      }),
+    ]);
+  }
+  const limpeza = await encerrarFinanceiroDoContrato(id, `Contrato ${existente.numero} excluído`, session.user!.id);
+  return NextResponse.json({ ok: true, ...limpeza });
 }

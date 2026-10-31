@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { MESES_PT } from "@/lib/utils";
 import { CalendarRange, X, Check, AlertCircle } from "lucide-react";
 import { anoBR, mesBR } from "@/lib/fuso";
+import { Dica } from "@/components/ui/dica";
 
 export function GerarMedicoesMes() {
   const router = useRouter();
@@ -16,7 +17,7 @@ export function GerarMedicoesMes() {
   const [mes, setMes] = useState(mesBR(agora));
   const [ano, setAno] = useState(anoBR(agora));
   const [gerando, setGerando] = useState(false);
-  const [resultado, setResultado] = useState<{ criadas: number; ignoradas: number } | null>(null);
+  const [resultado, setResultado] = useState<{ criadas: number; ignoradas: number; foraDaVigencia: string[] } | null>(null);
   const [erro, setErro] = useState("");
 
   async function gerar() {
@@ -35,7 +36,7 @@ export function GerarMedicoesMes() {
         return;
       }
       const data = await res.json();
-      setResultado({ criadas: data.criadas, ignoradas: data.ignoradas });
+      setResultado({ criadas: data.criadas, ignoradas: data.ignoradas, foraDaVigencia: data.foraDaVigencia ?? [] });
       router.refresh();
     } catch {
       setErro("Erro de conexão.");
@@ -61,7 +62,7 @@ export function GerarMedicoesMes() {
         </button>
       </div>
       <p className="text-xs text-ink-muted">
-        Gera medições para todos os clientes com contrato ativo, respeitando o perfil de faturamento.
+        Gera medições para os clientes com contrato ativo e vigente no mês, respeitando o perfil de faturamento.
       </p>
       <div className="grid grid-cols-2 gap-2">
         <Select value={String(mes)} onChange={(e) => setMes(Number(e.target.value))}>
@@ -79,6 +80,15 @@ export function GerarMedicoesMes() {
         <div className="bg-success-50 border border-success-200 text-success-700 text-xs rounded-lg px-3 py-2 flex items-center gap-2">
           <Check className="w-3.5 h-3.5" /> {resultado.criadas} criada(s), {resultado.ignoradas} ignorada(s).
         </div>
+      )}
+      {resultado && resultado.foraDaVigencia.length > 0 && (
+        <p data-fora-vigencia className="text-xs text-ink-muted flex items-center gap-1">
+          <span>
+            {resultado.foraDaVigencia.length === 1 ? "1 contrato fora da vigência" : `${resultado.foraDaVigencia.length} contratos fora da vigência`}
+            {": "}{resultado.foraDaVigencia.slice(0, 3).join(", ")}{resultado.foraDaVigencia.length > 3 ? "…" : ""}
+          </span>
+          <Dica rotulo="Fora da vigência" lado="esquerda" texto="Contrato que só começa depois deste mês, ou que já terminou antes dele, não gera mensalidade, mesmo com status Ativo. Confira as datas de início e fim no contrato." />
+        </p>
       )}
 
       <Button onClick={gerar} loading={gerando} className="w-full justify-center">
