@@ -116,6 +116,20 @@ describe("5 abas com os campos certos", () => {
     expect(painel("contrato").textContent).toContain("Sábados, domingos e feriados");
   });
 
+  it("periodicidade: o texto diz a verdade (a cobrança sai todo mês) e o detalhe fica na ⓘ, fora de botão", async () => {
+    await montar();
+    await clicar($("[data-mais-opcoes]"));
+    const campo = $<HTMLSelectElement>('select[name="periodicidade"]')!.closest("div")!.parentElement!;
+    expect(campo.textContent).toContain("Hoje a cobrança sai todo mês");
+    expect(document.body.textContent).not.toContain("De quantos em quantos meses");
+    const dica = campo.querySelector<HTMLButtonElement>('button[aria-label*="Periodicidade de cobrança"]')!;
+    expect(dica).toBeTruthy();
+    expect(dica.parentElement!.closest("button, a")).toBeNull();
+    const balao = document.getElementById(dica.getAttribute("aria-describedby")!)!;
+    expect(balao.textContent).toContain("saem uma por mês, pelo valor mensal");
+    expect(balao.textContent).toContain("ainda não muda o intervalo da cobrança");
+  });
+
   it("cada aba mostra o seu conteúdo", async () => {
     await montar();
     await aba("escopo");

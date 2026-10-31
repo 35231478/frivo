@@ -7,6 +7,10 @@ import { diaCivilPassou, hojeDiaCivil, inicioMesDiaCivil, partesBR } from "@/lib
 import { calcularVencimento } from "@/lib/medicao-helpers";
 import { rotuloMedicao } from "@/lib/faturamento/fatura";
 import { cancelarParcelas, reajustarParcelas, recebidoNoPeriodo, saldoDoAgregado } from "@/lib/financeiro/parcelas-server";
+import {
+  type CobrancaContrato, competenciasDoContrato, detalheCancelamento, detalheReaberta, eventoDoContrato, mudancasDaCobranca,
+  planoSincronizacao, valorMensalDe, vencimentoDaCompetencia,
+} from "@/lib/financeiro/contrato-previsao";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
@@ -387,19 +391,6 @@ export async function criarMedicaoDeRelatorio(relatorioId: string) {
 // CONTRATOS → PREVISÃO DE CONTAS A RECEBER
 // ─────────────────────────────────────────────
 
-function addMonths(d: Date, n: number): Date { const x = new Date(d); x.setDate(1); x.setMonth(x.getMonth() + n); return x; }
-function addDays(d: Date, n: number): Date { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
-function diaDoMes(ano: number, mes0: number, dia: number): Date {
-  const ultimo = new Date(ano, mes0 + 1, 0).getDate();
-  return new Date(ano, mes0, Math.min(dia, ultimo));
-}
-/** Ajusta uma data que cai no fim de semana conforme o tratamento escolhido. */
-function ajustarFimDeSemana(d: Date, modo: string | null | undefined): Date {
-  const wd = d.getDay(); // 0=dom, 6=sáb
-  if (modo === "ADIANTAR") { if (wd === 6) return addDays(d, -1); if (wd === 0) return addDays(d, -2); }
-  else if (modo === "POSTERGAR") { if (wd === 6) return addDays(d, 2); if (wd === 0) return addDays(d, 1); }
-  return d;
-}
 /**
  * CO2: só contrato ATIVO movimenta o financeiro e a recorrência. Cancelado, vencido,
  * em renovação, aguardando assinatura, suspenso ou encerrado NÃO geram previsão nem OS.
@@ -408,45 +399,26 @@ export function contratoGeraFinanceiro(status: string | null | undefined): boole
   return status === "ATIVO";
 }
 
-/**
- * CO4: competências (mês/ano) cobradas pela vigência. A regra é a do aniversário:
- * um mês de referência conta enquanto o aniversário do início naquele mês for ANTERIOR
- * ao fim — assim "01/01 a 01/01 do ano seguinte" e "01/01 a 31/12" são ambos 12 meses.
- * Vigência indeterminada: 12 meses a partir de hoje.
- */
-export function competenciasDoContrato(dataInicio: Date, dataFim: Date | null): { ano: number; mes: number }[] {
-  const inicio = new Date(dataInicio);
-  const hoje = hojeDiaCivil();
-  const fim = dataFim ? new Date(dataFim) : addMonths(hoje, 13); // sem fim: ~12 meses à frente
-  const out: { ano: number; mes: number }[] = [];
-  for (let k = 0; k < 120; k++) {
-    const ref = addMonths(inicio, k); // dia 1 do mês de referência
-    const aniversario = diaDoMes(ref.getFullYear(), ref.getMonth(), inicio.getDate());
-    if (aniversario >= fim) break;
-    out.push({ ano: ref.getFullYear(), mes: ref.getMonth() + 1 });
-  }
-  return out;
-}
+export { competenciasDoContrato } from "@/lib/financeiro/contrato-previsao";
 
 /**
  * Gera (de forma idempotente) a previsão de contas a receber de um contrato.
  * D3: a cobrança do contrato é SEMPRE mensal (valor fixo por mês), independente da
  * frequência das visitas (CO1). C6: cada previsão nasce LIGADA ao contrato e à
  * competência (uma por contrato × mês — unique no banco). Só contrato ATIVO gera (CO2).
- * Cria apenas competências de hoje em diante. Retorna a quantidade criada.
+ * Cria apenas competências de hoje em diante. Retorna a quantidade criada (ou revivida).
  */
-export async function gerarPrevisaoContratoContasReceber(contratoId: string): Promise<number> {
+export async function gerarPrevisaoContratoContasReceber(contratoId: string, usuarioId?: string | null): Promise<number> {
   const contrato = await prisma.contrato.findUnique({
     where: { id: contratoId },
     include: { cliente: { select: { cpfCnpj: true } } },
   });
   if (!contrato) return 0;
-  const valor = contrato.valorMensal ? Number(contrato.valorMensal) : 0;
+  const valor = valorMensalDe(contrato);
   if (valor <= 0) return 0;
   if (!contratoGeraFinanceiro(contrato.status)) return 0;
 
   const hojeBR = partesBR(); // competência corrente pelo mês de Brasília
-  const diaFat = contrato.diaFaturamento ?? contrato.diaFixoMes ?? contrato.diaVencimento ?? 1;
   const base = `${contrato.descricaoNFSe?.trim() || `Contrato ${contrato.numero}`}`;
 
   // Categoria "Contrato": ligada por ID quando a empresa tem uma categoria ATIVA com esse nome
@@ -461,16 +433,7 @@ export async function gerarPrevisaoContratoContasReceber(contratoId: string): Pr
     // Da competência CORRENTE em diante (o mês atual ainda vai ser faturado pelo gerar-mes;
     // meses já passados não nascem)
     if (ano < hojeBR.ano || (ano === hojeBR.ano && mes0 < hojeBR.mes)) continue;
-    const dataFaturamento = diaDoMes(ano, mes0, diaFat);
-
-    // Vencimento
-    let venc: Date;
-    if (contrato.tipoVencimento === "DIA_FIXO_MES" && contrato.diaFixoMes) {
-      venc = diaDoMes(ano, mes0, contrato.diaFixoMes);
-    } else {
-      venc = addDays(dataFaturamento, contrato.diasAposVencimento ?? 0);
-    }
-    venc = ajustarFimDeSemana(venc, contrato.ajusteFinsDeSemana);
+    const venc = vencimentoDaCompetencia(contrato, ano, mes);
 
     const tag = `${ano}${String(mes).padStart(2, "0")}`;
     const numero = `${contrato.numero}/${tag}`;
@@ -483,14 +446,27 @@ export async function gerarPrevisaoContratoContasReceber(contratoId: string): Pr
           { empresaId: contrato.empresaId, clienteId: contrato.clienteId, numero },
         ],
       },
-      select: { id: true, status: true, medicaoId: true },
+      select: { id: true, status: true, medicaoId: true, canceladaEm: true, excluidaEm: true, observacao: true },
     });
     if (existente) {
-      // Contrato reativado (CO2): a previsão cancelada no encerramento REVIVE — não nasce
-      // uma segunda linha (a competência é única por contrato).
-      if (existente.status === "CANCELADO" && !existente.medicaoId) {
-        await prisma.contaReceber.update({ where: { id: existente.id }, data: { status: "PREVISTO", valor, dataVencimento: venc } });
-        criadas++;
+      // Contrato reativado / de novo na vigência (CO2): a previsão que o CONTRATO cancelou
+      // REVIVE — não nasce uma segunda linha (a competência é única por contrato). A que a
+      // pessoa cancelou à mão continua cancelada.
+      if (existente.status === "CANCELADO" && !existente.medicaoId && !existente.excluidaEm && await canceladaPeloContrato(existente)) {
+        const r = await prisma.contaReceber.updateMany({
+          where: { id: existente.id, status: "CANCELADO", medicaoId: null },
+          data: {
+            status: "PREVISTO", valor, dataVencimento: venc, canceladaEm: null, motivoCancelamento: null,
+            // o encerramento antigo escrevia o motivo na observação
+            ...(existente.observacao && !existente.canceladaEm ? { observacao: null } : {}),
+          },
+        });
+        if (r.count) {
+          await prisma.contaReceberEvento.create({
+            data: { empresaId: contrato.empresaId, contaReceberId: existente.id, tipo: "REABERTA", detalhe: detalheReaberta(contrato.numero), usuarioId: usuarioId ?? null },
+          });
+          criadas++;
+        }
       }
       continue;
     }
@@ -519,17 +495,97 @@ export async function gerarPrevisaoContratoContasReceber(contratoId: string): Pr
 }
 
 /**
- * CO2: quando o contrato deixa de estar ATIVO (cancelado, encerrado, suspenso, vencido…),
+ * A previsão cancelada foi cancelada PELO CONTRATO? Sem data de cancelamento é a do
+ * encerramento antigo (que só escrevia na observação) — revive como sempre reviveu. Com data,
+ * só se o último cancelamento na linha do tempo foi escrito pelo contrato.
+ */
+async function canceladaPeloContrato(c: { id: string; canceladaEm: Date | null }) {
+  if (!c.canceladaEm) return true;
+  const ultimo = await prisma.contaReceberEvento.findFirst({
+    where: { contaReceberId: c.id, tipo: "CANCELADA" }, orderBy: { criadoEm: "desc" }, select: { detalhe: true },
+  });
+  return eventoDoContrato(ultimo?.detalhe);
+}
+
+/** As previsões do contrato que ainda são só previsão: nada faturado, nenhum boleto vivo, não excluída */
+const previsoesAbertasDoContrato = (contratoId: string): Prisma.ContaReceberWhereInput => ({
+  contratoId, status: "PREVISTO", medicaoId: null, lancamentoId: null, excluidaEm: null,
+  OR: [{ boletoStatus: null }, { boletoStatus: { not: "EMITIDO" } }],
+});
+
+/**
+ * Cancela UMA previsão em nome do contrato: status + data + motivo + evento na linha do tempo.
+ * A escrita confere de novo que ainda é previsão pura (se o gerar-mes ligou a conta a uma
+ * medição, ou saiu um boleto, no meio do caminho, ela fica como está). Devolve se cancelou.
+ */
+async function cancelarPrevisaoDoContrato(c: { id: string; empresaId: string }, motivo: string, usuarioId?: string | null) {
+  return prisma.$transaction(async (tx) => {
+    const r = await tx.contaReceber.updateMany({
+      where: { id: c.id, status: "PREVISTO", medicaoId: null, OR: [{ boletoStatus: null }, { boletoStatus: { not: "EMITIDO" } }] },
+      data: { status: "CANCELADO", canceladaEm: new Date(), motivoCancelamento: motivo },
+    });
+    if (!r.count) return false;
+    await tx.contaReceberEvento.create({
+      data: { empresaId: c.empresaId, contaReceberId: c.id, tipo: "CANCELADA", detalhe: detalheCancelamento(motivo), usuarioId: usuarioId ?? null },
+    });
+    return true;
+  });
+}
+
+/**
+ * Contrato EDITADO (continua ATIVO): as previsões ainda abertas acompanham o contrato.
+ * - fora da nova vigência (ou contrato sem valor mensal) → canceladas, com motivo e evento;
+ * - da competência corrente em diante → valor e/ou vencimento novos, só no que mudou
+ *   (`antes` × contrato atual), com evento "Editada" dizendo de quanto para quanto.
+ * Nada que já virou cobrança (medição, boleto, recebimento) muda. Depois disto, o
+ * `gerarPrevisaoContratoContasReceber` cria os meses que entraram na vigência.
+ */
+export async function sincronizarPrevisoesDoContrato(contratoId: string, antes: CobrancaContrato, usuarioId?: string | null) {
+  const contrato = await prisma.contrato.findUnique({ where: { id: contratoId } });
+  if (!contrato || !contratoGeraFinanceiro(contrato.status)) return { atualizadas: 0, canceladas: 0 };
+  const abertas = await prisma.contaReceber.findMany({
+    where: previsoesAbertasDoContrato(contratoId),
+    select: { id: true, refAno: true, refMes: true, valor: true, dataVencimento: true },
+    orderBy: [{ refAno: "asc" }, { refMes: "asc" }],
+  });
+  const hojeBR = partesBR();
+  const plano = planoSincronizacao(abertas, contrato, mudancasDaCobranca(antes, contrato), { ano: hojeBR.ano, mes: hojeBR.mes + 1 });
+
+  let canceladas = 0;
+  for (const c of plano.cancelar) {
+    if (await cancelarPrevisaoDoContrato({ id: c.id, empresaId: contrato.empresaId }, c.motivo, usuarioId)) canceladas++;
+  }
+  let atualizadas = 0;
+  for (const a of plano.atualizar) {
+    const feito = await prisma.$transaction(async (tx) => {
+      const r = await tx.contaReceber.updateMany({
+        where: { id: a.id, status: "PREVISTO", medicaoId: null, OR: [{ boletoStatus: null }, { boletoStatus: { not: "EMITIDO" } }] },
+        data: { ...(a.valor !== undefined ? { valor: a.valor } : {}), ...(a.dataVencimento ? { dataVencimento: a.dataVencimento } : {}) },
+      });
+      if (!r.count) return false;
+      await tx.contaReceberEvento.create({
+        data: { empresaId: contrato.empresaId, contaReceberId: a.id, tipo: "EDITADA", detalhe: a.detalhe, usuarioId: usuarioId ?? null },
+      });
+      return true;
+    });
+    if (feito) atualizadas++;
+  }
+  return { atualizadas, canceladas };
+}
+
+/**
+ * CO2: quando o contrato deixa de estar ATIVO (cancelado, encerrado, suspenso, vencido, excluído…),
  * a receita fantasma é limpa: cancela as previsões (PREVISTO) ainda não faturadas do
- * contrato e as OS AGENDADAS futuras e intocadas (sem execução e sem financeiro).
- * Nada recebido/faturado é alterado. Retorna o que foi cancelado.
+ * contrato — com motivo e evento na linha do tempo — e as OS AGENDADAS futuras e intocadas
+ * (sem execução e sem financeiro). Nada recebido/faturado é alterado. Retorna o que foi cancelado.
  */
 export async function encerrarFinanceiroDoContrato(contratoId: string, motivo = "Contrato deixou de estar ativo", usuarioId?: string) {
   const agora = new Date();
-  const previsoes = await prisma.contaReceber.updateMany({
-    where: { contratoId, status: "PREVISTO", medicaoId: null },
-    data: { status: "CANCELADO", observacao: motivo },
-  });
+  const abertas = await prisma.contaReceber.findMany({ where: previsoesAbertasDoContrato(contratoId), select: { id: true, empresaId: true } });
+  let previsoesCanceladas = 0;
+  for (const c of abertas) {
+    if (await cancelarPrevisaoDoContrato(c, motivo, usuarioId)) previsoesCanceladas++;
+  }
 
   // OS futuras e intocadas: AGENDADA, nenhuma atividade fora de AGENDADA, nenhuma atividade
   // passada, nada no financeiro (a trava osJaFaturada é por medição viva — aqui basta nenhum item)
@@ -550,7 +606,7 @@ export async function encerrarFinanceiroDoContrato(contratoId: string, motivo = 
       });
     }
   }
-  return { previsoesCanceladas: previsoes.count, osCanceladas: candidatas.length };
+  return { previsoesCanceladas, osCanceladas: candidatas.length };
 }
 
 // ─────────────────────────────────────────────

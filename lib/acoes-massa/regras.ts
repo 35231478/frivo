@@ -160,7 +160,7 @@ export async function mudarStatusContrato(id: string, novo: StatusContrato, ctx:
   if (!contratoGeraFinanceiro(novo)) {
     await encerrarFinanceiroDoContrato(id, `Contrato ${novo.toLowerCase().replace(/_/g, " ")}${ctx.motivo ? ` — ${ctx.motivo}` : ""}`, ctx.usuarioId).catch(() => null);
   } else {
-    await gerarPrevisaoContratoContasReceber(id).catch(() => 0);
+    await gerarPrevisaoContratoContasReceber(id, ctx.usuarioId).catch(() => 0);
   }
   return ok(undefined, { historico });
 }
