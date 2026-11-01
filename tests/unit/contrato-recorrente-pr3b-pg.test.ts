@@ -50,11 +50,16 @@ vi.mock("next/navigation", () => ({ redirect: (u: string) => { throw new Error(`
 vi.mock("next/server", async (orig) => ({ ...(await orig<typeof import("next/server")>()), after: () => {} }));
 
 /* ───────── PlugNotas simulado ───────── */
-const pn = vi.hoisted(() => ({ notas: new Map<string, any>(), envios: 0, seq: 0, atrasoEnvio: 0 }));
+const pn = vi.hoisted(() => ({ notas: new Map<string, any>(), envios: 0, seq: 0, atrasoEnvio: 0, aoConsultarCep: null as null | (() => Promise<unknown>) }));
 const resposta = (status: number, corpo: unknown) => new Response(JSON.stringify(corpo), { status, headers: { "Content-Type": "application/json" } });
 async function fetchFalso(entrada: string | URL, init?: RequestInit) {
   const url = String(entrada);
-  if (url.startsWith("https://viacep.com.br/")) return resposta(200, { ibge: "5220454", localidade: "Senador Canedo", uf: "GO" });
+  if (url.startsWith("https://viacep.com.br/")) {
+    // Gancho de teste: algo acontece no meio da preparação da emissão (uma só vez)
+    const f = pn.aoConsultarCep; pn.aoConsultarCep = null;
+    if (f) await f();
+    return resposta(200, { ibge: "5220454", localidade: "Senador Canedo", uf: "GO" });
+  }
   const chave = new Headers(init?.headers).get("x-api-key");
   if (chave !== TOKEN) return resposta(401, { error: { message: "Unauthorized" } });
   const caminho = url.replace(BASE, "");
@@ -419,11 +424,31 @@ describe.skipIf(!URL_PG)("Contrato recorrente PR3-B — NFS-e e boleto automáti
     em("2026-11-11T11:23:00.000Z"); await rodar();
     expect(email.boleto.filter((id) => id === conta.id)).toHaveLength(1);
     expect((await execucao(g.id)).situacao).toBe("PENDENCIA");
+    // Um e-mail ANTIGO da conta (antes deste boleto) não conta como o e-mail do boleto
+    const emitidoEm = (await prisma.contaReceber.findUnique({ where: { id: conta.id } })).boletoEmitidoEm;
+    await prisma.emailLog.create({ data: { empresaId: "e1", para: "fin@x.com", assunto: "Cobrança antiga", referenciaId: conta.id, referenciaTipo: "ContaReceber", status: "ENVIADO", enviadoEm: new Date(emitidoEm.getTime() - 86_400_000) } });
+    em("2026-11-12T11:23:00.000Z"); await rodar();
+    expect((await execucao(g.id)).situacao).toBe("PENDENCIA");
     // Corrigido o cadastro: "Tentar de novo" reenvia só o e-mail
     email.respostaBoleto = { ok: true };
     await chamar("faturamento-contratos/[id]/tentar", "POST", { id: ex.id });
     ex = await execucao(g.id);
     expect([ex.situacao, inter.n - nInter, email.boleto.filter((id) => id === conta.id).length]).toEqual(["CONCLUIDA", 1, 2]);
+
+    // E-mail que não saiu, mandado depois à mão pela conta: "Tentar de novo" conclui sem mandar outro
+    email.respostaBoleto = { ok: false, erro: "Destinatário sem e-mail." };
+    const k = await criar({ emitirNfseAuto: false });
+    await rodar();
+    const exK0 = await execucao(k.id);
+    expect((await chamar("medicoes/[id]/acao", "POST", { id: exK0.medicaoId }, { acao: "REGISTRAR_NF", nfNumero: "703" })).status).toBe(200);
+    await rodar();
+    const exK = await execucao(k.id);
+    const [contaK] = await contasDo(k.id);
+    expect(exK.situacao).toBe("PENDENCIA");
+    await prisma.emailLog.create({ data: { empresaId: "e1", para: "fin@x.com", assunto: "Boleto", referenciaId: contaK.id, referenciaTipo: "ContaReceber", status: "ENVIADO", enviadoEm: new Date(Date.now() + 60_000) } });
+    const enviosK = email.boleto.filter((id) => id === contaK.id).length;
+    await chamar("faturamento-contratos/[id]/tentar", "POST", { id: exK.id });
+    expect([(await execucao(k.id)).situacao, email.boleto.filter((id) => id === contaK.id).length]).toEqual(["CONCLUIDA", enviosK]);
 
     // Empresa desligou o e-mail de boleto: não é pendência
     const h = await criar({ emitirNfseAuto: false });
@@ -433,6 +458,100 @@ describe.skipIf(!URL_PG)("Contrato recorrente PR3-B — NFS-e e boleto automáti
     expect((await chamar("medicoes/[id]/acao", "POST", { id: exH.medicaoId }, { acao: "REGISTRAR_NF", nfNumero: "702" })).status).toBe(200);
     await rodar();
     expect((await execucao(h.id)).situacao).toBe("CONCLUIDA");
+  });
+
+  it("a tela emite o boleto (com o nome de quem clicou) antes da rodada: a rotina não emite outro e conclui", async () => {
+    em("2026-11-10T11:23:00.000Z");
+    const t = await criar({ emitirNfseAuto: false });
+    await rodar();
+    const ex0 = await execucao(t.id);
+    expect((await chamar("medicoes/[id]/acao", "POST", { id: ex0.medicaoId }, { acao: "REGISTRAR_NF", nfNumero: "801" })).status).toBe(200);
+    const [conta] = await contasDo(t.id);
+    const nInter = inter.n;
+    expect((await chamar("contas-receber/[id]/boleto", "POST", { id: conta.id }, {})).status).toBe(201);
+    const evento = await prisma.contaReceberEvento.findFirst({ where: { contaReceberId: conta.id, tipo: "BOLETO_EMITIDO" } });
+    expect([evento.usuarioId, evento.detalhe.includes("pela rotina")]).toEqual(["uA", false]);
+    await rodar();
+    expect([(await execucao(t.id)).situacao, inter.n - nInter]).toEqual(["CONCLUIDA", 1]);
+  });
+
+  it("boleto sozinho + NFS-e emitida pela tela: a autorização (aviso) já leva ao boleto, sem esperar a rodada", async () => {
+    em("2026-11-10T11:23:00.000Z");
+    const t = await criar({ emitirNfseAuto: false });
+    await rodar();
+    const ex0 = await execucao(t.id);
+    expect([ex0.etapa, ex0.situacao]).toEqual(["BOLETO", "AGUARDANDO"]);
+    await emissao.emitirNotas({ id: "uA", empresaId: "e1" }, ex0.medicaoId, { origem: "MEDICAO" });
+    const [nota] = await notasDo(t.id);
+    situar(nota.plugnotasId, { situacao: "CONCLUIDO", numeroNfse: "880" });
+    const nInter = inter.n;
+    await aviso({ id: nota.plugnotasId });
+    const ex = await execucao(t.id);
+    expect([ex.etapa, ex.situacao, inter.n - nInter, (await contasDo(t.id))[0].boletoStatus]).toEqual(["CONCLUIDA", "CONCLUIDA", 1, "EMITIDO"]);
+  });
+
+  it("parcelas: cada parcela ganha o seu boleto; a tela lista as parcelas (não o lançamento parcelado)", async () => {
+    em("2026-11-10T11:23:00.000Z");
+    const t = await criar({ emitirNfseAuto: false });
+    await rodar();
+    const ex0 = await execucao(t.id);
+    expect((await chamar("medicoes/[id]/acao", "POST", { id: ex0.medicaoId }, { acao: "REGISTRAR_NF", nfNumero: "901" })).status).toBe(200);
+    const [conta] = await contasDo(t.id);
+    const metade = Math.round(Number(conta.valor) * 50) / 100;
+    const resto = Math.round((Number(conta.valor) - metade) * 100) / 100;
+    const parc = await chamar("contas-receber/[id]/parcelar", "POST", { id: conta.id }, { parcelas: [{ vencimento: "2026-11-20", valor: metade }, { vencimento: "2026-12-20", valor: resto }] });
+    expect(parc.status).toBeLessThan(300);
+    const nInter = inter.n;
+    await rodar();
+    expect([(await execucao(t.id)).situacao, inter.n - nInter]).toEqual(["CONCLUIDA", 2]);
+    const parcelas = await prisma.contaReceber.findMany({ where: { lancamentoId: conta.id }, orderBy: { parcelaNumero: "asc" } });
+    expect(parcelas.map((p: any) => p.boletoStatus)).toEqual(["EMITIDO", "EMITIDO"]);
+    const tela = await chamar("faturamento-contratos", "GET", {}, undefined, "http://localhost/api/faturamento-contratos?ano=2026&mes=11");
+    const linha = tela.json.linhas.find((l: any) => l.contratoId === t.id);
+    expect(linha.execucao.cobrancas.map((c: any) => [c.id, c.boleto])).toEqual(parcelas.map((p: any) => [p.id, "EMITIDO"]));
+  });
+
+  it("NFS-e: medição cancelada no meio encerra; cliente que exige pedido de compra espera o PC (sem emitir, sem sino)", async () => {
+    em("2026-11-10T11:23:00.000Z");
+    const x = await criar({ servicoId: null });
+    await rodar();
+    let ex = await execucao(x.id);
+    expect([ex.etapa, ex.situacao]).toEqual(["NFSE", "PENDENCIA"]);
+    const m = await prisma.medicao.findUnique({ where: { id: ex.medicaoId } });
+    await prisma.medicao.update({ where: { id: m.id }, data: { status: "CANCELADA" } });
+    em("2026-11-11T11:23:00.000Z");
+    await chamar("faturamento-contratos/[id]/tentar", "POST", { id: ex.id });
+    ex = await execucao(x.id);
+    expect([ex.situacao, ex.erro]).toEqual(["CANCELADA", `A medição ${m.numero} foi cancelada.`]);
+
+    em("2026-11-10T11:23:00.000Z");
+    const cliPc = await novoCliente();
+    await prisma.cliente.update({ where: { id: cliPc }, data: { exigePcAntesNf: true } });
+    const y = await criar({ clienteId: cliPc });
+    const antes = pn.envios;
+    await rodar();
+    const exY = await execucao(y.id);
+    expect([exY.etapa, exY.situacao, exY.erro, pn.envios - antes, (await notasDo(y.id)).length]).toEqual(["NFSE", "AGUARDANDO", null, 0, 0]);
+    expect((await prisma.medicao.findUnique({ where: { id: exY.medicaoId } })).status).toBe("AGUARDANDO_PC");
+  });
+
+  it("corrida certa: a tela emite no meio da preparação da rotina → a rotina recebe \"outra emissão começou\" e espera (sem contar tentativa, sem nota em dobro)", async () => {
+    em("2026-11-10T11:23:00.000Z");
+    // Cliente fora do município da empresa: a emissão consulta o CEP (é aí que a tela entra)
+    const cli = await novoCliente();
+    await prisma.cliente.update({ where: { id: cli }, data: { cidade: "Goiânia", cep: "74000-000" } });
+    const z = await criar({ clienteId: cli, emitirBoletoAuto: false });
+    let daTela: unknown = null;
+    pn.aoConsultarCep = async () => {
+      const ex = await execucao(z.id);
+      daTela = await emissao.emitirNotas({ id: "uA", empresaId: "e1" }, ex.medicaoId, { origem: "MEDICAO" }).then(() => "ok", (e) => e.message);
+    };
+    const antes = pn.envios;
+    await rodar();
+    pn.aoConsultarCep = null;
+    expect(daTela).toBe("ok");
+    const ex = await execucao(z.id);
+    expect([ex.etapa, ex.situacao, ex.tentativas, ex.erro, pn.envios - antes, (await notasDo(z.id)).length]).toEqual(["NFSE", "AGUARDANDO", 0, null, 1, 1]);
   });
 
   it("RBAC das chaves: NFS-e automática pede Fiscal; boleto automático pede Contas a receber; só Medições não liga nenhuma das duas", async () => {
@@ -449,6 +568,12 @@ describe.skipIf(!URL_PG)("Contrato recorrente PR3-B — NFS-e e boleto automáti
     expect((await editar(base, { emitirNfseAuto: true, emitirBoletoAuto: true })).status).toBe(200);
     const salvo = await prisma.contrato.findUnique({ where: { id: base.id } });
     expect([salvo.emitirNfseAuto, salvo.emitirBoletoAuto]).toEqual([true, true]);
+    // Criar já com a chave também pede a permissão
+    logar(usuario({ contratos: ["visualizar", "criar", "editar"], financeiro: ["visualizar", "medicoes", "fiscal"] }));
+    const cli = await novoCliente();
+    const novo = await chamar("contratos", "POST", {}, { ...base.body, clienteId: cli, numero: "CT-RBAC-POST", emitirNfseAuto: true, emitirBoletoAuto: true });
+    expect([novo.status, novo.json.erro]).toEqual([403, "Ligar ou desligar o boleto automático pede a permissão Financeiro › Contas a receber."]);
+    expect(await prisma.contrato.count({ where: { numero: "CT-RBAC-POST" } })).toBe(0);
     // Sem Fiscal, desligar também é recusado (a chave é dele)
     logar(usuario({ contratos: ["visualizar", "editar"], financeiro: ["visualizar", "medicoes", "contasReceber"] }));
     expect((await editar(base, { emitirNfseAuto: false })).status).toBe(403);

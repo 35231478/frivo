@@ -90,6 +90,7 @@ describe("Faturamento de contratos", () => {
     expect([tr("a").querySelector("[data-nf]")!.textContent, tr("a").querySelector("[data-boleto]")!.textContent]).toEqual(["nº 123", "Emitido"]);
     // NF → a medição (onde ficam a nota e o PDF); boleto → a conta a receber aberta na gaveta
     expect(tr("a").querySelector("[data-nf] a")!.getAttribute("href")).toBe("/financeiro/medicoes/m1");
+    expect(tr("a").querySelector("[data-nf] a")!.className).toContain("whitespace-nowrap"); // o nº da NF numa linha só
     expect(tr("a").querySelector("[data-boleto] a")!.getAttribute("href")).toBe("/financeiro/contas-receber?conta=cr1&periodo=todos");
     expect(tr("a").textContent).toContain("aprova sozinho");
     expect(tr("b").querySelector("[data-situacao]")!.textContent).toBe("Aprovação · Aguardando");

@@ -441,9 +441,14 @@ describe("PR3-A: cobrança a cada N meses e faturamento automático", () => {
     await act(async () => root.unmount());
     caixa.remove();
     // Medições + Fiscal: só o boleto travado
-    await montar({ ...permissoesVazias(), contratos: { visualizar: true, editar: true }, clientes: { visualizar: true }, financeiro: { visualizar: true, medicoes: true, fiscal: true } }, editarCt({ faturamentoAutomatico: true }));
+    await montar({ ...permissoesVazias(), contratos: { visualizar: true, editar: true }, clientes: { visualizar: true }, financeiro: { visualizar: true, medicoes: true, fiscal: true } }, editarCt({ faturamentoAutomatico: true, emitirNfseAuto: true, emitirBoletoAuto: true }));
     expect([sw("Emitir a NFS-e sozinha").disabled, sw("Emitir e enviar o boleto sozinho").disabled]).toEqual([false, true]);
     expect($("[data-automacao-sem-permissao-etapa]")!.textContent).toBe("O boleto automático pede a permissão Financeiro › Contas a receber.");
+    // Desligar o automático desliga só o que esta pessoa pode mexer (o boleto fica como está: o servidor recusaria)
+    chamadas.length = 0;
+    await clicar(sw("Faturamento automático"));
+    const semCr = await salvar();
+    expect([semCr.faturamentoAutomatico, semCr.emitirNfseAuto, semCr.emitirBoletoAuto]).toEqual([false, false, true]);
     await act(async () => root.unmount());
     caixa.remove();
     // Tudo: liga as duas; sem serviço da nota, a NFS-e avisa

@@ -23,13 +23,14 @@ export type LinhaFaturamentoContrato = {
   };
 };
 
-/** A NF que a tela mostra: a autorizada mais recente; senão a que está na prefeitura; senão a não aceita; senão a manual */
+/** A NF que a tela mostra: a autorizada mais recente; senão a que está na prefeitura; senão a não aceita; senão a registrada à mão (sem nota emitida aqui) */
 export function nfDaMedicao(notas: { status: string; numero: string | null }[], nfManual: string | null): NfTela {
   const autorizada = notas.find((n) => n.status === "CONCLUIDO");
   if (autorizada) return { numero: autorizada.numero, situacao: "AUTORIZADA" };
   if (notas.some((n) => n.status === "ENVIANDO" || n.status === "PROCESSANDO")) return { numero: null, situacao: "PREFEITURA" };
   if (notas.some((n) => n.status === "REJEITADO" || n.status === "INTERROMPIDO")) return { numero: null, situacao: "NAO_ACEITA" };
-  return nfManual ? { numero: nfManual, situacao: "MANUAL" } : null;
+  // NF registrada à mão: só quando nenhuma nota foi emitida aqui (o nº de uma nota cancelada não vira "manual")
+  return nfManual && !notas.length ? { numero: nfManual, situacao: "MANUAL" } : null;
 }
 
 type Cartao = { q: number; v: number };
@@ -91,8 +92,7 @@ export async function painelFaturamentoContratos(empresaId: string, ano: number,
       execucao: e ? {
         id: e.id, etapa: e.etapa, situacao: e.situacao, erro: e.erro, tentativas: e.tentativas, atualizadoEm: e.atualizadoEm.toISOString(),
         medicao: e.medicao ? { id: e.medicao.id, numero: e.medicao.numero, status: e.medicao.status, nfNumero: e.medicao.nfNumero } : null,
-        // NF manual: o nº registrado na medição que não é de nota emitida aqui
-        nf: e.medicao ? nfDaMedicao(e.medicao.notasFiscais, e.medicao.notasFiscais.length ? null : e.medicao.nfNumero) : null,
+        nf: e.medicao ? nfDaMedicao(e.medicao.notasFiscais, e.medicao.nfNumero) : null,
         cobrancas: cobrancasDe(e.medicaoId),
       } : null,
     });

@@ -59,6 +59,8 @@ describe("a NF que a tela mostra", () => {
     expect(nfDaMedicao([{ status: "INTERROMPIDO", numero: null }], null)).toEqual({ numero: null, situacao: "NAO_ACEITA" });
     expect(nfDaMedicao([], "555")).toEqual({ numero: "555", situacao: "MANUAL" });
     expect(nfDaMedicao([], null)).toBeNull();
+    // Nota cancelada: o nº que ficou na medição não vira "registrada à mão"
+    expect(nfDaMedicao([{ status: "CANCELADO", numero: "12" }], "12")).toBeNull();
   });
 });
 
@@ -75,5 +77,8 @@ describe("permissões das chaves (servidor e tela)", () => {
     expect(faltaPermissaoAutomacao({ emitirNfseAuto: true }, { emitirNfseAuto: true }, u([]))).toBeNull();
     expect(faltaPermissaoAutomacao({ emitirBoletoAuto: false }, { emitirBoletoAuto: true }, u(["medicoes", "fiscal"]))).toBe(ERRO_SEM_PERMISSAO_BOLETO_AUTO);
     expect(faltaPermissaoAutomacao({ emitirNfseAuto: true }, {}, { permissoes: {}, role: "ADMIN" })).toBeNull();
+    // null/undefined no corpo = "não mexi" (não pede permissão), mesmo com a chave ligada no contrato
+    expect(faltaPermissaoAutomacao({ emitirNfseAuto: null, emitirBoletoAuto: undefined }, { emitirNfseAuto: true, emitirBoletoAuto: true }, u(["medicoes"]))).toBeNull();
+    expect(mudaAutomacao({ emitirBoletoAuto: null }, { emitirBoletoAuto: true })).toBe(false);
   });
 });
