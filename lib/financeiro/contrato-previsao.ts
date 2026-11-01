@@ -66,7 +66,10 @@ export function competenciasDoContrato(dataInicio: Date, dataFim: Date | null, h
   // sem fim: ~12 meses à frente (13 > 12 = o maior passo: o anual sempre tem a próxima cobrança)
   const fim = dataFim ? new Date(dataFim) : addMonths(hoje, 13);
   const out: { ano: number; mes: number }[] = [];
-  for (let k = 0; k < 120; k += Math.max(1, passo)) {
+  // PR4: até o fim (ou a janela de ~12 meses), por mais antigo que seja o contrato (antes: no máximo 120
+  // meses a partir do início — contrato indeterminado com mais de 10 anos parava de gerar previsão)
+  const limite = (fim.getFullYear() - inicio.getFullYear()) * 12 + (fim.getMonth() - inicio.getMonth()) + 1;
+  for (let k = 0; k <= limite; k += Math.max(1, passo)) {
     const ref = addMonths(inicio, k); // dia 1 do mês de referência
     const aniversario = diaDoMes(ref.getFullYear(), ref.getMonth(), inicio.getDate());
     if (aniversario >= fim) break;

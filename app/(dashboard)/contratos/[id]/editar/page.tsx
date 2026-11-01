@@ -17,7 +17,7 @@ export default async function EditarContratoPage({ params }: { params: Promise<{
       responsavelTecnico: { select: { id: true, nome: true, crea: true } },
       unidades: { include: { unidade: true } },
       anexos: { select: { id: true, nome: true, tipo: true, tamanho: true, categoria: true, criadoEm: true }, orderBy: { criadoEm: "desc" } },
-      reajustes: { orderBy: { data: "desc" } },
+      reajustes: { orderBy: { data: "desc" }, include: { usuario: { select: { nome: true } } } },
       historicoStatus: { include: { usuario: { select: { id: true, nome: true } } }, orderBy: { createdAt: "desc" } },
       recorrenciasLocais: true,
     },

@@ -23,7 +23,7 @@ export async function GET(_: NextRequest, { params }: Params) {
       responsavelTecnico: { select: { id: true, nome: true, crea: true } },
       unidades: { include: { unidade: true } },
       anexos: { select: { id: true, nome: true, tipo: true, tamanho: true, categoria: true, criadoEm: true }, orderBy: { criadoEm: "desc" } },
-      reajustes: { orderBy: { data: "desc" } },
+      reajustes: { orderBy: { data: "desc" }, include: { usuario: { select: { nome: true } } } },
     },
   });
   if (!contrato) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
