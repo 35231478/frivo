@@ -24,6 +24,8 @@ describe("aniversário", () => {
     expect(primeiroAniversario(base)).toEqual({ ano: 2026, mes: 11 }); // 12 meses
     expect(primeiroAniversario({ ...base, reajusteMesAniversario: 12 })).toEqual({ ano: 2026, mes: 12 }); // 13
     expect(primeiroAniversario({ ...base, reajusteMesAniversario: 3 })).toEqual({ ano: 2027, mes: 3 }); // mar/26 seria 4 meses
+    // 11 meses não bastam: começou em dez/2025, aniversário em novembro → nov/2027 (nov/2026 seriam 11 meses)
+    expect(primeiroAniversario({ ...base, dataInicio: new Date("2025-12-01T00:00:00.000Z"), reajusteMesAniversario: 11 })).toEqual({ ano: 2027, mes: 11 });
   });
   it("devido: o mais recente que já chegou (o mês de hoje conta); antes do 1º, nenhum", () => {
     expect(aniversarioDevido(base, { ano: 2026, mes: 10 })).toBeNull();
@@ -35,6 +37,8 @@ describe("aniversário", () => {
     expect(proximoAniversario(base, { ano: 2026, mes: 3 })).toEqual({ ano: 2026, mes: 11 });
     expect(proximoAniversario(base, { ano: 2026, mes: 11 })).toEqual({ ano: 2027, mes: 11 });
     expect(proximoAniversario(base, { ano: 2027, mes: 12 })).toEqual({ ano: 2028, mes: 11 });
+    // O 1º ainda está a mais de um ano: é ele (não o "janeiro que vem")
+    expect(proximoAniversario({ ...base, dataInicio: new Date("2026-03-01T00:00:00.000Z"), reajusteMesAniversario: 1 }, { ano: 2026, mes: 4 })).toEqual({ ano: 2028, mes: 1 });
   });
 });
 

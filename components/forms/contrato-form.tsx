@@ -482,8 +482,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
         </p>
       );
     }
-    let prox = proximoAniversario(c, hoje);
-    while (decididos.includes(prox.ano)) prox = { ano: prox.ano + 1, mes: prox.mes };
+    const prox = proximoAniversario(c, hoje); // sempre depois de hoje: nunca um ano já decidido
     return (
       <p className="text-sm text-ink-muted" data-proximo-reajuste="futuro">
         Próximo reajuste: {textoCompetencia(prox)} · {formatarMoeda(valorMensalNum)} → {formatarMoeda(valorReajustado(valorMensalNum, pct))}

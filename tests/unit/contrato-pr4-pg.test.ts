@@ -134,6 +134,17 @@ describe.skipIf(!URL_PG)("Contrato recorrente PR4 — horizonte rolante + reajus
     expect(await retrato(comFim.id)).toEqual(fimAntes); // com fim: como está
     expect(await previsoes(suspenso.id)).toHaveLength(0);
 
+    // Corrida de verdade: três rodadas ao mesmo tempo completando a mesma janela → cada mês uma vez, sem falha
+    const apagadas = (await prisma.contaReceber.deleteMany({ where: { contratoId: ind.id, refAno: 2027, refMes: { gte: 6 } } })).count;
+    const corrida = await Promise.all([1, 2, 3].map(() => fin.rolarHorizonteDePrevisoes({ empresaId: "e1" })));
+    expect([corrida.reduce((t, x) => t + x.previsoes, 0), corrida.reduce((t, x) => t + x.falhas, 0)]).toEqual([apagadas, 0]);
+    expect(await comps(ind.id)).toHaveLength(14);
+    // Contrato COM fim: o cron não mexe (nem completa o que alguém tirou)
+    await prisma.contaReceber.deleteMany({ where: { contratoId: comFim.id, refAno: 2027, refMes: 3 } });
+    const semMarco = await retrato(comFim.id);
+    await fin.rolarHorizonteDePrevisoes({ empresaId: "e1" });
+    expect(await retrato(comFim.id)).toEqual(semMarco);
+
     // Idempotente, também com duas rodadas ao mesmo tempo (competência única por contrato)
     const antes = await prisma.contaReceber.count();
     const rs = await Promise.all([fin.rolarHorizonteDePrevisoes(), fin.rolarHorizonteDePrevisoes({ empresaId: "e1" })]);
@@ -216,10 +227,13 @@ describe.skipIf(!URL_PG)("Contrato recorrente PR4 — horizonte rolante + reajus
     const antes = await retrato(ct.id);
     expect(sp((await decidir(ct.id, { acao: "APLICAR", ano: 2026, valorEsperado: 999 })).json.erro)).toBe("O valor do contrato mudou (agora R$ 1.000,00). Atualize a tela e confira o reajuste.");
     expect(await retrato(ct.id)).toEqual(antes);
+    expect((await decidir(ct.id, { acao: "APLICAR", ano: 2025, valorEsperado: 1000 })).status).toBe(409); // outro aniversário
+    expect((await decidir(ct.id, { acao: "ADIAR", ano: 2026, dias: 10 })).status).toBe(200); // adiado ainda pode ser aplicado
     const rs = await Promise.all([1, 2, 3].map(() => decidir(ct.id, { acao: "APLICAR", ano: 2026, valorEsperado: 1000 })));
     expect(rs.map((r) => r.status).sort()).toEqual([200, 409, 409]);
     expect(Number((await prisma.contrato.findUnique({ where: { id: ct.id } })).valorMensal)).toBe(1050);
     expect(await prisma.reajusteContrato.count({ where: { contratoId: ct.id } })).toBe(1);
+    expect((await prisma.contrato.findUnique({ where: { id: ct.id } })).reajusteAdiadoAte).toBeNull(); // decidido: o adiamento some
   });
 
   it("adiar some até a data (e volta); dispensar fecha o ano sem mexer no valor; no aniversário seguinte sugere de novo", async () => {
@@ -257,6 +271,7 @@ describe.skipIf(!URL_PG)("Contrato recorrente PR4 — horizonte rolante + reajus
     expect(lista.some((x) => x.contratoId === novo.id || x.contratoId === ipca.id)).toBe(false);
     const r = await decidir(breve.id, { acao: "APLICAR", ano: 2026, valorEsperado: 1000 });
     expect([r.status, r.json.erro]).toEqual([409, "O reajuste vale a partir de dez/2026: aplique quando o aniversário chegar."]);
+    expect((await decidir(breve.id, { acao: "ADIAR", ano: 2026, dias: 30 })).json.erro).toBe("O aniversário ainda não chegou: não há o que adiar.");
     expect(Number((await prisma.contrato.findUnique({ where: { id: breve.id } })).valorMensal)).toBe(1000);
   });
 
@@ -273,6 +288,13 @@ describe.skipIf(!URL_PG)("Contrato recorrente PR4 — horizonte rolante + reajus
       expect((await decidir(ct.id, { acao: "APLICAR", ano: 2026, valorEsperado: 1000 })).status).toBe(404);
     } finally { logar(); }
     expect((await decidir(ct.id, { acao: "APLICAR", ano: 2026 })).status).toBe(400);
+    // Contrato da OUTRA empresa no aniversário: não aparece na lista (nem no sino) desta
+    const outro = await prisma.contrato.create({ data: {
+      empresaId: "e2", clienteId: "c2", numero: "CT-E2", tipo: "MANUTENCAO_PREVENTIVA", status: "ATIVO", valorMensal: 500,
+      dataInicio: new Date("2025-11-01T00:00:00.000Z"), reajusteAtivo: true, reajusteIndice: "PERCENTUAL_FIXO", reajustePercentual: 5,
+    } });
+    expect((await reajuste.listarReajustes("e1")).some((l) => l.contratoId === outro.id)).toBe(false);
+    expect((await reajuste.listarReajustes("e2")).map((l) => l.contratoId)).toEqual([outro.id]);
     expect(Number((await prisma.contrato.findUnique({ where: { id: ct.id } })).valorMensal)).toBe(1000);
   });
 });
