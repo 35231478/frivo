@@ -83,8 +83,9 @@ async function avancar(ex: Execucao): Promise<boolean> {
       }
       return true;
     }
-    // Aprovação do cliente: envia uma vez (D6: por e-mail) e espera; cada rodada confere de novo
-    if (m.status === "RASCUNHO") {
+    // Aprovação do cliente: envia (D6: por e-mail) e espera; cada rodada confere de novo. Envia de novo
+    // quando a execução volta para a fila ("Tentar de novo" na pendência do e-mail, ou medição adotada já enviada à mão)
+    if (m.status === "RASCUNHO" || (m.status === "AGUARDANDO_APROVACAO" && ex.situacao === "PENDENTE")) {
       await marcarEnviada(m.id);
       const email = await enviarMedicao(m.id).catch((e) => ({ ok: false, erro: (e as Error)?.message ?? "erro no envio" }));
       await gravar(ex.id, email.ok

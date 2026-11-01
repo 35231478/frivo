@@ -54,12 +54,12 @@ export const medicaoJaAprovada = (status: string) => (MEDICAO_APROVADA as readon
 
 /**
  * O erro que a tela e o sino mostram: curto e legível. O erro do banco (Prisma) vem com a consulta
- * inteira; fica só a mensagem do banco ("Message: `…`") ou a última linha.
+ * inteira; fica só a mensagem do banco ("Message: `…`" ou message: "…") ou a última linha.
  */
 export function mensagemDeErro(e: unknown): string {
   const msg = ((e as Error)?.message || "").trim();
   if (!msg) return "Erro inesperado.";
-  const doBanco = msg.match(/Message: `([^`]+)`/)?.[1] ?? msg.match(/ERROR: ([^\n]+)/)?.[1];
+  const doBanco = msg.match(/Message: `([^`]+)`/)?.[1] ?? msg.match(/message: "([^"]+)"/)?.[1] ?? msg.match(/ERROR: ([^\n]+)/)?.[1];
   const linhas = msg.split("\n").map((l) => l.trim()).filter(Boolean);
   return (doBanco ?? linhas[linhas.length - 1] ?? msg).slice(0, 300);
 }

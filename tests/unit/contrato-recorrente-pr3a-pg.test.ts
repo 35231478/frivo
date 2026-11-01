@@ -98,10 +98,11 @@ describe.skipIf(!URL_PG)("Contrato recorrente PR3-A — periodicidade e rotina d
       { id: "uA", empresaId: "e1", nome: "Ana", email: "ana@x.com", senha: "x", role: "ADMIN" },
       { id: "uU", empresaId: "e1", nome: "Uli", email: "uli@x.com", senha: "x", role: "OPERADOR" },
     ] });
-    await prisma.cliente.createMany({ data: Array.from({ length: 13 }, (_, i) => ({
+    await prisma.cliente.createMany({ data: Array.from({ length: 14 }, (_, i) => ({
       id: `c${i + 1}`, empresaId: "e1", nome: `Cliente ${i + 1}`, cpfCnpj: `${String(i + 10).padStart(2, "0")}.111.111/0001-11`, diaFaturamento: 10,
       ...(i === 12 ? { tipoFaturamento: "FATURA_UNICA", agrupaAdicionais: true } : {}),
     })) });
+    await prisma.servico.create({ data: { id: "sRet", empresaId: "e1", nome: "Manutenção preventiva", codigo: "MANU01", codigoLc116: "14.01", issRetido: true, aliquotaISS: 5 } });
     vi.useFakeTimers({ toFake: ["Date"] });
     em("2026-11-15T15:00:00.000Z");
     logar();
@@ -149,11 +150,16 @@ describe.skipIf(!URL_PG)("Contrato recorrente PR3-A — periodicidade e rotina d
     expect([medT.descricao, Number(medT.valorTotal), medT.itens.map((i: any) => i.descricao), medT.mes, medT.ano])
       .toEqual(["Cobrança dez/2026–fev/2027", 900, [`Contrato ${t.numero} — cobrança Ref. dez/2026–fev/2027`], 12, 2026]);
     expect((await prisma.contaReceber.findFirst({ where: { contratoId: t.id, refAno: 2026, refMes: 12 } })).medicaoId).toBe(medT.id);
+    // Medição cancelada não conta como cobrança: gerar de novo cria outra para a mesma competência
+    expect((await chamar("medicoes/[id]/acao", "POST", { id: medM.id }, { acao: "CANCELAR", motivo: "Refazer" })).status).toBe(200);
+    const denovo = await chamar("medicoes/gerar-mes", "POST", {}, { mes: 11, ano: 2026 });
+    expect(denovo.json.criadas).toBe(1);
+    expect(await prisma.medicao.count({ where: { contratoId: m.id, mes: 11, ano: 2026, status: { not: "CANCELADA" } } })).toBe(1);
     // Janeiro: só o mensal de novo; gerar 2× não duplica
     expect((await chamar("medicoes/gerar-mes", "POST", {}, { mes: 1, ano: 2027 })).json.criadas).toBe(1);
     expect((await chamar("medicoes/gerar-mes", "POST", {}, { mes: 1, ano: 2027 })).json.criadas).toBe(0);
     expect(await prisma.medicao.count({ where: { contratoId: t.id } })).toBe(1);
-    expect(await prisma.medicao.count({ where: { contratoId: m.id } })).toBe(3);
+    expect(await prisma.medicao.count({ where: { contratoId: m.id, status: { not: "CANCELADA" } } })).toBe(3);
   });
 
   it("trocar mensal → trimestral cancela o que sai do passo (motivo + evento) e reescreve o Ref.; voltar a mensal revive", async () => {
@@ -198,6 +204,9 @@ describe.skipIf(!URL_PG)("Contrato recorrente PR3-A — periodicidade e rotina d
     const [my] = await medicoesDo(y.id);
     const [mz] = await medicoesDo(z.id);
     expect([ymd(my.dataVencimento), ymd(mz.dataVencimento)]).toEqual(["2026-11-20", "2026-11-10"]);
+    // A previsão também: sem dia no contrato, vence no dia do cliente (não no dia 1)
+    expect((await previsoes(z.id)).slice(0, 2).map((c: any) => ymd(c.dataVencimento))).toEqual(["2026-11-10", "2026-12-10"]);
+    expect((await previsoes(y.id)).slice(0, 2).map((c: any) => ymd(c.dataVencimento))).toEqual(["2026-11-20", "2026-12-20"]);
     expect((await chamar("medicoes/[id]/acao", "POST", { id: my.id }, { acao: "ENVIAR" })).status).toBe(200);
     const ap = await chamar("medicoes/[id]/acao", "POST", { id: my.id }, { acao: "APROVAR_MANUAL" });
     expect([ap.status, ap.json.status]).toEqual([200, "PC_RECEBIDO"]);
@@ -289,6 +298,17 @@ describe.skipIf(!URL_PG)("Contrato recorrente PR3-A — periodicidade e rotina d
     em("2026-11-28T11:23:00.000Z");
     await rodar();
     expect((await execucao(b.id, 2026, 11)).situacao).toBe("CONCLUIDA");
+
+    // "Tentar de novo" na pendência do e-mail: manda de novo (agora sai) e volta a esperar o cliente
+    (enviarMedicao as any).mockImplementation(async (id: string) => { email.enviados.push(id); chamadas++; return { ok: true }; });
+    const t = await chamar("faturamento-contratos/[id]/tentar", "POST", { id: exc.id });
+    expect([t.status, t.json.execucao.situacao, t.json.execucao.erro]).toEqual([200, "AGUARDANDO", null]);
+    expect(chamadas).toBe(3);
+    expect(email.enviados.at(-1)).toBe(mc.id);
+    expect((await chamar("alertas", "GET")).json.faturamentoContratos).toBe(0);
+    // A rodada seguinte não manda de novo
+    await rodar();
+    expect(chamadas).toBe(3);
 
     // Medição cancelada: a execução encerra com o motivo e sai do sino
     expect((await chamar("medicoes/[id]/acao", "POST", { id: mc.id }, { acao: "CANCELAR", motivo: "Cliente pediu para refazer" })).status).toBe(200);
@@ -419,11 +439,30 @@ describe.skipIf(!URL_PG)("Contrato recorrente PR3-A — periodicidade e rotina d
 
   it("D3: cliente de fatura única com contrato automático → medição só do contrato (sem os orçamentos do cliente)", async () => {
     em("2027-03-15T15:00:00.000Z");
-    const u = await criar({ clienteId: "c13", diaFaturamento: 10, faturamentoAutomatico: true, aprovacaoAutomatica: true });
+    const u = await criar({ clienteId: "c13", diaFaturamento: 10, faturamentoAutomatico: true, aprovacaoAutomatica: true, servicoId: "sRet" });
     await rodar();
     const [mu] = await medicoesDo(u.id);
-    expect([mu.tipo, mu.contratoId, mu.descricao, Number(mu.valorTotal)]).toEqual(["MENSAL_FIXO", u.id, "Medição mensal 03/2027", 1000]);
+    expect([mu.tipo, mu.contratoId, mu.descricao, Number(mu.valorTotal), Number(mu.valorRetencoes)]).toEqual(["MENSAL_FIXO", u.id, "Medição mensal 03/2027", 1000, 50]);
     expect((await execucao(u.id, 2027, 3)).situacao).toBe("CONCLUIDA");
+    // A aprovação automática gera a cobrança: a conta da competência passa a ser o líquido (R$ 1.000 − ISS retido R$ 50)
+    const conta = await prisma.contaReceber.findFirst({ where: { contratoId: u.id, refAno: 2027, refMes: 3 } });
+    expect([conta.medicaoId, Number(conta.valor)]).toEqual([mu.id, 950]);
+  });
+
+  it("desligar o automático com a cobrança ainda na fila: a rodada seguinte encerra (não cria a medição)", async () => {
+    em("2027-04-10T11:23:00.000Z");
+    const v = await criar({ clienteId: "c14", diaFaturamento: 10, faturamentoAutomatico: true, aprovacaoAutomatica: true });
+    await prisma.$executeRawUnsafe(`CREATE OR REPLACE FUNCTION "${SCHEMA}".falha_c14() RETURNS trigger AS $$ BEGIN IF NEW.cliente_id = 'c14' THEN RAISE EXCEPTION 'banco fora do ar'; END IF; RETURN NEW; END $$ LANGUAGE plpgsql`);
+    await prisma.$executeRawUnsafe(`CREATE TRIGGER falha_c14 BEFORE INSERT ON "${SCHEMA}".medicoes FOR EACH ROW EXECUTE FUNCTION "${SCHEMA}".falha_c14()`);
+    await rodar();
+    expect((await execucao(v.id, 2027, 4)).tentativas).toBe(1);
+    await prisma.$executeRawUnsafe(`DROP TRIGGER falha_c14 ON "${SCHEMA}".medicoes`);
+    expect((await editar(v, { faturamentoAutomatico: false, aprovacaoAutomatica: false })).status).toBe(200);
+    em("2027-04-11T11:23:00.000Z");
+    await rodar();
+    const ex = await execucao(v.id, 2027, 4);
+    expect([ex.situacao, ex.erro]).toEqual(["CANCELADA", "O faturamento automático foi desligado no contrato."]);
+    expect(await prisma.medicao.count({ where: { contratoId: v.id } })).toBe(0);
   });
 
   it("RBAC: ligar/desligar o automático pede Financeiro › Medições (criar e editar); o resto do contrato segue como antes", async () => {

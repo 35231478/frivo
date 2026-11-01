@@ -146,6 +146,8 @@ describe("rotina: competência devida e tentativas (D7)", () => {
   it("o erro que aparece é curto: a mensagem do banco, não a consulta inteira", () => {
     const prisma = new Error("\nInvalid `tx.medicao.create()` invocation in\n/app/lib/x.ts:120:5\n\n  117 |\n→ 120 const m = await tx.medicao.create(\nError occurred during query execution:\nConnectorError(ConnectorError { user_facing_error: None, kind: QueryError(PostgresError { code: \"P0001\", message: \"banco fora do ar\", severity: \"ERROR\" }) })\nRaw query failed. Code: `P0001`. Message: `banco fora do ar`");
     expect(mensagemDeErro(prisma)).toBe("banco fora do ar");
+    const conector = new Error("Invalid `tx.medicao.updateMany()` invocation:\n\n\nError occurred during query execution:\nConnectorError(ConnectorError { user_facing_error: None, kind: QueryError(PostgresError { code: \"P0001\", message: \"banco indisponível no momento\", severity: \"ERROR\", detail: None, column: None, hint: None }), transient: false })");
+    expect(mensagemDeErro(conector)).toBe("banco indisponível no momento");
     expect(mensagemDeErro(new Error("Uma OS do contrato entrou em outra medição enquanto esta era montada."))).toBe("Uma OS do contrato entrou em outra medição enquanto esta era montada.");
     expect(mensagemDeErro(new Error("linha 1\n  linha final  "))).toBe("linha final");
     expect(mensagemDeErro(null)).toBe("Erro inesperado.");
