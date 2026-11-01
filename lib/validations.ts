@@ -276,6 +276,10 @@ export const contratoSchema = z.object({
   ajusteFinsDeSemana: z.preprocess((v) => (v === "" || v == null ? null : v), z.nativeEnum(TratamentoFimSemana).nullable()).default(null),
   // D3: adicionais do contrato em faturas separadas (padrão) ou consolidados na fatura mensal
   faturamentoAdicionais: z.enum(["SEPARADO", "CONSOLIDADO"]).default("SEPARADO"),
+  // PR3-A: faturamento automático (rotina diária) e referência do período na nota. Ausente = não mexe
+  faturamentoAutomatico: z.boolean().optional(),
+  aprovacaoAutomatica: z.boolean().optional(),
+  nfseReferencia: z.enum(["CORRENTE", "ANTERIOR"]).optional(),
 
   // Escopo: só a descrição (itens inclusos e visitas saíram do formulário; o já gravado fica como está)
   descricaoServicos: z.string().max(MAX_DESCRICAO_SERVICOS, `Descrição dos serviços: no máximo ${MAX_DESCRICAO_SERVICOS} caracteres.`).optional().nullable(),

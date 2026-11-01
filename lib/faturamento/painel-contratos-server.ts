@@ -18,7 +18,8 @@ export type LinhaFaturamentoContrato = {
   };
 };
 
-export type ResumoFaturamentoContratos = { contratos: number; concluidas: number; andamento: number; atencao: number };
+type Cartao = { q: number; v: number };
+export type ResumoFaturamentoContratos = { contratos: Cartao; concluidas: Cartao; andamento: Cartao; atencao: Cartao };
 
 export async function painelFaturamentoContratos(empresaId: string, ano: number, mes: number) {
   const [contratos, execucoes] = await Promise.all([
@@ -74,11 +75,15 @@ export async function painelFaturamentoContratos(empresaId: string, ano: number,
   // Execuções de contratos que deixaram de ser automáticos (ou de estar ativos) continuam visíveis
   for (const e of execucoes) if (!vistos.has(e.contratoId)) linhaDe(e.contrato, null);
 
+  const cartao = (f: (l: LinhaFaturamentoContrato) => boolean): Cartao => {
+    const ls = linhas.filter(f);
+    return { q: ls.length, v: Math.round(ls.reduce((a, l) => a + l.valor, 0) * 100) / 100 };
+  };
   const resumo: ResumoFaturamentoContratos = {
-    contratos: linhas.length,
-    concluidas: linhas.filter((l) => l.execucao?.situacao === "CONCLUIDA").length,
-    andamento: linhas.filter((l) => l.execucao && ["PENDENTE", "AGUARDANDO"].includes(l.execucao.situacao)).length,
-    atencao: linhas.filter((l) => l.execucao && ["FALHA", "PENDENCIA"].includes(l.execucao.situacao)).length,
+    contratos: cartao(() => true),
+    concluidas: cartao((l) => l.execucao?.situacao === "CONCLUIDA"),
+    andamento: cartao((l) => !!l.execucao && ["PENDENTE", "AGUARDANDO"].includes(l.execucao.situacao)),
+    atencao: cartao((l) => !!l.execucao && ["FALHA", "PENDENCIA"].includes(l.execucao.situacao)),
   };
   return { ano, mes, linhas, resumo };
 }

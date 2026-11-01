@@ -16,11 +16,13 @@ export type PeriodoTela = Pick<Periodo, "tipo" | "mes" | "de" | "ate" | "rotulo"
  * e, onde a tela permite, "Todo o período". Tudo na URL via `navegar` (compartilhável; o "voltar"
  * do navegador funciona). O mês atual não vai para a URL (é o padrão).
  */
-export function BarraPeriodo({ periodo, navegar, permitirTodos, dica }: {
+export function BarraPeriodo({ periodo, navegar, permitirTodos, somenteMes, dica }: {
   /** O período lido da URL no servidor (lerPeriodo), sem os instantes */
   periodo: PeriodoTela; navegar: Navegar;
   /** Mostra "Todo o período" (ex.: Contas a Receber — busca de uma conta antiga) */
   permitirTodos?: boolean;
+  /** Só mês a mês (sem "Período personalizado"): telas por competência */
+  somenteMes?: boolean;
   /** ⓘ do que a data do período significa (ex.: "Pela data de vencimento.") */
   dica?: string;
 }) {
@@ -57,9 +59,11 @@ export function BarraPeriodo({ periodo, navegar, permitirTodos, dica }: {
         </button>
       ) : (
         <>
-          <button type="button" onClick={() => setPersonalizado(true)} className="inline-flex items-center gap-1.5 text-sm text-acento hover:underline px-1" data-alternar-periodo>
-            <CalendarRange className="w-3.5 h-3.5" /> Período personalizado
-          </button>
+          {!somenteMes && (
+            <button type="button" onClick={() => setPersonalizado(true)} className="inline-flex items-center gap-1.5 text-sm text-acento hover:underline px-1" data-alternar-periodo>
+              <CalendarRange className="w-3.5 h-3.5" /> Período personalizado
+            </button>
+          )}
           {permitirTodos && (
             <button type="button" onClick={() => navegar({ mes: null, de: null, ate: null, periodo: "todos" })} className="inline-flex items-center gap-1.5 text-sm text-acento hover:underline px-1" data-todo-periodo>
               <Todos className="w-3.5 h-3.5" /> Todo o período

@@ -31,6 +31,8 @@ import { anoBR, chaveDiaCivil, diaCivilDeChave, diasAteDiaCivil } from "@/lib/fu
 import { InputData } from "@/components/ui/input-data";
 import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
 import { PreviaCobrancaContrato } from "@/components/contratos/previa-cobranca";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { PERIODICIDADES_COBRANCA, passoCobranca, textoFrequencia } from "@/lib/financeiro/contrato-previsao";
 
 // Opções de mudança de status oferecidas no cabeçalho (ícone, cor e descrição).
 const STATUS_OPCOES: { valor: string; label: string; descricao: string; icone: any; cor: string }[] = [
@@ -107,7 +109,7 @@ const CAMPO_ABA: Record<string, AbaContrato> = {
   alertaDias: "gestao", renovacaoMeses: "gestao", notificarClienteDias: "gestao", observacoes: "gestao",
 };
 /** Campos que ficam em "Mais opções" (a seção abre sozinha se um deles tiver erro) */
-const CAMPOS_MAIS_OPCOES = ["tipo", "periodicidade", "ajusteFinsDeSemana"];
+const CAMPOS_MAIS_OPCOES = ["tipo", "ajusteFinsDeSemana", "nfseReferencia"];
 
 export function ContratoForm({ initialData }: ContratoFormProps) {
   const router = useRouter();
@@ -180,7 +182,8 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
           numero: initialData.numero,
           tipo: initialData.tipo,
           status: initialData.status,
-          periodicidade: initialData.periodicidade,
+          // D1: o seletor de cobrança só tem mensal…anual; semanal/quinzenal (de antes) cobram como mensal
+          periodicidade: (PERIODICIDADES_COBRANCA as readonly string[]).includes(initialData.periodicidade) ? initialData.periodicidade : "MENSAL",
           valorMensal: initialData.valorMensal ? Number(initialData.valorMensal) : undefined,
           valorTotal: initialData.valorTotal ? Number(initialData.valorTotal) : undefined,
           dataInicio: toDateInput(initialData.dataInicio),
@@ -198,6 +201,9 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
           tecnicoRecorrenciaId: initialData.tecnicoRecorrenciaId ?? "",
           // Faturamento
           faturamentoAdicionais: (initialData as any).faturamentoAdicionais ?? "SEPARADO",
+          faturamentoAutomatico: initialData.faturamentoAutomatico ?? false,
+          aprovacaoAutomatica: initialData.aprovacaoAutomatica ?? false,
+          nfseReferencia: initialData.nfseReferencia ?? "CORRENTE",
           diaFaturamento: initialData.diaFaturamento ?? undefined,
           servicoId: (initialData as { servicoId?: string | null }).servicoId ?? "",
           tipoVencimento: initialData.tipoVencimento ?? undefined,
@@ -234,6 +240,9 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
           numero: `CT-${anoBR()}-`,
           recorrencia: false,
           faturamentoAdicionais: "SEPARADO",
+          faturamentoAutomatico: false,
+          aprovacaoAutomatica: false,
+          nfseReferencia: "CORRENTE",
           diaFaturamento: undefined,
           tipoVencimento: "DIAS_APOS_FATURAMENTO",
           ajusteFinsDeSemana: "MANTER",
@@ -338,7 +347,14 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
     return b.getDate() < a.getDate() ? diff : b.getDate() === a.getDate() ? Math.max(diff, 1) : diff + 1;
   })();
   const valorMensalNum = typeof valorMensalVal === "number" && !isNaN(valorMensalVal) ? valorMensalVal : null;
-  const valorTotalCalc = valorMensalNum != null && mesesVigencia != null ? valorMensalNum * mesesVigencia : null;
+  // D1: o valor é o de CADA cobrança; o total = valor × cobranças na vigência (1 a cada N meses)
+  const passo = passoCobranca(watch("periodicidade"));
+  const cobrancasNaVigencia = mesesVigencia != null ? Math.ceil(mesesVigencia / passo) : null;
+  const valorTotalCalc = valorMensalNum != null && cobrancasNaVigencia != null ? valorMensalNum * cobrancasNaVigencia : null;
+  const { pode: podePerm } = usePermissoes();
+  const podeAutomatizar = podePerm("financeiro", "medicoes");
+  const faturamentoAutomaticoVal = !!watch("faturamentoAutomatico");
+  const aprovacaoAutomaticaVal = !!watch("aprovacaoAutomatica");
   const duracaoTexto = mesesVigencia != null ? `${mesesVigencia} ${mesesVigencia === 1 ? "mês" : "meses"}` : "Indeterminado";
 
 
@@ -601,17 +617,32 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
         </FormSection>
 
         <FormSection title="Valores e faturamento" icon={<DollarSign className="w-3.5 h-3.5" />}>
-          <FormGrid cols={3}>
-            <FormField label="Valor mensal (R$)" hint="Gera previsão de contas a receber" error={errors.valorMensal?.message}>
-              <Input {...register("valorMensal", { valueAsNumber: true })} type="number" step="0.01" min="0" placeholder="0,00" error={!!errors.valorMensal} />
+          <FormGrid>
+            <FormField
+              label="Cobrança"
+              required
+              dica="De quanto em quanto tempo o contrato cobra. Sai uma previsão no Contas a Receber e uma medição por período, sempre pelo valor ao lado (o valor de cada cobrança, sem multiplicar)."
+              error={errors.periodicidade?.message}
+            >
+              <Select {...register("periodicidade")} data-periodicidade>
+                {PERIODICIDADES_COBRANCA.map((v) => (<option key={v} value={v}>{LABELS_PERIODICIDADE[v] ?? v}</option>))}
+              </Select>
             </FormField>
-            <FormField label="Valor total (R$)" hint="Calculado: valor mensal × meses de vigência">
+            <FormField label="Dia de faturamento" hint="1 a 28" dica="Dia do mês em que a cobrança sai. Em branco, vale o dia de faturamento do cliente." error={errors.diaFaturamento?.message}>
+              <Input {...register("diaFaturamento")} type="number" min={1} max={28} placeholder="1" />
+            </FormField>
+            <FormField
+              label={passo > 1 ? "Valor da cobrança (R$)" : "Valor mensal (R$)"}
+              hint={passo > 1 ? (valorMensalNum ? `${formatarMoeda(valorMensalNum)} · ${textoFrequencia(passo)}` : `Cobrado ${textoFrequencia(passo)}`) : "Gera previsão de contas a receber"}
+              error={errors.valorMensal?.message}
+            >
+              <Input {...register("valorMensal", { valueAsNumber: true })} type="number" step="0.01" min="0" placeholder="0,00" error={!!errors.valorMensal} data-valor-cobranca />
+            </FormField>
+            <FormField label="Valor total (R$)" hint={passo > 1 ? "Calculado: valor da cobrança × cobranças na vigência" : "Calculado: valor mensal × meses de vigência"}>
               <div className="flex h-10 items-center rounded-lg border border-surface-border bg-surface-alt/60 px-3 text-sm font-medium text-ink" data-valor-total>
                 {valorTotalCalc != null ? formatarMoeda(valorTotalCalc) : "—"}
+                {passo > 1 && cobrancasNaVigencia != null && <span className="ml-1.5 text-xs font-normal text-ink-muted">({cobrancasNaVigencia} {cobrancasNaVigencia === 1 ? "cobrança" : "cobranças"})</span>}
               </div>
-            </FormField>
-            <FormField label="Dia de faturamento" hint="1 a 28" error={errors.diaFaturamento?.message}>
-              <Input {...register("diaFaturamento")} type="number" min={1} max={28} placeholder="1" />
             </FormField>
           </FormGrid>
 
@@ -631,6 +662,28 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
               />
             </FormField>
             <PreviaCobrancaContrato servicoId={servicoIdVal || null} valor={typeof valorMensalVal === "number" ? valorMensalVal : null} />
+          </div>
+
+          {/* PR3-A: rotina diária (medição → aprovação). Ligar/desligar pede Financeiro › Medições (tela e servidor) */}
+          <div className="rounded-lg border border-surface-border px-3 divide-y divide-surface-linha" data-automacao>
+            <ToggleSwitch
+              label="Faturamento automático"
+              description={faturamentoAutomaticoVal ? `A medição sai sozinha no dia de faturamento, ${textoFrequencia(passo)}.` : undefined}
+              dica="Todo dia de manhã o sistema confere os contratos com esta chave ligada: no dia de faturamento, cria a medição do contrato e segue para a aprovação. Se algo falhar, tenta de novo nos 2 dias seguintes e depois avisa no sino. Acompanhe em Financeiro › Faturamento de contratos."
+              checked={faturamentoAutomaticoVal}
+              onChange={(v) => { setValue("faturamentoAutomatico", v, { shouldDirty: true }); if (!v) setValue("aprovacaoAutomatica", false, { shouldDirty: true }); }}
+              disabled={!podeAutomatizar}
+            />
+            <ToggleSwitch
+              label="Aprovar sem esperar o cliente"
+              dica="Ligada: a medição do contrato já nasce aprovada (a conta a receber sai na hora). Desligada: a medição vai por e-mail para o cliente aprovar pelo link, e a rotina espera."
+              checked={aprovacaoAutomaticaVal}
+              onChange={(v) => setValue("aprovacaoAutomatica", v, { shouldDirty: true })}
+              disabled={!podeAutomatizar || !faturamentoAutomaticoVal}
+            />
+            {!podeAutomatizar && (
+              <p className="py-2 text-xs text-ink-muted" data-automacao-sem-permissao>Só quem tem a permissão Financeiro › Medições liga o faturamento automático.</p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -673,7 +726,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
             </div>
           </div>
 
-          {/* Mais opções: ajuste de dia não útil + tipo e periodicidade (continuam valendo; só ficam recolhidos) */}
+          {/* Mais opções: ajuste de dia não útil, tipo e período na nota (continuam valendo; só ficam recolhidos) */}
           <div className="border border-surface-border rounded-lg">
             <button
               type="button" onClick={() => setMaisOpcoes((v) => !v)} aria-expanded={maisOpcoes} data-mais-opcoes
@@ -681,7 +734,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
             >
               <span className="flex items-center gap-2"><SlidersHorizontal className="w-4 h-4 text-ink-muted" /> Mais opções</span>
               <span className="flex items-center gap-2 text-xs text-ink-muted">
-                {!maisOpcoes && <span className="hidden sm:inline">{LABELS_TIPO_CONTRATO[watch("tipo")] ?? "—"} · {LABELS_PERIODICIDADE[watch("periodicidade")] ?? "—"}</span>}
+                {!maisOpcoes && <span className="hidden sm:inline">{LABELS_TIPO_CONTRATO[watch("tipo")] ?? "—"}{watch("nfseReferencia") === "ANTERIOR" ? " · Nota do período anterior" : ""}</span>}
                 <ChevronDown className={cn("w-4 h-4 transition-transform", maisOpcoes && "rotate-180")} />
               </span>
             </button>
@@ -698,9 +751,10 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
                       {Object.entries(LABELS_TIPO_CONTRATO).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
                     </Select>
                   </FormField>
-                  <FormField label="Periodicidade de cobrança" required hint="Hoje a cobrança sai todo mês" dica="A previsão no Contas a Receber e a medição do contrato saem uma por mês, pelo valor mensal. Este campo fica registrado no contrato, mas ainda não muda o intervalo da cobrança.">
-                    <Select {...register("periodicidade")}>
-                      {Object.entries(LABELS_PERIODICIDADE).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
+                  <FormField label="Período na nota" dica="O período que a nota e a cobrança descrevem (Ref.). Corrente: o próprio período da cobrança. Anterior: o período que acabou de passar (quem cobra o serviço já prestado).">
+                    <Select {...register("nfseReferencia")} data-nfse-referencia>
+                      <option value="CORRENTE">Período corrente</option>
+                      <option value="ANTERIOR">Período anterior</option>
                     </Select>
                   </FormField>
                 </FormGrid>

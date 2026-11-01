@@ -6,6 +6,7 @@ import { CampoBusca, Paginacao, sugerirPorUrl } from "@/components/listagem/list
 import { DEBOUNCE_BUSCA_MS, useTamanhoPreferido } from "@/components/listagem/use-listagem-url";
 import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { passoCobranca, textoFrequencia } from "@/lib/financeiro/contrato-previsao";
 import { cn, formatarData, formatarMoeda, LABELS_PERIODICIDADE } from "@/lib/utils";
 import { BuscaSelect, type OpcaoBusca } from "@/components/ui/busca-select";
 import { AvatarCliente } from "@/components/ui/avatar-cliente";
@@ -185,7 +186,7 @@ export function ContratosListaClient({ contratos, total, pagina, porPagina, soma
                   {ct.vencido ? <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-atrasado-claro text-atrasado-texto">Vencido</span>
                     : ct.vencendo ? <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-atencao-claro text-atencao-texto">Vence em breve</span>
                     : <span className={cn("text-[11px] font-semibold px-2 py-0.5 rounded-full", COR_STATUS[ct.status])}>{LABELS_STATUS[ct.status] ?? ct.status}</span>}
-                  <span className="ml-auto text-sm font-semibold text-ink">{formatarMoeda(ct.valorMensal)}<span className="text-xs font-normal text-ink-muted">/mês</span></span>
+                  <span className="ml-auto text-sm font-semibold text-ink">{formatarMoeda(ct.valorMensal)}<span className="text-xs font-normal text-ink-muted">{passoCobranca(ct.periodicidade) > 1 ? ` · ${textoFrequencia(passoCobranca(ct.periodicidade))}` : "/mês"}</span></span>
                 </div>
               </Link>
             </li>
@@ -199,7 +200,7 @@ export function ContratosListaClient({ contratos, total, pagina, porPagina, soma
                 <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider cursor-pointer select-none hover:text-ink" onClick={() => ordenarPor("numero")}>Número <Seta campo="numero" /></th>
                 <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider cursor-pointer select-none hover:text-ink" onClick={() => ordenarPor("cliente")}>Cliente <Seta campo="cliente" /></th>
                 <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden md:table-cell">Frequência</th>
-                <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider cursor-pointer select-none hover:text-ink" onClick={() => ordenarPor("valorMensal")}>Valor/mês <Seta campo="valorMensal" /></th>
+                <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider cursor-pointer select-none hover:text-ink" onClick={() => ordenarPor("valorMensal")}>Valor da cobrança <Seta campo="valorMensal" /></th>
                 <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden md:table-cell">Valor/ano</th>
                 <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden lg:table-cell cursor-pointer select-none hover:text-ink" onClick={() => ordenarPor("dataInicio")}>Início <Seta campo="dataInicio" /></th>
                 <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden lg:table-cell cursor-pointer select-none hover:text-ink" onClick={() => ordenarPor("dataFim")}>Fim <Seta campo="dataFim" /></th>
@@ -221,8 +222,11 @@ export function ContratosListaClient({ contratos, total, pagina, porPagina, soma
                     </div>
                   </td>
                   <td className="px-4 py-3 hidden md:table-cell"><span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full", COR_FREQ[ct.periodicidade])}>{LABELS_PERIODICIDADE[ct.periodicidade] ?? ct.periodicidade}</span></td>
-                  <td className="px-4 py-3 text-right text-ink font-medium">{formatarMoeda(ct.valorMensal)}</td>
-                  <td className="px-4 py-3 text-right text-ink-muted hidden md:table-cell">{ct.valorMensal != null ? formatarMoeda(ct.valorMensal * 12) : "—"}</td>
+                  <td className="px-4 py-3 text-right text-ink font-medium">
+                    {formatarMoeda(ct.valorMensal)}
+                    {passoCobranca(ct.periodicidade) > 1 && <span className="block text-[11px] font-normal text-ink-muted">{textoFrequencia(passoCobranca(ct.periodicidade))}</span>}
+                  </td>
+                  <td className="px-4 py-3 text-right text-ink-muted hidden md:table-cell">{ct.valorMensal != null ? formatarMoeda(ct.valorMensal * 12 / passoCobranca(ct.periodicidade)) : "—"}</td>
                   <td className="px-4 py-3 text-ink-muted hidden lg:table-cell">{formatarData(ct.dataInicio)}</td>
                   <td className={cn("px-4 py-3 hidden lg:table-cell", ct.vencido ? "text-atrasado font-medium" : "text-ink-muted")}>{ct.dataFim ? formatarData(ct.dataFim) : "indeterminado"}</td>
                   <td className="px-4 py-3">
@@ -246,7 +250,7 @@ export function ContratosListaClient({ contratos, total, pagina, porPagina, soma
               <tfoot>
                 <tr className="bg-surface-alt border-t-2 border-surface-border">
                   <td colSpan={3} className="px-4 py-3 text-sm font-semibold text-ink">{total} contrato(s) filtrado(s)</td>
-                  <td className="px-4 py-3 text-right text-sm font-bold text-success-700">{formatarMoeda(somaMensalFiltrada)}</td>
+                  <td className="px-4 py-3 text-right text-sm font-bold text-success-700" title="Equivalente por mês">{formatarMoeda(somaMensalFiltrada)}<span className="text-xs font-normal">/mês</span></td>
                   <td className="px-4 py-3 text-right text-sm font-bold text-success-700 hidden md:table-cell">{formatarMoeda(somaMensalFiltrada * 12)}</td>
                   <td colSpan={4} />
                 </tr>
