@@ -472,5 +472,50 @@ describe("PR3-A: cobrança a cada N meses e faturamento automático", () => {
     corpo = await salvar();
     expect([corpo.faturamentoAutomatico, corpo.emitirNfseAuto, corpo.emitirBoletoAuto]).toEqual([false, false, false]);
   });
-});
 
+  it("PR4: reajuste anual — sugere no aniversário (com link para decidir), mostra o próximo, histórico com quem decidiu; índice não sugere", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-15T15:00:00.000Z"));
+    try {
+      nav.sp = new URLSearchParams();
+      // Aniversário chegou (nov/2026, 12 meses depois de nov/2025) e ninguém decidiu
+      await montar(permissoesTotais(), editarCt({ dataInicio: new Date("2025-11-01T00:00:00"), dataFim: null, valorMensal: 1000, reajusteAtivo: true, reajusteIndice: "PERCENTUAL_FIXO", reajustePercentual: 5 }));
+      await aba("gestao");
+      expect(sw("Reajuste anual")).toBeTruthy();
+      const dica = $('button[aria-label*="Reajuste anual"]')!;
+      expect(dica.parentElement!.closest("button, a")).toBeNull();
+      const pend = $("[data-proximo-reajuste]")!;
+      expect([pend.getAttribute("data-proximo-reajuste"), sp(pend.textContent!)]).toEqual(["pendente", "Aniversário de nov/2026: R$ 1.000,00 → R$ 1.050,00. Decidir em Reajustes"]);
+      expect(pend.querySelector("a")!.getAttribute("href")).toBe("/contratos/reajustes");
+      // Mês de aniversário em março: o 1º só depois de 12 meses (mar/2027)
+      const mes = $<HTMLSelectElement>('select[name="reajusteMesAniversario"]')!;
+      await act(async () => { mes.value = "3"; mes.dispatchEvent(new Event("change", { bubbles: true })); });
+      await flush();
+      expect(sp($("[data-proximo-reajuste]")!.textContent!)).toBe("Próximo reajuste: mar/2027 · R$ 1.000,00 → R$ 1.050,00");
+      // Índice (IPCA): não sugere
+      const ind = $<HTMLSelectElement>('select[name="reajusteIndice"]')!;
+      await act(async () => { ind.value = "IPCA"; ind.dispatchEvent(new Event("change", { bubbles: true })); });
+      await flush();
+      expect($("[data-proximo-reajuste]")).toBeNull();
+      expect(caixa.textContent).toContain("Só o percentual fixo gera a sugestão.");
+      await act(async () => root.unmount());
+      caixa.remove();
+
+      // Já decidido este ano: mostra o do ano que vem; histórico com a decisão e quem decidiu
+      await montar(permissoesTotais(), editarCt({
+        dataInicio: new Date("2025-11-01T00:00:00"), dataFim: null, valorMensal: 1050, reajusteAtivo: true, reajusteIndice: "PERCENTUAL_FIXO", reajustePercentual: 5,
+        reajustes: [
+          { id: "r2", data: "2026-11-10T12:00:00.000Z", indice: "PERCENTUAL_FIXO", percentual: 5, valorAnterior: 1000, valorNovo: 1050, anoReferencia: 2026, situacao: "APLICADO", usuario: { nome: "Ana" } },
+          { id: "r1", data: "2025-11-10T12:00:00.000Z", indice: "PERCENTUAL_FIXO", percentual: 4.5, valorAnterior: 1000, valorNovo: 1000, anoReferencia: 2025, situacao: "DISPENSADO", motivo: "cliente pediu", usuario: { nome: "Bia" } },
+        ],
+      }));
+      await aba("gestao");
+      expect(sp($("[data-proximo-reajuste]")!.textContent!)).toBe("Próximo reajuste: nov/2027 · R$ 1.050,00 → R$ 1.102,50");
+      const linhas = [...caixa.querySelectorAll("[data-reajuste-historico]")].map((tr) => [...tr.querySelectorAll("td")].map((td) => td.textContent));
+      expect(linhas).toEqual([
+        ["10/11/2026", "2026", "Aplicado", "5%", "1.000,00", "1.050,00", "Ana"],
+        ["10/11/2025", "2025", "Dispensado · cliente pediu", "4,5%", "1.000,00", "1.000,00", "Bia"],
+      ]);
+    } finally { vi.useRealTimers(); }
+  });
+});

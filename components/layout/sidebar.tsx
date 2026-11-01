@@ -86,6 +86,7 @@ const OPERACIONAL: Secao[] = [
         tipo: "grupo", label: "Comercial", icone: FileText, itens: [
           { href: "/orcamentos", icone: Calculator, label: "Orçamentos" },
           { href: "/contratos", icone: FileText, label: "Contratos" },
+          { href: "/contratos/reajustes", icone: TrendingUp, label: "Reajustes", modulo: "contratos", acao: "editar" },
           { href: "/leads-site", icone: Globe, label: "Leads do Site" },
         ],
       },
