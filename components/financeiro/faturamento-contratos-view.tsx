@@ -17,7 +17,37 @@ import type { LinhaFaturamentoContrato, ResumoFaturamentoContratos } from "@/lib
 const TOM_SITUACAO: Record<string, TomStatus> = {
   PENDENTE: "previsto", AGUARDANDO: "atencao", PENDENCIA: "atrasado", FALHA: "atrasado-solido", CONCLUIDA: "ok", CANCELADA: "previsto",
 };
-const BOLETO: Record<string, string> = { EMITIDO: "Emitido", PAGO: "Pago", CANCELADO: "Cancelado", ERRO: "Com erro" };
+const BOLETO: Record<string, string> = { EMITIDO: "Emitido", PAGO: "Pago", CANCELADO: "Cancelado", VENCIDO: "Vencido", PENDENTE: "Pendente" };
+const hrefConta = (id: string) => `/financeiro/contas-receber?conta=${id}&periodo=todos`;
+
+type Exec = NonNullable<LinhaFaturamentoContrato["execucao"]>;
+
+/** A NFS-e da medição, com o link para a medição (onde ficam a nota, o PDF e o histórico) */
+function Nf({ e }: { e: Exec }) {
+  if (!e.nf || !e.medicao) return <span className="text-ink-subtle">—</span>;
+  const texto = e.nf.situacao === "AUTORIZADA" || e.nf.situacao === "MANUAL" ? `nº ${e.nf.numero ?? "—"}` : e.nf.situacao === "PREFEITURA" ? "Na prefeitura" : "Não aceita";
+  return (
+    <Link href={`/financeiro/medicoes/${e.medicao.id}`} data-nf-situacao={e.nf.situacao}
+      className={cn("hover:underline", e.nf.situacao === "NAO_ACEITA" ? "text-atrasado-texto" : e.nf.situacao === "PREFEITURA" ? "text-atencao-texto" : "text-acento")}>
+      {texto}
+    </Link>
+  );
+}
+
+/** O boleto de cada cobrança da medição (a conta, ou cada parcela), com o link para a conta */
+function Boletos({ e }: { e: Exec }) {
+  if (!e.cobrancas.length) return <span className="text-ink-subtle">—</span>;
+  const varias = e.cobrancas.length > 1;
+  return (
+    <span className="flex flex-col">
+      {e.cobrancas.map((c) => (
+        <Link key={c.id} href={hrefConta(c.id)} data-boleto-conta={c.id} className={cn("hover:underline whitespace-nowrap", c.boleto ? "text-acento" : "text-ink-muted")}>
+          {varias ? `${c.numero.split("/").pop()}: ` : ""}{c.boleto ? BOLETO[c.boleto] ?? c.boleto : "Sem boleto"}
+        </Link>
+      ))}
+    </span>
+  );
+}
 const retentavel = (s: string) => ["FALHA", "PENDENCIA"].includes(s);
 
 /** "Medição · Aguardando" / "Na fila"… e o que esperar quando ainda não há execução */
@@ -112,8 +142,12 @@ export function FaturamentoContratosView({ periodo, linhas, resumo, soAtencao }:
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                     <Situacao l={l} />
                     {e?.medicao && <Link href={`/financeiro/medicoes/${e.medicao.id}`} className="text-acento hover:underline">{e.medicao.numero}</Link>}
-                    {e?.medicao?.nfNumero && <span className="text-ink-muted">NF {e.medicao.nfNumero}</span>}
-                    {e?.boleto && <span className="text-ink-muted">Boleto {BOLETO[e.boleto] ?? e.boleto}</span>}
+                    {e?.nf && <span className="text-ink-muted" data-nf-cartao>NF <Nf e={e} /></span>}
+                    {e && e.cobrancas.some((c) => c.boleto) && (
+                      <span className="inline-flex flex-wrap gap-x-1 text-ink-muted" data-boleto-cartao>Boleto {e.cobrancas.filter((c) => c.boleto).map((c) => (
+                        <Link key={c.id} href={hrefConta(c.id)} className="text-acento hover:underline">{BOLETO[c.boleto!] ?? c.boleto}</Link>
+                      ))}</span>
+                    )}
                   </div>
                   {e?.erro && <p className="text-xs text-atrasado-texto" data-erro>{e.erro}</p>}
                   {e && retentavel(e.situacao) && <BotaoTentar id={e.id} ocupado={ocupado === e.id} onTentar={tentar} />}
@@ -156,8 +190,8 @@ export function FaturamentoContratosView({ periodo, linhas, resumo, soAtencao }:
                           </>
                         ) : "—"}
                       </td>
-                      <td className={cn(PLANILHA.td, "hidden lg:table-cell text-ink-muted")} data-nf>{e?.medicao?.nfNumero ?? "—"}</td>
-                      <td className={cn(PLANILHA.td, "hidden lg:table-cell text-ink-muted")} data-boleto>{e?.boleto ? BOLETO[e.boleto] ?? e.boleto : "—"}</td>
+                      <td className={cn(PLANILHA.td, "hidden lg:table-cell")} data-nf>{e ? <Nf e={e} /> : "—"}</td>
+                      <td className={cn(PLANILHA.td, "hidden lg:table-cell")} data-boleto>{e ? <Boletos e={e} /> : "—"}</td>
                       <td className={PLANILHA.td}>
                         {e?.erro ? <p className="text-atrasado-texto line-clamp-2" title={e.erro} data-erro>{e.erro}</p> : <span className="text-ink-subtle">—</span>}
                         {e && e.tentativas > 0 && !retentavel(e.situacao) && <p className="text-[11px] text-ink-subtle">{e.tentativas} de 3 tentativas</p>}

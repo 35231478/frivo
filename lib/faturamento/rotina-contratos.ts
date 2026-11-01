@@ -64,3 +64,22 @@ export function mensagemDeErro(e: unknown): string {
   return (doBanco ?? linhas[linhas.length - 1] ?? msg).slice(0, 300);
 }
 
+
+/** A NF da medição já está feita (pela rotina, pela tela ou registrada à mão): a conta foi liberada */
+export const MEDICAO_COM_NF = ["NF_EMITIDA", "BOLETO_GERADO", "PAGO"] as const;
+export const medicaoComNf = (status: string) => (MEDICAO_COM_NF as readonly string[]).includes(status);
+
+type ChavesEtapas = { emitirNfseAuto?: boolean | null; emitirBoletoAuto?: boolean | null };
+/** Depois da aprovação: a NFS-e (se a chave está ligada), senão o boleto (que espera a NF feita à mão), senão acabou */
+export const etapaAposAprovacao = (c: ChavesEtapas) => (c.emitirNfseAuto ? "NFSE" : c.emitirBoletoAuto ? "BOLETO" : "CONCLUIDA") as "NFSE" | "BOLETO" | "CONCLUIDA";
+/** Depois da NF: o boleto (se a chave está ligada), senão acabou */
+export const etapaAposNf = (c: ChavesEtapas) => (c.emitirBoletoAuto ? "BOLETO" : "CONCLUIDA") as "BOLETO" | "CONCLUIDA";
+
+/** O texto da pendência da NFS-e (o mesmo da tela "Emitir NFS-e"), curto o bastante para a tela e o sino */
+export function textoPendenciaNfse(pendencias: { texto: string }[]): string {
+  const textos = [...new Set(pendencias.map((p) => p.texto.trim()).filter(Boolean))];
+  return `Para a NFS-e sair: ${textos.join(" ")}`.slice(0, 600);
+}
+
+/** E-mail que a empresa desligou de propósito (chave da empresa ou preferência do cliente): não é pendência */
+export const emailDesligado = (erro?: string | null) => erro === "Notificação desativada.";

@@ -161,7 +161,8 @@ describe("5 abas com os campos certos", () => {
   it("o que saiu não aparece em lugar nenhum (NFS-e, itens inclusos, visitas, RT na NFS-e)", async () => {
     await montar();
     await clicar($("[data-mais-opcoes]"));
-    const tudo = caixa.textContent!;
+    // A única menção à NFS-e é a chave da rotina automática (PR3-B); os campos antigos da NFS-e saíram
+    const tudo = caixa.textContent!.replace($("[data-automacao]")!.textContent!, "");
     for (const fora of ["NFS-e", "NFSe", "Itens inclusos", "Outros itens inclusos", "visitas", "Período das visitas", "período de referência", "Configurações da NFS-e"])
       expect(tudo).not.toContain(fora);
     expect(chamadas.some((c) => c.url.startsWith("/api/servicos"))).toBe(false);

@@ -36,10 +36,10 @@ const linha = (o: Partial<LinhaFaturamentoContrato> & { contratoId: string }): L
   previsto: null, execucao: null, ...o,
 });
 const exec = (o: Record<string, unknown>) => ({
-  id: "x", etapa: "MEDICAO", situacao: "PENDENTE", erro: null, tentativas: 0, atualizadoEm: "2026-11-20T11:23:00.000Z", medicao: null, boleto: null, ...o,
+  id: "x", etapa: "MEDICAO", situacao: "PENDENTE", erro: null, tentativas: 0, atualizadoEm: "2026-11-20T11:23:00.000Z", medicao: null, nf: null, cobrancas: [], ...o,
 });
 const LINHAS: LinhaFaturamentoContrato[] = [
-  linha({ contratoId: "a", aprovacaoAutomatica: true, execucao: exec({ id: "ea", etapa: "CONCLUIDA", situacao: "CONCLUIDA", medicao: { id: "m1", numero: "MED-2026-0007", status: "PC_RECEBIDO", nfNumero: "123" }, boleto: "EMITIDO" }) as any }),
+  linha({ contratoId: "a", aprovacaoAutomatica: true, execucao: exec({ id: "ea", etapa: "CONCLUIDA", situacao: "CONCLUIDA", medicao: { id: "m1", numero: "MED-2026-0007", status: "NF_EMITIDA", nfNumero: "123" }, nf: { numero: "123", situacao: "AUTORIZADA" }, cobrancas: [{ id: "cr1", numero: "CT-1/202611", boleto: "EMITIDO" }] }) as any }),
   linha({ contratoId: "b", valor: 900, frequencia: "a cada 3 meses", execucao: exec({ id: "eb", etapa: "APROVACAO", situacao: "AGUARDANDO", medicao: { id: "m2", numero: "MED-2026-0008", status: "AGUARDANDO_APROVACAO", nfNumero: null } }) as any }),
   linha({ contratoId: "c", execucao: exec({ id: "ec", etapa: "MEDICAO", situacao: "FALHA", tentativas: 3, erro: "banco fora do ar" }) as any }),
   linha({ contratoId: "d", previsto: "Fatura no dia 20" }),
@@ -84,7 +84,10 @@ describe("Faturamento de contratos", () => {
     expect(tr("a").querySelector("[data-situacao]")!.textContent).toBe("Concluída");
     expect(tr("a").querySelector("[data-medicao]")!.textContent).toBe("MED-2026-0007");
     expect(tr("a").querySelector("[data-medicao]")!.getAttribute("href")).toBe("/financeiro/medicoes/m1");
-    expect([tr("a").querySelector("[data-nf]")!.textContent, tr("a").querySelector("[data-boleto]")!.textContent]).toEqual(["123", "Emitido"]);
+    expect([tr("a").querySelector("[data-nf]")!.textContent, tr("a").querySelector("[data-boleto]")!.textContent]).toEqual(["nº 123", "Emitido"]);
+    // NF → a medição (onde ficam a nota e o PDF); boleto → a conta a receber aberta na gaveta
+    expect(tr("a").querySelector("[data-nf] a")!.getAttribute("href")).toBe("/financeiro/medicoes/m1");
+    expect(tr("a").querySelector("[data-boleto] a")!.getAttribute("href")).toBe("/financeiro/contas-receber?conta=cr1&periodo=todos");
     expect(tr("a").textContent).toContain("aprova sozinho");
     expect(tr("b").querySelector("[data-situacao]")!.textContent).toBe("Aprovação · Aguardando");
     expect(sp(tr("b").textContent!)).toContain("a cada 3 meses");
@@ -99,7 +102,8 @@ describe("Faturamento de contratos", () => {
     // Celular: os mesmos dados em cartões
     expect(card("c").textContent).toContain("banco fora do ar");
     expect(card("a").textContent).toContain("MED-2026-0007");
-    expect(card("a").textContent).toContain("NF 123");
+    expect(card("a").textContent).toContain("NF nº 123");
+    expect(card("a").textContent).toContain("Boleto Emitido");
     expect(card("d").textContent).toContain("Fatura no dia 20");
     // ⓘ fora de qualquer botão/link
     for (const d of $$('button[aria-label^="Sobre"], button[aria-describedby]')) expect(d.parentElement!.closest("button, a")).toBeNull();

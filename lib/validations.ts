@@ -279,6 +279,8 @@ export const contratoSchema = z.object({
   // PR3-A: faturamento automático (rotina diária) e referência do período na nota. Ausente = não mexe
   faturamentoAutomatico: z.boolean().optional(),
   aprovacaoAutomatica: z.boolean().optional(),
+  emitirNfseAuto: z.boolean().optional(),
+  emitirBoletoAuto: z.boolean().optional(),
   nfseReferencia: z.enum(["CORRENTE", "ANTERIOR"]).optional(),
 
   // Escopo: só a descrição (itens inclusos e visitas saíram do formulário; o já gravado fica como está)
