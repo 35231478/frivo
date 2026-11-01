@@ -100,6 +100,12 @@ enum IndiceReajuste {
   PERCENTUAL_FIXO
 }
 
+/// PR4 (D8): a decisão de um aniversário de reajuste
+enum SituacaoReajuste {
+  APLICADO
+  DISPENSADO
+}
+
 enum PeriodoRefNFSe {
   MES_ANTERIOR_FATURAMENTO
   MES_FATURAMENTO
@@ -772,6 +778,7 @@ model Usuario {
 
   notasFiscaisEmitidas NotaFiscal[]       @relation("NotaFiscalEmissor")
   notasFiscaisEventos  NotaFiscalEvento[] @relation("NotaFiscalEventoAutor")
+  reajustesContrato    ReajusteContrato[]
 
   @@unique([email, empresaId])
   @@index([empresaId, ativo])
@@ -1225,6 +1232,8 @@ model Contrato {
   reajusteMesAniversario Int?            @map("reajuste_mes_aniversario")
   reajusteNotificar      Boolean         @default(false) @map("reajuste_notificar")
   reajusteNotificarDias  Int?            @map("reajuste_notificar_dias")
+  /// PR4: "Adiar" esconde a sugestão de reajuste até esta data
+  reajusteAdiadoAte      DateTime?       @map("reajuste_adiado_ate") @db.Date
 
   // Alertas e renovação
   alertaDias                Int?    @default(30) @map("alerta_dias")
@@ -1343,18 +1352,28 @@ model AnexoContrato {
 
 // Histórico de reajustes aplicados ao contrato
 model ReajusteContrato {
-  id            String   @id @default(cuid())
-  empresaId     String   @map("empresa_id")
-  contratoId    String   @map("contrato_id")
-  data          DateTime @default(now())
+  id            String           @id @default(cuid())
+  empresaId     String           @map("empresa_id")
+  contratoId    String           @map("contrato_id")
+  data          DateTime         @default(now())
   indice        String
-  percentual    Decimal  @db.Decimal(6, 3)
-  valorAnterior Decimal  @map("valor_anterior") @db.Decimal(10, 2)
-  valorNovo     Decimal  @map("valor_novo") @db.Decimal(10, 2)
-  criadoEm      DateTime @default(now()) @map("criado_em")
+  percentual    Decimal          @db.Decimal(6, 3)
+  valorAnterior Decimal          @map("valor_anterior") @db.Decimal(10, 2)
+  valorNovo     Decimal          @map("valor_novo") @db.Decimal(10, 2)
+  criadoEm      DateTime         @default(now()) @map("criado_em")
+  /// PR4: o aniversário decidido (ano/mês) — uma decisão por contrato × ano
+  anoReferencia Int?             @map("ano_referencia")
+  mesReferencia Int?             @map("mes_referencia")
+  situacao      SituacaoReajuste @default(APLICADO)
+  /// Quem aplicou/dispensou
+  usuarioId     String?          @map("usuario_id")
+  motivo        String?
 
   contrato Contrato @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+  usuario  Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
 
+  @@unique([contratoId, anoReferencia])
+  @@index([usuarioId])
   @@map("reajustes_contrato")
 }
 

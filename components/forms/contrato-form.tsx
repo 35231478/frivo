@@ -27,12 +27,15 @@ import {
   Paperclip, Repeat, StickyNote, Building2, FileCheck, AlertCircle, Wand2, DollarSign,
   Plus, CalendarDays, ChevronDown, CheckCircle2, PauseCircle, RefreshCw, XCircle, History, User, Trash2, SlidersHorizontal,
 } from "lucide-react";
-import { anoBR, chaveDiaCivil, diaCivilDeChave, diasAteDiaCivil } from "@/lib/fuso";
+import { anoBR, chaveDiaCivil, diaCivilDeChave, diasAteDiaCivil, partesBR } from "@/lib/fuso";
+import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
 import { InputData } from "@/components/ui/input-data";
 import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
 import { PreviaCobrancaContrato } from "@/components/contratos/previa-cobranca";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { PERIODICIDADES_COBRANCA, passoCobranca, textoFrequencia } from "@/lib/financeiro/contrato-previsao";
+import { proximoAniversario, sugestaoReajuste, textoCompetencia, valorReajustado, percentualDe } from "@/lib/contratos/reajuste";
+import Link from "next/link";
 
 // Opções de mudança de status oferecidas no cabeçalho (ícone, cor e descrição).
 const STATUS_OPCOES: { valor: string; label: string; descricao: string; icone: any; cor: string }[] = [
@@ -62,7 +65,10 @@ function toDateInput(date: Date | null | undefined) {
 type ClienteItem = { id: string; nome: string; nomeFantasia?: string | null };
 type ResponsavelItem = Pick<Tecnico, "id" | "nome" | "crea">;
 type AnexoItem = { id: string; nome: string; tipo: string; tamanho: number; categoria?: string | null; criadoEm: string | Date };
-type ReajusteItem = { id: string; data: string | Date; indice: string; percentual: any; valorAnterior: any; valorNovo: any };
+type ReajusteItem = {
+  id: string; data: string | Date; indice: string; percentual: any; valorAnterior: any; valorNovo: any;
+  anoReferencia?: number | null; situacao?: string; motivo?: string | null; usuario?: { nome: string } | null;
+};
 type HistoricoStatusItem = { id: string; statusAnterior: string; statusNovo: string; motivo: string | null; createdAt: string | Date; usuario?: { id: string; nome: string } | null };
 type RecorrenciaLocalItem = { unidadeId: string; ativa: boolean; frequencia: string | null; tipoOsId: string | null; tecnicoId: string | null; dataPrimeiraOs: string | Date | null };
 
@@ -266,6 +272,9 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
   const renovacaoAtiva = watch("renovacaoAutomatica");
   const notificarRenov = watch("notificarClienteRenovacao");
   const reajusteNotificarVal = watch("reajusteNotificar");
+  const reajustePercentualVal = watch("reajustePercentual");
+  const reajusteMesVal = watch("reajusteMesAniversario");
+  const reajusteNotificarDiasVal = watch("reajusteNotificarDias");
   const tipoVencimentoVal = watch("tipoVencimento");
   const faturamentoAdicionaisVal = watch("faturamentoAdicionais");
   const statusVal = watch("status");
@@ -452,6 +461,34 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
       </Button>
     </div>
   );
+
+  // PR4 (D8): o próximo reajuste (ou o que está esperando decisão), pelas mesmas regras da lista "Reajustes"
+  const proximoReajuste = (() => {
+    const pct = percentualDe({ reajusteIndice: reajusteIndiceVal ?? null, reajustePercentual: reajustePercentualVal });
+    if (!dataInicioVal || pct == null || !valorMensalNum) return null;
+    const p = partesBR();
+    const hoje = { ano: p.ano, mes: p.mes + 1, dia: p.dia };
+    const c = {
+      status: statusVal ?? "ATIVO", dataInicio: dataInicioVal, valorMensal: valorMensalNum, reajusteAtivo: true, reajusteIndice: "PERCENTUAL_FIXO",
+      reajustePercentual: pct, reajusteMesAniversario: reajusteMesVal ? Number(reajusteMesVal) : null, reajusteAdiadoAte: initialData?.reajusteAdiadoAte ?? null,
+    };
+    const decididos = (initialData?.reajustes ?? []).map((r) => r.anoReferencia).filter((a): a is number => typeof a === "number");
+    const s = isEditing ? sugestaoReajuste(c, decididos, hoje) : null;
+    if (s && s.situacao !== "EM_BREVE") {
+      return (
+        <p className="text-sm text-atencao-texto" data-proximo-reajuste="pendente">
+          Aniversário de {textoCompetencia(s.aniversario)}: {formatarMoeda(s.valorAtual)} → {formatarMoeda(s.valorNovo)}.{" "}
+          <Link href="/contratos/reajustes" className="font-semibold text-acento hover:underline">Decidir em Reajustes</Link>
+        </p>
+      );
+    }
+    const prox = proximoAniversario(c, hoje); // sempre depois de hoje: nunca um ano já decidido
+    return (
+      <p className="text-sm text-ink-muted" data-proximo-reajuste="futuro">
+        Próximo reajuste: {textoCompetencia(prox)} · {formatarMoeda(valorMensalNum)} → {formatarMoeda(valorReajustado(valorMensalNum, pct))}
+      </p>
+    );
+  })();
 
   return (
     <form onSubmit={salvar} className="min-h-full -m-6 bg-surface-page p-4 sm:p-6">
@@ -956,63 +993,69 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
 
       {/* ABA 5 — Gestão */}
       <Painel ativo={aba === "gestao"} id="gestao">
-        <FormSection title="Reajuste automático" icon={<TrendingUp className="w-3.5 h-3.5" />}>
+        <FormSection title="Reajuste anual" icon={<TrendingUp className="w-3.5 h-3.5" />}>
           <ToggleSwitch
-            label="Reajuste automático"
-            description="Aplica reajuste periódico ao valor do contrato."
+            label="Reajuste anual"
+            description="No aniversário, o sistema sugere e você confirma."
+            dica="Todo ano, no mês de aniversário, o contrato aparece em Contratos › Reajustes (e no sino) com o valor novo. Nada muda sozinho: você aplica, adia ou dispensa. Aplicado, o valor novo vale para as cobranças previstas daqui pra frente; o que já foi cobrado não muda. O 1º reajuste vem depois de 12 meses de contrato."
             checked={!!reajusteAtivo}
-            onChange={(v) => setValue("reajusteAtivo", v)}
+            onChange={(v) => setValue("reajusteAtivo", v, { shouldDirty: true })}
           />
           {reajusteAtivo && (
             <div className="space-y-4 border-l-2 border-surface-border pl-4 mt-2">
               <FormGrid cols={3}>
-                <FormField label="Índice">
+                <FormField label="Índice" hint={reajusteIndiceVal && reajusteIndiceVal !== "PERCENTUAL_FIXO" ? "Só o percentual fixo gera a sugestão." : undefined}>
                   <Select {...register("reajusteIndice")} placeholder="Selecione">
                     {Object.entries(LABELS_INDICE_REAJUSTE).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
                   </Select>
                 </FormField>
                 {reajusteIndiceVal === "PERCENTUAL_FIXO" && (
-                  <FormField label="Percentual fixo (%)">
+                  <FormField label="Percentual ao ano (%)">
                     <Input {...register("reajustePercentual")} type="number" step="0.001" min={0} placeholder="0,00" />
                   </FormField>
                 )}
-                <FormField label="Mês de aniversário">
-                  <Select {...register("reajusteMesAniversario")} placeholder="Selecione">
+                <FormField label="Mês de aniversário" hint="Vazio: o mês do início.">
+                  <Select {...register("reajusteMesAniversario")} placeholder="Mês do início">
                     {Object.entries(LABELS_MES).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
                   </Select>
                 </FormField>
               </FormGrid>
+              {proximoReajuste}
               <div className="border-t border-surface-linha pt-1 divide-y divide-surface-linha">
-                <ToggleSwitch label="Notificar antes do reajuste" description="" checked={!!reajusteNotificarVal} onChange={(v) => setValue("reajusteNotificar", v)} />
+                <ToggleSwitch label="Avisar antes do aniversário" description="Aparece em Reajustes uns dias antes (sem sino)." checked={!!reajusteNotificarVal} onChange={(v) => setValue("reajusteNotificar", v, { shouldDirty: true })} />
               </div>
               {reajusteNotificarVal && (
-                <FormField label="Dias de antecedência">
+                <FormField label="Dias antes">
                   <Input {...register("reajusteNotificarDias")} type="number" min={0} placeholder="30" />
                 </FormField>
               )}
             </div>
           )}
           {isEditing && !!initialData?.reajustes?.length && (
-            <div className="overflow-x-auto mt-3">
-              <p className="text-xs font-bold text-ink-muted uppercase tracking-wider mb-2">Reajustes aplicados</p>
-              <table className="w-full text-sm">
-                <thead className="bg-surface-alt border-b border-surface-border">
-                  <tr>
-                    <th className="text-left px-3 py-2 font-semibold text-ink-muted text-xs uppercase">Data</th>
-                    <th className="text-left px-3 py-2 font-semibold text-ink-muted text-xs uppercase">Índice</th>
-                    <th className="text-right px-3 py-2 font-semibold text-ink-muted text-xs uppercase">% aplicado</th>
-                    <th className="text-right px-3 py-2 font-semibold text-ink-muted text-xs uppercase">Valor anterior</th>
-                    <th className="text-right px-3 py-2 font-semibold text-ink-muted text-xs uppercase">Valor novo</th>
+            <div className="overflow-x-auto mt-3" data-historico-reajustes>
+              <p className="text-xs font-bold text-ink-muted uppercase tracking-wider mb-2">Histórico de reajustes</p>
+              <table className={PLANILHA.tabela}>
+                <thead>
+                  <tr className={PLANILHA.cabecalho}>
+                    <th className={cn(PLANILHA.th, "text-left")}>Data</th>
+                    <th className={cn(PLANILHA.th, "text-left")}>Aniversário</th>
+                    <th className={cn(PLANILHA.th, "text-left")}>Decisão</th>
+                    <th className={cn(PLANILHA.th, "text-right")}>%</th>
+                    <th className={cn(PLANILHA.th, "text-right")}>De (R$)</th>
+                    <th className={cn(PLANILHA.th, "text-right")}>Para (R$)</th>
+                    <th className={cn(PLANILHA.th, "text-left")}>Por</th>
                   </tr>
                 </thead>
                 <tbody>
                   {initialData!.reajustes!.map((r) => (
-                    <tr key={r.id} className="border-b border-surface-border">
-                      <td className="px-3 py-2 text-ink">{formatarData(r.data)}</td>
-                      <td className="px-3 py-2 text-ink">{LABELS_INDICE_REAJUSTE[r.indice] ?? r.indice}</td>
-                      <td className="px-3 py-2 text-right text-ink">{Number(r.percentual).toFixed(2)}%</td>
-                      <td className="px-3 py-2 text-right text-ink-muted">{formatarMoeda(Number(r.valorAnterior))}</td>
-                      <td className="px-3 py-2 text-right font-medium text-ink">{formatarMoeda(Number(r.valorNovo))}</td>
+                    <tr key={r.id} className={PLANILHA.linha} data-reajuste-historico={r.situacao ?? "APLICADO"}>
+                      <td className={PLANILHA.td}>{formatarData(r.data)}</td>
+                      <td className={PLANILHA.td}>{r.anoReferencia ?? "—"}</td>
+                      <td className={PLANILHA.td} title={r.motivo ?? undefined}>{r.situacao === "DISPENSADO" ? `Dispensado${r.motivo ? ` · ${r.motivo}` : ""}` : `Aplicado${r.indice && r.indice !== "PERCENTUAL_FIXO" ? ` · ${LABELS_INDICE_REAJUSTE[r.indice] ?? r.indice}` : ""}`}</td>
+                      <td className={cn(PLANILHA.td, PLANILHA.numero)}>{Number(r.percentual).toLocaleString("pt-BR", { maximumFractionDigits: 3 })}%</td>
+                      <td className={cn(PLANILHA.td, PLANILHA.numero, "text-ink-muted")}>{valorSemMoeda(Number(r.valorAnterior))}</td>
+                      <td className={cn(PLANILHA.td, PLANILHA.numero, "font-medium text-ink")}>{valorSemMoeda(Number(r.valorNovo))}</td>
+                      <td className={PLANILHA.td}>{r.usuario?.nome ?? "—"}</td>
                     </tr>
                   ))}
                 </tbody>

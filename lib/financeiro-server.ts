@@ -471,7 +471,9 @@ export async function gerarPrevisaoContratoContasReceber(contratoId: string, usu
       continue;
     }
 
-    await prisma.contaReceber.create({
+    // C6: a competência é única por contrato. Duas gerações ao mesmo tempo (o horizonte rolante do cron e
+    // um salvar do contrato) → a 2ª encontra a 1ª e segue
+    const nova = await prisma.contaReceber.create({
       data: {
         empresaId: contrato.empresaId,
         clienteId: contrato.clienteId,
@@ -487,11 +489,40 @@ export async function gerarPrevisaoContratoContasReceber(contratoId: string, usu
         categoriaId: catContrato?.id ?? null,
         clienteCnpj: contrato.cliente?.cpfCnpj ?? null,
       },
+      select: { id: true },
+    }).catch((e) => {
+      if ((e as { code?: string })?.code === "P2002") return null;
+      throw e;
     });
-    criadas++;
+    if (nova) criadas++;
   }
 
   return criadas;
+}
+
+/**
+ * PR4 — horizonte rolante: contrato ATIVO **sem data de fim** mantém sempre ~12 meses de previsão à frente.
+ * Roda no cron diário: cria só as competências que faltam na janela (a mesma geração do salvar do contrato:
+ * periodicidade, vigência, dia de faturamento, competência única C6). Contrato com data de fim já nasce
+ * com tudo até o fim e fica como está. Erro num contrato não para os outros.
+ */
+export async function rolarHorizonteDePrevisoes(o: { empresaId?: string } = {}) {
+  const contratos = await prisma.contrato.findMany({
+    where: { ...(o.empresaId ? { empresaId: o.empresaId } : {}), status: "ATIVO", dataFim: null, valorMensal: { gt: 0 } },
+    select: { id: true },
+    orderBy: { criadoEm: "asc" },
+  });
+  let previsoes = 0;
+  let falhas = 0;
+  for (const c of contratos) {
+    try {
+      previsoes += await gerarPrevisaoContratoContasReceber(c.id, null);
+    } catch (e) {
+      falhas++;
+      console.error("[horizonte] contrato", c.id, (e as Error)?.message);
+    }
+  }
+  return { contratos: contratos.length, previsoes, falhas };
 }
 
 /**

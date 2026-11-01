@@ -7,6 +7,7 @@ import { contarAlertasVeiculos } from "@/lib/veiculo-server";
 import { hojeDiaCivil } from "@/lib/fuso";
 import { avisosNfse, reconciliarEmpresa } from "@/lib/nfse/webhook-server";
 import { contarAtencaoFaturamento } from "@/lib/faturamento/painel-contratos-server";
+import { contarReajustesPendentes } from "@/lib/contratos/reajuste-server";
 
 export async function GET() {
   const session = await auth();
@@ -23,6 +24,7 @@ export async function GET() {
   const verOrcamentos = pode(permissoes, "orcamentos", "visualizar", role);
   const verFiscal = pode(permissoes, "financeiro", "fiscal", role);
   const verMedicoes = pode(permissoes, "financeiro", "medicoes", role);
+  const editarContratos = pode(permissoes, "contratos", "editar", role);
 
   // NFS-e paradas sem aviso do PlugNotas: o sino (2 em 2 min) puxa a reconciliação da empresa
   // DEPOIS de responder (no máximo 1 rodada por minuto por empresa; não atrasa o sino)
@@ -32,7 +34,7 @@ export async function GET() {
 
   const zeroVeiculos = { checklistPendente: 0, checklistsComAlertas: 0, documentosVencendo: 0, veiculosManutencao: 0, revisaoChegando: 0 };
   const zeroNfse = { nfseAutorizadas: 0, nfseAutorizadaMedicaoId: null, nfseRejeitadas: 0, nfseRejeitadaMedicaoId: null, nfseAguardando: 0, nfseAguardandoMedicaoId: null };
-  const [prazosBrutos, veiculosBrutos, boletosPagos, orcamentosRespondidos, nfsDoPedido, nfse, faturamentoContratos] = await Promise.all([
+  const [prazosBrutos, veiculosBrutos, boletosPagos, orcamentosRespondidos, nfsDoPedido, nfse, faturamentoContratos, reajustesContrato] = await Promise.all([
     verOrdens || verCompras ? contarAlertasPrazos(empresaId) : Promise.resolve(null),
     verVeiculos ? contarAlertasVeiculos(empresaId) : Promise.resolve(null),
     verBoletos
@@ -52,6 +54,8 @@ export async function GET() {
     verFiscal ? avisosNfse(empresaId) : Promise.resolve(zeroNfse),
     // D7: faturamento automático de contrato que falhou 3× ou parou numa pendência (Financeiro › Medições)
     verMedicoes ? contarAtencaoFaturamento(empresaId) : Promise.resolve(0),
+    // PR4 (D8): contrato fez aniversário e o reajuste espera alguém aplicar/adiar/dispensar (Contratos › Editar)
+    editarContratos ? contarReajustesPendentes(empresaId) : Promise.resolve(0),
   ]);
 
   const prazos = {
@@ -75,6 +79,7 @@ export async function GET() {
     nfPedidoId: nfsDoPedido[0]?.id ?? null,
     ...nfse,
     faturamentoContratos,
-    total: totalPrazos + totalVeiculos + boletosPagos + orcamentosRespondidos + nfsDoPedido.length + nfse.nfseAutorizadas + nfse.nfseRejeitadas + nfse.nfseAguardando + faturamentoContratos,
+    reajustesContrato,
+    total: totalPrazos + totalVeiculos + boletosPagos + orcamentosRespondidos + nfsDoPedido.length + nfse.nfseAutorizadas + nfse.nfseRejeitadas + nfse.nfseAguardando + faturamentoContratos + reajustesContrato,
   });
 }
