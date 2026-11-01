@@ -164,7 +164,7 @@ export function FaturamentoContratosView({ periodo, linhas, resumo, soAtencao }:
                   <th scope="col" className={cn(PLANILHA.th, "text-right w-[7.5rem]")}>Cobrança (R$)</th>
                   <th scope="col" className={cn(PLANILHA.th, "text-left w-[11rem]")}>Situação</th>
                   <th scope="col" className={cn(PLANILHA.th, "text-left w-[9rem]")}>Medição</th>
-                  <th scope="col" className={cn(PLANILHA.th, "text-left w-[6rem] hidden lg:table-cell")}>NF</th>
+                  <th scope="col" className={cn(PLANILHA.th, "text-left w-[7.5rem] hidden lg:table-cell")}>NF</th>
                   <th scope="col" className={cn(PLANILHA.th, "text-left w-[6rem] hidden lg:table-cell")}>Boleto</th>
                   <th scope="col" className={cn(PLANILHA.th, "text-left")}>Erro</th>
                 </tr>

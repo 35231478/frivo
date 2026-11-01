@@ -283,7 +283,7 @@ describe.skipIf(!URL_PG)("Contrato recorrente PR3-B — NFS-e e boleto automáti
     const r = await criar();
     await rodar();
     const [nota] = await notasDo(r.id);
-    situar(nota.plugnotasId, { situacao: "REJEITADO", mensagem: "Código de serviço inválido" });
+    situar(nota.plugnotasId, { situacao: "REJEITADO", mensagem: "Código de serviço inválido." }); // o ponto final da prefeitura não dobra
     // Reconciliação (cron): a nota espera há mais de 2 min
     await ws.reconciliarNotas({ empresaId: "e1" }, new Date("2026-11-10T11:40:00.000Z"));
     let ex = await execucao(r.id);

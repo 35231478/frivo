@@ -147,7 +147,7 @@ async function etapaNfse(ex: Execucao): Promise<boolean> {
   const recusada = notas.find((n) => n.status === "REJEITADO" || n.status === "INTERROMPIDO");
   // Não aceita: não insiste sozinha (sairia recusada de novo); emite outra no "Tentar de novo", depois de corrigir
   if (recusada && ex.situacao !== "PENDENTE") {
-    await pendencia(ex, `A prefeitura não aceitou a NFS-e: ${recusada.motivo ?? "sem motivo informado"}. Corrija e use "Tentar de novo".`);
+    await pendencia(ex, `A prefeitura não aceitou a NFS-e: ${recusada.motivo?.trim().replace(/[.\s]+$/, "") || "sem motivo informado"}. Corrija e use "Tentar de novo".`);
     return false;
   }
   const previa = await previaEmissao(ct.empresaId, m.id);
