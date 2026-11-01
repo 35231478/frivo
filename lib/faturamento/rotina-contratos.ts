@@ -51,3 +51,16 @@ export function aposFalha(tentativas: number, agora: Date) {
 /** Status da medição já aprovada (a aprovação ficou para trás) */
 export const MEDICAO_APROVADA = ["APROVADA", "AGUARDANDO_PC", "PC_RECEBIDO", "NF_EMITIDA", "BOLETO_GERADO", "PAGO"] as const;
 export const medicaoJaAprovada = (status: string) => (MEDICAO_APROVADA as readonly string[]).includes(status);
+
+/**
+ * O erro que a tela e o sino mostram: curto e legível. O erro do banco (Prisma) vem com a consulta
+ * inteira; fica só a mensagem do banco ("Message: `…`") ou a última linha.
+ */
+export function mensagemDeErro(e: unknown): string {
+  const msg = ((e as Error)?.message || "").trim();
+  if (!msg) return "Erro inesperado.";
+  const doBanco = msg.match(/Message: `([^`]+)`/)?.[1] ?? msg.match(/ERROR: ([^\n]+)/)?.[1];
+  const linhas = msg.split("\n").map((l) => l.trim()).filter(Boolean);
+  return (doBanco ?? linhas[linhas.length - 1] ?? msg).slice(0, 300);
+}
+

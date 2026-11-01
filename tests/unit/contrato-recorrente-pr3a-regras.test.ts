@@ -9,7 +9,7 @@ import {
   motivoForaDoPeriodo, mudancasDaCobranca, passoCobranca, PERIODICIDADES_COBRANCA, planoSincronizacao, rotuloReferencia,
   somarMeses, textoFrequencia, vencimentoDaCompetencia, type CobrancaContrato,
 } from "@/lib/financeiro/contrato-previsao";
-import { aposFalha, competenciaDevida, diaDeFaturar, INTERVALO_TENTATIVA_MS, MAX_TENTATIVAS, medicaoJaAprovada } from "@/lib/faturamento/rotina-contratos";
+import { aposFalha, competenciaDevida, diaDeFaturar, INTERVALO_TENTATIVA_MS, MAX_TENTATIVAS, medicaoJaAprovada, mensagemDeErro } from "@/lib/faturamento/rotina-contratos";
 import { mudaAutomacao, podeAutomatizarFaturamento } from "@/lib/contratos/automacao";
 import { montarPermissoes } from "@/lib/permissoes";
 
@@ -141,6 +141,15 @@ describe("rotina: competência devida e tentativas (D7)", () => {
     // a próxima rodada diária (24h depois) já pode tentar; a mesma manhã, não
     expect(aposFalha(0, agora).proximaTentativa!.getTime()).toBeLessThan(agora.getTime() + 24 * 3600_000);
     expect(aposFalha(0, agora).proximaTentativa!.getTime()).toBeGreaterThan(agora.getTime() + 12 * 3600_000);
+  });
+
+  it("o erro que aparece é curto: a mensagem do banco, não a consulta inteira", () => {
+    const prisma = new Error("\nInvalid `tx.medicao.create()` invocation in\n/app/lib/x.ts:120:5\n\n  117 |\n→ 120 const m = await tx.medicao.create(\nError occurred during query execution:\nConnectorError(ConnectorError { user_facing_error: None, kind: QueryError(PostgresError { code: \"P0001\", message: \"banco fora do ar\", severity: \"ERROR\" }) })\nRaw query failed. Code: `P0001`. Message: `banco fora do ar`");
+    expect(mensagemDeErro(prisma)).toBe("banco fora do ar");
+    expect(mensagemDeErro(new Error("Uma OS do contrato entrou em outra medição enquanto esta era montada."))).toBe("Uma OS do contrato entrou em outra medição enquanto esta era montada.");
+    expect(mensagemDeErro(new Error("linha 1\n  linha final  "))).toBe("linha final");
+    expect(mensagemDeErro(null)).toBe("Erro inesperado.");
+    expect(mensagemDeErro(new Error("x".repeat(400)))).toHaveLength(300);
   });
 
   it("medição já aprovada", () => {

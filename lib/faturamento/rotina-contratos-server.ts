@@ -11,7 +11,7 @@ import { partesBR } from "@/lib/fuso";
 import { enviarMedicao } from "@/lib/email";
 import { cobrancaDoContrato, gerarMedicaoDeContratos } from "@/lib/faturamento/medicao-contrato-server";
 import { aprovarMedicao, marcarEnviada } from "@/lib/faturamento/aprovar-medicao-server";
-import { aposFalha, competenciaDevida, LEASE_MS, medicaoJaAprovada } from "@/lib/faturamento/rotina-contratos";
+import { aposFalha, competenciaDevida, LEASE_MS, medicaoJaAprovada, mensagemDeErro } from "@/lib/faturamento/rotina-contratos";
 
 const ABERTAS = ["PENDENTE", "AGUARDANDO", "PENDENCIA"] as const;
 const execucaoCompleta = { contrato: { include: { cliente: true } }, medicao: { select: { id: true, numero: true, status: true } } } as const;
@@ -120,8 +120,7 @@ export async function processarExecucao(id: string, agora = new Date()): Promise
         if (!(await avancar(ex))) break;
       } catch (e) {
         resultado = "falhou";
-        const msg = ((e as Error)?.message || "Erro inesperado").slice(0, 500);
-        await gravar(id, { ...aposFalha(ex.tentativas, agora), erro: msg });
+        await gravar(id, { ...aposFalha(ex.tentativas, agora), erro: mensagemDeErro(e) });
         break;
       }
     }

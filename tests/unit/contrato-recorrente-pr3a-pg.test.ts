@@ -98,8 +98,9 @@ describe.skipIf(!URL_PG)("Contrato recorrente PR3-A — periodicidade e rotina d
       { id: "uA", empresaId: "e1", nome: "Ana", email: "ana@x.com", senha: "x", role: "ADMIN" },
       { id: "uU", empresaId: "e1", nome: "Uli", email: "uli@x.com", senha: "x", role: "OPERADOR" },
     ] });
-    await prisma.cliente.createMany({ data: Array.from({ length: 12 }, (_, i) => ({
+    await prisma.cliente.createMany({ data: Array.from({ length: 13 }, (_, i) => ({
       id: `c${i + 1}`, empresaId: "e1", nome: `Cliente ${i + 1}`, cpfCnpj: `${String(i + 10).padStart(2, "0")}.111.111/0001-11`, diaFaturamento: 10,
+      ...(i === 12 ? { tipoFaturamento: "FATURA_UNICA", agrupaAdicionais: true } : {}),
     })) });
     vi.useFakeTimers({ toFake: ["Date"] });
     em("2026-11-15T15:00:00.000Z");
@@ -170,11 +171,24 @@ describe.skipIf(!URL_PG)("Contrato recorrente PR3-A — periodicidade e rotina d
     const ev = await prisma.contaReceberEvento.findMany({ where: { contaReceberId: dez.id } });
     expect(ev.map((e: any) => [e.tipo, e.detalhe, e.usuarioId])).toEqual([["CANCELADA", `Pelo contrato: ${motivo}. A previsão sai do Contas a Receber.`, "uA"]]);
 
+    // Bimestral: o que o trimestral cancelou e cai no passo novo volta, já com o Ref. do período novo
+    expect((await editar(x, { periodicidade: "BIMESTRAL" })).status).toBe(200);
+    const bi = await previsoes(x.id);
+    expect(bi.filter((c: any) => c.status === "PREVISTO").map((c: any) => [`${c.refMes}/${c.refAno}`, c.descricao])).toEqual([
+      ["11/2026", `Contrato ${x.numero} — Ref. nov–dez/2026`], ["1/2027", `Contrato ${x.numero} — Ref. jan–fev/2027`],
+      ["3/2027", `Contrato ${x.numero} — Ref. mar–abr/2027`], ["5/2027", `Contrato ${x.numero} — Ref. mai–jun/2027`],
+      ["7/2027", `Contrato ${x.numero} — Ref. jul–ago/2027`], ["9/2027", `Contrato ${x.numero} — Ref. set–out/2027`],
+    ]);
     expect((await editar(x, { periodicidade: "MENSAL" })).status).toBe(200);
     const mens = await previsoes(x.id);
     expect(mens.map((c: any) => [c.status, c.descricao])).toEqual(mens.map((c: any) => ["PREVISTO", `Contrato ${x.numero} — Ref. ${String(c.refMes).padStart(2, "0")}/${c.refAno}`]));
     expect(mens).toHaveLength(12);
     expect((await prisma.contaReceberEvento.findMany({ where: { contaReceberId: dez.id }, orderBy: { criadoEm: "asc" } })).map((e: any) => e.tipo)).toEqual(["CANCELADA", "REABERTA"]);
+    // Uma previsão ajustada à mão não tem a descrição reescrita por uma edição que não mexe no período
+    const jan = mens.find((c: any) => c.refMes === 1);
+    await prisma.contaReceber.update({ where: { id: jan.id }, data: { descricao: "Combinado com o cliente" } });
+    expect((await editar(x, { observacoes: "nada de cobrança" })).status).toBe(200);
+    expect((await prisma.contaReceber.findUnique({ where: { id: jan.id } })).descricao).toBe("Combinado com o cliente");
   });
 
   it("D2: a medição de um contrato vence pelo dia do contrato (o do cliente é a reserva), também ao aprovar", async () => {
@@ -200,6 +214,10 @@ describe.skipIf(!URL_PG)("Contrato recorrente PR3-A — periodicidade e rotina d
     em("2026-11-19T12:00:00.000Z");
     const antes = await rodar();
     expect([antes.novas, await prisma.faturamentoContratoExecucao.count({ where: { contratoId: a.id } })]).toEqual([0, 0]);
+    // O botão manual, antes do dia: o contrato automático é da rotina, não entra
+    const cedo = await chamar("medicoes/gerar-mes", "POST", {}, { mes: 11, ano: 2026 });
+    expect(cedo.json.peloAutomatico).toContain(a.numero);
+    expect(await prisma.medicao.count({ where: { contratoId: a.id } })).toBe(0);
 
     em("2026-11-20T11:23:00.000Z");
     const r = await rodar();
@@ -266,7 +284,8 @@ describe.skipIf(!URL_PG)("Contrato recorrente PR3-A — periodicidade e rotina d
     // O cliente aprova pelo link
     const ap = await chamar("publico/medicoes/[token]/aprovar", "POST", { token: mb.tokenPublico }, { nome: "Carlos Cliente", cpf: "123.456.789-09", assinaturaUrl: "data:image/png;base64,AAAAAAAAAAAAAAAA" });
     expect([ap.status, ap.json.status]).toEqual([200, "PC_RECEBIDO"]);
-    expect(ymd((await prisma.medicao.findUnique({ where: { id: mb.id } })).dataVencimento)).toBe("2026-11-20");
+    const aprovada = await prisma.medicao.findUnique({ where: { id: mb.id } });
+    expect([ymd(aprovada.dataVencimento), aprovada.assinadoPor, aprovada.assinadoCpf]).toEqual(["2026-11-20", "Carlos Cliente", "12345678909"]);
     em("2026-11-28T11:23:00.000Z");
     await rodar();
     expect((await execucao(b.id, 2026, 11)).situacao).toBe("CONCLUIDA");
@@ -322,6 +341,13 @@ describe.skipIf(!URL_PG)("Contrato recorrente PR3-A — periodicidade e rotina d
     expect((await chamar("faturamento-contratos/[id]/tentar", "POST", { id: ex.id })).status).toBe(404);
     expect((await chamar("faturamento-contratos", "GET", {}, undefined, "http://localhost/api/faturamento-contratos?ano=2026&mes=12")).json.linhas).toEqual([]);
     expect((await execucao(d.id, 2026, 12)).situacao).toBe("FALHA");
+
+    // Posse: com outra rodada segurando a execução, ninguém mais processa
+    const { processarExecucao } = await import("@/lib/faturamento/rotina-contratos-server");
+    await prisma.faturamentoContratoExecucao.update({ where: { id: ex.id }, data: { situacao: "PENDENTE", processandoAte: new Date("2026-12-08T11:30:00.000Z") } });
+    expect(await processarExecucao(ex.id, new Date("2026-12-08T11:24:00.000Z"))).toBe("ocupada");
+    expect((await execucao(d.id, 2026, 12)).tentativas).toBe(3);
+    await prisma.faturamentoContratoExecucao.update({ where: { id: ex.id }, data: { situacao: "FALHA", processandoAte: null } });
 
     // Ainda falhando: "Tentar de novo" conta 1 tentativa nova e devolve o erro
     logar(usuario({ financeiro: ["visualizar", "medicoes"] }));
@@ -382,6 +408,22 @@ describe.skipIf(!URL_PG)("Contrato recorrente PR3-A — periodicidade e rotina d
     expect([exg.situacao, exg.erro]).toEqual(["CANCELADA", `Cobrado à mão na medição ${consolidada.numero}, junto com outros contratos do cliente.`]);
     expect(await prisma.medicao.count({ where: { clienteId: "c12", mes: 2, ano: 2027 } })).toBe(1);
     void h;
+    // Contrato novo num cliente já cobrado só por outro contrato: o novo entra (a medição do outro segura só o outro)
+    const f2 = await criar({ clienteId: "c11", dataInicio: "2027-02-01", valorMensal: 300 });
+    const r2 = await chamar("medicoes/gerar-mes", "POST", {}, { mes: 2, ano: 2027 });
+    expect(r2.json.criadas).toBe(1);
+    const [mf2] = await medicoesDo(f2.id);
+    expect([mf2.contratoId, Number(mf2.valorTotal)]).toEqual([f2.id, 300]);
+    expect(await prisma.medicao.count({ where: { contratoId: f.id } })).toBe(1);
+  });
+
+  it("D3: cliente de fatura única com contrato automático → medição só do contrato (sem os orçamentos do cliente)", async () => {
+    em("2027-03-15T15:00:00.000Z");
+    const u = await criar({ clienteId: "c13", diaFaturamento: 10, faturamentoAutomatico: true, aprovacaoAutomatica: true });
+    await rodar();
+    const [mu] = await medicoesDo(u.id);
+    expect([mu.tipo, mu.contratoId, mu.descricao, Number(mu.valorTotal)]).toEqual(["MENSAL_FIXO", u.id, "Medição mensal 03/2027", 1000]);
+    expect((await execucao(u.id, 2027, 3)).situacao).toBe("CONCLUIDA");
   });
 
   it("RBAC: ligar/desligar o automático pede Financeiro › Medições (criar e editar); o resto do contrato segue como antes", async () => {

@@ -40,7 +40,7 @@ const MESES_CURTOS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "s
 /** Soma meses a uma competência (mes 1–12) */
 export function somarMeses(ano: number, mes: number, n: number): { ano: number; mes: number } {
   const t = ano * 12 + (mes - 1) + n;
-  return { ano: Math.floor(t / 12), mes: (t % 12 + 12) % 12 + 1 };
+  return { ano: Math.floor(t / 12), mes: (t % 12) + 1 }; // t ≥ 0 para qualquer ano real
 }
 /**
  * O período que a cobrança cobre: mensal "11/2026"; a cada N meses "jan–mar/2026" (ou
@@ -63,8 +63,8 @@ export function rotuloReferencia(ano: number, mes: number, passo = 1, referencia
  */
 export function competenciasDoContrato(dataInicio: Date, dataFim: Date | null, hoje: Date = hojeDiaCivil(), passo = 1): { ano: number; mes: number }[] {
   const inicio = new Date(dataInicio);
-  // sem fim: ~12 meses à frente (e pelo menos a próxima cobrança, no contrato anual)
-  const fim = dataFim ? new Date(dataFim) : addMonths(hoje, Math.max(13, passo + 1));
+  // sem fim: ~12 meses à frente (13 > 12 = o maior passo: o anual sempre tem a próxima cobrança)
+  const fim = dataFim ? new Date(dataFim) : addMonths(hoje, 13);
   const out: { ano: number; mes: number }[] = [];
   for (let k = 0; k < 120; k += Math.max(1, passo)) {
     const ref = addMonths(inicio, k); // dia 1 do mês de referência
