@@ -19,8 +19,8 @@ motor da medição/fatura e o módulo fiscal, com as mesmas travas, sem caminho 
 |---|---|---|---|
 | **PR1** | Base: excluir encerra o financeiro; editar valor/dia/vigência sincroniza as previsões abertas; eventos na linha do tempo; "Gerar medições do mês" respeita a vigência; texto da periodicidade. | 🟢 | Feito (35231478/frivo#111) |
 | **PR2** | **Serviço padrão do contrato**: `contratos.servico_id`. A medição do contrato nasce com o serviço no item (NFS-e sem a pendência) e com as retenções do serviço. Prévia no formulário: cobrança − retenções = cobrado. | 🔵 | Feito (35231478/frivo#112) |
-| **PR3-A** | **Periodicidade de cobrança** (mensal a anual) + **rotina diária** medição → aprovação, com execuções (contrato × competência), 3 tentativas, sino e a tela "Faturamento de contratos". | 🔵 | Este PR |
-| PR3-B | Etapas NFS-e (emissão automática) e boleto (+ envio por e-mail); colunas NF/boleto da tela passam a ser preenchidas pela rotina. | 🟢 | Depois do PR3-A |
+| **PR3-A** | **Periodicidade de cobrança** (mensal a anual) + **rotina diária** medição → aprovação, com execuções (contrato × competência), 3 tentativas, sino e a tela "Faturamento de contratos". | 🔵 | Feito (35231478/frivo#113) |
+| **PR3-B** | **Etapas NFS-e** (emissão automática) e **boleto** (+ envio por e-mail); colunas NF/boleto da tela preenchidas, com links. | 🟢 | Este PR |
 | PR4 | Horizonte rolante de previsões e reajuste anual. | 🟢 | Depende de D8 |
 
 ## Regras do PR2
@@ -45,6 +45,22 @@ motor da medição/fatura e o módulo fiscal, com as mesmas travas, sem caminho 
 - **Travas.** Uma execução por contrato × competência (índice único). Posse da execução enquanto processa. O núcleo da medição tranca o contrato e confere de novo a competência. O número da medição sai sob trava. A aprovação é atômica.
 - **Permissão.** Ligar ou desligar as chaves automáticas pede Financeiro › Medições, na tela e no servidor. A tela e o "Tentar de novo" também pedem.
 
+## Regras do PR3-B
+
+- **Chaves.** Duas chaves novas no contrato (só com o "Faturamento automático" ligado): "Emitir a NFS-e sozinha" (pede também Financeiro › Fiscal) e "Emitir e enviar o boleto sozinho" (pede também Financeiro › Contas a receber). Na tela e no servidor (POST e PUT). Desligar o automático desliga as duas (só as que a pessoa pode mexer).
+- **Etapa C — NFS-e.** Depois da aprovação, a rotina emite a NFS-e da medição **pelo sistema** (sem usuário), com a empresa do próprio contrato, pelo mesmo caminho da tela "Emitir NFS-e" (mesma pré-validação, mesma trava da medição). Ambiente: o da empresa; Produção só com `NFSE_EMISSAO_PRODUCAO` liberada, sem a variável sai em Homologação.
+  - pendência (serviço, cliente, emitente, Produção não liberada): **não emite**; a execução vira "Pendência" com o texto do que falta e vai pro sino;
+  - nota viva (enviando, na prefeitura ou autorizada): não emite outra. Se a tela emitiu no meio da rodada, a rotina recebe "outra emissão começou" e espera, sem contar tentativa;
+  - cliente que exige pedido de compra: espera o PC (sem sino);
+  - a prefeitura não aceitou: vira "Pendência" com o motivo; não insiste sozinha. "Tentar de novo" (depois de corrigir) emite outra;
+  - a resposta da prefeitura chega pelo aviso do PlugNotas ou pela reconciliação, e a execução segue **na hora** (gancho na nota).
+- **Etapa D — boleto.** Com a NF feita (a da rotina, a da tela ou a registrada à mão), emite o boleto Inter de **cada cobrança** da medição que pode receber boleto (A receber/atrasada, sem boleto vivo; com parcelas, cada parcela) e manda ao cliente por e-mail (D6).
+  - o núcleo é o mesmo da tela (`emitirBoletoDaConta`): a conta fica trancada enquanto o Inter responde, então tela + rotina ao mesmo tempo = um boleto;
+  - conta que já tem boleto ou que não pode receber (previsão, recebida, cancelada, perda, renegociada) fica de fora;
+  - Inter não configurado: "Pendência" com o caminho para configurar. Inter fora do ar: tentativas (3, uma por dia) e "Falhou";
+  - e-mail que não saiu: "Pendência" (o boleto já saiu). A rodada do dia não reenvia sozinha; a pendência fica até o e-mail sair (à mão, pela conta, ou no "Tentar de novo", que reenvia só o e-mail). E-mail que a empresa ou o cliente desligou não é pendência.
+- **Tela.** Coluna NF: nº (autorizada ou registrada à mão), "Na prefeitura" ou "Não aceita", com link para a medição. Coluna Boleto: a situação do boleto de cada cobrança (ou parcela), com link para a conta. Previsão ainda não aparece no boleto (sem NF não se cobra).
+
 ## Decisões em aberto (do levantamento)
 
 | # | Pergunta | Sugestão |
@@ -54,7 +70,7 @@ motor da medição/fatura e o módulo fiscal, com as mesmas travas, sem caminho 
 | D3 | Uma medição por cliente (soma contratos) ou por contrato? | Decidido: por contrato no automático (PR3-A) |
 | D4 | Aprovação automática: todos, por contrato ou só o perfil AUTOMÁTICO? | Decidido: por contrato (PR3-A) |
 | D5 | A NF descreve o mês corrente ou o anterior? | Decidido: corrente, com opção no contrato (PR3-A) |
-| D6 | Boleto junto com a NF? Envio por e-mail automático? | Sim e sim |
+| D6 | Boleto junto com a NF? Envio por e-mail automático? | Decidido: sim e sim (PR3-B) |
 | D7 | Falha: quantas tentativas e quem é avisado? | Decidido: 3 (1 por dia) e o sino de quem tem Financeiro › Medições (PR3-A) |
 | D8 | Reajuste anual automático agora ou depois? | Depois (PR4) |
 | D9 | Ao editar o valor, atualizar as previsões já criadas? | Feito no PR1 (só as abertas) |
