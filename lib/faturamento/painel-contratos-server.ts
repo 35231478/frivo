@@ -68,7 +68,7 @@ export async function painelFaturamentoContratos(empresaId: string, ano: number,
   const medicaoIds = execucoes.map((e) => e.medicaoId).filter(Boolean) as string[];
   const contas = medicaoIds.length ? await prisma.contaReceber.findMany({
     where: {
-      empresaId, excluidaEm: null, status: { notIn: ["CANCELADO", "PARCELADO"] },
+      empresaId, excluidaEm: null, status: { notIn: ["PREVISTO", "CANCELADO", "PARCELADO"] }, // previsão ainda não se cobra
       OR: [{ medicaoId: { in: medicaoIds } }, { lancamento: { medicaoId: { in: medicaoIds } } }],
     },
     select: { id: true, numero: true, boletoStatus: true, medicaoId: true, lancamento: { select: { medicaoId: true } } },

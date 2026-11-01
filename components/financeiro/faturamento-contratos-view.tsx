@@ -28,7 +28,7 @@ function Nf({ e }: { e: Exec }) {
   const texto = e.nf.situacao === "AUTORIZADA" || e.nf.situacao === "MANUAL" ? `nº ${e.nf.numero ?? "—"}` : e.nf.situacao === "PREFEITURA" ? "Na prefeitura" : "Não aceita";
   return (
     <Link href={`/financeiro/medicoes/${e.medicao.id}`} data-nf-situacao={e.nf.situacao}
-      className={cn("hover:underline", e.nf.situacao === "NAO_ACEITA" ? "text-atrasado-texto" : e.nf.situacao === "PREFEITURA" ? "text-atencao-texto" : "text-acento")}>
+      className={cn("hover:underline whitespace-nowrap", e.nf.situacao === "NAO_ACEITA" ? "text-atrasado-texto" : e.nf.situacao === "PREFEITURA" ? "text-atencao-texto" : "text-acento")}>
       {texto}
     </Link>
   );

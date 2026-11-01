@@ -203,6 +203,10 @@ describe.skipIf(!URL_PG)("Contrato recorrente PR3-B — NFS-e e boleto automáti
     await rodar();
     expect(pn.envios - enviosAntes).toBe(1);
     expect(await notasDo(a.id)).toHaveLength(1);
+    // Na tela: a NF "na prefeitura"; a conta ainda é previsão (sem NF não se cobra) → nada na coluna do boleto
+    const antes = await chamar("faturamento-contratos", "GET", {}, undefined, "http://localhost/api/faturamento-contratos?ano=2026&mes=11");
+    const l0 = antes.json.linhas.find((l: any) => l.contratoId === a.id);
+    expect([l0.execucao.nf, l0.execucao.cobrancas, (await contasDo(a.id))[0].status]).toEqual([{ numero: null, situacao: "PREFEITURA" }, [], "PREVISTO"]);
 
     // A prefeitura autoriza; o aviso do PlugNotas chega → a execução segue na hora: boleto + e-mail
     situar(nota.plugnotasId, { situacao: "CONCLUIDO", numeroNfse: "4321", codigoVerificacao: "AB-12" });
