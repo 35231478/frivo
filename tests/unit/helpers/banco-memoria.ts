@@ -1,6 +1,6 @@
 /**
  * Banco em memória para testes de rota (substitui `@/lib/prisma`). Cobre o que as rotas usam:
- * findFirst/findUnique/findMany/count/aggregate(_sum/_max)/create/createMany/update/updateMany/upsert/delete/deleteMany e
+ * findFirst/findUnique/findMany/count/aggregate(_sum/_max)/groupBy(_sum)/create/createMany/update/updateMany/upsert/delete/deleteMany e
  * $transaction. findMany respeita orderBy (ver `comparador`), skip e take. Filtros: igualdade, in/notIn/not/has/contains, lt/lte/gt/gte, AND/OR, chave composta
  * (`cpf_empresaId`) e filtro por relação (`formularioTemplate: { ativo: true }`), resolvido
  * pelas relações declaradas em `relacoes`. `select`/`include` não recortam colunas (devolve a
@@ -135,6 +135,17 @@ export function criarPrisma(db: Banco, relacoes: Relacoes = {}, aninhadas: Aninh
         return [k, vs.length ? Math.max(...vs.map(Number)) : null];
       })),
     }),
+    groupBy: async ({ by, where, _sum }: any = {}) => {
+      const grupos = new Map<string, Linha[]>();
+      for (const r of linhas(m, where)) {
+        const k = JSON.stringify([by].flat().map((c: string) => r[c] ?? null));
+        grupos.set(k, [...(grupos.get(k) ?? []), r]);
+      }
+      return [...grupos.values()].map((rs) => ({
+        ...Object.fromEntries([by].flat().map((c: string) => [c, rs[0][c] ?? null])),
+        _sum: Object.fromEntries(Object.keys(_sum ?? {}).map((k) => [k, rs.reduce((t, r) => t + Number(r[k] ?? 0), 0)])),
+      }));
+    },
     create: async ({ data }: any) => {
       const { campos, ...resto } = data ?? {};
       const r: Linha = { id: `${m}-${++db.seq}`, ...resto };

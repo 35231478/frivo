@@ -3,6 +3,7 @@ import { BarraAcoesMassa } from "@/components/acoes-massa/barra";
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { passoCobranca } from "@/lib/financeiro/contrato-previsao";
 import { whereContratos } from "@/lib/listas/filtros";
 import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
 import { ContratosListaClient } from "@/components/contratos/contratos-lista-client";
@@ -52,15 +53,18 @@ export default async function ContratosPage({ searchParams }: { searchParams: Pr
       orderBy: [SORT_MAP[sort](dir), { id: "asc" }],
       ...janela(pagina, porPagina),
     }),
-    prisma.contrato.aggregate({ where, _sum: { valorMensal: true } }),
+    prisma.contrato.groupBy({ by: ["periodicidade"], where, _sum: { valorMensal: true } }),
     prisma.contrato.count({ where: { empresaId, status: "ATIVO" } }),
-    prisma.contrato.aggregate({ where: { empresaId, status: "ATIVO" }, _sum: { valorMensal: true } }),
+    prisma.contrato.groupBy({ by: ["periodicidade"], where: { empresaId, status: "ATIVO" }, _sum: { valorMensal: true } }),
     prisma.contrato.count({ where: { empresaId, status: "ATIVO", dataFim: { gte: hoje, lte: em30 } } }),
     prisma.contrato.count({ where: { empresaId, status: { not: "ENCERRADO" }, dataFim: { lt: hoje } } }),
     prisma.cliente.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true, nomeFantasia: true }, orderBy: { nome: "asc" } }),
   ]);
 
-  const valorMensalAtivos = Number(somaAtivos._sum.valorMensal ?? 0);
+  // D1: o valor é o de cada cobrança; no total, o equivalente por mês (trimestral R$ 900 = R$ 300/mês)
+  const porMes = (grupos: { periodicidade: string; _sum: { valorMensal: unknown } }[]) =>
+    Math.round(grupos.reduce((a, g) => a + Number(g._sum.valorMensal ?? 0) / passoCobranca(g.periodicidade), 0) * 100) / 100;
+  const valorMensalAtivos = porMes(somaAtivos);
 
   const view = contratos.map((c) => {
     const fim = c.dataFim;
@@ -90,7 +94,7 @@ export default async function ContratosPage({ searchParams }: { searchParams: Pr
       total={total}
       pagina={pagina}
       porPagina={porPagina}
-      somaMensalFiltrada={Number(agregadoFiltrado._sum.valorMensal ?? 0)}
+      somaMensalFiltrada={porMes(agregadoFiltrado)}
       resumo={{ ativos, valorMensalTotal: valorMensalAtivos, valorAnualTotal: valorMensalAtivos * 12, vencendo, vencidos }}
       opcoesClientes={clientes.map((c) => ({ value: c.id, label: c.nomeFantasia ?? c.nome }))}
     />

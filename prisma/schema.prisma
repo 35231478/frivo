@@ -125,6 +125,31 @@ enum Periodicidade {
   ANUAL
 }
 
+/// D5: período que a NFS-e do contrato descreve
+enum ReferenciaNfse {
+  CORRENTE
+  ANTERIOR
+}
+
+/// Rotina de faturamento do contrato: em que passo a competência está
+enum EtapaFaturamento {
+  MEDICAO
+  APROVACAO
+  NFSE
+  BOLETO
+  CONCLUIDA
+}
+
+/// Rotina de faturamento do contrato: como o passo atual está
+enum SituacaoFaturamento {
+  PENDENTE
+  AGUARDANDO
+  PENDENCIA
+  FALHA
+  CONCLUIDA
+  CANCELADA
+}
+
 enum TipoServico {
   INSTALACAO
   MANUTENCAO_PREVENTIVA
@@ -461,10 +486,11 @@ model Empresa {
   criadoEm             DateTime @default(now()) @map("criado_em")
   atualizadoEm         DateTime @updatedAt @map("atualizado_em")
 
-  responsavelTecnico     Tecnico?                  @relation("EmpresaResponsavelTecnico", fields: [responsavelTecnicoId], references: [id], onDelete: SetNull)
+  responsavelTecnico     Tecnico?                      @relation("EmpresaResponsavelTecnico", fields: [responsavelTecnicoId], references: [id], onDelete: SetNull)
   usuarios               Usuario[]
   clientes               Cliente[]
   equipamentos           Equipamento[]
+  faturamentoExecucoes   FaturamentoContratoExecucao[]
   contratos              Contrato[]
   ordensServico          OrdemServico[]
   tecnicos               Tecnico[]
@@ -1222,24 +1248,33 @@ model Contrato {
   // D3: adicionais na fatura do contrato (CONSOLIDADO) ou em faturas separadas (SEPARADO, padrão)
   faturamentoAdicionais FaturamentoAdicionais @default(SEPARADO) @map("faturamento_adicionais")
 
+  // Faturamento automático (rotina diária): cada etapa só anda com a sua chave ligada
+  faturamentoAutomatico Boolean        @default(false) @map("faturamento_automatico")
+  aprovacaoAutomatica   Boolean        @default(false) @map("aprovacao_automatica")
+  emitirNfseAuto        Boolean        @default(false) @map("emitir_nfse_auto")
+  emitirBoletoAuto      Boolean        @default(false) @map("emitir_boleto_auto")
+  /// D5: a nota descreve o período corrente (padrão) ou o anterior (cobrança vencida)
+  nfseReferencia        ReferenciaNfse @default(CORRENTE) @map("nfse_referencia")
+
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  empresa            Empresa                    @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  origemOrcamento    Orcamento?                 @relation("OrcamentoContrato", fields: [origemOrcamentoId], references: [id])
-  cliente            Cliente                    @relation(fields: [clienteId], references: [id])
-  responsavelTecnico Tecnico?                   @relation(fields: [responsavelTecnicoId], references: [id])
-  tipoOsRecorrencia  TipoOs?                    @relation("ContratoTipoOsRecorrencia", fields: [tipoOsRecorrenciaId], references: [id])
-  tecnicoRecorrencia Tecnico?                   @relation("ContratoTecnicoRecorrencia", fields: [tecnicoRecorrenciaId], references: [id])
-  unidades           ContratoUnidade[]
-  ordensServico      OrdemServico[]
-  medicoes           Medicao[]
-  relatorios         RelatorioOs[]
-  anexos             AnexoContrato[]
-  reajustes          ReajusteContrato[]
-  historicoStatus    ContratoHistoricoStatus[]
-  recorrenciasLocais ContratoRecorrenciaLocal[]
-  contasReceber      ContaReceber[]
+  empresa              Empresa                       @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  origemOrcamento      Orcamento?                    @relation("OrcamentoContrato", fields: [origemOrcamentoId], references: [id])
+  cliente              Cliente                       @relation(fields: [clienteId], references: [id])
+  responsavelTecnico   Tecnico?                      @relation(fields: [responsavelTecnicoId], references: [id])
+  tipoOsRecorrencia    TipoOs?                       @relation("ContratoTipoOsRecorrencia", fields: [tipoOsRecorrenciaId], references: [id])
+  tecnicoRecorrencia   Tecnico?                      @relation("ContratoTecnicoRecorrencia", fields: [tecnicoRecorrenciaId], references: [id])
+  unidades             ContratoUnidade[]
+  ordensServico        OrdemServico[]
+  medicoes             Medicao[]
+  relatorios           RelatorioOs[]
+  anexos               AnexoContrato[]
+  reajustes            ReajusteContrato[]
+  historicoStatus      ContratoHistoricoStatus[]
+  recorrenciasLocais   ContratoRecorrenciaLocal[]
+  contasReceber        ContaReceber[]
+  execucoesFaturamento FaturamentoContratoExecucao[]
 
   @@unique([numero, empresaId])
   @@index([empresaId, status])
@@ -2396,6 +2431,8 @@ model Medicao {
   relatorios    RelatorioOs[]
 
   notasFiscais NotaFiscal[]
+
+  execucoesFaturamento FaturamentoContratoExecucao[]
 
   @@unique([numero, empresaId])
   @@index([empresaId, status])
@@ -3814,4 +3851,34 @@ model NotaFiscalEvento {
 
   @@index([notaId])
   @@map("notas_fiscais_eventos")
+}
+
+/// Rotina de faturamento automático: uma linha por contrato × competência (única). Cada etapa retoma
+/// de onde parou; `tentativas`/`proximaTentativa` fazem a retentativa diária (3 e para no sino);
+/// `processandoAte` é a vez de quem está processando (dois crons ao mesmo tempo não andam juntos).
+model FaturamentoContratoExecucao {
+  id               String              @id @default(cuid())
+  empresaId        String              @map("empresa_id")
+  contratoId       String              @map("contrato_id")
+  refAno           Int                 @map("ref_ano")
+  refMes           Int                 @map("ref_mes")
+  medicaoId        String?             @map("medicao_id")
+  etapa            EtapaFaturamento    @default(MEDICAO)
+  situacao         SituacaoFaturamento @default(PENDENTE)
+  erro             String?             @db.Text
+  tentativas       Int                 @default(0)
+  proximaTentativa DateTime?           @map("proxima_tentativa")
+  processandoAte   DateTime?           @map("processando_ate")
+  concluidaEm      DateTime?           @map("concluida_em")
+  criadoEm         DateTime            @default(now()) @map("criado_em")
+  atualizadoEm     DateTime            @updatedAt @map("atualizado_em")
+
+  empresa  Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  contrato Contrato @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+  medicao  Medicao? @relation(fields: [medicaoId], references: [id], onDelete: SetNull)
+
+  @@unique([contratoId, refAno, refMes])
+  @@index([empresaId, situacao])
+  @@index([medicaoId])
+  @@map("faturamento_contrato_execucoes")
 }

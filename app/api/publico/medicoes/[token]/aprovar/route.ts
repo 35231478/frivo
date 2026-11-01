@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { aprovacaoMedicaoSchema } from "@/lib/validations";
-import { statusAposAprovacao, calcularVencimento } from "@/lib/medicao-helpers";
-import { gerarContaReceberDaMedicao } from "@/lib/financeiro-server";
+import { aprovarMedicao } from "@/lib/faturamento/aprovar-medicao-server";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -24,24 +23,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   }
 
   const cpfLimpo = parsed.data.cpf.replace(/\D/g, "");
-  const proximo = statusAposAprovacao(medicao.cliente.exigePcAntesNf);
-  const vencimento = calcularVencimento(medicao.cliente.diaFaturamento, medicao.mes, medicao.ano);
+  // Atômico: dois envios da aprovação (clique duplo/outra aba) — só o primeiro muda o status (núcleo único)
+  const aprovada = await aprovarMedicao(medicao.id, { assinadoPor: parsed.data.nome.trim(), assinadoCpf: cpfLimpo, assinaturaUrl: parsed.data.assinaturaUrl });
+  if (!aprovada) return NextResponse.json({ erro: "Esta medição não está disponível para aprovação" }, { status: 400 });
 
-  // Atômico: dois envios da aprovação (clique duplo/outra aba) — só o primeiro muda o status
-  const r = await prisma.medicao.updateMany({
-    where: { id: medicao.id, status: "AGUARDANDO_APROVACAO" },
-    data: {
-      status: proximo,
-      dataAprovacao: new Date(),
-      dataVencimento: vencimento,
-      assinadoPor: parsed.data.nome.trim(),
-      assinadoCpf: cpfLimpo,
-      assinaturaUrl: parsed.data.assinaturaUrl,
-    },
-  });
-  if (r.count !== 1) return NextResponse.json({ erro: "Esta medição não está disponível para aprovação" }, { status: 400 });
-
-  await gerarContaReceberDaMedicao(medicao.id);
-
-  return NextResponse.json({ ok: true, status: proximo });
+  return NextResponse.json({ ok: true, status: aprovada.status });
 }

@@ -67,4 +67,23 @@ describe("Gerar medições do mês", () => {
     await gerar();
     expect(caixa.querySelector("[data-fora-vigencia]")).toBeNull();
   });
+  it("PR3-A: contratos sem cobrança neste mês e os do faturamento automático aparecem, cada um com a sua ⓘ", async () => {
+    resposta = { ok: true, criadas: 1, ignoradas: 0, foraDaVigencia: [], semCobrancaNoMes: ["CT-T1", "CT-T2"], peloAutomatico: ["CT-A"], resultado: [] };
+    await gerar();
+    const sem = caixa.querySelector("[data-sem-cobranca-mes]")!;
+    expect(sem.textContent).toContain("2 contratos sem cobrança neste mês: CT-T1, CT-T2");
+    const auto = caixa.querySelector("[data-pelo-automatico]")!;
+    expect(auto.textContent).toContain("1 contrato fica com o faturamento automático: CT-A");
+    for (const [linha, rotulo, texto] of [[sem, "Sem cobrança neste mês", "só cobra no 1º mês de cada período"], [auto, "Faturamento automático", "Financeiro › Faturamento de contratos"]] as const) {
+      const dica = linha.querySelector<HTMLButtonElement>(`button[aria-label*="${rotulo}"]`)!;
+      expect(dica.parentElement!.closest("button, a")).toBeNull();
+      expect(document.getElementById(dica.getAttribute("aria-describedby")!)!.textContent).toContain(texto);
+    }
+    act(() => root.unmount());
+    root = createRoot(caixa);
+    resposta = { ok: true, criadas: 1, ignoradas: 0, foraDaVigencia: [], resultado: [] };
+    await gerar();
+    expect(caixa.querySelector("[data-sem-cobranca-mes]")).toBeNull();
+    expect(caixa.querySelector("[data-pelo-automatico]")).toBeNull();
+  });
 });

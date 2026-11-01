@@ -9,7 +9,7 @@ import { rotuloMedicao } from "@/lib/faturamento/fatura";
 import { cancelarParcelas, reajustarParcelas, recebidoNoPeriodo, saldoDoAgregado } from "@/lib/financeiro/parcelas-server";
 import {
   type CobrancaContrato, competenciasDoContrato, detalheCancelamento, detalheReaberta, eventoDoContrato, mudancasDaCobranca,
-  planoSincronizacao, valorMensalDe, vencimentoDaCompetencia,
+  descricaoDaCobranca, passoCobranca, planoSincronizacao, valorMensalDe, vencimentoDaCompetencia,
 } from "@/lib/financeiro/contrato-previsao";
 
 type Db = Prisma.TransactionClient | typeof prisma;
@@ -411,15 +411,15 @@ export { competenciasDoContrato } from "@/lib/financeiro/contrato-previsao";
 export async function gerarPrevisaoContratoContasReceber(contratoId: string, usuarioId?: string | null): Promise<number> {
   const contrato = await prisma.contrato.findUnique({
     where: { id: contratoId },
-    include: { cliente: { select: { cpfCnpj: true } } },
+    include: { cliente: { select: { cpfCnpj: true, diaFaturamento: true } } },
   });
   if (!contrato) return 0;
   const valor = valorMensalDe(contrato);
+  const passo = passoCobranca(contrato.periodicidade);
   if (valor <= 0) return 0;
   if (!contratoGeraFinanceiro(contrato.status)) return 0;
 
   const hojeBR = partesBR(); // competência corrente pelo mês de Brasília
-  const base = `${contrato.descricaoNFSe?.trim() || `Contrato ${contrato.numero}`}`;
 
   // Categoria "Contrato": ligada por ID quando a empresa tem uma categoria ATIVA com esse nome
   // (mesma regra da migração: nome exato); senão fica só o texto, como sempre foi.
@@ -428,12 +428,12 @@ export async function gerarPrevisaoContratoContasReceber(contratoId: string, usu
   });
 
   let criadas = 0;
-  for (const { ano, mes } of competenciasDoContrato(contrato.dataInicio, contrato.dataFim)) {
+  for (const { ano, mes } of competenciasDoContrato(contrato.dataInicio, contrato.dataFim, undefined, passo)) {
     const mes0 = mes - 1;
     // Da competência CORRENTE em diante (o mês atual ainda vai ser faturado pelo gerar-mes;
     // meses já passados não nascem)
     if (ano < hojeBR.ano || (ano === hojeBR.ano && mes0 < hojeBR.mes)) continue;
-    const venc = vencimentoDaCompetencia(contrato, ano, mes);
+    const venc = vencimentoDaCompetencia(contrato, ano, mes, contrato.cliente?.diaFaturamento);
 
     const tag = `${ano}${String(mes).padStart(2, "0")}`;
     const numero = `${contrato.numero}/${tag}`;
@@ -456,7 +456,7 @@ export async function gerarPrevisaoContratoContasReceber(contratoId: string, usu
         const r = await prisma.contaReceber.updateMany({
           where: { id: existente.id, status: "CANCELADO", medicaoId: null },
           data: {
-            status: "PREVISTO", valor, dataVencimento: venc, canceladaEm: null, motivoCancelamento: null,
+            status: "PREVISTO", valor, dataVencimento: venc, canceladaEm: null, motivoCancelamento: null, descricao: descricaoDaCobranca(contrato, ano, mes),
             // o encerramento antigo escrevia o motivo na observação
             ...(existente.observacao && !existente.canceladaEm ? { observacao: null } : {}),
           },
@@ -479,7 +479,7 @@ export async function gerarPrevisaoContratoContasReceber(contratoId: string, usu
         refAno: ano,
         refMes: mes,
         numero,
-        descricao: `${base} — Ref. ${String(mes).padStart(2, "0")}/${ano}`,
+        descricao: descricaoDaCobranca(contrato, ano, mes),
         valor,
         status: "PREVISTO",
         dataVencimento: venc,
@@ -541,15 +541,15 @@ async function cancelarPrevisaoDoContrato(c: { id: string; empresaId: string }, 
  * `gerarPrevisaoContratoContasReceber` cria os meses que entraram na vigência.
  */
 export async function sincronizarPrevisoesDoContrato(contratoId: string, antes: CobrancaContrato, usuarioId?: string | null) {
-  const contrato = await prisma.contrato.findUnique({ where: { id: contratoId } });
+  const contrato = await prisma.contrato.findUnique({ where: { id: contratoId }, include: { cliente: { select: { diaFaturamento: true } } } });
   if (!contrato || !contratoGeraFinanceiro(contrato.status)) return { atualizadas: 0, canceladas: 0 };
   const abertas = await prisma.contaReceber.findMany({
     where: previsoesAbertasDoContrato(contratoId),
-    select: { id: true, refAno: true, refMes: true, valor: true, dataVencimento: true },
+    select: { id: true, refAno: true, refMes: true, valor: true, dataVencimento: true, descricao: true },
     orderBy: [{ refAno: "asc" }, { refMes: "asc" }],
   });
   const hojeBR = partesBR();
-  const plano = planoSincronizacao(abertas, contrato, mudancasDaCobranca(antes, contrato), { ano: hojeBR.ano, mes: hojeBR.mes + 1 });
+  const plano = planoSincronizacao(abertas, contrato, mudancasDaCobranca(antes, contrato), { ano: hojeBR.ano, mes: hojeBR.mes + 1 }, contrato.cliente?.diaFaturamento);
 
   let canceladas = 0;
   for (const c of plano.cancelar) {
@@ -569,6 +569,16 @@ export async function sincronizarPrevisoesDoContrato(contratoId: string, antes: 
       return true;
     });
     if (feito) atualizadas++;
+  }
+  // D1/D5: mudou a periodicidade ou a referência da nota → o "Ref." das previsões que ficam acompanha
+  const mudouPeriodo = passoCobranca(antes.periodicidade) !== passoCobranca(contrato.periodicidade)
+    || (antes.nfseReferencia ?? "CORRENTE") !== contrato.nfseReferencia;
+  const canceladasIds = new Set(plano.cancelar.map((c) => c.id));
+  for (const p of mudouPeriodo ? abertas : []) {
+    if (p.refAno == null || p.refMes == null || canceladasIds.has(p.id)) continue;
+    const descricao = descricaoDaCobranca(contrato, p.refAno, p.refMes);
+    if (p.descricao === descricao) continue;
+    await prisma.contaReceber.updateMany({ where: { id: p.id, status: "PREVISTO", medicaoId: null }, data: { descricao } });
   }
   return { atualizadas, canceladas };
 }

@@ -17,7 +17,7 @@ export function GerarMedicoesMes() {
   const [mes, setMes] = useState(mesBR(agora));
   const [ano, setAno] = useState(anoBR(agora));
   const [gerando, setGerando] = useState(false);
-  const [resultado, setResultado] = useState<{ criadas: number; ignoradas: number; foraDaVigencia: string[] } | null>(null);
+  const [resultado, setResultado] = useState<{ criadas: number; ignoradas: number; foraDaVigencia: string[]; semCobrancaNoMes: string[]; peloAutomatico: string[] } | null>(null);
   const [erro, setErro] = useState("");
 
   async function gerar() {
@@ -36,7 +36,7 @@ export function GerarMedicoesMes() {
         return;
       }
       const data = await res.json();
-      setResultado({ criadas: data.criadas, ignoradas: data.ignoradas, foraDaVigencia: data.foraDaVigencia ?? [] });
+      setResultado({ criadas: data.criadas, ignoradas: data.ignoradas, foraDaVigencia: data.foraDaVigencia ?? [], semCobrancaNoMes: data.semCobrancaNoMes ?? [], peloAutomatico: data.peloAutomatico ?? [] });
       router.refresh();
     } catch {
       setErro("Erro de conexão.");
@@ -91,6 +91,24 @@ export function GerarMedicoesMes() {
         </p>
       )}
 
+      {resultado && resultado.semCobrancaNoMes.length > 0 && (
+        <p data-sem-cobranca-mes className="text-xs text-ink-muted flex items-center gap-1">
+          <span>
+            {resultado.semCobrancaNoMes.length === 1 ? "1 contrato sem cobrança neste mês" : `${resultado.semCobrancaNoMes.length} contratos sem cobrança neste mês`}
+            {": "}{resultado.semCobrancaNoMes.slice(0, 3).join(", ")}{resultado.semCobrancaNoMes.length > 3 ? "…" : ""}
+          </span>
+          <Dica rotulo="Sem cobrança neste mês" lado="esquerda" texto="Contrato bimestral, trimestral, semestral ou anual só cobra no 1º mês de cada período, contado do início da vigência." />
+        </p>
+      )}
+      {resultado && resultado.peloAutomatico.length > 0 && (
+        <p data-pelo-automatico className="text-xs text-ink-muted flex items-center gap-1">
+          <span>
+            {resultado.peloAutomatico.length === 1 ? "1 contrato fica com o faturamento automático" : `${resultado.peloAutomatico.length} contratos ficam com o faturamento automático`}
+            {": "}{resultado.peloAutomatico.slice(0, 3).join(", ")}{resultado.peloAutomatico.length > 3 ? "…" : ""}
+          </span>
+          <Dica rotulo="Faturamento automático" lado="esquerda" texto="Estes contratos têm a medição criada sozinha no dia de faturamento (uma por contrato). Acompanhe em Financeiro › Faturamento de contratos." />
+        </p>
+      )}
       <Button onClick={gerar} loading={gerando} className="w-full justify-center">
         <CalendarRange className="w-4 h-4" /> Gerar agora
       </Button>

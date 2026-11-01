@@ -1,7 +1,7 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import { Bell, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer, Headset, ClipboardCheck, FileWarning, Wrench, Menu, Barcode, MessageSquareReply, PackageCheck, FileCheck2, FileX2, Hourglass } from "lucide-react";
+import { Bell, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer, Headset, ClipboardCheck, FileWarning, Wrench, Menu, Barcode, MessageSquareReply, PackageCheck, FileCheck2, FileX2, Hourglass, CalendarX2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -28,6 +28,7 @@ interface Alertas {
   nfseRejeitadaMedicaoId?: string | null;
   nfseAguardando?: number;
   nfseAguardandoMedicaoId?: string | null;
+  faturamentoContratos?: number;
   total: number;
 }
 
@@ -42,6 +43,7 @@ const ROTULOS_ROTA: Record<string, string> = {
   equipamentos: "Equipamentos",
   ordens: "Ordens de Serviço",
   contratos: "Contratos",
+  "faturamento-contratos": "Faturamento de contratos",
   tecnicos: "Técnicos",
   colaboradores: "Colaboradores",
   equipes: "Equipes",
@@ -249,6 +251,7 @@ export function Header({ session, avatarUrl }: HeaderProps) {
                   {podeVer("financeiro", "fiscal") && (alertas?.nfseRejeitadas ?? 0) > 0 && <AlertaItem href={hrefMedicao(alertas?.nfseRejeitadaMedicaoId)} icone={FileX2} cor="text-atrasado" label="NFS-e não aceitas" valor={alertas?.nfseRejeitadas ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("financeiro", "fiscal") && (alertas?.nfseAguardando ?? 0) > 0 && <AlertaItem href={hrefMedicao(alertas?.nfseAguardandoMedicaoId)} icone={Hourglass} cor="text-atencao" label="NFS-e aguardando a prefeitura" valor={alertas?.nfseAguardando ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("financeiro", "fiscal") && (alertas?.nfseAutorizadas ?? 0) > 0 && <AlertaItem href={hrefMedicao(alertas?.nfseAutorizadaMedicaoId)} icone={FileCheck2} cor="text-ok" label="NFS-e autorizadas" valor={alertas?.nfseAutorizadas ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("financeiro", "medicoes") && (alertas?.faturamentoContratos ?? 0) > 0 && <AlertaItem href="/financeiro/faturamento-contratos?atencao=1" icone={CalendarX2} cor="text-atrasado" label="Faturamento de contrato parado" valor={alertas?.faturamentoContratos ?? 0} onClick={() => setSinoAberto(false)} />}
                   {(alertas?.nfPedidos ?? 0) > 0 && <AlertaItem href={`/compras/pedidos/${alertas?.nfPedidoId ?? ""}`} icone={PackageCheck} cor="text-ok" label="NF chegou nos seus pedidos" valor={alertas?.nfPedidos ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("ordens") && <AlertaItem href="/prazos?status=ATRASADO" icone={AlertTriangle} cor="text-atrasado" label="Prazos vencidos" valor={alertas?.prazosVencidos ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("ordens") && <AlertaItem href="/prazos?status=ATIVO" icone={Clock} cor="text-atencao" label="Vencendo hoje" valor={alertas?.etapasVencendoHoje ?? 0} onClick={() => setSinoAberto(false)} />}

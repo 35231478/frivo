@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { exigirPermissao } from "@/lib/permissoes-server";
+import { ERRO_SEM_PERMISSAO_AUTOMACAO, mudaAutomacao, podeAutomatizarFaturamento } from "@/lib/contratos/automacao";
 import { contratoSchema } from "@/lib/validations";
 import { contratoGeraFinanceiro, encerrarFinanceiroDoContrato, gerarPrevisaoContratoContasReceber, sincronizarPrevisoesDoContrato } from "@/lib/financeiro-server";
 import { gerarOsRecorrentesContrato, gerarOsRecorrentesLocais } from "@/lib/recorrencia-server";
@@ -52,6 +53,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (dup) return NextResponse.json({ erro: "Número já cadastrado" }, { status: 409 });
   }
 
+  // PR3-A: a automação do faturamento fatura sem ninguém olhar — pede também Financeiro › Medições
+  if (mudaAutomacao(parsed.data, existente) && !podeAutomatizarFaturamento(session.user!)) {
+    return NextResponse.json({ erro: ERRO_SEM_PERMISSAO_AUTOMACAO }, { status: 403 });
+  }
   const { unidadeIds, recorrenciasLocais, dataInicio, dataFim, valorMensal, valorTotal, responsavelTecnicoId, tipoOsRecorrenciaId, tecnicoRecorrenciaId, artVencimento, ...resto } = parsed.data;
   // Cliente, locais, tipos de OS e técnicos (inclusive os da recorrência por local) precisam ser da mesma empresa
   try {
