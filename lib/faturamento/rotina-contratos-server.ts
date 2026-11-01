@@ -207,17 +207,21 @@ async function etapaBoleto(ex: Execucao): Promise<boolean> {
       throw e;
     }
   }
-  // "Tentar de novo" depois de um e-mail que não saiu: manda de novo o que ficou sem e-mail
+  // Boletos que já existiam (de uma rodada anterior): o e-mail deles saiu?
+  const comBoleto = await prisma.contaReceber.findMany({
+    where: { id: { in: cobrancas.map((c) => c.id).filter((id) => !emitidas.has(id)) }, boletoStatus: "EMITIDO" },
+    select: { id: true, numero: true, empresaId: true, boletoEmitidoEm: true },
+  });
   if (ex.situacao === "PENDENTE") {
-    const comBoleto = await prisma.contaReceber.findMany({
-      where: { id: { in: cobrancas.map((c) => c.id).filter((id) => !emitidas.has(id)) }, boletoStatus: "EMITIDO" },
-      select: { id: true, numero: true, empresaId: true, boletoEmitidoEm: true },
-    });
+    // "Tentar de novo" depois de um e-mail que não saiu: manda de novo o que ficou sem e-mail
     for (const c of comBoleto) {
       if (await emailDoBoletoSaiu(c)) continue;
       const r = await enviarBoleto(c.id).catch((e) => ({ ok: false, erro: (e as Error)?.message ?? "erro no envio" }));
       if (!r.ok && !emailDesligado(r.erro)) naoSaiu.push(`${c.numero}: ${r.erro ?? "motivo desconhecido"}`);
     }
+  } else if (ex.situacao === "PENDENCIA" && !emitidas.size) {
+    // A rodada do dia não reenvia sozinha: a pendência fica até o e-mail sair (à mão ou no "Tentar de novo")
+    for (const c of comBoleto) if (!(await emailDoBoletoSaiu(c))) return false;
   }
   if (naoSaiu.length) {
     await pendencia(ex, `Boleto emitido, mas o e-mail não saiu (${naoSaiu.join("; ")}). Mande pela conta a receber ou use "Tentar de novo".`);

@@ -42,10 +42,13 @@ const LINHAS: LinhaFaturamentoContrato[] = [
   linha({ contratoId: "a", aprovacaoAutomatica: true, execucao: exec({ id: "ea", etapa: "CONCLUIDA", situacao: "CONCLUIDA", medicao: { id: "m1", numero: "MED-2026-0007", status: "NF_EMITIDA", nfNumero: "123" }, nf: { numero: "123", situacao: "AUTORIZADA" }, cobrancas: [{ id: "cr1", numero: "CT-1/202611", boleto: "EMITIDO" }] }) as any }),
   linha({ contratoId: "b", valor: 900, frequencia: "a cada 3 meses", execucao: exec({ id: "eb", etapa: "APROVACAO", situacao: "AGUARDANDO", medicao: { id: "m2", numero: "MED-2026-0008", status: "AGUARDANDO_APROVACAO", nfNumero: null } }) as any }),
   linha({ contratoId: "c", execucao: exec({ id: "ec", etapa: "MEDICAO", situacao: "FALHA", tentativas: 3, erro: "banco fora do ar" }) as any }),
+  linha({ contratoId: "f", execucao: exec({ id: "ef", etapa: "NFSE", situacao: "AGUARDANDO", medicao: { id: "m3", numero: "MED-2026-0009", status: "PC_RECEBIDO", nfNumero: null }, nf: { numero: null, situacao: "PREFEITURA" } }) as any }),
+  linha({ contratoId: "g", execucao: exec({ id: "eg", etapa: "NFSE", situacao: "PENDENCIA", erro: "A prefeitura não aceitou a NFS-e: código inválido.", medicao: { id: "m4", numero: "MED-2026-0010", status: "PC_RECEBIDO", nfNumero: null }, nf: { numero: null, situacao: "NAO_ACEITA" } }) as any }),
+  linha({ contratoId: "h", execucao: exec({ id: "eh", etapa: "BOLETO", situacao: "PENDENCIA", medicao: { id: "m5", numero: "MED-2026-0011", status: "NF_EMITIDA", nfNumero: "88" }, nf: { numero: "88", situacao: "MANUAL" }, cobrancas: [{ id: "p1", numero: "CR-2026-0001/1", boleto: "EMITIDO" }, { id: "p2", numero: "CR-2026-0001/2", boleto: null }] }) as any }),
   linha({ contratoId: "d", previsto: "Fatura no dia 20" }),
   linha({ contratoId: "e", previsto: "Sem cobrança neste mês" }),
 ];
-const RESUMO: ResumoFaturamentoContratos = { contratos: { q: 5, v: 4900 }, concluidas: { q: 1, v: 1000 }, andamento: { q: 1, v: 900 }, atencao: { q: 1, v: 1000 } };
+const RESUMO: ResumoFaturamentoContratos = { contratos: { q: 8, v: 7900 }, concluidas: { q: 1, v: 1000 }, andamento: { q: 1, v: 900 }, atencao: { q: 1, v: 1000 } };
 const PERIODO = { tipo: "mes" as const, mes: "2026-11", de: null, ate: null, rotulo: "Novembro de 2026" };
 const sp = (t: string) => t.replace(/ /g, " ");
 const $ = <T extends Element = HTMLElement>(s: string) => caixa.querySelector(s) as T | null;
@@ -75,7 +78,7 @@ const card = (id: string) => $(`li[data-linha-contrato="${id}"]`)!;
 describe("Faturamento de contratos", () => {
   it("cards do mês e a planilha: etapa, medição, NF, boleto, erro; sem execução, o que esperar", async () => {
     await montar();
-    expect(sp($('[data-card="contratos"]')!.textContent!)).toContain("R$ 4.900,005 contratos");
+    expect(sp($('[data-card="contratos"]')!.textContent!)).toContain("R$ 7.900,008 contratos");
     expect(sp($('[data-card="concluidas"]')!.textContent!)).toContain("R$ 1.000,001 contrato");
     expect(sp($('[data-card="atencao"]')!.textContent!)).toContain("Precisam de você");
     expect($("[data-mes-rotulo]")!.textContent).toBe("Novembro de 2026");
@@ -98,7 +101,17 @@ describe("Faturamento de contratos", () => {
     expect(tr("d").querySelector("[data-previsto]")!.textContent).toBe("Fatura no dia 20");
     expect(tr("e").querySelector("[data-previsto]")!.textContent).toBe("Sem cobrança neste mês");
     // "Tentar de novo" só no que falhou/parou
-    expect($$("table [data-tentar]").map((b) => b.getAttribute("data-tentar"))).toEqual(["ec"]);
+    expect($$("table [data-tentar]").map((b) => b.getAttribute("data-tentar"))).toEqual(["ec", "eg", "eh"]);
+    // NF: na prefeitura, não aceita, manual — com o link para a medição
+    expect([tr("f"), tr("g"), tr("h")].map((t) => [t.querySelector("[data-nf]")!.textContent, t.querySelector("[data-nf] a")!.getAttribute("href")])).toEqual([
+      ["Na prefeitura", "/financeiro/medicoes/m3"], ["Não aceita", "/financeiro/medicoes/m4"], ["nº 88", "/financeiro/medicoes/m5"],
+    ]);
+    expect(tr("f").querySelector("[data-situacao]")!.textContent).toBe("NFS-e · Aguardando");
+    expect(tr("h").querySelector("[data-situacao]")!.textContent).toBe("Boleto · Pendência");
+    // Parcelas: um boleto por cobrança, cada uma com o seu link
+    expect([...tr("h").querySelectorAll("[data-boleto] a")].map((a) => [a.textContent, a.getAttribute("href")])).toEqual([
+      ["1: Emitido", "/financeiro/contas-receber?conta=p1&periodo=todos"], ["2: Sem boleto", "/financeiro/contas-receber?conta=p2&periodo=todos"],
+    ]);
     // Celular: os mesmos dados em cartões
     expect(card("c").textContent).toContain("banco fora do ar");
     expect(card("a").textContent).toContain("MED-2026-0007");
@@ -136,11 +149,11 @@ describe("Faturamento de contratos", () => {
     act(() => root.unmount());
     root = createRoot(caixa);
     await montar(true);
-    expect($$("table [data-linha-contrato]").map((l) => l.getAttribute("data-linha-contrato"))).toEqual(["c"]);
+    expect($$("table [data-linha-contrato]").map((l) => l.getAttribute("data-linha-contrato"))).toEqual(["c", "g", "h"]);
     expect($('[data-card="atencao"]')!.getAttribute("aria-pressed")).toBe("true");
     act(() => root.unmount());
     root = createRoot(caixa);
-    await montar(true, LINHAS.filter((l) => l.contratoId !== "c"));
+    await montar(true, LINHAS.filter((l) => !["c", "g", "h"].includes(l.contratoId)));
     expect($("[data-lista-vazia]")!.textContent).toContain("Nada parado neste mês");
     act(() => root.unmount());
     root = createRoot(caixa);
