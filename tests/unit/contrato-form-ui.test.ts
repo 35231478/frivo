@@ -155,7 +155,7 @@ describe("5 abas com os campos certos", () => {
     for (const c of ["Responsável técnico", "Número ART", "Vencimento da ART", "PDF/relatório da OS", "Contrato assinado e anexos"]) expect(rt).toContain(c);
     await aba("gestao");
     const g = painel("gestao").textContent!;
-    for (const c of ["Reajuste automático", "Alertas de vencimento", "Renovação automática", "Observações", "Histórico de status"]) expect(g).toContain(c);
+    for (const c of ["Reajuste anual", "Alertas de vencimento", "Renovação automática", "Observações", "Histórico de status"]) expect(g).toContain(c);
   });
 
   it("o que saiu não aparece em lugar nenhum (NFS-e, itens inclusos, visitas, RT na NFS-e)", async () => {
