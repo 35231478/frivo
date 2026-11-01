@@ -20,8 +20,8 @@ motor da medição/fatura e o módulo fiscal, com as mesmas travas, sem caminho 
 | **PR1** | Base: excluir encerra o financeiro; editar valor/dia/vigência sincroniza as previsões abertas; eventos na linha do tempo; "Gerar medições do mês" respeita a vigência; texto da periodicidade. | 🟢 | Feito (35231478/frivo#111) |
 | **PR2** | **Serviço padrão do contrato**: `contratos.servico_id`. A medição do contrato nasce com o serviço no item (NFS-e sem a pendência) e com as retenções do serviço. Prévia no formulário: cobrança − retenções = cobrado. | 🔵 | Feito (35231478/frivo#112) |
 | **PR3-A** | **Periodicidade de cobrança** (mensal a anual) + **rotina diária** medição → aprovação, com execuções (contrato × competência), 3 tentativas, sino e a tela "Faturamento de contratos". | 🔵 | Feito (35231478/frivo#113) |
-| **PR3-B** | **Etapas NFS-e** (emissão automática) e **boleto** (+ envio por e-mail); colunas NF/boleto da tela preenchidas, com links. | 🟢 | Este PR |
-| PR4 | Horizonte rolante de previsões e reajuste anual. | 🟢 | Depende de D8 |
+| **PR3-B** | **Etapas NFS-e** (emissão automática) e **boleto** (+ envio por e-mail); colunas NF/boleto da tela preenchidas, com links. | 🟢 | Feito (35231478/frivo#114) |
+| **PR4** | **Horizonte rolante** de previsões (contrato sem fim: sempre ~12 meses à frente) e **reajuste anual** sugerido e confirmado (D8). | 🔵 | Este PR |
 
 ## Regras do PR2
 
@@ -61,6 +61,18 @@ motor da medição/fatura e o módulo fiscal, com as mesmas travas, sem caminho 
   - e-mail que não saiu: "Pendência" (o boleto já saiu). A rodada do dia não reenvia sozinha; a pendência fica até o e-mail sair (à mão, pela conta, ou no "Tentar de novo", que reenvia só o e-mail). E-mail que a empresa ou o cliente desligou não é pendência.
 - **Tela.** Coluna NF: nº (autorizada ou registrada à mão), "Na prefeitura" ou "Não aceita", com link para a medição. Coluna Boleto: a situação do boleto de cada cobrança (ou parcela), com link para a conta. Previsão ainda não aparece no boleto (sem NF não se cobra).
 
+## Regras do PR4
+
+- **Horizonte rolante.** Contrato ATIVO **sem data de fim** mantém sempre ~12 meses de previsão à frente (a competência corrente + 12). O cron diário (`/api/cron/faturar-contratos`, 1º passo) cria só as competências que faltam na janela, pela mesma geração do salvar do contrato: periodicidade (uma por período), vigência, dia de faturamento, competência única (C6). Duas gerações ao mesmo tempo não duplicam. Contrato com data de fim (que já nasce com tudo até o fim), suspenso ou sem valor fica como está. Antes, a lista de competências parava em 120 meses do início: contrato indeterminado com mais de 10 anos deixava de gerar.
+- **Reajuste anual (D8).** No contrato (aba Gestão): "Reajuste anual" + percentual fixo ao ano + mês de aniversário (vazio = o do início). O 1º reajuste vem no 1º aniversário com pelo menos 12 meses de contrato; depois, um por ano.
+  - **Nada aplica sozinho.** No mês do aniversário, o contrato aparece em Contratos › Reajustes ("Reajustes a aplicar") e no sino: "Contrato X faz aniversário em mês/ano — aplicar reajuste de Y% (R$ A → R$ B)?";
+  - **Aplicar** (Contratos › Editar): grava a decisão no histórico (aniversário, %, de → para, quem, quando), muda o valor do contrato e leva o valor novo às previsões que ainda são só previsão, **da competência corrente em diante** (a sincronização do PR1). Não é retroativo: o mês que passou e o que já virou cobrança (medição, boleto, recebimento) não mudam;
+  - **Adiar** (30 dias) esconde do sino até a data; **Dispensar** (com motivo) fecha o aniversário do ano sem reajuste;
+  - uma decisão por contrato × ano (índice único) e o contrato trancado no aplicar: dois cliques ou duas abas não aplicam duas vezes; se o valor do contrato mudou depois que a tela abriu, recusa;
+  - "Avisar antes do aniversário" mostra o aniversário que vem chegando na lista (sem sino e sem aplicar antes da hora);
+  - só o percentual fixo gera a sugestão; índice (IPCA, IGP-M, INPC) fica para reajustar à mão;
+  - o aniversário que passou sem decisão não acumula: vale o mais recente.
+
 ## Decisões em aberto (do levantamento)
 
 | # | Pergunta | Sugestão |
@@ -72,5 +84,5 @@ motor da medição/fatura e o módulo fiscal, com as mesmas travas, sem caminho 
 | D5 | A NF descreve o mês corrente ou o anterior? | Decidido: corrente, com opção no contrato (PR3-A) |
 | D6 | Boleto junto com a NF? Envio por e-mail automático? | Decidido: sim e sim (PR3-B) |
 | D7 | Falha: quantas tentativas e quem é avisado? | Decidido: 3 (1 por dia) e o sino de quem tem Financeiro › Medições (PR3-A) |
-| D8 | Reajuste anual automático agora ou depois? | Depois (PR4) |
+| D8 | Reajuste anual automático agora ou depois? | Decidido: percentual fixo, sugerido e confirmado (PR4) |
 | D9 | Ao editar o valor, atualizar as previsões já criadas? | Feito no PR1 (só as abertas) |
