@@ -59,8 +59,9 @@ export function FaturamentoContratosView({ periodo, linhas, resumo, soAtencao }:
       const r = await fetch(`/api/faturamento-contratos/${id}/tentar`, { method: "POST" });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { toast(d.erro ?? "Não foi possível tentar de novo.", "erro"); return; }
+      // Falhou de novo: volta para a fila (ou para FALHA/pendência) com o erro — mostra o erro
       const s = d.execucao?.situacao as string | undefined;
-      if (s && retentavel(s)) toast(d.execucao?.erro ?? "Ainda não deu certo.", "erro");
+      if (d.execucao?.erro || (s && retentavel(s))) toast(d.execucao?.erro ?? "Ainda não deu certo.", "erro");
       else toast("Pronto: a cobrança seguiu.");
       router.refresh();
     } catch { toast("Erro de conexão.", "erro"); } finally { setOcupado(null); }

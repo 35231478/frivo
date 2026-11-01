@@ -2,8 +2,8 @@
 /**
  * Formulário de contrato (contrato-form.tsx real, num DOM de verdade). Prova:
  *  - 5 abas, nesta ordem, cada uma com os campos certos; o que saiu (NFS-e, itens inclusos,
- *    visitas, RT na NFS-e) não aparece em lugar nenhum; Tipo/Periodicidade/ajuste de dia não útil
- *    ficam em "Mais opções";
+ *    visitas, RT na NFS-e) não aparece em lugar nenhum; Tipo, ajuste de dia não útil e período na nota
+ *    ficam em "Mais opções"; a cobrança (periodicidade) fica à vista (PR3-A);
  *  - descrição dos serviços com limite (maxLength 1000) e contador "x/1000";
  *  - 1º local = endereço do cliente: vem preenchido, tem excluir, não duplica (usa o local que já
  *    existe), e é criado ao salvar; sem permissão de criar endereço, não sugere um novo;
@@ -59,6 +59,7 @@ async function digitar(el: HTMLInputElement | HTMLTextAreaElement, valor: string
   await flush();
 }
 const aba = (id: string) => clicar($(`[data-aba-contrato="${id}"]`));
+const sp = (t: string) => t.replace(/\u00a0/g, " ");
 
 beforeEach(() => {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -118,29 +119,27 @@ describe("5 abas com os campos certos", () => {
     const t = painel("contrato").textContent!;
     for (const campo of ["Cliente", "Número do contrato", "Gerar automático", "Status", "Início da vigência", "Fim da vigência", "Valor mensal", "Valor total", "Dia de faturamento", "Tipo de vencimento", "Mais opções"])
       expect(t).toContain(campo);
-    // Recolhidos
+    // À vista: a cobrança (PR3-A). Recolhidos: tipo, ajuste e período na nota
+    expect($<HTMLSelectElement>('select[name="periodicidade"]')!.value).toBe("MENSAL");
     expect($('select[name="tipo"]')).toBeNull();
-    expect($('select[name="periodicidade"]')).toBeNull();
+    expect($('select[name="nfseReferencia"]')).toBeNull();
     expect(t).not.toContain("Sábados, domingos e feriados");
     await clicar($("[data-mais-opcoes]"));
     expect($('select[name="tipo"]')).toBeTruthy();
     expect($<HTMLSelectElement>('select[name="tipo"]')!.value).toBe("MANUTENCAO_PREVENTIVA");
-    expect($<HTMLSelectElement>('select[name="periodicidade"]')!.value).toBe("MENSAL");
+    expect($<HTMLSelectElement>('select[name="nfseReferencia"]')!.value).toBe("CORRENTE");
     expect(painel("contrato").textContent).toContain("Sábados, domingos e feriados");
   });
 
-  it("periodicidade: o texto diz a verdade (a cobrança sai todo mês) e o detalhe fica na ⓘ, fora de botão", async () => {
+  it("cobrança: só mensal…anual; o detalhe fica na ⓘ, fora de botão", async () => {
     await montar();
-    await clicar($("[data-mais-opcoes]"));
-    const campo = $<HTMLSelectElement>('select[name="periodicidade"]')!.closest("div")!.parentElement!;
-    expect(campo.textContent).toContain("Hoje a cobrança sai todo mês");
-    expect(document.body.textContent).not.toContain("De quantos em quantos meses");
-    const dica = campo.querySelector<HTMLButtonElement>('button[aria-label*="Periodicidade de cobrança"]')!;
+    const sel = $<HTMLSelectElement>('select[name="periodicidade"]')!;
+    expect([...sel.options].map((o) => o.textContent)).toEqual(["Mensal", "Bimestral", "Trimestral", "Semestral", "Anual"]);
+    const campo = sel.closest("div")!.parentElement!;
+    const dica = campo.querySelector<HTMLButtonElement>('button[aria-label*="Cobrança"]')!;
     expect(dica).toBeTruthy();
     expect(dica.parentElement!.closest("button, a")).toBeNull();
-    const balao = document.getElementById(dica.getAttribute("aria-describedby")!)!;
-    expect(balao.textContent).toContain("saem uma por mês, pelo valor mensal");
-    expect(balao.textContent).toContain("ainda não muda o intervalo da cobrança");
+    expect(document.getElementById(dica.getAttribute("aria-describedby")!)!.textContent).toContain("o valor de cada cobrança, sem multiplicar");
   });
 
   it("cada aba mostra o seu conteúdo", async () => {
@@ -252,9 +251,9 @@ describe("1º local coberto vem do cadastro do cliente", () => {
     expect($$("[data-local]").map((e) => e.getAttribute("data-local"))).toEqual(["u-filial"]);
     // Tipo e periodicidade do contrato existente são mantidos
     await aba("contrato");
+    expect($<HTMLSelectElement>('select[name="periodicidade"]')!.value).toBe("TRIMESTRAL");
     await clicar($("[data-mais-opcoes]"));
     expect($<HTMLSelectElement>('select[name="tipo"]')!.value).toBe("LOCACAO");
-    expect($<HTMLSelectElement>('select[name="periodicidade"]')!.value).toBe("TRIMESTRAL");
   });
 
   it("sem permissão de cadastrar endereço: não sugere local novo (só o que já existe)", async () => {
@@ -342,5 +341,92 @@ describe("serviço da nota e prévia: cobrança − retenções = cobrado", () =
     await digitar($<HTMLInputElement>('input[aria-label="Início da vigência"]')!, "01/11/2026");
     await clicar($$("button").find((b) => b.textContent?.trim() === "Salvar")!);
     expect(chamadas.find((c) => c.metodo === "POST" && c.url === "/api/contratos")!.corpo.servicoId).toBe("s1");
+  });
+});
+
+// ═════════════════════════ PR3-A: cobrança e faturamento automático ═════════════════════════
+describe("PR3-A: cobrança a cada N meses e faturamento automático", () => {
+  const editarCt = (extra: Record<string, unknown> = {}) => ({
+    id: "ct1", clienteId: "c1", numero: "CT-1", tipo: "MANUTENCAO_PREVENTIVA", status: "ATIVO", periodicidade: "MENSAL",
+    dataInicio: new Date("2026-09-01T00:00:00"), dataFim: new Date("2027-08-31T00:00:00"), valorMensal: 900,
+    unidades: [], anexos: [], reajustes: [], historicoStatus: [], recorrenciasLocais: [], ...extra,
+  });
+  const escolherCobranca = async (v: string) => {
+    const sel = $<HTMLSelectElement>('select[name="periodicidade"]')!;
+    await act(async () => { sel.value = v; sel.dispatchEvent(new Event("change", { bubbles: true })); });
+    await flush();
+  };
+  const sw = (rotulo: string) => $$('button[role="switch"]').find((b) => document.getElementById(b.getAttribute("aria-labelledby")!)?.textContent === rotulo) as HTMLButtonElement;
+  const salvar = async () => {
+    await clicar($$("button").find((b) => b.textContent?.trim() === "Salvar")!);
+    return chamadas.find((c) => c.metodo === "PUT" && c.url === "/api/contratos/ct1")!.corpo;
+  };
+
+  it("mensal: “Valor mensal” e total = 12 meses; trimestral: “Valor da cobrança”, “R$ 900,00 · a cada 3 meses” e total = 4 cobranças", async () => {
+    nav.sp = new URLSearchParams();
+    await montar(permissoesTotais(), editarCt());
+    const p = painel("contrato");
+    expect(p.textContent).toContain("Valor mensal (R$)");
+    expect(sp($("[data-valor-total]")!.textContent!)).toBe("R$ 10.800,00");
+    await escolherCobranca("TRIMESTRAL");
+    expect(p.textContent).not.toContain("Valor mensal (R$)");
+    expect(p.textContent).toContain("Valor da cobrança (R$)");
+    expect(sp(p.textContent!)).toContain("R$ 900,00 · a cada 3 meses");
+    expect(sp($("[data-valor-total]")!.textContent!)).toBe("R$ 3.600,00(4 cobranças)");
+    await escolherCobranca("ANUAL");
+    expect(sp(p.textContent!)).toContain("R$ 900,00 · por ano");
+    expect(sp($("[data-valor-total]")!.textContent!)).toBe("R$ 900,00(1 cobrança)");
+    rotas["PUT /api/contratos/ct1"] = { id: "ct1" };
+    expect((await salvar()).periodicidade).toBe("ANUAL");
+  });
+
+  it("contrato antigo semanal/quinzenal abre como mensal (o seletor não oferece os dois)", async () => {
+    nav.sp = new URLSearchParams();
+    await montar(permissoesTotais(), editarCt({ periodicidade: "QUINZENAL" }));
+    expect($<HTMLSelectElement>('select[name="periodicidade"]')!.value).toBe("MENSAL");
+  });
+
+  it("sem Financeiro › Medições: as chaves aparecem travadas, com o porquê; o salvar não mexe nelas", async () => {
+    nav.sp = new URLSearchParams();
+    rotas["PUT /api/contratos/ct1"] = { id: "ct1" };
+    await montar({ ...permissoesVazias(), contratos: { visualizar: true, editar: true }, clientes: { visualizar: true } }, editarCt({ faturamentoAutomatico: true }));
+    expect(sw("Faturamento automático").disabled).toBe(true);
+    expect(sw("Faturamento automático").getAttribute("aria-checked")).toBe("true");
+    expect(sw("Aprovar sem esperar o cliente").disabled).toBe(true);
+    expect($("[data-automacao-sem-permissao]")!.textContent).toBe("Só quem tem a permissão Financeiro › Medições liga o faturamento automático.");
+    await clicar(sw("Faturamento automático"));
+    expect(sw("Faturamento automático").getAttribute("aria-checked")).toBe("true");
+    const corpo = await salvar();
+    expect([corpo.faturamentoAutomatico, corpo.aprovacaoAutomatica]).toEqual([true, false]); // o mesmo que estava gravado
+  });
+
+  it("com a permissão: liga o automático, libera a aprovação automática; desligar o automático desliga a aprovação; ⓘ fora de botão; período na nota vai junto", async () => {
+    nav.sp = new URLSearchParams();
+    rotas["PUT /api/contratos/ct1"] = { id: "ct1" };
+    await montar(permissoesTotais(), editarCt());
+    expect($("[data-automacao-sem-permissao]")).toBeNull();
+    expect(sw("Aprovar sem esperar o cliente").disabled).toBe(true); // só com o automático ligado
+    await clicar(sw("Faturamento automático"));
+    expect(sw("Faturamento automático").getAttribute("aria-checked")).toBe("true");
+    expect($("[data-automacao]")!.textContent).toContain("A medição sai sozinha no dia de faturamento, por mês.");
+    expect(sw("Aprovar sem esperar o cliente").disabled).toBe(false);
+    await clicar(sw("Aprovar sem esperar o cliente"));
+    for (const rotulo of ["Faturamento automático", "Aprovar sem esperar o cliente"]) {
+      const dica = $(`[data-automacao] button[aria-label*="${rotulo}"]`)!;
+      expect(dica.parentElement!.closest("button, a")).toBeNull();
+    }
+    const dicaAuto = $<HTMLButtonElement>('[data-automacao] button[aria-label*="Faturamento automático"]')!;
+    expect(document.getElementById(dicaAuto.getAttribute("aria-describedby")!)!.textContent).toContain("tenta de novo nos 2 dias seguintes e depois avisa no sino");
+    await clicar($("[data-mais-opcoes]"));
+    const ref = $<HTMLSelectElement>('select[name="nfseReferencia"]')!;
+    await act(async () => { ref.value = "ANTERIOR"; ref.dispatchEvent(new Event("change", { bubbles: true })); });
+    await flush();
+    let corpo = await salvar();
+    expect([corpo.faturamentoAutomatico, corpo.aprovacaoAutomatica, corpo.nfseReferencia]).toEqual([true, true, "ANTERIOR"]);
+    chamadas.length = 0;
+    await clicar(sw("Faturamento automático"));
+    expect(sw("Aprovar sem esperar o cliente").getAttribute("aria-checked")).toBe("false");
+    corpo = await salvar();
+    expect([corpo.faturamentoAutomatico, corpo.aprovacaoAutomatica]).toEqual([false, false]);
   });
 });
