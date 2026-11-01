@@ -350,10 +350,10 @@ describe("listas renderizadas no servidor", () => {
   });
 
   it("Orçamentos: 130 orçamentos = 3 páginas de 50 (antes cortava em 100)", async () => {
-    const h = await html(() => import("@/app/(dashboard)/orcamentos/page"), "pagina=3");
+    const h = await html(() => import("@/app/(dashboard)/orcamentos/page"), "pagina=3&periodo=todos");
     expect(h).toContain("101–130");
     expect(linhasDe(h, "data-cartao")).toHaveLength(30);
-    const v = await html(() => import("@/app/(dashboard)/orcamentos/page"), "ordem=valor&dir=desc&por=25");
+    const v = await html(() => import("@/app/(dashboard)/orcamentos/page"), "ordem=valor&dir=desc&por=25&periodo=todos");
     expect(linhasDe(v, "data-cartao")[0]).toBe("or130");
   });
 

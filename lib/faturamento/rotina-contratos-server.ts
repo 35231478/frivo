@@ -1,17 +1,27 @@
 /**
- * Rotina diária de faturamento automático dos contratos (PR3-A: medição → aprovação).
+ * Rotina diária de faturamento automático dos contratos: medição → aprovação (PR3-A) → NFS-e → boleto
+ * com o e-mail ao cliente (PR3-B).
  * Uma EXECUÇÃO por contrato × competência (único no banco) guarda a etapa, a situação, o erro e as
  * tentativas; a rodada seguinte retoma de onde parou. Travas:
  * - execução única por competência (createMany skipDuplicates sobre o índice único);
  * - "posse" da execução (processando_ate): duas rodadas ao mesmo tempo não processam a mesma;
- * - a medição sai pelo núcleo único (contrato trancado + competência conferida lá dentro).
+ * - a medição sai pelo núcleo único (contrato trancado + competência conferida lá dentro);
+ * - a NFS-e sai pela emissão de sempre (medição trancada; nota viva não deixa sair outra);
+ * - o boleto sai pelo núcleo da conta (conta trancada; conta com boleto ou que não pode receber fica de fora).
  */
 import { prisma } from "@/lib/prisma";
 import { partesBR } from "@/lib/fuso";
-import { enviarMedicao } from "@/lib/email";
+import { enviarBoleto, enviarMedicao } from "@/lib/email";
 import { cobrancaDoContrato, gerarMedicaoDeContratos } from "@/lib/faturamento/medicao-contrato-server";
 import { aprovarMedicao, marcarEnviada } from "@/lib/faturamento/aprovar-medicao-server";
-import { aposFalha, competenciaDevida, LEASE_MS, medicaoJaAprovada, mensagemDeErro } from "@/lib/faturamento/rotina-contratos";
+import {
+  aposFalha, competenciaDevida, emailDesligado, etapaAposAprovacao, etapaAposNf, LEASE_MS, medicaoComNf, medicaoJaAprovada,
+  mensagemDeErro, textoPendenciaNfse,
+} from "@/lib/faturamento/rotina-contratos";
+import { emitirNotas, ErroEmissao, previaEmissao } from "@/lib/nfse/emissao-server";
+import { statusVivo } from "@/lib/nfse/nota";
+import { emitirBoletoDaConta, ErroBoleto, motivoSemBoleto } from "@/lib/financeiro/boleto-server";
+import { cobrancasDaMedicao } from "@/lib/financeiro/parcelas-server";
 
 const ABERTAS = ["PENDENTE", "AGUARDANDO", "PENDENCIA"] as const;
 const execucaoCompleta = { contrato: { include: { cliente: true } }, medicao: { select: { id: true, numero: true, status: true } } } as const;
@@ -66,12 +76,10 @@ async function avancar(ex: Execucao): Promise<boolean> {
       return false;
     }
     if (medicaoJaAprovada(m.status)) {
-      if (ct.emitirNfseAuto) {
-        await gravar(ex.id, { etapa: "NFSE", situacao: "AGUARDANDO", tentativas: 0, erro: null, proximaTentativa: null });
-        return false;
-      }
-      await encerrar(ex.id, "CONCLUIDA");
-      return false;
+      const proxima = etapaAposAprovacao(ct);
+      if (proxima === "CONCLUIDA") { await encerrar(ex.id, "CONCLUIDA"); return false; }
+      await gravar(ex.id, { etapa: proxima, situacao: "PENDENTE", tentativas: 0, erro: null, proximaTentativa: null });
+      return true;
     }
     if (ct.aprovacaoAutomatica) {
       // D4: o contrato aprova sozinho (sem esperar o cliente)
@@ -97,9 +105,142 @@ async function avancar(ex: Execucao): Promise<boolean> {
     return false;
   }
 
-  // NFSE / BOLETO: emissão automática (próxima etapa do plano). Fica aguardando sem consumir tentativa.
-  if (ex.situacao !== "AGUARDANDO") await gravar(ex.id, { situacao: "AGUARDANDO", proximaTentativa: null });
+  if (ex.etapa === "NFSE") return etapaNfse(ex);
+  if (ex.etapa === "BOLETO") return etapaBoleto(ex);
   return false;
+}
+
+/** Esperando alguém de fora (a prefeitura, o pedido de compra, a NF feita à mão): sem tentativa, sem sino */
+async function aguardar(ex: Execucao) {
+  if (ex.situacao !== "AGUARDANDO" || ex.erro) await gravar(ex.id, { situacao: "AGUARDANDO", erro: null, tentativas: 0, proximaTentativa: null });
+}
+const pendencia = (ex: Execucao, erro: string) => gravar(ex.id, { situacao: "PENDENCIA", erro, tentativas: 0, proximaTentativa: null });
+/** Medição cancelada no meio do caminho: encerra com o motivo. true = encerrou */
+async function medicaoCancelada(ex: Execucao) {
+  const m = ex.medicao;
+  if (m && m.status !== "CANCELADA") return false;
+  await encerrar(ex.id, "CANCELADA", m ? `A medição ${m.numero} foi cancelada.` : "A medição foi apagada.");
+  return true;
+}
+
+/**
+ * Etapa C — NFS-e (chave "Emitir a NFS-e sozinha"). Emite "pelo sistema" com a empresa do contrato,
+ * pelo mesmo caminho da tela (pré-validação, ambiente da empresa: Homologação enquanto a Produção não
+ * for liberada). Com pendência não emite: vira pendência com o texto e vai pro sino. Nota viva = não
+ * emite outra; espera a prefeitura (o aviso do PlugNotas ou a reconciliação trazem a resposta).
+ */
+async function etapaNfse(ex: Execucao): Promise<boolean> {
+  if (await medicaoCancelada(ex)) return false;
+  const m = ex.medicao!;
+  const ct = ex.contrato;
+  if (medicaoComNf(m.status)) {
+    const proxima = etapaAposNf(ct);
+    if (proxima === "CONCLUIDA") { await encerrar(ex.id, "CONCLUIDA"); return false; }
+    await gravar(ex.id, { etapa: proxima, situacao: "PENDENTE", tentativas: 0, erro: null, proximaTentativa: null });
+    return true;
+  }
+  // Aprovada, mas o cliente exige o pedido de compra antes da NF: espera o PC
+  if (m.status === "AGUARDANDO_PC") { await aguardar(ex); return false; }
+
+  const notas = await prisma.notaFiscal.findMany({ where: { medicaoId: m.id }, select: { status: true, motivo: true }, orderBy: { criadoEm: "desc" } });
+  if (notas.some((n) => statusVivo(n.status) && n.status !== "CONCLUIDO")) { await aguardar(ex); return false; }
+  const recusada = notas.find((n) => n.status === "REJEITADO" || n.status === "INTERROMPIDO");
+  // Não aceita: não insiste sozinha (sairia recusada de novo); emite outra no "Tentar de novo", depois de corrigir
+  if (recusada && ex.situacao !== "PENDENTE") {
+    await pendencia(ex, `A prefeitura não aceitou a NFS-e: ${recusada.motivo?.trim().replace(/[.\s]+$/, "") || "sem motivo informado"}. Corrija e use "Tentar de novo".`);
+    return false;
+  }
+  const previa = await previaEmissao(ct.empresaId, m.id);
+  if (previa.pendencias.length) { await pendencia(ex, textoPendenciaNfse(previa.pendencias)); return false; }
+  if (!previa.grupos.length) {
+    await pendencia(ex, `Nada a emitir na NFS-e da medição ${m.numero}: confira os serviços (e o valor) dos itens.`);
+    return false;
+  }
+  try {
+    await emitirNotas({ id: null, empresaId: ct.empresaId }, m.id, { origem: "MEDICAO" });
+  } catch (e) {
+    if (!(e instanceof ErroEmissao)) throw e;
+    if (e.pendencias?.length) { await pendencia(ex, textoPendenciaNfse(e.pendencias)); return false; }
+    // Outra emissão desta medição começou agora (a tela, outra rodada): não emite outra, espera
+    if (e.status === 409) { await aguardar(ex); return false; }
+    throw e;
+  }
+  await gravar(ex.id, { situacao: "AGUARDANDO", erro: null, tentativas: 0, proximaTentativa: null });
+  return true; // confere já: recusa imediata vira pendência
+}
+
+/** O e-mail deste boleto já saiu? (o registro de envio da conta depois da emissão) */
+async function emailDoBoletoSaiu(c: { id: string; empresaId: string; boletoEmitidoEm: Date | null }) {
+  return !!(await prisma.emailLog.findFirst({
+    where: { empresaId: c.empresaId, referenciaId: c.id, referenciaTipo: "ContaReceber", status: "ENVIADO", ...(c.boletoEmitidoEm ? { enviadoEm: { gte: c.boletoEmitidoEm } } : {}) },
+    select: { id: true },
+  }));
+}
+
+/**
+ * Etapa D — boleto (chave "Emitir e enviar o boleto sozinho"). Depois da NF (a da rotina, a da tela
+ * ou a registrada à mão): emite o boleto Inter de cada cobrança da medição que pode receber boleto
+ * (A receber/atrasada, sem boleto) e manda ao cliente por e-mail (D6). Já tem boleto = não emite outro.
+ */
+async function etapaBoleto(ex: Execucao): Promise<boolean> {
+  if (await medicaoCancelada(ex)) return false;
+  const m = ex.medicao!;
+  const ct = ex.contrato;
+  if (!medicaoComNf(m.status)) { await aguardar(ex); return false; } // a conta só libera com a NF
+
+  const cobrancas = await prisma.contaReceber.findMany({
+    where: { ...cobrancasDaMedicao(m.id), empresaId: ct.empresaId, excluidaEm: null, status: { in: ["A_RECEBER", "ATRASADO"] } },
+    select: { id: true, numero: true, status: true, boletoId: true, boletoStatus: true },
+    orderBy: [{ parcelaNumero: "asc" }, { criadoEm: "asc" }],
+  });
+  const naoSaiu: string[] = [];
+  const emitidas = new Set<string>();
+  for (const c of cobrancas.filter((c) => !motivoSemBoleto(c))) {
+    try {
+      const r = await emitirBoletoDaConta(ct.empresaId, c.id, { usuarioId: null });
+      emitidas.add(c.id);
+      if (!r.email.ok && !emailDesligado(r.email.erro)) naoSaiu.push(`${c.numero}: ${r.email.erro ?? "motivo desconhecido"}`);
+    } catch (e) {
+      if (!(e instanceof ErroBoleto)) throw e;
+      if (e.message.startsWith("Integração com o Banco Inter")) { await pendencia(ex, "O Banco Inter não está configurado/ativo: o boleto não sai. Configure em Configurações › Integrações e use \"Tentar de novo\"."); return false; }
+      if (e.message.startsWith("Já existe um boleto")) continue; // a tela emitiu no meio: não emite outro
+      throw e;
+    }
+  }
+  // Boletos que já existiam (de uma rodada anterior): o e-mail deles saiu?
+  const comBoleto = await prisma.contaReceber.findMany({
+    where: { id: { in: cobrancas.map((c) => c.id).filter((id) => !emitidas.has(id)) }, boletoStatus: "EMITIDO" },
+    select: { id: true, numero: true, empresaId: true, boletoEmitidoEm: true },
+  });
+  if (ex.situacao === "PENDENTE") {
+    // "Tentar de novo" depois de um e-mail que não saiu: manda de novo o que ficou sem e-mail
+    for (const c of comBoleto) {
+      if (await emailDoBoletoSaiu(c)) continue;
+      const r = await enviarBoleto(c.id).catch((e) => ({ ok: false, erro: (e as Error)?.message ?? "erro no envio" }));
+      if (!r.ok && !emailDesligado(r.erro)) naoSaiu.push(`${c.numero}: ${r.erro ?? "motivo desconhecido"}`);
+    }
+  } else if (ex.situacao === "PENDENCIA" && !emitidas.size) {
+    // A rodada do dia não reenvia sozinha: a pendência fica até o e-mail sair (à mão ou no "Tentar de novo")
+    for (const c of comBoleto) if (!(await emailDoBoletoSaiu(c))) return false;
+  }
+  if (naoSaiu.length) {
+    await pendencia(ex, `Boleto emitido, mas o e-mail não saiu (${naoSaiu.join("; ")}). Mande pela conta a receber ou use "Tentar de novo".`);
+    return false;
+  }
+  await encerrar(ex.id, "CONCLUIDA");
+  return false;
+}
+
+/**
+ * A nota da medição mudou (autorizada ou não aceita — pelo aviso do PlugNotas, pela reconciliação ou
+ * pela tela): a execução do contrato segue na hora, sem esperar a rodada do dia seguinte.
+ */
+export async function avancarPelaMedicao(medicaoId: string, agora = new Date()) {
+  const ex = await prisma.faturamentoContratoExecucao.findFirst({
+    where: { medicaoId, etapa: { in: ["NFSE", "BOLETO"] }, situacao: { in: [...ABERTAS] } },
+    select: { id: true },
+  });
+  return ex ? processarExecucao(ex.id, agora) : null;
 }
 
 /**

@@ -7,6 +7,8 @@ import { prisma } from "@/lib/prisma";
 import { contratoCobraNaCompetencia, passoCobranca, textoFrequencia, valorMensalDe } from "@/lib/financeiro/contrato-previsao";
 import { diaDeFaturar } from "@/lib/faturamento/rotina-contratos";
 
+export type NfTela = null | { numero: string | null; situacao: "AUTORIZADA" | "PREFEITURA" | "NAO_ACEITA" | "MANUAL" };
+
 export type LinhaFaturamentoContrato = {
   contratoId: string; contratoNumero: string; cliente: string; valor: number; frequencia: string; aprovacaoAutomatica: boolean;
   /** Sem execução: o que esperar ("Fatura no dia 10", "Sem cobrança neste mês") */
@@ -14,9 +16,22 @@ export type LinhaFaturamentoContrato = {
   execucao: null | {
     id: string; etapa: string; situacao: string; erro: string | null; tentativas: number; atualizadoEm: string;
     medicao: null | { id: string; numero: string; status: string; nfNumero: string | null };
-    boleto: string | null;
+    /** A NFS-e da medição: a mais recente (nº quando autorizada; na prefeitura; não aceita) ou a NF registrada à mão */
+    nf: NfTela;
+    /** As cobranças da medição (conta ou parcelas) com o boleto de cada uma */
+    cobrancas: { id: string; numero: string; boleto: string | null }[];
   };
 };
+
+/** A NF que a tela mostra: a autorizada mais recente; senão a que está na prefeitura; senão a não aceita; senão a registrada à mão (sem nota emitida aqui) */
+export function nfDaMedicao(notas: { status: string; numero: string | null }[], nfManual: string | null): NfTela {
+  const autorizada = notas.find((n) => n.status === "CONCLUIDO");
+  if (autorizada) return { numero: autorizada.numero, situacao: "AUTORIZADA" };
+  if (notas.some((n) => n.status === "ENVIANDO" || n.status === "PROCESSANDO")) return { numero: null, situacao: "PREFEITURA" };
+  if (notas.some((n) => n.status === "REJEITADO" || n.status === "INTERROMPIDO")) return { numero: null, situacao: "NAO_ACEITA" };
+  // NF registrada à mão: só quando nenhuma nota foi emitida aqui (o nº de uma nota cancelada não vira "manual")
+  return nfManual && !notas.length ? { numero: nfManual, situacao: "MANUAL" } : null;
+}
 
 type Cartao = { q: number; v: number };
 export type ResumoFaturamentoContratos = { contratos: Cartao; concluidas: Cartao; andamento: Cartao; atencao: Cartao };
@@ -43,12 +58,26 @@ export async function painelFaturamentoContratos(empresaId: string, ano: number,
         medicao: {
           select: {
             id: true, numero: true, status: true, nfNumero: true,
-            contasReceber: { where: { status: { not: "CANCELADO" }, excluidaEm: null }, select: { boletoStatus: true }, take: 1, orderBy: { criadoEm: "asc" } },
+            notasFiscais: { select: { status: true, numero: true }, orderBy: { criadoEm: "desc" } },
           },
         },
       },
     }),
   ]);
+
+  // As cobranças das medições (a conta, ou as parcelas dela) com o boleto de cada uma
+  const medicaoIds = execucoes.map((e) => e.medicaoId).filter(Boolean) as string[];
+  const contas = medicaoIds.length ? await prisma.contaReceber.findMany({
+    where: {
+      empresaId, excluidaEm: null, status: { notIn: ["PREVISTO", "CANCELADO", "PARCELADO"] }, // previsão ainda não se cobra
+      OR: [{ medicaoId: { in: medicaoIds } }, { lancamento: { medicaoId: { in: medicaoIds } } }],
+    },
+    select: { id: true, numero: true, boletoStatus: true, medicaoId: true, lancamento: { select: { medicaoId: true } } },
+    orderBy: [{ parcelaNumero: "asc" }, { criadoEm: "asc" }],
+  }) : [];
+  const cobrancasDe = (medicaoId: string | null) => contas
+    .filter((c) => medicaoId && (c.medicaoId === medicaoId || c.lancamento?.medicaoId === medicaoId))
+    .map((c) => ({ id: c.id, numero: c.numero, boleto: c.boletoStatus ?? null }));
 
   const porContrato = new Map(execucoes.map((e) => [e.contratoId, e]));
   const linhas: LinhaFaturamentoContrato[] = [];
@@ -63,7 +92,8 @@ export async function painelFaturamentoContratos(empresaId: string, ano: number,
       execucao: e ? {
         id: e.id, etapa: e.etapa, situacao: e.situacao, erro: e.erro, tentativas: e.tentativas, atualizadoEm: e.atualizadoEm.toISOString(),
         medicao: e.medicao ? { id: e.medicao.id, numero: e.medicao.numero, status: e.medicao.status, nfNumero: e.medicao.nfNumero } : null,
-        boleto: e.medicao?.contasReceber[0]?.boletoStatus ?? null,
+        nf: e.medicao ? nfDaMedicao(e.medicao.notasFiscais, e.medicao.nfNumero) : null,
+        cobrancas: cobrancasDe(e.medicaoId),
       } : null,
     });
   };

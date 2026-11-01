@@ -161,7 +161,8 @@ describe("5 abas com os campos certos", () => {
   it("o que saiu não aparece em lugar nenhum (NFS-e, itens inclusos, visitas, RT na NFS-e)", async () => {
     await montar();
     await clicar($("[data-mais-opcoes]"));
-    const tudo = caixa.textContent!;
+    // A única menção à NFS-e é a chave da rotina automática (PR3-B); os campos antigos da NFS-e saíram
+    const tudo = caixa.textContent!.replace($("[data-automacao]")!.textContent!, "");
     for (const fora of ["NFS-e", "NFSe", "Itens inclusos", "Outros itens inclusos", "visitas", "Período das visitas", "período de referência", "Configurações da NFS-e"])
       expect(tudo).not.toContain(fora);
     expect(chamadas.some((c) => c.url.startsWith("/api/servicos"))).toBe(false);
@@ -429,4 +430,47 @@ describe("PR3-A: cobrança a cada N meses e faturamento automático", () => {
     corpo = await salvar();
     expect([corpo.faturamentoAutomatico, corpo.aprovacaoAutomatica]).toEqual([false, false]);
   });
+
+  it("PR3-B: NFS-e e boleto automáticos — cada um pede a sua permissão; ligam com o automático; desligar o automático desliga os dois; sem serviço avisa", async () => {
+    nav.sp = new URLSearchParams();
+    rotas["PUT /api/contratos/ct1"] = { id: "ct1" };
+    // Só Medições: as duas chaves travadas, com o porquê
+    await montar({ ...permissoesVazias(), contratos: { visualizar: true, editar: true }, clientes: { visualizar: true }, financeiro: { visualizar: true, medicoes: true } }, editarCt({ faturamentoAutomatico: true }));
+    expect([sw("Emitir a NFS-e sozinha").disabled, sw("Emitir e enviar o boleto sozinho").disabled]).toEqual([true, true]);
+    expect($("[data-automacao-sem-permissao-etapa]")!.textContent).toBe("A NFS-e e o boleto automáticos pedem as permissões Financeiro › Fiscal e Contas a receber.");
+    await act(async () => root.unmount());
+    caixa.remove();
+    // Medições + Fiscal: só o boleto travado
+    await montar({ ...permissoesVazias(), contratos: { visualizar: true, editar: true }, clientes: { visualizar: true }, financeiro: { visualizar: true, medicoes: true, fiscal: true } }, editarCt({ faturamentoAutomatico: true, emitirNfseAuto: true, emitirBoletoAuto: true }));
+    expect([sw("Emitir a NFS-e sozinha").disabled, sw("Emitir e enviar o boleto sozinho").disabled]).toEqual([false, true]);
+    expect($("[data-automacao-sem-permissao-etapa]")!.textContent).toBe("O boleto automático pede a permissão Financeiro › Contas a receber.");
+    // Desligar o automático desliga só o que esta pessoa pode mexer (o boleto fica como está: o servidor recusaria)
+    chamadas.length = 0;
+    await clicar(sw("Faturamento automático"));
+    const semCr = await salvar();
+    expect([semCr.faturamentoAutomatico, semCr.emitirNfseAuto, semCr.emitirBoletoAuto]).toEqual([false, false, true]);
+    await act(async () => root.unmount());
+    caixa.remove();
+    // Tudo: liga as duas; sem serviço da nota, a NFS-e avisa
+    chamadas.length = 0;
+    await montar(permissoesTotais(), editarCt());
+    expect([sw("Emitir a NFS-e sozinha").disabled, sw("Emitir e enviar o boleto sozinho").disabled]).toEqual([true, true]); // só com o automático ligado
+    expect($("[data-automacao-sem-permissao-etapa]")).toBeNull();
+    await clicar(sw("Faturamento automático"));
+    await clicar(sw("Emitir a NFS-e sozinha"));
+    await clicar(sw("Emitir e enviar o boleto sozinho"));
+    expect($("[data-automacao]")!.textContent).toContain("Escolha o serviço da nota acima: sem ele, a NFS-e fica pendente.");
+    for (const rotulo of ["Emitir a NFS-e sozinha", "Emitir e enviar o boleto sozinho"]) {
+      const dica = $(`[data-automacao] button[aria-label*="${rotulo}"]`)!;
+      expect(dica.parentElement!.closest("button, a")).toBeNull();
+    }
+    let corpo = await salvar();
+    expect([corpo.emitirNfseAuto, corpo.emitirBoletoAuto]).toEqual([true, true]);
+    chamadas.length = 0;
+    await clicar(sw("Faturamento automático"));
+    expect([sw("Emitir a NFS-e sozinha").getAttribute("aria-checked"), sw("Emitir e enviar o boleto sozinho").getAttribute("aria-checked")]).toEqual(["false", "false"]);
+    corpo = await salvar();
+    expect([corpo.faturamentoAutomatico, corpo.emitirNfseAuto, corpo.emitirBoletoAuto]).toEqual([false, false, false]);
+  });
 });
+

@@ -203,6 +203,8 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
           faturamentoAdicionais: (initialData as any).faturamentoAdicionais ?? "SEPARADO",
           faturamentoAutomatico: initialData.faturamentoAutomatico ?? false,
           aprovacaoAutomatica: initialData.aprovacaoAutomatica ?? false,
+          emitirNfseAuto: initialData.emitirNfseAuto ?? false,
+          emitirBoletoAuto: initialData.emitirBoletoAuto ?? false,
           nfseReferencia: initialData.nfseReferencia ?? "CORRENTE",
           diaFaturamento: initialData.diaFaturamento ?? undefined,
           servicoId: (initialData as { servicoId?: string | null }).servicoId ?? "",
@@ -242,6 +244,8 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
           faturamentoAdicionais: "SEPARADO",
           faturamentoAutomatico: false,
           aprovacaoAutomatica: false,
+          emitirNfseAuto: false,
+          emitirBoletoAuto: false,
           nfseReferencia: "CORRENTE",
           diaFaturamento: undefined,
           tipoVencimento: "DIAS_APOS_FATURAMENTO",
@@ -355,6 +359,11 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
   const podeAutomatizar = podePerm("financeiro", "medicoes");
   const faturamentoAutomaticoVal = !!watch("faturamentoAutomatico");
   const aprovacaoAutomaticaVal = !!watch("aprovacaoAutomatica");
+  // PR3-B: NFS-e e boleto automáticos pedem também a permissão de emitir cada um à mão
+  const podeNfseAuto = podeAutomatizar && podePerm("financeiro", "fiscal");
+  const podeBoletoAuto = podeAutomatizar && podePerm("financeiro", "contasReceber");
+  const emitirNfseAutoVal = !!watch("emitirNfseAuto");
+  const emitirBoletoAutoVal = !!watch("emitirBoletoAuto");
   const duracaoTexto = mesesVigencia != null ? `${mesesVigencia} ${mesesVigencia === 1 ? "mês" : "meses"}` : "Indeterminado";
 
 
@@ -664,14 +673,23 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
             <PreviaCobrancaContrato servicoId={servicoIdVal || null} valor={typeof valorMensalVal === "number" ? valorMensalVal : null} />
           </div>
 
-          {/* PR3-A: rotina diária (medição → aprovação). Ligar/desligar pede Financeiro › Medições (tela e servidor) */}
+          {/* PR3-A/B: rotina diária (medição → aprovação → NFS-e → boleto). Ligar/desligar pede Financeiro › Medições;
+              NFS-e pede também Fiscal e boleto Contas a receber (tela e servidor) */}
           <div className="rounded-lg border border-surface-border px-3 divide-y divide-surface-linha" data-automacao>
             <ToggleSwitch
               label="Faturamento automático"
               description={faturamentoAutomaticoVal ? `A medição sai sozinha no dia de faturamento, ${textoFrequencia(passo)}.` : undefined}
               dica="Todo dia de manhã o sistema confere os contratos com esta chave ligada: no dia de faturamento, cria a medição do contrato e segue para a aprovação. Se algo falhar, tenta de novo nos 2 dias seguintes e depois avisa no sino. Acompanhe em Financeiro › Faturamento de contratos."
               checked={faturamentoAutomaticoVal}
-              onChange={(v) => { setValue("faturamentoAutomatico", v, { shouldDirty: true }); if (!v) setValue("aprovacaoAutomatica", false, { shouldDirty: true }); }}
+              onChange={(v) => {
+                setValue("faturamentoAutomatico", v, { shouldDirty: true });
+                // Desligar o automático desliga as etapas dele (só as que esta pessoa pode mexer)
+                if (!v) {
+                  setValue("aprovacaoAutomatica", false, { shouldDirty: true });
+                  if (podeNfseAuto) setValue("emitirNfseAuto", false, { shouldDirty: true });
+                  if (podeBoletoAuto) setValue("emitirBoletoAuto", false, { shouldDirty: true });
+                }
+              }}
               disabled={!podeAutomatizar}
             />
             <ToggleSwitch
@@ -681,6 +699,26 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
               onChange={(v) => setValue("aprovacaoAutomatica", v, { shouldDirty: true })}
               disabled={!podeAutomatizar || !faturamentoAutomaticoVal}
             />
+            <ToggleSwitch
+              label="Emitir a NFS-e sozinha"
+              description={emitirNfseAutoVal && !servicoIdVal ? "Escolha o serviço da nota acima: sem ele, a NFS-e fica pendente." : undefined}
+              dica="Depois da aprovação, o sistema emite a NFS-e da medição pela empresa (Dados fiscais), no ambiente em que ela está. Se faltar algum dado (serviço, cliente, emitente), não emite: avisa no sino com o que falta. Pede também a permissão Financeiro › Fiscal."
+              checked={emitirNfseAutoVal}
+              onChange={(v) => setValue("emitirNfseAuto", v, { shouldDirty: true })}
+              disabled={!podeNfseAuto || !faturamentoAutomaticoVal}
+            />
+            <ToggleSwitch
+              label="Emitir e enviar o boleto sozinho"
+              dica="Com a NF autorizada (a automática ou a feita à mão), o sistema emite o boleto do Banco Inter de cada cobrança da medição e manda por e-mail ao cliente. Cobrança que já tem boleto não ganha outro. Pede também a permissão Financeiro › Contas a receber."
+              checked={emitirBoletoAutoVal}
+              onChange={(v) => setValue("emitirBoletoAuto", v, { shouldDirty: true })}
+              disabled={!podeBoletoAuto || !faturamentoAutomaticoVal}
+            />
+            {podeAutomatizar && (!podeNfseAuto || !podeBoletoAuto) && (
+              <p className="py-2 text-xs text-ink-muted" data-automacao-sem-permissao-etapa>
+                {!podeNfseAuto && !podeBoletoAuto ? "A NFS-e e o boleto automáticos pedem as permissões Financeiro › Fiscal e Contas a receber." : !podeNfseAuto ? "A NFS-e automática pede a permissão Financeiro › Fiscal." : "O boleto automático pede a permissão Financeiro › Contas a receber."}
+              </p>
+            )}
             {!podeAutomatizar && (
               <p className="py-2 text-xs text-ink-muted" data-automacao-sem-permissao>Só quem tem a permissão Financeiro › Medições liga o faturamento automático.</p>
             )}

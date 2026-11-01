@@ -34,7 +34,8 @@ export const INTERVALO_CONSULTA_MS = 5_000;
 /** Sem o id do PlugNotas e sem registro lá depois disto: o envio não chegou (pode emitir de novo) */
 export const PRAZO_SEM_REGISTRO_MS = 2 * 60_000;
 
-export interface Ator { id: string; empresaId: string }
+/** Quem emite: a pessoa da sessão, ou a rotina dos contratos (id null = "pelo sistema") */
+export interface Ator { id: string | null; empresaId: string }
 
 const SELECT_SERVICO = {
   id: true, nome: true, codigoLc116: true, codigoMunicipal: true, aliquotaISS: true, nfseTributacao: true,
@@ -296,6 +297,14 @@ export async function aplicarSituacao(nota: NotaBanco, r: ResultadoConsulta, usu
   if (rejeitada) {
     const os = await osDaNota(nota.id);
     await historicoOs([nota.ordemServicoId, ...os], usuarioId, "NFS-e rejeitada", data.motivo ?? "");
+  }
+  // PR3-B: a rotina do contrato segue na hora (autorizada → boleto; não aceita → pendência no sino).
+  // Import dinâmico: a rotina usa a emissão (evita o ciclo). Falha aqui não derruba o aviso/consulta.
+  if ((novo === "CONCLUIDO" || rejeitada) && nota.medicaoId) {
+    const medicaoId = nota.medicaoId;
+    await import("@/lib/faturamento/rotina-contratos-server")
+      .then((m) => m.avancarPelaMedicao(medicaoId))
+      .catch((e) => console.error("[faturamento-contratos] após a nota", medicaoId, (e as Error)?.message));
   }
   return { ...nota, ...data };
 }
