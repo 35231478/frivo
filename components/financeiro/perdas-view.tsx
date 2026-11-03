@@ -39,7 +39,7 @@ export function PerdasView({ periodo, total, clientes, linhas }: {
         <Link href="/financeiro/contas-receber" className="inline-flex items-center gap-1.5 text-sm text-ink-muted hover:text-ink"><ArrowLeft className="w-4 h-4" /> Contas a Receber</Link>
       </div>
 
-      <BarraPeriodo periodo={periodo} navegar={navegar} permitirTodos dica="Pela data em que a cobrança foi marcada como perda." />
+      <BarraPeriodo rotulo="Data da perda" periodo={periodo} navegar={navegar} permitirTodos dica="Pela data em que a cobrança foi marcada como perda." />
       <GradeCards colunas={4}>
         <CardResumo id="valor" rotulo="Perdido no período" icone={TrendingDown} cor="text-atrasado" v={total.valor} legenda={qtdCobrancas(total.qtd)} />
         <CardResumo id="maior-cliente" rotulo="Maior perda por cliente" icone={Users} cor="text-ink" v={clientes[0]?.valor ?? 0}

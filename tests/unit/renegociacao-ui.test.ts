@@ -247,7 +247,7 @@ describe("lista e gaveta", () => {
     await montar(createElement(ContasReceberView, props(contas, { filtros: { ...props([]).filtros, clienteId: "c1" } }) as any));
     expect(txt($("[data-linha-conta=r] [data-situacao]"))).toBe("Renegociada");
     expect($("[data-linha-conta=r] [data-renegociada]")!.getAttribute("title")).toBe("Renegociada em CR-9");
-    await clicar($("[data-mais-filtros]")); // os chips ficam no painel "Mais filtros"
+    await clicar($("[data-mais-filtros]")); await clicar($("[data-filtro-opcao=status]")); // os chips aparecem ao escolher "Status" no menu
     expect(txt($("[data-chip-status=RENEGOCIADO]"))).toBe("Renegociada");
     expect(txt($("[data-cartao-conta=r] [data-renegociada-cartao]"))).toMatch(/^Renegociada em CR-9 · recebido R\$\s?100,00$/);
   });

@@ -20,7 +20,7 @@ export const periodoTela = (p: Periodo): PeriodoTela => ({ tipo: p.tipo, mes: p.
  * Todo o período · Período personalizado) e as setas andam uma unidade do atalho escolhido. Tudo na
  * URL via `navegar` (compartilhável; o "voltar" do navegador funciona). O mês atual não vai para a URL.
  */
-export function BarraPeriodo({ periodo, navegar, permitirTodos, somenteMes, dica, className }: {
+export function BarraPeriodo({ periodo, navegar, permitirTodos, somenteMes, dica, className, rotulo = "Período" }: {
   periodo: PeriodoTela; navegar: Navegar;
   /** Mostra "Todo o período" (ex.: Contas a Receber — busca de uma conta antiga) */
   permitirTodos?: boolean;
@@ -29,6 +29,8 @@ export function BarraPeriodo({ periodo, navegar, permitirTodos, somenteMes, dica
   /** ⓘ do que a data do período significa (ex.: "Pela data de vencimento.") */
   dica?: string;
   className?: string;
+  /** O rótulo em cima (o que a data é nesta tela: "Vencimento", "Criação"…) */
+  rotulo?: string;
 }) {
   const [aberto, setAberto] = useState(false);
   const [personalizado, setPersonalizado] = useState(false); // o efeito abaixo abre os campos quando o período já é um intervalo
@@ -62,7 +64,7 @@ export function BarraPeriodo({ periodo, navegar, permitirTodos, somenteMes, dica
 
   return (
     <div className={cn("flex flex-col gap-1", className)} data-periodo={periodo.tipo}>
-      <span className="text-xs font-medium text-ink-muted">Período</span>
+      <span className="text-xs font-medium text-ink-muted" data-periodo-rotulo-tela>{rotulo}</span>
       <div className="flex items-center gap-2">
       <div ref={ref} className="relative flex-1 sm:flex-none">
         <div className="flex w-full sm:w-auto items-stretch h-10 rounded-lg border border-surface-border bg-white overflow-hidden">

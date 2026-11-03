@@ -71,15 +71,17 @@ Toda tela de lista por período (Orçamentos, Ordens de Serviço, Contas a Receb
 Notas fiscais, Medições, Perdas, Faturamento de contratos) usa a mesma barra, numa linha só:
 
 ```
-[‹ Novembro de 2026 · Este mês ▾ ›]  [Pesquisar no período selecionado]  [Mais filtros (n)] [Limpar filtros] [extras]
+Vencimento                     Pesquisar no período selecionado
+[‹ | Novembro de 2026 ⌄ | ›]   [Pesquisar]   [Mais filtros ⌄] [extras]
+Limpar filtros
 ```
 
 | Peça | Componente | O que faz |
 |---|---|---|
 | Período | `BarraPeriodo` (`components/listagem/periodo-cards.tsx`) | menu com Hoje · Esta semana · Este mês · Este ano · Últimos 30 dias · Últimos 12 meses · Todo o período · Período personalizado; as setas andam uma unidade do atalho; só mês (competência) com `somenteMes`; "Todo o período" com `permitirTodos` |
 | Regras do período | `lib/periodo.ts` | lê a URL (`mes`, `de`/`ate`, `periodo`, `ref`), dá `gte`/`lt` (instantes de Brasília) e `dias` (dia civil); `urlDoAtalho`, `urlVizinho`; padrão por tela (`padrao: "mes" | "todos"`) |
-| Barra | `BarraFiltros` (`components/listagem/barra-filtros.tsx`) | período + busca + "Mais filtros" (painel recolhido, fechado por padrão, contador dos ativos) + "Limpar filtros" (zera os filtros do painel e a busca; o período fica) + extras à direita |
-| Filtro do painel | `CampoFiltro` (rótulo em cima), `FiltroSelectUrl`/`SelectFiltro` com `className="w-full"`, `FiltroTextoUrl` (texto/número com atraso) | cada mudança vai na hora para a URL; o controle ativo se destaca |
+| Barra | `BarraFiltros` (`components/listagem/barra-filtros.tsx`) | período + busca (rótulo "Pesquisar no período selecionado") + "Mais filtros" (menu com os NOMES dos filtros; escolher um faz o campo aparecer, com ×; os que têm valor na URL aparecem sozinhos; contador dos ativos) + "Limpar filtros" na linha de baixo (zera os filtros e a busca; o período fica) + extras à direita |
+| Filtro | `FiltroDef` (`id`, `label`, `params`, `render`, `largo`), controles com `inputFiltro(ativo)`, `FiltroSelectUrl`/`SelectFiltro` com `className="w-full"`, `FiltroTextoUrl` (texto/número com atraso) | cada mudança vai na hora para a URL; o controle ativo se destaca |
 
 Regras:
 - A URL é a fonte da verdade (compartilhável; o "voltar" funciona). O mês corrente não vai para a URL.

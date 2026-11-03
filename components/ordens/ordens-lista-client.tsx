@@ -10,7 +10,7 @@ import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { cn, formatarData, LABELS_STATUS_OS, LABELS_PRIORIDADE, LABELS_ORIGEM_OS } from "@/lib/utils";
 import { BarraPeriodo, type PeriodoTela } from "@/components/listagem/periodo-cards";
-import { BarraFiltros, CampoFiltro, FiltroTextoUrl, INPUT_FILTRO } from "@/components/listagem/barra-filtros";
+import { BarraFiltros, FiltroTextoUrl, inputFiltro } from "@/components/listagem/barra-filtros";
 import { urlDoAtalho, urlVizinho, type Periodo } from "@/lib/periodo";
 import { BuscaSelect, type OpcaoBusca } from "@/components/ui/busca-select";
 import { AvatarCliente } from "@/components/ui/avatar-cliente";
@@ -114,7 +114,6 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
     return dirAtual === "asc" ? <ArrowUp className="inline w-3 h-3 ml-1 text-acento" /> : <ArrowDown className="inline w-3 h-3 ml-1 text-acento" />;
   }
 
-  const selectCls = INPUT_FILTRO;
   // Chip de filtro (status/prioridade): ligado = acento claro
   const chip = (ligado: boolean) => cn("text-xs px-2.5 py-1 rounded-full border transition-colors",
     ligado ? "bg-acento-claro border-acento/40 text-acento font-semibold" : "bg-white border-surface-border text-ink-muted hover:border-acento/40 hover:text-ink");
@@ -139,11 +138,11 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
         periodo={<BarraPeriodo periodo={periodo} navegar={(m) => setParams(m)} permitirTodos dica="Pelo dia agendado, pela previsão de conclusão ou pela abertura da OS. Atalhos: ← → mudam o período, T volta para hoje." />}
         busca={
           <CampoBusca
-            valor={buscaLocal} onChange={setBuscaLocal} placeholder="Pesquisar no período selecionado" rotulo="Buscar ordens de serviço"
+            valor={buscaLocal} onChange={setBuscaLocal} placeholder="Pesquisar" rotulo="Buscar ordens de serviço"
             sugerir={sugerir} onEscolher={(s) => s.href && router.push(s.href)} carregando={pendente}
           />
         }
-        paramsFiltros={PARAMS_FILTROS_OS} paramBusca="busca" navegar={(m) => setParams(m)}
+        paramBusca="busca" navegar={(m) => setParams(m)}
         extras={
           <>
             <div className="flex items-center bg-surface-page border border-surface-border rounded-lg p-0.5">
@@ -155,55 +154,46 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
             </a>
           </>
         }
-      >
-        {/* Chips de status e prioridade (multi) */}
-        <div className="sm:col-span-2 lg:col-span-4 flex flex-wrap items-center gap-x-4 gap-y-2">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-xs font-medium text-ink-muted mr-1">Status</span>
-            {Object.entries(LABELS_STATUS_OS).map(([v, l]) => (
-              <button key={v} type="button" onClick={() => toggleLista("status", v)} aria-pressed={naLista("status", v)}
-                className={chip(naLista("status", v))}>{l}</button>
-            ))}
-            {!get("status") && (
-              <span className="text-[11px] text-ink-muted ml-1" title="OS inativadas ficam ocultas; marque “Cancelada” para vê-las">
-                (canceladas ocultas)
-              </span>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-xs font-medium text-ink-muted mr-1">Prioridade</span>
-            {Object.entries(LABELS_PRIORIDADE).map(([v, l]) => (
-              <button key={v} type="button" onClick={() => toggleLista("prioridade", v)} aria-pressed={naLista("prioridade", v)}
-                className={chip(naLista("prioridade", v))}>{l}</button>
-            ))}
-          </div>
-        </div>
-        <div className="flex flex-col gap-1 min-w-0">
-          <span className="text-xs font-medium text-ink-muted">Cliente</span>
-          <BuscaSelect value={get("clienteId")} onChange={(v) => setParams({ clienteId: v || null })} options={opcoes.clientes} placeholder="Todos" />
-        </div>
-        <div className="flex flex-col gap-1 min-w-0">
-          <span className="text-xs font-medium text-ink-muted">Técnico responsável</span>
-          <BuscaSelect value={get("responsavelId")} onChange={(v) => setParams({ responsavelId: v || null })} options={opcoes.usuarios} placeholder="Todos" />
-        </div>
-        <CampoFiltro label="Tipo de OS">
-          <select value={get("tipoOsId")} onChange={(e) => setParams({ tipoOsId: e.target.value || null })} className={cn(selectCls, get("tipoOsId") && "border-primary-300 text-primary-700 bg-primary-50/50")} aria-label="Tipo de OS">
-            <option value="">Todos</option>
-            {opcoes.tiposOs.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-          </select>
-        </CampoFiltro>
-        <CampoFiltro label="Número da OS"><FiltroTextoUrl param="numero" navegar={(m) => setParams(m)} placeholder="OS-2026-..." rotulo="Número da OS" /></CampoFiltro>
-        <CampoFiltro label="Origem">
-          <select value={get("origem")} onChange={(e) => setParams({ origem: e.target.value || null })} className={cn(selectCls, get("origem") && "border-primary-300 text-primary-700 bg-primary-50/50")} aria-label="Origem">
-            <option value="">Todas</option>
-            {Object.entries(LABELS_ORIGEM_OS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-        </CampoFiltro>
-        <div className="flex flex-col gap-1 min-w-0">
-          <span className="text-xs font-medium text-ink-muted">Contrato</span>
-          <BuscaSelect value={get("contratoId")} onChange={(v) => setParams({ contratoId: v || null })} options={opcoes.contratos} placeholder="Todos" />
-        </div>
-      </BarraFiltros>
+        filtros={[
+          { id: "status", label: "Status", params: ["status"], largo: true, render: () => (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {Object.entries(LABELS_STATUS_OS).map(([v, l]) => (
+                <button key={v} type="button" onClick={() => toggleLista("status", v)} aria-pressed={naLista("status", v)}
+                  className={chip(naLista("status", v))}>{l}</button>
+              ))}
+              {!get("status") && (
+                <span className="text-[11px] text-ink-muted ml-1" title="OS inativadas ficam ocultas; marque “Cancelada” para vê-las">
+                  (canceladas ocultas)
+                </span>
+              )}
+            </div>
+          ) },
+          { id: "prioridade", label: "Prioridade", params: ["prioridade"], largo: true, render: () => (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {Object.entries(LABELS_PRIORIDADE).map(([v, l]) => (
+                <button key={v} type="button" onClick={() => toggleLista("prioridade", v)} aria-pressed={naLista("prioridade", v)}
+                  className={chip(naLista("prioridade", v))}>{l}</button>
+              ))}
+            </div>
+          ) },
+          { id: "clienteId", label: "Cliente", params: ["clienteId"], render: () => <BuscaSelect value={get("clienteId")} onChange={(v) => setParams({ clienteId: v || null })} options={opcoes.clientes} placeholder="Todos" /> },
+          { id: "responsavelId", label: "Técnico responsável", params: ["responsavelId"], render: () => <BuscaSelect value={get("responsavelId")} onChange={(v) => setParams({ responsavelId: v || null })} options={opcoes.usuarios} placeholder="Todos" /> },
+          { id: "tipoOsId", label: "Tipo de OS", params: ["tipoOsId"], render: () => (
+            <select value={get("tipoOsId")} onChange={(e) => setParams({ tipoOsId: e.target.value || null })} className={inputFiltro(get("tipoOsId"))} aria-label="Tipo de OS">
+              <option value="">Todos</option>
+              {opcoes.tiposOs.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          ) },
+          { id: "numero", label: "Número da OS", params: ["numero"], render: () => <FiltroTextoUrl param="numero" navegar={(m) => setParams(m)} placeholder="OS-2026-..." rotulo="Número da OS" /> },
+          { id: "origem", label: "Origem", params: ["origem"], render: () => (
+            <select value={get("origem")} onChange={(e) => setParams({ origem: e.target.value || null })} className={inputFiltro(get("origem"))} aria-label="Origem">
+              <option value="">Todas</option>
+              {Object.entries(LABELS_ORIGEM_OS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          ) },
+          { id: "contratoId", label: "Contrato", params: ["contratoId"], render: () => <BuscaSelect value={get("contratoId")} onChange={(v) => setParams({ contratoId: v || null })} options={opcoes.contratos} placeholder="Todos" /> },
+        ]}
+      />
 
       <div className="card overflow-hidden">
         <div className="px-4 sm:px-5 py-2.5 border-b border-surface-border flex items-center justify-between flex-wrap gap-2 text-sm text-ink-muted">

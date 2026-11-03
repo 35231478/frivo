@@ -20,7 +20,7 @@ import {
   Plus, Download, Barcode, Loader2, Sigma, TrendingDown, Handshake, X,
 } from "lucide-react";
 import { BarraPeriodo, CardResumo, GradeCards, type PeriodoTela } from "@/components/listagem/periodo-cards";
-import { BarraFiltros, CampoFiltro, INPUT_FILTRO, FiltroTextoUrl } from "@/components/listagem/barra-filtros";
+import { BarraFiltros, FiltroTextoUrl, inputFiltro } from "@/components/listagem/barra-filtros";
 import { CampoBusca, Paginacao } from "@/components/listagem/listagem-ui";
 import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
 import { recebidaEmParte, saldoDaConta } from "@/lib/financeiro/parcelas";
@@ -65,8 +65,6 @@ export interface FiltrosReceber {
 }
 
 type CardKey = "VENCIDO" | "VENCE_HOJE" | "A_VENCER" | "RECEBIDO" | "PERDA" | "TOTAL";
-/** Os filtros do painel "Mais filtros" (o período e o card ficam fora: são navegação) */
-const PARAMS_FILTROS_RECEBER = ["clienteId", "categoria", "forma", "banco", "valorMin", "valorMax", "status"];
 
 /**
  * Contas a Receber no padrão da casa: período (‹ mês ›, personalizado ou todo o período — pelo
@@ -159,44 +157,48 @@ export function ContasReceberView({
 
       {/* Barra enxuta: período (pelo vencimento) + busca + "Mais filtros" (painel recolhido) — padrão da casa */}
       <BarraFiltros
-        periodo={<BarraPeriodo periodo={periodo} navegar={navegar} permitirTodos dica="Pela data de vencimento." />}
-        busca={<CampoBusca valor={busca} onChange={setBusca} placeholder="Pesquisar no período selecionado" rotulo="Buscar cobranças" carregando={pendente} />}
-        paramsFiltros={PARAMS_FILTROS_RECEBER} paramBusca="q" navegar={navegar}
-      >
-        <CampoFiltro label="Cliente">
-          <select value={filtros.clienteId} onChange={(e) => navegar({ clienteId: e.target.value || null })} className={cn(INPUT_FILTRO, filtros.clienteId && "border-primary-300 text-primary-700 bg-primary-50/50")} data-filtro="clienteId">
-            <option value="">Todos</option>
-            {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-          </select>
-        </CampoFiltro>
-        <CampoFiltro label="Categoria">
-          <select value={filtros.categoria} onChange={(e) => navegar({ categoria: e.target.value || null })} className={cn(INPUT_FILTRO, filtros.categoria && "border-primary-300 text-primary-700 bg-primary-50/50")} data-filtro="categoria">
-            <option value="">Todas</option>
-            {/* Filtro: inclui as inativas (contas antigas continuam filtráveis) */}
-            {categorias.map((c) => <option key={c.id} value={c.id}>{c.ativo ? c.nome : `${c.nome} (inativa)`}</option>)}
-          </select>
-        </CampoFiltro>
-        <CampoFiltro label="Forma de pagamento">
-          <select value={filtros.forma} onChange={(e) => navegar({ forma: e.target.value || null })} className={cn(INPUT_FILTRO, filtros.forma && "border-primary-300 text-primary-700 bg-primary-50/50")} data-filtro="forma">
-            <option value="">Todas</option>
-            {Object.entries(LABELS_FORMA_PAGAMENTO).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-        </CampoFiltro>
-        <CampoFiltro label="Banco"><FiltroTextoUrl param="banco" navegar={navegar} placeholder="Banco" rotulo="Banco" /></CampoFiltro>
-        <CampoFiltro label="Valor de"><FiltroTextoUrl param="valorMin" navegar={navegar} tipo="number" placeholder="0,00" rotulo="Valor de" /></CampoFiltro>
-        <CampoFiltro label="Valor até"><FiltroTextoUrl param="valorMax" navegar={navegar} tipo="number" placeholder="0,00" rotulo="Valor até" /></CampoFiltro>
-        <div className="sm:col-span-2 lg:col-span-4">
-          <p className="text-xs font-medium text-ink-muted mb-1.5">Status</p>
-          <div className="flex flex-wrap gap-1.5">
-            {(["PREVISTO", "A_VENCER", "VENCE_HOJE", "VENCIDO", "PARCIAL", "PAGO", "PERDA", "RENEGOCIADO", "CANCELADO"] as const).map((s) => (
-              <button key={s} type="button" data-chip-status={s} onClick={() => toggleStatus(s)} aria-pressed={statusChips.has(s)}
-                className={cn("text-xs px-2.5 py-1 rounded-full border transition-colors", statusChips.has(s) ? "bg-primary-500 border-primary-500 text-white" : "bg-white border-surface-border text-ink-muted hover:border-primary-300")}>
-                {LABEL_CHAVE[s]}
-              </button>
-            ))}
-          </div>
-        </div>
-      </BarraFiltros>
+        periodo={<BarraPeriodo rotulo="Vencimento" periodo={periodo} navegar={navegar} permitirTodos dica="Pela data de vencimento." />}
+        busca={<CampoBusca valor={busca} onChange={setBusca} placeholder="Pesquisar" rotulo="Buscar cobranças" carregando={pendente} />}
+        paramBusca="q" navegar={navegar}
+        filtros={[
+          { id: "clienteId", label: "Cliente", params: ["clienteId"], render: () => (
+            <select value={filtros.clienteId} onChange={(e) => navegar({ clienteId: e.target.value || null })} className={inputFiltro(filtros.clienteId)} aria-label="Cliente" data-filtro="clienteId">
+              <option value="">Todos</option>
+              {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </select>
+          ) },
+          { id: "categoria", label: "Categoria", params: ["categoria"], render: () => (
+            <select value={filtros.categoria} onChange={(e) => navegar({ categoria: e.target.value || null })} className={inputFiltro(filtros.categoria)} aria-label="Categoria" data-filtro="categoria">
+              <option value="">Todas</option>
+              {/* Filtro: inclui as inativas (contas antigas continuam filtráveis) */}
+              {categorias.map((c) => <option key={c.id} value={c.id}>{c.ativo ? c.nome : `${c.nome} (inativa)`}</option>)}
+            </select>
+          ) },
+          { id: "forma", label: "Forma de pagamento", params: ["forma"], render: () => (
+            <select value={filtros.forma} onChange={(e) => navegar({ forma: e.target.value || null })} className={inputFiltro(filtros.forma)} aria-label="Forma de pagamento" data-filtro="forma">
+              <option value="">Todas</option>
+              {Object.entries(LABELS_FORMA_PAGAMENTO).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          ) },
+          { id: "banco", label: "Banco", params: ["banco"], render: () => <FiltroTextoUrl param="banco" navegar={navegar} placeholder="Banco" rotulo="Banco" /> },
+          { id: "valor", label: "Valor (de / até)", params: ["valorMin", "valorMax"], render: () => (
+            <div className="flex gap-2">
+              <FiltroTextoUrl param="valorMin" navegar={navegar} tipo="number" placeholder="0,00" rotulo="Valor de" />
+              <FiltroTextoUrl param="valorMax" navegar={navegar} tipo="number" placeholder="0,00" rotulo="Valor até" />
+            </div>
+          ) },
+          { id: "status", label: "Status", params: ["status"], largo: true, render: () => (
+            <div className="flex flex-wrap gap-1.5">
+              {(["PREVISTO", "A_VENCER", "VENCE_HOJE", "VENCIDO", "PARCIAL", "PAGO", "PERDA", "RENEGOCIADO", "CANCELADO"] as const).map((s) => (
+                <button key={s} type="button" data-chip-status={s} onClick={() => toggleStatus(s)} aria-pressed={statusChips.has(s)}
+                  className={cn("text-xs px-2.5 py-1 rounded-full border transition-colors", statusChips.has(s) ? "bg-primary-500 border-primary-500 text-white" : "bg-white border-surface-border text-ink-muted hover:border-primary-300")}>
+                  {LABEL_CHAVE[s]}
+                </button>
+              ))}
+            </div>
+          ) },
+        ]}
+      />
       <GradeCards colunas={6}>
         {CARDS.map((c) => (
           <CardResumo key={c.key} id={c.key} rotulo={c.rotulo} icone={c.icone} cor={c.cor} dica={c.dica}

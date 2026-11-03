@@ -191,21 +191,22 @@ describe("cara de planilha (desktop) e cartões (celular)", () => {
 });
 
 describe("busca e painel de filtros", () => {
-  it("'Mais filtros': painel fechado por padrão; cada escolha vai na hora para a URL sem perder o período; mostra os inativos marcados; contador no botão; 'Limpar filtros' tira", async () => {
+  it("'Mais filtros': nenhum campo à vista por padrão; escolher 'Centro de custo' no menu mostra o select (inativos marcados) e a escolha vai na hora para a URL sem perder o período; os ativos aparecem sozinhos com o contador; 'Limpar filtros' tira", async () => {
     nav.qs = "mes=2026-10&card=VENCIDO";
     await montarTela();
-    expect($("[data-painel-filtros]")).toBeNull(); // fechado por padrão
+    expect($("[data-painel-filtros]")).toBeNull(); // nada escolhido, nada ativo
     expect(($("[data-limpar-filtros]") as HTMLButtonElement).disabled).toBe(true); // nada a limpar
     await clicar($("[data-mais-filtros]"));
+    expect($$("[data-filtro-opcao]").map(txt)).toEqual(["Status", "Fornecedor", "Categoria", "Centro de custo", "Origem"]);
+    await clicar($("[data-filtro-opcao=centro]"));
     expect(txt($("[data-filtro=centro]"))).toContain("Obra encerrada (inativo)");
     await escolher($("[data-filtro=centro]"), "ccObra");
     expect(ultimaUrl()).toBe("/financeiro/contas-pagar?mes=2026-10&card=VENCIDO&centro=ccObra");
     nav.qs = "mes=2026-10&centro=ccObra&origem=NF";
     await montarTela({ filtros: { ...props().filtros, centro: "ccObra", origem: "NF" } });
-    expect($("[data-painel-filtros]")).toBeNull(); // continua fechado: o contador no botão diz que há 2 ativos
+    expect($$("[data-filtro-caixa]").map((c) => c.getAttribute("data-filtro-caixa"))).toEqual(["centro", "origem"]); // os ativos aparecem sozinhos
     expect(txt($("[data-filtros-ativos]"))).toBe("2");
-    await clicar($("[data-mais-filtros]"));
-    expect(($("[data-filtro=centro]") as HTMLSelectElement).value).toBe("ccObra"); // o ativo vem marcado
+    expect(($("[data-filtro=centro]") as HTMLSelectElement).value).toBe("ccObra"); // marcado
     await clicar($("[data-limpar-filtros]"));
     expect(ultimaUrl()).toBe("/financeiro/contas-pagar?mes=2026-10");
   });

@@ -4,7 +4,7 @@ import type { ComponentType } from "react";
 import { CheckCircle2, Send, Sigma, ThumbsDown, TimerOff } from "lucide-react";
 import { BarraPeriodo, CardResumo, GradeCards, type PeriodoTela } from "@/components/listagem/periodo-cards";
 import { BuscaUrl, FiltroCheckUrl, FiltroSelectUrl, useListaUrl } from "@/components/listagem/lista-url";
-import { BarraFiltros, CampoFiltro } from "@/components/listagem/barra-filtros";
+import { BarraFiltros } from "@/components/listagem/barra-filtros";
 import Link from "next/link";
 import { X } from "lucide-react";
 import type { Opcao } from "@/components/listagem/listagem-ui";
@@ -37,20 +37,21 @@ export function PeriodoCardsOrcamentos({ periodo, resumo, card, opcoes = { tipos
     <>
       {/* Barra enxuta: período (pela criação) + busca + "Mais filtros" (painel recolhido) — padrão da casa */}
       <BarraFiltros
-        periodo={<BarraPeriodo periodo={periodo} navegar={navegar} permitirTodos dica="Pela data de criação do orçamento." />}
-        busca={<BuscaUrl lista="orcamentos" placeholder="Pesquisar no período selecionado" rotulo="Buscar orçamentos" />}
-        paramsFiltros={["tipo", "status", "clienteId", "inativos", "resposta"]} paramBusca="busca" navegar={navegar}
+        periodo={<BarraPeriodo rotulo="Criação" periodo={periodo} navegar={navegar} permitirTodos dica="Pela data de criação do orçamento." />}
+        busca={<BuscaUrl lista="orcamentos" placeholder="Pesquisar" rotulo="Buscar orçamentos" />}
+        paramBusca="busca" navegar={navegar}
         extras={resposta === "nova" ? (
           <Link href="/orcamentos?periodo=todos" className="inline-flex items-center gap-1.5 rounded-full bg-acento-claro text-acento text-xs font-semibold px-3 py-1.5" data-filtro-resposta>
             Respostas novas do cliente <X className="w-3.5 h-3.5" aria-hidden /><span className="sr-only">Limpar filtro</span>
           </Link>
         ) : undefined}
-      >
-        <CampoFiltro label="Tipo"><FiltroSelectUrl param="tipo" vazio="Todos os tipos" opcoes={opcoes.tipos} rotulo="Tipo" className="w-full" /></CampoFiltro>
-        <CampoFiltro label="Status"><FiltroSelectUrl param="status" vazio="Todos status" opcoes={opcoes.status} rotulo="Status" className="w-full" /></CampoFiltro>
-        <CampoFiltro label="Cliente"><FiltroSelectUrl param="clienteId" vazio="Todos clientes" opcoes={opcoes.clientes} rotulo="Cliente" className="w-full" /></CampoFiltro>
-        <div className="flex items-end"><FiltroCheckUrl param="inativos" rotulo="Mostrar cancelados" /></div>
-      </BarraFiltros>
+        filtros={[
+          { id: "tipo", label: "Tipo", params: ["tipo"], render: () => <FiltroSelectUrl param="tipo" vazio="Todos os tipos" opcoes={opcoes.tipos} rotulo="Tipo" className="w-full" /> },
+          { id: "status", label: "Status", params: ["status"], render: () => <FiltroSelectUrl param="status" vazio="Todos status" opcoes={opcoes.status} rotulo="Status" className="w-full" /> },
+          { id: "clienteId", label: "Cliente", params: ["clienteId"], render: () => <FiltroSelectUrl param="clienteId" vazio="Todos clientes" opcoes={opcoes.clientes} rotulo="Cliente" className="w-full" /> },
+          { id: "inativos", label: "Cancelados", params: ["inativos"], render: () => <FiltroCheckUrl param="inativos" rotulo="Mostrar cancelados" /> },
+        ]}
+      />
       <GradeCards colunas={5}>
         {CARDS.map((c) => (
           <CardResumo key={c.key} id={c.key} rotulo={c.rotulo} icone={c.icone} cor={c.cor} dica={c.dica}

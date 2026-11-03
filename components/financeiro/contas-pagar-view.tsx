@@ -12,7 +12,7 @@ import {
   FileText, ShoppingCart, Receipt,
 } from "lucide-react";
 import { BarraPeriodo, CardResumo, GradeCards, type PeriodoTela } from "@/components/listagem/periodo-cards";
-import { BarraFiltros, CampoFiltro, INPUT_FILTRO } from "@/components/listagem/barra-filtros";
+import { BarraFiltros, inputFiltro } from "@/components/listagem/barra-filtros";
 import { CampoBusca, Paginacao } from "@/components/listagem/listagem-ui";
 import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
 
@@ -33,8 +33,6 @@ export interface ContaPagarView {
 interface Opcao { id: string; nome: string; ativo: boolean }
 
 type CardKey = "VENCIDO" | "VENCE_HOJE" | "A_VENCER" | "PAGO" | "TOTAL";
-/** Os filtros do painel "Mais filtros" (o período e o card ficam fora: são navegação) */
-const PARAMS_FILTROS_PAGAR = ["status", "fornecedorId", "categoria", "centro", "origem"];
 /** Cards do período (lib/listas/filtros: CARDS_PERIODO_PAGAR): quantidade + R$ */
 export type ResumoPagar = Record<CardKey, { v: number; q: number }>;
 
@@ -64,7 +62,7 @@ export function ContasPagarView({
   /** Um select do painel: muda = vai para a URL na hora (o controle se destaca quando ativo) */
   const sel = (k: keyof FiltrosPagar) => ({
     value: filtros[k], onChange: (e: React.ChangeEvent<HTMLSelectElement>) => navegar({ [k]: e.target.value || null }),
-    className: cn(INPUT_FILTRO, filtros[k] && "border-primary-300 text-primary-700 bg-primary-50/50"), "data-filtro": k,
+    className: inputFiltro(filtros[k]), "data-filtro": k,
   });
 
   const acoes = (c: ContaPagarView) => (
@@ -130,44 +128,45 @@ export function ContasPagarView({
 
       {/* Barra enxuta: período (pelo vencimento) + busca + "Mais filtros" (painel recolhido) — padrão da casa */}
       <BarraFiltros
-        periodo={<BarraPeriodo periodo={periodo} navegar={navegar} permitirTodos dica="Pela data de vencimento." />}
-        busca={<CampoBusca valor={busca} onChange={setBusca} placeholder="Pesquisar no período selecionado" rotulo="Buscar contas a pagar" carregando={pendente} />}
-        paramsFiltros={PARAMS_FILTROS_PAGAR} paramBusca="fornecedor" navegar={navegar}
-      >
-        <CampoFiltro label="Status">
-          <select {...sel("status")} aria-label="Status">
-            <option value="">Todos</option>
-            {Object.entries(LABELS_STATUS_CONTA_PAGAR).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-        </CampoFiltro>
-        <CampoFiltro label="Fornecedor">
-          <select {...sel("fornecedorId")} aria-label="Fornecedor cadastrado">
-            <option value="">Todos</option>
-            {fornecedores.map((x) => <option key={x.id} value={x.id}>{x.ativo ? x.nome : `${x.nome} (inativo)`}</option>)}
-          </select>
-        </CampoFiltro>
-        <CampoFiltro label="Categoria">
-          <select {...sel("categoria")} aria-label="Categoria">
-            <option value="">Todas</option>
-            {/* Filtro: inclui as inativas (contas antigas continuam filtráveis) */}
-            {categorias.map((x) => <option key={x.id} value={x.id}>{x.ativo ? x.nome : `${x.nome} (inativa)`}</option>)}
-          </select>
-        </CampoFiltro>
-        <CampoFiltro label="Centro de custo">
-          <select {...sel("centro")} aria-label="Centro de custo">
-            <option value="">Todos</option>
-            {centros.map((x) => <option key={x.id} value={x.id}>{x.ativo ? x.nome : `${x.nome} (inativo)`}</option>)}
-          </select>
-        </CampoFiltro>
-        <CampoFiltro label="Origem">
-          <select {...sel("origem")} aria-label="Origem">
-            <option value="">Todas</option>
-            <option value="MANUAL">Manual</option>
-            <option value="PEDIDO">Pedido de compra</option>
-            <option value="NF">Nota de compra (NF)</option>
-          </select>
-        </CampoFiltro>
-      </BarraFiltros>
+        periodo={<BarraPeriodo rotulo="Vencimento" periodo={periodo} navegar={navegar} permitirTodos dica="Pela data de vencimento." />}
+        busca={<CampoBusca valor={busca} onChange={setBusca} placeholder="Pesquisar" rotulo="Buscar contas a pagar" carregando={pendente} />}
+        paramBusca="fornecedor" navegar={navegar}
+        filtros={[
+          { id: "status", label: "Status", params: ["status"], render: () => (
+            <select {...sel("status")} aria-label="Status">
+              <option value="">Todos</option>
+              {Object.entries(LABELS_STATUS_CONTA_PAGAR).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          ) },
+          { id: "fornecedorId", label: "Fornecedor", params: ["fornecedorId"], render: () => (
+            <select {...sel("fornecedorId")} aria-label="Fornecedor cadastrado">
+              <option value="">Todos</option>
+              {fornecedores.map((x) => <option key={x.id} value={x.id}>{x.ativo ? x.nome : `${x.nome} (inativo)`}</option>)}
+            </select>
+          ) },
+          { id: "categoria", label: "Categoria", params: ["categoria"], render: () => (
+            <select {...sel("categoria")} aria-label="Categoria">
+              <option value="">Todas</option>
+              {/* Filtro: inclui as inativas (contas antigas continuam filtráveis) */}
+              {categorias.map((x) => <option key={x.id} value={x.id}>{x.ativo ? x.nome : `${x.nome} (inativa)`}</option>)}
+            </select>
+          ) },
+          { id: "centro", label: "Centro de custo", params: ["centro"], render: () => (
+            <select {...sel("centro")} aria-label="Centro de custo">
+              <option value="">Todos</option>
+              {centros.map((x) => <option key={x.id} value={x.id}>{x.ativo ? x.nome : `${x.nome} (inativo)`}</option>)}
+            </select>
+          ) },
+          { id: "origem", label: "Origem", params: ["origem"], render: () => (
+            <select {...sel("origem")} aria-label="Origem">
+              <option value="">Todas</option>
+              <option value="MANUAL">Manual</option>
+              <option value="PEDIDO">Pedido de compra</option>
+              <option value="NF">Nota de compra (NF)</option>
+            </select>
+          ) },
+        ]}
+      />
       <GradeCards colunas={5}>
         {CARDS.map((c) => (
           <CardResumo key={c.key} id={c.key} rotulo={c.rotulo} icone={c.icone} cor={c.cor} dica={c.dica}

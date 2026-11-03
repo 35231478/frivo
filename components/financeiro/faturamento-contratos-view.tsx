@@ -108,7 +108,7 @@ export function FaturamentoContratosView({ periodo, linhas, resumo, soAtencao }:
         <Link href="/financeiro/medicoes" className="text-sm text-ink-muted hover:text-ink">Ver medições</Link>
       </div>
 
-      <BarraPeriodo periodo={periodo} navegar={navegar} somenteMes dica="Pela competência: o mês de referência da cobrança." />
+      <BarraPeriodo rotulo="Competência" periodo={periodo} navegar={navegar} somenteMes dica="Pela competência: o mês de referência da cobrança." />
       <GradeCards colunas={4}>
         <CardResumo id="contratos" rotulo="Contratos automáticos" icone={FileSignature} cor="text-ink" v={resumo.contratos.v} q={resumo.contratos.q} unidade={["contrato", "contratos"]} />
         <CardResumo id="concluidas" rotulo="Concluídas" icone={CheckCircle2} cor="text-ok" v={resumo.concluidas.v} q={resumo.concluidas.q} unidade={["contrato", "contratos"]} />

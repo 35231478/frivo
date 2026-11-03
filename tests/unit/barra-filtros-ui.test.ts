@@ -125,41 +125,62 @@ describe("seletor de período", () => {
 });
 
 describe("BarraFiltros", () => {
-  async function barra(qs: string, children = true) {
+  const FILTROS = [
+    { id: "status", label: "Status", params: ["status"], render: () => createElement("select", { "data-filtro": "status" }) },
+    { id: "clienteId", label: "Cliente", params: ["clienteId"], render: () => createElement("select", { "data-filtro": "clienteId" }) },
+    { id: "valor", label: "Valor (de / até)", params: ["valorMin", "valorMax"], render: () => createElement("input", { "data-filtro": "valor" }) },
+  ];
+  async function barra(qs: string, filtros: unknown[] = FILTROS) {
     nav.qs = qs;
-    const { BarraFiltros, CampoFiltro } = await import("@/components/listagem/barra-filtros");
+    const { BarraFiltros } = await import("@/components/listagem/barra-filtros");
     await montar(createElement(BarraFiltros, {
       periodo: createElement("span", { "data-slot-periodo": true }, "período"),
-      busca: createElement("input", { "data-slot-busca": true, placeholder: "Pesquisar no período selecionado" }),
-      paramsFiltros: ["status", "clienteId"], paramBusca: "q", navegar,
+      busca: createElement("input", { "data-slot-busca": true, placeholder: "Pesquisar" }),
+      filtros, paramBusca: "q", navegar,
       extras: createElement("button", { "data-slot-extra": true }, "Exportar"),
-      children: children ? createElement(CampoFiltro, { label: "Status" }, createElement("select", { "data-filtro": "status" })) : undefined,
     } as any));
   }
-  it("tudo numa linha: período, busca, 'Mais filtros' (painel fechado por padrão), 'Limpar filtros' desligado sem nada a limpar, extras", async () => {
+  it("linha 1: período, busca com o rótulo, 'Mais filtros' e extras; linha 2: 'Limpar filtros' desligado sem nada a limpar; nenhum filtro à vista", async () => {
     await barra("");
     expect($("[data-slot-periodo]")).not.toBeNull();
     expect($("[data-slot-busca]")).not.toBeNull();
+    expect(document.body.textContent).toContain("Pesquisar no período selecionado");
     expect($("[data-slot-extra]")).not.toBeNull();
     expect($("[data-painel-filtros]")).toBeNull();
     expect($("[data-filtros-ativos]")).toBeNull();
     expect($<HTMLButtonElement>("[data-limpar-filtros]")!.disabled).toBe(true);
+  });
+  it("'Mais filtros' lista os NOMES; escolher um mostra o campo dele (com ×); o × tira o campo e zera o parâmetro", async () => {
+    await barra("");
     await clicar($("[data-mais-filtros]"));
-    expect($("[data-painel-filtros] [data-filtro=status]")).not.toBeNull();
     expect($("[data-mais-filtros]")!.getAttribute("aria-expanded")).toBe("true");
+    expect($$("[data-filtro-opcao]").map(txt)).toEqual(["Status", "Cliente", "Valor (de / até)"]);
+    await clicar($("[data-filtro-opcao=clienteId]"));
+    expect($("[data-menu-filtros]")).toBeNull(); // escolher fecha o menu
+    expect($$("[data-filtro-caixa]").map((c) => c.getAttribute("data-filtro-caixa"))).toEqual(["clienteId"]);
+    expect($("[data-filtro-caixa=clienteId] [data-filtro=clienteId]")).not.toBeNull();
+    expect($<HTMLButtonElement>("[data-limpar-filtros]")!.disabled).toBe(false); // há um campo aberto para tirar
     await clicar($("[data-mais-filtros]"));
+    expect(txt($("[data-filtro-opcao=clienteId]"))).toBe("Cliente"); // marcado como visível (✓)
+    await clicar($("[data-filtro-opcao=clienteId]")); // escolher de novo não duplica
+    expect($$("[data-filtro-caixa]")).toHaveLength(1);
+    await clicar($("[data-fechar-filtro=clienteId]"));
     expect($("[data-painel-filtros]")).toBeNull();
+    expect(navegar).not.toHaveBeenCalled(); // sem valor na URL, só fecha
   });
-  it("com filtros na URL: continua fechado, o botão conta os ativos (a busca e o período não contam); 'Limpar filtros' zera filtros + busca e deixa o período", async () => {
-    await barra("mes=2026-10&status=ABERTA&clienteId=c1&q=hospital&pagina=3");
-    expect($("[data-painel-filtros]")).toBeNull();
+  it("filtros com valor na URL aparecem sozinhos e marcados; o botão conta os ativos (busca e período não contam); × num ativo zera os parâmetros dele", async () => {
+    await barra("mes=2026-10&status=ABERTA&valorMin=10&q=hospital&pagina=3");
+    expect($$("[data-filtro-caixa]").map((c) => c.getAttribute("data-filtro-caixa"))).toEqual(["status", "valor"]);
+    expect($$("[data-filtro-caixa][data-filtro-ativo]")).toHaveLength(2);
     expect(txt($("[data-filtros-ativos]"))).toBe("2");
-    expect($<HTMLButtonElement>("[data-limpar-filtros]")!.disabled).toBe(false);
-    await clicar($("[data-limpar-filtros]"));
-    expect(ultimo()).toEqual({ status: null, clienteId: null, q: null });
+    await clicar($("[data-fechar-filtro=valor]"));
+    expect(ultimo()).toEqual({ valorMin: null, valorMax: null });
   });
-  it("só a busca ativa também libera o 'Limpar filtros'; sem painel não há botão 'Mais filtros'", async () => {
-    await barra("q=x", false);
+  it("'Limpar filtros' zera todos os filtros + a busca e deixa o período; só a busca ativa também libera; sem filtros não há 'Mais filtros'", async () => {
+    await barra("mes=2026-10&status=ABERTA&clienteId=c1&q=hospital");
+    await clicar($("[data-limpar-filtros]"));
+    expect(ultimo()).toEqual({ status: null, clienteId: null, valorMin: null, valorMax: null, q: null });
+    await barra("q=x", []);
     expect($("[data-mais-filtros]")).toBeNull();
     expect($<HTMLButtonElement>("[data-limpar-filtros]")!.disabled).toBe(false);
   });

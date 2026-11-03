@@ -174,7 +174,7 @@ describe("período, busca e filtros (na URL)", () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(400); });
     expect(ultimaUrl()).toBe("/financeiro/notas-fiscais?q=Hospital");
     vi.useRealTimers();
-    await clicar($("[data-mais-filtros]")); // os selects ficam no painel "Mais filtros"
+    await clicar($("[data-mais-filtros]")); await clicar($("[data-filtro-opcao=situacao]")); // o select aparece ao escolher no menu
     const sel = async (s: string, v: string) => act(async () => {
       const el = $(s) as HTMLSelectElement;
       Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(el, v);
@@ -182,6 +182,7 @@ describe("período, busca e filtros (na URL)", () => {
     });
     await sel("[data-filtro-situacao]", "transmissao");
     expect(ultimaUrl()).toContain("situacao=transmissao");
+    await clicar($("[data-mais-filtros]")); await clicar($("[data-filtro-opcao=ambiente]"));
     await sel("[data-filtro-ambiente]", "PRODUCAO");
     expect(ultimaUrl()).toContain("ambiente=PRODUCAO");
     expect($$("[data-filtro-situacao] option").map(txt)).toEqual(["Todas as situações", "Em transmissão", "Emitidas", "Com falha", "Canceladas"]);

@@ -54,7 +54,8 @@ describe("lista de OS: barra enxuta", () => {
     await montar();
     expect(txt($("[data-mes-rotulo]"))).toBe("Todo o período");
     expect($<HTMLButtonElement>("[data-mes-anterior]")!.disabled).toBe(true);
-    expect($<HTMLInputElement>("[data-busca]")!.placeholder).toBe("Pesquisar no período selecionado");
+    expect($<HTMLInputElement>("[data-busca]")!.placeholder).toBe("Pesquisar");
+    expect(document.body.textContent).toContain("Pesquisar no período selecionado"); // o rótulo em cima do campo
     expect($("[data-painel-filtros]")).toBeNull();
     await tecla("t");
     expect(ultimaUrl()).toBe("/ordens?periodo=hoje");
@@ -66,10 +67,11 @@ describe("lista de OS: barra enxuta", () => {
     expect(ultimaUrl()).toBe("/ordens?periodo=hoje&ref=2026-11-02");
   });
 
-  it("'Mais filtros' abre os chips de status/prioridade e os demais filtros; 'Limpar filtros' zera os filtros e a busca, não o período", async () => {
+  it("os filtros ativos aparecem sozinhos; 'Mais filtros' lista os demais; 'Limpar filtros' zera os filtros e a busca, não o período", async () => {
     await montar("periodo=semana&status=ABERTA,AGENDADA&busca=split&clienteId=c1");
     expect(txt($("[data-filtros-ativos]"))).toBe("2"); // status + clienteId (a busca não conta)
-    await clicar($("[data-mais-filtros]"));
+    expect($$("[data-filtro-caixa]").map((c) => c.getAttribute("data-filtro-caixa"))).toEqual(["status", "clienteId"]); // os ativos já aparecem
+    await clicar($("[data-mais-filtros]")); await clicar($("[data-filtro-opcao=prioridade]")); // e a prioridade entra pelo menu
     const chips = $$("[data-painel-filtros] button[aria-pressed]");
     expect(chips.length).toBeGreaterThan(8);
     expect(chips.filter((c) => c.getAttribute("aria-pressed") === "true").map(txt)).toEqual(["Aberta", "Agendada"]);
