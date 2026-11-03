@@ -92,6 +92,7 @@ function semear() {
       { id: "c1", empresaId: "e1", nome: "Cliente Velho", tipoPessoa: "JURIDICA", cpfCnpj: "12345678000199", tabelaPrecoId: "tp-velha", ativo: true },
       { id: "c2", empresaId: "e1", nome: "Belma", tipoPessoa: "JURIDICA", cpfCnpj: "98765432000188", tabelaPrecoId: "tp-contrato", ativo: true },
       { id: "c3", empresaId: "e1", nome: "Sem tabela", tipoPessoa: "JURIDICA", cpfCnpj: "11222333000144", tabelaPrecoId: null, ativo: true },
+      { id: "c4", empresaId: "e1", nome: "Inativo da Belma", tipoPessoa: "JURIDICA", cpfCnpj: "44555666000177", tabelaPrecoId: "tp-contrato", ativo: false },
     ],
     termoReferenciaTemplate: [
       { id: "tr1", empresaId: "e1", nome: "Contrato anual", descricao: "PMOC", conteudo: "A CONTRATADA atende {{cliente_nome}}.", ativo: true },
@@ -328,13 +329,13 @@ describe("tabelas de preço", () => {
     expect(db.t.tabelaPrecoItem.filter((i) => i.tabelaId === "tp-contrato")).toHaveLength(1);
   });
 
-  it("cliente ligado a tabela inativa: o preço volta para a Padrão e a resposta diz qual estava ligada", async () => {
+  it("cliente ligado a tabela inativa: catálogo padrão (sem tabela) e a resposta diz qual estava ligada; cliente sem tabela NÃO cai na “Padrão” de ninguém", async () => {
     const efetiva = () => import("@/app/api/clientes/[id]/tabela-preco/route");
     const r = (await chamar(efetiva, "GET", { id: "c1" })).json;
-    expect(r).toMatchObject({ id: "tp-padrao", nome: "Padrão", vinculadaInativa: { id: "tp-velha", nome: "Tabela 2023" } });
-    expect(r.itens.s1.valorFinal).toBe(90);
+    expect(r).toEqual({ id: null, nome: null, tipo: null, precosBloqueados: false, itens: null, vinculadaInativa: { id: "tp-velha", nome: "Tabela 2023" } });
     expect((await chamar(efetiva, "GET", { id: "c2" })).json).toMatchObject({ id: "tp-contrato", vinculadaInativa: null });
-    expect((await chamar(efetiva, "GET", { id: "c3" })).json).toMatchObject({ id: "tp-padrao", vinculadaInativa: null });
+    // Sem tabela: null = catálogo padrão. Antes vinha a tabela de tipo "Padrão" (tp-padrao), com o s1 a 90
+    expect((await chamar(efetiva, "GET", { id: "c3" })).json).toBeNull();
     // Reativar volta a valer a tabela do cliente
     await chamar(item, "PATCH", { ...P, id: "tp-velha" }, { ativo: true });
     expect((await chamar(efetiva, "GET", { id: "c1" })).json).toMatchObject({ id: "tp-velha", vinculadaInativa: null });
@@ -363,12 +364,14 @@ describe("tabelas de preço", () => {
     expect(html("")).toContain("Contrato Belma");
   });
 
-  it("impacto: clientes ativos que passam a usar a Padrão; única Padrão avisa", async () => {
+  it("impacto: clientes ativos que passam a valer o catálogo padrão (nenhuma tabela empurra para outra)", async () => {
     const a = (await chamar(impacto, "GET", { ...P, id: "tp-contrato" })).json;
-    expect(a.usos).toEqual([{ rotulo: "1 cliente ativo", total: 1 }]);
-    expect(a.avisos[0]).toMatch(/1 cliente ativo usa esta tabela.*tabela Padrão \(“Padrão”\)/);
+    expect(a.usos).toEqual([{ rotulo: "1 cliente ativo", total: 1 }]); // o c4 (inativo) não conta
+    expect(a.avisos[0]).toMatch(/1 cliente ativo usa esta tabela.*passam a valer os preços padrão do catálogo/);
+    expect(a.avisos.join(" ")).not.toMatch(/tabela Padrão/);
     const b = (await chamar(impacto, "GET", { ...P, id: "tp-padrao" })).json;
-    expect(b.avisos.join(" ")).toMatch(/única tabela Padrão ativa/);
+    expect(b.usos).toEqual([]); // ninguém ligado
+    expect(b.avisos.join(" ")).not.toMatch(/Padrão|sem tabela/); // sumiu o "é a única tabela Padrão ativa"
   });
 });
 

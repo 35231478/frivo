@@ -34,13 +34,16 @@ export interface CatalogoItem {
   valorPadrao?: unknown; // Decimal | number | null
 }
 
+/**
+ * A tabela de preços do cliente (de /api/clientes/{id}/tabela-preco). Só existe quando o cliente tem tabela
+ * ATIVA: o seletor mostra os itens dela (cadeado abre o catálogo todo) com o preço dela. Sem tabela, o
+ * seletor mostra o catálogo padrão da empresa com o preço padrão de cada item.
+ */
 export interface TabelaPrecoCliente {
   nome: string;
   tipo: string;
   precosBloqueados: boolean;
   itens: Record<string, { valorFinal: number; bloqueado: boolean; tipoPreco: string; descontoPercent: number | null }>;
-  /** A tabela do cliente foi inativada: o preço veio da tabela Padrão */
-  vinculadaInativa?: { id: string; nome: string } | null;
 }
 
 /** Cadastro rápido de item de catálogo (produto/serviço) direto da busca. */
@@ -391,6 +394,8 @@ function BuscaCatalogo({
   const [aberto, setAberto] = useState(false);
   const [mostrarTodos, setMostrarTodos] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  // Trocou o cliente (outra tabela, ou nenhuma): o cadeado volta a fechar
+  useEffect(() => { setMostrarTodos(false); }, [tabela]);
 
   useEffect(() => {
     function onClick(e: MouseEvent) {

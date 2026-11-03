@@ -320,10 +320,9 @@ const tabelasPreco: RegrasCadastro = {
   }),
   async impacto(t, empresaId) {
     const clientes = await prisma.cliente.count({ where: { empresaId, tabelaPrecoId: t.id, ativo: true } });
-    const outraPadrao = await prisma.tabelaPreco.findFirst({ where: { empresaId, tipo: "PADRAO", ativo: true, id: { not: t.id } }, select: { nome: true } });
     const avisos: string[] = [];
-    if (clientes) avisos.push(`${pl(clientes, "cliente ativo usa", "clientes ativos usam")} esta tabela. Ao inativar, ${clientes === 1 ? "ele continua ligado" : "eles continuam ligados"} a ela (aparece como “inativa” no cadastro do cliente), mas os preços passam a vir da tabela Padrão${outraPadrao ? ` (“${outraPadrao.nome}”)` : ""} até você escolher outra.`);
-    if (t.tipo === "PADRAO" && !outraPadrao) avisos.push("É a única tabela Padrão ativa: clientes sem tabela própria ficam sem tabela (valem os preços do catálogo).");
+    // Uma tabela só vale para os clientes ligados a ela: inativar não empurra ninguém para outra tabela
+    if (clientes) avisos.push(`${pl(clientes, "cliente ativo usa", "clientes ativos usam")} esta tabela. Ao inativar, ${clientes === 1 ? "ele continua ligado" : "eles continuam ligados"} a ela (aparece como “inativa” no cadastro do cliente), mas passam a valer os preços padrão do catálogo até você escolher outra tabela ou reativá-la.`);
     return { usos: [{ rotulo: pl(clientes, "cliente ativo", "clientes ativos"), total: clientes }], avisos };
   },
 };

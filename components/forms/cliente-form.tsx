@@ -580,12 +580,12 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
       <Painel ativo={aba === "faturamento"}>
         <FormSection title="Comercial" icon={<DollarSign className="w-3.5 h-3.5" />}>
           <FormGrid>
-            <FormField label="Tabela de preços" hint="Sem seleção, usa a tabela Padrão da empresa">
+            <FormField label="Tabela de preços" hint="Sem tabela, valem os preços padrão do catálogo.">
               {/* Só ativas para nova escolha; a do cliente continua visível mesmo inativa (“(inativa)”) */}
-              <SeletorCadastro entidade="tabelas-preco" valor={tabelaPrecoId} onChange={(v) => setTabelaPrecoId(v)} vazio="Padrão (automático)" itens={tabelasPreco.itens} />
+              <SeletorCadastro entidade="tabelas-preco" valor={tabelaPrecoId} onChange={(v) => setTabelaPrecoId(v)} vazio="Sem tabela (preços do catálogo)" itens={tabelasPreco.itens} />
               {tabelaInativa && (
                 <p className="text-xs text-atencao-texto mt-1" data-aviso-tabela-inativa>
-                  “{tabelaInativa.nome}” está inativa: os preços deste cliente estão vindo da tabela Padrão. Escolha outra tabela ou reative-a.
+                  “{tabelaInativa.nome}” está inativa: para este cliente valem os preços padrão do catálogo. Escolha outra tabela ou reative-a.
                 </p>
               )}
             </FormField>
