@@ -62,7 +62,7 @@ export function BarraFiltros({ periodo, busca, filtros = [], paramBusca = "q", n
   const visiveis = filtros.filter((f) => ativo(f) || escolhidos.includes(f.id));
   const escolher = (f: FiltroDef) => {
     setMenu(false);
-    if (!visiveis.includes(f)) setEscolhidos((e) => [...e, f.id]);
+    setEscolhidos((e) => [...e, f.id]); // repetido não duplica na tela: `visiveis` filtra pela lista dos filtros
   };
   const tirar = (f: FiltroDef) => {
     setEscolhidos((e) => e.filter((id) => id !== f.id));
