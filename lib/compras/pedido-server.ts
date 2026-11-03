@@ -5,7 +5,7 @@
  */
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { anoBR, chaveDiaCivil } from "@/lib/fuso";
+import { chaveDiaCivil } from "@/lib/fuso";
 import { permissoesDoUsuario } from "@/lib/permissoes";
 import { proximoNumero } from "@/lib/numeracao-server";
 import {
@@ -16,11 +16,11 @@ import {
 type Tx = Prisma.TransactionClient | typeof prisma;
 
 /**
- * Próximo número do PC ("PCI-2026-0147") pelo contador da empresa (Configurações › Numeração de
+ * Próximo número do PC ("PCI-147") pelo contador da empresa (Configurações › Numeração de
  * documentos), sob trava: dentro da transação recebida ou numa curta só para isso. Numeração contínua.
  */
-export function proximoNumeroPedido(empresaId: string, ano = anoBR(), db: Tx = prisma): Promise<string> {
-  return db === prisma ? prisma.$transaction((tx) => proximoNumero(tx, empresaId, "pedido_compra", ano)) : proximoNumero(db as Prisma.TransactionClient, empresaId, "pedido_compra", ano);
+export function proximoNumeroPedido(empresaId: string, db: Tx = prisma): Promise<string> {
+  return db === prisma ? prisma.$transaction((tx) => proximoNumero(tx, empresaId, "pedido_compra")) : proximoNumero(db as Prisma.TransactionClient, empresaId, "pedido_compra");
 }
 
 /** Uma linha no histórico do pedido */

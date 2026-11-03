@@ -275,8 +275,8 @@ describe("confirmar e lançar: as contas saem do rascunho", () => {
     expect(r.json.contas.map((c: any) => [c.valor, c.boleto])).toEqual([[874.65, true], [874.65, false]]);
     const cs = contasDa(id);
     expect(cs.map((c) => [c.numero, c.valorTotal, c.dataVencimento.toISOString(), c.descricao, c.categoriaId, c.centroCustoId, c.formaPagamento, c.linhaDigitavel, c.codigoBarrasBoleto])).toEqual([
-      [`CP-${ANO}-0008`, 874.65, "2026-11-20T12:00:00.000Z", "NF 4521/1 — parcela 1/2", "catMat", "ccObra", "BOLETO", BOLETO_CAIXA.linha, BOLETO_CAIXA.barras],
-      [`CP-${ANO}-0009`, 874.65, "2026-12-20T12:00:00.000Z", "NF 4521/1 — parcela 2/2", "catMat", "ccObra", "BOLETO", null, null],
+      ["CP-8", 874.65, "2026-11-20T12:00:00.000Z", "NF 4521/1 — parcela 1/2", "catMat", "ccObra", "BOLETO", BOLETO_CAIXA.linha, BOLETO_CAIXA.barras],
+      ["CP-9", 874.65, "2026-12-20T12:00:00.000Z", "NF 4521/1 — parcela 2/2", "catMat", "ccObra", "BOLETO", null, null],
     ]);
     expect(cs[0].observacao).toBe(`Parcela 1/2 da NF-e ${CHAVE1} (parcelas ajustadas no lançamento)`);
     expect(cs.every((c) => c.status === "PENDENTE" && c.saldoRestante === c.valorTotal && c.fornecedorId === forn().id)).toBe(true);

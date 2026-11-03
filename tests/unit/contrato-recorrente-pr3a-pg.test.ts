@@ -142,7 +142,7 @@ describe.skipIf(!URL_PG)("Contrato recorrente PR3-A — periodicidade e rotina d
     const [medM] = await medicoesDo(m.id);
     expect([medM.descricao, Number(medM.valorTotal), medM.itens.map((i: any) => [i.descricao, Number(i.valorTotal)]), ymd(medM.dataVencimento)])
       .toEqual(["Medição mensal 11/2026", 1000, [[`Contrato ${m.numero} — mensalidade`, 1000]], "2026-11-10"]);
-    expect(medM.numero).toBe("MED-2026-0001");
+    expect(medM.numero).toBe("MED-1");
     // Dezembro: os dois cobram; a do trimestral descreve o período
     const dez = await chamar("medicoes/gerar-mes", "POST", {}, { mes: 12, ano: 2026 });
     expect([dez.json.criadas, dez.json.semCobrancaNoMes]).toEqual([2, []]);

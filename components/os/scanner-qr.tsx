@@ -70,7 +70,7 @@ export function ScannerQR({ onFechar, onLer }: { onFechar: () => void; onLer: (v
           <div className="space-y-2 pt-1">
             <label className="text-xs font-medium text-ink-muted">Entrada manual (código ou link do QR)</label>
             <div className="flex gap-2">
-              <Input value={manual} onChange={(e) => setManual(e.target.value)} placeholder="Ex: QR-2026-0001" className="flex-1" />
+              <Input value={manual} onChange={(e) => setManual(e.target.value)} placeholder="Ex: QR-104" className="flex-1" />
               <Button type="button" onClick={() => manual.trim() && onLer(manual.trim())} disabled={!manual.trim()}>Confirmar</Button>
             </div>
           </div>

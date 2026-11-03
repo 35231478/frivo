@@ -128,18 +128,18 @@ describe.skipIf(!URL_PG)("Proposta corporativa: numeração, padrões, destinat�
     await criarDireto("e1", `ORC-${ANO - 1}-20000`); // numeração contínua: o ano passado CONTA (segue do maior, não reinicia)
     let r = await chamar("orcamentos", "POST", { clienteId: "c2", servicos: [ITEM], produtos: [] });
     expect(r.status).toBe(201);
-    expect(r.json.codigo).toBe(`ORC-${ANO}-20001`);
+    expect(r.json.codigo).toBe("ORC-20001");
     r = await chamar("orcamentos", "POST", { clienteId: "c2", servicos: [ITEM], produtos: [] });
-    expect(r.json.codigo).toBe(`ORC-${ANO}-20002`);
+    expect(r.json.codigo).toBe("ORC-20002");
     // Outra empresa começa do 1
     logar(permissoesTotais(), "e2", "u2");
     r = await chamar("orcamentos", "POST", { clienteId: "c9", servicos: [ITEM], produtos: [] });
-    expect(r.json.codigo).toBe(`ORC-${ANO}-0001`);
+    expect(r.json.codigo).toBe("ORC-1");
     logar();
     // Excluir o do meio (o maior continua) não faz o número voltar
     await prisma.orcamento.delete({ where: { codigo_empresaId: { codigo: `ORC-${ANO}-9999`, empresaId: "e1" } } });
     r = await chamar("orcamentos", "POST", { clienteId: "c2", servicos: [ITEM], produtos: [] });
-    expect(r.json.codigo).toBe(`ORC-${ANO}-20003`);
+    expect(r.json.codigo).toBe("ORC-20003");
   });
 
   it("Configurações › Orçamentos: salva os padrões normalizados; validade fora de 1–365 recusada; sem gerenciar = 403", async () => {

@@ -57,7 +57,7 @@ async function criarFatura(o: Origem): Promise<ResultadoFaturar> {
     if (ja) return { tipo: "existente" as const, fatura: { id: ja.medicao.id, numero: ja.medicao.numero } };
 
     // Número pelo contador da empresa, sob trava (a mesma de toda medição/fatura)
-    const numero = await proximoNumero(tx, o.empresaId, "medicao", agora.ano);
+    const numero = await proximoNumero(tx, o.empresaId, "medicao");
     const criada = await tx.medicao.create({
       data: {
         empresaId: o.empresaId, clienteId: o.clienteId, numero, tipo: "ADICIONAL", avulsa: true,

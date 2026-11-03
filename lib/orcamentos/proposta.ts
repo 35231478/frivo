@@ -8,15 +8,10 @@ const t = (v: string | null | undefined) => (v ?? "").trim();
 
 // ───────────────────────── Número formal ─────────────────────────
 
-/** "ORC-2026-0147" → "2026-0147" (o "Orçamento Nº" do documento). Código fora do padrão sai como está. */
+/** O "Orçamento Nº" do documento: "ORC-3358" → "3358" (formato novo); "ORC-2026-0147" → "2026-0147" (antigo). Fora do padrão sai como está. */
 export function numeroFormalOrcamento(codigo: string): string {
-  const m = /^ORC-(\d{4})-(\d+)$/.exec(codigo.trim());
-  return m ? `${m[1]}-${m[2]}` : codigo;
-}
-
-/** Código do orçamento a partir do ano e do sequencial: ORC-2026-0147 (4 dígitos, cresce depois de 9999). */
-export function codigoOrcamento(ano: number, sequencial: number): string {
-  return `ORC-${ano}-${String(sequencial).padStart(4, "0")}`;
+  const m = /^ORC-((?:\d{4}-)?\d+)$/.exec(codigo.trim());
+  return m ? m[1] : codigo;
 }
 
 // ───────────────────────── Normas ─────────────────────────

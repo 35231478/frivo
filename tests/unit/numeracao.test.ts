@@ -16,34 +16,41 @@ describe("tipos e formato", () => {
     expect(NUMERACOES.orcamento).toMatchObject({ tabela: "orcamentos", coluna: "codigo" });
     expect(Object.keys(NUMERACOES).some((t) => /nfs|nota/.test(t))).toBe(false);
   });
-  it("formata com o ano como rótulo e zeros à esquerda (3 no contrato, 4 nos demais); acima disso o número só cresce", () => {
-    expect(formatarNumero("orcamento", 3358, 2026)).toBe("ORC-2026-3358");
-    expect(formatarNumero("orcamento", 7, 2026)).toBe("ORC-2026-0007");
-    expect(formatarNumero("contrato", 7, 2026)).toBe("CT-2026-007");
-    expect(formatarNumero("os", 12345, 2027)).toBe("OS-2027-12345");
-    expect(formatarNumero("medicao", 42, 2025)).toBe("MED-2025-0042");
+  it("formata sem ano e sem zeros à esquerda: PREFIXO-NÚMERO", () => {
+    expect(formatarNumero("orcamento", 3358)).toBe("ORC-3358");
+    expect(formatarNumero("orcamento", 7)).toBe("ORC-7");
+    expect(formatarNumero("contrato", 18)).toBe("CT-18");
+    expect(formatarNumero("os", 12345)).toBe("OS-12345");
+    expect(formatarNumero("medicao", 21)).toBe("MED-21");
+    expect(formatarNumero("chamado", 902)).toBe("CHM-902");
   });
 });
 
 describe("ler o sequencial de um número gravado", () => {
-  it("aceita o formato do tipo (qualquer ano) e a parcela '/n' da conta a receber; recusa outros prefixos e lixo", () => {
+  it("aceita o formato novo (PREFIXO-N) e o antigo (PREFIXO-AAAA-NNNN, qualquer ano) e a parcela '/n'; recusa outros prefixos e lixo", () => {
+    expect(sequencialDe("orcamento", "ORC-3358")).toBe(3358);
     expect(sequencialDe("orcamento", "ORC-2026-0147")).toBe(147);
     expect(sequencialDe("orcamento", "ORC-2024-12345")).toBe(12345);
     expect(sequencialDe("conta_receber", "CR-2026-0042/3")).toBe(42);
+    expect(sequencialDe("conta_receber", "CR-112/2")).toBe(112);
     expect(sequencialDe("contrato", "CT-2026-001")).toBe(1);
+    expect(sequencialDe("contrato", "CT-18")).toBe(18);
     expect(sequencialDe("conta_receber", "CT-2026-001/202611")).toBeNull(); // cobrança de contrato: não é CR-
     expect(sequencialDe("os", "CHM-2026-0001")).toBeNull();
     expect(sequencialDe("os", "OS-2026-")).toBeNull();
-    expect(sequencialDe("os", "OS-26-0001")).toBeNull();
+    expect(sequencialDe("os", "OS-")).toBeNull();
+    expect(sequencialDe("os", "OS-26-0001")).toBeNull(); // 2 dígitos não é ano nem número solto (seria OS-26-… com segmento a mais)
     expect(sequencialDe("os", null)).toBeNull();
     expect(sequencialDe("os", "")).toBeNull();
   });
-  it("a regex do SQL é a mesma do parse (prefixo-4 dígitos-1 a 9 dígitos, parcela opcional)", () => {
-    expect(regexNumero("conta_receber")).toBe("^CR-[0-9]{4}-[0-9]{1,9}(/[0-9]+)?$");
+  it("a regex do SQL é a mesma do parse (prefixo, ano opcional de 4 dígitos, 1 a 9 dígitos, parcela opcional)", () => {
+    expect(regexNumero("conta_receber")).toBe("^CR-([0-9]{4}-)?[0-9]{1,9}(/[0-9]+)?$");
     const re = new RegExp(regexNumero("os"));
     expect(re.test("OS-2026-0001")).toBe(true);
+    expect(re.test("OS-9267")).toBe(true);
     expect(re.test("OS-2026-1234567890")).toBe(false);
     expect(re.test("OSX-2026-0001")).toBe(false);
+    expect(re.test("OSX-1")).toBe(false);
   });
 });
 

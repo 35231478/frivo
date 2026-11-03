@@ -167,8 +167,7 @@ async function contaDaMedicao(tx: Prisma.TransactionClient, medicaoId: string) {
     return conta;
   }
 
-  const ano = medicao.ano ?? partesBR().ano;
-  const numero = await proximoNumeroContaReceber(medicao.empresaId, ano, tx);
+  const numero = await proximoNumeroContaReceber(medicao.empresaId, tx);
 
   return tx.contaReceber.create({
     data: {
@@ -192,8 +191,8 @@ async function contaDaMedicao(tx: Prisma.TransactionClient, medicaoId: string) {
  * Próximo número de conta a receber (CR-AAAA-NNNN) pelo contador da empresa, sob trava. Com `db` =
  * transação, dentro dela; com o prisma solto, numa transação curta só para isso.
  */
-export function proximoNumeroContaReceber(empresaId: string, ano: number, db: Db = prisma) {
-  return db === prisma ? prisma.$transaction((tx) => proximoNumero(tx, empresaId, "conta_receber", ano)) : proximoNumero(db as Prisma.TransactionClient, empresaId, "conta_receber", ano);
+export function proximoNumeroContaReceber(empresaId: string, db: Db = prisma) {
+  return db === prisma ? prisma.$transaction((tx) => proximoNumero(tx, empresaId, "conta_receber")) : proximoNumero(db as Prisma.TransactionClient, empresaId, "conta_receber");
 }
 
 /**
@@ -215,7 +214,7 @@ export async function gerarContaReceberDoOrcamento(orcamentoId: string) {
       if (orcamento.tipo === "PROPOSTA_CONTRATO") return null;
       if (await orcamentoJaFaturado(orcamentoId, tx)) return null;
 
-      const numero = await proximoNumeroContaReceber(orcamento.empresaId, partesBR().ano, tx);
+      const numero = await proximoNumeroContaReceber(orcamento.empresaId, tx);
 
       return tx.contaReceber.create({
         data: {
@@ -330,8 +329,8 @@ export async function criarMedicaoDeRelatorio(relatorioId: string) {
       "PC_RECEBIDO";
 
     const valor = relatorio.valorFinanceiro ? Number(relatorio.valorFinanceiro) : 0;
-    // Número pelo contador da empresa, sob trava (rótulo = ano de referência do relatório)
-    const numero = await proximoNumero(tx, relatorio.empresaId, "medicao", relatorio.anoReferencia);
+    // Número pelo contador da empresa, sob trava
+    const numero = await proximoNumero(tx, relatorio.empresaId, "medicao");
     const vencimento = calcularVencimento(cliente.diaFaturamento, relatorio.mesReferencia, relatorio.anoReferencia);
 
     const medicao = await tx.medicao.create({
@@ -647,8 +646,8 @@ export async function encerrarFinanceiroDoContrato(contratoId: string, motivo = 
 // ─────────────────────────────────────────────
 
 /** Próximo número de conta a pagar (CP-AAAA-NNNN) pelo contador da empresa, sob trava (ver proximoNumeroContaReceber) */
-export function proximoNumeroContaPagar(empresaId: string, ano: number, db: Db = prisma) {
-  return db === prisma ? prisma.$transaction((tx) => proximoNumero(tx, empresaId, "conta_pagar", ano)) : proximoNumero(db as Prisma.TransactionClient, empresaId, "conta_pagar", ano);
+export function proximoNumeroContaPagar(empresaId: string, db: Db = prisma) {
+  return db === prisma ? prisma.$transaction((tx) => proximoNumero(tx, empresaId, "conta_pagar")) : proximoNumero(db as Prisma.TransactionClient, empresaId, "conta_pagar");
 }
 
 /** Recalcula valorPago, saldoRestante, status e dataPagamento a partir dos pagamentos. */

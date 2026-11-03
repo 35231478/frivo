@@ -2,7 +2,7 @@ import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { anoBR, chaveDiaCivil, relogioBR } from "@/lib/fuso";
+import { chaveDiaCivil, relogioBR } from "@/lib/fuso";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -43,30 +43,6 @@ export function formatarTelefone(valor: string): string {
     return numeros.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
   }
   return numeros.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
-}
-
-export function gerarNumeroOS(sequencial: number): string {
-  return `OS-${anoBR()}-${String(sequencial).padStart(4, "0")}`;
-}
-
-export function gerarNumeroContrato(sequencial: number): string {
-  return `CT-${anoBR()}-${String(sequencial).padStart(3, "0")}`;
-}
-
-export function gerarNumeroMedicao(sequencial: number, ano = anoBR()): string {
-  return `MED-${ano}-${String(sequencial).padStart(4, "0")}`;
-}
-
-export function gerarNumeroContaReceber(sequencial: number, ano = anoBR()): string {
-  return `CR-${ano}-${String(sequencial).padStart(4, "0")}`;
-}
-
-export function gerarNumeroContaPagar(sequencial: number, ano = anoBR()): string {
-  return `CP-${ano}-${String(sequencial).padStart(4, "0")}`;
-}
-
-export function gerarNumeroRelatorio(sequencial: number, ano = anoBR()): string {
-  return `REL-${ano}-${String(sequencial).padStart(4, "0")}`;
 }
 
 export const MESES_PT = [

@@ -150,6 +150,17 @@ describe("isolamento por empresa", () => {
     expect(JSON.stringify(r1)).not.toContain("SIGILOSO");
   });
 
+  it("número no formato novo (OS-12) acha pela digitação curta '12' e pelo número inteiro; o antigo (0107) continua achando", async () => {
+    banco.ordemServico.push(osBase("e1", "OS-12", "Cliente do formato novo"));
+    const curto: any = await executarFerramenta("consultar_os", { numero: "12" }, ctx(permissoesTotais(), "e1", "ADMIN"));
+    expect(curto.ok).toBe(true);
+    expect(curto.dados.cliente).toContain("formato novo");
+    const inteiro: any = await executarFerramenta("consultar_os", { numero: "OS-12" }, ctx(permissoesTotais(), "e1", "ADMIN"));
+    expect(inteiro.dados.cliente).toContain("formato novo");
+    const antigo: any = await executarFerramenta("consultar_os", { numero: "107" }, ctx(permissoesTotais(), "e1", "ADMIN"));
+    expect(antigo.dados.cliente).toContain("empresa 1");
+  });
+
   it("OS que só existe em outra empresa → 'não encontrada'", async () => {
     const r: any = await executarFerramenta("consultar_os", { numero: "OS-2026-0500" }, ctx(permissoesTotais(), "e1", "ADMIN"));
     expect(r.dados.encontrada).toBe(false);

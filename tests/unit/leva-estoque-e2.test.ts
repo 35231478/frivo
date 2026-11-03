@@ -349,13 +349,13 @@ describe("lançar a nota", () => {
     const fornecedorId = T("notaCompra")[0].fornecedorId;
     const novas = T("contaPagar").filter((c) => c.notaCompraId === id);
     expect(novas.map((c) => [c.numero, c.valorTotal, c.saldoRestante, c.valorPago, c.status, c.dataVencimento.toISOString(), c.descricao])).toEqual([
-      [`CP-${ANO}-0008`, 583.1, 583.1, 0, "PENDENTE", "2026-11-14T12:00:00.000Z", "NF 4521/1 — parcela 1/3"],
-      [`CP-${ANO}-0009`, 583.1, 583.1, 0, "PENDENTE", "2026-12-14T12:00:00.000Z", "NF 4521/1 — parcela 2/3"],
-      [`CP-${ANO}-0010`, 583.1, 583.1, 0, "PENDENTE", "2027-01-13T12:00:00.000Z", "NF 4521/1 — parcela 3/3"],
+      ["CP-8", 583.1, 583.1, 0, "PENDENTE", "2026-11-14T12:00:00.000Z", "NF 4521/1 — parcela 1/3"],
+      ["CP-9", 583.1, 583.1, 0, "PENDENTE", "2026-12-14T12:00:00.000Z", "NF 4521/1 — parcela 2/3"],
+      ["CP-10", 583.1, 583.1, 0, "PENDENTE", "2027-01-13T12:00:00.000Z", "NF 4521/1 — parcela 3/3"],
     ]);
     expect(novas.every((c) => c.empresaId === "e1" && c.fornecedorId === fornecedorId && c.fornecedor === "FRIGELAR COMERCIO E DISTRIBUICAO S.A." && c.fornecedorCnpj === "11222333000181" && c.pedidoCompraId === null)).toBe(true);
     expect(novas[0].observacao).toBe(`Duplicata 001 da NF-e ${CHAVE1}`);
-    expect(r.json.contas.map((c: any) => [c.numero, c.valor])).toEqual([[`CP-${ANO}-0008`, 583.1], [`CP-${ANO}-0009`, 583.1], [`CP-${ANO}-0010`, 583.1]]);
+    expect(r.json.contas.map((c: any) => [c.numero, c.valor])).toEqual([["CP-8", 583.1], ["CP-9", 583.1], ["CP-10", 583.1]]);
   });
 
   it("aprendizado: a 2ª nota do mesmo fornecedor já vem com o item conhecido vinculado; sem duplicata = 1 conta à vista", async () => {
@@ -530,7 +530,7 @@ describe("telas", () => {
     const h = await detalhe(id);
     expect(h).toContain("data-resultado");
     expect(h).toContain("Nota lançada: 3 entrada(s) no estoque e 3 conta(s) a pagar.");
-    expect(attrs(h, "data-conta")).toEqual([`CP-${ANO}-0008`, `CP-${ANO}-0009`, `CP-${ANO}-0010`]);
+    expect(attrs(h, "data-conta")).toEqual(["CP-8", "CP-9", "CP-10"]);
     expect(h).toMatch(/R\$\s12,3333/); // custo da NF com 4 casas (espaço do R$ é não separável)
     expect(h).toContain("vence 14/11/2026");
     expect(h).toContain("data-conversoes");

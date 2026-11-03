@@ -21,7 +21,7 @@ type QrItem = {
 interface Props {
   lista: QrItem[];
   equipamentosLivres: { id: string; nome: string }[];
-  /** Próximo código pelo contador da empresa (Configurações › Numeração), ex.: QR-2026-0104 */
+  /** Próximo código pelo contador da empresa (Configurações › Numeração), ex.: QR-104 */
   proximoCodigo: string;
 }
 
@@ -186,12 +186,13 @@ function ModalGerar({ onClose, onPronto, proximoCodigo }: { onClose: () => void;
   // O próximo vem do servidor (contador de Configurações › Numeração): a prévia só continua a sequência
   const proximo = useMemo(() => {
     const partes = proximoCodigo.split("-");
-    return { prefixo: `${partes[0]}-${partes[1]}-`, seq: Number(partes[2]) || 1 };
+    const seq = Number(partes.pop()) || 1; // o sequencial é o que vem depois do último hífen (QR-104)
+    return { prefixo: `${partes.join("-")}-`, seq };
   }, [proximoCodigo]);
 
   const previa = useMemo(() => {
     const n = Math.min(Math.max(quantidade, 1), 3);
-    return Array.from({ length: n }, (_, i) => `${proximo.prefixo}${String(proximo.seq + i).padStart(4, "0")}`);
+    return Array.from({ length: n }, (_, i) => `${proximo.prefixo}${proximo.seq + i}`);
   }, [quantidade, proximo]);
 
   async function gerar() {
@@ -224,7 +225,7 @@ function ModalGerar({ onClose, onPronto, proximoCodigo }: { onClose: () => void;
           <p className="text-ink-muted text-xs mb-1.5">Os códigos gerados serão:</p>
           <ul className="font-mono text-ink space-y-0.5">
             {previa.map((c) => <li key={c}>{c}</li>)}
-            {quantidade > 3 && <li className="text-ink-subtle">… até {`${proximo.prefixo}${String(proximo.seq + quantidade - 1).padStart(4, "0")}`}</li>}
+            {quantidade > 3 && <li className="text-ink-subtle">… até {`${proximo.prefixo}${proximo.seq + quantidade - 1}`}</li>}
           </ul>
         </div>
       </div>

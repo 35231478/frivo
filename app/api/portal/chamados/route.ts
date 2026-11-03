@@ -6,7 +6,6 @@ import { chamadoPortalSchema } from "@/lib/validations";
 import { validarDataUrl, type ArquivoValidado } from "@/lib/anexos-server";
 import { TIPOS_IMAGEM } from "@/lib/anexos";
 import { conferirBloqueio, ipDaRequisicao, registrarTentativa } from "@/lib/acesso/limite";
-import { anoBR } from "@/lib/fuso";
 import { proximoNumero } from "@/lib/numeracao-server";
 
 const MAP_URGENCIA: Record<string, "NORMAL" | "ALTA" | "CRITICO"> = {
@@ -65,15 +64,13 @@ export async function POST(req: NextRequest) {
   }) ?? await prisma.usuario.findFirst({ where: { empresaId, ativo: true }, select: { id: true } });
   if (!gestor) return NextResponse.json({ erro: "Empresa sem usuário responsável" }, { status: 400 });
 
-  const ano = anoBR();
-
   const descricao = (d.tipoProblema ? `[${d.tipoProblema}] ` : "") + d.descricao;
 
   // OS e chamado numerados pelo contador da empresa (sob trava, na mesma transação do INSERT):
   // nunca "total + 1", que repetia número depois de uma exclusão
   const os = await prisma.$transaction(async (tx) => {
-  const numero = await proximoNumeroOs(tx, empresaId, ano);
-  const chamadoNumero = await proximoNumero(tx, empresaId, "chamado", ano);
+  const numero = await proximoNumeroOs(tx, empresaId);
+  const chamadoNumero = await proximoNumero(tx, empresaId, "chamado");
   return tx.ordemServico.create({
     data: {
       empresaId,

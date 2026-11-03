@@ -68,7 +68,7 @@ export async function POST(_: NextRequest, { params }: Params) {
     const travadas = await travarParaFaturar(tx, { osIds: [os.id] });
     if (travadas.os.length) return { id: travadas.os[0].medicao.id, jaExistia: true };
     // Número pelo contador da empresa, sob trava (nunca "total + 1", que repetia número)
-    const numero = await proximoNumero(tx, empresaId, "medicao", ano);
+    const numero = await proximoNumero(tx, empresaId, "medicao");
     const medicao = await tx.medicao.create({
       data: {
         empresaId,

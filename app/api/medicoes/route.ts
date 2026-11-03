@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { respostaRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { medicaoSchema } from "@/lib/validations";
 import { calcularTotaisMedicao } from "@/lib/medicao-helpers";
-import { anoBR, periodoInstanteBR } from "@/lib/fuso";
+import { periodoInstanteBR } from "@/lib/fuso";
 import { proximoNumero } from "@/lib/numeracao-server";
 
 export async function GET(req: NextRequest) {
@@ -80,7 +80,6 @@ export async function POST(req: NextRequest) {
     ]);
   } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
-  const ano = data.ano ?? anoBR();
   const tokenPublico = crypto.randomUUID();
 
   const totais = calcularTotaisMedicao(data.itens, data.descontoValor, data.descontoPercent);
@@ -107,7 +106,7 @@ export async function POST(req: NextRequest) {
     const ja = [...travadas.os, ...travadas.orcamentos][0];
     if (ja) return { conflito: `Um item desta medição já está faturado na medição ${ja.medicao.numero}. Cancele-a antes de faturar de novo.` };
     // Número pelo contador da empresa, sob trava, na mesma transação do INSERT
-    const numero = await proximoNumero(tx, empresaId, "medicao", ano);
+    const numero = await proximoNumero(tx, empresaId, "medicao");
     const medicao = await tx.medicao.create({
       data: {
         empresaId,

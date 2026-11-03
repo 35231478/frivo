@@ -45,8 +45,8 @@ export async function vencimentoDaMedicao(db: Db, m: { contratoId: string | null
   return calcularVencimento(m.cliente.diaFaturamento, m.mes, m.ano);
 }
 
-/** Próximo número MED-AAAA-NNNN pelo contador da empresa, sob trava até o fim da transação (rótulo = ano da competência) */
-const proximoNumeroMedicao = (tx: Prisma.TransactionClient, empresaId: string, ano: number) => proximoNumero(tx, empresaId, "medicao", ano);
+/** Próximo número MED-N pelo contador da empresa, sob trava até o fim da transação */
+const proximoNumeroMedicao = (tx: Prisma.TransactionClient, empresaId: string) => proximoNumero(tx, empresaId, "medicao");
 
 type Item = {
   tipo: "SERVICO" | "PRODUTO"; descricao: string; quantidade: number; valorUnitario: number; valorTotal: number;
@@ -156,7 +156,7 @@ export async function gerarMedicaoDeContratos(o: {
     const travadas = await travarParaFaturar(tx, { osIds: itens.map((i) => i.ordemServicoId), orcamentoIds: itens.map((i) => i.orcamentoId) });
     if (travadas.os.length || travadas.orcamentos.length) return { status: "item-faturado" };
 
-    const numero = await proximoNumeroMedicao(tx, empresaId, ano);
+    const numero = await proximoNumeroMedicao(tx, empresaId);
     const medicao = await tx.medicao.create({
       data: {
         empresaId, clienteId: cliente.id, contratoId: unico?.id ?? null, numero,

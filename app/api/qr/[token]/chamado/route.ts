@@ -7,7 +7,6 @@ import { conferirBloqueio, ipDaRequisicao, registrarTentativa } from "@/lib/aces
 import { validarDataUrl, type ArquivoValidado } from "@/lib/anexos-server";
 import { TIPOS_IMAGEM, MAX_FOTOS_CHAMADO } from "@/lib/anexos";
 import { z } from "zod";
-import { anoBR } from "@/lib/fuso";
 import { proximoNumero } from "@/lib/numeracao-server";
 
 type Params = { params: Promise<{ token: string }> };
@@ -101,7 +100,6 @@ export async function POST(req: NextRequest, { params }: Params) {
     (await prisma.usuario.findFirst({ where: { empresaId, ativo: true }, select: { id: true } }));
   if (!gestor) return NextResponse.json({ erro: "Empresa sem usuário responsável." }, { status: 400 });
 
-  const ano = anoBR();
 
   const contato = [`Solicitante: ${d.nome}`, d.email ? `E-mail: ${d.email}` : null, d.telefone ? `Telefone: ${d.telefone}` : null]
     .filter(Boolean)
@@ -112,8 +110,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   // OS e chamado numerados pelo contador da empresa (sob trava, na mesma transação do INSERT):
   // nunca "total + 1", que repetia número depois de uma exclusão
   const os = await prisma.$transaction(async (tx) => {
-  const numero = await proximoNumeroOs(tx, empresaId, ano);
-  const chamadoNumero = await proximoNumero(tx, empresaId, "chamado", ano);
+  const numero = await proximoNumeroOs(tx, empresaId);
+  const chamadoNumero = await proximoNumero(tx, empresaId, "chamado");
   return tx.ordemServico.create({
     data: {
       empresaId,

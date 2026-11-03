@@ -12,8 +12,8 @@ import { Pencil, ArrowLeft, Check } from "lucide-react";
 
 const SAMPLE: Record<string, string> = {
   cliente_nome: "João Silva", cliente_cnpj: "12.345.678/0001-90", valor: "R$ 1.250,00", vencimento: "10/07/2026",
-  dias_para_vencer: "3", dias_em_atraso: "5", descricao: "Manutenção preventiva", numero_os: "OS-2026-0001",
-  numero_orcamento: "ORC-2026-0001", numero_contrato: "CT-2026-001", link_boleto: "#", link_documento: "#", link_orcamento: "#",
+  dias_para_vencer: "3", dias_em_atraso: "5", descricao: "Manutenção preventiva", numero_os: "OS-9267",
+  numero_orcamento: "ORC-3358", numero_contrato: "CT-18", link_boleto: "#", link_documento: "#", link_orcamento: "#",
   empresa_nome: "Sua Empresa", empresa_telefone: "(11) 99999-0000", empresa_email: "contato@empresa.com.br",
   empresa_site: "www.empresa.com.br", mes_referencia: "Junho/2026", data_aprovacao: "01/07/2026",
   usuario_nome: "Maria Souza", link_definir_senha: "#", validade_convite: "72 horas", validade_link: "60 minutos",

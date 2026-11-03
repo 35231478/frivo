@@ -43,9 +43,9 @@ async function digitar(el: HTMLInputElement, valor: string) {
 const linha = (tipo: string) => $(`[data-numeracao-tipo="${tipo}"]`)!;
 
 const INICIAL: NumeracaoTela[] = [
-  { tipo: "orcamento", rotulo: "Orçamento", prefixo: "ORC", dica: "d", maiorUsado: 3357, proximo: 3358, configurado: false, exemplo: "ORC-2026-3358" },
-  { tipo: "os", rotulo: "Ordem de serviço", prefixo: "OS", dica: "d", maiorUsado: 0, proximo: 1, configurado: false, exemplo: "OS-2026-0001" },
-  { tipo: "contrato", rotulo: "Contrato", prefixo: "CT", dica: "d", maiorUsado: 10, proximo: 500, configurado: true, exemplo: "CT-2026-500" },
+  { tipo: "orcamento", rotulo: "Orçamento", prefixo: "ORC", dica: "d", maiorUsado: 3357, proximo: 3358, configurado: false, exemplo: "ORC-3358" },
+  { tipo: "os", rotulo: "Ordem de serviço", prefixo: "OS", dica: "d", maiorUsado: 0, proximo: 1, configurado: false, exemplo: "OS-1" },
+  { tipo: "contrato", rotulo: "Contrato", prefixo: "CT", dica: "d", maiorUsado: 10, proximo: 500, configurado: true, exemplo: "CT-500" },
 ];
 
 async function montar(podeEditar = true) {
@@ -64,7 +64,7 @@ describe("Numeração de documentos", () => {
     expect(txt(linha("os").querySelector("[data-maior-usado]"))).toBe("—");
     expect((linha("orcamento").querySelector("[data-proximo]") as HTMLInputElement).value).toBe("3358");
     expect((linha("orcamento").querySelector("[data-proximo]") as HTMLInputElement).min).toBe("3358");
-    expect(txt(linha("contrato").querySelector("[data-exemplo]"))).toMatch(/^CT-\d{4}-500$/);
+    expect(txt(linha("contrato").querySelector("[data-exemplo]"))).toBe("CT-500");
     expect((linha("orcamento").querySelector("[data-salvar]") as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -78,7 +78,7 @@ describe("Numeração de documentos", () => {
     await digitar(campo, "4000");
     expect(linha("orcamento").querySelector('[data-msg="aviso"]')).toBeNull();
     expect((linha("orcamento").querySelector("[data-salvar]") as HTMLButtonElement).disabled).toBe(false);
-    expect(txt(linha("orcamento").querySelector("[data-exemplo]"))).toMatch(/^ORC-\d{4}-4000$/);
+    expect(txt(linha("orcamento").querySelector("[data-exemplo]"))).toBe("ORC-4000");
     await digitar(campo, "abc");
     expect(txt(linha("orcamento").querySelector('[data-msg="aviso"]'))).toBe("Informe um número inteiro.");
     expect(txt(linha("orcamento").querySelector("[data-exemplo]"))).toBe("—");
@@ -87,11 +87,11 @@ describe("Numeração de documentos", () => {
 
   it("salvar: PUT { tipo, proximo } na rota; o exemplo que volta vira a confirmação; a linha passa a 'configurada'", async () => {
     await montar();
-    resposta = { status: 200, corpo: { tipo: "orcamento", proximo: 4000, exemplo: "ORC-2026-4000" } };
+    resposta = { status: 200, corpo: { tipo: "orcamento", proximo: 4000, exemplo: "ORC-4000" } };
     await digitar(linha("orcamento").querySelector("[data-proximo]") as HTMLInputElement, "4000");
     await clicar(linha("orcamento").querySelector("[data-salvar]"));
     expect(chamadas).toEqual([{ url: "/api/configuracoes/numeracao", metodo: "PUT", corpo: { tipo: "orcamento", proximo: 4000 } }]);
-    expect(txt(linha("orcamento").querySelector('[data-msg="ok"]'))).toBe("Salvo. O próximo orçamento sai como ORC-2026-4000.");
+    expect(txt(linha("orcamento").querySelector('[data-msg="ok"]'))).toBe("Salvo. O próximo orçamento sai como ORC-4000.");
     expect((linha("orcamento").querySelector("[data-salvar]") as HTMLButtonElement).disabled).toBe(true); // nada pendente
   });
 

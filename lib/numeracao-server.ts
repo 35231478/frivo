@@ -1,6 +1,5 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { anoBR } from "@/lib/fuso";
 import {
   formatarNumero, mensagemMinimo, minimoPermitido, NUMERACOES, regexNumero, TIPOS_NUMERACAO, type NumeracaoTela, type TipoNumeracao,
 } from "@/lib/numeracao";
@@ -13,8 +12,9 @@ import {
  * tempo esperam um pelo outro em vez de pegar o mesmo número.
  *
  * O contador (tabela `numeracoes`) guarda o PRÓXIMO sequencial. Sem linha, o 1º uso semeia com o
- * maior número já gravado + 1, em qualquer ano (numeração contínua): nada anda para trás e os
- * documentos existentes não mudam. Configurações pode definir o próximo, nunca abaixo do maior usado.
+ * maior número já gravado + 1, contando os documentos antigos (PREFIXO-AAAA-NNNN) e os novos
+ * (PREFIXO-N): nada anda para trás e os documentos existentes não mudam. Configurações pode definir o
+ * próximo, nunca abaixo do maior usado.
  */
 type Db = Prisma.TransactionClient | typeof prisma;
 type Tx = Prisma.TransactionClient;
@@ -25,18 +25,19 @@ async function travar(tx: Tx, empresaId: string, tipo: TipoNumeracao) {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${chaveTrava(empresaId, tipo)}))`;
 }
 
-/** O maior sequencial já gravado deste tipo na empresa, em QUALQUER ano (0 = nenhum) */
+/** O maior sequencial já gravado deste tipo na empresa, nos dois formatos (0 = nenhum) */
 export async function maiorUsado(db: Db, empresaId: string, tipo: TipoNumeracao): Promise<number> {
   const d = NUMERACOES[tipo];
-  // tabela e coluna vêm da tabela fixa NUMERACOES (nunca do usuário); o id da empresa vai como parâmetro
-  const sql = `SELECT MAX(CAST(split_part(split_part("${d.coluna}", '/', 1), '-', 3) AS BIGINT)) AS max
+  // tabela e coluna vêm da tabela fixa NUMERACOES (nunca do usuário); o id da empresa vai como parâmetro.
+  // O sequencial é o que vem depois do ÚLTIMO hífen (antes da "/n" da parcela): "ORC-3358" e "ORC-2026-0147"
+  const sql = `SELECT MAX(CAST(regexp_replace(split_part("${d.coluna}", '/', 1), '^.*-', '') AS BIGINT)) AS max
     FROM "${d.tabela}" WHERE "empresa_id" = $1 AND "${d.coluna}" ~ $2`;
   const [r] = await db.$queryRawUnsafe<{ max: bigint | number | null }[]>(sql, empresaId, regexNumero(tipo));
   return Number(r?.max ?? 0);
 }
 
-/** Reserva `quantidade` números em sequência (sob a trava); devolve-os formatados com o ano dado */
-export async function reservarNumeros(tx: Tx, empresaId: string, tipo: TipoNumeracao, quantidade: number, ano = anoBR()): Promise<string[]> {
+/** Reserva `quantidade` números em sequência (sob a trava); devolve-os formatados (PREFIXO-N) */
+export async function reservarNumeros(tx: Tx, empresaId: string, tipo: TipoNumeracao, quantidade: number): Promise<string[]> {
   if (quantidade < 1) return [];
   await travar(tx, empresaId, tipo);
   // O contador configurado OU o maior já gravado + 1, o que for maior: um número digitado à mão
@@ -48,12 +49,12 @@ export async function reservarNumeros(tx: Tx, empresaId: string, tipo: TipoNumer
     create: { empresaId, tipo, proximo: inicio + quantidade },
     update: { proximo: inicio + quantidade },
   });
-  return Array.from({ length: quantidade }, (_, i) => formatarNumero(tipo, inicio + i, ano));
+  return Array.from({ length: quantidade }, (_, i) => formatarNumero(tipo, inicio + i));
 }
 
-/** O próximo número deste tipo, formatado com o ano dado (o de hoje, ou o da competência) — dentro da transação */
-export async function proximoNumero(tx: Tx, empresaId: string, tipo: TipoNumeracao, ano = anoBR()): Promise<string> {
-  const [n] = await reservarNumeros(tx, empresaId, tipo, 1, ano);
+/** O próximo número deste tipo, formatado — dentro da transação */
+export async function proximoNumero(tx: Tx, empresaId: string, tipo: TipoNumeracao): Promise<string> {
+  const [n] = await reservarNumeros(tx, empresaId, tipo, 1);
   return n;
 }
 
@@ -62,21 +63,21 @@ export async function proximoNumero(tx: Tx, empresaId: string, tipo: TipoNumerac
  * recebido (a trava segura até o commit). Com `db` = transação, usa a dela.
  */
 export function comNumero<T>(
-  empresaId: string, tipo: TipoNumeracao, fazer: (numero: string, tx: Tx) => Promise<T>, opcoes: { ano?: number; db?: Db } = {},
+  empresaId: string, tipo: TipoNumeracao, fazer: (numero: string, tx: Tx) => Promise<T>, opcoes: { db?: Db } = {},
 ): Promise<T> {
-  const rodar = async (tx: Tx) => fazer(await proximoNumero(tx, empresaId, tipo, opcoes.ano), tx);
+  const rodar = async (tx: Tx) => fazer(await proximoNumero(tx, empresaId, tipo), tx);
   const db = opcoes.db ?? prisma;
   return db === prisma ? prisma.$transaction(rodar) : rodar(db as Tx);
 }
 
 /** Só OLHA o próximo número (sem consumir): a sugestão do contrato, cujo número é digitável e confirmado ao salvar */
-export async function espiarProximo(empresaId: string, tipo: TipoNumeracao, ano = anoBR()): Promise<string> {
+export async function espiarProximo(empresaId: string, tipo: TipoNumeracao): Promise<string> {
   const atual = await prisma.numeracao.findUnique({ where: { empresaId_tipo: { empresaId, tipo } }, select: { proximo: true } });
-  return formatarNumero(tipo, Math.max(atual?.proximo ?? 0, minimoPermitido(await maiorUsado(prisma, empresaId, tipo))), ano);
+  return formatarNumero(tipo, Math.max(atual?.proximo ?? 0, minimoPermitido(await maiorUsado(prisma, empresaId, tipo))));
 }
 
 /** A tela de Configurações: cada tipo com o maior usado, o próximo e o exemplo */
-export async function lerNumeracoes(empresaId: string, ano = anoBR()): Promise<NumeracaoTela[]> {
+export async function lerNumeracoes(empresaId: string): Promise<NumeracaoTela[]> {
   const contadores = await prisma.numeracao.findMany({ where: { empresaId }, select: { tipo: true, proximo: true } });
   const porTipo = new Map(contadores.map((c) => [c.tipo, c.proximo]));
   return Promise.all(TIPOS_NUMERACAO.map(async (tipo) => {
@@ -84,7 +85,7 @@ export async function lerNumeracoes(empresaId: string, ano = anoBR()): Promise<N
     const maior = await maiorUsado(prisma, empresaId, tipo);
     const configurado = porTipo.has(tipo);
     const proximo = Math.max(porTipo.get(tipo) ?? 0, minimoPermitido(maior));
-    return { tipo, rotulo: d.rotulo, prefixo: d.prefixo, dica: d.dica, maiorUsado: maior, proximo, configurado, exemplo: formatarNumero(tipo, proximo, ano) };
+    return { tipo, rotulo: d.rotulo, prefixo: d.prefixo, dica: d.dica, maiorUsado: maior, proximo, configurado, exemplo: formatarNumero(tipo, proximo) };
   }));
 }
 
@@ -94,7 +95,7 @@ export type ResultadoDefinir = { ok: true; proximo: number; exemplo: string } | 
  * Define o próximo número de um tipo (Configurações). Sob a MESMA trava da geração: nenhum número é
  * gerado enquanto a conferência e a gravação acontecem. Recusa valor igual ou abaixo do maior já usado.
  */
-export function definirProximo(empresaId: string, tipo: TipoNumeracao, proximo: number, ano = anoBR()): Promise<ResultadoDefinir> {
+export function definirProximo(empresaId: string, tipo: TipoNumeracao, proximo: number): Promise<ResultadoDefinir> {
   return prisma.$transaction(async (tx) => {
     await travar(tx, empresaId, tipo);
     const maior = await maiorUsado(tx, empresaId, tipo);
@@ -104,6 +105,6 @@ export function definirProximo(empresaId: string, tipo: TipoNumeracao, proximo: 
       create: { empresaId, tipo, proximo },
       update: { proximo },
     });
-    return { ok: true, proximo, exemplo: formatarNumero(tipo, proximo, ano) };
+    return { ok: true, proximo, exemplo: formatarNumero(tipo, proximo) };
   });
 }

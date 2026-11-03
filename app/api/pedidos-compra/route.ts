@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
   }
 
   const criar = () => prisma.$transaction(async (tx) => {
-    const numero = await proximoNumeroPedido(empresaId, undefined, tx);
+    const numero = await proximoNumeroPedido(empresaId, tx);
     const pedido = await tx.pedidoCompraInterno.create({
       data: {
         empresaId, numero, ordemServicoId, orcamentoId, solicitanteId: u.id,

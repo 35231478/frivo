@@ -52,8 +52,9 @@ export async function POST(req: NextRequest) {
   const criados = await prisma.qrcode.findMany({
     where: { empresaId, codigo: { in: codigos } },
   });
-  // Ordem numérica (como texto, "…-10000" viria antes de "…-9999")
-  criados.sort((a, b) => Number(a.codigo.split("-")[2]) - Number(b.codigo.split("-")[2]));
+  // Ordem numérica (como texto, "QR-10000" viria antes de "QR-9999")
+  const seq = (c: string) => Number(c.split("-").pop());
+  criados.sort((a, b) => seq(a.codigo) - seq(b.codigo));
 
   return NextResponse.json(criados, { status: 201 });
 }

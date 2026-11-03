@@ -27,7 +27,7 @@ import {
   Paperclip, Repeat, StickyNote, Building2, FileCheck, AlertCircle, Wand2, DollarSign,
   Plus, CalendarDays, ChevronDown, CheckCircle2, PauseCircle, RefreshCw, XCircle, History, User, Trash2, SlidersHorizontal,
 } from "lucide-react";
-import { anoBR, chaveDiaCivil, diaCivilDeChave, diasAteDiaCivil, partesBR } from "@/lib/fuso";
+import { chaveDiaCivil, diaCivilDeChave, diasAteDiaCivil, partesBR } from "@/lib/fuso";
 import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
 import { InputData } from "@/components/ui/input-data";
 import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
@@ -245,7 +245,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
           tipo: "MANUTENCAO_PREVENTIVA",
           periodicidade: "MENSAL",
           unidadeIds: [],
-          numero: `CT-${anoBR()}-`,
+          numero: "CT-",
           recorrencia: false,
           faturamentoAdicionais: "SEPARADO",
           faturamentoAutomatico: false,
@@ -627,9 +627,9 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
                 )}
               />
             </FormField>
-            <FormField label="Número do contrato" required error={errors.numero?.message} hint="Ex: CT-2024-001">
+            <FormField label="Número do contrato" required error={errors.numero?.message} hint="Ex: CT-18">
               <div className="flex gap-2">
-                <Input {...register("numero")} error={!!errors.numero} placeholder="CT-2024-001" className="flex-1" />
+                <Input {...register("numero")} error={!!errors.numero} placeholder="CT-18" className="flex-1" />
                 <Button type="button" variant="secondary" loading={gerandoNumero} onClick={gerarNumero} className="shrink-0">
                   <Wand2 className="w-4 h-4" /> <span className="hidden sm:inline">Gerar automático</span>
                 </Button>

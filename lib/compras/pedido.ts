@@ -42,10 +42,6 @@ export const pedidoEditavel = (status: string) => !pedidoEncerrado(status);
 /** Baixar ou enviar o PC ao fornecedor: o pedido solicitado passa a "Em cotação"; os outros ficam */
 export const statusAposEnvio = (status: string): string => (status === "SOLICITADO" ? "COTANDO" : status);
 
-/** "PCI-2026-0147" (4 dígitos; cresce depois de 9999) */
-export function codigoPedidoCompra(ano: number, sequencial: number): string {
-  return `PCI-${ano}-${String(sequencial).padStart(4, "0")}`;
-}
 
 /** PC avulso (sem OS/orçamento): o motivo padrão */
 export const MOTIVO_AVULSO_PADRAO = "Reposição de estoque";

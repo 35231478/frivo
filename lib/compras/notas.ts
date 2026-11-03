@@ -39,7 +39,6 @@ import { mensagemZod, parcelaSchema, type FinanceiroRascunho, type PrecoLinha } 
 import { lerBoleto } from "@/lib/financeiro/boleto";
 import { validarRefEmpresa } from "@/lib/ref-empresa";
 import { sugestoesDaNota, vincularNota } from "@/lib/compras/conciliacao-server";
-import { anoBR } from "@/lib/fuso";
 import { reservarNumeros } from "@/lib/numeracao-server";
 
 /** Recusa com status HTTP e dados extras (ex.: a nota que já existe). */
@@ -445,7 +444,7 @@ export async function lancarNota({ empresaId, usuarioId, notaId, escolhas = [], 
     //    classificação, a forma de pagamento e o boleto do rascunho
     const ajustadas = nota.parcelas != null;
     // Uma sequência de números pelo contador da empresa, sob trava (nunca duplica)
-    const numeros = await reservarNumeros(tx, empresaId, "conta_pagar", parcelas.length, anoBR());
+    const numeros = await reservarNumeros(tx, empresaId, "conta_pagar", parcelas.length);
     const contas = [];
     for (const [i, p] of parcelas.entries()) {
       const valor = arred(p.valor);

@@ -6,7 +6,6 @@
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { anoBR } from "@/lib/fuso";
 import { ErroTecnicos, MSG_SEM_EXECUTOR, gravarTecnicos, lerDefinicao, lerVeiculo, resolverTecnicos, resolverVeiculo } from "@/lib/atividade-tecnicos";
 import { proximoNumero } from "@/lib/numeracao-server";
 
@@ -57,7 +56,7 @@ export async function prepararExecucao(empresaId: string, exec: unknown): Promis
  * documentos), sob trava e dentro da transação de quem grava: numeração contínua, nunca duplica.
  * `ano` = o de hoje em Brasília ou o da competência (OS recorrente).
  */
-export const proximoNumeroOs = (tx: Prisma.TransactionClient, empresaId: string, ano = anoBR()) => proximoNumero(tx, empresaId, "os", ano);
+export const proximoNumeroOs = (tx: Prisma.TransactionClient, empresaId: string) => proximoNumero(tx, empresaId, "os");
 
 /** Cria a 1ª atividade (agendada) com quem executa; devolve o id dela. */
 export async function criarPrimeiraAtividade(tx: Prisma.TransactionClient, empresaId: string, ordemServicoId: string, e: ExecucaoPreparada) {

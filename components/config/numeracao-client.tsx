@@ -18,7 +18,6 @@ export function NumeracaoClient({ inicial, podeEditar }: { inicial: NumeracaoTel
   const [salvando, setSalvando] = useState<TipoNumeracao | null>(null);
   const [msgs, setMsgs] = useState<Record<string, { tipo: "ok" | "erro"; texto: string } | undefined>>({});
 
-  const ano = new Date().getFullYear();
   const mudar = (tipo: TipoNumeracao, v: string) => { setValores((s) => ({ ...s, [tipo]: v })); setMsgs((m) => ({ ...m, [tipo]: undefined })); };
 
   /** O que impede salvar esta linha agora (vazio = pode) */
@@ -74,7 +73,7 @@ export function NumeracaoClient({ inicial, podeEditar }: { inicial: NumeracaoTel
               const erro = problema(n);
               const mudou = v !== String(n.proximo);
               const msg = msgs[n.tipo];
-              const exemplo = /^\d+$/.test(v) ? formatarNumero(n.tipo, Number(v), ano) : "—";
+              const exemplo = /^\d+$/.test(v) ? formatarNumero(n.tipo, Number(v)) : "—";
               return (
                 <tr key={n.tipo} className={PLANILHA.linha} data-numeracao-tipo={n.tipo}>
                   <td className={cn(PLANILHA.td, "align-middle")}>

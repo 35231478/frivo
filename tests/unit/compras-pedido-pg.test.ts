@@ -146,7 +146,7 @@ describe.skipIf(!URL_PG)("Pedido de Compra completo (PostgreSQL real)", () => {
       itens: [item("Filtro secador", { produtoId: "pFiltro", quantidade: 4, valorEstimado: 18.45 }), item("Fita isolante")],
     });
     expect(r.status).toBe(201);
-    expect(r.json.numero).toBe(`PCI-${ANO}-0001`);
+    expect(r.json.numero).toBe("PCI-1");
     expect(r.json.whatsappUrl).toMatch(/^https:\/\/wa\.me\/5531988887777\?text=/);
     expect(decodeURIComponent(r.json.whatsappUrl)).toContain("OS: OS-2026-0012 — Hospital Santa Clara");
     const p = await prisma.pedidoCompraInterno.findUnique({ where: { id: r.json.id } });
@@ -158,13 +158,13 @@ describe.skipIf(!URL_PG)("Pedido de Compra completo (PostgreSQL real)", () => {
   it("número pelo MAIOR sequencial: excluir não faz repetir; outra empresa não conta", async () => {
     const a = await chamar("pedidos-compra", "POST", { orcamentoId: "orcSolto", itens: [item("A")] });
     const b = await chamar("pedidos-compra", "POST", { orcamentoId: "orcSolto", itens: [item("B")] });
-    expect([a.json.numero, b.json.numero]).toEqual([`PCI-${ANO}-0002`, `PCI-${ANO}-0003`]);
+    expect([a.json.numero, b.json.numero]).toEqual(["PCI-2", "PCI-3"]);
     await prisma.pedidoCompraInterno.delete({ where: { id: a.json.id } });
     const c = await chamar("pedidos-compra", "POST", { orcamentoId: "orcSolto", itens: [item("C")] });
-    expect(c.json.numero).toBe(`PCI-${ANO}-0004`);
+    expect(c.json.numero).toBe("PCI-4");
     // Pedido legado (PC-…, count) não atrapalha
     await prisma.pedidoCompraInterno.create({ data: { empresaId: "e1", numero: "PC-2026-0031", solicitanteId: "uAdm" } });
-    expect((await chamar("pedidos-compra", "POST", { orcamentoId: "orcSolto", itens: [item("D")] })).json.numero).toBe(`PCI-${ANO}-0005`);
+    expect((await chamar("pedidos-compra", "POST", { orcamentoId: "orcSolto", itens: [item("D")] })).json.numero).toBe("PCI-5");
   });
 
   it("avulso: só Compras › Gerenciar; motivo padrão 'Reposição de estoque'", async () => {

@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  adicionarNaoIncluso, codigoOrcamento, destinatarioOrcamento, diasValidadeValidos, enderecoEmLinha, linhasCondicoes,
+  adicionarNaoIncluso, destinatarioOrcamento, diasValidadeValidos, enderecoEmLinha, linhasCondicoes,
   linhasNaoIncluso, NAO_INCLUSO_SUGESTOES, NORMAS, normasDoDocumento, normasValidas, NOTA_ART_APOS_APROVACAO,
   numeroFormalOrcamento, textoArt, timbreEmpresa,
 } from "@/lib/orcamentos/proposta";
@@ -14,15 +14,11 @@ import { ordenarAnexos, tipoAnexoPorMime } from "@/lib/orcamentos/anexos-server"
 import { orcamentoSchema } from "@/lib/validations";
 
 describe("número formal do orçamento", () => {
-  it("ORC-AAAA-NNNN → AAAA-NNNN; código fora do padrão sai como está", () => {
+  it("ORC-3358 → 3358 (novo); ORC-AAAA-NNNN → AAAA-NNNN (antigo); código fora do padrão sai como está", () => {
+    expect(numeroFormalOrcamento("ORC-3358")).toBe("3358");
     expect(numeroFormalOrcamento("ORC-2026-0147")).toBe("2026-0147");
     expect(numeroFormalOrcamento("ORC-2027-12345")).toBe("2027-12345");
     expect(numeroFormalOrcamento("PROP-77")).toBe("PROP-77");
-  });
-  it("código pelo ano e sequencial: 4 dígitos, cresce depois de 9999", () => {
-    expect(codigoOrcamento(2026, 1)).toBe("ORC-2026-0001");
-    expect(codigoOrcamento(2026, 147)).toBe("ORC-2026-0147");
-    expect(codigoOrcamento(2026, 10000)).toBe("ORC-2026-10000");
   });
 });
 
