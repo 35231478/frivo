@@ -63,9 +63,9 @@ export function NumeracaoClient({ inicial, podeEditar }: { inicial: NumeracaoTel
             <tr className={PLANILHA.cabecalho}>
               <th scope="col" className={cn(PLANILHA.th, "text-left")}>Documento</th>
               <th scope="col" className={cn(PLANILHA.th, "text-right w-[8.5rem]")}>Maior já usado</th>
-              <th scope="col" className={cn(PLANILHA.th, "text-left w-[11rem]")}>Próximo número</th>
-              <th scope="col" className={cn(PLANILHA.th, "text-left w-[10rem]")}>Vai sair como</th>
-              <th scope="col" className={cn(PLANILHA.th, "w-24")}><span className="sr-only">Salvar</span></th>
+              <th scope="col" className={cn(PLANILHA.th, "text-left w-[11rem] min-w-[7rem]")}>Próximo número</th>
+              <th scope="col" className={cn(PLANILHA.th, "text-left w-[10rem] hidden sm:table-cell")}>Vai sair como</th>
+              <th scope="col" className={cn(PLANILHA.th, "w-12 sm:w-24")}><span className="sr-only">Salvar</span></th>
             </tr>
           </thead>
           <tbody>
@@ -80,7 +80,7 @@ export function NumeracaoClient({ inicial, podeEditar }: { inicial: NumeracaoTel
                   <td className={cn(PLANILHA.td, "align-middle")}>
                     <span className="inline-flex items-center gap-1.5">
                       <span className={PLANILHA.nome}>{n.rotulo}</span>
-                      <span className={cn(PLANILHA.codigo, "text-ink-subtle font-normal")}>{n.prefixo}-</span>
+                      <span className={cn(PLANILHA.codigo, "text-ink-subtle font-normal hidden sm:inline")}>{n.prefixo}-</span>
                       <Dica texto={n.dica} rotulo={n.rotulo} />
                     </span>
                     {msg && <p className={cn("text-xs mt-1", msg.tipo === "ok" ? "text-ok-texto" : "text-atrasado")} data-msg={msg.tipo} role={msg.tipo === "erro" ? "alert" : "status"}>{msg.texto}</p>}
@@ -96,15 +96,16 @@ export function NumeracaoClient({ inicial, podeEditar }: { inicial: NumeracaoTel
                       className={cn("w-full bg-white border rounded-lg px-3 py-1.5 text-sm text-ink tabular-nums focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 disabled:bg-surface-alt",
                         mudou && erro ? "border-atrasado" : "border-surface-border")}
                     />
+                    <p className="sm:hidden mt-1 text-[11px] text-ink-muted whitespace-nowrap">Sai como <span className={PLANILHA.codigo} data-exemplo-cel>{exemplo}</span></p>
                   </td>
-                  <td className={cn(PLANILHA.td, "align-middle")}><span className={PLANILHA.codigo} data-exemplo>{exemplo}</span></td>
+                  <td className={cn(PLANILHA.td, "align-middle hidden sm:table-cell")}><span className={PLANILHA.codigo} data-exemplo>{exemplo}</span></td>
                   <td className={cn(PLANILHA.td, "align-middle text-right")}>
                     {podeEditar && (
                       <button
                         type="button" onClick={() => void salvar(n)} disabled={!mudou || !!erro || salvando === n.tipo} data-salvar={n.tipo}
-                        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-40"
+                        className="inline-flex items-center gap-1.5 h-8 px-2.5 sm:px-3 rounded-lg text-xs font-semibold bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-40"
                       >
-                        {salvando === n.tipo ? <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden /> : <Check className="w-3.5 h-3.5" aria-hidden />} Salvar
+                        {salvando === n.tipo ? <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden /> : <Check className="w-3.5 h-3.5" aria-hidden />} <span className="hidden sm:inline">Salvar</span><span className="sr-only sm:hidden">Salvar</span>
                       </button>
                     )}
                   </td>
