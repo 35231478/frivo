@@ -41,7 +41,7 @@ async function montar(el: ReactNode) {
   await esperar();
 }
 async function barraPeriodo(sp: Record<string, string>, props: Record<string, unknown> = {}) {
-  const { BarraPeriodo, periodoTela } = await import("@/components/listagem/periodo-cards");
+  const { BarraPeriodo } = await import("@/components/listagem/periodo-cards"); const { periodoTela } = await import("@/lib/periodo");
   const p = lerPeriodo(sp, AGORA, { permitirTodos: true, padrao: (props.padrao as "mes" | "todos") ?? "mes" });
   await montar(createElement(BarraPeriodo, { periodo: periodoTela(p), navegar, permitirTodos: true, ...props } as any));
 }

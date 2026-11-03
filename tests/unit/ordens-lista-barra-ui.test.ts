@@ -37,7 +37,7 @@ async function montar(qs = "") {
   nav.qs = qs;
   if (root) { act(() => root.unmount()); caixa.remove(); } // dois "montar" no mesmo teste: um de cada vez
   const [{ OrdensListaClient }, { PermissoesProvider }, { periodoTela }] = await Promise.all([
-    import("@/components/ordens/ordens-lista-client"), import("@/components/providers/permissoes-provider"), import("@/components/listagem/periodo-cards"),
+    import("@/components/ordens/ordens-lista-client"), import("@/components/providers/permissoes-provider"), import("@/lib/periodo"),
   ]);
   const periodo = periodoTela(periodoOrdens(Object.fromEntries(new URLSearchParams(qs).entries()), AGORA));
   caixa = document.createElement("div"); document.body.appendChild(caixa); root = createRoot(caixa);

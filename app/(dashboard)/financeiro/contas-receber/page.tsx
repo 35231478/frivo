@@ -6,8 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { marcarContasReceberVencidas } from "@/lib/financeiro-server";
 import { CAMPO_CARD_RECEBER, CARD_SO_COBRANCAS, CARDS_PERIODO_RECEBER, condCardPeriodoReceber, condPeriodoVencimento, whereListaReceber } from "@/lib/listas/filtros";
 import { saldoDoAgregado } from "@/lib/financeiro/parcelas-server";
-import { lerPeriodo } from "@/lib/periodo";
-import { periodoTela } from "@/components/listagem/periodo-cards";
+import { lerPeriodo, periodoTela } from "@/lib/periodo";
 import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
 import { ContasReceberView, type ContaView, type ResumoReceber } from "@/components/financeiro/contas-receber-view";
 

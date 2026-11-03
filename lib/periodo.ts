@@ -48,6 +48,10 @@ export interface Periodo {
   rotulo: string;
 }
 export type PadraoPeriodo = "mes" | "todos";
+/** O período lido da URL no servidor (lerPeriodo), sem os instantes (os Date não passam para o cliente) */
+export type PeriodoTela = Omit<Periodo, "gte" | "lt" | "ref" | "dias"> & Partial<Pick<Periodo, "ref" | "dias">>;
+/** O que a página manda para a tela (tira os Date) */
+export const periodoTela = (p: Periodo): PeriodoTela => ({ tipo: p.tipo, mes: p.mes, de: p.de, ate: p.ate, ref: p.ref, dias: p.dias, rotulo: p.rotulo });
 
 const RE_MES = /^(\d{4})-(0[1-9]|1[0-2])$/;
 const RE_DIA = /^(\d{4})-(\d{2})-(\d{2})$/;

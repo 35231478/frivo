@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
-import { lerPeriodo } from "@/lib/periodo";
-import { periodoTela } from "@/components/listagem/periodo-cards";
+import { lerPeriodo, periodoTela } from "@/lib/periodo";
 import { relatorioPerdas } from "@/lib/financeiro/perda-estorno-server";
 import { PerdasView } from "@/components/financeiro/perdas-view";
 

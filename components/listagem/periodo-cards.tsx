@@ -6,13 +6,10 @@ import { ChevronDown, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Dica } from "@/components/ui/dica";
 import { InputData } from "@/components/ui/input-data";
 import { cn, formatarMoeda } from "@/lib/utils";
-import { ATALHOS, ehAtual, nomeAtalho, PARAMS_PERIODO, urlDoAtalho, urlVizinho, type Periodo, type TipoPeriodo } from "@/lib/periodo";
+import { ATALHOS, ehAtual, nomeAtalho, PARAMS_PERIODO, urlDoAtalho, urlVizinho, type Periodo, type PeriodoTela, type TipoPeriodo } from "@/lib/periodo";
 
 type Navegar = (m: Record<string, string | null>) => void;
-/** O período lido da URL no servidor (lerPeriodo), sem os instantes (não passam para o cliente) */
-export type PeriodoTela = Omit<Periodo, "gte" | "lt" | "ref" | "dias"> & Partial<Pick<Periodo, "ref" | "dias">>;
-/** O que a página manda para a tela (tira os Date) */
-export const periodoTela = (p: Periodo): PeriodoTela => ({ tipo: p.tipo, mes: p.mes, de: p.de, ate: p.ate, ref: p.ref, dias: p.dias, rotulo: p.rotulo });
+export type { PeriodoTela } from "@/lib/periodo";
 
 /**
  * Seletor de período compacto (padrão da casa, estilo Conta Azul): ‹ [calendário · rótulo · atalho] ›.

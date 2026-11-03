@@ -15,8 +15,7 @@ import { ConteudoUrl, ListaUrl, PaginacaoUrl } from "@/components/listagem/lista
 import { AvatarCliente } from "@/components/ui/avatar-cliente";
 import { numeroFatura, rotuloStatusMedicao } from "@/lib/faturamento/fatura";
 
-import { lerPeriodo } from "@/lib/periodo";
-import { periodoTela } from "@/components/listagem/periodo-cards";
+import { lerPeriodo, periodoTela } from "@/lib/periodo";
 import { FiltrosMedicoes } from "@/components/financeiro/medicoes-filtros";
 
 export const metadata: Metadata = { title: "Medições" };
