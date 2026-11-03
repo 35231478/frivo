@@ -62,8 +62,8 @@ export function NumeracaoClient({ inicial, podeEditar }: { inicial: NumeracaoTel
           <thead>
             <tr className={PLANILHA.cabecalho}>
               <th scope="col" className={cn(PLANILHA.th, "text-left")}>Documento</th>
-              <th scope="col" className={cn(PLANILHA.th, "text-right w-[8.5rem]")}>Maior já usado</th>
-              <th scope="col" className={cn(PLANILHA.th, "text-left w-[11rem] min-w-[7rem]")}>Próximo número</th>
+              <th scope="col" className={cn(PLANILHA.th, "text-right sm:w-[8.5rem]")}>Maior já usado</th>
+              <th scope="col" className={cn(PLANILHA.th, "text-left sm:w-[11rem] min-w-[7rem]")}>Próximo número</th>
               <th scope="col" className={cn(PLANILHA.th, "text-left w-[10rem] hidden sm:table-cell")}>Vai sair como</th>
               <th scope="col" className={cn(PLANILHA.th, "w-12 sm:w-24")}><span className="sr-only">Salvar</span></th>
             </tr>
