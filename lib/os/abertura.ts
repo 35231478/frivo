@@ -8,6 +8,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { anoBR } from "@/lib/fuso";
 import { ErroTecnicos, MSG_SEM_EXECUTOR, gravarTecnicos, lerDefinicao, lerVeiculo, resolverTecnicos, resolverVeiculo } from "@/lib/atividade-tecnicos";
+import { proximoNumero } from "@/lib/numeracao-server";
 
 /** 1ª atividade da OS — é nela que fica QUEM EXECUTA (obrigatório) e o veículo. */
 export const execucaoSchema = z.object({
@@ -51,17 +52,12 @@ export async function prepararExecucao(empresaId: string, exec: unknown): Promis
   }
 }
 
-/** Próximo número da OS no ano de Brasília (OS-AAAA-NNNN); o único (numero, empresa) barra colisão. */
-export async function proximoNumeroOs(empresaId: string): Promise<string> {
-  const ano = anoBR();
-  const ultimaOs = await prisma.ordemServico.findFirst({
-    where: { empresaId, numero: { startsWith: `OS-${ano}-` } },
-    orderBy: { numero: "desc" },
-    select: { numero: true },
-  });
-  const seq = (ultimaOs ? Number(ultimaOs.numero.split("-")[2]) : 0) + 1;
-  return `OS-${ano}-${String(seq).padStart(4, "0")}`;
-}
+/**
+ * Próximo número da OS (OS-AAAA-NNNN) pelo contador da empresa (Configurações › Numeração de
+ * documentos), sob trava e dentro da transação de quem grava: numeração contínua, nunca duplica.
+ * `ano` = o de hoje em Brasília ou o da competência (OS recorrente).
+ */
+export const proximoNumeroOs = (tx: Prisma.TransactionClient, empresaId: string, ano = anoBR()) => proximoNumero(tx, empresaId, "os", ano);
 
 /** Cria a 1ª atividade (agendada) com quem executa; devolve o id dela. */
 export async function criarPrimeiraAtividade(tx: Prisma.TransactionClient, empresaId: string, ordemServicoId: string, e: ExecucaoPreparada) {

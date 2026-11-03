@@ -2,11 +2,12 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { orcamentoJaFaturado, travarParaFaturar } from "@/lib/faturamento-os";
 import { aFaturar, chaveMesBR } from "@/lib/financeiro/a-faturar";
-import { formatarData, formatarMoeda, gerarNumeroContaReceber, gerarNumeroContaPagar, gerarNumeroMedicao } from "@/lib/utils";
+import { formatarData, formatarMoeda } from "@/lib/utils";
 import { diaCivilPassou, hojeDiaCivil, inicioMesDiaCivil, partesBR } from "@/lib/fuso";
 import { calcularVencimento } from "@/lib/medicao-helpers";
 import { rotuloMedicao } from "@/lib/faturamento/fatura";
 import { cancelarParcelas, reajustarParcelas, recebidoNoPeriodo, saldoDoAgregado } from "@/lib/financeiro/parcelas-server";
+import { proximoNumero } from "@/lib/numeracao-server";
 import {
   type CobrancaContrato, competenciasDoContrato, detalheCancelamento, detalheReaberta, eventoDoContrato, mudancasDaCobranca,
   descricaoDaCobranca, passoCobranca, planoSincronizacao, valorMensalDe, vencimentoDaCompetencia,
@@ -187,16 +188,12 @@ async function contaDaMedicao(tx: Prisma.TransactionClient, medicaoId: string) {
   });
 }
 
-/** Próximo número sequencial de conta a receber (CR-AAAA-NNNN) baseado no maior do ano. */
-export async function proximoNumeroContaReceber(empresaId: string, ano: number, db: Db = prisma) {
-  const ultimo = await db.contaReceber.findFirst({
-    where: { empresaId, numero: { startsWith: `CR-${ano}-` } },
-    orderBy: { numero: "desc" },
-    select: { numero: true },
-  });
-  // parseInt: a parcela "CR-2026-0042/3" conta como a 0042 (o lançamento dela)
-  const seq = ultimo ? (parseInt(ultimo.numero.split("-")[2], 10) || 0) + 1 : 1;
-  return gerarNumeroContaReceber(seq, ano);
+/**
+ * Próximo número de conta a receber (CR-AAAA-NNNN) pelo contador da empresa, sob trava. Com `db` =
+ * transação, dentro dela; com o prisma solto, numa transação curta só para isso.
+ */
+export function proximoNumeroContaReceber(empresaId: string, ano: number, db: Db = prisma) {
+  return db === prisma ? prisma.$transaction((tx) => proximoNumero(tx, empresaId, "conta_receber", ano)) : proximoNumero(db as Prisma.TransactionClient, empresaId, "conta_receber", ano);
 }
 
 /**
@@ -333,13 +330,8 @@ export async function criarMedicaoDeRelatorio(relatorioId: string) {
       "PC_RECEBIDO";
 
     const valor = relatorio.valorFinanceiro ? Number(relatorio.valorFinanceiro) : 0;
-    const ultimaMed = await tx.medicao.findFirst({
-      where: { empresaId: relatorio.empresaId, numero: { startsWith: `MED-${relatorio.anoReferencia}-` } },
-      orderBy: { numero: "desc" },
-      select: { numero: true },
-    });
-    const seq = ultimaMed ? Number(ultimaMed.numero.split("-")[2]) + 1 : 1;
-    const numero = gerarNumeroMedicao(seq, relatorio.anoReferencia);
+    // Número pelo contador da empresa, sob trava (rótulo = ano de referência do relatório)
+    const numero = await proximoNumero(tx, relatorio.empresaId, "medicao", relatorio.anoReferencia);
     const vencimento = calcularVencimento(cliente.diaFaturamento, relatorio.mesReferencia, relatorio.anoReferencia);
 
     const medicao = await tx.medicao.create({
@@ -654,15 +646,9 @@ export async function encerrarFinanceiroDoContrato(contratoId: string, motivo = 
 // CONTAS A PAGAR
 // ─────────────────────────────────────────────
 
-/** Próximo número sequencial de conta a pagar (CP-AAAA-NNNN). */
-export async function proximoNumeroContaPagar(empresaId: string, ano: number) {
-  const ultimo = await prisma.contaPagar.findFirst({
-    where: { empresaId, numero: { startsWith: `CP-${ano}-` } },
-    orderBy: { numero: "desc" },
-    select: { numero: true },
-  });
-  const seq = ultimo ? Number(ultimo.numero.split("-")[2]) + 1 : 1;
-  return gerarNumeroContaPagar(seq, ano);
+/** Próximo número de conta a pagar (CP-AAAA-NNNN) pelo contador da empresa, sob trava (ver proximoNumeroContaReceber) */
+export function proximoNumeroContaPagar(empresaId: string, ano: number, db: Db = prisma) {
+  return db === prisma ? prisma.$transaction((tx) => proximoNumero(tx, empresaId, "conta_pagar", ano)) : proximoNumero(db as Prisma.TransactionClient, empresaId, "conta_pagar", ano);
 }
 
 /** Recalcula valorPago, saldoRestante, status e dataPagamento a partir dos pagamentos. */

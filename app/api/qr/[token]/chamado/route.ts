@@ -8,6 +8,7 @@ import { validarDataUrl, type ArquivoValidado } from "@/lib/anexos-server";
 import { TIPOS_IMAGEM, MAX_FOTOS_CHAMADO } from "@/lib/anexos";
 import { z } from "zod";
 import { anoBR } from "@/lib/fuso";
+import { proximoNumero } from "@/lib/numeracao-server";
 
 type Params = { params: Promise<{ token: string }> };
 
@@ -101,9 +102,6 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!gestor) return NextResponse.json({ erro: "Empresa sem usuário responsável." }, { status: 400 });
 
   const ano = anoBR();
-  const numero = await proximoNumeroOs(empresaId, ano);
-  const totalChamados = await prisma.ordemServico.count({ where: { empresaId, origem: "PORTAL_CLIENTE" } });
-  const chamadoNumero = `CHM-${ano}-${String(totalChamados + 1).padStart(4, "0")}`;
 
   const contato = [`Solicitante: ${d.nome}`, d.email ? `E-mail: ${d.email}` : null, d.telefone ? `Telefone: ${d.telefone}` : null]
     .filter(Boolean)
@@ -111,7 +109,12 @@ export async function POST(req: NextRequest, { params }: Params) {
   const marcador = d.tipo === "ORCAMENTO" ? "[Orçamento via QR Code]" : "[Chamado via QR Code]";
   const descricao = `${d.tipo === "ORCAMENTO" ? "Solicitação de orçamento. " : ""}${d.descricao}\n\n${marcador} ${contato}`;
 
-  const os = await prisma.ordemServico.create({
+  // OS e chamado numerados pelo contador da empresa (sob trava, na mesma transação do INSERT):
+  // nunca "total + 1", que repetia número depois de uma exclusão
+  const os = await prisma.$transaction(async (tx) => {
+  const numero = await proximoNumeroOs(tx, empresaId, ano);
+  const chamadoNumero = await proximoNumero(tx, empresaId, "chamado", ano);
+  return tx.ordemServico.create({
     data: {
       empresaId,
       numero,
@@ -128,10 +131,11 @@ export async function POST(req: NextRequest, { params }: Params) {
       anexos: fotos.length > 0 ? { create: fotos } : undefined,
     },
   });
-
-  await prisma.osHistorico.create({
-    data: { ordemServicoId: os.id, usuarioId: gestor.id, acao: d.tipo === "ORCAMENTO" ? "Orçamento solicitado via QR Code" : "Chamado aberto via QR Code", detalhes: `${chamadoNumero} — ${d.nome}` },
   });
 
-  return NextResponse.json({ chamadoNumero }, { status: 201 });
+  await prisma.osHistorico.create({
+    data: { ordemServicoId: os.id, usuarioId: gestor.id, acao: d.tipo === "ORCAMENTO" ? "Orçamento solicitado via QR Code" : "Chamado aberto via QR Code", detalhes: `${os.chamadoNumero} — ${d.nome}` },
+  });
+
+  return NextResponse.json({ chamadoNumero: os.chamadoNumero }, { status: 201 });
 }

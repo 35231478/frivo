@@ -9,11 +9,11 @@
  */
 import { Prisma, type Cliente, type Contrato } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { gerarNumeroMedicao } from "@/lib/utils";
 import { calcularVencimento } from "@/lib/medicao-helpers";
 import { itensFaturaveisDaOs, orcamentoJaFaturado, osJaFaturada, travarParaFaturar } from "@/lib/faturamento-os";
 import { descricaoDaCobranca, descricaoItemContrato, passoCobranca, rotuloReferencia, valorMensalDe, vencimentoDaCompetencia } from "@/lib/financeiro/contrato-previsao";
 import { retencoesHerdadas } from "@/lib/financeiro/retencoes-server";
+import { proximoNumero } from "@/lib/numeracao-server";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 export type ContratoComCliente = Contrato & { cliente: Cliente };
@@ -45,14 +45,8 @@ export async function vencimentoDaMedicao(db: Db, m: { contratoId: string | null
   return calcularVencimento(m.cliente.diaFaturamento, m.mes, m.ano);
 }
 
-/** Próximo número MED-AAAA-NNNN, sob trava por empresa+ano (até o fim da transação) */
-async function proximoNumeroMedicao(tx: Prisma.TransactionClient, empresaId: string, ano: number) {
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`numero-medicao:${empresaId}:${ano}`}))`;
-  const ultima = await tx.medicao.findFirst({
-    where: { empresaId, numero: { startsWith: `MED-${ano}-` } }, orderBy: { numero: "desc" }, select: { numero: true },
-  });
-  return gerarNumeroMedicao((ultima ? Number(ultima.numero.split("-")[2]) : 0) + 1, ano);
-}
+/** Próximo número MED-AAAA-NNNN pelo contador da empresa, sob trava até o fim da transação (rótulo = ano da competência) */
+const proximoNumeroMedicao = (tx: Prisma.TransactionClient, empresaId: string, ano: number) => proximoNumero(tx, empresaId, "medicao", ano);
 
 type Item = {
   tipo: "SERVICO" | "PRODUTO"; descricao: string; quantidade: number; valorUnitario: number; valorTotal: number;

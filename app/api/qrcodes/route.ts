@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { exigirAlgumaPermissao, exigirPermissao } from "@/lib/permissoes-server";
 import { z } from "zod";
-import { codigoQr, proximoSequencialQr } from "@/lib/qrcode-server";
-import { anoBR } from "@/lib/fuso";
+import { gerarLoteQrCodes } from "@/lib/qrcode-server";
 
 const gerarSchema = z.object({
   quantidade: z.number().int().min(1).max(100),
@@ -47,18 +46,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
   }
 
-  const ano = anoBR();
-  const inicio = await proximoSequencialQr(empresaId, ano);
-
-  const dados = Array.from({ length: parsed.data.quantidade }, (_, i) => ({
-    empresaId,
-    codigo: codigoQr(ano, inicio + i),
-  }));
-
-  await prisma.qrcode.createMany({ data: dados });
+  // Lote numerado pelo contador da empresa, sob trava (nunca duplica)
+  const codigos = await gerarLoteQrCodes(empresaId, parsed.data.quantidade);
 
   const criados = await prisma.qrcode.findMany({
-    where: { empresaId, codigo: { in: dados.map((d) => d.codigo) } },
+    where: { empresaId, codigo: { in: codigos } },
   });
   // Ordem numérica (como texto, "…-10000" viria antes de "…-9999")
   criados.sort((a, b) => Number(a.codigo.split("-")[2]) - Number(b.codigo.split("-")[2]));

@@ -1,17 +1,10 @@
-import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import { anoBR } from "@/lib/fuso";
-import { codigoOrcamento } from "@/lib/orcamentos/proposta";
+import { proximoNumero } from "@/lib/numeracao-server";
 
 /**
- * Próximo código do orçamento do ano ("ORC-2026-0147"), por empresa, pelo MAIOR sequencial já usado
- * — a mesma regra da numeração da OS (lib/os-server.ts). Nunca "total + 1" (colide depois de excluir)
- * e nunca a ordem de texto do código ("ORC-2026-9999" > "ORC-2026-10000" como texto).
+ * Próximo código do orçamento ("ORC-2026-0147"), pelo contador da empresa (Configurações › Numeração
+ * de documentos), sob trava e dentro da transação de quem grava — numeração contínua (não reinicia no
+ * ano; o ano no código é só o rótulo de quando nasceu).
  */
-export async function proximoCodigoOrcamento(empresaId: string, ano = anoBR()): Promise<string> {
-  const prefixo = `ORC-${ano}-`;
-  const [r] = await prisma.$queryRaw<{ max: number | null }[]>`
-    SELECT MAX(CAST(split_part(codigo, '-', 3) AS INTEGER)) AS max
-    FROM orcamentos
-    WHERE empresa_id = ${empresaId} AND codigo LIKE ${prefixo + "%"} AND split_part(codigo, '-', 3) ~ '^[0-9]{1,9}$'`;
-  return codigoOrcamento(ano, (r?.max ?? 0) + 1);
-}
+export const proximoCodigoOrcamento = (tx: Prisma.TransactionClient, empresaId: string, ano = anoBR()) => proximoNumero(tx, empresaId, "orcamento", ano);

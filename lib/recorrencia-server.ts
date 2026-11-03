@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { contratoGeraFinanceiro } from "@/lib/financeiro-server";
 import { proximasOcorrencias } from "@/lib/recorrencia-helpers";
 import { diaDoMesCivil } from "@/lib/fuso";
+import { comNumero } from "@/lib/numeracao-server";
 
 /**
  * Gera (idempotente) as OS recorrentes futuras de um contrato, a partir de hoje,
@@ -34,21 +35,6 @@ export async function gerarOsRecorrentesContrato(
   if (ocorrencias.length === 0) return 0;
 
   const tituloTipo = ct.tipoOsRecorrencia?.nome ?? "Atendimento recorrente";
-  const seqPorAno = new Map<number, number>();
-
-  async function proximoSeq(ano: number): Promise<number> {
-    if (!seqPorAno.has(ano)) {
-      const ultima = await prisma.ordemServico.findFirst({
-        where: { empresaId: ct!.empresaId, numero: { startsWith: `OS-${ano}-` } },
-        orderBy: { numero: "desc" },
-        select: { numero: true },
-      });
-      seqPorAno.set(ano, ultima ? Number(ultima.numero.split("-")[2]) || 0 : 0);
-    }
-    const proximo = (seqPorAno.get(ano) ?? 0) + 1;
-    seqPorAno.set(ano, proximo);
-    return proximo;
-  }
 
   let criadas = 0;
   for (const oc of ocorrencias) {
@@ -58,10 +44,8 @@ export async function gerarOsRecorrentesContrato(
     });
     if (jaExiste) continue;
 
-    const seq = await proximoSeq(oc.ano);
-    const numero = `OS-${oc.ano}-${String(seq).padStart(4, "0")}`;
-
-    const os = await prisma.ordemServico.create({
+    // Número pelo contador da empresa (rótulo = ano da ocorrência), sob trava, na transação do INSERT
+    const os = await comNumero(ct.empresaId, "os", (numero, tx) => tx.ordemServico.create({
       data: {
         empresaId: ct.empresaId,
         numero,
@@ -87,7 +71,7 @@ export async function gerarOsRecorrentesContrato(
             }
           : undefined,
       },
-    });
+    }));
 
     await prisma.osHistorico.create({
       data: {
@@ -132,21 +116,6 @@ export async function gerarOsRecorrentesLocais(
     : [];
   const tipoNome = new Map(tipos.map((t) => [t.id, t.nome]));
 
-  const seqPorAno = new Map<number, number>();
-  async function proximoSeq(ano: number): Promise<number> {
-    if (!seqPorAno.has(ano)) {
-      const ultima = await prisma.ordemServico.findFirst({
-        where: { empresaId: ct!.empresaId, numero: { startsWith: `OS-${ano}-` } },
-        orderBy: { numero: "desc" },
-        select: { numero: true },
-      });
-      seqPorAno.set(ano, ultima ? Number(ultima.numero.split("-")[2]) || 0 : 0);
-    }
-    const proximo = (seqPorAno.get(ano) ?? 0) + 1;
-    seqPorAno.set(ano, proximo);
-    return proximo;
-  }
-
   let criadas = 0;
   for (const r of ativos) {
     const primeira = new Date(r.dataPrimeiraOs!);
@@ -169,10 +138,8 @@ export async function gerarOsRecorrentesLocais(
       });
       if (jaExiste) continue;
 
-      const seq = await proximoSeq(oc.ano);
-      const numero = `OS-${oc.ano}-${String(seq).padStart(4, "0")}`;
-
-      const os = await prisma.ordemServico.create({
+      // Número pelo contador da empresa (rótulo = ano da ocorrência), sob trava, na transação do INSERT
+      const os = await comNumero(ct.empresaId, "os", (numero, tx) => tx.ordemServico.create({
         data: {
           empresaId: ct.empresaId,
           numero,
@@ -199,7 +166,7 @@ export async function gerarOsRecorrentesLocais(
               }
             : undefined,
         },
-      });
+      }));
 
       await prisma.osHistorico.create({
         data: {

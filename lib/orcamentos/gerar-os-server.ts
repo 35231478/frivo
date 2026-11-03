@@ -53,11 +53,10 @@ export async function gerarOsDoOrcamento(p: { empresaId: string; usuarioId: stri
   if (motivo) return { tipo: "bloqueado", erro: motivo };
 
   const itens = itensParaOs(orc.servicos, orc.produtos);
-  // A numeração é "último + 1": numa corrida com outra OS nova, tenta o número seguinte
-  for (let tentativa = 0; tentativa < 3; tentativa++) {
-    const numero = await proximoNumeroOs(empresaId);
-    try {
+  try {
       const os = await prisma.$transaction(async (tx) => {
+        // Número pelo contador da empresa, sob trava, na mesma transação (nunca duplica)
+        const numero = await proximoNumeroOs(tx, empresaId);
         const criada = await tx.ordemServico.create({
           data: {
             empresaId, numero, clienteId: orc.clienteId, unidadeId: orc.unidadeId, orcamentoOrigemId: orc.id,
@@ -81,9 +80,6 @@ export async function gerarOsDoOrcamento(p: { empresaId: string; usuarioId: stri
         const ja = await osDoOrcamento(empresaId, orc.id);
         if (ja) return { tipo: "existente", os: { id: ja.id, numero: ja.numero } };
       }
-      if (violouUnico(e, "numero") && tentativa < 2) continue;
       throw e;
-    }
   }
-  throw new Error("Não foi possível numerar a OS.");
 }

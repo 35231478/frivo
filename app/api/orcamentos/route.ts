@@ -3,11 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { orcamentoSchema } from "@/lib/validations";
-import { proximoCodigoOrcamento } from "@/lib/orcamentos/numero-server";
 import { camposCondicoes, montarValoresOrcamento, montarCamposProposta } from "@/lib/orcamento-helpers";
 import { nomeDoOrcamento } from "@/lib/orcamentos/nome-server";
 import { destinatarioSugerido, padroesOrcamento, validadeDoPadrao, validarDestinatario } from "@/lib/orcamentos/padroes-server";
-import { anoBR, periodoInstanteBR } from "@/lib/fuso";
+import { periodoInstanteBR } from "@/lib/fuso";
+import { comNumero } from "@/lib/numeracao-server";
 
 export async function GET(req: NextRequest) {
   const guard = await exigirPermissao("orcamentos", "visualizar");
@@ -107,14 +107,9 @@ export async function POST(req: NextRequest) {
   // Nome em branco = automático (tipo da OS, equipamento, cliente/unidade ou itens)
   const nome = await nomeDoOrcamento(empresaId, data);
 
-  // Numeração derivada do maior código existente do ano (evita reuso após exclusão); retry em colisão
-  const ano = anoBR();
-  let orcamento;
-  for (let tentativa = 0; ; tentativa++) {
-    const codigo = await proximoCodigoOrcamento(empresaId, ano);
-
-    try {
-      orcamento = await prisma.orcamento.create({
+  // Número pelo contador da empresa, sob trava, na mesma transação do INSERT (nunca duplica)
+  const orcamento = await comNumero(empresaId, "orcamento", (codigo, tx) =>
+      tx.orcamento.create({
         data: {
           empresaId,
           codigo,
@@ -136,14 +131,7 @@ export async function POST(req: NextRequest) {
             create: data.ordensServicoIds.map((osId) => ({ ordemServicoId: osId })),
           },
         },
-      });
-      break;
-    } catch (e: any) {
-      // P2002 = violação de unique (codigo, empresaId) por concorrência → tenta o próximo número
-      if (e?.code === "P2002" && tentativa < 5) continue;
-      throw e;
-    }
-  }
+      }));
 
   return NextResponse.json(orcamento, { status: 201 });
 }

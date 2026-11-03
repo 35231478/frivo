@@ -3,8 +3,8 @@ import { nomesTecnicosAtividade, textoTecnicosAtividade } from "@/lib/atividade-
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { relatorioSchema } from "@/lib/validations";
-import { gerarNumeroRelatorio } from "@/lib/utils";
 import { linkRelatorioAtividade } from "@/lib/relatorio-atividade-link";
+import { comNumero } from "@/lib/numeracao-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -110,15 +110,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
   const data = parsed.data;
 
-  const ultimoRel = await prisma.relatorioOs.findFirst({
-    where: { empresaId, numero: { startsWith: `REL-${data.anoReferencia}-` } },
-    orderBy: { numero: "desc" },
-    select: { numero: true },
-  });
-  const seq = (ultimoRel ? Number(ultimoRel.numero.split("-")[2]) : 0) + 1;
-  const numero = gerarNumeroRelatorio(seq, data.anoReferencia);
-
-  const relatorio = await prisma.relatorioOs.create({
+  // Número pelo contador da empresa (rótulo = ano de referência), sob trava, na transação do INSERT
+  const relatorio = await comNumero(empresaId, "relatorio_os", (numero, tx) => tx.relatorioOs.create({
     data: {
       empresaId,
       ordemServicoId: id,
@@ -132,7 +125,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       status: "RASCUNHO",
       tokenPublico: crypto.randomUUID(),
     },
-  });
+  }));
 
   return NextResponse.json(relatorio, { status: 201 });
 }

@@ -21,6 +21,7 @@ import { TelaEmail } from "./email";
 import { TelaEmailTemplates } from "./email-templates";
 import { TelaPortal } from "./portal";
 import { TelaQrCode } from "./qr-code";
+import { TelaNumeracao } from "./numeracao";
 
 /**
  * A tela COMPLETA de cada item de Configurações (as mesmas de antes, sem nada capado), pelo id
@@ -50,6 +51,7 @@ const TELAS: Record<string, () => ReactNode> = {
   "email-templates": () => <TelaEmailTemplates />,
   portal: () => <TelaPortal />,
   "qr-code": () => <TelaQrCode />,
+  numeracao: () => <TelaNumeracao />,
 };
 
 export const temTelaConfig = (id: string) => id in TELAS;

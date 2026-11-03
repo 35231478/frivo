@@ -13,11 +13,13 @@ const db = vi.hoisted(() => ({
   ordemServico: { count: vi.fn(), create: vi.fn() },
   unidade: { findFirst: vi.fn() },
   equipamento: { findFirst: vi.fn() },
+  $transaction: async (fn: any) => fn(db),
 }));
 const portal = vi.hoisted(() => ({ sessao: null as any }));
 
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 vi.mock("@/lib/os-server", () => ({ osDaEmpresa: vi.fn(async () => true), proximoNumeroOs: vi.fn(async () => "OS-2026-0001") }));
+vi.mock("@/lib/numeracao-server", () => ({ proximoNumero: vi.fn(async (_tx: unknown, _e: string, tipo: string) => (tipo === "chamado" ? "CHM-2026-0001" : "OS-2026-0001")) }));
 vi.mock("@/lib/permissoes-server", () => ({
   exigirPermissao: vi.fn(async () => ({ erro: false, session: { user: { id: "u1", empresaId: "e1" } } })),
 }));
