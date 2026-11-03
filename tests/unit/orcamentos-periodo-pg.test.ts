@@ -115,7 +115,7 @@ describe.skipIf(!URL_PG)("Orçamentos — período e cards de funil (PostgreSQL 
     // planilha (o mesmo estilo de Receber/Pagar): colunas fixas, Valor (R$) sem "R$" na célula, à direita e tabular; validade
     expect(t.h).toMatch(/<table class="[^"]*text-\[13px\][^"]*table-fixed[^"]*" data-tabela-planilha/);
     const linha = t.h.match(/<tr [^>]*data-linha-orcamento="oN7"[\s\S]*?<\/tr>/)![0];
-    expect(linha).toMatch(/<td class="[^"]*text-right tabular-nums[^"]*" data-valor="true">800,00<\/td>/);
+    expect(linha).toMatch(/<td class="[^"]*text-right tabular-nums[^"]*" data-celula="valor"><span class="[^"]*tabular-nums[^"]*" data-valor="true">800,00<\/span><\/td>/);
     expect(linha).toContain('data-validade="true">14/11/2026<');
     expect(t.h).toMatch(/Valor \(R\$\)/);
     // status numa linha só na planilha: o "desde" vai para o hover

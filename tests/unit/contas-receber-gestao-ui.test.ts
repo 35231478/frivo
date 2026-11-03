@@ -415,7 +415,7 @@ describe("período + cards do período + cara de planilha (padrão da casa)", ()
     expect(linha.querySelector("[data-origem-conta]")!.getAttribute("href")).toBe("/orcamentos/o1");
     // celular continua em cartões
     expect($("[data-cartoes-receber]")!.className).toContain("md:hidden");
-    expect($("[data-tabela-receber]")!.className).toContain("hidden md:block");
+    expect($("[data-tabela-receber] table[data-tabela-planilha]")!.closest(".md\\:block")!.className).toContain("hidden md:block");
   });
 
   it("nada no período: mensagem do mês + \"Ver todo o período\"; em todo o período, só a mensagem", async () => {

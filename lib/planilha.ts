@@ -12,6 +12,14 @@ export const PLANILHA = {
   td: "px-2 py-1.5 align-top",
   /** Valor em R$ / número: à direita, alinhado pelos algarismos */
   numero: "text-right tabular-nums whitespace-nowrap",
+  /** Código/número do registro (orçamento, OS, conta, nota): a MESMA fonte em todas as telas */
+  codigo: "font-mono text-[12px] font-semibold",
+  /** O nome principal da linha: só peso, nunca tamanho maior que o resto */
+  nome: "font-medium text-ink",
+  /** Texto secundário (técnico, categoria, datas) */
+  apagado: "text-ink-muted",
+  /** Data: alinhada pelos algarismos, nunca quebra */
+  data: "tabular-nums whitespace-nowrap",
 } as const;
 
 

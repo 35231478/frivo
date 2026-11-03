@@ -779,10 +779,28 @@ model Usuario {
   notasFiscaisEmitidas NotaFiscal[]       @relation("NotaFiscalEmissor")
   notasFiscaisEventos  NotaFiscalEvento[] @relation("NotaFiscalEventoAutor")
   reajustesContrato    ReajusteContrato[]
+  preferencias         PreferenciaUsuario[]
 
   @@unique([email, empresaId])
   @@index([empresaId, ativo])
   @@map("usuarios")
+}
+
+/// Preferência pessoal de tela (larguras e colunas visíveis das tabelas, …), uma linha por
+/// usuário e chave ("tabela:orcamentos"). Segue o usuário entre dispositivos; o localStorage é só
+/// a reserva enquanto carrega. Não tem empresa: o usuário já é de uma só, e a rota só lê/grava a
+/// preferência do próprio usuário da sessão.
+model PreferenciaUsuario {
+  id           String   @id @default(cuid())
+  usuarioId    String   @map("usuario_id")
+  chave        String
+  valor        Json
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, chave])
+  @@map("preferencias_usuario")
 }
 
 model PushSubscription {

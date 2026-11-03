@@ -19,6 +19,7 @@ import { CampoBusca } from "@/components/listagem/listagem-ui";
 import { useListagemUrl } from "@/components/listagem/use-listagem-url";
 import { cn, formatarData, formatarDataHora, formatarMoeda } from "@/lib/utils";
 import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
+import { TabelaPro } from "@/components/listagem/tabela-pro";
 import { formatarDocumento } from "@/lib/documento";
 import { LABEL_AMBIENTE } from "@/lib/nfse/regras";
 import {
@@ -102,42 +103,41 @@ export function NotasCentralView({ dados }: { dados: DadosCentral }) {
           <ListaVazia mensagem={`Nenhuma nota em ${filtros.periodo.tipo === "mes" ? filtros.periodo.rotulo.toLowerCase() : "o período"}`} busca={filtros.q || undefined} onLimpar={() => { setBusca(""); navegar({ q: null }); }} />
         ) : (
           <>
-            {/* Desktop: "cara de planilha" (lib/planilha — o mesmo estilo de Contas a Receber/Pagar e do orçamento).
-                Ações fixas à direita: com nomes/motivos longos a tabela rola, as ações não somem */}
-            <div className="hidden md:block overflow-x-auto" data-tabela-rolagem>
-              <table className={PLANILHA.tabela} data-tabela data-tabela-planilha>
-                <thead>
-                  <tr className={PLANILHA.cabecalho}>
-                    {["Situação", "Número", "Data", "Tomador", "Origem"].map((h) => <th key={h} scope="col" className={TH}>{h}</th>)}
-                    <th scope="col" className={cn(TH, "text-right")}>Valor (R$)</th>
-                    <th scope="col" className={cn(TH, "hidden 2xl:table-cell")}>Ambiente</th>
-                    <th scope="col" className={cn(TH, "text-right sticky right-0 bg-surface-alt")}><span className="sr-only">Ações</span></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dados.notas.map((n) => (
-                    <tr key={n.id} className={cn("group", PLANILHA.linha, "hover:bg-primary-50/40")} data-nota={n.id} data-status={n.status}>
-                      <td className={PLANILHA.td}>
-                        <Situacao n={n} />
-                        <span className="2xl:hidden mt-1 inline-flex"><Ambiente a={n.ambiente} /></span>
-                      </td>
-                      <td className={cn(PLANILHA.td, "font-mono text-[12px] text-ink whitespace-nowrap")}>{n.numero ?? "—"}</td>
-                      <td className={cn(PLANILHA.td, "text-ink-muted whitespace-nowrap tabular-nums")}><DataNota n={n} /></td>
-                      <td className={cn(PLANILHA.td, "max-w-[220px]")}>
-                        <p className="font-medium text-ink truncate" title={n.tomadorNome}>{n.tomadorNome}</p>
+            {/* Desktop: a tabela profissional (components/listagem/tabela-pro — colunas redimensionáveis, menu "Colunas", preferência por usuário) */}
+            <div data-tabela-rolagem>
+              <TabelaPro
+                tela="notas-fiscais"
+                atributos={{ "data-tabela": true }}
+                colunas={[
+                  { id: "situacao", titulo: "Situação", largura: 200, obrigatoria: true },
+                  { id: "numero", titulo: "Número", largura: 96 },
+                  { id: "data", titulo: "Data", largura: 96 },
+                  { id: "tomador", titulo: "Tomador", obrigatoria: true },
+                  { id: "origem", titulo: "Origem", largura: 160 },
+                  { id: "valor", titulo: "Valor (R$)", alinhar: "direita", largura: 120, obrigatoria: true },
+                  { id: "ambiente", titulo: "Ambiente", largura: 120 },
+                  { id: "acoes", titulo: "Ações", fixa: true, largura: 72, semTitulo: true, alinhar: "direita", classe: "py-0.5" },
+                ]}
+                linhas={dados.notas.map((n) => ({
+                  id: n.id,
+                  atributos: { "data-nota": n.id, "data-status": n.status },
+                  celulas: {
+                    situacao: <Situacao n={n} />,
+                    numero: <span className={cn(PLANILHA.codigo, "font-normal text-ink")}>{n.numero ?? "—"}</span>,
+                    data: <span className={cn(PLANILHA.data, PLANILHA.apagado)}><DataNota n={n} /></span>,
+                    tomador: (
+                      <>
+                        <p className={cn(PLANILHA.nome, "truncate")} title={n.tomadorNome}>{n.tomadorNome}</p>
                         <p className="text-[11px] text-ink-subtle whitespace-nowrap tabular-nums">{formatarDocumento(n.tomadorCpfCnpj)}</p>
-                      </td>
-                      <td className={PLANILHA.td}><Origem n={n} /></td>
-                      <td className={cn(PLANILHA.td, PLANILHA.numero, "font-semibold text-ink")} data-valor>{valorSemMoeda(n.valorServicos)}</td>
-                      <td className={cn(PLANILHA.td, "hidden 2xl:table-cell")}><Ambiente a={n.ambiente} /></td>
-                      {/* A célula fixa precisa de fundo opaco: o mesmo tom da linha (branca, zebrada ou com o mouse) */}
-                      <td className={cn(PLANILHA.td, "py-0.5 text-right sticky right-0 bg-white group-even:bg-[#FAFBFC] group-hover:bg-primary-50")} data-celula-acoes>
-                        <AcoesNota n={n} onDetalhes={() => setDetalheId(n.id)} onReconsultar={() => reconsultar(n.id)} consultando={consultando === n.id} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </>
+                    ),
+                    origem: <Origem n={n} />,
+                    valor: <span className={cn(PLANILHA.numero, "font-semibold text-ink")} data-valor>{valorSemMoeda(n.valorServicos)}</span>,
+                    ambiente: <Ambiente a={n.ambiente} />,
+                    acoes: <span data-celula-acoes><AcoesNota n={n} onDetalhes={() => setDetalheId(n.id)} onReconsultar={() => reconsultar(n.id)} consultando={consultando === n.id} /></span>,
+                  },
+                }))}
+              />
             </div>
 
             {/* Celular: cartões (nada de tabela cortada) */}
@@ -176,7 +176,6 @@ export function NotasCentralView({ dados }: { dados: DadosCentral }) {
 
 /** Altura máxima do menu ⋮ (7 itens): abaixo disso de espaço, ele abre para cima */
 const INPUT = "bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all";
-const TH = cn(PLANILHA.th, "text-left whitespace-nowrap");
 
 /* ───────── Células ───────── */
 function Situacao({ n }: { n: NotaLinha }) {

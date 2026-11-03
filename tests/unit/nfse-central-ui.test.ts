@@ -36,6 +36,8 @@ beforeEach(() => {
   nav.replace.mockClear(); nav.refresh.mockClear(); nav.sp = ""; nav.path = "/financeiro/notas-fiscais";
   vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit = {}) => {
     const metodo = String(init.method ?? "GET");
+    // A preferência da tabela (larguras/colunas) não entra na conta: ninguém tem uma guardada
+    if (url.startsWith("/api/preferencias/")) return new Response(JSON.stringify({ valor: null }), { status: 200, headers: { "Content-Type": "application/json" } });
     chamadas.push({ url, metodo });
     const r = respostas[`${metodo} ${url}`] ?? { status: 404, corpo: { erro: "Nota não encontrada." } };
     return new Response(JSON.stringify(r.corpo), { status: r.status, headers: { "Content-Type": "application/json" } });
@@ -298,11 +300,11 @@ describe("ações por status (menu ⋮)", () => {
     expect([m.style.top, m.style.bottom]).toEqual(["134px", ""]);
   });
 
-  it("tabela larga: rola por dentro e a coluna de ações fica fixa à direita", async () => {
+  it("tabela larga: rola por dentro (TabelaPro) e as ações ficam na última coluna", async () => {
     await tela();
-    expect($("[data-tabela-rolagem]")!.className).toContain("overflow-x-auto");
-    expect($$("[data-celula-acoes]").every((c) => c.className.includes("sticky") && c.className.includes("right-0"))).toBe(true);
-    // O menu sai da célula fixa (que cria camada própria): vai direto no body, por cima das outras linhas
+    expect($("[data-tabela-rolagem] .overflow-x-auto table[data-tabela-planilha]")).not.toBeNull();
+    expect($$("[data-celula-acoes]").every((c) => c.closest("td")?.getAttribute("data-celula") === "acoes")).toBe(true);
+    // O menu vai direto no body, por cima das outras linhas
     const m = await abrirMenu("nA");
     expect(m.parentElement).toBe(document.body);
     expect(m.closest("[data-celula-acoes]")).toBeNull();

@@ -46,6 +46,8 @@ const pedidos: URL[] = [];
 let segurar: Promise<void> | null = null;
 function api(urlStr: string) {
   const u = new URL(urlStr, "http://localhost");
+  // A preferência da tabela (larguras/colunas) é outra conversa: aqui ninguém tem uma guardada
+  if (u.pathname.startsWith("/api/preferencias/")) return { chave: u.pathname.split("/").pop(), valor: null };
   pedidos.push(u);
   const q = (u.searchParams.get("q") ?? "").toLowerCase();
   let rs = PRODUTOS.filter((p) => p.nome.toLowerCase().includes(q));

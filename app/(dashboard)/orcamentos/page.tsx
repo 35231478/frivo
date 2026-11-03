@@ -19,7 +19,7 @@ import { InativarRegistro } from "@/components/ui/inativar-registro";
 import type { Prisma } from "@prisma/client";
 import { janela, lerOrdem, lerPaginacao, ordemPrisma, paginaValida } from "@/lib/listagem";
 import { ORDEM_ORCAMENTOS, ORDEM_PADRAO_ORCAMENTOS } from "@/lib/listas/ordenacao";
-import { BuscaUrl, ConteudoUrl, FiltroCheckUrl, FiltroSelectUrl, LimparBuscaUrl, ListaUrl, PaginacaoUrl, ThOrdUrl } from "@/components/listagem/lista-url";
+import { ConteudoUrl, LimparBuscaUrl, ListaUrl, PaginacaoUrl, TabelaProUrl } from "@/components/listagem/lista-url";
 
 export const metadata: Metadata = { title: "Orçamentos" };
 
@@ -135,48 +135,43 @@ export default async function OrcamentosPage({
             </li>
           ))}
         </ul>
-        {/* Desktop: "cara de planilha" (lib/planilha — o mesmo estilo de Contas a Receber/Pagar e do orçamento) */}
-        <div className="overflow-x-auto hidden md:block" data-tabela-orcamentos>
-          <table className={cn(PLANILHA.tabela, "table-fixed")} data-tabela-planilha>
-            <thead>
-              <tr className={PLANILHA.cabecalho}>
-                {massa && <th scope="col" className={cn(PLANILHA.th, "w-9 pl-3")}><CheckboxPagina /></th>}
-                <ThOrdUrl label="Código" k="codigo" className={cn(PLANILHA.th, "w-[7.5rem]")} />
-                <ThOrdUrl label="Nome" k="nome" className={PLANILHA.th} />
-                <ThOrdUrl label="Cliente" k="cliente" className={cn(PLANILHA.th, "w-[17%]")} />
-                <th scope="col" className={cn(PLANILHA.th, "text-left hidden 2xl:table-cell w-[8rem]")}>Tipo</th>
-                <ThOrdUrl label="Status" k="status" className={cn(PLANILHA.th, "w-[8.5rem]")} />
-                <ThOrdUrl label="Valor (R$)" k="valor" className={cn(PLANILHA.th, "text-right w-[7.5rem]")} />
-                <th scope="col" className={cn(PLANILHA.th, "text-left hidden xl:table-cell w-[5.75rem]")}>Validade</th>
-                <th scope="col" className={cn(PLANILHA.th, "text-center hidden 2xl:table-cell w-12")}>OS</th>
-                <ThOrdUrl label="Criado" k="criado" padrao="criado" className={cn(PLANILHA.th, "hidden lg:table-cell w-[5.75rem]")} />
-                <th scope="col" className={cn(PLANILHA.th, "w-[8.5rem]")}><span className="sr-only">Ações</span></th>
-              </tr>
-            </thead>
-            <tbody>
-              {orcamentos.map((o) => {
-                const cliente = o.cliente.nomeFantasia ?? o.cliente.nome;
-                return (
-                  <tr key={o.id} data-linha-orcamento={o.id} className={cn(PLANILHA.linha, "hover:bg-primary-50/40")}>
-                    {massa && <td className={cn(PLANILHA.td, "align-middle pl-3")}><CheckboxLinha id={o.id} rotulo={o.codigo} /></td>}
-                    <td className={cn(PLANILHA.td, "align-middle truncate")}>
-                      <Link href={`/orcamentos/${o.id}`} title={o.codigo} className="font-mono text-[12px] font-semibold text-primary-600 hover:underline">{o.codigo}</Link>
-                    </td>
-                    {/* Uma linha só: o texto inteiro aparece no hover */}
-                    <td className={cn(PLANILHA.td, "align-middle truncate font-medium text-ink")} title={o.nome} data-nome-orcamento>{o.nome}</td>
-                    <td className={cn(PLANILHA.td, "align-middle truncate text-ink")} title={cliente} data-cliente-orcamento>{cliente}</td>
-                    <td className={cn(PLANILHA.td, "align-middle hidden 2xl:table-cell truncate")}>
-                      <span className={CLASSE_TIPO_ORCAMENTO[o.tipo]}>{LABELS_TIPO_ORCAMENTO[o.tipo]}</span>
-                    </td>
-                    <td className={cn(PLANILHA.td, "align-middle")}>
-                      <PilulaEtapa etapa={etapaCiclo(o, agora)} desde={dataDaEtapa(o, agora)} compacta />
-                    </td>
-                    <td className={cn(PLANILHA.td, PLANILHA.numero, "align-middle font-semibold text-ink")} data-valor>{valorSemMoeda(Number(o.totalGeral))}</td>
-                    <td className={cn(PLANILHA.td, "align-middle hidden xl:table-cell tabular-nums whitespace-nowrap text-ink-muted")} data-validade>{o.validadeEm ? formatarData(o.validadeEm) : "—"}</td>
-                    <td className={cn(PLANILHA.td, "align-middle text-center text-ink-muted hidden 2xl:table-cell tabular-nums")}>{o._count.ordensServico}</td>
-                    <td className={cn(PLANILHA.td, "align-middle hidden lg:table-cell tabular-nums whitespace-nowrap text-ink-muted")}>{formatarData(o.criadoEm)}</td>
-                    <td className={cn(PLANILHA.td, "align-middle py-0.5 text-right")}>
-                      <div className="flex items-center justify-end gap-0.5">
+        {/* Desktop: a tabela profissional (components/listagem/tabela-pro — colunas redimensionáveis, menu "Colunas", preferência por usuário) */}
+        <div data-tabela-orcamentos>
+          <TabelaProUrl
+            tela="orcamentos" padrao="criado"
+            colunas={[
+              ...(massa ? [{ id: "sel", titulo: "Selecionar a página", fixa: true, largura: 36, cabecalho: <CheckboxPagina />, classe: "pl-3" }] : []),
+              { id: "codigo", titulo: "Código", largura: 120, ordenar: "codigo", obrigatoria: true, classe: "truncate" },
+              { id: "nome", titulo: "Nome", ordenar: "nome", obrigatoria: true, classe: "truncate" },
+              { id: "cliente", titulo: "Cliente", largura: 220, ordenar: "cliente", classe: "truncate" },
+              { id: "tipo", titulo: "Tipo", largura: 128, oculta: true, classe: "truncate" },
+              { id: "status", titulo: "Status", largura: 136, ordenar: "status" },
+              { id: "valor", titulo: "Valor (R$)", alinhar: "direita", largura: 120, ordenar: "valor", obrigatoria: true },
+              { id: "validade", titulo: "Validade", largura: 92 },
+              { id: "os", titulo: "OS", alinhar: "centro", largura: 48, oculta: true },
+              { id: "criado", titulo: "Criado", largura: 92, ordenar: "criado" },
+              { id: "acoes", titulo: "Ações", fixa: true, largura: 136, semTitulo: true, alinhar: "direita", classe: "py-0.5" },
+            ]}
+            linhas={orcamentos.map((o) => {
+              const cliente = o.cliente.nomeFantasia ?? o.cliente.nome;
+              return {
+                id: o.id,
+                atributos: { "data-linha-orcamento": o.id },
+                titulos: { nome: o.nome, cliente },
+                celulas: {
+                  sel: massa ? <CheckboxLinha id={o.id} rotulo={o.codigo} /> : null,
+                  codigo: <Link href={`/orcamentos/${o.id}`} title={o.codigo} className={cn(PLANILHA.codigo, "text-primary-600 hover:underline")}>{o.codigo}</Link>,
+                  // Uma linha só: o texto inteiro aparece no hover
+                  nome: <span className={PLANILHA.nome} data-nome-orcamento>{o.nome}</span>,
+                  cliente: <span className="text-ink" data-cliente-orcamento>{cliente}</span>,
+                  tipo: <span className={CLASSE_TIPO_ORCAMENTO[o.tipo]}>{LABELS_TIPO_ORCAMENTO[o.tipo]}</span>,
+                  status: <PilulaEtapa etapa={etapaCiclo(o, agora)} desde={dataDaEtapa(o, agora)} compacta />,
+                  valor: <span className={cn(PLANILHA.numero, "font-semibold text-ink")} data-valor>{valorSemMoeda(Number(o.totalGeral))}</span>,
+                  validade: <span className={cn(PLANILHA.data, PLANILHA.apagado)} data-validade>{o.validadeEm ? formatarData(o.validadeEm) : "—"}</span>,
+                  os: <span className="tabular-nums text-ink-muted">{o._count.ordensServico}</span>,
+                  criado: <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{formatarData(o.criadoEm)}</span>,
+                  acoes: (
+                    <div className="flex items-center justify-end gap-0.5">
                       <AcoesLinhaOrcamento orcamentoId={o.id} codigo={o.codigo} tokenPublico={o.tokenPublico} podeEnviar={podeEnviar} bloqueio={bloqueioEnvio(o, agora)} />
                       <InativarRegistro
                         url={`/api/orcamentos/${o.id}`} modulo="orcamentos" acaoReativar="editar"
@@ -185,13 +180,12 @@ export default async function OrcamentosPage({
                         textoInativar="Tem certeza? O orçamento passa para Cancelado e sai da lista padrão. Nada é apagado: itens, vínculos e o link público ficam preservados, e ele pode ser reaberto (volta para Rascunho)."
                         textoReativar="O orçamento volta para Rascunho (editável) e reaparece na lista."
                       />
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    </div>
+                  ),
+                },
+              };
+            })}
+          />
         </div>
         </>
         )}

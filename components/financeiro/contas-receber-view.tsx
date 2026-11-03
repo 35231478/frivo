@@ -23,6 +23,7 @@ import { BarraPeriodo, CardResumo, GradeCards, type PeriodoTela } from "@/compon
 import { BarraFiltros, FiltroTextoUrl, inputFiltro } from "@/components/listagem/barra-filtros";
 import { CampoBusca, Paginacao } from "@/components/listagem/listagem-ui";
 import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
+import { TabelaPro, type ColunaPro } from "@/components/listagem/tabela-pro";
 import { recebidaEmParte, saldoDaConta } from "@/lib/financeiro/parcelas";
 
 export interface ContaView {
@@ -252,45 +253,43 @@ export function ContasReceberView({
           })}
         </ul>
 
-        {/* Desktop: "cara de planilha" (lib/planilha — o mesmo estilo do documento do orçamento) */}
-        <div className="hidden md:block overflow-x-auto" data-tabela-receber>
-          <table className={cn(PLANILHA.tabela, "table-fixed")} data-tabela-planilha>
-            <thead>
-              <tr className={PLANILHA.cabecalho}>
-                {podeRenegociar && <th scope="col" className={cn(PLANILHA.th, "w-8")}><span className="sr-only">Escolher para renegociar</span></th>}
-                <th scope="col" className={cn(PLANILHA.th, "text-left w-[5.75rem]")}>Vencimento</th>
-                <th scope="col" className={cn(PLANILHA.th, "text-left hidden lg:table-cell w-[8.5rem]")}>Nº</th>
-                <th scope="col" className={cn(PLANILHA.th, "text-left w-[17%]")}>Cliente</th>
-                <th scope="col" className={cn(PLANILHA.th, "text-left hidden lg:table-cell")}>Descrição</th>
-                <th scope="col" className={cn(PLANILHA.th, "text-left hidden xl:table-cell w-[10rem]")}>Categoria</th>
-                <th scope="col" className={cn(PLANILHA.th, "text-left w-[8rem]")}>Situação</th>
-                <th scope="col" className={cn(PLANILHA.th, "text-right w-[7.5rem]")}>Valor (R$)</th>
-                <th scope="col" className={cn(PLANILHA.th, "text-right hidden lg:table-cell w-[7.5rem]")}>Em aberto (R$)</th>
-                <th scope="col" className={cn(PLANILHA.th, "w-10")}><span className="sr-only">Ações</span></th>
-              </tr>
-            </thead>
-            <tbody>
-              {comStatus.length === 0 ? (
-                <tr><td colSpan={podeRenegociar ? 10 : 9}><Vazio /></td></tr>
-              ) : comStatus.map(({ c, sv }) => {
+        {/* Desktop: a tabela profissional (components/listagem/tabela-pro — colunas redimensionáveis, menu "Colunas", preferência por usuário) */}
+        <div data-tabela-receber>
+          {comStatus.length === 0 ? <div className="hidden md:block"><Vazio /></div> : (
+            <TabelaPro
+              tela="contas-receber"
+              colunas={[
+                ...(podeRenegociar ? [{ id: "sel", titulo: "Escolher para renegociar", fixa: true, largura: 32, cabecalho: <span aria-hidden /> } satisfies ColunaPro] : []),
+                { id: "vencimento", titulo: "Vencimento", largura: 96 },
+                { id: "numero", titulo: "Nº", largura: 136, classe: "truncate" },
+                { id: "cliente", titulo: "Cliente", largura: 220, obrigatoria: true },
+                { id: "descricao", titulo: "Descrição" },
+                { id: "categoria", titulo: "Categoria", largura: 160 },
+                { id: "situacao", titulo: "Situação", largura: 128 },
+                { id: "valor", titulo: "Valor (R$)", alinhar: "direita", largura: 120, obrigatoria: true },
+                { id: "emAberto", titulo: "Em aberto (R$)", alinhar: "direita", largura: 120 },
+                { id: "acoes", titulo: "Ações", fixa: true, largura: 40, semTitulo: true, alinhar: "direita", classe: "py-0.5" },
+              ]}
+              linhas={comStatus.map(({ c, sv }) => {
                 const origem = origemComLink(c);
-                return (
-                  <tr key={c.id} data-linha-conta={c.id}
-                    className={cn(PLANILHA.linha, "hover:bg-primary-50/40", sv.linhaVermelha && "even:bg-atrasado-claro bg-atrasado-claro hover:bg-atrasado-claro/70")}>
-                    {podeRenegociar && <td className={cn(PLANILHA.td, "align-middle")}>{caixa(c)}</td>}
-                    <td className={cn(PLANILHA.td, "align-middle tabular-nums whitespace-nowrap text-ink-muted")}>{c.dataVencimento ? formatarData(c.dataVencimento) : "—"}</td>
-                    <td className={cn(PLANILHA.td, "align-middle hidden lg:table-cell truncate font-mono text-[11px] text-ink-subtle")} title={c.numero} data-numero-conta>{c.numero}</td>
-                    <td className={cn(PLANILHA.td, "align-middle")}>
-                      <p className="font-medium text-ink truncate" title={c.clienteCnpj ? `${c.clienteNome} · ${formatarCpfCnpj(c.clienteCnpj)}` : c.clienteNome}>{c.clienteNome}</p>
-                    </td>
-                    <td className={cn(PLANILHA.td, "align-middle hidden lg:table-cell")}>
+                return {
+                  id: c.id,
+                  atributos: { "data-linha-conta": c.id },
+                  classe: sv.linhaVermelha ? "even:bg-atrasado-claro bg-atrasado-claro hover:bg-atrasado-claro/70" : undefined,
+                  titulos: { numero: c.numero },
+                  celulas: {
+                    sel: podeRenegociar ? caixa(c) : null,
+                    vencimento: <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{c.dataVencimento ? formatarData(c.dataVencimento) : "—"}</span>,
+                    numero: <span className={cn(PLANILHA.codigo, "font-normal text-ink-subtle")} data-numero-conta>{c.numero}</span>,
+                    cliente: <p className={cn(PLANILHA.nome, "truncate")} title={c.clienteCnpj ? `${c.clienteNome} · ${formatarCpfCnpj(c.clienteCnpj)}` : c.clienteNome}>{c.clienteNome}</p>,
+                    descricao: (
                       <div className="flex items-baseline gap-1.5 min-w-0">
                         <button type="button" onClick={() => setDetalheId(c.id)} title={c.descricao} className="min-w-0 text-left text-ink hover:text-primary-600 truncate" data-abrir-detalhes={c.id}>{c.descricao}</button>
                         {origem && <Link href={origem.href} title={origem.rotulo} className="shrink-0 max-w-[45%] truncate text-[11px] text-acento hover:underline" data-origem-conta>{origem.rotulo}</Link>}
                       </div>
-                    </td>
-                    <td className={cn(PLANILHA.td, "align-middle hidden xl:table-cell")}><CategoriaBadge conta={c} categorias={categorias} linhaUnica /></td>
-                    <td className={cn(PLANILHA.td, "align-middle")}>
+                    ),
+                    categoria: <CategoriaBadge conta={c} categorias={categorias} linhaUnica />,
+                    situacao: (
                       <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
                         <span className={cn("inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full", sv.classe)} data-situacao>
                           {sv.linhaVermelha && <AlertTriangle className="w-3 h-3" />}{sv.label}
@@ -298,21 +297,23 @@ export function ContasReceberView({
                         {recebidaEmParte(c) && <SeloParcial />}
                         {c.boletoStatus === "EMITIDO" && <Barcode className="w-3.5 h-3.5 text-ok-texto" aria-label="Boleto emitido" />}
                       </span>
-                    </td>
-                    <td className={cn(PLANILHA.td, PLANILHA.numero, "align-middle font-semibold text-ink")} data-valor>{valorSemMoeda(c.valor)}</td>
-                    {/* O que falta: igual ao valor sem baixa; menor na baixa parcial; 0 na recebida/cancelada */}
-                    <td className={cn(PLANILHA.td, PLANILHA.numero, "align-middle hidden lg:table-cell", recebidaEmParte(c) ? "font-semibold text-atencao-texto" : "text-ink-muted")} data-em-aberto>
-                      {c.status === "CANCELADO" ? "—"
-                        : c.status === "PERDA" ? <span title={`Perdido: ${formatarMoeda(c.valorPerda ?? 0)}`} data-perdido>—</span>
-                        : c.status === "RENEGOCIADO" ? <span title={c.renegociadaEmNumero ? `Renegociada em ${c.renegociadaEmNumero}` : "Renegociada"} data-renegociada>—</span>
-                        : valorSemMoeda(saldoDaConta(c))}
-                    </td>
-                    <td className={cn(PLANILHA.td, "align-middle text-right py-0.5")}>{acoes(c)}</td>
-                  </tr>
-                );
+                    ),
+                    valor: <span className={cn(PLANILHA.numero, "font-semibold text-ink")} data-valor>{valorSemMoeda(c.valor)}</span>,
+                    // O que falta: igual ao valor sem baixa; menor na baixa parcial; 0 na recebida/cancelada
+                    emAberto: (
+                      <span className={cn(PLANILHA.numero, recebidaEmParte(c) ? "font-semibold text-atencao-texto" : "text-ink-muted")} data-em-aberto>
+                        {c.status === "CANCELADO" ? "—"
+                          : c.status === "PERDA" ? <span title={`Perdido: ${formatarMoeda(c.valorPerda ?? 0)}`} data-perdido>—</span>
+                          : c.status === "RENEGOCIADO" ? <span title={c.renegociadaEmNumero ? `Renegociada em ${c.renegociadaEmNumero}` : "Renegociada"} data-renegociada>—</span>
+                          : valorSemMoeda(saldoDaConta(c))}
+                      </span>
+                    ),
+                    acoes: acoes(c),
+                  },
+                };
               })}
-            </tbody>
-          </table>
+            />
+          )}
         </div>
 
         <div className="px-4 py-3 border-t border-surface-border bg-surface-alt/40 space-y-2">

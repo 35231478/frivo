@@ -7,6 +7,7 @@ import { useListagemUrl } from "@/components/listagem/use-listagem-url";
 import { CampoBusca, Paginacao, SelectFiltro, sugerirPorUrl, ThOrd, type Opcao } from "@/components/listagem/listagem-ui";
 import type { Sugestao } from "@/lib/listagem";
 import { InputData } from "@/components/ui/input-data";
+import { TabelaPro, type TabelaProProps } from "@/components/listagem/tabela-pro";
 
 /**
  * Peças para listas renderizadas NO SERVIDOR (Clientes, Orçamentos…): a página continua montando
@@ -78,6 +79,20 @@ export function ThOrdUrl({ label, k, padrao, className }: { label: string; k: st
     <ThOrd
       label={label} k={k} ordem={ordem} dir={dir} className={className}
       onOrdenar={(c) => navegar({ ordem: c, dir: ordem === c && dir === "asc" ? "desc" : null }, true)}
+    />
+  );
+}
+
+/** A tabela profissional ordenando pela URL (?ordem=&dir=); sem ordem escolhida, `padrao` aparece como ativo. */
+export function TabelaProUrl({ padrao, ...props }: Omit<TabelaProProps, "ordenacao"> & { padrao?: string }) {
+  const { navegar } = useLista();
+  const sp = useSearchParams();
+  const ordem = sp.get("ordem") || padrao || null;
+  const dir = sp.get("dir") === "desc" ? "desc" : "asc";
+  return (
+    <TabelaPro
+      {...props}
+      ordenacao={{ ativa: ordem, dir, onOrdenar: (c) => navegar({ ordem: c, dir: ordem === c && dir === "asc" ? "desc" : null }, true) }}
     />
   );
 }
