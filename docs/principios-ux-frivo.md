@@ -89,3 +89,26 @@ Regras:
 - Sem botão "Aplicar": escolher já filtra. Campos de texto esperam a pessoa parar de digitar.
 - No celular tudo empilha (período na largura toda, busca, botões); a lista vira cartões como antes.
 - Atalhos de teclado onde existiam (OS): ← › período anterior/seguinte, T = hoje.
+
+## Padrão das telas de lista: a tabela profissional (`TabelaPro`)
+
+Toda tabela de lista no desktop (Orçamentos, OS, Contas a Receber, Contas a Pagar, Notas fiscais,
+Medições e os cadastros do `CadastroPadrao`) é UM componente: `components/listagem/tabela-pro`.
+No celular a tabela não existe: a tela passa os seus cartões em `cartoes`.
+
+```
+[contador / totais da tela]                               [⚙ Colunas ⌄]
+┌ CÓDIGO ┃ NOME                 ┃ CLIENTE      ┃ VALOR (R$) ┃   ┐   ← cabeçalho 10px maiúsculo; a borda ┃ arrasta
+│ C-0101   Manutenção preventiva   Hospital X        5.880,00   ⋮ │   ← 13px em tudo; R$ à direita, tabular, sem "R$"
+```
+
+| Regra | Como |
+|---|---|
+| Uma fonte, um tamanho | `PLANILHA.tabela` (13px) em tudo; o nome principal é só `PLANILHA.nome` (peso), nunca maior. Código/número é `PLANILHA.codigo` (mono 12px) em todas as telas. |
+| Alinhamento | Texto à esquerda; R$ e números à direita com `tabular-nums` (`alinhar: "direita"`); o "R$" fica no cabeçalho ("Valor (R$)"). |
+| Colunas declaradas | `ColunaPro { id, titulo, alinhar, largura, minimo, obrigatoria, oculta, fixa, ordenar, classe }`. Uma coluna SEM `largura` é a elástica (ocupa o que sobra): toda tela tem uma. |
+| Redimensionar | A borda direita de cada cabeçalho arrasta (ponteiro); respeita `minimo` (48px); duplo clique volta ao padrão. Colunas `fixa` (checkbox, ações) não mexem. |
+| Menu "Colunas" | Mostrar/esconder (as `obrigatoria` ficam travadas; as `fixa` nem aparecem) e "Restaurar padrão". |
+| Preferência por usuário | Larguras e colunas vão para `preferencias_usuario` pela rota `/api/preferencias/tabela:<tela>` (só a do próprio usuário da sessão) e seguem a pessoa entre dispositivos. O `localStorage` responde na hora e fica de reserva se a API falhar; a do servidor vence. |
+| Ordenação | `ordenacao={{ ativa, dir, onOrdenar }}` ou `TabelaProUrl` (lê `?ordem=&dir=`). O cabeçalho vira botão com `aria-sort`. |
+| Células | Chegam prontas (`ReactNode`): a página do servidor monta links e pílulas como sempre; o componente cuida de largura, visibilidade e estilo. |
