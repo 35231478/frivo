@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
-import { SlidersHorizontal, X } from "lucide-react";
+import { ChevronDown, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DEBOUNCE_BUSCA_MS } from "@/components/listagem/use-listagem-url";
 
@@ -10,7 +10,9 @@ type Navegar = (m: Record<string, string | null>) => void;
 
 /**
  * A barra enxuta das telas de lista (padrão da casa, estilo Conta Azul), numa linha só:
- *   [‹ período ›] [Pesquisar no período selecionado] [Mais filtros (n)] [Limpar filtros] [extras]
+ *   Período                 Pesquisar no período selecionado
+ *   [‹ | Novembro de 2026 ⌄ | ›]   [Pesquisar…]   [Mais filtros ⌄] [extras]
+ *   Limpar filtros
  * Os filtros extras (situação, cliente, categoria…) ficam recolhidos num painel — fechado por padrão,
  * para sobrar espaço — com o contador dos ativos no botão. "Limpar filtros" zera os filtros do painel
  * e a busca; o período fica (é navegação, não filtro). No celular tudo empilha.
@@ -37,29 +39,37 @@ export function BarraFiltros({ periodo, busca, paramsFiltros, paramBusca = "q", 
   const temBusca = (sp.get(paramBusca) ?? "") !== "";
   const limpar = () => navegar(Object.fromEntries([...paramsFiltros, paramBusca].map((k) => [k, null])));
   return (
-    <div className={cn("card p-3", className)} data-barra-filtros>
-      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
+    <div className={cn("card p-3 sm:p-4", className)} data-barra-filtros>
+      {/* Linha 1: período · busca · Mais filtros · extras (cada um com o rótulo em cima, como na referência) */}
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3">
         {periodo}
-        <div className="flex-1 min-w-0 sm:min-w-[220px]">{busca}</div>
+        <label className="flex-1 min-w-0 sm:min-w-[240px] flex flex-col gap-1">
+          <span className="text-xs font-medium text-ink-muted">Pesquisar no período selecionado</span>
+          {busca}
+        </label>
         <div className="flex items-center gap-2 flex-wrap">
           {children && (
             <button
               type="button" onClick={() => setAberto((v) => !v)} aria-expanded={aberto} aria-controls="painel-filtros" data-mais-filtros
-              className={cn("inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-colors",
-                aberto || ativos ? "bg-primary-50 border-primary-200 text-primary-700" : "bg-white border-surface-border text-ink-muted hover:bg-surface-alt")}
+              className={cn("inline-flex items-center gap-2 h-10 px-4 rounded-lg text-sm font-semibold border transition-colors",
+                aberto || ativos ? "bg-primary-50 border-primary-200 text-primary-700" : "bg-white border-surface-border text-primary-700 hover:bg-primary-50")}
             >
-              <SlidersHorizontal className="w-4 h-4" /> Mais filtros
+              Mais filtros
               {ativos > 0 && <span className="text-[10px] font-bold bg-primary-500 text-white rounded-full min-w-4 h-4 px-1 flex items-center justify-center" data-filtros-ativos>{ativos}</span>}
+              <ChevronDown className={cn("w-4 h-4 transition-transform", aberto && "rotate-180")} aria-hidden />
             </button>
           )}
-          <button
-            type="button" onClick={limpar} disabled={!ativos && !temBusca} data-limpar-filtros
-            className="inline-flex items-center gap-1 text-sm font-medium text-ink-muted hover:text-ink px-2 py-2 disabled:opacity-40 disabled:hover:text-ink-muted"
-          >
-            <X className="w-3.5 h-3.5" /> Limpar filtros
-          </button>
           {extras}
         </div>
+      </div>
+      {/* Linha 2: Limpar filtros (zera o painel e a busca; o período fica) */}
+      <div className="mt-2">
+        <button
+          type="button" onClick={limpar} disabled={!ativos && !temBusca} data-limpar-filtros
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-700 hover:underline disabled:opacity-40 disabled:no-underline"
+        >
+          <Trash2 className="w-4 h-4" aria-hidden /> Limpar filtros
+        </button>
       </div>
       {aberto && children && (
         <div id="painel-filtros" className="mt-3 pt-3 border-t border-surface-border grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3" data-painel-filtros>

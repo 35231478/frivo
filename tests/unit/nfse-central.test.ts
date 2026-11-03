@@ -55,6 +55,8 @@ describe("filtros da URL", () => {
     expect(lerFiltros({ situacao: "toString", ambiente: "prod", q: "x".repeat(300) }, agora))
       .toMatchObject({ situacao: null, ambiente: null, pagina: 1, porPagina: 50 });
     expect(lerFiltros({ q: "x".repeat(300) }, agora).q).toHaveLength(100);
+    // A central aceita "Todo o período" (nota antiga): o seletor da lista oferece o atalho
+    expect(lerFiltros({ periodo: "todos" }, agora).periodo.tipo).toBe("todos");
     expect([...AMBIENTES_FILTRO]).toEqual(["HOMOLOGACAO", "PRODUCAO"]);
   });
 

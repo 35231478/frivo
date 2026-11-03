@@ -45,7 +45,6 @@ export function whereOrdens(empresaId: string, sp: SP, agora = new Date()) {
     const instante = { ...(periodo.gte && { gte: periodo.gte }), ...(periodo.lt && { lt: periodo.lt }) };
     const dia = faixaDiaCivil(periodo);
     where.AND = [
-      ...(where.AND ?? []),
       {
         OR: [
           { atividades: { some: { dataAgendada: instante } } },

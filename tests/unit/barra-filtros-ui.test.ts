@@ -51,7 +51,7 @@ describe("seletor de período", () => {
   it("este mês: rótulo + atalho; ‹ › trocam o mês (o atual sai da URL); o menu tem os 8 atalhos na ordem e marca o atual", async () => {
     await barraPeriodo({});
     expect(txt($("[data-mes-rotulo]"))).toBe("Novembro de 2026");
-    expect(txt($("[data-periodo-atalho]"))).toBe("Este mês");
+    expect($("[data-periodo-menu]")!.getAttribute("data-periodo-atalho")).toBe("Este mês");
     await clicar($("[data-mes-anterior]"));
     expect(ultimo()).toEqual({ ...LIMPO, mes: "2026-10" });
     expect($("[data-periodo-opcoes]")).toBeNull(); // fechado
@@ -63,9 +63,9 @@ describe("seletor de período", () => {
     expect($("[data-periodo-opcoes]")).toBeNull(); // escolher fecha
   });
 
-  it("mês navegado mostra 'mês · navegado'; hoje/semana/ano andam a unidade certa pelas setas", async () => {
+  it("mês navegado avisa no title; hoje/semana/ano andam a unidade certa pelas setas", async () => {
     await barraPeriodo({ mes: "2026-09" });
-    expect(txt($("[data-periodo-atalho]"))).toBe("mês · navegado");
+    expect($("[data-periodo-menu]")!.getAttribute("data-periodo-atalho")).toBe("Este mês (navegado)");
     await barraPeriodo({ periodo: "hoje" });
     expect(txt($("[data-mes-rotulo]"))).toBe("Hoje, 03/11/2026");
     await clicar($("[data-mes-seguinte]"));
@@ -109,7 +109,7 @@ describe("seletor de período", () => {
     expect(ultimo()).toEqual({ ...LIMPO, de: "2026-11-01", ate: null });
     await barraPeriodo({ de: "2026-11-01", ate: "2026-11-10" });
     expect(txt($("[data-periodo-rotulo]"))).toBe("01/11/2026 a 10/11/2026");
-    expect(txt($("[data-periodo-atalho]"))).toBe("Período personalizado");
+    expect($("[data-periodo-menu]")!.getAttribute("data-periodo-atalho")).toBe("Período personalizado");
     await clicar($("[data-mes-seguinte]"));
     expect(ultimo()).toEqual({ ...LIMPO, de: "2026-11-11", ate: "2026-11-20" });
   });

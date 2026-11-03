@@ -194,6 +194,10 @@ describe("lista, celular e gaveta", () => {
     await montar(createElement(ContasReceberView, { ...props([{}]), filtros: { ...props([]).filtros, clienteId: "c1" } } as any));
     await clicar($("[data-mais-filtros]")); // os chips ficam no painel "Mais filtros"
     expect(txt($("[data-chip-status=PARCIAL]"))).toBe("Recebido em parte");
+    expect($("[data-chip-status=PARCIAL]")!.getAttribute("aria-pressed")).toBe("false");
+    await montar(createElement(ContasReceberView, { ...props([{}]), filtros: { ...props([]).filtros, status: "PARCIAL,PAGO" } } as any));
+    await clicar($("[data-mais-filtros]"));
+    expect($$("[data-chip-status][aria-pressed=true]").map((c) => c.getAttribute("data-chip-status"))).toEqual(["PARCIAL", "PAGO"]);
   });
 
   it("gaveta: recebido × em aberto, parcelas (a atual marcada; a irmã abre na mesma gaveta) e recebimentos", async () => {

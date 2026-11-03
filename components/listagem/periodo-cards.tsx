@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import Link from "next/link";
-import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Dica } from "@/components/ui/dica";
 import { InputData } from "@/components/ui/input-data";
 import { cn, formatarMoeda } from "@/lib/utils";
@@ -56,35 +56,32 @@ export function BarraPeriodo({ periodo, navegar, permitirTodos, somenteMes, dica
   };
   const aplicarIntervalo = () => { setAberto(false); setPersonalizado(false); navegar({ ...PARAMS_PERIODO, de: de || null, ate: ate || null }); };
   const opcoes = somenteMes ? ATALHOS.filter((a) => a.tipo === "mes") : ATALHOS.filter((a) => a.tipo !== "todos" || permitirTodos);
-  const botao = "p-2 text-ink-muted hover:text-primary-600 disabled:opacity-30 disabled:hover:text-ink-muted";
+  const seta = "px-3 self-stretch text-primary-600 hover:bg-primary-50 disabled:opacity-30 disabled:hover:bg-transparent";
+  // O que o atalho significa (vai no title do seletor; o rótulo já diz o período)
+  const atalho = periodo.tipo === "intervalo" ? "Período personalizado" : periodo.tipo === "todos" ? "" : atual ? nomeAtalho(periodo.tipo) : `${nomeAtalho(periodo.tipo)} (navegado)`;
 
   return (
-    <div className={cn("flex items-center gap-2", className)} data-periodo={periodo.tipo}>
+    <div className={cn("flex flex-col gap-1", className)} data-periodo={periodo.tipo}>
+      <span className="text-xs font-medium text-ink-muted">Período</span>
+      <div className="flex items-center gap-2">
       <div ref={ref} className="relative flex-1 sm:flex-none">
-        <div className="inline-flex w-full sm:w-auto items-center rounded-lg border border-surface-border bg-white">
-          <button type="button" onClick={() => ir(anterior)} disabled={!anterior} aria-label="Período anterior" title="Período anterior" className={botao} data-mes-anterior><ChevronLeft className="w-4 h-4" /></button>
+        <div className="flex w-full sm:w-auto items-stretch h-10 rounded-lg border border-surface-border bg-white overflow-hidden">
+          <button type="button" onClick={() => ir(anterior)} disabled={!anterior} aria-label="Período anterior" title="Período anterior" className={seta} data-mes-anterior><ChevronLeft className="w-4 h-4" /></button>
           <button
-            type="button" onClick={() => setAberto((v) => !v)} aria-haspopup="listbox" aria-expanded={aberto} data-periodo-menu
-            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-2 py-1.5 text-sm text-ink min-w-0 sm:min-w-[13rem] hover:bg-surface-alt rounded-md"
+            type="button" onClick={() => setAberto((v) => !v)} aria-haspopup="listbox" aria-expanded={aberto} data-periodo-menu data-periodo-atalho={atalho || undefined} title={atalho || undefined}
+            className={cn("flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 text-sm font-semibold text-primary-700 min-w-0 sm:min-w-[13rem] border-x border-surface-border",
+              aberto ? "bg-primary-100" : "bg-primary-50 hover:bg-primary-100")}
           >
-            <CalendarDays className="w-4 h-4 text-ink-muted shrink-0" aria-hidden />
-            <span className="min-w-0 truncate text-left leading-tight">
-              {periodo.tipo === "intervalo"
-                ? <span className="block font-semibold truncate" data-periodo-rotulo>{periodo.rotulo}</span>
-                : <span className="block font-semibold truncate" data-mes-rotulo>{periodo.rotulo}</span>}
-              {periodo.tipo !== "todos" && (
-                <span className="block text-[11px] text-ink-muted truncate" data-periodo-atalho>
-                  {periodo.tipo === "intervalo" ? "Período personalizado" : atual ? nomeAtalho(periodo.tipo) : `${nomeAtalho(periodo.tipo).replace(/^Est[ea] /, "")} · navegado`}
-                </span>
-              )}
-            </span>
-            {!somenteMes && <ChevronDown className={cn("w-4 h-4 text-ink-muted shrink-0 transition-transform", aberto && "rotate-180")} aria-hidden />}
+            {periodo.tipo === "intervalo"
+              ? <span className="truncate" data-periodo-rotulo>{periodo.rotulo}</span>
+              : <span className="truncate" data-mes-rotulo>{periodo.rotulo}</span>}
+            {!somenteMes && <ChevronDown className={cn("w-4 h-4 shrink-0 transition-transform", aberto && "rotate-180")} aria-hidden />}
           </button>
-          <button type="button" onClick={() => ir(seguinte)} disabled={!seguinte} aria-label="Período seguinte" title="Período seguinte" className={botao} data-mes-seguinte><ChevronRight className="w-4 h-4" /></button>
+          <button type="button" onClick={() => ir(seguinte)} disabled={!seguinte} aria-label="Período seguinte" title="Período seguinte" className={seta} data-mes-seguinte><ChevronRight className="w-4 h-4" /></button>
         </div>
 
         {aberto && !somenteMes && (
-          <div className="absolute z-40 left-0 mt-1 w-full sm:w-72 bg-white border border-surface-border rounded-lg shadow-elevated py-1" data-periodo-opcoes>
+          <div className="absolute z-40 left-0 sm:left-10 mt-1 w-full sm:w-72 max-h-80 overflow-y-auto bg-white border border-surface-border rounded-lg shadow-elevated py-1" data-periodo-opcoes>
             <ul role="listbox" aria-label="Período">
               {opcoes.map((a) => {
                 const ativo = a.tipo === periodo.tipo && (a.tipo !== "intervalo" || !personalizado);
@@ -93,10 +90,9 @@ export function BarraPeriodo({ periodo, navegar, permitirTodos, somenteMes, dica
                     <button
                       type="button" onClick={() => escolher(a.tipo)} data-periodo-opcao={a.tipo}
                       {...(a.tipo === "todos" ? { "data-todo-periodo": true } : a.tipo === "intervalo" ? { "data-alternar-periodo": true } : {})}
-                      className={cn("w-full flex items-center justify-between gap-2 px-3 py-1.5 text-sm text-left hover:bg-surface-alt", ativo ? "text-primary-700 font-semibold" : "text-ink")}
+                      className={cn("w-full px-4 py-2.5 text-sm text-left hover:bg-surface-alt", ativo ? "bg-primary-50 text-primary-700 font-semibold" : "text-ink")}
                     >
                       {a.nome}
-                      {ativo && <Check className="w-4 h-4 shrink-0" aria-hidden />}
                     </button>
                   </li>
                 );
@@ -120,6 +116,7 @@ export function BarraPeriodo({ periodo, navegar, permitirTodos, somenteMes, dica
         )}
       </div>
       {dica && <Dica texto={dica} rotulo="Período" />}
+      </div>
     </div>
   );
 }

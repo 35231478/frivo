@@ -47,6 +47,7 @@ describe("atalhos", () => {
   });
   it("este ano, últimos 30 dias (inclusive hoje) e últimos 12 meses", () => {
     expect(dias(lerPeriodo({ periodo: "ano" }, AGORA))).toEqual(["2026-01-01", "2026-12-31"]);
+    expect(lerPeriodo({ periodo: "ano" }, AGORA).ref).toBeNull(); // o ano corrente não vai para a URL
     expect(lerPeriodo({ periodo: "ano", ref: "2024-07-15" }, AGORA)).toMatchObject({ ref: "2024-01-01", rotulo: "2024" });
     const d30 = lerPeriodo({ periodo: "30d" }, AGORA);
     expect([...dias(d30), d30.rotulo]).toEqual(["2026-10-05", "2026-11-03", "05/10/2026 a 03/11/2026"]);
@@ -83,6 +84,7 @@ describe("setas ‹ › e o menu", () => {
     expect(url({ periodo: "hoje" }, -1)).toEqual({ ...limpo, periodo: "hoje", ref: "2026-11-02" });
     expect(url({ periodo: "hoje", ref: "2026-11-02" }, 1)).toEqual({ ...limpo, periodo: "hoje", ref: null });
     expect(url({ periodo: "semana" }, 1)).toEqual({ ...limpo, periodo: "semana", ref: "2026-11-09" });
+    expect(url({ periodo: "semana", ref: "2026-10-26" }, 1)).toEqual({ ...limpo, periodo: "semana", ref: null }); // voltou à semana de hoje
     expect(url({ periodo: "ano" }, -1)).toEqual({ ...limpo, periodo: "ano", ref: "2025-01-01" });
     expect(url({ periodo: "ano", ref: "2025-01-01" }, 1)).toEqual({ ...limpo, periodo: "ano", ref: null });
     expect(url({ periodo: "30d" }, -1)).toEqual({ ...limpo, periodo: "30d", ref: "2026-10-04" });

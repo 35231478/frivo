@@ -77,5 +77,9 @@ describe("lista de OS: barra enxuta", () => {
     expect(ultimaUrl()).toBe("/ordens?periodo=semana&status=ABERTA&busca=split&clienteId=c1");
     await clicar($("[data-limpar-filtros]"));
     expect(ultimaUrl()).toBe("/ordens?periodo=semana");
+    // O "Limpar filtros" do estado vazio faz o mesmo (e também deixa o período)
+    nav.replace.mockClear();
+    await clicar($$("[data-lista-vazia] button").find((b) => txt(b) === "Limpar filtros")!);
+    expect(ultimaUrl()).toBe("/ordens?periodo=semana");
   });
 });
