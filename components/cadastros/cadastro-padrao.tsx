@@ -18,7 +18,9 @@ import { ENTIDADE, podeAcao, podeExportar, type AcaoItem, type Entidade } from "
 import { rotuloPermissao } from "@/lib/permissoes";
 import { cn, formatarMoeda } from "@/lib/utils";
 import { lerTamanho, proximaOrdem, TAMANHO_PADRAO, type Ordem } from "@/lib/listagem";
-import { CampoBusca, ListaVazia, lerTamanhoPreferido, Paginacao, SkeletonLista, sugerirPorUrl, ThOrd } from "@/components/listagem/listagem-ui";
+import { CampoBusca, ListaVazia, lerTamanhoPreferido, Paginacao, SkeletonLista, sugerirPorUrl } from "@/components/listagem/listagem-ui";
+import { TabelaPro } from "@/components/listagem/tabela-pro";
+import { PLANILHA } from "@/lib/planilha";
 import { DEBOUNCE_BUSCA_MS } from "@/components/listagem/use-listagem-url";
 import { ImportarPlanilha } from "@/components/importacao/importar-planilha";
 import { BaixarPlanilha } from "@/components/importacao/baixar-planilha";
@@ -287,37 +289,38 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda, aviso, grupos }
                 </li>
               ))}
             </ul>
-            {/* Desktop: tabela com cabeçalho ordenável */}
-            <div className="hidden sm:block border border-surface-border rounded-lg overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-surface-alt border-b border-surface-border">
-                  <tr>
-                    {massa && <th className="w-px pl-4 pr-1 py-3"><CheckboxPagina /></th>}
-                    {def.colunas.map((col) => col.ordenar
-                      ? <ThOrd key={col.key} label={col.label} k={col.key} ordem={ordem.campo} dir={ordem.dir} onOrdenar={ordenar} className="px-4 py-3 text-ink-muted text-xs tracking-wider" />
-                      : <th key={col.key} className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">{col.label}</th>)}
-                    {aba === "todos" && <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Situação</th>}
-                    <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {itens.map((item, idx) => (
-                    <tr key={item.id} data-linha={item.id} className={cn("border-b border-surface-border last:border-0 hover:bg-primary-50/40", idx % 2 === 1 && "bg-surface-alt/30", !item.ativo && "text-ink-muted")}>
-                      {massa && <td className="w-px pl-4 pr-1 py-3"><CheckboxLinha id={item.id} rotulo={item.nome} /></td>}
-                      {def.colunas.map((col, i) => <td key={col.key} className="px-4 py-3">{valor(col, item, i)}</td>)}
-                      {aba === "todos" && (
-                        <td className="px-4 py-3">
-                          <span className={cn("text-[11px] font-semibold px-2 py-0.5 rounded-full", item.ativo ? "bg-ok-claro text-ok-texto" : "bg-surface-alt text-ink-muted")}>
-                            {item.ativo ? "Ativo" : "Inativo"}
-                          </span>
-                        </td>
-                      )}
-                      <td className="px-4 py-3 text-right whitespace-nowrap">{acoes(item)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {/* Desktop: a tabela profissional (components/listagem/tabela-pro — colunas redimensionáveis, menu "Colunas", preferência por usuário) */}
+            <TabelaPro
+              tela={`cadastro-${entidade}`} quebra="sm" className="border border-surface-border rounded-lg overflow-hidden"
+              ordenacao={{ ativa: ordem.campo, dir: ordem.dir, onOrdenar: ordenar }}
+              colunas={[
+                ...(massa ? [{ id: "sel", titulo: "Selecionar a página", fixa: true, largura: 36, cabecalho: <CheckboxPagina />, classe: "pl-3" }] : []),
+                ...def.colunas.map((col, i) => ({
+                  id: col.key, titulo: col.label, ordenar: col.ordenar ? col.key : undefined,
+                  // A 1ª coluna (ou código + nome) identifica o registro: fica sempre; valores em R$ à direita
+                  obrigatoria: i < nTitulo, alinhar: col.formato === "moeda" ? "direita" as const : undefined,
+                  largura: col.formato === "codigo" ? 96 : col.formato === "moeda" ? 120 : i >= nTitulo ? 180 : undefined,
+                  classe: "truncate",
+                })),
+                ...(aba === "todos" ? [{ id: "situacao", titulo: "Situação", largura: 96 }] : []),
+                { id: "acoes", titulo: "Ações", fixa: true, largura: 112, semTitulo: true, alinhar: "direita" as const, classe: "py-0.5" },
+              ]}
+              linhas={itens.map((item) => ({
+                id: item.id,
+                atributos: { "data-linha": item.id },
+                classe: !item.ativo ? "text-ink-muted" : undefined,
+                celulas: {
+                  sel: massa ? <CheckboxLinha id={item.id} rotulo={item.nome} /> : null,
+                  ...Object.fromEntries(def.colunas.map((col, i) => [col.key, valor(col, item, i)])),
+                  situacao: (
+                    <span className={cn("text-[11px] font-semibold px-2 py-0.5 rounded-full", item.ativo ? "bg-ok-claro text-ok-texto" : "bg-surface-alt text-ink-muted")}>
+                      {item.ativo ? "Ativo" : "Inativo"}
+                    </span>
+                  ),
+                  acoes: acoes(item),
+                },
+              }))}
+            />
             <Paginacao total={dados.total} pagina={dados.pagina} porPagina={dados.porPagina} rotulo={def.plural} onNavegar={mudarUrl} />
           </div>
         )}
@@ -342,8 +345,8 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda, aviso, grupos }
 
 function Celula({ col, item, primeira }: { col: ColunaCadastro; item: Item; primeira: boolean }) {
   const v = item[col.key];
-  if (col.formato === "moeda") return <>{v != null && v !== "" ? formatarMoeda(Number(v)) : "—"}</>;
-  if (col.formato === "codigo") return <span className="font-mono text-xs font-semibold text-ink-muted" data-codigo>{v != null && v !== "" ? String(v) : "—"}</span>;
+  if (col.formato === "moeda") return <span className="tabular-nums whitespace-nowrap">{v != null && v !== "" ? formatarMoeda(Number(v)) : "—"}</span>;
+  if (col.formato === "codigo") return <span className={cn(PLANILHA.codigo, "text-ink-muted")} data-codigo>{v != null && v !== "" ? String(v) : "—"}</span>;
   if (col.formato === "cor-nome") {
     return (
       <span className="flex items-center gap-2">

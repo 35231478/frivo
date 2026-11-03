@@ -159,7 +159,7 @@ describe("cara de planilha (desktop) e cartões (celular)", () => {
   it("celular: as mesmas contas em cartões (md:hidden) com valor, situação, vencimento, o que falta e o ⋮", async () => {
     await montarTela();
     expect($("[data-cartoes-pagar]")!.className).toContain("md:hidden");
-    expect($("[data-tabela-pagar]")!.className).toContain("hidden md:block");
+    expect($("[data-tabela-pagar] table[data-tabela-planilha]")!.closest(".md\\:block")!.className).toContain("hidden md:block");
     expect($$("[data-cartoes-pagar] [data-cartao-conta]").map((e) => e.getAttribute("data-cartao-conta"))).toEqual(["cp1", "cp2"]);
     const c2 = $("[data-cartao-conta=cp2]")!;
     expect(txt(c2)).toContain("R$ 98.765,40");

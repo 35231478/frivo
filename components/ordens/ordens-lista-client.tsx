@@ -16,7 +16,9 @@ import { BuscaSelect, type OpcaoBusca } from "@/components/ui/busca-select";
 import { AvatarCliente } from "@/components/ui/avatar-cliente";
 import { AvatarStack } from "@/components/ui/avatar-stack";
 import { formatarDiaCivil } from "@/lib/os/prazos";
-import { ClipboardList, Plus, ArrowUp, ArrowDown, ArrowUpDown, LayoutGrid, List, Download, Headset } from "lucide-react";
+import { ClipboardList, Plus, LayoutGrid, List, Download, Headset } from "lucide-react";
+import { TabelaPro } from "@/components/listagem/tabela-pro";
+import { PLANILHA } from "@/lib/planilha";
 
 interface TecnicoView { id: string; nome: string; avatar: string | null }
 interface OrdemView {
@@ -108,11 +110,6 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
   }
 
   const exportUrl = `/api/ordens/export${sp.toString() ? `?${sp.toString()}` : ""}`;
-
-  function Seta({ campo }: { campo: string }) {
-    if (sortAtual !== campo) return <ArrowUpDown className="inline w-3 h-3 ml-1 text-ink-subtle" />;
-    return dirAtual === "asc" ? <ArrowUp className="inline w-3 h-3 ml-1 text-acento" /> : <ArrowDown className="inline w-3 h-3 ml-1 text-acento" />;
-  }
 
   // Chip de filtro (status/prioridade): ligado = acento claro
   const chip = (ligado: boolean) => cn("text-xs px-2.5 py-1 rounded-full border transition-colors",
@@ -238,48 +235,48 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
             ))}
           </div>
           {view !== "cards" && (
-          <div className="overflow-x-auto hidden md:block">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-page border-b border-surface-border">
-                <tr>
-                  {massa && <th className="w-px pl-4 pr-1 py-3"><CheckboxPagina /></th>}
-                  <Th onClick={() => ordenarPor("numero")}>Número <Seta campo="numero" /></Th>
-                  <Th onClick={() => ordenarPor("cliente")}>Cliente <Seta campo="cliente" /></Th>
-                  <th scope="col" className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden lg:table-cell">Técnico</th>
-                  <Th className="hidden lg:table-cell" onClick={() => ordenarPor("criadoEm")}>Abertura <Seta campo="criadoEm" /></Th>
-                  <Th className="hidden xl:table-cell" onClick={() => ordenarPor("previsaoConclusao")}>Previsão <Seta campo="previsaoConclusao" /></Th>
-                  <Th onClick={() => ordenarPor("status")}>Status <Seta campo="status" /></Th>
-                  <Th className="hidden md:table-cell" onClick={() => ordenarPor("prioridade")}>Prioridade <Seta campo="prioridade" /></Th>
-                  <th scope="col" className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Equipe</th>
-                  <th className="w-px px-2 py-3"><span className="sr-only">Ações</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                {ordens.map((os) => (
-                  <tr key={os.id} className="border-b border-surface-linha last:border-0 hover:bg-surface-page transition-colors">
-                    {massa && <td className="w-px pl-4 pr-1 py-3"><CheckboxLinha id={os.id} rotulo={os.chamadoNumero ?? os.numero} /></td>}
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <Link href={`/ordens/${os.id}`} className="font-display font-semibold tabular-nums text-acento hover:underline">{os.chamadoNumero ?? os.numero}</Link>
-                      {os.origem === "PORTAL_CLIENTE" && <span className="ml-2 pill-acento text-[11px] px-2"><Headset className="w-3 h-3" aria-hidden="true" /> Portal</span>}
-                    </td>
-                    <td className="px-4 py-3 text-ink font-medium">
-                      <div className="flex items-center gap-2">
-                        <AvatarCliente nome={os.cliente} logoUrl={os.clienteLogo} size={28} />
-                        <span className="truncate">{os.cliente}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-ink-muted hidden lg:table-cell">{os.responsavel ?? "—"}</td>
-                    <td className="px-4 py-3 text-ink-muted tabular-nums hidden lg:table-cell">{formatarData(os.criadoEm)}</td>
-                    <td className="px-4 py-3 text-ink-muted tabular-nums hidden xl:table-cell">{formatarDiaCivil(os.previsaoConclusao)}</td>
-                    <td className="px-4 py-3"><span className={CLASSE_STATUS[os.status]}>{LABELS_STATUS_OS[os.status]}</span></td>
-                    <td className="px-4 py-3 hidden md:table-cell"><span className={CLASSE_PRIORIDADE[os.prioridade]}>{LABELS_PRIORIDADE[os.prioridade]}</span></td>
-                    <td className="px-4 py-3"><div className="flex justify-end"><AvatarStack tecnicos={os.tecnicos} size={28} /></div></td>
-                    <td className="px-2 py-3"><OsInativarBotao osId={os.id} numero={os.chamadoNumero ?? os.numero} status={os.status} variante="icone" /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <TabelaPro
+            tela="ordens"
+            ordenacao={{ ativa: sortAtual, dir: dirAtual, onOrdenar: ordenarPor }}
+            colunas={[
+              ...(massa ? [{ id: "sel", titulo: "Selecionar a página", fixa: true, largura: 36, cabecalho: <CheckboxPagina />, classe: "pl-3" }] : []),
+              { id: "numero", titulo: "Número", largura: 150, ordenar: "numero", obrigatoria: true },
+              { id: "cliente", titulo: "Cliente", ordenar: "cliente", obrigatoria: true },
+              { id: "tecnico", titulo: "Técnico", largura: 140, classe: "truncate" },
+              { id: "abertura", titulo: "Abertura", largura: 96, ordenar: "criadoEm" },
+              { id: "previsao", titulo: "Previsão", largura: 96, ordenar: "previsaoConclusao" },
+              { id: "status", titulo: "Status", largura: 168, ordenar: "status" },
+              { id: "prioridade", titulo: "Prioridade", largura: 104, ordenar: "prioridade" },
+              { id: "equipe", titulo: "Equipe", largura: 112, alinhar: "direita" },
+              { id: "acoes", titulo: "Ações", fixa: true, largura: 40, semTitulo: true, alinhar: "direita", classe: "py-0.5" },
+            ]}
+            linhas={ordens.map((os) => ({
+              id: os.id,
+              titulos: { cliente: os.cliente, tecnico: os.responsavel ?? undefined },
+              celulas: {
+                sel: massa ? <CheckboxLinha id={os.id} rotulo={os.chamadoNumero ?? os.numero} /> : null,
+                numero: (
+                  <span className="whitespace-nowrap">
+                    <Link href={`/ordens/${os.id}`} className={cn(PLANILHA.codigo, "text-acento hover:underline")}>{os.chamadoNumero ?? os.numero}</Link>
+                    {os.origem === "PORTAL_CLIENTE" && <span className="ml-2 pill-acento text-[11px] px-2"><Headset className="w-3 h-3" aria-hidden="true" /> Portal</span>}
+                  </span>
+                ),
+                cliente: (
+                  <div className="flex items-center gap-2 min-w-0">
+                    <AvatarCliente nome={os.cliente} logoUrl={os.clienteLogo} size={24} />
+                    <span className={cn(PLANILHA.nome, "truncate")}>{os.cliente}</span>
+                  </div>
+                ),
+                tecnico: <span className={PLANILHA.apagado}>{os.responsavel ?? "—"}</span>,
+                abertura: <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{formatarData(os.criadoEm)}</span>,
+                previsao: <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{formatarDiaCivil(os.previsaoConclusao)}</span>,
+                status: <span className={CLASSE_STATUS[os.status]}>{LABELS_STATUS_OS[os.status]}</span>,
+                prioridade: <span className={CLASSE_PRIORIDADE[os.prioridade]}>{LABELS_PRIORIDADE[os.prioridade]}</span>,
+                equipe: <div className="flex justify-end"><AvatarStack tecnicos={os.tecnicos} size={24} /></div>,
+                acoes: <OsInativarBotao osId={os.id} numero={os.chamadoNumero ?? os.numero} status={os.status} variante="icone" />,
+              },
+            }))}
+          />
           )}
         </>)}
         </div>
@@ -288,16 +285,5 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
         </div>
       </div>
     </div>
-  );
-}
-
-/** Cabeçalho ordenável: o clique é num <button> real (teclado e leitor de tela), não no <th>. */
-function Th({ children, onClick, className }: { children: React.ReactNode; onClick: () => void; className?: string }) {
-  return (
-    <th scope="col" className={cn("text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider", className)}>
-      <button type="button" onClick={onClick} className="inline-flex items-center uppercase tracking-wider select-none hover:text-ink rounded">
-        {children}
-      </button>
-    </th>
   );
 }

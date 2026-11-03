@@ -11,7 +11,8 @@ import Link from "next/link";
 import { FileBarChart, Plus } from "lucide-react";
 import { GerarMedicoesMes } from "@/components/medicao/gerar-medicoes-mes";
 import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
-import { ConteudoUrl, ListaUrl, PaginacaoUrl } from "@/components/listagem/lista-url";
+import { ConteudoUrl, ListaUrl, PaginacaoUrl, TabelaProUrl } from "@/components/listagem/lista-url";
+import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
 import { AvatarCliente } from "@/components/ui/avatar-cliente";
 import { numeroFatura, rotuloStatusMedicao } from "@/lib/faturamento/fatura";
 
@@ -99,42 +100,69 @@ export default async function MedicoesPage({
       />
 
       <div className="card overflow-hidden">
-        <ConteudoUrl className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-surface-alt border-b border-surface-border">
-              <tr>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Número</th>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Cliente</th>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden md:table-cell">Tipo</th>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden lg:table-cell">Referência</th>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Status</th>
-                <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Valor</th>
-              </tr>
-            </thead>
-            <tbody>
-              {medicoes.length === 0 ? (
-                <tr><td colSpan={6} className="text-center text-ink-subtle py-12">Nenhuma medição encontrada</td></tr>
-              ) : (
-                medicoes.map((m, idx) => (
-                  <tr key={m.id} className={cn("border-b border-surface-border hover:bg-primary-50/40 transition-colors", idx % 2 === 1 && "bg-surface-alt/30")}>
-                    <td className="px-4 py-3">
-                      <Link href={m.avulsa ? `/financeiro/faturas/${m.id}` : `/financeiro/medicoes/${m.id}`} className="font-mono font-semibold text-primary-600 hover:underline">{m.avulsa ? `Fatura ${numeroFatura(m.numero)}` : m.numero}</Link>
-                    </td>
-                    <td className="px-4 py-3 text-ink font-medium">
-                      <div className="flex items-center gap-2">
-                        <AvatarCliente nome={m.cliente.nomeFantasia ?? m.cliente.nome} logoUrl={m.cliente.logo} size={28} />
-                        <span className="truncate">{m.cliente.nomeFantasia ?? m.cliente.nome}</span>
+        <ConteudoUrl>
+          {medicoes.length === 0 ? (
+            <p className="text-center text-ink-subtle py-12" data-lista-vazia>Nenhuma medição encontrada</p>
+          ) : (
+            <TabelaProUrl
+              tela="medicoes"
+              cartoes={
+                <ul className="divide-y divide-surface-border" data-cartoes>
+                  {medicoes.map((m) => {
+                    const cliente = m.cliente.nomeFantasia ?? m.cliente.nome;
+                    return (
+                      <li key={m.id} data-cartao={m.id} className="px-4 py-3">
+                        <Link href={m.avulsa ? `/financeiro/faturas/${m.id}` : `/financeiro/medicoes/${m.id}`} className="block min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className={cn(PLANILHA.codigo, "text-primary-600")}>{m.avulsa ? `Fatura ${numeroFatura(m.numero)}` : m.numero}</p>
+                            <p className="font-semibold text-ink tabular-nums shrink-0">{formatarMoeda(Number(m.valorLiquido))}</p>
+                          </div>
+                          <div className="flex items-center gap-2 mt-1 min-w-0">
+                            <AvatarCliente nome={cliente} logoUrl={m.cliente.logo} size={24} />
+                            <p className="text-sm text-ink font-medium truncate">{cliente}</p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5 text-xs text-ink-muted">
+                            <span className={CLASSE_STATUS_MEDICAO[m.status]}>{rotuloStatusMedicao(m, LABELS_STATUS_MEDICAO)}</span>
+                            <span>{m.avulsa ? "Avulsa" : LABELS_TIPO_MEDICAO[m.tipo]}</span>
+                            <span>· {m.mes ? `${nomeMes(m.mes)}/${m.ano}` : formatarData(m.criadoEm)}</span>
+                          </div>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              }
+              colunas={[
+                { id: "numero", titulo: "Número", largura: 136, obrigatoria: true },
+                { id: "cliente", titulo: "Cliente", obrigatoria: true },
+                { id: "tipo", titulo: "Tipo", largura: 128 },
+                { id: "referencia", titulo: "Referência", largura: 120 },
+                { id: "status", titulo: "Status", largura: 144 },
+                { id: "valor", titulo: "Valor (R$)", alinhar: "direita", largura: 120, obrigatoria: true },
+              ]}
+              linhas={medicoes.map((m) => {
+                const cliente = m.cliente.nomeFantasia ?? m.cliente.nome;
+                return {
+                  id: m.id,
+                  atributos: { "data-linha-medicao": m.id },
+                  titulos: { cliente },
+                  celulas: {
+                    numero: <Link href={m.avulsa ? `/financeiro/faturas/${m.id}` : `/financeiro/medicoes/${m.id}`} className={cn(PLANILHA.codigo, "text-primary-600 hover:underline")}>{m.avulsa ? `Fatura ${numeroFatura(m.numero)}` : m.numero}</Link>,
+                    cliente: (
+                      <div className="flex items-center gap-2 min-w-0">
+                        <AvatarCliente nome={cliente} logoUrl={m.cliente.logo} size={24} />
+                        <span className={cn(PLANILHA.nome, "truncate")}>{cliente}</span>
                       </div>
-                    </td>
-                    <td className="px-4 py-3 text-ink-muted hidden md:table-cell">{m.avulsa ? "Avulsa" : LABELS_TIPO_MEDICAO[m.tipo]}</td>
-                    <td className="px-4 py-3 text-ink-muted hidden lg:table-cell">{m.mes ? `${nomeMes(m.mes)}/${m.ano}` : formatarData(m.criadoEm)}</td>
-                    <td className="px-4 py-3"><span className={CLASSE_STATUS_MEDICAO[m.status]}>{rotuloStatusMedicao(m, LABELS_STATUS_MEDICAO)}</span></td>
-                    <td className="px-4 py-3 text-right font-semibold text-ink">{formatarMoeda(Number(m.valorLiquido))}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                    ),
+                    tipo: <span className={PLANILHA.apagado}>{m.avulsa ? "Avulsa" : LABELS_TIPO_MEDICAO[m.tipo]}</span>,
+                    referencia: <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{m.mes ? `${nomeMes(m.mes)}/${m.ano}` : formatarData(m.criadoEm)}</span>,
+                    status: <span className={CLASSE_STATUS_MEDICAO[m.status]}>{rotuloStatusMedicao(m, LABELS_STATUS_MEDICAO)}</span>,
+                    valor: <span className={cn(PLANILHA.numero, "font-semibold text-ink")} data-valor>{valorSemMoeda(Number(m.valorLiquido))}</span>,
+                  },
+                };
+              })}
+            />
+          )}
         </ConteudoUrl>
         <div className="px-4 py-3 border-t border-surface-border bg-surface-alt/40">
           <PaginacaoUrl total={total} pagina={pagina} porPagina={porPagina} rotulo="medições" />

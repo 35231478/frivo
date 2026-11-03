@@ -15,6 +15,7 @@ import { BarraPeriodo, CardResumo, GradeCards, type PeriodoTela } from "@/compon
 import { BarraFiltros, inputFiltro } from "@/components/listagem/barra-filtros";
 import { CampoBusca, Paginacao } from "@/components/listagem/listagem-ui";
 import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
+import { TabelaPro } from "@/components/listagem/tabela-pro";
 
 /** Uma conta a pagar já pronta para a tela (números em vez de Decimal, datas em texto) */
 export interface ContaPagarView {
@@ -201,68 +202,65 @@ export function ContasPagarView({
           ))}
         </ul>
 
-        {/* Desktop: "cara de planilha" (lib/planilha — o mesmo estilo de Contas a Receber e do orçamento) */}
-        <div className="hidden md:block overflow-x-auto" data-tabela-pagar>
-          <table className={cn(PLANILHA.tabela, "table-fixed")} data-tabela-planilha>
-            <thead>
-              <tr className={PLANILHA.cabecalho}>
-                <th scope="col" className={cn(PLANILHA.th, "text-left w-[5.75rem]")}>Vencimento</th>
-                <th scope="col" className={cn(PLANILHA.th, "text-left hidden lg:table-cell w-[7.5rem]")}>Nº/Doc</th>
-                <th scope="col" className={cn(PLANILHA.th, "text-left w-[17%]")}>Fornecedor</th>
-                <th scope="col" className={cn(PLANILHA.th, "text-left hidden lg:table-cell")}>Descrição</th>
-                <th scope="col" className={cn(PLANILHA.th, "text-left hidden xl:table-cell w-[9rem]")}>Categoria</th>
-                <th scope="col" className={cn(PLANILHA.th, "text-left hidden xl:table-cell w-[8rem]")}>Centro de custo</th>
-                <th scope="col" className={cn(PLANILHA.th, "text-left w-[8rem]")}>Situação</th>
-                <th scope="col" className={cn(PLANILHA.th, "text-right w-[7.5rem]")}>Valor (R$)</th>
-                <th scope="col" className={cn(PLANILHA.th, "w-10")}><span className="sr-only">Ações</span></th>
-              </tr>
-            </thead>
-            <tbody>
-              {comStatus.length === 0 ? (
-                <tr><td colSpan={9}><Vazio /></td></tr>
-              ) : comStatus.map(({ c, sv }) => (
-                <tr key={c.id} data-linha-conta={c.id}
-                  className={cn(PLANILHA.linha, "hover:bg-primary-50/40", sv.linhaVermelha && "even:bg-atrasado-claro bg-atrasado-claro hover:bg-atrasado-claro/70")}>
-                  <td className={cn(PLANILHA.td, "align-middle tabular-nums whitespace-nowrap text-ink-muted")}>{c.dataVencimento ? formatarData(c.dataVencimento) : "—"}</td>
-                  <td className={cn(PLANILHA.td, "align-middle hidden lg:table-cell truncate")}>
-                    <Link href={`/financeiro/contas-pagar/${c.id}`} title={c.numero} className="font-mono text-[11px] text-primary-600 hover:underline" data-detalhe-conta={c.numero}>{c.numero}</Link>
-                  </td>
-                  <td className={cn(PLANILHA.td, "align-middle")}>
-                    <p className="font-medium text-ink truncate" data-fornecedor={c.fornecedor.id ?? "sem-cadastro"}
+        {/* Desktop: a tabela profissional (components/listagem/tabela-pro — colunas redimensionáveis, menu "Colunas", preferência por usuário) */}
+        <div data-tabela-pagar>
+          {comStatus.length === 0 ? <div className="hidden md:block"><Vazio /></div> : (
+            <TabelaPro
+              tela="contas-pagar"
+              colunas={[
+                { id: "vencimento", titulo: "Vencimento", largura: 96 },
+                { id: "numero", titulo: "Nº/Doc", largura: 120, classe: "truncate" },
+                { id: "fornecedor", titulo: "Fornecedor", largura: 220, obrigatoria: true },
+                { id: "descricao", titulo: "Descrição" },
+                { id: "categoria", titulo: "Categoria", largura: 144 },
+                { id: "centro", titulo: "Centro de custo", largura: 128, classe: "truncate" },
+                { id: "situacao", titulo: "Situação", largura: 128 },
+                { id: "valor", titulo: "Valor (R$)", alinhar: "direita", largura: 120, obrigatoria: true },
+                { id: "acoes", titulo: "Ações", fixa: true, largura: 40, semTitulo: true, alinhar: "direita", classe: "py-0.5" },
+              ]}
+              linhas={comStatus.map(({ c, sv }) => ({
+                id: c.id,
+                atributos: { "data-linha-conta": c.id },
+                classe: sv.linhaVermelha ? "even:bg-atrasado-claro bg-atrasado-claro hover:bg-atrasado-claro/70" : undefined,
+                celulas: {
+                  vencimento: <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{c.dataVencimento ? formatarData(c.dataVencimento) : "—"}</span>,
+                  numero: <Link href={`/financeiro/contas-pagar/${c.id}`} title={c.numero} className={cn(PLANILHA.codigo, "font-normal text-primary-600 hover:underline")} data-detalhe-conta={c.numero}>{c.numero}</Link>,
+                  fornecedor: (
+                    <p className={cn(PLANILHA.nome, "truncate")} data-fornecedor={c.fornecedor.id ?? "sem-cadastro"}
                       title={c.fornecedor.documento ? `${c.fornecedor.nome} · ${formatarCpfCnpj(c.fornecedor.documento)}` : c.fornecedor.nome}>
                       {c.fornecedor.nome}{marcasFornecedor(c)}
                     </p>
-                  </td>
-                  <td className={cn(PLANILHA.td, "align-middle hidden lg:table-cell")}>
+                  ),
+                  descricao: (
                     <div className="flex items-baseline gap-1.5 min-w-0">
                       <span className="min-w-0 truncate text-ink" title={c.descricao}>{c.descricao}</span>
                       <Origem c={c} className="shrink-0 max-w-[45%]" />
                     </div>
-                  </td>
-                  <td className={cn(PLANILHA.td, "align-middle hidden xl:table-cell")}><CategoriaBadge conta={c} categorias={categorias} linhaUnica /></td>
-                  <td className={cn(PLANILHA.td, "align-middle hidden xl:table-cell truncate text-ink-muted")}>
-                    {c.centroCusto
-                      ? <span title={c.centroCusto.nome} data-centro-custo={c.centroCusto.id}>{c.centroCusto.nome}{!c.centroCusto.ativo && " (inativo)"}</span>
-                      : <span className="text-ink-subtle">—</span>}
-                  </td>
-                  <td className={cn(PLANILHA.td, "align-middle")}>
+                  ),
+                  categoria: <CategoriaBadge conta={c} categorias={categorias} linhaUnica />,
+                  centro: c.centroCusto
+                    ? <span className={PLANILHA.apagado} title={c.centroCusto.nome} data-centro-custo={c.centroCusto.id}>{c.centroCusto.nome}{!c.centroCusto.ativo && " (inativo)"}</span>
+                    : <span className="text-ink-subtle">—</span>,
+                  situacao: (
                     <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
                       <span className={cn("inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full", sv.classe)} data-situacao>
                         {sv.linhaVermelha && <AlertTriangle className="w-3 h-3" />}{sv.label}
                       </span>
                       {c.temBoleto && <span className="inline-flex text-primary-600" title="Boleto colado: veja no detalhe da conta" data-tem-boleto><Barcode className="w-3.5 h-3.5" /></span>}
                     </span>
-                  </td>
-                  <td className={cn(PLANILHA.td, PLANILHA.numero, "align-middle font-semibold text-ink")} data-valor>
-                    {valorSemMoeda(c.valorTotal)}
-                    {/* Pago em parte: o que falta, logo abaixo (o card soma por ele) */}
-                    {c.status === "PAGO_PARCIAL" && <span className="block text-[11px] font-normal text-ink-muted" data-saldo>falta {valorSemMoeda(c.saldoRestante)}</span>}
-                  </td>
-                  <td className={cn(PLANILHA.td, "align-middle text-right py-0.5")}>{acoes(c)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  ),
+                  valor: (
+                    <span className={cn(PLANILHA.numero, "font-semibold text-ink")} data-valor>
+                      {valorSemMoeda(c.valorTotal)}
+                      {/* Pago em parte: o que falta, logo abaixo (o card soma por ele) */}
+                      {c.status === "PAGO_PARCIAL" && <span className="block text-[11px] font-normal text-ink-muted" data-saldo>falta {valorSemMoeda(c.saldoRestante)}</span>}
+                    </span>
+                  ),
+                  acoes: acoes(c),
+                },
+              }))}
+            />
+          )}
         </div>
 
         <div className="px-4 py-3 border-t border-surface-border bg-surface-alt/40 space-y-2">
