@@ -84,6 +84,8 @@ export function MedicaoForm({
 
   const [contratos, setContratos] = useState<ContratoOpt[]>([]);
   const [tabelaPreco, setTabelaPreco] = useState<TabelaPrecoCliente | null>(null);
+  /** O cliente está ligado a uma tabela inativa: valem os preços padrão do catálogo, e a tela avisa */
+  const [tabelaInativa, setTabelaInativa] = useState<{ id: string; nome: string } | null>(null);
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
 
@@ -91,6 +93,7 @@ export function MedicaoForm({
     if (!clienteId) {
       setContratos([]);
       setTabelaPreco(null);
+      setTabelaInativa(null);
       return;
     }
     fetch(`/api/contratos?clienteId=${clienteId}`)
@@ -99,8 +102,8 @@ export function MedicaoForm({
       .catch(() => setContratos([]));
     fetch(`/api/clientes/${clienteId}/tabela-preco`)
       .then((r) => r.json())
-      .then((d) => setTabelaPreco(d && d.itens ? d : null))
-      .catch(() => setTabelaPreco(null));
+      .then((d) => { setTabelaPreco(d && d.itens ? d : null); setTabelaInativa(d?.vinculadaInativa ?? null); })
+      .catch(() => { setTabelaPreco(null); setTabelaInativa(null); });
   }, [clienteId]);
 
   const valorTotal = useMemo(() => {
@@ -203,13 +206,13 @@ export function MedicaoForm({
           <span className="inline-flex items-center gap-1.5 bg-success-50 text-success-700 text-xs font-semibold rounded-full px-3 py-1">
             <Tags className="w-3.5 h-3.5" /> Tabela: {tabelaPreco.nome}
           </span>
-          {tabelaPreco.vinculadaInativa && (
-            <span className="text-xs text-atencao-texto" data-aviso-tabela-inativa>A tabela do cliente (“{tabelaPreco.vinculadaInativa.nome}”) está inativa: valem os preços da Padrão.</span>
-          )}
           {tabelaPreco.precosBloqueados && (
             <span className="text-xs text-ink-muted">Preços bloqueados por contrato</span>
           )}
         </div>
+      )}
+      {tabelaInativa && (
+        <p className="text-xs text-atencao-texto" data-aviso-tabela-inativa>A tabela do cliente (“{tabelaInativa.nome}”) está inativa: valem os preços padrão do catálogo.</p>
       )}
 
       <div className="card-padded space-y-6">

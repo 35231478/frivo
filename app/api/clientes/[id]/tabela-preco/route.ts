@@ -6,11 +6,15 @@ import { prisma } from "@/lib/prisma";
 type Params = { params: Promise<{ id: string }> };
 
 /**
- * Resolve a tabela de preços efetiva de um cliente:
- * - a tabela vinculada ao cliente, se estiver ATIVA;
- * - senão (sem tabela, ou com tabela inativada), a tabela PADRAO ativa da empresa.
- * Retorna os itens indexados pelo id do serviço/produto e, quando a vinculada está inativa,
- * `vinculadaInativa` (para a tela avisar que o preço veio da Padrão).
+ * A tabela de preços que vale para um cliente (empresa da sessão):
+ * - cliente COM tabela vinculada e ATIVA → a tabela dela (os itens indexados pelo id do serviço/produto);
+ * - cliente SEM tabela → `null`: vale o catálogo padrão (serviços/produtos ativos da empresa, preço padrão);
+ * - cliente com tabela vinculada INATIVA → também o catálogo padrão, e a resposta diz qual tabela estava
+ *   ligada (`vinculadaInativa`) para a tela avisar.
+ *
+ * Nunca cai em outra tabela. Antes, "sem tabela" voltava para a tabela de tipo "Padrão" da empresa — e
+ * qualquer tabela marcada com esse tipo (até uma feita para um cliente específico) virava o catálogo
+ * de todos os clientes sem tabela, com os itens e os preços dela.
  */
 export async function GET(_: NextRequest, { params }: Params) {
   const session = await auth();
@@ -22,21 +26,13 @@ export async function GET(_: NextRequest, { params }: Params) {
 
   const cliente = await prisma.cliente.findFirst({ where: { id, empresaId }, select: { tabelaPrecoId: true } });
   if (!cliente) return NextResponse.json({ erro: "Cliente não encontrado" }, { status: 404 });
+  if (!cliente.tabelaPrecoId) return NextResponse.json(null);
 
-  const vinculada = cliente.tabelaPrecoId
-    ? await prisma.tabelaPreco.findFirst({ where: { id: cliente.tabelaPrecoId, empresaId }, include: { itens: true } })
-    : null;
-  // Tabela inativada não vale mais para preço novo: volta para a Padrão (antes ficava sem tabela nenhuma)
-  const tabela = vinculada?.ativo
-    ? vinculada
-    : await prisma.tabelaPreco.findFirst({
-        where: { empresaId, tipo: "PADRAO", ativo: true },
-        include: { itens: true },
-        orderBy: { criadoEm: "asc" },
-      });
-  const vinculadaInativa = vinculada && !vinculada.ativo ? { id: vinculada.id, nome: vinculada.nome } : null;
-
+  const tabela = await prisma.tabelaPreco.findFirst({ where: { id: cliente.tabelaPrecoId, empresaId }, include: { itens: true } });
   if (!tabela) return NextResponse.json(null);
+  if (!tabela.ativo) {
+    return NextResponse.json({ id: null, nome: null, tipo: null, precosBloqueados: false, itens: null, vinculadaInativa: { id: tabela.id, nome: tabela.nome } });
+  }
 
   const itens: Record<string, { valorFinal: number; bloqueado: boolean; tipoPreco: string; descontoPercent: number | null }> = {};
   for (const it of tabela.itens) {
@@ -56,6 +52,6 @@ export async function GET(_: NextRequest, { params }: Params) {
     tipo: tabela.tipo,
     precosBloqueados: tabela.precosBloqueados,
     itens,
-    vinculadaInativa,
+    vinculadaInativa: null,
   });
 }

@@ -283,14 +283,18 @@ export function OrcamentoForm({
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [tabelaPreco, setTabelaPreco] = useState<TabelaPrecoCliente | null>(null);
+  /** O cliente está ligado a uma tabela inativa: valem os preços padrão do catálogo, e a tela avisa */
+  const [tabelaInativa, setTabelaInativa] = useState<{ id: string; nome: string } | null>(null);
 
+  // A tabela de preços do cliente (ou nenhuma = catálogo padrão). Trocar o cliente busca de novo: a tabela
+  // (ou a ausência dela) é sempre a do cliente escolhido agora
   useEffect(() => {
-    if (!clienteId) { setTabelaPreco(null); return; }
+    if (!clienteId) { setTabelaPreco(null); setTabelaInativa(null); return; }
     let ativo = true;
     fetch(`/api/clientes/${clienteId}/tabela-preco`)
       .then((r) => r.json())
-      .then((d) => { if (ativo) setTabelaPreco(d && d.itens ? d : null); })
-      .catch(() => { if (ativo) setTabelaPreco(null); });
+      .then((d) => { if (ativo) { setTabelaPreco(d && d.itens ? d : null); setTabelaInativa(d?.vinculadaInativa ?? null); } })
+      .catch(() => { if (ativo) { setTabelaPreco(null); setTabelaInativa(null); } });
     return () => { ativo = false; };
   }, [clienteId]);
 
@@ -516,13 +520,13 @@ export function OrcamentoForm({
           <span className="inline-flex items-center gap-1.5 bg-success-50 text-success-700 text-xs font-semibold rounded-full px-3 py-1">
             <Tags className="w-3.5 h-3.5" /> Tabela: {tabelaPreco.nome}
           </span>
-          {tabelaPreco.vinculadaInativa && (
-            <span className="text-xs text-atencao-texto" data-aviso-tabela-inativa>A tabela do cliente (“{tabelaPreco.vinculadaInativa.nome}”) está inativa: valem os preços da Padrão.</span>
-          )}
           {tabelaPreco.precosBloqueados && (
             <span className="text-xs text-ink-muted">Preços bloqueados por contrato</span>
           )}
         </div>
+      )}
+      {tabelaInativa && (
+        <p className="text-xs text-atencao-texto" data-aviso-tabela-inativa>A tabela do cliente (“{tabelaInativa.nome}”) está inativa: valem os preços padrão do catálogo.</p>
       )}
 
       {tiposPermitidos.length > 1 && <div className="card-padded">
