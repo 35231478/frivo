@@ -6,6 +6,7 @@ import { pode } from "@/lib/permissoes";
 import { fornecedorDaConta } from "@/lib/financeiro/fornecedor";
 import { CAMPO_CARD_PAGAR, CARDS_PERIODO_PAGAR, condCardPeriodoPagar, condPeriodoVencimento, whereListaPagar } from "@/lib/listas/filtros";
 import { lerPeriodo } from "@/lib/periodo";
+import { periodoTela } from "@/components/listagem/periodo-cards";
 import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
 import { hojeDiaCivil } from "@/lib/fuso";
 import { ContasPagarView, type ResumoPagar } from "@/components/financeiro/contas-pagar-view";
@@ -89,7 +90,7 @@ export default async function ContasPagarPage({
         notaCompra: c.notaCompra ?? null, pedidoCompra: c.pedidoCompra ?? null,
       }))}
       resumo={resumo}
-      periodo={{ tipo: periodo.tipo, mes: periodo.mes, de: periodo.de, ate: periodo.ate, rotulo: periodo.rotulo }}
+      periodo={periodoTela(periodo)}
       filtros={{
         fornecedor: sp.fornecedor ?? "", card: sp.card ?? "", status: sp.status ?? "", fornecedorId: sp.fornecedorId ?? "",
         categoria: sp.categoria ?? "", centro: sp.centro ?? "", origem: sp.origem ?? "",

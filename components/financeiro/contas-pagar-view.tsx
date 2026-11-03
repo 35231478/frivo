@@ -7,12 +7,13 @@ import { statusVisualPagar, LABELS_STATUS_CONTA_PAGAR } from "@/lib/financeiro-s
 import { ContaPagarAcoes } from "@/components/financeiro/conta-pagar-acoes";
 import { CategoriaBadge } from "@/components/financeiro/categoria-badge";
 import { useListagemUrl } from "@/components/listagem/use-listagem-url";
-import { Paginacao } from "@/components/listagem/listagem-ui";
 import {
   Upload, AlertTriangle, CalendarClock, CheckCircle2, Search, SlidersHorizontal, Plus, Barcode, Loader2, Sigma,
   FileText, ShoppingCart, Receipt,
 } from "lucide-react";
 import { BarraPeriodo, CardResumo, GradeCards, type PeriodoTela } from "@/components/listagem/periodo-cards";
+import { BarraFiltros, CampoFiltro, INPUT_FILTRO } from "@/components/listagem/barra-filtros";
+import { CampoBusca, Paginacao } from "@/components/listagem/listagem-ui";
 import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
 
 /** Uma conta a pagar já pronta para a tela (números em vez de Decimal, datas em texto) */
@@ -32,6 +33,8 @@ export interface ContaPagarView {
 interface Opcao { id: string; nome: string; ativo: boolean }
 
 type CardKey = "VENCIDO" | "VENCE_HOJE" | "A_VENCER" | "PAGO" | "TOTAL";
+/** Os filtros do painel "Mais filtros" (o período e o card ficam fora: são navegação) */
+const PARAMS_FILTROS_PAGAR = ["status", "fornecedorId", "categoria", "centro", "origem"];
 /** Cards do período (lib/listas/filtros: CARDS_PERIODO_PAGAR): quantidade + R$ */
 export type ResumoPagar = Record<CardKey, { v: number; q: number }>;
 
@@ -55,18 +58,14 @@ export function ContasPagarView({
   const { busca, setBusca, navegar, pendente } = useListagemUrl({
     chave: "contas-pagar", qAtual: filtros.fornecedor, paramBusca: "fornecedor", lembrarFiltros: false,
   });
-  const vazioF = { status: "", fornecedorId: "", categoria: "", centro: "", origem: "" };
-  const inicialF = { status: filtros.status, fornecedorId: filtros.fornecedorId, categoria: filtros.categoria, centro: filtros.centro, origem: filtros.origem };
-  // Painel: edita local e "Aplicar" manda tudo para a URL de uma vez (o vencimento é o período, lá em cima)
-  const [f, setF] = useState(inicialF);
-  const filtrosAtivos = Object.values(inicialF).filter(Boolean).length;
-  const [painel, setPainel] = useState(filtrosAtivos > 0);
   const card = filtros.card as CardKey | "";
   const comStatus = useMemo(() => contas.map((c) => ({ c, sv: statusVisualPagar(c.status, c.dataVencimento) })), [contas]);
 
-  const paraUrl = (x: typeof f) => Object.fromEntries(Object.entries(x).map(([k, v]) => [k, v || null]));
-  function aplicar() { navegar(paraUrl(f)); setPainel(false); }
-  function limpar() { setF(vazioF); navegar(paraUrl(vazioF)); }
+  /** Um select do painel: muda = vai para a URL na hora (o controle se destaca quando ativo) */
+  const sel = (k: keyof FiltrosPagar) => ({
+    value: filtros[k], onChange: (e: React.ChangeEvent<HTMLSelectElement>) => navegar({ [k]: e.target.value || null }),
+    className: cn(INPUT_FILTRO, filtros[k] && "border-primary-300 text-primary-700 bg-primary-50/50"), "data-filtro": k,
+  });
 
   const acoes = (c: ContaPagarView) => (
     <ContaPagarAcoes conta={{ id: c.id, numero: c.numero, fornecedor: c.fornecedor.nome, valorTotal: c.valorTotal, valorPago: c.valorPago, saldoRestante: c.saldoRestante, status: c.status }} menu />
@@ -129,8 +128,46 @@ export function ContasPagarView({
         </div>
       </div>
 
-      {/* Período (pelo vencimento) + cards do período, clicáveis como filtro — padrão da casa */}
-      <BarraPeriodo periodo={periodo} navegar={navegar} permitirTodos dica="Pela data de vencimento." />
+      {/* Barra enxuta: período (pelo vencimento) + busca + "Mais filtros" (painel recolhido) — padrão da casa */}
+      <BarraFiltros
+        periodo={<BarraPeriodo periodo={periodo} navegar={navegar} permitirTodos dica="Pela data de vencimento." />}
+        busca={<CampoBusca valor={busca} onChange={setBusca} placeholder="Pesquisar no período selecionado" rotulo="Buscar contas a pagar" carregando={pendente} />}
+        paramsFiltros={PARAMS_FILTROS_PAGAR} paramBusca="fornecedor" navegar={navegar}
+      >
+        <CampoFiltro label="Status">
+          <select {...sel("status")} aria-label="Status">
+            <option value="">Todos</option>
+            {Object.entries(LABELS_STATUS_CONTA_PAGAR).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </CampoFiltro>
+        <CampoFiltro label="Fornecedor">
+          <select {...sel("fornecedorId")} aria-label="Fornecedor cadastrado">
+            <option value="">Todos</option>
+            {fornecedores.map((x) => <option key={x.id} value={x.id}>{x.ativo ? x.nome : `${x.nome} (inativo)`}</option>)}
+          </select>
+        </CampoFiltro>
+        <CampoFiltro label="Categoria">
+          <select {...sel("categoria")} aria-label="Categoria">
+            <option value="">Todas</option>
+            {/* Filtro: inclui as inativas (contas antigas continuam filtráveis) */}
+            {categorias.map((x) => <option key={x.id} value={x.id}>{x.ativo ? x.nome : `${x.nome} (inativa)`}</option>)}
+          </select>
+        </CampoFiltro>
+        <CampoFiltro label="Centro de custo">
+          <select {...sel("centro")} aria-label="Centro de custo">
+            <option value="">Todos</option>
+            {centros.map((x) => <option key={x.id} value={x.id}>{x.ativo ? x.nome : `${x.nome} (inativo)`}</option>)}
+          </select>
+        </CampoFiltro>
+        <CampoFiltro label="Origem">
+          <select {...sel("origem")} aria-label="Origem">
+            <option value="">Todas</option>
+            <option value="MANUAL">Manual</option>
+            <option value="PEDIDO">Pedido de compra</option>
+            <option value="NF">Nota de compra (NF)</option>
+          </select>
+        </CampoFiltro>
+      </BarraFiltros>
       <GradeCards colunas={5}>
         {CARDS.map((c) => (
           <CardResumo key={c.key} id={c.key} rotulo={c.rotulo} icone={c.icone} cor={c.cor} dica={c.dica}
@@ -140,64 +177,6 @@ export function ContasPagarView({
       </GradeCards>
 
       <div className="card overflow-hidden">
-        {/* Busca + filtros */}
-        <div className="p-3 border-b border-surface-border flex items-center gap-2 flex-wrap">
-          <div className="relative flex-1 min-w-[220px]">
-            {pendente
-              ? <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-subtle animate-spin pointer-events-none" />
-              : <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-subtle pointer-events-none" />}
-            <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por fornecedor, descrição ou número…" className={cn(inputCls, "w-full pl-9")} data-busca-pagar />
-          </div>
-          <button type="button" onClick={() => setPainel((v) => !v)} data-abrir-filtros className={cn("inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-colors", painel || filtrosAtivos ? "bg-primary-50 border-primary-200 text-primary-700" : "bg-white border-surface-border text-ink-muted hover:bg-surface-alt")}>
-            <SlidersHorizontal className="w-4 h-4" /> Filtros
-            {filtrosAtivos > 0 && <span className="text-[10px] font-bold bg-primary-500 text-white rounded-full w-4 h-4 flex items-center justify-center">{filtrosAtivos}</span>}
-          </button>
-        </div>
-
-        {painel && (
-          <div className="p-4 border-b border-surface-border bg-surface-alt/40 space-y-3" data-painel-filtros>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-              <FiltroCampo label="Status">
-                <select value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })} className={cn(inputCls, "w-full")} aria-label="Status" data-filtro="status">
-                  <option value="">Todos</option>
-                  {Object.entries(LABELS_STATUS_CONTA_PAGAR).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                </select>
-              </FiltroCampo>
-              <FiltroCampo label="Fornecedor">
-                <select value={f.fornecedorId} onChange={(e) => setF({ ...f, fornecedorId: e.target.value })} className={cn(inputCls, "w-full")} aria-label="Fornecedor cadastrado" data-filtro="fornecedorId">
-                  <option value="">Todos</option>
-                  {fornecedores.map((x) => <option key={x.id} value={x.id}>{x.ativo ? x.nome : `${x.nome} (inativo)`}</option>)}
-                </select>
-              </FiltroCampo>
-              <FiltroCampo label="Categoria">
-                <select value={f.categoria} onChange={(e) => setF({ ...f, categoria: e.target.value })} className={cn(inputCls, "w-full")} aria-label="Categoria" data-filtro="categoria">
-                  <option value="">Todas</option>
-                  {/* Filtro: inclui as inativas (contas antigas continuam filtráveis) */}
-                  {categorias.map((x) => <option key={x.id} value={x.id}>{x.ativo ? x.nome : `${x.nome} (inativa)`}</option>)}
-                </select>
-              </FiltroCampo>
-              <FiltroCampo label="Centro de custo">
-                <select value={f.centro} onChange={(e) => setF({ ...f, centro: e.target.value })} className={cn(inputCls, "w-full")} aria-label="Centro de custo" data-filtro="centro">
-                  <option value="">Todos</option>
-                  {centros.map((x) => <option key={x.id} value={x.id}>{x.ativo ? x.nome : `${x.nome} (inativo)`}</option>)}
-                </select>
-              </FiltroCampo>
-              <FiltroCampo label="Origem">
-                <select value={f.origem} onChange={(e) => setF({ ...f, origem: e.target.value })} className={cn(inputCls, "w-full")} aria-label="Origem" data-filtro="origem">
-                  <option value="">Todas</option>
-                  <option value="MANUAL">Manual</option>
-                  <option value="PEDIDO">Pedido de compra</option>
-                  <option value="NF">Nota de compra (NF)</option>
-                </select>
-              </FiltroCampo>
-            </div>
-            <div className="flex justify-end gap-2 pt-1">
-              <button type="button" onClick={limpar} className="text-sm text-ink-muted hover:text-ink px-3 py-1.5" data-limpar-filtros>Limpar</button>
-              <button type="button" onClick={aplicar} className="text-sm font-semibold text-white bg-primary-500 hover:bg-primary-600 px-4 py-1.5 rounded-lg" data-aplicar-filtros>Aplicar</button>
-            </div>
-          </div>
-        )}
-
         {/* Celular: um cartão por conta (toque abre o detalhe; ações no ⋮) */}
         <ul className="md:hidden divide-y divide-surface-border" data-cartoes-pagar>
           {comStatus.length === 0 ? (
@@ -300,6 +279,3 @@ export function ContasPagarView({
   );
 }
 
-function FiltroCampo({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div><label className="text-[11px] font-semibold text-ink-muted">{label}</label><div className="mt-1">{children}</div></div>;
-}

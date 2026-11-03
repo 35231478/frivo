@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { CARDS_PERIODO_ORCAMENTOS, condCardPeriodoOrcamentos, condPeriodoCriacao, whereListaOrcamentos } from "@/lib/listas/filtros";
 import { lerPeriodo } from "@/lib/periodo";
+import { periodoTela } from "@/components/listagem/periodo-cards";
 import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
 import { PeriodoCardsOrcamentos, VerTodoPeriodo, type ResumoOrcamentos } from "@/components/orcamento/orcamentos-periodo";
 import { cn, formatarData, formatarMoeda, LABELS_TIPO_ORCAMENTO, CLASSE_TIPO_ORCAMENTO } from "@/lib/utils";
@@ -95,26 +96,16 @@ export default async function OrcamentosPage({
       </div>
 
       {/* Período (pela criação) + cards de funil do período, clicáveis como filtro — padrão da casa */}
-      <PeriodoCardsOrcamentos periodo={{ tipo: periodo.tipo, mes: periodo.mes, de: periodo.de, ate: periodo.ate, rotulo: periodo.rotulo }} resumo={resumo} card={card} />
+      <PeriodoCardsOrcamentos
+        periodo={periodoTela(periodo)} resumo={resumo} card={card} resposta={resposta}
+        opcoes={{
+          tipos: Object.entries(LABELS_TIPO_ORCAMENTO).map(([value, label]) => ({ value, label })),
+          status: Object.entries(LABELS_ETAPA).map(([value, label]) => ({ value, label })),
+          clientes: clientes.map((c) => ({ value: c.id, label: c.nomeFantasia ?? c.nome })),
+        }}
+      />
 
       <div className="card overflow-hidden">
-        <div className="p-4 border-b border-surface-border bg-surface-alt/40">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex-1 min-w-[220px]">
-              <BuscaUrl lista="orcamentos" placeholder="Buscar por código, nome ou cliente…" rotulo="Buscar orçamentos" />
-            </div>
-            <FiltroSelectUrl param="tipo" vazio="Todos os tipos" opcoes={Object.entries(LABELS_TIPO_ORCAMENTO).map(([value, label]) => ({ value, label }))} />
-            <FiltroSelectUrl param="status" vazio="Todos status" opcoes={Object.entries(LABELS_ETAPA).map(([value, label]) => ({ value, label }))} />
-            <FiltroSelectUrl param="clienteId" vazio="Todos clientes" opcoes={clientes.map((c) => ({ value: c.id, label: c.nomeFantasia ?? c.nome }))} />
-            <FiltroCheckUrl param="inativos" rotulo="Mostrar cancelados" />
-            {resposta === "nova" && (
-              <Link href="/orcamentos?periodo=todos" className="inline-flex items-center gap-1.5 rounded-full bg-acento-claro text-acento text-xs font-semibold px-3 py-1.5" data-filtro-resposta>
-                Respostas novas do cliente <X className="w-3.5 h-3.5" aria-hidden /><span className="sr-only">Limpar filtro</span>
-              </Link>
-            )}
-          </div>
-        </div>
-
         <ConteudoUrl>
         {orcamentos.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-12 text-center" data-lista-vazia>

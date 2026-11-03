@@ -14,6 +14,8 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { toast } from "@/components/ui/avisos";
 import { Paginacao, ListaVazia } from "@/components/listagem/listagem-ui";
 import { BarraPeriodo, CardResumo, GradeCards } from "@/components/listagem/periodo-cards";
+import { BarraFiltros, CampoFiltro, INPUT_FILTRO } from "@/components/listagem/barra-filtros";
+import { CampoBusca } from "@/components/listagem/listagem-ui";
 import { useListagemUrl } from "@/components/listagem/use-listagem-url";
 import { cn, formatarData, formatarDataHora, formatarMoeda } from "@/lib/utils";
 import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
@@ -60,7 +62,26 @@ export function NotasCentralView({ dados }: { dados: DadosCentral }) {
         <Dica texto="NFS-e emitidas pelo PlugNotas a partir das medições e das OS concluídas." rotulo="Notas fiscais de serviço" lado="direita" />
       </div>
 
-      <BarraPeriodo periodo={filtros.periodo} navegar={navegar} />
+      {/* Barra enxuta: período (pela data da nota) + busca + "Mais filtros" (painel recolhido) — padrão da casa */}
+      <BarraFiltros
+        periodo={<BarraPeriodo periodo={filtros.periodo} navegar={navegar} permitirTodos dica="Pela data de autorização da nota (ou de envio, se ainda não autorizada)." />}
+        busca={<CampoBusca valor={busca} onChange={setBusca} placeholder="Pesquisar no período selecionado" rotulo="Buscar notas" carregando={pendente} />}
+        paramsFiltros={["situacao", "ambiente"]} paramBusca="q" navegar={navegar}
+      >
+        <CampoFiltro label="Situação">
+          <select value={filtros.situacao ?? ""} onChange={(e) => navegar({ situacao: e.target.value || null })} aria-label="Situação" className={cn(INPUT_FILTRO, filtros.situacao && "border-primary-300 text-primary-700 bg-primary-50/50")} data-filtro-situacao>
+            <option value="">Todas as situações</option>
+            {(Object.keys(GRUPOS_SITUACAO) as GrupoSituacao[]).map((g) => <option key={g} value={g}>{GRUPOS_SITUACAO[g].rotulo}</option>)}
+          </select>
+        </CampoFiltro>
+        <CampoFiltro label="Ambiente">
+          <select value={filtros.ambiente ?? ""} onChange={(e) => navegar({ ambiente: e.target.value || null })} aria-label="Ambiente" className={cn(INPUT_FILTRO, filtros.ambiente && "border-primary-300 text-primary-700 bg-primary-50/50")} data-filtro-ambiente>
+            <option value="">Todos os ambientes</option>
+            <option value="HOMOLOGACAO">Homologação</option>
+            <option value="PRODUCAO">Produção</option>
+          </select>
+        </CampoFiltro>
+      </BarraFiltros>
 
       {/* Cards do período (e do ambiente escolhido) */}
       <GradeCards colunas={6}>
@@ -76,26 +97,6 @@ export function NotasCentralView({ dados }: { dados: DadosCentral }) {
       </GradeCards>
 
       <div className="card overflow-hidden">
-        {/* Busca + situação + ambiente */}
-        <div className="p-3 border-b border-surface-border flex items-center gap-2 flex-wrap">
-          <div className="relative flex-1 min-w-[220px]">
-            {pendente
-              ? <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-subtle animate-spin pointer-events-none" />
-              : <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-subtle pointer-events-none" />}
-            <input value={busca} onChange={(e) => setBusca(e.target.value)} aria-label="Buscar notas"
-              placeholder="Número, tomador (nome ou CNPJ), OS ou medição" className={cn(INPUT, "w-full pl-9")} data-busca />
-          </div>
-          <select value={filtros.situacao} onChange={(e) => navegar({ situacao: e.target.value || null })} aria-label="Situação" className={cn(INPUT, "flex-1 sm:flex-none")} data-filtro-situacao>
-            <option value="">Todas as situações</option>
-            {(Object.keys(GRUPOS_SITUACAO) as GrupoSituacao[]).map((g) => <option key={g} value={g}>{GRUPOS_SITUACAO[g].rotulo}</option>)}
-          </select>
-          <select value={filtros.ambiente} onChange={(e) => navegar({ ambiente: e.target.value || null })} aria-label="Ambiente" className={cn(INPUT, "flex-1 sm:flex-none")} data-filtro-ambiente>
-            <option value="">Todos os ambientes</option>
-            <option value="HOMOLOGACAO">Homologação</option>
-            <option value="PRODUCAO">Produção</option>
-          </select>
-        </div>
-
         {dados.notas.length === 0 ? (
           <ListaVazia mensagem={`Nenhuma nota em ${filtros.periodo.tipo === "mes" ? filtros.periodo.rotulo.toLowerCase() : "o período"}`} busca={filtros.q || undefined} onLimpar={() => { setBusca(""); navegar({ q: null }); }} />
         ) : (

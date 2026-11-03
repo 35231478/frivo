@@ -14,13 +14,14 @@ import { origemComLink } from "@/lib/financeiro/conta-receber-gestao";
 import { SincronizarBoletos } from "@/components/financeiro/sincronizar-boletos";
 import { CategoriaBadge } from "@/components/financeiro/categoria-badge";
 import { useListagemUrl } from "@/components/listagem/use-listagem-url";
-import { Paginacao } from "@/components/listagem/listagem-ui";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import {
   Receipt, AlertTriangle, CalendarClock, CheckCircle2, Search, SlidersHorizontal,
   Plus, Download, Barcode, Loader2, Sigma, TrendingDown, Handshake, X,
 } from "lucide-react";
 import { BarraPeriodo, CardResumo, GradeCards, type PeriodoTela } from "@/components/listagem/periodo-cards";
+import { BarraFiltros, CampoFiltro, INPUT_FILTRO, FiltroTextoUrl } from "@/components/listagem/barra-filtros";
+import { CampoBusca, Paginacao } from "@/components/listagem/listagem-ui";
 import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
 import { recebidaEmParte, saldoDaConta } from "@/lib/financeiro/parcelas";
 
@@ -64,6 +65,8 @@ export interface FiltrosReceber {
 }
 
 type CardKey = "VENCIDO" | "VENCE_HOJE" | "A_VENCER" | "RECEBIDO" | "PERDA" | "TOTAL";
+/** Os filtros do painel "Mais filtros" (o período e o card ficam fora: são navegação) */
+const PARAMS_FILTROS_RECEBER = ["clienteId", "categoria", "forma", "banco", "valorMin", "valorMax", "status"];
 
 /**
  * Contas a Receber no padrão da casa: período (‹ mês ›, personalizado ou todo o período — pelo
@@ -84,14 +87,6 @@ export function ContasReceberView({
   const podeCobrar = pode("financeiro", "contasReceber");
   const { busca, setBusca, navegar, pendente } = useListagemUrl({
     chave: "contas-receber", qAtual: filtros.q, paramBusca: "q", lembrarFiltros: false,
-  });
-  const [painel, setPainel] = useState(
-    !!(filtros.clienteId || filtros.categoria || filtros.forma || filtros.banco || filtros.valorMin || filtros.valorMax),
-  );
-  // Painel: edita local e "Aplicar" manda tudo para a URL de uma vez (o vencimento é o período, lá em cima)
-  const [f, setF] = useState({
-    clienteId: filtros.clienteId, forma: filtros.forma,
-    banco: filtros.banco, categoria: filtros.categoria, valorMin: filtros.valorMin, valorMax: filtros.valorMax,
   });
   const [detalheId, setDetalheId] = useState<string | null>(filtros.conta || null);
   const fecharDetalhe = () => { setDetalheId(null); if (filtros.conta) navegar({ conta: null }); };
@@ -114,19 +109,6 @@ export function ContasReceberView({
   const card = filtros.card as CardKey | "";
 
   const comStatus = useMemo(() => contas.map((c) => ({ c, sv: statusVisualReceber(c.status, c.dataVencimento) })), [contas]);
-  const filtrosAtivos = Object.values(f).filter(Boolean).length + (statusChips.size ? 1 : 0);
-
-  function aplicar() {
-    navegar({
-      clienteId: f.clienteId || null, forma: f.forma || null,
-      banco: f.banco || null, categoria: f.categoria || null, valorMin: f.valorMin || null, valorMax: f.valorMax || null,
-    });
-    setPainel(false);
-  }
-  function limpar() {
-    setF({ clienteId: "", forma: "", banco: "", categoria: "", valorMin: "", valorMax: "" });
-    navegar({ vencDe: null, vencAte: null, clienteId: null, forma: null, banco: null, categoria: null, valorMin: null, valorMax: null, status: null });
-  }
   function toggleStatus(chave: string) {
     const s = new Set(statusChips);
     s.has(chave) ? s.delete(chave) : s.add(chave);
@@ -175,8 +157,46 @@ export function ContasReceberView({
         </div>
       </div>
 
-      {/* Período (pelo vencimento) + cards do período, clicáveis como filtro — padrão da casa */}
-      <BarraPeriodo periodo={periodo} navegar={navegar} permitirTodos dica="Pela data de vencimento." />
+      {/* Barra enxuta: período (pelo vencimento) + busca + "Mais filtros" (painel recolhido) — padrão da casa */}
+      <BarraFiltros
+        periodo={<BarraPeriodo periodo={periodo} navegar={navegar} permitirTodos dica="Pela data de vencimento." />}
+        busca={<CampoBusca valor={busca} onChange={setBusca} placeholder="Pesquisar no período selecionado" rotulo="Buscar cobranças" carregando={pendente} />}
+        paramsFiltros={PARAMS_FILTROS_RECEBER} paramBusca="q" navegar={navegar}
+      >
+        <CampoFiltro label="Cliente">
+          <select value={filtros.clienteId} onChange={(e) => navegar({ clienteId: e.target.value || null })} className={cn(INPUT_FILTRO, filtros.clienteId && "border-primary-300 text-primary-700 bg-primary-50/50")} data-filtro="clienteId">
+            <option value="">Todos</option>
+            {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+          </select>
+        </CampoFiltro>
+        <CampoFiltro label="Categoria">
+          <select value={filtros.categoria} onChange={(e) => navegar({ categoria: e.target.value || null })} className={cn(INPUT_FILTRO, filtros.categoria && "border-primary-300 text-primary-700 bg-primary-50/50")} data-filtro="categoria">
+            <option value="">Todas</option>
+            {/* Filtro: inclui as inativas (contas antigas continuam filtráveis) */}
+            {categorias.map((c) => <option key={c.id} value={c.id}>{c.ativo ? c.nome : `${c.nome} (inativa)`}</option>)}
+          </select>
+        </CampoFiltro>
+        <CampoFiltro label="Forma de pagamento">
+          <select value={filtros.forma} onChange={(e) => navegar({ forma: e.target.value || null })} className={cn(INPUT_FILTRO, filtros.forma && "border-primary-300 text-primary-700 bg-primary-50/50")} data-filtro="forma">
+            <option value="">Todas</option>
+            {Object.entries(LABELS_FORMA_PAGAMENTO).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </CampoFiltro>
+        <CampoFiltro label="Banco"><FiltroTextoUrl param="banco" navegar={navegar} placeholder="Banco" rotulo="Banco" /></CampoFiltro>
+        <CampoFiltro label="Valor de"><FiltroTextoUrl param="valorMin" navegar={navegar} tipo="number" placeholder="0,00" rotulo="Valor de" /></CampoFiltro>
+        <CampoFiltro label="Valor até"><FiltroTextoUrl param="valorMax" navegar={navegar} tipo="number" placeholder="0,00" rotulo="Valor até" /></CampoFiltro>
+        <div className="sm:col-span-2 lg:col-span-4">
+          <p className="text-xs font-medium text-ink-muted mb-1.5">Status</p>
+          <div className="flex flex-wrap gap-1.5">
+            {(["PREVISTO", "A_VENCER", "VENCE_HOJE", "VENCIDO", "PARCIAL", "PAGO", "PERDA", "RENEGOCIADO", "CANCELADO"] as const).map((s) => (
+              <button key={s} type="button" data-chip-status={s} onClick={() => toggleStatus(s)} aria-pressed={statusChips.has(s)}
+                className={cn("text-xs px-2.5 py-1 rounded-full border transition-colors", statusChips.has(s) ? "bg-primary-500 border-primary-500 text-white" : "bg-white border-surface-border text-ink-muted hover:border-primary-300")}>
+                {LABEL_CHAVE[s]}
+              </button>
+            ))}
+          </div>
+        </div>
+      </BarraFiltros>
       <GradeCards colunas={6}>
         {CARDS.map((c) => (
           <CardResumo key={c.key} id={c.key} rotulo={c.rotulo} icone={c.icone} cor={c.cor} dica={c.dica}
@@ -185,65 +205,7 @@ export function ContasReceberView({
         ))}
       </GradeCards>
 
-      {/* Busca + filtros */}
       <div className="card overflow-hidden">
-        <div className="p-3 border-b border-surface-border flex items-center gap-2 flex-wrap">
-          <div className="relative flex-1 min-w-[220px]">
-            {pendente
-              ? <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-subtle animate-spin pointer-events-none" />
-              : <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-subtle pointer-events-none" />}
-            <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por cliente, descrição ou número…" className={cn(inputCls, "w-full pl-9")} />
-          </div>
-          <button onClick={() => setPainel((v) => !v)} className={cn("inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-colors", painel || filtrosAtivos ? "bg-primary-50 border-primary-200 text-primary-700" : "bg-white border-surface-border text-ink-muted hover:bg-surface-alt")}>
-            <SlidersHorizontal className="w-4 h-4" /> Filtros
-            {filtrosAtivos > 0 && <span className="text-[10px] font-bold bg-primary-500 text-white rounded-full w-4 h-4 flex items-center justify-center">{filtrosAtivos}</span>}
-          </button>
-        </div>
-
-        {painel && (
-          <div className="p-4 border-b border-surface-border bg-surface-alt/40 space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <FiltroCampo label="Cliente">
-                <select value={f.clienteId} onChange={(e) => setF({ ...f, clienteId: e.target.value })} className={inputCls}>
-                  <option value="">Todos</option>
-                  {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                </select>
-              </FiltroCampo>
-              <FiltroCampo label="Categoria">
-                <select value={f.categoria} onChange={(e) => setF({ ...f, categoria: e.target.value })} className={inputCls}>
-                  <option value="">Todas</option>
-                  {/* Filtro: inclui as inativas (contas antigas continuam filtráveis) */}
-                  {categorias.map((c) => <option key={c.id} value={c.id}>{c.ativo ? c.nome : `${c.nome} (inativa)`}</option>)}
-                </select>
-              </FiltroCampo>
-              <FiltroCampo label="Forma de pagamento">
-                <select value={f.forma} onChange={(e) => setF({ ...f, forma: e.target.value })} className={inputCls}>
-                  <option value="">Todas</option>
-                  {Object.entries(LABELS_FORMA_PAGAMENTO).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                </select>
-              </FiltroCampo>
-              <FiltroCampo label="Banco"><input value={f.banco} onChange={(e) => setF({ ...f, banco: e.target.value })} className={inputCls} placeholder="Banco" /></FiltroCampo>
-              <FiltroCampo label="Valor de"><input type="number" value={f.valorMin} onChange={(e) => setF({ ...f, valorMin: e.target.value })} className={inputCls} placeholder="0,00" /></FiltroCampo>
-              <FiltroCampo label="Valor até"><input type="number" value={f.valorMax} onChange={(e) => setF({ ...f, valorMax: e.target.value })} className={inputCls} placeholder="0,00" /></FiltroCampo>
-            </div>
-            <div>
-              <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider mb-1.5">Status</p>
-              <div className="flex flex-wrap gap-1.5">
-                {(["PREVISTO", "A_VENCER", "VENCE_HOJE", "VENCIDO", "PARCIAL", "PAGO", "PERDA", "RENEGOCIADO", "CANCELADO"] as const).map((s) => (
-                  <button key={s} type="button" data-chip-status={s} onClick={() => toggleStatus(s)}
-                    className={cn("text-xs px-2.5 py-1 rounded-full border transition-colors", statusChips.has(s) ? "bg-primary-500 border-primary-500 text-white" : "bg-white border-surface-border text-ink-muted hover:border-primary-300")}>
-                    {LABEL_CHAVE[s]}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-1">
-              <button onClick={limpar} className="text-sm text-ink-muted hover:text-ink px-3 py-1.5">Limpar</button>
-              <button onClick={aplicar} className="text-sm font-semibold text-white bg-primary-500 hover:bg-primary-600 px-4 py-1.5 rounded-lg">Aplicar</button>
-            </div>
-          </div>
-        )}
-
         {/* Celular: um cartão por conta (toque abre os detalhes; ações no ⋮) */}
         <ul className="md:hidden divide-y divide-surface-border" data-cartoes-receber>
           {comStatus.length === 0 ? (
@@ -396,6 +358,3 @@ function SeloParcial() {
   return <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-atencao-claro text-atencao-texto" data-selo-parcial>Parcial</span>;
 }
 
-function FiltroCampo({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div><label className="text-[11px] font-semibold text-ink-muted">{label}</label><div className="mt-1">{children}</div></div>;
-}

@@ -51,10 +51,10 @@ export function BuscaUrl({ lista, placeholder, rotulo }: { lista: string; placeh
   );
 }
 
-export function FiltroSelectUrl({ param, vazio, opcoes }: { param: string; vazio: string; opcoes: Opcao[] }) {
+export function FiltroSelectUrl({ param, vazio, opcoes, rotulo, className }: { param: string; vazio: string; opcoes: Opcao[]; rotulo?: string; className?: string }) {
   const { navegar } = useLista();
   const sp = useSearchParams();
-  return <SelectFiltro valor={sp.get(param) ?? ""} onChange={(v) => navegar({ [param]: v || null })} vazio={vazio} opcoes={opcoes} />;
+  return <SelectFiltro valor={sp.get(param) ?? ""} onChange={(v) => navegar({ [param]: v || null })} vazio={vazio} opcoes={opcoes} rotulo={rotulo} className={className} />;
 }
 
 export function FiltroCheckUrl({ param, rotulo }: { param: string; rotulo: string }) {

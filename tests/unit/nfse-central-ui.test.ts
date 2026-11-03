@@ -128,12 +128,14 @@ describe("período, busca e filtros (na URL)", () => {
     expect(ultimaUrl()).toBe("/financeiro/notas-fiscais?mes=2026-02");
     await clicar($("[data-mes-seguinte]"));
     expect(ultimaUrl()).toBe("/financeiro/notas-fiscais?mes=2026-04");
-    expect($("[data-todo-periodo]")).toBeNull(); // "Todo o período" só onde a tela permite (Contas a Receber)
+    await clicar($("[data-periodo-menu]"));
+    expect($("[data-todo-periodo]")).not.toBeNull(); // a central também aceita "Todo o período" (nota antiga)
   });
 
-  it("período personalizado: de/até → Aplicar (sai o mês); 'Voltar ao mês atual' limpa", async () => {
+  it("período personalizado: de/até → Aplicar (sai o mês); 'Este mês' limpa", async () => {
     nav.sp = "mes=2026-03";
     await tela();
+    await clicar($("[data-periodo-menu]"));
     await clicar($("[data-alternar-periodo]"));
     const campos = $$('[data-intervalo] [data-input-data]') as HTMLInputElement[];
     expect(campos).toHaveLength(2);
@@ -148,14 +150,16 @@ describe("período, busca e filtros (na URL)", () => {
     await esperar();
     await clicar($("[data-aplicar-intervalo]"));
     expect(ultimaUrl()).toBe("/financeiro/notas-fiscais?de=2026-03-05&ate=2026-03-20");
-    await clicar($("[data-alternar-periodo]"));
+    await clicar($("[data-periodo-menu]"));
+    await clicar($("[data-periodo-opcao=mes]"));
     expect(ultimaUrl()).toBe("/financeiro/notas-fiscais");
   });
 
-  it("intervalo ativo: mostra o rótulo e já abre nos campos", async () => {
+  it("intervalo ativo: mostra o rótulo e o menu já abre nos campos preenchidos", async () => {
     await tela(DADOS({ filtros: { ...DADOS().filtros, periodo: { tipo: "intervalo", mes: null, de: "2026-03-05", ate: "2026-03-20", rotulo: "05/03/2026 a 20/03/2026" } } }));
     expect($("[data-periodo]")!.getAttribute("data-periodo")).toBe("intervalo");
     expect(txt($("[data-periodo-rotulo]"))).toBe("05/03/2026 a 20/03/2026");
+    await clicar($("[data-periodo-menu]"));
     expect(($$('[data-intervalo] [data-input-data]') as HTMLInputElement[]).map((i) => i.value)).toEqual(["05/03/2026", "20/03/2026"]);
   });
 
@@ -170,6 +174,7 @@ describe("período, busca e filtros (na URL)", () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(400); });
     expect(ultimaUrl()).toBe("/financeiro/notas-fiscais?q=Hospital");
     vi.useRealTimers();
+    await clicar($("[data-mais-filtros]")); // os selects ficam no painel "Mais filtros"
     const sel = async (s: string, v: string) => act(async () => {
       const el = $(s) as HTMLSelectElement;
       Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(el, v);

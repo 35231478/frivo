@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { lerPeriodo } from "@/lib/periodo";
+import { periodoTela } from "@/components/listagem/periodo-cards";
 import { painelFaturamentoContratos } from "@/lib/faturamento/painel-contratos-server";
 import { FaturamentoContratosView } from "@/components/financeiro/faturamento-contratos-view";
 
@@ -22,7 +23,7 @@ export default async function FaturamentoContratosPage({ searchParams }: { searc
   const dados = await painelFaturamentoContratos(session!.user!.empresaId, ano, mes);
   return (
     <FaturamentoContratosView
-      periodo={{ tipo: periodo.tipo, mes: periodo.mes, de: null, ate: null, rotulo: periodo.rotulo }}
+      periodo={periodoTela(periodo)}
       linhas={dados.linhas} resumo={dados.resumo} soAtencao={sp.atencao === "1"}
     />
   );
