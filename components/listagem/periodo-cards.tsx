@@ -31,7 +31,7 @@ export function BarraPeriodo({ periodo, navegar, permitirTodos, somenteMes, dica
   className?: string;
 }) {
   const [aberto, setAberto] = useState(false);
-  const [personalizado, setPersonalizado] = useState(periodo.tipo === "intervalo");
+  const [personalizado, setPersonalizado] = useState(false); // o efeito abaixo abre os campos quando o período já é um intervalo
   const [de, setDe] = useState(periodo.de ?? "");
   const [ate, setAte] = useState(periodo.ate ?? "");
   const ref = useRef<HTMLDivElement>(null);
