@@ -33,23 +33,40 @@ const clicar = async (el: Element | null) => { expect(el).not.toBeNull(); await 
 const tecla = async (key: string) => { await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })); }); await esperar(); };
 const ultimaUrl = () => String(nav.replace.mock.calls.at(-1)?.[0] ?? "");
 
-async function montar(qs = "") {
+const OS1 = { id: "os1", numero: "OS-2026-0001", chamadoNumero: null, origem: "INTERNA", cliente: "Hospital Santa Clara", clienteLogo: null, unidade: "Matriz", responsavel: "Ana", atividades: 1, tecnicos: [], status: "ABERTA", prioridade: "NORMAL", criadoEm: "2026-11-02T12:00:00.000Z", previsaoConclusao: null };
+async function montar(qs = "", ordens: unknown[] = []) {
   nav.qs = qs;
   if (root) { act(() => root.unmount()); caixa.remove(); } // dois "montar" no mesmo teste: um de cada vez
-  const [{ OrdensListaClient }, { PermissoesProvider }, { periodoTela }] = await Promise.all([
-    import("@/components/ordens/ordens-lista-client"), import("@/components/providers/permissoes-provider"), import("@/lib/periodo"),
+  const [{ OrdensListaClient }, { PermissoesProvider }, { periodoTela }, { SelecaoMassaProvider }] = await Promise.all([
+    import("@/components/ordens/ordens-lista-client"), import("@/components/providers/permissoes-provider"), import("@/lib/periodo"), import("@/components/acoes-massa/selecao"),
   ]);
   const periodo = periodoTela(periodoOrdens(Object.fromEntries(new URLSearchParams(qs).entries()), AGORA));
   caixa = document.createElement("div"); document.body.appendChild(caixa); root = createRoot(caixa);
   await act(async () => {
     root.render(createElement(PermissoesProvider, { role: "ADMIN", permissoes: permissoesTotais(), children:
-      createElement(OrdensListaClient as any, { ordens: [], total: 0, pagina: 1, porPagina: 50, periodo, opcoes: { clientes: [], usuarios: [], tiposOs: [], contratos: [] } }),
+      // a página real envolve a lista no provedor da seleção em massa
+      createElement(SelecaoMassaProvider as any, { entidade: "ordens", idsPagina: (ordens as { id: string }[]).map((o) => o.id), total: ordens.length, children:
+        createElement(OrdensListaClient as any, { ordens, total: ordens.length, pagina: 1, porPagina: 50, periodo, opcoes: { clientes: [], usuarios: [], tiposOs: [], contratos: [] } }),
+      }),
     }));
   });
   await esperar();
 }
 
 describe("lista de OS: barra enxuta", () => {
+  it("tabela profissional: ordena pelo cabeçalho (?sort=&dir=), Abertura desc por padrão; número e nome na fonte única da planilha", async () => {
+    await montar("", [OS1]);
+    expect($("table[data-tabela-planilha]")).not.toBeNull();
+    expect(txt($('th[aria-sort="descending"]'))).toContain("Abertura");
+    expect($$("[data-ordenar]").map((b) => b.getAttribute("data-ordenar"))).toEqual(["numero", "cliente", "criadoEm", "previsaoConclusao", "status", "prioridade"]);
+    await clicar($('[data-ordenar="numero"]'));
+    expect(ultimaUrl()).toBe("/ordens?sort=numero&dir=desc");
+    const numero = $('tr[data-linha="os1"] td[data-celula="numero"] a')!;
+    expect(numero.className).toContain("font-mono");
+    expect(numero.className).not.toContain("font-display");
+    expect($('tr[data-linha="os1"] td[data-celula="cliente"]')!.getAttribute("title")).toBe("Hospital Santa Clara");
+  });
+
   it("por padrão todo o período (setas desligadas); T vai para hoje; ← › andam o dia; a barra tem a busca e 'Mais filtros' fechado", async () => {
     await montar();
     expect(txt($("[data-mes-rotulo]"))).toBe("Todo o período");

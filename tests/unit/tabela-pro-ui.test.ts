@@ -216,6 +216,13 @@ describe("preferência por usuário", () => {
     expect(cabecalhos()).toEqual(["sel", "codigo", "nome", "cliente", "valor", "acoes"]);
   });
 
+  it("a do navegador também é casada com as colunas: obrigatória escondida volta, mínima vale, coluna que sumiu sai", async () => {
+    localStorage.setItem("frivo:tabela:teste", JSON.stringify({ larguras: { cliente: 60, sumiu: 100 }, ocultas: ["codigo", "sumiu"] }));
+    await montar();
+    expect(larguraCol("cliente")).toBe("80px");
+    expect(cabecalhos()).toEqual(["sel", "codigo", "nome", "cliente", "tipo", "valor", "acoes"]);
+  });
+
   it("API fora do ar ou JSON torto no navegador: a tela abre com o padrão e segue gravando no navegador", async () => {
     apiFora = true;
     localStorage.setItem("frivo:tabela:teste", "{torto");
