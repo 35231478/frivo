@@ -95,7 +95,7 @@ export function BarraFiltros({ periodo, busca, filtros = [], paramBusca = "q", n
                 <ChevronDown className={cn("w-4 h-4 transition-transform", menu && "rotate-180")} aria-hidden />
               </button>
               {menu && (
-                <ul role="menu" aria-label="Mais filtros" className="absolute z-40 right-0 sm:left-0 sm:right-auto mt-1 w-64 max-h-80 overflow-y-auto bg-white border border-surface-border rounded-lg shadow-elevated py-1" data-menu-filtros>
+                <ul role="menu" aria-label="Mais filtros" className="absolute z-40 left-0 sm:left-auto sm:right-0 mt-1 w-64 max-h-[70vh] overflow-y-auto bg-white border border-surface-border rounded-lg shadow-elevated py-1" data-menu-filtros>
                   {filtros.map((f) => {
                     const v = visiveis.includes(f);
                     return (

@@ -80,7 +80,7 @@ export function BarraPeriodo({ periodo, navegar, permitirTodos, somenteMes, dica
         </div>
 
         {aberto && !somenteMes && (
-          <div className="absolute z-40 left-0 sm:left-10 mt-1 w-full sm:w-72 max-h-80 overflow-y-auto bg-white border border-surface-border rounded-lg shadow-elevated py-1" data-periodo-opcoes>
+          <div className="absolute z-40 left-0 sm:left-10 mt-1 w-full sm:w-72 max-h-[70vh] overflow-y-auto bg-white border border-surface-border rounded-lg shadow-elevated py-1" data-periodo-opcoes>
             <ul role="listbox" aria-label="Período">
               {opcoes.map((a) => {
                 const ativo = a.tipo === periodo.tipo && (a.tipo !== "intervalo" || !personalizado);
