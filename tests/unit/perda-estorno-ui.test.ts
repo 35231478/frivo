@@ -213,6 +213,7 @@ describe("lista, gaveta, relatório e alerta", () => {
     expect(txt($("[data-card=PERDA]"))).toMatch(/^Perdas\s?R\$\s?300,00\s?1 cobrança$/);
     expect($("[data-card=PERDA] [data-dica]")).toBeNull();
     expect($("[data-card-caixa=PERDA] [data-dica]")).not.toBeNull();
+    await clicar($("[data-mais-filtros]")); // os chips ficam no painel "Mais filtros"
     expect(txt($("[data-chip-status=PERDA]"))).toBe("Perda");
     expect($("[data-link-perdas]")!.getAttribute("href")).toBe("/financeiro/perdas");
     expect(txt($("[data-linha-conta=cr1] [data-situacao]"))).toBe("Perda");

@@ -371,6 +371,17 @@ describe("listas renderizadas no servidor", () => {
     expect(b).toContain("1–3");
   });
 
+  it("OS: o período do seletor filtra no servidor (últimos 12 meses = todas; um intervalo antigo = nenhuma); a barra mostra o rótulo", async () => {
+    const h = await html(() => import("@/app/(dashboard)/ordens/page"), "periodo=12m");
+    expect(h).toContain("1–50");
+    expect(h).toContain("130</strong> ordens de serviço"); // o contador
+    expect(h).toContain("Últimos 12 meses");
+    const v = await html(() => import("@/app/(dashboard)/ordens/page"), "de=2000-01-01&ate=2000-01-31");
+    expect(v).toContain("Nenhuma OS encontrada");
+    expect(v).toContain("01/01/2000 a 31/01/2000");
+    expect(v).toContain("Pesquisar no período selecionado");
+  });
+
   it("Contratos: paginado (antes cortava em 200; agora 25/50/100)", async () => {
     const h = await html(() => import("@/app/(dashboard)/contratos/page"), "pagina=2&por=100");
     expect(h).toContain("101–130");

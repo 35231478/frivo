@@ -192,6 +192,7 @@ describe("lista, celular e gaveta", () => {
   it("filtro 'Recebido em parte' no painel de status", async () => {
     const { ContasReceberView } = await import("@/components/financeiro/contas-receber-view");
     await montar(createElement(ContasReceberView, { ...props([{}]), filtros: { ...props([]).filtros, clienteId: "c1" } } as any));
+    await clicar($("[data-mais-filtros]")); // os chips ficam no painel "Mais filtros"
     expect(txt($("[data-chip-status=PARCIAL]"))).toBe("Recebido em parte");
   });
 
