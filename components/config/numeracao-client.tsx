@@ -96,7 +96,7 @@ export function NumeracaoClient({ inicial, podeEditar }: { inicial: NumeracaoTel
                       className={cn("w-full bg-white border rounded-lg px-3 py-1.5 text-sm text-ink tabular-nums focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 disabled:bg-surface-alt",
                         mudou && erro ? "border-atrasado" : "border-surface-border")}
                     />
-                    <p className="sm:hidden mt-1 text-[11px] text-ink-muted whitespace-nowrap">Sai como <span className={PLANILHA.codigo} data-exemplo-cel>{exemplo}</span></p>
+                    <p className="sm:hidden mt-1 text-[11px] text-ink-muted leading-tight">Sai como <span className={PLANILHA.codigo} data-exemplo-cel>{exemplo}</span></p>
                   </td>
                   <td className={cn(PLANILHA.td, "align-middle hidden sm:table-cell")}><span className={PLANILHA.codigo} data-exemplo>{exemplo}</span></td>
                   <td className={cn(PLANILHA.td, "align-middle text-right")}>
