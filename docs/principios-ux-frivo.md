@@ -64,3 +64,28 @@ de valor, que precisam ser vistas sem abrir nada. Explicação vai em `dica`.
 - Clicar na dica não aciona o que está em volta: não foca o campo, não liga o switch e não clica no card.
 - O visual segue `docs/design-system.md`: balão escuro (`bg-ink`), texto branco de 12 px, ícone
   `Info` em `text-ink-subtle`.
+
+## Padrão das telas de lista: barra de período + filtros enxuta
+
+Toda tela de lista por período (Orçamentos, Ordens de Serviço, Contas a Receber, Contas a Pagar,
+Notas fiscais, Medições, Perdas, Faturamento de contratos) usa a mesma barra, numa linha só:
+
+```
+Vencimento                     Pesquisar no período selecionado
+[‹ | Novembro de 2026 ⌄ | ›]   [Pesquisar]   [Mais filtros ⌄] [extras]
+Limpar filtros
+```
+
+| Peça | Componente | O que faz |
+|---|---|---|
+| Período | `BarraPeriodo` (`components/listagem/periodo-cards.tsx`) | menu com Hoje · Esta semana · Este mês · Este ano · Últimos 30 dias · Últimos 12 meses · Todo o período · Período personalizado; as setas andam uma unidade do atalho; só mês (competência) com `somenteMes`; "Todo o período" com `permitirTodos` |
+| Regras do período | `lib/periodo.ts` | lê a URL (`mes`, `de`/`ate`, `periodo`, `ref`), dá `gte`/`lt` (instantes de Brasília) e `dias` (dia civil); `urlDoAtalho`, `urlVizinho`; padrão por tela (`padrao: "mes" | "todos"`) |
+| Barra | `BarraFiltros` (`components/listagem/barra-filtros.tsx`) | período + busca (rótulo "Pesquisar no período selecionado") + "Mais filtros" (menu com os NOMES dos filtros; escolher um faz o campo aparecer, com ×; os que têm valor na URL aparecem sozinhos; contador dos ativos) + "Limpar filtros" na linha de baixo (zera os filtros e a busca; o período fica) + extras à direita |
+| Filtro | `FiltroDef` (`id`, `label`, `params`, `render`, `largo`), controles com `inputFiltro(ativo)`, `FiltroSelectUrl`/`SelectFiltro` com `className="w-full"`, `FiltroTextoUrl` (texto/número com atraso) | cada mudança vai na hora para a URL; o controle ativo se destaca |
+
+Regras:
+- A URL é a fonte da verdade (compartilhável; o "voltar" funciona). O mês corrente não vai para a URL.
+- Os cards de resumo ficam abaixo da barra e continuam clicáveis como filtro.
+- Sem botão "Aplicar": escolher já filtra. Campos de texto esperam a pessoa parar de digitar.
+- No celular tudo empilha (período na largura toda, busca, botões); a lista vira cartões como antes.
+- Atalhos de teclado onde existiam (OS): ← › período anterior/seguinte, T = hoje.

@@ -596,9 +596,8 @@ describe("conta a pagar (manual também): centro de custo e boleto", () => {
     expect(h).toMatch(/<a [^>]*data-detalhe-conta="[^"]+"[^>]*>|<a [^>]*href="\/financeiro\/contas-pagar\/[^"]+"[^>]*data-detalhe-conta/);
     expect(h).toMatch(/<a (?=[^>]*data-detalhe-conta)(?=[^>]*href="\/financeiro\/contas-pagar\/[^"]+")/);
     const soFrota = await listaContas({ centro: "ccFrota", periodo: "todos" });
-    // Com filtro ativo o painel já vem aberto: o select de centro traz os ativos e os inativos (marcados)
-    expect(soFrota).toContain("<option value=\"ccObra\">Obra Shopping Norte</option>");
-    expect(soFrota).toContain("Obra encerrada (inativo)");
+    // O painel "Mais filtros" fica fechado mesmo com filtro ativo (as opções do select, inativos
+    // inclusive, e o contador estão cobertos em contas-pagar-ui); aqui vale o que a lista mostra:
     // as 3 parcelas da NF (uma linha na planilha do desktop; o celular repete em cartões)
     expect(soFrota.match(/<tr [^>]*data-linha-conta=/g)).toHaveLength(3);
     expect(texto(soFrota)).toContain("NF 4521/1 — parcela");

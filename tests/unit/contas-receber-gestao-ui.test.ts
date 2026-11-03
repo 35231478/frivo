@@ -369,24 +369,27 @@ describe("período + cards do período + cara de planilha (padrão da casa)", ()
     expect(ultimaUrl()).toBe("/financeiro/contas-receber");
   });
 
-  it("período: ‹ › trocam o mês na URL; o mês atual sai da URL; todo o período e personalizado", async () => {
+  it("período: ‹ › trocam o mês na URL; o mês atual sai da URL; o menu tem todo o período e o personalizado", async () => {
     await montarTela();
     expect(txt($("[data-mes-rotulo]"))).toBe("Novembro de 2026");
     await clicar($("[data-mes-anterior]"));
     expect(ultimaUrl()).toBe("/financeiro/contas-receber?mes=2026-10");
     await clicar($("[data-mes-seguinte]"));
     expect(ultimaUrl()).toBe("/financeiro/contas-receber?mes=2026-12");
+    await clicar($("[data-periodo-menu]"));
     await clicar($("[data-todo-periodo]"));
     expect(ultimaUrl()).toBe("/financeiro/contas-receber?periodo=todos");
+    await clicar($("[data-periodo-menu]"));
     await clicar($("[data-alternar-periodo]"));
     expect($("[data-intervalo]")).not.toBeNull();
-    // Em "todo o período" (URL atual com periodo=todos): voltar ao mês tira o período da URL e mantém a busca
+    // Em "todo o período" (URL atual com periodo=todos): as setas somem; "Este mês" tira o período da URL e mantém a busca
     nav.qs = "periodo=todos&q=hospital";
     try {
       await montarTela({ periodo: { tipo: "todos", mes: null, de: null, ate: null, rotulo: "Todo o período" } });
       expect(txt($("[data-mes-rotulo]"))).toBe("Todo o período");
-      expect(txt($("[data-alternar-periodo]"))).toBe("Voltar ao mês atual");
-      await clicar($("[data-alternar-periodo]"));
+      expect(($("[data-mes-anterior]") as HTMLButtonElement).disabled).toBe(true);
+      await clicar($("[data-periodo-menu]"));
+      await clicar($("[data-periodo-opcao=mes]"));
       expect(ultimaUrl()).toBe("/financeiro/contas-receber?q=hospital");
     } finally { nav.qs = ""; }
   });

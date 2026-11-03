@@ -7,11 +7,24 @@
 import { variantesDocumento } from "@/lib/listagem";
 import { hojeDiaCivil, inicioMesDiaCivil, periodoDiaCivil, periodoInstanteBR } from "@/lib/fuso";
 import { whereEtapa } from "@/lib/orcamentos/ciclo";
-import { faixaDiaCivil, type Periodo } from "@/lib/periodo";
+import { faixaDiaCivil, lerPeriodo, type Periodo } from "@/lib/periodo";
 
 type SP = Record<string, string | undefined>;
 
-export function whereOrdens(empresaId: string, sp: SP) {
+/**
+ * O período da lista de OS (seletor da tela): por padrão TODO o período. Links antigos continuam
+ * valendo: `?data=AAAA-MM-DD` (navegação por dia) vira "Hoje" navegado; `dataInicio`/`dataFim`
+ * viram o período personalizado.
+ */
+export function periodoOrdens(sp: SP, agora = new Date()) {
+  const semPeriodo = !sp.periodo && !sp.de && !sp.ate && !sp.mes;
+  return lerPeriodo(
+    { ...sp, ...(sp.data && semPeriodo ? { periodo: "hoje", ref: sp.data } : {}), de: sp.de ?? sp.dataInicio, ate: sp.ate ?? sp.dataFim },
+    agora, { permitirTodos: true, padrao: "todos" },
+  );
+}
+
+export function whereOrdens(empresaId: string, sp: SP, agora = new Date()) {
   const statusList = (sp.status ?? "").split(",").filter(Boolean);
   const prioridadeList = (sp.prioridade ?? "").split(",").filter(Boolean);
   const where: any = { empresaId };
@@ -25,26 +38,22 @@ export function whereOrdens(empresaId: string, sp: SP) {
   if (sp.contratoId) where.contratoId = sp.contratoId;
   if (sp.tipoOsId) where.atividades = { some: { tipoOsId: sp.tipoOsId } };
   if (sp.numero) where.numero = { contains: sp.numero, mode: "insensitive" };
-  if (sp.data) {
-    // Navegação por dia: mostra OS com atividade agendada, previsão de conclusão
-    // ou abertura no dia selecionado — o DIA DE BRASÍLIA (instantes) / o dia gravado (previsão)
-    const instante = periodoInstanteBR(sp.data, sp.data);
-    const dia = periodoDiaCivil(sp.data, sp.data);
-    if (instante && dia) {
-      where.AND = [
-        ...(where.AND ?? []),
-        {
-          OR: [
-            { atividades: { some: { dataAgendada: instante } } },
-            { previsaoConclusao: dia },
-            { previsaoConclusao: instante }, // previsão gravada com hora (OS do calendário)
-            { criadoEm: instante },
-          ],
-        },
-      ];
-    }
-  } else if (sp.dataInicio || sp.dataFim) {
-    where.criadoEm = periodoInstanteBR(sp.dataInicio, sp.dataFim) ?? {};
+  // Período: OS com atividade agendada, previsão de conclusão ou abertura dentro dele
+  // (instantes no fuso de Brasília; a previsão gravada como DIA CIVIL pela faixa de dia)
+  const periodo = periodoOrdens(sp, agora);
+  if (periodo.gte || periodo.lt) {
+    const instante = { ...(periodo.gte && { gte: periodo.gte }), ...(periodo.lt && { lt: periodo.lt }) };
+    const dia = faixaDiaCivil(periodo);
+    where.AND = [
+      {
+        OR: [
+          { atividades: { some: { dataAgendada: instante } } },
+          ...(dia ? [{ previsaoConclusao: dia }] : []),
+          { previsaoConclusao: instante }, // previsão gravada com hora (OS do calendário)
+          { criadoEm: instante },
+        ],
+      },
+    ];
   }
   if (sp.busca) {
     where.OR = [

@@ -36,7 +36,7 @@ export function lerFiltros(sp: ParamsUrl, agora = new Date()): FiltrosCentral {
   const situacao = um(sp.situacao);
   const ambiente = um(sp.ambiente);
   return {
-    periodo: lerPeriodo(sp, agora),
+    periodo: lerPeriodo(sp, agora, { permitirTodos: true }),
     q: um(sp.q).trim().slice(0, 100),
     situacao: ehGrupo(situacao) ? situacao : null,
     ambiente: (AMBIENTES_FILTRO as readonly string[]).includes(ambiente) ? (ambiente as FiltrosCentral["ambiente"]) : null,

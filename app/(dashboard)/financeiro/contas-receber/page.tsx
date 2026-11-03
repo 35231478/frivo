@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { marcarContasReceberVencidas } from "@/lib/financeiro-server";
 import { CAMPO_CARD_RECEBER, CARD_SO_COBRANCAS, CARDS_PERIODO_RECEBER, condCardPeriodoReceber, condPeriodoVencimento, whereListaReceber } from "@/lib/listas/filtros";
 import { saldoDoAgregado } from "@/lib/financeiro/parcelas-server";
-import { lerPeriodo } from "@/lib/periodo";
+import { lerPeriodo, periodoTela } from "@/lib/periodo";
 import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
 import { ContasReceberView, type ContaView, type ResumoReceber } from "@/components/financeiro/contas-receber-view";
 
@@ -138,7 +138,7 @@ export default async function ContasReceberPage({
       abertoFiltrado={saldoDoAgregado(abertoAgg)}
       pagina={pagina}
       porPagina={porPagina}
-      periodo={{ tipo: periodo.tipo, mes: periodo.mes, de: periodo.de, ate: periodo.ate, rotulo: periodo.rotulo }}
+      periodo={periodoTela(periodo)}
       filtros={{
         q: sp.q ?? "", card: sp.card === "A_RECEBER" ? "A_VENCER" : sp.card ?? "", clienteId: sp.clienteId ?? "", categoria: sp.categoria ?? "",
         forma: sp.forma ?? "", banco: sp.banco ?? "", valorMin: sp.valorMin ?? "", valorMax: sp.valorMax ?? "",

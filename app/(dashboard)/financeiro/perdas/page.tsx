@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
-import { lerPeriodo } from "@/lib/periodo";
+import { lerPeriodo, periodoTela } from "@/lib/periodo";
 import { relatorioPerdas } from "@/lib/financeiro/perda-estorno-server";
 import { PerdasView } from "@/components/financeiro/perdas-view";
 
@@ -20,7 +20,7 @@ export default async function PerdasPage({ searchParams }: { searchParams: Promi
   const dados = await relatorioPerdas(session!.user!.empresaId, { gte: periodo.gte, lt: periodo.lt });
   return (
     <PerdasView
-      periodo={{ tipo: periodo.tipo, mes: periodo.mes, de: periodo.de, ate: periodo.ate, rotulo: periodo.rotulo }}
+      periodo={periodoTela(periodo)}
       total={dados.total} clientes={dados.clientes}
       linhas={dados.linhas.map((l) => ({ ...l, perdaEm: l.perdaEm?.toISOString() ?? null, vencimento: l.vencimento?.toISOString() ?? null }))}
     />

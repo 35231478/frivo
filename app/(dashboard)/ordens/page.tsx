@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { whereOrdens } from "@/lib/listas/filtros";
+import { periodoOrdens, whereOrdens } from "@/lib/listas/filtros";
+import { periodoTela } from "@/lib/periodo";
 import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
 import { OrdensListaClient } from "@/components/ordens/ordens-lista-client";
 import { SelecaoMassaProvider } from "@/components/acoes-massa/selecao";
@@ -13,7 +14,7 @@ export const metadata: Metadata = { title: "Ordens de Serviço" };
 type SP = {
   busca?: string; status?: string; prioridade?: string; origem?: string;
   clienteId?: string; responsavelId?: string; tipoOsId?: string; contratoId?: string;
-  numero?: string; dataInicio?: string; dataFim?: string; data?: string;
+  numero?: string; dataInicio?: string; dataFim?: string; data?: string; periodo?: string; ref?: string; mes?: string; de?: string; ate?: string;
   sort?: string; dir?: string; view?: string; pagina?: string; por?: string;
 };
 
@@ -34,7 +35,9 @@ export default async function OrdensPage({ searchParams }: { searchParams: Promi
   const sort = sp.sort && SORT_MAP[sp.sort] ? sp.sort : "criadoEm";
   const dir: "asc" | "desc" = sp.dir === "asc" ? "asc" : "desc";
 
-  const where = whereOrdens(empresaId, sp);
+  const agora = new Date();
+  const where = whereOrdens(empresaId, sp, agora);
+  const periodo = periodoTela(periodoOrdens(sp, agora));
   const { pagina: paginaPedida, porPagina } = lerPaginacao(sp);
   const total = await prisma.ordemServico.count({ where });
   const pagina = paginaValida(paginaPedida, porPagina, total);
@@ -93,6 +96,7 @@ export default async function OrdensPage({ searchParams }: { searchParams: Promi
       total={total}
       pagina={pagina}
       porPagina={porPagina}
+      periodo={periodo}
       opcoes={{
         clientes: clientes.map((c) => ({ value: c.id, label: c.nomeFantasia ?? c.nome })),
         usuarios: usuarios.map((u) => ({ value: u.id, label: u.nome })),

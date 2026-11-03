@@ -11,11 +11,12 @@ import Link from "next/link";
 import { FileBarChart, Plus } from "lucide-react";
 import { GerarMedicoesMes } from "@/components/medicao/gerar-medicoes-mes";
 import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
-import { BuscaUrl, ConteudoUrl, ListaUrl, PaginacaoUrl } from "@/components/listagem/lista-url";
+import { ConteudoUrl, ListaUrl, PaginacaoUrl } from "@/components/listagem/lista-url";
 import { AvatarCliente } from "@/components/ui/avatar-cliente";
-import { InputData } from "@/components/ui/input-data";
-import { periodoInstanteBR } from "@/lib/fuso";
 import { numeroFatura, rotuloStatusMedicao } from "@/lib/faturamento/fatura";
+
+import { lerPeriodo, periodoTela } from "@/lib/periodo";
+import { FiltrosMedicoes } from "@/components/financeiro/medicoes-filtros";
 
 export const metadata: Metadata = { title: "Medições" };
 
@@ -25,7 +26,7 @@ export default async function MedicoesPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const sp = await searchParams;
-  const { busca = "", status = "", clienteId = "", tipo = "", dataInicio = "", dataFim = "" } = sp;
+  const { busca = "", status = "", clienteId = "", tipo = "" } = sp;
   const session = await auth();
   if (!pode(session!.user!.permissoes, "financeiro", "medicoes", session!.user!.role)) redirect("/sem-permissao");
   const empresaId = session!.user!.empresaId;
@@ -34,9 +35,10 @@ export default async function MedicoesPage({
   if (status) where.status = status;
   if (clienteId) where.clienteId = clienteId;
   if (tipo) where.tipo = tipo;
-  if (dataInicio || dataFim) {
-    where.criadoEm = periodoInstanteBR(dataInicio, dataFim) ?? {}; // dias de Brasília
-  }
+  // Período (pela data de criação): o seletor da lista; por padrão todo o período (como sempre foi).
+  // Links antigos com dataInicio/dataFim valem como período personalizado.
+  const periodo = lerPeriodo({ ...sp, de: sp.de ?? sp.dataInicio, ate: sp.ate ?? sp.dataFim }, new Date(), { permitirTodos: true, padrao: "todos" });
+  if (periodo.gte || periodo.lt) where.criadoEm = { ...(periodo.gte && { gte: periodo.gte }), ...(periodo.lt && { lt: periodo.lt }) };
   if (busca) {
     where.OR = [
       { numero: { contains: busca, mode: "insensitive" } },
@@ -87,30 +89,16 @@ export default async function MedicoesPage({
         </div>
       </div>
 
-      <div className="card overflow-hidden">
-        <div className="p-4 border-b border-surface-border bg-surface-alt/40">
-          {/* Busca ao vivo (debounce no padrão das listas) + filtros por GET */}
-          <div className="mb-2"><BuscaUrl lista="medicoes" placeholder="Buscar por número, descrição ou cliente…" /></div>
-          <form method="get" className="flex flex-wrap gap-2">
-            <input type="hidden" name="busca" value={busca} />
-            <select name="status" defaultValue={status} className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all">
-              <option value="">Todos status</option>
-              {Object.entries(LABELS_STATUS_MEDICAO).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
-            <select name="tipo" defaultValue={tipo} className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all">
-              <option value="">Todos tipos</option>
-              {Object.entries(LABELS_TIPO_MEDICAO).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
-            <select name="clienteId" defaultValue={clienteId} className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all">
-              <option value="">Todos clientes</option>
-              {clientes.map((c) => <option key={c.id} value={c.id}>{c.nomeFantasia ?? c.nome}</option>)}
-            </select>
-            <InputData name="dataInicio" defaultValue={dataInicio} title="Data inicial" aria-label="Data inicial" className="w-36" />
-            <InputData name="dataFim" defaultValue={dataFim} title="Data final" aria-label="Data final" className="w-36" />
-            <button type="submit" className="bg-primary-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-600 transition-all shadow-sm">Filtrar</button>
-          </form>
-        </div>
+      <FiltrosMedicoes
+        periodo={periodoTela(periodo)}
+        opcoes={{
+          status: Object.entries(LABELS_STATUS_MEDICAO).map(([value, label]) => ({ value, label })),
+          tipos: Object.entries(LABELS_TIPO_MEDICAO).map(([value, label]) => ({ value, label })),
+          clientes: clientes.map((c) => ({ value: c.id, label: c.nomeFantasia ?? c.nome })),
+        }}
+      />
 
+      <div className="card overflow-hidden">
         <ConteudoUrl className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-surface-alt border-b border-surface-border">

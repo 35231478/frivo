@@ -8,17 +8,15 @@ import { OsInativarBotao } from "@/components/os/os-inativar";
 import { CheckboxLinha, CheckboxPagina, useAcoesMassaDisponiveis } from "@/components/acoes-massa/selecao";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { cn, formatarData, MESES_PT, LABELS_STATUS_OS, LABELS_PRIORIDADE, LABELS_ORIGEM_OS } from "@/lib/utils";
+import { cn, formatarData, LABELS_STATUS_OS, LABELS_PRIORIDADE, LABELS_ORIGEM_OS } from "@/lib/utils";
+import { BarraPeriodo, type PeriodoTela } from "@/components/listagem/periodo-cards";
+import { BarraFiltros, FiltroTextoUrl, inputFiltro } from "@/components/listagem/barra-filtros";
+import { urlDoAtalho, urlVizinho, type Periodo } from "@/lib/periodo";
 import { BuscaSelect, type OpcaoBusca } from "@/components/ui/busca-select";
 import { AvatarCliente } from "@/components/ui/avatar-cliente";
 import { AvatarStack } from "@/components/ui/avatar-stack";
-import { formatarDiaCivil, prazoVencido } from "@/lib/os/prazos";
-import { chaveHojeBR } from "@/lib/fuso";
-import {
-  ClipboardList, Plus, Search, SlidersHorizontal, X, ArrowUp, ArrowDown, ArrowUpDown,
-  LayoutGrid, List, Download, Headset, Filter, ChevronLeft, ChevronRight, CalendarDays, CalendarCheck,
-} from "lucide-react";
-import { InputData } from "@/components/ui/input-data";
+import { formatarDiaCivil } from "@/lib/os/prazos";
+import { ClipboardList, Plus, ArrowUp, ArrowDown, ArrowUpDown, LayoutGrid, List, Download, Headset } from "lucide-react";
 
 interface TecnicoView { id: string; nome: string; avatar: string | null }
 interface OrdemView {
@@ -39,38 +37,10 @@ const CLASSE_PRIORIDADE: Record<string, string> = {
   URGENTE: "badge-prioridade-urgente", CRITICO: "badge-prioridade-critico",
 };
 
-const FILTROS_CHAVE = ["busca", "status", "prioridade", "origem", "clienteId", "responsavelId", "tipoOsId", "contratoId", "numero", "dataInicio", "dataFim"];
-const AVANCADOS = ["dataInicio", "dataFim", "clienteId", "responsavelId", "tipoOsId", "numero", "origem", "contratoId"];
+/** Os filtros do painel "Mais filtros" (o período e a busca ficam fora) */
+const PARAMS_FILTROS_OS = ["status", "prioridade", "origem", "clienteId", "responsavelId", "tipoOsId", "contratoId", "numero"];
 
-const DIAS_SEMANA = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
-const STATUS_PENDENTE = ["ABERTA", "AGUARDANDO_ATENDIMENTO", "AGENDADA", "AGUARDANDO_PECA"];
-const STATUS_ANDAMENTO = ["EM_ANDAMENTO", "PAUSADA"];
-const STATUS_FINALIZADA = ["CONCLUIDA", "CANCELADA"];
-
-// "2026-06-02" → Date no horário local (evita o deslocamento de fuso do new Date("yyyy-mm-dd"))
-function parseDia(s: string): Date {
-  const [y, m, d] = s.split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
-// Date → "2026-06-02" no horário local
-function ymdLocal(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-function dataPorExtenso(s: string): string {
-  const d = parseDia(s);
-  return `${DIAS_SEMANA[d.getDay()]}, ${String(d.getDate()).padStart(2, "0")} de ${MESES_PT[d.getMonth()]} de ${d.getFullYear()}`;
-}
-// Cor do badge do dia conforme a situação geral das OS (atrasada > pendente > em andamento > concluídas)
-function corDoDia(ordens: OrdemView[]): string {
-  // Atrasada só depois do dia da previsão (no fuso de Brasília), não às 21h da véspera
-  const atrasada = ordens.some((o) => prazoVencido(o.previsaoConclusao) && !STATUS_FINALIZADA.includes(o.status));
-  if (atrasada) return "pill-atrasado";
-  if (ordens.some((o) => STATUS_PENDENTE.includes(o.status))) return "pill-atencao";
-  if (ordens.some((o) => STATUS_ANDAMENTO.includes(o.status))) return "pill-acento";
-  return "pill-ok";
-}
-
-export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: { ordens: OrdemView[]; total: number; pagina: number; porPagina: number; opcoes: Opcoes }) {
+export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, periodo }: { ordens: OrdemView[]; total: number; pagina: number; porPagina: number; opcoes: Opcoes; periodo: PeriodoTela }) {
   const router = useRouter();
   const { pode } = usePermissoes();
   const pathname = usePathname();
@@ -81,11 +51,9 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: 
   const massa = useAcoesMassaDisponiveis("ordens");
   const sortAtual = get("sort") || "criadoEm";
   const dirAtual = (get("dir") || "desc") as "asc" | "desc";
-  const filtrosAtivos = FILTROS_CHAVE.filter((k) => get(k) !== "").length;
+  const filtrosAtivos = [...PARAMS_FILTROS_OS, "busca"].filter((k) => get(k) !== "").length;
 
-  const [mostrarAvancados, setMostrarAvancados] = useState(AVANCADOS.some((k) => get(k) !== ""));
   const [buscaLocal, setBuscaLocal] = useState(get("busca"));
-  const [numeroLocal, setNumeroLocal] = useState(get("numero"));
 
   const [pendente, startTransition] = useTransition();
   /** Muda a URL; qualquer filtro novo volta para a página 1 (só a paginação mantém a página). */
@@ -104,44 +72,22 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: 
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buscaLocal]);
-  // Debounce do número
-  useEffect(() => {
-    const t = setTimeout(() => { if (numeroLocal !== get("numero")) setParams({ numero: numeroLocal || null }); }, 500);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [numeroLocal]);
-
-  // --- Navegação por data ---
-  const dataAtual = get("data");
-  const hojeStr = chaveHojeBR(); // hoje em Brasília (não vira amanhã às 21h)
-  const ehHoje = dataAtual === hojeStr;
-
-  // Define o dia (limpa o intervalo "de/até" para não conflitar com a navegação)
-  function setData(valor: string | null) {
-    setParams({ data: valor, dataInicio: null, dataFim: null });
-  }
-  function deslocarDia(dias: number) {
-    const base = parseDia(dataAtual || hojeStr);
-    base.setDate(base.getDate() + dias);
-    setData(ymdLocal(base));
-  }
-  const irParaHoje = () => setData(hojeStr);
-
-  // Atalhos de teclado: ← dia anterior · → próximo dia · T volta para hoje
+  // Atalhos de teclado: ← período anterior · → período seguinte · T volta para hoje
   useEffect(() => {
     function aoTeclar(e: KeyboardEvent) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const alvo = document.activeElement as HTMLElement | null;
       const tag = alvo?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || alvo?.isContentEditable) return;
-      if (e.key === "ArrowLeft") { e.preventDefault(); deslocarDia(-1); }
-      else if (e.key === "ArrowRight") { e.preventDefault(); deslocarDia(1); }
-      else if (e.key === "t" || e.key === "T") { e.preventDefault(); irParaHoje(); }
+      const p = periodo as Periodo;
+      if (e.key === "ArrowLeft") { const m = urlVizinho(p, -1); if (m) { e.preventDefault(); setParams(m); } }
+      else if (e.key === "ArrowRight") { const m = urlVizinho(p, 1); if (m) { e.preventDefault(); setParams(m); } }
+      else if (e.key === "t" || e.key === "T") { e.preventDefault(); setParams(urlDoAtalho("hoje")); }
     }
     window.addEventListener("keydown", aoTeclar);
     return () => window.removeEventListener("keydown", aoTeclar);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataAtual]);
+  }, [periodo]);
 
   function toggleLista(param: string, valor: string) {
     const atual = get(param).split(",").filter(Boolean);
@@ -155,13 +101,10 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: 
     else setParams({ sort: campo, dir: "desc" });
   }
 
+  /** Zera os filtros do painel e a busca (o período fica: é navegação) */
   function limparFiltros() {
-    const novo = new URLSearchParams();
-    if (get("view")) novo.set("view", get("view"));
-    if (get("data")) novo.set("data", get("data"));
-    if (get("por")) novo.set("por", get("por"));
-    setBuscaLocal(""); setNumeroLocal("");
-    router.replace(`${pathname}${novo.toString() ? `?${novo}` : ""}`, { scroll: false });
+    setBuscaLocal("");
+    setParams(Object.fromEntries([...PARAMS_FILTROS_OS, "busca"].map((k) => [k, null])));
   }
 
   const exportUrl = `/api/ordens/export${sp.toString() ? `?${sp.toString()}` : ""}`;
@@ -171,9 +114,6 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: 
     return dirAtual === "asc" ? <ArrowUp className="inline w-3 h-3 ml-1 text-acento" /> : <ArrowDown className="inline w-3 h-3 ml-1 text-acento" />;
   }
 
-  const selectCls = "input-base py-2";
-  // Botão quadrado de ícone (navegação por data, visão)
-  const btnIcone = "p-2 rounded-lg border border-surface-border bg-white text-ink-muted hover:bg-surface-page hover:text-ink transition-colors";
   // Chip de filtro (status/prioridade): ligado = acento claro
   const chip = (ligado: boolean) => cn("text-xs px-2.5 py-1 rounded-full border transition-colors",
     ligado ? "bg-acento-claro border-acento/40 text-acento font-semibold" : "bg-white border-surface-border text-ink-muted hover:border-acento/40 hover:text-ink");
@@ -193,75 +133,18 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: 
         )}
       </div>
 
-      {/* Navegação por data */}
-      <div className="card px-4 py-3 flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={() => deslocarDia(-1)} title="Dia anterior (←)" aria-label="Dia anterior"
-            className={btnIcone}>
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <button type="button" onClick={irParaHoje} title="Voltar para hoje (T)"
-            aria-pressed={ehHoje}
-            className={cn("inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border transition-colors",
-              ehHoje ? "bg-acento border-acento text-white" : "bg-white border-surface-border text-acento hover:bg-acento-claro")}>
-            <CalendarCheck className="w-4 h-4" /> Hoje
-          </button>
-          <button type="button" onClick={() => deslocarDia(1)} title="Próximo dia (→)" aria-label="Próximo dia"
-            className={btnIcone}>
-            <ChevronRight className="w-4 h-4" />
-          </button>
-          <div className="relative">
-            <button type="button" title="Escolher data"
-              className={btnIcone}>
-              <CalendarDays className="w-4 h-4" />
-            </button>
-            {/* Só o calendário do aparelho (invisível, sobre o botão): nenhum texto de data aparece aqui */}
-            <input type="date" value={dataAtual || hojeStr} onChange={(e) => e.target.value && setData(e.target.value)}
-              aria-label="Selecionar data" className="absolute inset-0 opacity-0 cursor-pointer" />
-          </div>
-        </div>
-
-        <div key={dataAtual || "todos"} className="anim-data flex flex-1 items-center justify-center gap-2 flex-wrap min-w-[260px] text-center">
-          {dataAtual ? (
-            <>
-              <span className="text-sm font-semibold text-ink">{dataPorExtenso(dataAtual)}</span>
-              <span className={cn(corDoDia(ordens), "font-semibold")}>
-                {total} {total === 1 ? "ordem de serviço" : "ordens de serviço"}
-              </span>
-            </>
-          ) : (
-            <span className="text-sm font-semibold text-ink-muted">
-              Todas as datas · {total} {total === 1 ? "ordem de serviço" : "ordens de serviço"}
-            </span>
-          )}
-        </div>
-
-        <div className="flex items-center justify-end gap-2 min-w-[140px]">
-          {dataAtual && (
-            <button type="button" onClick={() => setData(null)}
-              className="inline-flex items-center gap-1 text-xs font-medium text-acento hover:text-acento-hover">
-              <X className="w-3.5 h-3.5" /> Ver todos os dias
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="card overflow-hidden">
-        {/* Filtros principais */}
-        <div className="p-4 sm:p-5 border-b border-surface-border space-y-4">
-          <div className="flex flex-wrap gap-2 items-center">
-            <div className="flex-1 min-w-[220px]">
-              <CampoBusca
-                valor={buscaLocal} onChange={setBuscaLocal} placeholder="Buscar por número, descrição ou cliente…" rotulo="Buscar ordens de serviço"
-                sugerir={sugerir} onEscolher={(s) => s.href && router.push(s.href)} carregando={pendente}
-              />
-            </div>
-            <button type="button" onClick={() => setMostrarAvancados((v) => !v)}
-              aria-expanded={mostrarAvancados}
-              className={cn("inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-colors", mostrarAvancados ? "bg-acento-claro border-acento/40 text-acento" : "bg-white border-surface-border text-ink-muted hover:bg-surface-page hover:text-ink")}>
-              <SlidersHorizontal className="w-4 h-4" /> Mais filtros
-            </button>
-            {/* Alternar visualização */}
+      {/* Barra enxuta: período + busca + "Mais filtros" (painel recolhido) — padrão da casa */}
+      <BarraFiltros
+        periodo={<BarraPeriodo periodo={periodo} navegar={(m) => setParams(m)} permitirTodos dica="Pelo dia agendado, pela previsão de conclusão ou pela abertura da OS. Atalhos: ← → mudam o período, T volta para hoje." />}
+        busca={
+          <CampoBusca
+            valor={buscaLocal} onChange={setBuscaLocal} placeholder="Pesquisar" rotulo="Buscar ordens de serviço"
+            sugerir={sugerir} onEscolher={(s) => s.href && router.push(s.href)} carregando={pendente}
+          />
+        }
+        paramBusca="busca" navegar={(m) => setParams(m)}
+        extras={
+          <>
             <div className="flex items-center bg-surface-page border border-surface-border rounded-lg p-0.5">
               <button type="button" onClick={() => setParams({ view: null })} aria-pressed={view === "tabela"} className={cn("p-1.5 rounded-md transition-colors", view === "tabela" ? "bg-white text-acento shadow-card" : "text-ink-muted hover:text-ink")} title="Tabela"><List className="w-4 h-4" /></button>
               <button type="button" onClick={() => setParams({ view: "cards" })} aria-pressed={view === "cards"} className={cn("p-1.5 rounded-md transition-colors", view === "cards" ? "bg-white text-acento shadow-card" : "text-ink-muted hover:text-ink")} title="Cards"><LayoutGrid className="w-4 h-4" /></button>
@@ -269,12 +152,11 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: 
             <a href={exportUrl} className="btn-secondary px-3 py-2 font-medium text-ink-muted">
               <Download className="w-4 h-4" /> Exportar
             </a>
-          </div>
-
-          {/* Chips de status e prioridade (multi) */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          </>
+        }
+        filtros={[
+          { id: "status", label: "Status", params: ["status"], largo: true, render: () => (
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider mr-1">Status</span>
               {Object.entries(LABELS_STATUS_OS).map(([v, l]) => (
                 <button key={v} type="button" onClick={() => toggleLista("status", v)} aria-pressed={naLista("status", v)}
                   className={chip(naLista("status", v))}>{l}</button>
@@ -285,75 +167,37 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes }: 
                 </span>
               )}
             </div>
+          ) },
+          { id: "prioridade", label: "Prioridade", params: ["prioridade"], largo: true, render: () => (
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider mr-1">Prioridade</span>
               {Object.entries(LABELS_PRIORIDADE).map(([v, l]) => (
                 <button key={v} type="button" onClick={() => toggleLista("prioridade", v)} aria-pressed={naLista("prioridade", v)}
                   className={chip(naLista("prioridade", v))}>{l}</button>
               ))}
             </div>
-          </div>
+          ) },
+          { id: "clienteId", label: "Cliente", params: ["clienteId"], render: () => <BuscaSelect value={get("clienteId")} onChange={(v) => setParams({ clienteId: v || null })} options={opcoes.clientes} placeholder="Todos" /> },
+          { id: "responsavelId", label: "Técnico responsável", params: ["responsavelId"], render: () => <BuscaSelect value={get("responsavelId")} onChange={(v) => setParams({ responsavelId: v || null })} options={opcoes.usuarios} placeholder="Todos" /> },
+          { id: "tipoOsId", label: "Tipo de OS", params: ["tipoOsId"], render: () => (
+            <select value={get("tipoOsId")} onChange={(e) => setParams({ tipoOsId: e.target.value || null })} className={inputFiltro(get("tipoOsId"))} aria-label="Tipo de OS">
+              <option value="">Todos</option>
+              {opcoes.tiposOs.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          ) },
+          { id: "numero", label: "Número da OS", params: ["numero"], render: () => <FiltroTextoUrl param="numero" navegar={(m) => setParams(m)} placeholder="OS-2026-..." rotulo="Número da OS" /> },
+          { id: "origem", label: "Origem", params: ["origem"], render: () => (
+            <select value={get("origem")} onChange={(e) => setParams({ origem: e.target.value || null })} className={inputFiltro(get("origem"))} aria-label="Origem">
+              <option value="">Todas</option>
+              {Object.entries(LABELS_ORIGEM_OS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          ) },
+          { id: "contratoId", label: "Contrato", params: ["contratoId"], render: () => <BuscaSelect value={get("contratoId")} onChange={(v) => setParams({ contratoId: v || null })} options={opcoes.contratos} placeholder="Todos" /> },
+        ]}
+      />
 
-          {/* Filtros avançados */}
-          {mostrarAvancados && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t border-surface-linha [&>div]:flex [&>div]:flex-col [&>div]:gap-1.5">
-              <div>
-                <label htmlFor="f-os-de" className="text-xs font-medium text-ink-muted">Abertura — de</label>
-                <InputData id="f-os-de" defaultValue={get("dataInicio")} onChange={(v) => setParams({ dataInicio: v || null, data: null })} />
-              </div>
-              <div>
-                <label htmlFor="f-os-ate" className="text-xs font-medium text-ink-muted">Abertura — até</label>
-                <InputData id="f-os-ate" defaultValue={get("dataFim")} onChange={(v) => setParams({ dataFim: v || null, data: null })} />
-              </div>
-              <div>
-                <span className="text-xs font-medium text-ink-muted">Cliente</span>
-                <BuscaSelect value={get("clienteId")} onChange={(v) => setParams({ clienteId: v || null })} options={opcoes.clientes} placeholder="Todos" />
-              </div>
-              <div>
-                <span className="text-xs font-medium text-ink-muted">Técnico responsável</span>
-                <BuscaSelect value={get("responsavelId")} onChange={(v) => setParams({ responsavelId: v || null })} options={opcoes.usuarios} placeholder="Todos" />
-              </div>
-              <div>
-                <label htmlFor="f-os-tipo" className="text-xs font-medium text-ink-muted">Tipo de OS</label>
-                <select id="f-os-tipo" value={get("tipoOsId")} onChange={(e) => setParams({ tipoOsId: e.target.value || null })} className={selectCls}>
-                  <option value="">Todos</option>
-                  {opcoes.tiposOs.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="f-os-numero" className="text-xs font-medium text-ink-muted">Número da OS</label>
-                <input id="f-os-numero" value={numeroLocal} onChange={(e) => setNumeroLocal(e.target.value)} placeholder="OS-2026-..." className={selectCls} />
-              </div>
-              <div>
-                <label htmlFor="f-os-origem" className="text-xs font-medium text-ink-muted">Origem</label>
-                <select id="f-os-origem" value={get("origem")} onChange={(e) => setParams({ origem: e.target.value || null })} className={selectCls}>
-                  <option value="">Todas</option>
-                  {Object.entries(LABELS_ORIGEM_OS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                </select>
-              </div>
-              <div>
-                <span className="text-xs font-medium text-ink-muted">Contrato</span>
-                <BuscaSelect value={get("contratoId")} onChange={(v) => setParams({ contratoId: v || null })} options={opcoes.contratos} placeholder="Todos" />
-              </div>
-            </div>
-          )}
-
-          {/* Resumo / ações de filtro */}
-          <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
-            <div className="flex items-center gap-3 text-sm text-ink-muted">
-              <span data-contador><strong className="text-ink">{total.toLocaleString("pt-BR")}</strong> {total === 1 ? "ordem de serviço" : "ordens de serviço"}</span>
-              {filtrosAtivos > 0 && (
-                <span className="pill-acento font-semibold">
-                  <Filter className="w-3 h-3" /> {filtrosAtivos} filtro(s) ativo(s)
-                </span>
-              )}
-            </div>
-            {filtrosAtivos > 0 && (
-              <button type="button" onClick={limparFiltros} className="inline-flex items-center gap-1 text-xs font-medium text-ink-muted hover:text-ink">
-                <X className="w-3.5 h-3.5" /> Limpar filtros
-              </button>
-            )}
-          </div>
+      <div className="card overflow-hidden">
+        <div className="px-4 sm:px-5 py-2.5 border-b border-surface-border flex items-center justify-between flex-wrap gap-2 text-sm text-ink-muted">
+          <span data-contador><strong className="text-ink">{total.toLocaleString("pt-BR")}</strong> {total === 1 ? "ordem de serviço" : "ordens de serviço"}{periodo.tipo !== "todos" ? ` · ${periodo.rotulo}` : ""}</span>
         </div>
 
         {/* Resultados (celular: sempre cartões) */}

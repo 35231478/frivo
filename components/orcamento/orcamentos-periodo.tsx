@@ -3,7 +3,11 @@
 import type { ComponentType } from "react";
 import { CheckCircle2, Send, Sigma, ThumbsDown, TimerOff } from "lucide-react";
 import { BarraPeriodo, CardResumo, GradeCards, type PeriodoTela } from "@/components/listagem/periodo-cards";
-import { useListaUrl } from "@/components/listagem/lista-url";
+import { BuscaUrl, FiltroCheckUrl, FiltroSelectUrl, useListaUrl } from "@/components/listagem/lista-url";
+import { BarraFiltros } from "@/components/listagem/barra-filtros";
+import Link from "next/link";
+import { X } from "lucide-react";
+import type { Opcao } from "@/components/listagem/listagem-ui";
 
 type CardKey = "EM_ABERTO" | "APROVADO" | "RECUSADO" | "VENCIDO" | "TOTAL";
 /** Cards de funil do período (lib/listas/filtros: CARDS_PERIODO_ORCAMENTOS): quantidade + R$ */
@@ -21,11 +25,33 @@ const CARDS: { key: CardKey; rotulo: string; icone: ComponentType<{ className?: 
  * Orçamentos no padrão da casa (o mesmo de Contas a Receber/Pagar): período pela DATA DE CRIAÇÃO
  * e cards de funil do período, clicáveis como filtro. A lista é do servidor: isto só mexe na URL.
  */
-export function PeriodoCardsOrcamentos({ periodo, resumo, card }: { periodo: PeriodoTela; resumo: ResumoOrcamentos; card: string }) {
+export function PeriodoCardsOrcamentos({ periodo, resumo, card, opcoes = { tipos: [], status: [], clientes: [] }, resposta }: {
+  periodo: PeriodoTela; resumo: ResumoOrcamentos; card: string;
+  /** As opções dos filtros do painel "Mais filtros" */
+  opcoes?: { tipos: Opcao[]; status: Opcao[]; clientes: Opcao[] };
+  /** ?resposta=nova (link do sino): a pílula para tirar o filtro */
+  resposta?: string;
+}) {
   const { navegar } = useListaUrl();
   return (
     <>
-      <BarraPeriodo periodo={periodo} navegar={navegar} permitirTodos dica="Pela data de criação do orçamento." />
+      {/* Barra enxuta: período (pela criação) + busca + "Mais filtros" (painel recolhido) — padrão da casa */}
+      <BarraFiltros
+        periodo={<BarraPeriodo rotulo="Criação" periodo={periodo} navegar={navegar} permitirTodos dica="Pela data de criação do orçamento." />}
+        busca={<BuscaUrl lista="orcamentos" placeholder="Pesquisar" rotulo="Buscar orçamentos" />}
+        paramBusca="busca" navegar={navegar}
+        extras={resposta === "nova" ? (
+          <Link href="/orcamentos?periodo=todos" className="inline-flex items-center gap-1.5 rounded-full bg-acento-claro text-acento text-xs font-semibold px-3 py-1.5" data-filtro-resposta>
+            Respostas novas do cliente <X className="w-3.5 h-3.5" aria-hidden /><span className="sr-only">Limpar filtro</span>
+          </Link>
+        ) : undefined}
+        filtros={[
+          { id: "tipo", label: "Tipo", params: ["tipo"], render: () => <FiltroSelectUrl param="tipo" vazio="Todos os tipos" opcoes={opcoes.tipos} rotulo="Tipo" className="w-full" /> },
+          { id: "status", label: "Status", params: ["status"], render: () => <FiltroSelectUrl param="status" vazio="Todos status" opcoes={opcoes.status} rotulo="Status" className="w-full" /> },
+          { id: "clienteId", label: "Cliente", params: ["clienteId"], render: () => <FiltroSelectUrl param="clienteId" vazio="Todos clientes" opcoes={opcoes.clientes} rotulo="Cliente" className="w-full" /> },
+          { id: "inativos", label: "Cancelados", params: ["inativos"], render: () => <FiltroCheckUrl param="inativos" rotulo="Mostrar cancelados" /> },
+        ]}
+      />
       <GradeCards colunas={5}>
         {CARDS.map((c) => (
           <CardResumo key={c.key} id={c.key} rotulo={c.rotulo} icone={c.icone} cor={c.cor} dica={c.dica}

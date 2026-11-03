@@ -36,13 +36,14 @@ export function ChipResumo({ ativo, onClick, icone: Icone, cor, rotulo, valor, i
   );
 }
 
-export function SelectFiltro({ valor, onChange, vazio, opcoes, rotulo }: { valor: string; onChange: (v: string) => void; vazio: string; opcoes: Opcao[]; rotulo?: string }) {
+export function SelectFiltro({ valor, onChange, vazio, opcoes, rotulo, className }: { valor: string; onChange: (v: string) => void; vazio: string; opcoes: Opcao[]; rotulo?: string; className?: string }) {
   return (
     <select
       value={valor} onChange={(e) => onChange(e.target.value)} aria-label={rotulo ?? vazio}
       className={cn(
-        "bg-white border rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:border-primary-500 max-w-[200px]",
+        "bg-white border rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:border-primary-500",
         valor ? "border-primary-300 text-primary-700 bg-primary-50/50" : "border-surface-border text-ink",
+        className ?? "max-w-[200px]",
       )}
     >
       <option value="">{vazio}</option>

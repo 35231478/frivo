@@ -70,6 +70,7 @@ describe("Orçamentos: período + cards de funil", () => {
     expect(txt($("[data-mes-rotulo]"))).toBe("Novembro de 2026");
     await clicar($("[data-mes-anterior]"));
     expect(ultimaUrl()).toBe("/orcamentos?mes=2026-10");
+    await clicar($("[data-periodo-menu]"));
     await clicar($("[data-todo-periodo]"));
     expect(ultimaUrl()).toBe("/orcamentos?periodo=todos");
     expect($("[data-periodo] [data-dica]")).not.toBeNull();
