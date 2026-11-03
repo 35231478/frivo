@@ -12,7 +12,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { NextRequest } from "next/server";
-import { permissoesTotais, permissoesVazias, type Permissoes } from "@/lib/permissoes";
+import { montarPermissoes, permissoesTotais, permissoesVazias, type Permissoes } from "@/lib/permissoes";
 
 const URL_PG = process.env.PG_TESTE_URL;
 const SCHEMA = `teste_numeracao_pg_${process.pid}`;
@@ -120,6 +120,9 @@ describe.skipIf(!URL_PG)("Numeração de documentos (PostgreSQL real)", () => {
     expect(await n.espiarProximo("e1", "contrato", 2026)).toBe("CT-2026-052");
     expect(await n.espiarProximo("e1", "contrato", 2026)).toBe("CT-2026-052");
     expect(await prisma.$transaction((tx: any) => n.proximoNumero(tx, "e1", "contrato", 2026))).toBe("CT-2026-052");
+    // O contador JÁ existe (53) e alguém digita um contrato bem acima: o contador não pode ficar para trás
+    await prisma.contrato.create({ data: { id: "ct3", empresaId: "e1", clienteId: "c1", numero: "CT-2026-080", tipo: "MANUTENCAO_PREVENTIVA", dataInicio: new Date("2026-01-01"), valorMensal: 100 } });
+    expect(await prisma.$transaction((tx: any) => n.proximoNumero(tx, "e1", "contrato", 2026))).toBe("CT-2026-081");
   });
 
   it("Configurações: GET traz cada tipo com maior usado, próximo e exemplo; PUT define o próximo; a geração seguinte usa", async () => {
@@ -130,6 +133,9 @@ describe.skipIf(!URL_PG)("Numeração de documentos (PostgreSQL real)", () => {
     expect(orc).toMatchObject({ rotulo: "Orçamento", prefixo: "ORC", maiorUsado: 120, proximo: 123, configurado: true }); // gerar número não grava documento: o maior usado segue o dos orçamentos gravados
     expect(orc.exemplo).toMatch(/^ORC-\d{4}-0123$/);
     expect(g.json.numeracoes.find((x: any) => x.tipo === "pedido_compra")).toMatchObject({ maiorUsado: 0, proximo: 1, configurado: false });
+    // Contador do contrato está em 82, mas um contrato digitado à mão (090) passou dele: a tela mostra o que vai sair de verdade
+    await prisma.contrato.create({ data: { id: "ct4", empresaId: "e1", clienteId: "c1", numero: "CT-2026-090", tipo: "MANUTENCAO_PREVENTIVA", dataInicio: new Date("2026-01-01"), valorMensal: 100 } });
+    expect((await chamar("GET")).json.numeracoes.find((x: any) => x.tipo === "contrato")).toMatchObject({ maiorUsado: 90, proximo: 91, configurado: true });
     expect(g.json.numeracoes.map((x: any) => x.tipo)).toHaveLength(10);
 
     const p = await chamar("PUT", { tipo: "orcamento", proximo: 3358 });
@@ -168,6 +174,10 @@ describe.skipIf(!URL_PG)("Numeração de documentos (PostgreSQL real)", () => {
     logar(permissoesVazias(), "e1", "OPERADOR");
     expect((await chamar("PUT", { tipo: "os", proximo: 20000 })).status).toBe(403);
     expect((await chamar("GET")).status).toBe(403);
+    // Só "visualizar" em Configurações: vê a tela, mas não salva
+    logar(montarPermissoes({ configuracoes: ["visualizar"] }), "e1", "OPERADOR");
+    expect((await chamar("GET")).status).toBe(200);
+    expect((await chamar("PUT", { tipo: "os", proximo: 20000 })).status).toBe(403);
     // nada mudou
     expect((await prisma.numeracao.findUnique({ where: { empresaId_tipo: { empresaId: "e1", tipo: "os" } } })).proximo).toBe(10001);
   });
@@ -180,6 +190,13 @@ describe.skipIf(!URL_PG)("Numeração de documentos (PostgreSQL real)", () => {
     expect((await chamar("PUT", { tipo: "os", proximo: 5000 })).status).toBe(200);
     expect(await prisma.$transaction((tx: any) => n.proximoNumero(tx, "e2", "os", 2026))).toBe("OS-2026-5000");
     expect(await prisma.$transaction((tx: any) => n.proximoNumero(tx, "e1", "os", 2026))).toBe("OS-2026-10001");
+    // A trava é por empresa E tipo: a empresa 1 segurando a sua trava (transação longa) não faz a empresa 2 esperar
+    const longa = prisma.$transaction(async (tx: any) => { await n.proximoNumero(tx, "e1", "os", 2026); await new Promise((r) => setTimeout(r, 1500)); }, { timeout: 10_000 });
+    await new Promise((r) => setTimeout(r, 200)); // a longa já pegou a trava
+    const t0 = Date.now();
+    expect(await prisma.$transaction((tx: any) => n.proximoNumero(tx, "e2", "os", 2026))).toBe("OS-2026-5001");
+    expect(Date.now() - t0).toBeLessThan(1000);
+    await longa;
   });
 
   it("os helpers das telas passam pelo contador: conta a receber/pagar e pedido (fora e dentro de transação), lote de QR", async () => {
@@ -193,6 +210,10 @@ describe.skipIf(!URL_PG)("Numeração de documentos (PostgreSQL real)", () => {
     expect(await pedido.proximoNumeroPedido("e1", 2026)).toBe("PCI-2026-0001");
     expect(await qr.gerarLoteQrCodes("e1", 2)).toEqual(["QR-2026-0005", "QR-2026-0006"]);
     expect(await prisma.qrcode.count({ where: { empresaId: "e1" } })).toBe(2);
+    // O QR de um equipamento (cadastro e "gerar QR") continua a mesma sequência do lote
+    await prisma.unidade.create({ data: { id: "un1", empresaId: "e1", clienteId: "c1", nome: "Matriz" } });
+    await prisma.equipamento.create({ data: { id: "eq1", empresaId: "e1", unidadeId: "un1", tipo: "AR_CONDICIONADO_SPLIT", marca: "LG", modelo: "X" } });
+    expect((await qr.gerarQrCodeEquipamento("e1", "eq1")).codigo).toBe("QR-2026-0007");
     void AGORA;
   });
 });

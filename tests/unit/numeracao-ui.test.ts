@@ -116,6 +116,16 @@ describe("Numeração de documentos", () => {
     expect(txt(linha("os").querySelector('[data-msg="erro"]'))).toBe("Sem conexão. Tente de novo.");
   });
 
+  it("Enter abaixo do mínimo NÃO salva: nada vai para a rota e a linha mostra o erro", async () => {
+    await montar();
+    const campo = linha("orcamento").querySelector("[data-proximo]") as HTMLInputElement;
+    await digitar(campo, "3357");
+    await act(async () => { campo.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); });
+    await esperar();
+    expect(chamadas).toHaveLength(0);
+    expect(txt(linha("orcamento").querySelector('[data-msg="erro"]'))).toBe("O mínimo permitido é 3358 (o maior já usado é 3357).");
+  });
+
   it("sem Configurações › gerenciar: campos desligados e sem botão Salvar", async () => {
     await montar(false);
     expect($$("[data-proximo]").every((c) => (c as HTMLInputElement).disabled)).toBe(true);
