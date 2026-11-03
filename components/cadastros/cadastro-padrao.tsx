@@ -299,11 +299,11 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda, aviso, grupos }
                   id: col.key, titulo: col.label, ordenar: col.ordenar ? col.key : undefined,
                   // A 1ª coluna (ou código + nome) identifica o registro: fica sempre; valores em R$ à direita
                   obrigatoria: i < nTitulo, alinhar: col.formato === "moeda" ? "direita" as const : undefined,
-                  largura: col.formato === "codigo" ? 96 : col.formato === "moeda" ? 120 : i >= nTitulo ? 180 : undefined,
+                  largura: col.formato === "codigo" ? 80 : col.formato === "moeda" ? 120 : i >= nTitulo ? 140 : undefined,
                   classe: "truncate",
                 })),
                 ...(aba === "todos" ? [{ id: "situacao", titulo: "Situação", largura: 96 }] : []),
-                { id: "acoes", titulo: "Ações", fixa: true, largura: 112, semTitulo: true, alinhar: "direita" as const, classe: "py-0.5" },
+                { id: "acoes", titulo: "Ações", fixa: true, largura: 96, semTitulo: true, alinhar: "direita" as const, classe: "py-0.5" },
               ]}
               linhas={itens.map((item) => ({
                 id: item.id,

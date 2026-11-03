@@ -240,14 +240,14 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
             ordenacao={{ ativa: sortAtual, dir: dirAtual, onOrdenar: ordenarPor }}
             colunas={[
               ...(massa ? [{ id: "sel", titulo: "Selecionar a página", fixa: true, largura: 36, cabecalho: <CheckboxPagina />, classe: "pl-3" }] : []),
-              { id: "numero", titulo: "Número", largura: 150, ordenar: "numero", obrigatoria: true },
+              { id: "numero", titulo: "Número", largura: 176, ordenar: "numero", obrigatoria: true },
               { id: "cliente", titulo: "Cliente", ordenar: "cliente", obrigatoria: true },
               { id: "tecnico", titulo: "Técnico", largura: 140, classe: "truncate" },
               { id: "abertura", titulo: "Abertura", largura: 96, ordenar: "criadoEm" },
               { id: "previsao", titulo: "Previsão", largura: 96, ordenar: "previsaoConclusao" },
               { id: "status", titulo: "Status", largura: 168, ordenar: "status" },
               { id: "prioridade", titulo: "Prioridade", largura: 104, ordenar: "prioridade" },
-              { id: "equipe", titulo: "Equipe", largura: 112, alinhar: "direita" },
+              { id: "equipe", titulo: "Equipe", largura: 128, alinhar: "direita" },
               { id: "acoes", titulo: "Ações", fixa: true, largura: 40, semTitulo: true, alinhar: "direita", classe: "py-0.5" },
             ]}
             linhas={ordens.map((os) => ({
