@@ -9,6 +9,13 @@ export const PLANILHA = {
   cabecalho: "bg-surface-alt border-y border-ink/15",
   th: "px-2 py-1.5 font-semibold text-ink-muted text-[10px] uppercase tracking-wider",
   linha: "border-b border-surface-linha even:bg-surface-alt/60",
+  /**
+   * Realce da linha sob o mouse: o acento bem claro (primary-100 a 60%), um degrau acima da zebra
+   * (surface-alt a 60%) para ficar claro em qual linha o mouse está, sem brigar com a identidade.
+   * Uma linha com realce próprio (ex.: vencida, vermelha) traz o `hover:` dela depois deste, e o
+   * `cn` (tailwind-merge) fica com o dela.
+   */
+  linhaHover: "hover:bg-primary-100/60",
   td: "px-2 py-1.5 align-top",
   /** Valor em R$ / número: à direita, alinhado pelos algarismos */
   numero: "text-right tabular-nums whitespace-nowrap",
