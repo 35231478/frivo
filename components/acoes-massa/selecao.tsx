@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { ENTIDADE, MAX_SELECAO, podeAcao, podeExportar, type AcaoItem, type Entidade } from "@/lib/acoes-massa/acoes";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { SelecionadosProvider } from "@/components/listagem/selecao-linhas";
 
 /** O perfil tem alguma ação em massa nesta lista? (sem nenhuma, a lista nem mostra os checkboxes) */
 export function useAcoesMassaDisponiveis(entidade: Entidade) {
@@ -120,7 +121,8 @@ export function SelecaoMassaProvider({ entidade, idsPagina, total, children }: {
     entidade, selecionados, idsPagina, total, filtro, todosDoFiltro, alternar, alternarPagina, selecionarFiltro, limpar, carregandoFiltro, erroFiltro,
   }), [entidade, selecionados, idsPagina, total, filtro, todosDoFiltro, alternar, alternarPagina, selecionarFiltro, limpar, carregandoFiltro, erroFiltro]);
 
-  return <SelecaoCtx.Provider value={value}>{children}</SelecaoCtx.Provider>;
+  // A TabelaPro (e os cartões) pintam a linha marcada lendo este contexto menor
+  return <SelecaoCtx.Provider value={value}><SelecionadosProvider selecionados={selecionados}>{children}</SelecionadosProvider></SelecaoCtx.Provider>;
 }
 
 const clsCheckbox = "w-4 h-4 rounded border-surface-border accent-acento cursor-pointer align-middle";

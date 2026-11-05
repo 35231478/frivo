@@ -16,6 +16,9 @@ import { BarraFiltros, inputFiltro } from "@/components/listagem/barra-filtros";
 import { CampoBusca, Paginacao } from "@/components/listagem/listagem-ui";
 import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
 import { TabelaPro } from "@/components/listagem/tabela-pro";
+import { CheckboxSelecao, CheckboxSelecaoPagina, SelecaoLinhasProvider, useSelecaoLinhas } from "@/components/listagem/selecao-linhas";
+import { PainelTotais, type LinhaTotal } from "@/components/listagem/painel-totais";
+import { CHAVES_PAGAR, totaisPagar } from "@/lib/listagem/totais-selecao";
 
 /** Uma conta a pagar já pronta para a tela (números em vez de Decimal, datas em texto) */
 export interface ContaPagarView {
@@ -47,18 +50,29 @@ export interface FiltrosPagar {
  * personalizado ou todo o período) + cards do período clicáveis como filtro, e a lista em "cara de
  * planilha" no desktop (cartões no celular). Busca, filtros, período e paginação rodam no SERVIDOR.
  */
-export function ContasPagarView({
-  contas, resumo, periodo, filtros, categorias, centros, fornecedores, total, pagina, porPagina, totalFiltrado, totalAberto, podeImportarNf,
-}: {
+interface PropsPagar {
   contas: ContaPagarView[]; resumo: ResumoPagar; periodo: PeriodoTela; filtros: FiltrosPagar;
   categorias: { id: string; nome: string; cor: string; ativo: boolean }[]; centros: Opcao[]; fornecedores: Opcao[];
   total: number; pagina: number; porPagina: number; totalFiltrado: number; totalAberto: number; podeImportarNf: boolean;
-}) {
+}
+
+export function ContasPagarView(props: PropsPagar) {
+  // Seleção da página (realce da linha + painel "Total dos N selecionados")
+  return <SelecaoLinhasProvider idsPagina={props.contas.map((c) => c.id)}><ContasPagarCorpo {...props} /></SelecaoLinhasProvider>;
+}
+
+function ContasPagarCorpo({
+  contas, resumo, periodo, filtros, categorias, centros, fornecedores, total, pagina, porPagina, totalFiltrado, totalAberto, podeImportarNf,
+}: PropsPagar) {
+  const { selecionados } = useSelecaoLinhas();
   const { busca, setBusca, navegar, pendente } = useListagemUrl({
     chave: "contas-pagar", qAtual: filtros.fornecedor, paramBusca: "fornecedor", lembrarFiltros: false,
   });
   const card = filtros.card as CardKey | "";
   const comStatus = useMemo(() => contas.map((c) => ({ c, sv: statusVisualPagar(c.status, c.dataVencimento) })), [contas]);
+  // Painel do rodapé: totais do período (os cards) ou só das marcadas (lib/listagem/totais-selecao)
+  const selecionadas = useMemo(() => contas.filter((c) => selecionados.has(c.id)), [contas, selecionados]);
+  const totaisSelecao = useMemo(() => totaisPagar(selecionadas), [selecionadas]);
 
   /** Um select do painel: muda = vai para a URL na hora (o controle se destaca quando ativo) */
   const sel = (k: keyof FiltrosPagar) => ({
@@ -182,7 +196,8 @@ export function ContasPagarView({
           {comStatus.length === 0 ? (
             <li><Vazio /></li>
           ) : comStatus.map(({ c, sv }) => (
-            <li key={c.id} className={cn("flex items-start gap-3 px-4 py-3", sv.linhaVermelha && "bg-atrasado-claro")} data-cartao-conta={c.id}>
+            <li key={c.id} className={cn("flex items-start gap-3 px-4 py-3", sv.linhaVermelha && "bg-atrasado-claro", selecionados.has(c.id) && "bg-primary-50")} data-cartao-conta={c.id} data-selecionada={selecionados.has(c.id) ? "" : undefined}>
+              <div className="pt-1 w-4 shrink-0"><CheckboxSelecao id={c.id} rotulo={c.numero} /></div>
               <Link href={`/financeiro/contas-pagar/${c.id}`} className="flex-1 min-w-0" aria-label={`Ver detalhes de ${c.numero}`}>
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-medium text-ink truncate">{c.fornecedor.nome}{marcasFornecedor(c)}</p>
@@ -208,6 +223,7 @@ export function ContasPagarView({
             <TabelaPro
               tela="contas-pagar"
               colunas={[
+                { id: "sel", titulo: "Selecionar a página", fixa: true, largura: 36, cabecalho: <CheckboxSelecaoPagina />, classe: "pl-3" },
                 { id: "vencimento", titulo: "Vencimento", largura: 96 },
                 { id: "numero", titulo: "Nº/Doc", largura: 120, classe: "truncate" },
                 { id: "fornecedor", titulo: "Fornecedor", largura: 220, obrigatoria: true },
@@ -223,6 +239,7 @@ export function ContasPagarView({
                 atributos: { "data-linha-conta": c.id },
                 classe: sv.linhaVermelha ? "even:bg-atrasado-claro bg-atrasado-claro hover:bg-atrasado-claro/70" : undefined,
                 celulas: {
+                  sel: <CheckboxSelecao id={c.id} rotulo={c.numero} />,
                   vencimento: <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{c.dataVencimento ? formatarData(c.dataVencimento) : "—"}</span>,
                   numero: <Link href={`/financeiro/contas-pagar/${c.id}`} title={c.numero} className={cn(PLANILHA.codigo, "font-normal text-primary-600 hover:underline")} data-detalhe-conta={c.numero}>{c.numero}</Link>,
                   fornecedor: (
@@ -263,6 +280,14 @@ export function ContasPagarView({
           )}
         </div>
 
+        <PainelTotais unidade={["conta", "contas"]}
+          periodo={{
+            rotulo: periodo.rotulo, subtitulo: periodo.tipo === "todos" ? "Todo o período" : periodo.rotulo,
+            total: linhaTotal("TOTAL", resumo.TOTAL),
+            linhas: CHAVES_PAGAR.filter((k) => k !== "TOTAL").map((k) => linhaTotal(k, resumo[k])),
+          }}
+          selecao={{ n: selecionados.size, naPagina: selecionadas.length, total: linhaTotal("TOTAL", totaisSelecao.TOTAL), linhas: CHAVES_PAGAR.filter((k) => k !== "TOTAL").map((k) => linhaTotal(k, totaisSelecao[k])) }}
+        />
         <div className="px-4 py-3 border-t border-surface-border bg-surface-alt/40 space-y-2">
           <Paginacao total={total} pagina={pagina} porPagina={porPagina} onNavegar={navegar} rotulo="contas" />
           <p className="text-sm text-ink-muted" data-total-filtrado>
@@ -276,3 +301,10 @@ export function ContasPagarView({
   );
 }
 
+
+/** Uma linha do painel de totais com o rótulo e a cor do card correspondente */
+const ROTULO_TOTAL: Record<string, { rotulo: string; cor?: string }> = {
+  VENCIDO: { rotulo: "Em aberto (Vencido)", cor: "text-atrasado" }, VENCE_HOJE: { rotulo: "Em aberto (Vence hoje)", cor: "text-atencao-texto" },
+  A_VENCER: { rotulo: "Em aberto (A vencer)" }, PAGO: { rotulo: "Pagos", cor: "text-success-600" }, TOTAL: { rotulo: "Total" },
+};
+const linhaTotal = (chave: string, s: { v: number; q: number }): LinhaTotal => ({ chave, ...ROTULO_TOTAL[chave], v: s.v, q: s.q });

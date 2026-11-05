@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import { RenegociarCobrancas } from "@/components/financeiro/renegociar-modal";
-import { motivoNaoRenegociar, motivoSelecaoInvalida } from "@/lib/financeiro/renegociacao";
+import { motivoSelecaoInvalida } from "@/lib/financeiro/renegociacao";
 import { cn, formatarMoeda, formatarData, formatarCpfCnpj, LABELS_FORMA_PAGAMENTO } from "@/lib/utils";
 import { statusVisualReceber } from "@/lib/financeiro-status";
 import { ContaReceberAcoes } from "@/components/financeiro/conta-receber-acoes";
@@ -24,6 +24,9 @@ import { BarraFiltros, FiltroTextoUrl, inputFiltro } from "@/components/listagem
 import { CampoBusca, Paginacao } from "@/components/listagem/listagem-ui";
 import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
 import { TabelaPro, type ColunaPro } from "@/components/listagem/tabela-pro";
+import { CheckboxSelecao, CheckboxSelecaoPagina, SelecaoLinhasProvider, useSelecaoLinhas } from "@/components/listagem/selecao-linhas";
+import { PainelTotais, type LinhaTotal } from "@/components/listagem/painel-totais";
+import { CHAVES_RECEBER, totaisReceber } from "@/lib/listagem/totais-selecao";
 import { recebidaEmParte, saldoDaConta } from "@/lib/financeiro/parcelas";
 
 export interface ContaView {
@@ -73,15 +76,22 @@ type CardKey = "VENCIDO" | "VENCE_HOJE" | "A_VENCER" | "RECEBIDO" | "PERDA" | "T
  * (cartões no celular). Busca, filtros, período e paginação rodam no SERVIDOR (a URL é a fonte da
  * verdade); a exportação CSV exporta o FILTRO (com o período), não a página.
  */
-export function ContasReceberView({
-  contas, clientes, categorias, interAtivo, resumo, total, totalFiltrado, abertoFiltrado, pagina, porPagina, filtros, periodo,
-}: {
+export function ContasReceberView(props: PropsReceber) {
+  // Seleção da página (realce da linha + painel "Total dos N selecionados" + a escolha para renegociar)
+  return <SelecaoLinhasProvider idsPagina={props.contas.map((c) => c.id)}><ContasReceberCorpo {...props} /></SelecaoLinhasProvider>;
+}
+
+interface PropsReceber {
   contas: ContaView[]; clientes: Opcao[]; categorias: { id: string; nome: string; cor: string; ativo: boolean }[];
   interAtivo: boolean; resumo: ResumoReceber; total: number; totalFiltrado: number;
   /** O que falta receber no filtro (abertas, pelo saldo) */
   abertoFiltrado?: number;
   pagina: number; porPagina: number; filtros: FiltrosReceber; periodo: PeriodoTela;
-}) {
+}
+
+function ContasReceberCorpo({
+  contas, clientes, categorias, interAtivo, resumo, total, totalFiltrado, abertoFiltrado, pagina, porPagina, filtros, periodo,
+}: PropsReceber) {
   const { pode } = usePermissoes();
   const podeCobrar = pode("financeiro", "contasReceber");
   const { busca, setBusca, navegar, pendente } = useListagemUrl({
@@ -92,18 +102,19 @@ export function ContasReceberView({
   const acoes = (c: ContaView) => (
     <ContaReceberAcoes conta={{ ...c, interAtivo }} categorias={categorias} clientes={clientes} onDetalhes={() => setDetalheId(c.id)} />
   );
-  // Renegociar: escolher 1+ cobranças em aberto do mesmo cliente (só quem tem Financeiro › Perdas vê as caixas)
+  // Seleção de linhas (caixa em toda cobrança): pinta a linha, soma no painel do rodapé e, para quem
+  // tem Financeiro › Perdas, é a escolha para renegociar (a barra diz por que não dá, se não der)
   const router = useRouter();
   const podeRenegociar = pode("financeiro", "perdas");
-  const [escolhidas, setEscolhidas] = useState<Map<string, ContaView>>(new Map());
+  const { selecionados, limpar } = useSelecaoLinhas();
   const [renegociando, setRenegociando] = useState(false);
-  const alternarEscolha = (c: ContaView) => setEscolhidas((m) => { const n = new Map(m); n.has(c.id) ? n.delete(c.id) : n.set(c.id, c); return n; });
-  const listaEscolhidas = [...escolhidas.values()];
+  const selecionadas = useMemo(() => contas.filter((c) => selecionados.has(c.id)), [contas, selecionados]);
+  const listaEscolhidas = podeRenegociar ? selecionadas : [];
   const motivoEscolha = listaEscolhidas.length ? motivoSelecaoInvalida(listaEscolhidas) : null;
   const saldoEscolhidas = listaEscolhidas.reduce((s, c) => s + saldoDaConta(c), 0);
-  const caixa = (c: ContaView) => podeRenegociar && !motivoNaoRenegociar(c)
-    ? <input type="checkbox" className="w-4 h-4 accent-acento align-middle" checked={escolhidas.has(c.id)} onChange={() => alternarEscolha(c)} aria-label={`Escolher ${c.numero} para renegociar`} data-escolher-conta={c.id} />
-    : null;
+  const caixa = (c: ContaView) => <CheckboxSelecao id={c.id} rotulo={c.numero} data-escolher-conta={c.id} />;
+  // Painel do rodapé: totais do período (os cards) ou só das marcadas (lib/listagem/totais-selecao)
+  const totaisSelecao = useMemo(() => totaisReceber(selecionadas), [selecionadas]);
   const statusChips = useMemo(() => new Set(filtros.status.split(",").filter(Boolean)), [filtros.status]);
   const card = filtros.card as CardKey | "";
 
@@ -216,8 +227,8 @@ export function ContasReceberView({
           ) : comStatus.map(({ c, sv }) => {
             const origem = origemComLink(c);
             return (
-              <li key={c.id} className={cn("flex items-start gap-3 px-4 py-3", sv.linhaVermelha && "bg-atrasado-claro")} data-cartao-conta={c.id}>
-                {podeRenegociar && <div className="pt-1 w-4 shrink-0">{caixa(c)}</div>}
+              <li key={c.id} className={cn("flex items-start gap-3 px-4 py-3", sv.linhaVermelha && "bg-atrasado-claro", selecionados.has(c.id) && "bg-primary-50")} data-cartao-conta={c.id} data-selecionada={selecionados.has(c.id) ? "" : undefined}>
+                <div className="pt-1 w-4 shrink-0">{caixa(c)}</div>
                 <button type="button" onClick={() => setDetalheId(c.id)} className="flex-1 min-w-0 text-left" aria-label={`Ver detalhes de ${c.numero}`}>
                   <div className="flex items-start justify-between gap-2">
                     <p className="font-medium text-ink truncate">{c.clienteNome}</p>
@@ -259,7 +270,7 @@ export function ContasReceberView({
             <TabelaPro
               tela="contas-receber"
               colunas={[
-                ...(podeRenegociar ? [{ id: "sel", titulo: "Escolher para renegociar", fixa: true, largura: 32, cabecalho: <span aria-hidden /> } satisfies ColunaPro] : []),
+                { id: "sel", titulo: "Selecionar a página", fixa: true, largura: 36, cabecalho: <CheckboxSelecaoPagina />, classe: "pl-3" } satisfies ColunaPro,
                 { id: "vencimento", titulo: "Vencimento", largura: 96 },
                 { id: "numero", titulo: "Nº", largura: 136, classe: "truncate" },
                 { id: "cliente", titulo: "Cliente", largura: 220, obrigatoria: true },
@@ -278,7 +289,7 @@ export function ContasReceberView({
                   classe: sv.linhaVermelha ? "even:bg-atrasado-claro bg-atrasado-claro hover:bg-atrasado-claro/70" : undefined,
                   titulos: { numero: c.numero },
                   celulas: {
-                    sel: podeRenegociar ? caixa(c) : null,
+                    sel: caixa(c),
                     vencimento: <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{c.dataVencimento ? formatarData(c.dataVencimento) : "—"}</span>,
                     numero: <span className={cn(PLANILHA.codigo, "font-normal text-ink-subtle")} data-numero-conta>{c.numero}</span>,
                     cliente: <p className={cn(PLANILHA.nome, "truncate")} title={c.clienteCnpj ? `${c.clienteNome} · ${formatarCpfCnpj(c.clienteCnpj)}` : c.clienteNome}>{c.clienteNome}</p>,
@@ -316,6 +327,14 @@ export function ContasReceberView({
           )}
         </div>
 
+        <PainelTotais unidade={["cobrança", "cobranças"]}
+          periodo={{
+            rotulo: periodo.rotulo, subtitulo: periodo.tipo === "todos" ? "Todo o período" : periodo.rotulo,
+            total: linhaTotal("TOTAL", resumo.TOTAL),
+            linhas: CHAVES_RECEBER.filter((k) => k !== "TOTAL").map((k) => linhaTotal(k, resumo[k])),
+          }}
+          selecao={{ n: selecionados.size, naPagina: selecionadas.length, total: linhaTotal("TOTAL", totaisSelecao.TOTAL), linhas: CHAVES_RECEBER.filter((k) => k !== "TOTAL").map((k) => linhaTotal(k, totaisSelecao[k])) }}
+        />
         <div className="px-4 py-3 border-t border-surface-border bg-surface-alt/40 space-y-2">
           <Paginacao total={total} pagina={pagina} porPagina={porPagina} onNavegar={navegar} rotulo="cobranças" />
           <p className="text-sm text-ink-muted" data-total-filtrado>
@@ -324,6 +343,8 @@ export function ContasReceberView({
           </p>
         </div>
       </div>
+      {/* Com a barra flutuante na tela, um respiro no fim para o painel de totais rolar acima dela */}
+      {listaEscolhidas.length > 0 && <div className="h-24 md:h-20" aria-hidden data-espaco-barra />}
       <ContaReceberDetalhes id={detalheId} onFechar={fecharDetalhe} onAbrirConta={setDetalheId} />
 
       {/* Barra da escolha: quantas, quanto falta, e "Renegociar" (mesmo cliente) */}
@@ -335,7 +356,7 @@ export function ContasReceberView({
             </span>
             {motivoEscolha && <span role="alert" className="text-xs text-atencao-texto" data-motivo-escolha>{motivoEscolha}</span>}
             <div className="flex items-center gap-2 ml-auto">
-              <button type="button" onClick={() => setEscolhidas(new Map())} className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink px-2 py-1.5" data-limpar-escolha><X className="w-3.5 h-3.5" /> Limpar</button>
+              <button type="button" onClick={limpar} className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink px-2 py-1.5" data-limpar-escolha><X className="w-3.5 h-3.5" /> Limpar</button>
               <button type="button" onClick={() => setRenegociando(true)} disabled={!!motivoEscolha}
                 className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-primary-500 hover:bg-primary-600 px-4 py-2 rounded-lg disabled:opacity-50" data-abrir-renegociar>
                 <Handshake className="w-4 h-4" /> Renegociar
@@ -347,12 +368,20 @@ export function ContasReceberView({
       <Modal aberto={renegociando} onFechar={() => setRenegociando(false)} titulo={`Renegociar — ${listaEscolhidas[0]?.clienteNome ?? ""}`} tamanho="lg">
         {renegociando && listaEscolhidas.length > 0 && (
           <RenegociarCobrancas clienteId={listaEscolhidas[0].clienteId} clienteNome={listaEscolhidas[0].clienteNome} iniciais={listaEscolhidas.map((c) => c.id)}
-            onPronto={() => { setRenegociando(false); setEscolhidas(new Map()); router.refresh(); }} onCancelar={() => setRenegociando(false)} />
+            onPronto={() => { setRenegociando(false); limpar(); router.refresh(); }} onCancelar={() => setRenegociando(false)} />
         )}
       </Modal>
     </div>
   );
 }
+
+/** Uma linha do painel de totais com o rótulo e a cor do card correspondente */
+const ROTULO_TOTAL: Record<string, { rotulo: string; cor?: string }> = {
+  VENCIDO: { rotulo: "Em aberto (Vencido)", cor: "text-atrasado" }, VENCE_HOJE: { rotulo: "Em aberto (Vence hoje)", cor: "text-atencao-texto" },
+  A_VENCER: { rotulo: "Em aberto (A vencer)" }, RECEBIDO: { rotulo: "Recebidos", cor: "text-success-600" }, PERDA: { rotulo: "Perdas", cor: "text-atrasado-texto" },
+  TOTAL: { rotulo: "Total" },
+};
+const linhaTotal = (chave: string, s: { v: number; q: number }): LinhaTotal => ({ chave, ...ROTULO_TOTAL[chave], v: s.v, q: s.q });
 
 const LABEL_CHAVE: Record<string, string> = { PREVISTO: "Previsto", A_VENCER: "A vencer", VENCE_HOJE: "Vence hoje", VENCIDO: "Vencido", PARCIAL: "Recebido em parte", PAGO: "Pago", PERDA: "Perda", RENEGOCIADO: "Renegociada", CANCELADO: "Cancelado" };
 

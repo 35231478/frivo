@@ -128,7 +128,7 @@ describe("cara de planilha (desktop) e cartões (celular)", () => {
     const tabela = $("[data-tabela-pagar] table[data-tabela-planilha]")!;
     expect(tabela.className).toContain("text-[13px]");
     expect(tabela.className).toContain("table-fixed");
-    expect($$("[data-tabela-pagar] th").map(txt)).toEqual(["Vencimento", "Nº/Doc", "Fornecedor", "Descrição", "Categoria", "Centro de custo", "Situação", "Valor (R$)", "Ações"]);
+    expect($$("[data-tabela-pagar] th").map(txt)).toEqual(["Selecionar a página", "Vencimento", "Nº/Doc", "Fornecedor", "Descrição", "Categoria", "Centro de custo", "Situação", "Valor (R$)", "Ações"]);
     const l1 = $("[data-linha-conta=cp1]")!;
     expect(l1.className).toContain("border-surface-linha");
     expect(txt(l1)).toContain("20/11/2026");
@@ -216,5 +216,67 @@ describe("busca e painel de filtros", () => {
     expect($<HTMLAnchorElement>("[data-lancar-nf]")!.getAttribute("href")).toBe("/estoque/notas?de=contas-pagar");
     await montarTela({ podeImportarNf: false });
     expect($("[data-lancar-nf]")).toBeNull();
+  });
+});
+
+describe("seleção de linhas + painel de totais (Total dos N selecionados)", () => {
+  const seis = () => [
+    base,                                                                                                                    // 1.200 a vencer (20/11)
+    { ...base, id: "cp2", numero: "CP-2", valorTotal: 98765.4, valorPago: 765.4, saldoRestante: 98000, status: "PAGO_PARCIAL", dataVencimento: "2026-11-02T00:00:00.000Z" }, // vencida: falta 98.000
+    { ...base, id: "cp3", numero: "CP-3", valorTotal: 500, saldoRestante: 500, status: "VENCIDO", dataVencimento: "2026-11-15T00:00:00.000Z" },           // vence hoje
+    { ...base, id: "cp4", numero: "CP-4", valorTotal: 80, valorPago: 80, saldoRestante: 0, status: "PAGO_TOTAL", dataVencimento: "2026-11-01T00:00:00.000Z" }, // paga
+    { ...base, id: "cp5", numero: "CP-5", valorTotal: 300, saldoRestante: 300, dataVencimento: "2026-11-25T00:00:00.000Z" },                             // a vencer
+    { ...base, id: "cp6", numero: "CP-6", valorTotal: 9999, saldoRestante: 0, status: "CANCELADO", dataVencimento: "2026-11-25T00:00:00.000Z" },          // cancelada: fora do total
+  ];
+  const painel = () => $("[data-painel-totais]")!;
+  const valor = (k: string) => txt($(`[data-painel-linha=${k}] [data-painel-valor]`));
+  const qtd = (k: string) => txt($(`[data-painel-linha=${k}] [data-painel-qtd]`));
+  const caixaTabela = (id: string) => $(`[data-tabela-pagar] [data-selecao-linha=${id}]`);
+
+  it("sem seleção o rodapé mostra os totais do período (a mesma quebra dos cards); 3 de 6 marcadas: só a soma das três, linha e cartão realçados; recalcula ao desmarcar; a caixa da página marca todas", async () => {
+    await montarTela({ contas: seis(), total: 6 });
+    expect(painel().getAttribute("data-modo")).toBe("periodo");
+    expect(txt($("[data-painel-titulo]"))).toBe("Totais do período");
+    expect(txt($("[data-painel-total]"))).toBe("R$ 3.600,00");
+    expect($$("[data-painel-linha]").map((l) => l.getAttribute("data-painel-linha"))).toEqual(["VENCIDO", "VENCE_HOJE", "A_VENCER", "PAGO"]);
+    expect([valor("VENCIDO"), qtd("VENCIDO"), valor("PAGO"), qtd("PAGO")]).toEqual(["R$ 800,00", "2 contas", "R$ 300,00", "1 conta"]);
+    expect($$("[data-selecao-linha]")).toHaveLength(12); // 6 na tabela + 6 nos cartões (a mesma seleção)
+
+    // 3 de 6: a vencida (pelo que falta), a que vence hoje e uma a vencer
+    await clicar(caixaTabela("cp2"));
+    await clicar(caixaTabela("cp3"));
+    await clicar($("[data-cartoes-pagar] [data-selecao-linha=cp5]")); // pelo cartão do celular também
+    expect(painel().getAttribute("data-modo")).toBe("selecao");
+    expect(txt($("[data-painel-titulo]"))).toBe("Total dos 3 contas selecionadas");
+    expect(txt($("[data-painel-subtitulo]"))).toBe("Só do que está marcado");
+    expect(txt($("[data-painel-total]"))).toBe("R$ 99.565,40"); // 98.765,40 + 500 + 300
+    expect([valor("VENCIDO"), qtd("VENCIDO")]).toEqual(["R$ 98.000,00", "1 conta"]);
+    expect([valor("VENCE_HOJE"), qtd("VENCE_HOJE")]).toEqual(["R$ 500,00", "1 conta"]);
+    expect([valor("A_VENCER"), qtd("A_VENCER")]).toEqual(["R$ 300,00", "1 conta"]);
+    expect([valor("PAGO"), qtd("PAGO")]).toEqual(["R$ 0,00", "0 contas"]);
+    // Realce: a linha da planilha e o cartão do celular das marcadas, e só delas
+    expect($$("[data-tabela-pagar] tr[data-selecionada]").map((tr) => tr.getAttribute("data-linha-conta"))).toEqual(["cp2", "cp3", "cp5"]);
+    expect($$("[data-cartoes-pagar] li[data-selecionada]").map((li) => li.getAttribute("data-cartao-conta"))).toEqual(["cp2", "cp3", "cp5"]);
+    expect($("[data-tabela-pagar] [data-linha-conta=cp2]")!.className).toContain("bg-primary-50"); // a vencida marcada fica azul, não vermelha
+    expect($("[data-tabela-pagar] [data-linha-conta=cp2]")!.className).not.toMatch(/(^| )bg-atrasado-claro( |$)/);
+    expect($("[data-cartoes-pagar] [data-cartao-conta=cp2]")!.className).toContain("bg-primary-50");
+    expect($("[data-tabela-pagar] [data-linha-conta=cp1]")!.hasAttribute("data-selecionada")).toBe(false);
+
+    // Desmarca a de hoje: recalcula na hora
+    await clicar(caixaTabela("cp3"));
+    expect(txt($("[data-painel-titulo]"))).toBe("Total dos 2 contas selecionadas");
+    expect(txt($("[data-painel-total]"))).toBe("R$ 99.065,40");
+    expect([valor("VENCE_HOJE"), qtd("VENCE_HOJE")]).toEqual(["R$ 0,00", "0 contas"]);
+
+    // A caixa do cabeçalho marca a página toda (a cancelada entra na seleção, mas não no total)
+    const pagina = $<HTMLInputElement>("[data-tabela-pagar] [data-selecao-pagina]")!;
+    expect(pagina.indeterminate).toBe(true);
+    await clicar(pagina);
+    expect(txt($("[data-painel-titulo]"))).toBe("Total dos 6 contas selecionadas");
+    expect(txt($("[data-painel-total]"))).toBe("R$ 100.845,40"); // 1.200 + 98.765,40 + 500 + 80 + 300
+    expect([valor("PAGO"), qtd("PAGO")]).toEqual(["R$ 80,00", "1 conta"]);
+    await clicar(pagina);
+    expect(painel().getAttribute("data-modo")).toBe("periodo");
+    expect($$("[data-selecionada]")).toHaveLength(0);
   });
 });
