@@ -110,7 +110,7 @@ describe.skipIf(!URL_PG)("Gerar OS a partir do orçamento aprovado (PostgreSQL r
     const r = await gerar(id, { execucao: { ...EXEC, dataAgendada: "2026-11-18T17:30:00.000Z" } });
     expect(r.status).toBe(201);
     expect(r.json.jaExistia).toBe(false);
-    expect(r.json.os.numero).toMatch(/^OS-\d{4}-\d{4}$/);
+    expect(r.json.os.numero).toMatch(/^OS-\d+$/);
 
     const os = await prisma.ordemServico.findUnique({
       where: { id: r.json.os.id },
@@ -268,11 +268,13 @@ describe.skipIf(!URL_PG)("Gerar OS a partir do orçamento aprovado (PostgreSQL r
       const res = await mod.POST(new NextRequest("http://localhost/api/ordens", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) }));
       return { status: res.status, json: await res.json() };
     };
-    const ultima = await prisma.ordemServico.findFirst({ where: { empresaId: "e1", numero: { startsWith: `OS-${new Date().getFullYear()}-` } }, orderBy: { numero: "desc" } });
+    // a última gerada (formato novo OS-N): maior sequencial depois do último hífen
+    const seqDe = (n: string) => Number(n.split("-").pop());
+    const ultima = (await prisma.ordemServico.findMany({ where: { empresaId: "e1" }, select: { numero: true } })).reduce((m: any, o: any) => (seqDe(o.numero) > seqDe(m.numero) ? o : m));
     const r = await criar({ clienteId: "c1", descricao: "Visita", prioridade: "NORMAL", execucao: { ...EXEC, titulo: "Visita técnica" } });
     expect(r.status).toBe(201);
     const os = await prisma.ordemServico.findUnique({ where: { id: r.json.id }, include: { atividades: true } });
-    expect(Number(os.numero.split("-")[2])).toBe(Number(ultima.numero.split("-")[2]) + 1);
+    expect(seqDe(os.numero)).toBe(seqDe(ultima.numero) + 1);
     expect(os.orcamentoOrigemId).toBeNull();
     expect(os.atividades[0]).toMatchObject({ titulo: "Visita técnica", tecnicoId: "t1" });
     expect((await criar({ clienteId: "c1", descricao: "Visita", prioridade: "NORMAL" })).status).toBe(400);

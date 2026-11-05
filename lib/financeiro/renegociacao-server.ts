@@ -7,7 +7,6 @@
 import type { FormaPagamento, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { formatarData, formatarMoeda } from "@/lib/utils";
-import { anoBR } from "@/lib/fuso";
 import { proximoNumeroContaReceber } from "@/lib/financeiro-server";
 import { ErroConta, parcelarConta, travarConta } from "@/lib/financeiro/parcelas-server";
 import { saldoDaConta, type ParcelaPlano } from "@/lib/financeiro/parcelas";
@@ -67,7 +66,7 @@ export async function renegociar(tx: Tx, p: PedidoRenegociar) {
   const base = contas[0];
   const comum = <K extends "categoriaId" | "categoria" | "centroCustoId" | "contaBancariaId" | "formaPagamento" | "banco" | "clienteCnpj">(k: K) =>
     contas.every((c) => c[k] === base[k]) ? base[k] : null;
-  const numero = await proximoNumeroContaReceber(p.empresaId, anoBR(), tx);
+  const numero = await proximoNumeroContaReceber(p.empresaId, tx);
   const nova = await tx.contaReceber.create({
     data: {
       empresaId: p.empresaId, clienteId: base.clienteId, clienteCnpj: comum("clienteCnpj"),

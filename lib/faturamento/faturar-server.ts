@@ -14,8 +14,8 @@ import { dividirEmParcelas, MAX_PARCELAS } from "@/lib/financeiro/parcelas";
 import { itensFaturaveisDaOs, orcamentoJaFaturado, osJaFaturada, travarParaFaturar } from "@/lib/faturamento-os";
 import { registrarEvento } from "@/lib/orcamentos/ciclo-server";
 import { chaveDiaCivil, chaveHojeBR, partesBR } from "@/lib/fuso";
-import { gerarNumeroMedicao } from "@/lib/utils";
 import { retencoesHerdadas } from "@/lib/financeiro/retencoes-server";
+import { proximoNumero } from "@/lib/numeracao-server";
 import {
   faturaDaOs, faturaDoOrcamento, motivoNaoFaturarOrcamento, motivoNaoFaturarOs, numeroFatura, vencimentoAvulso, type Fatura,
 } from "@/lib/faturamento/fatura";
@@ -56,11 +56,8 @@ async function criarFatura(o: Origem): Promise<ResultadoFaturar> {
     const ja = [...travadas.os, ...travadas.orcamentos][0];
     if (ja) return { tipo: "existente" as const, fatura: { id: ja.medicao.id, numero: ja.medicao.numero } };
 
-    const ultima = await tx.medicao.findFirst({
-      where: { empresaId: o.empresaId, numero: { startsWith: `MED-${agora.ano}-` } },
-      orderBy: { numero: "desc" }, select: { numero: true },
-    });
-    const numero = gerarNumeroMedicao((ultima ? Number(ultima.numero.split("-")[2]) : 0) + 1, agora.ano);
+    // Número pelo contador da empresa, sob trava (a mesma de toda medição/fatura)
+    const numero = await proximoNumero(tx, o.empresaId, "medicao");
     const criada = await tx.medicao.create({
       data: {
         empresaId: o.empresaId, clienteId: o.clienteId, numero, tipo: "ADICIONAL", avulsa: true,

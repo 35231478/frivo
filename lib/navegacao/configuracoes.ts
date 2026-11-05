@@ -1,6 +1,7 @@
 import {
   Building2, Clock, Cog, FileBadge, FileSignature, FileSpreadsheet, Headset, IdCard, Landmark, ListChecks, Mail, Package, Printer, QrCode, ScrollText, ShieldCheck, Tags,
   Target, Thermometer, UserCog, Wallet, Wrench, type LucideIcon,
+  Hash,
 } from "lucide-react";
 import { moduloDaRota, pode, type Acao, type Permissoes } from "@/lib/permissoes";
 
@@ -109,6 +110,7 @@ export const SECOES_CONFIGURACOES: SecaoConfig[] = [
         itens: [
           { id: "empresa", href: "/configuracoes", icone: Building2, label: "Dados da empresa", dica: "Razão social, CNPJ, endereço e logo" },
           { id: "preferencias", href: "/configuracoes", icone: Cog, label: "Preferências", dica: "Regras de cadastro, OS, notificações e ISS" },
+          { id: "numeracao", href: "/configuracoes/numeracao", icone: Hash, label: "Numeração de documentos", dica: "Próximo número de orçamento, OS, contrato, fatura, pedido e contas" },
         ],
       },
       {

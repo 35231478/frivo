@@ -1,25 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { exigirPermissao } from "@/lib/permissoes-server";
-import { anoBR } from "@/lib/fuso";
+import { espiarProximo } from "@/lib/numeracao-server";
 
-/** Retorna o próximo número de contrato sugerido (CT-AAAA-NNN), incrementando o maior do ano. */
+/**
+ * Sugere o próximo número de contrato (CT-AAAA-NNN) pelo contador da empresa (Configurações ›
+ * Numeração de documentos) — só ESPIA, não consome: o número é confirmado quando o contrato é salvo
+ * (o campo é digitável; o único (numero, empresa) barra repetição).
+ */
 export async function GET(_: NextRequest) {
   const guard = await exigirPermissao("contratos", "criar");
   if (guard.erro) return guard.resposta;
   const { session } = guard;
-  const empresaId = session.user!.empresaId;
-
-  const ano = anoBR();
-  const ultimo = await prisma.contrato.findFirst({
-    where: { empresaId, numero: { startsWith: `CT-${ano}-` } },
-    orderBy: { numero: "desc" },
-    select: { numero: true },
-  });
-
-  const ultimaSeq = ultimo ? Number(ultimo.numero.split("-")[2]) : 0;
-  const seq = Number.isFinite(ultimaSeq) ? ultimaSeq + 1 : 1;
-  const numero = `CT-${ano}-${String(seq).padStart(3, "0")}`;
-
-  return NextResponse.json({ numero });
+  return NextResponse.json({ numero: await espiarProximo(session.user!.empresaId, "contrato") });
 }

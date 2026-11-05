@@ -1,29 +1,20 @@
 import { prisma } from "@/lib/prisma";
-import { anoBR } from "@/lib/fuso";
+import { comNumero, reservarNumeros } from "@/lib/numeracao-server";
+import { formatarNumero } from "@/lib/numeracao";
 
-/**
- * Próximo sequencial do ano para "QR-AAAA-####", pelo MAIOR número já usado.
- * (Ordenar o código como texto colocava "QR-2026-9999" depois de "QR-2026-10000",
- * e o próximo voltava a ser 10000 → código duplicado. Mesma correção do número da OS.)
- */
-export async function proximoSequencialQr(empresaId: string, ano = anoBR()): Promise<number> {
-  const prefixo = `QR-${ano}-`;
-  const [r] = await prisma.$queryRaw<{ max: number | null }[]>`
-    SELECT MAX(CAST(split_part(codigo, '-', 3) AS INTEGER)) AS max
-    FROM qrcodes
-    WHERE empresa_id = ${empresaId} AND codigo LIKE ${prefixo + "%"} AND split_part(codigo, '-', 3) ~ '^[0-9]{1,9}$'`;
-  return (r?.max ?? 0) + 1;
+/** "QR-42" de um sequencial (o contador da empresa é quem dá o sequencial) */
+export const codigoQr = (seq: number) => formatarNumero("qrcode", seq);
+
+/** Gera um QR Code novo ("QR-42") já vinculado ao equipamento — número pelo contador, sob trava. */
+export function gerarQrCodeEquipamento(empresaId: string, equipamentoId: string) {
+  return comNumero(empresaId, "qrcode", (codigo, tx) => tx.qrcode.create({ data: { empresaId, codigo, equipamentoId } }));
 }
 
-export function codigoQr(ano: number, seq: number) {
-  return `QR-${ano}-${String(seq).padStart(4, "0")}`;
-}
-
-/** Gera um QR Code novo ("QR-2026-0042") já vinculado ao equipamento. */
-export async function gerarQrCodeEquipamento(empresaId: string, equipamentoId: string) {
-  const ano = anoBR();
-  const seq = await proximoSequencialQr(empresaId, ano);
-  return prisma.qrcode.create({
-    data: { empresaId, codigo: codigoQr(ano, seq), equipamentoId },
+/** Gera um lote de QR Codes avulsos (sem equipamento), numerados em sequência pelo contador. */
+export function gerarLoteQrCodes(empresaId: string, quantidade: number) {
+  return prisma.$transaction(async (tx) => {
+    const codigos = await reservarNumeros(tx, empresaId, "qrcode", quantidade);
+    await tx.qrcode.createMany({ data: codigos.map((codigo) => ({ empresaId, codigo })) });
+    return codigos;
   });
 }

@@ -167,9 +167,9 @@ describe.skipIf(!URL_PG)("Contas a Receber — parcelas + baixa parcial (Postgre
     expect((await chamar("contas-receber/[id]", "DELETE", { id: c.id }, {})).status).toBe(409);
     // A numeração segue: a próxima conta não tropeça no "/3" das parcelas
     const prox = await novaConta(10, "2026-12-01");
-    expect(outra.numero).toMatch(/^CR-2026-\d{4}$/);
-    expect(prox.numero).toMatch(/^CR-2026-\d{4}$/);
-    expect(Number(prox.numero.split("-")[2])).toBe(Number(outra.numero.split("-")[2]) + 1);
+    expect(outra.numero).toMatch(/^CR-\d+$/);
+    expect(prox.numero).toMatch(/^CR-\d+$/);
+    expect(Number(prox.numero.split("-")[1])).toBe(Number(outra.numero.split("-")[1]) + 1);
   });
 
   it("Nova cobrança já parcelada: conta + parcelas na mesma transação; plano errado não grava nada", async () => {

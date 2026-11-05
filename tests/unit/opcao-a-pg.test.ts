@@ -175,7 +175,7 @@ describe.skipIf(!URL_PG)("Faturamento — Opção A ligada: P2 + P3 (PostgreSQL 
     const fat = await chamar("orcamentos/[id]/faturar", "POST", { id: f.id });
     expect(fat.status).toBe(201);
     const impF = await chamar("orcamentos/[id]/impacto", "GET", { id: f.id });
-    expect(impF.json.bloqueio).toMatch(/^Este orçamento já foi faturado \(fatura \d{4}-\d{4}\)\. Cancele a fatura no Financeiro/);
+    expect(impF.json.bloqueio).toMatch(/^Este orçamento já foi faturado \(fatura \d+\)\. Cancele a fatura no Financeiro/);
     expect((await chamar("orcamentos/[id]", "DELETE", { id: f.id })).status).toBe(409);
     expect((await prisma.orcamento.findUnique({ where: { id: f.id } })).status).toBe("APROVADO");
 

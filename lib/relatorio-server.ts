@@ -5,10 +5,10 @@ const SELECT_EQUIP_RELATORIO = {
   id: true, tipo: true, marca: true, modelo: true, numeroSerie: true, localizacao: true,
   setor: true, capacidade: true, patrimonio: true, nome: true, tipoEquipamento: { select: { nome: true } },
 } as const;
-import { gerarNumeroRelatorio } from "@/lib/utils";
 import { adicionaisDe, blocosAtendidos, SELECT_ADICIONAIS, SELECT_CHECKLIST, SELECT_FOTOS } from "@/lib/relatorio-os/dados";
 import { tokenRelatorioNoFormato } from "@/lib/relatorio-atividade-link";
 import { partesBR } from "@/lib/fuso";
+import { comNumero } from "@/lib/numeracao-server";
 
 /** O que o relatório precisa para montar os blocos dos equipamentos ATENDIDOS (checklist, fotos, observação). */
 const INCLUDE_ATENDIMENTO = {
@@ -51,13 +51,6 @@ export async function gerarRelatoriosDaOs(osId: string, empresaId: string) {
   const mesReferencia = ref.mes + 1;
   const anoReferencia = ref.ano;
 
-  // Sequencial derivado do maior número de relatório do ano de referência (evita colisão entre anos)
-  const ultimoRel = await prisma.relatorioOs.findFirst({
-    where: { empresaId, numero: { startsWith: `REL-${anoReferencia}-` } },
-    orderBy: { numero: "desc" },
-    select: { numero: true },
-  });
-  let seq = ultimoRel ? Number(ultimoRel.numero.split("-")[2]) : 0;
   let criados = 0;
 
   // Relatórios individuais por atividade concluída
@@ -65,14 +58,14 @@ export async function gerarRelatoriosDaOs(osId: string, empresaId: string) {
   for (const a of atividadesConcluidas) {
     const jaTem = os.relatorios.some((r) => r.escopo === "ATIVIDADE" && r.atividadeId === a.id);
     if (jaTem) continue;
-    seq++;
-    await prisma.relatorioOs.create({
+    // Número pelo contador da empresa (rótulo = ano de referência), sob trava, na transação do INSERT
+    await comNumero(empresaId, "relatorio_os", (numero, tx) => tx.relatorioOs.create({
       data: {
         empresaId,
         ordemServicoId: os.id,
         atividadeId: a.id,
         contratoId: os.contratoId,
-        numero: gerarNumeroRelatorio(seq, anoReferencia),
+        numero,
         tipo: "MANUTENCAO",
         escopo: "ATIVIDADE",
         resumoAutomatico: resumoAtividade(a),
@@ -81,21 +74,20 @@ export async function gerarRelatoriosDaOs(osId: string, empresaId: string) {
         status: "RASCUNHO",
         tokenPublico: crypto.randomUUID(),
       },
-    });
+    }));
     criados++;
   }
 
   // Relatório geral consolidado
   const temGeral = os.relatorios.some((r) => r.escopo === "GERAL");
   if (!temGeral) {
-    seq++;
     const resumoGeral = `${os.atividades.length} atividade(s) · ${atividadesConcluidas.length} concluída(s)`;
-    await prisma.relatorioOs.create({
+    await comNumero(empresaId, "relatorio_os", (numero, tx) => tx.relatorioOs.create({
       data: {
         empresaId,
         ordemServicoId: os.id,
         contratoId: os.contratoId,
-        numero: gerarNumeroRelatorio(seq, anoReferencia),
+        numero,
         tipo: "PMOC",
         escopo: "GERAL",
         resumoAutomatico: resumoGeral,
@@ -104,7 +96,7 @@ export async function gerarRelatoriosDaOs(osId: string, empresaId: string) {
         status: "RASCUNHO",
         tokenPublico: crypto.randomUUID(),
       },
-    });
+    }));
     criados++;
   }
 

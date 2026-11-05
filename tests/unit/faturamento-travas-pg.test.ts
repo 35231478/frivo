@@ -152,7 +152,7 @@ describe.skipIf(!URL_PG)("Faturamento — travas C6/C7 e retenções (PostgreSQL
     });
     const r = await manual({ ordemServicoId: os.id });
     expect(r.status).toBe(409);
-    expect(r.json.erro).toMatch(/já está faturado na medição MED-2026-\d{4}/);
+    expect(r.json.erro).toMatch(/já está faturado na medição MED-\d+/);
 
     const orc = await novoOrcamento(90);
     await manual({ orcamentoId: orc.id }).then((x) => expect(x.status).toBe(201));
@@ -212,7 +212,7 @@ describe.skipIf(!URL_PG)("Faturamento — travas C6/C7 e retenções (PostgreSQL
     expect(Number(doOrc[0].valor)).toBe(808.5);
     expect(await vivas({ medicaoId: g.json.id })).toHaveLength(1);
     expect((await eventos(prev.id))[0][0]).toBe("FATURADA");
-    expect((await eventos(prev.id))[0][1]).toMatch(/^Previsão do orçamento virou a cobrança da medição MED-2026-\d{4} \(R\$\s?708,50 → R\$\s?808,50\)\.$/);
+    expect((await eventos(prev.id))[0][1]).toMatch(/^Previsão do orçamento virou a cobrança da medição MED-\d+ \(R\$\s?708,50 → R\$\s?808,50\)\.$/);
 
     expect((await acao(g.json.id, "CANCELAR")).status).toBe(200);
     const volta = await prisma.contaReceber.findUnique({ where: { id: prev.id } });

@@ -5,15 +5,15 @@
  */
 import { round2, versaoCliente, type EntradaCalculo } from "@/lib/orcamentos/calculo";
 
-/** "MED-2026-0012" → "2026-0012" */
+/** "MED-21" → "21" (formato novo); "MED-2026-0012" → "2026-0012" (antigo) */
 export const numeroFatura = (numero: string) => numero.replace(/^MED-/, "");
 
-/** Como a medição aparece para quem lê: "Fatura 2026-0012" (avulsa) ou "Medição MED-2026-0012" */
+/** Como a medição aparece para quem lê: "Fatura 21" (avulsa) ou "Medição MED-21" */
 export function rotuloMedicao(m: { numero: string; avulsa?: boolean | null }) {
   return m.avulsa ? `Fatura ${numeroFatura(m.numero)}` : `Medição ${m.numero}`;
 }
 
-/** Referência na discriminação da NFS-e: "Fatura nº 2026-0012" ou "Medição MED-2026-0012" */
+/** Referência na discriminação da NFS-e: "Fatura nº 21" ou "Medição MED-21" */
 export function referenciaNota(m: { numero: string; avulsa?: boolean | null }) {
   return m.avulsa ? `Fatura nº ${numeroFatura(m.numero)}` : `Medição ${m.numero}`;
 }

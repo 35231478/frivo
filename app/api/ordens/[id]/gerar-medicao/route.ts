@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
-import { gerarNumeroMedicao } from "@/lib/utils";
 import { itensFaturaveisDaOs, osJaFaturada, travarParaFaturar } from "@/lib/faturamento-os";
 import { partesBR } from "@/lib/fuso";
+import { proximoNumero } from "@/lib/numeracao-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -67,8 +67,8 @@ export async function POST(_: NextRequest, { params }: Params) {
   const r = await prisma.$transaction(async (tx) => {
     const travadas = await travarParaFaturar(tx, { osIds: [os.id] });
     if (travadas.os.length) return { id: travadas.os[0].medicao.id, jaExistia: true };
-    const sequencial = (await tx.medicao.count({ where: { empresaId } })) + 1;
-    const numero = gerarNumeroMedicao(sequencial, ano);
+    // Número pelo contador da empresa, sob trava (nunca "total + 1", que repetia número)
+    const numero = await proximoNumero(tx, empresaId, "medicao");
     const medicao = await tx.medicao.create({
       data: {
         empresaId,

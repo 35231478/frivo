@@ -52,12 +52,13 @@ const num = (v: unknown) => (v == null ? null : Number(v));
 const STATUS_OS = ["ABERTA", "AGUARDANDO_ATENDIMENTO", "AGENDADA", "EM_ANDAMENTO", "PAUSADA", "AGUARDANDO_PECA", "CONCLUIDA", "CANCELADA"] as const;
 const ABERTAS = ["ABERTA", "AGUARDANDO_ATENDIMENTO", "AGENDADA", "EM_ANDAMENTO", "PAUSADA", "AGUARDANDO_PECA"] as const;
 
-/** "OS-2026-0107", "0107" ou "107" → filtro pelo número da OS (ou do chamado), sempre na empresa. */
+/** "OS-107", "OS-2026-0107", "0107" ou "107" → filtro pelo número da OS (ou do chamado), sempre na empresa. */
 function filtroNumero(numero: string, empresaId: string) {
   const n = numero.trim().toUpperCase();
-  if (/^\d{1,6}$/.test(n)) {
-    const sufixo = `-${n.padStart(4, "0")}`;
-    return { empresaId, OR: [{ numero: { endsWith: sufixo } }, { chamadoNumero: { endsWith: sufixo } }] };
+  if (/^\d{1,9}$/.test(n)) {
+    // formato novo (OS-107) e antigo (OS-2026-0107): o sequencial é o que vem depois do último hífen
+    const sufixos = [...new Set([`-${String(Number(n))}`, `-${n.padStart(4, "0")}`])];
+    return { empresaId, OR: sufixos.flatMap((s) => [{ numero: { endsWith: s } }, { chamadoNumero: { endsWith: s } }]) };
   }
   return { empresaId, OR: [{ numero: n }, { chamadoNumero: n }] };
 }
@@ -152,7 +153,7 @@ const textoCurto = (max: number) => z.string().trim().min(1).max(max);
 export const FERRAMENTAS: Ferramenta[] = [
   {
     nome: "consultar_os",
-    descricao: "Detalhes de UMA ordem de serviço pelo número (ex.: OS-2026-0107, 0107 ou 107; também aceita nº de chamado CHM-...): cliente, local, equipamentos, atividades, execução, técnicos/equipe/veículo, peças/serviços, fotos/anexos, status e datas. Valores só aparecem se o perfil puder ver o financeiro.",
+    descricao: "Detalhes de UMA ordem de serviço pelo número (ex.: OS-107, OS-2026-0107, 0107 ou 107; também aceita nº de chamado CHM-...): cliente, local, equipamentos, atividades, execução, técnicos/equipe/veículo, peças/serviços, fotos/anexos, status e datas. Valores só aparecem se o perfil puder ver o financeiro.",
     entrada: z.object({ numero: textoCurto(40) }).strict(),
     schema: { type: "object", properties: { numero: { type: "string", description: "Número da OS ou do chamado" } }, required: ["numero"], additionalProperties: false },
     exige: [["ordens", "visualizar"]],

@@ -5,7 +5,6 @@ import { registrarEventoCR } from "@/lib/financeiro/conta-receber-server";
 import { z } from "zod";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { proximoNumeroContaReceber } from "@/lib/financeiro-server";
-import { anoBR } from "@/lib/fuso";
 import { ErroConta, parcelarConta, planoSchema } from "@/lib/financeiro/parcelas-server";
 
 const schema = z.object({
@@ -46,7 +45,7 @@ export async function POST(req: NextRequest) {
   } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
   const parcelado = (d.parcelas?.length ?? 0) > 1;
-  const numero = await proximoNumeroContaReceber(empresaId, anoBR());
+  const numero = await proximoNumeroContaReceber(empresaId);
   const dados = {
       empresaId,
       clienteId: d.clienteId,

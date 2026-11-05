@@ -4,9 +4,9 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { respostaRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { medicaoSchema } from "@/lib/validations";
-import { gerarNumeroMedicao } from "@/lib/utils";
 import { calcularTotaisMedicao } from "@/lib/medicao-helpers";
-import { anoBR, periodoInstanteBR } from "@/lib/fuso";
+import { periodoInstanteBR } from "@/lib/fuso";
+import { proximoNumero } from "@/lib/numeracao-server";
 
 export async function GET(req: NextRequest) {
   const guard = await exigirPermissao("financeiro", "medicoes");
@@ -80,14 +80,6 @@ export async function POST(req: NextRequest) {
     ]);
   } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
-  const ano = data.ano ?? anoBR();
-  const ultimaMed = await prisma.medicao.findFirst({
-    where: { empresaId, numero: { startsWith: `MED-${ano}-` } },
-    orderBy: { numero: "desc" },
-    select: { numero: true },
-  });
-  const seq = (ultimaMed ? Number(ultimaMed.numero.split("-")[2]) : 0) + 1;
-  const numero = gerarNumeroMedicao(seq, ano);
   const tokenPublico = crypto.randomUUID();
 
   const totais = calcularTotaisMedicao(data.itens, data.descontoValor, data.descontoPercent);
@@ -113,6 +105,8 @@ export async function POST(req: NextRequest) {
     });
     const ja = [...travadas.os, ...travadas.orcamentos][0];
     if (ja) return { conflito: `Um item desta medição já está faturado na medição ${ja.medicao.numero}. Cancele-a antes de faturar de novo.` };
+    // Número pelo contador da empresa, sob trava, na mesma transação do INSERT
+    const numero = await proximoNumero(tx, empresaId, "medicao");
     const medicao = await tx.medicao.create({
       data: {
         empresaId,

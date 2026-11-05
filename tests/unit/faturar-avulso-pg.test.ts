@@ -141,7 +141,7 @@ describe.skipIf(!URL_PG)("Faturar (avulso) + retenções herdadas do serviço (P
 
     const r = await faturarOrc(orc.id);
     expect(r.status).toBe(201);
-    expect(r.json).toMatchObject({ jaExistia: false, rotulo: expect.stringMatching(/^Fatura 2026-\d{4}$/) });
+    expect(r.json).toMatchObject({ jaExistia: false, rotulo: expect.stringMatching(/^Fatura \d+$/) });
     const m = await medicao(r.json.id);
     expect(m).toMatchObject({ empresaId: "e1", clienteId: "c1", tipo: "ADICIONAL", avulsa: true, status: "PC_RECEBIDO", valorRetencoes: expect.anything() });
     expect(m.dataAprovacao).toBeTruthy();

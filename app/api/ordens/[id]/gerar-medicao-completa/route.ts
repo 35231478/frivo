@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
-import { gerarNumeroRelatorio } from "@/lib/utils";
 import { criarMedicaoDeRelatorio } from "@/lib/financeiro-server";
 import { osJaFaturada } from "@/lib/faturamento-os";
 import { partesBR } from "@/lib/fuso";
+import { comNumero } from "@/lib/numeracao-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -61,13 +61,13 @@ export async function POST(_: NextRequest, { params }: Params) {
   // Reaproveita um relatório MEDICAO_COMPLETA sem medição viva, ou cria um novo
   let relatorioId: string | null = os.relatorios.find((r) => !r.medicaoId || r.medicao?.status === "CANCELADA")?.id ?? null;
   if (!relatorioId) {
-    const seq = (await prisma.relatorioOs.count({ where: { empresaId } })) + 1;
-    const novo = await prisma.relatorioOs.create({
+    // Número pelo contador da empresa, sob trava (nunca "total + 1", que repetia número)
+    const novo = await comNumero(empresaId, "relatorio_os", (numero, tx) => tx.relatorioOs.create({
       data: {
         empresaId,
         ordemServicoId: os.id,
         contratoId: os.contratoId,
-        numero: gerarNumeroRelatorio(seq, ref.ano),
+        numero,
         tipo: "MEDICAO",
         escopo: "MEDICAO_COMPLETA",
         mesReferencia: ref.mes + 1,
@@ -76,7 +76,7 @@ export async function POST(_: NextRequest, { params }: Params) {
         status: "RASCUNHO",
         tokenPublico: crypto.randomUUID(),
       },
-    });
+    }));
     relatorioId = novo.id;
   }
 

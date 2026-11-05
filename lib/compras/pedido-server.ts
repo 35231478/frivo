@@ -5,26 +5,22 @@
  */
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { anoBR, chaveDiaCivil } from "@/lib/fuso";
+import { chaveDiaCivil } from "@/lib/fuso";
 import { permissoesDoUsuario } from "@/lib/permissoes";
+import { proximoNumero } from "@/lib/numeracao-server";
 import {
-  codigoPedidoCompra, origemDoPedido, pedidoEditavel, podeEditarPedido, podeEnviarPedido, podeVincularNf, temAcessoCompras,
+  origemDoPedido, pedidoEditavel, podeEditarPedido, podeEnviarPedido, podeVincularNf, temAcessoCompras,
   type NotaDoPedidoTela, type PedidoTela, type StatusPedido, type UltimaCompra, type UsuarioPedido,
 } from "@/lib/compras/pedido";
 
 type Tx = Prisma.TransactionClient | typeof prisma;
 
 /**
- * Próximo número do PC do ano ("PCI-2026-0147"), por empresa, pelo MAIOR sequencial já usado — a mesma
- * regra da OS e do orçamento. Nunca "total + 1" (colide depois de excluir) nem a ordem de texto.
+ * Próximo número do PC ("PCI-147") pelo contador da empresa (Configurações › Numeração de
+ * documentos), sob trava: dentro da transação recebida ou numa curta só para isso. Numeração contínua.
  */
-export async function proximoNumeroPedido(empresaId: string, ano = anoBR(), db: Tx = prisma): Promise<string> {
-  const prefixo = `PCI-${ano}-`;
-  const [r] = await db.$queryRaw<{ max: number | null }[]>`
-    SELECT MAX(CAST(split_part(numero, '-', 3) AS INTEGER)) AS max
-    FROM pedidos_compra_interno
-    WHERE empresa_id = ${empresaId} AND numero LIKE ${prefixo + "%"} AND split_part(numero, '-', 3) ~ '^[0-9]{1,9}$'`;
-  return codigoPedidoCompra(ano, (r?.max ?? 0) + 1);
+export function proximoNumeroPedido(empresaId: string, db: Tx = prisma): Promise<string> {
+  return db === prisma ? prisma.$transaction((tx) => proximoNumero(tx, empresaId, "pedido_compra")) : proximoNumero(db as Prisma.TransactionClient, empresaId, "pedido_compra");
 }
 
 /** Uma linha no histórico do pedido */

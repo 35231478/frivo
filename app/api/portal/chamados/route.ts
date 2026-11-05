@@ -6,7 +6,7 @@ import { chamadoPortalSchema } from "@/lib/validations";
 import { validarDataUrl, type ArquivoValidado } from "@/lib/anexos-server";
 import { TIPOS_IMAGEM } from "@/lib/anexos";
 import { conferirBloqueio, ipDaRequisicao, registrarTentativa } from "@/lib/acesso/limite";
-import { anoBR } from "@/lib/fuso";
+import { proximoNumero } from "@/lib/numeracao-server";
 
 const MAP_URGENCIA: Record<string, "NORMAL" | "ALTA" | "CRITICO"> = {
   NORMAL: "NORMAL", URGENTE: "ALTA", CRITICO: "CRITICO",
@@ -64,14 +64,14 @@ export async function POST(req: NextRequest) {
   }) ?? await prisma.usuario.findFirst({ where: { empresaId, ativo: true }, select: { id: true } });
   if (!gestor) return NextResponse.json({ erro: "Empresa sem usuário responsável" }, { status: 400 });
 
-  const ano = anoBR();
-  const numero = await proximoNumeroOs(empresaId, ano);
-  const totalChamados = await prisma.ordemServico.count({ where: { empresaId, origem: "PORTAL_CLIENTE" } });
-  const chamadoNumero = `CHM-${ano}-${String(totalChamados + 1).padStart(4, "0")}`;
-
   const descricao = (d.tipoProblema ? `[${d.tipoProblema}] ` : "") + d.descricao;
 
-  const os = await prisma.ordemServico.create({
+  // OS e chamado numerados pelo contador da empresa (sob trava, na mesma transação do INSERT):
+  // nunca "total + 1", que repetia número depois de uma exclusão
+  const os = await prisma.$transaction(async (tx) => {
+  const numero = await proximoNumeroOs(tx, empresaId);
+  const chamadoNumero = await proximoNumero(tx, empresaId, "chamado");
+  return tx.ordemServico.create({
     data: {
       empresaId,
       numero,
@@ -88,10 +88,11 @@ export async function POST(req: NextRequest) {
       anexos: fotos.length > 0 ? { create: fotos } : undefined,
     },
   });
-
-  await prisma.osHistorico.create({
-    data: { ordemServicoId: os.id, usuarioId: gestor.id, acao: "Chamado aberto pelo portal", detalhes: `${chamadoNumero} — ${sessao.user.name ?? "cliente"}` },
   });
 
-  return NextResponse.json({ id: os.id, chamadoNumero }, { status: 201 });
+  await prisma.osHistorico.create({
+    data: { ordemServicoId: os.id, usuarioId: gestor.id, acao: "Chamado aberto pelo portal", detalhes: `${os.chamadoNumero} — ${sessao.user.name ?? "cliente"}` },
+  });
+
+  return NextResponse.json({ id: os.id, chamadoNumero: os.chamadoNumero }, { status: 201 });
 }

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { exigirPermissao } from "@/lib/permissoes-server";
-import { gerarNumeroContrato } from "@/lib/utils";
-import { anoBR } from "@/lib/fuso";
+import { proximoNumero } from "@/lib/numeracao-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -45,17 +44,9 @@ export async function POST(_req: NextRequest, { params }: Params) {
       )]
     : [];
 
-  // Numeração CT-AAAA-NNN derivada do maior do ano
-  const ano = anoBR();
-  const ultimo = await prisma.contrato.findFirst({
-    where: { empresaId, numero: { startsWith: `CT-${ano}-` } },
-    orderBy: { numero: "desc" },
-    select: { numero: true },
-  });
-  const seq = (ultimo ? Number(ultimo.numero.split("-")[2]) : 0) + 1;
-  const numero = gerarNumeroContrato(seq);
-
   const contrato = await prisma.$transaction(async (tx) => {
+    // Número pelo contador da empresa, sob trava, na mesma transação do INSERT
+    const numero = await proximoNumero(tx, empresaId, "contrato");
     const novo = await tx.contrato.create({
       data: {
         empresaId,

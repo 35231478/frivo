@@ -27,7 +27,7 @@ import { criarProdutoComCodigo } from "@/lib/cadastros/codigos-server";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { formatarCpfCnpj, formatarData, gerarNumeroContaPagar } from "@/lib/utils";
+import { formatarCpfCnpj, formatarData } from "@/lib/utils";
 import { arred } from "@/lib/estoque/regras";
 import { movimentar } from "@/lib/estoque/servidor";
 import { ultimosCustos } from "@/lib/estoque/custo";
@@ -39,7 +39,7 @@ import { mensagemZod, parcelaSchema, type FinanceiroRascunho, type PrecoLinha } 
 import { lerBoleto } from "@/lib/financeiro/boleto";
 import { validarRefEmpresa } from "@/lib/ref-empresa";
 import { sugestoesDaNota, vincularNota } from "@/lib/compras/conciliacao-server";
-import { anoBR } from "@/lib/fuso";
+import { reservarNumeros } from "@/lib/numeracao-server";
 
 /** Recusa com status HTTP e dados extras (ex.: a nota que já existe). */
 export { LABEL_STATUS_NOTA };
@@ -443,9 +443,8 @@ export async function lancarNota({ empresaId, usuarioId, notaId, escolhas = [], 
     // 3) Contas a pagar: uma por parcela (padrão = as duplicatas; sem duplicata, uma à vista), com a
     //    classificação, a forma de pagamento e o boleto do rascunho
     const ajustadas = nota.parcelas != null;
-    const ano = anoBR();
-    const ultimo = await tx.contaPagar.findFirst({ where: { empresaId, numero: { startsWith: `CP-${ano}-` } }, orderBy: { numero: "desc" }, select: { numero: true } });
-    let seq = ultimo ? Number(ultimo.numero.split("-")[2]) : 0;
+    // Uma sequência de números pelo contador da empresa, sob trava (nunca duplica)
+    const numeros = await reservarNumeros(tx, empresaId, "conta_pagar", parcelas.length);
     const contas = [];
     for (const [i, p] of parcelas.entries()) {
       const valor = arred(p.valor);
@@ -453,7 +452,7 @@ export async function lancarNota({ empresaId, usuarioId, notaId, escolhas = [], 
       const deQual = parcelas.length > 1 ? `Parcela ${i + 1}/${parcelas.length}` : "Parcela única";
       contas.push(await tx.contaPagar.create({
         data: {
-          empresaId, numero: gerarNumeroContaPagar(++seq, ano),
+          empresaId, numero: numeros[i],
           fornecedorId: nota.fornecedorId, fornecedor: nota.fornecedor.nome, fornecedorCnpj: nota.fornecedor.documento ?? nota.emitenteCnpj,
           descricao: `NF ${nota.numero}/${nota.serie}${parcelas.length > 1 ? ` — parcela ${i + 1}/${parcelas.length}` : ""}`,
           valorTotal: valor, valorPago: 0, saldoRestante: valor, status: "PENDENTE", dataVencimento: new Date(`${p.vencimento}T12:00:00.000Z`),

@@ -555,8 +555,26 @@ model Empresa {
   emailConfig     EmailConfig?
 
   notasFiscais NotaFiscal[]
+  numeracoes   Numeracao[]
 
   @@map("empresas")
+}
+
+/// Numeração de documentos (Configurações): o PRÓXIMO número de cada tipo (orçamento, OS, contrato…)
+/// por empresa. Toda geração de número passa por aqui sob trava (lib/numeracao-server) e a sequência é
+/// contínua (não reinicia no ano). Sem linha = o próximo é o maior já usado + 1 (semeado no 1º uso).
+model Numeracao {
+  id           String   @id @default(cuid())
+  empresaId    String   @map("empresa_id")
+  /// "orcamento" | "os" | "chamado" | "contrato" | "medicao" | "pedido_compra" | "conta_receber" | "conta_pagar" | "relatorio_os" | "qrcode"
+  tipo         String
+  proximo      Int
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@unique([empresaId, tipo])
+  @@map("numeracoes")
 }
 
 // ─────────────────────────────────────────────

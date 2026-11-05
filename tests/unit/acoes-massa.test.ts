@@ -52,12 +52,16 @@ vi.mock("@/lib/prisma", () => {
       Object.assign(r, data); escrever(m, "update", r); return hidratar(m, r);
     },
     create: async ({ data }: any) => { const r = { id: `${m}-${++db.seq}`, ...data }; T(m).push(r); escrever(m, "create", r); return hidratar(m, r); },
+    findUnique: async ({ where }: any = {}) => { const w = Object.values(where).find((v) => v && typeof v === "object") ?? where; const r = T(m).find((x) => casa(x, w as Linha)); return r ? hidratar(m, r) : null; },
+    upsert: async ({ where, create, update }: any) => { const w = Object.values(where).find((v) => v && typeof v === "object") ?? where; const r = T(m).find((x) => casa(x, w as Linha)); if (r) { Object.assign(r, update); return r; } const novo = { id: `${m}-${++db.seq}`, ...create }; T(m).push(novo); return novo; },
   });
   const cache: Record<string, any> = {};
   const prisma: any = new Proxy({}, {
     get: (_t, m: string) => {
       if (m === "$transaction") return async (arg: any) => (typeof arg === "function" ? arg(prisma) : Promise.all(arg));
       if (m === "$queryRaw") return async () => [{ max: 0 }];
+      if (m === "$queryRawUnsafe") return async () => [{ max: 0 }]; // "maior usado" da numeração
+      if (m === "$executeRaw") return async () => 0; // trava (advisory lock) não faz nada aqui
       return (cache[m] ??= model(m));
     },
   });

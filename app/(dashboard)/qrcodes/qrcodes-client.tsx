@@ -8,7 +8,6 @@ import { Select } from "@/components/ui/select";
 import { QrCode, Printer, Link2, X, Plus } from "lucide-react";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { formatarData as formatarDataBR } from "@/lib/utils";
-import { anoBR } from "@/lib/fuso";
 
 type EquipamentoRef = { id: string; nome: string; local: string | null };
 type QrItem = {
@@ -22,11 +21,13 @@ type QrItem = {
 interface Props {
   lista: QrItem[];
   equipamentosLivres: { id: string; nome: string }[];
+  /** Próximo código pelo contador da empresa (Configurações › Numeração), ex.: QR-104 */
+  proximoCodigo: string;
 }
 
 const formatarData = (iso: string) => formatarDataBR(iso); // dia de Brasília
 
-export function QrcodesClient({ lista, equipamentosLivres }: Props) {
+export function QrcodesClient({ lista, equipamentosLivres, proximoCodigo }: Props) {
   const router = useRouter();
   // Gerar e vincular QR exigem "QR Codes › gerenciar" (mesma regra da API); ver/imprimir não.
   const podeGerenciar = usePermissoes().pode("qrcodes", "gerenciar");
@@ -154,7 +155,7 @@ export function QrcodesClient({ lista, equipamentosLivres }: Props) {
         </table>
       </div>
 
-      {modalGerar && <ModalGerar onClose={() => setModalGerar(false)} listaAtual={lista} onPronto={() => { setModalGerar(false); router.refresh(); }} />}
+      {modalGerar && <ModalGerar onClose={() => setModalGerar(false)} proximoCodigo={proximoCodigo} onPronto={() => { setModalGerar(false); router.refresh(); }} />}
       {vinculandoId && (
         <ModalVincular
           qrId={vinculandoId}
@@ -177,23 +178,21 @@ function Overlay({ children, onClose }: { children: React.ReactNode; onClose: ()
   );
 }
 
-function ModalGerar({ onClose, onPronto, listaAtual }: { onClose: () => void; onPronto: () => void; listaAtual: QrItem[] }) {
+function ModalGerar({ onClose, onPronto, proximoCodigo }: { onClose: () => void; onPronto: () => void; proximoCodigo: string }) {
   const [quantidade, setQuantidade] = useState(10);
   const [gerando, setGerando] = useState(false);
   const [erro, setErro] = useState("");
 
+  // O próximo vem do servidor (contador de Configurações › Numeração): a prévia só continua a sequência
   const proximo = useMemo(() => {
-    const ano = anoBR();
-    const prefixo = `QR-${ano}-`;
-    const max = listaAtual
-      .filter((q) => q.codigo.startsWith(prefixo))
-      .reduce((acc, q) => Math.max(acc, Number(q.codigo.split("-")[2]) || 0), 0);
-    return { ano, seq: max + 1, prefixo };
-  }, [listaAtual]);
+    const partes = proximoCodigo.split("-");
+    const seq = Number(partes.pop()) || 1; // o sequencial é o que vem depois do último hífen (QR-104)
+    return { prefixo: `${partes.join("-")}-`, seq };
+  }, [proximoCodigo]);
 
   const previa = useMemo(() => {
     const n = Math.min(Math.max(quantidade, 1), 3);
-    return Array.from({ length: n }, (_, i) => `${proximo.prefixo}${String(proximo.seq + i).padStart(4, "0")}`);
+    return Array.from({ length: n }, (_, i) => `${proximo.prefixo}${proximo.seq + i}`);
   }, [quantidade, proximo]);
 
   async function gerar() {
@@ -226,7 +225,7 @@ function ModalGerar({ onClose, onPronto, listaAtual }: { onClose: () => void; on
           <p className="text-ink-muted text-xs mb-1.5">Os códigos gerados serão:</p>
           <ul className="font-mono text-ink space-y-0.5">
             {previa.map((c) => <li key={c}>{c}</li>)}
-            {quantidade > 3 && <li className="text-ink-subtle">… até {`${proximo.prefixo}${String(proximo.seq + quantidade - 1).padStart(4, "0")}`}</li>}
+            {quantidade > 3 && <li className="text-ink-subtle">… até {`${proximo.prefixo}${proximo.seq + quantidade - 1}`}</li>}
           </ul>
         </div>
       </div>

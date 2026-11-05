@@ -178,6 +178,17 @@ export function criarPrisma(db: Banco, relacoes: Relacoes = {}, aninhadas: Aninh
     get: (_t, m: string) => {
       if (m === "$transaction") return async (arg: any) => (typeof arg === "function" ? arg(prisma) : Promise.all(arg));
       if (m === "$queryRaw") return async () => [{ max: 0 }];
+      // O "maior já usado" da numeração (lib/numeracao-server): lê a tabela em memória pela regex recebida
+      if (m === "$queryRawUnsafe") return async (sql: string, empresaId?: string, regex?: string) => {
+        const tabela = /FROM "(\w+)"/.exec(sql)?.[1]; const coluna = /split_part\("(\w+)"/.exec(sql)?.[1];
+        const modelo = { orcamentos: "orcamento", ordens_servico: "ordemServico", contratos: "contrato", medicoes: "medicao", pedidos_compra_interno: "pedidoCompraInterno", contas_receber: "contaReceber", contas_pagar: "contaPagar", relatorios_os: "relatorioOs", qrcodes: "qrcode" }[tabela ?? ""];
+        const campo = coluna?.replace(/_(\w)/g, (_, c) => c.toUpperCase());
+        if (!modelo || !campo || !regex) return [{ max: 0 }];
+        const re = new RegExp(regex);
+        let max = 0;
+        for (const r of T(modelo)) { const v = r[campo]; if (r.empresaId === empresaId && typeof v === "string" && re.test(v)) max = Math.max(max, Number(v.split("/")[0].split("-")[2])); }
+        return [{ max }];
+      };
       if (m === "$executeRaw") return async () => 0; // travas (advisory lock) não fazem nada aqui
       if (typeof m !== "string" || m === "then") return undefined;
       return (cache[m] ??= model(m));

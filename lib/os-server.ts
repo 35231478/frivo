@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { anoBR } from "@/lib/fuso";
 
 /** A OS existe e é da empresa? (toda rota de /api/ordens/[id]/** deve checar antes de agir) */
 export async function osDaEmpresa(id: string, empresaId: string) {
@@ -23,16 +22,5 @@ export async function motivoBloqueioInativacao(osId: string): Promise<string | n
   return null;
 }
 
-/**
- * Próximo número de OS do ano ("OS-2026-0042"), pelo MAIOR sequencial já usado.
- * (Contar as OS e somar 1 colide com números existentes e derrubava a abertura de
- * chamado pelo portal/QR com erro de número duplicado.)
- */
-export async function proximoNumeroOs(empresaId: string, ano = anoBR()): Promise<string> {
-  const prefixo = `OS-${ano}-`;
-  const [r] = await prisma.$queryRaw<{ max: number | null }[]>`
-    SELECT MAX(CAST(split_part(numero, '-', 3) AS INTEGER)) AS max
-    FROM ordens_servico
-    WHERE empresa_id = ${empresaId} AND numero LIKE ${prefixo + "%"} AND split_part(numero, '-', 3) ~ '^[0-9]{1,9}$'`;
-  return `${prefixo}${String((r?.max ?? 0) + 1).padStart(4, "0")}`;
-}
+/** O número da OS vem do contador da empresa: ver `proximoNumeroOs` em lib/os/abertura (um helper só). */
+export { proximoNumeroOs } from "@/lib/os/abertura";

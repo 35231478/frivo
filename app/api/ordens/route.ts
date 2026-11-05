@@ -83,9 +83,9 @@ export async function POST(req: NextRequest) {
     equipamentoIds = r.validos;
   }
 
-  const numero = await proximoNumeroOs(empresaId);
-
   const os = await prisma.$transaction(async (tx) => {
+   // Número pelo contador da empresa, sob trava, na mesma transação do INSERT
+   const numero = await proximoNumeroOs(tx, empresaId);
    const criada = await tx.ordemServico.create({
     data: {
       empresaId,

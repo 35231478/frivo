@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  CICLO_PEDIDO, LABEL_STATUS_PEDIDO, MOTIVO_AVULSO_PADRAO, codigoPedidoCompra, faltaParaEnviar, mensagemFornecedor, mudancasPedido,
+  CICLO_PEDIDO, LABEL_STATUS_PEDIDO, MOTIVO_AVULSO_PADRAO, faltaParaEnviar, mensagemFornecedor, mudancasPedido,
   origemDoPedido, pedidoEditavel, pedidoEncerrado, podeEditarPedido, podeEnviarPedido, podeVerPedido, statusAposEnvio, temAcessoCompras,
   textoUltimaCompra, totalEstimadoPedido, valorSugerido, type PedidoComparavel,
 } from "@/lib/compras/pedido";
@@ -29,9 +29,7 @@ describe("ciclo e status automático", () => {
     for (const s of ["CONCLUIDO", "CANCELADO", "ENTREGUE"]) { expect(pedidoEncerrado(s)).toBe(true); expect(pedidoEditavel(s)).toBe(false); }
     for (const s of ["SOLICITADO", "COTANDO", "PARCIAL", "COMPRADO"]) { expect(pedidoEncerrado(s)).toBe(false); expect(pedidoEditavel(s)).toBe(true); }
   });
-  it("número PCI-AAAA-NNNN (4 dígitos, cresce depois de 9999)", () => {
-    expect(codigoPedidoCompra(2026, 7)).toBe("PCI-2026-0007");
-    expect(codigoPedidoCompra(2026, 12345)).toBe("PCI-2026-12345");
+  it("motivo padrão do pedido avulso", () => {
     expect(MOTIVO_AVULSO_PADRAO).toBe("Reposição de estoque");
   });
 });

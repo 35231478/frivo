@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { QrcodesClient } from "./qrcodes-client";
+import { espiarProximo } from "@/lib/numeracao-server";
 
 export const metadata: Metadata = { title: "QR Codes" };
 
@@ -9,7 +10,7 @@ export default async function QrcodesPage() {
   const session = await auth();
   const empresaId = session!.user!.empresaId;
 
-  const [qrcodes, equipamentosLivres] = await Promise.all([
+  const [qrcodes, equipamentosLivres, proximoCodigo] = await Promise.all([
     prisma.qrcode.findMany({
       where: { empresaId },
       include: {
@@ -22,6 +23,7 @@ export default async function QrcodesPage() {
       select: { id: true, marca: true, modelo: true, localizacao: true, unidade: { select: { nome: true } } },
       orderBy: [{ marca: "asc" }, { modelo: "asc" }],
     }),
+    espiarProximo(empresaId, "qrcode"), // o contador de Configurações › Numeração (só espia, não consome)
   ]);
 
   const lista = qrcodes.map((q) => ({
@@ -43,5 +45,5 @@ export default async function QrcodesPage() {
     nome: `${e.marca} ${e.modelo}${e.unidade?.nome ? ` — ${e.unidade.nome}` : ""}`,
   }));
 
-  return <QrcodesClient lista={lista} equipamentosLivres={equipamentos} />;
+  return <QrcodesClient lista={lista} equipamentosLivres={equipamentos} proximoCodigo={proximoCodigo} />;
 }

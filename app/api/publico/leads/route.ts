@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { proximoCodigoOrcamento } from "@/lib/orcamentos/numero-server";
 import { enviarEmailInterno } from "@/lib/email";
 import { formatarData } from "@/lib/utils";
-import { anoBR } from "@/lib/fuso";
+import { comNumero } from "@/lib/numeracao-server";
 
 /**
  * Endpoint público de lead vindo do site institucional (calculadora de BTU).
@@ -264,13 +263,9 @@ export async function POST(req: Request) {
       `⚠️ Valores de referência — orçamento definitivo após visita técnica.`,
     ].join("\n");
 
-    // 7. Orçamento com numeração ORC-YYYY-NNNN (retry em colisão de unique)
-    const ano = anoBR();
-    let orcamento!: { id: string; codigo: string };
-    for (let tentativa = 0; ; tentativa++) {
-      const codigo = await proximoCodigoOrcamento(empresaId, ano);
-      try {
-        orcamento = await prisma.orcamento.create({
+    // 7. Orçamento numerado pelo contador da empresa, sob trava (nunca duplica)
+    const orcamento = await comNumero(empresaId, "orcamento", (codigo, tx) =>
+        tx.orcamento.create({
           data: {
             empresaId,
             codigo,
@@ -288,14 +283,7 @@ export async function POST(req: Request) {
             servicos: { create: servicosCreate },
           },
           select: { id: true, codigo: true },
-        });
-        break;
-      } catch (e: unknown) {
-        const code = (e as { code?: string })?.code;
-        if (code === "P2002" && tentativa < 5) continue; // colisão → próximo número
-        throw e;
-      }
-    }
+        }));
 
     // 7. Notificação interna (best-effort — não bloqueia o sucesso do lead)
     const dest = process.env.TERMOFRIO_EMAIL_NOTIFICACAO;
