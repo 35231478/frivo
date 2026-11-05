@@ -410,3 +410,44 @@ describe("menu lateral", () => {
     expect(sem).not.toContain('href="/financeiro/notas-fiscais"');
   });
 });
+
+describe("seleção de linhas + painel de totais", () => {
+  it("sem seleção: totais do período (como os cards); 3 de 5 marcadas: só a soma delas por situação, realce na linha e no cartão; some ao desmarcar; sem notas não há painel", async () => {
+    await tela();
+    const valor = (k: string) => txt($(`[data-painel-linha=${k}] [data-painel-valor]`));
+    const qtd = (k: string) => txt($(`[data-painel-linha=${k}] [data-painel-qtd]`));
+    const painel = () => $("[data-painel-totais]")!;
+    expect(painel().getAttribute("data-modo")).toBe("periodo");
+    expect(txt($("[data-painel-titulo]"))).toBe("Totais do período");
+    expect(txt($("[data-painel-subtitulo]"))).toBe("Março de 2026");
+    expect(txt($("[data-painel-total]"))).toBe("R$ 1.630,00");
+    expect($$("[data-painel-linha]").map((l) => l.getAttribute("data-painel-linha"))).toEqual(["transmissao", "emitidas", "falha", "canceladas"]);
+    expect([valor("emitidas"), qtd("emitidas"), valor("falha")]).toEqual(["R$ 1.630,00", "2 notas", "R$ 300,00"]);
+
+    await clicar($("[data-tabela] [data-selecao-linha=nA]"));   // autorizada 180
+    await clicar($("[data-tabela] [data-selecao-linha=nC]"));   // processando 70
+    await clicar($("[data-cartoes] [data-selecao-linha=nD]"));  // rejeitada 300 (pelo cartão)
+    expect(painel().getAttribute("data-modo")).toBe("selecao");
+    expect(txt($("[data-painel-titulo]"))).toBe("Total dos 3 notas selecionadas");
+    expect(txt($("[data-painel-total]"))).toBe("R$ 180,00"); // total emitido: só a autorizada
+    expect([valor("transmissao"), qtd("transmissao")]).toEqual(["R$ 70,00", "1 nota"]);
+    expect([valor("emitidas"), qtd("emitidas")]).toEqual(["R$ 180,00", "1 nota"]);
+    expect([valor("falha"), qtd("falha")]).toEqual(["R$ 300,00", "1 nota"]);
+    expect([valor("canceladas"), qtd("canceladas")]).toEqual(["R$ 0,00", "0 notas"]);
+    expect($$("[data-tabela] tr[data-selecionada]").map((tr) => tr.getAttribute("data-linha"))).toEqual(["nA", "nC", "nD"]);
+    expect($$("[data-cartoes] li[data-selecionada]").map((li) => li.getAttribute("data-nota"))).toEqual(["nA", "nC", "nD"]);
+    expect($("[data-tabela] tr[data-linha=nA]")!.className).toContain("bg-primary-50");
+    expect($("[data-cartoes] [data-nota=nA]")!.className).toContain("bg-primary-50");
+    expect($("[data-tabela] tr[data-linha=nB]")!.hasAttribute("data-selecionada")).toBe(false);
+
+    await clicar($("[data-tabela] [data-selecao-linha=nA]"));
+    expect(txt($("[data-painel-titulo]"))).toBe("Total dos 2 notas selecionadas");
+    expect(txt($("[data-painel-total]"))).toBe("R$ 0,00");
+    await clicar($("[data-tabela] [data-selecao-linha=nC]"));
+    await clicar($("[data-tabela] [data-selecao-linha=nD]"));
+    expect(painel().getAttribute("data-modo")).toBe("periodo");
+
+    await tela(DADOS({ notas: [], total: 0 }));
+    expect($("[data-painel-totais]")).toBeNull();
+  });
+});

@@ -8,6 +8,7 @@ import { CARDS_PERIODO_ORCAMENTOS, condCardPeriodoOrcamentos, condPeriodoCriacao
 import { lerPeriodo, periodoTela } from "@/lib/periodo";
 import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
 import { PeriodoCardsOrcamentos, VerTodoPeriodo, type ResumoOrcamentos } from "@/components/orcamento/orcamentos-periodo";
+import { PainelTotaisOrcamentos } from "@/components/orcamento/painel-totais-orcamentos";
 import { cn, formatarData, formatarMoeda, LABELS_TIPO_ORCAMENTO, CLASSE_TIPO_ORCAMENTO } from "@/lib/utils";
 import { LABELS_ETAPA, bloqueioEnvio, dataDaEtapa, etapaCiclo } from "@/lib/orcamentos/ciclo";
 import { AcoesLinhaOrcamento } from "@/components/orcamento/acoes-linha-orcamento";
@@ -190,6 +191,10 @@ export default async function OrcamentosPage({
         </>
         )}
         </ConteudoUrl>
+        {orcamentos.length > 0 && (
+          <PainelTotaisOrcamentos periodo={periodoTela(periodo)} resumo={resumo}
+            itens={orcamentos.map((o) => ({ id: o.id, status: o.status, validadeEm: o.validadeEm ? new Date(o.validadeEm).toISOString() : null, totalGeral: Number(o.totalGeral) }))} />
+        )}
         <div className="px-4 py-3 border-t border-surface-border">
           <PaginacaoUrl total={total} pagina={pagina} porPagina={porPagina} rotulo="orçamentos" />
         </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -20,6 +20,9 @@ import { useListagemUrl } from "@/components/listagem/use-listagem-url";
 import { cn, formatarData, formatarDataHora, formatarMoeda } from "@/lib/utils";
 import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
 import { TabelaPro } from "@/components/listagem/tabela-pro";
+import { CheckboxSelecao, CheckboxSelecaoPagina, SelecaoLinhasProvider, useSelecaoLinhas } from "@/components/listagem/selecao-linhas";
+import { PainelTotais, type LinhaTotal } from "@/components/listagem/painel-totais";
+import { CHAVES_NOTAS, totaisNotas } from "@/lib/listagem/totais-selecao";
 import { formatarDocumento } from "@/lib/documento";
 import { LABEL_AMBIENTE } from "@/lib/nfse/regras";
 import {
@@ -34,8 +37,16 @@ import type { DadosCentral, DetalheNota, NotaLinha } from "@/lib/nfse/central-se
  * (tabela no desktop, cartões no celular) e, por nota, só as ações que funcionam no status dela.
  */
 export function NotasCentralView({ dados }: { dados: DadosCentral }) {
+  // Seleção da página (realce da linha + painel "Total dos N selecionados")
+  return <SelecaoLinhasProvider idsPagina={dados.notas.map((n) => n.id)}><NotasCentralCorpo dados={dados} /></SelecaoLinhasProvider>;
+}
+
+function NotasCentralCorpo({ dados }: { dados: DadosCentral }) {
   const router = useRouter();
   const { filtros, resumo } = dados;
+  const { selecionados } = useSelecaoLinhas();
+  const selecionadas = useMemo(() => dados.notas.filter((n) => selecionados.has(n.id)), [dados.notas, selecionados]);
+  const totaisSelecao = useMemo(() => totaisNotas(selecionadas), [selecionadas]);
   const { busca, setBusca, navegar, pendente } = useListagemUrl({ chave: "notas-fiscais", qAtual: filtros.q, paramBusca: "q", lembrarFiltros: false });
   const [detalheId, setDetalheId] = useState<string | null>(null);
   const [consultando, setConsultando] = useState<string | null>(null);
@@ -109,6 +120,7 @@ export function NotasCentralView({ dados }: { dados: DadosCentral }) {
                 tela="notas-fiscais"
                 atributos={{ "data-tabela": true }}
                 colunas={[
+                  { id: "sel", titulo: "Selecionar a página", fixa: true, largura: 36, cabecalho: <CheckboxSelecaoPagina />, classe: "pl-3" },
                   { id: "situacao", titulo: "Situação", largura: 200, obrigatoria: true },
                   { id: "numero", titulo: "Número", largura: 96 },
                   { id: "data", titulo: "Data", largura: 96 },
@@ -122,6 +134,7 @@ export function NotasCentralView({ dados }: { dados: DadosCentral }) {
                   id: n.id,
                   atributos: { "data-nota": n.id, "data-status": n.status },
                   celulas: {
+                    sel: <CheckboxSelecao id={n.id} rotulo={n.numero ? `nota ${n.numero}` : n.tomadorNome} />,
                     situacao: <Situacao n={n} />,
                     numero: <span className={cn(PLANILHA.codigo, "font-normal text-ink")}>{n.numero ?? "—"}</span>,
                     data: <span className={cn(PLANILHA.data, PLANILHA.apagado)}><DataNota n={n} /></span>,
@@ -143,9 +156,10 @@ export function NotasCentralView({ dados }: { dados: DadosCentral }) {
             {/* Celular: cartões (nada de tabela cortada) */}
             <ul className="md:hidden divide-y divide-surface-border" data-cartoes>
               {dados.notas.map((n) => (
-                <li key={n.id} className="p-3 space-y-2" data-nota={n.id} data-status={n.status}>
+                <li key={n.id} className={cn("p-3 space-y-2", selecionados.has(n.id) && "bg-primary-50")} data-nota={n.id} data-status={n.status} data-selecionada={selecionados.has(n.id) ? "" : undefined}>
                   <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 space-y-1">
+                    <div className="pt-0.5 w-4 shrink-0"><CheckboxSelecao id={n.id} rotulo={n.numero ? `nota ${n.numero}` : n.tomadorNome} /></div>
+                    <div className="min-w-0 flex-1 space-y-1">
                       <Situacao n={n} />
                       <p className="font-medium text-ink truncate">{n.tomadorNome}</p>
                       <p className="text-xs text-ink-subtle">{formatarDocumento(n.tomadorCpfCnpj)}</p>
@@ -163,6 +177,16 @@ export function NotasCentralView({ dados }: { dados: DadosCentral }) {
           </>
         )}
 
+        {dados.notas.length > 0 && (
+          <PainelTotais unidade={["nota", "notas"]}
+            periodo={{
+              rotulo: filtros.periodo.rotulo, subtitulo: filtros.periodo.rotulo,
+              total: linhaTotal("total", resumo.total),
+              linhas: CHAVES_NOTAS.filter((k) => k !== "total").map((k) => linhaTotal(k, resumo[k])),
+            }}
+            selecao={{ n: selecionados.size, naPagina: selecionadas.length, total: linhaTotal("total", totaisSelecao.total), linhas: CHAVES_NOTAS.filter((k) => k !== "total").map((k) => linhaTotal(k, totaisSelecao[k])) }}
+          />
+        )}
         <div className="px-4 py-3 border-t border-surface-border bg-surface-alt/40">
           <Paginacao total={dados.total} pagina={dados.pagina} porPagina={dados.porPagina} onNavegar={navegar} rotulo={dados.total === 1 ? "nota" : "notas"} />
         </div>
@@ -347,3 +371,10 @@ function Secao({ titulo, children }: { titulo: string; children: React.ReactNode
 function Campo({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
   return <div><dt className="text-xs text-ink-muted">{rotulo}</dt><dd className="text-ink break-words">{children}</dd></div>;
 }
+
+/** Uma linha do painel de totais com o rótulo e a cor do card correspondente */
+const ROTULO_TOTAL: Record<string, { rotulo: string; cor?: string }> = {
+  transmissao: { rotulo: "Em transmissão", cor: "text-atencao-texto" }, emitidas: { rotulo: "Emitidas", cor: "text-ok-texto" },
+  falha: { rotulo: "Com falha", cor: "text-atrasado-texto" }, canceladas: { rotulo: "Canceladas", cor: "text-ink-muted" }, total: { rotulo: "Total emitido" },
+};
+const linhaTotal = (chave: string, s: { v: number; q: number }): LinhaTotal => ({ chave, ...ROTULO_TOTAL[chave], v: s.v, q: s.q });

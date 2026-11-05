@@ -38,7 +38,7 @@ function badge(chave: StatusVisual["chave"], label: string, diasAtraso = 0): Sta
   return { chave, label, classe: CLASSES[chave], diasAtraso, linhaVermelha: chave === "VENCIDO" };
 }
 
-export function statusVisualReceber(status: string, dataVencimento: Date | string | null): StatusVisual {
+export function statusVisualReceber(status: string, dataVencimento: Date | string | null, agora: Date = new Date()): StatusVisual {
   if (status === "RECEBIDO") return badge("PAGO", "Pago");
   if (status === "CANCELADO") return badge("CANCELADO", "Cancelado");
   // A conta dividida (o lançamento): a situação de cada parcela está na parcela
@@ -50,17 +50,17 @@ export function statusVisualReceber(status: string, dataVencimento: Date | strin
   // C6/F5: previsão de contrato ainda não faturada NÃO é cobrança vencida — o selo
   // "Vencido" (e a linha vermelha) só valem para conta liberada (A_RECEBER/ATRASADO).
   if (status === "PREVISTO") return badge("PREVISTO", "Previsto");
-  const dias = diasAteVencimento(dataVencimento);
+  const dias = diasAteVencimento(dataVencimento, agora);
   if (dias === null) return badge("PREVISTO", "Previsto");
   if (dias < 0) return badge("VENCIDO", `Vencido ${-dias} ${-dias === 1 ? "dia" : "dias"}`, -dias);
   if (dias === 0) return badge("VENCE_HOJE", "Vence hoje");
   return badge("A_VENCER", "A vencer");
 }
 
-export function statusVisualPagar(status: string, dataVencimento: Date | string | null): StatusVisual {
+export function statusVisualPagar(status: string, dataVencimento: Date | string | null, agora: Date = new Date()): StatusVisual {
   if (status === "PAGO_TOTAL") return badge("PAGO", "Pago");
   if (status === "CANCELADO") return badge("CANCELADO", "Cancelado");
-  const dias = diasAteVencimento(dataVencimento);
+  const dias = diasAteVencimento(dataVencimento, agora);
   if (dias !== null && dias < 0) return badge("VENCIDO", `Vencido ${-dias} ${-dias === 1 ? "dia" : "dias"}`, -dias);
   if (status === "PAGO_PARCIAL") return badge("PARCIAL", "Pago parcial");
   if (dias === 0) return badge("VENCE_HOJE", "Vence hoje");

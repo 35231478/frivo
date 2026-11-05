@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, RotateCcw, Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PLANILHA } from "@/lib/planilha";
+import { useLinhasSelecionadas } from "@/components/listagem/selecao-linhas";
 import {
   ajustarPreferencia, chaveTabela, LARGURA_MIN, lerPreferenciaTabela, ocultasEfetivas, PREFERENCIA_VAZIA, type PreferenciaTabela,
 } from "@/lib/preferencias";
@@ -138,6 +139,8 @@ const preferenciaVaziaLocal = (p: PreferenciaTabela) => Object.keys(p.larguras).
 
 export function TabelaPro({ tela, colunas, linhas, ordenacao, cartoes, barra, quebra = "md", className, atributos }: TabelaProProps) {
   const { pref, gravar } = usePreferenciaTabela(tela, colunas);
+  // Linhas marcadas (seleção em massa ou seleção simples da lista em volta): ganham o realce permanente
+  const selecionados = useLinhasSelecionadas();
   // Largura ao vivo enquanto arrasta (só grava ao soltar)
   const [arrastando, setArrastando] = useState<{ id: string; px: number } | null>(null);
   const [menu, setMenu] = useState(false);
@@ -289,7 +292,8 @@ export function TabelaPro({ tela, colunas, linhas, ordenacao, cartoes, barra, qu
             </thead>
             <tbody>
               {linhas.map((l) => (
-                <tr key={l.id} data-linha={l.id} className={cn(PLANILHA.linha, PLANILHA.linhaHover, l.classe)} {...l.atributos}>
+                <tr key={l.id} data-linha={l.id} className={cn(PLANILHA.linha, PLANILHA.linhaHover, l.classe, selecionados?.has(l.id) && PLANILHA.linhaSelecionada)}
+                  aria-selected={selecionados ? selecionados.has(l.id) : undefined} data-selecionada={selecionados?.has(l.id) ? "" : undefined} {...l.atributos}>
                   {visiveis.map((c) => (
                     <td key={c.id} className={cn(PLANILHA.td, "align-middle", ALINHAR[c.alinhar ?? "esquerda"], c.alinhar === "direita" && "tabular-nums whitespace-nowrap", c.classe)}
                       title={l.titulos?.[c.id]} data-celula={c.id}>

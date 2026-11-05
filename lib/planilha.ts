@@ -16,6 +16,13 @@ export const PLANILHA = {
    * `cn` (tailwind-merge) fica com o dela.
    */
   linhaHover: "hover:bg-primary-100/60",
+  /**
+   * Linha com a caixa de seleção marcada: fundo do acento claro (primary-50), permanente enquanto
+   * marcada, por cima da zebra e da linha vermelha (como o selecionado do Conta Azul); sob o mouse
+   * um degrau acima (primary-100). A TabelaPro aplica quando o id da linha está na seleção
+   * (components/listagem/selecao-linhas).
+   */
+  linhaSelecionada: "bg-primary-50 even:bg-primary-50 hover:bg-primary-100",
   td: "px-2 py-1.5 align-top",
   /** Valor em R$ / número: à direita, alinhado pelos algarismos */
   numero: "text-right tabular-nums whitespace-nowrap",
