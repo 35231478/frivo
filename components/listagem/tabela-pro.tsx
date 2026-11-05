@@ -289,7 +289,7 @@ export function TabelaPro({ tela, colunas, linhas, ordenacao, cartoes, barra, qu
             </thead>
             <tbody>
               {linhas.map((l) => (
-                <tr key={l.id} data-linha={l.id} className={cn(PLANILHA.linha, "hover:bg-primary-50/40", l.classe)} {...l.atributos}>
+                <tr key={l.id} data-linha={l.id} className={cn(PLANILHA.linha, PLANILHA.linhaHover, l.classe)} {...l.atributos}>
                   {visiveis.map((c) => (
                     <td key={c.id} className={cn(PLANILHA.td, "align-middle", ALINHAR[c.alinhar ?? "esquerda"], c.alinhar === "direita" && "tabular-nums whitespace-nowrap", c.classe)}
                       title={l.titulos?.[c.id]} data-celula={c.id}>

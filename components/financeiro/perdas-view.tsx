@@ -132,7 +132,7 @@ export function PerdasView({ periodo, total, clientes, linhas }: {
                 </thead>
                 <tbody>
                   {linhas.map((l) => (
-                    <tr key={l.id} className={cn(PLANILHA.linha, "hover:bg-primary-50/40")} data-linha-perda={l.id}>
+                    <tr key={l.id} className={cn(PLANILHA.linha, PLANILHA.linhaHover)} data-linha-perda={l.id}>
                       <td className={cn(PLANILHA.td, "tabular-nums whitespace-nowrap text-ink-muted")}>{l.perdaEm ? formatarData(l.perdaEm) : "—"}</td>
                       <td className={cn(PLANILHA.td, "hidden lg:table-cell truncate font-mono text-[11px]")} title={l.numero}>
                         <Link href={hrefCobranca(l.id)} className="text-acento hover:underline" data-abrir-conta={l.id}>{l.numero}</Link>

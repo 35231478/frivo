@@ -88,6 +88,24 @@ describe("desenho", () => {
     expect(t.style.minWidth).toBe(`${36 + 100 + 160 + 200 + 110 + 40}px`);
   });
 
+  it("realce sob o mouse: o token único da planilha em toda linha (zebra mantida); a linha com realce próprio (vencida) fica só com o dela (o cn resolve)", async () => {
+    const { PLANILHA } = await import("@/lib/planilha");
+    expect(PLANILHA.linhaHover).toBe("hover:bg-primary-100/60");
+    await montar({ linhas: [
+      ...LINHAS,
+      { id: "venc", celulas: { nome: "Vencida" }, classe: "even:bg-atrasado-claro bg-atrasado-claro hover:bg-atrasado-claro/70" },
+    ] });
+    for (const id of ["r1", "r2", "r3"]) {
+      const cls = $(`tr[data-linha="${id}"]`)!.className;
+      expect(cls).toContain("hover:bg-primary-100/60");
+      expect(cls).toContain("even:bg-surface-alt/60");
+      expect(cls).not.toContain("hover:bg-primary-50/40");
+    }
+    const venc = $('tr[data-linha="venc"]')!.className;
+    expect(venc).toContain("hover:bg-atrasado-claro/70");
+    expect(venc).not.toContain("hover:bg-primary-100/60");
+  });
+
   it("cartões do celular ficam fora da tabela (md:hidden) e a tabela some abaixo da quebra; quebra 'sm' para os cadastros", async () => {
     await montar({ cartoes: createElement("ul", { "data-cartoes": true }, createElement("li", null, "cartão")) });
     expect($("[data-cartoes]")!.parentElement!.className).toBe("md:hidden");
