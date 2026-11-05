@@ -2,6 +2,9 @@
 
 import { useMemo, useState, type ComponentType } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { AcoesLote } from "@/components/financeiro/acoes-lote";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { cn, formatarMoeda, formatarData, formatarCpfCnpj } from "@/lib/utils";
 import { statusVisualPagar, LABELS_STATUS_CONTA_PAGAR } from "@/lib/financeiro-status";
 import { ContaPagarAcoes } from "@/components/financeiro/conta-pagar-acoes";
@@ -9,7 +12,7 @@ import { CategoriaBadge } from "@/components/financeiro/categoria-badge";
 import { useListagemUrl } from "@/components/listagem/use-listagem-url";
 import {
   Upload, AlertTriangle, CalendarClock, CheckCircle2, Search, SlidersHorizontal, Plus, Barcode, Loader2, Sigma,
-  FileText, ShoppingCart, Receipt,
+  FileText, ShoppingCart, Receipt, X,
 } from "lucide-react";
 import { BarraPeriodo, CardResumo, GradeCards, type PeriodoTela } from "@/components/listagem/periodo-cards";
 import { BarraFiltros, inputFiltro } from "@/components/listagem/barra-filtros";
@@ -64,15 +67,20 @@ export function ContasPagarView(props: PropsPagar) {
 function ContasPagarCorpo({
   contas, resumo, periodo, filtros, categorias, centros, fornecedores, total, pagina, porPagina, totalFiltrado, totalAberto, podeImportarNf,
 }: PropsPagar) {
-  const { selecionados } = useSelecaoLinhas();
+  const { selecionados, limpar } = useSelecaoLinhas();
   const { busca, setBusca, navegar, pendente } = useListagemUrl({
     chave: "contas-pagar", qAtual: filtros.fornecedor, paramBusca: "fornecedor", lembrarFiltros: false,
   });
+  const router = useRouter();
+  // "Ações em lote" (dar como pago, alterar vencimento, cancelar): a mesma permissão das ações de uma conta
+  const podeLote = usePermissoes().pode("financeiro", "fluxoCaixa");
   const card = filtros.card as CardKey | "";
   const comStatus = useMemo(() => contas.map((c) => ({ c, sv: statusVisualPagar(c.status, c.dataVencimento) })), [contas]);
   // Painel do rodapé: totais do período (os cards) ou só das marcadas (lib/listagem/totais-selecao)
   const selecionadas = useMemo(() => contas.filter((c) => selecionados.has(c.id)), [contas, selecionados]);
   const totaisSelecao = useMemo(() => totaisPagar(selecionadas), [selecionadas]);
+  const saldoSelecionadas = selecionadas.reduce((s, c) => s + c.saldoRestante, 0);
+  const comBarra = podeLote && selecionadas.length > 0;
 
   /** Um select do painel: muda = vai para a URL na hora (o controle se destaca quando ativo) */
   const sel = (k: keyof FiltrosPagar) => ({
@@ -297,6 +305,23 @@ function ContasPagarCorpo({
           </p>
         </div>
       </div>
+      {/* Com a barra flutuante na tela, um respiro no fim para o painel de totais rolar acima dela */}
+      {comBarra && <div className="h-24 md:h-20" aria-hidden data-espaco-barra />}
+
+      {/* Barra da seleção: quantas, quanto falta e "Ações em lote" */}
+      {comBarra && (
+        <div className="fixed inset-x-0 bottom-16 md:bottom-4 z-30 flex justify-center px-4 pointer-events-none" data-barra-selecao>
+          <div className="pointer-events-auto flex flex-wrap items-center gap-x-3 gap-y-2 rounded-card border border-surface-border bg-white shadow-card-hover px-4 py-3 max-w-full">
+            <span className="text-sm text-ink" data-barra-contagem>
+              <strong>{selecionadas.length}</strong> {selecionadas.length === 1 ? "conta" : "contas"} · falta <strong className="tabular-nums">{formatarMoeda(saldoSelecionadas)}</strong>
+            </span>
+            <div className="flex flex-wrap items-center gap-2 ml-auto">
+              <button type="button" onClick={limpar} className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink px-2 py-1.5" data-limpar-escolha><X className="w-3.5 h-3.5" /> Limpar</button>
+              <AcoesLote lista={{ tipo: "pagar", contas: selecionadas }} onConcluido={() => { limpar(); router.refresh(); }} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

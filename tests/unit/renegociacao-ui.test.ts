@@ -218,7 +218,7 @@ describe("lista e gaveta", () => {
     { id: "r", numero: "CR-5", status: "RENEGOCIADO", valorRecebido: 100, renegociadaEmNumero: "CR-9" },
   ];
 
-  it("a caixa de seleção fica em toda linha; a barra de renegociar aparece ao marcar (com o que falta), trava com o porquê (outro cliente, boleto, renegociada) e o mesmo cliente abre o modal com as escolhidas; sem a permissão: seleção sim, barra não", async () => {
+  it("a caixa de seleção fica em toda linha; a barra da seleção aparece ao marcar (com o que falta) e o Renegociar trava com o porquê (outro cliente, boleto, renegociada); o mesmo cliente abre o modal com as escolhidas; sem a permissão: barra com as ações em lote, sem Renegociar", async () => {
     respostas["GET /api/contas-receber/renegociar"] = { status: 200, corpo: [
       { ...lista[0], id: "a", numero: "CR-1" }, { ...lista[1], id: "b", numero: "CR-2" },
     ] };
@@ -226,11 +226,11 @@ describe("lista e gaveta", () => {
     await montar(createElement(ContasReceberView, props(contas) as any));
     const caixa = (id: string) => $(`[data-linha-conta=${id}] [data-escolher-conta]`);
     expect(["a", "b", "x", "bol", "r"].map((id) => !!caixa(id))).toEqual([true, true, true, true, true]);
-    expect($("[data-barra-renegociar]")).toBeNull();
+    expect($("[data-barra-selecao]")).toBeNull();
     await clicar(caixa("a"));
     expect($("[data-linha-conta=a]")!.hasAttribute("data-selecionada")).toBe(true); // a linha marcada ganha o realce
     await clicar(caixa("b"));
-    expect(txt($("[data-barra-renegociar]"))).toMatch(/^2 cobranças · falta R\$\s?1\.100,00/);
+    expect(txt($("[data-barra-contagem]"))).toMatch(/^2 cobranças · falta R\$\s?1\.100,00/);
     expect($("[data-espaco-barra]")).not.toBeNull(); // o painel de totais rola acima da barra flutuante
     await clicar(caixa("x"));
     expect(txt($("[data-motivo-escolha]"))).toBe("Escolha cobranças do mesmo cliente.");
@@ -247,13 +247,17 @@ describe("lista e gaveta", () => {
     await clicar($("[data-abrir-renegociar]"));
     expect($<HTMLInputElement>("[data-escolher=a]")!.checked).toBe(true);
     expect($<HTMLInputElement>("[data-escolher=b]")!.checked).toBe(true);
-    // Sem a permissão: a seleção continua (realce + totais), mas sem a barra de renegociar
+    // Sem a permissão: a seleção continua (realce + totais) e a barra fica só com as ações em lote (sem Renegociar nem o motivo)
     await montar(createElement(ContasReceberView, props(contas) as any), semPerdas());
     expect(caixa("a")).not.toBeNull();
     await clicar(caixa("a"));
+    await clicar(caixa("x"));
     expect($("[data-linha-conta=a]")!.hasAttribute("data-selecionada")).toBe(true);
-    expect($("[data-barra-renegociar]")).toBeNull();
-    expect($("[data-espaco-barra]")).toBeNull();
+    expect($("[data-barra-selecao]")).not.toBeNull();
+    expect($("[data-acoes-lote]")).not.toBeNull();
+    expect($("[data-abrir-renegociar]")).toBeNull();
+    expect($("[data-motivo-escolha]")).toBeNull();
+    expect($("[data-espaco-barra]")).not.toBeNull();
   });
 
   it("renegociada na lista: selo, — em aberto com o para-onde-foi, chip do filtro; no celular, 'Renegociada em …'", async () => {

@@ -84,6 +84,6 @@ describe.skipIf(!URL)("SQL de produção: Faturar (avulso) + retenções do serv
     rodar();
     rodar();
     expect([psql(["-c", `SELECT string_agg(id || '|' || avulsa, ',' ORDER BY id) FROM medicoes`]), retratoServicos()]).toEqual(antes);
-    expect(psql(["-c", `SELECT count(*) FROM pg_constraint WHERE conname = 'os_itens_orcamento_orcamento_servico_id_fkey'`])).toBe("1");
+    expect(psql(["-c", `SELECT count(*) FROM pg_constraint WHERE conname = 'os_itens_orcamento_orcamento_servico_id_fkey' AND connamespace = '${SCHEMA}'::regnamespace`])).toBe("1");
   });
 });
