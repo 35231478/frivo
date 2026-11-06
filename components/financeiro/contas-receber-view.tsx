@@ -4,6 +4,7 @@ import { useMemo, useState, type ComponentType } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
+import { AcoesLote } from "@/components/financeiro/acoes-lote";
 import { RenegociarCobrancas } from "@/components/financeiro/renegociar-modal";
 import { motivoSelecaoInvalida } from "@/lib/financeiro/renegociacao";
 import { cn, formatarMoeda, formatarData, formatarCpfCnpj, LABELS_FORMA_PAGAMENTO } from "@/lib/utils";
@@ -102,16 +103,19 @@ function ContasReceberCorpo({
   const acoes = (c: ContaView) => (
     <ContaReceberAcoes conta={{ ...c, interAtivo }} categorias={categorias} clientes={clientes} onDetalhes={() => setDetalheId(c.id)} />
   );
-  // Seleção de linhas (caixa em toda cobrança): pinta a linha, soma no painel do rodapé e, para quem
-  // tem Financeiro › Perdas, é a escolha para renegociar (a barra diz por que não dá, se não der)
+  // Seleção de linhas (caixa em toda cobrança): pinta a linha, soma no painel do rodapé e abre a barra
+  // flutuante — "Ações em lote" (quem pode cobrar) e, para quem tem Financeiro › Perdas, "Renegociar"
+  // (a barra diz por que não dá, se não der)
   const router = useRouter();
   const podeRenegociar = pode("financeiro", "perdas");
+  const podeLote = podeCobrar;
   const { selecionados, limpar } = useSelecaoLinhas();
   const [renegociando, setRenegociando] = useState(false);
   const selecionadas = useMemo(() => contas.filter((c) => selecionados.has(c.id)), [contas, selecionados]);
   const listaEscolhidas = podeRenegociar ? selecionadas : [];
   const motivoEscolha = listaEscolhidas.length ? motivoSelecaoInvalida(listaEscolhidas) : null;
-  const saldoEscolhidas = listaEscolhidas.reduce((s, c) => s + saldoDaConta(c), 0);
+  const saldoEscolhidas = selecionadas.reduce((s, c) => s + saldoDaConta(c), 0);
+  const comBarra = selecionadas.length > 0 && (podeLote || podeRenegociar);
   const caixa = (c: ContaView) => <CheckboxSelecao id={c.id} rotulo={c.numero} data-escolher-conta={c.id} />;
   // Painel do rodapé: totais do período (os cards) ou só das marcadas (lib/listagem/totais-selecao)
   const totaisSelecao = useMemo(() => totaisReceber(selecionadas), [selecionadas]);
@@ -344,23 +348,26 @@ function ContasReceberCorpo({
         </div>
       </div>
       {/* Com a barra flutuante na tela, um respiro no fim para o painel de totais rolar acima dela */}
-      {listaEscolhidas.length > 0 && <div className="h-24 md:h-20" aria-hidden data-espaco-barra />}
+      {comBarra && <div className="h-24 md:h-20" aria-hidden data-espaco-barra />}
       <ContaReceberDetalhes id={detalheId} onFechar={fecharDetalhe} onAbrirConta={setDetalheId} />
 
-      {/* Barra da escolha: quantas, quanto falta, e "Renegociar" (mesmo cliente) */}
-      {listaEscolhidas.length > 0 && (
-        <div className="fixed inset-x-0 bottom-16 md:bottom-4 z-30 flex justify-center px-4 pointer-events-none" data-barra-renegociar>
+      {/* Barra da seleção: quantas, quanto falta, "Ações em lote" e "Renegociar" (mesmo cliente) */}
+      {comBarra && (
+        <div className="fixed inset-x-0 bottom-16 md:bottom-4 z-30 flex justify-center px-4 pointer-events-none" data-barra-selecao>
           <div className="pointer-events-auto flex flex-wrap items-center gap-x-3 gap-y-2 rounded-card border border-surface-border bg-white shadow-card-hover px-4 py-3 max-w-full">
-            <span className="text-sm text-ink">
-              <strong>{listaEscolhidas.length}</strong> {listaEscolhidas.length === 1 ? "cobrança" : "cobranças"} · falta <strong className="tabular-nums">{formatarMoeda(saldoEscolhidas)}</strong>
+            <span className="text-sm text-ink" data-barra-contagem>
+              <strong>{selecionadas.length}</strong> {selecionadas.length === 1 ? "cobrança" : "cobranças"} · falta <strong className="tabular-nums">{formatarMoeda(saldoEscolhidas)}</strong>
             </span>
             {motivoEscolha && <span role="alert" className="text-xs text-atencao-texto" data-motivo-escolha>{motivoEscolha}</span>}
-            <div className="flex items-center gap-2 ml-auto">
+            <div className="flex flex-wrap items-center gap-2 ml-auto">
               <button type="button" onClick={limpar} className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink px-2 py-1.5" data-limpar-escolha><X className="w-3.5 h-3.5" /> Limpar</button>
-              <button type="button" onClick={() => setRenegociando(true)} disabled={!!motivoEscolha}
-                className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-primary-500 hover:bg-primary-600 px-4 py-2 rounded-lg disabled:opacity-50" data-abrir-renegociar>
-                <Handshake className="w-4 h-4" /> Renegociar
-              </button>
+              {podeLote && <AcoesLote lista={{ tipo: "receber", contas: selecionadas }} onConcluido={() => { limpar(); router.refresh(); }} />}
+              {podeRenegociar && (
+                <button type="button" onClick={() => setRenegociando(true)} disabled={!!motivoEscolha}
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-primary-500 hover:bg-primary-600 px-4 py-2 rounded-lg disabled:opacity-50" data-abrir-renegociar>
+                  <Handshake className="w-4 h-4" /> Renegociar
+                </button>
+              )}
             </div>
           </div>
         </div>

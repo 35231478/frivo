@@ -650,9 +650,9 @@ export function proximoNumeroContaPagar(empresaId: string, db: Db = prisma) {
   return db === prisma ? prisma.$transaction((tx) => proximoNumero(tx, empresaId, "conta_pagar")) : proximoNumero(db as Prisma.TransactionClient, empresaId, "conta_pagar");
 }
 
-/** Recalcula valorPago, saldoRestante, status e dataPagamento a partir dos pagamentos. */
-export async function recalcularContaPagar(contaPagarId: string) {
-  const conta = await prisma.contaPagar.findUnique({
+/** Recalcula valorPago, saldoRestante, status e dataPagamento a partir dos pagamentos (dentro de uma transação, passe o `db`). */
+export async function recalcularContaPagar(contaPagarId: string, db: Db = prisma) {
+  const conta = await db.contaPagar.findUnique({
     where: { id: contaPagarId },
     include: { pagamentos: { orderBy: { dataPagamento: "desc" } } },
   });
@@ -669,7 +669,7 @@ export async function recalcularContaPagar(contaPagarId: string) {
   else if (valorPago > 0) status = "PAGO_PARCIAL";
   else status = venceu ? "VENCIDO" : "PENDENTE";
 
-  return prisma.contaPagar.update({
+  return db.contaPagar.update({
     where: { id: contaPagarId },
     data: {
       valorPago,
