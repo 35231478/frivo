@@ -11,6 +11,8 @@ import { OsOrcamentosVinculados } from "@/components/os/os-orcamentos-vinculados
 import { OsPrazos } from "@/components/os/os-prazos";
 import { OsRelatorios } from "@/components/os/os-relatorios";
 import { ComprasSecao } from "@/components/compras/compras-secao";
+import { OsSeparacao, materiaisDaOs } from "@/components/os/os-separacao";
+import { resumoSeparacao } from "@/lib/estoque/separacao";
 import { OsInativarBotao } from "@/components/os/os-inativar";
 import { OsFotosAnexos } from "@/components/os/os-fotos-anexos";
 import { OsAdicionais } from "@/components/os/os-adicionais";
@@ -49,6 +51,9 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
   const { pode } = usePermissoes();
   // os.prazos = SLA por modelo de prazo (só id/status: o Resumo conta os atrasados)
   const central = useMemo(() => centralDaOs({ ...os, prazosSla: os.prazos ?? [] }), [os]);
+  // E4.1: a separação de material (estado por material do snapshot) — o badge da aba conta o que falta separar
+  const materiaisOs = useMemo(() => materiaisDaOs(os.itensOrcamento ?? []), [os.itensOrcamento]);
+  const separacao = useMemo(() => resumoSeparacao(materiaisOs), [materiaisOs]);
 
   function irPara(id: string) {
     const nova = abaValida(id);
@@ -71,7 +76,7 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
     { id: "resumo", label: "Resumo", badge: central.falta.length },
     { id: "atividades", label: "Atividades", badge: central.atividades.total },
     { id: "comercial", label: "Comercial", badge: (os.orcamentos?.length ?? 0) + os.itensOrcamento.length },
-    { id: "materiais", label: "Materiais & Compras" },
+    { id: "materiais", label: "Materiais & Compras", badge: separacao.aSeparar },
     { id: "financeiro", label: "Financeiro", badge: os.medicoes.length },
     { id: "relatorios", label: "Relatórios & Anexos", badge: (os.galeria?.fotos.length ?? 0) + (os.galeria?.documentos.length ?? 0) },
   ];
@@ -147,7 +152,15 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
                 </div>
               )}
 
-              {ativa === "materiais" && <ComprasSecao ordemServicoId={os.id} />}
+              {ativa === "materiais" && (
+                <div className="space-y-6">
+                  {/* E4.1: o que já foi separado (parcial/total), por quem, e o gancho da prestação de contas */}
+                  <OsSeparacao osId={os.id} materiais={materiaisOs} resumo={separacao} podeSeparar={pode("estoque", "separar")} />
+                  <div className="border-t border-surface-linha pt-6" data-secao-compras>
+                    <ComprasSecao ordemServicoId={os.id} />
+                  </div>
+                </div>
+              )}
 
               {ativa === "financeiro" && (
                 <OsFinanceiro osId={os.id} temContrato={!!os.contrato} concluida={os.status === "CONCLUIDA"} fatura={os.fatura ?? null} medicoes={os.medicoes} itensOrcamento={os.itensOrcamento} contasReceber={os.contasReceber ?? []} abrirNfse={abrirNfse} onAbriuNfse={() => setAbrirNfse(false)} />

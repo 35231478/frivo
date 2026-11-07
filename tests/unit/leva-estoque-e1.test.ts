@@ -551,9 +551,10 @@ describe("permissão Estoque", () => {
     expect(pode(permissoesVazias(), "estoque", "visualizar", "OPERADOR")).toBe(false);
     expect(pode(permissoesTotais(), "estoque", "gerenciar", "OPERADOR")).toBe(true);
     expect(pode(permissoesVazias(), "estoque", "gerenciar", "ADMIN")).toBe(true);
-    expect(PRESETS.SUPERVISOR.estoque).toEqual({ visualizar: true, gerenciar: true });
-    expect(PRESETS.FINANCEIRO.estoque).toEqual({ visualizar: true, gerenciar: false });
-    expect(PRESETS.TECNICO.estoque).toEqual({ visualizar: false, gerenciar: false });
+    // E4.1: "separar" (Separar material) entrou no módulo; o supervisor novo já separa
+    expect(PRESETS.SUPERVISOR.estoque).toEqual({ visualizar: true, gerenciar: true, separar: true });
+    expect(PRESETS.FINANCEIRO.estoque).toEqual({ visualizar: true, gerenciar: false, separar: false });
+    expect(PRESETS.TECNICO.estoque).toEqual({ visualizar: false, gerenciar: false, separar: false });
   });
 });
 

@@ -5,6 +5,7 @@ import { osDaEmpresa } from "@/lib/os-server";
 import { respostaRefEmpresa } from "@/lib/ref-empresa";
 import { itemOsSchema } from "@/lib/validations";
 import { INCLUIR_ITEM_OS, prepararItemOsConferido, regravarItemOs } from "@/lib/os/materiais-server";
+import { ERRO_ITEM_SEPARADO, itemTemMaterialSeparado } from "@/lib/estoque/separacao-server";
 
 type Params = { params: Promise<{ id: string; itemId: string }> };
 
@@ -45,6 +46,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (item.orcamentoServicoId) return NextResponse.json({ erro: "Este item veio do orçamento aprovado: edite-o no orçamento." }, { status: 400 });
   if (item.materialId) return NextResponse.json({ erro: "Peça derivada: edite-a nos materiais do serviço." }, { status: 400 });
   if (item.executado) return NextResponse.json({ erro: "Item já executado não pode ser alterado." }, { status: 400 });
+  // E4.1: regravar o item apaga e recria o snapshot — com material já separado (reservado) a reserva ficaria órfã
+  if (await itemTemMaterialSeparado(itemId)) return NextResponse.json({ erro: ERRO_ITEM_SEPARADO }, { status: 400 });
   const parsed = itemOsSchema.safeParse({ tipo: item.tipo, servicoId: item.servicoId, produtoId: item.produtoId, descricao: item.descricao, quantidade: Number(item.quantidade), valorUnitario: Number(item.valorUnitario), ...body });
   if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
   if (parsed.data.tipo !== item.tipo || (parsed.data.servicoId ?? null) !== item.servicoId || (parsed.data.produtoId ?? null) !== item.produtoId)
@@ -69,6 +72,8 @@ export async function DELETE(_: NextRequest, { params }: Params) {
   if (!item) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
   // Peça derivada não se apaga sozinha: ela segue o material do serviço (tire o material, ou zere a quantidade)
   if (item.materialId) return NextResponse.json({ erro: "Peça derivada: tire o material nos materiais do serviço." }, { status: 400 });
+  // E4.1: material separado (reservado no razão) não some junto com o item — desfaz a separação antes
+  if (await itemTemMaterialSeparado(itemId)) return NextResponse.json({ erro: ERRO_ITEM_SEPARADO }, { status: 400 });
   // Materiais e peças derivadas do item caem em cascata
   await prisma.osItemOrcamento.delete({ where: { id: itemId } });
   return NextResponse.json({ ok: true });

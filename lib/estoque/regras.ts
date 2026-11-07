@@ -9,8 +9,12 @@ import { z } from "zod";
 
 export type TipoMov = "ENTRADA" | "SAIDA" | "AJUSTE" | "DEVOLUCAO" | "RESERVA";
 export type OrigemMov = "COMPRA" | "OS" | "AJUSTE" | "INVENTARIO";
-/** O que se quer fazer. AJUSTE e INVENTARIO informam o saldo FINAL; os outros, a quantidade. RESERVA (E4) subtrai como a saída. */
-export type Operacao = "ENTRADA" | "SAIDA" | "DEVOLUCAO" | "RESERVA" | "AJUSTE" | "INVENTARIO";
+/**
+ * O que se quer fazer. AJUSTE e INVENTARIO informam o saldo FINAL; os outros, a quantidade. RESERVA (E4.1, separação
+ * para a OS) subtrai como a saída; ESTORNO_RESERVA (separação desfeita) devolve ao disponível — também fica no razão
+ * como RESERVA, com sinal +: a soma das RESERVAs de uma OS é o que está separado para ela.
+ */
+export type Operacao = "ENTRADA" | "SAIDA" | "DEVOLUCAO" | "RESERVA" | "ESTORNO_RESERVA" | "AJUSTE" | "INVENTARIO";
 
 export const CASAS = 3;
 export const arred = (n: number) => Math.round(n * 10 ** CASAS) / 10 ** CASAS;
@@ -31,6 +35,7 @@ export function calcularMovimento(op: Operacao, saldoAtual: number, valor: numbe
     case "DEVOLUCAO": return { tipo: "DEVOLUCAO", origem: "OS", delta: v };
     case "SAIDA": return { tipo: "SAIDA", origem: "OS", delta: -v };
     case "RESERVA": return { tipo: "RESERVA", origem: "OS", delta: -v };
+    case "ESTORNO_RESERVA": return { tipo: "RESERVA", origem: "OS", delta: v };
     case "AJUSTE": return { tipo: "AJUSTE", origem: "AJUSTE", delta: arred(v - saldoAtual) };
     case "INVENTARIO": return { tipo: "AJUSTE", origem: "INVENTARIO", delta: arred(v - saldoAtual) };
   }
@@ -57,11 +62,14 @@ export function avisoSaldo(saldo: number, unidade = "") {
 export const origemManual = (op: Operacao): OrigemMov | undefined => (op === "SAIDA" ? "AJUSTE" : undefined);
 
 /* ───────── Lançamento manual (tela) ───────── */
-const numero = (msg: string) => z.preprocess((v) => {
+/** Número vindo da tela: aceita "2,5" e "1.234,5"; string vazia = ausente */
+export const numeroBr = (msg: string) => z.preprocess((v) => {
   if (typeof v === "string") { const t = v.trim().replace(/\./g, (m, i, s) => (s.includes(",") ? "" : m)).replace(",", "."); return t === "" ? undefined : Number(t); }
   return v;
 }, z.number({ required_error: msg, invalid_type_error: msg }).finite(msg));
-const casas = (n: number) => Math.abs(n * 10 ** CASAS - Math.round(n * 10 ** CASAS)) < 1e-6;
+const numero = numeroBr;
+export const temAteTresCasas = (n: number) => Math.abs(n * 10 ** CASAS - Math.round(n * 10 ** CASAS)) < 1e-6;
+const casas = temAteTresCasas;
 const MAX = 1_000_000_000;
 const obs = z.string().trim().max(500, "Observação: no máximo 500 caracteres.");
 
