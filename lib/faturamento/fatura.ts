@@ -95,11 +95,15 @@ export function faturaDoOrcamento(o: EntradaCalculo & {
  * gerada dele) + adicionais marcados "Cobrar" com preço. Sem desconto.
  */
 export function faturaDaOs(osId: string,
-  itens: { descricao: string; quantidade: unknown; valorUnitario: unknown; valorTotal: unknown; servicoId?: string | null }[],
+  itens: { descricao: string; quantidade: unknown; valorUnitario: unknown; valorTotal: unknown; servicoId?: string | null; tipo?: string | null; produtoId?: string | null }[],
   adicionais: { descricao: string; valor: unknown }[],
 ): Fatura {
   const linhas: LinhaFatura[] = [
-    ...itens.map((it) => ({
+    // E3.3b: item PRODUTO da OS (peça à parte) vira linha de produto; item antigo (sem tipo) é serviço, como sempre
+    ...itens.map((it) => (it.tipo === "PRODUTO" ? {
+      tipo: "PRODUTO" as const, descricao: it.descricao.trim().slice(0, 500), quantidade: Number(it.quantidade),
+      valorUnitario: Number(it.valorUnitario), valorTotal: Number(it.valorTotal), produtoId: it.produtoId ?? null, ordemServicoId: osId,
+    } : {
       tipo: "SERVICO" as const, descricao: it.descricao.trim().slice(0, 500), quantidade: Number(it.quantidade),
       valorUnitario: Number(it.valorUnitario), valorTotal: Number(it.valorTotal), servicoId: it.servicoId ?? null, ordemServicoId: osId,
     })),

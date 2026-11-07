@@ -493,6 +493,19 @@ export const materialOrcamentoSchema = z.object({
   kitNome: z.string().max(120).optional().nullable(),
 }).strict();
 
+/** E3.3b — item da OS sem orçamento (linha livre, serviço/produto do catálogo, serviço com materiais) */
+export const itemOsSchema = z.object({
+  tipo: z.enum(["SERVICO", "PRODUTO"]).default("SERVICO"),
+  servicoId: z.string().max(40).optional().nullable(),
+  produtoId: z.string().max(40).optional().nullable(),
+  descricao: z.string().trim().min(1, "Informe a descrição do item.").max(500),
+  quantidade: z.preprocess((v) => (v === "" || v == null ? 1 : typeof v === "string" ? Number(v.replace(",", ".")) : Number(v)), z.number({ invalid_type_error: "Quantidade inválida." }).positive("Quantidade deve ser > 0")),
+  valorUnitario: z.preprocess((v) => (v === "" || v == null ? 0 : typeof v === "string" ? Number(v.replace(",", ".")) : Number(v)), z.number({ invalid_type_error: "Valor inválido." }).nonnegative("Valor não pode ser negativo")),
+  valorTotal: z.preprocess((v) => (v === "" || v == null ? undefined : typeof v === "string" ? Number(v.replace(",", ".")) : Number(v)), z.number().nonnegative("Valor não pode ser negativo").optional()),
+  valorManual: z.boolean().default(false),
+  materiais: z.lazy(() => z.array(materialOrcamentoSchema).max(200, "Uma linha vai até 200 materiais.")).optional(),
+}).strict();
+
 export const orcamentoItemSchema = z.object({
   catalogoId: z.string().optional().nullable(),
   descricao: z.string().min(1, "Descrição é obrigatória"),

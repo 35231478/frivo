@@ -145,7 +145,8 @@ export async function faturarOs(p: { empresaId: string; usuarioId: string; osId:
   const motivo = motivoNaoFaturarOs(os);
   if (motivo) return { tipo: "bloqueado", erro: motivo };
   const { itens, adicionais } = await itensFaturaveisDaOs(os.id);
-  const fatura = faturaDaOs(os.id, itens.map((i) => ({ ...i, servicoId: i.orcamentoServico?.servicoId ?? null })), adicionais.map((a) => ({ descricao: a.descricao, valor: a.valor })));
+  // O serviço do catálogo: o do orçamento de origem ou o próprio da OS avulsa (E3.3b)
+  const fatura = faturaDaOs(os.id, itens.map((i) => ({ ...i, servicoId: i.orcamentoServico?.servicoId ?? i.servicoId ?? null })), adicionais.map((a) => ({ descricao: a.descricao, valor: a.valor })));
   if (!fatura.linhas.length || fatura.valorLiquido <= 0) {
     return { tipo: "vazio", erro: "Nada a faturar: marque os itens executados (ou os adicionais \"Cobrar\" com preço)." };
   }

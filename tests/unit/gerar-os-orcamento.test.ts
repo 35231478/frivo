@@ -31,13 +31,15 @@ describe("itensParaOs", () => {
         { descricao: "Compressor", quantidade: dec(1), valorUnitario: dec(900), valorTotal: dec(900), ordem: 0 },
       ],
     );
-    expect(itens).toEqual([
-      // Serviço guarda de qual item do orçamento veio (o serviço do catálogo chega à NFS-e); produto não
-      { descricao: "Diagnóstico", quantidade: 2, valorUnitario: 90, valorTotal: 180, orcamentoServicoId: "os-dg" },
-      { descricao: "Mão de obra", quantidade: 1, valorUnitario: 600, valorTotal: 600, orcamentoServicoId: "os-mo" },
-      { descricao: "Compressor", quantidade: 1, valorUnitario: 900, valorTotal: 900, orcamentoServicoId: null },
-      { descricao: "Gás", quantidade: 1.5, valorUnitario: 100, valorTotal: 150, orcamentoServicoId: null },
+    // Serviço guarda de qual item do orçamento veio (o serviço do catálogo chega à NFS-e); produto não.
+    // E3.3b: cada item leva também o tipo, o catálogo e o snapshot dos materiais (vazio aqui) — os valores não mudam
+    expect(itens.map(({ descricao, quantidade, valorUnitario, valorTotal, orcamentoServicoId, tipo }) => ({ descricao, quantidade, valorUnitario, valorTotal, orcamentoServicoId, tipo }))).toEqual([
+      { descricao: "Diagnóstico", quantidade: 2, valorUnitario: 90, valorTotal: 180, orcamentoServicoId: "os-dg", tipo: "SERVICO" },
+      { descricao: "Mão de obra", quantidade: 1, valorUnitario: 600, valorTotal: 600, orcamentoServicoId: "os-mo", tipo: "SERVICO" },
+      { descricao: "Compressor", quantidade: 1, valorUnitario: 900, valorTotal: 900, orcamentoServicoId: null, tipo: "PRODUTO" },
+      { descricao: "Gás", quantidade: 1.5, valorUnitario: 100, valorTotal: 150, orcamentoServicoId: null, tipo: "PRODUTO" },
     ]);
+    for (const i of itens) expect(i).toMatchObject({ valorBase: null, ajusteMateriais: 0, valorManual: false, materiais: [], materialOrigemId: null, servicoId: null, produtoId: null });
   });
   it("sem ordem vale 0; não altera as listas de entrada; descrição longa é cortada em 500", () => {
     const servicos = [{ descricao: "B", quantidade: "1", valorUnitario: "10", valorTotal: "10", ordem: 1 }, { descricao: "A", quantidade: "1", valorUnitario: "5", valorTotal: "5", ordem: null }];
