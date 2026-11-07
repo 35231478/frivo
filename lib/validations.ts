@@ -477,6 +477,22 @@ export const checklistPreenchidoSchema = z.object({
 // ORÇAMENTO
 // ─────────────────────────────────────────────
 
+/** Estoque E3.3 — um material/peça do snapshot da linha de serviço (regra em lib/orcamentos/materiais.ts) */
+const numeroNaoNegativo = (msg: string) => z.preprocess((v) => (v === "" || v == null ? 0 : typeof v === "string" ? Number(v.trim().replace(",", ".")) : Number(v)), z.number({ invalid_type_error: msg }).nonnegative(msg));
+export const materialOrcamentoSchema = z.object({
+  id: z.string().optional().nullable(),
+  produtoId: z.string().max(40).optional().nullable(),
+  descricao: z.string().trim().min(1, "Todo material precisa de uma descrição.").max(300),
+  unidade: z.preprocess((v) => (v === "" || v == null ? "un" : v), z.string().trim().max(20)),
+  comportamento: z.enum(["VENDA_A_PARTE", "INCLUSO_NO_SERVICO"], { errorMap: () => ({ message: "Comportamento de faturamento do material inválido." }) }),
+  quantidade: numeroNaoNegativo("A quantidade do material não pode ser negativa."),
+  quantidadePadrao: numeroNaoNegativo("A quantidade do material não pode ser negativa."),
+  valorVendaUnit: numeroNaoNegativo("Valor do material não pode ser negativo."),
+  custoUnit: z.preprocess((v) => (v === "" || v == null ? null : typeof v === "string" ? Number(v.trim().replace(",", ".")) : Number(v)), z.number().nonnegative("Valor do material não pode ser negativo.").nullable()),
+  origem: z.enum(["SOLTO", "KIT", "AVULSO"], { errorMap: () => ({ message: "Origem do material inválida." }) }).default("AVULSO"),
+  kitNome: z.string().max(120).optional().nullable(),
+}).strict();
+
 export const orcamentoItemSchema = z.object({
   catalogoId: z.string().optional().nullable(),
   descricao: z.string().min(1, "Descrição é obrigatória"),
@@ -494,6 +510,9 @@ export const orcamentoItemSchema = z.object({
     z.number().nonnegative("Valor não pode ser negativo").optional()
   ),
   observacao: z.string().optional().nullable(),
+  /** E3.3 (só serviços): o snapshot dos materiais da linha; o total digitado na mão vale quando `valorManual` */
+  materiais: z.array(materialOrcamentoSchema).max(200, "Uma linha vai até 200 materiais.").optional(),
+  valorManual: z.boolean().default(false),
 });
 
 const descontoGrupo = z.preprocess(

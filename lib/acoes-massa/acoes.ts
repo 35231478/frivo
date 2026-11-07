@@ -17,7 +17,7 @@ export const ENTIDADES = [
 ] as const;
 export type Entidade = (typeof ENTIDADES)[number];
 
-export const ACOES_ITEM = ["inativar", "reativar", "gerar-qr", "aplicar-fiscal"] as const;
+export const ACOES_ITEM = ["inativar", "reativar", "gerar-qr", "aplicar-fiscal", "definir-categoria"] as const;
 export type AcaoItem = (typeof ACOES_ITEM)[number];
 
 /** Por requisição: acima disso o servidor recusa (evita timeout). A tela manda em partes menores. */
@@ -45,7 +45,7 @@ export interface DefAcao {
   /** Exige TAMBÉM todas estas (além de uma de `permissao`) */
   exigeTambem?: Requisito[];
   /** Formulário no modal antes de confirmar (os valores vão junto com o lote) */
-  formulario?: "fiscal-servico";
+  formulario?: "fiscal-servico" | "categoria-produto";
   /** Resultado: "12 aplicados" (padrão: "12 feitas") */
   resultado?: [singular: string, plural: string];
 }
@@ -117,7 +117,18 @@ export const ENTIDADE: Record<Entidade, DefEntidade> = {
     },
   },
   // Cadastros padronizados: inativar/reativar com a permissão do registro (lib/cadastros/registro.ts)
-  produtos: acoesCadastro("produto", "produtos"),
+  produtos: {
+    ...acoesCadastro("produto", "produtos"),
+    acoes: {
+      ...acoesCadastro("produto", "produtos").acoes,
+      // E3.3 (bônus): a categoria (E3.1) de vários produtos de uma vez, pela mesma edição do cadastro
+      "definir-categoria": {
+        rotulo: "Definir categoria", feito: "atualizados", formulario: "categoria-produto", resultado: ["atualizado", "atualizados"],
+        permissao: [["configuracoes", "gerenciar"]],
+        impacto: "A categoria escolhida é gravada em todos os produtos selecionados (“Sem categoria” tira a categoria). Cada produto passa pela mesma validação do cadastro; o que já estava assim não muda.",
+      },
+    },
+  },
   servicos: {
     ...acoesCadastro("serviço", "serviços"),
     acoes: {

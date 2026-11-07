@@ -9,6 +9,7 @@ import { EXECUTORES, gerarCsvExportacao, idsDoFiltro, linhasExportacao, rotulos 
 import type { ResultadoItem } from "@/lib/acoes-massa/regras";
 import { chaveHojeBR } from "@/lib/fuso";
 import { camposParaAplicar } from "@/lib/nfse/aplicar-fiscal";
+import { prepararDefinirCategoria } from "@/lib/acoes-massa/categoria-produtos";
 
 /**
  * Ações em massa — endpoint ÚNICO (a tela não faz uma chamada por registro).
@@ -96,7 +97,7 @@ export async function POST(req: NextRequest) {
   // Formulário da ação: validado uma vez (o que é inválido não chega a nenhum registro)
   let dados: Record<string, unknown> | undefined;
   if (def.formulario) {
-    const prep = camposParaAplicar(parsed.data.dados ?? {});
+    const prep = def.formulario === "categoria-produto" ? prepararDefinirCategoria(parsed.data.dados ?? {}) : camposParaAplicar(parsed.data.dados ?? {});
     if (!prep.ok) return NextResponse.json({ erro: prep.erro }, { status: 400 });
     dados = prep.dados;
   }

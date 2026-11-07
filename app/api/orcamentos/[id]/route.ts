@@ -13,6 +13,7 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { pode } from "@/lib/permissoes";
 import { cancelarPrevistasDoOrcamento, impactoOrcamento } from "@/lib/inativacao-server";
 import { cancelarOrcamento, reativarOrcamento, statusHttp } from "@/lib/acoes-massa/regras";
+import { apagarItensOrcamento, gravarItensOrcamento, validarMateriaisDoOrcamento } from "@/lib/orcamentos/materiais-server";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const guard = await exigirPermissao("orcamentos", "visualizar");
@@ -26,7 +27,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     include: {
       cliente: true,
       criadoPor: { select: { id: true, nome: true } },
-      servicos: { include: { servico: { select: { id: true, nome: true, unidade: true } } }, orderBy: { ordem: "asc" } },
+      // E3.3: o snapshot dos materiais de cada linha de serviço; a peça derivada traz `materialId`
+      servicos: { include: { servico: { select: { id: true, nome: true, unidade: true } }, materiais: { orderBy: { ordem: "asc" } } }, orderBy: { ordem: "asc" } },
       produtos: { include: { produto: { select: { id: true, nome: true, unidade: true } } }, orderBy: { ordem: "asc" } },
       ordensServico: {
         include: {
@@ -122,6 +124,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       validarRefsEmpresa("servico", data.servicos.map((s) => s.catalogoId), empresaId, "Serviço do catálogo"),
       validarRefsEmpresa("produto", data.produtos.map((p) => p.catalogoId), empresaId, "Produto do catálogo"),
       validarDestinatario(empresaId, data.clienteId, data.unidadeId, data.contatoClienteId),
+      validarMateriaisDoOrcamento(empresaId, data.servicos),
     ]);
   } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
@@ -158,11 +161,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const nome = await nomeDoOrcamento(empresaId, data);
 
   const atualizado = await prisma.$transaction(async (tx) => {
-    await tx.orcamentoServico.deleteMany({ where: { orcamentoId: id } });
-    await tx.orcamentoProduto.deleteMany({ where: { orcamentoId: id } });
+    await apagarItensOrcamento(tx, id);
     await tx.orcamentoOs.deleteMany({ where: { orcamentoId: id } });
 
-    return tx.orcamento.update({
+    const o = await tx.orcamento.update({
       where: { id },
       data: {
         nome,
@@ -176,13 +178,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         validadeEm: data.validadeEm === undefined ? existente.validadeEm : data.validadeEm ? new Date(data.validadeEm) : null,
         ...valores.campos,
         ...proposta,
-        servicos: { create: valores.servicos },
-        produtos: { create: valores.produtos },
         ordensServico: {
           create: data.ordensServicoIds.map((osId) => ({ ordemServicoId: osId })),
         },
       },
     });
+    await gravarItensOrcamento(tx, id, valores);
+    return o;
   });
 
   return NextResponse.json(atualizado);

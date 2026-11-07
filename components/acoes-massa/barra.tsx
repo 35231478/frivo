@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Ban, CheckCircle2, Download, FileText, Loader2, Printer, QrCode, RotateCcw, X, XCircle } from "lucide-react";
+import { AlertTriangle, Ban, CheckCircle2, Download, FileText, Loader2, Printer, QrCode, RotateCcw, Tags, X, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { usePainelGaveta } from "@/components/ui/drawer";
@@ -13,6 +13,7 @@ import {
   ENTIDADE, LIMITE_CONFIRMACAO_REFORCADA, MAX_SELECAO, TAMANHO_PARTE, podeAcao, podeExportar, type AcaoItem,
 } from "@/lib/acoes-massa/acoes";
 import { FormAplicarFiscalMassa } from "@/components/servicos/aplicar-fiscal-massa";
+import { FORM_CATEGORIA_VAZIO, FormDefinirCategoriaMassa, type FormDefinirCategoria } from "@/components/produtos/definir-categoria-massa";
 import { dadosDoForm, FORM_VAZIO, totalCampos, type FormAplicarFiscal } from "@/lib/nfse/aplicar-fiscal";
 
 /**
@@ -23,7 +24,7 @@ import { dadosDoForm, FORM_VAZIO, totalCampos, type FormAplicarFiscal } from "@/
 
 interface Item { id: string; rotulo: string; ok: boolean; detalhe?: string; codigo?: string; motivo?: string; qrcodeId?: string }
 
-const ICONE: Record<AcaoItem, React.ComponentType<{ className?: string }>> = { inativar: Ban, reativar: RotateCcw, "gerar-qr": QrCode, "aplicar-fiscal": FileText };
+const ICONE: Record<AcaoItem, React.ComponentType<{ className?: string }>> = { inativar: Ban, reativar: RotateCcw, "gerar-qr": QrCode, "aplicar-fiscal": FileText, "definir-categoria": Tags };
 const fmt = (n: number) => n.toLocaleString("pt-BR");
 
 /** `aoConcluir`: listas carregadas no cliente recarregam por aqui (padrão: router.refresh()). */
@@ -143,7 +144,8 @@ function ExecucaoMassa({ acao, ids, podeImprimirQr, onFechar }: { acao: AcaoItem
   const [itens, setItens] = useState<Item[]>([]);
   // Formulário da ação (ex.: dados fiscais): só os campos preenchidos vão junto com cada parte do lote
   const [form, setForm] = useState<FormAplicarFiscal>(FORM_VAZIO);
-  const dados = def.formulario ? dadosDoForm(form) : undefined;
+  const [formCategoria, setFormCategoria] = useState<FormDefinirCategoria>(FORM_CATEGORIA_VAZIO);
+  const dados = def.formulario === "categoria-produto" ? { categoriaProdutoId: formCategoria.categoriaProdutoId ?? null } : def.formulario ? dadosDoForm(form) : undefined;
 
   // É uma camada: com ela aberta, o Esc e o Tab não vão para a gaveta de baixo (se houver)
   const [camada] = useState(() => abrirCamada());
@@ -193,7 +195,7 @@ function ExecucaoMassa({ acao, ids, podeImprimirQr, onFechar }: { acao: AcaoItem
   const jaEstavam = ok.filter((i) => i.detalhe?.startsWith("Já")).length;
   const qrIds = useMemo(() => itens.map((i) => i.qrcodeId).filter(Boolean) as string[], [itens]);
   const pct = total ? Math.round((feitos / total) * 100) : 0;
-  const podeConfirmar = (!reforcada || digitado.replace(/\D/g, "") === String(total)) && (!def.formulario || totalCampos(form) > 0);
+  const podeConfirmar = (!reforcada || digitado.replace(/\D/g, "") === String(total)) && (!def.formulario || (def.formulario === "categoria-produto" ? formCategoria.categoriaProdutoId !== undefined : totalCampos(form) > 0));
   const [um, varios] = def.resultado ?? ["feita", "feitas"];
 
   return (
@@ -215,6 +217,7 @@ function ExecucaoMassa({ acao, ids, podeImprimirQr, onFechar }: { acao: AcaoItem
             <>
               <p className="text-sm text-ink">{def.impacto}</p>
               {def.formulario === "fiscal-servico" && <FormAplicarFiscalMassa valor={form} onChange={setForm} />}
+              {def.formulario === "categoria-produto" && <FormDefinirCategoriaMassa valor={formCategoria} onChange={setFormCategoria} />}
               {sel.todosDoFiltro && <p className="text-xs text-ink-muted">Inclui registros de outras páginas (todos os que batem no filtro atual).</p>}
               {def.comMotivo && (
                 <label className="block text-sm font-semibold text-ink space-y-1.5">

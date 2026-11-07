@@ -9,6 +9,7 @@ import {
   CadastroRapidoModal, usePodeCriar, type CampoRapido, type EntidadeCadastro, type PermissaoCriar,
 } from "@/components/ui/select-cadastro-rapido";
 import { round2, totalDoItem, totalDoUnitario, unitarioDoTotal } from "@/lib/orcamentos/calculo";
+import { valorDaLinha, type MaterialOrcamento } from "@/lib/orcamentos/materiais";
 
 export interface ItemTabela {
   id: string;            // uuid local
@@ -22,6 +23,12 @@ export interface ItemTabela {
   bloqueado?: boolean;
   origemPreco?: "contrato" | "padrao" | "fora_tabela";
   valorPadraoCadastro?: number;
+  /** E3.3 (serviço): snapshot dos materiais/peças da linha; com eles, `valorUnitario` é o BASE e o total = base + ajuste */
+  materiais?: MaterialOrcamento[];
+  /** E3.3: o total digitado na mão vale (não segue base + ajuste) */
+  valorManual?: boolean;
+  /** E3.3 (produto): peça derivada de um material de serviço — linha só de leitura, recomposta das linhas de serviço */
+  derivada?: { deServico: string };
 }
 
 export interface CatalogoItem {
@@ -32,6 +39,8 @@ export interface CatalogoItem {
   descricao?: string | null;
   unidade?: string | null;
   valorPadrao?: unknown; // Decimal | number | null
+  /** E3.3 (serviço): tem composição (materiais padrão) para materializar ao entrar no orçamento */
+  temMateriais?: boolean;
 }
 
 /**
@@ -69,6 +78,10 @@ interface ItensTabelaProps {
    * (unitário × qtd); editar o total recalcula o unitário (total ÷ qtd, em centavos).
    */
   totalEditavel?: boolean;
+  /** E3.3: conteúdo extra embaixo da linha (o painel de materiais do serviço) */
+  extraLinha?: (it: ItemTabela) => React.ReactNode;
+  /** E3.3: avisa quem adicionou um item do catálogo (para materializar a composição do serviço) */
+  onAdicionadoDoCatalogo?: (it: ItemTabela, c: CatalogoItem) => void;
 }
 
 function novoId() {
@@ -90,7 +103,7 @@ const mostrarNumero = (v: number, casas?: number) =>
  * Campo numérico em pt-BR (vírgula) que não "pula" enquanto se digita: guarda o texto digitado e
  * só reformata ao sair do campo ou quando o valor muda por fora (ex.: o total recalculou o unitário).
  */
-function CampoNumero({ valor, onValor, casas, className, ...props }: {
+export function CampoNumero({ valor, onValor, casas, className, ...props }: {
   valor: number; onValor: (v: number) => void; casas?: number;
 } & Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "type">) {
   const [texto, setTexto] = useState(mostrarNumero(valor, casas));
@@ -181,18 +194,23 @@ function ObservacaoItem({ valor, onChange, descricao }: { valor: string; onChang
 const COLUNAS = "grid grid-cols-3 sm:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_4.5rem_7.25rem_7.25rem_2rem] gap-x-2 sm:gap-x-3";
 const rotuloCelular = "block sm:sr-only text-[11px] font-semibold uppercase tracking-wider text-ink-muted mb-0.5";
 
-export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange, tabela, cadastro, totalEditavel = false }: ItensTabelaProps) {
+export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange, tabela, cadastro, totalEditavel = false, extraLinha, onAdicionadoDoCatalogo }: ItensTabelaProps) {
   function atualizar(id: string, patch: Partial<ItemTabela>) {
     onChange(itens.map((it) => (it.id === id ? { ...it, ...patch } : it)));
   }
-  // Unitário e quantidade mandam no total; o total digitado manda no unitário
+  const comMateriais = (it: ItemTabela) => !!it.materiais?.length;
+  // Unitário e quantidade mandam no total; o total digitado manda no unitário.
+  // Com materiais (E3.3): unitário/quantidade mudam a BASE (o total segue base + ajuste); o total digitado vira valor manual
   function mudarQuantidade(it: ItemTabela, quantidade: number) {
+    if (comMateriais(it)) return atualizar(it.id, { quantidade });
     atualizar(it.id, { quantidade, valorTotal: totalEditavel ? totalDoUnitario(quantidade, it.valorUnitario) : it.valorTotal });
   }
   function mudarUnitario(it: ItemTabela, valorUnitario: number) {
+    if (comMateriais(it)) return atualizar(it.id, { valorUnitario });
     atualizar(it.id, { valorUnitario, valorTotal: totalEditavel ? totalDoUnitario(it.quantidade, valorUnitario) : it.valorTotal });
   }
   function mudarTotal(it: ItemTabela, valorTotal: number) {
+    if (comMateriais(it)) return atualizar(it.id, { valorTotal, valorManual: true });
     atualizar(it.id, { valorTotal, valorUnitario: unitarioDoTotal(valorTotal, it.quantidade) });
   }
   function remover(id: string) {
@@ -217,23 +235,22 @@ export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange,
       bloqueado = (tabela?.precosBloqueados ?? false) || tItem.bloqueado;
       origemPreco = "contrato";
     }
-    onChange([
-      ...itens,
-      {
-        id: novoId(),
-        catalogoId: c.id,
-        descricao: descricaoDoCatalogo(c.nome, c.descricao),
-        quantidade: 1,
-        valorUnitario,
-        bloqueado,
-        origemPreco,
-        valorPadraoCadastro: padrao,
-      },
-    ]);
+    const novo: ItemTabela = {
+      id: novoId(),
+      catalogoId: c.id,
+      descricao: descricaoDoCatalogo(c.nome, c.descricao),
+      quantidade: 1,
+      valorUnitario,
+      bloqueado,
+      origemPreco,
+      valorPadraoCadastro: padrao,
+    };
+    onChange([...itens, novo]);
+    onAdicionadoDoCatalogo?.(novo, c);
   }
 
-  // Mesmo cálculo do servidor (lib/orcamentos/calculo.ts)
-  const totalLinha = (it: ItemTabela) => (totalEditavel ? totalDoItem(it) : totalDoUnitario(it.quantidade, it.valorUnitario));
+  // Mesmo cálculo do servidor (lib/orcamentos/calculo.ts; com materiais, lib/orcamentos/materiais.ts)
+  const totalLinha = (it: ItemTabela) => (comMateriais(it) ? valorDaLinha(it).valorTotal : totalEditavel ? totalDoItem(it) : totalDoUnitario(it.quantidade, it.valorUnitario));
   const subtotal = round2(itens.reduce((acc, it) => acc + totalLinha(it), 0));
 
   return (
@@ -263,8 +280,11 @@ export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange,
           const precoTitulo = it.origemPreco === "contrato" && it.valorPadraoCadastro != null && it.valorPadraoCadastro !== Number(it.valorUnitario)
             ? `Preço padrão: ${formatarMoeda(it.valorPadraoCadastro)} · Aplicado: ${formatarMoeda(Number(it.valorUnitario) || 0)}`
             : undefined;
+          const derivada = !!it.derivada;
+          const travado = it.bloqueado || derivada;
           return (
-            <div key={it.id} role="row" data-item-linha className={cn(COLUNAS, "gap-y-2 sm:items-center border-b border-surface-border last:border-b-0 px-3 py-2.5 sm:py-1 hover:bg-surface-alt/40")}>
+            <div key={it.id} className="border-b border-surface-border last:border-b-0">
+            <div role="row" data-item-linha data-linha-derivada={derivada ? "true" : undefined} data-valor-manual={it.valorManual && comMateriais(it) ? "true" : undefined} className={cn(COLUNAS, "gap-y-2 sm:items-center px-3 py-2.5 sm:py-1 hover:bg-surface-alt/40", derivada && "bg-surface-page/60")}>
               <div role="cell" className="col-span-3 sm:col-span-1 flex items-start sm:items-center gap-2 min-w-0">
                 <div className="flex-1 min-w-0 flex flex-wrap sm:flex-nowrap items-center gap-x-1.5">
                   <input
@@ -272,8 +292,17 @@ export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange,
                     onChange={(e) => atualizar(it.id, { descricao: e.target.value })}
                     placeholder="Descrição do item"
                     aria-label="Descrição do item"
+                    readOnly={derivada}
                     className="basis-full sm:basis-auto flex-1 min-w-0 w-full bg-transparent text-ink font-medium sm:font-normal focus:outline-none focus:bg-primary-50/30 rounded px-1 py-1 sm:py-0.5"
                   />
+                  {derivada && (
+                    <span className="inline-flex items-center shrink-0 whitespace-nowrap text-[10px] leading-none font-semibold px-1.5 py-1 rounded bg-acento-claro text-acento" title={`Peça dos materiais do serviço “${it.derivada!.deServico}”: edite lá`} data-peca-de={it.derivada!.deServico}>
+                      Peça · {it.derivada!.deServico}
+                    </span>
+                  )}
+                  {comMateriais(it) && it.valorManual && (
+                    <span className="inline-flex items-center shrink-0 whitespace-nowrap text-[10px] leading-none font-semibold px-1.5 py-1 rounded bg-atencao-claro text-atencao-texto" title="Total digitado na mão: não segue base + materiais">Valor manual</span>
+                  )}
                   {it.origemPreco && (
                     <span
                       className={cn(
@@ -291,7 +320,7 @@ export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange,
                     </span>
                   )}
                 </div>
-                <button
+                {!derivada && <button
                   type="button"
                   onClick={() => remover(it.id)}
                   className="sm:hidden p-2 -mr-1 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded transition-colors"
@@ -299,27 +328,31 @@ export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange,
                   aria-label={`Remover ${it.descricao || "item"}`}
                 >
                   <Trash2 className="w-4 h-4" />
-                </button>
+                </button>}
               </div>
 
               {/* Observação: à direita da descrição no desktop (com divisória); no fim do cartão no celular */}
               <div role="cell" className="col-span-3 order-last sm:order-none sm:col-span-1 sm:pl-3 sm:border-l sm:border-surface-linha min-w-0">
-                <ObservacaoItem valor={it.observacao ?? ""} onChange={(v) => atualizar(it.id, { observacao: v })} descricao={it.descricao} />
+                {derivada ? <span className="hidden sm:block text-[11px] text-ink-subtle italic px-2">Cobrada à parte</span> : <ObservacaoItem valor={it.observacao ?? ""} onChange={(v) => atualizar(it.id, { observacao: v })} descricao={it.descricao} />}
               </div>
 
               <label role="cell" className="block">
                 <span className={rotuloCelular}>Qtd</span>
-                <CampoNumero valor={Number(it.quantidade) || 0} onValor={(v) => mudarQuantidade(it, v)} aria-label="Quantidade" data-campo="quantidade" />
+                {derivada ? (
+                  <div className="text-right text-ink px-2 py-1.5 sm:py-0.5 tabular-nums" data-campo="quantidade">{String(round2(Number(it.quantidade) || 0)).replace(".", ",")}</div>
+                ) : (
+                  <CampoNumero valor={Number(it.quantidade) || 0} onValor={(v) => mudarQuantidade(it, v)} aria-label="Quantidade" data-campo="quantidade" />
+                )}
               </label>
 
               <label role="cell" className="block">
-                <span className={rotuloCelular}>Unitário</span>
-                {it.bloqueado ? (
+                <span className={rotuloCelular}>{comMateriais(it) ? "Unit. base" : "Unitário"}</span>
+                {travado ? (
                   <div
                     className="flex items-center justify-end gap-1 bg-surface-alt text-ink-muted rounded px-1.5 py-1.5 sm:py-0.5 cursor-not-allowed"
-                    title="Preço definido em contrato — não pode ser alterado"
+                    title={derivada ? "Preço da peça: edite nos materiais do serviço" : "Preço definido em contrato — não pode ser alterado"}
                   >
-                    <Lock className="w-3 h-3 shrink-0" />
+                    {!derivada && <Lock className="w-3 h-3 shrink-0" />}
                     <span className="font-medium tabular-nums">{formatarMoeda(Number(it.valorUnitario) || 0)}</span>
                   </div>
                 ) : (
@@ -329,23 +362,23 @@ export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange,
 
               <label role="cell" className="block">
                 <span className={rotuloCelular}>Total</span>
-                {totalEditavel && !it.bloqueado ? (
+                {totalEditavel && !travado ? (
                   <CampoNumero
                     valor={total}
                     casas={2}
                     onValor={(v) => mudarTotal(it, v)}
                     aria-label="Valor total do item"
-                    title="Digite o total: o unitário é recalculado (total ÷ quantidade)"
+                    title={comMateriais(it) ? "Total = base + materiais inclusos. Digitar aqui fixa um valor manual" : "Digite o total: o unitário é recalculado (total ÷ quantidade)"}
                     data-campo="total"
                     className="font-semibold"
                   />
                 ) : (
-                  <div className="text-right font-semibold text-ink px-2 py-1.5 sm:py-0.5 tabular-nums">{formatarMoeda(total)}</div>
+                  <div className="text-right font-semibold text-ink px-2 py-1.5 sm:py-0.5 tabular-nums" data-campo="total">{formatarMoeda(total)}</div>
                 )}
               </label>
 
               <div role="cell" className="hidden sm:flex items-center justify-center">
-                <button
+                {!derivada && <button
                   type="button"
                   onClick={() => remover(it.id)}
                   className="p-1 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded transition-colors"
@@ -353,8 +386,10 @@ export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange,
                   aria-label={`Remover ${it.descricao || "item"}`}
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                </button>}
               </div>
+            </div>
+            {extraLinha && !derivada && <div className="px-3">{extraLinha(it)}</div>}
             </div>
           );
         })}

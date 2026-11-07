@@ -20,6 +20,8 @@ import type { TipoDesconto, TipoOrcamento } from "@prisma/client";
 import { AlertCircle, Tags, Calculator, FileSignature, Sparkles, RefreshCw } from "lucide-react";
 import { chaveDiaCivil, chaveHojeBR } from "@/lib/fuso";
 import { calcularOrcamento, DIAS_VALIDADE_PADRAO, totalDoItem, validadePadrao } from "@/lib/orcamentos/calculo";
+import { pecasDosMateriais, valorDaLinha } from "@/lib/orcamentos/materiais";
+import { MateriaisLinha } from "@/components/orcamento/materiais-linha";
 import { confirmar, toast } from "@/components/ui/avisos";
 import { nomeAutomaticoOrcamento, type ContextoNomeOrcamento } from "@/lib/orcamentos/nome";
 import { Select } from "@/components/ui/select";
@@ -331,13 +333,31 @@ export function OrcamentoForm({
   }, [clienteId]);
 
   // O mesmo cálculo que o servidor grava (lib/orcamentos/calculo.ts)
+  // E3.3: as peças (venda à parte) dos materiais de cada serviço viram linhas de produto derivadas (só leitura)
+  const pecasDerivadas = useMemo<ItemTabela[]>(() => servicos.flatMap((s) => pecasDosMateriais(s.materiais).map((p, i) => ({
+    id: `peca:${s.id}:${i}`, catalogoId: p.material.produtoId ?? null, descricao: p.descricao, quantidade: p.quantidade,
+    valorUnitario: p.valorUnitario, valorTotal: p.valorTotal, derivada: { deServico: s.descricao || "serviço" },
+  }))), [servicos]);
   const totais = useMemo(() => calcularOrcamento({
-    servicos: servicos.filter((s) => s.descricao.trim()),
-    produtos: produtos.filter((p) => p.descricao.trim()),
+    // Serviço com materiais: base + ajuste dos inclusos (ou o manual) — lib/orcamentos/materiais.ts
+    servicos: servicos.filter((s) => s.descricao.trim()).map((s) => (s.materiais?.length ? { quantidade: s.quantidade, valorUnitario: valorDaLinha(s).valorUnitario, valorTotal: valorDaLinha(s).valorTotal } : s)),
+    produtos: [...produtos.filter((p) => p.descricao.trim()), ...pecasDerivadas],
     descontoServicos: descontoServicos.valor, tipoDescontoServicos: descontoServicos.tipo,
     descontoProdutos: descontoProdutos.valor, tipoDescontoProdutos: descontoProdutos.tipo,
     issAliquota,
-  }), [servicos, produtos, descontoServicos, descontoProdutos, issAliquota]);
+  }), [servicos, produtos, pecasDerivadas, descontoServicos, descontoProdutos, issAliquota]);
+
+  // Serviço do catálogo com composição (E3.2): materializa os materiais/peças com os preços deste cliente
+  async function materializarServico(item: ItemTabela, c: CatalogoItem) {
+    if (!c.temMateriais) return;
+    try {
+      const res = await fetch(`/api/orcamentos/materiais-padrao?servicoId=${encodeURIComponent(c.id)}${clienteId ? `&clienteId=${encodeURIComponent(clienteId)}` : ""}`, { cache: "no-store" });
+      const d = await res.json().catch(() => null);
+      if (!res.ok || !Array.isArray(d?.materiais)) { toast(d?.erro ?? "Não foi possível carregar os materiais do serviço.", "erro"); return; }
+      const materiais = d.materiais.map((m: any, i: number) => ({ ...m, id: `${item.id}:m${i}` }));
+      setServicos((prev) => prev.map((s) => (s.id === item.id ? { ...s, materiais } : s)));
+    } catch { toast("Erro de conexão ao carregar os materiais do serviço.", "erro"); }
+  }
 
   // Prévia do nome automático: tipo da OS, equipamento, cliente/unidade ou os itens
   const clienteSel = clientes.find((c) => c.id === clienteId);
@@ -410,8 +430,19 @@ export function OrcamentoForm({
       valorTotal: totalDoItem(it),
       observacao: it.observacao?.trim() || null,
     });
-    const servPayload = servicos.filter((s) => s.descricao.trim()).map(limpar);
-    const prodPayload = produtos.filter((p) => p.descricao.trim()).map(limpar);
+    // E3.3: o serviço leva o snapshot dos materiais (unitário = base; o servidor recalcula o total = base + ajuste, ou o manual)
+    const servPayload = servicos.filter((s) => s.descricao.trim()).map((s) => ({
+      ...limpar(s),
+      ...(s.materiais?.length ? {
+        valorTotal: valorDaLinha(s).valorTotal, valorManual: !!s.valorManual,
+        materiais: s.materiais.map((m) => ({
+          produtoId: m.produtoId ?? null, descricao: m.descricao, unidade: m.unidade, comportamento: m.comportamento, quantidade: m.quantidade,
+          quantidadePadrao: m.quantidadePadrao, valorVendaUnit: m.valorVendaUnit, custoUnit: m.custoUnit ?? null, origem: m.origem, kitNome: m.kitNome ?? null,
+        })),
+      } : {}),
+    }));
+    // As peças derivadas NÃO vão como produto: o servidor as recompõe dos materiais
+    const prodPayload = produtos.filter((p) => p.descricao.trim() && !p.derivada).map(limpar);
 
     const payload: Record<string, any> = {
       // Em branco = o servidor compõe o nome automático (a mesma regra da prévia)
@@ -667,6 +698,14 @@ export function OrcamentoForm({
           tabela={tabelaPreco}
           cadastro={cadastroServico}
           totalEditavel
+          onAdicionadoDoCatalogo={(it, c) => void materializarServico(it, c)}
+          extraLinha={(it) => (it.materiais ? (
+            <MateriaisLinha item={it} clienteId={clienteId || null} catalogoProdutos={catalogoProdutos as any}
+              onChange={(patch) => setServicos((prev) => prev.map((s) => (s.id === it.id ? { ...s, ...patch } : s)))} />
+          ) : (
+            <button type="button" onClick={() => setServicos((prev) => prev.map((s) => (s.id === it.id ? { ...s, materiais: [] } : s)))}
+              className="mb-1 text-[11px] font-medium text-primary-600 hover:text-primary-700" data-adicionar-materiais>+ Materiais e peças</button>
+          ))}
         />
       </div>
 
@@ -675,8 +714,8 @@ export function OrcamentoForm({
           titulo="Produtos"
           labelAdicionar="Buscar produto por nome ou código..."
           catalogo={catalogoProdutos}
-          itens={produtos}
-          onChange={setProdutos}
+          itens={[...produtos, ...pecasDerivadas]}
+          onChange={(itens) => setProdutos(itens.filter((i) => !i.derivada))}
           tabela={tabelaPreco}
           cadastro={cadastroProduto}
           totalEditavel

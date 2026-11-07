@@ -1,6 +1,7 @@
 import type { OrcamentoInput } from "./validations";
 import { calcularDataFimContrato } from "./utils";
 import { calcularOrcamento, descontoGeralPorGrupo, totalDoItem, type TotaisOrcamento } from "./orcamentos/calculo";
+import { prepararServicosComMateriais } from "./orcamentos/materiais";
 import { linhasNaoIncluso, normasValidas } from "./orcamentos/proposta";
 
 /**
@@ -12,13 +13,18 @@ import { linhasNaoIncluso, normasValidas } from "./orcamentos/proposta";
  * `issAliquota` é a alíquota congelada neste orçamento (a da empresa na criação).
  */
 export function montarValoresOrcamento(data: OrcamentoInput, issAliquota: number) {
-  const subtotal = (itens: OrcamentoInput["servicos"]) => itens.reduce((s, it) => s + totalDoItem(it), 0);
+  // E3.3: serviço com materiais vale base + ajuste dos inclusos (ou o manual); as peças viram linhas de produto
+  const prep = prepararServicosComMateriais(data.servicos);
+  const servicosEfetivos = prep.linhas.map((l) => ({ quantidade: l.linha.quantidade, valorUnitario: l.valor.valorUnitario, valorTotal: l.valor.valorTotal }));
+  const produtosDoUsuario = data.produtos.map((p) => ({ ...p, materiais: undefined }));
+  const todosProdutos = [...produtosDoUsuario, ...prep.pecas.map((p) => ({ quantidade: p.quantidade, valorUnitario: p.valorUnitario, valorTotal: p.valorTotal }))];
+  const subtotal = (itens: { quantidade: unknown; valorUnitario: unknown; valorTotal?: unknown }[]) => itens.reduce((s, it) => s + totalDoItem(it), 0);
   // Formato antigo (só o desconto geral): reparte nos grupos com a mesma soma
   const porGrupo = data.descontoServicos === undefined && data.descontoProdutos === undefined && data.desconto > 0
-    ? { ...descontoGeralPorGrupo(subtotal(data.servicos), subtotal(data.produtos), data.desconto, data.tipoDesconto), tipoDescontoServicos: "VALOR" as const, tipoDescontoProdutos: "VALOR" as const }
+    ? { ...descontoGeralPorGrupo(subtotal(servicosEfetivos), subtotal(todosProdutos), data.desconto, data.tipoDesconto), tipoDescontoServicos: "VALOR" as const, tipoDescontoProdutos: "VALOR" as const }
     : { descontoServicos: data.descontoServicos ?? 0, tipoDescontoServicos: data.tipoDescontoServicos, descontoProdutos: data.descontoProdutos ?? 0, tipoDescontoProdutos: data.tipoDescontoProdutos };
 
-  const totais: TotaisOrcamento = calcularOrcamento({ servicos: data.servicos, produtos: data.produtos, issAliquota, ...porGrupo });
+  const totais: TotaisOrcamento = calcularOrcamento({ servicos: servicosEfetivos, produtos: todosProdutos, issAliquota, ...porGrupo });
   const item = (it: OrcamentoInput["servicos"][number], idx: number) => ({
     descricao: it.descricao,
     quantidade: it.quantidade,
@@ -27,6 +33,7 @@ export function montarValoresOrcamento(data: OrcamentoInput, issAliquota: number
     observacao: it.observacao?.trim() || null,
     ordem: idx,
   });
+  const nProdutos = produtosDoUsuario.length;
   return {
     totais,
     campos: {
@@ -42,8 +49,21 @@ export function montarValoresOrcamento(data: OrcamentoInput, issAliquota: number
       totalProdutos: totais.subtotalProdutos,
       totalGeral: totais.totalGeral,
     },
-    servicos: data.servicos.map((s, idx) => ({ servicoId: s.catalogoId || null, ...item(s, idx) })),
-    produtos: data.produtos.map((p, idx) => ({ produtoId: p.catalogoId || null, ...item(p, idx) })),
+    servicos: prep.linhas.map(({ linha: s, valor: v, materiais }, idx) => ({
+      servicoId: s.catalogoId || null, ...item(s, idx),
+      // O que vale: base + ajuste (ou o manual); o unitário efetivo = total ÷ qtd (o que a OS, a fatura e a nota leem)
+      valorUnitario: v.valorUnitario, valorTotal: v.valorTotal, valorBase: v.valorBase, ajusteMateriais: v.ajuste, valorManual: v.valorManual,
+      materiais: materiais.map((m) => ({
+        id: m.id ?? undefined, produtoId: m.produtoId ?? null, descricao: m.descricao, unidade: m.unidade || "un", comportamento: m.comportamento,
+        quantidade: m.quantidade, quantidadePadrao: m.quantidadePadrao, valorVendaUnit: m.valorVendaUnit, custoUnit: m.custoUnit ?? null, origem: m.origem, kitNome: m.kitNome ?? null, ordem: m.ordem,
+      })),
+    })),
+    produtos: produtosDoUsuario.map((p, idx) => ({ produtoId: p.catalogoId || null, ...item(p, idx) })),
+    // Peças (venda à parte) das linhas de serviço: linhas de produto derivadas, depois dos produtos do usuário
+    pecas: prep.pecas.map((p, i) => ({
+      produtoId: p.material.produtoId ?? null, descricao: p.descricao, quantidade: p.quantidade, valorUnitario: p.valorUnitario, valorTotal: p.valorTotal,
+      observacao: null, ordem: nProdutos + i, idxServico: p.idxServico, idxMaterial: prep.linhas[p.idxServico].materiais.indexOf(p.material as never),
+    })),
   };
 }
 
