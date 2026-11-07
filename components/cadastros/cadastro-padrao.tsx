@@ -97,7 +97,8 @@ function usePodeCadastro(def: DefCadastro) {
 }
 
 const vazioParaForm = (c: CampoCadastro) => (c.tipo === "cor" ? "#64748B" : c.tipo === "select" ? c.opcoes?.[0]?.value ?? "" : c.tipo === "booleano" ? "true" : "");
-const valorParaForm = (c: CampoCadastro, v: unknown) => (v == null ? (c.tipo === "cor" ? "#64748B" : "") : c.formatar ? c.formatar(String(v)) : String(v));
+// Campo estruturado (lista editada por uma seção própria): começa vazio no formulário e só é enviado se a seção mexer
+const valorParaForm = (c: CampoCadastro, v: unknown) => (v == null || c.tipo === "estruturado" ? (c.tipo === "cor" ? "#64748B" : "") : c.formatar ? c.formatar(String(v)) : String(v));
 
 /** Seleção em massa: só cadastros registrados nas ações em massa e com alguma ação permitida. */
 function useMassa(def: DefCadastro) {
@@ -509,6 +510,7 @@ function CampoForm({ campo: c, valor, disabled, id, onChange }: {
     const outro = CADASTROS[c.cadastro];
     return <SeletorCadastro entidade={c.cadastro} valor={valor} onChange={(v) => onChange(v)} id={id} nome={c.key} disabled={disabled} vazio={`Sem ${outro.singular.split(" ")[0]}`} />;
   }
+  if (c.tipo === "estruturado") return null; // só existe dentro da seção própria do grupo
   if (c.tipo === "booleano") {
     return (
       <label className="inline-flex items-center gap-2 py-2.5 text-sm text-ink cursor-pointer">

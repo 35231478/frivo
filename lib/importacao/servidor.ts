@@ -90,6 +90,8 @@ async function gravarLinha(entidade: EntidadeImportacao, l: LinhaAnalisada, empr
     // O código já foi reservado para a linha (gravarImportacao); o schema do produto não aceita código
     const { codigo, ...semCodigo } = dados;
     const base = entidade === "clientes" ? dados : (CADASTROS[entidade].schemaCriar.parse(semCodigo) as Record<string, unknown>);
+    // Campo estruturado (ex.: materiais padrão do serviço, E3.2) não vem da planilha: o padrão do schema (lista vazia) fica de fora da gravação
+    if (entidade !== "clientes") for (const c of CADASTROS[entidade].campos) if (c.tipo === "estruturado") delete base[c.key];
     await tabela(entidade).create({ data: { ...base, ...(codigo !== undefined && { codigo }), empresaId, ativo: true } });
     return "criado";
   }
