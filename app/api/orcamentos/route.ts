@@ -8,6 +8,7 @@ import { nomeDoOrcamento } from "@/lib/orcamentos/nome-server";
 import { destinatarioSugerido, padroesOrcamento, validadeDoPadrao, validarDestinatario } from "@/lib/orcamentos/padroes-server";
 import { periodoInstanteBR } from "@/lib/fuso";
 import { comNumero } from "@/lib/numeracao-server";
+import { gravarItensOrcamento, validarMateriaisDoOrcamento } from "@/lib/orcamentos/materiais-server";
 
 export async function GET(req: NextRequest) {
   const guard = await exigirPermissao("orcamentos", "visualizar");
@@ -76,6 +77,8 @@ export async function POST(req: NextRequest) {
       validarRefsEmpresa("servico", data.servicos.map((s) => s.catalogoId), empresaId, "Serviço do catálogo"),
       validarRefsEmpresa("produto", data.produtos.map((p) => p.catalogoId), empresaId, "Produto do catálogo"),
       validarDestinatario(empresaId, data.clienteId, data.unidadeId, data.contatoClienteId),
+      // E3.3: materiais das linhas de serviço (regra pura + produtos da empresa)
+      validarMateriaisDoOrcamento(empresaId, data.servicos),
     ]);
   } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
@@ -108,8 +111,8 @@ export async function POST(req: NextRequest) {
   const nome = await nomeDoOrcamento(empresaId, data);
 
   // Número pelo contador da empresa, sob trava, na mesma transação do INSERT (nunca duplica)
-  const orcamento = await comNumero(empresaId, "orcamento", (codigo, tx) =>
-      tx.orcamento.create({
+  const orcamento = await comNumero(empresaId, "orcamento", async (codigo, tx) => {
+      const criado = await tx.orcamento.create({
         data: {
           empresaId,
           codigo,
@@ -125,13 +128,15 @@ export async function POST(req: NextRequest) {
           ...valores.campos,
           tokenPublico,
           ...proposta,
-          servicos: { create: valores.servicos },
-          produtos: { create: valores.produtos },
           ordensServico: {
             create: data.ordensServicoIds.map((osId) => ({ ordemServicoId: osId })),
           },
         },
-      }));
+      });
+      // Linhas em ordem: serviço → materiais (snapshot) → produtos → peças derivadas
+      await gravarItensOrcamento(tx, criado.id, valores);
+      return criado;
+  });
 
   return NextResponse.json(orcamento, { status: 201 });
 }

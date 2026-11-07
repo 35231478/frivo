@@ -19,7 +19,7 @@ export default async function EditarOrcamentoPage({
   const orcamento = await prisma.orcamento.findFirst({
     where: { id, empresaId },
     include: {
-      servicos: { orderBy: { ordem: "asc" } },
+      servicos: { orderBy: { ordem: "asc" }, include: { materiais: { orderBy: { ordem: "asc" } } } },
       produtos: { orderBy: { ordem: "asc" } },
       ordensServico: {
         include: {
@@ -42,7 +42,7 @@ export default async function EditarOrcamentoPage({
     }),
     prisma.servico.findMany({
       where: { empresaId, ativo: true },
-      select: { id: true, codigo: true, nome: true, descricao: true, unidade: true, valorPadrao: true },
+      select: { id: true, codigo: true, nome: true, descricao: true, unidade: true, valorPadrao: true, _count: { select: { materiais: true } } },
       orderBy: { nome: "asc" },
     }),
     prisma.produto.findMany({
@@ -111,11 +111,19 @@ export default async function EditarOrcamentoPage({
       catalogoId: s.servicoId,
       descricao: s.descricao,
       quantidade: Number(s.quantidade),
-      valorUnitario: Number(s.valorUnitario),
+      // E3.3: com materiais, o unitário editável é o BASE (antes do ajuste); o total gravado é o que vale
+      valorUnitario: s.materiais.length && s.valorBase != null ? Number(s.valorBase) / (Number(s.quantidade) || 1) : Number(s.valorUnitario),
       valorTotal: Number(s.valorTotal),
       observacao: s.observacao,
+      valorManual: s.valorManual,
+      materiais: s.materiais.map((m) => ({
+        id: m.id, produtoId: m.produtoId, descricao: m.descricao, unidade: m.unidade, comportamento: m.comportamento,
+        quantidade: Number(m.quantidade), quantidadePadrao: Number(m.quantidadePadrao), valorVendaUnit: Number(m.valorVendaUnit),
+        custoUnit: m.custoUnit == null ? null : Number(m.custoUnit), origem: m.origem, kitNome: m.kitNome,
+      })),
     })),
-    produtos: orcamento.produtos.map((p) => ({
+    // Peças derivadas dos materiais (materialId) não são editadas aqui: a tela as recompõe das linhas de serviço
+    produtos: orcamento.produtos.filter((p) => !p.materialId).map((p) => ({
       id: p.id,
       catalogoId: p.produtoId,
       descricao: p.descricao,
@@ -137,7 +145,7 @@ export default async function EditarOrcamentoPage({
     <OrcamentoForm
       mode="editar"
       clientes={clientes}
-      catalogoServicos={servicos.map((s) => ({ ...s, valorPadrao: s.valorPadrao ? Number(s.valorPadrao) : null }))}
+      catalogoServicos={servicos.map(({ _count, ...s }) => ({ ...s, valorPadrao: s.valorPadrao ? Number(s.valorPadrao) : null, temMateriais: _count.materiais > 0 }))}
       catalogoProdutos={produtos.map((p) => ({ ...p, valorPadrao: p.valorPadrao ? Number(p.valorPadrao) : null }))}
       tecnicos={tecnicos}
       termoTemplates={termoTemplates}

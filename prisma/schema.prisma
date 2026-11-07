@@ -1562,6 +1562,7 @@ model Produto {
   categoriaProduto CategoriaProduto? @relation(fields: [categoriaProdutoId], references: [id], onDelete: SetNull)
   kitItens         KitMaterialItem[]
   servicoMateriais ServicoMaterial[]
+  orcamentoMateriais OrcamentoMaterial[]
 
   @@unique([empresaId, codigo])
   @@index([categoriaProdutoId])
@@ -2316,6 +2317,8 @@ model Orcamento {
   eventos            OrcamentoEvento[]
   servicos           OrcamentoServico[]
   produtos           OrcamentoProduto[]
+  /// E3.3: snapshot dos materiais/peças de cada linha de serviço (cópia do cadastro na hora de orçar)
+  materiais          OrcamentoMaterial[]
   ordensServico      OrcamentoOs[]
   medicaoItens       MedicaoItem[]
   contasReceber      ContaReceber[]
@@ -2392,10 +2395,17 @@ model OrcamentoServico {
   valorTotal    Decimal @map("valor_total") @db.Decimal(12, 2)
   observacao    String?
   ordem         Int     @default(0)
+  /// E3.3 — valor da linha ANTES dos materiais (unitário × qtd). Nulo = linha sem composição (como sempre).
+  valorBase       Decimal? @map("valor_base") @db.Decimal(12, 2)
+  /// Σ (qtd − qtd padrão) × valor de venda dos materiais INCLUSOS: o que o serviço subiu/desceu por causa deles
+  ajusteMateriais Decimal  @default(0) @map("ajuste_materiais") @db.Decimal(12, 2)
+  /// Valor digitado na mão (override): o total não segue mais base + ajuste
+  valorManual     Boolean  @default(false) @map("valor_manual")
 
-  orcamento Orcamento         @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
-  servico   Servico?          @relation(fields: [servicoId], references: [id])
+  orcamento Orcamento           @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+  servico   Servico?            @relation(fields: [servicoId], references: [id])
   osItens   OsItemOrcamento[]
+  materiais OrcamentoMaterial[]
 
   @@map("orcamento_servicos")
 }
@@ -2411,10 +2421,52 @@ model OrcamentoProduto {
   observacao    String?
   ordem         Int     @default(0)
 
-  orcamento Orcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
-  produto   Produto?  @relation(fields: [produtoId], references: [id])
+  /// E3.3 — peça (venda à parte) gerada do material de um serviço: a linha é derivada dele (não se edita aqui)
+  materialId    String? @unique @map("material_id")
+
+  orcamento Orcamento          @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+  produto   Produto?           @relation(fields: [produtoId], references: [id])
+  material  OrcamentoMaterial? @relation(fields: [materialId], references: [id], onDelete: Cascade)
 
   @@map("orcamento_produtos")
+}
+
+/// De onde o material veio na composição: produto solto do serviço, item de um kit (explodido) ou avulso no orçamento
+enum OrigemMaterialOrcamento {
+  SOLTO
+  KIT
+  AVULSO
+}
+
+/// Estoque E3.3 — material/peça de UMA linha de serviço do orçamento: SNAPSHOT (mudar o cadastro depois não altera
+/// orçamentos já feitos). O comportamento efetivo congelado decide: INCLUSO ajusta o valor do serviço pela diferença
+/// do padrão ((qtd − qtd padrão) × venda) e fica oculto do cliente; VENDA_A_PARTE vira uma linha de produto
+/// (OrcamentoProduto.materialId) cobrada à parte. Custo = último custo de compra (só interno). Sem baixa (E4).
+model OrcamentoMaterial {
+  id                 String                   @id @default(cuid())
+  orcamentoId        String                   @map("orcamento_id")
+  orcamentoServicoId String                   @map("orcamento_servico_id")
+  produtoId          String?                  @map("produto_id")
+  descricao          String
+  unidade            String                   @default("un")
+  comportamento      ComportamentoFaturamento
+  quantidade         Decimal                  @db.Decimal(12, 3)
+  quantidadePadrao   Decimal                  @default(0) @map("quantidade_padrao") @db.Decimal(12, 3)
+  valorVendaUnit     Decimal                  @map("valor_venda_unit") @db.Decimal(12, 2)
+  custoUnit          Decimal?                 @map("custo_unit") @db.Decimal(14, 4)
+  origem             OrigemMaterialOrcamento  @default(AVULSO)
+  kitNome            String?                  @map("kit_nome")
+  ordem              Int                      @default(0)
+
+  orcamento        Orcamento         @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+  orcamentoServico OrcamentoServico  @relation(fields: [orcamentoServicoId], references: [id], onDelete: Cascade)
+  produto          Produto?          @relation(fields: [produtoId], references: [id], onDelete: SetNull)
+  linhaProduto     OrcamentoProduto?
+
+  @@index([orcamentoId])
+  @@index([orcamentoServicoId])
+  @@index([produtoId])
+  @@map("orcamento_materiais")
 }
 
 model OrcamentoOs {

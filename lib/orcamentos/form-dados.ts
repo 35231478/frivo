@@ -17,7 +17,7 @@ export async function dadosNovoOrcamento(empresaId: string, { clienteId, osId }:
     }),
     prisma.servico.findMany({
       where: { empresaId, ativo: true },
-      select: { id: true, codigo: true, nome: true, descricao: true, unidade: true, valorPadrao: true },
+      select: { id: true, codigo: true, nome: true, descricao: true, unidade: true, valorPadrao: true, _count: { select: { materiais: true } } },
       orderBy: { nome: "asc" },
     }),
     prisma.produto.findMany({
@@ -54,7 +54,7 @@ export async function dadosNovoOrcamento(empresaId: string, { clienteId, osId }:
 
   return {
     clientes,
-    catalogoServicos: servicos.map((s) => ({ ...s, valorPadrao: s.valorPadrao ? Number(s.valorPadrao) : null })),
+    catalogoServicos: servicos.map(({ _count, ...s }) => ({ ...s, valorPadrao: s.valorPadrao ? Number(s.valorPadrao) : null, temMateriais: _count.materiais > 0 })),
     catalogoProdutos: produtos.map((p) => ({ ...p, valorPadrao: p.valorPadrao ? Number(p.valorPadrao) : null })),
     tecnicos,
     termoTemplates,
