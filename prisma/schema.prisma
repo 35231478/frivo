@@ -1539,6 +1539,9 @@ model Produto {
   /// Saldo em estoque — CACHE da soma das movimentações (a fonte da verdade é movimentacoes_estoque).
   /// Só muda pela lib/estoque (lançamento + saldo na mesma transação); nunca pelo cadastro.
   saldo             Decimal  @default(0) @db.Decimal(12, 3)
+  /// Entra na tela Estoque e nos alertas? Falso = produto que não se controla (serviço embalado,
+  /// item sob encomenda…); o razão continua aceitando lançamentos (ex.: entrada pela NF de compra).
+  controlaEstoque   Boolean  @default(true) @map("controla_estoque")
   ativo             Boolean  @default(true)
   criadoEm          DateTime @default(now()) @map("criado_em")
 
@@ -1564,6 +1567,8 @@ enum TipoMovimentacaoEstoque {
   SAIDA
   AJUSTE
   DEVOLUCAO
+  /// Separação para uma OS (Leva E4): subtrai como a saída. Já previsto no banco; nenhuma tela gera ainda.
+  RESERVA
 }
 
 enum OrigemMovimentacaoEstoque {

@@ -79,7 +79,7 @@ export function BarraFiltros({ periodo, busca, filtros = [], paramBusca = "q", n
       <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3">
         {periodo}
         <label className="flex-1 min-w-0 sm:min-w-[240px] flex flex-col gap-1">
-          <span className="text-xs font-medium text-ink-muted">Pesquisar no período selecionado</span>
+          <span className="text-xs font-medium text-ink-muted">{periodo ? "Pesquisar no período selecionado" : "Pesquisar"}</span>
           {busca}
         </label>
         <div className="flex items-center gap-2 flex-wrap">

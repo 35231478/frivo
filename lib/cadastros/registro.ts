@@ -42,7 +42,7 @@ export type Requisito = [modulo: string, acao: Acao][] | null;
 export interface CampoCadastro {
   key: string;
   label: string;
-  tipo?: "texto" | "textarea" | "moeda" | "numero" | "inteiro" | "cor" | "select" | "email";
+  tipo?: "texto" | "textarea" | "moeda" | "numero" | "inteiro" | "cor" | "select" | "email" | "booleano";
   opcoes?: { value: string; label: string }[];
   obrigatorio?: boolean;
   placeholder?: string;
@@ -165,6 +165,8 @@ const aliquotaIss = numero().refine((v) => !erroAliquota(v), "Alíquota de ISS d
 const aliquota = (rotulo: string) => numero().refine((v) => !erroAliquota(v), `Alíquota de ${rotulo} deve estar entre 0 e 100%.`);
 /** "true"/"false" do formulário (ou booleano); vazio/ausente = false */
 const booleano = z.preprocess((v) => (v === "true" ? true : v === "false" || vazio(v) ? false : v), z.boolean());
+/** Idem, mas vazio/ausente = true (ex.: "controla estoque": quem não diz nada controla) */
+const booleanoPadraoVerdadeiro = z.preprocess((v) => (v === "false" ? false : v === "true" || vazio(v) ? true : v), z.boolean());
 const nfseTributacao = z.preprocess((v) => (vazio(v) ? null : v),
   z.enum(TRIBUTACOES_ISS.map((t) => t.id) as [string, ...string[]], { errorMap: () => ({ message: "Tributação do ISS inválida." }) }).nullable());
 
@@ -268,6 +270,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       { key: "unidade", label: "Unidade", tipo: "select", opcoes: UNIDADES_PRODUTO },
       { key: "valorPadrao", label: "Valor padrão (R$)", tipo: "moeda", placeholder: "0,00" },
       { key: "estoqueMinimo", label: "Estoque mínimo", tipo: "inteiro", placeholder: "0" },
+      { key: "controlaEstoque", label: "Controla estoque", tipo: "booleano", ajuda: "Desmarcado, o produto sai da tela Estoque e dos alertas (item sob encomenda, serviço embalado…). O histórico de movimentações fica." },
     ],
     colunas: [
       { key: "codigo", label: "Cód.", formato: "codigo", ordenar: "codigo" },
@@ -276,8 +279,8 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
     ],
     ...schemas({
       nome, descricao: textoOpcional(), unidade,
-      valorPadrao: numero(), estoqueMinimo: numero({ inteiro: true }),
-    }, { descricao: null, unidade: "un", valorPadrao: null, estoqueMinimo: null }),
+      valorPadrao: numero(), estoqueMinimo: numero({ inteiro: true }), controlaEstoque: booleanoPadraoVerdadeiro,
+    }, { descricao: null, unidade: "un", valorPadrao: null, estoqueMinimo: null, controlaEstoque: true }),
   },
   servicos: {
     entidade: "servicos", modelo: "servico", massa: true, singular: "serviço", plural: "serviços",

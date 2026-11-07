@@ -10,6 +10,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ErroRefEmpresa, validarRefEmpresa } from "@/lib/ref-empresa";
 import { janela, lerOrdem, lerPaginacao, ordemPrisma, paginaValida, um, type MapaOrdem, type ParamsUrl } from "@/lib/listagem";
+import { lerPeriodo, type Periodo } from "@/lib/periodo";
 import { arred, avisoSaldo, calcularMovimento, situacaoEstoque, type Operacao, type OrigemMov, type Situacao, type TipoMov } from "@/lib/estoque/regras";
 
 /** Regra de negócio recusada (vira 400 na API). */
@@ -99,24 +100,25 @@ export const FILTROS_SITUACAO = { abaixo: "Abaixo do mínimo", negativo: "Saldo 
 export type FiltroSituacao = keyof typeof FILTROS_SITUACAO;
 
 export interface LinhaEstoque {
-  id: string; nome: string; descricao: string | null; unidade: string; ativo: boolean;
+  id: string; nome: string; descricao: string | null; unidade: string; ativo: boolean; controlaEstoque: boolean;
   saldo: number; estoqueMinimo: number | null; situacao: Situacao;
 }
 
+/** A tela Estoque é dos produtos que CONTROLAM estoque (ativos; inativos sob pedido). */
 export function whereEstoque(empresaId: string, f: { busca?: string; inativos?: string }): Prisma.ProdutoWhereInput {
   const q = (f.busca ?? "").trim().slice(0, 100);
   return {
-    empresaId,
+    empresaId, controlaEstoque: true,
     ...(f.inativos === "1" ? {} : { ativo: true }),
     ...(q && { OR: [{ nome: { contains: q, mode: "insensitive" } }, { descricao: { contains: q, mode: "insensitive" } }] }),
   };
 }
 
-const linha = (p: { id: string; nome: string; descricao: string | null; unidade: string; ativo: boolean; saldo: unknown; estoqueMinimo: number | null }): LinhaEstoque => {
+const linha = (p: { id: string; nome: string; descricao: string | null; unidade: string; ativo: boolean; controlaEstoque: boolean; saldo: unknown; estoqueMinimo: number | null }): LinhaEstoque => {
   const saldo = arred(Number(p.saldo));
-  return { id: p.id, nome: p.nome, descricao: p.descricao, unidade: p.unidade, ativo: p.ativo, saldo, estoqueMinimo: p.estoqueMinimo, situacao: situacaoEstoque(saldo, p.estoqueMinimo) };
+  return { id: p.id, nome: p.nome, descricao: p.descricao, unidade: p.unidade, ativo: p.ativo, controlaEstoque: p.controlaEstoque, saldo, estoqueMinimo: p.estoqueMinimo, situacao: situacaoEstoque(saldo, p.estoqueMinimo) };
 };
-const SELECT_LINHA = { id: true, nome: true, descricao: true, unidade: true, ativo: true, saldo: true, estoqueMinimo: true } as const;
+const SELECT_LINHA = { id: true, nome: true, descricao: true, unidade: true, ativo: true, controlaEstoque: true, saldo: true, estoqueMinimo: true } as const;
 
 export async function listarEstoque(empresaId: string, sp: ParamsUrl) {
   const busca = um(sp.busca), inativos = um(sp.inativos), sit = um(sp.situacao);
@@ -146,10 +148,10 @@ export async function listarEstoque(empresaId: string, sp: ParamsUrl) {
   return { itens, total, pagina, porPagina, busca, situacao, inativos: inativos === "1" };
 }
 
-/** Produtos ativos abaixo do mínimo (inclui os negativos) e com saldo negativo — para o aviso no topo. */
+/** Produtos ativos (que controlam estoque) abaixo do mínimo (inclui os negativos) e com saldo negativo — para o aviso no topo. */
 export async function contarAlertas(empresaId: string) {
   const ps = await prisma.produto.findMany({
-    where: { empresaId, ativo: true, OR: [{ estoqueMinimo: { not: null } }, { saldo: { lt: 0 } }] },
+    where: { empresaId, ativo: true, controlaEstoque: true, OR: [{ estoqueMinimo: { not: null } }, { saldo: { lt: 0 } }] },
     select: { saldo: true, estoqueMinimo: true },
   });
   let abaixo = 0, negativo = 0;
@@ -167,11 +169,28 @@ export interface LinhaExtrato {
   custoUnitario: number | null; observacao: string | null; refId: string | null; usuario: string | null;
 }
 
+const TIPOS: readonly TipoMov[] = ["ENTRADA", "SAIDA", "AJUSTE", "DEVOLUCAO", "RESERVA"];
+const ORIGENS: readonly OrigemMov[] = ["COMPRA", "OS", "AJUSTE", "INVENTARIO"];
+
+/** O período do extrato (padrão da casa) sobre a DATA da movimentação; padrão: todo o período. */
+export function periodoExtrato(sp: ParamsUrl, agora = new Date()): Periodo {
+  return lerPeriodo(sp, agora, { permitirTodos: true, padrao: "todos" });
+}
+const condPeriodoData = (p: Periodo): Prisma.MovimentacaoEstoqueWhereInput =>
+  !p.gte && !p.lt ? {} : { data: { ...(p.gte && { gte: p.gte }), ...(p.lt && { lt: p.lt }) } };
+
 /** null = produto não existe NA EMPRESA (a rota responde 404, sem dizer se existe em outra). */
-export async function extratoProduto(empresaId: string, produtoId: string, sp: ParamsUrl) {
+export async function extratoProduto(empresaId: string, produtoId: string, sp: ParamsUrl, agora = new Date()) {
   const produto = await prisma.produto.findFirst({ where: { id: produtoId, empresaId }, select: SELECT_LINHA });
   if (!produto) return null;
-  const where: Prisma.MovimentacaoEstoqueWhereInput = { empresaId, produtoId };
+  const periodo = periodoExtrato(sp, agora);
+  const tipo = TIPOS.includes(um(sp.tipo) as TipoMov) ? (um(sp.tipo) as TipoMov) : "";
+  const origem = ORIGENS.includes(um(sp.origem) as OrigemMov) ? (um(sp.origem) as OrigemMov) : "";
+  const busca = um(sp.busca).trim().slice(0, 100);
+  const where: Prisma.MovimentacaoEstoqueWhereInput = {
+    empresaId, produtoId, ...condPeriodoData(periodo), ...(tipo && { tipo }), ...(origem && { origem }),
+    ...(busca && { observacao: { contains: busca, mode: "insensitive" } }),
+  };
   const total = await prisma.movimentacaoEstoque.count({ where });
   const { pagina: pedida, porPagina } = lerPaginacao(sp);
   const pagina = paginaValida(pedida, porPagina, total);
@@ -179,10 +198,11 @@ export async function extratoProduto(empresaId: string, produtoId: string, sp: P
     where, orderBy: [{ data: "desc" }, { criadoEm: "desc" }, { id: "desc" }], ...janela(pagina, porPagina),
     select: { id: true, data: true, tipo: true, origem: true, quantidade: true, saldoApos: true, custoUnitario: true, observacao: true, refId: true, usuario: { select: { nome: true } } },
   }) : [];
-  const soma = await prisma.movimentacaoEstoque.aggregate({ where, _sum: { quantidade: true } });
+  // A conferência é sobre o razão INTEIRO (não só o período da tela)
+  const soma = await prisma.movimentacaoEstoque.aggregate({ where: { empresaId, produtoId }, _sum: { quantidade: true } });
   const p = linha(produto);
   return {
-    produto: p,
+    produto: p, periodo, tipo, origem, busca,
     movimentacoes: movs.map((m): LinhaExtrato => ({
       id: m.id, data: m.data, tipo: m.tipo, origem: m.origem, quantidade: arred(Number(m.quantidade)), saldoApos: arred(Number(m.saldoApos)),
       custoUnitario: m.custoUnitario == null ? null : Number(m.custoUnitario), observacao: m.observacao, refId: m.refId, usuario: m.usuario?.nome ?? null,
@@ -191,4 +211,40 @@ export async function extratoProduto(empresaId: string, produtoId: string, sp: P
     /** Conferência: soma do razão (deve ser igual ao saldo do produto) */
     somaRazao: arred(Number(soma._sum.quantidade ?? 0)),
   };
+}
+
+/* ───────── Recálculo pelo histórico (conferência/correção do cache) ───────── */
+export interface Recalculo { produtoId: string; nome: string; saldoCache: number; somaRazao: number; divergia: boolean }
+
+/**
+ * Recalcula o saldo do produto a partir do razão e corrige o cache se divergir — com a linha do
+ * produto trancada (um lançamento simultâneo entra na fila e já parte do saldo certo). Não grava
+ * movimentação: o razão É a verdade; só o cache é acertado. null = produto não é da empresa.
+ */
+export async function recalcularSaldo(empresaId: string, produtoId: string): Promise<Recalculo | null> {
+  return prisma.$transaction(async (tx) => {
+    const p = await tx.produto.update({
+      where: { id: produtoId, empresaId }, data: { saldo: { increment: 0 } }, select: { id: true, nome: true, saldo: true },
+    }).catch((e: { code?: string }) => { if (e?.code === "P2025") return null; throw e; });
+    if (!p) return null;
+    const soma = await tx.movimentacaoEstoque.aggregate({ where: { empresaId, produtoId }, _sum: { quantidade: true } });
+    const somaRazao = arred(Number(soma._sum.quantidade ?? 0));
+    const saldoCache = arred(Number(p.saldo));
+    const divergia = saldoCache !== somaRazao;
+    if (divergia) await tx.produto.update({ where: { id: produtoId }, data: { saldo: somaRazao } });
+    return { produtoId, nome: p.nome, saldoCache, somaRazao, divergia };
+  });
+}
+
+/** Conferência da empresa inteira: os produtos cujo cache não bate com a soma do razão (só leitura). */
+export async function conferirSaldos(empresaId: string): Promise<Recalculo[]> {
+  const [produtos, somas] = await Promise.all([
+    prisma.produto.findMany({ where: { empresaId }, select: { id: true, nome: true, saldo: true } }),
+    prisma.movimentacaoEstoque.groupBy({ by: ["produtoId"], where: { empresaId }, _sum: { quantidade: true } }),
+  ]);
+  const soma = new Map(somas.map((s) => [s.produtoId, arred(Number(s._sum.quantidade ?? 0))]));
+  return produtos
+    .map((p) => ({ produtoId: p.id, nome: p.nome, saldoCache: arred(Number(p.saldo)), somaRazao: soma.get(p.id) ?? 0, divergia: false }))
+    .map((r) => ({ ...r, divergia: r.saldoCache !== r.somaRazao }))
+    .filter((r) => r.divergia);
 }

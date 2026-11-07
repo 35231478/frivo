@@ -10,9 +10,10 @@ import { FormField } from "@/components/ui/form-field";
 import { cn } from "@/lib/utils";
 import { arred, calcularMovimento, formatarDelta, formatarQtd, lancamentoManualSchema, mensagemLancamento } from "@/lib/estoque/regras";
 
-type Op = "ENTRADA" | "AJUSTE" | "INVENTARIO";
+type Op = "ENTRADA" | "SAIDA" | "AJUSTE" | "INVENTARIO";
 const OPS: { id: Op; label: string; dica: string }[] = [
   { id: "ENTRADA", label: "Entrada", dica: "Chegou material: soma ao saldo." },
+  { id: "SAIDA", label: "Saída", dica: "Perda ou uso avulso: subtrai do saldo (motivo obrigatório)." },
   { id: "AJUSTE", label: "Ajuste", dica: "Corrige o saldo para o valor certo (motivo obrigatório)." },
   { id: "INVENTARIO", label: "Inventário", dica: "Contagem física: o saldo passa a ser o que foi contado." },
 ];
@@ -28,7 +29,7 @@ function lerNumero(v: string): number | null {
 }
 
 /**
- * Lançamento manual de estoque (Entrada / Ajuste / Inventário) — só aparece para quem tem
+ * Lançamento manual de estoque (Entrada / Saída / Ajuste / Inventário) — só aparece para quem tem
  * "Estoque › gerenciar". Grava pela API (lançamento + saldo juntos) e atualiza a página.
  */
 export function LancarEstoque({ produto, compacto = false }: { produto: ProdutoLancamento; compacto?: boolean }) {
@@ -53,6 +54,7 @@ export function LancarEstoque({ produto, compacto = false }: { produto: ProdutoL
     e.preventDefault();
     const corpo = op === "ENTRADA"
       ? { operacao: op, quantidade: valor, ...(custo.trim() && { custoUnitario: custo }), ...(obs.trim() && { observacao: obs }) }
+      : op === "SAIDA" ? { operacao: op, quantidade: valor, observacao: obs }
       : op === "AJUSTE" ? { operacao: op, novoSaldo: valor, observacao: obs }
       : { operacao: op, contagem: valor, ...(obs.trim() && { observacao: obs }) };
     const v = lancamentoManualSchema.safeParse(corpo);
@@ -97,7 +99,7 @@ export function LancarEstoque({ produto, compacto = false }: { produto: ProdutoL
           </div>
         ) : (
           <form onSubmit={enviar} className="space-y-4" noValidate>
-            <div role="tablist" aria-label="Tipo de lançamento" className="grid grid-cols-3 gap-1 p-1 bg-surface-alt rounded-lg">
+            <div role="tablist" aria-label="Tipo de lançamento" className="grid grid-cols-4 gap-1 p-1 bg-surface-alt rounded-lg">
               {OPS.map((o) => (
                 <button
                   key={o.id} type="button" role="tab" aria-selected={op === o.id}
@@ -108,7 +110,7 @@ export function LancarEstoque({ produto, compacto = false }: { produto: ProdutoL
             </div>
             <p className="text-xs text-ink-muted">{OPS.find((o) => o.id === op)!.dica} Saldo atual: <strong className={cn(produto.saldo < 0 && "text-atrasado")}>{formatarQtd(produto.saldo)} {un}</strong></p>
 
-            <FormField label={op === "ENTRADA" ? `Quantidade (${un})` : op === "AJUSTE" ? `Saldo correto (${un})` : `Quantidade contada (${un})`} required>
+            <FormField label={op === "ENTRADA" || op === "SAIDA" ? `Quantidade (${un})` : op === "AJUSTE" ? `Saldo correto (${un})` : `Quantidade contada (${un})`} required>
               <Input inputMode="decimal" autoFocus value={valor} onChange={(e) => setValor(e.target.value)} name="valor" placeholder="0" />
             </FormField>
             {op === "ENTRADA" && (
@@ -116,11 +118,12 @@ export function LancarEstoque({ produto, compacto = false }: { produto: ProdutoL
                 <Input inputMode="decimal" value={custo} onChange={(e) => setCusto(e.target.value)} name="custo" placeholder="0,00" />
               </FormField>
             )}
-            <FormField label={op === "AJUSTE" ? "Motivo" : "Observação"} required={op === "AJUSTE"}>
-              <Input value={obs} onChange={(e) => setObs(e.target.value)} name="observacao" maxLength={500} placeholder={op === "AJUSTE" ? "Ex.: perda, avaria, erro de lançamento" : "Opcional"} />
+            <FormField label={op === "AJUSTE" || op === "SAIDA" ? "Motivo" : "Observação"} required={op === "AJUSTE" || op === "SAIDA"}>
+              <Input value={obs} onChange={(e) => setObs(e.target.value)} name="observacao" maxLength={500}
+                placeholder={op === "AJUSTE" ? "Ex.: perda, avaria, erro de lançamento" : op === "SAIDA" ? "Ex.: uso no almoxarifado, avaria, perda" : "Opcional"} />
             </FormField>
 
-            {previa && (op !== "ENTRADA" || previa.delta > 0) && (
+            {previa && ((op !== "ENTRADA" && op !== "SAIDA") || Math.abs(previa.delta) > 0) && (
               <p className="text-xs text-ink-muted" data-previa>
                 Lançamento: <strong>{formatarDelta(previa.delta)} {un}</strong> → saldo fica{" "}
                 <strong className={cn(arred(produto.saldo + previa.delta) < 0 && "text-atrasado")}>{formatarQtd(arred(produto.saldo + previa.delta))} {un}</strong>
