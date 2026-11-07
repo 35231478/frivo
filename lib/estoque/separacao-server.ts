@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { movimentar } from "@/lib/estoque/servidor";
 import { arred, situacaoEstoque, type Situacao } from "@/lib/estoque/regras";
-import { faltaSeparar, planoSeparacao, precisaSeparar, resumoSeparacao, situacaoDoMaterial, type EstadoSeparacao, type MaterialSeparavel, type SituacaoMaterial } from "@/lib/estoque/separacao";
+import { faltaSeparar, pendenteDevolucao, planoSeparacao, precisaSeparar, resumoSeparacao, situacaoDoMaterial, type EstadoSeparacao, type MaterialSeparavel, type SituacaoMaterial } from "@/lib/estoque/separacao";
 
 /**
  * Estoque E4.1 — separação de material da OS, lado do banco: a fila "A separar", os materiais de uma OS com o saldo
@@ -19,7 +19,9 @@ export const STATUS_FORA_DA_FILA = ["CONCLUIDA", "CANCELADA"] as const;
 const SELECT_MATERIAL = {
   id: true, osItemId: true, produtoId: true, descricao: true, unidade: true, comportamento: true, quantidade: true, kitNome: true, ordem: true,
   quantidadeSeparada: true, estadoSeparacao: true, separadoEm: true,
+  quantidadeConsumida: true, consumidoEm: true,
   separadoPor: { select: { nome: true } },
+  consumidoPor: { select: { nome: true } },
   produto: { select: { nome: true, saldo: true, estoqueMinimo: true, controlaEstoque: true } },
   item: { select: { descricao: true, ordem: true } },
 } as const;
@@ -34,14 +36,18 @@ export interface MaterialSeparacaoTela extends MaterialSeparavel {
   situacao: SituacaoMaterial;
   separadoEm: string | null;
   separadoPor: string | null;
+  /** E4.2: consumo informado (estado CONSUMIDO) e a sobra ainda reservada */
+  consumidoEm: string | null;
+  consumidoPor: string | null;
+  pendenteDevolucao: number;
   /** Saldo disponível do produto (null = produto saiu do cadastro) */
   saldo: number | null;
   situacaoSaldo: Situacao | null;
 }
 
-export const paraSeparavel = (m: { id: string; produtoId: string | null; descricao: string; unidade: string; quantidade: unknown; quantidadeSeparada: unknown; estadoSeparacao: EstadoSeparacao | null }): MaterialSeparavel => ({
+export const paraSeparavel = (m: { id: string; produtoId: string | null; descricao: string; unidade: string; quantidade: unknown; quantidadeSeparada: unknown; quantidadeConsumida?: unknown; estadoSeparacao: EstadoSeparacao | null }): MaterialSeparavel => ({
   id: m.id, produtoId: m.produtoId, descricao: m.descricao, unidade: m.unidade,
-  quantidade: arred(Number(m.quantidade)), quantidadeSeparada: arred(Number(m.quantidadeSeparada)), estadoSeparacao: m.estadoSeparacao,
+  quantidade: arred(Number(m.quantidade)), quantidadeSeparada: arred(Number(m.quantidadeSeparada)), quantidadeConsumida: arred(Number(m.quantidadeConsumida ?? 0)), estadoSeparacao: m.estadoSeparacao,
 });
 
 export function materialParaTela(m: MaterialBanco): MaterialSeparacaoTela {
@@ -50,6 +56,7 @@ export function materialParaTela(m: MaterialBanco): MaterialSeparacaoTela {
   return {
     ...s, osItemId: m.osItemId, item: m.item.descricao, kitNome: m.kitNome, comportamento: m.comportamento,
     falta: faltaSeparar(s), situacao: situacaoDoMaterial(s), separadoEm: m.separadoEm?.toISOString() ?? null, separadoPor: m.separadoPor?.nome ?? null,
+    consumidoEm: m.consumidoEm?.toISOString() ?? null, consumidoPor: m.consumidoPor?.nome ?? null, pendenteDevolucao: pendenteDevolucao(s),
     saldo, situacaoSaldo: m.produto ? situacaoEstoque(saldo!, m.produto.estoqueMinimo) : null,
   };
 }
@@ -180,8 +187,8 @@ export async function separarMateriais(empresaId: string, osId: string, usuarioI
   return { separacao, ...feito };
 }
 
-/** Há material separado (reservado) para este item da OS? Editar/apagar o item apagaria o snapshot e deixaria a reserva órfã. */
+/** Há material separado (reservado) ou consumido (baixado) neste item da OS? Editar/apagar o item apagaria o snapshot e deixaria o razão órfão. */
 export async function itemTemMaterialSeparado(itemId: string): Promise<boolean> {
-  return (await prisma.osMaterial.count({ where: { osItemId: itemId, quantidadeSeparada: { gt: 0 } } })) > 0;
+  return (await prisma.osMaterial.count({ where: { osItemId: itemId, OR: [{ quantidadeSeparada: { gt: 0 } }, { quantidadeConsumida: { gt: 0 } }] } })) > 0;
 }
-export const ERRO_ITEM_SEPARADO = "Há material separado para este item: desfaça a separação (Estoque › A separar) antes de alterar.";
+export const ERRO_ITEM_SEPARADO = "Há material separado ou consumido para este item: desfaça a separação/consumo antes de alterar.";

@@ -40,7 +40,7 @@ export async function GET(_: NextRequest, { params }: Params) {
         },
         orderBy: { criadoEm: "asc" },
       },
-      itensOrcamento: { orderBy: [{ ordem: "asc" }, { id: "asc" }], include: { materiais: { orderBy: { ordem: "asc" }, include: { separadoPor: { select: { nome: true } } } }, material: { select: { osItemId: true } } } },
+      itensOrcamento: { orderBy: [{ ordem: "asc" }, { id: "asc" }], include: { materiais: { orderBy: { ordem: "asc" }, include: { separadoPor: { select: { nome: true } }, consumidoPor: { select: { nome: true } } } }, material: { select: { osItemId: true } } } },
       // Medições OFICIAIS em que a OS entrou (a medição interna OsMedicao saiu do sistema)
       medicaoItens: { select: { medicao: { select: { id: true, numero: true, status: true, valorTotal: true, criadoEm: true } } } },
       anexos: { select: { id: true, nome: true, tipo: true, tamanho: true, criadoEm: true }, orderBy: { criadoEm: "desc" } },
@@ -164,7 +164,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     // Trava: a OS só conclui com pelo menos 1 equipamento atendido e o checklist de cada atendido respondido
     if (status === "CONCLUIDA") {
       const r = await verificarConclusaoOs(empresaId, id);
-      if (!r.ok) return NextResponse.json({ erro: r.mensagem, pendencias: r.pendencias }, { status: 422 });
+      if (!r.ok) return NextResponse.json({ erro: r.mensagem, pendencias: r.pendencias, materiais: r.materiais }, { status: 422 });
     }
   }
 

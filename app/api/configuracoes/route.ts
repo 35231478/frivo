@@ -23,6 +23,7 @@ const configuracaoSchema = z.object({
   osPermitirSemContrato: z.boolean().optional(),
   osExigirQuestionario: z.boolean().optional(),
   osPermitirEdicaoConcluida: z.boolean().optional(),
+  osExigirPrestacaoMaterial: z.boolean().optional(),
   notifEmailAbrirOs: z.boolean().optional(),
   notifEmailConcluirOs: z.boolean().optional(),
   notifWhatsappAbrirOs: z.boolean().optional(),
