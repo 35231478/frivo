@@ -135,14 +135,14 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
               )}
 
               {ativa === "comercial" && (
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div className="space-y-6">
                   <section data-secao-orcamentos>
                     <h3 className="section-title mb-3">Orçamentos do comercial</h3>
                     <OsOrcamentosVinculados osId={os.id} clienteId={os.cliente.id} numeroOs={os.chamadoNumero ?? os.numero} vinculados={os.orcamentos ?? []} />
                   </section>
                   <section data-secao-itens>
                     <h3 className="section-title mb-3">Itens da OS</h3>
-                    <OsOrcamento osId={os.id} itens={os.itensOrcamento} />
+                    <OsOrcamento osId={os.id} itens={os.itensOrcamento} clienteId={os.cliente.id} />
                   </section>
                 </div>
               )}

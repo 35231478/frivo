@@ -164,11 +164,11 @@ describe("UX-1: orçamento da OS avisa quando a gravação falha", () => {
     const { OsOrcamento } = await import("@/components/os/os-orcamento");
     vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("Failed to fetch"); }));
     await montar(createElement(OsOrcamento, { osId: "os1", itens: [] }));
-    await clicar($$("button").find((b) => b.textContent!.includes("Adicionar item")));
-    const inputs = $$("input");
-    await digitar(inputs[0], "Gás R410A");
-    await digitar(inputs[2], "100");
-    await clicar($$("button").find((b) => b.textContent!.trim() === "Adicionar"));
+    // E3.3b: a "linha livre" (descrição, quantidade, unitário) continua existindo ao lado do catálogo
+    await clicar($('[data-acao="novo-livre"]'));
+    await digitar($("[data-descricao-item]"), "Gás R410A");
+    await digitar($("[data-unitario-item]"), "100");
+    await clicar($('[data-acao="salvar-item"]'));
     expect($("[data-erro-orcamento]")!.textContent).toContain("Erro de conexão");
   });
 });

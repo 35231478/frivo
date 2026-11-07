@@ -39,8 +39,9 @@ export async function gerarOsDoOrcamento(p: { empresaId: string; usuarioId: stri
     where: { id: orcamentoId, empresaId },
     select: {
       id: true, codigo: true, nome: true, descricao: true, status: true, tipo: true, clienteId: true, unidadeId: true,
-      servicos: { select: { id: true, descricao: true, quantidade: true, valorUnitario: true, valorTotal: true, ordem: true } },
-      produtos: { select: { descricao: true, quantidade: true, valorUnitario: true, valorTotal: true, ordem: true } },
+      // E3.3b: o snapshot dos materiais e a peça derivada (materialId) vão para a OS, com os mesmos valores
+      servicos: { select: { id: true, descricao: true, quantidade: true, valorUnitario: true, valorTotal: true, ordem: true, servicoId: true, valorBase: true, ajusteMateriais: true, valorManual: true, materiais: { orderBy: { ordem: "asc" } } } },
+      produtos: { select: { descricao: true, quantidade: true, valorUnitario: true, valorTotal: true, ordem: true, produtoId: true, materialId: true } },
     },
   });
   if (!orc) return { tipo: "nao-encontrado" };
@@ -65,7 +66,17 @@ export async function gerarOsDoOrcamento(p: { empresaId: string; usuarioId: stri
           select: { id: true, numero: true },
         });
         await criarPrimeiraAtividade(tx, empresaId, criada.id, p.execucao);
-        if (itens.length) await tx.osItemOrcamento.createMany({ data: itens.map((i) => ({ ...i, ordemServicoId: criada.id })) });
+        // Em ordem (serviço → materiais dele; a peça derivada aponta para o material copiado)
+        const materialIdNaOs = new Map<string, string>();
+        for (const [ordem, i] of itens.entries()) {
+          const { materiais, materialOrigemId, ...dados } = i;
+          const item = await tx.osItemOrcamento.create({ data: { ...dados, ordemServicoId: criada.id, ordem, materialId: materialOrigemId ? materialIdNaOs.get(materialOrigemId) ?? null : null } });
+          for (const m of materiais) {
+            const { origemId, ...dm } = m;
+            const criadoM = await tx.osMaterial.create({ data: { ...dm, comportamento: dm.comportamento as "VENDA_A_PARTE" | "INCLUSO_NO_SERVICO", origem: dm.origem as "SOLTO" | "KIT" | "AVULSO", ordemServicoId: criada.id, osItemId: item.id } });
+            if (origemId) materialIdNaOs.set(origemId, criadoM.id);
+          }
+        }
         await tx.orcamentoOs.create({ data: { orcamentoId: orc.id, ordemServicoId: criada.id } });
         await tx.osHistorico.create({
           data: { ordemServicoId: criada.id, usuarioId, acao: "OS criada", detalhes: `Ordem de serviço ${numero} gerada a partir do orçamento ${orc.codigo}.` },

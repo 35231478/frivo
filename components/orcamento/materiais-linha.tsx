@@ -17,7 +17,7 @@ const uid = () => Math.random().toString(36).slice(2);
 const sinal = (v: number) => (v > 0 ? `+${formatarMoeda(v)}` : v < 0 ? `−${formatarMoeda(-v)}` : formatarMoeda(0));
 
 export interface LinhaComMateriais {
-  id: string;
+  id?: string;
   descricao: string;
   quantidade: number;
   valorUnitario: number;
@@ -33,11 +33,15 @@ export interface LinhaComMateriais {
  * como linhas de produto e o custo interno (margem). Valor manual: o total digitado na linha vale; "Recalcular"
  * volta a base + ajuste.
  */
-export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange }: {
+export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange, somenteLeitura = false, buscarAvulso }: {
   item: LinhaComMateriais;
   clienteId: string | null;
   catalogoProdutos: ItemCadastro[];
   onChange: (patch: Partial<LinhaComMateriais>) => void;
+  /** Item que veio do orçamento aprovado (OS): mostra, não edita */
+  somenteLeitura?: boolean;
+  /** De onde vem o material avulso (padrão: a rota do orçamento; a OS usa a dela) */
+  buscarAvulso?: (produtoId: string) => Promise<{ material?: MaterialOrcamento; erro?: string }>;
 }) {
   const [aberto, setAberto] = useState(true);
   const [carregando, setCarregando] = useState(false);
@@ -56,15 +60,14 @@ export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange }: 
     if (!produtoId) return;
     setCarregando(true); setErro("");
     try {
-      const res = await fetch(`/api/orcamentos/materiais-padrao?produtoId=${encodeURIComponent(produtoId)}${clienteId ? `&clienteId=${encodeURIComponent(clienteId)}` : ""}`, { cache: "no-store" });
-      const d = await res.json().catch(() => null);
-      if (!res.ok || !d?.material) { setErro(d?.erro ?? "Não foi possível adicionar o material."); return; }
+      const d = buscarAvulso ? await buscarAvulso(produtoId) : await fetch(`/api/orcamentos/materiais-padrao?produtoId=${encodeURIComponent(produtoId)}${clienteId ? `&clienteId=${encodeURIComponent(clienteId)}` : ""}`, { cache: "no-store" }).then(async (r) => (await r.json().catch(() => null)) ?? { erro: "Não foi possível adicionar o material." });
+      if (!d?.material) { setErro(d?.erro ?? "Não foi possível adicionar o material."); return; }
       onChange({ materiais: [...ms, { ...d.material, id: uid() }] });
     } catch { setErro("Erro de conexão."); } finally { setCarregando(false); }
   }
 
   return (
-    <div className="mt-1 mb-1 rounded-lg border border-surface-border bg-surface-page/60" data-materiais-linha data-total-materiais={ms.length}>
+    <div className="mt-1 mb-1 rounded-lg border border-surface-border bg-surface-page/60" data-materiais-linha data-total-materiais={ms.length} data-somente-leitura={somenteLeitura ? "true" : undefined}>
       <button type="button" onClick={() => setAberto((a) => !a)} className="w-full flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 text-left" aria-expanded={aberto} data-abrir-materiais>
         <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink">
           <Boxes className="w-3.5 h-3.5 text-ink-muted" aria-hidden /> Materiais e peças ({ms.length})
@@ -102,11 +105,11 @@ export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange }: 
                   </label>
                   <label className="block">
                     <span className="block text-[10px] text-ink-subtle">Qtd</span>
-                    <CampoNumero valor={m.quantidade} onValor={(q) => mudar(m.id!, { quantidade: Math.max(0, q) })} aria-label={`Quantidade de ${m.descricao}`} data-qtd-material className="!bg-white !border-surface-border !py-0.5 text-xs" />
+                    <CampoNumero valor={m.quantidade} onValor={(q) => mudar(m.id!, { quantidade: Math.max(0, q) })} aria-label={`Quantidade de ${m.descricao}`} data-qtd-material className="!bg-white !border-surface-border !py-0.5 text-xs" disabled={somenteLeitura} />
                   </label>
                   <label className="block">
                     <span className="block text-[10px] text-ink-subtle">Venda (un.)</span>
-                    <CampoNumero valor={m.valorVendaUnit} casas={2} onValor={(p) => mudar(m.id!, { valorVendaUnit: Math.max(0, p) })} aria-label={`Valor de venda de ${m.descricao}`} data-venda-material className="!bg-white !border-surface-border !py-0.5 text-xs" />
+                    <CampoNumero valor={m.valorVendaUnit} casas={2} onValor={(p) => mudar(m.id!, { valorVendaUnit: Math.max(0, p) })} aria-label={`Valor de venda de ${m.descricao}`} data-venda-material className="!bg-white !border-surface-border !py-0.5 text-xs" disabled={somenteLeitura} />
                   </label>
                   <div className="text-right">
                     <span className="block text-[10px] text-ink-subtle">{peca ? "À parte" : "No serviço"}</span>
@@ -118,7 +121,7 @@ export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange }: 
                     </span>
                   </div>
                   <div className="flex justify-end">
-                    {naoUsado ? (
+                    {somenteLeitura ? null : naoUsado ? (
                       <button type="button" onClick={() => mudar(m.id!, { quantidade: m.quantidadePadrao })} className="p-1 text-ink-muted hover:text-ink" aria-label={`Voltar a usar ${m.descricao}`} title="Voltar ao padrão"><Undo2 className="w-3.5 h-3.5" /></button>
                     ) : (
                       <button type="button" onClick={() => tirar(m)} className="p-1 text-ink-muted hover:text-atrasado" aria-label={`Tirar ${m.descricao}`} title={m.quantidadePadrao > 0 ? "Não usar (abate o padrão do serviço)" : "Remover"}><Trash2 className="w-3.5 h-3.5" /></button>
@@ -129,11 +132,13 @@ export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange }: 
             })}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="min-w-[220px] flex-1 max-w-sm">
-              <SeletorCadastro entidade="produtos" itens={catalogoProdutos} valor="" onChange={(v) => void adicionarAvulso(v)} placeholder={carregando ? "Adicionando…" : "+ Material ou peça avulso…"} semCriar disabled={carregando} nome="material-avulso" />
+          {!somenteLeitura && (
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="min-w-[220px] flex-1 max-w-sm">
+                <SeletorCadastro entidade="produtos" itens={catalogoProdutos} valor="" onChange={(v) => void adicionarAvulso(v)} placeholder={carregando ? "Adicionando…" : "+ Material ou peça avulso…"} semCriar disabled={carregando} nome="material-avulso" />
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="rounded-md bg-white border border-surface-border px-3 py-2 text-xs space-y-1" data-resumo-materiais>
             <div className="flex flex-wrap justify-between gap-x-4 gap-y-0.5">
@@ -143,7 +148,7 @@ export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange }: 
             {v.valorManual && (
               <div className="flex flex-wrap items-center justify-between gap-2 text-atencao-texto" data-valor-manual>
                 <span>Valor manual na linha: <strong className="tabular-nums">{formatarMoeda(v.valorTotal)}</strong> (o cálculo acima não está sendo usado)</span>
-                <button type="button" onClick={() => onChange({ valorManual: false, valorTotal: undefined })} className="inline-flex items-center gap-1 font-semibold text-primary-600 hover:text-primary-700" data-recalcular><RotateCcw className="w-3 h-3" /> Recalcular</button>
+                {!somenteLeitura && <button type="button" onClick={() => onChange({ valorManual: false, valorTotal: undefined })} className="inline-flex items-center gap-1 font-semibold text-primary-600 hover:text-primary-700" data-recalcular><RotateCcw className="w-3 h-3" /> Recalcular</button>}
               </div>
             )}
             {r.quantasPecas > 0 && <p className="text-ink-muted"><Package className="inline w-3 h-3 mr-1" aria-hidden />{r.quantasPecas} {r.quantasPecas === 1 ? "peça vai" : "peças vão"} como linha de produto, cobrada à parte: <strong className="tabular-nums">{formatarMoeda(r.pecas)}</strong></p>}

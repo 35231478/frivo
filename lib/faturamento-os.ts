@@ -82,7 +82,7 @@ export async function travarParaFaturar(tx: Prisma.TransactionClient, o: {
 export async function itensFaturaveisDaOs(osId: string) {
   const [itens, adicionais] = await Promise.all([
     prisma.osItemOrcamento.findMany({
-      where: { ordemServicoId: osId, executado: true }, orderBy: { id: "asc" },
+      where: { ordemServicoId: osId, executado: true }, orderBy: [{ ordem: "asc" }, { id: "asc" }],
       // O serviço do orçamento de origem (copiado pelo "Gerar OS") leva os dados fiscais até a nota
       include: { orcamentoServico: { select: { servicoId: true } } },
     }),
