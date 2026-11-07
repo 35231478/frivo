@@ -25,7 +25,9 @@ import { DEBOUNCE_BUSCA_MS } from "@/components/listagem/use-listagem-url";
 import { ImportarPlanilha } from "@/components/importacao/importar-planilha";
 import { BaixarPlanilha } from "@/components/importacao/baixar-planilha";
 import { ehEntidadeImportacao } from "@/lib/importacao/entidades";
-import { CADASTROS, type AcaoCadastro, type CampoCadastro, type ColunaCadastro, type DefCadastro, type EntidadeCadastro } from "@/lib/cadastros/registro";
+import { CADASTROS, type AcaoCadastro, type CampoCadastro, type ColunaCadastro, type DefCadastro, type EntidadeCadastro, type FiltroCadastro } from "@/lib/cadastros/registro";
+import { SeletorCadastro, useCadastro } from "@/components/cadastros/seletor-cadastro";
+import { opcoesCadastro } from "@/lib/cadastros/opcoes";
 
 /**
  * Tela padrão de um cadastro (lib/cadastros/registro.ts): abas Ativos / Inativos / Todos com busca
@@ -158,6 +160,7 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda, aviso, grupos }
 
   const consulta = new URLSearchParams({ ativo: FILTRO_ABA[aba], pagina: String(pagina), por: String(porPagina) });
   if (qUrl.trim()) consulta.set("q", qUrl.trim());
+  for (const fl of def.filtros ?? []) { const v = sp.get(fl.param); if (v) consulta.set(fl.param, v); }
   if (ordem.campo) { consulta.set("ordem", ordem.campo); consulta.set("dir", ordem.dir); }
   const chaveConsulta = consulta.toString();
 
@@ -234,6 +237,10 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda, aviso, grupos }
               sugerir={sugerir} carregando={carregando && !!dados}
             />
           </div>
+          {/* Filtros por vínculo (ex.: produtos por categoria): na URL, valem também no "selecionar todos do filtro" */}
+          {(def.filtros ?? []).map((fl) => (
+            <FiltroVinculo key={fl.param} filtro={fl} valor={sp.get(fl.param) ?? ""} onChange={(v) => mudarUrl({ [fl.param]: v || null })} />
+          ))}
           {/* No celular: Baixar | Importar numa linha e "Novo" embaixo, na largura toda (os três não cabem lado a lado) */}
           <div className="flex flex-wrap sm:flex-nowrap gap-2 sm:ml-auto shrink-0 empty:hidden">
             {/* Baixar a planilha (mesmo formato da importação): quem vê o módulo; o servidor confere de novo */}
@@ -358,6 +365,24 @@ function Celula({ col, item, primeira }: { col: ColunaCadastro; item: Item; prim
   return <span className={cn(primeira && "font-medium")}>{v != null && v !== "" ? String(v) : "—"}</span>;
 }
 
+/** Select de um filtro por vínculo: "Todas", a opção "sem" e os registros do outro cadastro (os inativos marcados) */
+function FiltroVinculo({ filtro: fl, valor, onChange }: { filtro: FiltroCadastro; valor: string; onChange: (v: string) => void }) {
+  const outro = CADASTROS[fl.opcoesDe];
+  const { itens } = useCadastro(fl.opcoesDe);
+  const opcoes = opcoesCadastro(itens, [valor === "sem" ? null : valor], "id", { feminino: outro.feminino });
+  return (
+    <label className="flex items-center gap-2 text-sm text-ink-muted">
+      <span className="sr-only sm:not-sr-only">{fl.rotulo}</span>
+      <select value={valor} onChange={(e) => onChange(e.target.value)} aria-label={fl.rotulo} data-filtro-vinculo={fl.param}
+        className={cn("bg-white border rounded-lg px-2.5 py-2 text-sm text-ink focus:outline-none focus:border-primary-500", valor ? "border-primary-300 text-primary-700 bg-primary-50/50" : "border-surface-border")}>
+        <option value="">{outro.feminino ? "Todas" : "Todos"}</option>
+        {fl.semValor && <option value="sem">{fl.semValor}</option>}
+        {opcoes.map((o) => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
+      </select>
+    </label>
+  );
+}
+
 /* ───────── Painel de criar/editar ───────── */
 function FormularioCadastro({
   def, titulo, editando, onFechar, onSalvo, grupos = {},
@@ -479,6 +504,11 @@ function CampoForm({ campo: c, valor, disabled, id, onChange }: {
   // Códigos com lista (ex.: LC 116): busca-e-seleção; o digitado também vale
   if (c.opcoesCodigo) return <ComboboxCodigo id={id} value={valor} onChange={onChange} opcoes={c.opcoesCodigo} placeholder={c.placeholder} disabled={disabled} />;
   if (c.tipo === "textarea") return <Textarea id={id} value={valor} onChange={(e) => onChange(e.target.value)} placeholder={c.placeholder} rows={3} disabled={disabled} />;
+  if (c.tipo === "cadastro" && c.cadastro) {
+    // Vínculo com outro cadastro: seletor da casa (ativos para escolher; o atual fica mesmo inativo; "+ Novo…" inline)
+    const outro = CADASTROS[c.cadastro];
+    return <SeletorCadastro entidade={c.cadastro} valor={valor} onChange={(v) => onChange(v)} id={id} nome={c.key} disabled={disabled} vazio={`Sem ${outro.singular.split(" ")[0]}`} />;
+  }
   if (c.tipo === "booleano") {
     return (
       <label className="inline-flex items-center gap-2 py-2.5 text-sm text-ink cursor-pointer">

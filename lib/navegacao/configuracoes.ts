@@ -71,6 +71,7 @@ export const SECOES_CONFIGURACOES: SecaoConfig[] = [
           { id: "tipos-equipamento", href: "/configuracoes/tipos-equipamento", icone: Thermometer, label: "Tipos de equipamento", dica: "Categorias de equipamento e formulários de cada tipo" },
           { id: "servicos", href: "/configuracoes/servicos", icone: Wrench, label: "Serviços", dica: "Serviços prestados, usados em OS e orçamentos" },
           { id: "produtos", href: "/configuracoes/produtos", icone: Package, label: "Produtos", dica: "Peças e materiais usados nos serviços" },
+          { id: "categorias-produto", href: "/configuracoes/categorias-produto", icone: Tags, label: "Categorias de produto", dica: "Como o produto entra na cobrança: venda à parte ou incluso no serviço" },
           { id: "tabelas-preco", href: "/configuracoes/tabelas-preco", icone: Tags, label: "Tabelas de preços", dica: "Preços por serviço/produto, vinculados a clientes" },
         ],
       },

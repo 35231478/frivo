@@ -39,7 +39,9 @@ export function limpar<T extends Record<string, unknown> | null>(def: DefCadastr
   return copia as T;
 }
 
-export async function listarCadastro(def: DefCadastro, empresaId: string, f: { ativo: FiltroAtivo; q?: string | null }) {
+export type FiltroLista = { ativo: FiltroAtivo; q?: string | null; filtros?: Record<string, string | null | undefined> };
+
+export async function listarCadastro(def: DefCadastro, empresaId: string, f: FiltroLista) {
   await REGRAS[def.entidade]?.antesDeListar?.(empresaId);
   const itens = await tabela(def).findMany({
     where: whereCadastro(def, empresaId, f), orderBy: def.ordem ?? { nome: "asc" }, ...(def.incluir && { include: def.incluir }),
@@ -60,10 +62,10 @@ export interface PaginaCadastro {
  * Lista PAGINADA no servidor (?pagina=&por=&ordem=&dir=), com o total e as contagens das abas.
  * Ordenação só pelas colunas ordenáveis do registro; página além do fim volta para a última.
  */
-export async function listarCadastroPaginado(def: DefCadastro, empresaId: string, f: { ativo: FiltroAtivo; q?: string | null }, sp: ParamsUrl): Promise<PaginaCadastro> {
+export async function listarCadastroPaginado(def: DefCadastro, empresaId: string, f: FiltroLista, sp: ParamsUrl): Promise<PaginaCadastro> {
   await REGRAS[def.entidade]?.antesDeListar?.(empresaId);
   const t = tabela(def);
-  const comBusca = whereCadastro(def, empresaId, { ativo: "todos", q: f.q });
+  const comBusca = whereCadastro(def, empresaId, { ...f, ativo: "todos" });
   const [ativos, inativos] = await Promise.all([t.count({ where: { ...comBusca, ativo: true } }), t.count({ where: { ...comBusca, ativo: false } })]);
   const total = f.ativo === "sim" ? ativos : f.ativo === "nao" ? inativos : ativos + inativos;
   const { pagina: pedida, porPagina } = lerPaginacao(sp);
@@ -77,7 +79,7 @@ export async function listarCadastroPaginado(def: DefCadastro, empresaId: string
 }
 
 /** Sugestões da busca: as ~5 que mais combinam (só id, nome e o detalhe; nada além do que a lista mostra). */
-export async function sugestoesCadastro(def: DefCadastro, empresaId: string, f: { ativo: FiltroAtivo; q?: string | null }): Promise<Sugestao[]> {
+export async function sugestoesCadastro(def: DefCadastro, empresaId: string, f: FiltroLista): Promise<Sugestao[]> {
   const q = f.q?.trim();
   if (!q) return [];
   const det = def.detalheSugestao;
@@ -214,7 +216,7 @@ export async function rotulosCadastro(entidade: EntidadeCadastro, ids: string[],
 export async function idsCadastro(entidade: EntidadeCadastro, sp: Record<string, string>, empresaId: string, max: number) {
   const def = CADASTROS[entidade];
   const ativo: FiltroAtivo = sp.aba === "inativos" ? "nao" : sp.aba === "todos" ? "todos" : "sim";
-  const where = whereCadastro(def, empresaId, { ativo, q: sp.q });
+  const where = whereCadastro(def, empresaId, { ativo, q: sp.q, filtros: Object.fromEntries((def.filtros ?? []).map((fl) => [fl.param, sp[fl.param]])) });
   const [linhas, total] = await Promise.all([
     tabela(def).findMany({ where, select: { id: true }, orderBy: { nome: "asc" }, take: max + 1 }),
     tabela(def).count({ where }),
@@ -224,8 +226,11 @@ export async function idsCadastro(entidade: EntidadeCadastro, sp: Record<string,
 
 export async function linhasCadastro(entidade: EntidadeCadastro, ids: string[], empresaId: string): Promise<string[][]> {
   const def = CADASTROS[entidade];
-  const rs = await tabela(def).findMany({ where: { id: { in: ids }, empresaId }, orderBy: { nome: "asc" } });
+  const rs = await tabela(def).findMany({ where: { id: { in: ids }, empresaId }, orderBy: { nome: "asc" }, ...(def.incluir && { include: def.incluir }) });
   const campos = def.campos;
   const fmt = (v: unknown) => (v == null ? "" : typeof v === "object" ? String(Number(v)).replace(".", ",") : String(v));
-  return [[...campos.map((c) => c.label), "Situação"], ...rs.map((r) => [...campos.map((c) => fmt(r[c.key])), r.ativo ? "Ativo" : "Inativo"])];
+  // Campo de vínculo (tipo "cadastro"): sai o NOME do registro ligado, não o id
+  const valor = (c: (typeof campos)[number], r: Record<string, unknown>) =>
+    c.tipo === "cadastro" && c.relacao ? String((r[c.relacao] as { nome?: string } | null)?.nome ?? "") : fmt(r[c.key]);
+  return [[...campos.map((c) => c.label), "Situação"], ...rs.map((r) => [...campos.map((c) => valor(c, r)), r.ativo ? "Ativo" : "Inativo"])];
 }

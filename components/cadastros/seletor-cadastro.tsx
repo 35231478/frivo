@@ -30,7 +30,7 @@ export function useCadastro<T extends ItemCadastro = ItemCadastro>(entidade: Ent
 /** Mini-formulário do cadastro rápido a partir do registro: só os campos principais (sem grupo). */
 export function camposRapidos(def: DefCadastro): CampoRapido[] {
   // Campos booleanos ficam de fora do cadastro rápido (valem o padrão do registro)
-  return def.campos.filter((c) => !c.grupo && c.tipo !== "booleano").map((c) => ({
+  return def.campos.filter((c) => !c.grupo && c.tipo !== "booleano" && c.tipo !== "cadastro").map((c) => ({
     nome: c.key,
     label: c.label,
     obrigatorio: c.obrigatorio,

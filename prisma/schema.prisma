@@ -542,6 +542,7 @@ model Empresa {
   contasPagar            ContaPagar[]
   categoriasFinanceiras  CategoriaFinanceira[]
   centrosCusto           CentroCusto[]
+  categoriasProduto      CategoriaProduto[]
   contasBancarias        ContaBancaria[]
   contaReceberEventos    ContaReceberEvento[]
   recebimentosReceber    ContaReceberRecebimento[]
@@ -1542,6 +1543,8 @@ model Produto {
   /// Entra na tela Estoque e nos alertas? Falso = produto que não se controla (serviço embalado,
   /// item sob encomenda…); o razão continua aceitando lançamentos (ex.: entrada pela NF de compra).
   controlaEstoque   Boolean  @default(true) @map("controla_estoque")
+  /// Categoria (E3.1): de onde vem o comportamento de faturamento. Opcional: sem ela, "incluso no serviço".
+  categoriaProdutoId String? @map("categoria_produto_id")
   ativo             Boolean  @default(true)
   criadoEm          DateTime @default(now()) @map("criado_em")
 
@@ -1553,8 +1556,10 @@ model Produto {
   movimentacoes  MovimentacaoEstoque[]
   notaItens      NotaCompraItem[]
   deParas        DeParaProdutoFornecedor[]
+  categoriaProduto CategoriaProduto? @relation(fields: [categoriaProdutoId], references: [id], onDelete: SetNull)
 
   @@unique([empresaId, codigo])
+  @@index([categoriaProdutoId])
   @@map("produtos")
 }
 
@@ -2749,6 +2754,32 @@ model CategoriaFinanceira {
 /// Centro de custo (E2.1): onde a despesa pesa (ex.: Obra Shopping Norte, Frota, Administrativo).
 /// Cadastro padronizado (lib/cadastros); a conta a pagar aponta pelo ID, e o fornecedor guarda o
 /// padrão aprendido na nota de compra.
+/// Como o produto entra na cobrança (Estoque E3.1): VENDA_A_PARTE = peça de reposição (cobra separado e
+/// baixa estoque); INCLUSO_NO_SERVICO = material de instalação/consumo (embutido no valor, só baixa estoque).
+enum ComportamentoFaturamento {
+  VENDA_A_PARTE
+  INCLUSO_NO_SERVICO
+}
+
+/// Categoria de produto (por empresa): nome + comportamento de faturamento. Duas vêm pré-cadastradas
+/// ("Peças de reposição", "Materiais de instalação/consumo"); o usuário cria outras. Produto sem
+/// categoria é tratado como INCLUSO (lib/estoque/categoria.ts).
+model CategoriaProduto {
+  id            String                   @id @default(cuid())
+  empresaId     String                   @map("empresa_id")
+  nome          String
+  comportamento ComportamentoFaturamento @default(INCLUSO_NO_SERVICO)
+  ativo         Boolean                  @default(true)
+  criadoEm      DateTime                 @default(now()) @map("criado_em")
+  atualizadoEm  DateTime                 @updatedAt @map("atualizado_em")
+
+  empresa  Empresa   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  produtos Produto[]
+
+  @@index([empresaId, ativo])
+  @@map("categorias_produto")
+}
+
 model CentroCusto {
   id           String   @id @default(cuid())
   empresaId    String   @map("empresa_id")

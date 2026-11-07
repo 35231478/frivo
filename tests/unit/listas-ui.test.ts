@@ -279,6 +279,6 @@ describe("ordenar pelo cabeçalho", () => {
     expect($('th[aria-sort="descending"]')).toBeTruthy();
     // Coluna sem `ordenar` no registro não vira botão
     expect($('[data-ordenar="unidade"]')).toBeTruthy();
-    expect($$("[data-ordenar]").map((b) => b.getAttribute("data-ordenar"))).toEqual(["codigo", "nome", "unidade", "valorPadrao", "estoqueMinimo"]);
+    expect($$("[data-ordenar]").map((b) => b.getAttribute("data-ordenar"))).toEqual(["codigo", "nome", "categoriaProduto", "unidade", "valorPadrao", "estoqueMinimo"]); // E3.1: a categoria entre o nome e a unidade
   });
 });

@@ -9,6 +9,7 @@ import type { EntidadeCadastro } from "@/lib/cadastros/registro";
 import { normalizarCodigoServico } from "@/lib/cadastros/codigos";
 import { colisaoDeCodigo, criarProdutoComCodigo, criarServicoComCodigo, servicoComCodigo } from "@/lib/cadastros/codigos-server";
 import { motivoRetencaoServicoInvalida, type RetencoesDoServico } from "@/lib/financeiro/retencoes";
+import { categoriaProdutoComNome, garantirCategoriasProdutoPadrao } from "@/lib/estoque/categoria-server";
 
 /**
  * Regras ESPECÍFICAS de alguns cadastros padronizados (perfis de acesso, modelos de encargos,
@@ -404,10 +405,27 @@ const fornecedores: RegrasCadastro = {
 
 /* ───────────────────────── Produtos e serviços: código ───────────────────────── */
 /** Produto: código numérico sequencial da empresa, gerado aqui (não vem do formulário). */
+/** Categoria do produto (E3.1): da empresa; escolha NOVA precisa estar ativa (manter a atual, mesmo inativa, é aceito). */
+async function validarCategoriaProduto(categoriaId: unknown, empresaId: string, atual?: string | null) {
+  if (typeof categoriaId !== "string" || !categoriaId) return null;
+  try { await validarRefEmpresa("categoriaProduto", categoriaId, empresaId, "Categoria de produto", { novoAtivo: true, manter: [atual] }); return null; }
+  catch (e) { if (e instanceof ErroRefEmpresa) return e.message; throw e; }
+}
+const INCLUIR_PRODUTO = { categoriaProduto: { select: { id: true, nome: true, comportamento: true, ativo: true } } };
+
 const produtos: RegrasCadastro = {
   async criar(dados, ator) {
+    const erro = await validarCategoriaProduto(dados.categoriaProdutoId, ator.empresaId);
+    if (erro) return falha(400, erro);
     const item = await criarProdutoComCodigo(ator.empresaId, (codigo, tx) =>
-      tx.produto.create({ data: { ...(dados as any), codigo, empresaId: ator.empresaId, ativo: true } }));
+      tx.produto.create({ data: { ...(dados as any), codigo, empresaId: ator.empresaId, ativo: true }, include: INCLUIR_PRODUTO }));
+    return { ok: true, item };
+  },
+  async editar(existente, dados, ator) {
+    const erro = await validarCategoriaProduto(dados.categoriaProdutoId, ator.empresaId, existente.categoriaProdutoId as string | null);
+    if (erro) return falha(400, erro);
+    // (a rota do item relê o produto com a categoria depois de gravar)
+    const item = await prisma.produto.update({ where: { id: existente.id }, data: dados as any });
     return { ok: true, item };
   },
 };
@@ -502,6 +520,35 @@ async function centroComNome(empresaId: string, nome: string, exceto?: string) {
 const msgCentro = (c: { nome: string; ativo: boolean }) =>
   `Já existe o centro de custo “${c.nome}”${c.ativo ? "" : " (inativo — reative-o em vez de cadastrar de novo)"}.`;
 
+const msgCategoriaProduto = (c: { nome: string; ativo: boolean }) =>
+  `Já existe a categoria “${c.nome}”${c.ativo ? "" : " (inativa — reative-a em vez de cadastrar de novo)"}.`;
+
+/** Categorias de produto (E3.1): as duas do Zé vêm pré-cadastradas (seed por empresa, uma vez); nome único na empresa. */
+const categoriasProduto: RegrasCadastro = {
+  antesDeListar: async (empresaId) => { await garantirCategoriasProdutoPadrao(empresaId); },
+  async criar(dados, ator) {
+    const dup = await categoriaProdutoComNome(ator.empresaId, String(dados.nome));
+    if (dup) return falha(409, msgCategoriaProduto(dup));
+    const item = await prisma.categoriaProduto.create({ data: { ...(dados as { nome: string; comportamento: "VENDA_A_PARTE" | "INCLUSO_NO_SERVICO" }), empresaId: ator.empresaId, ativo: true } });
+    return { ok: true, item };
+  },
+  async editar(existente, dados, ator) {
+    if (typeof dados.nome === "string") {
+      const dup = await categoriaProdutoComNome(ator.empresaId, dados.nome, existente.id);
+      if (dup) return falha(409, msgCategoriaProduto(dup));
+    }
+    const item = await prisma.categoriaProduto.update({ where: { id: existente.id }, data: dados as { nome?: string; comportamento?: "VENDA_A_PARTE" | "INCLUSO_NO_SERVICO" } });
+    return { ok: true, item };
+  },
+  async impacto(c, empresaId) {
+    const produtos = await prisma.produto.count({ where: { empresaId, categoriaProdutoId: c.id } });
+    const ativos = produtos ? await prisma.produto.count({ where: { empresaId, categoriaProdutoId: c.id, ativo: true } }) : 0;
+    const avisos: string[] = [];
+    if (produtos) avisos.push(`Usada em ${pl(produtos, "produto", "produtos")}${ativos !== produtos ? ` (${pl(ativos, "ativo", "ativos")})` : ""}. Eles continuam com esta categoria e com o comportamento dela (aparece como “inativa”); ela só deixa de ser oferecida nos produtos novos.`);
+    return { usos: [{ rotulo: pl(produtos, "produto", "produtos"), total: produtos }], avisos };
+  },
+};
+
 const centrosCusto: RegrasCadastro = {
   async criar(dados, ator) {
     const dup = await centroComNome(ator.empresaId, String(dados.nome));
@@ -552,4 +599,5 @@ export const REGRAS: Partial<Record<EntidadeCadastro, RegrasCadastro>> = {
   fornecedores,
   "centros-custo": centrosCusto,
   "contas-bancarias": contasBancarias,
+  "categorias-produto": categoriasProduto,
 };
