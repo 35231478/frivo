@@ -62,7 +62,9 @@ describe.skipIf(!URL)("SQL de produção: categoria de produto (PostgreSQL real)
   });
 
   it("seed por empresa: as duas do Zé em quem não tinha nenhuma; a renomeada/criada da e1 fica como está (sem repor); a e2 que apagou o seed e criou a sua não recebe de novo; a e3 nova recebe na 2ª rodada; nada duplica", () => {
-    expect(linhas(`SELECT "empresa_id", "id", "nome", "comportamento"::text, "ativo" FROM "categorias_produto" ORDER BY "empresa_id", "id"`)).toEqual([
+    // COLLATE "C": a ordem de 'c-extra' × 'catp_e1_*' muda com a collation do banco (en_US ignora o hífen e põe
+    // 'c-extra' depois; C/pt_BR.C põe antes) — o CI roda em en_US.utf8 e o banco local em C.UTF-8
+    expect(linhas(`SELECT "empresa_id", "id", "nome", "comportamento"::text, "ativo" FROM "categorias_produto" ORDER BY "empresa_id", "id" COLLATE "C"`)).toEqual([
       ["e1", "c-extra", "Consumíveis", "INCLUSO_NO_SERVICO", "t"],
       ["e1", "catp_e1_materiais", "Materiais de instalação/consumo", "INCLUSO_NO_SERVICO", "t"],
       ["e1", "catp_e1_pecas", "Peças", "VENDA_A_PARTE", "t"],
