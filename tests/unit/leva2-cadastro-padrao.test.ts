@@ -115,9 +115,19 @@ describe.each(ENTIDADES_CADASTRO)("cadastro padronizado: %s", (e) => {
     const r = await chamar(colecao, "POST", { entidade: e }, NOVO[e]);
     expect(r.status).toBe(201);
     expect(r.json).toMatchObject({ empresaId: "e1", ativo: true, nome: NOVO[e].nome });
-    if (e === "produtos") expect(r.json).toMatchObject({ valorPadrao: 12.5, estoqueMinimo: null, descricao: null });
+    if (e === "produtos") expect(r.json).toMatchObject({ valorPadrao: 12.5, estoqueMinimo: null, descricao: null, controlaEstoque: true }); // sem dizer, controla estoque
     if (e === "servicos") expect(r.json).toMatchObject({ valorPadrao: 800, aliquotaISS: null, unidade: "un" });
     if (e === "categorias-financeiras") expect(r.json.cor).toBe("#2563EB");
+  });
+
+  if (e === "produtos") it("produto: 'controla estoque' vem marcado por padrão; \"false\" (do formulário) desmarca e a edição liga de volta", async () => {
+    const r = await chamar(colecao, "POST", { entidade: e }, { ...NOVO[e], controlaEstoque: "false" });
+    expect(r.status).toBe(201);
+    expect(r.json.controlaEstoque).toBe(false);
+    expect((await chamar(colecao, "POST", { entidade: e }, { ...NOVO[e], nome: "Outro", controlaEstoque: "" })).json.controlaEstoque).toBe(true);
+    const ed = await chamar(item, "PUT", { entidade: e, id: r.json.id }, { controlaEstoque: true });
+    expect([ed.status, ed.json.controlaEstoque]).toEqual([200, true]);
+    expect((await chamar(colecao, "POST", { entidade: e }, { ...NOVO[e], nome: "Errado", controlaEstoque: "talvez" })).status).toBe(400);
   });
 
   it("editar é parcial: só o nome muda, o resto fica igual", async () => {

@@ -8,6 +8,10 @@
  *  - empresa sempre da sessão (produto de outra empresa = 404, nada gravado; empresaId no corpo
  *    é recusado); permissão: sem "Estoque" não vê nem lança; "visualizar" vê mas não lança;
  *  - alerta: produtos no mínimo ou abaixo e negativos contados e filtráveis.
+ * Complemento (Leva E1 — complemento): saída manual (perda/uso avulso, motivo obrigatório, origem
+ * "ajuste manual"); RESERVA subtrai como a saída (previsto para a E4); produto que não controla
+ * estoque fica fora da lista, dos alertas e das sugestões (o extrato continua); recálculo pelo
+ * histórico corrige o cache (e só ele) e a conferência da empresa lista as divergências.
  * (Concorrência e atomicidade num PostgreSQL real: estoque-concorrencia.test.ts; o SQL: sql-estoque.test.ts.)
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -54,8 +58,10 @@ function semear() {
       { id: "p2", empresaId: "e1", nome: "Filtro secador", descricao: null, unidade: "un", estoqueMinimo: null, saldo: 0, ativo: true },
       { id: "p3", empresaId: "e1", nome: "Capacitor 35uF", descricao: null, unidade: "un", estoqueMinimo: 2, saldo: 0, ativo: true },
       { id: "p4", empresaId: "e1", nome: "Tubo de cobre (antigo)", descricao: null, unidade: "m", estoqueMinimo: 10, saldo: 0, ativo: false },
+      // Não controla estoque: fora da tela e dos alertas (o razão ainda aceita lançamentos)
+      { id: "p5", empresaId: "e1", nome: "Visita técnica (kit)", descricao: null, unidade: "un", estoqueMinimo: 1, saldo: 0, ativo: true, controlaEstoque: false },
       { id: "pB", empresaId: "e2", nome: "Gás da outra", descricao: null, unidade: "kg", estoqueMinimo: 1, saldo: 0, ativo: true },
-    ],
+    ].map((p) => ({ controlaEstoque: true, ...p })),
     movimentacaoEstoque: [],
   };
 }
@@ -149,7 +155,13 @@ describe("regras", () => {
     expect(ok({ operacao: "AJUSTE", novoSaldo: 0, observacao: "perda" }).success).toBe(true);
     expect(ok({ operacao: "INVENTARIO", contagem: 0 }).success).toBe(true);
     expect(msg({ operacao: "INVENTARIO", contagem: -1 })).toBe("A contagem não pode ser negativa.");
-    expect(msg({ operacao: "SAIDA", quantidade: 1 })).toBe("Escolha entrada, ajuste ou inventário.");
+    // Saída manual (perda/uso avulso): quantidade > 0 e motivo obrigatório
+    expect(msg({ operacao: "SAIDA", quantidade: 1 })).toBe("Saída exige o motivo (observação).");
+    expect(msg({ operacao: "SAIDA", quantidade: 0, observacao: "perda" })).toBe("A quantidade precisa ser maior que zero.");
+    expect(ok({ operacao: "SAIDA", quantidade: "1,5", observacao: "uso no almoxarifado" }).data).toEqual({ operacao: "SAIDA", quantidade: 1.5, observacao: "uso no almoxarifado" });
+    expect(msg({ operacao: "DEVOLUCAO", quantidade: 1 })).toBe("Escolha entrada, saída, ajuste ou inventário.");
+    expect(msg({ operacao: "RESERVA", quantidade: 1 })).toBe("Escolha entrada, saída, ajuste ou inventário.");
+    expect(valorDoLancamento({ operacao: "SAIDA", quantidade: 2, observacao: "x" })).toBe(2);
     expect(msg({ operacao: "ENTRADA", quantidade: 1, empresaId: "e2" })).toBe("Campo não permitido: empresaId.");
     expect(msg({ operacao: "INVENTARIO", contagem: 1, saldo: 99 })).toBe("Campo não permitido: saldo.");
     expect(msg({ operacao: "ENTRADA", quantidade: 1, observacao: "x".repeat(501) })).toBe("Observação: no máximo 500 caracteres.");
@@ -269,7 +281,8 @@ describe("POST /api/estoque/:produtoId/movimentacoes", () => {
       [{ operacao: "ENTRADA", quantidade: 0 }, "A quantidade precisa ser maior que zero."],
       [{ operacao: "AJUSTE", novoSaldo: 1 }, "Ajuste exige o motivo (observação)."],
       [{ operacao: "AJUSTE", novoSaldo: 0, observacao: "zerado" }, "O saldo já é esse — não há o que ajustar."],
-      [{ operacao: "SAIDA", quantidade: 1 }, "Escolha entrada, ajuste ou inventário."],
+      [{ operacao: "SAIDA", quantidade: 1 }, "Saída exige o motivo (observação)."],
+      [{ operacao: "RESERVA", quantidade: 1 }, "Escolha entrada, saída, ajuste ou inventário."],
       [{ operacao: "ENTRADA", quantidade: 1, empresaId: "e2" }, "Campo não permitido: empresaId."],
       [{ operacao: "ENTRADA", quantidade: 1, usuarioId: "uB" }, "Campo não permitido: usuarioId."],
       [null, "Dados inválidos."],
@@ -387,7 +400,7 @@ describe("GET extrato / lista / alertas", () => {
   });
 
   it("lista filtrada pagina sobre o subconjunto", async () => {
-    T("produto").push(...Array.from({ length: 30 }, (_, i) => ({ id: `n${String(i).padStart(2, "0")}`, empresaId: "e1", nome: `Neg ${String(i).padStart(2, "0")}`, unidade: "un", estoqueMinimo: null, saldo: -1, ativo: true, descricao: null })));
+    T("produto").push(...Array.from({ length: 30 }, (_, i) => ({ id: `n${String(i).padStart(2, "0")}`, empresaId: "e1", nome: `Neg ${String(i).padStart(2, "0")}`, unidade: "un", estoqueMinimo: null, saldo: -1, ativo: true, descricao: null, controlaEstoque: true })));
     const a = await listaApi("situacao=negativo&por=25");
     const b = await listaApi("situacao=negativo&por=25&pagina=2");
     expect([a.json.total, a.json.itens.length, b.json.itens.length]).toEqual([30, 25, 5]);
@@ -416,6 +429,117 @@ describe("GET extrato / lista / alertas", () => {
   it("listar e consultar não gravam nada", async () => {
     await listaApi(); await extratoApi("p1"); await alertasApi();
     expect(db.escritas).toEqual([]);
+  });
+});
+
+// ═════════════════════════ Complemento: saída manual, RESERVA, controla estoque, recálculo ═════════════════════════
+const recalcularApi = (produtoId: string) => chamar(() => import("@/app/api/estoque/[produtoId]/recalcular/route"), "POST", { produtoId });
+const conferenciaApi = () => chamar(() => import("@/app/api/estoque/conferencia/route"), "GET", {});
+
+describe("complemento da E1", () => {
+  it("saída manual pela tela: subtrai, origem 'ajuste manual' (não é OS), motivo no razão, quem fez; pode ficar negativa (avisa)", async () => {
+    await lancarApi("p1", { operacao: "ENTRADA", quantidade: 3 });
+    const r = await lancarApi("p1", { operacao: "SAIDA", quantidade: 1.5, observacao: "Uso no almoxarifado" });
+    expect(r.status).toBe(201);
+    expect(r.json).toMatchObject({ saldo: 1.5, aviso: null, movimentacao: { tipo: "SAIDA", origem: "AJUSTE", quantidade: -1.5, saldoApos: 1.5 } });
+    expect(movs("p1").at(-1)).toMatchObject({ tipo: "SAIDA", origem: "AJUSTE", quantidade: -1.5, observacao: "Uso no almoxarifado", usuarioId: "u1", empresaId: "e1" });
+    const neg = await lancarApi("p1", { operacao: "SAIDA", quantidade: 2, observacao: "Perda" });
+    expect(neg.status).toBe(201);
+    expect(neg.json.saldo).toBe(-0.5);
+    expect(neg.json.aviso).toContain("ficou negativo");
+    expect(prod("p1").saldo).toBe(-0.5);
+    expect(somaRazao("p1")).toBe(-0.5);
+  });
+
+  it("RESERVA (E4) subtrai como a saída e fica no razão com o tipo dela; a tela não a oferece", async () => {
+    expect(calcularMovimento("RESERVA", 10, 4)).toEqual({ tipo: "RESERVA", origem: "OS", delta: -4 });
+    await mov("p1", "ENTRADA", 10);
+    const r = await mov("p1", "RESERVA", 4, { refId: "os-1" });
+    expect(r.movimentacao).toMatchObject({ tipo: "RESERVA", origem: "OS", quantidade: -4, saldoApos: 6 });
+    expect(movs("p1").at(-1)).toMatchObject({ tipo: "RESERVA", refId: "os-1" });
+    expect(prod("p1").saldo).toBe(6);
+    expect((await lancarApi("p1", { operacao: "RESERVA", quantidade: 1 })).status).toBe(400);
+  });
+
+  it("produto que não controla estoque: fora da lista, dos alertas e das sugestões; o extrato abre e o razão aceita lançamento", async () => {
+    await mov("p5", "SAIDA", 2); // negativo, mas não entra nos alertas
+    const lista = await listaApi();
+    expect(lista.json.itens.map((p: any) => p.id)).not.toContain("p5");
+    expect(lista.json.alertas).toEqual({ abaixo: 2, negativo: 0 }); // p1 e p3 no mínimo; p5 fora
+    expect((await listaApi("busca=visita")).json.total).toBe(0);
+    expect((await listaApi("inativos=1")).json.itens.map((p: any) => p.id)).not.toContain("p5");
+    const ex = await extratoApi("p5");
+    expect(ex.status).toBe(200);
+    expect(ex.json.produto).toMatchObject({ controlaEstoque: false, saldo: -2, situacao: "negativo" });
+    expect(await extrato("p5")).toContain("não controla estoque");
+    expect((await lancarApi("p5", { operacao: "ENTRADA", quantidade: 5 })).status).toBe(201);
+    expect(prod("p5").saldo).toBe(3);
+  });
+
+  it("recálculo pelo histórico: corrige o cache pela soma do razão (sem criar movimentação); já batendo, só confere; outra empresa = 404; exige gerenciar", async () => {
+    await mov("p1", "ENTRADA", 8);
+    await mov("p1", "SAIDA", 3);
+    prod("p1").saldo = 99; // cache corrompido (não acontece pela lib; simula)
+    const antes = movs("p1").length;
+    const r = await recalcularApi("p1");
+    expect(r.status).toBe(200);
+    expect(r.json).toEqual({ produtoId: "p1", nome: "Gás R410A", saldoCache: 99, somaRazao: 5, divergia: true });
+    expect(prod("p1").saldo).toBe(5);
+    expect(movs("p1")).toHaveLength(antes);
+    expect((await recalcularApi("p1")).json).toMatchObject({ saldoCache: 5, somaRazao: 5, divergia: false });
+    expect((await recalcularApi("pB")).status).toBe(404);
+    expect((await recalcularApi("nada")).status).toBe(404);
+    expect(prod("pB").saldo).toBe(0);
+    logar(so({ visualizar: true }));
+    expect((await recalcularApi("p1")).status).toBe(403);
+    sessao.atual = null;
+    expect((await recalcularApi("p1")).status).toBe(401);
+  });
+
+  it("conferência da empresa: lista só os que divergem (cache ≠ soma do razão), só da empresa; vazia quando tudo bate; sem permissão 403", async () => {
+    await mov("p1", "ENTRADA", 8);
+    await mov("p3", "ENTRADA", 2);
+    expect((await conferenciaApi()).json).toEqual({ divergentes: [], total: 0 });
+    prod("p3").saldo = 7;
+    prod("pB").saldo = 7; // da outra empresa: não aparece
+    db.escritas = [];
+    const r = await conferenciaApi();
+    expect(r.json).toEqual({ divergentes: [{ produtoId: "p3", nome: "Capacitor 35uF", saldoCache: 7, somaRazao: 2, divergia: true }], total: 1 });
+    expect(db.escritas.filter((e) => e.startsWith("produto.update"))).toHaveLength(0); // só leitura
+    await recalcularApi("p3");
+    expect((await conferenciaApi()).json.total).toBe(0);
+    logar(permissoesVazias());
+    expect((await conferenciaApi()).status).toBe(403);
+  });
+
+  it("extrato: período pela data, filtro por tipo/origem e busca na observação (na URL); a conferência é do razão inteiro", async () => {
+    await mov("p1", "ENTRADA", 8, { observacao: "NF 4521" });
+    await mov("p1", "SAIDA", 3, { observacao: "Perda", origem: "AJUSTE" });
+    await mov("p1", "INVENTARIO", 4);
+    // datas: 1/10 12:01, 12:02, 12:03 (carimbar) — o período de outubro pega as três; novembro nenhuma
+    expect((await extratoApi("p1", "tipo=SAIDA")).json.movimentacoes.map((m: any) => m.tipo)).toEqual(["SAIDA"]);
+    expect((await extratoApi("p1", "origem=INVENTARIO")).json.movimentacoes.map((m: any) => m.origem)).toEqual(["INVENTARIO"]);
+    expect((await extratoApi("p1", "busca=nf")).json.movimentacoes.map((m: any) => m.observacao)).toEqual(["NF 4521"]);
+    expect((await extratoApi("p1", "tipo=ROUBO")).json).toMatchObject({ total: 3, tipo: "" });
+    const nov = await extratoApi("p1", "mes=2026-11");
+    expect([nov.json.total, nov.json.periodo.tipo, nov.json.somaRazao]).toEqual([0, "mes", 4]);
+    expect((await extratoApi("p1", "de=2026-10-01&ate=2026-10-01")).json.total).toBe(3);
+    expect((await extratoApi("p1")).json.periodo.tipo).toBe("todos"); // padrão: todo o período
+    const h = await extrato("p1", "tipo=SAIDA");
+    expect([...new Set(attrs(h, "data-mov"))]).toHaveLength(1);
+    expect(h).toContain('data-tipo-mov="SAIDA"');
+  });
+
+  it("lista no padrão da casa: barra de filtros + TabelaPro; linha negativa em vermelho; cartões no celular", async () => {
+    await mov("p2", "SAIDA", 1);
+    const h = await lista();
+    expect(h).toContain("data-barra-filtros");
+    expect(h).toContain("data-tabela-estoque");
+    expect(h).toContain("data-tabela-planilha");
+    expect(h).toMatch(/data-linha="p2"[^>]*data-situacao-linha="negativo"/);
+    expect(h).toMatch(/<tr data-linha="p2" class="[^"]*bg-atrasado-claro/);
+    expect(attrs(h, "data-cartao")).toEqual(["p3", "p2", "p1"]);
+    expect(h).toContain("data-cartoes");
   });
 });
 
@@ -483,8 +607,10 @@ describe("telas", () => {
     expect([...new Set(attrs(h, "data-mov"))]).toEqual(movs("p1").map((m) => m.id).reverse());
     // quantidade com sinal no cartão (celular) E na tabela
     expect(h.split("−4").length - 1).toBe(2);
-    expect(h).toMatch(/text-atrasado">−4<\/td>/);
-    expect(h).toMatch(/text-success-700">\+3<\/td>/);
+    expect(h).toMatch(/text-atrasado" data-quantidade="true">−4<\/span>/);
+    expect(h).toMatch(/text-success-700" data-quantidade="true">\+3<\/span>/);
+    expect(h).toContain("data-tabela-planilha"); // TabelaPro (padrão da casa) no extrato
+    expect(h).toContain('data-tabela-extrato');
     expect(h).toContain("Bruno");
     expect(attrs(h, "data-lancar")).toEqual(["p1"]);
     await expect(extrato("pB")).rejects.toThrow("NEXT_NOT_FOUND");
@@ -492,10 +618,17 @@ describe("telas", () => {
     expect(attrs(await extrato("p1"), "data-lancar")).toEqual([]);
   });
 
-  it("extrato: se o cache divergir do razão, a tela mostra (não esconde)", async () => {
+  it("extrato: se o cache divergir do razão, a tela mostra (não esconde) e quem gerencia tem o 'Recalcular pelo histórico'", async () => {
     await mov("p1", "ENTRADA", 3);
     prod("p1").saldo = 99;
-    expect(await extrato("p1")).toContain("data-divergencia");
+    const h = await extrato("p1");
+    expect(h).toContain("data-divergencia");
+    expect(h).toContain('data-recalcular="p1"');
+    logar(so({ visualizar: true }));
+    const v = await extrato("p1");
+    expect(v).toContain("data-divergencia");
+    expect(v).not.toContain("data-recalcular");
+    expect(v).toContain("Avise quem gerencia o estoque.");
   });
 });
 

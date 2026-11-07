@@ -20,6 +20,8 @@ describe.skipIf(!URL_PG)("estoque no PostgreSQL real: concorrência e atomicidad
   let prisma: any;
   let movimentar: typeof import("@/lib/estoque/servidor").movimentar;
   let extratoProduto: typeof import("@/lib/estoque/servidor").extratoProduto;
+  let recalcularSaldo: typeof import("@/lib/estoque/servidor").recalcularSaldo;
+  let conferirSaldos: typeof import("@/lib/estoque/servidor").conferirSaldos;
 
   beforeAll(async () => {
     const url = `${URL_PG}${URL_PG!.includes("?") ? "&" : "?"}schema=${SCHEMA}&connection_limit=10`;
@@ -29,7 +31,7 @@ describe.skipIf(!URL_PG)("estoque no PostgreSQL real: concorrência e atomicidad
     process.env.DATABASE_URL = url;
     (globalThis as any).prisma = undefined;
     ({ prisma } = await import("@/lib/prisma"));
-    ({ movimentar, extratoProduto } = await import("@/lib/estoque/servidor"));
+    ({ movimentar, extratoProduto, recalcularSaldo, conferirSaldos } = await import("@/lib/estoque/servidor"));
     await prisma.empresa.create({ data: { id: "e1", nome: "Empresa", cnpj: `c-${process.pid}`, email: "e@x.com" } });
     await prisma.usuario.create({ data: { id: "u1", empresaId: "e1", nome: "Ana", email: "a@x.com", senha: "x" } });
     await prisma.produto.createMany({ data: [
@@ -94,4 +96,27 @@ describe.skipIf(!URL_PG)("estoque no PostgreSQL real: concorrência e atomicidad
     await expect(movimentar({ empresaId: "e2", produtoId: "p1", operacao: "ENTRADA", valor: 5 })).rejects.toThrow(/Produto inválido/);
     expect(await somaRazao("p1")).toBe(await saldo("p1"));
   });
+
+  it("recálculo pelo histórico (Decimal real): corrige um cache corrompido pela soma do razão, sem movimentação nova; a conferência acha só quem diverge; lançamentos simultâneos ao recálculo não se perdem", async () => {
+    await prisma.produto.create({ data: { id: "p3", empresaId: "e1", nome: "Tubo", unidade: "m" } });
+    await Promise.all([1.25, 2.5, 0.125].map((v) => movimentar({ empresaId: "e1", produtoId: "p3", operacao: "ENTRADA", valor: v })));
+    await movimentar({ empresaId: "e1", produtoId: "p3", operacao: "SAIDA", valor: 0.375 });
+    expect(await saldo("p3")).toBe(3.5);
+    expect(await conferirSaldos("e1")).toEqual([]);
+    await prisma.produto.update({ where: { id: "p3" }, data: { saldo: 42 } }); // corrompe o cache por fora da lib
+    expect((await conferirSaldos("e1")).map((d: any) => [d.produtoId, d.saldoCache, d.somaRazao])).toEqual([["p3", 42, 3.5]]);
+    const n = await prisma.movimentacaoEstoque.count({ where: { produtoId: "p3" } });
+    // Recalcula ao mesmo tempo que 10 entradas: no fim, saldo = soma do razão (a trava serializa)
+    const [r] = await Promise.all([
+      recalcularSaldo("e1", "p3"),
+      ...Array.from({ length: 10 }, () => movimentar({ empresaId: "e1", produtoId: "p3", operacao: "ENTRADA", valor: 1 })),
+    ]);
+    expect(r).toMatchObject({ produtoId: "p3", divergia: true });
+    expect(await prisma.movimentacaoEstoque.count({ where: { produtoId: "p3" } })).toBe(n + 10);
+    expect(await saldo("p3")).toBe(await somaRazao("p3"));
+    expect(await saldo("p3")).toBe(13.5);
+    expect(await recalcularSaldo("e1", "p3")).toMatchObject({ saldoCache: 13.5, somaRazao: 13.5, divergia: false });
+    expect(await recalcularSaldo("e2", "p3")).toBeNull(); // outra empresa: nada
+    expect(await conferirSaldos("e1")).toEqual([]);
+  }, 60_000);
 });

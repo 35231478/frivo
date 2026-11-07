@@ -6,21 +6,28 @@ import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { cn, formatarData } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";
+import { PLANILHA } from "@/lib/planilha";
+import { periodoTela } from "@/lib/periodo";
 import { extratoProduto } from "@/lib/estoque/servidor";
 import { ultimosCustos } from "@/lib/estoque/custo";
 import { formatarNcm, rotuloOrigem } from "@/lib/compras/rotulos";
 import { formatarDelta, formatarQtd, LABEL_ORIGEM, LABEL_TIPO } from "@/lib/estoque/regras";
 import { LancarEstoque } from "@/components/estoque/lancar-estoque";
+import { BarraExtrato } from "@/components/estoque/estoque-barra";
+import { RecalcularSaldo } from "@/components/estoque/recalcular-saldo";
 import { SaldoQtd, SeloSituacao } from "@/components/estoque/situacao";
 import { PrecoVenda } from "@/components/estoque/preco-venda";
-import { ListaUrl, PaginacaoUrl } from "@/components/listagem/lista-url";
+import { ConteudoUrl, LimparBuscaUrl, ListaUrl, PaginacaoUrl, TabelaProUrl } from "@/components/listagem/lista-url";
 
 export const metadata: Metadata = { title: "Extrato do estoque" };
 
 const dataHora = (d: Date) => formatarData(d, "dd/MM/yyyy, HH:mm"); // Brasília
 const moeda = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-/** Extrato de um produto: cada movimentação (mais recente primeiro) com o saldo que resultou. */
+/**
+ * Extrato de um produto (padrão da casa: período + busca/filtros + TabelaPro): cada movimentação
+ * (mais recente primeiro) com tipo, quantidade, saldo resultante, origem, quem fez e quando.
+ */
 export default async function ExtratoEstoquePage({ params, searchParams }: {
   params: Promise<{ produtoId: string }>; searchParams: Promise<Record<string, string | undefined>>;
 }) {
@@ -28,7 +35,7 @@ export default async function ExtratoEstoquePage({ params, searchParams }: {
   const u = session!.user!;
   const extrato = await extratoProduto(u.empresaId, produtoId, sp);
   if (!extrato) notFound();
-  const { produto: p, movimentacoes, total, pagina, porPagina, somaRazao } = extrato;
+  const { produto: p, movimentacoes, total, pagina, porPagina, somaRazao, periodo, busca } = extrato;
   const podeLancar = pode(u.permissoes, "estoque", "gerenciar", u.role);
   const [extra, custos] = await Promise.all([
     prisma.produto.findFirst({
@@ -41,9 +48,10 @@ export default async function ExtratoEstoquePage({ params, searchParams }: {
     ["NCM", formatarNcm(extra?.ncm)], ["CEST", extra?.cest], ["GTIN/EAN", extra?.gtin],
     ["Origem", rotuloOrigem(extra?.origemMercadoria)], ["Unidade tributável", extra?.unidadeTributavel],
   ] as const;
+  const filtrado = periodo.tipo !== "todos" || !!busca || !!extrato.tipo || !!extrato.origem;
 
   return (
-    <ListaUrl chave="estoque-extrato" qAtual="">
+    <ListaUrl chave="estoque-extrato" paramBusca="busca" qAtual={busca}>
       <div className="space-y-6">
         <Link href="/estoque" className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink"><ArrowLeft className="w-4 h-4" /> Estoque</Link>
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -51,7 +59,7 @@ export default async function ExtratoEstoquePage({ params, searchParams }: {
             <div className="p-2 bg-primary-50 rounded-lg"><Package className="w-5 h-5 text-primary-600" /></div>
             <div className="min-w-0">
               <h1 className="page-title truncate">{p.nome}</h1>
-              <p className="text-xs text-ink-muted">Extrato do estoque{!p.ativo && " · produto inativo"}</p>
+              <p className="text-xs text-ink-muted">Extrato do estoque{!p.ativo && " · produto inativo"}{!p.controlaEstoque && " · não controla estoque"}</p>
             </div>
           </div>
           {podeLancar && <LancarEstoque produto={{ id: p.id, nome: p.nome, unidade: p.unidade, saldo: p.saldo }} />}
@@ -99,17 +107,27 @@ export default async function ExtratoEstoquePage({ params, searchParams }: {
           </p>
         )}
         {somaRazao !== p.saldo && (
-          // Não deve acontecer (saldo e lançamento são gravados juntos); se acontecer, fica visível
-          <p role="alert" data-divergencia className="text-sm text-atrasado-texto bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2">
-            O saldo gravado ({formatarQtd(p.saldo)}) não bate com a soma das movimentações ({formatarQtd(somaRazao)}). Avise o suporte.
-          </p>
+          // Não deve acontecer (saldo e lançamento são gravados juntos); se acontecer, fica visível — e quem gerencia corrige pelo histórico
+          <div role="alert" data-divergencia className="flex flex-wrap items-center gap-3 text-sm text-atrasado-texto bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2">
+            <span>O saldo gravado ({formatarQtd(p.saldo)}) não bate com a soma das movimentações ({formatarQtd(somaRazao)}).{!podeLancar && " Avise quem gerencia o estoque."}</span>
+            {podeLancar && <RecalcularSaldo produtoId={p.id} unidade={p.unidade} />}
+          </div>
         )}
 
+        {/* Período (pela data da movimentação) + busca na observação + tipo/origem — padrão da casa */}
+        <BarraExtrato
+          periodo={periodoTela(periodo)}
+          tipos={Object.entries(LABEL_TIPO).map(([value, label]) => ({ value, label }))}
+          origens={Object.entries(LABEL_ORIGEM).map(([value, label]) => ({ value, label }))}
+        />
+
         <div className="card overflow-hidden">
+          <ConteudoUrl>
           {movimentacoes.length === 0 ? (
-            <div className="py-12 text-center" data-lista-vazia>
-              <p className="text-sm font-medium text-ink">Nenhuma movimentação ainda</p>
-              <p className="text-xs text-ink-muted">{podeLancar ? "Use “Lançar” para a primeira entrada ou um inventário." : "Quando houver entradas ou saídas, elas aparecem aqui."}</p>
+            <div className="flex flex-col items-center gap-2 py-12 text-center" data-lista-vazia>
+              <p className="text-sm font-medium text-ink">{filtrado ? "Nenhuma movimentação com esses filtros" : "Nenhuma movimentação ainda"}</p>
+              <p className="text-xs text-ink-muted">{filtrado ? "Mude o período ou os filtros." : podeLancar ? "Use “Lançar” para a primeira entrada ou um inventário." : "Quando houver entradas ou saídas, elas aparecem aqui."}</p>
+              {filtrado && <LimparBuscaUrl />}
             </div>
           ) : (
             <>
@@ -125,36 +143,39 @@ export default async function ExtratoEstoquePage({ params, searchParams }: {
                   </li>
                 ))}
               </ul>
-              <table className="w-full text-sm hidden md:table">
-                <thead className="bg-surface-alt border-b border-surface-border">
-                  <tr className="text-left text-ink-muted text-xs uppercase tracking-wider">
-                    <th className="px-4 py-3 font-semibold">Data</th>
-                    <th className="px-4 py-3 font-semibold">Tipo</th>
-                    <th className="px-4 py-3 font-semibold">Origem</th>
-                    <th className="px-4 py-3 font-semibold text-right">Quantidade</th>
-                    <th className="px-4 py-3 font-semibold text-right">Saldo resultante</th>
-                    <th className="px-4 py-3 font-semibold text-right hidden lg:table-cell">Custo unit.</th>
-                    <th className="px-4 py-3 font-semibold">Quem fez</th>
-                    <th className="px-4 py-3 font-semibold hidden lg:table-cell">Observação</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {movimentacoes.map((m, idx) => (
-                    <tr key={m.id} data-mov={m.id} className={cn("border-b border-surface-border", idx % 2 === 1 && "bg-surface-alt/30")}>
-                      <td className="px-4 py-3 text-ink-muted whitespace-nowrap">{dataHora(m.data)}</td>
-                      <td className="px-4 py-3 font-medium text-ink">{LABEL_TIPO[m.tipo]}</td>
-                      <td className="px-4 py-3 text-ink-muted">{LABEL_ORIGEM[m.origem]}</td>
-                      <td className={cn("px-4 py-3 text-right font-semibold tabular-nums", m.quantidade < 0 ? "text-atrasado" : "text-success-700")}>{formatarDelta(m.quantidade)}</td>
-                      <td className={cn("px-4 py-3 text-right tabular-nums", m.saldoApos < 0 ? "text-atrasado font-semibold" : "text-ink")}>{formatarQtd(m.saldoApos)}</td>
-                      <td className="px-4 py-3 text-right text-ink-muted tabular-nums hidden lg:table-cell">{m.custoUnitario != null ? moeda(m.custoUnitario) : "—"}</td>
-                      <td className="px-4 py-3 text-ink-muted">{m.usuario ?? "—"}</td>
-                      <td className="px-4 py-3 text-ink-muted hidden lg:table-cell max-w-xs truncate" title={m.observacao ?? undefined}>{m.observacao ?? "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div data-tabela-extrato>
+                <TabelaProUrl
+                  tela="estoque-extrato"
+                  colunas={[
+                    { id: "data", titulo: "Data", largura: 140, obrigatoria: true },
+                    { id: "tipo", titulo: "Tipo", largura: 100, obrigatoria: true },
+                    { id: "origem", titulo: "Origem", largura: 130 },
+                    { id: "quantidade", titulo: "Quantidade", alinhar: "direita", largura: 110, obrigatoria: true },
+                    { id: "saldo", titulo: "Saldo resultante", alinhar: "direita", largura: 130 },
+                    { id: "custo", titulo: "Custo unit. (R$)", alinhar: "direita", largura: 120, oculta: true },
+                    { id: "usuario", titulo: "Quem fez", largura: 150, classe: "truncate" },
+                    { id: "observacao", titulo: "Observação", classe: "truncate" },
+                  ]}
+                  linhas={movimentacoes.map((m) => ({
+                    id: m.id,
+                    atributos: { "data-mov": m.id, "data-tipo-mov": m.tipo },
+                    titulos: { observacao: m.observacao ?? undefined, usuario: m.usuario ?? undefined },
+                    celulas: {
+                      data: <span className={cn(PLANILHA.data, "text-ink-muted")}>{dataHora(m.data)}</span>,
+                      tipo: <span className="font-medium text-ink">{LABEL_TIPO[m.tipo]}</span>,
+                      origem: <span className="text-ink-muted">{LABEL_ORIGEM[m.origem]}</span>,
+                      quantidade: <span className={cn(PLANILHA.numero, "font-semibold", m.quantidade < 0 ? "text-atrasado" : "text-success-700")} data-quantidade>{formatarDelta(m.quantidade)}</span>,
+                      saldo: <span className={cn(PLANILHA.numero, m.saldoApos < 0 ? "text-atrasado font-semibold" : "text-ink")} data-saldo-apos>{formatarQtd(m.saldoApos)}</span>,
+                      custo: <span className={cn(PLANILHA.numero, "text-ink-muted")}>{m.custoUnitario != null ? moeda(m.custoUnitario) : "—"}</span>,
+                      usuario: <span className="text-ink-muted">{m.usuario ?? "—"}</span>,
+                      observacao: <span className="text-ink-muted">{m.observacao ?? "—"}</span>,
+                    },
+                  }))}
+                />
+              </div>
             </>
           )}
+          </ConteudoUrl>
           <div className="px-4 py-3 border-t border-surface-border">
             <PaginacaoUrl total={total} pagina={pagina} porPagina={porPagina} rotulo="movimentações" />
           </div>

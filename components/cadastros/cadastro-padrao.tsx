@@ -94,7 +94,7 @@ function usePodeCadastro(def: DefCadastro) {
   return (acao: AcaoCadastro) => { const req = def.permissoes[acao]; return !req || req.some(([m, a]) => pode(m, a)); };
 }
 
-const vazioParaForm = (c: CampoCadastro) => (c.tipo === "cor" ? "#64748B" : c.tipo === "select" ? c.opcoes?.[0]?.value ?? "" : "");
+const vazioParaForm = (c: CampoCadastro) => (c.tipo === "cor" ? "#64748B" : c.tipo === "select" ? c.opcoes?.[0]?.value ?? "" : c.tipo === "booleano" ? "true" : "");
 const valorParaForm = (c: CampoCadastro, v: unknown) => (v == null ? (c.tipo === "cor" ? "#64748B" : "") : c.formatar ? c.formatar(String(v)) : String(v));
 
 /** Seleção em massa: só cadastros registrados nas ações em massa e com alguma ação permitida. */
@@ -479,6 +479,15 @@ function CampoForm({ campo: c, valor, disabled, id, onChange }: {
   // Códigos com lista (ex.: LC 116): busca-e-seleção; o digitado também vale
   if (c.opcoesCodigo) return <ComboboxCodigo id={id} value={valor} onChange={onChange} opcoes={c.opcoesCodigo} placeholder={c.placeholder} disabled={disabled} />;
   if (c.tipo === "textarea") return <Textarea id={id} value={valor} onChange={(e) => onChange(e.target.value)} placeholder={c.placeholder} rows={3} disabled={disabled} />;
+  if (c.tipo === "booleano") {
+    return (
+      <label className="inline-flex items-center gap-2 py-2.5 text-sm text-ink cursor-pointer">
+        <input id={id} type="checkbox" checked={valor === "true"} disabled={disabled} onChange={(e) => onChange(e.target.checked ? "true" : "false")}
+          className="w-4 h-4 rounded border-surface-border accent-acento" data-campo-booleano={c.key} />
+        {valor === "true" ? "Sim" : "Não"}
+      </label>
+    );
+  }
   if (c.tipo === "cor") {
     return (
       <div className="flex items-center gap-2">

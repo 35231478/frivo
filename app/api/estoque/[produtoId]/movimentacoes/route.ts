@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { respostaRefEmpresa } from "@/lib/ref-empresa";
-import { lancamentoManualSchema, mensagemLancamento, valorDoLancamento } from "@/lib/estoque/regras";
+import { lancamentoManualSchema, mensagemLancamento, origemManual, valorDoLancamento } from "@/lib/estoque/regras";
 import { ErroEstoque, movimentar } from "@/lib/estoque/servidor";
 
 type Params = { params: Promise<{ produtoId: string }> };
@@ -9,6 +9,7 @@ type Params = { params: Promise<{ produtoId: string }> };
 /**
  * POST /api/estoque/:produtoId/movimentacoes — lançamento manual:
  *   { operacao: "ENTRADA", quantidade, custoUnitario?, observacao? }
+ *   { operacao: "SAIDA", quantidade, observacao }        (perda/uso avulso; motivo obrigatório; origem "ajuste manual")
  *   { operacao: "AJUSTE", novoSaldo, observacao }        (motivo obrigatório)
  *   { operacao: "INVENTARIO", contagem, observacao? }
  * Grava o lançamento e o saldo juntos. Saldo negativo não bloqueia: volta em `aviso`.
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   try {
     const r = await movimentar({
       empresaId: user.empresaId, produtoId, usuarioId: user.id,
-      operacao: l.operacao, valor: valorDoLancamento(l),
+      operacao: l.operacao, valor: valorDoLancamento(l), origem: origemManual(l.operacao),
       custoUnitario: l.operacao === "ENTRADA" ? l.custoUnitario ?? null : null,
       observacao: l.observacao ?? null,
     });

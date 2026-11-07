@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * Estoque E1 — o formulário "Lançar" (Entrada / Ajuste / Inventário) num DOM de verdade (happy-dom),
+ * Estoque E1 — o formulário "Lançar" (Entrada / Saída / Ajuste / Inventário) num DOM de verdade (happy-dom),
  * com a API simulada. Prova o que o usuário vê:
  *  - entrada envia a quantidade (e custo) e mostra o saldo novo; a página é atualizada;
  *  - ajuste mostra a diferença antes de lançar, exige motivo e recusa "sem diferença" sem chamar a API;
@@ -67,6 +67,27 @@ describe("Lançar estoque", () => {
     expect($("[data-lancamento-feito]")!.textContent).toContain("Lançado. Saldo agora: 12 kg");
     expect($('[role="alert"]')).toBeNull();
     expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("saída: subtrai (prévia com o saldo que fica, em vermelho se negativo), exige motivo, envia quantidade e motivo", async () => {
+    await montar(2);
+    await clicar($("[data-lancar]"));
+    expect([...caixa.querySelectorAll('[role="tab"]')].map((b) => b.textContent)).toEqual(["Entrada", "Saída", "Ajuste", "Inventário"]);
+    await clicar(aba("Saída"));
+    expect(aba("Saída")!.getAttribute("aria-selected")).toBe("true");
+    expect(texto()).toContain("Perda ou uso avulso: subtrai do saldo (motivo obrigatório).");
+    await digitar("valor", "3");
+    expect($("[data-previa]")!.textContent).toBe("Lançamento: −3 kg → saldo fica -1 kg");
+    expect($("[data-previa] strong:last-child")!.className).toContain("text-atrasado");
+    await enviar();
+    expect($('[role="alert"]')!.textContent).toBe("Saída exige o motivo (observação).");
+    expect(enviados).toEqual([]);
+    await digitar("observacao", "Avaria");
+    resposta = { status: 201, corpo: { saldo: -1, aviso: "Atenção: o saldo ficou negativo (−1 kg). O lançamento foi feito; confira as entradas.", movimentacao: {} } };
+    await enviar();
+    expect(enviados).toEqual([{ url: "/api/estoque/p1/movimentacoes", corpo: { operacao: "SAIDA", quantidade: 3, observacao: "Avaria" } }]);
+    expect($("[data-lancamento-feito]")!.textContent).toContain("Saldo agora: -1 kg");
+    expect($('[role="alert"]')!.textContent).toContain("ficou negativo");
   });
 
   it("ajuste: mostra a diferença, exige motivo, recusa sem diferença (sem chamar a API)", async () => {
