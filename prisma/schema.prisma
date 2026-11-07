@@ -786,6 +786,7 @@ model Usuario {
   pushSubscriptions      PushSubscription[]
   contratoHistoricos     ContratoHistoricoStatus[]
   movimentacoesEstoque   MovimentacaoEstoque[]
+  osMateriaisSeparados   OsMaterial[]          @relation("OsMaterialSeparadoPor")
   notasCompra            NotaCompra[]
   checklistRespostas     ChecklistResposta[]
   fotosAtendimento       FotoAtendimento[]
@@ -2181,8 +2182,18 @@ model OsItemOrcamento {
   @@map("os_itens_orcamento")
 }
 
+/// Estoque E4.1 — estado da separação de um material da OS: SEPARADO (reservado no razão, prestação de contas
+/// pendente), CONSUMIDO (E4.2) e DEVOLVIDO (E4.3). null = nada separado ainda.
+enum EstadoSeparacaoMaterial {
+  SEPARADO
+  CONSUMIDO
+  DEVOLVIDO
+}
+
 /// Estoque E3.3b — material/peça de UMA linha de serviço da OS: o mesmo snapshot do orçamento (orcamento_materiais),
-/// para a OS criada direto (ou copiado do orçamento ao gerar a OS). Regra: lib/orcamentos/materiais.ts. Sem baixa (E4).
+/// para a OS criada direto (ou copiado do orçamento ao gerar a OS). Regra: lib/orcamentos/materiais.ts.
+/// E4.1: a separação fica aqui, por material — quantidade separada (= reservada no razão, movimentações RESERVA
+/// com ref_id = OS), estado, quem e quando. Regra: lib/estoque/separacao.ts.
 model OsMaterial {
   id               String                   @id @default(cuid())
   ordemServicoId   String                   @map("ordem_servico_id")
@@ -2198,15 +2209,22 @@ model OsMaterial {
   origem           OrigemMaterialOrcamento  @default(AVULSO)
   kitNome          String?                  @map("kit_nome")
   ordem            Int                      @default(0)
+  /// E4.1 — separação: quanto já foi separado (reservado) deste material, o estado e quem/quando separou
+  quantidadeSeparada Decimal                  @default(0) @map("quantidade_separada") @db.Decimal(12, 3)
+  estadoSeparacao    EstadoSeparacaoMaterial? @map("estado_separacao")
+  separadoEm         DateTime?                @map("separado_em")
+  separadoPorId      String?                  @map("separado_por_id")
 
   ordemServico OrdemServico     @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
   item         OsItemOrcamento  @relation("OsItemMateriais", fields: [osItemId], references: [id], onDelete: Cascade)
   produto      Produto?         @relation(fields: [produtoId], references: [id], onDelete: SetNull)
   linhaProduto OsItemOrcamento? @relation("OsPecaDerivada")
+  separadoPor  Usuario?         @relation("OsMaterialSeparadoPor", fields: [separadoPorId], references: [id], onDelete: SetNull)
 
   @@index([ordemServicoId])
   @@index([osItemId])
   @@index([produtoId])
+  @@index([ordemServicoId, estadoSeparacao])
   @@map("os_materiais")
 }
 

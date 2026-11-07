@@ -14,7 +14,7 @@ import {
   Wrench, Calculator, Wallet, Receipt, TrendingUp, FileBarChart, ShoppingCart, Timer, CalendarDays, QrCode,
   Truck, UsersRound, BadgeDollarSign, ClipboardCheck, Smartphone, UserCog, Upload, Landmark, Globe, Coins,
   PanelLeftClose, PanelLeftOpen, MoreVertical, LogOut, Package, FileBadge, TrendingDown,
-  CalendarClock,
+  CalendarClock, PackageOpen,
 } from "lucide-react";
 
 type Icone = React.ComponentType<{ className?: string }>;
@@ -27,6 +27,8 @@ interface Item {
   modulo?: string;
   /** Ação exigida (padrão: "visualizar"). Ex.: Custo de pessoal exige "Financeiro › folha". */
   acao?: Acao;
+  /** A ação basta sozinha (sem exigir "visualizar" do módulo). Ex.: "A separar" é de quem separa material. */
+  somenteAcao?: boolean;
 }
 interface Grupo {
   tipo: "grupo";
@@ -79,6 +81,7 @@ const OPERACIONAL: Secao[] = [
         tipo: "grupo", label: "Estoque", icone: Package, itens: [
           { href: "/estoque", icone: Package, label: "Saldos e extrato" },
           { href: "/estoque/notas", icone: FileText, label: "Notas de compra" },
+          { href: "/estoque/separacao", icone: PackageOpen, label: "A separar", modulo: "estoque", acao: "separar", somenteAcao: true },
           { href: "/compras/pedidos", icone: ShoppingCart, label: "Pedidos de compra", modulo: "compras" },
         ],
       },
@@ -238,7 +241,9 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
   const role = usuario.role;
   const podeVer = (i: Item) => {
     const m = i.modulo ?? moduloDaRota(i.href.split("#")[0]);
-    return !m || (pode(permissoes, m, "visualizar", role) && (!i.acao || pode(permissoes, m, i.acao, role)));
+    if (!m) return true;
+    if (i.somenteAcao && i.acao) return pode(permissoes, m, i.acao, role);
+    return pode(permissoes, m, "visualizar", role) && (!i.acao || pode(permissoes, m, i.acao, role));
   };
 
   // Filtra seções por permissão (itens sem permissão somem; grupos/seções vazios somem)

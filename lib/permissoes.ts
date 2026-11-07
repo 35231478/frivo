@@ -6,7 +6,8 @@
 
 export type Acao =
   | "visualizar" | "criar" | "editar" | "excluir" | "concluir" | "aprovar"
-  | "gerenciar" | "medicoes" | "contasReceber" | "fluxoCaixa" | "folha" | "fiscal" | "perdas" | "checklist" | "exportar";
+  | "gerenciar" | "medicoes" | "contasReceber" | "fluxoCaixa" | "folha" | "fiscal" | "perdas" | "checklist" | "exportar"
+  | "separar";
 
 export type Permissoes = Record<string, Partial<Record<Acao, boolean>>>;
 
@@ -29,6 +30,7 @@ export const ACOES_LABEL: Record<Acao, string> = {
   perdas: "Perdas (marcar/reverter)",
   checklist: "Checklist",
   exportar: "Exportar",
+  separar: "Separar material",
 };
 
 /** Matriz de permissões agrupada por seção (fonte da verdade da UI e dos defaults). */
@@ -41,7 +43,7 @@ export const SECOES: SecaoDef[] = [
       { id: "calendario", label: "Calendário", icone: "📅", acoes: ["visualizar"] },
       { id: "qrcodes", label: "QR Codes", icone: "📊", acoes: ["visualizar", "gerenciar"] },
       // Estoque: ver saldos/extrato; gerenciar = lançar entrada, ajuste e inventário
-      { id: "estoque", label: "Estoque", icone: "📦", acoes: ["visualizar", "gerenciar"] },
+      { id: "estoque", label: "Estoque", icone: "📦", acoes: ["visualizar", "gerenciar", "separar"] },
       // Compras: ver pedidos de compra, baixar/enviar o PC ao fornecedor; gerenciar = criar PC avulso,
       // editar e cancelar qualquer pedido. Só quem tem Compras pode ser o comprador responsável.
       { id: "compras", label: "Compras", icone: "🛒", acoes: ["visualizar", "gerenciar"] },
@@ -199,6 +201,9 @@ export function moduloDaRota(pathname: string): string | null {
   // comprador designado, quem pediu ou quem vê a OS/orçamento) — é para lá que o sino do
   // solicitante leva quando chega a NF do pedido dele (Compras 2/2)
   if (seg === "compras" && segs[1] === "pedidos" && segs.length === 3 && segs[2] !== "novo") return null;
+  // Exceção (E4.1): a fila "A separar" e a tela de separação são de quem tem "Estoque › Separar material",
+  // mesmo sem "Estoque › Visualizar" (o almoxarife que só separa) — a página confere a ação sozinha
+  if (seg === "estoque" && segs[1] === "separacao") return null;
   return ROTA_MODULO[seg] ?? null;
 }
 
@@ -214,7 +219,7 @@ export const PRESETS: Record<string, Permissoes> = {
     qrcodes: ["visualizar", "gerenciar"],
     equipes: ["visualizar", "gerenciar"],
     veiculos: ["visualizar", "checklist", "gerenciar"],
-    estoque: ["visualizar", "gerenciar"],
+    estoque: ["visualizar", "gerenciar", "separar"],
     relatorios: ["visualizar", "exportar"],
   }),
   FINANCEIRO: montarPermissoes({
