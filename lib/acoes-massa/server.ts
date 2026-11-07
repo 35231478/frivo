@@ -41,6 +41,7 @@ export const EXECUTORES: Record<Entidade, Partial<Record<AcaoItem, (id: string, 
   fornecedores: cadastro("fornecedores"),
   "centros-custo": cadastro("centros-custo"),
   "categorias-produto": cadastro("categorias-produto"),
+  "kits-material": cadastro("kits-material"),
 };
 
 /** Cadastros padronizados: a mesma regra única de ativar/inativar da rota /api/cadastros. */
@@ -79,7 +80,7 @@ export async function rotulos(entidade: Entidade, ids: string[], empresaId: stri
       pares = (await prisma.tecnico.findMany({ where, select: { id: true, nome: true } })).map((r) => [r.id, r.nome]);
       break;
     case "produtos": case "servicos": case "cargos": case "categorias-financeiras": case "perfis-acesso": case "modelos-encargos":
-    case "tipos-equipamento": case "tabelas-preco": case "termos-referencia": case "modelos-prazo": case "fornecedores": case "centros-custo": case "categorias-produto":
+    case "tipos-equipamento": case "tabelas-preco": case "termos-referencia": case "modelos-prazo": case "fornecedores": case "centros-custo": case "categorias-produto": case "kits-material":
       pares = await rotulosCadastro(entidade, ids, empresaId);
       break;
   }
@@ -130,7 +131,7 @@ export async function idsDoFiltro(entidade: Entidade, filtro: string, empresaId:
       return pegar(prisma.tecnico.findMany({ where, select: { id: true }, take }), prisma.tecnico.count({ where }));
     }
     case "produtos": case "servicos": case "cargos": case "categorias-financeiras": case "perfis-acesso": case "modelos-encargos":
-    case "tipos-equipamento": case "tabelas-preco": case "termos-referencia": case "modelos-prazo": case "fornecedores": case "centros-custo": case "categorias-produto":
+    case "tipos-equipamento": case "tabelas-preco": case "termos-referencia": case "modelos-prazo": case "fornecedores": case "centros-custo": case "categorias-produto": case "kits-material":
       return idsCadastro(entidade, sp, empresaId, MAX_SELECAO);
   }
 }
@@ -209,7 +210,7 @@ export async function linhasExportacao(entidade: Entidade, ids: string[], empres
           r.especialidades.join(", "), d(r.dataAdmissao), r.ativo ? r.statusColaborador : "INATIVO"])];
     }
     case "produtos": case "servicos": case "cargos": case "categorias-financeiras": case "perfis-acesso": case "modelos-encargos":
-    case "tipos-equipamento": case "tabelas-preco": case "termos-referencia": case "modelos-prazo": case "fornecedores": case "centros-custo": case "categorias-produto":
+    case "tipos-equipamento": case "tabelas-preco": case "termos-referencia": case "modelos-prazo": case "fornecedores": case "centros-custo": case "categorias-produto": case "kits-material":
       return linhasCadastro(entidade, ids, empresaId);
   }
 }

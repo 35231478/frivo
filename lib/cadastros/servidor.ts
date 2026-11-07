@@ -75,7 +75,9 @@ export async function listarCadastroPaginado(def: DefCadastro, empresaId: string
     where: whereCadastro(def, empresaId, f), orderBy: ordemPrisma(lerOrdem(sp, mapa), mapa, def.ordem ?? { nome: "asc" }),
     ...janela(pagina, porPagina), ...(def.incluir && { include: def.incluir }),
   });
-  return { itens: itens.map((i) => limpar(def, i)), total, pagina, porPagina, contagens: { ativos, inativos, todos: ativos + inativos } };
+  const enriquecer = REGRAS[def.entidade]?.enriquecer;
+  const prontos = enriquecer && itens.length ? await enriquecer(itens as Registro[], empresaId) : itens;
+  return { itens: prontos.map((i) => limpar(def, i)), total, pagina, porPagina, contagens: { ativos, inativos, todos: ativos + inativos } };
 }
 
 /** Sugestões da busca: as ~5 que mais combinam (só id, nome e o detalhe; nada além do que a lista mostra). */
@@ -141,15 +143,19 @@ function juntar(partes: string[]) {
 async function contarUsos(entidade: EntidadeCadastro, id: string, empresaId: string): Promise<Uso[]> {
   switch (entidade) {
     case "produtos": {
-      const [orc, med, ped, tab] = await Promise.all([
+      const [orc, med, ped, tab, kits, serv] = await Promise.all([
         prisma.orcamento.count({ where: { empresaId, produtos: { some: { produtoId: id } } } }),
         prisma.medicao.count({ where: { empresaId, itens: { some: { produtoId: id } } } }),
         prisma.pedidoCompraInterno.count({ where: { empresaId, itens: { some: { produtoId: id } } } }),
         prisma.tabelaPreco.count({ where: { empresaId, itens: { some: { produtoId: id } } } }),
+        // E3.2: kits e composições de serviço que usam o produto (continuam valendo; a tela avisa "inativo")
+        prisma.kitMaterial.count({ where: { empresaId, itens: { some: { produtoId: id } } } }),
+        prisma.servico.count({ where: { empresaId, materiais: { some: { produtoId: id } } } }),
       ]);
       return [
         { rotulo: pl(orc, "orçamento", "orçamentos"), total: orc }, { rotulo: pl(med, "medição", "medições"), total: med },
         { rotulo: pl(ped, "pedido de compra", "pedidos de compra"), total: ped }, { rotulo: pl(tab, "tabela de preço", "tabelas de preço"), total: tab },
+        { rotulo: pl(kits, "kit de material", "kits de material"), total: kits }, { rotulo: pl(serv, "serviço (materiais padrão)", "serviços (materiais padrão)"), total: serv },
       ];
     }
     case "servicos": {
@@ -227,7 +233,8 @@ export async function idsCadastro(entidade: EntidadeCadastro, sp: Record<string,
 export async function linhasCadastro(entidade: EntidadeCadastro, ids: string[], empresaId: string): Promise<string[][]> {
   const def = CADASTROS[entidade];
   const rs = await tabela(def).findMany({ where: { id: { in: ids }, empresaId }, orderBy: { nome: "asc" }, ...(def.incluir && { include: def.incluir }) });
-  const campos = def.campos;
+  // Campo estruturado (ex.: materiais padrão do serviço) não cabe numa célula: fica fora da planilha
+  const campos = def.campos.filter((c) => c.tipo !== "estruturado");
   const fmt = (v: unknown) => (v == null ? "" : typeof v === "object" ? String(Number(v)).replace(".", ",") : String(v));
   // Campo de vínculo (tipo "cadastro"): sai o NOME do registro ligado, não o id
   const valor = (c: (typeof campos)[number], r: Record<string, unknown>) =>

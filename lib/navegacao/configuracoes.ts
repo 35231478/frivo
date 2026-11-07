@@ -1,5 +1,5 @@
 import {
-  Building2, Clock, Cog, FileBadge, FileSignature, FileSpreadsheet, Headset, IdCard, Landmark, ListChecks, Mail, Package, Printer, QrCode, ScrollText, ShieldCheck, Tags,
+  Boxes, Building2, Clock, Cog, FileBadge, FileSignature, FileSpreadsheet, Headset, IdCard, Landmark, ListChecks, Mail, Package, Printer, QrCode, ScrollText, ShieldCheck, Tags,
   Target, Thermometer, UserCog, Wallet, Wrench, type LucideIcon,
   Hash,
 } from "lucide-react";
@@ -72,6 +72,7 @@ export const SECOES_CONFIGURACOES: SecaoConfig[] = [
           { id: "servicos", href: "/configuracoes/servicos", icone: Wrench, label: "Serviços", dica: "Serviços prestados, usados em OS e orçamentos" },
           { id: "produtos", href: "/configuracoes/produtos", icone: Package, label: "Produtos", dica: "Peças e materiais usados nos serviços" },
           { id: "categorias-produto", href: "/configuracoes/categorias-produto", icone: Tags, label: "Categorias de produto", dica: "Como o produto entra na cobrança: venda à parte ou incluso no serviço" },
+          { id: "kits-material", href: "/configuracoes/kits-material", icone: Boxes, label: "Kits de material", dica: "Conjuntos de produtos com quantidade (ex.: kit de instalação), reutilizados nos materiais padrão dos serviços" },
           { id: "tabelas-preco", href: "/configuracoes/tabelas-preco", icone: Tags, label: "Tabelas de preços", dica: "Preços por serviço/produto, vinculados a clientes" },
         ],
       },

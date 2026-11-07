@@ -12,6 +12,7 @@ import { TelaTabelasPreco } from "./tabelas-preco";
 import { TelaCategoriasFinanceiras } from "./categorias-financeiras";
 import { TelaCentrosCusto } from "./centros-custo";
 import { TelaCategoriasProduto } from "./categorias-produto";
+import { TelaKitsMaterial } from "./kits-material";
 import { TelaBancoInter } from "./banco-inter";
 import { TelaDadosFiscais } from "./dados-fiscais";
 import { TelaEmpresa } from "./empresa";
@@ -39,6 +40,7 @@ const TELAS: Record<string, () => ReactNode> = {
   servicos: () => <TelaServicos />,
   produtos: () => <TelaProdutos />,
   "categorias-produto": () => <TelaCategoriasProduto />,
+  "kits-material": () => <TelaKitsMaterial />,
   "tabelas-preco": () => <TelaTabelasPreco />,
   "categorias-financeiras": () => <TelaCategoriasFinanceiras />,
   "centros-custo": () => <TelaCentrosCusto />,
