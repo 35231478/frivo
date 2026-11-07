@@ -37,7 +37,7 @@ const ANTES = [
   "/configuracoes/produtos", "/configuracoes/tabelas-preco", "/configuracoes/termos", "/configuracoes/prazos",
   "/configuracoes/financeiro/categorias", "/configuracoes/perfis", "/configuracoes/usuarios",
   "/configuracoes/cargos", "/configuracoes/email", "/configuracoes/portal", "/configuracoes/qr-code",
-  "/configuracoes/impressao-os", "/configuracoes/financeiro/centros-custo", "/configuracoes/categorias-produto",
+  "/configuracoes/impressao-os", "/configuracoes/financeiro/centros-custo", "/configuracoes/categorias-produto", "/configuracoes/kits-material",
 ];
 
 /** O redirect do Next lança um erro com o destino no digest */
@@ -58,7 +58,7 @@ describe("estrutura: 3 abas com cartões; cada item tem id, tela e a rota antiga
     expect(sub("operacionais")).toEqual([
       ["Ordens de serviço", ["Tipos de OS", "Formulários", "Termos de referência", "Modelos de prazo", "Impressão da OS"]],
       ["Comercial", ["Orçamentos e propostas"]],
-      ["Catálogo", ["Tipos de equipamento", "Serviços", "Produtos", "Categorias de produto", "Tabelas de preços"]],
+      ["Catálogo", ["Tipos de equipamento", "Serviços", "Produtos", "Categorias de produto", "Kits de material", "Tabelas de preços"]],
     ]);
     expect(sub("financeiras")).toEqual([["Classificação", ["Categorias financeiras", "Centros de custo"]], ["Integrações", ["Banco Inter"]], ["Fiscal", ["Dados fiscais (NFS-e)"]]]);
     expect(sub("conta")).toEqual([

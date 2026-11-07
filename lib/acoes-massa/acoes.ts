@@ -13,7 +13,7 @@ export const ENTIDADES = [
   "ordens", "equipamentos", "clientes", "orcamentos", "contratos", "veiculos", "colaboradores",
   // Cadastros padronizados (lib/cadastros/registro.ts)
   "produtos", "servicos", "cargos", "categorias-financeiras", "perfis-acesso", "modelos-encargos",
-  "tipos-equipamento", "tabelas-preco", "termos-referencia", "modelos-prazo", "fornecedores", "centros-custo", "categorias-produto",
+  "tipos-equipamento", "tabelas-preco", "termos-referencia", "modelos-prazo", "fornecedores", "centros-custo", "categorias-produto", "kits-material",
 ] as const;
 export type Entidade = (typeof ENTIDADES)[number];
 
@@ -142,6 +142,7 @@ export const ENTIDADE: Record<Entidade, DefEntidade> = {
   fornecedores: acoesCadastro("fornecedor", "fornecedores", false, ["financeiro", "fluxoCaixa"]),
   "centros-custo": acoesCadastro("centro de custo", "centros de custo"),
   "categorias-produto": acoesCadastro("categoria de produto", "categorias de produto", true),
+  "kits-material": acoesCadastro("kit de material", "kits de material"),
 };
 
 /** Ações em massa de um cadastro padronizado: inativar/reativar com a permissão do registro. */

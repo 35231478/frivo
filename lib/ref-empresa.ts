@@ -18,7 +18,7 @@ import { prisma } from "@/lib/prisma";
 export type ModeloRef =
   | "cliente" | "cargo" | "perfilAcesso" | "tipoOs" | "tabelaPreco" | "servico" | "produto"
   | "checklistTemplate" | "unidade" | "tecnico" | "equipe" | "veiculo" | "formularioTemplate"
-  | "prazoTemplate" | "tipoEquipamentoCustom" | "categoriaFinanceira" | "fornecedor" | "centroCusto" | "contaBancaria" | "categoriaProduto"
+  | "prazoTemplate" | "tipoEquipamentoCustom" | "categoriaFinanceira" | "fornecedor" | "centroCusto" | "contaBancaria" | "categoriaProduto" | "kitMaterial"
   | "ordemServico" | "orcamento";
 
 export class ErroRefEmpresa extends Error {}

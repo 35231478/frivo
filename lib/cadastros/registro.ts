@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { COMPORTAMENTOS, OPCOES_COMPORTAMENTO } from "@/lib/estoque/categoria";
+import { erroDasLinhas, erroDosItensDoKit } from "@/lib/estoque/composicao";
 import type { Acao } from "@/lib/permissoes";
 import { REGIMES, REGIME_LABEL } from "@/lib/folha/calculo";
 import { itensEncargoSchema } from "@/lib/folha/validacao";
@@ -33,10 +34,12 @@ export const ENTIDADES_CADASTRO = [
   "contas-bancarias",
   // Estoque E3.1: categoria de produto com o comportamento de faturamento (venda à parte / incluso)
   "categorias-produto",
+  // Estoque E3.2: kit de material (produtos + quantidades), reutilizado na composição do serviço
+  "kits-material",
 ] as const;
 export type EntidadeCadastro = (typeof ENTIDADES_CADASTRO)[number];
 export type ModeloCadastro = "produto" | "servico" | "cargo" | "categoriaFinanceira" | "perfilAcesso" | "modeloEncargos" | "usuario"
-  | "tipoEquipamentoCustom" | "tabelaPreco" | "termoReferenciaTemplate" | "prazoTemplate" | "fornecedor" | "centroCusto" | "contaBancaria" | "categoriaProduto";
+  | "tipoEquipamentoCustom" | "tabelaPreco" | "termoReferenciaTemplate" | "prazoTemplate" | "fornecedor" | "centroCusto" | "contaBancaria" | "categoriaProduto" | "kitMaterial";
 export type AcaoCadastro = "listar" | "criar" | "editar" | "inativar" | "reativar";
 
 /** Basta UMA das permissões. `null` = qualquer usuário logado (catálogo lido nos seletores de outras telas). */
@@ -45,7 +48,11 @@ export type Requisito = [modulo: string, acao: Acao][] | null;
 export interface CampoCadastro {
   key: string;
   label: string;
-  tipo?: "texto" | "textarea" | "moeda" | "numero" | "inteiro" | "cor" | "select" | "email" | "booleano" | "cadastro";
+  /**
+   * "cadastro": vínculo com outro cadastro (grava o id). "estruturado": valor composto (lista/objeto) editado por
+   * uma seção própria (`grupo` com componente): no formulário viaja como JSON; fora da planilha de exportação.
+   */
+  tipo?: "texto" | "textarea" | "moeda" | "numero" | "inteiro" | "cor" | "select" | "email" | "booleano" | "cadastro" | "estruturado";
   opcoes?: { value: string; label: string }[];
   /** tipo "cadastro": o outro cadastro de onde vem a escolha (grava o id) e o nome da relação no registro (para mostrar/exportar o nome) */
   cadastro?: EntidadeCadastro;
@@ -231,6 +238,12 @@ export const CAMPOS_RETENCAO_SERVICO: CampoCadastro[] = RETENCOES_FEDERAIS_SERVI
   { key: r.aliquota, label: `Alíquota ${r.rotulo} (%)`, tipo: "numero" as const, placeholder: `Ex: ${r.exemplo}`, grupo: GRUPO_NFSE, permissao: FISCAL },
 ]);
 
+/** Seção "Materiais padrão" do serviço (E3.2): desenho próprio (components/servicos/secao-materiais-servico.tsx) */
+export const GRUPO_MATERIAIS = "Materiais padrão";
+/** O que a composição precisa saber do produto (nome, unidade, categoria → comportamento) */
+export const PRODUTO_DA_COMPOSICAO = { id: true, nome: true, unidade: true, ativo: true, categoriaProduto: { select: { id: true, nome: true, comportamento: true } } } as const;
+const ITENS_DO_KIT = { orderBy: { ordem: "asc" }, select: { produtoId: true, quantidade: true, produto: { select: PRODUTO_DA_COMPOSICAO } } } as const;
+
 const SO_GESTOR: Requisito = [["configuracoes", "gerenciar"]];
 const SO_FOLHA: Requisito = [["financeiro", "folha"]];
 const PERMISSOES_CONFIG: Record<AcaoCadastro, Requisito> = {
@@ -256,6 +269,33 @@ export const itemTabelaSchema = z.object({
   descontoPercent: numero().refine((v) => v == null || v <= 100, "Desconto vai até 100%.").optional(),
   bloqueado: z.boolean().default(false),
 }).strict().refine((it) => !!it.servicoId !== !!it.produtoId, { message: "Cada item da tabela é um serviço OU um produto." });
+/* Estoque E3.2: itens do kit e linhas da composição do serviço (a conferência é a regra pura de lib/estoque/composicao) */
+const quantidadeMaterial = z.preprocess((v) => {
+  if (vazio(v)) return v;
+  if (typeof v === "string") { const n = Number(v.trim().replace(",", ".")); return Number.isFinite(n) ? n : v; }
+  return v;
+}, z.number({ invalid_type_error: "Informe a quantidade.", required_error: "Informe a quantidade." }).positive("A quantidade precisa ser maior que zero.").max(999_999_999));
+/** Lista estruturada que pode chegar como JSON (texto) do formulário genérico; vazio = lista vazia */
+const listaOuJson = (v: unknown) => {
+  if (vazio(v)) return [];
+  if (typeof v === "string") { try { return JSON.parse(v); } catch { return v; } }
+  return v;
+};
+const comRegra = <T,>(regra: (xs: T[]) => string | null) => (xs: T[], ctx: z.RefinementCtx) => {
+  const erro = regra(xs);
+  if (erro) ctx.addIssue({ code: z.ZodIssueCode.custom, message: erro });
+};
+export const itemKitSchema = z.object({ produtoId: z.string().trim().min(1, "Cada item do kit precisa de um produto.").max(40), quantidade: quantidadeMaterial }).strict();
+export const itensKitSchema = z.preprocess(listaOuJson, z.array(itemKitSchema, { invalid_type_error: "Itens do kit inválidos." }).max(500, "Um kit vai até 500 itens.").superRefine(comRegra(erroDosItensDoKit)));
+export const linhaComposicaoSchema = z.object({
+  produtoId: idOpcional.optional(),
+  kitId: idOpcional.optional(),
+  quantidade: quantidadeMaterial,
+  // Override pontual (só produto solto); vazio = o da categoria do produto
+  comportamento: z.preprocess((v) => (vazio(v) ? null : v), z.enum(COMPORTAMENTOS, { errorMap: () => ({ message: "Comportamento de faturamento inválido." }) }).nullable()).optional(),
+}).strict();
+export const materiaisSchema = z.preprocess(listaOuJson, z.array(linhaComposicaoSchema, { invalid_type_error: "Materiais padrão inválidos." }).max(500, "A composição vai até 500 linhas.").superRefine(comRegra(erroDasLinhas)));
+
 export const etapaPrazoSchema = z.object({
   nome: z.string().trim().min(1, "Toda etapa precisa de um nome.").max(120),
   prazoHoras: z.preprocess((v) => (vazio(v) ? 24 : typeof v === "string" ? Number(v.replace(",", ".")) : v),
@@ -320,6 +360,9 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       { key: "descricao", label: "Descrição", tipo: "textarea" },
       { key: "unidade", label: "Unidade", tipo: "select", opcoes: UNIDADES_SERVICO },
       { key: "valorPadrao", label: "Valor padrão (R$)", tipo: "moeda", placeholder: "0,00" },
+      // E3.2: composição (produto solto ou kit + quantidade; override opcional). Viaja como JSON; serviço sem composição = como sempre
+      { key: "materiais", label: "Materiais padrão", tipo: "estruturado", grupo: GRUPO_MATERIAIS,
+        ajuda: "Produtos e kits que este serviço costuma consumir. No orçamento/OS eles entram pré-preenchidos (e editáveis). Peça (venda à parte) é cobrada do cliente; material (incluso) só baixa o estoque." },
       ...CAMPOS_NFSE_SERVICO,
       ...CAMPOS_RETENCAO_SERVICO,
       { key: "observacaoFiscal", label: "Observação fiscal", tipo: "textarea", grupo: "Outros tributos" },
@@ -327,11 +370,17 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
     colunas: [
       { key: "codigo", label: "Código", formato: "codigo", ordenar: "codigo" },
       { key: "nome", label: "Nome", ordenar: "nome" }, { key: "unidade", label: "Unidade", ordenar: "unidade" },
+      { key: "materiais", label: "Materiais", ordenar: (dir) => ({ materiais: { _count: dir } }) },
       { key: "codigoLc116", label: "LC 116", ordenar: "codigoLc116" }, { key: "valorPadrao", label: "Valor padrão", formato: "moeda", ordenar: "valorPadrao" },
     ],
+    // A lista só conta as linhas da composição; a composição inteira (com o kit "aberto") vem no registro único
+    incluir: { _count: { select: { materiais: true } } },
+    incluirItem: {
+      materiais: { orderBy: { ordem: "asc" }, include: { produto: { select: PRODUTO_DA_COMPOSICAO }, kit: { select: { id: true, nome: true, ativo: true, itens: ITENS_DO_KIT } } } },
+    },
     ...schemas({
       // Código: normalizado e conferido (único na empresa) pela regra do cadastro (especificos.ts)
-      nome, codigo: textoOpcional(40), descricao: textoOpcional(), unidade, valorPadrao: numero(),
+      nome, codigo: textoOpcional(40), descricao: textoOpcional(), unidade, valorPadrao: numero(), materiais: materiaisSchema,
       codigoMunicipal: textoOpcional(50), codigoLc116: lc116,
       aliquotaISS: aliquotaIss, aliquotaPIS: aliquota("PIS"), aliquotaCOFINS: aliquota("COFINS"), aliquotaCSLL: aliquota("CSLL"),
       aliquotaIR: aliquota("IR"), aliquotaINSS: aliquota("INSS"),
@@ -339,7 +388,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       observacaoFiscal: textoOpcional(),
       nfseTributacao, issRetido: booleano, cnae, discriminacaoPadrao: textoOpcional(),
     }, {
-      codigo: null, descricao: null, unidade: "un", valorPadrao: null, codigoMunicipal: null, codigoLc116: null,
+      codigo: null, descricao: null, unidade: "un", valorPadrao: null, materiais: [], codigoMunicipal: null, codigoLc116: null,
       aliquotaISS: null, aliquotaPIS: null, aliquotaCOFINS: null, aliquotaCSLL: null, aliquotaIR: null, aliquotaINSS: null, observacaoFiscal: null,
       nfseTributacao: null, cnae: null, discriminacaoPadrao: null,
     }),
@@ -560,6 +609,24 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
     ],
     // Nome único na empresa (sem diferença de maiúsculas): regra em especificos.ts; as duas do Zé vêm pré-cadastradas (seed por empresa)
     ...schemas({ nome: nome.max(120), comportamento: z.enum(COMPORTAMENTOS, { errorMap: () => ({ message: "Escolha o comportamento: venda à parte ou incluso no serviço." }) }) }),
+  },
+  "kits-material": {
+    entidade: "kits-material", modelo: "kitMaterial", massa: true, singular: "kit de material", plural: "kits de material",
+    // Como os outros cadastros do catálogo: qualquer usuário logado lê (seletor do serviço); gravar: Configurações › gerenciar
+    modulo: "configuracoes", permissoes: PERMISSOES_CONFIG, chave: "id", rota: "/configuracoes/kits-material", editorProprio: true,
+    busca: ["nome", "descricao"],
+    // Os itens vêm na lista (poucos por kit): a seção do serviço mostra o kit "aberto" e a lista soma o custo de referência
+    incluir: { _count: { select: { servicoMateriais: true } }, itens: ITENS_DO_KIT },
+    campos: [
+      { key: "nome", label: "Nome", obrigatorio: true, placeholder: "Ex: Kit instalação split 12k" },
+      { key: "descricao", label: "Descrição", tipo: "textarea" },
+    ],
+    colunas: [
+      { key: "nome", label: "Kit", ordenar: "nome" }, { key: "itens", label: "Itens", ordenar: (dir) => ({ itens: { _count: dir } }) },
+      { key: "custo", label: "Custo ref." }, { key: "uso", label: "Serviços", ordenar: (dir) => ({ servicoMateriais: { _count: dir } }) },
+    ],
+    // Nome único na empresa (sem diferença de maiúsculas) e itens da empresa: regras em especificos.ts
+    ...schemas({ nome: nome.max(120), descricao: textoOpcional(1000), itens: itensKitSchema }, { descricao: null, itens: [] }),
   },
   "contas-bancarias": {
     entidade: "contas-bancarias", modelo: "contaBancaria", singular: "conta bancária", plural: "contas bancárias",

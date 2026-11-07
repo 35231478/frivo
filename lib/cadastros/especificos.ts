@@ -5,11 +5,14 @@ import { garantirModelosPadrao } from "@/lib/folha/server";
 import { ErroRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { calcularValorFinalTabela } from "@/lib/tabela-preco-helpers";
 import { enviarConvite, senhaInicialAleatoria } from "@/lib/usuarios/convite";
-import type { EntidadeCadastro } from "@/lib/cadastros/registro";
+import { CADASTROS, type EntidadeCadastro } from "@/lib/cadastros/registro";
 import { normalizarCodigoServico } from "@/lib/cadastros/codigos";
 import { colisaoDeCodigo, criarProdutoComCodigo, criarServicoComCodigo, servicoComCodigo } from "@/lib/cadastros/codigos-server";
 import { motivoRetencaoServicoInvalida, type RetencoesDoServico } from "@/lib/financeiro/retencoes";
 import { categoriaProdutoComNome, garantirCategoriasProdutoPadrao } from "@/lib/estoque/categoria-server";
+import { custoDoKit } from "@/lib/estoque/composicao";
+import { kitMaterialComNome, montarItensKit, montarMateriaisServico } from "@/lib/estoque/composicao-server";
+import { ultimosCustos } from "@/lib/estoque/custo";
 
 /**
  * Regras ESPECÍFICAS de alguns cadastros padronizados (perfis de acesso, modelos de encargos,
@@ -38,6 +41,8 @@ export interface ImpactoEspecifico { usos: { rotulo: string; total: number }[]; 
 
 export interface RegrasCadastro {
   antesDeListar?: (empresaId: string) => Promise<void>;
+  /** Depois de listar (lista paginada): acrescenta dados calculados às linhas (ex.: custo de referência do kit) */
+  enriquecer?: (itens: Registro[], empresaId: string) => Promise<Registro[]>;
   criar?: (dados: Record<string, unknown>, ator: Ator) => Promise<Gravacao>;
   editar?: (existente: Registro, dados: Record<string, unknown>, ator: Ator) => Promise<Gravacao>;
   /** Motivo que impede inativar (ativo=false) ou reativar (ativo=true); null = pode. */
@@ -434,23 +439,29 @@ const msgCodigoServico = (codigo: string, s: { nome: string }) => `O código ${c
 
 /** Serviço: código digitado (normalizado, único na empresa) ou gerado pelo nome; vazio ao editar mantém o atual. */
 const servicos: RegrasCadastro = {
-  async criar(dados, ator) {
-    const ret = motivoRetencaoServicoInvalida(dados as RetencoesDoServico);
+  criar: (dados, ator) => comRef(async () => {
+    // E3.2: a composição (materiais padrão) vai junto; vazia = serviço como sempre
+    const { materiais, ...d } = dados as { materiais: LinhaMaterial[] } & Record<string, unknown>;
+    const ret = motivoRetencaoServicoInvalida(d as RetencoesDoServico);
     if (ret) return falha(400, ret);
-    const n = normalizarCodigoServico(dados.codigo);
+    const n = normalizarCodigoServico(d.codigo);
     if (n.erro) return falha(400, n.erro);
     if (n.codigo) { const dup = await servicoComCodigo(ator.empresaId, n.codigo); if (dup) return falha(409, msgCodigoServico(n.codigo, dup)); }
+    const linhas = await montarMateriaisServico(materiais ?? [], ator.empresaId);
     try {
-      const item = await criarServicoComCodigo(ator.empresaId, String(dados.nome), n.codigo, (codigo, tx) =>
-        tx.servico.create({ data: { ...(dados as any), codigo, empresaId: ator.empresaId, ativo: true } }));
+      const item = await criarServicoComCodigo(ator.empresaId, String(d.nome), n.codigo, (codigo, tx) =>
+        tx.servico.create({ data: { ...(d as any), codigo, empresaId: ator.empresaId, ativo: true, materiais: { create: linhas } }, include: CADASTROS.servicos.incluir as any }));
       return { ok: true, item };
     } catch (e) {
       if (n.codigo && colisaoDeCodigo(e)) return falha(409, `O código ${n.codigo} acabou de ser usado em outro serviço. Escolha outro.`);
       throw e;
     }
-  },
-  async editar(existente, dados, ator) {
-    const data = { ...dados };
+  }),
+  editar: (existente, dados, ator) => comRef(async () => {
+    // Parcial: sem `materiais` no corpo, a composição não muda (renomear nunca apaga a composição)
+    const { materiais, ...data } = dados as { materiais?: LinhaMaterial[] } & Record<string, unknown>;
+    const linhas = materiais && await montarMateriaisServico(materiais, ator.empresaId, (existente.materiais ?? []) as { produtoId?: unknown; kitId?: unknown }[]);
+    if (linhas) (data as Record<string, unknown>).materiais = { deleteMany: {}, create: linhas };
     // "Reter" exige alíquota, olhando o que fica gravado (o que veio + o que já estava)
     const ret = motivoRetencaoServicoInvalida({ ...existente, ...data } as RetencoesDoServico);
     if (ret) return falha(400, ret);
@@ -471,6 +482,49 @@ const servicos: RegrasCadastro = {
       if (colisaoDeCodigo(e)) return falha(409, `O código ${String(data.codigo)} acabou de ser usado em outro serviço. Escolha outro.`);
       throw e;
     }
+  }),
+};
+type LinhaMaterial = Parameters<typeof montarMateriaisServico>[0][number];
+
+/* ───────────────────────── Kits de material (E3.2) ───────────────────────── */
+const msgKit = (k: { nome: string; ativo: boolean }) =>
+  `Já existe o kit “${k.nome}”${k.ativo ? "" : " (inativo — reative-o em vez de cadastrar de novo)"}.`;
+
+/**
+ * Kit: nome único na empresa; itens = produtos da empresa (novo precisa estar ativo; o que o kit já tinha fica).
+ * A lista traz o custo de referência (último custo de compra × quantidade) — informativo, nunca vira preço.
+ */
+const kitsMaterial: RegrasCadastro = {
+  criar: (dados, ator) => comRef(async () => {
+    const { itens, ...d } = dados as { itens: { produtoId: string; quantidade: number }[]; nome: string; descricao?: string | null };
+    const dup = await kitMaterialComNome(ator.empresaId, d.nome);
+    if (dup) return falha(409, msgKit(dup));
+    const linhas = await montarItensKit(itens ?? [], ator.empresaId);
+    // A resposta já traz os itens com o produto (o que a lista mostra), como a listagem
+    const item = await prisma.kitMaterial.create({ data: { ...d, empresaId: ator.empresaId, ativo: true, itens: { create: linhas } }, include: CADASTROS["kits-material"].incluir as any });
+    return { ok: true, item };
+  }),
+  // Parcial: sem `itens` no corpo, os itens não mudam
+  editar: (existente, dados, ator) => comRef(async () => {
+    const { itens, ...d } = dados as { itens?: { produtoId: string; quantidade: number }[]; nome?: string; descricao?: string | null };
+    if (typeof d.nome === "string") {
+      const dup = await kitMaterialComNome(ator.empresaId, d.nome, existente.id);
+      if (dup) return falha(409, msgKit(dup));
+    }
+    const linhas = itens && await montarItensKit(itens, ator.empresaId, (existente.itens ?? []) as { produtoId?: unknown }[]);
+    const item = await prisma.kitMaterial.update({ where: { id: existente.id }, data: { ...d, ...(linhas && { itens: { deleteMany: {}, create: linhas } }) } });
+    return { ok: true, item };
+  }),
+  async enriquecer(itens, empresaId) {
+    const produtoIds = itens.flatMap((k) => ((k.itens ?? []) as { produtoId: string }[]).map((i) => i.produtoId));
+    const custos = await ultimosCustos(empresaId, produtoIds);
+    return itens.map((k) => ({ ...k, custoReferencia: custoDoKit({ itens: (k.itens ?? []) as { produtoId: string; quantidade: unknown }[] }, custos) }));
+  },
+  async impacto(k, empresaId) {
+    const servicos = await prisma.servico.count({ where: { empresaId, materiais: { some: { kitId: k.id } } } });
+    const avisos: string[] = [];
+    if (servicos) avisos.push(`Usado nos materiais padrão de ${pl(servicos, "serviço", "serviços")}. ${servicos === 1 ? "Ele continua" : "Eles continuam"} com o kit (aparece como “inativo”); ele só deixa de ser oferecido nas composições novas.`);
+    return { usos: [{ rotulo: pl(servicos, "serviço", "serviços"), total: servicos }], avisos };
   },
 };
 
@@ -600,4 +654,5 @@ export const REGRAS: Partial<Record<EntidadeCadastro, RegrasCadastro>> = {
   "centros-custo": centrosCusto,
   "contas-bancarias": contasBancarias,
   "categorias-produto": categoriasProduto,
+  "kits-material": kitsMaterial,
 };
