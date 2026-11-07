@@ -71,7 +71,11 @@ export function rotasColecao(fixa?: EntidadeCadastro, opts: { ativoPadrao?: Filt
       const g = await exigirCadastro(def, "listar");
       if ("resposta" in g) return g.resposta;
       const sp = req.nextUrl.searchParams;
-      const f = { ativo: lerFiltroAtivo(sp.get("ativo"), opts.ativoPadrao ?? "sim"), q: sp.get("q") };
+      const f = {
+        ativo: lerFiltroAtivo(sp.get("ativo"), opts.ativoPadrao ?? "sim"), q: sp.get("q"),
+        // Filtros por vínculo declarados no registro (?categoria=id | sem)
+        filtros: Object.fromEntries((def.filtros ?? []).map((fl) => [fl.param, sp.get(fl.param)])),
+      };
       const empresaId = g.sessao.user.empresaId;
       if (sp.get("sugestoes") === "1") return json({ sugestoes: await sugestoesCadastro(def, empresaId, f) });
       // Paginado só quando pedido (?pagina/?por): os seletores das outras telas continuam recebendo a lista

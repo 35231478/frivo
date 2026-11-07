@@ -105,7 +105,7 @@ describe("código na lista", () => {
     expect(cod.className).toContain("font-mono");
     expect(texto(titulo)).toBe("15Capacitor 35uF"); // código (span separado, com margem) + nome
     // Código e nome não se repetem embaixo
-    expect([...cartao.querySelectorAll("dt")].map((d) => d.textContent)).toEqual(["Unidade", "Valor padrão", "Est. mín."]);
+    expect([...cartao.querySelectorAll("dt")].map((d) => d.textContent)).toEqual(["Categoria", "Unidade", "Valor padrão", "Est. mín."]); // E3.1: a categoria do produto
   });
 });
 

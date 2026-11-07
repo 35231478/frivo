@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { COMPORTAMENTOS, OPCOES_COMPORTAMENTO } from "@/lib/estoque/categoria";
 import type { Acao } from "@/lib/permissoes";
 import { REGIMES, REGIME_LABEL } from "@/lib/folha/calculo";
 import { itensEncargoSchema } from "@/lib/folha/validacao";
@@ -30,10 +31,12 @@ export const ENTIDADES_CADASTRO = [
   "centros-custo",
   // CR robusto: onde o dinheiro entra (a conta a receber escolhe a conta bancária por ID)
   "contas-bancarias",
+  // Estoque E3.1: categoria de produto com o comportamento de faturamento (venda à parte / incluso)
+  "categorias-produto",
 ] as const;
 export type EntidadeCadastro = (typeof ENTIDADES_CADASTRO)[number];
 export type ModeloCadastro = "produto" | "servico" | "cargo" | "categoriaFinanceira" | "perfilAcesso" | "modeloEncargos" | "usuario"
-  | "tipoEquipamentoCustom" | "tabelaPreco" | "termoReferenciaTemplate" | "prazoTemplate" | "fornecedor" | "centroCusto" | "contaBancaria";
+  | "tipoEquipamentoCustom" | "tabelaPreco" | "termoReferenciaTemplate" | "prazoTemplate" | "fornecedor" | "centroCusto" | "contaBancaria" | "categoriaProduto";
 export type AcaoCadastro = "listar" | "criar" | "editar" | "inativar" | "reativar";
 
 /** Basta UMA das permissões. `null` = qualquer usuário logado (catálogo lido nos seletores de outras telas). */
@@ -42,8 +45,11 @@ export type Requisito = [modulo: string, acao: Acao][] | null;
 export interface CampoCadastro {
   key: string;
   label: string;
-  tipo?: "texto" | "textarea" | "moeda" | "numero" | "inteiro" | "cor" | "select" | "email" | "booleano";
+  tipo?: "texto" | "textarea" | "moeda" | "numero" | "inteiro" | "cor" | "select" | "email" | "booleano" | "cadastro";
   opcoes?: { value: string; label: string }[];
+  /** tipo "cadastro": o outro cadastro de onde vem a escolha (grava o id) e o nome da relação no registro (para mostrar/exportar o nome) */
+  cadastro?: EntidadeCadastro;
+  relacao?: string;
   obrigatorio?: boolean;
   placeholder?: string;
   /** Agrupa no formulário (ex.: "Dados fiscais") */
@@ -76,6 +82,16 @@ export interface ColunaCadastro {
 }
 
 /** Requisito de cada ação: "logado" não existe aqui — use null em listar. */
+
+/** Um filtro da lista por campo de vínculo (?param=id | "sem"): o select vem de outro cadastro */
+export interface FiltroCadastro {
+  param: string;
+  campo: string;
+  rotulo: string;
+  opcoesDe: EntidadeCadastro;
+  /** Rótulo da opção "sem vínculo" (?param=sem → campo nulo) */
+  semValor?: string;
+}
 
 export interface DefCadastro {
   entidade: EntidadeCadastro;
@@ -112,6 +128,8 @@ export interface DefCadastro {
   editorProprio?: boolean;
   /** Entra nas ações em massa (lib/acoes-massa/acoes.ts) */
   massa?: boolean;
+  /** Filtros da lista por vínculo (ex.: produtos por categoria), na URL e no "selecionar todos do filtro" */
+  filtros?: FiltroCadastro[];
 }
 
 /* ───────── Peças de validação ───────── */
@@ -270,17 +288,27 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       { key: "unidade", label: "Unidade", tipo: "select", opcoes: UNIDADES_PRODUTO },
       { key: "valorPadrao", label: "Valor padrão (R$)", tipo: "moeda", placeholder: "0,00" },
       { key: "estoqueMinimo", label: "Estoque mínimo", tipo: "inteiro", placeholder: "0" },
+      {
+        key: "categoriaProdutoId", label: "Categoria", tipo: "cadastro", cadastro: "categorias-produto", relacao: "categoriaProduto",
+        ajuda: "Diz como o produto entra na cobrança (venda à parte ou incluso no serviço). Sem categoria, é tratado como incluso no serviço — defina para não deixar de cobrar uma peça.",
+      },
       { key: "controlaEstoque", label: "Controla estoque", tipo: "booleano", ajuda: "Desmarcado, o produto sai da tela Estoque e dos alertas (item sob encomenda, serviço embalado…). O histórico de movimentações fica." },
     ],
     colunas: [
       { key: "codigo", label: "Cód.", formato: "codigo", ordenar: "codigo" },
-      { key: "nome", label: "Nome", ordenar: "nome" }, { key: "unidade", label: "Unidade", ordenar: "unidade" },
+      { key: "nome", label: "Nome", ordenar: "nome" }, { key: "categoriaProduto", label: "Categoria", ordenar: (dir) => ({ categoriaProduto: { nome: dir } }) },
+      { key: "unidade", label: "Unidade", ordenar: "unidade" },
       { key: "valorPadrao", label: "Valor padrão", formato: "moeda", ordenar: "valorPadrao" }, { key: "estoqueMinimo", label: "Est. mín.", ordenar: "estoqueMinimo" },
     ],
+    // A categoria vem junto (nome + comportamento) para a lista, a planilha e o orçamento (E3.3)
+    incluir: { categoriaProduto: { select: { id: true, nome: true, comportamento: true, ativo: true } } },
+    filtros: [{ param: "categoria", campo: "categoriaProdutoId", rotulo: "Categoria", opcoesDe: "categorias-produto", semValor: "Sem categoria" }],
     ...schemas({
       nome, descricao: textoOpcional(), unidade,
       valorPadrao: numero(), estoqueMinimo: numero({ inteiro: true }), controlaEstoque: booleanoPadraoVerdadeiro,
-    }, { descricao: null, unidade: "un", valorPadrao: null, estoqueMinimo: null, controlaEstoque: true }),
+      // Vínculo por id (da empresa e ativa — regra em especificos.ts); vazio = sem categoria
+      categoriaProdutoId: textoOpcional(40),
+    }, { descricao: null, unidade: "un", valorPadrao: null, estoqueMinimo: null, controlaEstoque: true, categoriaProdutoId: null }),
   },
   servicos: {
     entidade: "servicos", modelo: "servico", massa: true, singular: "serviço", plural: "serviços",
@@ -513,6 +541,26 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
     // Nome único na empresa (sem diferença de maiúsculas): regra em especificos.ts
     ...schemas({ nome: nome.max(120) }),
   },
+  "categorias-produto": {
+    entidade: "categorias-produto", modelo: "categoriaProduto", massa: true, singular: "categoria de produto", plural: "categorias de produto", feminino: true,
+    // Como as categorias financeiras: qualquer usuário logado lê (seletor do produto); gravar: Configurações › gerenciar
+    modulo: "configuracoes", permissoes: PERMISSOES_CONFIG, chave: "id", rota: "/configuracoes/categorias-produto",
+    busca: ["nome"],
+    incluir: { _count: { select: { produtos: true } } },
+    campos: [
+      { key: "nome", label: "Nome", obrigatorio: true, placeholder: "Ex: Peças de reposição, Materiais de instalação/consumo" },
+      {
+        key: "comportamento", label: "Comportamento de faturamento", tipo: "select", opcoes: OPCOES_COMPORTAMENTO, obrigatorio: true,
+        ajuda: "Venda à parte: peça de reposição, cobrada do cliente separado (e baixa o estoque). Incluso no serviço: material de instalação/consumo, embutido no valor do serviço (só baixa o estoque).",
+      },
+    ],
+    colunas: [
+      { key: "nome", label: "Categoria", ordenar: "nome" }, { key: "comportamento", label: "Faturamento", ordenar: "comportamento" },
+      { key: "uso", label: "Produtos", ordenar: (dir) => ({ produtos: { _count: dir } }) },
+    ],
+    // Nome único na empresa (sem diferença de maiúsculas): regra em especificos.ts; as duas do Zé vêm pré-cadastradas (seed por empresa)
+    ...schemas({ nome: nome.max(120), comportamento: z.enum(COMPORTAMENTOS, { errorMap: () => ({ message: "Escolha o comportamento: venda à parte ou incluso no serviço." }) }) }),
+  },
   "contas-bancarias": {
     entidade: "contas-bancarias", modelo: "contaBancaria", singular: "conta bancária", plural: "contas bancárias",
     // Ler: quem usa o financeiro (a conta a receber escolhe onde o dinheiro entra); gravar: quem lança o
@@ -558,10 +606,15 @@ export function mapaOrdemCadastro(def: DefCadastro): MapaOrdem {
     typeof c.ordenar === "string" ? (dir: Direcao) => ({ [c.ordenar as string]: dir }) : (c.ordenar as (d: Direcao) => unknown)]));
 }
 
-export function whereCadastro(def: DefCadastro, empresaId: string, f: { ativo: FiltroAtivo; q?: string | null }) {
+export function whereCadastro(def: DefCadastro, empresaId: string, f: { ativo: FiltroAtivo; q?: string | null; filtros?: Record<string, string | null | undefined> }) {
   const q = f.q?.trim();
+  // Filtros por vínculo (?categoria=id | sem): só os declarados no registro, nunca um campo qualquer da URL
+  const vinculos = Object.fromEntries((def.filtros ?? []).flatMap((fl) => {
+    const v = f.filtros?.[fl.param]?.trim();
+    return !v ? [] : [[fl.campo, v === "sem" ? null : v]];
+  }));
   return {
-    empresaId,
+    empresaId, ...vinculos,
     ...(f.ativo === "sim" ? { ativo: true } : f.ativo === "nao" ? { ativo: false } : {}),
     ...(q ? { OR: [
       ...def.busca.map((k) => ({ [k]: { contains: q, mode: "insensitive" as const } })),
