@@ -1,7 +1,7 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import { Bell, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer, Headset, ClipboardCheck, FileWarning, Wrench, Menu, Barcode, MessageSquareReply, PackageCheck, FileCheck2, FileX2, Hourglass, CalendarX2, TrendingUp, PackageOpen } from "lucide-react";
+import { Bell, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer, Headset, ClipboardCheck, FileWarning, Wrench, Menu, Barcode, MessageSquareReply, PackageCheck, FileCheck2, FileX2, Hourglass, CalendarX2, TrendingUp, PackageOpen, PackageMinus } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -31,6 +31,7 @@ interface Alertas {
   faturamentoContratos?: number;
   reajustesContrato?: number;
   separacoesPendentes?: number;
+  devolucoesPendentes?: number;
   total: number;
 }
 
@@ -66,6 +67,7 @@ const ROTULOS_ROTA: Record<string, string> = {
   estoque: "Estoque",
   notas: "Notas de compra",
   separacao: "A separar",
+  devolucao: "A devolver",
   "impressao-os": "Impressão da OS",
   financeiro: "Financeiro",
   "custo-pessoal": "Custo de Pessoal",
@@ -257,6 +259,7 @@ export function Header({ session, avatarUrl }: HeaderProps) {
                   {podeVer("financeiro", "medicoes") && (alertas?.faturamentoContratos ?? 0) > 0 && <AlertaItem href="/financeiro/faturamento-contratos?atencao=1" icone={CalendarX2} cor="text-atrasado" label="Faturamento de contrato parado" valor={alertas?.faturamentoContratos ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("contratos", "editar") && (alertas?.reajustesContrato ?? 0) > 0 && <AlertaItem href="/contratos/reajustes" icone={TrendingUp} cor="text-atencao" label="Reajustes a aplicar" valor={alertas?.reajustesContrato ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("estoque", "separar") && (alertas?.separacoesPendentes ?? 0) > 0 && <AlertaItem href="/estoque/separacao" icone={PackageOpen} cor="text-acento" label="OS com material a separar" valor={alertas?.separacoesPendentes ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("estoque", "separar") && (alertas?.devolucoesPendentes ?? 0) > 0 && <AlertaItem href="/estoque/devolucao" icone={PackageMinus} cor="text-atencao" label="OS com material a devolver" valor={alertas?.devolucoesPendentes ?? 0} onClick={() => setSinoAberto(false)} />}
                   {(alertas?.nfPedidos ?? 0) > 0 && <AlertaItem href={`/compras/pedidos/${alertas?.nfPedidoId ?? ""}`} icone={PackageCheck} cor="text-ok" label="NF chegou nos seus pedidos" valor={alertas?.nfPedidos ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("ordens") && <AlertaItem href="/prazos?status=ATRASADO" icone={AlertTriangle} cor="text-atrasado" label="Prazos vencidos" valor={alertas?.prazosVencidos ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("ordens") && <AlertaItem href="/prazos?status=ATIVO" icone={Clock} cor="text-atencao" label="Vencendo hoje" valor={alertas?.etapasVencendoHoje ?? 0} onClick={() => setSinoAberto(false)} />}

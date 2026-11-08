@@ -42,7 +42,7 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
         },
         orderBy: { criadoEm: "asc" },
       },
-      itensOrcamento: { orderBy: [{ ordem: "asc" }, { id: "asc" }], include: { materiais: { orderBy: { ordem: "asc" }, include: { separadoPor: { select: { nome: true } }, consumidoPor: { select: { nome: true } } } }, material: { select: { osItemId: true } } } },
+      itensOrcamento: { orderBy: [{ ordem: "asc" }, { id: "asc" }], include: { materiais: { orderBy: { ordem: "asc" }, include: { separadoPor: { select: { nome: true } }, consumidoPor: { select: { nome: true } }, devolvidoPor: { select: { nome: true } } } }, material: { select: { osItemId: true } } } },
       // Medições OFICIAIS em que a OS entrou (itens de medição → Medicao); a antiga
       // "medição interna da OS" (OsMedicao) saiu: nunca virava conta a receber
       medicaoItens: {

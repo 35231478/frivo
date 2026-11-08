@@ -52,7 +52,7 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
   // os.prazos = SLA por modelo de prazo (só id/status: o Resumo conta os atrasados)
   // E4.1/E4.2: a separação e o consumo de material (estado por material do snapshot) — o badge da aba conta o que falta
   const materiaisOs = useMemo(() => materiaisDaOs(os.itensOrcamento ?? []), [os.itensOrcamento]);
-  const separacao = useMemo(() => resumoSeparacao(materiaisOs), [materiaisOs]);
+  const separacao = useMemo(() => resumoSeparacao(materiaisOs, os.status === "CANCELADA"), [materiaisOs, os.status]);
   const central = useMemo(() => centralDaOs({ ...os, prazosSla: os.prazos ?? [], materiais: materiaisOs, exigirPrestacaoMaterial: !!os.exigirPrestacaoMaterial }), [os, materiaisOs]);
 
   function irPara(id: string) {
@@ -76,7 +76,7 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
     { id: "resumo", label: "Resumo", badge: central.falta.length },
     { id: "atividades", label: "Atividades", badge: central.atividades.total },
     { id: "comercial", label: "Comercial", badge: (os.orcamentos?.length ?? 0) + os.itensOrcamento.length },
-    { id: "materiais", label: "Materiais & Compras", badge: separacao.aSeparar + separacao.consumoPendente },
+    { id: "materiais", label: "Materiais & Compras", badge: separacao.aSeparar + separacao.consumoPendente + separacao.aDevolver },
     { id: "financeiro", label: "Financeiro", badge: os.medicoes.length },
     { id: "relatorios", label: "Relatórios & Anexos", badge: (os.galeria?.fotos.length ?? 0) + (os.galeria?.documentos.length ?? 0) },
   ];

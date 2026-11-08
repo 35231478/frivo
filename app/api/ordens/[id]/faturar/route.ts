@@ -3,6 +3,7 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { faturarOs } from "@/lib/faturamento/faturar-server";
 import { lerParcelamento, respostaFaturar } from "@/lib/faturamento/resposta";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
+import { respostaPortaoPrestacao } from "@/lib/estoque/devolucao-server";
 
 /**
  * "Faturar" a OS concluída (sem contrato): itens executados + adicionais "Cobrar" viram a fatura
@@ -15,6 +16,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const empresaId = guard.session.user!.empresaId;
   const usuarioId = guard.session.user!.id;
+  // E4.3 — Portões 2/3: com "Exigir prestação de contas de material" ligado, só fatura com o material 100% prestado contas
+  const portao = await respostaPortaoPrestacao(empresaId, id, "faturar");
+  if (portao) return portao;
   const r = await faturarOs({ empresaId, usuarioId, osId: id, parcelamento: await lerParcelamento(req) });
   // Faturada, a OS passa a "Faturada" na central (status automático)
   if (r.tipo === "criada") await sincronizarStatusOs(id, empresaId, usuarioId).catch(() => null);

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Check, PackageOpen, Undo2, X } from "lucide-react";
+import { AlertTriangle, Check, PackageMinus, PackageOpen, Undo2, X } from "lucide-react";
 import { StatusPill, type TomStatus } from "@/components/ui/status-pill";
 import { Dica } from "@/components/ui/dica";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { confirmar, toast } from "@/components/ui/avisos";
 import { cn, formatarDataHora } from "@/lib/utils";
 import { arred, formatarQtd } from "@/lib/estoque/regras";
 import {
-  LABEL_SITUACAO_MATERIAL, LABEL_SITUACAO_SEPARACAO, pendenteDevolucao, resumoSeparacao, situacaoDoMaterial,
+  aDevolver as aDevolverDe, LABEL_SITUACAO_MATERIAL, LABEL_SITUACAO_SEPARACAO, resumoSeparacao, situacaoDoMaterial,
   type EstadoSeparacao, type MaterialSeparavel, type ResumoSeparacao, type SituacaoMaterial, type SituacaoSeparacao,
 } from "@/lib/estoque/separacao";
 
@@ -29,6 +29,8 @@ export interface MaterialDaOs extends MaterialSeparavel {
   separadoPor: string | null;
   consumidoEm?: string | null;
   consumidoPor?: string | null;
+  devolvidoEm?: string | null;
+  devolvidoPor?: string | null;
 }
 
 const num = (v: unknown) => Number(v ?? 0);
@@ -38,10 +40,12 @@ export function materiaisDaOs(itens: any[]): MaterialDaOs[] {
   return itens.flatMap((i) => (i.materiais ?? []).map((m: any): MaterialDaOs => ({
     id: m.id, produtoId: m.produtoId ?? null, descricao: m.descricao, unidade: m.unidade || "un",
     quantidade: num(m.quantidade), quantidadeSeparada: num(m.quantidadeSeparada), quantidadeConsumida: num(m.quantidadeConsumida),
+    quantidadeDevolvida: num(m.quantidadeDevolvida), consumoInformado: m.consumidoEm != null,
     estadoSeparacao: (m.estadoSeparacao ?? null) as EstadoSeparacao | null,
     item: i.descricao, kitNome: m.kitNome ?? null,
     separadoEm: m.separadoEm ? new Date(m.separadoEm).toISOString() : null, separadoPor: m.separadoPor?.nome ?? null,
     consumidoEm: m.consumidoEm ? new Date(m.consumidoEm).toISOString() : null, consumidoPor: m.consumidoPor?.nome ?? null,
+    devolvidoEm: m.devolvidoEm ? new Date(m.devolvidoEm).toISOString() : null, devolvidoPor: m.devolvidoPor?.nome ?? null,
   }))).filter((m) => m.quantidade > 0);
 }
 
@@ -126,16 +130,27 @@ export function OsSeparacao({ osId, materiais: iniciais, resumo: resumoInicial, 
               {semConsumo === 1 ? "1 consumo a informar" : `${semConsumo} consumos a informar`}{exigirPrestacao ? " · trava a conclusão" : ""}
             </StatusPill>
           )}
-          {resumo.pendentesDevolucao > 0 && <StatusPill tom="atencao" data-pendentes-devolucao={resumo.pendentesDevolucao}>{resumo.pendentesDevolucao === 1 ? "1 sobra a devolver" : `${resumo.pendentesDevolucao} sobras a devolver`}</StatusPill>}
+          {resumo.aDevolver > 0 && <StatusPill tom={cancelada ? "atrasado" : "atencao"} data-pendentes-devolucao={resumo.aDevolver}>{cancelada ? "OS cancelada · liberar reserva" : resumo.aDevolver === 1 ? "1 sobra a devolver" : `${resumo.aDevolver} sobras a devolver`}</StatusPill>}
+          {resumo.prestado && (
+            <span className="inline-flex items-center gap-1">
+              <StatusPill tom="ok" data-prestado>Material prestado contas</StatusPill>
+              <Dica rotulo="Material prestado contas" texto="Todo material separado teve o consumo informado e a sobra devolvida ao estoque: nada pendente para faturar." />
+            </span>
+          )}
           {resumo.prestacaoPendente && (
             <span className="inline-flex items-center gap-1">
               <StatusPill tom="acento" data-flag-prestacao>Prestação de contas pendente</StatusPill>
               <Dica rotulo="Prestação de contas pendente" texto={exigirPrestacao
-                ? "Há material separado sem consumo informado, ou sobra sem devolução. Com a opção “Exigir prestação de contas de material” ligada em Configurações, a OS não conclui enquanto o consumo não for informado."
-                : "Há material separado sem consumo informado, ou sobra sem devolução. Só avisa: para travar a conclusão, ligue “Exigir prestação de contas de material” em Configurações."} />
+                ? "Há material separado sem consumo informado, ou sobra sem devolução. Com “Exigir prestação de contas de material” ligada em Configurações, a OS não conclui sem o consumo e não fatura sem a devolução."
+                : "Há material separado sem consumo informado, ou sobra sem devolução. Só avisa: para travar a conclusão e o faturamento, ligue “Exigir prestação de contas de material” em Configurações."} />
             </span>
           )}
-          {podeSeparar && resumo.total > 0 && !informando && (
+          {podeSeparar && resumo.total > 0 && !informando && resumo.aDevolver > 0 && (
+            <Link href={`/estoque/devolucao/${osId}`} className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-600 hover:underline" data-acao="ir-devolver">
+              <PackageMinus className="w-3.5 h-3.5" /> Devolver material
+            </Link>
+          )}
+          {podeSeparar && resumo.total > 0 && !informando && !cancelada && (
             <Link href={`/estoque/separacao/${osId}`} className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-600 hover:underline" data-acao="ir-separar">
               <PackageOpen className="w-3.5 h-3.5" /> {resumo.aSeparar > 0 ? "Separar material" : "Ver separação"}
             </Link>
@@ -158,7 +173,7 @@ export function OsSeparacao({ osId, materiais: iniciais, resumo: resumoInicial, 
         <ul className="divide-y divide-surface-linha border border-surface-border rounded-lg overflow-hidden" data-lista-separacao>
           {materiais.map((m) => {
             const sit = situacaoDoMaterial(m);
-            const sobra = pendenteDevolucao(m);
+            const sobra = aDevolverDe(m, cancelada);
             const editando = informando && aceitaConsumo(m);
             const q = editando ? paraNumero(agora[m.id] ?? "") : NaN;
             const aMais = editando && Number.isFinite(q) && q > m.quantidadeSeparada;
@@ -189,9 +204,17 @@ export function OsSeparacao({ osId, materiais: iniciais, resumo: resumoInicial, 
                           {formatarQtd(m.quantidadeConsumida ?? 0)} {m.unidade}
                         </span>
                       )}
-                      {sobra > 0 && <StatusPill tom="atencao" tamanho="sm" data-sobra>Pend. devolução {formatarQtd(sobra)} {m.unidade}</StatusPill>}
+                      {sit === "devolvido" && (
+                        <span className="tabular-nums text-ink" data-devolvido>
+                          <span className="text-[10px] uppercase text-ink-subtle mr-1">Devolvido</span>{" "}
+                          {formatarQtd(m.quantidadeDevolvida ?? 0)} {m.unidade}
+                        </span>
+                      )}
+                      {sobra > 0 && <StatusPill tom="atencao" tamanho="sm" data-sobra>{cancelada && sit !== "consumido" ? "Reservado · devolver" : "Pend. devolução"} {formatarQtd(sobra)} {m.unidade}</StatusPill>}
                       <StatusPill tom={TOM_SITUACAO_MATERIAL[sit]} tamanho="sm">{LABEL_SITUACAO_MATERIAL[sit]}</StatusPill>
-                      {sit === "consumido" && m.consumidoPor && m.consumidoEm
+                      {sit === "devolvido" && m.devolvidoPor && m.devolvidoEm
+                        ? <span className="text-xs text-ink-subtle" data-devolvido-por>por {m.devolvidoPor} · {formatarDataHora(m.devolvidoEm)}</span>
+                        : sit === "consumido" && m.consumidoPor && m.consumidoEm
                         ? <span className="text-xs text-ink-subtle" data-consumido-por>por {m.consumidoPor} · {formatarDataHora(m.consumidoEm)}</span>
                         : m.separadoPor && m.separadoEm && <span className="text-xs text-ink-subtle" data-separado-por>por {m.separadoPor} · {formatarDataHora(m.separadoEm)}</span>}
                       {sit === "consumido" && podeConsumir && !finalizada && (
@@ -220,4 +243,4 @@ export function OsSeparacao({ osId, materiais: iniciais, resumo: resumoInicial, 
 }
 
 /** Resumo recalculado na tela (quando a lista muda localmente) */
-export const resumoDaLista = (materiais: MaterialDaOs[]) => resumoSeparacao(materiais);
+export const resumoDaLista = (materiais: MaterialDaOs[], cancelada = false) => resumoSeparacao(materiais, cancelada);
