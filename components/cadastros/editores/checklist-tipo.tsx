@@ -167,7 +167,7 @@ export function ChecklistTipo({ tipoId, podeEditar }: { tipoId: string; podeEdit
           </div>
         </div>
       )}
-      <p className="text-[11px] text-ink-subtle">Item removido sai das próximas OS; o que já foi respondido continua no histórico e nos relatórios, com o texto da época.</p>
+      <p className="text-[11px] text-ink-subtle">Item removido sai das próximas OS; respostas antigas ficam no histórico.</p>
       <datalist id="unidades-medicao">{UNIDADES_SUGERIDAS.map((u) => <option key={u} value={u} />)}</datalist>
     </div>
   );

@@ -156,7 +156,7 @@ describe("perfis de acesso", () => {
     db.t.usuario.push({ id: "admin2", empresaId: "e1", nome: "Beto Admin", email: "beto@x.com", senha: "x", role: "ADMIN", ativo: true, perfilAcessoId: "p-tec" });
     const r = (await chamar(impacto, "GET", { ...P, id: "p-tec" })).json;
     expect(r.bloqueio).toBeNull();
-    expect(r.avisos[0]).toBe("2 usuários ativos usam este perfil (Téo Técnico, Tina Técnica). Ao inativar, eles ficam SEM ACESSO (só o início) a partir da próxima tela, até receberem outro perfil em Configurações › Usuários.");
+    expect(r.avisos[0]).toBe("2 usuários ativos usam este perfil (Téo Técnico, Tina Técnica). Ao inativar, perdem o acesso na próxima tela, até receber outro perfil.");
     expect(r.avisos[1]).toBe("1 colaborador está ligado a este perfil no cadastro.");
     expect(r.usos).toEqual([{ rotulo: "3 usuários ativos", total: 3 }, { rotulo: "1 colaborador", total: 1 }]);
   });
@@ -247,7 +247,7 @@ describe("modelos de encargos", () => {
   it("não inativa o modelo padrão do regime (troque o padrão antes)", async () => {
     const r = await chamar(item, "DELETE", { ...M, id: "m-clt" });
     expect(r.status).toBe(409);
-    expect(r.json.erro).toBe("É o modelo padrão de CLT: marque outro modelo como padrão antes de inativar este.");
+    expect(r.json.erro).toBe("Modelo padrão de CLT: defina outro padrão antes de inativar.");
   });
 
   it("impacto: avisa quem usa e para qual padrão o custo vai (não volta ao padrão sem aviso)", async () => {
@@ -344,7 +344,7 @@ describe("usuários", () => {
   it("não inativa o próprio usuário", async () => {
     const r = await chamar(item, "DELETE", { ...U, id: "admin" });
     expect(r.status).toBe(409);
-    expect(r.json.erro).toBe("Você não pode inativar o seu próprio usuário.");
+    expect(r.json.erro).toBe("Não é possível inativar o próprio usuário.");
     expect((await chamar(impacto, "GET", { ...U, id: "admin" })).json.bloqueio).toMatch(/próprio usuário/);
   });
 
@@ -439,7 +439,7 @@ describe("colaborador: inativar o usuário de login junto (função real de Usu�
   it("trava do usuário (o próprio) impede tudo — o colaborador não é inativado pela metade", async () => {
     const r = await chamar(tecnico, "DELETE", { id: "tAdm" }, { inativarUsuario: true });
     expect(r.status).toBe(409);
-    expect(r.json.erro).toMatch(/^Usuário de login: Você não pode inativar o seu próprio usuário/);
+    expect(r.json.erro).toMatch(/^Usuário de login: Não é possível inativar o próprio usuário/);
     expect(linha("tecnico", "tAdm").ativo).toBe(true);
   });
   it("sem Configurações › gerenciar não inativa o usuário (403) e nada muda", async () => {

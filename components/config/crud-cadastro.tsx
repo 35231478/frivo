@@ -1,6 +1,7 @@
 "use client";
 
 import { confirmar, toast } from "@/components/ui/avisos";
+import { corDado } from "@/lib/ui/tokens";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { Plus, Pencil, Trash2, Check, Search } from "lucide-react";
 
 // Cor que um registro novo recebe no seletor (dado salvo no cadastro, não pintura da tela)
-const COR_PADRAO = "#3b82f6";
+const COR_PADRAO = corDado.azulForte;
 
 export interface CampoConfig {
   key: string;
@@ -50,7 +51,7 @@ export function CrudCadastro({ titulo, apiUrl, campos, colunasLista }: CrudCadas
 
   function abrirNovo() {
     const vazio: Record<string, any> = {};
-    campos.forEach((c) => { vazio[c.key] = c.padrao !== undefined ? c.padrao : c.tipo === "color" ? "#3b82f6" : c.tipo === "switch" ? false : ""; });
+    campos.forEach((c) => { vazio[c.key] = c.padrao !== undefined ? c.padrao : c.tipo === "color" ? COR_PADRAO : c.tipo === "switch" ? false : ""; });
     vazio.ativo = true;
     setForm(vazio);
     setEditando("novo");
@@ -59,7 +60,7 @@ export function CrudCadastro({ titulo, apiUrl, campos, colunasLista }: CrudCadas
 
   function abrirEditar(item: any) {
     const vals: Record<string, any> = {};
-    campos.forEach((c) => { vals[c.key] = item[c.key] ?? (c.padrao !== undefined ? c.padrao : c.tipo === "color" ? "#3b82f6" : c.tipo === "switch" ? false : ""); });
+    campos.forEach((c) => { vals[c.key] = item[c.key] ?? (c.padrao !== undefined ? c.padrao : c.tipo === "color" ? COR_PADRAO : c.tipo === "switch" ? false : ""); });
     vals.ativo = item.ativo;
     setForm(vals);
     setEditando(item.id);

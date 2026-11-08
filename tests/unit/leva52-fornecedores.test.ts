@@ -122,7 +122,7 @@ describe("cadastro de fornecedor no padrão", () => {
     expect(dup.json.erro).toBe("Já existe um fornecedor com este CNPJ/CPF: “Frigelar Distribuidora”.");
     const inativo = await chamar(col, "POST", P, { nome: "Antiga de novo", documento: "98.765.432/0001-88" });
     expect(inativo.status).toBe(409);
-    expect(inativo.json.erro).toMatch(/inativo — reative-o/);
+    expect(inativo.json.erro).toMatch(/inativo: reative-o/);
     expect((await chamar(item, "PATCH", { ...P, id: "f-posto" }, { documento: "12.345.678/0001-99" })).status).toBe(409);
     expect(linha("fornecedor", "f-posto").documento).toBeNull();
     expect((await chamar(item, "PATCH", { ...P, id: "f-frigelar" }, { documento: "12345678000199", nome: "Frigelar" })).status).toBe(200); // o próprio

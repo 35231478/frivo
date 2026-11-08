@@ -367,7 +367,7 @@ describe("tabelas de preço", () => {
   it("impacto: clientes ativos que passam a valer o catálogo padrão (nenhuma tabela empurra para outra)", async () => {
     const a = (await chamar(impacto, "GET", { ...P, id: "tp-contrato" })).json;
     expect(a.usos).toEqual([{ rotulo: "1 cliente ativo", total: 1 }]); // o c4 (inativo) não conta
-    expect(a.avisos[0]).toMatch(/1 cliente ativo usa esta tabela.*passam a valer os preços padrão do catálogo/);
+    expect(a.avisos[0]).toMatch(/1 cliente ativo usa esta tabela.*preços padrão do catálogo/);
     expect(a.avisos.join(" ")).not.toMatch(/tabela Padrão/);
     const b = (await chamar(impacto, "GET", { ...P, id: "tp-padrao" })).json;
     expect(b.usos).toEqual([]); // ninguém ligado
@@ -411,7 +411,7 @@ describe("modelos de prazo", () => {
   it("impacto: prazos em andamento nas OS continuam", async () => {
     const a = (await chamar(impacto, "GET", { ...P, id: "pz-velho" })).json;
     expect(a.usos).toEqual([{ rotulo: "1 prazo em andamento", total: 1 }]);
-    expect(a.avisos[0]).toMatch(/continua correndo/);
+    expect(a.avisos[0]).toMatch(/segue correndo/);
   });
 
   it("seletor da OS: só modelos ativos", async () => {

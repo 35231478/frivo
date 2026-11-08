@@ -53,6 +53,17 @@ export const escalaOk = {
   500: status.ok.DEFAULT, 600: "#116A33", 700: "#0E5A2B",
 } as const;
 
+/**
+ * Cores de DADO: as que o usuário escolhe e ficam gravadas no cadastro (cor da equipe, do perfil de
+ * acesso, do tipo de OS, do modelo de prazo) e os padrões que um registro novo recebe. Não pintam a
+ * interface — são um valor do registro, mostrado como ponto/legenda. Ficam aqui para a paleta ser uma só
+ * e nenhum componente carregar hex solto. Os valores são os que o sistema já gravava.
+ */
+export const corDado = {
+  azul: "#0EA5E9", azulForte: "#3B82F6", verde: "#10B981", roxo: "#8B5CF6", ambar: "#F59E0B", amarelo: "#EAB308",
+  vermelho: "#EF4444", rosa: "#EC4899", ciano: "#06B6D4", indigo: "#6366F1", cinza: "#64748B",
+} as const;
+
 /** Forma */
 export const forma = {
   raioCard: "14px",

@@ -114,7 +114,7 @@ describe("Kits de material", () => {
     expect(custo.getAttribute("data-custo-kit")).toBe("25");
     expect(txt(custo)).toMatch(/R\$\s?25,00 \(1 sem custo\)/);
     expect(txt(linhas[1])).toContain("—"); // kit vazio: sem itens, sem custo
-    expect(document.body.textContent).toContain("mudar o kit muda em todos os serviços que o usam");
+    expect(document.body.textContent).toContain("Alterar o kit atualiza todos os serviços que o usam");
   });
 
   it("editor: itens com produto + quantidade (pílula do comportamento e custo); grava nome + itens pela rota genérica; a conferência pura barra quantidade zero", async () => {

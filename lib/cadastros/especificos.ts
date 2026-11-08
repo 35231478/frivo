@@ -62,16 +62,16 @@ const excede = (ator: { permissoes: Permissoes; role?: string }, alvo: unknown) 
 const perfis: RegrasCadastro = {
   async criar(dados, ator) {
     // Ninguém cria perfil com acessos que ele mesmo não tem (autopromoção)
-    if (excede(ator, dados.permissoes)) return falha(403, "Você não pode conceder acessos que você mesmo não tem.");
+    if (excede(ator, dados.permissoes)) return falha(403, "Não é possível conceder acessos além dos do próprio usuário.");
     const item = await prisma.perfilAcesso.create({ data: { ...(dados as any), empresaId: ator.empresaId, ativo: true, padraoSistema: false } });
     return { ok: true, item };
   },
   async editar(existente, dados, ator) {
     if (!admin(ator)) {
       const meu = await prisma.usuario.findUnique({ where: { id: ator.id }, select: { perfilAcessoId: true } });
-      if (meu?.perfilAcessoId === existente.id) return falha(403, "Você não pode alterar o perfil de acesso ao qual está vinculado.");
-      if (excede(ator, existente.permissoes)) return falha(403, "Este perfil tem acessos que você não tem; só um administrador pode alterá-lo.");
-      if (dados.permissoes !== undefined && excede(ator, dados.permissoes)) return falha(403, "Você não pode conceder acessos que você mesmo não tem.");
+      if (meu?.perfilAcessoId === existente.id) return falha(403, "Não é possível alterar o próprio perfil de acesso.");
+      if (excede(ator, existente.permissoes)) return falha(403, "Este perfil tem acessos além dos do usuário atual; só um administrador pode alterá-lo.");
+      if (dados.permissoes !== undefined && excede(ator, dados.permissoes)) return falha(403, "Não é possível conceder acessos além dos do próprio usuário.");
     }
     const item = await prisma.perfilAcesso.update({ where: { id: existente.id }, data: dados as any });
     return { ok: true, item };
@@ -83,7 +83,7 @@ const perfis: RegrasCadastro = {
       if (meu?.perfilAcessoId === p.id) return "É o seu próprio perfil de acesso: inativá-lo tiraria o seu acesso. Peça a outro administrador.";
     }
     if (!admin(ator) && excede(ator, p.permissoes))
-      return `Este perfil tem acessos que você não tem; só um administrador pode ${ativo ? "reativá-lo" : "inativá-lo"}.`;
+      return `Este perfil tem acessos além dos do usuário atual; só um administrador pode ${ativo ? "reativá-lo" : "inativá-lo"}.`;
     return null;
   },
   async impacto(p, empresaId) {
@@ -95,7 +95,8 @@ const perfis: RegrasCadastro = {
     const perdem = usuarios.filter((u) => u.role !== "ADMIN");
     const avisos: string[] = [];
     if (perdem.length) {
-      avisos.push(`${pl(perdem.length, "usuário ativo usa", "usuários ativos usam")} este perfil (${nomes(perdem)}). Ao inativar, ${perdem.length === 1 ? "ele fica" : "eles ficam"} SEM ACESSO (só o início) a partir da próxima tela, até receber${perdem.length === 1 ? "" : "em"} outro perfil em Configurações › Usuários.`);
+      const quem = `${pl(perdem.length, "usuário ativo usa", "usuários ativos usam")} este perfil (${nomes(perdem)})`;
+      avisos.push(`${quem}. Ao inativar, perde${perdem.length === 1 ? "" : "m"} o acesso na próxima tela, até receber outro perfil.`);
     }
     if (colaboradores) avisos.push(`${pl(colaboradores, "colaborador está ligado", "colaboradores estão ligados")} a este perfil no cadastro.`);
     return {
@@ -138,7 +139,7 @@ const modelos: RegrasCadastro = {
   async bloqueioAtivo(m, ativo) {
     // Sem padrão ativo, quem não escolheu modelo ficaria sem encargos: troque o padrão antes
     if (!ativo && m.padrao)
-      return `É o modelo padrão de ${REGIME_LABEL[m.regime as Regime] ?? m.regime}: marque outro modelo como padrão antes de inativar este.`;
+      return `Modelo padrão de ${REGIME_LABEL[m.regime as Regime] ?? m.regime}: defina outro padrão antes de inativar.`;
     return null;
   },
   async impacto(m, empresaId) {
@@ -170,7 +171,7 @@ async function conferirPerfil(perfilAcessoId: string | null | undefined, ator: A
   catch (e) { if (e instanceof ErroRefEmpresa) return falha(400, e.message); throw e; }
   if (perfilAcessoId === atual) return null;
   const perfil = await prisma.perfilAcesso.findUnique({ where: { id: perfilAcessoId }, select: { permissoes: true } });
-  if (excede(ator, perfil?.permissoes)) return falha(403, "Você não pode atribuir um perfil com acessos que você mesmo não tem.");
+  if (excede(ator, perfil?.permissoes)) return falha(403, "Não é possível atribuir um perfil com acessos além dos do próprio usuário.");
   return null;
 }
 
@@ -192,9 +193,9 @@ const usuarios: RegrasCadastro = {
     const d = dados as { nome?: string; perfilAcessoId?: string | null };
     const proprio = existente.id === ator.id;
     if (!proprio && !admin(ator) && excede(ator, await acessosDe(existente.id)))
-      return falha(403, "Este usuário tem acessos que você não tem; só um administrador pode alterá-lo.");
+      return falha(403, "Este usuário tem acessos além dos do usuário atual; só um administrador pode alterá-lo.");
     if (d.perfilAcessoId !== undefined && (d.perfilAcessoId ?? null) !== (existente.perfilAcessoId ?? null)) {
-      if (proprio) return falha(403, "Você não pode alterar o seu próprio perfil de acesso. Peça a outro administrador.");
+      if (proprio) return falha(403, "Não é possível alterar o próprio perfil de acesso. Peça a outro administrador.");
       const erroPerfil = await conferirPerfil(d.perfilAcessoId, ator, existente.perfilAcessoId as string | null);
       if (erroPerfil) return erroPerfil;
     }
@@ -202,13 +203,13 @@ const usuarios: RegrasCadastro = {
     return { ok: true, item };
   },
   async bloqueioAtivo(u, ativo, ator) {
-    if (!ativo && u.id === ator.id) return "Você não pode inativar o seu próprio usuário.";
+    if (!ativo && u.id === ator.id) return "Não é possível inativar o próprio usuário.";
     if (!ativo && u.role === "ADMIN") {
       const admins = await prisma.usuario.count({ where: { empresaId: ator.empresaId, role: "ADMIN", ativo: true } });
       if (admins <= 1) return "É o último administrador ativo da empresa: inativá-lo deixaria a empresa sem administrador.";
     }
     if (!admin(ator) && excede(ator, await acessosDe(u.id)))
-      return `Este usuário tem acessos que você não tem; só um administrador pode ${ativo ? "reativá-lo" : "inativá-lo"}.`;
+      return `Este usuário tem acessos além dos do usuário atual; só um administrador pode ${ativo ? "reativá-lo" : "inativá-lo"}.`;
     return null;
   },
   async impacto(u, empresaId) {
@@ -216,7 +217,7 @@ const usuarios: RegrasCadastro = {
       prisma.ordemServico.count({ where: { empresaId, responsavelId: u.id, status: { notIn: ["CONCLUIDA", "CANCELADA"] } } }),
       prisma.pedidoCompraInterno.count({ where: { empresaId, compradorId: u.id, status: { notIn: ["ENTREGUE", "CONCLUIDO", "CANCELADO"] } } }),
     ]);
-    const avisos = ["Ele perde o acesso ao sistema na hora (na próxima tela que abrir). Nada do que ele fez é apagado e dá para reativar depois."];
+    const avisos = ["Perde o acesso na próxima tela que abrir. Nada é apagado; pode ser reativado depois."];
     if (os) avisos.push(`É responsável por ${pl(os, "OS em aberto", "OS em aberto")}: reatribua se for o caso.`);
     if (pedidos) avisos.push(`É comprador de ${pl(pedidos, "pedido de compra em aberto", "pedidos de compra em aberto")}.`);
     return { usos: [{ rotulo: pl(os, "OS em aberto", "OS em aberto"), total: os }, { rotulo: pl(pedidos, "pedido de compra", "pedidos de compra"), total: pedidos }], avisos };
@@ -258,9 +259,10 @@ const tiposEquipamento: RegrasCadastro = {
       prisma.checklistTipoItem.count({ where: { tipoEquipamentoId: t.id, ativo: true } }),
     ]);
     const avisos: string[] = [];
-    if (equip) avisos.push(`${pl(equip, "equipamento ativo é", "equipamentos ativos são")} deste tipo: ${equip === 1 ? "continua" : "continuam"} com ele (aparece como “inativo” na edição); só deixa de ser oferecido para novos equipamentos.`);
-    if (forms) avisos.push(`${pl(forms, "formulário está vinculado", "formulários estão vinculados")} a este tipo: os vínculos ficam guardados e voltam a valer se você reativar.`);
-    if (itens) avisos.push(`O checklist deste tipo (${pl(itens, "item", "itens")}) fica guardado: equipamentos deste tipo continuam respondendo ele nas OS, e as respostas antigas não mudam.`);
+    const eq = pl(equip, "equipamento ativo é", "equipamentos ativos são"), fm = pl(forms, "formulário está vinculado", "formulários estão vinculados"), it = pl(itens, "item", "itens");
+    if (equip) avisos.push(`${eq} deste tipo: continua${equip === 1 ? "" : "m"} com ele (como “inativo”); só sai das novas escolhas.`);
+    if (forms) avisos.push(`${fm} a este tipo: os vínculos ficam guardados e voltam a valer na reativação.`);
+    if (itens) avisos.push(`O checklist (${it}) fica guardado: segue nas OS deste tipo e as respostas antigas não mudam.`);
     return {
       usos: [
         { rotulo: pl(equip, "equipamento ativo", "equipamentos ativos"), total: equip },
@@ -328,7 +330,8 @@ const tabelasPreco: RegrasCadastro = {
     const clientes = await prisma.cliente.count({ where: { empresaId, tabelaPrecoId: t.id, ativo: true } });
     const avisos: string[] = [];
     // Uma tabela só vale para os clientes ligados a ela: inativar não empurra ninguém para outra tabela
-    if (clientes) avisos.push(`${pl(clientes, "cliente ativo usa", "clientes ativos usam")} esta tabela. Ao inativar, ${clientes === 1 ? "ele continua ligado" : "eles continuam ligados"} a ela (aparece como “inativa” no cadastro do cliente), mas passam a valer os preços padrão do catálogo até você escolher outra tabela ou reativá-la.`);
+    const cl = pl(clientes, "cliente ativo usa", "clientes ativos usam");
+    if (clientes) avisos.push(`${cl} esta tabela: segue${clientes === 1 ? "" : "m"} ligado${clientes === 1 ? "" : "s"} a ela (como “inativa”), com os preços padrão do catálogo até a troca ou reativação.`);
     return { usos: [{ rotulo: pl(clientes, "cliente ativo", "clientes ativos"), total: clientes }], avisos };
   },
 };
@@ -337,7 +340,7 @@ const tabelasPreco: RegrasCadastro = {
 const termos: RegrasCadastro = {
   async impacto() {
     // A proposta COPIA o texto do termo: nada que já foi feito depende do cadastro
-    return { usos: [], avisos: ["As propostas que já usaram este termo guardam uma cópia do texto: nada muda nelas. Ele só deixa de aparecer em “Carregar de um template”."] };
+    return { usos: [], avisos: ["As propostas já emitidas guardam uma cópia do texto: nada muda nelas. O termo só sai de “Carregar de um template”."] };
   },
 };
 
@@ -364,7 +367,7 @@ const modelosPrazo: RegrasCadastro = {
   async impacto(m, empresaId) {
     const abertos = await prisma.osPrazo.count({ where: { templateId: m.id, status: { in: ["ATIVO", "ATRASADO"] }, ordemServico: { empresaId } } });
     const avisos = abertos
-      ? [`${pl(abertos, "prazo em andamento usa", "prazos em andamento usam")} este modelo nas OS: ${abertos === 1 ? "continua correndo" : "continuam correndo"} normalmente. O modelo só deixa de ser oferecido em “Adicionar prazo”.`]
+      ? [`${pl(abertos, "prazo em andamento usa", "prazos em andamento usam")} este modelo: segue${abertos === 1 ? "" : "m"} correndo. O modelo só sai de “Adicionar prazo”.`]
       : [];
     return { usos: [{ rotulo: pl(abertos, "prazo em andamento", "prazos em andamento"), total: abertos }], avisos };
   },
@@ -377,7 +380,7 @@ async function documentoEmUso(empresaId: string, documento: string | null | unde
   return prisma.fornecedor.findFirst({ where: { empresaId, documento, ...(exceto && { id: { not: exceto } }) }, select: { nome: true, ativo: true } });
 }
 const msgDocumento = (f: { nome: string; ativo: boolean }) =>
-  `Já existe um fornecedor com este CNPJ/CPF: “${f.nome}”${f.ativo ? "" : " (inativo — reative-o em vez de cadastrar de novo)"}.`;
+  `Já existe um fornecedor com este CNPJ/CPF: “${f.nome}”${f.ativo ? "" : " (inativo: reative-o)"}.`;
 
 const fornecedores: RegrasCadastro = {
   async criar(dados, ator) {
@@ -523,7 +526,7 @@ const kitsMaterial: RegrasCadastro = {
   async impacto(k, empresaId) {
     const servicos = await prisma.servico.count({ where: { empresaId, materiais: { some: { kitId: k.id } } } });
     const avisos: string[] = [];
-    if (servicos) avisos.push(`Usado nos materiais padrão de ${pl(servicos, "serviço", "serviços")}. ${servicos === 1 ? "Ele continua" : "Eles continuam"} com o kit (aparece como “inativo”); ele só deixa de ser oferecido nas composições novas.`);
+    if (servicos) avisos.push(`Usado nos materiais padrão de ${pl(servicos, "serviço", "serviços")}: segue${servicos === 1 ? "" : "m"} com o kit (como “inativo”); só sai das composições novas.`);
     return { usos: [{ rotulo: pl(servicos, "serviço", "serviços"), total: servicos }], avisos };
   },
 };
@@ -558,7 +561,7 @@ const contasBancarias: RegrasCadastro = {
     const abertas = await prisma.contaReceber.count({ where: { empresaId, contaBancariaId: c.id, excluidaEm: null, status: { notIn: ["RECEBIDO", "CANCELADO", "PARCELADO", "PERDA", "RENEGOCIADO"] } } });
     return {
       usos: [{ rotulo: pl(abertas, "conta a receber em aberto", "contas a receber em aberto"), total: abertas }],
-      avisos: abertas ? [`Está em ${pl(abertas, "conta a receber em aberto", "contas a receber em aberto")}. Elas continuam com esta conta (aparece como “inativa”); ela só deixa de ser oferecida nas próximas.`] : [],
+      avisos: abertas ? [`Está em ${pl(abertas, "conta a receber em aberto", "contas a receber em aberto")}: seguem com esta conta (como “inativa”); só sai das próximas.`] : [],
     };
   },
 };
@@ -572,10 +575,10 @@ async function centroComNome(empresaId: string, nome: string, exceto?: string) {
   });
 }
 const msgCentro = (c: { nome: string; ativo: boolean }) =>
-  `Já existe o centro de custo “${c.nome}”${c.ativo ? "" : " (inativo — reative-o em vez de cadastrar de novo)"}.`;
+  `Já existe o centro de custo “${c.nome}”${c.ativo ? "" : " (inativo: reative-o)"}.`;
 
 const msgCategoriaProduto = (c: { nome: string; ativo: boolean }) =>
-  `Já existe a categoria “${c.nome}”${c.ativo ? "" : " (inativa — reative-a em vez de cadastrar de novo)"}.`;
+  `Já existe a categoria “${c.nome}”${c.ativo ? "" : " (inativa: reative-a)"}.`;
 
 /** Categorias de produto (E3.1): as duas do Zé vêm pré-cadastradas (seed por empresa, uma vez); nome único na empresa. */
 const categoriasProduto: RegrasCadastro = {
@@ -626,9 +629,11 @@ const centrosCusto: RegrasCadastro = {
       prisma.notaCompra.count({ where: { empresaId, centroCustoId: c.id, status: { not: "LANCADA" } } }),
     ]);
     const avisos: string[] = [];
-    if (contas) avisos.push(`Usado em ${pl(contas, "conta a pagar", "contas a pagar")}${abertas ? ` (${pl(abertas, "em aberto", "em aberto")})` : ""}. Elas continuam com este centro de custo (aparece como “inativo”); ele só deixa de ser oferecido em contas novas.`);
-    if (fornecedores) avisos.push(`É o padrão de ${pl(fornecedores, "fornecedor", "fornecedores")}: as próximas notas deles não vêm mais com ele.`);
-    if (notas) avisos.push(`Está em ${pl(notas, "nota de compra ainda não lançada", "notas de compra ainda não lançadas")}: dá para lançar assim mesmo ou trocar antes.`);
+    const ct = `${pl(contas, "conta a pagar", "contas a pagar")}${abertas ? ` (${pl(abertas, "em aberto", "em aberto")})` : ""}`;
+    if (contas) avisos.push(`Usado em ${ct}: seguem com este centro (como “inativo”); só sai das contas novas.`);
+    if (fornecedores) avisos.push(`É o padrão de ${pl(fornecedores, "fornecedor", "fornecedores")}: as próximas notas deles vêm sem centro.`);
+    const nt = pl(notas, "nota de compra ainda não lançada", "notas de compra ainda não lançadas");
+    if (notas) avisos.push(`Está em ${nt}: dá para lançar assim mesmo ou trocar antes.`);
     return {
       usos: [
         { rotulo: pl(contas, "conta a pagar", "contas a pagar"), total: contas },

@@ -1,37 +1,28 @@
 {
  "geradoEm": "2026-11-08",
  "totais": {
-  "emoji": 27,
-  "hex": 43,
-  "informal": 60,
+  "emoji": 11,
+  "hex": 22,
+  "informal": 46,
   "exclamacao": 16,
-  "titleCase": 108,
-  "textoLongo": 76
+  "titleCase": 105,
+  "textoLongo": 67
  },
  "arquivos": {
   "emoji": {
    "app/api/os-prazos/[id]/avancar/route.ts": 1,
    "app/api/pedidos-compra/route.ts": 7,
    "app/api/publico/leads/route.ts": 1,
-   "components/tecnico/equipamento.tsx": 2,
-   "lib/permissoes.ts": 16
+   "components/tecnico/equipamento.tsx": 2
   },
   "hex": {
    "app/(dashboard)/qrcodes/imprimir/imprimir-client.tsx": 2,
    "app/(publico)/qr/[token]/page.tsx": 9,
    "app/api/equipes/montador/route.ts": 1,
    "app/api/tipos-os/route.ts": 1,
-   "components/cadastros/cadastro-padrao.tsx": 3,
-   "components/cadastros/editores/editor-modelo-prazo.tsx": 2,
-   "components/cadastros/editores/editor-perfil.tsx": 2,
-   "components/config/crud-cadastro.tsx": 3,
-   "components/config/portal-config-client.tsx": 1,
    "components/contratos/relatorio-contratos-client.tsx": 6,
    "components/equipes/montador-equipes.tsx": 1,
-   "components/forms/equipe-form.tsx": 2,
-   "components/ui/select-cadastro-rapido.tsx": 1,
-   "lib/cadastros/registro.ts": 3,
-   "lib/permissoes.ts": 6
+   "components/forms/equipe-form.tsx": 2
   },
   "informal": {
    "app/(dashboard)/estoque/notas/[id]/page.tsx": 1,
@@ -44,10 +35,8 @@
    "app/api/medicoes/[id]/retencoes/route.ts": 1,
    "app/api/orcamentos/[id]/enviar/route.ts": 1,
    "app/api/ordens/[id]/concluir-sem-equipamento/route.ts": 1,
-   "app/api/usuarios/[id]/convite/route.ts": 1,
    "app/offline/page.tsx": 1,
    "components/auth/esqueci-senha-form.tsx": 2,
-   "components/config/portal-config-client.tsx": 1,
    "components/contratos/reajustes-view.tsx": 2,
    "components/equipamentos/aviso-serie-duplicada.tsx": 1,
    "components/equipamentos/cadastro-por-foto.tsx": 1,
@@ -71,8 +60,7 @@
    "components/tecnico/indicador-sync.tsx": 1,
    "components/tecnico/meu-dia.tsx": 1,
    "components/tecnico/perfil.tsx": 1,
-   "components/veiculos/checklist-preenchimento.tsx": 1,
-   "lib/cadastros/especificos.ts": 12
+   "components/veiculos/checklist-preenchimento.tsx": 1
   },
   "exclamacao": {
    "app/(publico)/medicao/[token]/page.tsx": 1,
@@ -96,7 +84,6 @@
    "app/(dashboard)/colaboradores/novo/page.tsx": 2,
    "app/(dashboard)/compras/pedidos/[id]/page.tsx": 1,
    "app/(dashboard)/compras/pedidos/page.tsx": 2,
-   "app/(dashboard)/configuracoes/checklists-veiculo/page.tsx": 2,
    "app/(dashboard)/contratos/[id]/editar/page.tsx": 1,
    "app/(dashboard)/contratos/novo/page.tsx": 1,
    "app/(dashboard)/contratos/relatorio/page.tsx": 1,
@@ -149,8 +136,7 @@
    "components/perfil/perfil-client.tsx": 4,
    "components/portal/portal-shell.tsx": 1,
    "components/tecnico/equipamento.tsx": 1,
-   "components/ui/endereco-autocomplete.tsx": 6,
-   "lib/permissoes.ts": 1
+   "components/ui/endereco-autocomplete.tsx": 6
   },
   "textoLongo": {
    "app/(dashboard)/estoque/notas/page.tsx": 1,
@@ -162,13 +148,11 @@
    "app/api/publico/leads/route.ts": 1,
    "app/offline/page.tsx": 1,
    "components/auth/login-form.tsx": 1,
-   "components/cadastros/editores/checklist-tipo.tsx": 1,
    "components/compras/conciliacao-nota.tsx": 1,
    "components/compras/editor-pedido.tsx": 1,
    "components/compras/financeiro-nota.tsx": 1,
    "components/compras/pedido-da-nota.tsx": 1,
    "components/compras/pedido-painel.tsx": 2,
-   "components/config/inter-config-client.tsx": 1,
    "components/contratos/reajustes-view.tsx": 1,
    "components/equipamentos/equipamento-ativo-botao.tsx": 1,
    "components/estoque/devolucao-os.tsx": 2,
@@ -198,7 +182,7 @@
    "components/tecnico/perfil.tsx": 2,
    "components/ui/aviso-inativacao-status.tsx": 1,
    "components/ui/inativar-registro.tsx": 1,
-   "lib/cadastros/especificos.ts": 15,
+   "lib/cadastros/especificos.ts": 8,
    "lib/cadastros/servidor.ts": 1
   }
  }

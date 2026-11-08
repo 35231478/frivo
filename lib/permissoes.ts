@@ -1,8 +1,9 @@
 /**
  * Núcleo de controle de acesso por perfil (RBAC) do Frivo.
  * Arquivo puro (sem dependências de Node) — pode ser importado no servidor,
- * no client e no middleware (Edge).
+ * no client e no middleware (Edge). Só importa constantes de lib/ui/tokens.ts.
  */
+import { corDado } from "@/lib/ui/tokens";
 
 export type Acao =
   | "visualizar" | "criar" | "editar" | "excluir" | "concluir" | "aprovar"
@@ -11,7 +12,11 @@ export type Acao =
 
 export type Permissoes = Record<string, Partial<Record<Acao, boolean>>>;
 
-export interface ModuloDef { id: string; label: string; icone: string; acoes: Acao[] }
+/** Nome do ícone (lucide-react) que representa o módulo na UI — este arquivo não importa a biblioteca. */
+export type IconeModulo =
+  | "ClipboardList" | "Users" | "Thermometer" | "CalendarDays" | "QrCode" | "Package" | "ShoppingCart" | "Calculator"
+  | "FileText" | "Landmark" | "Wallet" | "UsersRound" | "Truck" | "Settings" | "BarChart3" | "LayoutDashboard";
+export interface ModuloDef { id: string; label: string; icone: IconeModulo; acoes: Acao[] }
 export interface SecaoDef { id: string; label: string; modulos: ModuloDef[] }
 
 export const ACOES_LABEL: Record<Acao, string> = {
@@ -23,8 +28,8 @@ export const ACOES_LABEL: Record<Acao, string> = {
   aprovar: "Aprovar",
   gerenciar: "Gerenciar",
   medicoes: "Medições",
-  contasReceber: "Contas a Receber",
-  fluxoCaixa: "Fluxo de Caixa",
+  contasReceber: "Contas a receber",
+  fluxoCaixa: "Fluxo de caixa",
   folha: "Custo de pessoal",
   fiscal: "Fiscal (NFS-e)",
   perdas: "Perdas (marcar/reverter)",
@@ -37,23 +42,23 @@ export const ACOES_LABEL: Record<Acao, string> = {
 export const SECOES: SecaoDef[] = [
   {
     id: "operacao", label: "Operação", modulos: [
-      { id: "ordens", label: "Ordens de Serviço", icone: "📋", acoes: ["visualizar", "criar", "editar", "concluir", "excluir"] },
-      { id: "clientes", label: "Clientes", icone: "👥", acoes: ["visualizar", "criar", "editar", "excluir"] },
-      { id: "equipamentos", label: "Equipamentos", icone: "🔧", acoes: ["visualizar", "criar", "editar", "excluir"] },
-      { id: "calendario", label: "Calendário", icone: "📅", acoes: ["visualizar"] },
-      { id: "qrcodes", label: "QR Codes", icone: "📊", acoes: ["visualizar", "gerenciar"] },
+      { id: "ordens", label: "Ordens de serviço", icone: "ClipboardList", acoes: ["visualizar", "criar", "editar", "concluir", "excluir"] },
+      { id: "clientes", label: "Clientes", icone: "Users", acoes: ["visualizar", "criar", "editar", "excluir"] },
+      { id: "equipamentos", label: "Equipamentos", icone: "Thermometer", acoes: ["visualizar", "criar", "editar", "excluir"] },
+      { id: "calendario", label: "Calendário", icone: "CalendarDays", acoes: ["visualizar"] },
+      { id: "qrcodes", label: "QR Codes", icone: "QrCode", acoes: ["visualizar", "gerenciar"] },
       // Estoque: ver saldos/extrato; gerenciar = lançar entrada, ajuste e inventário
-      { id: "estoque", label: "Estoque", icone: "📦", acoes: ["visualizar", "gerenciar", "separar"] },
+      { id: "estoque", label: "Estoque", icone: "Package", acoes: ["visualizar", "gerenciar", "separar"] },
       // Compras: ver pedidos de compra, baixar/enviar o PC ao fornecedor; gerenciar = criar PC avulso,
       // editar e cancelar qualquer pedido. Só quem tem Compras pode ser o comprador responsável.
-      { id: "compras", label: "Compras", icone: "🛒", acoes: ["visualizar", "gerenciar"] },
+      { id: "compras", label: "Compras", icone: "ShoppingCart", acoes: ["visualizar", "gerenciar"] },
     ],
   },
   {
     id: "comercial", label: "Comercial", modulos: [
-      { id: "orcamentos", label: "Orçamentos", icone: "💰", acoes: ["visualizar", "criar", "editar", "aprovar", "excluir"] },
-      { id: "contratos", label: "Contratos", icone: "📄", acoes: ["visualizar", "criar", "editar"] },
-      { id: "licitacoes", label: "Licitações", icone: "🏛️", acoes: ["visualizar", "gerenciar"] },
+      { id: "orcamentos", label: "Orçamentos", icone: "Calculator", acoes: ["visualizar", "criar", "editar", "aprovar", "excluir"] },
+      { id: "contratos", label: "Contratos", icone: "FileText", acoes: ["visualizar", "criar", "editar"] },
+      { id: "licitacoes", label: "Licitações", icone: "Landmark", acoes: ["visualizar", "gerenciar"] },
     ],
   },
   {
@@ -61,26 +66,26 @@ export const SECOES: SecaoDef[] = [
       // "folha" = Custo de pessoal (RH): salários, benefícios, encargos e importação de colaboradores
       // "fiscal" = dados fiscais da empresa como emitente de NFS-e (certificado, regime, PlugNotas)
       // "perdas" = marcar uma cobrança como perda (inadimplência) e reverter — gerente/administrador
-      { id: "financeiro", label: "Financeiro", icone: "💵", acoes: ["visualizar", "medicoes", "contasReceber", "fluxoCaixa", "folha", "fiscal", "perdas"] },
+      { id: "financeiro", label: "Financeiro", icone: "Wallet", acoes: ["visualizar", "medicoes", "contasReceber", "fluxoCaixa", "folha", "fiscal", "perdas"] },
     ],
   },
   {
     id: "equipe", label: "Equipe", modulos: [
-      { id: "equipes", label: "Equipes / Colaboradores", icone: "👤", acoes: ["visualizar", "gerenciar", "excluir"] },
-      { id: "veiculos", label: "Veículos", icone: "🚗", acoes: ["visualizar", "checklist", "gerenciar", "excluir"] },
+      { id: "equipes", label: "Equipes / Colaboradores", icone: "UsersRound", acoes: ["visualizar", "gerenciar", "excluir"] },
+      { id: "veiculos", label: "Veículos", icone: "Truck", acoes: ["visualizar", "checklist", "gerenciar", "excluir"] },
     ],
   },
   {
     id: "sistema", label: "Sistema", modulos: [
-      { id: "configuracoes", label: "Configurações", icone: "⚙️", acoes: ["visualizar", "gerenciar"] },
-      { id: "relatorios", label: "Relatórios", icone: "📈", acoes: ["visualizar", "exportar"] },
+      { id: "configuracoes", label: "Configurações", icone: "Settings", acoes: ["visualizar", "gerenciar"] },
+      { id: "relatorios", label: "Relatórios", icone: "BarChart3", acoes: ["visualizar", "exportar"] },
     ],
   },
 ];
 
 /** Todos os módulos achatados (inclui "dashboard", sempre visualizável). */
 export const MODULOS: ModuloDef[] = [
-  { id: "dashboard", label: "Dashboard", icone: "🏠", acoes: ["visualizar"] },
+  { id: "dashboard", label: "Dashboard", icone: "LayoutDashboard", acoes: ["visualizar"] },
   ...SECOES.flatMap((s) => s.modulos),
 ];
 
@@ -252,13 +257,14 @@ export const PRESETS: Record<string, Permissoes> = {
   PERSONALIZADO: permissoesVazias(),
 };
 
+/** Cor de DADO de cada tipo de perfil (gravada no cadastro): paleta única em lib/ui/tokens.ts. */
 export const CORES_PERFIL: Record<string, string> = {
-  ADMINISTRADOR: "#EF4444",
-  SUPERVISOR: "#F59E0B",
-  FINANCEIRO: "#EAB308",
-  TECNICO: "#0EA5E9",
-  AUXILIAR: "#64748B",
-  PERSONALIZADO: "#8B5CF6",
+  ADMINISTRADOR: corDado.vermelho,
+  SUPERVISOR: corDado.ambar,
+  FINANCEIRO: corDado.amarelo,
+  TECNICO: corDado.azul,
+  AUXILIAR: corDado.cinza,
+  PERSONALIZADO: corDado.roxo,
 };
 
 export const TIPOS_PERFIL_LABEL: Record<string, string> = {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { corDado } from "@/lib/ui/tokens";
 import { ArrowDown, ArrowUp, Check, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,12 +33,12 @@ function unidadeParaHoras(valor: number, unidade: UnidadePrazo): number {
 
 /** Editor de modelo de prazo (CadastroPadrao › modelos-prazo): nome, cor, descrição e as etapas (SLA). */
 // Cor que um registro novo recebe (dado salvo no cadastro; o usuário troca no seletor)
-const COR_PADRAO = "#0EA5E9";
+const COR_PADRAO = corDado.azul;
 
 export function EditorModeloPrazo({ item, aberto, onFechar, onSalvo }: EditorCadastroProps) {
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
-  const [cor, setCor] = useState("#0EA5E9");
+  const [cor, setCor] = useState<string>(COR_PADRAO);
   const [etapas, setEtapas] = useState<Etapa[]>([]);
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);

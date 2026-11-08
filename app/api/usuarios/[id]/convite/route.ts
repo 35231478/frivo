@@ -26,7 +26,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!u) return NextResponse.json({ erro: "Usuário não encontrado" }, { status: 404 });
   if (!u.ativo) return NextResponse.json({ erro: "Usuário inativo: reative antes de enviar o convite." }, { status: 409 });
   if (permissoesExcedentes(eu.permissoes as Permissoes, permissoesDoUsuario(u), eu.role).length > 0)
-    return NextResponse.json({ erro: "Este usuário tem acessos que você não tem; só um administrador pode enviar o convite." }, { status: 403 });
+    return NextResponse.json({ erro: "Este usuário tem acessos além dos do usuário atual; só um administrador pode enviar o convite." }, { status: 403 });
 
   const r = await enviarConvite(u.id, req.nextUrl.origin);
   if (r.enviadoPorEmail) return NextResponse.json({ enviadoPorEmail: true });
