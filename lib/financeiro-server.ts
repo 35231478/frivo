@@ -5,7 +5,7 @@ import { aFaturar, chaveMesBR } from "@/lib/financeiro/a-faturar";
 import { formatarData, formatarMoeda } from "@/lib/utils";
 import { diaCivilPassou, hojeDiaCivil, inicioMesDiaCivil, partesBR } from "@/lib/fuso";
 import { calcularVencimento } from "@/lib/medicao-helpers";
-import { rotuloMedicao } from "@/lib/faturamento/fatura";
+import { linhasMedicaoCompleta, rotuloMedicao } from "@/lib/faturamento/fatura";
 import { cancelarParcelas, reajustarParcelas, recebidoNoPeriodo, saldoDoAgregado } from "@/lib/financeiro/parcelas-server";
 import { proximoNumero } from "@/lib/numeracao-server";
 import {
@@ -332,6 +332,13 @@ export async function criarMedicaoDeRelatorio(relatorioId: string) {
     // Número pelo contador da empresa, sob trava
     const numero = await proximoNumero(tx, relatorio.empresaId, "medicao");
     const vencimento = calcularVencimento(cliente.diaFaturamento, relatorio.mesReferencia, relatorio.anoReferencia);
+    // E5: as PEÇAS (itens PRODUTO executados da OS) saem como linhas de produto; o serviço do período fica com o resto.
+    // O material incluso já está no valor do serviço e nunca aparece. Sem peça, a medição é a de sempre (uma linha).
+    const pecas = await tx.osItemOrcamento.findMany({
+      where: { ordemServicoId: relatorio.ordemServicoId, executado: true, tipo: "PRODUTO" }, orderBy: [{ ordem: "asc" }, { id: "asc" }],
+      select: { descricao: true, quantidade: true, valorUnitario: true, valorTotal: true, produtoId: true },
+    });
+    const linhas = linhasMedicaoCompleta(relatorio.numero, valor, relatorio.ordemServicoId, pecas);
 
     const medicao = await tx.medicao.create({
       data: {
@@ -352,14 +359,10 @@ export async function criarMedicaoDeRelatorio(relatorioId: string) {
         dataVencimento: vencimento,
         tokenPublico: crypto.randomUUID(),
         itens: {
-          create: [{
-            tipo: "SERVICO",
-            descricao: `Serviço do período — ${relatorio.numero}`,
-            quantidade: 1,
-            valorUnitario: valor,
-            valorTotal: valor,
-            ordem: 0,
-          }],
+          create: linhas.map((l, ordem) => ({
+            tipo: l.tipo, descricao: l.descricao, quantidade: l.quantidade, valorUnitario: l.valorUnitario, valorTotal: l.valorTotal,
+            produtoId: l.produtoId ?? null, ordemServicoId: l.ordemServicoId ?? null, ordem,
+          })),
         },
       },
     });
