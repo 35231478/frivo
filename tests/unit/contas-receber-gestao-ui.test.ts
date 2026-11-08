@@ -352,9 +352,12 @@ describe("período + cards do período + cara de planilha (padrão da casa)", ()
     await montar(createElement(ContasReceberView, props(o) as any));
   };
 
-  it("6 cards do período, na ordem, com R$ e quantidade; clicar filtra (card na URL) e clicar de novo tira", async () => {
+  it("5 cards do período (sem Perdas: fica no botão do cabeçalho), na ordem, com R$ e quantidade; clicar filtra (card na URL) e clicar de novo tira", async () => {
     await montarTela();
-    expect($$("[data-card]").map((c) => c.getAttribute("data-card"))).toEqual(["VENCIDO", "VENCE_HOJE", "A_VENCER", "RECEBIDO", "PERDA", "TOTAL"]);
+    expect($$("[data-card]").map((c) => c.getAttribute("data-card"))).toEqual(["VENCIDO", "VENCE_HOJE", "A_VENCER", "RECEBIDO", "TOTAL"]);
+    // "Perdas" sai do topo mas segue no cabeçalho (link) e no painel de totais do rodapé
+    expect($("[data-card=PERDA]")).toBeNull();
+    expect($("[data-link-perdas]")).not.toBeNull();
     const vencidos = $("[data-card=VENCIDO]")!;
     expect(txt(vencidos)).toMatch(/^Vencidos.*R\$\s?400,00.*1 cobrança$/);
     expect(txt($("[data-card=TOTAL]"))).toMatch(/Total do período.*R\$\s?2\.500,00.*5 cobranças$/);
@@ -392,6 +395,17 @@ describe("período + cards do período + cara de planilha (padrão da casa)", ()
       await clicar($("[data-periodo-opcao=mes]"));
       expect(ultimaUrl()).toBe("/financeiro/contas-receber?q=hospital");
     } finally { nav.qs = ""; }
+  });
+
+  it("\"Mais filtros\" tem \"Mostrar cancelados\" (padrão da casa): marca liga ?cancelados=1, desmarca tira", async () => {
+    await montarTela();
+    await clicar($("[data-mais-filtros]"));
+    expect($$("[data-filtro-opcao]").map((o) => o.getAttribute("data-filtro-opcao"))).toContain("cancelados");
+    await clicar($("[data-filtro-opcao=cancelados]"));
+    const check = $<HTMLInputElement>("[data-check-cancelados]")!;
+    expect(check.checked).toBe(false);
+    await clicar(check);
+    expect(ultimaUrl()).toBe("/financeiro/contas-receber?cancelados=1");
   });
 
   it("desktop em cara de planilha: cabeçalho compacto, Valor (R$) à direita com números tabulares, sem \"R$\" na célula", async () => {

@@ -74,9 +74,9 @@ export function BarraFiltros({ periodo, busca, filtros = [], paramBusca = "q", n
   };
 
   return (
-    <div className={cn("card p-3 sm:p-4", className)} data-barra-filtros>
+    <div className={cn("card p-2.5 sm:p-3", className)} data-barra-filtros>
       {/* Linha 1: período · busca · Mais filtros · extras (cada um com o rótulo em cima) */}
-      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-2.5">
         {periodo}
         <label className="flex-1 min-w-0 sm:min-w-[240px] flex flex-col gap-1">
           <span className="text-xs font-medium text-ink-muted">{periodo ? "Pesquisar no período selecionado" : "Pesquisar"}</span>
@@ -87,7 +87,7 @@ export function BarraFiltros({ periodo, busca, filtros = [], paramBusca = "q", n
             <div ref={ref} className="relative">
               <button
                 type="button" onClick={() => setMenu((v) => !v)} aria-haspopup="menu" aria-expanded={menu} data-mais-filtros
-                className={cn("inline-flex items-center gap-2 h-10 px-4 rounded-lg text-sm font-semibold border transition-colors",
+                className={cn("inline-flex items-center gap-2 h-9 px-4 rounded-lg text-sm font-semibold border transition-colors",
                   menu || ativos ? "bg-primary-50 border-primary-200 text-primary-700" : "bg-white border-surface-border text-primary-700 hover:bg-primary-50")}
               >
                 Mais filtros
@@ -142,6 +142,23 @@ export function BarraFiltros({ periodo, busca, filtros = [], paramBusca = "q", n
     </div>
   );
 }
+
+/** Checkbox "Mostrar cancelados" (padrão da casa, compartilhado) ligado a `?cancelados=1` na URL. */
+export function FiltroCanceladosUrl({ navegar, rotulo = "Mostrar cancelados", param = "cancelados" }: { navegar: Navegar; rotulo?: string; param?: string }) {
+  const sp = useSearchParams();
+  const marcado = sp.get(param) === "1";
+  return (
+    <label className="inline-flex items-center gap-2 px-3 py-1.5 text-sm text-ink-muted bg-white border border-surface-border rounded-lg cursor-pointer select-none" data-filtro-cancelados>
+      <input type="checkbox" checked={marcado} onChange={(e) => navegar({ [param]: e.target.checked ? "1" : null })} className="accent-primary-600" data-check-cancelados />
+      {rotulo}
+    </label>
+  );
+}
+
+/** FiltroDef pronto de "Mostrar cancelados" para o menu "Mais filtros" (Receber, Pagar, Notas, Orçamentos…). */
+export const filtroCancelados = (navegar: Navegar, rotulo = "Mostrar cancelados", param = "cancelados"): FiltroDef => ({
+  id: param, label: rotulo, params: [param], render: () => <FiltroCanceladosUrl navegar={navegar} rotulo={rotulo} param={param} />,
+});
 
 export const INPUT_FILTRO = "w-full bg-white border border-surface-border rounded-lg px-2.5 py-1.5 text-sm text-ink focus:outline-none focus:border-primary-500";
 /** O controle ativo (com valor na URL) se destaca */

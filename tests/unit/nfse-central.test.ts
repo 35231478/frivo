@@ -97,13 +97,19 @@ describe("where", () => {
     ]);
   });
 
-  it("where completo: empresa + período + busca + situação + ambiente", () => {
+  it("where completo: empresa + período + busca + situação + ambiente (a situação escolhida manda, sem excluir canceladas de novo)", () => {
     const f = lerFiltros({ situacao: "falha", ambiente: "HOMOLOGACAO", q: "x" }, agora);
     const w = whereNotas("e1", f);
     expect(w.empresaId).toBe("e1");
     expect(w.AND[2]).toEqual({ status: { in: ["REJEITADO", "INTERROMPIDO"] } });
-    expect(w.AND[3]).toEqual({ ambiente: "HOMOLOGACAO" });
-    expect(whereNotas("e1", lerFiltros({}, agora)).AND.slice(1)).toEqual([{}, {}, {}]);
+    // Com uma situação escolhida, o corte de canceladas não entra (fica {}); o ambiente vem depois
+    expect(w.AND[3]).toEqual({});
+    expect(w.AND[4]).toEqual({ ambiente: "HOMOLOGACAO" });
+    // Sem situação e sem "Mostrar cancelados": a lista esconde as canceladas por padrão
+    expect(whereNotas("e1", lerFiltros({}, agora)).AND.slice(1)).toEqual([{}, {}, { status: { notIn: ["CANCELADO"] } }, {}]);
+    // "Canceladas" (grupo) ou cancelados=1 trazem as canceladas de volta (sem o corte)
+    expect(whereNotas("e1", lerFiltros({ situacao: "canceladas" }, agora)).AND.slice(1)).toEqual([{}, { status: { in: ["CANCELADO"] } }, {}, {}]);
+    expect(whereNotas("e1", lerFiltros({ cancelados: "1" }, agora)).AND.slice(1)).toEqual([{}, {}, {}, {}]);
   });
 });
 

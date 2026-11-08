@@ -101,13 +101,15 @@ describe.skipIf(!URL_PG)("UX-4 — financeiro em escala (PostgreSQL real)", () =
   const contar = (sp: Record<string, string>) => prisma.contaReceber.count({ where: filtros.whereContasReceber("e1", sp, agora) });
 
   it("E4: chips de status visual e cartões filtram NO BANCO com a régua do selo", async () => {
-    expect(await contar({})).toBe(74); // tudo — bem além de qualquer fatia fixa
+    // Por padrão a lista esconde as canceladas (1): 73 das 74; "Mostrar cancelados" (cancelados=1) traz a 74ª
+    expect(await contar({})).toBe(73);
+    expect(await contar({ cancelados: "1" })).toBe(74);
     expect(await contar({ status: "PREVISTO" })).toBe(3);   // 2 PREVISTO + 1 liberada sem data
     expect(await contar({ status: "A_VENCER" })).toBe(61);  // 60 futuras + a da Padaria
     expect(await contar({ status: "VENCE_HOJE" })).toBe(2);
     expect(await contar({ status: "VENCIDO" })).toBe(4);    // 3 ATRASADO + 1 passada ainda A_RECEBER
     expect(await contar({ status: "PAGO" })).toBe(3);
-    expect(await contar({ status: "CANCELADO" })).toBe(1);
+    expect(await contar({ status: "CANCELADO" })).toBe(1);  // o chip "Cancelado" as mostra mesmo escondidas por padrão
     expect(await contar({ status: "VENCIDO,VENCE_HOJE" })).toBe(6); // chips somam (OR)
 
     expect(await contar({ card: "A_RECEBER" })).toBe(64);   // Previsto + A vencer
@@ -119,7 +121,7 @@ describe.skipIf(!URL_PG)("UX-4 — financeiro em escala (PostgreSQL real)", () =
 
   it("E4: busca e painel (cliente, categoria, forma, banco, valor, vencimento) no banco", async () => {
     expect(await contar({ q: "câmara fria" })).toBe(1);         // descrição
-    expect(await contar({ q: "Santa Clara" })).toBe(73);        // nome fantasia do cliente
+    expect(await contar({ q: "Santa Clara" })).toBe(72);        // a cancelada (Santa Clara) fica fora da lista padrão        // nome fantasia do cliente
     expect(await contar({ q: "pão quente" })).toBe(1);          // razão social, sem caixa
     expect(await contar({ q: "CR-0001" })).toBe(1);             // número
     expect(await contar({ clienteId: "c2" })).toBe(1);
@@ -183,8 +185,14 @@ describe.skipIf(!URL_PG)("UX-4 — financeiro em escala (PostgreSQL real)", () =
     await prisma.contaPagar.create({ data: { empresaId: "e1", numero: "CP-1001", fornecedor: "Frigelar", descricao: "Gás R410A", valorTotal: 1000, valorPago: 0, saldoRestante: 1000, status: "PENDENTE", dataVencimento: dia(5) } });
     await prisma.contaPagar.create({ data: { empresaId: "e1", numero: "CP-1002", fornecedor: "Frigelar", descricao: "Capacitores", valorTotal: 200, valorPago: 50, saldoRestante: 150, status: "PAGO_PARCIAL", dataVencimento: dia(2) } });
     await prisma.contaPagar.create({ data: { empresaId: "e1", numero: "CP-1003", fornecedor: "União Peças", descricao: "Tubo de cobre", valorTotal: 400, valorPago: 0, saldoRestante: 400, status: "VENCIDO", dataVencimento: dia(-4) } });
+    // Cancelada: fica fora da lista padrão (continua existindo); "Mostrar cancelados" e o status "Cancelado" a trazem
+    await prisma.contaPagar.create({ data: { empresaId: "e1", numero: "CP-1004", fornecedor: "Frigelar", descricao: "Compra cancelada", valorTotal: 900, valorPago: 0, saldoRestante: 900, status: "CANCELADO", dataVencimento: dia(3) } });
 
     const w = (sp: Record<string, string>) => filtros.whereContasPagar("e1", sp);
+    expect(await prisma.contaPagar.count({ where: w({}) })).toBe(3);                          // cancelada escondida
+    expect(await prisma.contaPagar.count({ where: w({ cancelados: "1" }) })).toBe(4);         // "Mostrar cancelados"
+    expect(await prisma.contaPagar.count({ where: w({ status: "CANCELADO" }) })).toBe(1);     // o filtro de status a mostra
+    expect(await prisma.contaPagar.count({ where: w({ fornecedor: "frigelar" }) })).toBe(2);  // busca padrão não traz a cancelada
     expect(await prisma.contaPagar.count({ where: w({ fornecedor: "gás" }) })).toBe(1);      // descrição (novo)
     expect(await prisma.contaPagar.count({ where: w({ fornecedor: "CP-1003" }) })).toBe(1);  // número (novo)
     expect(await prisma.contaPagar.count({ where: w({ fornecedor: "frigelar" }) })).toBe(2); // texto antigo

@@ -196,7 +196,7 @@ export function CampoBusca({ valor, onChange, placeholder, rotulo, sugerir, onEs
           else if (e.key === "ArrowUp") { e.preventDefault(); setDestaque((i) => Math.max(i - 1, -1)); }
           else if (e.key === "Enter" && destaque >= 0) { e.preventDefault(); escolher(sugestoes[destaque]); }
         }}
-        className="w-full bg-white border border-surface-border rounded-lg pl-9 pr-16 py-2.5 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-acento focus:ring-4 focus:ring-acento/15 [&::-webkit-search-cancel-button]:hidden"
+        className="w-full bg-white border border-surface-border rounded-lg pl-9 pr-16 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-acento focus:ring-4 focus:ring-acento/15 [&::-webkit-search-cancel-button]:hidden"
       />
       <span className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
         {carregando && <Loader2 className="w-3.5 h-3.5 text-ink-subtle animate-spin" aria-label="Buscando" />}

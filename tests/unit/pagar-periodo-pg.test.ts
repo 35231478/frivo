@@ -101,11 +101,14 @@ describe.skipIf(!URL_PG)("Contas a Pagar — período e cards (PostgreSQL real)"
   it("padrão = o mês corrente pelo VENCIMENTO, com as bordas certas; só da empresa da sessão", async () => {
     const t = await tela();
     expect(t.periodo).toMatchObject({ tipo: "mes", mes: "2026-11", rotulo: "Novembro de 2026" });
-    expect(valores(t)).toEqual([300, 400, 500, 600, 700, 800, 1000]); // dia 1 entra; 1/12 e sem data não
-    expect(t.total).toBe(7);
+    expect(valores(t)).toEqual([300, 400, 500, 600, 800, 1000]); // dia 1 entra; 1/12 e sem data não; a cancelada (700) some
+    expect(t.total).toBe(6);
     // rodapé: total do filtro (valor das contas) e o que está em aberto (saldo)
-    expect(t.totalFiltrado).toBe(4300);
+    expect(t.totalFiltrado).toBe(3600);
     expect(t.totalAberto).toBe(400 + 400 + 500 + 600 + 500);
+    const comCanc = await tela({ cancelados: "1" });
+    expect(valores(comCanc)).toEqual([300, 400, 500, 600, 700, 800, 1000]);
+    expect(comCanc.total).toBe(7);
   });
 
   it("cards: abertos pelo saldo (o pago parcial pelo que falta), Pagos pelo valor pago, Total sem as canceladas", async () => {
@@ -143,7 +146,8 @@ describe.skipIf(!URL_PG)("Contas a Pagar — período e cards (PostgreSQL real)"
     expect(valores(i)).toEqual([500, 600]);
     const todos = await tela({ periodo: "todos" });
     expect(todos.periodo).toMatchObject({ tipo: "todos", rotulo: "Todo o período" });
-    expect(valores(todos)).toEqual([50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]);
+    expect(valores(todos)).toEqual([50, 100, 200, 300, 400, 500, 600, 800, 900, 1000]); // a cancelada (700) fica fora
+    expect(valores(await tela({ periodo: "todos", cancelados: "1" }))).toEqual([50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]);
     expect(todos.resumo.A_VENCER).toEqual({ q: 4, v: 600 + 500 + 900 + 50 });
     expect(todos.resumo.TOTAL).toEqual({ q: 10, v: 4850 });
   });
@@ -152,7 +156,7 @@ describe.skipIf(!URL_PG)("Contas a Pagar — período e cards (PostgreSQL real)"
     expect((await tela({ fornecedor: "Peças antigas" })).total).toBe(0);
     expect(valores(await tela({ fornecedor: "Peças antigas", periodo: "todos" }))).toEqual([200]);
     // dataInicio/dataFim (o painel antigo) é ignorado: o período manda
-    expect(valores(await tela({ dataInicio: "2026-10-01", dataFim: "2026-10-31" }))).toEqual([300, 400, 500, 600, 700, 800, 1000]);
+    expect(valores(await tela({ dataInicio: "2026-10-01", dataFim: "2026-10-31" }))).toEqual([300, 400, 500, 600, 800, 1000]);
   });
 
   it("dashboard financeiro: 'Contas a pagar vencidas' abre o card Vencidos em todo o período", async () => {

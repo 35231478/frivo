@@ -64,7 +64,7 @@ export function BarraPeriodo({ periodo, navegar, permitirTodos, somenteMes, dica
       <span className="text-xs font-medium text-ink-muted" data-periodo-rotulo-tela>{rotulo}</span>
       <div className="flex items-center gap-2">
       <div ref={ref} className="relative flex-1 sm:flex-none">
-        <div className="flex w-full sm:w-auto items-stretch h-10 rounded-lg border border-surface-border bg-white overflow-hidden">
+        <div className="flex w-full sm:w-auto items-stretch h-9 rounded-lg border border-surface-border bg-white overflow-hidden">
           <button type="button" onClick={() => ir(anterior)} disabled={!anterior} aria-label="Período anterior" title="Período anterior" className={seta} data-mes-anterior><ChevronLeft className="w-4 h-4" /></button>
           <button
             type="button" onClick={() => setAberto((v) => !v)} aria-haspopup="listbox" aria-expanded={aberto} data-periodo-menu data-periodo-atalho={atalho || undefined} title={atalho || undefined}
@@ -123,7 +123,7 @@ export function BarraPeriodo({ periodo, navegar, permitirTodos, somenteMes, dica
 /** A grade dos cards de resumo (2 por linha no celular — o último, se sobrar sozinho, ocupa a linha; todos numa linha no desktop largo) */
 export function GradeCards({ colunas, children }: { colunas: 4 | 5 | 6; children: ReactNode }) {
   const xl = { 4: "xl:grid-cols-4", 5: "xl:grid-cols-5", 6: "xl:grid-cols-6" }[colunas];
-  return <div className={cn("grid grid-cols-2 md:grid-cols-3 gap-3 max-md:[&>*:last-child:nth-child(odd)]:col-span-2", xl)} data-cards>{children}</div>;
+  return <div className={cn("grid grid-cols-2 md:grid-cols-3 gap-2 max-md:[&>*:last-child:nth-child(odd)]:col-span-2", xl)} data-cards>{children}</div>;
 }
 
 /**
@@ -137,16 +137,16 @@ export function CardResumo({ id, rotulo, icone: Icone, cor, q, v, legenda, unida
 }) {
   const corpo = (
     <>
-      <div className="flex items-start justify-between gap-1">
-        <Icone className={cn("w-5 h-5", cor)} />
-        {ativo && <X className={cn("w-3.5 h-3.5 text-ink-subtle", dica && "mr-6")} />}
+      {/* Tile compacto (estilo Conta Azul): rótulo pequeno + ícone discreto numa linha, valor logo abaixo */}
+      <div className="flex items-center justify-between gap-1">
+        <p className="text-[11px] text-ink-muted truncate">{rotulo}</p>
+        {ativo ? <X className={cn("w-3.5 h-3.5 text-ink-subtle shrink-0", dica && "mr-5")} /> : <Icone className={cn("w-4 h-4 shrink-0 opacity-80", cor)} />}
       </div>
-      <p className="text-xs text-ink-muted mt-2">{rotulo}</p>
-      <p className="text-lg font-bold text-ink mt-0.5 tabular-nums" data-card-valor>{formatarMoeda(v)}</p>
-      <p className="text-[11px] text-ink-subtle mt-0.5" data-card-qtd>{legenda ?? `${q} ${unidade ? (q === 1 ? unidade[0] : unidade[1]) : q === 1 ? "nota" : "notas"}`}</p>
+      <p className="text-base font-bold text-ink mt-0.5 tabular-nums leading-tight" data-card-valor>{formatarMoeda(v)}</p>
+      <p className="text-[10px] text-ink-subtle" data-card-qtd>{legenda ?? `${q} ${unidade ? (q === 1 ? unidade[0] : unidade[1]) : q === 1 ? "nota" : "notas"}`}</p>
     </>
   );
-  const cls = cn("block h-full w-full text-left rounded-card border border-surface-border bg-white p-3.5 transition-all", (href || onClick) && "hover:shadow-card hover:border-primary-200",
+  const cls = cn("block h-full w-full text-left rounded-card border border-surface-border bg-white px-3 py-2 transition-all", (href || onClick) && "hover:shadow-card hover:border-primary-200",
     ativo && "bg-primary-50 ring-2 ring-offset-1 ring-primary-200");
   const card = href ? <Link href={href} className={cls} data-card={id}>{corpo}</Link>
     : onClick ? <button type="button" onClick={onClick} aria-pressed={!!ativo} className={cls} data-card={id}>{corpo}</button>
@@ -154,7 +154,7 @@ export function CardResumo({ id, rotulo, icone: Icone, cor, q, v, legenda, unida
   return (
     <div className="relative" data-card-caixa={id}>
       {card}
-      {dica && <span className="absolute top-3 right-3"><Dica texto={dica} rotulo={rotulo} /></span>}
+      {dica && <span className="absolute top-1.5 right-2"><Dica texto={dica} rotulo={rotulo} /></span>}
     </div>
   );
 }

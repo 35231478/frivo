@@ -12,6 +12,13 @@ import { faixaDiaCivil, lerPeriodo, type Periodo } from "@/lib/periodo";
 type SP = Record<string, string | undefined>;
 
 /**
+ * "Mostrar cancelados" (padrão da casa, compartilhado): por padrão as listas escondem os registros
+ * cancelados — eles continuam existindo (auditoria/fiscal) e saem dos totais; `?cancelados=1` (o
+ * filtro em "Mais filtros") os traz de volta. Também aceita o `inativos=1` antigo de Orçamentos.
+ */
+export const mostrarCancelados = (sp: SP) => sp.cancelados === "1" || sp.inativos === "1";
+
+/**
  * O período da lista de OS (seletor da tela): por padrão TODO o período. Links antigos continuam
  * valendo: `?data=AAAA-MM-DD` (navegação por dia) vira "Hoje" navegado; `dataInicio`/`dataFim`
  * viram o período personalizado.
@@ -95,7 +102,7 @@ export function whereOrcamentos(empresaId: string, sp: SP, agora = new Date()) {
   const porEtapa = etapa ? whereEtapa(etapa, hojeDiaCivil(agora)) : null;
   // Cancelado = orçamento inativado: fica fora da lista padrão (filtre o status ou marque "Mostrar cancelados")
   if (porEtapa) e.push(porEtapa);
-  else if (sp.inativos !== "1") where.status = { not: "CANCELADO" };
+  else if (!mostrarCancelados(sp)) where.status = { not: "CANCELADO" };
   // Sino: respostas do cliente (aprovou/recusou) que ninguém abriu ainda
   if (sp.resposta === "nova") e.push({ status: { in: ["APROVADO", "REPROVADO"] }, respostaVistaEm: null });
   if (e.length) where.AND = e;
@@ -201,8 +208,12 @@ export function whereContasReceber(empresaId: string, sp: SP, agora = new Date()
   if (sp.valorMax) where.valor = { ...(where.valor ?? {}), lte: Number(sp.valorMax) };
   const venc = periodoDiaCivil(sp.vencDe, sp.vencAte);
   if (venc) where.dataVencimento = { ...(where.dataVencimento ?? {}), ...venc };
-  const chips = (sp.status ?? "").split(",").map((s) => condStatusVisualReceber(s, agora)).filter(Boolean);
+  const statusSel = (sp.status ?? "").split(",").filter(Boolean);
+  const chips = statusSel.map((s) => condStatusVisualReceber(s, agora)).filter(Boolean);
   if (chips.length) and.push({ OR: chips });
+  // Cancelados fora da lista padrão (continuam existindo; já saem dos cards/totais). O chip "Cancelado"
+  // ou "Mostrar cancelados" os traz de volta.
+  if (!statusSel.includes("CANCELADO") && !mostrarCancelados(sp)) and.push({ status: { not: "CANCELADO" } });
   const card = condCardReceber(sp.card ?? "", agora);
   if (card) and.push(card);
   if (and.length) where.AND = and;
@@ -370,6 +381,9 @@ export function whereListaPagar(empresaId: string, sp: SP, periodo: Periodo, ago
 export function whereContasPagar(empresaId: string, sp: SP) {
   const where: any = { empresaId };
   if (sp.status) where.status = sp.status;
+  // Cancelados fora da lista padrão (continuam existindo; já saem dos cards/totais). Filtrar o status
+  // "Cancelado" ou marcar "Mostrar cancelados" os traz de volta.
+  else if (!mostrarCancelados(sp)) where.status = { not: "CANCELADO" };
   // Busca por texto: no nome do cadastro ligado, no texto antigo, na descrição e no número
   if (sp.fornecedor) where.OR = [
     { fornecedorCadastro: { nome: { contains: sp.fornecedor, mode: "insensitive" } } },
