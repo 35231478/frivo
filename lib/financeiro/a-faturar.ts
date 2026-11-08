@@ -4,9 +4,9 @@
  * Desde a P2 a aprovação não cria mais conta a receber: o orçamento APROVADO fica "a faturar" até o
  * "Faturar" (a cobrança nasce na fatura/medição). Para o painel não perder esse dinheiro, a previsão
  * passa a vir daqui:
- *  - orçamentos COMUM APROVADOS com SALDO a faturar = totalGeral − já faturado. Sem faturamento
- *    parcial (P5) o "já faturado" é sim/não — a mesma regra das travas (orcamentoJaFaturado: direto
- *    ou pela OS gerada, em medição/fatura viva) —, então o saldo é o total ou zero;
+ *  - orçamentos COMUM APROVADOS com SALDO a faturar = totalGeral − já faturado. Desde o faturamento
+ *    parcial (P5) o "já faturado" é a soma das faturas avulsas vivas ligadas ao orçamento (direto ou pela
+ *    OS gerada); uma medição de contrato/manual viva cobre tudo (faturamentoDaOrigem);
  *  - transição segura: orçamento que ainda tem a conta Prevista antiga (criada na aprovação antes da
  *    Opção A) NÃO entra — ela já está no Contas a Receber; contar os dois seria contar em dobro;
  *  - mês da previsão: a previsão de conclusão da OS gerada do orçamento; sem OS (ou sem previsão),
@@ -15,7 +15,7 @@
  */
 import { prisma } from "@/lib/prisma";
 import { partesBR } from "@/lib/fuso";
-import { orcamentoJaFaturado } from "@/lib/faturamento-os";
+import { faturamentoDaOrigem } from "@/lib/faturamento-os";
 
 export interface ItemAFaturar {
   orcamentoId: string; codigo: string; nome: string; clienteNome: string;
@@ -51,8 +51,9 @@ export async function itensAFaturar(empresaId: string, agora = new Date()): Prom
   const candidatos = await prisma.orcamento.findMany({
     where: {
       empresaId, tipo: "COMUM", status: "APROVADO",
-      // transição: quem ainda tem a Prevista antiga (ou qualquer conta viva) já está no Contas a Receber
-      contasReceber: { none: { status: { not: "CANCELADO" }, excluidaEm: null } },
+      // transição: quem ainda tem a Prevista antiga (conta sem medição) já está no Contas a Receber; a conta de uma
+      // fatura (parcial) tem medição e não tira o saldo da previsão
+      contasReceber: { none: { status: { not: "CANCELADO" }, excluidaEm: null, medicaoId: null } },
     },
     select: {
       id: true, codigo: true, nome: true, totalGeral: true,
@@ -63,9 +64,11 @@ export async function itensAFaturar(empresaId: string, agora = new Date()): Prom
   });
   const itens: ItemAFaturar[] = [];
   for (const o of candidatos) {
-    const valor = Number(o.totalGeral);
+    const total = Number(o.totalGeral);
+    if (total <= 0) continue;
+    // P5: só o saldo não faturado entra na previsão (zero = já faturado por inteiro)
+    const valor = (await faturamentoDaOrigem(prisma, { orcamentoId: o.id }, total)).saldo;
     if (valor <= 0) continue;
-    if (await orcamentoJaFaturado(o.id)) continue; // já faturado: saldo zero (sem parcial até a P5)
     const { mes, origem } = mesDaPrevisao(o.osGerada, agora);
     itens.push({
       orcamentoId: o.id, codigo: o.codigo, nome: o.nome, clienteNome: o.cliente.nomeFantasia ?? o.cliente.nome,

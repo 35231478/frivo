@@ -2604,6 +2604,11 @@ model Medicao {
   /// Fatura avulsa (botão "Faturar" do orçamento/OS): mesma engine, nasce liberada para a nota, sem
   /// a aprovação do cliente; na tela e na nota aparece como "Fatura" (o número MED-… não muda)
   avulsa Boolean @default(false)
+  /// P5 — faturamento parcial: esta fatura cobre só PARTE da origem (orçamento/OS). `percentualFaturado` é a
+  /// fatia do total da origem que ela representa (o "resto" também é parcial). O faturado acumulado da
+  /// origem é a soma do valor líquido das faturas avulsas vivas ligadas a ela (pelos itens) — sem tabela nova.
+  faturaParcial      Boolean  @default(false) @map("fatura_parcial")
+  percentualFaturado Decimal? @map("percentual_faturado") @db.Decimal(6, 2)
 
   dataEnvio      DateTime? @map("data_envio")
   dataAprovacao  DateTime? @map("data_aprovacao")

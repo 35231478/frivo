@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { faturarOs } from "@/lib/faturamento/faturar-server";
-import { lerParcelamento, respostaFaturar } from "@/lib/faturamento/resposta";
+import { lerCorpoFaturar, respostaFaturar } from "@/lib/faturamento/resposta";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 import { respostaPortaoPrestacao } from "@/lib/estoque/devolucao-server";
 
@@ -19,7 +19,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // E4.3 — Portões 2/3: com "Exigir prestação de contas de material" ligado, só fatura com o material 100% prestado contas
   const portao = await respostaPortaoPrestacao(empresaId, id, "faturar");
   if (portao) return portao;
-  const r = await faturarOs({ empresaId, usuarioId, osId: id, parcelamento: await lerParcelamento(req) });
+  const corpo = await lerCorpoFaturar(req);
+  if (!corpo.ok) return corpo.resposta;
+  const { parcelamento, parcial } = corpo;
+  const r = await faturarOs({ empresaId, usuarioId, osId: id, parcelamento, parcial });
   // Faturada, a OS passa a "Faturada" na central (status automático)
   if (r.tipo === "criada") await sincronizarStatusOs(id, empresaId, usuarioId).catch(() => null);
   return respostaFaturar(r, "OS");

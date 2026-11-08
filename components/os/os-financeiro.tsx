@@ -8,7 +8,7 @@ import { formatarMoeda, formatarData, LABELS_STATUS_MEDICAO } from "@/lib/utils"
 import { Receipt, ExternalLink } from "lucide-react";
 import { NotasFiscais } from "@/components/fiscal/nfse-notas";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
-import { BotaoFaturar, type FaturaExistente } from "@/components/faturamento/botao-faturar";
+import { BotaoFaturar, type FaturaExistente, type FaturamentoOrigem } from "@/components/faturamento/botao-faturar";
 import { rotuloMedicao } from "@/lib/faturamento/fatura";
 
 const COR_MEDICAO: Record<string, string> = {
@@ -28,12 +28,14 @@ interface MedicaoResumo { id: string; numero: string; status: string; valorTotal
  * liberada) e abre a emissão da NFS-e. OS de contrato: entra numa medição oficial ("Gerar medição").
  * A antiga "medição interna" (OsMedicao) saiu: nunca virava conta a receber.
  */
-export function OsFinanceiro({ osId, temContrato, concluida, fatura, medicoes: iniciais, itensOrcamento, contasReceber = [], abrirNfse, onAbriuNfse }: {
+export function OsFinanceiro({ osId, temContrato, concluida, fatura, faturamento, medicoes: iniciais, itensOrcamento, contasReceber = [], abrirNfse, onAbriuNfse }: {
   osId: string; temContrato?: boolean; medicoes: MedicaoResumo[]; itensOrcamento: any[];
   /** Faturar só com a OS concluída */
   concluida?: boolean;
   /** A fatura/medição viva que já cobre esta OS (nunca fatura de novo) */
   fatura?: FaturaExistente | null;
+  /** P5: total, faturado, saldo e as faturas da OS avulsa (pode ser faturada em partes) */
+  faturamento?: FaturamentoOrigem | null;
   /** Contas a receber da OS (medição ou orçamento ligado) — o outro lado do vínculo da conta */
   contasReceber?: ContaVinculada[];
   /** Botão "Emitir NFS-e" do cabeçalho: abre a emissão ao chegar na aba */
@@ -128,9 +130,9 @@ export function OsFinanceiro({ osId, temContrato, concluida, fatura, medicoes: i
         <Button type="button" onClick={gerarMedicao} loading={gerando}>
           <Receipt className="w-4 h-4" /> Gerar medição (itens executados + adicionais)
         </Button>
-      ) : fatura || (concluida && pode("financeiro", "medicoes")) ? (
+      ) : fatura || faturamento?.faturas.length || (concluida && pode("financeiro", "medicoes")) ? (
         <div className="border-t border-surface-linha pt-5">
-          <BotaoFaturar url={`/api/ordens/${osId}/faturar`} origem="OS" fatura={fatura ?? null}
+          <BotaoFaturar url={`/api/ordens/${osId}/faturar`} origem="OS" fatura={fatura ?? null} faturamento={faturamento ?? null}
             podeFaturar={!!concluida && pode("financeiro", "medicoes")} podeVer={pode("financeiro", "visualizar")} />
         </div>
       ) : pode("financeiro", "medicoes") && (

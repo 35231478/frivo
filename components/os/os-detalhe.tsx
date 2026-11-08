@@ -86,7 +86,7 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
       {/* OS avulsa: "Faturar" (direto para a nota). OS de contrato: segue pela medição */}
       {!os.contrato ? (
         <BotaoFaturar
-          url={`/api/ordens/${os.id}/faturar`} origem="OS" fatura={os.fatura ?? null} compacto
+          url={`/api/ordens/${os.id}/faturar`} origem="OS" fatura={os.fatura ?? null} faturamento={os.faturamento ?? null} compacto
           podeFaturar={os.status === "CONCLUIDA" && pode("financeiro", "medicoes")} podeVer={pode("financeiro", "visualizar")}
         />
       ) : os.status === "CONCLUIDA" && pode("financeiro", "medicoes") && (
@@ -167,7 +167,7 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
               )}
 
               {ativa === "financeiro" && (
-                <OsFinanceiro osId={os.id} temContrato={!!os.contrato} concluida={os.status === "CONCLUIDA"} fatura={os.fatura ?? null} medicoes={os.medicoes} itensOrcamento={os.itensOrcamento} contasReceber={os.contasReceber ?? []} abrirNfse={abrirNfse} onAbriuNfse={() => setAbrirNfse(false)} />
+                <OsFinanceiro osId={os.id} temContrato={!!os.contrato} concluida={os.status === "CONCLUIDA"} fatura={os.fatura ?? null} faturamento={os.faturamento ?? null} medicoes={os.medicoes} itensOrcamento={os.itensOrcamento} contasReceber={os.contasReceber ?? []} abrirNfse={abrirNfse} onAbriuNfse={() => setAbrirNfse(false)} />
               )}
 
               {ativa === "relatorios" && (

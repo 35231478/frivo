@@ -93,3 +93,81 @@ export async function itensFaturaveisDaOs(osId: string) {
   ]);
   return { itens, adicionais };
 }
+
+/* ───────────────────────── P5 — faturamento parcial ───────────────────────── */
+
+const SELECT_FAT = { ...SELECT_MED, status: true, valorLiquido: true, faturaParcial: true, percentualFaturado: true, criadoEm: true, nfNumero: true } as const;
+type MedicaoFat = { id: string; numero: string; tokenPublico: string | null; avulsa: boolean; status: string; valorLiquido: unknown; faturaParcial: boolean; percentualFaturado: unknown; criadoEm: Date; nfNumero: string | null };
+
+/** Só tranca as origens (ordem fixa), sem decidir nada: quem chama lê o saldo na mesma transação */
+export async function travarOrigens(tx: Prisma.TransactionClient, o: { osIds?: (string | null | undefined)[]; orcamentoIds?: (string | null | undefined)[] }) {
+  const osIds = [...new Set((o.osIds ?? []).filter(Boolean))].sort() as string[];
+  const orcIds = [...new Set((o.orcamentoIds ?? []).filter(Boolean))].sort() as string[];
+  const origens = osIds.length
+    ? (await tx.ordemServico.findMany({ where: { id: { in: osIds } }, select: { orcamentoOrigemId: true } })).map((x) => x.orcamentoOrigemId)
+    : [];
+  const todosOrc = [...new Set([...orcIds, ...origens.filter(Boolean)])].sort() as string[];
+  if (todosOrc.length) await tx.$queryRaw`SELECT id FROM orcamentos WHERE id IN (${Prisma.join(todosOrc)}) ORDER BY id FOR UPDATE`;
+  if (osIds.length) await tx.$queryRaw`SELECT id FROM ordens_servico WHERE id IN (${Prisma.join(osIds)}) ORDER BY id FOR UPDATE`;
+}
+
+/**
+ * Todas as medições VIVAS ligadas à origem (os mesmos três caminhos da trava: item do orçamento, item da OS,
+ * relatório MEDICAO_COMPLETA, e o orçamento de origem ↔ OS gerada), sem repetição, da mais antiga à mais nova.
+ */
+async function medicoesDaOrigem(db: Db, origem: { orcamentoId?: string | null; osId?: string | null }, ignorar?: string): Promise<MedicaoFat[]> {
+  const orcIds = new Set<string>(); const osIds = new Set<string>();
+  if (origem.orcamentoId) {
+    orcIds.add(origem.orcamentoId);
+    const os = await db.ordemServico.findFirst({ where: { orcamentoOrigemId: origem.orcamentoId }, select: { id: true } });
+    if (os) osIds.add(os.id);
+  }
+  if (origem.osId) {
+    osIds.add(origem.osId);
+    const os = await db.ordemServico.findUnique({ where: { id: origem.osId }, select: { orcamentoOrigemId: true } });
+    if (os?.orcamentoOrigemId) orcIds.add(os.orcamentoOrigemId);
+  }
+  const v = viva(ignorar);
+  const [porOrc, porOs, porRel] = await Promise.all([
+    orcIds.size ? db.medicaoItem.findMany({ where: { orcamentoId: { in: [...orcIds] }, medicao: v }, select: { medicao: { select: SELECT_FAT } } }) : [],
+    osIds.size ? db.medicaoItem.findMany({ where: { ordemServicoId: { in: [...osIds] }, medicao: v }, select: { medicao: { select: SELECT_FAT } } }) : [],
+    osIds.size ? db.relatorioOs.findMany({ where: { ordemServicoId: { in: [...osIds] }, escopo: "MEDICAO_COMPLETA", medicao: { is: v } }, select: { medicao: { select: SELECT_FAT } } }) : [],
+  ]);
+  const porId = new Map<string, MedicaoFat>();
+  for (const x of [...porOrc, ...porOs, ...porRel]) if (x.medicao) porId.set(x.medicao.id, x.medicao as MedicaoFat);
+  return [...porId.values()].sort((a, b) => a.criadoEm.getTime() - b.criadoEm.getTime() || a.numero.localeCompare(b.numero));
+}
+
+export interface FaturamentoDaOrigem {
+  total: number; faturado: number; saldo: number;
+  faturas: { id: string; numero: string; status: string; valor: number; parcial: boolean; percentual: number | null; criadoEm: string; nfNumero: string | null }[];
+  /** Medição NÃO avulsa viva (medição de contrato / manual) que já cobre a origem: a origem conta como faturada por inteiro */
+  outra: MedicaoDaOs | null;
+  /** A última fatura avulsa viva (para "já faturado → abrir") */
+  ultima: MedicaoDaOs | null;
+}
+
+/**
+ * O faturamento da origem: `total` é o valor da fatura cheia hoje; `faturado` = soma do líquido das faturas avulsas
+ * vivas ligadas; `saldo` = o que ainda dá para faturar. Cobrem a origem INTEIRA (saldo zero, seja qual for a soma):
+ * uma medição de contrato/manual viva, ou uma fatura avulsa CHEIA ("Faturar" sem parte antes — ex.: a OS gerada
+ * faturou só os itens executados; o orçamento não fatura o resto por fora, como sempre foi).
+ */
+export async function faturamentoDaOrigem(db: Db, origem: { orcamentoId?: string | null; osId?: string | null }, total: number, ignorar?: string): Promise<FaturamentoDaOrigem> {
+  const medicoes = await medicoesDaOrigem(db, origem, ignorar);
+  const outra = medicoes.find((m) => !m.avulsa) ?? null;
+  const avulsas = medicoes.filter((m) => m.avulsa);
+  const somaAvulsas = Math.round(avulsas.reduce((s, m) => s + Number(m.valorLiquido), 0) * 100) / 100;
+  const cheia = avulsas.some((m) => !m.faturaParcial);
+  const faturado = outra || cheia ? Math.max(Number(total), somaAvulsas) : somaAvulsas;
+  const saldo = Math.round(Math.max(0, Number(total) - faturado) * 100) / 100;
+  const resumo = (m: MedicaoFat): MedicaoDaOs => ({ id: m.id, numero: m.numero, tokenPublico: m.tokenPublico, avulsa: m.avulsa });
+  return {
+    total: Math.round(Number(total) * 100) / 100, faturado, saldo, outra: outra ? resumo(outra) : null,
+    ultima: avulsas.length ? resumo(avulsas[avulsas.length - 1]) : null,
+    faturas: avulsas.map((m) => ({
+      id: m.id, numero: m.numero, status: m.status, valor: Number(m.valorLiquido), parcial: m.faturaParcial,
+      percentual: m.percentualFaturado == null ? null : Number(m.percentualFaturado), criadoEm: m.criadoEm.toISOString(), nfNumero: m.nfNumero,
+    })),
+  };
+}
