@@ -115,7 +115,7 @@ export function ChecklistPreenchimento({ veiculos, templates, colaboradores, vei
         <div>
           <h3 className="text-lg font-bold text-ink">{concluido === "COM_ALERTAS" ? "Checklist enviado com alertas" : "Checklist concluído"}</h3>
           <p className="text-sm text-ink-muted mt-1">
-            {concluido === "COM_ALERTAS" ? "Itens com problema foram registrados e o gestor será notificado." : "Nenhuma irregularidade encontrada. Bom trabalho!"}
+            {concluido === "COM_ALERTAS" ? "Itens com problema foram registrados e o gestor será notificado." : "Nenhuma irregularidade registrada."}
           </p>
         </div>
         <div className="flex items-center justify-center gap-3">

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Dica } from "@/components/ui/dica";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
@@ -101,7 +102,7 @@ export default async function CustoPessoalPage() {
           <p className="text-xs text-ink-muted">Meses fechados (foto mensal){!fechadoAtual && " · tracejado = mês atual ainda não fechado"}<span className="sm:hidden"> · valores em R$ mil</span></p>
         </div>
         {barras.length <= 1 && historico.length === 0 ? (
-          <p className="text-sm text-ink-muted mb-3">Nenhum mês fechado ainda. Use “Fechar mês” no fim de cada mês para guardar o histórico — mudanças de salário ou de encargos depois não alteram o que já foi fechado.</p>
+          <p className="flex items-center gap-1 text-sm text-ink-muted mb-3">Nenhum mês fechado. Use “Fechar mês” para guardar o histórico. <Dica rotulo="Fechar mês" texto="Mudanças posteriores de salário ou encargos não alteram os meses já fechados." /></p>
         ) : null}
         <div className="flex items-end gap-1.5 sm:gap-3 h-48 overflow-x-auto pb-1" role="list" aria-label="Custo total da folha por mês">
           {barras.map((b) => (

@@ -181,7 +181,7 @@ export function MedicaoForm({
   return (
     <form onSubmit={salvar} className="space-y-6">
       <PageHeader
-        title={mode === "novo" ? "Nova Medição" : `Editar ${inicial?.numero ?? "Medição"}`}
+        title={mode === "novo" ? "Nova medição" : `Editar ${inicial?.numero ?? "medição"}`}
         description={mode === "novo" ? "Crie uma medição para faturamento" : "Edite os dados desta medição"}
         backHref={mode === "novo" ? "/financeiro/medicoes" : `/financeiro/medicoes/${inicial?.id}`}
         actions={

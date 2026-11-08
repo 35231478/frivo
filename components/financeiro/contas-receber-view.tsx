@@ -159,7 +159,7 @@ function ContasReceberCorpo({
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-primary-50 rounded-lg"><Receipt className="w-5 h-5 text-primary-600" /></div>
-          <h1 className="page-title">Contas a Receber</h1>
+          <h1 className="page-title">Contas a receber</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {/* No celular só o ícone (a linha de botões não pode estourar a largura) */}
@@ -167,7 +167,7 @@ function ContasReceberCorpo({
           {interAtivo && <SincronizarBoletos />}
           <button onClick={exportar} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-surface-border text-ink-muted hover:bg-surface-alt transition-colors"><Download className="w-4 h-4" /> Exportar</button>
           {/* UX-8 (G14): o botão segue a MESMA permissão do POST de criação — nunca leva a um 403 */}
-          {podeCobrar && <Link href="/financeiro/contas-receber/nova" data-nova-cobranca className="inline-flex items-center gap-1.5 bg-success-500 hover:bg-success-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm"><Plus className="w-4 h-4" /> Nova Cobrança</Link>}
+          {podeCobrar && <Link href="/financeiro/contas-receber/nova" data-nova-cobranca className="inline-flex items-center gap-1.5 bg-success-500 hover:bg-success-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm"><Plus className="w-4 h-4" /> Nova cobrança</Link>}
         </div>
       </div>
 

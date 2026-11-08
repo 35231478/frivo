@@ -72,7 +72,7 @@ export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status, avulsa }
         else setFeedback({ tipo: "erro", msg: "Cliente sem WhatsApp de faturamento cadastrado." });
       } else if (viaAposta === "copiar") {
         await navigator.clipboard.writeText(publicUrl);
-        setFeedback({ tipo: "ok", msg: "Link copiado!" });
+        setFeedback({ tipo: "ok", msg: "Link copiado." });
       }
       setPainel(null);
       router.refresh();
@@ -179,8 +179,8 @@ export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status, avulsa }
 
       {/* Painel: PC */}
       {painel === "PC" && (
-        <div className="border border-primary-200 bg-primary-50/30 rounded-lg p-4 space-y-3">
-          <h4 className="text-sm font-bold text-primary-700">Registrar Pedido de Compra (PC)</h4>
+        <div className="border border-surface-border bg-surface-alt/60 rounded-lg p-4 space-y-3">
+          <h4 className="text-sm font-semibold text-ink">Registrar pedido de compra (PC)</h4>
           <FormGrid cols={2}>
             <FormField label="Número do PC" required>
               <Input value={pcNumero} onChange={(e) => setPcNumero(e.target.value)} placeholder="Ex.: PC-2026-001" />
@@ -200,8 +200,8 @@ export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status, avulsa }
 
       {/* Painel: NF */}
       {painel === "NF" && (
-        <div className="border border-primary-200 bg-primary-50/30 rounded-lg p-4 space-y-3">
-          <h4 className="text-sm font-bold text-primary-700">Registrar Nota Fiscal</h4>
+        <div className="border border-surface-border bg-surface-alt/60 rounded-lg p-4 space-y-3">
+          <h4 className="text-sm font-semibold text-ink">Registrar nota fiscal</h4>
           <FormGrid cols={2}>
             <FormField label="Número da NF" required>
               <Input value={nfNumero} onChange={(e) => setNfNumero(e.target.value)} placeholder="Ex.: 12345" />
@@ -221,8 +221,8 @@ export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status, avulsa }
 
       {/* Painel: Boleto */}
       {painel === "BOLETO" && (
-        <div className="border border-primary-200 bg-primary-50/30 rounded-lg p-4 space-y-3">
-          <h4 className="text-sm font-bold text-primary-700">Registrar Boleto</h4>
+        <div className="border border-surface-border bg-surface-alt/60 rounded-lg p-4 space-y-3">
+          <h4 className="text-sm font-semibold text-ink">Registrar boleto</h4>
           <FormGrid cols={2}>
             <FormField label="Link do boleto (URL)" hint="Opcional">
               <Input value={boletoUrl} onChange={(e) => setBoletoUrl(e.target.value)} placeholder="https://..." />
@@ -242,8 +242,8 @@ export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status, avulsa }
 
       {/* Painel: Pagamento */}
       {painel === "PAGAMENTO" && (
-        <div className="border border-success-200 bg-success-50/30 rounded-lg p-4 space-y-3">
-          <h4 className="text-sm font-bold text-success-700">Registrar Pagamento</h4>
+        <div className="border border-surface-border bg-surface-alt/60 rounded-lg p-4 space-y-3">
+          <h4 className="text-sm font-semibold text-ink">Registrar pagamento</h4>
           <FormGrid cols={2}>
             <FormField label="Data do pagamento" required>
               <InputData value={dataPagamento} onChange={(v) => setDataPagamento(v)} />

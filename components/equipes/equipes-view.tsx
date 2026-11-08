@@ -39,9 +39,9 @@ export function EquipesView({ aba, q, grupos, colaboradores, perfis, contagens, 
   const dir = sp.get("dir") === "desc" ? "desc" : "asc";
 
   const ABAS: { id: Aba; label: string; icone: any }[] = [
-    { id: "grupos", label: "Grupos de Equipe", icone: UsersRound },
-    { id: "campo", label: "Equipe de Campo", icone: HardHat },
-    { id: "administrativa", label: "Equipe Administrativa", icone: Building2 },
+    { id: "grupos", label: "Grupos de equipe", icone: UsersRound },
+    { id: "campo", label: "Equipe de campo", icone: HardHat },
+    { id: "administrativa", label: "Equipe administrativa", icone: Building2 },
   ];
   const opcoesOrdem = aba === "grupos"
     ? [["nome:asc", "Nome (A–Z)"], ["nome:desc", "Nome (Z–A)"], ["membros:desc", "Mais membros"], ["membros:asc", "Menos membros"]]

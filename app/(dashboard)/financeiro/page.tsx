@@ -11,7 +11,7 @@ import {
   Wallet, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Receipt, Upload, CalendarClock,
 } from "lucide-react";
 
-export const metadata: Metadata = { title: "Dashboard Financeiro" };
+export const metadata: Metadata = { title: "Dashboard financeiro" };
 
 export default async function FinanceiroDashboardPage() {
   const session = await auth();
@@ -42,7 +42,7 @@ export default async function FinanceiroDashboardPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <div className="p-2 bg-primary-50 rounded-lg"><Wallet className="w-5 h-5 text-primary-600" /></div>
-        <h1 className="page-title">Dashboard Financeiro</h1>
+        <h1 className="page-title">Dashboard financeiro</h1>
       </div>
 
       {/* Cards do mês */}

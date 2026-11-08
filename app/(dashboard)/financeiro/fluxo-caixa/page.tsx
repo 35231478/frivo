@@ -12,7 +12,7 @@ import { itensAFaturar } from "@/lib/financeiro/a-faturar";
 import { Dica } from "@/components/ui/dica";
 import { anoBR, chaveDiaCivil, diaDoMesCivil, mesBR } from "@/lib/fuso";
 
-export const metadata: Metadata = { title: "Fluxo de Caixa" };
+export const metadata: Metadata = { title: "Fluxo de caixa" };
 
 export default async function FluxoCaixaPage({
   searchParams,
@@ -120,7 +120,7 @@ export default async function FluxoCaixaPage({
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-primary-50 rounded-lg"><TrendingUp className="w-5 h-5 text-primary-600" /></div>
-          <h1 className="page-title">Fluxo de Caixa</h1>
+          <h1 className="page-title">Fluxo de caixa</h1>
         </div>
         <form method="get" className="flex items-center gap-2">
           <select name="mes" defaultValue={mes} className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10">

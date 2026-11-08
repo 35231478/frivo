@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (e: any) {
     // CPF cadastrado por outra pessoa entre a prévia e a confirmação, por exemplo
-    if (e?.code === "P2002") return NextResponse.json({ erro: "Algum CPF foi cadastrado enquanto você importava. Gere a prévia de novo." }, { status: 409 });
+    if (e?.code === "P2002") return NextResponse.json({ erro: "Algum CPF foi cadastrado durante a importação. Gere a prévia de novo." }, { status: 409 });
     console.error("[folha/importar]", e);
     return NextResponse.json({ erro: "Não foi possível gravar a importação. Nada foi alterado." }, { status: 500 });
   }

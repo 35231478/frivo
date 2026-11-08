@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { EquipeForm } from "@/components/forms/equipe-form";
 
-export const metadata: Metadata = { title: "Editar Equipe" };
+export const metadata: Metadata = { title: "Editar equipe" };
 
 export default async function EditarEquipePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -25,7 +25,7 @@ export default async function EditarEquipePage({ params }: { params: Promise<{ i
   return (
     <div className="max-w-3xl mx-auto">
       <PageHeader
-        title="Editar Equipe" description={equipe.nome} backHref="/equipes"
+        title="Editar equipe" description={equipe.nome} backHref="/equipes"
         actions={<InativarRegistro url={`/api/equipes/${equipe.id}`} modulo="equipes" acaoReativar="gerenciar" variante="botao" ativo={equipe.status === "ATIVA"} nome={equipe.nome} entidade="equipe" feminino />}
       />
       {equipe.status !== "ATIVA" && (

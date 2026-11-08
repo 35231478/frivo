@@ -5,13 +5,13 @@ import { ContasBancariasTela } from "@/components/cadastros/telas/contas-bancari
 import { Building2, ArrowRight } from "lucide-react";
 import { hrefSecaoConfig } from "@/lib/navegacao/configuracoes";
 
-export const metadata: Metadata = { title: "Contas Bancárias" };
+export const metadata: Metadata = { title: "Contas bancárias" };
 
 /** Cadastro padronizado (lib/cadastros): permissões em registro.ts (ler: quem vê o financeiro; gravar: fluxo de caixa ou Configurações › gerenciar). */
 export default function ContasBancariasPage() {
   return (
     <div className="max-w-5xl mx-auto space-y-4">
-      <PageHeader title="Contas Bancárias" description="Onde a empresa recebe e paga" backHref="/financeiro" />
+      <PageHeader title="Contas bancárias" description="Onde a empresa recebe e paga" backHref="/financeiro" />
       <div className="bg-white rounded-card border border-surface-border p-4 sm:p-6">
         <ContasBancariasTela />
       </div>

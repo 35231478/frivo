@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { ColaboradorForm } from "@/components/forms/colaborador-form";
 
-export const metadata: Metadata = { title: "Editar Colaborador" };
+export const metadata: Metadata = { title: "Editar colaborador" };
 
 export default async function EditarColaboradorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -41,7 +41,7 @@ export default async function EditarColaboradorPage({ params }: { params: Promis
   return (
     <div className="max-w-4xl mx-auto">
       <PageHeader
-        title="Editar Colaborador" description={colaborador.nome} backHref="/colaboradores"
+        title="Editar colaborador" description={colaborador.nome} backHref="/colaboradores"
         actions={<InativarRegistro url={`/api/tecnicos/${colaborador.id}`} modulo="equipes" acaoReativar="gerenciar" variante="botao" ativo={colaborador.ativo} nome={colaborador.nome} entidade="colaborador" />}
       />
       {!colaborador.ativo && (

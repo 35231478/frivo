@@ -21,8 +21,8 @@ export function MedicaoEnvio({ token, numero, avulsa, empresaNome, emailDestino,
 
   const assunto = `${referenciaNota({ numero, avulsa })} — ${empresaNome}`;
   const corpo = avulsa
-    ? `Olá,\n\nSegue a fatura nº ${numeroFatura(numero)}:\n\n${publicUrl}\n\nAtenciosamente,\n${empresaNome}`
-    : `Olá,\n\nSegue a medição ${numero} (fatura + relatório) para sua avaliação:\n\n${publicUrl}\n\nAtenciosamente,\n${empresaNome}`;
+    ? `Prezados,\n\nSegue a fatura nº ${numeroFatura(numero)}:\n\n${publicUrl}\n\nAtenciosamente,\n${empresaNome}`
+    : `Prezados,\n\nSegue a medição ${numero} para avaliação:\n\n${publicUrl}\n\nAtenciosamente,\n${empresaNome}`;
   const mailto = emailDestino
     ? `mailto:${encodeURIComponent(emailDestino)}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`
     : `mailto:?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`;

@@ -103,7 +103,7 @@ export function ContaReceberAcoes({ conta, categorias = [], clientes = [], onDet
   const saldo = saldoDaConta(conta);
   const venc = conta.dataVencimento ? formatarData(conta.dataVencimento) : "—";
   // A cobrança é do que falta (a parte já paga não se cobra de novo)
-  const msg = `Olá ${conta.clienteNome}, lembramos que há uma pendência financeira no valor de ${formatarMoeda(saldo || conta.valor)} com vencimento em ${venc}. Entre em contato para regularização.`;
+  const msg = `Prezado(a) ${conta.clienteNome}, lembramos que há uma pendência financeira no valor de ${formatarMoeda(saldo || conta.valor)} com vencimento em ${venc}. Entre em contato para regularização.`;
 
   async function registrarCobranca(canal: "whatsapp" | "email") {
     try { await fetch(`/api/contas-receber/${conta.id}/notificar`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ canal }) }); } catch {}
@@ -182,7 +182,7 @@ export function ContaReceberAcoes({ conta, categorias = [], clientes = [], onDet
 
       {/* Boleto: integração não configurada */}
       <Modal aberto={modal === "boletoConfig"} onFechar={fechar} titulo="Emitir boleto" tamanho="sm">
-        <p className="text-sm text-ink-muted">A integração com o Banco Inter ainda não está ativa. Configure as credenciais e o certificado para emitir boletos.</p>
+        <p className="text-sm text-ink-muted">Integração com o Banco Inter inativa. Configure credenciais e certificado para emitir boletos.</p>
         <div className="flex justify-end gap-2 mt-4">
           <Button variant="secondary" onClick={fechar}>Fechar</Button>
           <Link href={hrefSecaoConfig("banco-inter")} className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold"><Settings className="w-4 h-4" /> Configurar</Link>
@@ -387,7 +387,8 @@ function InformarRecebimento({ conta, onPronto, onCancelar }: { conta: ContaAcoe
     });
     setSalvando(false);
     if (e) { setErro(e); return; }
-    toast(parcial ? `Recebimento parcial de ${formatarMoeda(v)} em ${conta.numero}. Falta ${formatarMoeda(Math.round((saldo - v) * 100) / 100)}.` : `${conta.numero} recebida.`, "sucesso");
+    const falta = formatarMoeda(Math.round((saldo - v) * 100) / 100);
+    toast(parcial ? `Recebimento parcial de ${formatarMoeda(v)} em ${conta.numero}. Falta ${falta}.` : `${conta.numero} recebida.`, "sucesso");
     onPronto();
   }
 
@@ -815,7 +816,7 @@ function BoletoEmitido({ conta, boleto, onAlterado }: { conta: ContaAcoes; bolet
     } catch { toast("Erro de conexão.", "erro"); } finally { setCancelando(false); }
   }
 
-  const msgBoleto = `Olá ${conta.clienteNome}, segue seu boleto no valor de ${formatarMoeda(conta.valor)} com vencimento em ${formatarData(conta.boletoVencimento)}.\nLinha digitável: ${linha}`;
+  const msgBoleto = `Prezado(a) ${conta.clienteNome}, segue o boleto no valor de ${formatarMoeda(conta.valor)} com vencimento em ${formatarData(conta.boletoVencimento)}.\nLinha digitável: ${linha}`;
 
   return (
     <div className="space-y-4">

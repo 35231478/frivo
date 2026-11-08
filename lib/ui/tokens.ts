@@ -57,12 +57,16 @@ export const escalaOk = {
  * Cores de DADO: as que o usuário escolhe e ficam gravadas no cadastro (cor da equipe, do perfil de
  * acesso, do tipo de OS, do modelo de prazo) e os padrões que um registro novo recebe. Não pintam a
  * interface — são um valor do registro, mostrado como ponto/legenda. Ficam aqui para a paleta ser uma só
- * e nenhum componente carregar hex solto. Os valores são os que o sistema já gravava.
+ * e nenhum componente carregar hex solto. Matizes harmonizados com a identidade (acento e status); o que já
+ * está gravado nos cadastros não muda — só a origem da constante e o que um registro novo recebe.
  */
 export const corDado = {
-  azul: "#0EA5E9", azulForte: "#3B82F6", verde: "#10B981", roxo: "#8B5CF6", ambar: "#F59E0B", amarelo: "#EAB308",
-  vermelho: "#EF4444", rosa: "#EC4899", ciano: "#06B6D4", indigo: "#6366F1", cinza: "#64748B",
+  azul: acento.DEFAULT, azulForte: "#1D4ED8", verde: status.ok.DEFAULT, roxo: "#6D28D9", ambar: status.atencao.DEFAULT, amarelo: "#A16207",
+  vermelho: status.atrasado.DEFAULT, rosa: "#BE185D", ciano: "#0F766E", indigo: "#4338CA", cinza: status.previsto.DEFAULT,
 } as const;
+
+/** As cores oferecidas no seletor (equipe, perfil…): a mesma lista em toda tela, na ordem de uso. */
+export const paletaSelecao: readonly string[] = [corDado.azul, corDado.verde, corDado.roxo, corDado.ambar, corDado.vermelho, corDado.rosa, corDado.ciano, corDado.indigo];
 
 /** Forma */
 export const forma = {

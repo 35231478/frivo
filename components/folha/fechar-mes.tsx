@@ -13,8 +13,8 @@ export function FecharMes({ competencia, rotulo, jaFechado }: { competencia: str
 
   async function fechar() {
     const pergunta = jaFechado
-      ? `O mês de ${rotulo} já foi fechado. Refazer a foto com os dados de agora? A foto anterior deste mês será substituída.`
-      : `Fechar ${rotulo}? Isso grava o custo de cada colaborador neste mês, para o histórico não mudar quando salários ou encargos mudarem depois.`;
+      ? `${rotulo} já foi fechado. Refazer a foto com os dados de agora? A anterior é substituída.`
+      : `Fechar ${rotulo}? Grava o custo de cada colaborador neste mês; o histórico não muda depois.`;
     if (!(await confirmar({ titulo: "Fechar o mês", mensagem: pergunta, confirmarTexto: "Fechar o mês" }))) return;
     setEnviando(true); setMsg(null);
     try {

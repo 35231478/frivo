@@ -181,7 +181,7 @@ export function FolhaColaborador({ colaboradorId }: { colaboradorId: string }) {
               {e.adicionalTipo !== "NENHUM" && campo("adicionalValor", "ou valor fixo", { prefixo: "R$", hint: "Tem prioridade sobre o %" })}
             </FormGrid>
             {e.adicionalTipo === "INSALUBRIDADE" && (
-              <p className="text-xs text-ink-muted -mt-2">Insalubridade costuma ser calculada sobre o salário mínimo: nesse caso, informe o valor fixo em R$.</p>
+              <p className="text-xs text-ink-muted -mt-2">Insalubridade sobre o salário mínimo: informe o valor fixo em R$.</p>
             )}
             <FormGrid>{campo("horasExtrasValor", "Horas extras (estimativa mensal)", { prefixo: "R$", hint: "Manual por enquanto (sem integração com ponto)" })}</FormGrid>
           </FormSection>

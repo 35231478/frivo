@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { toast } from "@/components/ui/avisos";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -105,23 +106,17 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
   const [aba, setAba] = useState("geral");
   const [abasErro, setAbasErro] = useState<Set<string>>(new Set());
   const [cnpjInfo, setCnpjInfo] = useState<{ nome: string; cidade?: string; estado?: string } | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
 
   // Controle do status ativo/inativo (header)
   const [statusOpen, setStatusOpen] = useState(false);
   const [mudandoAtivo, setMudandoAtivo] = useState(false);
-
-  function mostrarToast(msg: string) {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3000);
-  }
 
   // UX-2/E5: salvar um cliente novo aterrissa NESTA ficha (?criado=1) — confirma e já oferece as ações
   const searchParams = useSearchParams();
   const chegouCriado = isEditing && searchParams.get("criado") === "1";
   useEffect(() => {
     if (chegouCriado) {
-      mostrarToast("Cliente cadastrado com sucesso!");
+      toast("Cliente cadastrado.");
       router.replace(`/clientes/${initialData!.id}/editar`, { scroll: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -143,7 +138,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
       if (!res.ok) { const e = await res.json().catch(() => ({})); setErroGlobal(e.erro ?? "Erro ao alterar status."); return; }
       setValue("ativo", novo);
       setStatusOpen(false);
-      mostrarToast(novo ? "Cliente reativado." : "Cliente inativado.");
+      toast(novo ? "Cliente reativado." : "Cliente inativado.");
       router.refresh();
     } catch { setErroGlobal("Erro de conexão."); } finally { setMudandoAtivo(false); }
   }
@@ -286,7 +281,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
       if (!isEditing && saved?.id) {
         router.push(`/clientes/${saved.id}/editar?criado=1`); router.refresh();
       } else if (continuar) {
-        mostrarToast("Alterações salvas com sucesso!");
+        toast("Cliente salvo.");
         router.refresh();
       } else {
         router.push("/clientes"); router.refresh();
@@ -303,14 +298,14 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
   const qtdAnexos = isEditing ? (initialData!.anexos?.length ?? 0) : anexosNovos.length;
 
   const ABAS = [
-    { id: "geral", label: "Dados Gerais", icone: FileText },
+    { id: "geral", label: "Dados gerais", icone: FileText },
     { id: "contatos", label: "Contatos", icone: Phone, badge: qtdContatos },
     { id: "enderecos", label: "Endereços", icone: MapPin, badge: qtdEnderecos },
     { id: "comunicacao", label: "Comunicação", icone: Send },
     { id: "faturamento", label: "Faturamento", icone: DollarSign },
     { id: "contratos", label: "Contratos", icone: FileSignature, badge: qtdContratosAtivos },
     { id: "portal", label: "Portal", icone: Headset },
-    { id: "documentos", label: "Documentos e Mídia", icone: ImageIcon, badge: qtdAnexos },
+    { id: "documentos", label: "Documentos e mídia", icone: ImageIcon, badge: qtdAnexos },
     { id: "relacionamento", label: "Relacionamento", icone: Heart },
   ];
 
@@ -365,13 +360,6 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
 
   return (
     <form onSubmit={salvar} className="min-h-full -m-6 bg-surface-page p-4 sm:p-6">
-      {/* Toast de sucesso */}
-      {toast && (
-        <div className="fixed top-5 right-5 z-50 flex items-center gap-2 bg-ok text-white text-sm font-medium rounded-card px-4 py-3 shadow-card-hover animate-in fade-in slide-in-from-top-2">
-          <FileCheck className="w-4 h-4" /> {toast}
-        </div>
-      )}
-
       <div className="max-w-[1600px] mx-auto space-y-5">
         {/* Cabeçalho fixo: título + status + ações */}
         <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-surface-page/90 backdrop-blur border-b border-surface-border">
@@ -501,8 +489,8 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
           <FormGrid>
             <FormField label="Tipo de pessoa" required>
               <Select {...register("tipoPessoa")} error={!!errors.tipoPessoa}>
-                <option value="JURIDICA">Pessoa Jurídica</option>
-                <option value="FISICA">Pessoa Física</option>
+                <option value="JURIDICA">Pessoa jurídica</option>
+                <option value="FISICA">Pessoa física</option>
               </Select>
             </FormField>
             <FormField label={tipoPessoa === "FISICA" ? "CPF" : "CNPJ"} required error={errors.cpfCnpj?.message} hint={tipoPessoa === "JURIDICA" ? "Informe o CNPJ e clique em Buscar para preencher automaticamente." : undefined}>
@@ -518,11 +506,11 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
             </FormField>
           </FormGrid>
           {cnpjInfo && cnpjInfo.nome && (
-            <div className="flex items-start gap-3 bg-success-50 border border-success-200 rounded-card px-4 py-3 animate-in fade-in">
-              <FileCheck className="w-5 h-5 text-success-600 shrink-0 mt-0.5" />
+            <div className="flex items-start gap-3 bg-surface-alt border border-surface-border rounded-card px-4 py-3 animate-in fade-in">
+              <FileCheck className="w-5 h-5 text-ok-texto shrink-0 mt-0.5" />
               <div className="text-sm min-w-0">
-                <p className="font-semibold text-success-800">Dados encontrados na Receita Federal</p>
-                <p className="text-success-700 truncate">
+                <p className="font-medium text-ink">Dados encontrados na Receita Federal</p>
+                <p className="text-ink-muted truncate">
                   {cnpjInfo.nome}
                   {(cnpjInfo.cidade || cnpjInfo.estado) && ` — ${[cnpjInfo.cidade, cnpjInfo.estado].filter(Boolean).join("/")}`}
                 </p>
@@ -590,7 +578,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
               )}
             </FormField>
           </FormGrid>
-          <p className="text-xs font-bold text-ink-muted uppercase tracking-wider mt-2">Perfil de Faturamento</p>
+          <p className="text-xs font-bold text-ink-muted uppercase tracking-wider mt-2">Perfil de faturamento</p>
           <FormGrid>
             <FormField label="Tipo de faturamento" hint="Define o fluxo de aprovação e cobrança">
               <Select value={tipoFaturamento} onChange={(e) => setTipoFaturamento(e.target.value)} placeholder="Selecione">
@@ -628,7 +616,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
         <FormSection title="Contatos do cliente" icon={<Users className="w-3.5 h-3.5" />}>
           <p className="text-xs text-ink-muted -mt-2 mb-3">
             {isEditing
-              ? "Cadastre os contatos deste cliente. Defina quem recebe cada comunicação na aba Comunicação e o acesso ao portal na aba Portal."
+              ? "Contatos do cliente. Comunicação e acesso ao portal ficam nas abas próprias."
               : "Adicione os contatos do cliente. O primeiro será marcado como principal."}
           </p>
           {isEditing ? (
@@ -655,7 +643,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
 
       {/* ABA 3 — Endereços */}
       <Painel ativo={aba === "enderecos"}>
-        <FormSection title="Endereços do Cliente" icon={<MapPin className="w-3.5 h-3.5" />}>
+        <FormSection title="Endereços do cliente" icon={<MapPin className="w-3.5 h-3.5" />}>
           <p className="text-xs text-ink-muted -mt-2 mb-3">
             {isEditing
               ? "Gerencie os endereços do cliente. O endereço marcado com estrela é o principal."
@@ -707,7 +695,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
           </div>
         </FormSection>
         {isEditing && (
-          <FormSection title="Histórico de Interações" icon={<MessageSquare className="w-3.5 h-3.5" />}>
+          <FormSection title="Histórico de interações" icon={<MessageSquare className="w-3.5 h-3.5" />}>
             <InteracoesManager clienteId={initialData!.id} interacoesIniciais={initialData!.interacoes ?? []} />
           </FormSection>
         )}
@@ -720,10 +708,8 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
 
       {/* ABA 7 — Portal */}
       <Painel ativo={aba === "portal"}>
-        <FormSection title="Portal do Cliente" icon={<Globe className="w-3.5 h-3.5" />}>
-          <p className="text-xs text-ink-muted -mt-2 mb-1">
-            Habilita o acesso do cliente ao portal externo e gerencia o acesso individual de cada contato (senha provisória, redefinição e revogação).
-          </p>
+        <FormSection title="Portal do cliente" icon={<Globe className="w-3.5 h-3.5" />} dica="Acesso individual por contato: senha provisória, redefinição e revogação.">
+          <p className="text-xs text-ink-muted -mt-2 mb-1">Acesso do cliente ao portal externo.</p>
           <ToggleSwitch
             label="Portal ativo"
             description="Quando desligado, nenhum contato deste cliente consegue acessar o portal."

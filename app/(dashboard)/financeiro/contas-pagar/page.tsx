@@ -10,7 +10,7 @@ import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
 import { hojeDiaCivil } from "@/lib/fuso";
 import { ContasPagarView, type ResumoPagar } from "@/components/financeiro/contas-pagar-view";
 
-export const metadata: Metadata = { title: "Contas a Pagar" };
+export const metadata: Metadata = { title: "Contas a pagar" };
 
 export default async function ContasPagarPage({
   searchParams,
