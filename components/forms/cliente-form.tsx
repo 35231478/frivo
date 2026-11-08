@@ -305,7 +305,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
     { id: "faturamento", label: "Faturamento", icone: DollarSign },
     { id: "contratos", label: "Contratos", icone: FileSignature, badge: qtdContratosAtivos },
     { id: "portal", label: "Portal", icone: Headset },
-    { id: "documentos", label: "Documentos e mídia", icone: ImageIcon, badge: qtdAnexos },
+    { id: "documentos", label: "Anexos e mídia", icone: ImageIcon, badge: qtdAnexos },
     { id: "relacionamento", label: "Relacionamento", icone: Heart },
   ];
 
@@ -400,7 +400,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
                   <button
                     type="button"
                     onClick={() => setStatusOpen((o) => !o)}
-                    title="Alterar status do cliente"
+                    title="Mudar status do cliente"
                     className={cn(
                       "inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-2.5 py-1 border transition-colors",
                       ativoVal
@@ -493,13 +493,13 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
                 <option value="FISICA">Pessoa física</option>
               </Select>
             </FormField>
-            <FormField label={tipoPessoa === "FISICA" ? "CPF" : "CNPJ"} required error={errors.cpfCnpj?.message} hint={tipoPessoa === "JURIDICA" ? "Informe o CNPJ e clique em Buscar para preencher automaticamente." : undefined}>
+            <FormField label={tipoPessoa === "FISICA" ? "CPF" : "CNPJ"} required error={errors.cpfCnpj?.message} hint={tipoPessoa === "JURIDICA" ? "Informe o CNPJ e clique em Consultar para preencher automaticamente." : undefined}>
               <div className="flex gap-2">
                 <Input {...register("cpfCnpj")} placeholder={tipoPessoa === "FISICA" ? "000.000.000-00" : "00.000.000/0001-00"} error={!!errors.cpfCnpj} valido={!errors.cpfCnpj && !!cnpjInfo} className="flex-1" />
                 {tipoPessoa === "JURIDICA" && (
                   <Button type="button" variant="secondary" loading={buscandoCnpj} onClick={buscarCnpj} className="shrink-0">
                     {!buscandoCnpj && <Search className="w-4 h-4" />}
-                    <span className="hidden sm:inline ml-1">Buscar</span>
+                    <span className="hidden sm:inline ml-1">Consultar</span>
                   </Button>
                 )}
               </div>

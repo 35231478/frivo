@@ -167,7 +167,7 @@ export function MontadorEquipes({ equipesIniciais, colaboradores, podeGerenciar 
               <p className="text-sm font-semibold text-ink flex items-center gap-1.5"><Users className="w-4 h-4 text-ink-subtle" /> Colaboradores <span className="text-xs font-normal text-ink-muted">({colaboradores.length})</span></p>
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-subtle pointer-events-none" />
-                <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar colaborador…" aria-label="Buscar colaborador no montador"
+                <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Pesquisar colaborador…" aria-label="Pesquisar colaborador no montador"
                   className="w-full bg-white border border-surface-border rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:border-primary-500" />
               </div>
               <label className="flex items-center gap-2 text-xs text-ink-muted select-none">
@@ -190,7 +190,7 @@ export function MontadorEquipes({ equipesIniciais, colaboradores, podeGerenciar 
           {equipes.length > 6 && (
             <div className="relative max-w-xs">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-subtle pointer-events-none" />
-              <input value={buscaEquipe} onChange={(ev) => setBuscaEquipe(ev.target.value)} placeholder="Buscar equipe…" aria-label="Buscar equipe"
+              <input value={buscaEquipe} onChange={(ev) => setBuscaEquipe(ev.target.value)} placeholder="Pesquisar equipe…" aria-label="Pesquisar equipe"
                 className="w-full bg-white border border-surface-border rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:border-primary-500" />
             </div>
           )}

@@ -60,7 +60,7 @@ export function PainelConfiguracoes({ visiveis, abaInicial, secaoAberta, secaoNe
   return (
     <div className="space-y-6 max-w-6xl" data-pagina-configuracoes>
       <div className="flex items-center gap-3">
-        <div className="p-2 bg-primary-50 rounded-lg"><Settings className="w-5 h-5 text-primary-600" /></div>
+        <div className="p-2 bg-surface-alt rounded-lg"><Settings className="w-5 h-5 text-ink-muted" /></div>
         <div>
           <h1 className="page-title">Configurações</h1>
           <p className="page-subtitle">Parâmetros do sistema, organizados por assunto</p>

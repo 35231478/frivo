@@ -141,7 +141,7 @@ export function FrivoIA() {
               {mensagens.length === 0 && estado?.disponivel && (
                 <div className="space-y-3">
                   <p className="text-sm text-ink-muted">
-                    Pergunte sobre ordens de serviço, agenda, clientes, equipamentos e contratos. Para um laudo, peça por exemplo:
+                    Pergunte sobre OS, agenda, clientes, equipamentos e contratos. Para um laudo, peça por exemplo:
                     <span className="block mt-1 font-medium text-ink">“Gere o laudo da OS 0107”</span>
                   </p>
                   {sugestoes.length > 0 && (

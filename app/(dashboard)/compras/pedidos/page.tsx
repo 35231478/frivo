@@ -61,7 +61,7 @@ export default async function PedidosCompraPage({ searchParams }: { searchParams
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary-50 rounded-lg"><ShoppingCart className="w-5 h-5 text-primary-600" /></div>
+            <div className="p-2 bg-surface-alt rounded-lg"><ShoppingCart className="w-5 h-5 text-ink-muted" /></div>
             <h1 className="page-title">Pedidos de compra</h1>
             <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{total}</span>
           </div>
@@ -75,7 +75,7 @@ export default async function PedidosCompraPage({ searchParams }: { searchParams
         <div className="card overflow-hidden">
           <div className="p-4 border-b border-surface-border flex flex-wrap items-center gap-2 bg-surface-alt/40">
             <div className="flex-1 min-w-[220px]">
-              <BuscaUrl lista="pedidos-compra" placeholder="Buscar nº, item, fornecedor, OS…" rotulo="Buscar pedidos de compra" />
+              <BuscaUrl lista="pedidos-compra" placeholder="Pesquisar nº, item, fornecedor, OS…" rotulo="Pesquisar pedidos de compra" />
             </div>
             <FiltroSelectUrl param="status" vazio="Todos os status" opcoes={CICLO_PEDIDO.map((s) => ({ value: s, label: LABEL_STATUS_PEDIDO[s] }))} />
             <FiltroSelectUrl param="origem" vazio="Toda origem" opcoes={[{ value: "OS", label: "OS" }, { value: "ORCAMENTO", label: "Orçamento" }, { value: "AVULSO", label: "Avulso" }]} />

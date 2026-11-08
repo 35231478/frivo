@@ -14,8 +14,7 @@ export default function InstalarPage() {
           <Smartphone className="w-6 h-6 text-primary-600" />
         </div>
         <p className="text-sm text-ink-muted">
-          Instalando o Frivo, ele abre em tela cheia (sem a barra do navegador), carrega mais rápido e
-          funciona offline para as telas já visitadas.
+          Instalado, o Frivo abre em tela cheia, carrega mais rápido e funciona offline nas telas já visitadas.
         </p>
       </div>
 

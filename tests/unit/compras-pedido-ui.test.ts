@@ -182,7 +182,7 @@ describe("editor do pedido", () => {
     expect(campo("quantidade", 1).value).toBe("11,35");
     expect(campo("valorEstimado", 0).value).toBe("18,45");
     await digitar(campo("quantidade", 0), "6");
-    await clicar($$('[aria-label="Remover item"]')[1]);
+    await clicar($$('[aria-label="Excluir item"]')[1]);
     await clicar($("[data-salvar-pedido]"));
     const put = chamadas.find((c) => c.metodo === "PUT")!;
     expect(put.url).toBe("/api/pedidos-compra/pc1");

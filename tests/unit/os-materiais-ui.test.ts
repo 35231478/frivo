@@ -110,7 +110,7 @@ describe("Itens da OS sem orçamento", () => {
     expect(linhas().map((l) => [l.getAttribute("data-tipo-item"), l.getAttribute("data-linha-derivada"), txt(l.querySelector("[data-total-item]"))])).toEqual([["SERVICO", null, "Total R$ 840,00"], ["PRODUTO", "true", "Total R$ 80,00"]]);
     expect(txt(linhas()[1].querySelector("[data-peca-de]"))).toBe("Peça · Instalação split");
     expect(linhas()[1].querySelector("button[aria-label^='Editar']")).toBeNull();
-    expect(linhas()[1].querySelector("button[aria-label^='Remover']")).toBeNull();
+    expect(linhas()[1].querySelector("button[aria-label^='Excluir']")).toBeNull();
     expect(txt(linhas()[0].querySelector("[data-com-materiais]"))).toMatch(/3 materiais · ajuste R\$\s?40,00/);
     expect(txt($("[data-total-os]"))).toMatch(/920,00/);
     expect(txt($("[data-total-servicos]"))).toMatch(/840,00/);
@@ -155,7 +155,7 @@ describe("Itens da OS sem orçamento", () => {
     expect(posts().at(-1)).toEqual({ tipo: "SERVICO", servicoId: null, produtoId: null, descricao: "Deslocamento", quantidade: 1, valorUnitario: 50 });
     expect(linhas().map((l) => l.getAttribute("data-tipo-item"))).toEqual(["SERVICO", "PRODUTO", "PRODUTO", "SERVICO"]);
     // Remover o serviço tira a peça derivada junto
-    await clicar(linhas()[0].querySelector("button[aria-label^='Remover']"));
+    await clicar(linhas()[0].querySelector("button[aria-label^='Excluir']"));
     expect(linhas().map((l) => l.getAttribute("data-tipo-item"))).toEqual(["PRODUTO", "SERVICO"]);
   });
 
@@ -168,7 +168,7 @@ describe("Itens da OS sem orçamento", () => {
     expect(linhas().map((l) => [l.getAttribute("data-tipo-item"), txt(l.querySelector("[data-total-item]"))])).toEqual([["SERVICO", "Total R$ 840,00"], ["PRODUTO", "Total R$ 80,00"], ["SERVICO", "Total R$ 200,00"]]);
     expect(txt(linhas()[0])).toContain("Do orçamento");
     expect(linhas()[0].querySelector("button[aria-label^='Editar']")).toBeNull();
-    expect(linhas()[0].querySelector("button[aria-label^='Remover']")).toBeNull();
+    expect(linhas()[0].querySelector("button[aria-label^='Excluir']")).toBeNull();
     const painel = linhas()[0].querySelector("[data-materiais-linha]")!;
     expect(painel.getAttribute("data-somente-leitura")).toBe("true");
     expect(painel.getAttribute("data-total-materiais")).toBe("3");

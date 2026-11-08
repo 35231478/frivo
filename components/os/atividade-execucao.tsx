@@ -138,7 +138,7 @@ export function AtividadeExecucao({ osId, atividadeId, titulo, osNumero, tipoOs 
         if (d) { mudarEquip(eq, (x) => ({ ...x, feito: true, fotos: [...x.fotos, { id: d.id, itemId: d.itemId, criadoEm: d.criadoEm }] })); setMensagem({ tipo: "ok", texto: "Foto salva." }); }
       },
       async removerFoto(fotoId: string) {
-        if (!(await confirmar({ mensagem: "Remover esta foto?", perigo: true, confirmarTexto: "Remover" }))) return;
+        if (!(await confirmar({ mensagem: "Excluir esta foto?", perigo: true, confirmarTexto: "Excluir" }))) return;
         const d = await enviar(`${base}/execucao/fotos/${fotoId}`, { method: "DELETE" });
         if (d) mudarEquip(eq, (x) => ({ ...x, fotos: x.fotos.filter((f) => f.id !== fotoId) }));
       },

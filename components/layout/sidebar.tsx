@@ -66,7 +66,7 @@ const OPERACIONAL: Secao[] = [
     entries: [
       {
         tipo: "grupo", label: "Operações", icone: ClipboardList, itens: [
-          { href: "/ordens", icone: ClipboardList, label: "Ordens de Serviço" },
+          { href: "/ordens", icone: ClipboardList, label: "Ordens de serviço" },
           { href: "/calendario", icone: CalendarDays, label: "Calendário" },
           { href: "/prazos", icone: Timer, label: "Prazos e SLA" },
         ],
@@ -91,7 +91,7 @@ const OPERACIONAL: Secao[] = [
           { href: "/orcamentos", icone: Calculator, label: "Orçamentos" },
           { href: "/contratos", icone: FileText, label: "Contratos" },
           { href: "/contratos/reajustes", icone: TrendingUp, label: "Reajustes", modulo: "contratos", acao: "editar" },
-          { href: "/leads-site", icone: Globe, label: "Leads do Site" },
+          { href: "/leads-site", icone: Globe, label: "Leads do site" },
         ],
       },
       {

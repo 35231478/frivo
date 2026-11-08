@@ -88,6 +88,7 @@ export function InativarRegistro({
 
   const bloqueado = !!impacto?.bloqueio;
 
+  const art = feminino ? "A" : "O", fim = feminino ? "a" : "o";
   return (
     <>
       {variante === "icone" ? (
@@ -113,7 +114,7 @@ export function InativarRegistro({
         <div className="space-y-4" onClick={(e) => e.stopPropagation()}>
           <p className="text-sm text-ink">
             {ativo
-              ? (textoInativar ?? `Tem certeza? ${feminino ? "A" : "O"} ${entidade} sai das listas e seletores; nada é apagado e pode ser reativad${feminino ? "a" : "o"} depois.`)
+              ? (textoInativar ?? `Tem certeza? ${art} ${entidade} sai das listas e seletores; nada é apagado e pode ser reativad${fim} depois.`)
               : (textoReativar ?? `${feminino ? "A" : "O"} ${entidade} volta a aparecer nas listas e nos seletores.`)}
           </p>
 

@@ -132,7 +132,7 @@ export function EditorModeloPrazo({ item, aberto, onFechar, onSalvo }: EditorCad
                   <Input value={e.nome} onChange={(ev) => patchEtapa(e._id, { nome: ev.target.value })} placeholder="Nome da etapa" className="flex-1" />
                   <button type="button" onClick={() => mover(e._id, -1)} disabled={idx === 0} className="p-1.5 text-ink-muted hover:text-primary-600 disabled:opacity-30" aria-label="Subir etapa"><ArrowUp className="w-3.5 h-3.5" /></button>
                   <button type="button" onClick={() => mover(e._id, 1)} disabled={idx === etapas.length - 1} className="p-1.5 text-ink-muted hover:text-primary-600 disabled:opacity-30" aria-label="Descer etapa"><ArrowDown className="w-3.5 h-3.5" /></button>
-                  <button type="button" onClick={() => removerEtapa(e._id)} className="p-1.5 text-ink-muted hover:text-atrasado" aria-label="Remover etapa"><Trash2 className="w-3.5 h-3.5" /></button>
+                  <button type="button" onClick={() => removerEtapa(e._id)} className="p-1.5 text-ink-muted hover:text-atrasado" aria-label="Excluir etapa"><Trash2 className="w-3.5 h-3.5" /></button>
                 </div>
                 <FormGrid cols={3}>
                   <FormField label="Prazo">

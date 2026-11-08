@@ -11,12 +11,14 @@
  *   textoLongo   texto de instrução inline ≥ 110 caracteres (JSX, description/hint/placeholder…) que
  *                deveria estar na ⓘ (as props dica/ajuda/texto da Dica NÃO contam: é o lugar certo)
  *
- * O baseline (tests/unit/despoluicao-baseline.json) congela as violações conhecidas no diagnóstico de
- * 2026-11-08. O teste falha quando:
- *   - um arquivo tem MAIS violações de uma categoria que o baseline (violação nova → corrigir o código);
- *   - um arquivo tem MENOS (ou sumiu): a limpeza aconteceu, o baseline tem de encolher junto →
- *     `npm run despoluicao:baseline` regrava o arquivo (nunca sobe à mão).
- * Assim o baseline só anda para baixo; na Onda 7 chega a zero e o teste vira proibição plena.
+ * O baseline (tests/unit/despoluicao-baseline.json) congelou as violações conhecidas no diagnóstico de
+ * 2026-11-08 e foi encolhendo onda a onda. Desde a Onda 7 ele está FECHADO: `arquivos` é vazio e só
+ * ficam as `excecoes` documentadas (arquivo → { n, motivo }): nomes próprios, textos gravados como valor,
+ * templates cujo comprimento é o código. O teste falha quando:
+ *   - um arquivo tem MAIS violações de uma categoria que o permitido (violação nova → corrigir o código);
+ *   - um arquivo tem MENOS que a exceção diz (a limpeza aconteceu → encolher a exceção);
+ *   - `arquivos` deixa de ser vazio (`npm run despoluicao:baseline` regrava; o que não for exceção é bug).
+ * Exceção nova só com `motivo` escrito e revisão no PR.
  */
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
@@ -154,6 +156,7 @@ function listar(rel: string): string[] {
 export const arquivosDoEscopo = () => ESCOPO.flatMap(listar).sort();
 
 type Baseline = Record<Categoria, Record<string, number>>;
+type Excecoes = Record<Categoria, Record<string, { n: number; motivo: string }>>;
 type Contagem = Record<string, number>;
 interface Diferenca { arquivo: string; n: number; permitido: number }
 /** A regra do ratchet, pura: acima do baseline é violação nova; abaixo (ou arquivo sumido) é baseline a encolher. */
@@ -162,11 +165,15 @@ export function compararComBaseline(atual: Contagem, base: Contagem): { novas: D
   const desatualizados = Object.entries(base).filter(([f, p]) => (atual[f] ?? 0) < p).map(([f, p]) => ({ arquivo: f, n: atual[f] ?? 0, permitido: p }));
   return { novas, desatualizados };
 }
-function lerBaseline(): Baseline {
-  const vazio = Object.fromEntries(CATEGORIAS.map((c) => [c, {}])) as Baseline;
-  if (!existsSync(BASELINE)) return vazio;
-  return { ...vazio, ...(JSON.parse(readFileSync(BASELINE, "utf8")).arquivos as Baseline) };
+function lerBaseline(): { arquivos: Baseline; excecoes: Excecoes } {
+  const vazio = () => Object.fromEntries(CATEGORIAS.map((c) => [c, {}]));
+  if (!existsSync(BASELINE)) return { arquivos: vazio() as Baseline, excecoes: vazio() as Excecoes };
+  const j = JSON.parse(readFileSync(BASELINE, "utf8"));
+  return { arquivos: { ...vazio(), ...(j.arquivos ?? {}) } as Baseline, excecoes: { ...vazio(), ...(j.excecoes ?? {}) } as Excecoes };
 }
+/** Permitido por arquivo = baseline (legado) ou exceção documentada. */
+const permitidos = (arquivos: Baseline, excecoes: Excecoes, c: Categoria): Record<string, number> =>
+  ({ ...Object.fromEntries(Object.entries(excecoes[c]).map(([f, e]) => [f, e.n])), ...arquivos[c] });
 
 describe("despoluição: ratchet dos padrões do manifesto", () => {
   const arquivos = arquivosDoEscopo();
@@ -187,17 +194,21 @@ describe("despoluição: ratchet dos padrões do manifesto", () => {
   });
 
   if (ATUALIZAR) {
-    it("regrava o baseline com o estado atual (DESPOLUICAO_BASELINE=atualizar)", () => {
-      const ordenado = Object.fromEntries(CATEGORIAS.map((c) => [c, Object.fromEntries(Object.entries(atual[c]).sort(([a], [b]) => a.localeCompare(b)))]));
-      writeFileSync(BASELINE, JSON.stringify({ geradoEm: new Date().toISOString().slice(0, 10), totais, arquivos: ordenado }, null, 1) + "\n");
+    it("regrava o baseline com o estado atual (DESPOLUICAO_BASELINE=atualizar); as exceções ficam", () => {
+      const { excecoes } = lerBaseline();
+      // Arquivo coberto por exceção só entra em `arquivos` se passou do que a exceção permite (violação nova)
+      const ordenado = Object.fromEntries(CATEGORIAS.map((c) => [c, Object.fromEntries(Object.entries(atual[c]).filter(([f, n]) => !(f in excecoes[c]) || n > excecoes[c][f].n).sort(([a], [b]) => a.localeCompare(b)))]));
+      const totaisFora = Object.fromEntries(CATEGORIAS.map((c) => [c, Object.values(ordenado[c]).reduce((a, b) => a + (b as number), 0)]));
+      const totaisExcecoes = Object.fromEntries(CATEGORIAS.map((c) => [c, Object.values(excecoes[c]).reduce((a, e) => a + e.n, 0)]));
+      writeFileSync(BASELINE, JSON.stringify({ geradoEm: new Date().toISOString().slice(0, 10), totais: totaisFora, totaisExcecoes, arquivos: ordenado, excecoes }, null, 1) + "\n");
       expect(existsSync(BASELINE)).toBe(true);
     });
     return;
   }
 
-  const base = lerBaseline();
+  const { arquivos: base, excecoes } = lerBaseline();
   it.each(CATEGORIAS)("%s: nenhuma violação nova fora do baseline", (c) => {
-    const novas = compararComBaseline(atual[c], base[c]).novas.map(({ arquivo: f, n, permitido }) => {
+    const novas = compararComBaseline(atual[c], permitidos(base, excecoes, c)).novas.map(({ arquivo: f, n, permitido }) => {
       const lista = detalhes.get(f)![c].map((x) => `    ${f}:${x.linha}  ${x.trecho}`).join("\n");
       return `  ${f}: ${n} (baseline ${permitido})\n${lista}`;
     });
@@ -205,13 +216,31 @@ describe("despoluição: ratchet dos padrões do manifesto", () => {
   });
 
   it.each(CATEGORIAS)("%s: o baseline acompanha a limpeza (só anda para baixo)", (c) => {
-    const desatualizados = compararComBaseline(atual[c], base[c]).desatualizados.map(({ arquivo: f, n, permitido }) => `  ${f}: agora ${n}, baseline ${permitido}`);
+    const desatualizados = compararComBaseline(atual[c], permitidos(base, excecoes, c)).desatualizados.map(({ arquivo: f, n, permitido }) => `  ${f}: agora ${n}, baseline ${permitido}`);
     expect(desatualizados, `Baseline de "${c}" desatualizado — a limpeza aconteceu, encolha o baseline com \`npm run despoluicao:baseline\`:\n${desatualizados.join("\n")}`).toEqual([]);
   });
 
   it("os totais gravados batem com a soma por arquivo (o arquivo não foi editado à mão)", () => {
     const gravado = JSON.parse(readFileSync(BASELINE, "utf8"));
-    for (const c of CATEGORIAS) expect(gravado.totais[c]).toBe(Object.values(base[c]).reduce((a, b) => a + b, 0));
+    for (const c of CATEGORIAS) {
+      expect(gravado.totais[c]).toBe(Object.values(base[c]).reduce((a, b) => a + b, 0));
+      expect(gravado.totaisExcecoes[c]).toBe(Object.values(excecoes[c]).reduce((a, e) => a + e.n, 0));
+    }
+  });
+
+  it("baseline fechado (Onda 7): fora das exceções documentadas, nenhuma violação", () => {
+    const sobras = CATEGORIAS.flatMap((c) => Object.entries(base[c]).map(([f, n]) => `  ${c} ${f}: ${n}`));
+    expect(sobras, `Violações fora das exceções (corrija o código ou documente uma exceção com motivo):\n${sobras.join("\n")}`).toEqual([]);
+  });
+
+  it("cada exceção tem motivo escrito, n > 0 e bate com o real (nem mais, nem menos)", () => {
+    for (const c of CATEGORIAS) {
+      for (const [f, e] of Object.entries(excecoes[c])) {
+        expect(typeof e.motivo === "string" && e.motivo.trim().length >= 15, `${c} ${f}: motivo`).toBe(true);
+        expect(e.n, `${c} ${f}: n`).toBeGreaterThan(0);
+        expect(atual[c][f] ?? 0, `${c} ${f}: real × exceção`).toBe(e.n);
+      }
+    }
   });
 });
 

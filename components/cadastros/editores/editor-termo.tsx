@@ -50,7 +50,7 @@ export function EditorTermo({ item, aberto, onFechar, onSalvo }: EditorCadastroP
       largura="w-full sm:w-[60vw] sm:min-w-[520px] sm:max-w-[880px]"
       rodape={<>
         <Button type="button" variant="secondary" onClick={onFechar}>Cancelar</Button>
-        <Button type="button" loading={salvando} onClick={salvar}><Check className="w-4 h-4" /> {item ? "Salvar" : "Adicionar"}</Button>
+        <Button type="button" loading={salvando} onClick={salvar}><Check className="w-4 h-4" /> Salvar</Button>
       </>}
     >
       <div className="space-y-4">

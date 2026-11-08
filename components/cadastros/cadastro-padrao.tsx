@@ -235,7 +235,7 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda, aviso, grupos }
           {/* A busca não fica espremida: com pouco espaço, os botões descem para a linha de baixo */}
           <div className="flex-1 sm:min-w-[240px] sm:max-w-sm">
             <CampoBusca
-              valor={busca} onChange={setBusca} placeholder={`Buscar ${def.plural}…`} rotulo={`Buscar ${def.plural}`}
+              valor={busca} onChange={setBusca} placeholder={`Pesquisar ${def.plural}…`} rotulo={`Pesquisar ${def.plural}`}
               sugerir={sugerir} carregando={carregando && !!dados}
             />
           </div>
@@ -439,7 +439,7 @@ function FormularioCadastro({
       titulo={item ? `Editar ${item.nome}` : `Nov${def.feminino ? "a" : "o"} ${def.singular}`}
       rodape={<>
         <Button type="button" variant="secondary" onClick={onFechar}>Cancelar</Button>
-        <Button type="button" loading={salvando} onClick={salvar}><Check className="w-4 h-4" /> {item ? "Salvar" : "Adicionar"}</Button>
+        <Button type="button" loading={salvando} onClick={salvar}><Check className="w-4 h-4" /> Salvar</Button>
       </>}
     >
       {erro && <div ref={erroRef} role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2 mb-4">{erro}</div>}

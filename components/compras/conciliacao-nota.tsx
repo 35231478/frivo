@@ -256,7 +256,7 @@ function Vinculo({ item, escolha, onChange }: { item: ItemConciliacao; escolha: 
   }
   return (
     <div className="space-y-1.5" data-vinculo="pendente">
-      <BuscaProduto onEscolher={(p) => onChange({ modo: "existente", produto: p })} rotulo={`Buscar produto para o item ${item.numeroItem}`} />
+      <BuscaProduto onEscolher={(p) => onChange({ modo: "existente", produto: p })} rotulo={`Pesquisar produto para o item ${item.numeroItem}`} />
       <button type="button" onClick={() => onChange({ modo: "novo", nome: item.descricaoFornecedor, unidade: item.unidade })}
         className="inline-flex items-center gap-1 text-xs font-semibold text-primary-600 hover:underline" data-criar-novo={item.numeroItem}>
         <PackagePlus className="w-3.5 h-3.5" /> ou criar produto novo
@@ -364,7 +364,7 @@ function BuscaProduto({ onEscolher, rotulo }: { onEscolher: (p: ProdutoConciliac
   return (
     <div className="relative">
       <Search className="w-4 h-4 text-ink-subtle absolute left-3 top-1/2 -translate-y-1/2" />
-      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar produto por nome ou código…" aria-label={rotulo} className="pl-9" data-busca-produto />
+      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Pesquisar produto por nome ou código…" aria-label={rotulo} className="pl-9" data-busca-produto />
       {carregando && <Loader2 className="w-4 h-4 animate-spin text-ink-subtle absolute right-3 top-1/2 -translate-y-1/2" />}
       {lista.length > 0 && (
         <ul role="listbox" className="absolute z-20 mt-1 w-full bg-white border border-surface-border rounded-lg shadow-card-hover max-h-64 overflow-auto">

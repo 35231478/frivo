@@ -119,7 +119,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="p-2 bg-acento-claro rounded-lg"><ClipboardList className="w-5 h-5 text-acento" aria-hidden="true" /></div>
+          <div className="p-2 bg-surface-alt rounded-lg"><ClipboardList className="w-5 h-5 text-ink-muted" aria-hidden="true" /></div>
           <h1 className="page-title">Ordens de serviço</h1>
           <span className="pill-previsto font-display tabular-nums">{total}</span>
         </div>
@@ -135,7 +135,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
         periodo={<BarraPeriodo periodo={periodo} navegar={(m) => setParams(m)} permitirTodos dica="Pelo dia agendado, pela previsão de conclusão ou pela abertura da OS. Atalhos: ← → mudam o período, T volta para hoje." />}
         busca={
           <CampoBusca
-            valor={buscaLocal} onChange={setBuscaLocal} placeholder="Pesquisar" rotulo="Buscar ordens de serviço"
+            valor={buscaLocal} onChange={setBuscaLocal} placeholder="Pesquisar" rotulo="Pesquisar ordens de serviço"
             sugerir={sugerir} onEscolher={(s) => s.href && router.push(s.href)} carregando={pendente}
           />
         }

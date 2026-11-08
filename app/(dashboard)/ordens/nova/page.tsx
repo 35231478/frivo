@@ -329,7 +329,7 @@ export default function NovaOrdemPage() {
                 type="button" variant="secondary" data-vincular-equipamento aria-describedby={avisoSemCliente ? "aviso-sem-cliente" : undefined}
                 onClick={() => { if (!clienteId) { setAvisoSemCliente(true); return; } setGavetaAberta(true); }}
               >
-                <Link2 className="w-4 h-4" aria-hidden="true" /> {atendidos.length ? "Alterar equipamentos" : "Vincular equipamento"}
+                <Link2 className="w-4 h-4" aria-hidden="true" /> {atendidos.length ? "Editar equipamentos" : "Vincular equipamento"}
               </Button>
               {avisoSemCliente && !clienteId && (
                 <p id="aviso-sem-cliente" role="alert" data-aviso-sem-cliente className="mt-2 text-xs text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2">

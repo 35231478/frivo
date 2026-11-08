@@ -90,7 +90,7 @@ export function ContatosManager({ clienteId, contatosIniciais }: ContatosManager
   }
 
   async function remover(id: string) {
-    if (!(await confirmar({ mensagem: "Remover este contato?", perigo: true, confirmarTexto: "Remover" }))) return;
+    if (!(await confirmar({ mensagem: "Excluir este contato?", perigo: true, confirmarTexto: "Excluir" }))) return;
     try {
       const res = await fetch(`/api/clientes/${clienteId}/contatos/${id}`, { method: "DELETE" });
       if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro."); return; }
@@ -118,7 +118,7 @@ export function ContatosManager({ clienteId, contatosIniciais }: ContatosManager
         </FormGrid>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={cancelar}>Cancelar</Button>
-          <Button type="button" loading={salvando} onClick={salvar}><Check className="w-4 h-4" /> {editando === "novo" ? "Adicionar" : "Salvar"}</Button>
+          <Button type="button" loading={salvando} onClick={salvar}><Check className="w-4 h-4" /> Salvar</Button>
         </div>
       </div>
     );
@@ -169,7 +169,7 @@ export function ContatosManager({ clienteId, contatosIniciais }: ContatosManager
                 </div>
                 <div className="flex items-center gap-2 pt-1 flex-wrap">
                   <Button type="button" variant="secondary" onClick={() => abrirEditar(c)} className="text-xs h-7 px-2.5"><Pencil className="w-3 h-3" /> Editar</Button>
-                  <Button type="button" variant="ghost" onClick={() => remover(c.id)} className="text-xs h-7 px-2.5 text-atrasado hover:text-atrasado-texto"><Trash2 className="w-3 h-3" /> Remover</Button>
+                  <Button type="button" variant="ghost" onClick={() => remover(c.id)} className="text-xs h-7 px-2.5 text-atrasado hover:text-atrasado-texto"><Trash2 className="w-3 h-3" /> Excluir</Button>
                 </div>
               </div>
             )}
@@ -181,7 +181,7 @@ export function ContatosManager({ clienteId, contatosIniciais }: ContatosManager
 
       {!editando && (
         <Button type="button" variant="secondary" onClick={abrirNovo} className="w-full justify-center border-dashed mt-2">
-          <Plus className="w-4 h-4" /> Adicionar contato
+          <Plus className="w-4 h-4" /> Novo contato
         </Button>
       )}
     </div>

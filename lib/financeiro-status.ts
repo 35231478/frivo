@@ -64,12 +64,12 @@ export function statusVisualPagar(status: string, dataVencimento: Date | string 
   if (dias !== null && dias < 0) return badge("VENCIDO", `Vencido ${-dias} ${-dias === 1 ? "dia" : "dias"}`, -dias);
   if (status === "PAGO_PARCIAL") return badge("PARCIAL", "Pago parcial");
   if (dias === 0) return badge("VENCE_HOJE", "Vence hoje");
-  if (dias === null) return badge("PREVISTO", "Pendente");
+  if (dias === null) return badge("PREVISTO", "Em aberto");
   return badge("A_VENCER", "A vencer");
 }
 
 export const LABELS_STATUS_CONTA_PAGAR: Record<string, string> = {
-  PENDENTE: "Pendente",
+  PENDENTE: "Em aberto",
   PAGO_PARCIAL: "Pago parcial",
   PAGO_TOTAL: "Pago",
   VENCIDO: "Vencido",

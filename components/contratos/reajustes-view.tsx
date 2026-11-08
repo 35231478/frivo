@@ -90,7 +90,7 @@ export function ReajustesView({ linhas }: { linhas: LinhaReajuste[] }) {
     <div className="space-y-5" data-tela-reajustes>
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-acento-claro rounded-lg"><TrendingUp className="w-5 h-5 text-acento" /></div>
+          <div className="p-2 bg-surface-alt rounded-lg"><TrendingUp className="w-5 h-5 text-ink-muted" /></div>
           <h1 className="page-title">Reajustes a aplicar</h1>
           <Dica rotulo="Reajustes a aplicar" texto="Contratos com reajuste anual por percentual fixo que fizeram aniversário. O sistema só sugere: aplicar, adiar ou dispensar é manual. Aplicado, vale só para as cobranças futuras; o já cobrado não muda." />
         </div>

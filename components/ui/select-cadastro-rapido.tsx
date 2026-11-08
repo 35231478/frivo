@@ -178,7 +178,7 @@ export function SelectCadastroRapido({
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-subtle pointer-events-none" />
               <input
                 autoFocus value={busca} onChange={(e) => setBusca(e.target.value)}
-                placeholder={`Buscar ${entidade.singular}…`}
+                placeholder={`Pesquisar ${entidade.singular}…`}
                 className="w-full bg-surface-alt rounded-md pl-8 pr-2 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none"
               />
             </div>

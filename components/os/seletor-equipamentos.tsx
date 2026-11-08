@@ -44,7 +44,7 @@ export function SeletorEquipamentos({ clienteId, unidadeId, excluir = [], marcad
 
   return (
     <div className="space-y-2" data-seletor-equipamentos>
-      {disponiveis.length > 5 && <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por nome, TAG, local, tipo…" aria-label="Buscar equipamento" />}
+      {disponiveis.length > 5 && <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Pesquisar por nome, TAG, local, tipo…" aria-label="Pesquisar equipamento" />}
       {lista === null && <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-ink-subtle" /></div>}
       {lista !== null && candidatos.length === 0 && (
         <p className="text-xs text-ink-muted py-2" data-seletor-vazio>

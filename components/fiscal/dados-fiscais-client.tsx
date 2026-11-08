@@ -210,7 +210,7 @@ export function DadosFiscaisClient({ inicial }: { inicial: EmitenteTela }) {
           </FormField>
         </div>
         <Button variant="ghost" size="sm" onClick={buscarMunicipio} disabled={!!ocupado} loading={ocupado === "municipio"} data-buscar-municipio>
-          <MapPin className="w-4 h-4" /> Buscar pelo endereço da empresa
+          <MapPin className="w-4 h-4" /> Pesquisar pelo endereço da empresa
         </Button>
       </FormSection>
 
@@ -247,7 +247,7 @@ export function DadosFiscaisClient({ inicial }: { inicial: EmitenteTela }) {
               </span>
             )}
             <button type="button" data-remover-prefeitura onClick={() => { setRemoverPref((v) => !v); setMsg(null); }}
-              className="ml-auto font-medium text-acento hover:underline">{removerPref ? "Manter" : "Remover"}</button>
+              className="ml-auto font-medium text-acento hover:underline">{removerPref ? "Manter" : "Excluir"}</button>
           </div>
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

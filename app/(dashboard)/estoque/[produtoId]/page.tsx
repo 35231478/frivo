@@ -56,7 +56,7 @@ export default async function ExtratoEstoquePage({ params, searchParams }: {
         <Link href="/estoque" className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink"><ArrowLeft className="w-4 h-4" /> Estoque</Link>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="p-2 bg-primary-50 rounded-lg"><Package className="w-5 h-5 text-primary-600" /></div>
+            <div className="p-2 bg-surface-alt rounded-lg"><Package className="w-5 h-5 text-ink-muted" /></div>
             <div className="min-w-0">
               <h1 className="page-title truncate">{p.nome}</h1>
               <p className="text-xs text-ink-muted">Extrato do estoque{!p.ativo && " · produto inativo"}{!p.controlaEstoque && " · não controla estoque"}</p>

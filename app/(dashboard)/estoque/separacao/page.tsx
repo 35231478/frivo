@@ -28,7 +28,7 @@ export default async function FilaSeparacaoPage() {
     <div className="space-y-6" data-fila-separacao>
       {verEstoque && <Link href="/estoque" className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink"><ArrowLeft className="w-4 h-4" /> Estoque</Link>}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="p-2 bg-primary-50 rounded-lg"><PackageOpen className="w-5 h-5 text-primary-600" /></div>
+        <div className="p-2 bg-surface-alt rounded-lg"><PackageOpen className="w-5 h-5 text-ink-muted" /></div>
         <h1 className="page-title">A separar</h1>
         <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full" data-total-fila>{fila.length}</span>
         <Dica rotulo="A separar" texto="Toda OS com material nos itens entra aqui sozinha enquanto houver material ainda não separado; some quando tudo foi separado. Separar reserva o material para a OS no estoque." />

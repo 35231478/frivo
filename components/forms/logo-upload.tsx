@@ -68,7 +68,7 @@ export function LogoUpload({ clienteId, logoInicial }: LogoUploadProps) {
               <Upload className="w-3 h-3" /> Trocar
             </Button>
             <Button type="button" variant="ghost" onClick={removerLogo} className="text-xs text-atrasado hover:text-atrasado-texto py-1 px-2.5 h-auto">
-              <Trash2 className="w-3 h-3" /> Remover
+              <Trash2 className="w-3 h-3" /> Excluir
             </Button>
           </div>
         </div>

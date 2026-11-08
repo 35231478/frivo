@@ -38,7 +38,7 @@ export function PeriodoCardsOrcamentos({ periodo, resumo, card, opcoes = { tipos
       {/* Barra enxuta: período (pela criação) + busca + "Mais filtros" (painel recolhido) — padrão da casa */}
       <BarraFiltros
         periodo={<BarraPeriodo rotulo="Criação" periodo={periodo} navegar={navegar} permitirTodos dica="Pela data de criação do orçamento." />}
-        busca={<BuscaUrl lista="orcamentos" placeholder="Pesquisar" rotulo="Buscar orçamentos" />}
+        busca={<BuscaUrl lista="orcamentos" placeholder="Pesquisar" rotulo="Pesquisar orçamentos" />}
         paramBusca="busca" navegar={navegar}
         extras={resposta === "nova" ? (
           <Link href="/orcamentos?periodo=todos" className="inline-flex items-center gap-1.5 rounded-full bg-acento-claro text-acento text-xs font-semibold px-3 py-1.5" data-filtro-resposta>

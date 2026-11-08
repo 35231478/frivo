@@ -108,7 +108,7 @@ export function FotosVeiculo({ fotos, rotulos, onChange, somenteLeitura }: {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={f} alt={`Outra foto ${i + 1}`} className="w-20 h-20 rounded-lg object-cover border border-surface-border" />
               {!somenteLeitura && (
-                <button type="button" title="Remover foto" onClick={() => emitir(porAngulo, outros.filter((_, j) => j !== i))}
+                <button type="button" title="Excluir foto" onClick={() => emitir(porAngulo, outros.filter((_, j) => j !== i))}
                   className="absolute -top-1.5 -right-1.5 bg-white border border-surface-border text-ink-muted hover:text-atrasado rounded-full p-0.5 shadow">
                   <X className="w-3 h-3" />
                 </button>

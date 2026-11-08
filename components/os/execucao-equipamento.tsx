@@ -240,7 +240,7 @@ function Fotos({ fotos, somenteLeitura, onRemover, onAdicionar, dataAttr }: {
             <img src={`/api/fotos-atendimento/${f.id}`} alt="Foto do atendimento" className="w-16 h-16 rounded-lg object-cover border border-surface-border" loading="lazy" />
           </a>
           {!somenteLeitura && (
-            <button type="button" onClick={() => onRemover(f.id)} aria-label="Remover foto" className="absolute -top-1.5 -right-1.5 bg-white border border-surface-border rounded-full p-0.5 text-ink-muted hover:text-atrasado">
+            <button type="button" onClick={() => onRemover(f.id)} aria-label="Excluir foto" className="absolute -top-1.5 -right-1.5 bg-white border border-surface-border rounded-full p-0.5 text-ink-muted hover:text-atrasado">
               <X className="w-3 h-3" />
             </button>
           )}

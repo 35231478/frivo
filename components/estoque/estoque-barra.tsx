@@ -10,7 +10,7 @@ export function BarraEstoque({ situacoes }: { situacoes: Opcao[] }) {
   const { navegar } = useListaUrl();
   return (
     <BarraFiltros
-      busca={<BuscaUrl lista="estoque" placeholder="Pesquisar produto" rotulo="Buscar produtos no estoque" />}
+      busca={<BuscaUrl lista="estoque" placeholder="Pesquisar produto" rotulo="Pesquisar produtos no estoque" />}
       paramBusca="busca" navegar={navegar}
       filtros={[
         { id: "situacao", label: "Situação", params: ["situacao"], render: () => <FiltroSelectUrl param="situacao" vazio="Todas as situações" opcoes={situacoes} rotulo="Situação" className="w-full" /> },
@@ -26,7 +26,7 @@ export function BarraExtrato({ periodo, tipos, origens }: { periodo: PeriodoTela
   return (
     <BarraFiltros
       periodo={<BarraPeriodo rotulo="Movimentação" periodo={periodo} navegar={navegar} permitirTodos dica="Pela data em que a movimentação foi lançada." />}
-      busca={<CampoBusca valor={busca} onChange={setBusca} placeholder="Pesquisar na observação (NF, motivo…)" rotulo="Buscar movimentações" carregando={pendente} />}
+      busca={<CampoBusca valor={busca} onChange={setBusca} placeholder="Pesquisar na observação (NF, motivo…)" rotulo="Pesquisar movimentações" carregando={pendente} />}
       paramBusca="busca" navegar={navegar}
       filtros={[
         { id: "tipo", label: "Tipo", params: ["tipo"], render: () => <FiltroSelectUrl param="tipo" vazio="Todos os tipos" opcoes={tipos} rotulo="Tipo" className="w-full" /> },

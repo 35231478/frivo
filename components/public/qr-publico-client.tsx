@@ -294,7 +294,7 @@ function FormularioSolicitacao({ tipo, token, onFechar }: { tipo: "CHAMADO" | "O
               <div key={i} data-foto-qr className="relative w-20 h-20 rounded-lg overflow-hidden border border-surface-border">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={f.conteudo} alt={f.nome} className="w-full h-full object-cover" />
-                <button type="button" onClick={() => setFotos((p) => p.filter((_, j) => j !== i))} aria-label={`Remover foto ${f.nome}`} className="absolute top-0.5 right-0.5 bg-black/50 text-white rounded-full p-0.5"><X className="w-3 h-3" /></button>
+                <button type="button" onClick={() => setFotos((p) => p.filter((_, j) => j !== i))} aria-label={`Excluir foto ${f.nome}`} className="absolute top-0.5 right-0.5 bg-black/50 text-white rounded-full p-0.5"><X className="w-3 h-3" /></button>
               </div>
             ))}
             {fotos.length < 6 && (

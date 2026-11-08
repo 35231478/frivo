@@ -88,10 +88,10 @@ const $ = <T extends Element = HTMLElement>(sel: string) => document.querySelect
 const $$ = <T extends Element = HTMLElement>(sel: string) => [...document.querySelectorAll(sel)] as T[];
 const sp = (t: string) => t.replace(/ /g, " ");
 const clicar = async (el: Element | null | undefined) => { expect(el).toBeTruthy(); await act(async () => { (el as HTMLElement).click(); }); await esperar(); };
-const SERV = "Buscar serviço por nome ou código...";
-const PROD = "Buscar produto por nome ou código...";
+const SERV = "Pesquisar serviço por nome ou código...";
+const PROD = "Pesquisar produto por nome ou código...";
 /** Abre a busca (o campo pode estar com o placeholder "da tabela") e devolve as opções: "nome → preço" */
-const TAB = "Buscar na tabela do cliente...";
+const TAB = "Pesquisar na tabela do cliente...";
 async function opcoes(grupo: "servico" | "produto") {
   // Os grupos vêm na ordem Serviços, Produtos; com tabela os dois campos têm o placeholder "da tabela"
   const campos = $$<HTMLInputElement>("input").filter((i) => [SERV, PROD, TAB].includes(i.placeholder));
@@ -150,7 +150,7 @@ describe("seletor de itens × tabela de preços do cliente", () => {
     expect(document.body.textContent).toContain("Tabela: Hospital 2026");
     expect(cadeados().map((b) => b.textContent)).toEqual(["Mostrar todos os serviços", "Mostrar todos os serviços"]);
     let s = await opcoes("servico");
-    expect([s.placeholder, s.itens]).toEqual(["Buscar na tabela do cliente...", ["Limpeza de split → R$ 420,00"]]);
+    expect([s.placeholder, s.itens]).toEqual(["Pesquisar na tabela do cliente...", ["Limpeza de split → R$ 420,00"]]);
     let p = await opcoes("produto");
     expect(p.itens).toEqual(["Capacitor → R$ 45,00"]);
     // Cadeado dos serviços: abre o catálogo todo; a instalação vem com o preço padrão

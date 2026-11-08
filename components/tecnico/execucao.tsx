@@ -204,7 +204,7 @@ function FotosServico({ x, so, onAdicionar, registrar }: { x: ExecucaoTela; so: 
     return e ? [e.titulo, e.fabricante, e.tag && `TAG ${e.tag}`].filter(Boolean).join(" · ") : "Equipamento da OS";
   };
   async function remover(f: FotoServicoTela) {
-    const ok = await confirmar({ titulo: "Remover foto?", mensagem: `A foto “${f.legenda ?? "sem legenda"}” sai desta OS.`, perigo: true, confirmarTexto: "Remover" });
+    const ok = await confirmar({ titulo: "Excluir foto?", mensagem: `A foto “${f.legenda ?? "sem legenda"}” sai desta OS.`, perigo: true, confirmarTexto: "Excluir" });
     if (!ok) return;
     await registrar([{ tipo: "fotoOsRemover", atividadeId: x.atividade.id, dados: f.clientId ? { clientId: f.clientId } : { id: f.id! } }]);
     toast("Foto removida.");
@@ -214,7 +214,7 @@ function FotosServico({ x, so, onAdicionar, registrar }: { x: ExecucaoTela; so: 
       <h2 className="text-base font-bold text-ink inline-flex items-center gap-1.5"><Camera className="w-4 h-4 text-ink-muted" /> Fotos do serviço</h2>
       {!fotos.length && (
         <p className="rounded-card bg-white border border-surface-border p-3 text-sm text-ink-muted">
-          Cada foto vai com o equipamento (ou “Geral da OS”) e uma legenda; checklist e antes/depois ficam no equipamento.
+          Cada foto vai com o equipamento (ou “Geral da OS”) e uma legenda; checklist e antes/depois ficam lá.
         </p>
       )}
       {fotos.length > 0 && (
@@ -299,7 +299,7 @@ function ListaUnidade({ r, x, onFechar, onVincular }: { r: RetratoAtividade; x: 
       <div className="space-y-3" data-lista-unidade>
         <div className="relative">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle" />
-          <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por nome, TAG, local" aria-label="Buscar equipamento"
+          <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Pesquisar por nome, TAG, local" aria-label="Pesquisar equipamento"
             className="w-full rounded-card border border-surface-border pl-9 pr-3 py-3 text-base" />
         </div>
         {!lista.length && <p className="text-sm text-ink-muted">Nenhum outro equipamento ativo nesta unidade.</p>}

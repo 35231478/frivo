@@ -51,7 +51,7 @@ export default async function ContaPagarPage({ params }: { params: Promise<{ id:
       <div className="card p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-start gap-3 min-w-0">
-            <div className="p-2 bg-primary-50 rounded-lg shrink-0"><Upload className="w-5 h-5 text-primary-600" /></div>
+            <div className="p-2 bg-surface-alt rounded-lg shrink-0"><Upload className="w-5 h-5 text-ink-muted" /></div>
             <div className="min-w-0">
               <h1 className="page-title">{conta.numero}</h1>
               <p className="text-sm text-ink">{forn.nome}{forn.documento && <span className="text-ink-muted"> · {formatarCpfCnpj(forn.documento)}</span>}</p>

@@ -35,7 +35,7 @@ export function SlotFoto({ id, titulo, selo, seloCor, icone: Icone, dica, obriga
         <div className="relative">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={url} alt={titulo} className="w-full h-32 object-cover rounded-lg bg-surface-alt" />
-          <button type="button" onClick={onRemover} title="Remover foto" className="absolute top-1.5 right-1.5 bg-black/55 hover:bg-atrasado text-white rounded-full p-1"><X className="w-3.5 h-3.5" /></button>
+          <button type="button" onClick={onRemover} title="Excluir foto" className="absolute top-1.5 right-1.5 bg-black/55 hover:bg-atrasado text-white rounded-full p-1"><X className="w-3.5 h-3.5" /></button>
           <button type="button" onClick={() => camera.current?.click()} className="mt-1.5 w-full inline-flex items-center justify-center gap-1 text-xs text-ink-muted hover:text-ink"><RotateCcw className="w-3 h-3" /> Trocar</button>
         </div>
       ) : (

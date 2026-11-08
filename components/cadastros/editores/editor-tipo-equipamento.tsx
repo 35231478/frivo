@@ -247,7 +247,7 @@ function FormulariosVinculados({ equipId, formOpts, tiposOs }: { equipId: string
                   {v.formulario.nome}
                   <span className="text-xs font-normal text-ink-subtle">({v.formulario.qtdPerguntas} pergunta{v.formulario.qtdPerguntas === 1 ? "" : "s"})</span>
                 </p>
-                <button type="button" onClick={() => remover(v)} title="Remover formulário" className="p-1 text-ink-subtle hover:text-atrasado shrink-0"><X className="w-4 h-4" /></button>
+                <button type="button" onClick={() => remover(v)} title="Excluir formulário" className="p-1 text-ink-subtle hover:text-atrasado shrink-0"><X className="w-4 h-4" /></button>
               </div>
 
               <div className="flex flex-col sm:flex-row sm:items-center gap-2">

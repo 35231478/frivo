@@ -67,7 +67,8 @@ export function SeparacaoOs({ inicial }: { inicial: SeparacaoDaOs }) {
   }
 
   async function desfazer(m: MaterialSeparacaoTela) {
-    if (!(await confirmar({ titulo: "Desfazer separação", mensagem: `Devolver ao disponível ${texto(m.quantidadeSeparada)} ${m.unidade} de ${m.descricao}? A reserva é estornada.`, confirmarTexto: "Desfazer", perigo: true }))) return;
+    const qtd = `${texto(m.quantidadeSeparada)} ${m.unidade} de ${m.descricao}`;
+    if (!(await confirmar({ titulo: "Desfazer separação", mensagem: `Devolver ao disponível ${qtd}? A reserva é estornada.`, confirmarTexto: "Desfazer", perigo: true }))) return;
     await enviar([{ id: m.id, quantidade: 0 }], `Separação de ${m.descricao} desfeita`);
   }
 
@@ -78,13 +79,14 @@ export function SeparacaoOs({ inicial }: { inicial: SeparacaoDaOs }) {
     return { q, aviso, saldoVermelho };
   };
 
+  const resumoPendentes = `${pendentes.length} ${pendentes.length === 1 ? "material falta" : "materiais faltam"}`;
   return (
     <div className="space-y-5" data-separacao-os data-situacao-separacao={resumo.situacao}>
       <Link href="/estoque/separacao" className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink"><ArrowLeft className="w-4 h-4" /> A separar</Link>
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3 min-w-0">
-          <div className="p-2 bg-primary-50 rounded-lg"><PackageOpen className="w-5 h-5 text-primary-600" /></div>
+          <div className="p-2 bg-surface-alt rounded-lg"><PackageOpen className="w-5 h-5 text-ink-muted" /></div>
           <div className="min-w-0">
             <h1 className="page-title flex flex-wrap items-center gap-2">
               Separar material · <Link href={`/ordens/${os.id}?aba=materiais`} className="text-primary-600 hover:underline" data-link-os>{os.chamadoNumero ?? os.numero}</Link>
@@ -200,7 +202,7 @@ export function SeparacaoOs({ inicial }: { inicial: SeparacaoDaOs }) {
 
           <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-surface-border bg-surface-page">
             <p className="text-xs text-ink-muted">
-              {pendentes.length === 0 ? "Tudo separado para esta OS." : `${pendentes.length} ${pendentes.length === 1 ? "material falta" : "materiais faltam"} separar. Confirmar reserva o material no estoque.`}
+              {pendentes.length === 0 ? "Tudo separado para esta OS." : `${resumoPendentes} separar. Confirmar reserva o material no estoque.`}
             </p>
             {pendentes.length > 0 && (
               <Button onClick={confirmarSeparacao} loading={salvando} data-acao="confirmar-separacao"><Check className="w-4 h-4" /> Confirmar separação</Button>

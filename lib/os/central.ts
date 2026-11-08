@@ -35,7 +35,7 @@ export interface OsCentralEntrada {
 
 export type SituacaoPagamento = "SEM_COBRANCA" | "PREVISTO" | "A_RECEBER" | "VENCIDO" | "PAGO" | "PERDA";
 export const ROTULO_PAGAMENTO: Record<SituacaoPagamento, string> = {
-  SEM_COBRANCA: "Sem cobrança", PREVISTO: "Previsto", A_RECEBER: "A receber", VENCIDO: "Vencido", PAGO: "Pago", PERDA: "Perda",
+  SEM_COBRANCA: "Sem cobrança", PREVISTO: "Previsto", A_RECEBER: "Em aberto", VENCIDO: "Vencido", PAGO: "Pago", PERDA: "Perda",
 };
 
 export interface Pendencia { chave: string; texto: string; aba: string; nivel: "alerta" | "acao" }

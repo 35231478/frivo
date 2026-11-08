@@ -359,7 +359,7 @@ export const CLASSE_STATUS_MEDICAO: Record<string, string> = {
 
 export const LABELS_STATUS_CONTA_RECEBER: Record<string, string> = {
   PREVISTO: "Previsto",
-  A_RECEBER: "A receber",
+  A_RECEBER: "Em aberto",
   RECEBIDO: "Recebido",
   CANCELADO: "Cancelado",
   ATRASADO: "Atrasado",

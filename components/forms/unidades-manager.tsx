@@ -222,7 +222,7 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }
   async function remover(id: string) {
     const u = unidades.find((u) => u.id === id);
     if (u?.principal) { setErro("Não é possível remover o endereço principal."); return; }
-    if (!(await confirmar({ mensagem: "Tem certeza que deseja remover este endereço?", perigo: true, confirmarTexto: "Remover" }))) return;
+    if (!(await confirmar({ mensagem: "Tem certeza que deseja remover este endereço?", perigo: true, confirmarTexto: "Excluir" }))) return;
     setErro("");
     try {
       const res = await fetch(`/api/unidades/${id}`, { method: "DELETE" });
@@ -309,7 +309,7 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={cancelar}>Cancelar</Button>
           <Button type="button" loading={salvando} onClick={salvar}>
-            <Check className="w-4 h-4" /> {editando === "novo" ? "Adicionar" : "Salvar"}
+            <Check className="w-4 h-4" /> Salvar
           </Button>
         </div>
       </div>
@@ -394,7 +394,7 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }
                         <Star className="w-3 h-3" /> Tornar principal
                       </Button>
                       <Button type="button" variant="ghost" onClick={() => remover(u.id)} className="text-xs h-7 px-2.5 text-atrasado hover:text-atrasado-texto">
-                        <Trash2 className="w-3 h-3" /> Remover
+                        <Trash2 className="w-3 h-3" /> Excluir
                       </Button>
                     </>
                   )}
@@ -409,7 +409,7 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }
 
       {!editando && (
         <Button type="button" variant="secondary" onClick={abrirNova} className="w-full justify-center border-dashed mt-2">
-          <Plus className="w-4 h-4" /> Adicionar endereço
+          <Plus className="w-4 h-4" /> Novo endereço
         </Button>
       )}
     </div>

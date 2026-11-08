@@ -51,7 +51,7 @@ export function BuscaSelect({ value, onChange, options, placeholder = "Selecione
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-subtle pointer-events-none" />
             <input
               autoFocus value={query} onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar..."
+              placeholder="Pesquisar..."
               className="w-full bg-surface-alt rounded-md pl-8 pr-2 py-1.5 text-sm text-ink placeholder:text-ink-subtle focus:outline-none"
             />
           </div>

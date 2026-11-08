@@ -115,7 +115,7 @@ export function ChecklistTipo({ tipoId, podeEditar }: { tipoId: string; podeEdit
                 <div className="flex items-center shrink-0">
                   <button type="button" onClick={() => mover(i, -1)} disabled={i === 0} className="p-1.5 text-ink-subtle hover:text-ink disabled:opacity-30" aria-label={`Subir item ${i + 1}`}><ArrowUp className="w-4 h-4" /></button>
                   <button type="button" onClick={() => mover(i, 1)} disabled={i === itens.length - 1} className="p-1.5 text-ink-subtle hover:text-ink disabled:opacity-30" aria-label={`Descer item ${i + 1}`}><ArrowDown className="w-4 h-4" /></button>
-                  <button type="button" onClick={() => mudar((l) => l.filter((_, j) => j !== i))} className="p-1.5 text-ink-subtle hover:text-atrasado" aria-label={`Remover item ${i + 1}`}><Trash2 className="w-4 h-4" /></button>
+                  <button type="button" onClick={() => mudar((l) => l.filter((_, j) => j !== i))} className="p-1.5 text-ink-subtle hover:text-atrasado" aria-label={`Excluir item ${i + 1}`}><Trash2 className="w-4 h-4" /></button>
                 </div>
               )}
             </div>

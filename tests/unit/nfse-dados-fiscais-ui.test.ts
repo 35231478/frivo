@@ -328,7 +328,7 @@ describe("formulário", () => {
     expect([corpo.get("prefeituraLogin"), corpo.get("prefeituraSenha"), corpo.has("prefeituraRemover")]).toEqual(["clima.total", " P#ss ", false]);
     expect([$<HTMLInputElement>('[name="prefeituraLogin"]')!.value, $<HTMLInputElement>('[name="prefeituraSenha"]')!.value]).toEqual(["", ""]);
     // a guardada: só "login e senha" e a data, nunca os valores; os campos sugerem manter
-    expect(txt($("[data-prefeitura-guardada]"))).toBe("Armazenada (login e senha, em 28/10/2026). Deixe em branco para manter.Remover");
+    expect(txt($("[data-prefeitura-guardada]"))).toBe("Armazenada (login e senha, em 28/10/2026). Deixe em branco para manter.Excluir");
     expect(caixa.innerHTML).not.toContain("P#ss");
     expect($('[name="prefeituraSenha"]')!.getAttribute("placeholder")).toBe("Armazenada. Digite para alterar");
     expect($('[name="prefeituraLogin"]')!.getAttribute("placeholder")).toBe("Armazenado. Digite para alterar");
@@ -337,7 +337,7 @@ describe("formulário", () => {
   it("prefeitura: remover (e manter de novo); remover + digitado = vale o digitado; só senha; ilegível avisa; senha some mesmo com erro", async () => {
     respostas["POST /api/fiscal/emitente"] = { status: 400, corpo: { erro: "Senha da prefeitura longa demais." } };
     await montar({ ...ATIVO, prefeitura: { temLogin: false, temSenha: true, ilegivel: false, atualizadaEm: null } });
-    expect(txt($("[data-prefeitura-guardada]"))).toBe("Armazenada (senha). Deixe em branco para manter.Remover");
+    expect(txt($("[data-prefeitura-guardada]"))).toBe("Armazenada (senha). Deixe em branco para manter.Excluir");
     expect($('[name="prefeituraLogin"]')!.getAttribute("placeholder")).toBe("Opcional");
     await clicar($("[data-remover-prefeitura]"));
     expect(txt($("[data-prefeitura-guardada]"))).toBe("Será removida ao salvar.Manter");
@@ -362,7 +362,7 @@ describe("formulário", () => {
     expect([corpo.get("prefeituraLogin"), corpo.has("prefeituraRemover")]).toEqual(["novo", false]);
     act(() => root.unmount()); caixa.remove();
     await montar({ ...ATIVO, prefeitura: { temLogin: false, temSenha: false, ilegivel: true, atualizadaEm: "2026-10-28T15:00:00.000Z" } });
-    expect(txt($("[data-prefeitura-guardada]"))).toBe("A credencial armazenada não pôde ser lida neste servidor. Informe o login e a senha novamente.Remover");
+    expect(txt($("[data-prefeitura-guardada]"))).toBe("A credencial armazenada não pôde ser lida neste servidor. Informe o login e a senha novamente.Excluir");
   });
 
   it("Testar conexão: mostra o resultado (ok e erro) e atualiza a situação", async () => {

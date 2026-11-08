@@ -226,7 +226,7 @@ export function TelaEquipamento({ x, e, registrar }: Props) {
       {naoAtendido && (
         <Modal aberto titulo="Não atendido" onFechar={() => setNaoAtendido(false)} tamanho="sm">
           <div className="space-y-3">
-            <p className="text-sm text-ink-muted">O registrado fica guardado. O equipamento sai como “não atendido” no relatório. Informe o motivo, se possível.</p>
+            <p className="text-sm text-ink-muted">O registrado fica guardado; o equipamento sai como “não atendido” no relatório. Informe o motivo.</p>
             <ObservacaoVoz rotulo="Motivo" valor={e.observacao ?? ""} onSalvar={(t) => registrar([op({ tipo: "equipamento", dados: { observacao: t } })])} />
             <button type="button" className="w-full rounded-card bg-ink text-white py-3 font-semibold touch-target"
               onClick={async () => {

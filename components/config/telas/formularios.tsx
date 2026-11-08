@@ -109,7 +109,7 @@ export function TelaFormularios() {
   }
 
   async function remover(f: Formulario) {
-    if (!(await confirmar({ mensagem: `Remover o formulário "${f.nome}"?`, perigo: true, confirmarTexto: "Remover" }))) return;
+    if (!(await confirmar({ mensagem: `Excluir o formulário "${f.nome}"?`, perigo: true, confirmarTexto: "Excluir" }))) return;
     const res = await fetch(`/api/formularios/${f.id}`, { method: "DELETE" });
     if (res.ok) setFormularios((p) => p.filter((x) => x.id !== f.id));
   }
@@ -127,7 +127,7 @@ export function TelaFormularios() {
         <div className="flex items-center gap-3">
           <div className="relative flex-1 max-w-sm">
             <Search className="w-4 h-4 text-ink-subtle absolute left-3 top-1/2 -translate-y-1/2" />
-            <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar formulário..." className="pl-9" />
+            <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Pesquisar formulário..." className="pl-9" />
           </div>
           <Button type="button" onClick={abrirNovo} className="ml-auto shrink-0">
             <Plus className="w-4 h-4" /> Novo formulário
@@ -158,7 +158,7 @@ export function TelaFormularios() {
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-1">
                       <button onClick={() => abrirEditar(f)} title="Editar" className="p-1.5 text-ink-muted hover:text-primary-600 hover:bg-primary-50 rounded transition-colors"><Pencil className="w-4 h-4" /></button>
-                      <button onClick={() => remover(f)} title="Remover" className="p-1.5 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded transition-colors"><Trash2 className="w-4 h-4" /></button>
+                      <button onClick={() => remover(f)} title="Excluir" className="p-1.5 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded transition-colors"><Trash2 className="w-4 h-4" /></button>
                     </div>
                   </td>
                 </tr>

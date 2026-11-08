@@ -101,7 +101,7 @@ export function FaturamentoContratosView({ periodo, linhas, resumo, soAtencao }:
     <div className="space-y-5" data-tela-faturamento-contratos>
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-acento-claro rounded-lg"><CalendarClock className="w-5 h-5 text-acento" /></div>
+          <div className="p-2 bg-surface-alt rounded-lg"><CalendarClock className="w-5 h-5 text-ink-muted" /></div>
           <h1 className="page-title">Faturamento de contratos</h1>
           <Dica rotulo="Faturamento de contratos" texto="Os contratos com “Faturamento automático” ligado. Todo dia de manhã a rotina cria a medição no dia de faturamento e segue para a aprovação. Se algo falhar, ela tenta de novo nos 2 dias seguintes e depois avisa no sino." />
         </div>

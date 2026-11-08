@@ -110,7 +110,7 @@ export function ContatosLocal({ contatos, onChange }: ContatosLocalProps) {
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={cancelar}>Cancelar</Button>
           <Button type="button" onClick={salvar} disabled={!form.nome.trim()}>
-            <Check className="w-4 h-4" /> {editando === "novo" ? "Adicionar" : "Salvar"}
+            <Check className="w-4 h-4" /> Salvar
           </Button>
         </div>
       </div>
@@ -154,7 +154,7 @@ export function ContatosLocal({ contatos, onChange }: ContatosLocalProps) {
                 </div>
                 <div className="flex items-center gap-2 pt-1">
                   <Button type="button" variant="secondary" onClick={() => abrirEditar(c)} className="text-xs h-7 px-2.5"><Pencil className="w-3 h-3" /> Editar</Button>
-                  <Button type="button" variant="ghost" onClick={() => remover(c._tempId)} className="text-xs h-7 px-2.5 text-atrasado hover:text-atrasado-texto"><Trash2 className="w-3 h-3" /> Remover</Button>
+                  <Button type="button" variant="ghost" onClick={() => remover(c._tempId)} className="text-xs h-7 px-2.5 text-atrasado hover:text-atrasado-texto"><Trash2 className="w-3 h-3" /> Excluir</Button>
                 </div>
               </div>
             )}
@@ -166,7 +166,7 @@ export function ContatosLocal({ contatos, onChange }: ContatosLocalProps) {
 
       {!editando && (
         <Button type="button" variant="secondary" onClick={abrirNovo} className="w-full justify-center border-dashed mt-2">
-          <Plus className="w-4 h-4" /> Adicionar contato
+          <Plus className="w-4 h-4" /> Novo contato
         </Button>
       )}
     </div>

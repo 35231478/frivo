@@ -44,18 +44,22 @@ Só tokens de `lib/ui/tokens.ts` via classes do Tailwind (`bg-surface-*`, `text-
 
 Roda na suíte (`npm test`, logo no CI). Varre `components/`, `app/`, `lib/cadastros`, `lib/navegacao` e `lib/permissoes.ts` (fora testes) e conta, por arquivo, seis categorias: `emoji`, `hex`, `informal`, `exclamacao`, `titleCase`, `textoLongo` (texto inline ≥ 110 c fora da ⓘ). O que cada uma detecta está no cabeçalho do teste.
 
-**Baseline** `tests/unit/despoluicao-baseline.json`: as violações conhecidas, congeladas no diagnóstico. O teste falha quando:
+**Baseline fechado (Onda 7).** `tests/unit/despoluicao-baseline.json` tem `arquivos` **vazio**: fora das exceções documentadas, qualquer violação nova falha o CI. As **exceções** ficam em `excecoes` (categoria → arquivo → `{ n, motivo }`) e são só estas:
 
-1. um arquivo tem **mais** violações que o baseline → violação nova: corrija o código (o baseline nunca sobe à mão);
-2. um arquivo tem **menos** (ou foi apagado/renomeado) → a limpeza aconteceu: encolha o baseline.
+| Categoria | Arquivo | n | Por quê |
+|---|---|---|---|
+| titleCase | `components/ui/endereco-autocomplete.tsx` | 6 | Nomes de estados (Minas Gerais, Rio de Janeiro…): nomes próprios |
+| titleCase | `components/forms/colaborador-form.tsx` | 3 | Especialidades sugeridas e tipos de documento são **gravados como valor**; mudar a caixa mudaria o dado |
+| titleCase | `components/forms/tecnico-form.tsx` | 3 | Idem, no cadastro do técnico |
+| textoLongo | `lib/cadastros/especificos.ts` | 8 | Avisos de impacto/bloqueio da inativação: templates com plural e nome do registro; o contador soma o código `${…}` e a regra não cabe em 110 c sem perder sentido |
+| textoLongo | `lib/cadastros/servidor.ts` | 1 | Aviso genérico de inativação com artigo/singular interpolados |
 
-**Como reduzir o baseline (cada onda):**
+O teste confere que cada exceção tem `motivo` escrito, `n > 0` e **bate exatamente** com o real: se um desses arquivos for limpo, a exceção tem de diminuir (ou sair); se piorar, falha. O teste falha quando:
 
-```bash
-npm run despoluicao:baseline     # regrava tests/unit/despoluicao-baseline.json com o estado atual
-npm test -- tests/unit/despoluicao-ratchet.test.ts
-```
+1. um arquivo tem **mais** violações que o permitido (baseline ou exceção) → violação nova: corrija o código;
+2. um arquivo tem **menos** que a exceção diz → a limpeza aconteceu: reduza `n` (ou apague a exceção);
+3. `arquivos` deixa de ser vazio → corrija o código ou, se for um caso legítimo, documente a exceção **com motivo** e defenda no PR.
 
-O comando só regrava; confira no `git diff` do JSON que **todos** os números desceram (nenhum subiu, nenhum arquivo novo entrou) e cole no PR a tabela `totais` antes/depois. Arquivo renomeado: o número sai do nome antigo e entra no novo com valor igual ou menor. Na Onda 7 o `totais` chega a zero e o teste vira proibição plena.
+**Regravar** (`npm run despoluicao:baseline`) mantém as `excecoes` e só escreve em `arquivos` o que estiver fora delas — ou seja, depois da Onda 7 o comando deve devolver `arquivos` vazio; se não devolver, o que apareceu é bug a corrigir, não baseline a aceitar.
 
 Para ver as violações de um arquivo específico durante a limpeza, apague-o do JSON e rode o teste: a falha lista `arquivo:linha` e o trecho.

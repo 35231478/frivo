@@ -41,7 +41,7 @@ export default async function FinanceiroDashboardPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <div className="p-2 bg-primary-50 rounded-lg"><Wallet className="w-5 h-5 text-primary-600" /></div>
+        <div className="p-2 bg-surface-alt rounded-lg"><Wallet className="w-5 h-5 text-ink-muted" /></div>
         <h1 className="page-title">Dashboard financeiro</h1>
       </div>
 

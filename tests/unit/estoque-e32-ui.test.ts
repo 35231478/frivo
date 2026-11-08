@@ -225,7 +225,7 @@ describe("Serviço › Materiais padrão", () => {
     // Serviço novo sem mexer na seção: `materiais` vai vazio (o servidor entende como lista vazia)
     await clicar($("[data-acao=novo-cadastro]"));
     await digitar($('input[placeholder="Ex: Manutenção Preventiva"]'), "Higienização");
-    await clicar(botao("Adicionar"));
+    await clicar(botao("Salvar"));
     expect(gravacoes("servicos").at(-1)).toMatchObject({ metodo: "POST", corpo: { nome: "Higienização", materiais: "" } });
   });
 });

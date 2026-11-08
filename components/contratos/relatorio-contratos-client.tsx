@@ -85,7 +85,7 @@ export function RelatorioContratosClient({ mes, ano, itens, tecnicos, clientes }
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <Link href="/contratos" className="p-2 rounded-lg text-ink-muted hover:text-primary-600 hover:bg-surface-alt"><ChevronLeft className="w-5 h-5" /></Link>
-          <div className="p-2 bg-primary-50 rounded-lg"><CalendarDays className="w-5 h-5 text-primary-600" /></div>
+          <div className="p-2 bg-surface-alt rounded-lg"><CalendarDays className="w-5 h-5 text-ink-muted" /></div>
           <h1 className="page-title">Relatório de manutenções — {nomeMes(mes)}/{ano}</h1>
         </div>
         <div className="flex items-center gap-2">

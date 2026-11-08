@@ -82,7 +82,7 @@ export function SecaoMateriaisServico({ campos, mudar, item }: GrupoFormProps) {
       {erro && <p role="alert" className="text-sm bg-atrasado-claro border border-atrasado/20 text-atrasado-texto rounded-lg px-3 py-2">{erro} A composição não será alterada ao salvar.</p>}
       {carregando && <p className="text-sm text-ink-subtle">Carregando materiais padrão…</p>}
       {!carregando && !erro && linhas.length === 0 && (
-        <p className="text-sm text-ink-subtle italic" data-sem-materiais>Sem materiais padrão: o serviço funciona como sempre. Adicione produtos ou um kit para pré-preencher orçamento/OS.</p>
+        <p className="text-sm text-ink-subtle italic" data-sem-materiais>Sem materiais padrão: o serviço funciona como sempre. Produtos ou kit aqui pré-preenchem orçamento/OS.</p>
       )}
 
       <div className="space-y-2">

@@ -164,7 +164,7 @@ export function PerfilClient({ initial }: { initial: Initial }) {
   const acao: { label: string; fn: () => void; saving: boolean; disabled?: boolean } | null =
     aba === "dados" ? { label: "Salvar alterações", fn: salvarDados, saving: salvandoDados }
       : aba === "foto" ? { label: "Salvar foto", fn: salvarFoto, saving: enviandoFoto, disabled: !preview }
-      : aba === "seguranca" ? { label: "Alterar senha", fn: salvarSenha, saving: salvandoSenha }
+      : aba === "seguranca" ? { label: "Trocar senha", fn: salvarSenha, saving: salvandoSenha }
       : null;
 
   const BotaoSalvar = ({ compact = false }: { compact?: boolean }) =>
@@ -274,7 +274,7 @@ export function PerfilClient({ initial }: { initial: Initial }) {
 
             {/* ABA 3 — Segurança */}
             <Painel ativo={aba === "seguranca"}>
-              <FormSection title="Alterar senha" icon={<Lock className="w-3.5 h-3.5" />}>
+              <FormSection title="Trocar senha" icon={<Lock className="w-3.5 h-3.5" />}>
                 <FormGrid>
                   <FormField label="Senha atual" required>
                     <Input type="password" value={senhaAtual} onChange={(e) => setSenhaAtual(e.target.value)} autoComplete="current-password" />

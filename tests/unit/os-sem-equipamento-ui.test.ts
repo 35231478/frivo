@@ -256,7 +256,7 @@ describe("cadastro de Tipos de OS", () => {
     expect(chave().getAttribute("aria-checked")).toBe("false");
     const nome = [...document.querySelectorAll("input")].find((i) => i.placeholder?.startsWith("Ex: Manutenção")) ?? null;
     await digitar(nome, "Vistoria");
-    await act(async () => { [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Adicionar")!.click(); });
+    await act(async () => { [...document.querySelectorAll("button")].filter((b) => b.textContent?.trim() === "Salvar").at(-1)!.click(); });
     await esperar();
     expect(chamadas.find((c) => c.metodo === "POST")).toMatchObject({ url: "/api/tipos-os", corpo: { nome: "Vistoria", exigeEquipamento: false } });
     expect($$("[data-exige-equipamento='nao']")).toHaveLength(2);
