@@ -219,8 +219,8 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
   }
 
   const ABAS: { id: Aba; label: string; icone: any; badge?: number }[] = [
-    { id: "pessoais", label: "Dados Pessoais", icone: User },
-    { id: "profissionais", label: "Dados Profissionais", icone: Briefcase },
+    { id: "pessoais", label: "Dados pessoais", icone: User },
+    { id: "profissionais", label: "Dados profissionais", icone: Briefcase },
     { id: "competencias", label: "Competências", icone: ListChecks, badge: competenciaIds.length },
     { id: "documentos", label: "Documentos", icone: FileText, badge: documentos.length },
     ...(podeFolha ? [{ id: "folha" as const, label: "Dados financeiros / Folha", icone: Wallet }] : []),
@@ -342,8 +342,8 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
                 </FormField>
                 <FormField label="Tipo" required>
                   <Select {...register("tipo")}>
-                    <option value="TECNICO_CAMPO">Técnico de Campo</option>
-                    <option value="RESPONSAVEL_TECNICO">Responsável Técnico</option>
+                    <option value="TECNICO_CAMPO">Técnico de campo</option>
+                    <option value="RESPONSAVEL_TECNICO">Responsável técnico</option>
                     <option value="ADMINISTRATIVO">Administrativo</option>
                     <option value="MOTORISTA">Motorista</option>
                     <option value="OUTRO">Outro</option>
@@ -351,13 +351,13 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
                 </FormField>
               </FormGrid>
               <FormGrid>
-                <FormField label="Tipo de Equipe" hint="Define em qual equipe o colaborador aparece">
+                <FormField label="Tipo de equipe" hint="Define em qual equipe o colaborador aparece">
                   <Select value={tipoEquipe} onChange={(e) => escolherTipoEquipe(e.target.value)}>
                     <option value="CAMPO">Campo</option>
                     <option value="ADMINISTRATIVO">Administrativo</option>
                   </Select>
                 </FormField>
-                <FormField label="Perfil de Acesso" hint="Define as permissões no sistema (Configurações → Perfis)">
+                <FormField label="Perfil de acesso" hint="Permissões no sistema (Configurações › Perfis)">
                   <SeletorCadastro entidade="perfis-acesso" itens={perfis} valor={perfilAcessoId} vazio="Sem perfil" onChange={setPerfilAcessoId} />
                 </FormField>
               </FormGrid>
@@ -428,8 +428,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
           <div className={cn("space-y-8", aba !== "competencias" && "hidden")}>
             <FormSection title="Competências para execução">
               <p className="text-sm text-ink-muted -mt-1">
-                Marque os tipos de OS que este colaborador está habilitado a executar. Na criação de ordens de serviço,
-                apenas os colaboradores com competência no tipo selecionado serão sugeridos.
+                Tipos de OS que este colaborador pode executar; só eles são sugeridos ao criar a OS.
               </p>
               {tiposOs.length === 0 ? (
                 <p className="text-sm text-ink-subtle">Nenhum tipo de OS cadastrado. Cadastre em Configurações → Tipos de OS.</p>
@@ -485,7 +484,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
           <div className={cn("space-y-6", aba !== "documentos" && "hidden")}>
             <input ref={docRef} type="file" onChange={handleDocFile} className="hidden" />
             <FormSection title="Documentos">
-              <p className="text-sm text-ink-muted -mt-1">CNH, certificados, ASO e demais documentos. Documentos vencendo em até 30 dias são destacados.</p>
+              <p className="text-sm text-ink-muted -mt-1">CNH, certificados, ASO e outros. Vencimento em até 30 dias é destacado.</p>
               {documentos.length === 0 ? (
                 <p className="text-sm text-ink-subtle py-4 text-center border border-dashed border-surface-border rounded-lg">Nenhum documento adicionado.</p>
               ) : (
@@ -536,14 +535,14 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
         {podeFolha && aba === "folha" && (
           <div className="p-5 sm:p-6 lg:p-8">
             {isEditing ? <FolhaColaborador colaboradorId={initialData.id} /> : (
-              <p className="text-sm text-ink-muted">Cadastre o colaborador primeiro; depois, em “Editar”, preencha os dados financeiros desta aba.</p>
+              <p className="text-sm text-ink-muted">Salve o colaborador; os dados financeiros ficam disponíveis na edição.</p>
             )}
           </div>
         )}
       </div>
 
       {aba === "folha" ? null : somenteLeitura ? (
-        <p data-somente-leitura className="text-right text-xs text-ink-muted pt-1">Somente consulta — você não tem permissão para editar colaboradores.</p>
+        <p data-somente-leitura className="text-right text-xs text-ink-muted pt-1">Somente leitura: requer a permissão Equipes › gerenciar.</p>
       ) : (
         <div className="flex items-center justify-end gap-3 pt-1">
           <Button type="button" variant="secondary" onClick={() => router.back()}>Cancelar</Button>

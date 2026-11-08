@@ -77,7 +77,7 @@ export function GerarMedicoesMes() {
         </div>
       )}
       {resultado && (
-        <div className="bg-success-50 border border-success-200 text-success-700 text-xs rounded-lg px-3 py-2 flex items-center gap-2">
+        <div className="bg-ok-claro border border-ok/20 text-ok-texto text-xs rounded-lg px-3 py-2 flex items-center gap-2">
           <Check className="w-3.5 h-3.5" /> {resultado.criadas} criada(s), {resultado.ignoradas} ignorada(s).
         </div>
       )}

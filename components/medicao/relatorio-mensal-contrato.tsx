@@ -59,8 +59,8 @@ export function RelatorioMensalContratoResumo({ dados }: { dados: RelatorioMensa
       )}
 
       {dados.proximaPreventiva && (
-        <div className="flex items-center gap-2 bg-primary-50 border border-primary-100 rounded-lg px-4 py-3 text-sm text-ink" data-proxima-preventiva>
-          <CalendarClock className="w-4 h-4 text-primary-600 shrink-0" />
+        <div className="flex items-center gap-2 bg-surface-alt border border-surface-border rounded-lg px-4 py-3 text-sm text-ink" data-proxima-preventiva>
+          <CalendarClock className="w-4 h-4 text-ink-muted shrink-0" />
           <span>
             Próxima manutenção agendada: <strong>{formatarData(dados.proximaPreventiva.data, "dd/MM/yyyy")}</strong>
             {dados.proximaPreventiva.tipo ? ` · ${dados.proximaPreventiva.tipo}` : ""}

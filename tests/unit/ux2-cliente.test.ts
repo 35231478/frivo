@@ -14,6 +14,12 @@ import { montarPermissoes, permissoesTotais, type Permissoes } from "@/lib/permi
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
 const nav = vi.hoisted(() => ({ sp: new URLSearchParams(), push: [] as string[], replace: [] as string[] }));
+// Toast da casa (components/ui/avisos): o host <Avisos/> não está montado no teste — captura as chamadas
+const avisos = vi.hoisted(() => ({ lista: [] as [string, string][] }));
+vi.mock("@/components/ui/avisos", async (orig) => ({
+  ...(await orig<typeof import("@/components/ui/avisos")>()),
+  toast: (m: string, t = "sucesso") => { avisos.lista.push([m, t]); },
+}));
 vi.mock("next/navigation", () => ({
   useSearchParams: () => nav.sp,
   usePathname: () => "/",
@@ -175,7 +181,7 @@ describe("E5: ficha do cliente com 'Nova OS'/'Novo orçamento' e pós-salvar na 
   it("chegando com ?criado=1: toast de sucesso e a URL é limpa", { timeout: 40000 }, async () => {
     nav.sp = new URLSearchParams("criado=1");
     await montarCliente(permissoesTotais(), CLIENTE_FICHA);
-    expect(caixa.textContent).toContain("Cliente cadastrado com sucesso!");
+    expect(avisos.lista).toContainEqual(["Cliente cadastrado.", "sucesso"]);
     expect(nav.replace).toEqual(["/clientes/cl1/editar"]);
   });
 });

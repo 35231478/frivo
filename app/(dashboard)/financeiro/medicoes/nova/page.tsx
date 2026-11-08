@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { MedicaoForm } from "@/components/medicao/medicao-form";
 
-export const metadata: Metadata = { title: "Nova Medição" };
+export const metadata: Metadata = { title: "Nova medição" };
 
 export default async function NovaMedicaoPage({
   searchParams,

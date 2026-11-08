@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/ui/page-header";
 import { ContaPagarForm } from "@/components/financeiro/conta-pagar-form";
 
-export const metadata: Metadata = { title: "Editar Conta a Pagar" };
+export const metadata: Metadata = { title: "Editar conta a pagar" };
 
 export default async function EditarContaPagarPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

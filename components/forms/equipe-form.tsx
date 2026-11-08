@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { corDado, paletaSelecao } from "@/lib/ui/tokens";
 import { useRouter } from "next/navigation";
 import { AvisoInativacaoStatus } from "@/components/ui/aviso-inativacao-status";
 import { cn } from "@/lib/utils";
@@ -16,10 +17,10 @@ import { AlertCircle, AlertTriangle, Check, Truck } from "lucide-react";
 interface Colab { id: string; nome: string; avatar?: string | null }
 interface VeiculoOpt { id: string; placa: string; modelo: string; equipe: { id: string; nome: string } | null; inativo: boolean }
 
-const CORES = ["#0EA5E9", "#10B981", "#8B5CF6", "#F59E0B", "#EF4444", "#EC4899", "#06B6D4", "#6366F1"];
+const CORES = paletaSelecao;
 
 // Cor que um registro novo recebe (dado salvo no cadastro; o usuário troca no seletor)
-const COR_PADRAO = "#0EA5E9";
+const COR_PADRAO = corDado.azul;
 
 export function EquipeForm({ initialData }: { initialData?: any }) {
   const router = useRouter();

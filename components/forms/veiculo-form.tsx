@@ -345,7 +345,7 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
 
         <div className="sticky bottom-20 lg:bottom-4 z-20" data-barra-acoes>
           <div className="flex items-center justify-between gap-3 bg-white/95 backdrop-blur border border-surface-border rounded-card shadow-lg px-4 py-3">
-            <span className="text-xs text-ink-muted hidden sm:inline">{feitos === obrigatorios.length ? "Tudo pronto para cadastrar." : `Faltam ${obrigatorios.length - feitos} campo(s) obrigatório(s).`}</span>
+            <span className="text-xs text-ink-muted hidden sm:inline">{feitos === obrigatorios.length ? "Campos obrigatórios preenchidos." : `Faltam ${obrigatorios.length - feitos} campo(s) obrigatório(s).`}</span>
             <div className="flex items-center gap-2 ml-auto">
               <Button type="button" variant="secondary" onClick={() => router.back()}>Cancelar</Button>
               <Button type="button" onClick={salvar} loading={salvando}>Cadastrar veículo</Button>
@@ -536,7 +536,7 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
       </div>
 
       {conferindo ? null : somenteLeitura ? (
-        <p data-somente-leitura className="flex items-center justify-end gap-1.5 text-xs text-ink-muted pt-1"><Lock className="w-3.5 h-3.5" /> Somente consulta — você não tem permissão para editar veículos.</p>
+        <p data-somente-leitura className="flex items-center justify-end gap-1.5 text-xs text-ink-muted pt-1"><Lock className="w-3.5 h-3.5" /> Somente leitura: requer a permissão Veículos › gerenciar.</p>
       ) : (
         <div className="flex items-center justify-end gap-3 pt-1">
           <Button type="button" variant="secondary" onClick={() => router.back()}>Cancelar</Button>
@@ -605,9 +605,9 @@ function ManutencoesPanel({ veiculoId, manutencoes, setManutencoes }: { veiculoI
       )}
 
       {mostra ? (
-        <div className="border border-primary-200 bg-primary-50/30 rounded-lg p-4 space-y-3">
+        <div className="border border-surface-border bg-surface-alt/60 rounded-lg p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <h4 className="text-sm font-bold text-primary-700">Registrar manutenção</h4>
+            <h4 className="text-sm font-semibold text-ink">Registrar manutenção</h4>
             <button type="button" onClick={() => setMostra(false)} className="text-ink-muted hover:text-ink"><X className="w-4 h-4" /></button>
           </div>
           <FormGrid cols={3}>

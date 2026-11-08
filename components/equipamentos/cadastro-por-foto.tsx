@@ -342,7 +342,7 @@ export function CadastroPorFoto() {
         <Link href="/equipamentos/novo" className="p-2 rounded-lg text-ink-muted hover:bg-surface-alt" title="Voltar ao cadastro manual"><ChevronLeft className="w-5 h-5" /></Link>
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-ink flex items-center gap-2"><Sparkles className="w-5 h-5 text-primary-500" /> Cadastro pela foto</h1>
-          <p className="text-sm text-ink-muted">A IA lê a etiqueta e preenche a ficha para conferência antes de salvar.</p>
+          <p className="text-sm text-ink-muted">Leitura automática da etiqueta; os dados são conferidos antes de salvar.</p>
         </div>
       </div>
 
@@ -376,7 +376,7 @@ export function CadastroPorFoto() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" data-slots-fotos>
               <SlotFoto
-                id="etiqueta" titulo="1. Etiqueta" selo="A IA lê esta" seloCor="bg-acento-claro text-acento-hover" icone={Tag}
+                id="etiqueta" titulo="1. Etiqueta" selo="Leitura automática" seloCor="bg-acento-claro text-acento-hover" icone={Tag}
                 dica="De frente, bem perto, sem reflexo" obrigatoria url={foto} rotuloAria="Foto da etiqueta"
                 onArquivo={(f) => aoEscolherFoto("etiqueta", f)} onRemover={() => remover("etiqueta")}
               />
@@ -520,7 +520,7 @@ export function CadastroPorFoto() {
         {/* ── 5. Revisão ── */}
         {etapa === "revisao" && (
           <div className="space-y-4" data-revisao>
-            <h2 className="font-semibold text-ink">Tudo certo? Revise e salve</h2>
+            <h2 className="font-semibold text-ink">Revisar e salvar</h2>
             <dl className="divide-y divide-surface-border text-sm border border-surface-border rounded-lg">
               {[
                 ["Tipo", valores.tipo ? rotuloTipo(valores.tipo) : ""],
@@ -567,7 +567,7 @@ export function CadastroPorFoto() {
         {etapa === "pronto" && salvo && (
           <div className="text-center space-y-3 py-4" data-pronto>
             <CheckCircle2 className="w-12 h-12 text-ok-texto mx-auto" />
-            <h2 className="text-lg font-semibold text-ink">Equipamento cadastrado!</h2>
+            <h2 className="text-lg font-semibold text-ink">Equipamento cadastrado.</h2>
             {salvo.qr
               ? <p className="text-sm text-ink-muted">QR Code gerado: <strong className="font-mono text-ink" data-qr>{salvo.qr}</strong></p>
               : <p className="text-sm text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2">{salvo.avisoQr ?? "O QR Code não foi gerado. Gere pela ficha do equipamento (botão “Gerar QR”)."}</p>}

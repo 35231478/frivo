@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { corDado } from "@/lib/ui/tokens";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { exigirPermissao } from "@/lib/permissoes-server";
@@ -10,7 +11,7 @@ const equipeSchema = z.object({
   /** Identificador da tela (devolvido com o id criado). */
   chave: z.string().min(1).max(80),
   nome: z.string().trim().min(1, "Toda equipe precisa de um nome.").max(60),
-  cor: z.string().regex(/^#[0-9a-fA-F]{6}$/).default("#0EA5E9"),
+  cor: z.string().regex(/^#[0-9a-fA-F]{6}$/).default(corDado.azul),
   liderId: z.string().nullable().optional(),
   membroIds: z.array(z.string()).max(200).default([]),
 });

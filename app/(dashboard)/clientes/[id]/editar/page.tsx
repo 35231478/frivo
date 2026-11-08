@@ -7,7 +7,7 @@ import { calcularStatusFinanceiroDetalhado } from "@/lib/status-financeiro";
 import { contatoSeguro } from "@/lib/contato-cliente";
 import { perdasRecentesDoCliente } from "@/lib/financeiro/perda-estorno-server";
 
-export const metadata: Metadata = { title: "Editar Cliente" };
+export const metadata: Metadata = { title: "Editar cliente" };
 
 export default async function EditarClientePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { MedicaoForm } from "@/components/medicao/medicao-form";
 
-export const metadata: Metadata = { title: "Editar Medição" };
+export const metadata: Metadata = { title: "Editar medição" };
 
 export default async function EditarMedicaoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

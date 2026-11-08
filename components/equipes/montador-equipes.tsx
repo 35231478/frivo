@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { paletaSelecao } from "@/lib/ui/tokens";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -20,7 +21,7 @@ export interface EquipeMontador {
   chave: string; id?: string; nome: string; cor: string; liderId: string | null; membros: string[]; veiculos: string[];
 }
 
-const CORES = ["#0EA5E9", "#10B981", "#8B5CF6", "#F59E0B", "#EF4444", "#EC4899", "#06B6D4", "#6366F1"];
+const CORES = paletaSelecao;
 const POOL = "pool";
 
 /** Assinatura da composição (para saber se há alterações não salvas). */
@@ -146,7 +147,7 @@ export function MontadorEquipes({ equipesIniciais, colaboradores, podeGerenciar 
             <p className="text-sm text-ink-muted mt-0.5">
               {podeGerenciar
                 ? <>Arraste os colaboradores para dentro das equipes. Solte na faixa <Crown className="inline w-3.5 h-3.5 text-atencao-texto" /> para definir o líder.</>
-                : <>Somente consulta — você não tem permissão para alterar equipes.</>}
+                : <>Somente leitura: requer a permissão Equipes › gerenciar.</>}
             </p>
           </div>
         </div>

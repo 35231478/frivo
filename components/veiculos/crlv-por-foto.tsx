@@ -218,8 +218,8 @@ export function CrlvPorFoto({ onAplicar, onConferindo, compacto }: {
           </p>
           <p className="text-sm text-ink-muted mt-1">
             {lendo
-              ? "Lendo o documento com IA… isso leva alguns segundos."
-              : <>Fotografe o <strong className="text-ink">CRLV</strong> (documento do veículo). A IA lê placa, marca/modelo, anos, cor, combustível, chassi e RENAVAM — e você confere antes de salvar.</>}
+              ? "Lendo o documento… leva alguns segundos."
+              : <>Fotografe o <strong className="text-ink">CRLV</strong> (documento do veículo). Leitura automática de placa, marca/modelo, anos, cor, combustível, chassi e RENAVAM; confira antes de salvar.</>}
           </p>
         </div>
         <div className="flex flex-col gap-1.5 shrink-0">

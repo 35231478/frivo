@@ -313,7 +313,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
   const abas: { id: Aba; label: string; icone: any; oculta?: boolean }[] = [
     { id: "identificacao", label: "Identificação", icone: ImageIcon },
     { id: "localizacao", label: "Localização", icone: MapPin },
-    { id: "tecnicos", label: "Dados Técnicos", icone: Cog },
+    { id: "tecnicos", label: "Dados técnicos", icone: Cog },
     { id: "qrcode", label: "QR Code", icone: QrCode },
     { id: "historico", label: "Atendimentos", icone: History, oculta: !isEditing },
   ];
@@ -496,7 +496,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
         <div className="sticky bottom-20 lg:bottom-4 z-20" data-barra-acoes>
           <div>
             <div className="flex items-center justify-between gap-3 bg-white/95 backdrop-blur border border-surface-border rounded-card shadow-lg px-4 py-3">
-              <span className="text-xs text-ink-muted hidden sm:inline">{feitos === obrigatorios.length ? "Tudo pronto para cadastrar." : `Faltam ${obrigatorios.length - feitos} campo(s) obrigatório(s).`}</span>
+              <span className="text-xs text-ink-muted hidden sm:inline">{feitos === obrigatorios.length ? "Campos obrigatórios preenchidos." : `Faltam ${obrigatorios.length - feitos} campo(s) obrigatório(s).`}</span>
               <div className="flex items-center gap-2 ml-auto">
                 <Button type="button" variant="secondary" onClick={() => router.back()}>Cancelar</Button>
                 <Button type="button" onClick={salvar} loading={salvando}>Cadastrar equipamento</Button>

@@ -10,7 +10,7 @@ import { lerPeriodo, periodoTela } from "@/lib/periodo";
 import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
 import { ContasReceberView, type ContaView, type ResumoReceber } from "@/components/financeiro/contas-receber-view";
 
-export const metadata: Metadata = { title: "Contas a Receber" };
+export const metadata: Metadata = { title: "Contas a receber" };
 
 export default async function ContasReceberPage({
   searchParams,

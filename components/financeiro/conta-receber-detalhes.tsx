@@ -106,7 +106,7 @@ export function ContaReceberDetalhes({ id, onFechar, versao = 0, onAbrirConta }:
             {/* Baixa parcial: o que entrou × o que falta (como no Conta Azul) */}
             {(d.valorRecebido ?? 0) > 0 && d.status !== "RECEBIDO" && (
               <dl className="grid grid-cols-2 gap-2 text-sm" data-detalhe-parcial>
-                <div className="rounded-lg bg-success-50 px-3 py-2"><dt className="text-xs text-ink-muted">Valor recebido</dt><dd className="font-semibold text-success-700 tabular-nums">{formatarMoeda(d.valorRecebido ?? 0)}</dd></div>
+                <div className="rounded-lg bg-ok-claro px-3 py-2"><dt className="text-xs text-ink-muted">Valor recebido</dt><dd className="font-semibold text-ok-texto tabular-nums">{formatarMoeda(d.valorRecebido ?? 0)}</dd></div>
                 <div className="rounded-lg bg-atencao-claro px-3 py-2"><dt className="text-xs text-ink-muted">Valor em aberto</dt><dd className="font-semibold text-atencao-texto tabular-nums" data-detalhe-saldo>{formatarMoeda(d.saldo ?? 0)}</dd></div>
               </dl>
             )}
