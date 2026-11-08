@@ -14,6 +14,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
+import { toast } from "@/components/ui/avisos";
 import { ContratoDocumentos } from "@/components/forms/contrato-documentos";
 import { RecorrenciaLocais, type LocalConfig } from "@/components/forms/recorrencia-locais";
 import {
@@ -126,7 +127,6 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
   const [aba, setAba] = useState<AbaContrato>("contrato");
   const [maisOpcoes, setMaisOpcoes] = useState(false);
   const [abasErro, setAbasErro] = useState<Set<string>>(new Set());
-  const [toast, setToast] = useState<string | null>(null);
 
   const [clientes, setClientes] = useState<ClienteItem[]>([]);
   const [unidades, setUnidades] = useState<Unidade[]>([]);
@@ -316,8 +316,6 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clienteIdSelecionado, unidadesDe, enderecoCliente, podeCriarUnidade]);
 
-  function mostrarToast(msg: string) { setToast(msg); setTimeout(() => setToast(null), 3000); }
-
   async function gerarNumero() {
     setGerandoNumero(true);
     try {
@@ -344,7 +342,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
       const data = await res.json();
       setValue("status", statusAlvo as any);
       if (data.historico) setHistoricoStatus((prev) => [data.historico, ...prev]);
-      mostrarToast(`Status alterado para "${LABELS_STATUS_CONTRATO[statusAlvo] ?? statusAlvo}".`);
+      toast(`Status alterado para “${LABELS_STATUS_CONTRATO[statusAlvo] ?? statusAlvo}”.`);
       setStatusAlvo(null);
     } catch { setErroGlobal("Erro de conexão."); } finally { setSalvandoStatus(false); }
   }
@@ -422,7 +420,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
       if (!res.ok) { const err = await res.json(); setErroGlobal(err.erro ?? "Erro ao salvar contrato."); return; }
       const saved = await res.json().catch(() => ({}));
       if (continuar) {
-        mostrarToast(isEditing ? "Alterações salvas!" : "Contrato cadastrado!");
+        toast(isEditing ? "Contrato salvo." : "Contrato criado.");
         if (!isEditing && saved?.id) { router.push(`/contratos/${saved.id}/editar`); router.refresh(); }
         else router.refresh();
       } else {
@@ -441,7 +439,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
     const dias = diasAteDiaCivil(diaCivilDeChave(dataFimVal))!; // pelo dia de Brasília
     if (dias < 0) return { txt: `Vencido há ${Math.abs(dias)} dias`, cls: "bg-atrasado-claro text-atrasado-texto" };
     if (dias <= 30) return { txt: `Vence em ${dias} dias`, cls: "bg-atencao-claro text-atencao-texto" };
-    return { txt: `Vence em ${dias} dias`, cls: "bg-success-50 text-success-700" };
+    return { txt: `Vence em ${dias} dias`, cls: "bg-ok-claro text-ok-texto" };
   }
   const bv = badgeVigencia();
 
@@ -478,7 +476,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
       return (
         <p className="text-sm text-atencao-texto" data-proximo-reajuste="pendente">
           Aniversário de {textoCompetencia(s.aniversario)}: {formatarMoeda(s.valorAtual)} → {formatarMoeda(s.valorNovo)}.{" "}
-          <Link href="/contratos/reajustes" className="font-semibold text-acento hover:underline">Decidir em Reajustes</Link>
+          <Link href="/contratos/reajustes" className="font-medium text-acento hover:underline">Decidir em Contratos › Reajustes</Link>
         </p>
       );
     }
@@ -492,12 +490,6 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
 
   return (
     <form onSubmit={salvar} className="min-h-full -m-6 bg-surface-page p-4 sm:p-6">
-      {toast && (
-        <div className="fixed top-5 right-5 z-50 flex items-center gap-2 bg-ok text-white text-sm font-medium rounded-card px-4 py-3 shadow-card-hover animate-in fade-in slide-in-from-top-2">
-          <FileCheck className="w-4 h-4" /> {toast}
-        </div>
-      )}
-
       {/* Modal de confirmação de mudança de status */}
       {statusAlvo && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => !salvandoStatus && setStatusAlvo(null)}>
@@ -716,7 +708,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
             <ToggleSwitch
               label="Faturamento automático"
               description={faturamentoAutomaticoVal ? `A medição sai sozinha no dia de faturamento, ${textoFrequencia(passo)}.` : undefined}
-              dica="Todo dia de manhã o sistema confere os contratos com esta chave ligada: no dia de faturamento, cria a medição do contrato e segue para a aprovação. Se algo falhar, tenta de novo nos 2 dias seguintes e depois avisa no sino. Acompanhe em Financeiro › Faturamento de contratos."
+              dica="Todo dia de manhã a rotina confere os contratos com esta chave: no dia de faturamento cria a medição e segue para a aprovação. Se falhar, tenta de novo nos 2 dias seguintes e depois avisa no sino. Acompanhe em Financeiro › Faturamento de contratos."
               checked={faturamentoAutomaticoVal}
               onChange={(v) => {
                 setValue("faturamentoAutomatico", v, { shouldDirty: true });
@@ -739,14 +731,14 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
             <ToggleSwitch
               label="Emitir a NFS-e sozinha"
               description={emitirNfseAutoVal && !servicoIdVal ? "Escolha o serviço da nota acima: sem ele, a NFS-e fica pendente." : undefined}
-              dica="Depois da aprovação, o sistema emite a NFS-e da medição pela empresa (Dados fiscais), no ambiente em que ela está. Se faltar algum dado (serviço, cliente, emitente), não emite: avisa no sino com o que falta. Pede também a permissão Financeiro › Fiscal."
+              dica="Após a aprovação, a NFS-e da medição é emitida pela empresa (Dados fiscais), no ambiente configurado. Faltando dado (serviço, cliente, emitente), não emite e avisa no sino o que falta. Pede também a permissão Financeiro › Fiscal."
               checked={emitirNfseAutoVal}
               onChange={(v) => setValue("emitirNfseAuto", v, { shouldDirty: true })}
               disabled={!podeNfseAuto || !faturamentoAutomaticoVal}
             />
             <ToggleSwitch
               label="Emitir e enviar o boleto sozinho"
-              dica="Com a NF autorizada (a automática ou a feita à mão), o sistema emite o boleto do Banco Inter de cada cobrança da medição e manda por e-mail ao cliente. Cobrança que já tem boleto não ganha outro. Pede também a permissão Financeiro › Contas a receber."
+              dica="Com a NF autorizada (automática ou manual), o boleto do Banco Inter de cada cobrança da medição é emitido e enviado por e-mail ao cliente. Cobrança com boleto não ganha outro. Pede também a permissão Financeiro › Contas a receber."
               checked={emitirBoletoAutoVal}
               onChange={(v) => setValue("emitirBoletoAuto", v, { shouldDirty: true })}
               disabled={!podeBoletoAuto || !faturamentoAutomaticoVal}
@@ -764,14 +756,14 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
           <div className="space-y-2">
             <p className="text-xs font-bold text-ink-muted uppercase tracking-wider">Tipo de vencimento</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label className={cn("flex flex-col gap-2 p-3 border rounded-lg cursor-pointer transition-colors", tipoVencimentoVal === "DIAS_APOS_FATURAMENTO" ? "border-primary-400 bg-primary-50/40" : "border-surface-border hover:border-primary-300")}>
+              <label className={cn("flex flex-col gap-2 p-3 border rounded-lg cursor-pointer transition-colors", tipoVencimentoVal === "DIAS_APOS_FATURAMENTO" ? "border-acento bg-acento-claro/40" : "border-surface-border hover:border-acento/40")}>
                 <span className="flex items-center gap-2 text-sm font-medium text-ink">
                   <input type="radio" checked={tipoVencimentoVal === "DIAS_APOS_FATURAMENTO"} onChange={() => setValue("tipoVencimento", "DIAS_APOS_FATURAMENTO")} className="accent-primary-600" />
                   {LABELS_TIPO_VENCIMENTO.DIAS_APOS_FATURAMENTO}
                 </span>
                 <Input {...register("diasAposVencimento")} type="number" min={0} placeholder="30" disabled={tipoVencimentoVal !== "DIAS_APOS_FATURAMENTO"} />
               </label>
-              <label className={cn("flex flex-col gap-2 p-3 border rounded-lg cursor-pointer transition-colors", tipoVencimentoVal === "DIA_FIXO_MES" ? "border-primary-400 bg-primary-50/40" : "border-surface-border hover:border-primary-300")}>
+              <label className={cn("flex flex-col gap-2 p-3 border rounded-lg cursor-pointer transition-colors", tipoVencimentoVal === "DIA_FIXO_MES" ? "border-acento bg-acento-claro/40" : "border-surface-border hover:border-acento/40")}>
                 <span className="flex items-center gap-2 text-sm font-medium text-ink">
                   <input type="radio" checked={tipoVencimentoVal === "DIA_FIXO_MES"} onChange={() => setValue("tipoVencimento", "DIA_FIXO_MES")} className="accent-primary-600" />
                   {LABELS_TIPO_VENCIMENTO.DIA_FIXO_MES}
@@ -784,14 +776,14 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
           <div className="space-y-2" data-faturamento-adicionais>
             <p className="text-xs font-bold text-ink-muted uppercase tracking-wider">Serviços avulsos do contrato (itens executados e adicionais das OS)</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label className={cn("flex flex-col gap-1 p-3 border rounded-lg cursor-pointer transition-colors", faturamentoAdicionaisVal !== "CONSOLIDADO" ? "border-primary-400 bg-primary-50/40" : "border-surface-border hover:border-primary-300")}>
+              <label className={cn("flex flex-col gap-1 p-3 border rounded-lg cursor-pointer transition-colors", faturamentoAdicionaisVal !== "CONSOLIDADO" ? "border-acento bg-acento-claro/40" : "border-surface-border hover:border-acento/40")}>
                 <span className="flex items-center gap-2 text-sm font-medium text-ink">
                   <input type="radio" checked={faturamentoAdicionaisVal !== "CONSOLIDADO"} onChange={() => setValue("faturamentoAdicionais", "SEPARADO")} className="accent-primary-600" />
                   Faturas separadas
                 </span>
                 <span className="text-xs text-ink-muted">Cada OS gera a própria medição de adicional (padrão).</span>
               </label>
-              <label className={cn("flex flex-col gap-1 p-3 border rounded-lg cursor-pointer transition-colors", faturamentoAdicionaisVal === "CONSOLIDADO" ? "border-primary-400 bg-primary-50/40" : "border-surface-border hover:border-primary-300")}>
+              <label className={cn("flex flex-col gap-1 p-3 border rounded-lg cursor-pointer transition-colors", faturamentoAdicionaisVal === "CONSOLIDADO" ? "border-acento bg-acento-claro/40" : "border-surface-border hover:border-acento/40")}>
                 <span className="flex items-center gap-2 text-sm font-medium text-ink">
                   <input type="radio" checked={faturamentoAdicionaisVal === "CONSOLIDADO"} onChange={() => setValue("faturamentoAdicionais", "CONSOLIDADO")} className="accent-primary-600" />
                   Consolidados na fatura do mês
@@ -858,12 +850,12 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
               {/* Locais do contrato (com excluir) */}
               <div className="space-y-2" data-locais-cobertos>
                 {localPendente && (
-                  <div className="flex items-start gap-3 p-3 border border-primary-200 bg-primary-50/40 rounded-lg" data-local-pendente>
-                    <Building2 className="w-4 h-4 text-primary-500 shrink-0 mt-0.5" />
+                  <div className="flex items-start gap-3 p-3 border border-surface-border bg-surface-alt/60 rounded-lg" data-local-pendente>
+                    <Building2 className="w-4 h-4 text-ink-muted shrink-0 mt-0.5" />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-ink">{localPendente.nome}</p>
                       <p className="text-xs text-ink-subtle">{textoEndereco(localPendente) || "Sem endereço"}</p>
-                      <p className="text-[11px] text-primary-700 mt-0.5">Preenchido com o endereço do cadastro do cliente — vira um local do cliente ao salvar.</p>
+                      <p className="text-[11px] text-ink-muted mt-0.5">Endereço do cadastro do cliente; vira um local do cliente ao salvar.</p>
                     </div>
                     <button type="button" onClick={() => setLocalPendente(null)} className="p-1.5 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded" title="Excluir este local" aria-label={`Excluir ${localPendente.nome}`} data-excluir-local="pendente">
                       <Trash2 className="w-4 h-4" />
@@ -940,10 +932,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
 
       {/* ABA 3 — Recorrência de OS por local (como estava) */}
       <Painel ativo={aba === "recorrencia"} id="recorrencia">
-        <FormSection title="Recorrência de OS por local" icon={<Repeat className="w-3.5 h-3.5" />}>
-          <p className="text-xs text-ink-muted -mt-2 mb-1">
-            Cada local coberto pode ter sua própria recorrência (frequência, tipo de OS, responsável e data da primeira OS).
-          </p>
+        <FormSection title="Recorrência de OS por local" icon={<Repeat className="w-3.5 h-3.5" />} dica="Cada local coberto tem a própria recorrência: frequência, tipo de OS, responsável e data da primeira OS. A OS recorrente nasce desses dados.">
           {localPendente && (
             <p className="text-xs text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2">
               O local “{localPendente.nome}” é criado ao salvar; depois disso a recorrência dele aparece aqui.
@@ -996,8 +985,8 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
         <FormSection title="Reajuste anual" icon={<TrendingUp className="w-3.5 h-3.5" />}>
           <ToggleSwitch
             label="Reajuste anual"
-            description="No aniversário, o sistema sugere e você confirma."
-            dica="Todo ano, no mês de aniversário, o contrato aparece em Contratos › Reajustes (e no sino) com o valor novo. Nada muda sozinho: você aplica, adia ou dispensa. Aplicado, o valor novo vale para as cobranças previstas daqui pra frente; o que já foi cobrado não muda. O 1º reajuste vem depois de 12 meses de contrato."
+            description="No aniversário, o sistema sugere o valor novo; a aplicação é manual."
+            dica="No mês de aniversário o contrato entra em Contratos › Reajustes (e no sino) com o valor novo; aplicar, adiar ou dispensar é manual. Aplicado, vale só para as cobranças futuras; o já cobrado não muda. O 1º reajuste vem após 12 meses."
             checked={!!reajusteAtivo}
             onChange={(v) => setValue("reajusteAtivo", v, { shouldDirty: true })}
           />

@@ -65,7 +65,7 @@ export function ReajustesView({ linhas }: { linhas: LinhaReajuste[] }) {
   async function aplicar(l: LinhaReajuste) {
     const ok = await confirmar({
       titulo: "Aplicar reajuste",
-      mensagem: `${textoSugestao(l.numero, l)} O valor novo vale para as cobranças previstas daqui pra frente; o que já foi cobrado não muda.`,
+      mensagem: `${textoSugestao(l.numero, l)} O valor novo vale só para as cobranças futuras; o já cobrado não muda.`,
       confirmarTexto: "Aplicar",
     });
     if (ok) await decidir(l, { acao: "APLICAR", valorEsperado: l.valorAtual }, "Reajuste aplicado.");
@@ -92,7 +92,7 @@ export function ReajustesView({ linhas }: { linhas: LinhaReajuste[] }) {
         <div className="flex items-center gap-3">
           <div className="p-2 bg-acento-claro rounded-lg"><TrendingUp className="w-5 h-5 text-acento" /></div>
           <h1 className="page-title">Reajustes a aplicar</h1>
-          <Dica rotulo="Reajustes a aplicar" texto="Contratos com reajuste anual por percentual fixo que fizeram aniversário. O sistema só sugere: você aplica, adia ou dispensa. Aplicado, o valor novo vale para as cobranças previstas daqui pra frente; o que já foi cobrado não muda." />
+          <Dica rotulo="Reajustes a aplicar" texto="Contratos com reajuste anual por percentual fixo que fizeram aniversário. O sistema só sugere: aplicar, adiar ou dispensar é manual. Aplicado, vale só para as cobranças futuras; o já cobrado não muda." />
         </div>
         <Link href="/contratos" className="text-sm text-ink-muted hover:text-ink">Ver contratos</Link>
       </div>

@@ -92,7 +92,7 @@ export function FaturamentoContratosView({ periodo, linhas, resumo, soAtencao }:
       // Falhou de novo: volta para a fila (ou para FALHA/pendência) com o erro — mostra o erro
       const s = d.execucao?.situacao as string | undefined;
       if (d.execucao?.erro || (s && retentavel(s))) toast(d.execucao?.erro ?? "Ainda não deu certo.", "erro");
-      else toast("Pronto: a cobrança seguiu.");
+      else toast("Cobrança enviada.");
       router.refresh();
     } catch { toast("Erro de conexão.", "erro"); } finally { setOcupado(null); }
   }
@@ -114,7 +114,7 @@ export function FaturamentoContratosView({ periodo, linhas, resumo, soAtencao }:
         <CardResumo id="concluidas" rotulo="Concluídas" icone={CheckCircle2} cor="text-ok" v={resumo.concluidas.v} q={resumo.concluidas.q} unidade={["contrato", "contratos"]} />
         <CardResumo id="andamento" rotulo="Em andamento" icone={Hourglass} cor="text-atencao" v={resumo.andamento.v} q={resumo.andamento.q} unidade={["contrato", "contratos"]}
           dica="Na fila para a próxima rodada ou esperando alguém (o cliente aprovar, o pedido de compra)." />
-        <CardResumo id="atencao" rotulo="Precisam de você" icone={AlertTriangle} cor="text-atrasado" v={resumo.atencao.v} q={resumo.atencao.q} unidade={["contrato", "contratos"]}
+        <CardResumo id="atencao" rotulo="Com pendência" icone={AlertTriangle} cor="text-atrasado" v={resumo.atencao.v} q={resumo.atencao.q} unidade={["contrato", "contratos"]}
           ativo={soAtencao} onClick={() => navegar({ atencao: soAtencao ? null : "1" })} />
       </GradeCards>
 

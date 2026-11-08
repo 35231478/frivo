@@ -95,7 +95,7 @@ describe("Reajustes a aplicar", () => {
     expect(chamadas).toHaveLength(0);
     avisos.responder = true;
     await clicar(tr("a").querySelector("[data-aplicar]")!);
-    expect(sp(avisos.perguntas[1])).toMatch(/^Contrato CT-a faz aniversário em nov\/2026 — aplicar reajuste de 5% \(R\$ 1\.000,00 → R\$ 1\.050,00\)\? O valor novo vale para as cobranças previstas daqui pra frente/);
+    expect(sp(avisos.perguntas[1])).toMatch(/^Contrato CT-a faz aniversário em nov\/2026 — aplicar reajuste de 5% \(R\$ 1\.000,00 → R\$ 1\.050,00\)\? O valor novo vale só para as cobranças futuras/);
     expect(chamadas).toEqual([{ url: "/api/contratos/a/reajuste", corpo: { ano: 2026, acao: "APLICAR", valorEsperado: 1000 } }]);
     expect(sp(avisos.lista[0][0])).toBe("Reajuste de 5% aplicado: R$ 1.000,00 → R$ 1.050,00.");
     expect(nav.refresh).toHaveBeenCalledTimes(1);
