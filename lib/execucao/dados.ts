@@ -6,6 +6,8 @@
  * A empresa SEMPRE vem da sessão de quem chama.
  */
 import { prisma } from "@/lib/prisma";
+import { textoPortaoConsumo } from "@/lib/estoque/separacao";
+import { paraSeparavel } from "@/lib/estoque/separacao-server";
 import { ambienteEquipamento, descricaoEquipamento, fabricanteModelo } from "@/lib/equipamento-descricao";
 import {
   completo, faltasEquipamento, paraPendencia, verificarConclusao, textoDispensa, MSG_SEM_EQUIPAMENTO, MSG_SAIDAS_SEM_EQUIPAMENTO,
@@ -242,7 +244,7 @@ export async function carregarExecucao(empresaId: string, osId: string, atividad
  * recorrente de contrato sem equipamento vinculado, ou exceção justificada) — e de todos os atendidos
  * completos. Mensagem já diz a atividade de cada pendência.
  */
-export async function verificarConclusaoOs(empresaId: string, osId: string): Promise<{ ok: boolean; mensagem: string | null; pendencias: { atividade: string; pendencias: ResultadoConclusao["pendencias"] }[] }> {
+export async function verificarConclusaoOs(empresaId: string, osId: string): Promise<{ ok: boolean; mensagem: string | null; pendencias: { atividade: string; pendencias: ResultadoConclusao["pendencias"] }[]; materiais: string | null }> {
   const atividades = await prisma.atividadeOs.findMany({
     where: { ordemServicoId: osId, empresaId, status: { not: "CANCELADA" } },
     orderBy: { criadoEm: "asc" }, select: { id: true, titulo: true },
@@ -256,10 +258,28 @@ export async function verificarConclusaoOs(empresaId: string, osId: string): Pro
       || (os.origem === "RECORRENTE" && !(await temEquipamentoVinculado(empresaId, osId)))
       || (execs.length > 0 && execs.every((x) => x.dispensaEquipamento))
     );
-    if (!dispensada) return { ok: false, mensagem: `${MSG_SEM_EQUIPAMENTO} ${MSG_SAIDAS_SEM_EQUIPAMENTO}`, pendencias: [] };
+    if (!dispensada) return { ok: false, mensagem: `${MSG_SEM_EQUIPAMENTO} ${MSG_SAIDAS_SEM_EQUIPAMENTO}`, pendencias: [], materiais: null };
   }
   const pendencias = execs.filter((x) => x.conclusao.pendencias.length).map((x) => ({ atividade: x.atividade.titulo, pendencias: x.conclusao.pendencias }));
-  if (!pendencias.length) return { ok: true, mensagem: null, pendencias };
+  const materiais = await portaoConsumoMaterial(empresaId, osId);
+  if (!pendencias.length && !materiais) return { ok: true, mensagem: null, pendencias, materiais };
   const linhas = execs.filter((x) => x.conclusao.pendencias.length).map((x) => `Atividade “${x.atividade.titulo}”: ${x.conclusao.mensagem!.replace(/^Para concluir, falta: /, "").replace(/\.$/, "")}`);
-  return { ok: false, mensagem: `Para concluir a OS, falta: ${linhas.join(" | ")}.`, pendencias };
+  if (materiais) linhas.push(materiais);
+  return { ok: false, mensagem: `Para concluir a OS, falta: ${linhas.join(" | ")}.`, pendencias, materiais };
+}
+
+/**
+ * Estoque E4.2 — Portão 1 (consumo): com "Exigir prestação de contas de material" ligado na empresa, a OS não conclui
+ * enquanto houver material separado sem o consumo informado. Desligado (padrão): não trava (a central só avisa).
+ * Devolve o texto do que falta, ou null.
+ */
+export async function portaoConsumoMaterial(empresaId: string, osId: string): Promise<string | null> {
+  const cfg = await prisma.configuracao.findUnique({ where: { empresaId }, select: { osExigirPrestacaoMaterial: true } });
+  if (!cfg?.osExigirPrestacaoMaterial) return null;
+  const separados = await prisma.osMaterial.findMany({
+    where: { ordemServicoId: osId, ordemServico: { empresaId }, estadoSeparacao: "SEPARADO", quantidadeSeparada: { gt: 0 } },
+    select: { id: true, produtoId: true, descricao: true, unidade: true, quantidade: true, quantidadeSeparada: true, quantidadeConsumida: true, estadoSeparacao: true },
+    orderBy: { ordem: "asc" },
+  });
+  return textoPortaoConsumo(separados.map(paraSeparavel));
 }

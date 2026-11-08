@@ -187,7 +187,7 @@ describe("E4.1 — estado da separação na OS", () => {
     expect($("[data-flag-prestacao]")).toBeTruthy();
     // Tudo separado: "Ver separação"; nada pendente de prestação quando consumido
     await act(async () => { root.unmount(); });
-    const consumidos = materiais.map((m) => ({ ...m, quantidadeSeparada: m.quantidade, estadoSeparacao: "CONSUMIDO" as const }));
+    const consumidos = materiais.map((m) => ({ ...m, quantidadeSeparada: m.quantidade, quantidadeConsumida: m.quantidade, estadoSeparacao: "CONSUMIDO" as const }));
     await montar(createElement(OsSeparacao, { osId: "os1", materiais: consumidos, resumo: resumoSeparacao(consumidos), podeSeparar: true }));
     expect(txt($("[data-resumo-separacao]"))).toBe("Tudo separado");
     expect($("[data-flag-prestacao]")).toBeNull();

@@ -348,6 +348,7 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
           <ToggleSwitch label="Permitir OS sem contrato vinculado" checked={cfg.osPermitirSemContrato} onChange={() => toggleCfg("osPermitirSemContrato")} />
           <ToggleSwitch label="Exigir questionário preenchido para concluir OS" checked={cfg.osExigirQuestionario} onChange={() => toggleCfg("osExigirQuestionario")} />
           <ToggleSwitch label="Permitir técnico editar OS após concluída" checked={cfg.osPermitirEdicaoConcluida} onChange={() => toggleCfg("osPermitirEdicaoConcluida")} />
+          <ToggleSwitch label="Exigir prestação de contas de material para finalizar a OS" dica="Ligado: a OS só conclui depois que o consumo de todo material separado foi informado (aba Materiais &amp; Compras). Desligado: a OS mostra o que falta, mas não trava." checked={cfg.osExigirPrestacaoMaterial} onChange={() => toggleCfg("osExigirPrestacaoMaterial")} />
         </ToggleGroup>
 
         <ToggleGroup title="Notificações" dica="Mensagens enviadas automaticamente ao cliente na abertura e na conclusão das ordens de serviço.">

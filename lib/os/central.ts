@@ -1,6 +1,7 @@
 import { statusVisualReceber } from "@/lib/financeiro-status";
 import { atividadeEncerrada, situacaoPrazo, textoPrazo } from "@/lib/os/prazos";
 import { medicaoValida, resumoStatus, type EstagioOs } from "@/lib/os/status";
+import { semConsumoInformado, type MaterialSeparavel } from "@/lib/estoque/separacao";
 
 /**
  * A "central de controle" da OS em dados: tudo o que o cabeçalho e o Resumo mostram para
@@ -27,6 +28,9 @@ export interface OsCentralEntrada {
   orcamentoOrigemId?: string | null;
   servicosAdicionais?: { statusCobranca: string }[];
   prazosSla?: { status: string }[];
+  /** E4.2: materiais da OS (snapshot) e a amarra da empresa — "informar o consumo" entra no que falta */
+  materiais?: MaterialSeparavel[];
+  exigirPrestacaoMaterial?: boolean;
 }
 
 export type SituacaoPagamento = "SEM_COBRANCA" | "PREVISTO" | "A_RECEBER" | "VENCIDO" | "PAGO" | "PERDA";
@@ -93,6 +97,12 @@ export function centralDaOs(os: OsCentralEntrada, agora: Date = new Date()) {
     if (aAvaliar) falta.push({ chave: "adicional", texto: `Decidir a cobrança de ${aAvaliar} serviço${aAvaliar > 1 ? "s" : ""} adicional${aAvaliar > 1 ? "is" : ""}`, aba: "resumo", nivel: "acao" });
     const aguardando = os.orcamentos.filter((o) => o.orcamento.status === "ENVIADO").length;
     if (aguardando) falta.push({ chave: "orcamento-enviado", texto: `${aguardando} orçamento${aguardando > 1 ? "s" : ""} aguardando aprovação do cliente`, aba: "comercial", nivel: "acao" });
+    // E4.2: material separado sem consumo informado — com a amarra ligada, trava a conclusão (alerta); sem ela, só lembra
+    const semConsumo = semConsumoInformado(os.materiais ?? []).length;
+    if (semConsumo) falta.push({
+      chave: "consumo-material", aba: "materiais", nivel: os.exigirPrestacaoMaterial ? "alerta" : "acao",
+      texto: `Informar o consumo de ${semConsumo} ${semConsumo > 1 ? "materiais separados" : "material separado"}${os.exigirPrestacaoMaterial ? " — a OS não conclui sem isso" : ""}`,
+    });
     if (status.exibido === "CONCLUIDA") falta.push({ chave: "faturar", texto: "Gerar a medição para faturar a OS", aba: "financeiro", nivel: "acao" });
     if (pagamento === "VENCIDO") falta.push({ chave: "cobranca-vencida", texto: "Cobrança vencida — acompanhar o recebimento", aba: "financeiro", nivel: "alerta" });
   }

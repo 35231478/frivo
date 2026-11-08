@@ -210,8 +210,8 @@ describe.skipIf(!URL_PG)("Separação + reserva de material (PostgreSQL real)", 
     // O item com material separado (reservado) não se edita nem apaga: a reserva ficaria órfã
     const editar = (corpo: unknown) => chamar("ordens/[id]/orcamento/[itemId]", "PUT", corpo, { id: ids.os, itemId: ids.item });
     const apagar = () => chamar("ordens/[id]/orcamento/[itemId]", "DELETE", undefined, { id: ids.os, itemId: ids.item });
-    expect((await editar({ quantidade: 2, valorUnitario: 800 })).json).toMatchObject({ erro: expect.stringMatching(/Há material separado para este item/) });
-    expect((await apagar()).json).toMatchObject({ erro: expect.stringMatching(/Há material separado para este item/) });
+    expect((await editar({ quantidade: 2, valorUnitario: 800 })).json).toMatchObject({ erro: expect.stringMatching(/Há material separado ou consumido para este item/) });
+    expect((await apagar()).json).toMatchObject({ erro: expect.stringMatching(/Há material separado ou consumido para este item/) });
     expect(await prisma.osMaterial.count({ where: { osItemId: ids.item } })).toBe(3);
     // Marcar executado continua igual
     expect((await editar({ executado: true })).status).toBe(200);
@@ -231,7 +231,7 @@ describe.skipIf(!URL_PG)("Separação + reserva de material (PostgreSQL real)", 
   it("nesta leva não há consumo/devolução nem amarras: material CONSUMIDO não muda pela separação e não puxa a OS para a fila; OS concluída/cancelada fica fora da fila (estado continua visível)", async () => {
     const os = await novaOs();
     const { materiais } = await itemComMateriais(os.id, [["tubo", "Tubo", "m", 1], ["cap", "Capacitor", "un", 1, "VENDA_A_PARTE"]]);
-    await prisma.osMaterial.update({ where: { id: materiais.cap }, data: { estadoSeparacao: "CONSUMIDO", quantidadeSeparada: 1 } }); // como a E4.2 vai deixar
+    await prisma.osMaterial.update({ where: { id: materiais.cap }, data: { estadoSeparacao: "CONSUMIDO", quantidadeSeparada: 1, quantidadeConsumida: 1 } }); // como a E4.2 deixa (tudo consumido, sem sobra)
     expect((await fila()).json.map((o: any) => [o.id, o.aSeparar, o.total])).toEqual([[os.id, 1, 1]]);
     expect((await separar(os.id, [{ id: materiais.cap, quantidade: 0 }])).json).toMatchObject({ erro: expect.stringMatching(/já consumido/) });
     const tela = (await verOs(os.id)).json;

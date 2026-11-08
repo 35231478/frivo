@@ -42,7 +42,7 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
         },
         orderBy: { criadoEm: "asc" },
       },
-      itensOrcamento: { orderBy: [{ ordem: "asc" }, { id: "asc" }], include: { materiais: { orderBy: { ordem: "asc" }, include: { separadoPor: { select: { nome: true } } } }, material: { select: { osItemId: true } } } },
+      itensOrcamento: { orderBy: [{ ordem: "asc" }, { id: "asc" }], include: { materiais: { orderBy: { ordem: "asc" }, include: { separadoPor: { select: { nome: true } }, consumidoPor: { select: { nome: true } } } }, material: { select: { osItemId: true } } } },
       // Medições OFICIAIS em que a OS entrou (itens de medição → Medicao); a antiga
       // "medição interna da OS" (OsMedicao) saiu: nunca virava conta a receber
       medicaoItens: {
@@ -97,6 +97,8 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
 
   // Faturar: a OS já está numa fatura/medição viva (direto, relatório ou o orçamento de origem)? Nunca oferece de novo
   const fatura = await osJaFaturada(os.id);
+  // E4.2: a amarra da empresa (a central mostra "não conclui sem isso" quando ligada)
+  const cfg = await prisma.configuracao.findUnique({ where: { empresaId }, select: { osExigirPrestacaoMaterial: true } });
 
-  return <OsDetalhe os={{ ...os, medicoes: medicoesDaOs, galeria, contasReceber, fatura }} abaInicial={aba} />;
+  return <OsDetalhe os={{ ...os, medicoes: medicoesDaOs, galeria, contasReceber, fatura, exigirPrestacaoMaterial: cfg?.osExigirPrestacaoMaterial ?? false }} abaInicial={aba} />;
 }

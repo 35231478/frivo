@@ -605,6 +605,9 @@ model Configuracao {
   osPermitirSemContrato     Boolean @default(true) @map("os_permitir_sem_contrato")
   osExigirQuestionario      Boolean @default(false) @map("os_exigir_questionario")
   osPermitirEdicaoConcluida Boolean @default(false) @map("os_permitir_edicao_concluida")
+  /// Estoque E4.2 (Portão 1): a OS só conclui depois que o consumo de todo material separado foi informado.
+  /// Desligado (padrão): a OS avisa o que falta, mas não trava.
+  osExigirPrestacaoMaterial Boolean @default(false) @map("os_exigir_prestacao_material")
 
   // Notificações
   notifEmailAbrirOs       Boolean @default(false) @map("notif_email_abrir_os")
@@ -787,6 +790,7 @@ model Usuario {
   contratoHistoricos     ContratoHistoricoStatus[]
   movimentacoesEstoque   MovimentacaoEstoque[]
   osMateriaisSeparados   OsMaterial[]          @relation("OsMaterialSeparadoPor")
+  osMateriaisConsumidos  OsMaterial[]          @relation("OsMaterialConsumidoPor")
   notasCompra            NotaCompra[]
   checklistRespostas     ChecklistResposta[]
   fotosAtendimento       FotoAtendimento[]
@@ -2214,12 +2218,18 @@ model OsMaterial {
   estadoSeparacao    EstadoSeparacaoMaterial? @map("estado_separacao")
   separadoEm         DateTime?                @map("separado_em")
   separadoPorId      String?                  @map("separado_por_id")
+  /// E4.2 — consumo informado (estado CONSUMIDO): quanto saiu de verdade (SAIDA no razão), quem e quando.
+  /// A sobra (separada − consumida) continua reservada: "pendente de devolução" até a E4.3.
+  quantidadeConsumida Decimal   @default(0) @map("quantidade_consumida") @db.Decimal(12, 3)
+  consumidoEm         DateTime? @map("consumido_em")
+  consumidoPorId      String?   @map("consumido_por_id")
 
   ordemServico OrdemServico     @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
   item         OsItemOrcamento  @relation("OsItemMateriais", fields: [osItemId], references: [id], onDelete: Cascade)
   produto      Produto?         @relation(fields: [produtoId], references: [id], onDelete: SetNull)
   linhaProduto OsItemOrcamento? @relation("OsPecaDerivada")
   separadoPor  Usuario?         @relation("OsMaterialSeparadoPor", fields: [separadoPorId], references: [id], onDelete: SetNull)
+  consumidoPor Usuario?         @relation("OsMaterialConsumidoPor", fields: [consumidoPorId], references: [id], onDelete: SetNull)
 
   @@index([ordemServicoId])
   @@index([osItemId])

@@ -12,7 +12,8 @@ import {
 } from "@/lib/estoque/separacao";
 
 const M = (id: string, quantidade: number, quantidadeSeparada = 0, estadoSeparacao: MaterialSeparavel["estadoSeparacao"] = null, produtoId: string | null = `p-${id}`): MaterialSeparavel =>
-  ({ id, produtoId, descricao: id, unidade: "un", quantidade, quantidadeSeparada, estadoSeparacao });
+  // Consumido/devolvido sem sobra (a E4.2 grava o consumido): o que estava separado saiu
+  ({ id, produtoId, descricao: id, unidade: "un", quantidade, quantidadeSeparada, quantidadeConsumida: estadoSeparacao === "CONSUMIDO" || estadoSeparacao === "DEVOLVIDO" ? quantidadeSeparada : 0, estadoSeparacao });
 
 describe("E4.1 — separação de material (regra pura)", () => {
   it("razão: RESERVA subtrai (como a saída) e ESTORNO_RESERVA devolve — os dois ficam no razão como RESERVA, origem OS", () => {
