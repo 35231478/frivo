@@ -478,7 +478,7 @@ describe("centro de custo: cadastro no padrão", () => {
     expect(c.json).toMatchObject({ nome: "Administrativo", empresaId: "e1", ativo: true });
     expect((await cadastroApi("POST", { nome: "x", empresaId: "e2" })).json.erro).toBe("Campo não permitido: empresaId.");
     expect(await cadastroApi("POST", { nome: "OBRA SHOPPING NORTE" })).toMatchObject({ status: 409, json: { erro: "Já existe o centro de custo “Obra Shopping Norte”." } });
-    expect((await cadastroApi("POST", { nome: "obra encerrada" })).json.erro).toBe("Já existe o centro de custo “Obra encerrada” (inativo — reative-o em vez de cadastrar de novo).");
+    expect((await cadastroApi("POST", { nome: "obra encerrada" })).json.erro).toBe("Já existe o centro de custo “Obra encerrada” (inativo: reative-o).");
     expect((await cadastroApi("POST", { nome: "" })).status).toBe(400);
     expect((await cadastroApi("PATCH", { nome: "Adm. central" }, c.json.id)).json).toMatchObject({ nome: "Adm. central", ativo: true });
     expect((await cadastroApi("PATCH", { nome: "frota" }, c.json.id)).status).toBe(409);
@@ -516,9 +516,9 @@ describe("centro de custo: cadastro no padrão", () => {
     expect(r.json.usos).toEqual([
       { rotulo: "2 contas a pagar", total: 2 }, { rotulo: "1 fornecedor (padrão)", total: 1 }, { rotulo: "1 nota não lançada", total: 1 },
     ]);
-    expect(r.json.avisos[0]).toBe("Usado em 2 contas a pagar (1 em aberto). Elas continuam com este centro de custo (aparece como “inativo”); ele só deixa de ser oferecido em contas novas.");
+    expect(r.json.avisos[0]).toBe("Usado em 2 contas a pagar (1 em aberto): seguem com este centro (como “inativo”); só sai das contas novas.");
     expect(r.json.avisos.slice(1)).toEqual([
-      "É o padrão de 1 fornecedor: as próximas notas deles não vêm mais com ele.",
+      "É o padrão de 1 fornecedor: as próximas notas deles vêm sem centro.",
       "Está em 1 nota de compra ainda não lançada: dá para lançar assim mesmo ou trocar antes.",
     ]);
     void _;

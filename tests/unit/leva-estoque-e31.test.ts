@@ -132,7 +132,7 @@ describe("categorias de produto: cadastro no padrão", () => {
     expect((await categorias("PATCH", { nome: "peças de reposição" }, c.json.id)).status).toBe(409);
     expect((await categorias("DELETE", undefined, c.json.id)).status).toBe(200);
     expect(T("categoriaProduto").find((x) => x.id === c.json.id).ativo).toBe(false); // excluir = inativar
-    expect((await categorias("POST", { nome: "consumíveis de obra", comportamento: "VENDA_A_PARTE" })).json.erro).toBe("Já existe a categoria “Consumíveis de obra” (inativa — reative-a em vez de cadastrar de novo).");
+    expect((await categorias("POST", { nome: "consumíveis de obra", comportamento: "VENDA_A_PARTE" })).json.erro).toBe("Já existe a categoria “Consumíveis de obra” (inativa: reative-a).");
     expect((await categorias("PATCH", { ativo: true }, c.json.id)).json.ativo).toBe(true);
     expect(cats()).toHaveLength(3);
   });

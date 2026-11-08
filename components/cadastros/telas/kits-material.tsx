@@ -14,7 +14,7 @@ export function KitsMaterialTela() {
     <CadastroPadrao
       entidade="kits-material"
       Editor={EditorKitMaterial}
-      ajuda="Um kit junta produtos com a quantidade usada por serviço (ex.: kit de instalação: suporte, tubulação, cabo). Na composição do serviço ele entra como um bloco e é “vivo”: mudar o kit muda em todos os serviços que o usam; no orçamento/OS ele vira uma cópia editável. O custo é só referência (último custo de compra), nunca altera preço. Inativar tira o kit das novas escolhas; os serviços que já o usam continuam com ele."
+      ajuda="Um kit junta produtos com a quantidade usada por serviço (ex.: suporte, tubulação e cabo de uma instalação). Alterar o kit atualiza todos os serviços que o usam; no orçamento/OS vira uma cópia editável. O custo é só referência."
       celula={(col, k) => {
         if (col === "itens") { const n = Array.isArray(k.itens) ? k.itens.length : 0; return n ? `${n} ${n === 1 ? "item" : "itens"}` : "—"; }
         if (col === "custo") {

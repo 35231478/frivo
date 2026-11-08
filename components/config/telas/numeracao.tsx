@@ -14,7 +14,7 @@ export async function TelaNumeracao() {
       <PageHeader
         title="Numeração de documentos"
         description="O próximo número de cada documento"
-        dica="Para continuar a numeração de onde o sistema anterior parou. A sequência é contínua (não reinicia no ano): o ano no número é só o rótulo de quando o documento nasceu. Só os próximos documentos mudam; os existentes ficam como estão. A NFS-e não entra: o número dela vem da prefeitura."
+        dica="Para continuar a numeração do sistema anterior. A sequência é contínua, não reinicia no ano. Só os próximos documentos mudam; a NFS-e não entra (número da prefeitura)."
         backHref="/configuracoes/conta"
       />
       <NumeracaoClient inicial={numeracoes} podeEditar={pode(u.permissoes, "configuracoes", "gerenciar", u.role)} />

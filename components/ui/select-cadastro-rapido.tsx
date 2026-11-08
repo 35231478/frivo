@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { corDado } from "@/lib/ui/tokens";
 import { Check, ChevronDown, ExternalLink, Loader2, Plus, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
@@ -321,7 +322,7 @@ function MiniCadastro({
               ) : c.tipo === "cor" ? (
                 <input
                   type="color"
-                  value={valores[c.nome] || "#64748B"}
+                  value={valores[c.nome] || corDado.cinza}
                   onChange={(e) => set(c.nome, e.target.value)}
                   className="h-10 w-16 rounded-lg border border-surface-border bg-white p-1 cursor-pointer"
                 />

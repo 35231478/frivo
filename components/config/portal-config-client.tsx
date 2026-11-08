@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { corDado } from "@/lib/ui/tokens";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -8,7 +9,7 @@ import { FormField, FormGrid } from "@/components/ui/form-field";
 import { Check, Upload, X } from "lucide-react";
 
 export function PortalConfigClient() {
-  const [cor, setCor] = useState("#0EA5E9");
+  const [cor, setCor] = useState<string>(corDado.azul);
   const [boasVindas, setBoasVindas] = useState("");
   const [logo, setLogo] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -65,7 +66,7 @@ export function PortalConfigClient() {
         </FormField>
       </FormGrid>
       <FormField label="Mensagem de boas-vindas" dica="Exibida no painel inicial do portal.">
-        <Textarea value={boasVindas} onChange={(e) => setBoasVindas(e.target.value)} rows={3} placeholder="Bem-vindo ao nosso portal! Aqui você acompanha suas ordens de serviço, documentos e financeiro." />
+        <Textarea value={boasVindas} onChange={(e) => setBoasVindas(e.target.value)} rows={3} placeholder="Ex.: Acompanhe aqui as ordens de serviço, os documentos e o financeiro." />
       </FormField>
       <div className="flex items-center gap-3">
         <Button onClick={salvar} loading={salvando}><Check className="w-4 h-4" /> Salvar</Button>

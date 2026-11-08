@@ -417,7 +417,7 @@ describe.skipIf(!URL_PG)("execução da OS por equipamento (PostgreSQL real)", (
     expect(r.status).toBe(200);
     // eqA, eqB (Matriz) e eqC (Loja) usam o tipo; o inativo não conta
     expect(r.json.usos).toEqual([{ rotulo: "3 equipamentos ativos", total: 3 }, { rotulo: "3 itens de checklist", total: 3 }]);
-    expect(r.json.avisos[1]).toBe("O checklist deste tipo (3 itens) fica guardado: equipamentos deste tipo continuam respondendo ele nas OS, e as respostas antigas não mudam.");
+    expect(r.json.avisos[1]).toBe("O checklist (3 itens) fica guardado: segue nas OS deste tipo e as respostas antigas não mudam.");
   });
 
   it("isolamento e permissão: outra empresa não vê nem grava; só visualizar não grava; sem login 401", async () => {

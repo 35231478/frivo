@@ -206,7 +206,7 @@ export async function impactoCadastro(entidade: EntidadeCadastro, id: string, em
   const avisos = usos.length
     ? [
       `Em uso: ${juntar(usos.map((u) => u.rotulo))}.`,
-      `Esses registros continuam como estão (nada é apagado) e seguem mostrando ${o} ${def.singular} como “inativ${o}”; ${def.feminino ? "ela" : "ele"} só deixa de ser oferecid${o} para novas escolhas.`,
+      `Nada é apagado: esses registros seguem com ${o} ${def.singular} (como “inativ${o}”); só sai das novas escolhas.`,
     ]
     : [`Não está em uso em nenhum registro.`];
   return { bloqueio, avisos, usos };

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Eye } from "lucide-react";
+import { BarChart3, Calculator, CalendarDays, Check, ClipboardList, Eye, FileText, Landmark, LayoutDashboard, Package, QrCode, Settings, ShoppingCart, Thermometer, Truck, Users, UsersRound, Wallet, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,13 @@ import { Select } from "@/components/ui/select";
 import { FormField, FormGrid } from "@/components/ui/form-field";
 import { Drawer } from "@/components/ui/drawer";
 import { salvarCadastro, type EditorCadastroProps } from "@/components/cadastros/cadastro-padrao";
-import { SECOES, ACOES_LABEL, PRESETS, TIPOS_PERFIL_LABEL, permissoesVazias, type Permissoes, type Acao } from "@/lib/permissoes";
+import { SECOES, ACOES_LABEL, PRESETS, TIPOS_PERFIL_LABEL, permissoesVazias, type Permissoes, type Acao, type IconeModulo } from "@/lib/permissoes";
+import { corDado } from "@/lib/ui/tokens";
+
+/** Ícone de cada módulo (lib/permissoes.ts guarda só o nome: é um arquivo puro, sem a biblioteca). */
+const ICONES: Record<IconeModulo, LucideIcon> = {
+  ClipboardList, Users, Thermometer, CalendarDays, QrCode, Package, ShoppingCart, Calculator, FileText, Landmark, Wallet, UsersRound, Truck, Settings, BarChart3, LayoutDashboard,
+};
 
 const TIPOS = ["ADMINISTRADOR", "SUPERVISOR", "FINANCEIRO", "TECNICO", "AUXILIAR", "PERSONALIZADO"];
 
@@ -30,12 +36,12 @@ function MiniToggle({ checked, onChange, rotulo }: { checked: boolean; onChange:
  * contra autopromoção ficam no servidor (lib/cadastros/especificos.ts).
  */
 // Cor que um registro novo recebe (dado salvo no cadastro; o usuário troca no seletor)
-const COR_PADRAO = "#8B5CF6";
+const COR_PADRAO = corDado.roxo;
 
 export function EditorPerfil({ item, aberto, onFechar, onSalvo }: EditorCadastroProps) {
   const [nome, setNome] = useState("");
   const [tipo, setTipo] = useState("PERSONALIZADO");
-  const [cor, setCor] = useState("#8B5CF6");
+  const [cor, setCor] = useState<string>(COR_PADRAO);
   const [descricao, setDescricao] = useState("");
   const [permissoes, setPermissoes] = useState<Permissoes>(permissoesVazias());
   const [erro, setErro] = useState("");
@@ -119,7 +125,7 @@ export function EditorPerfil({ item, aberto, onFechar, onSalvo }: EditorCadastro
                 {secao.modulos.map((m) => (
                   <div key={m.id} className="flex items-start justify-between gap-4 px-4 py-3 flex-wrap">
                     <div className="flex items-center gap-2 min-w-[160px]">
-                      <span className="text-lg leading-none">{m.icone}</span>
+                      {(() => { const Icone = ICONES[m.icone]; return <Icone className="w-4 h-4 text-ink-subtle shrink-0" aria-hidden />; })()}
                       <span className="text-sm font-medium text-ink">{m.label}</span>
                     </div>
                     <div className="flex items-center gap-x-5 gap-y-2 flex-wrap justify-end">
@@ -137,11 +143,11 @@ export function EditorPerfil({ item, aberto, onFechar, onSalvo }: EditorCadastro
           ))}
         </div>
 
-        <div className="flex items-start gap-2 bg-primary-50 border border-primary-100 rounded-lg px-4 py-3">
-          <Eye className="w-4 h-4 text-primary-600 mt-0.5 shrink-0" />
-          <p className="text-sm text-ink">
-            <span className="font-semibold">Com estas permissões, quem tiver este perfil verá:</span>{" "}
-            {visiveis.length > 0 ? visiveis.map((m) => m.label).join(", ") : "apenas o Dashboard"}.
+        <div className="flex items-start gap-2 bg-surface-alt border border-surface-border rounded-lg px-4 py-3" data-resumo-visibilidade>
+          <Eye className="w-4 h-4 text-ink-subtle mt-0.5 shrink-0" aria-hidden />
+          <p className="text-sm text-ink-muted">
+            Módulos visíveis com este perfil:{" "}
+            <span className="text-ink">{visiveis.length > 0 ? visiveis.map((m) => m.label).join(", ") : "apenas o Dashboard"}</span>.
           </p>
         </div>
       </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { corDado } from "@/lib/ui/tokens";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, Check, Pencil, Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -96,9 +97,9 @@ function usePodeCadastro(def: DefCadastro) {
   return (acao: AcaoCadastro) => { const req = def.permissoes[acao]; return !req || req.some(([m, a]) => pode(m, a)); };
 }
 
-const vazioParaForm = (c: CampoCadastro) => (c.tipo === "cor" ? "#64748B" : c.tipo === "select" ? c.opcoes?.[0]?.value ?? "" : c.tipo === "booleano" ? "true" : "");
+const vazioParaForm = (c: CampoCadastro) => (c.tipo === "cor" ? corDado.cinza : c.tipo === "select" ? c.opcoes?.[0]?.value ?? "" : c.tipo === "booleano" ? "true" : "");
 // Campo estruturado (lista editada por uma seção própria): começa vazio no formulário e só é enviado se a seção mexer
-const valorParaForm = (c: CampoCadastro, v: unknown) => (v == null || c.tipo === "estruturado" ? (c.tipo === "cor" ? "#64748B" : "") : c.formatar ? c.formatar(String(v)) : String(v));
+const valorParaForm = (c: CampoCadastro, v: unknown) => (v == null || c.tipo === "estruturado" ? (c.tipo === "cor" ? corDado.cinza : "") : c.formatar ? c.formatar(String(v)) : String(v));
 
 /** Seleção em massa: só cadastros registrados nas ações em massa e com alguma ação permitida. */
 function useMassa(def: DefCadastro) {
@@ -523,7 +524,7 @@ function CampoForm({ campo: c, valor, disabled, id, onChange }: {
   if (c.tipo === "cor") {
     return (
       <div className="flex items-center gap-2">
-        <input id={id} type="color" value={valor || "#64748B"} onChange={(e) => onChange(e.target.value)} className="w-10 h-10 rounded border border-surface-border cursor-pointer" aria-label={c.label} />
+        <input id={id} type="color" value={valor || corDado.cinza} onChange={(e) => onChange(e.target.value)} className="w-10 h-10 rounded border border-surface-border cursor-pointer" aria-label={c.label} />
         <Input value={valor} onChange={(e) => onChange(e.target.value)} className="flex-1 font-mono text-xs" />
       </div>
     );

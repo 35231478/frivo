@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { corDado } from "@/lib/ui/tokens";
 import { COMPORTAMENTOS, OPCOES_COMPORTAMENTO } from "@/lib/estoque/categoria";
 import { erroDasLinhas, erroDosItensDoKit } from "@/lib/estoque/composicao";
 import type { Acao } from "@/lib/permissoes";
@@ -415,7 +416,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       { key: "cor", label: "Cor", tipo: "cor" },
     ],
     colunas: [{ key: "nome", label: "Nome", formato: "cor-nome", ordenar: "nome" }],
-    ...schemas({ nome, cor }, { cor: "#64748B" }),
+    ...schemas({ nome, cor }, { cor: corDado.cinza }),
   },
   "perfis-acesso": {
     entidade: "perfis-acesso", modelo: "perfilAcesso", singular: "perfil de acesso", plural: "perfis de acesso", massa: true,
@@ -438,7 +439,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       tipo: z.enum(["ADMINISTRADOR", "SUPERVISOR", "FINANCEIRO", "TECNICO", "AUXILIAR", "PERSONALIZADO"]),
       cor,
       permissoes: z.record(z.string(), z.record(z.string(), z.boolean())),
-    }, { descricao: null, tipo: "PERSONALIZADO", cor: "#8B5CF6", permissoes: {} }),
+    }, { descricao: null, tipo: "PERSONALIZADO", cor: corDado.roxo, permissoes: {} }),
   },
   "modelos-encargos": {
     entidade: "modelos-encargos", modelo: "modeloEncargos", singular: "modelo de encargos", plural: "modelos de encargos", massa: true,
@@ -547,7 +548,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
     ...schemas({
       nome: z.string().trim().min(2, "Informe o nome do modelo.").max(120), descricao: textoOpcional(1000), cor,
       etapas: z.array(etapaPrazoSchema).min(1, "Adicione ao menos uma etapa.").max(50),
-    }, { descricao: null, cor: "#0EA5E9" }),
+    }, { descricao: null, cor: corDado.azul }),
   },
   fornecedores: {
     entidade: "fornecedores", modelo: "fornecedor", massa: true, singular: "fornecedor", plural: "fornecedores",

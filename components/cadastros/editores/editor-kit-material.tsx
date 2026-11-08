@@ -93,7 +93,7 @@ export function EditorKitMaterial({ item, aberto, onFechar, onSalvo }: EditorCad
         <div>
           <div className="flex items-center gap-1 mb-2">
             <h5 className="text-xs font-bold text-ink-muted uppercase tracking-wider">Itens do kit</h5>
-            <Dica rotulo="Itens do kit" texto="Produto + quantidade por kit. O comportamento (venda à parte / incluso) é o da categoria de cada produto. O kit é vivo: mudar aqui muda em todos os serviços que o usam; no orçamento/OS ele vira uma cópia editável." />
+            <Dica rotulo="Itens do kit" texto="Produto + quantidade por kit. Venda à parte ou incluso vem da categoria de cada produto. Alterar o kit atualiza todos os serviços que o usam; no orçamento/OS vira uma cópia editável." />
           </div>
           <div className="space-y-2">
             {carregando && <p className="text-sm text-ink-subtle text-center py-4">Carregando itens…</p>}

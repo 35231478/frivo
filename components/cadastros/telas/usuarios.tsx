@@ -32,14 +32,14 @@ export function UsuariosTela({ usuarioAtualId, emailsTecnicos = [] }: { usuarioA
       <CadastroPadrao
         entidade="usuarios"
         Editor={Editor}
-        ajuda="Pessoas com acesso ao sistema e seus perfis. A senha é criada pela própria pessoa, a partir do convite. Usuário sem perfil acessa apenas a tela inicial; o administrador tem acesso total. Alterações de perfil valem a partir do próximo acesso."
+        ajuda="Pessoas com acesso ao sistema e seus perfis. A senha é criada pela própria pessoa, a partir do convite. Sem perfil, o acesso é só à tela inicial; alterações valem no próximo acesso."
         aviso={erro && <p role="alert" className="text-sm text-atrasado-texto">{erro}</p>}
         celula={(col, u) => {
           if (col === "nome") return (
             <span className="block min-w-0">
               <span className="flex items-center gap-1.5 flex-wrap">
                 <span className="font-medium">{u.nome}</span>
-                {u.id === usuarioAtualId && <span className="text-[10px] font-semibold bg-primary-50 text-primary-700 px-2 py-0.5 rounded-full">você</span>}
+                {u.id === usuarioAtualId && <span className="text-[10px] font-medium bg-surface-alt text-ink-muted border border-surface-border px-2 py-0.5 rounded-full">acesso atual</span>}
               </span>
               <span className="block text-xs text-ink-subtle truncate">{u.email}</span>
             </span>
@@ -49,7 +49,7 @@ export function UsuariosTela({ usuarioAtualId, emailsTecnicos = [] }: { usuarioA
             // sem isso a pessoa entra no sistema comum "vazio" e ninguém entende o porquê.
             const avisoTecnico = u.role === "TECNICO" && u.ativo && !emailsTecnicos.includes((u.email ?? "").trim().toLowerCase()) && (
               <span data-aviso-tecnico className="inline-flex items-center gap-1 text-[10px] font-semibold bg-atencao-claro text-atencao-texto px-2 py-0.5 rounded-full"
-                title="Não há técnico ativo com este e-mail em Equipes › Técnicos. Assim a pessoa entra no sistema comum (vazio) em vez do app do técnico. Cadastre o técnico com o mesmo e-mail.">
+                title="Sem técnico ativo com este e-mail em Equipes › Técnicos: a pessoa entra no sistema comum, não no app. Cadastre o técnico com o mesmo e-mail.">
                 <AlertTriangle className="w-3 h-3" /> sem técnico vinculado — não cai no app
               </span>
             );
