@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { origemDaConta } from "@/lib/financeiro/conta-receber-gestao";
 import { calcularRetencoes, retencoesDaMedicao } from "@/lib/financeiro/retencoes";
 import { rotuloMedicao } from "@/lib/faturamento/fatura";
+import { faturamentoDaOs, faturamentoDoOrcamento } from "@/lib/faturamento/faturar-server";
 import { recebidoDaConta, saldoDaConta } from "@/lib/financeiro/parcelas";
 import { detalheDaRenegociacao } from "@/lib/financeiro/renegociacao-server";
 import { temBaixaAntiga } from "@/lib/financeiro/perda-estorno";
@@ -37,7 +38,7 @@ const INCLUDE_ORIGEM = {
         select: {
           id: true, numero: true, status: true, avulsa: true, valorLiquido: true, valorRetencoes: true,
           retIssAliquota: true, retIrAliquota: true, retPisAliquota: true, retCofinsAliquota: true, retCsllAliquota: true, retInssAliquota: true,
-          itens: { select: { descricao: true, quantidade: true, valorUnitario: true, valorTotal: true, ordemServicoId: true }, orderBy: { ordem: "asc" } },
+          itens: { select: { descricao: true, quantidade: true, valorUnitario: true, valorTotal: true, ordemServicoId: true, orcamentoId: true }, orderBy: { ordem: "asc" } },
           relatorios: { select: { id: true, numero: true, ordemServicoId: true } },
         },
       },
@@ -105,6 +106,16 @@ export async function detalhesDaConta(empresaId: string, id: string) {
   const num = (v: unknown) => Number(v ?? 0);
   // Renegociação: para onde foi (original) e de onde veio (a conta nova ou parcela dela)
   const reneg = await detalheDaRenegociacao(prisma, conta);
+  // P5 — "Faturas desta venda": quando a origem foi faturada em partes, as faturas irmãs (valor, parte,
+  // status, nota) para a gaveta destacar a desta conta. Leitura pura; só quando há mais de uma fatura viva.
+  // A origem vem da conta (orcamentoId) ou dos itens da medição avulsa (orçamento ou OS faturados).
+  const orcOrigem = c.orcamentoId ?? (c.medicao?.avulsa ? c.medicao.itens.find((i) => i.orcamentoId)?.orcamentoId ?? null : null);
+  const osOrigem = !orcOrigem && c.medicao?.avulsa ? c.medicao.itens.find((i) => i.ordemServicoId)?.ordemServicoId ?? null : null;
+  const fat = orcOrigem ? await faturamentoDoOrcamento(orcOrigem, empresaId)
+    : osOrigem ? await faturamentoDaOs(osOrigem) : null;
+  const faturamento = fat && fat.faturas.length > 1
+    ? { total: fat.total, faturado: fat.faturado, saldo: fat.saldo, faturas: fat.faturas }
+    : null;
   const itens = c.medicao
     ? c.medicao.itens.map((i) => ({ descricao: i.descricao, quantidade: num(i.quantidade), valorUnitario: num(i.valorUnitario), valorTotal: num(i.valorTotal) }))
     : c.orcamento
@@ -144,6 +155,8 @@ export async function detalhesDaConta(empresaId: string, id: string) {
     cliente: { id: c.cliente.id, nome: c.cliente.nomeFantasia ?? c.cliente.nome, cpfCnpj: c.clienteCnpj ?? c.cliente.cpfCnpj },
     origem: origemDaConta(c),
     medicao: c.medicao ? { id: c.medicao.id, numero: c.medicao.numero, rotulo: rotuloMedicao(c.medicao), relatorios: c.medicao.relatorios.map((r) => ({ id: r.id, numero: r.numero })) } : null,
+    // Faturas da venda (origem faturada em partes); null quando é fatura única (sem consolidação a mostrar)
+    faturamento,
     // Bruto, cada retenção e o líquido — só quando a medição tem retenção marcada
     retencoes: c.medicao && num(c.medicao.valorRetencoes) > 0 ? calcularRetencoes(num(c.medicao.valorLiquido), retencoesDaMedicao(c.medicao)) : null,
     orcamento: c.orcamento ? { id: c.orcamento.id, codigo: c.orcamento.codigo, nome: c.orcamento.nome } : null,

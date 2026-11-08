@@ -31,6 +31,12 @@ const RAIZ = path.resolve(__dirname, "../..");
 const sessao = vi.hoisted(() => ({ atual: null as any }));
 vi.mock("@/lib/auth", () => ({ auth: vi.fn(async () => sessao.atual) }));
 vi.mock("@/lib/email", () => ({ enviarConfirmacaoPagamento: vi.fn(async () => {}) }));
+// A página da fatura (server) compõe componentes de client — só os hooks de navegação precisam de stub no SSR
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: () => {}, replace: () => {}, refresh: () => {}, back: () => {}, prefetch: () => {} }),
+  usePathname: () => "/financeiro/medicoes/x", useSearchParams: () => new URLSearchParams(),
+  notFound: () => { throw new Error("NEXT_NOT_FOUND"); }, redirect: (u: string) => { throw new Error(`NEXT_REDIRECT:${u}`); },
+}));
 
 const logar = (permissoes: Permissoes = permissoesTotais(), empresaId = "e1") => {
   sessao.atual = { user: { id: empresaId === "e1" ? "uA" : "uB", name: "Ana", email: "ana@x.com", empresaId, role: "OPERADOR", permissoes, tecnicoId: null } };
@@ -372,5 +378,74 @@ describe.skipIf(!URL_PG)("Faturamento parcial (PostgreSQL real)", () => {
       expect((await faturarOrc(orc.id, { parcial: { percentual: 40 } })).status).toBe(403);
     } finally { logar(); }
     expect(await prisma.medicaoItem.count({ where: { orcamentoId: orc.id } })).toBe(0);
+  });
+
+  // ═══════════ Detalhe consolidado da venda (P5): página da fatura + gaveta da conta ═══════════
+
+  it("página da fatura mostra \"Faturas desta venda\" com as irmãs, destaca a atual e leva à origem; fatura cheia única não mostra a seção", async () => {
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const MedicaoPage = (await import("@/app/(dashboard)/financeiro/medicoes/[id]/page")).default;
+    const render = (id: string) => MedicaoPage({ params: Promise.resolve({ id }), searchParams: Promise.resolve({}) }).then((el: any) => renderToStaticMarkup(el));
+
+    const orc = await novoOrcamento({ servicos: [{ servicoId: "sSN", v: 1000 }] });
+    const a = await faturarOrc(orc.id, { parcial: { percentual: 40 } });
+    const b = await faturarOrc(orc.id, { parcial: { percentual: 35 } });
+    const na = num((await medicao(a.json.id)).numero), nb = num((await medicao(b.json.id)).numero);
+
+    const htmlA = await render(a.json.id);
+    expect(htmlA).toContain("data-secao-faturas-da-venda");
+    expect(htmlA).toContain("Faturas desta venda");
+    // as duas faturas irmãs aparecem, cada uma com a sua parte
+    expect(htmlA).toContain(`Fatura ${na}`);
+    expect(htmlA).toContain(`Fatura ${nb}`);
+    expect(htmlA).toContain("parcial 40%");
+    expect(htmlA).toContain("parcial 35%");
+    // a fatura aberta é a destacada ("Esta venda"); a irmã tem link "Abrir" para a própria
+    expect(htmlA).toContain("data-fatura-atual");
+    expect(htmlA).toContain(`data-abrir-fatura="${b.json.id}"`);
+    expect(htmlA).not.toContain(`data-abrir-fatura="${a.json.id}"`);
+    // origem: volta ao orçamento
+    expect(htmlA).toContain(`data-origem-venda="Orçamento"`);
+    expect(htmlA).toContain(`/orcamentos/${orc.id}`);
+
+    // Fatura cheia (sem partes): a seção não aparece
+    const orcCheio = await novoOrcamento({ servicos: [{ servicoId: "sSN", v: 500 }] });
+    const c = await faturarOrc(orcCheio.id);
+    expect(await render(c.json.id)).not.toContain("data-secao-faturas-da-venda");
+  });
+
+  it("gaveta da conta: detalhesDaConta traz as faturas da venda (com a parte desta conta) quando houve partes; única não traz", async () => {
+    const { detalhesDaConta } = await import("@/lib/financeiro/conta-receber-server");
+    const orc = await novoOrcamento({ servicos: [{ servicoId: "sSN", v: 1000 }] });
+    const a = await faturarOrc(orc.id, { parcial: { percentual: 40 } });
+    await faturarOrc(orc.id, { parcial: { percentual: 60 } });
+    const contaA = (await vivas({ medicaoId: a.json.id }))[0];
+
+    const d = await detalhesDaConta("e1", contaA.id);
+    expect(d!.faturamento).toMatchObject({ total: 1000, faturado: 1000, saldo: 0 });
+    expect(d!.faturamento!.faturas).toHaveLength(2);
+    expect(d!.faturamento!.faturas.map((f: any) => f.id)).toContain(a.json.id);
+    expect(d!.medicao!.id).toBe(a.json.id); // a gaveta destaca esta pela medição da conta
+
+    // Outra empresa não cruza (o detalhe é por empresa): a conta da e1 não aparece para a e2
+    expect(await detalhesDaConta("e2", contaA.id)).toBeNull();
+
+    // A e2 tem a sua própria venda em partes: o faturamento é computado com a empresa da conta (e2), não a e1
+    logar(permissoesTotais(), "e2");
+    try {
+      const orcB = await novoOrcamento({ empresaId: "e2", clienteId: "cX", servicos: [{ servicoId: null, descricao: "Serviço", v: 800 }] });
+      const b2 = await faturarOrc(orcB.id, { parcial: { percentual: 50 } });
+      await faturarOrc(orcB.id, { parcial: { percentual: 50 } });
+      const contaB = (await vivas({ medicaoId: b2.json.id }))[0];
+      expect((await detalhesDaConta("e2", contaB.id))!.faturamento!.faturas).toHaveLength(2);
+      expect((await detalhesDaConta("e2", contaB.id))!.faturamento).toMatchObject({ total: 800 });
+      expect(await detalhesDaConta("e1", contaB.id)).toBeNull(); // nem para a e1
+    } finally { logar(); }
+
+    // Orçamento faturado inteiro de uma vez: sem partes, sem a seção
+    const orcCheio = await novoOrcamento({ servicos: [{ servicoId: "sSN", v: 700 }] });
+    const c = await faturarOrc(orcCheio.id);
+    const contaC = (await vivas({ medicaoId: c.json.id }))[0];
+    expect((await detalhesDaConta("e1", contaC.id))!.faturamento).toBeNull();
   });
 });

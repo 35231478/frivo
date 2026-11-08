@@ -211,3 +211,33 @@ describe("Bloco de faturamento (P5)", () => {
     expect($$("[data-historico-faturas] [data-fatura]")).toHaveLength(1);
   });
 });
+
+describe("FaturasDaVenda (telas de detalhe: fatura e gaveta)", () => {
+  let FaturasDaVenda: typeof import("@/components/faturamento/faturas-da-venda").FaturasDaVenda;
+  beforeAll(async () => { ({ FaturasDaVenda } = await import("@/components/faturamento/faturas-da-venda")); }, 120_000);
+  function montarVenda(props: Partial<Parameters<typeof FaturasDaVenda>[0]> = {}) {
+    if (caixa?.isConnected) { act(() => root.unmount()); caixa.remove(); }
+    caixa = document.createElement("div"); document.body.appendChild(caixa); root = createRoot(caixa);
+    act(() => root.render(createElement(FaturasDaVenda, { faturamento: FATURADO, ...props })));
+  }
+
+  it("resumo + histórico; destaca a fatura atual (sem link \"Abrir\" nela) e as outras com link", () => {
+    montarVenda({ atualId: "m1" });
+    expect(txt($("[data-faturas-da-venda] [data-pill-faturamento]"))).toBe("Faturado");
+    expect(txt($("[data-resumo-faturamento]"))).toMatch(/^Faturado R\$\s?1\.000,00 de R\$\s?1\.000,00/);
+    const atual = $("[data-fatura=m1]")!, outra = $("[data-fatura=m2]")!;
+    expect(atual.getAttribute("aria-current")).toBe("true");
+    expect(txt(atual.querySelector("[data-fatura-atual]"))).toBe("Esta venda");
+    expect(atual.querySelector("[data-abrir-fatura]")).toBeNull(); // a atual não leva a si mesma
+    expect(outra.querySelector<HTMLAnchorElement>("[data-abrir-fatura]")!.getAttribute("href")).toBe("/financeiro/faturas/m2");
+    expect(outra.querySelector("[data-fatura-atual]")).toBeNull();
+  });
+
+  it("sem permissão de ver (podeVer=false): nenhuma fatura tem link \"Abrir\"", () => {
+    montarVenda({ atualId: "m1", podeVer: false });
+    expect($$("[data-abrir-fatura]")).toHaveLength(0);
+    // mas as faturas e as partes continuam visíveis (leitura)
+    expect($$("[data-historico-faturas] [data-fatura]")).toHaveLength(2);
+    expect(txt($("[data-fatura=m1] [data-parte]"))).toBe("parcial 40%");
+  });
+});
