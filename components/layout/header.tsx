@@ -1,7 +1,7 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import { Bell, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer, Headset, ClipboardCheck, FileWarning, Wrench, Menu, Barcode, MessageSquareReply, PackageCheck, FileCheck2, FileX2, Hourglass, CalendarX2, TrendingUp, PackageOpen, PackageMinus } from "lucide-react";
+import { Bell, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer, Headset, ClipboardCheck, FileWarning, Wrench, Menu, Barcode, MessageSquareReply, PackageCheck, FileCheck2, FileX2, Hourglass, CalendarX2, TrendingUp, PackageOpen, PackageMinus, Globe } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -20,6 +20,7 @@ interface Alertas {
   veiculosManutencao: number;
   boletosPagos: number;
   orcamentosRespondidos: number;
+  leadsSite?: number;
   nfPedidos: number;
   nfPedidoId: string | null;
   nfseAutorizadas?: number;
@@ -251,6 +252,7 @@ export function Header({ session, avatarUrl }: HeaderProps) {
                 <p className="text-sm text-ink-muted text-center py-6">Nenhum alerta no momento.</p>
               ) : (
                 <div className="divide-y divide-surface-linha">
+                  {podeVer("orcamentos") && (alertas?.leadsSite ?? 0) > 0 && <AlertaItem href="/leads-site" icone={Globe} cor="text-primary-600" label="Novos leads do site" valor={alertas?.leadsSite ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("orcamentos") && <AlertaItem href="/orcamentos?resposta=nova&periodo=todos" icone={MessageSquareReply} cor="text-acento" label="Respostas de orçamentos" valor={alertas?.orcamentosRespondidos ?? 0} onClick={() => setSinoAberto(false)} />}
                   {/* NFS-e: só aparece quando há o que ver (resultado não visto ou nota parada) */}
                   {podeVer("financeiro", "fiscal") && (alertas?.nfseRejeitadas ?? 0) > 0 && <AlertaItem href={hrefMedicao(alertas?.nfseRejeitadaMedicaoId)} icone={FileX2} cor="text-atrasado" label="NFS-e não aceitas" valor={alertas?.nfseRejeitadas ?? 0} onClick={() => setSinoAberto(false)} />}
