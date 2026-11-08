@@ -58,10 +58,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const emailDest = contato?.email || orcamento.cliente.email || "";
   const mailtoUrl = emailDest ? buildMailtoLink(emailDest, empresaNome, `Nº ${numero}`, publicUrl) : null;
   const telefone = contato?.whatsapp || contato?.telefone || orcamento.cliente.celular || orcamento.cliente.telefone || "";
-  const saudacao = contato?.nome ? `Olá, ${contato.nome.split(" ")[0]}!` : "Olá!";
+  const saudacao = contato?.nome ? `Prezado(a) ${contato.nome.split(" ")[0]},` : "Prezados,";
   const msgWhats =
-    `${saudacao} Segue o orçamento Nº ${numero} de ${empresaNome}:\n${publicUrl}\n\n` +
-    `Você pode aprová-lo (ou recusar) digitalmente pelo link acima.`;
+    `${saudacao}\n\nSegue o orçamento Nº ${numero} de ${empresaNome}:\n${publicUrl}\n\n` +
+    `A aprovação ou a recusa pode ser feita digitalmente pelo link acima.`;
   const whatsappUrl = telefone ? whatsappLink(telefone, msgWhats) : null;
   const evento = (tipo: string, detalhe: string | null) =>
     registrarEvento({ empresaId, orcamentoId: id, tipo, detalhe, usuarioId: session.user!.id });

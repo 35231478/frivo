@@ -278,7 +278,7 @@ export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange,
         {itens.map((it) => {
           const total = totalLinha(it);
           const precoTitulo = it.origemPreco === "contrato" && it.valorPadraoCadastro != null && it.valorPadraoCadastro !== Number(it.valorUnitario)
-            ? `Preço padrão: ${formatarMoeda(it.valorPadraoCadastro)} · Aplicado: ${formatarMoeda(Number(it.valorUnitario) || 0)}`
+            ? `Padrão ${formatarMoeda(it.valorPadraoCadastro)} · aplicado ${formatarMoeda(Number(it.valorUnitario) || 0)}`
             : undefined;
           const derivada = !!it.derivada;
           const travado = it.bloqueado || derivada;

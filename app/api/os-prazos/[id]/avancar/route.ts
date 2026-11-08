@@ -61,7 +61,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       };
       const texto = proxima.mensagem
         ? aplicarVariaveis(proxima.mensagem, vars)
-        : `⏰ Nova etapa "${proxima.nome}" iniciada na OS ${prazo.ordemServico.numero}. ${vars.link}`;
+        : `Nova etapa "${proxima.nome}" iniciada na OS ${prazo.ordemServico.numero}. ${vars.link}`;
 
       const telefone =
         proxima.responsavel === "CLIENTE" ? cliente.celular :

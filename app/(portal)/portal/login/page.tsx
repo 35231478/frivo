@@ -4,7 +4,7 @@ import { FrivoLogo } from "@/components/layout/frivo-logo";
 import { PortalLoginForm } from "@/components/portal/portal-login-form";
 import { getPortalSession } from "@/lib/auth-portal";
 
-export const metadata: Metadata = { title: "Portal do Cliente — Entrar" };
+export const metadata: Metadata = { title: "Portal do cliente — Entrar" };
 export const dynamic = "force-dynamic";
 
 export default async function PortalLoginPage() {
@@ -16,7 +16,7 @@ export default async function PortalLoginPage() {
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-6">
           <FrivoLogo size="lg" variant="dark" />
-          <p className="text-ink-muted text-sm mt-3">Portal do Cliente</p>
+          <p className="text-ink-muted text-sm mt-3">Portal do cliente</p>
         </div>
         <div className="bg-white rounded-card shadow-card p-6 md:p-8 border border-surface-border">
           <h1 className="text-lg font-bold text-ink mb-1">Acesse sua conta</h1>

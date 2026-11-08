@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PerfilClient } from "@/components/perfil/perfil-client";
 
-export const metadata: Metadata = { title: "Meu Perfil" };
+export const metadata: Metadata = { title: "Meu perfil" };
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: "Administrador",

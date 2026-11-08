@@ -216,7 +216,7 @@ export function FinanceiroNotaEditor({ nota, valor, onChange, podeEditar }: {
           )}
         </div>
       </div>
-      {!podeEditar && <p className="px-4 pb-3 text-xs text-ink-muted">Categoria, centro de custo, forma e parcelas geram a conta a pagar: só quem tem Financeiro › fluxo de caixa altera.</p>}
+      {!podeEditar && <p className="px-4 pb-3 text-xs text-ink-muted">Categoria, centro de custo, forma e parcelas geram a conta a pagar: só Financeiro › fluxo de caixa altera.</p>}
     </div>
   );
 }

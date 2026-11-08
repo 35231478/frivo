@@ -46,12 +46,12 @@ export function PortalShell({ contatoNome, clienteNome, branding, permissoes, ch
               <span className="font-display font-bold text-lg text-ink">{branding.empresaNome}</span>
             )}
             <div className="hidden sm:block min-w-0">
-              <p className="text-xs text-ink-muted leading-none">Portal do Cliente</p>
+              <p className="text-xs text-ink-muted leading-none">Portal do cliente</p>
               <p className="text-sm font-semibold text-ink truncate">{clienteNome}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-ink-muted hidden md:inline">Olá, {contatoNome.split(" ")[0]}</span>
+            <span className="text-sm text-ink-muted hidden md:inline">{contatoNome.split(" ")[0]}</span>
             <form action={portalLogout}>
               <button type="submit" className="inline-flex items-center gap-1.5 text-sm text-ink bg-white border border-surface-border hover:bg-surface-page px-3 py-1.5 rounded-lg transition-colors">
                 <LogOut className="w-4 h-4" /> Sair

@@ -49,7 +49,7 @@ export function AcoesEnvio({ orcamentoId, tokenPublico, status, podeEditar, etap
         else { aba?.fechar(); setFeedback({ tipo: "erro", msg: SEM_WHATSAPP }); }
       } else {
         await navigator.clipboard?.writeText(data.publicUrl ?? "").catch(() => {});
-        setFeedback({ tipo: "ok", msg: "Link copiado!" });
+        setFeedback({ tipo: "ok", msg: "Link copiado." });
       }
       router.refresh();
     } catch {
@@ -150,7 +150,7 @@ export function AcoesEnvio({ orcamentoId, tokenPublico, status, podeEditar, etap
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => alterarStatus("RASCUNHO", { titulo: "Voltar para rascunho?", mensagem: "O link deixa de aceitar resposta até você enviar de novo. Dá para editar itens, validade e condições; a linha do tempo guarda o histórico.", confirmarTexto: "Voltar para rascunho" })}
+              onClick={() => alterarStatus("RASCUNHO", { titulo: "Voltar para rascunho?", mensagem: "O link deixa de aceitar resposta até novo envio; itens, validade e condições ficam editáveis.", confirmarTexto: "Voltar para rascunho" })}
               loading={carregando === "status-RASCUNHO"}
               data-voltar-rascunho
             >

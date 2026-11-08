@@ -9,7 +9,7 @@ export function rotuloSync(e: EstadoSync): { texto: string; detalhe: string; cla
   const n = e.pendentes;
   const fila = n === 1 ? "1 gravação" : `${n} gravações`;
   switch (e.situacao) {
-    case "offline": return { texto: n ? `Offline · ${n}` : "Offline", detalhe: n ? `${fila} no aparelho — sobe quando o sinal voltar` : "Tudo o que você gravar fica no aparelho", classe: "bg-previsto-claro text-previsto-texto" };
+    case "offline": return { texto: n ? `Offline · ${n}` : "Offline", detalhe: n ? `${fila} no aparelho — sobe quando o sinal voltar` : "O que for gravado fica no aparelho", classe: "bg-previsto-claro text-previsto-texto" };
     case "sincronizando": return { texto: "Sincronizando…", detalhe: n ? `Enviando ${fila}` : "Conferindo com o escritório", classe: "bg-acento-claro text-acento" };
     case "pendente": return { texto: `${n} a enviar`, detalhe: "Envia sozinho em instantes", classe: "bg-atencao-claro text-atencao-texto" };
     case "erro": return { texto: e.erros === 1 ? "1 recusada" : `${e.erros} recusadas`, detalhe: "Toque para ver o motivo", classe: "bg-atrasado text-white" };

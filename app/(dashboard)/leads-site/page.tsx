@@ -15,7 +15,7 @@ import {
   CLASSE_STATUS_ORCAMENTO,
 } from "@/lib/utils";
 
-export const metadata: Metadata = { title: "Leads do Site" };
+export const metadata: Metadata = { title: "Leads do site" };
 export const dynamic = "force-dynamic";
 
 // Leads do site são os orçamentos nomeados "Lead do site — ..." (criados pelo

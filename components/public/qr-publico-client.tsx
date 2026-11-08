@@ -242,7 +242,7 @@ function FormularioSolicitacao({ tipo, token, onFechar }: { tipo: "CHAMADO" | "O
     return (
       <section data-confirmacao-qr className="bg-white rounded-card border border-ok/20 shadow-sm p-5 text-center">
         <CheckCircle2 className="w-8 h-8 text-ok-texto mx-auto mb-2" />
-        <p className="font-semibold text-ink">Solicitação enviada!</p>
+        <p className="font-semibold text-ink">Solicitação enviada.</p>
         {ok && (
           <>
             <p className="text-sm text-ink-muted mt-2">Protocolo</p>
@@ -253,7 +253,7 @@ function FormularioSolicitacao({ tipo, token, onFechar }: { tipo: "CHAMADO" | "O
           </>
         )}
         <p className="text-sm text-ink-muted mt-3">
-          Guarde o protocolo. Nossa equipe recebe a solicitação e entra em contato pelos dados que você informou.
+          Guarde o protocolo. A equipe recebe a solicitação e entra em contato pelos dados informados.
         </p>
         <button onClick={() => { setOk(null); onFechar(); }} className="text-sm text-primary-600 hover:underline mt-3">Fechar</button>
       </section>
@@ -284,7 +284,7 @@ function FormularioSolicitacao({ tipo, token, onFechar }: { tipo: "CHAMADO" | "O
           <input className={inputCls} type="tel" inputMode="tel" autoComplete="tel" placeholder="(11) 99999-0000" value={telefone} onChange={(e) => setTelefone(e.target.value)} />
         </label>
         <label className={labelCls}>
-          {tipo === "ORCAMENTO" ? "O que você precisa orçar?" : "Descreva o problema"} <span className="text-atrasado">*</span>
+          {tipo === "ORCAMENTO" ? "Descreva o que precisa orçar" : "Descreva o problema"} <span className="text-atrasado">*</span>
           <textarea className={inputCls} rows={3} placeholder={tipo === "ORCAMENTO" ? "Conte o que precisa ser feito" : "O que está acontecendo com o equipamento?"} value={descricao} onChange={(e) => setDescricao(e.target.value)} required />
         </label>
         <div>

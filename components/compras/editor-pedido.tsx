@@ -209,7 +209,7 @@ export function EditorPedido({ pedido, ordemServicoId, orcamentoId, avulso, onSa
         <FormField label="Comprador responsável">
           {semComprador && !pedido?.comprador ? (
             <p className="text-xs text-atencao-texto bg-atencao-claro border border-atencao/30 rounded-lg px-3 py-2" data-sem-comprador>
-              Nenhum usuário ativo tem acesso a Compras. Dê a permissão “Compras” a alguém em Configurações › Perfis de acesso.
+              Nenhum usuário ativo tem acesso a Compras. Conceda a permissão em Configurações › Perfis de acesso.
             </p>
           ) : (
             <Select value={compradorId} onChange={(e) => setCompradorId(e.target.value)} placeholder={compradores === null ? "Carregando…" : "Sem comprador"} data-campo="comprador">

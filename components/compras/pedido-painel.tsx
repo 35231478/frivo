@@ -95,7 +95,7 @@ export function PedidoPainel({ inicial, onMudou, compacto, semNumero }: {
   async function desvincular(nota: PedidoTela["notas"][number]) {
     if (!(await confirmar({
       titulo: `Desvincular a NF ${nota.numero}?`,
-      mensagem: `O pedido ${pedido.numero} volta a esperar estes itens, o valor real que veio desta NF sai dos itens e fica registrado no histórico. A nota em si (estoque e contas) não muda.`,
+      mensagem: `${pedido.numero} volta a esperar estes itens; o valor real desta NF sai deles (fica no histórico). A nota não muda.`,
       confirmarTexto: "Desvincular", cancelarTexto: "Voltar", perigo: true,
     }))) return;
     setOcupado(`NF-${nota.notaId}`);
@@ -157,7 +157,7 @@ export function PedidoPainel({ inicial, onMudou, compacto, semNumero }: {
       </div>
       {pedido.podeEnviar && !encerrado && !pedido.fornecedor && (
         <p className="text-xs text-atencao-texto bg-atencao-claro border border-atencao/30 rounded-lg px-3 py-2" data-aviso-sem-fornecedor>
-          Sem fornecedor escolhido: dá para baixar o PDF; para enviar por e-mail ou WhatsApp, edite o pedido e escolha o fornecedor.
+          Sem fornecedor: dá para baixar o PDF. Para enviar por e-mail ou WhatsApp, edite o pedido e escolha um.
         </p>
       )}
 

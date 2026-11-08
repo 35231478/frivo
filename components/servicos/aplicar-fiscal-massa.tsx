@@ -103,7 +103,7 @@ export function FormAplicarFiscalMassa({ valor: f, onChange }: { valor: FormApli
       </Bloco>
 
       <p className="text-xs text-ink-muted" data-total-campos aria-live="polite">
-        {n ? `${n} ${n === 1 ? "campo será aplicado" : "campos serão aplicados"}. Os outros ficam como estão em cada serviço.` : "Preencha ao menos um campo. Campo vazio não muda nada."}
+        {n ? `${n} ${n === 1 ? "campo será aplicado" : "campos serão aplicados"}; os outros ficam como estão.` : "Preencha ao menos um campo. Campo vazio não muda nada."}
       </p>
     </div>
   );

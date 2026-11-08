@@ -80,7 +80,7 @@ export default async function NotaCompraPage({ params, searchParams }: { params:
           sugestoes={paraTela(conc?.sugestoes ?? [])}
           automaticoId={conc?.automatico?.pedidoId ?? null}
           podeLancar={financeiro}
-          motivoSemLancar={financeiro ? null : "Lançar gera conta a pagar: precisa de Financeiro › fluxo de caixa. Você pode salvar o rascunho dos itens."}
+          motivoSemLancar={financeiro ? null : "Lançar gera conta a pagar: requer Financeiro › fluxo de caixa. O rascunho dos itens pode ser salvo."}
           financeiro={financeiroDaNota(nota)}
           podePrecificar={pode(u.permissoes, "configuracoes", "gerenciar", u.role)}
         />

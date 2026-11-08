@@ -11,12 +11,10 @@ export default function QrNaoEncontrado() {
       <QrCode className="w-12 h-12 text-ink-subtle mb-4" aria-hidden />
       <h1 className="text-xl font-bold text-ink">Etiqueta não encontrada</h1>
       <p className="text-sm text-ink-muted mt-2 max-w-sm">
-        Este QR Code não existe mais ou foi desativado — pode ser uma etiqueta antiga ou de um
-        equipamento que foi substituído.
+        Este QR Code não existe mais ou foi desativado (etiqueta antiga ou equipamento substituído).
       </p>
       <p className="text-sm text-ink-muted mt-2 max-w-sm">
-        Precisa de atendimento? Fale com a empresa responsável pela manutenção do equipamento
-        pelos canais de sempre (telefone ou WhatsApp).
+        Para atendimento, fale com a empresa responsável pela manutenção pelos canais habituais.
       </p>
       <div className="mt-8 opacity-60"><FrivoLogo size="sm" variant="dark" /></div>
     </div>

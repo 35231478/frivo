@@ -189,8 +189,8 @@ export const podeVincularNf = (user: Pick<UsuarioPedido, "role" | "permissoes">)
 
 /** Mensagem do WhatsApp para o fornecedor (com o link do PC) */
 export function mensagemFornecedor(p: { numero: string; empresa: string; contato?: string | null; prazo?: string | null; link: string }): string {
-  const ola = p.contato ? `Olá, ${p.contato.split(" ")[0]}!` : "Olá!";
-  return `${ola} Segue o Pedido de Compra Nº ${p.numero} de ${p.empresa} para cotação${p.prazo ? ` (necessário até ${p.prazo})` : ""}:\n${p.link}\n\nPor favor, informe preço, validade e prazo de entrega.`;
+  const saudacao = p.contato ? `Prezado(a) ${p.contato.split(" ")[0]},` : "Prezados,";
+  return `${saudacao}\n\nSegue o Pedido de Compra Nº ${p.numero} de ${p.empresa} para cotação${p.prazo ? ` (necessário até ${p.prazo})` : ""}:\n${p.link}\n\nPor favor, informe preço, validade e prazo de entrega.`;
 }
 
 // ───────────────────────── O pedido na tela (JSON da API e props da página) ─────────────────────────

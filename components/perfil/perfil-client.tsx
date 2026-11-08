@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { toast } from "@/components/ui/avisos";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
@@ -52,10 +53,10 @@ function redimensionar(file: File): Promise<string> {
 }
 
 const ABAS = [
-  { id: "dados", label: "Dados Pessoais", icone: User },
-  { id: "foto", label: "Foto de Perfil", icone: Camera },
+  { id: "dados", label: "Dados pessoais", icone: User },
+  { id: "foto", label: "Foto de perfil", icone: Camera },
   { id: "seguranca", label: "Segurança", icone: Lock },
-  { id: "conta", label: "Minha Conta", icone: Building2 },
+  { id: "conta", label: "Minha conta", icone: Building2 },
 ];
 
 export function PerfilClient({ initial }: { initial: Initial }) {
@@ -64,8 +65,6 @@ export function PerfilClient({ initial }: { initial: Initial }) {
 
   const [aba, setAba] = useState("dados");
   const [erro, setErro] = useState("");
-  const [toast, setToast] = useState<string | null>(null);
-  function mostrarToast(msg: string) { setToast(msg); setTimeout(() => setToast(null), 3000); }
   function trocarAba(id: string) { setAba(id); setErro(""); }
 
   // ── Foto ──
@@ -96,7 +95,7 @@ export function PerfilClient({ initial }: { initial: Initial }) {
       if (!res.ok) { setErro(data?.erro ?? "Erro ao enviar foto."); return; }
       setAvatar(data.avatar);
       setPreview(null);
-      mostrarToast("Foto atualizada com sucesso!");
+      toast("Foto atualizada.");
       router.refresh(); // reflete no sidebar/header (avatar vem do banco no layout)
     } catch { setErro("Erro de conexão."); }
     finally { setEnviandoFoto(false); }
@@ -126,7 +125,7 @@ export function PerfilClient({ initial }: { initial: Initial }) {
       const data = await res.json();
       if (!res.ok) { setErro(data?.erro ?? "Erro ao salvar."); return; }
       setConfirmacaoEmail(""); setSenhaAtualEmail("");
-      mostrarToast("Dados atualizados com sucesso!");
+      toast("Dados salvos.");
       await update({ name: data.nome, email: data.email }); // atualiza o JWT (sidebar/header)
       router.refresh();
     } catch { setErro("Erro de conexão."); }
@@ -154,7 +153,7 @@ export function PerfilClient({ initial }: { initial: Initial }) {
       const data = await res.json();
       if (!res.ok) { setErro(data?.erro ?? "Erro ao alterar senha."); return; }
       setSenhaAtual(""); setNovaSenha(""); setConfirmar("");
-      mostrarToast("Senha alterada! As outras sessões abertas com a senha antiga foram encerradas.");
+      toast("Senha alterada. As outras sessões com a senha antiga foram encerradas.");
     } catch { setErro("Erro de conexão."); }
     finally { setSalvandoSenha(false); }
   }
@@ -178,18 +177,13 @@ export function PerfilClient({ initial }: { initial: Initial }) {
   return (
     <div className="min-h-full -m-6 bg-surface-page p-4 sm:p-6">
       {/* Toast de sucesso */}
-      {toast && (
-        <div className="fixed top-5 right-5 z-50 flex items-center gap-2 bg-success-600 text-white text-sm font-medium rounded-card px-4 py-3 shadow-card-hover animate-in fade-in slide-in-from-top-2">
-          <FileCheck className="w-4 h-4" /> {toast}
-        </div>
-      )}
 
       <div className="max-w-5xl mx-auto space-y-5">
         {/* Cabeçalho fixo: título + badges + ação */}
         <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-surface-page/90 backdrop-blur border-b border-surface-border">
           <div className="max-w-5xl mx-auto flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3 flex-wrap min-w-0">
-              <h1 className="text-xl font-bold text-ink truncate">{nome || "Meu Perfil"}</h1>
+              <h1 className="text-xl font-bold text-ink truncate">{nome || "Meu perfil"}</h1>
               <span className="inline-flex items-center gap-1.5 bg-acento-claro border border-acento/20 text-acento-hover text-xs font-medium rounded-lg px-2.5 py-1">
                 <ShieldCheck className="w-3.5 h-3.5" /> {initial.perfilNome ?? initial.cargo}
               </span>
@@ -295,7 +289,7 @@ export function PerfilClient({ initial }: { initial: Initial }) {
                     <Input type="password" value={confirmar} onChange={(e) => setConfirmar(e.target.value)} autoComplete="new-password" />
                   </FormField>
                 </FormGrid>
-                <p className="text-xs text-ink-muted">Ao trocar a senha, você continua conectado aqui; as sessões abertas em outros aparelhos são encerradas.</p>
+                <p className="text-xs text-ink-muted">Ao trocar a senha, esta sessão continua conectada; as abertas em outros aparelhos são encerradas.</p>
               </FormSection>
             </Painel>
 

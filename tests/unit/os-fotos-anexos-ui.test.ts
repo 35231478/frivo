@@ -136,7 +136,7 @@ describe("galeria por equipamento", () => {
 
   it("estado vazio: sem fotos nem documentos explica de onde as fotos vêm", async () => {
     await montar({ equipamentos: [], fotos: [], documentos: [] });
-    expect(txt($("[data-resumo-fotos]"))).toContain("As da execução (checklist, antes e depois) aparecem aqui sozinhas");
+    expect(txt($("[data-resumo-fotos]"))).toContain("As da execução (checklist, antes e depois) entram aqui sozinhas");
     expect($$("[data-secao-fotos]").map((s) => s.getAttribute("data-secao-fotos"))).toEqual(["GERAL"]);
     expect($("[data-documentos-vazio]")).not.toBeNull();
   });

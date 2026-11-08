@@ -20,7 +20,7 @@ export function destinoPosLogin(callbackUrl: string | null | undefined): string 
 /** Erro do login: senha errada (genérico, não diz se o e-mail existe) ou bloqueio por excesso de tentativas. */
 export function mensagemErroLogin(code: string | undefined): string {
   const minutos = /^bloqueado-(\d+)$/.exec(code ?? "")?.[1];
-  if (minutos) return `Muitas tentativas sem sucesso. Por segurança, aguarde ${minutos} min e tente de novo — ou use “Esqueci minha senha”.`;
+  if (minutos) return `Muitas tentativas. Aguarde ${minutos} min e tente de novo, ou use “Esqueci minha senha”.`;
   return "E-mail ou senha inválidos.";
 }
 

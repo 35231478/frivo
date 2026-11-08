@@ -115,7 +115,7 @@ describe("login", () => {
     expect(texto()).toMatch(/E-mail ou senha inválidos\./);
     auth.resultado = { error: "CredentialsSignin", code: "bloqueado-7" };
     await enviar();
-    expect(texto()).toMatch(/Muitas tentativas sem sucesso.*aguarde 7 min.*Esqueci minha senha/);
+    expect(texto()).toMatch(/Muitas tentativas.*Aguarde 7 min.*Esqueci minha senha/);
     expect(nav.push).toEqual([]);
   });
 
@@ -193,7 +193,7 @@ describe("definir senha pelo link de recuperação", () => {
     nav.sp = new URLSearchParams("token=abc.def");
     rotas["GET /api/publico/definir-senha"] = { json: { nome: "Nina Nova", email: "nina@x.com", finalidade: "convite" } };
     await montar(form);
-    expect(texto()).toMatch(/Olá, Nina!/);
+    expect(texto()).toMatch(/Defina sua senha, Nina/);
     expect(texto()).toMatch(/Definir senha e entrar/);
   });
 });

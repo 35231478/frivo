@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { acento, corDado, status } from "@/lib/ui/tokens";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getPortalBranding } from "@/lib/portal-server";
@@ -14,14 +15,14 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "QR Code", robots: { index: false, follow: false } };
 
 const STATUS_LABEL: Record<string, { label: string; cor: string }> = {
-  ABERTA: { label: "Aberta", cor: "#0EA5E9" },
-  AGUARDANDO_ATENDIMENTO: { label: "Aguardando atendimento", cor: "#F59E0B" },
-  AGENDADA: { label: "Agendada", cor: "#6366F1" },
-  EM_ANDAMENTO: { label: "Em andamento", cor: "#0EA5E9" },
-  PAUSADA: { label: "Pausada", cor: "#94A3B8" },
-  AGUARDANDO_PECA: { label: "Aguardando peça", cor: "#F59E0B" },
-  CONCLUIDA: { label: "Concluída", cor: "#10B981" },
-  CANCELADA: { label: "Cancelada", cor: "#EF4444" },
+  ABERTA: { label: "Aberta", cor: acento.DEFAULT },
+  AGUARDANDO_ATENDIMENTO: { label: "Aguardando atendimento", cor: status.atencao.DEFAULT },
+  AGENDADA: { label: "Agendada", cor: corDado.indigo },
+  EM_ANDAMENTO: { label: "Em andamento", cor: acento.DEFAULT },
+  PAUSADA: { label: "Pausada", cor: status.previsto.DEFAULT },
+  AGUARDANDO_PECA: { label: "Aguardando peça", cor: status.atencao.DEFAULT },
+  CONCLUIDA: { label: "Concluída", cor: status.ok.DEFAULT },
+  CANCELADA: { label: "Cancelada", cor: status.atrasado.DEFAULT },
 };
 
 function soDigitos(v: string) {
@@ -159,7 +160,7 @@ export default async function QrPublicoPage({ params }: { params: Promise<{ toke
       data: dataBR(o.dataConclusao ?? o.criadoEm),
       tipo: o.atividades[0]?.tipoOs?.nome ?? "Manutenção",
       tecnico: o.atividades[0]?.tecnico?.nome ?? null,
-      status: STATUS_LABEL[o.status] ?? { label: o.status, cor: "#94A3B8" },
+      status: STATUS_LABEL[o.status] ?? { label: o.status, cor: status.previsto.DEFAULT },
     })),
     historicoOculto: cfg.mostrarHistorico && cfg.historicoSomenteLogado && !logado,
     linkEquipe,

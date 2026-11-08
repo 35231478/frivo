@@ -71,7 +71,7 @@ export function PortalAcessoContato({
       const data = await res.json().catch(() => ({}));
       setTemAcesso(true); setSenha("");
       if (data.senhaProvisoria) { setSenhaProvisoria(data.senhaProvisoria); setRevelar(true); }
-      setFb({ t: "ok", m: "Acesso concedido!" });
+      setFb({ t: "ok", m: "Acesso concedido." });
       onChange?.({ temAcesso: true, senhaProvisoria: data.senhaProvisoria ?? senhaProvisoria, acessoConcedidoEm: data.acessoConcedidoEm ?? null });
     } catch { setFb({ t: "erro", m: "Erro de conexão." }); } finally { setSalvando(false); setAcao(null); }
   }
@@ -83,7 +83,7 @@ export function PortalAcessoContato({
       if (!res.ok) { const e = await res.json().catch(() => ({})); setFb({ t: "erro", m: e.erro ?? "Erro ao redefinir." }); return; }
       const data = await res.json();
       setTemAcesso(true); setSenhaProvisoria(data.senhaProvisoria ?? null); setRevelar(true);
-      setFb({ t: "ok", m: "Nova senha provisória gerada!" });
+      setFb({ t: "ok", m: "Nova senha provisória gerada." });
       onChange?.({ temAcesso: true, senhaProvisoria: data.senhaProvisoria ?? null, acessoConcedidoEm: data.acessoConcedidoEm ?? null });
     } catch { setFb({ t: "erro", m: "Erro de conexão." }); } finally { setSalvando(false); setAcao(null); }
   }
@@ -102,7 +102,7 @@ export function PortalAcessoContato({
   }
 
   const msgConvite =
-    `Olá ${contatoNome}, seu acesso ao portal do cliente está pronto.\n` +
+    `Prezado(a) ${contatoNome}, seu acesso ao portal do cliente está pronto.\n` +
     `Acesse: ${linkPortal}\nE-mail: ${email}${senhaProvisoria ? `\nSenha: ${senhaProvisoria}` : ""}`;
   const mailto = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent("Acesso ao Portal do Cliente")}&body=${encodeURIComponent(msgConvite)}`;
   const wpp = whatsappInicial ? whatsappLink(whatsappInicial, msgConvite) : `https://wa.me/?text=${encodeURIComponent(msgConvite)}`;

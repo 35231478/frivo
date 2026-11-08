@@ -4,7 +4,7 @@ import { AtividadeDocumento } from "@/components/relatorio/atividade-documento";
 import { AutoPrint } from "@/components/orcamento/auto-print";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Relatório de Atividade", robots: { index: false, follow: false }, referrer: "no-referrer" as const };
+export const metadata = { title: "Relatório de atividade", robots: { index: false, follow: false }, referrer: "no-referrer" as const };
 
 /** Link público: /relatorio/atividade/<id>?t=<token>. Sem o token certo, 404 (a mesma do id inexistente). */
 export default async function RelatorioAtividadePage({

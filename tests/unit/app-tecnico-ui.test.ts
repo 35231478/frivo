@@ -265,7 +265,7 @@ describe("execução guiada", () => {
     await esperarAte(() => !!$("[data-item=i1] [data-miniatura]"), "miniatura da foto");
     expect($("[data-item=i1] [data-miniatura]")!.textContent).toContain("no aparelho");
     // UX-7 (Y9): depois de anexar, o botão confirma — e (G11) o progresso tem legenda
-    expect($$("[data-item=i1] button").some((b) => b.textContent!.includes("Foto ✓ (1)"))).toBe(true);
+    expect($$("[data-item=i1] button").some((b) => b.textContent!.includes("Foto registrada (1)"))).toBe(true);
     expect($("[data-progresso-legenda]")!.textContent).toContain("Itens do checklist e medições");
     await clicar($("[data-concluir-equipamento]"));
     await esperarAte(() => window.location.search === "?ver=os&a=aA&e=eqB", "foi para o próximo");
@@ -331,7 +331,7 @@ describe("execução guiada", () => {
     await motor.baixarRetrato("aA");
     online = false;
     await abrirOs("aA");
-    expect($("[data-fotos-servico]")!.textContent).toContain("Cada foto vai com o equipamento a que se refere");
+    expect($("[data-fotos-servico]")!.textContent).toContain("Cada foto vai com o equipamento (ou “Geral da OS”) e uma legenda");
     const escolher = async (el: Element | null, v: string) => {
       await act(async () => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(el, v); el!.dispatchEvent(new Event("change", { bubbles: true })); });
       await esperar();

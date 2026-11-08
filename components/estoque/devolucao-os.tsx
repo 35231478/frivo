@@ -45,7 +45,7 @@ export function DevolucaoOs({ inicial }: { inicial: SeparacaoDaOs }) {
     await chamar("POST", { materiais: ids }, ids.length === 1 ? "1 material devolvido ao estoque" : `${ids.length} materiais devolvidos ao estoque`);
   }
   async function desfazer(m: MaterialSeparacaoTela) {
-    if (!(await confirmar({ titulo: "Desfazer devolução", mensagem: `Tirar de novo do estoque ${formatarQtd(m.quantidadeDevolvida ?? 0)} ${m.unidade} de ${m.descricao}? A sobra volta a "pendente de devolução".`, confirmarTexto: "Desfazer", perigo: true }))) return;
+    if (!(await confirmar({ titulo: "Desfazer devolução", mensagem: `Tirar de novo do estoque ${formatarQtd(m.quantidadeDevolvida ?? 0)} ${m.unidade} de ${m.descricao}? Volta a "pendente".`, confirmarTexto: "Desfazer", perigo: true }))) return;
     await chamar("DELETE", { id: m.id }, `Devolução de ${m.descricao} desfeita`);
   }
   const alternar = (id: string) => setMarcados((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -116,7 +116,7 @@ export function DevolucaoOs({ inicial }: { inicial: SeparacaoDaOs }) {
           <ul className="hidden md:block divide-y divide-surface-linha" data-lista-devolucao>{materiais.map((m) => linha(m, false))}</ul>
           <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-surface-border bg-surface-page">
             <p className="text-xs text-ink-muted">
-              {aDevolver.length === 0 ? "Nada a devolver nesta OS." : `${aDevolver.length} ${aDevolver.length === 1 ? "material volta" : "materiais voltam"} ao estoque. Confirmar lança a devolução no razão e libera o saldo.`}
+              {aDevolver.length === 0 ? "Nada a devolver nesta OS." : `${aDevolver.length} ${aDevolver.length === 1 ? "material volta" : "materiais voltam"} ao estoque. Confirmar lança a devolução e libera o saldo.`}
             </p>
             {aDevolver.length > 0 && <Button onClick={confirmarDevolucao} loading={salvando} data-acao="confirmar-devolucao"><Check className="w-4 h-4" /> Confirmar devolução</Button>}
           </div>

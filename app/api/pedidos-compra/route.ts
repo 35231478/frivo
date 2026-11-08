@@ -138,14 +138,14 @@ export async function POST(req: NextRequest) {
   // Aviso ao comprador designado (WhatsApp com o link do pedido)
   const link = `${req.nextUrl.origin}/compras/pedidos/${pedido.id}`;
   const origemTxt = pedido.ordemServico
-    ? `📋 OS: ${pedido.ordemServico.numero} — ${pedido.ordemServico.cliente.nomeFantasia ?? pedido.ordemServico.cliente.nome}`
-    : pedido.orcamento ? `📋 Orçamento: ${pedido.orcamento.codigo}` : `📋 Avulso: ${pedido.motivo}`;
+    ? `OS: ${pedido.ordemServico.numero} — ${pedido.ordemServico.cliente.nomeFantasia ?? pedido.ordemServico.cliente.nome}`
+    : pedido.orcamento ? `Orçamento: ${pedido.orcamento.codigo}` : `Avulso: ${pedido.motivo}`;
   const mensagem =
-    `🛒 *Pedido de Compra ${pedido.numero}*\n${origemTxt}\n` +
-    pedido.itens.map((i) => `📦 ${i.descricao} — ${Number(i.quantidade)} ${i.unidade}`).join("\n") + "\n" +
-    `⏰ Prazo: ${pedido.prazoNecessario ? formatarData(pedido.prazoNecessario) : "—"}\n` +
-    (pedido.observacao ? `💬 ${pedido.observacao}\n` : "") +
-    `🔗 Ver detalhes: ${link}`;
+    `*Pedido de Compra ${pedido.numero}*\n${origemTxt}\n` +
+    pedido.itens.map((i) => `- ${i.descricao} — ${Number(i.quantidade)} ${i.unidade}`).join("\n") + "\n" +
+    `Prazo: ${pedido.prazoNecessario ? formatarData(pedido.prazoNecessario) : "—"}\n` +
+    (pedido.observacao ? `Observação: ${pedido.observacao}\n` : "") +
+    `Ver detalhes: ${link}`;
   const whatsappUrl = pedido.comprador?.telefone ? whatsappLink(pedido.comprador.telefone, mensagem) : null;
 
   return NextResponse.json({ ...pedido, whatsappUrl, mensagem }, { status: 201 });

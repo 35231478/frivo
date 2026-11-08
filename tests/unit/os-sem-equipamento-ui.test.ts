@@ -180,7 +180,7 @@ describe("execução desktop: por que dá (ou não) para concluir sem equipament
     expect($("[data-dispensa-equipamento]")?.getAttribute("data-dispensa-equipamento")).toBe("TIPO");
     expect(texto("[data-resumo-execucao]")).toContain("“Visita Técnica” não exige equipamento");
     expect(texto("[data-sem-equipamentos]")).toContain("não exige equipamento");
-    expect(texto("[data-sem-equipamentos]")).not.toContain("é preciso pelo menos 1 equipamento");
+    expect(texto("[data-sem-equipamentos]")).not.toContain("é preciso ao menos 1 equipamento");
     await clicar($("[data-concluir]"));
     expect(chamadas.find((c) => c.metodo === "PUT")).toMatchObject({ url: "/api/ordens/os1/atividades/a1", corpo: { status: "CONCLUIDA" } });
     expect($("[data-pendencias]")).toBeNull();
@@ -216,7 +216,7 @@ describe("execução desktop: por que dá (ou não) para concluir sem equipament
   it("sem saída: 'Concluir' mostra a trava com as saídas e o botão de justificar, que conclui pela rota da exceção", async () => {
     respostas["POST /api/ordens/os1/concluir-sem-equipamento"] = { status: 200, corpo: { ok: true, status: "CONCLUIDA" } };
     await montarExec(null);
-    expect(texto("[data-sem-equipamentos]")).toContain("é preciso pelo menos 1 equipamento");
+    expect(texto("[data-sem-equipamentos]")).toContain("é preciso ao menos 1 equipamento");
     await clicar($("[data-concluir]"));
     expect(texto("[data-pendencias]")).toContain(MSG_TRAVA);
     expect(chamadas.some((c) => c.metodo === "PUT")).toBe(false); // a tela já sabe: não chama o servidor

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/ui/page-header";
 import { ChecklistPreenchimento } from "@/components/veiculos/checklist-preenchimento";
 
-export const metadata: Metadata = { title: "Checklist de Veículo" };
+export const metadata: Metadata = { title: "Checklist de veículo" };
 
 export default async function ChecklistVeiculoPage({ searchParams }: { searchParams: Promise<{ veiculoId?: string }> }) {
   const { veiculoId = "" } = await searchParams;
@@ -19,7 +19,7 @@ export default async function ChecklistVeiculoPage({ searchParams }: { searchPar
 
   return (
     <div className="max-w-2xl mx-auto">
-      <PageHeader title="Checklist de Veículo" description="Preencha o checklist do veículo" backHref="/veiculos" />
+      <PageHeader title="Checklist de veículo" description="Preencha o checklist do veículo" backHref="/veiculos" />
       <ChecklistPreenchimento
         veiculos={veiculos}
         templates={templates}

@@ -6,7 +6,7 @@ import { AutoPrint } from "@/components/orcamento/auto-print";
 import { BotaoImprimir } from "@/components/compras/botao-imprimir";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Pedido de Compra", robots: { index: false, follow: false } };
+export const metadata = { title: "Pedido de compra", robots: { index: false, follow: false } };
 
 /**
  * O Pedido de Compra para o fornecedor, sem login (link com token, sem nenhum preço): ver, imprimir

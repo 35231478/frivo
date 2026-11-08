@@ -8,7 +8,7 @@ import { carregarPedido, pedidoParaTela } from "@/lib/compras/pedido-server";
 import { PageHeader } from "@/components/ui/page-header";
 import { PedidoPainel } from "@/components/compras/pedido-painel";
 
-export const metadata: Metadata = { title: "Pedido de Compra" };
+export const metadata: Metadata = { title: "Pedido de compra" };
 
 export default async function PedidoCompraDetalhe({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

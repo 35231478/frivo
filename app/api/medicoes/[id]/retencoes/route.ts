@@ -93,7 +93,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     });
   } catch (e) {
     if (!(e instanceof ConflitoConta)) throw e;
-    return NextResponse.json({ erro: e.message || "A conta mudou enquanto você editava (boleto ou recebimento). Atualize a tela." }, { status: 409 });
+    return NextResponse.json({ erro: e.message || "A conta foi alterada por outra ação (boleto ou recebimento). Atualize a tela." }, { status: 409 });
   }
   return NextResponse.json({ ok: true, ...detalhe, contaReceber: conta ? { id: conta.id, numero: conta.numero, valor: valorNovo } : null });
 }

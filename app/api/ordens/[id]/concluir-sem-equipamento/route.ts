@@ -37,7 +37,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   // No modo técnico a justificativa é sempre por uma atividade DELE (sem ela, autorizaria qualquer OS)
   const ator = atorDaSessao(session);
-  if (ator.escopo.restrito && !atividadeId) return NextResponse.json({ erro: "Justifique pela atividade que você está executando." }, { status: 403 });
+  if (ator.escopo.restrito && !atividadeId) return NextResponse.json({ erro: "Justifique pela atividade em execução." }, { status: 403 });
 
   // A atividade (se veio) precisa ser desta OS e estar aberta — confere antes de gravar o motivo
   const ctx = atividadeId ? await carregarContexto(ator, atividadeId, { osId: id }) : null;

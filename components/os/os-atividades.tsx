@@ -355,8 +355,8 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
       <Modal aberto={!!excluindo} onFechar={() => setExcluindo(null)} titulo="Excluir atividade?" tamanho="sm">
         <div className="space-y-4">
           <p className="text-sm text-ink">
-            Tem certeza? A atividade <strong>{excluindo?.titulo}</strong> será removida da OS (fica registrado no histórico).
-            Atividades que já têm execução registrada não podem ser excluídas — nesse caso, cancele a atividade.
+            Tem certeza? A atividade <strong>{excluindo?.titulo}</strong> sai da OS (fica no histórico).
+            Com execução registrada ela não pode ser excluída: nesse caso, cancele a atividade.
           </p>
           {erroModal && <ErroModal texto={erroModal} />}
           <div className="flex justify-end gap-2">

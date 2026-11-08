@@ -4,7 +4,7 @@ import { RelatorioDocumento } from "@/components/relatorio/relatorio-documento";
 import { AutoPrint } from "@/components/orcamento/auto-print";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Imprimir Relatório", robots: { index: false, follow: false } };
+export const metadata = { title: "Imprimir relatório", robots: { index: false, follow: false } };
 
 export default async function ImprimirRelatorioPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;

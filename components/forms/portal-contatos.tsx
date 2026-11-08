@@ -62,7 +62,7 @@ export function PortalContatos({ clienteId, ativo, onGerenciar }: { clienteId: s
   return (
     <div className="space-y-2">
       <p className="text-xs text-ink-muted mb-1">
-        Conceda ou gerencie o acesso de cada contato ao portal do cliente. A senha aparece só no momento em que é definida ou redefinida, para você repassar ao contato.
+        Acesso de cada contato ao portal. A senha aparece só ao ser definida ou redefinida, para repasse ao contato.
       </p>
       {contatos.map((c) => {
         const temAcesso = !!c.temAcesso;

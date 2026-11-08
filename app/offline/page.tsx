@@ -33,10 +33,9 @@ export default function OfflinePage() {
           <WifiOff className="w-5 h-5" />
           <span className="text-sm font-medium uppercase tracking-wider">Sem conexão</span>
         </div>
-        <h1 className="text-2xl font-bold text-ink">Você está sem conexão</h1>
+        <h1 className="text-2xl font-bold text-ink">Sem conexão</h1>
         <p className="text-sm text-ink-muted max-w-sm">
-          As últimas informações carregadas ainda estão disponíveis. Reconecte-se à internet para
-          ver os dados mais recentes.
+          Os últimos dados carregados continuam disponíveis; reconecte para ver os mais recentes.
         </p>
       </div>
       <div className="flex flex-col sm:flex-row gap-3">

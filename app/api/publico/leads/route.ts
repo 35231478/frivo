@@ -260,7 +260,7 @@ export async function POST(req: Request) {
       `Instalação (referência): R$ ${fmt(INSTALACAO_UNIT)} por unidade (${qtd}x = R$ ${fmt(instalTotal)})`,
       `Total estimado: R$ ${fmt(data.preOrcamento.totalMin + instalTotal)} a R$ ${fmt(data.preOrcamento.totalMax + instalTotal)}`,
       ``,
-      `⚠️ Valores de referência — orçamento definitivo após visita técnica.`,
+      `Valores de referência: orçamento definitivo após visita técnica.`,
     ].join("\n");
 
     // 7. Orçamento numerado pelo contador da empresa, sob trava (nunca duplica)

@@ -81,7 +81,7 @@ export default async function MedicaoPublicaPage({ params }: { params: Promise<{
             <div className="bg-ok-claro border border-ok/30 text-ok-texto rounded-card px-5 py-4 flex items-center gap-3">
               <CheckCircle2 className="w-6 h-6 shrink-0" />
               <div>
-                <p className="font-bold">Medição aprovada!</p>
+                <p className="font-bold">Medição aprovada.</p>
                 <p className="text-sm">
                   Aprovada por {medicao.assinadoPor} em {formatarData(medicao.dataAprovacao, "dd/MM/yyyy 'às' HH:mm")}.
                 </p>

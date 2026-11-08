@@ -112,7 +112,7 @@ export function ImprimirClient({ etiquetas, empresa }: { etiquetas: Etiqueta[]; 
             key={et.id}
             className="etiqueta"
             style={{
-              border: "1px solid #d1d5db",
+              border: `1px solid ${neutro.borda}`,
               borderRadius: 6,
               padding: "0.3cm",
               display: "flex",
@@ -146,7 +146,7 @@ export function ImprimirClient({ etiquetas, empresa }: { etiquetas: Etiqueta[]; 
           body { background: #fff; }
           aside, header { display: none !important; }
           html, body, main { height: auto !important; overflow: visible !important; }
-          .etiqueta { border-color: #cbd5e1 !important; }
+          .etiqueta { border-color: ${neutro.borda} !important; }
         }
       `}</style>
     </div>

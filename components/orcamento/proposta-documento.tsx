@@ -117,7 +117,7 @@ export function PropostaDocumento({ orcamento: o, empresa, cliente, responsavelT
               {(cliente.nomeFantasia ?? cliente.nome).slice(0, 2).toUpperCase()}
             </div>
           </div>
-          <p className="text-xs uppercase tracking-[0.3em] text-success-700 font-semibold">Proposta Comercial</p>
+          <p className="text-xs uppercase tracking-[0.3em] text-success-700 font-semibold">Proposta comercial</p>
           <h1 className="text-3xl font-bold text-ink mt-3 max-w-xl">CONTRATO DE MANUTENÇÃO</h1>
           <p className="text-lg text-ink-muted mt-2">{o.nome}</p>
           <div className="mt-10 grid grid-cols-3 gap-8 text-sm">

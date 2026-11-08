@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { corDado } from "@/lib/ui/tokens";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { exigirPermissao } from "@/lib/permissoes-server";
@@ -7,7 +8,7 @@ import { z } from "zod";
 const tipoOsSchema = z.object({
   nome: z.string().min(1, "Nome é obrigatório"),
   descricao: z.string().optional(),
-  cor: z.string().default("#3b82f6"),
+  cor: z.string().default(corDado.azulForte),
   ativo: z.boolean().default(true),
   /** Trava da conclusão: false = serviço sem equipamento (visita técnica, vistoria, orçamento) */
   exigeEquipamento: z.boolean().default(true),

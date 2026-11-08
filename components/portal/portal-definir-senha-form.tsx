@@ -44,8 +44,8 @@ export function PortalDefinirSenhaForm() {
   if (ok) return (
     <div className="space-y-4 text-center">
       <CheckCircle2 className="w-10 h-10 text-success-600 mx-auto" />
-      <h2 className="text-xl font-bold text-ink">Senha criada!</h2>
-      <p className="text-sm text-ink-muted">Você já pode entrar com a nova senha. Levando você para a entrada…</p>
+      <h2 className="text-xl font-bold text-ink">Senha criada.</h2>
+      <p className="text-sm text-ink-muted">A nova senha já vale. Redirecionando para a entrada…</p>
       <Link href="/portal/login" className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary-600">Ir agora</Link>
     </div>
   );
@@ -54,7 +54,7 @@ export function PortalDefinirSenhaForm() {
     <form onSubmit={salvar} className="space-y-5" noValidate>
       <div>
         <h2 className="text-xl font-bold text-ink">Criar nova senha</h2>
-        <p className="text-sm text-ink-muted mt-1">Escolha a senha que você vai usar para entrar no portal.</p>
+        <p className="text-sm text-ink-muted mt-1">Escolha a senha de acesso ao portal.</p>
       </div>
       {erro && <p role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2.5 flex items-center gap-2"><AlertCircle className="w-4 h-4 shrink-0" /> {erro}</p>}
       <label className="block space-y-1.5">

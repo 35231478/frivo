@@ -101,7 +101,7 @@ export function ComunicacaoPreferencias({ clienteId, ativo, onGerenciar }: { cli
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <p className="text-xs text-ink-muted">
-          Marque quem recebe cada tipo de comunicação e por qual canal. Um mesmo contato pode receber várias comunicações.
+          Quem recebe cada comunicação e por qual canal. Um contato pode receber várias.
         </p>
         <StatusSalvamento status={status} />
       </div>
@@ -157,7 +157,7 @@ export function ComunicacaoPreferencias({ clienteId, ativo, onGerenciar }: { cli
       ))}
 
       <p className="text-xs text-ink-subtle">
-        O envio por WhatsApp será habilitado em breve — por enquanto apenas o e-mail é enviado automaticamente; o canal fica salvo para quando o envio por WhatsApp estiver disponível.
+        WhatsApp em breve: por enquanto só o e-mail é enviado automaticamente; o canal escolhido fica salvo.
       </p>
     </div>
   );

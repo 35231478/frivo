@@ -94,7 +94,7 @@ export default async function OrcamentoPublicoPage({
             <div className="bg-ok-claro border border-ok/30 text-ok-texto rounded-card px-5 py-4 flex items-center gap-3">
               <CheckCircle2 className="w-6 h-6 shrink-0" />
               <div>
-                <p className="font-bold">Orçamento aprovado!</p>
+                <p className="font-bold">Orçamento aprovado.</p>
                 <p className="text-sm">
                   Aprovado por {orcamento.assinadoPor} em{" "}
                   {formatarData(orcamento.assinadoEm, "dd/MM/yyyy 'às' HH:mm")}.

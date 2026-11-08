@@ -82,8 +82,7 @@ export function OsFinanceiro({ osId, temContrato, concluida, fatura, medicoes: i
 
       {temContrato && (
         <p className="text-xs text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2">
-          OS de contrato: a <strong>mensalidade</strong> é faturada pelo faturamento mensal do contrato
-          (Medições &rsaquo; Gerar mês). Aqui saem só os itens executados e os adicionais marcados &ldquo;Cobrar&rdquo;.
+          OS de contrato: a <strong>mensalidade</strong> sai pelo contrato (Medições &rsaquo; Gerar mês); aqui, só itens executados e adicionais &ldquo;Cobrar&rdquo;.
         </p>
       )}
 

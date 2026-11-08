@@ -149,7 +149,7 @@ export function MeuDia() {
         <div className="rounded-card bg-white border border-surface-border p-6 text-center space-y-2">
           <Clock className="w-8 h-8 text-ink-subtle mx-auto" />
           <p className="font-semibold text-ink">Dia livre por enquanto</p>
-          <p className="text-sm text-ink-muted">Quando o escritório agendar uma OS para você, ela aparece aqui.</p>
+          <p className="text-sm text-ink-muted">Nenhuma OS agendada. As agendadas pelo escritório aparecem aqui.</p>
           <button type="button" onClick={() => irPara({ ver: "agenda" })} className="text-sm font-semibold text-primary-700 inline-flex items-center gap-1 pt-1"><CalendarDays className="w-4 h-4" /> Ver a agenda</button>
         </div>
       )}

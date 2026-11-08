@@ -104,8 +104,8 @@ export function OsInativarBotao({
           {recusar ? (
             <>
               <p className="text-sm text-ink">
-                Tem certeza? A solicitação será <strong>recusada</strong>: a OS vira <strong>Cancelada</strong> e o cliente
-                passa a ver “Cancelada” no portal. Nada é apagado e ela pode ser reaberta depois pela própria OS.
+                Tem certeza? A solicitação será <strong>recusada</strong>: a OS vira <strong>Cancelada</strong>, também no portal do cliente.
+                Nada é apagado; a OS pode ser reaberta depois.
               </p>
               <label className="block">
                 <span className="block text-xs font-medium text-ink mb-1">Motivo (opcional — fica no histórico)</span>
@@ -122,7 +122,7 @@ export function OsInativarBotao({
             <>
               <p className="text-sm text-ink">
                 Tem certeza? A OS será <strong>cancelada</strong> e sairá das listas e do calendário.
-                Nada é apagado: atividades, anexos, relatórios e histórico ficam preservados, e ela pode ser reaberta depois.
+                Nada é apagado (atividades, anexos, relatórios, histórico); pode ser reaberta depois.
               </p>
               <label className="block">
                 <span className="block text-xs font-medium text-ink mb-1">Motivo (opcional — fica no histórico)</span>
