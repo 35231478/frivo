@@ -5,6 +5,7 @@ import { itensFaturaveisDaOs, osJaFaturada, travarParaFaturar } from "@/lib/fatu
 import { partesBR } from "@/lib/fuso";
 import { proximoNumero } from "@/lib/numeracao-server";
 import { respostaPortaoPrestacao } from "@/lib/estoque/devolucao-server";
+import { faturaDaOs } from "@/lib/faturamento/fatura";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -50,23 +51,10 @@ export async function POST(_: NextRequest, { params }: Params) {
   const agora = new Date();
   const { ano, mes: mes0 } = partesBR(agora); // competência pelo mês de Brasília
 
-  const linhas = [
-    ...itens.map((it) => ({
-      servicoId: it.orcamentoServico?.servicoId ?? null,
-      descricao: it.descricao,
-      quantidade: Number(it.quantidade),
-      valorUnitario: Number(it.valorUnitario),
-      valorTotal: Number(it.valorTotal),
-    })),
-    ...adicionais.map((a) => ({
-      servicoId: null as string | null,
-      descricao: `Serviço adicional — ${a.descricao}`,
-      quantidade: 1,
-      valorUnitario: Number(a.valor),
-      valorTotal: Number(a.valor),
-    })),
-  ];
-  const valorTotal = linhas.reduce((acc, l) => acc + l.valorTotal, 0);
+  // E5: a mesma regra pura do "Faturar" (faturaDaOs): serviço já ajustado pelos materiais inclusos (que nunca viram
+  // linha) + a PEÇA (item PRODUTO executado) como linha de produto, cobrada à parte; o serviço do catálogo vem do
+  // orçamento de origem ou do próprio item da OS avulsa (E3.3b)
+  const { linhas, valorTotal } = faturaDaOs(os.id, itens.map((i) => ({ ...i, servicoId: i.orcamentoServico?.servicoId ?? i.servicoId ?? null })), adicionais.map((a) => ({ descricao: a.descricao, valor: a.valor })));
 
   const r = await prisma.$transaction(async (tx) => {
     const travadas = await travarParaFaturar(tx, { osIds: [os.id] });
@@ -88,9 +76,10 @@ export async function POST(_: NextRequest, { params }: Params) {
         tokenPublico: crypto.randomUUID(),
         itens: {
           create: linhas.map((l, idx) => ({
-            tipo: "SERVICO" as const,
+            tipo: l.tipo,
             ordemServicoId: os.id,
-            servicoId: l.servicoId,
+            servicoId: l.servicoId ?? null,
+            produtoId: l.produtoId ?? null,
             descricao: l.descricao,
             quantidade: l.quantidade,
             valorUnitario: l.valorUnitario,

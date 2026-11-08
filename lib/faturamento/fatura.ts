@@ -116,6 +116,28 @@ export function faturaDaOs(osId: string,
   return { linhas, valorTotal, descontoValor: 0, valorLiquido: valorTotal };
 }
 
+/**
+ * E5 — medição COMPLETA (relatório + medição, aprovada pelo cliente): o serviço do período sai numa linha só, como
+ * sempre; as PEÇAS (itens PRODUTO executados da OS) saem como linhas de produto, cobradas à parte — a mesma regra do
+ * "Faturar" e do "Gerar medição". O material incluso já está embutido no serviço (ajuste pela diferença) e nunca vira
+ * linha. Sem peça, a medição é idêntica à de antes (uma linha com o valor do relatório).
+ */
+export function linhasMedicaoCompleta(
+  numeroRelatorio: string, valorFinanceiro: unknown, osId: string,
+  produtos: { descricao: string; quantidade: unknown; valorUnitario: unknown; valorTotal: unknown; produtoId?: string | null }[],
+): LinhaFatura[] {
+  const pecas: LinhaFatura[] = produtos.map((p) => ({
+    tipo: "PRODUTO" as const, descricao: p.descricao.trim().slice(0, 500), quantidade: Number(p.quantidade),
+    valorUnitario: Number(p.valorUnitario), valorTotal: round2(Number(p.valorTotal)), produtoId: p.produtoId ?? null, ordemServicoId: osId,
+  }));
+  const totalPecas = round2(pecas.reduce((s, l) => s + l.valorTotal, 0));
+  const servico = round2(Math.max(0, Number(valorFinanceiro) - totalPecas));
+  const linhas: LinhaFatura[] = servico > 0 || !pecas.length
+    ? [{ tipo: "SERVICO", descricao: `Serviço do período — ${numeroRelatorio}`, quantidade: 1, valorUnitario: servico, valorTotal: servico, ordemServicoId: osId }]
+    : [];
+  return [...linhas, ...pecas];
+}
+
 /** Status na tela: a fatura avulsa nasce liberada para a nota (sem PC), então "PC recebido" vira "A emitir" */
 export function rotuloStatusMedicao(m: { status: string; avulsa?: boolean | null }, labels: Record<string, string>) {
   if (m.avulsa && m.status === "PC_RECEBIDO") return "A emitir";

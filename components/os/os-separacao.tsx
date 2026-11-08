@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Check, PackageMinus, PackageOpen, Undo2, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, ChevronUp, PackageMinus, PackageOpen, Undo2, X } from "lucide-react";
 import { StatusPill, type TomStatus } from "@/components/ui/status-pill";
 import { Dica } from "@/components/ui/dica";
 import { Button } from "@/components/ui/button";
@@ -66,6 +66,8 @@ export function OsSeparacao({ osId, materiais: iniciais, resumo: resumoInicial, 
   const [resumo, setResumo] = useState<ResumoSeparacao>(resumoInicial);
   useEffect(() => { setMateriais(iniciais); setResumo(resumoInicial); }, [iniciais, resumoInicial]);
   const [informando, setInformando] = useState(false);
+  // E5: visão INTERNA por material (separado / consumido / devolvido / sobra, com quem e quando) — nunca vai ao cliente
+  const [detalhe, setDetalhe] = useState<string | null>(null);
   const [agora, setAgora] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
@@ -178,7 +180,7 @@ export function OsSeparacao({ osId, materiais: iniciais, resumo: resumoInicial, 
             const q = editando ? paraNumero(agora[m.id] ?? "") : NaN;
             const aMais = editando && Number.isFinite(q) && q > m.quantidadeSeparada;
             return (
-              <li key={m.id} data-material-estado={m.id} data-situacao-material={sit} data-pendente-devolucao={sobra > 0 ? sobra : undefined} className={cn("px-3 py-2 text-sm sm:flex sm:items-center sm:gap-3", aMais && "bg-atencao-claro/40")}>
+              <li key={m.id} data-material-estado={m.id} data-situacao-material={sit} data-pendente-devolucao={sobra > 0 ? sobra : undefined} className={cn("px-3 py-2 text-sm sm:flex sm:flex-wrap sm:items-center sm:gap-3", aMais && "bg-atencao-claro/40")}>
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-ink truncate">{m.descricao}</p>
                   <p className="text-xs text-ink-subtle truncate">{m.item}{m.kitNome ? ` · Kit ${m.kitNome}` : ""}</p>
@@ -220,9 +222,23 @@ export function OsSeparacao({ osId, materiais: iniciais, resumo: resumoInicial, 
                       {sit === "consumido" && podeConsumir && !finalizada && (
                         <button type="button" onClick={() => desfazer(m)} disabled={salvando} className="inline-flex items-center gap-1 text-xs font-semibold text-atrasado hover:underline" data-acao="desfazer-consumo"><Undo2 className="w-3.5 h-3.5" /> Desfazer</button>
                       )}
+                      {m.quantidadeSeparada > 0 && (
+                        <button type="button" onClick={() => setDetalhe((d) => (d === m.id ? null : m.id))} aria-expanded={detalhe === m.id} aria-label={`Histórico de ${m.descricao}`}
+                          className="inline-flex items-center gap-0.5 text-xs text-ink-muted hover:text-ink" data-acao="historico-material">
+                          {detalhe === m.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                        </button>
+                      )}
                     </>
                   )}
                 </div>
+                {detalhe === m.id && !editando && (
+                  <dl className="sm:basis-full mt-2 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-xs border-t border-surface-linha pt-2" data-historico-material={m.id}>
+                    <div><dt className="uppercase text-[10px] text-ink-subtle">Separado</dt><dd className="tabular-nums text-ink" data-hist-separado>{formatarQtd(m.quantidadeSeparada)} {m.unidade}{m.separadoPor ? <>{" "}<span className="block text-ink-subtle">por {m.separadoPor}{m.separadoEm ? ` · ${formatarDataHora(m.separadoEm)}` : ""}</span></> : null}</dd></div>
+                    <div><dt className="uppercase text-[10px] text-ink-subtle">Consumido</dt><dd className="tabular-nums text-ink" data-hist-consumido>{m.consumoInformado ? <>{formatarQtd(m.quantidadeConsumida ?? 0)} {m.unidade}{m.consumidoPor ? <>{" "}<span className="block text-ink-subtle">por {m.consumidoPor}{m.consumidoEm ? ` · ${formatarDataHora(m.consumidoEm)}` : ""}</span></> : null}</> : <span className="text-ink-subtle">não informado</span>}</dd></div>
+                    <div><dt className="uppercase text-[10px] text-ink-subtle">Devolvido</dt><dd className="tabular-nums text-ink" data-hist-devolvido>{(m.quantidadeDevolvida ?? 0) > 0 ? <>{formatarQtd(m.quantidadeDevolvida ?? 0)} {m.unidade}{m.devolvidoPor ? <>{" "}<span className="block text-ink-subtle">por {m.devolvidoPor}{m.devolvidoEm ? ` · ${formatarDataHora(m.devolvidoEm)}` : ""}</span></> : null}</> : <span className="text-ink-subtle">—</span>}</dd></div>
+                    <div><dt className="uppercase text-[10px] text-ink-subtle">Sobra</dt><dd className="tabular-nums text-ink" data-hist-sobra>{sobra > 0 ? `${formatarQtd(sobra)} ${m.unidade} a devolver` : m.consumoInformado || sit === "devolvido" ? "nenhuma" : <span className="text-ink-subtle">—</span>}</dd></div>
+                  </dl>
+                )}
               </li>
             );
           })}
