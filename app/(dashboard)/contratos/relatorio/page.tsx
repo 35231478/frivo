@@ -5,7 +5,7 @@ import { intervaloMeses, ehOcorrencia, dataAgendadaRecorrencia } from "@/lib/rec
 import { RelatorioContratosClient } from "@/components/contratos/relatorio-contratos-client";
 import { anoBR, diaCivilPassou, mesBR } from "@/lib/fuso";
 
-export const metadata: Metadata = { title: "Relatório de Contratos" };
+export const metadata: Metadata = { title: "Relatório de contratos" };
 
 type StatusMes = "CONCLUIDO" | "EM_ANDAMENTO" | "PENDENTE" | "ATRASADO";
 

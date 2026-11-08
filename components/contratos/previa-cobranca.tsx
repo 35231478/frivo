@@ -77,7 +77,7 @@ export function PreviaCobrancaContrato({ servicoId, valor }: { servicoId: string
         <p data-previa-pendencias className="flex flex-wrap items-center gap-1 text-xs text-atencao-texto">
           <AlertTriangle className="h-3.5 w-3.5" />
           Para a nota sair, falta no serviço: {previa.pendenciasNfse.join(" e ")}.
-          <a href="/configuracoes/servicos" className="font-medium underline">Abrir Serviços</a>
+          <a href="/configuracoes/servicos" className="font-medium underline">Abrir Configurações › Serviços</a>
         </p>
       )}
     </div>

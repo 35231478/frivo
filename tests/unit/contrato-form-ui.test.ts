@@ -485,7 +485,7 @@ describe("PR3-A: cobrança a cada N meses e faturamento automático", () => {
       const dica = $('button[aria-label*="Reajuste anual"]')!;
       expect(dica.parentElement!.closest("button, a")).toBeNull();
       const pend = $("[data-proximo-reajuste]")!;
-      expect([pend.getAttribute("data-proximo-reajuste"), sp(pend.textContent!)]).toEqual(["pendente", "Aniversário de nov/2026: R$ 1.000,00 → R$ 1.050,00. Decidir em Reajustes"]);
+      expect([pend.getAttribute("data-proximo-reajuste"), sp(pend.textContent!)]).toEqual(["pendente", "Aniversário de nov/2026: R$ 1.000,00 → R$ 1.050,00. Decidir em Contratos › Reajustes"]);
       expect(pend.querySelector("a")!.getAttribute("href")).toBe("/contratos/reajustes");
       // Mês de aniversário em março: o 1º só depois de 12 meses (mar/2027)
       const mes = $<HTMLSelectElement>('select[name="reajusteMesAniversario"]')!;

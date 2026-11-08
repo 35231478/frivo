@@ -80,7 +80,7 @@ describe("Faturamento de contratos", () => {
     await montar();
     expect(sp($('[data-card="contratos"]')!.textContent!)).toContain("R$ 7.900,008 contratos");
     expect(sp($('[data-card="concluidas"]')!.textContent!)).toContain("R$ 1.000,001 contrato");
-    expect(sp($('[data-card="atencao"]')!.textContent!)).toContain("Precisam de você");
+    expect(sp($('[data-card="atencao"]')!.textContent!)).toContain("Com pendência");
     expect($("[data-mes-rotulo]")!.textContent).toBe("Novembro de 2026");
     expect($("[data-alternar-periodo]")).toBeNull(); // por competência: só mês a mês
 
@@ -128,7 +128,7 @@ describe("Faturamento de contratos", () => {
     await act(async () => { tr("c").querySelector<HTMLButtonElement>("[data-tentar]")!.click(); });
     await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
     expect(posts).toEqual(["POST /api/faturamento-contratos/ec/tentar"]);
-    expect(avisos.lista).toEqual([["Pronto: a cobrança seguiu.", "sucesso"]]);
+    expect(avisos.lista).toEqual([["Cobrança enviada.", "sucesso"]]);
     expect(nav.refresh).toHaveBeenCalledTimes(1);
 
     respostaTentar = { status: 200, corpo: { ok: true, execucao: { situacao: "PENDENTE", erro: "banco fora do ar" } } };

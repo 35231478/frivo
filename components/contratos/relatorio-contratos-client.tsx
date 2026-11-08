@@ -1,6 +1,7 @@
 "use client";
 
 import { toast } from "@/components/ui/avisos";
+import { acento, neutro, status } from "@/lib/ui/tokens";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -62,9 +63,11 @@ export function RelatorioContratosClient({ mes, ano, itens, tecnicos, clientes }
   // Donut (conic-gradient)
   const seg = (n: number) => (total > 0 ? (n / total) * 100 : 0);
   const p1 = seg(concluidos), p2 = p1 + seg(andamento), p3 = p2 + seg(pendentes);
+  // Cores do donut = tokens de status (a mesma função das pílulas): OK, acento (em andamento), atenção, atrasado
+  const COR_DONUT = { concluido: status.ok.DEFAULT, andamento: acento.DEFAULT, pendente: status.atencao.DEFAULT, atrasado: status.atrasado.DEFAULT, vazio: neutro.linha };
   const donut = total > 0
-    ? `conic-gradient(#10B981 0 ${p1}%, #0EA5E9 ${p1}% ${p2}%, #F59E0B ${p2}% ${p3}%, #EF4444 ${p3}% 100%)`
-    : "conic-gradient(#E2E8F0 0 100%)";
+    ? `conic-gradient(${COR_DONUT.concluido} 0 ${p1}%, ${COR_DONUT.andamento} ${p1}% ${p2}%, ${COR_DONUT.pendente} ${p2}% ${p3}%, ${COR_DONUT.atrasado} ${p3}% 100%)`
+    : `conic-gradient(${COR_DONUT.vazio} 0 100%)`;
 
   function toggle(id: string) { setExpandido((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; }); }
 
@@ -100,7 +103,7 @@ export function RelatorioContratosClient({ mes, ano, itens, tecnicos, clientes }
         <div className="card-padded lg:col-span-2 space-y-4">
           <div className="grid grid-cols-3 gap-3">
             <Resumo label="Requerem atendimento" valor={total} cor="text-ink" />
-            <Resumo label="Realizadas (concluídas)" valor={concluidos} cor="text-success-700" />
+            <Resumo label="Realizadas (concluídas)" valor={concluidos} cor="text-ok-texto" />
             <Resumo label="Pendentes" valor={total - concluidos} cor="text-atencao-texto" />
           </div>
           <div>
@@ -122,10 +125,10 @@ export function RelatorioContratosClient({ mes, ano, itens, tecnicos, clientes }
             </div>
           </div>
           <div className="text-xs space-y-1">
-            <Legenda cor="#10B981" label="Concluído" n={concluidos} />
-            <Legenda cor="#0EA5E9" label="Em andamento" n={andamento} />
-            <Legenda cor="#F59E0B" label="Pendente" n={pendentes} />
-            <Legenda cor="#EF4444" label="Atrasado" n={atrasados} />
+            <Legenda cor={COR_DONUT.concluido} label="Concluído" n={concluidos} />
+            <Legenda cor={COR_DONUT.andamento} label="Em andamento" n={andamento} />
+            <Legenda cor={COR_DONUT.pendente} label="Pendente" n={pendentes} />
+            <Legenda cor={COR_DONUT.atrasado} label="Atrasado" n={atrasados} />
           </div>
         </div>
       </div>

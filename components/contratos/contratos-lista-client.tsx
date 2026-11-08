@@ -24,7 +24,7 @@ interface ContratoView {
 interface Resumo { ativos: number; valorMensalTotal: number; valorAnualTotal: number; vencendo: number; vencidos: number }
 
 const LABELS_STATUS: Record<string, string> = {
-  ATIVO: "Ativo", SUSPENSO: "Suspenso", EM_RENOVACAO: "Em renovação", ENCERRADO: "Encerrado", CANCELADO: "Cancelado", VENCIDO: "Vencido", AGUARDANDO_ASSINATURA: "Aguard. Assinatura",
+  ATIVO: "Ativo", SUSPENSO: "Suspenso", EM_RENOVACAO: "Em renovação", ENCERRADO: "Encerrado", CANCELADO: "Cancelado", VENCIDO: "Vencido", AGUARDANDO_ASSINATURA: "Aguardando assinatura",
 };
 const COR_STATUS: Record<string, string> = {
   ATIVO: "bg-ok-claro text-ok-texto", SUSPENSO: "bg-atencao-claro text-atencao-texto", EM_RENOVACAO: "bg-acento-claro text-acento-hover",
@@ -83,12 +83,14 @@ export function ContratosListaClient({ contratos, total, pagina, porPagina, soma
   }
   const selectCls = "w-full bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all";
 
+  // Base neutra; a cor só nos dois cartões de alerta, e só quando há o que alertar (cor com função)
+  const neutro = { cor: "text-ink", icone: "text-ink-muted", bg: "bg-surface-alt" };
   const cards = [
-    { label: "Contratos ativos", valor: String(resumo.ativos), icone: FileText, cor: "text-primary-600", bg: "bg-primary-50" },
-    { label: "Valor mensal total", valor: formatarMoeda(resumo.valorMensalTotal), icone: Wallet, cor: "text-success-700", bg: "bg-success-50" },
-    { label: "Valor anual total", valor: formatarMoeda(resumo.valorAnualTotal), icone: BarChart3, cor: "text-success-700", bg: "bg-success-50" },
-    { label: "Vencendo em 30 dias", valor: String(resumo.vencendo), icone: CalendarClock, cor: "text-atencao-texto", bg: "bg-atencao-claro" },
-    { label: "Vencidos", valor: String(resumo.vencidos), icone: AlertTriangle, cor: "text-atrasado", bg: "bg-atrasado-claro" },
+    { label: "Contratos ativos", valor: String(resumo.ativos), Icone: FileText, ...neutro },
+    { label: "Valor mensal total", valor: formatarMoeda(resumo.valorMensalTotal), Icone: Wallet, ...neutro },
+    { label: "Valor anual total", valor: formatarMoeda(resumo.valorAnualTotal), Icone: BarChart3, ...neutro },
+    { label: "Vencendo em 30 dias", valor: String(resumo.vencendo), Icone: CalendarClock, ...(resumo.vencendo > 0 ? { cor: "text-atencao-texto", icone: "text-atencao-texto", bg: "bg-atencao-claro" } : neutro) },
+    { label: "Vencidos", valor: String(resumo.vencidos), Icone: AlertTriangle, ...(resumo.vencidos > 0 ? { cor: "text-atrasado-texto", icone: "text-atrasado-texto", bg: "bg-atrasado-claro" } : neutro) },
   ];
 
   return (
@@ -104,7 +106,7 @@ export function ContratosListaClient({ contratos, total, pagina, porPagina, soma
             <BarChart3 className="w-4 h-4" /> Relatório
           </Link>
           <Link href="/contratos/novo" className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow">
-            <Plus className="w-4 h-4" /> Novo Contrato
+            <Plus className="w-4 h-4" /> Novo contrato
           </Link>
         </div>
       </div>
@@ -112,9 +114,9 @@ export function ContratosListaClient({ contratos, total, pagina, porPagina, soma
       {/* Cards de resumo */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {cards.map((c) => (
-          <div key={c.label} className="card p-4">
-            <div className={cn("p-2 rounded-lg w-fit mb-2", c.bg)}><c.icone className={cn("w-4 h-4", c.cor)} /></div>
-            <p className={cn("text-lg font-bold", c.cor)}>{c.valor}</p>
+          <div key={c.label} className="card p-4" data-card-resumo={c.label}>
+            <div className={cn("p-2 rounded-lg w-fit mb-2", c.bg)}><c.Icone className={cn("w-4 h-4", c.icone)} /></div>
+            <p className={cn("text-lg font-semibold tabular-nums", c.cor)}>{c.valor}</p>
             <p className="text-xs text-ink-muted mt-0.5">{c.label}</p>
           </div>
         ))}
@@ -210,7 +212,7 @@ export function ContratosListaClient({ contratos, total, pagina, porPagina, soma
             </thead>
             <tbody>
               {contratos.map((ct, idx) => (
-                <tr key={ct.id} className={cn("border-b border-surface-border hover:bg-primary-50/40 transition-colors", idx % 2 === 1 && "bg-surface-alt/30", ct.vencido && "bg-atrasado-claro/60 hover:bg-atrasado-claro", (ct.status === "ENCERRADO" || ct.status === "CANCELADO") && "opacity-60")}>
+                <tr key={ct.id} className={cn("border-b border-surface-border hover:bg-surface-alt transition-colors", idx % 2 === 1 && "bg-surface-alt/30", ct.vencido && "bg-atrasado-claro/60 hover:bg-atrasado-claro", (ct.status === "ENCERRADO" || ct.status === "CANCELADO") && "opacity-60")}>
                   {massa && <td className="w-px pl-4 pr-1 py-3"><CheckboxLinha id={ct.id} rotulo={ct.numero} /></td>}
                   <td className="px-4 py-3 whitespace-nowrap">
                     <Link href={`/contratos/${ct.id}`} className="font-mono font-semibold text-primary-600 hover:underline">{ct.numero}</Link>
@@ -250,8 +252,8 @@ export function ContratosListaClient({ contratos, total, pagina, porPagina, soma
               <tfoot>
                 <tr className="bg-surface-alt border-t-2 border-surface-border">
                   <td colSpan={3} className="px-4 py-3 text-sm font-semibold text-ink">{total} contrato(s) filtrado(s)</td>
-                  <td className="px-4 py-3 text-right text-sm font-bold text-success-700" title="Equivalente por mês">{formatarMoeda(somaMensalFiltrada)}<span className="text-xs font-normal">/mês</span></td>
-                  <td className="px-4 py-3 text-right text-sm font-bold text-success-700 hidden md:table-cell">{formatarMoeda(somaMensalFiltrada * 12)}</td>
+                  <td className="px-4 py-3 text-right text-sm font-semibold text-ink tabular-nums" title="Equivalente por mês">{formatarMoeda(somaMensalFiltrada)}<span className="text-xs font-normal text-ink-muted">/mês</span></td>
+                  <td className="px-4 py-3 text-right text-sm font-semibold text-ink tabular-nums hidden md:table-cell">{formatarMoeda(somaMensalFiltrada * 12)}</td>
                   <td colSpan={4} />
                 </tr>
               </tfoot>

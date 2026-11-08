@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ContratoForm } from "@/components/forms/contrato-form";
 
-export const metadata: Metadata = { title: "Editar Contrato" };
+export const metadata: Metadata = { title: "Editar contrato" };
 
 export default async function EditarContratoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

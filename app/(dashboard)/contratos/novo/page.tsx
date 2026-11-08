@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { ContratoForm } from "@/components/forms/contrato-form";
 
-export const metadata: Metadata = { title: "Novo Contrato" };
+export const metadata: Metadata = { title: "Novo contrato" };
 
 export default function NovoContratoPage() {
   return (
