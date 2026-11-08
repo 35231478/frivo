@@ -8,6 +8,7 @@ import { carregarGaleria } from "@/lib/os/galeria-server";
 import { contasVinculadas } from "@/lib/financeiro/conta-receber-server";
 import { pode } from "@/lib/permissoes";
 import { osJaFaturada } from "@/lib/faturamento-os";
+import { faturamentoDaOs } from "@/lib/faturamento/faturar-server";
 
 export const metadata: Metadata = { title: "Ordem de serviço" };
 
@@ -97,8 +98,11 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
 
   // Faturar: a OS já está numa fatura/medição viva (direto, relatório ou o orçamento de origem)? Nunca oferece de novo
   const fatura = await osJaFaturada(os.id);
+  // P5: OS avulsa pode ser faturada em partes — total, faturado, saldo e as faturas (uma medição de contrato cobre tudo)
+  const faturamentoOs = !os.contrato ? await faturamentoDaOs(os.id) : null;
+  const faturamento = faturamentoOs && !faturamentoOs.outra ? { total: faturamentoOs.total, faturado: faturamentoOs.faturado, saldo: faturamentoOs.saldo, faturas: faturamentoOs.faturas } : null;
   // E4.2: a amarra da empresa (a central mostra "não conclui sem isso" quando ligada)
   const cfg = await prisma.configuracao.findUnique({ where: { empresaId }, select: { osExigirPrestacaoMaterial: true } });
 
-  return <OsDetalhe os={{ ...os, medicoes: medicoesDaOs, galeria, contasReceber, fatura, exigirPrestacaoMaterial: cfg?.osExigirPrestacaoMaterial ?? false }} abaInicial={aba} />;
+  return <OsDetalhe os={{ ...os, medicoes: medicoesDaOs, galeria, contasReceber, fatura, faturamento, exigirPrestacaoMaterial: cfg?.osExigirPrestacaoMaterial ?? false }} abaInicial={aba} />;
 }

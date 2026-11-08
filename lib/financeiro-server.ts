@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { orcamentoJaFaturado, travarParaFaturar } from "@/lib/faturamento-os";
+import { faturamentoDaOrigem, orcamentoJaFaturado, travarParaFaturar } from "@/lib/faturamento-os";
 import { aFaturar, chaveMesBR } from "@/lib/financeiro/a-faturar";
 import { formatarData, formatarMoeda } from "@/lib/utils";
 import { diaCivilPassou, hojeDiaCivil, inicioMesDiaCivil, partesBR } from "@/lib/fuso";
@@ -249,6 +249,10 @@ export async function desfazerContasDaMedicao(m: { id: string; numero: string; e
     where: { medicaoId: m.id, status: { notIn: ["RECEBIDO", "CANCELADO"] } },
     include: { contrato: { select: { valorMensal: true } }, orcamento: { select: { totalGeral: true } } },
   });
+  // P5: a previsão que volta vale o SALDO a faturar do orçamento (o que as outras faturas vivas, parciais, ainda
+  // não cobrem) — nunca o total cheio por cima de uma parte já faturada
+  const saldoDoOrcamento = async (orcamentoId: string, total: unknown) =>
+    (await faturamentoDaOrigem(prisma, { orcamentoId }, Number(total), m.id)).saldo;
   for (const c of vinculadas) {
     // Conta parcelada (quem chama já recusou se alguma parcela teve dinheiro/boleto): as parcelas são
     // canceladas e o lançamento segue a regra da origem, como uma conta comum
@@ -259,11 +263,21 @@ export async function desfazerContasDaMedicao(m: { id: string; numero: string; e
         data: { medicaoId: null, status: "PREVISTO", valor: c.contrato?.valorMensal ?? c.valor },
       });
     } else if (c.orcamentoId) {
-      await prisma.contaReceber.update({
-        where: { id: c.id },
-        data: { medicaoId: null, status: "PREVISTO", valor: c.orcamento?.totalGeral ?? c.valor },
-      });
-      await evento(c.id, "REABERTA", `Medição ${m.numero} cancelada: volta a ser a previsão do orçamento.`);
+      const saldo = await saldoDoOrcamento(c.orcamentoId, c.orcamento?.totalGeral ?? c.valor);
+      if (saldo > 0) {
+        await prisma.contaReceber.update({
+          where: { id: c.id },
+          data: { medicaoId: null, status: "PREVISTO", valor: saldo },
+        });
+        await evento(c.id, "REABERTA", `Medição ${m.numero} cancelada: volta a ser a previsão do orçamento.`);
+      } else {
+        // Outra medição viva já cobre o orçamento inteiro: nada a prever
+        await prisma.contaReceber.update({
+          where: { id: c.id },
+          data: { status: "CANCELADO", canceladaEm: new Date(), motivoCancelamento: `Medição ${m.numero} cancelada` },
+        });
+        await evento(c.id, "CANCELADA", `Medição ${m.numero} cancelada.`);
+      }
     } else {
       await prisma.contaReceber.update({
         where: { id: c.id },
@@ -274,11 +288,13 @@ export async function desfazerContasDaMedicao(m: { id: string; numero: string; e
   }
   const absorvidas = await prisma.contaReceber.findMany({
     where: { empresaId: m.empresaId, status: "CANCELADO", excluidaEm: null, motivoCancelamento: motivoFaturadaNaMedicao(m.numero) },
-    select: { id: true },
+    select: { id: true, orcamentoId: true, valor: true, orcamento: { select: { totalGeral: true } } },
   });
   for (const a of absorvidas) {
+    const saldo = a.orcamentoId ? await saldoDoOrcamento(a.orcamentoId, a.orcamento?.totalGeral ?? a.valor) : Number(a.valor);
+    if (saldo <= 0) continue; // outra medição viva já cobre o orçamento: a previsão fica cancelada
     try {
-      await prisma.contaReceber.update({ where: { id: a.id }, data: { status: "PREVISTO", canceladaEm: null, motivoCancelamento: null } });
+      await prisma.contaReceber.update({ where: { id: a.id }, data: { status: "PREVISTO", canceladaEm: null, motivoCancelamento: null, valor: saldo } });
       await evento(a.id, "REABERTA", `Medição ${m.numero} cancelada: volta a ser a previsão do orçamento.`);
     } catch (e) {
       if (!ehDuplicada(e)) throw e; // o orçamento já tem outra conta viva: esta fica cancelada

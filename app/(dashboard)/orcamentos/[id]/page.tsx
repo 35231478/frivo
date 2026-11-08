@@ -13,7 +13,7 @@ import { AnexosProposta } from "@/components/orcamento/anexos-proposta";
 import { CicloOrcamento } from "@/components/orcamento/ciclo-orcamento";
 import { GerarOs, type OsDoOrcamento } from "@/components/orcamento/gerar-os";
 import { BotaoFaturar } from "@/components/faturamento/botao-faturar";
-import { orcamentoJaFaturado } from "@/lib/faturamento-os";
+import { faturamentoDoOrcamento } from "@/lib/faturamento/faturar-server";
 import { faturaDoOrcamento } from "@/lib/faturamento/fatura";
 import { ContasReceberVinculadas } from "@/components/financeiro/contas-receber-vinculadas";
 import { contasVinculadas } from "@/lib/financeiro/conta-receber-server";
@@ -77,8 +77,11 @@ export default async function OrcamentoDetalhePage({
   const ehProposta = orcamento.tipo === "PROPOSTA_CONTRATO";
   // Faturar: quem fatura medições; já faturado (direto ou pela OS gerada) → mostra a fatura
   const podeFaturar = pode(u.permissoes, "financeiro", "medicoes", u.role);
-  const faturaExistente = orcamento.tipo === "COMUM" && pode(u.permissoes, "financeiro", "visualizar", u.role)
-    ? await orcamentoJaFaturado(orcamento.id) : null;
+  // P5: total, faturado, saldo e as faturas (parciais ou não) do orçamento — para quem fatura ou vê o financeiro
+  const faturamento = orcamento.tipo === "COMUM" && (podeFaturar || pode(u.permissoes, "financeiro", "visualizar", u.role))
+    ? await faturamentoDoOrcamento(orcamento.id, empresaId) : null;
+  const temFaturas = !!faturamento && (faturamento.faturas.length > 0 || !!faturamento.outra);
+  const faturaExistente = faturamento?.outra ?? null;
   const equipamentos = ehProposta && orcamento.equipamentosCobertos.length
     ? (await prisma.equipamento.findMany({
         where: { id: { in: orcamento.equipamentosCobertos }, empresaId },
@@ -131,10 +134,11 @@ export default async function OrcamentoDetalhePage({
       )}
 
       {/* Faturar (avulso): o orçamento aprovado vira a fatura, com ou sem OS */}
-      {orcamento.tipo === "COMUM" && (orcamento.status === "APROVADO" || faturaExistente) && (podeFaturar || faturaExistente) && (
+      {orcamento.tipo === "COMUM" && faturamento && (orcamento.status === "APROVADO" || temFaturas) && (podeFaturar || temFaturas) && (
         <div className="card-padded" data-secao-faturar-orcamento>
           <BotaoFaturar
             url={`/api/orcamentos/${orcamento.id}/faturar`} origem="orçamento" fatura={faturaExistente}
+            faturamento={faturaExistente ? null : faturamento}
             valor={faturaDoOrcamento(orcamento).valorLiquido} itens={orcamento.servicos.length + orcamento.produtos.length}
             podeFaturar={podeFaturar} podeVer={pode(u.permissoes, "financeiro", "visualizar", u.role)}
           />
