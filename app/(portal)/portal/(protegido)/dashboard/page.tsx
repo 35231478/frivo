@@ -40,7 +40,7 @@ export default async function PortalDashboard() {
   ]);
 
   const alertas: { tipo: "info" | "warn" | "danger"; texto: string }[] = [];
-  if (permissoes.verFinanceiro && medicoesPend > 0) alertas.push({ tipo: "warn", texto: `Você tem ${medicoesPend} fatura(s) aguardando sua aprovação.` });
+  if (permissoes.verFinanceiro && medicoesPend > 0) alertas.push({ tipo: "warn", texto: `${medicoesPend} fatura(s) aguardando aprovação.` });
   if (permissoes.verBoletos) {
     const vencidos = boletos.filter((b) => diaCivilPassou(b.dataVencimento)).length;
     const vencendo = boletos.length - vencidos;
@@ -66,8 +66,8 @@ export default async function PortalDashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-ink">Olá, {(user.name ?? "Cliente").split(" ")[0]}!</h1>
-        <p className="text-sm text-ink-muted mt-1">{branding.boasVindas || `Bem-vindo ao portal de ${branding.empresaNome}.`}</p>
+        <h1 className="text-2xl font-bold text-ink">{user.name ?? "Cliente"}</h1>
+        <p className="text-sm text-ink-muted mt-1">{branding.boasVindas || `Portal de ${branding.empresaNome}: ordens de serviço, documentos e financeiro.`}</p>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

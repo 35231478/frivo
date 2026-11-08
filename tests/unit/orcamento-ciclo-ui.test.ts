@@ -169,7 +169,7 @@ describe("envio rastreável (tela do orçamento)", () => {
     await clicar($("[data-copiar-link]"));
     expect(chamadas.at(-1)!.corpo).toEqual({ canal: "LINK" });
     expect(copiar).toHaveBeenCalledWith("https://app/orcamento/tk1");
-    expect($("[data-feedback-envio]")?.textContent).toContain("Link copiado!");
+    expect($("[data-feedback-envio]")?.textContent).toContain("Link copiado.");
   });
 
   it("retornos sem envio: sem WhatsApp cadastrado, sem e-mail, erro do servidor, erro do Resend", async () => {

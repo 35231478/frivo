@@ -52,8 +52,10 @@ export function ConcluirSemEquipamento({ osId, atividadeId, onConcluido, classNa
       <Modal aberto={aberto} onFechar={() => setAberto(false)} titulo="Concluir sem equipamento">
         <div className="space-y-4" data-modal-sem-equipamento>
           <p className="text-sm text-ink-muted">
-            Use só para exceções (o serviço não envolveu equipamento). O motivo fica gravado na OS e no histórico, com o seu nome e a hora.
-            Equipamentos que já foram atendidos continuam exigindo o checklist completo.
+            Só para exceções (serviço sem equipamento). O motivo fica na OS e no histórico, com nome e hora.
+          </p>
+          <p className="text-sm text-ink-muted">
+            Equipamentos já atendidos continuam exigindo o checklist completo.
           </p>
           <FormField label="Motivo" required hint={`Mínimo de ${MOTIVO_MINIMO} caracteres`}>
             <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} maxLength={500} aria-label="Motivo"

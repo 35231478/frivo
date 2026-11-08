@@ -9,7 +9,7 @@ import { contasVinculadas } from "@/lib/financeiro/conta-receber-server";
 import { pode } from "@/lib/permissoes";
 import { osJaFaturada } from "@/lib/faturamento-os";
 
-export const metadata: Metadata = { title: "Ordem de Serviço" };
+export const metadata: Metadata = { title: "Ordem de serviço" };
 
 export default async function OsDetalhePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ aba?: string }> }) {
   const { id } = await params;

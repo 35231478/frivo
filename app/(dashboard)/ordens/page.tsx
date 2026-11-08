@@ -9,7 +9,7 @@ import { SelecaoMassaProvider } from "@/components/acoes-massa/selecao";
 import { BarraAcoesMassa } from "@/components/acoes-massa/barra";
 import { comparaNatural } from "@/lib/utils";
 
-export const metadata: Metadata = { title: "Ordens de Serviço" };
+export const metadata: Metadata = { title: "Ordens de serviço" };
 
 type SP = {
   busca?: string; status?: string; prioridade?: string; origem?: string;

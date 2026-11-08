@@ -43,7 +43,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       const whatsappDestino = cliente.whatsappFaturamento ?? cliente.celular ?? null;
       const assunto = `Medição ${medicao.numero} — ${medicao.empresa.nomeFantasia ?? medicao.empresa.nome}`;
       const corpo =
-        `Olá,\n\nSegue a medição ${medicao.numero} para sua avaliação e aprovação:\n\n${publicUrl}\n\n` +
+        `Prezados,\n\nSegue a medição ${medicao.numero} para avaliação e aprovação:\n\n${publicUrl}\n\n` +
         `Atenciosamente,\n${medicao.empresa.nomeFantasia ?? medicao.empresa.nome}`;
       return NextResponse.json({
         ok: true,

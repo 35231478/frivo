@@ -176,7 +176,7 @@ describe("tela de execução", () => {
   it("sem equipamento atendido: diz como resolver; Concluir não envia", async () => {
     respostas[`${BASE}/execucao`] = { status: 200, corpo: execucao([]) };
     await montarExecucao();
-    expect(txt("[data-sem-equipamentos]")).toContain("Leia o QR Code do equipamento ou escolha na lista da unidade");
+    expect(txt("[data-sem-equipamentos]")).toContain("Leia o QR Code do equipamento ou escolha na lista");
     await clicar($("[data-concluir]"));
     expect(txt("[data-pendencias]")).toContain("vincule pelo menos 1 equipamento atendido");
     expect(escritas()).toEqual([]);

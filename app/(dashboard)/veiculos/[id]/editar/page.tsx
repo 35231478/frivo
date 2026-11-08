@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { VeiculoForm } from "@/components/forms/veiculo-form";
 
-export const metadata: Metadata = { title: "Editar Veículo" };
+export const metadata: Metadata = { title: "Editar veículo" };
 
 export default async function EditarVeiculoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

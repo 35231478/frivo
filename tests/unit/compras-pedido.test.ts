@@ -171,8 +171,8 @@ describe("envio ao fornecedor", () => {
   });
   it("mensagem do WhatsApp com número, empresa, prazo e link", () => {
     expect(mensagemFornecedor({ numero: "PCI-2026-0002", empresa: "Clima Total", contato: "Ana Lima", prazo: "05/11/2026", link: "https://x/pc" }))
-      .toBe("Olá, Ana! Segue o Pedido de Compra Nº PCI-2026-0002 de Clima Total para cotação (necessário até 05/11/2026):\nhttps://x/pc\n\nPor favor, informe preço, validade e prazo de entrega.");
-    expect(mensagemFornecedor({ numero: "N", empresa: "E", link: "L" })).toBe("Olá! Segue o Pedido de Compra Nº N de E para cotação:\nL\n\nPor favor, informe preço, validade e prazo de entrega.");
+      .toBe("Prezado(a) Ana,\n\nSegue o Pedido de Compra Nº PCI-2026-0002 de Clima Total para cotação (necessário até 05/11/2026):\nhttps://x/pc\n\nPor favor, informe preço, validade e prazo de entrega.");
+    expect(mensagemFornecedor({ numero: "N", empresa: "E", link: "L" })).toBe("Prezados,\n\nSegue o Pedido de Compra Nº N de E para cotação:\nL\n\nPor favor, informe preço, validade e prazo de entrega.");
   });
 });
 

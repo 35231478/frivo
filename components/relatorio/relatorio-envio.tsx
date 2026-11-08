@@ -20,7 +20,7 @@ export function RelatorioEnvio({ token, numero, empresaNome, emailDestino, whats
   const printUrl = `${path}/imprimir`;
 
   const assunto = `Relatório ${numero} — ${empresaNome}`;
-  const corpo = `Olá,\n\nSegue o relatório ${numero} para sua avaliação:\n\n${publicUrl}\n\nAtenciosamente,\n${empresaNome}`;
+  const corpo = `Prezados,\n\nSegue o relatório ${numero} para avaliação:\n\n${publicUrl}\n\nAtenciosamente,\n${empresaNome}`;
   const mailto = emailDestino
     ? `mailto:${encodeURIComponent(emailDestino)}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`
     : `mailto:?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`;

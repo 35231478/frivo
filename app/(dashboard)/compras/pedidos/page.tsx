@@ -12,7 +12,7 @@ import { origemDoPedidoCompleto } from "@/lib/compras/pedido-server";
 import { OrigemPedido, StatusPedidoBadge } from "@/components/compras/pedido-painel";
 import { BuscaUrl, ConteudoUrl, FiltroCheckUrl, FiltroSelectUrl, LimparBuscaUrl, ListaUrl, PaginacaoUrl } from "@/components/listagem/lista-url";
 
-export const metadata: Metadata = { title: "Pedidos de Compra" };
+export const metadata: Metadata = { title: "Pedidos de compra" };
 
 /** Status legado aparece como o equivalente do ciclo novo (o SQL migra; isto é só garantia) */
 const statusTela = (s: string): StatusPedido => (s === "COMPRADO" ? "COTANDO" : s === "ENTREGUE" ? "CONCLUIDO" : s) as StatusPedido;
@@ -62,7 +62,7 @@ export default async function PedidosCompraPage({ searchParams }: { searchParams
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-primary-50 rounded-lg"><ShoppingCart className="w-5 h-5 text-primary-600" /></div>
-            <h1 className="page-title">Pedidos de Compra</h1>
+            <h1 className="page-title">Pedidos de compra</h1>
             <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{total}</span>
           </div>
           {podeCriar && (

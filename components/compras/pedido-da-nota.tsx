@@ -93,7 +93,7 @@ export function PedidoDaNota({ notaId, vinculos, sugestoes, podeGerenciar }: {
   async function desvincular(v: VinculoNotaTela) {
     if (!(await confirmar({
       titulo: `Desvincular do pedido ${v.numero}?`,
-      mensagem: `O pedido volta a esperar estes itens, o valor real que veio desta NF sai dos itens e fica registrado no histórico do pedido. A nota em si (estoque e contas a pagar) não muda.`,
+      mensagem: `O pedido volta a esperar estes itens; o valor real desta NF sai deles (fica no histórico). A nota não muda.`,
       confirmarTexto: "Desvincular", cancelarTexto: "Voltar", perigo: true,
     }))) return;
     setOcupado(v.pedidoId);

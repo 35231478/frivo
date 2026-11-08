@@ -39,7 +39,7 @@ export function PortalEsqueciSenhaForm() {
       <p role="status" className="bg-ok-claro border border-ok/20 text-ok-texto text-sm rounded-lg px-3 py-2.5 flex items-start gap-2">
         <MailCheck className="w-4 h-4 shrink-0 mt-0.5" /> {mensagem}
       </p>
-      <p className="text-xs text-ink-muted">O link vale por 1 hora e só pode ser usado uma vez. Não chegou? Você pode pedir de novo daqui a pouco.</p>
+      <p className="text-xs text-ink-muted">O link vale por 1 hora e só pode ser usado uma vez. Se não chegar, peça de novo em alguns minutos.</p>
       {voltar}
     </div>
   );
@@ -48,7 +48,7 @@ export function PortalEsqueciSenhaForm() {
     <form onSubmit={enviar} className="space-y-5" noValidate>
       <div>
         <h2 className="text-xl font-bold text-ink">Esqueci minha senha</h2>
-        <p className="text-sm text-ink-muted mt-1">Informe o e-mail que você usa para entrar no portal. Vamos mandar um link para você criar uma nova senha.</p>
+        <p className="text-sm text-ink-muted mt-1">Informe o e-mail de acesso ao portal. O link para criar uma nova senha é enviado por e-mail.</p>
       </div>
       {erro && <p role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2.5 flex items-center gap-2"><AlertCircle className="w-4 h-4 shrink-0" /> {erro}</p>}
       <label className="block space-y-1.5">

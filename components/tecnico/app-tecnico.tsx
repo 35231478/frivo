@@ -42,7 +42,7 @@ function Casca({ perfilInicial }: { perfilInicial: PerfilInicial }) {
   useEffect(() => {
     const url = new URL(window.location.href);
     if (url.searchParams.get("aviso") !== "restrito") return;
-    toast("Essa área é do escritório — você está no app do técnico.", "info");
+    toast("Área do escritório. Este é o app do técnico.", "info");
     url.searchParams.delete("aviso");
     window.history.replaceState(null, "", url.pathname + (url.search || "") + url.hash);
   }, []);

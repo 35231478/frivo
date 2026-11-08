@@ -165,11 +165,11 @@ export function TelaEquipamento({ x, e, registrar }: Props) {
                 <div className="flex flex-wrap items-center gap-2">
                   <Fotos fotos={fotosDe(it.id, null)} onRemover={so ? undefined : tirarFoto} />
                   {/* Y9: depois de anexar, o rótulo confirma — o técnico não reabre "ver o que falta" à toa */}
-                  {!so && <BotaoFoto rotulo={fotosDe(it.id, null).length ? `Foto ✓ (${fotosDe(it.id, null).length})` : it.pedirFoto ? "Foto (pedida)" : "Foto"} onFoto={(d) => foto(d, { itemId: it.id })} />}
+                  {!so && <BotaoFoto rotulo={fotosDe(it.id, null).length ? `Foto registrada (${fotosDe(it.id, null).length})` : it.pedirFoto ? "Foto (pedida)" : "Foto"} onFoto={(d) => foto(d, { itemId: it.id })} />}
                 </div>
               )}
               {it.pedirObservacao && e.respostas[it.id]?.status !== "ATENCAO" && e.respostas[it.id]?.status !== "NAO_SE_APLICA" && (
-                <ObservacaoVoz rotulo={(e.respostas[it.id]?.observacao ?? "").trim() || srcAudio(e.respostas[it.id]) ? "Observação ✓" : "Observação (pedida)"} valor={e.respostas[it.id]?.observacao ?? ""} desabilitado={so}
+                <ObservacaoVoz rotulo={(e.respostas[it.id]?.observacao ?? "").trim() || srcAudio(e.respostas[it.id]) ? "Observação registrada" : "Observação (pedida)"} valor={e.respostas[it.id]?.observacao ?? ""} desabilitado={so}
                   onSalvar={(t) => responder(it.id, { observacao: t })}
                   audio={srcAudio(e.respostas[it.id])} onAudio={(a) => registrar([op({ tipo: "audio", itemId: it.id, dataUrl: a })])} />
               )}
@@ -226,7 +226,7 @@ export function TelaEquipamento({ x, e, registrar }: Props) {
       {naoAtendido && (
         <Modal aberto titulo="Não atendido" onFechar={() => setNaoAtendido(false)} tamanho="sm">
           <div className="space-y-3">
-            <p className="text-sm text-ink-muted">O que já foi registrado fica guardado. O equipamento sai como “não atendido” no relatório. Diga o motivo, se puder.</p>
+            <p className="text-sm text-ink-muted">O registrado fica guardado. O equipamento sai como “não atendido” no relatório. Informe o motivo, se possível.</p>
             <ObservacaoVoz rotulo="Motivo" valor={e.observacao ?? ""} onSalvar={(t) => registrar([op({ tipo: "equipamento", dados: { observacao: t } })])} />
             <button type="button" className="w-full rounded-card bg-ink text-white py-3 font-semibold touch-target"
               onClick={async () => {
@@ -352,7 +352,7 @@ function ModalAtencao({ item, r, fotos, onFechar, onFoto, onRemoverFoto, onAudio
           placeholder="Ex.: bandeja com lodo, dreno entupido" />
         {!pode && <p className="text-xs text-atencao-texto">Para marcar Atenção: pelo menos 1 foto e a observação (escrita, ditada ou em áudio).</p>}
         <button type="button" disabled={!pode} onClick={() => onSalvar(obs.trim())} data-salvar-atencao
-          className="w-full rounded-card bg-atencao text-white py-4 text-base font-bold disabled:opacity-40 touch-target">Marcar Atenção</button>
+          className="w-full rounded-card bg-atencao text-white py-4 text-base font-bold disabled:opacity-40 touch-target">Marcar atenção</button>
       </div>
     </Modal>
   );

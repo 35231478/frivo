@@ -256,7 +256,7 @@ describe("rascunho editável (nada é lançado antes de confirmar)", () => {
     expect((await rascunhoApi(id, { itens: escolhas(id) })).status).toBe(200);
     // a tela: financeiro só leitura, com o motivo
     const h = await detalheNota(id);
-    expect(h).toContain("só quem tem Financeiro › fluxo de caixa altera");
+    expect(h).toContain("só Financeiro › fluxo de caixa altera");
     expect(h).toMatch(/<select[^>]*name="formaPagamento"[^>]*disabled=""|<select[^>]*disabled=""[^>]*name="formaPagamento"/);
   });
 });

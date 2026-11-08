@@ -113,7 +113,7 @@ export function InativarRegistro({
         <div className="space-y-4" onClick={(e) => e.stopPropagation()}>
           <p className="text-sm text-ink">
             {ativo
-              ? (textoInativar ?? `Tem certeza? ${feminino ? "A" : "O"} ${entidade} sai das listas e dos seletores, mas nada é apagado: o histórico fica preservado e ${feminino ? "ela pode ser reativada" : "ele pode ser reativado"} depois.`)
+              ? (textoInativar ?? `Tem certeza? ${feminino ? "A" : "O"} ${entidade} sai das listas e seletores; nada é apagado e pode ser reativad${feminino ? "a" : "o"} depois.`)
               : (textoReativar ?? `${feminino ? "A" : "O"} ${entidade} volta a aparecer nas listas e nos seletores.`)}
           </p>
 

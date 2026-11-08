@@ -39,7 +39,7 @@ export default async function RelatorioPublicoPage({ params }: { params: Promise
             <div className="bg-ok-claro border border-ok/30 text-ok-texto rounded-card px-5 py-4 flex items-center gap-3">
               <CheckCircle2 className="w-6 h-6 shrink-0" />
               <div>
-                <p className="font-bold">Relatório aprovado!</p>
+                <p className="font-bold">Relatório aprovado.</p>
                 <p className="text-sm">Aprovado por {relatorio.assinadoPor} em {formatarData(relatorio.assinadoEm, "dd/MM/yyyy 'às' HH:mm")}.</p>
               </div>
             </div>

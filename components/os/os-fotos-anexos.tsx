@@ -72,7 +72,7 @@ export function OsFotosAnexos({ osId, galeria: inicial, onMudou }: { osId: strin
   async function excluirFoto(f: FotoGaleria) {
     const ok = await confirmar({
       titulo: "Excluir foto?", perigo: true, confirmarTexto: "Excluir foto",
-      mensagem: `A foto “${f.legenda}” sai desta OS${f.origem === "ANEXO" ? "" : " (e da execução da atividade)"}. A exclusão fica registrada no histórico, com o seu nome.`,
+      mensagem: `A foto “${f.legenda}” sai desta OS${f.origem === "ANEXO" ? "" : " (e da execução)"}. A exclusão fica no histórico, com o nome de quem excluiu.`,
     });
     if (!ok) return;
     const url = f.origem === "ANEXO" ? `/api/ordens/${osId}/anexos/${f.id}` : `/api/ordens/${osId}/fotos/${f.id}?origem=${f.origem}`;
@@ -121,7 +121,7 @@ export function OsFotosAnexos({ osId, galeria: inicial, onMudou }: { osId: strin
           <p className="text-sm text-ink-muted mt-1" data-resumo-fotos>
             {total
               ? `${plural(total, "foto", "fotos")}${comFoto ? ` em ${plural(comFoto, "equipamento", "equipamentos")}` : ""} · ${plural(galeria.documentos.length, "documento", "documentos")}`
-              : "Ainda sem fotos. As da execução (checklist, antes e depois) aparecem aqui sozinhas, no equipamento de cada uma."}
+              : "Sem fotos. As da execução (checklist, antes e depois) entram aqui sozinhas, no equipamento de cada uma."}
           </p>
         </div>
         {podeEditar && (

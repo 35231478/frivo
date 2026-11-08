@@ -38,7 +38,7 @@ export default async function NotasCompraPage({ searchParams }: { searchParams: 
           <h1 className="page-title">Notas de compra</h1>
           <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{total}</span>
         </div>
-        {doFinanceiro && <p className="text-sm text-ink-muted -mt-3">Importe o XML: a nota vira conta a pagar (com parcelas, categoria e centro de custo) e entrada no estoque, tudo de uma vez ao confirmar.</p>}
+        {doFinanceiro && <p className="text-sm text-ink-muted -mt-3">Importe o XML: ao confirmar, a nota vira conta a pagar e entrada no estoque de uma vez.</p>}
         {podeImportar && <ImportarNota de={doFinanceiro ? "contas-pagar" : null} />}
 
         <div className="card overflow-hidden">

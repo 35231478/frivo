@@ -67,7 +67,7 @@ export function SeparacaoOs({ inicial }: { inicial: SeparacaoDaOs }) {
   }
 
   async function desfazer(m: MaterialSeparacaoTela) {
-    if (!(await confirmar({ titulo: "Desfazer separação", mensagem: `Devolver ao disponível ${texto(m.quantidadeSeparada)} ${m.unidade} de ${m.descricao}? A reserva desta OS é estornada no estoque.`, confirmarTexto: "Desfazer", perigo: true }))) return;
+    if (!(await confirmar({ titulo: "Desfazer separação", mensagem: `Devolver ao disponível ${texto(m.quantidadeSeparada)} ${m.unidade} de ${m.descricao}? A reserva é estornada.`, confirmarTexto: "Desfazer", perigo: true }))) return;
     await enviar([{ id: m.id, quantidade: 0 }], `Separação de ${m.descricao} desfeita`);
   }
 
@@ -200,7 +200,7 @@ export function SeparacaoOs({ inicial }: { inicial: SeparacaoDaOs }) {
 
           <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-surface-border bg-surface-page">
             <p className="text-xs text-ink-muted">
-              {pendentes.length === 0 ? "Tudo separado para esta OS." : `${pendentes.length} ${pendentes.length === 1 ? "material falta" : "materiais faltam"} separar. Confirmar reserva o material para esta OS no estoque.`}
+              {pendentes.length === 0 ? "Tudo separado para esta OS." : `${pendentes.length} ${pendentes.length === 1 ? "material falta" : "materiais faltam"} separar. Confirmar reserva o material no estoque.`}
             </p>
             {pendentes.length > 0 && (
               <Button onClick={confirmarSeparacao} loading={salvando} data-acao="confirmar-separacao"><Check className="w-4 h-4" /> Confirmar separação</Button>

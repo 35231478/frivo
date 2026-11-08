@@ -251,7 +251,7 @@ export function AtividadeExecucao({ osId, atividadeId, titulo, osNumero, tipoOs 
               <p className="text-sm font-semibold text-ink">{resumo!.atendidos} de {resumo!.total} equipamento{resumo!.total === 1 ? "" : "s"} atendido{resumo!.atendidos === 1 ? "" : "s"}</p>
               <p className="text-xs text-ink-muted">
                 {exec.conclusao.ok && exec.conclusao.dispensa ? <span data-dispensa-equipamento={exec.conclusao.dispensa.motivo}>{exec.conclusao.dispensa.texto}</span>
-                  : exec.conclusao.ok ? "Tudo respondido: pronto para concluir." : exec.conclusao.semEquipamento ? "Nenhum equipamento atendido ainda." : `${exec.conclusao.pendencias.length} equipamento${exec.conclusao.pendencias.length === 1 ? "" : "s"} com pendência.`}
+                  : exec.conclusao.ok ? "Tudo respondido: pronto para concluir." : exec.conclusao.semEquipamento ? "Nenhum equipamento atendido ainda." : `${exec.conclusao.pendencias.length} com pendência.`}
               </p>
             </div>
             {exec.conclusao.ok ? <CircleCheck className="w-6 h-6 text-success-600 shrink-0" /> : <ClipboardCheck className="w-6 h-6 text-ink-subtle shrink-0" />}
@@ -263,7 +263,7 @@ export function AtividadeExecucao({ osId, atividadeId, titulo, osNumero, tipoOs 
               Nenhum equipamento nesta atividade.
               {!somenteLeitura && (exec.conclusao.dispensa
                 ? <span className="text-xs text-ink-muted px-6">{exec.conclusao.dispensa.texto}</span>
-                : <span className="text-xs text-ink-muted px-6">Leia o QR Code do equipamento ou escolha na lista da unidade. Para concluir, é preciso pelo menos 1 equipamento atendido.</span>)}
+                : <span className="text-xs text-ink-muted px-6">Leia o QR Code do equipamento ou escolha na lista. Para concluir, é preciso ao menos 1 equipamento atendido.</span>)}
             </p>
           ) : (
             <div className="space-y-3">

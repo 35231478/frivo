@@ -5,7 +5,7 @@ import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { EquipamentoForm } from "@/components/forms/equipamento-form";
 
-export const metadata: Metadata = { title: "Editar Equipamento" };
+export const metadata: Metadata = { title: "Editar equipamento" };
 
 export default async function EditarEquipamentoPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ aba?: string }> }) {
   const { id } = await params;

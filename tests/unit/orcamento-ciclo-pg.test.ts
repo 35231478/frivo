@@ -339,7 +339,7 @@ describe.skipIf(!URL_PG)("Ciclo do orçamento: link público, aceite/recusa, env
       const o = await criar({ contatoClienteId: "ct1" });
       let r = await enviar(o.id, "WHATSAPP");
       expect(r.json.whatsappUrl).toMatch(/^https:\/\/wa\.me\/5531988887777\?text=/);
-      expect(decodeURIComponent(r.json.whatsappUrl)).toContain("Olá, Juliana! Segue o orçamento Nº");
+      expect(decodeURIComponent(r.json.whatsappUrl)).toContain("Prezado(a) Juliana,\n\nSegue o orçamento Nº");
       expect((await eventos(o.id)).at(-1)).toMatchObject({ tipo: "ENVIADO_WHATSAPP", detalhe: "Juliana Ramos · 31988887777" });
       const sem = await criar();
       r = await enviar(sem.id, "WHATSAPP");

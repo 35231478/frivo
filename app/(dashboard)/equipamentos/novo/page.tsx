@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { EquipamentoForm } from "@/components/forms/equipamento-form";
 
-export const metadata: Metadata = { title: "Novo Equipamento" };
+export const metadata: Metadata = { title: "Novo equipamento" };
 
 export default async function NovoEquipamentoPage({
   searchParams,

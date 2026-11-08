@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { VeiculoForm } from "@/components/forms/veiculo-form";
 
-export const metadata: Metadata = { title: "Novo Veículo" };
+export const metadata: Metadata = { title: "Novo veículo" };
 
 export default async function NovoVeiculoPage() {
   const session = await auth();

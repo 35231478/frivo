@@ -197,7 +197,7 @@ export function ConciliacaoNota({ notaId, itens, pedidos, podeLancar, motivoSemL
                 <option value="">{automaticoId ? "Automático (o pedido idêntico)" : "Sem pedido"}</option>
                 {pedidos.map((p) => <option key={p.id} value={p.id}>{p.numero}</option>)}
               </select>
-              <span className="text-xs text-ink-muted">Os itens da nota são casados com os do pedido (produto e quantidade): o custo real vai para o pedido e ele fica Parcial ou Concluído.</span>
+              <span className="text-xs text-ink-muted">Itens da nota casados com os do pedido: o custo real vai para o pedido, que fica Parcial ou Concluído.</span>
             </label>
           )}
         </div>

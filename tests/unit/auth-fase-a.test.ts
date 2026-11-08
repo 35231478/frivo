@@ -271,7 +271,7 @@ describe("limite de tentativas no login", () => {
     const { mensagemErroLogin } = await import("@/components/auth/login-form");
     expect(mensagemErroLogin("credentials")).toBe("E-mail ou senha inválidos.");
     expect(mensagemErroLogin(undefined)).toBe("E-mail ou senha inválidos.");
-    expect(mensagemErroLogin("bloqueado-12")).toMatch(/aguarde 12 min/);
+    expect(mensagemErroLogin("bloqueado-12")).toMatch(/Aguarde 12 min/);
   });
 });
 

@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { OrcamentoForm } from "@/components/forms/orcamento-form";
 import { padroesOrcamento } from "@/lib/orcamentos/padroes-server";
 
-export const metadata: Metadata = { title: "Editar Orçamento" };
+export const metadata: Metadata = { title: "Editar orçamento" };
 
 export default async function EditarOrcamentoPage({
   params,

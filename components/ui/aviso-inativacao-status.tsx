@@ -30,7 +30,7 @@ export function AvisoInativacaoStatus({ url, mostrar, motivo, onMotivo }: {
   // Aqui não há a caixa "inativar o usuário junto" do modal: o aviso do usuário de login aponta o caminho
   const usuario = impacto?.usuarioVinculado;
   const avisos = (impacto?.avisos ?? []).map((a) => usuario && a.includes(usuario.email)
-    ? `Também é usuário do sistema (${usuario.email}). Salvar como inativo NÃO bloqueia o login — para inativar o usuário junto, use o botão Inativar no topo da página (ou faça depois em Configurações › Usuários).`
+    ? `Também é usuário (${usuario.email}): salvar como inativo não bloqueia o login. Para isso, use Inativar no topo ou Configurações › Usuários.`
     : a);
   return (
     <div className="space-y-2" data-aviso-inativacao>

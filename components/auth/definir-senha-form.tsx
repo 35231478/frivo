@@ -67,7 +67,7 @@ export function DefinirSenhaForm() {
   return (
     <form onSubmit={salvar} className="space-y-5">
       <div>
-        <h2 className="text-xl font-bold text-ink">{recuperacao ? "Criar nova senha" : `Olá, ${usuario?.nome?.split(" ")[0]}!`}</h2>
+        <h2 className="text-xl font-bold text-ink">{recuperacao ? "Criar nova senha" : `Defina sua senha, ${usuario?.nome?.split(" ")[0]}`}</h2>
         <p className="text-sm text-ink-muted mt-1">
           {recuperacao ? <>Defina uma nova senha para <strong>{usuario?.email}</strong>. Ao salvar, as sessões abertas com a senha antiga são encerradas.</>
             : <>Defina a senha de acesso para <strong>{usuario?.email}</strong>.</>}

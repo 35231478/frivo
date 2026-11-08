@@ -110,7 +110,7 @@ export function OsSeparacao({ osId, materiais: iniciais, resumo: resumoInicial, 
   }
 
   async function desfazer(m: MaterialDaOs) {
-    if (!(await confirmar({ titulo: "Desfazer consumo", mensagem: `Estornar a baixa de ${formatarQtd(m.quantidadeConsumida ?? 0)} ${m.unidade} de ${m.descricao}? O material volta a "separado".`, confirmarTexto: "Desfazer", perigo: true }))) return;
+    if (!(await confirmar({ titulo: "Desfazer consumo", mensagem: `Estornar a baixa de ${formatarQtd(m.quantidadeConsumida ?? 0)} ${m.unidade} de ${m.descricao}? Volta a "separado".`, confirmarTexto: "Desfazer", perigo: true }))) return;
     await chamar("DELETE", { id: m.id }, `Consumo de ${m.descricao} desfeito`);
   }
 
@@ -143,8 +143,8 @@ export function OsSeparacao({ osId, materiais: iniciais, resumo: resumoInicial, 
             <span className="inline-flex items-center gap-1">
               <StatusPill tom="acento" data-flag-prestacao>Prestação de contas pendente</StatusPill>
               <Dica rotulo="Prestação de contas pendente" texto={exigirPrestacao
-                ? "Há material separado sem consumo informado, ou sobra sem devolução. Com “Exigir prestação de contas de material” ligada em Configurações, a OS não conclui sem o consumo e não fatura sem a devolução."
-                : "Há material separado sem consumo informado, ou sobra sem devolução. Só avisa: para travar a conclusão e o faturamento, ligue “Exigir prestação de contas de material” em Configurações."} />
+                ? "Material sem consumo informado ou sobra sem devolução. Com a exigência ligada em Configurações, a OS não conclui nem fatura."
+                : "Material sem consumo informado ou sobra sem devolução. Só avisa: a trava fica em Configurações (prestação de contas)."} />
             </span>
           )}
           {podeSeparar && resumo.total > 0 && !informando && resumo.aDevolver > 0 && (
@@ -247,7 +247,7 @@ export function OsSeparacao({ osId, materiais: iniciais, resumo: resumoInicial, 
 
       {informando && (
         <div className="flex flex-wrap items-center justify-between gap-2" data-barra-consumo>
-          <p className="text-xs text-ink-muted">Padrão = o separado. Menos: a sobra fica reservada, pendente de devolução. Mais: a diferença sai do estoque agora.</p>
+          <p className="text-xs text-ink-muted">Em branco, assume o separado. Menos: a sobra fica pendente de devolução. Mais: a diferença sai do estoque agora.</p>
           <div className="flex items-center gap-2">
             <Button size="sm" variant="ghost" onClick={() => { setInformando(false); setErro(""); }} disabled={salvando} data-acao="cancelar-consumo"><X className="w-4 h-4" /> Cancelar</Button>
             <Button size="sm" onClick={confirmarConsumo} loading={salvando} data-acao="confirmar-consumo"><Check className="w-4 h-4" /> Confirmar consumo</Button>

@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { OrcamentoForm } from "@/components/forms/orcamento-form";
 import { dadosNovoOrcamento } from "@/lib/orcamentos/form-dados";
 
-export const metadata: Metadata = { title: "Novo Orçamento" };
+export const metadata: Metadata = { title: "Novo orçamento" };
 
 export default async function NovoOrcamentoPage({
   searchParams,

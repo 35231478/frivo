@@ -143,8 +143,8 @@ export function buildMailtoLink(
 ): string {
   const assunto = `Orçamento ${codigo} — ${empresaNome}`;
   const corpo =
-    `Olá,\n\nSegue o orçamento ${codigo} para sua avaliação:\n\n${publicUrl}\n\n` +
-    `Você poderá aprová-lo digitalmente diretamente pelo link acima.\n\n` +
+    `Prezados,\n\nSegue o orçamento ${codigo} para avaliação:\n\n${publicUrl}\n\n` +
+    `A aprovação pode ser feita digitalmente pelo link acima.\n\n` +
     `Atenciosamente,\n${empresaNome}`;
   return `mailto:${encodeURIComponent(emailDestino)}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`;
 }

@@ -214,8 +214,7 @@ function FotosServico({ x, so, onAdicionar, registrar }: { x: ExecucaoTela; so: 
       <h2 className="text-base font-bold text-ink inline-flex items-center gap-1.5"><Camera className="w-4 h-4 text-ink-muted" /> Fotos do serviço</h2>
       {!fotos.length && (
         <p className="rounded-card bg-white border border-surface-border p-3 text-sm text-ink-muted">
-          Fachada, quadro elétrico, a peça trocada… Cada foto vai com o equipamento a que se refere (ou “Geral da OS”) e uma legenda.
-          As fotos do checklist e de antes/depois continuam dentro de cada equipamento.
+          Cada foto vai com o equipamento (ou “Geral da OS”) e uma legenda; checklist e antes/depois ficam no equipamento.
         </p>
       )}
       {fotos.length > 0 && (

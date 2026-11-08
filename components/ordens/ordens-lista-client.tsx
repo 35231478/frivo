@@ -120,7 +120,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="p-2 bg-acento-claro rounded-lg"><ClipboardList className="w-5 h-5 text-acento" aria-hidden="true" /></div>
-          <h1 className="page-title">Ordens de Serviço</h1>
+          <h1 className="page-title">Ordens de serviço</h1>
           <span className="pill-previsto font-display tabular-nums">{total}</span>
         </div>
         {pode("ordens", "criar") && (

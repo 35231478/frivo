@@ -44,7 +44,7 @@ export function AvisoSerieDuplicada({ numero, ignorarId }: { numero: string; ign
           </li>
         ))}
       </ul>
-      <p className="mt-1 text-atencao-texto">É só um aviso: você pode salvar mesmo assim.</p>
+      <p className="mt-1 text-atencao-texto">Apenas um aviso: é possível salvar assim mesmo.</p>
     </div>
   );
 }

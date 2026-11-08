@@ -39,7 +39,7 @@ export function PerfilTecnico({ perfilInicial }: { perfilInicial: React.Componen
   async function sair() {
     if (estado.pendentes && !(await confirmar({
       titulo: "Sair com gravações no aparelho?",
-      mensagem: `Há ${estado.pendentes} gravação(ões) ainda no aparelho. Elas continuam guardadas e sobem quando você entrar de novo neste celular.`,
+      mensagem: `Há ${estado.pendentes} gravação(ões) no aparelho. Ficam guardadas e sobem na próxima entrada neste celular.`,
       confirmarTexto: "Sair mesmo assim", cancelarTexto: "Ficar",
     }))) return;
     await signOut({ callbackUrl: "/login" });
@@ -75,7 +75,7 @@ export function PerfilTecnico({ perfilInicial }: { perfilInicial: React.Componen
                 <li key={o.seq} className="rounded-card border border-atrasado/20 bg-atrasado-claro p-3 text-sm space-y-1">
                   <p className="font-semibold text-ink">{ROTULO_OPERACAO[o.tipo] ?? o.tipo}{osDe[o.atividadeId] ? ` — ${osDe[o.atividadeId]}` : ""}</p>
                   <p className="text-atrasado-texto">{o.erro}</p>
-                  <p className="text-xs text-ink-muted">As gravações seguintes desta OS esperam esta ser resolvida. Se o escritório reabriu a atividade, toque em “Sincronizar agora”.</p>
+                  <p className="text-xs text-ink-muted">As próximas gravações desta OS esperam esta ser resolvida. Reaberta pelo escritório? Toque em “Sincronizar agora”.</p>
                   <button type="button" className="inline-flex items-center gap-1 text-xs font-semibold text-atrasado-texto py-1"
                     onClick={async () => { if (await confirmar({ mensagem: "Descartar esta gravação? Ela não vai para o escritório.", perigo: true, confirmarTexto: "Descartar" })) await motor?.descartar(o.seq!); }}>
                     <Trash2 className="w-3.5 h-3.5" /> Descartar esta

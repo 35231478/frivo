@@ -64,7 +64,7 @@ export default async function PortalFinanceiro() {
                 {podeAprovar ? (
                   <AprovacaoMedicao token={m.tokenPublico} />
                 ) : (
-                  <p className="text-xs text-ink-subtle">Você não tem permissão para aprovar faturas.</p>
+                  <p className="text-xs text-ink-subtle">Sem permissão para aprovar faturas.</p>
                 )}
               </div>
             ))}

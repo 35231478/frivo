@@ -29,7 +29,7 @@ export function EquipamentoAtivoBotao({
 
   async function executar() {
     const msg = ativo
-      ? `Inativar o equipamento "${nome}"? Ele sai das listas de seleção (OS, orçamentos), mas o histórico e o QR Code são preservados.`
+      ? `Inativar o equipamento "${nome}"? Sai das listas de seleção; histórico e QR Code ficam.`
       : `Reativar o equipamento "${nome}"?`;
     if (!(await confirmar({ mensagem: msg, perigo: ativo, confirmarTexto: ativo ? "Inativar" : "Reativar" }))) return;
     setCarregando(true);

@@ -157,11 +157,11 @@ describe("o formulário do modal", () => {
     await montar(GESTOR_FISCAL);
     await abrirModal();
     await digitar(campo("Código do serviço (LC 116)"), "14.01");
-    expect(totalCampos()).toBe("1 campo será aplicado. Os outros ficam como estão em cada serviço.");
+    expect(totalCampos()).toBe("1 campo será aplicado; os outros ficam como estão.");
     expect(confirmar().disabled).toBe(false);
     await digitar(campo("Alíquota de ISS (%)"), "2,5");
     await digitar(campo<HTMLSelectElement>("ISS retido pelo tomador"), "true");
-    expect(totalCampos()).toBe("3 campos serão aplicados. Os outros ficam como estão em cada serviço.");
+    expect(totalCampos()).toBe("3 campos serão aplicados; os outros ficam como estão.");
     // Apagar volta a "não alterar"
     await digitar(campo("Alíquota de ISS (%)"), "  ");
     expect(totalCampos()).toMatch(/^2 campos/);
