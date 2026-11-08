@@ -11,8 +11,11 @@ import { ContasReceberVinculadas } from "@/components/financeiro/contas-receber-
 import { pode } from "@/lib/permissoes";
 import { ResumoRetencoes } from "@/components/medicao/medicao-retencoes";
 import { baseRetencoes, retencoesDaMedicao, retencoesDosServicos, SELECT_RETENCOES_SERVICO } from "@/lib/financeiro/retencoes";
-import { Receipt } from "lucide-react";
+import { ArrowLeftRight, Layers, Receipt } from "lucide-react";
 import { rotuloMedicao } from "@/lib/faturamento/fatura";
+import { faturamentoDaOs, faturamentoDoOrcamento } from "@/lib/faturamento/faturar-server";
+import { FaturasDaVenda } from "@/components/faturamento/faturas-da-venda";
+import Link from "next/link";
 
 export const metadata: Metadata = { title: "Medição" };
 
@@ -50,8 +53,20 @@ export default async function MedicaoDetalhePage({ params, searchParams }: {
 
   // Fatura avulsa: "voltar" leva à origem (a OS ou o orçamento faturado)
   const origem = medicao.avulsa ? medicao.itens.find((i) => i.ordemServicoId || i.orcamentoId) : undefined;
-  const voltar = origem?.ordemServicoId ? `/ordens/${origem.ordemServicoId}`
-    : origem?.orcamentoId ? `/orcamentos/${origem.orcamentoId}` : "/financeiro/medicoes";
+  const hrefOrigem = origem?.orcamentoId ? `/orcamentos/${origem.orcamentoId}`
+    : origem?.ordemServicoId ? `/ordens/${origem.ordemServicoId}` : null;
+  const rotuloOrigem = origem?.orcamentoId ? "Orçamento" : origem?.ordemServicoId ? "OS" : null;
+  const voltar = hrefOrigem ?? "/financeiro/medicoes";
+
+  // P5 — "Faturas desta venda": quando a origem foi faturada em partes, as faturas irmãs (valor, parte,
+  // status e nota), destacando esta. Leitura pura (reusa faturamentoDaOrigem); some na fatura cheia única.
+  const faturamento = medicao.avulsa
+    ? origem?.orcamentoId ? await faturamentoDoOrcamento(origem.orcamentoId, empresaId)
+      : origem?.ordemServicoId ? await faturamentoDaOs(origem.ordemServicoId) : null
+    : null;
+  const faturasDaVenda = faturamento && faturamento.faturas.length > 1
+    ? { total: faturamento.total, faturado: faturamento.faturado, saldo: faturamento.saldo, faturas: faturamento.faturas }
+    : null;
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -60,6 +75,24 @@ export default async function MedicaoDetalhePage({ params, searchParams }: {
         description={medicao.descricao ?? undefined}
         backHref={voltar}
       />
+
+      {/* Origem: volta ao orçamento/OS que gerou a venda (ponto 2 do detalhe consolidado) */}
+      {hrefOrigem && rotuloOrigem && (
+        <Link href={hrefOrigem} className="inline-flex items-center gap-1.5 text-sm text-acento hover:underline" data-origem-venda={rotuloOrigem}>
+          <ArrowLeftRight className="w-4 h-4" aria-hidden /> Origem: {rotuloOrigem}
+        </Link>
+      )}
+
+      {/* "Faturas desta venda": a origem faturada em partes (P5) — leitura; destaca a fatura atual */}
+      {faturasDaVenda && (
+        <div className="card-padded" data-secao-faturas-da-venda>
+          <h2 className="card-title mb-3 flex items-center gap-2">
+            <Layers className="w-4 h-4 text-primary-600" /> Faturas desta venda
+          </h2>
+          <FaturasDaVenda faturamento={faturasDaVenda} atualId={medicao.id}
+            podeVer={pode(session!.user!.permissoes, "financeiro", "medicoes", session!.user!.role)} />
+        </div>
+      )}
 
       <div className="card-padded">
         <MedicaoAcoes

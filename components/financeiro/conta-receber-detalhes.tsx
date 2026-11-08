@@ -14,6 +14,8 @@ import {
 import { abrirPdfBoleto } from "@/components/financeiro/conta-receber-acoes";
 import type { Detalhamento } from "@/lib/financeiro/retencoes";
 import { ORIGEM_RECEBIMENTO } from "@/lib/financeiro/perda-estorno";
+import { FaturasDaVenda } from "@/components/faturamento/faturas-da-venda";
+import type { FaturamentoOrigem } from "@/lib/faturamento/fatura";
 
 /** O que GET /api/contas-receber/[id] devolve (datas em texto). */
 export interface DetalheConta {
@@ -26,6 +28,8 @@ export interface DetalheConta {
   cliente: { id: string; nome: string; cpfCnpj: string | null };
   origem: OrigemConta;
   medicao: { id: string; numero: string; rotulo?: string; relatorios: { id: string; numero: string }[] } | null;
+  /** Faturas da venda (origem faturada em partes, P5); null quando é fatura única */
+  faturamento?: FaturamentoOrigem | null;
   retencoes?: Detalhamento | null;
   orcamento: { id: string; codigo: string; nome: string } | null;
   contrato: { id: string; numero: string } | null;
@@ -121,6 +125,13 @@ export function ContaReceberDetalhes({ id, onFechar, versao = 0, onAbrirConta }:
                 {d.ordens.map((o) => <Vinculo key={o.id} href={hrefOs(o.id)}>OS {o.numero}</Vinculo>)}
               </div>
             </Secao>
+
+            {/* Faturas desta venda (origem faturada em partes, P5): a parte desta conta fica destacada */}
+            {d.faturamento && (
+              <Secao titulo="Faturas desta venda">
+                <FaturasDaVenda faturamento={d.faturamento} atualId={d.medicao?.id} />
+              </Secao>
+            )}
 
             <Secao titulo="Cobrança">
               <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">

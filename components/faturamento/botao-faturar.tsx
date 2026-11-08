@@ -9,13 +9,10 @@ import { Dica } from "@/components/ui/dica";
 import { Modal } from "@/components/ui/modal";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
-import { StatusPill, type TomStatus } from "@/components/ui/status-pill";
 import { confirmar, toast } from "@/components/ui/avisos";
-import { formatarMoeda, LABELS_STATUS_MEDICAO } from "@/lib/utils";
-import {
-  numeroFatura, percentualDoTotal, ROTULO_STATUS_FATURAMENTO, rotuloMedicao, rotuloParcial, statusFaturamento, validarParcial,
-  type FaturamentoOrigem,
-} from "@/lib/faturamento/fatura";
+import { formatarMoeda } from "@/lib/utils";
+import { rotuloMedicao, rotuloParcial, statusFaturamento, validarParcial, type FaturamentoOrigem } from "@/lib/faturamento/fatura";
+import { HistoricoFaturas, ResumoFaturamento } from "@/components/faturamento/faturas-da-venda";
 
 export interface FaturaExistente { id: string; numero: string; avulsa?: boolean | null }
 export type { FaturamentoOrigem };
@@ -25,9 +22,6 @@ const OPCOES_PARCELAS = Array.from({ length: 12 }, (_, i) => i + 1);
 
 /** Onde a fatura (medição avulsa) abre: com a emissão da NFS-e já aberta */
 export const hrefEmitirFatura = (id: string) => `/financeiro/faturas/${id}?nfse=emitir`;
-
-const TOM_STATUS_FATURAMENTO: Record<ReturnType<typeof statusFaturamento>, TomStatus> = { A_FATURAR: "previsto", PARCIAL: "atencao", FATURADO: "ok" };
-const TOM_MEDICAO: Record<string, TomStatus> = { PAGO: "ok", NF_EMITIDA: "acento", BOLETO_GERADO: "acento", PC_RECEBIDO: "previsto", CANCELADA: "atrasado" };
 
 const CLASSE_SELECT = "bg-white border border-surface-border rounded-lg px-2.5 py-2 text-sm text-ink focus:outline-none focus:border-primary-500";
 
@@ -124,13 +118,7 @@ export function BotaoFaturar({ url, origem, fatura, faturamento, valor, itens, p
     return (
       <div className="space-y-4" data-secao-faturamento data-status-faturamento={status}>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <StatusPill tom={TOM_STATUS_FATURAMENTO[status]} data-pill-faturamento>{ROTULO_STATUS_FATURAMENTO[status]}</StatusPill>
-          <p className="text-sm text-ink flex items-center gap-1" data-resumo-faturamento>
-            {status === "A_FATURAR" ? <>A faturar <strong className="tabular-nums">{formatarMoeda(f.saldo)}</strong></>
-              : <>Faturado <strong className="tabular-nums">{formatarMoeda(f.faturado)}</strong> de {formatarMoeda(f.total)}{f.saldo > 0 && <> · a faturar <strong className="tabular-nums">{formatarMoeda(f.saldo)}</strong></>}</>}
-            <Dica rotulo="Faturamento" lado="direita"
-              texto="Cada fatura tem número, nota e conta a receber próprios; retenções saem proporcionais à parte. Cancelar uma fatura devolve o valor dela ao saldo. Parcelado: uma cobrança por mês, cada uma com seu boleto." />
-          </p>
+          <ResumoFaturamento f={f} />
           {podeAgir && (
             <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
               <select value={parcelas} onChange={(e) => setParcelas(Number(e.target.value))} aria-label="Parcelas" className={CLASSE_SELECT} data-faturar-parcelas>
@@ -144,28 +132,7 @@ export function BotaoFaturar({ url, origem, fatura, faturamento, valor, itens, p
           )}
         </div>
 
-        {f.faturas.length > 0 && (
-          <ul className="divide-y divide-surface-linha border border-surface-border rounded-lg" data-historico-faturas>
-            {f.faturas.map((x) => {
-              const parte = x.parcial ? rotuloParcial(x.percentual ?? percentualDoTotal(x.valor, f.total)) : null;
-              return (
-                <li key={x.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm" data-fatura={x.id} data-fatura-parcial={x.parcial ? "1" : undefined}>
-                  <Receipt className="w-4 h-4 text-ink-muted shrink-0" aria-hidden />
-                  <span className="font-mono text-ink" data-rotulo-fatura>Fatura {numeroFatura(x.numero)}</span>
-                  {parte && <span className="text-xs text-ink-muted" data-parte>{parte}</span>}
-                  <StatusPill tom={TOM_MEDICAO[x.status] ?? "previsto"} tamanho="sm">{LABELS_STATUS_MEDICAO[x.status] ?? x.status}</StatusPill>
-                  {x.nfNumero && <span className="text-xs text-ink-muted" data-nf>NF {x.nfNumero}</span>}
-                  <span className="ml-auto tabular-nums font-medium text-ink" data-valor-fatura>{formatarMoeda(x.valor)}</span>
-                  {podeVer && (
-                    <Link href={`/financeiro/faturas/${x.id}`} className="inline-flex items-center gap-1 text-xs text-acento hover:underline" data-abrir-fatura={x.id}>
-                      Abrir <ExternalLink className="w-3 h-3" aria-hidden />
-                    </Link>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
+        <HistoricoFaturas f={f} podeVer={podeVer} />
 
         {modalParcial && (
           <ModalFaturarParcial origem={origem} faturamento={f} enviando={faturando} parcelasIniciais={parcelas} onFechar={() => setModalParcial(false)}
