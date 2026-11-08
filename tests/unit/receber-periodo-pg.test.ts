@@ -92,11 +92,15 @@ describe.skipIf(!URL_PG)("Contas a Receber — período e cards (PostgreSQL real
     await prisma?.$disconnect();
   });
 
-  it("padrão = o mês corrente pelo VENCIMENTO, com as bordas certas; só da empresa da sessão", async () => {
+  it("padrão = o mês corrente pelo VENCIMENTO, com as bordas certas; só da empresa da sessão; cancelada fora da visão padrão", async () => {
     const t = await tela();
     expect(t.periodo).toMatchObject({ tipo: "mes", mes: "2026-11", rotulo: "Novembro de 2026" });
-    expect(valores(t)).toEqual([300, 400, 500, 600, 700, 800]); // dia 1 entra; 1/12 e sem data não
-    expect(t.total).toBe(6);
+    expect(valores(t)).toEqual([300, 400, 500, 600, 700]); // dia 1 entra; 1/12 e sem data não; a cancelada (800) some
+    expect(t.total).toBe(5);
+    // "Mostrar cancelados" traz a cancelada (800) de volta — o dado continua existindo
+    const comCanc = await tela({ cancelados: "1" });
+    expect(valores(comCanc)).toEqual([300, 400, 500, 600, 700, 800]);
+    expect(comCanc.total).toBe(6);
   });
 
   it("cards do período: Vencidos · Vencem hoje · A vencer (com previsão) · Recebidos · Total (sem canceladas)", async () => {
@@ -128,7 +132,8 @@ describe.skipIf(!URL_PG)("Contas a Receber — período e cards (PostgreSQL real
     expect(valores(await tela({ ate: "2026-10-31" }))).toEqual([100, 200]);
     const todos = await tela({ periodo: "todos" });
     expect(todos.periodo).toMatchObject({ tipo: "todos", rotulo: "Todo o período" });
-    expect(valores(todos)).toEqual([50, 100, 200, 300, 400, 500, 600, 700, 800, 900]);
+    expect(valores(todos)).toEqual([50, 100, 200, 300, 400, 500, 600, 700, 900]); // a cancelada (800) fica fora
+    expect(valores(await tela({ periodo: "todos", cancelados: "1" }))).toEqual([50, 100, 200, 300, 400, 500, 600, 700, 800, 900]);
     expect(todos.resumo.TOTAL).toEqual({ q: 9, v: 3750 });
   });
 
@@ -140,9 +145,11 @@ describe.skipIf(!URL_PG)("Contas a Receber — período e cards (PostgreSQL real
   it("exportar segue o período da tela (padrão: o mês; todo o período quando pedido)", async () => {
     const { GET } = await import("@/app/api/contas-receber/exportar/route");
     const linhas = async (qs: string) => (await (await GET(new NextRequest(`http://localhost/api/contas-receber/exportar${qs}`))).text()).trim().split("\n").length - 1;
-    expect(await linhas("")).toBe(6);
+    expect(await linhas("")).toBe(5); // a exportação segue o filtro: sem as canceladas
+    expect(await linhas("?cancelados=1")).toBe(6); // "Mostrar cancelados" exporta a cancelada também
     expect(await linhas("?mes=2026-10")).toBe(2);
-    expect(await linhas("?periodo=todos")).toBe(10);
+    expect(await linhas("?periodo=todos")).toBe(9);
+    expect(await linhas("?periodo=todos&cancelados=1")).toBe(10);
     expect(await linhas("?card=VENCIDO")).toBe(1);
   });
 });

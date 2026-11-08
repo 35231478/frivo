@@ -29,6 +29,8 @@ export interface FiltrosCentral {
   q: string;
   situacao: GrupoSituacao | null;
   ambiente: (typeof AMBIENTES_FILTRO)[number] | null;
+  /** "Mostrar cancelados" (padrão da casa): por padrão as canceladas ficam fora da lista */
+  cancelados: boolean;
   pagina: number;
   porPagina: number;
 }
@@ -40,6 +42,7 @@ export function lerFiltros(sp: ParamsUrl, agora = new Date()): FiltrosCentral {
     q: um(sp.q).trim().slice(0, 100),
     situacao: ehGrupo(situacao) ? situacao : null,
     ambiente: (AMBIENTES_FILTRO as readonly string[]).includes(ambiente) ? (ambiente as FiltrosCentral["ambiente"]) : null,
+    cancelados: um(sp.cancelados) === "1",
     ...lerPaginacao(sp),
   };
 }
@@ -72,13 +75,15 @@ export function whereBusca(q: string) {
 }
 
 /** O `where` completo da lista (empresa SEMPRE a da sessão: quem chama passa) */
-export function whereNotas(empresaId: string, f: Pick<FiltrosCentral, "periodo" | "q" | "situacao" | "ambiente">) {
+export function whereNotas(empresaId: string, f: Pick<FiltrosCentral, "periodo" | "q" | "situacao" | "ambiente" | "cancelados">) {
   return {
     empresaId,
     AND: [
       wherePeriodo(f.periodo),
       whereBusca(f.q),
       f.situacao ? { status: { in: [...GRUPOS_SITUACAO[f.situacao].status] } } : {},
+      // Canceladas fora da lista padrão (continuam existindo); o grupo "Canceladas" ou "Mostrar cancelados" as traz
+      !f.situacao && !f.cancelados ? { status: { notIn: [...GRUPOS_SITUACAO.canceladas.status] } } : {},
       f.ambiente ? { ambiente: f.ambiente } : {},
     ],
   };

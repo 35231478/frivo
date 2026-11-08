@@ -21,7 +21,7 @@ import {
   Plus, Download, Barcode, Loader2, Sigma, TrendingDown, Handshake, X,
 } from "lucide-react";
 import { BarraPeriodo, CardResumo, GradeCards, type PeriodoTela } from "@/components/listagem/periodo-cards";
-import { BarraFiltros, FiltroTextoUrl, inputFiltro } from "@/components/listagem/barra-filtros";
+import { BarraFiltros, filtroCancelados, FiltroTextoUrl, inputFiltro } from "@/components/listagem/barra-filtros";
 import { CampoBusca, Paginacao } from "@/components/listagem/listagem-ui";
 import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
 import { TabelaPro, type ColunaPro } from "@/components/listagem/tabela-pro";
@@ -150,12 +150,12 @@ function ContasReceberCorpo({
     { key: "VENCE_HOJE", rotulo: "Vencem hoje", icone: CalendarClock, cor: "text-atencao-texto" },
     { key: "A_VENCER", rotulo: "A vencer", icone: Receipt, cor: "text-primary-600", dica: "Inclui as previsões (contratos e orçamentos aprovados). Pelo que falta receber." },
     { key: "RECEBIDO", rotulo: "Recebidos", icone: CheckCircle2, cor: "text-success-600" },
-    { key: "PERDA", rotulo: "Perdas", icone: TrendingDown, cor: "text-atrasado-texto", dica: "Cobranças do período dadas como perdidas, pelo valor perdido. O relatório por cliente fica em Perdas." },
+    // "Perdas" sai do topo (fica no botão do cabeçalho e no painel de totais): 5 cards, como no Conta Azul
     { key: "TOTAL", rotulo: "Total do período", icone: Sigma, cor: "text-ink", dica: "Todas as cobranças do período, menos as canceladas. A renegociação não soma de novo: conta a cobrança original." },
   ];
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-surface-alt rounded-lg"><Receipt className="w-5 h-5 text-ink-muted" /></div>
@@ -213,9 +213,10 @@ function ContasReceberCorpo({
               ))}
             </div>
           ) },
+          filtroCancelados(navegar),
         ]}
       />
-      <GradeCards colunas={6}>
+      <GradeCards colunas={5}>
         {CARDS.map((c) => (
           <CardResumo key={c.key} id={c.key} rotulo={c.rotulo} icone={c.icone} cor={c.cor} dica={c.dica}
             v={resumo[c.key].v} q={resumo[c.key].q} unidade={["cobrança", "cobranças"]}
@@ -339,9 +340,9 @@ function ContasReceberCorpo({
           }}
           selecao={{ n: selecionados.size, naPagina: selecionadas.length, total: linhaTotal("TOTAL", totaisSelecao.TOTAL), linhas: CHAVES_RECEBER.filter((k) => k !== "TOTAL").map((k) => linhaTotal(k, totaisSelecao[k])) }}
         />
-        <div className="px-4 py-3 border-t border-surface-border bg-surface-alt/40 space-y-2">
+        <div className="px-3 py-2 border-t border-surface-border bg-surface-alt/40 space-y-1.5">
           <Paginacao total={total} pagina={pagina} porPagina={porPagina} onNavegar={navegar} rotulo="cobranças" />
-          <p className="text-sm text-ink-muted" data-total-filtrado>
+          <p className="text-[13px] text-ink-muted" data-total-filtrado>
             Total do filtro: <strong className="text-ink">{formatarMoeda(totalFiltrado)}</strong>
             {abertoFiltrado != null && <> · em aberto: <strong className="text-ink" data-aberto-filtrado>{formatarMoeda(abertoFiltrado)}</strong></>}
           </p>

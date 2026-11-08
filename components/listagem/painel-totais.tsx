@@ -43,10 +43,10 @@ export function PainelTotais({ periodo, selecao, unidade, abertoInicial = true, 
   const qtd = (q?: number) => (q == null ? null : `${q} ${q === 1 ? unidade[0] : unidade[1]}`);
   return (
     <section className={cn("border-t border-surface-border bg-surface-alt/40", className)} data-painel-totais data-modo={comSelecao ? "selecao" : "periodo"} aria-label="Totais">
-      <div className="flex items-start justify-between gap-3 px-4 py-3">
+      <div className="flex items-start justify-between gap-3 px-3 py-2">
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-ink" data-painel-titulo>{comSelecao ? tituloSelecao : "Totais do período"}</h3>
-          <p className="text-xs text-ink-muted" data-painel-subtitulo>
+          <h3 className="text-[13px] font-semibold text-ink" data-painel-titulo>{comSelecao ? tituloSelecao : "Totais do período"}</h3>
+          <p className="text-[11px] text-ink-muted" data-painel-subtitulo>
             {comSelecao
               ? (naPagina < n ? `${naPagina} nesta página: a soma é só delas` : "Só do que está marcado")
               : (periodo.subtitulo ?? periodo.rotulo)}
@@ -55,19 +55,19 @@ export function PainelTotais({ periodo, selecao, unidade, abertoInicial = true, 
         </div>
         <div className="flex items-start gap-2 shrink-0 text-right">
           <div>
-            <p className="text-xs text-ink-muted whitespace-nowrap">{total.rotulo} (R$)</p>
-            <p className="text-base font-bold text-ink tabular-nums" data-painel-total>{formatarMoeda(total.v)}</p>
+            <p className="text-[11px] text-ink-muted whitespace-nowrap">{total.rotulo} (R$)</p>
+            <p className="text-sm font-bold text-ink tabular-nums" data-painel-total>{formatarMoeda(total.v)}</p>
           </div>
           <button type="button" onClick={() => setAberto((a) => !a)} aria-expanded={aberto} aria-controls="painel-totais-quebra"
-            className="p-1.5 -mr-1.5 rounded-md text-ink-muted hover:text-ink hover:bg-surface-alt" title={aberto ? "Recolher" : "Ver a quebra"} data-painel-alternar>
+            className="p-1 -mr-1 rounded-md text-ink-muted hover:text-ink hover:bg-surface-alt" title={aberto ? "Recolher" : "Ver a quebra"} data-painel-alternar>
             <ChevronDown className={cn("w-4 h-4 transition-transform", aberto && "rotate-180")} />
           </button>
         </div>
       </div>
       {aberto && (
-        <dl id="painel-totais-quebra" className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1.5 px-4 pb-3" data-painel-quebra>
+        <dl id="painel-totais-quebra" className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1 px-3 pb-2" data-painel-quebra>
           {linhas.map((l) => (
-            <div key={l.chave} className="flex items-baseline justify-between gap-3 text-sm" data-painel-linha={l.chave}>
+            <div key={l.chave} className="flex items-baseline justify-between gap-3 text-[13px]" data-painel-linha={l.chave}>
               <dt className="flex items-center gap-1 text-ink-muted min-w-0">
                 <span className="truncate">{l.rotulo} (R$)</span>
                 {l.dica && <Dica texto={l.dica} rotulo={l.rotulo} />}

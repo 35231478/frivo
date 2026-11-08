@@ -197,7 +197,7 @@ describe("busca e painel de filtros", () => {
     expect($("[data-painel-filtros]")).toBeNull(); // nada escolhido, nada ativo
     expect(($("[data-limpar-filtros]") as HTMLButtonElement).disabled).toBe(true); // nada a limpar
     await clicar($("[data-mais-filtros]"));
-    expect($$("[data-filtro-opcao]").map(txt)).toEqual(["Status", "Fornecedor", "Categoria", "Centro de custo", "Origem"]);
+    expect($$("[data-filtro-opcao]").map(txt)).toEqual(["Status", "Fornecedor", "Categoria", "Centro de custo", "Origem", "Mostrar cancelados"]);
     await clicar($("[data-filtro-opcao=centro]"));
     expect(txt($("[data-filtro=centro]"))).toContain("Obra encerrada (inativo)");
     await escolher($("[data-filtro=centro]"), "ccObra");

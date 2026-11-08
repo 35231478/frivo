@@ -207,12 +207,11 @@ describe("lista, gaveta, relatório e alerta", () => {
     ...o,
   });
 
-  it("card Perdas (com ⓘ fora do botão), chip 'Perda' no painel, link do relatório; a linha em perda: selo, — em aberto, 'Perdido' no celular", async () => {
+  it("Perdas fora do topo (fica no link do cabeçalho), chip 'Perda' no painel; a linha em perda: selo, — em aberto, 'Perdido' no celular", async () => {
     const { ContasReceberView } = await import("@/components/financeiro/contas-receber-view");
     await montar(createElement(ContasReceberView, props([{ status: "PERDA", valor: 500, valorRecebido: 200, valorPerda: 300 }], { filtros: { ...props([]).filtros, clienteId: "c1" } }) as any));
-    expect(txt($("[data-card=PERDA]"))).toMatch(/^Perdas\s?R\$\s?300,00\s?1 cobrança$/);
-    expect($("[data-card=PERDA] [data-dica]")).toBeNull();
-    expect($("[data-card-caixa=PERDA] [data-dica]")).not.toBeNull();
+    // O card "Perdas" saiu do topo (5 cards, como no Conta Azul): segue no botão do cabeçalho e no painel de totais
+    expect($("[data-card=PERDA]")).toBeNull();
     await clicar($("[data-mais-filtros]")); await clicar($("[data-filtro-opcao=status]")); // os chips aparecem ao escolher "Status" no menu
     expect(txt($("[data-chip-status=PERDA]"))).toBe("Perda");
     expect($("[data-link-perdas]")!.getAttribute("href")).toBe("/financeiro/perdas");

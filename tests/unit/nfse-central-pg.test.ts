@@ -98,8 +98,10 @@ describe.skipIf(!URL_PG)("Notas fiscais — tela central (PostgreSQL real)", () 
   it("outubro (padrão = mês corrente): pela data fiscal, mais recentes primeiro; outra empresa nunca", async () => {
     const r = await carregar();
     expect(r.filtros.periodo).toMatchObject({ tipo: "mes", mes: "2026-10", rotulo: "Outubro de 2026" });
-    expect(ids(r)).toEqual(["nB", "nG", "nE", "nD", "nC", "nF", "nA"]);
-    expect(r.total).toBe(7);
+    expect(ids(r)).toEqual(["nB", "nG", "nE", "nD", "nC", "nA"]); // a cancelada (nF) fica fora da lista padrão
+    expect(r.total).toBe(6);
+    // "Mostrar cancelados" (cancelados=1) ou o grupo "Canceladas" trazem a nF de volta
+    expect(ids(await carregar({ cancelados: "1" }))).toEqual(["nB", "nG", "nE", "nD", "nC", "nF", "nA"]);
   });
 
   it("cards do período: em aberto (medições), transmissão, emitidas, falha, canceladas, total", async () => {
@@ -151,10 +153,10 @@ describe.skipIf(!URL_PG)("Notas fiscais — tela central (PostgreSQL real)", () 
   it("paginação no padrão (25 por página); página além do fim volta para a última", async () => {
     await prisma.notaFiscal.createMany({ data: Array.from({ length: 30 }, (_, i) => nota(`x${String(i).padStart(2, "0")}`, { status: "PROCESSANDO", criadoEm: d(`2026-10-03T${String(i % 24).padStart(2, "0")}:${String(i).padStart(2, "0")}:00Z`) })) });
     const p1 = await carregar({ por: "25" });
-    expect([p1.total, p1.notas.length, p1.pagina, p1.porPagina]).toEqual([37, 25, 1, 25]);
+    expect([p1.total, p1.notas.length, p1.pagina, p1.porPagina]).toEqual([36, 25, 1, 25]); // a cancelada (nF) fora do padrão
     const p2 = await carregar({ por: "25", pagina: "2" });
-    expect([p2.notas.length, p2.pagina]).toEqual([12, 2]);
-    expect(new Set([...ids(p1), ...ids(p2)]).size).toBe(37);
+    expect([p2.notas.length, p2.pagina]).toEqual([11, 2]);
+    expect(new Set([...ids(p1), ...ids(p2)]).size).toBe(36);
     expect((await carregar({ por: "25", pagina: "9" })).pagina).toBe(2);
   });
 

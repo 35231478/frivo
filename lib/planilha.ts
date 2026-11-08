@@ -4,10 +4,10 @@
  * valores à direita com números tabulares. Só para o desktop: no celular as listas viram cartões.
  */
 export const PLANILHA = {
-  tabela: "w-full border-collapse text-[13px] leading-snug",
+  tabela: "w-full border-collapse text-[13px] leading-tight",
   /** Linha do cabeçalho (fundo + fio de cima e de baixo) */
   cabecalho: "bg-surface-alt border-y border-ink/15",
-  th: "px-2 py-1.5 font-semibold text-ink-muted text-[10px] uppercase tracking-wider",
+  th: "px-2 py-1 font-semibold text-ink-muted text-[10px] uppercase tracking-wider",
   linha: "border-b border-surface-linha even:bg-surface-alt/60",
   /**
    * Realce da linha sob o mouse: o acento bem claro (primary-100 a 60%), um degrau acima da zebra
@@ -23,7 +23,7 @@ export const PLANILHA = {
    * (components/listagem/selecao-linhas).
    */
   linhaSelecionada: "bg-primary-50 even:bg-primary-50 hover:bg-primary-100",
-  td: "px-2 py-1.5 align-top",
+  td: "px-2 py-1 align-middle",
   /** Valor em R$ / número: à direita, alinhado pelos algarismos */
   numero: "text-right tabular-nums whitespace-nowrap",
   /** Código/número do registro (orçamento, OS, conta, nota): a MESMA fonte em todas as telas */

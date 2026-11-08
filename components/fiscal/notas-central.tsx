@@ -67,7 +67,7 @@ function NotasCentralCorpo({ dados }: { dados: DadosCentral }) {
   const cardSituacao = (g: GrupoSituacao) => ({ ativo: filtros.situacao === g, onClick: () => navegar({ situacao: filtros.situacao === g ? null : g }) });
 
   return (
-    <div className="space-y-5" data-notas-central>
+    <div className="space-y-3" data-notas-central>
       <div className="flex items-center gap-3">
         <div className="p-2 bg-surface-alt rounded-lg"><FileText className="w-5 h-5 text-ink-muted" /></div>
         <h1 className="page-title">Notas fiscais de serviço</h1>

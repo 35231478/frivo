@@ -15,7 +15,7 @@ import {
   FileText, ShoppingCart, Receipt, X,
 } from "lucide-react";
 import { BarraPeriodo, CardResumo, GradeCards, type PeriodoTela } from "@/components/listagem/periodo-cards";
-import { BarraFiltros, inputFiltro } from "@/components/listagem/barra-filtros";
+import { BarraFiltros, filtroCancelados, inputFiltro } from "@/components/listagem/barra-filtros";
 import { CampoBusca, Paginacao } from "@/components/listagem/listagem-ui";
 import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
 import { TabelaPro } from "@/components/listagem/tabela-pro";
@@ -131,7 +131,7 @@ function ContasPagarCorpo({
   );
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-surface-alt rounded-lg"><Upload className="w-5 h-5 text-ink-muted" /></div>
@@ -188,6 +188,7 @@ function ContasPagarCorpo({
               <option value="NF">Nota de compra (NF)</option>
             </select>
           ) },
+          filtroCancelados(navegar),
         ]}
       />
       <GradeCards colunas={5}>
