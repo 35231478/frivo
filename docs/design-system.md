@@ -1,5 +1,7 @@
 # Sistema de design do Frivo
 
+> Este documento é a **identidade visual** citada em `docs/manifesto-produto-frivo.md` (lá chamada de `identidade-visual-frivo.md`): a referência aponta para cá, sem duplicar.
+
 Fase 1 entregue: fundação (tokens, fontes, componentes-base), o shell global e duas telas-vitrine
 (a central da OS e a lista de OS). Fase 2 em lotes: a varredura das demais telas, um PR por lote
 (ver "Fase 2" abaixo). Este guia vale para as próximas varreduras.

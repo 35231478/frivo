@@ -9,8 +9,12 @@ import { cn } from "@/lib/utils";
  * sistema, no lugar dos alert()/confirm() nativos do navegador.
  *
  * Uso imperativo, de qualquer client component (sem provider):
- *   toast("Salvo com sucesso!");                      // sucesso (padrão)
+ *   toast("Salvo.");                                  // sucesso (padrão)
  *   toast("Não foi possível salvar.", "erro");
+ *
+ * Texto do toast (manifesto, princípio 3; docs/componentes-base-despoluicao.md): frase curta com
+ * ponto final, voz impessoal, sem "!", sem "com sucesso", sem emoji — "Orçamento criado.", não
+ * "Pronto! Seu orçamento foi criado!". O ratchet (tests/unit/despoluicao-ratchet.test.ts) acusa "!".
  *   if (!(await confirmar({ mensagem: "Cancelar esta conta?" }))) return;
  *
  * O <Avisos /> é montado UMA vez por layout (dashboard — que também cobre o app do

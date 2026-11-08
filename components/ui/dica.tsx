@@ -98,7 +98,9 @@ export function Dica({ texto, rotulo, className, lado = "centro" }: {
         aria-expanded={aberta}
         data-dica
         onPointerEnter={(e) => { if (e.pointerType === "mouse") setAberta(true); }}
-        onPointerLeave={(e) => { if (e.pointerType === "mouse") fechar(); }}
+        // Sair do ícone para dentro do balão não fecha (WCAG 1.4.13: o conteúdo do tooltip pode ser
+        // apontado e selecionado); sair do balão fecha
+        onPointerLeave={(e) => { if (e.pointerType === "mouse" && !balao.current?.contains(e.relatedTarget as Node | null)) fechar(); }}
         onPointerDown={(e) => { ponteiro.current = e.pointerType; }}
         onFocus={() => { if (!ponteiro.current) setAberta(true); }}
         onBlur={() => { ponteiro.current = null; fechar(); }}
@@ -122,6 +124,7 @@ export function Dica({ texto, rotulo, className, lado = "centro" }: {
           hidden={!aberta}
           style={pos}
           data-dica-texto
+          onPointerLeave={(e) => { if (e.pointerType === "mouse" && !botao.current?.contains(e.relatedTarget as Node | null)) fechar(); }}
           className="fixed z-[80] rounded-lg bg-ink px-3 py-2 text-xs font-normal leading-relaxed text-white shadow-elevated normal-case tracking-normal text-left whitespace-normal"
         >
           {texto}
