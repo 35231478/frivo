@@ -37,7 +37,8 @@ export async function GET() {
 
   const zeroVeiculos = { checklistPendente: 0, checklistsComAlertas: 0, documentosVencendo: 0, veiculosManutencao: 0, revisaoChegando: 0 };
   const zeroNfse = { nfseAutorizadas: 0, nfseAutorizadaMedicaoId: null, nfseRejeitadas: 0, nfseRejeitadaMedicaoId: null, nfseAguardando: 0, nfseAguardandoMedicaoId: null };
-  const [prazosBrutos, veiculosBrutos, boletosPagos, orcamentosRespondidos, nfsDoPedido, nfse, faturamentoContratos, reajustesContrato, separacoesPendentes, devolucoesPendentes] = await Promise.all([
+  const desde24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const [prazosBrutos, veiculosBrutos, boletosPagos, orcamentosRespondidos, leadsSite, nfsDoPedido, nfse, faturamentoContratos, reajustesContrato, separacoesPendentes, devolucoesPendentes] = await Promise.all([
     verOrdens || verCompras ? contarAlertasPrazos(empresaId) : Promise.resolve(null),
     verVeiculos ? contarAlertasVeiculos(empresaId) : Promise.resolve(null),
     verBoletos
@@ -46,6 +47,11 @@ export async function GET() {
     // Cliente aprovou/recusou pelo link e ninguém abriu o orçamento ainda (lib/orcamentos/ciclo)
     verOrcamentos
       ? prisma.orcamento.count({ where: { empresaId, status: { in: ["APROVADO", "REPROVADO"] }, respostaVistaEm: null } })
+      : Promise.resolve(0),
+    // Novos leads do site (calculadora de BTU) nas últimas 24h — o sino não deixa o lead passar
+    // despercebido (destino: /leads-site). Mesma permissão de ver orçamentos.
+    verOrcamentos
+      ? prisma.orcamento.count({ where: { empresaId, nome: { startsWith: "Lead do site" }, criadoEm: { gte: desde24h } } })
       : Promise.resolve(0),
     // Chegou NF num pedido de compra que ESTE usuário pediu e ele ainda não abriu (Compras 2/2).
     // Não depende de permissão: quem pediu sempre vê o próprio pedido (lib/compras/pedido podeVerPedido).
@@ -82,6 +88,7 @@ export async function GET() {
     ...veiculos,
     boletosPagos,
     orcamentosRespondidos,
+    leadsSite,
     nfPedidos: nfsDoPedido.length,
     nfPedidoId: nfsDoPedido[0]?.id ?? null,
     ...nfse,
@@ -89,6 +96,6 @@ export async function GET() {
     reajustesContrato,
     separacoesPendentes,
     devolucoesPendentes,
-    total: totalPrazos + totalVeiculos + boletosPagos + orcamentosRespondidos + nfsDoPedido.length + nfse.nfseAutorizadas + nfse.nfseRejeitadas + nfse.nfseAguardando + faturamentoContratos + reajustesContrato + separacoesPendentes + devolucoesPendentes,
+    total: totalPrazos + totalVeiculos + boletosPagos + orcamentosRespondidos + leadsSite + nfsDoPedido.length + nfse.nfseAutorizadas + nfse.nfseRejeitadas + nfse.nfseAguardando + faturamentoContratos + reajustesContrato + separacoesPendentes + devolucoesPendentes,
   });
 }
