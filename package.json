@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
+    "despoluicao:baseline": "DESPOLUICAO_BASELINE=atualizar vitest run tests/unit/despoluicao-ratchet.test.ts",
     "typecheck": "tsc --noEmit",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",

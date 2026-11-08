@@ -89,6 +89,17 @@ describe("mouse e toque", () => {
     expect(aberta()).toBe(false);
   });
 
+  it("mouse: ir do ícone para dentro do balão não fecha (WCAG 1.4.13); sair do balão fecha", async () => {
+    await montar(createElement(Dica, { texto: "Explicação" }));
+    const b = botao();
+    await hover(b, true);
+    expect(aberta()).toBe(true);
+    await disparar(b, "pointerout", { pointerType: "mouse", relatedTarget: balao() });
+    expect(aberta()).toBe(true);
+    await disparar(balao(), "pointerout", { pointerType: "mouse", relatedTarget: document.body });
+    expect(aberta()).toBe(false);
+  });
+
   it("toque: abre (o foco do toque não anula o clique), segundo toque fecha, toque fora fecha", async () => {
     await montar(createElement(Dica, { texto: "Explicação" }));
     const b = botao();
