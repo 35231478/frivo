@@ -101,7 +101,7 @@ describe("E1: equipamento usa o seletor de cliente da Nova OS", () => {
     // abre o seletor novo
     await clicar($$("button").find((b) => b.textContent!.includes("Selecione o cliente")));
     expect($$("button").filter((b) => b.textContent!.startsWith("Cliente ")).length).toBe(7);
-    await digitar($('input[placeholder*="Buscar cliente"]'), "santa");
+    await digitar($('input[placeholder*="Pesquisar cliente"]'), "santa");
     const opcoes = $$("button").filter((b) => b.textContent!.includes("Hospital Santa Clara"));
     expect(opcoes.length).toBe(1);
     expect($$("button").filter((b) => b.textContent!.startsWith("Cliente ")).length).toBe(0);

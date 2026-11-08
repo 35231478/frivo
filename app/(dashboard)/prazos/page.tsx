@@ -70,7 +70,7 @@ export default async function PrazosPage({
     <ListaUrl chave="prazos" paramBusca="q" qAtual="">
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <div className="p-2 bg-primary-50 rounded-lg"><Timer className="w-5 h-5 text-primary-600" /></div>
+        <div className="p-2 bg-surface-alt rounded-lg"><Timer className="w-5 h-5 text-ink-muted" /></div>
         <h1 className="page-title">Prazos</h1>
         <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{total}</span>
       </div>

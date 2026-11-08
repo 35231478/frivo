@@ -124,7 +124,7 @@ export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange, so
                     {somenteLeitura ? null : naoUsado ? (
                       <button type="button" onClick={() => mudar(m.id!, { quantidade: m.quantidadePadrao })} className="p-1 text-ink-muted hover:text-ink" aria-label={`Voltar a usar ${m.descricao}`} title="Voltar ao padrão"><Undo2 className="w-3.5 h-3.5" /></button>
                     ) : (
-                      <button type="button" onClick={() => tirar(m)} className="p-1 text-ink-muted hover:text-atrasado" aria-label={`Tirar ${m.descricao}`} title={m.quantidadePadrao > 0 ? "Não usar (abate o padrão do serviço)" : "Remover"}><Trash2 className="w-3.5 h-3.5" /></button>
+                      <button type="button" onClick={() => tirar(m)} className="p-1 text-ink-muted hover:text-atrasado" aria-label={`Tirar ${m.descricao}`} title={m.quantidadePadrao > 0 ? "Não usar (abate o padrão do serviço)" : "Excluir"}><Trash2 className="w-3.5 h-3.5" /></button>
                     )}
                   </div>
                 </div>

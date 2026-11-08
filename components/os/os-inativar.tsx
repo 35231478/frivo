@@ -121,8 +121,7 @@ export function OsInativarBotao({
           ) : (
             <>
               <p className="text-sm text-ink">
-                Tem certeza? A OS será <strong>cancelada</strong> e sairá das listas e do calendário.
-                Nada é apagado (atividades, anexos, relatórios, histórico); pode ser reaberta depois.
+                Tem certeza? A OS será <strong>cancelada</strong> e sai das listas e do calendário. Nada é apagado; pode ser reaberta depois.
               </p>
               <label className="block">
                 <span className="block text-xs font-medium text-ink mb-1">Motivo (opcional — fica no histórico)</span>

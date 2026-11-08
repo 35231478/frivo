@@ -5,7 +5,7 @@ import { EditorTipoEquipamento } from "@/components/cadastros/editores/editor-ti
 
 const pl = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
 
-/** Tipos de equipamento no padrão: inativar/reativar de verdade (antes “Remover” não sumia), impacto antes de inativar. */
+/** Tipos de equipamento no padrão: inativar/reativar de verdade (antes “Excluir” não sumia), impacto antes de inativar. */
 export function TiposEquipamentoTela() {
   return (
     <CadastroPadrao

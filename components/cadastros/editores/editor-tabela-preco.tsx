@@ -215,7 +215,7 @@ function BuscaCatalogo({ catalogo, jaAdicionados, onSelect }: { catalogo: Catalo
         value={query}
         onChange={(e) => { setQuery(e.target.value); setAberto(true); }}
         onFocus={() => setAberto(true)}
-        placeholder="Buscar serviço ou produto para adicionar..."
+        placeholder="Pesquisar serviço ou produto para adicionar..."
         className="w-full bg-white border border-surface-border rounded-lg pl-9 pr-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all"
       />
       {aberto && filtrados.length > 0 && (

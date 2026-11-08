@@ -55,7 +55,8 @@ export default async function DashboardPage() {
   // Só consulta o que vai aparecer; um bloco com erro não derruba a página
   const dados = await carregarBlocos(visiveis.map((b) => b.id), { empresaId: user.empresaId, podeVer });
 
-  const { ano, mes, dia } = partesBR();
+  const { ano, mes, dia, hora } = partesBR();
+  const saudacao = hora < 12 ? "Bom dia" : hora < 18 ? "Boa tarde" : "Boa noite";
   const semana = new Date(Date.UTC(ano, mes, dia)).getUTCDay();
   const primeiroNome = (user.name ?? "").split(" ")[0];
 
@@ -63,7 +64,7 @@ export default async function DashboardPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="page-title">{primeiroNome ? `Olá, ${primeiroNome}` : "Dashboard"}</h1>
+          <h1 className="page-title">{primeiroNome ? `${saudacao}, ${primeiroNome}` : "Dashboard"}</h1>
           <p className="page-subtitle first-letter:uppercase">
             {DIAS[semana]}, {dia} de {MESES[mes]} · {user.empresaNome}
           </p>

@@ -100,7 +100,7 @@ export function EquipamentosListaClient({ itens, total, filtros: f, opcoes, resu
       {/* ── Cabeçalho ── */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <div className="p-2 bg-primary-50 rounded-lg hidden sm:block"><Thermometer className="w-5 h-5 text-primary-600" /></div>
+          <div className="p-2 bg-surface-alt rounded-lg hidden sm:block"><Thermometer className="w-5 h-5 text-ink-muted" /></div>
           <h1 className="page-title">Equipamentos</h1>
           <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">
             {total.toLocaleString("pt-BR")}
@@ -145,7 +145,7 @@ export function EquipamentosListaClient({ itens, total, filtros: f, opcoes, resu
       {/* ── Busca + filtros ── */}
       <div className="bg-white border border-surface-border rounded-card p-3 sm:p-4 space-y-3">
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2">
-          <CampoBusca valor={busca} onChange={setBusca} carregando={pendente} sugerir={sugerir} onEscolher={(s) => s.href && roteador.push(s.href)} placeholder="Buscar nome, modelo, marca, nº série, TAG, cliente, setor…" />
+          <CampoBusca valor={busca} onChange={setBusca} carregando={pendente} sugerir={sugerir} onEscolher={(s) => s.href && roteador.push(s.href)} placeholder="Pesquisar nome, modelo, marca, nº série, TAG, cliente, setor…" />
           <div className="flex items-center gap-2">
             <Building2 className="w-4 h-4 text-ink-subtle shrink-0 hidden sm:block" />
             <BuscaSelect

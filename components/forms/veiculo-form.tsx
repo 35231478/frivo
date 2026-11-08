@@ -574,7 +574,7 @@ function ManutencoesPanel({ veiculoId, manutencoes, setManutencoes }: { veiculoI
   }
 
   async function remover(id: string) {
-    if (!(await confirmar({ mensagem: "Remover esta manutenção?", perigo: true, confirmarTexto: "Remover" }))) return;
+    if (!(await confirmar({ mensagem: "Excluir esta manutenção?", perigo: true, confirmarTexto: "Excluir" }))) return;
     await fetch(`/api/veiculos/${veiculoId}/manutencoes?manutencaoId=${id}`, { method: "DELETE" });
     setManutencoes(manutencoes.filter((x) => x.id !== id));
   }

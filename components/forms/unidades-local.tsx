@@ -225,7 +225,7 @@ export function UnidadesLocal({ unidades, onChange }: UnidadesLocalProps) {
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={cancelar}>Cancelar</Button>
           <Button type="button" onClick={salvar} disabled={!form.nome.trim()}>
-            <Check className="w-4 h-4" /> {editando === "novo" ? "Adicionar" : "Salvar"}
+            <Check className="w-4 h-4" /> Salvar
           </Button>
         </div>
       </div>
@@ -292,7 +292,7 @@ export function UnidadesLocal({ unidades, onChange }: UnidadesLocalProps) {
                         <Star className="w-3 h-3" /> Tornar principal
                       </Button>
                       <Button type="button" variant="ghost" onClick={() => remover(u._tempId)} className="text-xs h-7 px-2.5 text-atrasado hover:text-atrasado-texto">
-                        <Trash2 className="w-3 h-3" /> Remover
+                        <Trash2 className="w-3 h-3" /> Excluir
                       </Button>
                     </>
                   )}
@@ -307,7 +307,7 @@ export function UnidadesLocal({ unidades, onChange }: UnidadesLocalProps) {
 
       {!editando && (
         <Button type="button" variant="secondary" onClick={abrirNova} className="w-full justify-center border-dashed mt-2">
-          <Plus className="w-4 h-4" /> Adicionar endereço
+          <Plus className="w-4 h-4" /> Novo endereço
         </Button>
       )}
     </div>

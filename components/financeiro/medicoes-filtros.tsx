@@ -15,7 +15,7 @@ export function FiltrosMedicoes({ periodo, opcoes }: { periodo: PeriodoTela; opc
   return (
     <BarraFiltros
       periodo={<BarraPeriodo rotulo="Criação" periodo={periodo} navegar={navegar} permitirTodos dica="Pela data de criação da medição." />}
-      busca={<BuscaUrl lista="medicoes" placeholder="Pesquisar" rotulo="Buscar medições" />}
+      busca={<BuscaUrl lista="medicoes" placeholder="Pesquisar" rotulo="Pesquisar medições" />}
       paramBusca="busca" navegar={navegar}
       filtros={[
         { id: "status", label: "Status", params: ["status"], render: () => <FiltroSelectUrl param="status" vazio="Todos status" opcoes={opcoes.status} rotulo="Status" className="w-full" /> },

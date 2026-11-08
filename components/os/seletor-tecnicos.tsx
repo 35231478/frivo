@@ -115,7 +115,7 @@ export function SeletorTecnicos({ tecnicos, equipes, tipoOsId, valor, onChange, 
                   className={cn("p-0.5 rounded", resp ? "text-atencao" : "text-ink-subtle hover:text-atencao")}>
                   <Crown className="w-3.5 h-3.5" />
                 </button>
-                <button type="button" onClick={() => remover(id)} title="Remover" aria-label={`Remover ${t?.nome}`} className="p-0.5 rounded text-ink-subtle hover:text-atrasado"><X className="w-3.5 h-3.5" /></button>
+                <button type="button" onClick={() => remover(id)} title="Excluir" aria-label={`Excluir ${t?.nome}`} className="p-0.5 rounded text-ink-subtle hover:text-atrasado"><X className="w-3.5 h-3.5" /></button>
               </li>
             );
           })}

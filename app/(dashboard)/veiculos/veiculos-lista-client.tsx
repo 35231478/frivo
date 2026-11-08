@@ -73,7 +73,7 @@ export function VeiculosListaClient({ itens, total, filtros: f, tipos, resumo }:
       {/* ── Cabeçalho ── */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <div className="p-2 bg-primary-50 rounded-lg hidden sm:block"><Truck className="w-5 h-5 text-primary-600" /></div>
+          <div className="p-2 bg-surface-alt rounded-lg hidden sm:block"><Truck className="w-5 h-5 text-ink-muted" /></div>
           <h1 className="page-title">Veículos</h1>
           <span data-total className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">
             {total.toLocaleString("pt-BR")}
@@ -115,7 +115,7 @@ export function VeiculosListaClient({ itens, total, filtros: f, tipos, resumo }:
       {/* ── Busca + filtros ── */}
       <div className="bg-white border border-surface-border rounded-card p-3 sm:p-4 space-y-3">
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.6fr)_auto] gap-2 items-center">
-          <CampoBusca valor={busca} onChange={setBusca} carregando={pendente} sugerir={sugerir} onEscolher={(s) => s.href && roteador.push(s.href)} rotulo="Buscar veículo" placeholder="Buscar placa, modelo, marca, RENAVAM, responsável ou equipe…" />
+          <CampoBusca valor={busca} onChange={setBusca} carregando={pendente} sugerir={sugerir} onEscolher={(s) => s.href && roteador.push(s.href)} rotulo="Pesquisar veículo" placeholder="Pesquisar placa, modelo, marca, RENAVAM, responsável ou equipe…" />
           <button
             onClick={() => setFiltrosMobile((v) => !v)}
             className="lg:hidden w-full inline-flex items-center justify-center gap-1.5 text-sm font-medium text-primary-600 border border-surface-border rounded-lg py-2"

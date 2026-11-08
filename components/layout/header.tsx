@@ -44,7 +44,7 @@ const ROTULOS_ROTA: Record<string, string> = {
   dashboard: "Dashboard",
   clientes: "Clientes",
   equipamentos: "Equipamentos",
-  ordens: "Ordens de Serviço",
+  ordens: "Ordens de serviço",
   contratos: "Contratos",
   "faturamento-contratos": "Faturamento de contratos",
   tecnicos: "Técnicos",
@@ -53,16 +53,16 @@ const ROTULOS_ROTA: Record<string, string> = {
   veiculos: "Veículos",
   checklist: "Checklist",
   cargos: "Cargos",
-  "checklists-veiculo": "Checklists de Veículo",
-  "contas-bancarias": "Contas Bancárias",
+  "checklists-veiculo": "Checklists de veículo",
+  "contas-bancarias": "Contas bancárias",
   faturas: "Faturas",
   perfil: "Meu Perfil",
   configuracoes: "Configurações",
   formularios: "Formulários",
   produtos: "Produtos",
   servicos: "Serviços",
-  "tipos-equipamento": "Tipos de Equipamento",
-  "tabelas-preco": "Tabelas de Preços",
+  "tipos-equipamento": "Tipos de equipamento",
+  "tabelas-preco": "Tabelas de preços",
   "tipos-os": "Tipos de OS",
   estoque: "Estoque",
   notas: "Notas de compra",
@@ -70,7 +70,7 @@ const ROTULOS_ROTA: Record<string, string> = {
   devolucao: "A devolver",
   "impressao-os": "Impressão da OS",
   financeiro: "Financeiro",
-  "custo-pessoal": "Custo de Pessoal",
+  "custo-pessoal": "Custo de pessoal",
   fiscal: "Dados fiscais",
   colaborador: "Colaborador",
   encargos: "Encargos",
@@ -222,7 +222,7 @@ export function Header({ session, avatarUrl }: HeaderProps) {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-subtle" />
           <input
             type="search"
-            placeholder="Buscar..."
+            placeholder="Pesquisar..."
             className="w-64 bg-surface-page border border-surface-border rounded-lg pl-9 pr-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:bg-white focus:border-acento focus:ring-4 focus:ring-acento/15 transition-colors"
           />
         </div>

@@ -241,6 +241,7 @@ export async function POST(req: Request) {
           `• ${a.nome}: ${a.areaM2} m² → ${fmt(a.btuRecomendado)} BTU/h — ${a.tipoEquipamento}\n  Justificativa: ${a.justificativa}`,
       )
       .join("\n");
+    const totalMin = fmt(data.preOrcamento.totalMin + instalTotal), totalMax = fmt(data.preOrcamento.totalMax + instalTotal);
     const observacao = [
       `Lead recebido via Calculadora de BTU do site — ${dataHora}`,
       ``,
@@ -258,7 +259,7 @@ export async function POST(req: Request) {
       `PRÉ-ORÇAMENTO ESTIMADO`,
       `Equipamentos: R$ ${fmt(data.preOrcamento.totalMin)} a R$ ${fmt(data.preOrcamento.totalMax)}`,
       `Instalação (referência): R$ ${fmt(INSTALACAO_UNIT)} por unidade (${qtd}x = R$ ${fmt(instalTotal)})`,
-      `Total estimado: R$ ${fmt(data.preOrcamento.totalMin + instalTotal)} a R$ ${fmt(data.preOrcamento.totalMax + instalTotal)}`,
+      `Total estimado: R$ ${totalMin} a R$ ${totalMax}`,
       ``,
       `Valores de referência: orçamento definitivo após visita técnica.`,
     ].join("\n");

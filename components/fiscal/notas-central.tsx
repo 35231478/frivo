@@ -69,7 +69,7 @@ function NotasCentralCorpo({ dados }: { dados: DadosCentral }) {
   return (
     <div className="space-y-5" data-notas-central>
       <div className="flex items-center gap-3">
-        <div className="p-2 bg-primary-50 rounded-lg"><FileText className="w-5 h-5 text-primary-600" /></div>
+        <div className="p-2 bg-surface-alt rounded-lg"><FileText className="w-5 h-5 text-ink-muted" /></div>
         <h1 className="page-title">Notas fiscais de serviço</h1>
         <Dica texto="NFS-e emitidas pelo PlugNotas a partir das medições e das OS concluídas." rotulo="Notas fiscais de serviço" lado="direita" />
       </div>
@@ -77,7 +77,7 @@ function NotasCentralCorpo({ dados }: { dados: DadosCentral }) {
       {/* Barra enxuta: período (pela data da nota) + busca + "Mais filtros" (painel recolhido) — padrão da casa */}
       <BarraFiltros
         periodo={<BarraPeriodo rotulo="Data da nota" periodo={filtros.periodo} navegar={navegar} permitirTodos dica="Pela data de autorização da nota (ou de envio, se ainda não autorizada)." />}
-        busca={<CampoBusca valor={busca} onChange={setBusca} placeholder="Pesquisar" rotulo="Buscar notas" carregando={pendente} />}
+        busca={<CampoBusca valor={busca} onChange={setBusca} placeholder="Pesquisar" rotulo="Pesquisar notas" carregando={pendente} />}
         paramBusca="q" navegar={navegar}
         filtros={[
           { id: "situacao", label: "Situação", params: ["situacao"], render: () => (

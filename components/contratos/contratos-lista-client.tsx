@@ -97,7 +97,7 @@ export function ContratosListaClient({ contratos, total, pagina, porPagina, soma
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary-50 rounded-lg"><FileText className="w-5 h-5 text-primary-600" /></div>
+          <div className="p-2 bg-surface-alt rounded-lg"><FileText className="w-5 h-5 text-ink-muted" /></div>
           <h1 className="page-title">Contratos</h1>
           <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{total}</span>
         </div>
@@ -128,7 +128,7 @@ export function ContratosListaClient({ contratos, total, pagina, porPagina, soma
           <div className="flex flex-wrap gap-2 items-center">
             <div className="flex-1 min-w-[220px]">
               <CampoBusca
-                valor={buscaLocal} onChange={setBuscaLocal} placeholder="Buscar por número ou cliente…" rotulo="Buscar contratos"
+                valor={buscaLocal} onChange={setBuscaLocal} placeholder="Pesquisar por número ou cliente…" rotulo="Pesquisar contratos"
                 sugerir={sugerir} onEscolher={(s) => s.href && router.push(s.href)} carregando={pendente}
               />
             </div>

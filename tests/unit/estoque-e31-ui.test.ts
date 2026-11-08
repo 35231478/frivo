@@ -134,7 +134,7 @@ describe("Produtos", () => {
     expect(document.body.textContent).toContain("Sem categoria, é tratado como incluso no serviço");
     await digitar($('input[id]:not([type=checkbox])'), "Válvula de expansão");
     await escolher(sel, "cMat");
-    await clicar([...document.querySelectorAll("button")].find((b) => txt(b) === "Adicionar") ?? null);
+    await clicar([...document.querySelectorAll("button")].find((b) => txt(b) === "Salvar") ?? null);
     const post = chamadas.find((c) => c.metodo === "POST" && c.url === "/api/cadastros/produtos")!;
     expect(post.corpo).toMatchObject({ nome: "Válvula de expansão", categoriaProdutoId: "cMat", controlaEstoque: "true" });
   });
@@ -156,7 +156,7 @@ describe("Categorias de produto", () => {
     expect($("[data-dica]")!.parentElement!.closest("button, a")).toBeNull(); // ⓘ do campo fora de qualquer botão
     await digitar($('input[id]'), "Consumíveis");
     await escolher(sel, "INCLUSO_NO_SERVICO");
-    await clicar([...document.querySelectorAll("button")].find((b) => txt(b) === "Adicionar") ?? null);
+    await clicar([...document.querySelectorAll("button")].find((b) => txt(b) === "Salvar") ?? null);
     expect(chamadas.find((c) => c.metodo === "POST")!.corpo).toEqual({ nome: "Consumíveis", comportamento: "INCLUSO_NO_SERVICO" });
   });
 });

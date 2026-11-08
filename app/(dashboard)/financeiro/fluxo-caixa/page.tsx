@@ -119,7 +119,7 @@ export default async function FluxoCaixaPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary-50 rounded-lg"><TrendingUp className="w-5 h-5 text-primary-600" /></div>
+          <div className="p-2 bg-surface-alt rounded-lg"><TrendingUp className="w-5 h-5 text-ink-muted" /></div>
           <h1 className="page-title">Fluxo de caixa</h1>
         </div>
         <form method="get" className="flex items-center gap-2">

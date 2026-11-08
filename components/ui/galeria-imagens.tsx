@@ -84,7 +84,7 @@ export function GaleriaImagens({ fotos, onChange }: Props) {
                 <Star className="w-3 h-3 fill-white" /> Principal
               </span>
             )}
-            <button type="button" onClick={() => remover(indice)} className="absolute top-2 right-2 bg-black/50 hover:bg-atrasado text-white rounded-full p-1.5" title="Remover">
+            <button type="button" onClick={() => remover(indice)} className="absolute top-2 right-2 bg-black/50 hover:bg-atrasado text-white rounded-full p-1.5" title="Excluir">
               <X className="w-4 h-4" />
             </button>
             {fotos.length > 1 && (

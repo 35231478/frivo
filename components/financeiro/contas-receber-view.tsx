@@ -158,7 +158,7 @@ function ContasReceberCorpo({
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary-50 rounded-lg"><Receipt className="w-5 h-5 text-primary-600" /></div>
+          <div className="p-2 bg-surface-alt rounded-lg"><Receipt className="w-5 h-5 text-ink-muted" /></div>
           <h1 className="page-title">Contas a receber</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -174,7 +174,7 @@ function ContasReceberCorpo({
       {/* Barra enxuta: período (pelo vencimento) + busca + "Mais filtros" (painel recolhido) — padrão da casa */}
       <BarraFiltros
         periodo={<BarraPeriodo rotulo="Vencimento" periodo={periodo} navegar={navegar} permitirTodos dica="Pela data de vencimento." />}
-        busca={<CampoBusca valor={busca} onChange={setBusca} placeholder="Pesquisar" rotulo="Buscar cobranças" carregando={pendente} />}
+        busca={<CampoBusca valor={busca} onChange={setBusca} placeholder="Pesquisar" rotulo="Pesquisar cobranças" carregando={pendente} />}
         paramBusca="q" navegar={navegar}
         filtros={[
           { id: "clienteId", label: "Cliente", params: ["clienteId"], render: () => (

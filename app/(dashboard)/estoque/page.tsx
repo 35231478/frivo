@@ -33,7 +33,7 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary-50 rounded-lg"><Package className="w-5 h-5 text-primary-600" /></div>
+            <div className="p-2 bg-surface-alt rounded-lg"><Package className="w-5 h-5 text-ink-muted" /></div>
             <h1 className="page-title">Estoque</h1>
             <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{total}</span>
           </div>

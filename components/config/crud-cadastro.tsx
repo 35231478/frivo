@@ -138,7 +138,7 @@ export function CrudCadastro({ titulo, apiUrl, campos, colunasLista }: CrudCadas
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="w-4 h-4 text-ink-subtle absolute left-3 top-1/2 -translate-y-1/2" />
-          <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder={`Buscar ${titulo.toLowerCase()}...`} className="pl-9" />
+          <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder={`Pesquisar ${titulo.toLowerCase()}...`} className="pl-9" />
         </div>
         <Button type="button" onClick={abrirNovo} className="ml-auto shrink-0">
           <Plus className="w-4 h-4" /> Novo {titulo.toLowerCase()}
@@ -211,7 +211,7 @@ export function CrudCadastro({ titulo, apiUrl, campos, colunasLista }: CrudCadas
         rodape={
           <>
             <Button type="button" variant="secondary" onClick={cancelar}>Cancelar</Button>
-            <Button type="button" loading={salvando} onClick={salvar}><Check className="w-4 h-4" /> {editando === "novo" ? "Adicionar" : "Salvar"}</Button>
+            <Button type="button" loading={salvando} onClick={salvar}><Check className="w-4 h-4" /> Salvar</Button>
           </>
         }
       >

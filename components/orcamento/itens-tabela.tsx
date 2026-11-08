@@ -324,8 +324,8 @@ export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange,
                   type="button"
                   onClick={() => remover(it.id)}
                   className="sm:hidden p-2 -mr-1 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded transition-colors"
-                  title="Remover"
-                  aria-label={`Remover ${it.descricao || "item"}`}
+                  title="Excluir"
+                  aria-label={`Excluir ${it.descricao || "item"}`}
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>}
@@ -382,8 +382,8 @@ export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange,
                   type="button"
                   onClick={() => remover(it.id)}
                   className="p-1 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded transition-colors"
-                  title="Remover"
-                  aria-label={`Remover ${it.descricao || "item"}`}
+                  title="Excluir"
+                  aria-label={`Excluir ${it.descricao || "item"}`}
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>}
@@ -467,7 +467,7 @@ function BuscaCatalogo({
           value={query}
           onChange={(e) => { setQuery(e.target.value); setAberto(true); }}
           onFocus={() => setAberto(true)}
-          placeholder={restritoTabela ? "Buscar na tabela do cliente..." : placeholder}
+          placeholder={restritoTabela ? "Pesquisar na tabela do cliente..." : placeholder}
           className="w-full bg-white border border-surface-border rounded-lg pl-9 pr-9 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all"
         />
         {query && (

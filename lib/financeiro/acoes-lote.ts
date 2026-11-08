@@ -25,12 +25,12 @@ export const MAX_DIAS = 730;
 export const ROTULOS: Record<TipoLista, Record<AcaoLote, { rotulo: string; feito: [singular: string, plural: string] }>> = {
   receber: {
     baixar: { rotulo: "Dar como recebido", feito: ["baixada", "baixadas"] },
-    vencimento: { rotulo: "Alterar vencimento", feito: ["alterada", "alteradas"] },
+    vencimento: { rotulo: "Editar vencimento", feito: ["alterada", "alteradas"] },
     cancelar: { rotulo: "Cancelar cobranças", feito: ["cancelada", "canceladas"] },
   },
   pagar: {
     baixar: { rotulo: "Dar como pago", feito: ["baixada", "baixadas"] },
-    vencimento: { rotulo: "Alterar vencimento", feito: ["alterada", "alteradas"] },
+    vencimento: { rotulo: "Editar vencimento", feito: ["alterada", "alteradas"] },
     cancelar: { rotulo: "Cancelar contas", feito: ["cancelada", "canceladas"] },
   },
 };

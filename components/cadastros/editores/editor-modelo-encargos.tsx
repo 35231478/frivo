@@ -82,7 +82,7 @@ export function EditorModeloEncargos({ item, aberto, onFechar, onSalvo }: Editor
                 <Input value={i.percentual} onChange={(e) => upd(idx, "percentual", e.target.value)} inputMode="decimal" placeholder="0,00" className="pr-7" aria-label="Percentual" />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-ink-subtle">%</span>
               </div>
-              <button type="button" onClick={() => setItens((xs) => xs.filter((_, j) => j !== idx))} className="p-2 text-atrasado hover:text-atrasado-texto" aria-label="Remover encargo"><Trash2 className="w-4 h-4" /></button>
+              <button type="button" onClick={() => setItens((xs) => xs.filter((_, j) => j !== idx))} className="p-2 text-atrasado hover:text-atrasado-texto" aria-label="Excluir encargo"><Trash2 className="w-4 h-4" /></button>
             </div>
           ))}
           <div className="flex items-center justify-between">

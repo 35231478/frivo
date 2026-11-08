@@ -163,7 +163,7 @@ export function OsOrcamento({ osId, itens: iniciais, clienteId = null }: { osId:
                 </span>
                 <span className="flex justify-end gap-1">
                   {editavel && !emEdicao && <button type="button" onClick={() => editar(i)} className="p-1 text-ink-muted hover:text-ink" aria-label={`Editar ${i.descricao}`}><Pencil className="w-3.5 h-3.5" /></button>}
-                  {!derivada && !doOrcamento && !i.executado && <button type="button" onClick={() => remover(i)} className="p-1 text-ink-muted hover:text-atrasado" aria-label={`Remover ${i.descricao}`}><Trash2 className="w-3.5 h-3.5" /></button>}
+                  {!derivada && !doOrcamento && !i.executado && <button type="button" onClick={() => remover(i)} className="p-1 text-ink-muted hover:text-atrasado" aria-label={`Excluir ${i.descricao}`}><Trash2 className="w-3.5 h-3.5" /></button>}
                 </span>
                 </div>
               </div>
@@ -241,7 +241,7 @@ function FormItem({ edicao: e, setEdicao, total, salvar, cancelar, salvando, cli
       {e.origemPreco === "contrato" && <p className="text-[11px] text-ok-texto">Preço da tabela do cliente.</p>}
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={cancelar}>Cancelar</Button>
-        <Button type="button" loading={salvando} onClick={salvar} data-acao="salvar-item"><Check className="w-4 h-4" /> {e.id ? "Salvar" : "Adicionar"}</Button>
+        <Button type="button" loading={salvando} onClick={salvar} data-acao="salvar-item"><Check className="w-4 h-4" /> Salvar</Button>
       </div>
     </div>
   );

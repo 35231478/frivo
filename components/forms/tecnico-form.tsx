@@ -126,7 +126,7 @@ export function TecnicoForm({ initialData }: TecnicoFormProps) {
               </Button>
               {avatar && (
                 <Button type="button" variant="ghost" onClick={() => setAvatar(null)} className="text-xs text-atrasado hover:text-atrasado-texto py-1 px-2.5 h-auto">
-                  <Trash2 className="w-3.5 h-3.5" /> Remover
+                  <Trash2 className="w-3.5 h-3.5" /> Excluir
                 </Button>
               )}
               <p className="text-xs text-ink-muted">PNG, JPG ou WEBP — máx. 2 MB</p>

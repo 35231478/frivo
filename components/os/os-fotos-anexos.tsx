@@ -70,9 +70,10 @@ export function OsFotosAnexos({ osId, galeria: inicial, onMudou }: { osId: strin
   const secaoAberta = lightbox ? secoes.find((s) => s.chave === lightbox.secao) : null;
 
   async function excluirFoto(f: FotoGaleria) {
+    const deOnde = f.origem === "ANEXO" ? "" : " (e da execução)";
     const ok = await confirmar({
       titulo: "Excluir foto?", perigo: true, confirmarTexto: "Excluir foto",
-      mensagem: `A foto “${f.legenda}” sai desta OS${f.origem === "ANEXO" ? "" : " (e da execução)"}. A exclusão fica no histórico, com o nome de quem excluiu.`,
+      mensagem: `A foto “${f.legenda}” sai desta OS${deOnde}. A exclusão fica no histórico, com o nome de quem excluiu.`,
     });
     if (!ok) return;
     const url = f.origem === "ANEXO" ? `/api/ordens/${osId}/anexos/${f.id}` : `/api/ordens/${osId}/fotos/${f.id}?origem=${f.origem}`;
@@ -94,7 +95,7 @@ export function OsFotosAnexos({ osId, galeria: inicial, onMudou }: { osId: strin
     const data = await res?.json().catch(() => ({}));
     if (!res?.ok) { toast(data?.erro ?? "Não foi possível excluir o documento.", "erro"); return; }
     setGaleria((g) => ({ ...g, documentos: g.documentos.filter((x) => x.id !== d.id) }));
-    toast("Documento excluído.");
+    toast("Anexo excluído.");
   }
 
   async function enviarDocumento(e: React.ChangeEvent<HTMLInputElement>) {
@@ -128,7 +129,7 @@ export function OsFotosAnexos({ osId, galeria: inicial, onMudou }: { osId: strin
           <div className="flex flex-col sm:flex-row gap-2">
             <Button onClick={() => setEnviarFoto({ referencia: "" })} data-adicionar-foto><Camera className="w-4 h-4" aria-hidden="true" /> Adicionar foto</Button>
             <Button variant="secondary" onClick={() => inputDoc.current?.click()} loading={enviandoDoc} data-adicionar-documento>
-              <Upload className="w-4 h-4" aria-hidden="true" /> Adicionar documento
+              <Upload className="w-4 h-4" aria-hidden="true" /> Adicionar anexo
             </Button>
             <input ref={inputDoc} type="file" accept={ACCEPT_DOCUMENTO} onChange={enviarDocumento} className="hidden" aria-label="Arquivo do documento" />
           </div>
@@ -149,7 +150,7 @@ export function OsFotosAnexos({ osId, galeria: inicial, onMudou }: { osId: strin
       <section className="space-y-3" data-secao-documentos aria-labelledby="titulo-documentos">
         <div className="flex items-center gap-2">
           <FileText className="w-4 h-4 text-ink-subtle" aria-hidden="true" />
-          <h4 id="titulo-documentos" className="section-title">Documentos</h4>
+          <h4 id="titulo-documentos" className="section-title">Anexos</h4>
           <span className="text-xs text-ink-muted">({galeria.documentos.length})</span>
         </div>
         {galeria.documentos.length === 0 ? (
@@ -298,7 +299,7 @@ function ModalEnviarFoto({ osId, equipamentos, referenciaInicial, onFechar, onEn
     const f = e.target.files?.[0];
     e.target.value = "";
     if (!f) return;
-    if (!f.type.startsWith("image/")) { setErro("Escolha uma imagem (JPG, PNG, WEBP ou HEIC). Documento vai em “Adicionar documento”."); return; }
+    if (!f.type.startsWith("image/")) { setErro("Escolha uma imagem (JPG, PNG, WEBP ou HEIC). Anexo vai em “Adicionar anexo”."); return; }
     setLendo(true); setErro("");
     try {
       const { reduzirImagem, FOTO_GALERIA } = await import("@/lib/imagem-cliente");

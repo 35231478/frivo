@@ -113,8 +113,8 @@ describe("busca de itens do orçamento", () => {
   it("acha pelo código (número do produto / começo do código do serviço) e mostra o código", async () => {
     const { ItensTabela } = await import("@/components/orcamento/itens-tabela");
     const catalogo = [{ id: "s1", codigo: "LIMP01", nome: "Limpeza de Filtro", valorPadrao: 80 }, { id: "s2", codigo: "MANU01", nome: "Manutenção", valorPadrao: 350 }];
-    await renderizar(createElement(ItensTabela, { titulo: "Serviços", labelAdicionar: "Buscar serviço por nome ou código...", catalogo, itens: [], onChange: () => {} }));
-    const campo = $<HTMLInputElement>('input[placeholder="Buscar serviço por nome ou código..."]')!;
+    await renderizar(createElement(ItensTabela, { titulo: "Serviços", labelAdicionar: "Pesquisar serviço por nome ou código...", catalogo, itens: [], onChange: () => {} }));
+    const campo = $<HTMLInputElement>('input[placeholder="Pesquisar serviço por nome ou código..."]')!;
     await act(async () => {
       campo.focus();
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(campo, "limp01"); // só o código: o nome “Limpeza…” não contém “limp01”

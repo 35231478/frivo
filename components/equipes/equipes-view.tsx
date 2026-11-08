@@ -52,7 +52,7 @@ export function EquipesView({ aba, q, grupos, colaboradores, perfis, contagens, 
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary-50 rounded-lg"><UsersRound className="w-5 h-5 text-primary-600" /></div>
+          <div className="p-2 bg-surface-alt rounded-lg"><UsersRound className="w-5 h-5 text-ink-muted" /></div>
           <h1 className="page-title">Equipes</h1>
         </div>
         <div className="flex items-center gap-2">
@@ -91,8 +91,8 @@ export function EquipesView({ aba, q, grupos, colaboradores, perfis, contagens, 
           <CampoBusca
             valor={busca} onChange={setBusca} carregando={pendente} sugerir={sugerir}
             onEscolher={(s) => (s.href ? router.push(s.href) : setBusca(s.rotulo))}
-            placeholder={aba === "grupos" ? "Buscar equipe, líder ou membro…" : "Buscar colaborador ou cargo…"}
-            rotulo={aba === "grupos" ? "Buscar equipes" : "Buscar colaboradores"}
+            placeholder={aba === "grupos" ? "Pesquisar equipe, líder ou membro…" : "Pesquisar colaborador ou cargo…"}
+            rotulo={aba === "grupos" ? "Pesquisar equipes" : "Pesquisar colaboradores"}
           />
         </div>
         {aba !== "grupos" && perfis.length > 0 && (

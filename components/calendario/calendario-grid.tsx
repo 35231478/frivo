@@ -735,7 +735,7 @@ function CriarOsModal({
 
           <div>
             <label className="text-[11px] font-semibold text-ink-muted">Cliente *</label>
-            <BuscaSelect value={clienteId} onChange={setClienteId} options={opcoes.clientes} placeholder="Buscar cliente…" />
+            <BuscaSelect value={clienteId} onChange={setClienteId} options={opcoes.clientes} placeholder="Pesquisar cliente…" />
           </div>
 
           <div>

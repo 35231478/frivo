@@ -246,7 +246,7 @@ describe("editor do checklist do tipo", () => {
     await clicar($("[data-adicionar-item]"));
     await digitar($('input[name="item-3"]'), "Verificação do dreno e bandeja");
     await clicar($('input[name="obs-3"]'));
-    await clicar($('[aria-label="Remover item 2"]'));
+    await clicar($('[aria-label="Excluir item 2"]'));
     await clicar($("[data-salvar-checklist]"));
     expect(corpoSalvo()).toEqual({ itens: [
       { id: "i2", texto: "Medição de corrente", tipoResposta: "OK_ATENCAO_NA", pedirFoto: false, pedirObservacao: true },
@@ -274,7 +274,7 @@ describe("editor do checklist do tipo", () => {
   it("quem só visualiza: tudo travado, sem salvar/adicionar/remover", async () => {
     await montarChecklist(ATUAIS, false);
     expect(($('input[name="item-1"]') as HTMLInputElement).disabled).toBe(true);
-    expect([$("[data-salvar-checklist]"), $("[data-adicionar-item]"), $('[aria-label="Remover item 1"]')]).toEqual([null, null, null]);
+    expect([$("[data-salvar-checklist]"), $("[data-adicionar-item]"), $('[aria-label="Excluir item 1"]')]).toEqual([null, null, null]);
   });
 });
 

@@ -63,7 +63,7 @@ export function ContratoDocumentos({ contratoId, anexosIniciais }: ContratoDocum
   }
 
   async function remover(id: string) {
-    if (!(await confirmar({ mensagem: "Remover este documento?", perigo: true, confirmarTexto: "Remover" }))) return;
+    if (!(await confirmar({ mensagem: "Excluir este anexo?", perigo: true, confirmarTexto: "Excluir" }))) return;
     try {
       const res = await fetch(`/api/contratos/${contratoId}/anexos/${id}`, { method: "DELETE" });
       if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao remover."); return; }
@@ -118,7 +118,7 @@ export function ContratoDocumentos({ contratoId, anexosIniciais }: ContratoDocum
                 <button type="button" onClick={() => visualizar(a.id, a.tipo)} className="p-1 text-ink-muted hover:text-frivo-600 rounded" title="Visualizar/baixar">
                   <Eye className="w-3.5 h-3.5" />
                 </button>
-                <button type="button" onClick={() => remover(a.id)} className="p-1 text-ink-muted hover:text-atrasado rounded" title="Remover">
+                <button type="button" onClick={() => remover(a.id)} className="p-1 text-ink-muted hover:text-atrasado rounded" title="Excluir">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>

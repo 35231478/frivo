@@ -156,7 +156,7 @@ export function GavetaEquipamentos({ aberto, onFechar, clienteId, unidadeId, uni
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-subtle pointer-events-none" aria-hidden="true" />
                 <Input
                   autoFocus value={busca} onChange={(e) => setBusca(e.target.value)} className="pl-9"
-                  aria-label="Buscar equipamento" placeholder="Nome, marca, modelo, BTU/TR, TAG ou local"
+                  aria-label="Pesquisar equipamento" placeholder="Nome, marca, modelo, BTU/TR, TAG ou local"
                 />
               </div>
               {mostrarFiltroLocal && (

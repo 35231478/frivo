@@ -119,7 +119,7 @@ async function salvar() {
 describe("materiais e peças no construtor", () => {
   it("serviço com composição entra com o painel (kit explodido, pílulas, custo interno); tubo 3→5 ajusta a linha (+40); a peça vira linha de produto derivada; o payload leva o snapshot e não manda a peça", async () => {
     await montarForm();
-    await adicionar("Buscar serviço por nome ou código...", "Instalação split");
+    await adicionar("Pesquisar serviço por nome ou código...", "Instalação split");
     expect(chamadas.some((c) => c.url === "/api/orcamentos/materiais-padrao?servicoId=s1&clienteId=c1")).toBe(true);
     const painel = $("[data-materiais-linha]")!;
     expect(painel).not.toBeNull();
@@ -131,7 +131,7 @@ describe("materiais e peças no construtor", () => {
     // No padrão: linha vale a base (800); a peça já aparece como produto derivado (1 × 80)
     expect(campo(linhasServico()[0], "total").value).toBe("800,00");
     expect(linhasProduto().map((l) => [l.getAttribute("data-linha-derivada"), txt(l.querySelector("[data-peca-de]")), txt(l.querySelector("[data-campo='total']"))])).toEqual([["true", "Peça · Instalação split", "R$ 80,00"]]);
-    expect(linhasProduto()[0].querySelector("button[aria-label^='Remover']")).toBeNull();
+    expect(linhasProduto()[0].querySelector("button[aria-label^='Excluir']")).toBeNull();
     // Tubo 3 → 5: +2 × 20 = +40 na linha do serviço
     await digitar(materialQtd("tubo"), "5");
     expect($("[data-ajuste]")!.getAttribute("data-ajuste")).toBe("40");
@@ -153,7 +153,7 @@ describe("materiais e peças no construtor", () => {
 
   it("valor manual na linha (badge + Recalcular); 'tirar' material da composição = não usado (abate 60); avulso entra integral; serviço sem composição ganha o painel sob demanda", async () => {
     await montarForm();
-    await adicionar("Buscar serviço por nome ou código...", "Instalação split");
+    await adicionar("Pesquisar serviço por nome ou código...", "Instalação split");
     await digitar(materialQtd("tubo"), "5");
     // Total digitado na mão
     await digitar(campo(linhasServico()[0], "total"), "1000");
@@ -178,7 +178,7 @@ describe("materiais e peças no construtor", () => {
     await clicar($("[data-material='fita'] button[aria-label^='Tirar']"));
     expect($("[data-materiais-linha]")!.getAttribute("data-total-materiais")).toBe("4");
     // Serviço sem composição: nada é buscado; "+ Materiais e peças" abre o painel vazio
-    await adicionar("Buscar serviço por nome ou código...", "Limpeza");
+    await adicionar("Pesquisar serviço por nome ou código...", "Limpeza");
     expect(chamadas.filter((c) => c.url.includes("materiais-padrao?servicoId=")).map((c) => c.url)).toEqual(["/api/orcamentos/materiais-padrao?servicoId=s1&clienteId=c1"]);
     expect($$("[data-materiais-linha]")).toHaveLength(1);
     await clicar($("[data-adicionar-materiais]"));

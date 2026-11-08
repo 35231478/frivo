@@ -27,7 +27,7 @@ export default async function FilaDevolucaoPage() {
     <div className="space-y-6" data-fila-devolucao>
       {verEstoque && <Link href="/estoque" className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink"><ArrowLeft className="w-4 h-4" /> Estoque</Link>}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="p-2 bg-primary-50 rounded-lg"><PackageMinus className="w-5 h-5 text-primary-600" /></div>
+        <div className="p-2 bg-surface-alt rounded-lg"><PackageMinus className="w-5 h-5 text-ink-muted" /></div>
         <h1 className="page-title">A devolver</h1>
         <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full" data-total-fila>{fila.length}</span>
         <Dica rotulo="A devolver" texto="Material separado que sobrou depois do consumo informado, e material reservado de OS cancelada: volta ao estoque ao confirmar a devolução. A OS some daqui quando tudo voltou." />

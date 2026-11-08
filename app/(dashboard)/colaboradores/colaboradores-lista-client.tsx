@@ -82,7 +82,7 @@ export function ColaboradoresListaClient({ itens, total, filtros: f, opcoes, res
       {/* ── Cabeçalho ── */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <div className="p-2 bg-primary-50 rounded-lg hidden sm:block"><HardHat className="w-5 h-5 text-primary-600" /></div>
+          <div className="p-2 bg-surface-alt rounded-lg hidden sm:block"><HardHat className="w-5 h-5 text-ink-muted" /></div>
           <h1 className="page-title">Colaboradores</h1>
           <span data-total className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{total.toLocaleString("pt-BR")}</span>
           {pendente && <Loader2 className="w-4 h-4 text-primary-500 animate-spin" />}
@@ -119,7 +119,7 @@ export function ColaboradoresListaClient({ itens, total, filtros: f, opcoes, res
       {/* ── Busca + filtros ── */}
       <div className="bg-white border border-surface-border rounded-card p-3 sm:p-4 space-y-3">
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.4fr)_auto] gap-2 items-center">
-          <CampoBusca valor={busca} onChange={setBusca} carregando={pendente} sugerir={sugerir} onEscolher={(s) => s.href && roteador.push(s.href)} rotulo="Buscar colaborador" placeholder="Buscar nome, CPF, telefone, e-mail ou cargo…" />
+          <CampoBusca valor={busca} onChange={setBusca} carregando={pendente} sugerir={sugerir} onEscolher={(s) => s.href && roteador.push(s.href)} rotulo="Pesquisar colaborador" placeholder="Pesquisar nome, CPF, telefone, e-mail ou cargo…" />
           <button onClick={() => setFiltrosMobile((v) => !v)}
             className="lg:hidden w-full inline-flex items-center justify-center gap-1.5 text-sm font-medium text-primary-600 border border-surface-border rounded-lg py-2">
             <SlidersHorizontal className="w-4 h-4" />

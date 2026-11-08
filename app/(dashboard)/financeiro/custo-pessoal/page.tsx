@@ -52,7 +52,7 @@ export default async function CustoPessoalPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary-50 rounded-lg"><BadgeDollarSign className="w-5 h-5 text-primary-600" /></div>
+          <div className="p-2 bg-surface-alt rounded-lg"><BadgeDollarSign className="w-5 h-5 text-ink-muted" /></div>
           <div>
             <h1 className="page-title">Custo de pessoal</h1>
             <p className="page-subtitle first-letter:uppercase">{rotuloCompetencia(competencia, true)} · folha estimada com encargos e benefícios</p>

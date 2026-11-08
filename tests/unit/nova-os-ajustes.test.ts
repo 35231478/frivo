@@ -275,7 +275,7 @@ describe("vincular equipamento pela gaveta", () => {
     expect(txt($d('[data-opcao-equipamento="eqA"]'))).toContain("12.000 BTU/h");
     expect(txt($d('[data-opcao-equipamento="eqA"]'))).toContain("TAG AC-01");
 
-    const busca = $d<HTMLInputElement>("input[aria-label='Buscar equipamento']")!;
+    const busca = $d<HTMLInputElement>("input[aria-label='Pesquisar equipamento']")!;
     await digitar(busca, "ac-02");
     expect(opcoesGaveta()).toEqual(["eqB"]);
     await digitar(busca, "12000");
@@ -320,7 +320,7 @@ describe("vincular equipamento pela gaveta", () => {
 
     expect(escolhidosNaPagina()).toEqual(["eqB", "eqC"]);
     expect(txt($("[data-qtd-atendidos]"))).toBe("2 equipamentos selecionados");
-    expect(txt($("[data-vincular-equipamento]"))).toBe("Alterar equipamentos");
+    expect(txt($("[data-vincular-equipamento]"))).toBe("Editar equipamentos");
 
     await clicar($("[data-seletor-equipe] button"));
     await clicar($('[data-opcao-equipe="eq2"]'));

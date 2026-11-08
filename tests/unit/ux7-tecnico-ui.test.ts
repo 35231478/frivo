@@ -53,7 +53,7 @@ describe("Y10: miniatura de foto", () => {
     const removeu = vi.fn();
     await montar(createElement(Miniatura, { src: "data:image/jpeg;base64,Zm90bw==", alt: "foto 1", onRemover: removeu }));
     expect($('button[aria-label="Tirar foto 1"]')).toBeNull(); // "Tirar" soava como fotografar
-    const botao = $('button[aria-label="Remover foto 1"]');
+    const botao = $('button[aria-label="Excluir foto 1"]');
     expect(botao).not.toBeNull();
     expect(botao!.className).toContain("before:-inset"); // hitbox ampliada para o dedo
     await act(async () => { botao!.click(); });

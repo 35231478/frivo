@@ -370,9 +370,9 @@ describe("execução guiada", () => {
 
     // Remover: confirmação (sem host de avisos, cai no confirm do navegador); cancelar não remove
     const confirmar = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
-    await clicar($$("[data-foto-servico] button[aria-label^='Remover']")[0]);
+    await clicar($$("[data-foto-servico] button[aria-label^='Excluir']")[0]);
     expect((await fila()).map((o) => o.tipo)).toEqual(["iniciar", "fotoOs", "fotoOs"]);
-    await clicar($$("[data-foto-servico] button[aria-label^='Remover']")[0]);
+    await clicar($$("[data-foto-servico] button[aria-label^='Excluir']")[0]);
     await esperarAte(() => $$("[data-foto-servico]").length === 1, "foto removida");
     ops = await fila();
     expect(ops.at(-1)).toMatchObject({ tipo: "fotoOsRemover", dados: { clientId: f1.dados.clientId } });

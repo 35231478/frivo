@@ -182,7 +182,7 @@ export function EditorPedido({ pedido, ordemServicoId, orcamentoId, avulso, onSa
                 <Input inputMode="decimal" value={it.valorEstimado} onChange={(e) => patch(it._k, { valorEstimado: e.target.value, _auto: false })} placeholder="—" data-campo="valorEstimado" />
               </div>
               <div className="col-span-1 flex justify-center pb-1.5">
-                <button type="button" aria-label="Remover item" title="Remover item" onClick={() => setItens((l) => (l.length > 1 ? l.filter((x) => x._k !== it._k) : [novoItem()]))} className="p-1.5 text-ink-muted hover:text-atrasado">
+                <button type="button" aria-label="Excluir item" title="Excluir item" onClick={() => setItens((l) => (l.length > 1 ? l.filter((x) => x._k !== it._k) : [novoItem()]))} className="p-1.5 text-ink-muted hover:text-atrasado">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>

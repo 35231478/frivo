@@ -494,7 +494,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
       {statusAlvo && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => !salvandoStatus && setStatusAlvo(null)}>
           <div className="bg-white rounded-card shadow-card-hover w-full max-w-md p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-base font-bold text-ink">Alterar status para “{LABELS_STATUS_CONTRATO[statusAlvo] ?? statusAlvo}”?</h3>
+            <h3 className="text-base font-bold text-ink">Mudar status para “{LABELS_STATUS_CONTRATO[statusAlvo] ?? statusAlvo}”?</h3>
             <p className="text-sm text-ink-muted">{STATUS_OPCOES.find((o) => o.valor === statusAlvo)?.descricao}</p>
             <div>
               <label className="text-xs font-semibold text-ink">Motivo (opcional)</label>
@@ -519,7 +519,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
                   <button
                     type="button"
                     onClick={() => setStatusMenuOpen((o) => !o)}
-                    title="Alterar status do contrato"
+                    title="Mudar status do contrato"
                     className={cn("inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full transition-opacity hover:opacity-80", COR_STATUS_CONTRATO[statusVal] ?? "bg-surface-linha text-ink-muted")}
                   >
                     {LABELS_STATUS_CONTRATO[statusVal] ?? statusVal} <ChevronDown className="w-3 h-3" />
@@ -903,7 +903,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
 
               {podeCriarUnidade && (
                 <Button type="button" variant="secondary" onClick={() => setNovaUnidade(true)} className="w-full justify-center border-dashed">
-                  <Plus className="w-4 h-4" /> {unidades.length === 0 ? "Cadastrar endereço" : "Adicionar novo endereço"}
+                  <Plus className="w-4 h-4" /> Novo endereço
                 </Button>
               )}
               <CadastroRapidoModal

@@ -117,7 +117,7 @@ export default async function ClientesPage({
         {/* Busca ao vivo + filtros (mudam a URL; o servidor devolve a página nova) */}
         <div className="p-4 border-b border-surface-border flex flex-wrap items-center gap-2 bg-surface-alt/40">
           <div className="flex-1 min-w-[220px]">
-            <BuscaUrl lista="clientes" placeholder="Buscar por nome, fantasia ou CPF/CNPJ…" rotulo="Buscar clientes" />
+            <BuscaUrl lista="clientes" placeholder="Pesquisar por nome, fantasia ou CPF/CNPJ…" rotulo="Pesquisar clientes" />
           </div>
           <FiltroSelectUrl param="status" vazio="Status financeiro" opcoes={Object.entries(LABELS_STATUS_FINANCEIRO_CALC).map(([value, label]) => ({ value, label }))} />
           <FiltroSelectUrl param="segmento" vazio="Segmento" opcoes={Object.entries(LABELS_SEGMENTO).map(([value, label]) => ({ value, label }))} />

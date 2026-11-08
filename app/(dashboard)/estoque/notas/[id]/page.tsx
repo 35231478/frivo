@@ -53,7 +53,7 @@ export default async function NotaCompraPage({ params, searchParams }: { params:
       <div className="card p-4 sm:p-5" data-cabecalho-nota>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-start gap-3 min-w-0">
-            <div className="p-2 bg-primary-50 rounded-lg shrink-0"><FileText className="w-5 h-5 text-primary-600" /></div>
+            <div className="p-2 bg-surface-alt rounded-lg shrink-0"><FileText className="w-5 h-5 text-ink-muted" /></div>
             <div className="min-w-0">
               <h1 className="page-title">NF {nota.numero}/{nota.serie}</h1>
               <p className="text-sm text-ink">{nota.fornecedor.nome}</p>

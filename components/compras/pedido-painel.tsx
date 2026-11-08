@@ -95,7 +95,7 @@ export function PedidoPainel({ inicial, onMudou, compacto, semNumero }: {
   async function desvincular(nota: PedidoTela["notas"][number]) {
     if (!(await confirmar({
       titulo: `Desvincular a NF ${nota.numero}?`,
-      mensagem: `${pedido.numero} volta a esperar estes itens; o valor real desta NF sai deles (fica no histórico). A nota não muda.`,
+      mensagem: `${pedido.numero} volta a esperar estes itens; o valor desta NF sai deles (histórico). A nota não muda.`,
       confirmarTexto: "Desvincular", cancelarTexto: "Voltar", perigo: true,
     }))) return;
     setOcupado(`NF-${nota.notaId}`);

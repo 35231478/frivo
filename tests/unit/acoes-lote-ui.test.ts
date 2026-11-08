@@ -117,7 +117,7 @@ describe("Contas a Receber", () => {
     expect($("[data-menu-lote]")).toBeNull();
     await clicar($("[data-acoes-lote]"));
     expect($$("[data-menu-lote] [data-acao-lote]").map((b) => [b.getAttribute("data-acao-lote"), txt(b)])).toEqual([
-      ["baixar", "Dar como recebido"], ["vencimento", "Alterar vencimento"], ["cancelar", "Cancelar cobranças"],
+      ["baixar", "Dar como recebido"], ["vencimento", "Editar vencimento"], ["cancelar", "Cancelar cobranças"],
     ]);
     expect($("[data-acoes-lote]")!.getAttribute("aria-expanded")).toBe("true");
     await clicar($("[data-limpar-escolha]"));
