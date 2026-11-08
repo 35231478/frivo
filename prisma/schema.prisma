@@ -791,6 +791,7 @@ model Usuario {
   movimentacoesEstoque   MovimentacaoEstoque[]
   osMateriaisSeparados   OsMaterial[]          @relation("OsMaterialSeparadoPor")
   osMateriaisConsumidos  OsMaterial[]          @relation("OsMaterialConsumidoPor")
+  osMateriaisDevolvidos  OsMaterial[]          @relation("OsMaterialDevolvidoPor")
   notasCompra            NotaCompra[]
   checklistRespostas     ChecklistResposta[]
   fotosAtendimento       FotoAtendimento[]
@@ -2223,6 +2224,10 @@ model OsMaterial {
   quantidadeConsumida Decimal   @default(0) @map("quantidade_consumida") @db.Decimal(12, 3)
   consumidoEm         DateTime? @map("consumido_em")
   consumidoPorId      String?   @map("consumido_por_id")
+  /// E4.3 — devolução da sobra (estado DEVOLVIDO): quanto voltou ao estoque (DEVOLUCAO no razão), quem e quando.
+  quantidadeDevolvida Decimal   @default(0) @map("quantidade_devolvida") @db.Decimal(12, 3)
+  devolvidoEm         DateTime? @map("devolvido_em")
+  devolvidoPorId      String?   @map("devolvido_por_id")
 
   ordemServico OrdemServico     @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
   item         OsItemOrcamento  @relation("OsItemMateriais", fields: [osItemId], references: [id], onDelete: Cascade)
@@ -2230,6 +2235,7 @@ model OsMaterial {
   linhaProduto OsItemOrcamento? @relation("OsPecaDerivada")
   separadoPor  Usuario?         @relation("OsMaterialSeparadoPor", fields: [separadoPorId], references: [id], onDelete: SetNull)
   consumidoPor Usuario?         @relation("OsMaterialConsumidoPor", fields: [consumidoPorId], references: [id], onDelete: SetNull)
+  devolvidoPor Usuario?         @relation("OsMaterialDevolvidoPor", fields: [devolvidoPorId], references: [id], onDelete: SetNull)
 
   @@index([ordemServicoId])
   @@index([osItemId])

@@ -40,7 +40,7 @@ export async function GET(_: NextRequest, { params }: Params) {
         },
         orderBy: { criadoEm: "asc" },
       },
-      itensOrcamento: { orderBy: [{ ordem: "asc" }, { id: "asc" }], include: { materiais: { orderBy: { ordem: "asc" }, include: { separadoPor: { select: { nome: true } }, consumidoPor: { select: { nome: true } } } }, material: { select: { osItemId: true } } } },
+      itensOrcamento: { orderBy: [{ ordem: "asc" }, { id: "asc" }], include: { materiais: { orderBy: { ordem: "asc" }, include: { separadoPor: { select: { nome: true } }, consumidoPor: { select: { nome: true } }, devolvidoPor: { select: { nome: true } } } }, material: { select: { osItemId: true } } } },
       // Medições OFICIAIS em que a OS entrou (a medição interna OsMedicao saiu do sistema)
       medicaoItens: { select: { medicao: { select: { id: true, numero: true, status: true, valorTotal: true, criadoEm: true } } } },
       anexos: { select: { id: true, nome: true, tipo: true, tamanho: true, criadoEm: true }, orderBy: { criadoEm: "desc" } },

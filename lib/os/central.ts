@@ -1,7 +1,7 @@
 import { statusVisualReceber } from "@/lib/financeiro-status";
 import { atividadeEncerrada, situacaoPrazo, textoPrazo } from "@/lib/os/prazos";
 import { medicaoValida, resumoStatus, type EstagioOs } from "@/lib/os/status";
-import { semConsumoInformado, type MaterialSeparavel } from "@/lib/estoque/separacao";
+import { aDevolver, semConsumoInformado, type MaterialSeparavel } from "@/lib/estoque/separacao";
 
 /**
  * A "central de controle" da OS em dados: tudo o que o cabeçalho e o Resumo mostram para
@@ -102,6 +102,12 @@ export function centralDaOs(os: OsCentralEntrada, agora: Date = new Date()) {
     if (semConsumo) falta.push({
       chave: "consumo-material", aba: "materiais", nivel: os.exigirPrestacaoMaterial ? "alerta" : "acao",
       texto: `Informar o consumo de ${semConsumo} ${semConsumo > 1 ? "materiais separados" : "material separado"}${os.exigirPrestacaoMaterial ? " — a OS não conclui sem isso" : ""}`,
+    });
+    // E4.3: sobra separada sem devolução — com a amarra ligada, trava faturar/gerar medição (alerta); sem ela, só lembra
+    const aDev = (os.materiais ?? []).filter((m) => aDevolver(m, false) > 0).length;
+    if (aDev) falta.push({
+      chave: "devolucao-material", aba: "materiais", nivel: os.exigirPrestacaoMaterial ? "alerta" : "acao",
+      texto: `Devolver a sobra de ${aDev} ${aDev > 1 ? "materiais" : "material"} ao estoque${os.exigirPrestacaoMaterial ? " — a OS não fatura sem isso" : ""}`,
     });
     if (status.exibido === "CONCLUIDA") falta.push({ chave: "faturar", texto: "Gerar a medição para faturar a OS", aba: "financeiro", nivel: "acao" });
     if (pagamento === "VENCIDO") falta.push({ chave: "cobranca-vencida", texto: "Cobrança vencida — acompanhar o recebimento", aba: "financeiro", nivel: "alerta" });

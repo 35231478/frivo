@@ -5,6 +5,7 @@ import { criarMedicaoDeRelatorio } from "@/lib/financeiro-server";
 import { osJaFaturada } from "@/lib/faturamento-os";
 import { partesBR } from "@/lib/fuso";
 import { comNumero } from "@/lib/numeracao-server";
+import { respostaPortaoPrestacao } from "@/lib/estoque/devolucao-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -50,6 +51,9 @@ export async function POST(_: NextRequest, { params }: Params) {
   if (outra) {
     return NextResponse.json({ erro: `Esta OS já está na medição ${outra.numero}. Cancele-a antes de refaturar.` }, { status: 409 });
   }
+  // E4.3 — Portões 2/3
+  const portao = await respostaPortaoPrestacao(empresaId, id, "gerar a medição");
+  if (portao) return portao;
 
   const ref = partesBR(os.dataConclusao ?? new Date()); // mês/ano de Brasília
   // Sem contrato, o valor é o dos itens EXECUTADOS (não o orçado inteiro)

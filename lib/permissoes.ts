@@ -203,7 +203,7 @@ export function moduloDaRota(pathname: string): string | null {
   if (seg === "compras" && segs[1] === "pedidos" && segs.length === 3 && segs[2] !== "novo") return null;
   // Exceção (E4.1): a fila "A separar" e a tela de separação são de quem tem "Estoque › Separar material",
   // mesmo sem "Estoque › Visualizar" (o almoxarife que só separa) — a página confere a ação sozinha
-  if (seg === "estoque" && segs[1] === "separacao") return null;
+  if (seg === "estoque" && (segs[1] === "separacao" || segs[1] === "devolucao")) return null;
   return ROTA_MODULO[seg] ?? null;
 }
 

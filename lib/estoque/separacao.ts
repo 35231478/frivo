@@ -31,11 +31,16 @@ export interface MaterialSeparavel {
   quantidadeSeparada: number;
   /** E4.2: quanto saiu de verdade (vale com estado CONSUMIDO); ausente = 0 */
   quantidadeConsumida?: number;
+  /** E4.3: quanto voltou ao estoque (vale com estado DEVOLVIDO); ausente = 0 */
+  quantidadeDevolvida?: number;
+  /** E4.3: o consumo chegou a ser informado (mesmo que zero) — decide para onde "desfazer a devolução" volta */
+  consumoInformado?: boolean;
   estadoSeparacao: EstadoSeparacao | null;
 }
 
 const fechado = (m: Pick<MaterialSeparavel, "estadoSeparacao">) => m.estadoSeparacao === "CONSUMIDO" || m.estadoSeparacao === "DEVOLVIDO";
 const consumida = (m: MaterialSeparavel) => m.quantidadeConsumida ?? 0;
+const devolvida = (m: MaterialSeparavel) => m.quantidadeDevolvida ?? 0;
 
 /** Quanto ainda falta separar (0 quando não dá: sem produto, já consumido/devolvido, ou tudo separado). */
 export function faltaSeparar(m: MaterialSeparavel): number {
@@ -48,7 +53,18 @@ export const precisaSeparar = (m: MaterialSeparavel) => faltaSeparar(m) > 0;
 /** E4.2: a sobra separada que ainda não voltou ao estoque (separado − consumido, com o consumo já informado). A E4.3 devolve. */
 export function pendenteDevolucao(m: MaterialSeparavel): number {
   if (m.estadoSeparacao !== "CONSUMIDO") return 0;
-  return Math.max(0, arred(m.quantidadeSeparada - consumida(m)));
+  return Math.max(0, arred(m.quantidadeSeparada - consumida(m) - devolvida(m)));
+}
+
+/**
+ * E4.3: o que volta ao estoque nesta OS — a sobra pendente (consumo informado) ou, na OS CANCELADA, todo o material
+ * ainda só separado (reservado sem consumo): nada vai ser executado, o estoque precisa ser liberado.
+ */
+export function aDevolver(m: MaterialSeparavel, osCancelada: boolean): number {
+  if (!m.produtoId) return 0;
+  if (m.estadoSeparacao === "CONSUMIDO") return pendenteDevolucao(m);
+  if (osCancelada && m.estadoSeparacao === "SEPARADO") return Math.max(0, arred(m.quantidadeSeparada - devolvida(m)));
+  return 0;
 }
 
 export type SituacaoMaterial = "sem-produto" | "pendente" | "parcial" | "separado" | "consumido" | "devolvido";
@@ -83,14 +99,20 @@ export interface ResumoSeparacao {
   consumidos: number;
   /** E4.2: com sobra separada ainda reservada (a E4.3 devolve) */
   pendentesDevolucao: number;
+  /** E4.3: devolução feita */
+  devolvidos: number;
+  /** E4.3: materiais com algo a devolver nesta OS (sobra, ou reservado de OS cancelada) */
+  aDevolver: number;
   /** Há material separado sem consumo informado, ou sobra sem devolução — o gancho das amarras (E4.2/E4.3) */
   prestacaoPendente: boolean;
+  /** E4.3: material 100% prestado contas — todo consumo informado e nenhuma sobra pendente (nada mais a separar) */
+  prestado: boolean;
 }
 /** Material separado (de verdade) cujo consumo ainda não foi informado. */
 export const semConsumoInformado = (materiais: MaterialSeparavel[]) =>
   materiais.filter((m) => m.quantidade > 0 && !!m.produtoId && m.estadoSeparacao === "SEPARADO" && m.quantidadeSeparada > 0);
 
-export function resumoSeparacao(materiais: MaterialSeparavel[]): ResumoSeparacao {
+export function resumoSeparacao(materiais: MaterialSeparavel[], osCancelada = false): ResumoSeparacao {
   const fisicos = materiais.filter((m) => m.quantidade > 0);
   const comProduto = fisicos.filter((m) => m.produtoId);
   const sit = comProduto.map(situacaoDoMaterial);
@@ -99,12 +121,17 @@ export function resumoSeparacao(materiais: MaterialSeparavel[]): ResumoSeparacao
   const separados = sit.filter((s) => s === "separado").length;
   const aSeparar = comProduto.filter(precisaSeparar).length;
   const situacao: SituacaoSeparacao = comProduto.length === 0 ? "sem-material" : aSeparar === 0 ? "completa" : aSeparar < comProduto.length || parciais > 0 ? "parcial" : "pendente";
-  const consumoPendente = semConsumoInformado(materiais).length;
+  // OS cancelada: nada vai ser executado — não há consumo a informar; o que está reservado vai para a devolução
+  const consumoPendente = osCancelada ? 0 : semConsumoInformado(materiais).length;
   const pendentesDevolucao = materiais.filter((m) => pendenteDevolucao(m) > 0).length;
+  const devolvidos = sit.filter((s) => s === "devolvido").length;
+  const consumidos = sit.filter((s) => s === "consumido").length;
+  const aDev = materiais.filter((m) => aDevolver(m, osCancelada) > 0).length;
+  const prestacaoPendente = consumoPendente > 0 || aDev > 0;
   return {
     total: comProduto.length, aSeparar, pendentes, parciais, separados, semProduto: fisicos.length - comProduto.length, situacao,
-    consumoPendente, consumidos: sit.filter((s) => s === "consumido").length, pendentesDevolucao,
-    prestacaoPendente: consumoPendente > 0 || pendentesDevolucao > 0,
+    consumoPendente, consumidos, pendentesDevolucao, devolvidos, aDevolver: aDev, prestacaoPendente,
+    prestado: comProduto.length > 0 && !prestacaoPendente && consumidos + devolvidos === comProduto.length,
   };
 }
 
@@ -156,6 +183,46 @@ export function planoDesfazerConsumo(m: MaterialSeparavel): PlanoDesfazerConsumo
   return { ok: true, estornoSaida: c, reserva: arred(Math.min(c, m.quantidadeSeparada)), estado: m.quantidadeSeparada > 0 ? "SEPARADO" : null };
 }
 
+/* ───────── E4.3: devolução ───────── */
+export type PlanoDevolucao =
+  | { ok: true; /** DEVOLUCAO + no razão */ quantidade: number; quantidadeDevolvida: number }
+  | { ok: false; erro: string };
+
+/** Devolve TUDO o que há a devolver do material (a sobra, ou o reservado da OS cancelada). */
+export function planoDevolucao(m: MaterialSeparavel, osCancelada: boolean): PlanoDevolucao {
+  if (!m.produtoId) return { ok: false, erro: "Material sem produto no cadastro: não dá para devolver." };
+  if (m.estadoSeparacao === "DEVOLVIDO") return { ok: false, erro: "Devolução já feita: desfaça para devolver de novo." };
+  if (m.estadoSeparacao === "SEPARADO" && !osCancelada) return { ok: false, erro: "Informe o consumo antes: a sobra é o que ficou depois do consumo." };
+  const q = aDevolver(m, osCancelada);
+  if (!(q > 0)) return { ok: false, erro: "Nada a devolver." };
+  return { ok: true, quantidade: q, quantidadeDevolvida: arred(devolvida(m) + q) };
+}
+
+export type PlanoDesfazerDevolucao =
+  | { ok: true; /** DEVOLUCAO − no razão (estorno) */ quantidade: number; estado: EstadoSeparacao }
+  | { ok: false; erro: string };
+
+/** Desfazer a devolução: estorna a DEVOLUCAO inteira; o estado volta a CONSUMIDO (consumo informado) ou SEPARADO (OS cancelada). */
+export function planoDesfazerDevolucao(m: MaterialSeparavel): PlanoDesfazerDevolucao {
+  if (m.estadoSeparacao !== "DEVOLVIDO") return { ok: false, erro: "Devolução não feita: nada a desfazer." };
+  const q = devolvida(m);
+  if (!(q > 0)) return { ok: false, erro: "Devolução sem quantidade: nada a desfazer." };
+  return { ok: true, quantidade: q, estado: m.consumoInformado ? "CONSUMIDO" : "SEPARADO" };
+}
+
+/**
+ * Portões 2/3 (E4.3): o texto do que falta para o material estar 100% prestado contas — consumo não informado
+ * (Portão 1) e sobra não devolvida (Portão 2); null = nada falta. Na OS cancelada não há o que cobrar: null.
+ */
+export function textoPortaoPrestacao(materiais: MaterialSeparavel[]): string | null {
+  const partes: string[] = [];
+  const semConsumo = semConsumoInformado(materiais);
+  if (semConsumo.length) partes.push(`informar o consumo de ${semConsumo.map((m) => `${m.descricao} ${formatarQtd(m.quantidadeSeparada)} ${m.unidade}`).join(", ")}`);
+  const sobras = materiais.filter((m) => m.quantidade > 0 && aDevolver(m, false) > 0);
+  if (sobras.length) partes.push(`devolver ao estoque ${sobras.map((m) => `${m.descricao} ${formatarQtd(aDevolver(m, false))} ${m.unidade}`).join(", ")}`);
+  return partes.length ? `${partes.join(" e ")} — aba Materiais & Compras` : null;
+}
+
 /** Portão 1 (E4.2): o texto do que falta quando há material separado sem consumo informado; null = nada falta. */
 export function textoPortaoConsumo(materiais: MaterialSeparavel[]): string | null {
   const l = semConsumoInformado(materiais);
@@ -185,6 +252,10 @@ export type CorpoSeparacao = z.infer<typeof separacaoSchema>;
 /** POST /api/ordens/[id]/consumo — por material, quanto foi consumido de verdade */
 export const consumoSchema = corpoAlvos("Informe a quantidade consumida.");
 export type CorpoConsumo = z.infer<typeof consumoSchema>;
+/** POST /api/ordens/[id]/devolucao — os materiais a devolver (devolve tudo o que há a devolver de cada um) */
+export const devolucaoSchema = z.object({
+  materiais: z.array(z.string().trim().min(1, "Material inválido.").max(40, "Material inválido.")).min(1, "Informe ao menos um material.").max(200, "Materiais demais de uma vez."),
+}).strict();
 
 export function mensagemSeparacao(e: z.ZodError) {
   const i = e.issues[0];

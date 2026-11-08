@@ -9,6 +9,7 @@ import { avisosNfse, reconciliarEmpresa } from "@/lib/nfse/webhook-server";
 import { contarAtencaoFaturamento } from "@/lib/faturamento/painel-contratos-server";
 import { contarReajustesPendentes } from "@/lib/contratos/reajuste-server";
 import { contarFilaSeparacao } from "@/lib/estoque/separacao-server";
+import { contarFilaDevolucao } from "@/lib/estoque/devolucao-server";
 
 export async function GET() {
   const session = await auth();
@@ -36,7 +37,7 @@ export async function GET() {
 
   const zeroVeiculos = { checklistPendente: 0, checklistsComAlertas: 0, documentosVencendo: 0, veiculosManutencao: 0, revisaoChegando: 0 };
   const zeroNfse = { nfseAutorizadas: 0, nfseAutorizadaMedicaoId: null, nfseRejeitadas: 0, nfseRejeitadaMedicaoId: null, nfseAguardando: 0, nfseAguardandoMedicaoId: null };
-  const [prazosBrutos, veiculosBrutos, boletosPagos, orcamentosRespondidos, nfsDoPedido, nfse, faturamentoContratos, reajustesContrato, separacoesPendentes] = await Promise.all([
+  const [prazosBrutos, veiculosBrutos, boletosPagos, orcamentosRespondidos, nfsDoPedido, nfse, faturamentoContratos, reajustesContrato, separacoesPendentes, devolucoesPendentes] = await Promise.all([
     verOrdens || verCompras ? contarAlertasPrazos(empresaId) : Promise.resolve(null),
     verVeiculos ? contarAlertasVeiculos(empresaId) : Promise.resolve(null),
     verBoletos
@@ -60,6 +61,8 @@ export async function GET() {
     editarContratos ? contarReajustesPendentes(empresaId) : Promise.resolve(0),
     // E4.1: OS viva com material ainda não separado (fila "A separar") — só para quem tem Estoque › Separar material
     separaMaterial ? contarFilaSeparacao(empresaId) : Promise.resolve(0),
+    // E4.3: OS com sobra separada a devolver (ou cancelada com material reservado) — mesma permissão
+    separaMaterial ? contarFilaDevolucao(empresaId) : Promise.resolve(0),
   ]);
 
   const prazos = {
@@ -85,6 +88,7 @@ export async function GET() {
     faturamentoContratos,
     reajustesContrato,
     separacoesPendentes,
-    total: totalPrazos + totalVeiculos + boletosPagos + orcamentosRespondidos + nfsDoPedido.length + nfse.nfseAutorizadas + nfse.nfseRejeitadas + nfse.nfseAguardando + faturamentoContratos + reajustesContrato + separacoesPendentes,
+    devolucoesPendentes,
+    total: totalPrazos + totalVeiculos + boletosPagos + orcamentosRespondidos + nfsDoPedido.length + nfse.nfseAutorizadas + nfse.nfseRejeitadas + nfse.nfseAguardando + faturamentoContratos + reajustesContrato + separacoesPendentes + devolucoesPendentes,
   });
 }

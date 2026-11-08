@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { itensFaturaveisDaOs, osJaFaturada, travarParaFaturar } from "@/lib/faturamento-os";
 import { partesBR } from "@/lib/fuso";
 import { proximoNumero } from "@/lib/numeracao-server";
+import { respostaPortaoPrestacao } from "@/lib/estoque/devolucao-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -35,6 +36,9 @@ export async function POST(_: NextRequest, { params }: Params) {
   if (existente) {
     return NextResponse.json({ id: existente.id, jaExistia: true });
   }
+  // E4.3 — Portões 2/3: material 100% prestado contas (consumo informado e sobra devolvida) quando a empresa exige
+  const portao = await respostaPortaoPrestacao(empresaId, id, "gerar a medição");
+  if (portao) return portao;
 
   const { itens, adicionais } = await itensFaturaveisDaOs(id);
   if (itens.length === 0 && adicionais.length === 0) {
