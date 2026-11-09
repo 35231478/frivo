@@ -1,7 +1,7 @@
 import {
   Boxes, Building2, Clock, Cog, FileBadge, FileSignature, FileSpreadsheet, Headset, IdCard, Landmark, ListChecks, Mail, Package, Printer, QrCode, ScrollText, ShieldCheck, Tags,
   Target, Thermometer, UserCog, Wallet, Wrench, type LucideIcon,
-  Hash,
+  Hash, CaseSensitive,
 } from "lucide-react";
 import { moduloDaRota, pode, type Acao, type Permissoes } from "@/lib/permissoes";
 
@@ -129,6 +129,12 @@ export const SECOES_CONFIGURACOES: SecaoConfig[] = [
           { id: "email", href: "/configuracoes/email", icone: Mail, label: "E-mail transacional", dica: "Envio de e-mails automáticos (remetente e modelos)" },
           { id: "portal", href: "/configuracoes/portal", icone: Headset, label: "Portal do cliente", dica: "Tipos de problema, aparência e mensagem do portal" },
           { id: "qr-code", href: "/configuracoes/qr-code", icone: QrCode, label: "QR Code", dica: "Página pública aberta pelo QR dos equipamentos" },
+        ],
+      },
+      {
+        titulo: "Manutenção de dados",
+        itens: [
+          { id: "padronizacao", href: "/configuracoes", modulo: "configuracoes", acao: "gerenciar", icone: CaseSensitive, label: "Padronização de digitação", dica: "Padroniza nomes, e-mails e endereços dos cadastros em maiúsculas e minúsculas" },
         ],
       },
     ],

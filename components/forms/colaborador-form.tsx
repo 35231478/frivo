@@ -282,7 +282,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
               </FormField>
               <FormGrid>
                 <FormField label="Nome completo" required error={errors.nome?.message}>
-                  <Input {...register("nome")} error={!!errors.nome} />
+                  <Input {...register("nome")} caixa="nome" error={!!errors.nome} />
                 </FormField>
                 <FormField label="CPF" required error={errors.cpf?.message}>
                   <Input {...register("cpf")} placeholder="000.000.000-00" error={!!errors.cpf} />
@@ -296,7 +296,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
                   <Controller name="dataNascimento" control={control} render={({ field }) => <InputData value={(field.value as string) ?? ""} onChange={field.onChange} aria-label="Data de nascimento" />} />
                 </FormField>
                 <FormField label="E-mail" error={errors.email?.message}>
-                  <Input {...register("email")} type="email" placeholder="colaborador@empresa.com.br" error={!!errors.email} />
+                  <Input {...register("email")} caixa="email" type="email" placeholder="colaborador@empresa.com.br" error={!!errors.email} />
                 </FormField>
               </FormGrid>
               <FormGrid cols={3}>
@@ -315,15 +315,15 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
             <FormSection title="Endereço">
               <FormGrid cols={3}>
                 <FormField label="CEP"><Input {...register("cep")} placeholder="00000-000" /></FormField>
-                <FormField label="Logradouro" className="sm:col-span-2"><Input {...register("endereco")} placeholder="Rua, avenida…" /></FormField>
+                <FormField label="Logradouro" className="sm:col-span-2"><Input {...register("endereco")} caixa="endereco" placeholder="Rua, avenida…" /></FormField>
               </FormGrid>
               <FormGrid cols={3}>
                 <FormField label="Número"><Input {...register("numero")} /></FormField>
                 <FormField label="Complemento"><Input {...register("complemento")} /></FormField>
-                <FormField label="Bairro"><Input {...register("bairro")} /></FormField>
+                <FormField label="Bairro"><Input {...register("bairro")} caixa="endereco" /></FormField>
               </FormGrid>
               <FormGrid>
-                <FormField label="Cidade"><Input {...register("cidade")} /></FormField>
+                <FormField label="Cidade"><Input {...register("cidade")} caixa="cidade" /></FormField>
                 <FormField label="Estado"><Input {...register("estado")} placeholder="UF" maxLength={2} /></FormField>
               </FormGrid>
             </FormSection>

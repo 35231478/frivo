@@ -523,7 +523,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
           <FormGrid>
             <FormField label={tipoPessoa === "FISICA" ? "Nome completo" : "Razão social"} required error={errors.nome?.message}>
               <div className="relative">
-                <Input {...register("nome")} error={!!errors.nome} valido={!errors.nome && razaoSocialBloqueada} readOnly={razaoSocialBloqueada} className={razaoSocialBloqueada ? "bg-surface-linha text-ink-muted pr-20" : ""} />
+                <Input {...register("nome")} caixa="nome" error={!!errors.nome} valido={!errors.nome && razaoSocialBloqueada} readOnly={razaoSocialBloqueada} className={razaoSocialBloqueada ? "bg-surface-linha text-ink-muted pr-20" : ""} />
                 {razaoSocialBloqueada && (
                   <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                     <Lock className="w-3.5 h-3.5 text-ink-muted" />
@@ -535,7 +535,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
               </div>
             </FormField>
             <FormField label={tipoPessoa === "FISICA" ? "Apelido" : "Nome fantasia"}>
-              <Input {...register("nomeFantasia")} />
+              <Input {...register("nomeFantasia")} caixa="nome" />
             </FormField>
           </FormGrid>
           {tipoPessoa === "JURIDICA" && (

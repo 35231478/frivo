@@ -18,6 +18,7 @@ import {
   TipoComunicacao, CanalComunicacao,
 } from "@prisma/client";
 import { anoBR, mesBR } from "@/lib/fuso";
+import { caixaNome, caixaEmail, caixaLivre } from "@/lib/texto/zod";
 
 const valorOpcional = z.preprocess(
   (v) =>
@@ -80,12 +81,12 @@ export const chamadoPortalSchema = z.object({
 });
 
 export const contatoClienteSchema = z.object({
-  nome: z.string().min(2, "Nome do contato é obrigatório"),
-  cargo: z.string().optional(),
+  nome: z.string().min(2, "Nome do contato é obrigatório").transform(caixaNome),
+  cargo: z.string().optional().transform(caixaNome),
   tipo: z.nativeEnum(TipoContato).default(TipoContato.OUTRO),
   telefone: z.string().optional(),
   whatsapp: z.string().optional(),
-  email: z.string().email("E-mail inválido").optional().or(z.literal("")),
+  email: z.string().trim().email("E-mail inválido").optional().or(z.literal("")).transform(caixaEmail),
   principal: z.boolean().default(false),
 });
 
@@ -107,8 +108,8 @@ export const interacaoClienteSchema = z.object({
 
 export const clienteSchema = z.object({
   tipoPessoa: z.nativeEnum(TipoPessoa),
-  nome: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-  nomeFantasia: z.string().optional(),
+  nome: z.string().min(2, "Nome deve ter pelo menos 2 caracteres").transform(caixaNome),
+  nomeFantasia: z.string().optional().transform(caixaNome),
   cpfCnpj: z.string().min(11, "CPF/CNPJ inválido"),
   inscricaoEstadual: z.string().optional(),
   segmento: z.nativeEnum(Segmento).optional().nullable(),
@@ -116,20 +117,20 @@ export const clienteSchema = z.object({
   statusFinanceiro: z.nativeEnum(StatusFinanceiro).default(StatusFinanceiro.ADIMPLENTE),
   ativo: z.boolean().default(true),
   satisfacao: z.number().min(1).max(5).optional().nullable(),
-  email: z.string().email("E-mail inválido").optional().or(z.literal("")),
+  email: z.string().trim().email("E-mail inválido").optional().or(z.literal("")).transform(caixaEmail),
   telefone: z.string().optional(),
   celular: z.string().optional(),
-  contato: z.string().optional(),
+  contato: z.string().optional().transform(caixaNome),
   artNumero: z.string().optional(),
   responsavelTecnicoId: z.string().optional(),
-  endereco: z.string().optional(),
+  endereco: z.string().optional().transform(caixaNome),
   numero: z.string().optional(),
-  complemento: z.string().optional(),
-  bairro: z.string().optional(),
-  cidade: z.string().optional(),
+  complemento: z.string().optional().transform(caixaNome),
+  bairro: z.string().optional().transform(caixaNome),
+  cidade: z.string().optional().transform(caixaNome),
   estado: z.string().optional(),
   cep: z.string().optional(),
-  observacoes: z.string().optional(),
+  observacoes: z.string().optional().transform(caixaLivre),
   // Perfil de faturamento
   tipoFaturamento: z.preprocess(
     (v) => (v === "" || v == null ? null : v),
@@ -162,19 +163,19 @@ export const clienteSchema = z.object({
 
 export const unidadeSchema = z.object({
   clienteId: z.string().min(1, "Cliente é obrigatório"),
-  nome: z.string().min(1, "Nome da unidade é obrigatório"),
+  nome: z.string().min(1, "Nome da unidade é obrigatório").transform(caixaNome),
   principal: z.boolean().default(false),
-  logradouro: z.string().optional(),
+  logradouro: z.string().optional().transform(caixaNome),
   numero: z.string().optional(),
-  complemento: z.string().optional(),
-  bairro: z.string().optional(),
-  cidade: z.string().optional(),
+  complemento: z.string().optional().transform(caixaNome),
+  bairro: z.string().optional().transform(caixaNome),
+  cidade: z.string().optional().transform(caixaNome),
   estado: z.string().optional(),
   cep: z.string().optional(),
   latitude: z.number().optional().nullable(),
   longitude: z.number().optional().nullable(),
   telefone: z.string().optional(),
-  observacoes: z.string().optional(),
+  observacoes: z.string().optional().transform(caixaLivre),
 });
 
 /** Tipo de equipamento (cadastro de configuração / cadastro rápido). */
@@ -335,20 +336,20 @@ const documentoColaboradorSchema = z.object({
 // Colaborador (antigo "Técnico") — cadastro completo em abas
 export const tecnicoSchema = z.object({
   // Dados pessoais
-  nome: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+  nome: z.string().min(2, "Nome deve ter pelo menos 2 caracteres").transform(caixaNome),
   cpf: z.string().min(11, "CPF inválido"),
   rg: z.string().optional(),
   dataNascimento: z.string().optional().nullable(),
-  email: z.string().email("E-mail inválido").optional().or(z.literal("")),
+  email: z.string().trim().email("E-mail inválido").optional().or(z.literal("")).transform(caixaEmail),
   telefone: z.string().min(8, "Telefone inválido"),
   celular: z.string().optional(),
   whatsapp: z.string().optional(),
   avatar: z.string().optional(),
-  endereco: z.string().optional(),
+  endereco: z.string().optional().transform(caixaNome),
   numero: z.string().optional(),
-  complemento: z.string().optional(),
-  bairro: z.string().optional(),
-  cidade: z.string().optional(),
+  complemento: z.string().optional().transform(caixaNome),
+  bairro: z.string().optional().transform(caixaNome),
+  cidade: z.string().optional().transform(caixaNome),
   estado: z.string().optional(),
   cep: z.string().optional(),
   // Dados profissionais
@@ -370,7 +371,7 @@ export const tecnicoSchema = z.object({
   especialidades: z.array(z.string()).default([]),
   // Documentos
   documentos: z.array(documentoColaboradorSchema).default([]),
-  observacoes: z.string().optional(),
+  observacoes: z.string().optional().transform(caixaLivre),
 });
 
 // ─────────────────────────────────────────────
@@ -423,7 +424,7 @@ export const veiculoManutencaoSchema = z.object({
 // ─────────────────────────────────────────────
 
 export const equipeSchema = z.object({
-  nome: z.string().min(1, "Nome é obrigatório"),
+  nome: z.string().min(1, "Nome é obrigatório").transform(caixaNome),
   cor: z.string().default("#0EA5E9"),
   liderId: z.string().optional().nullable(),
   membroIds: z.array(z.string()).default([]),
@@ -434,7 +435,7 @@ export const equipeSchema = z.object({
   /** Obrigatório para DESVINCULAR veículos que já estavam na equipe (senão 409 com a lista). */
   confirmarDesvinculo: z.boolean().optional(),
   status: z.nativeEnum(StatusEquipe).default(StatusEquipe.ATIVA),
-  observacoes: z.string().optional(),
+  observacoes: z.string().optional().transform(caixaLivre),
 });
 
 // ─────────────────────────────────────────────
