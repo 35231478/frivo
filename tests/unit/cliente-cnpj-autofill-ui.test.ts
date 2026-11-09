@@ -22,7 +22,7 @@ let root: Root; let caixa: HTMLDivElement;
 const flush = async () => { for (let i = 0; i < 8; i++) await act(async () => { await new Promise((r) => setTimeout(r, 0)); }); };
 const $ = <T extends Element = HTMLElement>(sel: string) => caixa.querySelector(sel) as T | null;
 const $$ = (sel: string) => [...caixa.querySelectorAll(sel)] as HTMLElement[];
-async function clicar(el: Element | null) { expect(el).toBeTruthy(); await act(async () => { (el as HTMLElement).click(); }); await flush(); }
+async function clicar(el: Element | null | undefined) { expect(el).toBeTruthy(); await act(async () => { (el as HTMLElement).click(); }); await flush(); }
 async function digitar(el: Element | null, v: string) {
   expect(el).toBeTruthy();
   await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(el, v); el!.dispatchEvent(new Event("input", { bubbles: true })); });
