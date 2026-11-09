@@ -82,9 +82,11 @@ describe("Autofill do CNPJ no cliente novo", () => {
     const botaoContato = $$("button").find((b) => b.textContent === "Termofrio Engenharia Ltda" || /Termofrio Engenharia Ltda/.test(b.textContent ?? ""));
     // o e-mail está no estado do contato; o card colapsado mostra o nome + selo Principal
     expect(botaoContato).toBeTruthy();
-    // aviso da Receita Federal agora é discreto (junto ao CNPJ), sem o painel antigo
-    expect(caixa.querySelector("[data-cnpj-encontrado]")).toBeTruthy();
+    // consulta silenciosa: sem aviso de sucesso, sem linha verde da Receita Federal, sem dica sob o CNPJ
+    expect(caixa.querySelector("[data-cnpj-encontrado]")).toBeFalsy();
     expect(corpo).not.toContain("Dados encontrados na Receita Federal");
+    expect(corpo).not.toContain("Receita Federal:");
+    expect(corpo).not.toContain("clique em Consultar para preencher");
     // status financeiro só no cabeçalho — não repete numa seção de Dados gerais
     expect(corpo).not.toContain("Calculado automaticamente pelas contas a receber");
   });

@@ -42,8 +42,10 @@ básicos sem poluir.
 Afinação da seção Identificação:
 - O **status financeiro** fica **só no cabeçalho** (selo ao lado do nome) — não se repete numa
   linha no corpo da seção.
-- O aviso **"Dados encontrados na Receita Federal"** deixou de ser um painel: virou uma linha
-  **discreta em verde** logo **acima** do campo de CNPJ (`data-cnpj-encontrado`), sem ocupar espaço.
+- A consulta de CNPJ preenche **em silêncio**: sem aviso de sucesso (toast), sem linha verde de
+  confirmação e sem dica sob o campo. Só **erros** da consulta aparecem (CNPJ inválido / não
+  encontrado / serviço indisponível / timeout). O campo apenas ganha o estado **válido** (borda) ao
+  encontrar o CNPJ.
 - **Endereços em caixas (acordeão), não cartões:** cada endereço é uma **caixa arredondada com fundo
   suave** (`bg-frivo-50`) — só o nome em negrito e o selo **Principal** no cabeçalho, com uma seta que
   gira ao abrir. Clicar **expande pra baixo** (painel branco) para ver todos os dados do endereço —

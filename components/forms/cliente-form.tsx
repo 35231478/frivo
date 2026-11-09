@@ -219,8 +219,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
         if (re.preencheu) setUnidadesNovas(re.unidades);
         const rc = mesclarContato<ContatoLocal>(contatosNovos, contato, nomeCli, novoContatoLocal);
         if (rc.contatos !== contatosNovos) setContatosNovos(rc.contatos);
-        const partes = [re.preencheu && "endereço", rc.adicionou && "contato"].filter(Boolean);
-        if (partes.length) toast(`Consulta preencheu ${partes.join(" e ")} do cliente.`);
+        // Preenchimento silencioso: o endereço/contato aparecem na própria seção (sem aviso de sucesso).
       } else {
         // Edição: vira sugestão para os managers (o nonce abre o formulário já preenchido ao adicionar).
         setSugestaoEndereco(end);
@@ -494,15 +493,8 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
                 <option value="FISICA">Pessoa física</option>
               </Select>
             </FormField>
-            <FormField label={tipoPessoa === "FISICA" ? "CPF" : "CNPJ"} required error={errors.cpfCnpj?.message} hint={tipoPessoa === "JURIDICA" && !cnpjInfo ? "Informe o CNPJ e clique em Consultar para preencher automaticamente." : undefined}>
+            <FormField label={tipoPessoa === "FISICA" ? "CPF" : "CNPJ"} required error={errors.cpfCnpj?.message}>
               <div>
-                {/* Confirmação discreta da consulta, logo acima do campo (sem o painel antigo) */}
-                {cnpjInfo?.nome && (
-                  <p className="flex items-center gap-1 text-xs text-ok-texto mb-1 animate-in fade-in" data-cnpj-encontrado>
-                    <FileCheck className="w-3.5 h-3.5 shrink-0" />
-                    <span className="truncate">Receita Federal: {cnpjInfo.nome}{(cnpjInfo.cidade || cnpjInfo.estado) ? ` — ${[cnpjInfo.cidade, cnpjInfo.estado].filter(Boolean).join("/")}` : ""}</span>
-                  </p>
-                )}
                 <div className="flex gap-2">
                   <Input {...register("cpfCnpj")} placeholder={tipoPessoa === "FISICA" ? "000.000.000-00" : "00.000.000/0001-00"} error={!!errors.cpfCnpj} valido={!errors.cpfCnpj && !!cnpjInfo} className="flex-1" />
                   {tipoPessoa === "JURIDICA" && (
