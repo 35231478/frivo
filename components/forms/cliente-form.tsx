@@ -26,7 +26,6 @@ import { PortalContatos } from "@/components/forms/portal-contatos";
 import { InteracoesManager } from "@/components/forms/interacoes-manager";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
-import { formatarMoeda } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import {
   LABELS_STATUS_FINANCEIRO_CALC, COR_STATUS_FINANCEIRO_CALC, type StatusFinanceiroCalc,
@@ -36,9 +35,9 @@ import { SeletorCadastro, useCadastro } from "@/components/cadastros/seletor-cad
 import type { Cliente, Tecnico, Unidade, Configuracao, ContatoCliente } from "@prisma/client";
 import type { ContatoSeguro } from "@/lib/contato-cliente";
 import {
-  Search, Loader2, FileCheck, Lock, Pencil, X, AlertCircle,
+  Search, Loader2, FileCheck, Lock, Pencil, AlertCircle,
   FileText, MapPin, Heart, Headset,
-  Building2, DollarSign, Users, Paperclip, Star, MessageSquare, Globe, ArrowUpRight, Send, FileSignature,
+  Building2, DollarSign, Users, Paperclip, Star, MessageSquare, Globe, Send, FileSignature,
   ClipboardPlus, Calculator,
 } from "lucide-react";
 import { AlertaPerdasCliente, type PerdasCliente } from "@/components/financeiro/alerta-perdas-cliente";
@@ -78,7 +77,7 @@ function Painel({ ativo, children }: { ativo: boolean; children: React.ReactNode
   return <div className={cn("space-y-8", !ativo && "hidden")}>{children}</div>;
 }
 
-export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30Dias, perdas12m }: ClienteFormProps) {
+export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: ClienteFormProps) {
   const router = useRouter();
   const isEditing = !!initialData;
   // RBAC (o servidor também valida): sem permissão de salvar, a ficha abre somente leitura.
@@ -90,7 +89,6 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
   const podeNovaOs = pode("ordens", "criar");
   const podeNovoOrcamento = pode("orcamentos", "criar");
   const statusCalc: StatusFinanceiroCalc = statusFinanceiroCalc ?? "SEM_HISTORICO";
-  const totalProx = totalProximos30Dias ?? 0;
   const qtdContratosAtivos = initialData?._count?.contratos ?? 0;
   const [erroGlobal, setErroGlobal] = useState("");
   const [buscandoCnpj, setBuscandoCnpj] = useState(false);
@@ -496,33 +494,27 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
                 <option value="FISICA">Pessoa física</option>
               </Select>
             </FormField>
-            <FormField label={tipoPessoa === "FISICA" ? "CPF" : "CNPJ"} required error={errors.cpfCnpj?.message} hint={tipoPessoa === "JURIDICA" ? "Informe o CNPJ e clique em Consultar para preencher automaticamente." : undefined}>
-              <div className="flex gap-2">
-                <Input {...register("cpfCnpj")} placeholder={tipoPessoa === "FISICA" ? "000.000.000-00" : "00.000.000/0001-00"} error={!!errors.cpfCnpj} valido={!errors.cpfCnpj && !!cnpjInfo} className="flex-1" />
-                {tipoPessoa === "JURIDICA" && (
-                  <Button type="button" variant="secondary" loading={buscandoCnpj} onClick={buscarCnpj} className="shrink-0">
-                    {!buscandoCnpj && <Search className="w-4 h-4" />}
-                    <span className="hidden sm:inline ml-1">Consultar</span>
-                  </Button>
+            <FormField label={tipoPessoa === "FISICA" ? "CPF" : "CNPJ"} required error={errors.cpfCnpj?.message} hint={tipoPessoa === "JURIDICA" && !cnpjInfo ? "Informe o CNPJ e clique em Consultar para preencher automaticamente." : undefined}>
+              <div>
+                {/* Confirmação discreta da consulta, logo acima do campo (sem o painel antigo) */}
+                {cnpjInfo?.nome && (
+                  <p className="flex items-center gap-1 text-xs text-ok-texto mb-1 animate-in fade-in" data-cnpj-encontrado>
+                    <FileCheck className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">Receita Federal: {cnpjInfo.nome}{(cnpjInfo.cidade || cnpjInfo.estado) ? ` — ${[cnpjInfo.cidade, cnpjInfo.estado].filter(Boolean).join("/")}` : ""}</span>
+                  </p>
                 )}
+                <div className="flex gap-2">
+                  <Input {...register("cpfCnpj")} placeholder={tipoPessoa === "FISICA" ? "000.000.000-00" : "00.000.000/0001-00"} error={!!errors.cpfCnpj} valido={!errors.cpfCnpj && !!cnpjInfo} className="flex-1" />
+                  {tipoPessoa === "JURIDICA" && (
+                    <Button type="button" variant="secondary" loading={buscandoCnpj} onClick={buscarCnpj} className="shrink-0">
+                      {!buscandoCnpj && <Search className="w-4 h-4" />}
+                      <span className="hidden sm:inline ml-1">Consultar</span>
+                    </Button>
+                  )}
+                </div>
               </div>
             </FormField>
           </FormGrid>
-          {cnpjInfo && cnpjInfo.nome && (
-            <div className="flex items-start gap-3 bg-surface-alt border border-surface-border rounded-card px-4 py-3 animate-in fade-in">
-              <FileCheck className="w-5 h-5 text-ok-texto shrink-0 mt-0.5" />
-              <div className="text-sm min-w-0">
-                <p className="font-medium text-ink">Dados encontrados na Receita Federal</p>
-                <p className="text-ink-muted truncate">
-                  {cnpjInfo.nome}
-                  {(cnpjInfo.cidade || cnpjInfo.estado) && ` — ${[cnpjInfo.cidade, cnpjInfo.estado].filter(Boolean).join("/")}`}
-                </p>
-              </div>
-              <button type="button" onClick={() => setCnpjInfo(null)} className="ml-auto text-success-600 hover:text-success-800 shrink-0">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          )}
           <FormGrid>
             <FormField label={tipoPessoa === "FISICA" ? "Nome completo" : "Razão social"} required error={errors.nome?.message}>
               <div className="relative">
@@ -546,24 +538,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
               <FormField label="Inscrição estadual"><Input {...register("inscricaoEstadual")} placeholder="Isento ou número" /></FormField>
             </FormGrid>
           )}
-          <FormGrid>
-            <FormField label="Status financeiro" hint="Calculado automaticamente pelas contas a receber">
-              <div className="flex flex-col gap-1.5 pt-1.5">
-                <span className={cn("inline-flex w-fit items-center text-xs font-semibold px-2.5 py-1 rounded-full", COR_STATUS_FINANCEIRO_CALC[statusCalc])}>
-                  {LABELS_STATUS_FINANCEIRO_CALC[statusCalc]}
-                </span>
-                {isEditing && statusCalc !== "SEM_HISTORICO" && totalProx > 0 && (
-                  <Link
-                    href={`/financeiro/contas-receber?clienteId=${initialData!.id}&periodo=todos`}
-                    className="inline-flex w-fit items-center gap-1 text-xs text-ink-muted hover:text-primary-600 transition-colors"
-                  >
-                    A receber (30 dias): {formatarMoeda(totalProx)}
-                    <ArrowUpRight className="w-3 h-3" />
-                  </Link>
-                )}
-              </div>
-            </FormField>
-          </FormGrid>
+          {/* Status financeiro fica só no cabeçalho (selo ao lado do nome) — não repete aqui embaixo. */}
         </FormSection>
 
         {/* Endereços — logo abaixo da identificação (o Consultar preenche os dois juntos) */}

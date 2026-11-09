@@ -39,6 +39,12 @@ Quatro seções (`FormSection`, cabeçalho em maiúsculas com ícone), nesta ord
 A logo ganhou uma variante `compacto` (preview menor, dica inline) para caber ao lado dos dados
 básicos sem poluir.
 
+Afinação da seção Identificação:
+- O **status financeiro** fica **só no cabeçalho** (selo ao lado do nome) — não se repete numa
+  linha no corpo da seção.
+- O aviso **"Dados encontrados na Receita Federal"** deixou de ser um painel: virou uma linha
+  **discreta em verde** logo **acima** do campo de CNPJ (`data-cnpj-encontrado`), sem ocupar espaço.
+
 ## Testes
 
 - `autofill-cnpj` (função pura): cria principal quando vazio; preenche só os vazios quando já existe
