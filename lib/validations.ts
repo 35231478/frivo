@@ -131,21 +131,10 @@ export const clienteSchema = z.object({
   estado: z.string().optional(),
   cep: z.string().optional(),
   observacoes: z.string().optional().transform(caixaLivre),
-  // Perfil de faturamento
-  tipoFaturamento: z.preprocess(
-    (v) => (v === "" || v == null ? null : v),
-    z.nativeEnum(PerfilFaturamento).nullable()
-  ).default(null),
-  diaFaturamento: z.preprocess(
-    (v) => (v === "" || v == null ? 1 : Number(v)),
-    z.number().min(1).max(28)
-  ).default(1),
-  condicaoPagamento: z.string().optional().nullable(),
-  exigePcAntesNf: z.boolean().default(false),
-  agrupaAdicionais: z.boolean().default(false),
-  boletoUnicoMensal: z.boolean().default(false),
-  emailsFaturamento: z.array(z.string()).default([]),
-  whatsappFaturamento: z.string().optional().nullable(),
+  // Perfil de faturamento (tipo/dia/condição e canais de cobrança) saiu da UI do cliente: as colunas
+  // continuam no banco e são preservadas na edição porque NÃO entram mais por este schema. A config de
+  // faturamento passou a viver em cada contrato; o dia de faturamento do contrato tem o do cliente só
+  // como fallback (lib/financeiro/contrato-previsao.ts). Ver docs/cliente-abas-enxugar.md.
   // Preferências de e-mail
   emailReceberBoletos: z.boolean().default(true),
   emailReceberRelatorios: z.boolean().default(true),

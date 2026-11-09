@@ -47,7 +47,8 @@ describe("glossário nos rótulos", () => {
   it("arquivos anexados são 'Anexos'; status não pago é 'Em aberto'", () => {
     expect(ler("components/os/os-fotos-anexos.tsx")).toContain(">Anexos<");
     expect(ler("components/os/os-fotos-anexos.tsx")).not.toMatch(/Adicionar documento|Documento excluído/);
-    expect(ler("components/forms/cliente-form.tsx")).toContain('label: "Anexos e mídia"');
+    // A aba "Anexos e mídia" virou só "Anexos" (a logo foi para Dados gerais) — fica no glossário.
+    expect(ler("components/forms/cliente-form.tsx")).toContain('label: "Anexos"');
     expect(LABELS_STATUS_CONTA_RECEBER.A_RECEBER).toBe("Em aberto");
     expect(LABELS_STATUS_CONTA_PAGAR.PENDENTE).toBe("Em aberto");
     expect(ler("lib/os/central.ts")).toContain('A_RECEBER: "Em aberto"');
