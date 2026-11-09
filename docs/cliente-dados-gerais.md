@@ -44,10 +44,12 @@ Afinação da seção Identificação:
   linha no corpo da seção.
 - O aviso **"Dados encontrados na Receita Federal"** deixou de ser um painel: virou uma linha
   **discreta em verde** logo **acima** do campo de CNPJ (`data-cnpj-encontrado`), sem ocupar espaço.
-- **Endereços em lista (acordeão), não cartões:** os endereços viram uma lista única (uma borda,
-  linhas divididas) que **expande pra baixo** ao clicar, para ver todos os dados do endereço — melhor
-  quando há vários. O selo **Principal** perdeu o ícone de estrela (texto só, sem "emoji"). Vale para
-  o cliente novo (`UnidadesLocal`) e para a edição (`UnidadesManager`).
+- **Endereços em caixas (acordeão), não cartões:** cada endereço é uma **caixa arredondada com fundo
+  suave** (`bg-frivo-50`) — só o nome em negrito e o selo **Principal** no cabeçalho, com uma seta que
+  gira ao abrir. Clicar **expande pra baixo** (painel branco) para ver todos os dados do endereço —
+  melhor quando há vários. O selo **Principal** é texto só, sem ícone de estrela (sem "emoji"). Vale
+  para o cliente novo (`UnidadesLocal`) e para a edição (`UnidadesManager`, que mantém o selo de
+  distância "da empresa" no cabeçalho).
 
 ## Testes
 

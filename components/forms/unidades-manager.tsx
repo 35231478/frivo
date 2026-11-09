@@ -12,8 +12,8 @@ import { MapaEndereco } from "@/components/ui/mapa-endereco";
 import { EnderecoAutocomplete, type EnderecoSelecionado } from "@/components/ui/endereco-autocomplete";
 import { haversine, formatarDistancia } from "@/lib/geo";
 import type { Unidade } from "@prisma/client";
-import { Plus, Pencil, Trash2, X, Check, Building2, ChevronDown, ChevronRight, MapPin, Navigation, Smartphone, Search } from "lucide-react";
-import { comparaNatural } from "@/lib/utils";
+import { Plus, Pencil, Trash2, X, Check, ChevronDown, Navigation, Smartphone, Search } from "lucide-react";
+import { cn, comparaNatural } from "@/lib/utils";
 
 const ESTADOS_BR = [
   "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
@@ -248,9 +248,6 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente, 
     return comparaNatural(a.nome, b.nome);
   });
 
-  function enderecoTexto(u: Unidade): string {
-    return [u.logradouro, u.numero, u.bairro, u.cidade, u.estado].filter(Boolean).join(", ") || "Sem endereço";
-  }
 
   function renderFormInline() {
     return (
@@ -335,45 +332,34 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente, 
         <p className="text-sm text-ink-muted py-2">Nenhum endereço cadastrado.</p>
       )}
 
-      {ordenadas.length > 0 && (
-      <div className="rounded-lg border border-surface-border divide-y divide-surface-linha overflow-hidden">
       {ordenadas.map((u) => {
-        if (editando === u.id) return <div key={u.id} className="p-3 bg-surface-page/40">{renderFormInline()}</div>;
+        if (editando === u.id) return <div key={u.id}>{renderFormInline()}</div>;
         const aberto = expandido.has(u.id);
         const temEnd = !!(u.logradouro && u.cidade && u.estado);
         const dist = calcDistancia(u);
 
         return (
-          <div key={u.id} className="overflow-hidden">
+          <div key={u.id} className="rounded-lg border border-surface-border overflow-hidden">
             <button type="button" onClick={() => toggleExpand(u.id)}
-              className="flex items-center justify-between w-full p-3 text-left hover:bg-surface-page transition-colors">
-              <div className="flex items-center gap-3 min-w-0">
-                <Building2 className="w-4 h-4 text-ink-muted shrink-0" />
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-ink">{u.nome}</span>
-                    {u.principal && (
-                      <span className="inline-flex items-center text-[10px] font-semibold bg-atencao-claro text-atencao-texto px-1.5 py-0.5 rounded-full">
-                        Principal
-                      </span>
-                    )}
-                    {dist && (
-                      <span className="inline-flex items-center gap-0.5 text-[10px] font-medium bg-acento-claro text-acento px-1.5 py-0.5 rounded-full">
-                        <Navigation className="w-2.5 h-2.5" /> {dist} da empresa
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-ink-muted truncate">{enderecoTexto(u)}</p>
-                </div>
+              className={cn("flex items-center justify-between w-full px-4 py-3.5 text-left transition-colors", aberto ? "bg-frivo-50" : "bg-frivo-50/60 hover:bg-frivo-50")}>
+              <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                <span className="text-sm font-bold text-ink truncate">{u.nome}</span>
+                {u.principal && (
+                  <span className="inline-flex items-center text-[10px] font-semibold bg-atencao-claro text-atencao-texto px-1.5 py-0.5 rounded-full shrink-0">
+                    Principal
+                  </span>
+                )}
+                {dist && (
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-medium bg-acento-claro text-acento px-1.5 py-0.5 rounded-full shrink-0">
+                    <Navigation className="w-2.5 h-2.5" /> {dist} da empresa
+                  </span>
+                )}
               </div>
-              <div className="flex items-center gap-1 shrink-0">
-                {temEnd && <MapPin className="w-3 h-3 text-ok-texto" />}
-                {aberto ? <ChevronDown className="w-4 h-4 text-ink-muted" /> : <ChevronRight className="w-4 h-4 text-ink-muted" />}
-              </div>
+              <ChevronDown className={cn("w-5 h-5 text-ink-muted shrink-0 transition-transform", aberto && "rotate-180")} />
             </button>
 
             {aberto && (
-              <div className="border-t border-surface-linha p-3 space-y-3 bg-surface-page/50">
+              <div className="border-t border-surface-border p-3 space-y-3 bg-white">
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                   {u.logradouro && <div className="col-span-2"><span className="text-ink-muted">Logradouro:</span> <span className="text-ink">{u.logradouro}{u.numero ? `, ${u.numero}` : ""}</span></div>}
                   {u.complemento && <div className="col-span-2"><span className="text-ink-muted">Complemento:</span> <span className="text-ink">{u.complemento}</span></div>}
@@ -417,8 +403,6 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente, 
           </div>
         );
       })}
-      </div>
-      )}
 
       {editando === "novo" && renderFormInline()}
 

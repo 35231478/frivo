@@ -68,13 +68,16 @@ describe("Autofill do CNPJ no cliente novo", () => {
     const corpo = caixa.textContent ?? "";
     // razão social preenchida
     expect(($('input[name="nome"]') as HTMLInputElement).value).toBe("Termofrio Engenharia Ltda");
-    // endereço principal criado (card "Matriz" com a rua e a cidade)
+    // endereço principal criado (caixa "Matriz" — nome no cabeçalho, dados ao expandir)
     expect(corpo).toContain("Matriz");
-    expect(corpo).toContain("Avenida Central");
-    expect(corpo).toContain("Setor Central");
-    expect(corpo).toContain("Goiânia");
     // endereço principal + contato principal = 2 selos "Principal"
     expect(contarPrincipais()).toBe(2);
+    // expandindo a caixa do endereço, os dados da consulta aparecem
+    await clicar($$("button").find((b) => /Matriz/.test(b.textContent ?? "")));
+    const expandido = caixa.textContent ?? "";
+    expect(expandido).toContain("Avenida Central");
+    expect(expandido).toContain("Setor Central");
+    expect(expandido).toContain("Goiânia");
     // e o contato leva o e-mail da consulta (abrindo o card)
     const botaoContato = $$("button").find((b) => b.textContent === "Termofrio Engenharia Ltda" || /Termofrio Engenharia Ltda/.test(b.textContent ?? ""));
     // o e-mail está no estado do contato; o card colapsado mostra o nome + selo Principal
