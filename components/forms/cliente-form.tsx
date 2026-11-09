@@ -479,12 +479,10 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
       {/* ABA 1 — Dados Gerais */}
       <Painel ativo={aba === "geral"}>
         <FormSection title="Identificação" icon={<Building2 className="w-3.5 h-3.5" />}>
-          {isEditing ? (
+          {isEditing && (
             <div className="flex items-center gap-3 pb-1">
               <LogoUpload compacto clienteId={initialData!.id} logoInicial={initialData!.logo} />
             </div>
-          ) : (
-            <p className="text-xs text-ink-muted">A logomarca pode ser enviada após salvar o cliente.</p>
           )}
           <FormGrid>
             <FormField label="Tipo de pessoa" required>
@@ -535,13 +533,13 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
 
         {/* Endereços — logo abaixo da identificação (o Consultar preenche os dois juntos) */}
         <FormSection title="Endereços" icon={<MapPin className="w-3.5 h-3.5" />}>
-          <p className="text-xs text-ink-muted -mt-2 mb-3">
-            {isEditing
-              ? "Gerencie os endereços do cliente. O endereço com o selo Principal é o padrão."
-              : config.clienteExigirUnidade
-                ? "Adicione pelo menos o endereço principal do cliente (obrigatório)."
-                : "Adicione os endereços do cliente."}
-          </p>
+          {(isEditing || config.clienteExigirUnidade) && (
+            <p className="text-xs text-ink-muted -mt-2 mb-3">
+              {isEditing
+                ? "Gerencie os endereços do cliente. O endereço com o selo Principal é o padrão."
+                : "Adicione pelo menos o endereço principal do cliente (obrigatório)."}
+            </p>
+          )}
           {isEditing ? (
             <UnidadesManager clienteId={initialData!.id} unidadesIniciais={initialData!.unidades ?? []}
               prefillNonce={consultaNonce}
@@ -555,11 +553,11 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
 
         {/* Contatos */}
         <FormSection title="Contatos" icon={<Users className="w-3.5 h-3.5" />}>
-          <p className="text-xs text-ink-muted -mt-2 mb-3">
-            {isEditing
-              ? "Contatos do cliente. Comunicação e acesso ao portal ficam nas abas Comunicação e Portal."
-              : "Adicione os contatos do cliente. O primeiro será marcado como principal."}
-          </p>
+          {isEditing && (
+            <p className="text-xs text-ink-muted -mt-2 mb-3">
+              Contatos do cliente. Comunicação e acesso ao portal ficam nas abas Comunicação e Portal.
+            </p>
+          )}
           {isEditing ? (
             <ContatosManager clienteId={initialData!.id} contatosIniciais={initialData!.contatosCliente ?? []}
               sugestao={sugestaoContato ? { nome: watch("nome"), email: sugestaoContato.email, telefone: sugestaoContato.telefone } : null}
