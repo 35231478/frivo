@@ -68,13 +68,15 @@ describe("Abas do cliente enxugadas para 5", () => {
     expect(botoes).not.toContain("Anexos e mídia");
   });
 
-  it("Dados gerais concentra as seções: básicos, logo, contatos, endereços e tabela de preços", async () => {
+  it("Dados gerais concentra as seções: Identificação, Endereços, Contatos e Comercial", async () => {
     await montar(CLIENTE);
     // os cabeçalhos de seção são <h3> (FormSection); conferir pelo heading, não só pelo texto solto
     const headings = $$("h3").map((e) => txt(e));
-    for (const sec of ["Dados básicos", "Logomarca", "Contatos do cliente", "Endereços do cliente", "Tabela de preços"]) {
+    for (const sec of ["Identificação", "Endereços", "Contatos", "Comercial"]) {
       expect(headings.includes(sec), `faltou a seção ${sec}`).toBe(true);
     }
+    // Endereços vem antes de Contatos (o Consultar preenche os dois juntos)
+    expect(headings.indexOf("Endereços")).toBeLessThan(headings.indexOf("Contatos"));
   });
 
   it("o perfil de faturamento saiu da UI (sem tipo/dia/condição de faturamento)", async () => {

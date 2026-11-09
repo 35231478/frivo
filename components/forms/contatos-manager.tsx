@@ -1,7 +1,7 @@
 "use client";
 
 import { confirmar } from "@/components/ui/avisos";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormField, FormGrid } from "@/components/ui/form-field";
@@ -32,15 +32,36 @@ const emptyForm: ContatoFormData = {
 interface ContatosManagerProps {
   clienteId: string;
   contatosIniciais: Contato[];
+  /** Sugestão (e-mail/telefone) da consulta de CNPJ; o nonce abre "Novo contato" já preenchido. */
+  sugestao?: { nome?: string; email?: string; telefone?: string } | null;
+  prefillNonce?: number;
 }
 
-export function ContatosManager({ clienteId, contatosIniciais }: ContatosManagerProps) {
+export function ContatosManager({ clienteId, contatosIniciais, sugestao, prefillNonce }: ContatosManagerProps) {
   const [contatos, setContatos] = useState<Contato[]>(contatosIniciais);
   const [editando, setEditando] = useState<string | "novo" | null>(null);
   const [expandido, setExpandido] = useState<Set<string>>(new Set());
   const [form, setForm] = useState<ContatoFormData>(emptyForm);
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
+
+  // Consulta de CNPJ (edição): abre "Novo contato" já preenchido, sem duplicar quem já existe.
+  const nonceAnterior = useRef(prefillNonce);
+  useEffect(() => {
+    if (prefillNonce === undefined || prefillNonce === nonceAnterior.current) return;
+    nonceAnterior.current = prefillNonce;
+    const email = (sugestao?.email ?? "").trim();
+    const telefone = (sugestao?.telefone ?? "").trim();
+    if (!email && !telefone) return;
+    const jaTem = contatos.some((c) =>
+      (email && (c.email ?? "").trim().toLowerCase() === email.toLowerCase()) ||
+      (!email && telefone && (c.telefone ?? "").replace(/\D/g, "") === telefone.replace(/\D/g, "")));
+    if (jaTem || editando) return;
+    setForm({ ...emptyForm, nome: sugestao?.nome ?? "", email, telefone, principal: contatos.length === 0 });
+    setEditando("novo");
+    setErro("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillNonce]);
 
   function toggleExpand(id: string) {
     setExpandido((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });

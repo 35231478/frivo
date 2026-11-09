@@ -1,7 +1,7 @@
 "use client";
 
 import { confirmar } from "@/components/ui/avisos";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAutoGeocode } from "@/hooks/use-auto-geocode";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,8 +12,8 @@ import { MapaEndereco } from "@/components/ui/mapa-endereco";
 import { EnderecoAutocomplete, type EnderecoSelecionado } from "@/components/ui/endereco-autocomplete";
 import { haversine, formatarDistancia } from "@/lib/geo";
 import type { Unidade } from "@prisma/client";
-import { Plus, Pencil, Trash2, X, Check, Building2, Star, ChevronDown, ChevronRight, MapPin, Navigation, Smartphone, Search } from "lucide-react";
-import { comparaNatural } from "@/lib/utils";
+import { Plus, Pencil, Trash2, X, Check, ChevronDown, Navigation, Smartphone, Search } from "lucide-react";
+import { cn, comparaNatural } from "@/lib/utils";
 
 const ESTADOS_BR = [
   "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
@@ -62,9 +62,11 @@ interface UnidadesManagerProps {
   clienteId: string;
   unidadesIniciais: Unidade[];
   enderecoCliente?: EnderecoCliente;
+  /** Muda a cada consulta de CNPJ: abre o formulário "Novo endereço" já preenchido pela consulta. */
+  prefillNonce?: number;
 }
 
-export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }: UnidadesManagerProps) {
+export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente, prefillNonce }: UnidadesManagerProps) {
   const [unidades, setUnidades] = useState<Unidade[]>(unidadesIniciais);
   const [editando, setEditando] = useState<string | "novo" | null>(null);
   const [expandido, setExpandido] = useState<Set<string>>(new Set());
@@ -80,6 +82,15 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }
       .then((e) => setEmpresaCoords({ latitude: e.latitude, longitude: e.longitude }))
       .catch(() => {});
   }, []);
+
+  // Consulta de CNPJ (edição): abre "Novo endereço" já preenchido pela consulta (enderecoCliente).
+  const nonceAnterior = useRef(prefillNonce);
+  useEffect(() => {
+    if (prefillNonce === undefined || prefillNonce === nonceAnterior.current) return;
+    nonceAnterior.current = prefillNonce;
+    if (!editando) abrirNova();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillNonce]);
 
   function calcDistancia(u: Unidade): string | null {
     if (!empresaCoords.latitude || !empresaCoords.longitude) return null;
@@ -237,9 +248,6 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }
     return comparaNatural(a.nome, b.nome);
   });
 
-  function enderecoTexto(u: Unidade): string {
-    return [u.logradouro, u.numero, u.bairro, u.cidade, u.estado].filter(Boolean).join(", ") || "Sem endereço";
-  }
 
   function renderFormInline() {
     return (
@@ -331,36 +339,27 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }
         const dist = calcDistancia(u);
 
         return (
-          <div key={u.id} className="border border-surface-border rounded-lg overflow-hidden">
+          <div key={u.id} className="rounded-lg border border-surface-border overflow-hidden">
             <button type="button" onClick={() => toggleExpand(u.id)}
-              className="flex items-center justify-between w-full p-3 text-left hover:bg-surface-page transition-colors">
-              <div className="flex items-center gap-3 min-w-0">
-                <Building2 className="w-4 h-4 text-ink-muted shrink-0" />
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-ink">{u.nome}</span>
-                    {u.principal && (
-                      <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold bg-atencao-claro text-atencao-texto px-1.5 py-0.5 rounded-full">
-                        <Star className="w-2.5 h-2.5 fill-current" /> Principal
-                      </span>
-                    )}
-                    {dist && (
-                      <span className="inline-flex items-center gap-0.5 text-[10px] font-medium bg-acento-claro text-acento px-1.5 py-0.5 rounded-full">
-                        <Navigation className="w-2.5 h-2.5" /> {dist} da empresa
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-ink-muted truncate">{enderecoTexto(u)}</p>
-                </div>
+              className={cn("flex items-center justify-between w-full px-4 py-3.5 text-left transition-colors", aberto ? "bg-frivo-50" : "bg-frivo-50/60 hover:bg-frivo-50")}>
+              <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                <span className="text-sm font-bold text-ink truncate">{u.nome}</span>
+                {u.principal && (
+                  <span className="inline-flex items-center text-[10px] font-semibold bg-atencao-claro text-atencao-texto px-1.5 py-0.5 rounded-full shrink-0">
+                    Principal
+                  </span>
+                )}
+                {dist && (
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-medium bg-acento-claro text-acento px-1.5 py-0.5 rounded-full shrink-0">
+                    <Navigation className="w-2.5 h-2.5" /> {dist} da empresa
+                  </span>
+                )}
               </div>
-              <div className="flex items-center gap-1 shrink-0">
-                {temEnd && <MapPin className="w-3 h-3 text-ok-texto" />}
-                {aberto ? <ChevronDown className="w-4 h-4 text-ink-muted" /> : <ChevronRight className="w-4 h-4 text-ink-muted" />}
-              </div>
+              <ChevronDown className={cn("w-5 h-5 text-ink-muted shrink-0 transition-transform", aberto && "rotate-180")} />
             </button>
 
             {aberto && (
-              <div className="border-t border-surface-linha p-3 space-y-3 bg-surface-page/50">
+              <div className="border-t border-surface-border p-3 space-y-3 bg-white">
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                   {u.logradouro && <div className="col-span-2"><span className="text-ink-muted">Logradouro:</span> <span className="text-ink">{u.logradouro}{u.numero ? `, ${u.numero}` : ""}</span></div>}
                   {u.complemento && <div className="col-span-2"><span className="text-ink-muted">Complemento:</span> <span className="text-ink">{u.complemento}</span></div>}
@@ -391,7 +390,7 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }
                   {!u.principal && (
                     <>
                       <Button type="button" variant="ghost" onClick={() => marcarPrincipal(u.id)} className="text-xs h-7 px-2.5 text-atencao-texto hover:text-atencao-texto">
-                        <Star className="w-3 h-3" /> Tornar principal
+                        Tornar principal
                       </Button>
                       <Button type="button" variant="ghost" onClick={() => remover(u.id)} className="text-xs h-7 px-2.5 text-atrasado hover:text-atrasado-texto">
                         <Trash2 className="w-3 h-3" /> Excluir

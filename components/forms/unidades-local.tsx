@@ -9,8 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid } from "@/components/ui/form-field";
 import { MapaEndereco } from "@/components/ui/mapa-endereco";
 import { EnderecoAutocomplete, type EnderecoSelecionado } from "@/components/ui/endereco-autocomplete";
-import { Plus, Pencil, Trash2, X, Check, Building2, Star, ChevronDown, ChevronRight, MapPin, Search } from "lucide-react";
-import { comparaNatural } from "@/lib/utils";
+import { Plus, Pencil, Trash2, X, Check, ChevronDown, Search } from "lucide-react";
+import { cn, comparaNatural } from "@/lib/utils";
 
 const ESTADOS_BR = [
   "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
@@ -40,6 +40,9 @@ const emptyForm = (): UnidadeLocal => ({
   bairro: "", cidade: "", estado: "", cep: "",
   latitude: null, longitude: null, telefone: "", observacoes: "",
 });
+
+/** Cria um endereço local em branco (com _tempId) — usado pelo autofill da consulta de CNPJ. */
+export const novaUnidadeLocal = emptyForm;
 
 interface UnidadesLocalProps {
   unidades: UnidadeLocal[];
@@ -153,9 +156,6 @@ export function UnidadesLocal({ unidades, onChange }: UnidadesLocalProps) {
     return comparaNatural(a.nome, b.nome);
   });
 
-  function enderecoTexto(u: UnidadeLocal): string {
-    return [u.logradouro, u.numero, u.bairro, u.cidade, u.estado].filter(Boolean).join(", ") || "Sem endereço";
-  }
 
   function renderFormInline() {
     return (
@@ -244,31 +244,22 @@ export function UnidadesLocal({ unidades, onChange }: UnidadesLocalProps) {
         const temEnd = !!(u.logradouro && u.cidade && u.estado);
 
         return (
-          <div key={u._tempId} className="border border-surface-border rounded-lg overflow-hidden">
+          <div key={u._tempId} className="rounded-lg border border-surface-border overflow-hidden">
             <button type="button" onClick={() => toggleExpand(u._tempId)}
-              className="flex items-center justify-between w-full p-3 text-left hover:bg-surface-page transition-colors">
-              <div className="flex items-center gap-3 min-w-0">
-                <Building2 className="w-4 h-4 text-ink-muted shrink-0" />
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-ink">{u.nome}</span>
-                    {u.principal && (
-                      <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold bg-atencao-claro text-atencao-texto px-1.5 py-0.5 rounded-full">
-                        <Star className="w-2.5 h-2.5 fill-current" /> Principal
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-ink-muted truncate">{enderecoTexto(u)}</p>
-                </div>
+              className={cn("flex items-center justify-between w-full px-4 py-3.5 text-left transition-colors", aberto ? "bg-frivo-50" : "bg-frivo-50/60 hover:bg-frivo-50")}>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-sm font-bold text-ink truncate">{u.nome}</span>
+                {u.principal && (
+                  <span className="inline-flex items-center text-[10px] font-semibold bg-atencao-claro text-atencao-texto px-1.5 py-0.5 rounded-full shrink-0">
+                    Principal
+                  </span>
+                )}
               </div>
-              <div className="flex items-center gap-1 shrink-0">
-                {temEnd && <MapPin className="w-3 h-3 text-ok-texto" />}
-                {aberto ? <ChevronDown className="w-4 h-4 text-ink-muted" /> : <ChevronRight className="w-4 h-4 text-ink-muted" />}
-              </div>
+              <ChevronDown className={cn("w-5 h-5 text-ink-muted shrink-0 transition-transform", aberto && "rotate-180")} />
             </button>
 
             {aberto && (
-              <div className="border-t border-surface-linha p-3 space-y-3 bg-surface-page/50">
+              <div className="border-t border-surface-border p-3 space-y-3 bg-white">
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                   {u.logradouro && <div className="col-span-2"><span className="text-ink-muted">Logradouro:</span> <span className="text-ink">{u.logradouro}{u.numero ? `, ${u.numero}` : ""}</span></div>}
                   {u.complemento && <div className="col-span-2"><span className="text-ink-muted">Complemento:</span> <span className="text-ink">{u.complemento}</span></div>}
@@ -289,7 +280,7 @@ export function UnidadesLocal({ unidades, onChange }: UnidadesLocalProps) {
                   {!u.principal && (
                     <>
                       <Button type="button" variant="ghost" onClick={() => marcarPrincipal(u._tempId)} className="text-xs h-7 px-2.5 text-atencao-texto hover:text-atencao-texto">
-                        <Star className="w-3 h-3" /> Tornar principal
+                        Tornar principal
                       </Button>
                       <Button type="button" variant="ghost" onClick={() => remover(u._tempId)} className="text-xs h-7 px-2.5 text-atrasado hover:text-atrasado-texto">
                         <Trash2 className="w-3 h-3" /> Excluir
