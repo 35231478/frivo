@@ -545,7 +545,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
         <FormSection title="Endereços" icon={<MapPin className="w-3.5 h-3.5" />}>
           <p className="text-xs text-ink-muted -mt-2 mb-3">
             {isEditing
-              ? "Gerencie os endereços do cliente. O endereço marcado com estrela é o principal."
+              ? "Gerencie os endereços do cliente. O endereço com o selo Principal é o padrão."
               : config.clienteExigirUnidade
                 ? "Adicione pelo menos o endereço principal do cliente (obrigatório)."
                 : "Adicione os endereços do cliente."}

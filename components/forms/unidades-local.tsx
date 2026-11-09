@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid } from "@/components/ui/form-field";
 import { MapaEndereco } from "@/components/ui/mapa-endereco";
 import { EnderecoAutocomplete, type EnderecoSelecionado } from "@/components/ui/endereco-autocomplete";
-import { Plus, Pencil, Trash2, X, Check, Building2, Star, ChevronDown, ChevronRight, MapPin, Search } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Check, Building2, ChevronDown, ChevronRight, MapPin, Search } from "lucide-react";
 import { comparaNatural } from "@/lib/utils";
 
 const ESTADOS_BR = [
@@ -241,13 +241,15 @@ export function UnidadesLocal({ unidades, onChange }: UnidadesLocalProps) {
         <p className="text-sm text-ink-muted py-2">Nenhum endereço adicionado. Adicione pelo menos o endereço principal.</p>
       )}
 
+      {ordenadas.length > 0 && (
+      <div className="rounded-lg border border-surface-border divide-y divide-surface-linha overflow-hidden">
       {ordenadas.map((u) => {
-        if (editando === u._tempId) return <div key={u._tempId}>{renderFormInline()}</div>;
+        if (editando === u._tempId) return <div key={u._tempId} className="p-3 bg-surface-page/40">{renderFormInline()}</div>;
         const aberto = expandido.has(u._tempId);
         const temEnd = !!(u.logradouro && u.cidade && u.estado);
 
         return (
-          <div key={u._tempId} className="border border-surface-border rounded-lg overflow-hidden">
+          <div key={u._tempId} className="overflow-hidden">
             <button type="button" onClick={() => toggleExpand(u._tempId)}
               className="flex items-center justify-between w-full p-3 text-left hover:bg-surface-page transition-colors">
               <div className="flex items-center gap-3 min-w-0">
@@ -256,8 +258,8 @@ export function UnidadesLocal({ unidades, onChange }: UnidadesLocalProps) {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-medium text-ink">{u.nome}</span>
                     {u.principal && (
-                      <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold bg-atencao-claro text-atencao-texto px-1.5 py-0.5 rounded-full">
-                        <Star className="w-2.5 h-2.5 fill-current" /> Principal
+                      <span className="inline-flex items-center text-[10px] font-semibold bg-atencao-claro text-atencao-texto px-1.5 py-0.5 rounded-full">
+                        Principal
                       </span>
                     )}
                   </div>
@@ -292,7 +294,7 @@ export function UnidadesLocal({ unidades, onChange }: UnidadesLocalProps) {
                   {!u.principal && (
                     <>
                       <Button type="button" variant="ghost" onClick={() => marcarPrincipal(u._tempId)} className="text-xs h-7 px-2.5 text-atencao-texto hover:text-atencao-texto">
-                        <Star className="w-3 h-3" /> Tornar principal
+                        Tornar principal
                       </Button>
                       <Button type="button" variant="ghost" onClick={() => remover(u._tempId)} className="text-xs h-7 px-2.5 text-atrasado hover:text-atrasado-texto">
                         <Trash2 className="w-3 h-3" /> Excluir
@@ -305,6 +307,8 @@ export function UnidadesLocal({ unidades, onChange }: UnidadesLocalProps) {
           </div>
         );
       })}
+      </div>
+      )}
 
       {editando === "novo" && renderFormInline()}
 

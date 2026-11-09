@@ -12,7 +12,7 @@ import { MapaEndereco } from "@/components/ui/mapa-endereco";
 import { EnderecoAutocomplete, type EnderecoSelecionado } from "@/components/ui/endereco-autocomplete";
 import { haversine, formatarDistancia } from "@/lib/geo";
 import type { Unidade } from "@prisma/client";
-import { Plus, Pencil, Trash2, X, Check, Building2, Star, ChevronDown, ChevronRight, MapPin, Navigation, Smartphone, Search } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Check, Building2, ChevronDown, ChevronRight, MapPin, Navigation, Smartphone, Search } from "lucide-react";
 import { comparaNatural } from "@/lib/utils";
 
 const ESTADOS_BR = [
@@ -335,14 +335,16 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente, 
         <p className="text-sm text-ink-muted py-2">Nenhum endereço cadastrado.</p>
       )}
 
+      {ordenadas.length > 0 && (
+      <div className="rounded-lg border border-surface-border divide-y divide-surface-linha overflow-hidden">
       {ordenadas.map((u) => {
-        if (editando === u.id) return <div key={u.id}>{renderFormInline()}</div>;
+        if (editando === u.id) return <div key={u.id} className="p-3 bg-surface-page/40">{renderFormInline()}</div>;
         const aberto = expandido.has(u.id);
         const temEnd = !!(u.logradouro && u.cidade && u.estado);
         const dist = calcDistancia(u);
 
         return (
-          <div key={u.id} className="border border-surface-border rounded-lg overflow-hidden">
+          <div key={u.id} className="overflow-hidden">
             <button type="button" onClick={() => toggleExpand(u.id)}
               className="flex items-center justify-between w-full p-3 text-left hover:bg-surface-page transition-colors">
               <div className="flex items-center gap-3 min-w-0">
@@ -351,8 +353,8 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente, 
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-medium text-ink">{u.nome}</span>
                     {u.principal && (
-                      <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold bg-atencao-claro text-atencao-texto px-1.5 py-0.5 rounded-full">
-                        <Star className="w-2.5 h-2.5 fill-current" /> Principal
+                      <span className="inline-flex items-center text-[10px] font-semibold bg-atencao-claro text-atencao-texto px-1.5 py-0.5 rounded-full">
+                        Principal
                       </span>
                     )}
                     {dist && (
@@ -402,7 +404,7 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente, 
                   {!u.principal && (
                     <>
                       <Button type="button" variant="ghost" onClick={() => marcarPrincipal(u.id)} className="text-xs h-7 px-2.5 text-atencao-texto hover:text-atencao-texto">
-                        <Star className="w-3 h-3" /> Tornar principal
+                        Tornar principal
                       </Button>
                       <Button type="button" variant="ghost" onClick={() => remover(u.id)} className="text-xs h-7 px-2.5 text-atrasado hover:text-atrasado-texto">
                         <Trash2 className="w-3 h-3" /> Excluir
@@ -415,6 +417,8 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente, 
           </div>
         );
       })}
+      </div>
+      )}
 
       {editando === "novo" && renderFormInline()}
 
