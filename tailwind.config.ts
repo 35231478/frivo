@@ -1,5 +1,5 @@
 import type { Config } from "tailwindcss";
-import { acento, escalaAcento, escalaOk, forma, neutro, status } from "./lib/ui/tokens";
+import { acento, cena, escalaAcento, escalaOk, forma, neutro, status } from "./lib/ui/tokens";
 
 // Sistema de design: as cores e formas vêm de lib/ui/tokens.ts (fonte única). As escalas antigas
 // (primary-*, success-*, ink, surface) foram mantidas como NOMES e remapeadas para a identidade
@@ -42,6 +42,8 @@ const config: Config = {
           linha: neutro.linha,
         },
         frivo: { ...escalaAcento, 950: escalaAcento[900] },
+        // Cena da calculadora pública (painel escuro premium) — só esta superfície de marketing usa
+        cena: cena,
       },
       boxShadow: {
         card: forma.sombraCard,
