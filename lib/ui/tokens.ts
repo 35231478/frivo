@@ -68,6 +68,27 @@ export const corDado = {
 /** As cores oferecidas no seletor (equipe, perfil…): a mesma lista em toda tela, na ordem de uso. */
 export const paletaSelecao: readonly string[] = [corDado.azul, corDado.verde, corDado.roxo, corDado.ambar, corDado.vermelho, corDado.rosa, corDado.ciano, corDado.indigo];
 
+/**
+ * Cena da calculadora pública (superfície de marketing, painel ESCURO premium). Só esta tela usa —
+ * o app interno segue claro. Tons de petróleo profundo com o acento da marca; o "frio" é um ciano
+ * suave. Contraste do texto sobre o fundo escuro conferido (texto/apoio passam 4.5:1).
+ */
+export const cena = {
+  fundo: "#0B1220",   // fundo do painel da cena (petróleo quase preto)
+  painel: "#131C2E",  // cartões/superfícies sobre o fundo
+  borda: "#24314A",   // contorno sutil
+  texto: "#EAF0F8",   // texto principal sobre o escuro
+  apoio: "#9FB0C9",   // texto de apoio sobre o escuro (passa 4.5:1 sobre fundo e painel)
+  frio: "#38BDF8",    // ciano do "frio": brilho, ar, destaque
+  frio2: "#0EA5E9",   // ciano mais forte
+  parede: "#1C2740",  // parede do cômodo (isométrico)
+  piso: "#161F33",    // piso
+  luz: "#223150",     // face iluminada (topo da parede)
+  equip: "#CBD7EA",   // corpo do equipamento (claro, metálico)
+  equip2: "#8A9BBB",  // sombra do equipamento
+  neve: "#BFE9FB",    // floco de neve / ar frio
+} as const;
+
 /** Forma */
 export const forma = {
   raioCard: "14px",
