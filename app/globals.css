@@ -261,38 +261,50 @@
   .anim-gaveta-acena, .anim-gaveta-entra, .anim-gaveta-sobe { animation: none; }
 }
 
-/* ───────── Calculadora pública (cena premium): ar frio, flocos e brilho ───────── */
+/* ───────── Calculadora pública (cena premium / render arquitetônico) ───────── */
+/* Cores da cena como variáveis (o SVG usa em fill/stroke/stop-color/filtros; o app interno segue claro) */
+.cena-vars {
+  --cena-fundo: #0B1220; --cena-painel: #131C2E; --cena-borda: #24314A;
+  --cena-texto: #EAF0F8; --cena-apoio: #9FB0C9;
+  --cena-frio: #38BDF8; --cena-frio2: #0EA5E9;
+  --cena-parede: #1C2740; --cena-parede2: #141D30; --cena-piso: #161F33; --cena-piso2: #101829;
+  --cena-luz: #223150; --cena-vidro: #9DC9E8; --cena-movel: #334260; --cena-movel2: #44587E;
+  --cena-equip: #E6EDF8; --cena-equip2: #8A9BBB; --cena-led: #4ADE80; --cena-neve: #DCF1FB;
+}
+/* Floco de neve: cai, deriva e gira, com fade; tamanho/opacidade vêm por variável por floco */
 @keyframes calcFloco {
-  0%   { transform: translateY(-4px) translateX(0) rotate(0deg); opacity: 0; }
-  12%  { opacity: 0.9; }
-  100% { transform: translateY(62px) translateX(var(--calc-drift, 6px)) rotate(180deg); opacity: 0; }
+  0%   { transform: translateY(-6px) translateX(0) rotate(0deg); opacity: 0; }
+  10%  { opacity: var(--calc-op, 0.9); }
+  90%  { opacity: var(--calc-op, 0.9); }
+  100% { transform: translateY(var(--calc-queda, 70px)) translateX(var(--calc-drift, 8px)) rotate(200deg); opacity: 0; }
 }
-@keyframes calcArFrio {
-  0%   { transform: translateY(0) scaleX(1); opacity: 0; }
-  30%  { opacity: 0.5; }
-  100% { transform: translateY(40px) scaleX(1.6); opacity: 0; }
+/* Névoa/vapor frio descendo das aletas (blur aplicado no SVG) */
+@keyframes calcMist {
+  0%   { transform: translateY(0) scale(1); opacity: 0; }
+  25%  { opacity: 0.55; }
+  100% { transform: translateY(46px) scale(1.5, 1.9); opacity: 0; }
 }
-@keyframes calcBrilho {
-  0%, 100% { opacity: 0.35; }
-  50%      { opacity: 0.7; }
-}
-@keyframes calcEntra {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: none; }
-}
+/* Brilho frio que respira */
+@keyframes calcBrilho { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.6; } }
+/* Entrada de elemento (cômodo monta, aparelho instala com settle) */
+@keyframes calcEntra { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes calcSettle { 0% { opacity: 0; transform: translateY(-8px) scale(0.96); } 60% { transform: translateY(2px) scale(1.01); } 100% { opacity: 1; transform: none; } }
+/* Cone de luz fria pulsando de leve */
+@keyframes calcCone { 0%, 100% { opacity: 0.18; } 50% { opacity: 0.32; } }
 @layer utilities {
-  .anim-calc-floco  { animation: calcFloco 2.8s linear infinite; }
-  .anim-calc-arfrio { animation: calcArFrio 2.4s ease-out infinite; }
-  .anim-calc-brilho { animation: calcBrilho 3.5s ease-in-out infinite; }
-  .anim-calc-entra  { animation: calcEntra 0.35s ease-out; }
+  .anim-calc-floco   { animation: calcFloco var(--calc-dur, 3s) linear infinite; }
+  .anim-calc-mist    { animation: calcMist 2.6s ease-out infinite; }
+  .anim-calc-brilho  { animation: calcBrilho 4s ease-in-out infinite; }
+  .anim-calc-entra   { animation: calcEntra 0.4s ease-out both; }
+  .anim-calc-settle  { animation: calcSettle 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .anim-calc-cone    { animation: calcCone 4s ease-in-out infinite; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .anim-calc-floco, .anim-calc-arfrio, .anim-calc-brilho, .anim-calc-entra { animation: none; }
-  /* sem movimento: o floco e o ar frio ficam estáticos e sutis */
-  .anim-calc-floco  { opacity: 0.6; }
-  .anim-calc-arfrio { opacity: 0.3; }
+  .anim-calc-floco, .anim-calc-mist, .anim-calc-brilho, .anim-calc-entra, .anim-calc-settle, .anim-calc-cone { animation: none; }
+  .anim-calc-floco { opacity: 0.7; }
+  .anim-calc-mist  { opacity: 0.35; }
+  .anim-calc-cone  { opacity: 0.22; }
 }
-
-/* Brilho frio atrás da unidade na cena da calculadora (cor do token cena.frio) */
-.calc-glow { background: radial-gradient(60% 50% at 62% 38%, rgba(56, 189, 248, 0.18), transparent 70%); }
-@media (prefers-reduced-motion: reduce) { .calc-glow { opacity: 0.5; } }
+/* Brilho frio de ambiente atrás da unidade */
+.calc-glow { background: radial-gradient(58% 48% at 60% 36%, rgba(56, 189, 248, 0.20), transparent 72%); }
+@media (prefers-reduced-motion: reduce) { .calc-glow { opacity: 0.6; } }

@@ -50,12 +50,19 @@ describe("Wizard da calculadora", () => {
     expect($("[data-pergunta=tipo]")).toBeTruthy();
     expect($("[data-pergunta=tamanho]")).toBeNull();
     expect(forma()).toBe("hi-wall");
+    // sem área ainda: a cena não sopra ar frio
+    expect($("[data-ar-frio]")).toBeNull();
     await clicar("[data-continuar]"); // tipo -> tamanho
     // sem área, não avança e mostra erro
     await clicar("[data-continuar]");
     expect(txt($("[data-erro-wizard]"))).toMatch(/Informe a área/);
     await digitar("[data-amb-area]", "12");
     expect(forma()).toBe("hi-wall"); // 12 m² quarto = 7200 -> 9000 -> hi-wall
+    // com área, a unidade está instalada e o ar frio aparece na cena
+    expect($("[data-unidade-interna='0']")).toBeTruthy();
+    expect($("[data-ar-frio]")).toBeTruthy();
+    // sem conjunto, não há condensadora externa
+    expect($("[data-unidade-externa]")).toBeNull();
   });
 
   it("ambiente grande → cena no teto (cassete)", async () => {
@@ -67,6 +74,8 @@ describe("Wizard da calculadora", () => {
     await clicar("[data-continuar]");
     await digitar("[data-amb-area]", "60"); // 60×900 = 54000 -> cassete (teto)
     expect(forma()).toBe("cassete");
+    // a cena desenha os móveis do tipo escolhido (galpão -> prateleiras)
+    expect($("[data-movel=prateleiras]")).toBeTruthy();
   });
 
   it("fluxo completo de 1 ambiente: resultado com BTU + equipamento + pré-orçamento, e captura o lead", async () => {
@@ -104,6 +113,9 @@ describe("Wizard da calculadora", () => {
     expect($$("[data-ambiente-res]")).toHaveLength(3);
     expect(txt($("[data-conjunto]"))).toMatch(/Multisplit/);
     expect(forma()).toBe("multisplit");
+    // a cena mostra a condensadora externa e mais de uma unidade interna
+    expect($("[data-unidade-externa]")).toBeTruthy();
+    expect($$("[data-unidade-interna]").length).toBeGreaterThanOrEqual(2);
     await clicar("[data-cta-orcamento]");
     await digitar("[data-contato-nome]", "João Souza");
     await digitar("[data-contato-whatsapp]", "62988887777");
