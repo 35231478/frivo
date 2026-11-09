@@ -199,7 +199,7 @@ export function CalculadoraWizard({ whatsapp }: { whatsapp?: string | null }) {
 
       {/* A cena do projeto, formando-se */}
       <div className="order-1 lg:order-2 lg:sticky lg:top-5 self-start" data-cena-lado>
-        <CenaProjeto escala={cenaEscala} forma={cenaForma} ativo={areaAtual > 0 || calculados.length > 0} nInternas={calculados.length || 1} />
+        <CenaProjeto escala={cenaEscala} forma={cenaForma} ativo={areaAtual > 0 || calculados.length > 0} nInternas={calculados.length || 1} tipo={atual?.tipo} />
         <p className="mt-2 text-center text-xs text-cena-apoio">{calculados.length > 1 ? `${calculados.length} ambientes` : "O projeto se forma a cada resposta."}</p>
       </div>
     </div>

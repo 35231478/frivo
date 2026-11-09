@@ -81,12 +81,18 @@ export const cena = {
   apoio: "#9FB0C9",   // texto de apoio sobre o escuro (passa 4.5:1 sobre fundo e painel)
   frio: "#38BDF8",    // ciano do "frio": brilho, ar, destaque
   frio2: "#0EA5E9",   // ciano mais forte
-  parede: "#1C2740",  // parede do cômodo (isométrico)
+  parede: "#1C2740",  // parede do cômodo (face direita, mais iluminada)
+  parede2: "#141D30", // parede do cômodo (face esquerda, mais escura — profundidade)
   piso: "#161F33",    // piso
-  luz: "#223150",     // face iluminada (topo da parede)
-  equip: "#CBD7EA",   // corpo do equipamento (claro, metálico)
-  equip2: "#8A9BBB",  // sombra do equipamento
-  neve: "#BFE9FB",    // floco de neve / ar frio
+  piso2: "#101829",   // piso ao fundo (gradiente de profundidade)
+  luz: "#223150",     // face iluminada (topo/rodapé)
+  vidro: "#9DC9E8",   // luz do dia entrando pela janela
+  movel: "#334260",   // móveis (silhueta)
+  movel2: "#44587E",  // móveis (face superior, luz)
+  equip: "#E6EDF8",   // corpo do equipamento (claro, metálico premium)
+  equip2: "#8A9BBB",  // sombra/aletas do equipamento
+  led: "#4ADE80",     // LED/display do aparelho (verde "ligado")
+  neve: "#DCF1FB",    // floco de neve / ar frio
 } as const;
 
 /** Forma */
