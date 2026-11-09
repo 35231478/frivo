@@ -25,6 +25,9 @@ const emptyContato = (): ContatoLocal => ({
   nome: "", cargo: "", tipo: "OUTRO", telefone: "", whatsapp: "", email: "", principal: false,
 });
 
+/** Cria um contato local em branco (com _tempId) — usado pelo autofill da consulta de CNPJ. */
+export const novoContatoLocal = emptyContato;
+
 interface ContatosLocalProps {
   contatos: ContatoLocal[];
   onChange: (contatos: ContatoLocal[]) => void;

@@ -41,6 +41,9 @@ const emptyForm = (): UnidadeLocal => ({
   latitude: null, longitude: null, telefone: "", observacoes: "",
 });
 
+/** Cria um endereço local em branco (com _tempId) — usado pelo autofill da consulta de CNPJ. */
+export const novaUnidadeLocal = emptyForm;
+
 interface UnidadesLocalProps {
   unidades: UnidadeLocal[];
   onChange: (unidades: UnidadeLocal[]) => void;

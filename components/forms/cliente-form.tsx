@@ -14,12 +14,13 @@ import { PhoneInput } from "@/components/ui/phone-input";
 import { StarRating } from "@/components/ui/star-rating";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { UnidadesManager } from "@/components/forms/unidades-manager";
-import { UnidadesLocal, type UnidadeLocal } from "@/components/forms/unidades-local";
+import { UnidadesLocal, novaUnidadeLocal, type UnidadeLocal } from "@/components/forms/unidades-local";
+import { mesclarEnderecoPrincipal, mesclarContato, type EnderecoConsulta, type ContatoConsulta } from "@/lib/cadastros/autofill-cnpj";
 import { AnexosManager } from "@/components/forms/anexos-manager";
 import { AnexosLocal, type AnexoLocal } from "@/components/forms/anexos-local";
 import { LogoUpload } from "@/components/forms/logo-upload";
 import { ContatosManager } from "@/components/forms/contatos-manager";
-import { ContatosLocal, type ContatoLocal } from "@/components/forms/contatos-local";
+import { ContatosLocal, novoContatoLocal, type ContatoLocal } from "@/components/forms/contatos-local";
 import { ComunicacaoPreferencias } from "@/components/forms/comunicacao-preferencias";
 import { PortalContatos } from "@/components/forms/portal-contatos";
 import { InteracoesManager } from "@/components/forms/interacoes-manager";
@@ -36,7 +37,7 @@ import type { Cliente, Tecnico, Unidade, Configuracao, ContatoCliente } from "@p
 import type { ContatoSeguro } from "@/lib/contato-cliente";
 import {
   Search, Loader2, FileCheck, Lock, Pencil, X, AlertCircle,
-  FileText, MapPin, Image as ImageIcon, Heart, Headset,
+  FileText, MapPin, Heart, Headset,
   Building2, DollarSign, Users, Paperclip, Star, MessageSquare, Globe, ArrowUpRight, Send, FileSignature,
   ClipboardPlus, Calculator,
 } from "lucide-react";
@@ -97,6 +98,11 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
   const [anexosNovos, setAnexosNovos] = useState<AnexoLocal[]>([]);
   const [contatosNovos, setContatosNovos] = useState<ContatoLocal[]>([]);
   const [razaoSocialBloqueada, setRazaoSocialBloqueada] = useState(false);
+  // Autofill da consulta de CNPJ na edição: o endereço/contato da consulta viram sugestão para os
+  // managers (abrem o formulário já preenchido ao clicar em "Novo"); o nonce dispara o efeito.
+  const [sugestaoEndereco, setSugestaoEndereco] = useState<EnderecoConsulta | null>(null);
+  const [sugestaoContato, setSugestaoContato] = useState<ContatoConsulta | null>(null);
+  const [consultaNonce, setConsultaNonce] = useState(0);
   const [config, setConfig] = useState<Partial<Configuracao>>({});
   const [satisfacao, setSatisfacao] = useState<number | null>(initialData?.satisfacao ?? null);
 
@@ -196,21 +202,34 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
     setBuscandoCnpj(true); setErroGlobal("");
     try {
       const res = await fetch(`/api/cnpj/${cnpj}`);
-      if (!res.ok) { const err = await res.json(); setErroGlobal(err.erro ?? "Erro ao consultar CNPJ."); return; }
+      if (!res.ok) { const err = await res.json().catch(() => ({})); setErroGlobal(err.erro ?? "Erro ao consultar CNPJ."); return; }
       const data = await res.json();
       if (data.nome) { setValue("nome", data.nome); setRazaoSocialBloqueada(true); }
       setCnpjInfo({ nome: data.nome ?? "", cidade: data.cidade, estado: data.estado });
       if (data.nomeFantasia) setValue("nomeFantasia", data.nomeFantasia);
-      if (data.email) setValue("email", data.email);
-      if (data.telefone) setValue("telefone", data.telefone);
-      if (data.endereco) setValue("endereco", data.endereco);
-      if (data.numero) setValue("numero", data.numero);
-      if (data.complemento) setValue("complemento", data.complemento);
-      if (data.bairro) setValue("bairro", data.bairro);
-      if (data.cidade) setValue("cidade", data.cidade);
-      if (data.estado) setValue("estado", data.estado);
-      if (data.cep) setValue("cep", data.cep);
-    } catch { setErroGlobal("Falha na consulta do CNPJ."); } finally { setBuscandoCnpj(false); }
+      // A mesma resposta já traz o endereço completo e o contato — aproveitar (sem 2ª chamada ao ViaCEP).
+      const end: EnderecoConsulta = {
+        logradouro: data.endereco ?? "", numero: data.numero ?? "", complemento: data.complemento ?? "",
+        bairro: data.bairro ?? "", cidade: data.cidade ?? "", estado: data.estado ?? "", cep: data.cep ?? "",
+      };
+      const contato: ContatoConsulta = { email: data.email ?? "", telefone: data.telefone ?? "" };
+      const nomeCli = data.nome || watch("nome") || "";
+
+      if (!isEditing) {
+        // Cliente novo: mescla direto no que vai ser salvo (cria o principal se não houver; senão só vazios).
+        const re = mesclarEnderecoPrincipal<UnidadeLocal>(unidadesNovas, end, novaUnidadeLocal);
+        if (re.preencheu) setUnidadesNovas(re.unidades);
+        const rc = mesclarContato<ContatoLocal>(contatosNovos, contato, nomeCli, novoContatoLocal);
+        if (rc.contatos !== contatosNovos) setContatosNovos(rc.contatos);
+        const partes = [re.preencheu && "endereço", rc.adicionou && "contato"].filter(Boolean);
+        if (partes.length) toast(`Consulta preencheu ${partes.join(" e ")} do cliente.`);
+      } else {
+        // Edição: vira sugestão para os managers (o nonce abre o formulário já preenchido ao adicionar).
+        setSugestaoEndereco(end);
+        setSugestaoContato(contato.email || contato.telefone ? contato : null);
+        setConsultaNonce((n) => n + 1);
+      }
+    } catch { setErroGlobal("Falha na consulta do CNPJ. Tente novamente."); } finally { setBuscandoCnpj(false); }
   }
 
   // Valida regras dinâmicas da empresa; retorna { aba, msg } do primeiro erro
@@ -462,7 +481,14 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
 
       {/* ABA 1 — Dados Gerais */}
       <Painel ativo={aba === "geral"}>
-        <FormSection title="Dados básicos" icon={<Building2 className="w-3.5 h-3.5" />}>
+        <FormSection title="Identificação" icon={<Building2 className="w-3.5 h-3.5" />}>
+          {isEditing ? (
+            <div className="flex items-center gap-3 pb-1">
+              <LogoUpload compacto clienteId={initialData!.id} logoInicial={initialData!.logo} />
+            </div>
+          ) : (
+            <p className="text-xs text-ink-muted">A logomarca pode ser enviada após salvar o cliente.</p>
+          )}
           <FormGrid>
             <FormField label="Tipo de pessoa" required>
               <Select {...register("tipoPessoa")} error={!!errors.tipoPessoa}>
@@ -540,31 +566,8 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
           </FormGrid>
         </FormSection>
 
-        {/* Logomarca — no topo, junto aos dados básicos */}
-        <FormSection title="Logomarca" icon={<ImageIcon className="w-3.5 h-3.5" />}>
-          {isEditing ? (
-            <LogoUpload clienteId={initialData!.id} logoInicial={initialData!.logo} />
-          ) : (
-            <p className="text-sm text-ink-muted">A logomarca pode ser enviada após salvar o cliente.</p>
-          )}
-        </FormSection>
-
-        {/* Contatos (antes numa aba própria) */}
-        <FormSection title="Contatos do cliente" icon={<Users className="w-3.5 h-3.5" />}>
-          <p className="text-xs text-ink-muted -mt-2 mb-3">
-            {isEditing
-              ? "Contatos do cliente. Comunicação e acesso ao portal ficam nas abas Comunicação e Portal."
-              : "Adicione os contatos do cliente. O primeiro será marcado como principal."}
-          </p>
-          {isEditing ? (
-            <ContatosManager clienteId={initialData!.id} contatosIniciais={initialData!.contatosCliente ?? []} />
-          ) : (
-            <ContatosLocal contatos={contatosNovos} onChange={setContatosNovos} />
-          )}
-        </FormSection>
-
-        {/* Endereços (antes numa aba própria) */}
-        <FormSection title="Endereços do cliente" icon={<MapPin className="w-3.5 h-3.5" />}>
+        {/* Endereços — logo abaixo da identificação (o Consultar preenche os dois juntos) */}
+        <FormSection title="Endereços" icon={<MapPin className="w-3.5 h-3.5" />}>
           <p className="text-xs text-ink-muted -mt-2 mb-3">
             {isEditing
               ? "Gerencie os endereços do cliente. O endereço marcado com estrela é o principal."
@@ -574,14 +577,33 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
           </p>
           {isEditing ? (
             <UnidadesManager clienteId={initialData!.id} unidadesIniciais={initialData!.unidades ?? []}
-              enderecoCliente={{ endereco: initialData!.endereco, numero: initialData!.numero, complemento: initialData!.complemento, bairro: initialData!.bairro, cidade: initialData!.cidade, estado: initialData!.estado, cep: initialData!.cep, telefone: initialData!.telefone }} />
+              prefillNonce={consultaNonce}
+              enderecoCliente={sugestaoEndereco
+                ? { endereco: sugestaoEndereco.logradouro, numero: sugestaoEndereco.numero, complemento: sugestaoEndereco.complemento, bairro: sugestaoEndereco.bairro, cidade: sugestaoEndereco.cidade, estado: sugestaoEndereco.estado, cep: sugestaoEndereco.cep, telefone: initialData!.telefone }
+                : { endereco: initialData!.endereco, numero: initialData!.numero, complemento: initialData!.complemento, bairro: initialData!.bairro, cidade: initialData!.cidade, estado: initialData!.estado, cep: initialData!.cep, telefone: initialData!.telefone }} />
           ) : (
             <UnidadesLocal unidades={unidadesNovas} onChange={setUnidadesNovas} />
           )}
         </FormSection>
 
-        {/* Tabela de preços (antes na aba Faturamento) */}
-        <FormSection title="Tabela de preços" icon={<DollarSign className="w-3.5 h-3.5" />}>
+        {/* Contatos */}
+        <FormSection title="Contatos" icon={<Users className="w-3.5 h-3.5" />}>
+          <p className="text-xs text-ink-muted -mt-2 mb-3">
+            {isEditing
+              ? "Contatos do cliente. Comunicação e acesso ao portal ficam nas abas Comunicação e Portal."
+              : "Adicione os contatos do cliente. O primeiro será marcado como principal."}
+          </p>
+          {isEditing ? (
+            <ContatosManager clienteId={initialData!.id} contatosIniciais={initialData!.contatosCliente ?? []}
+              sugestao={sugestaoContato ? { nome: watch("nome"), email: sugestaoContato.email, telefone: sugestaoContato.telefone } : null}
+              prefillNonce={consultaNonce} />
+          ) : (
+            <ContatosLocal contatos={contatosNovos} onChange={setContatosNovos} />
+          )}
+        </FormSection>
+
+        {/* Comercial — tabela de preços */}
+        <FormSection title="Comercial" icon={<DollarSign className="w-3.5 h-3.5" />}>
           <FormField label="Tabela de preços" hint="Sem tabela, valem os preços padrão do catálogo.">
             {/* Só ativas para nova escolha; a do cliente continua visível mesmo inativa (“(inativa)”) */}
             <SeletorCadastro entidade="tabelas-preco" valor={tabelaPrecoId} onChange={(v) => setTabelaPrecoId(v)} vazio="Sem tabela (preços do catálogo)" itens={tabelasPreco.itens} />
