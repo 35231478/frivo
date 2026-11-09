@@ -88,15 +88,15 @@ export function ContatosLocal({ contatos, onChange }: ContatosLocalProps) {
         </div>
         <FormGrid>
           <FormField label="Nome" required>
-            <Input value={form.nome} onChange={(e) => updateField("nome", e.target.value)} placeholder="Nome completo" />
+            <Input value={form.nome} onChange={(e) => updateField("nome", e.target.value)} caixa="nome" placeholder="Nome completo" />
           </FormField>
           <FormField label="Cargo">
-            <Input value={form.cargo} onChange={(e) => updateField("cargo", e.target.value)} placeholder="Ex: Gerente, Coordenador" />
+            <Input value={form.cargo} onChange={(e) => updateField("cargo", e.target.value)} caixa="nome" placeholder="Ex: Gerente, Coordenador" />
           </FormField>
         </FormGrid>
         <FormGrid>
           <FormField label="E-mail">
-            <Input value={form.email} onChange={(e) => updateField("email", e.target.value)} type="email" placeholder="email@empresa.com" />
+            <Input value={form.email} onChange={(e) => updateField("email", e.target.value)} caixa="email" type="email" placeholder="email@empresa.com" />
           </FormField>
           <FormField label="Telefone">
             <PhoneInput value={form.telefone} onChange={(e: any) => updateField("telefone", e.target.value)} placeholder="(00) 0000-0000" />

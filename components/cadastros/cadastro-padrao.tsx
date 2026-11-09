@@ -544,6 +544,7 @@ function CampoForm({ campo: c, valor, disabled, id, onChange }: {
     <Input
       id={id} type="text" inputMode={numerico ? (c.tipo === "inteiro" ? "numeric" : "decimal") : undefined}
       value={valor} onChange={(e) => onChange(e.target.value)} placeholder={c.placeholder} disabled={disabled}
+      caixa={numerico ? undefined : c.caixa}
     />
   );
 }

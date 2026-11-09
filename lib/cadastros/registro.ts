@@ -9,6 +9,7 @@ import type { Direcao, MapaOrdem } from "@/lib/listagem";
 import { descricaoLc116, LISTA_LC116 } from "@/lib/nfse/lc116";
 import type { OpcaoCodigo } from "@/lib/nfse/busca-codigo";
 import { erroAliquota, formatarCnae, normalizarCnae, normalizarLc116, TRIBUTACOES_ISS } from "@/lib/nfse/servico";
+import { padronizarNome, type TipoTexto } from "@/lib/texto/normalizar";
 
 /**
  * Cadastros padronizados — registro DECLARATIVO (mesmo espírito do ENTIDADE das ações em massa).
@@ -62,6 +63,8 @@ export interface CampoCadastro {
   placeholder?: string;
   /** Agrupa no formulário (ex.: "Dados fiscais") */
   grupo?: string;
+  /** Padroniza a digitação ao sair do campo (onBlur); o servidor normaliza de novo ao gravar */
+  caixa?: TipoTexto;
   /** Texto de ajuda discreto embaixo do campo */
   ajuda?: string;
   /** Como mostrar o valor gravado no formulário (ex.: CNAE 4321500 → 4321-5/00); o servidor normaliza de volta */
@@ -470,12 +473,12 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
     ocultos: ["senha"],
     incluir: { perfilAcesso: { select: { id: true, nome: true, cor: true, ativo: true } } },
     campos: [
-      { key: "nome", label: "Nome", obrigatorio: true },
+      { key: "nome", label: "Nome", obrigatorio: true, caixa: "nome" },
       { key: "email", label: "E-mail", tipo: "email", obrigatorio: true },
     ],
     colunas: [{ key: "nome", label: "Usuário", ordenar: "nome" }, { key: "perfil", label: "Perfil de acesso", ordenar: (dir) => ({ perfilAcesso: { nome: dir } }) }, { key: "ultimoAcesso", label: "Último acesso", ordenar: (dir) => ({ ultimoAcesso: { sort: dir, nulls: "last" } }) }],
     ...schemas({
-      nome: z.string().trim().min(2, "Informe o nome (mín. 2 letras).").max(120),
+      nome: z.string().trim().min(2, "Informe o nome (mín. 2 letras).").max(120).transform(padronizarNome),
       email: z.string().trim().toLowerCase().email("E-mail inválido.").max(160),
       perfilAcessoId: z.preprocess((v) => (vazio(v) ? null : v), z.string().max(40).nullable()),
     }, { perfilAcessoId: null }, { soCriar: ["email"] }),
@@ -566,7 +569,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
     busca: ["nome", "documento", "email", "telefone"], detalheSugestao: "documento",
     incluir: { _count: { select: { contasPagar: true } } },
     campos: [
-      { key: "nome", label: "Nome / razão social", obrigatorio: true, placeholder: "Ex: Frigelar Distribuidora" },
+      { key: "nome", label: "Nome / razão social", obrigatorio: true, placeholder: "Ex: Frigelar Distribuidora", caixa: "nome" },
       { key: "documento", label: "CNPJ / CPF", placeholder: "00.000.000/0000-00" },
       { key: "telefone", label: "Telefone", placeholder: "(00) 00000-0000" },
       { key: "email", label: "E-mail", tipo: "email", placeholder: "contato@fornecedor.com.br" },
@@ -574,7 +577,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
     ],
     colunas: [{ key: "nome", label: "Fornecedor", ordenar: "nome" }, { key: "documento", label: "CNPJ / CPF", ordenar: "documento" }, { key: "contato", label: "Contato" }, { key: "uso", label: "Contas a pagar", ordenar: (dir) => ({ contasPagar: { _count: dir } }) }],
     ...schemas({
-      nome: nome, documento: documentoSchema, telefone: textoOpcional(30), email: emailOpcional, observacoes: textoOpcional(2000),
+      nome: nome.transform(padronizarNome), documento: documentoSchema, telefone: textoOpcional(30), email: emailOpcional, observacoes: textoOpcional(2000),
     }, { documento: null, telefone: null, email: null, observacoes: null }),
   },
   "centros-custo": {

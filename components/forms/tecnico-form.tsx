@@ -136,7 +136,7 @@ export function TecnicoForm({ initialData }: TecnicoFormProps) {
         </FormField>
         <FormGrid>
           <FormField label="Nome completo" required error={errors.nome?.message}>
-            <Input {...register("nome")} error={!!errors.nome} />
+            <Input {...register("nome")} caixa="nome" error={!!errors.nome} />
           </FormField>
           <FormField label="CPF" required error={errors.cpf?.message}>
             <Input {...register("cpf")} placeholder="000.000.000-00" error={!!errors.cpf} />
@@ -144,7 +144,7 @@ export function TecnicoForm({ initialData }: TecnicoFormProps) {
         </FormGrid>
         <FormGrid cols={3}>
           <FormField label="E-mail" error={errors.email?.message}>
-            <Input {...register("email")} type="email" placeholder="tecnico@empresa.com.br" error={!!errors.email} />
+            <Input {...register("email")} caixa="email" type="email" placeholder="tecnico@empresa.com.br" error={!!errors.email} />
           </FormField>
           <FormField label="Telefone" required error={errors.telefone?.message}>
             <Input {...register("telefone")} placeholder="(00) 0000-0000" error={!!errors.telefone} />

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { enviarEmailInterno } from "@/lib/email";
 import { formatarData } from "@/lib/utils";
 import { comNumero } from "@/lib/numeracao-server";
+import { caixaNome, caixaEmail } from "@/lib/texto/zod";
 
 /**
  * Criação do lead do site (calculadora de BTU), num só lugar, usada tanto pelo endpoint público do
@@ -26,10 +27,10 @@ export const ambienteLeadSchema = z.object({
 });
 
 export const leadSiteSchema = z.object({
-  nome: z.string().trim().min(3, "Informe o nome completo."),
+  nome: z.string().trim().min(3, "Informe o nome completo.").transform(caixaNome),
   whatsapp: z.string().trim().min(10, "Informe um WhatsApp/telefone válido com DDD."),
-  email: z.string().trim().email("Informe um e-mail válido."),
-  cidade: z.string().trim().min(1, "Informe a cidade.").optional().default(""),
+  email: z.string().trim().email("Informe um e-mail válido.").transform(caixaEmail),
+  cidade: z.string().trim().min(1, "Informe a cidade.").optional().default("").transform(caixaNome),
   tipoUso: z.string().trim().min(1).default("Residencial"),
   mensagemAdicional: z.string().trim().optional(),
   recomendacao: z.string().trim().optional(),

@@ -5,22 +5,23 @@ import { prisma } from "@/lib/prisma";
 import { respostaRefEmpresa, validarRefEmpresa } from "@/lib/ref-empresa";
 import { validarDataUrl, type ArquivoValidado } from "@/lib/anexos-server";
 import { clienteSchema } from "@/lib/validations";
+import { caixaNome, caixaEmail, caixaLivre } from "@/lib/texto/zod";
 import { z } from "zod";
 
 const unidadeInlineSchema = z.object({
-  nome: z.string().min(1),
+  nome: z.string().min(1).transform(caixaNome),
   principal: z.boolean().default(false),
-  logradouro: z.string().optional(),
+  logradouro: z.string().optional().transform(caixaNome),
   numero: z.string().optional(),
-  complemento: z.string().optional(),
-  bairro: z.string().optional(),
-  cidade: z.string().optional(),
+  complemento: z.string().optional().transform(caixaNome),
+  bairro: z.string().optional().transform(caixaNome),
+  cidade: z.string().optional().transform(caixaNome),
   estado: z.string().optional(),
   cep: z.string().optional(),
   latitude: z.number().optional().nullable(),
   longitude: z.number().optional().nullable(),
   telefone: z.string().optional(),
-  observacoes: z.string().optional(),
+  observacoes: z.string().optional().transform(caixaLivre),
 });
 
 const anexoInlineSchema = z.object({
@@ -31,12 +32,12 @@ const anexoInlineSchema = z.object({
 });
 
 const contatoInlineSchema = z.object({
-  nome: z.string().min(1),
-  cargo: z.string().optional(),
+  nome: z.string().min(1).transform(caixaNome),
+  cargo: z.string().optional().transform(caixaNome),
   tipo: z.string().default("OUTRO"),
   telefone: z.string().optional(),
   whatsapp: z.string().optional(),
-  email: z.string().optional(),
+  email: z.string().optional().transform(caixaEmail),
   principal: z.boolean().default(false),
 });
 

@@ -12,6 +12,11 @@ import { normalizarCodigoProduto, normalizarCodigoServico } from "@/lib/cadastro
 import {
   chaveNome, numero, opcao, texto, type ColunaImportacao, type ContextoImportacao, type DefImportacao, type OpcaoRef, type ResultadoLinha,
 } from "@/lib/importacao/motor";
+import { padronizarNome, padronizarEmail, apararTextoLivre } from "@/lib/texto/normalizar";
+
+/** Padroniza um texto opcional da planilha; mantém undefined quando ausente. */
+const pNome = (s: string | undefined) => (s ? padronizarNome(s) : s);
+const pLivre = (s: string | undefined) => (s ? apararTextoLivre(s) : s);
 
 export const ENTIDADES_IMPORTACAO = ["clientes", "fornecedores", "servicos", "produtos"] as const;
 export type EntidadeImportacao = (typeof ENTIDADES_IMPORTACAO)[number];
@@ -154,13 +159,13 @@ const clientes: DefImportacao = {
     return {
       ok: true, rotulo, chaves: [...(id ? [`id:${id}`] : []), `doc:${doc}`],
       dados: {
-        nome: rotulo, cpfCnpj: formatarDocumento(doc!), tipoPessoa: tipo.valor ?? tipoDoc,
-        nomeFantasia: texto(v.nome_fantasia), inscricaoEstadual: texto(v.inscricao_estadual),
-        email: email?.toLowerCase(), telefone: texto(v.telefone), celular: texto(v.celular), contato: texto(v.contato),
+        nome: padronizarNome(rotulo), cpfCnpj: formatarDocumento(doc!), tipoPessoa: tipo.valor ?? tipoDoc,
+        nomeFantasia: pNome(texto(v.nome_fantasia)), inscricaoEstadual: texto(v.inscricao_estadual),
+        email: email ? padronizarEmail(email) : undefined, telefone: texto(v.telefone), celular: texto(v.celular), contato: pNome(texto(v.contato)),
         cep: cep ? digitos(cep).replace(/(\d{5})(\d{3})/, "$1-$2") : undefined,
-        endereco: texto(v.endereco), numero: texto(v.numero), complemento: texto(v.complemento), bairro: texto(v.bairro),
-        cidade: texto(v.cidade), estado: uf.valor, segmento: seg.valor, origem: ori.valor, tabelaPrecoId: tab.valor,
-        observacoes: texto(v.observacoes),
+        endereco: pNome(texto(v.endereco)), numero: texto(v.numero), complemento: pNome(texto(v.complemento)), bairro: pNome(texto(v.bairro)),
+        cidade: pNome(texto(v.cidade)), estado: uf.valor, segmento: seg.valor, origem: ori.valor, tabelaPrecoId: tab.valor,
+        observacoes: pLivre(texto(v.observacoes)),
       },
     };
   },

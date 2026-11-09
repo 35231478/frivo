@@ -65,6 +65,7 @@ describe("estrutura: 3 abas com cartões; cada item tem id, tela e a rota antiga
       ["Empresa", ["Dados da empresa", "Preferências", "Numeração de documentos"]],
       ["Acesso e pessoas", ["Usuários", "Perfis de acesso", "Cargos"]],
       ["Integrações", ["E-mail transacional", "Portal do cliente", "QR Code"]],
+      ["Manutenção de dados", ["Padronização de digitação"]],
     ]);
   });
 

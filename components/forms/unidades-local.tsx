@@ -169,7 +169,7 @@ export function UnidadesLocal({ unidades, onChange }: UnidadesLocalProps) {
 
         <FormGrid>
           <FormField label="Nome do endereço" required>
-            <Input value={form.nome} onChange={(e) => updateField("nome", e.target.value)} placeholder="Ex: Matriz, Filial, Depósito" />
+            <Input value={form.nome} onChange={(e) => updateField("nome", e.target.value)} caixa="nome" placeholder="Ex: Matriz, Filial, Depósito" />
           </FormField>
           <FormField label="Telefone">
             <Input value={form.telefone} onChange={(e) => updateField("telefone", e.target.value)} placeholder="(00) 0000-0000" />
@@ -190,15 +190,15 @@ export function UnidadesLocal({ unidades, onChange }: UnidadesLocalProps) {
             <Input value={form.numero} onChange={(e) => updateField("numero", e.target.value)} />
           </FormField>
           <FormField label="Complemento" className="sm:col-span-2">
-            <Input value={form.complemento} onChange={(e) => updateField("complemento", e.target.value)} />
+            <Input value={form.complemento} onChange={(e) => updateField("complemento", e.target.value)} caixa="endereco" />
           </FormField>
         </FormGrid>
         <FormGrid cols={3}>
           <FormField label="Bairro">
-            <Input value={form.bairro} onChange={(e) => updateField("bairro", e.target.value)} />
+            <Input value={form.bairro} onChange={(e) => updateField("bairro", e.target.value)} caixa="endereco" />
           </FormField>
           <FormField label="Cidade">
-            <Input value={form.cidade} onChange={(e) => updateField("cidade", e.target.value)} />
+            <Input value={form.cidade} onChange={(e) => updateField("cidade", e.target.value)} caixa="cidade" />
           </FormField>
           <FormField label="Estado">
             <Select value={form.estado} onChange={(e) => updateField("estado", e.target.value)} placeholder="UF">
