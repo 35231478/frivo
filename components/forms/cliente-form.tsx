@@ -11,7 +11,6 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { PhoneInput } from "@/components/ui/phone-input";
-import { WhatsAppInput } from "@/components/ui/whatsapp-input";
 import { StarRating } from "@/components/ui/star-rating";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { UnidadesManager } from "@/components/forms/unidades-manager";
@@ -22,12 +21,11 @@ import { LogoUpload } from "@/components/forms/logo-upload";
 import { ContatosManager } from "@/components/forms/contatos-manager";
 import { ContatosLocal, type ContatoLocal } from "@/components/forms/contatos-local";
 import { ComunicacaoPreferencias } from "@/components/forms/comunicacao-preferencias";
-import { ClienteContratos } from "@/components/forms/cliente-contratos";
 import { PortalContatos } from "@/components/forms/portal-contatos";
 import { InteracoesManager } from "@/components/forms/interacoes-manager";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
-import { LABELS_PERFIL_FATURAMENTO, formatarMoeda } from "@/lib/utils";
+import { formatarMoeda } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import {
   LABELS_STATUS_FINANCEIRO_CALC, COR_STATUS_FINANCEIRO_CALC, type StatusFinanceiroCalc,
@@ -38,7 +36,7 @@ import type { Cliente, Tecnico, Unidade, Configuracao, ContatoCliente } from "@p
 import type { ContatoSeguro } from "@/lib/contato-cliente";
 import {
   Search, Loader2, FileCheck, Lock, Pencil, X, AlertCircle,
-  FileText, Phone, MapPin, Image as ImageIcon, Heart, Headset,
+  FileText, MapPin, Image as ImageIcon, Heart, Headset,
   Building2, DollarSign, Users, Paperclip, Star, MessageSquare, Globe, ArrowUpRight, Send, FileSignature,
   ClipboardPlus, Calculator,
 } from "lucide-react";
@@ -69,7 +67,7 @@ interface ClienteFormProps {
 const CAMPO_ABA: Record<string, string> = {
   tipoPessoa: "geral", cpfCnpj: "geral", nome: "geral", nomeFantasia: "geral", inscricaoEstadual: "geral",
   statusFinanceiro: "geral", ativo: "geral",
-  email: "contatos", telefone: "contatos", celular: "contatos", contato: "contatos",
+  email: "geral", telefone: "geral", celular: "geral", contato: "geral",
   observacoes: "relacionamento",
 };
 
@@ -143,15 +141,9 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
     } catch { setErroGlobal("Erro de conexão."); } finally { setMudandoAtivo(false); }
   }
 
-  // Perfil de faturamento (gerenciado fora do RHF)
-  const [tipoFaturamento, setTipoFaturamento] = useState<string>(initialData?.tipoFaturamento ?? "");
-  const [diaFaturamento, setDiaFaturamento] = useState<number>(initialData?.diaFaturamento ?? 1);
-  const [condicaoPagamento, setCondicaoPagamento] = useState<string>(initialData?.condicaoPagamento ?? "");
-  const [exigePcAntesNf, setExigePcAntesNf] = useState<boolean>(initialData?.exigePcAntesNf ?? false);
-  const [agrupaAdicionais, setAgrupaAdicionais] = useState<boolean>(initialData?.agrupaAdicionais ?? false);
-  const [boletoUnicoMensal, setBoletoUnicoMensal] = useState<boolean>(initialData?.boletoUnicoMensal ?? false);
-  const [emailsFaturamento] = useState<string[]>(initialData?.emailsFaturamento ?? []);
-  const [whatsappFaturamento, setWhatsappFaturamento] = useState<string>(initialData?.whatsappFaturamento ?? "");
+  // Tabela de preços (em Dados gerais). O perfil de faturamento (tipo/dia/condição e canais de
+  // cobrança) saiu da UI do cliente: as colunas ficam no banco e são preservadas na edição porque
+  // não entram mais no payload. A configuração de faturamento vive em cada contrato.
   const [tabelaPrecoId, setTabelaPrecoId] = useState<string>(initialData?.tabelaPrecoId ?? "");
   const tabelasPreco = useCadastro("tabelas-preco");
   const tabelaInativa = tabelasPreco.itens.find((t) => t.id === tabelaPrecoId && t.ativo === false) ?? null;
@@ -223,7 +215,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
 
   // Valida regras dinâmicas da empresa; retorna { aba, msg } do primeiro erro
   function validarConfigDinamica(): { aba: string; msg: string } | null {
-    if (config.clienteExigirUnidade && !isEditing && unidadesNovas.length === 0) return { aba: "enderecos", msg: "Adicione pelo menos um endereço antes de salvar (configuração da empresa)." };
+    if (config.clienteExigirUnidade && !isEditing && unidadesNovas.length === 0) return { aba: "geral", msg: "Adicione pelo menos um endereço antes de salvar (configuração da empresa)." };
     return null;
   }
 
@@ -244,14 +236,6 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
     const payload: any = {
       ...data,
       satisfacao,
-      tipoFaturamento: tipoFaturamento || null,
-      diaFaturamento,
-      condicaoPagamento: condicaoPagamento || null,
-      exigePcAntesNf,
-      agrupaAdicionais,
-      boletoUnicoMensal,
-      emailsFaturamento,
-      whatsappFaturamento: whatsappFaturamento || null,
       tabelaPrecoId: tabelaPrecoId || null,
       portalAtivo,
       // Segmento e Origem não são mais editáveis no formulário; preserva o valor
@@ -293,19 +277,13 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
     return config[cfgKey] ? `${base} *` : base;
   }
 
-  const qtdContatos = isEditing ? (initialData!.contatosCliente?.length ?? 0) : contatosNovos.length;
-  const qtdEnderecos = isEditing ? (initialData!.unidades?.length ?? 0) : unidadesNovas.length;
   const qtdAnexos = isEditing ? (initialData!.anexos?.length ?? 0) : anexosNovos.length;
 
   const ABAS = [
     { id: "geral", label: "Dados gerais", icone: FileText },
-    { id: "contatos", label: "Contatos", icone: Phone, badge: qtdContatos },
-    { id: "enderecos", label: "Endereços", icone: MapPin, badge: qtdEnderecos },
     { id: "comunicacao", label: "Comunicação", icone: Send },
-    { id: "faturamento", label: "Faturamento", icone: DollarSign },
-    { id: "contratos", label: "Contratos", icone: FileSignature, badge: qtdContratosAtivos },
+    { id: "documentos", label: "Anexos", icone: Paperclip, badge: qtdAnexos },
     { id: "portal", label: "Portal", icone: Headset },
-    { id: "documentos", label: "Anexos e mídia", icone: ImageIcon, badge: qtdAnexos },
     { id: "relacionamento", label: "Relacionamento", icone: Heart },
   ];
 
@@ -367,9 +345,8 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
             <div className="flex items-center gap-3 flex-wrap min-w-0">
               <h1 className="text-xl font-bold text-ink truncate">{titulo}</h1>
               {isEditing && (
-                <button
-                  type="button"
-                  onClick={() => setAba("contratos")}
+                <Link
+                  href={`/contratos?clienteId=${initialData!.id}`}
                   title="Ver contratos do cliente"
                   className={cn(
                     "inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-2.5 py-1 border transition-colors",
@@ -382,7 +359,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
                   {qtdContratosAtivos > 0
                     ? `${qtdContratosAtivos} contrato${qtdContratosAtivos > 1 ? "s" : ""} ativo${qtdContratosAtivos > 1 ? "s" : ""}`
                     : "Sem contratos"}
-                </button>
+                </Link>
               )}
               <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", COR_STATUS_FINANCEIRO_CALC[statusCalc])}>
                 {LABELS_STATUS_FINANCEIRO_CALC[statusCalc]}
@@ -562,61 +539,21 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
             </FormField>
           </FormGrid>
         </FormSection>
-      </Painel>
 
-      {/* ABA 2 — Faturamento */}
-      <Painel ativo={aba === "faturamento"}>
-        <FormSection title="Comercial" icon={<DollarSign className="w-3.5 h-3.5" />}>
-          <FormGrid>
-            <FormField label="Tabela de preços" hint="Sem tabela, valem os preços padrão do catálogo.">
-              {/* Só ativas para nova escolha; a do cliente continua visível mesmo inativa (“(inativa)”) */}
-              <SeletorCadastro entidade="tabelas-preco" valor={tabelaPrecoId} onChange={(v) => setTabelaPrecoId(v)} vazio="Sem tabela (preços do catálogo)" itens={tabelasPreco.itens} />
-              {tabelaInativa && (
-                <p className="text-xs text-atencao-texto mt-1" data-aviso-tabela-inativa>
-                  “{tabelaInativa.nome}” está inativa: para este cliente valem os preços padrão do catálogo. Escolha outra tabela ou reative-a.
-                </p>
-              )}
-            </FormField>
-          </FormGrid>
-          <p className="text-xs font-bold text-ink-muted uppercase tracking-wider mt-2">Perfil de faturamento</p>
-          <FormGrid>
-            <FormField label="Tipo de faturamento" hint="Define o fluxo de aprovação e cobrança">
-              <Select value={tipoFaturamento} onChange={(e) => setTipoFaturamento(e.target.value)} placeholder="Selecione">
-                {Object.entries(LABELS_PERFIL_FATURAMENTO).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
-              </Select>
-            </FormField>
-            <FormField label="Dia de faturamento" hint="Dia do mês (1 a 28)">
-              <Input type="number" min={1} max={28} value={diaFaturamento} onChange={(e) => setDiaFaturamento(Math.min(28, Math.max(1, Number(e.target.value) || 1)))} />
-            </FormField>
-          </FormGrid>
-          <FormGrid>
-            <FormField label="Condição de pagamento" hint="Ex: 30 dias, 15 dias, à vista">
-              <Input value={condicaoPagamento} onChange={(e) => setCondicaoPagamento(e.target.value)} placeholder="30 dias" />
-            </FormField>
-            <FormField label="WhatsApp para envio automático">
-              <WhatsAppInput value={whatsappFaturamento} onChange={(e) => setWhatsappFaturamento(e.target.value)} placeholder="(00) 00000-0000" />
-            </FormField>
-          </FormGrid>
-          {(tipoFaturamento === "COM_APROVACAO" || tipoFaturamento === "FATURA_UNICA") && (
-            <div className="border-t border-surface-linha pt-1">
-              <ToggleSwitch label="Exige PC (Pedido de Compra) antes da NF" description="A nota fiscal só pode ser emitida após o registro do PC do cliente." checked={exigePcAntesNf} onChange={setExigePcAntesNf} />
-            </div>
-          )}
-          {tipoFaturamento === "FATURA_UNICA" && (
-            <div className="divide-y divide-surface-linha border-t border-surface-linha">
-              <ToggleSwitch label="Agrupa adicionais do mês na fatura" description="Contrato e adicionais (OS/orçamentos) do mês entram numa fatura única." checked={agrupaAdicionais} onChange={setAgrupaAdicionais} />
-              <ToggleSwitch label="Boleto único mensal" description="Gera um único boleto consolidando toda a fatura do mês." checked={boletoUnicoMensal} onChange={setBoletoUnicoMensal} />
-            </div>
+        {/* Logomarca — no topo, junto aos dados básicos */}
+        <FormSection title="Logomarca" icon={<ImageIcon className="w-3.5 h-3.5" />}>
+          {isEditing ? (
+            <LogoUpload clienteId={initialData!.id} logoInicial={initialData!.logo} />
+          ) : (
+            <p className="text-sm text-ink-muted">A logomarca pode ser enviada após salvar o cliente.</p>
           )}
         </FormSection>
-      </Painel>
 
-      {/* ABA 3 — Contatos */}
-      <Painel ativo={aba === "contatos"}>
+        {/* Contatos (antes numa aba própria) */}
         <FormSection title="Contatos do cliente" icon={<Users className="w-3.5 h-3.5" />}>
           <p className="text-xs text-ink-muted -mt-2 mb-3">
             {isEditing
-              ? "Contatos do cliente. Comunicação e acesso ao portal ficam nas abas próprias."
+              ? "Contatos do cliente. Comunicação e acesso ao portal ficam nas abas Comunicação e Portal."
               : "Adicione os contatos do cliente. O primeiro será marcado como principal."}
           </p>
           {isEditing ? (
@@ -625,24 +562,8 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
             <ContatosLocal contatos={contatosNovos} onChange={setContatosNovos} />
           )}
         </FormSection>
-      </Painel>
 
-      {/* ABA — Comunicação */}
-      <Painel ativo={aba === "comunicacao"}>
-        <FormSection title="Preferências de comunicação" icon={<Send className="w-3.5 h-3.5" />}>
-          <p className="text-xs text-ink-muted -mt-2 mb-3">
-            Defina quais contatos recebem cada tipo de comunicação e por qual canal. Os contatos são cadastrados na aba <strong>Contatos</strong>.
-          </p>
-          {isEditing ? (
-            <ComunicacaoPreferencias clienteId={initialData!.id} ativo={aba === "comunicacao"} onGerenciar={() => setAba("contatos")} />
-          ) : (
-            <p className="text-sm text-ink-muted">Salve o cliente para configurar a comunicação dos contatos.</p>
-          )}
-        </FormSection>
-      </Painel>
-
-      {/* ABA 3 — Endereços */}
-      <Painel ativo={aba === "enderecos"}>
+        {/* Endereços (antes numa aba própria) */}
         <FormSection title="Endereços do cliente" icon={<MapPin className="w-3.5 h-3.5" />}>
           <p className="text-xs text-ink-muted -mt-2 mb-3">
             {isEditing
@@ -658,32 +579,42 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
             <UnidadesLocal unidades={unidadesNovas} onChange={setUnidadesNovas} />
           )}
         </FormSection>
+
+        {/* Tabela de preços (antes na aba Faturamento) */}
+        <FormSection title="Tabela de preços" icon={<DollarSign className="w-3.5 h-3.5" />}>
+          <FormField label="Tabela de preços" hint="Sem tabela, valem os preços padrão do catálogo.">
+            {/* Só ativas para nova escolha; a do cliente continua visível mesmo inativa (“(inativa)”) */}
+            <SeletorCadastro entidade="tabelas-preco" valor={tabelaPrecoId} onChange={(v) => setTabelaPrecoId(v)} vazio="Sem tabela (preços do catálogo)" itens={tabelasPreco.itens} />
+            {tabelaInativa && (
+              <p className="text-xs text-atencao-texto mt-1" data-aviso-tabela-inativa>
+                “{tabelaInativa.nome}” está inativa: para este cliente valem os preços padrão do catálogo. Escolha outra tabela ou reative-a.
+              </p>
+            )}
+          </FormField>
+        </FormSection>
       </Painel>
 
-      {/* ABA — Contratos */}
-      <Painel ativo={aba === "contratos"}>
-        <FormSection title="Contratos do cliente" icon={<FileSignature className="w-3.5 h-3.5" />}>
+      {/* ABA — Comunicação */}
+      <Painel ativo={aba === "comunicacao"}>
+        <FormSection title="Preferências de comunicação" icon={<Send className="w-3.5 h-3.5" />}>
+          <p className="text-xs text-ink-muted -mt-2 mb-3">
+            Defina quais contatos recebem cada tipo de comunicação e por qual canal. Os contatos são cadastrados em <strong>Dados gerais</strong>.
+          </p>
           {isEditing ? (
-            <ClienteContratos clienteId={initialData!.id} />
+            <ComunicacaoPreferencias clienteId={initialData!.id} ativo={aba === "comunicacao"} onGerenciar={() => setAba("geral")} />
           ) : (
-            <p className="text-sm text-ink-muted">Salve o cliente para gerenciar os contratos.</p>
+            <p className="text-sm text-ink-muted">Salve o cliente para configurar a comunicação dos contatos.</p>
           )}
         </FormSection>
       </Painel>
 
-      {/* ABA 5 — Documentos e Mídia */}
+      {/* ABA — Anexos */}
       <Painel ativo={aba === "documentos"}>
-        {isEditing && (
-          <FormSection title="Logomarca" icon={<ImageIcon className="w-3.5 h-3.5" />}>
-            <LogoUpload clienteId={initialData!.id} logoInicial={initialData!.logo} />
-          </FormSection>
-        )}
         <FormSection title="Anexos" icon={<Paperclip className="w-3.5 h-3.5" />}>
           {isEditing
             ? <AnexosManager clienteId={initialData!.id} anexosIniciais={initialData!.anexos ?? []} />
             : <AnexosLocal anexos={anexosNovos} onChange={setAnexosNovos} />}
         </FormSection>
-        {!isEditing && <p className="text-xs text-ink-muted">A logomarca pode ser enviada após salvar o cliente.</p>}
       </Painel>
 
       {/* ABA 6 — Relacionamento */}
@@ -719,7 +650,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
           {!isEditing ? (
             <p className="text-xs text-ink-muted">Salve o cliente para conceder acesso de portal aos contatos.</p>
           ) : (
-            <PortalContatos clienteId={initialData!.id} ativo={aba === "portal"} onGerenciar={() => setAba("contatos")} />
+            <PortalContatos clienteId={initialData!.id} ativo={aba === "portal"} onGerenciar={() => setAba("geral")} />
           )}
         </FormSection>
       </Painel>
