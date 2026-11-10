@@ -24,6 +24,13 @@ export default async function EditarColaboradorPage({ params }: { params: Promis
 
   const user = session!.user!;
   const podeFolha = pode(user.permissoes, "financeiro", "folha", user.role);
+  // Acesso ao app (criar/ligar login de técnico) é gestão de usuários → exige Configurações › gerenciar.
+  const podeAcesso = pode(user.permissoes, "configuracoes", "gerenciar", user.role);
+  const loginEmail = (colaborador.email ?? "").trim();
+  const loginUsuario = podeAcesso && loginEmail
+    ? await prisma.usuario.findFirst({ where: { empresaId, email: { equals: loginEmail, mode: "insensitive" } }, select: { ativo: true, role: true } })
+    : null;
+  const acessoInicial = { email: colaborador.email ?? null, temLogin: !!loginUsuario, acessoAtivo: !!loginUsuario?.ativo, role: loginUsuario?.role ?? null };
 
   // Serializa para o client (Decimal/Date → tipos simples). O salário NÃO vai para o navegador:
   // quem tem a permissão de folha vê/edita na aba "Dados financeiros / Folha" (API própria).
@@ -53,6 +60,8 @@ export default async function EditarColaboradorPage({ params }: { params: Promis
         key={`${colaborador.ativo}-${colaborador.statusColaborador}`} initialData={initialData}
         somenteLeitura={!pode(user.permissoes, "equipes", "gerenciar", user.role)}
         podeFolha={podeFolha}
+        podeAcesso={podeAcesso}
+        acessoInicial={acessoInicial}
       />
     </div>
   );

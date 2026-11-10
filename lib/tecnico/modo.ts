@@ -15,15 +15,24 @@ export const ROTA_TECNICO = "/tecnico";
 
 export function ehTecnicoPuro(role: string | null | undefined, permissoes: Permissoes | null | undefined): boolean {
   if (role === "ADMIN" || role === "SUPER_ADMIN") return false;
+  // O papel TECNICO é, por si só, app de campo: o painel fica travado para ele, independentemente do
+  // perfil (quem libera o acesso de um colaborador cria um usuário TECNICO ligado a ele).
+  if (role === "TECNICO") return true;
   if (!pode(permissoes, "ordens", "visualizar", role ?? undefined)) return false;
   return permissoesExcedentes(PRESETS.TECNICO, permissoes).length === 0;
 }
 
 export interface UsuarioModo { role?: string | null; permissoes?: Permissoes | null; tecnicoId?: string | null }
 
-/** Está no modo técnico dedicado? (técnico puro + ligado a um técnico) */
+/**
+ * Está no modo técnico dedicado? O papel TECNICO está SEMPRE no app (mesmo sem vínculo — nesse caso
+ * não vê OS nenhuma, ver filtroEscopo). Compat: quem é "técnico puro" por permissão só entra no modo
+ * quando está ligado a um técnico (mesmo e-mail no cadastro), para ter "minhas OS" o que mostrar.
+ */
 export function emModoTecnico(u: UsuarioModo | null | undefined): boolean {
-  return !!u?.tecnicoId && ehTecnicoPuro(u.role, u.permissoes);
+  if (!u) return false;
+  if (u.role === "TECNICO") return true;
+  return !!u.tecnicoId && ehTecnicoPuro(u.role, u.permissoes);
 }
 
 /** Rotas de tela que o técnico puro usa fora do app (o resto do sistema leva para "Meu dia"). */
