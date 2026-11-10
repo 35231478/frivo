@@ -61,26 +61,20 @@ async function consultar() {
 const contarPrincipais = () => ((caixa.textContent ?? "").match(/Principal/g) ?? []).length;
 
 describe("Autofill do CNPJ no cliente novo", () => {
-  it("Consultar preenche razão social, endereço principal e um contato", async () => {
+  it("Consultar preenche razão social e um contato, sem criar endereço", async () => {
     await montar();
     expect(contarPrincipais()).toBe(0); // nada ainda
     await consultar();
     const corpo = caixa.textContent ?? "";
     // razão social preenchida
     expect(($('input[name="nome"]') as HTMLInputElement).value).toBe("Termofrio Engenharia Ltda");
-    // endereço principal criado (caixa "Matriz" — nome no cabeçalho, dados ao expandir)
-    expect(corpo).toContain("Matriz");
-    // endereço principal + contato principal = 2 selos "Principal"
-    expect(contarPrincipais()).toBe(2);
-    // expandindo a caixa do endereço, os dados da consulta aparecem
-    await clicar($$("button").find((b) => /Matriz/.test(b.textContent ?? "")));
-    const expandido = caixa.textContent ?? "";
-    expect(expandido).toContain("Avenida Central");
-    expect(expandido).toContain("Setor Central");
-    expect(expandido).toContain("Goiânia");
-    // e o contato leva o e-mail da consulta (abrindo o card)
-    const botaoContato = $$("button").find((b) => b.textContent === "Termofrio Engenharia Ltda" || /Termofrio Engenharia Ltda/.test(b.textContent ?? ""));
-    // o e-mail está no estado do contato; o card colapsado mostra o nome + selo Principal
+    // o endereço NÃO é criado pela consulta: sem caixa "Matriz", a seção fica vazia
+    expect(corpo).not.toContain("Matriz");
+    expect(corpo).toContain("Nenhum endereço adicionado");
+    // só o contato principal da consulta → 1 selo "Principal"
+    expect(contarPrincipais()).toBe(1);
+    // e o contato leva o nome da consulta (card colapsado mostra o nome + selo Principal)
+    const botaoContato = $$("button").find((b) => /Termofrio Engenharia Ltda/.test(b.textContent ?? ""));
     expect(botaoContato).toBeTruthy();
     // consulta silenciosa: sem aviso de sucesso, sem linha verde da Receita Federal, sem dica sob o CNPJ
     expect(caixa.querySelector("[data-cnpj-encontrado]")).toBeFalsy();
@@ -91,12 +85,12 @@ describe("Autofill do CNPJ no cliente novo", () => {
     expect(corpo).not.toContain("Calculado automaticamente pelas contas a receber");
   });
 
-  it("não duplica: consultar duas vezes não cria endereço/contato repetidos", async () => {
+  it("não duplica: consultar duas vezes não cria contato repetido", async () => {
     await montar();
     await consultar();
-    expect(contarPrincipais()).toBe(2);
+    expect(contarPrincipais()).toBe(1);
     await consultar();
-    // 2ª consulta: endereço já completo e contato de mesmo e-mail já existe → nada novo
-    expect(contarPrincipais()).toBe(2);
+    // 2ª consulta: contato de mesmo e-mail já existe → nada novo
+    expect(contarPrincipais()).toBe(1);
   });
 });

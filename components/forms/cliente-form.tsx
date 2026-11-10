@@ -14,9 +14,10 @@ import { PhoneInput } from "@/components/ui/phone-input";
 import { StarRating } from "@/components/ui/star-rating";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { UnidadesManager } from "@/components/forms/unidades-manager";
-import { UnidadesLocal, novaUnidadeLocal, type UnidadeLocal } from "@/components/forms/unidades-local";
-import { mesclarEnderecoPrincipal, mesclarContato, type EnderecoConsulta, type ContatoConsulta } from "@/lib/cadastros/autofill-cnpj";
+import { UnidadesLocal, type UnidadeLocal } from "@/components/forms/unidades-local";
+import { mesclarContato, type ContatoConsulta } from "@/lib/cadastros/autofill-cnpj";
 import { AnexosManager } from "@/components/forms/anexos-manager";
+import { AtendimentoCliente } from "@/components/forms/atendimento-cliente";
 import { AnexosLocal, type AnexoLocal } from "@/components/forms/anexos-local";
 import { LogoUpload } from "@/components/forms/logo-upload";
 import { ContatosManager } from "@/components/forms/contatos-manager";
@@ -38,7 +39,7 @@ import {
   Search, Loader2, FileCheck, Lock, Pencil, AlertCircle,
   FileText, MapPin, Heart, Headset,
   Building2, DollarSign, Users, Paperclip, Star, MessageSquare, Globe, Send, FileSignature,
-  ClipboardPlus, Calculator,
+  ClipboardPlus, ClipboardList, Calculator,
 } from "lucide-react";
 import { AlertaPerdasCliente, type PerdasCliente } from "@/components/financeiro/alerta-perdas-cliente";
 
@@ -98,7 +99,6 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
   const [razaoSocialBloqueada, setRazaoSocialBloqueada] = useState(false);
   // Autofill da consulta de CNPJ na edição: o endereço/contato da consulta viram sugestão para os
   // managers (abrem o formulário já preenchido ao clicar em "Novo"); o nonce dispara o efeito.
-  const [sugestaoEndereco, setSugestaoEndereco] = useState<EnderecoConsulta | null>(null);
   const [sugestaoContato, setSugestaoContato] = useState<ContatoConsulta | null>(null);
   const [consultaNonce, setConsultaNonce] = useState(0);
   const [config, setConfig] = useState<Partial<Configuracao>>({});
@@ -205,24 +205,16 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
       if (data.nome) { setValue("nome", data.nome); setRazaoSocialBloqueada(true); }
       setCnpjInfo({ nome: data.nome ?? "", cidade: data.cidade, estado: data.estado });
       if (data.nomeFantasia) setValue("nomeFantasia", data.nomeFantasia);
-      // A mesma resposta já traz o endereço completo e o contato — aproveitar (sem 2ª chamada ao ViaCEP).
-      const end: EnderecoConsulta = {
-        logradouro: data.endereco ?? "", numero: data.numero ?? "", complemento: data.complemento ?? "",
-        bairro: data.bairro ?? "", cidade: data.cidade ?? "", estado: data.estado ?? "", cep: data.cep ?? "",
-      };
+      // A consulta preenche razão social, nome fantasia e um contato. O endereço fica manual (sem criar card).
       const contato: ContatoConsulta = { email: data.email ?? "", telefone: data.telefone ?? "" };
       const nomeCli = data.nome || watch("nome") || "";
 
       if (!isEditing) {
-        // Cliente novo: mescla direto no que vai ser salvo (cria o principal se não houver; senão só vazios).
-        const re = mesclarEnderecoPrincipal<UnidadeLocal>(unidadesNovas, end, novaUnidadeLocal);
-        if (re.preencheu) setUnidadesNovas(re.unidades);
+        // Cliente novo: mescla o contato direto no que vai ser salvo (sem duplicar).
         const rc = mesclarContato<ContatoLocal>(contatosNovos, contato, nomeCli, novoContatoLocal);
         if (rc.contatos !== contatosNovos) setContatosNovos(rc.contatos);
-        // Preenchimento silencioso: o endereço/contato aparecem na própria seção (sem aviso de sucesso).
       } else {
-        // Edição: vira sugestão para os managers (o nonce abre o formulário já preenchido ao adicionar).
-        setSugestaoEndereco(end);
+        // Edição: o contato vira sugestão para o manager (o nonce abre "Novo contato" já preenchido).
         setSugestaoContato(contato.email || contato.telefone ? contato : null);
         setConsultaNonce((n) => n + 1);
       }
@@ -297,10 +289,11 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
 
   const ABAS = [
     { id: "geral", label: "Dados gerais", icone: FileText },
+    { id: "atendimento", label: "Atendimento", icone: ClipboardList },
     { id: "comunicacao", label: "Comunicação", icone: Send },
-    { id: "documentos", label: "Anexos", icone: Paperclip, badge: qtdAnexos },
     { id: "portal", label: "Portal", icone: Headset },
     { id: "relacionamento", label: "Relacionamento", icone: Heart },
+    { id: "documentos", label: "Anexos", icone: Paperclip, badge: qtdAnexos },
   ];
 
   const salvar = handleSubmit((d) => onSubmit(d, false), onError);
@@ -531,7 +524,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
           {/* Status financeiro fica só no cabeçalho (selo ao lado do nome) — não repete aqui embaixo. */}
         </FormSection>
 
-        {/* Endereços — logo abaixo da identificação (o Consultar preenche os dois juntos) */}
+        {/* Endereços — logo abaixo da identificação; adicionados manualmente (o Consultar não cria endereço) */}
         <FormSection title="Endereços" icon={<MapPin className="w-3.5 h-3.5" />}>
           {(isEditing || config.clienteExigirUnidade) && (
             <p className="text-xs text-ink-muted -mt-2 mb-3">
@@ -542,10 +535,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
           )}
           {isEditing ? (
             <UnidadesManager clienteId={initialData!.id} unidadesIniciais={initialData!.unidades ?? []}
-              prefillNonce={consultaNonce}
-              enderecoCliente={sugestaoEndereco
-                ? { endereco: sugestaoEndereco.logradouro, numero: sugestaoEndereco.numero, complemento: sugestaoEndereco.complemento, bairro: sugestaoEndereco.bairro, cidade: sugestaoEndereco.cidade, estado: sugestaoEndereco.estado, cep: sugestaoEndereco.cep, telefone: initialData!.telefone }
-                : { endereco: initialData!.endereco, numero: initialData!.numero, complemento: initialData!.complemento, bairro: initialData!.bairro, cidade: initialData!.cidade, estado: initialData!.estado, cep: initialData!.cep, telefone: initialData!.telefone }} />
+              enderecoCliente={{ endereco: initialData!.endereco, numero: initialData!.numero, complemento: initialData!.complemento, bairro: initialData!.bairro, cidade: initialData!.cidade, estado: initialData!.estado, cep: initialData!.cep, telefone: initialData!.telefone }} />
           ) : (
             <UnidadesLocal unidades={unidadesNovas} onChange={setUnidadesNovas} />
           )}
@@ -578,6 +568,15 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
               </p>
             )}
           </FormField>
+        </FormSection>
+      </Painel>
+
+      {/* ABA — Atendimento (histórico de OS) */}
+      <Painel ativo={aba === "atendimento"}>
+        <FormSection title="Atendimento" icon={<ClipboardList className="w-3.5 h-3.5" />}>
+          {isEditing
+            ? <AtendimentoCliente clienteId={initialData!.id} ativo={aba === "atendimento"} />
+            : <p className="text-sm text-ink-muted py-2">Salve o cliente para ver o histórico de atendimento (ordens de serviço).</p>}
         </FormSection>
       </Painel>
 
