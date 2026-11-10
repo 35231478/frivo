@@ -12,6 +12,7 @@ import { FrivoLogo } from "@/components/layout/frivo-logo";
 import { LABELS_STATUS_MEDICAO, CLASSE_STATUS_MEDICAO, formatarData, cn } from "@/lib/utils";
 import { CheckCircle2, AlertTriangle } from "lucide-react";
 import { referenciaNota } from "@/lib/faturamento/fatura";
+import { emailCobranca, whatsappCobranca } from "@/lib/cliente/cobranca-destino";
 
 export const dynamic = "force-dynamic";
 
@@ -54,8 +55,8 @@ export default async function MedicaoPublicaPage({ params }: { params: Promise<{
     ? (await Promise.all(mensal.relatoriosDoMes.map((t) => carregarRelatorioPorToken(t)))).filter((r): r is NonNullable<typeof r> => !!r)
     : [];
 
-  const emailDestino = medicao.cliente.emailsFaturamento?.[0] ?? medicao.cliente.email ?? null;
-  const whatsappDestino = medicao.cliente.whatsappFaturamento ?? medicao.cliente.celular ?? null;
+  const emailDestino = await emailCobranca(medicao.cliente);
+  const whatsappDestino = await whatsappCobranca(medicao.cliente);
 
   return (
     <div className="min-h-screen flex flex-col">

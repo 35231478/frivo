@@ -12,6 +12,7 @@
 import { liberarCobrancasDaMedicao } from "@/lib/financeiro/parcelas-server";
 import { prisma } from "@/lib/prisma";
 import { referenciaNota, rotuloMedicao } from "@/lib/faturamento/fatura";
+import { emailCobranca } from "@/lib/cliente/cobranca-destino";
 import { digitos } from "@/lib/documento";
 import { LABELS_STATUS_MEDICAO } from "@/lib/utils";
 import { buscarMunicipio, normalizarNome } from "@/lib/nfse/municipio";
@@ -106,10 +107,10 @@ function nfManual(c: Carga): string | null {
   return c.medicao.nfs.find((nf) => !nossas.has(nf.numero))?.numero ?? null;
 }
 
-function tomadorDe(c: Carga, codigoCidade: string | null): TomadorEmissao {
+async function tomadorDe(c: Carga, codigoCidade: string | null): Promise<TomadorEmissao> {
   const cl = c.medicao.cliente;
   return {
-    id: cl.id, nome: cl.nome, cpfCnpj: cl.cpfCnpj, email: cl.emailsFaturamento?.[0] || cl.email,
+    id: cl.id, nome: cl.nome, cpfCnpj: cl.cpfCnpj, email: await emailCobranca(cl),
     endereco: cl.endereco, numero: cl.numero, complemento: cl.complemento, bairro: cl.bairro,
     cidade: cl.cidade, estado: cl.estado, cep: cl.cep, codigoCidade,
   };
@@ -129,7 +130,7 @@ async function preparar(empresaId: string, medicaoId: string) {
   const itens = itensDe(c);
   const opcoes = { aliquotaPadrao: c.aliquotaPadrao, cnaeEmpresa: c.cnaeEmpresa };
   const grupos = agruparNotas(itens, Number(c.medicao.valorTotal) - Number(c.medicao.valorLiquido), opcoes, { medicaoNumero: c.medicao.numero, osNumeros: numerosOs(c), referencia: referenciaNota(c.medicao) });
-  const tomador = tomadorDe(c, await codigoCidadeTomador(c.medicao.cliente, c.fiscal));
+  const tomador = await tomadorDe(c, await codigoCidadeTomador(c.medicao.cliente, c.fiscal));
   const pendencias = [
     ...pendenciasEmitente(emitente),
     ...pendenciasMedicao({ id: c.medicao.id, numero: c.medicao.numero, status: c.medicao.status, nfManual: nfManual(c) }, LABELS_STATUS_MEDICAO[c.medicao.status] ?? c.medicao.status),

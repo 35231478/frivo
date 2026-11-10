@@ -3,6 +3,7 @@ import { saldoDaConta } from "@/lib/financeiro/parcelas";
 import { TipoContato, TipoComunicacao, CanalComunicacao } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { descriptografar } from "@/lib/crypto";
+import { emailContatoPrincipal } from "@/lib/cliente/cobranca-destino";
 import { TEMPLATES_PADRAO, substituirVariaveis, montarEmailHtml, type DadosEmpresaEmail } from "@/lib/email-templates";
 import { formatarMoeda, formatarData, nomeMes } from "@/lib/utils";
 import { diasAteDiaCivil } from "@/lib/fuso";
@@ -188,6 +189,22 @@ export async function getEmailsComunicacao(clienteId: string, tipo: TipoComunica
   return getContatosPorTipo(clienteId, LEGADO_POR_COMUNICACAO[tipo]);
 }
 
+/**
+ * E-mails que recebem a cobrança/fatura (boleto, lembrete de vencimento,
+ * confirmação de pagamento), em ordem de prioridade:
+ *  1) e-mails de cobrança dedicados da seção "Cobrança e faturamento" (emailsFaturamento);
+ *  2) roteamento FINANCEIRO (aba Comunicação → contato financeiro → e-mail do cadastro);
+ *  3) e-mail do contato principal — garante que a cobrança nunca fique sem destino.
+ */
+export async function getEmailsCobranca(cliente: { id: string; emailsFaturamento?: string[] | null; email?: string | null }): Promise<string[]> {
+  const dedicados = [...new Set((cliente.emailsFaturamento ?? []).map((e) => e.trim()).filter(Boolean))];
+  if (dedicados.length > 0) return dedicados;
+  const financeiro = await getEmailsComunicacao(cliente.id, TipoComunicacao.FINANCEIRO);
+  if (financeiro.length > 0) return financeiro;
+  const principal = await emailContatoPrincipal(cliente.id, cliente.email);
+  return principal ? [principal] : [];
+}
+
 /** Monta { para, cc } a partir de uma lista de e-mails + os e-mails de cópia do cliente. */
 function montarDestinatarios(emails: string[], cli: { emailsCopia?: string[] | null }): { para: string; cc: string[] } | null {
   const lista = [...new Set(emails.map((e) => e.trim()).filter(Boolean))];
@@ -206,9 +223,7 @@ export async function enviarBoleto(contaReceberId: string): Promise<ResultadoEma
   if (!c) return { ok: false, erro: "Conta não encontrada." };
   const cfg = await prisma.emailConfig.findUnique({ where: { empresaId: c.empresaId } });
   if (!cfg?.notifBoletoEmitido || !c.cliente.emailReceberBoletos) return { ok: false, erro: "Notificação desativada." };
-  const emails = await getEmailsComunicacao(c.cliente.id, TipoComunicacao.FINANCEIRO);
-  if (emails.length === 0 && c.cliente.emailsFaturamento?.[0]) emails.push(c.cliente.emailsFaturamento[0]);
-  const dest = montarDestinatarios(emails, c.cliente);
+  const dest = montarDestinatarios(await getEmailsCobranca(c.cliente), c.cliente);
   if (!dest) return { ok: false, erro: "Destinatário sem e-mail." };
   return enviarEmail(c.empresaId, {
     tipo: "BOLETO_EMITIDO", para: dest.para, cc: dest.cc,
@@ -221,7 +236,7 @@ export async function enviarLembreteVencimento(contaReceberId: string): Promise<
   const c = await prisma.contaReceber.findUnique({ where: { id: contaReceberId }, include: { cliente: true } });
   if (!c) return { ok: false, erro: "Conta não encontrada." };
   if (!c.cliente.emailReceberLembretes) return { ok: false, erro: "Cliente não recebe lembretes." };
-  const dest = montarDestinatarios(await getEmailsComunicacao(c.cliente.id, TipoComunicacao.FINANCEIRO), c.cliente);
+  const dest = montarDestinatarios(await getEmailsCobranca(c.cliente), c.cliente);
   if (!dest) return { ok: false, erro: "Destinatário sem e-mail." };
   const dias = Math.max(0, diasAteDiaCivil(c.dataVencimento) ?? 0);
   return enviarEmail(c.empresaId, {
@@ -236,7 +251,7 @@ export async function enviarConfirmacaoPagamento(contaReceberId: string): Promis
   if (!c) return { ok: false, erro: "Conta não encontrada." };
   const cfg = await prisma.emailConfig.findUnique({ where: { empresaId: c.empresaId } });
   if (!cfg?.notifConfirmacaoPagamento || !c.cliente.emailReceberConfirmacoes) return { ok: false, erro: "Notificação desativada." };
-  const dest = montarDestinatarios(await getEmailsComunicacao(c.cliente.id, TipoComunicacao.FINANCEIRO), c.cliente);
+  const dest = montarDestinatarios(await getEmailsCobranca(c.cliente), c.cliente);
   if (!dest) return { ok: false, erro: "Destinatário sem e-mail." };
   return enviarEmail(c.empresaId, {
     tipo: "CONFIRMACAO_PAGAMENTO", para: dest.para, cc: dest.cc, referenciaId: c.id, referenciaTipo: "ContaReceber",

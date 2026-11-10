@@ -6,6 +6,7 @@ import { AprovacaoRelatorio } from "@/components/relatorio/aprovacao-relatorio";
 import { RelatorioEnvio } from "@/components/relatorio/relatorio-envio";
 import { FrivoLogo } from "@/components/layout/frivo-logo";
 import { formatarData } from "@/lib/utils";
+import { emailCobranca, whatsappCobranca } from "@/lib/cliente/cobranca-destino";
 import { CheckCircle2, AlertTriangle } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -21,8 +22,8 @@ export default async function RelatorioPublicoPage({ params }: { params: Promise
   const reprovado = relatorio.status === "REPROVADO";
   const podeAprovar = !aprovado && !reprovado;
 
-  const emailDestino = os.cliente.emailsFaturamento?.[0] ?? os.cliente.email ?? null;
-  const whatsappDestino = os.cliente.whatsappFaturamento ?? os.cliente.celular ?? null;
+  const emailDestino = await emailCobranca(os.cliente);
+  const whatsappDestino = await whatsappCobranca(os.cliente);
 
   return (
     <div className="min-h-screen flex flex-col">

@@ -11,6 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { PhoneInput } from "@/components/ui/phone-input";
+import { WhatsAppInput } from "@/components/ui/whatsapp-input";
+import { EmailsInput } from "@/components/ui/emails-input";
 import { StarRating } from "@/components/ui/star-rating";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { UnidadesManager } from "@/components/forms/unidades-manager";
@@ -25,7 +27,7 @@ import { ContatosLocal, novoContatoLocal, type ContatoLocal } from "@/components
 import { ComunicacaoPreferencias } from "@/components/forms/comunicacao-preferencias";
 import { PortalContatos } from "@/components/forms/portal-contatos";
 import { InteracoesManager } from "@/components/forms/interacoes-manager";
-import { ToggleSwitch } from "@/components/ui/toggle-switch";
+import { ToggleSwitch, ToggleGroup } from "@/components/ui/toggle-switch";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { cn } from "@/lib/utils";
 import {
@@ -39,7 +41,7 @@ import {
   Search, Loader2, FileCheck, Lock, Pencil, AlertCircle,
   FileText, MapPin, Heart, Headset,
   Building2, DollarSign, Users, Paperclip, Star, MessageSquare, Globe, Send, FileSignature,
-  ClipboardPlus, ClipboardList, Calculator, Receipt, ChevronDown,
+  ClipboardPlus, ClipboardList, Calculator, Receipt, ChevronDown, Wallet,
 } from "lucide-react";
 import { AlertaPerdasCliente, type PerdasCliente } from "@/components/financeiro/alerta-perdas-cliente";
 
@@ -70,6 +72,7 @@ const CAMPO_ABA: Record<string, string> = {
   optanteSimples: "geral", indicadorInscricaoEstadual: "geral", inscricaoMunicipal: "geral", inscricaoSuframa: "geral",
   statusFinanceiro: "geral", ativo: "geral",
   email: "geral", telefone: "geral", celular: "geral", contato: "geral",
+  emailsFaturamento: "geral", whatsappFaturamento: "geral",
   observacoes: "relacionamento",
 };
 
@@ -162,6 +165,11 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
     emailReceberOs: initialData?.emailReceberOs ?? true,
   });
   const [emailsCopia] = useState<string[]>(initialData?.emailsCopia ?? []);
+  // Cobrança e faturamento (reaproveita colunas já existentes; sem schema novo). Salvos no create e edit.
+  const [emailsFaturamento, setEmailsFaturamento] = useState<string[]>(initialData?.emailsFaturamento ?? []);
+  const [boletoUnicoMensal, setBoletoUnicoMensal] = useState<boolean>(initialData?.boletoUnicoMensal ?? false);
+  const [exigePcAntesNf, setExigePcAntesNf] = useState<boolean>(initialData?.exigePcAntesNf ?? false);
+  const [agrupaAdicionais, setAgrupaAdicionais] = useState<boolean>(initialData?.agrupaAdicionais ?? false);
 
   useEffect(() => {
     fetch("/api/configuracoes").then((r) => r.json()).then(setConfig).catch(() => {});
@@ -190,6 +198,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
           complemento: initialData.complemento ?? "", bairro: initialData.bairro ?? "",
           cidade: initialData.cidade ?? "", estado: initialData.estado ?? "",
           cep: initialData.cep ?? "", observacoes: initialData.observacoes ?? "",
+          whatsappFaturamento: initialData.whatsappFaturamento ?? "",
         }
       : { tipoPessoa: "JURIDICA", statusFinanceiro: "ADIMPLENTE", ativo: true, optanteSimples: false },
   });
@@ -262,6 +271,11 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
       origem: initialData?.origem ?? null,
       ...prefsEmail,
       emailsCopia,
+      // Cobrança e faturamento: gravados no create e no edit (não ignora nem zera).
+      emailsFaturamento,
+      boletoUnicoMensal,
+      exigePcAntesNf,
+      agrupaAdicionais,
     };
     if (!isEditing) {
       payload.unidades = unidadesNovas.map(({ _tempId, ...u }) => u);
@@ -618,6 +632,37 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
               </p>
             )}
           </FormField>
+        </FormSection>
+
+        {/* Cobrança e faturamento — para onde vão as faturas/cobranças deste cliente (reaproveita colunas
+            do cliente; sem schema novo). Sem e-mail/WhatsApp aqui, o envio cai no contato principal. */}
+        <FormSection title="Cobrança e faturamento" icon={<Wallet className="w-3.5 h-3.5" />}>
+          <FormGrid>
+            <FormField label="E-mails de cobrança"
+              hint="As faturas e cobranças deste cliente são enviadas para estes e-mails."
+              dica="Pode informar mais de um e-mail. Sem nenhum, a cobrança vai para o e-mail do contato principal do cliente.">
+              <EmailsInput value={emailsFaturamento} onChange={setEmailsFaturamento} />
+            </FormField>
+            <FormField label="WhatsApp de cobrança"
+              hint="Para enviar fatura/cobrança por WhatsApp."
+              dica="Sem este número, a cobrança por WhatsApp vai para o WhatsApp do contato principal do cliente.">
+              <WhatsAppInput {...register("whatsappFaturamento")} placeholder="(00) 00000-0000" />
+            </FormField>
+          </FormGrid>
+          <ToggleGroup title="Preferências de cobrança" description="Como este cliente é cobrado e faturado.">
+            <ToggleSwitch
+              label="Boleto único mensal" checked={boletoUnicoMensal} onChange={setBoletoUnicoMensal}
+              dica="Agrupa as cobranças do mês num único boleto, em vez de um por lançamento."
+            />
+            <ToggleSwitch
+              label="Exige pedido de compra antes da NF" checked={exigePcAntesNf} onChange={setExigePcAntesNf}
+              dica="A nota fiscal só é emitida depois que o cliente informa o número do pedido de compra (PC)."
+            />
+            <ToggleSwitch
+              label="Agrupa adicionais na fatura" checked={agrupaAdicionais} onChange={setAgrupaAdicionais}
+              dica="Serviços adicionais entram na mesma fatura do contrato, em vez de faturas separadas."
+            />
+          </ToggleGroup>
         </FormSection>
       </Painel>
 
