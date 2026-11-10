@@ -39,7 +39,7 @@ import {
   Search, Loader2, FileCheck, Lock, Pencil, AlertCircle,
   FileText, MapPin, Heart, Headset,
   Building2, DollarSign, Users, Paperclip, Star, MessageSquare, Globe, Send, FileSignature,
-  ClipboardPlus, ClipboardList, Calculator,
+  ClipboardPlus, ClipboardList, Calculator, Receipt, ChevronDown,
 } from "lucide-react";
 import { AlertaPerdasCliente, type PerdasCliente } from "@/components/financeiro/alerta-perdas-cliente";
 
@@ -67,6 +67,7 @@ interface ClienteFormProps {
 // Mapeia cada campo (RHF) à aba onde ele está, para destacar abas com erro
 const CAMPO_ABA: Record<string, string> = {
   tipoPessoa: "geral", cpfCnpj: "geral", nome: "geral", nomeFantasia: "geral", inscricaoEstadual: "geral",
+  optanteSimples: "geral", indicadorInscricaoEstadual: "geral", inscricaoMunicipal: "geral", inscricaoSuframa: "geral",
   statusFinanceiro: "geral", ativo: "geral",
   email: "geral", telefone: "geral", celular: "geral", contato: "geral",
   observacoes: "relacionamento",
@@ -176,6 +177,10 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
           tipoPessoa: initialData.tipoPessoa, nome: initialData.nome,
           nomeFantasia: initialData.nomeFantasia ?? "", cpfCnpj: initialData.cpfCnpj,
           inscricaoEstadual: initialData.inscricaoEstadual ?? "",
+          optanteSimples: initialData.optanteSimples ?? false,
+          indicadorInscricaoEstadual: (initialData.indicadorInscricaoEstadual ?? "") as any,
+          inscricaoMunicipal: initialData.inscricaoMunicipal ?? "",
+          inscricaoSuframa: initialData.inscricaoSuframa ?? "",
           statusFinanceiro: initialData.statusFinanceiro, ativo: initialData.ativo, satisfacao: initialData.satisfacao,
           email: initialData.email ?? "", telefone: initialData.telefone ?? "",
           celular: initialData.celular ?? "", contato: initialData.contato ?? "",
@@ -186,13 +191,16 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
           cidade: initialData.cidade ?? "", estado: initialData.estado ?? "",
           cep: initialData.cep ?? "", observacoes: initialData.observacoes ?? "",
         }
-      : { tipoPessoa: "JURIDICA", statusFinanceiro: "ADIMPLENTE", ativo: true },
+      : { tipoPessoa: "JURIDICA", statusFinanceiro: "ADIMPLENTE", ativo: true, optanteSimples: false },
   });
 
   const tipoPessoa = watch("tipoPessoa");
   const telefoneVal = watch("telefone") ?? "";
   const celularVal = watch("celular") ?? "";
   const ativoVal = watch("ativo") ?? true;
+  const optanteSimplesVal = watch("optanteSimples") ?? false;
+  // Informações fiscais: seção avançada, recolhida por padrão (só abre quem vai emitir nota).
+  const [fiscalAberto, setFiscalAberto] = useState(false);
 
   async function buscarCnpj() {
     const cnpj = watch("cpfCnpj")?.replace(/\D/g, "");
@@ -205,6 +213,8 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
       if (data.nome) { setValue("nome", data.nome); setRazaoSocialBloqueada(true); }
       setCnpjInfo({ nome: data.nome ?? "", cidade: data.cidade, estado: data.estado });
       if (data.nomeFantasia) setValue("nomeFantasia", data.nomeFantasia);
+      // A opção pelo Simples vem na consulta federal (quando disponível); IE/IM/Suframa não vêm (manuais).
+      if (typeof data.optanteSimples === "boolean") { setValue("optanteSimples", data.optanteSimples); setFiscalAberto(true); }
       // A consulta preenche razão social, nome fantasia e um contato. O endereço fica manual (sem criar card).
       const contato: ContatoConsulta = { email: data.email ?? "", telefone: data.telefone ?? "" };
       const nomeCli = data.nome || watch("nome") || "";
@@ -516,13 +526,53 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
               <Input {...register("nomeFantasia")} caixa="nome" />
             </FormField>
           </FormGrid>
-          {tipoPessoa === "JURIDICA" && (
-            <FormGrid>
-              <FormField label="Inscrição estadual"><Input {...register("inscricaoEstadual")} placeholder="Isento ou número" /></FormField>
-            </FormGrid>
-          )}
           {/* Status financeiro fica só no cabeçalho (selo ao lado do nome) — não repete aqui embaixo. */}
+          {/* Inscrição estadual migrou para "Informações fiscais" (abaixo), que concentra o fiscal. */}
         </FormSection>
+
+        {/* Informações fiscais — seção avançada, recolhida por padrão (progressive disclosure):
+            só abre quem vai emitir nota. Concentra o fiscal (IE, IM, Suframa, Simples, indicador de IE). */}
+        <div className="space-y-4">
+          <button type="button" onClick={() => setFiscalAberto((v) => !v)} aria-expanded={fiscalAberto} data-secao-fiscal-toggle
+            className="flex items-center gap-2 w-full text-xs font-semibold text-ink-muted uppercase tracking-wider pb-2 border-b border-surface-border">
+            <span className="text-acento"><Receipt className="w-3.5 h-3.5" /></span>
+            Informações fiscais
+            <ChevronDown className={cn("w-4 h-4 ml-auto text-ink-muted transition-transform", fiscalAberto && "rotate-180")} />
+          </button>
+          {fiscalAberto && (
+            <div className="space-y-4" data-secao-fiscal>
+              <p className="text-xs text-ink-muted -mt-1">Dados usados na emissão de nota fiscal. Preencha se este cliente for emitir NFS-e.</p>
+              <FormGrid>
+                <FormField label="Optante pelo Simples Nacional?" dica="Ao marcar Sim, não há retenção de PIS, Cofins e CSLL nas notas de serviço deste cliente.">
+                  <div className="flex gap-2" role="radiogroup" aria-label="Optante pelo Simples Nacional">
+                    {[{ v: true, r: "Sim" }, { v: false, r: "Não" }].map((o) => (
+                      <button key={o.r} type="button" role="radio" aria-checked={optanteSimplesVal === o.v}
+                        onClick={() => setValue("optanteSimples", o.v, { shouldDirty: true })}
+                        className={cn("flex-1 h-10 rounded-lg border text-sm font-medium transition-colors",
+                          optanteSimplesVal === o.v ? "border-acento bg-frivo-50 text-frivo-700" : "border-surface-campo bg-white text-ink hover:bg-surface-alt")}>
+                        {o.r}
+                      </button>
+                    ))}
+                  </div>
+                </FormField>
+                <FormField label="Indicador de Inscrição estadual">
+                  <Select {...register("indicadorInscricaoEstadual")} placeholder="Selecione">
+                    <option value="CONTRIBUINTE">Contribuinte</option>
+                    <option value="ISENTO">Isento</option>
+                    <option value="NAO_CONTRIBUINTE">Não contribuinte</option>
+                  </Select>
+                </FormField>
+              </FormGrid>
+              <FormGrid>
+                <FormField label="Inscrição estadual"><Input {...register("inscricaoEstadual")} placeholder="Isento ou número" /></FormField>
+                <FormField label="Inscrição municipal"><Input {...register("inscricaoMunicipal")} placeholder="Número" /></FormField>
+              </FormGrid>
+              <FormGrid>
+                <FormField label="Inscrição SUFRAMA"><Input {...register("inscricaoSuframa")} placeholder="Número (Zona Franca)" /></FormField>
+              </FormGrid>
+            </div>
+          )}
+        </div>
 
         {/* Endereços — logo abaixo da identificação; adicionados manualmente (o Consultar não cria endereço) */}
         <FormSection title="Endereços" icon={<MapPin className="w-3.5 h-3.5" />}>

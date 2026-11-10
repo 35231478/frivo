@@ -932,6 +932,11 @@ model Cliente {
   nomeFantasia         String?          @map("nome_fantasia")
   cpfCnpj              String           @map("cpf_cnpj")
   inscricaoEstadual    String?          @map("inscricao_estadual")
+  // Informações fiscais (alimentam o tomador da NFS-e e, no futuro, o destinatário da NF de produto)
+  optanteSimples             Boolean? @map("optante_simples")
+  indicadorInscricaoEstadual String?  @map("indicador_inscricao_estadual") // CONTRIBUINTE | ISENTO | NAO_CONTRIBUINTE
+  inscricaoMunicipal         String?  @map("inscricao_municipal")
+  inscricaoSuframa           String?  @map("inscricao_suframa")
   email                String?
   telefone             String?
   celular              String?
