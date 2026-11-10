@@ -33,7 +33,7 @@ const chamadas: { url: string; metodo: string; corpo: any }[] = [];
 beforeAll(async () => {
   await Promise.all([
     import("@/components/financeiro/conta-receber-acoes"), import("@/components/financeiro/contas-receber-view"),
-    import("@/components/providers/permissoes-provider"), import("@/components/financeiro/perdas-view"), import("@/components/financeiro/alerta-perdas-cliente"),
+    import("@/components/providers/permissoes-provider"), import("@/components/financeiro/alerta-perdas-cliente"),
   ]);
 }, 120_000);
 beforeEach(() => {
@@ -96,50 +96,56 @@ const motivo = (id: string) => itemMenu(id)?.getAttribute("title") ?? null;
 const desabilitado = (id: string) => itemMenu(id)?.hasAttribute("data-desabilitado") ?? null;
 const ids = () => $$("[data-menu-acoes] [data-item]").map((i) => i.getAttribute("data-item"));
 
-describe("⋮ Perda e Estorno", () => {
-  it("Marcar como perda: liberado na cobrança em aberto; sem a permissão, apagado com o porquê (ⓘ); com boleto, o motivo da regra", async () => {
+const abrirEditar = async (conta: Record<string, unknown> = {}, permissoes?: Permissoes) => { await menu(conta, permissoes); await clicar(itemMenu("editar")); };
+
+describe("Perda (dentro de Editar) e Estorno (⋮)", () => {
+  it("Marcar como perda vive dentro de Editar (saiu do ⋮): aparece na conta em aberto; some sem permissão, com boleto ou já quitada", async () => {
     await menu({ valorRecebido: 400 });
-    expect(desabilitado("perda")).toBe(false);
-    expect(itemMenu("perda")!.className).toContain("text-atrasado");
-    await menu({ valorRecebido: 400 }, semPerdas());
-    expect(desabilitado("perda")).toBe(true);
-    expect(motivo("perda")).toBe("Sem permissão: Financeiro › Perdas (peça a um gerente).");
-    expect(itemMenu("perda")!.querySelector("[data-dica]")).not.toBeNull();
-    await menu({ boletoStatus: "EMITIDO" });
-    expect(motivo("perda")).toBe("Cancele o boleto antes: o cliente ainda consegue pagá-lo.");
-    // Recebida, cancelada, lançamento parcelado: o item nem aparece
-    for (const status of ["RECEBIDO", "CANCELADO", "PARCELADO"]) { await menu({ status }); expect(itemMenu("perda")).toBeNull(); }
+    expect(itemMenu("perda")).toBeNull(); // não está mais no menu ⋮
+    expect(ids()).not.toContain("perda");
+    await clicar(itemMenu("editar"));
+    expect($("[data-marcar-perda-edicao]")).not.toBeNull();
+    // Sem a permissão Financeiro › Perdas: a seção de perda não aparece na edição
+    await abrirEditar({ valorRecebido: 400 }, semPerdas());
+    expect($("[data-perda-edicao]")).toBeNull();
+    // Com boleto emitido (regra), e já quitada: o botão não aparece
+    await abrirEditar({ boletoStatus: "EMITIDO" });
+    expect($("[data-marcar-perda-edicao]")).toBeNull();
+    for (const status of ["RECEBIDO", "CANCELADO"]) { await abrirEditar({ status }); expect($("[data-marcar-perda-edicao]")).toBeNull(); }
   });
 
-  it("em perda: só Reverter perda (e o estorno apagado, com o porquê); nada de receber, parcelar, cobrar, boleto", async () => {
+  it("em perda: Editar mostra 'Desmarcar perda' (apagado sem permissão); o ⋮ não tem mais perda nem reverter", async () => {
     await menu({ status: "PERDA", valorRecebido: 400, valorPerda: 600, whatsapp: "11999990000", email: "a@b.com" });
-    expect(ids()).toEqual(["detalhes", "editar", "reverter-perda", "estornar", "recibo", "cancelar", "excluir"]);
-    expect(motivo("estornar")).toBe("Conta em perda: reverta a perda antes de estornar.");
-    expect(motivo("cancelar")).toBe("Conta em perda: reverta a perda antes.");
-    expect(desabilitado("reverter-perda")).toBe(false);
-    await menu({ status: "PERDA", valorPerda: 1000 }, semPerdas());
-    expect(motivo("reverter-perda")).toBe("Sem permissão: Financeiro › Perdas (peça a um gerente).");
+    expect(ids()).toEqual(["detalhes", "editar", "estornar", "recibo", "cancelar", "excluir"]);
+    await clicar(itemMenu("editar"));
+    expect(txt($("[data-perda-edicao]"))).toMatch(/Conta em perda · R\$\s?600,00/);
+    expect($<HTMLButtonElement>("[data-reverter-perda-edicao]")!.disabled).toBe(false);
+    await abrirEditar({ status: "PERDA", valorPerda: 1000 }, semPerdas());
+    expect($<HTMLButtonElement>("[data-reverter-perda-edicao]")!.disabled).toBe(true);
   });
 
-  it("modal Marcar como perda: mostra o que vira perda e o que continua recebido; sem motivo não envia; com motivo, POST e toast", async () => {
-    await menu({ valorRecebido: 400 });
-    await clicar(itemMenu("perda"));
+  it("Marcar como perda: do Editar abre o modal; motivo é OPCIONAL (envia mesmo vazio); com motivo, vai o motivo", async () => {
+    await abrirEditar({ valorRecebido: 400 });
+    await clicar($("[data-marcar-perda-edicao]"));
     const dds = $$("[data-marcar-perda] dd").map(txt);
     expect(dds).toEqual([expect.stringMatching(/600,00/), expect.stringMatching(/400,00/)]);
-    expect($("[data-marcar-perda] [data-dica]")).not.toBeNull();
+    // Sem motivo: ENVIA (opcional) — sem corpo de motivo
     await clicar($("[data-confirmar-perda]"));
-    expect(txt($("[data-erro-conta]"))).toBe("Informe o motivo da perda.");
-    expect(enviados("POST")).toEqual([]);
+    expect(enviados("POST")).toEqual([{ url: "/api/contas-receber/cr1/perda", metodo: "POST", corpo: {} }]);
+    expect(avisos.toast).toHaveBeenCalledWith(expect.stringMatching(/^CR-2026-0042: perda de R\$\s?600,00 registrada\.$/), "sucesso");
+    expect(nav.refresh).toHaveBeenCalled();
+    // Com motivo: vai o motivo (aparado)
+    chamadas.length = 0;
+    await abrirEditar({ valorRecebido: 400 });
+    await clicar($("[data-marcar-perda-edicao]"));
     await digitar($('textarea[aria-label="Motivo da perda"]'), "  Cliente faliu ");
     await clicar($("[data-confirmar-perda]"));
     expect(enviados("POST")).toEqual([{ url: "/api/contas-receber/cr1/perda", metodo: "POST", corpo: { motivo: "Cliente faliu" } }]);
-    expect(avisos.toast).toHaveBeenCalledWith(expect.stringMatching(/^CR-2026-0042: perda de R\$\s?600,00 registrada\.$/), "sucesso");
-    expect(nav.refresh).toHaveBeenCalled();
   });
 
-  it("modal Reverter perda: o cliente pagou (padrão, valor = o perdido; mais que isso trava; menos avisa o que fica) ou voltar a cobrar", async () => {
-    await menu({ status: "PERDA", valorRecebido: 400, valorPerda: 600 });
-    await clicar(itemMenu("reverter-perda"));
+  it("Desmarcar perda: do Editar abre o Reverter (o cliente pagou — valor = o perdido, mais trava, menos avisa — ou voltar a cobrar)", async () => {
+    await abrirEditar({ status: "PERDA", valorRecebido: 400, valorPerda: 600 });
+    await clicar($("[data-reverter-perda-edicao]"));
     expect($<HTMLInputElement>('[data-modo-reverter="RECUPERAR"]')!.checked).toBe(true);
     expect($<HTMLInputElement>("[data-valor-recuperado]")!.value).toBe("600");
     await digitar($("[data-valor-recuperado]"), "600.01");
@@ -149,17 +155,15 @@ describe("⋮ Perda e Estorno", () => {
     expect(txt($("[data-aviso-parcial]"))).toMatch(/^Continuam em aberto R\$\s?350,00\.$/);
     await clicar($("[data-confirmar-reverter]"));
     expect(enviados("POST")).toEqual([{ url: "/api/contas-receber/cr1/perda/reverter", metodo: "POST", corpo: { modo: "RECUPERAR", motivo: null, valor: 250, data: "2026-11-15", formaPagamento: "PIX" } }]);
-    expect(avisos.toast).toHaveBeenCalledWith(expect.stringMatching(/^CR-2026-0042: recuperação de R\$\s?250,00 registrada\.$/), "sucesso");
 
     chamadas.length = 0;
-    await menu({ status: "PERDA", valorPerda: 1000 });
-    await clicar(itemMenu("reverter-perda"));
+    await abrirEditar({ status: "PERDA", valorPerda: 1000 });
+    await clicar($("[data-reverter-perda-edicao]"));
     await clicar($('[data-modo-reverter="REABRIR"]'));
     expect($("[data-valor-recuperado]")).toBeNull();
     expect(txt($("[data-confirmar-reverter]"))).toBe("Voltar a cobrar");
-    await digitar($('textarea[aria-label="Comentário"]'), "Prometeu pagar");
     await clicar($("[data-confirmar-reverter]"));
-    expect(enviados("POST").map((c) => c.corpo)).toEqual([{ modo: "REABRIR", motivo: "Prometeu pagar" }]);
+    expect(enviados("POST").map((c) => c.corpo)).toEqual([{ modo: "REABRIR", motivo: null }]);
   });
 
   it("modal Estornar: lista os recebimentos ativos; o do boleto apagado com o porquê; o único possível já vem escolhido; motivo obrigatório", async () => {
@@ -207,14 +211,14 @@ describe("lista, gaveta, relatório e alerta", () => {
     ...o,
   });
 
-  it("Perdas fora do topo (fica no link do cabeçalho), chip 'Perda' no painel; a linha em perda: selo, — em aberto, 'Perdido' no celular", async () => {
+  it("Perdas sem botão/card no topo; ver perdas = chip 'Perda' no filtro; a linha em perda: selo, — em aberto, 'Perdido' no celular", async () => {
     const { ContasReceberView } = await import("@/components/financeiro/contas-receber-view");
     await montar(createElement(ContasReceberView, props([{ status: "PERDA", valor: 500, valorRecebido: 200, valorPerda: 300 }], { filtros: { ...props([]).filtros, clienteId: "c1" } }) as any));
-    // O card "Perdas" saiu do topo (5 cards, como no Conta Azul): segue no botão do cabeçalho e no painel de totais
+    // O card "Perdas" saiu do topo (5 cards) e o botão "Perdas" do cabeçalho também: ver perdas = filtro de status
     expect($("[data-card=PERDA]")).toBeNull();
+    expect($("[data-link-perdas]")).toBeNull();
     await clicar($("[data-mais-filtros]")); await clicar($("[data-filtro-opcao=status]")); // os chips aparecem ao escolher "Status" no menu
     expect(txt($("[data-chip-status=PERDA]"))).toBe("Perda");
-    expect($("[data-link-perdas]")!.getAttribute("href")).toBe("/financeiro/perdas");
     expect(txt($("[data-linha-conta=cr1] [data-situacao]"))).toBe("Perda");
     expect(txt($("[data-linha-conta=cr1] [data-em-aberto]"))).toBe("—");
     expect($("[data-linha-conta=cr1] [data-perdido]")!.getAttribute("title")).toMatch(/^Perdido: R\$\s?300,00$/);
@@ -249,44 +253,7 @@ describe("lista, gaveta, relatório e alerta", () => {
     expect(txt($("[data-evento=PERDA]"))).toMatch(/^Marcada como perda — Perda de R\$ 600,00/);
   });
 
-  const perdas = {
-    periodo: { tipo: "mes", mes: "2026-11", de: null, ate: null, rotulo: "Novembro de 2026" },
-    total: { valor: 1500, qtd: 2, clientes: 2 },
-    clientes: [{ clienteId: "c3", nome: "Mercado", qtd: 1, valor: 900 }, { clienteId: "c2", nome: "Padaria", qtd: 1, valor: 600 }],
-    linhas: [
-      { id: "p1", numero: "CR-2026-0101", descricao: "P1", cliente: "Padaria", clienteId: "c2", valor: 700, recebido: 100, valorPerda: 600, perdaEm: "2026-11-15T15:00:00.000Z", motivo: "Faliu", vencimento: null, por: "Beto" },
-      { id: "p2", numero: "CR-2026-0102", descricao: "P2", cliente: "Mercado", clienteId: "c3", valor: 900, recebido: 0, valorPerda: 900, perdaEm: "2026-11-14T15:00:00.000Z", motivo: "Sumiu", vencimento: null, por: null },
-    ],
-  };
-  it("relatório Perdas: cards, por cliente (com total), cobranças com link para a gaveta em todo o período; período navega pela URL", async () => {
-    const { PerdasView } = await import("@/components/financeiro/perdas-view");
-    await montar(createElement(PerdasView, perdas as any));
-    expect(txt($("[data-card=valor]"))).toMatch(/^Perdido no período\s?R\$\s?1\.500,00\s?2 cobranças$/);
-    expect(txt($("[data-card=maior-cliente]"))).toMatch(/^Maior perda por cliente\s?R\$\s?900,00\s?Mercado · 2 clientes no período$/);
-    expect($$("[data-perdas-por-cliente] tr[data-cliente-perda]").map((tr) => $$("td").length && [...tr.querySelectorAll("td")].map(txt))).toEqual([
-      ["Mercado", "1", "900,00"], ["Padaria", "1", "600,00"],
-    ]);
-    expect(txt($("[data-total-perdas]"))).toBe("1.500,00");
-    const linha = (id: string) => [...$(`tr[data-linha-perda=${id}]`)!.querySelectorAll("td")].map(txt);
-    expect(linha("p1")).toEqual(["15/11/2026", "CR-2026-0101", "PadariaP1", "Faliu", "Beto", "100,00", "600,00"]);
-    expect(linha("p2")).toEqual(["14/11/2026", "CR-2026-0102", "MercadoP2", "Sumiu", "—", "—", "900,00"]);
-    expect($("tr[data-linha-perda=p1] [data-abrir-conta]")!.getAttribute("href")).toBe("/financeiro/contas-receber?conta=p1&periodo=todos");
-    // Celular: um cartão por cobrança, também com link
-    expect($("li[data-linha-perda=p2] a")!.getAttribute("href")).toBe("/financeiro/contas-receber?conta=p2&periodo=todos");
-    // ⓘ do título fora de link/botão
-    expect($("[data-tela-perdas] h1 + [data-dica], [data-tela-perdas] [data-dica]")!.closest("a,button[data-card]")).toBeNull();
-    await clicar($("[data-mes-anterior]"));
-    expect(String(nav.replace.mock.calls.at(-1)?.[0] ?? nav.push.mock.calls.at(-1)?.[0])).toContain("mes=2026-10");
-  });
-
-  it("relatório vazio: diz o mês e oferece todo o período", async () => {
-    const { PerdasView } = await import("@/components/financeiro/perdas-view");
-    await montar(createElement(PerdasView, { ...perdas, total: { valor: 0, qtd: 0, clientes: 0 }, clientes: [], linhas: [] } as any));
-    expect(txt($("[data-lista-vazia] p"))).toBe("Nenhuma perda em novembro de 2026");
-    expect($("[data-perdas-lista]")).toBeNull();
-    await clicar($("[data-ver-todo-periodo]"));
-    expect(String(nav.replace.mock.calls.at(-1)?.[0])).toContain("periodo=todos");
-  });
+  // (O relatório/página dedicada "Perdas" foi removido: ver perdas = filtro de status "Perda" na própria lista.)
 
   it("alerta de 12 meses: só com perda; diz quantas, quanto e a última; 'Ver cobranças' só para quem tem Contas a Receber", async () => {
     const { AlertaPerdasCliente } = await import("@/components/financeiro/alerta-perdas-cliente");

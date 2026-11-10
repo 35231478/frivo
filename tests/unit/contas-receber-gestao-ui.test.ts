@@ -39,6 +39,7 @@ beforeAll(async () => {
 beforeEach(() => {
   chamadas.length = 0;
   nav.refresh.mockClear(); nav.push.mockClear(); avisos.toast.mockClear();
+  try { localStorage.clear(); } catch { /* sem storage */ } // o painel de totais lembra o estado por localStorage
   respostas = {
     "GET /api/cadastros/contas-bancarias": { status: 200, corpo: [{ id: "cb1", nome: "Inter PJ", ativo: true }, { id: "cb2", nome: "Itaú movimento", ativo: true }] },
     "GET /api/cadastros/centros-custo": { status: 200, corpo: [{ id: "cc1", nome: "Obra Shopping Norte", ativo: true }] },
@@ -105,7 +106,8 @@ describe("menu ⋮ por situação", () => {
   it("conta manual em aberto: tudo à mão; recibo apagado com o motivo; excluir liberado", async () => {
     await menu();
     expect($$("[data-menu-acoes] [data-item]").map((i) => i.getAttribute("data-item"))).toEqual([
-      "detalhes", "editar", "receber", "parcelar", "renegociar", "boleto", "cobrar-whatsapp", "cobrar-email", "recibo", "perda", "cancelar", "excluir",
+      // "perda" saiu do menu ⋮ (virou ação dentro de "Editar")
+      "detalhes", "editar", "receber", "parcelar", "renegociar", "boleto", "cobrar-whatsapp", "cobrar-email", "recibo", "cancelar", "excluir",
     ]);
     expect(desabilitado("parcelar")).toBe(false);
     expect(desabilitado("excluir")).toBe(false);
@@ -352,15 +354,15 @@ describe("período + cards do período + cara de planilha (padrão da casa)", ()
     await montar(createElement(ContasReceberView, props(o) as any));
   };
 
-  it("5 cards do período (sem Perdas: fica no botão do cabeçalho), na ordem, com R$ e quantidade; clicar filtra (card na URL) e clicar de novo tira", async () => {
+  it("5 cards do período (sem Perdas: ver perdas = filtro de status), na ordem, com R$ e quantidade; clicar filtra (card na URL) e clicar de novo tira", async () => {
     await montarTela();
     expect($$("[data-card]").map((c) => c.getAttribute("data-card"))).toEqual(["VENCIDO", "VENCE_HOJE", "A_VENCER", "RECEBIDO", "TOTAL"]);
-    // "Perdas" sai do topo mas segue no cabeçalho (link) e no painel de totais do rodapé
+    // "Perdas" saiu do topo E do cabeçalho: ver perdas = filtro de status "Perda"; o total segue no painel
     expect($("[data-card=PERDA]")).toBeNull();
-    expect($("[data-link-perdas]")).not.toBeNull();
+    expect($("[data-link-perdas]")).toBeNull();
     const vencidos = $("[data-card=VENCIDO]")!;
-    expect(txt(vencidos)).toMatch(/^Vencidos.*R\$\s?400,00.*1 cobrança$/);
-    expect(txt($("[data-card=TOTAL]"))).toMatch(/Total do período.*R\$\s?2\.500,00.*5 cobranças$/);
+    expect(txt(vencidos)).toMatch(/^Vencidos.*R\$\s?400,00.*1 receita$/);
+    expect(txt($("[data-card=TOTAL]"))).toMatch(/Total do período.*R\$\s?2\.500,00.*5 receitas$/);
     // ⓘ fora do botão do card (botão dentro de botão quebra a hidratação — React #418)
     expect($("[data-card=A_VENCER] [data-dica]")).toBeNull();
     expect($("[data-card-caixa=A_VENCER] [data-dica]")).not.toBeNull();
@@ -434,7 +436,7 @@ describe("período + cards do período + cara de planilha (padrão da casa)", ()
 
   it("nada no período: mensagem do mês + \"Ver todo o período\"; em todo o período, só a mensagem", async () => {
     await montarTela({ contas: [], total: 0, totalFiltrado: 0 });
-    expect(txt($("[data-tabela-receber] [data-lista-vazia]"))).toContain("Nenhuma cobrança em novembro de 2026");
+    expect(txt($("[data-tabela-receber] [data-lista-vazia]"))).toContain("Nenhuma receita em novembro de 2026");
     await clicar($("[data-tabela-receber] [data-ver-todo-periodo]"));
     expect(ultimaUrl()).toBe("/financeiro/contas-receber?periodo=todos");
     await montarTela({ contas: [], total: 0, totalFiltrado: 0, periodo: { tipo: "todos", mes: null, de: null, ate: null, rotulo: "Todo o período" } });
@@ -456,18 +458,21 @@ describe("período + cards do período + cara de planilha (padrão da casa)", ()
     expect($("[data-painel-totais]")!.getAttribute("data-modo")).toBe("periodo");
     expect(txt($("[data-painel-titulo]"))).toBe("Totais do período");
     expect(txt($("[data-painel-total]"))).toBe("R$ 2.500,00");
+    // Recolhido por padrão: a quebra só aparece ao expandir pelo chevron
+    expect($$("[data-painel-linha]").length).toBe(0);
+    await clicar($("[data-painel-alternar]"));
     expect($$("[data-painel-linha]").map((l) => l.getAttribute("data-painel-linha"))).toEqual(["VENCIDO", "VENCE_HOJE", "A_VENCER", "RECEBIDO", "PERDA"]);
-    expect([valor("A_VENCER"), qtd("A_VENCER")]).toEqual(["R$ 1.300,00", "2 cobranças"]);
+    expect([valor("A_VENCER"), qtd("A_VENCER")]).toEqual(["R$ 1.300,00", "2 receitas"]);
 
     await clicar($("[data-tabela-receber] [data-selecao-linha=cr2]"));
     await clicar($("[data-tabela-receber] [data-selecao-linha=cr3]"));
     await clicar($("[data-cartoes-receber] [data-selecao-linha=cr6]"));
     expect($("[data-painel-totais]")!.getAttribute("data-modo")).toBe("selecao");
-    expect(txt($("[data-painel-titulo]"))).toBe("Total dos 3 cobranças selecionadas");
-    expect(txt($("[data-painel-total]"))).toBe("R$ 99.565,40"); // 98.765,40 + 500 + 300 (o valor das cobranças)
-    expect([valor("VENCIDO"), qtd("VENCIDO")]).toEqual(["R$ 98.765,40", "1 cobrança"]);
-    expect([valor("VENCE_HOJE"), qtd("VENCE_HOJE")]).toEqual(["R$ 500,00", "1 cobrança"]);
-    expect([valor("A_VENCER"), qtd("A_VENCER")]).toEqual(["R$ 200,00", "1 cobrança"]); // em aberto é pelo saldo
+    expect(txt($("[data-painel-titulo]"))).toBe("Total dos 3 receitas selecionadas");
+    expect(txt($("[data-painel-total]"))).toBe("R$ 99.565,40"); // 98.765,40 + 500 + 300 (o valor das receitas)
+    expect([valor("VENCIDO"), qtd("VENCIDO")]).toEqual(["R$ 98.765,40", "1 receita"]);
+    expect([valor("VENCE_HOJE"), qtd("VENCE_HOJE")]).toEqual(["R$ 500,00", "1 receita"]);
+    expect([valor("A_VENCER"), qtd("A_VENCER")]).toEqual(["R$ 200,00", "1 receita"]); // em aberto é pelo saldo
     expect([valor("RECEBIDO"), valor("PERDA")]).toEqual(["R$ 0,00", "R$ 0,00"]);
     expect($$("[data-tabela-receber] tr[data-selecionada]").map((tr) => tr.getAttribute("data-linha-conta"))).toEqual(["cr2", "cr3", "cr6"]);
     expect($$("[data-cartoes-receber] li[data-selecionada]").map((li) => li.getAttribute("data-cartao-conta"))).toEqual(["cr2", "cr3", "cr6"]);
@@ -475,9 +480,9 @@ describe("período + cards do período + cara de planilha (padrão da casa)", ()
     expect($("[data-tabela-receber] [data-linha-conta=cr2]")!.className).not.toMatch(/(^| )bg-atrasado-claro( |$)/);
 
     await clicar($("[data-tabela-receber] [data-selecao-linha=cr2]"));
-    expect(txt($("[data-painel-titulo]"))).toBe("Total dos 2 cobranças selecionadas");
+    expect(txt($("[data-painel-titulo]"))).toBe("Total dos 2 receitas selecionadas");
     expect(txt($("[data-painel-total]"))).toBe("R$ 800,00");
-    expect([valor("VENCIDO"), qtd("VENCIDO")]).toEqual(["R$ 0,00", "0 cobranças"]);
+    expect([valor("VENCIDO"), qtd("VENCIDO")]).toEqual(["R$ 0,00", "0 receitas"]);
     // A recebida e a perda marcadas entram na quebra delas
     await clicar($("[data-tabela-receber] [data-selecao-linha=cr4]"));
     await clicar($("[data-tabela-receber] [data-selecao-linha=cr5]"));

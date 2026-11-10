@@ -126,7 +126,7 @@ describe.skipIf(!URL_PG)("Contas a Receber — perda + estorno (PostgreSQL real)
     await prisma?.$disconnect();
   });
 
-  it("Marcar como perda: permissão própria, motivo obrigatório; o SALDO vira perda e o recebido continua; evento com motivo e autor", async () => {
+  it("Marcar como perda: permissão própria, motivo opcional; o SALDO vira perda e o recebido continua; evento com motivo e autor", async () => {
     const c = await novaConta(1000, "2026-11-01");
     expect((await receber(c.id, { valor: 400, data: "2026-11-10" })).status).toBe(201);
 
@@ -135,10 +135,13 @@ describe.skipIf(!URL_PG)("Contas a Receber — perda + estorno (PostgreSQL real)
     expect((await marcar(c.id)).status).toBe(403);
     logar();
     expect((await conta(c.id)).status).not.toBe("PERDA");
-    // Motivo: vazio, curto demais, ausente
-    for (const corpo of [{ motivo: "" }, { motivo: "ab" }, { motivo: "   " }, {}]) {
-      expect(await chamar("contas-receber/[id]/perda", "POST", { id: c.id }, corpo)).toMatchObject({ status: 400, json: { erro: "Informe o motivo da perda." } });
-    }
+    // Motivo é OPCIONAL: sem motivo o marcar funciona (numa conta à parte, para não mexer na de cima).
+    const semMotivo = await novaConta(200, "2026-11-01");
+    expect(await chamar("contas-receber/[id]/perda", "POST", { id: semMotivo.id }, {})).toMatchObject({ status: 200, json: { ok: true } });
+    expect((await conta(semMotivo.id)).status).toBe("PERDA");
+    // Motivo longo demais (acima de 500) é recusado, sem marcar
+    expect(await chamar("contas-receber/[id]/perda", "POST", { id: c.id }, { motivo: "x".repeat(501) })).toMatchObject({ status: 400 });
+    expect((await conta(c.id)).status).not.toBe("PERDA");
     // Outra empresa não acha a conta
     logar("e2");
     expect(await marcar(c.id)).toMatchObject({ status: 404, json: { erro: "Conta não encontrada." } });
@@ -431,16 +434,10 @@ describe.skipIf(!URL_PG)("Contas a Receber — perda + estorno (PostgreSQL real)
     expect(nov.linhas.map((l) => [l.numero, l.cliente, l.valor, l.recebido, l.valorPerda, l.motivo, l.por])).toEqual([
       ["CR-2026-0101", "Padaria", 700, 100, 600, "Faliu", "Beto"], ["CR-2026-0102", "Mercado", 900, 0, 900, "Sumiu", "Beto"],
     ]);
-    // A tela do relatório (servidor): mês atual por padrão; todo o período inclui a antiga
-    const { default: Perdas } = await import("@/app/(dashboard)/financeiro/perdas/page");
-    const tela: any = await Perdas({ searchParams: Promise.resolve({}) });
-    expect([tela.props.periodo.tipo, tela.props.total]).toEqual(["mes", { valor: 1500, qtd: 2, clientes: 2 }]);
-    const todos: any = await Perdas({ searchParams: Promise.resolve({ periodo: "todos" }) });
-    expect(todos.props.total.valor).toBe(1550);
-    // Quem não tem Contas a Receber não abre o relatório
-    sessao.atual = { user: { ...sessao.atual.user, permissoes: { ...permissoesTotais(), financeiro: { visualizar: true } } } };
-    await expect(Perdas({ searchParams: Promise.resolve({}) })).rejects.toThrow("redirect /sem-permissao");
-    logar("e2");
+    // O relatório pelo período (servidor): todo o período inclui a perda antiga (a página dedicada foi
+    // removida — a função continua alimentando o alerta do cliente e o filtro de status "Perda").
+    const todos = await relatorioPerdas("e2", { gte: new Date("2000-01-01T00:00:00Z"), lt: new Date("2100-01-01T00:00:00Z") });
+    expect(todos.total.valor).toBe(1550);
 
     // Alerta no cadastro / antes de atender: só os últimos 12 meses
     const st = await chamar("clientes/[id]/status-financeiro", "GET", { id: "c2" });

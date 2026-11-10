@@ -18,7 +18,7 @@ import { useListagemUrl } from "@/components/listagem/use-listagem-url";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import {
   Receipt, AlertTriangle, CalendarClock, CheckCircle2, Search, SlidersHorizontal,
-  Plus, Download, Barcode, Loader2, Sigma, TrendingDown, Handshake, X,
+  Plus, Download, Barcode, Loader2, Sigma, Handshake, X,
 } from "lucide-react";
 import { BarraPeriodo, CardResumo, GradeCards, type PeriodoTela } from "@/components/listagem/periodo-cards";
 import { BarraFiltros, filtroCancelados, FiltroTextoUrl, inputFiltro } from "@/components/listagem/barra-filtros";
@@ -136,7 +136,7 @@ function ContasReceberCorpo({
   // Nada no período: oferece todo o período (busca de uma conta antiga, link de outra tela)
   const Vazio = () => (
     <div className="flex flex-col items-center gap-2 py-10 text-center" data-lista-vazia>
-      <p className="text-sm font-medium text-ink">{periodo.tipo === "todos" ? "Nenhuma cobrança encontrada" : `Nenhuma cobrança em ${periodo.tipo === "mes" ? periodo.rotulo.toLowerCase() : "o período"}`}</p>
+      <p className="text-sm font-medium text-ink">{periodo.tipo === "todos" ? "Nenhuma receita encontrada" : `Nenhuma receita em ${periodo.tipo === "mes" ? periodo.rotulo.toLowerCase() : "o período"}`}</p>
       {periodo.tipo !== "todos" && (
         <button type="button" onClick={() => navegar({ mes: null, de: null, ate: null, periodo: "todos" })} className="text-sm text-primary-600 hover:underline" data-ver-todo-periodo>Ver todo o período</button>
       )}
@@ -162,19 +162,20 @@ function ContasReceberCorpo({
           <h1 className="page-title">Contas a receber</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {/* No celular só o ícone (a linha de botões não pode estourar a largura) */}
-          <Link href="/financeiro/perdas" aria-label="Perdas" title="Perdas com clientes" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-surface-border text-ink-muted hover:bg-surface-alt transition-colors" data-link-perdas><TrendingDown className="w-4 h-4" /><span className="hidden sm:inline">Perdas</span></Link>
+          {/* "Perdas" saiu do topo e da barra lateral: ver perdas = filtro de status "Perda"; marcar/desmarcar
+              perda virou ação dentro de "Editar" a conta (conta-receber-acoes). */}
           {interAtivo && <SincronizarBoletos />}
           <button onClick={exportar} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-surface-border text-ink-muted hover:bg-surface-alt transition-colors"><Download className="w-4 h-4" /> Exportar</button>
           {/* UX-8 (G14): o botão segue a MESMA permissão do POST de criação — nunca leva a um 403 */}
-          {podeCobrar && <Link href="/financeiro/contas-receber/nova" data-nova-cobranca className="inline-flex items-center gap-1.5 bg-success-500 hover:bg-success-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm"><Plus className="w-4 h-4" /> Nova cobrança</Link>}
+          {podeCobrar && <Link href="/financeiro/contas-receber/nova" data-nova-receita className="inline-flex items-center gap-1.5 bg-success-500 hover:bg-success-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm"><Plus className="w-4 h-4" /> Nova receita</Link>}
         </div>
       </div>
 
-      {/* Barra enxuta: período (pelo vencimento) + busca + "Mais filtros" (painel recolhido) — padrão da casa */}
+      {/* Barra enxuta e compacta (sem card branco gordo): período (pelo vencimento) + busca + "Mais filtros" */}
       <BarraFiltros
+        compacto
         periodo={<BarraPeriodo rotulo="Vencimento" periodo={periodo} navegar={navegar} permitirTodos dica="Pela data de vencimento." />}
-        busca={<CampoBusca valor={busca} onChange={setBusca} placeholder="Pesquisar" rotulo="Pesquisar cobranças" carregando={pendente} />}
+        busca={<CampoBusca valor={busca} onChange={setBusca} placeholder="Pesquisar" rotulo="Pesquisar receitas" carregando={pendente} />}
         paramBusca="q" navegar={navegar}
         filtros={[
           { id: "clienteId", label: "Cliente", params: ["clienteId"], render: () => (
@@ -219,7 +220,7 @@ function ContasReceberCorpo({
       <GradeCards colunas={5}>
         {CARDS.map((c) => (
           <CardResumo key={c.key} id={c.key} rotulo={c.rotulo} icone={c.icone} cor={c.cor} dica={c.dica}
-            v={resumo[c.key].v} q={resumo[c.key].q} unidade={["cobrança", "cobranças"]}
+            v={resumo[c.key].v} q={resumo[c.key].q} unidade={["receita", "receitas"]}
             ativo={card === c.key} onClick={() => navegar({ card: card === c.key ? null : c.key })} />
         ))}
       </GradeCards>
@@ -332,7 +333,7 @@ function ContasReceberCorpo({
           )}
         </div>
 
-        <PainelTotais unidade={["cobrança", "cobranças"]}
+        <PainelTotais unidade={["receita", "receitas"]} abertoInicial={false} lembrarComo="totais-receber"
           periodo={{
             rotulo: periodo.rotulo, subtitulo: periodo.tipo === "todos" ? "Todo o período" : periodo.rotulo,
             total: linhaTotal("TOTAL", resumo.TOTAL),
@@ -341,7 +342,7 @@ function ContasReceberCorpo({
           selecao={{ n: selecionados.size, naPagina: selecionadas.length, total: linhaTotal("TOTAL", totaisSelecao.TOTAL), linhas: CHAVES_RECEBER.filter((k) => k !== "TOTAL").map((k) => linhaTotal(k, totaisSelecao[k])) }}
         />
         <div className="px-3 py-2 border-t border-surface-border bg-surface-alt/40 space-y-1.5">
-          <Paginacao total={total} pagina={pagina} porPagina={porPagina} onNavegar={navegar} rotulo="cobranças" />
+          <Paginacao total={total} pagina={pagina} porPagina={porPagina} onNavegar={navegar} rotulo="receitas" />
           <p className="text-[13px] text-ink-muted" data-total-filtrado>
             Total do filtro: <strong className="text-ink">{formatarMoeda(totalFiltrado)}</strong>
             {abertoFiltrado != null && <> · em aberto: <strong className="text-ink" data-aberto-filtrado>{formatarMoeda(abertoFiltrado)}</strong></>}
@@ -357,7 +358,7 @@ function ContasReceberCorpo({
         <div className="fixed inset-x-0 bottom-16 md:bottom-4 z-30 flex justify-center px-4 pointer-events-none" data-barra-selecao>
           <div className="pointer-events-auto flex flex-wrap items-center gap-x-3 gap-y-2 rounded-card border border-surface-border bg-white shadow-card-hover px-4 py-3 max-w-full">
             <span className="text-sm text-ink" data-barra-contagem>
-              <strong>{selecionadas.length}</strong> {selecionadas.length === 1 ? "cobrança" : "cobranças"} · falta <strong className="tabular-nums">{formatarMoeda(saldoEscolhidas)}</strong>
+              <strong>{selecionadas.length}</strong> {selecionadas.length === 1 ? "receita" : "receitas"} · falta <strong className="tabular-nums">{formatarMoeda(saldoEscolhidas)}</strong>
             </span>
             {motivoEscolha && <span role="alert" className="text-xs text-atencao-texto" data-motivo-escolha>{motivoEscolha}</span>}
             <div className="flex flex-wrap items-center gap-2 ml-auto">

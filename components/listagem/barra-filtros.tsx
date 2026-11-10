@@ -28,7 +28,7 @@ export interface FiltroDef {
  * Um filtro com valor na URL aparece sozinho (já marcado). "Limpar filtros" zera todos e a busca; o
  * período fica (é navegação, não filtro). No celular tudo empilha.
  */
-export function BarraFiltros({ periodo, busca, filtros = [], paramBusca = "q", navegar, extras, className }: {
+export function BarraFiltros({ periodo, busca, filtros = [], paramBusca = "q", navegar, extras, className, compacto = false }: {
   /** O seletor de período (BarraPeriodo) — opcional nas listas sem período */
   periodo?: ReactNode;
   /** O campo de busca (BuscaUrl / CampoBusca) */
@@ -41,6 +41,8 @@ export function BarraFiltros({ periodo, busca, filtros = [], paramBusca = "q", n
   /** Botões à direita (Exportar, alternar visão…) */
   extras?: ReactNode;
   className?: string;
+  /** Faixa enxuta, sem o card branco: tudo numa linha e "Limpar filtros" discreto ao lado (estilo Conta Azul) */
+  compacto?: boolean;
 }) {
   const sp = useSearchParams();
   const [menu, setMenu] = useState(false);
@@ -73,8 +75,17 @@ export function BarraFiltros({ periodo, busca, filtros = [], paramBusca = "q", n
     navegar(Object.fromEntries([...filtros.flatMap((f) => f.params), paramBusca].map((k) => [k, null])));
   };
 
+  const botaoLimpar = (
+    <button
+      type="button" onClick={limpar} disabled={!ativos && !temBusca && !escolhidos.length} data-limpar-filtros
+      className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-700 hover:underline disabled:opacity-40 disabled:no-underline"
+    >
+      <Trash2 className="w-4 h-4" aria-hidden /> Limpar filtros
+    </button>
+  );
+
   return (
-    <div className={cn("card p-2.5 sm:p-3", className)} data-barra-filtros>
+    <div className={cn(compacto ? "space-y-2" : "card p-2.5 sm:p-3", className)} data-barra-filtros data-compacto={compacto || undefined}>
       {/* Linha 1: período · busca · Mais filtros · extras (cada um com o rótulo em cima) */}
       <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-2.5">
         {periodo}
@@ -113,17 +124,12 @@ export function BarraFiltros({ periodo, busca, filtros = [], paramBusca = "q", n
             </div>
           )}
           {extras}
+          {/* Compacto: "Limpar filtros" discreto na mesma linha (sem ocupar uma linha só) */}
+          {compacto && botaoLimpar}
         </div>
       </div>
-      {/* Linha 2: Limpar filtros (zera os filtros e a busca; o período fica) */}
-      <div className="mt-2">
-        <button
-          type="button" onClick={limpar} disabled={!ativos && !temBusca && !escolhidos.length} data-limpar-filtros
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-700 hover:underline disabled:opacity-40 disabled:no-underline"
-        >
-          <Trash2 className="w-4 h-4" aria-hidden /> Limpar filtros
-        </button>
-      </div>
+      {/* Linha 2 (só no modo normal): Limpar filtros (zera os filtros e a busca; o período fica) */}
+      {!compacto && <div className="mt-2">{botaoLimpar}</div>}
       {/* Os filtros escolhidos (e os que já têm valor), cada um com rótulo e × */}
       {visiveis.length > 0 && (
         <div className="mt-3 pt-3 border-t border-surface-border grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3" data-painel-filtros>

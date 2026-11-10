@@ -129,9 +129,7 @@ export function ContaReceberAcoes({ conta, categorias = [], clientes = [], onDet
               <ItemMenu icone={Pencil} onClick={() => { f(); setModal("editar"); }} id="editar">Editar</ItemMenu>
               {!quitada && <ItemMenu icone={CheckCircle2} onClick={() => { f(); setModal("receber"); }} desabilitado={!!naoReceber} motivo={naoReceber} id="receber">Informar recebimento</ItemMenu>}
               {!quitada && <ItemMenu icone={Split} onClick={() => { f(); setModal("parcelar"); }} desabilitado={!!naoParcelar} motivo={naoParcelar} id="parcelar">Parcelar</ItemMenu>}
-              {emPerda && (
-                <ItemMenu icone={RotateCcw} onClick={() => { f(); setModal("reverterPerda"); }} desabilitado={!podePerdas} motivo={podePerdas ? null : SEM_PERMISSAO_PERDAS} id="reverter-perda">Reverter perda</ItemMenu>
-              )}
+              {/* Marcar / reverter perda saiu do menu: agora é ação dentro de "Editar" a conta. */}
               {!quitada && conta.status !== "PARCELADO" && (
                 <ItemMenu icone={Handshake} onClick={() => { f(); setModal("renegociar"); }} desabilitado={!!naoRenegociar} motivo={naoRenegociar} id="renegociar">Renegociar</ItemMenu>
               )}
@@ -148,9 +146,6 @@ export function ContaReceberAcoes({ conta, categorias = [], clientes = [], onDet
               {!quitada && conta.email && <ItemMenu icone={Mail} onClick={() => { f(); setModal("email"); }} id="cobrar-email">Enviar cobrança por e-mail</ItemMenu>}
               <ItemMenu icone={Receipt} href={`/financeiro/contas-receber/${conta.id}/recibo`} novaAba desabilitado={!!naoRecibo} motivo={naoRecibo} id="recibo">Emitir recibo (PDF)</ItemMenu>
               <SeparadorMenu />
-              {!quitada && conta.status !== "PARCELADO" && (
-                <ItemMenu icone={TrendingDown} onClick={() => { f(); setModal("perda"); }} desabilitado={!!naoPerda} motivo={naoPerda} perigo id="perda">Marcar como perda</ItemMenu>
-              )}
               {conta.status !== "CANCELADO" && conta.status !== "RECEBIDO" && (
                 <ItemMenu icone={Ban} onClick={() => { f(); setModal("cancelar"); }} desabilitado={!!naoCancelar} motivo={naoCancelar} perigo id="cancelar">Cancelar</ItemMenu>
               )}
@@ -203,7 +198,9 @@ export function ContaReceberAcoes({ conta, categorias = [], clientes = [], onDet
         <ParcelarConta conta={conta} onPronto={pronto} onCancelar={fechar} />
       </Modal>
       <Modal aberto={modal === "editar"} onFechar={fechar} titulo={`Editar ${conta.numero}`} tamanho="lg">
-        <EditarCobranca conta={conta} categorias={categorias} clientes={clientes} onPronto={pronto} onCancelar={fechar} />
+        <EditarCobranca conta={conta} categorias={categorias} clientes={clientes} onPronto={pronto} onCancelar={fechar}
+          emPerda={emPerda} naoPerda={naoPerda} podePerdas={podePerdas}
+          onMarcarPerda={() => setModal("perda")} onReverterPerda={() => setModal("reverterPerda")} />
       </Modal>
       <Modal aberto={modal === "cancelar"} onFechar={fechar} titulo={`Cancelar ${conta.numero}`} tamanho="sm">
         <CancelarConta conta={conta} onPronto={pronto} onCancelar={fechar} />
@@ -211,11 +208,12 @@ export function ContaReceberAcoes({ conta, categorias = [], clientes = [], onDet
       <Modal aberto={modal === "excluir"} onFechar={fechar} titulo={`Excluir ${conta.numero}`} tamanho="sm">
         <ExcluirConta conta={conta} onPronto={pronto} onCancelar={fechar} />
       </Modal>
+      {/* Marcar/reverter perda: abertos a partir de "Editar"; Voltar retorna ao Editar */}
       <Modal aberto={modal === "perda"} onFechar={fechar} titulo={`Marcar ${conta.numero} como perda`} tamanho="sm">
-        <MarcarPerda conta={conta} onPronto={pronto} onCancelar={fechar} />
+        <MarcarPerda conta={conta} onPronto={pronto} onCancelar={() => setModal("editar")} />
       </Modal>
       <Modal aberto={modal === "reverterPerda"} onFechar={fechar} titulo={`Reverter perda — ${conta.numero}`}>
-        <ReverterPerda conta={conta} onPronto={pronto} onCancelar={fechar} />
+        <ReverterPerda conta={conta} onPronto={pronto} onCancelar={() => setModal("editar")} />
       </Modal>
       <Modal aberto={modal === "estornar"} onFechar={fechar} titulo={`Estornar recebimento — ${conta.numero}`}>
         <EstornarRecebimento conta={conta} onPronto={pronto} onCancelar={fechar} />
@@ -252,8 +250,10 @@ async function enviar(url: string, method: string, corpo: unknown): Promise<stri
   } catch { return "Sem conexão. Tente novamente."; }
 }
 
-function EditarCobranca({ conta, categorias, clientes, onPronto, onCancelar }: {
+function EditarCobranca({ conta, categorias, clientes, onPronto, onCancelar, emPerda, naoPerda, podePerdas, onMarcarPerda, onReverterPerda }: {
   conta: ContaAcoes; categorias: Categoria[]; clientes: { id: string; nome: string }[]; onPronto: () => void; onCancelar: () => void;
+  /** Perda (ação dentro da edição): o estado atual, o motivo de não poder marcar (ou null) e os gatilhos */
+  emPerda: boolean; naoPerda: string | null; podePerdas: boolean; onMarcarPerda: () => void; onReverterPerda: () => void;
 }) {
   const regra = { ...conta, notas: conta.notas ?? [] };
   const travas = travasDaConta(regra);
@@ -352,6 +352,35 @@ function EditarCobranca({ conta, categorias, clientes, onPronto, onCancelar }: {
         </FormField>
       </FormGrid>
       <FormField label="Observações"><Textarea value={observacao} onChange={(e) => setObservacao(e.target.value)} rows={2} maxLength={2000} /></FormField>
+
+      {/* Perda (inadimplência): marcar/desmarcar é ação da própria edição. Marcar tira do a receber; o
+          já recebido continua recebido. Reversível — se o cliente pagar depois, desmarca e volta. */}
+      {(emPerda || !naoPerda) && (
+        <div className="rounded-lg border border-surface-border bg-surface-alt/40 px-3 py-2.5" data-perda-edicao>
+          {emPerda ? (
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="text-sm min-w-0">
+                <p className="font-medium text-ink">Conta em perda{conta.valorPerda ? ` · ${formatarMoeda(conta.valorPerda)}` : ""}</p>
+                <p className="text-xs text-ink-muted">Saiu do a receber. Se o cliente pagar, desmarque para voltar ao em aberto.</p>
+              </div>
+              <Button type="button" variant="secondary" onClick={onReverterPerda} disabled={!podePerdas} title={podePerdas ? undefined : SEM_PERMISSAO_PERDAS} data-reverter-perda-edicao>
+                <RotateCcw className="w-4 h-4" /> Desmarcar perda
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="text-sm min-w-0">
+                <p className="font-medium text-ink">Marcar como perda</p>
+                <p className="text-xs text-ink-muted">Quando o cliente não vai pagar: o saldo sai do a receber e vira perda (motivo opcional).</p>
+              </div>
+              <Button type="button" variant="secondary" onClick={onMarcarPerda} className="text-atrasado-texto" data-marcar-perda-edicao>
+                <TrendingDown className="w-4 h-4" /> Marcar como perda
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
         <Button variant="secondary" onClick={onCancelar} disabled={salvando}>Cancelar</Button>
         <Button loading={salvando} onClick={salvar} data-salvar-conta>Salvar</Button>
@@ -525,10 +554,8 @@ function MarcarPerda({ conta, onPronto, onCancelar }: { conta: ContaAcoes; onPro
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
   async function marcar() {
-    const inv = motivoTextoInvalido(motivo, "o motivo da perda");
-    if (inv) { setErro(inv); return; }
     setErro(""); setSalvando(true);
-    const e = await enviar(`/api/contas-receber/${conta.id}/perda`, "POST", { motivo: motivo.trim() });
+    const e = await enviar(`/api/contas-receber/${conta.id}/perda`, "POST", { motivo: motivo.trim() || undefined });
     setSalvando(false);
     if (e) { setErro(e); return; }
     toast(`${conta.numero}: perda de ${formatarMoeda(saldo)} registrada.`, "sucesso");
@@ -545,7 +572,7 @@ function MarcarPerda({ conta, onPronto, onCancelar }: { conta: ContaAcoes; onPro
         Sai do a receber. A nota fiscal continua emitida.
         {" "}<Dica rotulo="Perda" texto="Use quando o cliente não vai pagar (falência, acordo perdido, valor pequeno demais para cobrar). Se ele pagar depois, use “Reverter perda”." />
       </p>
-      <FormField label="Motivo" required>
+      <FormField label="Motivo" hint="Opcional — fica no histórico da conta.">
         <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={2} maxLength={500} placeholder="Ex.: cliente faliu; sem retorno há 6 meses" aria-label="Motivo da perda" />
       </FormField>
       <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">

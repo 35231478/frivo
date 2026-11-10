@@ -15,11 +15,12 @@ export async function POST(req: NextRequest, { params }: Params) {
   const guard = await exigirPermissao("financeiro", "perdas");
   if (guard.erro) return guard.resposta;
   const { id } = await params;
-  const corpo = z.object({ motivo: z.string().max(500) }).safeParse(await req.json().catch(() => ({})));
-  if (!corpo.success) return NextResponse.json({ erro: "Informe o motivo da perda." }, { status: 400 });
+  // Motivo OPCIONAL (o usuário pediu): aceita vazio.
+  const corpo = z.object({ motivo: z.string().max(500).optional() }).safeParse(await req.json().catch(() => ({})));
+  if (!corpo.success) return NextResponse.json({ erro: "Motivo muito longo (máx. 500)." }, { status: 400 });
   try {
     const r = await prisma.$transaction((tx) => marcarPerda(tx, {
-      empresaId: guard.session.user!.empresaId, contaId: id, motivo: corpo.data.motivo, usuarioId: guard.session.user!.id,
+      empresaId: guard.session.user!.empresaId, contaId: id, motivo: corpo.data.motivo ?? "", usuarioId: guard.session.user!.id,
     }), { timeout: 20_000 });
     return NextResponse.json({ ok: true, ...r });
   } catch (e) {

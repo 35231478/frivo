@@ -28,14 +28,13 @@ async function contaDaEmpresa(tx: Tx, empresaId: string, id: string) {
  * Marca a cobrança como PERDA: o saldo (valor − recebido) sai do a receber e fica registrado como
  * perdido. O que já entrou continua recebido; a nota fiscal e a medição não mudam (a medição não fica paga).
  */
-export async function marcarPerda(tx: Tx, p: { empresaId: string; contaId: string; motivo: string; usuarioId?: string | null }) {
-  const invalido = motivoTextoInvalido(p.motivo, "o motivo da perda");
-  if (invalido) throw new ErroConta(400, invalido);
+export async function marcarPerda(tx: Tx, p: { empresaId: string; contaId: string; motivo?: string | null; usuarioId?: string | null }) {
+  // Motivo é OPCIONAL (fica como rastro na linha do tempo quando informado).
   const c = await contaDaEmpresa(tx, p.empresaId, p.contaId);
   const m = motivoNaoMarcarPerda(c);
   if (m) throw new ErroConta(409, m);
   const valorPerda = saldoDaConta(c);
-  const motivo = p.motivo.trim().slice(0, 500);
+  const motivo = (p.motivo ?? "").trim().slice(0, 500);
   // Guardado: só vira perda se ainda está como lemos (sem boleto emitido no meio)
   const r = await tx.contaReceber.updateMany({
     where: { id: c.id, status: c.status, valorRecebido: c.valorRecebido, OR: [{ boletoStatus: null }, { boletoStatus: { not: "EMITIDO" } }] },

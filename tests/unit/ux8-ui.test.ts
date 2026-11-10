@@ -257,7 +257,7 @@ describe("G3/G5: ordenação natural e breadcrumbs", () => {
 });
 
 /* ───────── G14 ───────── */
-describe("G14: 'Nova Cobrança' segue a permissão de criar cobrança", () => {
+describe("G14: 'Nova receita' segue a permissão de criar cobrança", () => {
   const props = {
     contas: [], clientes: [], categorias: [], interAtivo: false,
     resumo: { VENCIDO: { v: 0, q: 0 }, VENCE_HOJE: { v: 0, q: 0 }, A_VENCER: { v: 0, q: 0 }, RECEBIDO: { v: 0, q: 0 }, PERDA: { v: 0, q: 0 }, TOTAL: { v: 0, q: 0 } },
@@ -268,12 +268,12 @@ describe("G14: 'Nova Cobrança' segue a permissão de criar cobrança", () => {
   it("com contasReceber: aparece; sem: some", async () => {
     const { ContasReceberView } = await import("@/components/financeiro/contas-receber-view");
     await montar(createElement(ContasReceberView, props as any));
-    expect($("[data-nova-cobranca]")).not.toBeNull();
+    expect($("[data-nova-receita]")).not.toBeNull();
     act(() => root.unmount()); caixa.remove();
 
     const p = permissoesVazias() as any;
     p.financeiro = { visualizar: true };
     await montar(createElement(ContasReceberView, props as any), p);
-    expect($("[data-nova-cobranca]")).toBeNull();
+    expect($("[data-nova-receita]")).toBeNull();
   });
 });

@@ -13,7 +13,7 @@ import {
   LayoutDashboard, Users, Thermometer, ClipboardList, FileText, HardHat, Settings, ChevronDown, ChevronRight,
   Wrench, Calculator, Wallet, Receipt, TrendingUp, FileBarChart, ShoppingCart, Timer, CalendarDays, QrCode,
   Truck, UsersRound, BadgeDollarSign, ClipboardCheck, Smartphone, UserCog, Upload, Landmark, Globe, Coins,
-  PanelLeftClose, PanelLeftOpen, MoreVertical, LogOut, Package, FileBadge, TrendingDown,
+  PanelLeftClose, PanelLeftOpen, MoreVertical, LogOut, Package, FileBadge,
   CalendarClock, PackageOpen, PackageMinus,
 } from "lucide-react";
 
@@ -127,7 +127,8 @@ const FINANCEIRO: Secao[] = [
           { href: "/financeiro/contas-receber", icone: Receipt, label: "Contas a receber", modulo: "financeiro" },
           { href: "/financeiro/medicoes", icone: FileBarChart, label: "Medições", modulo: "financeiro" },
           { href: "/financeiro/faturamento-contratos", icone: CalendarClock, label: "Faturamento de contratos", modulo: "financeiro", acao: "medicoes" },
-          { href: "/financeiro/perdas", icone: TrendingDown, label: "Perdas", modulo: "financeiro", acao: "contasReceber" },
+          // "Perdas" saiu daqui: ver perdas = filtro de status "Perda" em Contas a receber; marcar/desmarcar
+          // perda virou ação dentro de "Editar" a conta.
         ],
       },
       {
