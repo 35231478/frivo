@@ -23,6 +23,11 @@ const flush = async () => { for (let i = 0; i < 8; i++) await act(async () => { 
 const $$ = (sel: string) => [...caixa.querySelectorAll(sel)] as HTMLElement[];
 const txt = (el: Element | null) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
 async function clicar(el: Element | null | undefined) { expect(el).toBeTruthy(); await act(async () => { (el as HTMLElement).click(); }); await flush(); }
+async function digitar(el: Element | null, v: string) {
+  expect(el).toBeTruthy();
+  await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(el, v); el!.dispatchEvent(new Event("input", { bubbles: true })); });
+  await flush();
+}
 
 async function montar(initialData: any, permissoes: Permissoes = permissoesTotais()) {
   const { PermissoesProvider } = await import("@/components/providers/permissoes-provider");
@@ -65,6 +70,22 @@ describe("Aba Atendimento do cliente", () => {
     const hrefs = $$("a").map((a) => a.getAttribute("href"));
     expect(hrefs).toContain("/ordens/os_1");
     expect(hrefs).toContain("/ordens/os_2");
+  });
+
+  it("a busca filtra as OS (por descrição/número/unidade)", async () => {
+    ordensResp = [
+      { id: "os_1", numero: "OS-0001", status: "EM_ANDAMENTO", prioridade: "ALTA", descricao: "Manutenção do chiller", criadoEm: "2026-10-01T12:00:00Z", dataConclusao: null, unidade: { id: "u1", nome: "Matriz" }, responsavel: { id: "t1", nome: "Carlos" } },
+      { id: "os_2", numero: "OS-0002", status: "CONCLUIDA", prioridade: "NORMAL", descricao: "Troca de filtro", criadoEm: "2026-09-10T12:00:00Z", dataConclusao: "2026-09-12T12:00:00Z", unidade: null, responsavel: null },
+    ];
+    await montar(CLIENTE);
+    await clicar(abaAtendimento());
+    const campo = $$("input").find((i) => /Número, descrição/.test(i.getAttribute("placeholder") ?? ""));
+    await digitar(campo ?? null, "chiller");
+    const corpo = caixa.textContent ?? "";
+    expect(corpo).toContain("OS-0001");
+    expect(corpo).not.toContain("OS-0002");
+    // contador reflete o filtro (1 de 2)
+    expect(corpo).toContain("1 de 2");
   });
 
   it("sem OS: mostra mensagem vazia e o atalho Nova OS", async () => {

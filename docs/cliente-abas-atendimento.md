@@ -12,6 +12,11 @@ concluída), a unidade e o responsável. No topo, um atalho **Nova OS**
 
 - Componente `components/forms/atendimento-cliente.tsx`: busca `GET /api/ordens?clienteId={id}`
   (rota já existente) **só quando a aba abre** (prop `ativo`), no padrão das abas Comunicação/Portal.
+- **Filtros (padrão da casa):** um seletor de **período** (`BarraPeriodo`, rótulo "Abertura" — Hoje,
+  Esta semana, Este mês, Este ano, Últimos 30 dias, Últimos 12 meses, Todo o período, Período
+  personalizado) e uma **caixa de busca** (`CampoBusca`) por número, descrição, unidade, responsável
+  e status. Ambos filtram em memória a lista já carregada; o contador mostra "N de M (filtro
+  aplicado)" e, sem resultado, uma mensagem clara. Padrão: "Todo o período".
 - No cliente **novo** (ainda sem id), a aba mostra "Salve o cliente para ver o histórico de
   atendimento".
 
@@ -30,7 +35,8 @@ mostra **erros**.
 ## Testes
 
 - `cliente-atendimento-ui`: a aba Atendimento lista as OS do cliente com link para cada uma
-  (`/ordens/{id}`); vazio mostra a mensagem + atalho Nova OS.
+  (`/ordens/{id}`); a busca filtra a lista (contador "1 de 2"); vazio mostra a mensagem + atalho
+  Nova OS.
 - `cliente-abas-enxugar-ui`: as abas são exatamente Dados gerais, Atendimento, Comunicação, Portal,
   Relacionamento, Anexos — com **Anexos por último**.
 - `cliente-cnpj-autofill-ui` / `autofill-cnpj`: a consulta preenche razão social e contato, **sem**
