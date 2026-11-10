@@ -112,6 +112,14 @@ export const clienteSchema = z.object({
   nomeFantasia: z.string().optional().transform(caixaNome),
   cpfCnpj: z.string().min(11, "CPF/CNPJ inválido"),
   inscricaoEstadual: z.string().optional(),
+  // Informações fiscais (todas opcionais/nulas; alimentam a NFS-e). Salvas no create e no edit.
+  optanteSimples: z.boolean().optional().nullable(),
+  indicadorInscricaoEstadual: z.preprocess(
+    (v) => (v === "" || v == null ? null : v),
+    z.enum(["CONTRIBUINTE", "ISENTO", "NAO_CONTRIBUINTE"]).nullable(),
+  ).default(null),
+  inscricaoMunicipal: z.string().optional(),
+  inscricaoSuframa: z.string().optional(),
   segmento: z.nativeEnum(Segmento).optional().nullable(),
   origem: z.nativeEnum(OrigemCliente).optional().nullable(),
   statusFinanceiro: z.nativeEnum(StatusFinanceiro).default(StatusFinanceiro.ADIMPLENTE),

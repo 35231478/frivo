@@ -18,6 +18,17 @@ function formatarCep(cep: string | null | undefined): string {
   return limpo;
 }
 
+/** Normaliza o "optante pelo Simples" das APIs (boolean, "Sim"/"Não", ou ausente) para boolean|null. */
+function optanteSimplesDe(v: unknown): boolean | null {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "string") {
+    const s = v.trim().toLowerCase();
+    if (s === "sim" || s === "true") return true;
+    if (s === "não" || s === "nao" || s === "false") return false;
+  }
+  return null;
+}
+
 async function consultarBrasilApi(cnpj: string) {
   const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`, {
     headers: {
@@ -45,6 +56,7 @@ async function consultarBrasilApi(cnpj: string) {
     cidade: data.municipio ?? "",
     estado: data.uf ?? "",
     cep: formatarCep(data.cep),
+    optanteSimples: optanteSimplesDe(data.opcao_pelo_simples),
   };
 }
 
@@ -73,6 +85,7 @@ async function consultarReceitaWs(cnpj: string) {
     cidade: data.municipio ?? "",
     estado: data.uf ?? "",
     cep: formatarCep(data.cep),
+    optanteSimples: optanteSimplesDe(data.simples?.optante),
   };
 }
 
