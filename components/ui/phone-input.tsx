@@ -29,7 +29,7 @@ export const PhoneInput = forwardRef<HTMLInputElement, PhoneInputProps>(
             "w-full border rounded-lg px-3 py-2 pr-10 text-sm bg-white transition-colors",
             "focus:outline-none focus:ring-2 focus:ring-acento focus:border-acento",
             "disabled:opacity-50 disabled:bg-surface-page placeholder:text-ink-muted",
-            error ? "border-atrasado focus:ring-atrasado/30" : "border-surface-border",
+            error ? "border-atrasado focus:ring-atrasado/30" : "border-surface-campo",
             className
           )}
         />

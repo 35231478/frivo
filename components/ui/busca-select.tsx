@@ -35,7 +35,7 @@ export function BuscaSelect({ value, onChange, options, placeholder = "Selecione
       <button
         type="button"
         onClick={() => setAberto((v) => !v)}
-        className="w-full flex items-center justify-between gap-2 bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-left focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all"
+        className="w-full flex items-center justify-between gap-2 bg-white border border-surface-campo rounded-lg px-3 py-2 text-sm text-left focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all"
       >
         <span className={cn("truncate", selecionada ? "text-ink" : "text-ink-subtle")}>{selecionada?.label ?? placeholder}</span>
         <span className="flex items-center gap-1 shrink-0">

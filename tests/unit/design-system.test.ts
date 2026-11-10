@@ -39,6 +39,8 @@ describe("tokens: definidos uma vez e com contraste acessível (4.5:1)", () => {
 
   it("as cores aprovadas estão nos tokens (e o texto de OK/atenção só escurece o tom onde precisa)", () => {
     expect(neutro).toMatchObject({ fundo: "#F7F8FA", superficie: "#FFFFFF", borda: "#E4E7EC", linha: "#EEF1F5", texto: "#1A2230", secundario: "#5B6472", suave: "#8A94A6" });
+    // borda do campo de digitação é um tom acima da borda do card (identidade): #CFD5DE vs #E4E7EC
+    expect(neutro.bordaCampo).toBe("#CFD5DE");
     expect(acento).toEqual({ DEFAULT: "#0E7490", hover: "#0B5566", claro: "#E6F2F5" });
     expect(status.ok).toMatchObject({ DEFAULT: "#15803D", claro: "#E7F5EC" });
     expect(status.atencao).toMatchObject({ DEFAULT: "#B45309", claro: "#FBF0E0" });
@@ -58,7 +60,7 @@ describe("tokens: definidos uma vez e com contraste acessível (4.5:1)", () => {
     expect(c.success).toEqual(escalaOk);
     expect(c.acento).toEqual(acento);
     expect(c.ink).toEqual({ DEFAULT: neutro.texto, muted: neutro.secundario, subtle: neutro.suave });
-    expect(c.surface).toMatchObject({ page: neutro.fundo, border: neutro.borda, linha: neutro.linha });
+    expect(c.surface).toMatchObject({ page: neutro.fundo, border: neutro.borda, campo: neutro.bordaCampo, linha: neutro.linha });
     expect(c.ok).toEqual(status.ok);
     expect((config.theme!.extend as any).fontFamily.display[0]).toBe("var(--font-archivo)");
     expect((config.theme!.extend as any).borderRadius.card).toBe("14px");
@@ -257,5 +259,8 @@ describe("componentes-base", () => {
     expect(label.getAttribute("for")).toBe(input.id);
     expect(input.id).not.toBe("");
     expect(input.className).toContain("focus:border-acento");
+    // a borda do campo usa o token do campo (#CFD5DE), não a do card (#E4E7EC)
+    expect(input.className).toContain("border-surface-campo");
+    expect(input.className).not.toContain("border-surface-border");
   });
 });

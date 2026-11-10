@@ -19,7 +19,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         "placeholder:text-ink-subtle",
         error
           ? "border-atrasado focus:border-atrasado focus:ring-atrasado/15"
-          : "border-surface-border",
+          : "border-surface-campo",
         className
       )}
     />

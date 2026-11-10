@@ -45,7 +45,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             ? "border-atrasado focus:border-atrasado focus:ring-atrasado/15"
             : valido
               ? "border-ok focus:border-ok focus:ring-ok/15"
-              : "border-surface-border",
+              : "border-surface-campo",
           className
         )}
       />
