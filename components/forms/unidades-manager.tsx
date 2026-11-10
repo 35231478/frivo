@@ -1,7 +1,7 @@
 "use client";
 
 import { confirmar } from "@/components/ui/avisos";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAutoGeocode } from "@/hooks/use-auto-geocode";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,12 +61,11 @@ interface EmpresaCoords {
 interface UnidadesManagerProps {
   clienteId: string;
   unidadesIniciais: Unidade[];
+  /** Endereço legado do cliente, usado para pré-preencher o 1º "Novo endereço" (não vem da consulta). */
   enderecoCliente?: EnderecoCliente;
-  /** Muda a cada consulta de CNPJ: abre o formulário "Novo endereço" já preenchido pela consulta. */
-  prefillNonce?: number;
 }
 
-export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente, prefillNonce }: UnidadesManagerProps) {
+export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }: UnidadesManagerProps) {
   const [unidades, setUnidades] = useState<Unidade[]>(unidadesIniciais);
   const [editando, setEditando] = useState<string | "novo" | null>(null);
   const [expandido, setExpandido] = useState<Set<string>>(new Set());
@@ -82,15 +81,6 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente, 
       .then((e) => setEmpresaCoords({ latitude: e.latitude, longitude: e.longitude }))
       .catch(() => {});
   }, []);
-
-  // Consulta de CNPJ (edição): abre "Novo endereço" já preenchido pela consulta (enderecoCliente).
-  const nonceAnterior = useRef(prefillNonce);
-  useEffect(() => {
-    if (prefillNonce === undefined || prefillNonce === nonceAnterior.current) return;
-    nonceAnterior.current = prefillNonce;
-    if (!editando) abrirNova();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefillNonce]);
 
   function calcDistancia(u: Unidade): string | null {
     if (!empresaCoords.latitude || !empresaCoords.longitude) return null;

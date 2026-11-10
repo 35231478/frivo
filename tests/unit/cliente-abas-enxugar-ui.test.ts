@@ -52,14 +52,17 @@ const CLIENTE: any = {
   logo: null, unidades: [], anexos: [], contatosCliente: [], interacoes: [], _count: { contratos: 1 },
 };
 
-const LABELS_ABAS = ["Dados gerais", "Comunicação", "Anexos", "Portal", "Relacionamento"];
+// Atendimento entra como 2ª aba (histórico de OS); Anexos passa a ser a última.
+const LABELS_ABAS = ["Dados gerais", "Atendimento", "Comunicação", "Portal", "Relacionamento", "Anexos"];
 
-describe("Abas do cliente enxugadas para 5", () => {
-  it("as abas são exatamente as 5 previstas (Contatos, Endereços, Faturamento e Contratos saíram)", async () => {
+describe("Abas do cliente", () => {
+  it("as abas são exatamente as previstas, com Atendimento e Anexos por último", async () => {
     await montar(CLIENTE);
     const nav = caixa.querySelector("nav")!;
     const botoes = [...nav.querySelectorAll("button")].map((b) => txt(b));
     expect(botoes).toEqual(LABELS_ABAS);
+    // Anexos é a última aba
+    expect(botoes[botoes.length - 1]).toBe("Anexos");
     // as abas removidas não existem mais como aba
     for (const removida of ["Faturamento", "Contratos"]) {
       expect(botoes.some((b) => b === removida)).toBe(false);
