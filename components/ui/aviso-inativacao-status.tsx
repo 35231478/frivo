@@ -50,7 +50,7 @@ export function AvisoInativacaoStatus({ url, mostrar, motivo, onMotivo }: {
         <label className="block">
           <span className="block text-xs font-medium text-ink mb-1">Motivo da inativação (opcional — fica registrado nas observações)</span>
           <textarea value={motivo} onChange={(e) => onMotivo(e.target.value)} rows={2} maxLength={500}
-            className="w-full bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 resize-none" />
+            className="w-full bg-white border border-surface-campo rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 resize-none" />
         </label>
       )}
     </div>

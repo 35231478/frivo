@@ -11,7 +11,8 @@
 export const neutro = {
   fundo: "#F7F8FA",      // fundo da página
   superficie: "#FFFFFF", // cards, barras, campos
-  borda: "#E4E7EC",      // contorno de card/campo
+  borda: "#E4E7EC",      // contorno de card (sutil)
+  bordaCampo: "#CFD5DE", // contorno de campo de digitação (input/select/textarea/date/busca) — um tom acima da borda do card
   linha: "#EEF1F5",      // divisória entre linhas de lista/tabela
   texto: "#1A2230",      // texto principal
   secundario: "#5B6472", // texto de apoio (rótulos, metadados) — passa 4.5:1 sobre branco e fundo

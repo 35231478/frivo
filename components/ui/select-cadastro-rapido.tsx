@@ -94,7 +94,7 @@ interface Props {
 const UFS = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
 const COLS: Record<number, string> = { 2: "sm:col-span-2", 3: "sm:col-span-3", 4: "sm:col-span-4", 6: "sm:col-span-6" };
 const inputCls =
-  "w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10";
+  "w-full bg-white border border-surface-campo rounded-lg px-3 py-2.5 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10";
 
 export function SelectCadastroRapido({
   value, onChange, opcoes, entidade, campos, criar, permissao, linkCadastroCompleto, contexto,
@@ -157,7 +157,7 @@ export function SelectCadastroRapido({
         className={cn(
           "w-full flex items-center justify-between gap-2 bg-white border rounded-lg px-3 py-2.5 text-sm text-left transition-all",
           "focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10",
-          erro ? "border-atrasado/40" : "border-surface-border",
+          erro ? "border-atrasado/40" : "border-surface-campo",
           disabled && "bg-surface-alt cursor-not-allowed",
         )}
       >

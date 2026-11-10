@@ -18,7 +18,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
         "disabled:bg-surface-page disabled:text-ink-muted disabled:cursor-not-allowed",
         error
           ? "border-atrasado focus:border-atrasado focus:ring-atrasado/15"
-          : "border-surface-border",
+          : "border-surface-campo",
         className
       )}
     >

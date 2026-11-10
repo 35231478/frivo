@@ -39,6 +39,7 @@ const config: Config = {
           page: neutro.fundo,
           alt: neutro.fundo,
           border: neutro.borda,
+          campo: neutro.bordaCampo,
           linha: neutro.linha,
         },
         frivo: { ...escalaAcento, 950: escalaAcento[900] },
