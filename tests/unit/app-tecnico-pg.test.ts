@@ -196,9 +196,11 @@ describe.skipIf(!URL_PG)("app do técnico: Meu dia, escopo e sincronização off
     const r = await sync([op("resposta", "aC", { equipamentoId: "eqA", itemId: "i2", dados: { status: "OK" } })]);
     expect(r.json.resultados[0]).toMatchObject({ ok: false, status: 403 });
     expect(await prisma.checklistResposta.count({ where: { atividadeId: "aC" } })).toBe(0);
-    // Técnico sem vínculo na sessão (logou antes de ser ligado) não fica preso: sem restrição de modo
+    // Papel TECNICO sem técnico na sessão: o modo fica ligado (painel travado) e, sem técnico ligado, o
+    // escopo não libera atividade nenhuma — melhor vazio que vazar a OS de outro. (No login real o
+    // tecnicoId é resolvido pelo e-mail; o Meu dia também acha o técnico pelo e-mail.)
     comoTecnico(null);
-    expect((await chamar("tecnico/atividades/[atividadeId]", "GET", { atividadeId: "aC" })).status).toBe(200);
+    expect((await chamar("tecnico/atividades/[atividadeId]", "GET", { atividadeId: "aC" })).status).toBe(403);
     // Escritório vê qualquer uma; outra empresa, nenhuma
     comoEscritorio();
     expect((await chamar("tecnico/atividades/[atividadeId]", "GET", { atividadeId: "aC" })).status).toBe(200);

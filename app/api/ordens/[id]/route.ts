@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
+import { bloqueioPainelTecnico } from "@/lib/tecnico/painel";
 import { pode } from "@/lib/permissoes";
 import { motivoBloqueioInativacao } from "@/lib/os-server";
 import { cancelarOs, statusHttp } from "@/lib/acoes-massa/regras";
@@ -17,6 +18,8 @@ export async function GET(_: NextRequest, { params }: Params) {
   const guard = await exigirPermissao("ordens", "visualizar");
   if (guard.erro) return guard.resposta;
   const { session } = guard;
+  const bloqueio = bloqueioPainelTecnico(session);
+  if (bloqueio) return bloqueio;
   const { id } = await params;
   const empresaId = session.user!.empresaId;
 
@@ -67,6 +70,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const guard = await exigirPermissao("ordens", "editar");
   if (guard.erro) return guard.resposta;
   const { session } = guard;
+  const bloqueio = bloqueioPainelTecnico(session);
+  if (bloqueio) return bloqueio;
   const { id } = await params;
   const empresaId = session.user!.empresaId;
   const usuarioId = session.user!.id;
@@ -113,6 +118,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const guard = await exigirPermissao("ordens", "editar");
   if (guard.erro) return guard.resposta;
   const { session } = guard;
+  const bloqueio = bloqueioPainelTecnico(session);
+  if (bloqueio) return bloqueio;
   const { id } = await params;
   const empresaId = session.user!.empresaId;
   const usuarioId = session.user!.id;
@@ -225,6 +232,8 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   const guard = await exigirPermissao("ordens", "excluir");
   if (guard.erro) return guard.resposta;
   const { session } = guard;
+  const bloqueio = bloqueioPainelTecnico(session);
+  if (bloqueio) return bloqueio;
   const { id } = await params;
   const empresaId = session.user!.empresaId;
 

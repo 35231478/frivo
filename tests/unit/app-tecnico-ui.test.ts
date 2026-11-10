@@ -157,9 +157,12 @@ describe("modo técnico (puro, roda no middleware)", () => {
     expect(ehTecnicoPuro("OPERADOR", montarPermissoes({ ordens: ["visualizar"], clientes: ["visualizar"] }))).toBe(false); // uma permissão a mais
     expect(ehTecnicoPuro("OPERADOR", montarPermissoes({ equipamentos: ["visualizar"] }))).toBe(false); // não vê OS
     expect(ehTecnicoPuro("OPERADOR", null)).toBe(false);
-    // o modo só liga com o técnico ligado (mesmo e-mail) — sem vínculo, segue no sistema como antes
+    // O papel TECNICO está SEMPRE no app (painel travado), com ou sem vínculo — sem vínculo não vê OS.
     expect(emModoTecnico({ role: "TECNICO", permissoes: PRESETS.TECNICO, tecnicoId: "t1" })).toBe(true);
-    expect(emModoTecnico({ role: "TECNICO", permissoes: PRESETS.TECNICO, tecnicoId: null })).toBe(false);
+    expect(emModoTecnico({ role: "TECNICO", permissoes: PRESETS.TECNICO, tecnicoId: null })).toBe(true);
+    // Técnico puro por PERMISSÃO (sem o papel TECNICO) só entra no modo quando ligado a um técnico.
+    expect(emModoTecnico({ role: "OPERADOR", permissoes: PRESETS.TECNICO, tecnicoId: "t1" })).toBe(true);
+    expect(emModoTecnico({ role: "OPERADOR", permissoes: PRESETS.TECNICO, tecnicoId: null })).toBe(false);
     expect(emModoTecnico({ role: "OPERADOR", permissoes: permissoesTotais(), tecnicoId: "t1" })).toBe(false);
   });
 

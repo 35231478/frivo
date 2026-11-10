@@ -38,9 +38,15 @@ export function escopoDaSessao(session: Session): EscopoTecnico {
   return { restrito, tecnicoId: u.tecnicoId ?? null };
 }
 
-/** Filtro de atividade para o escopo (vazio = sem restrição). */
+/**
+ * Filtro de atividade para o escopo. Sem restrição → vazio (vê tudo que a permissão deixa). No modo
+ * técnico SEM técnico ligado, retorna um filtro impossível (não vê nada) — nunca o vazio que
+ * mostraria a empresa toda.
+ */
 export function filtroEscopo(escopo: EscopoTecnico): Prisma.AtividadeOsWhereInput {
-  return escopo.restrito && escopo.tecnicoId ? atividadesDoTecnico(escopo.tecnicoId) : {};
+  if (!escopo.restrito) return {};
+  if (!escopo.tecnicoId) return { id: { in: [] } };
+  return atividadesDoTecnico(escopo.tecnicoId);
 }
 
 export const MSG_FORA_DO_ESCOPO = "Esta atividade não está atribuída a você. Fale com o escritório.";

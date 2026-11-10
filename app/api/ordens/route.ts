@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
+import { bloqueioPainelTecnico } from "@/lib/tecnico/painel";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { equipamentosDoCliente } from "@/lib/execucao/vinculos";
@@ -22,6 +23,9 @@ export async function GET(req: NextRequest) {
   const guard = await exigirPermissao("ordens", "visualizar");
   if (guard.erro) return guard.resposta;
   const { session } = guard;
+  // Lista de OS do PAINEL: bloqueada no modo técnico (o app vê só as OS dele, por /api/tecnico/*).
+  const bloqueio = bloqueioPainelTecnico(session);
+  if (bloqueio) return bloqueio;
   const empresaId = session.user!.empresaId;
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status");

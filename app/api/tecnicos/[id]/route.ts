@@ -126,6 +126,17 @@ export async function PUT(req: NextRequest, { params }: Params) {
       },
     },
   });
+  // O login do app acompanha o e-mail do colaborador (o vínculo é por e-mail). Se o e-mail mudou e
+  // havia um usuário ligado ao e-mail antigo, renomeia junto — evita um login órfão no e-mail velho.
+  const emailAntigo = (existente.email ?? "").trim();
+  const emailNovo = (email ?? "").trim();
+  if (emailNovo && emailAntigo && emailNovo.toLowerCase() !== emailAntigo.toLowerCase()) {
+    const login = await prisma.usuario.findFirst({ where: { empresaId, email: { equals: emailAntigo, mode: "insensitive" } }, select: { id: true } });
+    if (login) {
+      const colide = await prisma.usuario.findFirst({ where: { empresaId, email: { equals: emailNovo, mode: "insensitive" }, id: { not: login.id } }, select: { id: true } });
+      if (!colide) await prisma.usuario.update({ where: { id: login.id }, data: { email: emailNovo } });
+    }
+  }
   if (virandoInativo) {
     const r = await inativarColaborador(id, ctxStatus);
     if (!r.ok) return NextResponse.json({ erro: r.motivo }, { status: statusHttp(r) });
