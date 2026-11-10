@@ -71,6 +71,12 @@ export function horaBR(d: Date | string | number): string {
   return `${dois(hora)}:${dois(minuto)}`;
 }
 
+/** "DD/MM/AAAA HH:mm" em Brasília — carimbo de data/hora da marca d'água das fotos. */
+export function dataHoraMarca(d: Date | string | number = new Date()): string {
+  const { ano, mes, dia, hora, minuto } = partesBR(d);
+  return `${dois(dia)}/${dois(mes + 1)}/${ano} ${dois(hora)}:${dois(minuto)}`;
+}
+
 /** O valor é um DIA CIVIL gravado à meia-noite UTC (campo só de data)? */
 export function ehDiaCivil(d: Date | string | number): boolean {
   const x = comoData(d);

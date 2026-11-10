@@ -34,6 +34,8 @@ declare module "next-auth" {
     /** Impressão da senha no login (lib/acesso/impressao-senha) */
     fs?: string;
     tecnicoId?: string | null;
+    /** Nonce do dispositivo ativo ("apenas um dispositivo ativo"): novo login desconecta o anterior */
+    sessaoAtiva?: string | null;
   }
 }
 
@@ -52,5 +54,7 @@ declare module "next-auth/jwt" {
     fs?: string;
     /** Técnico ligado ao usuário (modo técnico) */
     tecnicoId?: string | null;
+    /** Nonce do dispositivo ("apenas um dispositivo ativo"): não bate com o do banco → sessão encerrada */
+    sa?: string | null;
   }
 }

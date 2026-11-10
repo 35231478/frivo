@@ -30,6 +30,7 @@ export const authConfig = {
         token.loginEm = Date.now();
         token.fs = (user as any).fs; // impressão da senha: trocou a senha, as outras sessões caem (lib/sessao-ativa)
         token.tecnicoId = (user as any).tecnicoId ?? null; // técnico ligado ao usuário (modo técnico: lib/tecnico/modo)
+        token.sa = (user as any).sessaoAtiva ?? null; // nonce do dispositivo ("apenas um dispositivo ativo")
       }
       if (sessaoCurtaVencida(token)) return null; // sem "Manter conectado": 1 dia desde o login
       // Atualização disparada por update() no client (perfil: nome/e-mail).

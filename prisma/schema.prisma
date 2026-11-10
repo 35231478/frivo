@@ -609,6 +609,33 @@ model Configuracao {
   /// Desligado (padrão): a OS avisa o que falta, mas não trava.
   osExigirPrestacaoMaterial Boolean @default(false) @map("os_exigir_prestacao_material")
 
+  // ─────────────────────────────────────────────
+  // App do colaborador (modo técnico) — o que o colaborador VÊ e PODE FAZER no app.
+  // Por empresa (global), igual para todos os colaboradores. O técnico nunca edita esta tela.
+  // ─────────────────────────────────────────────
+  /// Privacidade: mostra nome/endereço/descrição do cliente no app (desligado = oculta no app)
+  appExibirDadosCliente    Boolean @default(true)  @map("app_exibir_dados_cliente")
+  /// Privacidade: mostra os contatos do cliente (botão Ligar/WhatsApp) no app
+  appExibirContatosCliente Boolean @default(true)  @map("app_exibir_contatos_cliente")
+  /// Comercial: esconde qualquer valor de produtos/serviços no app (ligado = técnico não vê preço)
+  appEsconderValores       Boolean @default(true)  @map("app_esconder_valores")
+  /// Prova: carimba as fotos com marca d'água (data/hora sempre; e os itens abaixo que estiverem ligados)
+  appMarcaDagua            Boolean @default(true)  @map("app_marca_dagua")
+  /// Marca d'água: inclui o identificador da OS
+  appMarcaDaguaOs          Boolean @default(true)  @map("app_marca_dagua_os")
+  /// Marca d'água: inclui o endereço da OS
+  appMarcaDaguaEndereco    Boolean @default(false) @map("app_marca_dagua_endereco")
+  /// Marca d'água: inclui as coordenadas (GPS do aparelho no momento da foto)
+  appMarcaDaguaCoordenadas Boolean @default(false) @map("app_marca_dagua_coordenadas")
+  /// Prova: exige localização ativa (GPS) para usar o app
+  appExigirLocalizacao     Boolean @default(false) @map("app_exigir_localizacao")
+  /// Prova: foto somente pela câmera (ligado = bloqueia enviar da galeria)
+  appFotoSomenteCamera     Boolean @default(false) @map("app_foto_somente_camera")
+  /// Execução: exige preencher o campo de conclusão (resumo) para concluir a atividade
+  appConclusaoObrigatoria  Boolean @default(false) @map("app_conclusao_obrigatoria")
+  /// Dispositivo: apenas um dispositivo ativo por colaborador (entrar em outro desconecta o anterior)
+  appUmDispositivo         Boolean @default(true)  @map("app_um_dispositivo")
+
   // Notificações
   notifEmailAbrirOs       Boolean @default(false) @map("notif_email_abrir_os")
   notifEmailConcluirOs    Boolean @default(false) @map("notif_email_concluir_os")
@@ -766,6 +793,9 @@ model Usuario {
   telefone     String?
   ativo        Boolean   @default(true)
   ultimoAcesso DateTime? @map("ultimo_acesso")
+  /// "Apenas um dispositivo ativo" (Configuracao.appUmDispositivo): nonce do login atual.
+  /// Entrar em outro aparelho regrava o nonce; a sessão anterior cai na leitura seguinte (lib/sessao-ativa).
+  sessaoAtiva  String?   @map("sessao_ativa")
   criadoEm     DateTime  @default(now()) @map("criado_em")
   atualizadoEm DateTime  @updatedAt @map("atualizado_em")
 

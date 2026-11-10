@@ -1,5 +1,6 @@
 import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations";
@@ -61,9 +62,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         await limparTentativas("LOGIN", alvos);
         await apagarTentativas(registros);
 
+        // Nonce do dispositivo ativo: regravado a cada login. Com "apenas um dispositivo ativo" ligado
+        // na empresa, o aparelho anterior (nonce velho) cai na leitura seguinte (lib/sessao-ativa).
+        const sessaoAtiva = randomUUID();
         await prisma.usuario.update({
           where: { id: usuario.id },
-          data: { ultimoAcesso: new Date() },
+          data: { ultimoAcesso: new Date(), sessaoAtiva },
         });
 
         // ADMIN = acesso total; perfil ativo = permissões do perfil; sem perfil = só o dashboard.
@@ -83,6 +87,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           lembrar,
           fs: impressaoDaSenha(usuario.senha),
           tecnicoId: tecnico?.id ?? null,
+          sessaoAtiva,
         };
       },
     }),

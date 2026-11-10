@@ -28,7 +28,11 @@ export function situacaoLocal(c: CartaoTela, fila: OperacaoFila[]) {
 
 export function CartaoAtividade({ c, fila, mostrarDia }: { c: CartaoTela; fila: OperacaoFila[]; mostrarDia?: boolean }) {
   const { status, aEnviar } = situacaoLocal(c, fila);
+  const { config } = useTecnico();
   const st = ROTULO_STATUS_ATIVIDADE[status] ?? { rotulo: status, classe: "bg-surface-linha text-ink" };
+  // "Exibir dados do cliente" desligado: cartão sem nome/endereço do cliente (privacidade)
+  const verDados = config.exibirDadosCliente;
+  const verContatos = config.exibirContatosCliente;
   return (
     <article className="bg-white rounded-card border border-surface-border shadow-card overflow-hidden" data-cartao={c.atividadeId}>
       <button type="button" onClick={() => irPara({ ver: "os", a: c.atividadeId })} className="w-full text-left p-4 flex gap-3 active:bg-surface-alt">
@@ -39,13 +43,13 @@ export function CartaoAtividade({ c, fila, mostrarDia }: { c: CartaoTela; fila: 
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="font-bold text-ink text-base leading-snug truncate">{c.cliente}</h3>
+            <h3 className="font-bold text-ink text-base leading-snug truncate">{verDados ? c.cliente : `${c.osNumero} · ${c.titulo}`}</h3>
             <ChevronRight className="w-5 h-5 text-ink-subtle shrink-0" />
           </div>
           <p className="text-sm text-ink-muted truncate">
             {c.osNumero} · {c.titulo}{c.unidade ? ` · ${c.unidade}` : ""}
           </p>
-          {c.endereco && <p className="text-sm text-ink mt-1 flex gap-1"><MapPin className="w-4 h-4 text-ink-subtle shrink-0 mt-0.5" /><span className="line-clamp-2">{c.endereco}</span></p>}
+          {verDados && c.endereco && <p className="text-sm text-ink mt-1 flex gap-1"><MapPin className="w-4 h-4 text-ink-subtle shrink-0 mt-0.5" /><span className="line-clamp-2">{c.endereco}</span></p>}
           <div className="flex flex-wrap items-center gap-1.5 mt-2">
             <span className={cn("text-xs font-semibold rounded-full px-2 py-0.5", st.classe)} data-status={status}>{st.rotulo}</span>
             <span className="text-xs font-medium rounded-full px-2 py-0.5 bg-surface-linha text-ink inline-flex items-center gap-1" data-equipamentos={c.equipamentos}>
@@ -56,14 +60,14 @@ export function CartaoAtividade({ c, fila, mostrarDia }: { c: CartaoTela; fila: 
           </div>
         </div>
       </button>
-      {(c.rota || c.telefone) && (
+      {((verDados && c.rota) || (verContatos && c.telefone)) && (
         <div className="flex border-t border-surface-border divide-x divide-surface-border">
-          {c.rota && (
+          {verDados && c.rota && (
             <a href={c.rota} target="_blank" rel="noopener noreferrer" data-rota className="flex-1 inline-flex items-center justify-center gap-2 py-3 text-sm font-semibold text-primary-700 active:bg-primary-50 touch-target">
               <Navigation className="w-4 h-4" /> Rota no mapa
             </a>
           )}
-          {c.telefone && (
+          {verContatos && c.telefone && (
             <a href={`tel:${c.telefone.replace(/[^\d+]/g, "")}`} className="flex-1 inline-flex items-center justify-center gap-2 py-3 text-sm font-semibold text-ink active:bg-surface-alt touch-target">
               <Phone className="w-4 h-4" /> Ligar
             </a>

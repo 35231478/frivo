@@ -98,6 +98,7 @@ const OPERACIONAL: Secao[] = [
         tipo: "grupo", label: "Equipes", icone: UsersRound, itens: [
           { href: "/colaboradores", icone: HardHat, label: "Colaboradores" },
           { href: "/equipes", icone: UsersRound, label: "Equipes" },
+          { href: "/equipes/app-colaborador", icone: Smartphone, label: "App do colaborador", modulo: "configuracoes", acao: "gerenciar", somenteAcao: true },
         ],
       },
       {

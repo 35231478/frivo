@@ -5,11 +5,14 @@ import { BancoTecnico } from "@/lib/tecnico/offline/banco";
 import { MotorSync, type EstadoSync } from "@/lib/tecnico/offline/motor";
 import { estadoDaAtividade } from "@/lib/tecnico/offline/estado";
 import type { NovaOperacao, OperacaoFila, RetratoAtividade } from "@/lib/tecnico/offline/tipos";
+import { CONFIG_APP_PADRAO, type ConfigApp } from "@/lib/tecnico/config-app";
 
 export interface UsuarioApp { id: string; nome: string; email: string; empresaNome: string; podeGravar: boolean }
 
 interface Contexto {
   usuario: UsuarioApp;
+  /** Permissões/autorizações do app do colaborador (por empresa) — governa o que ele vê e pode fazer */
+  config: ConfigApp;
   motor: MotorSync | null;
   estado: EstadoSync;
   /** O navegador não guarda dados offline (ex.: aba anônima antiga) */
@@ -20,7 +23,7 @@ const ESTADO_INICIAL: EstadoSync = { situacao: "sincronizado", pendentes: 0, err
 const Ctx = createContext<Contexto | null>(null);
 
 /** Abre o banco do aparelho (um por usuário) e liga o motor de sincronização. */
-export function ProvedorTecnico({ usuario, children, motorPronto }: { usuario: UsuarioApp; children: React.ReactNode; motorPronto?: MotorSync }) {
+export function ProvedorTecnico({ usuario, config = CONFIG_APP_PADRAO, children, motorPronto }: { usuario: UsuarioApp; config?: ConfigApp; children: React.ReactNode; motorPronto?: MotorSync }) {
   const [motor, setMotor] = useState<MotorSync | null>(motorPronto ?? null);
   const [estado, setEstado] = useState<EstadoSync>(ESTADO_INICIAL);
   const [semBanco, setSemBanco] = useState(false);
@@ -42,7 +45,7 @@ export function ProvedorTecnico({ usuario, children, motorPronto }: { usuario: U
 
   useEffect(() => motor?.assinar(setEstado), [motor]);
 
-  const valor = useMemo(() => ({ usuario, motor, estado, semBanco }), [usuario, motor, estado, semBanco]);
+  const valor = useMemo(() => ({ usuario, config, motor, estado, semBanco }), [usuario, config, motor, estado, semBanco]);
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
 }
 

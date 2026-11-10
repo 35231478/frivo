@@ -51,6 +51,7 @@ const ROTULOS_ROTA: Record<string, string> = {
   tecnicos: "Técnicos",
   colaboradores: "Colaboradores",
   equipes: "Equipes",
+  "app-colaborador": "App do colaborador",
   veiculos: "Veículos",
   checklist: "Checklist",
   cargos: "Cargos",

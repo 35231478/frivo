@@ -102,6 +102,54 @@ export function avaliarQualidade(origem: HTMLCanvasElement): QualidadeImagem {
   return { escura: brilho < 45, borrada: nitidez < 40, nitidez: Math.round(nitidez), brilho: Math.round(brilho) };
 }
 
+/**
+ * Marca d'água: carimba as linhas (data/hora, OS, endereço, coordenadas) no rodapé da foto, sobre
+ * uma faixa escura translúcida para ler em qualquer fundo. Recebe e devolve data URL JPEG. Sem
+ * linhas, devolve a foto como está. Nunca lança: se o canvas falhar, volta a original.
+ */
+export async function aplicarMarcaDagua(dataUrl: string, linhas: string[], qualidade = 0.85): Promise<string> {
+  const texto = linhas.map((l) => l.trim()).filter(Boolean);
+  if (!texto.length) return dataUrl;
+  try {
+    const blob = await (await fetch(dataUrl)).blob();
+    const fonte = await carregar(blob);
+    const w = "naturalWidth" in fonte ? fonte.naturalWidth : fonte.width;
+    const h = "naturalHeight" in fonte ? fonte.naturalHeight : fonte.height;
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return dataUrl;
+    ctx.drawImage(fonte, 0, 0, w, h);
+    if ("close" in fonte) fonte.close();
+
+    // Fonte proporcional ao lado maior (legível no celular e na impressão)
+    const fontePx = Math.max(13, Math.round(Math.min(w, h) * 0.032));
+    const linha = Math.round(fontePx * 1.32);
+    const margem = Math.round(fontePx * 0.7);
+    const altura = linha * texto.length + margem;
+    ctx.textBaseline = "alphabetic";
+    ctx.font = `600 ${fontePx}px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
+
+    // Faixa escura no rodapé
+    ctx.fillStyle = "rgba(0,0,0,0.42)";
+    ctx.fillRect(0, h - altura, w, altura);
+
+    // Texto branco com sombra
+    ctx.fillStyle = "#fff";
+    ctx.shadowColor = "rgba(0,0,0,0.6)";
+    ctx.shadowBlur = Math.round(fontePx * 0.25);
+    texto.forEach((l, i) => {
+      const y = h - altura + margem / 2 + linha * (i + 1) - Math.round(fontePx * 0.3);
+      ctx.fillText(l, margem, y);
+    });
+    ctx.shadowBlur = 0;
+
+    return canvas.toDataURL("image/jpeg", qualidade);
+  } catch {
+    return dataUrl;
+  }
+}
+
 /** data URL (já comprimida) → arquivo, para enviar num FormData como o input de arquivo faria. */
 export function dataUrlParaArquivo(dataUrl: string, nome: string): File {
   const [cabecalho, base64 = ""] = dataUrl.split(",");

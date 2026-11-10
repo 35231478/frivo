@@ -35,6 +35,8 @@ interface Props {
   x: ExecucaoTela;
   e: EquipamentoTela;
   registrar: (ops: NovaOperacao[]) => Promise<void>;
+  /** Endereço da OS (vem do cartão) para a marca d'água das fotos, quando ligada */
+  endereco?: string | null;
 }
 
 /**
@@ -42,10 +44,11 @@ interface Props {
  * ajusta o que não está OK (Atenção pede foto + observação, que pode ser falada) → medições (número +
  * unidade, sem avaliar) → fotos DEPOIS → "Concluir equipamento" leva ao próximo. Tudo grava no aparelho.
  */
-export function TelaEquipamento({ x, e, registrar }: Props) {
+export function TelaEquipamento({ x, e, registrar, endereco }: Props) {
   const atividadeId = x.atividade.id;
   const equipamentoId = e.equipamento.id;
   const so = x.bloqueada;
+  const marca = { osNumero: x.os.numero, endereco };
   const [atencao, setAtencao] = useState<ItemTela | null>(null);
   const [mostrarFaltas, setMostrarFaltas] = useState(false);
   const [naoAtendido, setNaoAtendido] = useState(false);
@@ -142,7 +145,7 @@ export function TelaEquipamento({ x, e, registrar }: Props) {
 
       <Secao titulo="Fotos ANTES do serviço" Icone={Camera}>
         <Fotos fotos={fotosDe(null, "ANTES")} onRemover={so ? undefined : tirarFoto} />
-        {!so && <BotaoFoto rotulo="Foto antes" onFoto={(d) => foto(d, { momento: "ANTES" })} />}
+        {!so && <BotaoFoto rotulo="Foto antes" marca={marca} onFoto={(d) => foto(d, { momento: "ANTES" })} />}
       </Secao>
 
       {ativos.length > 0 && !so && (
@@ -165,7 +168,7 @@ export function TelaEquipamento({ x, e, registrar }: Props) {
                 <div className="flex flex-wrap items-center gap-2">
                   <Fotos fotos={fotosDe(it.id, null)} onRemover={so ? undefined : tirarFoto} />
                   {/* Y9: depois de anexar, o rótulo confirma — o técnico não reabre "ver o que falta" à toa */}
-                  {!so && <BotaoFoto rotulo={fotosDe(it.id, null).length ? `Foto registrada (${fotosDe(it.id, null).length})` : it.pedirFoto ? "Foto (pedida)" : "Foto"} onFoto={(d) => foto(d, { itemId: it.id })} />}
+                  {!so && <BotaoFoto rotulo={fotosDe(it.id, null).length ? `Foto registrada (${fotosDe(it.id, null).length})` : it.pedirFoto ? "Foto (pedida)" : "Foto"} marca={marca} onFoto={(d) => foto(d, { itemId: it.id })} />}
                 </div>
               )}
               {it.pedirObservacao && e.respostas[it.id]?.status !== "ATENCAO" && e.respostas[it.id]?.status !== "NAO_SE_APLICA" && (
@@ -196,7 +199,7 @@ export function TelaEquipamento({ x, e, registrar }: Props) {
 
       <Secao titulo="Fotos DEPOIS do serviço" Icone={Camera}>
         <Fotos fotos={fotosDe(null, "DEPOIS")} onRemover={so ? undefined : tirarFoto} />
-        {!so && <BotaoFoto rotulo="Foto depois" onFoto={(d) => foto(d, { momento: "DEPOIS" })} />}
+        {!so && <BotaoFoto rotulo="Foto depois" marca={marca} onFoto={(d) => foto(d, { momento: "DEPOIS" })} />}
       </Secao>
 
       {!so && (
