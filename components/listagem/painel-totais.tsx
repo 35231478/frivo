@@ -1,9 +1,25 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn, formatarMoeda } from "@/lib/utils";
 import { Dica } from "@/components/ui/dica";
+
+/** Lê o estado recolhido/aberto guardado (se houver chave); default = abertoInicial. */
+function usarEstadoAberto(abertoInicial: boolean, lembrarComo?: string) {
+  const [aberto, setAberto] = useState(abertoInicial);
+  // Hidrata do localStorage só no cliente (o SSR não lê), para lembrar a última escolha por tela.
+  useEffect(() => {
+    if (!lembrarComo) return;
+    try { const v = localStorage.getItem(`painel-totais:${lembrarComo}`); if (v === "0" || v === "1") setAberto(v === "1"); } catch { /* sem storage */ }
+  }, [lembrarComo]);
+  const alternar = () => setAberto((a) => {
+    const novo = !a;
+    if (lembrarComo) { try { localStorage.setItem(`painel-totais:${lembrarComo}`, novo ? "1" : "0"); } catch { /* sem storage */ } }
+    return novo;
+  });
+  return [aberto, alternar] as const;
+}
 
 export interface LinhaTotal {
   chave: string;
@@ -22,18 +38,20 @@ export interface LinhaTotal {
  *    recalculado a cada marca/desmarca (o cálculo é da tela: lib/listagem/totais-selecao).
  * Responsivo: título e destaque empilham no celular; as linhas da quebra ficam em 2 colunas.
  */
-export function PainelTotais({ periodo, selecao, unidade, abertoInicial = true, className, extra }: {
+export function PainelTotais({ periodo, selecao, unidade, abertoInicial = true, lembrarComo, className, extra }: {
   periodo: { rotulo: string; subtitulo?: string; total: LinhaTotal; linhas: LinhaTotal[] };
   /** Null/0 = sem seleção (mostra o período). `naPagina` < `n` quando parte da seleção não está nesta página */
   selecao?: { n: number; naPagina?: number; total: LinhaTotal; linhas: LinhaTotal[] } | null;
   /** ["cobrança", "cobranças"] para as quantidades */
   unidade: [string, string];
   abertoInicial?: boolean;
+  /** Se informado, lembra o estado recolhido/aberto por tela (localStorage) */
+  lembrarComo?: string;
   className?: string;
   /** Algo a mais na linha de cima (ex.: um aviso) */
   extra?: ReactNode;
 }) {
-  const [aberto, setAberto] = useState(abertoInicial);
+  const [aberto, setAberto] = usarEstadoAberto(abertoInicial, lembrarComo);
   const comSelecao = !!selecao && selecao.n > 0;
   const total = comSelecao ? selecao!.total : periodo.total;
   const linhas = comSelecao ? selecao!.linhas : periodo.linhas;
@@ -58,7 +76,7 @@ export function PainelTotais({ periodo, selecao, unidade, abertoInicial = true, 
             <p className="text-[11px] text-ink-muted whitespace-nowrap">{total.rotulo} (R$)</p>
             <p className="text-sm font-bold text-ink tabular-nums" data-painel-total>{formatarMoeda(total.v)}</p>
           </div>
-          <button type="button" onClick={() => setAberto((a) => !a)} aria-expanded={aberto} aria-controls="painel-totais-quebra"
+          <button type="button" onClick={() => setAberto()} aria-expanded={aberto} aria-controls="painel-totais-quebra"
             className="p-1 -mr-1 rounded-md text-ink-muted hover:text-ink hover:bg-surface-alt" title={aberto ? "Recolher" : "Ver a quebra"} data-painel-alternar>
             <ChevronDown className={cn("w-4 h-4 transition-transform", aberto && "rotate-180")} />
           </button>
