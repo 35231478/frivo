@@ -284,8 +284,12 @@ describe.skipIf(!URL_PG)("Contrato recorrente PR3-B — NFS-e e boleto automáti
     await rodar();
     const [nota] = await notasDo(r.id);
     situar(nota.plugnotasId, { situacao: "REJEITADO", mensagem: "Código de serviço inválido." }); // o ponto final da prefeitura não dobra
-    // Reconciliação (cron): a nota espera há mais de 2 min
-    await ws.reconciliarNotas({ empresaId: "e1" }, new Date("2026-11-10T11:40:00.000Z"));
+    // Reconciliação (cron): a nota precisa esperar há mais de 2 min. O criadoEm é gravado pelo banco
+    // (hora real do PostgreSQL), então fixamos aqui uma base controlada pelo teste — o criadoEm fica
+    // 17 min antes do "agora" da reconciliação — para o resultado independer do dia/hora real.
+    const agoraReconc = new Date("2026-11-10T11:40:00.000Z");
+    await prisma.notaFiscal.update({ where: { id: nota.id }, data: { criadoEm: new Date(agoraReconc.getTime() - 17 * 60_000) } });
+    await ws.reconciliarNotas({ empresaId: "e1" }, agoraReconc);
     let ex = await execucao(r.id);
     expect([ex.etapa, ex.situacao]).toEqual(["NFSE", "PENDENCIA"]);
     expect(ex.erro).toBe('A prefeitura não aceitou a NFS-e: Código de serviço inválido. Corrija e use "Tentar de novo".');
