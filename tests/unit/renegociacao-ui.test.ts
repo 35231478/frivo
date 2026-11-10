@@ -230,7 +230,7 @@ describe("lista e gaveta", () => {
     await clicar(caixa("a"));
     expect($("[data-linha-conta=a]")!.hasAttribute("data-selecionada")).toBe(true); // a linha marcada ganha o realce
     await clicar(caixa("b"));
-    expect(txt($("[data-barra-contagem]"))).toMatch(/^2 cobranças · falta R\$\s?1\.100,00/);
+    expect(txt($("[data-barra-contagem]"))).toMatch(/^2 receitas · falta R\$\s?1\.100,00/);
     expect($("[data-espaco-barra]")).not.toBeNull(); // o painel de totais rola acima da barra flutuante
     await clicar(caixa("x"));
     expect(txt($("[data-motivo-escolha]"))).toBe("Escolha cobranças do mesmo cliente.");

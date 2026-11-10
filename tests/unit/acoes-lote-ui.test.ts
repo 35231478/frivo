@@ -113,7 +113,7 @@ describe("Contas a Receber", () => {
     await telaCR();
     expect($("[data-barra-selecao]")).toBeNull();
     await marcar("[data-tabela-receber]", ["cr1", "cr2"]);
-    expect(txt($("[data-barra-contagem]"))).toBe("2 cobranças · falta R$ 1.500,00");
+    expect(txt($("[data-barra-contagem]"))).toBe("2 receitas · falta R$ 1.500,00");
     expect($("[data-menu-lote]")).toBeNull();
     await clicar($("[data-acoes-lote]"));
     expect($$("[data-menu-lote] [data-acao-lote]").map((b) => [b.getAttribute("data-acao-lote"), txt(b)])).toEqual([
