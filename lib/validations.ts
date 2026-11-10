@@ -139,10 +139,18 @@ export const clienteSchema = z.object({
   estado: z.string().optional(),
   cep: z.string().optional(),
   observacoes: z.string().optional().transform(caixaLivre),
-  // Perfil de faturamento (tipo/dia/condição e canais de cobrança) saiu da UI do cliente: as colunas
-  // continuam no banco e são preservadas na edição porque NÃO entram mais por este schema. A config de
-  // faturamento passou a viver em cada contrato; o dia de faturamento do contrato tem o do cliente só
-  // como fallback (lib/financeiro/contrato-previsao.ts). Ver docs/cliente-abas-enxugar.md.
+  // Cobrança e faturamento (reaproveita colunas já existentes no cliente). Salvos no create e no edit.
+  // E-mails/WhatsApp de cobrança têm prioridade no envio de fatura/cobrança; sem eles, cai no contato
+  // principal (lib/cliente/cobranca-destino.ts). As preferências de cobrança alimentam o faturamento.
+  emailsFaturamento: z.array(z.string().trim().email()).default([]),
+  whatsappFaturamento: z.string().optional(),
+  boletoUnicoMensal: z.boolean().default(false),
+  exigePcAntesNf: z.boolean().default(false),
+  agrupaAdicionais: z.boolean().default(false),
+  // Perfil de faturamento (tipo/dia/condição) saiu da UI do cliente: as colunas continuam no banco e são
+  // preservadas na edição porque NÃO entram mais por este schema. A config de faturamento passou a viver
+  // em cada contrato; o dia de faturamento do contrato tem o do cliente só como fallback
+  // (lib/financeiro/contrato-previsao.ts). Ver docs/cliente-abas-enxugar.md.
   // Preferências de e-mail
   emailReceberBoletos: z.boolean().default(true),
   emailReceberRelatorios: z.boolean().default(true),

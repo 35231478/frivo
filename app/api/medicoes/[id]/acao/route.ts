@@ -6,6 +6,7 @@ import { buildMedicaoPublicUrl } from "@/lib/medicao-helpers";
 import { desfazerContasDaMedicao } from "@/lib/financeiro-server";
 import { aprovarMedicao, marcarEnviada } from "@/lib/faturamento/aprovar-medicao-server";
 import { whatsappLink } from "@/lib/utils";
+import { emailCobranca, whatsappCobranca } from "@/lib/cliente/cobranca-destino";
 import { cobrancasDaMedicao, cobrancasQueTravamMedicao, liberarCobrancasDaMedicao, registrarRecebimento } from "@/lib/financeiro/parcelas-server";
 
 type Params = { params: Promise<{ id: string }> };
@@ -39,8 +40,8 @@ export async function POST(req: NextRequest, { params }: Params) {
       }
       if (!(await marcarEnviada(id))) return NextResponse.json({ erro: "Medição não pode ser enviada neste status" }, { status: 409 });
       const publicUrl = buildMedicaoPublicUrl(medicao.tokenPublico, origin);
-      const emailDestino = cliente.emailsFaturamento[0] ?? cliente.email ?? null;
-      const whatsappDestino = cliente.whatsappFaturamento ?? cliente.celular ?? null;
+      const emailDestino = await emailCobranca(cliente);
+      const whatsappDestino = await whatsappCobranca(cliente);
       const assunto = `Medição ${medicao.numero} — ${medicao.empresa.nomeFantasia ?? medicao.empresa.nome}`;
       const corpo =
         `Prezados,\n\nSegue a medição ${medicao.numero} para avaliação e aprovação:\n\n${publicUrl}\n\n` +
