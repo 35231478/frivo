@@ -91,6 +91,10 @@ export class MotorSync {
   private umPorVez = false;
   /** A tela liga aqui para mostrar o que o servidor tem a dizer sobre uma gravação que subiu (só aviso) */
   aoAvisar: ((texto: string) => void) | null = null;
+  /** Avisado a cada gravação que entra na fila (o rastreio lê a posição nos momentos-chave) */
+  aoRegistrar: ((ops: OperacaoFila[]) => void) | null = null;
+  /** Avisado quando uma rodada de sincronização subiu alguma gravação */
+  aoSincronizar: (() => void) | null = null;
   private prazoEnvioMs: number;
   private prazoLeituraMs: number;
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -152,6 +156,7 @@ export class MotorSync {
       feitas.push(await this.banco.enfileirar(op));
     }
     await this.recontar(true);
+    try { this.aoRegistrar?.(feitas); } catch { /* quem escuta nunca atrapalha a gravação */ }
     void this.sincronizar();
     return feitas;
   }
@@ -289,6 +294,7 @@ export class MotorSync {
     // Retrato novo de cada atividade que subiu: a tela passa a mostrar o que o servidor gravou
     for (const atividadeId of enviadas) await this.baixarRetrato(atividadeId);
     await this.recontar(true);
+    if (enviadas.size) { try { this.aoSincronizar?.(); } catch { /* idem */ } }
   }
 
   /* ── gatilhos ── */

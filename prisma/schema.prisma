@@ -639,6 +639,9 @@ model Configuracao {
   appCadastrarEquipamento  Boolean @default(true)  @map("app_cadastrar_equipamento")
   /// Execução: o técnico avisa o cliente pelo app ("A caminho" / "Cheguei"). Desligado = os botões não aparecem
   appAvisarCliente         Boolean @default(true)  @map("app_avisar_cliente")
+  /// Rastrear a localização dos técnicos (Operações › Mapa). DESLIGADO por padrão: é dado sensível
+  /// (LGPD) — sem ligar, o app não captura nada e o servidor recusa o que chegar
+  appRastrearLocalizacao   Boolean @default(false) @map("app_rastrear_localizacao")
 
   // Notificações
   notifEmailAbrirOs       Boolean @default(false) @map("notif_email_abrir_os")
@@ -947,6 +950,7 @@ model Tecnico {
   equipamentosMarcados  AtividadeEquipamento[]
   respostasEquipamento  RespostaFormularioEquipamento[]
   folha                 ColaboradorFolha?
+  posicao               TecnicoPosicao?
 
   @@unique([cpf, empresaId])
   @@index([empresaId, ativo])
@@ -1912,6 +1916,38 @@ model AtividadeAviso {
   @@unique([atividadeId, evento, dia])
   @@index([empresaId])
   @@map("atividade_avisos")
+}
+
+/// Operações › Mapa: a ÚLTIMA posição conhecida de cada técnico — UMA linha por técnico (a leitura
+/// mais nova substitui a anterior; não há histórico de trajeto). Só existe com "Rastrear localização
+/// dos técnicos" ligado na empresa. Quem envia hoje é o app web (com o app aberto); o app nativo, quando
+/// existir, envia para o MESMO lugar (origem NATIVO), com mais frequência.
+model TecnicoPosicao {
+  id           String   @id @default(cuid())
+  empresaId    String   @map("empresa_id")
+  tecnicoId    String   @unique @map("tecnico_id")
+  latitude     Float
+  longitude    Float
+  /// Raio de precisão em metros, quando o aparelho informa
+  precisaoM    Float?   @map("precisao_m")
+  /// Bateria (0–100). null = o aparelho não informa (iPhone na web): nunca é inventada
+  bateria      Int?
+  carregando   Boolean?
+  /// Horário da leitura no aparelho (com ou sem sinal), já corrigido pelo relógio do servidor
+  registradoEm DateTime @map("registrado_em")
+  /// Quando a leitura chegou ao servidor
+  recebidoEm   DateTime @default(now()) @map("recebido_em")
+  /// O que disparou a leitura: ABRIU_APP | CHEGUEI | INICIO | CONCLUSAO | SINCRONIZACAO | PERIODICO | SEGUNDO_PLANO
+  motivo       String
+  /// De onde veio: PWA | NATIVO
+  origem       String   @default("PWA")
+  /// Quem estava logado no aparelho
+  usuarioId    String?  @map("usuario_id")
+
+  tecnico Tecnico @relation(fields: [tecnicoId], references: [id], onDelete: Cascade)
+
+  @@index([empresaId])
+  @@map("tecnico_posicoes")
 }
 
 /// Demais técnicos da atividade (além do responsável `AtividadeOs.tecnicoId`).

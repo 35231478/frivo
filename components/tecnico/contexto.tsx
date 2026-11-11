@@ -7,6 +7,8 @@ import { estadoDaAtividade } from "@/lib/tecnico/offline/estado";
 import type { NovaOperacao, OperacaoFila, RetratoAtividade } from "@/lib/tecnico/offline/tipos";
 import { CONFIG_APP_PADRAO, type ConfigApp } from "@/lib/tecnico/config-app";
 import { MSG_SEM_ESPACO, protegerArmazenamento, type Armazenamento } from "@/lib/tecnico/offline/armazenamento";
+import { Rastreio, motivoDaOperacao, type EstadoRastreio } from "@/lib/tecnico/offline/rastreio";
+import type { MotivoPosicao } from "@/lib/tecnico/posicao";
 import { toast } from "@/components/ui/avisos";
 
 export interface UsuarioApp {
@@ -29,13 +31,23 @@ interface Contexto {
   avatar: string | null;
   /** O técnico trocou a foto em Meus dados: o topo acompanha na hora, sem recarregar */
   definirAvatar: (avatar: string | null) => void;
+  /**
+   * Rastreio da localização (Operações › Mapa): null com "Rastrear localização dos técnicos" desligado —
+   * aí nada é lido nem enviado. Com ele ligado, o estado alimenta o indicador que o técnico vê.
+   */
+  rastreio: EstadoRastreio | null;
+  /** Lê e envia a posição agora (no-op com o rastreio desligado) */
+  capturarPosicao: (motivo: MotivoPosicao) => void;
 }
 
 const ESTADO_INICIAL: EstadoSync = { situacao: "sincronizado", pendentes: 0, erros: 0, ultimoSync: null, versao: 0 };
 const Ctx = createContext<Contexto | null>(null);
 
 /** Abre o banco do aparelho (um por usuário) e liga o motor de sincronização. */
-export function ProvedorTecnico({ usuario, config = CONFIG_APP_PADRAO, children, motorPronto }: { usuario: UsuarioApp; config?: ConfigApp; children: React.ReactNode; motorPronto?: MotorSync }) {
+export function ProvedorTecnico({ usuario, config = CONFIG_APP_PADRAO, children, motorPronto, criarRastreio }: {
+  usuario: UsuarioApp; config?: ConfigApp; children: React.ReactNode; motorPronto?: MotorSync;
+  /** Os testes trocam o rastreio (GPS e rede simulados) */ criarRastreio?: (motor: MotorSync) => Rastreio;
+}) {
   const [motor, setMotor] = useState<MotorSync | null>(motorPronto ?? null);
   const [estado, setEstado] = useState<EstadoSync>(ESTADO_INICIAL);
   const [semBanco, setSemBanco] = useState(false);
@@ -63,6 +75,24 @@ export function ProvedorTecnico({ usuario, config = CONFIG_APP_PADRAO, children,
   }, [usuario.id, motorPronto]);
 
   useEffect(() => motor?.assinar(setEstado), [motor]);
+
+  // Rastreio da localização: SÓ com a permissão da empresa ligada. Desligada, nada é lido nem enviado —
+  // e o que tinha ficado guardado no aparelho é apagado.
+  const [rastreio, setRastreio] = useState<EstadoRastreio | null>(null);
+  const rastreador = useRef<Rastreio | null>(null);
+  useEffect(() => {
+    if (!motor) return;
+    if (!config.rastrearLocalizacao) { void Rastreio.esquecer(motor.banco); return; }
+    const r = criarRastreio ? criarRastreio(motor) : new Rastreio(motor.banco);
+    rastreador.current = r;
+    const sair = r.assinar(setRastreio);
+    // Momentos-chave: "Cheguei", iniciar e concluir a execução; e cada sincronização que subiu algo
+    motor.aoRegistrar = (ops) => { const motivo = ops.map(motivoDaOperacao).find(Boolean); if (motivo) void r.capturar(motivo); };
+    motor.aoSincronizar = () => { void r.capturar("SINCRONIZACAO"); };
+    r.ligar();
+    return () => { sair(); r.parar(); motor.aoRegistrar = null; motor.aoSincronizar = null; rastreador.current = null; setRastreio(null); };
+  }, [motor, config.rastrearLocalizacao, criarRastreio]);
+  const capturarPosicao = useCallback((motivo: MotivoPosicao) => { void rastreador.current?.capturar(motivo); }, []);
   // Pede ao navegador para não limpar o que o técnico gravou sem sinal (uma vez, ao abrir o app)
   useEffect(() => {
     let vivo = true;
@@ -70,7 +100,8 @@ export function ProvedorTecnico({ usuario, config = CONFIG_APP_PADRAO, children,
     return () => { vivo = false; };
   }, []);
 
-  const valor = useMemo(() => ({ usuario, config, motor, estado, semBanco, armazenamento, avatar, definirAvatar }), [usuario, config, motor, estado, semBanco, armazenamento, avatar]);
+  const valor = useMemo(() => ({ usuario, config, motor, estado, semBanco, armazenamento, avatar, definirAvatar, rastreio, capturarPosicao }),
+    [usuario, config, motor, estado, semBanco, armazenamento, avatar, rastreio, capturarPosicao]);
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
 }
 

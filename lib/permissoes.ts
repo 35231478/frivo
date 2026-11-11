@@ -178,6 +178,7 @@ const ROTA_MODULO: Record<string, string> = {
   equipamentos: "equipamentos",
   ordens: "ordens",
   prazos: "ordens",
+  mapa: "equipes", // Operações › Mapa (posição dos técnicos): a página exige Equipes › Gerenciar
   tecnico: "ordens", // app do técnico (Meu dia)
   calendario: "calendario",
   qrcodes: "qrcodes",

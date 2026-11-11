@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Smartphone, Check, ShieldCheck, Camera, MonitorSmartphone } from "lucide-react";
+import { Smartphone, Check, ShieldCheck, Camera, MapPinned, MonitorSmartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ToggleSwitch, ToggleGroup } from "@/components/ui/toggle-switch";
 import { configAppParaPayload, type ConfigApp } from "@/lib/tecnico/config-app";
@@ -131,6 +131,25 @@ export function AppColaboradorClient({ inicial }: { inicial: ConfigApp }) {
             checked={cfg.avisarCliente} onChange={set("avisarCliente")}
           />
         </ToggleGroup>
+      </section>
+
+      {/* ========== Localização (dado sensível) ========== */}
+      <section className="bg-white rounded-card border border-surface-border p-6" data-secao-localizacao>
+        <div className="flex items-center gap-2 mb-4">
+          <MapPinned className="w-5 h-5 text-frivo-600" />
+          <h2 className="text-lg font-semibold text-ink">Localização</h2>
+        </div>
+        <ToggleGroup title="Mapa dos técnicos">
+          <ToggleSwitch
+            label="Rastrear localização dos técnicos"
+            dica="Ligado: o app envia a posição do aparelho, com o app aberto, e ela aparece em Operações › Mapa. Desligado: nada é capturado."
+            checked={cfg.rastrearLocalizacao} onChange={set("rastrearLocalizacao")}
+          />
+        </ToggleGroup>
+        <p className="text-xs text-ink-muted mt-3" data-aviso-lgpd>
+          Localização é dado pessoal (LGPD). Ligue só depois de informar os colaboradores e ter o consentimento deles.
+          {cfg.rastrearLocalizacao ? " Com isto ligado, o app mostra ao técnico que a localização está sendo compartilhada." : ""}
+        </p>
       </section>
 
       {/* ========== Dispositivo ========== */}

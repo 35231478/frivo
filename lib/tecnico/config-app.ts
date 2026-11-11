@@ -34,6 +34,11 @@ export interface ConfigApp {
   cadastrarEquipamento: boolean;
   /** O técnico avisa o cliente ("A caminho" / "Cheguei"); desligado: os botões não aparecem e nada é enviado */
   avisarCliente: boolean;
+  /**
+   * Rastrear a localização dos técnicos (Operações › Mapa). DESLIGADO por padrão (dado sensível, LGPD):
+   * desligado, o app não captura nem envia posição e o servidor recusa o que chegar
+   */
+  rastrearLocalizacao: boolean;
 }
 
 export const CONFIG_APP_PADRAO: ConfigApp = {
@@ -50,6 +55,7 @@ export const CONFIG_APP_PADRAO: ConfigApp = {
   umDispositivo: true,
   cadastrarEquipamento: true,
   avisarCliente: true,
+  rastrearLocalizacao: false,
 };
 
 /** Os campos de Configuracao (snake→camel do Prisma) que alimentam o ConfigApp. */
@@ -67,6 +73,7 @@ export interface ConfiguracaoApp {
   appUmDispositivo: boolean;
   appCadastrarEquipamento: boolean;
   appAvisarCliente: boolean;
+  appRastrearLocalizacao: boolean;
 }
 
 /** Os campos a selecionar de Configuracao (reuso no servidor). */
@@ -84,6 +91,7 @@ export const SELECT_CONFIG_APP = {
   appUmDispositivo: true,
   appCadastrarEquipamento: true,
   appAvisarCliente: true,
+  appRastrearLocalizacao: true,
 } as const;
 
 /** ConfigApp (chaves amigáveis) → payload de Configuracao (chaves app*) para o PUT /api/configuracoes. */
@@ -102,6 +110,7 @@ export function configAppParaPayload(c: ConfigApp): ConfiguracaoApp {
     appUmDispositivo: c.umDispositivo,
     appCadastrarEquipamento: c.cadastrarEquipamento,
     appAvisarCliente: c.avisarCliente,
+    appRastrearLocalizacao: c.rastrearLocalizacao,
   };
 }
 
@@ -126,5 +135,6 @@ export function normalizarConfigApp(row: Partial<ConfiguracaoApp> | null | undef
     umDispositivo: ou(row.appUmDispositivo, CONFIG_APP_PADRAO.umDispositivo),
     cadastrarEquipamento: ou(row.appCadastrarEquipamento, CONFIG_APP_PADRAO.cadastrarEquipamento),
     avisarCliente: ou(row.appAvisarCliente, CONFIG_APP_PADRAO.avisarCliente),
+    rastrearLocalizacao: ou(row.appRastrearLocalizacao, CONFIG_APP_PADRAO.rastrearLocalizacao),
   };
 }

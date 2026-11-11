@@ -8,6 +8,7 @@ import { toqueLeve } from "@/lib/haptico";
 import { FrivoMark } from "@/components/layout/frivo-logo";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import { IndicadorSync } from "@/components/tecnico/indicador-sync";
+import { IndicadorLocalizacao } from "@/components/tecnico/indicador-localizacao";
 import { ProvedorTecnico, irPara, useTecnico, useVista, type UsuarioApp, type Vista } from "@/components/tecnico/contexto";
 import type { ConfigApp } from "@/lib/tecnico/config-app";
 import { Agenda, MeuDia } from "@/components/tecnico/meu-dia";
@@ -71,8 +72,10 @@ function Casca({ perfilInicial }: { perfilInicial: PerfilInicial }) {
             </button>
           </div>
         </div>
+        {/* Transparência: com o rastreamento ligado, o técnico vê sempre que a localização é compartilhada */}
+        <IndicadorLocalizacao />
       </header>
-      {semBanco && <p className="bg-atrasado text-white text-sm px-4 py-2">Este navegador não guarda dados no aparelho (modo anônimo?). Sem sinal, nada pode ser gravado.</p>}
+      {semBanco &&<p className="bg-atrasado text-white text-sm px-4 py-2">Este navegador não guarda dados no aparelho (modo anônimo?). Sem sinal, nada pode ser gravado.</p>}
       <main className="max-w-2xl mx-auto px-4 pt-4 pb-28">
         {travadoLoc
           ? <BloqueioLocalizacao estado={loc.estado} onTentar={loc.tentar} />
