@@ -65,15 +65,26 @@ export async function whatsappParaAviso(os: {
   return whatsappContatoPrincipal(os.clienteId, os.cliente.celular);
 }
 
+/** O que foi registrado HOJE (Brasília) em cada uma destas atividades, por evento (uma consulta só). */
+export async function avisosDeHojePorAtividade(atividadeIds: string[], agora: Date = new Date()): Promise<Map<string, AvisosTela>> {
+  const porAtividade = new Map<string, AvisosTela>();
+  if (!atividadeIds.length) return porAtividade;
+  const dia = diaCivilDeChave(chaveDiaBR(agora))!;
+  const linhas = await prisma.atividadeAviso.findMany({
+    where: { atividadeId: { in: atividadeIds }, dia }, select: { atividadeId: true, evento: true, registradoEm: true, avisoStatus: true },
+  });
+  for (const l of linhas) {
+    if (!(EVENTOS_AVISO as readonly string[]).includes(l.evento)) continue;
+    const avisos = porAtividade.get(l.atividadeId) ?? {};
+    avisos[l.evento as EventoAviso] = { em: l.registradoEm.toISOString(), status: l.avisoStatus as StatusAviso };
+    porAtividade.set(l.atividadeId, avisos);
+  }
+  return porAtividade;
+}
+
 /** O que foi registrado HOJE (Brasília) nesta atividade, por evento. */
 export async function avisosDeHoje(atividadeId: string, agora: Date = new Date()): Promise<AvisosTela> {
-  const dia = diaCivilDeChave(chaveDiaBR(agora))!;
-  const linhas = await prisma.atividadeAviso.findMany({ where: { atividadeId, dia }, select: { evento: true, registradoEm: true, avisoStatus: true } });
-  const avisos: AvisosTela = {};
-  for (const l of linhas) {
-    if ((EVENTOS_AVISO as readonly string[]).includes(l.evento)) avisos[l.evento as EventoAviso] = { em: l.registradoEm.toISOString(), status: l.avisoStatus as StatusAviso };
-  }
-  return avisos;
+  return (await avisosDeHojePorAtividade([atividadeId], agora)).get(atividadeId) ?? {};
 }
 
 /**

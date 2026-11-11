@@ -16,6 +16,12 @@ export interface CartaoTela {
   status: string; prioridade: string; dataAgendada: string | null; dia: string | null; hora: string | null; duracaoMin: number | null;
   cliente: string; telefone: string | null; unidade: string | null; endereco: string; rota: string | null; descricao: string;
   equipamentos: number; atendidos: number; adicionais: number;
+  /** A OS veio de um chamado do cliente: a descrição é o que ele pediu. Ausente em listas antigas */
+  chamado?: boolean;
+  /** O que o escritório escreveu para a visita (observação da atividade + observações da OS). Ausente em listas antigas */
+  orientacao?: string;
+  /** "A caminho" / "Cheguei" de hoje, como a lista baixou. Ausente em listas antigas */
+  avisos?: AvisosTela;
 }
 
 export interface EquipamentoInfo {

@@ -8,13 +8,15 @@ import { prisma } from "@/lib/prisma";
 import { chaveDiaBR, inicioHojeBR } from "@/lib/fuso";
 import { atividadesDoTecnico } from "@/lib/tecnico/escopo";
 import { enderecoEmLinha, horaMarcada, linkRota, ordenarDoDia } from "@/lib/tecnico/cartao";
+import { avisosDeHojePorAtividade } from "@/lib/execucao/aviso-cliente";
+import type { AvisosTela } from "@/lib/tecnico/aviso-cliente";
 
 const SELECT_CARTAO = {
-  id: true, titulo: true, status: true, dataAgendada: true, duracaoMin: true,
+  id: true, titulo: true, status: true, dataAgendada: true, duracaoMin: true, observacao: true,
   tipoOs: { select: { nome: true, cor: true } },
   ordemServico: {
     select: {
-      id: true, numero: true, prioridade: true, descricao: true,
+      id: true, numero: true, prioridade: true, descricao: true, origem: true, observacoes: true,
       cliente: { select: { nome: true, nomeFantasia: true, telefone: true, endereco: true, numero: true, bairro: true, cidade: true, estado: true, cep: true } },
       unidade: { select: { nome: true, logradouro: true, numero: true, complemento: true, bairro: true, cidade: true, estado: true, cep: true, latitude: true, longitude: true, telefone: true } },
     },
@@ -43,10 +45,20 @@ export interface CartaoAtividade {
   endereco: string;
   rota: string | null;
   descricao: string;
+  /** A OS veio de um chamado do cliente (portal ou QR Code): a descrição é o que ele pediu */
+  chamado: boolean;
+  /** O que o escritório escreveu para a visita: a observação da atividade e as observações da OS */
+  orientacao: string;
   equipamentos: number;
   atendidos: number;
   adicionais: number;
+  /** "A caminho" / "Cheguei" registrados HOJE (só nas listas; no retrato vão em `execucao.avisos`) */
+  avisos?: AvisosTela;
 }
+
+/** Junta os textos do escritório (sem repetir o mesmo texto), um parágrafo cada. */
+const juntarTextos = (...textos: (string | null | undefined)[]) =>
+  textos.map((t) => (t ?? "").trim()).filter((t, i, todos) => t && todos.indexOf(t) === i).join("\n\n");
 
 export function montarCartao(a: AtividadeCartao): CartaoAtividade {
   const os = a.ordemServico;
@@ -61,8 +73,18 @@ export function montarCartao(a: AtividadeCartao): CartaoAtividade {
     dataAgendada: a.dataAgendada, dia: a.dataAgendada ? chaveDiaBR(a.dataAgendada) : null, hora: horaMarcada(a.dataAgendada), duracaoMin: a.duracaoMin,
     cliente: (c.nomeFantasia ?? "").trim() || c.nome, telefone: (u?.telefone ?? c.telefone ?? "").trim() || null, unidade: u?.nome ?? null,
     endereco: enderecoEmLinha(local), rota: linkRota(local), descricao: os.descricao,
+    chamado: os.origem === "PORTAL_CLIENTE", orientacao: juntarTextos(a.observacao, os.observacoes),
     equipamentos: a._count.equipamentos, atendidos: a.equipamentos.length, adicionais: a._count.servicosAdicionais,
   };
+}
+
+/**
+ * Põe em cada cartão o "A caminho" / "Cheguei" de HOJE (uma consulta para a lista inteira): é o que
+ * diz ao card se o técnico já chegou — e, portanto, se a OS abre.
+ */
+async function comAvisosDeHoje(cartoes: CartaoAtividade[], agora: Date): Promise<CartaoAtividade[]> {
+  const avisos = await avisosDeHojePorAtividade(cartoes.map((c) => c.atividadeId), agora);
+  return cartoes.map((c) => ({ ...c, avisos: avisos.get(c.atividadeId) ?? {} }));
 }
 
 /**
@@ -80,7 +102,7 @@ export async function meuDia(empresaId: string, tecnicoId: string, agora = new D
     select: SELECT_CARTAO,
     take: 100,
   });
-  const cartoes = atividades.map(montarCartao);
+  const cartoes = await comAvisosDeHoje(atividades.map(montarCartao), agora);
   const hoje = chaveDiaBR(agora);
   return {
     dia: hoje,
@@ -99,7 +121,7 @@ export async function agenda(empresaId: string, tecnicoId: string, dias = 14, ag
     take: 300,
   });
   const porDia = new Map<string, CartaoAtividade[]>();
-  for (const c of atividades.map(montarCartao)) porDia.set(c.dia!, [...(porDia.get(c.dia!) ?? []), c]);
+  for (const c of await comAvisosDeHoje(atividades.map(montarCartao), agora)) porDia.set(c.dia!, [...(porDia.get(c.dia!) ?? []), c]);
   return [...porDia.keys()].sort().map((dia) => ({ dia, atividades: ordenarDoDia(porDia.get(dia)!) }));
 }
 

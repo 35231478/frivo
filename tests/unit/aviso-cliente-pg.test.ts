@@ -12,7 +12,7 @@
  *  - privacidade: o e-mail do cliente nunca vai para o app; o WhatsApp só com "Exibir contatos do cliente".
  *   PG_TESTE_URL="postgresql://root@localhost/postgres?host=/var/run/postgresql" npx vitest run tests/unit/aviso-cliente-pg
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
@@ -429,5 +429,80 @@ describe.skipIf(!URL_PG)("Aviso ao cliente: a caminho / cheguei (PostgreSQL real
     expect(rs.map((r) => r.ok)).toEqual([true, true, true]);
     expect((await prisma.atividadeOs.findUnique({ where: { id: a } })).status).toBe("EM_ANDAMENTO");
     expect(resend.enviados).toHaveLength(2);
+  });
+
+  /* ───────── o card do Meu dia: é ele que abre (ou não) a OS ───────── */
+  describe("o card do Meu dia e da Agenda", () => {
+    const meuDia = async () => (await chamar("tecnico/meu-dia", "GET", {})).json;
+    const agenda = async () => (await chamar("tecnico/agenda", "GET", {})).json;
+    /** Uma atividade marcada para hoje, às 14:00 de Brasília */
+    const hoje = (osId: string, extra: Record<string, unknown> = {}) => {
+      const dia = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+      return atividade(osId, { dataAgendada: new Date(`${dia}T17:00:00.000Z`), ...extra });
+    };
+    const QR = "Ar da recepção pingando.\n\n[Chamado via QR Code] Solicitante: Marta Lima · E-mail: marta@hospital.com · Telefone: (11) 97777-1111";
+
+    beforeAll(async () => {
+      await prisma.ordemServico.createMany({ data: [
+        { id: "osQr", empresaId: "e1", numero: "OS-0050", clienteId: "c1", criadoPorId: "uA", origem: "PORTAL_CLIENTE", chamadoNumero: "CH-0007", descricao: QR, observacoes: "Entrar pela portaria 2." },
+        { id: "osEscritorio", empresaId: "e1", numero: "OS-0051", clienteId: "c1", criadoPorId: "uA", descricao: "Trocar o compressor", observacoes: "Levar escada." },
+      ] });
+    });
+    afterEach(async () => { await prisma.atividadeOs.updateMany({ where: { empresaId: "e1" }, data: { dataAgendada: null } }); });
+
+    it("cada card leva os toques de HOJE desta atividade: é o que diz se o técnico já chegou (e a OS abre)", async () => {
+      const [semToque, aCaminho, chegou] = [await hoje("osA"), await hoje("osA"), await hoje("osA")];
+      await sync([toque("A_CAMINHO", aCaminho), toque("A_CAMINHO", chegou), toque("CHEGOU", chegou)]);
+      // toque de ontem não vale: a OS que segue agendada pede "Cheguei" de novo
+      const ontem = new Date(Date.now() - 26 * 60 * MIN);
+      await prisma.atividadeAviso.create({ data: { empresaId: "e1", atividadeId: semToque, evento: "CHEGOU", dia: new Date(Date.UTC(ontem.getUTCFullYear(), ontem.getUTCMonth(), ontem.getUTCDate() - 1)), registradoEm: ontem, usuarioId: "uT", avisoStatus: "ENVIADO" } });
+
+      for (const lista of [(await meuDia()).atividades, (await agenda()).dias[0].atividades]) {
+        const card = (id: string) => lista.find((c: any) => c.atividadeId === id);
+        expect(card(semToque).avisos).toEqual({});
+        expect(card(aCaminho).avisos).toEqual({ A_CAMINHO: { em: expect.any(String), status: "ENVIADO" } });
+        expect(Object.keys(card(chegou).avisos).sort()).toEqual(["A_CAMINHO", "CHEGOU"]);
+        expect(card(chegou).avisos.CHEGOU.status).toBe("ENVIADO");
+        expect(card(chegou).status).toBe("AGENDADA"); // chegar não começa o atendimento
+        expect(JSON.stringify(lista)).not.toMatch(/@hospital/); // o destinatário do aviso nunca vai
+      }
+    });
+
+    it("o card diz se a OS veio de um chamado do cliente e traz a orientação do escritório (observação da atividade + observações da OS)", async () => {
+      const doChamado = await hoje("osQr", { observacao: "Levar bomba de dreno." });
+      const doEscritorio = await hoje("osEscritorio");
+      const igual = await hoje("osEscritorio", { observacao: "Levar escada." }); // o mesmo texto nos dois lugares: uma vez só
+      const lista = (await meuDia()).atividades;
+      const card = (id: string) => lista.find((c: any) => c.atividadeId === id);
+      expect(card(doChamado)).toMatchObject({ chamado: true, descricao: QR, orientacao: "Levar bomba de dreno.\n\nEntrar pela portaria 2." });
+      expect(card(doEscritorio)).toMatchObject({ chamado: false, descricao: "Trocar o compressor", orientacao: "Levar escada." });
+      expect(card(igual).orientacao).toBe("Levar escada.");
+      expect((await retrato(doChamado)).cartao).toMatchObject({ chamado: true, orientacao: "Levar bomba de dreno.\n\nEntrar pela portaria 2." });
+    });
+
+    it("'Exibir dados do cliente' DESLIGADO: o pedido e a orientação vão; o nome, o e-mail e o telefone de quem pediu NÃO saem do servidor", async () => {
+      const a = await hoje("osQr", { observacao: "Levar bomba de dreno." });
+      await permitir({ appExibirDadosCliente: false, appExibirContatosCliente: false });
+      const cards = [(await meuDia()).atividades.find((c: any) => c.atividadeId === a), (await agenda()).dias[0].atividades.find((c: any) => c.atividadeId === a), (await retrato(a)).cartao];
+      for (const c of cards) {
+        expect(c).toMatchObject({ cliente: "", endereco: "", descricao: "Ar da recepção pingando.", orientacao: "Levar bomba de dreno.\n\nEntrar pela portaria 2.", chamado: true });
+        expect(JSON.stringify(c)).not.toMatch(/Marta|marta@|97777|Hospital/);
+      }
+      // só os contatos desligados: fica o nome de quem pediu; e-mail e telefone não
+      await permitir({ appExibirDadosCliente: true, appExibirContatosCliente: false });
+      const c = (await meuDia()).atividades.find((x: any) => x.atividadeId === a);
+      expect(c.descricao).toBe("Ar da recepção pingando.\n\nSolicitante: Marta Lima");
+    });
+
+    it("'Avisar o cliente' DESLIGADO: o 'Cheguei' continua valendo como chegada — registra o horário, não envia nada, e o card passa a saber", async () => {
+      const a = await hoje("osA");
+      await permitir({ appAvisarCliente: false });
+      const [res] = await sync([toque("CHEGOU", a)]);
+      expect(res).toMatchObject({ ok: true, dados: { evento: "CHEGOU", status: "INDISPONIVEL" } });
+      expect(resend.enviados).toHaveLength(0);
+      expect((await meuDia()).atividades.find((c: any) => c.atividadeId === a).avisos.CHEGOU).toMatchObject({ status: "INDISPONIVEL" });
+      const [h] = (await historico("osA")).filter((x: any) => x.detalhes.includes("aviso ao cliente desligado")).slice(-1);
+      expect(h.acao).toBe("Técnico chegou ao local");
+    });
   });
 });

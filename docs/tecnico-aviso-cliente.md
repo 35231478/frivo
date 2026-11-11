@@ -1,6 +1,11 @@
 # App do técnico — avisar o cliente: "A caminho" e "Cheguei"
 
-Na tela da OS do app, antes dos equipamentos, dois botões: **A caminho** e **Cheguei**. O toque:
+> **Onde o técnico toca mudou** (ver `docs/tecnico-meu-dia-cheguei.md`): os botões saíram de dentro da
+> OS e foram para o **card do Meu dia**. "Cheguei" é o botão principal e abre a OS; "A caminho" é
+> opcional. Dentro da OS fica só o registro. As regras abaixo (horário, e-mail, um por dia, janela
+> de 5 minutos, banco) continuam as mesmas.
+
+No card da OS (Meu dia e Agenda), dois toques: **A caminho** e **Cheguei**. O toque:
 
 1. **registra o horário** na atividade e no **Histórico da OS** (o escritório vê quem tocou e quando);
 2. **avisa o cliente por e-mail**, com uma mensagem curta e o nome da empresa — se houver sinal na hora;

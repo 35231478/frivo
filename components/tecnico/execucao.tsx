@@ -12,13 +12,14 @@ import { BotaoFoto, Miniatura, ObservacaoVoz } from "@/components/tecnico/captur
 import { irPara, useAtividade, useTecnico } from "@/components/tecnico/contexto";
 import { BotaoRota } from "@/components/tecnico/rota";
 import { ModalCadastroEquipamento } from "@/components/tecnico/cadastro-equipamento";
-import { AvisoClienteOs } from "@/components/tecnico/aviso-cliente";
+import { ChegadaNaOs } from "@/components/tecnico/aviso-cliente";
 import { CameraRapida, useRapida } from "@/components/tecnico/camera-rapida";
 import { ConferenciaRapida } from "@/components/tecnico/conferencia-rapida";
 import { MSG_SEM_UNIDADE } from "@/lib/tecnico/cadastro-equipamento";
 import { ConcluirSemEquipamento } from "@/components/os/concluir-sem-equipamento";
 import { srcFoto, TelaEquipamento } from "@/components/tecnico/equipamento";
-import { ROTULO_STATUS_ATIVIDADE } from "@/components/tecnico/meu-dia";
+import { CartaoAtividade, DetalhesServico, ROTULO_STATUS_ATIVIDADE } from "@/components/tecnico/meu-dia";
+import { guardadoDoRetrato, podeEntrar } from "@/lib/tecnico/chegada";
 import { adicionalAvaliado, equipamentoDoQr } from "@/lib/tecnico/offline/estado";
 import { novoClientId } from "@/lib/tecnico/offline/motor";
 import { textoFaltas } from "@/lib/execucao/pendencias";
@@ -39,7 +40,7 @@ export function situacao(e: EquipamentoTela) {
 
 /** A OS no app: local, equipamentos (com o que falta), serviço extra e a conclusão (com a trava da Etapa 1). */
 export function VistaOs({ atividadeId, equipamentoId, camera }: { atividadeId: string; equipamentoId?: string | null; /** Abre já na câmera rápida (atalho do Meu dia) */ camera?: boolean }) {
-  const { retrato, tela, aEnviar, registrar, carregando } = useAtividade(atividadeId);
+  const { retrato, tela, fila, aEnviar, registrar, carregando } = useAtividade(atividadeId);
 
   if (carregando) return <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-ink-subtle" /></div>;
   if (!retrato || !tela) {
@@ -51,6 +52,17 @@ export function VistaOs({ atividadeId, equipamentoId, camera }: { atividadeId: s
           <p className="font-semibold text-ink">Esta OS ainda não está no aparelho</p>
           <p className="text-sm text-ink-muted">Abra-a uma vez com sinal (ou abra o Meu dia com internet: as OS do dia já ficam guardadas).</p>
         </div>
+      </div>
+    );
+  }
+  // A porta da OS é o "Cheguei" do card: agendada e sem chegada hoje, a execução não abre — por
+  // nenhum caminho (link direto, atalho da câmera, voltar do navegador). Em andamento entra direto.
+  if (!podeEntrar(tela.atividade.status, tela.avisos)) {
+    return (
+      <div className="space-y-4" data-vista="os-antes-de-chegar">
+        <Voltar />
+        <p className="text-sm text-ink-muted" data-trava-chegada>Toque em “Cheguei” para abrir a OS.</p>
+        <CartaoAtividade c={retrato.cartao} fila={fila} guardado={guardadoDoRetrato(retrato, Number.MAX_SAFE_INTEGER)} />
       </div>
     );
   }
@@ -125,11 +137,12 @@ function ResumoOs({ r, x, aEnviar, registrar, camera }: { r: RetratoAtividade; x
             <p className="text-sm font-semibold text-ink-muted">{c.osNumero}{x.atividade.tipoOs ? ` · ${x.atividade.tipoOs.nome}` : ""}</p>
             <span className={cn("text-xs font-semibold rounded-full px-2 py-0.5", st.classe)} data-status={x.atividade.status}>{st.rotulo}</span>
           </div>
-          {/* "Exibir dados do cliente" desligado: esconde nome, endereço e descrição do cliente (privacidade) */}
+          {/* "Exibir dados do cliente" desligado: esconde nome e endereço do cliente (privacidade) */}
           <h1 className="text-xl font-bold text-ink leading-tight">{(config.exibirDadosCliente && c.cliente) || x.atividade.titulo || c.osNumero}</h1>
           <p className="text-sm text-ink-muted">{[config.exibirDadosCliente && c.cliente && x.atividade.titulo !== x.atividade.tipoOs?.nome && x.atividade.titulo, config.exibirDadosCliente && c.unidade, c.hora].filter(Boolean).join(" · ")}</p>
           {config.exibirDadosCliente && c.endereco && <p className="text-sm text-ink flex gap-1 pt-1"><MapPin className="w-4 h-4 text-ink-subtle shrink-0 mt-0.5" /> {c.endereco}</p>}
-          {config.exibirDadosCliente && c.descricao && <p className="text-sm text-ink bg-surface-alt rounded-lg p-2.5 mt-2 whitespace-pre-line" data-descricao>{c.descricao}</p>}
+          {/* O que fazer (descrição e orientação do escritório) fica sempre; sem dados do cliente, sai só a identidade de quem pediu */}
+          <div className="bg-surface-alt rounded-lg p-2.5 mt-2 empty:hidden"><DetalhesServico c={c} /></div>
         </div>
         {((config.exibirDadosCliente && c.rota) || (config.exibirContatosCliente && c.telefone)) && (
           <div className="flex border-t border-surface-border divide-x divide-surface-border">
@@ -140,7 +153,7 @@ function ResumoOs({ r, x, aEnviar, registrar, camera }: { r: RetratoAtividade; x
         )}
       </header>
 
-      <AvisoClienteOs r={r} x={x} registrar={registrar} />
+      <ChegadaNaOs r={r} x={x} />
 
       {!so && (
         <section className="space-y-2" data-camera-rapida-atalho>

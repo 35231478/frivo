@@ -72,16 +72,39 @@ export const linkDoApp = (rotaGoogle: string, app: AppRota): string => (app === 
 /* ───────── Privacidade (Equipes › App do colaborador) ───────── */
 
 interface DadosDoCliente { cliente: string; telefone: string | null; unidade: string | null; endereco: string; rota: string | null; descricao: string }
+type Privacidade = { exibirDadosCliente: boolean; exibirContatosCliente: boolean };
+
+/** O rodapé que o chamado aberto pelo QR Code grava na descrição: "[Chamado via QR Code] Solicitante: … · E-mail: … · Telefone: …" */
+const RODAPE_QR = /\s*\[(?:Chamado|Orçamento) via QR Code\]([\s\S]*)$/;
+
+/**
+ * A descrição do serviço como o app pode ler. O texto do pedido fica SEMPRE (o técnico precisa saber
+ * o que fazer); o que sai é a identidade de quem pediu, que o chamado do QR Code grava no rodapé:
+ *  - "Exibir dados do cliente" desligado: sai o rodapé inteiro (nome, e-mail, telefone);
+ *  - só "Exibir contatos" desligado: fica o nome do solicitante, saem e-mail e telefone.
+ * Texto livre digitado no meio da descrição não dá para separar: segue como foi escrito.
+ */
+export function descricaoParaApp(descricao: string | null | undefined, config: Privacidade): string {
+  const texto = (descricao ?? "").trim();
+  const m = texto.match(RODAPE_QR);
+  if (!m || (config.exibirDadosCliente && config.exibirContatosCliente)) return texto;
+  const corpo = texto.slice(0, m.index).trimEnd();
+  if (!config.exibirDadosCliente) return corpo;
+  const nome = m[1].split(" · ").map((p) => p.trim()).filter((p) => /^Solicitante:/i.test(p));
+  return nome.length ? `${corpo}\n\n${nome.join(" · ")}` : corpo;
+}
 
 /**
  * O cartão como o app pode ver, pelas permissões da empresa: "Exibir dados do cliente" desligado tira
- * nome, unidade, endereço, rota e descrição; "Exibir contatos" desligado tira o telefone. Aplicado NO
- * SERVIDOR (o dado nem chega ao aparelho); a tela confere de novo para o que já estava guardado.
+ * nome, unidade, endereço e rota — e, da descrição, a identidade de quem pediu (o texto do serviço
+ * fica); "Exibir contatos" desligado tira o telefone. Aplicado NO SERVIDOR (o dado nem chega ao
+ * aparelho); a tela confere de novo para o que já estava guardado.
  */
-export function aplicarPrivacidade<T extends DadosDoCliente>(c: T, config: { exibirDadosCliente: boolean; exibirContatosCliente: boolean }): T {
+export function aplicarPrivacidade<T extends DadosDoCliente>(c: T, config: Privacidade): T {
   return {
     ...c,
-    ...(!config.exibirDadosCliente && { cliente: "", unidade: null, endereco: "", rota: null, descricao: "" }),
+    descricao: descricaoParaApp(c.descricao, config),
+    ...(!config.exibirDadosCliente && { cliente: "", unidade: null, endereco: "", rota: null }),
     ...(!config.exibirContatosCliente && { telefone: null }),
   };
 }
