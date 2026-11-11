@@ -881,9 +881,29 @@ describe("Etapa 2c — medição é só captura; serviço adicional dentro da OS
     expect(modal.textContent).toContain("Split Sala 1");
     expect(modal.querySelectorAll("textarea, select, input, [data-salvar-adicional]").length).toBe(0);
     expect([...modal.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Fechar"]); // nem "tirar este serviço", nem excluir foto
+    // a foto já sincronizada vem da rota do adicional (antes apontava para a de equipamento e aparecia em branco)
+    expect(modal.querySelector("[data-miniatura] img")!.getAttribute("src")).toBe("/api/servicos-adicionais/fotos/f9");
     await clicar(modal.querySelector("button"));
     expect($("[data-modal-adicional]")).toBeNull();
     expect((await fila()).filter((o) => o.tipo.startsWith("adicional"))).toEqual([]);
+  });
+
+  it("B · adicional já sincronizado e ainda a avaliar: abre para editar e a miniatura da foto vem da rota do adicional", async () => {
+    ajustarRetrato = (r) => ({
+      ...r,
+      execucao: { ...r.execucao, adicionais: [{ id: "s8", clientId: null, descricao: "Reaperto do suporte", equipamentoId: null, cobrancaDecidida: false, fotos: [{ id: "f8", clientId: null }], criadoPor: "João" }] },
+    });
+    await motor.baixarRetrato("aA");
+    await abrirNaUrl();
+    expect($("[data-adicional]")!.textContent).toContain("escritório avalia a cobrança");
+    expect($("[data-adicional]")!.hasAttribute("data-avaliado")).toBe(false);
+    await clicar($("[data-adicional]"));
+    const modal = $("[data-modal-adicional]")!;
+    expect(modal.hasAttribute("data-somente-leitura")).toBe(false);
+    expect(modal.querySelector("textarea")).not.toBeNull();
+    expect(modal.querySelector("[data-miniatura] img")!.getAttribute("src")).toBe("/api/servicos-adicionais/fotos/f8");
+    const { srcFotoAdicional } = await import("@/components/tecnico/execucao");
+    expect(srcFotoAdicional({ id: null, local: "data:image/jpeg;base64,AAA" })).toBe("data:image/jpeg;base64,AAA"); // ainda no aparelho
   });
 
   it("B · regra pura: 'já avaliado' pelo sinal novo ou, em retrato antigo guardado no aparelho, pela situação que vinha antes", async () => {

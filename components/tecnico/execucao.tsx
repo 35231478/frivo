@@ -327,6 +327,9 @@ function ListaUnidade({ r, x, onFechar, onVincular }: { r: RetratoAtividade; x: 
   );
 }
 
+/** Foto de serviço adicional: a guardada no aparelho ou, já sincronizada, a do servidor (rota própria — não é a das fotos de equipamento). */
+export const srcFotoAdicional = (f: { id: string | null; local?: string }) => f.local ?? `/api/servicos-adicionais/fotos/${f.id}`;
+
 /** Serviço extra: entra na MESMA OS e no MESMO relatório (destacado como "Adicional"); o escritório avalia a cobrança. */
 function ModalAdicional({ x, r, a, onFechar, registrar }: { x: ExecucaoTela; r: RetratoAtividade; a: AdicionalTela | null; onFechar: () => void; registrar: (ops: NovaOperacao[]) => Promise<void> }) {
   const atividadeId = x.atividade.id;
@@ -364,7 +367,7 @@ function ModalAdicional({ x, r, a, onFechar, registrar }: { x: ExecucaoTela; r: 
           {eq && <p className="text-sm text-ink-muted">Equipamento: <span className="text-ink font-semibold">{eq.titulo}</span></p>}
           {a.fotos.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {a.fotos.map((f, i) => <Miniatura key={f.clientId ?? f.id ?? i} src={srcFoto(f)} alt={`foto ${i + 1}`} pendente={!f.id} />)}
+              {a.fotos.map((f, i) => <Miniatura key={f.clientId ?? f.id ?? i} src={srcFotoAdicional(f)} alt={`foto ${i + 1}`} pendente={!f.id} />)}
             </div>
           )}
           <button type="button" onClick={onFechar} className="w-full rounded-card border border-surface-border bg-white py-3 font-semibold text-ink touch-target">Fechar</button>
@@ -387,7 +390,7 @@ function ModalAdicional({ x, r, a, onFechar, registrar }: { x: ExecucaoTela; r: 
         <div className="space-y-2">
           <span className="text-sm font-semibold text-ink">Fotos</span>
           <div className="flex flex-wrap gap-2">
-            {a?.fotos.map((f, i) => <Miniatura key={f.clientId ?? f.id ?? i} src={srcFoto(f)} alt={`foto ${i + 1}`} pendente={!f.id}
+            {a?.fotos.map((f, i) => <Miniatura key={f.clientId ?? f.id ?? i} src={srcFotoAdicional(f)} alt={`foto ${i + 1}`} pendente={!f.id}
               onRemover={() => registrar([{ tipo: "adicionalFotoRemover", atividadeId, dados: f.clientId ? { clientId: f.clientId } : { id: f.id! } }])} />)}
             {fotosNovas.map((d, i) => <Miniatura key={`n${i}`} src={d} alt={`foto nova ${i + 1}`} pendente onRemover={() => setFotosNovas((l) => l.filter((_, j) => j !== i))} />)}
           </div>
