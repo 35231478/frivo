@@ -1,5 +1,9 @@
 # App do técnico — Trocar senha no Perfil (Tema 2)
 
+> **Atualização:** o card "Trocar senha" solto no Perfil foi **removido** — a mesma função existia em
+> dois lugares. A troca de senha do app vive agora **só em Perfil › Meus dados › Segurança** (mesma
+> rota, mesmas regras). Ver `docs/tecnico-senha-unica-haptico.md`. O texto abaixo é o registro do Tema 2.
+
 **Sem mudança de banco. A autenticação não foi alterada.**
 
 ## Levantamento — o que já existia

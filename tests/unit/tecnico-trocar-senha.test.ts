@@ -1,9 +1,11 @@
 // @vitest-environment happy-dom
 /**
- * Tema 2 — o técnico troca a PRÓPRIA senha no Perfil do app.
+ * O técnico troca a PRÓPRIA senha pelo app — em UM lugar só: Perfil › Meus dados › Segurança (o card
+ * "Trocar senha" solto no Perfil saiu: era a mesma função duas vezes).
  * A rota (/api/perfil/senha) já existia e não foi alterada: aqui prova-se que ela serve ao técnico
  * (papel TECNICO) com as mesmas regras — senha atual obrigatória, senha forte, só a própria, guardada
- * como hash bcrypt — e que a tela do app manda só o que deve, mostra os erros e pede sinal.
+ * como hash bcrypt — e que, pelo caminho que ficou, nada se perdeu: a tela manda só o que deve,
+ * valida antes de enviar, mostra os erros do servidor e, sem sinal, avisa e mantém o que foi digitado.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
@@ -11,6 +13,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { NextRequest } from "next/server";
 import bcrypt from "bcryptjs";
 import type { EstadoSync } from "@/lib/tecnico/offline/motor";
+
+(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
 /* ───────── servidor: a rota real, com um "banco" mínimo ───────── */
 const SENHA_ANTIGA = "Antiga-123";
@@ -79,11 +83,11 @@ describe("servidor: a rota que já existia serve ao técnico, só para a PRÓPRI
   });
 });
 
-/* ───────── tela do app ───────── */
-describe("app do técnico › Perfil › Trocar senha", () => {
+/* ───────── tela do app: Perfil › Meus dados › Segurança ───────── */
+describe("app do técnico › Perfil › Meus dados › Segurança (o único lugar da troca de senha)", () => {
   let root: Root; let caixa: HTMLDivElement;
   let chamadas: { url: string; init: RequestInit }[];
-  let responder: () => Response;
+  let responder: () => Response | Promise<Response>;
   const estado = (situacao: EstadoSync["situacao"]): EstadoSync => ({ situacao, pendentes: 0, erros: 0, ultimoSync: null, versao: 0 });
   const motorFalso = (situacao: EstadoSync["situacao"]) => ({ assinar: (fn: (e: EstadoSync) => void) => { fn(estado(situacao)); return () => {}; }, banco: { fila: async () => [], retratos: async () => [] } }) as any;
 
@@ -94,43 +98,70 @@ describe("app do técnico › Perfil › Trocar senha", () => {
   });
   afterEach(() => { if (root) act(() => root.unmount()); caixa?.remove(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
-  const $ = <T extends Element = HTMLElement>(s: string) => caixa.querySelector(s) as T | null;
   const esperar = async () => { for (let i = 0; i < 5; i++) await act(async () => { await new Promise((r) => setTimeout(r, 3)); }); };
-  const clicar = async (el: Element | null) => { expect(el).not.toBeNull(); await act(async () => { (el as HTMLElement).click(); }); await esperar(); };
-  const digitar = async (el: Element | null, v: string) => {
+  const texto = (el: Element | null) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
+  const clicar = async (el: Element | null | undefined) => { expect(el).toBeTruthy(); await act(async () => { (el as HTMLElement).click(); }); await esperar(); };
+  const digitar = async (el: Element | null | undefined, v: string) => {
+    expect(el).toBeTruthy();
     await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(el, v); el!.dispatchEvent(new Event("input", { bubbles: true })); });
   };
-  async function montar(situacao: EstadoSync["situacao"] = "sincronizado", filho?: any) {
+  const botoes = (rotulo: string) => [...caixa.querySelectorAll<HTMLButtonElement>("button")].filter((b) => texto(b) === rotulo);
+  const visivel = (el: Element) => !el.closest(".hidden");
+  /** Os campos de senha da aba Segurança (a aba "Dados pessoais" fica escondida, com o estado preservado) */
+  const campos = () => [...caixa.querySelectorAll<HTMLInputElement>("[data-meus-dados-app] input[type='password']")].filter(visivel);
+  const erro = () => texto(caixa.querySelector("[data-meus-dados-app] .bg-atrasado-claro")) || null;
+
+  async function abrirPerfil(situacao: EstadoSync["situacao"] = "sincronizado") {
     const { ProvedorTecnico } = await import("@/components/tecnico/contexto");
-    const { TrocarSenha } = await import("@/components/tecnico/trocar-senha");
+    const { PerfilTecnico } = await import("@/components/tecnico/perfil");
     caixa = document.createElement("div"); document.body.appendChild(caixa);
     root = createRoot(caixa);
-    await act(async () => { root.render(createElement(ProvedorTecnico, { usuario: { id: "uTec", nome: "João", email: "j@x.com", empresaNome: "Clima", podeGravar: true }, motorPronto: motorFalso(situacao), children: filho ?? createElement(TrocarSenha) })); });
+    const perfilInicial = { nome: "João", email: "j@x.com", avatar: null, empresaNome: "Clima", perfilNome: null, cargo: "Técnico" } as any;
+    await act(async () => { root.render(createElement(ProvedorTecnico, { usuario: { id: "uTec", nome: "João", email: "j@x.com", empresaNome: "Clima", podeGravar: true }, motorPronto: motorFalso(situacao), children: createElement(PerfilTecnico, { perfilInicial }) })); });
     await esperar();
   }
+  async function abrirSeguranca(situacao: EstadoSync["situacao"] = "sincronizado") {
+    await abrirPerfil(situacao);
+    await clicar(botoes("Meus dados")[0]);
+    await clicar(botoes("Segurança")[0]);
+    expect(campos()).toHaveLength(3);
+  }
   const preencher = async (atual: string, nova: string, confirmar: string) => {
-    await digitar($("[data-senha-atual]"), atual); await digitar($("[data-senha-nova]"), nova); await digitar($("[data-senha-confirmar]"), confirmar);
+    const [a, n, c] = campos();
+    await digitar(a, atual); await digitar(n, nova); await digitar(c, confirmar);
   };
-  const enviar = async () => { await act(async () => { $("[data-trocar-senha] form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); }); await esperar(); };
+  /** "Trocar senha" do rodapé do formulário (há também o da faixa de cima: os dois fazem o mesmo) */
+  const enviar = async () => { await clicar(botoes("Trocar senha").at(-1)); };
 
-  it("está no Perfil do app, com alvo de toque ≥44px; abre com senha atual, nova (requisitos ao vivo) e confirmação — campos de senha, nunca texto", async () => {
-    const { PerfilTecnico } = await import("@/components/tecnico/perfil");
-    await montar("sincronizado", createElement(PerfilTecnico, { perfilInicial: { nome: "João", email: "j@x.com", avatar: null, empresaNome: "Clima", perfilNome: null, cargo: "Técnico" } as any }));
-    const abrir = $("[data-trocar-senha] > button")!;
-    expect(abrir.textContent).toContain("Trocar senha");
-    expect(abrir.className).toContain("touch-target");
-    expect($("[data-trocar-senha] form")).toBeNull(); // fechado até tocar (não polui o Perfil)
-    await clicar(abrir);
-    const campos = [...caixa.querySelectorAll<HTMLInputElement>("[data-trocar-senha] input")];
-    expect(campos.map((c) => [c.type, c.autocomplete])).toEqual([["password", "current-password"], ["password", "new-password"], ["password", "new-password"]]);
-    for (const c of campos) expect(c.className).toContain("touch-target");
-    await digitar($("[data-senha-nova]"), "abc");
-    expect([...caixa.querySelectorAll("[data-trocar-senha] [data-requisito]")].map((r) => [r.getAttribute("data-requisito"), r.getAttribute("data-ok")])).toEqual([["tamanho", "false"], ["letra", "true"], ["numero", "false"]]);
+  it("o card solto saiu do Perfil: 'Trocar senha' não aparece até abrir Meus dados › Segurança", async () => {
+    await abrirPerfil();
+    expect(caixa.querySelector("[data-trocar-senha]")).toBeNull();
+    expect(texto(caixa)).not.toContain("Trocar senha");
+    expect(caixa.querySelectorAll("input[type='password']")).toHaveLength(0);
+    await clicar(botoes("Meus dados")[0]);
+    await clicar(botoes("Segurança")[0]);
+    expect(botoes("Trocar senha").length).toBeGreaterThan(0);
+  });
+
+  it("em Segurança: senha atual, nova (requisitos ao vivo) e confirmação — campos de senha, nunca texto", async () => {
+    await abrirSeguranca();
+    expect(campos().map((c) => [c.type, c.autocomplete])).toEqual([["password", "current-password"], ["password", "new-password"], ["password", "new-password"]]);
+    await digitar(campos()[1], "abc");
+    expect([...caixa.querySelectorAll("[data-meus-dados-app] [data-requisito]")].filter(visivel).map((r) => [r.getAttribute("data-requisito"), r.getAttribute("data-ok")]))
+      .toEqual([["tamanho", "false"], ["letra", "true"], ["numero", "false"]]);
+  });
+
+  it("no app, tudo o que se toca em Meus dados tem pelo menos 44 px (abas, campos e botões)", async () => {
+    await abrirSeguranca();
+    const area = caixa.querySelector("[data-meus-dados-app]")!;
+    expect(area.className).toContain("[&_button]:min-h-[44px]");
+    expect(area.className).toContain("[&_input]:min-h-[44px]");
+    // A aba, os três campos e o botão de trocar estão todos dentro dessa área
+    for (const el of [botoes("Segurança")[0], ...campos(), ...botoes("Trocar senha")]) expect(area.contains(el)).toBe(true);
   });
 
   it("valida antes de enviar (mesma regra do sistema): nada sai para o servidor com senha fraca, confirmação diferente ou igual à atual", async () => {
-    await montar(); await clicar($("[data-trocar-senha] > button"));
-    const erro = () => $("[data-erro-senha]")?.textContent ?? null;
+    await abrirSeguranca();
     await enviar();
     expect(erro()).toBe("Informe a senha atual.");
     await preencher(SENHA_ANTIGA, "curta1", "curta1"); await enviar();
@@ -144,38 +175,44 @@ describe("app do técnico › Perfil › Trocar senha", () => {
     expect(chamadas).toEqual([]);
   });
 
-  it("envia só senha atual + nova + confirmação (sem id de ninguém); deu certo: avisa, limpa os campos e fecha", async () => {
+  it("envia só senha atual + nova + confirmação (sem id de ninguém); deu certo: avisa e limpa os campos", async () => {
     const avisos = await import("@/components/ui/avisos");
     const toast = vi.spyOn(avisos, "toast").mockImplementation(() => {});
-    await montar(); await clicar($("[data-trocar-senha] > button"));
+    await abrirSeguranca();
     await preencher(SENHA_ANTIGA, "Nova-senha9", "Nova-senha9"); await enviar();
     expect(chamadas.length).toBe(1);
     expect(chamadas[0].url).toBe("/api/perfil/senha");
     expect(chamadas[0].init.method).toBe("PATCH");
     expect(JSON.parse(String(chamadas[0].init.body))).toEqual({ senhaAtual: SENHA_ANTIGA, novaSenha: "Nova-senha9", confirmar: "Nova-senha9" });
     expect(toast).toHaveBeenCalledWith(expect.stringContaining("Senha alterada"));
-    expect($("[data-trocar-senha] form")).toBeNull();
-    await clicar($("[data-trocar-senha] > button"));
-    expect([...caixa.querySelectorAll<HTMLInputElement>("[data-trocar-senha] input")].map((c) => c.value)).toEqual(["", "", ""]);
+    expect(erro()).toBeNull();
+    expect(campos().map((c) => c.value)).toEqual(["", "", ""]);
   });
 
-  it("o servidor recusou (senha atual errada, muitas tentativas): mostra o motivo e mantém o formulário", async () => {
-    responder = () => new Response(JSON.stringify({ erro: "Senha atual incorreta." }), { status: 400, headers: { "content-type": "application/json" } });
-    await montar(); await clicar($("[data-trocar-senha] > button"));
-    await preencher("errada-999", "Nova-senha9", "Nova-senha9"); await enviar();
-    expect($("[data-erro-senha]")!.textContent).toBe("Senha atual incorreta.");
-    expect($("[data-erro-senha]")!.getAttribute("role")).toBe("alert");
-    expect($("[data-trocar-senha] form")).not.toBeNull();
-    expect($<HTMLInputElement>("[data-senha-nova]")!.value).toBe("Nova-senha9");
-  });
-
-  it("sem sinal: explica e não deixa enviar (senha não entra na fila do aparelho)", async () => {
-    await montar("offline"); await clicar($("[data-trocar-senha] > button"));
-    expect($("[data-senha-sem-sinal]")!.textContent).toBe("Trocar a senha precisa de sinal.");
-    expect($<HTMLButtonElement>("[data-salvar-senha]")!.disabled).toBe(true);
+  it("o botão da faixa de cima faz o mesmo que o do rodapé", async () => {
+    vi.spyOn(await import("@/components/ui/avisos"), "toast").mockImplementation(() => {});
+    await abrirSeguranca();
+    expect(botoes("Trocar senha")).toHaveLength(2);
     await preencher(SENHA_ANTIGA, "Nova-senha9", "Nova-senha9");
-    await clicar($("[data-salvar-senha]"));
-    expect(chamadas).toEqual([]);
+    await clicar(botoes("Trocar senha")[0]);
+    expect(chamadas.map((c) => c.url)).toEqual(["/api/perfil/senha"]);
+  });
+
+  it("o servidor recusou (senha atual errada, muitas tentativas): mostra o motivo e mantém o que foi digitado", async () => {
+    responder = () => new Response(JSON.stringify({ erro: "Senha atual incorreta." }), { status: 400, headers: { "content-type": "application/json" } });
+    await abrirSeguranca();
+    await preencher("errada-999", "Nova-senha9", "Nova-senha9"); await enviar();
+    expect(erro()).toBe("Senha atual incorreta.");
+    expect(campos().map((c) => c.value)).toEqual(["errada-999", "Nova-senha9", "Nova-senha9"]);
+  });
+
+  it("sem sinal: avisa que não deu, não trava o app e mantém o que foi digitado (senha não entra na fila do aparelho)", async () => {
+    responder = () => Promise.reject(new TypeError("Failed to fetch"));
+    await abrirSeguranca("offline");
+    await preencher(SENHA_ANTIGA, "Nova-senha9", "Nova-senha9"); await enviar();
+    expect(erro()).toBe("Erro de conexão.");
+    expect(campos().map((c) => c.value)).toEqual([SENHA_ANTIGA, "Nova-senha9", "Nova-senha9"]);
+    expect(botoes("Trocar senha").at(-1)!.disabled).toBe(false); // dá para tentar de novo quando o sinal voltar
   });
 
   it("fluxo inteiro tela → rota real: a senha do técnico muda no banco como hash", async () => {
@@ -184,9 +221,9 @@ describe("app do técnico › Perfil › Trocar senha", () => {
       return new Response(JSON.stringify(r.json), { status: r.status, headers: { "content-type": "application/json" } });
     }));
     vi.spyOn(await import("@/components/ui/avisos"), "toast").mockImplementation(() => {});
-    await montar(); await clicar($("[data-trocar-senha] > button"));
+    await abrirSeguranca();
     await preencher(SENHA_ANTIGA, "Nova-senha9", "Nova-senha9"); await enviar();
-    expect($("[data-erro-senha]")).toBeNull();
+    expect(erro()).toBeNull();
     expect(await bcrypt.compare("Nova-senha9", banco.usuarios.find((u) => u.id === "uTec")!.senha)).toBe(true);
   });
 });

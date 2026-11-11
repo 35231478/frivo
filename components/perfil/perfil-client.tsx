@@ -151,6 +151,8 @@ export function PerfilClient({ initial, onAvatar, topoFixo = true }: {
     const problema = problemaSenha(novaSenha);
     if (problema) { setErro(problema); return; }
     if (novaSenha !== confirmar) { setErro("A confirmação da nova senha não coincide."); return; }
+    // A mesma regra do servidor, dita antes de enviar
+    if (novaSenha === senhaAtual) { setErro("A nova senha precisa ser diferente da atual."); return; }
     setSalvandoSenha(true);
     try {
       const res = await fetch("/api/perfil/senha", {
