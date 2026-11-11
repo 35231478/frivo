@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { conferirBloqueio, registrarTentativa, limparTentativas } from "@/lib/acesso/limite";
 import { z } from "zod";
+import { MSG_EMAIL_DO_TECNICO, emModoTecnico } from "@/lib/tecnico/modo";
 
 const schema = z.object({
   nome: z.string().trim().min(1, "Nome é obrigatório").optional(),
@@ -32,6 +33,10 @@ export async function PATCH(req: NextRequest) {
   if (nome) data.nome = nome;
 
   if (email && email !== atual.email.toLowerCase()) {
+    // App do técnico: o técnico é ligado às OS dele pelo e-mail de login. Trocando aqui, ele perderia
+    // o acesso até o escritório acertar — quem troca é o escritório, pela ficha do colaborador (que
+    // leva o login junto). Vale no servidor: a tela do app só mostra o e-mail, mas a rota também recusa.
+    if (emModoTecnico(session.user)) return NextResponse.json({ erro: MSG_EMAIL_DO_TECNICO }, { status: 403 });
     if (confirmacaoEmail?.toLowerCase() !== email) {
       return NextResponse.json({ erro: "A confirmação de e-mail não coincide." }, { status: 400 });
     }

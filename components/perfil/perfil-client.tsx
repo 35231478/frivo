@@ -59,12 +59,17 @@ const ABAS = [
   { id: "conta", label: "Minha conta", icone: Building2 },
 ];
 
-export function PerfilClient({ initial, onAvatar, topoFixo = true }: {
+export function PerfilClient({ initial, onAvatar, topoFixo = true, emailSomenteLeitura = false }: {
   initial: Initial;
   /** Foto nova salva (o app do técnico atualiza o topo na hora) */
   onAvatar?: (avatar: string) => void;
   /** A faixa com o nome e "Salvar" acompanha a rolagem (painel). No app do técnico, que já tem o seu topo fixo, não */
   topoFixo?: boolean;
+  /**
+   * App do técnico: o e-mail de login só aparece — não dá para editar (o vínculo do técnico com as OS
+   * é por esse e-mail; quem troca é o escritório, na ficha do colaborador). No painel, editável.
+   */
+  emailSomenteLeitura?: boolean;
 }) {
   const router = useRouter();
   const { update } = useSession();
@@ -114,7 +119,7 @@ export function PerfilClient({ initial, onAvatar, topoFixo = true }: {
   const [confirmacaoEmail, setConfirmacaoEmail] = useState("");
   const [senhaAtualEmail, setSenhaAtualEmail] = useState("");
   const [salvandoDados, setSalvandoDados] = useState(false);
-  const emailMudou = email.trim().toLowerCase() !== initial.email.toLowerCase();
+  const emailMudou = !emailSomenteLeitura && email.trim().toLowerCase() !== initial.email.toLowerCase();
 
   async function salvarDados() {
     setErro("");
@@ -127,7 +132,8 @@ export function PerfilClient({ initial, onAvatar, topoFixo = true }: {
     try {
       const res = await fetch("/api/perfil", {
         method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome: nome.trim(), email: email.trim(), confirmacaoEmail: confirmacaoEmail.trim() || undefined, senhaAtual: emailMudou ? senhaAtualEmail : undefined }),
+        // E-mail somente leitura: o e-mail nem vai no corpo (só o nome)
+        body: JSON.stringify(emailSomenteLeitura ? { nome: nome.trim() } : { nome: nome.trim(), email: email.trim(), confirmacaoEmail: confirmacaoEmail.trim() || undefined, senhaAtual: emailMudou ? senhaAtualEmail : undefined }),
       });
       const data = await res.json();
       if (!res.ok) { setErro(data?.erro ?? "Erro ao salvar."); return; }
@@ -238,9 +244,15 @@ export function PerfilClient({ initial, onAvatar, topoFixo = true }: {
                   <FormField label="Nome completo" required>
                     <Input value={nome} onChange={(e) => setNome(e.target.value)} />
                   </FormField>
-                  <FormField label="E-mail" required>
-                    <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-                  </FormField>
+                  {emailSomenteLeitura ? (
+                    <FormField label="E-mail de login" hint="A troca do e-mail de login é feita pelo escritório.">
+                      <Input type="email" value={initial.email} readOnly aria-readonly="true" data-email-somente-leitura className="bg-surface-linha text-ink-muted" />
+                    </FormField>
+                  ) : (
+                    <FormField label="E-mail" required>
+                      <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                    </FormField>
+                  )}
                 </FormGrid>
                 {emailMudou && (
                   <FormGrid>

@@ -21,7 +21,7 @@
   e não envia (senha nunca entra na fila do aparelho).
 - "Meus dados e senha" passou a se chamar **"Meus dados"** (a tela embutida continua igual).
 
-## Pergunta para o Zé (não mexi)
+## Pergunta para o Zé — **resolvida** (ver `docs/tecnico-email-login-somente-leitura.md`)
 - Em "Meus dados" o técnico também consegue **trocar o próprio e-mail de login**. O vínculo
   técnico ↔ usuário do app é pelo e-mail: se ele trocar, pode perder o acesso às OS até o cadastro
   do colaborador ser acertado. Quer que eu esconda a troca de e-mail no app do técnico?
