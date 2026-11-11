@@ -47,10 +47,12 @@ export async function GET(_: NextRequest, { params }: Params) {
   for (const { tipoEquipamentoId, ...i } of itens) (checklistsPorTipo[tipoEquipamentoId] ??= []).push(i);
   // Permissões do app (Equipes › App do colaborador): dado do cliente oculto nem sai do servidor
   const config = await carregarConfigApp(empresaId);
+  // O nome da unidade do cliente vem junto de cada equipamento: sem "Exibir dados do cliente", sai também
+  const semUnidade = <T extends { unidade: string | null }>(e: T): T => (config.exibirDadosCliente ? e : { ...e, unidade: null });
   return NextResponse.json({
     cartao: aplicarPrivacidade(cartao, config),
-    execucao,
-    equipamentosUnidade: daUnidade.map(({ qrcode, ...e }) => ({ ...apresentarEquipamento(e), tipoEquipamentoId: e.tipoEquipamentoId, qr: qrcode })),
+    execucao: { ...execucao, equipamentos: execucao.equipamentos.map((q) => ({ ...q, equipamento: semUnidade(q.equipamento) })) },
+    equipamentosUnidade: daUnidade.map(({ qrcode, ...e }) => ({ ...semUnidade(apresentarEquipamento(e)), tipoEquipamentoId: e.tipoEquipamentoId, qr: qrcode })),
     checklistsPorTipo,
     geradoEm: new Date().toISOString(),
   }, { headers: { "Cache-Control": "private, no-store" } });

@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowLeft, ArrowRight, Camera, Check, CheckCheck, CircleSlash, ClipboardList, Ruler } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, Camera, Check, CheckCheck, ChevronLeft, ChevronRight, CircleSlash, ClipboardList, Ruler } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
 import { CampoFormulario } from "@/components/os/execucao-equipamento";
-import { BotaoFoto, Miniatura, ObservacaoVoz } from "@/components/tecnico/captura";
+import { BotaoFoto, Miniatura, ObservacaoVoz, type MarcaFoto } from "@/components/tecnico/captura";
 import { irPara } from "@/components/tecnico/contexto";
 import { novoClientId } from "@/lib/tecnico/offline/motor";
 import { proximoEquipamento } from "@/lib/tecnico/offline/estado";
@@ -60,6 +60,14 @@ export function TelaEquipamento({ x, e, registrar, endereco }: Props) {
   const fotosDe = (itemId: string | null, momento: "ANTES" | "DEPOIS" | null) => e.fotos.filter((f) => f.itemId === itemId && (itemId ? true : f.momento === momento));
   const faltando = useMemo(() => new Set([...e.faltas.semResposta, ...e.faltas.semFoto, ...e.faltas.semObservacao]), [e.faltas]);
   const posicao = x.equipamentos.findIndex((q) => q.equipamento.id === equipamentoId);
+  const total = x.equipamentos.length;
+  const anterior = posicao > 0 ? x.equipamentos[posicao - 1].equipamento.id : null;
+  const seguinte = posicao >= 0 && posicao < total - 1 ? x.equipamentos[posicao + 1].equipamento.id : null;
+  // Para onde o "Concluir equipamento" leva: o próximo ainda por fazer (ou a OS, quando acabou)
+  const proxId = proximoEquipamento(x, equipamentoId);
+  const prox = proxId ? x.equipamentos.find((q) => q.equipamento.id === proxId) ?? null : null;
+  const proxPosicao = prox ? x.equipamentos.indexOf(prox) + 1 : 0;
+  const pular = (id: string) => irPara({ ver: "os", a: atividadeId, e: id }, true);
 
   // Y8: cada pendência do banner vira um botão que PULA ao item (as faltas guardam o TEXTO do item)
   const pendencias = useMemo(() => {
@@ -109,7 +117,17 @@ export function TelaEquipamento({ x, e, registrar, endereco }: Props) {
       </button>
 
       <header className="bg-white rounded-card border border-surface-border p-4 space-y-2">
-        <p className="text-xs font-semibold text-ink-muted">Equipamento {posicao + 1} de {x.equipamentos.length}</p>
+        <div className="flex items-center justify-between gap-2 -mt-1">
+          <p className="text-xs font-semibold text-ink-muted" data-posicao-equipamento>Equipamento {posicao + 1} de {total}</p>
+          {total > 1 && (
+            <div className="flex items-center gap-1 -mr-2">
+              <button type="button" disabled={!anterior} onClick={() => anterior && pular(anterior)} aria-label="Equipamento anterior" data-nav-equipamento="anterior"
+                className="inline-flex items-center justify-center rounded-lg text-primary-700 active:bg-primary-50 disabled:text-ink-subtle disabled:opacity-40 touch-target"><ChevronLeft className="w-6 h-6" /></button>
+              <button type="button" disabled={!seguinte} onClick={() => seguinte && pular(seguinte)} aria-label="Próximo equipamento" data-nav-equipamento="proximo"
+                className="inline-flex items-center justify-center rounded-lg text-primary-700 active:bg-primary-50 disabled:text-ink-subtle disabled:opacity-40 touch-target"><ChevronRight className="w-6 h-6" /></button>
+            </div>
+          )}
+        </div>
         <h1 className="text-xl font-bold text-ink leading-tight">{e.equipamento.titulo}</h1>
         <p className="text-sm text-ink-muted">
           {[e.equipamento.tipo?.nome, e.equipamento.tag && `TAG ${e.equipamento.tag}`, e.equipamento.local].filter(Boolean).join(" · ")}
@@ -143,7 +161,7 @@ export function TelaEquipamento({ x, e, registrar, endereco }: Props) {
         </div>
       )}
 
-      <Secao titulo="Fotos ANTES do serviço" Icone={Camera}>
+      <Secao titulo="Fotos ANTES do serviço" Icone={Camera} contagem={fotosDe(null, "ANTES").length} chave="antes">
         <Fotos fotos={fotosDe(null, "ANTES")} onRemover={so ? undefined : tirarFoto} />
         {!so && <BotaoFoto rotulo="Foto antes" marca={marca} onFoto={(d) => foto(d, { momento: "ANTES" })} />}
       </Secao>
@@ -197,7 +215,7 @@ export function TelaEquipamento({ x, e, registrar, endereco }: Props) {
           onSalvar={(t) => registrar([op({ tipo: "equipamento", dados: { observacao: t } })])} />
       </Secao>
 
-      <Secao titulo="Fotos DEPOIS do serviço" Icone={Camera}>
+      <Secao titulo="Fotos DEPOIS do serviço" Icone={Camera} contagem={fotosDe(null, "DEPOIS").length} chave="depois">
         <Fotos fotos={fotosDe(null, "DEPOIS")} onRemover={so ? undefined : tirarFoto} />
         {!so && <BotaoFoto rotulo="Foto depois" marca={marca} onFoto={(d) => foto(d, { momento: "DEPOIS" })} />}
       </Secao>
@@ -214,13 +232,22 @@ export function TelaEquipamento({ x, e, registrar, endereco }: Props) {
         <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 px-4 pb-2 pt-2 bg-surface-page/95 backdrop-blur border-t border-surface-border">
           <button type="button" onClick={concluirEquipamento} data-concluir-equipamento
             className={cn("w-full rounded-card py-4 text-base font-bold shadow-elevated inline-flex items-center justify-center gap-2 touch-target", e.completo ? "bg-primary-600 text-white active:bg-primary-700" : "bg-white text-ink border border-surface-border")}>
-            {e.completo ? <>Concluir equipamento <ArrowRight className="w-5 h-5" /></> : <>Concluir equipamento — ver o que falta</>}
+            {e.completo
+              ? (
+                <span className="flex flex-col items-center leading-tight">
+                  <span className="inline-flex items-center gap-2">{prox ? "Concluir e ir ao próximo" : "Concluir equipamento"} <ArrowRight className="w-5 h-5" /></span>
+                  <span className="text-xs font-medium opacity-90 max-w-full truncate" data-destino-concluir>
+                    {prox ? `${prox.equipamento.titulo} · equipamento ${proxPosicao} de ${total}` : "Volta para a OS para concluir a atividade"}
+                  </span>
+                </span>
+              )
+              : <span data-faltam={pendencias.length}>{pendencias.length === 1 ? "Falta 1 — ver o que falta" : `Faltam ${pendencias.length} — ver o que falta`}</span>}
           </button>
         </div>
       )}
 
       {atencao && (
-        <ModalAtencao item={atencao} r={e.respostas[atencao.id]} fotos={fotosDe(atencao.id, null)}
+        <ModalAtencao item={atencao} r={e.respostas[atencao.id]} fotos={fotosDe(atencao.id, null)} marca={marca}
           onFechar={() => setAtencao(null)}
           onFoto={(d) => foto(d, { itemId: atencao.id })} onRemoverFoto={tirarFoto}
           onAudio={(a) => registrar([op({ tipo: "audio", itemId: atencao.id, dataUrl: a })])}
@@ -245,10 +272,13 @@ export function TelaEquipamento({ x, e, registrar, endereco }: Props) {
   );
 }
 
-function Secao({ titulo, Icone, children }: { titulo: string; Icone: typeof Camera; children: React.ReactNode }) {
+function Secao({ titulo, Icone, children, contagem, chave }: { titulo: string; Icone: typeof Camera; children: React.ReactNode; /** Quantas fotos a seção já tem */ contagem?: number; chave?: string }) {
   return (
-    <section className="space-y-2">
-      <h2 className="text-sm font-bold text-ink flex items-center gap-1.5"><Icone className="w-4 h-4 text-ink-muted" /> {titulo}</h2>
+    <section className="space-y-2" data-secao={chave}>
+      <h2 className="text-sm font-bold text-ink flex items-center gap-1.5">
+        <Icone className="w-4 h-4 text-ink-muted" /> {titulo}
+        {!!contagem && <span className="text-xs font-semibold rounded-full bg-surface-linha text-ink px-2 py-0.5" data-contagem-fotos>{contagem}</span>}
+      </h2>
       {children}
     </section>
   );
@@ -333,8 +363,8 @@ function ItemMedicao({ item, r, so, onResponder }: { item: ItemTela; r?: Respost
 }
 
 /** "Atenção": exige foto do item + observação (escrita, ditada ou em áudio) — o escritório precisa ver o problema. */
-function ModalAtencao({ item, r, fotos, onFechar, onFoto, onRemoverFoto, onAudio, onSalvar }: {
-  item: ItemTela; r?: RespostaTela; fotos: FotoTela[];
+function ModalAtencao({ item, r, fotos, marca, onFechar, onFoto, onRemoverFoto, onAudio, onSalvar }: {
+  item: ItemTela; r?: RespostaTela; fotos: FotoTela[]; marca?: MarcaFoto;
   onFechar: () => void; onFoto: (d: string) => void; onRemoverFoto: (f: FotoTela) => void; onAudio: (d: string | null) => void; onSalvar: (obs: string) => void;
 }) {
   const [obs, setObs] = useState(r?.observacao ?? "");
@@ -349,11 +379,16 @@ function ModalAtencao({ item, r, fotos, onFechar, onFoto, onRemoverFoto, onAudio
           <div className="flex flex-wrap gap-2">
             {fotos.map((f, i) => <Miniatura key={f.clientId ?? f.id ?? i} src={srcFoto(f)} alt={`foto ${i + 1}`} pendente={f.pendente} onRemover={() => onRemoverFoto(f)} />)}
           </div>
-          <BotaoFoto grande rotulo={fotos.length ? "Mais uma foto" : "Tirar foto"} onFoto={onFoto} />
+          <BotaoFoto grande rotulo={fotos.length ? "Mais uma foto" : "Tirar foto"} marca={marca} onFoto={onFoto} />
         </div>
         <ObservacaoVoz rotulo="O que está errado" obrigatoria valor={obs} onSalvar={setObs} aoDigitar={setObs} audio={srcAudio(r)} onAudio={onAudio}
           placeholder="Ex.: bandeja com lodo, dreno entupido" />
-        {!pode && <p className="text-xs text-atencao-texto">Para marcar Atenção: pelo menos 1 foto e a observação (escrita, ditada ou em áudio).</p>}
+        {!pode && (
+          <p className="text-xs text-atencao-texto" data-falta-atencao>
+            {!fotos.length && !(obs.trim() || temAudio) ? "Para marcar Atenção: pelo menos 1 foto e a observação."
+              : !fotos.length ? "Falta a foto do problema." : "Falta a observação do que está errado."}
+          </p>
+        )}
         <button type="button" disabled={!pode} onClick={() => onSalvar(obs.trim())} data-salvar-atencao
           className="w-full rounded-card bg-atencao text-white py-4 text-base font-bold disabled:opacity-40 touch-target">Marcar atenção</button>
       </div>

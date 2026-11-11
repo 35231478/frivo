@@ -190,6 +190,13 @@ describe.skipIf(!URL_PG)("app do técnico: Meu dia, escopo e sincronização off
         expect(c).toMatchObject({ cliente: "", unidade: null, endereco: "", rota: null, descricao: "" });
         expect(JSON.stringify(c)).not.toMatch(/Hospital|Paulista|maps/);
       }
+      // o nome da unidade do cliente também não vai junto dos equipamentos da OS (nem dos da unidade)
+      const oculta = (await chamar("tecnico/atividades/[atividadeId]", "GET", { atividadeId: "aA" })).json;
+      expect(oculta.execucao.equipamentos.map((q: any) => q.equipamento.unidade)).toEqual([null, null]);
+      expect(oculta.equipamentosUnidade.every((q: any) => q.unidade === null)).toBe(true);
+      expect(JSON.stringify(oculta)).not.toMatch(/Matriz|Hospital|Paulista/);
+      // …mas o equipamento segue identificado para o trabalho (nome, TAG, local, checklist)
+      expect(oculta.execucao.equipamentos[0].equipamento).toMatchObject({ titulo: "Split Sala 1", tag: "AC-01" });
       const [a] = await cartoes();
       // o que ele precisa para trabalhar continua: OS, título, horário, equipamentos, situação
       expect(a).toMatchObject({ osNumero: "OS-0001", titulo: "Preventiva mensal", hora: "14:00", equipamentos: 2, status: "AGENDADA", telefone: "1133334444" });
@@ -201,6 +208,7 @@ describe.skipIf(!URL_PG)("app do técnico: Meu dia, escopo e sincronização off
       await prisma.configuracao.deleteMany({ where: { empresaId: "e1" } });
     }
     // sem configuração (padrão): tudo aparece
+    expect((await chamar("tecnico/atividades/[atividadeId]", "GET", { atividadeId: "aA" })).json.execucao.equipamentos[0].equipamento.unidade).toBe("Matriz");
     expect((await cartoes())[0]).toMatchObject({ cliente: "Hospital Santa Luzia", telefone: "1133334444", endereco: expect.stringContaining("Av. Paulista") });
   });
 
