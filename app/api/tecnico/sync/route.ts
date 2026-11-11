@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   const parsed = loteSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
   const ator = atorDaSessao(guard.session);
-  const resultados = await processarLote(ator, parsed.data.operacoes);
+  const resultados = await processarLote(ator, parsed.data.operacoes, { agoraAparelho: parsed.data.agora });
   await limparOperacoesAntigas(ator).catch(() => undefined);
   return NextResponse.json({ resultados }, { headers: { "Cache-Control": "private, no-store" } });
 }

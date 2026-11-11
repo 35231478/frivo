@@ -7,6 +7,7 @@ import { MSG_FORA_DO_ESCOPO, escopoDaSessao, filtroEscopo } from "@/lib/tecnico/
 import { aplicarPrivacidade } from "@/lib/tecnico/cartao";
 import { carregarConfigApp } from "@/lib/tecnico/config-app-server";
 import { cadastroParaRetrato } from "@/lib/execucao/cadastro-campo";
+import { avisoParaRetrato, avisosDeHoje } from "@/lib/execucao/aviso-cliente";
 
 type Params = { params: Promise<{ atividadeId: string }> };
 
@@ -41,6 +42,9 @@ export async function GET(_: NextRequest, { params }: Params) {
   const config = await carregarConfigApp(empresaId);
   // Cadastro em campo (se a empresa permite): unidade, tipos que já existem e sugestões de local
   const cadastro = await cadastroParaRetrato(empresaId, config.cadastrarEquipamento, { clienteId, unidadeId }, daUnidade);
+  // Aviso ao cliente ("A caminho" / "Cheguei"), se a empresa permite: o nome da empresa para a mensagem,
+  // o WhatsApp do cliente (só com "Exibir contatos do cliente") e o que já foi registrado hoje
+  const [avisoCliente, avisos] = await Promise.all([avisoParaRetrato(empresaId, config, cartao.osId), avisosDeHoje(atividadeId)]);
   // Checklist de cada tipo da unidade — e, com o cadastro em campo, de cada tipo que dá para escolher:
   // vincular ou cadastrar sem sinal já mostra o checklist do equipamento novo
   const tipoIds = [...new Set([...daUnidade.map((e) => e.tipoEquipamentoId), ...(cadastro?.tipos ?? []).map((t) => t.tipoEquipamentoId)].filter((x): x is string => !!x))];
@@ -61,10 +65,12 @@ export async function GET(_: NextRequest, { params }: Params) {
       // Serviço adicional: a decisão de cobrança (e o preço) é do escritório e não vai para o app —
       // só o sinal de que já foi avaliado, para o app travar a edição
       adicionais: execucao.adicionais.map(({ statusCobranca, ...a }) => ({ ...a, cobrancaDecidida: statusCobranca !== "A_AVALIAR" })),
+      avisos,
     },
     equipamentosUnidade: daUnidade.map(({ qrcode, ...e }) => ({ ...semUnidade(apresentarEquipamento(e)), tipoEquipamentoId: e.tipoEquipamentoId, qr: qrcode })),
     checklistsPorTipo,
     cadastro,
+    avisoCliente,
     geradoEm: new Date().toISOString(),
   }, { headers: { "Cache-Control": "private, no-store" } });
 }

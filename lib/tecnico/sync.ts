@@ -21,6 +21,8 @@ import {
 
 import { cadastroEquipamentoSchema } from "@/lib/tecnico/cadastro-equipamento";
 import { cadastrarEquipamentoEmCampo } from "@/lib/execucao/cadastro-campo";
+import { avisoClienteSchema } from "@/lib/tecnico/aviso-cliente";
+import { avisarCliente } from "@/lib/execucao/aviso-cliente";
 
 export const MAX_OPERACOES = 100;
 /** Quanto tempo a marca de "já aplicada" fica guardada (reenvio depois disso é raríssimo) */
@@ -32,6 +34,8 @@ const base = { id: z.string().uuid("Operação sem identificador válido."), ati
 
 export const operacaoSchema = z.discriminatedUnion("tipo", [
   z.object({ ...base, tipo: z.literal("iniciar") }).strict(),
+  // "A caminho" / "Cheguei": registra o horário do toque (`em`) e avisa o cliente se ainda estiver em tempo
+  z.object({ ...base, tipo: z.literal("avisoCliente"), dados: avisoClienteSchema }).strict(),
   z.object({ ...base, tipo: z.literal("resposta"), equipamentoId: id, itemId: id, dados: respostaSchema }).strict(),
   z.object({ ...base, tipo: z.literal("audio"), equipamentoId: id, itemId: id, dataUrl: z.string().min(30).nullable() }).strict(),
   z.object({ ...base, tipo: z.literal("tudoOk"), equipamentoId: id }).strict(),
@@ -52,7 +56,14 @@ export const operacaoSchema = z.discriminatedUnion("tipo", [
   z.object({ ...base, tipo: z.literal("concluir"), dados: concluirSchema }).strict(),
 ]);
 export type Operacao = z.infer<typeof operacaoSchema>;
-export const loteSchema = z.object({ operacoes: z.array(z.unknown()).min(1).max(MAX_OPERACOES, `No máximo ${MAX_OPERACOES} operações por envio.`) }).strict();
+export const loteSchema = z.object({
+  operacoes: z.array(z.unknown()).min(1).max(MAX_OPERACOES, `No máximo ${MAX_OPERACOES} operações por envio.`),
+  /** Relógio do APARELHO na hora do envio: com o `em` de cada operação, dá há quanto tempo ela foi feita */
+  agora: z.string().max(40).optional(),
+}).strict();
+
+/** O que vale para o lote inteiro (não é de uma operação) */
+export interface OpcoesLote { agoraAparelho?: string | null }
 
 export interface ResultadoOperacao {
   id: string;
@@ -69,12 +80,13 @@ export interface ResultadoOperacao {
 
 const MSG_ADIADA = "Aguardando a gravação anterior desta OS.";
 
-async function executar(ator: Ator, op: Operacao): Promise<ResultadoAcao<unknown>> {
+async function executar(ator: Ator, op: Operacao, lote: OpcoesLote): Promise<ResultadoAcao<unknown>> {
   const equipamentoId = "equipamentoId" in op ? op.equipamentoId : undefined;
   const ctx = await carregarContexto(ator, op.atividadeId, { equipamentoId, permitirBloqueada: op.tipo === "concluir" });
   if (!ctx.ok) return { ok: false, status: ctx.status, erro: ctx.erro };
   switch (op.tipo) {
     case "iniciar": return iniciarAtividade(ctx);
+    case "avisoCliente": return avisarCliente(ctx, op.dados, { em: op.em, agoraAparelho: lote.agoraAparelho });
     case "resposta": return responderItem(ctx, op.itemId, op.dados);
     case "audio": return gravarAudio(ctx, op.itemId, op.dataUrl);
     case "tudoOk": return tudoOk(ctx);
@@ -105,7 +117,7 @@ async function executar(ator: Ator, op: Operacao): Promise<ResultadoAcao<unknown
 const json = (v: unknown) => JSON.parse(JSON.stringify(v ?? null));
 
 /** Processa um lote, em ordem. Nunca lança por causa de uma operação: cada uma tem o seu resultado. */
-export async function processarLote(ator: Ator, operacoes: unknown[]): Promise<ResultadoOperacao[]> {
+export async function processarLote(ator: Ator, operacoes: unknown[], lote: OpcoesLote = {}): Promise<ResultadoOperacao[]> {
   const resultados: ResultadoOperacao[] = [];
   const travadas = new Set<string>();
   const ids = operacoes.map((o) => (o && typeof o === "object" && typeof (o as { id?: unknown }).id === "string" ? (o as { id: string }).id : "")).filter(Boolean);
@@ -139,7 +151,7 @@ export async function processarLote(ator: Ator, operacoes: unknown[]): Promise<R
     }
     let r: ResultadoAcao<unknown>;
     try {
-      r = await executar(ator, op);
+      r = await executar(ator, op, lote);
     } catch (e) {
       console.error("[sync técnico] falha ao aplicar operação", op.tipo, e);
       r = { ok: false, status: 500, erro: "Não foi possível gravar agora: o app tenta de novo sozinho." };

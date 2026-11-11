@@ -56,6 +56,11 @@ export const TEMPLATES_PADRAO: DefTemplate[] = [
   { tipo: "OS_CONCLUIDA", nome: "OS Concluída", assunto: "Ordem de serviço {{numero_os}} concluída — {{empresa_nome}}",
     corpo: "<p>Olá <strong>{{cliente_nome}}</strong>,</p><p>A ordem de serviço <strong>{{numero_os}}</strong> foi concluída. Agradecemos a preferência e ficamos à disposição.</p>",
     botaoLabel: "Ver detalhes", botaoVar: "link_documento" },
+  // App do técnico: aviso curto ao cliente quando o técnico sai ("A caminho") e quando chega ("Cheguei")
+  { tipo: "TECNICO_A_CAMINHO", nome: "Técnico a caminho", assunto: "Técnico a caminho — {{empresa_nome}}",
+    corpo: "<p><strong>{{empresa_nome}}</strong>: nosso técnico está a caminho do seu atendimento.</p><p style=\"color:#64748b;font-size:13px\">Ordem de serviço {{numero_os}}.</p>" },
+  { tipo: "TECNICO_CHEGOU", nome: "Técnico no local", assunto: "Técnico no local — {{empresa_nome}}",
+    corpo: "<p><strong>{{empresa_nome}}</strong>: nosso técnico chegou ao local.</p><p style=\"color:#64748b;font-size:13px\">Ordem de serviço {{numero_os}}.</p>" },
   { tipo: "CONTRATO_ASSINATURA", nome: "Contrato para Assinatura", assunto: "Proposta de contrato {{numero_contrato}} aguarda sua assinatura",
     corpo: "<p>Olá <strong>{{cliente_nome}}</strong>,</p><p>A proposta de contrato <strong>{{numero_contrato}}</strong> está pronta e aguarda sua assinatura digital.</p>",
     botaoLabel: "Assinar contrato", botaoVar: "link_documento" },

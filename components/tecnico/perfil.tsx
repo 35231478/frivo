@@ -15,7 +15,7 @@ import type { OperacaoFila } from "@/lib/tecnico/offline/tipos";
 import { horaBR } from "@/lib/fuso";
 
 const ROTULO_OPERACAO: Record<string, string> = {
-  iniciar: "Início do atendimento", resposta: "Resposta do checklist", audio: "Observação em áudio", tudoOk: "TUDO OK",
+  iniciar: "Início do atendimento", avisoCliente: "A caminho / Cheguei", cadastrarEquipamento: "Equipamento cadastrado", resposta: "Resposta do checklist", audio: "Observação em áudio", tudoOk: "TUDO OK",
   foto: "Foto", fotoRemover: "Foto retirada", equipamento: "Equipamento atendido/observação", formulario: "Formulário",
   vincular: "Equipamento vinculado", scan: "QR Code lido", adicional: "Serviço extra", adicionalRemover: "Serviço extra retirado",
   adicionalFoto: "Foto do serviço extra", adicionalFotoRemover: "Foto do serviço extra retirada",
