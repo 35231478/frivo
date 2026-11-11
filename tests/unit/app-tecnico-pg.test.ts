@@ -307,7 +307,7 @@ describe.skipIf(!URL_PG)("app do técnico: Meu dia, escopo e sincronização off
     await prisma.atividadeEquipamento.deleteMany({ where: { atividadeId: "aG" } });
     expect(equipDe(x, "eqA").respostas.i2).toMatchObject({ status: "ATENCAO", audio: true, audioId: expect.any(String) });
     expect(equipDe(x, "eqA").respostas.m1).toMatchObject({ valor: 118.5, unidade: "psi", status: null });
-    expect(x.execucao.adicionais).toEqual([expect.objectContaining({ clientId: "adic-0001-aaaa", descricao: "Troca do controle remoto (pedido do cliente)", statusCobranca: "A_AVALIAR", criadoPor: "João", fotos: [expect.objectContaining({ clientId: "foto-adic-0001" })] })]);
+    expect(x.execucao.adicionais).toEqual([expect.objectContaining({ clientId: "adic-0001-aaaa", descricao: "Troca do controle remoto (pedido do cliente)", cobrancaDecidida: false, criadoPor: "João", fotos: [expect.objectContaining({ clientId: "foto-adic-0001" })] })]);
   });
 
   it("ALIMENTA o relatório da OS (#44) e o histórico do equipamento (#7): medições com unidade, antes/depois, áudio só marcado, adicional destacado", async () => {
@@ -482,6 +482,38 @@ describe.skipIf(!URL_PG)("app do técnico: Meu dia, escopo e sincronização off
     expect((await chamar("ordens/[id]/servicos-adicionais/[servicoId]", "PATCH", { id: "osA", servicoId: s.id }, { statusCobranca: "TALVEZ" })).status).toBe(400);
     comoEscritorio("e2", permissoesTotais(), "uE2");
     expect((await chamar("ordens/[id]/servicos-adicionais/[servicoId]", "PATCH", { id: "osA", servicoId: s.id }, { statusCobranca: "NAO_COBRAR" })).status).toBe(404);
+  });
+
+  it("adicional JÁ AVALIADO pelo escritório: o app não recebe a decisão nem o preço, e o técnico não altera nem tira (Etapa 2c)", async () => {
+    const MSG = "O escritório já avaliou a cobrança deste serviço adicional. Para alterar ou tirar, fale com o escritório.";
+    const s = await prisma.servicoAdicional.findFirst({ where: { clientId: "adic-0003-cccc" } });
+    expect([s.statusCobranca, Number(s.valor)]).toEqual(["COBRAR", 120]); // deixado assim pelo teste anterior
+    await prisma.servicoAdicionalFoto.create({ data: { id: "foto-adic-3", empresaId: "e1", servicoId: s.id, url: FOTO, clientId: "foto-adic-0003" } });
+    comoTecnico();
+    // o retrato do app: só o sinal de "já avaliado" — sem a decisão (cobrar/não cobrar) e sem o preço
+    const doApp = (await exec("aA")).execucao.adicionais.find((a: any) => a.id === s.id);
+    expect(doApp).toMatchObject({ descricao: "Instalar suporte novo", cobrancaDecidida: true });
+    expect(Object.keys(doApp)).not.toContain("statusCobranca");
+    expect(Object.keys(doApp)).not.toContain("valor");
+    expect(JSON.stringify((await exec("aA")).execucao.adicionais)).not.toMatch(/COBRAR|A_AVALIAR|120/);
+    // alterar a descrição, tirar o serviço ou tirar a foto dele: recusado, nada muda no banco
+    const tentar = async (o: unknown) => (await sync([o])).json.resultados[0];
+    expect(await tentar(op("adicional", "aA", { dados: { clientId: "adic-0003-cccc", descricao: "Outra coisa" } }))).toMatchObject({ ok: false, status: 409, erro: MSG });
+    expect(await tentar(op("adicional", "aA", { dados: { id: s.id, descricao: "Instalar suporte novo", equipamentoId: "eqA" } }))).toMatchObject({ ok: false, status: 409 });
+    expect(await tentar(op("adicionalRemover", "aA", { dados: { clientId: "adic-0003-cccc" } }))).toMatchObject({ ok: false, status: 409, erro: MSG });
+    expect(await tentar(op("adicionalFotoRemover", "aA", { dados: { clientId: "foto-adic-0003" } }))).toMatchObject({ ok: false, status: 409, erro: MSG });
+    const depois = await prisma.servicoAdicional.findUnique({ where: { id: s.id }, include: { fotos: true } });
+    expect([depois.descricao, depois.equipamentoId, depois.statusCobranca, Number(depois.valor), depois.fotos.length]).toEqual(["Instalar suporte novo", null, "COBRAR", 120, 1]);
+    // reenviar a MESMA gravação (o app repete sem sinal) não é erro; juntar mais uma foto de prova pode
+    expect(await tentar(op("adicional", "aA", { dados: { clientId: "adic-0003-cccc", descricao: "Instalar suporte novo" } }))).toMatchObject({ ok: true });
+    expect(await tentar(op("adicionalFoto", "aA", { dados: { servicoClientId: "adic-0003-cccc", dataUrl: FOTO, clientId: "foto-adic-0004" } }))).toMatchObject({ ok: true });
+    // o escritório volta para "A avaliar": o técnico pode corrigir de novo
+    comoEscritorio();
+    await chamar("ordens/[id]/servicos-adicionais/[servicoId]", "PATCH", { id: "osA", servicoId: s.id }, { statusCobranca: "A_AVALIAR" });
+    comoTecnico();
+    expect((await exec("aA")).execucao.adicionais.find((a: any) => a.id === s.id).cobrancaDecidida).toBe(false);
+    expect(await tentar(op("adicional", "aA", { dados: { clientId: "adic-0003-cccc", descricao: "Instalar suporte novo (2 un.)" } }))).toMatchObject({ ok: true });
+    expect((await prisma.servicoAdicional.findUnique({ where: { id: s.id } })).descricao).toBe("Instalar suporte novo (2 un.)");
   });
 
   it("técnico do usuário: achado pelo e-mail sem diferença de maiúsculas, só se ATIVO; adicional de atividade cancelada não vai ao relatório", async () => {

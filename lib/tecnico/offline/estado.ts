@@ -157,7 +157,7 @@ export function aplicar(r: RetratoAtividade, x: ExecucaoTela, op: OperacaoFila):
       const existe = x.adicionais.find((a) => (d.clientId && a.clientId === d.clientId) || (d.id && a.id === d.id));
       if (existe) return mudarAdicional(d, (a) => ({ ...a, descricao: d.descricao, ...(d.equipamentoId !== undefined && { equipamentoId: d.equipamentoId }), pendente: true }));
       const novo: AdicionalTela = {
-        id: null, clientId: d.clientId ?? null, descricao: d.descricao, equipamentoId: d.equipamentoId ?? null, statusCobranca: "A_AVALIAR", fotos: [], criadoPor: null, pendente: true,
+        id: null, clientId: d.clientId ?? null, descricao: d.descricao, equipamentoId: d.equipamentoId ?? null, cobrancaDecidida: false, fotos: [], criadoPor: null, pendente: true,
       };
       return { ...x, adicionais: [...x.adicionais, novo] };
     }
@@ -219,3 +219,7 @@ export function proximoEquipamento(x: ExecucaoTela, atualId: string | null): str
   if (depois) return depois.equipamento.id;
   return lista.slice(0, Math.max(i, 0)).find((e) => e.feito && !e.completo)?.equipamento.id ?? null;
 }
+
+/** O escritório já avaliou a cobrança deste adicional? (retrato novo: o sinal; retrato antigo: a situação guardada) */
+export const adicionalAvaliado = (a: { cobrancaDecidida?: boolean; statusCobranca?: string }): boolean =>
+  a.cobrancaDecidida ?? (!!a.statusCobranca && a.statusCobranca !== "A_AVALIAR");

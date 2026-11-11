@@ -137,7 +137,7 @@ describe("estado da tela = retrato + fila (as mesmas regras do servidor)", () =>
     expect(x.equipamentos[0].faltas.semObservacao).toEqual([]);
     expect(x.equipamentos[0].respostas.i2).toMatchObject({ audio: true, audioLocal: expect.stringContaining("audio/webm") });
     expect(x.equipamentos.map((e) => [e.equipamento.id, e.feito, e.itens.length, e.pendente ?? false])).toEqual([["eqA", true, 3, false], ["eqB", false, 3, false], ["eqN", true, 3, true]]);
-    expect(x.adicionais).toEqual([expect.objectContaining({ clientId: "ad1aaaaaaa", descricao: "Troca do controle e pilhas", statusCobranca: "A_AVALIAR", fotos: [expect.objectContaining({ clientId: "fa1aaaaaaa" })] })]);
+    expect(x.adicionais).toEqual([expect.objectContaining({ clientId: "ad1aaaaaaa", descricao: "Troca do controle e pilhas", cobrancaDecidida: false, fotos: [expect.objectContaining({ clientId: "fa1aaaaaaa" })] })]);
     expect(equipamentoDoQr(r, "QR-2026-0003")?.id).toBe("eqN");
     expect(equipamentoDoQr(r, "qualquer")).toBeNull();
     const c = estadoDaAtividade(r, [op({ tipo: "concluir", atividadeId: "aA", dados: {} }, 1)]);

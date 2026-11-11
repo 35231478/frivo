@@ -50,7 +50,10 @@ export interface EquipamentoTela {
 }
 export interface AdicionalTela {
   id: string | null; clientId: string | null; descricao: string; equipamentoId: string | null;
-  statusCobranca: "A_AVALIAR" | "COBRAR" | "NAO_COBRAR";
+  /** O escritório já avaliou a cobrança: o app trava a edição. A decisão em si (e o preço) não vem para o app */
+  cobrancaDecidida?: boolean;
+  /** Só em retratos antigos guardados no aparelho (o servidor não manda mais a decisão) */
+  statusCobranca?: "A_AVALIAR" | "COBRAR" | "NAO_COBRAR";
   fotos: { id: string | null; clientId: string | null; local?: string }[];
   criadoPor: string | null;
   pendente?: boolean;
