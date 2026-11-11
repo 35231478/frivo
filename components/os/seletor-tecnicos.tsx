@@ -61,6 +61,9 @@ export function SeletorTecnicos({ tecnicos, equipes, tipoOsId, valor, onChange, 
   const porId = useMemo(() => new Map(tecnicos.map((t) => [t.id, t])), [tecnicos]);
   const temCompetencia = (id: string) => !tipoOsId || (porId.get(id)?.competencias ?? []).some((c) => c.id === tipoOsId);
   const equipeSel = equipes.find((e) => e.id === valor.equipeId) ?? null;
+  // A equipe desta atividade foi inativada depois: ela não entra mais na lista (só ativas), mas o
+  // vínculo continua — o seletor diz isso em vez de parecer que não há equipe nenhuma.
+  const equipeInativada = !carregando && !!valor.equipeId && !equipeSel;
 
   function usarEquipe(id: string) {
     if (!id) { onChange({ ...valor, equipeId: null }); return; }
@@ -91,10 +94,10 @@ export function SeletorTecnicos({ tecnicos, equipes, tipoOsId, valor, onChange, 
 
   return (
     <div className="space-y-2.5" data-seletor-tecnicos>
-      {equipes.length > 0 && (
+      {(equipes.length > 0 || equipeInativada) && (
         <SeletorEquipe
-          equipes={equipes} nomeDe={(id) => porId.get(id)?.nome} valor={valor.equipeId}
-          placeholder={valor.tecnicoIds.length ? "Sem equipe (colaboradores avulsos)" : "Escolher uma equipe…"}
+          equipes={equipes} nomeDe={(id) => porId.get(id)?.nome} valor={valor.equipeId} inativada={equipeInativada}
+          placeholder={equipeInativada ? "Equipe inativada (mantida nesta atividade)" : valor.tecnicoIds.length ? "Sem equipe (colaboradores avulsos)" : "Escolher uma equipe…"}
           semEquipe={valor.tecnicoIds.length ? "Sem equipe (colaboradores avulsos)" : "Nenhuma equipe"}
           onChange={usarEquipe}
         />
@@ -188,7 +191,9 @@ export function integrantesDaEquipe(e: EquipeOpcao, nomeDe: (id: string) => stri
  * para escolher sem precisar lembrar quem está em cada equipe. Lista acessível (listbox): setas,
  * Home/End, Enter/Espaço escolhem, Esc fecha e devolve o foco ao botão.
  */
-function SeletorEquipe({ equipes, nomeDe, valor, placeholder, semEquipe, onChange }: {
+function SeletorEquipe({ equipes, nomeDe, valor, placeholder, semEquipe, onChange, inativada }: {
+  /** A equipe escolhida foi inativada: o texto do botão avisa (ela não está entre as opções) */
+  inativada?: boolean;
   equipes: EquipeOpcao[];
   nomeDe: (id: string) => string | undefined;
   valor: string | null;
@@ -255,7 +260,7 @@ function SeletorEquipe({ equipes, nomeDe, valor, placeholder, semEquipe, onChang
             <span className="truncate text-ink" data-equipe-escolhida>
               {sel.nome}<span className="text-ink-muted"> · {sel.integrantes.length} {sel.integrantes.length === 1 ? "integrante" : "integrantes"}</span>
             </span>
-          ) : <span className="truncate text-ink-subtle">{placeholder}</span>}
+          ) : <span className={cn("truncate", inativada ? "text-atencao-texto" : "text-ink-subtle")} data-equipe-inativada={inativada || undefined}>{placeholder}</span>}
         </span>
         <ChevronDown className="w-4 h-4 text-ink-subtle shrink-0" aria-hidden="true" />
       </button>

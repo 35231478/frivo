@@ -20,6 +20,14 @@ export function rotuloVeiculo(v: Pick<VeiculoResumo, "placa" | "modelo" | "marca
   return `${v.placa} — ${[v.marca, v.modelo].filter(Boolean).join(" ")}`.trim();
 }
 
+/**
+ * Sufixo do veículo que não está ATIVO (o que já estava escolhido continua na lista, com o motivo):
+ * " (em manutenção)" ou " (inativo)". Antes os dois saíam como "(inativo)".
+ */
+export function sufixoStatusVeiculo(status: string | null | undefined): string {
+  return status === "MANUTENCAO" ? " (em manutenção)" : status && status !== "ATIVO" ? " (inativo)" : "";
+}
+
 export function sugerirVeiculo(
   exec: { equipeId: string | null; responsavelId: string | null },
   veiculos: VeiculoResumo[],
