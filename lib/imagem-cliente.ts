@@ -56,19 +56,45 @@ export function bytesDataUrl(dataUrl: string): number {
 }
 
 /**
+ * Teto do TOTAL das fotos de um envio (bytes das imagens): em base64 dá ~3,7 MB, com folga para o
+ * resto do cadastro dentro dos 4,5 MB por requisição do Vercel. Cinco fotos antigas de até 600 KB
+ * cada passavam uma a uma e, juntas, encostavam no limite.
+ */
+export const LIMITE_TOTAL_FOTOS_BYTES = 2_800_000;
+/** Segunda redução, mais forte — só para as maiores, e só quando o conjunto ainda não cabe */
+const FOTO_APERTADA = { ladoMax: 1024, qualidade: 0.7 } as const;
+
+type Redutor = (file: Blob, ladoMax: number, qualidade: number) => Promise<{ imagem: Pick<ImagemReduzida, "dataUrl" | "bytes"> }>;
+
+/**
  * Garante que as fotos vão leves para o servidor (corpo da requisição no Vercel ≤ 4,5 MB).
  * Fotos novas já chegam reduzidas pela galeria; aqui pegamos as antigas, salvas com o
- * tamanho original. Se uma não puder ser lida, fica como está.
+ * tamanho original, e conferimos o TOTAL: se o conjunto ainda passar do teto, as maiores são
+ * reduzidas mais um pouco. Se uma não puder ser lida, fica como está (nunca perde a foto).
+ * `reduzir` existe para os testes (o padrão usa o canvas do navegador).
  */
-export async function aliviarFotos(fotos: string[]): Promise<string[]> {
-  return Promise.all(fotos.map(async (f) => {
-    if (!f.startsWith("data:image/") || bytesDataUrl(f) <= LIMITE_FOTO_BYTES) return f;
+export async function aliviarFotos(fotos: string[], reduzir: Redutor = reduzirImagem): Promise<string[]> {
+  const ehImagem = (f: string) => f.startsWith("data:image/");
+  const recomprimir = async (f: string, alvo: { ladoMax: number; qualidade: number }) => {
     try {
       const blob = await (await fetch(f)).blob();
-      const { imagem } = await reduzirImagem(blob, FOTO_GALERIA.ladoMax, FOTO_GALERIA.qualidade);
+      const { imagem } = await reduzir(blob, alvo.ladoMax, alvo.qualidade);
       return imagem.bytes < bytesDataUrl(f) ? imagem.dataUrl : f;
     } catch { return f; }
-  }));
+  };
+  // 1) cada foto antiga acima do limite individual
+  const leves = await Promise.all(fotos.map((f) => (!ehImagem(f) || bytesDataUrl(f) <= LIMITE_FOTO_BYTES ? f : recomprimir(f, FOTO_GALERIA))));
+  // 2) o conjunto: da maior para a menor, até caber
+  const tamanho = (f: string) => (ehImagem(f) ? bytesDataUrl(f) : 0);
+  let total = leves.reduce((n, f) => n + tamanho(f), 0);
+  const daMaior = leves.map((_, i) => i).filter((i) => ehImagem(leves[i])).sort((x, y) => tamanho(leves[y]) - tamanho(leves[x]));
+  for (const i of daMaior) {
+    if (total <= LIMITE_TOTAL_FOTOS_BYTES) break;
+    const antes = tamanho(leves[i]);
+    leves[i] = await recomprimir(leves[i], FOTO_APERTADA);
+    total += tamanho(leves[i]) - antes;
+  }
+  return leves;
 }
 
 /** Brilho médio e variância do Laplaciano (medida clássica de foco) numa versão reduzida. */

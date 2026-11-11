@@ -134,7 +134,8 @@ export const EQUIPAMENTO = {
     return postar("/api/equipamentos", {
       unidadeId: v.unidadeId || unidadeId,
       tipo: v.tipo, marca: v.marca, modelo: v.modelo,
-      numeroSerie: v.numeroSerie || undefined, localizacao: v.localizacao || undefined,
+      // sem espaços nas pontas: a etiqueta digitada com espaço não vira "outra" série
+      numeroSerie: v.numeroSerie?.trim() || undefined, localizacao: v.localizacao || undefined,
     }, "Erro ao cadastrar o equipamento.");
   },
 };
