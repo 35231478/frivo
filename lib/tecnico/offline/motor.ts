@@ -255,7 +255,7 @@ export class MotorSync {
     for (const lote of emLotes(paraEnviar, undefined, this.umPorVez ? 1 : MAX_LOTE)) {
       let res: Response;
       try {
-        res = await this.pedir("/api/tecnico/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operacoes: lote }), cache: "no-store" }, this.prazoEnvioMs);
+        res = await this.pedir("/api/tecnico/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operacoes: lote, agora: new Date(this.agora()).toISOString() }), cache: "no-store" }, this.prazoEnvioMs);
       } catch { falhouRede = true; break; }
       if (res.status === 401) { this.sessaoExpirada = true; break; }
       if (!res.ok) { falhouRede = true; break; }

@@ -161,7 +161,9 @@ export function useAtividade(atividadeId: string) {
   /** Grava (na fila do aparelho). A 1ª gravação numa atividade agendada também a marca como iniciada. */
   const registrar = useCallback(async (ops: NovaOperacao[]) => {
     if (!motor) return;
-    const iniciar = tela?.atividade.status === "AGENDADA" && !fila.some((o) => o.tipo === "iniciar") && !ops.some((o) => o.tipo === "iniciar");
+    // "A caminho" / "Cheguei" não começam o atendimento: só as gravações da execução marcam o início
+    const iniciar = tela?.atividade.status === "AGENDADA" && !fila.some((o) => o.tipo === "iniciar") && !ops.some((o) => o.tipo === "iniciar")
+      && ops.some((o) => o.tipo !== "avisoCliente");
     const todas: NovaOperacao[] = iniciar ? [{ tipo: "iniciar", atividadeId }, ...ops] : ops;
     let feitas: OperacaoFila[];
     try {

@@ -637,6 +637,8 @@ model Configuracao {
   appUmDispositivo         Boolean @default(true)  @map("app_um_dispositivo")
   /// Execução: o técnico pode CADASTRAR equipamento em campo, pelo app (desligado = só vincula os que já existem)
   appCadastrarEquipamento  Boolean @default(true)  @map("app_cadastrar_equipamento")
+  /// Execução: o técnico avisa o cliente pelo app ("A caminho" / "Cheguei"). Desligado = os botões não aparecem
+  appAvisarCliente         Boolean @default(true)  @map("app_avisar_cliente")
 
   // Notificações
   notifEmailAbrirOs       Boolean @default(false) @map("notif_email_abrir_os")
@@ -1871,6 +1873,7 @@ model AtividadeOs {
   fotosAtendimento     FotoAtendimento[]
   servicosAdicionais   ServicoAdicional[]
   anexosOs             OsAnexo[]
+  avisosCliente        AtividadeAviso[]
 
   @@index([ordemServicoId])
   @@index([tecnicoId])
@@ -1879,6 +1882,36 @@ model AtividadeOs {
   @@index([veiculoId])
   @@index([empresaId, dataAgendada])
   @@map("atividades_os")
+}
+
+/// App do técnico: "A caminho" / "Cheguei" de uma atividade — o horário do toque e o que aconteceu
+/// com o aviso ao cliente. Um por atividade, por evento e por DIA (dois toques não avisam duas vezes;
+/// a atividade que continua em outro dia pode avisar de novo).
+model AtividadeAviso {
+  id           String    @id @default(cuid())
+  empresaId    String    @map("empresa_id")
+  atividadeId  String    @map("atividade_id")
+  /// A_CAMINHO | CHEGOU
+  evento       String
+  /// Dia civil (Brasília) do toque
+  dia          DateTime  @db.Date
+  /// Horário do toque no aparelho (com ou sem sinal)
+  registradoEm DateTime  @map("registrado_em")
+  usuarioId    String    @map("usuario_id")
+  /// PENDENTE | ENVIADO | ATRASADO | SEM_DESTINO | INDISPONIVEL (lib/tecnico/aviso-cliente.ts)
+  avisoStatus  String    @default("PENDENTE") @map("aviso_status")
+  /// Por que o aviso não saiu (para o escritório)
+  avisoDetalhe String?   @map("aviso_detalhe")
+  /// E-mail que recebeu o aviso
+  avisoPara    String?   @map("aviso_para")
+  avisoEm      DateTime? @map("aviso_em")
+  criadoEm     DateTime  @default(now()) @map("criado_em")
+
+  atividade AtividadeOs @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+
+  @@unique([atividadeId, evento, dia])
+  @@index([empresaId])
+  @@map("atividade_avisos")
 }
 
 /// Demais técnicos da atividade (além do responsável `AtividadeOs.tecnicoId`).

@@ -12,6 +12,7 @@ import { BotaoFoto, Miniatura, ObservacaoVoz } from "@/components/tecnico/captur
 import { irPara, useAtividade, useTecnico } from "@/components/tecnico/contexto";
 import { BotaoRota } from "@/components/tecnico/rota";
 import { ModalCadastroEquipamento } from "@/components/tecnico/cadastro-equipamento";
+import { AvisoClienteOs } from "@/components/tecnico/aviso-cliente";
 import { MSG_SEM_UNIDADE } from "@/lib/tecnico/cadastro-equipamento";
 import { ConcluirSemEquipamento } from "@/components/os/concluir-sem-equipamento";
 import { srcFoto, TelaEquipamento } from "@/components/tecnico/equipamento";
@@ -118,6 +119,8 @@ function ResumoOs({ r, x, aEnviar, registrar }: { r: RetratoAtividade; x: Execuc
           </div>
         )}
       </header>
+
+      <AvisoClienteOs r={r} x={x} registrar={registrar} />
 
       {aEnviar > 0 && <p className="rounded-card bg-atencao-claro border border-atencao/20 px-3 py-2 text-sm text-atencao-texto" data-a-enviar>{aEnviar === 1 ? "1 gravação" : `${aEnviar} gravações`} desta OS no aparelho — sobe sozinho quando houver sinal.</p>}
       {so && <p className="rounded-card bg-success-50 border border-success-200 px-3 py-2 text-sm text-success-800 inline-flex items-center gap-2 w-full"><CheckCircle2 className="w-4 h-4" /> Atividade concluída{aEnviar ? " no aparelho (a enviar)" : ""}. Só leitura.</p>}

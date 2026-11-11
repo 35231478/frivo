@@ -37,6 +37,7 @@ const configuracaoSchema = z.object({
   appConclusaoObrigatoria: z.boolean().optional(),
   appUmDispositivo: z.boolean().optional(),
   appCadastrarEquipamento: z.boolean().optional(),
+  appAvisarCliente: z.boolean().optional(),
   notifEmailAbrirOs: z.boolean().optional(),
   notifEmailConcluirOs: z.boolean().optional(),
   notifWhatsappAbrirOs: z.boolean().optional(),

@@ -125,6 +125,11 @@ export function AppColaboradorClient({ inicial }: { inicial: ConfigApp }) {
             dica="Ligado: na OS, o colaborador cadastra o equipamento que falta na unidade. Desligado: só vincula os existentes."
             checked={cfg.cadastrarEquipamento} onChange={set("cadastrarEquipamento")}
           />
+          <ToggleSwitch
+            label="Avisar o cliente (a caminho / cheguei)"
+            dica="Ligado: na OS, o colaborador avisa o cliente por e-mail ao sair e ao chegar. Desligado: os botões somem."
+            checked={cfg.avisarCliente} onChange={set("avisarCliente")}
+          />
         </ToggleGroup>
       </section>
 

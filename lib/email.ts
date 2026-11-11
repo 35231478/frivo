@@ -206,7 +206,7 @@ export async function getEmailsCobranca(cliente: { id: string; emailsFaturamento
 }
 
 /** Monta { para, cc } a partir de uma lista de e-mails + os e-mails de cópia do cliente. */
-function montarDestinatarios(emails: string[], cli: { emailsCopia?: string[] | null }): { para: string; cc: string[] } | null {
+export function montarDestinatarios(emails: string[], cli: { emailsCopia?: string[] | null }): { para: string; cc: string[] } | null {
   const lista = [...new Set(emails.map((e) => e.trim()).filter(Boolean))];
   if (lista.length === 0) return null;
   const [para, ...resto] = lista;

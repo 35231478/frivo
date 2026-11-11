@@ -32,6 +32,8 @@ export interface ConfigApp {
   umDispositivo: boolean;
   /** O técnico pode cadastrar equipamento em campo (desligado: o botão nem aparece e o servidor recusa) */
   cadastrarEquipamento: boolean;
+  /** O técnico avisa o cliente ("A caminho" / "Cheguei"); desligado: os botões não aparecem e nada é enviado */
+  avisarCliente: boolean;
 }
 
 export const CONFIG_APP_PADRAO: ConfigApp = {
@@ -47,6 +49,7 @@ export const CONFIG_APP_PADRAO: ConfigApp = {
   conclusaoObrigatoria: false,
   umDispositivo: true,
   cadastrarEquipamento: true,
+  avisarCliente: true,
 };
 
 /** Os campos de Configuracao (snake→camel do Prisma) que alimentam o ConfigApp. */
@@ -63,6 +66,7 @@ export interface ConfiguracaoApp {
   appConclusaoObrigatoria: boolean;
   appUmDispositivo: boolean;
   appCadastrarEquipamento: boolean;
+  appAvisarCliente: boolean;
 }
 
 /** Os campos a selecionar de Configuracao (reuso no servidor). */
@@ -79,6 +83,7 @@ export const SELECT_CONFIG_APP = {
   appConclusaoObrigatoria: true,
   appUmDispositivo: true,
   appCadastrarEquipamento: true,
+  appAvisarCliente: true,
 } as const;
 
 /** ConfigApp (chaves amigáveis) → payload de Configuracao (chaves app*) para o PUT /api/configuracoes. */
@@ -96,6 +101,7 @@ export function configAppParaPayload(c: ConfigApp): ConfiguracaoApp {
     appConclusaoObrigatoria: c.conclusaoObrigatoria,
     appUmDispositivo: c.umDispositivo,
     appCadastrarEquipamento: c.cadastrarEquipamento,
+    appAvisarCliente: c.avisarCliente,
   };
 }
 
@@ -119,5 +125,6 @@ export function normalizarConfigApp(row: Partial<ConfiguracaoApp> | null | undef
     conclusaoObrigatoria: ou(row.appConclusaoObrigatoria, CONFIG_APP_PADRAO.conclusaoObrigatoria),
     umDispositivo: ou(row.appUmDispositivo, CONFIG_APP_PADRAO.umDispositivo),
     cadastrarEquipamento: ou(row.appCadastrarEquipamento, CONFIG_APP_PADRAO.cadastrarEquipamento),
+    avisarCliente: ou(row.appAvisarCliente, CONFIG_APP_PADRAO.avisarCliente),
   };
 }

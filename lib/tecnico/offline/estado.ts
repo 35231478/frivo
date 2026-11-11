@@ -6,6 +6,7 @@
  */
 import { completo, faltasEquipamento, paraPendencia, verificarConclusao, type StatusItem } from "@/lib/execucao/pendencias";
 import { apresentarCadastro } from "@/lib/tecnico/cadastro-equipamento";
+import { mesmoDia } from "@/lib/tecnico/aviso-cliente";
 import type {
   AdicionalTela, EquipamentoTela, ExecucaoTela, FotoTela, OperacaoFila, RespostaTela, RetratoAtividade,
 } from "@/lib/tecnico/offline/tipos";
@@ -56,6 +57,15 @@ export function aplicar(r: RetratoAtividade, x: ExecucaoTela, op: OperacaoFila):
 
     case "concluir":
       return { ...x, atividade: { ...x.atividade, status: "CONCLUIDA" }, bloqueada: true };
+
+    case "avisoCliente": {
+      // O horário do toque vale já (sem sinal também). Um por evento, por dia: o que o servidor já
+      // registrou hoje fica; o toque repetido não muda nada
+      const em = op.em ?? op.criadoEm;
+      const atual = x.avisos?.[op.dados.evento];
+      if (atual && mesmoDia(atual.em, em)) return x;
+      return { ...x, avisos: { ...x.avisos, [op.dados.evento]: { em, status: null, pendente: true } } };
+    }
 
     case "resposta":
       return mudarEquip(op.equipamentoId, (e) => {

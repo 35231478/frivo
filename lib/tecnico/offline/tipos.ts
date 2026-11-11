@@ -6,6 +6,7 @@
 import type { DispensaEquipamento, ItemExecucao, RespostaItem, ResultadoConclusao, FaltasEquipamento, FormularioExecucao } from "@/lib/execucao/pendencias";
 import type { Operacao } from "@/lib/tecnico/sync";
 import type { CadastroCampo } from "@/lib/tecnico/cadastro-equipamento";
+import type { AvisoClienteRetrato, AvisosTela } from "@/lib/tecnico/aviso-cliente";
 
 export type { Operacao };
 export type TipoOperacao = Operacao["tipo"];
@@ -77,6 +78,8 @@ export interface ExecucaoTela {
   conclusao: ResultadoConclusao;
   /** Saída da exigência de equipamento (tipo, recorrente, justificada); ausente em retratos antigos */
   dispensaEquipamento?: DispensaEquipamento | null;
+  /** "A caminho" / "Cheguei" registrados hoje nesta atividade; ausente em retratos antigos */
+  avisos?: AvisosTela;
 }
 
 /** O que o servidor manda (e o aparelho guarda) de uma atividade */
@@ -87,6 +90,8 @@ export interface RetratoAtividade {
   checklistsPorTipo: Record<string, ItemTela[]>;
   /** Cadastro de equipamento em campo: null = permissão desligada; ausente em retratos antigos */
   cadastro?: CadastroCampo | null;
+  /** Aviso ao cliente ("A caminho" / "Cheguei"): null = permissão desligada; ausente em retratos antigos */
+  avisoCliente?: AvisoClienteRetrato | null;
   geradoEm: string;
 }
 
