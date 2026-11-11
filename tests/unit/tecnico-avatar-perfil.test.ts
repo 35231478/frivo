@@ -98,7 +98,6 @@ describe("Perfil enxuto", () => {
   const secoes = () => $$("[data-vista='perfil'] > *").map((el) => {
     if (el.matches("header")) return "cabeçalho";
     if (el.hasAttribute("data-painel-sync")) return "Sincronização";
-    if (el.hasAttribute("data-trocar-senha")) return "Trocar senha";
     return texto(el).split(" ").slice(0, 3).join(" ");
   });
 
@@ -113,11 +112,12 @@ describe("Perfil enxuto", () => {
     expect(texto($("[data-avatar-perfil]"))).toBe("JS");
   });
 
-  it("o card 'App de rota' saiu da frente: ficam Sincronização, Checklist do veículo, Trocar senha, Meus dados e Sair", async () => {
+  it("o card 'App de rota' saiu da frente (e o 'Trocar senha' solto também): ficam Sincronização, Checklist do veículo, Meus dados e Sair", async () => {
     await abrirApp(usuario(), "?ver=perfil");
     expect($("[data-preferencia-rota]")).toBeNull();
     expect(texto()).not.toContain("App de rota");
-    expect(secoes()).toEqual(["cabeçalho", "Sincronização", "Checklist do veículo", "Trocar senha", "Meus dados", "Sair"]);
+    expect(secoes()).toEqual(["cabeçalho", "Sincronização", "Checklist do veículo", "Meus dados", "Sair"]);
+    expect(texto()).not.toContain("Trocar senha"); // a troca de senha vive só em Meus dados › Segurança
   });
 
   it("a escolha do app de rota está DENTRO de 'Meus dados' (Preferências): mesmas três opções, 44 px, e continua gravando neste aparelho", async () => {
