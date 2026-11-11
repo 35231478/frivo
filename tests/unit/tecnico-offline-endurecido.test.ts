@@ -341,7 +341,7 @@ describe("[novo] armazenamento protegido e aviso quando o aparelho não guarda",
       armazenamento(false);
       await montar(perfil, motor);
       expect(caixa.querySelector("[data-painel-sync]")!.textContent).toContain("1 gravação(ões) a enviar.");
-      expect(dica()!.textContent).toContain("instale o app na tela inicial");
+      expect(dica()!.textContent).toContain("Instale o app na tela inicial");
       act(() => root.unmount()); caixa.remove();
       // o navegador ACEITOU proteger: sem dica
       armazenamento(true);
