@@ -21,10 +21,14 @@ export default async function TecnicoPage() {
   if (!session) redirect("/sessao-encerrada");
   const u = session.user;
   if (!pode(u.permissoes, "ordens", "visualizar", u.role)) redirect("/sem-permissao");
-  const [db, configApp] = await Promise.all([
+  const [db, colaborador, configApp] = await Promise.all([
     prisma.usuario.findUnique({ where: { id: u.id }, select: { avatar: true } }),
+    // A foto do cadastro do colaborador (posta pelo escritório) vale quando ele ainda não escolheu a dele
+    u.tecnicoId ? prisma.tecnico.findFirst({ where: { id: u.tecnicoId, empresaId: u.empresaId }, select: { avatar: true } }) : null,
     carregarConfigApp(u.empresaId),
   ]);
+  // Foto de perfil: a de "Meus dados"; sem ela, a do cadastro do colaborador; sem nenhuma, o app mostra as iniciais
+  const avatar = db?.avatar || colaborador?.avatar || null;
   return (
     <AuthSessionProvider session={session}>
       {/* Fora do layout do painel: as permissões da tela (ex.: "concluir sem equipamento") vêm daqui */}
@@ -34,9 +38,10 @@ export default async function TecnicoPage() {
           usuario={{
             id: u.id, nome: u.name ?? "", email: u.email ?? "", empresaNome: u.empresaNome ?? "",
             podeGravar: pode(u.permissoes, "ordens", "editar", u.role) || pode(u.permissoes, "ordens", "concluir", u.role),
+            avatar,
           }}
           perfilInicial={{
-            nome: u.name ?? "", email: u.email ?? "", avatar: db?.avatar ?? null, empresaNome: u.empresaNome ?? "",
+            nome: u.name ?? "", email: u.email ?? "", avatar: null /* vem do contexto do app (uma cópia só da foto na página) */, empresaNome: u.empresaNome ?? "",
             perfilNome: u.perfilNome ?? null, cargo: ROLE_LABELS[u.role] ?? u.role,
           }}
         />

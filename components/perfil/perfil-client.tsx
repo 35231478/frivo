@@ -59,7 +59,7 @@ const ABAS = [
   { id: "conta", label: "Minha conta", icone: Building2 },
 ];
 
-export function PerfilClient({ initial }: { initial: Initial }) {
+export function PerfilClient({ initial, onAvatar }: { initial: Initial; /** Foto nova salva (o app do técnico atualiza o topo na hora) */ onAvatar?: (avatar: string) => void }) {
   const router = useRouter();
   const { update } = useSession();
 
@@ -94,6 +94,7 @@ export function PerfilClient({ initial }: { initial: Initial }) {
       const data = await res.json();
       if (!res.ok) { setErro(data?.erro ?? "Erro ao enviar foto."); return; }
       setAvatar(data.avatar);
+      onAvatar?.(data.avatar);
       setPreview(null);
       toast("Foto atualizada.");
       router.refresh(); // reflete no sidebar/header (avatar vem do banco no layout)

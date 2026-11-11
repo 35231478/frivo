@@ -3,7 +3,8 @@
 import { confirmar } from "@/components/ui/avisos";
 import { useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
-import { AlertTriangle, Car, ChevronDown, LogOut, RefreshCw, Trash2, UserRound } from "lucide-react";
+import { AlertTriangle, Car, ChevronDown, LogOut, RefreshCw, Trash2 } from "lucide-react";
+import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import { cn } from "@/lib/utils";
 import { PerfilClient } from "@/components/perfil/perfil-client";
 import { rotuloSync } from "@/components/tecnico/indicador-sync";
@@ -21,9 +22,12 @@ const ROTULO_OPERACAO: Record<string, string> = {
   fotoOs: "Foto do serviço", fotoOsRemover: "Foto do serviço retirada", concluir: "Conclusão da atividade",
 };
 
-/** Perfil do técnico: situação da sincronização (com o motivo das recusadas), dados, checklist do veículo, sair. */
+/**
+ * Perfil do técnico, enxuto: sincronização (com o motivo das recusadas), checklist do veículo, trocar
+ * senha, Meus dados e sair. Preferências do aparelho (app de rota) ficam DENTRO de "Meus dados".
+ */
 export function PerfilTecnico({ perfilInicial }: { perfilInicial: React.ComponentProps<typeof PerfilClient>["initial"] }) {
-  const { motor, estado, usuario, config, armazenamento } = useTecnico();
+  const { motor, estado, usuario, config, armazenamento, avatar, definirAvatar } = useTecnico();
   const [fila, setFila] = useState<OperacaoFila[]>([]);
   const [osDe, setOsDe] = useState<Record<string, string>>({});
   const [dados, setDados] = useState(false);
@@ -50,7 +54,7 @@ export function PerfilTecnico({ perfilInicial }: { perfilInicial: React.Componen
   return (
     <div className="space-y-5" data-vista="perfil">
       <header className="flex items-center gap-3">
-        <div className="w-12 h-12 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center"><UserRound className="w-6 h-6" /></div>
+        <span data-avatar-perfil data-com-foto={avatar ? "" : undefined}><AvatarTecnico nome={usuario.nome} fotoUrl={avatar} size={48} /></span>
         <div className="min-w-0">
           <h1 className="text-xl font-bold text-ink truncate">{usuario.nome}</h1>
           <p className="text-sm text-ink-muted truncate">{usuario.email} · {usuario.empresaNome}</p>
@@ -93,8 +97,6 @@ export function PerfilTecnico({ perfilInicial }: { perfilInicial: React.Componen
         )}
       </section>
 
-      <PreferenciaRota />
-
       <a href="/veiculos/checklist" className="flex items-center gap-3 bg-white rounded-card border border-surface-border p-4 font-semibold text-ink touch-target">
         <Car className="w-5 h-5 text-ink-muted" /> Checklist do veículo
       </a>
@@ -105,7 +107,13 @@ export function PerfilTecnico({ perfilInicial }: { perfilInicial: React.Componen
         <button type="button" onClick={() => setDados((v) => !v)} aria-expanded={dados} className="w-full flex items-center justify-between p-4 font-semibold text-ink touch-target">
           Meus dados <ChevronDown className={cn("w-5 h-5 transition-transform", dados && "rotate-180")} />
         </button>
-        {dados && <div className="border-t border-surface-border p-2"><PerfilClient initial={perfilInicial} /></div>}
+        {dados && (
+          <div className="border-t border-surface-border p-2">
+            <PerfilClient initial={{ ...perfilInicial, avatar }} onAvatar={definirAvatar} />
+            {/* Preferência do aparelho (não é ação do dia a dia): fica aqui, fora da frente do Perfil */}
+            <PreferenciaRota />
+          </div>
+        )}
       </section>
 
       <button type="button" onClick={sair} className="w-full rounded-card border border-atrasado/20 bg-white text-atrasado py-3 font-semibold inline-flex items-center justify-center gap-2 touch-target">
