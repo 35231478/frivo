@@ -574,7 +574,7 @@ describe("a OS só abre depois do 'Cheguei' — por nenhum outro caminho", () =>
   it("link direto para a OS antes de chegar: a execução NÃO abre; aparece o card com o 'Cheguei', que abre", async () => {
     await abrirApp(undefined, "/tecnico?ver=os&a=aA");
     expect(vista()).toBe("os-antes-de-chegar");
-    expect(texto($("[data-trava-chegada]"))).toBe("A OS abre quando você tocar em “Cheguei”.");
+    expect(texto($("[data-trava-chegada]"))).toBe("Toque em “Cheguei” para abrir a OS.");
     for (const daExecucao of ["[data-abrir-camera-rapida]", "[data-concluir-atividade]", "[data-equip-linha]", "[data-novo-adicional]"]) expect($(daExecucao), daExecucao).toBeNull();
     expect(acoes()).toEqual(["Rota no mapa", "Cheguei", "Avisar que estou a caminho"]);
     await clicar(botao("CHEGOU"));
@@ -663,7 +663,7 @@ describe("OS marcada para OUTRO dia (Agenda): o toque avisaria o cliente — con
     await abrirApp(undefined, "/tecnico?ver=agenda");
     await esperarAte(() => $$("[data-cartao]").length === 2, "agenda");
     await clicar(botao("A_CAMINHO", "aD"));
-    expect(texto($("[data-confirmacao]"))).toContain("Avisar que você está a caminho agora?");
+    expect(texto($("[data-confirmacao]"))).toContain("Avisar o cliente agora?");
     await clicar($("[data-confirmar-nao]"));
     expect(await banco.fila()).toEqual([]);
     await clicar(botao("A_CAMINHO", "aA"));
@@ -721,12 +721,12 @@ describe("respeita as permissões do app do colaborador", () => {
     servidor.ligado = false;
     const semAviso = { ...CONFIG_APP_PADRAO, avisarCliente: false };
     await guardarNoAparelho();
+    online = false; // nem sem sinal fala em aviso
     await abrirMeuDia(semAviso);
     expect(acoes()).toEqual(["Rota no mapa", "Cheguei"]);
     expect(texto()).not.toContain("a caminho");
     await clicar(corpo());
     expect(texto(card()!.querySelector("[data-dica-cheguei]"))).toBe("“Cheguei” registra o horário e abre a OS.");
-    online = false; // nem sem sinal fala em aviso
     await clicar(botao("CHEGOU"));
     await esperarAte(() => vista() === "os", "entrou na OS");
     expect(toasts()).toEqual([]);

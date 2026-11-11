@@ -1,5 +1,10 @@
 # App do técnico — "Meu dia" lapidado (Etapa 2a)
 
+> **Atualização** (`docs/tecnico-meu-dia-cheguei.md`): o card não tem mais "Ligar"; antes de o
+> técnico chegar, tocar no card expande em vez de abrir a OS, e a OS abre pelo "Cheguei". Com os
+> dados do cliente desligados, a descrição do serviço passou a ficar (sai só a identidade de quem
+> pediu).
+
 **Sem mudança de banco.** A tela já existia e funcionava; esta etapa fecha as pontas do dia a dia
 (privacidade de ponta a ponta, rota no app que o técnico usa, progresso do dia, estados).
 

@@ -61,7 +61,7 @@ export function VistaOs({ atividadeId, equipamentoId, camera }: { atividadeId: s
     return (
       <div className="space-y-4" data-vista="os-antes-de-chegar">
         <Voltar />
-        <p className="text-sm text-ink-muted" data-trava-chegada>A OS abre quando você tocar em “Cheguei”.</p>
+        <p className="text-sm text-ink-muted" data-trava-chegada>Toque em “Cheguei” para abrir a OS.</p>
         <CartaoAtividade c={retrato.cartao} fila={fila} guardado={guardadoDoRetrato(retrato, Number.MAX_SAFE_INTEGER)} />
       </div>
     );

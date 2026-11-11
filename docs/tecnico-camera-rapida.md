@@ -8,8 +8,9 @@ identificar" e o técnico resolve em um toque.
 
 ## Fluxo
 
-1. **Atalho grande "Câmera rápida"** na OS (acima dos equipamentos) e **"Câmera"** em cada OS aberta do
-   Meu dia. Abre direto na câmera.
+1. **Atalho grande "Câmera rápida"** na OS (acima dos equipamentos) e **"Câmera"** no card do Meu dia —
+   este só depois que o técnico chega ("Cheguei" ou OS em andamento; ver
+   `docs/tecnico-meu-dia-cheguei.md`). Abre direto na câmera.
 2. **Rajada:** tocou, fotografou. As miniaturas empilham. Não há diálogo, legenda nem seleção no meio.
 3. **Antes / Depois:** um toque na câmera (padrão: antes). Vale para as fotos seguintes.
 4. **"Pronto":** abre a conferência.

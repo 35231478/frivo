@@ -109,7 +109,7 @@ export function CartaoAtividade({ c, fila, mostrarDia, proxima, guardado, listaE
     if (await tocar("CHEGOU")) irPara({ ver: "os", a: c.atividadeId });
   }
   async function aCaminhoAgora() {
-    if (!(await confirmarOutroDia("Avisar que você está a caminho agora?"))) return;
+    if (!(await confirmarOutroDia("Avisar o cliente agora?"))) return;
     toqueLeve();
     await tocar("A_CAMINHO");
   }
