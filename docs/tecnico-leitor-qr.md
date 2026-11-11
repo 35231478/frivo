@@ -39,7 +39,7 @@ Dois problemas a mais que apareceram no levantamento:
 | Rede | — | Nenhuma: tudo local, lê **sem sinal** |
 
 **Biblioteca:** `jsqr` 1.4.0 (Apache-2.0, sem dependências). Entra no pacote do próprio app — não é
-script de fora —, então funciona offline. Custo: ~250 KB no código-fonte, **~43 KB comprimido** a mais
+script de fora —, então funciona offline. Custo medido: ~130 KB minificado, **~46 KB comprimido** a mais
 nas telas que têm o leitor.
 
 Por que jsQR e não html5-qrcode ou zxing-js: é a menor, lê só QR (é o que o sistema usa) e não traz

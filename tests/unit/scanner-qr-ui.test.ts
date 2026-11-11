@@ -177,7 +177,7 @@ describe("Chrome / Android: com BarcodeDetector", () => {
   };
 
   it("que lê QR: usa o detector do navegador direto no vídeo (sem passar pelo canvas)", async () => {
-    const detect = vi.fn(async () => [{ rawValue: "QR-NATIVO-7" }]); comDetector(detect);
+    const detect = vi.fn(async (..._fonte: unknown[]) => [{ rawValue: "QR-NATIVO-7" }]); comDetector(detect);
     await abrir();
     await esperarAte(() => onLer.mock.calls.length > 0, "QR lido");
     expect(onLer).toHaveBeenCalledWith("QR-NATIVO-7");
