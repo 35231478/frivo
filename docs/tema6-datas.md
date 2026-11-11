@@ -37,6 +37,9 @@ Um teste percorre `app/` e `components/` e falha se alguém voltar a usar
 - **Exibição** de datas (textos, tabelas, relatórios) não fez parte desta varredura: o pedido era
   sobre os campos nativos. Não encontrei exibição em formato americano, mas não fiz uma auditoria
   linha a linha de todo `toLocale…` do sistema.
+- No calendário, a criação rápida já usava 08:00 quando a hora fica vazia. Isso continua: se a
+  pessoa deixar uma hora inválida (em vermelho) e salvar, a OS é agendada às 08:00. Se preferir
+  **impedir o salvar** enquanto a hora estiver em vermelho, é uma mudança pequena — fica a pergunta.
 - O `InputHora` não tem um seletor de relógio (só digitação). Se fizer falta no celular, é um
   complemento pequeno.
 
