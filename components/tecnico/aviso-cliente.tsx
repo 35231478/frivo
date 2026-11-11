@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, Clock, MapPin, MessageCircle, Navigation } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/components/ui/avisos";
@@ -28,6 +28,8 @@ export function AvisoClienteOs({ r, x, registrar }: { r: RetratoAtividade; x: Ex
   const { config, estado } = useTecnico();
   const [agora, setAgora] = useState(() => Date.now());
   const [tocando, setTocando] = useState<EventoAviso | null>(null);
+  // Dois toques no mesmo instante (antes de a tela redesenhar) contam como um só
+  const tocados = useRef(new Set<EventoAviso>());
   // O texto muda com o tempo ("aviso a enviar" deixa de valer quando a janela passa)
   useEffect(() => { const t = setInterval(() => setAgora(Date.now()), 30_000); return () => clearInterval(t); }, []);
 
@@ -40,13 +42,17 @@ export function AvisoClienteOs({ r, x, registrar }: { r: RetratoAtividade; x: Ex
   const whatsapp = ultimo && config.exibirContatosCliente ? linkWhatsappAviso(r.avisoCliente.whatsapp, ultimo, r.avisoCliente.empresa) : null;
 
   async function tocar(evento: EventoAviso) {
-    if (tocando || feito[evento]) return;
+    if (tocados.current.has(evento) || feito[evento]) return;
+    tocados.current.add(evento);
     setTocando(evento);
     try {
       await registrar([{ tipo: "avisoCliente", atividadeId: x.atividade.id, dados: { evento } }]);
       setAgora(Date.now());
       if (semSinal) toast("Horário registrado no aparelho. Sem sinal, o aviso só sai se ele voltar logo.", "info");
-    } catch { /* o aparelho não guardou: o aviso de falta de espaço já apareceu */ } finally {
+    } catch {
+      // O aparelho não guardou (o aviso de falta de espaço já apareceu): o botão volta a valer
+      tocados.current.delete(evento);
+    } finally {
       setTocando(null);
     }
   }

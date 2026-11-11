@@ -16,6 +16,9 @@ import { TEMPLATES_PADRAO, substituirVariaveis } from "@/lib/email-templates";
 import { operacaoSchema, loteSchema } from "@/lib/tecnico/sync";
 import { aplicar } from "@/lib/tecnico/offline/estado";
 import type { ExecucaoTela, OperacaoFila, RetratoAtividade } from "@/lib/tecnico/offline/tipos";
+import { CONFIG_APP_PADRAO, configAppParaPayload, normalizarConfigApp } from "@/lib/tecnico/config-app";
+import fs from "node:fs";
+import path from "node:path";
 
 const EMOJI = /\p{Extended_Pictographic}/u;
 // 14:02 em Brasília (UTC−3)
@@ -208,5 +211,22 @@ describe("no aparelho (com ou sem sinal): a tela já mostra o toque", () => {
     const hoje = aplicar(r, aplicar(r, x(ontem), fila("A_CAMINHO", T)), fila("CHEGOU", T + 30 * MIN));
     expect(hoje.avisos!.A_CAMINHO).toMatchObject({ em: new Date(T).toISOString(), status: null });
     expect(hoje.avisos!.CHEGOU).toMatchObject({ em: new Date(T + 30 * MIN).toISOString(), status: null });
+  });
+});
+
+describe("permissão 'Avisar o cliente (a caminho / cheguei)'", () => {
+  it("nasce LIGADA; vai e volta da configuração; empresa sem linha ou coluna vazia = padrão (ligada)", () => {
+    expect(CONFIG_APP_PADRAO.avisarCliente).toBe(true);
+    expect(normalizarConfigApp(null).avisarCliente).toBe(true);
+    expect(normalizarConfigApp({}).avisarCliente).toBe(true);
+    expect(normalizarConfigApp({ appAvisarCliente: false }).avisarCliente).toBe(false);
+    expect(configAppParaPayload({ ...CONFIG_APP_PADRAO, avisarCliente: false }).appAvisarCliente).toBe(false);
+  });
+
+  it("está em Equipes › App do colaborador, com o nome combinado, e a API de configurações aceita o campo", () => {
+    const raiz = path.resolve(__dirname, "../..");
+    const tela = fs.readFileSync(path.join(raiz, "components/equipes/app-colaborador-client.tsx"), "utf8");
+    expect(tela).toMatch(/label="Avisar o cliente \(a caminho \/ cheguei\)"[\s\S]{0,260}checked=\{cfg\.avisarCliente\} onChange=\{set\("avisarCliente"\)\}/);
+    expect(fs.readFileSync(path.join(raiz, "app/api/configuracoes/route.ts"), "utf8")).toMatch(/appAvisarCliente: z\.boolean\(\)\.optional\(\)/);
   });
 });
