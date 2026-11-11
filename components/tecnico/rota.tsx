@@ -65,7 +65,7 @@ export function BotaoRota({ rota, className }: { rota: string; className?: strin
                 <Navigation className="w-5 h-5 text-primary-700" /> {a.nome}
               </a>
             ))}
-            <p className="text-xs text-ink-muted text-center pt-1">O app escolhido fica lembrado neste aparelho. Troque no Perfil.</p>
+            <p className="text-xs text-ink-muted text-center pt-1">O app escolhido fica lembrado neste aparelho. Troque em Perfil › Meus dados.</p>
           </div>
         </Modal>
       )}
@@ -73,14 +73,18 @@ export function BotaoRota({ rota, className }: { rota: string; className?: strin
   );
 }
 
-/** Perfil: troca o app de rota lembrado (ou volta a perguntar). */
+/**
+ * Preferência do aparelho: o app de rota lembrado (ou voltar a perguntar). Não é ação do dia a dia —
+ * fica dentro de "Meus dados" do Perfil, discreta, sem card próprio.
+ */
 export function PreferenciaRota() {
   const [preferido, gravar] = usePreferenciaRota();
   const opcoes: { id: AppRota | null; nome: string }[] = [{ id: null, nome: "Perguntar" }, ...APPS_ROTA];
   return (
-    <section className="bg-white rounded-card border border-surface-border p-4 space-y-3" data-preferencia-rota>
-      <h2 className="text-base font-bold text-ink">App de rota</h2>
-      <div className="grid grid-cols-3 gap-2" role="group" aria-label="App de rota">
+    <div className="mt-2 border-t border-surface-border px-2 pt-4 pb-2 space-y-2" data-preferencia-rota>
+      <h3 className="text-sm font-semibold text-ink">Preferências</h3>
+      <p className="text-sm text-ink-muted" id="rotulo-app-rota">App que abre em “Rota no mapa”, neste aparelho.</p>
+      <div className="grid grid-cols-3 gap-2" role="group" aria-labelledby="rotulo-app-rota">
         {opcoes.map((o) => (
           <button key={o.id ?? "perguntar"} type="button" aria-pressed={preferido === o.id} onClick={() => gravar(o.id)} data-opcao-rota={o.id ?? "perguntar"}
             className={cn("rounded-card border py-3 text-sm font-semibold touch-target",
@@ -89,6 +93,6 @@ export function PreferenciaRota() {
           </button>
         ))}
       </div>
-    </section>
+    </div>
   );
 }

@@ -5,6 +5,7 @@ import { CalendarDays, Loader2, Sun, UserRound } from "lucide-react";
 import { Avisos, toast } from "@/components/ui/avisos";
 import { cn } from "@/lib/utils";
 import { FrivoMark } from "@/components/layout/frivo-logo";
+import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import { IndicadorSync } from "@/components/tecnico/indicador-sync";
 import { ProvedorTecnico, irPara, useTecnico, useVista, type UsuarioApp, type Vista } from "@/components/tecnico/contexto";
 import type { ConfigApp } from "@/lib/tecnico/config-app";
@@ -36,7 +37,7 @@ export function AppTecnico({ usuario, config, perfilInicial }: { usuario: Usuari
 }
 
 function Casca({ perfilInicial }: { perfilInicial: PerfilInicial }) {
-  const { estado, semBanco, motor, config } = useTecnico();
+  const { estado, semBanco, motor, config, usuario, avatar } = useTecnico();
   const vista = useVista();
   const ativa = vista?.ver === "os" ? "dia" : vista?.ver;
   // "Exigir localização ativa": sem GPS, o app fica travado (libera sozinho quando a posição volta)
@@ -57,10 +58,17 @@ function Casca({ perfilInicial }: { perfilInicial: PerfilInicial }) {
       <Avisos />
       <header className="sticky top-0 z-30 bg-white border-b border-surface-border safe-top">
         <div className="flex items-center justify-between gap-2 px-4 h-14 max-w-2xl mx-auto">
-          <button type="button" onClick={() => irPara({ ver: "dia" })} className="inline-flex items-center gap-2 rounded-lg font-display font-bold text-ink">
-            <FrivoMark size={28} /> <span>Frivo <span className="font-sans font-medium text-ink-muted">· Técnico</span></span>
+          <button type="button" onClick={() => irPara({ ver: "dia" })} className="inline-flex items-center gap-2 rounded-lg font-display font-bold text-ink min-w-0">
+            <FrivoMark size={28} /> <span className="truncate">Frivo <span className="font-sans font-medium text-ink-muted">· Técnico</span></span>
           </button>
-          <IndicadorSync estado={estado} onClick={() => irPara({ ver: "perfil" })} />
+          <div className="flex items-center gap-1 shrink-0">
+            <IndicadorSync estado={estado} onClick={() => irPara({ ver: "perfil" })} />
+            {/* Quem está logado: a foto de perfil (ou as iniciais); toca e abre o Perfil */}
+            <button type="button" onClick={() => irPara({ ver: "perfil" })} aria-label={`Perfil de ${usuario.nome || "técnico"}`} data-avatar-topo data-com-foto={avatar ? "" : undefined}
+              className="inline-flex items-center justify-center rounded-full touch-target">
+              <AvatarTecnico nome={usuario.nome} fotoUrl={avatar} size={36} title="Perfil" />
+            </button>
+          </div>
         </div>
       </header>
       {semBanco && <p className="bg-atrasado text-white text-sm px-4 py-2">Este navegador não guarda dados no aparelho (modo anônimo?). Sem sinal, nada pode ser gravado.</p>}

@@ -9,7 +9,11 @@ import { CONFIG_APP_PADRAO, type ConfigApp } from "@/lib/tecnico/config-app";
 import { MSG_SEM_ESPACO, protegerArmazenamento, type Armazenamento } from "@/lib/tecnico/offline/armazenamento";
 import { toast } from "@/components/ui/avisos";
 
-export interface UsuarioApp { id: string; nome: string; email: string; empresaNome: string; podeGravar: boolean }
+export interface UsuarioApp {
+  id: string; nome: string; email: string; empresaNome: string; podeGravar: boolean;
+  /** Foto de perfil (Meus dados › Foto de perfil; sem ela, a do cadastro do colaborador). Sem foto: iniciais */
+  avatar?: string | null;
+}
 
 interface Contexto {
   usuario: UsuarioApp;
@@ -21,6 +25,10 @@ interface Contexto {
   semBanco: boolean;
   /** O navegador aceitou proteger o que o app guarda no aparelho? ("comum" = pode limpar se faltar espaço) */
   armazenamento: Armazenamento;
+  /** A foto que o topo e o Perfil mostram (null = iniciais) */
+  avatar: string | null;
+  /** O técnico trocou a foto em Meus dados: o topo acompanha na hora, sem recarregar */
+  definirAvatar: (avatar: string | null) => void;
 }
 
 const ESTADO_INICIAL: EstadoSync = { situacao: "sincronizado", pendentes: 0, erros: 0, ultimoSync: null, versao: 0 };
@@ -32,6 +40,9 @@ export function ProvedorTecnico({ usuario, config = CONFIG_APP_PADRAO, children,
   const [estado, setEstado] = useState<EstadoSync>(ESTADO_INICIAL);
   const [semBanco, setSemBanco] = useState(false);
   const [armazenamento, setArmazenamento] = useState<Armazenamento>("desconhecido");
+  const [avatar, definirAvatar] = useState<string | null>(usuario.avatar ?? null);
+  // A página foi recarregada com outra foto (ex.: trocada pelo escritório): vale a que chegou
+  useEffect(() => { definirAvatar(usuario.avatar ?? null); }, [usuario.avatar]);
 
   useEffect(() => {
     if (motorPronto) return;
@@ -59,7 +70,7 @@ export function ProvedorTecnico({ usuario, config = CONFIG_APP_PADRAO, children,
     return () => { vivo = false; };
   }, []);
 
-  const valor = useMemo(() => ({ usuario, config, motor, estado, semBanco, armazenamento }), [usuario, config, motor, estado, semBanco, armazenamento]);
+  const valor = useMemo(() => ({ usuario, config, motor, estado, semBanco, armazenamento, avatar, definirAvatar }), [usuario, config, motor, estado, semBanco, armazenamento, avatar]);
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
 }
 
