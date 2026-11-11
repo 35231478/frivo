@@ -23,6 +23,7 @@ import {
   X, Plus, Upload, Trash2, AlertCircle, User, Briefcase, ListChecks, FileText, Wallet, KeyRound,
 } from "lucide-react";
 import { InputData } from "@/components/ui/input-data";
+import { InputHora } from "@/components/ui/input-hora";
 
 const ESPECIALIDADES_SUGERIDAS = [
   "Split", "VRF", "Chiller", "Câmara Fria",
@@ -397,10 +398,10 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
             <FormSection title="Jornada de trabalho">
               <FormGrid>
                 <FormField label="Horário de entrada">
-                  <Input type="time" {...register("jornadaEntrada")} />
+                  <Controller name="jornadaEntrada" control={control} render={({ field }) => <InputHora value={(field.value as string) ?? ""} onChange={field.onChange} aria-label="Horário de entrada" />} />
                 </FormField>
                 <FormField label="Horário de saída">
-                  <Input type="time" {...register("jornadaSaida")} />
+                  <Controller name="jornadaSaida" control={control} render={({ field }) => <InputHora value={(field.value as string) ?? ""} onChange={field.onChange} aria-label="Horário de saída" />} />
                 </FormField>
               </FormGrid>
               <FormField label="Dias da semana">

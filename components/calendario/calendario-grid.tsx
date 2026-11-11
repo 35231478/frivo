@@ -10,6 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { cn, MESES_PT, LABELS_STATUS_OS, LABELS_PRIORIDADE } from "@/lib/utils";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
+import { InputHora } from "@/components/ui/input-hora";
 import { SeletorExecucao, VALOR_EXECUCAO_VAZIO, corpoExecucao, temExecutor, useOpcoesExecucao, type ValorExecucao } from "@/components/os/seletor-execucao";
 import { MSG_SEM_EXECUTOR_TELA } from "@/lib/atividade-equipe";
 import { BuscaSelect, type OpcaoBusca } from "@/components/ui/busca-select";
@@ -752,7 +753,7 @@ function CriarOsModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-[11px] font-semibold text-ink-muted">Hora de agendamento</label>
-              <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} className={inputCls} />
+              <InputHora value={hora} onChange={setHora} aria-label="Hora de agendamento" />
             </div>
             <div>
               <label className="text-[11px] font-semibold text-ink-muted">Prioridade</label>
