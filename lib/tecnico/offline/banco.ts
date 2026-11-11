@@ -3,7 +3,7 @@
  * não se misturam). Guarda:
  *  - `retratos`: o último retrato de cada atividade (para abrir sem sinal);
  *  - `fila`: as operações (respostas, fotos comprimidas, áudios, adicionais…) até o servidor confirmar;
- *  - `dados`: Meu dia, Agenda e marcas de sincronização.
+ *  - `dados`: Meu dia, Agenda, marcas de sincronização e a guarda da câmera rápida (fotos ainda sem equipamento).
  * Nada sai da fila sem confirmação do servidor E um retrato mais novo que já reflita a operação.
  */
 import type { OperacaoFila, RetratoAtividade } from "@/lib/tecnico/offline/tipos";
@@ -96,6 +96,12 @@ export class BancoTecnico {
   async gravar(chave: string, valor: unknown): Promise<void> {
     const t = this.db.transaction("dados", "readwrite");
     t.objectStore("dados").put(valor, chave);
+    await fim(t);
+  }
+  async apagar(chaves: string[]): Promise<void> {
+    if (!chaves.length) return;
+    const t = this.db.transaction("dados", "readwrite");
+    for (const c of chaves) t.objectStore("dados").delete(c);
     await fim(t);
   }
 }
