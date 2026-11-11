@@ -80,7 +80,7 @@ export function OsRelatorios({ osId }: { osId: string }) {
     { label: "Atividades", valor: resumo.totalAtividades, icone: ListChecks },
     { label: "Técnicos", valor: resumo.totalTecnicos, icone: Users },
     { label: "Fotos", valor: resumo.totalFotos, icone: Camera },
-    { label: "Equipamentos", valor: resumo.totalEquipamentos, icone: Wrench },
+    { label: "Equipamentos atendidos", valor: resumo.totalEquipamentos, icone: Wrench },
   ];
 
   return (
