@@ -7,7 +7,7 @@ import { toqueLeve } from "@/lib/haptico";
 import { toast } from "@/components/ui/avisos";
 import { useTecnico } from "@/components/tecnico/contexto";
 import { BotaoFoto, processarFoto, type MarcaFoto } from "@/components/tecnico/captura";
-import { MSG_SEM_API_CAMERA, abrirCamera, lerQrDaFoto, lerQrDoCanvas, motivoSemCamera, pararCamera } from "@/lib/qr/leitor";
+import { abrirCamera, causaSemCamera, lerQrDaFoto, lerQrDoCanvas, pararCamera } from "@/lib/qr/leitor";
 import { dataUrlParaArquivo } from "@/lib/imagem-cliente";
 import { novoClientId } from "@/lib/tecnico/offline/motor";
 import { EVENTO_RAPIDA, guardaDo } from "@/lib/tecnico/offline/rapida";
@@ -88,7 +88,7 @@ export function CameraRapida({ atividadeId, marca, resolverQr, nomeDoEquipamento
     (async () => {
       try { stream = await abrirCamera({ alta: true }); } catch (e) {
         if (cancelado) return;
-        setMotivo((e as { name?: string })?.name === "SemApiCamera" ? MSG_SEM_API_CAMERA : motivoSemCamera(e));
+        setMotivo(causaSemCamera(e));
         setFase("sem-camera");
         return;
       }
@@ -176,7 +176,7 @@ export function CameraRapida({ atividadeId, marca, resolverQr, nomeDoEquipamento
         {fase === "sem-camera" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center" data-rapida-sem-camera>
             <p role="alert" className="text-sm text-white/90 inline-flex items-start gap-2 text-left"><AlertCircle className="w-4 h-4 shrink-0 mt-0.5" /> {motivo}</p>
-            <p className="text-sm text-white/70">A câmera do aparelho resolve: cada foto entra aqui do mesmo jeito.</p>
+            <p className="text-sm text-white/70">Use a câmera do aparelho: cada foto entra aqui do mesmo jeito.</p>
             <div className="w-full max-w-xs text-ink"><BotaoFoto grande rotulo="Tirar foto" marca={marca} onFoto={aoFotoDoSistema} className="bg-white" /></div>
           </div>
         )}

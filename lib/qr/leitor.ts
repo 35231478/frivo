@@ -156,10 +156,18 @@ export async function lerQrDaFoto(arquivo: Blob, nativo?: DetectorNativo | null)
 /** Por que a câmera não abriu — sempre com a saída (foto ou código digitado). */
 export function motivoSemCamera(erro: unknown): string {
   const nome = (erro as { name?: string } | null)?.name ?? "";
-  if (nome === "NotAllowedError" || nome === "SecurityError") return "Câmera bloqueada neste navegador. Libere o acesso, tire uma foto do QR ou digite o código.";
-  if (nome === "NotFoundError" || nome === "OverconstrainedError") return "Nenhuma câmera encontrada. Tire uma foto do QR ou digite o código.";
-  if (nome === "NotReadableError" || nome === "AbortError") return "A câmera está em uso por outro app. Tire uma foto do QR ou digite o código.";
-  return "Não foi possível abrir a câmera. Tire uma foto do QR ou digite o código.";
+  const bloqueada = nome === "NotAllowedError" || nome === "SecurityError";
+  return `${causaSemCamera(erro)} ${bloqueada ? "Libere o acesso, tire" : "Tire"} uma foto do QR ou digite o código.`;
+}
+
+/** Só a causa de a câmera ao vivo não ter aberto (quem mostra diz a saída que tem a oferecer). */
+export function causaSemCamera(erro: unknown): string {
+  const nome = (erro as { name?: string } | null)?.name ?? "";
+  if (nome === "NotAllowedError" || nome === "SecurityError") return "Câmera bloqueada neste navegador.";
+  if (nome === "NotFoundError" || nome === "OverconstrainedError") return "Nenhuma câmera encontrada.";
+  if (nome === "NotReadableError" || nome === "AbortError") return "A câmera está em uso por outro app.";
+  if (nome === "SemApiCamera") return "Este navegador não abre a câmera aqui.";
+  return "Não foi possível abrir a câmera.";
 }
 
 export const MSG_SEM_API_CAMERA = "Este navegador não abre a câmera aqui. Tire uma foto do QR ou digite o código.";

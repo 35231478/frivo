@@ -123,6 +123,7 @@ describe("3. o grupo vira as gravações que o app já tem", () => {
     const ops = operacoesDoGrupo("at1", fotos, { tipo: "geral" }, true);
     expect(ops.map((o) => (o as any).dados.legenda)).toEqual(["Câmera rápida — antes", "Câmera rápida — depois"]);
     expect(ops.every((o) => o.tipo === "fotoOs" && (o as any).dados.equipamentoId === null)).toBe(true);
+    expect(ops.map((o) => (o as any).dados.clientId)).toEqual(fotos.map((f) => f.id)); // o id do aparelho: reenviar não duplica
     expect(ops.every(valida)).toBe(true);
     expect(operacoesDoGrupo("at1", [], { tipo: "geral" }, true)).toEqual([]);
   });

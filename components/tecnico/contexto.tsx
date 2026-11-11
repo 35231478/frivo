@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { BancoTecnico } from "@/lib/tecnico/offline/banco";
 import { MotorSync, type EstadoSync } from "@/lib/tecnico/offline/motor";
 import { estadoDaAtividade } from "@/lib/tecnico/offline/estado";
@@ -157,19 +157,25 @@ export function useAtividade(atividadeId: string) {
   }, [motor, atividadeId]);
 
   const tela = useMemo(() => (retrato ? estadoDaAtividade(retrato, fila) : null), [retrato, fila]);
+  const iniciou = useRef(false);
+  // Saiu de "Agendada" (o início já vale): a marca volta ao zero, para uma eventual reabertura
+  useEffect(() => { if (tela && tela.atividade.status !== "AGENDADA") iniciou.current = false; }, [tela]);
 
   /** Grava (na fila do aparelho). A 1ª gravação numa atividade agendada também a marca como iniciada. */
   const registrar = useCallback(async (ops: NovaOperacao[]) => {
     if (!motor) return;
     // "A caminho" / "Cheguei" não começam o atendimento: só as gravações da execução marcam o início
     const iniciar = tela?.atividade.status === "AGENDADA" && !fila.some((o) => o.tipo === "iniciar") && !ops.some((o) => o.tipo === "iniciar")
-      && ops.some((o) => o.tipo !== "avisoCliente");
+      && ops.some((o) => o.tipo !== "avisoCliente") && !iniciou.current;
+    // Duas gravações seguidas, antes de a tela redesenhar, não marcam o início duas vezes
+    if (iniciar) iniciou.current = true;
     const todas: NovaOperacao[] = iniciar ? [{ tipo: "iniciar", atividadeId }, ...ops] : ops;
     let feitas: OperacaoFila[];
     try {
       feitas = await motor.registrar(todas);
     } catch (e) {
       // O aparelho não guardou (sem espaço, armazenamento bloqueado): avisa na hora — nunca finge que gravou
+      if (iniciar) iniciou.current = false;
       toast(MSG_SEM_ESPACO, "erro");
       throw e;
     }
