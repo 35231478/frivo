@@ -22,7 +22,7 @@ const ROTULO_OPERACAO: Record<string, string> = {
 
 /** Perfil do técnico: situação da sincronização (com o motivo das recusadas), dados, checklist do veículo, sair. */
 export function PerfilTecnico({ perfilInicial }: { perfilInicial: React.ComponentProps<typeof PerfilClient>["initial"] }) {
-  const { motor, estado, usuario, config } = useTecnico();
+  const { motor, estado, usuario, config, armazenamento } = useTecnico();
   const [fila, setFila] = useState<OperacaoFila[]>([]);
   const [osDe, setOsDe] = useState<Record<string, string>>({});
   const [dados, setDados] = useState(false);
@@ -63,6 +63,10 @@ export function PerfilTecnico({ perfilInicial }: { perfilInicial: React.Componen
         </div>
         <p className="text-sm text-ink-muted">{r.detalhe}.{estado.ultimoSync ? ` Última sincronização às ${horaBR(estado.ultimoSync)}.` : ""}</p>
         <p className="text-sm text-ink">{aEnviar.length ? `${aEnviar.length} gravação(ões) a enviar.` : "Nada esperando para enviar."}</p>
+        {/* O navegador não protegeu o armazenamento e há coisa guardada: a dica que evita perder */}
+        {armazenamento === "comum" && aEnviar.length > 0 && (
+          <p className="text-xs text-ink-muted" data-armazenamento-comum>Instale o app na tela inicial para o navegador não limpar o que está guardado.</p>
+        )}
         <button type="button" disabled={!motor || sincronizando} data-sincronizar
           onClick={async () => { setSincronizando(true); await motor!.tentarDeNovo(); setSincronizando(false); }}
           className="w-full rounded-card bg-primary-600 text-white py-3 font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-50 touch-target">

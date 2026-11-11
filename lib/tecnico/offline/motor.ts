@@ -6,7 +6,10 @@
  *    da atividade (que já a contém); recusa do servidor fica na fila, visível, com o motivo;
  *  - nunca duplica: cada operação tem id próprio e o servidor ignora o que já aplicou;
  *  - em ordem: lotes na ordem em que o técnico gravou (o servidor segura o resto da atividade se uma falhar);
- *  - lotes pequenos (o corpo da requisição tem limite): fotos já vão comprimidas.
+ *  - lotes pequenos (o corpo da requisição tem limite): fotos já vão comprimidas;
+ *  - nunca fica preso: toda requisição tem prazo. Rede que "pendura" conta como falha de rede (a fila
+ *    fica no aparelho e tenta de novo, com espera crescente) e, depois de uma falha, sobe UMA gravação
+ *    por vez — em rede ruim cada confirmação já fica garantida antes da próxima.
  */
 import { BancoTecnico } from "@/lib/tecnico/offline/banco";
 import type { NovaOperacao, OperacaoFila, RetratoAtividade } from "@/lib/tecnico/offline/tipos";
@@ -27,6 +30,9 @@ export const LIMITE_LOTE_BYTES = 3_000_000;
 export const MAX_LOTE = 40;
 const INTERVALO_MS = 30_000;
 const ESPERA_MAX_MS = 5 * 60_000;
+/** Prazo de um envio da fila (um lote) e de uma leitura (retrato, Meu dia): passou disso, é falha de rede */
+export const PRAZO_ENVIO_MS = 90_000;
+export const PRAZO_LEITURA_MS = 30_000;
 
 export function novoId(): string {
   const c = globalThis.crypto;
@@ -41,13 +47,13 @@ export function novoId(): string {
 export const novoClientId = () => novoId().replace(/-/g, "");
 
 /** Divide a fila em lotes (ordem mantida) que caibam no limite do corpo da requisição. */
-export function emLotes<T>(ops: T[], tamanho: (o: T) => number = (o) => JSON.stringify(o).length): T[][] {
+export function emLotes<T>(ops: T[], tamanho: (o: T) => number = (o) => JSON.stringify(o).length, maxPorLote = MAX_LOTE): T[][] {
   const lotes: T[][] = [];
   let atual: T[] = [];
   let bytes = 0;
   for (const op of ops) {
     const n = tamanho(op);
-    if (atual.length && (bytes + n > LIMITE_LOTE_BYTES || atual.length >= MAX_LOTE)) { lotes.push(atual); atual = []; bytes = 0; }
+    if (atual.length && (bytes + n > LIMITE_LOTE_BYTES || atual.length >= maxPorLote)) { lotes.push(atual); atual = []; bytes = 0; }
     atual.push(op); bytes += n;
   }
   if (atual.length) lotes.push(atual);
@@ -63,7 +69,13 @@ export interface OpcoesMotor {
   fetch?: typeof fetch;
   online?: () => boolean;
   agora?: () => number;
+  /** Prazos das requisições (os testes encurtam) */
+  prazoEnvioMs?: number;
+  prazoLeituraMs?: number;
 }
+
+/** A requisição passou do prazo (rede pendurada): tratada como falha de rede. */
+class PrazoEsgotado extends Error { constructor() { super("prazo esgotado"); } }
 
 export class MotorSync {
   private ouvintes = new Set<(e: EstadoSync) => void>();
@@ -75,6 +87,10 @@ export class MotorSync {
   private sessaoExpirada = false;
   private falhas = 0;
   private proximaTentativa = 0;
+  /** Depois de uma falha de rede: uma gravação por lote até um envio dar certo */
+  private umPorVez = false;
+  private prazoEnvioMs: number;
+  private prazoLeituraMs: number;
   private timer: ReturnType<typeof setInterval> | null = null;
   private desligar: (() => void) | null = null;
   private fetch: typeof fetch;
@@ -85,6 +101,23 @@ export class MotorSync {
     this.fetch = op.fetch ?? ((...a) => globalThis.fetch(...a));
     this.online = op.online ?? (() => typeof navigator === "undefined" || navigator.onLine !== false);
     this.agora = op.agora ?? Date.now;
+    this.prazoEnvioMs = op.prazoEnvioMs ?? PRAZO_ENVIO_MS;
+    this.prazoLeituraMs = op.prazoLeituraMs ?? PRAZO_LEITURA_MS;
+  }
+
+  /**
+   * `fetch` com PRAZO: aborta a requisição e, mesmo que a rede não responda ao abort, desiste dela.
+   * Sem isto, um envio pendurado deixava o app em "Sincronizando…" indefinidamente, sem tentar de novo.
+   */
+  private async pedir(url: string, init: RequestInit, prazoMs: number): Promise<Response> {
+    const controle = typeof AbortController !== "undefined" ? new AbortController() : null;
+    let relogio: ReturnType<typeof setTimeout> | null = null;
+    const prazo = new Promise<never>((_, falha) => { relogio = setTimeout(() => { controle?.abort(); falha(new PrazoEsgotado()); }, prazoMs); });
+    try {
+      return await Promise.race([this.fetch(url, { ...init, ...(controle && { signal: controle.signal }) }), prazo]);
+    } finally {
+      if (relogio) clearTimeout(relogio);
+    }
   }
 
   /* ── estado observável ── */
@@ -144,7 +177,7 @@ export class MotorSync {
     if (!this.online()) { this.publicar(); return null; }
     const pedidoEm = this.agora();
     try {
-      const r = await this.fetch(`/api/tecnico/atividades/${encodeURIComponent(atividadeId)}`, { cache: "no-store" });
+      const r = await this.pedir(`/api/tecnico/atividades/${encodeURIComponent(atividadeId)}`, { cache: "no-store" }, this.prazoLeituraMs);
       if (r.status === 401) { this.sessaoExpirada = true; this.publicar(); return null; }
       if (!r.ok) return null;
       const retrato: RetratoAtividade = await r.json();
@@ -164,7 +197,7 @@ export class MotorSync {
     if (!this.online()) this.publicar(); // o indicador já mostra "Offline"
     else {
       try {
-        const r = await this.fetch(url, { cache: "no-store" });
+        const r = await this.pedir(url, { cache: "no-store" }, this.prazoLeituraMs);
         if (r.status === 401) { this.sessaoExpirada = true; this.publicar(); }
         else if (r.ok) {
           const dados: T = await r.json();
@@ -190,6 +223,8 @@ export class MotorSync {
   sincronizar(forcar = false): Promise<void> {
     // Já rodando: pede mais uma volta ao final (o que entrou na fila no meio também sobe)
     if (this.rodando) { this.deNovo = true; this.forcado ||= forcar; return this.rodando; }
+    // Sem sinal não há o que tentar: o indicador fica em "Offline" (antes piscava "Sincronizando…" a cada toque)
+    if (!this.online()) return this.recontar();
     if (!forcar && this.agora() < this.proximaTentativa) return Promise.resolve();
     this.rodando = (async () => {
       try {
@@ -214,10 +249,11 @@ export class MotorSync {
     const fila = toda.filter((o) => o.estado === "pendente" && !(travada.has(o.atividadeId) && o.seq! > travada.get(o.atividadeId)!));
     const enviadas = new Set<string>();
     let falhouRede = false;
-    for (const lote of emLotes(fila.map(({ seq: _s, criadoEm: _c, estado: _e, tentativas: _t, erro: _er, status: _st, enviadaEm: _en, ...op }) => op))) {
+    const paraEnviar = fila.map(({ seq: _s, criadoEm: _c, estado: _e, tentativas: _t, erro: _er, status: _st, enviadaEm: _en, ...op }) => op);
+    for (const lote of emLotes(paraEnviar, undefined, this.umPorVez ? 1 : MAX_LOTE)) {
       let res: Response;
       try {
-        res = await this.fetch("/api/tecnico/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operacoes: lote }), cache: "no-store" });
+        res = await this.pedir("/api/tecnico/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operacoes: lote }), cache: "no-store" }, this.prazoEnvioMs);
       } catch { falhouRede = true; break; }
       if (res.status === 401) { this.sessaoExpirada = true; break; }
       if (!res.ok) { falhouRede = true; break; }
@@ -232,9 +268,11 @@ export class MotorSync {
         else mudadas.push({ ...op, erro: r.erro ?? null, status: r.status, tentativas: op.tentativas + 1 });
       }
       await this.banco.atualizar(mudadas);
+      this.umPorVez = false; // um envio deu certo: a rede aguenta lotes de novo
     }
     this.semRede = falhouRede;
     if (falhouRede) {
+      this.umPorVez = true;
       this.falhas += 1;
       this.proximaTentativa = this.agora() + Math.min(ESPERA_MAX_MS, 5_000 * 2 ** (this.falhas - 1));
     } else if (!this.sessaoExpirada) {

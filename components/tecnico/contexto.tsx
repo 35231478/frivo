@@ -6,6 +6,8 @@ import { MotorSync, type EstadoSync } from "@/lib/tecnico/offline/motor";
 import { estadoDaAtividade } from "@/lib/tecnico/offline/estado";
 import type { NovaOperacao, OperacaoFila, RetratoAtividade } from "@/lib/tecnico/offline/tipos";
 import { CONFIG_APP_PADRAO, type ConfigApp } from "@/lib/tecnico/config-app";
+import { MSG_SEM_ESPACO, protegerArmazenamento, type Armazenamento } from "@/lib/tecnico/offline/armazenamento";
+import { toast } from "@/components/ui/avisos";
 
 export interface UsuarioApp { id: string; nome: string; email: string; empresaNome: string; podeGravar: boolean }
 
@@ -17,6 +19,8 @@ interface Contexto {
   estado: EstadoSync;
   /** O navegador não guarda dados offline (ex.: aba anônima antiga) */
   semBanco: boolean;
+  /** O navegador aceitou proteger o que o app guarda no aparelho? ("comum" = pode limpar se faltar espaço) */
+  armazenamento: Armazenamento;
 }
 
 const ESTADO_INICIAL: EstadoSync = { situacao: "sincronizado", pendentes: 0, erros: 0, ultimoSync: null, versao: 0 };
@@ -27,6 +31,7 @@ export function ProvedorTecnico({ usuario, config = CONFIG_APP_PADRAO, children,
   const [motor, setMotor] = useState<MotorSync | null>(motorPronto ?? null);
   const [estado, setEstado] = useState<EstadoSync>(ESTADO_INICIAL);
   const [semBanco, setSemBanco] = useState(false);
+  const [armazenamento, setArmazenamento] = useState<Armazenamento>("desconhecido");
 
   useEffect(() => {
     if (motorPronto) return;
@@ -38,14 +43,21 @@ export function ProvedorTecnico({ usuario, config = CONFIG_APP_PADRAO, children,
         m = new MotorSync(banco);
         m.ligar();
         setMotor(m);
+
       })
       .catch(() => setSemBanco(true));
     return () => { cancelado = true; m?.parar(); m?.banco.fechar(); };
   }, [usuario.id, motorPronto]);
 
   useEffect(() => motor?.assinar(setEstado), [motor]);
+  // Pede ao navegador para não limpar o que o técnico gravou sem sinal (uma vez, ao abrir o app)
+  useEffect(() => {
+    let vivo = true;
+    void protegerArmazenamento().then((a) => { if (vivo) setArmazenamento(a); });
+    return () => { vivo = false; };
+  }, []);
 
-  const valor = useMemo(() => ({ usuario, config, motor, estado, semBanco }), [usuario, config, motor, estado, semBanco]);
+  const valor = useMemo(() => ({ usuario, config, motor, estado, semBanco, armazenamento }), [usuario, config, motor, estado, semBanco, armazenamento]);
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
 }
 
@@ -138,7 +150,14 @@ export function useAtividade(atividadeId: string) {
     if (!motor) return;
     const iniciar = tela?.atividade.status === "AGENDADA" && !fila.some((o) => o.tipo === "iniciar") && !ops.some((o) => o.tipo === "iniciar");
     const todas: NovaOperacao[] = iniciar ? [{ tipo: "iniciar", atividadeId }, ...ops] : ops;
-    const feitas = await motor.registrar(todas);
+    let feitas: OperacaoFila[];
+    try {
+      feitas = await motor.registrar(todas);
+    } catch (e) {
+      // O aparelho não guardou (sem espaço, armazenamento bloqueado): avisa na hora — nunca finge que gravou
+      toast(MSG_SEM_ESPACO, "erro");
+      throw e;
+    }
     setFila((f) => [...f, ...feitas]);
   }, [motor, tela?.atividade.status, fila, atividadeId]);
 
