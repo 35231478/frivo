@@ -319,4 +319,50 @@ describe.skipIf(!URL_PG)("Fotos & Anexos do serviço (PostgreSQL real)", () => {
     expect(porAtividade.a1).toBeGreaterThan(0);
   });
 
+  it("Tema 4 — card 'Equipamentos' = equipamentos ATENDIDOS na OS (a mesma conta do relatório), nunca os da unidade", async () => {
+    comoEscritorio();
+    const { relatorioInterno } = await import("@/lib/relatorio-os/dados");
+    const card = async () => (await chamar("ordens/[id]/relatorios", "GET", { id: "osA" })).json.resumo.totalEquipamentos;
+    const noRelatorio = async () => (await relatorioInterno("osA", "e1"))!.dados.equipamentos.length;
+    // a unidade tem 3 equipamentos ativos (eqA, eqB, eqC); nesta altura só eqA está atendido na OS
+    expect(await prisma.equipamento.count({ where: { unidadeId: "un1", ativo: true } })).toBe(3);
+    expect([await card(), await noRelatorio()]).toEqual([1, 1]); // antes o card dizia 3
+    // vincular outro SEM atender não muda a conta
+    await prisma.atividadeEquipamento.create({ data: { atividadeId: "a1", equipamentoId: "eqC", feito: false } });
+    expect([await card(), await noRelatorio()]).toEqual([1, 1]);
+    // o mesmo equipamento atendido em duas atividades conta uma vez
+    await prisma.atividadeEquipamento.create({ data: { atividadeId: "a2", equipamentoId: "eqA", feito: true } });
+    expect([await card(), await noRelatorio()]).toEqual([1, 1]);
+    // atender o segundo: 2
+    await prisma.atividadeEquipamento.updateMany({ where: { atividadeId: "a1", equipamentoId: "eqC" }, data: { feito: true } });
+    expect([await card(), await noRelatorio()]).toEqual([2, 2]);
+    // atividade cancelada não atendeu ninguém (eqC só estava na a1; eqA segue pela a2)
+    await prisma.atividadeOs.update({ where: { id: "a1" }, data: { status: "CANCELADA" } });
+    expect([await card(), await noRelatorio()]).toEqual([1, 1]);
+    await prisma.atividadeOs.update({ where: { id: "a1" }, data: { status: "EM_ANDAMENTO" } });
+  });
+
+  it("Tema 4 — o relatório (PDF/impressão) só leva fotos da EXECUÇÃO: nada do cadastro do equipamento nem do que o escritório enviou à galeria", async () => {
+    comoEscritorio();
+    const { relatorioInterno } = await import("@/lib/relatorio-os/dados");
+    const marca = (texto: string) => dataUrl("image/png", new Uint8Array([...PNG, ...new TextEncoder().encode(texto)]));
+    const doCadastro = marca("foto-do-cadastro-do-equipamento");
+    const doEscritorio = marca("foto-enviada-pelo-escritorio");
+    const daExecucao = marca("foto-da-execucao-no-equipamento");
+    await prisma.equipamento.update({ where: { id: "eqA" }, data: { fotos: [doCadastro] } });
+    await prisma.osAnexo.create({ data: { id: "anEscritorio", ordemServicoId: "osA", nome: "fachada.png", tipo: "image/png", tamanho: 10, conteudo: doEscritorio, legenda: "Fachada", criadoPorId: "uA" } });
+    await prisma.fotoAtendimento.create({ data: { id: "fExec", empresaId: "e1", atividadeId: "a1", equipamentoId: "eqA", momento: "DEPOIS", url: daExecucao, criadoPorId: "uT" } });
+    const dados = (await relatorioInterno("osA", "e1"))!.dados;
+    const tudo = JSON.stringify(dados);
+    expect(tudo).toContain(daExecucao);
+    expect(tudo).not.toContain(doCadastro);
+    expect(tudo).not.toContain(doEscritorio);
+    // as fotos de cada equipamento atendido são as da execução dele (antes / item / depois)
+    const eqA = dados.equipamentos.find((b: any) => b.id === "eqA")!;
+    expect(eqA.fotos.map((f: any) => f.legenda)).toContain("Depois do serviço");
+    expect(eqA.fotos.every((f: any) => f.url !== doCadastro && f.url !== doEscritorio)).toBe(true);
+    // a galeria da OS continua mostrando a do escritório (é lá o lugar dela)
+    expect((await galeria()).fotos.some((f: any) => f.legenda === "Fachada")).toBe(true);
+  });
+
 });

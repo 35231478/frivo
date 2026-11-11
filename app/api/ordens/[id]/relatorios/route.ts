@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { relatorioSchema } from "@/lib/validations";
 import { linkRelatorioAtividade } from "@/lib/relatorio-atividade-link";
 import { comNumero } from "@/lib/numeracao-server";
+import { contarEquipamentosAtendidos } from "@/lib/relatorio-os/dados";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -31,6 +32,7 @@ export async function GET(_: NextRequest, { params }: Params) {
           equipe: { select: { nome: true } },
           tecnicosEquipe: { select: { tecnico: { select: { nome: true } } }, orderBy: { criadoEm: "asc" } },
           respostas: { include: { campo: { select: { label: true, tipo: true } } } },
+          equipamentos: { select: { feito: true, equipamento: { select: { id: true } } } },
         },
       },
       relatorios: { orderBy: { criadoEm: "desc" } },
@@ -38,9 +40,9 @@ export async function GET(_: NextRequest, { params }: Params) {
   });
   if (!os) return NextResponse.json({ erro: "Não encontrada" }, { status: 404 });
 
-  const equipamentos = os.unidadeId
-    ? await prisma.equipamento.count({ where: { unidadeId: os.unidadeId, ativo: true } })
-    : 0;
+  // Equipamentos ATENDIDOS nesta OS — a mesma regra do relatório (antes contava todos os ativos da
+  // unidade do cliente, atendidos ou não: o card dizia 30 numa OS que atendeu 2)
+  const equipamentos = contarEquipamentosAtendidos(os.atividades, os.equipamentoId, os.status === "CONCLUIDA");
 
   // Fotos = as mesmas da galeria "Fotos & Anexos do serviço": execução, serviços adicionais e as
   // enviadas (escritório/app), além das do formulário da atividade
