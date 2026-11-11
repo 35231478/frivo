@@ -69,6 +69,8 @@ function retrato(atividadeId = "aA"): RetratoAtividade {
 let online = true;
 let enviadas: { tipo: string; dados?: any; valor?: unknown; equipamentoIds?: string[]; itemId?: string }[] = [];
 const meuDia = { tecnico: { id: "t1", nome: "João Silva" }, dia: "2026-10-20", atividades: [cartao("aB", "08:30", "Padaria Pão Quente"), cartao("aA", "14:00", "Hospital Santa Luzia"), cartao("aG", null, "Escola Viva")], anteriores: [] };
+/** Deixa um teste mexer no retrato que o "servidor" manda (ex.: um adicional já avaliado) */
+let ajustarRetrato: (r: RetratoAtividade) => RetratoAtividade = (r) => r;
 /** Segura a resposta do Meu dia (para ver a tela carregando) */
 let segurarMeuDia: Promise<void> | null = null;
 const fetchFalso = vi.fn(async (url: string, init?: RequestInit) => {
@@ -76,7 +78,7 @@ const fetchFalso = vi.fn(async (url: string, init?: RequestInit) => {
   if (segurarMeuDia && url === "/api/tecnico/meu-dia") await segurarMeuDia;
   const json = (c: unknown, status = 200) => new Response(JSON.stringify(c), { status, headers: { "content-type": "application/json" } });
   if (url === "/api/tecnico/meu-dia") return json(meuDia);
-  if (url.startsWith("/api/tecnico/atividades/")) return json(retrato(decodeURIComponent(url.split("/").pop()!)));
+  if (url.startsWith("/api/tecnico/atividades/")) return json(ajustarRetrato(retrato(decodeURIComponent(url.split("/").pop()!))));
   if (url === "/api/tecnico/sync") {
     const { operacoes } = JSON.parse(String(init!.body));
     enviadas.push(...operacoes);
@@ -96,7 +98,7 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   (globalThis as any).indexedDB = new IDBFactory();
-  online = true; enviadas = []; fetchFalso.mockClear(); segurarMeuDia = null;
+  online = true; enviadas = []; fetchFalso.mockClear(); segurarMeuDia = null; ajustarRetrato = (r) => r;
   window.localStorage.clear();
   banco = await BancoTecnico.abrir("uT");
   motor = new MotorSync(banco, { fetch: fetchFalso as unknown as typeof fetch, online: () => online });
@@ -761,6 +763,181 @@ describe("execução guiada — lapidada (Etapa 2b)", () => {
     await clicar($("[data-confirmar-conclusao]"));
     await esperar();
     expect((await fila()).at(-1)).toMatchObject({ tipo: "concluir", estado: "pendente" });
+  });
+});
+
+/* ═════════════════════════ Etapa 2c: medição só captura + serviço adicional ═════════════════════════ */
+describe("Etapa 2c — medição é só captura; serviço adicional dentro da OS", () => {
+  async function abrirNaUrl(equipamentoId?: string, config?: any) {
+    const { VistaOs } = await import("@/components/tecnico/execucao");
+    const { useVista } = await import("@/components/tecnico/contexto");
+    function Roteada() { const v = useVista(); return v?.ver === "os" ? createElement(VistaOs, { key: v.a, atividadeId: v.a, equipamentoId: v.e }) : null; }
+    window.history.replaceState(null, "", `/tecnico?ver=os&a=aA${equipamentoId ? `&e=${equipamentoId}` : ""}`);
+    await montar(createElement(Roteada), config);
+    await esperarAte(() => !!$("[data-vista]"), "OS carregada");
+  }
+  const offline = async (equipamentoId?: string, config?: any) => { await motor.baixarRetrato("aA"); online = false; await abrirNaUrl(equipamentoId, config); };
+  async function fotoAntiga(input: Element | null) {
+    await act(async () => {
+      Object.defineProperty(input, "files", { configurable: true, value: [new File([new Uint8Array([1, 2, 3])], "galeria.jpg", { type: "image/jpeg", lastModified: Date.now() - 3 * 60 * 60 * 1000 })] });
+      input!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await esperar();
+  }
+  const JULGAMENTO = /fora d|faixa|alt[oa]\b|baix[oa]\b|normal|ideal|padrão|acima|abaixo|ruim|bo[am]\b|crític|alerta/i;
+
+  it("A · a medição é só NÚMERO + UNIDADE + N/A: sem chips de OK/Atenção, sem cor, alerta ou texto que julgue o valor — qualquer número é guardado como veio", async () => {
+    await offline("eqA");
+    const m = () => $("[data-item=m1]")!;
+    // o campo: um número, a unidade e o N/A — nada de OK/Atenção
+    expect(m().querySelectorAll("input").length).toBe(1);
+    expect(m().querySelectorAll("select").length).toBe(1);
+    expect([...m().querySelectorAll("[data-chip]")].map((c) => c.getAttribute("data-chip"))).toEqual(["NAO_SE_APLICA"]);
+    const campo = () => m().querySelector("input") as HTMLInputElement;
+    const classeVazia = campo().className;
+    // valores absurdos (muito alto, negativo, zero): guardados sem julgamento
+    for (const [digitado, valor] of [["9999", 9999], ["-40", -40], ["0", 0], ["118,5", 118.5]] as const) {
+      await digitar(campo(), digitado); await sair(campo());
+      await esperar();
+      expect(m().textContent ?? "", `texto com ${digitado}`).not.toMatch(JULGAMENTO);
+      expect(m().querySelector("[role=alert]"), `alerta com ${digitado}`).toBeNull();
+      expect(campo().className, `cor com ${digitado}`).toBe(classeVazia); // o campo não muda de cor conforme o valor
+      expect(m().className).not.toMatch(/atrasado|atencao|success/);
+      expect(((await fila()).at(-1) as any)).toMatchObject({ tipo: "resposta", itemId: "m1", dados: { valor } });
+    }
+    // a única mensagem do campo é de DIGITAÇÃO (não é número), nunca do valor
+    await digitar(campo(), "abc"); await sair(campo());
+    expect(m().textContent).toContain("Número inválido");
+    // N/A no lugar do número
+    await clicar(m().querySelector("[data-chip=NAO_SE_APLICA]"));
+    expect(((await fila()).at(-1) as any).dados).toEqual({ status: "NAO_SE_APLICA" });
+    // medição não entra na trava como "atenção": responder basta (não pede foto nem observação por causa do valor)
+    expect($$("[data-item=m1] [data-foto-input]").length).toBe(0);
+  });
+
+  it("A · sem sinal a medição não se perde: fechar e reabrir traz o número e a unidade do aparelho", async () => {
+    await offline("eqA");
+    const campo = $<HTMLInputElement>("[data-item=m1] input")!;
+    await digitar(campo, "72,4"); await sair(campo);
+    await esperar();
+    act(() => root.unmount()); caixa.remove();
+    await abrirNaUrl("eqA");
+    expect($<HTMLInputElement>("[data-item=m1] input")!.value).toBe("72,4");
+    expect($<HTMLSelectElement>("[data-item=m1] select")!.value).toBe("psi");
+    expect(enviadas).toEqual([]);
+  });
+
+  it("B · serviço extra: entra na MESMA OS (nenhuma OS nova), destacado como Adicional, com descrição, foto e equipamento opcional; o técnico não vê nem define preço", async () => {
+    await offline();
+    expect($("[data-novo-adicional]")!.className).toContain("touch-target");
+    await clicar($("[data-novo-adicional]"));
+    const modal = () => $("[data-modal-adicional]")!;
+    expect(modal().textContent).toContain("Não cria outra OS");
+    expect(modal().textContent).toContain("o escritório decide a cobrança");
+    // nada de preço/cobrança para o técnico preencher
+    expect(modal().querySelectorAll("input[type=number], input[inputmode=decimal], [data-preco-adicional], [data-cobranca]").length).toBe(0);
+    expect(modal().textContent).not.toMatch(/R\$|preço|valor/i);
+    await digitar(modal().querySelector("textarea"), "Troca do controle remoto");
+    await act(async () => { const sel = modal().querySelector("select") as HTMLSelectElement; sel.value = "eqB"; sel.dispatchEvent(new Event("change", { bubbles: true })); });
+    await foto(modal().querySelector("input[data-foto-input]"));
+    await clicar($("[data-salvar-adicional]"));
+    await esperarAte(() => $$("[data-adicional]").length === 1, "adicional na lista");
+    const cartaoAd = $("[data-adicional]")!;
+    expect(cartaoAd.className).toContain("touch-target");
+    expect(cartaoAd.textContent).toContain("Adicional");
+    expect(cartaoAd.textContent).toContain("Split Sala 2"); // o equipamento vinculado
+    expect(cartaoAd.textContent).toContain("1 foto");
+    const ops = await fila();
+    expect(ops.map((o) => o.tipo)).toEqual(["iniciar", "adicional", "adicionalFoto"]);
+    expect(new Set(ops.map((o) => o.atividadeId))).toEqual(new Set(["aA"])); // tudo na mesma atividade/OS
+    expect((ops[1] as any).dados).toEqual({ clientId: expect.any(String), descricao: "Troca do controle remoto", equipamentoId: "eqB" });
+    expect(JSON.stringify(ops)).not.toMatch(/valor|statusCobranca|preco/);
+    expect(enviadas).toEqual([]);
+    // sem sinal não se perde: reabrir traz o adicional (com a foto) do aparelho
+    act(() => root.unmount()); caixa.remove();
+    await abrirNaUrl();
+    expect($$("[data-adicional]").length).toBe(1);
+    expect($("[data-adicional]")!.textContent).toContain("no aparelho");
+    await clicar($("[data-adicional]"));
+    expect($$("[data-modal-adicional] [data-miniatura]").length).toBe(1);
+  });
+
+  it("B · adicional JÁ AVALIADO pelo escritório: cartão diz 'escritório já avaliou' e abre só para consulta — sem editar, tirar, nem mostrar a decisão ou o preço", async () => {
+    ajustarRetrato = (r) => ({
+      ...r,
+      execucao: { ...r.execucao, adicionais: [{ id: "s9", clientId: null, descricao: "Troca do capacitor", equipamentoId: "eqA", cobrancaDecidida: true, fotos: [{ id: "f9", clientId: null }], criadoPor: "João" }] },
+    });
+    await motor.baixarRetrato("aA");
+    await abrirNaUrl();
+    const c = $("[data-adicional]")!;
+    expect(c.getAttribute("data-avaliado")).toBe("true");
+    expect(c.textContent).toContain("escritório já avaliou");
+    expect(caixa.textContent).not.toMatch(/R\$|COBRAR|Cobrar|cortesia/);
+    await clicar(c);
+    const modal = $("[data-modal-adicional]")!;
+    expect(modal.hasAttribute("data-somente-leitura")).toBe(true);
+    expect($("[data-adicional-avaliado]")!.textContent).toContain("fale com o escritório");
+    expect(modal.textContent).toContain("Troca do capacitor");
+    expect(modal.textContent).toContain("Split Sala 1");
+    expect(modal.querySelectorAll("textarea, select, input, [data-salvar-adicional]").length).toBe(0);
+    expect([...modal.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Fechar"]); // nem "tirar este serviço", nem excluir foto
+    await clicar(modal.querySelector("button"));
+    expect($("[data-modal-adicional]")).toBeNull();
+    expect((await fila()).filter((o) => o.tipo.startsWith("adicional"))).toEqual([]);
+  });
+
+  it("B · regra pura: 'já avaliado' pelo sinal novo ou, em retrato antigo guardado no aparelho, pela situação que vinha antes", async () => {
+    const { adicionalAvaliado } = await import("@/lib/tecnico/offline/estado");
+    expect(adicionalAvaliado({ cobrancaDecidida: true })).toBe(true);
+    expect(adicionalAvaliado({ cobrancaDecidida: false })).toBe(false);
+    expect(adicionalAvaliado({ cobrancaDecidida: false, statusCobranca: "COBRAR" })).toBe(false); // o sinal novo manda
+    expect([adicionalAvaliado({ statusCobranca: "COBRAR" }), adicionalAvaliado({ statusCobranca: "NAO_COBRAR" })]).toEqual([true, true]);
+    expect([adicionalAvaliado({ statusCobranca: "A_AVALIAR" }), adicionalAvaliado({})]).toEqual([false, false]);
+  });
+
+  it("permissões no adicional: 'Foto somente pela câmera' recusa a galeria; a foto leva a marca d'água da OS e do endereço", async () => {
+    const { aplicarMarcaDagua } = await import("@/lib/imagem-cliente");
+    (aplicarMarcaDagua as any).mockClear();
+    await offline(undefined, cfg({ fotoSomenteCamera: true, marcaDaguaEndereco: true }));
+    await clicar($("[data-novo-adicional]"));
+    const campo = () => $("[data-modal-adicional] input[data-foto-input]");
+    expect(campo()!.getAttribute("capture")).toBe("environment");
+    await fotoAntiga(campo());
+    expect($("[data-modal-adicional] [data-erro-foto]")!.textContent).toContain("Fotos da galeria ficam bloqueadas");
+    expect($("[data-modal-adicional] [data-miniatura]")).toBeNull();
+    expect(aplicarMarcaDagua).not.toHaveBeenCalled();
+    await foto(campo());
+    await esperarAte(() => !!$("[data-modal-adicional] [data-miniatura]"), "foto da câmera aceita");
+    const linhas = (aplicarMarcaDagua as any).mock.calls.at(-1)[1] as string[];
+    expect(linhas).toContain("OS OS-aA");
+    expect(linhas).toContain("Av. Paulista, 1000 — São Paulo/SP");
+  });
+
+  it("permissões no adicional: com 'Exibir dados do cliente' desligado, o adicional não mostra cliente, unidade nem endereço (e o carimbo não leva o endereço)", async () => {
+    const { aplicarMarcaDagua } = await import("@/lib/imagem-cliente");
+    (aplicarMarcaDagua as any).mockClear();
+    // o servidor já manda o cartão sem os dados
+    ajustarRetrato = (r) => ({ ...r, cartao: aplicarPrivacidade(r.cartao, { exibirDadosCliente: false, exibirContatosCliente: false }) });
+    await offline(undefined, cfg({ exibirDadosCliente: false, exibirContatosCliente: false, marcaDaguaEndereco: true }));
+    await clicar($("[data-novo-adicional]"));
+    await foto($("[data-modal-adicional] input[data-foto-input]"));
+    await esperarAte(() => !!$("[data-modal-adicional] [data-miniatura]"), "foto");
+    for (const dado of ["Hospital Santa Luzia", "Av. Paulista", "Matriz"]) expect(caixa.textContent, dado).not.toContain(dado);
+    const linhas = (aplicarMarcaDagua as any).mock.calls.at(-1)[1] as string[];
+    expect(linhas.some((l) => l.includes("Paulista"))).toBe(false);
+    expect(linhas).toContain("OS OS-aA");
+  });
+
+  it("trava de conclusão mantida com adicional: registrar serviço extra não libera a atividade sem equipamento atendido", async () => {
+    await offline();
+    await clicar($("[data-novo-adicional]"));
+    await digitar($("[data-modal-adicional] textarea"), "Reaperto do suporte");
+    await clicar($("[data-salvar-adicional]"));
+    await esperarAte(() => $$("[data-adicional]").length === 1, "adicional");
+    await clicar($("[data-concluir-atividade]"));
+    expect($("[data-pendencias]")!.textContent).toContain("vincule pelo menos 1 equipamento atendido");
+    expect($("[data-confirmar-conclusao]")).toBeNull();
+    expect((await fila()).some((o) => o.tipo === "concluir")).toBe(false);
   });
 });
 
