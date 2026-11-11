@@ -126,7 +126,7 @@ export const EQUIPAMENTO = {
         opcoes: Object.entries(LABELS_TIPO_EQUIPAMENTO).map(([value, label]) => ({ value, label })) },
       { nome: "marca", label: "Marca", obrigatorio: true, colunas: 3, placeholder: "Ex: LG, Carrier" },
       { nome: "modelo", label: "Modelo", obrigatorio: true, colunas: 3 },
-      { nome: "numeroSerie", label: "Nº de série", colunas: 3 },
+      { nome: "numeroSerie", label: "Nº de série", colunas: 3, avisoSerie: true },
       { nome: "localizacao", label: "Ambiente", colunas: 3, placeholder: "Ex: Recepção" },
     ];
   },
@@ -134,7 +134,8 @@ export const EQUIPAMENTO = {
     return postar("/api/equipamentos", {
       unidadeId: v.unidadeId || unidadeId,
       tipo: v.tipo, marca: v.marca, modelo: v.modelo,
-      numeroSerie: v.numeroSerie || undefined, localizacao: v.localizacao || undefined,
+      // sem espaços nas pontas: a etiqueta digitada com espaço não vira "outra" série
+      numeroSerie: v.numeroSerie?.trim() || undefined, localizacao: v.localizacao || undefined,
     }, "Erro ao cadastrar o equipamento.");
   },
 };
