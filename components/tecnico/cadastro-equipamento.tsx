@@ -107,9 +107,13 @@ function AvisoSerieCampo({ numero, atividadeId, ignorarId, daUnidade, tipos, naO
  * salvar, o equipamento já fica vinculado à atividade e o técnico segue a execução nele. Funciona
  * sem sinal: fica na fila do aparelho e sobe sozinho.
  */
-export function ModalCadastroEquipamento({ r, x, endereco, onFechar, registrar }: {
+export function ModalCadastroEquipamento({ r, x, endereco, onFechar, registrar, qrInicial, aoCadastrar }: {
   r: RetratoAtividade; x: ExecucaoTela; /** Endereço da OS para a marca d'água */ endereco?: string | null;
   onFechar: () => void; registrar: (ops: NovaOperacao[]) => Promise<void>;
+  /** Etiqueta QR já lida (ex.: fotografada na câmera rápida): o equipamento novo nasce com ela */
+  qrInicial?: string | null;
+  /** Quem abriu quer o equipamento novo (ex.: para pôr as fotos nele) em vez de ir para a tela dele */
+  aoCadastrar?: (equipamentoId: string) => void | Promise<void>;
 }) {
   const atividadeId = x.atividade.id;
   const cadastro = r.cadastro;
@@ -128,7 +132,7 @@ export function ModalCadastroEquipamento({ r, x, endereco, onFechar, registrar }
   const [lendo, setLendo] = useState(false);
   const [leitura, setLeitura] = useState<{ tipo: "ok" | "aviso"; texto: string } | null>(null);
   const [scan, setScan] = useState(false);
-  const [qrLido, setQrLido] = useState<string | null>(null);
+  const [qrLido, setQrLido] = useState<string | null>(() => qrInicial?.trim() || null);
   const [qrDeOutro, setQrDeOutro] = useState<EquipamentoUnidade | null>(null);
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
@@ -187,6 +191,7 @@ export function ModalCadastroEquipamento({ r, x, endereco, onFechar, registrar }
     try {
       await registrar([{ tipo: "cadastrarEquipamento", atividadeId, dados }]);
       toast(semSinal() ? "Equipamento guardado no aparelho: sobe sozinho quando houver sinal." : "Equipamento cadastrado e vinculado à OS.");
+      if (aoCadastrar) { await aoCadastrar(id); onFechar(); return; }
       onFechar();
       irPara({ ver: "os", a: atividadeId, e: id });
     } catch { setSalvando(false); }

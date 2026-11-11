@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CalendarDays, CheckCircle2, ChevronRight, Clock, HardDrive, MapPin, Phone, RefreshCw, Sun, WifiOff } from "lucide-react";
+import { CalendarDays, Camera, CheckCircle2, ChevronRight, Clock, HardDrive, MapPin, Phone, RefreshCw, Sun, WifiOff } from "lucide-react";
 import { cn, formatarData } from "@/lib/utils";
 import { irPara, useTecnico } from "@/components/tecnico/contexto";
 import { BotaoRota } from "@/components/tecnico/rota";
@@ -69,8 +69,15 @@ export function CartaoAtividade({ c, fila, mostrarDia, proxima }: { c: CartaoTel
           </div>
         </div>
       </button>
-      {(rota || telefone) && (
+      {(rota || telefone || !concluida) && (
         <div className="flex border-t border-surface-border divide-x divide-surface-border" data-acoes-cartao>
+          {/* Atalho: abre a OS já na câmera rápida (fotos em rajada, organizadas pelo QR da etiqueta) */}
+          {!concluida && (
+            <button type="button" onClick={() => irPara({ ver: "os", a: c.atividadeId, cam: true })} data-camera-cartao
+              className="flex-1 inline-flex items-center justify-center gap-2 py-3 text-sm font-semibold text-primary-700 active:bg-surface-alt touch-target">
+              <Camera className="w-4 h-4" /> Câmera
+            </button>
+          )}
           {rota && <BotaoRota rota={rota} />}
           {telefone && (
             <a href={`tel:${telefone.replace(/[^\d+]/g, "")}`} data-ligar className="flex-1 inline-flex items-center justify-center gap-2 py-3 text-sm font-semibold text-ink active:bg-surface-alt touch-target">

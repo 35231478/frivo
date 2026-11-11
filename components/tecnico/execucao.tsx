@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft, Camera, CheckCircle2, ChevronRight, CircleDashed, ClipboardCheck, HardDrive, ListPlus, Loader2, MapPin, Phone, Plus, QrCode, Search, Sparkles, Trash2, WifiOff,
 } from "lucide-react";
@@ -13,6 +13,8 @@ import { irPara, useAtividade, useTecnico } from "@/components/tecnico/contexto"
 import { BotaoRota } from "@/components/tecnico/rota";
 import { ModalCadastroEquipamento } from "@/components/tecnico/cadastro-equipamento";
 import { AvisoClienteOs } from "@/components/tecnico/aviso-cliente";
+import { CameraRapida, useRapida } from "@/components/tecnico/camera-rapida";
+import { ConferenciaRapida } from "@/components/tecnico/conferencia-rapida";
 import { MSG_SEM_UNIDADE } from "@/lib/tecnico/cadastro-equipamento";
 import { ConcluirSemEquipamento } from "@/components/os/concluir-sem-equipamento";
 import { srcFoto, TelaEquipamento } from "@/components/tecnico/equipamento";
@@ -36,7 +38,7 @@ export function situacao(e: EquipamentoTela) {
 }
 
 /** A OS no app: local, equipamentos (com o que falta), serviço extra e a conclusão (com a trava da Etapa 1). */
-export function VistaOs({ atividadeId, equipamentoId }: { atividadeId: string; equipamentoId?: string | null }) {
+export function VistaOs({ atividadeId, equipamentoId, camera }: { atividadeId: string; equipamentoId?: string | null; /** Abre já na câmera rápida (atalho do Meu dia) */ camera?: boolean }) {
   const { retrato, tela, aEnviar, registrar, carregando } = useAtividade(atividadeId);
 
   if (carregando) return <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-ink-subtle" /></div>;
@@ -55,7 +57,7 @@ export function VistaOs({ atividadeId, equipamentoId }: { atividadeId: string; e
   const e = equipamentoId ? tela.equipamentos.find((q) => q.equipamento.id === equipamentoId) : null;
   if (e) return <TelaEquipamento x={tela} e={e} registrar={registrar} endereco={retrato.cartao.endereco}
     qr={retrato.equipamentosUnidade.find((u) => u.id === e.equipamento.id)?.qr?.codigo ?? null} />;
-  return <ResumoOs r={retrato} x={tela} aEnviar={aEnviar} registrar={registrar} />;
+  return <ResumoOs r={retrato} x={tela} aEnviar={aEnviar} registrar={registrar} camera={camera} />;
 }
 
 function Voltar() {
@@ -66,7 +68,7 @@ function Voltar() {
   );
 }
 
-function ResumoOs({ r, x, aEnviar, registrar }: { r: RetratoAtividade; x: ExecucaoTela; aEnviar: number; registrar: (ops: NovaOperacao[]) => Promise<void> }) {
+function ResumoOs({ r, x, aEnviar, registrar, camera }: { r: RetratoAtividade; x: ExecucaoTela; aEnviar: number; registrar: (ops: NovaOperacao[]) => Promise<void>; camera?: boolean }) {
   const c = r.cartao;
   const atividadeId = x.atividade.id;
   const { motor, config } = useTecnico();
@@ -80,6 +82,24 @@ function ResumoOs({ r, x, aEnviar, registrar }: { r: RetratoAtividade; x: Execuc
   const [concluir, setConcluir] = useState(false);
   const [fotoServico, setFotoServico] = useState(false);
   const [aviso, setAviso] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
+  // Câmera rápida: fotos em rajada que o app organiza pelo QR; as sem equipamento esperam a conferência
+  const { guarda: guardaRapida, sessao: rapida } = useRapida(atividadeId);
+  const [cameraAberta, setCameraAberta] = useState(false);
+  const [conferindo, setConferindo] = useState(false);
+  const aConferir = rapida.fotos.length;
+  // Atalho do Meu dia (…&cam=1): abre direto na câmera e tira o atalho do endereço (voltar não reabre)
+  useEffect(() => {
+    if (!camera || so) return;
+    setCameraAberta(true);
+    irPara({ ver: "os", a: atividadeId }, true);
+  }, [camera, so, atividadeId]);
+  // Atividade encerrada e nada a conferir: não sobra nada da câmera rápida no aparelho
+  useEffect(() => { if (so && !aConferir && rapida.salvos.length) void guardaRapida?.limpar(atividadeId); }, [so, aConferir, rapida.salvos.length, guardaRapida, atividadeId]);
+  async function fecharCamera() {
+    setCameraAberta(false);
+    const s = await guardaRapida?.sessao(atividadeId);
+    if (s && (s.fotos.length || s.salvos.length)) setConferindo(true);
+  }
   const st = ROTULO_STATUS_ATIVIDADE[x.atividade.status] ?? { rotulo: x.atividade.status, classe: "bg-surface-linha text-ink" };
   const atendidos = x.equipamentos.filter((e) => e.feito).length;
 
@@ -121,6 +141,22 @@ function ResumoOs({ r, x, aEnviar, registrar }: { r: RetratoAtividade; x: Execuc
       </header>
 
       <AvisoClienteOs r={r} x={x} registrar={registrar} />
+
+      {!so && (
+        <section className="space-y-2" data-camera-rapida-atalho>
+          <button type="button" onClick={() => setCameraAberta(true)} data-abrir-camera-rapida
+            className="w-full rounded-card bg-primary-600 text-white py-4 text-base font-bold shadow-card inline-flex items-center justify-center gap-2 touch-target">
+            <Camera className="w-6 h-6" /> Câmera rápida
+          </button>
+          <p className="text-xs text-ink-muted">Fotografe à vontade, com a etiqueta QR junto: o app põe cada foto no equipamento certo.</p>
+        </section>
+      )}
+      {aConferir > 0 && (
+        <button type="button" onClick={() => setConferindo(true)} data-conferir-fotos
+          className="w-full text-left rounded-card bg-atencao-claro border border-atencao/20 px-3 py-3 text-sm text-atencao-texto font-semibold inline-flex items-center justify-between gap-2 touch-target">
+          <span>{aConferir === 1 ? "1 foto a identificar" : `${aConferir} fotos a identificar`} — toque para conferir</span> <ChevronRight className="w-5 h-5 shrink-0" />
+        </button>
+      )}
 
       {aEnviar > 0 && <p className="rounded-card bg-atencao-claro border border-atencao/20 px-3 py-2 text-sm text-atencao-texto" data-a-enviar>{aEnviar === 1 ? "1 gravação" : `${aEnviar} gravações`} desta OS no aparelho — sobe sozinho quando houver sinal.</p>}
       {so && <p className="rounded-card bg-success-50 border border-success-200 px-3 py-2 text-sm text-success-800 inline-flex items-center gap-2 w-full"><CheckCircle2 className="w-4 h-4" /> Atividade concluída{aEnviar ? " no aparelho (a enviar)" : ""}. Só leitura.</p>}
@@ -193,13 +229,23 @@ function ResumoOs({ r, x, aEnviar, registrar }: { r: RetratoAtividade; x: Execuc
 
       {!so && (
         <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 px-4 pb-2 pt-2 bg-surface-page/95 backdrop-blur border-t border-surface-border">
-          <button type="button" onClick={() => setConcluir(true)} data-concluir-atividade
+          <button type="button" data-concluir-atividade onClick={() => {
+            // Foto sem equipamento não fica para trás: concluir espera a conferência
+            if (aConferir > 0) { toast("Antes de concluir, diga de qual equipamento são as fotos.", "info"); setConferindo(true); return; }
+            setConcluir(true);
+          }}
             className={cn("w-full rounded-card py-4 text-base font-bold shadow-elevated inline-flex items-center justify-center gap-2 touch-target", x.conclusao.ok ? "bg-success-600 text-white" : "bg-white text-ink border border-surface-border")}>
             <ClipboardCheck className="w-5 h-5" /> Concluir atividade
           </button>
         </div>
       )}
 
+      {cameraAberta && (
+        <CameraRapida atividadeId={atividadeId} marca={{ osNumero: x.os.numero, endereco: c.endereco }} onPronto={fecharCamera}
+          resolverQr={(qr) => equipamentoDoQr(r, qr)?.id ?? null}
+          nomeDoEquipamento={(id) => x.equipamentos.find((e) => e.equipamento.id === id)?.equipamento.titulo ?? r.equipamentosUnidade.find((u) => u.id === id)?.titulo ?? "Equipamento"} />
+      )}
+      {conferindo && <ConferenciaRapida r={r} x={x} registrar={registrar} onFechar={() => setConferindo(false)} onMaisFotos={() => { setConferindo(false); setCameraAberta(true); }} />}
       {scan && <ScannerQR onFechar={() => setScan(false)} onLer={lerQr} />}
       {lista && <ListaUnidade r={r} x={x} onFechar={() => setLista(false)} onVincular={async (ids) => { setLista(false); await registrar([{ tipo: "vincular", atividadeId, equipamentoIds: ids }]); }}
         onCadastrar={podeCadastrar && r.cadastro!.unidadeId ? () => { setLista(false); setCadastro(true); } : undefined} />}

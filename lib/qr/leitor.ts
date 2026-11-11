@@ -83,6 +83,27 @@ export function lerQrDoVideo(video: HTMLVideoElement, canvas: HTMLCanvasElement)
   return lerQrDosPixels(ctx.getImageData(0, 0, destino, destino).data, destino, destino);
 }
 
+/**
+ * Lê o QR de um canvas já desenhado (uma FOTO parada — ex.: o quadro que a câmera rápida acabou de
+ * capturar), tentando alguns tamanhos. Não altera o canvas de origem. null = sem QR legível.
+ */
+export function lerQrDoCanvas(origem: HTMLCanvasElement, lados: readonly number[] = LADOS_FOTO): string | null {
+  const { width: largura, height: altura } = origem;
+  if (!largura || !altura) return null;
+  const canvas = document.createElement("canvas");
+  const ctx = contexto(canvas);
+  if (!ctx) return null;
+  for (const ladoMax of lados) {
+    const d = reducao(largura, altura, ladoMax);
+    canvas.width = d.largura; canvas.height = d.altura;
+    ctx.drawImage(origem, 0, 0, d.largura, d.altura);
+    const v = lerQrDosPixels(ctx.getImageData(0, 0, d.largura, d.altura).data, d.largura, d.altura, true);
+    if (v) return v;
+    if (d.largura === largura && d.altura === altura) break;
+  }
+  return null;
+}
+
 /** Abre o arquivo de imagem (foto do QR) como algo que o canvas desenha. */
 async function abrirImagem(arquivo: Blob): Promise<{ imagem: ImageBitmap | HTMLImageElement; largura: number; altura: number; fechar: () => void }> {
   if (typeof createImageBitmap === "function") {
@@ -135,10 +156,18 @@ export async function lerQrDaFoto(arquivo: Blob, nativo?: DetectorNativo | null)
 /** Por que a câmera não abriu — sempre com a saída (foto ou código digitado). */
 export function motivoSemCamera(erro: unknown): string {
   const nome = (erro as { name?: string } | null)?.name ?? "";
-  if (nome === "NotAllowedError" || nome === "SecurityError") return "Câmera bloqueada neste navegador. Libere o acesso, tire uma foto do QR ou digite o código.";
-  if (nome === "NotFoundError" || nome === "OverconstrainedError") return "Nenhuma câmera encontrada. Tire uma foto do QR ou digite o código.";
-  if (nome === "NotReadableError" || nome === "AbortError") return "A câmera está em uso por outro app. Tire uma foto do QR ou digite o código.";
-  return "Não foi possível abrir a câmera. Tire uma foto do QR ou digite o código.";
+  const bloqueada = nome === "NotAllowedError" || nome === "SecurityError";
+  return `${causaSemCamera(erro)} ${bloqueada ? "Libere o acesso, tire" : "Tire"} uma foto do QR ou digite o código.`;
+}
+
+/** Só a causa de a câmera ao vivo não ter aberto (quem mostra diz a saída que tem a oferecer). */
+export function causaSemCamera(erro: unknown): string {
+  const nome = (erro as { name?: string } | null)?.name ?? "";
+  if (nome === "NotAllowedError" || nome === "SecurityError") return "Câmera bloqueada neste navegador.";
+  if (nome === "NotFoundError" || nome === "OverconstrainedError") return "Nenhuma câmera encontrada.";
+  if (nome === "NotReadableError" || nome === "AbortError") return "A câmera está em uso por outro app.";
+  if (nome === "SemApiCamera") return "Este navegador não abre a câmera aqui.";
+  return "Não foi possível abrir a câmera.";
 }
 
 export const MSG_SEM_API_CAMERA = "Este navegador não abre a câmera aqui. Tire uma foto do QR ou digite o código.";
@@ -149,11 +178,11 @@ export const MSG_FOTO_INVALIDA = "Não consegui abrir essa foto. Tire outra ou d
  * Pede a câmera traseira (getUserMedia). Se o aparelho não tiver "traseira" (notebook, alguns
  * tablets), aceita qualquer câmera. Lança o erro do navegador quando ela não abre.
  */
-export async function abrirCamera(): Promise<MediaStream> {
+export async function abrirCamera(op: { /** Pede resolução alta (fotos), não só o bastante para ler QR */ alta?: boolean } = {}): Promise<MediaStream> {
   const midia = typeof navigator !== "undefined" ? navigator.mediaDevices : undefined;
   if (!midia?.getUserMedia) throw Object.assign(new Error(MSG_SEM_API_CAMERA), { name: "SemApiCamera" });
   try {
-    return await midia.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+    return await midia.getUserMedia({ video: { facingMode: { ideal: "environment" }, ...(op.alta && { width: { ideal: 1920 }, height: { ideal: 1080 } }) }, audio: false });
   } catch (e) {
     if ((e as { name?: string })?.name !== "OverconstrainedError") throw e;
     return midia.getUserMedia({ video: true, audio: false });

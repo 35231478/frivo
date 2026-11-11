@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { BancoTecnico } from "@/lib/tecnico/offline/banco";
 import { MotorSync, type EstadoSync } from "@/lib/tecnico/offline/motor";
 import { estadoDaAtividade } from "@/lib/tecnico/offline/estado";
@@ -86,20 +86,20 @@ export type Vista =
   | { ver: "dia" }
   | { ver: "agenda" }
   | { ver: "perfil" }
-  | { ver: "os"; a: string; e?: string | null };
+  | { ver: "os"; a: string; e?: string | null; /** Abre já na câmera rápida (atalho do Meu dia) */ cam?: boolean };
 
 export function lerVista(search: string): Vista {
   const q = new URLSearchParams(search);
   const ver = q.get("ver");
   const a = q.get("a");
-  if (ver === "os" && a) return { ver: "os", a, e: q.get("e") };
+  if (ver === "os" && a) return { ver: "os", a, e: q.get("e"), ...(q.get("cam") === "1" && { cam: true }) };
   if (ver === "agenda" || ver === "perfil") return { ver };
   return { ver: "dia" };
 }
 
 export function urlDaVista(v: Vista): string {
   if (v.ver === "dia") return "/tecnico";
-  if (v.ver === "os") return `/tecnico?ver=os&a=${encodeURIComponent(v.a)}${v.e ? `&e=${encodeURIComponent(v.e)}` : ""}`;
+  if (v.ver === "os") return `/tecnico?ver=os&a=${encodeURIComponent(v.a)}${v.e ? `&e=${encodeURIComponent(v.e)}` : ""}${v.cam ? "&cam=1" : ""}`;
   return `/tecnico?ver=${v.ver}`;
 }
 
@@ -157,19 +157,25 @@ export function useAtividade(atividadeId: string) {
   }, [motor, atividadeId]);
 
   const tela = useMemo(() => (retrato ? estadoDaAtividade(retrato, fila) : null), [retrato, fila]);
+  const iniciou = useRef(false);
+  // Saiu de "Agendada" (o início já vale): a marca volta ao zero, para uma eventual reabertura
+  useEffect(() => { if (tela && tela.atividade.status !== "AGENDADA") iniciou.current = false; }, [tela]);
 
   /** Grava (na fila do aparelho). A 1ª gravação numa atividade agendada também a marca como iniciada. */
   const registrar = useCallback(async (ops: NovaOperacao[]) => {
     if (!motor) return;
     // "A caminho" / "Cheguei" não começam o atendimento: só as gravações da execução marcam o início
     const iniciar = tela?.atividade.status === "AGENDADA" && !fila.some((o) => o.tipo === "iniciar") && !ops.some((o) => o.tipo === "iniciar")
-      && ops.some((o) => o.tipo !== "avisoCliente");
+      && ops.some((o) => o.tipo !== "avisoCliente") && !iniciou.current;
+    // Duas gravações seguidas, antes de a tela redesenhar, não marcam o início duas vezes
+    if (iniciar) iniciou.current = true;
     const todas: NovaOperacao[] = iniciar ? [{ tipo: "iniciar", atividadeId }, ...ops] : ops;
     let feitas: OperacaoFila[];
     try {
       feitas = await motor.registrar(todas);
     } catch (e) {
       // O aparelho não guardou (sem espaço, armazenamento bloqueado): avisa na hora — nunca finge que gravou
+      if (iniciar) iniciou.current = false;
       toast(MSG_SEM_ESPACO, "erro");
       throw e;
     }

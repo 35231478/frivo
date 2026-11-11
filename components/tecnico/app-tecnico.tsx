@@ -98,7 +98,7 @@ function Conteudo({ vista, perfilInicial }: { vista: Vista; perfilInicial: Perfi
   switch (vista.ver) {
     case "agenda": return <Agenda />;
     case "perfil": return <PerfilTecnico perfilInicial={perfilInicial} />;
-    case "os": return <VistaOs key={vista.a} atividadeId={vista.a} equipamentoId={vista.e} />;
+    case "os": return <VistaOs key={vista.a} atividadeId={vista.a} equipamentoId={vista.e} camera={vista.cam} />;
     default: return <MeuDia />;
   }
 }

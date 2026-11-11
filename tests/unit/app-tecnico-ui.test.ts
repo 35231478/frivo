@@ -264,7 +264,7 @@ describe("Meu dia — lapidado (Etapa 2a)", () => {
     expect(c.querySelector("[data-ligar]")).not.toBeNull();
   });
 
-  it("permissões do app: 'Exibir contatos' DESLIGADO — sem Ligar (a rota fica); as duas desligadas — sem barra de ações", async () => {
+  it("permissões do app: 'Exibir contatos' DESLIGADO — sem Ligar (a rota fica); as duas desligadas — nada do cliente na barra (só o atalho da câmera)", async () => {
     await abrirMeuDia(cfg({ exibirContatosCliente: false }));
     const c = $("[data-cartao=aA]")!;
     expect(c.querySelector("[data-ligar]")).toBeNull();
@@ -273,7 +273,9 @@ describe("Meu dia — lapidado (Etapa 2a)", () => {
     expect(c.textContent).toContain("Hospital Santa Luzia");
     act(() => root.unmount()); caixa.remove();
     await abrirMeuDia(cfg({ exibirDadosCliente: false, exibirContatosCliente: false }));
-    expect($$("[data-acoes-cartao]")).toEqual([]);
+    // A barra agora existe por causa do atalho "Câmera" (que não é dado do cliente): Rota e Ligar continuam fora
+    for (const barra of $$("[data-acoes-cartao]")) expect([...barra.children].map((b) => b.textContent?.trim())).toEqual(["Câmera"]);
+    expect($$("[data-rota]")).toEqual([]);
     expect($$("a[href^='tel:']")).toEqual([]);
   });
 
@@ -285,7 +287,10 @@ describe("Meu dia — lapidado (Etapa 2a)", () => {
       const c = $("[data-cartao=aA]")!;
       expect(c.querySelector("h3")!.textContent).toBe("Preventiva");
       expect(c.querySelector("[data-linha-os]")!.textContent).toBe("OS-aA");
-      expect(c.querySelector("[data-acoes-cartao]")).toBeNull();
+      // Sem rota nem telefone (não vieram): na barra fica só o atalho da câmera
+      expect([...c.querySelector("[data-acoes-cartao]")!.children].map((b) => b.textContent?.trim())).toEqual(["Câmera"]);
+      expect(c.querySelector("[data-rota]")).toBeNull();
+      expect(c.querySelector("[data-ligar]")).toBeNull();
     } finally { meuDia.atividades = original; }
   });
 

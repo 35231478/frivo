@@ -26,6 +26,17 @@ async function montarLinhasMarca(config: ConfigApp, marca: MarcaFoto | undefined
   return linhas;
 }
 
+/**
+ * O caminho ÚNICO de toda foto do app: reduz no aparelho (~200–400 KB) e, se a empresa ligou, carimba
+ * a marca d'água (data/hora sempre; OS, endereço e coordenadas conforme as permissões). Vale para o
+ * botão de foto e para a câmera rápida — nenhuma foto entra por fora das permissões.
+ */
+export async function processarFoto(arquivo: Blob, config: ConfigApp, marca: MarcaFoto | undefined): Promise<string> {
+  const { reduzirImagem, aplicarMarcaDagua, FOTO_GALERIA } = await import("@/lib/imagem-cliente");
+  const { imagem } = await reduzirImagem(arquivo, FOTO_GALERIA.ladoMax, FOTO_GALERIA.qualidade);
+  return config.marcaDagua ? aplicarMarcaDagua(imagem.dataUrl, await montarLinhasMarca(config, marca)) : imagem.dataUrl;
+}
+
 export function BotaoFoto({ onFoto, rotulo = "Tirar foto", grande, desabilitado, className, marca }: {
   onFoto: (dataUrl: string) => void | Promise<void>; rotulo?: string; grande?: boolean; desabilitado?: boolean; className?: string;
   /** Dados da OS para a marca d'água (quando ligada na empresa) */
@@ -53,11 +64,7 @@ export function BotaoFoto({ onFoto, rotulo = "Tirar foto", grande, desabilitado,
         if (config.fotoSomenteCamera && !fotoTiradaAgora(f)) { setErro(MSG_SO_CAMERA); return; }
         setLendo(true); setErro(null);
         try {
-          const { reduzirImagem, aplicarMarcaDagua, FOTO_GALERIA } = await import("@/lib/imagem-cliente");
-          const { imagem } = await reduzirImagem(f, FOTO_GALERIA.ladoMax, FOTO_GALERIA.qualidade);
-          let dataUrl = imagem.dataUrl;
-          if (config.marcaDagua) dataUrl = await aplicarMarcaDagua(dataUrl, await montarLinhasMarca(config, marca));
-          await onFoto(dataUrl);
+          await onFoto(await processarFoto(f, config, marca));
         } catch {
           setErro("Não foi possível ler a foto. Tente de novo.");
         } finally { setLendo(false); }
