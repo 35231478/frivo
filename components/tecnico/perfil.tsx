@@ -9,6 +9,7 @@ import { PerfilClient } from "@/components/perfil/perfil-client";
 import { rotuloSync } from "@/components/tecnico/indicador-sync";
 import { useTecnico } from "@/components/tecnico/contexto";
 import { PreferenciaRota } from "@/components/tecnico/rota";
+import { TrocarSenha } from "@/components/tecnico/trocar-senha";
 import type { OperacaoFila } from "@/lib/tecnico/offline/tipos";
 import { horaBR } from "@/lib/fuso";
 
@@ -94,9 +95,11 @@ export function PerfilTecnico({ perfilInicial }: { perfilInicial: React.Componen
         <Car className="w-5 h-5 text-ink-muted" /> Checklist do veículo
       </a>
 
+      <TrocarSenha />
+
       <section className="bg-white rounded-card border border-surface-border">
         <button type="button" onClick={() => setDados((v) => !v)} aria-expanded={dados} className="w-full flex items-center justify-between p-4 font-semibold text-ink touch-target">
-          Meus dados e senha <ChevronDown className={cn("w-5 h-5 transition-transform", dados && "rotate-180")} />
+          Meus dados <ChevronDown className={cn("w-5 h-5 transition-transform", dados && "rotate-180")} />
         </button>
         {dados && <div className="border-t border-surface-border p-2"><PerfilClient initial={perfilInicial} /></div>}
       </section>
