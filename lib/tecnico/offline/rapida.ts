@@ -79,3 +79,11 @@ export class GuardaRapida {
     });
   }
 }
+
+const guardas = new WeakMap<BancoTecnico, GuardaRapida>();
+/** A guarda deste banco — uma só por aparelho aberto (câmera, conferência e OS escrevem pela mesma fila). */
+export function guardaDo(banco: BancoTecnico): GuardaRapida {
+  let g = guardas.get(banco);
+  if (!g) { g = new GuardaRapida(banco); guardas.set(banco, g); }
+  return g;
+}

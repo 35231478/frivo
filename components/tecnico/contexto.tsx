@@ -86,20 +86,20 @@ export type Vista =
   | { ver: "dia" }
   | { ver: "agenda" }
   | { ver: "perfil" }
-  | { ver: "os"; a: string; e?: string | null };
+  | { ver: "os"; a: string; e?: string | null; /** Abre já na câmera rápida (atalho do Meu dia) */ cam?: boolean };
 
 export function lerVista(search: string): Vista {
   const q = new URLSearchParams(search);
   const ver = q.get("ver");
   const a = q.get("a");
-  if (ver === "os" && a) return { ver: "os", a, e: q.get("e") };
+  if (ver === "os" && a) return { ver: "os", a, e: q.get("e"), ...(q.get("cam") === "1" && { cam: true }) };
   if (ver === "agenda" || ver === "perfil") return { ver };
   return { ver: "dia" };
 }
 
 export function urlDaVista(v: Vista): string {
   if (v.ver === "dia") return "/tecnico";
-  if (v.ver === "os") return `/tecnico?ver=os&a=${encodeURIComponent(v.a)}${v.e ? `&e=${encodeURIComponent(v.e)}` : ""}`;
+  if (v.ver === "os") return `/tecnico?ver=os&a=${encodeURIComponent(v.a)}${v.e ? `&e=${encodeURIComponent(v.e)}` : ""}${v.cam ? "&cam=1" : ""}`;
   return `/tecnico?ver=${v.ver}`;
 }
 
