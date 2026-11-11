@@ -11,6 +11,8 @@ import { ScannerQR } from "@/components/os/scanner-qr";
 import { BotaoFoto, Miniatura, ObservacaoVoz } from "@/components/tecnico/captura";
 import { irPara, useAtividade, useTecnico } from "@/components/tecnico/contexto";
 import { BotaoRota } from "@/components/tecnico/rota";
+import { ModalCadastroEquipamento } from "@/components/tecnico/cadastro-equipamento";
+import { MSG_SEM_UNIDADE } from "@/lib/tecnico/cadastro-equipamento";
 import { ConcluirSemEquipamento } from "@/components/os/concluir-sem-equipamento";
 import { srcFoto, TelaEquipamento } from "@/components/tecnico/equipamento";
 import { ROTULO_STATUS_ATIVIDADE } from "@/components/tecnico/meu-dia";
@@ -50,7 +52,8 @@ export function VistaOs({ atividadeId, equipamentoId }: { atividadeId: string; e
     );
   }
   const e = equipamentoId ? tela.equipamentos.find((q) => q.equipamento.id === equipamentoId) : null;
-  if (e) return <TelaEquipamento x={tela} e={e} registrar={registrar} endereco={retrato.cartao.endereco} />;
+  if (e) return <TelaEquipamento x={tela} e={e} registrar={registrar} endereco={retrato.cartao.endereco}
+    qr={retrato.equipamentosUnidade.find((u) => u.id === e.equipamento.id)?.qr?.codigo ?? null} />;
   return <ResumoOs r={retrato} x={tela} aEnviar={aEnviar} registrar={registrar} />;
 }
 
@@ -69,6 +72,9 @@ function ResumoOs({ r, x, aEnviar, registrar }: { r: RetratoAtividade; x: Execuc
   const so = x.bloqueada;
   const [scan, setScan] = useState(false);
   const [lista, setLista] = useState(false);
+  const [cadastro, setCadastro] = useState(false);
+  // "Permitir cadastrar equipamento em campo" (Equipes › App do colaborador): desligado, o botão nem aparece
+  const podeCadastrar = !so && config.cadastrarEquipamento && !!r.cadastro;
   const [adicional, setAdicional] = useState<AdicionalTela | "novo" | null>(null);
   const [concluir, setConcluir] = useState(false);
   const [fotoServico, setFotoServico] = useState(false);
@@ -80,7 +86,10 @@ function ResumoOs({ r, x, aEnviar, registrar }: { r: RetratoAtividade; x: Execuc
     setScan(false);
     const u = equipamentoDoQr(r, valor);
     // Sem sinal, o QR é resolvido no aparelho (lista da unidade); o servidor confere de novo ao sincronizar
-    if (!u && !navigator.onLine) { setAviso({ tipo: "erro", texto: "QR não é de um equipamento desta unidade (ou o cadastro é novo): vincule pela lista." }); return; }
+    if (!u && !navigator.onLine) {
+      const saida = podeCadastrar && r.cadastro?.unidadeId ? "vincule pela lista ou cadastre o equipamento." : "vincule pela lista.";
+      setAviso({ tipo: "erro", texto: `QR não é de um equipamento desta unidade (ou o cadastro é novo): ${saida}` }); return;
+    }
     await registrar([{ tipo: "scan", atividadeId, valor }]);
     if (u) { setAviso({ tipo: "ok", texto: `${u.titulo}: vinculado e marcado como atendido.` }); irPara({ ver: "os", a: atividadeId, e: u.id }); }
     else setAviso({ tipo: "ok", texto: "QR enviado: o escritório confere o equipamento ao sincronizar." });
@@ -145,6 +154,13 @@ function ResumoOs({ r, x, aEnviar, registrar }: { r: RetratoAtividade; x: Execuc
             <button type="button" onClick={() => setLista(true)} className="rounded-card border border-surface-border bg-white text-ink py-3 text-sm font-semibold inline-flex items-center justify-center gap-2 touch-target"><ListPlus className="w-5 h-5" /> Da lista</button>
           </div>
         )}
+        {/* Não está na unidade (nem pelo QR, nem na lista): cadastra em campo, já vinculado a esta OS */}
+        {podeCadastrar && (r.cadastro!.unidadeId ? (
+          <button type="button" onClick={() => setCadastro(true)} data-cadastrar-equipamento
+            className="w-full rounded-card border-2 border-dashed border-primary-300 text-primary-700 py-3 text-sm font-semibold inline-flex items-center justify-center gap-2 touch-target">
+            <Plus className="w-5 h-5" /> Cadastrar novo equipamento
+          </button>
+        ) : <p className="text-xs text-ink-muted" data-cadastro-sem-unidade>{MSG_SEM_UNIDADE}</p>)}
       </section>
 
       <FotosServico x={x} so={so} onAdicionar={() => setFotoServico(true)} registrar={registrar} />
@@ -182,7 +198,9 @@ function ResumoOs({ r, x, aEnviar, registrar }: { r: RetratoAtividade; x: Execuc
       )}
 
       {scan && <ScannerQR onFechar={() => setScan(false)} onLer={lerQr} />}
-      {lista && <ListaUnidade r={r} x={x} onFechar={() => setLista(false)} onVincular={async (ids) => { setLista(false); await registrar([{ tipo: "vincular", atividadeId, equipamentoIds: ids }]); }} />}
+      {lista && <ListaUnidade r={r} x={x} onFechar={() => setLista(false)} onVincular={async (ids) => { setLista(false); await registrar([{ tipo: "vincular", atividadeId, equipamentoIds: ids }]); }}
+        onCadastrar={podeCadastrar && r.cadastro!.unidadeId ? () => { setLista(false); setCadastro(true); } : undefined} />}
+      {cadastro && <ModalCadastroEquipamento r={r} x={x} endereco={c.endereco} onFechar={() => setCadastro(false)} registrar={registrar} />}
       {fotoServico && <ModalFotoServico x={x} endereco={c.endereco} onFechar={() => setFotoServico(false)} registrar={registrar} />}
       {adicional && <ModalAdicional x={x} r={r} a={adicional === "novo" ? null : adicional} onFechar={() => setAdicional(null)} registrar={registrar} />}
       {concluir && <ModalConcluir x={x} onFechar={() => setConcluir(false)} onConcluir={async (resumo) => {
@@ -289,7 +307,7 @@ function ModalFotoServico({ x, endereco, onFechar, registrar }: { x: ExecucaoTel
   );
 }
 
-function ListaUnidade({ r, x, onFechar, onVincular }: { r: RetratoAtividade; x: ExecucaoTela; onFechar: () => void; onVincular: (ids: string[]) => void }) {
+function ListaUnidade({ r, x, onFechar, onVincular, onCadastrar }: { r: RetratoAtividade; x: ExecucaoTela; onFechar: () => void; onVincular: (ids: string[]) => void; /** Com a permissão: o equipamento que não está na lista é cadastrado em campo */ onCadastrar?: () => void }) {
   const [busca, setBusca] = useState("");
   const [marcados, setMarcados] = useState<Set<string>>(new Set());
   const ja = new Set(x.equipamentos.map((e) => e.equipamento.id));
@@ -322,6 +340,11 @@ function ListaUnidade({ r, x, onFechar, onVincular }: { r: RetratoAtividade; x: 
         <button type="button" disabled={!marcados.size} onClick={() => onVincular([...marcados])} className="w-full rounded-card bg-primary-600 text-white py-3 font-semibold disabled:opacity-40 touch-target">
           Vincular {marcados.size || ""}
         </button>
+        {onCadastrar && (
+          <button type="button" onClick={onCadastrar} data-cadastrar-da-lista className="w-full py-3 text-sm font-semibold text-primary-700 inline-flex items-center justify-center gap-2 touch-target">
+            <Plus className="w-5 h-5" /> Não está na lista? Cadastrar novo
+          </button>
+        )}
       </div>
     </Modal>
   );

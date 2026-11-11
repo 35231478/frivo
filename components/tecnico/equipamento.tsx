@@ -37,6 +37,8 @@ interface Props {
   registrar: (ops: NovaOperacao[]) => Promise<void>;
   /** Endereço da OS (vem do cartão) para a marca d'água das fotos, quando ligada */
   endereco?: string | null;
+  /** Código do QR do equipamento (ex.: o número gerado no cadastro em campo), para o técnico anotar */
+  qr?: string | null;
 }
 
 /**
@@ -44,7 +46,7 @@ interface Props {
  * ajusta o que não está OK (Atenção pede foto + observação, que pode ser falada) → medições (número +
  * unidade, sem avaliar) → fotos DEPOIS → "Concluir equipamento" leva ao próximo. Tudo grava no aparelho.
  */
-export function TelaEquipamento({ x, e, registrar, endereco }: Props) {
+export function TelaEquipamento({ x, e, registrar, endereco, qr }: Props) {
   const atividadeId = x.atividade.id;
   const equipamentoId = e.equipamento.id;
   const so = x.bloqueada;
@@ -130,8 +132,9 @@ export function TelaEquipamento({ x, e, registrar, endereco }: Props) {
         </div>
         <h1 className="text-xl font-bold text-ink leading-tight">{e.equipamento.titulo}</h1>
         <p className="text-sm text-ink-muted">
-          {[e.equipamento.tipo?.nome, e.equipamento.tag && `TAG ${e.equipamento.tag}`, e.equipamento.local].filter(Boolean).join(" · ")}
+          {[e.equipamento.tipo?.nome, e.equipamento.tag && `TAG ${e.equipamento.tag}`, e.equipamento.local, qr].filter(Boolean).join(" · ")}
         </p>
+        {e.pendente && !e.vinculoId && <p className="text-xs text-atencao-texto" data-equipamento-no-aparelho>No aparelho: sobe sozinho quando houver sinal.</p>}
         <div className="flex items-center gap-2">
           <div className="h-2.5 flex-1 rounded-full bg-surface-page overflow-hidden">
             <div className={cn("h-full rounded-full transition-all", e.completo ? "bg-success-500" : "bg-primary-500")} style={{ width: `${ativos.length ? (feitos / ativos.length) * 100 : 0}%` }} />
