@@ -18,7 +18,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { PRESETS, montarPermissoes, permissoesTotais } from "@/lib/permissoes";
 import { destinoModoTecnico, ehTecnicoPuro, emModoTecnico } from "@/lib/tecnico/modo";
-import { enderecoEmLinha, horaMarcada, linkRota, ordenarDoDia } from "@/lib/tecnico/cartao";
+import { aplicarPrivacidade, enderecoEmLinha, horaMarcada, linkDoApp, linkRota, linkWaze, ordenarDoDia } from "@/lib/tecnico/cartao";
 import { BancoTecnico } from "@/lib/tecnico/offline/banco";
 import { MotorSync } from "@/lib/tecnico/offline/motor";
 import type { RetratoAtividade } from "@/lib/tecnico/offline/tipos";
@@ -69,8 +69,11 @@ function retrato(atividadeId = "aA"): RetratoAtividade {
 let online = true;
 let enviadas: { tipo: string; dados?: any; valor?: unknown; equipamentoIds?: string[]; itemId?: string }[] = [];
 const meuDia = { tecnico: { id: "t1", nome: "João Silva" }, dia: "2026-10-20", atividades: [cartao("aB", "08:30", "Padaria Pão Quente"), cartao("aA", "14:00", "Hospital Santa Luzia"), cartao("aG", null, "Escola Viva")], anteriores: [] };
+/** Segura a resposta do Meu dia (para ver a tela carregando) */
+let segurarMeuDia: Promise<void> | null = null;
 const fetchFalso = vi.fn(async (url: string, init?: RequestInit) => {
   if (!online) throw new TypeError("Failed to fetch");
+  if (segurarMeuDia && url === "/api/tecnico/meu-dia") await segurarMeuDia;
   const json = (c: unknown, status = 200) => new Response(JSON.stringify(c), { status, headers: { "content-type": "application/json" } });
   if (url === "/api/tecnico/meu-dia") return json(meuDia);
   if (url.startsWith("/api/tecnico/atividades/")) return json(retrato(decodeURIComponent(url.split("/").pop()!)));
@@ -93,7 +96,8 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   (globalThis as any).indexedDB = new IDBFactory();
-  online = true; enviadas = []; fetchFalso.mockClear();
+  online = true; enviadas = []; fetchFalso.mockClear(); segurarMeuDia = null;
+  window.localStorage.clear();
   banco = await BancoTecnico.abrir("uT");
   motor = new MotorSync(banco, { fetch: fetchFalso as unknown as typeof fetch, online: () => online });
   window.history.replaceState(null, "", "/tecnico");
@@ -233,6 +237,175 @@ describe("Meu dia", () => {
     await esperarAte(() => $$("[data-cartao]").length === 3, "cartões guardados");
     expect(caixa.textContent).toMatch(/Atualizado às \d\d:\d\d/);
     await esperarAte(() => situacao() === "offline", "offline");
+  });
+});
+
+describe("Meu dia — lapidado (Etapa 2a)", () => {
+  const abrirMeuDia = async (config?: any, n = 3) => {
+    const { MeuDia } = await import("@/components/tecnico/meu-dia");
+    await montar(createElement(MeuDia), config);
+    if (n) await esperarAte(() => $$("[data-cartao]").length === n, `${n} cartões`);
+  };
+
+  it("permissões do app: 'Exibir dados do cliente' DESLIGADO — cartão sem nome, unidade, endereço nem rota; o resto fica", async () => {
+    await abrirMeuDia(cfg({ exibirDadosCliente: false }));
+    const c = $("[data-cartao=aA]")!;
+    for (const oculto of ["Hospital Santa Luzia", "Av. Paulista", "Matriz", "Rota no mapa"]) expect(c.textContent, oculto).not.toContain(oculto);
+    expect(c.querySelector("h3")!.textContent).toBe("Preventiva"); // identifica pela OS, sem repetir o título
+    expect(c.querySelector("[data-linha-os]")!.textContent).toBe("OS-aA");
+    expect(c.querySelector("[data-endereco]")).toBeNull();
+    expect(c.querySelector("[data-rota]")).toBeNull();
+    // o que ele precisa para o dia continua: horário, situação, equipamentos — e o contato (outra chave)
+    expect(c.querySelector("[data-hora]")!.textContent).toBe("14:00");
+    expect(c.querySelector("[data-status]")!.textContent).toBe("Agendada");
+    expect(c.querySelector("[data-equipamentos]")!.textContent).toContain("2 equipamentos");
+    expect(c.querySelector("[data-ligar]")).not.toBeNull();
+  });
+
+  it("permissões do app: 'Exibir contatos' DESLIGADO — sem Ligar (a rota fica); as duas desligadas — sem barra de ações", async () => {
+    await abrirMeuDia(cfg({ exibirContatosCliente: false }));
+    const c = $("[data-cartao=aA]")!;
+    expect(c.querySelector("[data-ligar]")).toBeNull();
+    expect(c.textContent).not.toContain("Ligar");
+    expect(c.querySelector("[data-rota]")).not.toBeNull();
+    expect(c.textContent).toContain("Hospital Santa Luzia");
+    act(() => root.unmount()); caixa.remove();
+    await abrirMeuDia(cfg({ exibirDadosCliente: false, exibirContatosCliente: false }));
+    expect($$("[data-acoes-cartao]")).toEqual([]);
+    expect($$("a[href^='tel:']")).toEqual([]);
+  });
+
+  it("o servidor já mandou o cartão sem os dados (chave desligada depois da página aberta): a tela não quebra nem mostra vazio", async () => {
+    const original = meuDia.atividades;
+    meuDia.atividades = original.map((c) => aplicarPrivacidade(c, { exibirDadosCliente: false, exibirContatosCliente: false }));
+    try {
+      await abrirMeuDia(); // config da página ainda "tudo ligado"
+      const c = $("[data-cartao=aA]")!;
+      expect(c.querySelector("h3")!.textContent).toBe("Preventiva");
+      expect(c.querySelector("[data-linha-os]")!.textContent).toBe("OS-aA");
+      expect(c.querySelector("[data-acoes-cartao]")).toBeNull();
+    } finally { meuDia.atividades = original; }
+  });
+
+  it("carregando: esqueleto até a lista chegar", async () => {
+    let soltar!: () => void;
+    segurarMeuDia = new Promise((r) => { soltar = r; });
+    await abrirMeuDia(undefined, 0);
+    expect($("[data-carregando]")).not.toBeNull();
+    expect($$("[data-cartao]")).toEqual([]);
+    soltar();
+    await esperarAte(() => $$("[data-cartao]").length === 3, "lista chegou");
+    expect($("[data-carregando]")).toBeNull();
+  });
+
+  it("vazio: 'Nenhuma OS para hoje', sem barra de progresso, com atalho (≥44px) para a agenda", async () => {
+    const original = meuDia.atividades;
+    meuDia.atividades = [];
+    try {
+      await abrirMeuDia(undefined, 0);
+      await esperarAte(() => !!$("[data-dia-vazio]"), "estado vazio");
+      expect($("[data-dia-vazio]")!.textContent).toContain("Nenhuma OS para hoje");
+      expect($("[data-resumo-dia]")!.textContent).toBe("Nenhuma OS para hoje.");
+      expect($("[data-progresso-dia]")).toBeNull();
+      const atalho = $("[data-dia-vazio] button")!;
+      expect(atalho.className).toContain("touch-target");
+      await clicar(atalho);
+      expect(window.location.search).toBe("?ver=agenda");
+    } finally { meuDia.atividades = original; }
+  });
+
+  it("sem internet e sem nada guardado: explica e deixa tentar de novo (não quebra); o sinal volta e a lista aparece", async () => {
+    online = false;
+    await abrirMeuDia(undefined, 0);
+    await esperarAte(() => !!$("[data-sem-dados]"), "aviso sem dados");
+    expect($("[data-sem-dados]")!.textContent).toContain("Sem sinal e nada guardado ainda");
+    expect($$("[data-cartao]")).toEqual([]);
+    online = true;
+    await clicar($("[data-sem-dados] button"));
+    await esperarAte(() => $$("[data-cartao]").length === 3, "lista depois do sinal");
+    expect($("[data-sem-dados]")).toBeNull();
+  });
+
+  it("progresso do dia e a PRÓXIMA: conta o que ele já concluiu no aparelho (sem sinal) e diz que a lista é a guardada", async () => {
+    await abrirMeuDia();
+    // de início: nada concluído, a primeira do horário é a próxima
+    expect($("[data-progresso-dia]")!.getAttribute("data-progresso-dia")).toBe("0/3");
+    expect($("[data-resumo-dia]")!.textContent).toBe("3 OS para hoje, na ordem do horário.");
+    expect($$("[data-proxima]").map((c) => c.getAttribute("data-cartao"))).toEqual(["aB"]);
+    expect($("[data-cartao=aB]")!.textContent).toContain("Próxima");
+    expect($("[data-origem]")).toBeNull(); // veio do servidor: sem o aviso de "guardado no aparelho"
+    act(() => root.unmount()); caixa.remove();
+
+    online = false;
+    await motor.registrar([{ tipo: "concluir", atividadeId: "aB", dados: {} }]);
+    await abrirMeuDia();
+    expect($("[data-progresso-dia]")!.getAttribute("data-progresso-dia")).toBe("1/3");
+    expect($("[data-progresso-dia]")!.getAttribute("aria-valuenow")).toBe("1");
+    expect($("[data-resumo-dia]")!.textContent).toBe("3 OS para hoje, na ordem do horário · 1 concluída.");
+    expect($("[data-cartao=aB] [data-status]")!.textContent).toBe("Concluída");
+    expect($$("[data-proxima]").map((c) => c.getAttribute("data-cartao"))).toEqual(["aA"]);
+    expect($("[data-origem=aparelho]")!.textContent).toMatch(/^Guardado no aparelho · Atualizado às \d\d:\d\d$/);
+  });
+
+  it("selo de prioridade só quando merece destaque; toque ≥44px no cartão e nas ações", async () => {
+    const original = meuDia.atividades;
+    meuDia.atividades = [cartao("aB", "08:30", "Padaria Pão Quente", { prioridade: "URGENTE" }), cartao("aA", "14:00", "Hospital Santa Luzia")];
+    try {
+      await abrirMeuDia(undefined, 2);
+      expect($("[data-cartao=aB] [data-prioridade]")!.textContent).toBe("Urgente");
+      expect($("[data-cartao=aA] [data-prioridade]")).toBeNull();
+      for (const el of [$("[data-cartao=aA] button"), $("[data-cartao=aA] [data-rota]"), $("[data-cartao=aA] [data-ligar]")]) expect(el!.className).toContain("touch-target");
+    } finally { meuDia.atividades = original; }
+  });
+
+  it("ROTA: na 1ª vez pergunta o app (Google Maps ou Waze), lembra neste aparelho e passa a abrir direto; o Perfil troca", async () => {
+    const naoNavegar = (e: Event) => e.preventDefault(); // o teste não sai da página
+    document.addEventListener("click", naoNavegar, true);
+    try {
+      await abrirMeuDia();
+      const link = (id = "aA") => $<HTMLAnchorElement>(`[data-cartao=${id}] [data-rota]`)!;
+      expect(link().href).toContain("google.com/maps/dir/"); // link de verdade mesmo antes de escolher
+      await clicar(link());
+      expect($("[data-escolher-rota]")).not.toBeNull();
+      expect($<HTMLAnchorElement>("[data-abrir-rota=google]")!.href).toContain("google.com/maps/dir/");
+      expect($<HTMLAnchorElement>("[data-abrir-rota=waze]")!.href).toBe("https://waze.com/ul?ll=-23.5%2C-46.6&navigate=yes");
+      await clicar($("[data-abrir-rota=waze]"));
+      expect(window.localStorage.getItem("frivo:app-rota")).toBe("waze");
+      expect($("[data-escolher-rota]")).toBeNull();
+      // todos os cartões passam a abrir o Waze direto (sem perguntar)
+      expect(link().href).toBe("https://waze.com/ul?ll=-23.5%2C-46.6&navigate=yes");
+      expect(link("aB").getAttribute("data-app-rota")).toBe("waze");
+      await clicar(link());
+      expect($("[data-escolher-rota]")).toBeNull();
+      act(() => root.unmount()); caixa.remove();
+
+      // Perfil: troca o app lembrado, ou volta a perguntar
+      const { PreferenciaRota } = await import("@/components/tecnico/rota");
+      await montar(createElement(PreferenciaRota));
+      expect($("[data-opcao-rota=waze]")!.getAttribute("aria-pressed")).toBe("true");
+      await clicar($("[data-opcao-rota=google]"));
+      expect(window.localStorage.getItem("frivo:app-rota")).toBe("google");
+      expect($("[data-opcao-rota=google]")!.getAttribute("aria-pressed")).toBe("true");
+      await clicar($("[data-opcao-rota=perguntar]"));
+      expect(window.localStorage.getItem("frivo:app-rota")).toBeNull();
+    } finally { document.removeEventListener("click", naoNavegar, true); }
+  });
+
+  it("regras puras: link do Waze (coordenada ou endereço), app escolhido e privacidade do cartão", () => {
+    const comCoord = linkRota({ latitude: -23.56, longitude: -46.65 })!;
+    const comEndereco = linkRota({ logradouro: "Rua das Flores", numero: "10", cidade: "Santos", estado: "SP" })!;
+    expect(linkWaze(comCoord)).toBe("https://waze.com/ul?ll=-23.56%2C-46.65&navigate=yes");
+    expect(linkWaze(comEndereco)).toBe(`https://waze.com/ul?q=${encodeURIComponent("Rua das Flores, 10 — Santos/SP")}&navigate=yes`);
+    expect([linkWaze(null), linkWaze(""), linkWaze("não é url"), linkWaze("https://www.google.com/maps")]).toEqual([null, null, null, null]);
+    expect(linkDoApp(comCoord, "google")).toBe(comCoord);
+    expect(linkDoApp(comCoord, "waze")).toBe(linkWaze(comCoord));
+    expect(linkDoApp("https://www.google.com/maps", "waze")).toBe("https://www.google.com/maps"); // sem destino: fica no Google
+
+    const c = cartao("aA", "14:00", "Hospital Santa Luzia");
+    expect(aplicarPrivacidade(c, { exibirDadosCliente: true, exibirContatosCliente: true })).toEqual(c);
+    expect(aplicarPrivacidade(c, { exibirDadosCliente: false, exibirContatosCliente: true }))
+      .toEqual({ ...c, cliente: "", unidade: null, endereco: "", rota: null, descricao: "" });
+    expect(aplicarPrivacidade(c, { exibirDadosCliente: true, exibirContatosCliente: false })).toEqual({ ...c, telefone: null });
   });
 });
 

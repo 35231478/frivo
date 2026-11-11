@@ -175,6 +175,35 @@ describe.skipIf(!URL_PG)("app do técnico: Meu dia, escopo e sincronização off
     expect((await chamar("tecnico/meu-dia", "GET")).json).toMatchObject({ tecnico: null, atividades: [], aviso: expect.stringContaining("não está ligado a um técnico") });
   });
 
+  it("permissões do app (Equipes › App do colaborador): dado do cliente oculto NEM SAI do servidor — Meu dia, Agenda e a OS", async () => {
+    comoTecnico();
+    const cartoes = async () => {
+      const dia = (await chamar("tecnico/meu-dia", "GET")).json;
+      const ag = (await chamar("tecnico/agenda", "GET", {}, undefined, "?dias=3")).json;
+      const os = (await chamar("tecnico/atividades/[atividadeId]", "GET", { atividadeId: "aA" })).json;
+      return [dia.atividades.find((a: any) => a.atividadeId === "aA"), dia.anteriores[0], ag.dias[0].atividades.find((a: any) => a.atividadeId === "aA"), os.cartao];
+    };
+    try {
+      // "Exibir dados do cliente" desligado: sem nome, unidade, endereço, rota e descrição (o contato segue)
+      await prisma.configuracao.upsert({ where: { empresaId: "e1" }, create: { empresaId: "e1", appExibirDadosCliente: false }, update: { appExibirDadosCliente: false, appExibirContatosCliente: true } });
+      for (const c of await cartoes()) {
+        expect(c).toMatchObject({ cliente: "", unidade: null, endereco: "", rota: null, descricao: "" });
+        expect(JSON.stringify(c)).not.toMatch(/Hospital|Paulista|maps/);
+      }
+      const [a] = await cartoes();
+      // o que ele precisa para trabalhar continua: OS, título, horário, equipamentos, situação
+      expect(a).toMatchObject({ osNumero: "OS-0001", titulo: "Preventiva mensal", hora: "14:00", equipamentos: 2, status: "AGENDADA", telefone: "1133334444" });
+      // "Exibir contatos" desligado: sem telefone (os dados voltam)
+      await prisma.configuracao.update({ where: { empresaId: "e1" }, data: { appExibirDadosCliente: true, appExibirContatosCliente: false } });
+      for (const c of await cartoes()) expect(c.telefone).toBeNull();
+      expect((await cartoes())[0]).toMatchObject({ cliente: "Hospital Santa Luzia", rota: expect.stringContaining("google.com/maps") });
+    } finally {
+      await prisma.configuracao.deleteMany({ where: { empresaId: "e1" } });
+    }
+    // sem configuração (padrão): tudo aparece
+    expect((await cartoes())[0]).toMatchObject({ cliente: "Hospital Santa Luzia", telefone: "1133334444", endereco: expect.stringContaining("Av. Paulista") });
+  });
+
   it("escopo no servidor: técnico puro lê/grava só as atividades dele; o escritório vê todas; outra empresa não vê", async () => {
     comoTecnico();
     const x = await exec("aA");
