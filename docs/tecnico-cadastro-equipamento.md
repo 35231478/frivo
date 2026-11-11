@@ -111,6 +111,14 @@ Botões com alvo de toque de 44 px; textos curtos.
 - **Escopo:** só o técnico da atividade cadastra nela; atividade concluída não aceita.
 - Nenhuma permissão do painel foi alterada.
 
+## Fora do cadastro, mas no mesmo PR
+
+- **Modal compartilhado:** o cabeçalho fixo ganhou camada própria. Ao rolar um formulário comprido,
+  miniaturas e seletores passavam por cima do título — apareceu nos prints deste formulário e já
+  acontecia em outros modais. Mudança de uma classe, sem efeito no conteúdo.
+- **Tela do equipamento no app:** mostra o código do QR (para o técnico anotar) e, enquanto o cadastro
+  não subiu, "No aparelho: sobe sozinho quando houver sinal."
+
 ## Decisões que tomei — confira
 
 1. **OS sem endereço definido:** se o cliente tem **uma** unidade, o equipamento nasce nela; se tem
@@ -129,7 +137,7 @@ Botões com alvo de toque de 44 px; textos curtos.
 - `cadastro-campo-pg` (21, Postgres real): criar + vincular, gravações seguintes no mesmo envio,
   reenvio, tipo, unidade, QR (etiqueta avulsa × número novo depois do 9999), série repetida, permissão
   desligada, escopo, o retrato, conferência de série com privacidade, leitura da etiqueta.
-- `cadastro-campo-ui` (31): onde o botão aparece, o formulário, sem sinal, com sinal, QR, permissões do app.
+- `cadastro-campo-ui` (32): onde o botão aparece, o formulário, sem sinal, com sinal, QR, permissões do app.
 - `sql-app-cadastrar-equipamento` (5): o SQL de produção rodado num Postgres de verdade.
 - `config-app`: a lista de permissões do app passou de 11 para 12 (expectativa atualizada de propósito).
 
