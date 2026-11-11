@@ -18,7 +18,7 @@ import { MSG_SEM_EXECUTOR_TELA } from "@/lib/atividade-equipe";
 import { GavetaEquipamentos } from "@/components/os/gaveta-equipamentos";
 import { detalheEquipamento, rotuloEquipamento, type EquipamentoResumo } from "@/lib/os/vincular-equipamentos";
 import { InputData } from "@/components/ui/input-data";
-import { InputDataHora } from "@/components/ui/input-data-hora";
+import { InputDataHora, MSG_HORA_INVALIDA } from "@/components/ui/input-data-hora";
 import { paraLocalBR } from "@/lib/fuso";
 import { AlertaPerdasCliente, type PerdasCliente } from "@/components/financeiro/alerta-perdas-cliente";
 
@@ -63,6 +63,9 @@ export default function NovaOrdemPage() {
   const [tiposOs, setTiposOs] = useState<{ id: string; nome: string; ativo: boolean }[]>([]);
   const [tipoOsId, setTipoOsId] = useState("");
   const [agendarPara, setAgendarPara] = useState("");
+  // Data escolhida sem hora válida: não salva (nada de 08:00 escondido nem de hora anterior valendo)
+  const [horaRuim, setHoraRuim] = useState<string | null>(null);
+  const aoProblemaHora = (p: string | null) => { setHoraRuim(p); if (!p) setErro((e) => (e === MSG_HORA_INVALIDA ? "" : e)); };
   const [equipamentoId, setEquipamentoId] = useState("");
   const [equipamentos, setEquipamentos] = useState<EquipItem[]>([]);
   // Equipamentos atendidos (opcional na abertura; dá para vincular na execução) — escolhidos na gaveta
@@ -132,6 +135,7 @@ export default function NovaOrdemPage() {
 
   async function aceitarSolicitacao() {
     if (!solicitacao) return;
+    if (horaRuim) { setErro(horaRuim); return; }
     if (!dataHora) { setErro("Escolha a data e a hora do atendimento."); return; }
     if (form.descricao.trim().length < 5) { setErro("Descrição muito curta."); return; }
     if (!temExecutor(execucao)) { setFaltaExecutor(true); setErro(MSG_SEM_EXECUTOR_TELA); return; }
@@ -157,6 +161,7 @@ export default function NovaOrdemPage() {
   async function salvar() {
     if (!clienteId || !form.descricao.trim()) { setErro("Cliente e descrição são obrigatórios."); return; }
     if (!temExecutor(execucao)) { setFaltaExecutor(true); setErro(MSG_SEM_EXECUTOR_TELA); return; }
+    if (horaRuim) { setErro(horaRuim); return; }
     setErro(""); setSalvando(true);
     try {
       const res = await fetch("/api/ordens", {
@@ -255,12 +260,12 @@ export default function NovaOrdemPage() {
             </FormField>
             {solicitacao ? (
               <FormField label="Data e hora do atendimento" required>
-                <InputDataHora aria-label="Data e hora do atendimento" value={dataHora} onChange={setDataHora} />
+                <InputDataHora aria-label="Data e hora do atendimento" value={dataHora} onChange={setDataHora} onProblema={aoProblemaHora} />
               </FormField>
             ) : (
               // Data e hora da 1ª atividade (é ela que aparece no calendário)
               <FormField label="Agendar para" dica="Opcional. Data e hora da primeira atividade, exibida no calendário.">
-                <InputDataHora aria-label="Agendar para" value={agendarPara} onChange={setAgendarPara} />
+                <InputDataHora aria-label="Agendar para" value={agendarPara} onChange={setAgendarPara} onProblema={aoProblemaHora} />
               </FormField>
             )}
           </FormGrid>

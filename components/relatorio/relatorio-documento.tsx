@@ -4,8 +4,8 @@ import {
   cn,
 } from "@/lib/utils";
 import { EquipamentosTabela, type EquipamentoInfo } from "@/components/relatorio/cabecalho-relatorio";
-import { BlocosEquipamentos, SecaoAdicionais } from "@/components/relatorio/relatorio-os-documento";
-import type { AdicionalRelatorio, BlocoEquipamento } from "@/lib/relatorio-os/dados";
+import { BlocosEquipamentos, SecaoAdicionais, SecaoFotosServico } from "@/components/relatorio/relatorio-os-documento";
+import type { AdicionalRelatorio, BlocoEquipamento, FotoRelatorio } from "@/lib/relatorio-os/dados";
 import { nomesTecnicosAtividade, textoTecnicosAtividade } from "@/lib/atividade-equipe";
 
 interface Resposta { resposta: string | null; arquivoUrl: string | null; campo: { label: string; tipo: string } }
@@ -42,6 +42,8 @@ export interface RelatorioDocumentoProps {
   blocos?: BlocoEquipamento[];
   /** Serviços adicionais pedidos na visita (destacados) */
   adicionais?: AdicionalRelatorio[];
+  /** Fotos do serviço (app) que não são de um equipamento atendido */
+  fotosServico?: FotoRelatorio[];
 }
 
 function n(v: unknown): number { return typeof v === "number" ? v : Number(v ?? 0); }
@@ -56,7 +58,7 @@ function enderecoStr(e: any): string {
   return p.join(" — ");
 }
 
-export function RelatorioDocumento({ relatorio, empresa, os, equipamentos, blocos, adicionais = [] }: RelatorioDocumentoProps) {
+export function RelatorioDocumento({ relatorio, empresa, os, equipamentos, blocos, adicionais = [], fotosServico = [] }: RelatorioDocumentoProps) {
   // Todos os técnicos das atividades (responsáveis e membros das equipes)
   const equipe = [...new Set(os.atividades.flatMap((a) => nomesTecnicosAtividade(a)))];
   const tipos = [...new Set(os.atividades.map((a) => a.tipoOs?.nome).filter(Boolean))] as string[];
@@ -131,6 +133,7 @@ export function RelatorioDocumento({ relatorio, empresa, os, equipamentos, bloco
       {/* EQUIPAMENTOS ATENDIDOS — ambiente e equipamento separados (tabela compartilhada) */}
       {blocos ? <BlocosEquipamentos blocos={blocos} /> : <EquipamentosTabela equipamentos={equipamentos} unidadeNome={os.unidade?.nome} />}
       <SecaoAdicionais adicionais={adicionais} fotos interna={false} />
+      <SecaoFotosServico fotos={fotosServico} />
 
       {/* RELATÓRIO TÉCNICO */}
       <div className="py-4 border-b border-surface-border">

@@ -2,6 +2,7 @@ import { statusVisualReceber } from "@/lib/financeiro-status";
 import { atividadeEncerrada, situacaoPrazo, textoPrazo } from "@/lib/os/prazos";
 import { medicaoValida, resumoStatus, type EstagioOs } from "@/lib/os/status";
 import { aDevolver, semConsumoInformado, type MaterialSeparavel } from "@/lib/estoque/separacao";
+import { contarEquipamentosAtendidos } from "@/lib/os/equipamentos-atendidos";
 
 /**
  * A "central de controle" da OS em dados: tudo o que o cabeçalho e o Resumo mostram para
@@ -12,10 +13,13 @@ export interface AtividadeCentral {
   id: string; titulo: string; status: string;
   dataAgendada: Date | string | null; prazo: Date | string | null;
   tecnico?: { nome: string } | null; equipe?: { nome: string } | null; tecnicosEquipe?: unknown[];
-  equipamentos?: { feito: boolean }[];
+  /** `equipamentoId` identifica o equipamento: o mesmo, atendido em duas atividades, conta uma vez */
+  equipamentos?: { feito: boolean; equipamentoId?: string | null }[];
 }
 export interface OsCentralEntrada {
   status: string; statusManual: boolean; previsaoConclusao: Date | string | null;
+  /** Equipamento principal da OS (OS antiga, concluída sem equipamento vinculado: era ele o atendido) */
+  equipamentoId?: string | null;
   atividades: AtividadeCentral[];
   medicoes: {
     status: string; valorTotal: unknown;
@@ -67,7 +71,15 @@ export function centralDaOs(os: OsCentralEntrada, agora: Date = new Date()) {
 
   const ativas = os.atividades.filter((a) => a.status !== "CANCELADA");
   const concluidas = ativas.filter((a) => a.status === "CONCLUIDA").length;
-  const equipamentosAtendidos = ativas.reduce((n, a) => n + (a.equipamentos ?? []).filter((e) => e.feito).length, 0);
+  // Equipamento DISTINTO — a mesma conta do card "Equipamentos atendidos" e do relatório (antes somava
+  // os vínculos: o mesmo equipamento atendido em duas atividades aparecia como 2)
+  const equipamentosAtendidos = contarEquipamentosAtendidos(
+    os.atividades.map((a, i) => ({
+      status: a.status,
+      equipamentos: (a.equipamentos ?? []).map((e, j) => ({ feito: e.feito, equipamento: { id: e.equipamentoId ?? `sem-id:${i}:${j}` } })),
+    })),
+    os.equipamentoId ?? null, os.status === "CONCLUIDA",
+  );
 
   // Valor: orçado = itens da OS + orçamentos vinculados APROVADOS (menos o de origem, cujos itens
   // já vieram para a OS); medido = medições válidas

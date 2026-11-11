@@ -85,9 +85,10 @@ describe("InputDataHora (navegador em Nova York)", () => {
     await digitar(hora, "2560");
     expect(hora.getAttribute("aria-invalid")).toBe("true");
     expect(emitidos.length).toBe(antes);
-    // apagar a hora (com a data escolhida) volta para a hora padrão 08:00 de Brasília
+    // apagar a hora (com a data escolhida) NÃO volta mais para 08:00 escondido: nada novo é gravado
+    // (o formulário é avisado e não salva — ver acabamento-hora-ui)
     await digitar(hora, "");
-    expect(emitidos.at(-1)).toBe("2026-10-30T11:00:00.000Z");
+    expect(emitidos.length).toBe(antes);
     // apagar a data limpa o valor
     await digitar(dia, "");
     expect(emitidos.at(-1)).toBe("");

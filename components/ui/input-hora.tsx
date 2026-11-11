@@ -3,20 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { horaValida, mascararHora } from "@/components/ui/input-data-hora";
+import { completarHora, horaValida, mascararHora } from "@/components/ui/input-data-hora";
 
-/**
- * O que foi digitado vira "hh:mm" ao sair do campo: "9" → 09:00, "14" → 14:00, "930" → 09:30,
- * "1830" → 18:30. Devolve null quando não dá uma hora que existe (ex.: "25", "9:7").
- */
-export function completarHora(digitado: string): string | null {
-  const n = digitado.replace(/\D/g, "");
-  if (!n) return null;
-  const tentativas = n.length <= 2 ? [`${n.padStart(2, "0")}:00`]
-    : n.length === 3 ? [`0${n[0]}:${n.slice(1)}`]
-      : [`${n.slice(0, 2)}:${n.slice(2, 4)}`];
-  return tentativas.find(horaValida) ?? null;
-}
+export { completarHora };
 
 /**
  * Hora sempre em hh:mm de 24 horas — no lugar do <input type="time"> nativo, que num navegador em
@@ -25,13 +14,15 @@ export function completarHora(digitado: string): string | null {
  * não existe sai como "" (nunca fica valendo, calada, a hora anterior). Ao sair do campo completa o
  * que der ("9" → 09:00) e marca em vermelho o que não é hora.
  */
-export function InputHora({ value, onChange, id, className, disabled, placeholder = "hh:mm", "aria-label": ariaLabel }: {
+export function InputHora({ value, onChange, id, className, disabled, invalido = false, placeholder = "hh:mm", "aria-label": ariaLabel }: {
   /** "HH:mm" ou "" */
   value: string;
   onChange: (hora: string) => void;
   id?: string;
   className?: string;
   disabled?: boolean;
+  /** O formulário exige a hora e ela não veio (ex.: tentou salvar com o campo vazio): marca em vermelho */
+  invalido?: boolean;
   placeholder?: string;
   "aria-label"?: string;
 }) {
@@ -47,7 +38,7 @@ export function InputHora({ value, onChange, id, className, disabled, placeholde
   }, [value]);
   const entregar = (h: string) => { if (h !== entregue.current) { entregue.current = h; onChange(h); } };
 
-  const invalida = !!texto && !horaValida(texto) && (saiu || texto.length === 5);
+  const invalida = (!!texto && !horaValida(texto) && (saiu || texto.length === 5)) || (invalido && !horaValida(texto));
 
   return (
     <div className={cn("relative", className)} data-input-hora-campo>

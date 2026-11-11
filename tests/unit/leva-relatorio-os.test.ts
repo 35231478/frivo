@@ -472,7 +472,7 @@ describe("tela Configurações › Impressão da OS", () => {
     salvarConfig(comConfig({ fotos: { ativo: false, cliente: true }, tempos: { ativo: true, cliente: true } }));
     const h = await tela();
     expect(attrs(h, "data-secao")).toEqual(SECOES_RELATORIO.map((s) => s.id));
-    expect(h).toMatch(/aria-checked="false" aria-label="Incluir Fotos dos equipamentos"/);
+    expect(h).toMatch(/aria-checked="false" aria-label="Incluir Fotos da execução"/);
     expect(h).toContain('data-conta="cliente">9<');
     expect(h).toContain('data-conta="interna">10<');
     expect(h).not.toContain("data-somente-leitura");

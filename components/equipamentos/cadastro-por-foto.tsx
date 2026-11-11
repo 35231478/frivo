@@ -15,7 +15,7 @@ import { ClienteCombobox } from "@/components/ui/cliente-combobox";
 import { SelectCadastroRapido, type CampoRapido, type OpcaoCadastro } from "@/components/ui/select-cadastro-rapido";
 import { UNIDADE } from "@/components/cadastro-rapido/definicoes";
 import { reduzirImagem, type QualidadeImagem } from "@/lib/imagem-cliente";
-import { AvisoSerieDuplicada } from "@/components/equipamentos/aviso-serie-duplicada";
+import { AvisoSerieDuplicada, type ItemLeva } from "@/components/equipamentos/aviso-serie-duplicada";
 import { SlotFoto } from "@/components/ui/slot-foto";
 import { hrefSecaoConfig } from "@/lib/navegacao/configuracoes";
 
@@ -106,6 +106,9 @@ export function CadastroPorFoto() {
   const [tiposCustom, setTiposCustom] = useState<TipoCustom[]>([]);
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState<{ id: string; qr: string | null; avisoQr?: string } | null>(null);
+  // A LEVA: o que já foi cadastrado nesta sequência ("Cadastrar outro") — para avisar na hora quando a
+  // mesma etiqueta é fotografada duas vezes. "Cadastrar outro" não limpa esta lista.
+  const [leva, setLeva] = useState<ItemLeva[]>([]);
 
   const inputPlaca = useRef<HTMLInputElement>(null);
 
@@ -283,6 +286,8 @@ export function CadastroPorFoto() {
       const d = await res.json().catch(() => ({}));
       if (!res.ok) { setErroEtapa(d.erro ?? "Não foi possível salvar o equipamento."); return; }
       setSalvo({ id: d.id, qr: d.qrcode?.codigo ?? null, avisoQr: d.avisoQr });
+      const serie = valores.numero_serie.trim();
+      if (serie && d.id) setLeva((l) => [...l, { id: d.id, numeroSerie: serie, descricao: [rotuloTipo(valores.tipo), [valores.marca.trim(), valores.modelo.trim()].filter(Boolean).join(" ")].filter(Boolean).join(" · ") }]);
       setEtapa("pronto");
     } catch {
       setErroEtapa("Sem conexão. Seus dados continuam aqui — tente salvar de novo.");
@@ -436,6 +441,8 @@ export function CadastroPorFoto() {
                 </FormField>
               )}
             </div>
+            {/* Logo depois da leitura: a mesma etiqueta fotografada duas vezes aparece aqui, antes de seguir */}
+            {lidosPelaIa.has("numero_serie") && <AvisoSerieDuplicada numero={valores.numero_serie} leva={leva} />}
             {faltantes.length > 0 && (
               <p className="text-xs text-ink-muted bg-surface-alt rounded-lg px-3 py-2" data-nao-lidos>
                 Não lidos pela IA: <strong>{faltantes.map((c) => ROTULO[c]).join(", ")}</strong>. Serão solicitados a seguir; os opcionais podem ser pulados.
@@ -537,7 +544,7 @@ export function CadastroPorFoto() {
                 </div>
               ))}
             </dl>
-            <AvisoSerieDuplicada numero={valores.numero_serie} />
+            <AvisoSerieDuplicada numero={valores.numero_serie} leva={leva} />
             <div className="flex gap-2 text-xs">
               <button type="button" onClick={() => { setFaltantes(PERGUNTAS.map((p) => p.campo)); setIdxPergunta(0); setEtapa("faltantes"); }} className="inline-flex items-center gap-1 text-primary-600 hover:underline"><Pencil className="w-3 h-3" /> Corrigir dados</button>
               <button type="button" onClick={() => setEtapa("local")} className="inline-flex items-center gap-1 text-primary-600 hover:underline"><Pencil className="w-3 h-3" /> Corrigir local</button>

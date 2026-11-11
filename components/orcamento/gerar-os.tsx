@@ -7,7 +7,7 @@ import { ClipboardList, ClipboardPlus, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { FormField } from "@/components/ui/form-field";
-import { InputDataHora } from "@/components/ui/input-data-hora";
+import { InputDataHora, MSG_HORA_INVALIDA } from "@/components/ui/input-data-hora";
 import { Dica } from "@/components/ui/dica";
 import { toast } from "@/components/ui/avisos";
 import { SeletorExecucao, VALOR_EXECUCAO_VAZIO, corpoExecucao, temExecutor, useOpcoesExecucao, type ValorExecucao } from "@/components/os/seletor-execucao";
@@ -33,6 +33,7 @@ export function GerarOs({ orcamentoId, codigo, itens, os, podeCriar, podeVer }: 
   const [aberto, setAberto] = useState(false);
   const [execucao, setExecucao] = useState<ValorExecucao>(VALOR_EXECUCAO_VAZIO);
   const [agendarPara, setAgendarPara] = useState("");
+  const [horaRuim, setHoraRuim] = useState<string | null>(null);
   const [faltaExecutor, setFaltaExecutor] = useState(false);
   const [erro, setErro] = useState("");
   const [gerando, setGerando] = useState(false);
@@ -57,6 +58,7 @@ export function GerarOs({ orcamentoId, codigo, itens, os, podeCriar, podeVer }: 
 
   async function gerar() {
     if (!temExecutor(execucao)) { setFaltaExecutor(true); setErro(MSG_SEM_EXECUTOR_TELA); return; }
+    if (horaRuim) { setErro(horaRuim); return; }
     setErro(""); setGerando(true);
     try {
       const r = await fetch(`/api/orcamentos/${orcamentoId}/gerar-os`, {
@@ -95,7 +97,8 @@ export function GerarOs({ orcamentoId, codigo, itens, os, podeCriar, podeVer }: 
               onChange={(v) => { setExecucao(v); if (temExecutor(v)) { setFaltaExecutor(false); setErro(""); } }} erro={faltaExecutor} />
           </FormField>
           <FormField label="Agendar para" dica="Opcional. Data e hora da primeira atividade, exibida no calendário.">
-            <InputDataHora aria-label="Agendar para" value={agendarPara} onChange={setAgendarPara} />
+            <InputDataHora aria-label="Agendar para" value={agendarPara} onChange={setAgendarPara}
+              onProblema={(p) => { setHoraRuim(p); if (!p) setErro((e) => (e === MSG_HORA_INVALIDA ? "" : e)); }} />
           </FormField>
           {erro && <p role="alert" className="text-sm text-atrasado-texto" data-erro-gerar-os>{erro}</p>}
           <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-1">
