@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { horaValida, mascararHora } from "@/components/ui/input-data-hora";
@@ -21,8 +21,9 @@ export function completarHora(digitado: string): string | null {
 /**
  * Hora sempre em hh:mm de 24 horas — no lugar do <input type="time"> nativo, que num navegador em
  * inglês mostra 12 h com AM/PM. Para fora trabalha com "HH:mm" (ou "" vazio), o mesmo valor que o
- * campo nativo entregava: troca direta. Só avisa a mudança com hora completa e válida (ou ao limpar);
- * ao sair do campo completa o que der ("9" → 09:00) e marca em vermelho o que não é hora.
+ * campo nativo entregava: troca direta — hora completa e válida sai como "HH:mm"; incompleta ou que
+ * não existe sai como "" (nunca fica valendo, calada, a hora anterior). Ao sair do campo completa o
+ * que der ("9" → 09:00) e marca em vermelho o que não é hora.
  */
 export function InputHora({ value, onChange, id, className, disabled, placeholder = "hh:mm", "aria-label": ariaLabel }: {
   /** "HH:mm" ou "" */
@@ -36,8 +37,15 @@ export function InputHora({ value, onChange, id, className, disabled, placeholde
 }) {
   const [texto, setTexto] = useState(value ?? "");
   const [saiu, setSaiu] = useState(false);
-  // Valor vindo de fora (reset/edição) prevalece
-  useEffect(() => { setTexto(value ?? ""); setSaiu(false); }, [value]);
+  // O último valor que este campo entregou: só o que vem DE FORA (reset/edição) troca o texto —
+  // o "" de uma hora ainda incompleta não apaga o que a pessoa está digitando
+  const entregue = useRef(value ?? "");
+  useEffect(() => {
+    const v = value ?? "";
+    if (v === entregue.current) return;
+    entregue.current = v; setTexto(v); setSaiu(false);
+  }, [value]);
+  const entregar = (h: string) => { if (h !== entregue.current) { entregue.current = h; onChange(h); } };
 
   const invalida = !!texto && !horaValida(texto) && (saiu || texto.length === 5);
 
@@ -50,13 +58,12 @@ export function InputHora({ value, onChange, id, className, disabled, placeholde
         onChange={(e) => {
           const h = mascararHora(e.target.value);
           setTexto(h); setSaiu(false);
-          if (h === "") onChange("");
-          else if (horaValida(h)) onChange(h);
+          entregar(horaValida(h) ? h : "");
         }}
         onBlur={() => {
           if (!texto || horaValida(texto)) return;
           const completa = completarHora(texto);
-          if (completa) { setTexto(completa); onChange(completa); } else setSaiu(true);
+          if (completa) { setTexto(completa); entregar(completa); } else setSaiu(true);
         }}
         className={cn(
           "w-full bg-white border rounded-lg pl-3 pr-8 py-2 text-sm text-ink tabular-nums focus:outline-none focus:ring-4 transition-all disabled:opacity-60",
