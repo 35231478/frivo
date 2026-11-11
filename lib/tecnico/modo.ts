@@ -22,6 +22,9 @@ export function ehTecnicoPuro(role: string | null | undefined, permissoes: Permi
   return permissoesExcedentes(PRESETS.TECNICO, permissoes).length === 0;
 }
 
+/** O técnico do app não troca o próprio e-mail de login (o vínculo com as OS dele é por esse e-mail) */
+export const MSG_EMAIL_DO_TECNICO = "O e-mail de login é trocado pelo escritório, na ficha do colaborador.";
+
 export interface UsuarioModo { role?: string | null; permissoes?: Permissoes | null; tecnicoId?: string | null }
 
 /**

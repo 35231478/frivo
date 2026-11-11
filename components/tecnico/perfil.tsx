@@ -109,7 +109,8 @@ export function PerfilTecnico({ perfilInicial }: { perfilInicial: React.Componen
           // No app, tudo o que se toca em "Meus dados" tem pelo menos 44 px (a tela do painel é mais compacta)
           <div className="border-t border-surface-border p-2 [&_button]:min-h-[44px] [&_input]:min-h-[44px]" data-meus-dados-app>
             {/* topoFixo={false}: a faixa de "Meus dados" não gruda por cima do topo do app ao rolar */}
-            <PerfilClient initial={{ ...perfilInicial, avatar }} onAvatar={definirAvatar} topoFixo={false} />
+            {/* emailSomenteLeitura: o técnico não troca o próprio e-mail de login (perderia as OS dele) */}
+            <PerfilClient initial={{ ...perfilInicial, avatar }} onAvatar={definirAvatar} topoFixo={false} emailSomenteLeitura />
             {/* Preferência do aparelho (não é ação do dia a dia): fica aqui, fora da frente do Perfil */}
             <PreferenciaRota />
           </div>
