@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
-import { rotuloVeiculo, type VeiculoResumo } from "@/lib/veiculo-sugestao";
+import { rotuloVeiculo, sufixoStatusVeiculo, type VeiculoResumo } from "@/lib/veiculo-sugestao";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import { reduzirImagem } from "@/lib/imagem-cliente";
 import { FolhaColaborador } from "@/components/folha/folha-colaborador";
@@ -369,7 +369,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
                 <Select aria-label="Veículo padrão" value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)}>
                   <option value="">Sem veículo padrão</option>
                   {veiculos.filter((v) => v.status === "ATIVO" || v.id === veiculoId).map((v) => (
-                    <option key={v.id} value={v.id}>{rotuloVeiculo(v)}{v.status !== "ATIVO" ? " (inativo)" : ""}</option>
+                    <option key={v.id} value={v.id}>{rotuloVeiculo(v)}{sufixoStatusVeiculo(v.status)}</option>
                   ))}
                 </Select>
               </FormField>

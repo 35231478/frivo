@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Car } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { rotuloVeiculo, sugerirVeiculo, type VeiculoResumo } from "@/lib/veiculo-sugestao";
+import { rotuloVeiculo, sufixoStatusVeiculo, sugerirVeiculo, type VeiculoResumo } from "@/lib/veiculo-sugestao";
 import {
   SeletorTecnicos, VALOR_TECNICOS_VAZIO, corpoTecnicos, valorDaAtividade,
   type EquipeOpcao, type TecnicoOpcao, type ValorTecnicos,
@@ -106,7 +106,7 @@ export function SeletorExecucao({ opcoes, tipoOsId, valor, onChange, erro }: {
         >
           <option value="">Sem veículo</option>
           {listaVeiculos.map((v) => (
-            <option key={v.id} value={v.id}>{rotuloVeiculo(v)}{v.status !== "ATIVO" ? " (inativo)" : ""}</option>
+            <option key={v.id} value={v.id}>{rotuloVeiculo(v)}{sufixoStatusVeiculo(v.status)}</option>
           ))}
         </select>
         <p className="text-[11px] text-ink-subtle mt-1" data-origem-veiculo>

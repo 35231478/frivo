@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import { Modal } from "@/components/ui/modal";
-import { AlertCircle, AlertTriangle, Check, Truck } from "lucide-react";
+import { AlertCircle, AlertTriangle, Check, Search, Truck } from "lucide-react";
 
 interface Colab { id: string; nome: string; avatar?: string | null }
 interface VeiculoOpt { id: string; placa: string; modelo: string; equipe: { id: string; nome: string } | null; inativo: boolean }
@@ -21,6 +21,17 @@ const CORES = paletaSelecao;
 
 // Cor que um registro novo recebe (dado salvo no cadastro; o usuário troca no seletor)
 const COR_PADRAO = corDado.azul;
+
+/** A pesquisa de veículos aparece quando a lista passa disto (frota pequena não precisa) */
+export const BUSCA_VEICULOS_A_PARTIR = 6;
+const semAcento = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+/** Filtra por placa (com ou sem hífen) ou modelo, sem diferenciar maiúsculas e acentos. */
+export function filtrarVeiculos<T extends { placa: string; modelo: string }>(veiculos: T[], busca: string): T[] {
+  const q = semAcento(busca.trim());
+  if (!q) return veiculos;
+  const qPlaca = q.replace(/[^a-z0-9]/g, "");
+  return veiculos.filter((v) => semAcento(v.modelo ?? "").includes(q) || (!!qPlaca && semAcento(v.placa).replace(/[^a-z0-9]/g, "").includes(qPlaca)));
+}
 
 export function EquipeForm({ initialData }: { initialData?: any }) {
   const router = useRouter();
@@ -35,6 +46,7 @@ export function EquipeForm({ initialData }: { initialData?: any }) {
   // Todos os veículos da equipe (antes só 1 — salvar desvinculava os demais sem avisar)
   const vinculadosAntes: string[] = initialData?.veiculos?.map((v: any) => v.id) ?? [];
   const [veiculoIds, setVeiculoIds] = useState<string[]>(vinculadosAntes);
+  const [buscaVeiculo, setBuscaVeiculo] = useState("");
   const [confirmar, setConfirmar] = useState<string[] | null>(null);
   const [status, setStatus] = useState(initialData?.status ?? "ATIVA");
   // Status → Inativa (editando): mostra o impacto e pede motivo, como o botão Inativar
@@ -53,6 +65,8 @@ export function EquipeForm({ initialData }: { initialData?: any }) {
         .map((v: any) => ({ id: v.id, placa: v.placa, modelo: v.modelo, equipe: v.equipe ? { id: v.equipe.id, nome: v.equipe.nome } : null, inativo: v.status === "INATIVO" }))
       : [])).catch(() => {});
   }, []);
+
+  const veiculosVisiveis = filtrarVeiculos(veiculos, buscaVeiculo);
 
   function toggleMembro(id: string) {
     setMembroIds((p) => (p.includes(id) ? p.filter((m) => m !== id) : [...p, id]));
@@ -133,8 +147,20 @@ export function EquipeForm({ initialData }: { initialData?: any }) {
             {veiculos.length === 0 ? (
               <p className="text-sm text-ink-subtle">Nenhum veículo cadastrado.</p>
             ) : (
+              <>
+              {/* Frota grande: pesquisa por placa ou modelo (os marcados contam à parte, para não sumirem de vista) */}
+              {veiculos.length > BUSCA_VEICULOS_A_PARTIR && (
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <div className="relative flex-1 min-w-[12rem]">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle" aria-hidden />
+                    <Input value={buscaVeiculo} onChange={(e) => setBuscaVeiculo(e.target.value)} placeholder="Pesquisar placa ou modelo" aria-label="Pesquisar veículo" className="pl-9" data-busca-veiculos-equipe />
+                  </div>
+                  <span className="text-xs text-ink-muted" data-veiculos-marcados>{veiculoIds.length === 1 ? "1 marcado" : `${veiculoIds.length} marcados`}</span>
+                </div>
+              )}
+              {veiculosVisiveis.length === 0 && <p className="text-sm text-ink-subtle" data-veiculos-sem-resultado>Nenhum veículo com “{buscaVeiculo.trim()}”.</p>}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" data-veiculos-equipe>
-                {veiculos.map((v) => {
+                {veiculosVisiveis.map((v) => {
                   const sel = veiculoIds.includes(v.id);
                   const outra = v.equipe && v.equipe.id !== initialData?.id ? v.equipe.nome : null;
                   return (
@@ -149,6 +175,7 @@ export function EquipeForm({ initialData }: { initialData?: any }) {
                   );
                 })}
               </div>
+              </>
             )}
             {(saindo.length > 0 || vindoDeOutra.length > 0) && (
               <div data-aviso-veiculos className="mt-2 text-xs text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2 space-y-0.5">
