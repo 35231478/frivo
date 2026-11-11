@@ -51,7 +51,13 @@ export async function GET(_: NextRequest, { params }: Params) {
   const semUnidade = <T extends { unidade: string | null }>(e: T): T => (config.exibirDadosCliente ? e : { ...e, unidade: null });
   return NextResponse.json({
     cartao: aplicarPrivacidade(cartao, config),
-    execucao: { ...execucao, equipamentos: execucao.equipamentos.map((q) => ({ ...q, equipamento: semUnidade(q.equipamento) })) },
+    execucao: {
+      ...execucao,
+      equipamentos: execucao.equipamentos.map((q) => ({ ...q, equipamento: semUnidade(q.equipamento) })),
+      // Serviço adicional: a decisão de cobrança (e o preço) é do escritório e não vai para o app —
+      // só o sinal de que já foi avaliado, para o app travar a edição
+      adicionais: execucao.adicionais.map(({ statusCobranca, ...a }) => ({ ...a, cobrancaDecidida: statusCobranca !== "A_AVALIAR" })),
+    },
     equipamentosUnidade: daUnidade.map(({ qrcode, ...e }) => ({ ...semUnidade(apresentarEquipamento(e)), tipoEquipamentoId: e.tipoEquipamentoId, qr: qrcode })),
     checklistsPorTipo,
     geradoEm: new Date().toISOString(),

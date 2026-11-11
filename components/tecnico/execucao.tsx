@@ -14,7 +14,7 @@ import { BotaoRota } from "@/components/tecnico/rota";
 import { ConcluirSemEquipamento } from "@/components/os/concluir-sem-equipamento";
 import { srcFoto, TelaEquipamento } from "@/components/tecnico/equipamento";
 import { ROTULO_STATUS_ATIVIDADE } from "@/components/tecnico/meu-dia";
-import { equipamentoDoQr } from "@/lib/tecnico/offline/estado";
+import { adicionalAvaliado, equipamentoDoQr } from "@/lib/tecnico/offline/estado";
 import { novoClientId } from "@/lib/tecnico/offline/motor";
 import { textoFaltas } from "@/lib/execucao/pendencias";
 import { LEGENDA_MAX, limparLegenda, REFERENCIA_GERAL } from "@/lib/os/galeria";
@@ -154,11 +154,11 @@ function ResumoOs({ r, x, aEnviar, registrar }: { r: RetratoAtividade; x: Execuc
         {x.adicionais.map((a, i) => {
           const eq = a.equipamentoId ? (x.equipamentos.find((e) => e.equipamento.id === a.equipamentoId)?.equipamento ?? r.equipamentosUnidade.find((u) => u.id === a.equipamentoId)) : null;
           return (
-            <button key={a.clientId ?? a.id ?? i} type="button" disabled={so} onClick={() => setAdicional(a)} data-adicional
-              className="w-full text-left rounded-card border-2 border-acento/20 bg-acento-claro p-3 space-y-1 disabled:opacity-90">
+            <button key={a.clientId ?? a.id ?? i} type="button" disabled={so} onClick={() => setAdicional(a)} data-adicional data-avaliado={adicionalAvaliado(a) || undefined}
+              className="w-full text-left rounded-card border-2 border-acento/20 bg-acento-claro p-3 space-y-1 disabled:opacity-90 touch-target">
               <span className="flex items-center justify-between gap-2">
                 <span className="text-xs font-bold uppercase tracking-wide text-acento-hover">Adicional</span>
-                <span className="text-xs font-semibold rounded-full bg-white text-acento-hover px-2 py-0.5">{a.pendente ? "no aparelho" : "escritório avalia a cobrança"}</span>
+                <span className="text-xs font-semibold rounded-full bg-white text-acento-hover px-2 py-0.5">{a.pendente ? "no aparelho" : adicionalAvaliado(a) ? "escritório já avaliou" : "escritório avalia a cobrança"}</span>
               </span>
               <span className="block text-sm font-semibold text-ink">{a.descricao}</span>
               <span className="block text-xs text-ink-muted">{[eq?.titulo, a.fotos.length ? `${a.fotos.length} foto${a.fotos.length > 1 ? "s" : ""}` : null].filter(Boolean).join(" · ") || "Sem equipamento"}</span>
@@ -327,6 +327,9 @@ function ListaUnidade({ r, x, onFechar, onVincular }: { r: RetratoAtividade; x: 
   );
 }
 
+/** Foto de serviço adicional: a guardada no aparelho ou, já sincronizada, a do servidor (rota própria — não é a das fotos de equipamento). */
+export const srcFotoAdicional = (f: { id: string | null; local?: string }) => f.local ?? `/api/servicos-adicionais/fotos/${f.id}`;
+
 /** Serviço extra: entra na MESMA OS e no MESMO relatório (destacado como "Adicional"); o escritório avalia a cobrança. */
 function ModalAdicional({ x, r, a, onFechar, registrar }: { x: ExecucaoTela; r: RetratoAtividade; a: AdicionalTela | null; onFechar: () => void; registrar: (ops: NovaOperacao[]) => Promise<void> }) {
   const atividadeId = x.atividade.id;
@@ -348,6 +351,30 @@ function ModalAdicional({ x, r, a, onFechar, registrar }: { x: ExecucaoTela; r: 
     await registrar(ops);
     onFechar();
   }
+  // O escritório já avaliou a cobrança: o técnico só consulta (não altera nem tira o que tem decisão do escritório)
+  if (a && adicionalAvaliado(a)) {
+    const eq = opcoes.find((o) => o.id === a.equipamentoId);
+    return (
+      <Modal aberto titulo="Serviço extra" onFechar={onFechar}>
+        <div className="space-y-4" data-modal-adicional data-somente-leitura>
+          <p className="rounded-card bg-surface-alt border border-surface-border px-3 py-2 text-sm text-ink" data-adicional-avaliado>
+            O escritório já avaliou a cobrança deste serviço. Para alterar ou tirar, fale com o escritório.
+          </p>
+          <div className="space-y-1">
+            <p className="text-xs font-semibold text-ink-muted">O que foi feito / pedido</p>
+            <p className="text-base text-ink whitespace-pre-line">{a.descricao}</p>
+          </div>
+          {eq && <p className="text-sm text-ink-muted">Equipamento: <span className="text-ink font-semibold">{eq.titulo}</span></p>}
+          {a.fotos.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {a.fotos.map((f, i) => <Miniatura key={f.clientId ?? f.id ?? i} src={srcFotoAdicional(f)} alt={`foto ${i + 1}`} pendente={!f.id} />)}
+            </div>
+          )}
+          <button type="button" onClick={onFechar} className="w-full rounded-card border border-surface-border bg-white py-3 font-semibold text-ink touch-target">Fechar</button>
+        </div>
+      </Modal>
+    );
+  }
   return (
     <Modal aberto titulo={a ? "Serviço extra" : "Adicionar serviço extra"} onFechar={onFechar}>
       <div className="space-y-4" data-modal-adicional>
@@ -363,7 +390,7 @@ function ModalAdicional({ x, r, a, onFechar, registrar }: { x: ExecucaoTela; r: 
         <div className="space-y-2">
           <span className="text-sm font-semibold text-ink">Fotos</span>
           <div className="flex flex-wrap gap-2">
-            {a?.fotos.map((f, i) => <Miniatura key={f.clientId ?? f.id ?? i} src={srcFoto(f)} alt={`foto ${i + 1}`} pendente={!f.id}
+            {a?.fotos.map((f, i) => <Miniatura key={f.clientId ?? f.id ?? i} src={srcFotoAdicional(f)} alt={`foto ${i + 1}`} pendente={!f.id}
               onRemover={() => registrar([{ tipo: "adicionalFotoRemover", atividadeId, dados: f.clientId ? { clientId: f.clientId } : { id: f.id! } }])} />)}
             {fotosNovas.map((d, i) => <Miniatura key={`n${i}`} src={d} alt={`foto nova ${i + 1}`} pendente onRemover={() => setFotosNovas((l) => l.filter((_, j) => j !== i))} />)}
           </div>

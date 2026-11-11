@@ -426,12 +426,19 @@ const selectAdicional = {
   fotos: { orderBy: { criadoEm: "asc" as const }, select: { id: true, clientId: true } },
 } as const;
 
+/**
+ * Depois que o escritório avalia a cobrança (cobrar / não cobrar), o serviço adicional deixa de ser
+ * editável pelo app: o técnico não altera nem tira o que já tem decisão (e talvez preço) do escritório.
+ */
+export const MSG_ADICIONAL_AVALIADO = "O escritório já avaliou a cobrança deste serviço adicional. Para alterar ou tirar, fale com o escritório.";
+const avaliado = (s: { statusCobranca: string }) => s.statusCobranca !== "A_AVALIAR";
+
 /** Acha o serviço adicional desta atividade pelo id ou pelo id do aparelho. */
 async function acharAdicional(ctx: ContextoExecucao, ref: { id?: string; clientId?: string }) {
   if (!ref.id && !ref.clientId) return null;
   return prisma.servicoAdicional.findFirst({
     where: { atividadeId: ctx.atividade.id, empresaId: ctx.empresaId, ...(ref.id ? { id: ref.id } : { clientId: ref.clientId }) },
-    select: { id: true },
+    select: { id: true, statusCobranca: true, descricao: true, equipamentoId: true },
   });
 }
 
@@ -452,6 +459,11 @@ export async function salvarAdicional(ctx: ContextoExecucao, d: z.infer<typeof a
     if (deOutro) return erro(409, "Este serviço adicional já foi enviado para outra atividade.");
   }
   const dados = { descricao: d.descricao, ...(d.equipamentoId !== undefined && { equipamentoId: d.equipamentoId }) };
+  // Já avaliado pelo escritório: só passa o reenvio que não muda nada (o app repete a gravação sem prejuízo)
+  if (existente && avaliado(existente)) {
+    const mudou = existente.descricao !== d.descricao || (d.equipamentoId !== undefined && existente.equipamentoId !== d.equipamentoId);
+    if (mudou) return erro(409, MSG_ADICIONAL_AVALIADO);
+  }
   try {
     const s = existente
       ? await prisma.servicoAdicional.update({ where: { id: existente.id }, data: dados, select: selectAdicional })
@@ -473,6 +485,7 @@ export async function salvarAdicional(ctx: ContextoExecucao, d: z.infer<typeof a
 export async function removerAdicional(ctx: ContextoExecucao, ref: { id?: string; clientId?: string }) {
   const s = await acharAdicional(ctx, ref);
   if (!s) return ref.id ? erro(404, "Serviço adicional não encontrado.") : ok({ removidos: 0 });
+  if (avaliado(s)) return erro(409, MSG_ADICIONAL_AVALIADO);
   await prisma.servicoAdicional.delete({ where: { id: s.id } });
   return ok({ removidos: 1 });
 }
@@ -510,9 +523,11 @@ export async function fotoAdicional(ctx: ContextoExecucao, d: z.infer<typeof fot
 
 export async function removerFotoAdicional(ctx: ContextoExecucao, ref: { fotoId?: string; clientId?: string }) {
   if (!ref.fotoId && !ref.clientId) return erro(400, "Diga qual foto.");
-  const { count } = await prisma.servicoAdicionalFoto.deleteMany({
-    where: { empresaId: ctx.empresaId, servico: { atividadeId: ctx.atividade.id }, ...(ref.fotoId ? { id: ref.fotoId } : { clientId: ref.clientId }) },
-  });
+  const onde = { empresaId: ctx.empresaId, servico: { atividadeId: ctx.atividade.id }, ...(ref.fotoId ? { id: ref.fotoId } : { clientId: ref.clientId }) };
+  // A foto é a prova do adicional: depois da avaliação do escritório, não sai pelo app
+  const foto = await prisma.servicoAdicionalFoto.findFirst({ where: onde, select: { servico: { select: { statusCobranca: true } } } });
+  if (foto && avaliado(foto.servico)) return erro(409, MSG_ADICIONAL_AVALIADO);
+  const { count } = await prisma.servicoAdicionalFoto.deleteMany({ where: onde });
   if (!count && ref.fotoId) return erro(404, "Foto não encontrada");
   return ok({ removidas: count });
 }
