@@ -126,7 +126,7 @@ export const EQUIPAMENTO = {
         opcoes: Object.entries(LABELS_TIPO_EQUIPAMENTO).map(([value, label]) => ({ value, label })) },
       { nome: "marca", label: "Marca", obrigatorio: true, colunas: 3, placeholder: "Ex: LG, Carrier" },
       { nome: "modelo", label: "Modelo", obrigatorio: true, colunas: 3 },
-      { nome: "numeroSerie", label: "Nº de série", colunas: 3 },
+      { nome: "numeroSerie", label: "Nº de série", colunas: 3, avisoSerie: true },
       { nome: "localizacao", label: "Ambiente", colunas: 3, placeholder: "Ex: Recepção" },
     ];
   },

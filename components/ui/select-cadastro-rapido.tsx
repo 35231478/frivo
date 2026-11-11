@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import type { Acao } from "@/lib/permissoes";
+import { AvisoSerieDuplicada } from "@/components/equipamentos/aviso-serie-duplicada";
 
 /**
  * Select com CADASTRO RÁPIDO ("criar sem sair da tela").
@@ -41,6 +42,8 @@ export interface CampoRapido {
   colunas?: 2 | 3 | 4 | 6;
   maxLength?: number;
   inputMode?: "text" | "numeric" | "decimal" | "tel" | "email";
+  /** Nº de série de equipamento: avisa (sem bloquear) se já existe outro com a mesma etiqueta. */
+  avisoSerie?: boolean;
 }
 
 /** Uma permissão, ou uma lista em que QUALQUER uma libera a criação. */
@@ -345,6 +348,7 @@ function MiniCadastro({
             </label>
           ))}
         </div>
+        {campos.filter((c) => c.avisoSerie).map((c) => <AvisoSerieDuplicada key={c.nome} numero={valores[c.nome] ?? ""} />)}
 
         {erro && <p className="text-sm text-atrasado bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2">{erro}</p>}
 
