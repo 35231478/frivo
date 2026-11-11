@@ -83,7 +83,7 @@ function AvisoSerieCampo({ numero, atividadeId, ignorarId, daUnidade, tipos, naO
           <ul className="space-y-1.5">
             {locais.map((l) => (
               <li key={l.id} data-serie-origem={l.origem}>
-                <span className="block">{[l.titulo, l.local].filter(Boolean).join(" — ")}{l.origem === "fila" ? " (cadastrado neste aparelho)" : ""}</span>
+                <span className="block">{[l.titulo, l.local].filter(Boolean).join(" — ")}{l.origem === "fila" ? " (cadastrado neste aparelho)" : naOs.has(l.id) ? " (já está nesta OS)" : ""}</span>
                 {l.origem === "unidade" && !naOs.has(l.id) && (
                   <button type="button" onClick={() => onVincular(l.id)} data-vincular-existente={l.id}
                     className="mt-1 inline-flex items-center rounded-card border border-atencao/40 bg-white px-3 text-sm font-semibold text-ink touch-target">Vincular este à OS</button>

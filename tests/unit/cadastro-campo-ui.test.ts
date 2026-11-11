@@ -353,6 +353,15 @@ describe("SEM SINAL", () => {
     expect(($("[data-salvar-equipamento]") as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it("a série é de um equipamento que JÁ está nesta OS: o aviso diz isso e não oferece vincular de novo", async () => {
+    ajustar = (r) => ({ ...r, equipamentosUnidade: r.equipamentosUnidade.map((u: any) => (u.id === "eqA" ? { ...u, numeroSerie: "SERIE-DO-EQA" } : u)) });
+    await abrirCadastro();
+    online = false;
+    await digitar($("[data-serie]"), "serie-do-eqa");
+    expect(texto($('[data-serie-origem="unidade"]'))).toBe("Split Sala 1 — Sala 1 (já está nesta OS)");
+    expect($("[data-vincular-existente]")).toBeNull();
+  });
+
   it("o equipamento com a mesma série já está na unidade: 'Vincular este à OS' vincula em vez de cadastrar de novo", async () => {
     await abrirCadastro();
     online = false;
