@@ -5,6 +5,7 @@
  */
 import type { DispensaEquipamento, ItemExecucao, RespostaItem, ResultadoConclusao, FaltasEquipamento, FormularioExecucao } from "@/lib/execucao/pendencias";
 import type { Operacao } from "@/lib/tecnico/sync";
+import type { CadastroCampo } from "@/lib/tecnico/cadastro-equipamento";
 
 export type { Operacao };
 export type TipoOperacao = Operacao["tipo"];
@@ -84,6 +85,8 @@ export interface RetratoAtividade {
   execucao: ExecucaoTela;
   equipamentosUnidade: EquipamentoUnidade[];
   checklistsPorTipo: Record<string, ItemTela[]>;
+  /** Cadastro de equipamento em campo: null = permissão desligada; ausente em retratos antigos */
+  cadastro?: CadastroCampo | null;
   geradoEm: string;
 }
 

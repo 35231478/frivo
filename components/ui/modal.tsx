@@ -46,7 +46,9 @@ export function Modal({ aberto, onFechar, titulo, children, tamanho = "md" }: Mo
         "relative bg-white rounded-card border border-surface-border shadow-elevated w-full max-h-[90vh] overflow-y-auto",
         tamanho === "sm" ? "max-w-md" : tamanho === "lg" ? "max-w-2xl" : "max-w-lg",
       )}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-surface-border sticky top-0 bg-white">
+        {/* z-10: o cabeçalho fixo fica ACIMA do conteúdo que rola (miniatura, seletor e outros elementos
+            posicionados passavam por cima do título) */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-surface-border sticky top-0 z-10 bg-white">
           <h3 className="font-display text-base font-semibold text-ink">{titulo}</h3>
           <button type="button" onClick={onFechar} aria-label="Fechar" className="p-1 -mr-1 rounded-lg text-ink-muted hover:text-ink hover:bg-surface-page"><X className="w-5 h-5" /></button>
         </div>

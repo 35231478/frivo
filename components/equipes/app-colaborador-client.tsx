@@ -120,6 +120,11 @@ export function AppColaboradorClient({ inicial }: { inicial: ConfigApp }) {
             dica="Ligado: o colaborador precisa preencher o resumo da conclusão para concluir a atividade."
             checked={cfg.conclusaoObrigatoria} onChange={set("conclusaoObrigatoria")}
           />
+          <ToggleSwitch
+            label="Permitir cadastrar equipamento em campo"
+            dica="Ligado: na OS, o colaborador cadastra o equipamento que falta na unidade. Desligado: só vincula os existentes."
+            checked={cfg.cadastrarEquipamento} onChange={set("cadastrarEquipamento")}
+          />
         </ToggleGroup>
       </section>
 

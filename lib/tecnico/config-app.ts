@@ -30,6 +30,8 @@ export interface ConfigApp {
   conclusaoObrigatoria: boolean;
   /** Apenas um dispositivo ativo por colaborador */
   umDispositivo: boolean;
+  /** O técnico pode cadastrar equipamento em campo (desligado: o botão nem aparece e o servidor recusa) */
+  cadastrarEquipamento: boolean;
 }
 
 export const CONFIG_APP_PADRAO: ConfigApp = {
@@ -44,6 +46,7 @@ export const CONFIG_APP_PADRAO: ConfigApp = {
   fotoSomenteCamera: false,
   conclusaoObrigatoria: false,
   umDispositivo: true,
+  cadastrarEquipamento: true,
 };
 
 /** Os campos de Configuracao (snake→camel do Prisma) que alimentam o ConfigApp. */
@@ -59,6 +62,7 @@ export interface ConfiguracaoApp {
   appFotoSomenteCamera: boolean;
   appConclusaoObrigatoria: boolean;
   appUmDispositivo: boolean;
+  appCadastrarEquipamento: boolean;
 }
 
 /** Os campos a selecionar de Configuracao (reuso no servidor). */
@@ -74,6 +78,7 @@ export const SELECT_CONFIG_APP = {
   appFotoSomenteCamera: true,
   appConclusaoObrigatoria: true,
   appUmDispositivo: true,
+  appCadastrarEquipamento: true,
 } as const;
 
 /** ConfigApp (chaves amigáveis) → payload de Configuracao (chaves app*) para o PUT /api/configuracoes. */
@@ -90,6 +95,7 @@ export function configAppParaPayload(c: ConfigApp): ConfiguracaoApp {
     appFotoSomenteCamera: c.fotoSomenteCamera,
     appConclusaoObrigatoria: c.conclusaoObrigatoria,
     appUmDispositivo: c.umDispositivo,
+    appCadastrarEquipamento: c.cadastrarEquipamento,
   };
 }
 
@@ -112,5 +118,6 @@ export function normalizarConfigApp(row: Partial<ConfiguracaoApp> | null | undef
     fotoSomenteCamera: ou(row.appFotoSomenteCamera, CONFIG_APP_PADRAO.fotoSomenteCamera),
     conclusaoObrigatoria: ou(row.appConclusaoObrigatoria, CONFIG_APP_PADRAO.conclusaoObrigatoria),
     umDispositivo: ou(row.appUmDispositivo, CONFIG_APP_PADRAO.umDispositivo),
+    cadastrarEquipamento: ou(row.appCadastrarEquipamento, CONFIG_APP_PADRAO.cadastrarEquipamento),
   };
 }

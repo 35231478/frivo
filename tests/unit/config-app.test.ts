@@ -25,12 +25,13 @@ describe("ConfigApp — padrões (espelham os @default do schema)", () => {
       fotoSomenteCamera: false,
       conclusaoObrigatoria: false,
       umDispositivo: true,
+      cadastrarEquipamento: true, // cadastro de equipamento em campo: nasce LIGADO
     });
   });
 
-  it("SELECT_CONFIG_APP cobre exatamente as 11 colunas app*", () => {
+  it("SELECT_CONFIG_APP cobre exatamente as 12 colunas app*", () => {
     expect(Object.keys(SELECT_CONFIG_APP).sort()).toEqual([
-      "appConclusaoObrigatoria", "appEsconderValores", "appExibirContatosCliente", "appExibirDadosCliente",
+      "appCadastrarEquipamento", "appConclusaoObrigatoria", "appEsconderValores", "appExibirContatosCliente", "appExibirDadosCliente",
       "appExigirLocalizacao", "appFotoSomenteCamera", "appMarcaDagua", "appMarcaDaguaCoordenadas",
       "appMarcaDaguaEndereco", "appMarcaDaguaOs", "appUmDispositivo",
     ]);

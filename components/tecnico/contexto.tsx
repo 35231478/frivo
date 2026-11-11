@@ -41,6 +41,8 @@ export function ProvedorTecnico({ usuario, config = CONFIG_APP_PADRAO, children,
       .then((banco) => {
         if (cancelado) { banco.fechar(); return; }
         m = new MotorSync(banco);
+        // Gravação que subiu com um aviso do servidor (ex.: série que já existia): mostra, sem travar nada
+        m.aoAvisar = (texto) => toast(texto, "info");
         m.ligar();
         setMotor(m);
 
