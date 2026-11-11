@@ -11,6 +11,7 @@ import {
 import { cn, MESES_PT, LABELS_STATUS_OS, LABELS_PRIORIDADE } from "@/lib/utils";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import { InputHora } from "@/components/ui/input-hora";
+import { MSG_HORA_INVALIDA, horaValida } from "@/components/ui/input-data-hora";
 import { SeletorExecucao, VALOR_EXECUCAO_VAZIO, corpoExecucao, temExecutor, useOpcoesExecucao, type ValorExecucao } from "@/components/os/seletor-execucao";
 import { MSG_SEM_EXECUTOR_TELA } from "@/lib/atividade-equipe";
 import { BuscaSelect, type OpcaoBusca } from "@/components/ui/busca-select";
@@ -679,6 +680,7 @@ function CriarOsModal({
   const [execucao, setExecucao] = useState<ValorExecucao>(VALOR_EXECUCAO_VAZIO);
   const [faltaExecutor, setFaltaExecutor] = useState(false);
   const [hora, setHora] = useState("08:00");
+  const [faltaHora, setFaltaHora] = useState(false);
   const [prioridade, setPrioridade] = useState("NORMAL");
   const [descricao, setDescricao] = useState("");
   const [erro, setErro] = useState("");
@@ -691,10 +693,12 @@ function CriarOsModal({
     if (!clienteId) { setErro("Selecione o cliente."); return; }
     if (descricao.trim().length < 5) { setErro("Descreva o serviço (mínimo 5 caracteres)."); return; }
     if (!temExecutor(execucao)) { setFaltaExecutor(true); setErro(MSG_SEM_EXECUTOR_TELA); return; }
+    // Hora vazia ou que não existe NÃO vira 08:00 escondido: a OS só é agendada com horário válido
+    if (!horaValida(hora)) { setFaltaHora(true); setErro(MSG_HORA_INVALIDA); return; }
     setSalvando(true);
     try {
       // A hora escolhida é de Brasília (qualquer que seja o fuso do navegador)
-      const dataAgendada = deLocalBR(`${dateKey}T${hora || "08:00"}`)!.toISOString();
+      const dataAgendada = deLocalBR(`${dateKey}T${hora}`)!.toISOString();
       // OS + atividade agendada (com quem executa e o veículo) numa única chamada — tudo ou nada
       const titulo = opcoes.tiposOs.find((t) => t.value === tipoOsId)?.label ?? "Atendimento agendado";
       const resOs = await fetch("/api/ordens", {
@@ -752,8 +756,9 @@ function CriarOsModal({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-[11px] font-semibold text-ink-muted">Hora de agendamento</label>
-              <InputHora value={hora} onChange={setHora} aria-label="Hora de agendamento" />
+              <label className="text-[11px] font-semibold text-ink-muted">Hora de agendamento *</label>
+              <InputHora value={hora} invalido={faltaHora} aria-label="Hora de agendamento"
+                onChange={(h) => { setHora(h); if (horaValida(h)) { setFaltaHora(false); setErro((e) => (e === MSG_HORA_INVALIDA ? "" : e)); } }} />
             </div>
             <div>
               <label className="text-[11px] font-semibold text-ink-muted">Prioridade</label>

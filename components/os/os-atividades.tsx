@@ -19,7 +19,7 @@ import { TIPO_OS } from "@/components/cadastro-rapido/definicoes";
 import { InputData } from "@/components/ui/input-data";
 import { ConcluirSemEquipamento } from "@/components/os/concluir-sem-equipamento";
 import { atividadeEncerrada, chaveDiaCivil, situacaoPrazo, textoPrazo } from "@/lib/os/prazos";
-import { InputDataHora } from "@/components/ui/input-data-hora";
+import { InputDataHora, MSG_HORA_INVALIDA } from "@/components/ui/input-data-hora";
 
 
 const STATUS_LABELS: Record<string, string> = { AGENDADA: "Agendada", EM_ANDAMENTO: "Em Andamento", CONCLUIDA: "Concluída", CANCELADA: "Cancelada" };
@@ -52,6 +52,9 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
   const [excluindo, setExcluindo] = useState<any | null>(null);
   const [processando, setProcessando] = useState(false);
   const [erroModal, setErroModal] = useState("");
+  // Data escolhida sem hora válida (nova atividade / edição): não salva enquanto não corrigir
+  const [horaRuimNova, setHoraRuimNova] = useState<string | null>(null);
+  const [horaRuimEdicao, setHoraRuimEdicao] = useState<string | null>(null);
 
   function abrirEdicao(a: any) {
     setErroModal("");
@@ -68,6 +71,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
     if (!editando) return;
     if (!formEdicao.titulo.trim()) { setErroModal("O título é obrigatório."); return; }
     if (!temExecutor(tecnicosEdicao)) { setFaltaExecutor(true); setErroModal(MSG_SEM_EXECUTOR_TELA); return; }
+    if (horaRuimEdicao) { setErroModal(horaRuimEdicao); return; }
     setProcessando(true); setErroModal("");
     try {
       const res = await fetch(`/api/ordens/${osId}/atividades/${editando.id}`, {
@@ -115,6 +119,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
     setErroForm("");
     if (!form.titulo.trim()) { setErroForm("O título é obrigatório."); return; }
     if (!temExecutor(tecnicosNova)) { setFaltaExecutor(true); setErroForm(MSG_SEM_EXECUTOR_TELA); return; }
+    if (horaRuimNova) { setErroForm(horaRuimNova); return; }
     setSalvando(true);
     try {
       const res = await fetch(`/api/ordens/${osId}/atividades`, {
@@ -274,7 +279,8 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
           </FormField>
           <FormGrid>
             <FormField label="Data/hora agendada">
-              <InputDataHora value={form.dataAgendada} onChange={(iso) => setForm((f) => ({ ...f, dataAgendada: iso }))} aria-label="Data/hora agendada" />
+              <InputDataHora value={form.dataAgendada} onChange={(iso) => setForm((f) => ({ ...f, dataAgendada: iso }))} aria-label="Data/hora agendada"
+                onProblema={(p) => { setHoraRuimNova(p); if (!p) setErroForm((e) => (e === MSG_HORA_INVALIDA ? "" : e)); }} />
             </FormField>
             <FormField label="Prazo da atividade" hint="Até quando deve estar pronta">
               <InputData value={form.prazo} onChange={(iso) => setForm((f) => ({ ...f, prazo: iso }))} aria-label="Prazo da atividade" />
@@ -331,7 +337,8 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
           </FormField>
           <FormGrid>
             <FormField label="Data/hora agendada">
-              <InputDataHora value={formEdicao.dataAgendada} onChange={(iso) => setFormEdicao((f) => ({ ...f, dataAgendada: iso }))} aria-label="Data/hora agendada" />
+              <InputDataHora value={formEdicao.dataAgendada} onChange={(iso) => setFormEdicao((f) => ({ ...f, dataAgendada: iso }))} aria-label="Data/hora agendada"
+                onProblema={(p) => { setHoraRuimEdicao(p); if (!p) setErroModal((e) => (e === MSG_HORA_INVALIDA ? "" : e)); }} />
             </FormField>
             <FormField label="Prazo da atividade" hint="Até quando deve estar pronta">
               <InputData value={formEdicao.prazo} onChange={(iso) => setFormEdicao((f) => ({ ...f, prazo: iso }))} aria-label="Prazo da atividade" />

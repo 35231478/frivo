@@ -306,17 +306,21 @@ describe.skipIf(!URL_PG)("Fotos & Anexos do serviço (PostgreSQL real)", () => {
     expect(g.fotos.find((f: any) => f.chave === "EXECUCAO:fItem").equipamentoId).toBe("eqB");
   });
 
-  it("o resumo dos relatórios conta as MESMAS fotos da galeria (por atividade + as do escritório)", async () => {
+  it("o resumo dos relatórios conta as fotos da EXECUÇÃO — as mesmas da galeria, menos as enviadas pelo escritório", async () => {
     comoEscritorio();
     const g = await galeria();
     const r = (await chamar("ordens/[id]/relatorios", "GET", { id: "osA" })).json;
-    expect(r.resumo.totalFotos).toBe(g.fotos.length);
+    // As do escritório não têm atividade: continuam na galeria, mas saem da conta do card "Fotos"
+    const doEscritorio = g.fotos.filter((f: any) => !f.atividade).length;
+    expect(doEscritorio).toBeGreaterThan(0);
+    expect(r.resumo.totalFotos).toBe(g.fotos.length - doEscritorio);
     const porAtividade = Object.fromEntries(r.resumo.atividades.map((a: any) => [a.id, a.fotos]));
     expect(porAtividade).toEqual({
       a1: g.fotos.filter((f: any) => f.atividade?.id === "a1").length,
       a2: g.fotos.filter((f: any) => f.atividade?.id === "a2").length,
     });
     expect(porAtividade.a1).toBeGreaterThan(0);
+    expect(r.resumo.totalFotos).toBe(porAtividade.a1 + porAtividade.a2);
   });
 
   it("Tema 4 — card 'Equipamentos' = equipamentos ATENDIDOS na OS (a mesma conta do relatório), nunca os da unidade", async () => {
@@ -363,6 +367,55 @@ describe.skipIf(!URL_PG)("Fotos & Anexos do serviço (PostgreSQL real)", () => {
     expect(eqA.fotos.every((f: any) => f.url !== doCadastro && f.url !== doEscritorio)).toBe(true);
     // a galeria da OS continua mostrando a do escritório (é lá o lugar dela)
     expect((await galeria()).fotos.some((f: any) => f.legenda === "Fachada")).toBe(true);
+  });
+
+  it("Acabamento — as 'Fotos do serviço' tiradas no APP entram no relatório: no bloco do equipamento atendido, ou em 'Fotos do serviço'", async () => {
+    comoEscritorio();
+    const { relatorioInterno } = await import("@/lib/relatorio-os/dados");
+    const marca = (texto: string) => dataUrl("image/png", new Uint8Array([...PNG, ...new TextEncoder().encode(texto)]));
+    const [doEquip, geral, deNaoAtendido, doEscritorio] = ["app-do-equipamento", "app-geral-da-os", "app-de-equipamento-nao-atendido", "escritorio-nao-entra"].map(marca);
+    const anexo = (id: string, conteudo: string, extra: object) => ({ id, ordemServicoId: "osA", nome: `${id}.png`, tipo: "image/png", tamanho: 10, conteudo, ...extra });
+    await prisma.osAnexo.createMany({ data: [
+      anexo("appEq", doEquip, { atividadeId: "a1", equipamentoId: "eqA", legenda: "Dreno desobstruído", criadoPorId: "uT" }),
+      anexo("appGeral", geral, { atividadeId: "a1", equipamentoId: null, legenda: "Quadro elétrico", criadoPorId: "uT" }),
+      anexo("appNaoAtendido", deNaoAtendido, { atividadeId: "a1", equipamentoId: "eqB", legenda: "Condensadora sem acesso", criadoPorId: "uT" }),
+      anexo("escritorio2", doEscritorio, { atividadeId: null, equipamentoId: "eqA", legenda: "Projeto", criadoPorId: "uA" }),
+    ] });
+    // um PDF mandado pelo app não é foto (não deveria existir, mas se existir não vira imagem quebrada no relatório)
+    await prisma.osAnexo.create({ data: { ...anexo("appPdf", "data:application/pdf;base64,JVBERi0=", { atividadeId: "a1", legenda: "Laudo" }), tipo: "application/pdf" } });
+    const dados = (await relatorioInterno("osA", "e1"))!.dados;
+
+    // do equipamento ATENDIDO: dentro do bloco dele, com a legenda que o técnico escreveu
+    const eqA = dados.equipamentos.find((b: any) => b.id === "eqA")!;
+    expect(eqA.fotos.find((f: any) => f.url === doEquip)).toEqual({ url: doEquip, legenda: "Dreno desobstruído" });
+    // geral da OS e a de equipamento que não foi atendido: na seção "Fotos do serviço" (a do equipamento leva o nome dele)
+    expect(dados.fotosServico.find((f: any) => f.url === geral)).toEqual({ url: geral, legenda: "Quadro elétrico" });
+    expect(dados.fotosServico.find((f: any) => f.url === deNaoAtendido)!.legenda).toMatch(/^Condensadora sem acesso — /);
+    expect(dados.equipamentos.some((b: any) => b.id === "eqB")).toBe(false);
+    // cada foto sai uma vez só
+    const tudo = JSON.stringify(dados);
+    for (const f of [doEquip, geral, deNaoAtendido]) expect(tudo.split(f).length - 1).toBe(1);
+    // do escritório e o PDF: nunca
+    expect(tudo).not.toContain(doEscritorio);
+    expect(tudo).not.toContain("JVBERi0=");
+
+    // o card "Fotos" conta as 3 novas do app e não a do escritório
+    const antes = (await chamar("ordens/[id]/relatorios", "GET", { id: "osA" })).json.resumo.totalFotos;
+    await prisma.osAnexo.deleteMany({ where: { id: { in: ["appEq", "appGeral", "appNaoAtendido"] } } });
+    expect((await chamar("ordens/[id]/relatorios", "GET", { id: "osA" })).json.resumo.totalFotos).toBe(antes - 3);
+    await prisma.osAnexo.deleteMany({ where: { id: "escritorio2" } });
+    expect((await chamar("ordens/[id]/relatorios", "GET", { id: "osA" })).json.resumo.totalFotos).toBe(antes - 3);
+  });
+
+  it("Acabamento — foto do serviço de atividade CANCELADA não vai para o relatório", async () => {
+    comoEscritorio();
+    const { relatorioInterno } = await import("@/lib/relatorio-os/dados");
+    const cancelada = dataUrl("image/png", new Uint8Array([...PNG, ...new TextEncoder().encode("app-de-atividade-cancelada")]));
+    await prisma.osAnexo.create({ data: { id: "appCancelada", ordemServicoId: "osA", atividadeId: "a1", nome: "c.png", tipo: "image/png", tamanho: 10, conteudo: cancelada, legenda: "Antes de cancelar", criadoPorId: "uT" } });
+    expect(JSON.stringify((await relatorioInterno("osA", "e1"))!.dados)).toContain(cancelada);
+    await prisma.atividadeOs.update({ where: { id: "a1" }, data: { status: "CANCELADA" } });
+    expect(JSON.stringify((await relatorioInterno("osA", "e1"))!.dados)).not.toContain(cancelada);
+    await prisma.atividadeOs.update({ where: { id: "a1" }, data: { status: "EM_ANDAMENTO" } });
   });
 
 });
