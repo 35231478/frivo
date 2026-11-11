@@ -184,10 +184,11 @@ describe.skipIf(!URL_PG)("app do técnico: Meu dia, escopo e sincronização off
       return [dia.atividades.find((a: any) => a.atividadeId === "aA"), dia.anteriores[0], ag.dias[0].atividades.find((a: any) => a.atividadeId === "aA"), os.cartao];
     };
     try {
-      // "Exibir dados do cliente" desligado: sem nome, unidade, endereço, rota e descrição (o contato segue)
+      // "Exibir dados do cliente" desligado: sem nome, unidade, endereço e rota (o contato segue). A
+      // descrição do SERVIÇO fica: o técnico precisa saber o que fazer — sai só a identidade de quem pediu
       await prisma.configuracao.upsert({ where: { empresaId: "e1" }, create: { empresaId: "e1", appExibirDadosCliente: false }, update: { appExibirDadosCliente: false, appExibirContatosCliente: true } });
       for (const c of await cartoes()) {
-        expect(c).toMatchObject({ cliente: "", unidade: null, endereco: "", rota: null, descricao: "" });
+        expect(c).toMatchObject({ cliente: "", unidade: null, endereco: "", rota: null, descricao: expect.stringMatching(/^Preventiva OS-/) });
         expect(JSON.stringify(c)).not.toMatch(/Hospital|Paulista|maps/);
       }
       // o nome da unidade do cliente também não vai junto dos equipamentos da OS (nem dos da unidade)

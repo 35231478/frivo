@@ -97,6 +97,30 @@ export interface AvisoClienteRetrato {
 
 export const mesmoDia = (a: string | number | Date, b: string | number | Date) => chaveDiaBR(a) === chaveDiaBR(b);
 
+/**
+ * Um toque entra nos avisos da tela: vale o horário do toque, já (sem sinal também). Um por evento,
+ * por dia — o que já está registrado hoje fica, e o toque repetido não muda nada.
+ */
+export function aplicarToque(avisos: AvisosTela | null | undefined, evento: EventoAviso, em: string): AvisosTela {
+  const atual = avisos?.[evento];
+  if (atual && mesmoDia(atual.em, em)) return avisos!;
+  return { ...avisos, [evento]: { em, status: null, pendente: true } };
+}
+
+/**
+ * Junta o que se sabe dos avisos de várias fontes (a lista do Meu dia, o retrato guardado da OS):
+ * por evento, fica o registro que o servidor já respondeu; sem nenhum, o primeiro que houver.
+ */
+export function juntarAvisos(...fontes: (AvisosTela | null | undefined)[]): AvisosTela {
+  const junto: AvisosTela = {};
+  for (const evento of EVENTOS_AVISO) {
+    const achados = fontes.map((f) => f?.[evento]).filter((a): a is AvisoTela => !!a);
+    const escolhido = achados.find((a) => a.status !== null) ?? achados[0];
+    if (escolhido) junto[evento] = escolhido;
+  }
+  return junto;
+}
+
 /** O toque de HOJE deste evento (o de outro dia não conta: a atividade que continua pode avisar de novo). */
 export function avisoDoDia(avisos: AvisosTela | null | undefined, evento: EventoAviso, agora: number = Date.now()): AvisoTela | null {
   const a = avisos?.[evento];
@@ -109,10 +133,12 @@ export type TomAviso = "ok" | "espera" | "neutro";
  * O que o botão mostra depois do toque: o evento em cima e, embaixo, "avisado às 14:02" — ou o horário
  * com o motivo de o aviso não ter saído. `texto` junta os dois (leitor de tela).
  */
-export function rotuloAviso(evento: EventoAviso, a: AvisoTela, agora: number = Date.now()): { titulo: string; detalhe: string; texto: string; tom: TomAviso } {
+export function rotuloAviso(evento: EventoAviso, a: AvisoTela, agora: number = Date.now(), /** "Avisar o cliente" ligado na empresa? */ avisa = true): { titulo: string; detalhe: string; texto: string; tom: TomAviso } {
   const titulo = ROTULO_EVENTO[evento];
   const hora = horaBR(a.em);
   const montar = (detalhe: string, tom: TomAviso) => ({ titulo, detalhe, texto: `${titulo} · ${detalhe}`, tom });
+  // Aviso desligado na empresa: o toque só registra o horário — não há aviso de que falar
+  if (!avisa) return montar(`registrado às ${hora}`, "neutro");
   if (a.status === "ENVIADO") return montar(`avisado às ${hora}`, "ok");
   // Ainda no aparelho (ou o servidor acabou de receber): dentro da janela o aviso ainda sai
   if ((a.status === null || a.status === "PENDENTE") && agora - Date.parse(a.em) <= JANELA_AVISO_MS) return montar(`${hora} · aviso a enviar`, "espera");

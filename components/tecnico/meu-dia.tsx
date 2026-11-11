@@ -1,12 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CalendarDays, Camera, CheckCircle2, ChevronRight, Clock, HardDrive, MapPin, Phone, RefreshCw, Sun, WifiOff } from "lucide-react";
+import { CalendarDays, Camera, Car, CheckCircle2, ChevronDown, ChevronRight, Clock, HardDrive, MapPin, MessageCircle, RefreshCw, Sun, WifiOff } from "lucide-react";
 import { cn, formatarData } from "@/lib/utils";
+import { confirmar } from "@/components/ui/avisos";
 import { irPara, useTecnico } from "@/components/tecnico/contexto";
 import { BotaoRota } from "@/components/tecnico/rota";
+import { RegistroAviso, useAgora, useToqueAviso, useWhatsappAviso } from "@/components/tecnico/aviso-cliente";
 import type { CartaoTela, OperacaoFila } from "@/lib/tecnico/offline/tipos";
-import { diaCivilDeChave, diasAteDiaCivil, horaBR, partesBR } from "@/lib/fuso";
+import { descricaoParaApp } from "@/lib/tecnico/cartao";
+import { guardadoDoRetrato, situacaoDoCartao, type EstadoCartao, type Guardado } from "@/lib/tecnico/chegada";
+import { toqueLeve } from "@/lib/haptico";
+import { chaveDiaBR, diaCivilDeChave, diasAteDiaCivil, horaBR, partesBR } from "@/lib/fuso";
 
 export const ROTULO_STATUS_ATIVIDADE: Record<string, { rotulo: string; classe: string }> = {
   AGENDADA: { rotulo: "Agendada", classe: "bg-acento-claro text-acento-hover" },
@@ -22,38 +27,112 @@ const horaBaixada = (ms: number | null) => (ms ? horaBR(ms) : null);
 
 /** Situação que o técnico vê: a do servidor, ou a que ele já gravou no aparelho (iniciar/concluir ainda a enviar). */
 export function situacaoLocal(c: CartaoTela, fila: OperacaoFila[]) {
-  const minhas = fila.filter((o) => o.atividadeId === c.atividadeId && o.estado !== "enviada");
-  const status = minhas.some((o) => o.tipo === "concluir") ? "CONCLUIDA" : minhas.some((o) => o.tipo === "iniciar") && c.status === "AGENDADA" ? "EM_ANDAMENTO" : c.status;
-  return { status, aEnviar: minhas.length };
+  const { status, aEnviar } = situacaoDoCartao(c, fila);
+  return { status, aEnviar };
 }
 
-export function CartaoAtividade({ c, fila, mostrarDia, proxima }: { c: CartaoTela; fila: OperacaoFila[]; mostrarDia?: boolean; /** A primeira OS do dia ainda por concluir */ proxima?: boolean }) {
-  const { status, aEnviar } = situacaoLocal(c, fila);
+/** O que o card mostra no lugar de "Agendada" depois de um toque de hoje */
+const ROTULO_ESTADO: Partial<Record<EstadoCartao, { rotulo: string; classe: string }>> = {
+  "a-caminho": { rotulo: "A caminho", classe: "bg-acento-claro text-acento-hover" },
+  chegou: { rotulo: "No local", classe: "bg-success-100 text-success-700" },
+};
+
+/**
+ * O que o técnico lê antes de sair: o que o cliente pediu ao abrir o chamado (ou a descrição do
+ * serviço, na OS aberta pelo escritório) e a orientação do escritório. Com "Exibir dados do cliente"
+ * desligado o texto do serviço continua; sai a identidade de quem pediu (lib/tecnico/cartao).
+ */
+export function DetalhesServico({ c, seVazio }: { c: CartaoTela; /** Texto quando não há nada escrito (sem ele, nada aparece) */ seVazio?: string }) {
   const { config } = useTecnico();
-  const st = ROTULO_STATUS_ATIVIDADE[status] ?? { rotulo: status, classe: "bg-surface-linha text-ink" };
+  const descricao = descricaoParaApp(c.descricao, config);
+  const orientacao = (c.orientacao ?? "").trim();
+  if (!descricao && !orientacao) return seVazio ? <p className="text-sm text-ink-muted" data-sem-detalhes>{seVazio}</p> : null;
+  const titulo = "text-[11px] font-bold uppercase tracking-wide text-ink-muted";
+  return (
+    <div className="space-y-3" data-detalhes-servico>
+      {descricao && (
+        <div>
+          <h4 className={titulo}>{c.chamado ? "O que o cliente pediu" : "Descrição do serviço"}</h4>
+          <p className="text-sm text-ink whitespace-pre-line break-words" data-descricao>{descricao}</p>
+        </div>
+      )}
+      {orientacao && (
+        <div>
+          <h4 className={titulo}>Orientação do escritório</h4>
+          <p className="text-sm text-ink whitespace-pre-line break-words" data-orientacao>{orientacao}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const diaMes = (dia: string) => dia.split("-").reverse().slice(0, 2).join("/");
+
+/**
+ * O card da OS. Antes de chegar ele só se LÊ: tocar no corpo expande (descrição e orientação), e a OS
+ * só abre pelo "Cheguei" — que registra a chegada, avisa o cliente e entra na OS, com ou sem sinal.
+ * "A caminho" é opcional e discreto: dá para tocar "Cheguei" direto. Depois de chegar (ou com a OS já
+ * em andamento), o card abre a OS e ganha o atalho da Câmera — a foto é sempre no local.
+ */
+export function CartaoAtividade({ c, fila, mostrarDia, proxima, guardado, listaEm }: {
+  c: CartaoTela; fila: OperacaoFila[]; mostrarDia?: boolean; /** A primeira OS do dia ainda por concluir */ proxima?: boolean;
+  /** O retrato desta OS guardado no aparelho (o mesmo que a tela da OS usa) */ guardado?: Guardado | null;
+  /** Quando a lista foi baixada */ listaEm?: number | null;
+}) {
+  const { config } = useTecnico();
+  const agora = useAgora();
+  const { status, aEnviar, estado, entra, aCaminho, chegou } = situacaoDoCartao(c, fila, { guardado, listaEm, agora });
+  const { tocar, tocando } = useToqueAviso(c.atividadeId);
+  const [aberto, setAberto] = useState(false);
+  const st = ROTULO_ESTADO[estado] ?? ROTULO_STATUS_ATIVIDADE[status] ?? { rotulo: status, classe: "bg-surface-linha text-ink" };
   // Permissões do app (Equipes › App do colaborador): com "Exibir dados do cliente" desligado o cartão
-  // não mostra nome, unidade, endereço nem rota; com "Exibir contatos" desligado, nada de Ligar.
+  // não mostra nome, unidade, endereço nem rota.
   const verDados = config.exibirDadosCliente;
-  const verContatos = config.exibirContatosCliente;
   const cliente = verDados ? c.cliente : "";
   const rota = verDados ? c.rota : null;
-  const telefone = verContatos ? c.telefone : null;
+  const encerrada = estado === "concluida" || estado === "cancelada";
   const concluida = status === "CONCLUIDA";
+  // Depois do toque: o registro de hoje (um só — o mais recente) e o WhatsApp com a mensagem pronta
+  const registro = estado === "chegou" && chegou ? { evento: "CHEGOU" as const, aviso: chegou } : estado === "a-caminho" && aCaminho ? { evento: "A_CAMINHO" as const, aviso: aCaminho } : null;
+  const whatsapp = useWhatsappAviso(guardado?.avisoCliente, registro?.evento ?? null);
+  const detalhesId = `detalhes-${c.atividadeId}`;
+
+  /** OS marcada para outro dia: um toque por engano avisaria o cliente — confirma antes */
+  async function confirmarOutroDia(pergunta: string) {
+    if (!c.dia || c.dia === chaveDiaBR(agora)) return true;
+    return confirmar({ titulo: `OS agendada para ${diaMes(c.dia)}`, mensagem: pergunta, confirmarTexto: "Sim" });
+  }
+  async function chegar() {
+    if (!(await confirmarOutroDia("Registrar a chegada agora?"))) return;
+    toqueLeve();
+    // Entrar na OS é local: o toque fica no aparelho e a OS abre, com ou sem sinal
+    if (await tocar("CHEGOU")) irPara({ ver: "os", a: c.atividadeId });
+  }
+  async function aCaminhoAgora() {
+    if (!(await confirmarOutroDia("Avisar que você está a caminho agora?"))) return;
+    toqueLeve();
+    await tocar("A_CAMINHO");
+  }
+
   return (
     <article className={cn("bg-white rounded-card border shadow-card overflow-hidden", proxima ? "border-primary-300 ring-2 ring-primary-100" : "border-surface-border")}
-      data-cartao={c.atividadeId} data-proxima={proxima || undefined}>
-      <button type="button" onClick={() => irPara({ ver: "os", a: c.atividadeId })} className="w-full text-left p-4 flex gap-3 active:bg-surface-alt touch-target">
+      data-cartao={c.atividadeId} data-estado={estado} data-proxima={proxima || undefined}>
+      <button type="button" data-corpo-cartao
+        onClick={() => (entra ? irPara({ ver: "os", a: c.atividadeId }) : setAberto((v) => !v))}
+        {...(!entra && { "aria-expanded": aberto, "aria-controls": detalhesId })}
+        className="w-full text-left p-4 flex gap-3 active:bg-surface-alt touch-target">
         <div className="w-16 shrink-0 text-center">
           <div className={cn("text-xl font-bold leading-tight", concluida ? "text-ink-muted" : "text-ink")} data-hora>{c.hora ?? "—"}</div>
           <div className="text-[11px] text-ink-muted">{c.hora ? (c.duracaoMin ? `${c.duracaoMin} min` : "") : "sem horário"}</div>
-          {mostrarDia && c.dia && <div className="text-[11px] text-ink-muted mt-0.5">{c.dia.split("-").reverse().slice(0, 2).join("/")}</div>}
+          {mostrarDia && c.dia && <div className="text-[11px] text-ink-muted mt-0.5">{diaMes(c.dia)}</div>}
           {concluida && <CheckCircle2 className="w-5 h-5 text-success-600 mx-auto mt-1" aria-hidden />}
         </div>
         <div className="min-w-0 flex-1">
           {proxima && status === "AGENDADA" && <p className="text-[11px] font-bold uppercase tracking-wide text-primary-700 mb-0.5">Próxima</p>}
           <div className="flex items-start justify-between gap-2">
             <h3 className={cn("font-bold text-base leading-snug truncate", concluida ? "text-ink-muted" : "text-ink")}>{cliente || c.titulo}</h3>
-            <ChevronRight className="w-5 h-5 text-ink-subtle shrink-0" />
+            {/* Seta para a direita = abre a OS; para baixo = só expande (ainda não chegou) */}
+            {entra ? <ChevronRight className="w-5 h-5 text-ink-subtle shrink-0" data-abre-os /> : <ChevronDown className={cn("w-5 h-5 text-ink-subtle shrink-0 transition-transform", aberto && "rotate-180")} data-expande />}
           </div>
           <p className="text-sm text-ink-muted truncate" data-linha-os>
             {[c.osNumero, cliente ? c.titulo : null, verDados ? c.unidade : null].filter(Boolean).join(" · ")}
@@ -69,25 +148,75 @@ export function CartaoAtividade({ c, fila, mostrarDia, proxima }: { c: CartaoTel
           </div>
         </div>
       </button>
-      {(rota || telefone || !concluida) && (
+
+      {!entra && aberto && (
+        <div id={detalhesId} className="border-t border-surface-border bg-surface-alt px-4 py-3 space-y-3" data-detalhes-cartao>
+          <DetalhesServico c={c} seVazio="Sem descrição nem orientação do escritório." />
+          <p className="text-xs text-ink-muted" data-dica-cheguei>
+            {config.avisarCliente ? "“Cheguei” registra o horário, avisa o cliente e abre a OS." : "“Cheguei” registra o horário e abre a OS."}
+          </p>
+        </div>
+      )}
+
+      {registro && (
+        <div className="border-t border-surface-border px-3 py-2 flex items-center gap-2" data-registro-cartao>
+          <RegistroAviso evento={registro.evento} aviso={registro.aviso} agora={agora} className="flex-1" />
+          {whatsapp && (
+            <a href={whatsapp} target="_blank" rel="noopener noreferrer" data-aviso-whatsapp={registro.evento} aria-label="Avisar pelo WhatsApp"
+              className="shrink-0 rounded-card border border-surface-border bg-white text-ink px-3 text-sm font-semibold inline-flex items-center justify-center gap-1.5 touch-target">
+              <MessageCircle className="w-4 h-4" /> WhatsApp
+            </a>
+          )}
+        </div>
+      )}
+
+      {!entra ? (
+        // Antes de chegar: Rota e "Cheguei" (principal). "A caminho" é opcional e some depois do toque.
+        <div className="border-t border-surface-border p-3 space-y-1" data-acoes-cartao>
+          <div className="flex gap-2">
+            {rota && <BotaoRota rota={rota} className="rounded-card border border-surface-border bg-white" />}
+            <button type="button" onClick={chegar} disabled={!!tocando} data-aviso="CHEGOU" data-cheguei
+              className="flex-1 rounded-card bg-acento text-white py-3 text-sm font-bold inline-flex items-center justify-center gap-2 active:bg-acento-hover disabled:opacity-60 touch-target">
+              <MapPin className="w-5 h-5" /> Cheguei
+            </button>
+          </div>
+          {estado === "antes" && config.avisarCliente && (
+            <button type="button" onClick={aCaminhoAgora} disabled={!!tocando} data-aviso="A_CAMINHO"
+              className="w-full inline-flex items-center justify-center gap-1.5 text-sm font-medium text-ink-muted active:text-ink disabled:opacity-60 touch-target">
+              <Car className="w-4 h-4" /> Avisar que estou a caminho
+            </button>
+          )}
+        </div>
+      ) : (rota || !encerrada) && (
         <div className="flex border-t border-surface-border divide-x divide-surface-border" data-acoes-cartao>
-          {/* Atalho: abre a OS já na câmera rápida (fotos em rajada, organizadas pelo QR da etiqueta) */}
-          {!concluida && (
+          {/* Já no local: abre a OS direto na câmera rápida (fotos em rajada, organizadas pelo QR da etiqueta) */}
+          {!encerrada && (
             <button type="button" onClick={() => irPara({ ver: "os", a: c.atividadeId, cam: true })} data-camera-cartao
               className="flex-1 inline-flex items-center justify-center gap-2 py-3 text-sm font-semibold text-primary-700 active:bg-surface-alt touch-target">
               <Camera className="w-4 h-4" /> Câmera
             </button>
           )}
           {rota && <BotaoRota rota={rota} />}
-          {telefone && (
-            <a href={`tel:${telefone.replace(/[^\d+]/g, "")}`} data-ligar className="flex-1 inline-flex items-center justify-center gap-2 py-3 text-sm font-semibold text-ink active:bg-surface-alt touch-target">
-              <Phone className="w-4 h-4" /> Ligar
-            </a>
-          )}
         </div>
       )}
     </article>
   );
+}
+
+/** O que o aparelho guarda de cada OS da lista (retrato): diz ao card se o técnico já chegou, mesmo sem sinal. */
+function useGuardados(ids: string[]): Map<string, Guardado> {
+  const { motor, estado } = useTecnico();
+  const [guardados, setGuardados] = useState<Map<string, Guardado>>(() => new Map());
+  const chave = ids.join(",");
+  useEffect(() => {
+    if (!motor || !chave) return;
+    let vivo = true;
+    void Promise.all(chave.split(",").map((id) => motor.banco.retrato(id))).then((lista) => {
+      if (vivo) setGuardados(new Map(lista.flatMap((g) => (g ? [[g.atividadeId, guardadoDoRetrato(g.retrato, g.salvoEm)] as const] : []))));
+    });
+    return () => { vivo = false; };
+  }, [motor, chave, estado.versao]);
+  return guardados;
 }
 
 interface RespostaMeuDia { tecnico: { id: string; nome: string } | null; aviso?: string; dia: string | null; atividades: CartaoTela[]; anteriores: CartaoTela[] }
@@ -151,6 +280,7 @@ export function MeuDia() {
   }, [carregar]);
 
   const d = r?.dados;
+  const guardados = useGuardados([...(d?.anteriores ?? []), ...(d?.atividades ?? [])].map((c) => c.atividadeId));
   const primeiroNome = (d?.tecnico?.nome ?? usuario.nome).split(" ")[0];
   const resumo = resumoDoDia(d?.atividades ?? [], fila);
   return (
@@ -185,13 +315,13 @@ export function MeuDia() {
       {d && d.anteriores.length > 0 && (
         <section className="space-y-2">
           <h2 className="text-sm font-bold text-ink-muted uppercase tracking-wide">Começadas antes — falta concluir</h2>
-          {d.anteriores.map((c) => <CartaoAtividade key={c.atividadeId} c={c} fila={fila} mostrarDia />)}
+          {d.anteriores.map((c) => <CartaoAtividade key={c.atividadeId} c={c} fila={fila} mostrarDia guardado={guardados.get(c.atividadeId)} listaEm={r?.baixadoEm} />)}
         </section>
       )}
       {d && d.atividades.length > 0 && (
         <section className="space-y-3">
           {d.anteriores.length > 0 && <h2 className="text-sm font-bold text-ink-muted uppercase tracking-wide">Hoje</h2>}
-          {d.atividades.map((c) => <CartaoAtividade key={c.atividadeId} c={c} fila={fila} proxima={c.atividadeId === resumo.proxima} />)}
+          {d.atividades.map((c) => <CartaoAtividade key={c.atividadeId} c={c} fila={fila} proxima={c.atividadeId === resumo.proxima} guardado={guardados.get(c.atividadeId)} listaEm={r?.baixadoEm} />)}
         </section>
       )}
       {d && d.tecnico && !d.atividades.length && !d.anteriores.length && (
@@ -227,6 +357,7 @@ export function Agenda() {
   }, [motor]);
   useEffect(() => { void carregar(); }, [carregar]);
   const d = r?.dados;
+  const guardados = useGuardados((d?.dias ?? []).flatMap((g) => g.atividades.map((c) => c.atividadeId)));
   return (
     <div className="space-y-4" data-vista="agenda">
       <header className="space-y-1">
@@ -240,7 +371,7 @@ export function Agenda() {
       {d?.dias.map((g) => (
         <section key={g.dia} className="space-y-2">
           <h2 className="text-sm font-bold text-ink capitalize">{nomeDia(g.dia)} <span className="text-ink-muted font-medium">· {g.atividades.length}</span></h2>
-          {g.atividades.map((c) => <CartaoAtividade key={c.atividadeId} c={c} fila={fila} />)}
+          {g.atividades.map((c) => <CartaoAtividade key={c.atividadeId} c={c} fila={fila} guardado={guardados.get(c.atividadeId)} listaEm={r?.baixadoEm} />)}
         </section>
       ))}
     </div>

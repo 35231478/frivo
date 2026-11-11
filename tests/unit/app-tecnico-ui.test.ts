@@ -45,6 +45,11 @@ const cartao = (atividadeId: string, hora: string | null, cliente: string, extra
   endereco: "Av. Paulista, 1000 — São Paulo/SP", rota: "https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=-23.5%2C-46.6", descricao: "Preventiva mensal",
   equipamentos: 2, atendidos: 0, adicionais: 0, ...extra,
 });
+/**
+ * A OS só abre depois do "Cheguei" do card. Nos testes da EXECUÇÃO o técnico já chegou (o servidor
+ * manda a chegada de hoje); os do Meu dia começam antes da chegada (`jaChegou = false`).
+ */
+let jaChegou = true;
 function retrato(atividadeId = "aA"): RetratoAtividade {
   return {
     cartao: cartao(atividadeId, "08:30", "Hospital Santa Luzia"),
@@ -58,6 +63,7 @@ function retrato(atividadeId = "aA"): RetratoAtividade {
       ],
       adicionais: [],
       conclusao: { ok: false, semEquipamento: true, pendencias: [], atendidos: 0, naoAtendidos: 2, mensagem: null },
+      avisos: jaChegou ? { CHEGOU: { em: new Date().toISOString(), status: "ENVIADO" } } : {},
     },
     equipamentosUnidade: [{ ...info("eqN", "Split Sala 3"), tipoEquipamentoId: "te1", qr: null }],
     checklistsPorTipo: { te1: ITENS },
@@ -98,7 +104,7 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   (globalThis as any).indexedDB = new IDBFactory();
-  online = true; enviadas = []; fetchFalso.mockClear(); segurarMeuDia = null; ajustarRetrato = (r) => r;
+  online = true; enviadas = []; fetchFalso.mockClear(); segurarMeuDia = null; ajustarRetrato = (r) => r; jaChegou = true;
   window.localStorage.clear();
   banco = await BancoTecnico.abrir("uT");
   motor = new MotorSync(banco, { fetch: fetchFalso as unknown as typeof fetch, online: () => online });
@@ -209,6 +215,7 @@ describe("modo técnico (puro, roda no middleware)", () => {
 
 /* ═════════════════════════ telas ═════════════════════════ */
 describe("Meu dia", () => {
+  beforeEach(() => { jaChegou = false; });
   it("cartões na ordem do servidor (horário), com cliente, endereço, rota, horário, situação e nº de equipamentos; prepara as OS para abrir sem sinal", async () => {
     const { MeuDia } = await import("@/components/tecnico/meu-dia");
     await montar(createElement(MeuDia));
@@ -226,9 +233,10 @@ describe("Meu dia", () => {
     await esperarAte(() => fetchFalso.mock.calls.filter(([u]) => String(u).startsWith("/api/tecnico/atividades/")).length === 3, "retratos baixados");
     await esperar();
     expect((await banco.retratos()).map((r) => r.atividadeId).sort()).toEqual(["aA", "aB", "aG"]);
-    // tocar no cartão abre a OS no app
-    await clicar(c.querySelector("button"));
-    expect(window.location.search).toBe("?ver=os&a=aA");
+    // antes de chegar, tocar no cartão NÃO abre a OS: expande (a OS abre pelo "Cheguei" — tests/unit/meu-dia-chegada-ui)
+    await clicar(c.querySelector("[data-corpo-cartao]"));
+    expect(window.location.search).toBe("");
+    expect(c.querySelector("[data-detalhes-cartao]")!.textContent).toContain("Preventiva mensal");
   });
 
   it("SEM SINAL: mostra o Meu dia guardado (com a hora) e o indicador diz Offline", async () => {
@@ -243,6 +251,9 @@ describe("Meu dia", () => {
 });
 
 describe("Meu dia — lapidado (Etapa 2a)", () => {
+  beforeEach(() => { jaChegou = false; });
+  /** Os botões da barra do card, na ordem em que aparecem */
+  const acoes = (barra: Element) => [...barra.querySelectorAll("a, button")].map((b) => b.textContent?.trim());
   const abrirMeuDia = async (config?: any, n = 3) => {
     const { MeuDia } = await import("@/components/tecnico/meu-dia");
     await montar(createElement(MeuDia), config);
@@ -257,26 +268,29 @@ describe("Meu dia — lapidado (Etapa 2a)", () => {
     expect(c.querySelector("[data-linha-os]")!.textContent).toBe("OS-aA");
     expect(c.querySelector("[data-endereco]")).toBeNull();
     expect(c.querySelector("[data-rota]")).toBeNull();
-    // o que ele precisa para o dia continua: horário, situação, equipamentos — e o contato (outra chave)
+    // o que ele precisa para o dia continua: horário, situação, equipamentos — e o "Cheguei"
     expect(c.querySelector("[data-hora]")!.textContent).toBe("14:00");
     expect(c.querySelector("[data-status]")!.textContent).toBe("Agendada");
     expect(c.querySelector("[data-equipamentos]")!.textContent).toContain("2 equipamentos");
-    expect(c.querySelector("[data-ligar]")).not.toBeNull();
+    expect(c.querySelector("[data-cheguei]")).not.toBeNull();
+    expect(c.querySelector("[data-ligar]")).toBeNull(); // o "Ligar" saiu do card
   });
 
-  it("permissões do app: 'Exibir contatos' DESLIGADO — sem Ligar (a rota fica); as duas desligadas — nada do cliente na barra (só o atalho da câmera)", async () => {
-    await abrirMeuDia(cfg({ exibirContatosCliente: false }));
+  it("o card não tem mais 'Ligar' (com ou sem 'Exibir contatos'); com os dados do cliente desligados, some a rota e ficam 'Cheguei' e 'A caminho'", async () => {
+    await abrirMeuDia();
     const c = $("[data-cartao=aA]")!;
     expect(c.querySelector("[data-ligar]")).toBeNull();
     expect(c.textContent).not.toContain("Ligar");
-    expect(c.querySelector("[data-rota]")).not.toBeNull();
+    expect($$("a[href^='tel:']")).toEqual([]);
+    // Antes de chegar: Rota e "Cheguei" na linha; "A caminho" discreto, embaixo. Sem Câmera (a foto é no local)
+    expect(acoes(c.querySelector("[data-acoes-cartao]")!)).toEqual(["Rota no mapa", "Cheguei", "Avisar que estou a caminho"]);
     expect(c.textContent).toContain("Hospital Santa Luzia");
     act(() => root.unmount()); caixa.remove();
     await abrirMeuDia(cfg({ exibirDadosCliente: false, exibirContatosCliente: false }));
-    // A barra agora existe por causa do atalho "Câmera" (que não é dado do cliente): Rota e Ligar continuam fora
-    for (const barra of $$("[data-acoes-cartao]")) expect([...barra.children].map((b) => b.textContent?.trim())).toEqual(["Câmera"]);
+    for (const barra of $$("[data-acoes-cartao]")) expect(acoes(barra)).toEqual(["Cheguei", "Avisar que estou a caminho"]);
     expect($$("[data-rota]")).toEqual([]);
     expect($$("a[href^='tel:']")).toEqual([]);
+    expect($$("[data-camera-cartao]")).toEqual([]);
   });
 
   it("o servidor já mandou o cartão sem os dados (chave desligada depois da página aberta): a tela não quebra nem mostra vazio", async () => {
@@ -287,8 +301,8 @@ describe("Meu dia — lapidado (Etapa 2a)", () => {
       const c = $("[data-cartao=aA]")!;
       expect(c.querySelector("h3")!.textContent).toBe("Preventiva");
       expect(c.querySelector("[data-linha-os]")!.textContent).toBe("OS-aA");
-      // Sem rota nem telefone (não vieram): na barra fica só o atalho da câmera
-      expect([...c.querySelector("[data-acoes-cartao]")!.children].map((b) => b.textContent?.trim())).toEqual(["Câmera"]);
+      // Sem rota (não veio): na barra ficam "Cheguei" e "A caminho"
+      expect(acoes(c.querySelector("[data-acoes-cartao]")!)).toEqual(["Cheguei", "Avisar que estou a caminho"]);
       expect(c.querySelector("[data-rota]")).toBeNull();
       expect(c.querySelector("[data-ligar]")).toBeNull();
     } finally { meuDia.atividades = original; }
@@ -361,7 +375,7 @@ describe("Meu dia — lapidado (Etapa 2a)", () => {
       await abrirMeuDia(undefined, 2);
       expect($("[data-cartao=aB] [data-prioridade]")!.textContent).toBe("Urgente");
       expect($("[data-cartao=aA] [data-prioridade]")).toBeNull();
-      for (const el of [$("[data-cartao=aA] button"), $("[data-cartao=aA] [data-rota]"), $("[data-cartao=aA] [data-ligar]")]) expect(el!.className).toContain("touch-target");
+      for (const el of [$("[data-cartao=aA] button"), $("[data-cartao=aA] [data-rota]"), $("[data-cartao=aA] [data-cheguei]"), $("[data-cartao=aA] [data-aviso=A_CAMINHO]")]) expect(el!.className).toContain("touch-target");
     } finally { meuDia.atividades = original; }
   });
 
@@ -410,8 +424,9 @@ describe("Meu dia — lapidado (Etapa 2a)", () => {
 
     const c = cartao("aA", "14:00", "Hospital Santa Luzia");
     expect(aplicarPrivacidade(c, { exibirDadosCliente: true, exibirContatosCliente: true })).toEqual(c);
+    // Sem os dados do cliente saem nome, unidade, endereço e rota; a descrição do SERVIÇO fica (o técnico precisa dela)
     expect(aplicarPrivacidade(c, { exibirDadosCliente: false, exibirContatosCliente: true }))
-      .toEqual({ ...c, cliente: "", unidade: null, endereco: "", rota: null, descricao: "" });
+      .toEqual({ ...c, cliente: "", unidade: null, endereco: "", rota: null });
     expect(aplicarPrivacidade(c, { exibirDadosCliente: true, exibirContatosCliente: false })).toEqual({ ...c, telefone: null });
   });
 });
@@ -971,12 +986,12 @@ import { CONFIG_APP_PADRAO } from "@/lib/tecnico/config-app";
 const cfg = (over: Partial<typeof CONFIG_APP_PADRAO>) => ({ ...CONFIG_APP_PADRAO, ...over });
 
 describe("App do colaborador: o que o técnico vê e pode fazer (por empresa)", () => {
-  it("Exibir dados do cliente DESLIGADO: esconde nome, endereço, descrição e a rota no mapa", async () => {
+  it("Exibir dados do cliente DESLIGADO: esconde nome, endereço e a rota no mapa; a descrição do serviço fica", async () => {
     await abrirOs("aA", undefined, cfg({ exibirDadosCliente: false }));
     const cab = $("header")!.textContent!;
     expect(cab).not.toContain("Hospital Santa Luzia"); // nome do cliente oculto
     expect(cab).not.toContain("Av. Paulista"); // endereço oculto
-    expect($("[data-descricao]")).toBeNull();
+    expect($("[data-descricao]")!.textContent).toBe("Preventiva mensal"); // o que fazer continua à vista
     expect(cab).not.toContain("Rota no mapa");
     expect(cab).toContain("Preventiva"); // ainda identifica a OS pelo título/nº
   });
