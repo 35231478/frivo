@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
-  ArrowLeft, Camera, CheckCircle2, ChevronRight, CircleDashed, ClipboardCheck, HardDrive, ListPlus, Loader2, MapPin, Navigation, Phone, Plus, QrCode, Search, Sparkles, Trash2, WifiOff,
+  ArrowLeft, Camera, CheckCircle2, ChevronRight, CircleDashed, ClipboardCheck, HardDrive, ListPlus, Loader2, MapPin, Phone, Plus, QrCode, Search, Sparkles, Trash2, WifiOff,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
@@ -10,6 +10,7 @@ import { confirmar, toast } from "@/components/ui/avisos";
 import { ScannerQR } from "@/components/os/scanner-qr";
 import { BotaoFoto, Miniatura, ObservacaoVoz } from "@/components/tecnico/captura";
 import { irPara, useAtividade, useTecnico } from "@/components/tecnico/contexto";
+import { BotaoRota } from "@/components/tecnico/rota";
 import { ConcluirSemEquipamento } from "@/components/os/concluir-sem-equipamento";
 import { srcFoto, TelaEquipamento } from "@/components/tecnico/equipamento";
 import { ROTULO_STATUS_ATIVIDADE } from "@/components/tecnico/meu-dia";
@@ -95,15 +96,15 @@ function ResumoOs({ r, x, aEnviar, registrar }: { r: RetratoAtividade; x: Execuc
             <span className={cn("text-xs font-semibold rounded-full px-2 py-0.5", st.classe)} data-status={x.atividade.status}>{st.rotulo}</span>
           </div>
           {/* "Exibir dados do cliente" desligado: esconde nome, endereço e descrição do cliente (privacidade) */}
-          <h1 className="text-xl font-bold text-ink leading-tight">{config.exibirDadosCliente ? c.cliente : (x.atividade.titulo || c.osNumero)}</h1>
-          <p className="text-sm text-ink-muted">{[x.atividade.titulo !== x.atividade.tipoOs?.nome && x.atividade.titulo, c.unidade, c.hora].filter(Boolean).join(" · ")}</p>
+          <h1 className="text-xl font-bold text-ink leading-tight">{(config.exibirDadosCliente && c.cliente) || x.atividade.titulo || c.osNumero}</h1>
+          <p className="text-sm text-ink-muted">{[config.exibirDadosCliente && c.cliente && x.atividade.titulo !== x.atividade.tipoOs?.nome && x.atividade.titulo, config.exibirDadosCliente && c.unidade, c.hora].filter(Boolean).join(" · ")}</p>
           {config.exibirDadosCliente && c.endereco && <p className="text-sm text-ink flex gap-1 pt-1"><MapPin className="w-4 h-4 text-ink-subtle shrink-0 mt-0.5" /> {c.endereco}</p>}
           {config.exibirDadosCliente && c.descricao && <p className="text-sm text-ink bg-surface-alt rounded-lg p-2.5 mt-2 whitespace-pre-line" data-descricao>{c.descricao}</p>}
         </div>
         {((config.exibirDadosCliente && c.rota) || (config.exibirContatosCliente && c.telefone)) && (
           <div className="flex border-t border-surface-border divide-x divide-surface-border">
             {/* Rota depende do endereço do cliente (dados); Ligar é contato do cliente */}
-            {config.exibirDadosCliente && c.rota && <a href={c.rota} target="_blank" rel="noopener noreferrer" className="flex-1 inline-flex items-center justify-center gap-2 py-3 text-sm font-semibold text-primary-700 touch-target"><Navigation className="w-4 h-4" /> Rota no mapa</a>}
+            {config.exibirDadosCliente && c.rota && <BotaoRota rota={c.rota} />}
             {config.exibirContatosCliente && c.telefone && <a href={`tel:${c.telefone.replace(/[^\d+]/g, "")}`} className="flex-1 inline-flex items-center justify-center gap-2 py-3 text-sm font-semibold text-ink touch-target"><Phone className="w-4 h-4" /> Ligar</a>}
           </div>
         )}

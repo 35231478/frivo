@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { agenda } from "@/lib/tecnico/dia";
 import { MSG_SEM_TECNICO, tecnicoDaSessao } from "@/lib/tecnico/sessao";
+import { aplicarPrivacidade } from "@/lib/tecnico/cartao";
+import { carregarConfigApp } from "@/lib/tecnico/config-app-server";
 
 /** Agenda do técnico: hoje e os próximos dias (padrão 14, no máximo 31), agrupados por dia. */
 export async function GET(req: NextRequest) {
@@ -10,5 +12,8 @@ export async function GET(req: NextRequest) {
   const tecnico = await tecnicoDaSessao(guard.session);
   if (!tecnico) return NextResponse.json({ tecnico: null, aviso: MSG_SEM_TECNICO, dias: [] });
   const n = Math.min(31, Math.max(1, Number(req.nextUrl.searchParams.get("dias")) || 14));
-  return NextResponse.json({ tecnico, dias: await agenda(guard.session.user.empresaId, tecnico.id, n) }, { headers: { "Cache-Control": "private, no-store" } });
+  const empresaId = guard.session.user.empresaId;
+  const [dias, config] = await Promise.all([agenda(empresaId, tecnico.id, n), carregarConfigApp(empresaId)]);
+  // Permissões do app (Equipes › App do colaborador): dado do cliente oculto nem sai do servidor
+  return NextResponse.json({ tecnico, dias: dias.map((g) => ({ dia: g.dia, atividades: g.atividades.map((c) => aplicarPrivacidade(c, config)) })) }, { headers: { "Cache-Control": "private, no-store" } });
 }

@@ -47,3 +47,41 @@ export function ordenarDoDia<T extends { dataAgendada: Date | string | null; hor
   const chave = (x: T) => (x.hora ? new Date(x.dataAgendada!).getTime() : Number.MAX_SAFE_INTEGER);
   return [...lista].sort((a, b) => chave(a) - chave(b) || a.osNumero.localeCompare(b.osNumero, "pt-BR", { numeric: true }));
 }
+
+/* ───────── Rota: Google Maps ou Waze (o técnico escolhe o app do celular) ───────── */
+
+export type AppRota = "google" | "waze";
+export const APPS_ROTA: { id: AppRota; nome: string }[] = [{ id: "google", nome: "Google Maps" }, { id: "waze", nome: "Waze" }];
+
+/**
+ * Link do WAZE para o mesmo destino da rota do Google (o cartão guarda só a do Google — assim vale
+ * também para o que já está no aparelho). Coordenadas, quando há; senão o endereço escrito.
+ */
+export function linkWaze(rotaGoogle: string | null | undefined): string | null {
+  if (!rotaGoogle) return null;
+  let destino: string | null = null;
+  try { destino = new URL(rotaGoogle).searchParams.get("destination"); } catch { return null; }
+  if (!destino) return null;
+  const coord = /^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/.test(destino);
+  return `https://waze.com/ul?${coord ? "ll" : "q"}=${encodeURIComponent(destino)}&navigate=yes`;
+}
+
+/** O link da rota no app escolhido (sem Waze possível, cai no Google). */
+export const linkDoApp = (rotaGoogle: string, app: AppRota): string => (app === "waze" ? linkWaze(rotaGoogle) ?? rotaGoogle : rotaGoogle);
+
+/* ───────── Privacidade (Equipes › App do colaborador) ───────── */
+
+interface DadosDoCliente { cliente: string; telefone: string | null; unidade: string | null; endereco: string; rota: string | null; descricao: string }
+
+/**
+ * O cartão como o app pode ver, pelas permissões da empresa: "Exibir dados do cliente" desligado tira
+ * nome, unidade, endereço, rota e descrição; "Exibir contatos" desligado tira o telefone. Aplicado NO
+ * SERVIDOR (o dado nem chega ao aparelho); a tela confere de novo para o que já estava guardado.
+ */
+export function aplicarPrivacidade<T extends DadosDoCliente>(c: T, config: { exibirDadosCliente: boolean; exibirContatosCliente: boolean }): T {
+  return {
+    ...c,
+    ...(!config.exibirDadosCliente && { cliente: "", unidade: null, endereco: "", rota: null, descricao: "" }),
+    ...(!config.exibirContatosCliente && { telefone: null }),
+  };
+}

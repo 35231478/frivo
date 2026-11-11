@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { PerfilClient } from "@/components/perfil/perfil-client";
 import { rotuloSync } from "@/components/tecnico/indicador-sync";
 import { useTecnico } from "@/components/tecnico/contexto";
+import { PreferenciaRota } from "@/components/tecnico/rota";
 import type { OperacaoFila } from "@/lib/tecnico/offline/tipos";
 import { horaBR } from "@/lib/fuso";
 
@@ -21,7 +22,7 @@ const ROTULO_OPERACAO: Record<string, string> = {
 
 /** Perfil do técnico: situação da sincronização (com o motivo das recusadas), dados, checklist do veículo, sair. */
 export function PerfilTecnico({ perfilInicial }: { perfilInicial: React.ComponentProps<typeof PerfilClient>["initial"] }) {
-  const { motor, estado, usuario } = useTecnico();
+  const { motor, estado, usuario, config } = useTecnico();
   const [fila, setFila] = useState<OperacaoFila[]>([]);
   const [osDe, setOsDe] = useState<Record<string, string>>({});
   const [dados, setDados] = useState(false);
@@ -29,8 +30,8 @@ export function PerfilTecnico({ perfilInicial }: { perfilInicial: React.Componen
   useEffect(() => {
     if (!motor) return;
     motor.banco.fila().then(setFila);
-    motor.banco.retratos().then((rs) => setOsDe(Object.fromEntries(rs.map((r) => [r.atividadeId, `${r.retrato.cartao.osNumero} · ${r.retrato.cartao.cliente}`]))));
-  }, [motor, estado.versao]);
+    motor.banco.retratos().then((rs) => setOsDe(Object.fromEntries(rs.map((r) => [r.atividadeId, [r.retrato.cartao.osNumero, config.exibirDadosCliente && r.retrato.cartao.cliente].filter(Boolean).join(" · ")]))));
+  }, [motor, estado.versao, config.exibirDadosCliente]);
 
   const r = rotuloSync(estado);
   const recusadas = fila.filter((o) => o.estado === "erro");
@@ -86,6 +87,8 @@ export function PerfilTecnico({ perfilInicial }: { perfilInicial: React.Componen
           </div>
         )}
       </section>
+
+      <PreferenciaRota />
 
       <a href="/veiculos/checklist" className="flex items-center gap-3 bg-white rounded-card border border-surface-border p-4 font-semibold text-ink touch-target">
         <Car className="w-5 h-5 text-ink-muted" /> Checklist do veículo

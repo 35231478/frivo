@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { apresentarEquipamento, carregarExecucao, SELECT_EQUIP_EXECUCAO } from "@/lib/execucao/dados";
 import { cartaoDaAtividade } from "@/lib/tecnico/dia";
 import { MSG_FORA_DO_ESCOPO, escopoDaSessao, filtroEscopo } from "@/lib/tecnico/escopo";
+import { aplicarPrivacidade } from "@/lib/tecnico/cartao";
+import { carregarConfigApp } from "@/lib/tecnico/config-app-server";
 
 type Params = { params: Promise<{ atividadeId: string }> };
 
@@ -43,8 +45,10 @@ export async function GET(_: NextRequest, { params }: Params) {
   }) : [];
   const checklistsPorTipo: Record<string, Omit<(typeof itens)[number], "tipoEquipamentoId">[]> = {};
   for (const { tipoEquipamentoId, ...i } of itens) (checklistsPorTipo[tipoEquipamentoId] ??= []).push(i);
+  // Permissões do app (Equipes › App do colaborador): dado do cliente oculto nem sai do servidor
+  const config = await carregarConfigApp(empresaId);
   return NextResponse.json({
-    cartao,
+    cartao: aplicarPrivacidade(cartao, config),
     execucao,
     equipamentosUnidade: daUnidade.map(({ qrcode, ...e }) => ({ ...apresentarEquipamento(e), tipoEquipamentoId: e.tipoEquipamentoId, qr: qrcode })),
     checklistsPorTipo,
