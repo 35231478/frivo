@@ -29,6 +29,11 @@ const BASELINE = path.join(__dirname, "despoluicao-baseline.json");
 const ATUALIZAR = process.env.DESPOLUICAO_BASELINE === "atualizar";
 
 export const ESCOPO = ["components", "app", "lib/cadastros", "lib/navegacao", "lib/permissoes.ts"];
+// Fora do escopo: páginas públicas institucionais (Privacidade, FAQ, Termos). Elas diagramam texto
+// jurídico e de FAQ OFICIAL, de leitura longa e em registro público (2ª pessoa, "você"). Não são a
+// UI do produto que o ratchet guarda — os princípios 3 e 10 miram as telas internas; aqui o
+// comprimento e o tom são o próprio conteúdo, como a "cena" escura da calculadora é exceção de marca.
+export const IGNORADOS = ["app/(publico)/(institucional)"];
 export const CATEGORIAS = ["emoji", "hex", "informal", "exclamacao", "titleCase", "textoLongo"] as const;
 export type Categoria = (typeof CATEGORIAS)[number];
 export interface Violacao { linha: number; trecho: string }
@@ -143,6 +148,7 @@ export function analisar(src: string): Record<Categoria, Violacao[]> {
 // ── Varredura ────────────────────────────────────────────────────────────────────────────────
 
 function listar(rel: string): string[] {
+  if (IGNORADOS.some((p) => rel === p || rel.startsWith(p + "/"))) return [];
   const abs = path.join(RAIZ, rel);
   if (!existsSync(abs)) return [];
   if (statSync(abs).isFile()) return [rel];
