@@ -635,6 +635,8 @@ model Configuracao {
   appConclusaoObrigatoria  Boolean @default(false) @map("app_conclusao_obrigatoria")
   /// Dispositivo: apenas um dispositivo ativo por colaborador (entrar em outro desconecta o anterior)
   appUmDispositivo         Boolean @default(true)  @map("app_um_dispositivo")
+  /// Execução: o técnico pode CADASTRAR equipamento em campo, pelo app (desligado = só vincula os que já existem)
+  appCadastrarEquipamento  Boolean @default(true)  @map("app_cadastrar_equipamento")
 
   // Notificações
   notifEmailAbrirOs       Boolean @default(false) @map("notif_email_abrir_os")

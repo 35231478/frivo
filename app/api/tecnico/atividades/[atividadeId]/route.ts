@@ -6,6 +6,7 @@ import { cartaoDaAtividade } from "@/lib/tecnico/dia";
 import { MSG_FORA_DO_ESCOPO, escopoDaSessao, filtroEscopo } from "@/lib/tecnico/escopo";
 import { aplicarPrivacidade } from "@/lib/tecnico/cartao";
 import { carregarConfigApp } from "@/lib/tecnico/config-app-server";
+import { cadastroParaRetrato } from "@/lib/execucao/cadastro-campo";
 
 type Params = { params: Promise<{ atividadeId: string }> };
 
@@ -36,8 +37,13 @@ export async function GET(_: NextRequest, { params }: Params) {
     take: 300,
     select: { ...SELECT_EQUIP_EXECUCAO, qrcode: { select: { tokenPublico: true, codigo: true } } },
   });
-  // Checklist de cada tipo da unidade: vincular sem sinal já mostra o checklist do equipamento novo
-  const tipoIds = [...new Set(daUnidade.map((e) => e.tipoEquipamentoId).filter((x): x is string => !!x))];
+  // Permissões do app (Equipes › App do colaborador): dado do cliente oculto nem sai do servidor
+  const config = await carregarConfigApp(empresaId);
+  // Cadastro em campo (se a empresa permite): unidade, tipos que já existem e sugestões de local
+  const cadastro = await cadastroParaRetrato(empresaId, config.cadastrarEquipamento, { clienteId, unidadeId }, daUnidade);
+  // Checklist de cada tipo da unidade — e, com o cadastro em campo, de cada tipo que dá para escolher:
+  // vincular ou cadastrar sem sinal já mostra o checklist do equipamento novo
+  const tipoIds = [...new Set([...daUnidade.map((e) => e.tipoEquipamentoId), ...(cadastro?.tipos ?? []).map((t) => t.tipoEquipamentoId)].filter((x): x is string => !!x))];
   const itens = tipoIds.length ? await prisma.checklistTipoItem.findMany({
     where: { tipoEquipamentoId: { in: tipoIds }, empresaId, ativo: true },
     orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }],
@@ -45,8 +51,6 @@ export async function GET(_: NextRequest, { params }: Params) {
   }) : [];
   const checklistsPorTipo: Record<string, Omit<(typeof itens)[number], "tipoEquipamentoId">[]> = {};
   for (const { tipoEquipamentoId, ...i } of itens) (checklistsPorTipo[tipoEquipamentoId] ??= []).push(i);
-  // Permissões do app (Equipes › App do colaborador): dado do cliente oculto nem sai do servidor
-  const config = await carregarConfigApp(empresaId);
   // O nome da unidade do cliente vem junto de cada equipamento: sem "Exibir dados do cliente", sai também
   const semUnidade = <T extends { unidade: string | null }>(e: T): T => (config.exibirDadosCliente ? e : { ...e, unidade: null });
   return NextResponse.json({
@@ -60,6 +64,7 @@ export async function GET(_: NextRequest, { params }: Params) {
     },
     equipamentosUnidade: daUnidade.map(({ qrcode, ...e }) => ({ ...semUnidade(apresentarEquipamento(e)), tipoEquipamentoId: e.tipoEquipamentoId, qr: qrcode })),
     checklistsPorTipo,
+    cadastro,
     geradoEm: new Date().toISOString(),
   }, { headers: { "Cache-Control": "private, no-store" } });
 }

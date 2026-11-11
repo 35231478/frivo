@@ -60,7 +60,7 @@ export function emLotes<T>(ops: T[], tamanho: (o: T) => number = (o) => JSON.str
   return lotes;
 }
 
-interface ResultadoServidor { id: string; ok: boolean; status: number; erro?: string; adiada?: boolean; repetida?: boolean }
+interface ResultadoServidor { id: string; ok: boolean; status: number; erro?: string; adiada?: boolean; repetida?: boolean; dados?: unknown }
 
 /** Recusa definitiva (fica com erro até o técnico tentar de novo ou descartar)? 4xx menos sessão/limite. */
 const definitiva = (status: number) => status >= 400 && status < 500 && ![401, 408, 429].includes(status);
@@ -89,6 +89,8 @@ export class MotorSync {
   private proximaTentativa = 0;
   /** Depois de uma falha de rede: uma gravação por lote até um envio dar certo */
   private umPorVez = false;
+  /** A tela liga aqui para mostrar o que o servidor tem a dizer sobre uma gravação que subiu (só aviso) */
+  aoAvisar: ((texto: string) => void) | null = null;
   private prazoEnvioMs: number;
   private prazoLeituraMs: number;
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -263,7 +265,12 @@ export class MotorSync {
       for (const op of fila.filter((o) => lote.some((l) => l.id === o.id))) {
         const r = porId.get(op.id);
         if (!r || r.adiada) continue;
-        if (r.ok) { mudadas.push({ ...op, estado: "enviada", enviadaEm: this.agora(), erro: null, status: r.status }); enviadas.add(op.atividadeId); }
+        if (r.ok) {
+          mudadas.push({ ...op, estado: "enviada", enviadaEm: this.agora(), erro: null, status: r.status }); enviadas.add(op.atividadeId);
+          // O servidor gravou, mas tem algo a dizer ao técnico (ex.: a série já existia em outro equipamento)
+          const aviso = !r.repetida && r.dados && typeof r.dados === "object" ? (r.dados as { aviso?: unknown }).aviso : null;
+          if (typeof aviso === "string" && aviso) this.aoAvisar?.(aviso);
+        }
         else if (definitiva(r.status)) mudadas.push({ ...op, estado: "erro", erro: r.erro ?? "Recusada pelo servidor.", status: r.status, tentativas: op.tentativas + 1 });
         else mudadas.push({ ...op, erro: r.erro ?? null, status: r.status, tentativas: op.tentativas + 1 });
       }

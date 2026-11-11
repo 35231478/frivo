@@ -36,6 +36,7 @@ const configuracaoSchema = z.object({
   appFotoSomenteCamera: z.boolean().optional(),
   appConclusaoObrigatoria: z.boolean().optional(),
   appUmDispositivo: z.boolean().optional(),
+  appCadastrarEquipamento: z.boolean().optional(),
   notifEmailAbrirOs: z.boolean().optional(),
   notifEmailConcluirOs: z.boolean().optional(),
   notifWhatsappAbrirOs: z.boolean().optional(),

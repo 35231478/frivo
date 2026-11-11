@@ -5,6 +5,7 @@
  * falta para concluir é calculado com as regras da trava (lib/execucao/pendencias).
  */
 import { completo, faltasEquipamento, paraPendencia, verificarConclusao, type StatusItem } from "@/lib/execucao/pendencias";
+import { apresentarCadastro } from "@/lib/tecnico/cadastro-equipamento";
 import type {
   AdicionalTela, EquipamentoTela, ExecucaoTela, FotoTela, OperacaoFila, RespostaTela, RetratoAtividade,
 } from "@/lib/tecnico/offline/tipos";
@@ -142,6 +143,18 @@ export function aplicar(r: RetratoAtividade, x: ExecucaoTela, op: OperacaoFila):
         .map((id) => novoEquipamento(r, id, false))
         .filter((e): e is EquipamentoTela => !!e);
       return novos.length ? { ...x, equipamentos: [...x.equipamentos, ...novos] } : x;
+    }
+
+    case "cadastrarEquipamento": {
+      // Equipamento novo, cadastrado em campo: já entra na OS (vinculado, ainda não atendido) com o
+      // checklist do tipo escolhido — sem sinal, o técnico segue a execução nele normalmente
+      if (x.equipamentos.some((e) => e.equipamento.id === op.dados.id)) return x;
+      const { tipoEquipamentoId, ...equipamento } = apresentarCadastro(op.dados, r.cadastro?.tipos ?? []);
+      const novo: EquipamentoTela = {
+        vinculoId: null, feito: false, observacao: null, equipamento, itens: tipoEquipamentoId ? (r.checklistsPorTipo[tipoEquipamentoId] ?? []) : [],
+        respostas: {}, fotos: [], formulario: null, faltas: { semResposta: [], semFoto: [], semObservacao: [], formulario: null }, completo: false, pendente: true,
+      };
+      return { ...x, equipamentos: [...x.equipamentos, novo] };
     }
 
     case "scan": {

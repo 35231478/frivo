@@ -19,6 +19,9 @@ import {
   responderFormulario, salvarAdicional, tudoOk, vincularEquipamentos, vincularPorQr, type ResultadoAcao,
 } from "@/lib/execucao/acoes";
 
+import { cadastroEquipamentoSchema } from "@/lib/tecnico/cadastro-equipamento";
+import { cadastrarEquipamentoEmCampo } from "@/lib/execucao/cadastro-campo";
+
 export const MAX_OPERACOES = 100;
 /** Quanto tempo a marca de "já aplicada" fica guardada (reenvio depois disso é raríssimo) */
 export const DIAS_GUARDA_OPERACAO = 30;
@@ -38,6 +41,8 @@ export const operacaoSchema = z.discriminatedUnion("tipo", [
   z.object({ ...base, tipo: z.literal("formulario"), equipamentoId: id, dados: formularioSchema }).strict(),
   z.object({ ...base, tipo: z.literal("vincular"), equipamentoIds: z.array(id).min(1).max(200) }).strict(),
   z.object({ ...base, tipo: z.literal("scan"), valor: z.string().min(1).max(500) }).strict(),
+  // Cadastro em campo: o id do equipamento novo vai DENTRO de `dados` (ainda não há vínculo para conferir)
+  z.object({ ...base, tipo: z.literal("cadastrarEquipamento"), dados: cadastroEquipamentoSchema }).strict(),
   z.object({ ...base, tipo: z.literal("adicional"), dados: adicionalSchema }).strict(),
   z.object({ ...base, tipo: z.literal("adicionalRemover"), dados: ref }).strict(),
   z.object({ ...base, tipo: z.literal("adicionalFoto"), dados: fotoAdicionalSchema }).strict(),
@@ -79,6 +84,7 @@ async function executar(ator: Ator, op: Operacao): Promise<ResultadoAcao<unknown
     case "formulario": return responderFormulario(ctx, op.dados);
     case "vincular": return vincularEquipamentos(ctx, op.equipamentoIds);
     case "scan": return vincularPorQr(ctx, op.valor);
+    case "cadastrarEquipamento": return cadastrarEquipamentoEmCampo(ctx, op.dados);
     case "adicional": return salvarAdicional(ctx, op.dados);
     case "adicionalRemover": return removerAdicional(ctx, op.dados);
     case "adicionalFoto": return fotoAdicional(ctx, op.dados);
