@@ -59,7 +59,13 @@ const ABAS = [
   { id: "conta", label: "Minha conta", icone: Building2 },
 ];
 
-export function PerfilClient({ initial, onAvatar }: { initial: Initial; /** Foto nova salva (o app do técnico atualiza o topo na hora) */ onAvatar?: (avatar: string) => void }) {
+export function PerfilClient({ initial, onAvatar, topoFixo = true }: {
+  initial: Initial;
+  /** Foto nova salva (o app do técnico atualiza o topo na hora) */
+  onAvatar?: (avatar: string) => void;
+  /** A faixa com o nome e "Salvar" acompanha a rolagem (painel). No app do técnico, que já tem o seu topo fixo, não */
+  topoFixo?: boolean;
+}) {
   const router = useRouter();
   const { update } = useSession();
 
@@ -181,7 +187,7 @@ export function PerfilClient({ initial, onAvatar }: { initial: Initial; /** Foto
 
       <div className="max-w-5xl mx-auto space-y-5">
         {/* Cabeçalho fixo: título + badges + ação */}
-        <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-surface-page/90 backdrop-blur border-b border-surface-border">
+        <div className={cn(topoFixo && "sticky top-0 z-30", "-mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-surface-page/90 backdrop-blur border-b border-surface-border")} data-topo-perfil data-topo-fixo={topoFixo || undefined}>
           <div className="max-w-5xl mx-auto flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3 flex-wrap min-w-0">
               <h1 className="text-xl font-bold text-ink truncate">{nome || "Meu perfil"}</h1>

@@ -33,6 +33,11 @@ aparelho.
 - O **botão de rota de cada OS continua igual**: na primeira vez pergunta o app e lembra a escolha.
   Só o texto do aviso mudou, para dizer onde trocar agora: "Troque em Perfil › Meus dados."
 
+### Ajuste junto
+- Dentro de "Meus dados", a faixa com o nome e "Salvar alterações" **grudava por cima do topo do
+  app** ao rolar (as duas ficavam fixas no mesmo lugar). No app ela passa a rolar com o conteúdo; no
+  painel nada muda.
+
 ### Mantive
 - **"Checklist do veículo"** continua no Perfil. Ele não estava na sua lista, mas é uma ação do dia
   a dia e o Perfil é o único caminho até ele no app — não tirei. Se quiser levá-lo para outro lugar

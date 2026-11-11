@@ -109,7 +109,8 @@ export function PerfilTecnico({ perfilInicial }: { perfilInicial: React.Componen
         </button>
         {dados && (
           <div className="border-t border-surface-border p-2">
-            <PerfilClient initial={{ ...perfilInicial, avatar }} onAvatar={definirAvatar} />
+            {/* topoFixo={false}: a faixa de "Meus dados" não gruda por cima do topo do app ao rolar */}
+            <PerfilClient initial={{ ...perfilInicial, avatar }} onAvatar={definirAvatar} topoFixo={false} />
             {/* Preferência do aparelho (não é ação do dia a dia): fica aqui, fora da frente do Perfil */}
             <PreferenciaRota />
           </div>

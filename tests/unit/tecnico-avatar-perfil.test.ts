@@ -23,8 +23,8 @@ vi.mock("next/navigation", () => ({
 }));
 // "Meus dados" (tela do painel reaproveitada): aqui basta saber a foto que ela recebeu e simular a troca
 vi.mock("@/components/perfil/perfil-client", () => ({
-  PerfilClient: ({ initial, onAvatar }: { initial: { avatar: string | null }; onAvatar?: (a: string) => void }) =>
-    createElement("div", { "data-meus-dados": "", "data-foto-inicial": initial.avatar ?? "" },
+  PerfilClient: ({ initial, onAvatar, topoFixo }: { initial: { avatar: string | null }; onAvatar?: (a: string) => void; topoFixo?: boolean }) =>
+    createElement("div", { "data-meus-dados": "", "data-foto-inicial": initial.avatar ?? "", "data-topo-fixo": String(topoFixo) },
       createElement("button", { type: "button", "data-trocar-foto": "", onClick: () => onAvatar?.("data:image/jpeg;base64,NOVA") }, "Salvar foto")),
 }));
 
@@ -143,6 +143,7 @@ describe("Perfil enxuto", () => {
     await abrirApp(usuario({ avatar: FOTO }), "?ver=perfil");
     await clicar([...document.querySelectorAll("button")].find((b) => texto(b) === "Meus dados"));
     expect($("[data-meus-dados]")!.getAttribute("data-foto-inicial")).toBe(FOTO); // "Foto de perfil" abre com a foto atual
+    expect($("[data-meus-dados]")!.getAttribute("data-topo-fixo")).toBe("false"); // a faixa de "Meus dados" não gruda por cima do topo do app
     await clicar($("[data-trocar-foto]"));
     expect($("[data-avatar-topo] img")!.getAttribute("src")).toBe("data:image/jpeg;base64,NOVA");
     expect($("[data-avatar-perfil] img")!.getAttribute("src")).toBe("data:image/jpeg;base64,NOVA");
