@@ -33,6 +33,9 @@ const rotasPublicas = [
   "/qr/",
   "/api/qr/",
   "/calculadora",     // calculadora de BTU pública (lead do site, sem login)
+  "/privacidade",     // páginas institucionais públicas (sem login, indexáveis)
+  "/faq",
+  "/termos",
   "/instalar",
   "/offline",
   "/sw.js",
