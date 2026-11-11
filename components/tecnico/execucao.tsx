@@ -49,7 +49,7 @@ export function VistaOs({ atividadeId, equipamentoId }: { atividadeId: string; e
     );
   }
   const e = equipamentoId ? tela.equipamentos.find((q) => q.equipamento.id === equipamentoId) : null;
-  if (e) return <TelaEquipamento x={tela} e={e} registrar={registrar} />;
+  if (e) return <TelaEquipamento x={tela} e={e} registrar={registrar} endereco={retrato.cartao.endereco} />;
   return <ResumoOs r={retrato} x={tela} aEnviar={aEnviar} registrar={registrar} />;
 }
 
@@ -64,7 +64,7 @@ function Voltar() {
 function ResumoOs({ r, x, aEnviar, registrar }: { r: RetratoAtividade; x: ExecucaoTela; aEnviar: number; registrar: (ops: NovaOperacao[]) => Promise<void> }) {
   const c = r.cartao;
   const atividadeId = x.atividade.id;
-  const { motor } = useTecnico();
+  const { motor, config } = useTecnico();
   const so = x.bloqueada;
   const [scan, setScan] = useState(false);
   const [lista, setLista] = useState(false);
@@ -94,15 +94,17 @@ function ResumoOs({ r, x, aEnviar, registrar }: { r: RetratoAtividade; x: Execuc
             <p className="text-sm font-semibold text-ink-muted">{c.osNumero}{x.atividade.tipoOs ? ` · ${x.atividade.tipoOs.nome}` : ""}</p>
             <span className={cn("text-xs font-semibold rounded-full px-2 py-0.5", st.classe)} data-status={x.atividade.status}>{st.rotulo}</span>
           </div>
-          <h1 className="text-xl font-bold text-ink leading-tight">{c.cliente}</h1>
+          {/* "Exibir dados do cliente" desligado: esconde nome, endereço e descrição do cliente (privacidade) */}
+          <h1 className="text-xl font-bold text-ink leading-tight">{config.exibirDadosCliente ? c.cliente : (x.atividade.titulo || c.osNumero)}</h1>
           <p className="text-sm text-ink-muted">{[x.atividade.titulo !== x.atividade.tipoOs?.nome && x.atividade.titulo, c.unidade, c.hora].filter(Boolean).join(" · ")}</p>
-          {c.endereco && <p className="text-sm text-ink flex gap-1 pt-1"><MapPin className="w-4 h-4 text-ink-subtle shrink-0 mt-0.5" /> {c.endereco}</p>}
-          {c.descricao && <p className="text-sm text-ink bg-surface-alt rounded-lg p-2.5 mt-2 whitespace-pre-line" data-descricao>{c.descricao}</p>}
+          {config.exibirDadosCliente && c.endereco && <p className="text-sm text-ink flex gap-1 pt-1"><MapPin className="w-4 h-4 text-ink-subtle shrink-0 mt-0.5" /> {c.endereco}</p>}
+          {config.exibirDadosCliente && c.descricao && <p className="text-sm text-ink bg-surface-alt rounded-lg p-2.5 mt-2 whitespace-pre-line" data-descricao>{c.descricao}</p>}
         </div>
-        {(c.rota || c.telefone) && (
+        {((config.exibirDadosCliente && c.rota) || (config.exibirContatosCliente && c.telefone)) && (
           <div className="flex border-t border-surface-border divide-x divide-surface-border">
-            {c.rota && <a href={c.rota} target="_blank" rel="noopener noreferrer" className="flex-1 inline-flex items-center justify-center gap-2 py-3 text-sm font-semibold text-primary-700 touch-target"><Navigation className="w-4 h-4" /> Rota no mapa</a>}
-            {c.telefone && <a href={`tel:${c.telefone.replace(/[^\d+]/g, "")}`} className="flex-1 inline-flex items-center justify-center gap-2 py-3 text-sm font-semibold text-ink touch-target"><Phone className="w-4 h-4" /> Ligar</a>}
+            {/* Rota depende do endereço do cliente (dados); Ligar é contato do cliente */}
+            {config.exibirDadosCliente && c.rota && <a href={c.rota} target="_blank" rel="noopener noreferrer" className="flex-1 inline-flex items-center justify-center gap-2 py-3 text-sm font-semibold text-primary-700 touch-target"><Navigation className="w-4 h-4" /> Rota no mapa</a>}
+            {config.exibirContatosCliente && c.telefone && <a href={`tel:${c.telefone.replace(/[^\d+]/g, "")}`} className="flex-1 inline-flex items-center justify-center gap-2 py-3 text-sm font-semibold text-ink touch-target"><Phone className="w-4 h-4" /> Ligar</a>}
           </div>
         )}
       </header>
@@ -276,7 +278,7 @@ function ModalFotoServico({ x, onFechar, registrar }: { x: ExecucaoTela; onFecha
         </label>
         <div className="space-y-2">
           {foto && <Miniatura src={foto} alt="foto nova" pendente onRemover={() => setFoto(null)} />}
-          {!foto && <BotaoFoto grande rotulo="Tirar a foto" onFoto={setFoto} />}
+          {!foto && <BotaoFoto grande rotulo="Tirar a foto" marca={{ osNumero: x.os.numero }} onFoto={setFoto} />}
         </div>
         {!pronta && <p className="text-xs text-ink-muted">Para adicionar: escolha a que a foto se refere, escreva a legenda e tire a foto.</p>}
         <button type="button" disabled={!pronta} onClick={salvar} data-salvar-foto-servico
@@ -364,7 +366,7 @@ function ModalAdicional({ x, r, a, onFechar, registrar }: { x: ExecucaoTela; r: 
               onRemover={() => registrar([{ tipo: "adicionalFotoRemover", atividadeId, dados: f.clientId ? { clientId: f.clientId } : { id: f.id! } }])} />)}
             {fotosNovas.map((d, i) => <Miniatura key={`n${i}`} src={d} alt={`foto nova ${i + 1}`} pendente onRemover={() => setFotosNovas((l) => l.filter((_, j) => j !== i))} />)}
           </div>
-          <BotaoFoto rotulo="Foto do serviço extra" onFoto={(d) => setFotosNovas((l) => [...l, d])} />
+          <BotaoFoto rotulo="Foto do serviço extra" marca={{ osNumero: x.os.numero, endereco: r.cartao.endereco }} onFoto={(d) => setFotosNovas((l) => [...l, d])} />
         </div>
         <button type="button" disabled={descricao.trim().length < 3} onClick={salvar} data-salvar-adicional className="w-full rounded-card bg-acento text-white py-4 text-base font-bold disabled:opacity-40 touch-target">
           {a ? "Salvar" : "Adicionar à OS"}
@@ -378,9 +380,12 @@ function ModalAdicional({ x, r, a, onFechar, registrar }: { x: ExecucaoTela; r: 
   );
 }
 
-function ModalConcluir({ x, onFechar, onConcluir, onJustificado }: { x: ExecucaoTela; onFechar: () => void; onConcluir: (resumo: string) => void; onJustificado: () => void }) {
+export function ModalConcluir({ x, onFechar, onConcluir, onJustificado }: { x: ExecucaoTela; onFechar: () => void; onConcluir: (resumo: string) => void; onJustificado: () => void }) {
   const [resumo, setResumo] = useState("");
+  const { config } = useTecnico();
   const c = x.conclusao;
+  // "Campo de conclusão obrigatório": sem o resumo, não conclui
+  const faltaResumo = config.conclusaoObrigatoria && !resumo.trim();
   return (
     <Modal aberto titulo="Concluir atividade" onFechar={onFechar}>
       {!c.ok ? (
@@ -415,8 +420,9 @@ function ModalConcluir({ x, onFechar, onConcluir, onJustificado }: { x: Execucao
       ) : (
         <div className="space-y-4">
           <p className="text-sm text-ink">{c.atendidos === 1 ? "1 equipamento atendido" : `${c.atendidos} equipamentos atendidos`}{c.naoAtendidos ? ` · ${c.naoAtendidos} não atendido${c.naoAtendidos > 1 ? "s" : ""}` : ""}{x.adicionais.length ? ` · ${x.adicionais.length} serviço${x.adicionais.length > 1 ? "s" : ""} extra` : ""}.</p>
-          <ObservacaoVoz rotulo="Resumo para o escritório (opcional)" valor={resumo} onSalvar={setResumo} aoDigitar={setResumo} />
-          <button type="button" onClick={() => onConcluir(resumo.trim())} data-confirmar-conclusao className="w-full rounded-card bg-success-600 text-white py-4 text-base font-bold touch-target">Concluir atividade</button>
+          <ObservacaoVoz rotulo={config.conclusaoObrigatoria ? "Resumo para o escritório (obrigatório)" : "Resumo para o escritório (opcional)"} obrigatoria={config.conclusaoObrigatoria} valor={resumo} onSalvar={setResumo} aoDigitar={setResumo} />
+          {faltaResumo && <p className="text-xs text-ink-muted" data-falta-resumo>Preencha o resumo da conclusão para concluir a atividade.</p>}
+          <button type="button" disabled={faltaResumo} onClick={() => onConcluir(resumo.trim())} data-confirmar-conclusao className="w-full rounded-card bg-success-600 text-white py-4 text-base font-bold touch-target disabled:opacity-40">Concluir atividade</button>
         </div>
       )}
     </Modal>

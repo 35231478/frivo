@@ -11,7 +11,7 @@ const permissoes = permissoesTotais();
 vi.mock("@/lib/auth", () => ({
   auth: async () => ({ user: { id: "uT", name: "Fernanda", email: "f@x.com", empresaId: "e1", empresaNome: "Clima", role: "TECNICO", permissoes, perfilNome: "Técnico" } }),
 }));
-vi.mock("@/lib/prisma", () => ({ prisma: { usuario: { findUnique: async () => ({ avatar: null }) } } }));
+vi.mock("@/lib/prisma", () => ({ prisma: { usuario: { findUnique: async () => ({ avatar: null }) }, configuracao: { findUnique: async () => null } } }));
 vi.mock("next/navigation", () => ({ redirect: (u: string) => { throw new Error(`redirect ${u}`); } }));
 
 /** Caminho de componentes (pelo nome) da raiz até o primeiro elemento que satisfaz `alvo`. */

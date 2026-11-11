@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { pode } from "@/lib/permissoes";
+import { carregarConfigApp } from "@/lib/tecnico/config-app-server";
 import { AuthSessionProvider } from "@/components/providers/session-provider";
 import { PermissoesProvider } from "@/components/providers/permissoes-provider";
 import { AppTecnico } from "@/components/tecnico/app-tecnico";
@@ -20,12 +21,16 @@ export default async function TecnicoPage() {
   if (!session) redirect("/sessao-encerrada");
   const u = session.user;
   if (!pode(u.permissoes, "ordens", "visualizar", u.role)) redirect("/sem-permissao");
-  const db = await prisma.usuario.findUnique({ where: { id: u.id }, select: { avatar: true } });
+  const [db, configApp] = await Promise.all([
+    prisma.usuario.findUnique({ where: { id: u.id }, select: { avatar: true } }),
+    carregarConfigApp(u.empresaId),
+  ]);
   return (
     <AuthSessionProvider session={session}>
       {/* Fora do layout do painel: as permissões da tela (ex.: "concluir sem equipamento") vêm daqui */}
       <PermissoesProvider role={u.role} permissoes={u.permissoes}>
         <AppTecnico
+          config={configApp}
           usuario={{
             id: u.id, nome: u.name ?? "", email: u.email ?? "", empresaNome: u.empresaNome ?? "",
             podeGravar: pode(u.permissoes, "ordens", "editar", u.role) || pode(u.permissoes, "ordens", "concluir", u.role),

@@ -26,6 +26,9 @@ import type { RetratoAtividade } from "@/lib/tecnico/offline/tipos";
 vi.mock("@/lib/imagem-cliente", () => ({
   FOTO_GALERIA: { ladoMax: 1280, qualidade: 0.8 },
   reduzirImagem: vi.fn(async () => ({ imagem: { dataUrl: "data:image/jpeg;base64,/9j/FOTO", largura: 10, altura: 10, bytes: 9 }, qualidade: {} })),
+  // A marca d'água carimba no <canvas> (sem canvas no happy-dom): no teste é passthrough (a foto não
+  // muda) e as linhas do carimbo são conferidas pelo spy.
+  aplicarMarcaDagua: vi.fn(async (dataUrl: string) => dataUrl),
 }));
 vi.mock("next-auth/react", () => ({ signOut: vi.fn(), useSession: () => ({ data: null, update: vi.fn() }) }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn() }), usePathname: () => "/tecnico", useSearchParams: () => new URLSearchParams() }));
@@ -103,7 +106,7 @@ afterEach(() => {
 });
 
 const USUARIO = { id: "uT", nome: "João Silva", email: "joao@clima.com", empresaNome: "Clima Total", podeGravar: true };
-async function montar(filho: any) {
+async function montar(filho: any, config?: any) {
   const { ProvedorTecnico } = await import("@/components/tecnico/contexto");
   const { IndicadorSync } = await import("@/components/tecnico/indicador-sync");
   const { useTecnico } = await import("@/components/tecnico/contexto");
@@ -111,7 +114,7 @@ async function montar(filho: any) {
   caixa = document.createElement("div");
   document.body.appendChild(caixa);
   root = createRoot(caixa);
-  await act(async () => { root.render(createElement(ProvedorTecnico, { usuario: USUARIO, motorPronto: motor, children: [createElement(Topo, { key: "t" }), createElement("div", { key: "c" }, filho)] })); });
+  await act(async () => { root.render(createElement(ProvedorTecnico, { usuario: USUARIO, config, motorPronto: motor, children: [createElement(Topo, { key: "t" }), createElement("div", { key: "c" }, filho)] })); });
   await esperar();
 }
 const esperar = async (n = 8) => { for (let i = 0; i < n; i++) await act(async () => { await new Promise((r) => setTimeout(r, 5)); }); };
@@ -138,9 +141,9 @@ async function foto(input: Element | null) {
 const fila = () => banco.fila();
 const situacao = () => $("[data-sync]")?.getAttribute("data-sync");
 
-async function abrirOs(atividadeId = "aA", equipamentoId?: string) {
+async function abrirOs(atividadeId = "aA", equipamentoId?: string, config?: any) {
   const { VistaOs } = await import("@/components/tecnico/execucao");
-  await montar(createElement(VistaOs, { atividadeId, equipamentoId }));
+  await montar(createElement(VistaOs, { atividadeId, equipamentoId }), config);
   await esperarAte(() => !!$("[data-vista]") && $("[data-vista]")!.getAttribute("data-vista") !== null && !caixa.querySelector(".animate-spin:not([data-sync] *)"), "OS carregada");
 }
 
@@ -381,6 +384,86 @@ describe("execução guiada", () => {
     expect(ops.at(-1)).toMatchObject({ tipo: "fotoOsRemover", dados: { clientId: f1.dados.clientId } });
     expect(confirmar).toHaveBeenCalledTimes(2);
     confirmar.mockRestore();
+  });
+});
+
+/* ═════════════════════════ App do colaborador (config por empresa) ═════════════════════════ */
+import { CONFIG_APP_PADRAO } from "@/lib/tecnico/config-app";
+const cfg = (over: Partial<typeof CONFIG_APP_PADRAO>) => ({ ...CONFIG_APP_PADRAO, ...over });
+
+describe("App do colaborador: o que o técnico vê e pode fazer (por empresa)", () => {
+  it("Exibir dados do cliente DESLIGADO: esconde nome, endereço, descrição e a rota no mapa", async () => {
+    await abrirOs("aA", undefined, cfg({ exibirDadosCliente: false }));
+    const cab = $("header")!.textContent!;
+    expect(cab).not.toContain("Hospital Santa Luzia"); // nome do cliente oculto
+    expect(cab).not.toContain("Av. Paulista"); // endereço oculto
+    expect($("[data-descricao]")).toBeNull();
+    expect(cab).not.toContain("Rota no mapa");
+    expect(cab).toContain("Preventiva"); // ainda identifica a OS pelo título/nº
+  });
+
+  it("Exibir contatos DESLIGADO: some o 'Ligar', mas a rota (dados) continua", async () => {
+    await abrirOs("aA", undefined, cfg({ exibirContatosCliente: false }));
+    const cab = $("header")!.textContent!;
+    expect(cab).not.toContain("Ligar");
+    expect(cab).toContain("Rota no mapa");
+    expect(cab).toContain("Hospital Santa Luzia");
+  });
+
+  it("padrão (tudo ligado): nome, endereço, rota e Ligar aparecem", async () => {
+    await abrirOs("aA");
+    const cab = $("header")!.textContent!;
+    expect(cab).toContain("Hospital Santa Luzia");
+    expect(cab).toContain("Rota no mapa");
+    expect(cab).toContain("Ligar");
+  });
+
+  it("Foto somente pela câmera: LIGADO força capture=environment; DESLIGADO libera a galeria", async () => {
+    const { BotaoFoto } = await import("@/components/tecnico/captura");
+    await montar(createElement(BotaoFoto, { onFoto() {} }), cfg({ fotoSomenteCamera: true }));
+    expect($("[data-foto-input]")!.getAttribute("capture")).toBe("environment");
+    expect($("[data-foto-input]")!.getAttribute("data-somente-camera")).toBe("true");
+    if (root) act(() => root.unmount()); caixa?.remove();
+    await montar(createElement(BotaoFoto, { onFoto() {} }), cfg({ fotoSomenteCamera: false }));
+    expect($("[data-foto-input]")!.getAttribute("capture")).toBeNull();
+  });
+
+  it("Marca d'água LIGADA: carimba data/hora + OS + endereço; DESLIGADA não carimba", async () => {
+    const { BotaoFoto } = await import("@/components/tecnico/captura");
+    const { aplicarMarcaDagua } = await import("@/lib/imagem-cliente");
+    (aplicarMarcaDagua as any).mockClear();
+    await montar(createElement(BotaoFoto, { onFoto() {}, marca: { osNumero: "OS-aA", endereco: "Av. Paulista, 1000" } }), cfg({ marcaDagua: true, marcaDaguaOs: true, marcaDaguaEndereco: true }));
+    await foto($("[data-foto-input]"));
+    expect(aplicarMarcaDagua).toHaveBeenCalledTimes(1);
+    const linhas = (aplicarMarcaDagua as any).mock.calls[0][1] as string[];
+    expect(linhas[0]).toMatch(/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/); // data/hora sempre, primeiro
+    expect(linhas).toContain("OS OS-aA");
+    expect(linhas).toContain("Av. Paulista, 1000");
+    if (root) act(() => root.unmount()); caixa?.remove();
+
+    (aplicarMarcaDagua as any).mockClear();
+    await montar(createElement(BotaoFoto, { onFoto() {}, marca: { osNumero: "OS-aA" } }), cfg({ marcaDagua: false }));
+    await foto($("[data-foto-input]"));
+    expect(aplicarMarcaDagua).not.toHaveBeenCalled();
+  });
+
+  it("Campo de conclusão obrigatório: sem o resumo, o botão de concluir fica travado", async () => {
+    const { ModalConcluir } = await import("@/components/tecnico/execucao");
+    const x: any = { atividade: { id: "aA", titulo: "Preventiva", status: "EM_ANDAMENTO", tipoOs: null }, os: { id: "os", numero: "OS-1" }, adicionais: [], conclusao: { ok: true, semEquipamento: false, pendencias: [], atendidos: 1, naoAtendidos: 0, mensagem: null } };
+    await montar(createElement(ModalConcluir, { x, onFechar() {}, onConcluir() {}, onJustificado() {} }), cfg({ conclusaoObrigatoria: true }));
+    const botao = $("[data-confirmar-conclusao]") as HTMLButtonElement;
+    expect(botao.disabled).toBe(true);
+    expect($("[data-falta-resumo]")).not.toBeNull();
+    await digitar($("textarea"), "Troca de filtro e limpeza concluídas");
+    expect((($("[data-confirmar-conclusao]")) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("conclusão opcional (padrão): conclui mesmo sem resumo", async () => {
+    const { ModalConcluir } = await import("@/components/tecnico/execucao");
+    const x: any = { atividade: { id: "aA", titulo: "Preventiva", status: "EM_ANDAMENTO", tipoOs: null }, os: { id: "os", numero: "OS-1" }, adicionais: [], conclusao: { ok: true, semEquipamento: false, pendencias: [], atendidos: 1, naoAtendidos: 0, mensagem: null } };
+    await montar(createElement(ModalConcluir, { x, onFechar() {}, onConcluir() {}, onJustificado() {} }));
+    expect((($("[data-confirmar-conclusao]")) as HTMLButtonElement).disabled).toBe(false);
+    expect($("[data-falta-resumo]")).toBeNull();
   });
 });
 

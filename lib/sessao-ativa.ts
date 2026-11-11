@@ -17,7 +17,10 @@ const lerUsuario = cache(async (usuarioId: string) => {
   try {
     const u = await prisma.usuario.findUnique({
       where: { id: usuarioId },
-      select: { ativo: true, senha: true, empresa: { select: { ativo: true } } },
+      select: {
+        ativo: true, senha: true, sessaoAtiva: true,
+        empresa: { select: { ativo: true, configuracao: { select: { appUmDispositivo: true } } } },
+      },
     });
     return u ?? "removido";
   } catch (e) {
@@ -38,6 +41,9 @@ export async function conferirTokenAtivo(token: JWT | null, acabouDeEntrar: bool
   const u = await lerUsuario(id);
   if (u === null) return token;
   if (u === "removido" || !u.ativo || !u.empresa.ativo) return null;
+  // "Apenas um dispositivo ativo" (por empresa): o nonce do token tem de bater com o do cadastro.
+  // Entrar em outro aparelho regrava o nonce; este token (nonce velho) é encerrado aqui.
+  if (u.empresa.configuracao?.appUmDispositivo && u.sessaoAtiva && token.sa !== u.sessaoAtiva) return null;
   const atual = impressaoDaSenha(u.senha ?? "");
   if (typeof token.fs !== "string") return { ...token, fs: atual };
   return token.fs === atual ? token : null;

@@ -12,6 +12,7 @@
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { carregarContexto, type Ator } from "@/lib/execucao/contexto";
+import { conclusaoExigeResumo } from "@/lib/tecnico/config-app-server";
 import {
   adicionalSchema, adicionarFoto, adicionarFotoOs, concluirAtividade, fotoOsSchema, removerFotoOs, concluirSchema, equipamentoSchema, formularioSchema, fotoAdicional, fotoAdicionalSchema, fotoSchema,
   gravarAudio, iniciarAtividade, marcarEquipamento, removerAdicional, removerFoto, removerFotoAdicional, respostaSchema, responderItem,
@@ -84,7 +85,13 @@ async function executar(ator: Ator, op: Operacao): Promise<ResultadoAcao<unknown
     case "adicionalFotoRemover": return removerFotoAdicional(ctx, { fotoId: op.dados.id, clientId: op.dados.clientId });
     case "fotoOs": return adicionarFotoOs(ctx, op.dados);
     case "fotoOsRemover": return removerFotoOs(ctx, { fotoId: op.dados.id, clientId: op.dados.clientId });
-    case "concluir": return concluirAtividade(ctx, op.dados);
+    case "concluir": {
+      // "Campo de conclusão obrigatório" (Configuracao.appConclusaoObrigatoria): sem resumo, não conclui.
+      if (!(op.dados.resumo ?? "").trim() && await conclusaoExigeResumo(ator.empresaId)) {
+        return { ok: false, status: 422, erro: "Preencha o resumo da conclusão para concluir a atividade." };
+      }
+      return concluirAtividade(ctx, op.dados);
+    }
   }
 }
 

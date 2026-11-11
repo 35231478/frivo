@@ -7,9 +7,11 @@ import { cn } from "@/lib/utils";
 import { FrivoMark } from "@/components/layout/frivo-logo";
 import { IndicadorSync } from "@/components/tecnico/indicador-sync";
 import { ProvedorTecnico, irPara, useTecnico, useVista, type UsuarioApp, type Vista } from "@/components/tecnico/contexto";
+import type { ConfigApp } from "@/lib/tecnico/config-app";
 import { Agenda, MeuDia } from "@/components/tecnico/meu-dia";
 import { VistaOs } from "@/components/tecnico/execucao";
 import { PerfilTecnico } from "@/components/tecnico/perfil";
+import { BloqueioLocalizacao, useLocalizacaoObrigatoria } from "@/components/tecnico/localizacao-gate";
 import type { PerfilClient } from "@/components/perfil/perfil-client";
 
 type PerfilInicial = React.ComponentProps<typeof PerfilClient>["initial"];
@@ -25,18 +27,21 @@ const NAV = [
  * execução da OS. Navegação mínima — sem o menu do sistema. Tudo o que ele grava fica no aparelho e
  * sobe sozinho; o indicador no topo diz se está offline, sincronizando ou sincronizado.
  */
-export function AppTecnico({ usuario, perfilInicial }: { usuario: UsuarioApp; perfilInicial: PerfilInicial }) {
+export function AppTecnico({ usuario, config, perfilInicial }: { usuario: UsuarioApp; config: ConfigApp; perfilInicial: PerfilInicial }) {
   return (
-    <ProvedorTecnico usuario={usuario}>
+    <ProvedorTecnico usuario={usuario} config={config}>
       <Casca perfilInicial={perfilInicial} />
     </ProvedorTecnico>
   );
 }
 
 function Casca({ perfilInicial }: { perfilInicial: PerfilInicial }) {
-  const { estado, semBanco, motor } = useTecnico();
+  const { estado, semBanco, motor, config } = useTecnico();
   const vista = useVista();
   const ativa = vista?.ver === "os" ? "dia" : vista?.ver;
+  // "Exigir localização ativa": sem GPS, o app fica travado (libera sozinho quando a posição volta)
+  const loc = useLocalizacaoObrigatoria(config.exigirLocalizacao);
+  const travadoLoc = config.exigirLocalizacao && loc.estado !== "ok";
 
   // G12/UX-3: quem clicou num link do escritório foi trazido para cá — avisa em vez de só "piscar"
   useEffect(() => {
@@ -60,7 +65,9 @@ function Casca({ perfilInicial }: { perfilInicial: PerfilInicial }) {
       </header>
       {semBanco && <p className="bg-atrasado text-white text-sm px-4 py-2">Este navegador não guarda dados no aparelho (modo anônimo?). Sem sinal, nada pode ser gravado.</p>}
       <main className="max-w-2xl mx-auto px-4 pt-4 pb-28">
-        {!vista || !motor ? <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-ink-subtle" /></div> : <Conteudo vista={vista} perfilInicial={perfilInicial} />}
+        {travadoLoc
+          ? <BloqueioLocalizacao estado={loc.estado} onTentar={loc.tentar} />
+          : !vista || !motor ? <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-ink-subtle" /></div> : <Conteudo vista={vista} perfilInicial={perfilInicial} />}
       </main>
       <nav className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-surface-border safe-bottom" aria-label="Navegação do técnico">
         <div className="grid grid-cols-3 max-w-2xl mx-auto">

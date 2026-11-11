@@ -3,12 +3,34 @@
 import { useEffect, useRef, useState } from "react";
 import { Camera, Loader2, Mic, Square, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTecnico } from "@/components/tecnico/contexto";
+import type { ConfigApp } from "@/lib/tecnico/config-app";
+import { dataHoraMarca } from "@/lib/fuso";
 
 /* ───────── Foto: câmera do celular, comprimida no aparelho (~200–400 KB) ───────── */
 
-export function BotaoFoto({ onFoto, rotulo = "Tirar foto", grande, desabilitado, className }: {
+/** Dados da OS para a marca d'água (o que incluir é decidido pela Configuracao da empresa). */
+export interface MarcaFoto { osNumero?: string | null; endereco?: string | null }
+
+/** Monta as linhas da marca d'água: data/hora sempre; OS/endereço/coordenadas conforme a config. */
+async function montarLinhasMarca(config: ConfigApp, marca: MarcaFoto | undefined): Promise<string[]> {
+  const linhas: string[] = [dataHoraMarca(new Date())];
+  if (config.marcaDaguaOs && marca?.osNumero) linhas.push(`OS ${marca.osNumero}`);
+  if (config.marcaDaguaEndereco && marca?.endereco) linhas.push(marca.endereco);
+  if (config.marcaDaguaCoordenadas) {
+    const { posicaoAtual, formatarCoord } = await import("@/lib/tecnico/geo");
+    const pos = await posicaoAtual();
+    if (pos) linhas.push(formatarCoord(pos));
+  }
+  return linhas;
+}
+
+export function BotaoFoto({ onFoto, rotulo = "Tirar foto", grande, desabilitado, className, marca }: {
   onFoto: (dataUrl: string) => void | Promise<void>; rotulo?: string; grande?: boolean; desabilitado?: boolean; className?: string;
+  /** Dados da OS para a marca d'água (quando ligada na empresa) */
+  marca?: MarcaFoto;
 }) {
+  const { config } = useTecnico();
   const ref = useRef<HTMLInputElement>(null);
   const [lendo, setLendo] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -20,15 +42,19 @@ export function BotaoFoto({ onFoto, rotulo = "Tirar foto", grande, desabilitado,
         {lendo ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />} {rotulo}
       </button>
       {erro && <p className="text-xs text-atrasado mt-1">{erro}</p>}
-      <input ref={ref} type="file" accept="image/*" capture="environment" className="hidden" data-foto-input onChange={async (e) => {
+      {/* "Foto somente pela câmera" ligado: capture=environment força a câmera e tira a galeria no
+          celular. Desligado: sem capture, o aparelho deixa escolher da galeria também. */}
+      <input ref={ref} type="file" accept="image/*" capture={config.fotoSomenteCamera ? "environment" : undefined} className="hidden" data-foto-input data-somente-camera={config.fotoSomenteCamera || undefined} onChange={async (e) => {
         const f = e.target.files?.[0];
         e.target.value = "";
         if (!f) return;
         setLendo(true); setErro(null);
         try {
-          const { reduzirImagem, FOTO_GALERIA } = await import("@/lib/imagem-cliente");
+          const { reduzirImagem, aplicarMarcaDagua, FOTO_GALERIA } = await import("@/lib/imagem-cliente");
           const { imagem } = await reduzirImagem(f, FOTO_GALERIA.ladoMax, FOTO_GALERIA.qualidade);
-          await onFoto(imagem.dataUrl);
+          let dataUrl = imagem.dataUrl;
+          if (config.marcaDagua) dataUrl = await aplicarMarcaDagua(dataUrl, await montarLinhasMarca(config, marca));
+          await onFoto(dataUrl);
         } catch {
           setErro("Não foi possível ler a foto. Tente de novo.");
         } finally { setLendo(false); }
