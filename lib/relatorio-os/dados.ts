@@ -79,6 +79,12 @@ export interface RelatorioOsDados {
   naoAtendidos: { id: string; titulo: string; local: string | null }[];
   adicionais: AdicionalRelatorio[];
   geral: { checklist: GrupoChecklist[]; fotos: FotoRelatorio[] };
+  /**
+   * "Fotos do serviço" tiradas no app que NÃO são de um equipamento atendido: as gerais da OS
+   * (fachada, quadro elétrico…) e as de equipamento que não chegou a ser atendido. As de equipamento
+   * atendido saem dentro do bloco dele.
+   */
+  fotosServico: FotoRelatorio[];
   tempos: { atividade: string; status: string; inicio: Date | null; duracaoMin: number | null }[];
   observacoes: string[];
   assinaturas: { coletadas: AssinaturaColetada[]; responsavel: { nome: string; crea: string | null } | null; clienteNome: string };
@@ -109,7 +115,10 @@ type Atividade = {
   }[];
   fotosAtendimento?: { id: string; equipamentoId: string; url: string; momento?: "ANTES" | "DEPOIS" | null; item?: { texto: string } | null }[];
   servicosAdicionais?: AdicionalEntrada[];
+  /** "Fotos do serviço" tiradas no app NESTA atividade (galeria da OS, com legenda); do escritório não vem */
+  anexosOs?: FotoServicoEntrada[];
 };
+type FotoServicoEntrada = { conteudo: string; legenda: string | null; equipamentoId: string | null; equipamento?: Equip | null };
 type AdicionalEntrada = {
   id: string; descricao: string; statusCobranca: "A_AVALIAR" | "COBRAR" | "NAO_COBRAR"; criadoPor?: { nome: string } | null;
   equipamento: Equip | null; fotos: { url: string }[];
@@ -192,6 +201,34 @@ export function adicionaisDe(ativs: Atividade[]): AdicionalRelatorio[] {
   }));
 }
 
+export const LEGENDA_FOTO_SERVICO = "Foto do serviço";
+
+/**
+ * As "Fotos do serviço" que o técnico tirou no app (fora do checklist, com legenda) — a prova que o
+ * cliente quer ver. Só as de atividade não cancelada. `doEquipamento`: as de cada equipamento
+ * ATENDIDO (vão para o bloco dele, mesmo tiradas em outra atividade da OS); `gerais`: as "Geral da
+ * OS" e as de equipamento não atendido (a legenda leva o nome dele). Foto enviada pelo escritório
+ * (sem atividade) nunca chega aqui: quem carrega só traz as do app.
+ */
+export function fotosServicoDe(ativs: Atividade[], atendidos: Set<string>) {
+  const doEquipamento = new Map<string, FotoRelatorio[]>();
+  const gerais: FotoRelatorio[] = [];
+  for (const a of ativs) {
+    if (a.status === "CANCELADA") continue;
+    for (const f of a.anexosOs ?? []) {
+      if (!ehImagem(f.conteudo)) continue;
+      const legenda = (f.legenda ?? "").trim() || LEGENDA_FOTO_SERVICO;
+      if (f.equipamentoId && atendidos.has(f.equipamentoId)) {
+        doEquipamento.set(f.equipamentoId, [...(doEquipamento.get(f.equipamentoId) ?? []), { url: f.conteudo, legenda }]);
+      } else {
+        const de = f.equipamento ? blocoEquipamento(f.equipamento, null).titulo : null;
+        gerais.push({ url: f.conteudo, legenda: de ? `${legenda} — ${de}` : legenda });
+      }
+    }
+  }
+  return { doEquipamento, gerais };
+}
+
 /**
  * Os equipamentos ATENDIDOS (um bloco cada) e os vinculados que não foram atendidos. De cada
  * atendido, só o que foi registrado nas atividades em que ELE foi atendido: checklist do tipo, as
@@ -207,6 +244,8 @@ export function blocosAtendidos(ativs: Atividade[], unidade: string | null, prin
   // OS antiga (concluída sem nenhum equipamento vinculado): o principal era o atendido
   if (principal && !equips.has(principal.id))
     equips.set(principal.id, { e: principal, atividades: new Set(legado && equips.size === 0 ? ["*", ...ativs.map((a) => a.id)] : []) });
+
+  const servico = fotosServicoDe(ativs, new Set([...equips.values()].filter((x) => x.atividades.size).map((x) => x.e.id)));
 
   const blocos: BlocoEquipamento[] = [...equips.values()].filter((x) => x.atividades.size).map(({ e, atividades }) => {
     const checklist: GrupoChecklist[] = [], fotos: FotoRelatorio[] = [], checklistTipo: ChecklistTipoRelatorio[] = [], observacoes: string[] = [];
@@ -238,6 +277,8 @@ export function blocosAtendidos(ativs: Atividade[], unidade: string | null, prin
       const obs = (a.equipamentos.find((v) => v.equipamento.id === e.id)?.observacao ?? "").trim();
       if (obs && !observacoes.includes(obs)) observacoes.push(obs);
     }
+    // Por último, as "Fotos do serviço" deste equipamento (com a legenda que o técnico escreveu)
+    fotos.push(...(servico.doEquipamento.get(e.id) ?? []));
     return { ...blocoEquipamento(e, unidade), checklistTipo, resumoChecklist, checklist, fotos, observacoes };
   }).sort((a, b) =>
     comparaNatural(`${a.local.complemento ?? ""}|${a.local.principal ?? ""}|${a.titulo}`, `${b.local.complemento ?? ""}|${b.local.principal ?? ""}|${b.titulo}`));
@@ -249,34 +290,17 @@ export function blocosAtendidos(ativs: Atividade[], unidade: string | null, prin
 
   const ids = new Set(blocos.map((b) => b.id));
   const equipamentosAtendidos = [...equips.values()].filter((x) => ids.has(x.e.id)).map((x) => x.e);
-  return { blocos, naoAtendidos, total: equips.size, equipamentosAtendidos };
+  return { blocos, naoAtendidos, total: equips.size, equipamentosAtendidos, fotosServico: servico.gerais };
 }
 
-/**
- * Quantos equipamentos foram ATENDIDOS na OS — a mesma regra do relatório (`blocosAtendidos`), sem
- * carregar o relatório inteiro: equipamento DISTINTO marcado como atendido em atividade não
- * cancelada (atendido em duas atividades conta uma vez); e, em OS antiga concluída sem nenhum
- * equipamento vinculado, o equipamento principal. Nunca "todos os da unidade".
- */
-export function contarEquipamentosAtendidos(
-  ativs: { status: string; equipamentos: { feito: boolean; equipamento: { id: string } }[] }[],
-  principalId: string | null = null, legado = false,
-): number {
-  const vinculados = new Set<string>();
-  const atendidos = new Set<string>();
-  for (const a of ativs) for (const v of a.equipamentos) {
-    vinculados.add(v.equipamento.id);
-    if (v.feito && a.status !== "CANCELADA") atendidos.add(v.equipamento.id);
-  }
-  if (principalId && legado && vinculados.size === 0) atendidos.add(principalId);
-  return atendidos.size;
-}
+// A contagem dos atendidos é regra pura (também usada na tela): mora em lib/os/equipamentos-atendidos
+export { contarEquipamentosAtendidos } from "@/lib/os/equipamentos-atendidos";
 
 export function montarRelatorioOs(os: OsParaRelatorio, relatorio: RelatorioRef | null): RelatorioOsDados {
   const unidade = os.unidade?.nome ?? null;
   const ativs = os.atividades;
 
-  const { blocos, naoAtendidos, total } = blocosAtendidos(ativs, unidade, os.equipamento, os.status === "CONCLUIDA");
+  const { blocos, naoAtendidos, total, fotosServico } = blocosAtendidos(ativs, unidade, os.equipamento, os.status === "CONCLUIDA");
 
   const concluidas = ativs.filter((a) => a.status === "CONCLUIDA").length;
   // Relato do técnico (texto livre da atividade). O `resumo` NÃO entra: é o despejo automático das
@@ -333,6 +357,7 @@ export function montarRelatorioOs(os: OsParaRelatorio, relatorio: RelatorioRef |
       checklist: ativs.flatMap((a) => checklistDe(a.respostas, a.titulo)),
       fotos: ativs.flatMap((a) => fotosDe(a.respostas)),
     },
+    fotosServico,
     tempos: ativs.map((a) => ({ atividade: a.titulo, status: a.status, inicio: a.dataAgendada ?? a.criadoEm, duracaoMin: a.duracaoMin })),
     observacoes: [os.observacoes, relatorio?.observacao].map((x) => (x ?? "").trim()).filter((x, i, arr) => x && arr.indexOf(x) === i),
     assinaturas: {
@@ -361,6 +386,16 @@ export const SELECT_ADICIONAIS = {
     id: true, descricao: true, statusCobranca: true, criadoPor: { select: { nome: true } },
     equipamento: { select: SELECT_EQUIP }, fotos: { orderBy: { criadoEm: "asc" }, select: { url: true } },
   },
+} as const;
+
+/**
+ * "Fotos do serviço" do app, dentro de cada atividade (a relação já filtra por atividade: a foto
+ * enviada pelo escritório não tem atividade e por isso não entra). Só imagem; documento fica de fora.
+ */
+export const SELECT_FOTOS_SERVICO = {
+  where: { tipo: { startsWith: "image/" } },
+  orderBy: { criadoEm: "asc" },
+  select: { conteudo: true, legenda: true, equipamentoId: true, equipamento: { select: SELECT_EQUIP } },
 } as const;
 
 /** Marca as respostas que têm áudio (sem carregar o áudio: ele é servido à parte). */
@@ -396,6 +431,7 @@ export async function carregarOsParaRelatorio(osId: string, empresaId: string): 
           checklistRespostas: SELECT_CHECKLIST,
           fotosAtendimento: SELECT_FOTOS,
           servicosAdicionais: SELECT_ADICIONAIS,
+          anexosOs: SELECT_FOTOS_SERVICO,
         },
       },
     },

@@ -123,6 +123,9 @@ export function RelatorioOsDocumento({ dados: d, config, versao }: { dados: Rela
       {/* ── Serviços adicionais (pedidos na visita), destacados ── */}
       {ve("adicionais") && <SecaoAdicionais adicionais={d.adicionais} fotos={ve("fotos")} interna={versao === "interna"} />}
 
+      {/* ── Fotos do serviço (tiradas no app) que não são de um equipamento atendido ── */}
+      {ve("fotos") && <SecaoFotosServico fotos={d.fotosServico} />}
+
       {/* ── Formulário geral da atividade (respostas sem equipamento) ── */}
       {(geralChecklist.length > 0 || geralFotos.length > 0) && (
         <section className="mt-5" data-secao="checklistGeral">
@@ -368,11 +371,26 @@ function Checklist({ grupos }: { grupos: GrupoChecklist[] }) {
   );
 }
 
-function Fotos({ fotos }: { fotos: FotoRelatorio[] }) {
+/**
+ * "Fotos do serviço": as que o técnico tirou no app com legenda e que não são de um equipamento
+ * atendido (as "Geral da OS" e as de equipamento não atendido). As de equipamento atendido saem
+ * no bloco dele. Sem foto, a seção não aparece.
+ */
+export function SecaoFotosServico({ fotos }: { fotos: FotoRelatorio[] }) {
+  if (!fotos.length) return null;
+  return (
+    <section className="mt-5" data-secao="fotosServico">
+      <Titulo icone={<Camera className="w-3.5 h-3.5" />}>Fotos do serviço ({fotos.length})</Titulo>
+      <Fotos fotos={fotos} semTitulo />
+    </section>
+  );
+}
+
+function Fotos({ fotos, semTitulo = false }: { fotos: FotoRelatorio[]; semTitulo?: boolean }) {
   if (!fotos.length) return null;
   return (
     <div data-fotos>
-      <p className="text-[11px] font-semibold text-ink-muted flex items-center gap-1 mb-1"><Camera className="w-3.5 h-3.5" /> Fotos</p>
+      {!semTitulo && <p className="text-[11px] font-semibold text-ink-muted flex items-center gap-1 mb-1"><Camera className="w-3.5 h-3.5" /> Fotos</p>}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         {fotos.map((f, i) => (
           <figure key={i} className="border border-surface-border rounded overflow-hidden" style={{ breakInside: "avoid" }}>

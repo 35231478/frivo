@@ -1,8 +1,8 @@
 import { formatarData } from "@/lib/utils";
 import { CabecalhoEmpresa, DadosClienteContrato, type EmpresaInfo, type ClienteInfo, type ContratoInfo } from "./cabecalho-relatorio";
 import { SecaoAtividade, type AtividadeSecao } from "./secao-atividade";
-import { BlocosEquipamentos, SecaoAdicionais } from "./relatorio-os-documento";
-import type { AdicionalRelatorio, BlocoEquipamento } from "@/lib/relatorio-os/dados";
+import { BlocosEquipamentos, SecaoAdicionais, SecaoFotosServico } from "./relatorio-os-documento";
+import type { AdicionalRelatorio, BlocoEquipamento, FotoRelatorio } from "@/lib/relatorio-os/dados";
 
 export interface AtividadeDocumentoProps {
   empresa: EmpresaInfo;
@@ -12,10 +12,12 @@ export interface AtividadeDocumentoProps {
   equipamentos: BlocoEquipamento[];
   /** Serviços adicionais pedidos na visita (destacados) */
   adicionais?: AdicionalRelatorio[];
+  /** Fotos do serviço (app) que não são de um equipamento atendido */
+  fotosServico?: FotoRelatorio[];
   numero: string;
 }
 
-export function AtividadeDocumento({ empresa, os, atividade, equipamentos, adicionais = [], numero }: AtividadeDocumentoProps) {
+export function AtividadeDocumento({ empresa, os, atividade, equipamentos, adicionais = [], fotosServico = [], numero }: AtividadeDocumentoProps) {
   return (
     <div className="bg-white text-ink">
       <CabecalhoEmpresa empresa={empresa} titulo="RELATÓRIO DE ATIVIDADE" numero={numero} subtitulo={`Emitido em ${formatarData(new Date(), "dd/MM/yyyy")}`} />
@@ -31,6 +33,7 @@ export function AtividadeDocumento({ empresa, os, atividade, equipamentos, adici
 
       <BlocosEquipamentos blocos={equipamentos} />
       <SecaoAdicionais adicionais={adicionais} fotos interna={false} />
+      <SecaoFotosServico fotos={fotosServico} />
 
       <div className="py-4 border-b border-surface-border">
         <p className="text-xs uppercase tracking-wider text-ink-muted mb-3">Execução técnica</p>

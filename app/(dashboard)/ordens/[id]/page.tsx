@@ -39,7 +39,8 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
           tecnicosEquipe: { select: { tecnico: { select: { id: true, nome: true } } }, orderBy: { criadoEm: "asc" } },
           veiculo: { select: { id: true, placa: true, modelo: true, marca: true } },
           respostas: { include: { campo: true } },
-          equipamentos: { select: { feito: true } },
+          // equipamentoId: o cabeçalho conta equipamento DISTINTO (igual ao card e ao relatório)
+          equipamentos: { select: { feito: true, equipamentoId: true } },
         },
         orderBy: { criadoEm: "asc" },
       },

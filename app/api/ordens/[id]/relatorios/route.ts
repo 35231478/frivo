@@ -44,12 +44,13 @@ export async function GET(_: NextRequest, { params }: Params) {
   // unidade do cliente, atendidos ou não: o card dizia 30 numa OS que atendeu 2)
   const equipamentos = contarEquipamentosAtendidos(os.atividades, os.equipamentoId, os.status === "CONCLUIDA");
 
-  // Fotos = as mesmas da galeria "Fotos & Anexos do serviço": execução, serviços adicionais e as
-  // enviadas (escritório/app), além das do formulário da atividade
+  // Fotos = só as da EXECUÇÃO, as que o técnico tirou na visita: checklist (antes/depois/item), "Fotos
+  // do serviço" do app, formulário e serviço adicional. As enviadas pelo escritório (anexo sem
+  // atividade) continuam na galeria "Fotos & Anexos", mas não entram nesta conta nem no relatório.
   const [porExecucao, porAdicional, anexosFoto] = await Promise.all([
     prisma.fotoAtendimento.groupBy({ by: ["atividadeId"], where: { empresaId, atividade: { ordemServicoId: id } }, _count: { _all: true } }),
     prisma.servicoAdicionalFoto.findMany({ where: { empresaId, servico: { ordemServicoId: id } }, select: { servico: { select: { atividadeId: true } } } }),
-    prisma.osAnexo.findMany({ where: { ordemServicoId: id, tipo: { startsWith: "image/" } }, select: { atividadeId: true } }),
+    prisma.osAnexo.findMany({ where: { ordemServicoId: id, atividadeId: { not: null }, tipo: { startsWith: "image/" } }, select: { atividadeId: true } }),
   ]);
   const fotosDaAtividade = new Map<string | null, number>();
   const somar = (atividadeId: string | null, n = 1) => fotosDaAtividade.set(atividadeId, (fotosDaAtividade.get(atividadeId) ?? 0) + n);
@@ -58,7 +59,7 @@ export async function GET(_: NextRequest, { params }: Params) {
   for (const a of anexosFoto) somar(a.atividadeId);
 
   const tecnicos = new Set<string>();
-  let totalFotos = fotosDaAtividade.get(null) ?? 0; // enviadas pelo escritório (sem atividade)
+  let totalFotos = 0;
   const atividades = os.atividades.map((a) => {
     nomesTecnicosAtividade(a).forEach((n) => tecnicos.add(n));
     const fotos = a.respostas.filter((r) => ehFoto(r.arquivoUrl, r.campo.tipo)).length + (fotosDaAtividade.get(a.id) ?? 0);
