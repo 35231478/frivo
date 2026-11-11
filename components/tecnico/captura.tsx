@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { useTecnico } from "@/components/tecnico/contexto";
 import type { ConfigApp } from "@/lib/tecnico/config-app";
 import { dataHoraMarca } from "@/lib/fuso";
+import { fotoTiradaAgora, MSG_SO_CAMERA } from "@/lib/tecnico/camera";
 
 /* ───────── Foto: câmera do celular, comprimida no aparelho (~200–400 KB) ───────── */
 
@@ -41,13 +42,15 @@ export function BotaoFoto({ onFoto, rotulo = "Tirar foto", grande, desabilitado,
           grande ? "px-4 py-4 text-base w-full" : "px-3 py-2 text-sm", className)}>
         {lendo ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />} {rotulo}
       </button>
-      {erro && <p className="text-xs text-atrasado mt-1">{erro}</p>}
+      {erro && <p className="text-xs text-atrasado mt-1" role="alert" data-erro-foto>{erro}</p>}
       {/* "Foto somente pela câmera" ligado: capture=environment força a câmera e tira a galeria no
           celular. Desligado: sem capture, o aparelho deixa escolher da galeria também. */}
       <input ref={ref} type="file" accept="image/*" capture={config.fotoSomenteCamera ? "environment" : undefined} className="hidden" data-foto-input data-somente-camera={config.fotoSomenteCamera || undefined} onChange={async (e) => {
         const f = e.target.files?.[0];
         e.target.value = "";
         if (!f) return;
+        // "Foto somente pela câmera": arquivo antigo (galeria/pasta) é recusado — nada é gravado
+        if (config.fotoSomenteCamera && !fotoTiradaAgora(f)) { setErro(MSG_SO_CAMERA); return; }
         setLendo(true); setErro(null);
         try {
           const { reduzirImagem, aplicarMarcaDagua, FOTO_GALERIA } = await import("@/lib/imagem-cliente");

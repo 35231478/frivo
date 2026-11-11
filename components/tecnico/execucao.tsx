@@ -183,7 +183,7 @@ function ResumoOs({ r, x, aEnviar, registrar }: { r: RetratoAtividade; x: Execuc
 
       {scan && <ScannerQR onFechar={() => setScan(false)} onLer={lerQr} />}
       {lista && <ListaUnidade r={r} x={x} onFechar={() => setLista(false)} onVincular={async (ids) => { setLista(false); await registrar([{ tipo: "vincular", atividadeId, equipamentoIds: ids }]); }} />}
-      {fotoServico && <ModalFotoServico x={x} onFechar={() => setFotoServico(false)} registrar={registrar} />}
+      {fotoServico && <ModalFotoServico x={x} endereco={c.endereco} onFechar={() => setFotoServico(false)} registrar={registrar} />}
       {adicional && <ModalAdicional x={x} r={r} a={adicional === "novo" ? null : adicional} onFechar={() => setAdicional(null)} registrar={registrar} />}
       {concluir && <ModalConcluir x={x} onFechar={() => setConcluir(false)} onConcluir={async (resumo) => {
         await registrar([{ tipo: "concluir", atividadeId, dados: resumo ? { resumo } : {} }]);
@@ -244,7 +244,7 @@ function FotosServico({ x, so, onAdicionar, registrar }: { x: ExecucaoTela; so: 
 }
 
 /** Foto do serviço: a QUE SE REFERE (obrigatório) + legenda (obrigatória) + a foto (comprimida no aparelho). Grava no aparelho. */
-function ModalFotoServico({ x, onFechar, registrar }: { x: ExecucaoTela; onFechar: () => void; registrar: (ops: NovaOperacao[]) => Promise<void> }) {
+function ModalFotoServico({ x, endereco, onFechar, registrar }: { x: ExecucaoTela; /** Endereço da OS para a marca d'água */ endereco?: string | null; onFechar: () => void; registrar: (ops: NovaOperacao[]) => Promise<void> }) {
   const [referencia, setReferencia] = useState("");
   const [legenda, setLegenda] = useState("");
   const [foto, setFoto] = useState<string | null>(null);
@@ -279,7 +279,7 @@ function ModalFotoServico({ x, onFechar, registrar }: { x: ExecucaoTela; onFecha
         </label>
         <div className="space-y-2">
           {foto && <Miniatura src={foto} alt="foto nova" pendente onRemover={() => setFoto(null)} />}
-          {!foto && <BotaoFoto grande rotulo="Tirar a foto" marca={{ osNumero: x.os.numero }} onFoto={setFoto} />}
+          {!foto && <BotaoFoto grande rotulo="Tirar a foto" marca={{ osNumero: x.os.numero, endereco }} onFoto={setFoto} />}
         </div>
         {!pronta && <p className="text-xs text-ink-muted">Para adicionar: escolha a que a foto se refere, escreva a legenda e tire a foto.</p>}
         <button type="button" disabled={!pronta} onClick={salvar} data-salvar-foto-servico

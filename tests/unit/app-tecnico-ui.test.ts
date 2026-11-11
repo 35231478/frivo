@@ -560,6 +560,210 @@ describe("execução guiada", () => {
   });
 });
 
+/* ═════════════════════════ execução guiada — lapidada (Etapa 2b) ═════════════════════════ */
+describe("execução guiada — lapidada (Etapa 2b)", () => {
+  /** Arquivo ANTIGO (galeria/pasta): a data dele é de quando foi tirado, não de agora */
+  async function fotoAntiga(input: Element | null) {
+    expect(input).not.toBeNull();
+    await act(async () => {
+      Object.defineProperty(input, "files", { configurable: true, value: [new File([new Uint8Array([1, 2, 3])], "galeria.jpg", { type: "image/jpeg", lastModified: Date.now() - 3 * 60 * 60 * 1000 })] });
+      input!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await esperar();
+  }
+  /** A OS aberta PELA URL (como no app): tocar em voltar, nas setas ou em concluir troca a tela de verdade */
+  async function abrirNaUrl(equipamentoId?: string, config?: any) {
+    const { VistaOs } = await import("@/components/tecnico/execucao");
+    const { useVista } = await import("@/components/tecnico/contexto");
+    function Roteada() { const v = useVista(); return v?.ver === "os" ? createElement(VistaOs, { key: v.a, atividadeId: v.a, equipamentoId: v.e }) : null; }
+    window.history.replaceState(null, "", `/tecnico?ver=os&a=aA${equipamentoId ? `&e=${equipamentoId}` : ""}`);
+    await montar(createElement(Roteada), config);
+    await esperarAte(() => !!$("[data-vista]"), "OS carregada");
+  }
+  const offline = async (equipamentoId?: string, config?: any) => { await motor.baixarRetrato("aA"); online = false; await abrirNaUrl(equipamentoId, config); };
+  const rodape = () => $("[data-concluir-equipamento]")!;
+  /** Deixa o equipamento aberto completo: TUDO OK + a medição + a foto pedida pelo item 1 */
+  async function completar() {
+    await clicar($("[data-tudo-ok]"));
+    const campo = $<HTMLInputElement>("[data-item=m1] input")!;
+    await digitar(campo, "118,5"); await sair(campo);
+    await foto($("[data-item=i1] input[data-foto-input]"));
+    await esperarAte(() => !!$("[data-destino-concluir]"), "equipamento completo");
+  }
+
+  it("1 · TUDO OK é reversível: depois dele o técnico vira um item para N/A, volta para OK, e Atenção só troca quando há prova", async () => {
+    await offline("eqA");
+    await clicar($("[data-tudo-ok]"));
+    const pressionado = (item: string, chip: string) => $(`[data-item=${item}] [data-chip=${chip}]`)!.getAttribute("aria-pressed");
+    expect([pressionado("i1", "OK"), pressionado("i2", "OK")]).toEqual(["true", "true"]);
+    await clicar($("[data-item=i2] [data-chip=NAO_SE_APLICA]"));
+    expect([pressionado("i2", "NAO_SE_APLICA"), pressionado("i2", "OK")]).toEqual(["true", "false"]);
+    await clicar($("[data-item=i2] [data-chip=OK]"));
+    expect(pressionado("i2", "OK")).toBe("true");
+    // Atenção: abre a prova; fechar sem prova NÃO troca o item (continua OK)
+    await clicar($("[data-item=i2] [data-chip=ATENCAO]"));
+    expect($("[data-modal-atencao]")).not.toBeNull();
+    await clicar($("[data-modal-atencao]")!.closest("[role=dialog]")?.querySelector("button[aria-label*='echar']") ?? $("button[aria-label*='echar']"));
+    await esperarAte(() => !$("[data-modal-atencao]"), "modal fechado");
+    expect([pressionado("i2", "OK"), pressionado("i2", "ATENCAO")]).toEqual(["true", "false"]);
+    expect((await fila()).map((o) => [o.tipo, (o as any).dados?.status ?? null])).toEqual([["iniciar", null], ["tudoOk", null], ["resposta", "NAO_SE_APLICA"], ["resposta", "OK"]]);
+  });
+
+  it("3 · Atenção exige prova: diz o que falta (foto, depois observação); a foto leva a marca d'água da OS; sem a foto o equipamento não conclui", async () => {
+    const { aplicarMarcaDagua } = await import("@/lib/imagem-cliente");
+    (aplicarMarcaDagua as any).mockClear();
+    await offline("eqA", cfg({ marcaDaguaEndereco: true }));
+    await clicar($("[data-item=i2] [data-chip=ATENCAO]"));
+    const falta = () => $("[data-falta-atencao]")?.textContent ?? null;
+    expect(falta()).toBe("Para marcar Atenção: pelo menos 1 foto e a observação.");
+    await digitar($("[data-modal-atencao] textarea"), "Bandeja com lodo");
+    await esperarAte(() => falta() === "Falta a foto do problema.", "pede a foto");
+    expect($("[data-salvar-atencao]")!.hasAttribute("disabled")).toBe(true);
+    await foto($("[data-modal-atencao] input[data-foto-input]"));
+    await esperarAte(() => falta() === null, "prova completa");
+    // a foto do problema é carimbada com a OS e o endereço (antes saía só com data/hora)
+    const linhas = (aplicarMarcaDagua as any).mock.calls.at(-1)[1] as string[];
+    expect(linhas).toContain("OS OS-aA");
+    expect(linhas).toContain("Av. Paulista, 1000 — São Paulo/SP");
+    await clicar($("[data-salvar-atencao]"));
+    await esperarAte(() => !$("[data-modal-atencao]"), "modal fechado");
+    // tira a foto do item em Atenção: volta a faltar e o equipamento não conclui
+    await clicar($("[data-tudo-ok]"));
+    const campo = $<HTMLInputElement>("[data-item=m1] input")!;
+    await digitar(campo, "10"); await sair(campo);
+    await foto($("[data-item=i1] input[data-foto-input]"));
+    await esperarAte(() => !!$("[data-destino-concluir]"), "completo com a prova");
+    const confirmar = vi.spyOn(await import("@/components/ui/avisos"), "confirmar").mockResolvedValue(true);
+    await clicar($("[data-item=i2] [data-miniatura] button"));
+    confirmar.mockRestore();
+    await esperarAte(() => rodape().querySelector("[data-faltam]")?.getAttribute("data-faltam") === "1", "voltou a faltar a foto");
+    await clicar(rodape());
+    expect(window.location.search).toBe("?ver=os&a=aA&e=eqA"); // não saiu do equipamento
+    expect($$("[data-faltas] [data-pendencia]").map((b) => b.textContent)).toEqual(["Foto: Dreno e bandeja ›"]);
+  });
+
+  it("4 · Próximo equipamento: 'Equipamento 1 de 2', setas para pular, rodapé conta o que falta e diz para onde vai", async () => {
+    await offline("eqA");
+    expect($("[data-posicao-equipamento]")!.textContent).toBe("Equipamento 1 de 2");
+    expect($<HTMLButtonElement>("[data-nav-equipamento=anterior]")!.disabled).toBe(true);
+    expect($("[data-nav-equipamento=proximo]")!.className).toContain("touch-target");
+    // incompleto: o rodapé conta (3 itens sem resposta) em vez de só "ver o que falta"
+    expect(rodape().textContent).toBe("Faltam 3 — ver o que falta");
+    await completar();
+    expect(rodape().textContent).toContain("Concluir e ir ao próximo");
+    expect($("[data-destino-concluir]")!.textContent).toBe("Split Sala 2 · equipamento 2 de 2");
+    await clicar(rodape());
+    await esperarAte(() => window.location.search === "?ver=os&a=aA&e=eqB", "foi para o próximo");
+    expect($("[data-posicao-equipamento]")!.textContent).toBe("Equipamento 2 de 2");
+    expect($<HTMLButtonElement>("[data-nav-equipamento=proximo]")!.disabled).toBe(true);
+    // último: concluir volta para a OS (onde se conclui a atividade)
+    await completar();
+    expect(rodape().textContent).toContain("Concluir equipamento");
+    expect($("[data-destino-concluir]")!.textContent).toBe("Volta para a OS para concluir a atividade");
+    // as setas pulam sem concluir nem gravar nada
+    const antes = (await fila()).length;
+    await clicar($("[data-nav-equipamento=anterior]"));
+    await esperarAte(() => window.location.search === "?ver=os&a=aA&e=eqA", "voltou pela seta");
+    expect((await fila()).length).toBe(antes);
+    await clicar($("[data-nav-equipamento=proximo]"));
+    await esperarAte(() => window.location.search === "?ver=os&a=aA&e=eqB", "avançou pela seta");
+    await clicar(rodape());
+    await esperarAte(() => window.location.search === "?ver=os&a=aA", "voltou para a OS");
+  });
+
+  it("5 · Fotos ANTES e DEPOIS por equipamento: cada uma na sua seção, com a contagem, gravadas com o momento (sem mudança de banco)", async () => {
+    await offline("eqA");
+    expect($("[data-secao=antes] [data-contagem-fotos]")).toBeNull();
+    await foto($("[data-secao=antes] input[data-foto-input]"));
+    await foto($("[data-secao=antes] input[data-foto-input]"));
+    await foto($("[data-secao=depois] input[data-foto-input]"));
+    await esperarAte(() => $$("[data-secao=antes] [data-miniatura]").length === 2 && $$("[data-secao=depois] [data-miniatura]").length === 1, "fotos nas seções");
+    expect($("[data-secao=antes] [data-contagem-fotos]")!.textContent).toBe("2");
+    expect($("[data-secao=depois] [data-contagem-fotos]")!.textContent).toBe("1");
+    expect((await fila()).filter((o) => o.tipo === "foto").map((o: any) => [o.dados.momento, o.dados.itemId ?? null])).toEqual([["ANTES", null], ["ANTES", null], ["DEPOIS", null]]);
+  });
+
+  it("permissões · 'Foto somente pela câmera' bloqueia a galeria DE VERDADE: arquivo antigo é recusado e nada é gravado; foto tirada agora passa", async () => {
+    await offline("eqA", cfg({ fotoSomenteCamera: true }));
+    const campo = () => $("[data-secao=antes] input[data-foto-input]");
+    expect(campo()!.getAttribute("capture")).toBe("environment");
+    await fotoAntiga(campo());
+    expect($("[data-secao=antes] [data-erro-foto]")!.textContent).toContain("Fotos da galeria ficam bloqueadas");
+    expect($$("[data-secao=antes] [data-miniatura]")).toEqual([]);
+    expect((await fila()).some((o) => o.tipo === "foto")).toBe(false);
+    await foto(campo());
+    await esperarAte(() => $$("[data-secao=antes] [data-miniatura]").length === 1, "foto da câmera aceita");
+    expect($("[data-secao=antes] [data-erro-foto]")).toBeNull();
+    // a prova da Atenção segue a mesma regra
+    await clicar($("[data-item=i2] [data-chip=ATENCAO]"));
+    await fotoAntiga($("[data-modal-atencao] input[data-foto-input]"));
+    expect($("[data-modal-atencao] [data-erro-foto]")).not.toBeNull();
+    expect($("[data-modal-atencao] [data-miniatura]")).toBeNull();
+  });
+
+  it("permissões · com a chave desligada a galeria vale (arquivo antigo é aceito); regra pura da data do arquivo", async () => {
+    await offline("eqA", cfg({ fotoSomenteCamera: false }));
+    await fotoAntiga($("[data-secao=antes] input[data-foto-input]"));
+    await esperarAte(() => $$("[data-secao=antes] [data-miniatura]").length === 1, "galeria aceita");
+    const { fotoTiradaAgora, TOLERANCIA_CAMERA_MS } = await import("@/lib/tecnico/camera");
+    const agora = 1_800_000_000_000;
+    expect(fotoTiradaAgora({ lastModified: agora - 1000 }, agora)).toBe(true);
+    expect(fotoTiradaAgora({ lastModified: agora - TOLERANCIA_CAMERA_MS }, agora)).toBe(true);
+    expect(fotoTiradaAgora({ lastModified: agora - TOLERANCIA_CAMERA_MS - 1 }, agora)).toBe(false);
+    expect(fotoTiradaAgora({ lastModified: agora - 86_400_000 }, agora)).toBe(false);
+    expect([fotoTiradaAgora({}, agora), fotoTiradaAgora({ lastModified: 0 }, agora)]).toEqual([true, true]); // sem data: vale o capture
+  });
+
+  it("permissões · com 'Exibir dados do cliente' desligado, a tela do equipamento e a OS não mostram cliente, unidade nem endereço", async () => {
+    await offline("eqA", cfg({ exibirDadosCliente: false, exibirContatosCliente: false }));
+    for (const dado of ["Hospital Santa Luzia", "Av. Paulista", "Matriz", "1133334444"]) expect(caixa.textContent, dado).not.toContain(dado);
+    expect($("h1")!.textContent).toBe("Split Sala 1"); // o trabalho segue identificado pelo equipamento
+    await clicar($("[data-vista=equipamento] button")); // "Equipamentos da OS"
+    await esperarAte(() => !!$("[data-vista=os]"), "voltou para a OS");
+    for (const dado of ["Hospital Santa Luzia", "Av. Paulista", "Matriz", "Ligar", "Rota no mapa"]) expect(caixa.textContent, dado).not.toContain(dado);
+  });
+
+  it("salvamento incremental SEM SINAL: fechar e reabrir não apaga resposta nem foto (ficam no aparelho) — e nada foi enviado", async () => {
+    await offline("eqA");
+    await clicar($("[data-item=i2] [data-chip=NAO_SE_APLICA]"));
+    await foto($("[data-secao=antes] input[data-foto-input]"));
+    await foto($("[data-item=i1] input[data-foto-input]"));
+    await esperarAte(() => $$("[data-miniatura]").length === 2, "fotos gravadas");
+    act(() => root.unmount()); caixa.remove();
+    await abrirNaUrl("eqA"); // reabre, ainda sem sinal
+    expect($("[data-item=i2] [data-chip=NAO_SE_APLICA]")!.getAttribute("aria-pressed")).toBe("true");
+    expect($$("[data-secao=antes] [data-miniatura]").length).toBe(1);
+    expect($$("[data-item=i1] [data-miniatura]").length).toBe(1);
+    expect($("[data-progresso]")!.textContent).toBe("1 de 3");
+    expect(enviadas).toEqual([]);
+    expect((await fila()).map((o) => [o.tipo, o.estado])).toEqual([["iniciar", "pendente"], ["resposta", "pendente"], ["foto", "pendente"], ["foto", "pendente"]]);
+  });
+
+  it("trava de conclusão mantida: atendido com checklist incompleto barra a atividade; completo, conclui (o não atendido não trava)", async () => {
+    await offline("eqA");
+    await clicar($("[data-tudo-ok]")); // atendido, mas faltam a medição e a foto pedida
+    await clicar($("[data-vista=equipamento] button"));
+    await esperarAte(() => !!$("[data-vista=os]"), "na OS");
+    await clicar($("[data-concluir-atividade]"));
+    expect($("[data-pendencias]")!.textContent).toContain("Split Sala 1");
+    expect($("[data-confirmar-conclusao]")).toBeNull();
+    expect((await fila()).some((o) => o.tipo === "concluir")).toBe(false);
+    await clicar($$("[data-pendencias] button").find((b) => b.textContent!.includes("Split Sala 1"))!);
+    await esperarAte(() => !!$("[data-vista=equipamento]"), "abriu o equipamento pela pendência");
+    const campo = $<HTMLInputElement>("[data-item=m1] input")!;
+    await digitar(campo, "118,5"); await sair(campo);
+    await foto($("[data-item=i1] input[data-foto-input]"));
+    await esperarAte(() => !!$("[data-destino-concluir]"), "equipamento completo");
+    await clicar($("[data-vista=equipamento] button"));
+    await esperarAte(() => !!$("[data-vista=os]"), "na OS de novo");
+    await clicar($("[data-concluir-atividade]"));
+    expect($("[data-pendencias]")).toBeNull();
+    await clicar($("[data-confirmar-conclusao]"));
+    await esperar();
+    expect((await fila()).at(-1)).toMatchObject({ tipo: "concluir", estado: "pendente" });
+  });
+});
+
 /* ═════════════════════════ App do colaborador (config por empresa) ═════════════════════════ */
 import { CONFIG_APP_PADRAO } from "@/lib/tecnico/config-app";
 const cfg = (over: Partial<typeof CONFIG_APP_PADRAO>) => ({ ...CONFIG_APP_PADRAO, ...over });
