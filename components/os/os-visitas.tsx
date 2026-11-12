@@ -136,16 +136,16 @@ export function OsVisitas({ osId, onMudou }: { osId: string; onMudou?: () => voi
             <li key={v.id} data-visita={v.id} data-pendente={v.pendente} data-dia={v.dia ?? ""}>
               <div className="flex items-center gap-2 flex-wrap px-4 py-2.5">
                 <button type="button" onClick={() => { setAberta(expandida ? null : v.id); setMarcados(new Set()); setDestino(""); setErro(""); }}
-                  className="flex items-center gap-2 text-left min-w-0 flex-1" aria-expanded={expandida} data-ver-equipamentos>
+                  className="flex items-center gap-2 text-left basis-full sm:basis-auto sm:flex-1" aria-expanded={expandida} data-ver-equipamentos>
                   {expandida ? <ChevronDown className="w-4 h-4 text-ink-muted shrink-0" /> : <ChevronRight className="w-4 h-4 text-ink-muted shrink-0" />}
                   <span className="text-sm font-medium text-ink whitespace-nowrap">{v.numero ? `Visita ${v.numero}` : "Visita"}</span>
                   <span className="text-sm text-ink-muted whitespace-nowrap" data-dia-visita>{rotuloDia(v.dia)}</span>
                 </button>
-                <span className={cn("text-[11px] font-medium px-1.5 py-0.5 rounded-full", st.classe)}>{st.rotulo}</span>
+                <span className={cn("text-[11px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap", st.classe)} data-situacao>{st.rotulo}</span>
                 <span className="text-xs text-ink-muted whitespace-nowrap" data-lote>{feitos} de {plural(v.equipamentos.length, "equipamento", "equipamentos")}</span>
-                <span className={cn("text-xs truncate max-w-[16rem]", v.executor ? "text-ink-muted" : "text-atencao-texto")} data-executor>{v.executor ?? "Sem quem execute"}</span>
+                <span className={cn("text-xs truncate min-w-0 max-w-full sm:max-w-[16rem]", v.executor ? "text-ink-muted" : "text-atencao-texto")} data-executor>{v.executor ?? "Sem quem execute"}</span>
                 {podeEditar && v.pendente && (
-                  <span className="flex items-center gap-1">
+                  <span className="flex items-center gap-1 ml-auto sm:ml-0">
                     <button type="button" title="Mover de dia" aria-label="Mover de dia" onClick={() => abrir({ tipo: "mover", visita: v })} data-mover-visita
                       className="p-1.5 rounded-md text-ink-muted hover:text-acento hover:bg-surface-alt"><MoveRight className="w-4 h-4" /></button>
                     <button type="button" title="Tirar o dia" aria-label="Tirar o dia" onClick={() => abrir({ tipo: "tirar", visita: v })} disabled={!outras.length} data-tirar-dia
