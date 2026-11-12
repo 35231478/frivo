@@ -105,5 +105,9 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
   // E4.2: a amarra da empresa (a central mostra "não conclui sem isso" quando ligada)
   const cfg = await prisma.configuracao.findUnique({ where: { empresaId }, select: { osExigirPrestacaoMaterial: true } });
 
-  return <OsDetalhe os={{ ...os, medicoes: medicoesDaOs, galeria, contasReceber, fatura, faturamento, exigirPrestacaoMaterial: cfg?.osExigirPrestacaoMaterial ?? false }} abaInicial={aba} />;
+  // PMOC (Etapa 2): a OS foi gerada pelo cronograma de um plano? Leitura à parte e tolerante: se as
+  // tabelas do cronograma ainda não existirem no banco, a OS abre normalmente, só sem o atalho.
+  const pmoc = await prisma.pmocExecucao.findFirst({ where: { ordemServicoId: os.id }, select: { pmoc: { select: { id: true, nome: true } } } }).then((x) => x?.pmoc ?? null).catch(() => null);
+
+  return <OsDetalhe os={{ ...os, medicoes: medicoesDaOs, galeria, contasReceber, fatura, faturamento, pmoc, exigirPrestacaoMaterial: cfg?.osExigirPrestacaoMaterial ?? false }} abaInicial={aba} />;
 }

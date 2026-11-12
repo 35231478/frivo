@@ -69,13 +69,15 @@ export function proximasOcorrencias(opts: {
   dataInicio: Date;
   dataFim?: Date | null;
   frequencia: Periodicidade | string | null | undefined;
+  /** "A cada N meses" informado direto (cronograma do PMOC); quando vem, vale no lugar de `frequencia` */
+  intervaloMeses?: number | null;
   diaRecorrencia?: number | null;
   fimSemana?: TratamentoFimSemana | string | null;
   limite?: number;
   aPartirDe?: Date;
 }): OcorrenciaRecorrencia[] {
   const limite = opts.limite ?? 12;
-  const intervalo = intervaloMeses(opts.frequencia);
+  const intervalo = opts.intervaloMeses && opts.intervaloMeses >= 1 ? Math.floor(opts.intervaloMeses) : intervaloMeses(opts.frequencia);
   const inicio = new Date(opts.dataInicio);
   // "A partir de hoje" = início do dia em Brasília; o fim da vigência vale o dia inteiro (dia civil)
   const { ano: anoDesde, mes: mesDesde, dia: diaDesde } = partesBR(opts.aPartirDe ?? new Date());

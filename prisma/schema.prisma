@@ -1246,6 +1246,8 @@ model Equipamento {
   anexosOs            OsAnexo[]
 
   pmocs PmocEquipamento[]
+  pmocCronogramas PmocCronograma[]
+  pmocExecucoes   PmocExecucao[]
 
   @@index([empresaId, ativo])
   @@index([unidadeId])
@@ -1509,6 +1511,8 @@ model TipoEquipamentoCustom {
   formTypeMappings FormTypeMapping[]
   checklistItens   ChecklistTipoItem[]
 
+  pmocCronogramas PmocCronograma[]
+
   @@map("tipos_equipamento_custom")
 }
 
@@ -1707,6 +1711,8 @@ model TipoOs {
   contratosRecorrencia     Contrato[]           @relation("ContratoTipoOsRecorrencia")
   colaboradoresCompetentes Tecnico[]            @relation("ColaboradorCompetencias")
 
+  pmocCronogramas PmocCronograma[]
+
   @@map("tipos_os")
 }
 
@@ -1822,6 +1828,8 @@ model OrdemServico {
   servicosAdicionais ServicoAdicional[]
 
   notasFiscais NotaFiscal[]
+
+  pmocExecucoes PmocExecucao[]
 
   @@unique([numero, empresaId])
   @@index([empresaId, status])
@@ -4345,6 +4353,8 @@ model Pmoc {
   responsavelTecnico Tecnico?          @relation("PmocResponsavelTecnico", fields: [responsavelTecnicoId], references: [id], onDelete: SetNull)
   criadoPor          Usuario?          @relation("PmocCriador", fields: [criadoPorId], references: [id], onDelete: SetNull)
   equipamentos       PmocEquipamento[]
+  cronograma         PmocCronograma[]
+  execucoes          PmocExecucao[]
 
   @@index([empresaId, ativo])
   @@index([clienteId])
@@ -4364,4 +4374,68 @@ model PmocEquipamento {
   @@unique([pmocId, equipamentoId])
   @@index([equipamentoId])
   @@map("pmoc_equipamentos")
+}
+
+// ─────────────────────────────────────────────
+// PMOC — Etapa 2: cronograma que gera as OS de manutenção preventiva.
+//  - PmocCronograma: um ITEM do cronograma — a quem se aplica (todos os equipamentos do plano, um
+//    tipo de equipamento ou um equipamento), o tipo de OS, a data de início, de quantos em quantos
+//    meses e o dia de execução.
+//  - PmocExecucao: uma linha por (item, equipamento, período AAAA-MM) ligada à OS gerada. A chave
+//    única é o que impede OS duplicada ao reagendar. Ver lib/pmoc-cronograma.ts.
+// ─────────────────────────────────────────────
+
+model PmocCronograma {
+  id                String   @id @default(cuid())
+  pmocId            String   @map("pmoc_id")
+  /// A quem se aplica: um tipo de equipamento OU um equipamento. Os dois vazios = todos os do plano.
+  tipoEquipamentoId String?  @map("tipo_equipamento_id")
+  equipamentoId     String?  @map("equipamento_id")
+  tipoOsId          String   @map("tipo_os_id")
+  dataInicio        DateTime @map("data_inicio") @db.Date
+  /// "A cada N meses": 1 = mensal, 3 = trimestral, 12 = anual…
+  intervaloMeses    Int      @default(1) @map("intervalo_meses")
+  /// Dia do mês da execução (1 a 28, como na recorrência de contratos)
+  diaExecucao       Int      @map("dia_execucao")
+  /// false = item excluído que já gerou OS (fica para o histórico; não gera mais)
+  ativo             Boolean  @default(true)
+  criadoEm          DateTime @default(now()) @map("criado_em")
+  atualizadoEm      DateTime @updatedAt @map("atualizado_em")
+
+  pmoc            Pmoc                   @relation(fields: [pmocId], references: [id], onDelete: Cascade)
+  tipoEquipamento TipoEquipamentoCustom? @relation(fields: [tipoEquipamentoId], references: [id], onDelete: Restrict)
+  equipamento     Equipamento?           @relation(fields: [equipamentoId], references: [id], onDelete: Cascade)
+  tipoOs          TipoOs                 @relation(fields: [tipoOsId], references: [id])
+  execucoes       PmocExecucao[]
+
+  @@index([pmocId])
+  @@index([tipoOsId])
+  @@index([tipoEquipamentoId])
+  @@index([equipamentoId])
+  @@map("pmoc_cronogramas")
+}
+
+model PmocExecucao {
+  id             String   @id @default(cuid())
+  pmocId         String   @map("pmoc_id")
+  cronogramaId   String   @map("cronograma_id")
+  equipamentoId  String   @map("equipamento_id")
+  /// Competência da execução: "AAAA-MM"
+  periodo        String
+  /// Data em que o cronograma agendou (serve para saber se alguém mudou a data da OS à mão)
+  dataPrevista   DateTime @map("data_prevista")
+  /// OS gerada. Fica vazia se a OS for apagada: a execução continua registrada e não é gerada de novo.
+  ordemServicoId String?  @map("ordem_servico_id")
+  criadoEm       DateTime @default(now()) @map("criado_em")
+
+  pmoc         Pmoc           @relation(fields: [pmocId], references: [id], onDelete: Cascade)
+  cronograma   PmocCronograma @relation(fields: [cronogramaId], references: [id], onDelete: Cascade)
+  equipamento  Equipamento    @relation(fields: [equipamentoId], references: [id], onDelete: Cascade)
+  ordemServico OrdemServico?  @relation(fields: [ordemServicoId], references: [id], onDelete: SetNull)
+
+  @@unique([cronogramaId, equipamentoId, periodo])
+  @@index([pmocId])
+  @@index([equipamentoId])
+  @@index([ordemServicoId])
+  @@map("pmoc_execucoes")
 }

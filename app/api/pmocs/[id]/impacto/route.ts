@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { situacaoPmoc, dataBR } from "@/lib/pmoc";
+import { osFuturasDoPlano } from "@/lib/pmoc-cronograma-server";
 
 /** Pré-checagem do modal de inativar (mesmo padrão de #13). Exige "excluir". */
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -20,5 +21,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
     avisos.push(`Inativado, ${cliente} fica sem PMOC ativo neste local. A lei exige um plano em vigor.`);
   }
   if (p._count.equipamentos) avisos.push(`Os ${p._count.equipamentos} equipamento(s) vinculados continuam no cadastro e no PMOC (nada é apagado).`);
+  const futuras = await osFuturasDoPlano(id, guard.session.user!.empresaId);
+  if (futuras) avisos.push(`${futuras} OS futura(s) geradas pelo cronograma continuam na agenda. Cancele pela OS as que não for atender.`);
   return NextResponse.json({ bloqueio: null, avisos });
 }

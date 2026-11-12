@@ -203,20 +203,21 @@ describe("PMOC: editor (Identificação e Equipamentos AVAC)", () => {
     expect(($("textarea[aria-label='Descrição']") as HTMLTextAreaElement).value).toBe(DESCRICAO_PADRAO_PMOC);
     expect($$("input[data-input-data]").map((i) => [(i as HTMLInputElement).getAttribute("aria-label"), (i as HTMLInputElement).value])).toEqual([["Data de início", "12/11/2026"], ["Data de expiração", "11/11/2027"]]);
     const abas = $$("[role=tablist] > button").map((b) => ({ rotulo: texto(b).replace(/ em breve$/, ""), desabilitada: (b as HTMLButtonElement).disabled, futura: b.hasAttribute("data-aba-futura") }));
-    expect(abas.slice(0, 2)).toEqual([{ rotulo: "Identificação", desabilitada: false, futura: false }, { rotulo: "Equipamentos AVAC", desabilitada: true, futura: false }]);
+    expect(abas.slice(0, 3)).toEqual([{ rotulo: "Identificação", desabilitada: false, futura: false }, { rotulo: "Equipamentos AVAC", desabilitada: true, futura: false }, { rotulo: "Cronograma", desabilitada: true, futura: false }]);
     expect(botao("Criar PMOC")).toBeTruthy();
     expect(botao("Publicar")).toBeUndefined(); // só existe depois de salvo
   });
 
-  it("escopo da Etapa 1: Cronograma, Planejamento, Ocorrências, Recomendações e Anexos aparecem como 'em breve', DESABILITADAS", async () => {
+  it("escopo: Planejamento, Ocorrências, Recomendações e Anexos aparecem como 'em breve', DESABILITADAS (o Cronograma chegou na Etapa 2)", async () => {
     await abrirEditor({ inicial: plano() });
     const futuras = $$("[data-aba-futura]");
-    expect(futuras.map((b) => texto(b))).toEqual(["Cronograma em breve", "Planejamento em breve", "Ocorrências em breve", "Recomendações em breve", "Anexos em breve"]);
+    expect(futuras.map((b) => texto(b))).toEqual(["Planejamento em breve", "Ocorrências em breve", "Recomendações em breve", "Anexos em breve"]);
     for (const b of futuras) expect((b as HTMLButtonElement).disabled).toBe(true);
-    // Nada de geração de OS, PDF, alerta ou WhatsApp nesta etapa
-    const fonte = ["components/pmoc/pmoc-editor.tsx", "app/(dashboard)/pmoc/page.tsx", "lib/pmoc.ts", "lib/pmoc-server.ts"].map((f) => fs.readFileSync(path.join(RAIZ, f), "utf8")).join("\n");
-    expect(fonte).not.toMatch(/ordemServico|atividadeOs|whatsapp|jspdf|@react-pdf|enviarEmail|notifica/i);
-    expect(fs.readdirSync(path.join(RAIZ, "app/api/pmocs/[id]")).sort()).toEqual(["art", "copia", "equipamentos", "impacto", "route.ts"]);
+    // PDF, alerta e WhatsApp continuam fora (Etapa 3) — em todo o módulo, cronograma inclusive
+    const fonte = ["components/pmoc/pmoc-editor.tsx", "components/pmoc/pmoc-cronograma.tsx", "app/(dashboard)/pmoc/page.tsx", "lib/pmoc.ts", "lib/pmoc-server.ts", "lib/pmoc-cronograma.ts", "lib/pmoc-cronograma-server.ts", "lib/pmoc-cronograma-rotas.ts"]
+      .map((f) => fs.readFileSync(path.join(RAIZ, f), "utf8")).join("\n");
+    expect(fonte).not.toMatch(/whatsapp|jspdf|@react-pdf|enviarEmail|notifica/i);
+    expect(fs.readdirSync(path.join(RAIZ, "app/api/pmocs/[id]")).sort()).toEqual(["art", "copia", "cronograma", "equipamentos", "impacto", "route.ts"]);
   });
 
   it("criar: envia a identificação, nasce Rascunho e abre a aba de equipamentos do plano novo", async () => {
