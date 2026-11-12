@@ -11,6 +11,7 @@ import { carregarCronograma } from "@/lib/pmoc-cronograma-server";
 import { montarDocumento, type AtividadesDoTipo, type DadosDocumento } from "@/lib/pmoc-documento";
 import { gerarPdfDocumento, type ArquivoArt, type DocumentoPdf } from "@/lib/pmoc-documento-pdf";
 import { CONFIG_PMOC_PADRAO, type ConfigPmoc } from "@/lib/pmoc-avisos";
+import { lerReferencia } from "@/lib/pmoc-renovacao";
 import { decodificarDataUrl } from "@/lib/anexos-server";
 
 type Db = Prisma.TransactionClient | typeof prisma;
@@ -28,13 +29,26 @@ export function registrarHistorico(db: Db, h: { pmocId: string; usuarioId?: stri
   return db.pmocHistorico.create({ data: { pmocId: h.pmocId, usuarioId: h.usuarioId ?? null, acao: h.acao, detalhes: h.detalhes ?? null } });
 }
 
-export interface LinhaHistorico { id: string; acao: string; detalhes: string | null; criadoEm: string; usuario: string | null }
+export interface LinhaHistorico {
+  id: string; acao: string; detalhes: string | null; criadoEm: string; usuario: string | null;
+  /** O outro plano a que a linha se refere (renovação): só vem se ele existe nesta empresa */
+  plano: { id: string; nome: string } | null;
+}
 export async function historicoDoPlano(pmocId: string, empresaId: string): Promise<LinhaHistorico[] | null> {
   const p = await prisma.pmoc.findFirst({
     where: { id: pmocId, empresaId },
     select: { historico: { orderBy: [{ criadoEm: "desc" }, { id: "desc" }], take: 200, select: { id: true, acao: true, detalhes: true, criadoEm: true, usuario: { select: { nome: true } } } } },
   });
-  return p ? p.historico.map((h) => ({ id: h.id, acao: h.acao, detalhes: h.detalhes, criadoEm: h.criadoEm.toISOString(), usuario: h.usuario?.nome ?? null })) : null;
+  if (!p) return null;
+  // A linha que aponta para outro plano guarda o id dele nos detalhes: sai do texto e vira o link
+  const linhas = p.historico.map((h) => ({ h, ref: lerReferencia(h.detalhes) }));
+  const ids = [...new Set(linhas.map((l) => l.ref.pmocId).filter((id): id is string => !!id))];
+  const planos = ids.length ? await prisma.pmoc.findMany({ where: { id: { in: ids }, empresaId }, select: { id: true, nome: true } }) : [];
+  const porId = new Map(planos.map((x) => [x.id, x]));
+  return linhas.map(({ h, ref }) => ({
+    id: h.id, acao: h.acao, detalhes: ref.texto, criadoEm: h.criadoEm.toISOString(), usuario: h.usuario?.nome ?? null,
+    plano: (ref.pmocId && porId.get(ref.pmocId)) || null,
+  }));
 }
 
 /* ───────── link público ───────── */

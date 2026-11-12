@@ -189,7 +189,7 @@ describe("PMOC › aviso de vencimento no plano", () => {
     respostas[`POST ${URL_P}/aviso`] = { status: 200, corpo: { ok: true, tipo: "VENCENDO" } };
     await abrirEditor();
     expect(faixa()!.getAttribute("data-aviso-vencimento")).toBe("VENCENDO");
-    expect(texto(faixa())).toBe("Expira em 12 dias (24/11/2026). Para renovar, use “Criar cópia” e informe a nova validade e a nova ART. Ciente");
+    expect(texto(faixa())).toBe("Expira em 12 dias (24/11/2026). Use “Renovar” para criar o plano da próxima vigência, já com o cronograma. Ciente");
     expect(faixa()!.className).toContain("bg-atencao-claro");
     await clicar($("[data-ciente]"));
     expect(pedidos.filter((p) => p.url === `${URL_P}/aviso`)).toEqual([{ url: `${URL_P}/aviso`, metodo: "POST", corpo: undefined }]);
