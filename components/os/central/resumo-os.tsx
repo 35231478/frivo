@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { AlertTriangle, CalendarClock, CheckCircle2, ChevronRight, Clock, FileText, History, ListChecks, MapPin, User } from "lucide-react";
 import { cn, formatarDataHora } from "@/lib/utils";
 import { formatarDiaCivil, textoPrazo } from "@/lib/os/prazos";
 import type { CentralOs } from "@/lib/os/central";
 import { Card, CardTitulo } from "@/components/ui/card";
 import { StatusPill, TOM_PRAZO } from "@/components/ui/status-pill";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
 
 function Cartao({ titulo, icone, children, dado, className }: {
   titulo: string; icone: React.ComponentType<{ className?: string }>; children: React.ReactNode; dado?: string; className?: string;
@@ -21,6 +23,7 @@ function Cartao({ titulo, icone, children, dado, className }: {
 
 export function ResumoOs({ os, central, onAba }: { os: any; central: CentralOs; onAba: (aba: string) => void }) {
   const [historicoTodo, setHistoricoTodo] = useState(false);
+  const { pode } = usePermissoes();
   const historico: any[] = os.historico ?? [];
   const visiveis = historicoTodo ? historico : historico.slice(0, 8);
   const comPrazo = (os.atividades ?? []).filter((a: any) => a.prazo && a.status !== "CANCELADA");
@@ -58,6 +61,14 @@ export function ResumoOs({ os, central, onAba }: { os: any; central: CentralOs; 
                 <Info rotulo="Endereço"><span className="inline-flex items-start gap-1"><MapPin className="w-3.5 h-3.5 mt-0.5 text-ink-subtle shrink-0" aria-hidden="true" />{os.unidade.nome}{os.unidade.cidade ? ` — ${os.unidade.cidade}/${os.unidade.estado}` : ""}</span></Info>
               )}
               {os.contrato && <Info rotulo="Contrato"><span className="font-mono">{os.contrato.numero}</span></Info>}
+              {/* OS gerada pelo cronograma de um PMOC: atalho para o plano (só vira link para quem vê o módulo) */}
+              {os.pmoc && (
+                <Info rotulo="PMOC">
+                  {pode("pmoc", "visualizar")
+                    ? <Link href={`/pmoc/${os.pmoc.id}?aba=cronograma`} data-pmoc-da-os className="text-acento hover:underline">{os.pmoc.nome}</Link>
+                    : <span data-pmoc-da-os>{os.pmoc.nome}</span>}
+                </Info>
+              )}
               <Info rotulo="Responsável">{os.responsavel?.nome ?? "—"}</Info>
               {os.criadoPor && <Info rotulo="Aberta por">{os.criadoPor.nome}</Info>}
             </dl>

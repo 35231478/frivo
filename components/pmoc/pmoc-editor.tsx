@@ -19,6 +19,7 @@ import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { PmocStatusSelo } from "@/components/pmoc/pmoc-status-selo";
 import { PmocCopiarBotao } from "@/components/pmoc/pmoc-copiar-botao";
+import { PmocCronograma } from "@/components/pmoc/pmoc-cronograma";
 import { DESCRICAO_PADRAO_PMOC, TAMANHO_MAX_ART, TIPOS_ART, hojeISO, pendenciasPublicacao, serializarPmoc } from "@/lib/pmoc";
 
 const serializar = (d: any) => serializarPmoc<PmocDados>(d);
@@ -38,9 +39,11 @@ export interface PmocDados {
   equipamentos: { id: string; equipamento: EquipamentoPmoc }[];
 }
 
-type Aba = "identificacao" | "equipamentos";
+type Aba = "identificacao" | "equipamentos" | "cronograma";
+const ABAS = [["identificacao", "Identificação", ClipboardList], ["equipamentos", "Equipamentos AVAC", Thermometer], ["cronograma", "Cronograma", CalendarRange]] as const;
+// As abas que só existem com o plano salvo
+const SO_SALVO: Aba[] = ["equipamentos", "cronograma"];
 const ABAS_FUTURAS = [
-  { rotulo: "Cronograma", icone: CalendarRange },
   { rotulo: "Planejamento", icone: ListChecks },
   { rotulo: "Ocorrências", icone: AlertOctagon },
   { rotulo: "Recomendações", icone: Lightbulb },
@@ -67,7 +70,19 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente }:
   const novo = !inicial;
   const [pmoc, setPmoc] = useState<PmocDados | undefined>(inicial);
   const somenteLeitura = novo ? !pode("pmoc", "criar") : !pode("pmoc", "editar") || !pmoc!.ativo;
-  const [aba, setAba] = useState<Aba>(abaInicial === "equipamentos" && !novo ? "equipamentos" : "identificacao");
+  const [aba, setAba] = useState<Aba>(!novo && SO_SALVO.includes(abaInicial as Aba) ? (abaInicial as Aba) : "identificacao");
+
+  // No celular a faixa de abas rola para os lados: a aba ativa fica sempre à vista
+  const abasRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const faixa = abasRef.current;
+    const ativa = faixa?.querySelector<HTMLElement>("[aria-selected='true']");
+    if (!faixa || !ativa) return;
+    // Rola só o necessário para a aba ativa caber inteira (no desktop, onde ela já aparece, não mexe)
+    const inicio = ativa.offsetLeft - faixa.offsetLeft, fim = inicio + ativa.offsetWidth;
+    if (inicio < faixa.scrollLeft) faixa.scrollLeft = Math.max(0, inicio - 16);
+    else if (fim > faixa.scrollLeft + faixa.clientWidth) faixa.scrollLeft = fim - faixa.clientWidth + 16;
+  }, [aba]);
 
   const hoje = hojeISO();
   const [form, setForm] = useState(() => ({
@@ -145,7 +160,9 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente }:
       if (!res.ok) { setMsg({ tipo: "erro", texto: d.erro ?? "Não foi possível salvar." }); return; }
       if (novo) { router.push(`/pmoc/${d.id}?aba=equipamentos&criado=1`); return; }
       setPmoc(serializar(d)); setArtNova(null); setRemoverArt(false);
-      setMsg({ tipo: "ok", texto: statusDesejado === "PUBLICADO" ? "PMOC publicado." : statusDesejado === "RASCUNHO" ? "PMOC voltou para Rascunho." : "Alterações salvas." });
+      const geradas = Number(d.osGeradas) || 0;
+      const sufixo = geradas ? ` ${geradas === 1 ? "1 OS gerada" : `${geradas} OS geradas`} pelo cronograma.` : "";
+      setMsg({ tipo: "ok", texto: (statusDesejado === "PUBLICADO" ? "PMOC publicado." : statusDesejado === "RASCUNHO" ? "PMOC voltou para Rascunho." : "Alterações salvas.") + sufixo });
       router.refresh();
     } catch { setMsg({ tipo: "erro", texto: "Erro de conexão." }); } finally { setSalvando(null); }
   }
@@ -200,10 +217,10 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente }:
       )}
 
       {/* Abas */}
-      <div className="flex gap-1 overflow-x-auto border-b border-surface-border -mx-1 px-1" role="tablist">
-        {([["identificacao", "Identificação", ClipboardList], ["equipamentos", "Equipamentos AVAC", Thermometer]] as const).map(([id, rotulo, Icone]) => (
-          <button key={id} type="button" role="tab" aria-selected={aba === id} disabled={novo && id === "equipamentos"} onClick={() => setAba(id)}
-            title={novo && id === "equipamentos" ? "Salve a identificação primeiro" : undefined}
+      <div ref={abasRef} className="flex gap-1 overflow-x-auto border-b border-surface-border -mx-1 px-1" role="tablist">
+        {ABAS.map(([id, rotulo, Icone]) => (
+          <button key={id} type="button" role="tab" data-aba={id} aria-selected={aba === id} disabled={novo && SO_SALVO.includes(id)} onClick={() => setAba(id)}
+            title={novo && SO_SALVO.includes(id) ? "Salve a identificação primeiro" : undefined}
             className={cn("flex items-center gap-2 px-3 sm:px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 -mb-px transition-colors disabled:opacity-40",
               aba === id ? "border-primary-500 text-primary-600" : "border-transparent text-ink-muted hover:text-ink")}>
             <Icone className="w-4 h-4" /> {rotulo}
@@ -331,6 +348,11 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente }:
       {/* ── Equipamentos AVAC ── */}
       {aba === "equipamentos" && pmoc && (
         <EquipamentosPmoc pmoc={pmoc} somenteLeitura={somenteLeitura} onAtualizar={(d) => setPmoc(serializar(d))} onErro={(t) => setMsg({ tipo: "erro", texto: t })} />
+      )}
+
+      {/* ── Cronograma (Etapa 2): relê ao mudar o status, a validade ou os equipamentos do plano ── */}
+      {aba === "cronograma" && pmoc && (
+        <PmocCronograma key={`${pmoc.status}-${pmoc.dataExpiracao}-${pmoc.equipamentos.length}`} pmocId={pmoc.id} dataExpiracao={pmoc.dataExpiracao} somenteLeitura={somenteLeitura} />
       )}
     </div>
   );
