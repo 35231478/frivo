@@ -34,7 +34,7 @@ export function CartaoPosicao({ nome, os, posicao, agora }: { nome: string; os: 
         <Clock className={icone} aria-hidden />
         <span>
           <span data-visto>{textoVisto(posicao.registradoEm, agora)}</span>
-          {idade === "antiga" && <span className="ml-1.5 rounded-full bg-surface-linha text-ink-muted text-xs font-semibold px-2 py-0.5" data-posicao-antiga>Posição antiga</span>}
+          {idade === "antiga" && <span className="block w-fit mt-1 rounded-full bg-surface-linha text-ink-muted text-xs font-semibold px-2 py-0.5 whitespace-nowrap" data-posicao-antiga>Posição antiga</span>}
         </span>
       </p>
       <p className={linha}>

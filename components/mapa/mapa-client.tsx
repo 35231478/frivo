@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { Maximize2, MapPinOff, RefreshCw } from "lucide-react";
@@ -47,6 +47,12 @@ export function MapaClient({ inicial, podeConfigurar }: { inicial: RespostaMapa;
   const [falhou, setFalhou] = useState(false);
   const [selecionado, setSelecionado] = useState<string | null>(null);
   const [enquadrar, setEnquadrar] = useState(0);
+  const areaMapa = useRef<HTMLDivElement>(null);
+  /** Escolher na lista leva o mapa ao técnico — e, no celular (lista abaixo do mapa), traz o mapa para a tela */
+  const escolher = useCallback((id: string) => {
+    setSelecionado(id);
+    areaMapa.current?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+  }, []);
 
   const atualizar = useCallback(async () => {
     setAtualizando(true);
@@ -83,8 +89,8 @@ export function MapaClient({ inicial, podeConfigurar }: { inicial: RespostaMapa;
           <h1 className="font-display text-2xl font-bold text-ink tracking-tight">Mapa</h1>
           <p className="text-sm text-ink-muted mt-1">Última posição conhecida de cada técnico. Não é tempo real.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-ink-muted" data-atualizado-as>{falhou ? "Sem conexão · " : ""}Atualizado às {horaBR(dados.geradoEm)}</span>
+        <div className="flex flex-wrap items-center gap-2 whitespace-nowrap">
+          <span className="text-xs text-ink-muted w-full sm:w-auto" data-atualizado-as>{falhou ? "Sem conexão · " : ""}Atualizado às {horaBR(dados.geradoEm)}</span>
           {noMapa.length > 0 && <Button variant="outline" size="sm" onClick={() => { setSelecionado(null); setEnquadrar((n) => n + 1); }} data-enquadrar><Maximize2 className="w-4 h-4" /> Enquadrar todos</Button>}
           <Button variant="outline" size="sm" onClick={atualizar} disabled={atualizando} data-atualizar-mapa><RefreshCw className={cn("w-4 h-4", atualizando && "animate-spin")} /> Atualizar</Button>
         </div>
@@ -101,13 +107,13 @@ export function MapaClient({ inicial, podeConfigurar }: { inicial: RespostaMapa;
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
         {/* `isolate`: as camadas do Leaflet (z-index alto) não passam por cima do menu e dos avisos do sistema */}
-        <div className="isolate h-[55vh] min-h-[20rem] lg:h-[calc(100vh-13rem)] rounded-card overflow-hidden border border-surface-border bg-white" data-area-mapa>
+        <div ref={areaMapa} className="isolate min-w-0 h-[55vh] min-h-[20rem] max-h-[34rem] scroll-mt-4 lg:max-h-none lg:h-[calc(100vh-13rem)] rounded-card overflow-hidden border border-surface-border bg-white" data-area-mapa>
           <MapaLeaflet tecnicos={noMapa} agora={agora} selecionado={selecionado} enquadrar={enquadrar} onSelecionar={setSelecionado} />
         </div>
 
-        <aside className="space-y-4 lg:max-h-[calc(100vh-13rem)] lg:overflow-y-auto" aria-label="Técnicos" data-lista-tecnicos>
+        <aside className="min-w-0 space-y-4 lg:max-h-[calc(100vh-13rem)] lg:overflow-y-auto" aria-label="Técnicos" data-lista-tecnicos>
           <section className="bg-white rounded-card border border-surface-border">
             <h2 className="px-4 pt-3 pb-2 text-sm font-bold text-ink">No mapa <span className="font-medium text-ink-muted" data-total-no-mapa>· {noMapa.length}</span></h2>
             {dados.rastreio && noMapa.length === 0 && (
@@ -118,7 +124,7 @@ export function MapaClient({ inicial, podeConfigurar }: { inicial: RespostaMapa;
                 const idade = frescor(t.posicao.registradoEm, agora);
                 return (
                   <li key={t.id}>
-                    <button type="button" onClick={() => setSelecionado(t.id)} aria-pressed={selecionado === t.id} data-tecnico-no-mapa={t.id} data-frescor={idade}
+                    <button type="button" onClick={() => escolher(t.id)} aria-pressed={selecionado === t.id} data-tecnico-no-mapa={t.id} data-frescor={idade}
                       className={cn("w-full text-left px-4 py-3 flex gap-3 touch-target hover:bg-surface-alt", selecionado === t.id && "bg-acento-claro", idade === "antiga" && "opacity-70")}>
                       <span className={cn("flex items-center justify-center w-9 h-9 rounded-full border-2 text-xs font-bold shrink-0", PONTO[idade])} aria-hidden>{iniciais(t.nome)}</span>
                       <span className="min-w-0 flex-1 text-sm">

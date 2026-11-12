@@ -44,8 +44,16 @@ function Enquadramento({ tecnicos, selecionado, enquadrar, marcadores }: {
   useEffect(() => {
     const t = selecionado ? pontos.current.find((x) => x.id === selecionado) : null;
     if (!t) return;
-    mapa.flyTo([t.posicao.lat, t.posicao.lng], Math.max(mapa.getZoom(), 15), { duration: 0.6 });
-    marcadores.current.get(t.id)?.openPopup();
+    const zoom = Math.max(mapa.getZoom(), 15);
+    // O marcador fica um pouco abaixo do centro: sobra espaço em cima para o cartão (mapa baixo no celular)
+    const centro = mapa.unproject(mapa.project([t.posicao.lat, t.posicao.lng], zoom).subtract([0, mapa.getSize().y * 0.22]), zoom);
+    // O cartão abre quando o mapa chega: assim o Leaflet o encaixa na área visível
+    const abrir = () => { const m = marcadores.current.get(t.id); if (m && !m.isPopupOpen()) m.openPopup(); };
+    mapa.flyTo(centro, zoom, { duration: 0.6 });
+    mapa.once("moveend", abrir);
+    // Garantia: se o movimento foi interrompido (outro toque, o cartão anterior fechando), abre assim mesmo
+    const garantia = setTimeout(abrir, 900);
+    return () => { mapa.off("moveend", abrir); clearTimeout(garantia); };
   }, [mapa, selecionado, marcadores]);
   return null;
 }
@@ -73,7 +81,7 @@ export function MapaLeaflet({ tecnicos, agora, selecionado, enquadrar, onSelecio
             zIndexOffset={idade === "antiga" ? -500 : selecionado === t.id ? 500 : 0}
             ref={(m) => { if (m) marcadores.current.set(t.id, m); else marcadores.current.delete(t.id); }}
             eventHandlers={{ click: () => onSelecionar(t.id) }}>
-            <Popup><CartaoPosicao nome={t.nome} os={t.os} posicao={t.posicao} agora={agora} /></Popup>
+            <Popup autoPanPaddingTopLeft={[56, 12]} autoPanPaddingBottomRight={[12, 12]}><CartaoPosicao nome={t.nome} os={t.os} posicao={t.posicao} agora={agora} /></Popup>
           </Marker>
         );
       })}
