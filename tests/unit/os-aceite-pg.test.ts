@@ -583,6 +583,10 @@ describe.skipIf(!URL_PG)("Aceite do cliente na conclusão da OS (PostgreSQL real
     expect(await todas()).toEqual([404, 404, 404]);
     expect(JSON.stringify(await aceite(x.id))).toBe(antes);
     expect(resend.enviados).toHaveLength(0);
+    // A leitura do aceite é por empresa: com o id da OS na mão, a outra empresa não lê nada
+    const { aceiteDaOs } = await import("@/lib/os/aceite-server");
+    expect(await aceiteDaOs(x.id, "e2")).toBeNull();
+    expect((await aceiteDaOs(x.id, "e1"))!.situacao).toBe("PENDENTE");
     comOs(["visualizar", "editar"]);
     expect(await todas()).toEqual([200, 200, 200]);
     // O link público não depende de nada disso: só do token (testado acima) — e as rotas da OS nunca devolvem o aceite de outra empresa

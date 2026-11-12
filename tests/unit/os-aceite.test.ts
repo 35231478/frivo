@@ -17,6 +17,9 @@ import {
 import { centralDaOs, type OsCentralEntrada } from "@/lib/os/central";
 import { montarRelatorioOs, type OsParaRelatorio } from "@/lib/relatorio-os/dados";
 import { TEMPLATES_PADRAO, substituirVariaveis } from "@/lib/email-templates";
+import { aplicar } from "@/lib/tecnico/offline/estado";
+import { operacaoSchema } from "@/lib/tecnico/sync";
+import type { ExecucaoTela, OperacaoFila, RetratoAtividade } from "@/lib/tecnico/offline/tipos";
 
 const erroDe = (schema: { safeParse: (v: unknown) => any }, corpo: unknown) => { const r = schema.safeParse(corpo); return r.success ? null : r.error.issues[0].message; };
 const png = (bytes: number) => `data:image/png;base64,${"A".repeat(Math.ceil((bytes * 4) / 3))}`;
@@ -246,5 +249,28 @@ describe("aceite do cliente: a central da OS e o relatório", () => {
     expect(montarRelatorioOs(paraRelatorio({ ...CONFIRMADO, situacao: "PENDENTE" }), null).aceite).toBeNull();
     expect(montarRelatorioOs(paraRelatorio(null), null).aceite).toBeNull();
     expect(montarRelatorioOs(paraRelatorio(undefined), null).aceite).toBeNull();
+  });
+});
+
+describe("aceite do cliente: no aparelho do técnico (com ou sem sinal)", () => {
+  const ASSINADO = `data:image/png;base64,${"QUJD".repeat(60)}`;
+  const tela = { atividade: { id: "a1", titulo: "Preventiva", status: "CONCLUIDA", tipoOs: null }, equipamentos: [], adicionais: [], bloqueada: true } as unknown as ExecucaoTela;
+  const naFila = (nome: string, em?: string) => ({ id: "x", tipo: "aceite", atividadeId: "a1", ...(em ? { em } : {}), criadoEm: "2026-11-12T15:00:00.000Z", estado: "pendente", tentativas: 0, dados: { nome, assinatura: ASSINADO } }) as OperacaoFila;
+
+  it("a assinatura colhida já vale na tela (quem e quando, pelo relógio do aparelho) — a assinatura em si sobe pela fila, não fica na tela", () => {
+    expect(tela.aceiteLocal).toBeUndefined();
+    const depois = aplicar({} as RetratoAtividade, tela, naFila("João Pereira", "2026-11-12T16:30:00.000Z"));
+    expect(depois.aceiteLocal).toEqual({ nome: "João Pereira", em: "2026-11-12T16:30:00.000Z" });
+    expect(aplicar({} as RetratoAtividade, tela, naFila("João Pereira")).aceiteLocal).toEqual({ nome: "João Pereira", em: "2026-11-12T15:00:00.000Z" });
+    expect(depois.atividade.status).toBe("CONCLUIDA"); // o aceite não mexe na atividade
+    expect(aceiteNoApp({ atividadeConcluida: true, retrato: { situacao: "PENDENTE", nome: null, confirmadoEm: null, osConcluida: true, ultimaDaOs: true }, aceiteLocal: depois.aceiteLocal })).toBe("COLHIDO_NO_APARELHO");
+  });
+
+  it("a fila só aceita a operação 'aceite' com nome e assinatura válidos — e nada além deles", () => {
+    const op = (dados: unknown) => operacaoSchema.safeParse({ id: "3f2b8c1e-5a7d-4e9f-8b1a-2c3d4e5f6a7b", tipo: "aceite", atividadeId: "a1", dados }).success;
+    expect(op({ nome: "João Pereira", assinatura: ASSINADO })).toBe(true);
+    expect(op({ nome: "Jo", assinatura: ASSINADO })).toBe(false);
+    expect(op({ nome: "João Pereira" })).toBe(false);
+    expect(op({ nome: "João Pereira", assinatura: ASSINADO, situacao: "CONFIRMADO" })).toBe(false);
   });
 });
