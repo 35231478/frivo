@@ -1,10 +1,11 @@
-import { CalendarClock, Camera, ClipboardCheck, Lock, MapPin, Mic, Sparkles, Truck, Users } from "lucide-react";
+import { BadgeCheck, CalendarClock, Camera, ClipboardCheck, Lock, MapPin, Mic, Sparkles, Truck, Users } from "lucide-react";
 import { cn, formatarCpfCnpj, formatarData, formatarDataHora, formatarTelefone } from "@/lib/utils";
 import { enderecoStr } from "@/components/relatorio/cabecalho-relatorio";
 import { mostraSecao, type ConfigRelatorioOs, type SecaoRelatorioId, type VersaoRelatorio } from "@/lib/relatorio-os/config";
 import type { AdicionalRelatorio, BlocoEquipamento, ChecklistTipoRelatorio, FotoRelatorio, GrupoChecklist, RelatorioOsDados } from "@/lib/relatorio-os/dados";
 import { ROTULO_COBRANCA } from "@/lib/execucao/adicional";
 import { ROTULO_STATUS, type StatusItem } from "@/lib/execucao/pendencias";
+import { provaDoAceite, textoDoAceite } from "@/lib/os/aceite";
 
 /**
  * Relatório da OS — layout por equipamento. Mesmo componente para as duas versões:
@@ -169,6 +170,25 @@ export function RelatorioOsDocumento({ dados: d, config, versao }: { dados: Rela
         <section className="mt-5" data-secao="observacoes">
           <Titulo>Observações</Titulo>
           {d.observacoes.map((o, i) => <p key={i} className="text-sm whitespace-pre-wrap">{o}</p>)}
+        </section>
+      )}
+
+      {/* ── Aceite do cliente (a prova da entrega): sai sempre que ele confirmou, nas duas versões ── */}
+      {d.aceite && (
+        <section className="mt-6 border border-ok/30 bg-ok-claro rounded-lg p-4 flex items-start justify-between gap-4 flex-wrap" style={{ breakInside: "avoid" }} data-secao="aceite">
+          <div className="min-w-0 space-y-0.5">
+            <p className="text-xs font-bold uppercase tracking-wider text-ok-texto flex items-center gap-1.5"><BadgeCheck className="w-4 h-4" aria-hidden /> Aceite do cliente</p>
+            <p className="text-sm font-semibold text-ink" data-aceite-relatorio-quem>{textoDoAceite(d.aceite)}</p>
+            <p className="text-xs text-ink-muted" data-aceite-relatorio-prova>{provaDoAceite(d.aceite)}</p>
+            {d.aceite.observacao && <p className="text-sm text-ink whitespace-pre-wrap break-words">Observação do cliente: {d.aceite.observacao}</p>}
+          </div>
+          {d.aceite.assinatura && (
+            <figure className="text-center shrink-0" data-aceite-relatorio-assinatura>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={d.aceite.assinatura} alt={`Assinatura de ${d.aceite.nome ?? "cliente"}`} className="h-16 max-w-[12rem] object-contain bg-white rounded" />
+              <figcaption className="border-t border-ink/40 pt-1 text-xs font-semibold">{d.aceite.nome}</figcaption>
+            </figure>
+          )}
         </section>
       )}
 

@@ -17,6 +17,7 @@ import { resumoSeparacao } from "@/lib/estoque/separacao";
 import { OsInativarBotao } from "@/components/os/os-inativar";
 import { OsFotosAnexos } from "@/components/os/os-fotos-anexos";
 import { OsAdicionais } from "@/components/os/os-adicionais";
+import { OsAceite } from "@/components/os/os-aceite";
 import { CabecalhoOs } from "@/components/os/central/cabecalho-os";
 import { ResumoOs } from "@/components/os/central/resumo-os";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
@@ -122,6 +123,10 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" /> {erroAcao}
         </div>
       )}
+
+      {/* Aceite do cliente: "aguardando confirmação" (enviar o link, colher a assinatura) ou a prova de quem confirmou */}
+      <OsAceite osId={os.id} numero={os.numero} cliente={os.cliente?.nomeFantasia ?? os.cliente?.nome ?? ""} statusOs={os.status}
+        aoMudar={(aceite) => setOs((prev: any) => (JSON.stringify(prev.aceite ?? null) === JSON.stringify(aceite) ? prev : { ...prev, aceite }))} />
 
       {/* Serviços adicionais pedidos na visita: decisão de cobrança à vista em qualquer aba */}
       <OsAdicionais osId={os.id} adicionais={os.servicosAdicionais ?? []} />

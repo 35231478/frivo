@@ -6,12 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid } from "@/components/ui/form-field";
+import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { Check, Upload, X } from "lucide-react";
 
 export function PortalConfigClient() {
   const [cor, setCor] = useState<string>(corDado.azul);
   const [boasVindas, setBoasVindas] = useState("");
   const [logo, setLogo] = useState<string | null>(null);
+  const [aceiteObrigatorio, setAceiteObrigatorio] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [ok, setOk] = useState(false);
 
@@ -20,6 +22,7 @@ export function PortalConfigClient() {
       if (c?.portalCorPrimaria) setCor(c.portalCorPrimaria);
       if (c?.portalBoasVindas) setBoasVindas(c.portalBoasVindas);
       if (c?.portalLogo) setLogo(c.portalLogo);
+      setAceiteObrigatorio(!!c?.portalAceiteObrigatorio);
     }).catch(() => {});
   }, []);
 
@@ -34,7 +37,7 @@ export function PortalConfigClient() {
     try {
       const res = await fetch("/api/configuracoes", {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ portalCorPrimaria: cor, portalBoasVindas: boasVindas || null, portalLogo: logo }),
+        body: JSON.stringify({ portalCorPrimaria: cor, portalBoasVindas: boasVindas || null, portalLogo: logo, portalAceiteObrigatorio: aceiteObrigatorio }),
       });
       if (res.ok) { setOk(true); setTimeout(() => setOk(false), 2500); }
     } finally { setSalvando(false); }
@@ -68,6 +71,13 @@ export function PortalConfigClient() {
       <FormField label="Mensagem de boas-vindas" dica="Exibida no painel inicial do portal.">
         <Textarea value={boasVindas} onChange={(e) => setBoasVindas(e.target.value)} rows={3} placeholder="Ex.: Acompanhe aqui as ordens de serviço, os documentos e o financeiro." />
       </FormField>
+      <div className="border-t border-surface-border pt-2" data-config-aceite>
+        <ToggleSwitch
+          label="Pedir a confirmação dos serviços antes de um novo chamado" checked={aceiteObrigatorio} onChange={setAceiteObrigatorio}
+          description="Desligado: o portal só mostra os serviços aguardando confirmação. Ligado: o cliente confirma antes de abrir chamado."
+          dica="Mesmo ligado, o cliente sempre pode abrir um chamado de emergência sem confirmar: equipamento parado não espera."
+        />
+      </div>
       <div className="flex items-center gap-3">
         <Button onClick={salvar} loading={salvando}><Check className="w-4 h-4" /> Salvar</Button>
         {ok && <span className="text-sm text-success-700">Alterações salvas.</span>}
