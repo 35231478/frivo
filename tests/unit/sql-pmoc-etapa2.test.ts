@@ -4,6 +4,9 @@
  * "pmoc_execucoes"), é idempotente (roda duas vezes), não mexe em mais nada — nem em "ordens_servico" —
  * e o resultado é EXATAMENTE o que o Prisma espera (comparado com o schema.prisma aplicado por
  * `prisma db push`). Não cria enum: a frequência é um número de meses.
+ * Desde a Etapa 2.1 o schema tem a coluna "fim_semana" (prisma/sql/2026-12-12_pmoc_cronograma_fim_semana.sql):
+ * a comparação com o Prisma é feita com os DOIS arquivos aplicados, na ordem em que vão para produção.
+ * O arquivo da Etapa 2.1 tem o seu próprio teste (sql-pmoc-etapa2-1).
  *   PG_TESTE_URL="postgresql://root@localhost/postgres?host=/var/run/postgresql" npx vitest run tests/unit/sql-pmoc-etapa2
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -14,6 +17,7 @@ import path from "node:path";
 const URL = process.env.PG_TESTE_URL;
 const RAIZ = path.resolve(__dirname, "../..");
 const ARQUIVO = path.join(RAIZ, "prisma/sql/2026-12-10_pmoc_etapa2_cronograma.sql");
+const ARQUIVO_2_1 = path.join(RAIZ, "prisma/sql/2026-12-12_pmoc_cronograma_fim_semana.sql");
 const SCHEMA = `teste_pmoc2_sql_${process.pid}`;
 const PRISMA = `teste_pmoc2_sql_prisma_${process.pid}`;
 const TABELAS = ["pmoc_cronogramas", "pmoc_execucoes"] as const;
@@ -27,6 +31,7 @@ const sql = (q: string, schema = SCHEMA) => psql(["-c", q], schema);
 
 /** O que o cronograma referencia, como já existe em produção (só o necessário para as chaves) */
 const BASE = `
+  CREATE TYPE "TratamentoFimSemana" AS ENUM ('MANTER', 'ADIANTAR', 'POSTERGAR');
   CREATE TABLE "pmocs" ("id" TEXT PRIMARY KEY, "nome" TEXT NOT NULL);
   CREATE TABLE "tipos_os" ("id" TEXT PRIMARY KEY, "nome" TEXT NOT NULL);
   CREATE TABLE "tipos_equipamento_custom" ("id" TEXT PRIMARY KEY, "nome" TEXT NOT NULL);
@@ -56,6 +61,7 @@ describe.skipIf(!URL)("SQL de produção: PMOC — Etapa 2, cronograma (PostgreS
     sql(BASE);
     psql(["-f", ARQUIVO]);
     psql(["-f", ARQUIVO]); // 2ª vez: idempotente, não pode falhar
+    psql(["-f", ARQUIVO_2_1]); // a coluna da Etapa 2.1, por cima
     const url = `${URL}${URL!.includes("?") ? "&" : "?"}schema=${PRISMA}`;
     execFileSync(path.join(RAIZ, "node_modules/.bin/prisma"), ["db", "push", "--skip-generate", "--schema", "prisma/schema.prisma"], { cwd: RAIZ, env: { ...process.env, DATABASE_URL: url }, stdio: "pipe" });
   }, 180_000);
@@ -67,7 +73,7 @@ describe.skipIf(!URL)("SQL de produção: PMOC — Etapa 2, cronograma (PostgreS
       expect(indices(SCHEMA, t), t).toBe(indices(PRISMA, t));
       expect(chaves(SCHEMA, t), t).toBe(chaves(PRISMA, t));
     }
-    expect(colunas(SCHEMA, "pmoc_cronogramas").split("\n")).toHaveLength(11);
+    expect(colunas(SCHEMA, "pmoc_cronogramas").split("\n")).toHaveLength(12); // 11 da Etapa 2 + "fim_semana" (Etapa 2.1)
     expect(colunas(SCHEMA, "pmoc_execucoes").split("\n")).toHaveLength(8);
     // 4 chaves estrangeiras + a primária em cada tabela
     expect(chaves(SCHEMA, "pmoc_cronogramas").split("\n")).toHaveLength(5);

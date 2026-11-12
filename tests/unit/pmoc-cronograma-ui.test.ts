@@ -7,7 +7,9 @@
  *  - o formulário do item: o que manda ao servidor, a prévia das próximas datas, o erro do servidor;
  *  - "Reagendar atividades": a confirmação diz o que vai mudar; sem o que fazer, não há o que confirmar;
  *  - RBAC na tela: quem só visualiza não vê ações; o número da OS só é link para quem vê OS;
- *  - a aba deixou de ser "em breve" no editor, e a OS mostra o atalho para o plano.
+ *  - a aba deixou de ser "em breve" no editor, e a OS mostra o atalho para o plano;
+ *  - Etapa 2.1: a opção de fim de semana no formulário e na lista, e a substituição explicada na tela
+ *    (a regra, o que cada item cede e o que isso pede do checklist).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
@@ -27,12 +29,13 @@ const URL_CRON = "/api/pmocs/p1/cronograma";
 
 const itemTela = (id: string, extra: Partial<ItemCronogramaTela> = {}): ItemCronogramaTela => ({
   id, ativo: true, tipoEquipamentoId: "teSplit", equipamentoId: null, tipoOsId: "to1", dataInicio: "2026-11-12", intervaloMeses: 1, diaExecucao: 25,
+  fimSemana: "MANTER", criadoEm: "2026-11-01T12:00:00.000Z", substituidas: 0,
   tipoOs: { id: "to1", nome: "Manutenção preventiva", ativo: true }, tipoEquipamento: { id: "teSplit", nome: "Split" }, equipamento: null, equipamentos: 3, proxima: "2026-11-25", ...extra,
 });
 const osTela = (id: string, dia: string, extra: Partial<OsDoCronograma> = {}): OsDoCronograma => ({
   id, numero: `OS-${id}`, status: "AGENDADA", data: `${dia}T15:00:00.000Z`, periodo: dia.slice(0, 7), itemId: "i1", tipoOs: "Manutenção preventiva", local: "Matriz", equipamentos: 2, pendente: true, ...extra,
 });
-const SEM_PREVIA = { criar: 0, incluir: 0, mover: 0, retirar: 0, cancelar: 0, mantidas: 0 };
+const SEM_PREVIA = { criar: 0, incluir: 0, mover: 0, retirar: 0, cancelar: 0, mantidas: 0, substituidos: 0 };
 const tela = (extra: Partial<CronogramaTela> = {}): CronogramaTela => ({
   itens: [itemTela("i1")], semCronograma: [], ordens: [osTela("101", "2026-11-25"), osTela("102", "2026-12-25")], totais: { futuras: 2, passadas: 0 }, motivo: null, previa: SEM_PREVIA,
   opcoes: {
@@ -180,7 +183,7 @@ describe("aba Cronograma: o item", () => {
     expect(texto($("[data-proximas]"))).toBe("Próximas execuções: 10/12/2026, 10/03/2027, 10/06/2027, 10/09/2027. Vão até a expiração do plano (11/11/2027).");
 
     await clicar($("[data-salvar-item]"));
-    expect(pedidos.find((p) => p.metodo === "POST")).toEqual({ url: URL_CRON, metodo: "POST", corpo: { tipoEquipamentoId: "teSplit", equipamentoId: null, tipoOsId: "to2", dataInicio: "2026-11-12", intervaloMeses: 3, diaExecucao: 10 } });
+    expect(pedidos.find((p) => p.metodo === "POST")).toEqual({ url: URL_CRON, metodo: "POST", corpo: { tipoEquipamentoId: "teSplit", equipamentoId: null, tipoOsId: "to2", dataInicio: "2026-11-12", intervaloMeses: 3, diaExecucao: 10, fimSemana: "POSTERGAR" } });
     expect($("[data-form-item]")).toBeNull();
     expect($$("[data-item]")).toHaveLength(2);
     expect(toast).toHaveBeenCalledWith("Item criado. 2 OS criadas.");
@@ -254,6 +257,126 @@ describe("aba Cronograma: o item", () => {
   });
 });
 
+describe("aba Cronograma: fim de semana e substituição (Etapa 2.1)", () => {
+  const selFim = () => $("select[aria-label='Se cair no fim de semana']") as HTMLSelectElement;
+  const GERADO = { motivo: null, criadas: [], incluidos: 0, movidas: 0, retirados: 0, canceladas: 0, mantidas: 0, aCancelar: 0 };
+  const balao = (b: Element | null) => texto(document.getElementById(b!.getAttribute("aria-describedby")!));
+
+  it("item novo: propõe POSTERGAR, com as mesmas três opções (e os mesmos nomes) dos contratos", async () => {
+    await abrirAba();
+    await clicar($("[data-novo-item]"));
+    expect(selFim().value).toBe("POSTERGAR");
+    expect([...selFim().querySelectorAll("option")].map((o) => [o.value, o.textContent])).toEqual([
+      ["MANTER", "Manter na data original"], ["ADIANTAR", "Adiantar para sexta-feira"], ["POSTERGAR", "Postergar para segunda-feira"],
+    ]);
+  });
+
+  it("a prévia das próximas datas acompanha a opção: dia 14 (sábado em novembro, domingo em fevereiro)", async () => {
+    await abrirAba();
+    await clicar($("[data-novo-item]"));
+    await digitar("input[aria-label='Dia de execução']", "14");
+    expect(texto($("[data-proximas]"))).toContain("Próximas execuções: 16/11/2026, 14/12/2026, 14/01/2027, 15/02/2027 e mais 8.");
+    await digitar("select[aria-label='Se cair no fim de semana']", "ADIANTAR");
+    expect(texto($("[data-proximas]"))).toContain("Próximas execuções: 13/11/2026, 14/12/2026, 14/01/2027, 12/02/2027 e mais 8.");
+    await digitar("select[aria-label='Se cair no fim de semana']", "MANTER");
+    expect(texto($("[data-proximas]"))).toContain("Próximas execuções: 14/11/2026, 14/12/2026, 14/01/2027, 14/02/2027 e mais 8.");
+  });
+
+  it("o que foi escolhido vai ao servidor; editar abre com o que está gravado (item antigo = manter) e salva a troca", async () => {
+    respostas[`POST ${URL_CRON}`] = { status: 201, corpo: { cronograma: tela(), gerado: GERADO } };
+    respostas[`PUT ${URL_CRON}/i1`] = { status: 200, corpo: { cronograma: tela({ itens: [itemTela("i1", { fimSemana: "ADIANTAR" })] }), gerado: GERADO } };
+    await abrirAba();
+    await clicar($("[data-novo-item]"));
+    await digitar("select[aria-label='Tipo de OS']", "to2");
+    await digitar("input[aria-label='Dia de execução']", "14");
+    await digitar("select[aria-label='Se cair no fim de semana']", "MANTER");
+    await clicar($("[data-salvar-item]"));
+    expect(pedidos.find((p) => p.metodo === "POST")!.corpo).toMatchObject({ diaExecucao: 14, fimSemana: "MANTER" });
+
+    await clicar($("[data-item='i1'] button[aria-label='Editar item']"));
+    expect(selFim().value).toBe("MANTER"); // o item de exemplo foi gravado antes de a opção existir
+    await digitar("select[aria-label='Se cair no fim de semana']", "ADIANTAR");
+    await clicar($("[data-salvar-item]"));
+    expect(pedidos.find((p) => p.metodo === "PUT")!.corpo).toMatchObject({ fimSemana: "ADIANTAR" });
+    expect(texto($("[data-item='i1'] [data-fim-semana]"))).toBe("fim de semana: sexta");
+  });
+
+  it("a lista mostra a opção de cada item (manter não polui) e quantas execuções o item cede a um de maior intervalo", async () => {
+    respostas[`GET ${URL_CRON}`].corpo = tela({ itens: [
+      itemTela("i1", { substituidas: 4 }),
+      itemTela("i2", { intervaloMeses: 6, fimSemana: "POSTERGAR", tipoOs: { id: "to2", nome: "Higienização", ativo: true }, proxima: "2027-04-26" }),
+      itemTela("i3", { fimSemana: "ADIANTAR", substituidas: 1 }),
+    ] });
+    await abrirAba();
+    const linhas = $$("[data-item]").map((tr) => [...tr.querySelectorAll("td")].map((td) => texto(td)));
+    expect(linhas.map((l) => [l[0], l[4], l[5]])).toEqual([
+      ["Split3 equipamentos4 execuções substituídas", "25", "25/11/2026"], // "substituídas" fica numa linha própria, abaixo
+      ["Split3 equipamentos", "25", "26/04/2027fim de semana: segunda"],
+      ["Split3 equipamentos1 execução substituída", "25", "25/11/2026fim de semana: sexta"],
+    ]);
+    expect($$("[data-item] [data-substituidas]").map((e) => texto(e))).toEqual(["4 execuções substituídas", "1 execução substituída"]);
+    expect($$("[data-fim-semana]").map((e) => e.getAttribute("data-fim-semana"))).toEqual(["POSTERGAR", "ADIANTAR"]);
+    // no celular (cards), o mesmo conteúdo
+    const cards = $$("[data-item-card]").map((c) => texto(c));
+    expect(cards[0]).toContain("Split · 3 equipamentos");
+    expect($$("[data-item-card] [data-substituidas]").map((e) => texto(e))).toEqual(["4 execuções substituídas", "1 execução substituída"]); // numa linha própria
+    expect(cards[0]).toContain("Manutenção preventiva · Mensal, dia 25");
+    expect(cards[0]).not.toContain("fim de semana");
+    expect(cards[1]).toContain("Higienização · Semestral, dia 25 (fim de semana: segunda)");
+    expect(cards[1]).not.toContain("substituída");
+    expect(cards[2]).toContain("1 execução substituída");
+  });
+
+  it("a regra da substituição está na tela: a frase na lista, a dica com o desempate e, no tipo de OS, o que o checklist precisa ter", async () => {
+    respostas[`GET ${URL_CRON}`].corpo = tela({ itens: [itemTela("i1"), itemTela("i2", { intervaloMeses: 6 })] });
+    await abrirAba();
+    expect(texto($("[data-regra-substituicao]"))).toBe("Uma OS por execução e por local. No mesmo mês, vale o item de maior intervalo.");
+    expect(balao($("button[aria-label='Ajuda: Itens do cronograma']"))).toBe(
+      "Quando dois itens pegam o mesmo equipamento no mesmo mês, só o de maior intervalo gera OS: a limpeza semestral substitui a preventiva mensal. No empate, vale o item criado primeiro.");
+
+    await clicar($("[data-novo-item]"));
+    expect(balao($("[data-form-item] button[aria-label='Ajuda: Tipo de OS']"))).toBe(
+      "Define o serviço e o checklist da OS gerada. O serviço de maior intervalo substitui os outros no mês: o checklist dele deve incluir também a rotina leve. Os tipos ficam em Configurações.");
+    expect(balao($("[data-form-item] button[aria-label='Ajuda: Se cair no fim de semana']"))).toBe("Vale quando o dia de execução cai em sábado ou domingo. Feriados não entram na conta.");
+    // Já existe outro item no plano: o formulário lembra que este pode ser substituído
+    expect(texto($("[data-aviso-substituicao]"))).toBe("No mês em que um item de maior intervalo atender o mesmo equipamento, este não gera OS.");
+  });
+
+  it("a confirmação do 'Reagendar' separa o que sai por substituição do que saiu do cronograma", async () => {
+    respostas[`GET ${URL_CRON}`].corpo = tela({ previa: { ...SEM_PREVIA, criar: 1, retirar: 5, substituidos: 3, cancelar: 2 } });
+    await abrirAba();
+    await clicar($("[data-reagendar]"));
+    expect($$("[data-previa] li").map((li) => texto(li))).toEqual([
+      "Criar 1 OS", "Retirar 3 equipamentos atendidos por outro serviço", "Retirar 2 equipamentos que saíram do cronograma", "Cancelar 2 OS que ficam sem equipamento",
+    ]);
+    await clicar(botao("Voltar"));
+
+    // Só substituição (e no singular): a linha "saiu do cronograma" não aparece
+    respostas[`GET ${URL_CRON}`].corpo = tela({ previa: { ...SEM_PREVIA, retirar: 1, substituidos: 1, cancelar: 1 } });
+    await abrirAba();
+    await clicar($("[data-reagendar]"));
+    expect($$("[data-previa] li").map((li) => texto(li))).toEqual(["Retirar 1 equipamento atendido por outro serviço", "Cancelar 1 OS que fica sem equipamento"]);
+  });
+
+  it("plano com um item só: ao editar esse item, o lembrete da substituição não aparece (não há com quem disputar)", async () => {
+    await abrirAba();
+    await clicar($("[data-item='i1'] button[aria-label='Editar item']"));
+    expect($("[data-aviso-substituicao]")).toBeNull();
+    await clicar(botao("Cancelar"));
+    await clicar($("[data-novo-item]")); // já o item NOVO disputa com o que existe
+    expect($("[data-aviso-substituicao]")).not.toBeNull();
+  });
+
+  it("quem só visualiza vê a opção e o que foi substituído, mas não tem como mudar", async () => {
+    respostas[`GET ${URL_CRON}`].corpo = tela({ itens: [itemTela("i1", { fimSemana: "POSTERGAR", substituidas: 2 })] });
+    await abrirAba(montarPermissoes({ pmoc: ["visualizar"] }), true); // o editor abre a aba só para leitura sem "PMOC › Editar"
+    expect(texto($("[data-item='i1']"))).toContain("2 execuções substituídas");
+    expect(texto($("[data-item='i1'] [data-fim-semana]"))).toBe("fim de semana: segunda");
+    expect($("[data-novo-item]")).toBeNull();
+    expect($("[data-item='i1'] button[aria-label='Editar item']")).toBeNull();
+  });
+});
+
 describe("aba Cronograma: Reagendar atividades", () => {
   it("nada a fazer: o diálogo diz que a agenda já está igual, e não há botão para confirmar", async () => {
     await abrirAba();
@@ -266,7 +389,7 @@ describe("aba Cronograma: Reagendar atividades", () => {
   });
 
   it("a confirmação diz o que vai mudar, linha por linha, antes de mexer em qualquer OS", async () => {
-    respostas[`GET ${URL_CRON}`].corpo = tela({ previa: { criar: 3, incluir: 1, mover: 2, retirar: 4, cancelar: 1, mantidas: 1 } });
+    respostas[`GET ${URL_CRON}`].corpo = tela({ previa: { criar: 3, incluir: 1, mover: 2, retirar: 4, cancelar: 1, mantidas: 1, substituidos: 0 } });
     await abrirAba();
     await clicar($("[data-reagendar]"));
     expect($$("[data-previa] li").map((li) => texto(li))).toEqual([

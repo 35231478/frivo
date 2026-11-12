@@ -7,7 +7,7 @@ import type { Session } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { pode, type Permissoes } from "@/lib/permissoes";
 import { dataISO } from "@/lib/pmoc";
-import type { ItemCronogramaInput } from "@/lib/pmoc-cronograma";
+import { FIM_SEMANA_PADRAO, type FimSemana, type ItemCronogramaInput } from "@/lib/pmoc-cronograma";
 import { executarCronograma, type AtorCronograma, type ResultadoCronograma } from "@/lib/pmoc-cronograma-server";
 
 export const atorDoCronograma = (session: Session): AtorCronograma => ({
@@ -38,9 +38,14 @@ export async function validarItem(pmoc: PlanoDoItem, empresaId: string, d: ItemC
   return null;
 }
 
-export const dadosDoItem = (d: ItemCronogramaInput) => ({
+/**
+ * O que grava do item. `fimSemana` ausente no pedido: item NOVO recebe o padrão proposto (postergar);
+ * na edição, fica o que estava (`atual`).
+ */
+export const dadosDoItem = (d: ItemCronogramaInput, atual?: FimSemana) => ({
   tipoEquipamentoId: d.tipoEquipamentoId, equipamentoId: d.equipamentoId, tipoOsId: d.tipoOsId,
   dataInicio: new Date(`${d.dataInicio}T00:00:00Z`), intervaloMeses: d.intervaloMeses, diaExecucao: d.diaExecucao,
+  fimSemana: d.fimSemana ?? atual ?? FIM_SEMANA_PADRAO,
 });
 
 /**

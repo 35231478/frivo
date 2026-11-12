@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, CalendarClock, Info, Loader2, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
-import { cn, LABELS_STATUS_OS } from "@/lib/utils";
+import { cn, LABELS_STATUS_OS, LABELS_TRATAMENTO_FIM_SEMANA } from "@/lib/utils";
 import { chaveDiaBR } from "@/lib/fuso";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,13 +11,14 @@ import { InputData } from "@/components/ui/input-data";
 import { Select } from "@/components/ui/select";
 import { Modal } from "@/components/ui/modal";
 import { FormField, FormGrid } from "@/components/ui/form-field";
+import { Dica } from "@/components/ui/dica";
 import { StatusPill, TOM_ESTAGIO_OS } from "@/components/ui/status-pill";
 import { confirmar, toast } from "@/components/ui/avisos";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { dataBR, hojeISO } from "@/lib/pmoc";
 import {
-  DIA_EXECUCAO_MAX, FREQUENCIAS, INTERVALO_MESES_MAX, TEXTO_SEM_GERAR, escopoDoItem, ocorrenciasDoItem, rotuloFrequencia, textoResultado,
-  type EscopoItem, type ResumoPlano,
+  DIA_EXECUCAO_MAX, FIM_SEMANA_CURTO, FIM_SEMANA_PADRAO, FINS_DE_SEMANA, FREQUENCIAS, INTERVALO_MESES_MAX, TEXTO_SEM_GERAR, escopoDoItem,
+  ocorrenciasDoItem, rotuloFrequencia, textoResultado, type EscopoItem, type FimSemana, type ResumoPlano,
 } from "@/lib/pmoc-cronograma";
 import type { CronogramaTela, ItemCronogramaTela, OsDoCronograma } from "@/lib/pmoc-cronograma-server";
 
@@ -27,20 +28,41 @@ function rotuloEscopo(i: ItemCronogramaTela): string {
   return i.tipoEquipamento ? i.tipoEquipamento.nome : "Todos os equipamentos";
 }
 const plural = (n: number, um: string, varios: string) => (n === 1 ? `1 ${um}` : `${n} ${varios}`);
+/** "2 execuções substituídas" — o que o item cede, de hoje em diante, a um item de maior intervalo */
+const cedidas = (i: ItemCronogramaTela) => plural(i.substituidas, "execução substituída", "execuções substituídas");
 
 /** As mudanças pendentes, uma por linha (o que "Reagendar atividades" vai fazer) */
 function linhasDaPrevia(p: ResumoPlano): string[] {
+  // Dos retirados: os que passam a ser atendidos por um item de maior intervalo, e os que saíram do cronograma
+  const cedidos = plural(p.substituidos, "equipamento atendido", "equipamentos atendidos");
+  const fora = plural(p.retirar - p.substituidos, "equipamento que saiu", "equipamentos que saíram");
   return [
     p.criar > 0 && `Criar ${plural(p.criar, "OS", "OS")}`,
     p.incluir > 0 && `Incluir ${plural(p.incluir, "equipamento", "equipamentos")} em OS já geradas`,
     p.mover > 0 && `Mudar a data de ${plural(p.mover, "OS", "OS")}`,
-    p.retirar > 0 && `Retirar ${plural(p.retirar, "equipamento que saiu", "equipamentos que saíram")} do cronograma`,
+    p.substituidos > 0 && `Retirar ${cedidos} por outro serviço`,
+    p.retirar > p.substituidos && `Retirar ${fora} do cronograma`,
     p.cancelar > 0 && `Cancelar ${plural(p.cancelar, "OS que fica", "OS que ficam")} sem equipamento`,
   ].filter((l): l is string => !!l);
 }
 const temPendencia = (p: ResumoPlano) => p.criar + p.incluir + p.mover + p.retirar + p.cancelar > 0;
 
-interface FormItem { escopo: EscopoItem; tipoEquipamentoId: string; equipamentoId: string; tipoOsId: string; dataInicio: string; intervaloMeses: string; diaExecucao: string }
+interface FormItem { escopo: EscopoItem; tipoEquipamentoId: string; equipamentoId: string; tipoOsId: string; dataInicio: string; intervaloMeses: string; diaExecucao: string; fimSemana: FimSemana }
+
+/** A regra da substituição, na dica da lista de itens */
+const AJUDA_SUBSTITUICAO = (
+  <>
+    Quando dois itens pegam o mesmo equipamento no mesmo mês, só o de maior intervalo gera OS:
+    {" "}a limpeza semestral substitui a preventiva mensal. No empate, vale o item criado primeiro.
+  </>
+);
+/** O que a substituição pede do checklist, na dica do tipo de OS */
+const AJUDA_TIPO_OS = (
+  <>
+    Define o serviço e o checklist da OS gerada. O serviço de maior intervalo substitui os outros no mês:
+    {" "}o checklist dele deve incluir também a rotina leve. Os tipos ficam em Configurações.
+  </>
+);
 
 /**
  * Aba "Cronograma" do PMOC (Etapa 2): os itens que dizem o que fazer, em quem e de quanto em quanto
@@ -102,8 +124,8 @@ export function PmocCronograma({ pmocId, dataExpiracao, somenteLeitura }: { pmoc
       <div className="bg-white border border-surface-border rounded-xl overflow-hidden">
         <div className="px-4 py-3 border-b border-surface-border flex items-center justify-between gap-2 flex-wrap">
           <div>
-            <h2 className="font-semibold text-ink">Itens do cronograma ({dados.itens.length})</h2>
-            <p className="text-xs text-ink-muted">Cada item gera uma OS por execução e por local, com os equipamentos dele.</p>
+            <h2 className="font-semibold text-ink flex items-center gap-1.5">Itens do cronograma ({dados.itens.length}) <Dica texto={AJUDA_SUBSTITUICAO} rotulo="Itens do cronograma" lado="direita" /></h2>
+            <p className="text-xs text-ink-muted" data-regra-substituicao>Uma OS por execução e por local. No mesmo mês, vale o item de maior intervalo.</p>
           </div>
           {!somenteLeitura && <Button type="button" size="sm" onClick={() => setEditando("novo")} data-novo-item><Plus className="w-4 h-4" /> Novo item</Button>}
         </div>
@@ -126,12 +148,16 @@ export function PmocCronograma({ pmocId, dataExpiracao, somenteLeitura }: { pmoc
                       <td className="px-4 py-2.5">
                         <span className="font-medium text-ink">{rotuloEscopo(i)}</span>
                         <span className="block text-xs text-ink-muted">{plural(i.equipamentos, "equipamento", "equipamentos")}</span>
+                        {i.substituidas > 0 && <span className="block text-xs text-ink-muted" data-substituidas>{cedidas(i)}</span>}
                       </td>
                       <td className="px-4 py-2.5 text-ink-muted">{i.tipoOs.nome}</td>
                       <td className="px-4 py-2.5 text-ink-muted whitespace-nowrap">{dataBR(i.dataInicio)}</td>
                       <td className="px-4 py-2.5 text-ink-muted whitespace-nowrap">{rotuloFrequencia(i.intervaloMeses)}</td>
                       <td className="px-4 py-2.5 text-ink-muted">{i.diaExecucao}</td>
-                      <td className="px-4 py-2.5 text-ink-muted whitespace-nowrap">{i.proxima ? dataBR(i.proxima) : "—"}</td>
+                      <td className="px-4 py-2.5 text-ink-muted whitespace-nowrap">
+                        {i.proxima ? dataBR(i.proxima) : "—"}
+                        {i.fimSemana !== "MANTER" && <span className="block text-xs" data-fim-semana={i.fimSemana}>{FIM_SEMANA_CURTO[i.fimSemana]}</span>}
+                      </td>
                       <td className="px-2">{acoes(i)}</td>
                     </tr>
                   ))}
@@ -143,8 +169,9 @@ export function PmocCronograma({ pmocId, dataExpiracao, somenteLeitura }: { pmoc
                 <li key={i.id} data-item-card={i.id} className="px-4 py-3 flex items-start gap-2">
                   <div className="min-w-0 flex-1 space-y-0.5">
                     <p className="text-sm font-medium text-ink">{rotuloEscopo(i)} <span className="font-normal text-ink-muted">· {plural(i.equipamentos, "equipamento", "equipamentos")}</span></p>
-                    <p className="text-xs text-ink-muted">{i.tipoOs.nome} · {rotuloFrequencia(i.intervaloMeses)}, dia {i.diaExecucao}</p>
+                    <p className="text-xs text-ink-muted">{i.tipoOs.nome} · {rotuloFrequencia(i.intervaloMeses)}, dia {i.diaExecucao}{i.fimSemana !== "MANTER" ? ` (${FIM_SEMANA_CURTO[i.fimSemana]})` : ""}</p>
                     <p className="text-xs text-ink-muted">Início {dataBR(i.dataInicio)} · Próxima {i.proxima ? dataBR(i.proxima) : "—"}</p>
+                    {i.substituidas > 0 && <p className="text-xs text-ink-muted" data-substituidas>{cedidas(i)}</p>}
                   </div>
                   {acoes(i)}
                 </li>
@@ -263,8 +290,11 @@ function ModalItem({ item, dados, dataExpiracao, url, onFechar, onSalvo }: {
     tipoEquipamentoId: item?.tipoEquipamentoId ?? "", equipamentoId: item?.equipamentoId ?? "",
     tipoOsId: item?.tipoOsId ?? (dados.opcoes.tiposOs.length === 1 ? dados.opcoes.tiposOs[0].id : ""),
     dataInicio: item?.dataInicio ?? hojeISO(), intervaloMeses: String(item?.intervaloMeses ?? 1), diaExecucao: String(item?.diaExecucao ?? ""),
+    fimSemana: item?.fimSemana ?? FIM_SEMANA_PADRAO,
   }));
   const set = <K extends keyof FormItem>(k: K, v: FormItem[K]) => setF((x) => ({ ...x, [k]: v }));
+  /** Há outro item no plano? Então a substituição pode valer para este */
+  const outrosItens = dados.itens.filter((i) => i.id !== item?.id).length;
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
 
@@ -279,8 +309,8 @@ function ModalItem({ item, dados, dataExpiracao, url, onFechar, onSalvo }: {
   const proximas = useMemo(() => {
     if (!f.dataInicio || !Number.isInteger(intervalo) || intervalo < 1 || !Number.isInteger(dia) || dia < 1 || dia > DIA_EXECUCAO_MAX) return [];
     const hoje = hojeISO();
-    return ocorrenciasDoItem({ dataInicio: f.dataInicio, intervaloMeses: intervalo, diaExecucao: dia }, dataExpiracao).map((o) => chaveDiaBR(o.data)).filter((d) => d >= hoje);
-  }, [f.dataInicio, intervalo, dia, dataExpiracao]);
+    return ocorrenciasDoItem({ dataInicio: f.dataInicio, intervaloMeses: intervalo, diaExecucao: dia, fimSemana: f.fimSemana }, dataExpiracao).map((o) => chaveDiaBR(o.data)).filter((d) => d >= hoje);
+  }, [f.dataInicio, intervalo, dia, f.fimSemana, dataExpiracao]);
 
   async function salvar() {
     setErro("");
@@ -293,6 +323,7 @@ function ModalItem({ item, dados, dataExpiracao, url, onFechar, onSalvo }: {
         body: JSON.stringify({
           tipoEquipamentoId: f.escopo === "TIPO" ? f.tipoEquipamentoId : null, equipamentoId: f.escopo === "EQUIPAMENTO" ? f.equipamentoId : null,
           tipoOsId: f.tipoOsId, dataInicio: f.dataInicio, intervaloMeses: f.intervaloMeses === "" ? NaN : intervalo, diaExecucao: f.diaExecucao === "" ? NaN : dia,
+          fimSemana: f.fimSemana,
         }),
       });
       const d = await res.json().catch(() => ({}));
@@ -330,7 +361,7 @@ function ModalItem({ item, dados, dataExpiracao, url, onFechar, onSalvo }: {
           )}
         </FormGrid>
         <FormGrid>
-          <FormField label="Tipo de OS" required dica="Define o serviço e o checklist da OS gerada. Os tipos ficam em Configurações.">
+          <FormField label="Tipo de OS" required dica={AJUDA_TIPO_OS}>
             <Select aria-label="Tipo de OS" value={f.tipoOsId} onChange={(e) => set("tipoOsId", e.target.value)} placeholder="Selecione o tipo de OS">
               {tiposOs.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
             </Select>
@@ -353,11 +384,21 @@ function ModalItem({ item, dados, dataExpiracao, url, onFechar, onSalvo }: {
             <Input aria-label="Dia de execução" type="number" inputMode="numeric" min={1} max={DIA_EXECUCAO_MAX} step={1} value={f.diaExecucao} onChange={(e) => set("diaExecucao", e.target.value)} placeholder="Ex: 25" />
           </FormField>
         </FormGrid>
+        <FormGrid>
+          <FormField label="Se cair no fim de semana" required dica="Vale quando o dia de execução cai em sábado ou domingo. Feriados não entram na conta.">
+            <Select aria-label="Se cair no fim de semana" value={f.fimSemana} onChange={(e) => set("fimSemana", e.target.value as FimSemana)}>
+              {FINS_DE_SEMANA.map((v) => <option key={v} value={v}>{LABELS_TRATAMENTO_FIM_SEMANA[v]}</option>)}
+            </Select>
+          </FormField>
+        </FormGrid>
         <p data-proximas className="text-xs text-ink-muted">
           {proximas.length
             ? <>Próximas execuções: <strong className="text-ink">{proximas.slice(0, 4).map((d) => dataBR(d)).join(", ")}</strong>{proximas.length > 4 ? ` e mais ${proximas.length - 4}` : ""}. Vão até a expiração do plano ({dataBR(dataExpiracao)}).</>
             : "Sem execução dentro da validade do plano com estes dados."}
         </p>
+        {outrosItens > 0 && (
+          <p data-aviso-substituicao className="text-xs text-ink-muted">No mês em que um item de maior intervalo atender o mesmo equipamento, este não gera OS.</p>
+        )}
         <div className="flex justify-end gap-2 pt-2 border-t border-surface-border">
           <Button type="button" variant="secondary" onClick={onFechar}>Cancelar</Button>
           <Button type="button" loading={salvando} onClick={salvar} data-salvar-item>Salvar</Button>
