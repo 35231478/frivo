@@ -1,12 +1,13 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import { Bell, ShieldAlert, ShieldX, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer, Headset, ClipboardCheck, FileWarning, Wrench, Menu, Barcode, MessageSquareReply, PackageCheck, FileCheck2, FileX2, Hourglass, CalendarX2, TrendingUp, PackageOpen, PackageMinus, Globe } from "lucide-react";
+import { Bell, ShieldAlert, ShieldX, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer, Headset, ClipboardCheck, FileWarning, Wrench, Menu, Barcode, MessageSquareReply, PackageCheck, FileCheck2, FileX2, Hourglass, CalendarX2, TrendingUp, PackageOpen, PackageMinus, Globe, BadgeCheck, MessageSquareWarning } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "next-auth";
 import { pode } from "@/lib/permissoes";
+import { EVENTO_SINO } from "@/lib/ui/sino";
 
 interface Alertas {
   prazosVencidos: number;
@@ -35,6 +36,11 @@ interface Alertas {
   reajustesContrato?: number;
   separacoesPendentes?: number;
   devolucoesPendentes?: number;
+  /** Aceite do cliente: confirmações (com ressalva à parte) que ninguém do escritório viu, e a OS da mais recente */
+  aceitesRessalva?: number;
+  aceiteRessalvaOsId?: string | null;
+  aceitesConfirmados?: number;
+  aceiteConfirmadoOsId?: string | null;
   total: number;
 }
 
@@ -161,9 +167,12 @@ export function Header({ session, avatarUrl }: HeaderProps) {
         .catch(() => {});
     carregar();
     const intervalo = setInterval(carregar, 120000);
+    // Uma tela acabou de dar um aviso por visto (ex.: abriu a OS que o cliente confirmou): o sino relê já
+    window.addEventListener(EVENTO_SINO, carregar);
     return () => {
       ativo = false;
       clearInterval(intervalo);
+      window.removeEventListener(EVENTO_SINO, carregar);
     };
   }, []);
 
@@ -258,6 +267,9 @@ export function Header({ session, avatarUrl }: HeaderProps) {
                 <div className="divide-y divide-surface-linha">
                   {podeVer("orcamentos") && (alertas?.leadsSite ?? 0) > 0 && <AlertaItem href="/leads-site" icone={Globe} cor="text-primary-600" label="Novos leads do site" valor={alertas?.leadsSite ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("orcamentos") && <AlertaItem href="/orcamentos?resposta=nova&periodo=todos" icone={MessageSquareReply} cor="text-acento" label="Respostas de orçamentos" valor={alertas?.orcamentosRespondidos ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {/* Aceite do cliente: confirmou pelo link (ou assinou com o técnico) e ninguém abriu a OS ainda; a ressalva primeiro */}
+                  {podeVer("ordens") && (alertas?.aceitesRessalva ?? 0) > 0 && <AlertaItem href={hrefOs(alertas?.aceiteRessalvaOsId)} icone={MessageSquareWarning} cor="text-atencao" label="Ressalvas de clientes" valor={alertas?.aceitesRessalva ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("ordens") && (alertas?.aceitesConfirmados ?? 0) > 0 && <AlertaItem href={hrefOs(alertas?.aceiteConfirmadoOsId)} icone={BadgeCheck} cor="text-ok" label="Serviços confirmados pelo cliente" valor={alertas?.aceitesConfirmados ?? 0} onClick={() => setSinoAberto(false)} />}
                   {/* NFS-e: só aparece quando há o que ver (resultado não visto ou nota parada) */}
                   {podeVer("financeiro", "fiscal") && (alertas?.nfseRejeitadas ?? 0) > 0 && <AlertaItem href={hrefMedicao(alertas?.nfseRejeitadaMedicaoId)} icone={FileX2} cor="text-atrasado" label="NFS-e não aceitas" valor={alertas?.nfseRejeitadas ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("financeiro", "fiscal") && (alertas?.nfseAguardando ?? 0) > 0 && <AlertaItem href={hrefMedicao(alertas?.nfseAguardandoMedicaoId)} icone={Hourglass} cor="text-atencao" label="NFS-e aguardando a prefeitura" valor={alertas?.nfseAguardando ?? 0} onClick={() => setSinoAberto(false)} />}
@@ -316,6 +328,8 @@ export function Header({ session, avatarUrl }: HeaderProps) {
 
 /** A medição da nota mais recente (onde ficam as notas); sem ela, a lista de medições */
 const hrefMedicao = (id: string | null | undefined) => (id ? `/financeiro/medicoes/${id}` : "/financeiro/medicoes");
+/** A OS do aviso mais recente: abrir a OS é o que dá o aviso por visto */
+const hrefOs = (id: string | null | undefined) => (id ? `/ordens/${id}` : "/ordens");
 
 function AlertaItem({
   href, icone: Icone, cor, label, valor, onClick,

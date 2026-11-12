@@ -5,7 +5,9 @@
  *  - o quadro de assinatura (nome + assinatura obrigatórios) usado no app do técnico e no escritório;
  *  - o cartão da OS no escritório: aguardando × confirmada, enviar (um clique), copiar link, colher;
  *  - o app do técnico: quando oferece, assinar pela fila (vale sem sinal), enviar o link (precisa de sinal);
- *  - o link público: nome obrigatório, o aviso do que fica registrado, o que vai no pedido;
+ *  - o link público: nome obrigatório, o aviso do que fica registrado, o que vai no pedido — e o
+ *    segundo caminho, "Tenho uma ressalva" (confirma, mas registra o que ficou pendente);
+ *  - a RESSALVA no cartão da OS, o "visto" de quem abre a OS e os avisos do aceite no SINO;
  *  - o portal: as pendências em destaque e o formulário do chamado — livre, bloqueado e emergência.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -134,8 +136,8 @@ describe("Quadro de assinatura do cliente (aceite no local)", () => {
 
 /* ───────── o cartão da OS no escritório ───────── */
 describe("Aceite na OS (escritório)", () => {
-  const G = "GET /api/ordens/os1/aceite", ENVIAR = "POST /api/ordens/os1/aceite/enviar", COLHER = "POST /api/ordens/os1/aceite";
-  const pendente = (extra: Record<string, unknown> = {}) => ({ token: "tok123", situacao: "PENDENTE", metodo: null, nome: null, observacao: null, ip: null, confirmadoEm: null, colhidoPor: null, assinatura: null, enviadoEm: null, enviadoCanal: null, enviadoPara: null, envios: 0, ...extra });
+  const G = "GET /api/ordens/os1/aceite", ENVIAR = "POST /api/ordens/os1/aceite/enviar", COLHER = "POST /api/ordens/os1/aceite", VISTO = "POST /api/ordens/os1/aceite/visto";
+  const pendente = (extra: Record<string, unknown> = {}) => ({ token: "tok123", situacao: "PENDENTE", metodo: null, nome: null, ressalva: null, ip: null, confirmadoEm: null, vistoEm: null, colhidoPor: null, assinatura: null, enviadoEm: null, enviadoCanal: null, enviadoPara: null, envios: 0, ...extra });
   const AGUARDANDO = { estado: "AGUARDANDO", statusOs: "CONCLUIDA", aceite: pendente(), caminhoPublico: "/relatorio/aceite/tok123" };
   const confirmado = (extra: Record<string, unknown> = {}) => ({ estado: "CONFIRMADO", statusOs: "CONCLUIDA", caminhoPublico: "/relatorio/aceite/tok123", aceite: pendente({ situacao: "CONFIRMADO", metodo: "REMOTO", nome: "Roberto Almeida", ip: "200.150.10.5", confirmadoEm: "2026-11-12T15:00:00.000Z", ...extra }) });
   const mudancas: unknown[] = [];
@@ -154,7 +156,7 @@ describe("Aceite na OS (escritório)", () => {
     expect(texto(c)).toContain("A OS está concluída e pode ser faturada. Falta o cliente confirmar o recebimento.");
     expect($$("[data-acoes-aceite] button").map((b) => texto(b))).toEqual(["Enviar ao cliente", "Copiar link", "Colher assinatura"]);
     expect($("[data-aceite-envio]")).toBeNull(); // ainda não foi pedido
-    expect(mudancas).toEqual([{ situacao: "PENDENTE", nome: null, confirmadoEm: null, metodo: null }]);
+    expect(mudancas).toEqual([{ situacao: "PENDENTE", nome: null, confirmadoEm: null, metodo: null, ressalva: null }]);
   });
 
   it("quem só visualiza vê a situação, sem nenhum botão; OS que não concluiu não mostra nada", async () => {
@@ -212,7 +214,7 @@ describe("Aceite na OS (escritório)", () => {
   });
 
   it("COLHER ASSINATURA: abre o quadro com a OS e o cliente, grava nome + assinatura e o cartão vira 'Confirmada pelo cliente'", async () => {
-    respostas[G] = [{ status: 200, corpo: AGUARDANDO }, { status: 200, corpo: confirmado({ metodo: "LOCAL", nome: "Marta Nunes", colhidoPor: "Ana Souza", ip: "177.1.2.3", assinatura: ASSINATURA }) }];
+    respostas[G] = [{ status: 200, corpo: AGUARDANDO }, { status: 200, corpo: confirmado({ metodo: "LOCAL", nome: "Marta Nunes", colhidoPor: "Ana Souza", ip: "177.1.2.3", assinatura: ASSINATURA, vistoEm: "2026-11-12T15:00:00.000Z" }) }];
     await abrir();
     expect($("[data-assinatura-cliente]")).toBeNull();
     await clicar($("[data-colher-aceite]"));
@@ -233,16 +235,67 @@ describe("Aceite na OS (escritório)", () => {
     expect($("[data-aceite-assinatura]")?.getAttribute("src")).toBe(ASSINATURA);
     expect($("[data-aceite-assinatura]")?.getAttribute("alt")).toBe("Assinatura de Marta Nunes");
     expect($$("[data-aceite-os] button")).toEqual([]);
-    expect(mudancas.at(-1)).toEqual({ situacao: "CONFIRMADO", nome: "Marta Nunes", confirmadoEm: "2026-11-12T15:00:00.000Z", metodo: "LOCAL" });
+    expect(mudancas.at(-1)).toEqual({ situacao: "CONFIRMADO", nome: "Marta Nunes", confirmadoEm: "2026-11-12T15:00:00.000Z", metodo: "LOCAL", ressalva: null });
   });
 
-  it("confirmada pelo link: a PROVA — quem, quando, como, de onde e a observação do cliente (igual para quem só visualiza)", async () => {
-    respostas[G] = { status: 200, corpo: confirmado({ observacao: "Tudo certo, equipe pontual" }) };
+  it("confirmada pelo link SEM ressalva: a PROVA — quem, quando, como e de onde (igual para quem só visualiza)", async () => {
+    respostas[G] = { status: 200, corpo: confirmado() };
     await abrir(soVer);
+    expect($("[data-aceite-os='CONFIRMADO']")?.getAttribute("data-aceite-com-ressalva")).toBe("nao");
+    expect(texto($("[data-aceite-titulo]"))).toBe("Confirmada pelo cliente");
     expect(texto($("[data-aceite-quem]"))).toBe("Confirmado por Roberto Almeida em 12/11/2026 às 12:00");
     expect(texto($("[data-aceite-prova]"))).toBe("pelo link de confirmação · IP 200.150.10.5");
-    expect(texto($("[data-aceite-observacao]"))).toBe("Observação do cliente: Tudo certo, equipe pontual");
+    expect($("[data-aceite-ressalva]")).toBeNull();
     expect($("[data-aceite-assinatura]")).toBeNull();
+  });
+
+  it("confirmada COM RESSALVA: o cartão chama a atenção, diz 'com ressalva' e mostra o que o cliente escreveu", async () => {
+    respostas[G] = { status: 200, corpo: confirmado({ ressalva: "O split da recepção continua pingando" }) };
+    await abrir(soVer);
+    const c = $("[data-aceite-os='CONFIRMADO']")!;
+    expect(c.getAttribute("data-aceite-com-ressalva")).toBe("sim");
+    expect(c.className).toContain("bg-atencao-claro"); // não é o verde de "tudo certo"
+    expect(texto($("[data-aceite-titulo]"))).toBe("Confirmada pelo cliente, com ressalva");
+    expect(texto($("[data-aceite-ressalva]"))).toBe("Ressalva do cliente: O split da recepção continua pingando");
+    expect(texto($("[data-aceite-quem]"))).toBe("Confirmado por Roberto Almeida em 12/11/2026 às 12:00"); // a prova continua lá
+    expect(texto($("[data-aceite-prova]"))).toBe("pelo link de confirmação · IP 200.150.10.5");
+    expect(mudancas.at(-1)).toMatchObject({ situacao: "CONFIRMADO", ressalva: "O split da recepção continua pingando" }); // o selo do cabeçalho acompanha
+    respostas[G] = { status: 200, corpo: confirmado({ ressalva: "   " }) }; // em branco não é ressalva
+    await abrir(soVer);
+    expect($("[data-aceite-os='CONFIRMADO']")?.getAttribute("data-aceite-com-ressalva")).toBe("nao");
+    expect($("[data-aceite-ressalva]")).toBeNull();
+  });
+
+  it("VISTO: quem tem 'OS › Editar' abriu a OS que o cliente confirmou — avisa o servidor e o sino relê; quem só visualiza, já vista e pendente não avisam", async () => {
+    let releituras = 0; const ouvir = () => { releituras++; };
+    window.addEventListener("frivo:sino", ouvir);
+    try {
+      respostas[G] = { status: 200, corpo: confirmado({ ressalva: "O split da recepção continua pingando" }) };
+      respostas[VISTO] = { status: 200, corpo: { ok: true, marcou: true } };
+      await abrir();
+      expect(escritas()).toEqual([{ url: "/api/ordens/os1/aceite/visto", metodo: "POST", corpo: undefined }]);
+      expect(releituras).toBe(1);
+      expect(texto($("[data-aceite-ressalva]"))).toContain("continua pingando"); // ver não apaga a ressalva da tela
+      // Sem "OS › Editar": vê, mas não dá por visto (o aviso continua para quem pode tratar)
+      pedidos.length = 0; releituras = 0;
+      await abrir(soVer);
+      expect(escritas()).toEqual([]);
+      // Já vista por alguém: nada a avisar
+      respostas[G] = { status: 200, corpo: confirmado({ vistoEm: "2026-11-12T16:00:00.000Z" }) };
+      await abrir();
+      expect(escritas()).toEqual([]);
+      // Ainda aguardando o cliente: nada a ver
+      respostas[G] = { status: 200, corpo: AGUARDANDO };
+      await abrir();
+      expect(escritas()).toEqual([]);
+      expect(releituras).toBe(0);
+      // O servidor recusou: o sino não é relido à toa
+      respostas[G] = { status: 200, corpo: confirmado() };
+      respostas[VISTO] = { status: 403, corpo: { erro: "Sem permissão" } };
+      await abrir();
+      expect(escritas()).toHaveLength(1);
+      expect(releituras).toBe(0);
+    } finally { window.removeEventListener("frivo:sino", ouvir); }
   });
 
   it("OS concluída ANTES do aceite existir: quem edita pode pedir a confirmação (só o envio); quem só visualiza não vê nada", async () => {
@@ -383,17 +436,21 @@ describe("Confirmação pelo link público", () => {
     const { AceitePublico } = await import("@/components/os/aceite-publico");
     await montar(createElement(AceitePublico, { token: "tok/123", rotulo: "OS-123, concluída em 05/11/2026", nomeSugerido }));
   }
-  const N = "input[aria-label='Nome completo']", O = "textarea[aria-label='Observação']";
+  const N = "input[aria-label='Nome completo']", R = "textarea[aria-label='Ressalva']";
 
-  it("diz qual OS está sendo confirmada e avisa, antes do clique, que nome, data, hora e IP ficam registrados", async () => {
+  it("diz qual OS está sendo confirmada, avisa o que fica registrado e oferece os DOIS caminhos: confirmar ou registrar uma ressalva", async () => {
     await abrir();
     expect(texto($("[data-aceite-rotulo]"))).toBe("Confirmação do recebimento do serviço da OS-123, concluída em 05/11/2026.");
     expect(texto($("[data-aviso-registro]"))).toBe("Ao confirmar, registramos seu nome, a data e a hora e o endereço IP desta confirmação.");
     expect(texto($("[data-confirmar-aceite-publico]"))).toBe("Confirmo o recebimento do serviço");
+    expect(texto($("[data-tenho-ressalva]"))).toBe("Tenho uma ressalva");
+    expect($("[data-aceite-publico]")?.getAttribute("data-aceite-publico")).toBe("CONFIRMAR");
+    expect($(R)).toBeNull(); // o campo da ressalva só abre para quem pede
+    expect($("[data-confirmar-com-ressalva]")).toBeNull();
     expect(($(N) as HTMLInputElement).value).toBe("");
   });
 
-  it("sem nome não confirma (e não chama o servidor); com nome, manda nome + observação e relê a página", async () => {
+  it("CONFIRMAR: sem nome não confirma (e não chama o servidor); com nome, manda o nome SEM ressalva e relê a página", async () => {
     await abrir();
     await clicar($("[data-confirmar-aceite-publico]"));
     expect(texto($("[data-erro-aceite-publico]"))).toBe("Informe o nome completo de quem confirma.");
@@ -401,18 +458,50 @@ describe("Confirmação pelo link público", () => {
     await clicar($("[data-confirmar-aceite-publico]"));
     expect(pedidos).toEqual([]);
     await digitar(N, "  Roberto Almeida ");
-    await digitar(O, "  Tudo certo  ");
     await clicar($("[data-confirmar-aceite-publico]"));
-    expect(pedidos).toEqual([{ url: "/api/publico/aceites/tok%2F123/confirmar", metodo: "POST", corpo: { nome: "Roberto Almeida", observacao: "Tudo certo" } }]);
+    expect(pedidos).toEqual([{ url: "/api/publico/aceites/tok%2F123/confirmar", metodo: "POST", corpo: { nome: "Roberto Almeida", ressalva: null } }]);
     expect(navegacao.refresh).toHaveBeenCalledTimes(1);
     expect($("[data-erro-aceite-publico]")).toBeNull();
   });
 
-  it("logado no portal, o nome do contato já vem preenchido; sem observação vai null", async () => {
+  it("TENHO UMA RESSALVA: abre o campo, explica que o serviço fica confirmado e a empresa é avisada; sem texto de verdade não envia", async () => {
     await abrir("Dra. Paula Reis");
-    expect(($(N) as HTMLInputElement).value).toBe("Dra. Paula Reis");
+    expect(($(N) as HTMLInputElement).value).toBe("Dra. Paula Reis"); // logado no portal, o nome já vem
+    await clicar($("[data-tenho-ressalva]"));
+    expect($("[data-aceite-publico]")?.getAttribute("data-aceite-publico")).toBe("RESSALVA");
+    expect($(R)).toBeTruthy();
+    expect(texto($("[data-ressalva-explica]"))).toBe("O serviço fica confirmado e a ressalva segue junto. A empresa é avisada na hora.");
+    expect(texto($("[data-confirmar-com-ressalva]"))).toBe("Confirmar com ressalva");
+    expect($("[data-confirmar-aceite-publico]")).toBeNull(); // um botão de confirmar por vez: sem clique errado
+    expect(texto($("[data-aviso-registro]"))).toContain("endereço IP"); // o aviso do registro vale para os dois caminhos
+    await clicar($("[data-confirmar-com-ressalva]"));
+    expect(texto($("[data-erro-aceite-publico]"))).toBe("Descreva a ressalva em poucas palavras.");
+    await digitar(R, "  ruim ");
+    await clicar($("[data-confirmar-com-ressalva]"));
+    expect(texto($("[data-erro-aceite-publico]"))).toBe("Descreva a ressalva em poucas palavras.");
+    expect(pedidos).toEqual([]);
+    await digitar(R, "  O split da recepção continua pingando ");
+    expect($("[data-erro-aceite-publico]")).toBeNull(); // corrigiu: o erro some ao digitar, sem esperar o clique
+    await clicar($("[data-confirmar-com-ressalva]"));
+    expect(pedidos).toEqual([{ url: "/api/publico/aceites/tok%2F123/confirmar", metodo: "POST", corpo: { nome: "Dra. Paula Reis", ressalva: "O split da recepção continua pingando" } }]);
+    expect(navegacao.refresh).toHaveBeenCalledTimes(1);
+    expect($("[data-erro-aceite-publico]")).toBeNull();
+  });
+
+  it("a ressalva também pede o nome; VOLTAR desiste dela — o que foi escrito NÃO vai junto na confirmação simples", async () => {
+    await abrir();
+    await clicar($("[data-tenho-ressalva]"));
+    await digitar(R, "Faltou a tampa do dreno");
+    await clicar($("[data-confirmar-com-ressalva]"));
+    expect(texto($("[data-erro-aceite-publico]"))).toBe("Informe o nome completo de quem confirma.");
+    expect(pedidos).toEqual([]);
+    await clicar($("[data-ressalva-voltar]"));
+    expect($(R)).toBeNull();
+    expect($("[data-erro-aceite-publico]")).toBeNull();
+    expect($("[data-aceite-publico]")?.getAttribute("data-aceite-publico")).toBe("CONFIRMAR");
+    await digitar(N, "Roberto Almeida");
     await clicar($("[data-confirmar-aceite-publico]"));
-    expect(pedidos[0].corpo).toEqual({ nome: "Dra. Paula Reis", observacao: null });
+    expect(pedidos[0].corpo).toEqual({ nome: "Roberto Almeida", ressalva: null });
   });
 
   it("recusa do servidor aparece; se já foi confirmado (409) a página relê para mostrar o que vale", async () => {
@@ -495,5 +584,55 @@ describe("Portal do cliente: pendências e o novo chamado", () => {
     respostas["POST /api/portal/chamados"] = { status: 201, corpo: { id: "novo2" } };
     await clicar($("form button[type='submit']"));
     expect(navegacao.push).toHaveBeenCalledWith("/portal/chamados/novo2");
+  });
+});
+
+/* ───────── o sino ───────── */
+describe("Sino do escritório: aceite do cliente", () => {
+  const ALERTAS = { prazosVencidos: 0, etapasVencendoHoje: 0, pedidosPendentes: 0, atendimentosAtraso: 0, chamadosPortal: 0, checklistPendente: 0, checklistsComAlertas: 0, documentosVencendo: 0, veiculosManutencao: 0, boletosPagos: 0, orcamentosRespondidos: 0, nfPedidos: 0, nfPedidoId: null, total: 0 };
+  async function sino(alertas: Record<string, unknown>, permissoes: Permissoes) {
+    respostas["GET /api/alertas"] = { status: 200, corpo: { ...ALERTAS, ...alertas } };
+    const [{ Header }, { PermissoesProvider }] = await Promise.all([import("@/components/layout/header"), import("@/components/providers/permissoes-provider")]);
+    const sessao = { user: { id: "u1", name: "Ana", email: "a@x.com", empresaId: "e1", role: "OPERADOR", permissoes }, expires: "2099-01-01T00:00:00Z" };
+    await montar(createElement(PermissoesProvider, { role: "OPERADOR", permissoes } as any, createElement(Header, { session: sessao, avatarUrl: null } as any)));
+    await clicar([...caixa.querySelectorAll("button")].find((b) => b.querySelector("svg.lucide-bell"))!);
+  }
+  const links = () => [...caixa.querySelectorAll("[data-sino-menu] a")] as HTMLAnchorElement[];
+  const link = (rotulo: string) => links().find((a) => a.textContent?.includes(rotulo)) ?? null;
+  const OS = montarPermissoes({ ordens: ["visualizar"] });
+  const RESSALVAS = "Ressalvas de clientes", CONFIRMADOS = "Serviços confirmados pelo cliente";
+
+  it("ressalvas e confirmações: cada aviso com a contagem e o link da OS mais recente — a ressalva vem primeiro", async () => {
+    await sino({ aceitesRessalva: 2, aceiteRessalvaOsId: "os9", aceitesConfirmados: 3, aceiteConfirmadoOsId: "os7", total: 5 }, OS);
+    expect([link(RESSALVAS)?.getAttribute("href"), texto(link(RESSALVAS))]).toEqual(["/ordens/os9", "Ressalvas de clientes2"]);
+    expect([link(CONFIRMADOS)?.getAttribute("href"), texto(link(CONFIRMADOS))]).toEqual(["/ordens/os7", "Serviços confirmados pelo cliente3"]);
+    expect(links().indexOf(link(RESSALVAS)!)).toBeLessThan(links().indexOf(link(CONFIRMADOS)!));
+  });
+
+  it("zero não aparece; sem a OS do aviso, leva à lista de OS", async () => {
+    await sino({ aceitesRessalva: 0, aceitesConfirmados: 1, aceiteConfirmadoOsId: null, total: 1 }, OS);
+    expect(link(RESSALVAS)).toBeNull();
+    expect(link(CONFIRMADOS)?.getAttribute("href")).toBe("/ordens");
+    await sino({ aceitesRessalva: 1, aceiteRessalvaOsId: "os9", aceitesConfirmados: 0, total: 1 }, OS);
+    expect(link(CONFIRMADOS)).toBeNull();
+    expect(link(RESSALVAS)?.getAttribute("href")).toBe("/ordens/os9");
+  });
+
+  it("sem Ordens de serviço: nunca mostra os avisos do aceite (mesmo que a API mande)", async () => {
+    await sino({ aceitesRessalva: 2, aceiteRessalvaOsId: "os9", aceitesConfirmados: 3, aceiteConfirmadoOsId: "os7", total: 5 }, montarPermissoes({ financeiro: ["visualizar"] }));
+    expect(link(RESSALVAS)).toBeNull();
+    expect(link(CONFIRMADOS)).toBeNull();
+  });
+
+  it("o sino relê NA HORA quando uma tela dá o aviso por visto (não espera os 2 minutos)", async () => {
+    await sino({ aceitesRessalva: 1, aceiteRessalvaOsId: "os9", total: 1 }, OS);
+    expect(link(RESSALVAS)).toBeTruthy();
+    expect(pedidos.filter((p) => p.url === "/api/alertas")).toHaveLength(1);
+    respostas["GET /api/alertas"] = { status: 200, corpo: ALERTAS };
+    const { atualizarSino } = await import("@/lib/ui/sino");
+    await act(async () => { atualizarSino(); });
+    await esperar();
+    expect(pedidos.filter((p) => p.url === "/api/alertas")).toHaveLength(2);
+    expect(link(RESSALVAS)).toBeNull();
   });
 });

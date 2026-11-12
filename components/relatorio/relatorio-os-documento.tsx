@@ -177,10 +177,12 @@ export function RelatorioOsDocumento({ dados: d, config, versao }: { dados: Rela
       {d.aceite && (
         <section className="mt-6 border border-ok/30 bg-ok-claro rounded-lg p-4 flex items-start justify-between gap-4 flex-wrap" style={{ breakInside: "avoid" }} data-secao="aceite">
           <div className="min-w-0 space-y-0.5">
-            <p className="text-xs font-bold uppercase tracking-wider text-ok-texto flex items-center gap-1.5"><BadgeCheck className="w-4 h-4" aria-hidden /> Aceite do cliente</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-ok-texto flex items-center gap-1.5"><BadgeCheck className="w-4 h-4" aria-hidden /> {d.aceite.ressalva ? "Aceite do cliente, com ressalva" : "Aceite do cliente"}</p>
             <p className="text-sm font-semibold text-ink" data-aceite-relatorio-quem>{textoDoAceite(d.aceite)}</p>
             <p className="text-xs text-ink-muted" data-aceite-relatorio-prova>{provaDoAceite(d.aceite)}</p>
-            {d.aceite.observacao && <p className="text-sm text-ink whitespace-pre-wrap break-words">Observação do cliente: {d.aceite.observacao}</p>}
+            {d.aceite.ressalva && (
+              <p className="text-sm text-ink whitespace-pre-wrap break-words" data-aceite-relatorio-ressalva><strong>Ressalva do cliente:</strong> {d.aceite.ressalva}</p>
+            )}
           </div>
           {d.aceite.assinatura && (
             <figure className="text-center shrink-0" data-aceite-relatorio-assinatura>

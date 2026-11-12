@@ -19,7 +19,6 @@ const configuracaoSchema = z.object({
   clienteExigirUnidade: z.boolean().optional(),
   clienteExigirDocumento: z.boolean().optional(),
   osExigirFoto: z.boolean().optional(),
-  osExigirAssinatura: z.boolean().optional(),
   osPermitirSemContrato: z.boolean().optional(),
   osExigirQuestionario: z.boolean().optional(),
   osPermitirEdicaoConcluida: z.boolean().optional(),
@@ -70,6 +69,13 @@ const configuracaoSchema = z.object({
   orcamentoNormas: z.array(z.string().max(40)).max(20).optional().transform((v) => (v === undefined ? undefined : normasValidas(v))),
 }).strict();
 
+/**
+ * "Exigir assinatura do cliente na OS" saiu da tela (não fazia nada: o aceite do cliente cobre). A
+ * coluna continua no banco, então o campo é tirado do que sai — e do que chega, porque uma tela
+ * aberta antes da atualização ainda manda a configuração inteira de volta, com ele dentro.
+ */
+const semCampoMorto = <T extends { osExigirAssinatura?: unknown }>({ osExigirAssinatura: _semUso, ...resto }: T) => resto;
+
 export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
@@ -84,7 +90,7 @@ export async function GET() {
     });
   }
 
-  return NextResponse.json(config);
+  return NextResponse.json(semCampoMorto(config));
 }
 
 export async function PUT(req: NextRequest) {
@@ -101,7 +107,7 @@ export async function PUT(req: NextRequest) {
 
   // Remove campos de controle antes de validar (id/empresaId não são editáveis aqui) e os que têm
   // tela/rota própria (QR Code e impressão da OS) — a tela manda a configuração inteira de volta
-  const { id: _id, empresaId: _empresaId, qrConfig: _qr, relatorioOsConfig: _rel, ...entrada } = body;
+  const { id: _id, empresaId: _empresaId, qrConfig: _qr, relatorioOsConfig: _rel, ...entrada } = semCampoMorto(body);
   const parsed = configuracaoSchema.safeParse(entrada);
   if (!parsed.success) {
     const campos = parsed.error.flatten().fieldErrors;
@@ -116,5 +122,5 @@ export async function PUT(req: NextRequest) {
     update: dados,
   });
 
-  return NextResponse.json(config);
+  return NextResponse.json(semCampoMorto(config));
 }

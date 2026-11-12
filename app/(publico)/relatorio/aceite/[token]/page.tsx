@@ -9,7 +9,7 @@ import { AceitePublico } from "@/components/os/aceite-publico";
 import { FrivoLogo } from "@/components/layout/frivo-logo";
 import { getPortalSession } from "@/lib/auth-portal";
 import { aceitePorToken } from "@/lib/os/aceite-server";
-import { provaDoAceite, rotuloDaOs, textoDoAceite } from "@/lib/os/aceite";
+import { provaDoAceite, rotuloDaOs, temRessalva, textoDoAceite } from "@/lib/os/aceite";
 import { formatarData } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +35,7 @@ export default async function AceitePage({ params }: { params: Promise<{ token: 
   const noPortal = !!sessao?.user && sessao.user.clienteId === os.clienteId && sessao.user.empresaId === aceite.empresaId;
 
   const confirmado = aceite.situacao === "CONFIRMADO";
+  const comRessalva = temRessalva(aceite);
   const disponivel = !confirmado && os.status === "CONCLUIDA";
   const numero = rotuloDaOs(os.numero);
   const servico = dados.tipos.join(", ") || "Atendimento";
@@ -65,12 +66,18 @@ export default async function AceitePage({ params }: { params: Promise<{ token: 
               <p className="text-sm text-ink whitespace-pre-wrap break-words">{dados.solicitacao}</p>
             </div>
             {confirmado ? (
-              <div className="bg-ok-claro border border-ok/20 rounded-lg px-4 py-3 flex items-start gap-2" data-aceite-confirmado>
+              <div className="bg-ok-claro border border-ok/20 rounded-lg px-4 py-3 flex items-start gap-2" data-aceite-confirmado={comRessalva ? "RESSALVA" : "SIMPLES"}>
                 <CheckCircle2 className="w-5 h-5 text-ok-texto shrink-0 mt-0.5" aria-hidden />
                 <div>
-                  <p className="text-sm font-semibold text-ok-texto">Serviço confirmado</p>
+                  <p className="text-sm font-semibold text-ok-texto">{comRessalva ? "Serviço confirmado, com ressalva" : "Serviço confirmado"}</p>
                   <p className="text-sm text-ink">{textoDoAceite(aceite)}</p>
                   <p className="text-xs text-ink-muted">{provaDoAceite({ metodo: aceite.metodo, ip: aceite.ip, colhidoPor: aceite.colhidoPor?.nome })}</p>
+                  {comRessalva && (
+                    <p className="text-sm text-ink mt-2 whitespace-pre-wrap break-words" data-aceite-ressalva-registrada>
+                      <strong>Ressalva registrada:</strong> {aceite.ressalva}
+                      <span className="block text-xs text-ink-muted mt-1">{empresaNome} foi avisada.</span>
+                    </p>
+                  )}
                 </div>
               </div>
             ) : disponivel ? (

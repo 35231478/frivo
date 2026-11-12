@@ -7,7 +7,9 @@
  *    aberto com a mensagem pronta, para os mesmos contatos dos avisos de OS;
  *  - `confirmarAceitePublico`: o cliente confirmou pelo link — nome, IP, navegador e data/hora,
  *    com troca ATÔMICA de situação (dois cliques não confirmam duas vezes), como no orçamento;
- *  - `pendenciasDoCliente`: o que o portal mostra a quem vai abrir um chamado.
+ *  - `pendenciasDoCliente`: o que o portal mostra a quem vai abrir um chamado;
+ *  - `avisosDeAceite` / `marcarAceiteVisto`: o SINO do escritório — o cliente confirmou (com ou sem
+ *    ressalva) e ninguém abriu a OS ainda. Mesmo mecanismo da NFS-e e do orçamento ("visto em").
  *
  * Tudo por empresa. Cada passo deixa uma linha no histórico da OS.
  */
@@ -21,7 +23,7 @@ import { carregarConfigApp } from "@/lib/tecnico/config-app-server";
 import type { ContextoExecucao } from "@/lib/execucao/contexto";
 import type { ResultadoAcao } from "@/lib/execucao/acoes";
 import {
-  ACAO_ACEITE, ACAO_PEDIDO, MSG_JA_CONFIRMADO, MSG_OS_CANCELADA, MSG_OS_NAO_CONCLUIDA, canalDoPedido, caminhoPublicoAceite, mensagemPedido, motivoSemAceite,
+  ACAO_ACEITE, ACAO_ACEITE_RESSALVA, ACAO_PEDIDO, MSG_JA_CONFIRMADO, MSG_OS_CANCELADA, MSG_OS_NAO_CONCLUIDA, canalDoPedido, caminhoPublicoAceite, mensagemPedido, motivoSemAceite,
   servicoDaOs, textoDoCanal, type AceiteLocal, type AceitePublico, type AceiteRetrato, type CanalPedido, type PendenciaAceite,
 } from "@/lib/os/aceite";
 
@@ -34,19 +36,19 @@ const limpo = (v: string | null | undefined) => (v ?? "").trim();
 
 /** O que as telas leem do aceite — a assinatura (imagem) só vem quando pedida */
 const SELECT_ACEITE = {
-  id: true, token: true, situacao: true, metodo: true, nome: true, observacao: true, ip: true, confirmadoEm: true,
+  id: true, token: true, situacao: true, metodo: true, nome: true, ressalva: true, ip: true, confirmadoEm: true, vistoEm: true,
   enviadoEm: true, enviadoCanal: true, enviadoPara: true, envios: true, colhidoPor: { select: { nome: true } },
 } satisfies Prisma.OsAceiteSelect;
 type Linha = Prisma.OsAceiteGetPayload<{ select: typeof SELECT_ACEITE }> & { assinatura?: string | null };
 
 export interface AceiteDaOs {
-  token: string; situacao: string; metodo: string | null; nome: string | null; observacao: string | null; ip: string | null;
-  confirmadoEm: string | null; colhidoPor: string | null; assinatura: string | null;
+  token: string; situacao: string; metodo: string | null; nome: string | null; ressalva: string | null; ip: string | null;
+  confirmadoEm: string | null; vistoEm: string | null; colhidoPor: string | null; assinatura: string | null;
   enviadoEm: string | null; enviadoCanal: string | null; enviadoPara: string | null; envios: number;
 }
 const serializar = (a: Linha): AceiteDaOs => ({
-  token: a.token, situacao: a.situacao, metodo: a.metodo, nome: a.nome, observacao: a.observacao, ip: a.ip,
-  confirmadoEm: a.confirmadoEm?.toISOString() ?? null, colhidoPor: a.colhidoPor?.nome ?? null, assinatura: a.assinatura ?? null,
+  token: a.token, situacao: a.situacao, metodo: a.metodo, nome: a.nome, ressalva: a.ressalva, ip: a.ip,
+  confirmadoEm: a.confirmadoEm?.toISOString() ?? null, vistoEm: a.vistoEm?.toISOString() ?? null, colhidoPor: a.colhidoPor?.nome ?? null, assinatura: a.assinatura ?? null,
   enviadoEm: a.enviadoEm?.toISOString() ?? null, enviadoCanal: a.enviadoCanal, enviadoPara: a.enviadoPara, envios: a.envios,
 });
 
@@ -73,10 +75,11 @@ const navegador = (ua: string | null | undefined) => limpo(ua).slice(0, 300) || 
  * O responsável do cliente assinou na tela de quem está no local. `exigirOsConcluida`: no escritório
  * a OS tem de estar concluída; pela fila do app do técnico basta a atividade dele estar (o app só
  * oferece o aceite na última atividade da OS — e uma assinatura colhida nunca é jogada fora).
- * Já confirmado: não regrava (devolve o que está, com `jaEstava`).
+ * Já confirmado: não regrava (devolve o que está, com `jaEstava`). `vistoPeloEscritorio`: quem colheu
+ * foi o próprio escritório — não há o que avisar no sino (colhido pelo técnico, o sino avisa).
  */
 export async function registrarAceiteLocal(
-  quem: { empresaId: string; usuarioId: string; osId: string; atividadeId?: string | null; exigirOsConcluida: boolean },
+  quem: { empresaId: string; usuarioId: string; osId: string; atividadeId?: string | null; exigirOsConcluida: boolean; vistoPeloEscritorio?: boolean },
   dados: AceiteLocal, origem: OrigemDoAceite = {}, agora: Date = new Date(),
 ): Promise<{ aceite: AceiteDaOs; jaEstava: boolean }> {
   const os = await prisma.ordemServico.findFirst({ where: { id: quem.osId, empresaId: quem.empresaId }, select: { id: true, status: true } });
@@ -89,6 +92,7 @@ export async function registrarAceiteLocal(
     data: {
       situacao: "CONFIRMADO", metodo: "LOCAL", nome: dados.nome, assinatura: dados.assinatura, confirmadoEm: agora,
       ip: origem.ip ?? null, userAgent: navegador(origem.userAgent), atividadeId: quem.atividadeId ?? null, colhidoPorId: quem.usuarioId,
+      vistoEm: quem.vistoPeloEscritorio ? agora : null,
     },
   });
   if (count) await prisma.osHistorico.create({ data: { ordemServicoId: os.id, usuarioId: quem.usuarioId, acao: ACAO_ACEITE, detalhes: `No local, por ${dados.nome} (assinatura colhida na tela)`.slice(0, 500) } });
@@ -177,11 +181,12 @@ export async function aceitePorToken(token: string) {
 /**
  * O cliente confirmou pelo link: grava o nome, o IP, o navegador e a data/hora. Só confirma o que
  * está PENDENTE, de uma OS concluída; a troca é atômica. `contatoId`: quando quem confirma está
- * logado no portal do MESMO cliente.
+ * logado no portal do MESMO cliente. Com RESSALVA o serviço fica confirmado do mesmo jeito, e a
+ * ressalva fica no registro; nos dois casos o sino do escritório avisa (`vistoEm` nasce vazio).
  */
 export async function confirmarAceitePublico(
   token: string, dados: AceitePublico, origem: OrigemDoAceite & { contato?: { id: string; clienteId: string; empresaId: string } | null } = {}, agora: Date = new Date(),
-): Promise<{ confirmadoEm: string; nome: string }> {
+): Promise<{ confirmadoEm: string; nome: string; comRessalva: boolean }> {
   const a = await aceitePorToken(token);
   if (!a) throw new ErroAceite("Link de confirmação não encontrado", 404);
   const os = a.ordemServico;
@@ -191,16 +196,55 @@ export async function confirmarAceitePublico(
   const doCliente = origem.contato && origem.contato.clienteId === os.clienteId && origem.contato.empresaId === a.empresaId ? origem.contato.id : null;
   const { count } = await prisma.osAceite.updateMany({
     where: { id: a.id, situacao: "PENDENTE" },
-    data: { situacao: "CONFIRMADO", metodo: "REMOTO", nome: dados.nome, observacao: dados.observacao, confirmadoEm: agora, ip: origem.ip ?? null, userAgent: navegador(origem.userAgent), contatoId: doCliente },
+    data: { situacao: "CONFIRMADO", metodo: "REMOTO", nome: dados.nome, ressalva: dados.ressalva, confirmadoEm: agora, vistoEm: null, ip: origem.ip ?? null, userAgent: navegador(origem.userAgent), contatoId: doCliente },
   });
   if (count !== 1) throw new ErroAceite(MSG_JA_CONFIRMADO, 409);
   await prisma.osHistorico.create({
     data: {
-      ordemServicoId: os.id, usuarioId: os.criadoPorId, acao: ACAO_ACEITE,
-      detalhes: `Pelo link, por ${dados.nome}${origem.ip ? ` (IP ${origem.ip})` : ""}${dados.observacao ? `. Observação: ${dados.observacao}` : ""}`.slice(0, 1000),
+      ordemServicoId: os.id, usuarioId: os.criadoPorId, acao: dados.ressalva ? ACAO_ACEITE_RESSALVA : ACAO_ACEITE,
+      detalhes: `Pelo link, por ${dados.nome}${origem.ip ? ` (IP ${origem.ip})` : ""}${dados.ressalva ? `. Ressalva: ${dados.ressalva}` : ""}`.slice(0, 1200),
     },
   });
-  return { confirmadoEm: agora.toISOString(), nome: dados.nome };
+  return { confirmadoEm: agora.toISOString(), nome: dados.nome, comRessalva: !!dados.ressalva };
+}
+
+/* ───────── o aviso no sino do escritório ───────── */
+
+/**
+ * Alguém do escritório abriu a OS depois da confirmação: o aviso sai do sino. Idempotente (só marca
+ * o que está confirmado e ainda não foi visto) — devolve se marcou agora.
+ */
+export async function marcarAceiteVisto(osId: string, empresaId: string, agora: Date = new Date()): Promise<boolean> {
+  const os = await prisma.ordemServico.findFirst({ where: { id: osId, empresaId }, select: { id: true } });
+  if (!os) throw new ErroAceite("OS não encontrada", 404);
+  const { count } = await prisma.osAceite.updateMany({ where: { ordemServicoId: osId, empresaId, situacao: "CONFIRMADO", vistoEm: null }, data: { vistoEm: agora } });
+  return count === 1;
+}
+
+export interface AvisosDeAceite {
+  /** Confirmações COM ressalva que ninguém viu, e a OS da mais recente (o destino do sino) */
+  aceitesRessalva: number; aceiteRessalvaOsId: string | null;
+  /** Confirmações sem ressalva que ninguém viu, e a OS da mais recente */
+  aceitesConfirmados: number; aceiteConfirmadoOsId: string | null;
+}
+export const SEM_AVISOS_DE_ACEITE: AvisosDeAceite = { aceitesRessalva: 0, aceiteRessalvaOsId: null, aceitesConfirmados: 0, aceiteConfirmadoOsId: null };
+
+/**
+ * O sino: um aviso por confirmação ainda não vista — as com ressalva contadas à parte. `daAtividade`
+ * é o escopo de quem pede (o técnico só é avisado das OS em que tem atividade); vazio = a empresa toda.
+ */
+export async function avisosDeAceite(empresaId: string, daAtividade: Prisma.AtividadeOsWhereInput = {}): Promise<AvisosDeAceite> {
+  const restrito = Object.keys(daAtividade).length > 0;
+  const naoVistos: Prisma.OsAceiteWhereInput = {
+    empresaId, situacao: "CONFIRMADO", vistoEm: null,
+    ordemServico: { empresaId, status: { not: "CANCELADA" }, ...(restrito && { atividades: { some: daAtividade } }) },
+  };
+  const comRessalva = { ...naoVistos, ressalva: { not: null } }, semRessalva = { ...naoVistos, ressalva: null };
+  const maisRecente = (where: Prisma.OsAceiteWhereInput) => prisma.osAceite.findFirst({ where, orderBy: { confirmadoEm: "desc" }, select: { ordemServicoId: true } });
+  const [nRessalva, nConfirmados, uRessalva, uConfirmado] = await Promise.all([
+    prisma.osAceite.count({ where: comRessalva }), prisma.osAceite.count({ where: semRessalva }), maisRecente(comRessalva), maisRecente(semRessalva),
+  ]);
+  return { aceitesRessalva: nRessalva, aceiteRessalvaOsId: uRessalva?.ordemServicoId ?? null, aceitesConfirmados: nConfirmados, aceiteConfirmadoOsId: uConfirmado?.ordemServicoId ?? null };
 }
 
 /* ───────── portal ───────── */

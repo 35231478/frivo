@@ -11,6 +11,8 @@ import { contarReajustesPendentes } from "@/lib/contratos/reajuste-server";
 import { contarFilaSeparacao } from "@/lib/estoque/separacao-server";
 import { contarFilaDevolucao } from "@/lib/estoque/devolucao-server";
 import { contarAvisosPmoc, registrarAvisosPmoc } from "@/lib/pmoc-avisos-server";
+import { SEM_AVISOS_DE_ACEITE, avisosDeAceite } from "@/lib/os/aceite-server";
+import { escopoDaSessao, filtroEscopo } from "@/lib/tecnico/escopo";
 
 export async function GET() {
   const session = await auth();
@@ -44,7 +46,7 @@ export async function GET() {
   const zeroVeiculos = { checklistPendente: 0, checklistsComAlertas: 0, documentosVencendo: 0, veiculosManutencao: 0, revisaoChegando: 0 };
   const zeroNfse = { nfseAutorizadas: 0, nfseAutorizadaMedicaoId: null, nfseRejeitadas: 0, nfseRejeitadaMedicaoId: null, nfseAguardando: 0, nfseAguardandoMedicaoId: null };
   const desde24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const [prazosBrutos, veiculosBrutos, boletosPagos, orcamentosRespondidos, leadsSite, nfsDoPedido, nfse, faturamentoContratos, reajustesContrato, separacoesPendentes, devolucoesPendentes, pmoc] = await Promise.all([
+  const [prazosBrutos, veiculosBrutos, boletosPagos, orcamentosRespondidos, leadsSite, nfsDoPedido, nfse, faturamentoContratos, reajustesContrato, separacoesPendentes, devolucoesPendentes, pmoc, aceites] = await Promise.all([
     verOrdens || verCompras ? contarAlertasPrazos(empresaId) : Promise.resolve(null),
     verVeiculos ? contarAlertasVeiculos(empresaId) : Promise.resolve(null),
     verBoletos
@@ -77,6 +79,9 @@ export async function GET() {
     separaMaterial ? contarFilaDevolucao(empresaId) : Promise.resolve(0),
     // PMOC perto de expirar (antecedência da empresa) e expirado, menos os que já tiveram ciência (PMOC › Visualizar)
     verPmoc ? contarAvisosPmoc(empresaId) : Promise.resolve({ pmocsVencendo: 0, pmocsExpirados: 0 }),
+    // Aceite do cliente: confirmou pelo link (ou assinou com o técnico) e ninguém do escritório abriu a OS
+    // ainda — as ressalvas à parte. Só para quem vê OS; o técnico, só das OS em que tem atividade
+    verOrdens ? avisosDeAceite(empresaId, filtroEscopo(escopoDaSessao(session))) : Promise.resolve(SEM_AVISOS_DE_ACEITE),
   ]);
 
   const prazos = {
@@ -105,6 +110,7 @@ export async function GET() {
     separacoesPendentes,
     devolucoesPendentes,
     ...pmoc,
-    total: totalPrazos + totalVeiculos + boletosPagos + orcamentosRespondidos + leadsSite + nfsDoPedido.length + nfse.nfseAutorizadas + nfse.nfseRejeitadas + nfse.nfseAguardando + faturamentoContratos + reajustesContrato + separacoesPendentes + devolucoesPendentes + pmoc.pmocsVencendo + pmoc.pmocsExpirados,
+    ...aceites,
+    total: totalPrazos + totalVeiculos + boletosPagos + orcamentosRespondidos + leadsSite + nfsDoPedido.length + nfse.nfseAutorizadas + nfse.nfseRejeitadas + nfse.nfseAguardando + faturamentoContratos + reajustesContrato + separacoesPendentes + devolucoesPendentes + pmoc.pmocsVencendo + pmoc.pmocsExpirados + aceites.aceitesRessalva + aceites.aceitesConfirmados,
   });
 }
