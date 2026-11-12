@@ -74,7 +74,7 @@ export function PortalConfigClient() {
       <div className="border-t border-surface-border pt-2" data-config-aceite>
         <ToggleSwitch
           label="Pedir a confirmação dos serviços antes de um novo chamado" checked={aceiteObrigatorio} onChange={setAceiteObrigatorio}
-          description="Desligado: o portal só mostra os serviços aguardando confirmação. Ligado: o cliente confirma antes de abrir chamado."
+          description="Desligado, o portal só mostra as pendências. Ligado, o cliente confirma antes de abrir chamado."
           dica="Mesmo ligado, o cliente sempre pode abrir um chamado de emergência sem confirmar: equipamento parado não espera."
         />
       </div>

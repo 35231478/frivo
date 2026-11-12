@@ -39,8 +39,9 @@ export async function POST(req: NextRequest) {
 
   // Confirmações de serviço pendentes: por padrão só aparecem na tela (não travam). Com a opção da
   // empresa ligada, o chamado só abre depois de confirmar — ou pela saída de emergência, que existe sempre
-  const pendentes = await pendenciasDoCliente(empresaId, clienteId);
-  const gate = gateDoChamado({ obrigatorio: await aceiteObrigatorioNoPortal(empresaId), pendentes: pendentes.length, emergencia: d.emergencia });
+  const obrigatorio = await aceiteObrigatorioNoPortal(empresaId);
+  const pendentes = obrigatorio ? await pendenciasDoCliente(empresaId, clienteId) : [];
+  const gate = gateDoChamado({ obrigatorio, pendentes: pendentes.length, emergencia: d.emergencia });
   if (gate === "BLOQUEADO") return NextResponse.json({ erro: MSG_GATE, pendentes: pendentes.length }, { status: 409 });
 
   // Validações de tenant: unidade/equipamento precisam ser do próprio cliente
