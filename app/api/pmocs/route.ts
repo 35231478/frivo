@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { pmocSchema } from "@/lib/pmoc";
-import { ErroPmoc, dadosArt, paraData, validarVinculos } from "@/lib/pmoc-server";
+import { ErroPmoc, dadosArt, mudancaDaArt, paraData, validarVinculos } from "@/lib/pmoc-server";
+import { registrarHistorico } from "@/lib/pmoc-documento-server";
 
 /** Cria um PMOC (sempre começa como Rascunho: publicar exige RT, ART e equipamentos). */
 export async function POST(req: NextRequest) {
@@ -26,6 +27,8 @@ export async function POST(req: NextRequest) {
       },
       select: { id: true },
     });
+    const art = mudancaDaArt(d, null);
+    if (art) await registrarHistorico(prisma, { pmocId: pmoc.id, usuarioId: session.user!.id, ...art });
     return NextResponse.json(pmoc, { status: 201 });
   } catch (e) {
     if (e instanceof ErroPmoc) return NextResponse.json({ erro: e.message }, { status: e.status });

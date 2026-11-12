@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { TIPOS_ART, TAMANHO_MAX_ART, type PmocInput } from "@/lib/pmoc";
+import { validarDataUrl } from "@/lib/anexos-server";
 
 export class ErroPmoc extends Error {
   constructor(message: string, public status = 400) { super(message); }
@@ -38,16 +39,24 @@ export async function validarVinculos(empresaId: string, d: Pick<PmocInput, "cli
   }
 }
 
+export const MSG_ART_GRANDE = "Arquivo da ART acima de 3 MB.";
+
+/** O que mudou no arquivo da ART neste salvamento, para o histórico do plano (null = nada) */
+export function mudancaDaArt(d: Pick<PmocInput, "artArquivo" | "artArquivoNome" | "removerArt">, nomeAnterior: string | null): { acao: string; detalhes: string | null } | null {
+  if (d.removerArt) return nomeAnterior ? { acao: "Arquivo da ART excluído", detalhes: nomeAnterior } : null;
+  if (!d.artArquivo) return null;
+  return { acao: nomeAnterior ? "Arquivo da ART trocado" : "Arquivo da ART anexado", detalhes: (d.artArquivoNome ?? "ART").slice(0, 200) };
+}
+
 /** Dados do arquivo da ART a partir do body: troca, remove ou mantém (undefined). */
 export function dadosArt(d: Pick<PmocInput, "artArquivo" | "artArquivoNome" | "removerArt">) {
   if (d.removerArt) return { artArquivo: null, artArquivoNome: null, artArquivoTipo: null, artArquivoTamanho: null };
   if (!d.artArquivo) return {};
-  const m = /^data:([^;,]+);base64,([A-Za-z0-9+/=]+)$/.exec(d.artArquivo);
-  if (!m) throw new ErroPmoc("Arquivo da ART inválido.");
-  if (!(TIPOS_ART as readonly string[]).includes(m[1])) throw new ErroPmoc("A ART deve ser PDF, JPG ou PNG.");
-  const tamanho = Math.floor((m[2].length * 3) / 4);
-  if (tamanho > TAMANHO_MAX_ART) throw new ErroPmoc("Arquivo da ART acima de 5 MB.", 413);
-  return { artArquivo: d.artArquivo, artArquivoNome: (d.artArquivoNome ?? "ART").slice(0, 200), artArquivoTipo: m[1], artArquivoTamanho: tamanho };
+  if (!/^data:[^;,]+;base64,[A-Za-z0-9+/=]+$/.test(d.artArquivo)) throw new ErroPmoc("Arquivo da ART inválido.");
+  // O tipo é o do CONTEÚDO (primeiros bytes), não o que o navegador declarou: é este arquivo que entra no documento
+  const r = validarDataUrl(d.artArquivo, d.artArquivoNome ?? "ART", { tipos: TIPOS_ART, tamanhoMax: TAMANHO_MAX_ART, mensagemTipo: "A ART deve ser PDF, JPG ou PNG." });
+  if (!r.ok) throw new ErroPmoc(/muito grande/.test(r.erro) ? MSG_ART_GRANDE : r.erro, /muito grande/.test(r.erro) ? 413 : 400);
+  return { artArquivo: r.arquivo.conteudo, artArquivoNome: (d.artArquivoNome ?? "ART").slice(0, 200), artArquivoTipo: r.arquivo.tipo, artArquivoTamanho: r.arquivo.tamanho };
 }
 
 export const paraData = (iso: string) => new Date(`${iso}T00:00:00Z`);

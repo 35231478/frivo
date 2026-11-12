@@ -9,6 +9,8 @@ import { dataBR, filtroStatusPmoc, LABELS_STATUS_PMOC } from "@/lib/pmoc";
 import { PmocStatusSelo } from "@/components/pmoc/pmoc-status-selo";
 import { PmocCopiarBotao } from "@/components/pmoc/pmoc-copiar-botao";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
+import { PmocConfigBotao } from "@/components/pmoc/pmoc-config-botao";
+import { configPmoc } from "@/lib/pmoc-documento-server";
 
 export const metadata: Metadata = { title: "PMOC" };
 
@@ -20,8 +22,9 @@ export default async function PmocListaPage({ searchParams }: { searchParams: Pr
   const podeCriar = pode(permissoes, "pmoc", "criar", role);
   const podeEditar = pode(permissoes, "pmoc", "editar", role);
 
+  const { diasAviso } = await configPmoc(empresaId);
   // Inativado (soft-delete) fica fora da lista padrão
-  const where: any = { empresaId, ...(mostrarInativos ? {} : { ativo: true }), ...(filtroStatusPmoc(status) ?? {}) };
+  const where: any = { empresaId, ...(mostrarInativos ? {} : { ativo: true }), ...(filtroStatusPmoc(status, new Date(), diasAviso) ?? {}) };
   if (busca) {
     where.OR = [
       { nome: { contains: busca, mode: "insensitive" } },
@@ -63,11 +66,14 @@ export default async function PmocListaPage({ searchParams }: { searchParams: Pr
           </div>
           <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{pmocs.length}</span>
         </div>
-        {podeCriar && (
-          <Link href="/pmoc/novo" className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm">
-            <Plus className="w-4 h-4" /> Novo PMOC
-          </Link>
-        )}
+        <div className="flex items-center gap-2">
+          {podeEditar && <PmocConfigBotao />}
+          {podeCriar && (
+            <Link href="/pmoc/novo" className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm">
+              <Plus className="w-4 h-4" /> Novo PMOC
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="card overflow-hidden">
@@ -78,6 +84,7 @@ export default async function PmocListaPage({ searchParams }: { searchParams: Pr
             className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500">
             <option value="">Todos os status</option>
             {Object.entries(LABELS_STATUS_PMOC).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            <option value="VENCENDO">Vencendo em até {diasAviso} dias</option>
           </select>
           <label className="inline-flex items-center gap-2 text-sm text-ink-muted px-1 select-none">
             <input type="checkbox" name="inativos" value="1" defaultChecked={mostrarInativos} className="accent-primary-600" /> Mostrar inativos
@@ -115,7 +122,7 @@ export default async function PmocListaPage({ searchParams }: { searchParams: Pr
                       </td>
                       <td className="px-4 py-3 text-ink-muted">{p.cliente.nomeFantasia ?? p.cliente.nome}</td>
                       <td className="px-4 py-3 text-ink-muted">{local(p.unidade)}</td>
-                      <td className="px-4 py-3"><PmocStatusSelo pmoc={p} /></td>
+                      <td className="px-4 py-3"><PmocStatusSelo pmoc={p} diasAviso={diasAviso} /></td>
                       <td className="px-4 py-3 text-ink-muted whitespace-nowrap">{dataBR(p.dataInicio)} – {dataBR(p.dataExpiracao)}</td>
                       <td className="px-3 py-2">{acoes(p)}</td>
                     </tr>
@@ -129,7 +136,7 @@ export default async function PmocListaPage({ searchParams }: { searchParams: Pr
                 <div key={p.id} data-pmoc-card={p.id} className={cn("p-4 space-y-1.5", !p.ativo && "opacity-60")}>
                   <div className="flex items-start justify-between gap-2">
                     <Link href={`/pmoc/${p.id}`} className="font-semibold text-ink">{p.nome}</Link>
-                    <PmocStatusSelo pmoc={p} />
+                    <PmocStatusSelo pmoc={p} diasAviso={diasAviso} />
                   </div>
                   <p className="text-sm text-ink-muted">{p.cliente.nomeFantasia ?? p.cliente.nome}</p>
                   <p className="text-xs text-ink-muted flex items-center gap-1"><MapPin className="w-3 h-3" /> {local(p.unidade)}</p>

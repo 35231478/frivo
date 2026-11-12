@@ -4,6 +4,9 @@
  * ("StatusPmoc") e DUAS tabelas ("pmocs", "pmoc_equipamentos"), é idempotente (cada passo roda duas
  * vezes), não mexe em mais nada, e o resultado é EXATAMENTE o que o Prisma espera (comparado com o
  * schema.prisma aplicado por `prisma db push`).
+ * Desde a Etapa 3 a tabela "pmocs" tem a coluna "token_publico"
+ * (prisma/sql/2026-12-15_pmoc_etapa3_documento_alertas_envio.sql): a comparação com o Prisma é feita
+ * com esse arquivo aplicado por cima, na ordem em que vai para produção. Ele tem o teste próprio (sql-pmoc-etapa3).
  *   PG_TESTE_URL="postgresql://root@localhost/postgres?host=/var/run/postgresql" npx vitest run tests/unit/sql-pmoc-etapa1
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -15,6 +18,7 @@ const URL = process.env.PG_TESTE_URL;
 const RAIZ = path.resolve(__dirname, "../..");
 const PASSO1 = path.join(RAIZ, "prisma/sql/2026-10-06_pmoc_etapa1_1_enum.sql");
 const PASSO2 = path.join(RAIZ, "prisma/sql/2026-10-06_pmoc_etapa1_2.sql");
+const ETAPA_3 = path.join(RAIZ, "prisma/sql/2026-12-15_pmoc_etapa3_documento_alertas_envio.sql");
 const SCHEMA = `teste_pmoc_sql_${process.pid}`;
 const SO_PASSO2 = `teste_pmoc_sql_p2_${process.pid}`;
 const JUNTO = `teste_pmoc_sql_junto_${process.pid}`;
@@ -64,6 +68,7 @@ describe.skipIf(!URL)("SQL de produção: PMOC — Etapa 1, em dois passos (Post
     psql(["-f", PASSO1]); // 2ª vez: idempotente, não pode falhar
     psql(["-f", PASSO2]);
     psql(["-f", PASSO2]);
+    psql(["-f", ETAPA_3]); // a coluna do link público (Etapa 3), por cima
     // O que o Prisma criaria a partir do schema.prisma (a referência)
     const url = `${URL}${URL!.includes("?") ? "&" : "?"}schema=${PRISMA}`;
     execFileSync(path.join(RAIZ, "node_modules/.bin/prisma"), ["db", "push", "--skip-generate", "--schema", "prisma/schema.prisma"], { cwd: RAIZ, env: { ...process.env, DATABASE_URL: url }, stdio: "pipe" });
@@ -81,7 +86,7 @@ describe.skipIf(!URL)("SQL de produção: PMOC — Etapa 1, em dois passos (Post
       expect(indices(SCHEMA, t), t).toBe(indices(PRISMA, t));
       expect(chaves(SCHEMA, t), t).toBe(chaves(PRISMA, t));
     }
-    expect(colunas(SCHEMA, "pmocs").split("\n")).toHaveLength(21);
+    expect(colunas(SCHEMA, "pmocs").split("\n")).toHaveLength(22); // 21 da Etapa 1 + "token_publico" (Etapa 3)
     expect(colunas(SCHEMA, "pmoc_equipamentos").split("\n")).toHaveLength(4);
     // 5 chaves estrangeiras + a primária no plano; 2 + a primária nos equipamentos cobertos
     expect(chaves(SCHEMA, "pmocs").split("\n")).toHaveLength(6);
@@ -131,6 +136,7 @@ describe.skipIf(!URL)("SQL de produção: PMOC — Etapa 1, em dois passos (Post
 
   it("os dois passos numa transação só também funcionam (o tipo é NOVO: não é o caso de valor novo em enum existente)", () => {
     psql(["-1", "-f", PASSO1, "-f", PASSO2], JUNTO);
+    psql(["-f", ETAPA_3], JUNTO);
     expect(valoresEnum(JUNTO)).toBe("RASCUNHO,PUBLICADO");
     for (const t of TABELAS) expect(colunas(JUNTO, t), t).toBe(colunas(PRISMA, t));
   });

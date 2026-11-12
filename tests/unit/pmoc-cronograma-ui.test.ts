@@ -475,9 +475,9 @@ describe("editor do PMOC e OS", () => {
   it("'Cronograma' é uma aba de verdade (só com o plano salvo); Planejamento, Ocorrências, Recomendações e Anexos seguem 'em breve'", async () => {
     await abrirEditor({});
     const abas = () => $$("[role=tab]").map((b) => [texto(b).replace(/\s*\d+$/, ""), (b as HTMLButtonElement).disabled]);
-    expect(abas()).toEqual([["Identificação", false], ["Equipamentos AVAC", true], ["Cronograma", true]]); // plano novo: salvar primeiro
+    expect(abas()).toEqual([["Identificação", false], ["Equipamentos AVAC", true], ["Cronograma", true], ["Histórico", true]]); // plano novo: salvar primeiro
     await abrirEditor({ inicial: plano() });
-    expect(abas()).toEqual([["Identificação", false], ["Equipamentos AVAC", false], ["Cronograma", false]]);
+    expect(abas()).toEqual([["Identificação", false], ["Equipamentos AVAC", false], ["Cronograma", false], ["Histórico", false]]); // "Histórico" chegou na Etapa 3
     expect($$("[data-aba-futura]").map((b) => texto(b))).toEqual(["Planejamento em breve", "Ocorrências em breve", "Recomendações em breve", "Anexos em breve"]);
     await clicar($("[role=tab][data-aba='cronograma']"));
     expect($("[data-cronograma]")).toBeTruthy();

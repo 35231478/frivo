@@ -11,10 +11,10 @@ import { BlocoComErro } from "@/components/dashboard/ui";
 import { FrivoIA } from "@/components/ia/frivo-ia";
 import {
   BlocoAgenda, BlocoComercial, BlocoEquipamentos, BlocoFinanceiro, BlocoFrota, BlocoOperacional, BlocoOsDoDia,
-  BlocoPrazos, BlocoSolicitacoes,
+  BlocoPmoc, BlocoPrazos, BlocoSolicitacoes,
 } from "@/components/dashboard/blocos";
 import {
-  CalendarDays, ClipboardList, FileSignature, HardHat, Headset, LayoutDashboard, Thermometer, Timer, Truck, Wallet,
+  CalendarDays, ClipboardList, FileBadge, FileSignature, HardHat, Headset, LayoutDashboard, Thermometer, Timer, Truck, Wallet,
   type LucideIcon,
 } from "lucide-react";
 
@@ -22,7 +22,7 @@ export const metadata: Metadata = { title: "Dashboard" };
 
 const ICONES: Record<BlocoId, LucideIcon> = {
   operacional: ClipboardList, "os-do-dia": HardHat, solicitacoes: Headset, agenda: CalendarDays,
-  comercial: FileSignature, financeiro: Wallet, equipamentos: Thermometer, frota: Truck, prazos: Timer,
+  comercial: FileSignature, financeiro: Wallet, equipamentos: Thermometer, pmoc: FileBadge, frota: Truck, prazos: Timer,
 };
 
 function renderizar<K extends BlocoId>(id: K, d: DadosBloco[K]) {
@@ -34,6 +34,7 @@ function renderizar<K extends BlocoId>(id: K, d: DadosBloco[K]) {
     case "comercial": return <BlocoComercial d={d as DadosBloco["comercial"]} />;
     case "financeiro": return <BlocoFinanceiro d={d as DadosBloco["financeiro"]} />;
     case "equipamentos": return <BlocoEquipamentos d={d as DadosBloco["equipamentos"]} />;
+    case "pmoc": return <BlocoPmoc d={d as DadosBloco["pmoc"]} />;
     case "frota": return <BlocoFrota d={d as DadosBloco["frota"]} />;
     case "prazos": return <BlocoPrazos d={d as DadosBloco["prazos"]} />;
   }

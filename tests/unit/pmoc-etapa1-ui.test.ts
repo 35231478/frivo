@@ -213,11 +213,12 @@ describe("PMOC: editor (Identificação e Equipamentos AVAC)", () => {
     const futuras = $$("[data-aba-futura]");
     expect(futuras.map((b) => texto(b))).toEqual(["Planejamento em breve", "Ocorrências em breve", "Recomendações em breve", "Anexos em breve"]);
     for (const b of futuras) expect((b as HTMLButtonElement).disabled).toBe(true);
-    // PDF, alerta e WhatsApp continuam fora (Etapa 3) — em todo o módulo, cronograma inclusive
-    const fonte = ["components/pmoc/pmoc-editor.tsx", "components/pmoc/pmoc-cronograma.tsx", "app/(dashboard)/pmoc/page.tsx", "lib/pmoc.ts", "lib/pmoc-server.ts", "lib/pmoc-cronograma.ts", "lib/pmoc-cronograma-server.ts", "lib/pmoc-cronograma-rotas.ts"]
+    // Etapa 3: documento em PDF, aviso de vencimento, envio ao cliente e histórico entraram — cada um na sua rota
+    expect(fs.readdirSync(path.join(RAIZ, "app/api/pmocs/[id]")).sort()).toEqual(["art", "aviso", "copia", "cronograma", "documento", "enviar", "equipamentos", "historico", "impacto", "route.ts"]);
+    // O cronograma (regras e geração de OS) continua sem saber de envio nem de PDF
+    const fonte = ["components/pmoc/pmoc-cronograma.tsx", "lib/pmoc-cronograma.ts", "lib/pmoc-cronograma-server.ts", "lib/pmoc-cronograma-rotas.ts"]
       .map((f) => fs.readFileSync(path.join(RAIZ, f), "utf8")).join("\n");
-    expect(fonte).not.toMatch(/whatsapp|jspdf|@react-pdf|enviarEmail|notifica/i);
-    expect(fs.readdirSync(path.join(RAIZ, "app/api/pmocs/[id]")).sort()).toEqual(["art", "copia", "cronograma", "equipamentos", "impacto", "route.ts"]);
+    expect(fonte).not.toMatch(/whatsapp|pdf-lib|enviarEmail|notifica/i);
   });
 
   it("criar: envia a identificação, nasce Rascunho e abre a aba de equipamentos do plano novo", async () => {

@@ -5,7 +5,7 @@
  *  - criar nasce RASCUNHO, mesmo pedindo PUBLICADO; datas, unidade do cliente e RT da empresa são conferidos;
  *  - publicar exige nome do RT, CREA, nº da ART e ao menos 1 equipamento (422); publicado não fica sem equipamento;
  *  - equipamentos: só ativos e do mesmo cliente; sem repetir; excluir do plano não apaga o equipamento;
- *  - ART: PDF/JPG/PNG até 5 MB; o arquivo nunca vem nas leituras, só no download;
+ *  - ART: PDF/JPG/PNG até 3 MB (Etapa 3: cabe no pedido e no documento); o arquivo nunca vem nas leituras, só no download;
  *  - cópia: Rascunho com os mesmos dados, RT e equipamentos, SEM a ART;
  *  - inativar (soft-delete) e reativar; inativo não aceita edição; o aviso de plano vigente;
  *  - RBAC: visualizar / criar / editar / excluir em cada rota; multiempresa.
@@ -244,11 +244,11 @@ describe.skipIf(!URL_PG)("PMOC — Etapa 1: cadastro base (PostgreSQL real)", ()
     expect((await chamar("art", "GET", { id, query: "inline=1" })).res.headers.get("content-disposition")).toMatch(/^inline;/);
   });
 
-  it("ART: só PDF, JPG ou PNG, até 5 MB; excluir o arquivo limpa nome, tipo e tamanho", async () => {
+  it("ART: só PDF, JPG ou PNG, até 3 MB; excluir o arquivo limpa nome, tipo e tamanho", async () => {
     expect(await chamar("lista", "POST", { corpo: base({ artArquivo: `data:text/html;base64,${Buffer.from("<script>").toString("base64")}` }) })).toMatchObject({ status: 400, json: { erro: "A ART deve ser PDF, JPG ou PNG." } });
     expect(await chamar("lista", "POST", { corpo: base({ artArquivo: "isto não é um arquivo" }) })).toMatchObject({ status: 400, json: { erro: "Arquivo da ART inválido." } });
-    const grande = `data:application/pdf;base64,${"A".repeat(Math.ceil((5 * 1024 * 1024 + 10) / 3) * 4)}`;
-    expect(await chamar("lista", "POST", { corpo: base({ artArquivo: grande }) })).toMatchObject({ status: 413, json: { erro: "Arquivo da ART acima de 5 MB." } });
+    const grande = `data:application/pdf;base64,${"A".repeat(Math.ceil((3 * 1024 * 1024 + 10) / 3) * 4)}`;
+    expect(await chamar("lista", "POST", { corpo: base({ artArquivo: grande }) })).toMatchObject({ status: 413, json: { erro: "Arquivo da ART acima de 3 MB." } });
     expect(await prisma.pmoc.count()).toBe(0);
 
     const id = await criar({ artArquivo: PDF, artArquivoNome: "art.pdf" });

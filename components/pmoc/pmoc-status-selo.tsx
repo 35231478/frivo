@@ -5,14 +5,16 @@ import { situacaoPmoc, dataBR, LABELS_STATUS_PMOC } from "@/lib/pmoc";
 
 /**
  * Selo de status do PMOC, nos tons de status do sistema de design (mesmo formato do selo de garantia):
- * Rascunho (previsto) · Vigente (ok; atenção quando vence em ≤30 dias) · Expirado (atrasado).
+ * Rascunho (previsto) · Vigente (ok; atenção quando falta pouco para expirar) · Expirado (atrasado).
+ * `diasAviso`: a antecedência do aviso de vencimento desta empresa (padrão do sistema: 30 dias).
  */
-export function PmocStatusSelo({ pmoc, detalhe, className }: {
+export function PmocStatusSelo({ pmoc, detalhe, className, diasAviso }: {
   pmoc: { status: string; dataInicio: Date | string; dataExpiracao: Date | string };
   detalhe?: boolean;
   className?: string;
+  diasAviso?: number;
 }) {
-  const s = situacaoPmoc(pmoc);
+  const s = situacaoPmoc(pmoc, new Date(), diasAviso);
   const tom: TomStatus = s.status === "RASCUNHO" ? "previsto" : s.status === "EXPIRADO" ? "atrasado" : s.vencendo ? "atencao" : "ok";
   const Icone = s.status === "RASCUNHO" ? FileClock : s.status === "EXPIRADO" ? ShieldX : s.vencendo ? ShieldAlert : ShieldCheck;
   const extra = s.status === "EXPIRADO" ? `desde ${dataBR(pmoc.dataExpiracao)}`

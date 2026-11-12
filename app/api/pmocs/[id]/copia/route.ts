@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
+import { registrarHistorico } from "@/lib/pmoc-documento-server";
 
 /**
  * Cria uma cópia do PMOC como RASCUNHO: mesmos dados gerais, RT e equipamentos.
@@ -31,5 +32,6 @@ export async function POST(_: NextRequest, { params }: { params: Promise<{ id: s
     },
     select: { id: true },
   });
+  await registrarHistorico(prisma, { pmocId: copia.id, usuarioId: session.user!.id, acao: "Plano criado como cópia", detalhes: `De: ${o.nome}. A ART não é copiada.` });
   return NextResponse.json(copia, { status: 201 });
 }
