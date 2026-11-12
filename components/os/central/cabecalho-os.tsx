@@ -11,6 +11,7 @@ import { formatarDataHora, formatarMoeda, LABELS_PRIORIDADE, LABELS_STATUS_OS } 
 import { ESTAGIOS_LINHA, ROTULO_ESTAGIO, type EstagioOs } from "@/lib/os/status";
 import { formatarDiaCivil, textoPrazo } from "@/lib/os/prazos";
 import { ROTULO_PAGAMENTO, type CentralOs } from "@/lib/os/central";
+import { ROTULO_ESTADO, estadoDoAceite, textoDoAceite } from "@/lib/os/aceite";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { toast } from "@/components/ui/avisos";
 import { StatusPill, TOM_ESTAGIO_OS, TOM_PRAZO, TOM_PRIORIDADE } from "@/components/ui/status-pill";
@@ -36,6 +37,8 @@ export function CabecalhoOs({ os, central, acoes, onAba, onAtualizado }: {
   const { pode } = usePermissoes();
   const podeEditar = pode("ordens", "editar");
   const { status, prazoOs } = central;
+  // "Concluída, aguardando confirmação do cliente" (o status da OS não muda: o aceite é à parte)
+  const aceite = estadoDoAceite(os.status, os.aceite);
   const cliente = os.cliente?.nomeFantasia ?? os.cliente?.nome;
   const local = os.unidade ? [os.unidade.nome, os.unidade.cidade && `${os.unidade.cidade}/${os.unidade.estado}`].filter(Boolean).join(" — ") : null;
 
@@ -55,6 +58,11 @@ export function CabecalhoOs({ os, central, acoes, onAba, onAtualizado }: {
               </StatusPill>
               {status.manual && os.status !== "CANCELADA" && (
                 <StatusPill tom="atencao" tamanho="sm" data-status-manual="">ajuste manual</StatusPill>
+              )}
+              {aceite !== "NAO_SE_APLICA" && (
+                <span title={aceite === "CONFIRMADO" ? textoDoAceite(os.aceite) : undefined}>
+                  <StatusPill tom={aceite === "CONFIRMADO" ? "ok" : "atencao"} tamanho="sm" data-aceite-selo={aceite}>{ROTULO_ESTADO[aceite]}</StatusPill>
+                </span>
               )}
               <StatusPill tom={TOM_PRIORIDADE[os.prioridade] ?? "previsto"}>
                 {LABELS_PRIORIDADE[os.prioridade]}

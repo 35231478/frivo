@@ -61,6 +61,12 @@ export interface AdicionalRelatorio {
   statusCobranca: "A_AVALIAR" | "COBRAR" | "NAO_COBRAR"; criadoPor: string | null;
 }
 export interface AssinaturaColetada { rotulo: string; url: string; nome: string | null; data: Date | null }
+/** O aceite do cliente na conclusão da OS (a prova): quem confirmou, quando, como e de onde */
+export interface AceiteRelatorio {
+  nome: string | null; confirmadoEm: Date | null; metodo: string | null; ip: string | null;
+  /** Assinatura desenhada (só no aceite no local) */
+  assinatura: string | null; colhidoPor: string | null; observacao: string | null;
+}
 export interface RelatorioOsDados {
   empresa: EmpresaInfo;
   numeroOs: string;
@@ -88,6 +94,8 @@ export interface RelatorioOsDados {
   tempos: { atividade: string; status: string; inicio: Date | null; duracaoMin: number | null }[];
   observacoes: string[];
   assinaturas: { coletadas: AssinaturaColetada[]; responsavel: { nome: string; crea: string | null } | null; clienteNome: string };
+  /** O aceite do cliente, quando ele já confirmou (null = sem aceite ou ainda pendente) */
+  aceite: AceiteRelatorio | null;
   /** Para o botão "Enviar" do link público (e-mail/WhatsApp de faturamento do cliente) */
   envio: { email: string | null; whatsapp: string | null };
 }
@@ -132,6 +140,11 @@ export interface OsParaRelatorio {
   contrato: ContratoInfo | null;
   equipamento: Equip | null;
   atividades: Atividade[];
+  /** Aceite do cliente (ausente em quem monta o relatório sem carregá-lo) */
+  aceite?: {
+    situacao: string; nome: string | null; confirmadoEm: Date | null; metodo: string | null; ip: string | null;
+    assinatura: string | null; observacao: string | null; colhidoPor: { nome: string } | null;
+  } | null;
 }
 export interface RelatorioRef { numero: string; observacao: string | null; assinaturaUrl: string | null; assinadoPor: string | null; assinadoEm: Date | null }
 
@@ -360,6 +373,11 @@ export function montarRelatorioOs(os: OsParaRelatorio, relatorio: RelatorioRef |
     fotosServico,
     tempos: ativs.map((a) => ({ atividade: a.titulo, status: a.status, inicio: a.dataAgendada ?? a.criadoEm, duracaoMin: a.duracaoMin })),
     observacoes: [os.observacoes, relatorio?.observacao].map((x) => (x ?? "").trim()).filter((x, i, arr) => x && arr.indexOf(x) === i),
+    // Só o aceite CONFIRMADO entra no relatório (o pendente não é prova de nada)
+    aceite: os.aceite?.situacao === "CONFIRMADO" ? {
+      nome: os.aceite.nome, confirmadoEm: os.aceite.confirmadoEm, metodo: os.aceite.metodo, ip: os.aceite.ip,
+      assinatura: os.aceite.assinatura, colhidoPor: os.aceite.colhidoPor?.nome ?? null, observacao: os.aceite.observacao,
+    } : null,
     assinaturas: {
       coletadas,
       responsavel: os.contrato?.responsavelTecnico ? { nome: os.contrato.responsavelTecnico.nome, crea: os.contrato.responsavelTecnico.crea ?? null } : null,
@@ -417,6 +435,7 @@ export async function carregarOsParaRelatorio(osId: string, empresaId: string): 
       unidade: { select: { nome: true, logradouro: true, numero: true, bairro: true, cidade: true, estado: true, cep: true } },
       contrato: { select: { numero: true, artNumero: true, responsavelTecnico: { select: { nome: true, crea: true } } } },
       equipamento: { select: SELECT_EQUIP },
+      aceite: { select: { situacao: true, nome: true, confirmadoEm: true, metodo: true, ip: true, assinatura: true, observacao: true, colhidoPor: { select: { nome: true } } } },
       atividades: {
         orderBy: { criadoEm: "asc" },
         include: {

@@ -7,6 +7,8 @@ import { validarDataUrl, type ArquivoValidado } from "@/lib/anexos-server";
 import { TIPOS_IMAGEM } from "@/lib/anexos";
 import { conferirBloqueio, ipDaRequisicao, registrarTentativa } from "@/lib/acesso/limite";
 import { proximoNumero } from "@/lib/numeracao-server";
+import { ACAO_EMERGENCIA, MSG_GATE, gateDoChamado, rotuloDaOs } from "@/lib/os/aceite";
+import { aceiteObrigatorioNoPortal, pendenciasDoCliente } from "@/lib/os/aceite-server";
 
 const MAP_URGENCIA: Record<string, "NORMAL" | "ALTA" | "CRITICO"> = {
   NORMAL: "NORMAL", URGENTE: "ALTA", CRITICO: "CRITICO",
@@ -34,6 +36,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
   }
   const d = parsed.data;
+
+  // Confirmações de serviço pendentes: por padrão só aparecem na tela (não travam). Com a opção da
+  // empresa ligada, o chamado só abre depois de confirmar — ou pela saída de emergência, que existe sempre
+  const obrigatorio = await aceiteObrigatorioNoPortal(empresaId);
+  const pendentes = obrigatorio ? await pendenciasDoCliente(empresaId, clienteId) : [];
+  const gate = gateDoChamado({ obrigatorio, pendentes: pendentes.length, emergencia: d.emergencia });
+  if (gate === "BLOQUEADO") return NextResponse.json({ erro: MSG_GATE, pendentes: pendentes.length }, { status: 409 });
 
   // Validações de tenant: unidade/equipamento precisam ser do próprio cliente
   if (d.unidadeId) {
@@ -93,6 +102,15 @@ export async function POST(req: NextRequest) {
   await prisma.osHistorico.create({
     data: { ordemServicoId: os.id, usuarioId: gestor.id, acao: "Chamado aberto pelo portal", detalhes: `${os.chamadoNumero} — ${sessao.user.name ?? "cliente"}` },
   });
+
+  if (gate === "EMERGENCIA") {
+    await prisma.osHistorico.create({
+      data: {
+        ordemServicoId: os.id, usuarioId: gestor.id, acao: ACAO_EMERGENCIA,
+        detalhes: `O cliente declarou emergência com ${pendentes.length === 1 ? "1 confirmação pendente" : `${pendentes.length} confirmações pendentes`}: ${pendentes.map((p) => rotuloDaOs(p.numero)).join(", ")}`.slice(0, 1000),
+      },
+    });
+  }
 
   return NextResponse.json({ id: os.id, chamadoNumero: os.chamadoNumero }, { status: 201 });
 }

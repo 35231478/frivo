@@ -13,6 +13,7 @@ import { irPara, useAtividade, useTecnico } from "@/components/tecnico/contexto"
 import { BotaoRota } from "@/components/tecnico/rota";
 import { ModalCadastroEquipamento } from "@/components/tecnico/cadastro-equipamento";
 import { ChegadaNaOs } from "@/components/tecnico/aviso-cliente";
+import { AceiteNaOs } from "@/components/tecnico/aceite-cliente";
 import { CameraRapida, useRapida } from "@/components/tecnico/camera-rapida";
 import { ConferenciaRapida } from "@/components/tecnico/conferencia-rapida";
 import { MSG_SEM_UNIDADE } from "@/lib/tecnico/cadastro-equipamento";
@@ -173,6 +174,8 @@ function ResumoOs({ r, x, aEnviar, registrar, camera }: { r: RetratoAtividade; x
 
       {aEnviar > 0 && <p className="rounded-card bg-atencao-claro border border-atencao/20 px-3 py-2 text-sm text-atencao-texto" data-a-enviar>{aEnviar === 1 ? "1 gravação" : `${aEnviar} gravações`} desta OS no aparelho — sobe sozinho quando houver sinal.</p>}
       {so && <p className="rounded-card bg-success-50 border border-success-200 px-3 py-2 text-sm text-success-800 inline-flex items-center gap-2 w-full"><CheckCircle2 className="w-4 h-4" /> Atividade concluída{aEnviar ? " no aparelho (a enviar)" : ""}. Só leitura.</p>}
+      {/* Concluiu a atividade que fecha a OS: é a hora do aceite do cliente (assina aqui ou recebe o link) */}
+      <AceiteNaOs r={r} x={x} aEnviar={aEnviar} registrar={registrar} />
       {aviso && <p role="status" className={cn("rounded-card px-3 py-2 text-sm", aviso.tipo === "ok" ? "bg-success-50 text-success-800" : "bg-atrasado-claro text-atrasado-texto")}>{aviso.texto}</p>}
 
       <section className="space-y-2">

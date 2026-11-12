@@ -23,6 +23,8 @@ import { cadastroEquipamentoSchema } from "@/lib/tecnico/cadastro-equipamento";
 import { cadastrarEquipamentoEmCampo } from "@/lib/execucao/cadastro-campo";
 import { avisoClienteSchema } from "@/lib/tecnico/aviso-cliente";
 import { avisarCliente } from "@/lib/execucao/aviso-cliente";
+import { aceiteLocalSchema } from "@/lib/os/aceite";
+import { aceiteNoLocal } from "@/lib/os/aceite-server";
 
 export const MAX_OPERACOES = 100;
 /** Quanto tempo a marca de "já aplicada" fica guardada (reenvio depois disso é raríssimo) */
@@ -54,6 +56,8 @@ export const operacaoSchema = z.discriminatedUnion("tipo", [
   z.object({ ...base, tipo: z.literal("fotoOs"), dados: fotoOsSchema }).strict(),
   z.object({ ...base, tipo: z.literal("fotoOsRemover"), dados: ref }).strict(),
   z.object({ ...base, tipo: z.literal("concluir"), dados: concluirSchema }).strict(),
+  // Aceite do cliente no local: nome + assinatura desenhada no aparelho, depois de concluir
+  z.object({ ...base, tipo: z.literal("aceite"), dados: aceiteLocalSchema }).strict(),
 ]);
 export type Operacao = z.infer<typeof operacaoSchema>;
 export const loteSchema = z.object({
@@ -63,7 +67,13 @@ export const loteSchema = z.object({
 }).strict();
 
 /** O que vale para o lote inteiro (não é de uma operação) */
-export interface OpcoesLote { agoraAparelho?: string | null }
+export interface OpcoesLote {
+  agoraAparelho?: string | null;
+  /** De onde o lote veio (o aparelho do técnico): fica registrado no aceite colhido no local */
+  ip?: string | null; userAgent?: string | null;
+  /** Quem manda o lote tem "OS › Editar" (ausente = sim: chamadas internas e testes antigos) */
+  podeEditarOs?: boolean;
+}
 
 export interface ResultadoOperacao {
   id: string;
@@ -82,7 +92,7 @@ const MSG_ADIADA = "Aguardando a gravação anterior desta OS.";
 
 async function executar(ator: Ator, op: Operacao, lote: OpcoesLote): Promise<ResultadoAcao<unknown>> {
   const equipamentoId = "equipamentoId" in op ? op.equipamentoId : undefined;
-  const ctx = await carregarContexto(ator, op.atividadeId, { equipamentoId, permitirBloqueada: op.tipo === "concluir" });
+  const ctx = await carregarContexto(ator, op.atividadeId, { equipamentoId, permitirBloqueada: op.tipo === "concluir" || op.tipo === "aceite" });
   if (!ctx.ok) return { ok: false, status: ctx.status, erro: ctx.erro };
   switch (op.tipo) {
     case "iniciar": return iniciarAtividade(ctx);
@@ -110,6 +120,9 @@ async function executar(ator: Ator, op: Operacao, lote: OpcoesLote): Promise<Res
       }
       return concluirAtividade(ctx, op.dados);
     }
+    case "aceite":
+      if (lote.podeEditarOs === false) return { ok: false, status: 403, erro: "Sem permissão para registrar o aceite do cliente." };
+      return aceiteNoLocal(ctx, op.dados, { ip: lote.ip, userAgent: lote.userAgent });
   }
 }
 

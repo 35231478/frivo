@@ -40,7 +40,7 @@ const SELECT_OS = {
  * Quem recebe o e-mail: o contato que abriu o chamado (se a OS tem um, ativo e com e-mail) e os
  * contatos das comunicações de Ordens do cliente — a mesma resolução dos outros e-mails de OS.
  */
-async function destinatarios(os: {
+export async function destinatariosDaOs(os: {
   cliente: { id: string; emailReceberOs: boolean; emailsCopia: string[] };
   contatoOrigem: { email: string | null; ativo: boolean } | null;
 }): Promise<{ para: string; cc: string[] } | { motivo: string }> {
@@ -138,7 +138,7 @@ export async function avisarCliente(ctx: ContextoExecucao, d: AvisoCliente, relo
   if (!decisao.enviar) ({ status, detalhe } = decisao);
   else if (!os) { status = "INDISPONIVEL"; detalhe = "OS não encontrada"; }
   else {
-    const dest = await destinatarios(os);
+    const dest = await destinatariosDaOs(os);
     if ("motivo" in dest) { status = "SEM_DESTINO"; detalhe = dest.motivo; }
     else if (!(await emailConfigAtiva(empresaId))) { status = "INDISPONIVEL"; detalhe = "e-mail da empresa não configurado (Configurações › E-mail)"; }
     else {

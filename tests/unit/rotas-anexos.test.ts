@@ -13,6 +13,8 @@ const db = vi.hoisted(() => ({
   ordemServico: { count: vi.fn(), create: vi.fn() },
   unidade: { findFirst: vi.fn() },
   equipamento: { findFirst: vi.fn() },
+  // O chamado do portal lê a opção da empresa "confirmar os serviços antes" (aqui: desligada, o padrão)
+  configuracao: { findUnique: vi.fn(async () => null) },
   $transaction: async (fn: any) => fn(db),
 }));
 const portal = vi.hoisted(() => ({ sessao: null as any }));

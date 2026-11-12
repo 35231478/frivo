@@ -4,6 +4,7 @@ import { medicaoValida, resumoStatus, type EstagioOs } from "@/lib/os/status";
 import { aDevolver, semConsumoInformado, type MaterialSeparavel } from "@/lib/estoque/separacao";
 import { contarEquipamentosAtendidos } from "@/lib/os/equipamentos-atendidos";
 import { progressoDasVisitas } from "@/lib/os/visitas";
+import { estadoDoAceite } from "@/lib/os/aceite";
 
 /**
  * A "central de controle" da OS em dados: tudo o que o cabeçalho e o Resumo mostram para
@@ -38,6 +39,8 @@ export interface OsCentralEntrada {
   /** E4.2: materiais da OS (snapshot) e a amarra da empresa — "informar o consumo" entra no que falta */
   materiais?: MaterialSeparavel[];
   exigirPrestacaoMaterial?: boolean;
+  /** Aceite do cliente na conclusão (null/ausente = OS sem aceite) */
+  aceite?: { situacao: string } | null;
 }
 
 export type SituacaoPagamento = "SEM_COBRANCA" | "PREVISTO" | "A_RECEBER" | "VENCIDO" | "PAGO" | "PERDA";
@@ -131,6 +134,8 @@ export function centralDaOs(os: OsCentralEntrada, agora: Date = new Date()) {
       texto: `Devolver a sobra de ${aDev} ${aDev > 1 ? "materiais" : "material"} ao estoque${os.exigirPrestacaoMaterial ? " — a OS não fatura sem isso" : ""}`,
     });
     if (status.exibido === "CONCLUIDA") falta.push({ chave: "faturar", texto: "Gerar a medição para faturar a OS", aba: "financeiro", nivel: "acao" });
+    // Aceite do cliente: fica "a fazer" enquanto a OS está concluída (ou já faturada) sem a confirmação — não trava nada
+    if (estadoDoAceite(os.status, os.aceite) === "AGUARDANDO") falta.push({ chave: "aceite", texto: "Aguardando a confirmação do cliente (aceite do serviço)", aba: "resumo", nivel: "acao" });
     if (pagamento === "VENCIDO") falta.push({ chave: "cobranca-vencida", texto: "Cobrança vencida — acompanhar o recebimento", aba: "financeiro", nivel: "alerta" });
   }
 

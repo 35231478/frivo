@@ -7,6 +7,7 @@ import type { DispensaEquipamento, ItemExecucao, RespostaItem, ResultadoConclusa
 import type { Operacao } from "@/lib/tecnico/sync";
 import type { CadastroCampo } from "@/lib/tecnico/cadastro-equipamento";
 import type { AvisoClienteRetrato, AvisosTela } from "@/lib/tecnico/aviso-cliente";
+import type { AceiteRetrato } from "@/lib/os/aceite";
 
 export type { Operacao };
 export type TipoOperacao = Operacao["tipo"];
@@ -88,6 +89,8 @@ export interface ExecucaoTela {
   dispensaEquipamento?: DispensaEquipamento | null;
   /** "A caminho" / "Cheguei" registrados hoje nesta atividade; ausente em retratos antigos */
   avisos?: AvisosTela;
+  /** Aceite do cliente colhido NESTE aparelho (ainda na fila ou já enviado) */
+  aceiteLocal?: { nome: string; em: string };
 }
 
 /** O que o servidor manda (e o aparelho guarda) de uma atividade */
@@ -100,6 +103,8 @@ export interface RetratoAtividade {
   cadastro?: CadastroCampo | null;
   /** Aviso ao cliente ("A caminho" / "Cheguei"): null = permissão desligada; ausente em retratos antigos */
   avisoCliente?: AvisoClienteRetrato | null;
+  /** Aceite do cliente na conclusão da OS: null = não se aplica a quem está logado; ausente em retratos antigos */
+  aceite?: AceiteRetrato | null;
   geradoEm: string;
 }
 

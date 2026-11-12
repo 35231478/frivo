@@ -58,6 +58,10 @@ export function aplicar(r: RetratoAtividade, x: ExecucaoTela, op: OperacaoFila):
     case "concluir":
       return { ...x, atividade: { ...x.atividade, status: "CONCLUIDA" }, bloqueada: true };
 
+    case "aceite":
+      // O cliente assinou no aparelho: vale já na tela (sem sinal também); a assinatura sobe pela fila
+      return { ...x, aceiteLocal: { nome: op.dados.nome, em: op.em ?? op.criadoEm } };
+
     case "avisoCliente": {
       // O horário do toque vale já (sem sinal também). Um por evento, por dia: o que o servidor já
       // registrou hoje fica; o toque repetido não muda nada

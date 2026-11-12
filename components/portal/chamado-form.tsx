@@ -3,14 +3,20 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { reduzirImagem, FOTO_GALERIA } from "@/lib/imagem-cliente";
-import { AlertCircle, Upload, X, Send } from "lucide-react";
+import { AlertCircle, Siren, Upload, X, Send } from "lucide-react";
 
 interface Unidade { id: string; nome: string }
 interface Equip { id: string; nome: string; unidadeId: string }
 interface Foto { nome: string; tipo: string; tamanho: number; conteudo: string }
 
-export function ChamadoForm({ unidades, equipamentos, tiposProblema }: { unidades: Unidade[]; equipamentos: Equip[]; tiposProblema: string[] }) {
+export function ChamadoForm({ unidades, equipamentos, tiposProblema, confirmacoesPendentes = 0 }: {
+  unidades: Unidade[]; equipamentos: Equip[]; tiposProblema: string[];
+  /** A empresa pede a confirmação dos serviços antes de um novo chamado e há N pendentes (0 = livre) */
+  confirmacoesPendentes?: number;
+}) {
   const router = useRouter();
+  // Saída de emergência: existe sempre — climatização parada não espera a confirmação de um serviço antigo
+  const [emergencia, setEmergencia] = useState(false);
   const [unidadeId, setUnidadeId] = useState("");
   const [equipamentoId, setEquipamentoId] = useState("");
   const [tipoProblema, setTipoProblema] = useState("");
@@ -50,7 +56,7 @@ export function ChamadoForm({ unidades, equipamentos, tiposProblema }: { unidade
       const res = await fetch("/api/portal/chamados", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ unidadeId: unidadeId || null, equipamentoId: equipamentoId || null, tipoProblema: tipoProblema || null, descricao: descricao.trim(), urgencia, fotos }),
+        body: JSON.stringify({ unidadeId: unidadeId || null, equipamentoId: equipamentoId || null, tipoProblema: tipoProblema || null, descricao: descricao.trim(), urgencia, fotos, ...(emergencia ? { emergencia: true } : {}) }),
       });
       if (!res.ok) { const er = await res.json().catch(() => ({})); setErro(er.erro ?? "Erro ao abrir chamado."); return; }
       const data = await res.json();
@@ -61,8 +67,31 @@ export function ChamadoForm({ unidades, equipamentos, tiposProblema }: { unidade
 
   const inputCls = "mt-1 w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all";
 
+  if (confirmacoesPendentes > 0 && !emergencia) {
+    return (
+      <div className="bg-white rounded-card border border-surface-border p-5 space-y-3" data-chamado-bloqueado>
+        <p className="text-sm text-ink">
+          <span>Para abrir um novo chamado, confirme primeiro {confirmacoesPendentes === 1 ? "o serviço acima" : "os serviços acima"}. </span>
+          <span>Depois de confirmar, é só voltar a esta página.</span>
+        </p>
+        <div className="border-t border-surface-border pt-3 space-y-2">
+          <p className="text-sm text-ink-muted">Equipamento parado ou risco no local? O chamado de emergência abre agora, sem esperar a confirmação.</p>
+          <button type="button" onClick={() => setEmergencia(true)} data-emergencia
+            className="inline-flex items-center gap-2 border border-atrasado/30 bg-atrasado-claro text-atrasado-texto font-semibold px-4 py-2.5 rounded-lg hover:brightness-95">
+            <Siren className="w-4 h-4" aria-hidden /> É uma emergência: abrir chamado agora
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={enviar} className="space-y-4 bg-white rounded-card border border-surface-border p-5">
+      {emergencia && (
+        <p className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2 flex items-center gap-2" data-chamado-emergencia>
+          <Siren className="w-4 h-4 shrink-0" aria-hidden /> Chamado de emergência. As confirmações continuam pendentes para depois.
+        </p>
+      )}
       {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2 flex items-center gap-2"><AlertCircle className="w-4 h-4" />{erro}</div>}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

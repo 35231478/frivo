@@ -661,6 +661,9 @@ model Configuracao {
   portalCorPrimaria String? @map("portal_cor_primaria")
   portalLogo        String? @map("portal_logo") @db.Text
   portalBoasVindas  String? @map("portal_boas_vindas") @db.Text
+  /// Portal: com confirmações de serviço pendentes, o cliente só abre chamado novo depois de confirmar
+  /// — ou pela saída de emergência, que existe sempre. false = só mostra as pendências (não bloqueia).
+  portalAceiteObrigatorio Boolean @default(false) @map("portal_aceite_obrigatorio")
 
   // QR Code (acesso público, botões de contato, restrições) — armazenado como JSON
   qrConfig Json? @map("qr_config")
@@ -850,6 +853,7 @@ model Usuario {
   pmocsCriados Pmoc[] @relation("PmocCriador")
   pmocHistorico PmocHistorico[] @relation("PmocHistoricoUsuario")
   pmocAvisosVistos PmocAviso[] @relation("PmocAvisoVistoPor")
+  aceitesColhidos        OsAceite[]             @relation("OsAceiteColhidoPor")
 
   @@unique([email, empresaId])
   @@index([empresaId, ativo])
@@ -1090,6 +1094,7 @@ model ContatoCliente {
   ordensAbertas           OrdemServico[]           @relation("OsContatoOrigem")
   orcamentosAc            Orcamento[]
   comunicacaoPreferencias ComunicacaoPreferencia[]
+  aceitesConfirmados      OsAceite[]
 
   @@index([clienteId])
   @@index([empresaId])
@@ -1839,6 +1844,8 @@ model OrdemServico {
   /// Ocorrências do PMOC detectadas nesta OS / que geraram esta OS corretiva
   pmocOcorrencias           PmocOcorrencia[] @relation("PmocOcorrenciaOs")
   pmocOcorrenciasCorretivas PmocOcorrencia[] @relation("PmocOcorrenciaOsCorretiva")
+  /// Aceite do cliente na conclusão (uma linha por OS). Ver OsAceite.
+  aceite             OsAceite?
 
   @@unique([numero, empresaId])
   @@index([empresaId, status])
@@ -1912,6 +1919,8 @@ model AtividadeOs {
   avisosCliente        AtividadeAviso[]
   /// Ocorrências do PMOC detectadas nesta atividade
   pmocOcorrencias      PmocOcorrencia[]
+  /// Aceites do cliente colhidos no local nesta atividade
+  aceitesColhidos      OsAceite[]
 
   @@index([ordemServicoId])
   @@index([tecnicoId])
@@ -1944,6 +1953,54 @@ model OsPlanoVisitas {
 
   @@index([empresaId])
   @@map("os_planos_visitas")
+}
+
+/// ACEITE DO CLIENTE na conclusão da OS: a prova de que o cliente recebeu o serviço. Uma linha por OS,
+/// criada PENDENTE quando a OS conclui; o status da OS não muda (o faturamento não depende do aceite).
+/// Dois caminhos: NO LOCAL (o responsável assina na tela do técnico) e REMOTO (link público por
+/// WhatsApp/e-mail, pendente no portal). Situação e método são TEXTO (sem enum).
+model OsAceite {
+  id             String  @id @default(cuid())
+  empresaId      String  @map("empresa_id")
+  ordemServicoId String  @unique @map("ordem_servico_id")
+  /// Token do link público de confirmação (sem login)
+  token          String  @unique
+  /// "PENDENTE" | "CONFIRMADO"
+  situacao       String  @default("PENDENTE")
+  /// "LOCAL" (assinado na tela do técnico) | "REMOTO" (pelo link); vazio enquanto pendente
+  metodo         String?
+  /// Quem aceitou
+  nome           String?
+  /// Assinatura desenhada (data URL), só no aceite no local
+  assinatura     String? @db.Text
+  /// O que o cliente quis registrar ao confirmar (opcional)
+  observacao     String? @db.Text
+  ip             String?
+  userAgent      String? @map("user_agent")
+  confirmadoEm   DateTime? @map("confirmado_em")
+  /// No local: a atividade em que foi colhido e quem colheu
+  atividadeId    String? @map("atividade_id")
+  colhidoPorId   String? @map("colhido_por_id")
+  /// Remoto pelo portal: o contato que estava logado
+  contatoId      String? @map("contato_id")
+
+  // O último pedido de confirmação enviado ao cliente
+  enviadoEm    DateTime? @map("enviado_em")
+  /// "WHATSAPP" | "EMAIL" | "WHATSAPP_EMAIL" | "LINK"
+  enviadoCanal String?   @map("enviado_canal")
+  enviadoPara  String?   @map("enviado_para")
+  envios       Int       @default(0)
+
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  ordemServico OrdemServico    @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  atividade    AtividadeOs?    @relation(fields: [atividadeId], references: [id], onDelete: SetNull)
+  colhidoPor   Usuario?        @relation("OsAceiteColhidoPor", fields: [colhidoPorId], references: [id], onDelete: SetNull)
+  contato      ContatoCliente? @relation(fields: [contatoId], references: [id], onDelete: SetNull)
+
+  @@index([empresaId, situacao])
+  @@map("os_aceites")
 }
 
 /// App do técnico: "A caminho" / "Cheguei" de uma atividade — o horário do toque e o que aconteceu

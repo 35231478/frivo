@@ -78,6 +78,8 @@ export const chamadoPortalSchema = z.object({
     tamanho: z.number(),
     conteudo: z.string(),
   })).max(MAX_FOTOS_CHAMADO, `Envie no máximo ${MAX_FOTOS_CHAMADO} fotos`).default([]),
+  /** Saída de emergência: abre o chamado mesmo com confirmações de serviço pendentes (empresa que as exige) */
+  emergencia: z.boolean().optional(),
 });
 
 export const contatoClienteSchema = z.object({

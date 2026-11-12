@@ -5,6 +5,8 @@ import { requirePortalSession, getPortalBranding, STATUS_CONTA_PORTAL } from "@/
 import { formatarData } from "@/lib/utils";
 import { ClipboardList, CalendarCheck, FileText, AlertTriangle, Bell, Headset } from "lucide-react";
 import { diaCivilPassou, diasAteDiaCivil, hojeDiaCivil } from "@/lib/fuso";
+import { AceitesPendentes } from "@/components/portal/aceites-pendentes";
+import { aceiteObrigatorioNoPortal, pendenciasDoCliente } from "@/lib/os/aceite-server";
 
 export const metadata: Metadata = { title: "Portal — Início" };
 export const dynamic = "force-dynamic";
@@ -39,6 +41,9 @@ export default async function PortalDashboard() {
     prisma.contrato.findMany({ where: { empresaId, clienteId, status: "ATIVO", dataFim: { gte: hoje, lte: em30dias } }, select: { numero: true, dataFim: true } }),
   ]);
 
+  // Serviços concluídos à espera da confirmação do cliente (quem vê as OS ou abre chamados)
+  const [pendencias, aceiteObrigatorio] = verChamados ? await Promise.all([pendenciasDoCliente(empresaId, clienteId), aceiteObrigatorioNoPortal(empresaId)]) : [[], false];
+
   const alertas: { tipo: "info" | "warn" | "danger"; texto: string }[] = [];
   if (permissoes.verFinanceiro && medicoesPend > 0) alertas.push({ tipo: "warn", texto: `${medicoesPend} fatura(s) aguardando aprovação.` });
   if (permissoes.verBoletos) {
@@ -69,6 +74,8 @@ export default async function PortalDashboard() {
         <h1 className="text-2xl font-bold text-ink">{user.name ?? "Cliente"}</h1>
         <p className="text-sm text-ink-muted mt-1">{branding.boasVindas || `Portal de ${branding.empresaNome}: ordens de serviço, documentos e financeiro.`}</p>
       </div>
+
+      <AceitesPendentes pendencias={pendencias} obrigatorio={aceiteObrigatorio && !!permissoes.abrirChamados} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {cards.map((c) => (

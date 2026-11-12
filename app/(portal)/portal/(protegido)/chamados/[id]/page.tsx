@@ -5,7 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { requirePortalSession, podeVerChamados } from "@/lib/portal-server";
 import { SemAcesso } from "@/components/portal/sem-acesso";
 import { cn, formatarDataHora, LABELS_STATUS_OS, LABELS_PRIORIDADE } from "@/lib/utils";
-import { ChevronLeft, User, Clock, Image as ImageIcon } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ClipboardCheck, User, Clock, Image as ImageIcon } from "lucide-react";
+import { caminhoPublicoAceite, estadoDoAceite, textoDoAceite } from "@/lib/os/aceite";
 
 export const metadata: Metadata = { title: "Portal — Chamado" };
 export const dynamic = "force-dynamic";
@@ -23,9 +24,11 @@ export default async function PortalChamadoDetalhe({ params }: { params: Promise
       unidade: { select: { nome: true } },
       equipamento: { select: { marca: true, modelo: true } },
       anexos: { select: { id: true, nome: true, tipo: true, conteudo: true, criadoEm: true }, orderBy: { criadoEm: "asc" } },
+      aceite: { select: { token: true, situacao: true, nome: true, confirmadoEm: true } },
     },
   });
   if (!os) notFound();
+  const aceite = estadoDoAceite(os.status, os.aceite);
 
   // Só as fotos enviadas pelo cliente ao abrir o chamado (criadas junto com a OS).
   // Anexos que a equipe sobe depois são material interno e não aparecem no portal.
@@ -43,6 +46,7 @@ export default async function PortalChamadoDetalhe({ params }: { params: Promise
     ...(os.previsaoConclusao ? [{ titulo: "Visita prevista", quando: os.previsaoConclusao }] : []),
     ...(os.dataInicio ? [{ titulo: "Atendimento iniciado", quando: os.dataInicio }] : []),
     ...(os.status === "CONCLUIDA" && os.dataConclusao ? [{ titulo: "Atendimento concluído", quando: os.dataConclusao }] : []),
+    ...(aceite === "CONFIRMADO" ? [{ titulo: "Serviço confirmado pelo cliente", quando: os.aceite!.confirmadoEm }] : []),
     ...(os.status === "CANCELADA" ? [{ titulo: "Chamado cancelado", quando: os.atualizadoEm ?? null }] : []),
   ];
 
@@ -69,6 +73,24 @@ export default async function PortalChamadoDetalhe({ params }: { params: Promise
           <p className="text-sm text-ink whitespace-pre-wrap">{os.descricao}</p>
         </div>
       </div>
+
+      {aceite === "AGUARDANDO" && (
+        <div className="bg-atencao-claro border border-atencao/30 rounded-xl p-5 flex items-center justify-between gap-3 flex-wrap" data-aceite-chamado="AGUARDANDO">
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-atencao-texto flex items-center gap-2"><ClipboardCheck className="w-4 h-4" aria-hidden /> Serviço concluído, aguardando sua confirmação</p>
+            <p className="text-sm text-ink mt-0.5">Veja o relatório do que foi feito e confirme o recebimento.</p>
+          </div>
+          <Link href={caminhoPublicoAceite(os.aceite!.token)} className="inline-flex items-center gap-1.5 bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold px-4 py-2.5 rounded-lg shrink-0" data-confirmar-chamado>
+            Ver e confirmar
+          </Link>
+        </div>
+      )}
+      {aceite === "CONFIRMADO" && (
+        <div className="bg-ok-claro border border-ok/20 rounded-xl p-5 flex items-center justify-between gap-3 flex-wrap" data-aceite-chamado="CONFIRMADO">
+          <p className="text-sm text-ink flex items-center gap-2 min-w-0"><CheckCircle2 className="w-4 h-4 text-ok-texto shrink-0" aria-hidden /> {textoDoAceite(os.aceite!)}</p>
+          <Link href={caminhoPublicoAceite(os.aceite!.token)} className="text-sm font-medium text-primary-600 hover:underline shrink-0">Ver o relatório</Link>
+        </div>
+      )}
 
       {fotos.length > 0 && (
         <div className="bg-white rounded-xl border border-surface-border p-5">
