@@ -77,6 +77,7 @@ const OPERACIONAL: Secao[] = [
         tipo: "grupo", label: "Equipamentos", icone: Thermometer, itens: [
           { href: "/equipamentos", icone: Thermometer, label: "Todos os equipamentos" },
           { href: "/qrcodes", icone: QrCode, label: "QR Codes" },
+          { href: "/pmoc", icone: FileBadge, label: "PMOC" },
         ],
       },
       {

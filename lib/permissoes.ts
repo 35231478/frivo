@@ -15,7 +15,7 @@ export type Permissoes = Record<string, Partial<Record<Acao, boolean>>>;
 /** Nome do ícone (lucide-react) que representa o módulo na UI — este arquivo não importa a biblioteca. */
 export type IconeModulo =
   | "ClipboardList" | "Users" | "Thermometer" | "CalendarDays" | "QrCode" | "Package" | "ShoppingCart" | "Calculator"
-  | "FileText" | "Landmark" | "Wallet" | "UsersRound" | "Truck" | "Settings" | "BarChart3" | "LayoutDashboard";
+  | "FileText" | "Landmark" | "Wallet" | "UsersRound" | "Truck" | "Settings" | "BarChart3" | "LayoutDashboard" | "FileBadge";
 export interface ModuloDef { id: string; label: string; icone: IconeModulo; acoes: Acao[] }
 export interface SecaoDef { id: string; label: string; modulos: ModuloDef[] }
 
@@ -45,6 +45,7 @@ export const SECOES: SecaoDef[] = [
       { id: "ordens", label: "Ordens de serviço", icone: "ClipboardList", acoes: ["visualizar", "criar", "editar", "concluir", "excluir"] },
       { id: "clientes", label: "Clientes", icone: "Users", acoes: ["visualizar", "criar", "editar", "excluir"] },
       { id: "equipamentos", label: "Equipamentos", icone: "Thermometer", acoes: ["visualizar", "criar", "editar", "excluir"] },
+      { id: "pmoc", label: "PMOC", icone: "FileBadge", acoes: ["visualizar", "criar", "editar", "excluir"] },
       { id: "calendario", label: "Calendário", icone: "CalendarDays", acoes: ["visualizar"] },
       { id: "qrcodes", label: "QR Codes", icone: "QrCode", acoes: ["visualizar", "gerenciar"] },
       // Estoque: ver saldos/extrato; gerenciar = lançar entrada, ajuste e inventário
@@ -176,6 +177,7 @@ const ROTA_MODULO: Record<string, string> = {
   dashboard: "dashboard",
   clientes: "clientes",
   equipamentos: "equipamentos",
+  pmoc: "pmoc",
   ordens: "ordens",
   prazos: "ordens",
   mapa: "equipes", // Operações › Mapa (posição dos técnicos): a página exige Equipes › Gerenciar
@@ -221,6 +223,7 @@ export const PRESETS: Record<string, Permissoes> = {
     ordens: ["visualizar", "criar", "editar", "concluir", "excluir"],
     clientes: ["visualizar", "criar", "editar"],
     equipamentos: ["visualizar", "criar", "editar"],
+    pmoc: ["visualizar", "criar", "editar"],
     calendario: ["visualizar"],
     qrcodes: ["visualizar", "gerenciar"],
     equipes: ["visualizar", "gerenciar"],

@@ -45,6 +45,7 @@ const ROTULOS_ROTA: Record<string, string> = {
   dashboard: "Dashboard",
   clientes: "Clientes",
   equipamentos: "Equipamentos",
+  pmoc: "PMOC",
   ordens: "Ordens de serviço",
   contratos: "Contratos",
   "faturamento-contratos": "Faturamento de contratos",

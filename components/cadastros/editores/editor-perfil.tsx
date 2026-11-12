@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BarChart3, Calculator, CalendarDays, Check, ClipboardList, Eye, FileText, Landmark, LayoutDashboard, Package, QrCode, Settings, ShoppingCart, Thermometer, Truck, Users, UsersRound, Wallet, type LucideIcon } from "lucide-react";
+import { BarChart3, Calculator, CalendarDays, Check, ClipboardList, Eye, FileBadge, FileText, Landmark, LayoutDashboard, Package, QrCode, Settings, ShoppingCart, Thermometer, Truck, Users, UsersRound, Wallet, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,7 @@ import { corDado } from "@/lib/ui/tokens";
 
 /** Ícone de cada módulo (lib/permissoes.ts guarda só o nome: é um arquivo puro, sem a biblioteca). */
 const ICONES: Record<IconeModulo, LucideIcon> = {
-  ClipboardList, Users, Thermometer, CalendarDays, QrCode, Package, ShoppingCart, Calculator, FileText, Landmark, Wallet, UsersRound, Truck, Settings, BarChart3, LayoutDashboard,
+  ClipboardList, Users, Thermometer, CalendarDays, QrCode, Package, ShoppingCart, Calculator, FileText, Landmark, Wallet, UsersRound, Truck, Settings, BarChart3, LayoutDashboard, FileBadge,
 };
 
 const TIPOS = ["ADMINISTRADOR", "SUPERVISOR", "FINANCEIRO", "TECNICO", "AUXILIAR", "PERSONALIZADO"];

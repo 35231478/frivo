@@ -559,6 +559,8 @@ model Empresa {
   notasFiscais NotaFiscal[]
   numeracoes   Numeracao[]
 
+  pmocs Pmoc[]
+
   @@map("empresas")
 }
 
@@ -844,6 +846,8 @@ model Usuario {
   reajustesContrato    ReajusteContrato[]
   preferencias         PreferenciaUsuario[]
 
+  pmocsCriados Pmoc[] @relation("PmocCriador")
+
   @@unique([email, empresaId])
   @@index([empresaId, ativo])
   @@map("usuarios")
@@ -952,6 +956,8 @@ model Tecnico {
   folha                 ColaboradorFolha?
   posicao               TecnicoPosicao?
 
+  pmocsResponsavel Pmoc[] @relation("PmocResponsavelTecnico")
+
   @@unique([cpf, empresaId])
   @@index([empresaId, ativo])
   @@index([veiculoId])
@@ -1038,6 +1044,8 @@ model Cliente {
   tabelaPreco             TabelaPreco?             @relation(fields: [tabelaPrecoId], references: [id])
 
   notasFiscais NotaFiscal[]
+
+  pmocs Pmoc[]
 
   @@unique([cpfCnpj, empresaId])
   @@index([empresaId, ativo])
@@ -1161,6 +1169,8 @@ model Unidade {
   ordensServico OrdemServico[]
   orcamentos    Orcamento[]
 
+  pmocs Pmoc[]
+
   @@index([clienteId])
   @@index([empresaId])
   @@map("unidades")
@@ -1234,6 +1244,8 @@ model Equipamento {
   fotosAtendimento    FotoAtendimento[]
   servicosAdicionais  ServicoAdicional[]
   anexosOs            OsAnexo[]
+
+  pmocs PmocEquipamento[]
 
   @@index([empresaId, ativo])
   @@index([unidadeId])
@@ -4285,4 +4297,71 @@ model FaturamentoContratoExecucao {
   @@index([empresaId, situacao])
   @@index([medicaoId])
   @@map("faturamento_contrato_execucoes")
+}
+
+// ─────────────────────────────────────────────
+// PMOC — Plano de Manutenção, Operação e Controle (Lei 13.589/2018)
+// Etapa 1: cadastro base (identificação, RT/ART e equipamentos cobertos).
+// Status exibido: RASCUNHO (manual) | Vigente/Expirado (calculado pelas datas
+// quando PUBLICADO) — ver lib/pmoc.ts. Soft-delete por `ativo`.
+// ─────────────────────────────────────────────
+
+enum StatusPmoc {
+  RASCUNHO
+  PUBLICADO
+}
+
+model Pmoc {
+  id            String     @id @default(cuid())
+  empresaId     String     @map("empresa_id")
+  clienteId     String     @map("cliente_id")
+  unidadeId     String     @map("unidade_id")
+  nome          String
+  descricao     String?    @db.Text
+  dataInicio    DateTime   @map("data_inicio") @db.Date
+  dataExpiracao DateTime   @map("data_expiracao") @db.Date
+  status        StatusPmoc @default(RASCUNHO)
+
+  // Responsável Técnico (snapshot do nome/CREA; vínculo opcional ao colaborador)
+  responsavelTecnicoId String? @map("responsavel_tecnico_id")
+  rtNome               String? @map("rt_nome")
+  rtCrea               String? @map("rt_crea")
+
+  // ART (número + arquivo em data URL — nunca carregado nas listagens)
+  artNumero         String? @map("art_numero")
+  artArquivo        String? @map("art_arquivo") @db.Text
+  artArquivoNome    String? @map("art_arquivo_nome")
+  artArquivoTipo    String? @map("art_arquivo_tipo")
+  artArquivoTamanho Int?    @map("art_arquivo_tamanho")
+
+  ativo        Boolean  @default(true)
+  criadoPorId  String?  @map("criado_por_id")
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  empresa            Empresa           @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  cliente            Cliente           @relation(fields: [clienteId], references: [id])
+  unidade            Unidade           @relation(fields: [unidadeId], references: [id])
+  responsavelTecnico Tecnico?          @relation("PmocResponsavelTecnico", fields: [responsavelTecnicoId], references: [id], onDelete: SetNull)
+  criadoPor          Usuario?          @relation("PmocCriador", fields: [criadoPorId], references: [id], onDelete: SetNull)
+  equipamentos       PmocEquipamento[]
+
+  @@index([empresaId, ativo])
+  @@index([clienteId])
+  @@index([unidadeId])
+  @@map("pmocs")
+}
+
+model PmocEquipamento {
+  id            String   @id @default(cuid())
+  pmocId        String   @map("pmoc_id")
+  equipamentoId String   @map("equipamento_id")
+  criadoEm      DateTime @default(now()) @map("criado_em")
+
+  pmoc        Pmoc        @relation(fields: [pmocId], references: [id], onDelete: Cascade)
+  equipamento Equipamento @relation(fields: [equipamentoId], references: [id], onDelete: Cascade)
+
+  @@unique([pmocId, equipamentoId])
+  @@index([equipamentoId])
+  @@map("pmoc_equipamentos")
 }
