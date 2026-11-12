@@ -17,7 +17,7 @@ export async function GET(_: NextRequest, { params }: Params) {
 
 /**
  * Renova o plano: cria um plano NOVO, em rascunho, para a vigência informada, com os equipamentos
- * ativos e o cronograma deslocado. Não leva ART, link público, histórico, avisos nem as OS geradas.
+ * ativos e o cronograma deslocado. Não leva ART, link público, histórico, avisos, ocorrências nem as OS geradas.
  * Exige "PMOC › Editar".
  */
 export async function POST(req: NextRequest, { params }: Params) {

@@ -7,6 +7,7 @@ import { PmocEditor, type PmocDados } from "@/components/pmoc/pmoc-editor";
 import { serializarPmoc } from "@/lib/pmoc";
 import { avisoDoPlano } from "@/lib/pmoc-avisos";
 import { configPmoc, destinoDoCliente } from "@/lib/pmoc-documento-server";
+import { ocorrenciasPendentes } from "@/lib/pmoc-ocorrencias-server";
 
 export const metadata: Metadata = { title: "PMOC" };
 
@@ -21,13 +22,13 @@ export default async function PmocPage({ params, searchParams }: {
   const [pmoc, config] = await Promise.all([prisma.pmoc.findFirst({ where: { id, empresaId }, select: SELECT_PMOC }), configPmoc(empresaId)]);
   if (!pmoc) notFound();
   const dados = serializarPmoc<PmocDados>(JSON.parse(JSON.stringify(pmoc)));
-  const destino = await destinoDoCliente(pmoc.clienteId, empresaId);
+  const [destino, pendentes] = await Promise.all([destinoDoCliente(pmoc.clienteId, empresaId), ocorrenciasPendentes(pmoc.id)]);
   // O aviso de vencimento de hoje já teve ciência? (aí não aparece mais no cabeçalho do plano)
   const aviso = avisoDoPlano(pmoc, config.diasAviso);
   const ciente = aviso ? await prisma.pmocAviso.findFirst({ where: { pmocId: pmoc.id, tipo: aviso.tipo, dataExpiracao: pmoc.dataExpiracao, vistoEm: { not: null } }, select: { id: true } }) : null;
   return (
     <div className="max-w-5xl mx-auto">
-      <PmocEditor key={`${pmoc.id}-${pmoc.ativo}`} inicial={dados} abaInicial={aba} copiaRecente={copia === "1"} criadoRecente={criado === "1"} renovadoRecente={renovado === "1"} config={config} avisoCiente={ciente && aviso ? aviso.tipo : null} destino={destino} />
+      <PmocEditor key={`${pmoc.id}-${pmoc.ativo}`} inicial={dados} abaInicial={aba} copiaRecente={copia === "1"} criadoRecente={criado === "1"} renovadoRecente={renovado === "1"} config={config} avisoCiente={ciente && aviso ? aviso.tipo : null} destino={destino} ocorrenciasPendentes={pendentes} />
     </div>
   );
 }

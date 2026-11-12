@@ -24,6 +24,7 @@ import { umAnoDepois } from "@/lib/pmoc-renovacao";
 import { PmocCronograma } from "@/components/pmoc/pmoc-cronograma";
 import { PmocBaixarDocumento, PmocEnviar, type DestinoEnvio } from "@/components/pmoc/pmoc-envio";
 import { PmocHistorico } from "@/components/pmoc/pmoc-historico";
+import { PmocOcorrencias } from "@/components/pmoc/pmoc-ocorrencias";
 import { DESCRICAO_PADRAO_PMOC, TAMANHO_MAX_ART, TIPOS_ART, hojeISO, pendenciasPublicacao, serializarPmoc } from "@/lib/pmoc";
 import { avisoDoPlano, bloqueioEnvio, textoAviso, type ConfigPmoc, type TipoAviso } from "@/lib/pmoc-avisos";
 import { reduzirImagem } from "@/lib/imagem-cliente";
@@ -45,17 +46,16 @@ export interface PmocDados {
   equipamentos: { id: string; equipamento: EquipamentoPmoc }[];
 }
 
-type Aba = "identificacao" | "equipamentos" | "cronograma" | "historico";
+type Aba = "identificacao" | "equipamentos" | "cronograma" | "ocorrencias" | "historico";
 const ABAS = [
   ["identificacao", "Identificação", ClipboardList], ["equipamentos", "Equipamentos AVAC", Thermometer], ["cronograma", "Cronograma", CalendarRange],
-  ["historico", "Histórico", History],
+  ["ocorrencias", "Ocorrências", AlertOctagon], ["historico", "Histórico", History],
 ] as const;
 // As abas que só existem com o plano salvo
-const SO_SALVO: Aba[] = ["equipamentos", "cronograma", "historico"];
+const SO_SALVO: Aba[] = ["equipamentos", "cronograma", "ocorrencias", "historico"];
 const MSG_ART_GRANDE = "Arquivo da ART acima de 3 MB.";
 const ABAS_FUTURAS = [
   { rotulo: "Planejamento", icone: ListChecks },
-  { rotulo: "Ocorrências", icone: AlertOctagon },
   { rotulo: "Recomendações", icone: Lightbulb },
   { rotulo: "Anexos", icone: Paperclip },
 ];
@@ -69,8 +69,10 @@ function lerArquivo(file: File): Promise<string> {
   return new Promise((ok, erro) => { const r = new FileReader(); r.onload = () => ok(r.result as string); r.onerror = erro; r.readAsDataURL(file); });
 }
 
-export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente, renovadoRecente, config, avisoCiente, destino }: {
+export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente, renovadoRecente, config, avisoCiente, destino, ocorrenciasPendentes }: {
   inicial?: PmocDados; abaInicial?: string; copiaRecente?: boolean; criadoRecente?: boolean; renovadoRecente?: boolean;
+  /** Quantas ocorrências do plano ainda não foram resolvidas (o número na aba) */
+  ocorrenciasPendentes?: number;
   /** O padrão da empresa: antecedência do aviso de vencimento e texto técnico dos planos novos */
   config?: ConfigPmoc;
   /** O aviso de vencimento de hoje que já teve ciência (some do cabeçalho) */
@@ -168,6 +170,12 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente, r
   const [dandoCiencia, setDandoCiencia] = useState(false);
   const aviso = pmoc ? avisoDoPlano(pmoc, config?.diasAviso) : null;
   const [historicoVersao, setHistoricoVersao] = useState(0);
+  // Ocorrências: o número da aba acompanha o que a aba faz, e cada mudança dela entra no histórico
+  const [pendentes, setPendentes] = useState(ocorrenciasPendentes ?? 0);
+  const equipamentosDoPlano = useMemo(
+    () => (pmoc?.equipamentos ?? []).map(({ equipamento: e }) => ({ id: e.id, rotulo: [e.patrimonio, rotuloEquip(e)].filter(Boolean).join(" · ") })),
+    [pmoc?.equipamentos],
+  );
   async function darCiencia() {
     if (!pmoc) return;
     setDandoCiencia(true);
@@ -284,6 +292,9 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente, r
               aba === id ? "border-primary-500 text-primary-600" : "border-transparent text-ink-muted hover:text-ink")}>
             <Icone className="w-4 h-4" /> {rotulo}
             {id === "equipamentos" && pmoc && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-surface-alt">{pmoc.equipamentos.length}</span>}
+            {id === "ocorrencias" && pendentes > 0 && (
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-atencao-claro text-atencao-texto" data-ocorrencias-pendentes title="Ocorrências não resolvidas">{pendentes}</span>
+            )}
           </button>
         ))}
         {ABAS_FUTURAS.map(({ rotulo, icone: Icone }) => (
@@ -414,7 +425,13 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente, r
         <PmocCronograma key={`${pmoc.status}-${pmoc.dataExpiracao}-${pmoc.equipamentos.length}`} pmocId={pmoc.id} dataExpiracao={pmoc.dataExpiracao} somenteLeitura={somenteLeitura} />
       )}
 
-      {/* ── Histórico (Etapa 3): relê depois de cada envio, ciência ou salvamento ── */}
+      {/* ── Ocorrências: as não conformidades achadas na manutenção (entram no documento) ── */}
+      {aba === "ocorrencias" && pmoc && (
+        <PmocOcorrencias pmocId={pmoc.id} equipamentos={equipamentosDoPlano} somenteLeitura={!pode("pmoc", "editar") || !pmoc.ativo}
+          aoMudar={(n) => { setPendentes(n); setHistoricoVersao((v) => v + 1); }} />
+      )}
+
+      {/* ── Histórico (Etapa 3): relê depois de cada envio, ciência, salvamento ou ocorrência ── */}
       {aba === "historico" && pmoc && <PmocHistorico key={historicoVersao} pmocId={pmoc.id} />}
     </div>
   );

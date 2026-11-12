@@ -1251,6 +1251,7 @@ model Equipamento {
   pmocs PmocEquipamento[]
   pmocCronogramas PmocCronograma[]
   pmocExecucoes   PmocExecucao[]
+  pmocOcorrencias PmocOcorrencia[]
 
   @@index([empresaId, ativo])
   @@index([unidadeId])
@@ -1835,6 +1836,9 @@ model OrdemServico {
   notasFiscais NotaFiscal[]
 
   pmocExecucoes PmocExecucao[]
+  /// Ocorrências do PMOC detectadas nesta OS / que geraram esta OS corretiva
+  pmocOcorrencias           PmocOcorrencia[] @relation("PmocOcorrenciaOs")
+  pmocOcorrenciasCorretivas PmocOcorrencia[] @relation("PmocOcorrenciaOsCorretiva")
 
   @@unique([numero, empresaId])
   @@index([empresaId, status])
@@ -1906,6 +1910,8 @@ model AtividadeOs {
   servicosAdicionais   ServicoAdicional[]
   anexosOs             OsAnexo[]
   avisosCliente        AtividadeAviso[]
+  /// Ocorrências do PMOC detectadas nesta atividade
+  pmocOcorrencias      PmocOcorrencia[]
 
   @@index([ordemServicoId])
   @@index([tecnicoId])
@@ -2166,6 +2172,8 @@ model ChecklistResposta {
   equipamento   Equipamento       @relation(fields: [equipamentoId], references: [id], onDelete: Cascade)
   item          ChecklistTipoItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
   respondidoPor Usuario?          @relation(fields: [respondidoPorId], references: [id], onDelete: SetNull)
+  /// A ocorrência do PMOC criada a partir desta resposta (ligação futura: "Atenção" do técnico)
+  pmocOcorrencia PmocOcorrencia?
 
   @@unique([atividadeId, equipamentoId, itemId])
   @@index([equipamentoId])
@@ -2571,6 +2579,8 @@ model Orcamento {
   pedidosCompra      PedidoCompraInterno[]
   contratoGerado     Contrato?             @relation("OrcamentoContrato")
   osGerada           OrdemServico?         @relation("OrcamentoOsGerada")
+  /// Ocorrências do PMOC que deram origem a este orçamento (ligação futura)
+  pmocOcorrencias PmocOcorrencia[]
 
   @@unique([codigo, empresaId])
   @@index([empresaId, status])
@@ -4393,6 +4403,7 @@ model Pmoc {
   execucoes          PmocExecucao[]
   historico          PmocHistorico[]
   avisos             PmocAviso[]
+  ocorrencias        PmocOcorrencia[]
 
   @@index([empresaId, ativo])
   @@index([clienteId])
@@ -4453,6 +4464,68 @@ model PmocConfiguracao {
   empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
 
   @@map("pmoc_configuracoes")
+}
+
+/// PMOC — OCORRÊNCIAS: o registro das não conformidades achadas na manutenção dos equipamentos do
+/// plano (vazamento, corrosão, ruído anormal, filtro danificado, falha elétrica…). É parte do livro
+/// de registro: entra no documento em PDF. Gravidade e situação são TEXTO (sem enum).
+/// Os vínculos opcionais já deixam o modelo pronto para: a OS/atividade onde foi detectada, a
+/// resposta "Atenção" do técnico que a originou, e o orçamento ou a OS corretiva gerados a partir dela.
+model PmocOcorrencia {
+  id             String    @id @default(cuid())
+  empresaId      String    @map("empresa_id")
+  pmocId         String    @map("pmoc_id")
+  /// Vazio = ocorrência geral da unidade
+  equipamentoId  String?   @map("equipamento_id")
+  data           DateTime  @db.Date
+  descricao      String    @db.Text
+  /// "BAIXA" | "MEDIA" | "ALTA" | "CRITICA"
+  gravidade      String
+  /// "ABERTA" | "EM_ANDAMENTO" | "RESOLVIDA"
+  situacao       String    @default("ABERTA")
+  resolvidaEm    DateTime? @map("resolvida_em") @db.Date
+  /// O que foi feito para resolver
+  resolucao      String?   @db.Text
+  resolvidaPorId String?   @map("resolvida_por_id")
+
+  // Foto ou PDF (data URL — nunca carregado nas listagens)
+  anexo        String? @db.Text
+  anexoNome    String? @map("anexo_nome")
+  anexoTipo    String? @map("anexo_tipo")
+  anexoTamanho Int?    @map("anexo_tamanho")
+
+  /// "MANUAL" (escritório) | "APP" (futuro: a "Atenção" do técnico)
+  origem              String  @default("MANUAL")
+  /// A OS onde foi detectada (hoje preenchida à mão)
+  ordemServicoId      String? @map("ordem_servico_id")
+  /// A atividade (visita) onde foi detectada — ligação futura com a execução do técnico
+  atividadeId         String? @map("atividade_id")
+  /// A resposta do checklist que originou a ocorrência — única: uma resposta, uma ocorrência
+  checklistRespostaId String? @unique @map("checklist_resposta_id")
+  /// Orçamento gerado a partir da ocorrência (ligação futura)
+  orcamentoId         String? @map("orcamento_id")
+  /// OS corretiva gerada a partir da ocorrência (ligação futura)
+  osCorretivaId       String? @map("os_corretiva_id")
+
+  /// false = excluída (sai da lista e do documento; fica guardada)
+  ativo        Boolean  @default(true)
+  criadoPorId  String?  @map("criado_por_id")
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  pmoc              Pmoc               @relation(fields: [pmocId], references: [id], onDelete: Cascade)
+  equipamento       Equipamento?       @relation(fields: [equipamentoId], references: [id], onDelete: SetNull)
+  ordemServico      OrdemServico?      @relation("PmocOcorrenciaOs", fields: [ordemServicoId], references: [id], onDelete: SetNull)
+  atividade         AtividadeOs?       @relation(fields: [atividadeId], references: [id], onDelete: SetNull)
+  checklistResposta ChecklistResposta? @relation(fields: [checklistRespostaId], references: [id], onDelete: SetNull)
+  orcamento         Orcamento?         @relation(fields: [orcamentoId], references: [id], onDelete: SetNull)
+  osCorretiva       OrdemServico?      @relation("PmocOcorrenciaOsCorretiva", fields: [osCorretivaId], references: [id], onDelete: SetNull)
+
+  @@index([pmocId, data])
+  @@index([empresaId])
+  @@index([equipamentoId])
+  @@index([ordemServicoId])
+  @@map("pmoc_ocorrencias")
 }
 
 model PmocEquipamento {

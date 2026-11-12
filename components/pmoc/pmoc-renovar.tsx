@@ -121,7 +121,7 @@ export function PmocRenovar({ pmocId }: { pmocId: string }) {
                     <h4 className="text-sm font-semibold text-ink flex items-center gap-1.5"><X className="w-4 h-4" /> O que não vai</h4>
                     <ul className="text-sm text-ink space-y-1.5">
                       <li data-art-nao-vai><strong>ART</strong> (número e arquivo): cada vigência tem a sua. Anexe a nova antes de publicar.</li>
-                      <li>Link público, histórico, avisos e as OS já geradas.</li>
+                      <li>Link público, histórico, avisos, ocorrências e as OS já geradas.</li>
                       {plano.equipamentosFora.length > 0 && (
                         <li data-equipamentos-fora>{plural(plano.equipamentosFora.length, "equipamento inativo", "equipamentos inativos")}: {plano.equipamentosFora.map(rotulo).join(", ")}.</li>
                       )}
