@@ -195,6 +195,7 @@ describe("captura no aparelho", () => {
     relogio += 4 * MIN; gps = { lat: -23.6, lng: -46.7, precisao: 30 };
     await capturar(r, "INICIO");
     expect(envios).toEqual([]);
+    expect(fetchFalso).not.toHaveBeenCalled(); // sem sinal nem tenta a rede (não gasta bateria à toa)
     expect((await fila()).map((l) => [l.motivo, l.lat, l.em])).toEqual([["CHEGUEI", -23.5505, new Date(MEIO_DIA).toISOString()], ["INICIO", -23.6, new Date(MEIO_DIA + 4 * MIN).toISOString()]]);
     expect(r.atual).toMatchObject({ leitura: "ok", aEnviar: 2, ultimoEnvioEm: null });
 
