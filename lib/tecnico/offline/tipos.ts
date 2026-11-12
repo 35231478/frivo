@@ -22,6 +22,8 @@ export interface CartaoTela {
   orientacao?: string;
   /** "A caminho" / "Cheguei" de hoje, como a lista baixou. Ausente em listas antigas */
   avisos?: AvisosTela;
+  /** OS dividida em visitas diárias: qual é esta ("Visita 3 de 12"). Ausente = atividade comum */
+  visita?: { numero: number; total: number };
 }
 
 export interface EquipamentoInfo {

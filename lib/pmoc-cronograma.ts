@@ -173,6 +173,8 @@ export interface OsDaExecucao {
   equipamentoIds: string[];
   /** Os que o técnico já marcou como atendidos */
   feitos: string[];
+  /** A OS foi dividida em visitas diárias (lib/os/visitas): o reagendamento do cronograma não mexe nela */
+  emVisitas?: boolean;
 }
 export interface ExecucaoExistente {
   id: string; cronogramaId: string; equipamentoId: string; periodo: string;
@@ -215,10 +217,12 @@ const OS_ABERTA = ["ABERTA", "AGUARDANDO_ATENDIMENTO", "AGENDADA"];
 /**
  * A execução ainda pode ser mexida pelo reagendamento? Só enquanto NADA aconteceu: OS aberta/agendada,
  * atividade agendada, equipamento não atendido e data de hoje em diante.
+ * A OS dividida em visitas diárias fica de fora: o cronograma não muda data nem lote dela.
  */
 export function execucaoPendente(x: ExecucaoExistente, hoje: string): boolean {
   const os = x.os;
   if (!os || !os.atividadeId || !os.dataAgendada) return false;
+  if (os.emVisitas) return false; // quem manda nas datas e nos lotes é o planejamento de visitas da OS
   if (!OS_ABERTA.includes(os.status) || os.atividadeStatus !== "AGENDADA") return false;
   if (os.feitos.includes(x.equipamentoId)) return false;
   return chaveDiaBR(os.dataAgendada) >= hoje;

@@ -1819,6 +1819,8 @@ model OrdemServico {
   equipamento        Equipamento?          @relation(fields: [equipamentoId], references: [id])
   orcamentoOrigem    Orcamento?            @relation("OrcamentoOsGerada", fields: [orcamentoOrigemId], references: [id], onDelete: SetNull)
   atividades         AtividadeOs[]
+  /// Plano de visitas (campanha): a OS grande dividida em visitas diárias. Ver OsPlanoVisitas.
+  planoVisitas       OsPlanoVisitas?
   itensOrcamento     OsItemOrcamento[]
   materiais          OsMaterial[]
   anexos             OsAnexo[]
@@ -1879,6 +1881,8 @@ model AtividadeOs {
   duracaoMin     Int?            @map("duracao_min")
   observacao     String?
   resumo         String?         @db.Text
+  /// Esta atividade é uma VISITA do plano de visitas da OS (vazio = atividade comum)
+  planoVisitasId String?         @map("plano_visitas_id")
   /// Segredo do link público do relatório desta atividade (/relatorio/atividade/<id>?t=<token>):
   /// 32 bytes aleatórios em base64url (43 caracteres). O banco gera ao criar a atividade (SQL
   /// 2026-10-20_relatorio_atividade_token); "Gerar novo link" troca e o link antigo para de abrir.
@@ -1891,6 +1895,7 @@ model AtividadeOs {
   tecnico              Tecnico?                        @relation(fields: [tecnicoId], references: [id])
   equipe               Equipe?                         @relation(fields: [equipeId], references: [id], onDelete: SetNull)
   veiculo              Veiculo?                        @relation(fields: [veiculoId], references: [id], onDelete: SetNull)
+  planoVisitas         OsPlanoVisitas?                 @relation(fields: [planoVisitasId], references: [id], onDelete: SetNull)
   tecnicosEquipe       AtividadeTecnico[]
   respostas            AtividadeResposta[]
   relatorios           RelatorioOs[]
@@ -1908,7 +1913,31 @@ model AtividadeOs {
   @@index([equipeId])
   @@index([veiculoId])
   @@index([empresaId, dataAgendada])
+  @@index([planoVisitasId])
   @@map("atividades_os")
+}
+
+/// OS EM CAMPANHA: uma manutenção grande (ex.: limpeza química de 300 aparelhos) que não cabe num dia.
+/// A OS continua sendo UMA só; o plano divide os equipamentos em VISITAS diárias, e cada visita é
+/// uma atividade da OS (`atividades_os.plano_visitas_id`) com o seu lote de equipamentos — por isso
+/// já aparece no calendário e no app do técnico. Um plano por OS. Ver lib/os/visitas.ts.
+model OsPlanoVisitas {
+  id             String   @id @default(cuid())
+  empresaId      String   @map("empresa_id")
+  ordemServicoId String   @unique @map("ordem_servico_id")
+  /// Quantos equipamentos por dia no último planejamento
+  porDia         Int      @map("por_dia")
+  /// Sábado e domingo ficam de fora da sequência de dias
+  pularFimSemana Boolean  @default(true) @map("pular_fim_semana")
+  criadoPorId    String?  @map("criado_por_id")
+  criadoEm       DateTime @default(now()) @map("criado_em")
+  atualizadoEm   DateTime @updatedAt @map("atualizado_em")
+
+  ordemServico OrdemServico  @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  visitas      AtividadeOs[]
+
+  @@index([empresaId])
+  @@map("os_planos_visitas")
 }
 
 /// App do técnico: "A caminho" / "Cheguei" de uma atividade — o horário do toque e o que aconteceu

@@ -15,7 +15,7 @@ import { MSG_HORA_INVALIDA, horaValida } from "@/components/ui/input-data-hora";
 import { SeletorExecucao, VALOR_EXECUCAO_VAZIO, corpoExecucao, temExecutor, useOpcoesExecucao, type ValorExecucao } from "@/components/os/seletor-execucao";
 import { MSG_SEM_EXECUTOR_TELA } from "@/lib/atividade-equipe";
 import { BuscaSelect, type OpcaoBusca } from "@/components/ui/busca-select";
-import { Repeat, MapPin, CalendarClock, Wrench, AlertTriangle, X, Plus, Check, Lock, Maximize2, Minimize2, GripHorizontal, Car } from "lucide-react";
+import { Repeat, MapPin, CalendarClock, Wrench, AlertTriangle, X, Plus, Check, Lock, Maximize2, Minimize2, GripHorizontal, Car, ListChecks } from "lucide-react";
 import { deLocalBR } from "@/lib/fuso";
 
 export interface CardOs {
@@ -44,6 +44,8 @@ export interface CardOs {
   equipeCor?: string | null;
   /** Veículo desta atividade ("ABC1D23 — Strada"), se houver. */
   veiculo?: string | null;
+  /** OS dividida em visitas diárias: "Visita 3 de 12" (a deste dia). */
+  visita?: string | null;
   status: string;
   prioridade: string;
   atrasada: boolean;
@@ -589,6 +591,9 @@ function Tooltip({ card, rect }: { card: CardOs; rect: DOMRect }) {
           <div className="flex items-center gap-1.5"><CalendarClock className="w-3.5 h-3.5 shrink-0 text-ink-subtle" /><span>{card.dataFmt}{card.hora ? ` às ${card.hora}` : ""}</span></div>
           {card.tipoOs && (
             <div className="flex items-center gap-1.5"><Wrench className="w-3.5 h-3.5 shrink-0 text-ink-subtle" /><span>{card.tipoOs}</span></div>
+          )}
+          {card.visita && (
+            <div className="flex items-center gap-1.5" data-visita><ListChecks className="w-3.5 h-3.5 shrink-0 text-ink-subtle" /><span>{card.visita}</span></div>
           )}
         </div>
         <EquipeCard card={card} />

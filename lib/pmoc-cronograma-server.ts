@@ -81,16 +81,22 @@ async function carregarOs(db: Db, ids: string[]): Promise<Map<string, OsDaExecuc
   const ordens = await db.ordemServico.findMany({
     where: { id: { in: ids } },
     select: {
-      id: true, numero: true, status: true,
-      atividades: { orderBy: { criadoEm: "asc" }, take: 1, select: { id: true, status: true, dataAgendada: true, equipamentos: { select: { equipamentoId: true, feito: true } } } },
+      id: true, numero: true, status: true, planoVisitas: { select: { id: true } },
+      atividades: { orderBy: { criadoEm: "asc" }, select: { id: true, status: true, dataAgendada: true, equipamentos: { select: { equipamentoId: true, feito: true } } } },
     },
   });
   return new Map(ordens.map((o) => {
+    // OS dividida em VISITAS (lib/os/visitas): os equipamentos estão espalhados pelas atividades — conta
+    // todas as não canceladas, e o reagendamento do cronograma não mexe nela (`emVisitas`)
+    const emVisitas = !!o.planoVisitas;
     const a = o.atividades[0];
+    const consideradas = emVisitas ? o.atividades.filter((x) => x.status !== "CANCELADA") : a ? [a] : [];
+    const vinculos = consideradas.flatMap((x) => x.equipamentos);
     return [o.id, {
       id: o.id, numero: o.numero, status: o.status, atividadeId: a?.id ?? null, atividadeStatus: a?.status ?? null,
       dataAgendada: a?.dataAgendada?.toISOString() ?? null,
-      equipamentoIds: (a?.equipamentos ?? []).map((e) => e.equipamentoId), feitos: (a?.equipamentos ?? []).filter((e) => e.feito).map((e) => e.equipamentoId),
+      equipamentoIds: [...new Set(vinculos.map((e) => e.equipamentoId))], feitos: [...new Set(vinculos.filter((e) => e.feito).map((e) => e.equipamentoId))],
+      ...(emVisitas ? { emVisitas } : {}),
     }];
   }));
 }

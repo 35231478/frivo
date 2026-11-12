@@ -10,9 +10,10 @@ import { atividadesDoTecnico } from "@/lib/tecnico/escopo";
 import { enderecoEmLinha, horaMarcada, linkRota, ordenarDoDia } from "@/lib/tecnico/cartao";
 import { avisosDeHojePorAtividade } from "@/lib/execucao/aviso-cliente";
 import type { AvisosTela } from "@/lib/tecnico/aviso-cliente";
+import { numerosDasVisitas } from "@/lib/os/visitas-server";
 
 const SELECT_CARTAO = {
-  id: true, titulo: true, status: true, dataAgendada: true, duracaoMin: true, observacao: true,
+  id: true, titulo: true, status: true, dataAgendada: true, duracaoMin: true, observacao: true, planoVisitasId: true,
   tipoOs: { select: { nome: true, cor: true } },
   ordemServico: {
     select: {
@@ -54,6 +55,8 @@ export interface CartaoAtividade {
   adicionais: number;
   /** "A caminho" / "Cheguei" registrados HOJE (só nas listas; no retrato vão em `execucao.avisos`) */
   avisos?: AvisosTela;
+  /** OS dividida em visitas diárias: qual é esta ("Visita 3 de 12"). Ausente = atividade comum */
+  visita?: { numero: number; total: number };
 }
 
 /** Junta os textos do escritório (sem repetir o mesmo texto), um parágrafo cada. */
@@ -87,6 +90,12 @@ async function comAvisosDeHoje(cartoes: CartaoAtividade[], agora: Date): Promise
   return cartoes.map((c) => ({ ...c, avisos: avisos.get(c.atividadeId) ?? {} }));
 }
 
+/** Os cartões das atividades, com "Visita N de M" nas que são visita de uma OS em campanha */
+async function cartoesDe(atividades: AtividadeCartao[]): Promise<CartaoAtividade[]> {
+  const visitas = await numerosDasVisitas(atividades);
+  return atividades.map((a) => { const v = visitas.get(a.id); return v ? { ...montarCartao(a), visita: v } : montarCartao(a); });
+}
+
 /**
  * Hoje: as atividades marcadas para hoje (Brasília) + as que ele começou em outro dia e ainda não
  * concluiu (precisa terminar). Em ordem de horário.
@@ -102,7 +111,7 @@ export async function meuDia(empresaId: string, tecnicoId: string, agora = new D
     select: SELECT_CARTAO,
     take: 100,
   });
-  const cartoes = await comAvisosDeHoje(atividades.map(montarCartao), agora);
+  const cartoes = await comAvisosDeHoje(await cartoesDe(atividades), agora);
   const hoje = chaveDiaBR(agora);
   return {
     dia: hoje,
@@ -121,12 +130,12 @@ export async function agenda(empresaId: string, tecnicoId: string, dias = 14, ag
     take: 300,
   });
   const porDia = new Map<string, CartaoAtividade[]>();
-  for (const c of await comAvisosDeHoje(atividades.map(montarCartao), agora)) porDia.set(c.dia!, [...(porDia.get(c.dia!) ?? []), c]);
+  for (const c of await comAvisosDeHoje(await cartoesDe(atividades), agora)) porDia.set(c.dia!, [...(porDia.get(c.dia!) ?? []), c]);
   return [...porDia.keys()].sort().map((dia) => ({ dia, atividades: ordenarDoDia(porDia.get(dia)!) }));
 }
 
 /** O cartão de UMA atividade (cabeçalho da execução no app). */
 export async function cartaoDaAtividade(empresaId: string, atividadeId: string, filtro: Prisma.AtividadeOsWhereInput = {}) {
   const a = await prisma.atividadeOs.findFirst({ where: { id: atividadeId, empresaId, ...filtro }, select: SELECT_CARTAO });
-  return a ? montarCartao(a) : null;
+  return a ? (await cartoesDe([a]))[0] : null;
 }
