@@ -115,7 +115,7 @@ export type FiltroSituacao = "" | SituacaoOcorrencia | "EXCLUIDAS";
 export interface FiltroOcorrencias { busca: string; situacao: FiltroSituacao; gravidade: "" | GravidadeOcorrencia }
 export const FILTRO_VAZIO: FiltroOcorrencias = { busca: "", situacao: "", gravidade: "" };
 
-const semAcento = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+const semAcento = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 /** Onde a busca procura: descrição, resolução, equipamento (nome e TAG) e número da OS */
 function textoDaBusca(o: OcorrenciaPmoc): string {
