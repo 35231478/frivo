@@ -3,6 +3,7 @@ import { atividadeEncerrada, situacaoPrazo, textoPrazo } from "@/lib/os/prazos";
 import { medicaoValida, resumoStatus, type EstagioOs } from "@/lib/os/status";
 import { aDevolver, semConsumoInformado, type MaterialSeparavel } from "@/lib/estoque/separacao";
 import { contarEquipamentosAtendidos } from "@/lib/os/equipamentos-atendidos";
+import { progressoDasVisitas } from "@/lib/os/visitas";
 
 /**
  * A "central de controle" da OS em dados: tudo o que o cabeçalho e o Resumo mostram para
@@ -15,6 +16,8 @@ export interface AtividadeCentral {
   tecnico?: { nome: string } | null; equipe?: { nome: string } | null; tecnicosEquipe?: unknown[];
   /** `equipamentoId` identifica o equipamento: o mesmo, atendido em duas atividades, conta uma vez */
   equipamentos?: { feito: boolean; equipamentoId?: string | null }[];
+  /** A atividade é uma VISITA do plano de visitas da OS (OS em campanha) */
+  planoVisitasId?: string | null;
 }
 export interface OsCentralEntrada {
   status: string; statusManual: boolean; previsaoConclusao: Date | string | null;
@@ -81,6 +84,12 @@ export function centralDaOs(os: OsCentralEntrada, agora: Date = new Date()) {
     os.equipamentoId ?? null, os.status === "CONCLUIDA",
   );
 
+  // OS em campanha: o progresso SOMADO das visitas ("180 de 300 equipamentos"); null = OS sem plano de visitas
+  const doPlano = os.atividades.filter((a) => a.planoVisitasId);
+  const visitas = doPlano.length
+    ? progressoDasVisitas(doPlano.map((a, i) => ({ status: a.status, equipamentos: (a.equipamentos ?? []).map((e, j) => ({ id: e.equipamentoId ?? `sem-id:${i}:${j}`, feito: e.feito, ordem: "" })) })))
+    : null;
+
   // Valor: orçado = itens da OS + orçamentos vinculados APROVADOS (menos o de origem, cujos itens
   // já vieram para a OS); medido = medições válidas
   const orcado = os.itensOrcamento.reduce((s, i) => s + num(i.valorTotal), 0)
@@ -129,6 +138,7 @@ export function centralDaOs(os: OsCentralEntrada, agora: Date = new Date()) {
     status,
     atividades: { total: ativas.length, concluidas },
     equipamentosAtendidos,
+    visitas,
     valor: { orcado, medido },
     pagamento,
     prazoOs,

@@ -12,6 +12,7 @@ import { prazoVencido } from "@/lib/os/prazos";
 import { chaveDiaBR, chaveDiaCivil, partesBR } from "@/lib/fuso";
 import { gridCalendario, posicaoNoCalendario } from "@/lib/calendario/grid";
 import { SolicitacoesGaveta } from "@/components/calendario/solicitacoes-gaveta";
+import { numerosDasVisitas } from "@/lib/os/visitas-server";
 import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, Repeat } from "lucide-react";
 
 export const metadata: Metadata = { title: "Calendário" };
@@ -75,6 +76,7 @@ export default async function CalendarioPage({
           select: {
             id: true,
             dataAgendada: true,
+            planoVisitasId: true,
             tipoOs: { select: { id: true, nome: true } },
             tecnico: { select: { id: true, nome: true, avatar: true } },
             equipe: { select: { nome: true, cor: true } },
@@ -93,6 +95,8 @@ export default async function CalendarioPage({
     veSolicitacoes ? prisma.ordemServico.count({ where: { empresaId, ...SOLICITACAO_PENDENTE } }) : Promise.resolve(0),
   ]);
 
+  // OS em campanha: cada dia mostra qual visita é ("Visita 3 de 12")
+  const visitas = await numerosDasVisitas(ordens.flatMap((os) => os.atividades));
   // Monta os cards e os posiciona por dia (preferindo a atividade agendada; senão a previsão)
   const eventosPorDia: Record<string, CardOs[]> = {};
   for (const os of ordens) {
@@ -139,6 +143,7 @@ export default async function CalendarioPage({
         equipeNome: ativ?.equipe?.nome ?? null,
         equipeCor: ativ?.equipe?.cor ?? null,
         veiculo: ativ?.veiculo ? `${ativ.veiculo.placa} — ${ativ.veiculo.modelo}` : null,
+        visita: ativ && visitas.get(ativ.id) ? `Visita ${visitas.get(ativ.id)!.numero} de ${visitas.get(ativ.id)!.total}` : null,
         status: os.status,
         prioridade: os.prioridade,
         atrasada,

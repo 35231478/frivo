@@ -143,6 +143,7 @@ export function CartaoAtividade({ c, fila, mostrarDia, proxima, guardado, listaE
             <span className="text-xs font-medium rounded-full px-2 py-0.5 bg-surface-linha text-ink inline-flex items-center gap-1" data-equipamentos={c.equipamentos}>
               <HardDrive className="w-3 h-3" /> {c.equipamentos === 1 ? "1 equipamento" : `${c.equipamentos} equipamentos`}
             </span>
+            {c.visita && <span className="text-xs font-medium rounded-full px-2 py-0.5 bg-acento-claro text-acento" data-visita={c.visita.numero}>Visita {c.visita.numero} de {c.visita.total}</span>}
             {PRIORIDADE[c.prioridade] && <span className="text-xs font-semibold rounded-full px-2 py-0.5 bg-atrasado-claro text-atrasado-texto" data-prioridade={c.prioridade}>{PRIORIDADE[c.prioridade]}</span>}
             {aEnviar > 0 && <span className="text-xs font-semibold rounded-full px-2 py-0.5 bg-atencao-claro text-atencao-texto">{aEnviar} a enviar</span>}
           </div>

@@ -20,6 +20,7 @@ import { InputData } from "@/components/ui/input-data";
 import { ConcluirSemEquipamento } from "@/components/os/concluir-sem-equipamento";
 import { atividadeEncerrada, chaveDiaCivil, situacaoPrazo, textoPrazo } from "@/lib/os/prazos";
 import { InputDataHora, MSG_HORA_INVALIDA } from "@/components/ui/input-data-hora";
+import { numerarVisitas } from "@/lib/os/visitas";
 
 
 const STATUS_LABELS: Record<string, string> = { AGENDADA: "Agendada", EM_ANDAMENTO: "Em Andamento", CONCLUIDA: "Concluída", CANCELADA: "Cancelada" };
@@ -43,6 +44,8 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
   const [faltaExecutor, setFaltaExecutor] = useState(false);
   const [erroForm, setErroForm] = useState("");
   const { pode } = usePermissoes();
+  // OS em campanha: as atividades que são visitas mostram "Visita N de M"
+  const visitas = numerarVisitas(atividades.filter((a: any) => a.planoVisitasId));
   const podeEditar = pode("ordens", "editar");
   const podeExcluir = pode("ordens", "excluir");
   const podeStatus = podeEditar || pode("ordens", "concluir");
@@ -188,6 +191,11 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
                     <span className="text-sm font-medium text-ink">{a.titulo}</span>
                     {a.tipoOs && <span className="inline-flex items-center gap-1 text-[10px] font-medium text-ink-muted bg-surface-page border border-surface-border px-1.5 py-0.5 rounded-full"><span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: a.tipoOs.cor }} aria-hidden />{a.tipoOs.nome}</span>}
                     <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full", STATUS_COR[a.status])}>{STATUS_LABELS[a.status]}</span>
+                    {visitas.get(a.id) && (
+                      <span data-chip-visita className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-surface-page border border-surface-border text-ink-muted">
+                        Visita {visitas.get(a.id)!.numero} de {visitas.get(a.id)!.total}
+                      </span>
+                    )}
                     <ChipPrazo a={a} />
                     {a.resumo && <span data-formulario-respondido className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-acento-claro text-acento">Formulário respondido</span>}
                   </div>
