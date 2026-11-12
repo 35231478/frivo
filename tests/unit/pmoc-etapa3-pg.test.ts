@@ -154,7 +154,10 @@ describe.skipIf(!URL_PG)("PMOC — Etapa 3: documento, ART, alertas e envio (Pos
     const id = await plano();
     const r = await chamar("documento", "GET", { id });
     expect(r).toMatchObject({ status: 200, tipo: "application/pdf" });
-    expect(r.headers.get("content-disposition")).toBe(`attachment; filename*=UTF-8''${encodeURIComponent("PMOC 2027 — Hospital.pdf")}`);
+    // o nome vai duas vezes: sem acento (para o navegador que não lê UTF-8) e completo
+    expect(r.headers.get("content-disposition")).toBe(`attachment; filename="PMOC 2027 - Hospital.pdf"; filename*=UTF-8''${encodeURIComponent("PMOC 2027 — Hospital.pdf")}`);
+    const { nomeAscii } = await import("@/lib/pmoc-documento-server");
+    expect(nomeAscii('PMOC São "João" — 日本.pdf')).toBe("PMOC Sao _Joao_ - __.pdf");
     expect(r.headers.get("cache-control")).toBe("private, no-store");
     expect(Buffer.from(r.bytes!.slice(0, 5)).toString("latin1")).toBe("%PDF-");
     expect(r.bytes!.length).toBeLessThan(80_000);

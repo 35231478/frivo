@@ -146,13 +146,16 @@ export async function gerarDocumento(ref: ReferenciaDoPlano, agora: Date = new D
   return { ...(await gerarPdfDocumento(montarDocumento(c.dados), c.art)), carregado: c };
 }
 
+/** O nome do arquivo só com letras sem acento, para o navegador que não lê o nome em UTF-8 */
+export const nomeAscii = (nome: string) => nome.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\u2012-\u2015]/g, "-").replace(/[^\x20-\x7e]|["\\]/g, "_");
+
 /** Resposta HTTP com o PDF (inline = abre no navegador; senão, baixa) */
 export function respostaPdf(pdf: DocumentoPdf, inline: boolean): Response {
   return new Response(Buffer.from(pdf.bytes), {
     headers: {
       "Content-Type": "application/pdf",
       "Content-Length": String(pdf.bytes.length),
-      "Content-Disposition": `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(pdf.nomeArquivo)}`,
+      "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${nomeAscii(pdf.nomeArquivo)}"; filename*=UTF-8''${encodeURIComponent(pdf.nomeArquivo)}`,
       "Cache-Control": "private, no-store",
       "X-Content-Type-Options": "nosniff",
       "X-Robots-Tag": "noindex, nofollow",
