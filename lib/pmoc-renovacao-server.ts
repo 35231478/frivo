@@ -82,7 +82,7 @@ export interface ResultadoRenovacao { id: string; plano: PlanoRenovacao }
 
 /**
  * Cria o plano novo, em RASCUNHO, com os equipamentos ativos e o cronograma deslocado, e liga os
- * dois planos pelo histórico. Tudo numa transação. Não leva ART, link público, histórico, avisos nem
+ * dois planos pelo histórico. Tudo numa transação. Não leva ART, link público, histórico, avisos, ocorrências nem
  * execuções: nada disso é lido do plano de origem. Devolve null se o plano não é desta empresa.
  */
 export async function renovarPmoc(pmocId: string, ator: { empresaId: string; usuarioId: string }, d: RenovacaoInput, agora: Date = new Date()): Promise<ResultadoRenovacao | null> {

@@ -31,6 +31,7 @@ Ao confirmar, o plano novo abre em **Rascunho**. Nenhuma OS é gerada até ele s
 |---|---|
 | ART (número e arquivo) | Cada vigência tem a sua. A nova é anexada antes de publicar. |
 | Link público, histórico, avisos de vencimento | São do plano antigo. |
+| Ocorrências | São o registro do que foi achado na vigência antiga; ficam no plano antigo. |
 | OS já geradas | Continuam no plano antigo. |
 | Equipamento inativo | E o item do cronograma que era só dele. |
 | Item excluído do cronograma | Já não fazia parte do plano. |

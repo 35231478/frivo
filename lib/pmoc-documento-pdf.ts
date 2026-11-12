@@ -390,6 +390,22 @@ function planejamento(d: Desenho, numero: number) {
   }
 }
 
+/** O livro de ocorrências: o que foi achado na manutenção, com a gravidade e a situação de cada uma */
+function ocorrencias(d: Desenho, numero: number) {
+  const m = d.m;
+  d.y += 14;
+  d.secao(numero, "Ocorrências");
+  if (!m.ocorrencias.length) {
+    d.paragrafo("Nenhuma ocorrência registrada neste plano até a emissão deste documento.", { cor: C.apoio });
+    return;
+  }
+  d.paragrafo(`Não conformidades encontradas na manutenção dos equipamentos do plano. ${m.resumoOcorrencias}.`, { tamanho: 9, cor: C.apoio, depois: 6 });
+  d.tabela(
+    [{ titulo: "Data", largura: 58 }, { titulo: "Equipamento", largura: 118, negrito: true }, { titulo: "Descrição", largura: d.util - 318 }, { titulo: "Gravidade", largura: 58 }, { titulo: "Situação", largura: 84 }],
+    m.ocorrencias.map((o) => [o.data, o.equipamento, o.resolucao ? `${o.descricao}\nResolução: ${o.resolucao}` : o.descricao, o.gravidade, o.situacao]),
+  );
+}
+
 function assinaturas(d: Desenho) {
   const m = d.m;
   d.garantir(120);
@@ -451,6 +467,7 @@ async function desenhar(m: ModeloDocumento, art: ArquivoArt | null, semArt: "GRA
 
   cronograma(d, 3);
   planejamento(d, 4);
+  ocorrencias(d, 5);
   assinaturas(d);
 
   // ART: a imagem vira uma página do documento; o PDF entra depois, com as páginas como são

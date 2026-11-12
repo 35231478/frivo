@@ -2,8 +2,9 @@
  * PMOC — Etapa 3: o DOCUMENTO do plano como DADO (regras puras: sem banco e sem PDF).
  *
  * `montarDocumento` recebe o que foi lido do cadastro e devolve o que o documento diz, seção por
- * seção: identificação, responsável técnico e ART, texto técnico, equipamentos cobertos, cronograma
- * e planejamento das atividades. Quem desenha o PDF (lib/pmoc-documento-pdf) só coloca isto na página.
+ * seção: identificação, responsável técnico e ART, texto técnico, equipamentos cobertos, cronograma,
+ * planejamento das atividades e ocorrências. Quem desenha o PDF (lib/pmoc-documento-pdf) só coloca
+ * isto na página.
  *
  * CRONOGRAMA: é o do plano inteiro, da data de início à expiração, com as MESMAS regras que geram as
  * OS (lib/pmoc-cronograma): a substituição já aplicada — no mesmo equipamento e no mesmo mês só aparece
@@ -14,6 +15,7 @@ import { DESCRICAO_PADRAO_PMOC, LABELS_STATUS_PMOC, dataBR, situacaoPmoc, type S
 import {
   equipamentoNoItem, execucoesDesejadas, prevalece, rotuloFrequencia, type EstadoCronograma, type ItemCronograma,
 } from "@/lib/pmoc-cronograma";
+import { LABELS_GRAVIDADE, ROTULO_GERAL, contarOcorrencias, resumoDasOcorrencias, textoDaSituacao, type GravidadeOcorrencia } from "@/lib/pmoc-ocorrencias";
 import { chaveDiaBR } from "@/lib/fuso";
 import { LABELS_TIPO_EQUIPAMENTO, LABELS_TRATAMENTO_FIM_SEMANA, formatarCpfCnpj } from "@/lib/utils";
 
@@ -40,6 +42,14 @@ export interface AtividadesDoTipo {
   checklist: string[];
   formularios: { tipoOsId: string; nome: string; campos: string[] }[];
 }
+/** Uma ocorrência do plano (só as que estão valendo: a excluída não entra no documento) */
+export interface OcorrenciaDoDocumento {
+  /** "AAAA-MM-DD" */
+  data: string; criadoEm?: string;
+  /** null = geral da unidade */
+  equipamento: Pick<EquipamentoDoDocumento, "patrimonio" | "nome" | "marca" | "modelo"> | null;
+  descricao: string; gravidade: string; situacao: string; resolvidaEm: string | null; resolucao: string | null;
+}
 export interface DadosDocumento {
   empresa: EmpresaDoDocumento;
   pmoc: {
@@ -53,6 +63,8 @@ export interface DadosDocumento {
   estado: EstadoCronograma;
   itens: ItemDoDocumento[];
   atividades: AtividadesDoTipo[];
+  /** O livro de ocorrências do plano (ausente = nenhuma) */
+  ocorrencias?: OcorrenciaDoDocumento[];
   /** Texto técnico padrão da EMPRESA (usado quando o plano não tem o seu) */
   textoPadrao?: string | null;
   geradoEm: Date;
@@ -66,6 +78,7 @@ export interface LinhaServicoDoc { codigo: string; servico: string; aplicaSe: st
 export interface CelulaDoc { codigo: string; /** "dd/mm" */ data: string; /** "AAAA-MM-DD" */ iso: string }
 export interface LinhaCronogramaDoc { equipamentoId: string; tag: string; descricao: string; local: string; celulas: (CelulaDoc | null)[] }
 export interface LinhaEquipamentoDoc { tag: string; descricao: string; tipo: string; capacidade: string; local: string }
+export interface LinhaOcorrenciaDoc { data: string; equipamento: string; descricao: string; resolucao: string; gravidade: string; situacao: string }
 export interface PlanejamentoDoc { tipo: string; equipamentos: number; atividades: string[]; formularios: { servico: string; nome: string; campos: string[] }[] }
 
 export interface ModeloDocumento {
@@ -88,6 +101,9 @@ export interface ModeloDocumento {
   totalExecucoes: number;
   observacoes: string[];
   planejamento: PlanejamentoDoc[];
+  /** O livro de ocorrências, da mais antiga para a mais nova, e a frase que resume a situação delas */
+  ocorrencias: LinhaOcorrenciaDoc[];
+  resumoOcorrencias: string;
   geradoEm: string;
   nomeArquivo: string;
 }
@@ -235,6 +251,15 @@ export function montarDocumento(d: DadosDocumento): ModeloDocumento {
     formularios: (g.atividades?.formularios ?? []).filter((f) => servicosDoPlano.has(f.tipoOsId)).map((f) => ({ servico: nomeDoServico.get(f.tipoOsId) ?? "Serviço", nome: f.nome, campos: f.campos })),
   }));
 
+  // Ocorrências: o livro em ordem de data (a de mesma data, na ordem em que foi registrada)
+  const registradas = [...(d.ocorrencias ?? [])].sort((a, b) => a.data.localeCompare(b.data) || (a.criadoEm ?? "").localeCompare(b.criadoEm ?? ""));
+  const ocorrencias: LinhaOcorrenciaDoc[] = registradas.map((o) => ({
+    data: dataBR(o.data),
+    equipamento: o.equipamento ? [txt(o.equipamento.patrimonio), descricaoEquipamento(o.equipamento)].filter(Boolean).join(" · ") : ROTULO_GERAL,
+    descricao: txt(o.descricao), resolucao: o.situacao === "RESOLVIDA" ? txt(o.resolucao) : "",
+    gravidade: LABELS_GRAVIDADE[o.gravidade as GravidadeOcorrencia] ?? o.gravidade, situacao: textoDaSituacao(o),
+  }));
+
   const observacoes: string[] = [];
   if (itensAtivos.length > 1) observacoes.push("Quando dois serviços coincidem no mesmo equipamento e no mesmo mês, é executado o de maior intervalo, que inclui a rotina do serviço mais frequente.");
   if (itensAtivos.some((i) => i.fimSemana !== "MANTER")) observacoes.push("As datas que cairiam em sábado ou domingo já estão ajustadas para o dia útil definido em cada serviço. Feriados não são considerados.");
@@ -282,6 +307,7 @@ export function montarDocumento(d: DadosDocumento): ModeloDocumento {
     equipamentos: emOrdem.map((e) => ({ tag: txt(e.patrimonio) || "—", descricao: descricaoEquipamento(e), tipo: tipoDoc(e), capacidade: capacidadeDoc(e.capacidade), local: localDoc(e) })),
     inativos: d.equipamentos.length - ativos.length,
     servicos, itens, meses, cronograma, totalExecucoes, observacoes, planejamento,
+    ocorrencias, resumoOcorrencias: resumoDasOcorrencias(contarOcorrencias(registradas)),
     geradoEm: dataBR(chaveDiaBR(d.geradoEm)),
     nomeArquivo: nomeArquivoDocumento(d.pmoc.nome),
   };

@@ -122,13 +122,18 @@ export async function carregarDocumento(ref: ReferenciaDoPlano, agora: Date = ne
   });
   const servicos = [...new Set(cron.estado.itens.filter((i) => i.ativo).map((i) => i.tipoOsId))];
   const idsTipos = tipos.map((t) => t.id);
-  const [checklist, formularios, config] = await Promise.all([
+  const [checklist, formularios, config, ocorrencias] = await Promise.all([
     prisma.checklistTipoItem.findMany({ where: { empresaId: p.empresaId, tipoEquipamentoId: { in: idsTipos }, ativo: true }, orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }], select: { tipoEquipamentoId: true, texto: true } }),
     prisma.formTypeMapping.findMany({
       where: { empresaId: p.empresaId, tipoEquipamentoId: { in: idsTipos }, tipoOsId: { in: servicos }, formularioTemplate: { ativo: true } },
       select: { tipoEquipamentoId: true, tipoOsId: true, formularioTemplate: { select: { nome: true, campos: { where: { ativo: true }, orderBy: { ordem: "asc" }, select: { label: true } } } } },
     }),
     configPmoc(p.empresaId),
+    // O livro de ocorrências: só as que estão valendo (a excluída não entra no documento)
+    prisma.pmocOcorrencia.findMany({
+      where: { pmocId: p.id, ativo: true }, orderBy: [{ data: "asc" }, { criadoEm: "asc" }],
+      select: { data: true, criadoEm: true, descricao: true, gravidade: true, situacao: true, resolvidaEm: true, resolucao: true, equipamento: { select: { patrimonio: true, nome: true, marca: true, modelo: true } } },
+    }),
   ]);
   const atividades: AtividadesDoTipo[] = tipos.map((t) => ({
     tipoEquipamentoId: t.id, nome: t.nome, chaveEnum: t.chaveEnum,
@@ -148,6 +153,7 @@ export async function carregarDocumento(ref: ReferenciaDoPlano, agora: Date = ne
         equipamentoRotulo: l.equipamento ? [l.equipamento.patrimonio, l.equipamento.nome || `${l.equipamento.marca} ${l.equipamento.modelo}`.trim()].filter(Boolean).join(" · ") : null,
       })),
       atividades, textoPadrao: config.textoPadrao, geradoEm: agora,
+      ocorrencias: ocorrencias.map((o) => ({ ...o, data: dataISO(o.data)!, criadoEm: o.criadoEm.toISOString(), resolvidaEm: dataISO(o.resolvidaEm) })),
     },
     art: bytesArt?.length ? { nome: p.artArquivoNome, bytes: bytesArt } : null,
   };

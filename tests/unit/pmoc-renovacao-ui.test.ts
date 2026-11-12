@@ -149,7 +149,7 @@ describe("PMOC › Renovar: o diálogo", () => {
   it("O QUE NÃO VAI: a ART (anexar a nova), link/histórico/avisos/OS, o equipamento inativo pelo nome e o item que era dele", async () => {
     await abrirDialogo();
     expect(texto($("[data-art-nao-vai]"))).toBe("ART (número e arquivo): cada vigência tem a sua. Anexe a nova antes de publicar.");
-    expect(texto($("[data-nao-vai]"))).toContain("Link público, histórico, avisos e as OS já geradas.");
+    expect(texto($("[data-nao-vai]"))).toContain("Link público, histórico, avisos, ocorrências e as OS já geradas.");
     expect(texto($("[data-equipamentos-fora]"))).toBe("1 equipamento inativo: AC-003 · Split do almoxarifado.");
     expect($$("[data-item-fora]").map((l) => texto(l))).toEqual(["Item Manutenção Preventiva · AC-003 · Split do almoxarifado: o equipamento está inativo."]);
   });
