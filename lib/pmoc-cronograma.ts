@@ -16,10 +16,21 @@
  *  - só para equipamento ATIVO do plano que caiba no item;
  *  - nunca no passado, nunca depois da data de expiração do plano.
  *
+ * SUBSTITUIÇÃO (Etapa 2.1): quando, para o MESMO equipamento na MESMA competência, mais de um item
+ * gera execução, vale só o de MAIOR intervalo (o serviço menos frequente, mais profundo: a limpeza
+ * química semestral "come" a preventiva mensal daquele mês). Empate de intervalo: o item criado
+ * primeiro. É por equipamento — cada um resolve sozinho qual serviço prevalece no mês. Só disputa a
+ * execução que EXISTE ou ainda PODE existir (já gerada, ou com data de hoje em diante): uma execução
+ * que ficou no passado sem nunca ter sido gerada não tira o lugar de outra.
+ *
+ * FIM DE SEMANA (Etapa 2.1): por item — manter, adiantar para a sexta ou postergar para a segunda,
+ * com a mesma regra da recorrência de OS dos contratos (`ajustarFimDeSemana`).
+ *
  * "Reagendar atividades" (o plano completo) também acerta o que já foi gerado e AINDA NÃO COMEÇOU:
  *  - muda a data da OS quando o cronograma mudou — a menos que alguém já tenha mudado a data à mão;
  *  - tira da OS o equipamento que saiu do cronograma (inativado, tirado do plano, item excluído,
- *    competência que deixou de existir) e cancela a OS que ficar sem equipamento;
+ *    competência que deixou de existir, ou substituído por um item de maior intervalo) e cancela a
+ *    OS que ficar sem equipamento;
  *  - OS iniciada, concluída, cancelada ou de data passada não é tocada.
  */
 import { z } from "zod";
@@ -34,6 +45,14 @@ export const DIA_EXECUCAO_MAX = 28;
 export const INTERVALO_MESES_MAX = 60;
 /** Teto de segurança de competências por item (20 anos de mensal) */
 const LIMITE_OCORRENCIAS = 240;
+
+/** O que fazer quando o dia de execução cai em sábado ou domingo — os mesmos valores dos contratos */
+export const FINS_DE_SEMANA = ["MANTER", "ADIANTAR", "POSTERGAR"] as const;
+export type FimSemana = (typeof FINS_DE_SEMANA)[number];
+/** O que a tela propõe num item NOVO: a visita não se perde nem cai antes da data combinada */
+export const FIM_SEMANA_PADRAO: FimSemana = "POSTERGAR";
+/** Nome curto para a lista de itens (o nome completo está em LABELS_TRATAMENTO_FIM_SEMANA, o dos contratos) */
+export const FIM_SEMANA_CURTO: Record<FimSemana, string> = { MANTER: "", ADIANTAR: "fim de semana: sexta", POSTERGAR: "fim de semana: segunda" };
 
 export const FREQUENCIAS = [
   { meses: 1, rotulo: "Mensal" },
@@ -58,6 +77,8 @@ export const itemCronogramaSchema = z.object({
     .min(1, "O intervalo é de pelo menos 1 mês.").max(INTERVALO_MESES_MAX, `O intervalo é de no máximo ${INTERVALO_MESES_MAX} meses.`),
   diaExecucao: z.number({ invalid_type_error: "Informe o dia de execução." }).int("Informe um dia inteiro.")
     .min(1, "O dia de execução vai de 1 a 28.").max(DIA_EXECUCAO_MAX, "O dia de execução vai de 1 a 28."),
+  /** Ausente = o servidor decide (item novo: o padrão proposto; edição: mantém o que estava) */
+  fimSemana: z.enum(FINS_DE_SEMANA, { errorMap: () => ({ message: "Escolha o que fazer no fim de semana." }) }).optional(),
 }).refine((d) => !(d.tipoEquipamentoId && d.equipamentoId), { message: "Escolha um tipo de equipamento OU um equipamento, não os dois.", path: ["equipamentoId"] });
 export type ItemCronogramaInput = z.infer<typeof itemCronogramaSchema>;
 
@@ -67,6 +88,9 @@ export interface ItemCronograma {
   /** "AAAA-MM-DD" */
   dataInicio: string;
   intervaloMeses: number; diaExecucao: number;
+  fimSemana: FimSemana;
+  /** Quando o item foi criado (ISO): o desempate da substituição entre itens de mesmo intervalo */
+  criadoEm: string;
 }
 export type EscopoItem = "TODOS" | "TIPO" | "EQUIPAMENTO";
 export const escopoDoItem = (i: Pick<ItemCronograma, "tipoEquipamentoId" | "equipamentoId">): EscopoItem =>
@@ -91,13 +115,17 @@ export function equipamentoNoItem(item: Pick<ItemCronograma, "tipoEquipamentoId"
 /* ───────── as datas ───────── */
 
 export interface Ocorrencia { periodo: string; data: Date }
+/** O que define as datas de um item (sem `fimSemana` = manter) */
+export type DatasDoItem = Pick<ItemCronograma, "dataInicio" | "intervaloMeses" | "diaExecucao"> & { fimSemana?: FimSemana | null };
 
 /**
  * Todas as execuções de um item, da data de início até a data de expiração do plano (inclusive).
  * A primeira é o primeiro "dia de execução" NA data de início ou depois dela: início em 26/11 com
- * dia 25 começa em 25/12; daí em diante, de N em N meses.
+ * dia 25 começa em 25/12; daí em diante, de N em N meses. O dia que cai em sábado ou domingo segue a
+ * opção do item (a competência continua sendo o mês do dia de execução, mesmo que a data ajustada
+ * escorregue para o mês vizinho).
  */
-export function ocorrenciasDoItem(item: Pick<ItemCronograma, "dataInicio" | "intervaloMeses" | "diaExecucao">, dataExpiracao: string): Ocorrencia[] {
+export function ocorrenciasDoItem(item: DatasDoItem, dataExpiracao: string): Ocorrencia[] {
   const [a, m, d] = item.dataInicio.split("-").map(Number);
   if (!a || !m || !d || item.dataInicio > dataExpiracao) return [];
   const dia = Math.min(Math.max(Math.floor(item.diaExecucao) || 1, 1), DIA_EXECUCAO_MAX);
@@ -105,13 +133,13 @@ export function ocorrenciasDoItem(item: Pick<ItemCronograma, "dataInicio" | "int
   const ancora = diaCivilUTC(a, m - 1 + (dia < d ? 1 : 0), 1);
   return proximasOcorrencias({
     dataInicio: ancora, dataFim: new Date(`${dataExpiracao}T00:00:00Z`), frequencia: null,
-    intervaloMeses: Math.max(1, Math.floor(item.intervaloMeses) || 1), diaRecorrencia: dia, fimSemana: "MANTER",
+    intervaloMeses: Math.max(1, Math.floor(item.intervaloMeses) || 1), diaRecorrencia: dia, fimSemana: item.fimSemana ?? "MANTER",
     limite: LIMITE_OCORRENCIAS, aPartirDe: instanteBR(a, m - 1, d, 12),
   }).map((o) => ({ periodo: o.periodo, data: o.data }));
 }
 
 /** A próxima execução de um item a partir de hoje (null = não há mais nenhuma dentro do plano) */
-export function proximaOcorrencia(item: Pick<ItemCronograma, "dataInicio" | "intervaloMeses" | "diaExecucao">, dataExpiracao: string, agora: Date = new Date()): Ocorrencia | null {
+export function proximaOcorrencia(item: DatasDoItem, dataExpiracao: string, agora: Date = new Date()): Ocorrencia | null {
   const hoje = hojeISO(agora);
   return ocorrenciasDoItem(item, dataExpiracao).find((o) => chaveDiaBR(o.data) >= hoje) ?? null;
 }
@@ -163,7 +191,11 @@ export interface EstadoCronograma {
 export interface OsACriar { itemId: string; periodo: string; data: Date; unidadeId: string; equipamentoIds: string[] }
 export interface EquipamentoAIncluir { osId: string; atividadeId: string; itemId: string; periodo: string; data: Date; equipamentoId: string }
 export interface OsAMover { osId: string; atividadeId: string; de: string; para: Date; execucaoIds: string[] }
-export interface EquipamentoARetirar { execucaoId: string; osId: string; atividadeId: string; equipamentoId: string }
+export interface EquipamentoARetirar {
+  execucaoId: string; osId: string; atividadeId: string; equipamentoId: string;
+  /** Sai porque, nesta competência, o equipamento é atendido por este item (de maior intervalo) — vai para o histórico da OS */
+  substituidoPor?: string;
+}
 export interface PlanoCronograma {
   /** Por que nada é gerado agora (null = pode gerar) */
   motivo: MotivoSemGerar | null;
@@ -194,6 +226,58 @@ export function execucaoPendente(x: ExecucaoExistente, hoje: string): boolean {
 
 const chave = (itemId: string, equipamentoId: string, periodo: string) => `${itemId}|${equipamentoId}|${periodo}`;
 
+/** Uma execução que o cronograma pede: este item, neste equipamento, nesta competência, nesta data */
+export interface ExecucaoDesejada { item: ItemCronograma; equipamento: EquipamentoPlano; periodo: string; data: Date }
+/** Uma execução que deixou de valer porque outro item, de maior intervalo, pegou o equipamento no mês */
+export interface ExecucaoSubstituida extends ExecucaoDesejada { porItemId: string }
+
+/**
+ * Quem prevalece entre dois itens no mesmo equipamento e na mesma competência: o de MAIOR intervalo;
+ * no empate, o item criado primeiro (e, por fim, o id — para ser sempre o mesmo resultado).
+ */
+export function prevalece(a: ItemCronograma, b: ItemCronograma): boolean {
+  if (a.intervaloMeses !== b.intervaloMeses) return a.intervaloMeses > b.intervaloMeses;
+  if (a.criadoEm !== b.criadoEm) return a.criadoEm < b.criadoEm;
+  return a.id < b.id;
+}
+
+/**
+ * O que o cronograma PEDE, já com a substituição aplicada: (item, equipamento, competência) → data.
+ * `substituidas` são as que perderam o equipamento naquele mês para um item de maior intervalo.
+ */
+export function execucoesDesejadas(estado: EstadoCronograma, agora: Date = new Date()): { desejado: Map<string, ExecucaoDesejada>; substituidas: ExecucaoSubstituida[] } {
+  const hoje = hojeISO(agora);
+  const desejado = new Map<string, ExecucaoDesejada>();
+  for (const item of estado.itens) {
+    if (!item.ativo) continue;
+    const equipamentos = estado.equipamentos.filter((e) => e.ativo && equipamentoNoItem(item, e, estado.tipos));
+    if (!equipamentos.length) continue;
+    for (const oc of ocorrenciasDoItem(item, estado.pmoc.dataExpiracao))
+      for (const equipamento of equipamentos) desejado.set(chave(item.id, equipamento.id, oc.periodo), { item, equipamento, periodo: oc.periodo, data: oc.data });
+  }
+
+  // Substituição: em cada (equipamento, competência) só disputa a execução que existe ou ainda pode
+  // existir — a já gerada, ou a que tem data de hoje em diante. Prevalece uma só.
+  const geradas = new Set(estado.execucoes.map((x) => chave(x.cronogramaId, x.equipamentoId, x.periodo)));
+  const vencedora = new Map<string, ExecucaoDesejada>();
+  const disputam: [string, ExecucaoDesejada][] = [];
+  for (const [k, q] of desejado) {
+    if (!geradas.has(k) && chaveDiaBR(q.data) < hoje) continue; // passou sem nunca ter sido gerada: não disputa
+    disputam.push([k, q]);
+    const vaga = `${q.equipamento.id}|${q.periodo}`;
+    const atual = vencedora.get(vaga);
+    if (!atual || prevalece(q.item, atual.item)) vencedora.set(vaga, q);
+  }
+  const substituidas: ExecucaoSubstituida[] = [];
+  for (const [k, q] of disputam) {
+    const ganhou = vencedora.get(`${q.equipamento.id}|${q.periodo}`)!;
+    if (ganhou.item.id === q.item.id) continue;
+    desejado.delete(k);
+    substituidas.push({ ...q, porItemId: ganhou.item.id });
+  }
+  return { desejado, substituidas };
+}
+
 /**
  * O PLANO: o que falta criar e o que precisa ser acertado para a agenda ficar igual ao cronograma.
  * Função pura e determinística — rodar de novo depois de aplicado devolve um plano sem mudança.
@@ -205,15 +289,9 @@ export function planejarCronograma(estado: EstadoCronograma, agora: Date = new D
   const plano = planoVazio();
   const equipPorId = new Map(estado.equipamentos.map((e) => [e.id, e]));
 
-  // 1. O que o cronograma pede: (item, equipamento, competência) → data
-  const desejado = new Map<string, { item: ItemCronograma; equipamento: EquipamentoPlano; periodo: string; data: Date }>();
-  for (const item of estado.itens) {
-    if (!item.ativo) continue;
-    const equipamentos = estado.equipamentos.filter((e) => e.ativo && equipamentoNoItem(item, e, estado.tipos));
-    if (!equipamentos.length) continue;
-    for (const oc of ocorrenciasDoItem(item, estado.pmoc.dataExpiracao))
-      for (const equipamento of equipamentos) desejado.set(chave(item.id, equipamento.id, oc.periodo), { item, equipamento, periodo: oc.periodo, data: oc.data });
-  }
+  // 1. O que o cronograma pede, já sem o que foi substituído por um item de maior intervalo
+  const { desejado, substituidas } = execucoesDesejadas(estado, agora);
+  const cedeuPara = new Map(substituidas.map((q) => [chave(q.item.id, q.equipamento.id, q.periodo), q.porItemId]));
 
   // 2. O que já existe: mantém, muda a data ou retira
   const atendidas = new Set<string>();
@@ -229,7 +307,8 @@ export function planejarCronograma(estado: EstadoCronograma, agora: Date = new D
     if (!quer) {
       // Saiu do cronograma: só mexe no que ainda não começou; o resto fica como histórico
       if (pendente) {
-        plano.retirar.push({ execucaoId: x.id, osId: x.os!.id, atividadeId: x.os!.atividadeId!, equipamentoId: x.equipamentoId });
+        const substituidoPor = cedeuPara.get(k);
+        plano.retirar.push({ execucaoId: x.id, osId: x.os!.id, atividadeId: x.os!.atividadeId!, equipamentoId: x.equipamentoId, ...(substituidoPor ? { substituidoPor } : {}) });
         if (!retiradosPorOs.has(x.os!.id)) retiradosPorOs.set(x.os!.id, new Set());
         retiradosPorOs.get(x.os!.id)!.add(x.equipamentoId);
       }
@@ -295,16 +374,25 @@ export function equipamentosSemCronograma(itens: ItemCronograma[], equipamentos:
 
 /* ───────── o que a tela e as rotas trocam ───────── */
 
-export interface ResumoPlano { criar: number; incluir: number; mover: number; retirar: number; cancelar: number; mantidas: number }
+export interface ResumoPlano {
+  criar: number; incluir: number; mover: number;
+  /** Equipamentos que saem de OS já geradas (todos os motivos) */
+  retirar: number;
+  cancelar: number; mantidas: number;
+  /** Dos retirados, quantos saem porque um item de maior intervalo passou a atendê-los no mês */
+  substituidos: number;
+}
 export const resumirPlano = (p: PlanoCronograma): ResumoPlano => ({
   criar: p.criar.length, incluir: p.incluir.length, mover: p.mover.length, retirar: p.retirar.length, cancelar: p.cancelar.length, mantidas: p.mantidas.length,
+  substituidos: p.retirar.filter((r) => r.substituidoPor).length,
 });
 
-/** "<tipo de OS> — PMOC <nome> (MM/AAAA)"; o nome que já diz "PMOC" não ganha a palavra de novo */
+/** "PMOC <nome>"; o nome que já diz "PMOC" não ganha a palavra de novo */
+export const nomeComPmoc = (nomePmoc: string) => (/pmoc/i.test(nomePmoc) ? nomePmoc : `PMOC ${nomePmoc}`);
+/** "<tipo de OS> — PMOC <nome> (MM/AAAA)" */
 export function descricaoDaOs(tipoOs: string, nomePmoc: string, periodo: string): string {
   const [ano, mes] = periodo.split("-");
-  const plano = /pmoc/i.test(nomePmoc) ? nomePmoc : `PMOC ${nomePmoc}`;
-  return `${tipoOs} — ${plano} (${mes}/${ano})`;
+  return `${tipoOs} — ${nomeComPmoc(nomePmoc)} (${mes}/${ano})`;
 }
 /** Marca da OS gerada pelo cronograma no campo de competência da recorrência (como os contratos fazem) */
 export const periodoDaOs = (periodo: string) => `PMOC:${periodo}`;

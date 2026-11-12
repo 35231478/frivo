@@ -9,7 +9,10 @@
  *  - idempotência: reagendar de novo (e dois ao mesmo tempo) não duplica;
  *  - "Reagendar atividades": muda datas, inclui e retira equipamentos, cancela a OS vazia — só no que
  *    ainda não começou, e sem desfazer o que alguém ajustou à mão;
- *  - RBAC do módulo pmoc, cancelar OS só com "Ordens de serviço › Excluir", multiempresa.
+ *  - RBAC do módulo pmoc, cancelar OS só com "Ordens de serviço › Excluir", multiempresa;
+ *  - Etapa 2.1 — SUBSTITUIÇÃO: no mesmo equipamento e na mesma competência só o item de maior intervalo
+ *    gera (mês a mês, por equipamento, desempate, química que entra depois, OS que esvazia é cancelada,
+ *    reagendar idempotente) e FIM DE SEMANA: manter, adiantar ou postergar, por item.
  *   PG_TESTE_URL="postgresql://root@localhost/postgres?host=/var/run/postgresql" npx vitest run tests/unit/pmoc-cronograma-pg
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -47,8 +50,12 @@ async function chamar(rota: keyof typeof ROTAS, metodo: string, op: { id?: strin
 
 const RT = { rtNome: "Eng. Paula Reis", rtCrea: "SP-5061234567", artNumero: "28027230241234567" };
 const corpoPlano = (extra: Record<string, unknown> = {}) => ({ nome: "PMOC 2026 — Hospital", clienteId: "c1", unidadeId: "u1", dataInicio: "2026-11-12", dataExpiracao: "2027-11-11", ...RT, ...extra });
-/** Mensal, todo dia 25, para todos os equipamentos do plano, a partir de hoje */
-const item = (extra: Record<string, unknown> = {}) => ({ tipoOsId: "toMensal", dataInicio: "2026-11-12", intervaloMeses: 1, diaExecucao: 25, ...extra });
+/**
+ * Mensal, todo dia 25, para todos os equipamentos do plano, a partir de hoje. `fimSemana: "MANTER"` deixa
+ * os testes da Etapa 2 nas datas nominais (o dia 25 cai em fim de semana em alguns meses); o padrão dos
+ * itens novos (postergar) e as três opções têm os seus testes no bloco da Etapa 2.1.
+ */
+const item = (extra: Record<string, unknown> = {}) => ({ tipoOsId: "toMensal", dataInicio: "2026-11-12", intervaloMeses: 1, diaExecucao: 25, fimSemana: "MANTER", ...extra });
 
 describe.skipIf(!URL_PG)("PMOC — Etapa 2: cronograma que gera as OS (PostgreSQL real)", () => {
   let prisma: any;
@@ -115,6 +122,7 @@ describe.skipIf(!URL_PG)("PMOC — Etapa 2: cronograma que gera as OS (PostgreSQ
     await prisma.tipoOs.createMany({ data: [
       { id: "toMensal", empresaId: "e1", nome: "PMOC mensal" },
       { id: "toTrimestral", empresaId: "e1", nome: "PMOC trimestral" },
+      { id: "toQuimica", empresaId: "e1", nome: "Limpeza química" },
       { id: "toInativo", empresaId: "e1", nome: "Tipo aposentado", ativo: false },
       { id: "toE2", empresaId: "e2", nome: "Tipo da outra empresa" },
     ] });
@@ -267,7 +275,7 @@ describe.skipIf(!URL_PG)("PMOC — Etapa 2: cronograma que gera as OS (PostgreSQ
     // O formulário também só oferece o ativo (e conta só ele no tipo)
     expect(tela.opcoes.equipamentos.map((e: any) => e.id)).toEqual(["q1"]);
     expect(tela.opcoes.tiposEquipamento).toEqual([{ id: "teSplit", nome: "Split", equipamentos: 1 }]);
-    expect(tela.opcoes.tiposOs.map((t: any) => t.nome)).toEqual(["PMOC mensal", "PMOC trimestral"]); // só os ativos, da própria empresa
+    expect(tela.opcoes.tiposOs.map((t: any) => t.nome)).toEqual(["Limpeza química", "PMOC mensal", "PMOC trimestral"]); // só os ativos, da própria empresa
   });
 
   it("todos os equipamentos do item inativos: nenhuma OS", async () => {
@@ -321,7 +329,7 @@ describe.skipIf(!URL_PG)("PMOC — Etapa 2: cronograma que gera as OS (PostgreSQ
     expect(await prisma.ordemServico.count()).toBe(24);
     expect(await execucoes(id)).toBe(36);
     expect(await prisma.osHistorico.count()).toBe(24); // nenhuma entrada a mais no histórico
-    expect((await ler(id)).previa).toEqual({ criar: 0, incluir: 0, mover: 0, retirar: 0, cancelar: 0, mantidas: 0 });
+    expect((await ler(id)).previa).toEqual({ criar: 0, incluir: 0, mover: 0, retirar: 0, cancelar: 0, mantidas: 0, substituidos: 0 });
   });
 
   it("dois 'Reagendar' AO MESMO TEMPO não geram OS em dobro (trava por plano + chave única das execuções)", async () => {
@@ -427,7 +435,7 @@ describe.skipIf(!URL_PG)("PMOC — Etapa 2: cronograma que gera as OS (PostgreSQ
     const anexo = await prisma.ordemServico.findFirst({ where: { unidadeId: "u1b" }, include: { atividades: { include: { equipamentos: true } }, historico: { orderBy: { criadoEm: "asc" } }, pmocExecucoes: true } });
     expect(anexo).toMatchObject({ status: "CANCELADA", pmocExecucoes: [] });
     expect(anexo.atividades[0].equipamentos.map((e: any) => e.equipamentoId)).toEqual(["q3"]);
-    expect(anexo.historico.at(-1)).toMatchObject({ acao: "OS inativada (cancelada)", detalhes: "AGENDADA → CANCELADA — Motivo: cronograma do PMOC PMOC 2026 — Hospital (nenhum equipamento a atender nesta competência)." });
+    expect(anexo.historico.at(-1)).toMatchObject({ acao: "OS inativada (cancelada)", detalhes: "AGENDADA → CANCELADA — Motivo: cronograma do PMOC 2026 — Hospital (nenhum equipamento a atender nesta competência)." });
     expect(await prisma.ordemServico.count()).toBe(2);
     expect((await reagendar(id)).json.resultado).toMatchObject({ canceladas: 0, criadas: [], aCancelar: 0 }); // e fica assim
   });
@@ -544,5 +552,270 @@ describe.skipIf(!URL_PG)("PMOC — Etapa 2: cronograma que gera as OS (PostgreSQ
     expect(await prisma.pmocCronograma.findUnique({ where: { id: itemId } })).toMatchObject({ ativo: true, tipoOsId: "toMensal" });
     expect(await prisma.ordemServico.count({ where: { empresaId: "e1" } })).toBe(1);
     expect(await prisma.ordemServico.count({ where: { empresaId: "e2" } })).toBe(0);
+  });
+  /* ───────── Etapa 2.1: substituição ───────── */
+  /** A limpeza química: semestral, dia 25, a partir de abril/2027 (o 6º mês do plano) */
+  const QUIMICA = { tipoOsId: "toQuimica", intervaloMeses: 6, dataInicio: "2027-04-01" };
+  /** Por competência, o que a agenda tem: [mês, serviço, equipamentos, status] */
+  const agenda = async (id: string, so?: string) => (await ordens(id))
+    .map((o: any) => [o.periodo.replace("PMOC:", ""), o.bruto.atividades[0].titulo, o.equipamentos, o.status])
+    .filter((l: any[]) => !so || l[0] === so);
+  const itemDe = async (id: string, tipoOsId: string) => (await ler(id)).itens.find((i: any) => i.tipoOs.id === tipoOsId);
+  const MESES = ["2026-11", "2026-12", "2027-01", "2027-02", "2027-03", "2027-04", "2027-05", "2027-06", "2027-07", "2027-08", "2027-09", "2027-10"];
+  const ZERO = { motivo: null, criadas: [], incluidos: 0, movidas: 0, retirados: 0, canceladas: 0, mantidas: 0, aCancelar: 0 };
+
+  it("SUBSTITUIÇÃO mês a mês — mensal + química semestral: nos meses 1 a 5 só a leve; no 6º só a química; uma OS por mês", async () => {
+    const id = await rascunho(["q1", "q2"]);
+    await novoItem(id);          // preventiva leve, mensal
+    await novoItem(id, QUIMICA); // limpeza química, semestral
+    expect((await publicar(id)).status).toBe(200);
+
+    const os = await agenda(id);
+    expect(os.map((l: any[]) => l[0])).toEqual(MESES); // 12 OS, uma por mês — e não 14
+    for (const [n, linha] of os.entries()) {
+      const quimica = n === 5 || n === 11; // abril e outubro de 2027
+      expect(linha, MESES[n]).toEqual([MESES[n], quimica ? "Limpeza química" : "PMOC mensal", ["q1", "q2"], "AGENDADA"]);
+    }
+    expect(await prisma.ordemServico.count()).toBe(12);
+    expect(await execucoes(id)).toBe(24); // 12 meses × 2 equipamentos: uma execução por equipamento e mês
+    // Nenhum equipamento tem duas execuções na mesma competência
+    const repetidas = await prisma.pmocExecucao.groupBy({ by: ["equipamentoId", "periodo"], where: { pmocId: id }, _count: true, having: { equipamentoId: { _count: { gt: 1 } } } });
+    expect(repetidas).toEqual([]);
+
+    // A tela: a leve cede 4 execuções (2 equipamentos × abril e outubro); nada pendente
+    const tela = await ler(id);
+    expect(tela.itens.map((i: any) => [i.tipoOs.nome, i.substituidas, i.proxima])).toEqual([["PMOC mensal", 4, "2026-11-25"], ["Limpeza química", 0, "2027-04-25"]]);
+    expect(tela.previa).toEqual({ criar: 0, incluir: 0, mover: 0, retirar: 0, cancelar: 0, mantidas: 0, substituidos: 0 });
+    expect(tela.semCronograma).toEqual([]);
+  });
+
+  it("IDEMPOTENTE: publicar de novo e reagendar várias vezes não cria, não cancela e não escreve no histórico", async () => {
+    const id = await rascunho(["q1", "q2"]);
+    await novoItem(id);
+    await novoItem(id, QUIMICA);
+    await publicar(id);
+    const antes = (await ordens(id)).map((o: any) => [o.id, o.status, o.dia, o.equipamentos]);
+    const historico = await prisma.osHistorico.count();
+    for (let i = 0; i < 3; i++) {
+      expect(await reagendar(id)).toMatchObject({ status: 200, json: { resultado: ZERO } });
+      expect((await publicar(id)).status).toBe(200); // publicar de novo roda a geração automática
+    }
+    const [a, b] = await Promise.all([reagendar(id), reagendar(id)]); // e dois ao mesmo tempo
+    expect([a.json.resultado, b.json.resultado]).toEqual([ZERO, ZERO]);
+    expect((await ordens(id)).map((o: any) => [o.id, o.status, o.dia, o.equipamentos])).toEqual(antes);
+    expect(await prisma.ordemServico.count()).toBe(12);
+    expect(await execucoes(id)).toBe(24);
+    expect(await prisma.osHistorico.count()).toBe(historico);
+  });
+
+  it("é POR EQUIPAMENTO: a química só no q2 — no mês dela, o q2 vai na OS da química e os outros seguem na leve", async () => {
+    const id = await rascunho(["q1", "q2", "q3"]); // q3 fica no Anexo (outro local)
+    await novoItem(id);
+    await novoItem(id, { ...QUIMICA, equipamentoId: "q2" });
+    await publicar(id);
+    expect(await agenda(id, "2027-03")).toEqual([["2027-03", "PMOC mensal", ["q1", "q2"], "AGENDADA"], ["2027-03", "PMOC mensal", ["q3"], "AGENDADA"]]);
+    expect((await agenda(id, "2027-04")).sort()).toEqual([
+      ["2027-04", "Limpeza química", ["q2"], "AGENDADA"], ["2027-04", "PMOC mensal", ["q1"], "AGENDADA"], ["2027-04", "PMOC mensal", ["q3"], "AGENDADA"],
+    ]);
+    expect((await itemDe(id, "toMensal")).substituidas).toBe(2); // só o q2, em abril e outubro
+  });
+
+  it("por TIPO de equipamento: a química dos chillers não tira a leve dos splits; se a leve fica sem ninguém no mês, a OS dela nem nasce", async () => {
+    const id = await rascunho(["q1", "qChiller"]);
+    await novoItem(id);
+    await novoItem(id, { ...QUIMICA, tipoEquipamentoId: "teChiller" });
+    await publicar(id);
+    expect((await agenda(id, "2027-04")).sort()).toEqual([["2027-04", "Limpeza química", ["qChiller"], "AGENDADA"], ["2027-04", "PMOC mensal", ["q1"], "AGENDADA"]]);
+
+    // Só o chiller no plano: em abril não existe OS da leve (ficaria vazia)
+    const so = await rascunho(["qChiller"]);
+    await novoItem(so);
+    await novoItem(so, { ...QUIMICA, tipoEquipamentoId: "teChiller" });
+    await publicar(so);
+    expect(await agenda(so, "2027-04")).toEqual([["2027-04", "Limpeza química", ["qChiller"], "AGENDADA"]]);
+    expect(await prisma.ordemServico.count({ where: { pmocExecucoes: { some: { pmocId: so } } } })).toBe(12);
+  });
+
+  it("DESEMPATE no mesmo intervalo: vale o item CRIADO PRIMEIRO (não o último salvo, nem o tipo de OS)", async () => {
+    const id = await rascunho(["q1"]);
+    await novoItem(id, { intervaloMeses: 6, tipoOsId: "toTrimestral", diaExecucao: 20 });
+    await novoItem(id, { intervaloMeses: 6, tipoOsId: "toMensal" });
+    const [primeiro, segundo] = (await ler(id)).itens;
+    // Datas de criação explícitas (e o segundo editado por último): o que decide é quem foi criado antes
+    await prisma.pmocCronograma.update({ where: { id: primeiro.id }, data: { criadoEm: new Date("2026-11-01T12:00:00Z") } });
+    await prisma.pmocCronograma.update({ where: { id: segundo.id }, data: { criadoEm: new Date("2026-11-02T12:00:00Z"), atualizadoEm: new Date("2026-11-10T12:00:00Z") } });
+    await publicar(id);
+    expect(await agenda(id)).toEqual([["2026-11", "PMOC trimestral", ["q1"], "AGENDADA"], ["2027-05", "PMOC trimestral", ["q1"], "AGENDADA"]]);
+    expect((await ler(id)).itens.map((i: any) => [i.tipoOs.nome, i.substituidas, i.proxima])).toEqual([["PMOC trimestral", 0, "2026-11-20"], ["PMOC mensal", 2, null]]);
+
+    // Invertendo as datas de criação, inverte quem vale — e o 'Reagendar' troca as OS (cancela umas, cria outras) uma vez só
+    await prisma.pmocCronograma.update({ where: { id: segundo.id }, data: { criadoEm: new Date("2026-10-01T12:00:00Z") } });
+    expect((await reagendar(id)).json.resultado).toMatchObject({ canceladas: 2, criadas: [{}, {}] });
+    expect((await agenda(id)).filter((l: any[]) => l[3] === "AGENDADA")).toEqual([["2026-11", "PMOC mensal", ["q1"], "AGENDADA"], ["2027-05", "PMOC mensal", ["q1"], "AGENDADA"]]);
+    expect((await reagendar(id)).json.resultado).toEqual(ZERO);
+  });
+
+  it("a química entra DEPOIS de tudo gerado: salvar só cria a OS dela; 'Reagendar' cancela a OS da leve que ficou vazia, com o motivo no histórico", async () => {
+    const { id } = await publicado(["q1", "q2"]); // a leve já gerou os 12 meses
+    expect(await prisma.ordemServico.count()).toBe(12);
+
+    const salvar = await novoItem(id, QUIMICA);
+    expect(salvar.json.gerado.criadas).toHaveLength(2); // abril e outubro
+    expect(salvar.json.gerado).toMatchObject({ canceladas: 0, retirados: 0 }); // salvar nunca cancela nem retira sozinho
+    // Até o 'Reagendar', abril tem as duas OS — e a tela mostra o que está pendente
+    expect((await agenda(id, "2027-04")).sort()).toEqual([["2027-04", "Limpeza química", ["q1", "q2"], "AGENDADA"], ["2027-04", "PMOC mensal", ["q1", "q2"], "AGENDADA"]]);
+    expect(salvar.json.cronograma.previa).toEqual({ criar: 0, incluir: 0, mover: 0, retirar: 4, cancelar: 2, mantidas: 0, substituidos: 4 }); // os 4 saem por substituição
+
+    // Quem só edita o PMOC não cancela OS: fica avisado, nada muda
+    comPmoc(["visualizar", "editar"]);
+    expect((await reagendar(id)).json.resultado).toMatchObject({ canceladas: 0, retirados: 0, aCancelar: 2 });
+    expect(await prisma.ordemServico.count({ where: { status: "CANCELADA" } })).toBe(0);
+
+    // Com "Ordens de serviço › Excluir": as duas OS da leve (abril e outubro) são canceladas — não apagadas
+    comPmoc(["visualizar", "editar"], { ordens: ["visualizar", "excluir"] });
+    expect((await reagendar(id)).json.resultado).toMatchObject({ canceladas: 2, retirados: 0, criadas: [], aCancelar: 0 });
+    expect(await prisma.ordemServico.count()).toBe(14);
+    const canceladas = await prisma.ordemServico.findMany({ where: { status: "CANCELADA" }, orderBy: { previsaoConclusao: "asc" }, include: { atividades: { include: { equipamentos: true } }, historico: { orderBy: { criadoEm: "asc" } }, pmocExecucoes: true } });
+    expect(canceladas.map((o: any) => [o.periodoRecorrencia, o.atividades[0].titulo, o.pmocExecucoes.length, o.atividades[0].equipamentos.length])).toEqual([
+      ["PMOC:2027-04", "PMOC mensal", 0, 2], ["PMOC:2027-10", "PMOC mensal", 0, 2], // o conteúdo da OS fica (reabrir devolve tudo)
+    ]);
+    expect(canceladas[0].historico.at(-1)).toMatchObject({ acao: "OS inativada (cancelada)", detalhes: "AGENDADA → CANCELADA — Motivo: cronograma do PMOC 2026 — Hospital (substituída por Limpeza química nesta competência)." });
+    // Na agenda ativa: uma OS por mês, a química em abril e outubro
+    const ativas = (await agenda(id)).filter((l: any[]) => l[3] === "AGENDADA");
+    expect(ativas.map((l: any[]) => l[1])).toEqual(MESES.map((_, n) => (n === 5 || n === 11 ? "Limpeza química" : "PMOC mensal")));
+
+    // E não fica em looping: reagendar de novo não recria a leve de abril nem cancela mais nada
+    const historico = await prisma.osHistorico.count();
+    for (let i = 0; i < 3; i++) expect((await reagendar(id)).json.resultado).toEqual(ZERO);
+    expect(await prisma.ordemServico.count()).toBe(14);
+    expect(await prisma.osHistorico.count()).toBe(historico);
+    expect((await ler(id)).previa).toEqual({ criar: 0, incluir: 0, mover: 0, retirar: 0, cancelar: 0, mantidas: 0, substituidos: 0 });
+  });
+
+  it("química PARCIAL que entra depois: o equipamento sai da OS da leve (que continua com os outros) e o histórico diz por quê", async () => {
+    const { id } = await publicado(["q1", "q2"]);
+    await novoItem(id, { ...QUIMICA, equipamentoId: "q2" });
+    expect((await reagendar(id)).json.resultado).toMatchObject({ retirados: 2, canceladas: 0, criadas: [] });
+    expect((await agenda(id, "2027-04")).sort()).toEqual([["2027-04", "Limpeza química", ["q2"], "AGENDADA"], ["2027-04", "PMOC mensal", ["q1"], "AGENDADA"]]);
+    const leve = (await ordens(id)).find((o: any) => o.periodo === "PMOC:2027-04" && o.bruto.atividades[0].titulo === "PMOC mensal");
+    expect(leve.execucoes).toEqual(["q1"]);
+    expect(leve.bruto.historico.at(-1)).toMatchObject({ acao: "Equipamento retirado pelo cronograma do PMOC", detalhes: "Plano PMOC 2026 — Hospital: 1 equipamento(s) retirado(s) (nesta competência, atendido(s) por Limpeza química)." });
+    expect((await reagendar(id)).json.resultado).toEqual(ZERO);
+  });
+
+  it("a leve do mês JÁ COMEÇOU quando a química entra: fica como histórico; depois, a química EXCLUÍDA devolve a leve dos meses seguintes", async () => {
+    const { id } = await publicado(["q1"]);
+    const abril = (await ordens(id)).find((o: any) => o.periodo === "PMOC:2027-04");
+    await prisma.ordemServico.update({ where: { id: abril.id }, data: { status: "EM_ANDAMENTO" } });
+    await novoItem(id, QUIMICA);
+    expect((await reagendar(id)).json.resultado).toMatchObject({ canceladas: 1, retirados: 0 }); // só a de outubro
+    expect((await agenda(id, "2027-04")).sort()).toEqual([["2027-04", "Limpeza química", ["q1"], "AGENDADA"], ["2027-04", "PMOC mensal", ["q1"], "EM_ANDAMENTO"]]);
+    expect(await agenda(id, "2027-10")).toEqual([["2027-10", "Limpeza química", ["q1"], "AGENDADA"]]);
+    expect(await prisma.ordemServico.findMany({ where: { status: "CANCELADA" }, select: { periodoRecorrencia: true, descricao: true } })).toEqual([{ periodoRecorrencia: "PMOC:2027-10", descricao: "PMOC mensal — PMOC 2026 — Hospital (10/2027)" }]);
+
+    // Excluir a química: as OS dela saem e a leve de outubro volta a ser gerada (uma OS nova; a cancelada fica como está)
+    const quimica = await itemDe(id, "toQuimica");
+    await chamar("item", "DELETE", { id, itemId: quimica.id });
+    const r = (await reagendar(id)).json.resultado;
+    expect(r).toMatchObject({ canceladas: 2, aCancelar: 0 });
+    expect(r.criadas).toHaveLength(1);
+    expect(await agenda(id, "2027-10")).toEqual([["2027-10", "PMOC mensal", ["q1"], "AGENDADA"]]);
+    expect(await agenda(id, "2027-04")).toEqual([["2027-04", "PMOC mensal", ["q1"], "EM_ANDAMENTO"]]);
+    expect(await prisma.ordemServico.count({ where: { status: "CANCELADA" } })).toBe(3); // a leve de outubro (antes) e as duas da química
+    expect((await reagendar(id)).json.resultado).toEqual(ZERO);
+  });
+
+  /* ───────── Etapa 2.1: fim de semana ───────── */
+  // Dia 14: 14/11/2026 é sábado, 14/12 é segunda, 14/01/2027 é quinta, 14/02 e 14/03 são domingos
+  const ATE_MARCO = { dataExpiracao: "2027-03-31" };
+  const planoDia14 = async (fimSemana?: string) => {
+    const id = await rascunho(["q1"], { dataExpiracao: new Date("2027-03-31T00:00:00Z") });
+    const corpo: Record<string, unknown> = { ...item({ diaExecucao: 14 }) };
+    if (fimSemana) corpo.fimSemana = fimSemana; else delete corpo.fimSemana;
+    const r = await chamar("cronograma", "POST", { id, corpo });
+    expect(r.status, JSON.stringify(r.json)).toBe(201);
+    expect((await publicar(id, ATE_MARCO)).status).toBe(200);
+    return { id, itemId: r.json.cronograma.itens[0].id as string };
+  };
+  const datas = async (id: string) => (await ordens(id)).map((o: any) => o.dia);
+
+  it("FIM DE SEMANA nas três opções: manter, adiantar para a sexta e postergar para a segunda — a competência não muda", async () => {
+    const manter = await planoDia14("MANTER"), adiantar = await planoDia14("ADIANTAR"), postergar = await planoDia14("POSTERGAR");
+    expect(await datas(manter.id)).toEqual(["2026-11-14", "2026-12-14", "2027-01-14", "2027-02-14", "2027-03-14"]);
+    expect(await datas(adiantar.id)).toEqual(["2026-11-13", "2026-12-14", "2027-01-14", "2027-02-12", "2027-03-12"]);
+    expect(await datas(postergar.id)).toEqual(["2026-11-16", "2026-12-14", "2027-01-14", "2027-02-15", "2027-03-15"]);
+    for (const p of [manter, adiantar, postergar]) expect((await ordens(p.id)).map((o: any) => o.periodo)).toEqual(["PMOC:2026-11", "PMOC:2026-12", "PMOC:2027-01", "PMOC:2027-02", "PMOC:2027-03"]);
+    // A OS inteira anda junto: atividade, previsão e a data prevista da execução, ao meio-dia de Brasília
+    const [seg] = await ordens(postergar.id);
+    expect(seg.bruto.atividades[0].dataAgendada).toEqual(meioDia("2026-11-16"));
+    expect(seg.bruto.previsaoConclusao).toEqual(meioDia("2026-11-16"));
+    expect(seg.bruto.pmocExecucoes[0]).toMatchObject({ periodo: "2026-11", dataPrevista: meioDia("2026-11-16") });
+    expect((await ler(postergar.id)).itens[0]).toMatchObject({ fimSemana: "POSTERGAR", proxima: "2026-11-16" });
+    expect((await ler(adiantar.id)).itens[0]).toMatchObject({ fimSemana: "ADIANTAR", proxima: "2026-11-13" });
+  });
+
+  it("item NOVO sem a opção recebe POSTERGAR (o padrão proposto); item que já existia no banco continua MANTER", async () => {
+    const novo = await planoDia14();
+    expect((await ler(novo.id)).itens[0].fimSemana).toBe("POSTERGAR");
+    expect(await datas(novo.id)).toEqual(["2026-11-16", "2026-12-14", "2027-01-14", "2027-02-15", "2027-03-15"]);
+
+    // Como os itens gravados antes da Etapa 2.1: a coluna nasce com o padrão do banco
+    const id = await rascunho(["q1"], { dataExpiracao: new Date("2027-03-31T00:00:00Z") });
+    await prisma.pmocCronograma.create({ data: { pmocId: id, tipoOsId: "toMensal", dataInicio: new Date("2026-11-12T00:00:00Z"), intervaloMeses: 1, diaExecucao: 14 } });
+    await publicar(id, ATE_MARCO);
+    expect((await ler(id)).itens[0].fimSemana).toBe("MANTER");
+    expect(await datas(id)).toEqual(["2026-11-14", "2026-12-14", "2027-01-14", "2027-02-14", "2027-03-14"]);
+  });
+
+  it("editar: sem a opção no pedido fica a que estava; mudar a opção não mexe na agenda ao salvar — 'Reagendar' leva as OS para a data nova", async () => {
+    const { id, itemId } = await planoDia14("MANTER");
+    const { fimSemana: _fora, ...semOpcao } = item({ diaExecucao: 14 });
+    expect((await chamar("item", "PUT", { id, itemId, corpo: semOpcao })).json.cronograma.itens[0].fimSemana).toBe("MANTER");
+
+    const salvar = await chamar("item", "PUT", { id, itemId, corpo: item({ diaExecucao: 14, fimSemana: "POSTERGAR" }) });
+    expect(salvar.json.cronograma.itens[0].fimSemana).toBe("POSTERGAR");
+    expect(await datas(id)).toEqual(["2026-11-14", "2026-12-14", "2027-01-14", "2027-02-14", "2027-03-14"]); // ainda como estavam
+    expect(salvar.json.cronograma.previa).toMatchObject({ mover: 3, criar: 0, cancelar: 0 });
+
+    expect((await reagendar(id)).json.resultado).toMatchObject({ movidas: 3, criadas: [], canceladas: 0 });
+    expect(await datas(id)).toEqual(["2026-11-16", "2026-12-14", "2027-01-14", "2027-02-15", "2027-03-15"]);
+    expect((await ordens(id))[0].bruto.historico.map((h: any) => [h.acao, h.detalhes])).toContainEqual(["OS reagendada pelo cronograma do PMOC", "Plano PMOC 2026 — Hospital: de 14/11/2026 para 16/11/2026."]);
+    expect((await reagendar(id)).json.resultado).toEqual(ZERO);
+    expect(await prisma.ordemServico.count()).toBe(5);
+
+    // A sexta 13/11 ainda é de hoje em diante: adiantar também é aplicado; valor inválido é recusado
+    await chamar("item", "PUT", { id, itemId, corpo: item({ diaExecucao: 14, fimSemana: "ADIANTAR" }) });
+    expect((await reagendar(id)).json.resultado).toMatchObject({ movidas: 3 });
+    expect(await datas(id)).toEqual(["2026-11-13", "2026-12-14", "2027-01-14", "2027-02-12", "2027-03-12"]);
+    const invalido = await chamar("item", "PUT", { id, itemId, corpo: item({ diaExecucao: 14, fimSemana: "ANTECIPAR" }) });
+    expect(invalido).toMatchObject({ status: 400, json: { erro: "Escolha o que fazer no fim de semana." } });
+    expect((await ler(id)).itens[0].fimSemana).toBe("ADIANTAR");
+  });
+
+  it("substituição + fim de semana: a química postergada para a segunda continua sendo a do mês e substitui a leve", async () => {
+    const id = await rascunho(["q1"]);
+    await novoItem(id);                                        // leve: dia 25, manter
+    await novoItem(id, { ...QUIMICA, fimSemana: "POSTERGAR" }); // 25/04/2027 é domingo: vai para segunda, 26/04
+    await publicar(id);
+    expect((await ordens(id)).filter((o: any) => o.periodo === "PMOC:2027-04").map((o: any) => [o.dia, o.bruto.atividades[0].titulo])).toEqual([["2027-04-26", "Limpeza química"]]);
+  });
+
+  it("RBAC da Etapa 2.1: a opção de fim de semana só muda com 'PMOC › Editar'; quem só visualiza lê (inclusive o que foi substituído); sem o módulo, 403", async () => {
+    const { id, itemId } = await planoDia14("MANTER");
+    comPmoc(["visualizar"]);
+    expect((await chamar("item", "PUT", { id, itemId, corpo: item({ diaExecucao: 14, fimSemana: "POSTERGAR" }) })).status).toBe(403);
+    expect((await chamar("cronograma", "POST", { id, corpo: item(QUIMICA) })).status).toBe(403);
+    const lido = await chamar("cronograma", "GET", { id });
+    expect(lido.status).toBe(200);
+    expect(lido.json.itens[0]).toMatchObject({ fimSemana: "MANTER", substituidas: 0 });
+    for (const perfil of [montarPermissoes({ ordens: ["visualizar", "criar", "editar", "excluir"] }), PRESETS.FINANCEIRO]) {
+      como(perfil);
+      expect((await chamar("item", "PUT", { id, itemId, corpo: item({ diaExecucao: 14, fimSemana: "POSTERGAR" }) })).status).toBe(403);
+      expect((await chamar("cronograma", "GET", { id })).status).toBe(403);
+    }
+    como(PRESETS.TECNICO, "e1", { role: "TECNICO", tecnicoId: "t1" });
+    expect((await chamar("item", "PUT", { id, itemId, corpo: item({ diaExecucao: 14, fimSemana: "POSTERGAR" }) })).status).toBe(403);
+    expect((await prisma.pmocCronograma.findUnique({ where: { id: itemId } })).fimSemana).toBe("MANTER");
+    expect(await datas(id)).toEqual(["2026-11-14", "2026-12-14", "2027-01-14", "2027-02-14", "2027-03-14"]);
   });
 });

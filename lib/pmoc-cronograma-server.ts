@@ -15,8 +15,8 @@ import { motivoBloqueioInativacao } from "@/lib/os-server";
 import { chaveDiaBR } from "@/lib/fuso";
 import { dataBR, dataISO, hojeISO } from "@/lib/pmoc";
 import {
-  descricaoDaOs, equipamentoNoItem, equipamentosSemCronograma, execucaoPendente, periodoDaOs, planejarCronograma, proximaOcorrencia,
-  resumirPlano, soCriar, type EstadoCronograma, type ExecucaoExistente, type ItemCronograma, type MotivoSemGerar, type OsDaExecucao,
+  descricaoDaOs, equipamentoNoItem, equipamentosSemCronograma, execucaoPendente, execucoesDesejadas, periodoDaOs, planejarCronograma,
+  nomeComPmoc, resumirPlano, soCriar, type EstadoCronograma, type ExecucaoExistente, type ItemCronograma, type MotivoSemGerar, type OsDaExecucao,
   type PlanoCronograma, type ResumoPlano,
 } from "@/lib/pmoc-cronograma";
 
@@ -24,6 +24,7 @@ type Db = Prisma.TransactionClient | typeof prisma;
 
 export const SELECT_ITEM_CRONOGRAMA = {
   id: true, ativo: true, tipoEquipamentoId: true, equipamentoId: true, tipoOsId: true, dataInicio: true, intervaloMeses: true, diaExecucao: true,
+  fimSemana: true, criadoEm: true,
   tipoOs: { select: { id: true, nome: true, ativo: true } },
   tipoEquipamento: { select: { id: true, nome: true } },
   equipamento: { select: { id: true, nome: true, marca: true, modelo: true, patrimonio: true, ativo: true } },
@@ -57,6 +58,7 @@ export async function carregarCronograma(db: Db, pmocId: string, empresaId: stri
   const itens: ItemCronograma[] = pmoc.cronograma.map((i) => ({
     id: i.id, ativo: i.ativo, tipoEquipamentoId: i.tipoEquipamentoId, equipamentoId: i.equipamentoId, tipoOsId: i.tipoOsId,
     dataInicio: dataISO(i.dataInicio)!, intervaloMeses: i.intervaloMeses, diaExecucao: i.diaExecucao,
+    fimSemana: i.fimSemana, criadoEm: i.criadoEm.toISOString(),
   }));
   const execucoes: ExecucaoExistente[] = pmoc.execucoes.map((x) => ({
     id: x.id, cronogramaId: x.cronogramaId, equipamentoId: x.equipamentoId, periodo: x.periodo, dataPrevista: x.dataPrevista.toISOString(),
@@ -174,6 +176,10 @@ export async function executarCronograma(pmocId: string, ator: AtorCronograma, m
       r.movidas++;
     }
 
+    // Quem substituiu: o tipo de OS do item de maior intervalo que passou a atender o equipamento no mês
+    const servicoDe = (itemId: string) => c.tipoOsNome.get(itemPorId.get(itemId)?.tipoOsId ?? "") ?? "outro serviço";
+    const servicos = (rets: typeof plano.retirar) => [...new Set(rets.map((x) => servicoDe(x.substituidoPor!)))].sort().join(", ");
+
     // 4. OS que ficam sem equipamento: cancela (= inativa, a regra da casa) — se quem pediu pode e nada trava
     const naoCanceladas = new Set<string>();
     for (const osId of plano.cancelar) {
@@ -181,23 +187,31 @@ export async function executarCronograma(pmocId: string, ator: AtorCronograma, m
       if (bloqueio) { naoCanceladas.add(osId); r.aCancelar++; continue; }
       const antes = await tx.ordemServico.findUnique({ where: { id: osId }, select: { status: true } });
       await tx.ordemServico.update({ where: { id: osId }, data: { status: "CANCELADA" } });
-      await historico(osId, "OS inativada (cancelada)", `${antes?.status ?? ""} → CANCELADA — Motivo: cronograma do PMOC ${c.nome} (nenhum equipamento a atender nesta competência).`);
+      // Ficou vazia porque TODOS os equipamentos passaram para um serviço de maior intervalo? O motivo diz qual.
+      const daOs = plano.retirar.filter((x) => x.osId === osId);
+      const porque = daOs.length && daOs.every((x) => x.substituidoPor) ? `substituída por ${servicos(daOs)} nesta competência` : "nenhum equipamento a atender nesta competência";
+      await historico(osId, "OS inativada (cancelada)", `${antes?.status ?? ""} → CANCELADA — Motivo: cronograma do ${nomeComPmoc(c.nome)} (${porque}).`);
       r.canceladas++;
     }
     const canceladas = new Set(plano.cancelar.filter((id) => !naoCanceladas.has(id)));
 
     // 5. Equipamento que saiu do cronograma. Na OS cancelada, o conteúdo fica (reabrir devolve tudo);
     //    na que não pôde ser cancelada, nada muda (a execução continua lá até alguém cancelar).
-    const retiradosPorOs = new Map<string, number>();
+    const retiradosPorOs = new Map<string, typeof plano.retirar>();
     for (const ret of plano.retirar) {
       if (naoCanceladas.has(ret.osId)) continue;
       await tx.pmocExecucao.delete({ where: { id: ret.execucaoId } });
       if (canceladas.has(ret.osId)) continue;
       await tx.atividadeEquipamento.deleteMany({ where: { atividadeId: ret.atividadeId, equipamentoId: ret.equipamentoId, feito: false } });
-      retiradosPorOs.set(ret.osId, (retiradosPorOs.get(ret.osId) ?? 0) + 1);
+      retiradosPorOs.set(ret.osId, [...(retiradosPorOs.get(ret.osId) ?? []), ret]);
       r.retirados++;
     }
-    for (const [osId, n] of retiradosPorOs) await historico(osId, "Equipamento retirado pelo cronograma do PMOC", `Plano ${c.nome}: ${n} equipamento(s) retirado(s) (inativo ou fora do cronograma).`);
+    for (const [osId, rets] of retiradosPorOs) {
+      // Dois motivos diferentes, duas linhas no histórico: o que passou para outro serviço e o que saiu do cronograma
+      const cedidos = rets.filter((x) => x.substituidoPor), fora = rets.length - cedidos.length;
+      if (cedidos.length) await historico(osId, "Equipamento retirado pelo cronograma do PMOC", `Plano ${c.nome}: ${cedidos.length} equipamento(s) retirado(s) (nesta competência, atendido(s) por ${servicos(cedidos)}).`);
+      if (fora) await historico(osId, "Equipamento retirado pelo cronograma do PMOC", `Plano ${c.nome}: ${fora} equipamento(s) retirado(s) (inativo ou fora do cronograma).`);
+    }
     return r;
   }, { timeout: 120_000, maxWait: 20_000 });
 }
@@ -210,8 +224,10 @@ export interface ItemCronogramaTela extends ItemCronograma {
   equipamento: { id: string; nome: string | null; marca: string; modelo: string; patrimonio: string | null; ativo: boolean } | null;
   /** Equipamentos ativos do plano que entram neste item */
   equipamentos: number;
-  /** Próxima execução ("AAAA-MM-DD") ou null */
+  /** Próxima execução em que o item de fato gera OS ("AAAA-MM-DD"), já contando a substituição; null = nenhuma */
   proxima: string | null;
+  /** Execuções futuras (equipamento × competência) que este item cede a um item de maior intervalo */
+  substituidas: number;
 }
 export interface OsDoCronograma {
   id: string; numero: string; status: string;
@@ -248,12 +264,21 @@ export async function lerCronograma(pmocId: string, empresaId: string, agora: Da
   const c = await carregarCronograma(prisma, pmocId, empresaId);
   if (!c) return null;
   const hoje = hojeISO(agora);
+  // O que cada item gera de hoje em diante, já com a substituição (o mesmo cálculo do plano)
+  const { desejado, substituidas } = execucoesDesejadas(c.estado, agora);
+  const proximaDoItem = new Map<string, string>();
+  for (const q of desejado.values()) {
+    const dia = chaveDiaBR(q.data);
+    if (dia >= hoje && dia < (proximaDoItem.get(q.item.id) ?? "9999")) proximaDoItem.set(q.item.id, dia);
+  }
+  const cedidasDoItem = new Map<string, number>();
+  for (const q of substituidas) if (chaveDiaBR(q.data) >= hoje) cedidasDoItem.set(q.item.id, (cedidasDoItem.get(q.item.id) ?? 0) + 1);
   const itens: ItemCronogramaTela[] = c.linhas.filter((l) => l.ativo).map((l) => {
     const item = c.estado.itens.find((i) => i.id === l.id)!;
     return {
       ...item, tipoOs: l.tipoOs, tipoEquipamento: l.tipoEquipamento, equipamento: l.equipamento,
       equipamentos: c.estado.equipamentos.filter((e) => e.ativo && equipamentoNoItem(item, e, c.estado.tipos)).length,
-      proxima: (() => { const p = proximaOcorrencia(item, c.estado.pmoc.dataExpiracao, agora); return p ? chaveDiaBR(p.data) : null; })(),
+      proxima: proximaDoItem.get(item.id) ?? null, substituidas: cedidasDoItem.get(item.id) ?? 0,
     };
   });
 

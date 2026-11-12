@@ -4397,6 +4397,10 @@ model PmocCronograma {
   intervaloMeses    Int      @default(1) @map("intervalo_meses")
   /// Dia do mês da execução (1 a 28, como na recorrência de contratos)
   diaExecucao       Int      @map("dia_execucao")
+  /// Quando o dia de execução cai em sábado ou domingo: manter, adiantar para a sexta ou postergar para a
+  /// segunda — o mesmo tipo e a mesma regra da recorrência de OS dos contratos. O padrão do BANCO é
+  /// MANTER (os itens criados antes desta opção continuam como estavam); a tela propõe POSTERGAR nos novos.
+  fimSemana         TratamentoFimSemana @default(MANTER) @map("fim_semana")
   /// false = item excluído que já gerou OS (fica para o histórico; não gera mais)
   ativo             Boolean  @default(true)
   criadoEm          DateTime @default(now()) @map("criado_em")
