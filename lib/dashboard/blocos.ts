@@ -7,7 +7,7 @@ import { pode, type Permissoes } from "@/lib/permissoes";
 
 export type BlocoId =
   | "operacional" | "os-do-dia" | "solicitacoes" | "agenda"
-  | "comercial" | "financeiro" | "equipamentos" | "frota" | "prazos";
+  | "comercial" | "financeiro" | "equipamentos" | "pmoc" | "frota" | "prazos";
 
 export interface BlocoDef {
   id: BlocoId;
@@ -54,6 +54,11 @@ export const BLOCOS: BlocoDef[] = [
     id: "equipamentos", titulo: "Equipamentos",
     descricao: "Total cadastrado e garantias vencendo",
     visivel: (p, r) => pode(p, "equipamentos", "visualizar", r),
+  },
+  {
+    id: "pmoc", titulo: "PMOC",
+    descricao: "Planos vigentes, perto de expirar e expirados",
+    visivel: (p, r) => pode(p, "pmoc", "visualizar", r),
   },
   {
     id: "frota", titulo: "Frota",

@@ -43,7 +43,8 @@ function diasEntre(deISO: string, ateISO: string): number {
   return Math.round((Date.parse(`${ateISO}T00:00:00Z`) - Date.parse(`${deISO}T00:00:00Z`)) / 864e5);
 }
 
-export function situacaoPmoc(p: { status: string; dataInicio: Date | string; dataExpiracao: Date | string }, agora = new Date()): {
+/** `diasAviso`: com quantos dias de antecedência o plano vigente já conta como "vencendo" (padrão da empresa) */
+export function situacaoPmoc(p: { status: string; dataInicio: Date | string; dataExpiracao: Date | string }, agora = new Date(), diasAviso = DIAS_AVISO_VENCIMENTO): {
   status: StatusExibidoPmoc; diasParaExpirar: number | null; vencendo: boolean; aIniciar: boolean;
 } {
   if (p.status !== "PUBLICADO") return { status: "RASCUNHO", diasParaExpirar: null, vencendo: false, aIniciar: false };
@@ -51,12 +52,19 @@ export function situacaoPmoc(p: { status: string; dataInicio: Date | string; dat
   const fim = dataISO(p.dataExpiracao)!;
   const dias = diasEntre(hoje, fim);
   if (dias < 0) return { status: "EXPIRADO", diasParaExpirar: dias, vencendo: false, aIniciar: false };
-  return { status: "VIGENTE", diasParaExpirar: dias, vencendo: dias <= DIAS_AVISO_VENCIMENTO, aIniciar: diasEntre(hoje, dataISO(p.dataInicio)!) > 0 };
+  return { status: "VIGENTE", diasParaExpirar: dias, vencendo: dias <= diasAviso, aIniciar: diasEntre(hoje, dataISO(p.dataInicio)!) > 0 };
 }
 
-/** Filtro de status (lista) em SQL: Vigente/Expirado dependem da data de hoje. */
-export function filtroStatusPmoc(status: string, agora = new Date()): Record<string, unknown> | null {
+/**
+ * Filtro de status (lista) em SQL: Vigente/Expirado dependem da data de hoje. "VENCENDO" é o plano
+ * vigente que expira em até `diasAviso` dias (o que o aviso de vencimento mostra).
+ */
+export function filtroStatusPmoc(status: string, agora = new Date(), diasAviso = DIAS_AVISO_VENCIMENTO): Record<string, unknown> | null {
   const hoje = new Date(`${hojeISO(agora)}T00:00:00Z`);
+  if (status === "VENCENDO") {
+    const limite = new Date(hoje); limite.setUTCDate(limite.getUTCDate() + diasAviso);
+    return { status: "PUBLICADO", dataExpiracao: { gte: hoje, lte: limite } };
+  }
   if (status === "RASCUNHO") return { status: "RASCUNHO" };
   if (status === "VIGENTE") return { status: "PUBLICADO", dataExpiracao: { gte: hoje } };
   if (status === "EXPIRADO") return { status: "PUBLICADO", dataExpiracao: { lt: hoje } };
@@ -79,7 +87,12 @@ O plano contempla a relação dos equipamentos cobertos, a periodicidade das ati
 const texto = (max: number) => z.string().trim().max(max).optional().nullable().transform((v) => (v ? v : null));
 const dataStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida");
 export const TIPOS_ART = ["application/pdf", "image/jpeg", "image/png"] as const;
-export const TAMANHO_MAX_ART = 5 * 1024 * 1024;
+/**
+ * 3 MB: o arquivo viaja em base64 dentro do pedido (4 MB de texto), e a hospedagem recusa pedidos
+ * acima de 4,5 MB. Também é o que cabe, junto do documento, na resposta do PDF. Foto de ART é
+ * reduzida na tela antes de enviar; PDF maior que isso precisa ser exportado em tamanho menor.
+ */
+export const TAMANHO_MAX_ART = 3 * 1024 * 1024;
 
 export const pmocSchema = z.object({
   nome: z.string().trim().min(3, "Informe o nome do PMOC (mín. 3 caracteres).").max(150),

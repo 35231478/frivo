@@ -2,7 +2,7 @@ import Link from "next/link";
 import {
   AlertTriangle, CalendarClock, CalendarDays, CheckCircle2, ClipboardCheck, ClipboardList, Clock, FileSignature,
   FileText, Headset, HardHat, Inbox, PlayCircle, ShieldCheck, ShoppingCart, Thermometer, Timer, TrendingUp,
-  Truck, Wallet, Wrench, QrCode, Banknote, CalendarRange,
+  Truck, Wallet, Wrench, QrCode, Banknote, CalendarRange, FileBadge, ShieldAlert, ShieldX,
 } from "lucide-react";
 import { cn, LABELS_PRIORIDADE } from "@/lib/utils";
 import { chaveDiaBR, horaBR, partesBR } from "@/lib/fuso";
@@ -199,6 +199,33 @@ export function BlocoEquipamentos({ d }: { d: DadosBloco["equipamentos"] }) {
           detalhe={d.garantiaVencendo ? "nos próximos 60 dias" : `${d.garantiaVigente} em garantia`} />
         <Kpi rotulo="Sem QR Code" valor={d.semQr} icone={QrCode} tom={d.semQr ? "atencao" : "ok"} href="/qrcodes" detalhe="sem etiqueta vinculada" />
       </GradeKpi>
+    </Bloco>
+  );
+}
+
+export function BlocoPmoc({ d }: { d: DadosBloco["pmoc"] }) {
+  return (
+    <Bloco id="pmoc" titulo="PMOC" icone={FileBadge} href="/pmoc" link="Ver planos">
+      <GradeKpi colunas={3}>
+        <Kpi rotulo="Vigentes" valor={d.vigentes} icone={ShieldCheck} tom="info" href="/pmoc?status=VIGENTE" />
+        <Kpi rotulo="Vencendo" valor={d.vencendo} icone={ShieldAlert} tom={d.vencendo ? "atencao" : "ok"} href="/pmoc?status=VENCENDO" detalhe={`em até ${d.diasAviso} dias`} />
+        <Kpi rotulo="Expirados" valor={d.expirados} icone={ShieldX} tom={d.expirados ? "critico" : "ok"} href="/pmoc?status=EXPIRADO" />
+      </GradeKpi>
+      {d.avisos.length > 0 && (
+        <ul className="divide-y divide-surface-border mt-3" data-avisos-pmoc>
+          {d.avisos.map((a) => (
+            <li key={a.id}>
+              <Link href={`/pmoc/${a.id}`} className="py-2 flex items-start gap-3 hover:bg-surface-alt -mx-2 px-2 rounded-lg">
+                {a.tipo === "EXPIRADO" ? <ShieldX className="w-4 h-4 text-atrasado mt-0.5 shrink-0" aria-hidden /> : <ShieldAlert className="w-4 h-4 text-atencao mt-0.5 shrink-0" aria-hidden />}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-ink truncate">{a.nome}</p>
+                  <p className="text-xs text-ink-subtle truncate">{a.cliente} · {a.texto}</p>
+                </div>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
     </Bloco>
   );
 }

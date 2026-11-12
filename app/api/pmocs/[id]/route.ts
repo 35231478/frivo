@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { pmocSchema, pendenciasPublicacao } from "@/lib/pmoc";
-import { ErroPmoc, SELECT_PMOC, dadosArt, paraData, validarVinculos } from "@/lib/pmoc-server";
+import { ErroPmoc, SELECT_PMOC, dadosArt, mudancaDaArt, paraData, validarVinculos } from "@/lib/pmoc-server";
+import { registrarHistorico } from "@/lib/pmoc-documento-server";
 import { atorDoCronograma, gerarAoSalvar } from "@/lib/pmoc-cronograma-rotas";
 
 type Params = { params: Promise<{ id: string }> };
@@ -23,7 +24,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const empresaId = guard.session.user!.empresaId;
   const { id } = await params;
 
-  const existente = await prisma.pmoc.findFirst({ where: { id, empresaId }, select: { id: true, ativo: true, clienteId: true, _count: { select: { equipamentos: true } } } });
+  const existente = await prisma.pmoc.findFirst({ where: { id, empresaId }, select: { id: true, ativo: true, clienteId: true, status: true, artArquivoNome: true, _count: { select: { equipamentos: true } } } });
   if (!existente) return NextResponse.json({ erro: "PMOC não encontrado" }, { status: 404 });
   if (!existente.ativo) return NextResponse.json({ erro: "PMOC inativo: reative antes de editar." }, { status: 409 });
 
@@ -47,6 +48,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
         ...dadosArt(d),
       },
     });
+    // Etapa 3: o histórico do plano guarda a publicação e as mudanças no arquivo da ART
+    const usuarioId = guard.session.user!.id;
+    if (d.status !== existente.status) await registrarHistorico(prisma, { pmocId: id, usuarioId, acao: d.status === "PUBLICADO" ? "Plano publicado" : "Plano voltou para rascunho" });
+    const art = mudancaDaArt(d, existente.artArquivoNome);
+    if (art) await registrarHistorico(prisma, { pmocId: id, usuarioId, ...art });
     // Etapa 2: publicado, o cronograma gera as OS que faltam (só cria; mudar datas é "Reagendar atividades")
     const gerado = d.status === "PUBLICADO" ? await gerarAoSalvar(id, atorDoCronograma(guard.session)) : null;
     return NextResponse.json({ ...(await prisma.pmoc.findFirst({ where: { id }, select: SELECT_PMOC })), osGeradas: gerado?.criadas.length ?? 0 });

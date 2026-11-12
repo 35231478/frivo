@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   FileBadge, ClipboardList, Thermometer, CalendarRange, ListChecks, AlertOctagon, Lightbulb, Paperclip,
-  ChevronLeft, Save, Loader2, AlertTriangle, CheckCircle2, Upload, FileText, Trash2, Send, Undo2, Plus, X, Info,
+  ChevronLeft, Save, Loader2, AlertTriangle, CheckCircle2, Upload, FileText, Trash2, Send, Undo2, Plus, X, Info, History, ShieldAlert, ShieldX,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatarCapacidade, rotuloTipoEquipamento } from "@/lib/equipamento-descricao";
@@ -20,7 +20,11 @@ import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { PmocStatusSelo } from "@/components/pmoc/pmoc-status-selo";
 import { PmocCopiarBotao } from "@/components/pmoc/pmoc-copiar-botao";
 import { PmocCronograma } from "@/components/pmoc/pmoc-cronograma";
+import { PmocBaixarDocumento, PmocEnviar, type DestinoEnvio } from "@/components/pmoc/pmoc-envio";
+import { PmocHistorico } from "@/components/pmoc/pmoc-historico";
 import { DESCRICAO_PADRAO_PMOC, TAMANHO_MAX_ART, TIPOS_ART, hojeISO, pendenciasPublicacao, serializarPmoc } from "@/lib/pmoc";
+import { avisoDoPlano, bloqueioEnvio, textoAviso, type ConfigPmoc, type TipoAviso } from "@/lib/pmoc-avisos";
+import { reduzirImagem } from "@/lib/imagem-cliente";
 
 const serializar = (d: any) => serializarPmoc<PmocDados>(d);
 
@@ -39,10 +43,14 @@ export interface PmocDados {
   equipamentos: { id: string; equipamento: EquipamentoPmoc }[];
 }
 
-type Aba = "identificacao" | "equipamentos" | "cronograma";
-const ABAS = [["identificacao", "Identificação", ClipboardList], ["equipamentos", "Equipamentos AVAC", Thermometer], ["cronograma", "Cronograma", CalendarRange]] as const;
+type Aba = "identificacao" | "equipamentos" | "cronograma" | "historico";
+const ABAS = [
+  ["identificacao", "Identificação", ClipboardList], ["equipamentos", "Equipamentos AVAC", Thermometer], ["cronograma", "Cronograma", CalendarRange],
+  ["historico", "Histórico", History],
+] as const;
 // As abas que só existem com o plano salvo
-const SO_SALVO: Aba[] = ["equipamentos", "cronograma"];
+const SO_SALVO: Aba[] = ["equipamentos", "cronograma", "historico"];
+const MSG_ART_GRANDE = "Arquivo da ART acima de 3 MB.";
 const ABAS_FUTURAS = [
   { rotulo: "Planejamento", icone: ListChecks },
   { rotulo: "Ocorrências", icone: AlertOctagon },
@@ -64,10 +72,19 @@ function lerArquivo(file: File): Promise<string> {
   return new Promise((ok, erro) => { const r = new FileReader(); r.onload = () => ok(r.result as string); r.onerror = erro; r.readAsDataURL(file); });
 }
 
-export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente }: { inicial?: PmocDados; abaInicial?: string; copiaRecente?: boolean; criadoRecente?: boolean }) {
+export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente, config, avisoCiente, destino }: {
+  inicial?: PmocDados; abaInicial?: string; copiaRecente?: boolean; criadoRecente?: boolean;
+  /** O padrão da empresa: antecedência do aviso de vencimento e texto técnico dos planos novos */
+  config?: ConfigPmoc;
+  /** O aviso de vencimento de hoje que já teve ciência (some do cabeçalho) */
+  avisoCiente?: TipoAviso | null;
+  /** Para quem o documento vai: o contato principal do cliente */
+  destino?: DestinoEnvio;
+}) {
   const router = useRouter();
   const { pode } = usePermissoes();
   const novo = !inicial;
+  const textoPadrao = config?.textoPadrao || DESCRICAO_PADRAO_PMOC;
   const [pmoc, setPmoc] = useState<PmocDados | undefined>(inicial);
   const somenteLeitura = novo ? !pode("pmoc", "criar") : !pode("pmoc", "editar") || !pmoc!.ativo;
   const [aba, setAba] = useState<Aba>(!novo && SO_SALVO.includes(abaInicial as Aba) ? (abaInicial as Aba) : "identificacao");
@@ -87,7 +104,7 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente }:
   const hoje = hojeISO();
   const [form, setForm] = useState(() => ({
     nome: inicial?.nome ?? "",
-    descricao: inicial ? (inicial.descricao ?? "") : DESCRICAO_PADRAO_PMOC,
+    descricao: inicial ? (inicial.descricao ?? "") : textoPadrao,
     clienteId: inicial?.clienteId ?? "",
     unidadeId: inicial?.unidadeId ?? "",
     dataInicio: inicial?.dataInicio ?? hoje,
@@ -135,8 +152,34 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente }:
     e.target.value = "";
     if (!f) return;
     if (!(TIPOS_ART as readonly string[]).includes(f.type)) { setMsg({ tipo: "erro", texto: "A ART deve ser PDF, JPG ou PNG." }); return; }
-    if (f.size > TAMANHO_MAX_ART) { setMsg({ tipo: "erro", texto: "Arquivo da ART acima de 5 MB." }); return; }
+    // Foto da ART (celular: 3 a 8 MB) é reduzida antes de enviar: continua legível e cabe no documento
+    if (f.type !== "application/pdf") {
+      try {
+        const { imagem } = await reduzirImagem(f, 2200, 0.85);
+        if (imagem.bytes > TAMANHO_MAX_ART) { setMsg({ tipo: "erro", texto: MSG_ART_GRANDE }); return; }
+        setArtNova({ dataUrl: imagem.dataUrl, nome: f.name.replace(/\.[^.]+$/, "") + ".jpg" }); setRemoverArt(false); setMsg(null);
+        return;
+      } catch { /* não deu para reduzir: segue com o arquivo como veio */ }
+    }
+    if (f.size > TAMANHO_MAX_ART) { setMsg({ tipo: "erro", texto: MSG_ART_GRANDE }); return; }
     setArtNova({ dataUrl: await lerArquivo(f), nome: f.name }); setRemoverArt(false); setMsg(null);
+  }
+
+  // Aviso de vencimento: calculado pela data; some quando alguém dá ciência (até a próxima fase)
+  const [ciente, setCiente] = useState<TipoAviso | null>(avisoCiente ?? null);
+  const [dandoCiencia, setDandoCiencia] = useState(false);
+  const aviso = pmoc ? avisoDoPlano(pmoc, config?.diasAviso) : null;
+  const [historicoVersao, setHistoricoVersao] = useState(0);
+  async function darCiencia() {
+    if (!pmoc) return;
+    setDandoCiencia(true);
+    try {
+      const res = await fetch(`/api/pmocs/${pmoc.id}/aviso`, { method: "POST" });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { setMsg({ tipo: "erro", texto: d.erro ?? "Não foi possível registrar a ciência." }); return; }
+      setCiente(d.tipo); setHistoricoVersao((v) => v + 1);
+      router.refresh();
+    } catch { setMsg({ tipo: "erro", texto: "Erro de conexão." }); } finally { setDandoCiencia(false); }
   }
 
   async function salvar(statusDesejado?: "RASCUNHO" | "PUBLICADO") {
@@ -159,7 +202,7 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente }:
       const d = await res.json().catch(() => ({}));
       if (!res.ok) { setMsg({ tipo: "erro", texto: d.erro ?? "Não foi possível salvar." }); return; }
       if (novo) { router.push(`/pmoc/${d.id}?aba=equipamentos&criado=1`); return; }
-      setPmoc(serializar(d)); setArtNova(null); setRemoverArt(false);
+      setPmoc(serializar(d)); setArtNova(null); setRemoverArt(false); setHistoricoVersao((v) => v + 1);
       const geradas = Number(d.osGeradas) || 0;
       const sufixo = geradas ? ` ${geradas === 1 ? "1 OS gerada" : `${geradas} OS geradas`} pelo cronograma.` : "";
       setMsg({ tipo: "ok", texto: (statusDesejado === "PUBLICADO" ? "PMOC publicado." : statusDesejado === "RASCUNHO" ? "PMOC voltou para Rascunho." : "Alterações salvas.") + sufixo });
@@ -179,13 +222,15 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente }:
           <div className="min-w-0">
             <h1 className="text-xl sm:text-2xl font-bold text-ink flex items-center gap-2 flex-wrap">
               <FileBadge className="w-5 h-5 text-primary-500 shrink-0" /> <span className="truncate">{titulo}</span>
-              {pmoc && <PmocStatusSelo pmoc={pmoc} detalhe />}
+              {pmoc && <PmocStatusSelo pmoc={pmoc} detalhe diasAviso={config?.diasAviso} />}
             </h1>
             {pmoc && <p className="text-sm text-ink-muted">{pmoc.cliente.nomeFantasia ?? pmoc.cliente.nome} · {pmoc.unidade.nome}</p>}
           </div>
         </div>
         {pmoc && (
           <div className="flex items-center gap-2 flex-wrap">
+            <PmocBaixarDocumento pmocId={pmoc.id} />
+            <PmocEnviar pmocId={pmoc.id} bloqueio={bloqueioEnvio(pmoc)} destino={destino} aoEnviar={() => setHistoricoVersao((v) => v + 1)} />
             {!somenteLeitura && pmoc.status === "RASCUNHO" && (
               <button type="button" onClick={() => salvar("PUBLICADO")} disabled={!!salvando}
                 className="inline-flex items-center gap-1.5 text-sm rounded-lg px-3 py-2 bg-ok hover:bg-success-600 text-white font-semibold disabled:opacity-60">
@@ -208,6 +253,21 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente }:
       {pmoc && !pmoc.ativo && (
         <div data-aviso-inativo className="bg-surface-alt border border-surface-border text-ink-muted rounded-xl px-4 py-3 text-sm">
           Este PMOC está <strong>inativo</strong> e não aparece na lista padrão. Use “Reativar” para voltar a editá-lo.
+        </div>
+      )}
+      {pmoc && aviso && aviso.tipo !== ciente && (
+        <div data-aviso-vencimento={aviso.tipo} role="status"
+          className={cn("flex items-center gap-3 flex-wrap rounded-xl px-4 py-3 text-sm border", aviso.tipo === "EXPIRADO" ? "bg-atrasado-claro border-atrasado/20 text-atrasado-texto" : "bg-atencao-claro border-atencao/20 text-atencao-texto")}>
+          {aviso.tipo === "EXPIRADO" ? <ShieldX className="w-4 h-4 shrink-0" /> : <ShieldAlert className="w-4 h-4 shrink-0" />}
+          <span className="flex-1 min-w-[12rem]">
+            <strong>{textoAviso(aviso, pmoc.dataExpiracao)}.</strong> Para renovar, use “Criar cópia” e informe a nova validade e a nova ART.
+          </span>
+          {pode("pmoc", "editar") && (
+            <button type="button" onClick={darCiencia} disabled={dandoCiencia} data-ciente
+              className="inline-flex items-center gap-1.5 text-sm font-semibold border border-current/30 rounded-lg px-3 py-1.5 bg-white/70 hover:bg-white disabled:opacity-60">
+              {dandoCiencia ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} Ciente
+            </button>
+          )}
         </div>
       )}
       {msg && (
@@ -300,7 +360,7 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente }:
               <FormField label="Número da ART">
                 <Input aria-label="Número da ART" value={form.artNumero} onChange={(e) => set("artNumero", e.target.value)} placeholder="Ex: 28027230241234567" />
               </FormField>
-              <FormField label="Arquivo da ART" hint="PDF, JPG ou PNG até 5 MB">
+              <FormField label="Arquivo da ART" hint="PDF, JPG ou PNG até 3 MB. Entra no fim do documento do plano.">
                 <input ref={inputArt} type="file" accept="application/pdf,image/jpeg,image/png" className="hidden" onChange={escolherArt} aria-label="Arquivo da ART" />
                 {temArt ? (
                   <div className="flex items-center gap-2 border border-surface-border rounded-lg px-3 py-2 text-sm" data-art-arquivo>
@@ -329,8 +389,8 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente }:
             <FormField label="Texto do plano" hint="Texto padrão com a base legal; pode ser editado." dica="Cita a Lei 13.589/2018, a Portaria 3.523/GM/1998, a RE ANVISA 09/2003 e as normas NBR 13971 e NBR 16401.">
               <Textarea aria-label="Descrição" value={form.descricao} onChange={(e) => set("descricao", e.target.value)} rows={12} className="text-[13px] leading-relaxed" />
             </FormField>
-            {!somenteLeitura && form.descricao !== DESCRICAO_PADRAO_PMOC && (
-              <button type="button" onClick={() => set("descricao", DESCRICAO_PADRAO_PMOC)} className="text-xs text-primary-600 hover:underline">Restaurar texto padrão</button>
+            {!somenteLeitura && form.descricao !== textoPadrao && (
+              <button type="button" onClick={() => set("descricao", textoPadrao)} className="text-xs text-primary-600 hover:underline" data-restaurar-descricao>Restaurar texto padrão</button>
             )}
           </FormSection>
 
@@ -354,6 +414,9 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente }:
       {aba === "cronograma" && pmoc && (
         <PmocCronograma key={`${pmoc.status}-${pmoc.dataExpiracao}-${pmoc.equipamentos.length}`} pmocId={pmoc.id} dataExpiracao={pmoc.dataExpiracao} somenteLeitura={somenteLeitura} />
       )}
+
+      {/* ── Histórico (Etapa 3): relê depois de cada envio, ciência ou salvamento ── */}
+      {aba === "historico" && pmoc && <PmocHistorico key={historicoVersao} pmocId={pmoc.id} />}
     </div>
   );
 }

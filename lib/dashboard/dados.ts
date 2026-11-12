@@ -3,6 +3,9 @@
  * curtas com `take`. Toda consulta filtra por `empresaId`. "Hoje"/"mês" seguem o fuso
  * de Brasília (lib/fuso), não o do servidor.
  */
+import { filtroStatusPmoc } from "@/lib/pmoc";
+import { avisosAtivos } from "@/lib/pmoc-avisos-server";
+import { configPmoc } from "@/lib/pmoc-documento-server";
 import { NAO_E_RENEGOCIACAO } from "@/lib/listas/filtros";
 import { recebidoNoPeriodo, saldoDoAgregado } from "@/lib/financeiro/parcelas-server";
 import { prisma } from "@/lib/prisma";
@@ -187,6 +190,23 @@ export async function dadosEquipamentos(empresaId: string, agora = new Date()) {
   return { total, garantiaVencendo, garantiaVigente, semQr };
 }
 
+/** PMOC: planos vigentes e os avisos de vencimento em aberto (os que ainda não tiveram ciência) */
+export async function dadosPmoc(empresaId: string, agora = new Date()) {
+  const [vigentes, avisos, { diasAviso }] = await Promise.all([
+    prisma.pmoc.count({ where: { empresaId, ativo: true, ...filtroStatusPmoc("VIGENTE", agora) } }),
+    avisosAtivos(empresaId, agora),
+    configPmoc(empresaId),
+  ]);
+  return {
+    vigentes, diasAviso,
+    vencendo: avisos.filter((a) => a.tipo === "VENCENDO").length,
+    expirados: avisos.filter((a) => a.tipo === "EXPIRADO").length,
+    // os mais urgentes primeiro: expirados, depois os que expiram antes
+    avisos: [...avisos].sort((a, b) => (a.tipo === b.tipo ? a.dataExpiracao.localeCompare(b.dataExpiracao) : a.tipo === "EXPIRADO" ? -1 : 1)).slice(0, 5)
+      .map((a) => ({ id: a.pmocId, nome: a.nome, cliente: a.cliente, tipo: a.tipo, texto: a.texto })),
+  };
+}
+
 export const dadosFrota = (empresaId: string) => contarAlertasVeiculos(empresaId);
 
 export async function dadosPrazos(empresaId: string, comCompras: boolean) {
@@ -206,6 +226,7 @@ export type DadosBloco = {
   comercial: Awaited<ReturnType<typeof dadosComercial>>;
   financeiro: Awaited<ReturnType<typeof dadosFinanceiro>>;
   equipamentos: Awaited<ReturnType<typeof dadosEquipamentos>>;
+  pmoc: Awaited<ReturnType<typeof dadosPmoc>>;
   frota: Awaited<ReturnType<typeof dadosFrota>>;
   prazos: Awaited<ReturnType<typeof dadosPrazos>>;
 };
@@ -223,6 +244,7 @@ export async function carregarBlocos(ids: BlocoId[], ctx: ContextoUsuario, agora
     comercial: () => dadosComercial(empresaId, { contratos: podeVer("contratos"), orcamentos: podeVer("orcamentos") }, agora),
     financeiro: () => dadosFinanceiro(empresaId, agora),
     equipamentos: () => dadosEquipamentos(empresaId, agora),
+    pmoc: () => dadosPmoc(empresaId, agora),
     frota: () => dadosFrota(empresaId),
     prazos: () => dadosPrazos(empresaId, podeVer("compras")),
   };

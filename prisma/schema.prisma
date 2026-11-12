@@ -560,6 +560,7 @@ model Empresa {
   numeracoes   Numeracao[]
 
   pmocs Pmoc[]
+  pmocConfiguracao PmocConfiguracao?
 
   @@map("empresas")
 }
@@ -847,6 +848,8 @@ model Usuario {
   preferencias         PreferenciaUsuario[]
 
   pmocsCriados Pmoc[] @relation("PmocCriador")
+  pmocHistorico PmocHistorico[] @relation("PmocHistoricoUsuario")
+  pmocAvisosVistos PmocAviso[] @relation("PmocAvisoVistoPor")
 
   @@unique([email, empresaId])
   @@index([empresaId, ativo])
@@ -4342,6 +4345,10 @@ model Pmoc {
   artArquivoTipo    String? @map("art_arquivo_tipo")
   artArquivoTamanho Int?    @map("art_arquivo_tamanho")
 
+  /// Segredo do link público do documento (/relatorio/pmoc/<token>): nasce no 1º envio ao cliente.
+  /// Sem token, o plano não tem link público.
+  tokenPublico String? @unique @map("token_publico")
+
   ativo        Boolean  @default(true)
   criadoPorId  String?  @map("criado_por_id")
   criadoEm     DateTime @default(now()) @map("criado_em")
@@ -4355,11 +4362,68 @@ model Pmoc {
   equipamentos       PmocEquipamento[]
   cronograma         PmocCronograma[]
   execucoes          PmocExecucao[]
+  historico          PmocHistorico[]
+  avisos             PmocAviso[]
 
   @@index([empresaId, ativo])
   @@index([clienteId])
   @@index([unidadeId])
   @@map("pmocs")
+}
+
+// ─────────────────────────────────────────────
+// PMOC — Etapa 3: documento, alertas de vencimento e envio ao cliente.
+//  - PmocHistorico: a linha do tempo do plano (envios ao cliente, avisos de vencimento, ART).
+//  - PmocAviso: o aviso de vencimento JÁ registrado — um por (plano, tipo, data de expiração). A chave
+//    única é o que impede o mesmo aviso de ser registrado duas vezes; `vistoEm` tira o aviso do sino.
+//    Mudou a data de expiração do plano? É outro aviso (a chave leva a data).
+//  - PmocConfiguracao: o padrão da EMPRESA — quantos dias antes avisar e o texto técnico dos planos novos.
+// ─────────────────────────────────────────────
+
+model PmocHistorico {
+  id        String   @id @default(cuid())
+  pmocId    String   @map("pmoc_id")
+  usuarioId String?  @map("usuario_id")
+  acao      String
+  detalhes  String?  @db.Text
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  pmoc    Pmoc     @relation(fields: [pmocId], references: [id], onDelete: Cascade)
+  usuario Usuario? @relation("PmocHistoricoUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([pmocId, criadoEm])
+  @@map("pmoc_historico")
+}
+
+model PmocAviso {
+  id            String    @id @default(cuid())
+  pmocId        String    @map("pmoc_id")
+  /// "VENCENDO" (faltam até N dias) ou "EXPIRADO" — texto, sem enum
+  tipo          String
+  /// A data de expiração do plano quando o aviso foi registrado
+  dataExpiracao DateTime  @map("data_expiracao") @db.Date
+  criadoEm      DateTime  @default(now()) @map("criado_em")
+  vistoEm       DateTime? @map("visto_em")
+  vistoPorId    String?   @map("visto_por_id")
+
+  pmoc     Pmoc     @relation(fields: [pmocId], references: [id], onDelete: Cascade)
+  vistoPor Usuario? @relation("PmocAvisoVistoPor", fields: [vistoPorId], references: [id], onDelete: SetNull)
+
+  @@unique([pmocId, tipo, dataExpiracao])
+  @@map("pmoc_avisos")
+}
+
+model PmocConfiguracao {
+  empresaId    String   @id @map("empresa_id")
+  /// Quantos dias antes da expiração o plano entra no aviso "vencendo"
+  diasAviso    Int      @default(30) @map("dias_aviso")
+  /// Texto técnico/legal dos planos novos desta empresa (vazio = o texto padrão do sistema)
+  textoPadrao  String?  @map("texto_padrao") @db.Text
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@map("pmoc_configuracoes")
 }
 
 model PmocEquipamento {
