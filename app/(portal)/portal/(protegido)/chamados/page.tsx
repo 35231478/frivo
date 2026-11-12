@@ -1,29 +1,33 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { requirePortalSession } from "@/lib/portal-server";
+import { requirePortalSession, podeVerChamados } from "@/lib/portal-server";
+import { SemAcesso } from "@/components/portal/sem-acesso";
 import { cn, formatarData, LABELS_STATUS_OS } from "@/lib/utils";
 import { Headset, Plus } from "lucide-react";
+import { diaCivilPassou } from "@/lib/fuso";
 
 export const metadata: Metadata = { title: "Portal — Chamados" };
 export const dynamic = "force-dynamic";
 
 const COR_STATUS: Record<string, string> = {
   ABERTA: "bg-primary-50 text-primary-700",
-  AGUARDANDO_ATENDIMENTO: "bg-cyan-50 text-cyan-700",
-  AGENDADA: "bg-violet-50 text-violet-700",
-  EM_ANDAMENTO: "bg-amber-50 text-amber-700",
-  PAUSADA: "bg-orange-50 text-orange-700",
-  AGUARDANDO_PECA: "bg-yellow-50 text-yellow-700",
-  CONCLUIDA: "bg-success-50 text-success-700",
-  CANCELADA: "bg-red-50 text-red-700",
+  AGUARDANDO_ATENDIMENTO: "bg-acento-claro text-acento-hover",
+  AGENDADA: "bg-acento-claro text-acento-hover",
+  EM_ANDAMENTO: "bg-atencao-claro text-atencao-texto",
+  PAUSADA: "bg-atencao-claro text-atencao-texto",
+  AGUARDANDO_PECA: "bg-atencao-claro text-atencao-texto",
+  CONCLUIDA: "bg-ok-claro text-ok-texto",
+  CANCELADA: "bg-atrasado-claro text-atrasado-texto",
 };
 
 export default async function PortalChamados() {
-  const { user } = await requirePortalSession();
+  const sessao = await requirePortalSession();
+  if (!podeVerChamados(sessao)) return <SemAcesso />;
+  const { user } = sessao;
   const ordens = await prisma.ordemServico.findMany({
     where: { empresaId: user.empresaId, clienteId: user.clienteId },
-    select: { id: true, numero: true, chamadoNumero: true, descricao: true, status: true, origem: true, criadoEm: true },
+    select: { id: true, numero: true, chamadoNumero: true, descricao: true, status: true, origem: true, criadoEm: true, previsaoConclusao: true },
     orderBy: { criadoEm: "desc" },
     take: 100,
   });
@@ -40,11 +44,11 @@ export default async function PortalChamados() {
       </div>
 
       {ordens.length === 0 ? (
-        <div className="bg-white rounded-xl border border-surface-border p-10 text-center text-ink-muted">Nenhum chamado registrado.</div>
+        <div className="bg-white rounded-card border border-surface-border p-10 text-center text-ink-muted">Nenhum chamado registrado.</div>
       ) : (
         <div className="space-y-2">
           {ordens.map((o) => (
-            <Link key={o.id} href={`/portal/chamados/${o.id}`} className="block bg-white rounded-xl border border-surface-border p-4 hover:border-primary-200 hover:shadow-card transition-all">
+            <Link key={o.id} href={`/portal/chamados/${o.id}`} className="block bg-white rounded-card border border-surface-border p-4 hover:border-primary-200 hover:shadow-card transition-all">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
@@ -55,7 +59,14 @@ export default async function PortalChamados() {
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
                   <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", COR_STATUS[o.status])}>{LABELS_STATUS_OS[o.status] ?? o.status}</span>
-                  <span className="text-xs text-ink-subtle">{formatarData(o.criadoEm)}</span>
+                  {/* UX-8 (Y16): "Agendada" mostra a data DA VISITA (e avisa quando ficou para trás), não a de abertura */}
+                  {o.status === "AGENDADA" && o.previsaoConclusao ? (
+                    diaCivilPassou(o.previsaoConclusao)
+                      ? <span className="text-xs font-semibold text-atencao-texto">visita era {formatarData(o.previsaoConclusao)} — a reagendar</span>
+                      : <span className="text-xs text-ink-subtle">visita {formatarData(o.previsaoConclusao)}</span>
+                  ) : (
+                    <span className="text-xs text-ink-subtle">{formatarData(o.criadoEm)}</span>
+                  )}
                 </div>
               </div>
             </Link>

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { reduzirImagem, FOTO_GALERIA } from "@/lib/imagem-cliente";
 import { AlertCircle, Upload, X, Send } from "lucide-react";
 
 interface Unidade { id: string; nome: string }
@@ -26,14 +27,16 @@ export function ChamadoForm({ unidades, equipamentos, tiposProblema }: { unidade
 
   async function addFotos(files: FileList | null) {
     if (!files) return;
+    setErro("");
     const novas: Foto[] = [];
     for (const f of Array.from(files).slice(0, 6)) {
-      const conteudo = await new Promise<string>((res) => {
-        const r = new FileReader();
-        r.onload = () => res(r.result as string);
-        r.readAsDataURL(f);
-      });
-      novas.push({ nome: f.name, tipo: f.type, tamanho: f.size, conteudo });
+      try {
+        // Foto do celular sai com vários MB: reduz e recomprime antes de enviar (o servidor limita o tamanho)
+        const { imagem } = await reduzirImagem(f, FOTO_GALERIA.ladoMax, FOTO_GALERIA.qualidade);
+        novas.push({ nome: f.name, tipo: "image/jpeg", tamanho: imagem.bytes, conteudo: imagem.dataUrl });
+      } catch {
+        setErro(`Não foi possível ler a imagem "${f.name}". Envie fotos JPG, PNG ou WEBP.`);
+      }
     }
     setFotos((p) => [...p, ...novas].slice(0, 6));
   }
@@ -59,8 +62,8 @@ export function ChamadoForm({ unidades, equipamentos, tiposProblema }: { unidade
   const inputCls = "mt-1 w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all";
 
   return (
-    <form onSubmit={enviar} className="space-y-4 bg-white rounded-xl border border-surface-border p-5">
-      {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 flex items-center gap-2"><AlertCircle className="w-4 h-4" />{erro}</div>}
+    <form onSubmit={enviar} className="space-y-4 bg-white rounded-card border border-surface-border p-5">
+      {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2 flex items-center gap-2"><AlertCircle className="w-4 h-4" />{erro}</div>}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>

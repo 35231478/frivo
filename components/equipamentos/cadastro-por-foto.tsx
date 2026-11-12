@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  Camera, ImagePlus, Loader2, ShieldAlert, Sparkles, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight,
-  DoorOpen, QrCode, Keyboard, RotateCcw, Pencil,
+  Camera, Loader2, ShieldAlert, Sparkles, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight,
+  DoorOpen, QrCode, Keyboard, Pencil, Star, Tag,
 } from "lucide-react";
-import { cn, LABELS_TIPO_EQUIPAMENTO } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { opcoesTipoEquipamento, PREFIXO_TIPO_CUSTOM, type TipoEquipamentoCadastro } from "@/lib/cadastros/tipos-equipamento";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { FormField } from "@/components/ui/form-field";
@@ -14,6 +15,9 @@ import { ClienteCombobox } from "@/components/ui/cliente-combobox";
 import { SelectCadastroRapido, type CampoRapido, type OpcaoCadastro } from "@/components/ui/select-cadastro-rapido";
 import { UNIDADE } from "@/components/cadastro-rapido/definicoes";
 import { reduzirImagem, type QualidadeImagem } from "@/lib/imagem-cliente";
+import { AvisoSerieDuplicada, type ItemLeva } from "@/components/equipamentos/aviso-serie-duplicada";
+import { SlotFoto } from "@/components/ui/slot-foto";
+import { hrefSecaoConfig } from "@/lib/navegacao/configuracoes";
 
 /* ───────── Campos lidos da etiqueta (mesmos nomes do JSON pedido à IA) ───────── */
 type Campo =
@@ -29,7 +33,7 @@ const VAZIO: Valores = {
 const FLUIDOS = ["R22", "R410A", "R32", "R407C", "R404A", "R134a", "R290", "Outro"];
 const TENSOES = ["110V", "127V", "220V", "380V", "440V"];
 const FASES = ["Monofásico", "Bifásico", "Trifásico"];
-const PREFIXO_CUSTOM = "custom:";
+const PREFIXO_CUSTOM = PREFIXO_TIPO_CUSTOM;
 const CAMPOS_TIPO: CampoRapido[] = [{ nome: "nome", label: "Nome do tipo", obrigatorio: true, placeholder: "Ex: Cortina de ar, Bebedouro" }];
 
 /** Ordem do mini-questionário (o que a IA não leu é perguntado nesta ordem). */
@@ -51,7 +55,7 @@ const ROTULO: Record<string, string> = Object.fromEntries(PERGUNTAS.map((p) => [
 
 type Etapa = "foto" | "conferencia" | "faltantes" | "local" | "revisao" | "pronto";
 type UnidadeItem = { id: string; nome: string; cidade?: string | null; clienteId: string };
-type TipoCustom = { id: string; nome: string; chaveEnum: string | null; ativo: boolean };
+type TipoCustom = TipoEquipamentoCadastro;
 
 /** Chama a leitura por IA com limite de tempo; qualquer falha vira mensagem para o fallback manual. */
 async function lerComIa(tipo: "etiqueta" | "placa", imagem: string): Promise<{ ok: true; dados: any } | { ok: false; erro: string }> {
@@ -73,7 +77,10 @@ async function lerComIa(tipo: "etiqueta" | "placa", imagem: string): Promise<{ o
 
 export function CadastroPorFoto() {
   const [etapa, setEtapa] = useState<Etapa>("foto");
+  // Fotos: etiqueta (a IA lê; fica como foto de apoio) · equipamento por completo (CAPA) · outro ângulo (opcional)
   const [foto, setFoto] = useState<string | null>(null);
+  const [fotoFrente, setFotoFrente] = useState<string | null>(null);
+  const [fotoExtra, setFotoExtra] = useState<string | null>(null);
   const [qualidade, setQualidade] = useState<QualidadeImagem | null>(null);
   const [lendo, setLendo] = useState(false);
   const [aviso, setAviso] = useState<{ tipo: "erro" | "ruim"; texto: string } | null>(null);
@@ -97,17 +104,17 @@ export function CadastroPorFoto() {
 
   // Tipos personalizados
   const [tiposCustom, setTiposCustom] = useState<TipoCustom[]>([]);
-  const [usarFoto, setUsarFoto] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState<{ id: string; qr: string | null; avisoQr?: string } | null>(null);
+  // A LEVA: o que já foi cadastrado nesta sequência ("Cadastrar outro") — para avisar na hora quando a
+  // mesma etiqueta é fotografada duas vezes. "Cadastrar outro" não limpa esta lista.
+  const [leva, setLeva] = useState<ItemLeva[]>([]);
 
-  const inputCamera = useRef<HTMLInputElement>(null);
-  const inputGaleria = useRef<HTMLInputElement>(null);
   const inputPlaca = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetch("/api/tipos-equipamento").then((r) => r.json())
-      .then((d) => setTiposCustom(Array.isArray(d) ? d.filter((t: TipoCustom) => !t.chaveEnum && t.ativo !== false) : []))
+      .then((d) => setTiposCustom(Array.isArray(d) ? d : []))
       .catch(() => {});
   }, []);
 
@@ -123,10 +130,8 @@ export function CadastroPorFoto() {
       .catch(() => {}).finally(() => setCarregandoUnidades(false));
   }, [clienteId]);
 
-  const opcoesTipo: OpcaoCadastro[] = useMemo(() => [
-    ...Object.entries(LABELS_TIPO_EQUIPAMENTO).map(([value, label]) => ({ value, label })),
-    ...tiposCustom.map((t) => ({ value: `${PREFIXO_CUSTOM}${t.id}`, label: t.nome, descricao: "personalizado" })),
-  ], [tiposCustom]);
+  // Equipamento novo: só tipos ativos (padrão inativado pela empresa também sai)
+  const opcoesTipo: OpcaoCadastro[] = useMemo(() => opcoesTipoEquipamento(tiposCustom), [tiposCustom]);
   const rotuloTipo = (v: string) => opcoesTipo.find((o) => o.value === v)?.label ?? v;
 
   async function criarTipo(v: Record<string, string>): Promise<OpcaoCadastro> {
@@ -144,19 +149,23 @@ export function CadastroPorFoto() {
 
   const set = (c: Campo, v: string) => setValores((s) => ({ ...s, [c]: v }));
 
-  /* ───────── 1. Foto da etiqueta ───────── */
-  async function aoEscolherFoto(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
+  /* ───────── 1. Fotos (etiqueta para a IA + equipamento por completo = capa) ───────── */
+  async function aoEscolherFoto(qual: "etiqueta" | "frente" | "extra", file: File | undefined) {
     if (!file) return;
     setAviso(null); setErroEtapa("");
     try {
-      const { imagem, qualidade } = await reduzirImagem(file);
-      setFoto(imagem.dataUrl); setQualidade(qualidade);
+      // Etiqueta em 1600px (texto miúdo para a IA); as demais em 1280px (só exibição)
+      const { imagem, qualidade } = await reduzirImagem(file, qual === "etiqueta" ? 1600 : 1280, qual === "etiqueta" ? 0.82 : 0.8);
+      if (qual === "etiqueta") { setFoto(imagem.dataUrl); setQualidade(qualidade); }
+      else if (qual === "frente") setFotoFrente(imagem.dataUrl);
+      else setFotoExtra(imagem.dataUrl);
     } catch {
       setAviso({ tipo: "erro", texto: "Não foi possível abrir esta imagem. Tente outra foto." });
     }
   }
+  const remover = (qual: "etiqueta" | "frente" | "extra") => {
+    if (qual === "etiqueta") { setFoto(null); setQualidade(null); } else if (qual === "frente") setFotoFrente(null); else setFotoExtra(null);
+  };
 
   function irParaManual(motivo?: string) {
     if (motivo) setAviso({ tipo: "erro", texto: motivo });
@@ -168,6 +177,7 @@ export function CadastroPorFoto() {
 
   async function lerEtiqueta() {
     if (!foto) return;
+    if (!fotoFrente) { setAviso({ tipo: "ruim", texto: "Falta a foto do equipamento por completo (é a capa do cadastro)." }); return; }
     setLendo(true); setAviso(null);
     const r = await lerComIa("etiqueta", foto);
     setLendo(false);
@@ -268,13 +278,16 @@ export function CadastroPorFoto() {
         setor: setor.trim() || undefined,
         localizacao: ambiente.trim() || undefined,
         observacoesTecnicas: obsIa || undefined,
-        fotos: usarFoto && foto ? [foto] : [],
+        // Capa (fotos[0]) = equipamento por completo; a etiqueta fica como foto de apoio, nunca como capa
+        fotos: [fotoFrente, foto, fotoExtra].filter((x): x is string => !!x),
         gerarQrCode: true,
       };
       const res = await fetch("/api/equipamentos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) { setErroEtapa(d.erro ?? "Não foi possível salvar o equipamento."); return; }
       setSalvo({ id: d.id, qr: d.qrcode?.codigo ?? null, avisoQr: d.avisoQr });
+      const serie = valores.numero_serie.trim();
+      if (serie && d.id) setLeva((l) => [...l, { id: d.id, numeroSerie: serie, descricao: [rotuloTipo(valores.tipo), [valores.marca.trim(), valores.modelo.trim()].filter(Boolean).join(" ")].filter(Boolean).join(" · ") }]);
       setEtapa("pronto");
     } catch {
       setErroEtapa("Sem conexão. Seus dados continuam aqui — tente salvar de novo.");
@@ -284,13 +297,13 @@ export function CadastroPorFoto() {
   }
 
   function recomecar() {
-    setEtapa("foto"); setFoto(null); setQualidade(null); setAviso(null); setValores(VAZIO); setLidosPelaIa(new Set());
+    setEtapa("foto"); setFoto(null); setFotoFrente(null); setFotoExtra(null); setQualidade(null); setAviso(null); setValores(VAZIO); setLidosPelaIa(new Set());
     setDuvidosos(new Set()); setOutrasInfos(""); setFaltantes([]); setIdxPergunta(0); setSetor(""); setAmbiente("");
     setAvisoPlaca(null); setSalvo(null); setErroEtapa("");
   }
 
   const PASSOS: { id: Etapa; rotulo: string }[] = [
-    { id: "foto", rotulo: "Etiqueta" }, { id: "conferencia", rotulo: "Conferir" }, { id: "faltantes", rotulo: "Completar" },
+    { id: "foto", rotulo: "Fotos" }, { id: "conferencia", rotulo: "Conferir" }, { id: "faltantes", rotulo: "Completar" },
     { id: "local", rotulo: "Local" }, { id: "revisao", rotulo: "Salvar" },
   ];
   const idxEtapa = PASSOS.findIndex((p) => p.id === etapa);
@@ -299,14 +312,14 @@ export function CadastroPorFoto() {
   const campoInput = (p: (typeof PERGUNTAS)[number], autoFocus = false) => {
     const v = valores[p.campo];
     const duvida = duvidosos.has(p.campo);
-    const cls = cn(duvida && "border-amber-400 bg-amber-50/50");
+    const cls = cn(duvida && "border-atencao bg-atencao-claro/50");
     if (p.tipo === "tipo")
       return (
         <SelectCadastroRapido
           value={v} onChange={(x) => set("tipo", x)} opcoes={opcoesTipo}
           entidade={{ singular: "tipo de equipamento", plural: "tipos de equipamento" }} placeholder="Selecione o tipo"
           campos={CAMPOS_TIPO} campoBusca="nome" criar={criarTipo}
-          permissao={{ modulo: "configuracoes", acao: "gerenciar" }} linkCadastroCompleto="/configuracoes/tipos-equipamento"
+          permissao={{ modulo: "configuracoes", acao: "gerenciar" }} linkCadastroCompleto={hrefSecaoConfig("tipos-equipamento")}
         />
       );
     if (p.tipo === "capacidade")
@@ -334,7 +347,7 @@ export function CadastroPorFoto() {
         <Link href="/equipamentos/novo" className="p-2 rounded-lg text-ink-muted hover:bg-surface-alt" title="Voltar ao cadastro manual"><ChevronLeft className="w-5 h-5" /></Link>
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-ink flex items-center gap-2"><Sparkles className="w-5 h-5 text-primary-500" /> Cadastro pela foto</h1>
-          <p className="text-sm text-ink-muted">Fotografe a etiqueta e a IA preenche a ficha. Você confere tudo antes de salvar.</p>
+          <p className="text-sm text-ink-muted">Leitura automática da etiqueta; os dados são conferidos antes de salvar.</p>
         </div>
       </div>
 
@@ -350,56 +363,53 @@ export function CadastroPorFoto() {
 
       {aviso && (
         <div data-aviso-ia={aviso.tipo} className={cn("flex items-start gap-2 text-sm rounded-lg px-3 py-2 border",
-          aviso.tipo === "ruim" ? "text-amber-900 bg-amber-50 border-amber-200" : "text-red-700 bg-red-50 border-red-200")}>
+          aviso.tipo === "ruim" ? "text-atencao-texto bg-atencao-claro border-atencao/20" : "text-atrasado-texto bg-atrasado-claro border-atrasado/20")}>
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> <span>{aviso.texto}</span>
         </div>
       )}
 
-      <div className="bg-white border border-surface-border rounded-xl p-4 sm:p-5 space-y-4">
+      <div className="bg-white border border-surface-border rounded-card p-4 sm:p-5 space-y-4">
         {/* ── 1. Foto ── */}
         {etapa === "foto" && (
           <>
-            <div data-aviso-privacidade className="flex items-start gap-2 text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-              <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-slate-500" />
+            <div data-aviso-privacidade className="flex items-start gap-2 text-xs text-ink bg-surface-page border border-surface-border rounded-lg px-3 py-2">
+              <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-ink-muted" />
               <span>
-                <strong>Privacidade:</strong> a foto é enviada para a <strong>Anthropic</strong> (IA Claude), fora do Frivo, só para ler o texto da etiqueta.
-                Enquadre apenas a etiqueta — evite pessoas, documentos ou telas na foto.
+                <strong>Privacidade:</strong> apenas a foto da <strong>etiqueta</strong> é enviada à <strong>Anthropic</strong> (IA Claude), fora do Frivo, para leitura do texto.
+                As fotos do equipamento ficam somente no Frivo. Evite pessoas, documentos ou telas nas fotos.
               </span>
             </div>
-            <input ref={inputCamera} type="file" accept="image/*" capture="environment" className="hidden" onChange={aoEscolherFoto} aria-label="Foto da etiqueta (câmera)" />
-            <input ref={inputGaleria} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={aoEscolherFoto} aria-label="Foto da etiqueta (arquivo)" />
-
-            {foto ? (
-              <div className="space-y-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={foto} alt="Foto da etiqueta" className="w-full max-h-80 object-contain rounded-lg border border-surface-border bg-surface-alt" />
-                {qualidade && (qualidade.escura || qualidade.borrada) && (
-                  <p data-aviso-qualidade className="flex items-start gap-2 text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                    <AlertTriangle className="w-4 h-4 shrink-0" />
-                    A foto parece {qualidade.escura ? "escura" : "tremida/sem foco"}. A leitura pode falhar — se puder, tire outra mais de perto e com luz.
-                  </p>
-                )}
-                <div className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => inputCamera.current?.click()} className="inline-flex items-center justify-center gap-2 px-3 py-3 rounded-lg border border-surface-border text-sm font-medium text-ink hover:bg-surface-alt">
-                    <RotateCcw className="w-4 h-4" /> Tirar outra
-                  </button>
-                  <button type="button" onClick={lerEtiqueta} disabled={lendo} className="inline-flex items-center justify-center gap-2 px-3 py-3 rounded-lg bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold disabled:opacity-60">
-                    {lendo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} {lendo ? "Lendo a etiqueta…" : "Ler com IA"}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <button type="button" onClick={() => inputCamera.current?.click()} className="w-full flex flex-col items-center justify-center gap-2 py-10 rounded-xl border-2 border-dashed border-primary-300 bg-primary-50/50 text-primary-700 hover:bg-primary-50">
-                  <Camera className="w-10 h-10" />
-                  <span className="font-semibold">Fotografar a etiqueta</span>
-                  <span className="text-xs text-primary-600/80">De frente, bem perto, sem reflexo</span>
-                </button>
-                <button type="button" onClick={() => inputGaleria.current?.click()} className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-lg border border-surface-border text-sm text-ink hover:bg-surface-alt">
-                  <ImagePlus className="w-4 h-4" /> Escolher foto da galeria
-                </button>
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" data-slots-fotos>
+              <SlotFoto
+                id="etiqueta" titulo="1. Etiqueta" selo="Leitura automática" seloCor="bg-acento-claro text-acento-hover" icone={Tag}
+                dica="De frente, bem perto, sem reflexo" obrigatoria url={foto} rotuloAria="Foto da etiqueta"
+                onArquivo={(f) => aoEscolherFoto("etiqueta", f)} onRemover={() => remover("etiqueta")}
+              />
+              <SlotFoto
+                id="frente" titulo="2. Equipamento" selo="Capa do cadastro" seloCor="bg-primary-100 text-primary-800" icone={Star}
+                dica="Por completo: afaste-se e pegue o aparelho inteiro" obrigatoria url={fotoFrente} rotuloAria="Foto do equipamento"
+                onArquivo={(f) => aoEscolherFoto("frente", f)} onRemover={() => remover("frente")}
+              />
+              <SlotFoto
+                id="extra" titulo="3. Outro ângulo" selo="Opcional" seloCor="bg-surface-alt text-ink-muted" icone={Camera}
+                dica="Ex.: condensadora, instalação" url={fotoExtra} rotuloAria="Outra foto"
+                onArquivo={(f) => aoEscolherFoto("extra", f)} onRemover={() => remover("extra")}
+              />
+            </div>
+            {qualidade && foto && (qualidade.escura || qualidade.borrada) && (
+              <p data-aviso-qualidade className="flex items-start gap-2 text-xs text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                A foto da etiqueta parece {qualidade.escura ? "escura" : "tremida ou sem foco"}. A leitura pode falhar; se possível, fotografe mais de perto e com boa iluminação.
+              </p>
             )}
+            <p className="text-xs text-ink-muted">
+              A <strong className="text-ink">capa</strong> do equipamento será a foto 2; a etiqueta fica como foto de apoio.
+            </p>
+            <button type="button" onClick={lerEtiqueta} disabled={lendo || !foto}
+              className="w-full inline-flex items-center justify-center gap-2 px-3 py-3 rounded-lg bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold disabled:opacity-50">
+              {lendo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              {lendo ? "Lendo a etiqueta…" : !foto ? "Tire a foto da etiqueta para continuar" : !fotoFrente ? "Falta a foto do equipamento" : "Ler etiqueta com IA"}
+            </button>
             <button type="button" onClick={() => irParaManual()} className="w-full inline-flex items-center justify-center gap-1.5 text-sm text-ink-muted hover:text-ink py-1">
               <Keyboard className="w-4 h-4" /> Sem etiqueta? Preencher manualmente
             </button>
@@ -411,8 +421,8 @@ export function CadastroPorFoto() {
           <>
             <div>
               <h2 className="font-semibold text-ink">Confira o que a IA leu</h2>
-              <p className="text-sm text-ink-muted">A IA pode errar: compare com a foto e corrija o que for preciso.
-                {duvidosos.size > 0 && <> Campos em <span className="bg-amber-100 text-amber-900 px-1 rounded">amarelo</span> foram lidos com dúvida.</>}
+              <p className="text-sm text-ink-muted">Compare cada campo com a foto e corrija se necessário.
+                {duvidosos.size > 0 && <> Campos em <span className="bg-atencao-claro text-atencao-texto px-1 rounded">amarelo</span> foram lidos com dúvida.</>}
               </p>
             </div>
             {foto && (
@@ -421,19 +431,21 @@ export function CadastroPorFoto() {
             )}
             <div className="space-y-3" data-conferencia>
               {PERGUNTAS.filter((p) => lidosPelaIa.has(p.campo)).map((p) => (
-                <FormField key={p.campo} label={p.rotulo} hint={duvidosos.has(p.campo) ? "Lido com dúvida — confira" : undefined}>
+                <FormField key={p.campo} label={p.rotulo} hint={duvidosos.has(p.campo) ? "Leitura com dúvida: confira" : undefined}>
                   {campoInput(p)}
                 </FormField>
               ))}
               {outrasInfos && (
-                <FormField label="Outras informações da etiqueta" hint="Vai para as observações técnicas">
+                <FormField label="Outras informações da etiqueta" dica="Incluídas nas observações técnicas do equipamento.">
                   <Input value={outrasInfos} onChange={(e) => setOutrasInfos(e.target.value)} />
                 </FormField>
               )}
             </div>
+            {/* Logo depois da leitura: a mesma etiqueta fotografada duas vezes aparece aqui, antes de seguir */}
+            {lidosPelaIa.has("numero_serie") && <AvisoSerieDuplicada numero={valores.numero_serie} leva={leva} />}
             {faltantes.length > 0 && (
               <p className="text-xs text-ink-muted bg-surface-alt rounded-lg px-3 py-2" data-nao-lidos>
-                A IA não leu: <strong>{faltantes.map((c) => ROTULO[c]).join(", ")}</strong>. Vamos perguntar a seguir (os opcionais dá para pular).
+                Não lidos pela IA: <strong>{faltantes.map((c) => ROTULO[c]).join(", ")}</strong>. Serão solicitados a seguir; os opcionais podem ser pulados.
               </p>
             )}
             <div className="flex gap-2">
@@ -451,7 +463,7 @@ export function CadastroPorFoto() {
             <p className="text-xs font-semibold text-ink-muted">Pergunta {idxPergunta + 1} de {faltantes.length}{perguntaAtual.obrigatorio ? " · obrigatória" : ""}</p>
             <h2 className="text-lg font-semibold text-ink">{perguntaAtual.pergunta}</h2>
             {campoInput(perguntaAtual, true)}
-            {erroEtapa && <p className="text-sm text-red-600">{erroEtapa}</p>}
+            {erroEtapa && <p className="text-sm text-atrasado">{erroEtapa}</p>}
             <div className="flex gap-2">
               {idxPergunta > 0 && (
                 <button type="button" onClick={() => { setErroEtapa(""); setIdxPergunta((i) => i - 1); }} className="px-3 py-2.5 rounded-lg border border-surface-border text-sm text-ink hover:bg-surface-alt" title="Pergunta anterior">
@@ -474,7 +486,7 @@ export function CadastroPorFoto() {
         {etapa === "local" && (
           <div className="space-y-4">
             <h2 className="font-semibold text-ink">Onde ele está instalado?</h2>
-            <FormField label="Cliente" required hint="Digite 2+ letras para buscar">
+            <FormField label="Cliente" required dica="Digite ao menos 2 letras para buscar.">
               <ClienteCombobox value={clienteId} onChange={(id) => { setClienteId(id); setUnidadeId(""); }} />
             </FormField>
             <FormField label="Endereço / Unidade" required>
@@ -491,21 +503,21 @@ export function CadastroPorFoto() {
               {lendoPlaca ? <Loader2 className="w-4 h-4 animate-spin" /> : <DoorOpen className="w-4 h-4" />}
               {lendoPlaca ? "Lendo a placa…" : "Fotografar a placa da porta/sala"}
             </button>
-            <p className="text-[11px] text-ink-subtle -mt-2">A foto da placa também vai para a Anthropic só para leitura e não é guardada. Sem placa? É só digitar.</p>
+            <p className="text-[11px] text-ink-muted -mt-2">A foto da placa é enviada à Anthropic apenas para leitura e não é armazenada. Sem placa, preencha manualmente.</p>
             {avisoPlaca && (
-              <p data-aviso-placa={avisoPlaca.tipo} className={cn("text-xs rounded-lg px-3 py-2 border", avisoPlaca.tipo === "ok" ? "text-emerald-800 bg-emerald-50 border-emerald-200" : "text-amber-900 bg-amber-50 border-amber-200")}>
+              <p data-aviso-placa={avisoPlaca.tipo} className={cn("text-xs rounded-lg px-3 py-2 border", avisoPlaca.tipo === "ok" ? "text-ok-texto bg-ok-claro border-ok/20" : "text-atencao-texto bg-atencao-claro border-atencao/20")}>
                 {avisoPlaca.texto}
               </p>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <FormField label="Setor" hint="Andar, bloco ou área">
+              <FormField label="Setor" dica="Andar, bloco ou área dentro do endereço.">
                 <Input aria-label="Setor" value={setor} onChange={(e) => setSetor(e.target.value)} placeholder="Ex: 2º andar" />
               </FormField>
-              <FormField label="Ambiente" hint="Sala onde está instalado">
+              <FormField label="Ambiente" dica="Sala ou ambiente de instalação.">
                 <Input aria-label="Ambiente" value={ambiente} onChange={(e) => setAmbiente(e.target.value)} placeholder="Ex: Sala 201" />
               </FormField>
             </div>
-            {erroEtapa && <p className="text-sm text-red-600">{erroEtapa}</p>}
+            {erroEtapa && <p className="text-sm text-atrasado">{erroEtapa}</p>}
             <button type="button" onClick={confirmarLocal} className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold">
               Continuar <ChevronRight className="w-4 h-4" />
             </button>
@@ -515,7 +527,7 @@ export function CadastroPorFoto() {
         {/* ── 5. Revisão ── */}
         {etapa === "revisao" && (
           <div className="space-y-4" data-revisao>
-            <h2 className="font-semibold text-ink">Tudo certo? Revise e salve</h2>
+            <h2 className="font-semibold text-ink">Revisar e salvar</h2>
             <dl className="divide-y divide-surface-border text-sm border border-surface-border rounded-lg">
               {[
                 ["Tipo", valores.tipo ? rotuloTipo(valores.tipo) : ""],
@@ -532,17 +544,26 @@ export function CadastroPorFoto() {
                 </div>
               ))}
             </dl>
+            <AvisoSerieDuplicada numero={valores.numero_serie} leva={leva} />
             <div className="flex gap-2 text-xs">
               <button type="button" onClick={() => { setFaltantes(PERGUNTAS.map((p) => p.campo)); setIdxPergunta(0); setEtapa("faltantes"); }} className="inline-flex items-center gap-1 text-primary-600 hover:underline"><Pencil className="w-3 h-3" /> Corrigir dados</button>
               <button type="button" onClick={() => setEtapa("local")} className="inline-flex items-center gap-1 text-primary-600 hover:underline"><Pencil className="w-3 h-3" /> Corrigir local</button>
             </div>
-            {foto && (
-              <label className="flex items-center gap-2 text-sm text-ink">
-                <input type="checkbox" checked={usarFoto} onChange={(e) => setUsarFoto(e.target.checked)} className="accent-primary-600" />
-                Usar a foto da etiqueta como foto do equipamento
-              </label>
+            {(fotoFrente || foto || fotoExtra) && (
+              <div data-fotos-revisao>
+                <p className="text-xs font-semibold text-ink-muted mb-1.5">Fotos que serão salvas</p>
+                <div className="flex gap-2">
+                  {([[fotoFrente, "Capa", true], [foto, "Etiqueta (apoio)", false], [fotoExtra, "Outro ângulo", false]] as const).filter(([u]) => !!u).map(([u, rotulo, capa]) => (
+                    <figure key={rotulo} className="w-24">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={u!} alt={rotulo} className={cn("w-24 h-20 object-cover rounded-lg border", capa ? "border-primary-400 ring-2 ring-primary-200" : "border-surface-border")} />
+                      <figcaption className={cn("text-[10px] mt-1 text-center", capa ? "font-semibold text-primary-700" : "text-ink-muted")}>{rotulo}</figcaption>
+                    </figure>
+                  ))}
+                </div>
+              </div>
             )}
-            {erroEtapa && <p className="text-sm text-red-600">{erroEtapa}</p>}
+            {erroEtapa && <p className="text-sm text-atrasado">{erroEtapa}</p>}
             <button type="button" onClick={salvar} disabled={salvando} className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold disabled:opacity-60">
               {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <QrCode className="w-4 h-4" />} Salvar e gerar QR Code
             </button>
@@ -552,11 +573,11 @@ export function CadastroPorFoto() {
         {/* ── Pronto ── */}
         {etapa === "pronto" && salvo && (
           <div className="text-center space-y-3 py-4" data-pronto>
-            <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto" />
-            <h2 className="text-lg font-semibold text-ink">Equipamento cadastrado!</h2>
+            <CheckCircle2 className="w-12 h-12 text-ok-texto mx-auto" />
+            <h2 className="text-lg font-semibold text-ink">Equipamento cadastrado.</h2>
             {salvo.qr
               ? <p className="text-sm text-ink-muted">QR Code gerado: <strong className="font-mono text-ink" data-qr>{salvo.qr}</strong></p>
-              : <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{salvo.avisoQr ?? "O QR Code não foi gerado. Gere pela aba QR Code."}</p>}
+              : <p className="text-sm text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2">{salvo.avisoQr ?? "O QR Code não foi gerado. Gere pela ficha do equipamento (botão “Gerar QR”)."}</p>}
             <div className="flex flex-col sm:flex-row gap-2 justify-center">
               <Link href={`/equipamentos/${salvo.id}?aba=qrcode`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold">
                 <QrCode className="w-4 h-4" /> Ver e imprimir o QR Code

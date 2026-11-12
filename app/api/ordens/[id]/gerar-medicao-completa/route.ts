@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
-import { gerarNumeroRelatorio } from "@/lib/utils";
 import { criarMedicaoDeRelatorio } from "@/lib/financeiro-server";
+import { osJaFaturada } from "@/lib/faturamento-os";
+import { partesBR } from "@/lib/fuso";
+import { comNumero } from "@/lib/numeracao-server";
+import { respostaPortaoPrestacao } from "@/lib/estoque/devolucao-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -22,43 +25,62 @@ export async function POST(_: NextRequest, { params }: Params) {
   const os = await prisma.ordemServico.findFirst({
     where: { id, empresaId },
     include: {
-      contrato: { select: { valorMensal: true } },
       itensOrcamento: true,
-      relatorios: { where: { escopo: "MEDICAO_COMPLETA" }, include: { medicao: { select: { tokenPublico: true } } } },
+      relatorios: { where: { escopo: "MEDICAO_COMPLETA" }, include: { medicao: { select: { tokenPublico: true, status: true } } } },
     },
   });
   if (!os) return NextResponse.json({ erro: "OS não encontrada" }, { status: 404 });
+  if (os.status !== "CONCLUIDA") {
+    return NextResponse.json({ erro: "Só uma OS CONCLUÍDA pode ser faturada. Conclua a OS antes de gerar a medição." }, { status: 400 });
+  }
+  // OS de CONTRATO não cobra a mensalidade por aqui (F2): 3 preventivas no mês viravam
+  // 3 mensalidades. A mensalidade é do faturamento mensal do contrato (Medições › Gerar mês).
+  if (os.contratoId) {
+    return NextResponse.json({
+      erro: "Esta OS pertence a um contrato: a mensalidade é faturada pelo faturamento mensal do contrato (Medições › Gerar mês). Itens e adicionais desta OS saem pelo botão \"Gerar medição\".",
+    }, { status: 409 });
+  }
 
-  // Idempotente: já existe documento de medição completa com medição vinculada
-  const existente = os.relatorios.find((r) => r.medicao?.tokenPublico);
+  // Idempotente: já existe documento de medição completa com medição VIVA (cancelada refatura — F4)
+  const existente = os.relatorios.find((r) => r.medicao && r.medicao.status !== "CANCELADA" && r.medicao.tokenPublico);
   if (existente?.medicao?.tokenPublico) {
     return NextResponse.json({ ok: true, medicaoToken: existente.medicao.tokenPublico, jaExistia: true });
   }
+  // A trava única também enxerga o OUTRO caminho (itens já numa medição de adicional)
+  const outra = await osJaFaturada(id);
+  if (outra) {
+    return NextResponse.json({ erro: `Esta OS já está na medição ${outra.numero}. Cancele-a antes de refaturar.` }, { status: 409 });
+  }
+  // E4.3 — Portões 2/3
+  const portao = await respostaPortaoPrestacao(empresaId, id, "gerar a medição");
+  if (portao) return portao;
 
-  const ref = os.dataConclusao ?? new Date();
-  const valor = os.contrato?.valorMensal
-    ? Number(os.contrato.valorMensal)
-    : os.itensOrcamento.reduce((acc, it) => acc + Number(it.valorTotal), 0);
+  const ref = partesBR(os.dataConclusao ?? new Date()); // mês/ano de Brasília
+  // Sem contrato, o valor é o dos itens EXECUTADOS (não o orçado inteiro)
+  const valor = os.itensOrcamento.filter((it) => it.executado).reduce((acc, it) => acc + Number(it.valorTotal), 0);
+  if (valor <= 0) {
+    return NextResponse.json({ erro: "Nada a faturar: a OS não tem itens executados." }, { status: 400 });
+  }
 
-  // Reaproveita um relatório MEDICAO_COMPLETA existente sem medição, ou cria um novo
-  let relatorioId: string | null = os.relatorios.find((r) => !r.medicaoId)?.id ?? null;
+  // Reaproveita um relatório MEDICAO_COMPLETA sem medição viva, ou cria um novo
+  let relatorioId: string | null = os.relatorios.find((r) => !r.medicaoId || r.medicao?.status === "CANCELADA")?.id ?? null;
   if (!relatorioId) {
-    const seq = (await prisma.relatorioOs.count({ where: { empresaId } })) + 1;
-    const novo = await prisma.relatorioOs.create({
+    // Número pelo contador da empresa, sob trava (nunca "total + 1", que repetia número)
+    const novo = await comNumero(empresaId, "relatorio_os", (numero, tx) => tx.relatorioOs.create({
       data: {
         empresaId,
         ordemServicoId: os.id,
         contratoId: os.contratoId,
-        numero: gerarNumeroRelatorio(seq, ref.getFullYear()),
+        numero,
         tipo: "MEDICAO",
         escopo: "MEDICAO_COMPLETA",
-        mesReferencia: ref.getMonth() + 1,
-        anoReferencia: ref.getFullYear(),
+        mesReferencia: ref.mes + 1,
+        anoReferencia: ref.ano,
         valorFinanceiro: valor,
         status: "RASCUNHO",
         tokenPublico: crypto.randomUUID(),
       },
-    });
+    }));
     relatorioId = novo.id;
   }
 

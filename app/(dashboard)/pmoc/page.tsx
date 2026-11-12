@@ -56,7 +56,7 @@ export default async function PmocListaPage({ searchParams }: { searchParams: Pr
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary-50 rounded-lg"><FileBadge className="w-5 h-5 text-primary-600" /></div>
+          <div className="p-2 bg-surface-alt rounded-lg"><FileBadge className="w-5 h-5 text-ink-muted" /></div>
           <div>
             <h1 className="page-title">PMOC</h1>
             <p className="text-xs text-ink-muted">Plano de Manutenção, Operação e Controle — Lei 13.589/2018</p>
@@ -72,7 +72,7 @@ export default async function PmocListaPage({ searchParams }: { searchParams: Pr
 
       <div className="card overflow-hidden">
         <form method="get" className="p-4 border-b border-surface-border bg-surface-alt/40 flex flex-wrap items-center gap-2">
-          <input name="busca" defaultValue={busca} placeholder="Buscar por nome, cliente ou local…"
+          <input name="busca" defaultValue={busca} placeholder="Pesquisar por nome, cliente ou local…" aria-label="Pesquisar PMOC"
             className="flex-1 min-w-[200px] bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10" />
           <select name="status" defaultValue={status} aria-label="Status"
             className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500">

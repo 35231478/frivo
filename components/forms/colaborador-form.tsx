@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, KeyboardEvent } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
+import { chaveDiaCivil } from "@/lib/fuso";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { tecnicoSchema, type TecnicoInput } from "@/lib/validations";
@@ -11,10 +12,18 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
+import { rotuloVeiculo, sufixoStatusVeiculo, type VeiculoResumo } from "@/lib/veiculo-sugestao";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
+import { reduzirImagem } from "@/lib/imagem-cliente";
+import { FolhaColaborador } from "@/components/folha/folha-colaborador";
+import { AcessoAppColaborador } from "@/components/forms/acesso-app-colaborador";
+import { SeletorCadastro, useCadastro } from "@/components/cadastros/seletor-cadastro";
+import { AvisoInativacaoStatus } from "@/components/ui/aviso-inativacao-status";
 import {
-  X, Plus, Upload, Trash2, AlertCircle, User, Briefcase, ListChecks, FileText,
+  X, Plus, Upload, Trash2, AlertCircle, User, Briefcase, ListChecks, FileText, Wallet, KeyRound,
 } from "lucide-react";
+import { InputData } from "@/components/ui/input-data";
+import { InputHora } from "@/components/ui/input-hora";
 
 const ESPECIALIDADES_SUGERIDAS = [
   "Split", "VRF", "Chiller", "Câmara Fria",
@@ -29,7 +38,6 @@ const DIAS_SEMANA = [
 
 const TIPOS_DOC = ["CNH", "Certificado NR-35", "Certificado NR-10", "ASO", "Carteira de Trabalho", "Diploma", "Outro"];
 
-interface CargoOpt { id: string; nome: string }
 interface TipoOsOpt { id: string; nome: string; cor: string }
 interface DocItem { tipo: string; nome: string; arquivoUrl: string | null; dataVencimento: string | null }
 
@@ -37,7 +45,9 @@ interface ColaboradorFormProps {
   initialData?: any;
 }
 
-type Aba = "pessoais" | "profissionais" | "competencias" | "documentos";
+type Aba = "pessoais" | "profissionais" | "competencias" | "documentos" | "folha" | "acesso";
+
+interface EstadoAcessoInicial { email: string | null; temLogin: boolean; acessoAtivo: boolean; role: string | null }
 
 function vencendoEm30(data: string | null): boolean {
   if (!data) return false;
@@ -46,7 +56,11 @@ function vencendoEm30(data: string | null): boolean {
   return venc <= limite;
 }
 
-export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
+/**
+ * `podeFolha` (permissão "Financeiro › Custo de pessoal") mostra a aba "Dados financeiros / Folha".
+ * Sem ela, salário e benefícios não aparecem nem chegam ao navegador.
+ */
+export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha = false, podeAcesso = false, acessoInicial }: ColaboradorFormProps & { somenteLeitura?: boolean; podeFolha?: boolean; podeAcesso?: boolean; acessoInicial?: EstadoAcessoInicial }) {
   const router = useRouter();
   const isEditing = !!initialData;
   const [aba, setAba] = useState<Aba>("pessoais");
@@ -69,18 +83,20 @@ export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
     })),
   );
 
-  const [cargos, setCargos] = useState<CargoOpt[]>([]);
   const [tiposOs, setTiposOs] = useState<TipoOsOpt[]>([]);
-  const [perfis, setPerfis] = useState<{ id: string; nome: string; tipo: string }[]>([]);
+  // Perfis (ativos e inativos): o SeletorCadastro só oferece os ativos e mantém o atual se inativo
+  const { itens: perfis } = useCadastro("perfis-acesso");
   const [perfilAcessoId, setPerfilAcessoId] = useState<string>(initialData?.perfilAcessoId ?? "");
   const [tipoEquipe, setTipoEquipe] = useState<string>(initialData?.tipoEquipe ?? "CAMPO");
+  // Veículo "padrão" (opcional): puxado automaticamente na OS quando ele executa sozinho
+  const [veiculoId, setVeiculoId] = useState<string>(initialData?.veiculoId ?? "");
+  const [veiculos, setVeiculos] = useState<VeiculoResumo[]>([]);
   const docRef = useRef<HTMLInputElement>(null);
   const docIdx = useRef<number | null>(null);
 
   useEffect(() => {
-    fetch("/api/cargos").then((r) => r.json()).then((d) => setCargos(Array.isArray(d) ? d.filter((c: any) => c.ativo !== false) : [])).catch(() => {});
     fetch("/api/tipos-os").then((r) => r.json()).then((d) => setTiposOs(Array.isArray(d) ? d.filter((t: any) => t.ativo !== false) : [])).catch(() => {});
-    fetch("/api/perfis-acesso").then((r) => r.json()).then((d) => setPerfis(Array.isArray(d) ? d : [])).catch(() => {});
+    fetch("/api/veiculos?resumo=1").then((r) => (r.ok ? r.json() : [])).then((d) => setVeiculos(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
 
   // Ao escolher o tipo de equipe, sugere um perfil compatível (se nenhum estiver escolhido)
@@ -88,14 +104,14 @@ export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
     setTipoEquipe(novo);
     if (perfilAcessoId) return;
     const alvo = novo === "CAMPO" ? ["TECNICO"] : ["SUPERVISOR", "FINANCEIRO"];
-    const sugestao = perfis.find((p) => alvo.includes(p.tipo));
+    const sugestao = perfis.find((p) => p.ativo !== false && alvo.includes(String(p.tipo)));
     if (sugestao) setPerfilAcessoId(sugestao.id);
   }
 
-  const dataIso = (v: any) => (v ? String(v).slice(0, 10) : "");
+  const dataIso = (v: any) => (v ? chaveDiaCivil(v) : "");
 
   const {
-    register, handleSubmit, watch,
+    register, handleSubmit, watch, setValue, control,
     formState: { errors, isSubmitting },
   } = useForm<TecnicoInput>({
     resolver: zodResolver(tecnicoSchema),
@@ -110,7 +126,6 @@ export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
           cidade: initialData.cidade ?? "", estado: initialData.estado ?? "", cep: initialData.cep ?? "",
           cargoId: initialData.cargoId ?? "", tipo: initialData.tipo, crea: initialData.crea ?? "",
           dataAdmissao: dataIso(initialData.dataAdmissao),
-          salario: initialData.salario != null ? Number(initialData.salario) : undefined,
           jornadaEntrada: initialData.jornadaEntrada ?? "", jornadaSaida: initialData.jornadaSaida ?? "",
           statusColaborador: initialData.statusColaborador ?? "ATIVO",
           observacoes: initialData.observacoes ?? "",
@@ -119,6 +134,9 @@ export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
   });
 
   const tipo = watch("tipo");
+  // Status → Inativo (editando): mostra o impacto e pede motivo, como o botão Inativar
+  const [motivoInativacao, setMotivoInativacao] = useState("");
+  const inativandoPeloStatus = isEditing && watch("statusColaborador") === "INATIVO" && initialData?.ativo !== false && initialData?.statusColaborador !== "INATIVO";
 
   function toggleDia(code: string) {
     setJornadaDias((p) => (p.includes(code) ? p.filter((d) => d !== code) : [...p, code]));
@@ -136,16 +154,17 @@ export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
     if (e.key === "Enter") { e.preventDefault(); adicionarEsp(novaEsp); }
   }
 
-  function handleFoto(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (fotoRef.current) fotoRef.current.value = "";
     if (!file) return;
     setErroFoto("");
     if (!file.type.startsWith("image/")) { setErroFoto("Envie uma imagem (PNG, JPG ou WEBP)."); return; }
-    if (file.size > 2 * 1024 * 1024) { setErroFoto("Imagem muito grande. Máximo 2 MB."); return; }
-    const reader = new FileReader();
-    reader.onload = () => setAvatar(typeof reader.result === "string" ? reader.result : null);
-    reader.readAsDataURL(file);
+    // Foto de perfil: reduzida no navegador (lado maior 512px, JPEG) — fica leve na listagem
+    try {
+      const { imagem } = await reduzirImagem(file, 512, 0.85);
+      setAvatar(imagem.dataUrl);
+    } catch { setErroFoto("Não foi possível abrir esta imagem."); }
   }
 
   function addDocumento() {
@@ -184,9 +203,11 @@ export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
           ...data,
           avatar: avatar ?? "",
           perfilAcessoId: perfilAcessoId || null,
+          veiculoId: veiculoId || null,
           tipoEquipe,
           especialidades, competenciaIds, jornadaDias,
           documentos,
+          ...(inativandoPeloStatus && { motivoInativacao }),
         }),
       });
       if (!res.ok) {
@@ -202,10 +223,12 @@ export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
   }
 
   const ABAS: { id: Aba; label: string; icone: any; badge?: number }[] = [
-    { id: "pessoais", label: "Dados Pessoais", icone: User },
-    { id: "profissionais", label: "Dados Profissionais", icone: Briefcase },
+    { id: "pessoais", label: "Dados pessoais", icone: User },
+    { id: "profissionais", label: "Dados profissionais", icone: Briefcase },
     { id: "competencias", label: "Competências", icone: ListChecks, badge: competenciaIds.length },
     { id: "documentos", label: "Documentos", icone: FileText, badge: documentos.length },
+    ...(podeAcesso ? [{ id: "acesso" as const, label: "Acesso ao app", icone: KeyRound }] : []),
+    ...(podeFolha ? [{ id: "folha" as const, label: "Dados financeiros / Folha", icone: Wallet }] : []),
   ];
 
   const inputCls = "w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all";
@@ -213,12 +236,12 @@ export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
       {erroGlobal && (
-        <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+        <div className="flex items-center gap-2 bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3">
           <AlertCircle className="w-4 h-4 shrink-0" /> {erroGlobal}
         </div>
       )}
 
-      <div className="bg-white rounded-2xl shadow-card border border-surface-border overflow-hidden">
+      <div className="bg-white rounded-card shadow-card border border-surface-border overflow-hidden">
         <nav className="flex gap-1.5 overflow-x-auto px-4 pt-4 pb-4 border-b border-surface-border">
           {ABAS.map((t) => {
             const ativa = aba === t.id;
@@ -226,7 +249,7 @@ export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
               <button
                 key={t.id} type="button" onClick={() => setAba(t.id)}
                 className={cn(
-                  "flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl whitespace-nowrap transition-all",
+                  "flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-card whitespace-nowrap transition-all",
                   ativa ? "bg-primary-500 text-white shadow-sm" : "text-ink-muted hover:text-ink hover:bg-surface-alt",
                 )}
               >
@@ -240,7 +263,7 @@ export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
           })}
         </nav>
 
-        <div className="p-5 sm:p-6 lg:p-8 space-y-8">
+        <fieldset disabled={somenteLeitura} className={cn("min-w-0 p-5 sm:p-6 lg:p-8 space-y-8", (aba === "folha" || aba === "acesso") && "hidden")}>
           {/* ABA 1 — Dados Pessoais */}
           <div className={cn("space-y-8", aba !== "pessoais" && "hidden")}>
             <FormSection title="Identificação">
@@ -253,18 +276,18 @@ export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
                       <Upload className="w-3.5 h-3.5" /> {avatar ? "Trocar foto" : "Enviar foto"}
                     </Button>
                     {avatar && (
-                      <Button type="button" variant="ghost" onClick={() => setAvatar(null)} className="text-xs text-red-500 hover:text-red-700 py-1 px-2.5 h-auto">
-                        <Trash2 className="w-3.5 h-3.5" /> Remover
+                      <Button type="button" variant="ghost" onClick={() => setAvatar(null)} className="text-xs text-atrasado hover:text-atrasado-texto py-1 px-2.5 h-auto">
+                        <Trash2 className="w-3.5 h-3.5" /> Excluir
                       </Button>
                     )}
                     <p className="text-xs text-ink-subtle">PNG, JPG ou WEBP — máx. 2 MB</p>
-                    {erroFoto && <p className="text-xs text-red-600">{erroFoto}</p>}
+                    {erroFoto && <p className="text-xs text-atrasado">{erroFoto}</p>}
                   </div>
                 </div>
               </FormField>
               <FormGrid>
                 <FormField label="Nome completo" required error={errors.nome?.message}>
-                  <Input {...register("nome")} error={!!errors.nome} />
+                  <Input {...register("nome")} caixa="nome" error={!!errors.nome} />
                 </FormField>
                 <FormField label="CPF" required error={errors.cpf?.message}>
                   <Input {...register("cpf")} placeholder="000.000.000-00" error={!!errors.cpf} />
@@ -275,10 +298,10 @@ export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
                   <Input {...register("rg")} placeholder="00.000.000-0" />
                 </FormField>
                 <FormField label="Data de nascimento">
-                  <Input type="date" {...register("dataNascimento")} />
+                  <Controller name="dataNascimento" control={control} render={({ field }) => <InputData value={(field.value as string) ?? ""} onChange={field.onChange} aria-label="Data de nascimento" />} />
                 </FormField>
                 <FormField label="E-mail" error={errors.email?.message}>
-                  <Input {...register("email")} type="email" placeholder="colaborador@empresa.com.br" error={!!errors.email} />
+                  <Input {...register("email")} caixa="email" type="email" placeholder="colaborador@empresa.com.br" error={!!errors.email} />
                 </FormField>
               </FormGrid>
               <FormGrid cols={3}>
@@ -297,15 +320,15 @@ export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
             <FormSection title="Endereço">
               <FormGrid cols={3}>
                 <FormField label="CEP"><Input {...register("cep")} placeholder="00000-000" /></FormField>
-                <FormField label="Logradouro" className="sm:col-span-2"><Input {...register("endereco")} placeholder="Rua, avenida…" /></FormField>
+                <FormField label="Logradouro" className="sm:col-span-2"><Input {...register("endereco")} caixa="endereco" placeholder="Rua, avenida…" /></FormField>
               </FormGrid>
               <FormGrid cols={3}>
                 <FormField label="Número"><Input {...register("numero")} /></FormField>
                 <FormField label="Complemento"><Input {...register("complemento")} /></FormField>
-                <FormField label="Bairro"><Input {...register("bairro")} /></FormField>
+                <FormField label="Bairro"><Input {...register("bairro")} caixa="endereco" /></FormField>
               </FormGrid>
               <FormGrid>
-                <FormField label="Cidade"><Input {...register("cidade")} /></FormField>
+                <FormField label="Cidade"><Input {...register("cidade")} caixa="cidade" /></FormField>
                 <FormField label="Estado"><Input {...register("estado")} placeholder="UF" maxLength={2} /></FormField>
               </FormGrid>
             </FormSection>
@@ -315,16 +338,17 @@ export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
           <div className={cn("space-y-8", aba !== "profissionais" && "hidden")}>
             <FormSection title="Função">
               <FormGrid>
-                <FormField label="Cargo" hint="Cadastre cargos em Configurações → Cargos">
-                  <Select {...register("cargoId")}>
-                    <option value="">Selecione…</option>
-                    {cargos.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                  </Select>
+                <FormField label="Cargo">
+                  {/* Só cargos ativos para nova escolha; o cargo atual segue visível mesmo inativo */}
+                  <SeletorCadastro
+                    entidade="cargos" valor={watch("cargoId") ?? ""} placeholder="Selecione…"
+                    onChange={(v) => setValue("cargoId", v, { shouldDirty: true })}
+                  />
                 </FormField>
                 <FormField label="Tipo" required>
                   <Select {...register("tipo")}>
-                    <option value="TECNICO_CAMPO">Técnico de Campo</option>
-                    <option value="RESPONSAVEL_TECNICO">Responsável Técnico</option>
+                    <option value="TECNICO_CAMPO">Técnico de campo</option>
+                    <option value="RESPONSAVEL_TECNICO">Responsável técnico</option>
                     <option value="ADMINISTRATIVO">Administrativo</option>
                     <option value="MOTORISTA">Motorista</option>
                     <option value="OUTRO">Outro</option>
@@ -332,30 +356,32 @@ export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
                 </FormField>
               </FormGrid>
               <FormGrid>
-                <FormField label="Tipo de Equipe" hint="Define em qual equipe o colaborador aparece">
+                <FormField label="Tipo de equipe" hint="Define em qual equipe o colaborador aparece">
                   <Select value={tipoEquipe} onChange={(e) => escolherTipoEquipe(e.target.value)}>
                     <option value="CAMPO">Campo</option>
                     <option value="ADMINISTRATIVO">Administrativo</option>
                   </Select>
                 </FormField>
-                <FormField label="Perfil de Acesso" hint="Define as permissões no sistema (Configurações → Perfis)">
-                  <Select value={perfilAcessoId} onChange={(e) => setPerfilAcessoId(e.target.value)}>
-                    <option value="">Sem perfil</option>
-                    {perfis.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
-                  </Select>
+                <FormField label="Perfil de acesso" hint="Permissões no sistema (Configurações › Perfis)">
+                  <SeletorCadastro entidade="perfis-acesso" itens={perfis} valor={perfilAcessoId} vazio="Sem perfil" onChange={setPerfilAcessoId} />
                 </FormField>
               </FormGrid>
+              <FormField label="Veículo padrão" hint="Opcional — puxado automaticamente na OS quando este colaborador executa (dá para trocar na OS)">
+                <Select aria-label="Veículo padrão" value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)}>
+                  <option value="">Sem veículo padrão</option>
+                  {veiculos.filter((v) => v.status === "ATIVO" || v.id === veiculoId).map((v) => (
+                    <option key={v.id} value={v.id}>{rotuloVeiculo(v)}{sufixoStatusVeiculo(v.status)}</option>
+                  ))}
+                </Select>
+              </FormField>
               {tipo === "RESPONSAVEL_TECNICO" && (
                 <FormField label="CREA / Registro profissional" hint="Obrigatório para responsáveis técnicos">
                   <Input {...register("crea")} placeholder="Ex: 5012345-D/SP" />
                 </FormField>
               )}
-              <FormGrid cols={3}>
+              <FormGrid>
                 <FormField label="Data de admissão">
-                  <Input type="date" {...register("dataAdmissao")} />
-                </FormField>
-                <FormField label="Salário" hint="Reservado para o módulo de RH">
-                  <Input type="number" step="0.01" {...register("salario")} placeholder="0,00" />
+                  <Controller name="dataAdmissao" control={control} render={({ field }) => <InputData value={(field.value as string) ?? ""} onChange={field.onChange} aria-label="Data de admissão" />} />
                 </FormField>
                 <FormField label="Status">
                   <Select {...register("statusColaborador")}>
@@ -366,15 +392,16 @@ export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
                   </Select>
                 </FormField>
               </FormGrid>
+              {isEditing && <AvisoInativacaoStatus url={`/api/tecnicos/${initialData.id}`} mostrar={inativandoPeloStatus} motivo={motivoInativacao} onMotivo={setMotivoInativacao} />}
             </FormSection>
 
             <FormSection title="Jornada de trabalho">
               <FormGrid>
                 <FormField label="Horário de entrada">
-                  <Input type="time" {...register("jornadaEntrada")} />
+                  <Controller name="jornadaEntrada" control={control} render={({ field }) => <InputHora value={(field.value as string) ?? ""} onChange={field.onChange} aria-label="Horário de entrada" />} />
                 </FormField>
                 <FormField label="Horário de saída">
-                  <Input type="time" {...register("jornadaSaida")} />
+                  <Controller name="jornadaSaida" control={control} render={({ field }) => <InputHora value={(field.value as string) ?? ""} onChange={field.onChange} aria-label="Horário de saída" />} />
                 </FormField>
               </FormGrid>
               <FormField label="Dias da semana">
@@ -406,8 +433,7 @@ export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
           <div className={cn("space-y-8", aba !== "competencias" && "hidden")}>
             <FormSection title="Competências para execução">
               <p className="text-sm text-ink-muted -mt-1">
-                Marque os tipos de OS que este colaborador está habilitado a executar. Na criação de ordens de serviço,
-                apenas os colaboradores com competência no tipo selecionado serão sugeridos.
+                Tipos de OS que este colaborador pode executar; só eles são sugeridos ao criar a OS.
               </p>
               {tiposOs.length === 0 ? (
                 <p className="text-sm text-ink-subtle">Nenhum tipo de OS cadastrado. Cadastre em Configurações → Tipos de OS.</p>
@@ -463,7 +489,7 @@ export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
           <div className={cn("space-y-6", aba !== "documentos" && "hidden")}>
             <input ref={docRef} type="file" onChange={handleDocFile} className="hidden" />
             <FormSection title="Documentos">
-              <p className="text-sm text-ink-muted -mt-1">CNH, certificados, ASO e demais documentos. Documentos vencendo em até 30 dias são destacados.</p>
+              <p className="text-sm text-ink-muted -mt-1">CNH, certificados, ASO e outros. Vencimento em até 30 dias é destacado.</p>
               {documentos.length === 0 ? (
                 <p className="text-sm text-ink-subtle py-4 text-center border border-dashed border-surface-border rounded-lg">Nenhum documento adicionado.</p>
               ) : (
@@ -484,7 +510,7 @@ export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
                             <Input value={doc.nome} onChange={(e) => updDoc(idx, "nome", e.target.value)} placeholder="Ex: CNH categoria D" />
                           </FormField>
                           <FormField label="Vencimento">
-                            <Input type="date" value={doc.dataVencimento ?? ""} onChange={(e) => updDoc(idx, "dataVencimento", e.target.value || null)} />
+                            <InputData value={doc.dataVencimento ?? ""} onChange={(v) => updDoc(idx, "dataVencimento", v || null)} />
                           </FormField>
                         </div>
                         <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -493,10 +519,10 @@ export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
                               <Upload className="w-3.5 h-3.5" /> {doc.arquivoUrl ? "Trocar arquivo" : "Anexar arquivo"}
                             </Button>
                             {doc.arquivoUrl && <span className="text-xs text-success-600">Arquivo anexado</span>}
-                            {vencido && <span className="text-xs font-semibold bg-red-50 text-red-700 px-2 py-0.5 rounded-full">Vencido</span>}
-                            {alerta && <span className="text-xs font-semibold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full">Vence em 30 dias</span>}
+                            {vencido && <span className="text-xs font-semibold bg-atrasado-claro text-atrasado-texto px-2 py-0.5 rounded-full">Vencido</span>}
+                            {alerta && <span className="text-xs font-semibold bg-atencao-claro text-atencao-texto px-2 py-0.5 rounded-full">Vence em 30 dias</span>}
                           </div>
-                          <button type="button" onClick={() => removeDoc(idx)} className="text-red-500 hover:text-red-700 p-1.5"><Trash2 className="w-4 h-4" /></button>
+                          <button type="button" onClick={() => removeDoc(idx)} className="text-atrasado hover:text-atrasado-texto p-1.5"><Trash2 className="w-4 h-4" /></button>
                         </div>
                       </div>
                     );
@@ -508,15 +534,41 @@ export function ColaboradorForm({ initialData }: ColaboradorFormProps) {
               </Button>
             </FormSection>
           </div>
-        </div>
+        </fieldset>
+
+        {/* ABA — Acesso ao app (login de técnico; salva por API própria, fora do cadastro) */}
+        {podeAcesso && aba === "acesso" && (
+          <div className="p-5 sm:p-6 lg:p-8">
+            <FormSection title="Acesso ao app">
+              {isEditing && acessoInicial ? (
+                <AcessoAppColaborador tecnicoId={initialData.id} emailSalvo={acessoInicial.email} inicial={acessoInicial} />
+              ) : (
+                <p className="text-sm text-ink-muted">Salve o colaborador primeiro para liberar o acesso ao app.</p>
+              )}
+            </FormSection>
+          </div>
+        )}
+
+        {/* ABA 5 — Dados financeiros / Folha (só com a permissão; salva separado do cadastro) */}
+        {podeFolha && aba === "folha" && (
+          <div className="p-5 sm:p-6 lg:p-8">
+            {isEditing ? <FolhaColaborador colaboradorId={initialData.id} /> : (
+              <p className="text-sm text-ink-muted">Salve o colaborador; os dados financeiros ficam disponíveis na edição.</p>
+            )}
+          </div>
+        )}
       </div>
 
-      <div className="flex items-center justify-end gap-3 pt-1">
-        <Button type="button" variant="secondary" onClick={() => router.back()}>Cancelar</Button>
-        <Button type="submit" loading={isSubmitting}>
-          {isEditing ? "Salvar alterações" : "Cadastrar colaborador"}
-        </Button>
-      </div>
+      {aba === "folha" || aba === "acesso" ? null : somenteLeitura ? (
+        <p data-somente-leitura className="text-right text-xs text-ink-muted pt-1">Somente leitura: requer a permissão Equipes › gerenciar.</p>
+      ) : (
+        <div className="flex items-center justify-end gap-3 pt-1">
+          <Button type="button" variant="secondary" onClick={() => router.back()}>Cancelar</Button>
+          <Button type="submit" loading={isSubmitting}>
+            {isEditing ? "Salvar alterações" : "Cadastrar colaborador"}
+          </Button>
+        </div>
+      )}
     </form>
   );
 }

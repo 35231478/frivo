@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/ui/page-header";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { VeiculoForm } from "@/components/forms/veiculo-form";
 
-export const metadata: Metadata = { title: "Editar Veículo" };
+export const metadata: Metadata = { title: "Editar veículo" };
 
 export default async function EditarVeiculoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -69,11 +70,14 @@ export default async function EditarVeiculoPage({ params }: { params: Promise<{ 
         actions={<InativarRegistro url={`/api/veiculos/${veiculo.id}`} modulo="veiculos" acaoReativar="gerenciar" variante="botao" ativo={veiculo.status !== "INATIVO"} nome={veiculo.placa} entidade="veículo" />}
       />
       {veiculo.status === "INATIVO" && (
-        <div data-aviso-inativo className="mb-4 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-3 text-sm">
+        <div data-aviso-inativo className="mb-4 bg-surface-page border border-surface-border text-ink rounded-card px-4 py-3 text-sm">
           Este veículo está <strong>inativo</strong>: não aparece na lista padrão nem no checklist. Use “Reativar” para voltar a usá-lo.
         </div>
       )}
-      <VeiculoForm key={veiculo.status} initialData={initialData} ocorrencias={ocorrencias} />
+      <VeiculoForm
+        key={veiculo.status} initialData={initialData} ocorrencias={ocorrencias}
+        somenteLeitura={!pode(session!.user!.permissoes, "veiculos", "gerenciar", session!.user!.role)}
+      />
     </div>
   );
 }

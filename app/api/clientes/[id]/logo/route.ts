@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
+import { validarArquivoUpload } from "@/lib/anexos-server";
+import { TIPOS_IMAGEM } from "@/lib/anexos";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -25,16 +27,13 @@ export async function PUT(req: NextRequest, { params }: Params) {
     return NextResponse.json({ erro: "Nenhum arquivo enviado." }, { status: 400 });
   }
 
-  if (!file.type.startsWith("image/")) {
-    return NextResponse.json({ erro: "Envie apenas imagens (PNG, JPG, WEBP)." }, { status: 400 });
-  }
-
-  if (file.size > MAX_LOGO_SIZE) {
-    return NextResponse.json({ erro: "Imagem muito grande. Tamanho máximo: 2 MB." }, { status: 400 });
-  }
-
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const logo = `data:${file.type};base64,${buffer.toString("base64")}`;
+  // Tipo decidido pelos BYTES (SVG/HTML disfarçado de imagem é recusado); grava o data URL normalizado
+  const r = await validarArquivoUpload(file, {
+    tipos: TIPOS_IMAGEM, tamanhoMax: MAX_LOGO_SIZE,
+    mensagemTipo: "Envie apenas imagens (PNG, JPG, WEBP).",
+  });
+  if (!r.ok) return NextResponse.json({ erro: r.erro }, { status: 400 });
+  const logo = r.arquivo.conteudo;
 
   await prisma.cliente.update({ where: { id }, data: { logo } });
 

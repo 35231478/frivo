@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmar } from "@/components/ui/avisos";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +21,6 @@ interface Props {
   emailInicial?: string | null;
   whatsappInicial?: string | null;
   temAcesso: boolean;
-  senhaProvisoriaInicial?: string | null;
   acessoConcedidoEmInicial?: string | Date | null;
   permissoesIniciais?: Record<string, boolean> | null;
   onChange?: (info: AcessoChange) => void;
@@ -28,15 +28,24 @@ interface Props {
 
 export function PortalAcessoContato({
   clienteId, contatoId, contatoNome, emailInicial, whatsappInicial,
-  temAcesso: temAcessoInicial, senhaProvisoriaInicial, acessoConcedidoEmInicial, permissoesIniciais, onChange,
+  temAcesso: temAcessoInicial, acessoConcedidoEmInicial, permissoesIniciais, onChange,
 }: Props) {
   const [aberto, setAberto] = useState(false);
   const [email, setEmail] = useState(emailInicial ?? "");
   const [senha, setSenha] = useState("");
   const [temAcesso, setTemAcesso] = useState(temAcessoInicial);
-  const [senhaProvisoria, setSenhaProvisoria] = useState<string | null>(senhaProvisoriaInicial ?? null);
+  // A senha só existe aqui logo depois de definida/redefinida: o servidor guarda apenas o hash.
+  const [senhaProvisoria, setSenhaProvisoria] = useState<string | null>(null);
   const [revelar, setRevelar] = useState(false);
-  const [perms, setPerms] = useState<Record<string, boolean>>(permissoesIniciais ?? {});
+  // UX-5 (C1): acesso NOVO já nasce vendo o essencial — inclusive as FATURAS (o portal
+  // existe para o boleto se entregar sozinho). O gestor desmarca o que não quiser.
+  const PERMISSOES_PADRAO_CONCESSAO: Record<string, boolean> = {
+    verOS: true, abrirChamados: true, verDocumentos: true, verEquipamentos: true,
+    verFinanceiro: true, verBoletos: true, verValores: true,
+  };
+  const [perms, setPerms] = useState<Record<string, boolean>>(
+    permissoesIniciais ?? (temAcessoInicial ? {} : PERMISSOES_PADRAO_CONCESSAO),
+  );
   const [salvando, setSalvando] = useState(false);
   const [acao, setAcao] = useState<"salvar" | "redefinir" | "revogar" | null>(null);
   const [fb, setFb] = useState<{ t: "ok" | "erro"; m: string } | null>(null);
@@ -50,7 +59,8 @@ export function PortalAcessoContato({
   async function salvar() {
     setFb(null);
     if (!email) { setFb({ t: "erro", m: "Informe o e-mail de acesso." }); return; }
-    if (!temAcesso && senha.length < 4) { setFb({ t: "erro", m: "Defina uma senha (mín. 4 caracteres)." }); return; }
+    if (!temAcesso && senha.length < 8) { setFb({ t: "erro", m: "Defina uma senha (mín. 8 caracteres)." }); return; }
+    if (temAcesso && senha && senha.length < 8) { setFb({ t: "erro", m: "A nova senha precisa de pelo menos 8 caracteres." }); return; }
     setSalvando(true); setAcao("salvar");
     try {
       const res = await fetch(`/api/clientes/${clienteId}/contatos/${contatoId}/acesso-portal`, {
@@ -60,8 +70,8 @@ export function PortalAcessoContato({
       if (!res.ok) { const e = await res.json().catch(() => ({})); setFb({ t: "erro", m: e.erro ?? "Erro ao salvar." }); return; }
       const data = await res.json().catch(() => ({}));
       setTemAcesso(true); setSenha("");
-      if (data.senhaProvisoria) setSenhaProvisoria(data.senhaProvisoria);
-      setFb({ t: "ok", m: "Acesso concedido!" });
+      if (data.senhaProvisoria) { setSenhaProvisoria(data.senhaProvisoria); setRevelar(true); }
+      setFb({ t: "ok", m: "Acesso concedido." });
       onChange?.({ temAcesso: true, senhaProvisoria: data.senhaProvisoria ?? senhaProvisoria, acessoConcedidoEm: data.acessoConcedidoEm ?? null });
     } catch { setFb({ t: "erro", m: "Erro de conexão." }); } finally { setSalvando(false); setAcao(null); }
   }
@@ -73,26 +83,26 @@ export function PortalAcessoContato({
       if (!res.ok) { const e = await res.json().catch(() => ({})); setFb({ t: "erro", m: e.erro ?? "Erro ao redefinir." }); return; }
       const data = await res.json();
       setTemAcesso(true); setSenhaProvisoria(data.senhaProvisoria ?? null); setRevelar(true);
-      setFb({ t: "ok", m: "Nova senha provisória gerada!" });
+      setFb({ t: "ok", m: "Nova senha provisória gerada." });
       onChange?.({ temAcesso: true, senhaProvisoria: data.senhaProvisoria ?? null, acessoConcedidoEm: data.acessoConcedidoEm ?? null });
     } catch { setFb({ t: "erro", m: "Erro de conexão." }); } finally { setSalvando(false); setAcao(null); }
   }
 
   async function revogar() {
-    if (!confirm("Revogar o acesso ao portal deste contato?")) return;
+    if (!(await confirmar({ mensagem: "Revogar o acesso ao portal deste contato?", perigo: true, confirmarTexto: "Revogar acesso" }))) return;
     setSalvando(true); setAcao("revogar");
     try {
       const res = await fetch(`/api/clientes/${clienteId}/contatos/${contatoId}/acesso-portal`, { method: "DELETE" });
       if (res.ok) {
-        setTemAcesso(false); setRevelar(false);
+        setTemAcesso(false); setRevelar(false); setSenhaProvisoria(null);
         setFb({ t: "ok", m: "Acesso revogado." });
-        onChange?.({ temAcesso: false, senhaProvisoria, acessoConcedidoEm: null });
+        onChange?.({ temAcesso: false, senhaProvisoria: null, acessoConcedidoEm: null });
       }
     } finally { setSalvando(false); setAcao(null); }
   }
 
   const msgConvite =
-    `Olá ${contatoNome}, seu acesso ao portal do cliente está pronto.\n` +
+    `Prezado(a) ${contatoNome}, seu acesso ao portal do cliente está pronto.\n` +
     `Acesse: ${linkPortal}\nE-mail: ${email}${senhaProvisoria ? `\nSenha: ${senhaProvisoria}` : ""}`;
   const mailto = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent("Acesso ao Portal do Cliente")}&body=${encodeURIComponent(msgConvite)}`;
   const wpp = whatsappInicial ? whatsappLink(whatsappInicial, msgConvite) : `https://wa.me/?text=${encodeURIComponent(msgConvite)}`;
@@ -116,7 +126,7 @@ export function PortalAcessoContato({
       </div>
 
       {fb && (
-        <div className={fb.t === "ok" ? "bg-success-50 border border-success-200 text-success-700 text-xs rounded px-2 py-1.5 flex items-center gap-1.5" : "bg-red-50 border border-red-200 text-red-700 text-xs rounded px-2 py-1.5 flex items-center gap-1.5"}>
+        <div className={fb.t === "ok" ? "bg-success-50 border border-success-200 text-success-700 text-xs rounded px-2 py-1.5 flex items-center gap-1.5" : "bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-xs rounded px-2 py-1.5 flex items-center gap-1.5"}>
           {fb.t === "ok" ? <Check className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />} {fb.m}
         </div>
       )}
@@ -130,12 +140,19 @@ export function PortalAcessoContato({
           </div>
           <div className="min-w-0">
             <p className="text-[11px] font-semibold text-ink-muted">Senha provisória</p>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-mono text-ink">{revelar ? (senhaProvisoria || "—") : "••••••••"}</span>
-              <button type="button" onClick={() => setRevelar((v) => !v)} className="text-ink-muted hover:text-ink" title={revelar ? "Ocultar" : "Revelar"}>
-                {revelar ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-              </button>
-            </div>
+            {senhaProvisoria ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-mono text-ink">{revelar ? senhaProvisoria : "••••••••"}</span>
+                  <button type="button" onClick={() => setRevelar((v) => !v)} className="text-ink-muted hover:text-ink" title={revelar ? "Ocultar" : "Revelar"}>
+                    {revelar ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+                <p className="text-[10px] text-atencao-texto">Repasse agora: por segurança ela não será exibida de novo.</p>
+              </>
+            ) : (
+              <p className="text-xs text-ink-muted">Definida. Para enviar uma nova ao contato, use “Redefinir senha”.</p>
+            )}
           </div>
         </div>
       )}
@@ -148,13 +165,13 @@ export function PortalAcessoContato({
         </div>
         <div>
           <label className="text-[11px] font-semibold text-ink">{temAcesso ? "Nova senha (opcional)" : "Senha temporária"}</label>
-          <Input value={senha} onChange={(e) => setSenha(e.target.value)} type="text" placeholder={temAcesso ? "deixe em branco para manter" : "mín. 4 caracteres"} />
+          <Input value={senha} onChange={(e) => setSenha(e.target.value)} type="text" placeholder={temAcesso ? "deixe em branco para manter" : "mín. 8 caracteres"} />
         </div>
       </div>
 
       <div>
         <p className="text-[11px] font-semibold text-ink mb-1">Permissões</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 divide-y divide-gray-100 sm:divide-y-0">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 divide-y divide-surface-linha sm:divide-y-0">
           {PERMISSOES_PORTAL.map((p) => (
             <ToggleSwitch key={p.chave} label={p.label} checked={!!perms[p.chave]} onChange={(v) => setPerms((s) => ({ ...s, [p.chave]: v }))} />
           ))}
@@ -168,7 +185,7 @@ export function PortalAcessoContato({
             <Button type="button" variant="secondary" loading={salvando && acao === "redefinir"} onClick={redefinir} className="text-xs h-8"><RefreshCw className="w-3.5 h-3.5" /> Redefinir senha</Button>
             <a href={mailto} className="inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700"><Mail className="w-3.5 h-3.5" /> Convite e-mail</a>
             <a href={wpp} target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-xs font-medium text-success-700 hover:text-success-800"><MessageCircle className="w-3.5 h-3.5" /> Convite WhatsApp</a>
-            <button type="button" onClick={revogar} className="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-700 ml-auto"><ShieldOff className="w-3.5 h-3.5" /> Revogar acesso</button>
+            <button type="button" onClick={revogar} className="inline-flex items-center gap-1 text-xs font-medium text-atrasado hover:text-atrasado-texto ml-auto"><ShieldOff className="w-3.5 h-3.5" /> Revogar acesso</button>
           </>
         )}
       </div>

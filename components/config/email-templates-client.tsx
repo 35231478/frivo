@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "@/components/ui/avisos";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,10 +12,11 @@ import { Pencil, ArrowLeft, Check } from "lucide-react";
 
 const SAMPLE: Record<string, string> = {
   cliente_nome: "João Silva", cliente_cnpj: "12.345.678/0001-90", valor: "R$ 1.250,00", vencimento: "10/07/2026",
-  dias_para_vencer: "3", dias_em_atraso: "5", descricao: "Manutenção preventiva", numero_os: "OS-2026-0001",
-  numero_orcamento: "ORC-2026-0001", numero_contrato: "CT-2026-001", link_boleto: "#", link_documento: "#", link_orcamento: "#",
+  dias_para_vencer: "3", dias_em_atraso: "5", descricao: "Manutenção preventiva", numero_os: "OS-9267",
+  numero_orcamento: "ORC-3358", numero_contrato: "CT-18", link_boleto: "#", link_documento: "#", link_orcamento: "#",
   empresa_nome: "Sua Empresa", empresa_telefone: "(11) 99999-0000", empresa_email: "contato@empresa.com.br",
   empresa_site: "www.empresa.com.br", mes_referencia: "Junho/2026", data_aprovacao: "01/07/2026",
+  usuario_nome: "Maria Souza", link_definir_senha: "#", validade_convite: "72 horas", validade_link: "60 minutos",
 };
 const EMPRESA_SAMPLE = { nome: "Sua Empresa", telefone: "(11) 99999-0000", email: "contato@empresa.com.br", site: "www.empresa.com.br", endereco: "Av. Exemplo, 100", cidade: "São Paulo", estado: "SP", logo: null };
 
@@ -45,9 +47,18 @@ export function EmailTemplatesClient() {
 
   async function salvar() {
     setSalvando(true);
-    const res = await fetch(`/api/email/templates/${editando.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assunto, corpo, ativo }) });
-    if (res.ok) { const t = await res.json(); setTemplates((p) => p.map((x) => (x.id === t.id ? t : x))); setEditando(null); }
-    setSalvando(false);
+    try {
+      const res = await fetch(`/api/email/templates/${editando.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assunto, corpo, ativo }) });
+      if (res.ok) {
+        const t = await res.json();
+        setTemplates((p) => p.map((x) => (x.id === t.id ? t : x)));
+        setEditando(null);
+        toast("Template salvo.");
+      } else {
+        // Gravação nunca falha em silêncio (UX-3)
+        toast((await res.json().catch(() => null))?.erro ?? "Não foi possível salvar o template.", "erro");
+      }
+    } catch { toast("Erro de conexão. Tente novamente.", "erro"); } finally { setSalvando(false); }
   }
 
   const def = editando ? TEMPLATES_PADRAO.find((t) => t.tipo === editando.tipo) : undefined;
@@ -65,7 +76,7 @@ export function EmailTemplatesClient() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <div className="space-y-4">
             <h3 className="font-bold text-ink">{editando.nome}</h3>
-            <ToggleSwitch checked={ativo} onChange={setAtivo} label="Template ativo" description="Quando inativo, este e-mail não é enviado" />
+            <ToggleSwitch checked={ativo} onChange={setAtivo} label="Modelo ativo" dica="Inativo, este e-mail não é enviado." />
             <FormField label="Assunto"><Input value={assunto} onChange={(e) => setAssunto(e.target.value)} /></FormField>
             <FormField label="Corpo (HTML)"><Textarea value={corpo} onChange={(e) => setCorpo(e.target.value)} rows={10} className="font-mono text-xs" /></FormField>
             <div>
@@ -94,7 +105,7 @@ export function EmailTemplatesClient() {
     <div className="space-y-4">
       {templates.length === 0 ? (
         <div className="text-center py-10 border border-dashed border-surface-border rounded-xl space-y-3">
-          <p className="text-sm text-ink-muted">Nenhum template personalizado. Os textos padrão já são usados automaticamente.</p>
+          <p className="text-sm text-ink-muted">Nenhum modelo personalizado. São usados os textos padrão.</p>
           <Button onClick={restaurarPadroes}>Carregar templates padrão para editar</Button>
         </div>
       ) : (

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { hojeDiaCivil } from "@/lib/fuso";
 
 /**
  * Status financeiro calculado dinamicamente a partir das contas a receber
@@ -18,16 +19,13 @@ export const LABELS_STATUS_FINANCEIRO_CALC: Record<StatusFinanceiroCalc, string>
 };
 
 export const COR_STATUS_FINANCEIRO_CALC: Record<StatusFinanceiroCalc, string> = {
-  SEM_HISTORICO: "bg-slate-100 text-slate-600",
+  SEM_HISTORICO: "bg-surface-linha text-ink-muted",
   ADIMPLENTE: "bg-success-50 text-success-700",
-  INADIMPLENTE: "bg-red-50 text-red-700",
+  INADIMPLENTE: "bg-atrasado-claro text-atrasado-texto",
 };
 
-function inicioDeHoje(): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
+/** Vencimento é dia civil: em atraso só depois do dia de Brasília (não às 21h da véspera). */
+const inicioDeHoje = () => hojeDiaCivil();
 
 /**
  * Calcula o status financeiro de um cliente com base nas contas a receber reais:
@@ -64,9 +62,7 @@ export async function calcularStatusFinanceiroDetalhado(
 ): Promise<{ status: StatusFinanceiroCalc; totalProximos30Dias: number }> {
   const where = { clienteId, ...(empresaId ? { empresaId } : {}) };
   const hoje = inicioDeHoje();
-  const em30Dias = new Date(hoje);
-  em30Dias.setDate(em30Dias.getDate() + 30);
-  em30Dias.setHours(23, 59, 59, 999);
+  const em30Dias = new Date(hojeDiaCivil(new Date(), 31).getTime() - 1); // até o fim do 30º dia
 
   const [total, vencidasEmAberto, proximos] = await Promise.all([
     prisma.contaReceber.count({ where }),
@@ -74,7 +70,7 @@ export async function calcularStatusFinanceiroDetalhado(
       where: { ...where, status: { in: [...STATUS_EM_ABERTO] }, dataVencimento: { lt: hoje } },
     }),
     prisma.contaReceber.aggregate({
-      _sum: { valor: true },
+      _sum: { valor: true, valorRecebido: true },
       where: { ...where, status: { in: [...STATUS_EM_ABERTO] }, dataVencimento: { gte: hoje, lte: em30Dias } },
     }),
   ]);
@@ -82,7 +78,8 @@ export async function calcularStatusFinanceiroDetalhado(
   const status: StatusFinanceiroCalc =
     total === 0 ? "SEM_HISTORICO" : vencidasEmAberto > 0 ? "INADIMPLENTE" : "ADIMPLENTE";
 
-  return { status, totalProximos30Dias: Number(proximos._sum.valor ?? 0) };
+  // Pelo que falta receber (a baixa parcial já entrou)
+  return { status, totalProximos30Dias: Math.round((Number(proximos._sum.valor ?? 0) - Number(proximos._sum.valorRecebido ?? 0)) * 100) / 100 };
 }
 
 /**

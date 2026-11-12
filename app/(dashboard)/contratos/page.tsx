@@ -1,17 +1,25 @@
+import { SelecaoMassaProvider } from "@/components/acoes-massa/selecao";
+import { BarraAcoesMassa } from "@/components/acoes-massa/barra";
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { passoCobranca } from "@/lib/financeiro/contrato-previsao";
+import { whereContratos } from "@/lib/listas/filtros";
+import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
 import { ContratosListaClient } from "@/components/contratos/contratos-lista-client";
+import { hojeDiaCivil } from "@/lib/fuso";
 
 export const metadata: Metadata = { title: "Contratos" };
 
 type SP = {
   busca?: string; status?: string; frequencia?: string;
   vigenciaInicio?: string; vigenciaFim?: string; valorMin?: string; valorMax?: string;
-  clienteId?: string; sort?: string; dir?: string;
+  clienteId?: string; sort?: string; dir?: string; pagina?: string; por?: string;
 };
 
 const SORT_MAP: Record<string, (dir: "asc" | "desc") => any> = {
+  numero: (dir) => ({ numero: dir }),
+  status: (dir) => ({ status: dir }),
   valorMensal: (dir) => ({ valorMensal: dir }),
   dataInicio: (dir) => ({ dataInicio: dir }),
   dataFim: (dir) => ({ dataFim: dir }),
@@ -23,56 +31,45 @@ export default async function ContratosPage({ searchParams }: { searchParams: Pr
   const session = await auth();
   const empresaId = session!.user!.empresaId;
 
+  // Vigência é dia civil: vence depois do último dia, no calendário de Brasília
   const agora = new Date();
-  const em30 = new Date(agora.getTime() + 30 * 864e5);
+  const hoje = hojeDiaCivil(agora);
+  const em30 = hojeDiaCivil(agora, 30);
   const sort = sp.sort && SORT_MAP[sp.sort] ? sp.sort : "dataInicio";
   const dir: "asc" | "desc" = sp.dir === "asc" ? "asc" : "desc";
 
-  const where: any = { empresaId };
-  if (sp.busca) {
-    where.OR = [
-      { numero: { contains: sp.busca, mode: "insensitive" } },
-      { cliente: { nome: { contains: sp.busca, mode: "insensitive" } } },
-    ];
-  }
-  if (sp.frequencia) where.periodicidade = sp.frequencia;
-  if (sp.clienteId) where.clienteId = sp.clienteId;
-  if (sp.vigenciaInicio) where.dataInicio = { ...(where.dataInicio ?? {}), gte: new Date(sp.vigenciaInicio) };
-  if (sp.vigenciaFim) { const f = new Date(sp.vigenciaFim); f.setHours(23, 59, 59, 999); where.dataInicio = { ...(where.dataInicio ?? {}), lte: f }; }
-  if (sp.valorMin) where.valorMensal = { ...(where.valorMensal ?? {}), gte: Number(sp.valorMin) };
-  if (sp.valorMax) where.valorMensal = { ...(where.valorMensal ?? {}), lte: Number(sp.valorMax) };
-  // Filtro de status: valores diretos do enum + computados (VENCIDO/VENCENDO)
-  const STATUS_ENUM = ["ATIVO", "SUSPENSO", "ENCERRADO", "CANCELADO", "EM_RENOVACAO", "AGUARDANDO_ASSINATURA"];
-  if (sp.status && STATUS_ENUM.includes(sp.status)) where.status = sp.status;
-  else if (sp.status === "INATIVO") where.status = { in: ["SUSPENSO", "ENCERRADO", "CANCELADO"] };
-  else if (sp.status === "VENCIDO") { where.status = { notIn: ["ENCERRADO", "CANCELADO"] }; where.dataFim = { lt: agora }; }
-  else if (sp.status === "VENCENDO") { where.status = "ATIVO"; where.dataFim = { gte: agora, lte: em30 }; }
+  const where = whereContratos(empresaId, sp, agora);
+  const { pagina: paginaPedida, porPagina } = lerPaginacao(sp);
+  const total = await prisma.contrato.count({ where });
+  const pagina = paginaValida(paginaPedida, porPagina, total);
 
-  const [contratos, total, agregadoFiltrado, ativos, somaAtivos, vencendo, vencidos, clientes] = await Promise.all([
+  const [contratos, agregadoFiltrado, ativos, somaAtivos, vencendo, vencidos, clientes] = await Promise.all([
     prisma.contrato.findMany({
       where,
       include: {
         cliente: { select: { id: true, nome: true, nomeFantasia: true, logo: true } },
-        ordensServico: { where: { previsaoConclusao: { gte: agora } }, orderBy: { previsaoConclusao: "asc" }, take: 1, select: { id: true, numero: true, status: true, previsaoConclusao: true } },
+        ordensServico: { where: { previsaoConclusao: { gte: hoje } }, orderBy: { previsaoConclusao: "asc" }, take: 1, select: { id: true, numero: true, status: true, previsaoConclusao: true } },
       },
-      orderBy: SORT_MAP[sort](dir),
-      take: 200,
+      orderBy: [SORT_MAP[sort](dir), { id: "asc" }],
+      ...janela(pagina, porPagina),
     }),
-    prisma.contrato.count({ where }),
-    prisma.contrato.aggregate({ where, _sum: { valorMensal: true } }),
+    prisma.contrato.groupBy({ by: ["periodicidade"], where, _sum: { valorMensal: true } }),
     prisma.contrato.count({ where: { empresaId, status: "ATIVO" } }),
-    prisma.contrato.aggregate({ where: { empresaId, status: "ATIVO" }, _sum: { valorMensal: true } }),
-    prisma.contrato.count({ where: { empresaId, status: "ATIVO", dataFim: { gte: agora, lte: em30 } } }),
-    prisma.contrato.count({ where: { empresaId, status: { not: "ENCERRADO" }, dataFim: { lt: agora } } }),
+    prisma.contrato.groupBy({ by: ["periodicidade"], where: { empresaId, status: "ATIVO" }, _sum: { valorMensal: true } }),
+    prisma.contrato.count({ where: { empresaId, status: "ATIVO", dataFim: { gte: hoje, lte: em30 } } }),
+    prisma.contrato.count({ where: { empresaId, status: { not: "ENCERRADO" }, dataFim: { lt: hoje } } }),
     prisma.cliente.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true, nomeFantasia: true }, orderBy: { nome: "asc" } }),
   ]);
 
-  const valorMensalAtivos = Number(somaAtivos._sum.valorMensal ?? 0);
+  // D1: o valor é o de cada cobrança; no total, o equivalente por mês (trimestral R$ 900 = R$ 300/mês)
+  const porMes = (grupos: { periodicidade: string; _sum: { valorMensal: unknown } }[]) =>
+    Math.round(grupos.reduce((a, g) => a + Number(g._sum.valorMensal ?? 0) / passoCobranca(g.periodicidade), 0) * 100) / 100;
+  const valorMensalAtivos = porMes(somaAtivos);
 
   const view = contratos.map((c) => {
     const fim = c.dataFim;
-    const vencido = !!fim && fim < agora && c.status !== "ENCERRADO";
-    const vencendo = !!fim && fim >= agora && fim <= em30 && c.status === "ATIVO";
+    const vencido = !!fim && fim < hoje && c.status !== "ENCERRADO";
+    const vencendo = !!fim && fim >= hoje && fim <= em30 && c.status === "ATIVO";
     return {
       id: c.id,
       numero: c.numero,
@@ -91,12 +88,17 @@ export default async function ContratosPage({ searchParams }: { searchParams: Pr
   });
 
   return (
+    <SelecaoMassaProvider entidade="contratos" idsPagina={contratos.map((c) => c.id)} total={total}>
     <ContratosListaClient
       contratos={view}
       total={total}
-      somaMensalFiltrada={Number(agregadoFiltrado._sum.valorMensal ?? 0)}
+      pagina={pagina}
+      porPagina={porPagina}
+      somaMensalFiltrada={porMes(agregadoFiltrado)}
       resumo={{ ativos, valorMensalTotal: valorMensalAtivos, valorAnualTotal: valorMensalAtivos * 12, vencendo, vencidos }}
       opcoesClientes={clientes.map((c) => ({ value: c.id, label: c.nomeFantasia ?? c.nome }))}
     />
+    <BarraAcoesMassa />
+    </SelecaoMassaProvider>
   );
 }

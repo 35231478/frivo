@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { linhasNaoIncluso, normasValidas } from "@/lib/orcamentos/proposta";
+
+/** Texto curto opcional: vazio = sem padrão (null) */
+const textoPadrao = (max: number) =>
+  z.string().trim().max(max, "Texto muito longo").nullable().optional().transform((v) => (v === undefined ? undefined : v || null));
 
 const configuracaoSchema = z.object({
   clienteEmailObrigatorio: z.boolean().optional(),
@@ -17,6 +23,22 @@ const configuracaoSchema = z.object({
   osPermitirSemContrato: z.boolean().optional(),
   osExigirQuestionario: z.boolean().optional(),
   osPermitirEdicaoConcluida: z.boolean().optional(),
+  osExigirPrestacaoMaterial: z.boolean().optional(),
+  // App do colaborador (modo técnico) — por empresa
+  appExibirDadosCliente: z.boolean().optional(),
+  appExibirContatosCliente: z.boolean().optional(),
+  appEsconderValores: z.boolean().optional(),
+  appMarcaDagua: z.boolean().optional(),
+  appMarcaDaguaOs: z.boolean().optional(),
+  appMarcaDaguaEndereco: z.boolean().optional(),
+  appMarcaDaguaCoordenadas: z.boolean().optional(),
+  appExigirLocalizacao: z.boolean().optional(),
+  appFotoSomenteCamera: z.boolean().optional(),
+  appConclusaoObrigatoria: z.boolean().optional(),
+  appUmDispositivo: z.boolean().optional(),
+  appCadastrarEquipamento: z.boolean().optional(),
+  appAvisarCliente: z.boolean().optional(),
+  appRastrearLocalizacao: z.boolean().optional(),
   notifEmailAbrirOs: z.boolean().optional(),
   notifEmailConcluirOs: z.boolean().optional(),
   notifWhatsappAbrirOs: z.boolean().optional(),
@@ -27,6 +49,23 @@ const configuracaoSchema = z.object({
   portalCorPrimaria: z.string().nullable().optional(),
   portalLogo: z.string().nullable().optional(),
   portalBoasVindas: z.string().nullable().optional(),
+  // ISS (%) sobre serviços nos orçamentos — 0 a 100, em centésimos
+  issAliquota: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : Number(String(v).replace(",", "."))),
+    z.number({ invalid_type_error: "Alíquota de ISS inválida" }).min(0, "A alíquota de ISS vai de 0 a 100%").max(100, "A alíquota de ISS vai de 0 a 100%")
+      .transform((v) => Math.round(v * 100) / 100).optional()
+  ),
+  // Padrões do orçamento novo (cada orçamento grava os seus e pode editar)
+  orcamentoValidadeDias: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : Number(v)),
+    z.number({ invalid_type_error: "Validade inválida" }).int("A validade é em dias inteiros")
+      .min(1, "A validade vai de 1 a 365 dias").max(365, "A validade vai de 1 a 365 dias").optional()
+  ),
+  orcamentoGarantiaServico: textoPadrao(200),
+  orcamentoGarantiaPecas: textoPadrao(200),
+  orcamentoNaoIncluso: z.string().max(4000, "\"Não incluso\" muito longo").nullable().optional()
+    .transform((v) => (v === undefined ? undefined : linhasNaoIncluso(v).join("\n") || null)),
+  orcamentoNormas: z.array(z.string().max(40)).max(20).optional().transform((v) => (v === undefined ? undefined : normasValidas(v))),
 }).strict();
 
 export async function GET() {
@@ -50,19 +89,22 @@ export async function PUT(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
 
-  const role = session.user!.role;
-  if (role !== "ADMIN" && role !== "SUPER_ADMIN") {
-    return NextResponse.json({ erro: "Apenas administradores podem alterar configurações." }, { status: 403 });
+  // Permissão, não role: quem tem "Configurações > Gerenciar" no perfil também pode (I5)
+  if (!pode(session.user!.permissoes, "configuracoes", "gerenciar", session.user!.role)) {
+    return NextResponse.json({ erro: "Sem permissão para alterar configurações." }, { status: 403 });
   }
 
   const empresaId = session.user!.empresaId;
   const body = await req.json();
 
-  // Remove campos de controle antes de validar (id/empresaId não são editáveis aqui)
-  const { id: _id, empresaId: _empresaId, ...entrada } = body;
+  // Remove campos de controle antes de validar (id/empresaId não são editáveis aqui) e os que têm
+  // tela/rota própria (QR Code e impressão da OS) — a tela manda a configuração inteira de volta
+  const { id: _id, empresaId: _empresaId, qrConfig: _qr, relatorioOsConfig: _rel, ...entrada } = body;
   const parsed = configuracaoSchema.safeParse(entrada);
   if (!parsed.success) {
-    return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+    const campos = parsed.error.flatten().fieldErrors;
+    const msg = campos.issAliquota?.[0] ?? campos.orcamentoValidadeDias?.[0] ?? campos.orcamentoNaoIncluso?.[0];
+    return NextResponse.json({ erro: msg ?? "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
   }
   const dados = parsed.data;
 

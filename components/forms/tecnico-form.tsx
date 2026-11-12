@@ -111,7 +111,7 @@ export function TecnicoForm({ initialData }: TecnicoFormProps) {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
       {erroGlobal && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{erroGlobal}</div>
+        <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3">{erroGlobal}</div>
       )}
 
       {/* Dados pessoais */}
@@ -125,18 +125,18 @@ export function TecnicoForm({ initialData }: TecnicoFormProps) {
                 <Upload className="w-3.5 h-3.5" /> {avatar ? "Trocar foto" : "Enviar foto"}
               </Button>
               {avatar && (
-                <Button type="button" variant="ghost" onClick={() => setAvatar(null)} className="text-xs text-red-500 hover:text-red-700 py-1 px-2.5 h-auto">
-                  <Trash2 className="w-3.5 h-3.5" /> Remover
+                <Button type="button" variant="ghost" onClick={() => setAvatar(null)} className="text-xs text-atrasado hover:text-atrasado-texto py-1 px-2.5 h-auto">
+                  <Trash2 className="w-3.5 h-3.5" /> Excluir
                 </Button>
               )}
-              <p className="text-xs text-gray-400">PNG, JPG ou WEBP — máx. 2 MB</p>
-              {erroFoto && <p className="text-xs text-red-600">{erroFoto}</p>}
+              <p className="text-xs text-ink-muted">PNG, JPG ou WEBP — máx. 2 MB</p>
+              {erroFoto && <p className="text-xs text-atrasado">{erroFoto}</p>}
             </div>
           </div>
         </FormField>
         <FormGrid>
           <FormField label="Nome completo" required error={errors.nome?.message}>
-            <Input {...register("nome")} error={!!errors.nome} />
+            <Input {...register("nome")} caixa="nome" error={!!errors.nome} />
           </FormField>
           <FormField label="CPF" required error={errors.cpf?.message}>
             <Input {...register("cpf")} placeholder="000.000.000-00" error={!!errors.cpf} />
@@ -144,7 +144,7 @@ export function TecnicoForm({ initialData }: TecnicoFormProps) {
         </FormGrid>
         <FormGrid cols={3}>
           <FormField label="E-mail" error={errors.email?.message}>
-            <Input {...register("email")} type="email" placeholder="tecnico@empresa.com.br" error={!!errors.email} />
+            <Input {...register("email")} caixa="email" type="email" placeholder="tecnico@empresa.com.br" error={!!errors.email} />
           </FormField>
           <FormField label="Telefone" required error={errors.telefone?.message}>
             <Input {...register("telefone")} placeholder="(00) 0000-0000" error={!!errors.telefone} />
@@ -192,9 +192,9 @@ export function TecnicoForm({ initialData }: TecnicoFormProps) {
             )}
 
             <div className="flex flex-wrap gap-1.5">
-              <p className="text-xs text-gray-400 w-full">Sugestões:</p>
+              <p className="text-xs text-ink-muted w-full">Sugestões:</p>
               {ESPECIALIDADES_SUGERIDAS.filter((e) => !especialidades.includes(e)).map((esp) => (
-                <button key={esp} type="button" onClick={() => adicionarEsp(esp)} className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-0.5 rounded transition-colors">
+                <button key={esp} type="button" onClick={() => adicionarEsp(esp)} className="text-xs bg-surface-linha hover:bg-surface-border text-ink-muted px-2 py-0.5 rounded transition-colors">
                   + {esp}
                 </button>
               ))}
@@ -210,7 +210,7 @@ export function TecnicoForm({ initialData }: TecnicoFormProps) {
         </FormField>
       </FormSection>
 
-      <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
+      <div className="flex items-center justify-end gap-3 pt-2 border-t border-surface-linha">
         <Button type="button" variant="secondary" onClick={() => router.back()}>Cancelar</Button>
         <Button type="submit" loading={isSubmitting}>
           {isEditing ? "Salvar alterações" : "Cadastrar técnico"}

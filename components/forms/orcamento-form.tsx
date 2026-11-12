@@ -1,21 +1,34 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InputData } from "@/components/ui/input-data";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid, FormSection } from "@/components/ui/form-field";
+import { Dica } from "@/components/ui/dica";
 import { PageHeader } from "@/components/ui/page-header";
 import { ItensTabela, type ItemTabela, type CatalogoItem, type TabelaPrecoCliente, type CadastroCatalogo } from "@/components/orcamento/itens-tabela";
 import { SelectCadastroRapido } from "@/components/ui/select-cadastro-rapido";
 import { CLIENTE, PRODUTO, SERVICO } from "@/components/cadastro-rapido/definicoes";
 import { OsVinculadas } from "@/components/orcamento/os-vinculadas";
-import { TotaisBloco } from "@/components/orcamento/totais-bloco";
+import { TotaisBloco, type DescontoGrupoState } from "@/components/orcamento/totais-bloco";
 import { PropostaCampos, PROPOSTA_VAZIA, type PropostaState } from "@/components/orcamento/proposta-campos";
 import { cn, LABELS_TIPO_ORCAMENTO } from "@/lib/utils";
 import type { TipoDesconto, TipoOrcamento } from "@prisma/client";
-import { AlertCircle, Tags, Calculator, FileSignature } from "lucide-react";
+import { AlertCircle, Tags, Calculator, FileSignature, Sparkles, RefreshCw } from "lucide-react";
+import { chaveDiaCivil, chaveHojeBR } from "@/lib/fuso";
+import { calcularOrcamento, DIAS_VALIDADE_PADRAO, totalDoItem, validadePadrao } from "@/lib/orcamentos/calculo";
+import { pecasDosMateriais, valorDaLinha } from "@/lib/orcamentos/materiais";
+import { MateriaisLinha } from "@/components/orcamento/materiais-linha";
+import { confirmar, toast } from "@/components/ui/avisos";
+import { nomeAutomaticoOrcamento, type ContextoNomeOrcamento } from "@/lib/orcamentos/nome";
+import { Select } from "@/components/ui/select";
+import { NOTA_ART_APOS_APROVACAO } from "@/lib/orcamentos/proposta";
+import {
+  FormaPagamentoCampo, GARANTIAS_PECAS_SUGERIDAS, GARANTIAS_SERVICO_SUGERIDAS, NaoInclusoCampo, NormasCampo,
+} from "@/components/orcamento/campos-corporativos";
 
 interface ClienteOpt {
   id: string;
@@ -75,8 +88,20 @@ interface OrcamentoInicial {
   descricao?: string | null;
   observacao?: string | null;
   validadeEm?: Date | string | null;
-  desconto: number;
-  tipoDesconto: TipoDesconto;
+  prazoExecucao?: string | null;
+  formaPagamento?: string | null;
+  garantiaServico?: string | null;
+  garantiaPecas?: string | null;
+  naoIncluso?: string | null;
+  normas?: string[];
+  unidadeId?: string | null;
+  contatoClienteId?: string | null;
+  descontoServicos: number;
+  tipoDescontoServicos: TipoDesconto;
+  descontoProdutos: number;
+  tipoDescontoProdutos: TipoDesconto;
+  /** Alíquota de ISS congelada neste orçamento */
+  issAliquota: number;
   servicos: ItemTabela[];
   produtos: ItemTabela[];
   ordensServicoIds: string[];
@@ -96,6 +121,36 @@ interface OrcamentoFormProps {
   clienteIdInicial?: string;
   osInicialId?: string;
   osInicial?: OsItem;
+  /** Alíquota de ISS da empresa hoje (%): o orçamento novo nasce com ela; na edição, oferece atualizar */
+  issAliquota?: number;
+  /** Há chave da IA no servidor? Sem ela o botão "Gerar descrição" fica desabilitado com aviso */
+  iaDisponivel?: boolean;
+  /** Da OS de origem: tipo, unidade e equipamento principal (prévia do nome automático) */
+  contextoNome?: Omit<ContextoNomeOrcamento, "cliente" | "itens">;
+  /**
+   * Construtor dentro de outra tela (gaveta "Criar orçamento" da OS): sem cabeçalho de página, o
+   * cliente fica o da OS, a OS nunca sai do vínculo, e salvar/cancelar devolvem para quem abriu
+   * em vez de navegar. O resto é o MESMO formulário e a MESMA API.
+   */
+  embutido?: { osId: string; onSalvo: (orcamento: any) => void; onCancelar: () => void };
+  /** Padrões de Configurações › Orçamentos (o orçamento NOVO abre com eles; cada um pode mudar) */
+  padroes?: PadroesOrcamentoForm;
+  /** Orçamento novo: destinatário sugerido (unidade da OS de origem, contato principal do cliente) */
+  destinatarioInicial?: { unidadeId: string | null; contatoClienteId: string | null };
+}
+
+export interface PadroesOrcamentoForm {
+  validadeDias: number;
+  garantiaServico: string | null;
+  garantiaPecas: string | null;
+  naoIncluso: string | null;
+  normas: string[];
+  responsavelTecnicoId: string | null;
+}
+
+interface OpcoesDestinatario {
+  unidades: { id: string; nome: string; principal: boolean; cidade: string | null; estado: string | null }[];
+  contatos: { id: string; nome: string; cargo: string | null; principal: boolean; email: string | null }[];
 }
 
 function toInput(v: number | null | undefined): string {
@@ -108,7 +163,7 @@ function propostaInicialToState(p?: PropostaInicial): PropostaState {
     valorMensal: toInput(p.valorMensal),
     frequenciaContrato: p.frequenciaContrato ?? "MENSAL",
     diaExecucao: toInput(p.diaExecucao),
-    dataInicioContrato: p.dataInicioContrato ? new Date(p.dataInicioContrato).toISOString().slice(0, 10) : "",
+    dataInicioContrato: p.dataInicioContrato ? chaveDiaCivil(p.dataInicioContrato) : "",
     vigenciaMeses: p.vigenciaMeses ? String(p.vigenciaMeses) : "12",
     condicaoPagamento: p.condicaoPagamento ?? "",
     diaFaturamento: toInput(p.diaFaturamento),
@@ -125,14 +180,15 @@ function propostaInicialToState(p?: PropostaInicial): PropostaState {
   };
 }
 
+/** Sugestões (o campo é texto livre) */
+const PRAZOS_SUGERIDOS = ["Imediato, após aprovação", "1 dia útil após aprovação", "3 dias úteis após aprovação", "5 dias úteis após aprovação", "10 dias úteis após aprovação", "A combinar"];
+
 function novoId() {
   return Math.random().toString(36).slice(2);
 }
 
 function toInputDate(d: Date | string | null | undefined): string {
-  if (!d) return "";
-  const data = typeof d === "string" ? new Date(d) : d;
-  return data.toISOString().slice(0, 10);
+  return d ? chaveDiaCivil(d) : "";
 }
 
 export function OrcamentoForm({
@@ -146,6 +202,12 @@ export function OrcamentoForm({
   clienteIdInicial,
   osInicialId,
   osInicial,
+  issAliquota: issAliquotaEmpresa = 0,
+  iaDisponivel = false,
+  contextoNome,
+  embutido,
+  padroes,
+  destinatarioInicial,
 }: OrcamentoFormProps) {
   const router = useRouter();
 
@@ -172,18 +234,44 @@ export function OrcamentoForm({
     },
   };
 
-  const [tipo, setTipo] = useState<TipoOrcamento>(inicial?.tipo ?? "COMUM");
-  const [proposta, setProposta] = useState<PropostaState>(propostaInicialToState(inicial?.proposta));
+  // Dentro da OS só existe "Orçamento" (proposta de contrato é coisa do módulo Comercial)
+  const tiposPermitidos: TipoOrcamento[] = embutido ? ["COMUM"] : ["COMUM", "PROPOSTA_CONTRATO"];
+  const [tipo, setTipo] = useState<TipoOrcamento>(embutido ? "COMUM" : inicial?.tipo ?? "COMUM");
+  // RT/ART valem nos dois tipos; o orçamento novo nasce com o RT padrão da empresa
+  const [proposta, setProposta] = useState<PropostaState>(
+    inicial ? propostaInicialToState(inicial.proposta) : { ...PROPOSTA_VAZIA, responsavelTecnicoId: padroes?.responsavelTecnicoId ?? "" },
+  );
   const [equipamentos, setEquipamentos] = useState<EquipamentoOpt[]>([]);
   const patchProposta = (patch: Partial<PropostaState>) => setProposta((p) => ({ ...p, ...patch }));
 
   const [nome, setNome] = useState(inicial?.nome ?? "");
   const [clienteId, setClienteId] = useState(inicial?.clienteId ?? clienteIdInicial ?? "");
   const [descricao, setDescricao] = useState(inicial?.descricao ?? "");
+  const [prazoExecucao, setPrazoExecucao] = useState(inicial?.prazoExecucao ?? "");
+  const [formaPagamento, setFormaPagamento] = useState(inicial?.formaPagamento ?? "");
   const [observacao, setObservacao] = useState(inicial?.observacao ?? "");
-  const [validadeEm, setValidadeEm] = useState(toInputDate(inicial?.validadeEm ?? null));
-  const [desconto, setDesconto] = useState(Number(inicial?.desconto ?? 0));
-  const [tipoDesconto, setTipoDesconto] = useState<TipoDesconto>(inicial?.tipoDesconto ?? "VALOR");
+  // Novo: garantias, não incluso e normas vêm dos padrões de Configurações; edição: os gravados
+  const [garantiaServico, setGarantiaServico] = useState((inicial ? inicial.garantiaServico : padroes?.garantiaServico) ?? "");
+  const [garantiaPecas, setGarantiaPecas] = useState((inicial ? inicial.garantiaPecas : padroes?.garantiaPecas) ?? "");
+  const [naoIncluso, setNaoIncluso] = useState((inicial ? inicial.naoIncluso : padroes?.naoIncluso) ?? "");
+  const [normas, setNormas] = useState<string[]>((inicial ? inicial.normas : padroes?.normas) ?? []);
+  // Destinatário ("Para:"): unidade do cliente e contato A/C
+  const [unidadeId, setUnidadeId] = useState((inicial ? inicial.unidadeId : destinatarioInicial?.unidadeId) ?? "");
+  const [contatoClienteId, setContatoClienteId] = useState((inicial ? inicial.contatoClienteId : destinatarioInicial?.contatoClienteId) ?? "");
+  const [destinos, setDestinos] = useState<OpcoesDestinatario>({ unidades: [], contatos: [] });
+  // Validade: no novo, a data de hoje (a do orçamento) + os dias do padrão (Configurações; 10) — editável
+  const diasValidade = padroes?.validadeDias ?? DIAS_VALIDADE_PADRAO;
+  const [validadeEm, setValidadeEm] = useState(
+    inicial ? toInputDate(inicial.validadeEm ?? null) : validadePadrao(chaveHojeBR(), diasValidade),
+  );
+  const [descontoServicos, setDescontoServicos] = useState<DescontoGrupoState>({ valor: Number(inicial?.descontoServicos ?? 0), tipo: inicial?.tipoDescontoServicos ?? "VALOR" });
+  const [descontoProdutos, setDescontoProdutos] = useState<DescontoGrupoState>({ valor: Number(inicial?.descontoProdutos ?? 0), tipo: inicial?.tipoDescontoProdutos ?? "VALOR" });
+  // ISS: novo = a da empresa; edição = a congelada no orçamento (até alguém pedir a atual)
+  const [issAliquota, setIssAliquota] = useState(inicial ? Number(inicial.issAliquota ?? 0) : issAliquotaEmpresa);
+  const [atualizarIss, setAtualizarIss] = useState(false);
+  // IA: texto sugerido aguardando decisão (nunca substitui a descrição sem o usuário pedir)
+  const [gerandoIa, setGerandoIa] = useState(false);
+  const [sugestaoIa, setSugestaoIa] = useState<string | null>(null);
   const [servicos, setServicos] = useState<ItemTabela[]>(
     inicial?.servicos.map((s) => ({ ...s, id: s.id || novoId() })) ?? [],
   );
@@ -197,14 +285,31 @@ export function OrcamentoForm({
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [tabelaPreco, setTabelaPreco] = useState<TabelaPrecoCliente | null>(null);
+  /** O cliente está ligado a uma tabela inativa: valem os preços padrão do catálogo, e a tela avisa */
+  const [tabelaInativa, setTabelaInativa] = useState<{ id: string; nome: string } | null>(null);
 
+  // A tabela de preços do cliente (ou nenhuma = catálogo padrão). Trocar o cliente busca de novo: a tabela
+  // (ou a ausência dela) é sempre a do cliente escolhido agora
   useEffect(() => {
-    if (!clienteId) { setTabelaPreco(null); return; }
+    if (!clienteId) { setTabelaPreco(null); setTabelaInativa(null); return; }
     let ativo = true;
     fetch(`/api/clientes/${clienteId}/tabela-preco`)
       .then((r) => r.json())
-      .then((d) => { if (ativo) setTabelaPreco(d && d.itens ? d : null); })
-      .catch(() => { if (ativo) setTabelaPreco(null); });
+      .then((d) => { if (ativo) { setTabelaPreco(d && d.itens ? d : null); setTabelaInativa(d?.vinculadaInativa ?? null); } })
+      .catch(() => { if (ativo) { setTabelaPreco(null); setTabelaInativa(null); } });
+    return () => { ativo = false; };
+  }, [clienteId]);
+
+  // Unidades e contatos do cliente para o "Para:"; trocar de cliente solta o que era do anterior
+  const clienteAnterior = useRef(clienteId);
+  useEffect(() => {
+    if (clienteAnterior.current !== clienteId) { setUnidadeId(""); setContatoClienteId(""); clienteAnterior.current = clienteId; }
+    if (!clienteId) { setDestinos({ unidades: [], contatos: [] }); return; }
+    let ativo = true;
+    fetch(`/api/orcamentos/destinatario?clienteId=${encodeURIComponent(clienteId)}`)
+      .then((r) => (r.ok ? r.json() : { unidades: [], contatos: [] }))
+      .then((d: OpcoesDestinatario) => { if (ativo) setDestinos({ unidades: d.unidades ?? [], contatos: d.contatos ?? [] }); })
+      .catch(() => { if (ativo) setDestinos({ unidades: [], contatos: [] }); });
     return () => { ativo = false; };
   }, [clienteId]);
 
@@ -227,14 +332,75 @@ export function OrcamentoForm({
     return () => { ativo = false; };
   }, [clienteId]);
 
-  const totalServicos = useMemo(
-    () => servicos.reduce((acc, it) => acc + (Number(it.quantidade) || 0) * (Number(it.valorUnitario) || 0), 0),
-    [servicos],
-  );
-  const totalProdutos = useMemo(
-    () => produtos.reduce((acc, it) => acc + (Number(it.quantidade) || 0) * (Number(it.valorUnitario) || 0), 0),
-    [produtos],
-  );
+  // O mesmo cálculo que o servidor grava (lib/orcamentos/calculo.ts)
+  // E3.3: as peças (venda à parte) dos materiais de cada serviço viram linhas de produto derivadas (só leitura)
+  const pecasDerivadas = useMemo<ItemTabela[]>(() => servicos.flatMap((s) => pecasDosMateriais(s.materiais).map((p, i) => ({
+    id: `peca:${s.id}:${i}`, catalogoId: p.material.produtoId ?? null, descricao: p.descricao, quantidade: p.quantidade,
+    valorUnitario: p.valorUnitario, valorTotal: p.valorTotal, derivada: { deServico: s.descricao || "serviço" },
+  }))), [servicos]);
+  const totais = useMemo(() => calcularOrcamento({
+    // Serviço com materiais: base + ajuste dos inclusos (ou o manual) — lib/orcamentos/materiais.ts
+    servicos: servicos.filter((s) => s.descricao.trim()).map((s) => (s.materiais?.length ? { quantidade: s.quantidade, valorUnitario: valorDaLinha(s).valorUnitario, valorTotal: valorDaLinha(s).valorTotal } : s)),
+    produtos: [...produtos.filter((p) => p.descricao.trim()), ...pecasDerivadas],
+    descontoServicos: descontoServicos.valor, tipoDescontoServicos: descontoServicos.tipo,
+    descontoProdutos: descontoProdutos.valor, tipoDescontoProdutos: descontoProdutos.tipo,
+    issAliquota,
+  }), [servicos, produtos, pecasDerivadas, descontoServicos, descontoProdutos, issAliquota]);
+
+  // Serviço do catálogo com composição (E3.2): materializa os materiais/peças com os preços deste cliente
+  async function materializarServico(item: ItemTabela, c: CatalogoItem) {
+    if (!c.temMateriais) return;
+    try {
+      const res = await fetch(`/api/orcamentos/materiais-padrao?servicoId=${encodeURIComponent(c.id)}${clienteId ? `&clienteId=${encodeURIComponent(clienteId)}` : ""}`, { cache: "no-store" });
+      const d = await res.json().catch(() => null);
+      if (!res.ok || !Array.isArray(d?.materiais)) { toast(d?.erro ?? "Não foi possível carregar os materiais do serviço.", "erro"); return; }
+      const materiais = d.materiais.map((m: any, i: number) => ({ ...m, id: `${item.id}:m${i}` }));
+      setServicos((prev) => prev.map((s) => (s.id === item.id ? { ...s, materiais } : s)));
+    } catch { toast("Erro de conexão ao carregar os materiais do serviço.", "erro"); }
+  }
+
+  // Prévia do nome automático: tipo da OS, equipamento, cliente/unidade ou os itens
+  const clienteSel = clientes.find((c) => c.id === clienteId);
+  const nomeAuto = nomeAutomaticoOrcamento({
+    ...contextoNome,
+    cliente: clienteSel ? (clienteSel.nomeFantasia || clienteSel.nome) : null,
+    itens: [...servicos, ...produtos].map((i) => i.descricao),
+  });
+
+  const osDaIa = embutido?.osId ?? (ordensIds.length === 1 ? ordensIds[0] : null);
+  async function gerarDescricaoIa() {
+    if (!iaDisponivel || gerandoIa) return;
+    const itens = (lista: ItemTabela[]) => lista.filter((i) => i.descricao.trim()).map((i) => ({ descricao: i.descricao.trim(), observacao: i.observacao ?? null }));
+    setGerandoIa(true);
+    try {
+      const res = await fetch("/api/orcamentos/descricao-ia", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ osId: osDaIa, nome: nome.trim() || null, servicos: itens(servicos), produtos: itens(produtos) }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.descricao) { toast(d.erro ?? "Não foi possível gerar a descrição.", "erro"); return; }
+      if (!descricao.trim()) {
+        setDescricao(d.descricao);
+        setSugestaoIa(null);
+        toast("Descrição gerada pela IA — revise antes de salvar.");
+      } else {
+        // Já havia texto: mostra a sugestão ao lado; só troca se o usuário pedir
+        setSugestaoIa(d.descricao);
+      }
+    } catch {
+      toast("Erro de conexão ao gerar a descrição.", "erro");
+    } finally {
+      setGerandoIa(false);
+    }
+  }
+  async function usarSugestaoIa() {
+    if (!sugestaoIa) return;
+    const ok = await confirmar({ titulo: "Substituir a descrição?", mensagem: "O texto atual da descrição será trocado pelo texto sugerido pela IA.", confirmarTexto: "Substituir" });
+    if (!ok) return;
+    setDescricao(sugestaoIa);
+    setSugestaoIa(null);
+  }
 
   const osPreCarregadas = useMemo<OsItem[]>(() => {
     const lista: OsItem[] = inicial?.osPreCarregadas ?? [];
@@ -248,7 +414,6 @@ export function OrcamentoForm({
     e.preventDefault();
     setErro("");
 
-    if (!nome.trim()) return setErro("Informe o nome do orçamento.");
     if (!clienteId) return setErro("Selecione um cliente.");
     if (servicos.length === 0 && produtos.length === 0) {
       return setErro("Adicione ao menos um serviço ou produto.");
@@ -261,23 +426,52 @@ export function OrcamentoForm({
       descricao: it.descricao.trim(),
       quantidade: Number(it.quantidade) || 0,
       valorUnitario: Number(it.valorUnitario) || 0,
-      observacao: it.observacao ?? null,
+      // O total que vale para a linha (o digitado manda; o servidor confere com unitário × qtd)
+      valorTotal: totalDoItem(it),
+      observacao: it.observacao?.trim() || null,
     });
-    const servPayload = servicos.filter((s) => s.descricao.trim()).map(limpar);
-    const prodPayload = produtos.filter((p) => p.descricao.trim()).map(limpar);
+    // E3.3: o serviço leva o snapshot dos materiais (unitário = base; o servidor recalcula o total = base + ajuste, ou o manual)
+    const servPayload = servicos.filter((s) => s.descricao.trim()).map((s) => ({
+      ...limpar(s),
+      ...(s.materiais?.length ? {
+        valorTotal: valorDaLinha(s).valorTotal, valorManual: !!s.valorManual,
+        materiais: s.materiais.map((m) => ({
+          produtoId: m.produtoId ?? null, descricao: m.descricao, unidade: m.unidade, comportamento: m.comportamento, quantidade: m.quantidade,
+          quantidadePadrao: m.quantidadePadrao, valorVendaUnit: m.valorVendaUnit, custoUnit: m.custoUnit ?? null, origem: m.origem, kitNome: m.kitNome ?? null,
+        })),
+      } : {}),
+    }));
+    // As peças derivadas NÃO vão como produto: o servidor as recompõe dos materiais
+    const prodPayload = produtos.filter((p) => p.descricao.trim() && !p.derivada).map(limpar);
 
     const payload: Record<string, any> = {
-      nome: nome.trim(),
+      // Em branco = o servidor compõe o nome automático (a mesma regra da prévia)
+      nome: nome.trim() || null,
+      prazoExecucao: prazoExecucao.trim() || null,
+      formaPagamento: formaPagamento.trim() || null,
+      garantiaServico: garantiaServico.trim() || null,
+      garantiaPecas: garantiaPecas.trim() || null,
+      naoIncluso: naoIncluso.trim() || null,
+      normas,
+      unidadeId: unidadeId || null,
+      contatoClienteId: contatoClienteId || null,
+      // Responsável técnico (nome/CREA no documento) e ART — nos dois tipos
+      responsavelTecnicoId: proposta.responsavelTecnicoId || null,
+      artNumero: proposta.artNumero?.trim() || null,
       clienteId,
       tipo,
       descricao: descricao?.trim() || null,
       observacao: observacao?.trim() || null,
       validadeEm: validadeEm || null,
-      desconto: Number(desconto) || 0,
-      tipoDesconto,
+      descontoServicos: descontoServicos.valor,
+      tipoDescontoServicos: descontoServicos.tipo,
+      descontoProdutos: descontoProdutos.valor,
+      tipoDescontoProdutos: descontoProdutos.tipo,
+      atualizarIss,
       servicos: servPayload,
       produtos: prodPayload,
-      ordensServicoIds: ordensIds,
+      // Embutido na OS: a OS de origem vai sempre (desmarcar na lista não a tira)
+      ordensServicoIds: embutido && !ordensIds.includes(embutido.osId) ? [...ordensIds, embutido.osId] : ordensIds,
     };
 
     if (tipo === "PROPOSTA_CONTRATO") {
@@ -317,6 +511,7 @@ export function OrcamentoForm({
         return;
       }
       const saved = await res.json();
+      if (embutido) { embutido.onSalvo(saved); return; }
       router.push(`/orcamentos/${saved.id}`);
       router.refresh();
     } catch {
@@ -327,10 +522,10 @@ export function OrcamentoForm({
   }
 
   return (
-    <form onSubmit={salvar} className="space-y-6">
-      <PageHeader
-        title={mode === "novo" ? "Novo Orçamento" : `Editar ${inicial?.codigo ?? "Orçamento"}`}
-        description={mode === "novo" ? "Crie uma proposta comercial para o cliente" : "Edite os dados deste orçamento"}
+    <form onSubmit={salvar} className="space-y-6" data-orcamento-form={embutido ? "embutido" : mode}>
+      {!embutido && <PageHeader
+        title={mode === "novo" ? "Novo orçamento" : `Editar ${inicial?.codigo ?? "orçamento"}`}
+        description={mode === "novo" ? "Proposta comercial para o cliente" : undefined}
         backHref={mode === "novo" ? "/orcamentos" : `/orcamentos/${inicial?.id}`}
         actions={
           <>
@@ -342,10 +537,10 @@ export function OrcamentoForm({
             </Button>
           </>
         }
-      />
+      />}
 
       {erro && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 flex items-center gap-2">
+        <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
           {erro}
         </div>
@@ -361,11 +556,14 @@ export function OrcamentoForm({
           )}
         </div>
       )}
+      {tabelaInativa && (
+        <p className="text-xs text-atencao-texto" data-aviso-tabela-inativa>A tabela do cliente (“{tabelaInativa.nome}”) está inativa: valem os preços padrão do catálogo.</p>
+      )}
 
-      <div className="card-padded">
+      {tiposPermitidos.length > 1 && <div className="card-padded">
         <FormSection title="Tipo de documento">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {(["COMUM", "PROPOSTA_CONTRATO"] as TipoOrcamento[]).map((t) => {
+            {tiposPermitidos.map((t) => {
               const ativo = tipo === t;
               const Icone = t === "COMUM" ? Calculator : FileSignature;
               return (
@@ -384,7 +582,7 @@ export function OrcamentoForm({
                   <div>
                     <p className="text-sm font-semibold text-ink">{LABELS_TIPO_ORCAMENTO[t]}</p>
                     <p className="text-xs text-ink-muted">
-                      {t === "COMUM" ? "Proposta comercial avulsa de serviços/produtos." : "Contrato de manutenção que pode ser convertido em contrato ao ser aprovado."}
+                      {t === "COMUM" ? "Proposta comercial avulsa de serviços e produtos." : "Contrato de manutenção, convertido em contrato após a aprovação."}
                     </p>
                   </div>
                 </button>
@@ -392,18 +590,20 @@ export function OrcamentoForm({
             })}
           </div>
         </FormSection>
-      </div>
+      </div>}
 
       <div className="card-padded space-y-6">
         <FormSection title="Identificação">
           <FormGrid cols={2}>
-            <FormField label="Nome do orçamento" required>
-              <Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Manutenção mensal — split sala XYZ" />
+            <FormField label="Nome do orçamento" dica="Gerado automaticamente a partir do tipo da OS, do equipamento, do cliente ou dos itens. Pode ser editado; apague o texto para voltar ao nome automático.">
+              <Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder={nomeAuto} data-nome-orcamento />
             </FormField>
             <FormField label="Cliente" required>
               <SelectCadastroRapido
                 value={clienteId}
                 onChange={setClienteId}
+                disabled={!!embutido}
+                textoDesabilitado={embutido ? clientes.filter((c) => c.id === clienteId).map((c) => CLIENTE.opcao(c).label)[0] ?? "Cliente da OS" : undefined}
                 opcoes={clientes.map(CLIENTE.opcao)}
                 entidade={CLIENTE.entidade}
                 placeholder="Selecione..."
@@ -419,13 +619,69 @@ export function OrcamentoForm({
                 }}
               />
             </FormField>
-            <FormField label="Validade" hint="Após esta data o orçamento não pode mais ser aprovado">
-              <Input type="date" value={validadeEm} onChange={(e) => setValidadeEm(e.target.value)} />
+            <FormField label="Validade" dica={`Padrão: ${diasValidade} dias após a data do orçamento (Configurações › Orçamentos). Após a validade, o orçamento não pode ser aprovado.`}>
+              <InputData value={validadeEm} onChange={setValidadeEm} aria-label="Validade" />
             </FormField>
           </FormGrid>
-          <FormField label="Descrição" hint="Resumo da proposta para o cliente">
-            <Textarea value={descricao ?? ""} onChange={(e) => setDescricao(e.target.value)} rows={3} />
-          </FormField>
+          {tipo !== "PROPOSTA_CONTRATO" && clienteId && (
+            <div data-destinatario>
+              <FormGrid cols={2}>
+                <FormField label="Unidade (endereço do “Para:”)" dica="Endereço exibido no campo “Para:” do documento. Em branco, é usado o endereço do cadastro do cliente.">
+                  <Select value={unidadeId} onChange={(e) => setUnidadeId(e.target.value)} placeholder="Endereço do cliente" data-unidade-orcamento>
+                    {unidadeId && !destinos.unidades.some((u) => u.id === unidadeId) && <option value={unidadeId}>Unidade atual</option>}
+                    {destinos.unidades.map((u) => (
+                      <option key={u.id} value={u.id}>{u.nome}{u.cidade ? ` — ${u.cidade}${u.estado ? `/${u.estado}` : ""}` : ""}</option>
+                    ))}
+                  </Select>
+                </FormField>
+                <FormField label="A/C (aos cuidados de)" dica="Contato do cliente que recebe a proposta.">
+                  <Select value={contatoClienteId} onChange={(e) => setContatoClienteId(e.target.value)} placeholder="Sem contato A/C" data-contato-orcamento>
+                    {contatoClienteId && !destinos.contatos.some((c) => c.id === contatoClienteId) && <option value={contatoClienteId}>Contato atual</option>}
+                    {destinos.contatos.map((c) => (
+                      <option key={c.id} value={c.id}>{c.nome}{c.cargo ? ` (${c.cargo})` : ""}{c.principal ? " · principal" : ""}</option>
+                    ))}
+                  </Select>
+                </FormField>
+              </FormGrid>
+            </div>
+          )}
+          <div className="space-y-2" data-descricao-orcamento>
+            <FormField label="Descrição" dica="Resumo da proposta, exibido ao cliente.">
+              <Textarea value={descricao ?? ""} onChange={(e) => setDescricao(e.target.value)} rows={Math.min(14, Math.max(5, (descricao ?? "").split("\n").length + 1))} />
+            </FormField>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={gerarDescricaoIa}
+                loading={gerandoIa}
+                disabled={!iaDisponivel}
+                data-gerar-descricao-ia
+                title={iaDisponivel ? "Rascunha o texto com a descrição da OS, os equipamentos, as fotos e os itens — revise antes de salvar" : "IA não configurada"}
+              >
+                {descricao.trim() ? <RefreshCw className="w-3.5 h-3.5" aria-hidden /> : <Sparkles className="w-3.5 h-3.5" aria-hidden />}
+                {descricao.trim() ? "Gerar outra descrição (IA)" : "Gerar descrição profissional (IA)"}
+              </Button>
+              {!iaDisponivel ? (
+                <span className="text-xs text-ink-muted" data-ia-indisponivel>IA não configurada</span>
+              ) : (
+                <Dica rotulo="Descrição pela IA" lado="direita"
+                  texto={`Rascunho gerado a partir ${osDaIa ? "da OS (descrição, equipamentos e fotos) e " : ""}dos itens do orçamento, sem inventar informações. Revise antes de salvar.`} />
+              )}
+            </div>
+            {sugestaoIa && (
+              <div className="rounded-lg border border-primary-200 bg-primary-50/60 p-3 space-y-2" data-sugestao-ia role="region" aria-label="Sugestão da IA">
+                <p className="text-xs font-semibold uppercase tracking-wider text-primary-700">Sugestão da IA</p>
+                <p className="text-sm text-ink whitespace-pre-line">{sugestaoIa}</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" size="sm" onClick={usarSugestaoIa}>Substituir a descrição</Button>
+                  <Button type="button" size="sm" variant="secondary" onClick={gerarDescricaoIa} loading={gerandoIa}>Gerar de novo</Button>
+                  <Button type="button" size="sm" variant="ghost" onClick={() => setSugestaoIa(null)}>Descartar</Button>
+                </div>
+              </div>
+            )}
+          </div>
           <FormField label="Observações internas">
             <Textarea value={observacao ?? ""} onChange={(e) => setObservacao(e.target.value)} rows={2} />
           </FormField>
@@ -435,26 +691,79 @@ export function OrcamentoForm({
       <div className="card-padded">
         <ItensTabela
           titulo={tipo === "PROPOSTA_CONTRATO" ? "Serviços inclusos no contrato" : "Serviços"}
-          labelAdicionar="Buscar serviço por nome..."
+          labelAdicionar="Pesquisar serviço por nome ou código..."
           catalogo={catalogoServicos}
           itens={servicos}
           onChange={setServicos}
           tabela={tabelaPreco}
           cadastro={cadastroServico}
+          totalEditavel
+          onAdicionadoDoCatalogo={(it, c) => void materializarServico(it, c)}
+          extraLinha={(it) => (it.materiais ? (
+            <MateriaisLinha item={it} clienteId={clienteId || null} catalogoProdutos={catalogoProdutos as any}
+              onChange={(patch) => setServicos((prev) => prev.map((s) => (s.id === it.id ? { ...s, ...patch } : s)))} />
+          ) : (
+            <button type="button" onClick={() => setServicos((prev) => prev.map((s) => (s.id === it.id ? { ...s, materiais: [] } : s)))}
+              className="mb-1 text-[11px] font-medium text-primary-600 hover:text-primary-700" data-adicionar-materiais>+ Materiais e peças</button>
+          ))}
         />
       </div>
 
       <div className="card-padded">
         <ItensTabela
           titulo="Produtos"
-          labelAdicionar="Buscar produto por nome..."
+          labelAdicionar="Pesquisar produto por nome ou código..."
           catalogo={catalogoProdutos}
-          itens={produtos}
-          onChange={setProdutos}
+          itens={[...produtos, ...pecasDerivadas]}
+          onChange={(itens) => setProdutos(itens.filter((i) => !i.derivada))}
           tabela={tabelaPreco}
           cadastro={cadastroProduto}
+          totalEditavel
         />
       </div>
+
+      {tipo !== "PROPOSTA_CONTRATO" && (
+        <div className="card-padded space-y-6" data-condicoes-comerciais>
+          <FormSection title="Condições comerciais" dica="Exibidas no bloco “Condições” do documento do cliente. Campos em branco não são exibidos.">
+            <FormGrid cols={2}>
+              <FormField label="Prazo de execução dos serviços">
+                <Input value={prazoExecucao} onChange={(e) => setPrazoExecucao(e.target.value)} list="sugestoes-prazo-execucao" maxLength={200} placeholder="Ex.: 5 dias úteis após aprovação" data-prazo-execucao />
+              </FormField>
+              <FormField label="Forma de pagamento">
+                <FormaPagamentoCampo id="forma-pagamento-orcamento" valor={formaPagamento} onChange={setFormaPagamento} />
+              </FormField>
+              <FormField label="Garantia dos serviços">
+                <Input value={garantiaServico} onChange={(e) => setGarantiaServico(e.target.value)} list="sugestoes-garantia-servico" maxLength={200} placeholder="Ex.: 90 dias" data-garantia-servico />
+              </FormField>
+              <FormField label="Garantia das peças">
+                <Input value={garantiaPecas} onChange={(e) => setGarantiaPecas(e.target.value)} list="sugestoes-garantia-pecas" maxLength={200} placeholder="Ex.: Conforme garantia do fabricante" data-garantia-pecas />
+              </FormField>
+            </FormGrid>
+            <datalist id="sugestoes-prazo-execucao">{PRAZOS_SUGERIDOS.map((v) => <option key={v} value={v} />)}</datalist>
+            <datalist id="sugestoes-garantia-servico">{GARANTIAS_SERVICO_SUGERIDAS.map((v) => <option key={v} value={v} />)}</datalist>
+            <datalist id="sugestoes-garantia-pecas">{GARANTIAS_PECAS_SUGERIDAS.map((v) => <option key={v} value={v} />)}</datalist>
+            <FormField label="Não incluso" dica="Uma exclusão por linha, exibida no documento como “Não incluso”.">
+              <NaoInclusoCampo id="nao-incluso-orcamento" valor={naoIncluso} onChange={setNaoIncluso} />
+            </FormField>
+          </FormSection>
+
+          <FormSection title="Responsável técnico e normas">
+            <FormGrid cols={2}>
+              <FormField label="Responsável técnico" dica="Nome e CREA impressos no documento. Em branco, o bloco não é exibido.">
+                <Select value={proposta.responsavelTecnicoId} onChange={(e) => patchProposta({ responsavelTecnicoId: e.target.value })} placeholder="Sem responsável técnico" data-rt-orcamento>
+                  {tecnicos.map((t) => <option key={t.id} value={t.id}>{t.nome}{t.crea ? ` — CREA ${t.crea}` : ""}</option>)}
+                </Select>
+              </FormField>
+              <FormField label="Nº da ART" dica={`Em branco, o documento exibe “${NOTA_ART_APOS_APROVACAO}”.`}>
+                <Input value={proposta.artNumero} onChange={(e) => patchProposta({ artNumero: e.target.value })} maxLength={60} placeholder="Opcional" data-art-orcamento />
+              </FormField>
+            </FormGrid>
+            <FormField label="Normas atendidas" dica="Marque apenas as normas aplicáveis. Sem nenhuma marcada, o bloco não é exibido.">
+              <NormasCampo valor={normas} onChange={setNormas} />
+            </FormField>
+          </FormSection>
+        </div>
+      )}
 
       {tipo === "PROPOSTA_CONTRATO" && (
         <PropostaCampos
@@ -480,18 +789,19 @@ export function OrcamentoForm({
 
         <div>
           <TotaisBloco
-            totalServicos={totalServicos}
-            totalProdutos={totalProdutos}
-            desconto={desconto}
-            tipoDesconto={tipoDesconto}
-            onDescontoChange={setDesconto}
-            onTipoDescontoChange={setTipoDesconto}
+            totais={totais}
+            descontoServicos={descontoServicos}
+            descontoProdutos={descontoProdutos}
+            onDescontoServicos={setDescontoServicos}
+            onDescontoProdutos={setDescontoProdutos}
+            issAliquotaEmpresa={mode === "editar" ? issAliquotaEmpresa : undefined}
+            onUsarIssEmpresa={() => { setIssAliquota(issAliquotaEmpresa); setAtualizarIss(true); }}
           />
         </div>
       </div>
 
       <div className="flex justify-end gap-2 pb-4">
-        <Button type="button" variant="secondary" onClick={() => router.back()}>Cancelar</Button>
+        <Button type="button" variant="secondary" onClick={() => (embutido ? embutido.onCancelar() : router.back())}>Cancelar</Button>
         <Button type="submit" loading={salvando}>
           {mode === "novo" ? "Criar orçamento" : "Salvar alterações"}
         </Button>

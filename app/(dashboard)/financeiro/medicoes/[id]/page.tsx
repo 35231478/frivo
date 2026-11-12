@@ -1,42 +1,98 @@
 import type { Metadata } from "next";
+import { contasVinculadas } from "@/lib/financeiro/conta-receber-server";
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { MedicaoDocumento } from "@/components/medicao/medicao-documento";
 import { MedicaoAcoes } from "@/components/medicao/medicao-acoes";
+import { NotasFiscais } from "@/components/fiscal/nfse-notas";
 import { PageHeader } from "@/components/ui/page-header";
-import { formatarData, formatarMoeda, LABELS_STATUS_CONTA_RECEBER, CLASSE_STATUS_CONTA_RECEBER } from "@/lib/utils";
-import { Receipt } from "lucide-react";
+import { ContasReceberVinculadas } from "@/components/financeiro/contas-receber-vinculadas";
+import { pode } from "@/lib/permissoes";
+import { ResumoRetencoes } from "@/components/medicao/medicao-retencoes";
+import { baseRetencoes, retencoesDaMedicao, retencoesDosServicos, SELECT_RETENCOES_SERVICO } from "@/lib/financeiro/retencoes";
+import { ArrowLeftRight, Layers, Receipt } from "lucide-react";
+import { rotuloMedicao } from "@/lib/faturamento/fatura";
+import { faturamentoDaOs, faturamentoDoOrcamento } from "@/lib/faturamento/faturar-server";
+import { FaturasDaVenda } from "@/components/faturamento/faturas-da-venda";
+import Link from "next/link";
 
 export const metadata: Metadata = { title: "Medição" };
 
-export default async function MedicaoDetalhePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function MedicaoDetalhePage({ params, searchParams }: {
+  params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const { id } = await params;
+  // ?nfse=emitir: "Corrigir e reemitir" da central de notas abre a emissão (com o que falta corrigir)
+  const abrirEmissao = (await searchParams).nfse === "emitir";
   const session = await auth();
   const empresaId = session!.user!.empresaId;
 
-  const [medicao, empresa] = await Promise.all([
+  const [medicao, empresa, config] = await Promise.all([
     prisma.medicao.findFirst({
       where: { id, empresaId },
       include: {
         cliente: true,
         contrato: { select: { id: true, numero: true } },
-        itens: { orderBy: { ordem: "asc" } },
-        contasReceber: true,
+        itens: { orderBy: { ordem: "asc" }, include: { servico: { select: SELECT_RETENCOES_SERVICO } } },
+        contasReceber: { where: { excluidaEm: null }, orderBy: { criadoEm: "asc" } },
       },
     }),
     prisma.empresa.findUnique({ where: { id: empresaId } }),
+    prisma.configuracao.findUnique({ where: { empresaId }, select: { issAliquota: true } }),
   ]);
 
   if (!medicao || !empresa) notFound();
+  const vivas = medicao.contasReceber.filter((c) => c.status !== "CANCELADO");
+  const bloqueioRetencoes =
+    medicao.status === "PAGO" ? `${medicao.avulsa ? "Fatura paga" : "Medição paga"}: as retenções não mudam mais.` :
+    medicao.status === "CANCELADA" ? (medicao.avulsa ? "Fatura cancelada." : "Medição cancelada.") :
+    vivas.some((c) => c.status === "RECEBIDO") ? "Conta já recebida: as retenções não mudam mais." :
+    vivas.some((c) => c.boletoStatus === "EMITIDO") ? "Boleto emitido: cancele o boleto para mudar as retenções." :
+    vivas.length > 1 ? "Medição com várias contas (contratos): retenção não disponível aqui." : null;
+
+  // Fatura avulsa: "voltar" leva à origem (a OS ou o orçamento faturado)
+  const origem = medicao.avulsa ? medicao.itens.find((i) => i.ordemServicoId || i.orcamentoId) : undefined;
+  const hrefOrigem = origem?.orcamentoId ? `/orcamentos/${origem.orcamentoId}`
+    : origem?.ordemServicoId ? `/ordens/${origem.ordemServicoId}` : null;
+  const rotuloOrigem = origem?.orcamentoId ? "Orçamento" : origem?.ordemServicoId ? "OS" : null;
+  const voltar = hrefOrigem ?? "/financeiro/medicoes";
+
+  // P5 — "Faturas desta venda": quando a origem foi faturada em partes, as faturas irmãs (valor, parte,
+  // status e nota), destacando esta. Leitura pura (reusa faturamentoDaOrigem); some na fatura cheia única.
+  const faturamento = medicao.avulsa
+    ? origem?.orcamentoId ? await faturamentoDoOrcamento(origem.orcamentoId, empresaId)
+      : origem?.ordemServicoId ? await faturamentoDaOs(origem.ordemServicoId) : null
+    : null;
+  const faturasDaVenda = faturamento && faturamento.faturas.length > 1
+    ? { total: faturamento.total, faturado: faturamento.faturado, saldo: faturamento.saldo, faturas: faturamento.faturas }
+    : null;
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       <PageHeader
-        title={`Medição ${medicao.numero}`}
+        title={rotuloMedicao(medicao)}
         description={medicao.descricao ?? undefined}
-        backHref="/financeiro/medicoes"
+        backHref={voltar}
       />
+
+      {/* Origem: volta ao orçamento/OS que gerou a venda (ponto 2 do detalhe consolidado) */}
+      {hrefOrigem && rotuloOrigem && (
+        <Link href={hrefOrigem} className="inline-flex items-center gap-1.5 text-sm text-acento hover:underline" data-origem-venda={rotuloOrigem}>
+          <ArrowLeftRight className="w-4 h-4" aria-hidden /> Origem: {rotuloOrigem}
+        </Link>
+      )}
+
+      {/* "Faturas desta venda": a origem faturada em partes (P5) — leitura; destaca a fatura atual */}
+      {faturasDaVenda && (
+        <div className="card-padded" data-secao-faturas-da-venda>
+          <h2 className="card-title mb-3 flex items-center gap-2">
+            <Layers className="w-4 h-4 text-primary-600" /> Faturas desta venda
+          </h2>
+          <FaturasDaVenda faturamento={faturasDaVenda} atualId={medicao.id}
+            podeVer={pode(session!.user!.permissoes, "financeiro", "medicoes", session!.user!.role)} />
+        </div>
+      )}
 
       <div className="card-padded">
         <MedicaoAcoes
@@ -44,6 +100,28 @@ export default async function MedicaoDetalhePage({ params }: { params: Promise<{
           numero={medicao.numero}
           tokenPublico={medicao.tokenPublico}
           status={medicao.status}
+          avulsa={medicao.avulsa}
+        />
+      </div>
+
+      {/* NFS-e: emitida pelo PlugNotas a partir desta medição (uma nota por código de serviço) */}
+      <div className="card-padded" id="nfse">
+        <NotasFiscais medicaoId={medicao.id} origem="MEDICAO" abrirEmissao={abrirEmissao} />
+      </div>
+
+      {/* Retenções: uma linha discreta (herdadas dos serviços); "Editar" abre o editor para a exceção */}
+      <div className="card-padded py-3">
+        <ResumoRetencoes
+          medicaoId={medicao.id}
+          base={baseRetencoes(medicao)}
+          liquido={Number(medicao.valorLiquido)}
+          gravadas={retencoesDaMedicao(medicao)}
+          sugestao={retencoesDosServicos(
+            medicao.itens.map((i) => ({ tipo: i.tipo, valorTotal: Number(i.valorTotal), servico: i.servico })),
+            config?.issAliquota != null ? Number(config.issAliquota) : null,
+          )}
+          podeEditar={pode(session!.user!.permissoes, "financeiro", "medicoes", session!.user!.role)}
+          bloqueio={bloqueioRetencoes}
         />
       </div>
 
@@ -56,20 +134,10 @@ export default async function MedicaoDetalhePage({ params }: { params: Promise<{
           <h2 className="card-title mb-3 flex items-center gap-2">
             <Receipt className="w-4 h-4 text-primary-600" /> Contas a receber
           </h2>
-          <div className="divide-y divide-surface-border">
-            {medicao.contasReceber.map((c) => (
-              <div key={c.id} className="flex items-center justify-between py-3">
-                <div>
-                  <p className="font-mono text-sm font-semibold text-ink">{c.numero}</p>
-                  <p className="text-xs text-ink-muted">Venc.: {formatarData(c.dataVencimento)}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className={CLASSE_STATUS_CONTA_RECEBER[c.status]}>{LABELS_STATUS_CONTA_RECEBER[c.status]}</span>
-                  <span className="font-semibold text-ink">{formatarMoeda(Number(c.valor))}</span>
-                </div>
-              </div>
-            ))}
-          </div>
+          <ContasReceberVinculadas
+            contas={await contasVinculadas(empresaId, { medicaoId: medicao.id })}
+            podeAbrir={pode(session!.user!.permissoes, "financeiro", "contasReceber", session!.user!.role)}
+          />
         </div>
       )}
     </div>

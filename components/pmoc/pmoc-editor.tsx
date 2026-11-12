@@ -7,8 +7,10 @@ import {
   FileBadge, ClipboardList, Thermometer, CalendarRange, ListChecks, AlertOctagon, Lightbulb, Paperclip,
   ChevronLeft, Save, Loader2, AlertTriangle, CheckCircle2, Upload, FileText, Trash2, Send, Undo2, Plus, X, Info,
 } from "lucide-react";
-import { cn, LABELS_TIPO_EQUIPAMENTO } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { formatarCapacidade, rotuloTipoEquipamento } from "@/lib/equipamento-descricao";
 import { Input } from "@/components/ui/input";
+import { InputData } from "@/components/ui/input-data";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid, FormSection } from "@/components/ui/form-field";
 import { SelectCadastroRapido, type OpcaoCadastro } from "@/components/ui/select-cadastro-rapido";
@@ -51,7 +53,9 @@ function umAnoDepois(iso: string) {
   return d.toISOString().slice(0, 10);
 }
 const rotuloEquip = (e: EquipamentoPmoc) => e.nome || `${e.marca} ${e.modelo}`.trim();
-const tipoEquip = (e: EquipamentoPmoc) => e.tipoEquipamento?.nome ?? LABELS_TIPO_EQUIPAMENTO[e.tipo] ?? e.tipo;
+// Tipo e capacidade no formato único do sistema (lib/equipamento-descricao): "48.000 BTU/h", "5 TR"
+const tipoEquip = (e: EquipamentoPmoc) => rotuloTipoEquipamento(e);
+const capacidadeEquip = (e: EquipamentoPmoc) => formatarCapacidade(e.capacidade);
 const localEquip = (e: EquipamentoPmoc) => [e.setor, e.localizacao].filter(Boolean).join(" › ") || "—";
 function lerArquivo(file: File): Promise<string> {
   return new Promise((ok, erro) => { const r = new FileReader(); r.onload = () => ok(r.result as string); r.onerror = erro; r.readAsDataURL(file); });
@@ -167,7 +171,7 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente }:
           <div className="flex items-center gap-2 flex-wrap">
             {!somenteLeitura && pmoc.status === "RASCUNHO" && (
               <button type="button" onClick={() => salvar("PUBLICADO")} disabled={!!salvando}
-                className="inline-flex items-center gap-1.5 text-sm rounded-lg px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold disabled:opacity-60">
+                className="inline-flex items-center gap-1.5 text-sm rounded-lg px-3 py-2 bg-ok hover:bg-success-600 text-white font-semibold disabled:opacity-60">
                 {salvando === "PUBLICADO" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Publicar
               </button>
             )}
@@ -185,12 +189,12 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente }:
       </div>
 
       {pmoc && !pmoc.ativo && (
-        <div data-aviso-inativo className="bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-3 text-sm">
+        <div data-aviso-inativo className="bg-surface-alt border border-surface-border text-ink-muted rounded-xl px-4 py-3 text-sm">
           Este PMOC está <strong>inativo</strong> e não aparece na lista padrão. Use “Reativar” para voltar a editá-lo.
         </div>
       )}
       {msg && (
-        <div data-msg={msg.tipo} className={cn("flex items-start gap-2 text-sm rounded-lg px-3 py-2 border", msg.tipo === "ok" ? "text-emerald-800 bg-emerald-50 border-emerald-200" : "text-red-700 bg-red-50 border-red-200")}>
+        <div data-msg={msg.tipo} className={cn("flex items-start gap-2 text-sm rounded-lg px-3 py-2 border", msg.tipo === "ok" ? "text-ok-texto bg-ok-claro border-ok/20" : "text-atrasado-texto bg-atrasado-claro border-atrasado/20")}>
           {msg.tipo === "ok" ? <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" /> : <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />} <span>{msg.texto}</span>
         </div>
       )}
@@ -209,7 +213,7 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente }:
         {ABAS_FUTURAS.map(({ rotulo, icone: Icone }) => (
           <button key={rotulo} type="button" disabled data-aba-futura title="Próxima etapa do módulo PMOC"
             className="flex items-center gap-2 px-3 sm:px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 border-transparent -mb-px text-ink-subtle cursor-not-allowed">
-            <Icone className="w-4 h-4" /> {rotulo} <span className="text-[9px] font-bold uppercase tracking-wide bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">em breve</span>
+            <Icone className="w-4 h-4" /> {rotulo} <span className="text-[9px] font-bold uppercase tracking-wide bg-atencao-claro text-atencao-texto px-1.5 py-0.5 rounded">em breve</span>
           </button>
         ))}
       </div>
@@ -245,17 +249,17 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente }:
             </FormGrid>
             <FormGrid>
               <FormField label="Data de início" required>
-                <Input type="date" aria-label="Data de início" value={form.dataInicio} onChange={(e) => set("dataInicio", e.target.value)} />
+                <InputData aria-label="Data de início" value={form.dataInicio} onChange={(iso) => set("dataInicio", iso)} disabled={somenteLeitura} />
               </FormField>
               <FormField label="Data de expiração" required hint="Vigente até este dia; depois vira Expirado automaticamente">
-                <Input type="date" aria-label="Data de expiração" value={form.dataExpiracao} onChange={(e) => set("dataExpiracao", e.target.value)} />
+                <InputData aria-label="Data de expiração" value={form.dataExpiracao} onChange={(iso) => set("dataExpiracao", iso)} disabled={somenteLeitura} />
               </FormField>
             </FormGrid>
           </FormSection>
 
-          <FormSection title="Responsável Técnico e ART">
+          <FormSection title="Responsável técnico e ART">
             {rts.length > 0 && !somenteLeitura && (
-              <FormField label="Preencher com um responsável técnico cadastrado" hint="Opcional — copia nome e CREA do cadastro de colaboradores">
+              <FormField label="Preencher com um responsável técnico cadastrado" hint="Opcional: copia nome e CREA do cadastro de colaboradores">
                 <select aria-label="Responsável técnico cadastrado" value={form.responsavelTecnicoId}
                   onChange={(e) => {
                     const rt = rts.find((r) => r.id === e.target.value);
@@ -268,8 +272,8 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente }:
               </FormField>
             )}
             <FormGrid>
-              <FormField label="Nome do Responsável Técnico">
-                <Input aria-label="Nome do Responsável Técnico" value={form.rtNome} onChange={(e) => set("rtNome", e.target.value)} placeholder="Engenheiro(a) responsável" />
+              <FormField label="Nome do responsável técnico">
+                <Input aria-label="Nome do responsável técnico" value={form.rtNome} onChange={(e) => set("rtNome", e.target.value)} placeholder="Engenheiro(a) responsável" />
               </FormField>
               <FormField label="Registro CREA">
                 <Input aria-label="Registro CREA" value={form.rtCrea} onChange={(e) => set("rtCrea", e.target.value)} placeholder="Ex: SP-5061234567" />
@@ -287,9 +291,9 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente }:
                     {artNova || !pmoc ? <span className="truncate flex-1">{artNova?.nome}</span> : (
                       <a href={`/api/pmocs/${pmoc.id}/art?inline=1`} target="_blank" rel="noreferrer" className="truncate flex-1 text-primary-600 hover:underline">{pmoc.artArquivoNome}</a>
                     )}
-                    {artNova && <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">a salvar</span>}
+                    {artNova && <span className="text-[10px] text-atencao-texto bg-atencao-claro px-1.5 py-0.5 rounded">a salvar</span>}
                     {!somenteLeitura && (
-                      <button type="button" title="Remover arquivo da ART" onClick={() => { setArtNova(null); setRemoverArt(!!pmoc?.artArquivoNome); }} className="p-1 text-ink-muted hover:text-red-600">
+                      <button type="button" title="Excluir arquivo da ART" aria-label="Excluir arquivo da ART" onClick={() => { setArtNova(null); setRemoverArt(!!pmoc?.artArquivoNome); }} className="p-1 text-ink-muted hover:text-atrasado">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     )}
@@ -305,7 +309,7 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente }:
           </FormSection>
 
           <FormSection title="Descrição técnica / legal">
-            <FormField label="Texto do plano" hint="Texto padrão com a base legal (Lei 13.589/2018, Portaria 3.523/GM/1998, RE ANVISA 09/2003, NBR 13971 e NBR 16401). Edite à vontade.">
+            <FormField label="Texto do plano" hint="Texto padrão com a base legal; pode ser editado." dica="Cita a Lei 13.589/2018, a Portaria 3.523/GM/1998, a RE ANVISA 09/2003 e as normas NBR 13971 e NBR 16401.">
               <Textarea aria-label="Descrição" value={form.descricao} onChange={(e) => set("descricao", e.target.value)} rows={12} className="text-[13px] leading-relaxed" />
             </FormField>
             {!somenteLeitura && form.descricao !== DESCRICAO_PADRAO_PMOC && (
@@ -375,11 +379,11 @@ function EquipamentosPmoc({ pmoc, somenteLeitura, onAtualizar, onErro }: {
     <>
       {prefixo}
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-ink truncate">{rotuloEquip(e)}{!e.ativo && <span className="ml-1 text-[10px] text-slate-500 bg-slate-100 px-1 rounded">inativo</span>}</p>
+        <p className="text-sm font-medium text-ink truncate">{rotuloEquip(e)}{!e.ativo && <span className="ml-1 text-[10px] text-ink-muted bg-surface-linha px-1 rounded">inativo</span>}</p>
         <p className="text-xs text-ink-muted flex flex-wrap gap-x-3">
           <span>TAG: <strong className="text-ink">{e.patrimonio || "—"}</strong></span>
           <span>{tipoEquip(e)}</span>
-          <span>{e.capacidade || "capacidade —"}</span>
+          <span>{capacidadeEquip(e) || "capacidade —"}</span>
           <span>{localEquip(e)}{e.unidade && e.unidadeId !== pmoc.unidadeId ? ` (${e.unidade.nome})` : ""}</span>
         </p>
       </div>
@@ -412,13 +416,13 @@ function EquipamentosPmoc({ pmoc, somenteLeitura, onAtualizar, onErro }: {
                     <tr key={e.id} data-coberto={e.id} className="border-t border-surface-border">
                       <td className="px-4 py-2.5 font-mono text-xs">{e.patrimonio || "—"}</td>
                       <td className="px-4 py-2.5"><Link href={`/equipamentos/${e.id}`} className="text-ink hover:text-primary-600 font-medium">{rotuloEquip(e)}</Link>
-                        {!e.ativo && <span className="ml-1 text-[10px] text-slate-500 bg-slate-100 px-1 rounded">inativo</span>}</td>
+                        {!e.ativo && <span className="ml-1 text-[10px] text-ink-muted bg-surface-linha px-1 rounded">inativo</span>}</td>
                       <td className="px-4 py-2.5 text-ink-muted">{tipoEquip(e)}</td>
-                      <td className="px-4 py-2.5 text-ink-muted">{e.capacidade || "—"}</td>
+                      <td className="px-4 py-2.5 text-ink-muted">{capacidadeEquip(e) || "—"}</td>
                       <td className="px-4 py-2.5 text-ink-muted">{localEquip(e)}{e.unidade && e.unidadeId !== pmoc.unidadeId ? ` (${e.unidade.nome})` : ""}</td>
                       <td className="px-2">
                         {!somenteLeitura && (
-                          <button type="button" title="Remover do PMOC" disabled={ocupado} onClick={() => remover(e.id)} className="p-1.5 rounded-md text-ink-muted hover:text-red-600 hover:bg-red-50 disabled:opacity-50"><X className="w-4 h-4" /></button>
+                          <button type="button" title="Excluir do PMOC" aria-label="Excluir do PMOC" disabled={ocupado} onClick={() => remover(e.id)} className="p-1.5 rounded-md text-ink-muted hover:text-atrasado hover:bg-atrasado-claro disabled:opacity-50"><X className="w-4 h-4" /></button>
                         )}
                       </td>
                     </tr>
@@ -430,7 +434,7 @@ function EquipamentosPmoc({ pmoc, somenteLeitura, onAtualizar, onErro }: {
               {pmoc.equipamentos.map(({ equipamento: e }) => (
                 <li key={e.id} data-coberto-card={e.id} className="flex items-center gap-3 px-4 py-3">
                   {linhaEquip(e, !somenteLeitura && (
-                    <button type="button" title="Remover do PMOC" disabled={ocupado} onClick={() => remover(e.id)} className="p-1.5 rounded-md text-ink-muted hover:text-red-600 shrink-0"><X className="w-4 h-4" /></button>
+                    <button type="button" title="Excluir do PMOC" aria-label="Excluir do PMOC" disabled={ocupado} onClick={() => remover(e.id)} className="p-1.5 rounded-md text-ink-muted hover:text-atrasado shrink-0"><X className="w-4 h-4" /></button>
                   ))}
                 </li>
               ))}

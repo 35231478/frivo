@@ -1,0 +1,57 @@
+{
+ "geradoEm": "2026-11-08",
+ "totais": {
+  "emoji": 0,
+  "hex": 0,
+  "informal": 0,
+  "exclamacao": 0,
+  "titleCase": 0,
+  "textoLongo": 0
+ },
+ "totaisExcecoes": {
+  "emoji": 0,
+  "hex": 0,
+  "informal": 0,
+  "exclamacao": 0,
+  "titleCase": 12,
+  "textoLongo": 9
+ },
+ "arquivos": {
+  "emoji": {},
+  "hex": {},
+  "informal": {},
+  "exclamacao": {},
+  "titleCase": {},
+  "textoLongo": {}
+ },
+ "excecoes": {
+  "emoji": {},
+  "hex": {},
+  "informal": {},
+  "exclamacao": {},
+  "titleCase": {
+   "components/ui/endereco-autocomplete.tsx": {
+    "n": 6,
+    "motivo": "Nomes de estados (Minas Gerais, Rio de Janeiro…): nomes próprios, caixa alta é a grafia correta."
+   },
+   "components/forms/colaborador-form.tsx": {
+    "n": 3,
+    "motivo": "Especialidades sugeridas e tipos de documento são gravados como valor (tag/texto) no cadastro; mudar a caixa mudaria o dado salvo nas próximas escolhas."
+   },
+   "components/forms/tecnico-form.tsx": {
+    "n": 3,
+    "motivo": "Mesmas especialidades/tipo do colaborador-form: texto gravado como valor no cadastro do técnico."
+   }
+  },
+  "textoLongo": {
+   "lib/cadastros/especificos.ts": {
+    "n": 8,
+    "motivo": "Avisos de impacto/bloqueio da inativação: templates com plural e nome do registro (${…}); o contador soma o código e a regra não cabe em 110 c sem perder o que explica."
+   },
+   "lib/cadastros/servidor.ts": {
+    "n": 1,
+    "motivo": "Aviso genérico de inativação com artigo/singular da entidade interpolados; o comprimento é o código do template."
+   }
+  }
+ }
+}

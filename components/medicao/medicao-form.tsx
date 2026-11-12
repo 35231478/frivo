@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { ItensTabela, type ItemTabela, type CatalogoItem, type TabelaPrecoCliente } from "@/components/orcamento/itens-tabela";
 import { LABELS_TIPO_MEDICAO, MESES_PT, formatarMoeda } from "@/lib/utils";
 import { AlertCircle, Tags } from "lucide-react";
+import { anoBR, mesBR } from "@/lib/fuso";
 
 interface ClienteOpt {
   id: string;
@@ -68,8 +69,8 @@ export function MedicaoForm({
   const [clienteId, setClienteId] = useState(inicial?.clienteId ?? clienteIdInicial ?? "");
   const [contratoId, setContratoId] = useState(inicial?.contratoId ?? "");
   const [tipo, setTipo] = useState(inicial?.tipo ?? "MENSAL_FIXO");
-  const [mes, setMes] = useState<number>(inicial?.mes ?? agora.getMonth() + 1);
-  const [ano, setAno] = useState<number>(inicial?.ano ?? agora.getFullYear());
+  const [mes, setMes] = useState<number>(inicial?.mes ?? mesBR(agora));
+  const [ano, setAno] = useState<number>(inicial?.ano ?? anoBR(agora));
   const [descricao, setDescricao] = useState(inicial?.descricao ?? "");
   const [observacao, setObservacao] = useState(inicial?.observacao ?? "");
   const [descontoValor, setDescontoValor] = useState(Number(inicial?.descontoValor ?? 0));
@@ -83,6 +84,8 @@ export function MedicaoForm({
 
   const [contratos, setContratos] = useState<ContratoOpt[]>([]);
   const [tabelaPreco, setTabelaPreco] = useState<TabelaPrecoCliente | null>(null);
+  /** O cliente está ligado a uma tabela inativa: valem os preços padrão do catálogo, e a tela avisa */
+  const [tabelaInativa, setTabelaInativa] = useState<{ id: string; nome: string } | null>(null);
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
 
@@ -90,6 +93,7 @@ export function MedicaoForm({
     if (!clienteId) {
       setContratos([]);
       setTabelaPreco(null);
+      setTabelaInativa(null);
       return;
     }
     fetch(`/api/contratos?clienteId=${clienteId}`)
@@ -98,8 +102,8 @@ export function MedicaoForm({
       .catch(() => setContratos([]));
     fetch(`/api/clientes/${clienteId}/tabela-preco`)
       .then((r) => r.json())
-      .then((d) => setTabelaPreco(d && d.itens ? d : null))
-      .catch(() => setTabelaPreco(null));
+      .then((d) => { setTabelaPreco(d && d.itens ? d : null); setTabelaInativa(d?.vinculadaInativa ?? null); })
+      .catch(() => { setTabelaPreco(null); setTabelaInativa(null); });
   }, [clienteId]);
 
   const valorTotal = useMemo(() => {
@@ -177,7 +181,7 @@ export function MedicaoForm({
   return (
     <form onSubmit={salvar} className="space-y-6">
       <PageHeader
-        title={mode === "novo" ? "Nova Medição" : `Editar ${inicial?.numero ?? "Medição"}`}
+        title={mode === "novo" ? "Nova medição" : `Editar ${inicial?.numero ?? "medição"}`}
         description={mode === "novo" ? "Crie uma medição para faturamento" : "Edite os dados desta medição"}
         backHref={mode === "novo" ? "/financeiro/medicoes" : `/financeiro/medicoes/${inicial?.id}`}
         actions={
@@ -191,7 +195,7 @@ export function MedicaoForm({
       />
 
       {erro && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 flex items-center gap-2">
+        <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
           {erro}
         </div>
@@ -206,6 +210,9 @@ export function MedicaoForm({
             <span className="text-xs text-ink-muted">Preços bloqueados por contrato</span>
           )}
         </div>
+      )}
+      {tabelaInativa && (
+        <p className="text-xs text-atencao-texto" data-aviso-tabela-inativa>A tabela do cliente (“{tabelaInativa.nome}”) está inativa: valem os preços padrão do catálogo.</p>
       )}
 
       <div className="card-padded space-y-6">
@@ -242,7 +249,7 @@ export function MedicaoForm({
               </Select>
             </FormField>
             <FormField label="Ano de referência">
-              <Input type="number" min={2000} max={2100} value={ano} onChange={(e) => setAno(Number(e.target.value) || agora.getFullYear())} />
+              <Input type="number" min={2000} max={2100} value={ano} onChange={(e) => setAno(Number(e.target.value) || anoBR(agora))} />
             </FormField>
           </FormGrid>
           <FormField label="Descrição">
@@ -255,11 +262,11 @@ export function MedicaoForm({
       </div>
 
       <div className="card-padded">
-        <ItensTabela titulo="Serviços" labelAdicionar="Buscar serviço por nome..." catalogo={catalogoServicos} itens={servicos} onChange={setServicos} tabela={tabelaPreco} />
+        <ItensTabela titulo="Serviços" labelAdicionar="Pesquisar serviço por nome ou código..." catalogo={catalogoServicos} itens={servicos} onChange={setServicos} tabela={tabelaPreco} />
       </div>
 
       <div className="card-padded">
-        <ItensTabela titulo="Produtos" labelAdicionar="Buscar produto por nome..." catalogo={catalogoProdutos} itens={produtos} onChange={setProdutos} tabela={tabelaPreco} />
+        <ItensTabela titulo="Produtos" labelAdicionar="Pesquisar produto por nome ou código..." catalogo={catalogoProdutos} itens={produtos} onChange={setProdutos} tabela={tabelaPreco} />
       </div>
 
       <div className="card-padded">
@@ -280,7 +287,7 @@ export function MedicaoForm({
             {desconto > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-ink-muted">Desconto</span>
-                <span className="font-mono text-red-600">- {formatarMoeda(desconto)}</span>
+                <span className="font-mono text-atrasado">- {formatarMoeda(desconto)}</span>
               </div>
             )}
             <div className="flex justify-between pt-2 border-t-2 border-success-500/40">

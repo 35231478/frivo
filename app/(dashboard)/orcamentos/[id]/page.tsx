@@ -4,10 +4,22 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { OrcamentoDocumento } from "@/components/orcamento/orcamento-documento";
+import { anexosDoDocumento, INCLUDE_DOCUMENTO_ORCAMENTO } from "@/lib/orcamentos/documento-server";
 import { PropostaDocumento } from "@/components/orcamento/proposta-documento";
 import { AcoesEnvio } from "@/components/orcamento/acoes-envio";
 import { ConverterContrato } from "@/components/orcamento/converter-contrato";
 import { ComprasSecao } from "@/components/compras/compras-secao";
+import { AnexosProposta } from "@/components/orcamento/anexos-proposta";
+import { CicloOrcamento } from "@/components/orcamento/ciclo-orcamento";
+import { GerarOs, type OsDoOrcamento } from "@/components/orcamento/gerar-os";
+import { BotaoFaturar } from "@/components/faturamento/botao-faturar";
+import { faturamentoDoOrcamento } from "@/lib/faturamento/faturar-server";
+import { faturaDoOrcamento } from "@/lib/faturamento/fatura";
+import { ContasReceberVinculadas } from "@/components/financeiro/contas-receber-vinculadas";
+import { contasVinculadas } from "@/lib/financeiro/conta-receber-server";
+import { etapaCiclo } from "@/lib/orcamentos/ciclo";
+import { marcarRespostaVista } from "@/lib/orcamentos/ciclo-server";
+import { pode } from "@/lib/permissoes";
 import { PageHeader } from "@/components/ui/page-header";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { LABELS_STATUS_OS, formatarData, cn } from "@/lib/utils";
@@ -28,15 +40,13 @@ export default async function OrcamentoDetalhePage({
     prisma.orcamento.findFirst({
       where: { id, empresaId },
       include: {
-        cliente: true,
+        ...INCLUDE_DOCUMENTO_ORCAMENTO,
         criadoPor: { select: { id: true, nome: true } },
-        responsavelTecnico: { select: { nome: true, crea: true } },
         contratoGerado: { select: { id: true, numero: true } },
-        servicos: { orderBy: { ordem: "asc" } },
-        produtos: { orderBy: { ordem: "asc" } },
+        osGerada: { select: { id: true, numero: true } },
         ordensServico: {
           include: {
-            ordemServico: { select: { id: true, numero: true, status: true, descricao: true } },
+            ordemServico: { select: { id: true, numero: true, status: true, descricao: true, criadoEm: true } },
           },
         },
       },
@@ -46,8 +56,32 @@ export default async function OrcamentoDetalhePage({
 
   if (!orcamento || !empresa) notFound();
 
+  // Abrir o orçamento respondido pelo cliente = resposta vista (sai do sino)
+  await marcarRespostaVista(orcamento, empresaId);
+  const eventos = await prisma.orcamentoEvento.findMany({
+    where: { orcamentoId: id, empresaId },
+    orderBy: { criadoEm: "desc" },
+    take: 50,
+    select: { id: true, tipo: true, detalhe: true, ip: true, criadoEm: true, usuario: { select: { nome: true } } },
+  });
+
   const podeEditar = orcamento.status === "RASCUNHO";
+  const u = session!.user!;
+  // Conta a receber do orçamento aprovado (o outro lado do vínculo): só para quem vê o financeiro
+  const contasReceber = pode(u.permissoes, "financeiro", "visualizar", u.role) ? await contasVinculadas(empresaId, { orcamentoId: orcamento.id }) : [];
+  // A OS do orçamento: a que ele gerou ou, se não gerou, a 1ª vinculada (o "Gerar OS" nunca cria outra)
+  const primeiraVinculada = [...orcamento.ordensServico].sort((a, b) => a.ordemServico.criadoEm.getTime() - b.ordemServico.criadoEm.getTime())[0]?.ordemServico;
+  const osDoOrcamento: OsDoOrcamento | null = orcamento.osGerada
+    ? { ...orcamento.osGerada, gerada: true }
+    : primeiraVinculada ? { id: primeiraVinculada.id, numero: primeiraVinculada.numero, gerada: false } : null;
   const ehProposta = orcamento.tipo === "PROPOSTA_CONTRATO";
+  // Faturar: quem fatura medições; já faturado (direto ou pela OS gerada) → mostra a fatura
+  const podeFaturar = pode(u.permissoes, "financeiro", "medicoes", u.role);
+  // P5: total, faturado, saldo e as faturas (parciais ou não) do orçamento — para quem fatura ou vê o financeiro
+  const faturamento = orcamento.tipo === "COMUM" && (podeFaturar || pode(u.permissoes, "financeiro", "visualizar", u.role))
+    ? await faturamentoDoOrcamento(orcamento.id, empresaId) : null;
+  const temFaturas = !!faturamento && (faturamento.faturas.length > 0 || !!faturamento.outra);
+  const faturaExistente = faturamento?.outra ?? null;
   const equipamentos = ehProposta && orcamento.equipamentosCobertos.length
     ? (await prisma.equipamento.findMany({
         where: { id: { in: orcamento.equipamentosCobertos }, empresaId },
@@ -72,7 +106,7 @@ export default async function OrcamentoDetalhePage({
         }
       />
       {orcamento.status === "CANCELADO" && (
-        <div data-aviso-inativo className="bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-3 text-sm">
+        <div data-aviso-inativo className="bg-surface-page border border-surface-border text-ink rounded-card px-4 py-3 text-sm">
           Este orçamento está <strong>cancelado</strong> (inativado) e não aparece na lista padrão. Use “Reabrir” para voltar a editá-lo.
         </div>
       )}
@@ -84,14 +118,48 @@ export default async function OrcamentoDetalhePage({
           tokenPublico={orcamento.tokenPublico}
           status={orcamento.status}
           podeEditar={podeEditar}
+          etapa={etapaCiclo(orcamento)}
         />
+      </div>
+
+      {/* Faturamento avulso, caminho inverso: orçamento aprovado → OS */}
+      {orcamento.tipo === "COMUM" && (orcamento.status === "APROVADO" || osDoOrcamento) && (
+        <div className="card-padded" data-secao-gerar-os>
+          <GerarOs
+            orcamentoId={orcamento.id} codigo={orcamento.codigo} os={osDoOrcamento}
+            itens={orcamento.servicos.length + orcamento.produtos.length}
+            podeCriar={pode(u.permissoes, "ordens", "criar", u.role)} podeVer={pode(u.permissoes, "ordens", "visualizar", u.role)}
+          />
+        </div>
+      )}
+
+      {/* Faturar (avulso): o orçamento aprovado vira a fatura, com ou sem OS */}
+      {orcamento.tipo === "COMUM" && faturamento && (orcamento.status === "APROVADO" || temFaturas) && (podeFaturar || temFaturas) && (
+        <div className="card-padded" data-secao-faturar-orcamento>
+          <BotaoFaturar
+            url={`/api/orcamentos/${orcamento.id}/faturar`} origem="orçamento" fatura={faturaExistente}
+            faturamento={faturaExistente ? null : faturamento}
+            valor={faturaDoOrcamento(orcamento).valorLiquido} itens={orcamento.servicos.length + orcamento.produtos.length}
+            podeFaturar={podeFaturar} podeVer={pode(u.permissoes, "financeiro", "visualizar", u.role)}
+          />
+        </div>
+      )}
+
+      {contasReceber.length > 0 && (
+        <div className="card-padded" data-secao-conta-receber>
+          <ContasReceberVinculadas contas={contasReceber} podeAbrir={pode(u.permissoes, "financeiro", "contasReceber", u.role)} />
+        </div>
+      )}
+
+      <div className="card-padded">
+        <CicloOrcamento orcamento={orcamento} eventos={eventos} />
       </div>
 
       {/* Indicadores e conversão da proposta de contrato */}
       {ehProposta && orcamento.status === "APROVADO" && (
         <>
           {orcamento.assinadoEm && (
-            <div className="bg-success-50 border-2 border-success-500 text-success-700 rounded-xl px-5 py-3 flex items-center gap-2 text-sm font-semibold">
+            <div className="bg-success-50 border-2 border-success-500 text-success-700 rounded-card px-5 py-3 flex items-center gap-2 text-sm font-semibold">
               <CheckCircle2 className="w-5 h-5 shrink-0" /> Aprovada pelo cliente em {formatarData(orcamento.assinadoEm, "dd/MM/yyyy 'às' HH:mm")}
             </div>
           )}
@@ -100,7 +168,7 @@ export default async function OrcamentoDetalhePage({
       )}
       {ehProposta && orcamento.contratoGerado && (
         <Link href={`/contratos/${orcamento.contratoGerado.id}/editar`}
-          className="bg-primary-50 border-2 border-primary-300 text-primary-700 rounded-xl px-5 py-3 flex items-center gap-2 text-sm font-semibold hover:bg-primary-100 transition-colors">
+          className="bg-primary-50 border-2 border-primary-300 text-primary-700 rounded-card px-5 py-3 flex items-center gap-2 text-sm font-semibold hover:bg-primary-100 transition-colors">
           <FileSignature className="w-5 h-5 shrink-0" /> Convertida em contrato {orcamento.contratoGerado.numero}
           <ExternalLink className="w-3.5 h-3.5" />
         </Link>
@@ -116,9 +184,20 @@ export default async function OrcamentoDetalhePage({
             equipamentos={equipamentos}
           />
         ) : (
-          <OrcamentoDocumento orcamento={orcamento} empresa={empresa} cliente={orcamento.cliente} />
+          <OrcamentoDocumento orcamento={orcamento} empresa={empresa} cliente={orcamento.cliente} versao="interna" anexos={anexosDoDocumento(orcamento.anexos, `/api/orcamentos/${orcamento.id}/anexos`)} />
         )}
       </div>
+
+      {!ehProposta && (
+        <div className="card-padded">
+          <AnexosProposta
+            orcamentoId={orcamento.id}
+            editavel={podeEditar && pode(session!.user!.permissoes, "orcamentos", "editar", session!.user!.role)}
+            temOs={orcamento.ordensServico.length > 0}
+            podeVerOs={pode(session!.user!.permissoes, "ordens", "visualizar", session!.user!.role)}
+          />
+        </div>
+      )}
 
       <div className="card-padded">
         <ComprasSecao orcamentoId={orcamento.id} />
@@ -126,7 +205,7 @@ export default async function OrcamentoDetalhePage({
 
       {orcamento.ordensServico.length > 0 && (
         <div className="card-padded">
-          <h2 className="card-title mb-3">Ordens de Serviço vinculadas</h2>
+          <h2 className="card-title mb-3">Ordens de serviço vinculadas</h2>
           <div className="divide-y divide-surface-border">
             {orcamento.ordensServico.map((vinc) => (
               <Link
@@ -142,6 +221,9 @@ export default async function OrcamentoDetalhePage({
                   <span className="text-sm text-ink truncate">{vinc.ordemServico.descricao}</span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  {vinc.ordemServico.id === orcamento.osGerada?.id && (
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-acento-claro text-acento" data-os-gerada>Gerada deste orçamento</span>
+                  )}
                   <span className={cn(
                     "text-xs font-semibold px-2 py-0.5 rounded-full",
                     "bg-surface-alt text-ink-muted"

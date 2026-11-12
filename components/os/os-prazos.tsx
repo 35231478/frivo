@@ -1,10 +1,13 @@
 "use client";
 
+import { confirmar } from "@/components/ui/avisos";
+import { acento } from "@/lib/ui/tokens";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
+import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
 import { cn, formatarDataHora, formatarPrazoHoras, LABELS_RESPONSAVEL_PRAZO, LABELS_STATUS_OS_PRAZO } from "@/lib/utils";
 import { Plus, CheckCircle2, AlertTriangle, Circle, ChevronRight, Trash2, Timer } from "lucide-react";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
 
 interface Etapa {
   id: string; nome: string; prazoHoras: number; prazoLimite: string;
@@ -14,14 +17,15 @@ interface Prazo {
   id: string; nome: string; status: string; etapaAtual: number;
   etapas: Etapa[]; template?: { cor?: string } | null;
 }
-interface Template { id: string; nome: string; ativo: boolean }
 
 export function OsPrazos({ osId }: { osId: string }) {
+  // Criar, avançar e cancelar prazo exigem editar a OS (mesma regra da API)
+  const podeEditar = usePermissoes().pode("ordens", "editar");
   const [prazos, setPrazos] = useState<Prazo[]>([]);
-  const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [adicionando, setAdicionando] = useState(false);
   const [templateId, setTemplateId] = useState("");
+  const [erro, setErro] = useState("");
   const [acao, setAcao] = useState<string | null>(null);
 
   function carregar() {
@@ -30,17 +34,18 @@ export function OsPrazos({ osId }: { osId: string }) {
 
   useEffect(() => {
     carregar();
-    fetch("/api/prazo-templates").then((r) => r.json()).then((d) => setTemplates(Array.isArray(d) ? d.filter((t: Template) => t.ativo !== false) : [])).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function adicionar() {
     if (!templateId) return;
-    setAcao("add");
+    setAcao("add"); setErro("");
     try {
       const res = await fetch(`/api/ordens/${osId}/prazos`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ templateId }) });
-      if (res.ok) { setAdicionando(false); setTemplateId(""); carregar(); }
-    } finally { setAcao(null); }
+      if (res.ok) { setAdicionando(false); setTemplateId(""); carregar(); return; }
+      const d = await res.json().catch(() => null);
+      setErro(d?.erro ?? "Não foi possível criar o prazo.");
+    } catch { setErro("Erro de conexão: o prazo não foi criado."); } finally { setAcao(null); }
   }
 
   async function avancar(prazoId: string) {
@@ -56,7 +61,7 @@ export function OsPrazos({ osId }: { osId: string }) {
   }
 
   async function cancelar(prazoId: string) {
-    if (!confirm("Cancelar este prazo?")) return;
+    if (!(await confirmar({ mensagem: "Cancelar este prazo?", perigo: true, confirmarTexto: "Cancelar prazo", cancelarTexto: "Voltar" }))) return;
     await fetch(`/api/os-prazos/${prazoId}`, { method: "DELETE" });
     carregar();
   }
@@ -67,7 +72,7 @@ export function OsPrazos({ osId }: { osId: string }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="section-title flex items-center gap-2"><Timer className="w-4 h-4 text-primary-600" /> Prazos / SLA</h3>
-        {!adicionando && (
+        {podeEditar && !adicionando && (
           <Button variant="outline" size="sm" onClick={() => setAdicionando(true)}>
             <Plus className="w-4 h-4" /> Adicionar prazo
           </Button>
@@ -75,15 +80,17 @@ export function OsPrazos({ osId }: { osId: string }) {
       </div>
 
       {adicionando && (
-        <div className="border border-primary-200 bg-primary-50/30 rounded-lg p-4 flex items-end gap-2">
-          <div className="flex-1">
-            <label className="text-xs font-semibold text-ink">Template de prazo</label>
-            <Select value={templateId} onChange={(e) => setTemplateId(e.target.value)} placeholder="Selecione um template" className="mt-1">
-              {templates.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
-            </Select>
+        <div className="border border-primary-200 bg-primary-50/30 rounded-lg p-4 space-y-2">
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <label className="text-xs font-semibold text-ink">Modelo de prazo</label>
+              {/* Só modelos ativos (o servidor recusa modelo inativo em prazo novo) */}
+              <SeletorCadastro entidade="modelos-prazo" valor={templateId} onChange={(v) => setTemplateId(v)} placeholder="Selecione um modelo" className="mt-1" />
+            </div>
+            <Button onClick={adicionar} loading={acao === "add"} disabled={!templateId}>Criar</Button>
+            <Button variant="secondary" onClick={() => { setAdicionando(false); setErro(""); }}>Cancelar</Button>
           </div>
-          <Button onClick={adicionar} loading={acao === "add"} disabled={!templateId}>Criar</Button>
-          <Button variant="secondary" onClick={() => setAdicionando(false)}>Cancelar</Button>
+          {erro && <p role="alert" className="text-sm text-atrasado-texto">{erro}</p>}
         </div>
       )}
 
@@ -97,23 +104,23 @@ export function OsPrazos({ osId }: { osId: string }) {
               <div key={p.id} className="border border-surface-border rounded-lg p-4">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full" style={{ backgroundColor: p.template?.cor ?? "#0EA5E9" }} />
+                    <span className="w-3 h-3 rounded-full" style={{ backgroundColor: p.template?.cor ?? acento.DEFAULT }} />
                     <span className="font-semibold text-ink">{p.nome}</span>
                     <span className={cn(
                       "text-xs font-medium px-2 py-0.5 rounded-full",
                       p.status === "CONCLUIDO" ? "bg-success-50 text-success-700" :
-                      p.status === "ATRASADO" ? "bg-red-50 text-red-700" :
-                      p.status === "CANCELADO" ? "bg-slate-100 text-slate-500" : "bg-primary-50 text-primary-700",
+                      p.status === "ATRASADO" ? "bg-atrasado-claro text-atrasado-texto" :
+                      p.status === "CANCELADO" ? "bg-surface-linha text-ink-muted" : "bg-primary-50 text-primary-700",
                     )}>{LABELS_STATUS_OS_PRAZO[p.status]}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    {ativo && (
+                    {podeEditar && ativo && (
                       <Button size="sm" variant="primary" onClick={() => avancar(p.id)} loading={acao === p.id}>
                         Avançar etapa <ChevronRight className="w-3.5 h-3.5" />
                       </Button>
                     )}
-                    {p.status !== "CANCELADO" && p.status !== "CONCLUIDO" && (
-                      <button onClick={() => cancelar(p.id)} className="p-1.5 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded" title="Cancelar prazo"><Trash2 className="w-3.5 h-3.5" /></button>
+                    {podeEditar && p.status !== "CANCELADO" && p.status !== "CONCLUIDO" && (
+                      <button onClick={() => cancelar(p.id)} className="p-1.5 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded" title="Cancelar prazo"><Trash2 className="w-3.5 h-3.5" /></button>
                     )}
                   </div>
                 </div>
@@ -128,20 +135,20 @@ export function OsPrazos({ osId }: { osId: string }) {
                       <li key={e.id} className="ml-5">
                         <span className={cn(
                           "absolute -left-[11px] flex items-center justify-center w-5 h-5 rounded-full ring-4 ring-white",
-                          concluida ? "bg-success-500" : atrasada ? "bg-red-500" : emAndamento ? "bg-primary-500 animate-pulse" : "bg-slate-300",
+                          concluida ? "bg-success-500" : atrasada ? "bg-atrasado" : emAndamento ? "bg-acento animate-pulse" : "bg-surface-border",
                         )}>
                           {concluida ? <CheckCircle2 className="w-3 h-3 text-white" /> : atrasada ? <AlertTriangle className="w-3 h-3 text-white" /> : <Circle className="w-2 h-2 text-white fill-white" />}
                         </span>
                         <div className="flex items-center justify-between gap-2">
                           <div>
-                            <p className={cn("text-sm font-medium", concluida ? "text-ink-muted line-through" : atrasada ? "text-red-700" : "text-ink")}>
+                            <p className={cn("text-sm font-medium", concluida ? "text-ink-muted line-through" : atrasada ? "text-atrasado-texto" : "text-ink")}>
                               {e.nome}
                             </p>
                             <p className="text-xs text-ink-muted">
                               {LABELS_RESPONSAVEL_PRAZO[e.responsavel]} · prazo {formatarPrazoHoras(e.prazoHoras)} · limite {formatarDataHora(e.prazoLimite)}
                             </p>
                             {concluida && e.concluidaEm && (
-                              <p className="text-[11px] text-success-700">✅ Concluída em {formatarDataHora(e.concluidaEm)}{e.concluidaPor ? ` por ${e.concluidaPor}` : ""}</p>
+                              <p className="inline-flex items-center gap-1 text-[11px] text-ok-texto"><CheckCircle2 className="w-3 h-3" aria-hidden="true" /> Concluída em {formatarDataHora(e.concluidaEm)}{e.concluidaPor ? ` por ${e.concluidaPor}` : ""}</p>
                             )}
                           </div>
                         </div>

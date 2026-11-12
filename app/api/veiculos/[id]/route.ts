@@ -1,17 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { validarDocumentoDataUrl, validarFotos } from "@/lib/anexos-server";
 import { veiculoSchema } from "@/lib/validations";
+import { organizarFotosVeiculo } from "@/lib/veiculo-fotos";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { pode } from "@/lib/permissoes";
-import { impactoVeiculo, anotarInativacao, lerMotivo } from "@/lib/inativacao-server";
+import { lerMotivo } from "@/lib/inativacao-server";
+import { inativarVeiculo, reativarVeiculo, statusHttp } from "@/lib/acoes-massa/regras";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
-  const empresaId = session.user!.empresaId;
+  // Detalhe com documentos e manutenções: exige ver veículos; id de outra empresa = 404
+  const guard = await exigirPermissao("veiculos", "visualizar");
+  if (guard.erro) return guard.resposta;
+  const empresaId = guard.session.user!.empresaId;
   const { id } = await params;
 
   const veiculo = await prisma.veiculo.findFirst({
@@ -26,8 +29,10 @@ export async function GET(_: NextRequest, { params }: Params) {
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  // Cadastrar/editar veículo exige "veiculos.gerenciar" (antes bastava estar logado)
+  const guard = await exigirPermissao("veiculos", "gerenciar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const empresaId = session.user!.empresaId;
   const { id } = await params;
 
@@ -44,7 +49,18 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (dup) return NextResponse.json({ erro: "Placa já cadastrada" }, { status: 409 });
   }
 
-  const { documentos, responsavelId, equipeId, proximaRevisaoData, seguroVencimento, ...rest } = parsed.data;
+  const { documentos, responsavelId, equipeId, proximaRevisaoData, seguroVencimento, fotos: fotosBrutas, fotosRotulos: rotulosBrutos, ...rest } = parsed.data;
+  // Fotos e documentos: tipo decidido pelos BYTES; grava o data URL normalizado
+  const fotosValidadas = validarFotos(fotosBrutas);
+  if (!fotosValidadas.ok) return NextResponse.json({ erro: fotosValidadas.erro }, { status: 400 });
+  const docsValidados: { tipo: typeof documentos[number]["tipo"]; nome: string; arquivoUrl: string | null; dataVencimento?: string | null }[] = [];
+  for (const d of documentos) {
+    const r = validarDocumentoDataUrl(d.arquivoUrl, d.nome);
+    if (!r.ok) return NextResponse.json({ erro: r.erro }, { status: 400 });
+    docsValidados.push({ ...d, arquivoUrl: r.conteudo });
+  }
+  // Frente primeiro (capa), depois traseira, laterais e outros
+  const { fotos, fotosRotulos } = organizarFotosVeiculo(fotosValidadas.fotos, rotulosBrutos);
   // Inativar pelo formulário (status) segue a mesma regra do botão: exige "excluir"
   if (rest.status === "INATIVO" && existente.status !== "INATIVO" && !pode(session.user!.permissoes, "veiculos", "excluir", session.user!.role))
     return NextResponse.json({ erro: "Sem permissão para inativar veículos" }, { status: 403 });
@@ -53,6 +69,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
     where: { id },
     data: {
       ...rest,
+      fotos,
+      fotosRotulos,
       placa,
       responsavelId: responsavelId || null,
       equipeId: equipeId || null,
@@ -60,10 +78,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
       seguroVencimento: seguroVencimento ? new Date(seguroVencimento) : null,
       documentos: {
         deleteMany: {},
-        create: documentos.map((d) => ({
+        create: docsValidados.map((d) => ({
           tipo: d.tipo,
           nome: d.nome,
-          arquivoUrl: d.arquivoUrl || null,
+          arquivoUrl: d.arquivoUrl,
           dataVencimento: d.dataVencimento ? new Date(d.dataVencimento) : null,
         })),
       },
@@ -84,18 +102,10 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   const empresaId = session.user!.empresaId;
   const { id } = await params;
 
-  const existente = await prisma.veiculo.findFirst({ where: { id, empresaId } });
-  if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
-  if (existente.status === "INATIVO") return NextResponse.json({ ok: true });
-
-  const impacto = await impactoVeiculo(id, empresaId);
-  if (impacto?.bloqueio) return NextResponse.json({ erro: impacto.bloqueio }, { status: 409 });
-
   const motivo = lerMotivo(await req.json().catch(() => ({})));
-  await prisma.veiculo.update({
-    where: { id },
-    data: { status: "INATIVO", observacoes: anotarInativacao(existente.observacoes, session.user!.name ?? "usuário", motivo) },
-  });
+  // Mesma regra da ação em massa (lib/acoes-massa/regras.ts)
+  const r = await inativarVeiculo(id, { empresaId, usuarioId: session.user!.id, usuarioNome: session.user!.name ?? "usuário", motivo });
+  if (!r.ok) return NextResponse.json({ erro: r.codigo === "nao_encontrado" ? "Não encontrado" : r.motivo }, { status: statusHttp(r) });
   return NextResponse.json({ ok: true });
 }
 
@@ -107,8 +117,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const { id } = await params;
   if ((await req.json().catch(() => ({})))?.ativo !== true) return NextResponse.json({ erro: "Ação inválida" }, { status: 400 });
 
-  const existente = await prisma.veiculo.findFirst({ where: { id, empresaId }, select: { id: true } });
-  if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
-  await prisma.veiculo.update({ where: { id }, data: { status: "ATIVO" } });
+  const r = await reativarVeiculo(id, { empresaId, usuarioId: guard.session.user!.id, usuarioNome: guard.session.user!.name ?? "usuário" });
+  if (!r.ok) return NextResponse.json({ erro: "Não encontrado" }, { status: statusHttp(r) });
   return NextResponse.json({ ok: true });
 }

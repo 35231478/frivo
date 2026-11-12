@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { toast } from "@/components/ui/avisos";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { clienteSchema, type ClienteInput } from "@/lib/validations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,33 +12,38 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { WhatsAppInput } from "@/components/ui/whatsapp-input";
+import { EmailsInput } from "@/components/ui/emails-input";
 import { StarRating } from "@/components/ui/star-rating";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { UnidadesManager } from "@/components/forms/unidades-manager";
 import { UnidadesLocal, type UnidadeLocal } from "@/components/forms/unidades-local";
+import { mesclarContato, type ContatoConsulta } from "@/lib/cadastros/autofill-cnpj";
 import { AnexosManager } from "@/components/forms/anexos-manager";
+import { AtendimentoCliente } from "@/components/forms/atendimento-cliente";
 import { AnexosLocal, type AnexoLocal } from "@/components/forms/anexos-local";
 import { LogoUpload } from "@/components/forms/logo-upload";
 import { ContatosManager } from "@/components/forms/contatos-manager";
-import { ContatosLocal, type ContatoLocal } from "@/components/forms/contatos-local";
+import { ContatosLocal, novoContatoLocal, type ContatoLocal } from "@/components/forms/contatos-local";
 import { ComunicacaoPreferencias } from "@/components/forms/comunicacao-preferencias";
-import { ClienteContratos } from "@/components/forms/cliente-contratos";
 import { PortalContatos } from "@/components/forms/portal-contatos";
 import { InteracoesManager } from "@/components/forms/interacoes-manager";
-import { ToggleSwitch } from "@/components/ui/toggle-switch";
+import { ToggleSwitch, ToggleGroup } from "@/components/ui/toggle-switch";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
-import { LABELS_PERFIL_FATURAMENTO, formatarMoeda } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import {
   LABELS_STATUS_FINANCEIRO_CALC, COR_STATUS_FINANCEIRO_CALC, type StatusFinanceiroCalc,
 } from "@/lib/status-financeiro";
 import Link from "next/link";
+import { SeletorCadastro, useCadastro } from "@/components/cadastros/seletor-cadastro";
 import type { Cliente, Tecnico, Unidade, Configuracao, ContatoCliente } from "@prisma/client";
+import type { ContatoSeguro } from "@/lib/contato-cliente";
 import {
-  Search, Loader2, FileCheck, Lock, Pencil, X, AlertCircle,
-  FileText, Phone, MapPin, Image as ImageIcon, Heart, Headset,
-  Building2, DollarSign, Users, Paperclip, Star, MessageSquare, Globe, ArrowUpRight, Send, FileSignature,
+  Search, Loader2, FileCheck, Lock, Pencil, AlertCircle,
+  FileText, MapPin, Heart, Headset,
+  Building2, DollarSign, Users, Paperclip, Star, MessageSquare, Globe, Send, FileSignature,
+  ClipboardPlus, ClipboardList, Calculator, Receipt, ChevronDown, Wallet,
 } from "lucide-react";
+import { AlertaPerdasCliente, type PerdasCliente } from "@/components/financeiro/alerta-perdas-cliente";
 
 type ResponsavelItem = Pick<Tecnico, "id" | "nome" | "crea">;
 type AnexoItem = { id: string; nome: string; tipo: string; tamanho: number; criadoEm: string | Date };
@@ -48,7 +54,7 @@ interface ClienteFormProps {
     responsavelTecnico?: ResponsavelItem | null;
     unidades?: Unidade[];
     anexos?: AnexoItem[];
-    contatosCliente?: ContatoCliente[];
+    contatosCliente?: ContatoSeguro<ContatoCliente>[];
     interacoes?: InteracaoItem[];
     _count?: { contratos: number };
   };
@@ -56,13 +62,17 @@ interface ClienteFormProps {
   statusFinanceiroCalc?: StatusFinanceiroCalc;
   /** Total a receber nos próximos 30 dias (parcelas em aberto). */
   totalProximos30Dias?: number;
+  /** Perdas (inadimplência) nos últimos 12 meses: alerta informativo, não bloqueia */
+  perdas12m?: PerdasCliente | null;
 }
 
 // Mapeia cada campo (RHF) à aba onde ele está, para destacar abas com erro
 const CAMPO_ABA: Record<string, string> = {
   tipoPessoa: "geral", cpfCnpj: "geral", nome: "geral", nomeFantasia: "geral", inscricaoEstadual: "geral",
+  optanteSimples: "geral", indicadorInscricaoEstadual: "geral", inscricaoMunicipal: "geral", inscricaoSuframa: "geral",
   statusFinanceiro: "geral", ativo: "geral",
-  email: "contatos", telefone: "contatos", celular: "contatos", contato: "contatos",
+  email: "geral", telefone: "geral", celular: "geral", contato: "geral",
+  emailsFaturamento: "geral", whatsappFaturamento: "geral",
   observacoes: "relacionamento",
 };
 
@@ -72,7 +82,7 @@ function Painel({ ativo, children }: { ativo: boolean; children: React.ReactNode
   return <div className={cn("space-y-8", !ativo && "hidden")}>{children}</div>;
 }
 
-export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30Dias }: ClienteFormProps) {
+export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: ClienteFormProps) {
   const router = useRouter();
   const isEditing = !!initialData;
   // RBAC (o servidor também valida): sem permissão de salvar, a ficha abre somente leitura.
@@ -80,8 +90,10 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
   const podeSalvar = pode("clientes", isEditing ? "editar" : "criar");
   const podeInativar = pode("clientes", "excluir");
   const podeReativar = pode("clientes", "editar");
+  // UX-2/E5: "cliente ligou → abrir OS" sem sair da ficha (RBAC igual ao resto do sistema)
+  const podeNovaOs = pode("ordens", "criar");
+  const podeNovoOrcamento = pode("orcamentos", "criar");
   const statusCalc: StatusFinanceiroCalc = statusFinanceiroCalc ?? "SEM_HISTORICO";
-  const totalProx = totalProximos30Dias ?? 0;
   const qtdContratosAtivos = initialData?._count?.contratos ?? 0;
   const [erroGlobal, setErroGlobal] = useState("");
   const [buscandoCnpj, setBuscandoCnpj] = useState(false);
@@ -89,6 +101,10 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
   const [anexosNovos, setAnexosNovos] = useState<AnexoLocal[]>([]);
   const [contatosNovos, setContatosNovos] = useState<ContatoLocal[]>([]);
   const [razaoSocialBloqueada, setRazaoSocialBloqueada] = useState(false);
+  // Autofill da consulta de CNPJ na edição: o endereço/contato da consulta viram sugestão para os
+  // managers (abrem o formulário já preenchido ao clicar em "Novo"); o nonce dispara o efeito.
+  const [sugestaoContato, setSugestaoContato] = useState<ContatoConsulta | null>(null);
+  const [consultaNonce, setConsultaNonce] = useState(0);
   const [config, setConfig] = useState<Partial<Configuracao>>({});
   const [satisfacao, setSatisfacao] = useState<number | null>(initialData?.satisfacao ?? null);
 
@@ -96,16 +112,21 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
   const [aba, setAba] = useState("geral");
   const [abasErro, setAbasErro] = useState<Set<string>>(new Set());
   const [cnpjInfo, setCnpjInfo] = useState<{ nome: string; cidade?: string; estado?: string } | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
 
   // Controle do status ativo/inativo (header)
   const [statusOpen, setStatusOpen] = useState(false);
   const [mudandoAtivo, setMudandoAtivo] = useState(false);
 
-  function mostrarToast(msg: string) {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3000);
-  }
+  // UX-2/E5: salvar um cliente novo aterrissa NESTA ficha (?criado=1) — confirma e já oferece as ações
+  const searchParams = useSearchParams();
+  const chegouCriado = isEditing && searchParams.get("criado") === "1";
+  useEffect(() => {
+    if (chegouCriado) {
+      toast("Cliente cadastrado.");
+      router.replace(`/clientes/${initialData!.id}/editar`, { scroll: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chegouCriado]);
 
   // Inativa (DELETE = soft-delete, exige "excluir") ou reativa (PATCH, exige "editar")
   // o cliente sem salvar o formulário inteiro.
@@ -123,22 +144,17 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
       if (!res.ok) { const e = await res.json().catch(() => ({})); setErroGlobal(e.erro ?? "Erro ao alterar status."); return; }
       setValue("ativo", novo);
       setStatusOpen(false);
-      mostrarToast(novo ? "Cliente reativado." : "Cliente inativado.");
+      toast(novo ? "Cliente reativado." : "Cliente inativado.");
       router.refresh();
     } catch { setErroGlobal("Erro de conexão."); } finally { setMudandoAtivo(false); }
   }
 
-  // Perfil de faturamento (gerenciado fora do RHF)
-  const [tipoFaturamento, setTipoFaturamento] = useState<string>(initialData?.tipoFaturamento ?? "");
-  const [diaFaturamento, setDiaFaturamento] = useState<number>(initialData?.diaFaturamento ?? 1);
-  const [condicaoPagamento, setCondicaoPagamento] = useState<string>(initialData?.condicaoPagamento ?? "");
-  const [exigePcAntesNf, setExigePcAntesNf] = useState<boolean>(initialData?.exigePcAntesNf ?? false);
-  const [agrupaAdicionais, setAgrupaAdicionais] = useState<boolean>(initialData?.agrupaAdicionais ?? false);
-  const [boletoUnicoMensal, setBoletoUnicoMensal] = useState<boolean>(initialData?.boletoUnicoMensal ?? false);
-  const [emailsFaturamento] = useState<string[]>(initialData?.emailsFaturamento ?? []);
-  const [whatsappFaturamento, setWhatsappFaturamento] = useState<string>(initialData?.whatsappFaturamento ?? "");
+  // Tabela de preços (em Dados gerais). O perfil de faturamento (tipo/dia/condição e canais de
+  // cobrança) saiu da UI do cliente: as colunas ficam no banco e são preservadas na edição porque
+  // não entram mais no payload. A configuração de faturamento vive em cada contrato.
   const [tabelaPrecoId, setTabelaPrecoId] = useState<string>(initialData?.tabelaPrecoId ?? "");
-  const [tabelas, setTabelas] = useState<{ id: string; nome: string; tipo: string }[]>([]);
+  const tabelasPreco = useCadastro("tabelas-preco");
+  const tabelaInativa = tabelasPreco.itens.find((t) => t.id === tabelaPrecoId && t.ativo === false) ?? null;
   const [portalAtivo, setPortalAtivo] = useState<boolean>(initialData?.portalAtivo ?? false);
   const [prefsEmail] = useState({
     emailReceberBoletos: initialData?.emailReceberBoletos ?? true,
@@ -149,10 +165,14 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
     emailReceberOs: initialData?.emailReceberOs ?? true,
   });
   const [emailsCopia] = useState<string[]>(initialData?.emailsCopia ?? []);
+  // Cobrança e faturamento (reaproveita colunas já existentes; sem schema novo). Salvos no create e edit.
+  const [emailsFaturamento, setEmailsFaturamento] = useState<string[]>(initialData?.emailsFaturamento ?? []);
+  const [boletoUnicoMensal, setBoletoUnicoMensal] = useState<boolean>(initialData?.boletoUnicoMensal ?? false);
+  const [exigePcAntesNf, setExigePcAntesNf] = useState<boolean>(initialData?.exigePcAntesNf ?? false);
+  const [agrupaAdicionais, setAgrupaAdicionais] = useState<boolean>(initialData?.agrupaAdicionais ?? false);
 
   useEffect(() => {
     fetch("/api/configuracoes").then((r) => r.json()).then(setConfig).catch(() => {});
-    fetch("/api/tabelas-preco").then((r) => r.json()).then((d) => setTabelas(Array.isArray(d) ? d.filter((t: any) => t.ativo !== false) : [])).catch(() => {});
   }, []);
 
   const {
@@ -165,6 +185,10 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
           tipoPessoa: initialData.tipoPessoa, nome: initialData.nome,
           nomeFantasia: initialData.nomeFantasia ?? "", cpfCnpj: initialData.cpfCnpj,
           inscricaoEstadual: initialData.inscricaoEstadual ?? "",
+          optanteSimples: initialData.optanteSimples ?? false,
+          indicadorInscricaoEstadual: (initialData.indicadorInscricaoEstadual ?? "") as any,
+          inscricaoMunicipal: initialData.inscricaoMunicipal ?? "",
+          inscricaoSuframa: initialData.inscricaoSuframa ?? "",
           statusFinanceiro: initialData.statusFinanceiro, ativo: initialData.ativo, satisfacao: initialData.satisfacao,
           email: initialData.email ?? "", telefone: initialData.telefone ?? "",
           celular: initialData.celular ?? "", contato: initialData.contato ?? "",
@@ -174,14 +198,18 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
           complemento: initialData.complemento ?? "", bairro: initialData.bairro ?? "",
           cidade: initialData.cidade ?? "", estado: initialData.estado ?? "",
           cep: initialData.cep ?? "", observacoes: initialData.observacoes ?? "",
+          whatsappFaturamento: initialData.whatsappFaturamento ?? "",
         }
-      : { tipoPessoa: "JURIDICA", statusFinanceiro: "ADIMPLENTE", ativo: true },
+      : { tipoPessoa: "JURIDICA", statusFinanceiro: "ADIMPLENTE", ativo: true, optanteSimples: false },
   });
 
   const tipoPessoa = watch("tipoPessoa");
   const telefoneVal = watch("telefone") ?? "";
   const celularVal = watch("celular") ?? "";
   const ativoVal = watch("ativo") ?? true;
+  const optanteSimplesVal = watch("optanteSimples") ?? false;
+  // Informações fiscais: seção avançada, recolhida por padrão (só abre quem vai emitir nota).
+  const [fiscalAberto, setFiscalAberto] = useState(false);
 
   async function buscarCnpj() {
     const cnpj = watch("cpfCnpj")?.replace(/\D/g, "");
@@ -189,26 +217,32 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
     setBuscandoCnpj(true); setErroGlobal("");
     try {
       const res = await fetch(`/api/cnpj/${cnpj}`);
-      if (!res.ok) { const err = await res.json(); setErroGlobal(err.erro ?? "Erro ao consultar CNPJ."); return; }
+      if (!res.ok) { const err = await res.json().catch(() => ({})); setErroGlobal(err.erro ?? "Erro ao consultar CNPJ."); return; }
       const data = await res.json();
       if (data.nome) { setValue("nome", data.nome); setRazaoSocialBloqueada(true); }
       setCnpjInfo({ nome: data.nome ?? "", cidade: data.cidade, estado: data.estado });
       if (data.nomeFantasia) setValue("nomeFantasia", data.nomeFantasia);
-      if (data.email) setValue("email", data.email);
-      if (data.telefone) setValue("telefone", data.telefone);
-      if (data.endereco) setValue("endereco", data.endereco);
-      if (data.numero) setValue("numero", data.numero);
-      if (data.complemento) setValue("complemento", data.complemento);
-      if (data.bairro) setValue("bairro", data.bairro);
-      if (data.cidade) setValue("cidade", data.cidade);
-      if (data.estado) setValue("estado", data.estado);
-      if (data.cep) setValue("cep", data.cep);
-    } catch { setErroGlobal("Falha na consulta do CNPJ."); } finally { setBuscandoCnpj(false); }
+      // A opção pelo Simples vem na consulta federal (quando disponível); IE/IM/Suframa não vêm (manuais).
+      if (typeof data.optanteSimples === "boolean") { setValue("optanteSimples", data.optanteSimples); setFiscalAberto(true); }
+      // A consulta preenche razão social, nome fantasia e um contato. O endereço fica manual (sem criar card).
+      const contato: ContatoConsulta = { email: data.email ?? "", telefone: data.telefone ?? "" };
+      const nomeCli = data.nome || watch("nome") || "";
+
+      if (!isEditing) {
+        // Cliente novo: mescla o contato direto no que vai ser salvo (sem duplicar).
+        const rc = mesclarContato<ContatoLocal>(contatosNovos, contato, nomeCli, novoContatoLocal);
+        if (rc.contatos !== contatosNovos) setContatosNovos(rc.contatos);
+      } else {
+        // Edição: o contato vira sugestão para o manager (o nonce abre "Novo contato" já preenchido).
+        setSugestaoContato(contato.email || contato.telefone ? contato : null);
+        setConsultaNonce((n) => n + 1);
+      }
+    } catch { setErroGlobal("Falha na consulta do CNPJ. Tente novamente."); } finally { setBuscandoCnpj(false); }
   }
 
   // Valida regras dinâmicas da empresa; retorna { aba, msg } do primeiro erro
   function validarConfigDinamica(): { aba: string; msg: string } | null {
-    if (config.clienteExigirUnidade && !isEditing && unidadesNovas.length === 0) return { aba: "enderecos", msg: "Adicione pelo menos um endereço antes de salvar (configuração da empresa)." };
+    if (config.clienteExigirUnidade && !isEditing && unidadesNovas.length === 0) return { aba: "geral", msg: "Adicione pelo menos um endereço antes de salvar (configuração da empresa)." };
     return null;
   }
 
@@ -229,14 +263,6 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
     const payload: any = {
       ...data,
       satisfacao,
-      tipoFaturamento: tipoFaturamento || null,
-      diaFaturamento,
-      condicaoPagamento: condicaoPagamento || null,
-      exigePcAntesNf,
-      agrupaAdicionais,
-      boletoUnicoMensal,
-      emailsFaturamento,
-      whatsappFaturamento: whatsappFaturamento || null,
       tabelaPrecoId: tabelaPrecoId || null,
       portalAtivo,
       // Segmento e Origem não são mais editáveis no formulário; preserva o valor
@@ -245,6 +271,11 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
       origem: initialData?.origem ?? null,
       ...prefsEmail,
       emailsCopia,
+      // Cobrança e faturamento: gravados no create e no edit (não ignora nem zera).
+      emailsFaturamento,
+      boletoUnicoMensal,
+      exigePcAntesNf,
+      agrupaAdicionais,
     };
     if (!isEditing) {
       payload.unidades = unidadesNovas.map(({ _tempId, ...u }) => u);
@@ -261,10 +292,13 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
       });
       if (!res.ok) { const err = await res.json(); setErroGlobal(err.erro ?? "Erro ao salvar cliente."); return; }
       const saved = await res.json().catch(() => ({}));
-      if (continuar) {
-        mostrarToast(isEditing ? "Alterações salvas com sucesso!" : "Cliente cadastrado com sucesso!");
-        if (!isEditing && saved?.id) { router.push(`/clientes/${saved.id}/editar`); router.refresh(); }
-        else router.refresh();
+      // Cliente NOVO: qualquer salvar aterrissa na ficha do criado (UX-2/E5) —
+      // o fluxo do balcão continua dali ("Nova OS", contatos, endereços…)
+      if (!isEditing && saved?.id) {
+        router.push(`/clientes/${saved.id}/editar?criado=1`); router.refresh();
+      } else if (continuar) {
+        toast("Cliente salvo.");
+        router.refresh();
       } else {
         router.push("/clientes"); router.refresh();
       }
@@ -275,20 +309,15 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
     return config[cfgKey] ? `${base} *` : base;
   }
 
-  const qtdContatos = isEditing ? (initialData!.contatosCliente?.length ?? 0) : contatosNovos.length;
-  const qtdEnderecos = isEditing ? (initialData!.unidades?.length ?? 0) : unidadesNovas.length;
   const qtdAnexos = isEditing ? (initialData!.anexos?.length ?? 0) : anexosNovos.length;
 
   const ABAS = [
-    { id: "geral", label: "Dados Gerais", icone: FileText },
-    { id: "contatos", label: "Contatos", icone: Phone, badge: qtdContatos },
-    { id: "enderecos", label: "Endereços", icone: MapPin, badge: qtdEnderecos },
+    { id: "geral", label: "Dados gerais", icone: FileText },
+    { id: "atendimento", label: "Atendimento", icone: ClipboardList },
     { id: "comunicacao", label: "Comunicação", icone: Send },
-    { id: "faturamento", label: "Faturamento", icone: DollarSign },
-    { id: "contratos", label: "Contratos", icone: FileSignature, badge: qtdContratosAtivos },
     { id: "portal", label: "Portal", icone: Headset },
-    { id: "documentos", label: "Documentos e Mídia", icone: ImageIcon, badge: qtdAnexos },
     { id: "relacionamento", label: "Relacionamento", icone: Heart },
+    { id: "documentos", label: "Anexos", icone: Paperclip, badge: qtdAnexos },
   ];
 
   const salvar = handleSubmit((d) => onSubmit(d, false), onError);
@@ -297,55 +326,73 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
   // Inativar exige "excluir"; reativar exige "editar". Sem a permissão, o status vira só um selo.
   const podeAlterarStatus = ativoVal ? podeInativar : podeReativar;
 
+  // "Cliente ligou → abrir OS" sem sair da ficha (E5): atalhos no cabeçalho, só para cliente ativo
+  const AtalhosCliente = ({ compact = false }: { compact?: boolean }) => !isEditing || !ativoVal ? null : (
+    <>
+      {podeNovaOs && (
+        <Link
+          href={`/ordens/nova?clienteId=${initialData!.id}`} data-nova-os
+          className={cn("inline-flex items-center gap-1.5 font-semibold bg-primary-500 hover:bg-primary-600 text-white rounded-lg shadow-sm whitespace-nowrap",
+            compact ? "text-xs px-3 py-1.5" : "text-sm px-4 py-2.5")}
+        >
+          <ClipboardPlus className="w-4 h-4" /> Nova OS
+        </Link>
+      )}
+      {podeNovoOrcamento && (
+        <Link
+          href={`/orcamentos/novo?clienteId=${initialData!.id}`} data-novo-orcamento
+          className={cn("inline-flex items-center gap-1.5 font-medium bg-white border border-primary-500 text-primary-600 hover:bg-primary-50 rounded-lg whitespace-nowrap",
+            compact ? "text-xs px-3 py-1.5" : "text-sm px-4 py-2.5")}
+        >
+          <Calculator className="w-4 h-4" /> <span className={compact ? "hidden lg:inline" : ""}>Novo orçamento</span><span className={compact ? "lg:hidden" : "hidden"}>Orçamento</span>
+        </Link>
+      )}
+    </>
+  );
+
   const BotoesAcao = ({ compact = false }: { compact?: boolean }) => !podeSalvar ? (
-    <div className="flex items-center gap-2 shrink-0">
+    <div className="flex items-center gap-2 flex-wrap">
+      <AtalhosCliente compact={compact} />
       <Button type="button" variant="secondary" size={compact ? "sm" : "md"} onClick={() => router.push("/clientes")}>Voltar</Button>
     </div>
   ) : (
-    <div className="flex items-center gap-2 shrink-0">
+    <div className="flex items-center gap-2 flex-wrap">
+      <AtalhosCliente compact={compact} />
       <Button type="button" variant="secondary" size={compact ? "sm" : "md"} onClick={() => router.push("/clientes")}>Cancelar</Button>
       <Button type="button" variant="outline" size={compact ? "sm" : "md"} loading={isSubmitting} onClick={salvarEContinuar}>
         <span className={compact ? "hidden lg:inline" : ""}>Salvar e continuar</span>
         <span className={compact ? "lg:hidden" : "hidden"}>Continuar</span>
       </Button>
-      <Button type="button" variant="success" size={compact ? "sm" : "md"} loading={isSubmitting} onClick={salvar}>
+      <Button type="button" variant="primary" size={compact ? "sm" : "md"} loading={isSubmitting} onClick={salvar}>
         <FileCheck className="w-4 h-4" /> Salvar
       </Button>
     </div>
   );
 
   return (
-    <form onSubmit={salvar} className="min-h-full -m-6 bg-[#F8FAFC] p-4 sm:p-6">
-      {/* Toast de sucesso */}
-      {toast && (
-        <div className="fixed top-5 right-5 z-50 flex items-center gap-2 bg-success-600 text-white text-sm font-medium rounded-xl px-4 py-3 shadow-card-hover animate-in fade-in slide-in-from-top-2">
-          <FileCheck className="w-4 h-4" /> {toast}
-        </div>
-      )}
-
+    <form onSubmit={salvar} className="min-h-full -m-6 bg-surface-page p-4 sm:p-6">
       <div className="max-w-[1600px] mx-auto space-y-5">
         {/* Cabeçalho fixo: título + status + ações */}
-        <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-[#F8FAFC]/90 backdrop-blur border-b border-surface-border">
+        <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-surface-page/90 backdrop-blur border-b border-surface-border">
           <div className="max-w-[1600px] mx-auto flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3 flex-wrap min-w-0">
               <h1 className="text-xl font-bold text-ink truncate">{titulo}</h1>
               {isEditing && (
-                <button
-                  type="button"
-                  onClick={() => setAba("contratos")}
+                <Link
+                  href={`/contratos?clienteId=${initialData!.id}`}
                   title="Ver contratos do cliente"
                   className={cn(
                     "inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-2.5 py-1 border transition-colors",
                     qtdContratosAtivos > 0
-                      ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
-                      : "bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200",
+                      ? "bg-ok-claro border-ok/20 text-ok-texto hover:brightness-95"
+                      : "bg-surface-linha border-surface-border text-ink-muted hover:bg-surface-border",
                   )}
                 >
                   <FileSignature className="w-3.5 h-3.5" />
                   {qtdContratosAtivos > 0
                     ? `${qtdContratosAtivos} contrato${qtdContratosAtivos > 1 ? "s" : ""} ativo${qtdContratosAtivos > 1 ? "s" : ""}`
                     : "Sem contratos"}
-                </button>
+                </Link>
               )}
               <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", COR_STATUS_FINANCEIRO_CALC[statusCalc])}>
                 {LABELS_STATUS_FINANCEIRO_CALC[statusCalc]}
@@ -353,9 +400,9 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
               {isEditing && !podeAlterarStatus ? (
                 <span className={cn(
                   "inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-2.5 py-1 border",
-                  ativoVal ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-red-50 border-red-200 text-red-600",
+                  ativoVal ? "bg-ok-claro border-ok/20 text-ok-texto" : "bg-atrasado-claro border-atrasado/20 text-atrasado",
                 )}>
-                  <span className={cn("w-1.5 h-1.5 rounded-full", ativoVal ? "bg-emerald-500" : "bg-red-500")} />
+                  <span className={cn("w-1.5 h-1.5 rounded-full", ativoVal ? "bg-ok" : "bg-atrasado")} />
                   {ativoVal ? "Ativo" : "Inativo"}
                 </span>
               ) : isEditing ? (
@@ -363,21 +410,21 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
                   <button
                     type="button"
                     onClick={() => setStatusOpen((o) => !o)}
-                    title="Alterar status do cliente"
+                    title="Mudar status do cliente"
                     className={cn(
                       "inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-2.5 py-1 border transition-colors",
                       ativoVal
-                        ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
-                        : "bg-red-50 border-red-200 text-red-600 hover:bg-red-100",
+                        ? "bg-ok-claro border-ok/20 text-ok-texto hover:brightness-95"
+                        : "bg-atrasado-claro border-atrasado/20 text-atrasado hover:brightness-95",
                     )}
                   >
-                    <span className={cn("w-1.5 h-1.5 rounded-full", ativoVal ? "bg-emerald-500" : "bg-red-500")} />
+                    <span className={cn("w-1.5 h-1.5 rounded-full", ativoVal ? "bg-ok" : "bg-atrasado")} />
                     {ativoVal ? "Ativo" : "Inativo"}
                   </button>
                   {statusOpen && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setStatusOpen(false)} />
-                      <div className="absolute left-0 mt-2 z-50 w-72 bg-white border border-surface-border rounded-xl shadow-card-hover p-3 space-y-3">
+                      <div className="absolute left-0 mt-2 z-50 w-72 bg-white border border-surface-border rounded-card shadow-card-hover p-3 space-y-3">
                         <p className="text-sm text-ink">
                           {ativoVal
                             ? "Deseja inativar este cliente? Ele não aparecerá nas listagens padrão, mas todo o histórico será preservado."
@@ -394,8 +441,8 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
                   )}
                 </div>
               ) : (
-                <span className="inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-2.5 py-1 border bg-emerald-50 border-emerald-200 text-emerald-700">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Ativo
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-2.5 py-1 border bg-ok-claro border-ok/20 text-ok-texto">
+                  <span className="w-1.5 h-1.5 rounded-full bg-ok" /> Ativo
                 </span>
               )}
             </div>
@@ -404,19 +451,21 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
         </div>
 
         {!podeSalvar && (
-          <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-4 py-3 flex items-center gap-2">
+          <div className="bg-atencao-claro border border-atencao/20 text-atencao-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2">
             <Lock className="w-4 h-4 shrink-0" /> Modo somente leitura: seu perfil não tem permissão para {isEditing ? "editar" : "cadastrar"} clientes.
           </div>
         )}
 
+        {isEditing && <AlertaPerdasCliente clienteId={initialData!.id} perdas={perdas12m} />}
+
         {erroGlobal && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 flex items-center gap-2">
+          <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" /> {erroGlobal}
           </div>
         )}
 
         {/* Card central branco com abas + conteúdo */}
-        <div className="bg-white rounded-2xl shadow-card border border-surface-border overflow-hidden">
+        <div className="bg-white rounded-card shadow-card border border-surface-border overflow-hidden">
           <nav className="flex flex-wrap gap-1.5 px-4 pt-4 pb-4 border-b border-surface-border">
             {ABAS.map((t) => {
               const ativa = aba === t.id;
@@ -425,9 +474,9 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
                 <button
                   key={t.id} type="button" onClick={() => setAba(t.id)}
                   className={cn(
-                    "flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl whitespace-nowrap transition-all",
+                    "flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-card whitespace-nowrap transition-all",
                     ativa ? "bg-primary-500 text-white shadow-sm" : "text-ink-muted hover:text-ink hover:bg-surface-alt",
-                    comErro && !ativa && "text-red-600 bg-red-50",
+                    comErro && !ativa && "text-atrasado bg-atrasado-claro",
                   )}
                 >
                   <t.icone className="w-4 h-4" />
@@ -435,7 +484,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
                   {t.badge != null && t.badge > 0 && (
                     <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", ativa ? "bg-white/25 text-white" : "bg-surface-alt text-ink-muted")}>{t.badge}</span>
                   )}
-                  {comErro && <AlertCircle className={cn("w-3.5 h-3.5", ativa ? "text-white" : "text-red-500")} />}
+                  {comErro && <AlertCircle className={cn("w-3.5 h-3.5", ativa ? "text-white" : "text-atrasado")} />}
                 </button>
               );
             })}
@@ -446,48 +495,40 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
 
       {/* ABA 1 — Dados Gerais */}
       <Painel ativo={aba === "geral"}>
-        <FormSection title="Dados básicos" icon={<Building2 className="w-3.5 h-3.5" />}>
-          <FormGrid>
-            <FormField label="Tipo de pessoa" required>
-              <Select {...register("tipoPessoa")} error={!!errors.tipoPessoa}>
-                <option value="JURIDICA">Pessoa Jurídica</option>
-                <option value="FISICA">Pessoa Física</option>
-              </Select>
-            </FormField>
-            <FormField label={tipoPessoa === "FISICA" ? "CPF" : "CNPJ"} required error={errors.cpfCnpj?.message} hint={tipoPessoa === "JURIDICA" ? "Informe o CNPJ e clique em Buscar para preencher automaticamente." : undefined}>
-              <div className="flex gap-2">
-                <Input {...register("cpfCnpj")} placeholder={tipoPessoa === "FISICA" ? "000.000.000-00" : "00.000.000/0001-00"} error={!!errors.cpfCnpj} valido={!errors.cpfCnpj && !!cnpjInfo} className="flex-1" />
-                {tipoPessoa === "JURIDICA" && (
-                  <Button type="button" variant="success" loading={buscandoCnpj} onClick={buscarCnpj} className="shrink-0">
-                    {!buscandoCnpj && <Search className="w-4 h-4" />}
-                    <span className="hidden sm:inline ml-1">Buscar</span>
-                  </Button>
-                )}
-              </div>
-            </FormField>
-          </FormGrid>
-          {cnpjInfo && cnpjInfo.nome && (
-            <div className="flex items-start gap-3 bg-success-50 border border-success-200 rounded-xl px-4 py-3 animate-in fade-in">
-              <FileCheck className="w-5 h-5 text-success-600 shrink-0 mt-0.5" />
-              <div className="text-sm min-w-0">
-                <p className="font-semibold text-success-800">Dados encontrados na Receita Federal</p>
-                <p className="text-success-700 truncate">
-                  {cnpjInfo.nome}
-                  {(cnpjInfo.cidade || cnpjInfo.estado) && ` — ${[cnpjInfo.cidade, cnpjInfo.estado].filter(Boolean).join("/")}`}
-                </p>
-              </div>
-              <button type="button" onClick={() => setCnpjInfo(null)} className="ml-auto text-success-600 hover:text-success-800 shrink-0">
-                <X className="w-4 h-4" />
-              </button>
+        <FormSection title="Identificação" icon={<Building2 className="w-3.5 h-3.5" />}>
+          {isEditing && (
+            <div className="flex items-center gap-3 pb-1">
+              <LogoUpload compacto clienteId={initialData!.id} logoInicial={initialData!.logo} />
             </div>
           )}
           <FormGrid>
+            <FormField label="Tipo de pessoa" required>
+              <Select {...register("tipoPessoa")} error={!!errors.tipoPessoa}>
+                <option value="JURIDICA">Pessoa jurídica</option>
+                <option value="FISICA">Pessoa física</option>
+              </Select>
+            </FormField>
+            <FormField label={tipoPessoa === "FISICA" ? "CPF" : "CNPJ"} required error={errors.cpfCnpj?.message}>
+              <div>
+                <div className="flex gap-2">
+                  <Input {...register("cpfCnpj")} placeholder={tipoPessoa === "FISICA" ? "000.000.000-00" : "00.000.000/0001-00"} error={!!errors.cpfCnpj} valido={!errors.cpfCnpj && !!cnpjInfo} className="flex-1" />
+                  {tipoPessoa === "JURIDICA" && (
+                    <Button type="button" variant="secondary" loading={buscandoCnpj} onClick={buscarCnpj} className="shrink-0">
+                      {!buscandoCnpj && <Search className="w-4 h-4" />}
+                      <span className="hidden sm:inline ml-1">Consultar</span>
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </FormField>
+          </FormGrid>
+          <FormGrid>
             <FormField label={tipoPessoa === "FISICA" ? "Nome completo" : "Razão social"} required error={errors.nome?.message}>
               <div className="relative">
-                <Input {...register("nome")} error={!!errors.nome} valido={!errors.nome && razaoSocialBloqueada} readOnly={razaoSocialBloqueada} className={razaoSocialBloqueada ? "bg-gray-100 text-gray-600 pr-20" : ""} />
+                <Input {...register("nome")} caixa="nome" error={!!errors.nome} valido={!errors.nome && razaoSocialBloqueada} readOnly={razaoSocialBloqueada} className={razaoSocialBloqueada ? "bg-surface-linha text-ink-muted pr-20" : ""} />
                 {razaoSocialBloqueada && (
                   <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                    <Lock className="w-3.5 h-3.5 text-gray-400" />
+                    <Lock className="w-3.5 h-3.5 text-ink-muted" />
                     <button type="button" onClick={() => setRazaoSocialBloqueada(false)} className="text-[11px] text-frivo-600 hover:underline flex items-center gap-0.5">
                       <Pencil className="w-3 h-3" /> Editar
                     </button>
@@ -496,118 +537,66 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
               </div>
             </FormField>
             <FormField label={tipoPessoa === "FISICA" ? "Apelido" : "Nome fantasia"}>
-              <Input {...register("nomeFantasia")} />
+              <Input {...register("nomeFantasia")} caixa="nome" />
             </FormField>
           </FormGrid>
-          {tipoPessoa === "JURIDICA" && (
-            <FormGrid>
-              <FormField label="Inscrição estadual"><Input {...register("inscricaoEstadual")} placeholder="Isento ou número" /></FormField>
-            </FormGrid>
-          )}
-          <FormGrid>
-            <FormField label="Status financeiro" hint="Calculado automaticamente pelas contas a receber">
-              <div className="flex flex-col gap-1.5 pt-1.5">
-                <span className={cn("inline-flex w-fit items-center text-xs font-semibold px-2.5 py-1 rounded-full", COR_STATUS_FINANCEIRO_CALC[statusCalc])}>
-                  {LABELS_STATUS_FINANCEIRO_CALC[statusCalc]}
-                </span>
-                {isEditing && statusCalc !== "SEM_HISTORICO" && totalProx > 0 && (
-                  <Link
-                    href={`/financeiro/contas-receber?clienteId=${initialData!.id}`}
-                    className="inline-flex w-fit items-center gap-1 text-xs text-ink-muted hover:text-primary-600 transition-colors"
-                  >
-                    A receber (30 dias): {formatarMoeda(totalProx)}
-                    <ArrowUpRight className="w-3 h-3" />
-                  </Link>
-                )}
-              </div>
-            </FormField>
-          </FormGrid>
+          {/* Status financeiro fica só no cabeçalho (selo ao lado do nome) — não repete aqui embaixo. */}
+          {/* Inscrição estadual migrou para "Informações fiscais" (abaixo), que concentra o fiscal. */}
         </FormSection>
-      </Painel>
 
-      {/* ABA 2 — Faturamento */}
-      <Painel ativo={aba === "faturamento"}>
-        <FormSection title="Comercial" icon={<DollarSign className="w-3.5 h-3.5" />}>
-          <FormGrid>
-            <FormField label="Tabela de preços" hint="Sem seleção, usa a tabela Padrão da empresa">
-              <Select value={tabelaPrecoId} onChange={(e) => setTabelaPrecoId(e.target.value)} placeholder="Padrão (automático)">
-                {tabelas.map((t) => (<option key={t.id} value={t.id}>{t.nome}</option>))}
-              </Select>
-            </FormField>
-          </FormGrid>
-          <p className="text-xs font-bold text-ink-muted uppercase tracking-wider mt-2">Perfil de Faturamento</p>
-          <FormGrid>
-            <FormField label="Tipo de faturamento" hint="Define o fluxo de aprovação e cobrança">
-              <Select value={tipoFaturamento} onChange={(e) => setTipoFaturamento(e.target.value)} placeholder="Selecione">
-                {Object.entries(LABELS_PERFIL_FATURAMENTO).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
-              </Select>
-            </FormField>
-            <FormField label="Dia de faturamento" hint="Dia do mês (1 a 28)">
-              <Input type="number" min={1} max={28} value={diaFaturamento} onChange={(e) => setDiaFaturamento(Math.min(28, Math.max(1, Number(e.target.value) || 1)))} />
-            </FormField>
-          </FormGrid>
-          <FormGrid>
-            <FormField label="Condição de pagamento" hint="Ex: 30 dias, 15 dias, à vista">
-              <Input value={condicaoPagamento} onChange={(e) => setCondicaoPagamento(e.target.value)} placeholder="30 dias" />
-            </FormField>
-            <FormField label="WhatsApp para envio automático">
-              <WhatsAppInput value={whatsappFaturamento} onChange={(e) => setWhatsappFaturamento(e.target.value)} placeholder="(00) 00000-0000" />
-            </FormField>
-          </FormGrid>
-          {(tipoFaturamento === "COM_APROVACAO" || tipoFaturamento === "FATURA_UNICA") && (
-            <div className="border-t border-gray-100 pt-1">
-              <ToggleSwitch label="Exige PC (Pedido de Compra) antes da NF" description="A nota fiscal só pode ser emitida após o registro do PC do cliente." checked={exigePcAntesNf} onChange={setExigePcAntesNf} />
+        {/* Informações fiscais — seção avançada, recolhida por padrão (progressive disclosure):
+            só abre quem vai emitir nota. Concentra o fiscal (IE, IM, Suframa, Simples, indicador de IE). */}
+        <div className="space-y-4">
+          <button type="button" onClick={() => setFiscalAberto((v) => !v)} aria-expanded={fiscalAberto} data-secao-fiscal-toggle
+            className="flex items-center gap-2 w-full text-xs font-semibold text-ink-muted uppercase tracking-wider pb-2 border-b border-surface-border">
+            <span className="text-acento"><Receipt className="w-3.5 h-3.5" /></span>
+            Informações fiscais
+            <ChevronDown className={cn("w-4 h-4 ml-auto text-ink-muted transition-transform", fiscalAberto && "rotate-180")} />
+          </button>
+          {fiscalAberto && (
+            <div className="space-y-4" data-secao-fiscal>
+              <p className="text-xs text-ink-muted -mt-1">Dados usados na emissão de nota fiscal. Preencha se este cliente for emitir NFS-e.</p>
+              <FormGrid>
+                <FormField label="Optante pelo Simples Nacional?" dica="Ao marcar Sim, não há retenção de PIS, Cofins e CSLL nas notas de serviço deste cliente.">
+                  <div className="flex gap-2" role="radiogroup" aria-label="Optante pelo Simples Nacional">
+                    {[{ v: true, r: "Sim" }, { v: false, r: "Não" }].map((o) => (
+                      <button key={o.r} type="button" role="radio" aria-checked={optanteSimplesVal === o.v}
+                        onClick={() => setValue("optanteSimples", o.v, { shouldDirty: true })}
+                        className={cn("flex-1 h-10 rounded-lg border text-sm font-medium transition-colors",
+                          optanteSimplesVal === o.v ? "border-acento bg-frivo-50 text-frivo-700" : "border-surface-campo bg-white text-ink hover:bg-surface-alt")}>
+                        {o.r}
+                      </button>
+                    ))}
+                  </div>
+                </FormField>
+                <FormField label="Indicador de Inscrição estadual">
+                  <Select {...register("indicadorInscricaoEstadual")} placeholder="Selecione">
+                    <option value="CONTRIBUINTE">Contribuinte</option>
+                    <option value="ISENTO">Isento</option>
+                    <option value="NAO_CONTRIBUINTE">Não contribuinte</option>
+                  </Select>
+                </FormField>
+              </FormGrid>
+              <FormGrid>
+                <FormField label="Inscrição estadual"><Input {...register("inscricaoEstadual")} placeholder="Isento ou número" /></FormField>
+                <FormField label="Inscrição municipal"><Input {...register("inscricaoMunicipal")} placeholder="Número" /></FormField>
+              </FormGrid>
+              <FormGrid>
+                <FormField label="Inscrição SUFRAMA"><Input {...register("inscricaoSuframa")} placeholder="Número (Zona Franca)" /></FormField>
+              </FormGrid>
             </div>
           )}
-          {tipoFaturamento === "FATURA_UNICA" && (
-            <div className="divide-y divide-gray-100 border-t border-gray-100">
-              <ToggleSwitch label="Agrupa adicionais do mês na fatura" description="Contrato e adicionais (OS/orçamentos) do mês entram numa fatura única." checked={agrupaAdicionais} onChange={setAgrupaAdicionais} />
-              <ToggleSwitch label="Boleto único mensal" description="Gera um único boleto consolidando toda a fatura do mês." checked={boletoUnicoMensal} onChange={setBoletoUnicoMensal} />
-            </div>
-          )}
-        </FormSection>
-      </Painel>
+        </div>
 
-      {/* ABA 3 — Contatos */}
-      <Painel ativo={aba === "contatos"}>
-        <FormSection title="Contatos do cliente" icon={<Users className="w-3.5 h-3.5" />}>
-          <p className="text-xs text-gray-400 -mt-2 mb-3">
-            {isEditing
-              ? "Cadastre os contatos deste cliente. Defina quem recebe cada comunicação na aba Comunicação e o acesso ao portal na aba Portal."
-              : "Adicione os contatos do cliente. O primeiro será marcado como principal."}
-          </p>
-          {isEditing ? (
-            <ContatosManager clienteId={initialData!.id} contatosIniciais={initialData!.contatosCliente ?? []} />
-          ) : (
-            <ContatosLocal contatos={contatosNovos} onChange={setContatosNovos} />
+        {/* Endereços — logo abaixo da identificação; adicionados manualmente (o Consultar não cria endereço) */}
+        <FormSection title="Endereços" icon={<MapPin className="w-3.5 h-3.5" />}>
+          {(isEditing || config.clienteExigirUnidade) && (
+            <p className="text-xs text-ink-muted -mt-2 mb-3">
+              {isEditing
+                ? "Gerencie os endereços do cliente. O endereço com o selo Principal é o padrão."
+                : "Adicione pelo menos o endereço principal do cliente (obrigatório)."}
+            </p>
           )}
-        </FormSection>
-      </Painel>
-
-      {/* ABA — Comunicação */}
-      <Painel ativo={aba === "comunicacao"}>
-        <FormSection title="Preferências de comunicação" icon={<Send className="w-3.5 h-3.5" />}>
-          <p className="text-xs text-gray-400 -mt-2 mb-3">
-            Defina quais contatos recebem cada tipo de comunicação e por qual canal. Os contatos são cadastrados na aba <strong>Contatos</strong>.
-          </p>
-          {isEditing ? (
-            <ComunicacaoPreferencias clienteId={initialData!.id} ativo={aba === "comunicacao"} onGerenciar={() => setAba("contatos")} />
-          ) : (
-            <p className="text-sm text-ink-muted">Salve o cliente para configurar a comunicação dos contatos.</p>
-          )}
-        </FormSection>
-      </Painel>
-
-      {/* ABA 3 — Endereços */}
-      <Painel ativo={aba === "enderecos"}>
-        <FormSection title="Endereços do Cliente" icon={<MapPin className="w-3.5 h-3.5" />}>
-          <p className="text-xs text-gray-400 -mt-2 mb-3">
-            {isEditing
-              ? "Gerencie os endereços do cliente. O endereço marcado com estrela é o principal."
-              : config.clienteExigirUnidade
-                ? "Adicione pelo menos o endereço principal do cliente (obrigatório)."
-                : "Adicione os endereços do cliente."}
-          </p>
           {isEditing ? (
             <UnidadesManager clienteId={initialData!.id} unidadesIniciais={initialData!.unidades ?? []}
               enderecoCliente={{ endereco: initialData!.endereco, numero: initialData!.numero, complemento: initialData!.complemento, bairro: initialData!.bairro, cidade: initialData!.cidade, estado: initialData!.estado, cep: initialData!.cep, telefone: initialData!.telefone }} />
@@ -615,32 +604,98 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
             <UnidadesLocal unidades={unidadesNovas} onChange={setUnidadesNovas} />
           )}
         </FormSection>
+
+        {/* Contatos */}
+        <FormSection title="Contatos" icon={<Users className="w-3.5 h-3.5" />}>
+          {isEditing && (
+            <p className="text-xs text-ink-muted -mt-2 mb-3">
+              Contatos do cliente. Comunicação e acesso ao portal ficam nas abas Comunicação e Portal.
+            </p>
+          )}
+          {isEditing ? (
+            <ContatosManager clienteId={initialData!.id} contatosIniciais={initialData!.contatosCliente ?? []}
+              sugestao={sugestaoContato ? { nome: watch("nome"), email: sugestaoContato.email, telefone: sugestaoContato.telefone } : null}
+              prefillNonce={consultaNonce} />
+          ) : (
+            <ContatosLocal contatos={contatosNovos} onChange={setContatosNovos} />
+          )}
+        </FormSection>
+
+        {/* Comercial — tabela de preços */}
+        <FormSection title="Comercial" icon={<DollarSign className="w-3.5 h-3.5" />}>
+          <FormField label="Tabela de preços" hint="Sem tabela, valem os preços padrão do catálogo.">
+            {/* Só ativas para nova escolha; a do cliente continua visível mesmo inativa (“(inativa)”) */}
+            <SeletorCadastro entidade="tabelas-preco" valor={tabelaPrecoId} onChange={(v) => setTabelaPrecoId(v)} vazio="Sem tabela (preços do catálogo)" itens={tabelasPreco.itens} />
+            {tabelaInativa && (
+              <p className="text-xs text-atencao-texto mt-1" data-aviso-tabela-inativa>
+                “{tabelaInativa.nome}” está inativa: para este cliente valem os preços padrão do catálogo. Escolha outra tabela ou reative-a.
+              </p>
+            )}
+          </FormField>
+        </FormSection>
+
+        {/* Cobrança e faturamento — para onde vão as faturas/cobranças deste cliente (reaproveita colunas
+            do cliente; sem schema novo). Sem e-mail/WhatsApp aqui, o envio cai no contato principal. */}
+        <FormSection title="Cobrança e faturamento" icon={<Wallet className="w-3.5 h-3.5" />}>
+          <FormGrid>
+            <FormField label="E-mails de cobrança"
+              hint="As faturas e cobranças deste cliente são enviadas para estes e-mails."
+              dica="Pode informar mais de um e-mail. Sem nenhum, a cobrança vai para o e-mail do contato principal do cliente.">
+              <EmailsInput value={emailsFaturamento} onChange={setEmailsFaturamento} />
+            </FormField>
+            <FormField label="WhatsApp de cobrança"
+              hint="Para enviar fatura/cobrança por WhatsApp."
+              dica="Sem este número, a cobrança por WhatsApp vai para o WhatsApp do contato principal do cliente.">
+              <WhatsAppInput {...register("whatsappFaturamento")} placeholder="(00) 00000-0000" />
+            </FormField>
+          </FormGrid>
+          <ToggleGroup title="Preferências de cobrança" description="Como este cliente é cobrado e faturado.">
+            <ToggleSwitch
+              label="Boleto único mensal" checked={boletoUnicoMensal} onChange={setBoletoUnicoMensal}
+              dica="Agrupa as cobranças do mês num único boleto, em vez de um por lançamento."
+            />
+            <ToggleSwitch
+              label="Exige pedido de compra antes da NF" checked={exigePcAntesNf} onChange={setExigePcAntesNf}
+              dica="A nota fiscal só é emitida depois que o cliente informa o número do pedido de compra (PC)."
+            />
+            <ToggleSwitch
+              label="Agrupa adicionais na fatura" checked={agrupaAdicionais} onChange={setAgrupaAdicionais}
+              dica="Serviços adicionais entram na mesma fatura do contrato, em vez de faturas separadas."
+            />
+          </ToggleGroup>
+        </FormSection>
       </Painel>
 
-      {/* ABA — Contratos */}
-      <Painel ativo={aba === "contratos"}>
-        <FormSection title="Contratos do cliente" icon={<FileSignature className="w-3.5 h-3.5" />}>
+      {/* ABA — Atendimento (histórico de OS) */}
+      <Painel ativo={aba === "atendimento"}>
+        <FormSection title="Atendimento" icon={<ClipboardList className="w-3.5 h-3.5" />}>
+          {isEditing
+            ? <AtendimentoCliente clienteId={initialData!.id} ativo={aba === "atendimento"} />
+            : <p className="text-sm text-ink-muted py-2">Salve o cliente para ver o histórico de atendimento (ordens de serviço).</p>}
+        </FormSection>
+      </Painel>
+
+      {/* ABA — Comunicação */}
+      <Painel ativo={aba === "comunicacao"}>
+        <FormSection title="Preferências de comunicação" icon={<Send className="w-3.5 h-3.5" />}>
+          <p className="text-xs text-ink-muted -mt-2 mb-3">
+            Defina quais contatos recebem cada tipo de comunicação e por qual canal. Os contatos são cadastrados em <strong>Dados gerais</strong>.
+          </p>
           {isEditing ? (
-            <ClienteContratos clienteId={initialData!.id} />
+            <ComunicacaoPreferencias clienteId={initialData!.id} ativo={aba === "comunicacao"} onGerenciar={() => setAba("geral")} />
           ) : (
-            <p className="text-sm text-ink-muted">Salve o cliente para gerenciar os contratos.</p>
+            <p className="text-sm text-ink-muted">Salve o cliente para configurar a comunicação dos contatos.</p>
           )}
         </FormSection>
       </Painel>
 
-      {/* ABA 5 — Documentos e Mídia */}
+      {/* ABA — Anexos */}
       <Painel ativo={aba === "documentos"}>
-        {isEditing && (
-          <FormSection title="Logomarca" icon={<ImageIcon className="w-3.5 h-3.5" />}>
-            <LogoUpload clienteId={initialData!.id} logoInicial={initialData!.logo} />
-          </FormSection>
-        )}
         <FormSection title="Anexos" icon={<Paperclip className="w-3.5 h-3.5" />}>
           {isEditing
             ? <AnexosManager clienteId={initialData!.id} anexosIniciais={initialData!.anexos ?? []} />
             : <AnexosLocal anexos={anexosNovos} onChange={setAnexosNovos} />}
         </FormSection>
-        {!isEditing && <p className="text-xs text-gray-400">A logomarca pode ser enviada após salvar o cliente.</p>}
       </Painel>
 
       {/* ABA 6 — Relacionamento */}
@@ -652,7 +707,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
           </div>
         </FormSection>
         {isEditing && (
-          <FormSection title="Histórico de Interações" icon={<MessageSquare className="w-3.5 h-3.5" />}>
+          <FormSection title="Histórico de interações" icon={<MessageSquare className="w-3.5 h-3.5" />}>
             <InteracoesManager clienteId={initialData!.id} interacoesIniciais={initialData!.interacoes ?? []} />
           </FormSection>
         )}
@@ -665,10 +720,8 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
 
       {/* ABA 7 — Portal */}
       <Painel ativo={aba === "portal"}>
-        <FormSection title="Portal do Cliente" icon={<Globe className="w-3.5 h-3.5" />}>
-          <p className="text-xs text-gray-400 -mt-2 mb-1">
-            Habilita o acesso do cliente ao portal externo e gerencia o acesso individual de cada contato (senha provisória, redefinição e revogação).
-          </p>
+        <FormSection title="Portal do cliente" icon={<Globe className="w-3.5 h-3.5" />} dica="Acesso individual por contato: senha provisória, redefinição e revogação.">
+          <p className="text-xs text-ink-muted -mt-2 mb-1">Acesso do cliente ao portal externo.</p>
           <ToggleSwitch
             label="Portal ativo"
             description="Quando desligado, nenhum contato deste cliente consegue acessar o portal."
@@ -676,9 +729,9 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, totalProximos30
             onChange={setPortalAtivo}
           />
           {!isEditing ? (
-            <p className="text-xs text-gray-400">Salve o cliente para conceder acesso de portal aos contatos.</p>
+            <p className="text-xs text-ink-muted">Salve o cliente para conceder acesso de portal aos contatos.</p>
           ) : (
-            <PortalContatos clienteId={initialData!.id} ativo={aba === "portal"} onGerenciar={() => setAba("contatos")} />
+            <PortalContatos clienteId={initialData!.id} ativo={aba === "portal"} onGerenciar={() => setAba("geral")} />
           )}
         </FormSection>
       </Painel>

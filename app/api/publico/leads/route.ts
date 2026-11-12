@@ -1,330 +1,46 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
-import { prisma } from "@/lib/prisma";
-import { gerarCodigoOrcamento } from "@/lib/utils";
-import { enviarEmailInterno } from "@/lib/email";
+import { criarLeadDoSite } from "@/lib/leads/criar-lead-site";
 
 /**
- * Endpoint público de lead vindo do site institucional (calculadora de BTU).
- * Protegido por API key (header X-Site-Token == SITE_API_TOKEN). NÃO exige login
- * — a rota /api/publico/* já é liberada no middleware.
+ * Endpoint público do lead vindo do site institucional (frivo.com.br — calculadora de BTU).
+ * Protegido por API key (header X-Site-Token == SITE_API_TOKEN). NÃO exige login — `/api/publico/*`
+ * já é liberado no middleware.
  *
- * Observação: o model Orcamento não possui campo `origem`; por isso o lead é
- * identificado pelo cliente (origem = SITE) e por um marcador no campo
- * `observacao` (JSON com todos os dados do cálculo). O painel /leads-site filtra
- * por esse marcador.
+ * O lead vira um CLIENTE com origem = SITE e um ORÇAMENTO "Lead do site — <nome>" (o que a tela
+ * "Leads do site" lê). Toda a lógica fica em lib/leads/criar-lead-site (a calculadora first-party do
+ * app usa a MESMA função, sem token). Nunca falha em silêncio: devolve erro claro.
  */
-
 export const runtime = "nodejs";
 
-const ambienteSchema = z.object({
-  nome: z.string(),
-  areaM2: z.number(),
-  btuCalculado: z.number(),
-  btuRecomendado: z.number(),
-  tipoEquipamento: z.string(),
-  justificativa: z.string(),
-});
-
-const leadSchema = z.object({
-  nome: z.string().min(3),
-  whatsapp: z.string().min(10),
-  email: z.string().email(),
-  cidade: z.string().min(1),
-  mensagemAdicional: z.string().optional(),
-  tipoUso: z.string(),
-  recomendacao: z.string().optional(),
-  ambientes: z.array(ambienteSchema).min(1),
-  preOrcamento: z.object({ totalMin: z.number(), totalMax: z.number() }),
-});
-
-type LeadData = z.infer<typeof leadSchema>;
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function fmt(n: number): string {
-  return n.toLocaleString("pt-BR");
-}
-
-function montarEmailLead(data: LeadData, codigo: string): string {
-  const ambientes = data.ambientes
-    .map(
-      (a) =>
-        `<li>${escapeHtml(a.nome)}: ${fmt(a.btuRecomendado)} BTU — ${escapeHtml(a.tipoEquipamento)}</li>`,
-    )
-    .join("");
-  const valor =
-    data.preOrcamento.totalMin === 0 && data.preOrcamento.totalMax === 0
-      ? "Sob consulta"
-      : `R$ ${fmt(data.preOrcamento.totalMin)} a R$ ${fmt(data.preOrcamento.totalMax)}`;
-  return `
-    <h2>Novo lead da calculadora do site</h2>
-    <p><strong>Código do orçamento:</strong> ${escapeHtml(codigo)}</p>
-    <p>
-      <strong>Nome:</strong> ${escapeHtml(data.nome)}<br/>
-      <strong>WhatsApp:</strong> ${escapeHtml(data.whatsapp)}<br/>
-      <strong>E-mail:</strong> ${escapeHtml(data.email)}<br/>
-      <strong>Cidade:</strong> ${escapeHtml(data.cidade)}<br/>
-      <strong>Tipo de uso:</strong> ${escapeHtml(data.tipoUso)}
-    </p>
-    <p><strong>Ambientes:</strong></p>
-    <ul>${ambientes}</ul>
-    ${data.recomendacao ? `<p><strong>Recomendação:</strong> ${escapeHtml(data.recomendacao)}</p>` : ""}
-    <p><strong>Pré-orçamento estimado:</strong> ${valor}</p>
-    ${data.mensagemAdicional ? `<p><strong>Mensagem:</strong> ${escapeHtml(data.mensagemAdicional)}</p>` : ""}
-  `;
-}
-
-/** empresaId do tenant Termofrio (env), com fallback para a primeira empresa. */
-async function resolverEmpresaId(): Promise<string | null> {
-  const env = process.env.TERMOFRIO_EMPRESA_ID;
-  if (env) return env;
-  const empresa = await prisma.empresa.findFirst({
-    where: { ativo: true },
-    orderBy: { criadoEm: "asc" },
-    select: { id: true },
-  });
-  return empresa?.id ?? null;
-}
-
-/** Usuário a quem o lead é atribuído (prefere ADMIN; senão, qualquer ativo). */
-async function resolverCriadorId(empresaId: string): Promise<string | null> {
-  const admin = await prisma.usuario.findFirst({
-    where: { empresaId, ativo: true, role: { in: ["SUPER_ADMIN", "ADMIN"] } },
-    orderBy: { criadoEm: "asc" },
-    select: { id: true },
-  });
-  if (admin) return admin.id;
-  const qualquer = await prisma.usuario.findFirst({
-    where: { empresaId, ativo: true },
-    orderBy: { criadoEm: "asc" },
-    select: { id: true },
-  });
-  return qualquer?.id ?? null;
-}
-
 export async function POST(req: Request) {
-  // 1. Autenticação por API key
   const tokenEsperado = process.env.SITE_API_TOKEN;
   if (!tokenEsperado) {
     console.error("[publico/leads] SITE_API_TOKEN não configurado.");
-    return NextResponse.json(
-      { success: false, error: "Serviço indisponível." },
-      { status: 503 },
-    );
+    return NextResponse.json({ success: false, error: "Serviço indisponível." }, { status: 503 });
   }
   const tokenRecebido = req.headers.get("x-site-token");
   if (!tokenRecebido || tokenRecebido !== tokenEsperado) {
-    return NextResponse.json(
-      { success: false, error: "Não autorizado." },
-      { status: 401 },
-    );
+    return NextResponse.json({ success: false, error: "Não autorizado." }, { status: 401 });
   }
 
-  // 2. Validação do corpo
   let raw: unknown;
   try {
     raw = await req.json();
   } catch {
-    return NextResponse.json(
-      { success: false, error: "Requisição inválida." },
-      { status: 400 },
-    );
+    return NextResponse.json({ success: false, error: "Requisição inválida." }, { status: 400 });
   }
-  const parsed = leadSchema.safeParse(raw);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { success: false, error: "Dados inválidos." },
-      { status: 400 },
-    );
-  }
-  const data = parsed.data;
 
   try {
-    // 3. Tenant + usuário responsável
-    const empresaId = await resolverEmpresaId();
-    if (!empresaId) {
-      console.error("[publico/leads] Nenhuma empresa encontrada para o lead.");
-      return NextResponse.json(
-        { success: false, error: "Não foi possível processar o lead." },
-        { status: 500 },
-      );
+    const r = await criarLeadDoSite(raw, "Calculadora de BTU do site");
+    if (!r.ok) {
+      // Validação / tenant: 400 com a mensagem clara (o campo ajuda a diagnosticar payload do site)
+      console.error("[publico/leads] Lead recusado:", r.erro, r.campo ? `(campo: ${r.campo})` : "");
+      const status = r.campo ? 400 : 500;
+      return NextResponse.json({ success: false, error: r.erro, campo: r.campo }, { status });
     }
-    const criadoPorId = await resolverCriadorId(empresaId);
-    if (!criadoPorId) {
-      console.error("[publico/leads] Nenhum usuário para atribuir o lead.");
-      return NextResponse.json(
-        { success: false, error: "Não foi possível processar o lead." },
-        { status: 500 },
-      );
-    }
-
-    // 4. Cliente: reusa um existente por e-mail; senão upsert por telefone
-    //    (cpfCnpj placeholder, já que um lead do site não informa CPF/CNPJ).
-    const digits = data.whatsapp.replace(/\D/g, "");
-    const cpfCnpjPlaceholder = `SITE-${digits || Date.now()}`;
-    let cliente = await prisma.cliente.findFirst({
-      where: { empresaId, email: { equals: data.email, mode: "insensitive" } },
-      select: { id: true },
-    });
-    if (!cliente) {
-      cliente = await prisma.cliente.upsert({
-        where: { cpfCnpj_empresaId: { cpfCnpj: cpfCnpjPlaceholder, empresaId } },
-        update: {
-          nome: data.nome,
-          email: data.email,
-          celular: data.whatsapp,
-          cidade: data.cidade,
-        },
-        create: {
-          empresaId,
-          tipoPessoa: "FISICA",
-          nome: data.nome,
-          cpfCnpj: cpfCnpjPlaceholder,
-          email: data.email,
-          celular: data.whatsapp,
-          cidade: data.cidade,
-          origem: "SITE",
-          observacoes: "Lead recebido pela calculadora de BTU do site.",
-          ativo: true,
-        },
-        select: { id: true },
-      });
-    }
-
-    // 5. Itens do orçamento: por ambiente, 1 produto (equipamento) + 1 serviço
-    //    (instalação). O valor do equipamento é a média do pré-orçamento
-    //    rateada por ambiente; a instalação usa um valor de referência.
-    const qtd = data.ambientes.length;
-    const INSTALACAO_UNIT = 900; // referência (entre R$ 600 e R$ 1.200)
-    const equipUnit =
-      Math.round((((data.preOrcamento.totalMin + data.preOrcamento.totalMax) / 2) / qtd) * 100) / 100;
-
-    const produtosCreate = data.ambientes.map((a, idx) => ({
-      descricao: `${a.tipoEquipamento} — ${fmt(a.btuRecomendado)} BTU/h (${a.nome})`,
-      quantidade: 1,
-      valorUnitario: equipUnit,
-      valorTotal: equipUnit,
-      observacao: a.justificativa || null,
-      ordem: idx,
-    }));
-    const servicosCreate = data.ambientes.map((a, idx) => ({
-      descricao: `Instalação e comissionamento — ${a.nome}`,
-      quantidade: 1,
-      valorUnitario: INSTALACAO_UNIT,
-      valorTotal: INSTALACAO_UNIT,
-      ordem: idx,
-    }));
-
-    const totalProdutos = produtosCreate.reduce((s, p) => s + p.valorTotal, 0);
-    const totalServicos = servicosCreate.reduce((s, p) => s + p.valorTotal, 0);
-    const totalGeral = totalProdutos + totalServicos;
-
-    // 6. Observação: texto formatado e legível (não JSON cru).
-    const instalTotal = INSTALACAO_UNIT * qtd;
-    const dataHora = new Date().toLocaleString("pt-BR", {
-      timeZone: "America/Sao_Paulo",
-      dateStyle: "short",
-      timeStyle: "short",
-    });
-    const linhasAmbientes = data.ambientes
-      .map(
-        (a) =>
-          `• ${a.nome}: ${a.areaM2} m² → ${fmt(a.btuRecomendado)} BTU/h — ${a.tipoEquipamento}\n  Justificativa: ${a.justificativa}`,
-      )
-      .join("\n");
-    const observacao = [
-      `Lead recebido via Calculadora de BTU do site — ${dataHora}`,
-      ``,
-      `DADOS DO CLIENTE`,
-      `Nome: ${data.nome}`,
-      `WhatsApp: ${data.whatsapp}`,
-      `E-mail: ${data.email}`,
-      `Cidade: ${data.cidade}`,
-      `Tipo de uso: ${data.tipoUso}`,
-      ...(data.mensagemAdicional ? [`Mensagem: ${data.mensagemAdicional}`] : []),
-      ``,
-      `AMBIENTES CALCULADOS`,
-      linhasAmbientes,
-      ``,
-      `PRÉ-ORÇAMENTO ESTIMADO`,
-      `Equipamentos: R$ ${fmt(data.preOrcamento.totalMin)} a R$ ${fmt(data.preOrcamento.totalMax)}`,
-      `Instalação (referência): R$ ${fmt(INSTALACAO_UNIT)} por unidade (${qtd}x = R$ ${fmt(instalTotal)})`,
-      `Total estimado: R$ ${fmt(data.preOrcamento.totalMin + instalTotal)} a R$ ${fmt(data.preOrcamento.totalMax + instalTotal)}`,
-      ``,
-      `⚠️ Valores de referência — orçamento definitivo após visita técnica.`,
-    ].join("\n");
-
-    // 7. Orçamento com numeração ORC-YYYY-NNNN (retry em colisão de unique)
-    const ano = new Date().getFullYear();
-    let orcamento!: { id: string; codigo: string };
-    for (let tentativa = 0; ; tentativa++) {
-      const ultimo = await prisma.orcamento.findFirst({
-        where: { empresaId, codigo: { startsWith: `ORC-${ano}-` } },
-        orderBy: { codigo: "desc" },
-        select: { codigo: true },
-      });
-      const seq = ultimo ? Number(ultimo.codigo.split("-")[2]) + 1 : 1;
-      const codigo = gerarCodigoOrcamento(seq);
-      try {
-        orcamento = await prisma.orcamento.create({
-          data: {
-            empresaId,
-            codigo,
-            nome: `Lead do site — ${data.nome}`,
-            clienteId: cliente.id,
-            criadoPorId,
-            descricao: data.recomendacao ?? `Calculadora de BTU (${data.tipoUso})`,
-            observacao,
-            status: "RASCUNHO",
-            totalServicos,
-            totalProdutos,
-            totalGeral,
-            tokenPublico: crypto.randomUUID(),
-            produtos: { create: produtosCreate },
-            servicos: { create: servicosCreate },
-          },
-          select: { id: true, codigo: true },
-        });
-        break;
-      } catch (e: unknown) {
-        const code = (e as { code?: string })?.code;
-        if (code === "P2002" && tentativa < 5) continue; // colisão → próximo número
-        throw e;
-      }
-    }
-
-    // 7. Notificação interna (best-effort — não bloqueia o sucesso do lead)
-    const dest = process.env.TERMOFRIO_EMAIL_NOTIFICACAO;
-    if (dest) {
-      try {
-        await enviarEmailInterno(
-          empresaId,
-          dest,
-          `Novo lead do site — ${data.nome} (${orcamento.codigo})`,
-          montarEmailLead(data, orcamento.codigo),
-        );
-      } catch (e) {
-        console.error("[publico/leads] Falha ao enviar notificação:", e);
-      }
-    }
-
-    return NextResponse.json({
-      success: true,
-      orcamentoId: orcamento.id,
-      codigo: orcamento.codigo,
-    });
+    return NextResponse.json({ success: true, orcamentoId: r.orcamentoId, codigo: r.codigo });
   } catch (e) {
     console.error("[publico/leads] Erro ao processar lead:", e);
-    return NextResponse.json(
-      { success: false, error: "Erro ao processar o lead." },
-      { status: 500 },
-    );
+    return NextResponse.json({ success: false, error: "Erro ao processar o lead." }, { status: 500 });
   }
 }

@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
+import { respostaRefEmpresa, validarRefEmpresa } from "@/lib/ref-empresa";
 import { clienteSchema } from "@/lib/validations";
+import { contatoSeguro } from "@/lib/contato-cliente";
+import { definirAtivoCliente } from "@/lib/acoes-massa/regras";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -30,7 +33,7 @@ export async function GET(_: NextRequest, { params }: Params) {
     },
   });
   if (!cliente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
-  return NextResponse.json(cliente);
+  return NextResponse.json({ ...cliente, contatosCliente: cliente.contatosCliente.map(contatoSeguro) });
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {
@@ -63,6 +66,14 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
 
   const { responsavelTecnicoId, segmento, origem, satisfacao, ...resto } = parsed.data;
+  // Tabela de preço e responsável técnico precisam ser da mesma empresa; tabela NOVA precisa estar
+  // ativa (manter a que o cliente já usa, mesmo inativa, é aceito)
+  try {
+    await Promise.all([
+      validarRefEmpresa("tabelaPreco", resto.tabelaPrecoId, empresaId, "Tabela de preço", { novoAtivo: true, manter: [existente.tabelaPrecoId] }),
+      validarRefEmpresa("tecnico", responsavelTecnicoId, empresaId, "Responsável técnico"),
+    ]);
+  } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
   const atualizado = await prisma.cliente.update({
     where: { id },
@@ -98,8 +109,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (body.ativo === false && !pode(session.user!.permissoes, "clientes", "excluir", session.user!.role))
     return NextResponse.json({ erro: "Sem permissão" }, { status: 403 });
 
-  const atualizado = await prisma.cliente.update({ where: { id }, data: { ativo: body.ativo } });
-  return NextResponse.json({ ok: true, ativo: atualizado.ativo });
+  await definirAtivoCliente(id, body.ativo, { empresaId, usuarioId: session.user!.id, usuarioNome: session.user!.name ?? "usuário" });
+  return NextResponse.json({ ok: true, ativo: body.ativo });
 }
 
 export async function DELETE(_: NextRequest, { params }: Params) {
@@ -113,6 +124,6 @@ export async function DELETE(_: NextRequest, { params }: Params) {
   const existente = await getClienteTenant(id, empresaId);
   if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
 
-  await prisma.cliente.update({ where: { id }, data: { ativo: false } });
+  await definirAtivoCliente(id, false, { empresaId, usuarioId: session.user!.id, usuarioNome: session.user!.name ?? "usuário" });
   return NextResponse.json({ ok: true });
 }

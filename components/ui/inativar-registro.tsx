@@ -18,12 +18,14 @@ import type { Acao } from "@/lib/permissoes";
  * Sem a permissão correspondente, não renderiza nada (o servidor também valida).
  */
 export function InativarRegistro({
-  url, modulo, acaoReativar, ativo, nome, entidade, variante = "icone",
+  url, modulo, acaoInativar = "excluir", acaoReativar, ativo, nome, entidade, variante = "icone",
   rotuloInativar = "Inativar", rotuloReativar = "Reativar", comMotivo = true,
   textoInativar, textoReativar, aoConcluir, feminino = false,
 }: {
   url: string;
   modulo: string;
+  /** Permissão de inativar (padrão "excluir"; cadastros de Configurações usam "gerenciar"). */
+  acaoInativar?: Acao;
   acaoReativar: Acao;
   ativo: boolean;
   nome: string;
@@ -46,10 +48,12 @@ export function InativarRegistro({
   const [motivo, setMotivo] = useState("");
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(false);
-  const [impacto, setImpacto] = useState<{ bloqueio: string | null; avisos: string[] } | null>(null);
+  const [impacto, setImpacto] = useState<{ bloqueio: string | null; avisos: string[]; usuarioVinculado?: { id: string; nome: string; email: string } | null } | null>(null);
+  // Colaborador que também é usuário: inativar o login junto (mesma regra de Configurações › Usuários)
+  const [inativarUsuario, setInativarUsuario] = useState(false);
   const [checando, setChecando] = useState(false);
 
-  const permitido = ativo ? pode(modulo, "excluir") : pode(modulo, acaoReativar);
+  const permitido = ativo ? pode(modulo, acaoInativar) : pode(modulo, acaoReativar);
   if (!permitido) return null;
 
   const rotulo = ativo ? rotuloInativar : rotuloReativar;
@@ -57,7 +61,7 @@ export function InativarRegistro({
 
   async function abrir(e?: React.MouseEvent) {
     e?.preventDefault(); e?.stopPropagation();
-    setAberto(true); setErro(""); setMotivo(""); setImpacto(null);
+    setAberto(true); setErro(""); setMotivo(""); setImpacto(null); setInativarUsuario(false);
     if (!ativo) return;
     setChecando(true);
     try {
@@ -72,10 +76,11 @@ export function InativarRegistro({
     setCarregando(true); setErro("");
     try {
       const res = ativo
-        ? await fetch(url, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motivo }) })
+        ? await fetch(url, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motivo, ...(inativarUsuario && { inativarUsuario: true }) }) })
         : await fetch(url, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ativo: true }) });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) { setErro(d.erro ?? "Não foi possível concluir a ação."); return; }
+      if (d.aviso) { setErro(d.aviso); return; } // concluiu em parte: mostra o que faltou
       setAberto(false);
       if (aoConcluir) aoConcluir(!ativo); else router.refresh();
     } catch { setErro("Erro de conexão."); } finally { setCarregando(false); }
@@ -83,12 +88,13 @@ export function InativarRegistro({
 
   const bloqueado = !!impacto?.bloqueio;
 
+  const art = feminino ? "A" : "O", fim = feminino ? "a" : "o";
   return (
     <>
       {variante === "icone" ? (
         <button
           type="button" title={`${rotulo} ${entidade}`} aria-label={`${rotulo} ${entidade}`} onClick={abrir}
-          className={cn("p-1.5 rounded-md text-ink-muted hover:bg-surface-alt", ativo ? "hover:text-red-600" : "hover:text-emerald-600")}
+          className={cn("p-1.5 rounded-md text-ink-muted hover:bg-surface-alt", ativo ? "hover:text-atrasado" : "hover:text-ok")}
         >
           <Icone className="w-4 h-4" />
         </button>
@@ -97,7 +103,7 @@ export function InativarRegistro({
           type="button" onClick={abrir}
           className={cn(
             "inline-flex items-center gap-1.5 text-sm border rounded-lg px-3 py-2 transition-colors bg-white",
-            ativo ? "text-red-600 border-red-200 hover:bg-red-50" : "text-emerald-700 border-emerald-200 hover:bg-emerald-50",
+            ativo ? "text-atrasado border-atrasado/20 hover:bg-atrasado-claro" : "text-ok-texto border-ok/20 hover:bg-ok-claro",
           )}
         >
           <Icone className="w-4 h-4" /> {rotulo}
@@ -108,24 +114,31 @@ export function InativarRegistro({
         <div className="space-y-4" onClick={(e) => e.stopPropagation()}>
           <p className="text-sm text-ink">
             {ativo
-              ? (textoInativar ?? `Tem certeza? ${feminino ? "A" : "O"} ${entidade} sai das listas e dos seletores, mas nada é apagado: o histórico fica preservado e ${feminino ? "ela pode ser reativada" : "ele pode ser reativado"} depois.`)
+              ? (textoInativar ?? `Tem certeza? ${art} ${entidade} sai das listas e seletores; nada é apagado e pode ser reativad${fim} depois.`)
               : (textoReativar ?? `${feminino ? "A" : "O"} ${entidade} volta a aparecer nas listas e nos seletores.`)}
           </p>
 
           {checando && <p className="flex items-center gap-2 text-sm text-ink-muted"><Loader2 className="w-4 h-4 animate-spin" /> Verificando vínculos…</p>}
 
           {impacto?.bloqueio && (
-            <div data-bloqueio className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <div data-bloqueio className="flex items-start gap-2 text-sm text-atrasado-texto bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> <span>{impacto.bloqueio}</span>
             </div>
           )}
           {!bloqueado && !!impacto?.avisos.length && (
-            <div data-avisos className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            <div data-avisos className="text-sm text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2">
               <p className="flex items-center gap-1.5 font-semibold"><Info className="w-4 h-4" /> Antes de confirmar, saiba que:</p>
               <ul className="mt-1 ml-5 list-disc space-y-0.5">
                 {impacto.avisos.map((a) => <li key={a}>{a}</li>)}
               </ul>
             </div>
+          )}
+
+          {ativo && !bloqueado && impacto?.usuarioVinculado && pode("configuracoes", "gerenciar") && (
+            <label className="flex items-start gap-2 text-sm text-ink bg-surface-alt rounded-lg px-3 py-2" data-inativar-usuario>
+              <input type="checkbox" checked={inativarUsuario} onChange={(e) => setInativarUsuario(e.target.checked)} className="mt-0.5 w-4 h-4 rounded border-surface-border text-primary-600" />
+              <span>Também inativar o usuário de login <strong>{impacto.usuarioVinculado.email}</strong> (ele perde o acesso ao sistema na hora).</span>
+            </label>
           )}
 
           {ativo && comMotivo && !bloqueado && (
@@ -134,13 +147,13 @@ export function InativarRegistro({
               <textarea
                 value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={2} maxLength={500}
                 placeholder="Ex: desligado da empresa, vendido, duplicado…"
-                className="w-full bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 resize-none"
+                className="w-full bg-white border border-surface-campo rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 resize-none"
               />
             </label>
           )}
 
           {erro && (
-            <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <div className="flex items-start gap-2 text-sm text-atrasado-texto bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> <span>{erro}</span>
             </div>
           )}
@@ -153,7 +166,7 @@ export function InativarRegistro({
               type="button" onClick={confirmar} disabled={carregando || checando || bloqueado}
               className={cn(
                 "inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold rounded-lg text-white disabled:opacity-50",
-                ativo ? "bg-red-600 hover:bg-red-700" : "bg-emerald-600 hover:bg-emerald-700",
+                ativo ? "bg-atrasado hover:brightness-95" : "bg-ok hover:bg-success-600",
               )}
             >
               {carregando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Icone className="w-4 h-4" />}

@@ -14,8 +14,11 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   });
   if (!p) return NextResponse.json({ erro: "PMOC não encontrado" }, { status: 404 });
   const avisos: string[] = [];
-  if (situacaoPmoc(p).status === "VIGENTE")
-    avisos.push(`Este PMOC está VIGENTE até ${dataBR(p.dataExpiracao)}. Inativado, ${p.cliente.nomeFantasia ?? p.cliente.nome} fica sem PMOC ativo neste local — a lei exige um plano em vigor.`);
+  if (situacaoPmoc(p).status === "VIGENTE") {
+    avisos.push(`Este PMOC está vigente até ${dataBR(p.dataExpiracao)}.`);
+    const cliente = p.cliente.nomeFantasia ?? p.cliente.nome;
+    avisos.push(`Inativado, ${cliente} fica sem PMOC ativo neste local. A lei exige um plano em vigor.`);
+  }
   if (p._count.equipamentos) avisos.push(`Os ${p._count.equipamentos} equipamento(s) vinculados continuam no cadastro e no PMOC (nada é apagado).`);
   return NextResponse.json({ bloqueio: null, avisos });
 }

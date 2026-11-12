@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_FOTOS_CHAMADO } from "@/lib/anexos";
 import {
   TipoServico, Prioridade, StatusOS,
   TipoEquipamento, TipoContrato, StatusContrato,
@@ -8,7 +9,7 @@ import {
   TipoDesconto, TipoOrcamento,
   PerfilFaturamento, TipoMedicao, TipoItemMedicao,
   StatusMedicaoFin, StatusContaReceber, FormaPagamento,
-  ResponsavelPrazo, CanalNotificacao, StatusPedidoCompra,
+  ResponsavelPrazo, CanalNotificacao,
   TipoTabelaPreco, TipoPrecoTabela,
   TratamentoFimSemana, TipoRelatorio,
   TipoVencimento, IndiceReajuste, PeriodoRefNFSe, PeriodoVisita,
@@ -16,6 +17,8 @@ import {
   TipoManutencaoVeiculo, TipoDocumentoVeiculo, FrequenciaChecklist, TipoItemChecklist,
   TipoComunicacao, CanalComunicacao,
 } from "@prisma/client";
+import { anoBR, mesBR } from "@/lib/fuso";
+import { caixaNome, caixaEmail, caixaLivre } from "@/lib/texto/zod";
 
 const valorOpcional = z.preprocess(
   (v) =>
@@ -64,26 +67,26 @@ export const acessoPortalSchema = z.object({
 
 // Abertura de chamado pelo portal
 export const chamadoPortalSchema = z.object({
-  unidadeId: z.string().optional().nullable(),
-  equipamentoId: z.string().optional().nullable(),
-  tipoProblema: z.string().optional().nullable(),
-  descricao: z.string().min(5, "Descreva o problema (mín. 5 caracteres)"),
+  unidadeId: z.string().max(40).optional().nullable(),
+  equipamentoId: z.string().max(40).optional().nullable(),
+  tipoProblema: z.string().max(100).optional().nullable(),
+  descricao: z.string().min(5, "Descreva o problema (mín. 5 caracteres)").max(2000, "Descrição muito longa (máx. 2000 caracteres)"),
   urgencia: z.enum(["NORMAL", "URGENTE", "CRITICO"]).default("NORMAL"),
   fotos: z.array(z.object({
     nome: z.string(),
     tipo: z.string(),
     tamanho: z.number(),
     conteudo: z.string(),
-  })).default([]),
+  })).max(MAX_FOTOS_CHAMADO, `Envie no máximo ${MAX_FOTOS_CHAMADO} fotos`).default([]),
 });
 
 export const contatoClienteSchema = z.object({
-  nome: z.string().min(2, "Nome do contato é obrigatório"),
-  cargo: z.string().optional(),
+  nome: z.string().min(2, "Nome do contato é obrigatório").transform(caixaNome),
+  cargo: z.string().optional().transform(caixaNome),
   tipo: z.nativeEnum(TipoContato).default(TipoContato.OUTRO),
   telefone: z.string().optional(),
   whatsapp: z.string().optional(),
-  email: z.string().email("E-mail inválido").optional().or(z.literal("")),
+  email: z.string().trim().email("E-mail inválido").optional().or(z.literal("")).transform(caixaEmail),
   principal: z.boolean().default(false),
 });
 
@@ -105,44 +108,49 @@ export const interacaoClienteSchema = z.object({
 
 export const clienteSchema = z.object({
   tipoPessoa: z.nativeEnum(TipoPessoa),
-  nome: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-  nomeFantasia: z.string().optional(),
+  nome: z.string().min(2, "Nome deve ter pelo menos 2 caracteres").transform(caixaNome),
+  nomeFantasia: z.string().optional().transform(caixaNome),
   cpfCnpj: z.string().min(11, "CPF/CNPJ inválido"),
   inscricaoEstadual: z.string().optional(),
+  // Informações fiscais (todas opcionais/nulas; alimentam a NFS-e). Salvas no create e no edit.
+  optanteSimples: z.boolean().optional().nullable(),
+  indicadorInscricaoEstadual: z.preprocess(
+    (v) => (v === "" || v == null ? null : v),
+    z.enum(["CONTRIBUINTE", "ISENTO", "NAO_CONTRIBUINTE"]).nullable(),
+  ).default(null),
+  inscricaoMunicipal: z.string().optional(),
+  inscricaoSuframa: z.string().optional(),
   segmento: z.nativeEnum(Segmento).optional().nullable(),
   origem: z.nativeEnum(OrigemCliente).optional().nullable(),
   statusFinanceiro: z.nativeEnum(StatusFinanceiro).default(StatusFinanceiro.ADIMPLENTE),
   ativo: z.boolean().default(true),
   satisfacao: z.number().min(1).max(5).optional().nullable(),
-  email: z.string().email("E-mail inválido").optional().or(z.literal("")),
+  email: z.string().trim().email("E-mail inválido").optional().or(z.literal("")).transform(caixaEmail),
   telefone: z.string().optional(),
   celular: z.string().optional(),
-  contato: z.string().optional(),
+  contato: z.string().optional().transform(caixaNome),
   artNumero: z.string().optional(),
   responsavelTecnicoId: z.string().optional(),
-  endereco: z.string().optional(),
+  endereco: z.string().optional().transform(caixaNome),
   numero: z.string().optional(),
-  complemento: z.string().optional(),
-  bairro: z.string().optional(),
-  cidade: z.string().optional(),
+  complemento: z.string().optional().transform(caixaNome),
+  bairro: z.string().optional().transform(caixaNome),
+  cidade: z.string().optional().transform(caixaNome),
   estado: z.string().optional(),
   cep: z.string().optional(),
-  observacoes: z.string().optional(),
-  // Perfil de faturamento
-  tipoFaturamento: z.preprocess(
-    (v) => (v === "" || v == null ? null : v),
-    z.nativeEnum(PerfilFaturamento).nullable()
-  ).default(null),
-  diaFaturamento: z.preprocess(
-    (v) => (v === "" || v == null ? 1 : Number(v)),
-    z.number().min(1).max(28)
-  ).default(1),
-  condicaoPagamento: z.string().optional().nullable(),
+  observacoes: z.string().optional().transform(caixaLivre),
+  // Cobrança e faturamento (reaproveita colunas já existentes no cliente). Salvos no create e no edit.
+  // E-mails/WhatsApp de cobrança têm prioridade no envio de fatura/cobrança; sem eles, cai no contato
+  // principal (lib/cliente/cobranca-destino.ts). As preferências de cobrança alimentam o faturamento.
+  emailsFaturamento: z.array(z.string().trim().email()).default([]),
+  whatsappFaturamento: z.string().optional(),
+  boletoUnicoMensal: z.boolean().default(false),
   exigePcAntesNf: z.boolean().default(false),
   agrupaAdicionais: z.boolean().default(false),
-  boletoUnicoMensal: z.boolean().default(false),
-  emailsFaturamento: z.array(z.string()).default([]),
-  whatsappFaturamento: z.string().optional().nullable(),
+  // Perfil de faturamento (tipo/dia/condição) saiu da UI do cliente: as colunas continuam no banco e são
+  // preservadas na edição porque NÃO entram mais por este schema. A config de faturamento passou a viver
+  // em cada contrato; o dia de faturamento do contrato tem o do cliente só como fallback
+  // (lib/financeiro/contrato-previsao.ts). Ver docs/cliente-abas-enxugar.md.
   // Preferências de e-mail
   emailReceberBoletos: z.boolean().default(true),
   emailReceberRelatorios: z.boolean().default(true),
@@ -160,19 +168,19 @@ export const clienteSchema = z.object({
 
 export const unidadeSchema = z.object({
   clienteId: z.string().min(1, "Cliente é obrigatório"),
-  nome: z.string().min(1, "Nome da unidade é obrigatório"),
+  nome: z.string().min(1, "Nome da unidade é obrigatório").transform(caixaNome),
   principal: z.boolean().default(false),
-  logradouro: z.string().optional(),
+  logradouro: z.string().optional().transform(caixaNome),
   numero: z.string().optional(),
-  complemento: z.string().optional(),
-  bairro: z.string().optional(),
-  cidade: z.string().optional(),
+  complemento: z.string().optional().transform(caixaNome),
+  bairro: z.string().optional().transform(caixaNome),
+  cidade: z.string().optional().transform(caixaNome),
   estado: z.string().optional(),
   cep: z.string().optional(),
   latitude: z.number().optional().nullable(),
   longitude: z.number().optional().nullable(),
   telefone: z.string().optional(),
-  observacoes: z.string().optional(),
+  observacoes: z.string().optional().transform(caixaLivre),
 });
 
 /** Tipo de equipamento (cadastro de configuração / cadastro rápido). */
@@ -210,6 +218,14 @@ export const equipamentoSchema = z.object({
   fotos: z.array(z.string()).max(5, "Máximo de 5 imagens").optional(),
 });
 
+/** Limite da descrição dos serviços do contrato (contador "x/1000" no formulário). */
+export const MAX_DESCRICAO_SERVICOS = 1000;
+
+/**
+ * Contrato. Campos que saíram do formulário (NFS-e, itens inclusos, visitas, "exibir RT na NFS-e")
+ * NÃO estão aqui: o Zod descarta chave desconhecida, então nada novo é gravado neles e o valor
+ * antigo no banco não é apagado ao editar.
+ */
 export const contratoSchema = z.object({
   clienteId: z.string().min(1, "Cliente é obrigatório"),
   numero: z.string().min(1, "Número é obrigatório"),
@@ -255,28 +271,29 @@ export const contratoSchema = z.object({
     dataPrimeiraOs: z.string().optional().nullable(),
   })).default([]),
 
-  // Faturamento / NFS-e
+  // Faturamento (a NFS-e saiu do contrato: serviços da nota, período de referência, nº do contrato
+  // e vencimento na descrição não são mais gravados — o que já existia no banco fica como está)
   diaFaturamento: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().min(1).max(28).nullable()).default(null),
+  // Serviço padrão da mensalidade (NFS-e e retenções). Ausente = não mexe; vazio = sem serviço
+  servicoId: z.preprocess((v) => (v === "" ? null : v), z.string().min(1).nullable().optional()),
   tipoVencimento: z.preprocess((v) => (v === "" || v == null ? null : v), z.nativeEnum(TipoVencimento).nullable()).default(null),
   diasAposVencimento: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().min(0).max(365).nullable()).default(null),
   diaFixoMes: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().min(1).max(31).nullable()).default(null),
   ajusteFinsDeSemana: z.preprocess((v) => (v === "" || v == null ? null : v), z.nativeEnum(TratamentoFimSemana).nullable()).default(null),
-  descricaoNFSe: z.string().optional().nullable(),
-  servicosNFSeIds: z.array(z.string()).default([]),
-  adicionarPeriodoRef: z.boolean().default(false),
-  periodoRefOpcao: z.preprocess((v) => (v === "" || v == null ? null : v), z.nativeEnum(PeriodoRefNFSe).nullable()).default(null),
-  adicionarNumContrato: z.boolean().default(false),
-  adicionarVencimentoNFSe: z.boolean().default(false),
+  // D3: adicionais do contrato em faturas separadas (padrão) ou consolidados na fatura mensal
+  faturamentoAdicionais: z.enum(["SEPARADO", "CONSOLIDADO"]).default("SEPARADO"),
+  // PR3-A: faturamento automático (rotina diária) e referência do período na nota. Ausente = não mexe
+  faturamentoAutomatico: z.boolean().optional(),
+  aprovacaoAutomatica: z.boolean().optional(),
+  emitirNfseAuto: z.boolean().optional(),
+  emitirBoletoAuto: z.boolean().optional(),
+  nfseReferencia: z.enum(["CORRENTE", "ANTERIOR"]).optional(),
 
-  // Escopo
-  descricaoServicos: z.string().optional().nullable(),
-  itensInclusos: z.record(z.any()).optional().nullable(),
-  qtdVisitas: z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().min(0).nullable()).default(null),
-  periodoVisitas: z.preprocess((v) => (v === "" || v == null ? null : v), z.nativeEnum(PeriodoVisita).nullable()).default(null),
+  // Escopo: só a descrição (itens inclusos e visitas saíram do formulário; o já gravado fica como está)
+  descricaoServicos: z.string().max(MAX_DESCRICAO_SERVICOS, `Descrição dos serviços: no máximo ${MAX_DESCRICAO_SERVICOS} caracteres.`).optional().nullable(),
 
   // Responsabilidade técnica
   artVencimento: z.string().optional().nullable(),
-  exibirRTNFSe: z.boolean().default(false),
   exibirRTPDF: z.boolean().default(false),
 
   // Reajuste
@@ -324,30 +341,32 @@ const documentoColaboradorSchema = z.object({
 // Colaborador (antigo "Técnico") — cadastro completo em abas
 export const tecnicoSchema = z.object({
   // Dados pessoais
-  nome: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+  nome: z.string().min(2, "Nome deve ter pelo menos 2 caracteres").transform(caixaNome),
   cpf: z.string().min(11, "CPF inválido"),
   rg: z.string().optional(),
   dataNascimento: z.string().optional().nullable(),
-  email: z.string().email("E-mail inválido").optional().or(z.literal("")),
+  email: z.string().trim().email("E-mail inválido").optional().or(z.literal("")).transform(caixaEmail),
   telefone: z.string().min(8, "Telefone inválido"),
   celular: z.string().optional(),
   whatsapp: z.string().optional(),
   avatar: z.string().optional(),
-  endereco: z.string().optional(),
+  endereco: z.string().optional().transform(caixaNome),
   numero: z.string().optional(),
-  complemento: z.string().optional(),
-  bairro: z.string().optional(),
-  cidade: z.string().optional(),
+  complemento: z.string().optional().transform(caixaNome),
+  bairro: z.string().optional().transform(caixaNome),
+  cidade: z.string().optional().transform(caixaNome),
   estado: z.string().optional(),
   cep: z.string().optional(),
   // Dados profissionais
   cargoId: z.string().optional().nullable(),
   perfilAcessoId: z.string().optional().nullable(),
+  /** Veículo "padrão" (opcional) — puxado na OS quando o colaborador executa sozinho */
+  veiculoId: z.string().optional().nullable(),
   tipoEquipe: z.enum(["CAMPO", "ADMINISTRATIVO"]).default("CAMPO"),
   tipo: z.nativeEnum(TipoTecnico).default(TipoTecnico.TECNICO_CAMPO),
   crea: z.string().optional(),
   dataAdmissao: z.string().optional().nullable(),
-  salario: decimalOpcional.optional(),
+  // Salário/base NÃO entra aqui: só pela seção "Dados financeiros / Folha" (permissão financeiro.folha)
   jornadaEntrada: z.string().optional(),
   jornadaSaida: z.string().optional(),
   jornadaDias: z.array(z.string()).default([]),
@@ -357,7 +376,7 @@ export const tecnicoSchema = z.object({
   especialidades: z.array(z.string()).default([]),
   // Documentos
   documentos: z.array(documentoColaboradorSchema).default([]),
-  observacoes: z.string().optional(),
+  observacoes: z.string().optional().transform(caixaLivre),
 });
 
 // ─────────────────────────────────────────────
@@ -365,11 +384,15 @@ export const tecnicoSchema = z.object({
 // ─────────────────────────────────────────────
 
 export const veiculoSchema = z.object({
-  fotos: z.array(z.string()).max(5, "Máximo de 5 fotos").default([]),
+  // 4 ângulos (frente, traseira, laterais) + até 4 "outros"; cada foto já vem reduzida pela tela (~300 KB)
+  fotos: z.array(z.string()).max(8, "Máximo de 8 fotos").default([]),
+  fotosRotulos: z.array(z.enum(["FRENTE", "TRASEIRA", "LATERAL_ESQUERDA", "LATERAL_DIREITA", "OUTRO"])).max(8).default([]),
   placa: z.string().min(1, "Placa é obrigatória"),
   modelo: z.string().min(1, "Modelo é obrigatório"),
   marca: z.string().optional(),
   ano: z.string().optional(),
+  anoModelo: z.string().optional(),
+  combustivel: z.string().max(30).optional(),
   cor: z.string().optional(),
   tipo: z.nativeEnum(TipoVeiculo).default(TipoVeiculo.CARRO),
   chassi: z.string().optional(),
@@ -406,13 +429,18 @@ export const veiculoManutencaoSchema = z.object({
 // ─────────────────────────────────────────────
 
 export const equipeSchema = z.object({
-  nome: z.string().min(1, "Nome é obrigatório"),
+  nome: z.string().min(1, "Nome é obrigatório").transform(caixaNome),
   cor: z.string().default("#0EA5E9"),
   liderId: z.string().optional().nullable(),
   membroIds: z.array(z.string()).default([]),
+  /** Legado (1 veículo): só garante o vínculo, nunca desvincula os outros. */
   veiculoId: z.string().optional().nullable(),
+  /** Lista completa de veículos da equipe. Ausente = não mexe nos veículos. */
+  veiculoIds: z.array(z.string()).optional(),
+  /** Obrigatório para DESVINCULAR veículos que já estavam na equipe (senão 409 com a lista). */
+  confirmarDesvinculo: z.boolean().optional(),
   status: z.nativeEnum(StatusEquipe).default(StatusEquipe.ATIVA),
-  observacoes: z.string().optional(),
+  observacoes: z.string().optional().transform(caixaLivre),
 });
 
 // ─────────────────────────────────────────────
@@ -425,6 +453,8 @@ export const checklistTemplateSchema = z.object({
   frequencia: z.nativeEnum(FrequenciaChecklist).default(FrequenciaChecklist.DIARIO),
   ativo: z.boolean().default(true),
   itens: z.array(z.object({
+    /** Item já existente (edição): atualiza no lugar. Sem id = item novo. */
+    id: z.string().min(1).nullable().optional(),
     categoria: z.string().min(1),
     descricao: z.string().min(1),
     tipo: z.nativeEnum(TipoItemChecklist).default(TipoItemChecklist.OK_NOK),
@@ -433,6 +463,9 @@ export const checklistTemplateSchema = z.object({
     ordem: z.number().int().default(0),
   })).default([]),
 });
+
+/** Edição PARCIAL do modelo de checklist: só muda o que veio (sem defaults que reativariam ou zerariam). */
+export const checklistTemplateEditarSchema = checklistTemplateSchema.partial();
 
 export const checklistPreenchidoSchema = z.object({
   veiculoId: z.string().min(1, "Veículo é obrigatório"),
@@ -450,6 +483,35 @@ export const checklistPreenchidoSchema = z.object({
 // ORÇAMENTO
 // ─────────────────────────────────────────────
 
+/** Estoque E3.3 — um material/peça do snapshot da linha de serviço (regra em lib/orcamentos/materiais.ts) */
+const numeroNaoNegativo = (msg: string) => z.preprocess((v) => (v === "" || v == null ? 0 : typeof v === "string" ? Number(v.trim().replace(",", ".")) : Number(v)), z.number({ invalid_type_error: msg }).nonnegative(msg));
+export const materialOrcamentoSchema = z.object({
+  id: z.string().optional().nullable(),
+  produtoId: z.string().max(40).optional().nullable(),
+  descricao: z.string().trim().min(1, "Todo material precisa de uma descrição.").max(300),
+  unidade: z.preprocess((v) => (v === "" || v == null ? "un" : v), z.string().trim().max(20)),
+  comportamento: z.enum(["VENDA_A_PARTE", "INCLUSO_NO_SERVICO"], { errorMap: () => ({ message: "Comportamento de faturamento do material inválido." }) }),
+  quantidade: numeroNaoNegativo("A quantidade do material não pode ser negativa."),
+  quantidadePadrao: numeroNaoNegativo("A quantidade do material não pode ser negativa."),
+  valorVendaUnit: numeroNaoNegativo("Valor do material não pode ser negativo."),
+  custoUnit: z.preprocess((v) => (v === "" || v == null ? null : typeof v === "string" ? Number(v.trim().replace(",", ".")) : Number(v)), z.number().nonnegative("Valor do material não pode ser negativo.").nullable()),
+  origem: z.enum(["SOLTO", "KIT", "AVULSO"], { errorMap: () => ({ message: "Origem do material inválida." }) }).default("AVULSO"),
+  kitNome: z.string().max(120).optional().nullable(),
+}).strict();
+
+/** E3.3b — item da OS sem orçamento (linha livre, serviço/produto do catálogo, serviço com materiais) */
+export const itemOsSchema = z.object({
+  tipo: z.enum(["SERVICO", "PRODUTO"]).default("SERVICO"),
+  servicoId: z.string().max(40).optional().nullable(),
+  produtoId: z.string().max(40).optional().nullable(),
+  descricao: z.string().trim().min(1, "Informe a descrição do item.").max(500),
+  quantidade: z.preprocess((v) => (v === "" || v == null ? 1 : typeof v === "string" ? Number(v.replace(",", ".")) : Number(v)), z.number({ invalid_type_error: "Quantidade inválida." }).positive("Quantidade deve ser > 0")),
+  valorUnitario: z.preprocess((v) => (v === "" || v == null ? 0 : typeof v === "string" ? Number(v.replace(",", ".")) : Number(v)), z.number({ invalid_type_error: "Valor inválido." }).nonnegative("Valor não pode ser negativo")),
+  valorTotal: z.preprocess((v) => (v === "" || v == null ? undefined : typeof v === "string" ? Number(v.replace(",", ".")) : Number(v)), z.number().nonnegative("Valor não pode ser negativo").optional()),
+  valorManual: z.boolean().default(false),
+  materiais: z.lazy(() => z.array(materialOrcamentoSchema).max(200, "Uma linha vai até 200 materiais.")).optional(),
+}).strict();
+
 export const orcamentoItemSchema = z.object({
   catalogoId: z.string().optional().nullable(),
   descricao: z.string().min(1, "Descrição é obrigatória"),
@@ -461,8 +523,21 @@ export const orcamentoItemSchema = z.object({
     (v) => (v === "" || v == null ? 0 : Number(v)),
     z.number().nonnegative("Valor não pode ser negativo")
   ),
+  /** Total da linha como foi digitado (o total manda); o servidor confere com unitário × qtd */
+  valorTotal: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : Number(v)),
+    z.number().nonnegative("Valor não pode ser negativo").optional()
+  ),
   observacao: z.string().optional().nullable(),
+  /** E3.3 (só serviços): o snapshot dos materiais da linha; o total digitado na mão vale quando `valorManual` */
+  materiais: z.array(materialOrcamentoSchema).max(200, "Uma linha vai até 200 materiais.").optional(),
+  valorManual: z.boolean().default(false),
 });
+
+const descontoGrupo = z.preprocess(
+  (v) => (v === "" || v == null ? undefined : Number(v)),
+  z.number().nonnegative("Desconto não pode ser negativo").optional()
+);
 
 const intOpcional = (min: number, max: number) =>
   z.preprocess(
@@ -471,9 +546,19 @@ const intOpcional = (min: number, max: number) =>
   ).default(null);
 
 export const orcamentoSchema = z.object({
-  nome: z.string().min(2, "Nome do orçamento é obrigatório"),
+  // Em branco = nome automático (lib/orcamentos/nome.ts), composto no servidor ao salvar
+  nome: z.string().trim().max(200, "Nome muito longo").optional().nullable(),
   clienteId: z.string().min(1, "Cliente é obrigatório"),
   tipo: z.nativeEnum(TipoOrcamento).default(TipoOrcamento.COMUM),
+  prazoExecucao: z.string().trim().max(200, "Prazo de execução muito longo").optional().nullable(),
+  formaPagamento: z.string().trim().max(200, "Forma de pagamento muito longa").optional().nullable(),
+  // Proposta corporativa: ausente (undefined) = padrão de Configurações no novo / mantém na edição
+  garantiaServico: z.string().trim().max(200, "Garantia dos serviços muito longa").optional().nullable(),
+  garantiaPecas: z.string().trim().max(200, "Garantia das peças muito longa").optional().nullable(),
+  naoIncluso: z.string().max(4000, "\"Não incluso\" muito longo").optional().nullable(),
+  normas: z.array(z.string().max(40)).max(20).optional(),
+  unidadeId: z.string().optional().nullable(),
+  contatoClienteId: z.string().optional().nullable(),
   descricao: z.string().optional().nullable(),
   observacao: z.string().optional().nullable(),
   validadeEm: z.string().optional().nullable(),
@@ -482,6 +567,13 @@ export const orcamentoSchema = z.object({
     z.number().nonnegative("Desconto não pode ser negativo")
   ).default(0),
   tipoDesconto: z.nativeEnum(TipoDesconto).default(TipoDesconto.VALOR),
+  // Desconto de cada grupo (R$ ou %). Sem eles, o `desconto` geral acima (formato antigo) é repartido.
+  descontoServicos: descontoGrupo,
+  tipoDescontoServicos: z.nativeEnum(TipoDesconto).default(TipoDesconto.VALOR),
+  descontoProdutos: descontoGrupo,
+  tipoDescontoProdutos: z.nativeEnum(TipoDesconto).default(TipoDesconto.VALOR),
+  /** Na edição: trocar a alíquota de ISS congelada no orçamento pela atual da empresa */
+  atualizarIss: z.boolean().default(false),
   servicos: z.array(orcamentoItemSchema).default([]),
   produtos: z.array(orcamentoItemSchema).default([]),
   ordensServicoIds: z.array(z.string()).default([]),
@@ -560,7 +652,8 @@ export const medicaoItemSchema = z.object({
 export const medicaoSchema = z.object({
   clienteId: z.string().min(1, "Cliente é obrigatório"),
   contratoId: z.string().optional().nullable(),
-  tipo: z.nativeEnum(TipoMedicao).default(TipoMedicao.MENSAL_FIXO),
+  // Medição manual avulsa não pode calar o gerar-mes da mensalidade (I25): o padrão é ADICIONAL
+  tipo: z.nativeEnum(TipoMedicao).default(TipoMedicao.ADICIONAL),
   mes: z.preprocess(
     (v) => (v === "" || v == null ? null : Number(v)),
     z.number().min(1).max(12).nullable()
@@ -607,13 +700,23 @@ export const acaoMedicaoSchema = z.object({
 export const contaReceberUpdateSchema = z.object({
   status: z.nativeEnum(StatusContaReceber).optional(),
   descricao: z.string().optional(),
-  categoria: z.string().optional().nullable(),
+  /** Categoria financeira pelo ID (Leva 5.1) */
+  categoriaId: z.string().optional().nullable(),
   valor: z.preprocess((v) => (v === "" || v == null ? undefined : Number(v)), z.number().positive()).optional(),
   dataVencimento: z.string().optional().nullable(),
   dataRecebimento: z.string().optional().nullable(),
   formaPagamento: z.nativeEnum(FormaPagamento).optional().nullable(),
   banco: z.string().optional().nullable(),
-  observacao: z.string().optional().nullable(),
+  observacao: z.string().max(2000).optional().nullable(),
+  /** Gestão (CR robusto): por ID, da empresa */
+  centroCustoId: z.string().optional().nullable(),
+  contaBancariaId: z.string().optional().nullable(),
+  /** Obrigatório ao cancelar */
+  motivoCancelamento: z.string().trim().max(500).optional().nullable(),
+  /** Só conta manual sem boleto/nota (regra em lib/financeiro/conta-receber-gestao) */
+  clienteId: z.string().min(1).optional(),
+  /** Comentário da baixa: vai para a linha do tempo (não sobrescreve as observações da conta) */
+  comentario: z.string().trim().max(500).optional().nullable(),
 });
 
 // ─────────────────────────────────────────────
@@ -626,8 +729,8 @@ const valorObrigatorio = z.preprocess(
 );
 
 export const contaPagarSchema = z.object({
-  fornecedor: z.string().min(1, "Fornecedor é obrigatório"),
-  fornecedorCnpj: z.string().optional().nullable(),
+  /** Fornecedor pelo ID (Leva 5.2). O texto livre não é mais aceito: nome/CNPJ vêm do cadastro. */
+  fornecedorId: z.string().optional().nullable(),
   descricao: z.string().min(1, "Descrição é obrigatória"),
   valorTotal: valorObrigatorio,
   dataVencimento: z.string().optional().nullable(),
@@ -635,6 +738,12 @@ export const contaPagarSchema = z.object({
   banco: z.string().optional().nullable(),
   pedidoCompraId: z.string().optional().nullable(),
   observacao: z.string().optional().nullable(),
+  /** Categoria financeira pelo ID (Leva 5.1: conta a pagar passa a ter categoria) */
+  categoriaId: z.string().optional().nullable(),
+  /** Centro de custo pelo ID (E2.1) */
+  centroCustoId: z.string().optional().nullable(),
+  /** Boleto colado: linha digitável (47/48) ou código de barras (44); DVs conferidos na rota. "" = sem boleto */
+  boleto: z.string().max(80).optional().nullable(),
 });
 
 export const contaPagarUpdateSchema = contaPagarSchema.partial();
@@ -688,41 +797,47 @@ export const prazoTemplateSchema = z.object({
 });
 
 export const pedidoCompraItemSchema = z.object({
+  /** Item já gravado (edição): o histórico compara por ele; vazio = item novo */
+  id: z.string().optional().nullable(),
   produtoId: z.string().optional().nullable(),
-  descricao: z.string().min(1, "Descrição é obrigatória"),
+  descricao: z.string().trim().min(1, "Descrição é obrigatória"),
   quantidade: z.preprocess(
     (v) => (v === "" || v == null ? 1 : Number(v)),
     z.number().positive("Quantidade deve ser > 0")
   ),
-  unidade: z.string().default("un"),
+  unidade: z.string().trim().min(1).default("un"),
   valorEstimado: z.preprocess(
     (v) => (v === "" || v == null ? null : Number(v)),
     z.number().nonnegative().nullable()
   ).optional(),
-  fornecedor: z.string().optional().nullable(),
   observacao: z.string().optional().nullable(),
 });
+
+/** Campos editáveis do pedido (criar e editar) */
+const pedidoCompraCampos = {
+  compradorId: z.string().optional().nullable(),
+  fornecedorId: z.string().optional().nullable(),
+  prazoNecessario: z.string().optional().nullable(),
+  observacao: z.string().optional().nullable(),
+  itens: z.array(pedidoCompraItemSchema).min(1, "Adicione ao menos um item"),
+};
 
 export const pedidoCompraSchema = z.object({
   ordemServicoId: z.string().optional().nullable(),
   orcamentoId: z.string().optional().nullable(),
-  compradorId: z.string().optional().nullable(),
-  prazoNecessario: z.string().optional().nullable(),
-  observacao: z.string().optional().nullable(),
-  itens: z.array(pedidoCompraItemSchema).min(1, "Adicione ao menos um item"),
+  /** PC avulso (sem OS/orçamento): o motivo, ex. "Reposição de estoque" */
+  motivo: z.string().trim().max(200).optional().nullable(),
+  ...pedidoCompraCampos,
 });
 
-export const pedidoCompraStatusSchema = z.object({
-  status: z.nativeEnum(StatusPedidoCompra),
+/** Edição inline (a origem não muda) */
+export const pedidoCompraEdicaoSchema = z.object({
+  motivo: z.string().trim().max(200).optional().nullable(),
+  ...pedidoCompraCampos,
 });
 
-export const pedidoCompraItemUpdateSchema = z.object({
-  valorReal: z.preprocess(
-    (v) => (v === "" || v == null ? null : Number(v)),
-    z.number().nonnegative().nullable()
-  ).optional(),
-  fornecedor: z.string().optional().nullable(),
-});
+/** Baixar ou enviar o PC ao fornecedor */
+export const pedidoCompraEnvioSchema = z.object({ canal: z.enum(["BAIXAR", "EMAIL", "WHATSAPP"]) });
 
 export const osPrazoSchema = z.object({
   templateId: z.string().min(1, "Selecione um template de prazo"),
@@ -767,11 +882,11 @@ export type TabelaPrecoItemInput = z.infer<typeof tabelaPrecoItemSchema>;
 export const relatorioSchema = z.object({
   tipo: z.nativeEnum(TipoRelatorio).default(TipoRelatorio.PMOC),
   mesReferencia: z.preprocess(
-    (v) => (v === "" || v == null ? new Date().getMonth() + 1 : Number(v)),
+    (v) => (v === "" || v == null ? mesBR() : Number(v)),
     z.number().min(1).max(12)
   ),
   anoReferencia: z.preprocess(
-    (v) => (v === "" || v == null ? new Date().getFullYear() : Number(v)),
+    (v) => (v === "" || v == null ? anoBR() : Number(v)),
     z.number().min(2000).max(2100)
   ),
   valorFinanceiro: z.preprocess(

@@ -1,11 +1,61 @@
-import { formatarCpfCnpj, formatarData, formatarMoeda, formatarTelefone, LABELS_STATUS_ORCAMENTO, CLASSE_STATUS_ORCAMENTO, cn } from "@/lib/utils";
+import { TimbreEmpresa } from "@/components/documento/timbre-empresa";
+import { formatarCpfCnpj, formatarData, formatarMoeda, formatarTelefone, cn } from "@/lib/utils";
+import { calcularOrcamento, versaoCliente, type EntradaCalculo, type TipoDesconto } from "@/lib/orcamentos/calculo";
+import { PLANILHA } from "@/lib/planilha";
+import { CLASSE_ETAPA, LABELS_ETAPA, etapaCiclo } from "@/lib/orcamentos/ciclo";
+import { linhasDadosBancarios } from "@/lib/orcamentos/dados-bancarios";
+import {
+  quantidadesAlinhadas, valorSemMoeda,
+  destinatarioOrcamento, linhasCondicoes, linhasNaoIncluso, normasDoDocumento, numeroFormalOrcamento, partesItemDocumento, textoArt, timbreEmpresa,
+  type ContatoPara, type UnidadePara,
+} from "@/lib/orcamentos/proposta";
 
-interface ItemDoc {
+export interface ItemDoc {
   descricao: string;
   quantidade: unknown;
   valorUnitario: unknown;
   valorTotal: unknown;
   observacao?: string | null;
+  /** Vínculo com o catálogo: separa "Nome — descrição cadastrada" em nome (destaque) + descrição (discreta) */
+  servicoId?: string | null;
+  produtoId?: string | null;
+  servico?: { nome: string } | null;
+  produto?: { nome: string } | null;
+}
+
+/**
+ * Texto do item no documento, em hierarquia: nome (destaque, como sempre) → descrição cadastrada (linha
+ * de baixo, menor e cinza) → observação do item (menor, cinza, itálico, com "Obs.:"). Item digitado à mão
+ * fica como estava (tudo é o nome).
+ */
+export function TextoItemDocumento({ item }: { item: ItemDoc }) {
+  const { nome, detalhe } = partesItemDocumento(item.descricao, {
+    vinculado: !!(item.servicoId || item.produtoId), nome: item.servico?.nome ?? item.produto?.nome,
+  });
+  const obs = (item.observacao ?? "").trim();
+  return (
+    <>
+      <span className="text-ink" data-nome-item>{nome}</span>
+      {detalhe && <p className="mt-0.5 text-[11px] print:text-[10px] leading-snug text-ink-muted whitespace-pre-line" data-descricao-item>{detalhe}</p>}
+      {obs && (
+        <p className="mt-0.5 text-[11px] print:text-[10px] leading-snug text-ink-muted italic whitespace-pre-line" data-observacao-item>
+          <span className="not-italic font-semibold">Obs.:</span> {obs}
+        </p>
+      )}
+    </>
+  );
+}
+
+/** Anexo da proposta já com o link (público ou interno) — ver lib/orcamentos/documento-server.ts */
+export interface AnexoDocumento {
+  id: string;
+  tipo: "FOTO" | "ARQUIVO";
+  nome: string;
+  mime: string;
+  tamanho: number;
+  legenda: string | null;
+  origem: string | null;
+  url: string;
 }
 
 export interface OrcamentoDocumentoProps {
@@ -16,16 +66,32 @@ export interface OrcamentoDocumentoProps {
     descricao?: string | null;
     observacao?: string | null;
     validadeEm?: Date | string | null;
+    /** Prazo de execução dos serviços e forma de pagamento (texto curto); vazios não aparecem */
+    prazoExecucao?: string | null;
+    formaPagamento?: string | null;
+    /** Garantias, "não incluso" e normas (proposta corporativa); vazios = o bloco não aparece */
+    garantiaServico?: string | null;
+    garantiaPecas?: string | null;
+    naoIncluso?: string | null;
+    normas?: string[] | null;
+    artNumero?: string | null;
+    responsavelTecnico?: { nome: string; crea?: string | null } | null;
+    unidade?: UnidadePara | null;
+    contatoCliente?: ContatoPara | null;
     criadoEm: Date | string;
     enviadoEm?: Date | string | null;
+    visualizadoEm?: Date | string | null;
     assinadoEm?: Date | string | null;
     assinadoPor?: string | null;
     assinadoCpf?: string | null;
     assinaturaUrl?: string | null;
     totalServicos: unknown;
     totalProdutos: unknown;
-    desconto: unknown;
-    tipoDesconto: string;
+    descontoServicos?: unknown;
+    tipoDescontoServicos?: string | null;
+    descontoProdutos?: unknown;
+    tipoDescontoProdutos?: string | null;
+    issAliquota?: unknown;
     totalGeral: unknown;
     servicos: ItemDoc[];
     produtos: ItemDoc[];
@@ -34,6 +100,8 @@ export interface OrcamentoDocumentoProps {
     nome: string;
     nomeFantasia?: string | null;
     cnpj: string;
+    inscricaoEstadual?: string | null;
+    inscricaoMunicipal?: string | null;
     email?: string | null;
     telefone?: string | null;
     celular?: string | null;
@@ -46,11 +114,20 @@ export interface OrcamentoDocumentoProps {
     cidade?: string | null;
     estado?: string | null;
     cep?: string | null;
+    /** Dados bancários do cadastro da empresa (sem conta e sem PIX, o bloco não aparece) */
+    bancoNome?: string | null;
+    bancoAgencia?: string | null;
+    bancoConta?: string | null;
+    bancoTipoConta?: string | null;
+    bancoTitular?: string | null;
+    pixChave?: string | null;
   };
   cliente: {
     nome: string;
     nomeFantasia?: string | null;
     cpfCnpj: string;
+    inscricaoEstadual?: string | null;
+    contato?: string | null;
     email?: string | null;
     telefone?: string | null;
     endereco?: string | null;
@@ -61,213 +138,291 @@ export interface OrcamentoDocumentoProps {
     estado?: string | null;
     cep?: string | null;
   };
+  /** Fotos e arquivos que vão junto com a proposta */
+  anexos?: AnexoDocumento[];
   variante?: "completa" | "compacta";
+  /**
+   * "cliente" (link público/impressão): ISS EMBUTIDO nos preços dos serviços, sem linha própria, com a
+   * nota discreta "valores com impostos inclusos". "interna" (tela do escritório): ISS em linha própria,
+   * status e observações internas.
+   */
+  versao?: "cliente" | "interna";
 }
 
 function n(v: unknown): number {
   return typeof v === "number" ? v : Number(v ?? 0);
 }
 
-function enderecoCompleto(e: OrcamentoDocumentoProps["empresa"] | OrcamentoDocumentoProps["cliente"]): string {
-  const parts: string[] = [];
-  if (e.endereco) parts.push(`${e.endereco}${e.numero ? `, ${e.numero}` : ""}`);
-  if (e.complemento) parts.push(e.complemento);
-  if (e.bairro) parts.push(e.bairro);
-  if (e.cidade && e.estado) parts.push(`${e.cidade}/${e.estado}`);
-  if (e.cep) parts.push(`CEP ${e.cep}`);
-  return parts.join(" — ");
+const FORMATOS = { doc: formatarCpfCnpj, tel: formatarTelefone };
+
+/** Título de seção do documento: não fica sozinho no pé da página (vai junto com o conteúdo) */
+function Rotulo({ children }: { children: React.ReactNode }) {
+  return <p className="text-xs uppercase tracking-wider text-ink-muted mb-2 font-semibold break-after-avoid">{children}</p>;
 }
 
-export function OrcamentoDocumento({ orcamento, empresa, cliente, variante = "completa" }: OrcamentoDocumentoProps) {
-  const totalBruto = n(orcamento.totalServicos) + n(orcamento.totalProdutos);
-  const desconto = n(orcamento.desconto);
-  const descontoCalculado =
-    orcamento.tipoDesconto === "PERCENTUAL"
-      ? Math.min(totalBruto * (desconto / 100), totalBruto)
-      : Math.min(desconto, totalBruto);
+function tamanhoLegivel(bytes: number) {
+  return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1).replace(".", ",")} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+export function OrcamentoDocumento({ orcamento, empresa, cliente, anexos = [], variante = "completa", versao = "cliente" }: OrcamentoDocumentoProps) {
+  // Mesmo cálculo da tela e do servidor (lib/orcamentos/calculo.ts), a partir do que está gravado
+  const entrada: EntradaCalculo = {
+    servicos: orcamento.servicos, produtos: orcamento.produtos,
+    descontoServicos: orcamento.descontoServicos, tipoDescontoServicos: (orcamento.tipoDescontoServicos ?? "VALOR") as TipoDesconto,
+    descontoProdutos: orcamento.descontoProdutos, tipoDescontoProdutos: (orcamento.tipoDescontoProdutos ?? "VALOR") as TipoDesconto,
+    issAliquota: orcamento.issAliquota,
+  };
+  const t = calcularOrcamento(entrada);
+  const banco = linhasDadosBancarios(empresa, formatarCpfCnpj);
+  const vc = versao === "cliente" ? versaoCliente(entrada) : null;
+  const grupoServicos: GrupoDoc = vc
+    ? { itens: vc.servicos, subtotal: vc.subtotalServicos, desconto: vc.descontoServicos, total: vc.totalServicos }
+    : { itens: orcamento.servicos.map((s) => ({ quantidade: n(s.quantidade), valorUnitario: n(s.valorUnitario), valorTotal: n(s.valorTotal) })), subtotal: t.subtotalServicos, desconto: t.descontoServicos, total: t.totalServicos, issAliquota: t.issAliquota, valorIss: t.valorIss };
+  const grupoProdutos: GrupoDoc = vc
+    ? { itens: vc.produtos, subtotal: vc.subtotalProdutos, desconto: vc.descontoProdutos, total: vc.totalProdutos }
+    : { itens: orcamento.produtos.map((p) => ({ quantidade: n(p.quantidade), valorUnitario: n(p.valorUnitario), valorTotal: n(p.valorTotal) })), subtotal: t.subtotalProdutos, desconto: t.descontoProdutos, total: t.totalProdutos };
+
+  const timbre = timbreEmpresa(empresa, FORMATOS);
+  const para = destinatarioOrcamento(cliente, orcamento.unidade, orcamento.contatoCliente, FORMATOS);
+  const condicoes = linhasCondicoes({
+    prazoExecucao: orcamento.prazoExecucao, formaPagamento: orcamento.formaPagamento,
+    garantiaServico: orcamento.garantiaServico, garantiaPecas: orcamento.garantiaPecas,
+    validadeEm: orcamento.validadeEm ? formatarData(orcamento.validadeEm) : null,
+  });
+  // "Condições" só aparece com prazo/pagamento/garantia; a validade sozinha já está no cabeçalho
+  const temCondicoes = condicoes.some((c) => c.chave !== "validade");
+  const naoIncluso = linhasNaoIncluso(orcamento.naoIncluso);
+  const normas = normasDoDocumento(orcamento.normas);
+  const rt = orcamento.responsavelTecnico;
+  const fotos = anexos.filter((a) => a.tipo === "FOTO");
+  const arquivos = anexos.filter((a) => a.tipo === "ARQUIVO");
 
   return (
-    <div className="bg-white">
-      {/* Cabeçalho */}
-      <div className="flex items-start justify-between gap-6 pb-6 border-b-2 border-primary-500">
-        <div className="flex items-start gap-4 flex-1 min-w-0">
-          {empresa.logo ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={empresa.logo} alt={empresa.nome} className="w-20 h-20 object-contain rounded-lg border border-surface-border" />
-          ) : (
-            <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-primary-500 to-success-500 flex items-center justify-center text-white text-2xl font-bold">
-              {empresa.nome.slice(0, 2).toUpperCase()}
-            </div>
+    <div className="bg-white text-ink print:text-[12px]" data-documento-orcamento={versao}>
+      {/* Timbre: logo, razão social, CNPJ/IE/IM, endereço e contatos — do cadastro da empresa */}
+      <TimbreEmpresa empresa={empresa}>
+        <div className="sm:text-right shrink-0" data-numero-orcamento>
+          <p className="text-xs uppercase tracking-wider text-ink-muted">Orçamento Nº</p>
+          <p className="font-mono text-2xl font-bold text-primary-600 tabular-nums">{numeroFormalOrcamento(orcamento.codigo)}</p>
+          {versao === "interna" && (
+            <span className={cn("mt-2 inline-flex", CLASSE_ETAPA[etapaCiclo(orcamento)])} data-etapa-documento>
+              {LABELS_ETAPA[etapaCiclo(orcamento)]}
+            </span>
           )}
-          <div className="min-w-0">
-            <h1 className="text-xl font-bold text-ink">{empresa.nomeFantasia ?? empresa.nome}</h1>
-            <p className="text-xs text-ink-muted">CNPJ {formatarCpfCnpj(empresa.cnpj)}</p>
-            {enderecoCompleto(empresa) && (
-              <p className="text-xs text-ink-muted mt-0.5">{enderecoCompleto(empresa)}</p>
-            )}
-            <p className="text-xs text-ink-muted mt-0.5">
-              {empresa.telefone && `Tel: ${formatarTelefone(empresa.telefone)}`}
-              {empresa.email && ` · ${empresa.email}`}
-            </p>
-          </div>
         </div>
-        <div className="text-right shrink-0">
-          <p className="text-xs uppercase tracking-wider text-ink-muted">Orçamento</p>
-          <p className="font-mono text-2xl font-bold text-primary-600">{orcamento.codigo}</p>
-          <span className={cn("mt-2 inline-flex", CLASSE_STATUS_ORCAMENTO[orcamento.status])}>
-            {LABELS_STATUS_ORCAMENTO[orcamento.status]}
-          </span>
-        </div>
-      </div>
+      </TimbreEmpresa>
 
-      {/* Título e datas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 py-5 border-b border-surface-border">
-        <div className="md:col-span-2">
-          <p className="text-xs uppercase tracking-wider text-ink-muted">Proposta</p>
-          <p className="text-lg font-semibold text-ink">{orcamento.nome}</p>
+      {/* Para: (cliente destinatário) + datas */}
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-5 py-5 border-b border-surface-border break-inside-avoid">
+        <div className="md:col-span-2 min-w-0" data-para>
+          <Rotulo>Para</Rotulo>
+          {/* Hierarquia: razão social em destaque; documentos numa linha; A/C e local alinhados */}
+          <p className="text-[15px] print:text-[13px] font-bold text-ink leading-snug" data-para-razao>{para.razaoSocial}</p>
+          {para.nomeFantasia && <p className="text-xs text-ink-muted leading-snug">{para.nomeFantasia}</p>}
+          <p className="text-xs text-ink-muted tabular-nums mt-0.5" data-para-documentos>{para.documentos}</p>
+          {(para.aosCuidados || para.contato || para.unidade || para.endereco) && (
+            <dl className="mt-2.5 grid grid-cols-[4.25rem_1fr] gap-x-2 gap-y-1.5 text-xs leading-snug">
+              {(para.aosCuidados || para.contato) && (
+                <>
+                  <dt className="text-ink-muted uppercase tracking-wide text-[10px] pt-px">{para.aosCuidados ? "A/C" : "Contato"}</dt>
+                  <dd className="min-w-0" {...(para.aosCuidados ? { "data-para-ac": "" } : {})}>
+                    {para.aosCuidados && <span className="block font-medium text-ink">{para.aosCuidados}</span>}
+                    {para.contato && <span className="block text-ink-muted [overflow-wrap:anywhere]">{para.contato}</span>}
+                  </dd>
+                </>
+              )}
+              {(para.unidade || para.endereco) && (
+                <>
+                  <dt className="text-ink-muted uppercase tracking-wide text-[10px] pt-px">{para.unidade ? "Local" : "Endereço"}</dt>
+                  <dd className="min-w-0" data-para-endereco>
+                    {para.unidade && <span className="block font-medium text-ink">{para.unidade}</span>}
+                    {para.endereco && <span className="block text-ink-muted">{para.endereco}</span>}
+                  </dd>
+                </>
+              )}
+            </dl>
+          )}
         </div>
-        <div className="text-sm space-y-1">
+        <dl className="text-sm print:text-xs space-y-1 md:border-l md:border-surface-border md:pl-5">
           <div className="flex justify-between gap-3">
-            <span className="text-ink-muted">Emissão:</span>
-            <span className="font-medium text-ink">{formatarData(orcamento.criadoEm)}</span>
+            <dt className="text-ink-muted">Emissão</dt>
+            <dd className="font-medium text-ink">{formatarData(orcamento.criadoEm)}</dd>
           </div>
           {orcamento.validadeEm && (
-            <div className="flex justify-between gap-3">
-              <span className="text-ink-muted">Válido até:</span>
-              <span className="font-medium text-ink">{formatarData(orcamento.validadeEm)}</span>
+            <div className="flex justify-between gap-3" data-validade-documento>
+              <dt className="text-ink-muted">Válido até</dt>
+              <dd className="font-medium text-ink">{formatarData(orcamento.validadeEm)}</dd>
             </div>
           )}
-        </div>
-      </div>
+        </dl>
+      </section>
 
-      {/* Cliente */}
-      <div className="py-5 border-b border-surface-border">
-        <p className="text-xs uppercase tracking-wider text-ink-muted mb-2">Cliente</p>
-        <p className="font-semibold text-ink">{cliente.nomeFantasia ?? cliente.nome}</p>
-        {cliente.nomeFantasia && <p className="text-xs text-ink-muted">{cliente.nome}</p>}
-        <p className="text-sm text-ink-muted">CPF/CNPJ {formatarCpfCnpj(cliente.cpfCnpj)}</p>
-        {enderecoCompleto(cliente) && (
-          <p className="text-sm text-ink-muted mt-1">{enderecoCompleto(cliente)}</p>
-        )}
-        <p className="text-sm text-ink-muted">
-          {cliente.telefone && formatarTelefone(cliente.telefone)}
-          {cliente.email && ` · ${cliente.email}`}
-        </p>
-      </div>
+      {/* Objeto */}
+      <section className="py-5 border-b border-surface-border">
+        <Rotulo>Objeto da proposta</Rotulo>
+        <p className="text-base print:text-[13px] font-semibold text-ink">{orcamento.nome}</p>
+        {orcamento.descricao && <p className="text-sm print:text-xs text-ink whitespace-pre-wrap mt-2">{orcamento.descricao}</p>}
+      </section>
 
-      {/* Descrição */}
-      {orcamento.descricao && (
-        <div className="py-5 border-b border-surface-border">
-          <p className="text-xs uppercase tracking-wider text-ink-muted mb-2">Descrição</p>
-          <p className="text-sm text-ink whitespace-pre-wrap">{orcamento.descricao}</p>
-        </div>
-      )}
-
-      {/* Serviços */}
       {orcamento.servicos.length > 0 && (
-        <div className="py-5">
-          <p className="text-xs uppercase tracking-wider text-ink-muted mb-3">Serviços</p>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-surface-alt border-b border-surface-border">
-                <th className="text-left px-3 py-2 font-semibold text-ink-muted text-xs uppercase">Descrição</th>
-                <th className="text-right px-3 py-2 font-semibold text-ink-muted text-xs uppercase w-16">Qtd</th>
-                <th className="text-right px-3 py-2 font-semibold text-ink-muted text-xs uppercase w-28">Unitário</th>
-                <th className="text-right px-3 py-2 font-semibold text-ink-muted text-xs uppercase w-32">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orcamento.servicos.map((s, i) => (
-                <tr key={i} className="border-b border-surface-border">
-                  <td className="px-3 py-2.5 text-ink">
-                    {s.descricao}
-                    {s.observacao && <p className="text-xs text-ink-muted italic">{s.observacao}</p>}
-                  </td>
-                  <td className="px-3 py-2.5 text-right text-ink-muted">{n(s.quantidade)}</td>
-                  <td className="px-3 py-2.5 text-right text-ink-muted">{formatarMoeda(n(s.valorUnitario))}</td>
-                  <td className="px-3 py-2.5 text-right font-semibold text-ink">{formatarMoeda(n(s.valorTotal))}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colSpan={3} className="px-3 py-2 text-right font-semibold text-ink-muted">Subtotal serviços</td>
-                <td className="px-3 py-2 text-right font-bold text-ink">{formatarMoeda(n(orcamento.totalServicos))}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+        <TabelaGrupo titulo="Serviços" rotulo="serviços" itens={orcamento.servicos} grupo={grupoServicos} />
       )}
 
-      {/* Produtos */}
       {orcamento.produtos.length > 0 && (
-        <div className="py-5 border-t border-surface-border">
-          <p className="text-xs uppercase tracking-wider text-ink-muted mb-3">Produtos</p>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-surface-alt border-b border-surface-border">
-                <th className="text-left px-3 py-2 font-semibold text-ink-muted text-xs uppercase">Descrição</th>
-                <th className="text-right px-3 py-2 font-semibold text-ink-muted text-xs uppercase w-16">Qtd</th>
-                <th className="text-right px-3 py-2 font-semibold text-ink-muted text-xs uppercase w-28">Unitário</th>
-                <th className="text-right px-3 py-2 font-semibold text-ink-muted text-xs uppercase w-32">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orcamento.produtos.map((p, i) => (
-                <tr key={i} className="border-b border-surface-border">
-                  <td className="px-3 py-2.5 text-ink">
-                    {p.descricao}
-                    {p.observacao && <p className="text-xs text-ink-muted italic">{p.observacao}</p>}
-                  </td>
-                  <td className="px-3 py-2.5 text-right text-ink-muted">{n(p.quantidade)}</td>
-                  <td className="px-3 py-2.5 text-right text-ink-muted">{formatarMoeda(n(p.valorUnitario))}</td>
-                  <td className="px-3 py-2.5 text-right font-semibold text-ink">{formatarMoeda(n(p.valorTotal))}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colSpan={3} className="px-3 py-2 text-right font-semibold text-ink-muted">Subtotal produtos</td>
-                <td className="px-3 py-2 text-right font-bold text-ink">{formatarMoeda(n(orcamento.totalProdutos))}</td>
-              </tr>
-            </tfoot>
-          </table>
+        <div className="border-t border-surface-border">
+          <TabelaGrupo titulo="Produtos" rotulo="produtos" itens={orcamento.produtos} grupo={grupoProdutos} />
         </div>
       )}
 
       {/* Totais */}
-      <div className="py-5 border-t-2 border-primary-500 flex justify-end">
-        <div className="w-full md:w-96 space-y-2">
-          <div className="flex justify-between text-sm">
-            <span className="text-ink-muted">Subtotal bruto</span>
-            <span className="font-mono text-ink">{formatarMoeda(totalBruto)}</span>
+      <section className="py-4 border-t-2 border-primary-500 flex justify-end break-inside-avoid" data-totais-documento>
+        <div className="w-full md:w-80 space-y-1.5 text-sm print:text-xs">
+          {orcamento.servicos.length > 0 && orcamento.produtos.length > 0 && (
+            <>
+              <div className="flex justify-between px-3">
+                <span className="text-ink-muted">Total serviços</span>
+                <span className="text-ink tabular-nums">{formatarMoeda(grupoServicos.total)}</span>
+              </div>
+              <div className="flex justify-between px-3">
+                <span className="text-ink-muted">Total produtos</span>
+                <span className="text-ink tabular-nums">{formatarMoeda(grupoProdutos.total)}</span>
+              </div>
+            </>
+          )}
+          {/* Destacado e sóbrio: fundo leve da identidade, valor no tom primário (nada de verde gigante) */}
+          <div className="flex justify-between items-center gap-3 rounded-md bg-primary-50 px-3 py-2 print:[print-color-adjust:exact]">
+            <span className="text-xs font-bold uppercase tracking-wider text-primary-700">Total geral</span>
+            <span className="text-lg print:text-base font-bold text-primary-700 tabular-nums" data-total-geral>{formatarMoeda(t.totalGeral)}</span>
           </div>
-          {descontoCalculado > 0 && (
-            <div className="flex justify-between text-sm">
-              <span className="text-ink-muted">
-                Desconto {orcamento.tipoDesconto === "PERCENTUAL" ? `(${desconto}%)` : ""}
-              </span>
-              <span className="font-mono text-red-600">- {formatarMoeda(descontoCalculado)}</span>
+          {vc?.impostosInclusos && (
+            <p className="text-right text-[11px] text-ink-subtle" data-impostos-inclusos>Valores com impostos inclusos.</p>
+          )}
+          {versao === "interna" && t.valorIss > 0 && (
+            <p className="text-right text-[11px] text-ink-subtle print:hidden">Versão interna: no documento do cliente o ISS vem embutido nos preços dos serviços.</p>
+          )}
+        </div>
+      </section>
+
+      {/* Condições: prazo, pagamento, garantias e validade (só os preenchidos) */}
+      {temCondicoes && (
+        <section className="py-5 border-t border-surface-border break-inside-avoid" data-condicoes-documento>
+          <Rotulo>Condições</Rotulo>
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm print:text-xs">
+            {condicoes.map((c) => (
+              <div key={c.chave} {...{ [`data-${c.chave}`]: "" }}>
+                <dt className="text-ink-muted">{c.rotulo}</dt>
+                <dd className="font-medium text-ink">{c.valor}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
+
+      {/* Não incluso (exclusões do escopo) */}
+      {naoIncluso.length > 0 && (
+        <section className="py-5 border-t border-surface-border break-inside-avoid" data-nao-incluso-documento>
+          <Rotulo>Não incluso</Rotulo>
+          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm print:text-xs text-ink list-disc pl-5">
+            {naoIncluso.map((l) => <li key={l}>{l}</li>)}
+          </ul>
+        </section>
+      )}
+
+      {/* Responsável técnico + ART e normas atendidas */}
+      {(rt || normas.length > 0) && (
+        <section className="py-5 border-t border-surface-border grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 break-inside-avoid">
+          {rt && (
+            <div data-rt-documento>
+              <Rotulo>Responsável técnico</Rotulo>
+              <p className="text-sm print:text-xs font-semibold text-ink">{rt.nome}</p>
+              {rt.crea && <p className="text-sm print:text-xs text-ink-muted">CREA {rt.crea}</p>}
+              <p className="text-sm print:text-xs text-ink-muted" data-art>{textoArt(orcamento.artNumero)}</p>
             </div>
           )}
-          <div className="flex justify-between pt-2 border-t-2 border-success-500/40">
-            <span className="text-sm font-bold uppercase tracking-wider text-ink-muted">Total geral</span>
-            <span className="text-2xl font-bold text-success-700">{formatarMoeda(n(orcamento.totalGeral))}</span>
-          </div>
-        </div>
-      </div>
+          {normas.length > 0 && (
+            <div data-normas-documento className={cn(!rt && "sm:col-span-2")}>
+              <Rotulo>Normas atendidas</Rotulo>
+              <ul className="space-y-1.5 text-sm print:text-xs">
+                {normas.map((nm) => (
+                  <li key={nm.codigo} data-norma-documento={nm.codigo}>
+                    <span className="font-semibold text-ink">{nm.titulo}</span>
+                    <span className="text-ink-muted"> — {nm.descricao}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
 
-      {/* Observações */}
-      {orcamento.observacao && variante === "completa" && (
-        <div className="py-5 border-t border-surface-border">
-          <p className="text-xs uppercase tracking-wider text-ink-muted mb-2">Observações</p>
+      {/* Dados bancários (do cadastro da empresa) */}
+      {banco && (
+        <section className="py-5 border-t border-surface-border break-inside-avoid" data-dados-bancarios>
+          <Rotulo>Dados para pagamento</Rotulo>
+          {/* Duas colunas alinhadas: conta (banco, agência, conta) | favorecido (titular, CNPJ, PIX) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1 rounded-md border border-surface-border px-4 py-3 text-sm print:text-xs">
+            {(["conta", "favorecido"] as const).map((col) => {
+              const linhas = banco.filter((l) => l.coluna === col);
+              return linhas.length ? (
+                <dl key={col} className="grid grid-cols-[6.5rem_1fr] gap-x-3 gap-y-1" data-coluna-banco={col}>
+                  {linhas.map((l) => (
+                    <div key={l.rotulo} className="contents">
+                      <dt className="text-ink-muted">{l.rotulo}</dt>
+                      <dd className="font-medium text-ink tabular-nums [overflow-wrap:anywhere]">{l.valor}</dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : null;
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Registro fotográfico (fotos da OS / enviadas para a proposta) */}
+      {fotos.length > 0 && (
+        <section className="py-5 border-t border-surface-border" data-fotos-documento>
+          <Rotulo>Registro fotográfico</Rotulo>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {fotos.map((f) => (
+              <figure key={f.id} className="break-inside-avoid rounded-lg border border-surface-border overflow-hidden bg-white" data-foto-documento={f.id}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`${f.url}?inline=1`} alt={f.legenda ?? f.nome} className="w-full aspect-[4/3] object-cover bg-surface-alt" />
+                <figcaption className="px-2 py-1.5 text-[11px] leading-snug">
+                  <span className="block text-ink">{f.legenda ?? f.nome}</span>
+                  {f.origem && <span className="block text-ink-subtle">{f.origem}</span>}
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Arquivos anexos (datasheet, catálogo) */}
+      {arquivos.length > 0 && (
+        <section className="py-5 border-t border-surface-border break-inside-avoid" data-arquivos-documento>
+          <Rotulo>Anexos</Rotulo>
+          <ul className="space-y-1 text-sm">
+            {arquivos.map((a) => (
+              <li key={a.id} className="flex flex-wrap items-baseline gap-x-2">
+                <a href={a.url} className="font-medium text-primary-600 hover:underline [overflow-wrap:anywhere] print:text-ink print:no-underline" data-arquivo-documento={a.id}>{a.nome}</a>
+                <span className="text-xs text-ink-subtle">{tamanhoLegivel(a.tamanho)}{a.legenda ? ` · ${a.legenda}` : ""}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* Observações internas: só na tela do escritório (o campo do construtor é "Observações internas") */}
+      {orcamento.observacao && variante === "completa" && versao === "interna" && (
+        <section className="py-5 border-t border-surface-border" data-observacoes-internas>
+          <Rotulo>Observações internas</Rotulo>
           <p className="text-sm text-ink whitespace-pre-wrap">{orcamento.observacao}</p>
-        </div>
+        </section>
       )}
 
       {/* Bloco de assinatura */}
       {orcamento.status === "APROVADO" && orcamento.assinaturaUrl && (
-        <div className="py-5 border-t-2 border-success-500">
+        <section className="py-5 border-t-2 border-success-500 break-inside-avoid">
           <p className="text-xs uppercase tracking-wider text-success-700 mb-2 font-bold">Aprovação digital</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1 text-sm">
@@ -294,17 +449,99 @@ export function OrcamentoDocumento({ orcamento, empresa, cliente, variante = "co
               <p className="text-center text-[10px] text-ink-subtle mt-1">Assinatura digital</p>
             </div>
           </div>
-        </div>
+        </section>
       )}
 
       {/* Rodapé */}
-      <div className="mt-6 pt-4 border-t border-surface-border text-center text-xs text-ink-subtle">
+      <footer className="mt-6 pt-4 border-t border-surface-border text-center text-xs text-ink-subtle break-inside-avoid">
         <p>
-          {empresa.nomeFantasia ?? empresa.nome} · CNPJ {formatarCpfCnpj(empresa.cnpj)}
+          {timbre.titulo} · {timbre.documentos}
           {empresa.telefone && ` · ${formatarTelefone(empresa.telefone)}`}
         </p>
-        <p className="mt-1">Documento gerado em {formatarData(new Date(), "dd/MM/yyyy 'às' HH:mm")}</p>
-      </div>
+        <p className="mt-1">Orçamento Nº {numeroFormalOrcamento(orcamento.codigo)} · documento gerado em {formatarData(new Date(), "dd/MM/yyyy 'às' HH:mm")}</p>
+      </footer>
     </div>
+  );
+}
+
+interface GrupoDoc {
+  itens: { quantidade: number; valorUnitario: number; valorTotal: number }[];
+  subtotal: number;
+  desconto: number;
+  total: number;
+  /** Só na versão interna: o ISS em linha própria */
+  issAliquota?: number;
+  valorIss?: number;
+}
+
+/**
+ * Tabela de um grupo. Na impressão: o cabeçalho se repete em cada página (thead) e nenhuma linha
+ * é cortada ao meio; os subtotais ficam FORA da tabela (num tfoot o navegador repetiria o
+ * "Subtotal" em toda página) e não se separam da última linha.
+ */
+function TabelaGrupo({ titulo, rotulo, itens, grupo }: { titulo: string; rotulo: string; itens: ItemDoc[]; grupo: GrupoDoc }) {
+  const comIss = (grupo.valorIss ?? 0) > 0;
+  const mostrarTotal = grupo.desconto > 0 || comIss;
+  const qtds = quantidadesAlinhadas(itens.map((it) => n(it.quantidade)));
+  // O estilo de planilha da casa (lib/planilha.ts), com o ajuste de impressão
+  const th = PLANILHA.th;
+  const td = cn(PLANILHA.td, "print:py-1");
+  return (
+    <section className="py-4" data-grupo-documento={rotulo}>
+      <Rotulo>{titulo}</Rotulo>
+      <div className="print:overflow-visible">
+        {/* Estilo planilha: linhas baixas, fios finos, zebrado leve; números à direita, alinhados pela vírgula */}
+        <table className={cn(PLANILHA.tabela, "print:text-[11px]")} data-tabela-planilha>
+          <thead className="[display:table-header-group]">
+            <tr className={cn(PLANILHA.cabecalho, "print:[print-color-adjust:exact]")}>
+              <th scope="col" className={cn(th, "text-right w-8")}>#</th>
+              <th scope="col" className={cn(th, "text-left")}>Descrição</th>
+              {/* Celular: Qtd e Unitário vão para baixo da descrição (a tabela não rola nem corta) */}
+              <th scope="col" className={cn(th, "hidden sm:table-cell text-right w-16")}>Qtd</th>
+              <th scope="col" className={cn(th, "hidden sm:table-cell text-right w-28")}>Unitário (R$)</th>
+              <th scope="col" className={cn(th, "text-right w-28 sm:w-32")}>Total (R$)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {itens.map((it, i) => (
+              <tr key={i} className={cn(PLANILHA.linha, "break-inside-avoid print:[print-color-adjust:exact]")} data-linha-item>
+                <td className={cn(td, "text-right text-ink-subtle tabular-nums")}>{i + 1}</td>
+                <td className={cn(td, "text-ink")}>
+                  <TextoItemDocumento item={it} />
+                  <p className="sm:hidden text-[11px] text-ink-muted tabular-nums" data-qtd-unitario-celular>{qtds[i]} × {formatarMoeda(grupo.itens[i]?.valorUnitario ?? 0)}</p>
+                </td>
+                <td className={cn(td, "hidden sm:table-cell text-right text-ink-muted tabular-nums whitespace-nowrap")} data-qtd>{qtds[i]}</td>
+                <td className={cn(td, "hidden sm:table-cell text-right text-ink-muted tabular-nums whitespace-nowrap")} data-unitario>{valorSemMoeda(grupo.itens[i]?.valorUnitario ?? 0)}</td>
+                <td className={cn(td, "text-right font-medium text-ink tabular-nums whitespace-nowrap")} data-total-item>{valorSemMoeda(grupo.itens[i]?.valorTotal ?? 0)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <dl className="mt-1 ml-auto w-full sm:w-80 text-[13px] print:text-[11px] break-inside-avoid break-before-avoid" data-subtotais-grupo={rotulo}>
+        <div className="flex justify-between gap-3 px-2 py-1">
+          <dt className="font-semibold text-ink-muted">Subtotal {rotulo}</dt>
+          <dd className="font-bold text-ink tabular-nums">{formatarMoeda(grupo.subtotal)}</dd>
+        </div>
+        {grupo.desconto > 0 && (
+          <div className="flex justify-between gap-3 px-2 py-0.5">
+            <dt className="text-ink-muted">Desconto {rotulo}</dt>
+            <dd className="text-atrasado tabular-nums">− {formatarMoeda(grupo.desconto)}</dd>
+          </div>
+        )}
+        {comIss && (
+          <div className="flex justify-between gap-3 px-2 py-0.5" data-linha-iss-documento>
+            <dt className="font-semibold text-primary-700">ISS ({String(grupo.issAliquota).replace(".", ",")}%)</dt>
+            <dd className="font-semibold text-primary-700 tabular-nums">+ {formatarMoeda(grupo.valorIss!)}</dd>
+          </div>
+        )}
+        {mostrarTotal && (
+          <div className="flex justify-between gap-3 px-2 py-1 border-t border-surface-linha">
+            <dt className="font-semibold text-ink">Total {rotulo}{comIss ? " (com ISS)" : ""}</dt>
+            <dd className="font-bold text-ink tabular-nums">{formatarMoeda(grupo.total)}</dd>
+          </div>
+        )}
+      </dl>
+    </section>
   );
 }

@@ -1,5 +1,25 @@
 import { prisma } from "@/lib/prisma";
-import { gerarNumeroRelatorio } from "@/lib/utils";
+
+/** Campos do equipamento no relatório da OS (ambiente/setor separados do tipo + capacidade). */
+const SELECT_EQUIP_RELATORIO = {
+  id: true, tipo: true, marca: true, modelo: true, numeroSerie: true, localizacao: true,
+  setor: true, capacidade: true, patrimonio: true, nome: true, tipoEquipamento: { select: { nome: true } },
+} as const;
+import { adicionaisDe, blocosAtendidos, SELECT_ADICIONAIS, SELECT_CHECKLIST, SELECT_FOTOS, SELECT_FOTOS_SERVICO } from "@/lib/relatorio-os/dados";
+import { tokenRelatorioNoFormato } from "@/lib/relatorio-atividade-link";
+import { partesBR } from "@/lib/fuso";
+import { comNumero } from "@/lib/numeracao-server";
+
+/** O que o relatório precisa para montar os blocos dos equipamentos ATENDIDOS (checklist, fotos, observação). */
+const INCLUDE_ATENDIMENTO = {
+  equipamentos: { orderBy: { criadoEm: "asc" }, include: { equipamento: { select: SELECT_EQUIP_RELATORIO } } },
+  respostasEquipamento: { include: { campo: { select: { label: true, tipo: true, ordem: true } }, formulario: { select: { nome: true } } } },
+  checklistRespostas: SELECT_CHECKLIST,
+  fotosAtendimento: SELECT_FOTOS,
+  servicosAdicionais: SELECT_ADICIONAIS,
+  // "Fotos do serviço" tiradas no app (as do escritório não têm atividade: não entram)
+  anexosOs: SELECT_FOTOS_SERVICO,
+} as const;
 
 /** Resumo automático de uma atividade: descrição/observação ou 1ª resposta do questionário. */
 function resumoAtividade(a: { observacao?: string | null; resumo?: string | null; respostas: { resposta: string | null; campo: { label: string } }[] }): string {
@@ -29,17 +49,10 @@ export async function gerarRelatoriosDaOs(osId: string, empresaId: string) {
   });
   if (!os) return { criados: 0 };
 
-  const ref = os.dataConclusao ?? new Date();
-  const mesReferencia = ref.getMonth() + 1;
-  const anoReferencia = ref.getFullYear();
+  const ref = partesBR(os.dataConclusao ?? new Date()); // mês/ano de Brasília
+  const mesReferencia = ref.mes + 1;
+  const anoReferencia = ref.ano;
 
-  // Sequencial derivado do maior número de relatório do ano de referência (evita colisão entre anos)
-  const ultimoRel = await prisma.relatorioOs.findFirst({
-    where: { empresaId, numero: { startsWith: `REL-${anoReferencia}-` } },
-    orderBy: { numero: "desc" },
-    select: { numero: true },
-  });
-  let seq = ultimoRel ? Number(ultimoRel.numero.split("-")[2]) : 0;
   let criados = 0;
 
   // Relatórios individuais por atividade concluída
@@ -47,14 +60,14 @@ export async function gerarRelatoriosDaOs(osId: string, empresaId: string) {
   for (const a of atividadesConcluidas) {
     const jaTem = os.relatorios.some((r) => r.escopo === "ATIVIDADE" && r.atividadeId === a.id);
     if (jaTem) continue;
-    seq++;
-    await prisma.relatorioOs.create({
+    // Número pelo contador da empresa (rótulo = ano de referência), sob trava, na transação do INSERT
+    await comNumero(empresaId, "relatorio_os", (numero, tx) => tx.relatorioOs.create({
       data: {
         empresaId,
         ordemServicoId: os.id,
         atividadeId: a.id,
         contratoId: os.contratoId,
-        numero: gerarNumeroRelatorio(seq, anoReferencia),
+        numero,
         tipo: "MANUTENCAO",
         escopo: "ATIVIDADE",
         resumoAutomatico: resumoAtividade(a),
@@ -63,21 +76,20 @@ export async function gerarRelatoriosDaOs(osId: string, empresaId: string) {
         status: "RASCUNHO",
         tokenPublico: crypto.randomUUID(),
       },
-    });
+    }));
     criados++;
   }
 
   // Relatório geral consolidado
   const temGeral = os.relatorios.some((r) => r.escopo === "GERAL");
   if (!temGeral) {
-    seq++;
     const resumoGeral = `${os.atividades.length} atividade(s) · ${atividadesConcluidas.length} concluída(s)`;
-    await prisma.relatorioOs.create({
+    await comNumero(empresaId, "relatorio_os", (numero, tx) => tx.relatorioOs.create({
       data: {
         empresaId,
         ordemServicoId: os.id,
         contratoId: os.contratoId,
-        numero: gerarNumeroRelatorio(seq, anoReferencia),
+        numero,
         tipo: "PMOC",
         escopo: "GERAL",
         resumoAutomatico: resumoGeral,
@@ -86,7 +98,7 @@ export async function gerarRelatoriosDaOs(osId: string, empresaId: string) {
         status: "RASCUNHO",
         tokenPublico: crypto.randomUUID(),
       },
-    });
+    }));
     criados++;
   }
 
@@ -103,6 +115,7 @@ export async function carregarRelatorioPorToken(token: string) {
         include: {
           cliente: true,
           unidade: { select: { id: true, nome: true } },
+          equipamento: { select: SELECT_EQUIP_RELATORIO },
           contrato: {
             select: {
               numero: true, artNumero: true,
@@ -113,8 +126,11 @@ export async function carregarRelatorioPorToken(token: string) {
             orderBy: { criadoEm: "asc" },
             include: {
               tecnico: { select: { nome: true } },
+              equipe: { select: { nome: true } },
+              tecnicosEquipe: { select: { tecnico: { select: { nome: true } } }, orderBy: { criadoEm: "asc" } },
               tipoOs: { select: { nome: true } },
               respostas: { include: { campo: { select: { label: true, tipo: true } } } },
+              ...INCLUDE_ATENDIMENTO,
             },
           },
         },
@@ -124,24 +140,31 @@ export async function carregarRelatorioPorToken(token: string) {
 
   if (!relatorio) return null;
 
-  const equipamentos = relatorio.ordemServico.unidadeId
-    ? await prisma.equipamento.findMany({
-        where: { unidadeId: relatorio.ordemServico.unidadeId, ativo: true },
-        select: { id: true, tipo: true, marca: true, modelo: true, numeroSerie: true, localizacao: true },
-      })
-    : [];
+  // SÓ os equipamentos atendidos (na atividade do relatório, ou na OS toda), nunca todos os da unidade
+  const os = relatorio.ordemServico;
+  const daAtividade = relatorio.escopo === "ATIVIDADE" && !!relatorio.atividadeId;
+  const ativs = daAtividade ? os.atividades.filter((a) => a.id === relatorio.atividadeId) : os.atividades;
+  const { blocos, equipamentosAtendidos: equipamentos, fotosServico } = blocosAtendidos(ativs, os.unidade?.nome ?? null, daAtividade ? null : os.equipamento, os.status === "CONCLUIDA");
 
-  return { relatorio, empresa: relatorio.empresa, os: relatorio.ordemServico, equipamentos };
+  return { relatorio, empresa: relatorio.empresa, os, equipamentos, blocos, adicionais: adicionaisDe(ativs), fotosServico };
 }
 
-/** Carrega os dados de uma atividade para o relatório individual (pela atividade id). */
-export async function carregarAtividade(atividadeId: string) {
+/**
+ * Relatório PÚBLICO de uma atividade (/relatorio/atividade/<id>?t=<token>). Procura SÓ pelo token
+ * (o segredo) e depois confere o id: sem token, token errado e id inexistente dão o mesmo `null`
+ * (→ a mesma 404), e o trabalho no banco não depende do id — trocar o id não revela nada.
+ */
+export async function carregarAtividade(atividadeId: string, token: unknown) {
+  if (!tokenRelatorioNoFormato(token)) return null;
   const atividade = await prisma.atividadeOs.findUnique({
-    where: { id: atividadeId },
+    where: { tokenRelatorio: token },
     include: {
       tecnico: { select: { nome: true } },
+      equipe: { select: { nome: true } },
+      tecnicosEquipe: { select: { tecnico: { select: { nome: true } } }, orderBy: { criadoEm: "asc" } },
       tipoOs: { select: { nome: true, cor: true } },
       respostas: { include: { campo: { select: { label: true, tipo: true } } } },
+      ...INCLUDE_ATENDIMENTO,
       ordemServico: {
         include: {
           empresa: true,
@@ -154,20 +177,17 @@ export async function carregarAtividade(atividadeId: string) {
       },
     },
   });
-  if (!atividade) return null;
+  if (!atividade || atividade.id !== atividadeId) return null;
 
   const os = atividade.ordemServico;
-  const equipamentos = os.unidadeId
-    ? await prisma.equipamento.findMany({
-        where: { unidadeId: os.unidadeId, ativo: true },
-        select: { id: true, tipo: true, marca: true, modelo: true, numeroSerie: true, localizacao: true },
-      })
-    : [];
+  // SÓ os equipamentos atendidos nesta atividade, cada um com o checklist, as fotos e a observação dele
+  const { blocos: equipamentos, fotosServico } = blocosAtendidos([atividade], os.unidade?.nome ?? null);
+  const adicionais = adicionaisDe([atividade]);
 
   const rel = await prisma.relatorioOs.findFirst({
     where: { atividadeId, escopo: "ATIVIDADE" },
     select: { numero: true },
   });
 
-  return { empresa: os.empresa, os, atividade, equipamentos, numero: rel?.numero ?? "RELATÓRIO" };
+  return { empresa: os.empresa, os, atividade, equipamentos, adicionais, fotosServico, numero: rel?.numero ?? "RELATÓRIO" };
 }

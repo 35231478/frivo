@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { acento, corDado, status } from "@/lib/ui/tokens";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getPortalBranding } from "@/lib/portal-server";
@@ -8,28 +9,26 @@ import { pode } from "@/lib/permissoes";
 import { mesclarQrConfig } from "@/lib/qr-config";
 import { LABELS_TIPO_EQUIPAMENTO } from "@/lib/utils";
 import { QrPublicoClient } from "@/components/public/qr-publico-client";
+import { formatarData } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "QR Code", robots: { index: false, follow: false } };
 
 const STATUS_LABEL: Record<string, { label: string; cor: string }> = {
-  ABERTA: { label: "Aberta", cor: "#0EA5E9" },
-  AGUARDANDO_ATENDIMENTO: { label: "Aguardando atendimento", cor: "#F59E0B" },
-  AGENDADA: { label: "Agendada", cor: "#6366F1" },
-  EM_ANDAMENTO: { label: "Em andamento", cor: "#0EA5E9" },
-  PAUSADA: { label: "Pausada", cor: "#94A3B8" },
-  AGUARDANDO_PECA: { label: "Aguardando peça", cor: "#F59E0B" },
-  CONCLUIDA: { label: "Concluída", cor: "#10B981" },
-  CANCELADA: { label: "Cancelada", cor: "#EF4444" },
+  ABERTA: { label: "Aberta", cor: acento.DEFAULT },
+  AGUARDANDO_ATENDIMENTO: { label: "Aguardando atendimento", cor: status.atencao.DEFAULT },
+  AGENDADA: { label: "Agendada", cor: corDado.indigo },
+  EM_ANDAMENTO: { label: "Em andamento", cor: acento.DEFAULT },
+  PAUSADA: { label: "Pausada", cor: status.previsto.DEFAULT },
+  AGUARDANDO_PECA: { label: "Aguardando peça", cor: status.atencao.DEFAULT },
+  CONCLUIDA: { label: "Concluída", cor: status.ok.DEFAULT },
+  CANCELADA: { label: "Cancelada", cor: status.atrasado.DEFAULT },
 };
 
 function soDigitos(v: string) {
   return (v || "").replace(/\D/g, "");
 }
-function dataBR(d: Date | string | null | undefined) {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
+const dataBR = (d: Date | string | null | undefined) => formatarData(d); // dia de Brasília
 
 export default async function QrPublicoPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -37,12 +36,14 @@ export default async function QrPublicoPage({ params }: { params: Promise<{ toke
   const qrcode = await prisma.qrcode.findUnique({
     where: { tokenPublico: token },
     include: {
-      equipamento: { include: { unidade: { select: { nome: true } } } },
+      equipamento: { include: { unidade: { select: { nome: true, clienteId: true } } } },
     },
   });
   if (!qrcode) notFound();
 
   const empresaId = qrcode.empresaId;
+  // QR inativado pela empresa não serve mais a página pública (etiqueta antiga, equipamento trocado…)
+  if (!qrcode.ativo) notFound();
 
   // Equipe interna logada (mesma empresa, com acesso a equipamentos) ganha atalho para o
   // histórico completo no sistema — vale mesmo com a página pública desativada.
@@ -57,8 +58,12 @@ export default async function QrPublicoPage({ params }: { params: Promise<{ toke
     prisma.configuracao.findUnique({ where: { empresaId }, select: { qrConfig: true } }),
   ]);
   const cfg = mesclarQrConfig(configRow?.qrConfig);
+  // "Logado" para as restrições do QR: contato do portal DA MESMA EMPRESA — e, para abrir
+  // chamado, do MESMO CLIENTE do equipamento (contato de outro cliente não abre OS aqui).
   const sessao = await getPortalSession();
-  const logado = !!sessao?.user;
+  const clienteDoEquip = qrcode.equipamento?.unidade?.clienteId ?? null;
+  const logado = !!sessao?.user && sessao.user.empresaId === empresaId
+    && (!clienteDoEquip || sessao.user.clienteId === clienteDoEquip);
 
   // ── Página pública desativada → acesso restrito ──
   if (!cfg.paginaPublicaAtiva) {
@@ -77,7 +82,7 @@ export default async function QrPublicoPage({ params }: { params: Promise<{ toke
           </a>
         )}
         {wpp && (
-          <a href={`https://wa.me/55${wpp}`} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-green-500 text-white px-4 py-2.5 text-sm font-medium">
+          <a href={`https://wa.me/55${wpp}`} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-white border border-surface-border text-ink hover:bg-surface-page px-4 py-2.5 text-sm font-medium">
             Entre em contato pelo WhatsApp
           </a>
         )}
@@ -155,7 +160,7 @@ export default async function QrPublicoPage({ params }: { params: Promise<{ toke
       data: dataBR(o.dataConclusao ?? o.criadoEm),
       tipo: o.atividades[0]?.tipoOs?.nome ?? "Manutenção",
       tecnico: o.atividades[0]?.tecnico?.nome ?? null,
-      status: STATUS_LABEL[o.status] ?? { label: o.status, cor: "#94A3B8" },
+      status: STATUS_LABEL[o.status] ?? { label: o.status, cor: status.previsto.DEFAULT },
     })),
     historicoOculto: cfg.mostrarHistorico && cfg.historicoSomenteLogado && !logado,
     linkEquipe,

@@ -1,27 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { z } from "zod";
-import { TipoCampo } from "@prisma/client";
-
-const campoSchema = z.object({
-  label: z.string().min(1),
-  tipo: z.nativeEnum(TipoCampo),
-  obrigatorio: z.boolean().default(false),
-  ordem: z.number().default(0),
-  opcoes: z.any().optional(),
-});
-
-const formularioSchema = z.object({
-  nome: z.string().min(1),
-  descricao: z.string().optional(),
-  tipoOsId: z.string().optional().nullable(),
-  campos: z.array(campoSchema).optional(),
-});
+import { exigirPermissao } from "@/lib/permissoes-server";
+import { formularioCriarSchema as formularioSchema } from "@/lib/formulario-schema";
+import { respostaRefEmpresa, validarRefEmpresa } from "@/lib/ref-empresa";
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("configuracoes", "visualizar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const empresaId = session.user!.empresaId;
   const { searchParams } = new URL(req.url);
   const tipoOsId = searchParams.get("tipoOsId");
@@ -29,7 +15,7 @@ export async function GET(req: NextRequest) {
   const formularios = await prisma.formularioTemplate.findMany({
     where: { empresaId, ativo: true, ...(tipoOsId && { tipoOsId }) },
     include: {
-      campos: { orderBy: { ordem: "asc" } },
+      campos: { where: { ativo: true }, orderBy: { ordem: "asc" } }, // removidos na edição ficam só no histórico
       tipoOs: { select: { id: true, nome: true, cor: true } },
     },
     orderBy: { nome: "asc" },
@@ -39,8 +25,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("configuracoes", "gerenciar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const empresaId = session.user!.empresaId;
 
   const body = await req.json();
@@ -48,12 +35,14 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos" }, { status: 400 });
 
   const { campos, tipoOsId, ...resto } = parsed.data;
+  try { await validarRefEmpresa("tipoOs", tipoOsId, empresaId, "Tipo de OS"); }
+  catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
   const formulario = await prisma.formularioTemplate.create({
     data: {
       ...resto,
       empresaId,
       tipoOsId: tipoOsId || null,
-      campos: campos ? { create: campos } : undefined,
+      campos: campos ? { create: campos.map(({ id: _id, ...c }) => c) } : undefined,
     },
     include: { campos: { orderBy: { ordem: "asc" } } },
   });

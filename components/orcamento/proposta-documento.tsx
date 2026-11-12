@@ -2,14 +2,8 @@ import {
   formatarCpfCnpj, formatarData, formatarMoeda, formatarTelefone,
   aplicarVariaveis, LABELS_PERIODICIDADE, LABELS_PERFIL_FATURAMENTO,
 } from "@/lib/utils";
+import { TextoItemDocumento, type ItemDoc } from "@/components/orcamento/orcamento-documento";
 
-interface ItemDoc {
-  descricao: string;
-  quantidade: unknown;
-  valorUnitario: unknown;
-  valorTotal: unknown;
-  observacao?: string | null;
-}
 
 export interface PropostaDocumentoProps {
   orcamento: {
@@ -114,7 +108,7 @@ export function PropostaDocumento({ orcamento: o, empresa, cliente, responsavelT
               // eslint-disable-next-line @next/next/no-img-element
               <img src={empresa.logo} alt={empresa.nome} className="w-24 h-24 object-contain rounded-lg border border-surface-border" />
             ) : (
-              <div className="w-24 h-24 rounded-lg bg-gradient-to-br from-primary-500 to-success-500 flex items-center justify-center text-white text-3xl font-bold">
+              <div className="w-24 h-24 rounded-lg bg-acento flex items-center justify-center text-white font-display text-3xl font-bold">
                 {empresa.nome.slice(0, 2).toUpperCase()}
               </div>
             )}
@@ -123,7 +117,7 @@ export function PropostaDocumento({ orcamento: o, empresa, cliente, responsavelT
               {(cliente.nomeFantasia ?? cliente.nome).slice(0, 2).toUpperCase()}
             </div>
           </div>
-          <p className="text-xs uppercase tracking-[0.3em] text-success-700 font-semibold">Proposta Comercial</p>
+          <p className="text-xs uppercase tracking-[0.3em] text-success-700 font-semibold">Proposta comercial</p>
           <h1 className="text-3xl font-bold text-ink mt-3 max-w-xl">CONTRATO DE MANUTENÇÃO</h1>
           <p className="text-lg text-ink-muted mt-2">{o.nome}</p>
           <div className="mt-10 grid grid-cols-3 gap-8 text-sm">
@@ -158,7 +152,7 @@ export function PropostaDocumento({ orcamento: o, empresa, cliente, responsavelT
             <p className="text-sm text-ink-muted">{cliente.telefone ? formatarTelefone(cliente.telefone) : ""}{cliente.email ? ` · ${cliente.email}` : ""}</p>
           </div>
 
-          <div className="rounded-xl border-2 border-success-500/40 bg-success-50/40 p-6 text-center mb-6">
+          <div className="rounded-card border border-ok/30 bg-ok-claro/60 p-6 text-center mb-6">
             <p className="text-xs uppercase tracking-wider text-success-700">Valor mensal</p>
             <p className="text-4xl font-bold text-success-700 mt-1">{formatarMoeda(n(o.valorMensal))}</p>
             <p className="text-xs text-ink-muted mt-1">Frequência: {freqLabel}</p>
@@ -195,7 +189,7 @@ export function PropostaDocumento({ orcamento: o, empresa, cliente, responsavelT
                 <tbody>
                   {o.servicos.map((s, i) => (
                     <tr key={i} className="border-b border-surface-border">
-                      <td className="px-3 py-2.5 text-ink">{s.descricao}{s.observacao && <p className="text-xs text-ink-muted italic">{s.observacao}</p>}</td>
+                      <td className="px-3 py-2.5 text-ink"><TextoItemDocumento item={s} /></td>
                       <td className="px-3 py-2.5 text-right text-ink-muted">{n(s.quantidade)}</td>
                     </tr>
                   ))}

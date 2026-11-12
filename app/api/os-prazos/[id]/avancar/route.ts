@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { exigirPermissao } from "@/lib/permissoes-server";
 import { aplicarVariaveis, whatsappLink } from "@/lib/utils";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function POST(req: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("ordens", "editar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const { id } = await params;
   const empresaId = session.user!.empresaId;
   const usuarioNome = session.user!.name ?? "Sistema";
@@ -60,7 +61,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       };
       const texto = proxima.mensagem
         ? aplicarVariaveis(proxima.mensagem, vars)
-        : `⏰ Nova etapa "${proxima.nome}" iniciada na OS ${prazo.ordemServico.numero}. ${vars.link}`;
+        : `Nova etapa "${proxima.nome}" iniciada na OS ${prazo.ordemServico.numero}. ${vars.link}`;
 
       const telefone =
         proxima.responsavel === "CLIENTE" ? cliente.celular :

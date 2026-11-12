@@ -6,7 +6,7 @@ import { carregarRelatorioPorToken } from "@/lib/relatorio-server";
 import { AutoPrint } from "@/components/orcamento/auto-print";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Imprimir Medição", robots: { index: false, follow: false } };
+export const metadata = { title: "Imprimir medição", robots: { index: false, follow: false } };
 
 export default async function ImprimirMedicaoPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;

@@ -1,16 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
+import { corDado } from "@/lib/ui/tokens";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { exigirPermissao } from "@/lib/permissoes-server";
 import { z } from "zod";
 
 const tipoOsSchema = z.object({
   nome: z.string().min(1, "Nome é obrigatório"),
   descricao: z.string().optional(),
-  cor: z.string().default("#3b82f6"),
+  cor: z.string().default(corDado.azulForte),
   ativo: z.boolean().default(true),
+  /** Trava da conclusão: false = serviço sem equipamento (visita técnica, vistoria, orçamento) */
+  exigeEquipamento: z.boolean().default(true),
 });
 
 export async function GET() {
+  // Leitura de catálogo: qualquer usuário logado (usado nas telas de OS, orçamento, contrato e cliente).
+  // Gravar exige configuracoes.gerenciar.
   const session = await auth();
   if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
   const empresaId = session.user!.empresaId;
@@ -25,8 +31,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("configuracoes", "gerenciar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const empresaId = session.user!.empresaId;
 
   const body = await req.json();

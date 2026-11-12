@@ -8,6 +8,7 @@
  */
 import { formatarCpfCnpj, LABELS_TIPO_EQUIPAMENTO } from "@/lib/utils";
 import type { CampoRapido, OpcaoCadastro, PermissaoCriar } from "@/components/ui/select-cadastro-rapido";
+import { hrefSecaoConfig } from "@/lib/navegacao/configuracoes";
 
 /** POST JSON; devolve o corpo ou lança Error com a mensagem da API. */
 async function postar<T = any>(url: string, corpo: unknown, erroPadrao: string): Promise<T> {
@@ -98,6 +99,19 @@ export const TECNICO = {
   },
 };
 
+/* ───────── Tipo de OS (UX-8/Y3: sem sair da Nova OS ou da atividade) ───────── */
+export const TIPO_OS = {
+  entidade: { singular: "tipo de OS", plural: "tipos de OS" },
+  permissao: { modulo: "configuracoes", acao: "gerenciar" } as PermissaoCriar,
+  link: hrefSecaoConfig("tipos-os"),
+  campos: [
+    { nome: "nome", label: "Nome do tipo", obrigatorio: true, placeholder: "Ex: Higienização" },
+  ] as CampoRapido[],
+  criar(v: Record<string, string>) {
+    return postar("/api/tipos-os", { nome: v.nome }, "Erro ao cadastrar o tipo de OS.");
+  },
+};
+
 /* ───────── Equipamento ───────── */
 export const EQUIPAMENTO = {
   entidade: { singular: "equipamento", plural: "equipamentos" },
@@ -112,7 +126,7 @@ export const EQUIPAMENTO = {
         opcoes: Object.entries(LABELS_TIPO_EQUIPAMENTO).map(([value, label]) => ({ value, label })) },
       { nome: "marca", label: "Marca", obrigatorio: true, colunas: 3, placeholder: "Ex: LG, Carrier" },
       { nome: "modelo", label: "Modelo", obrigatorio: true, colunas: 3 },
-      { nome: "numeroSerie", label: "Nº de série", colunas: 3 },
+      { nome: "numeroSerie", label: "Nº de série", colunas: 3, avisoSerie: true },
       { nome: "localizacao", label: "Ambiente", colunas: 3, placeholder: "Ex: Recepção" },
     ];
   },
@@ -120,7 +134,8 @@ export const EQUIPAMENTO = {
     return postar("/api/equipamentos", {
       unidadeId: v.unidadeId || unidadeId,
       tipo: v.tipo, marca: v.marca, modelo: v.modelo,
-      numeroSerie: v.numeroSerie || undefined, localizacao: v.localizacao || undefined,
+      // sem espaços nas pontas: a etiqueta digitada com espaço não vira "outra" série
+      numeroSerie: v.numeroSerie?.trim() || undefined, localizacao: v.localizacao || undefined,
     }, "Erro ao cadastrar o equipamento.");
   },
 };
@@ -143,7 +158,7 @@ export const PRODUTO = {
   entidade: { singular: "produto", plural: "produtos" },
   // Catálogo de produtos/serviços é cadastro de Configurações.
   permissao: { modulo: "configuracoes", acao: "gerenciar" } as PermissaoCriar,
-  link: "/configuracoes/produtos",
+  link: hrefSecaoConfig("produtos"),
   campos: camposCatalogo("Ex: Filtro de ar 30x30"),
   criar(v: Record<string, string>) {
     return postar("/api/produtos", { nome: v.nome, unidade: v.unidade || "un", valorPadrao: valorNumero(v.valorPadrao) }, "Erro ao cadastrar o produto.");
@@ -153,7 +168,7 @@ export const PRODUTO = {
 export const SERVICO = {
   entidade: { singular: "serviço", plural: "serviços" },
   permissao: { modulo: "configuracoes", acao: "gerenciar" } as PermissaoCriar,
-  link: "/configuracoes/servicos",
+  link: hrefSecaoConfig("servicos"),
   campos: camposCatalogo("Ex: Limpeza de split até 18.000 BTU"),
   criar(v: Record<string, string>) {
     return postar("/api/servicos", { nome: v.nome, unidade: v.unidade || "un", valorPadrao: valorNumero(v.valorPadrao) }, "Erro ao cadastrar o serviço.");

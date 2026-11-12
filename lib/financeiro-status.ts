@@ -1,10 +1,12 @@
+import { diasAteDiaCivil } from "@/lib/fuso";
+
 /**
  * Status visual (puro — server/client) para contas a receber e a pagar.
  * Deriva o rótulo/cor a partir do status armazenado + data de vencimento.
  */
 
 export interface StatusVisual {
-  chave: "PREVISTO" | "A_VENCER" | "VENCE_HOJE" | "VENCIDO" | "PAGO" | "CANCELADO" | "PARCIAL";
+  chave: "PREVISTO" | "A_VENCER" | "VENCE_HOJE" | "VENCIDO" | "PAGO" | "CANCELADO" | "PARCIAL" | "PARCELADO" | "PERDA" | "RENEGOCIADO";
   label: string;
   classe: string;
   diasAtraso: number;
@@ -14,51 +16,60 @@ export interface StatusVisual {
 const CLASSES: Record<string, string> = {
   PREVISTO: "bg-primary-50 text-primary-700",
   A_VENCER: "bg-success-50 text-success-700",
-  VENCE_HOJE: "bg-amber-50 text-amber-700",
-  VENCIDO: "bg-red-100 text-red-700",
+  VENCE_HOJE: "bg-atencao-claro text-atencao-texto",
+  VENCIDO: "bg-atrasado-claro text-atrasado-texto",
   PAGO: "bg-success-100 text-success-700",
-  CANCELADO: "bg-slate-100 text-slate-500",
-  PARCIAL: "bg-amber-50 text-amber-700",
+  CANCELADO: "bg-surface-linha text-ink-muted",
+  PARCIAL: "bg-atencao-claro text-atencao-texto",
+  PARCELADO: "bg-acento-claro text-acento",
+  PERDA: "bg-ink/10 text-ink",
+  RENEGOCIADO: "bg-acento-claro text-acento",
 };
 
-/** Dias entre hoje (00:00) e a data (negativo = vencida). null se sem data. */
-export function diasAteVencimento(dataVencimento: Date | string | null | undefined): number | null {
-  if (!dataVencimento) return null;
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
-  const venc = new Date(dataVencimento);
-  venc.setHours(0, 0, 0, 0);
-  return Math.round((venc.getTime() - hoje.getTime()) / 86400000);
+/**
+ * Dias de hoje (em Brasília) até o vencimento (negativo = vencida). null se sem data. O vencimento
+ * é dia civil: no próprio dia é "Vence hoje" até a meia-noite de Brasília, em qualquer navegador.
+ */
+export function diasAteVencimento(dataVencimento: Date | string | null | undefined, agora: Date = new Date()): number | null {
+  return diasAteDiaCivil(dataVencimento, agora);
 }
 
 function badge(chave: StatusVisual["chave"], label: string, diasAtraso = 0): StatusVisual {
   return { chave, label, classe: CLASSES[chave], diasAtraso, linhaVermelha: chave === "VENCIDO" };
 }
 
-export function statusVisualReceber(status: string, dataVencimento: Date | string | null): StatusVisual {
+export function statusVisualReceber(status: string, dataVencimento: Date | string | null, agora: Date = new Date()): StatusVisual {
   if (status === "RECEBIDO") return badge("PAGO", "Pago");
   if (status === "CANCELADO") return badge("CANCELADO", "Cancelado");
-  const dias = diasAteVencimento(dataVencimento);
+  // A conta dividida (o lançamento): a situação de cada parcela está na parcela
+  if (status === "PARCELADO") return badge("PARCELADO", "Parcelado");
+  // Inadimplência dada como perdida: fora do a receber (não é "vencido" — não pinta a linha)
+  if (status === "PERDA") return badge("PERDA", "Perda");
+  // O saldo foi para uma renegociação (a cobrança nova está na lista): não é "vencido"
+  if (status === "RENEGOCIADO") return badge("RENEGOCIADO", "Renegociada");
+  // C6/F5: previsão de contrato ainda não faturada NÃO é cobrança vencida — o selo
+  // "Vencido" (e a linha vermelha) só valem para conta liberada (A_RECEBER/ATRASADO).
+  if (status === "PREVISTO") return badge("PREVISTO", "Previsto");
+  const dias = diasAteVencimento(dataVencimento, agora);
   if (dias === null) return badge("PREVISTO", "Previsto");
   if (dias < 0) return badge("VENCIDO", `Vencido ${-dias} ${-dias === 1 ? "dia" : "dias"}`, -dias);
   if (dias === 0) return badge("VENCE_HOJE", "Vence hoje");
-  if (status === "PREVISTO") return badge("PREVISTO", "Previsto");
   return badge("A_VENCER", "A vencer");
 }
 
-export function statusVisualPagar(status: string, dataVencimento: Date | string | null): StatusVisual {
+export function statusVisualPagar(status: string, dataVencimento: Date | string | null, agora: Date = new Date()): StatusVisual {
   if (status === "PAGO_TOTAL") return badge("PAGO", "Pago");
   if (status === "CANCELADO") return badge("CANCELADO", "Cancelado");
-  const dias = diasAteVencimento(dataVencimento);
+  const dias = diasAteVencimento(dataVencimento, agora);
   if (dias !== null && dias < 0) return badge("VENCIDO", `Vencido ${-dias} ${-dias === 1 ? "dia" : "dias"}`, -dias);
   if (status === "PAGO_PARCIAL") return badge("PARCIAL", "Pago parcial");
   if (dias === 0) return badge("VENCE_HOJE", "Vence hoje");
-  if (dias === null) return badge("PREVISTO", "Pendente");
+  if (dias === null) return badge("PREVISTO", "Em aberto");
   return badge("A_VENCER", "A vencer");
 }
 
 export const LABELS_STATUS_CONTA_PAGAR: Record<string, string> = {
-  PENDENTE: "Pendente",
+  PENDENTE: "Em aberto",
   PAGO_PARCIAL: "Pago parcial",
   PAGO_TOTAL: "Pago",
   VENCIDO: "Vencido",

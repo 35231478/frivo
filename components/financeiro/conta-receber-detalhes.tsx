@@ -1,0 +1,330 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { ExternalLink, Download, Loader2 } from "lucide-react";
+import { Drawer } from "@/components/ui/drawer";
+import { Button } from "@/components/ui/button";
+import { cn, formatarData, formatarDataHora, formatarMoeda, formatarCpfCnpj, LABELS_FORMA_PAGAMENTO } from "@/lib/utils";
+import { statusVisualReceber } from "@/lib/financeiro-status";
+import { LABEL_STATUS_NOTA, type StatusNota } from "@/lib/nfse/nota";
+import {
+  hrefContrato, hrefMedicao, hrefOrcamento, hrefOs, ROTULO_EVENTO_CR, ROTULO_ORIGEM, type OrigemConta,
+} from "@/lib/financeiro/conta-receber-gestao";
+import { abrirPdfBoleto } from "@/components/financeiro/conta-receber-acoes";
+import type { Detalhamento } from "@/lib/financeiro/retencoes";
+import { ORIGEM_RECEBIMENTO } from "@/lib/financeiro/perda-estorno";
+import { FaturasDaVenda } from "@/components/faturamento/faturas-da-venda";
+import type { FaturamentoOrigem } from "@/lib/faturamento/fatura";
+
+/** O que GET /api/contas-receber/[id] devolve (datas em texto). */
+export interface DetalheConta {
+  id: string; numero: string; descricao: string; valor: number; status: string;
+  dataVencimento: string | null; dataRecebimento: string | null; criadoEm: string;
+  formaPagamento: string | null; banco: string | null; observacao: string | null;
+  canceladaEm: string | null; motivoCancelamento: string | null;
+  categoria: string | null; categoriaFinanceira: { nome: string; ativo: boolean } | null;
+  centroCusto: { nome: string; ativo: boolean } | null; contaBancaria: { nome: string; ativo: boolean } | null;
+  cliente: { id: string; nome: string; cpfCnpj: string | null };
+  origem: OrigemConta;
+  medicao: { id: string; numero: string; rotulo?: string; relatorios: { id: string; numero: string }[] } | null;
+  /** Faturas da venda (origem faturada em partes, P5); null quando é fatura única */
+  faturamento?: FaturamentoOrigem | null;
+  retencoes?: Detalhamento | null;
+  orcamento: { id: string; codigo: string; nome: string } | null;
+  contrato: { id: string; numero: string } | null;
+  ordens: { id: string; numero: string }[];
+  itens: { descricao: string; quantidade: number; valorUnitario: number; valorTotal: number }[];
+  boleto: { status: string; emitidoEm: string | null; vencimento: string | null; linhaDigitavel: string | null; temPdf: boolean } | null;
+  notas: { id: string; numero: string | null; status: string }[];
+  eventos: { id: string; tipo: string; detalhe: string | null; criadoEm: string; usuario: string | null }[];
+  /** Baixa parcial: quanto entrou, quanto falta e cada recebimento */
+  valorRecebido?: number; saldo?: number;
+  recebimentos?: {
+    id: string; valor: number; data: string; formaPagamento: string | null; origem: string; observacao: string | null; contaBancaria: string | null; usuario: string | null;
+    /** Estornado: riscado, fora das somas */
+    estornadoEm?: string | null; motivoEstorno?: string | null; estornadoPor?: string | null;
+  }[];
+  /** Recebida antes do histórico de recebimentos (estornável como um recebimento só) */
+  baixaAntiga?: boolean;
+  /** Marcada como perda: quanto, quando, por quê, quem */
+  perda?: { valor: number; em: string | null; motivo: string | null; por: string | null } | null;
+  /** Renegociada: a renegociação para onde foi o saldo */
+  renegociadaEm?: { id: string; numero: string; status: string; valor: number } | null;
+  /** É (parte de) uma renegociação: de onde veio, encargos, quanto entrou */
+  renegociacao?: {
+    id: string; numero: string; status: string; total: number; saldo: number; juros: number; multa: number; desconto: number; recebido: number;
+    composicao: { principal: number; encargos: number; desconto: number };
+    originais: { id: string; numero: string; saldo: number; recebido: number }[];
+    motivoNaoDesfazer: string | null;
+  } | null;
+  /** Parcelas: a própria (n/N), o lançamento e as irmãs */
+  parcelaNumero?: number | null; parcelaTotal?: number | null; lancamentoId?: string | null;
+  lancamento?: { id: string; numero: string; valor: number } | null;
+  parcelas?: { id: string; numero: string; valor: number; status: string; dataVencimento: string | null; parcelaNumero: number | null; parcelaTotal: number | null; boletoStatus: string | null; valorRecebido: number; saldo: number }[];
+}
+
+
+const STATUS_BOLETO: Record<string, string> = { PENDENTE: "Pendente", EMITIDO: "Emitido", PAGO: "Pago", CANCELADO: "Cancelado", VENCIDO: "Vencido" };
+
+/** Gaveta "Ver detalhes": origem com links, itens, recebimento, documentos (boleto, NFS-e) e a linha do tempo. */
+export function ContaReceberDetalhes({ id, onFechar, versao = 0, onAbrirConta }: {
+  id: string | null; onFechar: () => void; versao?: number;
+  /** Abre outra conta na mesma gaveta (a parcela irmã) */
+  onAbrirConta?: (id: string) => void;
+}) {
+  const [d, setD] = useState<DetalheConta | null>(null);
+  const [erro, setErro] = useState("");
+  const [baixando, setBaixando] = useState(false);
+
+  useEffect(() => {
+    if (!id) return;
+    let vivo = true;
+    setD(null); setErro("");
+    fetch(`/api/contas-receber/${id}`)
+      .then(async (r) => { const j = await r.json().catch(() => ({})); if (!vivo) return; if (r.ok) setD(j); else setErro(j.erro === "Não encontrado" ? "Conta não encontrada (ou excluída)." : j.erro ?? "Não foi possível carregar."); })
+      .catch(() => vivo && setErro("Sem conexão. Tente novamente."));
+    return () => { vivo = false; };
+  }, [id, versao]);
+
+  const sv = d ? statusVisualReceber(d.status, d.dataVencimento) : null;
+  return (
+    <Drawer aberto={!!id} onFechar={onFechar} titulo={d ? `Cobrança ${d.numero}` : "Cobrança"} largura="w-full sm:max-w-xl">
+      <div className="space-y-5" data-detalhes-conta={id ?? ""}>
+        {erro && <p role="alert" className="text-sm text-atrasado-texto">{erro}</p>}
+        {!d && !erro && <p className="flex items-center gap-2 text-sm text-ink-muted"><Loader2 className="w-4 h-4 animate-spin" /> Carregando…</p>}
+        {d && sv && (
+          <>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-semibold text-ink">{d.cliente.nome}</p>
+                {d.cliente.cpfCnpj && <p className="text-xs text-ink-subtle">{formatarCpfCnpj(d.cliente.cpfCnpj)}</p>}
+                <p className="text-sm text-ink-muted mt-1">{d.descricao}</p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-lg font-bold text-success-700" data-detalhe-valor>{formatarMoeda(d.valor)}</p>
+                <span className={cn("inline-flex text-xs font-semibold px-2.5 py-1 rounded-full mt-1", sv.classe)} data-detalhe-status>{sv.label}</span>
+              </div>
+            </div>
+
+            {/* Baixa parcial: o que entrou × o que falta (como no Conta Azul) */}
+            {(d.valorRecebido ?? 0) > 0 && d.status !== "RECEBIDO" && (
+              <dl className="grid grid-cols-2 gap-2 text-sm" data-detalhe-parcial>
+                <div className="rounded-lg bg-ok-claro px-3 py-2"><dt className="text-xs text-ink-muted">Valor recebido</dt><dd className="font-semibold text-ok-texto tabular-nums">{formatarMoeda(d.valorRecebido ?? 0)}</dd></div>
+                <div className="rounded-lg bg-atencao-claro px-3 py-2"><dt className="text-xs text-ink-muted">Valor em aberto</dt><dd className="font-semibold text-atencao-texto tabular-nums" data-detalhe-saldo>{formatarMoeda(d.saldo ?? 0)}</dd></div>
+              </dl>
+            )}
+
+            <Secao titulo="Origem">
+              <div className="flex flex-wrap gap-2" data-detalhe-origem={d.origem}>
+                {d.origem === "MANUAL" && <span className="text-sm text-ink-muted">{ROTULO_ORIGEM.MANUAL}</span>}
+                {d.orcamento && <Vinculo href={hrefOrcamento(d.orcamento.id)}>Orçamento {d.orcamento.codigo}</Vinculo>}
+                {d.medicao && <Vinculo href={hrefMedicao(d.medicao.id)}>{d.medicao.rotulo ?? `Medição ${d.medicao.numero}`}</Vinculo>}
+                {d.medicao?.relatorios.map((r) => <span key={r.id} className="text-xs px-2 py-1 rounded-full bg-surface-alt text-ink-muted">Relatório {r.numero}</span>)}
+                {d.contrato && <Vinculo href={hrefContrato(d.contrato.id)}>Contrato {d.contrato.numero}</Vinculo>}
+                {d.ordens.map((o) => <Vinculo key={o.id} href={hrefOs(o.id)}>OS {o.numero}</Vinculo>)}
+              </div>
+            </Secao>
+
+            {/* Faturas desta venda (origem faturada em partes, P5): a parte desta conta fica destacada */}
+            {d.faturamento && (
+              <Secao titulo="Faturas desta venda">
+                <FaturasDaVenda faturamento={d.faturamento} atualId={d.medicao?.id} />
+              </Secao>
+            )}
+
+            <Secao titulo="Cobrança">
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                <Linha rotulo="Vencimento" valor={d.dataVencimento ? formatarData(d.dataVencimento) : "—"} />
+                <Linha rotulo="Recebida em" valor={d.dataRecebimento ? formatarData(d.dataRecebimento) : "—"} />
+                <Linha rotulo="Forma de pagamento" valor={d.formaPagamento ? LABELS_FORMA_PAGAMENTO[d.formaPagamento] ?? d.formaPagamento : "—"} />
+                <Linha rotulo="Conta bancária" valor={d.contaBancaria ? `${d.contaBancaria.nome}${d.contaBancaria.ativo ? "" : " (inativa)"}` : d.banco ?? "—"} />
+                <Linha rotulo="Categoria" valor={d.categoriaFinanceira ? `${d.categoriaFinanceira.nome}${d.categoriaFinanceira.ativo ? "" : " (inativa)"}` : d.categoria ? `${d.categoria} (sem cadastro)` : "—"} />
+                <Linha rotulo="Centro de custo" valor={d.centroCusto ? `${d.centroCusto.nome}${d.centroCusto.ativo ? "" : " (inativo)"}` : "—"} />
+              </dl>
+              {d.retencoes && (
+                <dl className="mt-3 rounded-lg bg-surface-alt p-3 text-sm space-y-1" data-detalhe-retencoes>
+                  <div className="flex justify-between"><dt className="text-ink-muted">Valor da nota</dt><dd>{formatarMoeda(d.retencoes.bruto)}</dd></div>
+                  {d.retencoes.linhas.map((l) => (
+                    <div key={l.chave} className="flex justify-between"><dt className="text-ink-muted">{l.rotulo} ({String(l.aliquota).replace(".", ",")}%)</dt><dd>− {formatarMoeda(l.valor)}</dd></div>
+                  ))}
+                  <div className="flex justify-between font-semibold border-t border-surface-border pt-1"><dt>Líquido</dt><dd>{formatarMoeda(d.retencoes.liquido)}</dd></div>
+                </dl>
+              )}
+              {d.observacao && <p className="text-sm text-ink mt-2 whitespace-pre-wrap" data-detalhe-obs>{d.observacao}</p>}
+              {d.perda && (
+                <p className="text-sm text-ink mt-2 rounded-lg bg-surface-alt px-3 py-2" data-detalhe-perda>
+                  <strong className="font-semibold">Perda de {formatarMoeda(d.perda.valor)}</strong>
+                  {d.perda.em ? ` em ${formatarData(d.perda.em)}` : ""}{d.perda.por ? ` por ${d.perda.por}` : ""}
+                  {d.perda.motivo ? ` — ${d.perda.motivo}` : ""}
+                  {(d.valorRecebido ?? 0) > 0 && <span className="block text-xs text-ink-muted mt-0.5">Já recebido antes: {formatarMoeda(d.valorRecebido ?? 0)} (continua recebido).</span>}
+                </p>
+              )}
+              {d.renegociadaEm && (
+                <p className="text-sm text-ink mt-2 rounded-lg bg-acento-claro px-3 py-2" data-detalhe-renegociada>
+                  Saldo renegociado em{" "}
+                  {onAbrirConta
+                    ? <button type="button" onClick={() => onAbrirConta(d.renegociadaEm!.id)} className="font-semibold text-acento hover:underline" data-abrir-renegociacao>{d.renegociadaEm.numero}</button>
+                    : <strong>{d.renegociadaEm.numero}</strong>}
+                  {(d.valorRecebido ?? 0) > 0 && <span className="block text-xs text-ink-muted mt-0.5">Já recebido antes: {formatarMoeda(d.valorRecebido ?? 0)} (continua recebido).</span>}
+                </p>
+              )}
+              {d.status === "CANCELADO" && d.motivoCancelamento && (
+                <p className="text-sm text-atrasado-texto mt-2" data-detalhe-cancelamento>Cancelada{d.canceladaEm ? ` em ${formatarData(d.canceladaEm)}` : ""}: {d.motivoCancelamento}</p>
+              )}
+            </Secao>
+
+            {(d.parcelas?.length ?? 0) > 0 && (
+              <Secao titulo={d.lancamento ? `Parcelas de ${d.lancamento.numero} · total ${formatarMoeda(d.lancamento.valor)}` : "Parcelas"}>
+                <ul className="divide-y divide-surface-border text-sm border border-surface-border rounded-lg" data-detalhe-parcelas>
+                  {d.parcelas!.map((p) => {
+                    const svp = statusVisualReceber(p.status, p.dataVencimento);
+                    const atual = p.id === d.id;
+                    const linha = (
+                      <>
+                        <span className="tabular-nums text-ink-muted w-10 shrink-0">{p.parcelaNumero}/{p.parcelaTotal}</span>
+                        <span className="tabular-nums text-ink-muted shrink-0">{p.dataVencimento ? formatarData(p.dataVencimento) : "—"}</span>
+                        <span className={cn("text-[11px] font-semibold px-2 py-0.5 rounded-full", svp.classe)}>{svp.label}</span>
+                        <span className="ml-auto font-medium text-ink tabular-nums">{formatarMoeda(p.valor)}</span>
+                      </>
+                    );
+                    return (
+                      <li key={p.id} data-parcela-detalhe={p.parcelaNumero} aria-current={atual ? "true" : undefined}>
+                        {atual || !onAbrirConta
+                          ? <div className={cn("flex items-center gap-3 px-3 py-2", atual && "bg-primary-50/60")}>{linha}</div>
+                          : <button type="button" onClick={() => onAbrirConta(p.id)} className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-surface-alt/60" aria-label={`Abrir a parcela ${p.parcelaNumero}`}>{linha}</button>}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </Secao>
+            )}
+
+            {d.renegociacao && (
+              <Secao titulo={`Renegociação ${d.renegociacao.numero}`}>
+                <div className="space-y-2 text-sm" data-detalhe-renegociacao>
+                  <p className="text-ink-muted">
+                    De:{" "}
+                    {d.renegociacao.originais.map((o, k) => (
+                      <span key={o.id}>
+                        {k > 0 && ", "}
+                        {onAbrirConta
+                          ? <button type="button" onClick={() => onAbrirConta(o.id)} className="text-acento hover:underline" data-abrir-original={o.id}>{o.numero}</button>
+                          : o.numero}
+                        {" "}<span className="tabular-nums">({formatarMoeda(o.saldo)})</span>
+                      </span>
+                    ))}
+                  </p>
+                  <dl className="bg-surface-alt rounded-lg p-3 space-y-0.5" data-composicao-renegociacao>
+                    <div className="flex justify-between"><dt className="text-ink-muted">Saldo renegociado</dt><dd className="tabular-nums">{formatarMoeda(d.renegociacao.saldo)}</dd></div>
+                    {d.renegociacao.juros > 0 && <div className="flex justify-between"><dt className="text-ink-muted">+ Juros</dt><dd className="tabular-nums">{formatarMoeda(d.renegociacao.juros)}</dd></div>}
+                    {d.renegociacao.multa > 0 && <div className="flex justify-between"><dt className="text-ink-muted">+ Multa</dt><dd className="tabular-nums">{formatarMoeda(d.renegociacao.multa)}</dd></div>}
+                    {d.renegociacao.desconto > 0 && <div className="flex justify-between"><dt className="text-ink-muted">− Desconto</dt><dd className="tabular-nums">{formatarMoeda(d.renegociacao.desconto)}</dd></div>}
+                    <div className="flex justify-between font-semibold border-t border-surface-border pt-1"><dt>Total</dt><dd className="tabular-nums">{formatarMoeda(d.renegociacao.total)}</dd></div>
+                  </dl>
+                  {d.renegociacao.recebido > 0 && (
+                    <p className="text-xs text-ink-muted" data-recebido-renegociacao>
+                      Recebido na renegociação: {formatarMoeda(d.renegociacao.recebido)}
+                      {d.renegociacao.composicao.encargos > 0 && ` · ${formatarMoeda(d.renegociacao.composicao.encargos)} de juros/multa (receita financeira)`}
+                    </p>
+                  )}
+                  {d.renegociacao.status === "CANCELADO" && <p className="text-xs text-atrasado-texto">Renegociação desfeita.</p>}
+                </div>
+              </Secao>
+            )}
+
+            {(d.recebimentos?.length ?? 0) > 0 && (
+              <Secao titulo="Recebimentos">
+                <ol className="space-y-1.5 text-sm" data-detalhe-recebimentos>
+                  {d.recebimentos!.map((r) => (
+                    <li key={r.id} className="flex items-start justify-between gap-3" data-recebimento={r.id} data-estornado={r.estornadoEm ? "" : undefined}>
+                      <div className="min-w-0">
+                        <p className={cn("text-ink", r.estornadoEm && "line-through text-ink-subtle")}>{formatarData(r.data)} · {ORIGEM_RECEBIMENTO[r.origem] ?? r.origem}</p>
+                        <p className="text-xs text-ink-subtle">{[r.formaPagamento ? LABELS_FORMA_PAGAMENTO[r.formaPagamento] ?? r.formaPagamento : null, r.contaBancaria, r.usuario, r.observacao].filter(Boolean).join(" · ")}</p>
+                        {r.estornadoEm && (
+                          <p className="text-xs text-atrasado-texto" data-estorno-detalhe>
+                            Estornado em {formatarData(r.estornadoEm)}{r.estornadoPor ? ` por ${r.estornadoPor}` : ""}{r.motivoEstorno ? ` — ${r.motivoEstorno}` : ""}
+                          </p>
+                        )}
+                      </div>
+                      <span className={cn("font-semibold tabular-nums shrink-0", r.estornadoEm ? "line-through text-ink-subtle" : "text-success-700")}>{formatarMoeda(r.valor)}</span>
+                    </li>
+                  ))}
+                </ol>
+              </Secao>
+            )}
+
+            {d.itens.length > 0 && (
+              <Secao titulo="Itens">
+                <ul className="divide-y divide-surface-border text-sm" data-detalhe-itens>
+                  {d.itens.map((i, k) => (
+                    <li key={k} className="flex items-start justify-between gap-3 py-1.5">
+                      <span className="text-ink min-w-0">{i.descricao} <span className="text-ink-subtle">× {i.quantidade.toLocaleString("pt-BR")}</span></span>
+                      <span className="text-ink font-medium shrink-0">{formatarMoeda(i.valorTotal)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </Secao>
+            )}
+
+            <Secao titulo="Documentos">
+              <div className="space-y-2 text-sm">
+                {!d.boleto && !d.notas.length && <p className="text-ink-muted">Nenhum boleto ou nota fiscal.</p>}
+                {d.boleto && (
+                  <div className="flex flex-wrap items-center justify-between gap-2" data-detalhe-boleto={d.boleto.status}>
+                    <span className="text-ink">Boleto Banco Inter · {STATUS_BOLETO[d.boleto.status] ?? d.boleto.status}{d.boleto.vencimento ? ` · vence ${formatarData(d.boleto.vencimento)}` : ""}</span>
+                    {d.boleto.temPdf && d.boleto.status !== "CANCELADO" && (
+                      <Button variant="secondary" loading={baixando} onClick={async () => { setBaixando(true); try { await abrirPdfBoleto(d.id); } finally { setBaixando(false); } }}><Download className="w-4 h-4" /> Boleto (PDF)</Button>
+                    )}
+                    {d.boleto.linhaDigitavel && <p className="w-full font-mono text-xs text-ink-muted break-all">{d.boleto.linhaDigitavel}</p>}
+                  </div>
+                )}
+                {d.notas.map((n) => (
+                  <Link key={n.id} href={`/financeiro/notas-fiscais?q=${encodeURIComponent(n.numero ?? d.numero)}`} className="flex items-center justify-between gap-2 text-acento hover:underline" data-detalhe-nota={n.status}>
+                    <span>NFS-e {n.numero ?? "(sem número)"} · {LABEL_STATUS_NOTA[n.status as StatusNota] ?? n.status}</span><ExternalLink className="w-3.5 h-3.5" aria-hidden />
+                  </Link>
+                ))}
+              </div>
+            </Secao>
+
+            <Secao titulo="Histórico">
+              <ol className="space-y-2 text-sm" data-detalhe-historico>
+                {d.eventos.map((e) => (
+                  <li key={e.id} data-evento={e.tipo}>
+                    <p className="text-ink"><strong className="font-semibold">{ROTULO_EVENTO_CR[e.tipo] ?? e.tipo}</strong>{e.detalhe ? ` — ${e.detalhe}` : ""}</p>
+                    <p className="text-xs text-ink-subtle">{formatarDataHora(e.criadoEm)}{e.usuario ? ` · ${e.usuario}` : ""}</p>
+                  </li>
+                ))}
+                {!d.eventos.some((e) => e.tipo === "CRIADA") && (
+                  <li data-evento="CRIADA">
+                    <p className="text-ink"><strong className="font-semibold">Criada</strong>{d.origem !== "MANUAL" ? ` — ${ROTULO_ORIGEM[d.origem]}` : ""}</p>
+                    <p className="text-xs text-ink-subtle">{formatarDataHora(d.criadoEm)}</p>
+                  </li>
+                )}
+              </ol>
+            </Secao>
+          </>
+        )}
+      </div>
+    </Drawer>
+  );
+}
+
+function Secao({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <h3 className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider mb-2">{titulo}</h3>
+      {children}
+    </section>
+  );
+}
+function Linha({ rotulo, valor }: { rotulo: string; valor: string }) {
+  return <div className="flex justify-between gap-4"><dt className="text-ink-muted">{rotulo}</dt><dd className="text-ink font-medium text-right">{valor}</dd></div>;
+}
+function Vinculo({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link href={href} className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-acento-claro text-acento hover:underline" data-vinculo={href}>
+      {children} <ExternalLink className="w-3 h-3" aria-hidden />
+    </Link>
+  );
+}

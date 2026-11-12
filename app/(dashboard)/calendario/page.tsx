@@ -8,15 +8,19 @@ import { CalendarioPainel } from "@/components/calendario/calendario-painel";
 import type { CelulaDia, CardOs } from "@/components/calendario/calendario-grid";
 import { SOLICITACAO_PENDENTE } from "@/lib/solicitacoes";
 import { pode } from "@/lib/permissoes";
+import { prazoVencido } from "@/lib/os/prazos";
+import { chaveDiaBR, chaveDiaCivil, partesBR } from "@/lib/fuso";
+import { gridCalendario, posicaoNoCalendario } from "@/lib/calendario/grid";
 import { SolicitacoesGaveta } from "@/components/calendario/solicitacoes-gaveta";
-import { CalendarDays, ChevronLeft, ChevronRight, Repeat } from "lucide-react";
+import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, Repeat } from "lucide-react";
 
 export const metadata: Metadata = { title: "Calendário" };
 
 const FINALIZADAS = ["CONCLUIDA", "CANCELADA"];
 
+/** Chave "AAAA-MM-DD" de um dia do grid (dia civil, meia-noite UTC). */
 function chave(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return chaveDiaCivil(d);
 }
 
 export default async function CalendarioPage({
@@ -28,36 +32,17 @@ export default async function CalendarioPage({
   const session = await auth();
   const empresaId = session!.user!.empresaId;
 
+  // O calendário inteiro no relógio de Brasília (o servidor roda em UTC): "hoje", os dias do grid,
+  // a hora e o dia de cada card — o mesmo que o app do técnico mostra
   const hoje = new Date();
-  const mes = Number(sp.mes) || hoje.getMonth() + 1;
-  const ano = Number(sp.ano) || hoje.getFullYear();
+  const hojeBR = partesBR(hoje);
+  const mes = Number(sp.mes) || hojeBR.mes + 1;
+  const ano = Number(sp.ano) || hojeBR.ano;
   const view = sp.view === "semanal" ? "semanal" : "mensal";
 
-  // Intervalo visível
-  let gridInicio: Date;
-  let gridFim: Date;
-  const dias: Date[] = [];
-
-  if (view === "semanal") {
-    const diaRef = Number(sp.dia) || (hoje.getMonth() + 1 === mes && hoje.getFullYear() === ano ? hoje.getDate() : 1);
-    const ref = new Date(ano, mes - 1, diaRef);
-    const ini = new Date(ref);
-    ini.setDate(ref.getDate() - ref.getDay()); // domingo
-    gridInicio = new Date(ini.getFullYear(), ini.getMonth(), ini.getDate(), 0, 0, 0);
-    for (let i = 0; i < 7; i++) dias.push(new Date(ini.getFullYear(), ini.getMonth(), ini.getDate() + i));
-    gridFim = new Date(dias[6].getFullYear(), dias[6].getMonth(), dias[6].getDate(), 23, 59, 59);
-  } else {
-    const primeiro = new Date(ano, mes - 1, 1);
-    const ini = new Date(primeiro);
-    ini.setDate(1 - primeiro.getDay()); // volta ao domingo
-    gridInicio = new Date(ini.getFullYear(), ini.getMonth(), ini.getDate(), 0, 0, 0);
-    // 6 semanas cobrem qualquer mês
-    for (let i = 0; i < 42; i++) dias.push(new Date(ini.getFullYear(), ini.getMonth(), ini.getDate() + i));
-    const ult = dias[dias.length - 1];
-    gridFim = new Date(ult.getFullYear(), ult.getMonth(), ult.getDate(), 23, 59, 59);
-  }
-
-  const periodo = { gte: gridInicio, lte: gridFim };
+  // Grid e limites no relógio de Brasília (lib/calendario/grid.ts)
+  const diaRef = Number(sp.dia) || (hojeBR.mes + 1 === mes && hojeBR.ano === ano ? hojeBR.dia : 1);
+  const { dias, chaves: chavesGrid, periodo, periodoDia } = gridCalendario({ ano, mes, view, dia: diaRef });
 
   // Carrega TODAS as OS do período. Os filtros do painel são aplicados no cliente
   // (esmaecendo os cards que não correspondem, sem removê-los do calendário).
@@ -70,6 +55,7 @@ export default async function CalendarioPage({
     NOT: { ...SOLICITACAO_PENDENTE },
     OR: [
       { previsaoConclusao: periodo },
+      { previsaoConclusao: periodoDia },
       { atividades: { some: { dataAgendada: periodo } } },
     ],
   };
@@ -91,6 +77,9 @@ export default async function CalendarioPage({
             dataAgendada: true,
             tipoOs: { select: { id: true, nome: true } },
             tecnico: { select: { id: true, nome: true, avatar: true } },
+            equipe: { select: { nome: true, cor: true } },
+            tecnicosEquipe: { select: { tecnico: { select: { id: true, nome: true, avatar: true } } }, orderBy: { criadoEm: "asc" } },
+            veiculo: { select: { placa: true, modelo: true } },
           },
           orderBy: { dataAgendada: "asc" },
         },
@@ -105,7 +94,6 @@ export default async function CalendarioPage({
   ]);
 
   // Monta os cards e os posiciona por dia (preferindo a atividade agendada; senão a previsão)
-  const agora = hoje.getTime();
   const eventosPorDia: Record<string, CardOs[]> = {};
   for (const os of ordens) {
     // Um card por DIA em que a OS tem atividade agendada (antes só a 1ª atividade
@@ -115,16 +103,17 @@ export default async function CalendarioPage({
     for (const at of os.atividades) {
       if (!at.dataAgendada) continue;
       const d = new Date(at.dataAgendada);
-      if (d < gridInicio || d > gridFim) continue;
-      const k = chave(d);
+      const k = posicaoNoCalendario(d, true).chave;
+      if (!chavesGrid.has(k)) continue;
       if (!porDia.has(k)) porDia.set(k, { data: d, ativ: at });
     }
     if (porDia.size === 0 && os.previsaoConclusao) {
       const d = new Date(os.previsaoConclusao);
-      if (d >= gridInicio && d <= gridFim) porDia.set(chave(d), { data: d, ativ: null });
+      const k = posicaoNoCalendario(d, false).chave;
+      if (chavesGrid.has(k)) porDia.set(k, { data: d, ativ: null });
     }
 
-    const atrasada = !!os.previsaoConclusao && new Date(os.previsaoConclusao).getTime() < agora && !FINALIZADAS.includes(os.status);
+    const atrasada = prazoVencido(os.previsaoConclusao, hoje) && !FINALIZADAS.includes(os.status);
     for (const [k, { data: posData, ativ }] of porDia) {
       const card: CardOs = {
         chave: `${os.id}:${k}`,
@@ -139,10 +128,17 @@ export default async function CalendarioPage({
         clienteCompleto: os.cliente.nome,
         unidade: os.unidade?.nome ?? null,
         tipoOs: ativ?.tipoOs?.nome ?? null,
-        hora: formatarData(posData, "HH:mm"),
+        // Hora de Brasília; previsão só de dia (sem hora) não inventa "00:00"
+        hora: posicaoNoCalendario(posData, !!ativ).hora,
         dataFmt: formatarData(posData, "dd/MM/yyyy"),
         tecnicoNome: ativ?.tecnico?.nome ?? null,
         tecnicoAvatar: ativ?.tecnico?.avatar ?? null,
+        // Equipe/membros da atividade (o responsável continua sendo tecnicoId)
+        tecnicoIds: [ativ?.tecnico?.id, ...(ativ?.tecnicosEquipe ?? []).map((t) => t.tecnico.id)].filter(Boolean) as string[],
+        membros: (ativ?.tecnicosEquipe ?? []).map((t) => ({ nome: t.tecnico.nome, avatar: t.tecnico.avatar })),
+        equipeNome: ativ?.equipe?.nome ?? null,
+        equipeCor: ativ?.equipe?.cor ?? null,
+        veiculo: ativ?.veiculo ? `${ativ.veiculo.placa} — ${ativ.veiculo.modelo}` : null,
         status: os.status,
         prioridade: os.prioridade,
         atrasada,
@@ -158,8 +154,8 @@ export default async function CalendarioPage({
 
   // Células para o grid client
   const celulas: CelulaDia[] = dias.map((d, idx) => {
-    const inMonth = view === "semanal" ? true : d.getMonth() === mes - 1;
-    return { dateKey: chave(d), dayNum: d.getDate(), inMonth, isToday: chave(hoje) === chave(d), rowIndex: Math.floor(idx / 7) };
+    const inMonth = view === "semanal" ? true : d.getUTCMonth() === mes - 1;
+    return { dateKey: chave(d), dayNum: d.getUTCDate(), inMonth, isToday: chaveDiaBR(hoje) === chave(d), rowIndex: Math.floor(idx / 7) };
   });
 
   // Total de OS posicionadas nas células do mês (ou da semana, na visão semanal)
@@ -181,7 +177,7 @@ export default async function CalendarioPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary-50 rounded-lg"><CalendarDays className="w-5 h-5 text-primary-600" /></div>
+          <div className="p-2 bg-surface-alt rounded-lg"><CalendarDays className="w-5 h-5 text-ink-muted" /></div>
           <h1 className="page-title">Calendário</h1>
         </div>
         <GerarOsRecorrentes mes={mes} ano={ano} />
@@ -194,7 +190,7 @@ export default async function CalendarioPage({
             <Link href={baseParams(mesAnterior)} className="p-2 rounded-lg border border-surface-border hover:bg-surface-alt"><ChevronLeft className="w-4 h-4" /></Link>
             <Link href={baseParams(mesSeguinte)} className="p-2 rounded-lg border border-surface-border hover:bg-surface-alt"><ChevronRight className="w-4 h-4" /></Link>
             <div className="ml-1 text-lg font-bold text-ink leading-tight capitalize">{nomeMes(mes)} {ano}</div>
-            <Link href={baseParams({ mes: hoje.getMonth() + 1, ano: hoje.getFullYear(), dia: hoje.getDate() })}
+            <Link href={baseParams({ mes: hojeBR.mes + 1, ano: hojeBR.ano, dia: hojeBR.dia })}
               className="ml-2 inline-flex items-center px-3 py-1.5 rounded-lg border border-primary-500 text-primary-600 text-xs font-semibold hover:bg-primary-50 transition-colors">
               Hoje
             </Link>
@@ -222,16 +218,14 @@ export default async function CalendarioPage({
 
         {/* Legenda */}
         <div className="px-4 py-3 border-t border-surface-border flex flex-wrap items-center gap-4 text-xs text-ink-muted">
-          <span className="font-semibold text-ink-subtle uppercase tracking-wider">Prioridade:</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-slate-200" /> Baixa</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-primary-100" /> Normal</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-orange-100" /> Alta</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-red-100" /> Urgente</span>
-          <span className="font-semibold text-ink-subtle uppercase tracking-wider ml-2">Status (borda):</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm border-l-2 border-l-blue-500 bg-surface-alt" /> Aberta</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm border-l-2 border-l-amber-500 bg-surface-alt" /> Em andamento</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm border-l-2 border-l-green-500 bg-surface-alt" /> Concluída</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm border-l-2 border-l-red-500 bg-surface-alt" /> Atrasada</span>
+          <span className="font-semibold text-ink-muted uppercase tracking-wider">Status:</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-acento" /> Aberta / agendada</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-atencao" /> Em andamento</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-ok" /> Concluída</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-atrasado" /> Atrasada</span>
+          <span className="font-semibold text-ink-muted uppercase tracking-wider ml-2">Prioridade:</span>
+          <span className="flex items-center gap-1.5"><AlertTriangle className="w-3 h-3 text-atencao" /> Alta</span>
+          <span className="flex items-center gap-1.5"><AlertTriangle className="w-3 h-3 text-atrasado" /> Urgente</span>
           <span className="flex items-center gap-1.5"><Repeat className="w-3 h-3" /> OS recorrente</span>
         </div>
       </div>

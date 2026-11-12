@@ -1,0 +1,58 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { AlertTriangle, Info, Loader2 } from "lucide-react";
+
+/**
+ * Inativar pelo SELECT de status (formulário de colaborador/equipe): mostra o mesmo impacto do
+ * botão Inativar (GET `${url}/impacto`) e pede o motivo, que vai junto no salvar e entra na
+ * anotação — o select não pula nada do que o botão faz.
+ */
+export function AvisoInativacaoStatus({ url, mostrar, motivo, onMotivo }: {
+  url: string; mostrar: boolean; motivo: string; onMotivo: (v: string) => void;
+}) {
+  const [impacto, setImpacto] = useState<{ bloqueio: string | null; avisos: string[]; usuarioVinculado?: { email: string } | null } | null>(null);
+  const [carregando, setCarregando] = useState(false);
+  const [erro, setErro] = useState("");
+
+  useEffect(() => {
+    if (!mostrar) { setImpacto(null); return; }
+    let cancelado = false;
+    setCarregando(true); setErro("");
+    fetch(`${url}/impacto`, { cache: "no-store" })
+      .then(async (r) => { const d = await r.json().catch(() => null); if (cancelado) return; if (r.ok && d) setImpacto(d); else setErro(d?.erro ?? "Não foi possível verificar os vínculos."); })
+      .catch(() => { if (!cancelado) setErro("Erro de conexão."); })
+      .finally(() => { if (!cancelado) setCarregando(false); });
+    return () => { cancelado = true; };
+  }, [url, mostrar]);
+
+  if (!mostrar) return null;
+  // Aqui não há a caixa "inativar o usuário junto" do modal: o aviso do usuário de login aponta o caminho
+  const usuario = impacto?.usuarioVinculado;
+  const email = usuario?.email;
+  const avisos = (impacto?.avisos ?? []).map((a) => usuario && a.includes(usuario.email)
+    ? `Também é usuário (${email}): isto não bloqueia o login; use Inativar no topo ou Configurações › Usuários.`
+    : a);
+  return (
+    <div className="space-y-2" data-aviso-inativacao>
+      {carregando && <p className="flex items-center gap-2 text-sm text-ink-muted"><Loader2 className="w-4 h-4 animate-spin" /> Verificando vínculos…</p>}
+      {erro && <p className="text-sm text-atrasado-texto">{erro}</p>}
+      {impacto?.bloqueio && (
+        <p className="flex items-start gap-2 text-sm text-atrasado-texto bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2"><AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> {impacto.bloqueio}</p>
+      )}
+      {!impacto?.bloqueio && avisos.length > 0 && (
+        <div className="text-sm text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2">
+          <p className="flex items-center gap-1.5 font-semibold"><Info className="w-4 h-4" /> Ao salvar como inativo:</p>
+          <ul className="mt-1 ml-5 list-disc space-y-0.5">{avisos.map((a) => <li key={a}>{a}</li>)}</ul>
+        </div>
+      )}
+      {impacto && !impacto.bloqueio && (
+        <label className="block">
+          <span className="block text-xs font-medium text-ink mb-1">Motivo da inativação (opcional — fica registrado nas observações)</span>
+          <textarea value={motivo} onChange={(e) => onMotivo(e.target.value)} rows={2} maxLength={500}
+            className="w-full bg-white border border-surface-campo rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 resize-none" />
+        </label>
+      )}
+    </div>
+  );
+}

@@ -1,13 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ErroConta, registrarRecebimento } from "@/lib/financeiro/parcelas-server";
 import { prisma } from "@/lib/prisma";
+import { consultarBoletoInter } from "@/lib/inter-api";
 
 /**
  * Webhook de cobrança do Banco Inter. A URL registrada inclui ?token=<webhookSecret>
- * (gerado por empresa) — usamos esse token para identificar a empresa e autenticar a
- * notificação, já que a chamada do Inter chega via mTLS/IP do banco.
+ * (gerado por empresa) — o token identifica a empresa e autentica a notificação.
+ *
+ * O corpo do webhook é tratado como um AVISO, nunca como prova de pagamento: antes de
+ * baixar qualquer conta, a situação REAL da cobrança é confirmada na API do Inter
+ * (consultarBoletoInter). Um corpo forjado por quem conheça o token não baixa nada.
  *
  * Liberado no middleware (rota pública).
  */
+
+/** Situações do Inter que valem como pagamento confirmado. */
+const SITUACOES_PAGAS = ["RECEBIDO", "MARCADO_RECEBIDO", "PAGO"];
+
+/** Confirma na API do Inter a situação real da cobrança (null = não confirmada). */
+async function situacaoConfirmada(empresaId: string, codigoSolicitacao: string | null): Promise<string | null> {
+  if (!codigoSolicitacao) return null; // sem código não há como confirmar — não baixa
+  try {
+    const det = await consultarBoletoInter(empresaId, codigoSolicitacao);
+    return String(det?.cobranca?.situacao ?? det?.situacao ?? "").toUpperCase() || null;
+  } catch {
+    return null; // Inter fora do ar ou cobrança desconhecida: não baixa
+  }
+}
 export async function POST(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token");
   if (!token) return NextResponse.json({ erro: "token ausente" }, { status: 401 });
@@ -35,24 +54,29 @@ export async function POST(req: NextRequest) {
       },
     });
     if (!conta) continue;
+    // Conta cancelada ou já recebida nunca é mexida pelo webhook
+    if (conta.status === "CANCELADO" || conta.status === "RECEBIDO") continue;
 
-    if (situacao === "RECEBIDO" || situacao === "MARCADO_RECEBIDO" || situacao === "PAGO") {
+    // O que vale é a situação CONFIRMADA no Inter, não a do corpo recebido
+    const confirmada = await situacaoConfirmada(empresaId, conta.boletoId);
+    if (!confirmada) continue;
+
+    if (SITUACOES_PAGAS.includes(situacao) && SITUACOES_PAGAS.includes(confirmada)) {
       const dataPg = ev.dataHoraSituacao ? new Date(ev.dataHoraSituacao) : new Date();
-      await prisma.contaReceber.update({
-        where: { id: conta.id },
-        data: { status: "RECEBIDO", boletoStatus: "PAGO", dataRecebimento: dataPg, formaPagamento: "BOLETO" },
-      });
-      if (conta.medicaoId) {
-        await prisma.medicao.updateMany({
-          where: { id: conta.medicaoId, status: { notIn: ["PAGO", "CANCELADA"] } },
-          data: { status: "PAGO", dataPagamento: dataPg, formaPagamento: "BOLETO" },
-        });
+      // O boleto saiu pelo que faltava: recebe o saldo (caminho único da baixa — grava o recebimento,
+      // quita a conta e, quando todas as cobranças dela estão pagas, a medição/fatura de origem)
+      try {
+        await prisma.$transaction((tx) => registrarRecebimento(tx, {
+          empresaId, contaId: conta.id, data: dataPg, formaPagamento: "BOLETO", origem: "BOLETO", boletoPago: true,
+        }), { timeout: 20_000 });
+        processados++;
+      } catch (e) {
+        if (!(e instanceof ErroConta)) throw e; // recebida/cancelada no meio do caminho: nada a fazer
       }
-      processados++;
-    } else if (situacao === "CANCELADO" || situacao === "EXPIRADO") {
+    } else if ((situacao === "CANCELADO" || situacao === "EXPIRADO") && ["CANCELADO", "EXPIRADO"].includes(confirmada)) {
       await prisma.contaReceber.update({
         where: { id: conta.id },
-        data: { boletoStatus: situacao === "EXPIRADO" ? "VENCIDO" : "CANCELADO" },
+        data: { boletoStatus: confirmada === "EXPIRADO" ? "VENCIDO" : "CANCELADO" },
       });
       processados++;
     }

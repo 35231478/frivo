@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Copy, Loader2 } from "lucide-react";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { toast } from "@/components/ui/avisos";
 
 /** "Criar cópia": duplica como Rascunho (sem a ART) e abre a cópia no editor. Exige pmoc.criar. */
 export function PmocCopiarBotao({ id, variante = "icone" }: { id: string; variante?: "icone" | "botao" }) {
@@ -17,9 +18,9 @@ export function PmocCopiarBotao({ id, variante = "icone" }: { id: string; varian
     try {
       const res = await fetch(`/api/pmocs/${id}/copia`, { method: "POST" });
       const d = await res.json().catch(() => ({}));
-      if (!res.ok) { alert(d.erro ?? "Não foi possível copiar o PMOC."); return; }
+      if (!res.ok) { toast(d.erro ?? "Não foi possível copiar o PMOC.", "erro"); return; }
       router.push(`/pmoc/${d.id}?copia=1`);
-    } catch { alert("Erro de conexão."); } finally { setCarregando(false); }
+    } catch { toast("Erro de conexão.", "erro"); } finally { setCarregando(false); }
   }
 
   const Icone = carregando ? Loader2 : Copy;

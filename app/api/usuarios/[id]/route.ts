@@ -1,31 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { z } from "zod";
-import { exigirPermissao } from "@/lib/permissoes-server";
+import { rotasItem } from "@/lib/cadastros/rotas";
 
-type Params = { params: Promise<{ id: string }> };
-
-const updateSchema = z.object({
-  perfilAcessoId: z.string().nullable().optional(),
-});
-
-export async function PUT(req: NextRequest, { params }: Params) {
-  const guard = await exigirPermissao("configuracoes", "gerenciar");
-  if (guard.erro) return guard.resposta;
-  const { id } = await params;
-  const empresaId = guard.session.user.empresaId;
-
-  const usuario = await prisma.usuario.findFirst({ where: { id, empresaId } });
-  if (!usuario) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
-
-  const body = await req.json();
-  const parsed = updateSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos" }, { status: 400 });
-
-  const atualizado = await prisma.usuario.update({
-    where: { id },
-    data: { perfilAcessoId: parsed.data.perfilAcessoId || null },
-    select: { id: true, nome: true, email: true, role: true, perfilAcessoId: true, perfilAcesso: { select: { nome: true, cor: true } } },
-  });
-  return NextResponse.json(atualizado);
-}
+/**
+ * Compatibilidade: /api/cadastros/usuarios/[id] (lib/cadastros + travas em lib/cadastros/especificos.ts:
+ * ninguém altera o próprio perfil, nem inativa a si mesmo ou o último administrador, e quem não é
+ * administrador não mexe em quem tem mais acesso nem atribui perfil com acessos que não tem).
+ */
+const r = rotasItem("usuarios");
+export const GET = r.GET;
+export const PATCH = r.PATCH;
+export const PUT = r.PUT;
+export const DELETE = r.DELETE;

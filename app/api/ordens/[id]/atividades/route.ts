@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
+import { respostaRefEmpresa, validarRefEmpresa } from "@/lib/ref-empresa";
 import { z } from "zod";
+import { ErroTecnicos, INCLUDE_TECNICOS_ATIVIDADE, MSG_SEM_EXECUTOR, gravarTecnicos, lerDefinicao, lerVeiculo, resolverTecnicos, resolverVeiculo } from "@/lib/atividade-tecnicos";
+import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -10,6 +13,8 @@ const atividadeSchema = z.object({
   tipoOsId: z.string().optional(),
   tecnicoId: z.string().optional(),
   dataAgendada: z.string().optional(),
+  /** Prazo próprio da atividade: dia "AAAA-MM-DD" (vazio = sem prazo) */
+  prazo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Prazo inválido.").optional().or(z.literal("")),
   duracaoMin: z.number().optional(),
   observacao: z.string().optional(),
   status: z.string().optional(),
@@ -28,22 +33,43 @@ export async function POST(req: NextRequest, { params }: Params) {
   const body = await req.json();
   const parsed = atividadeSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos" }, { status: 400 });
+  // Tipo de OS precisa ser da mesma empresa
+  try { await validarRefEmpresa("tipoOs", parsed.data.tipoOsId, empresaId, "Tipo de OS"); }
+  catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
-  const atividade = await prisma.atividadeOs.create({
+  // Quem executa (OBRIGATÓRIO): { tecnicoIds, responsavelId?, equipeId? } — o formato antigo (só tecnicoId) continua valendo.
+  // Veículo: { veiculoId } escolhido, null = sem veículo, ausente = puxa o da equipe/colaborador.
+  const def = lerDefinicao(body);
+  if (!def) return NextResponse.json({ erro: MSG_SEM_EXECUTOR }, { status: 400 });
+  let tecnicos: Awaited<ReturnType<typeof resolverTecnicos>>;
+  let veiculoId: string | null;
+  try {
+    tecnicos = await resolverTecnicos(empresaId, def, parsed.data.tipoOsId || null, { exigir: true });
+    veiculoId = await resolverVeiculo(empresaId, lerVeiculo(body), tecnicos);
+  } catch (e) { if (e instanceof ErroTecnicos) return NextResponse.json({ erro: e.message }, { status: 400 }); throw e; }
+
+  const criada = await prisma.$transaction(async (tx) => {
+   const a = await tx.atividadeOs.create({
     data: {
       empresaId,
       ordemServicoId: id,
       titulo: parsed.data.titulo,
       tipoOsId: parsed.data.tipoOsId || null,
-      tecnicoId: parsed.data.tecnicoId || null,
+      tecnicoId: tecnicos.responsavel,
+      veiculoId,
       dataAgendada: parsed.data.dataAgendada ? new Date(parsed.data.dataAgendada) : null,
+      prazo: parsed.data.prazo ? new Date(parsed.data.prazo) : null,
       duracaoMin: parsed.data.duracaoMin ?? null,
       observacao: parsed.data.observacao || null,
     },
-    include: {
-      tipoOs: { select: { id: true, nome: true, cor: true } },
-      tecnico: { select: { id: true, nome: true } },
-    },
+    select: { id: true },
+   });
+   await gravarTecnicos(tx, a.id, tecnicos);
+   return a;
+  });
+  const atividade = await prisma.atividadeOs.findUniqueOrThrow({
+    where: { id: criada.id },
+    include: { tipoOs: { select: { id: true, nome: true, cor: true } }, ...INCLUDE_TECNICOS_ATIVIDADE },
   });
 
   await prisma.osHistorico.create({
@@ -53,5 +79,6 @@ export async function POST(req: NextRequest, { params }: Params) {
     },
   });
 
+  await sincronizarStatusOs(id, empresaId, session.user!.id);
   return NextResponse.json(atividade, { status: 201 });
 }

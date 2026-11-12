@@ -1,26 +1,36 @@
 import type { Metadata } from "next";
+import { acento } from "@/lib/ui/tokens";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
+import { pode } from "@/lib/permissoes";
+import { redirect } from "next/navigation";
 import { formatarMoeda, cn } from "@/lib/utils";
 import { resumoFinanceiro } from "@/lib/financeiro-server";
+import { Dica } from "@/components/ui/dica";
 import {
   Wallet, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Receipt, Upload, CalendarClock,
 } from "lucide-react";
 
-export const metadata: Metadata = { title: "Dashboard Financeiro" };
+export const metadata: Metadata = { title: "Dashboard financeiro" };
 
 export default async function FinanceiroDashboardPage() {
   const session = await auth();
+  if (!pode(session!.user!.permissoes, "financeiro", "visualizar", session!.user!.role)) redirect("/sem-permissao");
   const r = await resumoFinanceiro(session!.user!.empresaId);
 
   const cards = [
-    { titulo: "A receber este mês", valor: r.aReceberMes.valor, qtd: r.aReceberMes.qtd, icone: Receipt, cor: "text-primary-600", bg: "bg-primary-50", href: "/financeiro/contas-receber" },
-    { titulo: "Recebido este mês", valor: r.recebidoMes.valor, qtd: r.recebidoMes.qtd, icone: CheckCircle, cor: "text-success-600", bg: "bg-success-50", href: "/financeiro/contas-receber?status=RECEBIDO" },
-    { titulo: "Vencido (a receber)", valor: r.vencidoReceber.valor, qtd: r.vencidoReceber.qtd, icone: AlertTriangle, cor: "text-red-600", bg: "bg-red-50", href: "/financeiro/contas-receber?status=ATRASADO", alerta: r.vencidoReceber.qtd > 0 },
-    { titulo: "A pagar este mês", valor: r.aPagarMes.valor, qtd: r.aPagarMes.qtd, icone: Upload, cor: "text-amber-600", bg: "bg-amber-50", href: "/financeiro/contas-pagar" },
-    { titulo: "Contas a pagar vencidas", valor: r.pagasVencidas.valor, qtd: r.pagasVencidas.qtd, icone: AlertTriangle, cor: "text-red-600", bg: "bg-red-50", href: "/financeiro/contas-pagar?status=VENCIDO", alerta: r.pagasVencidas.qtd > 0 },
-    { titulo: "Saldo previsto", valor: r.saldoPrevisto, icone: Wallet, cor: r.saldoPrevisto >= 0 ? "text-success-600" : "text-red-600", bg: r.saldoPrevisto >= 0 ? "bg-success-50" : "bg-red-50", href: "/financeiro" },
-  ];
+    {
+      titulo: "A receber este mês", valor: r.aReceberMes.valor, qtd: r.aReceberMes.qtd, icone: Receipt, cor: "text-primary-600", bg: "bg-primary-50", href: "/financeiro/contas-receber",
+      // Opção A: os orçamentos aprovados ainda sem fatura entram na previsão, numa linha à parte
+      aFaturar: r.aReceberMes.aFaturar,
+    },
+    { titulo: "Recebido este mês", valor: r.recebidoMes.valor, qtd: r.recebidoMes.qtd, icone: CheckCircle, cor: "text-success-600", bg: "bg-success-50", href: "/financeiro/contas-receber?card=RECEBIDO" },
+    { titulo: "Vencido (a receber)", valor: r.vencidoReceber.valor, qtd: r.vencidoReceber.qtd, icone: AlertTriangle, cor: "text-atrasado", bg: "bg-atrasado-claro", href: "/financeiro/contas-receber?card=VENCIDO&periodo=todos", alerta: r.vencidoReceber.qtd > 0 },
+    { titulo: "A pagar este mês", valor: r.aPagarMes.valor, qtd: r.aPagarMes.qtd, icone: Upload, cor: "text-atencao", bg: "bg-atencao-claro", href: "/financeiro/contas-pagar" },
+    { titulo: "Contas a pagar vencidas", valor: r.pagasVencidas.valor, qtd: r.pagasVencidas.qtd, icone: AlertTriangle, cor: "text-atrasado", bg: "bg-atrasado-claro", href: "/financeiro/contas-pagar?card=VENCIDO&periodo=todos", alerta: r.pagasVencidas.qtd > 0 },
+    { titulo: "Saldo previsto", valor: r.saldoPrevisto, icone: Wallet, cor: r.saldoPrevisto >= 0 ? "text-success-600" : "text-atrasado", bg: r.saldoPrevisto >= 0 ? "bg-success-50" : "bg-atrasado-claro", href: "/financeiro",
+      dica: "Contas a receber em aberto do mês + orçamentos aprovados a faturar − contas a pagar do mês." },
+  ] as { titulo: string; valor: number; qtd?: number; icone: typeof Wallet; cor: string; bg: string; href: string; alerta?: boolean; aFaturar?: { valor: number; qtd: number }; dica?: string }[];
 
   const maxBar = Math.max(1, ...r.meses.map((m) => Math.max(m.entradas, m.saidas)));
   // Saldo acumulado para a linha
@@ -31,23 +41,37 @@ export default async function FinanceiroDashboardPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <div className="p-2 bg-primary-50 rounded-lg"><Wallet className="w-5 h-5 text-primary-600" /></div>
-        <h1 className="page-title">Dashboard Financeiro</h1>
+        <div className="p-2 bg-surface-alt rounded-lg"><Wallet className="w-5 h-5 text-ink-muted" /></div>
+        <h1 className="page-title">Dashboard financeiro</h1>
       </div>
 
       {/* Cards do mês */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {cards.map((c) => (
-          <Link key={c.titulo} href={c.href} className={cn("bg-white rounded-xl border p-5 shadow-card hover:shadow-card-hover transition-all", c.alerta ? "border-red-200" : "border-surface-border hover:border-primary-200")}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">{c.titulo}</p>
-                <p className={cn("text-2xl font-bold mt-2", c.cor)}>{formatarMoeda(c.valor)}</p>
-                {c.qtd != null && <p className="text-xs text-ink-subtle mt-1">{c.qtd} conta(s)</p>}
+          // O ⓘ fica FORA do link (botão dentro de link é HTML inválido)
+          <div key={c.titulo} className="relative" data-card-financeiro={c.titulo}>
+            <Link href={c.href} className={cn("block h-full bg-white rounded-card border p-5 shadow-card hover:shadow-card-hover transition-all", c.alerta ? "border-atrasado/20" : "border-surface-border hover:border-primary-200")}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">{c.titulo}</p>
+                  <p className={cn("text-2xl font-bold mt-2 tabular-nums", c.cor)} data-valor-card>{formatarMoeda(c.valor)}</p>
+                  {c.qtd != null && <p className="text-xs text-ink-subtle mt-1">{c.qtd} conta(s)</p>}
+                  {c.aFaturar && c.aFaturar.qtd > 0 && (
+                    <p className="text-xs text-ink-muted mt-1.5 pr-6" data-a-faturar>
+                      inclui <strong className="text-ink tabular-nums">{formatarMoeda(c.aFaturar.valor)}</strong> a faturar · {c.aFaturar.qtd} {c.aFaturar.qtd === 1 ? "orçamento" : "orçamentos"}
+                    </p>
+                  )}
+                </div>
+                <div className={cn("p-3 rounded-card shrink-0", c.bg)}><c.icone className={cn("w-6 h-6", c.cor)} /></div>
               </div>
-              <div className={cn("p-3 rounded-xl shrink-0", c.bg)}><c.icone className={cn("w-6 h-6", c.cor)} /></div>
-            </div>
-          </Link>
+            </Link>
+            {c.aFaturar && c.aFaturar.qtd > 0 && (
+              <span className="absolute bottom-4 right-4">
+                <Dica rotulo="A faturar" texto="Orçamentos aprovados ainda sem fatura, previstos para este mês (pela previsão de conclusão da OS; sem OS, o mês corrente). Viram conta a receber no Faturar." />
+              </span>
+            )}
+            {c.dica && <span className="absolute bottom-4 right-4"><Dica rotulo={c.titulo} texto={c.dica} /></span>}
+          </div>
         ))}
       </div>
 
@@ -57,7 +81,7 @@ export default async function FinanceiroDashboardPage() {
           <h2 className="card-title">Entradas × Saídas — últimos 6 meses</h2>
           <div className="flex items-center gap-4 text-xs">
             <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-success-500" /> Entradas</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-400" /> Saídas</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-atrasado" /> Saídas</span>
             <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-primary-500" /> Saldo acumulado</span>
           </div>
         </div>
@@ -65,7 +89,7 @@ export default async function FinanceiroDashboardPage() {
           {/* Linha de saldo acumulado (SVG sobreposto) */}
           <svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none" viewBox="0 0 100 100">
             <polyline
-              fill="none" stroke="#0EA5E9" strokeWidth="0.6"
+              fill="none" stroke={acento.DEFAULT} strokeWidth="0.6"
               points={saldoAcc.map((s, i) => {
                 const x = (i + 0.5) * (100 / r.meses.length);
                 const y = 50 - (s / maxSaldo) * 38;
@@ -77,7 +101,7 @@ export default async function FinanceiroDashboardPage() {
             <div key={i} className="flex-1 flex flex-col items-center gap-1 h-full justify-end z-10">
               <div className="flex items-end gap-0.5 w-full justify-center h-full">
                 <div className="w-1/2 bg-success-500 rounded-t" style={{ height: `${(m.entradas / maxBar) * 100}%` }} title={`Entradas: ${formatarMoeda(m.entradas)}`} />
-                <div className="w-1/2 bg-red-400 rounded-t" style={{ height: `${(m.saidas / maxBar) * 100}%` }} title={`Saídas: ${formatarMoeda(m.saidas)}`} />
+                <div className="w-1/2 bg-atrasado rounded-t" style={{ height: `${(m.saidas / maxBar) * 100}%` }} title={`Saídas: ${formatarMoeda(m.saidas)}`} />
               </div>
               <span className="text-[11px] text-ink-muted capitalize">{m.mes}</span>
             </div>
@@ -89,9 +113,9 @@ export default async function FinanceiroDashboardPage() {
       <div className="card-padded">
         <h2 className="card-title mb-3">Alertas do dia</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <AlertaItem icone={CalendarClock} cor="text-amber-600" bg="bg-amber-50" titulo="Vencem hoje" valor={`${r.alertas.vencemHoje} conta(s)`} detalhe={`${r.alertas.vencemHojeReceber} a receber · ${r.alertas.vencemHojePagar} a pagar`} />
-          <AlertaItem icone={AlertTriangle} cor="text-red-600" bg="bg-red-50" titulo="Vencidas sem notificação" valor={`${r.alertas.vencidasSemNotificacao} conta(s)`} detalhe="Atrasadas há mais de 3 dias" />
-          <AlertaItem icone={r.saldoPrevisto >= 0 ? TrendingUp : TrendingDown} cor={r.saldoPrevisto >= 0 ? "text-success-600" : "text-red-600"} bg={r.saldoPrevisto >= 0 ? "bg-success-50" : "bg-red-50"} titulo="Saldo previsto do mês" valor={formatarMoeda(r.saldoPrevisto)} detalhe="Receber − Pagar (em aberto)" />
+          <AlertaItem icone={CalendarClock} cor="text-atencao" bg="bg-atencao-claro" titulo="Vencem hoje" valor={`${r.alertas.vencemHoje} conta(s)`} detalhe={`${r.alertas.vencemHojeReceber} a receber · ${r.alertas.vencemHojePagar} a pagar`} />
+          <AlertaItem icone={AlertTriangle} cor="text-atrasado" bg="bg-atrasado-claro" titulo="Vencidas sem notificação" valor={`${r.alertas.vencidasSemNotificacao} conta(s)`} detalhe="Atrasadas há mais de 3 dias" />
+          <AlertaItem icone={r.saldoPrevisto >= 0 ? TrendingUp : TrendingDown} cor={r.saldoPrevisto >= 0 ? "text-success-600" : "text-atrasado"} bg={r.saldoPrevisto >= 0 ? "bg-success-50" : "bg-atrasado-claro"} titulo="Saldo previsto do mês" valor={formatarMoeda(r.saldoPrevisto)} detalhe="Receber (com a faturar) − Pagar (em aberto)" />
         </div>
       </div>
     </div>

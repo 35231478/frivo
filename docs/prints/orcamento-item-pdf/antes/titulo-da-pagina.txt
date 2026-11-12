@@ -1,0 +1,4 @@
+desktop-link: Orçamento | Frivo
+desktop-imprimir: Imprimir Orçamento | Frivo
+cel-link: Orçamento | Frivo
+cel-imprimir: Imprimir Orçamento | Frivo

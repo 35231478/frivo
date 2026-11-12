@@ -8,24 +8,25 @@ import { Select } from "@/components/ui/select";
 import { FormField, FormGrid } from "@/components/ui/form-field";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { Mail, CheckCircle2, XCircle, Send, ExternalLink, FileText } from "lucide-react";
+import { hrefSecaoConfig } from "@/lib/navegacao/configuracoes";
 
 const NOTIFS: { key: string; label: string; desc: string }[] = [
-  { key: "notifBoletoEmitido", label: "Enviar boleto ao emitir", desc: "Envia o boleto por e-mail assim que for emitido" },
-  { key: "notifMedicaoGerada", label: "Enviar relatório/medição ao gerar", desc: "Notifica o cliente quando a medição é gerada" },
-  { key: "notifLembreteVencimento", label: "Lembrete de vencimento", desc: "Avisa o cliente X dias antes do vencimento" },
-  { key: "notifConfirmacaoPagamento", label: "Confirmação de pagamento", desc: "Confirma o recebimento ao cliente" },
-  { key: "notifCobrancaVencida", label: "Cobrança vencida", desc: "Lembrete automático de cobrança em atraso" },
-  { key: "notifOsAberta", label: "OS aberta", desc: "Confirmação de abertura ao cliente" },
-  { key: "notifOsConcluida", label: "OS concluída", desc: "Aviso de conclusão ao cliente" },
-  { key: "notifOrcamentoEnviado", label: "Orçamento enviado", desc: "Envia o orçamento por e-mail" },
-  { key: "notifContratoAssinatura", label: "Contrato para assinatura", desc: "Envia a proposta de contrato" },
+  { key: "notifBoletoEmitido", label: "Enviar boleto ao emitir", desc: "Envia o boleto por e-mail no momento da emissão." },
+  { key: "notifMedicaoGerada", label: "Enviar relatório/medição ao gerar", desc: "Notifica o cliente quando a medição é gerada." },
+  { key: "notifLembreteVencimento", label: "Lembrete de vencimento", desc: "Avisa o cliente com a antecedência configurada antes do vencimento." },
+  { key: "notifConfirmacaoPagamento", label: "Confirmação de pagamento", desc: "Confirma ao cliente o recebimento do pagamento." },
+  { key: "notifCobrancaVencida", label: "Cobrança vencida", desc: "Lembrete automático de cobrança em atraso." },
+  { key: "notifOsAberta", label: "OS aberta", desc: "Confirma ao cliente a abertura da OS." },
+  { key: "notifOsConcluida", label: "OS concluída", desc: "Avisa o cliente da conclusão da OS." },
+  { key: "notifOrcamentoEnviado", label: "Orçamento enviado", desc: "Envia o orçamento por e-mail." },
+  { key: "notifContratoAssinatura", label: "Contrato para assinatura", desc: "Envia a proposta de contrato por e-mail." },
 ];
 
 const LEMBRETES_ORC: { key: string; label: string; desc: string }[] = [
-  { key: "lembreteOrcNaoRespondido", label: "Orçamento não respondido", desc: "X dias após o envio sem resposta" },
-  { key: "lembreteOrcVencendo", label: "Orçamento vencendo", desc: "X dias antes da validade expirar" },
-  { key: "lembreteOrcVencido", label: "Orçamento vencido", desc: "Aviso quando expira sem resposta" },
-  { key: "lembreteOrcAprovadoSemOs", label: "Aprovado sem OS gerada", desc: "X dias após aprovação sem OS vinculada" },
+  { key: "lembreteOrcNaoRespondido", label: "Orçamento não respondido", desc: "Enviado após o prazo configurado sem resposta do cliente." },
+  { key: "lembreteOrcVencendo", label: "Orçamento vencendo", desc: "Enviado com a antecedência configurada antes do fim da validade." },
+  { key: "lembreteOrcVencido", label: "Orçamento vencido", desc: "Enviado quando a validade expira sem resposta." },
+  { key: "lembreteOrcAprovadoSemOs", label: "Aprovado sem OS gerada", desc: "Enviado após o prazo configurado sem OS vinculada ao orçamento aprovado." },
 ];
 
 export function EmailConfigClient() {
@@ -71,7 +72,7 @@ export function EmailConfigClient() {
       {/* Servidor */}
       <section className="space-y-4">
         <div className="flex items-center gap-2"><Mail className="w-5 h-5 text-primary-600" /><h2 className="section-title">Configuração do servidor</h2></div>
-        <ToggleSwitch checked={!!c.ativo} onChange={(v) => set("ativo", v)} label="E-mails ativos" description="Liga/desliga o envio de e-mails transacionais" />
+        <ToggleSwitch checked={!!c.ativo} onChange={(v) => set("ativo", v)} label="E-mails ativos" dica="Ativa ou desativa o envio de todos os e-mails automáticos." />
         <FormGrid>
           <FormField label="Resend API Key" hint={temApiKey ? "Deixe em branco para manter a atual" : undefined}>
             <Input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={temApiKey ? "••••••••" : "re_..."} />
@@ -83,7 +84,7 @@ export function EmailConfigClient() {
           <FormField label="E-mail de resposta (reply-to)"><Input value={c.replyTo ?? ""} onChange={(e) => set("replyTo", e.target.value)} placeholder="financeiro@suaempresa.com.br" /></FormField>
         </FormGrid>
         {resultado && (
-          <div className={`flex items-center gap-2 text-sm rounded-lg px-3 py-2 ${resultado.ok ? "bg-success-50 text-success-700" : "bg-red-50 text-red-700"}`}>
+          <div className={`flex items-center gap-2 text-sm rounded-lg px-3 py-2 ${resultado.ok ? "bg-success-50 text-success-700" : "bg-atrasado-claro text-atrasado-texto"}`}>
             {resultado.ok ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
             {resultado.ok ? "E-mail de teste enviado! Verifique sua caixa de entrada." : `Falha: ${resultado.erro}`}
           </div>
@@ -106,7 +107,7 @@ export function EmailConfigClient() {
       <section className="space-y-1 border-t border-surface-border pt-6">
         <h2 className="section-title mb-2">Notificações automáticas</h2>
         <div className="divide-y divide-surface-border">
-          {NOTIFS.map((n) => <ToggleSwitch key={n.key} checked={!!c[n.key]} onChange={(v) => set(n.key, v)} label={n.label} description={n.desc} />)}
+          {NOTIFS.map((n) => <ToggleSwitch key={n.key} checked={!!c[n.key]} onChange={(v) => set(n.key, v)} label={n.label} dica={n.desc} />)}
         </div>
         <FormGrid>
           <FormField label="Lembrete de vencimento (dias antes)">
@@ -119,8 +120,8 @@ export function EmailConfigClient() {
       <section className="space-y-1 border-t border-surface-border pt-6">
         <h2 className="section-title mb-2">Lembretes de orçamentos</h2>
         <div className="divide-y divide-surface-border">
-          {LEMBRETES_ORC.map((n) => <ToggleSwitch key={n.key} checked={!!c[n.key]} onChange={(v) => set(n.key, v)} label={n.label} description={n.desc} />)}
-          <ToggleSwitch checked={!!c.pararSeVisualizado} onChange={(v) => set("pararSeVisualizado", v)} label="Parar se o cliente visualizou" description="Não envia mais lembretes se o cliente abriu o orçamento" />
+          {LEMBRETES_ORC.map((n) => <ToggleSwitch key={n.key} checked={!!c[n.key]} onChange={(v) => set(n.key, v)} label={n.label} dica={n.desc} />)}
+          <ToggleSwitch checked={!!c.pararSeVisualizado} onChange={(v) => set("pararSeVisualizado", v)} label="Parar se o cliente visualizou" dica="Os lembretes deixam de ser enviados quando o cliente abre o orçamento." />
         </div>
         <FormGrid cols={3}>
           <FormField label="Não respondido (dias após envio)">
@@ -139,7 +140,7 @@ export function EmailConfigClient() {
       </section>
 
       <div className="flex items-center justify-between gap-2 pt-4 border-t border-surface-border">
-        <Link href="/configuracoes/email/templates" className="inline-flex items-center gap-2 text-sm font-semibold text-primary-600 hover:text-primary-700"><FileText className="w-4 h-4" /> Editar templates de e-mail</Link>
+        <Link href={hrefSecaoConfig("email-templates")} scroll={false} className="inline-flex items-center gap-2 text-sm font-semibold text-primary-600 hover:text-primary-700"><FileText className="w-4 h-4" /> Editar templates de e-mail</Link>
         <div className="flex items-center gap-3">
           {msg && <span className="text-sm text-ink-muted">{msg}</span>}
           <Button type="button" loading={salvando} onClick={salvar}>Salvar configuração</Button>

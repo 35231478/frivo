@@ -30,7 +30,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
   const d = parsed.data;
   if (d.clienteId !== existente.clienteId && existente._count.equipamentos > 0)
-    return NextResponse.json({ erro: "Para trocar o cliente, remova antes os equipamentos do PMOC (eles pertencem ao cliente atual)." }, { status: 409 });
+    return NextResponse.json({ erro: "Para trocar o cliente, exclua antes os equipamentos deste PMOC (eles pertencem ao cliente atual)." }, { status: 409 });
   if (d.status === "PUBLICADO") {
     const faltam = pendenciasPublicacao(d, existente._count.equipamentos);
     if (faltam.length) return NextResponse.json({ erro: `Para publicar, falta: ${faltam.join(", ")}.` }, { status: 422 });

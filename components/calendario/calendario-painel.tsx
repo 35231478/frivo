@@ -74,7 +74,8 @@ export function CalendarioPainel({
       if (filtros.tipos.length && !(c.tipoOsId && filtros.tipos.includes(c.tipoOsId))) return false;
       if (numero && !c.numero.toLowerCase().includes(numero)) return false;
       if (unidade && !(c.unidade ?? "").toLowerCase().includes(unidade)) return false;
-      if (filtros.tecnicoId && c.tecnicoId !== filtros.tecnicoId) return false;
+      // Por técnico: o responsável OU qualquer membro da equipe da atividade
+      if (filtros.tecnicoId && c.tecnicoId !== filtros.tecnicoId && !(c.tecnicoIds ?? []).includes(filtros.tecnicoId)) return false;
       if (filtros.status.length && !filtros.status.includes(c.status)) return false;
       if (filtros.prioridade.length && !filtros.prioridade.includes(c.prioridade)) return false;
       return true;
@@ -164,7 +165,7 @@ export function CalendarioPainel({
             )}
           </div>
           {ativos > 0 && (
-            <button type="button" onClick={limpar} className="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-700">
+            <button type="button" onClick={limpar} className="inline-flex items-center gap-1 text-xs font-medium text-atrasado hover:text-atrasado-texto">
               <X className="w-3.5 h-3.5" /> Limpar filtros
             </button>
           )}

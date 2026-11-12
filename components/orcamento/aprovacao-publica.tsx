@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import SignatureCanvas from "react-signature-canvas";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, CheckCircle2, Eraser, PenLine } from "lucide-react";
+import { neutro } from "@/lib/ui/tokens";
 
 function mascararCpf(v: string): string {
   const n = v.replace(/\D/g, "").slice(0, 11);
@@ -14,7 +15,11 @@ function mascararCpf(v: string): string {
   return `${n.slice(0, 3)}.${n.slice(3, 6)}.${n.slice(6, 9)}-${n.slice(9)}`;
 }
 
-export function AprovacaoPublica({ token }: { token: string }) {
+/**
+ * Aceite no link público: nome, CPF e assinatura. O servidor grava também data/hora e IP (o texto
+ * avisa). `onRecusar` mostra, ao lado, o caminho para recusar com motivo (RecusaPublica).
+ */
+export function AprovacaoPublica({ token, onRecusar }: { token: string; onRecusar?: () => void }) {
   const router = useRouter();
   const sigRef = useRef<SignatureCanvas | null>(null);
   const [aberto, setAberto] = useState(false);
@@ -58,25 +63,38 @@ export function AprovacaoPublica({ token }: { token: string }) {
 
   if (!aberto) {
     return (
-      <div className="bg-gradient-to-br from-primary-500 to-success-500 rounded-2xl p-6 text-center shadow-elevated">
-        <h3 className="text-white text-xl font-bold mb-2">Aprovar este orçamento</h3>
-        <p className="text-primary-50 text-sm mb-4">
-          Confirme sua aprovação digitalmente com sua assinatura.
+      <div className="bg-white border border-surface-border rounded-card p-6 text-center shadow-card" data-resposta-publica>
+        <h3 className="font-display text-ink text-xl font-bold mb-2">Responder esta proposta</h3>
+        <p className="text-ink-muted text-sm mb-4">
+          Aprove com sua assinatura digital ou, se não for seguir, recuse e conte o motivo.
         </p>
-        <button
-          type="button"
-          onClick={() => setAberto(true)}
-          className="inline-flex items-center gap-2 bg-white text-primary-700 hover:bg-primary-50 font-bold px-6 py-3 rounded-lg transition-all shadow-sm hover:shadow-md"
-        >
-          <PenLine className="w-5 h-5" />
-          Aprovar orçamento
-        </button>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+          <button
+            type="button"
+            onClick={() => setAberto(true)}
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-acento text-white hover:bg-acento-hover font-bold px-6 py-3 rounded-lg transition-colors"
+            data-abrir-aprovacao
+          >
+            <PenLine className="w-5 h-5" />
+            Aprovar proposta
+          </button>
+          {onRecusar && (
+            <button
+              type="button"
+              onClick={onRecusar}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-white border border-surface-border text-ink hover:bg-surface-alt font-semibold px-6 py-3 rounded-lg transition-colors"
+              data-abrir-recusa
+            >
+              Recusar
+            </button>
+          )}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-white border-2 border-success-500 rounded-2xl p-6 space-y-4 shadow-elevated">
+    <div className="bg-white border border-acento/40 rounded-card p-6 space-y-4 shadow-card">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-bold text-ink flex items-center gap-2">
           <CheckCircle2 className="w-5 h-5 text-success-600" />
@@ -92,7 +110,7 @@ export function AprovacaoPublica({ token }: { token: string }) {
       </div>
 
       {erro && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 flex items-center gap-2">
+        <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2 flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
           {erro}
         </div>
@@ -134,7 +152,7 @@ export function AprovacaoPublica({ token }: { token: string }) {
           <div className="bg-surface-alt border-2 border-dashed border-surface-border rounded-lg overflow-hidden touch-none">
             <SignatureCanvas
               ref={sigRef}
-              penColor="#0F2744"
+              penColor={neutro.texto}
               canvasProps={{
                 className: "w-full h-40 bg-white",
               }}
@@ -143,6 +161,10 @@ export function AprovacaoPublica({ token }: { token: string }) {
           <p className="text-xs text-ink-subtle mt-1">Use o dedo (celular) ou mouse para assinar.</p>
         </div>
       </div>
+
+      <p className="text-xs text-ink-muted" data-aviso-registro>
+        Ao confirmar, registramos seu nome, CPF, a data e a hora e o endereço IP desta aprovação.
+      </p>
 
       <Button
         variant="success"

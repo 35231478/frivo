@@ -2,6 +2,7 @@
 
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid, FormSection } from "@/components/ui/form-field";
 import {
@@ -9,6 +10,7 @@ import {
   VARIAVEIS_TERMO, calcularDataFimContrato, formatarData,
 } from "@/lib/utils";
 import { FileText, Wrench, Clock } from "lucide-react";
+import { InputData } from "@/components/ui/input-data";
 
 export interface PropostaState {
   valorMensal: string;
@@ -42,7 +44,7 @@ interface PropostaCamposProps {
   proposta: PropostaState;
   onChange: (patch: Partial<PropostaState>) => void;
   tecnicos: { id: string; nome: string; crea?: string | null }[];
-  termoTemplates: { id: string; nome: string; conteudo: string }[];
+  termoTemplates: { id: string; nome: string; conteudo: string; ativo?: boolean }[];
   equipamentos: { id: string; rotulo: string }[];
 }
 
@@ -86,13 +88,13 @@ export function PropostaCampos({ proposta, onChange, tecnicos, termoTemplates, e
                 ))}
               </Select>
             </FormField>
-            <FormField label="Dia de execução" hint="Dia do mês para a visita">
+            <FormField label="Dia de execução" dica="Dia do mês previsto para a visita.">
               <Input type="number" min="1" max="31" value={proposta.diaExecucao}
                 onChange={(e) => onChange({ diaExecucao: e.target.value })} placeholder="Ex.: 5" />
             </FormField>
             <FormField label="Data de início">
-              <Input type="date" value={proposta.dataInicioContrato}
-                onChange={(e) => onChange({ dataInicioContrato: e.target.value })} />
+              <InputData value={proposta.dataInicioContrato}
+                onChange={(v) => onChange({ dataInicioContrato: v })} />
             </FormField>
             <FormField label="Vigência (meses)">
               <Select value={proposta.vigenciaMeses} onChange={(e) => onChange({ vigenciaMeses: e.target.value })}>
@@ -102,11 +104,11 @@ export function PropostaCampos({ proposta, onChange, tecnicos, termoTemplates, e
             <FormField label="Data fim (calculada)">
               <Input value={dataFim ? formatarData(dataFim) : "—"} disabled readOnly />
             </FormField>
-            <FormField label="Condição de pagamento" hint="Ex.: 30 dias após medição">
+            <FormField label="Condição de pagamento" dica="Exemplos: 30 dias após a medição; todo dia 05.">
               <Input value={proposta.condicaoPagamento}
                 onChange={(e) => onChange({ condicaoPagamento: e.target.value })} placeholder="Ex.: todo dia 05" />
             </FormField>
-            <FormField label="Dia de faturamento" hint="1 a 28">
+            <FormField label="Dia de faturamento" dica="Dia do mês para o faturamento, de 1 a 28.">
               <Input type="number" min="1" max="28" value={proposta.diaFaturamento}
                 onChange={(e) => onChange({ diaFaturamento: e.target.value })} placeholder="Ex.: 1" />
             </FormField>
@@ -141,9 +143,8 @@ export function PropostaCampos({ proposta, onChange, tecnicos, termoTemplates, e
       <div className="card-padded">
         <FormSection title="Termo de referência">
           <FormField label="Carregar de um template">
-            <Select value="" onChange={(e) => { if (e.target.value) aplicarTemplate(e.target.value); }} placeholder="Selecione um template...">
-              {termoTemplates.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
-            </Select>
+            {/* Ação de carregar (copia o texto): sempre escolha nova, só termos ativos */}
+            <SeletorCadastro entidade="termos-referencia" itens={termoTemplates} valor="" onChange={(v) => { if (v) aplicarTemplate(v); }} placeholder="Selecione um template..." />
           </FormField>
           <div className="flex flex-wrap gap-1.5">
             {VARIAVEIS_TERMO.map((v) => (
@@ -167,7 +168,7 @@ export function PropostaCampos({ proposta, onChange, tecnicos, termoTemplates, e
             <Wrench className="w-3.5 h-3.5" /> Os serviços inclusos são os listados na tabela de <strong>Serviços</strong> acima.
           </div>
           <FormGrid cols={2}>
-            <FormField label="Visitas por período" hint="Quantidade de visitas em cada ciclo">
+            <FormField label="Visitas por período" dica="Quantidade de visitas em cada ciclo de recorrência.">
               <Input type="number" min="1" value={proposta.visitasPorPeriodo}
                 onChange={(e) => onChange({ visitasPorPeriodo: e.target.value })} placeholder="Ex.: 1" />
             </FormField>

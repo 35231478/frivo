@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Download, X } from "lucide-react";
+import { Download, Smartphone, X } from "lucide-react";
 import { solicitarPermissaoEPush } from "@/lib/push";
 
 const CHAVE_DISMISS = "frivo-install-dismiss";
@@ -61,23 +61,23 @@ export function InstallBanner() {
   if (!visivel) return null;
 
   return (
-    <div className="lg:hidden flex items-center gap-3 bg-sidebar text-white px-4 py-2.5">
-      <span className="text-sm flex-1">📱 Instale o Frivo no seu celular</span>
+    <div className="lg:hidden flex items-center gap-3 bg-acento-claro text-ink border-b border-surface-border px-4 py-2.5">
+      <span className="text-sm flex-1 inline-flex items-center gap-2"><Smartphone className="w-4 h-4 text-acento shrink-0" aria-hidden /> Instale o Frivo no seu celular</span>
       <button
         type="button"
         onClick={instalar}
-        className="inline-flex items-center gap-1.5 bg-primary-500 hover:bg-primary-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+        className="inline-flex items-center gap-1.5 bg-acento hover:bg-acento-hover text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
       >
         <Download className="w-3.5 h-3.5" /> Instalar
       </button>
       <button
         type="button"
         onClick={dispensar}
-        className="text-slate-300 hover:text-white text-xs font-medium px-2 py-1.5"
+        className="text-ink-muted hover:text-ink text-xs font-medium px-2 py-1.5"
       >
         Agora não
       </button>
-      <button type="button" onClick={dispensar} aria-label="Fechar" className="text-slate-400 hover:text-white">
+      <button type="button" onClick={dispensar} aria-label="Fechar" className="text-ink-muted hover:text-ink">
         <X className="w-4 h-4" />
       </button>
     </div>

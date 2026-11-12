@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmar } from "@/components/ui/avisos";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -12,17 +13,21 @@ import {
   Mail, MessageCircle, Link2, Send, Ban, Pencil, Check, AlertCircle,
   FileCheck, ScrollText, Receipt, DollarSign,
 } from "lucide-react";
+import { chaveHojeBR } from "@/lib/fuso";
+import { InputData } from "@/components/ui/input-data";
 
 interface MedicaoAcoesProps {
   medicaoId: string;
   numero: string;
   tokenPublico: string;
   status: string;
+  /** Fatura avulsa: textos dizem "fatura" */
+  avulsa?: boolean;
 }
 
 type Painel = "PC" | "NF" | "BOLETO" | "PAGAMENTO" | null;
 
-export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status }: MedicaoAcoesProps) {
+export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status, avulsa }: MedicaoAcoesProps) {
   const router = useRouter();
   const [carregando, setCarregando] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ tipo: "ok" | "erro"; msg: string } | null>(null);
@@ -35,7 +40,7 @@ export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status }: Medica
   const [nfUrl, setNfUrl] = useState("");
   const [boletoUrl, setBoletoUrl] = useState("");
   const [boletoCodigo, setBoletoCodigo] = useState("");
-  const [dataPagamento, setDataPagamento] = useState(new Date().toISOString().slice(0, 10));
+  const [dataPagamento, setDataPagamento] = useState(chaveHojeBR());
   const [formaPagamento, setFormaPagamento] = useState("BOLETO");
 
   const publicUrl =
@@ -67,7 +72,7 @@ export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status }: Medica
         else setFeedback({ tipo: "erro", msg: "Cliente sem WhatsApp de faturamento cadastrado." });
       } else if (viaAposta === "copiar") {
         await navigator.clipboard.writeText(publicUrl);
-        setFeedback({ tipo: "ok", msg: "Link copiado!" });
+        setFeedback({ tipo: "ok", msg: "Link copiado." });
       }
       setPainel(null);
       router.refresh();
@@ -86,7 +91,7 @@ export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status }: Medica
         <div className={
           feedback.tipo === "ok"
             ? "bg-success-50 border border-success-200 text-success-700 text-sm rounded-lg px-3 py-2 flex items-center gap-2"
-            : "bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 flex items-center gap-2"
+            : "bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2 flex items-center gap-2"
         }>
           {feedback.tipo === "ok" ? <Check className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
           {feedback.msg}
@@ -100,7 +105,7 @@ export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status }: Medica
             <Button variant="primary" onClick={() => executar("ENVIAR", {}, "mailto")} loading={carregando === "mailto"}>
               <Mail className="w-4 h-4" /> Enviar p/ aprovação (E-mail)
             </Button>
-            <Button variant="success" onClick={() => executar("ENVIAR", {}, "whatsapp")} loading={carregando === "whatsapp"}>
+            <Button variant="secondary" onClick={() => executar("ENVIAR", {}, "whatsapp")} loading={carregando === "whatsapp"}>
               <MessageCircle className="w-4 h-4" /> Enviar (WhatsApp)
             </Button>
             <Button variant="outline" onClick={() => executar("ENVIAR", {}, "copiar")} loading={carregando === "copiar"}>
@@ -164,7 +169,7 @@ export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status }: Medica
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => { if (confirm("Cancelar esta medição?")) executar("CANCELAR"); }}
+            onClick={async () => { if (await confirmar({ mensagem: avulsa ? "Cancelar esta fatura?" : "Cancelar esta medição?", perigo: true, confirmarTexto: avulsa ? "Cancelar fatura" : "Cancelar medição", cancelarTexto: "Voltar" })) executar("CANCELAR"); }}
             loading={carregando === "CANCELAR"}
           >
             <Ban className="w-3.5 h-3.5" /> Cancelar
@@ -174,8 +179,8 @@ export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status }: Medica
 
       {/* Painel: PC */}
       {painel === "PC" && (
-        <div className="border border-primary-200 bg-primary-50/30 rounded-lg p-4 space-y-3">
-          <h4 className="text-sm font-bold text-primary-700">Registrar Pedido de Compra (PC)</h4>
+        <div className="border border-surface-border bg-surface-alt/60 rounded-lg p-4 space-y-3">
+          <h4 className="text-sm font-semibold text-ink">Registrar pedido de compra (PC)</h4>
           <FormGrid cols={2}>
             <FormField label="Número do PC" required>
               <Input value={pcNumero} onChange={(e) => setPcNumero(e.target.value)} placeholder="Ex.: PC-2026-001" />
@@ -195,8 +200,8 @@ export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status }: Medica
 
       {/* Painel: NF */}
       {painel === "NF" && (
-        <div className="border border-primary-200 bg-primary-50/30 rounded-lg p-4 space-y-3">
-          <h4 className="text-sm font-bold text-primary-700">Registrar Nota Fiscal</h4>
+        <div className="border border-surface-border bg-surface-alt/60 rounded-lg p-4 space-y-3">
+          <h4 className="text-sm font-semibold text-ink">Registrar nota fiscal</h4>
           <FormGrid cols={2}>
             <FormField label="Número da NF" required>
               <Input value={nfNumero} onChange={(e) => setNfNumero(e.target.value)} placeholder="Ex.: 12345" />
@@ -216,8 +221,8 @@ export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status }: Medica
 
       {/* Painel: Boleto */}
       {painel === "BOLETO" && (
-        <div className="border border-primary-200 bg-primary-50/30 rounded-lg p-4 space-y-3">
-          <h4 className="text-sm font-bold text-primary-700">Registrar Boleto</h4>
+        <div className="border border-surface-border bg-surface-alt/60 rounded-lg p-4 space-y-3">
+          <h4 className="text-sm font-semibold text-ink">Registrar boleto</h4>
           <FormGrid cols={2}>
             <FormField label="Link do boleto (URL)" hint="Opcional">
               <Input value={boletoUrl} onChange={(e) => setBoletoUrl(e.target.value)} placeholder="https://..." />
@@ -237,11 +242,11 @@ export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status }: Medica
 
       {/* Painel: Pagamento */}
       {painel === "PAGAMENTO" && (
-        <div className="border border-success-200 bg-success-50/30 rounded-lg p-4 space-y-3">
-          <h4 className="text-sm font-bold text-success-700">Registrar Pagamento</h4>
+        <div className="border border-surface-border bg-surface-alt/60 rounded-lg p-4 space-y-3">
+          <h4 className="text-sm font-semibold text-ink">Registrar pagamento</h4>
           <FormGrid cols={2}>
             <FormField label="Data do pagamento" required>
-              <Input type="date" value={dataPagamento} onChange={(e) => setDataPagamento(e.target.value)} />
+              <InputData value={dataPagamento} onChange={(v) => setDataPagamento(v)} />
             </FormField>
             <FormField label="Forma de pagamento">
               <Select value={formaPagamento} onChange={(e) => setFormaPagamento(e.target.value)}>

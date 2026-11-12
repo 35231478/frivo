@@ -3,6 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { proximoNumeroOs } from "@/lib/os-server";
 import { getPortalSession } from "@/lib/auth-portal";
 import { chamadoPortalSchema } from "@/lib/validations";
+import { validarDataUrl, type ArquivoValidado } from "@/lib/anexos-server";
+import { TIPOS_IMAGEM } from "@/lib/anexos";
+import { conferirBloqueio, ipDaRequisicao, registrarTentativa } from "@/lib/acesso/limite";
+import { proximoNumero } from "@/lib/numeracao-server";
 
 const MAP_URGENCIA: Record<string, "NORMAL" | "ALTA" | "CRITICO"> = {
   NORMAL: "NORMAL", URGENTE: "ALTA", CRITICO: "CRITICO",
@@ -16,6 +20,14 @@ export async function POST(req: NextRequest) {
   }
   const { clienteId, empresaId } = sessao.user;
   const contatoId = sessao.user.id;
+
+  // Limite por contato e por IP: chamado legítimo sobra, flood para
+  const alvos = { usuarioId: contatoId, ip: ipDaRequisicao(req.headers) };
+  const bloqueio = await conferirBloqueio("CHAMADO_PUBLICO", alvos);
+  if (bloqueio.bloqueado) {
+    return NextResponse.json({ erro: `Muitos chamados em sequência. Tente de novo em ${bloqueio.minutos} min.` }, { status: 429 });
+  }
+  await registrarTentativa("CHAMADO_PUBLICO", alvos);
 
   const parsed = chamadoPortalSchema.safeParse(await req.json());
   if (!parsed.success) {
@@ -33,6 +45,17 @@ export async function POST(req: NextRequest) {
     if (!e) return NextResponse.json({ erro: "Equipamento inválido" }, { status: 400 });
   }
 
+  // Fotos chegam como data URL do navegador do cliente: só imagens, conferidas pelo conteúdo
+  const fotos: ArquivoValidado[] = [];
+  for (const f of d.fotos) {
+    const v = validarDataUrl(f.conteudo, f.nome, {
+      tipos: TIPOS_IMAGEM,
+      mensagemTipo: "Envie apenas fotos (JPG, PNG ou WEBP).",
+    });
+    if (!v.ok) return NextResponse.json({ erro: `Foto "${f.nome}": ${v.erro}` }, { status: 400 });
+    fotos.push(v.arquivo);
+  }
+
   // Responsável interno pela criação (gestor/admin da empresa)
   const gestor = await prisma.usuario.findFirst({
     where: { empresaId, ativo: true, role: { in: ["ADMIN", "GERENTE"] } },
@@ -41,14 +64,14 @@ export async function POST(req: NextRequest) {
   }) ?? await prisma.usuario.findFirst({ where: { empresaId, ativo: true }, select: { id: true } });
   if (!gestor) return NextResponse.json({ erro: "Empresa sem usuário responsável" }, { status: 400 });
 
-  const ano = new Date().getFullYear();
-  const numero = await proximoNumeroOs(empresaId, ano);
-  const totalChamados = await prisma.ordemServico.count({ where: { empresaId, origem: "PORTAL_CLIENTE" } });
-  const chamadoNumero = `CHM-${ano}-${String(totalChamados + 1).padStart(4, "0")}`;
-
   const descricao = (d.tipoProblema ? `[${d.tipoProblema}] ` : "") + d.descricao;
 
-  const os = await prisma.ordemServico.create({
+  // OS e chamado numerados pelo contador da empresa (sob trava, na mesma transação do INSERT):
+  // nunca "total + 1", que repetia número depois de uma exclusão
+  const os = await prisma.$transaction(async (tx) => {
+  const numero = await proximoNumeroOs(tx, empresaId);
+  const chamadoNumero = await proximoNumero(tx, empresaId, "chamado");
+  return tx.ordemServico.create({
     data: {
       empresaId,
       numero,
@@ -62,13 +85,14 @@ export async function POST(req: NextRequest) {
       origem: "PORTAL_CLIENTE",
       prioridade: MAP_URGENCIA[d.urgencia] ?? "NORMAL",
       descricao,
-      anexos: d.fotos.length > 0 ? { create: d.fotos.map((f) => ({ nome: f.nome, tipo: f.tipo, tamanho: f.tamanho, conteudo: f.conteudo })) } : undefined,
+      anexos: fotos.length > 0 ? { create: fotos } : undefined,
     },
+  });
   });
 
   await prisma.osHistorico.create({
-    data: { ordemServicoId: os.id, usuarioId: gestor.id, acao: "Chamado aberto pelo portal", detalhes: `${chamadoNumero} — ${sessao.user.name ?? "cliente"}` },
+    data: { ordemServicoId: os.id, usuarioId: gestor.id, acao: "Chamado aberto pelo portal", detalhes: `${os.chamadoNumero} — ${sessao.user.name ?? "cliente"}` },
   });
 
-  return NextResponse.json({ id: os.id, chamadoNumero }, { status: 201 });
+  return NextResponse.json({ id: os.id, chamadoNumero: os.chamadoNumero }, { status: 201 });
 }

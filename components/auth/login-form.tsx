@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { signIn } from "next-auth/react";
@@ -8,29 +9,53 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { loginSchema, type LoginInput } from "@/lib/validations";
 import { AlertCircle, Eye, EyeOff, Loader2, LogIn } from "lucide-react";
 
+const CHAVE_LEMBRAR = "frivo:manter-conectado";
+
+/** Só caminho LOCAL ("/..." e não "//..."): callbackUrl=https://evil não leva ninguém para fora (S7). */
+export function destinoPosLogin(callbackUrl: string | null | undefined): string {
+  const v = callbackUrl ?? "";
+  return v.startsWith("/") && !v.startsWith("//") ? v : "/dashboard";
+}
+
+/** Erro do login: senha errada (genérico, não diz se o e-mail existe) ou bloqueio por excesso de tentativas. */
+export function mensagemErroLogin(code: string | undefined): string {
+  const minutos = /^bloqueado-(\d+)$/.exec(code ?? "")?.[1];
+  if (minutos) return `Muitas tentativas. Aguarde ${minutos} min e tente de novo, ou use “Esqueci minha senha”.`;
+  return "E-mail ou senha inválidos.";
+}
+
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") ?? "/dashboard";
+  const callbackUrl = destinoPosLogin(searchParams.get("callbackUrl"));
+  // Vindo de /sessao-encerrada: o acesso foi encerrado (usuário/empresa inativados ou sessão inválida)
+  const sessaoEncerrada = searchParams.get("sessao") === "encerrada";
+  // Vindo de /definir-senha (convite): senha criada, é só entrar
+  const senhaDefinida = searchParams.get("senha") === "definida";
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [erro, setErro] = useState("");
+  // "Manter conectado": desmarcado por padrão; o aparelho lembra a última escolha
+  const [lembrar, setLembrar] = useState(false);
+  useEffect(() => { try { setLembrar(localStorage.getItem(CHAVE_LEMBRAR) === "1"); } catch { /* sem storage */ } }, []);
 
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<LoginInput>({ resolver: zodResolver(loginSchema) });
+  } = useForm<LoginInput>({ resolver: zodResolver(loginSchema), defaultValues: { email: searchParams.get("email") ?? "" } });
 
   const onSubmit = async (data: LoginInput) => {
     setErro("");
+    try { localStorage.setItem(CHAVE_LEMBRAR, lembrar ? "1" : "0"); } catch { /* sem storage */ }
     const resultado = await signIn("credentials", {
       email: data.email,
       senha: data.senha,
+      lembrar: lembrar ? "true" : "false",
       redirect: false,
     });
 
     if (resultado?.error) {
-      setErro("E-mail ou senha inválidos.");
+      setErro(mensagemErroLogin(resultado.code));
       return;
     }
 
@@ -40,8 +65,22 @@ export function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+      {senhaDefinida && !erro && (
+        <div className="bg-ok-claro border border-ok/20 text-ok-texto text-sm rounded-lg px-3 py-2.5 flex items-center gap-2" role="status">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          Senha definida! Entre com o seu e-mail e a nova senha.
+        </div>
+      )}
+
+      {sessaoEncerrada && !erro && (
+        <div className="bg-atencao-claro border border-atencao/20 text-atencao-texto text-sm rounded-lg px-3 py-2.5 flex items-center gap-2" role="status">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          Sua sessão foi encerrada. Entre novamente para continuar.
+        </div>
+      )}
+
       {erro && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2.5 flex items-center gap-2">
+        <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2.5 flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
           {erro}
         </div>
@@ -58,12 +97,17 @@ export function LoginForm() {
           disabled={isSubmitting}
         />
         {errors.email && (
-          <p className="text-xs text-red-600 font-medium">{errors.email.message}</p>
+          <p className="text-xs text-atrasado font-medium">{errors.email.message}</p>
         )}
       </div>
 
       <div className="space-y-1.5">
-        <label className="text-sm font-semibold text-ink">Senha</label>
+        <div className="flex items-center justify-between gap-2">
+          <label className="text-sm font-semibold text-ink">Senha</label>
+          <Link href="/esqueci-senha" className="text-xs font-semibold text-primary-600 hover:text-primary-700 hover:underline">
+            Esqueci minha senha
+          </Link>
+        </div>
         <div className="relative">
           <input
             {...register("senha")}
@@ -83,14 +127,31 @@ export function LoginForm() {
           </button>
         </div>
         {errors.senha && (
-          <p className="text-xs text-red-600 font-medium">{errors.senha.message}</p>
+          <p className="text-xs text-atrasado font-medium">{errors.senha.message}</p>
         )}
       </div>
+
+      <label className="flex items-start gap-2.5 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          name="lembrar"
+          checked={lembrar}
+          onChange={(e) => setLembrar(e.target.checked)}
+          disabled={isSubmitting}
+          className="mt-0.5 w-4 h-4 rounded border-surface-border text-primary-600 focus:ring-primary-500/20"
+        />
+        <span className="text-sm text-ink">
+          Manter conectado
+          <span className="block text-xs text-ink-muted">
+            {lembrar ? "Fica conectado por 30 dias neste aparelho." : "Sem marcar, a sessão vale por 1 dia. Não marque em computador compartilhado."}
+          </span>
+        </span>
+      </label>
 
       <button
         type="submit"
         disabled={isSubmitting}
-        className="w-full bg-success-500 hover:bg-success-600 active:bg-success-700 text-white font-semibold py-3 rounded-lg text-sm transition-all disabled:opacity-60 flex items-center justify-center gap-2 shadow-sm hover:shadow-md focus:outline-none focus:ring-4 focus:ring-success-500/20"
+        className="w-full bg-acento hover:bg-acento-hover text-white font-semibold py-3 rounded-lg text-sm transition-colors disabled:opacity-60 flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-4 focus-visible:ring-acento/30"
       >
         {isSubmitting ? (
           <>

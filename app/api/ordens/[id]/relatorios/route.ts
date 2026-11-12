@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { nomesTecnicosAtividade, textoTecnicosAtividade } from "@/lib/atividade-equipe";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { relatorioSchema } from "@/lib/validations";
-import { gerarNumeroRelatorio } from "@/lib/utils";
+import { linkRelatorioAtividade } from "@/lib/relatorio-atividade-link";
+import { comNumero } from "@/lib/numeracao-server";
+import { contarEquipamentosAtendidos } from "@/lib/relatorio-os/dados";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -26,7 +29,10 @@ export async function GET(_: NextRequest, { params }: Params) {
         include: {
           tipoOs: { select: { nome: true, cor: true } },
           tecnico: { select: { nome: true } },
+          equipe: { select: { nome: true } },
+          tecnicosEquipe: { select: { tecnico: { select: { nome: true } } }, orderBy: { criadoEm: "asc" } },
           respostas: { include: { campo: { select: { label: true, tipo: true } } } },
+          equipamentos: { select: { feito: true, equipamento: { select: { id: true } } } },
         },
       },
       relatorios: { orderBy: { criadoEm: "desc" } },
@@ -34,15 +40,29 @@ export async function GET(_: NextRequest, { params }: Params) {
   });
   if (!os) return NextResponse.json({ erro: "Não encontrada" }, { status: 404 });
 
-  const equipamentos = os.unidadeId
-    ? await prisma.equipamento.count({ where: { unidadeId: os.unidadeId, ativo: true } })
-    : 0;
+  // Equipamentos ATENDIDOS nesta OS — a mesma regra do relatório (antes contava todos os ativos da
+  // unidade do cliente, atendidos ou não: o card dizia 30 numa OS que atendeu 2)
+  const equipamentos = contarEquipamentosAtendidos(os.atividades, os.equipamentoId, os.status === "CONCLUIDA");
+
+  // Fotos = só as da EXECUÇÃO, as que o técnico tirou na visita: checklist (antes/depois/item), "Fotos
+  // do serviço" do app, formulário e serviço adicional. As enviadas pelo escritório (anexo sem
+  // atividade) continuam na galeria "Fotos & Anexos", mas não entram nesta conta nem no relatório.
+  const [porExecucao, porAdicional, anexosFoto] = await Promise.all([
+    prisma.fotoAtendimento.groupBy({ by: ["atividadeId"], where: { empresaId, atividade: { ordemServicoId: id } }, _count: { _all: true } }),
+    prisma.servicoAdicionalFoto.findMany({ where: { empresaId, servico: { ordemServicoId: id } }, select: { servico: { select: { atividadeId: true } } } }),
+    prisma.osAnexo.findMany({ where: { ordemServicoId: id, atividadeId: { not: null }, tipo: { startsWith: "image/" } }, select: { atividadeId: true } }),
+  ]);
+  const fotosDaAtividade = new Map<string | null, number>();
+  const somar = (atividadeId: string | null, n = 1) => fotosDaAtividade.set(atividadeId, (fotosDaAtividade.get(atividadeId) ?? 0) + n);
+  for (const g of porExecucao) somar(g.atividadeId, g._count._all);
+  for (const f of porAdicional) somar(f.servico.atividadeId);
+  for (const a of anexosFoto) somar(a.atividadeId);
 
   const tecnicos = new Set<string>();
   let totalFotos = 0;
   const atividades = os.atividades.map((a) => {
-    if (a.tecnico) tecnicos.add(a.tecnico.nome);
-    const fotos = a.respostas.filter((r) => ehFoto(r.arquivoUrl, r.campo.tipo)).length;
+    nomesTecnicosAtividade(a).forEach((n) => tecnicos.add(n));
+    const fotos = a.respostas.filter((r) => ehFoto(r.arquivoUrl, r.campo.tipo)).length + (fotosDaAtividade.get(a.id) ?? 0);
     totalFotos += fotos;
     const respostasPreenchidas = a.respostas.filter((r) => (r.resposta ?? "").trim()).length;
     const base = (a.observacao || a.resumo || "").trim();
@@ -50,8 +70,8 @@ export async function GET(_: NextRequest, { params }: Params) {
     const resumo = base ? base.slice(0, 150) : primeira ? `${primeira.campo.label}: ${primeira.resposta}`.slice(0, 150) : "";
     return {
       id: a.id, titulo: a.titulo, status: a.status, criadoEm: a.criadoEm, duracaoMin: a.duracaoMin,
-      tipoOsNome: a.tipoOs?.nome ?? null, tipoOsCor: a.tipoOs?.cor ?? null, tecnicoNome: a.tecnico?.nome ?? null,
-      resumo, fotos, respostas: respostasPreenchidas,
+      tipoOsNome: a.tipoOs?.nome ?? null, tipoOsCor: a.tipoOs?.cor ?? null, tecnicoNome: textoTecnicosAtividade(a),
+      resumo, fotos, respostas: respostasPreenchidas, linkRelatorio: linkRelatorioAtividade(a),
     };
   });
 
@@ -93,15 +113,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
   const data = parsed.data;
 
-  const ultimoRel = await prisma.relatorioOs.findFirst({
-    where: { empresaId, numero: { startsWith: `REL-${data.anoReferencia}-` } },
-    orderBy: { numero: "desc" },
-    select: { numero: true },
-  });
-  const seq = (ultimoRel ? Number(ultimoRel.numero.split("-")[2]) : 0) + 1;
-  const numero = gerarNumeroRelatorio(seq, data.anoReferencia);
-
-  const relatorio = await prisma.relatorioOs.create({
+  // Número pelo contador da empresa (rótulo = ano de referência), sob trava, na transação do INSERT
+  const relatorio = await comNumero(empresaId, "relatorio_os", (numero, tx) => tx.relatorioOs.create({
     data: {
       empresaId,
       ordemServicoId: id,
@@ -115,7 +128,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       status: "RASCUNHO",
       tokenPublico: crypto.randomUUID(),
     },
-  });
+  }));
 
   return NextResponse.json(relatorio, { status: 201 });
 }

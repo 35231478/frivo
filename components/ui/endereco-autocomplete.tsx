@@ -133,21 +133,21 @@ export function EnderecoAutocomplete({
           className="pr-8"
         />
         {loading && (
-          <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 animate-spin" />
+          <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted animate-spin" />
         )}
       </div>
 
       {aberto && sugestoes.length > 0 && (
-        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+        <div className="absolute z-50 mt-1 w-full bg-white border border-surface-border rounded-lg shadow-lg max-h-60 overflow-y-auto">
           {sugestoes.map((s, i) => (
             <button
               key={i}
               type="button"
               onClick={() => selecionar(s)}
-              className="flex items-start gap-2 w-full px-3 py-2 text-left hover:bg-frivo-50 transition-colors border-b border-gray-50 last:border-0"
+              className="flex items-start gap-2 w-full px-3 py-2 text-left hover:bg-frivo-50 transition-colors border-b border-surface-linha last:border-0"
             >
-              <MapPin className="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0" />
-              <span className="text-xs text-gray-700 line-clamp-2">{s.display_name}</span>
+              <MapPin className="w-3.5 h-3.5 text-ink-muted mt-0.5 shrink-0" />
+              <span className="text-xs text-ink line-clamp-2">{s.display_name}</span>
             </button>
           ))}
         </div>

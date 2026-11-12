@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { MedicaoForm } from "@/components/medicao/medicao-form";
 
-export const metadata: Metadata = { title: "Nova Medição" };
+export const metadata: Metadata = { title: "Nova medição" };
 
 export default async function NovaMedicaoPage({
   searchParams,
@@ -22,12 +22,12 @@ export default async function NovaMedicaoPage({
     }),
     prisma.servico.findMany({
       where: { empresaId, ativo: true },
-      select: { id: true, nome: true, descricao: true, unidade: true, valorPadrao: true },
+      select: { id: true, codigo: true, nome: true, descricao: true, unidade: true, valorPadrao: true },
       orderBy: { nome: "asc" },
     }),
     prisma.produto.findMany({
       where: { empresaId, ativo: true },
-      select: { id: true, nome: true, descricao: true, unidade: true, valorPadrao: true },
+      select: { id: true, codigo: true, nome: true, descricao: true, unidade: true, valorPadrao: true },
       orderBy: { nome: "asc" },
     }),
   ]);

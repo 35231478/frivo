@@ -5,16 +5,16 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
-import { moduloDaRota, pode } from "@/lib/permissoes";
+import { moduloDaRota, pode, type Acao } from "@/lib/permissoes";
 import { FrivoLogo, FrivoMark } from "./frivo-logo";
+import { secoesVisiveis as secoesVisiveisConfig } from "@/lib/navegacao/configuracoes";
 import type { Session } from "next-auth";
 import {
-  LayoutDashboard, Users, Thermometer, ClipboardList, FileText, FileBadge,
-  HardHat, Settings, ChevronDown, ChevronRight,
-  Wrench, FileSpreadsheet, Cog, Package, ListChecks, Calculator,
-  Wallet, Receipt, TrendingUp, FileBarChart, Clock, ShoppingCart, Timer, Tags, CalendarDays, Headset, ScrollText, QrCode,
-  Truck, UsersRound, IdCard, ClipboardCheck, Smartphone, ShieldCheck, UserCog, Upload, Landmark, Mail, Building2, Globe, Coins,
-  PanelLeftClose, PanelLeftOpen, MoreVertical, LogOut,
+  LayoutDashboard, Users, Thermometer, ClipboardList, FileText, HardHat, Settings, ChevronDown, ChevronRight,
+  Wrench, Calculator, Wallet, Receipt, TrendingUp, FileBarChart, ShoppingCart, Timer, CalendarDays, QrCode, MapPinned,
+  Truck, UsersRound, BadgeDollarSign, ClipboardCheck, Smartphone, UserCog, Upload, Landmark, Globe, Coins,
+  PanelLeftClose, PanelLeftOpen, MoreVertical, LogOut, Package, FileBadge,
+  CalendarClock, PackageOpen, PackageMinus,
 } from "lucide-react";
 
 type Icone = React.ComponentType<{ className?: string }>;
@@ -23,10 +23,12 @@ interface Item {
   href: string;
   icone: Icone;
   label: string;
-  /** Sobrescreve o alvo de ativação (ex.: itens com mesma rota). "__nunca__" = nunca ativo. */
-  matchHref?: string;
   /** Sobrescreve o módulo de permissão (quando o 1º segmento da rota não reflete o gate correto). */
   modulo?: string;
+  /** Ação exigida (padrão: "visualizar"). Ex.: Custo de pessoal exige "Financeiro › folha". */
+  acao?: Acao;
+  /** A ação basta sozinha (sem exigir "visualizar" do módulo). Ex.: "A separar" é de quem separa material. */
+  somenteAcao?: boolean;
 }
 interface Grupo {
   tipo: "grupo";
@@ -64,9 +66,11 @@ const OPERACIONAL: Secao[] = [
     entries: [
       {
         tipo: "grupo", label: "Operações", icone: ClipboardList, itens: [
-          { href: "/ordens", icone: ClipboardList, label: "Ordens de Serviço" },
+          { href: "/ordens", icone: ClipboardList, label: "Ordens de serviço" },
           { href: "/calendario", icone: CalendarDays, label: "Calendário" },
           { href: "/prazos", icone: Timer, label: "Prazos e SLA" },
+          // Última posição dos técnicos: só a gestão (Equipes › Gerenciar)
+          { href: "/mapa", icone: MapPinned, label: "Mapa", modulo: "equipes", acao: "gerenciar" },
         ],
       },
       {
@@ -77,16 +81,27 @@ const OPERACIONAL: Secao[] = [
         ],
       },
       {
+        tipo: "grupo", label: "Estoque", icone: Package, itens: [
+          { href: "/estoque", icone: Package, label: "Saldos e extrato" },
+          { href: "/estoque/notas", icone: FileText, label: "Notas de compra" },
+          { href: "/estoque/separacao", icone: PackageOpen, label: "A separar", modulo: "estoque", acao: "separar", somenteAcao: true },
+          { href: "/estoque/devolucao", icone: PackageMinus, label: "A devolver", modulo: "estoque", acao: "separar", somenteAcao: true },
+          { href: "/compras/pedidos", icone: ShoppingCart, label: "Pedidos de compra", modulo: "compras" },
+        ],
+      },
+      {
         tipo: "grupo", label: "Comercial", icone: FileText, itens: [
           { href: "/orcamentos", icone: Calculator, label: "Orçamentos" },
           { href: "/contratos", icone: FileText, label: "Contratos" },
-          { href: "/leads-site", icone: Globe, label: "Leads do Site" },
+          { href: "/contratos/reajustes", icone: TrendingUp, label: "Reajustes", modulo: "contratos", acao: "editar" },
+          { href: "/leads-site", icone: Globe, label: "Leads do site" },
         ],
       },
       {
         tipo: "grupo", label: "Equipes", icone: UsersRound, itens: [
           { href: "/colaboradores", icone: HardHat, label: "Colaboradores" },
           { href: "/equipes", icone: UsersRound, label: "Equipes" },
+          { href: "/equipes/app-colaborador", icone: Smartphone, label: "App do colaborador", modulo: "configuracoes", acao: "gerenciar", somenteAcao: true },
         ],
       },
       {
@@ -115,12 +130,16 @@ const FINANCEIRO: Secao[] = [
         tipo: "grupo", label: "Recebimentos", icone: Receipt, itens: [
           { href: "/financeiro/contas-receber", icone: Receipt, label: "Contas a receber", modulo: "financeiro" },
           { href: "/financeiro/medicoes", icone: FileBarChart, label: "Medições", modulo: "financeiro" },
+          { href: "/financeiro/faturamento-contratos", icone: CalendarClock, label: "Faturamento de contratos", modulo: "financeiro", acao: "medicoes" },
+          // "Perdas" saiu daqui: ver perdas = filtro de status "Perda" em Contas a receber; marcar/desmarcar
+          // perda virou ação dentro de "Editar" a conta.
         ],
       },
       {
         tipo: "grupo", label: "Pagamentos", icone: Upload, itens: [
           { href: "/financeiro/contas-pagar", icone: Upload, label: "Contas a pagar", modulo: "financeiro" },
-          { href: "/compras/pedidos", icone: ShoppingCart, label: "Pedidos de compra", modulo: "financeiro" },
+          { href: "/compras/pedidos", icone: ShoppingCart, label: "Pedidos de compra", modulo: "compras" },
+          { href: "/financeiro/fornecedores", icone: Truck, label: "Fornecedores", modulo: "financeiro" },
         ],
       },
       {
@@ -128,38 +147,15 @@ const FINANCEIRO: Secao[] = [
           { href: "/financeiro/contas-bancarias", icone: Landmark, label: "Contas bancárias", modulo: "financeiro" },
         ],
       },
-    ],
-  },
-];
-
-/** Bloco SISTEMA — configurações, acessível pelo rodapé em ambos os módulos. */
-const SISTEMA: Secao[] = [
-  {
-    titulo: "Sistema",
-    entries: [
       {
-        tipo: "grupo", label: "Configurações operacionais", icone: Cog, itens: [
-          { href: "/configuracoes/tipos-os", icone: ListChecks, label: "Tipos de OS" },
-          { href: "/configuracoes/tipos-equipamento", icone: Thermometer, label: "Tipos de equipamento" },
-          { href: "/configuracoes/formularios", icone: FileSpreadsheet, label: "Formulários" },
-          { href: "/configuracoes/servicos", icone: Wrench, label: "Serviços" },
-          { href: "/configuracoes/produtos", icone: Package, label: "Produtos" },
-          { href: "/configuracoes/tabelas-preco", icone: Tags, label: "Tabelas de preços" },
-          { href: "/configuracoes/termos", icone: ScrollText, label: "Termos de referência" },
-          { href: "/configuracoes/prazos", icone: Clock, label: "Modelos de prazo" },
-          { href: "/configuracoes/financeiro/categorias", icone: Tags, label: "Categorias financeiras" },
+        tipo: "grupo", label: "Fiscal", icone: FileBadge, itens: [
+          { href: "/financeiro/notas-fiscais", icone: FileText, label: "Notas fiscais", modulo: "financeiro", acao: "fiscal" },
+          { href: "/financeiro/fiscal", icone: FileBadge, label: "Dados fiscais (NFS-e)", modulo: "financeiro", acao: "fiscal" },
         ],
       },
       {
-        tipo: "grupo", label: "Configurações da conta", icone: Settings, itens: [
-          { href: "/configuracoes", icone: Building2, label: "Dados da empresa" },
-          { href: "/configuracoes/perfis", icone: ShieldCheck, label: "Perfis de acesso" },
-          { href: "/configuracoes/usuarios", icone: UserCog, label: "Usuários" },
-          { href: "/configuracoes/cargos", icone: IdCard, label: "Cargos" },
-          { href: "/configuracoes#preferencias", icone: Cog, label: "Preferências", matchHref: "__nunca__" },
-          { href: "/configuracoes/email", icone: Mail, label: "E-mail transacional" },
-          { href: "/configuracoes/portal", icone: Headset, label: "Portal do cliente" },
-          { href: "/configuracoes/qr-code", icone: QrCode, label: "Config. QR Code" },
+        tipo: "grupo", label: "Pessoal", icone: BadgeDollarSign, itens: [
+          { href: "/financeiro/custo-pessoal", icone: BadgeDollarSign, label: "Custo de pessoal", modulo: "financeiro", acao: "folha" },
         ],
       },
     ],
@@ -167,16 +163,24 @@ const SISTEMA: Secao[] = [
 ];
 
 type Modulo = "operacional" | "financeiro";
-type Vista = Modulo | "sistema";
+type Vista = Modulo;
 
-const VISTAS: Record<Vista, Secao[]> = { operacional: OPERACIONAL, financeiro: FINANCEIRO, sistema: SISTEMA };
+const VISTAS: Record<Vista, Secao[]> = { operacional: OPERACIONAL, financeiro: FINANCEIRO };
 
-const baseHref = (i: Item) => i.matchHref ?? i.href.split("#")[0];
+/**
+ * Configurações: item ÚNICO no rodapé (sem submenu). Abre a página de Configurações, onde cada
+ * item abre numa gaveta (lib/navegacao/configuracoes.ts). Ativo em /configuracoes e nas rotas
+ * antigas dos itens (que redirecionam para lá) — menos os checklists da frota, que são do Frota.
+ */
+const CONFIG_HREF = "/configuracoes";
+const ehRotaConfiguracoes = (pathname: string) =>
+  (pathname === CONFIG_HREF || pathname.startsWith(CONFIG_HREF + "/")) && !pathname.startsWith("/configuracoes/checklists-veiculo");
+
+const baseHref = (i: Item) => i.href.split("#")[0];
 
 /** Todas as bases de rota marcadas com sua vista (para descobrir a qual módulo uma rota pertence). */
 const BASES_POR_VISTA: { base: string; vista: Vista }[] = (Object.keys(VISTAS) as Vista[]).flatMap((vista) =>
-  VISTAS[vista].flatMap((s) => s.entries.flatMap((e) => (ehGrupo(e) ? e.itens : [e]).map((i) => ({ base: baseHref(i), vista }))))
-    .filter((b) => b.base !== "__nunca__"),
+  VISTAS[vista].flatMap((s) => s.entries.flatMap((e) => (ehGrupo(e) ? e.itens : [e]).map((i) => ({ base: baseHref(i), vista })))),
 );
 
 /** Descobre a vista (módulo) de uma rota pelo prefixo mais longo; null se não pertencer a nenhuma. */
@@ -206,9 +210,8 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
   const [montado, setMontado] = useState(false);
   const [menuAberto, setMenuAberto] = useState(false);
 
-  // Módulo ativo ("mundo") + overlay de configurações (Sistema)
+  // Módulo ativo ("mundo")
   const [modulo, setModulo] = useState<Modulo>("operacional");
-  const [sistemaAberto, setSistemaAberto] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -222,8 +225,7 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
   // Troca automática de vista conforme a rota atual (o menu segue a página).
   useEffect(() => {
     const v = vistaDaRota(pathname);
-    if (v === "sistema") setSistemaAberto(true);
-    else if (v) { setModulo(v); setSistemaAberto(false); }
+    if (v) setModulo(v);
   }, [pathname]);
 
   // Persiste o módulo escolhido
@@ -245,7 +247,9 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
   const role = usuario.role;
   const podeVer = (i: Item) => {
     const m = i.modulo ?? moduloDaRota(i.href.split("#")[0]);
-    return !m || pode(permissoes, m, "visualizar", role);
+    if (!m) return true;
+    if (i.somenteAcao && i.acao) return pode(permissoes, m, i.acao, role);
+    return pode(permissoes, m, "visualizar", role) && (!i.acao || pode(permissoes, m, i.acao, role));
   };
 
   // Filtra seções por permissão (itens sem permissão somem; grupos/seções vazios somem)
@@ -266,27 +270,28 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
   // Disponibilidade de cada mundo conforme RBAC
   const operacionalDisponivel = temItens(filtrar(OPERACIONAL));
   const financeiroDisponivel = temItens(filtrar(FINANCEIRO));
-  const sistemaDisponivel = temItens(filtrar(SISTEMA));
+  // Configurações: aparece para quem pode ver ao menos um item (mesma regra dos cartões)
+  const configDisponivel = secoesVisiveisConfig(permissoes, role).length > 0;
+  const configAtiva = ehRotaConfiguracoes(pathname);
+  const perfilRotulo = role === "ADMIN" ? "ADMIN" : usuario.perfilNome || "Sem perfil de acesso";
 
   // Módulo efetivo (cai para o disponível se o escolhido não estiver acessível)
   const moduloEfetivo: Modulo =
     modulo === "financeiro" && !financeiroDisponivel ? "operacional"
       : modulo === "operacional" && !operacionalDisponivel && financeiroDisponivel ? "financeiro"
         : modulo;
-  const vistaAtiva: Vista = sistemaAberto && sistemaDisponivel ? "sistema" : moduloEfetivo;
+  const vistaAtiva: Vista = moduloEfetivo;
 
   const secoesVisiveis = filtrar(VISTAS[vistaAtiva]);
   const mostrarSeletor = operacionalDisponivel && financeiroDisponivel;
 
-  // Tema por módulo: financeiro = azul royal (estilo Conta Azul); demais = navy padrão.
-  // Destaque de item ativo adaptável ao fundo (overlay branco no financeiro).
-  const temaFin = vistaAtiva === "financeiro";
-  const ativoBg = temaFin ? "bg-white/20" : "bg-primary-500";
+  // Sistema de design: um só tema (superfície clara, item ativo no acento claro) em todos os módulos.
+  const ativoBg = "bg-acento-claro";
 
   // Item ativo pelo prefixo mais longo dentro da vista atual
   const basesAtuais = secoesVisiveis.flatMap((s) =>
     s.entries.flatMap((e) => (ehGrupo(e) ? e.itens : [e]).map((i) => baseHref(i))),
-  ).filter((b) => b !== "__nunca__");
+  );
   let ativoHref: string | null = null;
   for (const b of basesAtuais) {
     if (pathname === b || pathname.startsWith(b + "/")) {
@@ -314,16 +319,15 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
 
   const escolherModulo = (m: Modulo) => {
     setModulo(m);
-    setSistemaAberto(false);
     router.push(m === "financeiro" ? "/financeiro" : "/dashboard");
   };
 
   return (
     <aside
-      style={temaFin ? { backgroundColor: "#14498F" } : undefined}
+      aria-label="Menu principal"
       className={cn(
-        "flex flex-col bg-sidebar text-white shrink-0 shadow-xl",
-        montado && "transition-[width,background-color] duration-200 ease-in-out",
+        "flex flex-col bg-white text-ink border-r border-surface-border shrink-0",
+        montado && "transition-[width] duration-200 ease-in-out",
         variant === "mobile" ? "w-72 h-full" : cn("hidden lg:flex", colapsada ? "lg:w-16" : "lg:w-[280px]"),
       )}
     >
@@ -333,7 +337,8 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
           <button
             onClick={toggleRecolher}
             title={colapsada ? "Expandir menu" : "Recolher menu"}
-            className="p-1.5 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white transition-colors"
+            aria-label={colapsada ? "Expandir menu" : "Recolher menu"}
+            className="p-1.5 rounded-lg text-ink-muted hover:bg-surface-page hover:text-ink transition-colors"
           >
             {colapsada ? <PanelLeftOpen className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
           </button>
@@ -341,37 +346,54 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
       )}
 
       {/* Perfil do usuário */}
-      <div className="px-3 pt-2 pb-3 border-b border-white/5 relative">
+      <div className="px-3 pt-2 pb-3 border-b border-surface-linha relative">
         <button
           onClick={() => setMenuAberto((v) => !v)}
-          className={cn("flex items-center w-full rounded-lg p-2 hover:bg-white/5 transition-colors", colapsada ? "justify-center" : "gap-3")}
+          aria-haspopup="menu" aria-expanded={menuAberto}
+          className={cn("flex items-center w-full rounded-lg p-2 hover:bg-surface-page transition-colors", colapsada ? "justify-center" : "gap-3")}
         >
           <Avatar image={avatarUrl ?? usuario.image} name={usuario.name} />
           {!colapsada && (<>
             <span className="flex-1 min-w-0 text-left">
-              <span className="block text-sm font-medium text-white truncate">{usuario.name ?? "Usuário"}</span>
-              <span className="block text-[11px] text-slate-400 truncate">{usuario.email ?? ""}</span>
+              <span className="block text-sm font-medium text-ink truncate">{usuario.name ?? "Usuário"}</span>
+              <span className="block text-[11px] text-ink-muted truncate">{usuario.email ?? ""}</span>
             </span>
-            <MoreVertical className="w-4 h-4 text-slate-400 shrink-0" />
+            <MoreVertical className="w-4 h-4 text-ink-subtle shrink-0" />
           </>)}
         </button>
 
         {menuAberto && (<>
           <div className="fixed inset-0 z-10" onClick={() => setMenuAberto(false)} />
           <div className={cn(
-            "absolute z-20 mt-1 w-52 bg-white rounded-lg shadow-xl border border-gray-100 py-1",
+            "absolute z-20 mt-1 w-52 bg-white rounded-lg shadow-elevated border border-surface-border py-1",
             colapsada ? "left-full ml-2 top-2" : "left-3 right-3",
           )}>
+            <div className="px-3 pt-1.5 pb-2 mb-1 border-b border-surface-linha" data-menu-conta>
+              <p className="text-xs text-ink truncate" title={`${usuario.empresaNome} · ${perfilRotulo}`}>
+                <span className="font-semibold">{usuario.empresaNome || "Empresa"}</span>
+                <span className="text-ink-muted"> · {perfilRotulo}</span>
+              </p>
+            </div>
             <Link
               href="/perfil"
               onClick={() => setMenuAberto(false)}
-              className="flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              className="flex items-center gap-2.5 px-3 py-2 text-sm text-ink hover:bg-surface-page"
             >
               <UserCog className="w-4 h-4" /> Gerenciar perfil
             </Link>
+            {configDisponivel && (
+              <Link
+                href={CONFIG_HREF}
+                onClick={() => setMenuAberto(false)}
+                className="flex items-center gap-2.5 px-3 py-2 text-sm text-ink hover:bg-surface-page"
+                data-acao="menu-configuracoes"
+              >
+                <Settings className="w-4 h-4" /> Configurações
+              </Link>
+            )}
             <button
               onClick={() => signOut({ callbackUrl: "/login" })}
-              className="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+              className="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-atrasado hover:bg-atrasado-claro"
             >
               <LogOut className="w-4 h-4" /> Sair
             </button>
@@ -382,7 +404,7 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
       {/* Seletor de módulos ("mundos") */}
       {mostrarSeletor && (
         <div className={cn("px-3 pt-3", colapsada ? "pb-1" : "pb-1")}>
-          <div className={cn("bg-white/5 rounded-xl p-1", colapsada ? "flex flex-col gap-1" : "grid grid-cols-2 gap-1")}>
+          <div className={cn("bg-surface-page border border-surface-border rounded-lg p-1", colapsada ? "flex flex-col gap-1" : "grid grid-cols-2 gap-1")}>
             <SeletorBotao
               ativo={vistaAtiva === "operacional"}
               ativoBg={ativoBg}
@@ -417,7 +439,7 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
                       title={e.label}
                       className={cn(
                         "relative flex items-center justify-center py-2.5 rounded-lg transition-all",
-                        grupoAtivo(e) ? cn(ativoBg, "text-white") : "text-slate-200 hover:bg-white/5 hover:text-white",
+                        grupoAtivo(e) ? cn(ativoBg, "text-acento") : "text-ink-muted hover:bg-surface-page hover:text-ink",
                       )}
                     >
                       <e.icone className="w-[18px] h-[18px]" />
@@ -429,34 +451,36 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
                         className={cn(
                           "relative flex items-center justify-between w-full pl-4 pr-3 py-2.5 rounded-lg text-sm transition-all",
                           grupoAtivo(e)
-                            ? cn(ativoBg, "text-white font-semibold")
-                            : "text-slate-200 hover:bg-white/5 hover:text-white",
+                            ? "text-acento font-semibold"
+                            : "text-ink-muted hover:bg-surface-page hover:text-ink",
                         )}
+                        aria-expanded={abertos.has(e.label)}
                       >
-                        {grupoAtivo(e) && <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r bg-success-500" />}
-                        <span className="flex items-center gap-3">
-                          <e.icone className="w-[18px] h-[18px]" />
+                        <span className="flex items-center gap-3 text-left leading-tight min-w-0">
+                          <e.icone className="w-[18px] h-[18px] shrink-0" />
                           {e.label}
                         </span>
                         {abertos.has(e.label) ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                       </button>
 
                       {abertos.has(e.label) && (
-                        <div className="mt-1 ml-3 pl-3 pr-1 py-1 rounded-lg bg-white/5 border-l-2 border-white/15 space-y-0.5">
+                        <div className="mt-1 ml-5 pl-2 pr-1 py-1 border-l border-surface-border space-y-0.5">
                           {e.itens.map((i) => (
-                            <Link
-                              key={i.href + i.label}
-                              href={i.href}
-                              className={cn(
-                                "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
-                                itemAtivo(i)
-                                  ? "bg-white/15 text-white font-medium"
-                                  : "text-slate-200 hover:bg-white/10 hover:text-white",
-                              )}
-                            >
-                              <i.icone className="w-4 h-4 shrink-0" />
-                              {i.label}
-                            </Link>
+                            <div key={i.href + i.label}>
+                              <Link
+                                href={i.href}
+                                className={cn(
+                                  "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
+                                  itemAtivo(i)
+                                    ? "bg-acento-claro text-acento font-semibold"
+                                    : "text-ink-muted hover:bg-surface-page hover:text-ink",
+                                )}
+                                aria-current={itemAtivo(i) ? "page" : undefined}
+                              >
+                                <i.icone className="w-4 h-4 shrink-0" />
+                                {i.label}
+                              </Link>
+                            </div>
                           ))}
                         </div>
                       )}
@@ -471,29 +495,31 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
         ))}
       </nav>
 
-      {/* Rodapé: configurações (Sistema) + instalar app + logo */}
-      <div className="px-3 pt-2 pb-3 border-t border-white/5 space-y-2">
-        {sistemaDisponivel && (
-          <button
-            onClick={() => setSistemaAberto((v) => !v)}
+      {/* Rodapé: configurações (item único) + instalar app + logo */}
+      <div className="px-3 pt-2 pb-3 border-t border-surface-linha space-y-2">
+        {configDisponivel && (
+          <Link
+            href={CONFIG_HREF}
             title={colapsada ? "Configurações" : undefined}
+            aria-current={configAtiva ? "page" : undefined}
+            data-acao="rodape-configuracoes"
             className={cn(
               "flex items-center rounded-lg text-sm transition-colors w-full",
               colapsada ? "justify-center py-2" : "gap-3 pl-4 pr-3 py-2.5",
-              sistemaAberto
-                ? cn(ativoBg, "text-white font-semibold")
-                : "text-slate-200 hover:bg-white/5 hover:text-white",
+              configAtiva
+                ? cn(ativoBg, "text-acento font-semibold")
+                : "text-ink-muted hover:bg-surface-page hover:text-ink",
             )}
           >
             <Settings className="w-[18px] h-[18px] shrink-0" />
             {!colapsada && <span className="truncate">Configurações</span>}
-          </button>
+          </Link>
         )}
         <Link
           href="/instalar"
           title={colapsada ? "Instalar app" : undefined}
           className={cn(
-            "flex items-center rounded-lg text-xs text-slate-300 hover:bg-white/5 hover:text-white transition-colors",
+            "flex items-center rounded-lg text-xs text-ink-muted hover:bg-surface-page hover:text-ink transition-colors",
             colapsada ? "justify-center py-2" : "gap-2.5 px-3 py-2",
           )}
         >
@@ -501,7 +527,7 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
           {!colapsada && "Instalar app no celular"}
         </Link>
         <div className={cn("flex pt-1", colapsada ? "justify-center" : "px-3")}>
-          {colapsada ? <FrivoMark size={28} /> : <FrivoLogo size="sm" />}
+          {colapsada ? <FrivoMark size={28} /> : <FrivoLogo size="sm" variant="dark" />}
         </div>
       </div>
     </aside>
@@ -522,12 +548,13 @@ function SeletorBotao({ ativo, ativoBg, onClick, icone: Icone, label, colapsada 
     <button
       onClick={onClick}
       title={colapsada ? label : undefined}
+      aria-pressed={ativo}
       className={cn(
-        "flex items-center justify-center rounded-lg text-xs font-medium transition-all",
+        "flex items-center justify-center rounded-md text-xs font-medium transition-colors",
         colapsada ? "py-2" : "gap-1.5 py-2 px-2",
         ativo
-          ? cn(ativoBg, "text-white shadow-sm")
-          : "text-slate-300 hover:bg-white/5 hover:text-white",
+          ? "bg-white text-acento font-semibold shadow-card border border-surface-border"
+          : "text-ink-muted hover:text-ink border border-transparent",
       )}
     >
       <Icone className={cn(colapsada ? "w-[18px] h-[18px]" : "w-4 h-4 shrink-0")} />
@@ -544,7 +571,7 @@ function Avatar({ image, name }: { image?: string | null; name?: string | null }
     return <img src={image} alt={name ?? "Usuário"} className="w-9 h-9 rounded-full object-cover shrink-0" />;
   }
   return (
-    <span className="w-9 h-9 rounded-full bg-gradient-to-br from-primary-500 to-success-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
+    <span className="w-9 h-9 rounded-full bg-acento-claro text-acento flex items-center justify-center font-display text-xs font-semibold shrink-0">
       {iniciais}
     </span>
   );
@@ -568,11 +595,11 @@ function SidebarLink({ href, icone: Icone, label, ativo, ativoBg, colapsada }: S
         "relative flex items-center rounded-lg text-sm transition-all",
         colapsada ? "justify-center py-2.5" : "gap-3 pl-4 pr-3 py-2.5",
         ativo
-          ? cn(ativoBg, "text-white font-semibold shadow-sm")
-          : "text-slate-200 hover:bg-white/5 hover:text-white",
+          ? cn(ativoBg, "text-acento font-semibold")
+          : "text-ink-muted hover:bg-surface-page hover:text-ink",
       )}
+      aria-current={ativo ? "page" : undefined}
     >
-      {ativo && !colapsada && <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r bg-success-500" />}
       <Icone className="w-[18px] h-[18px] shrink-0" />
       {!colapsada && <span className="truncate">{label}</span>}
     </Link>

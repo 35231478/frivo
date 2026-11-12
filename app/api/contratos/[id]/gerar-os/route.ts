@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirAlgumaPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { dataAgendadaRecorrencia } from "@/lib/recorrencia-helpers";
+import { anoBR, mesBR } from "@/lib/fuso";
+import { comNumero } from "@/lib/numeracao-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -20,8 +22,8 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const body = await req.json().catch(() => ({}));
   const agora = new Date();
-  const mes = Number(body?.mes) || agora.getMonth() + 1;
-  const ano = Number(body?.ano) || agora.getFullYear();
+  const mes = Number(body?.mes) || mesBR(agora);
+  const ano = Number(body?.ano) || anoBR(agora);
   const periodo = `${ano}-${String(mes).padStart(2, "0")}`;
 
   const contrato = await prisma.contrato.findFirst({
@@ -37,17 +39,10 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (existente) return NextResponse.json({ id: existente.id, jaExistia: true });
 
   const dataAgendada = dataAgendadaRecorrencia(ano, mes, (contrato as any).diaRecorrencia ?? contrato.diaVencimento ?? 1, (contrato as any).fimSemanaRecorrencia);
-  // Sequencial derivado do maior número de OS do ano alvo (evita colisão ao gerar para outro ano)
-  const ultimaOs = await prisma.ordemServico.findFirst({
-    where: { empresaId, numero: { startsWith: `OS-${ano}-` } },
-    orderBy: { numero: "desc" },
-    select: { numero: true },
-  });
-  const seq = (ultimaOs ? Number(ultimaOs.numero.split("-")[2]) : 0) + 1;
-  const numero = `OS-${ano}-${String(seq).padStart(4, "0")}`;
   const tituloTipo = contrato.tipoOsRecorrencia?.nome ?? "Manutenção do contrato";
 
-  const os = await prisma.ordemServico.create({
+  // Número pelo contador da empresa (rótulo = ano da competência), sob trava, na transação do INSERT
+  const os = await comNumero(empresaId, "os", (numero, tx) => tx.ordemServico.create({
     data: {
       empresaId,
       numero,
@@ -64,7 +59,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         ? { create: { empresaId, tipoOsId: contrato.tipoOsRecorrenciaId || null, tecnicoId: contrato.tecnicoRecorrenciaId || null, titulo: tituloTipo, status: "AGENDADA", dataAgendada } }
         : undefined,
     },
-  });
+  }));
 
   await prisma.osHistorico.create({
     data: { ordemServicoId: os.id, usuarioId, acao: "OS gerada do relatório de contratos", detalhes: `Contrato ${contrato.numero} — ${periodo}.` },

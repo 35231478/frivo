@@ -1,5 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { DIAS_AVISO_GARANTIA } from "@/lib/equipamento-garantia";
+import { lerPaginacao, um, type ParamsUrl } from "@/lib/listagem";
+export { TAMANHOS_PAGINA } from "@/lib/listagem";
 
 /**
  * Filtros/ordenação da listagem de equipamentos, lidos da URL (server-side).
@@ -9,7 +11,6 @@ import { DIAS_AVISO_GARANTIA } from "@/lib/equipamento-garantia";
 
 export type OrdemListagem = "nome" | "cliente" | "tipo" | "garantia" | "ultimo" | "instalacao";
 export const ORDENS_VALIDAS: OrdemListagem[] = ["nome", "cliente", "tipo", "garantia", "ultimo", "instalacao"];
-export const TAMANHOS_PAGINA = [25, 50, 100] as const;
 
 export interface FiltrosListagem {
   q: string;
@@ -27,15 +28,11 @@ export interface FiltrosListagem {
   porPagina: number;
 }
 
-type Params = Record<string, string | string[] | undefined>;
-const um = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
-
-export function lerFiltros(sp: Params): FiltrosListagem {
+export function lerFiltros(sp: ParamsUrl): FiltrosListagem {
   const status = um(sp.status);
   const garantia = um(sp.garantia);
   const qr = um(sp.qr);
   const ordem = um(sp.ordem) as OrdemListagem;
-  const por = Number(um(sp.por));
   return {
     q: um(sp.q).trim(),
     cliente: um(sp.cliente),
@@ -49,8 +46,7 @@ export function lerFiltros(sp: Params): FiltrosListagem {
     fluido: um(sp.fluido),
     ordem: ORDENS_VALIDAS.includes(ordem) ? ordem : "nome",
     dir: um(sp.dir) === "desc" ? "desc" : "asc",
-    pagina: Math.max(1, Number(um(sp.pagina)) || 1),
-    porPagina: (TAMANHOS_PAGINA as readonly number[]).includes(por) ? por : 50,
+    ...lerPaginacao(sp),
   };
 }
 

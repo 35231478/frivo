@@ -1,7 +1,8 @@
 /**
  * Templates de e-mail transacional e layout HTML profissional (compatível com
- * Gmail/Outlook). Puro — sem dependências de Node.
+ * Gmail/Outlook). Puro — sem dependências de Node. As cores vêm dos tokens do sistema de design.
  */
+import { acento, neutro } from "@/lib/ui/tokens";
 
 export interface DefTemplate {
   tipo: string;
@@ -19,6 +20,8 @@ export const VARIAVEIS_DISPONIVEIS = [
   "link_boleto", "link_documento", "link_orcamento",
   "empresa_nome", "empresa_telefone", "empresa_email", "empresa_site",
   "mes_referencia", "data_aprovacao",
+  "usuario_nome", "link_definir_senha", "validade_convite", "validade_link",
+  "fornecedor_nome", "numero_pedido", "prazo_necessario", "link_pedido",
 ] as const;
 
 export const TEMPLATES_PADRAO: DefTemplate[] = [
@@ -53,9 +56,26 @@ export const TEMPLATES_PADRAO: DefTemplate[] = [
   { tipo: "OS_CONCLUIDA", nome: "OS Concluída", assunto: "Ordem de serviço {{numero_os}} concluída — {{empresa_nome}}",
     corpo: "<p>Olá <strong>{{cliente_nome}}</strong>,</p><p>A ordem de serviço <strong>{{numero_os}}</strong> foi concluída. Agradecemos a preferência e ficamos à disposição.</p>",
     botaoLabel: "Ver detalhes", botaoVar: "link_documento" },
+  // App do técnico: aviso curto ao cliente quando o técnico sai ("A caminho") e quando chega ("Cheguei")
+  { tipo: "TECNICO_A_CAMINHO", nome: "Técnico a caminho", assunto: "Técnico a caminho — {{empresa_nome}}",
+    corpo: "<p><strong>{{empresa_nome}}</strong>: nosso técnico está a caminho do seu atendimento.</p><p style=\"color:#64748b;font-size:13px\">Ordem de serviço {{numero_os}}.</p>" },
+  { tipo: "TECNICO_CHEGOU", nome: "Técnico no local", assunto: "Técnico no local — {{empresa_nome}}",
+    corpo: "<p><strong>{{empresa_nome}}</strong>: nosso técnico chegou ao local.</p><p style=\"color:#64748b;font-size:13px\">Ordem de serviço {{numero_os}}.</p>" },
   { tipo: "CONTRATO_ASSINATURA", nome: "Contrato para Assinatura", assunto: "Proposta de contrato {{numero_contrato}} aguarda sua assinatura",
     corpo: "<p>Olá <strong>{{cliente_nome}}</strong>,</p><p>A proposta de contrato <strong>{{numero_contrato}}</strong> está pronta e aguarda sua assinatura digital.</p>",
     botaoLabel: "Assinar contrato", botaoVar: "link_documento" },
+  // Usuário novo do sistema (Configurações › Usuários): a senha é definida por ele, pelo link
+  { tipo: "CONVITE_USUARIO", nome: "Convite de usuário do sistema", assunto: "Seu acesso ao sistema — {{empresa_nome}}",
+    corpo: "<p>Olá <strong>{{usuario_nome}}</strong>,</p><p>Você foi cadastrado(a) no sistema da <strong>{{empresa_nome}}</strong>. Clique no botão abaixo para definir a sua senha e entrar.</p><p style=\"color:#64748b;font-size:13px\">O link vale por {{validade_convite}} e só pode ser usado uma vez. Se você não esperava este convite, ignore este e-mail.</p>",
+    botaoLabel: "Definir minha senha", botaoVar: "link_definir_senha" },
+  // "Esqueci minha senha" na tela de login: link assinado, curto e de uso único
+  { tipo: "RECUPERACAO_SENHA", nome: "Recuperação de senha", assunto: "Criar nova senha — {{empresa_nome}}",
+    corpo: "<p>Olá <strong>{{usuario_nome}}</strong>,</p><p>Recebemos um pedido para criar uma nova senha de acesso ao sistema da <strong>{{empresa_nome}}</strong>. Clique no botão abaixo para definir a nova senha.</p><p style=\"color:#64748b;font-size:13px\">O link vale por {{validade_link}} e só pode ser usado uma vez. Se não foi você quem pediu, ignore este e-mail: a sua senha atual continua valendo.</p>",
+    botaoLabel: "Criar nova senha", botaoVar: "link_definir_senha" },
+  // Compras: o Pedido de Compra (sem preços) vai ao contato do fornecedor para cotação
+  { tipo: "PEDIDO_COMPRA", nome: "Pedido de Compra ao fornecedor", assunto: "Pedido de Compra {{numero_pedido}} — {{empresa_nome}}",
+    corpo: "<p>Olá <strong>{{fornecedor_nome}}</strong>,</p><p>Segue o Pedido de Compra <strong>{{numero_pedido}}</strong> para cotação{{prazo_necessario}}. Por favor, informe preço, validade da proposta e prazo de entrega de cada item.</p>",
+    botaoLabel: "Ver pedido de compra", botaoVar: "link_pedido" },
 ];
 
 export function substituirVariaveis(texto: string, vars: Record<string, string>): string {
@@ -71,7 +91,7 @@ export interface DadosEmpresaEmail {
 export function montarEmailHtml(opts: { empresa: DadosEmpresaEmail; corpoHtml: string; botaoLabel?: string; botaoUrl?: string }): string {
   const { empresa, corpoHtml, botaoLabel, botaoUrl } = opts;
   const botao = botaoLabel && botaoUrl
-    ? `<tr><td style="padding:8px 0 24px;text-align:center;"><a href="${botaoUrl}" style="display:inline-block;background:#10B981;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 28px;border-radius:8px;">${botaoLabel}</a></td></tr>`
+    ? `<tr><td style="padding:8px 0 24px;text-align:center;"><a href="${botaoUrl}" style="display:inline-block;background:${acento.DEFAULT};color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 28px;border-radius:8px;">${botaoLabel}</a></td></tr>`
     : "";
   const logo = empresa.logo
     ? `<img src="${empresa.logo}" alt="${empresa.nome}" width="40" height="40" style="border-radius:8px;vertical-align:middle;margin-right:10px;" />`
@@ -80,22 +100,22 @@ export function montarEmailHtml(opts: { empresa: DadosEmpresaEmail; corpoHtml: s
   const contatos = [empresa.telefone, empresa.email, empresa.site].filter(Boolean).join(" · ");
 
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
-<body style="margin:0;padding:0;background:#F1F5F9;font-family:Arial,Helvetica,sans-serif;color:#1E293B;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F1F5F9;padding:24px 12px;">
+<body style="margin:0;padding:0;background:${neutro.fundo};font-family:Arial,Helvetica,sans-serif;color:${neutro.texto};">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${neutro.fundo};padding:24px 12px;">
     <tr><td align="center">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #E2E8F0;">
-        <tr><td style="background:#0F2744;padding:20px 28px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid ${neutro.borda};">
+        <tr><td style="background:${acento.DEFAULT};padding:20px 28px;">
           ${logo}<span style="color:#ffffff;font-size:18px;font-weight:700;vertical-align:middle;">${empresa.nome}</span>
         </td></tr>
-        <tr><td style="padding:28px;font-size:15px;line-height:1.6;color:#1E293B;">
+        <tr><td style="padding:28px;font-size:15px;line-height:1.6;color:${neutro.texto};">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td>${corpoHtml}</td></tr>${botao}</table>
         </td></tr>
-        <tr><td style="padding:18px 28px;background:#F8FAFC;border-top:1px solid #E2E8F0;font-size:12px;color:#64748B;line-height:1.5;">
-          <strong style="color:#334155;">${empresa.nome}</strong><br/>
+        <tr><td style="padding:18px 28px;background:${neutro.fundo};border-top:1px solid ${neutro.borda};font-size:12px;color:${neutro.secundario};line-height:1.5;">
+          <strong style="color:${neutro.texto};">${empresa.nome}</strong><br/>
           ${endereco ? endereco + "<br/>" : ""}${contatos}
         </td></tr>
       </table>
-      <p style="font-size:11px;color:#94A3B8;margin:14px 0 0;">Este é um e-mail automático. Por favor, não responda diretamente.</p>
+      <p style="font-size:11px;color:${neutro.secundario};margin:14px 0 0;">Este é um e-mail automático. Por favor, não responda diretamente.</p>
     </td></tr>
   </table>
 </body></html>`;

@@ -1,10 +1,18 @@
 import type { Metadata } from "next";
+import { perdasNoPeriodo } from "@/lib/financeiro/perda-estorno-server";
+import { recebidoDaConta, saldoDaConta } from "@/lib/financeiro/parcelas";
 import { auth } from "@/lib/auth";
+import { pode } from "@/lib/permissoes";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { cn, formatarData, formatarMoeda, nomeMes, MESES_PT, LABELS_STATUS_CONTA_RECEBER, CLASSE_STATUS_CONTA_RECEBER } from "@/lib/utils";
 import { TrendingUp } from "lucide-react";
+import Link from "next/link";
+import { itensAFaturar } from "@/lib/financeiro/a-faturar";
+import { Dica } from "@/components/ui/dica";
+import { anoBR, chaveDiaCivil, diaDoMesCivil, mesBR } from "@/lib/fuso";
 
-export const metadata: Metadata = { title: "Fluxo de Caixa" };
+export const metadata: Metadata = { title: "Fluxo de caixa" };
 
 export default async function FluxoCaixaPage({
   searchParams,
@@ -13,11 +21,12 @@ export default async function FluxoCaixaPage({
 }) {
   const sp = await searchParams;
   const session = await auth();
+  if (!pode(session!.user!.permissoes, "financeiro", "fluxoCaixa", session!.user!.role)) redirect("/sem-permissao");
   const empresaId = session!.user!.empresaId;
 
   const agora = new Date();
-  const mes = Number(sp.mes) || agora.getMonth() + 1;
-  const ano = Number(sp.ano) || agora.getFullYear();
+  const mes = Number(sp.mes) || mesBR(agora);
+  const ano = Number(sp.ano) || anoBR(agora);
 
   const inicioMes = new Date(ano, mes - 1, 1, 0, 0, 0);
   const fimMes = new Date(ano, mes, 0, 23, 59, 59);
@@ -25,55 +34,80 @@ export default async function FluxoCaixaPage({
   // Janela dos últimos 6 meses (incluindo o mês selecionado)
   const inicioJanela = new Date(ano, mes - 6, 1, 0, 0, 0);
 
-  const [contasMes, contasJanela] = await Promise.all([
+  const [contasMes, contasJanela, aFaturarTodos, perdasMes] = await Promise.all([
     prisma.contaReceber.findMany({
-      where: { empresaId, dataVencimento: { gte: inicioMes, lte: fimMes }, status: { not: "CANCELADO" } },
+      // Cobranças: a conta parcelada (o lançamento) fica de fora — as parcelas entram, cada uma no seu mês
+      where: { empresaId, dataVencimento: { gte: inicioMes, lte: fimMes }, status: { notIn: ["CANCELADO", "PARCELADO"] } },
       include: { cliente: { select: { nome: true, nomeFantasia: true } } },
       orderBy: { dataVencimento: "asc" },
     }),
     prisma.contaReceber.findMany({
-      where: { empresaId, dataVencimento: { gte: inicioJanela, lte: fimMes }, status: { not: "CANCELADO" } },
-      select: { valor: true, status: true, dataVencimento: true },
+      where: { empresaId, dataVencimento: { gte: inicioJanela, lte: fimMes }, status: { notIn: ["CANCELADO", "PARCELADO"] } },
+      select: { valor: true, valorRecebido: true, valorPerda: true, status: true, dataVencimento: true },
     }),
+    // Opção A (P3): orçamentos aprovados ainda sem fatura, no mês da previsão (lib/financeiro/a-faturar)
+    itensAFaturar(empresaId, agora),
+    // Perdas do mês: pela data da MARCAÇÃO (é quando a inadimplência vira despesa), não pelo vencimento
+    perdasNoPeriodo(empresaId, { gte: inicioMes, lte: fimMes }),
   ]);
+  // A perda sai do previsto: da conta em perda só conta o que entrou de fato. Da renegociada também
+  // (o saldo dela foi para as cobranças da renegociação, que entram cada uma no seu mês)
+  const previstoDaConta = (c: { valor: unknown; valorPerda?: unknown; valorRecebido?: unknown; status: string }) =>
+    c.status === "RENEGOCIADO" ? Number(c.valorRecebido ?? 0) : Number(c.valor) - (c.status === "PERDA" ? Number(c.valorPerda ?? 0) : 0);
+  const chaveMes = (a: number, m: number) => `${a}-${String(m).padStart(2, "0")}`;
+  const aFaturarMes = aFaturarTodos.filter((i) => i.mes === chaveMes(ano, mes));
+  const totalAFaturarMes = aFaturarMes.reduce((acc, i) => acc + i.valor, 0);
 
   // Cards do mês
-  const totalPrevistoMes = contasMes.reduce((acc, c) => acc + Number(c.valor), 0);
-  const totalRecebidoMes = contasMes.filter((c) => c.status === "RECEBIDO").reduce((acc, c) => acc + Number(c.valor), 0);
-  const totalAReceberMes = contasMes.filter((c) => c.status === "A_RECEBER" || c.status === "PREVISTO").reduce((acc, c) => acc + Number(c.valor), 0);
-  const totalAtrasadoMes = contasMes.filter((c) => c.status === "ATRASADO").reduce((acc, c) => acc + Number(c.valor), 0);
+  const totalPrevistoMes = contasMes.reduce((acc, c) => acc + previstoDaConta(c), 0);
+  // Baixa parcial: o que entrou vai para "Recebido" e o que falta fica em "A receber"/"Atrasado"
+  const totalRecebidoMes = contasMes.reduce((acc, c) => acc + recebidoDaConta(c), 0);
+  const totalAReceberMes = contasMes.filter((c) => c.status === "A_RECEBER" || c.status === "PREVISTO").reduce((acc, c) => acc + saldoDaConta(c), 0);
+  const totalAtrasadoMes = contasMes.filter((c) => c.status === "ATRASADO").reduce((acc, c) => acc + saldoDaConta(c), 0);
 
   const cards = [
-    { label: "Previsto no mês", valor: totalPrevistoMes, cor: "text-slate-700", bg: "bg-slate-50" },
+    { label: "Previsto no mês", valor: totalPrevistoMes, cor: "text-ink", bg: "bg-surface-page" },
     { label: "A receber", valor: totalAReceberMes, cor: "text-primary-700", bg: "bg-primary-50" },
     { label: "Recebido", valor: totalRecebidoMes, cor: "text-success-700", bg: "bg-success-50" },
-    { label: "Atrasado", valor: totalAtrasadoMes, cor: "text-red-700", bg: "bg-red-50" },
-  ];
+    { label: "Atrasado", valor: totalAtrasadoMes, cor: "text-atrasado-texto", bg: "bg-atrasado-claro" },
+    {
+      label: "A faturar (orçamentos aprovados)", valor: totalAFaturarMes, cor: "text-acento", bg: "bg-acento-claro",
+      dica: "Orçamentos aprovados ainda sem fatura, no mês da previsão de conclusão da OS (sem OS, o mês corrente). Ainda não são contas: viram conta a receber no Faturar.",
+    },
+    {
+      label: "Perdas do mês", valor: perdasMes.valor, cor: "text-ink", bg: "bg-surface-alt",
+      dica: "Cobranças marcadas como perda neste mês (o saldo dado como perdido). Saíram do previsto; o que já tinha entrado continua em Recebido.",
+    },
+  ] as { label: string; valor: number; cor: string; bg: string; dica?: string }[];
 
   // Gráfico últimos 6 meses
-  const meses: { rotulo: string; previsto: number; recebido: number }[] = [];
+  const meses: { rotulo: string; previsto: number; recebido: number; aFaturar: number }[] = [];
   for (let i = 5; i >= 0; i--) {
     const d = new Date(ano, mes - 1 - i, 1);
-    meses.push({ rotulo: `${MESES_PT[d.getMonth()].slice(0, 3)}/${String(d.getFullYear()).slice(2)}`, previsto: 0, recebido: 0 });
+    const chave = chaveMes(d.getFullYear(), d.getMonth() + 1);
+    meses.push({
+      rotulo: `${MESES_PT[d.getMonth()].slice(0, 3)}/${String(d.getFullYear()).slice(2)}`, previsto: 0, recebido: 0,
+      aFaturar: aFaturarTodos.filter((x) => x.mes === chave).reduce((acc, x) => acc + x.valor, 0),
+    });
   }
   for (const c of contasJanela) {
     if (!c.dataVencimento) continue;
-    const d = new Date(c.dataVencimento);
+    const [va, vm] = chaveDiaCivil(c.dataVencimento).split("-").map(Number); // dia gravado, sem fuso
     const idx = meses.findIndex((_, i) => {
       const ref = new Date(ano, mes - 6 + i, 1);
-      return ref.getMonth() === d.getMonth() && ref.getFullYear() === d.getFullYear();
+      return ref.getMonth() + 1 === vm && ref.getFullYear() === va;
     });
     if (idx >= 0) {
-      meses[idx].previsto += Number(c.valor);
-      if (c.status === "RECEBIDO") meses[idx].recebido += Number(c.valor);
+      meses[idx].previsto += previstoDaConta(c);
+      meses[idx].recebido += recebidoDaConta(c);
     }
   }
-  const maxBar = Math.max(1, ...meses.map((m) => Math.max(m.previsto, m.recebido)));
+  const maxBar = Math.max(1, ...meses.map((m) => Math.max(m.previsto, m.recebido, m.aFaturar)));
 
   // Agrupa contas do mês por semana
   const semanas = new Map<number, typeof contasMes>();
   for (const c of contasMes) {
-    const dia = c.dataVencimento ? new Date(c.dataVencimento).getDate() : 1;
+    const dia = c.dataVencimento ? diaDoMesCivil(c.dataVencimento) : 1;
     const semana = Math.min(4, Math.floor((dia - 1) / 7)) + 1;
     const arr = semanas.get(semana) ?? [];
     arr.push(c);
@@ -85,8 +119,8 @@ export default async function FluxoCaixaPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary-50 rounded-lg"><TrendingUp className="w-5 h-5 text-primary-600" /></div>
-          <h1 className="page-title">Fluxo de Caixa</h1>
+          <div className="p-2 bg-surface-alt rounded-lg"><TrendingUp className="w-5 h-5 text-ink-muted" /></div>
+          <h1 className="page-title">Fluxo de caixa</h1>
         </div>
         <form method="get" className="flex items-center gap-2">
           <select name="mes" defaultValue={mes} className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10">
@@ -97,24 +131,25 @@ export default async function FluxoCaixaPage({
         </form>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
         {cards.map((c) => (
-          <div key={c.label} className={cn("card p-4", c.bg)}>
-            <p className="text-xs uppercase tracking-wider text-ink-muted">{c.label}</p>
-            <p className={cn("text-xl font-bold mt-1", c.cor)}>{formatarMoeda(c.valor)}</p>
+          <div key={c.label} className={cn("card p-4", c.bg)} data-card-fluxo={c.label}>
+            <p className="text-xs uppercase tracking-wider text-ink-muted flex items-center gap-1">{c.label}{c.dica && <Dica rotulo={c.label} texto={c.dica} />}</p>
+            <p className={cn("text-xl font-bold mt-1 tabular-nums", c.cor)}>{formatarMoeda(c.valor)}</p>
           </div>
         ))}
       </div>
 
       {/* Gráfico previsto vs recebido */}
       <div className="card-padded">
-        <h2 className="card-title mb-4">Previsto vs. Recebido — últimos 6 meses</h2>
+        <h2 className="card-title mb-4">Previsto vs. Recebido vs. A faturar — últimos 6 meses</h2>
         <div className="flex items-end justify-between gap-3 h-56">
           {meses.map((m, i) => (
             <div key={i} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
               <div className="w-full flex items-end justify-center gap-1 h-full">
-                <div className="w-1/2 bg-primary-200 rounded-t" style={{ height: `${(m.previsto / maxBar) * 100}%` }} title={`Previsto: ${formatarMoeda(m.previsto)}`} />
-                <div className="w-1/2 bg-success-500 rounded-t" style={{ height: `${(m.recebido / maxBar) * 100}%` }} title={`Recebido: ${formatarMoeda(m.recebido)}`} />
+                <div className="w-1/3 bg-primary-200 rounded-t" style={{ height: `${(m.previsto / maxBar) * 100}%` }} title={`Previsto: ${formatarMoeda(m.previsto)}`} />
+                <div className="w-1/3 bg-success-500 rounded-t" style={{ height: `${(m.recebido / maxBar) * 100}%` }} title={`Recebido: ${formatarMoeda(m.recebido)}`} />
+                <div className="w-1/3 bg-acento/60 rounded-t" style={{ height: `${(m.aFaturar / maxBar) * 100}%` }} title={`A faturar: ${formatarMoeda(m.aFaturar)}`} data-serie-a-faturar={m.aFaturar} />
               </div>
               <span className="text-[11px] text-ink-muted">{m.rotulo}</span>
             </div>
@@ -123,8 +158,30 @@ export default async function FluxoCaixaPage({
         <div className="flex items-center justify-center gap-6 mt-4 text-xs text-ink-muted">
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-primary-200" /> Previsto</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-success-500" /> Recebido</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-acento/60" /> A faturar (orçamentos aprovados)</span>
         </div>
       </div>
+
+      {/* Orçamentos aprovados a faturar no mês (ainda não são contas) */}
+      {aFaturarMes.length > 0 && (
+        <div className="card-padded" data-lista-a-faturar>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="card-title">A faturar em {nomeMes(mes)}/{ano}</h2>
+            <span className="text-sm font-semibold text-ink tabular-nums">{formatarMoeda(totalAFaturarMes)}</span>
+          </div>
+          <div className="divide-y divide-surface-border border border-surface-border rounded-lg">
+            {aFaturarMes.map((i) => (
+              <Link key={i.orcamentoId} href={`/orcamentos/${i.orcamentoId}`} className="flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-surface-alt/60" data-item-a-faturar={i.orcamentoId}>
+                <div className="min-w-0">
+                  <p className="text-sm text-ink font-medium truncate">{i.clienteNome}</p>
+                  <p className="text-xs text-ink-muted truncate">{i.codigo} · {i.nome} · {i.origemMes === "OS" ? `previsão da OS ${i.osNumero}` : "sem previsão de OS: mês corrente"}</p>
+                </div>
+                <span className="font-semibold text-ink tabular-nums shrink-0">{formatarMoeda(i.valor)}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Contas do mês agrupadas por semana */}
       <div className="card-padded">

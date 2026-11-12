@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { AtividadeExecucao } from "@/components/os/atividade-execucao";
 
-export const metadata: Metadata = { title: "Executar Atividade" };
+export const metadata: Metadata = { title: "Executar atividade" };
 
 export default async function ExecutarAtividadePage({ params }: { params: Promise<{ id: string; atividadeId: string }> }) {
   const { id, atividadeId } = await params;

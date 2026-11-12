@@ -113,7 +113,7 @@ export function SolicitacoesGaveta({ totalInicial, children }: { totalInicial: n
             className={cn(
               "fixed z-50 bg-white flex flex-col shadow-2xl",
               // celular: painel que sobe (quase tela cheia)
-              "inset-x-0 bottom-0 h-[92dvh] rounded-t-2xl anim-gaveta-sobe",
+              "inset-x-0 bottom-0 h-[92dvh] rounded-t-card anim-gaveta-sobe",
               // tablet/desktop: barra lateral à direita
               "md:inset-x-auto md:right-0 md:top-0 md:bottom-0 md:h-auto md:w-[24rem] md:rounded-none md:border-l md:border-surface-border md:anim-gaveta-entra",
             )}
@@ -136,7 +136,7 @@ export function SolicitacoesGaveta({ totalInicial, children }: { totalInicial: n
 
             <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-surface-alt/40">
               {erro && (
-                <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                <div className="flex items-start gap-2 text-sm text-atrasado-texto bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2">
                   <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> {erro}
                 </div>
               )}
@@ -145,16 +145,16 @@ export function SolicitacoesGaveta({ totalInicial, children }: { totalInicial: n
               )}
               {lista?.length === 0 && (
                 <div className="text-center py-12 px-4">
-                  <Check className="w-8 h-8 mx-auto text-emerald-500" />
+                  <Check className="w-8 h-8 mx-auto text-ok" />
                   <p className="mt-2 text-sm font-medium text-ink">Nenhuma solicitação pendente</p>
                   <p className="text-xs text-ink-muted">Os chamados que os clientes abrirem pelo portal ou QR Code aparecem aqui.</p>
                 </div>
               )}
               {lista?.map((s) => (
-                <article key={s.id} data-solicitacao={s.id} className="bg-white border border-surface-border rounded-xl p-3 shadow-sm">
+                <article key={s.id} data-solicitacao={s.id} className="bg-white border border-surface-border rounded-card p-3 shadow-sm">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-mono text-xs font-semibold text-primary-600">{s.numero}</span>
-                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-cyan-50 text-cyan-700 px-1.5 py-0.5 rounded">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-acento-claro text-acento-hover px-1.5 py-0.5 rounded">
                       {s.canal === "QR Code" ? <QrCode className="w-3 h-3" /> : <Headset className="w-3 h-3" />} {s.canal}
                     </span>
                   </div>
@@ -209,9 +209,9 @@ export function SolicitacoesGaveta({ totalInicial, children }: { totalInicial: n
 function ContadorBolha({ total }: { total: number }) {
   return (
     <span className="relative inline-flex" data-gaveta-contador>
-      {total > 0 && <span className="absolute inset-0 rounded-full bg-amber-300 animate-ping opacity-60 motion-reduce:hidden" />}
+      {total > 0 && <span className="absolute inset-0 rounded-full bg-atencao/40 animate-ping opacity-60 motion-reduce:hidden" />}
       <span className={cn("relative min-w-[1.25rem] h-5 px-1 rounded-full text-[11px] font-bold flex items-center justify-center tabular-nums",
-        total > 0 ? "bg-amber-400 text-amber-950" : "bg-white/25 text-white")}>
+        total > 0 ? "bg-atencao text-white" : "bg-white/25 text-white")}>
         {total}
       </span>
     </span>

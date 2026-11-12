@@ -1,5 +1,7 @@
 "use client";
 
+import { toast } from "@/components/ui/avisos";
+import { acento, neutro, status } from "@/lib/ui/tokens";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -21,15 +23,15 @@ interface Opcao { value: string; label: string }
 
 const LABEL_STATUS: Record<StatusMes, string> = { CONCLUIDO: "Concluído", EM_ANDAMENTO: "Em andamento", PENDENTE: "Pendente", ATRASADO: "Atrasado" };
 const COR_STATUS: Record<StatusMes, string> = {
-  CONCLUIDO: "bg-success-50 text-success-700", EM_ANDAMENTO: "bg-primary-50 text-primary-700",
-  PENDENTE: "bg-amber-50 text-amber-700", ATRASADO: "bg-red-50 text-red-700",
+  CONCLUIDO: "bg-ok-claro text-ok-texto", EM_ANDAMENTO: "bg-acento-claro text-acento-hover",
+  PENDENTE: "bg-atencao-claro text-atencao-texto", ATRASADO: "bg-atrasado-claro text-atrasado-texto",
 };
 const COR_BARRA: Record<StatusMes, string> = {
-  CONCLUIDO: "bg-success-500", EM_ANDAMENTO: "bg-primary-500", PENDENTE: "bg-amber-400", ATRASADO: "bg-red-500",
+  CONCLUIDO: "bg-ok", EM_ANDAMENTO: "bg-acento", PENDENTE: "bg-atencao", ATRASADO: "bg-atrasado",
 };
 const COR_FREQ: Record<string, string> = {
-  SEMANAL: "bg-slate-100 text-slate-600", QUINZENAL: "bg-slate-100 text-slate-600", MENSAL: "bg-primary-50 text-primary-700",
-  BIMESTRAL: "bg-cyan-50 text-cyan-700", TRIMESTRAL: "bg-violet-50 text-violet-700", SEMESTRAL: "bg-amber-50 text-amber-700", ANUAL: "bg-success-50 text-success-700",
+  SEMANAL: "bg-previsto-claro text-previsto-texto", QUINZENAL: "bg-previsto-claro text-previsto-texto", MENSAL: "bg-previsto-claro text-previsto-texto",
+  BIMESTRAL: "bg-previsto-claro text-previsto-texto", TRIMESTRAL: "bg-previsto-claro text-previsto-texto", SEMESTRAL: "bg-previsto-claro text-previsto-texto", ANUAL: "bg-previsto-claro text-previsto-texto",
 };
 
 export function RelatorioContratosClient({ mes, ano, itens, tecnicos, clientes }: { mes: number; ano: number; itens: Item[]; tecnicos: Opcao[]; clientes: Opcao[] }) {
@@ -56,14 +58,16 @@ export function RelatorioContratosClient({ mes, ano, itens, tecnicos, clientes }
   const pendentes = itens.filter((i) => i.statusMes === "PENDENTE").length;
   const atrasados = itens.filter((i) => i.statusMes === "ATRASADO").length;
   const pct = total > 0 ? Math.round((concluidos / total) * 100) : 0;
-  const corPct = pct <= 50 ? "bg-red-500" : pct <= 80 ? "bg-amber-400" : "bg-success-500";
+  const corPct = pct <= 50 ? "bg-atrasado" : pct <= 80 ? "bg-atencao" : "bg-ok";
 
   // Donut (conic-gradient)
   const seg = (n: number) => (total > 0 ? (n / total) * 100 : 0);
   const p1 = seg(concluidos), p2 = p1 + seg(andamento), p3 = p2 + seg(pendentes);
+  // Cores do donut = tokens de status (a mesma função das pílulas): OK, acento (em andamento), atenção, atrasado
+  const COR_DONUT = { concluido: status.ok.DEFAULT, andamento: acento.DEFAULT, pendente: status.atencao.DEFAULT, atrasado: status.atrasado.DEFAULT, vazio: neutro.linha };
   const donut = total > 0
-    ? `conic-gradient(#10B981 0 ${p1}%, #0EA5E9 ${p1}% ${p2}%, #F59E0B ${p2}% ${p3}%, #EF4444 ${p3}% 100%)`
-    : "conic-gradient(#E2E8F0 0 100%)";
+    ? `conic-gradient(${COR_DONUT.concluido} 0 ${p1}%, ${COR_DONUT.andamento} ${p1}% ${p2}%, ${COR_DONUT.pendente} ${p2}% ${p3}%, ${COR_DONUT.atrasado} ${p3}% 100%)`
+    : `conic-gradient(${COR_DONUT.vazio} 0 100%)`;
 
   function toggle(id: string) { setExpandido((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; }); }
 
@@ -71,8 +75,9 @@ export function RelatorioContratosClient({ mes, ano, itens, tecnicos, clientes }
     setGerando(contratoId);
     try {
       const res = await fetch(`/api/contratos/${contratoId}/gerar-os`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mes, ano }) });
-      if (res.ok) router.refresh();
-    } finally { setGerando(null); }
+      if (res.ok) { toast("OS do mês gerada."); router.refresh(); }
+      else toast((await res.json().catch(() => null))?.erro ?? "Não foi possível gerar a OS.", "erro");
+    } catch { toast("Erro de conexão. Tente novamente.", "erro"); } finally { setGerando(null); }
   }
 
   return (
@@ -80,7 +85,7 @@ export function RelatorioContratosClient({ mes, ano, itens, tecnicos, clientes }
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <Link href="/contratos" className="p-2 rounded-lg text-ink-muted hover:text-primary-600 hover:bg-surface-alt"><ChevronLeft className="w-5 h-5" /></Link>
-          <div className="p-2 bg-primary-50 rounded-lg"><CalendarDays className="w-5 h-5 text-primary-600" /></div>
+          <div className="p-2 bg-surface-alt rounded-lg"><CalendarDays className="w-5 h-5 text-ink-muted" /></div>
           <h1 className="page-title">Relatório de manutenções — {nomeMes(mes)}/{ano}</h1>
         </div>
         <div className="flex items-center gap-2">
@@ -98,8 +103,8 @@ export function RelatorioContratosClient({ mes, ano, itens, tecnicos, clientes }
         <div className="card-padded lg:col-span-2 space-y-4">
           <div className="grid grid-cols-3 gap-3">
             <Resumo label="Requerem atendimento" valor={total} cor="text-ink" />
-            <Resumo label="Realizadas (concluídas)" valor={concluidos} cor="text-success-700" />
-            <Resumo label="Pendentes" valor={total - concluidos} cor="text-amber-600" />
+            <Resumo label="Realizadas (concluídas)" valor={concluidos} cor="text-ok-texto" />
+            <Resumo label="Pendentes" valor={total - concluidos} cor="text-atencao-texto" />
           </div>
           <div>
             <div className="flex items-center justify-between mb-1">
@@ -120,10 +125,10 @@ export function RelatorioContratosClient({ mes, ano, itens, tecnicos, clientes }
             </div>
           </div>
           <div className="text-xs space-y-1">
-            <Legenda cor="#10B981" label="Concluído" n={concluidos} />
-            <Legenda cor="#0EA5E9" label="Em andamento" n={andamento} />
-            <Legenda cor="#F59E0B" label="Pendente" n={pendentes} />
-            <Legenda cor="#EF4444" label="Atrasado" n={atrasados} />
+            <Legenda cor={COR_DONUT.concluido} label="Concluído" n={concluidos} />
+            <Legenda cor={COR_DONUT.andamento} label="Em andamento" n={andamento} />
+            <Legenda cor={COR_DONUT.pendente} label="Pendente" n={pendentes} />
+            <Legenda cor={COR_DONUT.atrasado} label="Atrasado" n={atrasados} />
           </div>
         </div>
       </div>

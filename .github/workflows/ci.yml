@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+# Um push novo no MESMO PR cancela o run anterior (não desperdiça runner nem fica em fila).
+# No master cada merge roda até o fim (nunca cancela a validação de um commit da base).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Typecheck + validações rápidas (não precisa de Postgres): roda em paralelo com os shards de teste.
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # histórico para comparar com a base do PR (schema x SQL)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Schema alterado exige SQL em prisma/sql/
+        if: github.event_name == 'pull_request'
+        run: bash scripts/checar-sql-schema.sh "origin/${{ github.base_ref }}"
+      - run: npx prisma validate
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      - run: npm run typecheck
+
+  # A suíte (Postgres real) dividida em shards PARALELOS: baixa o tempo de parede sem tirar nenhum teste.
+  # Cada shard é um job isolado com seu próprio Postgres; os testes usam schema por processo, sem colisão.
+  testes:
+    name: Testes (shard ${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false # um shard vermelho não aborta os outros: vê-se tudo que falhou numa rodada
+      matrix:
+        shard: [1, 2, 3, 4]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Testes (vitest, shard ${{ matrix.shard }}/4)
+        run: npm test -- --shard=${{ matrix.shard }}/4
+        env:
+          PG_TESTE_URL: postgresql://ci:ci@localhost:5432/ci
+
+  # Portão único (nome do check preservado): só fica verde com typecheck + TODOS os shards verdes.
+  checks:
+    name: Typecheck e testes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [typecheck, testes]
+    if: always()
+    steps:
+      - name: Resultado
+        run: |
+          echo "typecheck=${{ needs.typecheck.result }} testes=${{ needs.testes.result }}"
+          if [ "${{ needs.typecheck.result }}" = "success" ] && [ "${{ needs.testes.result }}" = "success" ]; then
+            echo "CI verde."
+          else
+            echo "CI falhou (um deles não ficou verde)."
+            exit 1
+          fi

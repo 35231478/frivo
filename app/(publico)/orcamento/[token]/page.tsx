@@ -3,18 +3,23 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { OrcamentoDocumento } from "@/components/orcamento/orcamento-documento";
+import { anexosDoDocumento, INCLUDE_DOCUMENTO_ORCAMENTO, metadataDocumentoOrcamento } from "@/lib/orcamentos/documento-server";
 import { PropostaDocumento } from "@/components/orcamento/proposta-documento";
-import { AprovacaoPublica } from "@/components/orcamento/aprovacao-publica";
+import { RespostaPublica } from "@/components/orcamento/resposta-publica";
 import { FrivoLogo } from "@/components/layout/frivo-logo";
 import { LABELS_STATUS_ORCAMENTO, CLASSE_STATUS_ORCAMENTO, formatarData, cn } from "@/lib/utils";
-import { AlertTriangle, CheckCircle2, Printer } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Printer, XCircle } from "lucide-react";
+import { headers } from "next/headers";
+import { auth } from "@/lib/auth";
+import { ehAberturaDaPagina, etapaCiclo, ipDaRequisicao } from "@/lib/orcamentos/ciclo";
+import { registrarVisualizacao } from "@/lib/orcamentos/ciclo-server";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Orçamento",
-  robots: { index: false, follow: false },
-};
+// Título = nome do arquivo ao salvar/imprimir em PDF: "Orçamento 2026-0015 - CLIENTE"
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  return { ...(await metadataDocumentoOrcamento((await params).token)), robots: { index: false, follow: false } };
+}
 
 export default async function OrcamentoPublicoPage({
   params,
@@ -25,13 +30,7 @@ export default async function OrcamentoPublicoPage({
 
   const orcamento = await prisma.orcamento.findUnique({
     where: { tokenPublico: token },
-    include: {
-      empresa: true,
-      cliente: true,
-      responsavelTecnico: { select: { nome: true, crea: true } },
-      servicos: { orderBy: { ordem: "asc" } },
-      produtos: { orderBy: { ordem: "asc" } },
-    },
+    include: INCLUDE_DOCUMENTO_ORCAMENTO,
   });
 
   if (!orcamento) notFound();
@@ -44,21 +43,30 @@ export default async function OrcamentoPublicoPage({
       })).map((e) => ({ id: e.id, rotulo: [e.marca, e.modelo, e.numeroSerie ? `(${e.numeroSerie})` : "", e.unidade?.nome ? `— ${e.unidade.nome}` : ""].filter(Boolean).join(" ") }))
     : [];
 
-  const expirado = orcamento.validadeEm ? orcamento.validadeEm < new Date() : false;
-  const cancelado = orcamento.status === "CANCELADO";
-  const aprovado = orcamento.status === "APROVADO";
-  const podeAprovar = orcamento.status === "ENVIADO" && !expirado;
+  // O cliente abriu o link: "Visualizado" (não contam: a própria empresa logada, robô de prévia, prefetch e o service worker)
+  const sessao = await auth().catch(() => null);
+  const cab = await headers();
+  if (ehAberturaDaPagina(cab)) {
+    await registrarVisualizacao(orcamento, { empresaIdSessao: sessao?.user?.empresaId ?? null, ip: ipDaRequisicao(cab), userAgent: cab.get("user-agent") });
+  }
+
+  const etapa = etapaCiclo(orcamento); // validade vale até o fim do dia (Brasília)
+  const expirado = etapa === "EXPIRADO";
+  const cancelado = etapa === "CANCELADO";
+  const aprovado = etapa === "APROVADO" || etapa === "CONVERTIDO";
+  const recusado = etapa === "RECUSADO";
+  const podeAprovar = etapa === "ENVIADO" || etapa === "VISUALIZADO";
 
   return (
     <div className="min-h-screen flex flex-col">
       {/* Topo */}
-      <header className="bg-sidebar text-white py-4 px-6 shadow-sm">
+      <header className="bg-white border-b border-surface-border py-4 px-6">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
-          <FrivoLogo size="sm" showSubtitle={false} />
+          <FrivoLogo size="sm" showSubtitle={false} variant="dark" />
           <Link
             href={`/orcamento/${token}/imprimir`}
             target="_blank"
-            className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold px-3 py-2 rounded-lg transition-colors"
+            className="inline-flex items-center gap-2 bg-white border border-surface-border hover:bg-surface-page text-ink text-sm font-semibold px-3 py-2 rounded-lg transition-colors"
           >
             <Printer className="w-4 h-4" /> Imprimir / PDF
           </Link>
@@ -75,7 +83,7 @@ export default async function OrcamentoPublicoPage({
               mensagem="Este orçamento foi cancelado pela empresa e não pode mais ser aprovado."
             />
           )}
-          {expirado && !aprovado && !cancelado && (
+          {expirado && (
             <StatusAviso
               tipo="atencao"
               titulo="Orçamento expirado"
@@ -83,10 +91,10 @@ export default async function OrcamentoPublicoPage({
             />
           )}
           {aprovado && (
-            <div className="bg-success-50 border-2 border-success-500 text-success-700 rounded-xl px-5 py-4 flex items-center gap-3">
+            <div className="bg-ok-claro border border-ok/30 text-ok-texto rounded-card px-5 py-4 flex items-center gap-3">
               <CheckCircle2 className="w-6 h-6 shrink-0" />
               <div>
-                <p className="font-bold">Orçamento aprovado!</p>
+                <p className="font-bold">Orçamento aprovado.</p>
                 <p className="text-sm">
                   Aprovado por {orcamento.assinadoPor} em{" "}
                   {formatarData(orcamento.assinadoEm, "dd/MM/yyyy 'às' HH:mm")}.
@@ -95,8 +103,22 @@ export default async function OrcamentoPublicoPage({
             </div>
           )}
 
+          {recusado && (
+            <div className="bg-surface-alt border border-surface-border text-ink rounded-card px-5 py-4 flex items-center gap-3" data-aviso-recusado>
+              <XCircle className="w-6 h-6 shrink-0 text-atrasado" aria-hidden />
+              <div>
+                <p className="font-bold">Proposta recusada</p>
+                <p className="text-sm text-ink-muted">
+                  {orcamento.recusadoPor ? `Recusada por ${orcamento.recusadoPor}` : "Recusada"}
+                  {orcamento.recusadoEm && ` em ${formatarData(orcamento.recusadoEm, "dd/MM/yyyy 'às' HH:mm")}`}.
+                  {" "}Obrigado pelo retorno. Se mudar de ideia, fale com a empresa para uma nova proposta.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Documento */}
-          <div className="bg-white rounded-2xl shadow-card p-6 md:p-10">
+          <div className="bg-white rounded-card shadow-card p-6 md:p-10">
             {proposta ? (
               <PropostaDocumento
                 orcamento={orcamento}
@@ -110,14 +132,15 @@ export default async function OrcamentoPublicoPage({
                 orcamento={orcamento}
                 empresa={orcamento.empresa}
                 cliente={orcamento.cliente}
+                anexos={anexosDoDocumento(orcamento.anexos, `/api/publico/orcamentos/${token}/anexos`)}
               />
             )}
           </div>
 
           {/* Aprovação */}
-          {podeAprovar && <AprovacaoPublica token={token} />}
+          {podeAprovar && <RespostaPublica token={token} />}
           {orcamento.status === "RASCUNHO" && (
-            <div className="bg-white border border-surface-border rounded-xl px-5 py-4 text-center">
+            <div className="bg-white border border-surface-border rounded-card px-5 py-4 text-center">
               <span className={cn("inline-flex mb-2", CLASSE_STATUS_ORCAMENTO[orcamento.status])}>
                 {LABELS_STATUS_ORCAMENTO[orcamento.status]}
               </span>
@@ -142,10 +165,10 @@ export default async function OrcamentoPublicoPage({
 
 function StatusAviso({ tipo, titulo, mensagem }: { tipo: "erro" | "atencao"; titulo: string; mensagem: string }) {
   const classes = tipo === "erro"
-    ? "bg-red-50 border-red-300 text-red-700"
-    : "bg-amber-50 border-amber-300 text-amber-700";
+    ? "bg-atrasado-claro border-atrasado/40 text-atrasado-texto"
+    : "bg-atencao-claro border-atencao/40 text-atencao-texto";
   return (
-    <div className={cn("border-2 rounded-xl px-5 py-4 flex items-center gap-3", classes)}>
+    <div className={cn("border-2 rounded-card px-5 py-4 flex items-center gap-3", classes)}>
       <AlertTriangle className="w-6 h-6 shrink-0" />
       <div>
         <p className="font-bold">{titulo}</p>

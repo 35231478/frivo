@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmar } from "@/components/ui/avisos";
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -10,39 +11,67 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid } from "@/components/ui/form-field";
-import { DollarSign, History, Pencil, Ban, Upload } from "lucide-react";
+import { DollarSign, History, Pencil, Ban, Upload, Eye } from "lucide-react";
+import { ItemMenu, MenuAcoes, SeparadorMenu } from "@/components/ui/menu-acoes";
+import { chaveHojeBR } from "@/lib/fuso";
+import { InputData } from "@/components/ui/input-data";
 
 interface Conta {
   id: string; numero: string; fornecedor: string;
   valorTotal: number; valorPago: number; saldoRestante: number; status: string;
 }
 
-export function ContaPagarAcoes({ conta }: { conta: Conta }) {
+/**
+ * Ações de uma conta a pagar. `menu`: na lista, tudo num ⋮ único (o mesmo menu de Contas a Receber);
+ * sem ele (detalhe da conta), os botões de ícone.
+ */
+export function ContaPagarAcoes({ conta, menu }: { conta: Conta; menu?: boolean }) {
   const router = useRouter();
   const [modal, setModal] = useState<null | "pagar" | "historico">(null);
   const fechar = () => setModal(null);
   const finalizada = conta.status === "PAGO_TOTAL" || conta.status === "CANCELADO";
 
   async function cancelar() {
-    if (!confirm(`Cancelar a conta ${conta.numero}?`)) return;
+    if (!(await confirmar({ mensagem: `Cancelar a conta ${conta.numero}?`, perigo: true, confirmarTexto: "Cancelar conta", cancelarTexto: "Voltar" }))) return;
     await fetch(`/api/contas-pagar/${conta.id}`, { method: "DELETE" });
     router.refresh();
   }
 
   return (
     <>
+      {menu ? (
+        <div className="flex items-center justify-end">
+          <MenuAcoes rotulo={`Ações da conta ${conta.numero}`}>
+            {(f) => (
+              <>
+                <ItemMenu icone={Eye} href={`/financeiro/contas-pagar/${conta.id}`} id="detalhes">Ver detalhes</ItemMenu>
+                {!finalizada && <ItemMenu icone={DollarSign} onClick={() => { f(); setModal("pagar"); }} id="pagar">Registrar pagamento</ItemMenu>}
+                <ItemMenu icone={History} onClick={() => { f(); setModal("historico"); }} id="historico">Histórico de pagamentos</ItemMenu>
+                {!finalizada && <ItemMenu icone={Pencil} href={`/financeiro/contas-pagar/${conta.id}/editar`} id="editar">Editar</ItemMenu>}
+                {conta.status !== "CANCELADO" && (
+                  <>
+                    <SeparadorMenu />
+                    <ItemMenu icone={Ban} onClick={() => { f(); cancelar(); }} perigo id="cancelar">Cancelar conta</ItemMenu>
+                  </>
+                )}
+              </>
+            )}
+          </MenuAcoes>
+        </div>
+      ) : (
       <div className="flex items-center justify-end gap-0.5">
         {!finalizada && (
-          <button type="button" title="Registrar pagamento" onClick={() => setModal("pagar")} className="p-1.5 rounded text-emerald-600 hover:bg-surface-alt"><DollarSign className="w-4 h-4" /></button>
+          <button type="button" title="Registrar pagamento" onClick={() => setModal("pagar")} className="p-1.5 rounded text-ok-texto hover:bg-surface-alt"><DollarSign className="w-4 h-4" /></button>
         )}
         <button type="button" title="Histórico de pagamentos" onClick={() => setModal("historico")} className="p-1.5 rounded text-ink-muted hover:bg-surface-alt"><History className="w-4 h-4" /></button>
         {!finalizada && (
           <Link href={`/financeiro/contas-pagar/${conta.id}/editar`} title="Editar" className="p-1.5 rounded text-primary-600 hover:bg-surface-alt"><Pencil className="w-4 h-4" /></Link>
         )}
         {conta.status !== "CANCELADO" && (
-          <button type="button" title="Cancelar conta" onClick={cancelar} className="p-1.5 rounded text-red-600 hover:bg-red-50"><Ban className="w-4 h-4" /></button>
+          <button type="button" title="Cancelar conta" onClick={cancelar} className="p-1.5 rounded text-atrasado hover:bg-atrasado-claro"><Ban className="w-4 h-4" /></button>
         )}
       </div>
+      )}
 
       <Modal aberto={modal === "pagar"} onFechar={fechar} titulo={`Pagamento — ${conta.numero}`} tamanho="lg">
         <PagamentoParcial conta={conta} onPronto={() => { fechar(); router.refresh(); }} />
@@ -56,7 +85,7 @@ export function ContaPagarAcoes({ conta }: { conta: Conta }) {
 }
 
 function PagamentoParcial({ conta, onPronto }: { conta: Conta; onPronto: () => void }) {
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = chaveHojeBR();
   const [valor, setValor] = useState(String(conta.saldoRestante));
   const [data, setData] = useState(hoje);
   const [forma, setForma] = useState("");
@@ -96,12 +125,12 @@ function PagamentoParcial({ conta, onPronto }: { conta: Conta; onPronto: () => v
 
   return (
     <div className="space-y-4">
-      {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
+      {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2">{erro}</div>}
 
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-surface-alt rounded-lg p-3 text-center"><p className="text-xs text-ink-muted">Valor total</p><p className="text-sm font-bold text-ink mt-1">{formatarMoeda(conta.valorTotal)}</p></div>
         <div className="bg-surface-alt rounded-lg p-3 text-center"><p className="text-xs text-ink-muted">Já pago</p><p className="text-sm font-bold text-success-700 mt-1">{formatarMoeda(conta.valorPago)}</p></div>
-        <div className="bg-amber-50 rounded-lg p-3 text-center"><p className="text-xs text-ink-muted">Após este pagamento</p><p className="text-sm font-bold text-amber-700 mt-1">{formatarMoeda(saldoApos)}</p></div>
+        <div className="bg-atencao-claro rounded-lg p-3 text-center"><p className="text-xs text-ink-muted">Após este pagamento</p><p className="text-sm font-bold text-atencao-texto mt-1">{formatarMoeda(saldoApos)}</p></div>
       </div>
 
       <FormGrid>
@@ -111,7 +140,7 @@ function PagamentoParcial({ conta, onPronto }: { conta: Conta; onPronto: () => v
             <Button type="button" variant="secondary" onClick={() => setValor(String(conta.saldoRestante))} className="shrink-0 text-xs px-2.5">Total</Button>
           </div>
         </FormField>
-        <FormField label="Data do pagamento"><Input type="date" value={data} onChange={(e) => setData(e.target.value)} /></FormField>
+        <FormField label="Data do pagamento"><InputData value={data} onChange={(v) => setData(v)} /></FormField>
       </FormGrid>
       <FormGrid>
         <FormField label="Forma de pagamento">

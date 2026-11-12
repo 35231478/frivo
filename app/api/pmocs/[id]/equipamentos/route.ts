@@ -47,7 +47,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   const total = await prisma.pmocEquipamento.count({ where: { pmocId: id } });
   // PMOC publicado não pode ficar sem equipamento (mesma regra de publicação)
   if (p!.status === "PUBLICADO" && total <= 1)
-    return NextResponse.json({ erro: "Um PMOC publicado precisa de pelo menos 1 equipamento. Volte para Rascunho antes de remover o último." }, { status: 409 });
+    return NextResponse.json({ erro: "Um PMOC publicado precisa de pelo menos 1 equipamento. Volte para Rascunho antes de excluir o último." }, { status: 409 });
   const r = await prisma.pmocEquipamento.deleteMany({ where: { pmocId: id, equipamentoId } });
   if (!r.count) return NextResponse.json({ erro: "Equipamento não está neste PMOC." }, { status: 404 });
   return NextResponse.json(await prisma.pmoc.findFirst({ where: { id }, select: SELECT_PMOC }));

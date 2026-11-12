@@ -1,15 +1,21 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { periodoOrdens, whereOrdens } from "@/lib/listas/filtros";
+import { periodoTela } from "@/lib/periodo";
+import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
 import { OrdensListaClient } from "@/components/ordens/ordens-lista-client";
+import { SelecaoMassaProvider } from "@/components/acoes-massa/selecao";
+import { BarraAcoesMassa } from "@/components/acoes-massa/barra";
+import { comparaNatural } from "@/lib/utils";
 
-export const metadata: Metadata = { title: "Ordens de Serviço" };
+export const metadata: Metadata = { title: "Ordens de serviço" };
 
 type SP = {
   busca?: string; status?: string; prioridade?: string; origem?: string;
   clienteId?: string; responsavelId?: string; tipoOsId?: string; contratoId?: string;
-  numero?: string; dataInicio?: string; dataFim?: string; data?: string;
-  sort?: string; dir?: string; view?: string;
+  numero?: string; dataInicio?: string; dataFim?: string; data?: string; periodo?: string; ref?: string; mes?: string; de?: string; ate?: string;
+  sort?: string; dir?: string; view?: string; pagina?: string; por?: string;
 };
 
 const SORT_MAP: Record<string, (dir: "asc" | "desc") => any> = {
@@ -21,74 +27,37 @@ const SORT_MAP: Record<string, (dir: "asc" | "desc") => any> = {
   prioridade: (dir) => ({ prioridade: dir }),
 };
 
-const TAKE = 100;
-
 export default async function OrdensPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
   const session = await auth();
   const empresaId = session!.user!.empresaId;
 
-  const statusList = (sp.status ?? "").split(",").filter(Boolean);
-  const prioridadeList = (sp.prioridade ?? "").split(",").filter(Boolean);
   const sort = sp.sort && SORT_MAP[sp.sort] ? sp.sort : "criadoEm";
   const dir: "asc" | "desc" = sp.dir === "asc" ? "asc" : "desc";
 
-  const where: any = { empresaId };
-  // Sem filtro de status, OS inativadas (CANCELADA) ficam fora; o chip "Cancelada" as mostra
-  if (statusList.length) where.status = { in: statusList };
-  else where.status = { not: "CANCELADA" };
-  if (prioridadeList.length) where.prioridade = { in: prioridadeList };
-  if (sp.origem) where.origem = sp.origem;
-  if (sp.clienteId) where.clienteId = sp.clienteId;
-  if (sp.responsavelId) where.responsavelId = sp.responsavelId;
-  if (sp.contratoId) where.contratoId = sp.contratoId;
-  if (sp.tipoOsId) where.atividades = { some: { tipoOsId: sp.tipoOsId } };
-  if (sp.numero) where.numero = { contains: sp.numero, mode: "insensitive" };
-  if (sp.data) {
-    // Navegação por dia: mostra OS com atividade agendada, previsão de conclusão
-    // ou abertura no dia selecionado (limites em horário local).
-    const [y, m, d] = sp.data.split("-").map(Number);
-    if (y && m && d) {
-      const inicio = new Date(y, m - 1, d, 0, 0, 0, 0);
-      const fim = new Date(y, m - 1, d, 23, 59, 59, 999);
-      where.AND = [
-        ...(where.AND ?? []),
-        {
-          OR: [
-            { atividades: { some: { dataAgendada: { gte: inicio, lte: fim } } } },
-            { previsaoConclusao: { gte: inicio, lte: fim } },
-            { criadoEm: { gte: inicio, lte: fim } },
-          ],
-        },
-      ];
-    }
-  } else if (sp.dataInicio || sp.dataFim) {
-    where.criadoEm = {};
-    if (sp.dataInicio) where.criadoEm.gte = new Date(sp.dataInicio);
-    if (sp.dataFim) { const f = new Date(sp.dataFim); f.setHours(23, 59, 59, 999); where.criadoEm.lte = f; }
-  }
-  if (sp.busca) {
-    where.OR = [
-      { numero: { contains: sp.busca, mode: "insensitive" } },
-      { chamadoNumero: { contains: sp.busca, mode: "insensitive" } },
-      { descricao: { contains: sp.busca, mode: "insensitive" } },
-      { cliente: { nome: { contains: sp.busca, mode: "insensitive" } } },
-    ];
-  }
+  const agora = new Date();
+  const where = whereOrdens(empresaId, sp, agora);
+  const periodo = periodoTela(periodoOrdens(sp, agora));
+  const { pagina: paginaPedida, porPagina } = lerPaginacao(sp);
+  const total = await prisma.ordemServico.count({ where });
+  const pagina = paginaValida(paginaPedida, porPagina, total);
 
-  const [ordens, total, clientes, usuarios, tiposOs, contratos] = await Promise.all([
+  const [ordens, clientes, usuarios, tiposOs, contratos] = await Promise.all([
     prisma.ordemServico.findMany({
       where,
       include: {
         cliente: { select: { id: true, nome: true, nomeFantasia: true, logo: true } },
         unidade: { select: { nome: true } },
         responsavel: { select: { nome: true } },
-        atividades: { select: { tecnico: { select: { id: true, nome: true, avatar: true } } } },
+        atividades: { select: {
+          tecnico: { select: { id: true, nome: true, avatar: true } },
+          tecnicosEquipe: { select: { tecnico: { select: { id: true, nome: true, avatar: true } } } },
+        } },
       },
-      orderBy: SORT_MAP[sort](dir),
-      take: TAKE,
+      // `id` no fim: desempate estável (a paginação não repete nem pula OS)
+      orderBy: [SORT_MAP[sort](dir), { id: "asc" }],
+      ...janela(pagina, porPagina),
     }),
-    prisma.ordemServico.count({ where }),
     prisma.cliente.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true, nomeFantasia: true }, orderBy: { nome: "asc" } }),
     prisma.usuario.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
     prisma.tipoOs.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
@@ -98,8 +67,9 @@ export default async function OrdensPage({ searchParams }: { searchParams: Promi
   const ordensView = ordens.map((o) => {
     // Técnicos das atividades, deduplicados por id e ordenados por nome (pt-BR)
     const tecnicos = Array.from(
-      new Map(o.atividades.filter((a) => a.tecnico).map((a) => [a.tecnico!.id, a.tecnico!])).values(),
-    ).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+      // responsáveis + membros das equipes das atividades
+      new Map(o.atividades.flatMap((a) => [a.tecnico, ...a.tecnicosEquipe.map((t) => t.tecnico)]).filter(Boolean).map((t) => [t!.id, t!])).values(),
+    ).sort((a, b) => comparaNatural(a.nome, b.nome));
 
     return {
       id: o.id,
@@ -120,10 +90,13 @@ export default async function OrdensPage({ searchParams }: { searchParams: Promi
   });
 
   return (
+    <SelecaoMassaProvider entidade="ordens" idsPagina={ordens.map((o) => o.id)} total={total}>
     <OrdensListaClient
       ordens={ordensView}
       total={total}
-      exibindo={ordens.length}
+      pagina={pagina}
+      porPagina={porPagina}
+      periodo={periodo}
       opcoes={{
         clientes: clientes.map((c) => ({ value: c.id, label: c.nomeFantasia ?? c.nome })),
         usuarios: usuarios.map((u) => ({ value: u.id, label: u.nome })),
@@ -131,5 +104,7 @@ export default async function OrdensPage({ searchParams }: { searchParams: Promi
         contratos: contratos.map((c) => ({ value: c.id, label: c.numero })),
       }}
     />
+    <BarraAcoesMassa />
+    </SelecaoMassaProvider>
   );
 }

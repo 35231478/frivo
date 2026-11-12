@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
+  <NFe xmlns="http://www.portalfiscal.inf.br/nfe">
+    <infNFe Id="NFe35261111222333000181550010000046101000046103" versao="4.00">
+      <ide>
+        <cUF>35</cUF><cNF>00004610</cNF><natOp>VENDA DE MERCADORIA</natOp><mod>55</mod><serie>1</serie><nNF>4610</nNF>
+        <dhEmi>2026-11-03T14:05:00-03:00</dhEmi><tpNF>1</tpNF><idDest>1</idDest><cMunFG>3550308</cMunFG><tpImp>1</tpImp>
+        <tpEmis>1</tpEmis><cDV>3</cDV><tpAmb>1</tpAmb><finNFe>1</finNFe><indFinal>0</indFinal><indPres>9</indPres><procEmi>0</procEmi><verProc>ERP 2.1</verProc>
+      </ide>
+      <emit>
+        <CNPJ>11222333000181</CNPJ><xNome>FRIGELAR COMERCIO E DISTRIBUICAO S.A.</xNome><xFant>FRIGELAR</xFant>
+        <enderEmit><xLgr>AV DAS NACOES UNIDAS</xLgr><nro>4777</nro><xBairro>PINHEIROS</xBairro><cMun>3550308</cMun><xMun>SAO PAULO</xMun><UF>SP</UF><CEP>05477000</CEP></enderEmit>
+        <IE>110042490114</IE><CRT>3</CRT>
+      </emit>
+      <dest><CNPJ>12345678000190</CNPJ><xNome>CLIMA TOTAL LTDA</xNome><indIEDest>1</indIEDest><IE>123456789110</IE></dest>
+      <det nItem="1">
+        <prod>
+          <cProd>R410A-11</cProd><cEAN>7891234567895</cEAN><xProd>GAS REFRIGERANTE R410A CILINDRO 11,35KG</xProd><NCM>29037990</NCM><CFOP>5102</CFOP>
+          <uCom>UN</uCom><qCom>1.0000</qCom><vUnCom>702.5000000000</vUnCom><vProd>702.50</vProd><indTot>1</indTot>
+        </prod>
+      </det>
+      <det nItem="2">
+        <prod>
+          <cProd>FIL-SEC-032</cProd><cEAN>SEM GTIN</cEAN><xProd>FILTRO SECADOR 032S SOLDA</xProd><NCM>84213990</NCM><CFOP>5102</CFOP>
+          <uCom>PC</uCom><qCom>4.0000</qCom><vUnCom>27.9000000000</vUnCom><vProd>111.60</vProd><indTot>1</indTot>
+        </prod>
+      </det>
+      <total><ICMSTot><vProd>814.10</vProd><vFrete>15.00</vFrete><vDesc>0.00</vDesc><vOutro>0.00</vOutro><vNF>829.10</vNF></ICMSTot></total>
+      <transp><modFrete>0</modFrete></transp>
+      <pag><detPag><indPag>0</indPag><tPag>01</tPag><vPag>829.10</vPag></detPag></pag>
+    </infNFe>
+  </NFe>
+  <protNFe versao="4.00">
+    <infProt><tpAmb>1</tpAmb><chNFe>35261111222333000181550010000046101000046103</chNFe><dhRecbto>2026-11-03T14:06:00-03:00</dhRecbto><nProt>135260001239999</nProt><cStat>100</cStat><xMotivo>Autorizado o uso da NF-e</xMotivo></infProt>
+  </protNFe>
+</nfeProc>

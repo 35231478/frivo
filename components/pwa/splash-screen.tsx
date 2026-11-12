@@ -26,11 +26,11 @@ export function SplashScreen() {
   if (!visivel) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-4 bg-sidebar anim-splash-out">
+    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-4 bg-surface-page anim-splash-out">
       <FrivoMark size={88} />
       <div className="flex flex-col items-center leading-none">
-        <span className="text-3xl font-bold tracking-tight lowercase text-white">frivo</span>
-        <span className="text-[11px] mt-1 tracking-wide text-slate-300">by Termofrio</span>
+        <span className="font-display text-3xl font-bold tracking-tight lowercase text-ink">frivo</span>
+        <span className="text-[11px] mt-1 tracking-wide text-ink-muted">by Termofrio</span>
       </div>
     </div>
   );

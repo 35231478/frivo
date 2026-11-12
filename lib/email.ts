@@ -1,11 +1,14 @@
 import { Resend } from "resend";
+import { saldoDaConta } from "@/lib/financeiro/parcelas";
 import { TipoContato, TipoComunicacao, CanalComunicacao } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { descriptografar } from "@/lib/crypto";
+import { emailContatoPrincipal } from "@/lib/cliente/cobranca-destino";
 import { TEMPLATES_PADRAO, substituirVariaveis, montarEmailHtml, type DadosEmpresaEmail } from "@/lib/email-templates";
 import { formatarMoeda, formatarData, nomeMes } from "@/lib/utils";
+import { diasAteDiaCivil } from "@/lib/fuso";
 
-export interface ResultadoEmail { ok: boolean; erro?: string }
+export interface ResultadoEmail { ok: boolean; erro?: string; para?: string; cc?: string[] }
 
 function baseUrl(): string {
   return (process.env.NEXTAUTH_URL || process.env.APP_URL || "").replace(/\/$/, "");
@@ -186,8 +189,24 @@ export async function getEmailsComunicacao(clienteId: string, tipo: TipoComunica
   return getContatosPorTipo(clienteId, LEGADO_POR_COMUNICACAO[tipo]);
 }
 
+/**
+ * E-mails que recebem a cobrança/fatura (boleto, lembrete de vencimento,
+ * confirmação de pagamento), em ordem de prioridade:
+ *  1) e-mails de cobrança dedicados da seção "Cobrança e faturamento" (emailsFaturamento);
+ *  2) roteamento FINANCEIRO (aba Comunicação → contato financeiro → e-mail do cadastro);
+ *  3) e-mail do contato principal — garante que a cobrança nunca fique sem destino.
+ */
+export async function getEmailsCobranca(cliente: { id: string; emailsFaturamento?: string[] | null; email?: string | null }): Promise<string[]> {
+  const dedicados = [...new Set((cliente.emailsFaturamento ?? []).map((e) => e.trim()).filter(Boolean))];
+  if (dedicados.length > 0) return dedicados;
+  const financeiro = await getEmailsComunicacao(cliente.id, TipoComunicacao.FINANCEIRO);
+  if (financeiro.length > 0) return financeiro;
+  const principal = await emailContatoPrincipal(cliente.id, cliente.email);
+  return principal ? [principal] : [];
+}
+
 /** Monta { para, cc } a partir de uma lista de e-mails + os e-mails de cópia do cliente. */
-function montarDestinatarios(emails: string[], cli: { emailsCopia?: string[] | null }): { para: string; cc: string[] } | null {
+export function montarDestinatarios(emails: string[], cli: { emailsCopia?: string[] | null }): { para: string; cc: string[] } | null {
   const lista = [...new Set(emails.map((e) => e.trim()).filter(Boolean))];
   if (lista.length === 0) return null;
   const [para, ...resto] = lista;
@@ -204,14 +223,12 @@ export async function enviarBoleto(contaReceberId: string): Promise<ResultadoEma
   if (!c) return { ok: false, erro: "Conta não encontrada." };
   const cfg = await prisma.emailConfig.findUnique({ where: { empresaId: c.empresaId } });
   if (!cfg?.notifBoletoEmitido || !c.cliente.emailReceberBoletos) return { ok: false, erro: "Notificação desativada." };
-  const emails = await getEmailsComunicacao(c.cliente.id, TipoComunicacao.FINANCEIRO);
-  if (emails.length === 0 && c.cliente.emailsFaturamento?.[0]) emails.push(c.cliente.emailsFaturamento[0]);
-  const dest = montarDestinatarios(emails, c.cliente);
+  const dest = montarDestinatarios(await getEmailsCobranca(c.cliente), c.cliente);
   if (!dest) return { ok: false, erro: "Destinatário sem e-mail." };
   return enviarEmail(c.empresaId, {
     tipo: "BOLETO_EMITIDO", para: dest.para, cc: dest.cc,
     referenciaId: c.id, referenciaTipo: "ContaReceber",
-    variaveis: { cliente_nome: c.cliente.nomeFantasia ?? c.cliente.nome, cliente_cnpj: c.cliente.cpfCnpj, valor: formatarMoeda(Number(c.valor)), vencimento: c.dataVencimento ? formatarData(c.dataVencimento) : "—", descricao: c.descricao, link_boleto: c.boletoPdfUrl ?? c.boletoUrl ?? "" },
+    variaveis: { cliente_nome: c.cliente.nomeFantasia ?? c.cliente.nome, cliente_cnpj: c.cliente.cpfCnpj, valor: formatarMoeda(saldoDaConta(c)), vencimento: c.dataVencimento ? formatarData(c.dataVencimento) : "—", descricao: c.descricao, link_boleto: c.boletoPdfUrl ?? c.boletoUrl ?? "" },
   });
 }
 
@@ -219,12 +236,13 @@ export async function enviarLembreteVencimento(contaReceberId: string): Promise<
   const c = await prisma.contaReceber.findUnique({ where: { id: contaReceberId }, include: { cliente: true } });
   if (!c) return { ok: false, erro: "Conta não encontrada." };
   if (!c.cliente.emailReceberLembretes) return { ok: false, erro: "Cliente não recebe lembretes." };
-  const dest = montarDestinatarios(await getEmailsComunicacao(c.cliente.id, TipoComunicacao.FINANCEIRO), c.cliente);
+  const dest = montarDestinatarios(await getEmailsCobranca(c.cliente), c.cliente);
   if (!dest) return { ok: false, erro: "Destinatário sem e-mail." };
-  const dias = c.dataVencimento ? Math.max(0, Math.round((new Date(c.dataVencimento).getTime() - Date.now()) / 86400000)) : 0;
+  const dias = Math.max(0, diasAteDiaCivil(c.dataVencimento) ?? 0);
   return enviarEmail(c.empresaId, {
     tipo: "LEMBRETE_VENCIMENTO", para: dest.para, cc: dest.cc, referenciaId: c.id, referenciaTipo: "ContaReceber",
-    variaveis: { cliente_nome: c.cliente.nomeFantasia ?? c.cliente.nome, valor: formatarMoeda(Number(c.valor)), vencimento: c.dataVencimento ? formatarData(c.dataVencimento) : "—", dias_para_vencer: String(dias), descricao: c.descricao, link_boleto: c.boletoPdfUrl ?? "" },
+    // O que falta pagar (o boleto sai pelo saldo quando já houve recebimento parcial)
+    variaveis: { cliente_nome: c.cliente.nomeFantasia ?? c.cliente.nome, valor: formatarMoeda(saldoDaConta(c)), vencimento: c.dataVencimento ? formatarData(c.dataVencimento) : "—", dias_para_vencer: String(dias), descricao: c.descricao, link_boleto: c.boletoPdfUrl ?? "" },
   });
 }
 
@@ -233,7 +251,7 @@ export async function enviarConfirmacaoPagamento(contaReceberId: string): Promis
   if (!c) return { ok: false, erro: "Conta não encontrada." };
   const cfg = await prisma.emailConfig.findUnique({ where: { empresaId: c.empresaId } });
   if (!cfg?.notifConfirmacaoPagamento || !c.cliente.emailReceberConfirmacoes) return { ok: false, erro: "Notificação desativada." };
-  const dest = montarDestinatarios(await getEmailsComunicacao(c.cliente.id, TipoComunicacao.FINANCEIRO), c.cliente);
+  const dest = montarDestinatarios(await getEmailsCobranca(c.cliente), c.cliente);
   if (!dest) return { ok: false, erro: "Destinatário sem e-mail." };
   return enviarEmail(c.empresaId, {
     tipo: "CONFIRMACAO_PAGAMENTO", para: dest.para, cc: dest.cc, referenciaId: c.id, referenciaTipo: "ContaReceber",
@@ -256,15 +274,18 @@ export async function enviarMedicao(medicaoId: string): Promise<ResultadoEmail> 
 }
 
 export async function enviarOrcamento(orcamentoId: string): Promise<ResultadoEmail> {
-  const o = await prisma.orcamento.findUnique({ where: { id: orcamentoId }, include: { cliente: true } });
+  const o = await prisma.orcamento.findUnique({ where: { id: orcamentoId }, include: { cliente: true, contatoCliente: { select: { email: true, ativo: true } } } });
   if (!o) return { ok: false, erro: "Orçamento não encontrado." };
   if (!o.cliente.emailReceberOrcamentos) return { ok: false, erro: "Cliente não recebe orçamentos." };
-  const dest = montarDestinatarios(await getEmailsComunicacao(o.cliente.id, TipoComunicacao.ORCAMENTOS), o.cliente);
+  // O contato A/C do orçamento recebe primeiro; os de comunicação de orçamentos vão em cópia
+  const aosCuidados = o.contatoCliente?.ativo !== false && o.contatoCliente?.email ? [o.contatoCliente.email] : [];
+  const dest = montarDestinatarios([...aosCuidados, ...await getEmailsComunicacao(o.cliente.id, TipoComunicacao.ORCAMENTOS)], o.cliente);
   if (!dest) return { ok: false, erro: "Destinatário sem e-mail." };
-  return enviarEmail(o.empresaId, {
+  const r = await enviarEmail(o.empresaId, {
     tipo: "ORCAMENTO_ENVIADO", para: dest.para, cc: dest.cc, referenciaId: o.id, referenciaTipo: "Orcamento",
     variaveis: { cliente_nome: o.cliente.nomeFantasia ?? o.cliente.nome, cliente_cnpj: o.cliente.cpfCnpj, numero_orcamento: o.codigo, valor: formatarMoeda(Number(o.totalGeral)), link_orcamento: `${baseUrl()}/orcamento/${o.tokenPublico}` },
   });
+  return { ...r, para: dest.para, cc: dest.cc };
 }
 
 type TipoLembreteOrc = "nao_respondido" | "vencendo" | "vencido" | "aprovado_sem_os";
@@ -281,7 +302,7 @@ export async function enviarLembreteOrcamento(orcamentoId: string, tipo: TipoLem
   if (!o.cliente.emailReceberOrcamentos) return { ok: false, erro: "Cliente não recebe orçamentos." };
   const dest = montarDestinatarios(await getEmailsComunicacao(o.cliente.id, TipoComunicacao.ORCAMENTOS), o.cliente);
   if (!dest) return { ok: false, erro: "Destinatário sem e-mail." };
-  const dias = o.validadeEm ? Math.round((new Date(o.validadeEm).getTime() - Date.now()) / 86400000) : 0;
+  const dias = diasAteDiaCivil(o.validadeEm) ?? 0;
   return enviarEmail(o.empresaId, {
     tipo: TIPO_TPL_ORC[tipo], para: dest.para, cc: dest.cc, referenciaId: o.id, referenciaTipo: "Orcamento",
     variaveis: { cliente_nome: o.cliente.nomeFantasia ?? o.cliente.nome, numero_orcamento: o.codigo, valor: formatarMoeda(Number(o.totalGeral)), dias_para_vencer: String(Math.max(0, dias)), data_aprovacao: o.assinadoEm ? formatarData(o.assinadoEm) : "", link_orcamento: `${baseUrl()}/orcamento/${o.tokenPublico}` },
@@ -300,4 +321,25 @@ export async function enviarOS(ordemServicoId: string, tipo: "aberta" | "conclui
     tipo: tipo === "concluida" ? "OS_CONCLUIDA" : "OS_CONCLUIDA", para: dest.para, cc: dest.cc, referenciaId: os.id, referenciaTipo: "OrdemServico",
     variaveis: { cliente_nome: os.cliente.nomeFantasia ?? os.cliente.nome, numero_os: os.numero, link_documento: "" },
   });
+}
+
+/**
+ * Compras: o Pedido de Compra (sem preços) ao e-mail do fornecedor do cadastro, com o link público
+ * do PC (o fornecedor abre/imprime sem login e responde com preço, validade e prazo).
+ */
+export async function enviarPedidoCompra(pedidoId: string): Promise<ResultadoEmail> {
+  const p = await prisma.pedidoCompraInterno.findUnique({ where: { id: pedidoId }, include: { fornecedor: { select: { nome: true, email: true } } } });
+  if (!p) return { ok: false, erro: "Pedido não encontrado." };
+  const para = p.fornecedor?.email?.trim();
+  if (!p.fornecedor) return { ok: false, erro: "Escolha o fornecedor do pedido." };
+  if (!para) return { ok: false, erro: `O fornecedor ${p.fornecedor.nome} não tem e-mail no cadastro.` };
+  const r = await enviarEmail(p.empresaId, {
+    tipo: "PEDIDO_COMPRA", para, referenciaId: p.id, referenciaTipo: "PedidoCompraInterno",
+    variaveis: {
+      fornecedor_nome: p.fornecedor.nome, numero_pedido: p.numero,
+      prazo_necessario: p.prazoNecessario ? ` (necessário até ${formatarData(p.prazoNecessario)})` : "",
+      link_pedido: `${baseUrl()}/pedido-compra/${p.tokenPublico}`,
+    },
+  });
+  return { ...r, para };
 }

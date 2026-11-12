@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requirePortalSession } from "@/lib/portal-server";
+import { requirePortalSession, podeVerChamados } from "@/lib/portal-server";
+import { SemAcesso } from "@/components/portal/sem-acesso";
 import { cn, formatarDataHora, LABELS_STATUS_OS, LABELS_PRIORIDADE } from "@/lib/utils";
 import { ChevronLeft, User, Clock, Image as ImageIcon } from "lucide-react";
 
@@ -11,7 +12,9 @@ export const dynamic = "force-dynamic";
 
 export default async function PortalChamadoDetalhe({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { user } = await requirePortalSession();
+  const sessao = await requirePortalSession();
+  if (!podeVerChamados(sessao)) return <SemAcesso />;
+  const { user } = sessao;
 
   const os = await prisma.ordemServico.findFirst({
     where: { id, empresaId: user.empresaId, clienteId: user.clienteId },
@@ -19,13 +22,29 @@ export default async function PortalChamadoDetalhe({ params }: { params: Promise
       responsavel: { select: { nome: true } },
       unidade: { select: { nome: true } },
       equipamento: { select: { marca: true, modelo: true } },
-      anexos: { select: { id: true, nome: true, tipo: true, conteudo: true }, orderBy: { criadoEm: "asc" } },
-      historico: { orderBy: { criadoEm: "desc" }, take: 30 },
+      anexos: { select: { id: true, nome: true, tipo: true, conteudo: true, criadoEm: true }, orderBy: { criadoEm: "asc" } },
     },
   });
   if (!os) notFound();
 
-  const fotos = os.anexos.filter((a) => a.tipo.startsWith("image/") || /^data:image\//.test(a.conteudo));
+  // Só as fotos enviadas pelo cliente ao abrir o chamado (criadas junto com a OS).
+  // Anexos que a equipe sobe depois são material interno e não aparecem no portal.
+  const janelaChamado = os.criadoEm.getTime() + 60_000;
+  const fotos = os.anexos.filter(
+    (a) =>
+      os.origem === "PORTAL_CLIENTE" &&
+      a.criadoEm.getTime() <= janelaChamado &&
+      (a.tipo.startsWith("image/") || /^data:image\//.test(a.conteudo)),
+  );
+
+  // Linha do tempo pública: só os marcos do atendimento, nunca o histórico interno da OS
+  const marcos: { titulo: string; quando: Date | null }[] = [
+    { titulo: "Chamado aberto", quando: os.criadoEm },
+    ...(os.previsaoConclusao ? [{ titulo: "Visita prevista", quando: os.previsaoConclusao }] : []),
+    ...(os.dataInicio ? [{ titulo: "Atendimento iniciado", quando: os.dataInicio }] : []),
+    ...(os.status === "CONCLUIDA" && os.dataConclusao ? [{ titulo: "Atendimento concluído", quando: os.dataConclusao }] : []),
+    ...(os.status === "CANCELADA" ? [{ titulo: "Chamado cancelado", quando: os.atualizadoEm ?? null }] : []),
+  ];
 
   return (
     <div className="space-y-5">
@@ -64,17 +83,16 @@ export default async function PortalChamadoDetalhe({ params }: { params: Promise
       )}
 
       <div className="bg-white rounded-xl border border-surface-border p-5">
-        <p className="text-sm font-bold text-ink flex items-center gap-2 mb-3"><Clock className="w-4 h-4 text-primary-600" /> Atualizações</p>
-        {os.historico.length === 0 ? (
+        <p className="text-sm font-bold text-ink flex items-center gap-2 mb-3"><Clock className="w-4 h-4 text-primary-600" /> Acompanhamento</p>
+        {marcos.length === 0 ? (
           <p className="text-sm text-ink-muted">Sem atualizações.</p>
         ) : (
           <ol className="relative border-l-2 border-surface-border ml-2 space-y-3">
-            {os.historico.map((h) => (
-              <li key={h.id} className="ml-4">
+            {marcos.map((m) => (
+              <li key={m.titulo} className="ml-4">
                 <span className="absolute -left-[7px] w-3 h-3 rounded-full bg-primary-500 ring-2 ring-white" />
-                <p className="text-sm text-ink font-medium">{h.acao}</p>
-                {h.detalhes && <p className="text-xs text-ink-muted">{h.detalhes}</p>}
-                <p className="text-[11px] text-ink-subtle">{formatarDataHora(h.criadoEm)}</p>
+                <p className="text-sm text-ink font-medium">{m.titulo}</p>
+                {m.quando && <p className="text-[11px] text-ink-subtle">{formatarDataHora(m.quando)}</p>}
               </li>
             ))}
           </ol>

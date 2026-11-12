@@ -1,0 +1,141 @@
+import { statusVisualReceber } from "@/lib/financeiro-status";
+import { atividadeEncerrada, situacaoPrazo, textoPrazo } from "@/lib/os/prazos";
+import { medicaoValida, resumoStatus, type EstagioOs } from "@/lib/os/status";
+import { aDevolver, semConsumoInformado, type MaterialSeparavel } from "@/lib/estoque/separacao";
+import { contarEquipamentosAtendidos } from "@/lib/os/equipamentos-atendidos";
+
+/**
+ * A "central de controle" da OS em dados: tudo o que o cabeçalho e o Resumo mostram para
+ * atender o cliente batendo o olho — status, o que falta, prazo e valor. Função pura sobre o que
+ * a página já carrega (testável sem tela nem banco).
+ */
+export interface AtividadeCentral {
+  id: string; titulo: string; status: string;
+  dataAgendada: Date | string | null; prazo: Date | string | null;
+  tecnico?: { nome: string } | null; equipe?: { nome: string } | null; tecnicosEquipe?: unknown[];
+  /** `equipamentoId` identifica o equipamento: o mesmo, atendido em duas atividades, conta uma vez */
+  equipamentos?: { feito: boolean; equipamentoId?: string | null }[];
+}
+export interface OsCentralEntrada {
+  status: string; statusManual: boolean; previsaoConclusao: Date | string | null;
+  /** Equipamento principal da OS (OS antiga, concluída sem equipamento vinculado: era ele o atendido) */
+  equipamentoId?: string | null;
+  atividades: AtividadeCentral[];
+  medicoes: {
+    status: string; valorTotal: unknown;
+    /** Conta PARCELADA traz as parcelas: a situação é a delas */
+    contasReceber?: { status: string; dataVencimento: Date | string | null; valor?: unknown; parcelas?: { status: string; dataVencimento: Date | string | null }[] }[];
+  }[];
+  itensOrcamento: { valorTotal: unknown }[];
+  orcamentos: { orcamentoId?: string; orcamento: { status: string; totalGeral: unknown } }[];
+  /** Orçamento que GEROU a OS: os itens dele já estão em itensOrcamento (não somar o total de novo) */
+  orcamentoOrigemId?: string | null;
+  servicosAdicionais?: { statusCobranca: string }[];
+  prazosSla?: { status: string }[];
+  /** E4.2: materiais da OS (snapshot) e a amarra da empresa — "informar o consumo" entra no que falta */
+  materiais?: MaterialSeparavel[];
+  exigirPrestacaoMaterial?: boolean;
+}
+
+export type SituacaoPagamento = "SEM_COBRANCA" | "PREVISTO" | "A_RECEBER" | "VENCIDO" | "PAGO" | "PERDA";
+export const ROTULO_PAGAMENTO: Record<SituacaoPagamento, string> = {
+  SEM_COBRANCA: "Sem cobrança", PREVISTO: "Previsto", A_RECEBER: "Em aberto", VENCIDO: "Vencido", PAGO: "Pago", PERDA: "Perda",
+};
+
+export interface Pendencia { chave: string; texto: string; aba: string; nivel: "alerta" | "acao" }
+
+const num = (v: unknown) => Number(v ?? 0) || 0;
+
+/**
+ * Situação do pagamento da OS pelas contas a receber das medições em que ela entrou:
+ * tudo pago → Pago; alguma vencida → Vencido; alguma liberada → A receber; só previsões →
+ * Previsto. Sem medição: "Previsto" se há valor orçado, senão "Sem cobrança".
+ */
+export function situacaoPagamento(os: OsCentralEntrada, orcado: number): SituacaoPagamento {
+  const contas = os.medicoes.filter(medicaoValida).flatMap((m) => (m.contasReceber ?? []).map((c) => ({ ...c, medicaoPaga: m.status === "PAGO" })))
+    .flatMap((c) => (c.status === "PARCELADO" ? (c.parcelas ?? []).map((x) => ({ ...x, medicaoPaga: c.medicaoPaga })) : [c])).filter((c) => c.status !== "CANCELADO");
+  if (!contas.length) return orcado > 0 || os.medicoes.some(medicaoValida) ? "PREVISTO" : "SEM_COBRANCA";
+  // Renegociada: o dinheiro está na renegociação — paga quando ela foi quitada (a fatura fica PAGA), senão a receber
+  const vis = contas.map((c) => (c.status === "RENEGOCIADO" ? (c.medicaoPaga ? "PAGO" : "A_VENCER") : statusVisualReceber(c.status, c.dataVencimento).chave));
+  if (vis.every((v) => v === "PAGO")) return "PAGO";
+  if (vis.some((v) => v === "VENCIDO")) return "VENCIDO";
+  if (vis.some((v) => v === "A_VENCER" || v === "VENCE_HOJE")) return "A_RECEBER";
+  // Nada mais a receber, mas parte foi dada como perdida
+  if (vis.some((v) => v === "PERDA") && vis.every((v) => v === "PAGO" || v === "PERDA")) return "PERDA";
+  return "PREVISTO";
+}
+
+export function centralDaOs(os: OsCentralEntrada, agora: Date = new Date()) {
+  const status = resumoStatus({ status: os.status, statusManual: os.statusManual, previsaoConclusao: os.previsaoConclusao, atividades: os.atividades, medicoes: os.medicoes });
+  const encerrada = status.exibido === "CONCLUIDA" || status.exibido === "FATURADA" || status.exibido === "CANCELADA";
+
+  const ativas = os.atividades.filter((a) => a.status !== "CANCELADA");
+  const concluidas = ativas.filter((a) => a.status === "CONCLUIDA").length;
+  // Equipamento DISTINTO — a mesma conta do card "Equipamentos atendidos" e do relatório (antes somava
+  // os vínculos: o mesmo equipamento atendido em duas atividades aparecia como 2)
+  const equipamentosAtendidos = contarEquipamentosAtendidos(
+    os.atividades.map((a, i) => ({
+      status: a.status,
+      equipamentos: (a.equipamentos ?? []).map((e, j) => ({ feito: e.feito, equipamento: { id: e.equipamentoId ?? `sem-id:${i}:${j}` } })),
+    })),
+    os.equipamentoId ?? null, os.status === "CONCLUIDA",
+  );
+
+  // Valor: orçado = itens da OS + orçamentos vinculados APROVADOS (menos o de origem, cujos itens
+  // já vieram para a OS); medido = medições válidas
+  const orcado = os.itensOrcamento.reduce((s, i) => s + num(i.valorTotal), 0)
+    + os.orcamentos.filter((o) => o.orcamento.status === "APROVADO" && !(os.orcamentoOrigemId && o.orcamentoId === os.orcamentoOrigemId))
+      .reduce((s, o) => s + num(o.orcamento.totalGeral), 0);
+  const medido = os.medicoes.filter(medicaoValida).reduce((s, m) => s + num(m.valorTotal), 0);
+  const pagamento = situacaoPagamento(os, orcado);
+
+  const prazoOs = situacaoPrazo(os.previsaoConclusao, encerrada, agora);
+  const prazosAtividades = ativas.map((a) => ({ id: a.id, ...situacaoPrazo(a.prazo, atividadeEncerrada(a.status), agora) }));
+  const atividadesAtrasadas = prazosAtividades.filter((p) => p.situacao === "ATRASADO").length;
+
+  // O que falta — do mais urgente ao mais burocrático; cada item leva à aba onde se resolve
+  const falta: Pendencia[] = [];
+  if (status.exibido !== "CANCELADA") {
+    if (!ativas.length) falta.push({ chave: "sem-atividade", texto: "Criar a primeira atividade (quem executa e quando)", aba: "atividades", nivel: "acao" });
+    const semExecutor = ativas.filter((a) => !atividadeEncerrada(a.status) && !a.tecnico && !a.equipe && !(a.tecnicosEquipe ?? []).length).length;
+    if (semExecutor) falta.push({ chave: "sem-executor", texto: `${semExecutor} atividade${semExecutor > 1 ? "s" : ""} sem quem execute`, aba: "atividades", nivel: "alerta" });
+    const semData = ativas.filter((a) => a.status === "AGENDADA" && !a.dataAgendada).length;
+    if (semData) falta.push({ chave: "sem-data", texto: `Agendar ${semData} atividade${semData > 1 ? "s" : ""} sem data`, aba: "atividades", nivel: "acao" });
+    if (atividadesAtrasadas) falta.push({ chave: "atividade-atrasada", texto: `${atividadesAtrasadas} atividade${atividadesAtrasadas > 1 ? "s" : ""} fora do prazo`, aba: "atividades", nivel: "alerta" });
+    if (prazoOs.situacao === "ATRASADO") falta.push({ chave: "os-atrasada", texto: `Previsão da OS vencida (${textoPrazo(prazoOs, false).toLowerCase()})`, aba: "resumo", nivel: "alerta" });
+    const slaAtrasado = (os.prazosSla ?? []).filter((p) => p.status === "ATRASADO").length;
+    if (slaAtrasado) falta.push({ chave: "sla-atrasado", texto: `${slaAtrasado} prazo${slaAtrasado > 1 ? "s" : ""} de SLA atrasado${slaAtrasado > 1 ? "s" : ""}`, aba: "atividades", nivel: "alerta" });
+    const aAvaliar = (os.servicosAdicionais ?? []).filter((s) => s.statusCobranca === "A_AVALIAR").length;
+    if (aAvaliar) falta.push({ chave: "adicional", texto: `Decidir a cobrança de ${aAvaliar} serviço${aAvaliar > 1 ? "s" : ""} adicional${aAvaliar > 1 ? "is" : ""}`, aba: "resumo", nivel: "acao" });
+    const aguardando = os.orcamentos.filter((o) => o.orcamento.status === "ENVIADO").length;
+    if (aguardando) falta.push({ chave: "orcamento-enviado", texto: `${aguardando} orçamento${aguardando > 1 ? "s" : ""} aguardando aprovação do cliente`, aba: "comercial", nivel: "acao" });
+    // E4.2: material separado sem consumo informado — com a amarra ligada, trava a conclusão (alerta); sem ela, só lembra
+    const semConsumo = semConsumoInformado(os.materiais ?? []).length;
+    if (semConsumo) falta.push({
+      chave: "consumo-material", aba: "materiais", nivel: os.exigirPrestacaoMaterial ? "alerta" : "acao",
+      texto: `Informar o consumo de ${semConsumo} ${semConsumo > 1 ? "materiais separados" : "material separado"}${os.exigirPrestacaoMaterial ? " — a OS não conclui sem isso" : ""}`,
+    });
+    // E4.3: sobra separada sem devolução — com a amarra ligada, trava faturar/gerar medição (alerta); sem ela, só lembra
+    const aDev = (os.materiais ?? []).filter((m) => aDevolver(m, false) > 0).length;
+    if (aDev) falta.push({
+      chave: "devolucao-material", aba: "materiais", nivel: os.exigirPrestacaoMaterial ? "alerta" : "acao",
+      texto: `Devolver a sobra de ${aDev} ${aDev > 1 ? "materiais" : "material"} ao estoque${os.exigirPrestacaoMaterial ? " — a OS não fatura sem isso" : ""}`,
+    });
+    if (status.exibido === "CONCLUIDA") falta.push({ chave: "faturar", texto: "Gerar a medição para faturar a OS", aba: "financeiro", nivel: "acao" });
+    if (pagamento === "VENCIDO") falta.push({ chave: "cobranca-vencida", texto: "Cobrança vencida — acompanhar o recebimento", aba: "financeiro", nivel: "alerta" });
+  }
+
+  return {
+    status,
+    atividades: { total: ativas.length, concluidas },
+    equipamentosAtendidos,
+    valor: { orcado, medido },
+    pagamento,
+    prazoOs,
+    prazosAtividades,
+    falta,
+  };
+}
+
+export type CentralOs = ReturnType<typeof centralDaOs>;
+export type { EstagioOs };

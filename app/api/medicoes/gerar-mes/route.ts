@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
-import { gerarNumeroMedicao } from "@/lib/utils";
-import { calcularVencimento } from "@/lib/medicao-helpers";
+import { anoBR, mesBR } from "@/lib/fuso";
+import { contratoCobraNaCompetencia, passoCobranca } from "@/lib/financeiro/contrato-previsao";
+import { cobrancaDoContrato, gerarMedicaoDeContratos } from "@/lib/faturamento/medicao-contrato-server";
 
 /**
  * Gera as medições mensais de todos os clientes com contrato ativo.
@@ -11,6 +12,12 @@ import { calcularVencimento } from "@/lib/medicao-helpers";
  * - Clientes perfil "Fatura única": agrupa todos os contratos + orçamentos
  *   aprovados do mês ainda não faturados em uma única medição (FATURA_UNICA).
  * - Demais clientes: uma medição MENSAL_FIXO por cliente com os contratos ativos.
+ * - CO4: só entra o contrato cuja VIGÊNCIA cobre a competência (regra do aniversário) — o que
+ *   começa depois ou já terminou não gera mensalidade, mesmo com status ATIVO.
+ * - D1 (PR3-A): o contrato que cobra a cada N meses só entra no 1º mês de cada período.
+ * - PR3-A: contrato com faturamento automático é da rotina diária (uma medição por contrato), não daqui.
+ * - O contrato já cobrado nesta competência (por aqui ou pela rotina) não entra de novo.
+ * A montagem e a gravação são o núcleo único `gerarMedicaoDeContratos` (o mesmo da rotina).
  */
 export async function POST(req: NextRequest) {
   const guard = await exigirPermissao("financeiro", "medicoes");
@@ -20,13 +27,19 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}));
   const agora = new Date();
-  const mes = Number(body?.mes) || agora.getMonth() + 1;
-  const ano = Number(body?.ano) || agora.getFullYear();
+  const mes = Number(body?.mes) || mesBR(agora);
+  const ano = Number(body?.ano) || anoBR(agora);
 
-  const contratos = await prisma.contrato.findMany({
+  const ativos = await prisma.contrato.findMany({
     where: { empresaId, status: "ATIVO" },
     include: { cliente: true },
   });
+  const naVigencia = ativos.filter((c) => contratoCobraNaCompetencia(c.dataInicio, c.dataFim, ano, mes));
+  const foraDaVigencia = ativos.filter((c) => !naVigencia.includes(c)).map((c) => c.numero);
+  const noPeriodo = naVigencia.filter((c) => contratoCobraNaCompetencia(c.dataInicio, c.dataFim, ano, mes, passoCobranca(c.periodicidade)));
+  const semCobrancaNoMes = naVigencia.filter((c) => !noPeriodo.includes(c)).map((c) => c.numero);
+  const peloAutomatico = noPeriodo.filter((c) => c.faturamentoAutomatico).map((c) => c.numero);
+  const contratos = noPeriodo.filter((c) => !c.faturamentoAutomatico);
 
   // Agrupa contratos por cliente
   const porCliente = new Map<string, typeof contratos>();
@@ -36,132 +49,42 @@ export async function POST(req: NextRequest) {
     porCliente.set(c.clienteId, arr);
   }
 
-  // Sequencial derivado do maior número de medição do ano alvo (evita colisão entre anos)
-  const ultimaMed = await prisma.medicao.findFirst({
-    where: { empresaId, numero: { startsWith: `MED-${ano}-` } },
-    orderBy: { numero: "desc" },
-    select: { numero: true },
-  });
-  let sequencial = ultimaMed ? Number(ultimaMed.numero.split("-")[2]) : 0;
   let criadas = 0;
   let ignoradas = 0;
   const resultado: { cliente: string; numero?: string; status: string }[] = [];
 
-  for (const [clienteId, contratosCliente] of porCliente) {
-    const cliente = contratosCliente[0].cliente;
+  for (const [clienteId, contratosDoCliente] of porCliente) {
+    const cliente = contratosDoCliente[0].cliente;
+    const nome = cliente.nomeFantasia ?? cliente.nome;
 
-    // Evita duplicar: já existe medição mensal/fatura única deste cliente no período?
-    const jaExiste = await prisma.medicao.findFirst({
-      where: {
-        empresaId,
-        clienteId,
-        mes,
-        ano,
-        tipo: { in: ["MENSAL_FIXO", "FATURA_UNICA"] },
-        status: { not: "CANCELADA" },
-      },
+    // Evita duplicar: a medição do CLIENTE no período (consolidada, sem contrato único) segura todos;
+    // a de um contrato só segura aquele contrato
+    const doCliente = await prisma.medicao.findFirst({
+      where: { empresaId, clienteId, mes, ano, contratoId: null, tipo: { in: ["MENSAL_FIXO", "FATURA_UNICA"] }, status: { not: "CANCELADA" } },
+      select: { id: true },
     });
-    if (jaExiste) {
+    const pendentes: typeof contratosDoCliente = [];
+    if (!doCliente) {
+      for (const ct of contratosDoCliente) if (!(await cobrancaDoContrato(prisma, ct.id, ano, mes))) pendentes.push(ct);
+    }
+    if (!pendentes.length) {
       ignoradas++;
-      resultado.push({ cliente: cliente.nomeFantasia ?? cliente.nome, status: "já existe" });
+      resultado.push({ cliente: nome, status: "já existe" });
       continue;
     }
 
-    const faturaUnica = cliente.tipoFaturamento === "FATURA_UNICA";
-
-    const itens: {
-      tipo: "SERVICO" | "PRODUTO";
-      descricao: string;
-      quantidade: number;
-      valorUnitario: number;
-      valorTotal: number;
-      orcamentoId?: string;
-      ordem: number;
-    }[] = [];
-
-    let ordem = 0;
-    for (const ct of contratosCliente) {
-      const valor = ct.valorMensal ? Number(ct.valorMensal) : 0;
-      if (valor <= 0) continue;
-      itens.push({
-        tipo: "SERVICO",
-        descricao: `Contrato ${ct.numero} — mensalidade`,
-        quantidade: 1,
-        valorUnitario: valor,
-        valorTotal: valor,
-        ordem: ordem++,
-      });
-    }
-
-    // Fatura única: agrega orçamentos aprovados do cliente ainda não faturados
-    if (faturaUnica && cliente.agrupaAdicionais) {
-      const orcamentos = await prisma.orcamento.findMany({
-        where: {
-          empresaId,
-          clienteId,
-          status: "APROVADO",
-          medicaoItens: { none: {} },
-        },
-      });
-      for (const o of orcamentos) {
-        const valor = Number(o.totalGeral);
-        itens.push({
-          tipo: "SERVICO",
-          descricao: `Adicional — orçamento ${o.codigo}`,
-          quantidade: 1,
-          valorUnitario: valor,
-          valorTotal: valor,
-          orcamentoId: o.id,
-          ordem: ordem++,
-        });
-      }
-    }
-
-    if (itens.length === 0) {
+    const r = await gerarMedicaoDeContratos({ empresaId, cliente, contratos: pendentes, ano, mes });
+    if (r.status === "criada") {
+      criadas++;
+      resultado.push({ cliente: nome, numero: r.medicao.numero, status: "criada" });
+    } else {
       ignoradas++;
-      resultado.push({ cliente: cliente.nomeFantasia ?? cliente.nome, status: "sem valor de contrato" });
-      continue;
+      resultado.push({
+        cliente: nome,
+        status: r.status === "sem-itens" ? "sem valor de contrato" : r.status === "ja-cobrado" ? "já existe" : "item já faturado em outra medição — gere de novo",
+      });
     }
-
-    const valorTotal = itens.reduce((acc, it) => acc + it.valorTotal, 0);
-    sequencial++;
-    const numero = gerarNumeroMedicao(sequencial, ano);
-    const vencimento = calcularVencimento(cliente.diaFaturamento, mes, ano);
-
-    await prisma.medicao.create({
-      data: {
-        empresaId,
-        clienteId,
-        contratoId: !faturaUnica && contratosCliente.length === 1 ? contratosCliente[0].id : null,
-        numero,
-        tipo: faturaUnica ? "FATURA_UNICA" : "MENSAL_FIXO",
-        mes,
-        ano,
-        descricao: faturaUnica
-          ? `Fatura única ${String(mes).padStart(2, "0")}/${ano}`
-          : `Medição mensal ${String(mes).padStart(2, "0")}/${ano}`,
-        status: "RASCUNHO",
-        valorTotal,
-        valorLiquido: valorTotal,
-        dataVencimento: vencimento,
-        tokenPublico: crypto.randomUUID(),
-        itens: {
-          create: itens.map((it) => ({
-            tipo: it.tipo,
-            descricao: it.descricao,
-            quantidade: it.quantidade,
-            valorUnitario: it.valorUnitario,
-            valorTotal: it.valorTotal,
-            orcamentoId: it.orcamentoId ?? null,
-            ordem: it.ordem,
-          })),
-        },
-      },
-    });
-
-    criadas++;
-    resultado.push({ cliente: cliente.nomeFantasia ?? cliente.nome, numero, status: "criada" });
   }
 
-  return NextResponse.json({ ok: true, mes, ano, criadas, ignoradas, resultado });
+  return NextResponse.json({ ok: true, mes, ano, criadas, ignoradas, foraDaVigencia, semCobrancaNoMes, peloAutomatico, resultado });
 }

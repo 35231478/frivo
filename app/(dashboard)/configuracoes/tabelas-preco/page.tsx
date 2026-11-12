@@ -1,16 +1,7 @@
-import type { Metadata } from "next";
-import { PageHeader } from "@/components/ui/page-header";
-import { TabelasPrecoClient } from "@/components/config/tabelas-preco-client";
+import { redirect } from "next/navigation";
+import { hrefSecaoConfig } from "@/lib/navegacao/configuracoes";
 
-export const metadata: Metadata = { title: "Tabelas de Preços" };
-
-export default function TabelasPrecoPage() {
-  return (
-    <div>
-      <PageHeader title="Tabelas de Preços" description="Defina preços por serviço/produto e vincule a clientes" backHref="/configuracoes" />
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <TabelasPrecoClient />
-      </div>
-    </div>
-  );
+/** Link antigo: abre a mesma tela na gaveta da página de Configurações. */
+export default function Page() {
+  redirect(hrefSecaoConfig("tabelas-preco"));
 }

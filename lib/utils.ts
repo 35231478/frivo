@@ -2,14 +2,22 @@ import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { chaveDiaCivil, relogioBR } from "@/lib/fuso";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/**
+ * Data/hora SEMPRE no relógio de Brasília, qualquer que seja o fuso de quem roda (servidor em UTC,
+ * navegador em qualquer país). Dia civil gravado (meia-noite UTC: vencimento, validade…) mostra o
+ * próprio dia, nunca a véspera. Ver lib/fuso.ts.
+ */
 export function formatarData(data: Date | string | null | undefined, mascara = "dd/MM/yyyy"): string {
   if (!data) return "—";
-  return format(new Date(data), mascara, { locale: ptBR });
+  const d = new Date(data);
+  if (Number.isNaN(d.getTime())) return "—";
+  return format(relogioBR(d), mascara, { locale: ptBR });
 }
 
 export function formatarDataHora(data: Date | string | null | undefined): string {
@@ -37,38 +45,6 @@ export function formatarTelefone(valor: string): string {
   return numeros.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
 }
 
-export function gerarNumeroOS(sequencial: number): string {
-  return `OS-${new Date().getFullYear()}-${String(sequencial).padStart(4, "0")}`;
-}
-
-export function gerarNumeroContrato(sequencial: number): string {
-  return `CT-${new Date().getFullYear()}-${String(sequencial).padStart(3, "0")}`;
-}
-
-export function gerarCodigoOrcamento(sequencial: number): string {
-  return `ORC-${new Date().getFullYear()}-${String(sequencial).padStart(4, "0")}`;
-}
-
-export function gerarNumeroMedicao(sequencial: number, ano = new Date().getFullYear()): string {
-  return `MED-${ano}-${String(sequencial).padStart(4, "0")}`;
-}
-
-export function gerarNumeroContaReceber(sequencial: number, ano = new Date().getFullYear()): string {
-  return `CR-${ano}-${String(sequencial).padStart(4, "0")}`;
-}
-
-export function gerarNumeroContaPagar(sequencial: number, ano = new Date().getFullYear()): string {
-  return `CP-${ano}-${String(sequencial).padStart(4, "0")}`;
-}
-
-export function gerarNumeroPedidoCompra(sequencial: number, ano = new Date().getFullYear()): string {
-  return `PCI-${ano}-${String(sequencial).padStart(4, "0")}`;
-}
-
-export function gerarNumeroRelatorio(sequencial: number, ano = new Date().getFullYear()): string {
-  return `REL-${ano}-${String(sequencial).padStart(4, "0")}`;
-}
-
 export const MESES_PT = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
@@ -91,10 +67,10 @@ export function iniciais(nome: string | null | undefined): string {
   return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
 }
 
-// Paleta de avatares: azul, verde, roxo, laranja, rosa, ciano (fundo sólido, texto branco)
+// Avatares (sistema de design): tons da identidade, sem cor de status (verde/vermelho têm função).
+// Cada item traz fundo E texto; o nome sempre escolhe o mesmo tom.
 export const CORES_AVATAR = [
-  "bg-blue-500", "bg-emerald-500", "bg-violet-500",
-  "bg-orange-500", "bg-pink-500", "bg-cyan-500",
+  "bg-acento-claro text-acento-hover", "bg-acento text-white", "bg-previsto-claro text-previsto-texto",
 ];
 
 // Cor consistente para o mesmo nome (hash simples da string)
@@ -163,21 +139,24 @@ export const LABELS_TIPO_SERVICO: Record<string, string> = {
 };
 
 export const LABELS_TIPO_EQUIPAMENTO: Record<string, string> = {
-  AR_CONDICIONADO_SPLIT: "Ar-cond. Split",
+  AR_CONDICIONADO_SPLIT: "Split Hi-Wall (parede)",
   AR_CONDICIONADO_JANELA: "Ar-cond. Janela",
   AR_CONDICIONADO_CENTRAL: "Ar-cond. Central",
   AR_CONDICIONADO_PORTATIL: "Ar-cond. Portátil",
   CHILLER: "Chiller",
   TORRE_RESFRIAMENTO: "Torre de Resfriamento",
-  CAMARA_FRIA: "Câmara Fria",
+  CAMARA_FRIA: "Câmara Fria/Refrigeração",
   CAMARA_CLIMATIZADA: "Câmara Climatizada",
   REFRIGERADOR_COMERCIAL: "Refrigerador Comercial",
   CONGELADOR_COMERCIAL: "Congelador Comercial",
-  VRF: "VRF",
-  FANCOIL: "Fan Coil",
+  VRF: "VRF/VRV",
+  FANCOIL: "Fancoil",
   CONDENSADORA: "Condensadora",
   EVAPORADORA: "Evaporadora",
   OUTRO: "Outro",
+  PISO_TETO: "Piso-Teto",
+  CASSETE: "Cassete",
+  SELF_CONTAINED: "Self-Contained",
 };
 
 export const LABELS_SEGMENTO: Record<string, string> = {
@@ -212,9 +191,9 @@ export const LABELS_STATUS_FINANCEIRO: Record<string, string> = {
 
 export const COR_STATUS_FINANCEIRO: Record<string, string> = {
   ADIMPLENTE: "bg-success-50 text-success-700",
-  INADIMPLENTE: "bg-red-50 text-red-700",
-  EM_NEGOCIACAO: "bg-amber-50 text-amber-700",
-  AGUARDANDO_VENCIMENTO: "bg-orange-50 text-orange-700",
+  INADIMPLENTE: "bg-atrasado-claro text-atrasado-texto",
+  EM_NEGOCIACAO: "bg-atencao-claro text-atencao-texto",
+  AGUARDANDO_VENCIMENTO: "bg-atencao-claro text-atencao-texto",
 };
 
 export const LABELS_TIPO_CONTATO: Record<string, string> = {
@@ -263,12 +242,13 @@ export const SECOES_COMUNICACAO = [
 
 // Cores dos badges por tipo de contato (cobre todos os valores de TipoContato).
 export const COR_TIPO_CONTATO: Record<string, string> = {
-  OPERACIONAL: "bg-blue-50 text-blue-700",
-  FINANCEIRO: "bg-emerald-50 text-emerald-700",
-  CONTRATUAL: "bg-purple-50 text-purple-700",
-  TECNICO: "bg-amber-50 text-amber-700",
-  DIRETORIA: "bg-slate-100 text-slate-600",
-  OUTRO: "bg-gray-100 text-gray-600",
+  // Categoria (não é status): neutro, com o acento só no que é operacional
+  OPERACIONAL: "bg-acento-claro text-acento-hover",
+  FINANCEIRO: "bg-previsto-claro text-previsto-texto",
+  CONTRATUAL: "bg-previsto-claro text-previsto-texto",
+  TECNICO: "bg-previsto-claro text-previsto-texto",
+  DIRETORIA: "bg-previsto-claro text-previsto-texto",
+  OUTRO: "bg-previsto-claro text-previsto-texto",
 };
 
 export const LABELS_TIPO_INTERACAO: Record<string, string> = {
@@ -283,7 +263,7 @@ export const LABELS_STATUS_ORCAMENTO: Record<string, string> = {
   RASCUNHO: "Rascunho",
   ENVIADO: "Enviado",
   APROVADO: "Aprovado",
-  REPROVADO: "Reprovado",
+  REPROVADO: "Recusado",
   CANCELADO: "Cancelado",
   CONVERTIDA: "Convertida",
 };
@@ -298,7 +278,7 @@ export const CLASSE_STATUS_ORCAMENTO: Record<string, string> = {
 };
 
 export const LABELS_TIPO_ORCAMENTO: Record<string, string> = {
-  COMUM: "Orçamento Comum",
+  COMUM: "Orçamento",
   PROPOSTA_CONTRATO: "Proposta de Contrato",
 };
 
@@ -318,14 +298,18 @@ export const VARIAVEIS_TERMO = [
   "{{art_numero}}",
 ] as const;
 
-/** Calcula a data fim somando `meses` à data de início. */
+/**
+ * Calcula a data fim somando `meses` à data de início — MENOS um dia (CO4):
+ * 12 meses a partir de 01/01 terminam em 31/12, e a cobrança é de 12 competências,
+ * não 13 (o aniversário é o primeiro dia FORA da vigência).
+ */
 export function calcularDataFimContrato(inicio: Date | string | null | undefined, meses: number | null | undefined): Date | null {
   if (!inicio || !meses) return null;
   const d = new Date(inicio);
   if (isNaN(d.getTime())) return null;
-  const fim = new Date(d);
-  fim.setMonth(fim.getMonth() + meses);
-  return fim;
+  // Dia civil: soma meses no dia GRAVADO (sem fuso) e volta um dia
+  const [a, m, dia] = chaveDiaCivil(d).split("-").map(Number);
+  return new Date(Date.UTC(a, m - 1 + meses, dia - 1));
 }
 
 export const LABELS_TIPO_DESCONTO: Record<string, string> = {
@@ -375,18 +359,24 @@ export const CLASSE_STATUS_MEDICAO: Record<string, string> = {
 
 export const LABELS_STATUS_CONTA_RECEBER: Record<string, string> = {
   PREVISTO: "Previsto",
-  A_RECEBER: "A receber",
+  A_RECEBER: "Em aberto",
   RECEBIDO: "Recebido",
   CANCELADO: "Cancelado",
   ATRASADO: "Atrasado",
+  PARCELADO: "Parcelado",
+  PERDA: "Perda",
+  RENEGOCIADO: "Renegociada",
 };
 
 export const CLASSE_STATUS_CONTA_RECEBER: Record<string, string> = {
-  PREVISTO: "badge-base bg-slate-100 text-slate-600",
+  PREVISTO: "badge-base bg-surface-linha text-ink-muted",
   A_RECEBER: "badge-base bg-primary-50 text-primary-700",
   RECEBIDO: "badge-base bg-success-50 text-success-700",
-  CANCELADO: "badge-base bg-slate-100 text-slate-500",
-  ATRASADO: "badge-base bg-red-50 text-red-700",
+  CANCELADO: "badge-base bg-surface-linha text-ink-muted",
+  ATRASADO: "badge-base bg-atrasado-claro text-atrasado-texto",
+  PARCELADO: "badge-base bg-acento-claro text-acento",
+  PERDA: "badge-base bg-ink/10 text-ink",
+  RENEGOCIADO: "badge-base bg-acento-claro text-acento",
 };
 
 export const LABELS_FORMA_PAGAMENTO: Record<string, string> = {
@@ -413,22 +403,6 @@ export const LABELS_CANAL_NOTIFICACAO: Record<string, string> = {
   WHATSAPP: "WhatsApp",
   EMAIL: "E-mail",
   SISTEMA: "Sistema",
-};
-
-export const LABELS_STATUS_PEDIDO_COMPRA: Record<string, string> = {
-  SOLICITADO: "Solicitado",
-  COTANDO: "Cotando",
-  COMPRADO: "Comprado",
-  ENTREGUE: "Entregue",
-  CANCELADO: "Cancelado",
-};
-
-export const CLASSE_STATUS_PEDIDO_COMPRA: Record<string, string> = {
-  SOLICITADO: "badge-base bg-primary-50 text-primary-700",
-  COTANDO: "badge-base bg-amber-50 text-amber-700",
-  COMPRADO: "badge-base bg-violet-50 text-violet-700",
-  ENTREGUE: "badge-base bg-success-50 text-success-700",
-  CANCELADO: "badge-base bg-slate-100 text-slate-500",
 };
 
 export const LABELS_STATUS_OS_PRAZO: Record<string, string> = {
@@ -499,12 +473,12 @@ export const LABELS_STATUS_CONTRATO: Record<string, string> = {
 
 export const COR_STATUS_CONTRATO: Record<string, string> = {
   ATIVO: "bg-success-50 text-success-700",
-  SUSPENSO: "bg-amber-50 text-amber-700",
-  ENCERRADO: "bg-slate-100 text-slate-600",
-  CANCELADO: "bg-red-50 text-red-700",
-  VENCIDO: "bg-red-50 text-red-700",
-  AGUARDANDO_ASSINATURA: "bg-slate-100 text-slate-600",
-  EM_RENOVACAO: "bg-blue-50 text-blue-700",
+  SUSPENSO: "bg-atencao-claro text-atencao-texto",
+  ENCERRADO: "bg-surface-linha text-ink-muted",
+  CANCELADO: "bg-atrasado-claro text-atrasado-texto",
+  VENCIDO: "bg-atrasado-claro text-atrasado-texto",
+  AGUARDANDO_ASSINATURA: "bg-surface-linha text-ink-muted",
+  EM_RENOVACAO: "bg-acento-claro text-acento-hover",
 };
 
 // Status oferecidos no formulário/gerenciamento de contrato (subconjunto do enum).
@@ -529,33 +503,10 @@ export const LABELS_INDICE_REAJUSTE: Record<string, string> = {
   PERCENTUAL_FIXO: "Percentual fixo",
 };
 
-export const LABELS_PERIODO_REF_NFSE: Record<string, string> = {
-  MES_ANTERIOR_FATURAMENTO: "Mês anterior ao faturamento",
-  MES_FATURAMENTO: "Mês do faturamento",
-  MES_POSTERIOR_FATURAMENTO: "Mês posterior ao faturamento",
-  MES_ANTERIOR_VENCIMENTO: "Mês anterior ao vencimento",
-  MES_VENCIMENTO: "Mês do vencimento",
-};
-
-export const LABELS_PERIODO_VISITA: Record<string, string> = {
-  MES: "por mês",
-  TRIMESTRE: "por trimestre",
-  SEMESTRE: "por semestre",
-  ANO: "por ano",
-};
-
 export const LABELS_MES: Record<number, string> = {
   1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
   7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro",
 };
-
-// Itens inclusos padrão do escopo do contrato (checklist).
-export const ITENS_INCLUSOS_CONTRATO = [
-  { chave: "manutencaoPreventivaMensal", label: "Manutenção preventiva mensal" },
-  { chave: "limpezaQuimicaSemestral", label: "Limpeza química semestral" },
-  { chave: "atendimentoCorretivo", label: "Atendimento corretivo" },
-  { chave: "relatorioPmoc", label: "Relatório PMOC" },
-] as const;
 
 export const LABELS_TIPO_RELATORIO: Record<string, string> = {
   PMOC: "PMOC",
@@ -577,10 +528,10 @@ export const LABELS_STATUS_RELATORIO: Record<string, string> = {
 };
 
 export const CLASSE_STATUS_RELATORIO: Record<string, string> = {
-  RASCUNHO: "badge-base bg-slate-100 text-slate-600",
+  RASCUNHO: "badge-base bg-surface-linha text-ink-muted",
   ENVIADO: "badge-base bg-primary-50 text-primary-700",
   APROVADO: "badge-base bg-success-50 text-success-700",
-  REPROVADO: "badge-base bg-red-50 text-red-700",
+  REPROVADO: "badge-base bg-atrasado-claro text-atrasado-texto",
 };
 
 /** Substitui variáveis {{nome}} em um template de mensagem. */
@@ -597,3 +548,10 @@ export function formatarPrazoHoras(horas: number): string {
   const resto = horas % 24;
   return resto ? `${dias}d ${resto}h` : `${dias}d`;
 }
+
+/**
+ * UX-8 (G3): ordenação NATURAL em pt-BR — "Sala 2" antes de "Sala 10", "Academia 19" antes de
+ * "Academia 103" (o localeCompare puro ordena como texto e embaralha números).
+ */
+export const comparaNatural = (a: string | null | undefined, b: string | null | undefined): number =>
+  (a ?? "").localeCompare(b ?? "", "pt-BR", { numeric: true, sensitivity: "base" });

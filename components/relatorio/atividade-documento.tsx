@@ -1,16 +1,23 @@
 import { formatarData } from "@/lib/utils";
-import { CabecalhoEmpresa, DadosClienteContrato, EquipamentosTabela, type EmpresaInfo, type ClienteInfo, type ContratoInfo, type EquipamentoInfo } from "./cabecalho-relatorio";
+import { CabecalhoEmpresa, DadosClienteContrato, type EmpresaInfo, type ClienteInfo, type ContratoInfo } from "./cabecalho-relatorio";
 import { SecaoAtividade, type AtividadeSecao } from "./secao-atividade";
+import { BlocosEquipamentos, SecaoAdicionais, SecaoFotosServico } from "./relatorio-os-documento";
+import type { AdicionalRelatorio, BlocoEquipamento, FotoRelatorio } from "@/lib/relatorio-os/dados";
 
 export interface AtividadeDocumentoProps {
   empresa: EmpresaInfo;
   os: { numero: string; criadoEm: Date | string; dataConclusao?: Date | string | null; cliente: ClienteInfo; contrato?: ContratoInfo | null; unidade?: { nome: string } | null };
   atividade: AtividadeSecao;
-  equipamentos: EquipamentoInfo[];
+  /** SÓ os equipamentos atendidos nesta atividade (cada um com checklist, fotos e observação dele) */
+  equipamentos: BlocoEquipamento[];
+  /** Serviços adicionais pedidos na visita (destacados) */
+  adicionais?: AdicionalRelatorio[];
+  /** Fotos do serviço (app) que não são de um equipamento atendido */
+  fotosServico?: FotoRelatorio[];
   numero: string;
 }
 
-export function AtividadeDocumento({ empresa, os, atividade, equipamentos, numero }: AtividadeDocumentoProps) {
+export function AtividadeDocumento({ empresa, os, atividade, equipamentos, adicionais = [], fotosServico = [], numero }: AtividadeDocumentoProps) {
   return (
     <div className="bg-white text-ink">
       <CabecalhoEmpresa empresa={empresa} titulo="RELATÓRIO DE ATIVIDADE" numero={numero} subtitulo={`Emitido em ${formatarData(new Date(), "dd/MM/yyyy")}`} />
@@ -24,7 +31,9 @@ export function AtividadeDocumento({ empresa, os, atividade, equipamentos, numer
         <div><span className="text-ink-muted block text-xs">Unidade</span>{os.unidade?.nome ?? "—"}</div>
       </div>
 
-      <EquipamentosTabela equipamentos={equipamentos} unidadeNome={os.unidade?.nome} />
+      <BlocosEquipamentos blocos={equipamentos} />
+      <SecaoAdicionais adicionais={adicionais} fotos interna={false} />
+      <SecaoFotosServico fotos={fotosServico} />
 
       <div className="py-4 border-b border-surface-border">
         <p className="text-xs uppercase tracking-wider text-ink-muted mb-3">Execução técnica</p>
@@ -35,6 +44,11 @@ export function AtividadeDocumento({ empresa, os, atividade, equipamentos, numer
         <div className="border-t border-ink/40 pt-1 text-sm text-center">
           <p className="text-ink-muted">{atividade.tecnico?.nome ?? "Técnico executor"}</p>
           <p className="text-xs text-ink-subtle">Técnico responsável</p>
+          {(atividade.tecnicosEquipe?.length ?? 0) > 0 && (
+            <p data-membros-relatorio className="text-xs text-ink-subtle mt-1">
+              {atividade.equipe ? `Equipe ${atividade.equipe.nome}: ` : "Com: "}{atividade.tecnicosEquipe!.map((t) => t.tecnico.nome).join(", ")}
+            </p>
+          )}
         </div>
         <div className="text-right text-xs text-ink-subtle self-end">
           <p>Conclusão: {os.dataConclusao ? formatarData(os.dataConclusao, "dd/MM/yyyy 'às' HH:mm") : "—"}</p>

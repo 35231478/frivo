@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { gerarNumeroContrato } from "@/lib/utils";
+import { exigirPermissao } from "@/lib/permissoes-server";
+import { proximoNumero } from "@/lib/numeracao-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -10,8 +10,9 @@ type Params = { params: Promise<{ id: string }> };
  * Idempotente: se a proposta já gerou um contrato, retorna o existente.
  */
 export async function POST(_req: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("contratos", "criar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const empresaId = session.user!.empresaId;
   const { id } = await params;
 
@@ -43,17 +44,9 @@ export async function POST(_req: NextRequest, { params }: Params) {
       )]
     : [];
 
-  // Numeração CT-AAAA-NNN derivada do maior do ano
-  const ano = new Date().getFullYear();
-  const ultimo = await prisma.contrato.findFirst({
-    where: { empresaId, numero: { startsWith: `CT-${ano}-` } },
-    orderBy: { numero: "desc" },
-    select: { numero: true },
-  });
-  const seq = (ultimo ? Number(ultimo.numero.split("-")[2]) : 0) + 1;
-  const numero = gerarNumeroContrato(seq);
-
   const contrato = await prisma.$transaction(async (tx) => {
+    // Número pelo contador da empresa, sob trava, na mesma transação do INSERT
+    const numero = await proximoNumero(tx, empresaId, "contrato");
     const novo = await tx.contrato.create({
       data: {
         empresaId,

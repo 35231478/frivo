@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { corDado } from "@/lib/ui/tokens";
 import { Check, ChevronDown, ExternalLink, Loader2, Plus, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import type { Acao } from "@/lib/permissoes";
+import { AvisoSerieDuplicada } from "@/components/equipamentos/aviso-serie-duplicada";
 
 /**
  * Select com CADASTRO RÁPIDO ("criar sem sair da tela").
@@ -33,13 +35,15 @@ export interface CampoRapido {
   obrigatorio?: boolean;
   placeholder?: string;
   /** "cep" preenche logradouro/bairro/cidade/estado (se existirem) via ViaCEP. */
-  tipo?: "texto" | "cep" | "uf" | "textarea" | "select";
+  tipo?: "texto" | "cep" | "uf" | "textarea" | "select" | "cor";
   /** Opções quando `tipo: "select"`. */
   opcoes?: { value: string; label: string }[];
   /** Colunas no grid de 6 (celular sempre ocupa a linha toda). */
   colunas?: 2 | 3 | 4 | 6;
   maxLength?: number;
   inputMode?: "text" | "numeric" | "decimal" | "tel" | "email";
+  /** Nº de série de equipamento: avisa (sem bloquear) se já existe outro com a mesma etiqueta. */
+  avisoSerie?: boolean;
 }
 
 /** Uma permissão, ou uma lista em que QUALQUER uma libera a criação. */
@@ -86,16 +90,18 @@ interface Props {
   /** Nome do campo que recebe o texto digitado na busca ao clicar em "+ Criar 'x'". */
   campoBusca?: string;
   className?: string;
+  /** Ícone à esquerda do texto no botão (alinha com outros seletores que também têm ícone). */
+  icone?: React.ReactNode;
 }
 
 const UFS = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
 const COLS: Record<number, string> = { 2: "sm:col-span-2", 3: "sm:col-span-3", 4: "sm:col-span-4", 6: "sm:col-span-6" };
 const inputCls =
-  "w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10";
+  "w-full bg-white border border-surface-campo rounded-lg px-3 py-2.5 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10";
 
 export function SelectCadastroRapido({
   value, onChange, opcoes, entidade, campos, criar, permissao, linkCadastroCompleto, contexto,
-  placeholder, disabled, textoDesabilitado, carregando, erro, campoBusca, className, valoresIniciais,
+  placeholder, disabled, textoDesabilitado, carregando, erro, campoBusca, className, valoresIniciais, icone,
 }: Props) {
   const podeCriar = usePodeCriar(permissao);
 
@@ -129,7 +135,7 @@ export function SelectCadastroRapido({
   if (!disabled && !carregando && opcoes.length === 0) {
     return (
       <div className={cn("rounded-lg border border-dashed px-3 py-2.5 text-sm flex items-center justify-between gap-3 flex-wrap",
-        erro ? "border-red-300 bg-red-50/40" : "border-surface-border bg-surface-alt/50", className)}>
+        erro ? "border-atrasado/40 bg-atrasado-claro/60" : "border-surface-border bg-surface-page", className)}>
         <span className="text-ink-muted">{nenhum} {entidade.singular} {cadastrado}{contexto ? ` ${contexto}` : ""}</span>
         {podeCriar && (
           <button type="button" onClick={abrirCadastro} className="inline-flex items-center gap-1 font-semibold text-primary-600 hover:text-primary-700">
@@ -154,13 +160,16 @@ export function SelectCadastroRapido({
         className={cn(
           "w-full flex items-center justify-between gap-2 bg-white border rounded-lg px-3 py-2.5 text-sm text-left transition-all",
           "focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10",
-          erro ? "border-red-300" : "border-surface-border",
+          erro ? "border-atrasado/40" : "border-surface-campo",
           disabled && "bg-surface-alt cursor-not-allowed",
         )}
       >
-        <span className={cn("truncate", selecionada ? "text-ink" : "text-ink-subtle")}>
-          {disabled ? (textoDesabilitado ?? placeholder) : selecionada ? selecionada.label : (placeholder ?? `Selecione ${entidade.feminino ? "a" : "o"} ${entidade.singular}`)}
-          {selecionada?.descricao && <span className="text-ink-subtle"> — {selecionada.descricao}</span>}
+        <span className="flex items-center gap-2 min-w-0">
+          {icone && <span className="shrink-0 text-ink-subtle" aria-hidden="true">{icone}</span>}
+          <span className={cn("truncate", selecionada ? "text-ink" : "text-ink-subtle")}>
+            {disabled ? (textoDesabilitado ?? placeholder) : selecionada ? selecionada.label : (placeholder ?? `Selecione ${entidade.feminino ? "a" : "o"} ${entidade.singular}`)}
+            {selecionada?.descricao && <span className="text-ink-subtle"> — {selecionada.descricao}</span>}
+          </span>
         </span>
         {carregando ? <Loader2 className="w-4 h-4 text-ink-subtle animate-spin shrink-0" /> : <ChevronDown className="w-4 h-4 text-ink-subtle shrink-0" />}
       </button>
@@ -172,7 +181,7 @@ export function SelectCadastroRapido({
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-subtle pointer-events-none" />
               <input
                 autoFocus value={busca} onChange={(e) => setBusca(e.target.value)}
-                placeholder={`Buscar ${entidade.singular}…`}
+                placeholder={`Pesquisar ${entidade.singular}…`}
                 className="w-full bg-surface-alt rounded-md pl-8 pr-2 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none"
               />
             </div>
@@ -198,7 +207,7 @@ export function SelectCadastroRapido({
           {podeCriar && (
             <button
               type="button" onClick={abrirCadastro}
-              className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-semibold text-primary-600 hover:bg-primary-50 border-t border-surface-border bg-surface-alt/40"
+              className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-semibold text-primary-600 hover:bg-primary-50 border-t border-surface-border bg-surface-page"
             >
               <Plus className="w-4 h-4" />
               {busca.trim() && filtradas.length === 0 ? `Criar “${busca.trim()}”` : `${novo} ${entidade.singular}`}
@@ -226,16 +235,18 @@ export function CadastroRapidoModal(props: {
   aberto: boolean; onFechar: () => void; titulo: string; contexto?: string;
   campos: CampoRapido[]; criar: Props["criar"]; linkCadastroCompleto?: string;
   valoresIniciais?: Record<string, string>; onCriado: (o: OpcaoCadastro) => void;
+  /** Texto do botão de salvar (padrão: "Salvar e selecionar"). */
+  rotuloSalvar?: string;
 }) {
   return <MiniCadastro {...props} valoresIniciais={props.valoresIniciais ?? {}} />;
 }
 
 function MiniCadastro({
-  aberto, onFechar, titulo, contexto, campos, criar, linkCadastroCompleto, valoresIniciais, onCriado,
+  aberto, onFechar, titulo, contexto, campos, criar, linkCadastroCompleto, valoresIniciais, onCriado, rotuloSalvar,
 }: {
   aberto: boolean; onFechar: () => void; titulo: string; contexto?: string;
   campos: CampoRapido[]; criar: Props["criar"]; linkCadastroCompleto?: string;
-  valoresIniciais: Record<string, string>; onCriado: (o: OpcaoCadastro) => void;
+  valoresIniciais: Record<string, string>; onCriado: (o: OpcaoCadastro) => void; rotuloSalvar?: string;
 }) {
   const [valores, setValores] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState(false);
@@ -292,30 +303,37 @@ function MiniCadastro({
           if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT") { e.preventDefault(); e.stopPropagation(); salvar(); }
         }}
       >
-        {contexto && <p className="text-xs text-ink-muted -mt-1">Cadastro rápido {contexto}. Os dados já preenchidos no formulário continuam lá.</p>}
+        {contexto && <p className="text-xs text-ink-muted -mt-1">Cadastro rápido {contexto}. Os dados já preenchidos no formulário são mantidos.</p>}
 
         <div className="grid grid-cols-1 sm:grid-cols-6 gap-3">
           {campos.map((c, i) => (
             <label key={c.nome} className={cn("block", COLS[c.colunas ?? 6])}>
               <span className="block text-xs font-medium text-ink mb-1">
-                {c.label}{c.obrigatorio && <span className="text-red-500"> *</span>}
+                {c.label}{c.obrigatorio && <span className="text-atrasado"> *</span>}
                 {c.tipo === "cep" && buscandoCep && <Loader2 className="inline w-3 h-3 ml-1 animate-spin text-ink-subtle" />}
               </span>
               {c.tipo === "select" ? (
-                <select value={valores[c.nome] ?? ""} onChange={(e) => set(c.nome, e.target.value)} className={cn(inputCls, faltando.has(c.nome) && "border-red-300")}>
+                <select value={valores[c.nome] ?? ""} onChange={(e) => set(c.nome, e.target.value)} className={cn(inputCls, faltando.has(c.nome) && "border-atrasado/40")}>
                   {!c.obrigatorio || !(valores[c.nome]) ? <option value="">{c.placeholder ?? "Selecione"}</option> : null}
                   {(c.opcoes ?? []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               ) : c.tipo === "uf" ? (
-                <select value={valores[c.nome] ?? ""} onChange={(e) => set(c.nome, e.target.value)} className={cn(inputCls, faltando.has(c.nome) && "border-red-300")}>
+                <select value={valores[c.nome] ?? ""} onChange={(e) => set(c.nome, e.target.value)} className={cn(inputCls, faltando.has(c.nome) && "border-atrasado/40")}>
                   <option value="">UF</option>
                   {UFS.map((u) => <option key={u} value={u}>{u}</option>)}
                 </select>
+              ) : c.tipo === "cor" ? (
+                <input
+                  type="color"
+                  value={valores[c.nome] || corDado.cinza}
+                  onChange={(e) => set(c.nome, e.target.value)}
+                  className="h-10 w-16 rounded-lg border border-surface-border bg-white p-1 cursor-pointer"
+                />
               ) : c.tipo === "textarea" ? (
                 <textarea
                   value={valores[c.nome] ?? ""} onChange={(e) => set(c.nome, e.target.value)} rows={2}
                   placeholder={c.placeholder} maxLength={c.maxLength}
-                  className={cn(inputCls, "resize-none", faltando.has(c.nome) && "border-red-300")}
+                  className={cn(inputCls, "resize-none", faltando.has(c.nome) && "border-atrasado/40")}
                 />
               ) : (
                 <input
@@ -324,14 +342,15 @@ function MiniCadastro({
                   onChange={(e) => { set(c.nome, e.target.value); if (c.tipo === "cep") buscarCep(e.target.value); }}
                   placeholder={c.placeholder} maxLength={c.maxLength ?? (c.tipo === "cep" ? 9 : undefined)}
                   inputMode={c.tipo === "cep" ? "numeric" : c.inputMode}
-                  className={cn(inputCls, faltando.has(c.nome) && "border-red-300 focus:border-red-400 focus:ring-red-500/10")}
+                  className={cn(inputCls, faltando.has(c.nome) && "border-atrasado/40 focus:border-atrasado focus:ring-atrasado/10")}
                 />
               )}
             </label>
           ))}
         </div>
+        {campos.filter((c) => c.avisoSerie).map((c) => <AvisoSerieDuplicada key={c.nome} numero={valores[c.nome] ?? ""} />)}
 
-        {erro && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{erro}</p>}
+        {erro && <p className="text-sm text-atrasado bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2">{erro}</p>}
 
         <div className="flex flex-col-reverse gap-3 pt-1">
           {linkCadastroCompleto ? (
@@ -345,7 +364,7 @@ function MiniCadastro({
             </button>
             <button type="button" onClick={salvar} disabled={salvando} className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-semibold rounded-lg bg-primary-500 hover:bg-primary-600 text-white disabled:opacity-60">
               {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              <span className="sm:hidden">Salvar</span><span className="hidden sm:inline whitespace-nowrap">Salvar e selecionar</span>
+              <span className="sm:hidden">Salvar</span><span className="hidden sm:inline whitespace-nowrap">{rotuloSalvar ?? "Salvar e selecionar"}</span>
             </button>
           </div>
         </div>

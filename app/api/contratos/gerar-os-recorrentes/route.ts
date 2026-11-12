@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirAlgumaPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { intervaloMeses, ehOcorrencia, dataAgendadaRecorrencia } from "@/lib/recorrencia-helpers";
+import { anoBR, mesBR } from "@/lib/fuso";
+import { comNumero } from "@/lib/numeracao-server";
 
 /**
  * Gera OS recorrentes para todos os contratos ativos com recorrência habilitada.
@@ -17,8 +19,8 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}));
   const agora = new Date();
-  const mes = Number(body?.mes) || agora.getMonth() + 1;
-  const ano = Number(body?.ano) || agora.getFullYear();
+  const mes = Number(body?.mes) || mesBR(agora);
+  const ano = Number(body?.ano) || anoBR(agora);
 
   const inicioMes = new Date(ano, mes - 1, 1, 0, 0, 0);
   const fimMes = new Date(ano, mes, 0, 23, 59, 59);
@@ -33,13 +35,6 @@ export async function POST(req: NextRequest) {
     include: { cliente: { select: { nome: true, nomeFantasia: true } }, tipoOsRecorrencia: { select: { id: true, nome: true } } },
   });
 
-  // Sequencial derivado do maior número de OS do ano alvo (evita colisão ao gerar para outro ano)
-  const ultimaOs = await prisma.ordemServico.findFirst({
-    where: { empresaId, numero: { startsWith: `OS-${ano}-` } },
-    orderBy: { numero: "desc" },
-    select: { numero: true },
-  });
-  let seq = ultimaOs ? Number(ultimaOs.numero.split("-")[2]) : 0;
   let criadas = 0;
   let ignoradas = 0;
   const resultado: { contrato: string; numero?: string; status: string }[] = [];
@@ -64,11 +59,10 @@ export async function POST(req: NextRequest) {
     if (jaExiste) { ignoradas++; resultado.push({ contrato: rotulo, status: "já gerada" }); continue; }
 
     const dataAgendada = dataAgendadaRecorrencia(ano, mes, ct.diaRecorrencia ?? 1, ct.fimSemanaRecorrencia);
-    seq++;
-    const numero = `OS-${ano}-${String(seq).padStart(4, "0")}`;
     const tituloTipo = ct.tipoOsRecorrencia?.nome ?? "Atendimento recorrente";
 
-    const os = await prisma.ordemServico.create({
+    // Número pelo contador da empresa (rótulo = ano da competência), sob trava, na transação do INSERT
+    const os = await comNumero(empresaId, "os", (numero, tx) => tx.ordemServico.create({
       data: {
         empresaId,
         numero,
@@ -94,14 +88,14 @@ export async function POST(req: NextRequest) {
             }
           : undefined,
       },
-    });
+    }));
 
     await prisma.osHistorico.create({
       data: { ordemServicoId: os.id, usuarioId, acao: "OS recorrente gerada", detalhes: `Gerada automaticamente do contrato ${ct.numero} (${periodo}).` },
     });
 
     criadas++;
-    resultado.push({ contrato: rotulo, numero, status: "criada" });
+    resultado.push({ contrato: rotulo, numero: os.numero, status: "criada" });
   }
 
   return NextResponse.json({ ok: true, mes, ano, criadas, ignoradas, resultado });

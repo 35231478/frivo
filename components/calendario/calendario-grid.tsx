@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { acento } from "@/lib/ui/tokens";
 import { useRouter } from "next/navigation";
 import {
   DndContext, DragOverlay, useDraggable, useDroppable,
@@ -9,8 +10,13 @@ import {
 } from "@dnd-kit/core";
 import { cn, MESES_PT, LABELS_STATUS_OS, LABELS_PRIORIDADE } from "@/lib/utils";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
+import { InputHora } from "@/components/ui/input-hora";
+import { MSG_HORA_INVALIDA, horaValida } from "@/components/ui/input-data-hora";
+import { SeletorExecucao, VALOR_EXECUCAO_VAZIO, corpoExecucao, temExecutor, useOpcoesExecucao, type ValorExecucao } from "@/components/os/seletor-execucao";
+import { MSG_SEM_EXECUTOR_TELA } from "@/lib/atividade-equipe";
 import { BuscaSelect, type OpcaoBusca } from "@/components/ui/busca-select";
-import { Repeat, MapPin, CalendarClock, Wrench, AlertTriangle, X, Plus, Check, Lock, Maximize2, Minimize2, GripHorizontal } from "lucide-react";
+import { Repeat, MapPin, CalendarClock, Wrench, AlertTriangle, X, Plus, Check, Lock, Maximize2, Minimize2, GripHorizontal, Car } from "lucide-react";
+import { deLocalBR } from "@/lib/fuso";
 
 export interface CardOs {
   /** Chave única do card (OS + dia): uma OS com visitas em dias diferentes gera um card por dia. */
@@ -30,6 +36,14 @@ export interface CardOs {
   dataFmt: string;
   tecnicoNome: string | null;
   tecnicoAvatar: string | null;
+  /** Responsável + demais técnicos da atividade (para o filtro por técnico). */
+  tecnicoIds?: string[];
+  /** Demais técnicos (além do responsável) e a equipe usada, se houver. */
+  membros?: { nome: string; avatar: string | null }[];
+  equipeNome?: string | null;
+  equipeCor?: string | null;
+  /** Veículo desta atividade ("ABC1D23 — Strada"), se houver. */
+  veiculo?: string | null;
   status: string;
   prioridade: string;
   atrasada: boolean;
@@ -50,26 +64,33 @@ const DIAS_SEMANA = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
 const DIAS_LONGO = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
 const FINALIZADAS = ["CONCLUIDA", "CANCELADA"];
 
-const PRIORIDADE_BG: Record<string, string> = {
-  BAIXA: "bg-slate-100 hover:bg-slate-200",
-  NORMAL: "bg-primary-50 hover:bg-primary-100",
-  ALTA: "bg-orange-50 hover:bg-orange-100",
-  URGENTE: "bg-red-50 hover:bg-red-100",
-  CRITICO: "bg-red-100 hover:bg-red-200",
+// Sistema de design: cartão neutro (sem borda colorida à esquerda, sem fundo tingido). O STATUS vira
+// um ponto com a cor da função e a PRIORIDADE alta/urgente um ícone de alerta.
+const STATUS_PONTO: Record<string, string> = {
+  ABERTA: "bg-acento",
+  AGUARDANDO_ATENDIMENTO: "bg-acento",
+  AGENDADA: "bg-acento",
+  EM_ANDAMENTO: "bg-atencao",
+  PAUSADA: "bg-atencao",
+  AGUARDANDO_PECA: "bg-atencao",
+  CONCLUIDA: "bg-ok",
+  CANCELADA: "bg-ink-subtle",
 };
-const STATUS_BORDA: Record<string, string> = {
-  ABERTA: "border-l-blue-500",
-  AGUARDANDO_ATENDIMENTO: "border-l-sky-400",
-  AGENDADA: "border-l-blue-500",
-  EM_ANDAMENTO: "border-l-amber-500",
-  PAUSADA: "border-l-amber-400",
-  AGUARDANDO_PECA: "border-l-orange-400",
-  CONCLUIDA: "border-l-green-500",
-  CANCELADA: "border-l-slate-400",
-};
+const PRIORIDADE_ICONE: Record<string, string> = { ALTA: "text-atencao", URGENTE: "text-atrasado", CRITICO: "text-atrasado" };
 
-const corBorda = (c: CardOs) => (c.atrasada ? "border-l-red-500" : STATUS_BORDA[c.status] ?? "border-l-slate-300");
-const corFundo = (c: CardOs) => PRIORIDADE_BG[c.prioridade] ?? PRIORIDADE_BG.NORMAL;
+const corPonto = (c: CardOs) => (c.atrasada ? "bg-atrasado" : STATUS_PONTO[c.status] ?? "bg-ink-subtle");
+const corFundo = (_c: CardOs) => "bg-white border border-surface-border hover:bg-surface-page";
+
+/** Ponto do status + alerta de prioridade (a palavra está no título/legenda; a cor só reforça). */
+function MarcasCard({ card, grande }: { card: CardOs; grande?: boolean }) {
+  const alerta = PRIORIDADE_ICONE[card.prioridade];
+  return (
+    <>
+      <span className={cn("rounded-full shrink-0", grande ? "w-2.5 h-2.5" : "w-2 h-2", corPonto(card))} aria-hidden="true" data-ponto-status />
+      {alerta && <AlertTriangle className={cn("shrink-0", grande ? "w-3.5 h-3.5" : "w-2.5 h-2.5", alerta)} aria-label={`Prioridade ${card.prioridade.toLowerCase()}`} />}
+    </>
+  );
+}
 const badgeStatus = (s: string) => `badge-status-${s.toLowerCase()}`;
 const badgePrioridade = (p: string) => `badge-prioridade-${p.toLowerCase()}`;
 const bloqueada = (c: CardOs) => FINALIZADAS.includes(c.status);
@@ -257,7 +278,7 @@ export function CalendarioGrid({
         {toasts.map((t) => (
           <div key={t.id} className={cn(
             "anim-tooltip flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-xl text-sm font-medium text-white",
-            t.tipo === "ok" ? "bg-ink" : "bg-red-600",
+            t.tipo === "ok" ? "bg-ink" : "bg-atrasado",
           )}>
             {t.tipo === "ok" ? <Check className="w-4 h-4 text-success-400" /> : <AlertTriangle className="w-4 h-4" />}
             {t.texto}
@@ -292,7 +313,7 @@ function Celula({
   });
 
   if (!cel.inMonth) {
-    return <div className="min-h-[56px] md:min-h-[120px]" style={{ backgroundColor: "#F8FAFC" }} />;
+    return <div className="min-h-[56px] md:min-h-[120px] bg-surface-page" />;
   }
 
   // As OS que batem com o filtro vêm primeiro (as esmaecidas não "roubam" as vagas visíveis)
@@ -348,7 +369,7 @@ function Celula({
         </span>
         {cards.length > 0 && (
           <span className={cn("text-[10px] font-bold px-1.5 rounded-full tabular-nums",
-            cards.some((c) => c.atrasada) ? "bg-red-100 text-red-700" : "bg-primary-100 text-primary-700")}>
+            cards.some((c) => c.atrasada) ? "bg-atrasado-claro text-atrasado-texto" : "bg-primary-100 text-primary-700")}>
             {cards.length}
           </span>
         )}
@@ -487,14 +508,59 @@ function CardArrastavel({
 
 function CardVisual({ card, travada, className }: { card: CardOs; travada?: boolean; className?: string }) {
   return (
-    <div className={cn("flex items-center gap-1.5 border-l-[3px] rounded px-1.5 py-1 transition-colors", corFundo(card), corBorda(card), className)}>
+    <div className={cn("flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors", corFundo(card), className)}>
+      <MarcasCard card={card} />
       <span className="text-[10px] font-semibold text-ink-muted tabular-nums shrink-0">{card.hora ?? "--:--"}</span>
       <span className="flex items-center gap-0.5 text-[11px] font-medium text-ink truncate flex-1 min-w-0">
         {travada && <Lock className="w-2.5 h-2.5 shrink-0 text-ink-subtle" />}
         {card.origem === "RECORRENTE" && <Repeat className="w-2.5 h-2.5 shrink-0 text-ink-subtle" />}
         <span className="truncate">{card.clienteCurto}</span>
       </span>
-      <AvatarTecnico nome={card.tecnicoNome} fotoUrl={card.tecnicoAvatar} size={22} />
+      <AvataresCard card={card} size={22} />
+    </div>
+  );
+}
+
+/** Avatar do responsável + "+N" quando a atividade tem mais técnicos (equipe). */
+function AvataresCard({ card, size }: { card: CardOs; size: number }) {
+  const extra = card.membros?.length ?? 0;
+  return (
+    <span className="flex items-center shrink-0" data-avatares-card title={[card.tecnicoNome, ...(card.membros ?? []).map((m) => m.nome)].filter(Boolean).join(", ")}>
+      <AvatarTecnico nome={card.tecnicoNome} fotoUrl={card.tecnicoAvatar} size={size} />
+      {extra > 0 && (
+        <span className="-ml-1.5 rounded-full bg-primary-600 text-white font-semibold border border-white flex items-center justify-center"
+          style={{ width: size, height: size, fontSize: Math.max(9, Math.round(size * 0.42)) }}>+{extra}</span>
+      )}
+    </span>
+  );
+}
+
+/** "Equipe Alfa" + responsável e membros (tooltip / lista do dia). */
+function EquipeCard({ card }: { card: CardOs }) {
+  const membros = card.membros ?? [];
+  if (!card.equipeNome && !membros.length) {
+    return (
+      <div className="flex items-center gap-2 pt-1.5 border-t border-surface-border">
+        <AvatarTecnico nome={card.tecnicoNome} fotoUrl={card.tecnicoAvatar} size={28} />
+        <span className="text-xs font-medium text-ink">{card.tecnicoNome ?? "Sem técnico definido"}</span>
+      </div>
+    );
+  }
+  return (
+    <div className="pt-1.5 border-t border-surface-border space-y-1.5" data-equipe-card>
+      {card.equipeNome && (
+        <p className="flex items-center gap-1.5 text-xs font-semibold text-ink">
+          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: card.equipeCor ?? acento.DEFAULT }} />Equipe {card.equipeNome}
+        </p>
+      )}
+      <ul className="space-y-1">
+        {card.tecnicoNome && (
+          <li className="flex items-center gap-2 text-xs text-ink"><AvatarTecnico nome={card.tecnicoNome} fotoUrl={card.tecnicoAvatar} size={20} />{card.tecnicoNome}<span className="text-[10px] text-atencao-texto bg-atencao-claro px-1.5 rounded">responsável</span></li>
+        )}
+        {membros.map((m) => (
+          <li key={m.nome} className="flex items-center gap-2 text-xs text-ink-muted"><AvatarTecnico nome={m.nome} fotoUrl={m.avatar} size={20} />{m.nome}</li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -525,14 +591,14 @@ function Tooltip({ card, rect }: { card: CardOs; rect: DOMRect }) {
             <div className="flex items-center gap-1.5"><Wrench className="w-3.5 h-3.5 shrink-0 text-ink-subtle" /><span>{card.tipoOs}</span></div>
           )}
         </div>
-        <div className="flex items-center gap-2 pt-1.5 border-t border-surface-border">
-          <AvatarTecnico nome={card.tecnicoNome} fotoUrl={card.tecnicoAvatar} size={28} />
-          <span className="text-xs font-medium text-ink">{card.tecnicoNome ?? "Sem técnico definido"}</span>
-        </div>
+        <EquipeCard card={card} />
+        {card.veiculo && (
+          <div className="flex items-center gap-1.5 text-xs text-ink-muted mt-1.5" data-veiculo-card><Car className="w-3.5 h-3.5 shrink-0 text-ink-subtle" />{card.veiculo}</div>
+        )}
         <div className="flex items-center gap-2 flex-wrap">
           <span className={badgePrioridade(card.prioridade)}>{LABELS_PRIORIDADE[card.prioridade] ?? card.prioridade}</span>
           {card.atrasada && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded-full">
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-atrasado-claro text-atrasado-texto border border-atrasado/20 px-2 py-0.5 rounded-full">
               <AlertTriangle className="w-3 h-3" /> Atrasada
             </span>
           )}
@@ -552,7 +618,7 @@ function ModalDia({
   }, [onClose]);
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col anim-tooltip" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-card shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col anim-tooltip" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between gap-3 p-4 border-b border-surface-border">
           <div>
             <h3 className="font-semibold text-ink capitalize">{diaPorExtenso(dateKey)}</h3>
@@ -567,8 +633,9 @@ function ModalDia({
               key={card.chave}
               type="button"
               onClick={() => onNavegar(card)}
-              className={cn("w-full flex items-center gap-2.5 border-l-4 rounded-lg px-3 py-2.5 text-left transition-colors", corFundo(card), corBorda(card), dimmedIds?.has(card.chave) && "opacity-40")}
+              className={cn("w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition-colors", corFundo(card), dimmedIds?.has(card.chave) && "opacity-40")}
             >
+              <MarcasCard card={card} grande />
               <span className="text-xs font-semibold text-ink-muted tabular-nums shrink-0 w-10">{card.hora ?? "--:--"}</span>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-ink truncate flex items-center gap-1">
@@ -579,9 +646,10 @@ function ModalDia({
                   <span className="font-mono">{card.numero}</span>
                   {card.unidade ? ` · ${card.unidade}` : ""}
                   {card.atrasada ? " · Atrasada" : ""}
+                  {card.equipeNome ? ` · Equipe ${card.equipeNome}` : ""}
                 </p>
               </div>
-              <AvatarTecnico nome={card.tecnicoNome} fotoUrl={card.tecnicoAvatar} size={28} />
+              <AvataresCard card={card} size={28} />
             </button>
           ))}
         </div>
@@ -607,41 +675,45 @@ function CriarOsModal({
   const router = useRouter();
   const [clienteId, setClienteId] = useState("");
   const [tipoOsId, setTipoOsId] = useState("");
-  const [tecnicoId, setTecnicoId] = useState("");
+  // Quem executa (OBRIGATÓRIO): equipe ou colaboradores + veículo puxado automaticamente
+  const opcoesExecucao = useOpcoesExecucao();
+  const [execucao, setExecucao] = useState<ValorExecucao>(VALOR_EXECUCAO_VAZIO);
+  const [faltaExecutor, setFaltaExecutor] = useState(false);
   const [hora, setHora] = useState("08:00");
+  const [faltaHora, setFaltaHora] = useState(false);
   const [prioridade, setPrioridade] = useState("NORMAL");
   const [descricao, setDescricao] = useState("");
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
 
-  const tecnicoSel = opcoes.tecnicos.find((t) => t.value === tecnicoId);
   const inputCls = "w-full bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all";
 
   async function criar(abrir: boolean) {
     setErro("");
     if (!clienteId) { setErro("Selecione o cliente."); return; }
     if (descricao.trim().length < 5) { setErro("Descreva o serviço (mínimo 5 caracteres)."); return; }
+    if (!temExecutor(execucao)) { setFaltaExecutor(true); setErro(MSG_SEM_EXECUTOR_TELA); return; }
+    // Hora vazia ou que não existe NÃO vira 08:00 escondido: a OS só é agendada com horário válido
+    if (!horaValida(hora)) { setFaltaHora(true); setErro(MSG_HORA_INVALIDA); return; }
     setSalvando(true);
     try {
-      const dataAgendada = `${dateKey}T${hora || "08:00"}:00`;
+      // A hora escolhida é de Brasília (qualquer que seja o fuso do navegador)
+      const dataAgendada = deLocalBR(`${dateKey}T${hora}`)!.toISOString();
+      // OS + atividade agendada (com quem executa e o veículo) numa única chamada — tudo ou nada
+      const titulo = opcoes.tiposOs.find((t) => t.value === tipoOsId)?.label ?? "Atendimento agendado";
       const resOs = await fetch("/api/ordens", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clienteId, descricao: descricao.trim(), prioridade, previsaoConclusao: dataAgendada }),
+        body: JSON.stringify({
+          clienteId, descricao: descricao.trim(), prioridade, previsaoConclusao: dateKey, // previsão é o dia
+          execucao: { titulo, tipoOsId: tipoOsId || null, dataAgendada, ...corpoExecucao(execucao) },
+        }),
       });
       if (!resOs.ok) {
         const err = await resOs.json().catch(() => ({}));
         throw new Error(err.erro ?? "Erro ao criar OS.");
       }
       const os = await resOs.json();
-
-      // Cria a atividade agendada (posiciona o card no dia e horário)
-      const titulo = opcoes.tiposOs.find((t) => t.value === tipoOsId)?.label ?? "Atendimento agendado";
-      await fetch(`/api/ordens/${os.id}/atividades`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ titulo, tipoOsId: tipoOsId || undefined, tecnicoId: tecnicoId || undefined, dataAgendada, status: "AGENDADA" }),
-      });
 
       if (abrir) { router.push(`/ordens/${os.id}`); return; }
       onCriada(os.numero);
@@ -654,7 +726,7 @@ function CriarOsModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col anim-tooltip" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-card shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col anim-tooltip" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between gap-3 p-4 border-b border-surface-border">
           <div>
             <h3 className="font-semibold text-ink">Nova OS</h3>
@@ -664,31 +736,29 @@ function CriarOsModal({
         </div>
 
         <div className="overflow-y-auto p-4 space-y-3">
-          {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
+          {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2">{erro}</div>}
 
           <div>
             <label className="text-[11px] font-semibold text-ink-muted">Cliente *</label>
-            <BuscaSelect value={clienteId} onChange={setClienteId} options={opcoes.clientes} placeholder="Buscar cliente…" />
+            <BuscaSelect value={clienteId} onChange={setClienteId} options={opcoes.clientes} placeholder="Pesquisar cliente…" />
+          </div>
+
+          <div>
+            <label className="text-[11px] font-semibold text-ink-muted">Tipo de OS</label>
+            <BuscaSelect value={tipoOsId} onChange={setTipoOsId} options={opcoes.tiposOs} placeholder="Selecionar tipo…" />
+          </div>
+
+          <div data-quem-executa>
+            <label className="text-[11px] font-semibold text-ink-muted">Quem executa *</label>
+            <SeletorExecucao opcoes={opcoesExecucao} tipoOsId={tipoOsId} valor={execucao}
+              onChange={(v) => { setExecucao(v); if (temExecutor(v)) { setFaltaExecutor(false); setErro((e) => (e === MSG_SEM_EXECUTOR_TELA ? "" : e)); } }} erro={faltaExecutor} />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-[11px] font-semibold text-ink-muted">Tipo de OS</label>
-              <BuscaSelect value={tipoOsId} onChange={setTipoOsId} options={opcoes.tiposOs} placeholder="Selecionar tipo…" />
-            </div>
-            <div>
-              <label className="text-[11px] font-semibold text-ink-muted">Técnico responsável</label>
-              <div className="flex items-center gap-2">
-                {tecnicoId && <AvatarTecnico nome={tecnicoSel?.label} fotoUrl={tecnicoSel?.avatar} size={28} />}
-                <div className="flex-1 min-w-0"><BuscaSelect value={tecnicoId} onChange={setTecnicoId} options={opcoes.tecnicos} placeholder="Selecionar técnico…" /></div>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-[11px] font-semibold text-ink-muted">Hora de agendamento</label>
-              <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} className={inputCls} />
+              <label className="text-[11px] font-semibold text-ink-muted">Hora de agendamento *</label>
+              <InputHora value={hora} invalido={faltaHora} aria-label="Hora de agendamento"
+                onChange={(h) => { setHora(h); if (horaValida(h)) { setFaltaHora(false); setErro((e) => (e === MSG_HORA_INVALIDA ? "" : e)); } }} />
             </div>
             <div>
               <label className="text-[11px] font-semibold text-ink-muted">Prioridade</label>

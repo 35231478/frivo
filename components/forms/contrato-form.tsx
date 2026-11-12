@@ -1,42 +1,50 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { SelectCadastroRapido, CadastroRapidoModal, usePodeCriar, type CampoRapido, type PermissaoCriar } from "@/components/ui/select-cadastro-rapido";
 import { CLIENTE, UNIDADE } from "@/components/cadastro-rapido/definicoes";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter, useSearchParams } from "next/navigation";
-import { contratoSchema, type ContratoInput } from "@/lib/validations";
+import { contratoSchema, MAX_DESCRICAO_SERVICOS, type ContratoInput } from "@/lib/validations";
+import { novoLocalDoCliente, temEndereco, textoEndereco, unidadeDoCliente, type EnderecoCliente, type NovoLocal } from "@/lib/contratos/local-padrao";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
+import { toast } from "@/components/ui/avisos";
 import { ContratoDocumentos } from "@/components/forms/contrato-documentos";
 import { RecorrenciaLocais, type LocalConfig } from "@/components/forms/recorrencia-locais";
-import { proximasOcorrencias } from "@/lib/recorrencia-helpers";
 import {
-  FREQUENCIAS_RECORRENCIA, LABELS_PERIODICIDADE, LABELS_TRATAMENTO_FIM_SEMANA,
-  LABELS_TIPO_CONTRATO, LABELS_STATUS_CONTRATO, COR_STATUS_CONTRATO, STATUS_CONTRATO_FORM,
-  LABELS_AJUSTE_FIM_SEMANA, LABELS_TIPO_VENCIMENTO, LABELS_INDICE_REAJUSTE,
-  LABELS_PERIODO_REF_NFSE, LABELS_PERIODO_VISITA, LABELS_MES, ITENS_INCLUSOS_CONTRATO,
+  LABELS_PERIODICIDADE, LABELS_TIPO_CONTRATO, LABELS_STATUS_CONTRATO, COR_STATUS_CONTRATO, STATUS_CONTRATO_FORM,
+  LABELS_AJUSTE_FIM_SEMANA, LABELS_TIPO_VENCIMENTO, LABELS_INDICE_REAJUSTE, LABELS_MES,
   formatarMoeda, formatarData, formatarDataHora, cn,
 } from "@/lib/utils";
 import type { Contrato, Tecnico, Unidade } from "@prisma/client";
 import {
-  FileText, CalendarClock, ClipboardList, HardHat, MapPin, TrendingUp, BellRing,
-  Paperclip, Repeat, StickyNote, Building2, FileCheck, AlertCircle, Wand2, DollarSign, Receipt,
-  Plus, CalendarDays, ChevronDown, CheckCircle2, PauseCircle, RefreshCw, XCircle, History, User,
+  FileText, ClipboardList, HardHat, MapPin, TrendingUp, BellRing, Settings2,
+  Paperclip, Repeat, StickyNote, Building2, FileCheck, AlertCircle, Wand2, DollarSign,
+  Plus, CalendarDays, ChevronDown, CheckCircle2, PauseCircle, RefreshCw, XCircle, History, User, Trash2, SlidersHorizontal,
 } from "lucide-react";
+import { chaveDiaCivil, diaCivilDeChave, diasAteDiaCivil, partesBR } from "@/lib/fuso";
+import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
+import { InputData } from "@/components/ui/input-data";
+import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
+import { PreviaCobrancaContrato } from "@/components/contratos/previa-cobranca";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { PERIODICIDADES_COBRANCA, passoCobranca, textoFrequencia } from "@/lib/financeiro/contrato-previsao";
+import { proximoAniversario, sugestaoReajuste, textoCompetencia, valorReajustado, percentualDe } from "@/lib/contratos/reajuste";
+import Link from "next/link";
 
 // Opções de mudança de status oferecidas no cabeçalho (ícone, cor e descrição).
 const STATUS_OPCOES: { valor: string; label: string; descricao: string; icone: any; cor: string }[] = [
   { valor: "ATIVO", label: "Ativo", descricao: "Contrato vigente e em execução", icone: CheckCircle2, cor: "text-success-600" },
-  { valor: "SUSPENSO", label: "Suspenso", descricao: "Pausado temporariamente", icone: PauseCircle, cor: "text-amber-600" },
-  { valor: "EM_RENOVACAO", label: "Em renovação", descricao: "Em processo de renovação", icone: RefreshCw, cor: "text-blue-600" },
-  { valor: "ENCERRADO", label: "Encerrado", descricao: "Encerrado naturalmente ao fim da vigência", icone: FileCheck, cor: "text-slate-600" },
-  { valor: "CANCELADO", label: "Cancelado", descricao: "Cancelado antes do prazo", icone: XCircle, cor: "text-red-600" },
+  { valor: "SUSPENSO", label: "Suspenso", descricao: "Pausado temporariamente", icone: PauseCircle, cor: "text-atencao-texto" },
+  { valor: "EM_RENOVACAO", label: "Em renovação", descricao: "Em processo de renovação", icone: RefreshCw, cor: "text-acento" },
+  { valor: "ENCERRADO", label: "Encerrado", descricao: "Encerrado naturalmente ao fim da vigência", icone: FileCheck, cor: "text-ink-muted" },
+  { valor: "CANCELADO", label: "Cancelado", descricao: "Cancelado antes do prazo", icone: XCircle, cor: "text-atrasado" },
 ];
 
 // Endereço novo no contrato: campos do cadastro rápido de unidade + bairro/complemento (o painel antigo os tinha)
@@ -52,14 +60,16 @@ const PERMISSAO_UNIDADE_CONTRATO: PermissaoCriar = [
 ];
 
 function toDateInput(date: Date | null | undefined) {
-  if (!date) return "";
-  return new Date(date).toISOString().split("T")[0];
+  return date ? chaveDiaCivil(date) : "";
 }
 
 type ClienteItem = { id: string; nome: string; nomeFantasia?: string | null };
 type ResponsavelItem = Pick<Tecnico, "id" | "nome" | "crea">;
 type AnexoItem = { id: string; nome: string; tipo: string; tamanho: number; categoria?: string | null; criadoEm: string | Date };
-type ReajusteItem = { id: string; data: string | Date; indice: string; percentual: any; valorAnterior: any; valorNovo: any };
+type ReajusteItem = {
+  id: string; data: string | Date; indice: string; percentual: any; valorAnterior: any; valorNovo: any;
+  anoReferencia?: number | null; situacao?: string; motivo?: string | null; usuario?: { nome: string } | null;
+};
 type HistoricoStatusItem = { id: string; statusAnterior: string; statusNovo: string; motivo: string | null; createdAt: string | Date; usuario?: { id: string; nome: string } | null };
 type RecorrenciaLocalItem = { unidadeId: string; ativa: boolean; frequencia: string | null; tipoOsId: string | null; tecnicoId: string | null; dataPrimeiraOs: string | Date | null };
 
@@ -76,15 +86,37 @@ interface ContratoFormProps {
   initialData?: ContratoComRelacoes;
 }
 
-function Painel({ ativo, children }: { ativo: boolean; children: React.ReactNode }) {
-  return <div className={cn("space-y-8", !ativo && "hidden")}>{children}</div>;
+function Painel({ ativo, id, children }: { ativo: boolean; id: string; children: React.ReactNode }) {
+  return <div className={cn("space-y-8", !ativo && "hidden")} data-painel-contrato={id} role="tabpanel" hidden={!ativo}>{children}</div>;
 }
 
+/**
+ * As 5 abas do contrato (antes eram 10). O que saiu do formulário: NFS-e (serviços da nota,
+ * período de referência, nº do contrato e vencimento na descrição, "exibir RT na NFS-e"),
+ * itens inclusos e visitas. Tipo e periodicidade CONTINUAM (faturamento, relatório, filtro e
+ * ficha do cliente usam), recolhidos em "Mais opções".
+ */
+export const ABAS_CONTRATO = [
+  { id: "contrato", label: "Contrato", icone: FileText },
+  { id: "escopo", label: "Escopo e locais", icone: ClipboardList },
+  { id: "recorrencia", label: "Recorrência de OS", icone: Repeat },
+  { id: "rt", label: "Responsável técnico e documentos", icone: HardHat },
+  { id: "gestao", label: "Gestão", icone: Settings2 },
+] as const;
+type AbaContrato = (typeof ABAS_CONTRATO)[number]["id"];
+
 // Campo → aba (para destacar abas com erro de validação)
-const CAMPO_ABA: Record<string, string> = {
-  clienteId: "dados", numero: "dados", tipo: "dados", status: "dados", periodicidade: "dados",
-  valorMensal: "vigencia", valorTotal: "vigencia", dataInicio: "vigencia", dataFim: "vigencia",
+const CAMPO_ABA: Record<string, AbaContrato> = {
+  clienteId: "contrato", numero: "contrato", tipo: "contrato", status: "contrato", periodicidade: "contrato",
+  valorMensal: "contrato", valorTotal: "contrato", dataInicio: "contrato", dataFim: "contrato",
+  diaFaturamento: "contrato", servicoId: "contrato", diasAposVencimento: "contrato", diaFixoMes: "contrato", ajusteFinsDeSemana: "contrato",
+  descricaoServicos: "escopo", unidadeIds: "escopo",
+  artNumero: "rt", artVencimento: "rt", responsavelTecnicoId: "rt",
+  reajusteIndice: "gestao", reajustePercentual: "gestao", reajusteMesAniversario: "gestao", reajusteNotificarDias: "gestao",
+  alertaDias: "gestao", renovacaoMeses: "gestao", notificarClienteDias: "gestao", observacoes: "gestao",
 };
+/** Campos que ficam em "Mais opções" (a seção abre sozinha se um deles tiver erro) */
+const CAMPOS_MAIS_OPCOES = ["tipo", "ajusteFinsDeSemana", "nfseReferencia"];
 
 export function ContratoForm({ initialData }: ContratoFormProps) {
   const router = useRouter();
@@ -92,9 +124,9 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
   const isEditing = !!initialData;
   const clienteIdParam = searchParams.get("clienteId") ?? "";
   const [erroGlobal, setErroGlobal] = useState("");
-  const [aba, setAba] = useState("dados");
+  const [aba, setAba] = useState<AbaContrato>("contrato");
+  const [maisOpcoes, setMaisOpcoes] = useState(false);
   const [abasErro, setAbasErro] = useState<Set<string>>(new Set());
-  const [toast, setToast] = useState<string | null>(null);
 
   const [clientes, setClientes] = useState<ClienteItem[]>([]);
   const [unidades, setUnidades] = useState<Unidade[]>([]);
@@ -120,7 +152,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
         frequencia: r.frequencia ?? "MENSAL",
         tipoOsId: r.tipoOsId ?? "",
         tecnicoId: r.tecnicoId ?? "",
-        dataPrimeiraOs: r.dataPrimeiraOs ? new Date(r.dataPrimeiraOs).toISOString().split("T")[0] : "",
+        dataPrimeiraOs: r.dataPrimeiraOs ? chaveDiaCivil(r.dataPrimeiraOs) : "",
       };
     }
     return o;
@@ -132,18 +164,10 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
     });
   }
 
-  // Itens inclusos do escopo (JSON) — gerenciado fora do RHF
-  const itensIniciais = (initialData?.itensInclusos as Record<string, any> | null) ?? {};
-  const [itensInclusos, setItensInclusos] = useState<Record<string, boolean>>(() => {
-    const o: Record<string, boolean> = {};
-    for (const it of ITENS_INCLUSOS_CONTRATO) o[it.chave] = !!itensIniciais[it.chave];
-    return o;
-  });
-  const [outrosItens, setOutrosItens] = useState<string>(itensIniciais.outros ?? "");
-
-  // Serviços para a NFS-e (seleção múltipla)
-  const [servicos, setServicos] = useState<{ id: string; nome: string; descricao?: string | null }[]>([]);
-  const [servicosSelecionados, setServicosSelecionados] = useState<string[]>(initialData?.servicosNFSeIds ?? []);
+  // 1º local coberto = endereço do cadastro do cliente (sugerido ao abrir; removível; nunca duplica)
+  const [enderecoCliente, setEnderecoCliente] = useState<{ clienteId: string; end: EnderecoCliente } | null>(null);
+  const [localPendente, setLocalPendente] = useState<NovoLocal | null>(null);
+  const localSugeridoPara = useRef<string | null>(null);
 
   // Novo endereço inline (aba Locais)
   // Novo endereço (local coberto) pelo cadastro rápido compartilhado
@@ -164,7 +188,8 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
           numero: initialData.numero,
           tipo: initialData.tipo,
           status: initialData.status,
-          periodicidade: initialData.periodicidade,
+          // D1: o seletor de cobrança só tem mensal…anual; semanal/quinzenal (de antes) cobram como mensal
+          periodicidade: (PERIODICIDADES_COBRANCA as readonly string[]).includes(initialData.periodicidade) ? initialData.periodicidade : "MENSAL",
           valorMensal: initialData.valorMensal ? Number(initialData.valorMensal) : undefined,
           valorTotal: initialData.valorTotal ? Number(initialData.valorTotal) : undefined,
           dataInicio: toDateInput(initialData.dataInicio),
@@ -180,24 +205,23 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
           fimSemanaRecorrencia: initialData.fimSemanaRecorrencia ?? null,
           tipoOsRecorrenciaId: initialData.tipoOsRecorrenciaId ?? "",
           tecnicoRecorrenciaId: initialData.tecnicoRecorrenciaId ?? "",
-          // Faturamento / NFS-e
+          // Faturamento
+          faturamentoAdicionais: (initialData as any).faturamentoAdicionais ?? "SEPARADO",
+          faturamentoAutomatico: initialData.faturamentoAutomatico ?? false,
+          aprovacaoAutomatica: initialData.aprovacaoAutomatica ?? false,
+          emitirNfseAuto: initialData.emitirNfseAuto ?? false,
+          emitirBoletoAuto: initialData.emitirBoletoAuto ?? false,
+          nfseReferencia: initialData.nfseReferencia ?? "CORRENTE",
           diaFaturamento: initialData.diaFaturamento ?? undefined,
+          servicoId: (initialData as { servicoId?: string | null }).servicoId ?? "",
           tipoVencimento: initialData.tipoVencimento ?? undefined,
           diasAposVencimento: initialData.diasAposVencimento ?? undefined,
           diaFixoMes: initialData.diaFixoMes ?? undefined,
           ajusteFinsDeSemana: initialData.ajusteFinsDeSemana ?? undefined,
-          descricaoNFSe: initialData.descricaoNFSe ?? "",
-          adicionarPeriodoRef: initialData.adicionarPeriodoRef ?? false,
-          periodoRefOpcao: initialData.periodoRefOpcao ?? undefined,
-          adicionarNumContrato: initialData.adicionarNumContrato ?? false,
-          adicionarVencimentoNFSe: initialData.adicionarVencimentoNFSe ?? false,
           // Escopo
           descricaoServicos: initialData.descricaoServicos ?? "",
-          qtdVisitas: initialData.qtdVisitas ?? undefined,
-          periodoVisitas: initialData.periodoVisitas ?? undefined,
           // RT
           artVencimento: toDateInput(initialData.artVencimento),
-          exibirRTNFSe: initialData.exibirRTNFSe ?? false,
           exibirRTPDF: initialData.exibirRTPDF ?? false,
           // Reajuste
           reajusteAtivo: initialData.reajusteAtivo ?? false,
@@ -217,17 +241,21 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
       : {
           clienteId: clienteIdParam || undefined,
           status: "ATIVO",
+          // Tipo continua obrigatório no banco: o padrão evita que a seção recolhida trave o cadastro
+          tipo: "MANUTENCAO_PREVENTIVA",
           periodicidade: "MENSAL",
           unidadeIds: [],
-          numero: `CT-${new Date().getFullYear()}-`,
+          numero: "CT-",
           recorrencia: false,
+          faturamentoAdicionais: "SEPARADO",
+          faturamentoAutomatico: false,
+          aprovacaoAutomatica: false,
+          emitirNfseAuto: false,
+          emitirBoletoAuto: false,
+          nfseReferencia: "CORRENTE",
           diaFaturamento: undefined,
           tipoVencimento: "DIAS_APOS_FATURAMENTO",
           ajusteFinsDeSemana: "MANTER",
-          adicionarPeriodoRef: false,
-          adicionarNumContrato: false,
-          adicionarVencimentoNFSe: false,
-          exibirRTNFSe: false,
           exibirRTPDF: false,
           reajusteAtivo: false,
           reajusteNotificar: false,
@@ -244,32 +272,49 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
   const renovacaoAtiva = watch("renovacaoAutomatica");
   const notificarRenov = watch("notificarClienteRenovacao");
   const reajusteNotificarVal = watch("reajusteNotificar");
-  const adicionarPeriodoRefVal = watch("adicionarPeriodoRef");
+  const reajustePercentualVal = watch("reajustePercentual");
+  const reajusteMesVal = watch("reajusteMesAniversario");
+  const reajusteNotificarDiasVal = watch("reajusteNotificarDias");
   const tipoVencimentoVal = watch("tipoVencimento");
+  const faturamentoAdicionaisVal = watch("faturamentoAdicionais");
   const statusVal = watch("status");
   const dataInicioVal = watch("dataInicio");
   const dataFimVal = watch("dataFim");
   const valorMensalVal = watch("valorMensal");
-  const freqRecVal = watch("frequenciaRecorrencia");
-  const diaRecVal = watch("diaRecorrencia");
-  const fimSemanaRecVal = watch("fimSemanaRecorrencia");
-  const tipoOsRecVal = watch("tipoOsRecorrenciaId");
-  const tecnicoRecVal = watch("tecnicoRecorrenciaId");
+  const servicoIdVal = watch("servicoId");
+  const descricaoVal = watch("descricaoServicos") ?? "";
 
   useEffect(() => {
     fetch("/api/clientes").then((r) => r.json()).then((d) => setClientes(Array.isArray(d) ? d : [])).catch(() => {});
     fetch("/api/tecnicos?tipo=RESPONSAVEL_TECNICO").then((r) => r.json()).then((d) => setResponsaveis(Array.isArray(d) ? d : [])).catch(() => {});
     fetch("/api/tipos-os").then((r) => r.json()).then((d) => setTiposOs(Array.isArray(d) ? d : [])).catch(() => {});
     fetch("/api/tecnicos").then((r) => r.json()).then((d) => setTecnicos(Array.isArray(d) ? d : [])).catch(() => {});
-    fetch("/api/servicos").then((r) => r.json()).then((d) => setServicos(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
 
+  const [unidadesDe, setUnidadesDe] = useState<string | null>(null);
   useEffect(() => {
-    if (!clienteIdSelecionado) { setUnidades([]); return; }
-    fetch(`/api/unidades?clienteId=${clienteIdSelecionado}`).then((r) => r.json()).then((d) => setUnidades(Array.isArray(d) ? d : [])).catch(() => {});
+    if (!clienteIdSelecionado) { setUnidades([]); setUnidadesDe(null); return; }
+    fetch(`/api/unidades?clienteId=${clienteIdSelecionado}`).then((r) => r.json())
+      .then((d) => { setUnidades(Array.isArray(d) ? d : []); setUnidadesDe(clienteIdSelecionado); }).catch(() => {});
+    // Endereço do cadastro do cliente (para o 1º local coberto)
+    fetch(`/api/clientes/${clienteIdSelecionado}`).then((r) => (r.ok ? r.json() : null))
+      .then((c) => { if (c?.id) setEnderecoCliente({ clienteId: c.id, end: c }); }).catch(() => {});
   }, [clienteIdSelecionado]);
 
-  function mostrarToast(msg: string) { setToast(msg); setTimeout(() => setToast(null), 3000); }
+  // Ao abrir o contrato SEM locais: o 1º local vem do endereço do cliente. Se o cliente já tem um
+  // local com esse endereço, é ele que entra (não duplica); senão, fica pendente e é criado ao salvar.
+  // Uma vez por cliente: se a pessoa excluir, não volta.
+  useEffect(() => {
+    if (!clienteIdSelecionado || unidadesDe !== clienteIdSelecionado || enderecoCliente?.clienteId !== clienteIdSelecionado) return;
+    if (localSugeridoPara.current === clienteIdSelecionado) return;
+    localSugeridoPara.current = clienteIdSelecionado;
+    const atuais = (watch("unidadeIds") ?? []) as string[];
+    if (atuais.length > 0 || !temEndereco(enderecoCliente.end)) return;
+    const existente = unidadeDoCliente(unidades, enderecoCliente.end);
+    if (existente) setValue("unidadeIds", [existente.id]);
+    else if (podeCriarUnidade) setLocalPendente(novoLocalDoCliente(enderecoCliente.end));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clienteIdSelecionado, unidadesDe, enderecoCliente, podeCriarUnidade]);
 
   async function gerarNumero() {
     setGerandoNumero(true);
@@ -297,64 +342,69 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
       const data = await res.json();
       setValue("status", statusAlvo as any);
       if (data.historico) setHistoricoStatus((prev) => [data.historico, ...prev]);
-      mostrarToast(`Status alterado para "${LABELS_STATUS_CONTRATO[statusAlvo] ?? statusAlvo}".`);
+      toast(`Status alterado para “${LABELS_STATUS_CONTRATO[statusAlvo] ?? statusAlvo}”.`);
       setStatusAlvo(null);
     } catch { setErroGlobal("Erro de conexão."); } finally { setSalvandoStatus(false); }
   }
 
-  // Meses entre início e fim da vigência (inclusivo). null se indeterminado/ inválido.
+  // Meses COBRADOS na vigência (CO4): fim no aniversário do início conta até o mês anterior
+  // (01/01 → 01/01 do ano seguinte = 12 meses); qualquer dia depois disso inclui o mês do fim.
   const mesesVigencia = (() => {
     if (!dataInicioVal || !dataFimVal) return null;
     const a = new Date(`${dataInicioVal}T00:00:00`);
     const b = new Date(`${dataFimVal}T00:00:00`);
     if (b < a) return null;
-    return (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth()) + 1;
+    const diff = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
+    return b.getDate() < a.getDate() ? diff : b.getDate() === a.getDate() ? Math.max(diff, 1) : diff + 1;
   })();
   const valorMensalNum = typeof valorMensalVal === "number" && !isNaN(valorMensalVal) ? valorMensalVal : null;
-  const valorTotalCalc = valorMensalNum != null && mesesVigencia != null ? valorMensalNum * mesesVigencia : null;
+  // D1: o valor é o de CADA cobrança; o total = valor × cobranças na vigência (1 a cada N meses)
+  const passo = passoCobranca(watch("periodicidade"));
+  const cobrancasNaVigencia = mesesVigencia != null ? Math.ceil(mesesVigencia / passo) : null;
+  const valorTotalCalc = valorMensalNum != null && cobrancasNaVigencia != null ? valorMensalNum * cobrancasNaVigencia : null;
+  const { pode: podePerm } = usePermissoes();
+  const podeAutomatizar = podePerm("financeiro", "medicoes");
+  const faturamentoAutomaticoVal = !!watch("faturamentoAutomatico");
+  const aprovacaoAutomaticaVal = !!watch("aprovacaoAutomatica");
+  // PR3-B: NFS-e e boleto automáticos pedem também a permissão de emitir cada um à mão
+  const podeNfseAuto = podeAutomatizar && podePerm("financeiro", "fiscal");
+  const podeBoletoAuto = podeAutomatizar && podePerm("financeiro", "contasReceber");
+  const emitirNfseAutoVal = !!watch("emitirNfseAuto");
+  const emitirBoletoAutoVal = !!watch("emitirBoletoAuto");
   const duracaoTexto = mesesVigencia != null ? `${mesesVigencia} ${mesesVigencia === 1 ? "mês" : "meses"}` : "Indeterminado";
 
-  // Prévia das OS recorrentes (máx 12)
-  const previewRecorrencia = (recorrenciaAtiva && freqRecVal && dataInicioVal)
-    ? proximasOcorrencias({
-        dataInicio: new Date(`${dataInicioVal}T12:00:00`),
-        dataFim: dataFimVal ? new Date(`${dataFimVal}T12:00:00`) : null,
-        frequencia: freqRecVal,
-        diaRecorrencia: diaRecVal,
-        fimSemana: fimSemanaRecVal,
-        limite: 12,
-      })
-    : [];
-  const tipoOsNome = tiposOs.find((t) => t.id === tipoOsRecVal)?.nome ?? "Atendimento recorrente";
-  const responsavelNome = tecnicos.find((t) => t.id === tecnicoRecVal)?.nome ?? "—";
-
-  function toggleServico(id: string) {
-    setServicosSelecionados((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
-  }
 
   function onError(errs: typeof errors) {
     const abas = new Set<string>();
     Object.keys(errs).forEach((c) => { const a = CAMPO_ABA[c]; if (a) abas.add(a); });
+    if (Object.keys(errs).some((c) => CAMPOS_MAIS_OPCOES.includes(c))) setMaisOpcoes(true);
     setAbasErro(abas);
-    const primeira = ABAS.find((t) => abas.has(t.id));
+    const primeira = ABAS_CONTRATO.find((t) => abas.has(t.id));
     if (primeira) { setAba(primeira.id); setErroGlobal(`Verifique os campos obrigatórios na aba "${primeira.label}".`); }
   }
 
   async function onSubmit(data: ContratoInput, continuar = false) {
     setErroGlobal(""); setAbasErro(new Set());
-    const descricaoServicos = servicos.filter((s) => servicosSelecionados.includes(s.id)).map((s) => s.nome).join("; ");
-    const recPayload = (data.unidadeIds ?? []).map((unidadeId) => {
+    // 1º local vindo do cadastro do cliente: cria o local agora (só se ainda não existir um igual)
+    let unidadeIds = [...(data.unidadeIds ?? [])];
+    if (localPendente && data.clienteId === clienteIdSelecionado) {
+      const igual = unidadeDoCliente(unidades, { endereco: localPendente.logradouro, numero: localPendente.numero, cep: localPendente.cep, cidade: localPendente.cidade });
+      try {
+        const id = igual?.id ?? (await UNIDADE.criar(data.clienteId, { ...localPendente }, unidades.length === 0)).id;
+        if (!unidadeIds.includes(id)) unidadeIds = [id, ...unidadeIds];
+        setLocalPendente(null);
+        setValue("unidadeIds", unidadeIds);
+      } catch (e) { setErroGlobal(e instanceof Error ? e.message : "Não foi possível cadastrar o local do cliente."); setAba("escopo"); return; }
+    }
+    const recPayload = unidadeIds.map((unidadeId) => {
       const c = recLocais[unidadeId];
       return c ? { unidadeId, ativa: c.ativa, frequencia: c.frequencia || null, tipoOsId: c.tipoOsId || null, tecnicoId: c.tecnicoId || null, dataPrimeiraOs: c.dataPrimeiraOs || null } : null;
     }).filter(Boolean);
     const payload: any = {
       ...data,
-      itensInclusos: { ...itensInclusos, outros: outrosItens || undefined },
+      unidadeIds,
       // Valor total calculado automaticamente (valor mensal × meses de vigência)
       valorTotal: valorTotalCalc ?? undefined,
-      // Serviços da NFS-e (IDs + descrição derivada para a nota)
-      servicosNFSeIds: servicosSelecionados,
-      descricaoNFSe: descricaoServicos || "",
       // Recorrência de OS por local coberto
       recorrenciasLocais: recPayload,
       // Fallback: vencimento da ART = fim da vigência, se não informado
@@ -370,7 +420,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
       if (!res.ok) { const err = await res.json(); setErroGlobal(err.erro ?? "Erro ao salvar contrato."); return; }
       const saved = await res.json().catch(() => ({}));
       if (continuar) {
-        mostrarToast(isEditing ? "Alterações salvas!" : "Contrato cadastrado!");
+        toast(isEditing ? "Contrato salvo." : "Contrato criado.");
         if (!isEditing && saved?.id) { router.push(`/contratos/${saved.id}/editar`); router.refresh(); }
         else router.refresh();
       } else {
@@ -379,31 +429,17 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
     } catch { setErroGlobal("Erro de conexão. Tente novamente."); }
   }
 
-  const ABAS = [
-    { id: "dados", label: "Dados do contrato", icone: FileText },
-    { id: "vigencia", label: "Vigência e Valores", icone: CalendarClock },
-    { id: "escopo", label: "Escopo", icone: ClipboardList },
-    { id: "rt", label: "Responsabilidade Técnica", icone: HardHat },
-    { id: "locais", label: "Locais cobertos", icone: MapPin },
-    { id: "reajuste", label: "Reajuste", icone: TrendingUp },
-    { id: "alertas", label: "Alertas e Renovação", icone: BellRing },
-    { id: "documentos", label: "Documentos", icone: Paperclip },
-    { id: "recorrencia", label: "Recorrência de OS", icone: Repeat },
-    { id: "observacoes", label: "Observações", icone: StickyNote },
-  ];
 
   const salvar = handleSubmit((d) => onSubmit(d, false), onError);
   const salvarEContinuar = handleSubmit((d) => onSubmit(d, true), onError);
   const titulo = isEditing ? (initialData?.numero || "Editar contrato") : "Novo contrato";
 
   function badgeVigencia(): { txt: string; cls: string } {
-    if (!dataFimVal) return { txt: "Vigência indeterminada", cls: "bg-slate-100 text-slate-600" };
-    const fim = new Date(`${dataFimVal}T00:00:00`);
-    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-    const dias = Math.round((fim.getTime() - hoje.getTime()) / 86400000);
-    if (dias < 0) return { txt: `Vencido há ${Math.abs(dias)} dias`, cls: "bg-red-50 text-red-700" };
-    if (dias <= 30) return { txt: `Vence em ${dias} dias`, cls: "bg-amber-50 text-amber-700" };
-    return { txt: `Vence em ${dias} dias`, cls: "bg-success-50 text-success-700" };
+    if (!dataFimVal) return { txt: "Vigência indeterminada", cls: "bg-surface-linha text-ink-muted" };
+    const dias = diasAteDiaCivil(diaCivilDeChave(dataFimVal))!; // pelo dia de Brasília
+    if (dias < 0) return { txt: `Vencido há ${Math.abs(dias)} dias`, cls: "bg-atrasado-claro text-atrasado-texto" };
+    if (dias <= 30) return { txt: `Vence em ${dias} dias`, cls: "bg-atencao-claro text-atencao-texto" };
+    return { txt: `Vence em ${dias} dias`, cls: "bg-ok-claro text-ok-texto" };
   }
   const bv = badgeVigencia();
 
@@ -412,31 +448,53 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
   const locaisCobertos = unidades.filter((u) => unidadeIdsAtuais.includes(u.id)).map((u) => ({ id: u.id, nome: u.nome }));
 
   const BotoesAcao = ({ compact = false }: { compact?: boolean }) => (
-    <div className="flex items-center gap-2 shrink-0">
+    <div className="flex items-center gap-2 flex-wrap">
       <Button type="button" variant="secondary" size={compact ? "sm" : "md"} onClick={() => router.push("/contratos")}>Cancelar</Button>
       <Button type="button" variant="outline" size={compact ? "sm" : "md"} loading={isSubmitting} onClick={salvarEContinuar}>
         <span className={compact ? "hidden lg:inline" : ""}>Salvar e continuar</span>
         <span className={compact ? "lg:hidden" : "hidden"}>Continuar</span>
       </Button>
-      <Button type="button" variant="success" size={compact ? "sm" : "md"} loading={isSubmitting} onClick={salvar}>
+      <Button type="button" variant="primary" size={compact ? "sm" : "md"} loading={isSubmitting} onClick={salvar}>
         <FileCheck className="w-4 h-4" /> Salvar
       </Button>
     </div>
   );
 
-  return (
-    <form onSubmit={salvar} className="min-h-full -m-6 bg-[#F8FAFC] p-4 sm:p-6">
-      {toast && (
-        <div className="fixed top-5 right-5 z-50 flex items-center gap-2 bg-success-600 text-white text-sm font-medium rounded-xl px-4 py-3 shadow-card-hover animate-in fade-in slide-in-from-top-2">
-          <FileCheck className="w-4 h-4" /> {toast}
-        </div>
-      )}
+  // PR4 (D8): o próximo reajuste (ou o que está esperando decisão), pelas mesmas regras da lista "Reajustes"
+  const proximoReajuste = (() => {
+    const pct = percentualDe({ reajusteIndice: reajusteIndiceVal ?? null, reajustePercentual: reajustePercentualVal });
+    if (!dataInicioVal || pct == null || !valorMensalNum) return null;
+    const p = partesBR();
+    const hoje = { ano: p.ano, mes: p.mes + 1, dia: p.dia };
+    const c = {
+      status: statusVal ?? "ATIVO", dataInicio: dataInicioVal, valorMensal: valorMensalNum, reajusteAtivo: true, reajusteIndice: "PERCENTUAL_FIXO",
+      reajustePercentual: pct, reajusteMesAniversario: reajusteMesVal ? Number(reajusteMesVal) : null, reajusteAdiadoAte: initialData?.reajusteAdiadoAte ?? null,
+    };
+    const decididos = (initialData?.reajustes ?? []).map((r) => r.anoReferencia).filter((a): a is number => typeof a === "number");
+    const s = isEditing ? sugestaoReajuste(c, decididos, hoje) : null;
+    if (s && s.situacao !== "EM_BREVE") {
+      return (
+        <p className="text-sm text-atencao-texto" data-proximo-reajuste="pendente">
+          Aniversário de {textoCompetencia(s.aniversario)}: {formatarMoeda(s.valorAtual)} → {formatarMoeda(s.valorNovo)}.{" "}
+          <Link href="/contratos/reajustes" className="font-medium text-acento hover:underline">Decidir em Contratos › Reajustes</Link>
+        </p>
+      );
+    }
+    const prox = proximoAniversario(c, hoje); // sempre depois de hoje: nunca um ano já decidido
+    return (
+      <p className="text-sm text-ink-muted" data-proximo-reajuste="futuro">
+        Próximo reajuste: {textoCompetencia(prox)} · {formatarMoeda(valorMensalNum)} → {formatarMoeda(valorReajustado(valorMensalNum, pct))}
+      </p>
+    );
+  })();
 
+  return (
+    <form onSubmit={salvar} className="min-h-full -m-6 bg-surface-page p-4 sm:p-6">
       {/* Modal de confirmação de mudança de status */}
       {statusAlvo && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => !salvandoStatus && setStatusAlvo(null)}>
-          <div className="bg-white rounded-2xl shadow-card-hover w-full max-w-md p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-base font-bold text-ink">Alterar status para “{LABELS_STATUS_CONTRATO[statusAlvo] ?? statusAlvo}”?</h3>
+          <div className="bg-white rounded-card shadow-card-hover w-full max-w-md p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-bold text-ink">Mudar status para “{LABELS_STATUS_CONTRATO[statusAlvo] ?? statusAlvo}”?</h3>
             <p className="text-sm text-ink-muted">{STATUS_OPCOES.find((o) => o.valor === statusAlvo)?.descricao}</p>
             <div>
               <label className="text-xs font-semibold text-ink">Motivo (opcional)</label>
@@ -444,7 +502,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="secondary" onClick={() => setStatusAlvo(null)} disabled={salvandoStatus}>Cancelar</Button>
-              <Button type="button" variant="success" loading={salvandoStatus} onClick={confirmarStatus}>Confirmar</Button>
+              <Button type="button" variant="primary" loading={salvandoStatus} onClick={confirmarStatus}>Confirmar</Button>
             </div>
           </div>
         </div>
@@ -452,7 +510,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
 
       <div className="max-w-7xl mx-auto space-y-5">
         {/* Cabeçalho fixo */}
-        <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-[#F8FAFC]/90 backdrop-blur border-b border-surface-border">
+        <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-surface-page/90 backdrop-blur border-b border-surface-border">
           <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3 flex-wrap min-w-0">
               <h1 className="text-xl font-bold text-ink truncate">{titulo}</h1>
@@ -461,15 +519,15 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
                   <button
                     type="button"
                     onClick={() => setStatusMenuOpen((o) => !o)}
-                    title="Alterar status do contrato"
-                    className={cn("inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full transition-opacity hover:opacity-80", COR_STATUS_CONTRATO[statusVal] ?? "bg-slate-100 text-slate-600")}
+                    title="Mudar status do contrato"
+                    className={cn("inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full transition-opacity hover:opacity-80", COR_STATUS_CONTRATO[statusVal] ?? "bg-surface-linha text-ink-muted")}
                   >
                     {LABELS_STATUS_CONTRATO[statusVal] ?? statusVal} <ChevronDown className="w-3 h-3" />
                   </button>
                   {statusMenuOpen && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setStatusMenuOpen(false)} />
-                      <div className="absolute left-0 mt-2 z-50 w-72 bg-white border border-surface-border rounded-xl shadow-card-hover p-1.5">
+                      <div className="absolute left-0 mt-2 z-50 w-72 bg-white border border-surface-border rounded-card shadow-card-hover p-1.5">
                         {STATUS_OPCOES.map((o) => {
                           const atual = o.valor === statusVal;
                           return (
@@ -491,7 +549,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
                   )}
                 </div>
               ) : (
-                <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full", COR_STATUS_CONTRATO[statusVal] ?? "bg-slate-100 text-slate-600")}>
+                <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full", COR_STATUS_CONTRATO[statusVal] ?? "bg-surface-linha text-ink-muted")}>
                   {LABELS_STATUS_CONTRATO[statusVal] ?? statusVal}
                 </span>
               )}
@@ -502,28 +560,28 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
         </div>
 
         {erroGlobal && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 flex items-center gap-2">
+          <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" /> {erroGlobal}
           </div>
         )}
 
-        <div className="bg-white rounded-2xl shadow-card border border-surface-border overflow-hidden">
-          <nav className="flex gap-1.5 overflow-x-auto px-4 pt-4 pb-4 border-b border-surface-border">
-            {ABAS.map((t) => {
+        <div className="bg-white rounded-card shadow-card border border-surface-border overflow-hidden">
+          <nav className="flex gap-1.5 overflow-x-auto px-4 pt-4 pb-4 border-b border-surface-border" role="tablist">
+            {ABAS_CONTRATO.map((t) => {
               const ativa = aba === t.id;
               const comErro = abasErro.has(t.id);
               return (
                 <button
-                  key={t.id} type="button" onClick={() => setAba(t.id)}
+                  key={t.id} type="button" role="tab" onClick={() => setAba(t.id)} data-aba-contrato={t.id} aria-selected={ativa}
                   className={cn(
-                    "flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl whitespace-nowrap transition-all",
+                    "flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-card whitespace-nowrap transition-all",
                     ativa ? "bg-primary-500 text-white shadow-sm" : "text-ink-muted hover:text-ink hover:bg-surface-alt",
-                    comErro && !ativa && "text-red-600 bg-red-50",
+                    comErro && !ativa && "text-atrasado bg-atrasado-claro",
                   )}
                 >
                   <t.icone className="w-4 h-4" />
                   {t.label}
-                  {comErro && <AlertCircle className={cn("w-3.5 h-3.5", ativa ? "text-white" : "text-red-500")} />}
+                  {comErro && <AlertCircle className={cn("w-3.5 h-3.5", ativa ? "text-white" : "text-atrasado")} />}
                 </button>
               );
             })}
@@ -531,9 +589,9 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
 
           <div className="p-5 sm:p-6 lg:p-8">
 
-      {/* ABA 1 — Dados do contrato */}
-      <Painel ativo={aba === "dados"}>
-        <FormSection title="Dados do contrato" icon={<FileText className="w-3.5 h-3.5" />}>
+      {/* ABA 1 — Contrato */}
+      <Painel ativo={aba === "contrato"} id="contrato">
+        <FormSection title="Contrato" icon={<FileText className="w-3.5 h-3.5" />}>
           <FormGrid>
             <FormField label="Cliente" required error={errors.clienteId?.message}>
               <Controller
@@ -542,7 +600,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
                 render={({ field }) => (
                   <SelectCadastroRapido
                     value={field.value ?? ""}
-                    onChange={(v) => { field.onChange(v); setClienteIdSelecionado(v); }}
+                    onChange={(v) => { field.onChange(v); setClienteIdSelecionado(v); setLocalPendente(null); }}
                     opcoes={clientes.map(CLIENTE.opcao)}
                     entidade={CLIENTE.entidade}
                     placeholder="Selecione o cliente"
@@ -561,9 +619,9 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
                 )}
               />
             </FormField>
-            <FormField label="Número do contrato" required error={errors.numero?.message} hint="Ex: CT-2024-001">
+            <FormField label="Número do contrato" required error={errors.numero?.message} hint="Ex: CT-18">
               <div className="flex gap-2">
-                <Input {...register("numero")} error={!!errors.numero} placeholder="CT-2024-001" className="flex-1" />
+                <Input {...register("numero")} error={!!errors.numero} placeholder="CT-18" className="flex-1" />
                 <Button type="button" variant="secondary" loading={gerandoNumero} onClick={gerarNumero} className="shrink-0">
                   <Wand2 className="w-4 h-4" /> <span className="hidden sm:inline">Gerar automático</span>
                 </Button>
@@ -571,15 +629,10 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
             </FormField>
           </FormGrid>
           <FormGrid cols={3}>
-            <FormField label="Tipo" required error={errors.tipo?.message}>
-              <Select {...register("tipo")} error={!!errors.tipo} placeholder="Selecione o tipo">
-                {Object.entries(LABELS_TIPO_CONTRATO).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
-              </Select>
-            </FormField>
             <FormField label="Status" required hint={isEditing ? "Altere pelo botão de status no cabeçalho" : undefined}>
               {isEditing ? (
                 <div className="flex h-10 items-center">
-                  <span className={cn("inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full", COR_STATUS_CONTRATO[statusVal] ?? "bg-slate-100 text-slate-600")}>
+                  <span className={cn("inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full", COR_STATUS_CONTRATO[statusVal] ?? "bg-surface-linha text-ink-muted")}>
                     {LABELS_STATUS_CONTRATO[statusVal] ?? statusVal}
                   </span>
                 </div>
@@ -589,54 +642,128 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
                 </Select>
               )}
             </FormField>
-            <FormField label="Periodicidade" required>
-              <Select {...register("periodicidade")}>
-                {Object.entries(LABELS_PERIODICIDADE).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
-              </Select>
-            </FormField>
-          </FormGrid>
-        </FormSection>
-      </Painel>
-
-      {/* ABA 2 — Vigência e Valores */}
-      <Painel ativo={aba === "vigencia"}>
-        <FormSection title="Valores e vigência" icon={<DollarSign className="w-3.5 h-3.5" />}>
-          <FormGrid cols={3}>
-            <FormField label="Valor mensal (R$)" hint="Gera previsão de contas a receber" error={errors.valorMensal?.message}>
-              <Input {...register("valorMensal", { valueAsNumber: true })} type="number" step="0.01" min="0" placeholder="0,00" error={!!errors.valorMensal} />
-            </FormField>
-            <FormField label="Valor total (R$)" hint="Calculado: valor mensal × meses de vigência">
-              <div className="flex h-10 items-center rounded-lg border border-surface-border bg-surface-alt/60 px-3 text-sm font-medium text-ink">
-                {valorTotalCalc != null ? formatarMoeda(valorTotalCalc) : "—"}
-              </div>
-            </FormField>
-            <FormField label="Dia de faturamento" hint="1 a 28">
-              <Input {...register("diaFaturamento")} type="number" min={1} max={28} placeholder="1" />
-            </FormField>
-          </FormGrid>
-          <FormGrid>
             <FormField label="Início da vigência" required error={errors.dataInicio?.message}>
-              <Input {...register("dataInicio")} type="date" error={!!errors.dataInicio} />
+              <Controller name="dataInicio" control={control} render={({ field }) => <InputData value={(field.value as string) ?? ""} onChange={field.onChange} aria-label="Início da vigência" />} />
             </FormField>
             <FormField label="Fim da vigência" hint="Em branco = indeterminado">
-              <Input {...register("dataFim")} type="date" />
+              <Controller name="dataFim" control={control} render={({ field }) => <InputData value={(field.value as string) ?? ""} onChange={field.onChange} aria-label="Fim da vigência" />} />
             </FormField>
           </FormGrid>
           <p className="flex items-center gap-1.5 text-xs text-ink-muted -mt-2">
             <CalendarDays className="w-3.5 h-3.5" /> Duração da vigência: <span className="font-semibold text-ink">{duracaoTexto}</span>
           </p>
+        </FormSection>
+
+        <FormSection title="Valores e faturamento" icon={<DollarSign className="w-3.5 h-3.5" />}>
+          <FormGrid>
+            <FormField
+              label="Cobrança"
+              required
+              dica="De quanto em quanto tempo o contrato cobra. Sai uma previsão no Contas a Receber e uma medição por período, sempre pelo valor ao lado (o valor de cada cobrança, sem multiplicar)."
+              error={errors.periodicidade?.message}
+            >
+              <Select {...register("periodicidade")} data-periodicidade>
+                {PERIODICIDADES_COBRANCA.map((v) => (<option key={v} value={v}>{LABELS_PERIODICIDADE[v] ?? v}</option>))}
+              </Select>
+            </FormField>
+            <FormField label="Dia de faturamento" hint="1 a 28" dica="Dia do mês em que a cobrança sai. Em branco, vale o dia de faturamento do cliente." error={errors.diaFaturamento?.message}>
+              <Input {...register("diaFaturamento")} type="number" min={1} max={28} placeholder="1" />
+            </FormField>
+            <FormField
+              label={passo > 1 ? "Valor da cobrança (R$)" : "Valor mensal (R$)"}
+              hint={passo > 1 ? (valorMensalNum ? `${formatarMoeda(valorMensalNum)} · ${textoFrequencia(passo)}` : `Cobrado ${textoFrequencia(passo)}`) : "Gera previsão de contas a receber"}
+              error={errors.valorMensal?.message}
+            >
+              <Input {...register("valorMensal", { valueAsNumber: true })} type="number" step="0.01" min="0" placeholder="0,00" error={!!errors.valorMensal} data-valor-cobranca />
+            </FormField>
+            <FormField label="Valor total (R$)" hint={passo > 1 ? "Calculado: valor da cobrança × cobranças na vigência" : "Calculado: valor mensal × meses de vigência"}>
+              <div className="flex h-10 items-center rounded-lg border border-surface-border bg-surface-alt/60 px-3 text-sm font-medium text-ink" data-valor-total>
+                {valorTotalCalc != null ? formatarMoeda(valorTotalCalc) : "—"}
+                {passo > 1 && cobrancasNaVigencia != null && <span className="ml-1.5 text-xs font-normal text-ink-muted">({cobrancasNaVigencia} {cobrancasNaVigencia === 1 ? "cobrança" : "cobranças"})</span>}
+              </div>
+            </FormField>
+          </FormGrid>
+
+          <div className="space-y-2" data-servico-padrao>
+            <FormField
+              label="Serviço da nota"
+              hint="Recomendado"
+              dica="O serviço do catálogo que vai na NFS-e da mensalidade. Dele vêm o código fiscal e as retenções (ISS retido, IR, PIS, COFINS, CSLL, INSS)."
+              error={errors.servicoId?.message}
+            >
+              <Controller
+                control={control}
+                name="servicoId"
+                render={({ field }) => (
+                  <SeletorCadastro entidade="servicos" id="servicoId" nome="servicoId" valor={field.value ?? ""} vazio="Sem serviço padrão" onChange={(v) => field.onChange(v || "")} />
+                )}
+              />
+            </FormField>
+            <PreviaCobrancaContrato servicoId={servicoIdVal || null} valor={typeof valorMensalVal === "number" ? valorMensalVal : null} />
+          </div>
+
+          {/* PR3-A/B: rotina diária (medição → aprovação → NFS-e → boleto). Ligar/desligar pede Financeiro › Medições;
+              NFS-e pede também Fiscal e boleto Contas a receber (tela e servidor) */}
+          <div className="rounded-lg border border-surface-border px-3 divide-y divide-surface-linha" data-automacao>
+            <ToggleSwitch
+              label="Faturamento automático"
+              description={faturamentoAutomaticoVal ? `A medição sai sozinha no dia de faturamento, ${textoFrequencia(passo)}.` : undefined}
+              dica="Todo dia de manhã a rotina confere os contratos com esta chave: no dia de faturamento cria a medição e segue para a aprovação. Se falhar, tenta de novo nos 2 dias seguintes e depois avisa no sino. Acompanhe em Financeiro › Faturamento de contratos."
+              checked={faturamentoAutomaticoVal}
+              onChange={(v) => {
+                setValue("faturamentoAutomatico", v, { shouldDirty: true });
+                // Desligar o automático desliga as etapas dele (só as que esta pessoa pode mexer)
+                if (!v) {
+                  setValue("aprovacaoAutomatica", false, { shouldDirty: true });
+                  if (podeNfseAuto) setValue("emitirNfseAuto", false, { shouldDirty: true });
+                  if (podeBoletoAuto) setValue("emitirBoletoAuto", false, { shouldDirty: true });
+                }
+              }}
+              disabled={!podeAutomatizar}
+            />
+            <ToggleSwitch
+              label="Aprovar sem esperar o cliente"
+              dica="Ligada: a medição do contrato já nasce aprovada (a conta a receber sai na hora). Desligada: a medição vai por e-mail para o cliente aprovar pelo link, e a rotina espera."
+              checked={aprovacaoAutomaticaVal}
+              onChange={(v) => setValue("aprovacaoAutomatica", v, { shouldDirty: true })}
+              disabled={!podeAutomatizar || !faturamentoAutomaticoVal}
+            />
+            <ToggleSwitch
+              label="Emitir a NFS-e sozinha"
+              description={emitirNfseAutoVal && !servicoIdVal ? "Escolha o serviço da nota acima: sem ele, a NFS-e fica pendente." : undefined}
+              dica="Após a aprovação, a NFS-e da medição é emitida pela empresa (Dados fiscais), no ambiente configurado. Faltando dado (serviço, cliente, emitente), não emite e avisa no sino o que falta. Pede também a permissão Financeiro › Fiscal."
+              checked={emitirNfseAutoVal}
+              onChange={(v) => setValue("emitirNfseAuto", v, { shouldDirty: true })}
+              disabled={!podeNfseAuto || !faturamentoAutomaticoVal}
+            />
+            <ToggleSwitch
+              label="Emitir e enviar o boleto sozinho"
+              dica="Com a NF autorizada (automática ou manual), o boleto do Banco Inter de cada cobrança da medição é emitido e enviado por e-mail ao cliente. Cobrança com boleto não ganha outro. Pede também a permissão Financeiro › Contas a receber."
+              checked={emitirBoletoAutoVal}
+              onChange={(v) => setValue("emitirBoletoAuto", v, { shouldDirty: true })}
+              disabled={!podeBoletoAuto || !faturamentoAutomaticoVal}
+            />
+            {podeAutomatizar && (!podeNfseAuto || !podeBoletoAuto) && (
+              <p className="py-2 text-xs text-ink-muted" data-automacao-sem-permissao-etapa>
+                {!podeNfseAuto && !podeBoletoAuto ? "A NFS-e e o boleto automáticos pedem as permissões Financeiro › Fiscal e Contas a receber." : !podeNfseAuto ? "A NFS-e automática pede a permissão Financeiro › Fiscal." : "O boleto automático pede a permissão Financeiro › Contas a receber."}
+              </p>
+            )}
+            {!podeAutomatizar && (
+              <p className="py-2 text-xs text-ink-muted" data-automacao-sem-permissao>Só quem tem a permissão Financeiro › Medições liga o faturamento automático.</p>
+            )}
+          </div>
 
           <div className="space-y-2">
             <p className="text-xs font-bold text-ink-muted uppercase tracking-wider">Tipo de vencimento</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label className={cn("flex flex-col gap-2 p-3 border rounded-lg cursor-pointer transition-colors", tipoVencimentoVal === "DIAS_APOS_FATURAMENTO" ? "border-primary-400 bg-primary-50/40" : "border-surface-border hover:border-primary-300")}>
+              <label className={cn("flex flex-col gap-2 p-3 border rounded-lg cursor-pointer transition-colors", tipoVencimentoVal === "DIAS_APOS_FATURAMENTO" ? "border-acento bg-acento-claro/40" : "border-surface-border hover:border-acento/40")}>
                 <span className="flex items-center gap-2 text-sm font-medium text-ink">
                   <input type="radio" checked={tipoVencimentoVal === "DIAS_APOS_FATURAMENTO"} onChange={() => setValue("tipoVencimento", "DIAS_APOS_FATURAMENTO")} className="accent-primary-600" />
                   {LABELS_TIPO_VENCIMENTO.DIAS_APOS_FATURAMENTO}
                 </span>
                 <Input {...register("diasAposVencimento")} type="number" min={0} placeholder="30" disabled={tipoVencimentoVal !== "DIAS_APOS_FATURAMENTO"} />
               </label>
-              <label className={cn("flex flex-col gap-2 p-3 border rounded-lg cursor-pointer transition-colors", tipoVencimentoVal === "DIA_FIXO_MES" ? "border-primary-400 bg-primary-50/40" : "border-surface-border hover:border-primary-300")}>
+              <label className={cn("flex flex-col gap-2 p-3 border rounded-lg cursor-pointer transition-colors", tipoVencimentoVal === "DIA_FIXO_MES" ? "border-acento bg-acento-claro/40" : "border-surface-border hover:border-acento/40")}>
                 <span className="flex items-center gap-2 text-sm font-medium text-ink">
                   <input type="radio" checked={tipoVencimentoVal === "DIA_FIXO_MES"} onChange={() => setValue("tipoVencimento", "DIA_FIXO_MES")} className="accent-primary-600" />
                   {LABELS_TIPO_VENCIMENTO.DIA_FIXO_MES}
@@ -646,186 +773,137 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
             </div>
           </div>
 
-          <FormField label="Sábados, domingos e feriados nacionais" hint="Ajuste do vencimento que cai em dia não útil">
-            <Select {...register("ajusteFinsDeSemana")}>
-              {Object.entries(LABELS_AJUSTE_FIM_SEMANA).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
-            </Select>
-          </FormField>
-        </FormSection>
+          <div className="space-y-2" data-faturamento-adicionais>
+            <p className="text-xs font-bold text-ink-muted uppercase tracking-wider">Serviços avulsos do contrato (itens executados e adicionais das OS)</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className={cn("flex flex-col gap-1 p-3 border rounded-lg cursor-pointer transition-colors", faturamentoAdicionaisVal !== "CONSOLIDADO" ? "border-acento bg-acento-claro/40" : "border-surface-border hover:border-acento/40")}>
+                <span className="flex items-center gap-2 text-sm font-medium text-ink">
+                  <input type="radio" checked={faturamentoAdicionaisVal !== "CONSOLIDADO"} onChange={() => setValue("faturamentoAdicionais", "SEPARADO")} className="accent-primary-600" />
+                  Faturas separadas
+                </span>
+                <span className="text-xs text-ink-muted">Cada OS gera a própria medição de adicional (padrão).</span>
+              </label>
+              <label className={cn("flex flex-col gap-1 p-3 border rounded-lg cursor-pointer transition-colors", faturamentoAdicionaisVal === "CONSOLIDADO" ? "border-acento bg-acento-claro/40" : "border-surface-border hover:border-acento/40")}>
+                <span className="flex items-center gap-2 text-sm font-medium text-ink">
+                  <input type="radio" checked={faturamentoAdicionaisVal === "CONSOLIDADO"} onChange={() => setValue("faturamentoAdicionais", "CONSOLIDADO")} className="accent-primary-600" />
+                  Consolidados na fatura do mês
+                </span>
+                <span className="text-xs text-ink-muted">Os serviços do mês entram junto da mensalidade na medição do contrato.</span>
+              </label>
+            </div>
+          </div>
 
-        <FormSection title="Configurações da NFS-e" icon={<Receipt className="w-3.5 h-3.5" />}>
-          <FormField label="Serviços da NFS-e" hint="Selecione um ou mais serviços que aparecem na nota fiscal">
-            {servicos.length === 0 ? (
-              <p className="text-sm text-ink-muted">
-                Nenhum serviço cadastrado. Cadastre serviços em Configurações para usá-los aqui.
-              </p>
-            ) : (
-              <div className="space-y-1.5 max-h-60 overflow-y-auto border border-surface-border rounded-lg p-2">
-                {servicos.map((s) => {
-                  const sel = servicosSelecionados.includes(s.id);
-                  return (
-                    <label key={s.id} className={cn("flex items-start gap-2.5 p-2 rounded-lg cursor-pointer transition-colors", sel ? "bg-primary-50/60" : "hover:bg-surface-alt")}>
-                      <input type="checkbox" checked={sel} onChange={() => toggleServico(s.id)} className="mt-0.5 accent-primary-600" />
-                      <span className="min-w-0">
-                        <span className="block text-sm text-ink">{s.nome}</span>
-                        {s.descricao && <span className="block text-xs text-ink-subtle truncate">{s.descricao}</span>}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            )}
-            {servicosSelecionados.length > 0 && (
-              <p className="text-xs text-ink-muted mt-1.5">{servicosSelecionados.length} serviço(s) selecionado(s).</p>
-            )}
-          </FormField>
-          <div className="border-t border-gray-100 pt-1 divide-y divide-gray-100">
-            <ToggleSwitch
-              label="Adicionar período de referência"
-              description="Inclui o mês de referência na descrição da NFS-e."
-              checked={!!adicionarPeriodoRefVal}
-              onChange={(v) => setValue("adicionarPeriodoRef", v)}
-            />
-            {adicionarPeriodoRefVal && (
-              <div className="py-3">
-                <FormField label="Período de referência">
-                  <Select {...register("periodoRefOpcao")} placeholder="Selecione">
-                    {Object.entries(LABELS_PERIODO_REF_NFSE).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
+          {/* Mais opções: ajuste de dia não útil, tipo e período na nota (continuam valendo; só ficam recolhidos) */}
+          <div className="border border-surface-border rounded-lg">
+            <button
+              type="button" onClick={() => setMaisOpcoes((v) => !v)} aria-expanded={maisOpcoes} data-mais-opcoes
+              className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-sm font-medium text-ink hover:bg-surface-alt/60 rounded-lg"
+            >
+              <span className="flex items-center gap-2"><SlidersHorizontal className="w-4 h-4 text-ink-muted" /> Mais opções</span>
+              <span className="flex items-center gap-2 text-xs text-ink-muted">
+                {!maisOpcoes && <span className="hidden sm:inline">{LABELS_TIPO_CONTRATO[watch("tipo")] ?? "—"}{watch("nfseReferencia") === "ANTERIOR" ? " · Nota do período anterior" : ""}</span>}
+                <ChevronDown className={cn("w-4 h-4 transition-transform", maisOpcoes && "rotate-180")} />
+              </span>
+            </button>
+            {maisOpcoes && (
+              <div className="px-3 pb-3 pt-1 space-y-4 border-t border-surface-border" data-mais-opcoes-conteudo>
+                <FormField label="Sábados, domingos e feriados nacionais" hint="Ajuste do vencimento que cai em dia não útil">
+                  <Select {...register("ajusteFinsDeSemana")}>
+                    {Object.entries(LABELS_AJUSTE_FIM_SEMANA).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
                   </Select>
                 </FormField>
+                <FormGrid>
+                  <FormField label="Tipo" required error={errors.tipo?.message}>
+                    <Select {...register("tipo")} error={!!errors.tipo} placeholder="Selecione o tipo">
+                      {Object.entries(LABELS_TIPO_CONTRATO).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
+                    </Select>
+                  </FormField>
+                  <FormField label="Período na nota" dica="O período que a nota e a cobrança descrevem (Ref.). Corrente: o próprio período da cobrança. Anterior: o período que acabou de passar (quem cobra o serviço já prestado).">
+                    <Select {...register("nfseReferencia")} data-nfse-referencia>
+                      <option value="CORRENTE">Período corrente</option>
+                      <option value="ANTERIOR">Período anterior</option>
+                    </Select>
+                  </FormField>
+                </FormGrid>
               </div>
             )}
-            <ToggleSwitch
-              label="Adicionar Nº do contrato à descrição dos serviços"
-              description="Inclui o número do contrato na descrição da NFS-e."
-              checked={!!watch("adicionarNumContrato")}
-              onChange={(v) => setValue("adicionarNumContrato", v)}
-            />
-            <ToggleSwitch
-              label="Adicionar vencimento da parcela à descrição"
-              description={'Formato: "Contrato N. XXXX - Ref. Mês/Ano - Vencto. DD/MM/AAAA"'}
-              checked={!!watch("adicionarVencimentoNFSe")}
-              onChange={(v) => setValue("adicionarVencimentoNFSe", v)}
-            />
           </div>
         </FormSection>
       </Painel>
 
-      {/* ABA 3 — Escopo */}
-      <Painel ativo={aba === "escopo"}>
+      {/* ABA 2 — Escopo e locais */}
+      <Painel ativo={aba === "escopo"} id="escopo">
         <FormSection title="Escopo dos serviços" icon={<ClipboardList className="w-3.5 h-3.5" />}>
-          <FormField label="Descrição dos serviços" hint="O que está incluso no contrato">
-            <Textarea {...register("descricaoServicos")} rows={4} placeholder="Descreva os serviços contratados…" />
+          <FormField label="Descrição dos serviços" hint="O que está incluso no contrato" error={errors.descricaoServicos?.message}>
+            <Textarea {...register("descricaoServicos")} rows={5} maxLength={MAX_DESCRICAO_SERVICOS} placeholder="Descreva os serviços contratados…" data-descricao-servicos />
+            <p className={cn("text-xs text-right mt-1 tabular-nums", descricaoVal.length > MAX_DESCRICAO_SERVICOS ? "text-atrasado font-semibold" : descricaoVal.length > MAX_DESCRICAO_SERVICOS * 0.9 ? "text-atencao-texto" : "text-ink-subtle")} data-contador-descricao>
+              {descricaoVal.length}/{MAX_DESCRICAO_SERVICOS}
+            </p>
           </FormField>
-
-          <div className="space-y-2">
-            <p className="text-xs font-bold text-ink-muted uppercase tracking-wider">Itens inclusos</p>
-            <div className="space-y-2">
-              {ITENS_INCLUSOS_CONTRATO.map((it) => (
-                <label key={it.chave} className="flex items-center gap-3 p-2.5 border border-surface-border rounded-lg cursor-pointer hover:border-primary-300 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={!!itensInclusos[it.chave]}
-                    onChange={(e) => setItensInclusos((p) => ({ ...p, [it.chave]: e.target.checked }))}
-                    className="accent-primary-600"
-                  />
-                  <span className="text-sm text-ink">{it.label}</span>
-                </label>
-              ))}
-            </div>
-            <FormField label="Outros itens inclusos">
-              <Input value={outrosItens} onChange={(e) => setOutrosItens(e.target.value)} placeholder="Descreva outros itens (texto livre)" />
-            </FormField>
-          </div>
-
-          <FormGrid>
-            <FormField label="Quantidade de visitas inclusas">
-              <Input {...register("qtdVisitas")} type="number" min={0} placeholder="1" />
-            </FormField>
-            <FormField label="Período das visitas">
-              <Select {...register("periodoVisitas")} placeholder="Selecione">
-                {Object.entries(LABELS_PERIODO_VISITA).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
-              </Select>
-            </FormField>
-          </FormGrid>
         </FormSection>
-      </Painel>
 
-      {/* ABA 4 — Responsabilidade Técnica */}
-      <Painel ativo={aba === "rt"}>
-        <FormSection title="Responsabilidade técnica" icon={<HardHat className="w-3.5 h-3.5" />}>
-          <FormGrid>
-            <FormField label="Responsável técnico" hint="Colaborador responsável por este contrato">
-              <Select {...register("responsavelTecnicoId")} placeholder="Selecione">
-                {responsaveis.map((rt) => (<option key={rt.id} value={rt.id}>{rt.nome}{rt.crea ? ` — CREA ${rt.crea}` : ""}</option>))}
-              </Select>
-            </FormField>
-            <FormField label="Número ART" hint="Anotação de Responsabilidade Técnica">
-              <Input {...register("artNumero")} placeholder="Ex: ART-2024-005678" />
-            </FormField>
-          </FormGrid>
-          <FormGrid>
-            <FormField label="Vencimento da ART" hint="Se vazio, assume o fim da vigência do contrato">
-              <Input {...register("artVencimento")} type="date" />
-            </FormField>
-          </FormGrid>
-          <div className="border-t border-gray-100 pt-1 divide-y divide-gray-100">
-            <ToggleSwitch label="Exibir responsável técnico e ART na NFS-e" description="" checked={!!watch("exibirRTNFSe")} onChange={(v) => setValue("exibirRTNFSe", v)} />
-            <ToggleSwitch label="Exibir responsável técnico e ART no PDF/relatório da OS" description="" checked={!!watch("exibirRTPDF")} onChange={(v) => setValue("exibirRTPDF", v)} />
-          </div>
-        </FormSection>
-      </Painel>
-
-      {/* ABA 5 — Locais cobertos */}
-      <Painel ativo={aba === "locais"}>
         <FormSection title="Locais cobertos pelo contrato" icon={<MapPin className="w-3.5 h-3.5" />}>
           {!clienteIdSelecionado ? (
-            <p className="text-sm text-ink-muted py-3">Selecione um cliente primeiro (aba "Dados do contrato").</p>
+            <p className="text-sm text-ink-muted py-3">Selecione um cliente primeiro (aba &quot;Contrato&quot;).</p>
           ) : (
-            <div className="space-y-3">
-              <Controller
-                name="unidadeIds"
-                control={control}
-                render={({ field }) =>
-                  unidades.length === 0 ? (
-                    <p className="text-sm text-ink-muted">
-                      Nenhum endereço cadastrado para este cliente{podeCriarUnidade ? " — cadastre abaixo." : "."}
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {unidades.map((u) => {
-                        const selecionado = field.value?.includes(u.id) ?? false;
-                        return (
-                          <label key={u.id} className="flex items-start gap-3 p-3 border border-surface-border rounded-lg hover:border-primary-300 cursor-pointer transition-colors">
-                            <input
-                              type="checkbox"
-                              checked={selecionado}
-                              onChange={(e) => {
-                                const atual = field.value ?? [];
-                                field.onChange(e.target.checked ? [...atual, u.id] : atual.filter((id) => id !== u.id));
-                              }}
-                              className="mt-0.5 accent-primary-600"
-                            />
-                            <div className="flex items-center gap-2">
-                              <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
-                              <div>
-                                <p className="text-sm font-medium text-ink">{u.nome}</p>
-                                <p className="text-xs text-ink-subtle">
-                                  {[u.logradouro, u.numero, u.bairro, u.cidade, u.estado].filter(Boolean).join(", ") || "Sem endereço"}
-                                </p>
-                              </div>
-                            </div>
-                          </label>
-                        );
-                      })}
+            <div className="space-y-4">
+              {/* Locais do contrato (com excluir) */}
+              <div className="space-y-2" data-locais-cobertos>
+                {localPendente && (
+                  <div className="flex items-start gap-3 p-3 border border-surface-border bg-surface-alt/60 rounded-lg" data-local-pendente>
+                    <Building2 className="w-4 h-4 text-ink-muted shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-ink">{localPendente.nome}</p>
+                      <p className="text-xs text-ink-subtle">{textoEndereco(localPendente) || "Sem endereço"}</p>
+                      <p className="text-[11px] text-ink-muted mt-0.5">Endereço do cadastro do cliente; vira um local do cliente ao salvar.</p>
                     </div>
-                  )
-                }
-              />
+                    <button type="button" onClick={() => setLocalPendente(null)} className="p-1.5 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded" title="Excluir este local" aria-label={`Excluir ${localPendente.nome}`} data-excluir-local="pendente">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+                {unidades.filter((u) => unidadeIdsAtuais.includes(u.id)).map((u) => (
+                  <div key={u.id} className="flex items-start gap-3 p-3 border border-surface-border rounded-lg" data-local={u.id}>
+                    <Building2 className="w-4 h-4 text-ink-muted shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-ink">{u.nome}</p>
+                      <p className="text-xs text-ink-subtle">{textoEndereco(u) || "Sem endereço"}</p>
+                    </div>
+                    <button
+                      type="button" onClick={() => setValue("unidadeIds", unidadeIdsAtuais.filter((id) => id !== u.id))}
+                      className="p-1.5 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded" title="Excluir do contrato" aria-label={`Excluir ${u.nome}`} data-excluir-local={u.id}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                {!localPendente && unidadeIdsAtuais.length === 0 && (
+                  <p className="text-sm text-ink-muted">Nenhum local coberto ainda.</p>
+                )}
+              </div>
+
+              {/* Outros endereços do cliente: adicionar */}
+              {unidades.some((u) => !unidadeIdsAtuais.includes(u.id)) && (
+                <div className="space-y-2">
+                  <p className="text-xs font-bold text-ink-muted uppercase tracking-wider">Outros endereços do cliente</p>
+                  {unidades.filter((u) => !unidadeIdsAtuais.includes(u.id)).map((u) => (
+                    <button
+                      key={u.id} type="button" onClick={() => setValue("unidadeIds", [...unidadeIdsAtuais, u.id])} data-adicionar-local={u.id}
+                      className="w-full flex items-start gap-3 p-3 border border-dashed border-surface-border rounded-lg hover:border-primary-300 text-left transition-colors"
+                    >
+                      <Plus className="w-4 h-4 text-primary-500 shrink-0 mt-0.5" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-ink">{u.nome}</p>
+                        <p className="text-xs text-ink-subtle">{textoEndereco(u) || "Sem endereço"}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {podeCriarUnidade && (
                 <Button type="button" variant="secondary" onClick={() => setNovaUnidade(true)} className="w-full justify-center border-dashed">
-                  <Plus className="w-4 h-4" /> {unidades.length === 0 ? "Cadastrar agora" : "Adicionar novo endereço"}
+                  <Plus className="w-4 h-4" /> Novo endereço
                 </Button>
               )}
               <CadastroRapidoModal
@@ -852,136 +930,14 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
         </FormSection>
       </Painel>
 
-      {/* ABA 6 — Reajuste */}
-      <Painel ativo={aba === "reajuste"}>
-        <FormSection title="Reajuste automático" icon={<TrendingUp className="w-3.5 h-3.5" />}>
-          <ToggleSwitch
-            label="Reajuste automático"
-            description="Aplica reajuste periódico ao valor do contrato."
-            checked={!!reajusteAtivo}
-            onChange={(v) => setValue("reajusteAtivo", v)}
-          />
-          {reajusteAtivo && (
-            <div className="space-y-4 border-l-2 border-primary-200 pl-4 mt-2">
-              <FormGrid cols={3}>
-                <FormField label="Índice">
-                  <Select {...register("reajusteIndice")} placeholder="Selecione">
-                    {Object.entries(LABELS_INDICE_REAJUSTE).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
-                  </Select>
-                </FormField>
-                {reajusteIndiceVal === "PERCENTUAL_FIXO" && (
-                  <FormField label="Percentual fixo (%)">
-                    <Input {...register("reajustePercentual")} type="number" step="0.001" min={0} placeholder="0,00" />
-                  </FormField>
-                )}
-                <FormField label="Mês de aniversário">
-                  <Select {...register("reajusteMesAniversario")} placeholder="Selecione">
-                    {Object.entries(LABELS_MES).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
-                  </Select>
-                </FormField>
-              </FormGrid>
-              <div className="border-t border-gray-100 pt-1 divide-y divide-gray-100">
-                <ToggleSwitch label="Notificar antes do reajuste" description="" checked={!!reajusteNotificarVal} onChange={(v) => setValue("reajusteNotificar", v)} />
-              </div>
-              {reajusteNotificarVal && (
-                <FormField label="Dias de antecedência">
-                  <Input {...register("reajusteNotificarDias")} type="number" min={0} placeholder="30" />
-                </FormField>
-              )}
-            </div>
+      {/* ABA 3 — Recorrência de OS por local (como estava) */}
+      <Painel ativo={aba === "recorrencia"} id="recorrencia">
+        <FormSection title="Recorrência de OS por local" icon={<Repeat className="w-3.5 h-3.5" />} dica="Cada local coberto tem a própria recorrência: frequência, tipo de OS, responsável e data da primeira OS. A OS recorrente nasce desses dados.">
+          {localPendente && (
+            <p className="text-xs text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2">
+              O local “{localPendente.nome}” é criado ao salvar; depois disso a recorrência dele aparece aqui.
+            </p>
           )}
-        </FormSection>
-
-        <FormSection title="Histórico de reajustes" icon={<TrendingUp className="w-3.5 h-3.5" />}>
-          {!isEditing || !initialData?.reajustes?.length ? (
-            <p className="text-sm text-ink-muted py-2">Nenhum reajuste aplicado ainda.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-surface-alt border-b border-surface-border">
-                  <tr>
-                    <th className="text-left px-3 py-2 font-semibold text-ink-muted text-xs uppercase">Data</th>
-                    <th className="text-left px-3 py-2 font-semibold text-ink-muted text-xs uppercase">Índice</th>
-                    <th className="text-right px-3 py-2 font-semibold text-ink-muted text-xs uppercase">% aplicado</th>
-                    <th className="text-right px-3 py-2 font-semibold text-ink-muted text-xs uppercase">Valor anterior</th>
-                    <th className="text-right px-3 py-2 font-semibold text-ink-muted text-xs uppercase">Valor novo</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {initialData!.reajustes!.map((r) => (
-                    <tr key={r.id} className="border-b border-surface-border">
-                      <td className="px-3 py-2 text-ink">{formatarData(r.data)}</td>
-                      <td className="px-3 py-2 text-ink">{LABELS_INDICE_REAJUSTE[r.indice] ?? r.indice}</td>
-                      <td className="px-3 py-2 text-right text-ink">{Number(r.percentual).toFixed(2)}%</td>
-                      <td className="px-3 py-2 text-right text-ink-muted">{formatarMoeda(Number(r.valorAnterior))}</td>
-                      <td className="px-3 py-2 text-right font-medium text-ink">{formatarMoeda(Number(r.valorNovo))}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </FormSection>
-      </Painel>
-
-      {/* ABA 7 — Alertas e Renovação */}
-      <Painel ativo={aba === "alertas"}>
-        <FormSection title="Alertas de vencimento" icon={<BellRing className="w-3.5 h-3.5" />}>
-          <FormGrid>
-            <FormField label="Alertar antes do vencimento" hint="Gera notificação no sistema">
-              <div className="flex items-center gap-2">
-                <Input {...register("alertaDias")} type="number" min={0} placeholder="30" className="w-28" />
-                <span className="text-sm text-ink-muted">dias antes</span>
-              </div>
-            </FormField>
-          </FormGrid>
-          <div className="border-t border-gray-100 pt-1 divide-y divide-gray-100">
-            <ToggleSwitch label="Enviar alerta de vencimento por e-mail ao cliente" description="" checked={!!watch("alertaEmailCliente")} onChange={(v) => setValue("alertaEmailCliente", v)} />
-          </div>
-        </FormSection>
-
-        <FormSection title="Renovação" icon={<Repeat className="w-3.5 h-3.5" />}>
-          <ToggleSwitch
-            label="Renovação automática"
-            description="Renova o contrato automaticamente ao fim da vigência."
-            checked={!!renovacaoAtiva}
-            onChange={(v) => setValue("renovacaoAutomatica", v)}
-          />
-          {renovacaoAtiva && (
-            <div className="space-y-4 border-l-2 border-primary-200 pl-4 mt-2">
-              <FormField label="Renovar por (meses)">
-                <Input {...register("renovacaoMeses")} type="number" min={1} placeholder="12" className="w-40" />
-              </FormField>
-              <div className="border-t border-gray-100 pt-1 divide-y divide-gray-100">
-                <ToggleSwitch label="Notificar cliente sobre renovação" description="" checked={!!notificarRenov} onChange={(v) => setValue("notificarClienteRenovacao", v)} />
-              </div>
-              {notificarRenov && (
-                <FormField label="Dias de antecedência">
-                  <Input {...register("notificarClienteDias")} type="number" min={0} placeholder="30" className="w-40" />
-                </FormField>
-              )}
-            </div>
-          )}
-        </FormSection>
-      </Painel>
-
-      {/* ABA 8 — Documentos */}
-      <Painel ativo={aba === "documentos"}>
-        <FormSection title="Documentos do contrato" icon={<Paperclip className="w-3.5 h-3.5" />}>
-          {isEditing ? (
-            <ContratoDocumentos contratoId={initialData!.id} anexosIniciais={initialData!.anexos ?? []} />
-          ) : (
-            <p className="text-sm text-ink-muted">Salve o contrato para anexar documentos.</p>
-          )}
-        </FormSection>
-      </Painel>
-
-      {/* ABA 9 — Recorrência de OS por local */}
-      <Painel ativo={aba === "recorrencia"}>
-        <FormSection title="Recorrência de OS por local" icon={<Repeat className="w-3.5 h-3.5" />}>
-          <p className="text-xs text-gray-400 -mt-2 mb-1">
-            Cada local coberto pode ter sua própria recorrência (frequência, tipo de OS, responsável e data da primeira OS).
-          </p>
           <RecorrenciaLocais
             locais={locaisCobertos}
             tiposOs={tiposOs}
@@ -992,11 +948,152 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
         </FormSection>
       </Painel>
 
-      {/* ABA 10 — Observações */}
-      <Painel ativo={aba === "observacoes"}>
+      {/* ABA 4 — Responsável técnico e documentos */}
+      <Painel ativo={aba === "rt"} id="rt">
+        <FormSection title="Responsável técnico" icon={<HardHat className="w-3.5 h-3.5" />}>
+          <FormGrid>
+            <FormField label="Responsável técnico" hint="Colaborador responsável por este contrato">
+              <Select {...register("responsavelTecnicoId")} placeholder="Selecione">
+                {responsaveis.map((rt) => (<option key={rt.id} value={rt.id}>{rt.nome}{rt.crea ? ` — CREA ${rt.crea}` : ""}</option>))}
+              </Select>
+            </FormField>
+            <FormField label="Número ART" hint="Anotação de Responsabilidade Técnica">
+              <Input {...register("artNumero")} placeholder="Ex: ART-2024-005678" />
+            </FormField>
+          </FormGrid>
+          <FormGrid>
+            <FormField label="Vencimento da ART" hint="Se vazio, assume o fim da vigência do contrato">
+              <Controller name="artVencimento" control={control} render={({ field }) => <InputData value={(field.value as string) ?? ""} onChange={field.onChange} aria-label="Vencimento da ART" />} />
+            </FormField>
+          </FormGrid>
+          <div className="border-t border-surface-linha pt-1 divide-y divide-surface-linha">
+            <ToggleSwitch label="Exibir responsável técnico e ART no PDF/relatório da OS" description="" checked={!!watch("exibirRTPDF")} onChange={(v) => setValue("exibirRTPDF", v)} />
+          </div>
+        </FormSection>
+
+        <FormSection title="Contrato assinado e anexos" icon={<Paperclip className="w-3.5 h-3.5" />}>
+          {isEditing ? (
+            <ContratoDocumentos contratoId={initialData!.id} anexosIniciais={initialData!.anexos ?? []} />
+          ) : (
+            <p className="text-sm text-ink-muted">Salve o contrato para anexar o contrato assinado e outros documentos.</p>
+          )}
+        </FormSection>
+      </Painel>
+
+      {/* ABA 5 — Gestão */}
+      <Painel ativo={aba === "gestao"} id="gestao">
+        <FormSection title="Reajuste anual" icon={<TrendingUp className="w-3.5 h-3.5" />}>
+          <ToggleSwitch
+            label="Reajuste anual"
+            description="No aniversário, o sistema sugere o valor novo; a aplicação é manual."
+            dica="No mês de aniversário o contrato entra em Contratos › Reajustes (e no sino) com o valor novo; aplicar, adiar ou dispensar é manual. Aplicado, vale só para as cobranças futuras; o já cobrado não muda. O 1º reajuste vem após 12 meses."
+            checked={!!reajusteAtivo}
+            onChange={(v) => setValue("reajusteAtivo", v, { shouldDirty: true })}
+          />
+          {reajusteAtivo && (
+            <div className="space-y-4 border-l-2 border-surface-border pl-4 mt-2">
+              <FormGrid cols={3}>
+                <FormField label="Índice" hint={reajusteIndiceVal && reajusteIndiceVal !== "PERCENTUAL_FIXO" ? "Só o percentual fixo gera a sugestão." : undefined}>
+                  <Select {...register("reajusteIndice")} placeholder="Selecione">
+                    {Object.entries(LABELS_INDICE_REAJUSTE).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
+                  </Select>
+                </FormField>
+                {reajusteIndiceVal === "PERCENTUAL_FIXO" && (
+                  <FormField label="Percentual ao ano (%)">
+                    <Input {...register("reajustePercentual")} type="number" step="0.001" min={0} placeholder="0,00" />
+                  </FormField>
+                )}
+                <FormField label="Mês de aniversário" hint="Vazio: o mês do início.">
+                  <Select {...register("reajusteMesAniversario")} placeholder="Mês do início">
+                    {Object.entries(LABELS_MES).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
+                  </Select>
+                </FormField>
+              </FormGrid>
+              {proximoReajuste}
+              <div className="border-t border-surface-linha pt-1 divide-y divide-surface-linha">
+                <ToggleSwitch label="Avisar antes do aniversário" description="Aparece em Reajustes uns dias antes (sem sino)." checked={!!reajusteNotificarVal} onChange={(v) => setValue("reajusteNotificar", v, { shouldDirty: true })} />
+              </div>
+              {reajusteNotificarVal && (
+                <FormField label="Dias antes">
+                  <Input {...register("reajusteNotificarDias")} type="number" min={0} placeholder="30" />
+                </FormField>
+              )}
+            </div>
+          )}
+          {isEditing && !!initialData?.reajustes?.length && (
+            <div className="overflow-x-auto mt-3" data-historico-reajustes>
+              <p className="text-xs font-bold text-ink-muted uppercase tracking-wider mb-2">Histórico de reajustes</p>
+              <table className={PLANILHA.tabela}>
+                <thead>
+                  <tr className={PLANILHA.cabecalho}>
+                    <th className={cn(PLANILHA.th, "text-left")}>Data</th>
+                    <th className={cn(PLANILHA.th, "text-left")}>Aniversário</th>
+                    <th className={cn(PLANILHA.th, "text-left")}>Decisão</th>
+                    <th className={cn(PLANILHA.th, "text-right")}>%</th>
+                    <th className={cn(PLANILHA.th, "text-right")}>De (R$)</th>
+                    <th className={cn(PLANILHA.th, "text-right")}>Para (R$)</th>
+                    <th className={cn(PLANILHA.th, "text-left")}>Por</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {initialData!.reajustes!.map((r) => (
+                    <tr key={r.id} className={PLANILHA.linha} data-reajuste-historico={r.situacao ?? "APLICADO"}>
+                      <td className={PLANILHA.td}>{formatarData(r.data)}</td>
+                      <td className={PLANILHA.td}>{r.anoReferencia ?? "—"}</td>
+                      <td className={PLANILHA.td} title={r.motivo ?? undefined}>{r.situacao === "DISPENSADO" ? `Dispensado${r.motivo ? ` · ${r.motivo}` : ""}` : `Aplicado${r.indice && r.indice !== "PERCENTUAL_FIXO" ? ` · ${LABELS_INDICE_REAJUSTE[r.indice] ?? r.indice}` : ""}`}</td>
+                      <td className={cn(PLANILHA.td, PLANILHA.numero)}>{Number(r.percentual).toLocaleString("pt-BR", { maximumFractionDigits: 3 })}%</td>
+                      <td className={cn(PLANILHA.td, PLANILHA.numero, "text-ink-muted")}>{valorSemMoeda(Number(r.valorAnterior))}</td>
+                      <td className={cn(PLANILHA.td, PLANILHA.numero, "font-medium text-ink")}>{valorSemMoeda(Number(r.valorNovo))}</td>
+                      <td className={PLANILHA.td}>{r.usuario?.nome ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </FormSection>
+
+        <FormSection title="Alertas de vencimento" icon={<BellRing className="w-3.5 h-3.5" />}>
+          <FormGrid>
+            <FormField label="Alertar antes do vencimento" hint="Gera notificação no sistema">
+              <div className="flex items-center gap-2">
+                <Input {...register("alertaDias")} type="number" min={0} placeholder="30" className="w-28" />
+                <span className="text-sm text-ink-muted">dias antes</span>
+              </div>
+            </FormField>
+          </FormGrid>
+          <div className="border-t border-surface-linha pt-1 divide-y divide-surface-linha">
+            <ToggleSwitch label="Enviar alerta de vencimento por e-mail ao cliente" description="" checked={!!watch("alertaEmailCliente")} onChange={(v) => setValue("alertaEmailCliente", v)} />
+          </div>
+        </FormSection>
+
+        <FormSection title="Renovação automática" icon={<Repeat className="w-3.5 h-3.5" />}>
+          <ToggleSwitch
+            label="Renovação automática"
+            description="Renova o contrato automaticamente ao fim da vigência."
+            checked={!!renovacaoAtiva}
+            onChange={(v) => setValue("renovacaoAutomatica", v)}
+          />
+          {renovacaoAtiva && (
+            <div className="space-y-4 border-l-2 border-surface-border pl-4 mt-2">
+              <FormField label="Renovar por (meses)">
+                <Input {...register("renovacaoMeses")} type="number" min={1} placeholder="12" className="w-40" />
+              </FormField>
+              <div className="border-t border-surface-linha pt-1 divide-y divide-surface-linha">
+                <ToggleSwitch label="Notificar cliente sobre renovação" description="" checked={!!notificarRenov} onChange={(v) => setValue("notificarClienteRenovacao", v)} />
+              </div>
+              {notificarRenov && (
+                <FormField label="Dias de antecedência">
+                  <Input {...register("notificarClienteDias")} type="number" min={0} placeholder="30" className="w-40" />
+                </FormField>
+              )}
+            </div>
+          )}
+        </FormSection>
+
         <FormSection title="Observações" icon={<StickyNote className="w-3.5 h-3.5" />}>
           <FormField label="Cláusulas especiais, restrições, acordos adicionais">
-            <Textarea {...register("observacoes")} placeholder="Informações adicionais…" rows={6} />
+            <Textarea {...register("observacoes")} placeholder="Informações adicionais…" rows={5} />
           </FormField>
         </FormSection>
 
@@ -1008,11 +1105,11 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
               {historicoStatus.map((h) => (
                 <div key={h.id} className="border border-surface-border rounded-lg p-3">
                   <div className="flex items-center gap-2 flex-wrap text-sm">
-                    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", COR_STATUS_CONTRATO[h.statusAnterior] ?? "bg-slate-100 text-slate-600")}>
+                    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", COR_STATUS_CONTRATO[h.statusAnterior] ?? "bg-surface-linha text-ink-muted")}>
                       {LABELS_STATUS_CONTRATO[h.statusAnterior] ?? h.statusAnterior}
                     </span>
                     <span className="text-ink-subtle">→</span>
-                    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", COR_STATUS_CONTRATO[h.statusNovo] ?? "bg-slate-100 text-slate-600")}>
+                    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", COR_STATUS_CONTRATO[h.statusNovo] ?? "bg-surface-linha text-ink-muted")}>
                       {LABELS_STATUS_CONTRATO[h.statusNovo] ?? h.statusNovo}
                     </span>
                     <span className="ml-auto text-xs text-ink-muted">{formatarDataHora(h.createdAt)}</span>

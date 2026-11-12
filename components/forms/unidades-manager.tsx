@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmar } from "@/components/ui/avisos";
 import { useState, useEffect, useCallback } from "react";
 import { useAutoGeocode } from "@/hooks/use-auto-geocode";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,8 @@ import { MapaEndereco } from "@/components/ui/mapa-endereco";
 import { EnderecoAutocomplete, type EnderecoSelecionado } from "@/components/ui/endereco-autocomplete";
 import { haversine, formatarDistancia } from "@/lib/geo";
 import type { Unidade } from "@prisma/client";
-import { Plus, Pencil, Trash2, X, Check, Building2, Star, ChevronDown, ChevronRight, MapPin, Navigation, Smartphone, Search } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Check, ChevronDown, Navigation, Smartphone, Search } from "lucide-react";
+import { cn, comparaNatural } from "@/lib/utils";
 
 const ESTADOS_BR = [
   "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
@@ -59,6 +61,7 @@ interface EmpresaCoords {
 interface UnidadesManagerProps {
   clienteId: string;
   unidadesIniciais: Unidade[];
+  /** Endereço legado do cliente, usado para pré-preencher o 1º "Novo endereço" (não vem da consulta). */
   enderecoCliente?: EnderecoCliente;
 }
 
@@ -220,7 +223,7 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }
   async function remover(id: string) {
     const u = unidades.find((u) => u.id === id);
     if (u?.principal) { setErro("Não é possível remover o endereço principal."); return; }
-    if (!confirm("Tem certeza que deseja remover este endereço?")) return;
+    if (!(await confirmar({ mensagem: "Tem certeza que deseja remover este endereço?", perigo: true, confirmarTexto: "Excluir" }))) return;
     setErro("");
     try {
       const res = await fetch(`/api/unidades/${id}`, { method: "DELETE" });
@@ -232,12 +235,9 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }
   const ordenadas = [...unidades].sort((a, b) => {
     if (a.principal && !b.principal) return -1;
     if (!a.principal && b.principal) return 1;
-    return a.nome.localeCompare(b.nome);
+    return comparaNatural(a.nome, b.nome);
   });
 
-  function enderecoTexto(u: Unidade): string {
-    return [u.logradouro, u.numero, u.bairro, u.cidade, u.estado].filter(Boolean).join(", ") || "Sem endereço";
-  }
 
   function renderFormInline() {
     return (
@@ -246,7 +246,7 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }
           <h4 className="text-sm font-semibold text-frivo-800">
             {editando === "novo" ? "Novo endereço" : "Editar endereço"}
           </h4>
-          <button type="button" onClick={cancelar} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
+          <button type="button" onClick={cancelar} className="text-ink-muted hover:text-ink"><X className="w-4 h-4" /></button>
         </div>
 
         <FormGrid>
@@ -307,7 +307,7 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={cancelar}>Cancelar</Button>
           <Button type="button" loading={salvando} onClick={salvar}>
-            <Check className="w-4 h-4" /> {editando === "novo" ? "Adicionar" : "Salvar"}
+            <Check className="w-4 h-4" /> Salvar
           </Button>
         </div>
       </div>
@@ -316,10 +316,10 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }
 
   return (
     <div className="space-y-2">
-      {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
+      {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2">{erro}</div>}
 
       {ordenadas.length === 0 && !editando && (
-        <p className="text-sm text-gray-400 py-2">Nenhum endereço cadastrado.</p>
+        <p className="text-sm text-ink-muted py-2">Nenhum endereço cadastrado.</p>
       )}
 
       {ordenadas.map((u) => {
@@ -329,44 +329,35 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }
         const dist = calcDistancia(u);
 
         return (
-          <div key={u.id} className="border border-gray-200 rounded-lg overflow-hidden">
+          <div key={u.id} className="rounded-lg border border-surface-border overflow-hidden">
             <button type="button" onClick={() => toggleExpand(u.id)}
-              className="flex items-center justify-between w-full p-3 text-left hover:bg-gray-50 transition-colors">
-              <div className="flex items-center gap-3 min-w-0">
-                <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-gray-900">{u.nome}</span>
-                    {u.principal && (
-                      <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
-                        <Star className="w-2.5 h-2.5 fill-current" /> Principal
-                      </span>
-                    )}
-                    {dist && (
-                      <span className="inline-flex items-center gap-0.5 text-[10px] font-medium bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full">
-                        <Navigation className="w-2.5 h-2.5" /> {dist} da empresa
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-500 truncate">{enderecoTexto(u)}</p>
-                </div>
+              className={cn("flex items-center justify-between w-full px-4 py-3.5 text-left transition-colors", aberto ? "bg-frivo-50" : "bg-frivo-50/60 hover:bg-frivo-50")}>
+              <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                <span className="text-sm font-bold text-ink truncate">{u.nome}</span>
+                {u.principal && (
+                  <span className="inline-flex items-center text-[10px] font-semibold bg-atencao-claro text-atencao-texto px-1.5 py-0.5 rounded-full shrink-0">
+                    Principal
+                  </span>
+                )}
+                {dist && (
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-medium bg-acento-claro text-acento px-1.5 py-0.5 rounded-full shrink-0">
+                    <Navigation className="w-2.5 h-2.5" /> {dist} da empresa
+                  </span>
+                )}
               </div>
-              <div className="flex items-center gap-1 shrink-0">
-                {temEnd && <MapPin className="w-3 h-3 text-green-500" />}
-                {aberto ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
-              </div>
+              <ChevronDown className={cn("w-5 h-5 text-ink-muted shrink-0 transition-transform", aberto && "rotate-180")} />
             </button>
 
             {aberto && (
-              <div className="border-t border-gray-100 p-3 space-y-3 bg-gray-50/50">
+              <div className="border-t border-surface-border p-3 space-y-3 bg-white">
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                  {u.logradouro && <div className="col-span-2"><span className="text-gray-400">Logradouro:</span> <span className="text-gray-700">{u.logradouro}{u.numero ? `, ${u.numero}` : ""}</span></div>}
-                  {u.complemento && <div className="col-span-2"><span className="text-gray-400">Complemento:</span> <span className="text-gray-700">{u.complemento}</span></div>}
-                  {u.bairro && <div><span className="text-gray-400">Bairro:</span> <span className="text-gray-700">{u.bairro}</span></div>}
-                  {u.cep && <div><span className="text-gray-400">CEP:</span> <span className="text-gray-700">{u.cep}</span></div>}
-                  {u.cidade && <div><span className="text-gray-400">Cidade:</span> <span className="text-gray-700">{u.cidade} — {u.estado}</span></div>}
-                  {u.telefone && <div><span className="text-gray-400">Telefone:</span> <span className="text-gray-700">{u.telefone}</span></div>}
-                  {u.observacoes && <div className="col-span-2 mt-1"><span className="text-gray-400">Obs:</span> <span className="text-gray-700">{u.observacoes}</span></div>}
+                  {u.logradouro && <div className="col-span-2"><span className="text-ink-muted">Logradouro:</span> <span className="text-ink">{u.logradouro}{u.numero ? `, ${u.numero}` : ""}</span></div>}
+                  {u.complemento && <div className="col-span-2"><span className="text-ink-muted">Complemento:</span> <span className="text-ink">{u.complemento}</span></div>}
+                  {u.bairro && <div><span className="text-ink-muted">Bairro:</span> <span className="text-ink">{u.bairro}</span></div>}
+                  {u.cep && <div><span className="text-ink-muted">CEP:</span> <span className="text-ink">{u.cep}</span></div>}
+                  {u.cidade && <div><span className="text-ink-muted">Cidade:</span> <span className="text-ink">{u.cidade} — {u.estado}</span></div>}
+                  {u.telefone && <div><span className="text-ink-muted">Telefone:</span> <span className="text-ink">{u.telefone}</span></div>}
+                  {u.observacoes && <div className="col-span-2 mt-1"><span className="text-ink-muted">Obs:</span> <span className="text-ink">{u.observacoes}</span></div>}
                 </div>
 
                 {temEnd && (
@@ -374,11 +365,11 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }
                 )}
 
                 {/* Card Técnico mais próximo */}
-                <div className="flex items-center gap-3 p-2.5 bg-gray-100 rounded-lg">
-                  <Smartphone className="w-4 h-4 text-gray-400" />
+                <div className="flex items-center gap-3 p-2.5 bg-surface-linha rounded-lg">
+                  <Smartphone className="w-4 h-4 text-ink-muted" />
                   <div>
-                    <p className="text-xs font-medium text-gray-500">Técnico mais próximo</p>
-                    <p className="text-[11px] text-gray-400">App do técnico necessário — disponível em breve</p>
+                    <p className="text-xs font-medium text-ink-muted">Técnico mais próximo</p>
+                    <p className="text-[11px] text-ink-muted">App do técnico necessário — disponível em breve</p>
                   </div>
                 </div>
 
@@ -388,11 +379,11 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }
                   </Button>
                   {!u.principal && (
                     <>
-                      <Button type="button" variant="ghost" onClick={() => marcarPrincipal(u.id)} className="text-xs h-7 px-2.5 text-amber-600 hover:text-amber-700">
-                        <Star className="w-3 h-3" /> Tornar principal
+                      <Button type="button" variant="ghost" onClick={() => marcarPrincipal(u.id)} className="text-xs h-7 px-2.5 text-atencao-texto hover:text-atencao-texto">
+                        Tornar principal
                       </Button>
-                      <Button type="button" variant="ghost" onClick={() => remover(u.id)} className="text-xs h-7 px-2.5 text-red-500 hover:text-red-700">
-                        <Trash2 className="w-3 h-3" /> Remover
+                      <Button type="button" variant="ghost" onClick={() => remover(u.id)} className="text-xs h-7 px-2.5 text-atrasado hover:text-atrasado-texto">
+                        <Trash2 className="w-3 h-3" /> Excluir
                       </Button>
                     </>
                   )}
@@ -407,7 +398,7 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }
 
       {!editando && (
         <Button type="button" variant="secondary" onClick={abrirNova} className="w-full justify-center border-dashed mt-2">
-          <Plus className="w-4 h-4" /> Adicionar endereço
+          <Plus className="w-4 h-4" /> Novo endereço
         </Button>
       )}
     </div>

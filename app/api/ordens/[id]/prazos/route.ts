@@ -3,6 +3,7 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { osPrazoSchema } from "@/lib/validations";
 import { montarEtapas } from "@/lib/prazo-helpers";
+import { respostaRefEmpresa, validarRefEmpresa } from "@/lib/ref-empresa";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -38,6 +39,11 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!parsed.success) {
     return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
   }
+
+  // Cada prazo novo é uma escolha NOVA: o modelo precisa ser da empresa e estar ativo. Prazos já
+  // abertos com um modelo que depois foi inativado continuam (têm cópia das etapas).
+  try { await validarRefEmpresa("prazoTemplate", parsed.data.templateId, empresaId, "Modelo de prazo", { novoAtivo: true }); }
+  catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
   const template = await prisma.prazoTemplate.findFirst({
     where: { id: parsed.data.templateId, empresaId },

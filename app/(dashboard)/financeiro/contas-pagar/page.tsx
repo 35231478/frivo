@@ -1,158 +1,103 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import Link from "next/link";
-import { cn, formatarData, formatarMoeda, formatarCpfCnpj } from "@/lib/utils";
-import { statusVisualPagar, LABELS_STATUS_CONTA_PAGAR } from "@/lib/financeiro-status";
-import { Upload, Plus, AlertTriangle, ShoppingCart } from "lucide-react";
-import { ContaPagarAcoes } from "@/components/financeiro/conta-pagar-acoes";
+import { pode } from "@/lib/permissoes";
+import { fornecedorDaConta } from "@/lib/financeiro/fornecedor";
+import { CAMPO_CARD_PAGAR, CARDS_PERIODO_PAGAR, condCardPeriodoPagar, condPeriodoVencimento, whereListaPagar } from "@/lib/listas/filtros";
+import { lerPeriodo, periodoTela } from "@/lib/periodo";
+import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
+import { hojeDiaCivil } from "@/lib/fuso";
+import { ContasPagarView, type ResumoPagar } from "@/components/financeiro/contas-pagar-view";
 
-export const metadata: Metadata = { title: "Contas a Pagar" };
+export const metadata: Metadata = { title: "Contas a pagar" };
 
 export default async function ContasPagarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; fornecedor?: string; origem?: string; dataInicio?: string; dataFim?: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const { status = "", fornecedor = "", origem = "", dataInicio = "", dataFim = "" } = await searchParams;
+  const sp = await searchParams;
   const session = await auth();
-  const empresaId = session!.user!.empresaId;
+  if (!pode(session!.user!.permissoes, "financeiro", "visualizar", session!.user!.role)) redirect("/sem-permissao");
+  const u = session!.user!;
+  const empresaId = u.empresaId;
+  // Atalho para a mesma importação de XML do Estoque (importar exige Estoque › gerenciar)
+  const podeImportarNf = pode(u.permissoes, "estoque", "gerenciar", u.role);
 
-  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const agora = new Date();
+  const hoje = hojeDiaCivil(agora); // vencimento é dia civil: vencida só depois do dia de Brasília
   await prisma.contaPagar.updateMany({
     where: { empresaId, status: "PENDENTE", dataVencimento: { lt: hoje } },
     data: { status: "VENCIDO" },
   });
 
-  const where: any = { empresaId };
-  if (status) where.status = status;
-  if (fornecedor) where.fornecedor = { contains: fornecedor, mode: "insensitive" };
-  if (origem === "PEDIDO") where.pedidoCompraId = { not: null };
-  else if (origem === "MANUAL") where.pedidoCompraId = null;
-  if (dataInicio || dataFim) {
-    where.dataVencimento = {};
-    if (dataInicio) where.dataVencimento.gte = new Date(dataInicio);
-    if (dataFim) { const f = new Date(dataFim); f.setHours(23, 59, 59, 999); where.dataVencimento.lte = f; }
-  }
+  // Período (padrão da casa) pelo VENCIMENTO: mês com ‹ ›, intervalo ou todo o período — na URL.
+  // O filtro roda no BANCO e a lista é paginada (UX-4).
+  const periodo = lerPeriodo(sp, agora, { permitirTodos: true });
+  const where = whereListaPagar(empresaId, sp, periodo, agora) as any;
+  const { pagina: paginaPedida, porPagina } = lerPaginacao(sp);
 
-  const contas = await prisma.contaPagar.findMany({
-    where,
-    include: { pedidoCompra: { select: { numero: true } } },
-    orderBy: [{ dataVencimento: "asc" }, { criadoEm: "desc" }],
-    take: 300,
-  });
+  // Cards do período: só o período (busca e filtros do painel mexem só na lista). Abertos pelo
+  // saldo restante, "Pagos" pelo valor pago, "Total" pelo valor das contas (CAMPO_CARD_PAGAR).
+  const noPeriodo = condPeriodoVencimento(periodo);
+  const soma = (card: (typeof CARDS_PERIODO_PAGAR)[number]) =>
+    prisma.contaPagar.aggregate({
+      where: { empresaId, AND: [noPeriodo ?? {}, condCardPeriodoPagar(card, agora) ?? {}] as object[] },
+      _sum: { [CAMPO_CARD_PAGAR[card]]: true }, _count: true,
+    });
 
-  let totalFiltrado = 0, totalVencido = 0, totalAberto = 0, totalPago = 0;
-  for (const c of contas) {
-    totalFiltrado += Number(c.valorTotal);
-    totalPago += Number(c.valorPago);
-    if (c.status === "VENCIDO") totalVencido += Number(c.saldoRestante);
-    else if (c.status !== "PAGO_TOTAL" && c.status !== "CANCELADO") totalAberto += Number(c.saldoRestante);
-  }
+  const [total, agFiltrado, agAberto, aggCards, categorias, fornecedores, centros] = await Promise.all([
+    prisma.contaPagar.count({ where }),
+    prisma.contaPagar.aggregate({ where, _sum: { valorTotal: true } }),
+    prisma.contaPagar.aggregate({ where: { AND: [where, { status: { in: ["PENDENTE", "PAGO_PARCIAL", "VENCIDO"] } }] }, _sum: { saldoRestante: true } }),
+    Promise.all(CARDS_PERIODO_PAGAR.map(soma)),
+    // Todas (ativas e inativas): cor/nome das contas que já usam uma categoria inativa não somem
+    prisma.categoriaFinanceira.findMany({ where: { empresaId }, select: { id: true, nome: true, cor: true, ativo: true }, orderBy: { nome: "asc" } }),
+    prisma.fornecedor.findMany({ where: { empresaId }, select: { id: true, nome: true, ativo: true }, orderBy: { nome: "asc" } }),
+    prisma.centroCusto.findMany({ where: { empresaId }, select: { id: true, nome: true, ativo: true }, orderBy: { nome: "asc" } }),
+  ]);
+  const pagina = paginaValida(paginaPedida, porPagina, total);
+  const contas = total
+    ? await prisma.contaPagar.findMany({
+        where,
+        include: {
+          pedidoCompra: { select: { numero: true } }, notaCompra: { select: { id: true, numero: true } },
+          centroCusto: { select: { id: true, nome: true, ativo: true } },
+          fornecedorCadastro: { select: { id: true, nome: true, documento: true, ativo: true } },
+        },
+        orderBy: [{ dataVencimento: "asc" }, { criadoEm: "desc" }, { id: "asc" }],
+        ...janela(pagina, porPagina),
+      })
+    : [];
 
-  const inputCls = "bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all";
+  const resumo = Object.fromEntries(CARDS_PERIODO_PAGAR.map((k, i) => {
+    const a = aggCards[i] as { _sum?: Record<string, unknown>; _count: number };
+    return [k, { v: Number(a._sum?.[CAMPO_CARD_PAGAR[k]] ?? 0), q: a._count }];
+  })) as ResumoPagar;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary-50 rounded-lg"><Upload className="w-5 h-5 text-primary-600" /></div>
-          <h1 className="page-title">Contas a Pagar</h1>
-        </div>
-        <Link href="/financeiro/contas-pagar/nova" className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow">
-          <Plus className="w-4 h-4" /> Nova Conta
-        </Link>
-      </div>
-
-      <div className="card overflow-hidden">
-        <div className="p-4 border-b border-surface-border bg-surface-alt/40">
-          <form method="get" className="flex flex-wrap gap-2">
-            <select name="status" defaultValue={status} className={inputCls}>
-              <option value="">Todos status</option>
-              {Object.entries(LABELS_STATUS_CONTA_PAGAR).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
-            <input name="fornecedor" defaultValue={fornecedor} placeholder="Fornecedor" className={inputCls} />
-            <select name="origem" defaultValue={origem} className={inputCls}>
-              <option value="">Todas origens</option>
-              <option value="MANUAL">Manual</option>
-              <option value="PEDIDO">Pedido de compra</option>
-            </select>
-            <input type="date" name="dataInicio" defaultValue={dataInicio} title="Vencimento de" className={inputCls} />
-            <input type="date" name="dataFim" defaultValue={dataFim} title="Vencimento até" className={inputCls} />
-            <button type="submit" className="bg-primary-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-600 transition-all shadow-sm">Filtrar</button>
-          </form>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-surface-alt border-b border-surface-border">
-              <tr>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Fornecedor</th>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden xl:table-cell">Descrição</th>
-                <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Total</th>
-                <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden md:table-cell">Pago</th>
-                <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Saldo</th>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden md:table-cell">Vencimento</th>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Status</th>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden lg:table-cell">Origem</th>
-                <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {contas.length === 0 ? (
-                <tr><td colSpan={9} className="text-center text-ink-subtle py-12">Nenhuma conta a pagar encontrada</td></tr>
-              ) : (
-                contas.map((c) => {
-                  const sv = statusVisualPagar(c.status, c.dataVencimento);
-                  return (
-                    <tr key={c.id} className={cn("border-b border-surface-border transition-colors", sv.linhaVermelha ? "bg-red-50 hover:bg-red-100/60" : "hover:bg-primary-50/40")}>
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-ink truncate max-w-[180px]">{c.fornecedor}</p>
-                        {c.fornecedorCnpj && <p className="text-xs text-ink-subtle">{formatarCpfCnpj(c.fornecedorCnpj)}</p>}
-                      </td>
-                      <td className="px-4 py-3 text-ink-muted hidden xl:table-cell truncate max-w-[200px]">{c.descricao}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-ink">{formatarMoeda(Number(c.valorTotal))}</td>
-                      <td className="px-4 py-3 text-right text-success-700 hidden md:table-cell">{formatarMoeda(Number(c.valorPago))}</td>
-                      <td className="px-4 py-3 text-right font-bold text-ink">{formatarMoeda(Number(c.saldoRestante))}</td>
-                      <td className="px-4 py-3 text-ink-muted hidden md:table-cell">{formatarData(c.dataVencimento)}</td>
-                      <td className="px-4 py-3">
-                        <span className={cn("inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full", sv.classe)}>
-                          {sv.linhaVermelha && <AlertTriangle className="w-3 h-3" />}{sv.label}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 hidden lg:table-cell">
-                        {c.pedidoCompra ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-cyan-50 text-cyan-700 px-2 py-0.5 rounded-full"><ShoppingCart className="w-3 h-3" /> Pedido {c.pedidoCompra.numero}</span>
-                        ) : (
-                          <span className="text-[11px] font-semibold bg-surface-alt text-ink-muted px-2 py-0.5 rounded-full">Manual</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <ContaPagarAcoes conta={{ id: c.id, numero: c.numero, fornecedor: c.fornecedor, valorTotal: Number(c.valorTotal), valorPago: Number(c.valorPago), saldoRestante: Number(c.saldoRestante), status: c.status }} />
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-            {contas.length > 0 && (
-              <tfoot className="bg-surface-alt border-t border-surface-border">
-                <tr className="text-sm">
-                  <td colSpan={2} className="px-4 py-3 font-semibold text-ink">Totais ({contas.length})</td>
-                  <td className="px-4 py-3 text-right font-bold text-ink">{formatarMoeda(totalFiltrado)}</td>
-                  <td className="px-4 py-3 text-right text-success-700 hidden md:table-cell">{formatarMoeda(totalPago)}</td>
-                  <td colSpan={5} className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-4 text-xs">
-                      <span className="text-red-700 font-semibold">Vencido: {formatarMoeda(totalVencido)}</span>
-                      <span className="text-amber-700 font-semibold">Em aberto: {formatarMoeda(totalAberto)}</span>
-                    </div>
-                  </td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
-      </div>
-    </div>
+    <ContasPagarView
+      contas={contas.map((c) => ({
+        id: c.id, numero: c.numero, descricao: c.descricao,
+        valorTotal: Number(c.valorTotal), valorPago: Number(c.valorPago), saldoRestante: Number(c.saldoRestante),
+        dataVencimento: c.dataVencimento ? new Date(c.dataVencimento).toISOString() : null, status: c.status,
+        categoriaId: c.categoriaId ?? null, categoria: null,
+        centroCusto: c.centroCusto ?? null,
+        fornecedor: fornecedorDaConta(c),
+        temBoleto: !!c.linhaDigitavel,
+        notaCompra: c.notaCompra ?? null, pedidoCompra: c.pedidoCompra ?? null,
+      }))}
+      resumo={resumo}
+      periodo={periodoTela(periodo)}
+      filtros={{
+        fornecedor: sp.fornecedor ?? "", card: sp.card ?? "", status: sp.status ?? "", fornecedorId: sp.fornecedorId ?? "",
+        categoria: sp.categoria ?? "", centro: sp.centro ?? "", origem: sp.origem ?? "",
+      }}
+      categorias={categorias} centros={centros} fornecedores={fornecedores}
+      total={total} pagina={pagina} porPagina={porPagina}
+      totalFiltrado={Number(agFiltrado._sum.valorTotal ?? 0)} totalAberto={Number(agAberto._sum.saldoRestante ?? 0)}
+      podeImportarNf={podeImportarNf}
+    />
   );
 }

@@ -1,7 +1,11 @@
+import { SelecaoMassaProvider, CheckboxLinha, CheckboxPagina } from "@/components/acoes-massa/selecao";
+import { BarraAcoesMassa } from "@/components/acoes-massa/barra";
+import { temAcaoMassa } from "@/lib/acoes-massa/acoes";
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
+import { whereClientes } from "@/lib/listas/filtros";
 import { formatarCpfCnpj, cn, LABELS_SEGMENTO } from "@/lib/utils";
 import {
   calcularStatusFinanceiroEmLote, LABELS_STATUS_FINANCEIRO_CALC, COR_STATUS_FINANCEIRO_CALC,
@@ -11,65 +15,61 @@ import { Prisma } from "@prisma/client";
 import Link from "next/link";
 import { Users, Plus, FileCheck, Star } from "lucide-react";
 import { ClienteAcoes } from "@/components/clientes/cliente-acoes";
+import { ImportarClientes } from "@/components/clientes/importar-clientes";
+import { BaixarPlanilha } from "@/components/importacao/baixar-planilha";
+import { janela, lerOrdem, lerPaginacao, ordemPrisma, paginaValida } from "@/lib/listagem";
+import { ORDEM_CLIENTES, ORDEM_PADRAO_CLIENTES } from "@/lib/listas/ordenacao";
+import { BuscaUrl, ConteudoUrl, FiltroCheckUrl, FiltroSelectUrl, LimparBuscaUrl, ListaUrl, PaginacaoUrl, ThOrdUrl } from "@/components/listagem/lista-url";
 
 export const metadata: Metadata = { title: "Clientes" };
 
 export default async function ClientesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ busca?: string; pagina?: string; status?: string; segmento?: string; inativos?: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const { busca = "", pagina = "1", status = "", segmento = "", inativos = "" } = await searchParams;
+  const sp = await searchParams;
+  const { busca = "", status = "", segmento = "", inativos = "" } = sp;
   const session = await auth();
   const empresaId = session!.user!.empresaId;
   const podeCriar = pode(session!.user!.permissoes, "clientes", "criar", session!.user!.role);
-  const porPagina = 20;
-  const skip = (Number(pagina) - 1) * porPagina;
+  const massa = temAcaoMassa(session!.user!.permissoes, session!.user!.role, "clientes");
+  const { pagina: paginaPedida, porPagina } = lerPaginacao(sp);
+  const orderBy = ordemPrisma(lerOrdem(sp, ORDEM_CLIENTES), ORDEM_CLIENTES, ORDEM_PADRAO_CLIENTES) as Prisma.ClienteOrderByWithRelationInput[];
 
-  // O status financeiro é calculado (não é mais coluna filtrável no banco).
-  const statusFiltro = (["SEM_HISTORICO", "ADIMPLENTE", "INADIMPLENTE"] as const).find((s) => s === status);
-  const mostrarInativos = inativos === "1";
-
-  // Por padrão lista apenas ativos; com "Mostrar inativos" inclui os inativos também.
-  const where: any = { empresaId, ...(mostrarInativos ? {} : { ativo: true }) };
-  if (busca) {
-    where.OR = [
-      { nome: { contains: busca, mode: "insensitive" } },
-      { nomeFantasia: { contains: busca, mode: "insensitive" } },
-      { cpfCnpj: { contains: busca } },
-    ];
-  }
-  if (segmento) where.segmento = segmento;
+  // O status financeiro é calculado (não é mais coluna filtrável no banco): vem à parte.
+  const { where, statusFiltro } = whereClientes(empresaId, { busca, status, segmento, inativos });
 
   const incluir = {
     _count: { select: { unidades: true, ordensServico: true, contratos: { where: { status: "ATIVO" } } } },
     responsavelTecnico: { select: { nome: true } },
   } satisfies Prisma.ClienteInclude;
-  const ordenar: Prisma.ClienteOrderByWithRelationInput[] = [{ nome: "asc" }, { id: "asc" }];
 
   type ClienteRow = Prisma.ClienteGetPayload<{ include: typeof incluir }>;
   let clientes: ClienteRow[] = [];
   let total = 0;
+  let pagina = 1;
   let statusFinanceiroMap: Record<string, StatusFinanceiroCalc> = {};
 
   if (statusFiltro) {
     // Filtro por status calculado: avalia todos os clientes que batem nos demais
     // filtros, calcula o status real e pagina sobre o subconjunto resultante.
-    const todos = await prisma.cliente.findMany({ where, select: { id: true }, orderBy: ordenar });
+    const todos = await prisma.cliente.findMany({ where, select: { id: true }, orderBy });
     statusFinanceiroMap = await calcularStatusFinanceiroEmLote(empresaId, todos.map((c) => c.id));
     const idsFiltrados = todos
       .filter((c) => (statusFinanceiroMap[c.id] ?? "SEM_HISTORICO") === statusFiltro)
       .map((c) => c.id);
     total = idsFiltrados.length;
-    const idsPagina = idsFiltrados.slice(skip, skip + porPagina);
+    pagina = paginaValida(paginaPedida, porPagina, total);
+    const { skip, take } = janela(pagina, porPagina);
+    const idsPagina = idsFiltrados.slice(skip, skip + take);
     clientes = idsPagina.length
-      ? await prisma.cliente.findMany({ where: { id: { in: idsPagina } }, include: incluir, orderBy: ordenar })
+      ? await prisma.cliente.findMany({ where: { id: { in: idsPagina } }, include: incluir, orderBy })
       : [];
   } else {
-    [clientes, total] = await Promise.all([
-      prisma.cliente.findMany({ where, include: incluir, orderBy: ordenar, skip, take: porPagina }),
-      prisma.cliente.count({ where }),
-    ]);
+    total = await prisma.cliente.count({ where });
+    pagina = paginaValida(paginaPedida, porPagina, total);
+    clientes = total ? await prisma.cliente.findMany({ where, include: incluir, orderBy, ...janela(pagina, porPagina) }) : [];
     statusFinanceiroMap = await calcularStatusFinanceiroEmLote(empresaId, clientes.map((c) => c.id));
   }
 
@@ -78,15 +78,17 @@ export default async function ClientesPage({
     return (
       <span className="inline-flex items-center gap-0.5" title={`${n} de 5`}>
         {Array.from({ length: 5 }, (_, i) => (
-          <Star key={i} className={cn("w-3 h-3", i < n ? "text-amber-400 fill-amber-400" : "text-surface-border")} />
+          <Star key={i} className={cn("w-3 h-3", i < n ? "text-atencao-texto fill-atencao" : "text-surface-border")} />
         ))}
       </span>
     );
   }
 
   return (
+    <SelecaoMassaProvider entidade="clientes" idsPagina={clientes.map((c) => c.id)} total={total}>
+    <ListaUrl chave="clientes" paramBusca="busca" qAtual={busca}>
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-primary-50 rounded-lg">
             <Users className="w-5 h-5 text-primary-600" />
@@ -94,75 +96,93 @@ export default async function ClientesPage({
           <h1 className="page-title">Clientes</h1>
           <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{total}</span>
         </div>
+        {/* No celular: Baixar | Importar numa linha e "Novo Cliente" embaixo, na largura toda */}
+        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
+          <BaixarPlanilha entidade="clientes" className="flex-1 sm:flex-none" />
         {podeCriar && (
-          <Link
-            href="/clientes/novo"
-            className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow"
-          >
-            <Plus className="w-4 h-4" /> Novo Cliente
-          </Link>
+          <>
+            <ImportarClientes className="flex-1 sm:flex-none" />
+            <Link
+              href="/clientes/novo"
+              className="basis-full sm:basis-auto inline-flex items-center justify-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow"
+            >
+              <Plus className="w-4 h-4" /> Novo Cliente
+            </Link>
+          </>
         )}
+        </div>
       </div>
 
       <div className="card overflow-hidden">
-        {/* Filtros */}
-        <div className="p-4 border-b border-surface-border flex flex-wrap gap-3 bg-surface-alt/40">
-          <form method="get" className="flex flex-wrap gap-2 flex-1">
-            <input
-              name="busca" defaultValue={busca}
-              placeholder="Buscar por nome, fantasia ou CPF/CNPJ..."
-              className="flex-1 min-w-[200px] bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all"
-            />
-            <select name="status" defaultValue={status}
-              className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all">
-              <option value="">Status financeiro</option>
-              {Object.entries(LABELS_STATUS_FINANCEIRO_CALC).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
-            </select>
-            <select name="segmento" defaultValue={segmento}
-              className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all">
-              <option value="">Segmento</option>
-              {Object.entries(LABELS_SEGMENTO).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
-            </select>
-            <label className="inline-flex items-center gap-2 px-3 py-2 text-sm text-ink-muted bg-white border border-surface-border rounded-lg cursor-pointer select-none">
-              <input type="checkbox" name="inativos" value="1" defaultChecked={mostrarInativos} className="accent-primary-600" />
-              Mostrar inativos
-            </label>
-            <button type="submit" className="bg-primary-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-600 transition-all shadow-sm">
-              Filtrar
-            </button>
-          </form>
+        {/* Busca ao vivo + filtros (mudam a URL; o servidor devolve a página nova) */}
+        <div className="p-4 border-b border-surface-border flex flex-wrap items-center gap-2 bg-surface-alt/40">
+          <div className="flex-1 min-w-[220px]">
+            <BuscaUrl lista="clientes" placeholder="Pesquisar por nome, fantasia ou CPF/CNPJ…" rotulo="Pesquisar clientes" />
+          </div>
+          <FiltroSelectUrl param="status" vazio="Status financeiro" opcoes={Object.entries(LABELS_STATUS_FINANCEIRO_CALC).map(([value, label]) => ({ value, label }))} />
+          <FiltroSelectUrl param="segmento" vazio="Segmento" opcoes={Object.entries(LABELS_SEGMENTO).map(([value, label]) => ({ value, label }))} />
+          <FiltroCheckUrl param="inativos" rotulo="Mostrar inativos" />
         </div>
 
-        <table className="w-full text-sm">
+        <ConteudoUrl>
+        {clientes.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-12 text-center" data-lista-vazia>
+            <p className="text-sm font-medium text-ink">Nenhum cliente encontrado</p>
+            {busca && <p className="text-xs text-ink-muted">Nada combina com “{busca}”.</p>}
+            <LimparBuscaUrl />
+          </div>
+        ) : (
+        <>
+        {/* Celular: um cartão por cliente */}
+        <ul className="md:hidden divide-y divide-surface-border" data-cartoes>
+          {clientes.map((c) => {
+            const sf = statusFinanceiroMap[c.id] ?? "SEM_HISTORICO";
+            return (
+              <li key={c.id} data-cartao={c.id} className={cn("flex items-start gap-3 px-4 py-3", !c.ativo && "opacity-60")}>
+                {massa && <span className="pt-0.5"><CheckboxLinha id={c.id} rotulo={c.nomeFantasia ?? c.nome} /></span>}
+                <div className="min-w-0 flex-1">
+                  <Link href={`/clientes/${c.id}/editar`} className="font-semibold text-ink hover:text-primary-600 block truncate">{c.nomeFantasia ?? c.nome}</Link>
+                  <p className="text-xs text-ink-muted truncate">{formatarCpfCnpj(c.cpfCnpj)}{c.segmento ? ` · ${LABELS_SEGMENTO[c.segmento] ?? c.segmento}` : ""}</p>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+                    <span className={cn("font-semibold px-2 py-0.5 rounded-full", COR_STATUS_FINANCEIRO_CALC[sf])}>{LABELS_STATUS_FINANCEIRO_CALC[sf]}</span>
+                    <span className="text-ink-subtle">{c._count.unidades} end. · {c._count.ordensServico} OS</span>
+                    {!c.ativo && <span className="font-bold bg-surface-linha text-ink-muted px-2 py-0.5 rounded-full">Inativo</span>}
+                  </div>
+                </div>
+                <ClienteAcoes id={c.id} nome={c.nomeFantasia ?? c.nome} ativo={c.ativo} />
+              </li>
+            );
+          })}
+        </ul>
+        <table className="w-full text-sm hidden md:table">
           <thead className="bg-surface-alt border-b border-surface-border">
             <tr>
-              <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Nome</th>
-              <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden md:table-cell">CPF/CNPJ</th>
-              <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden lg:table-cell">Segmento</th>
-              <th className="text-center px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden xl:table-cell">Satisfação</th>
-              <th className="text-center px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">End.</th>
-              <th className="text-center px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">OS</th>
+              {massa && <th className="w-px pl-4 pr-1 py-3"><CheckboxPagina /></th>}
+              <ThOrdUrl label="Nome" k="nome" padrao="nome" className="px-4 py-3 text-ink-muted text-xs tracking-wider" />
+              <ThOrdUrl label="CPF/CNPJ" k="documento" className="px-4 py-3 text-ink-muted text-xs tracking-wider" />
+              <ThOrdUrl label="Segmento" k="segmento" className="px-4 py-3 text-ink-muted text-xs tracking-wider hidden lg:table-cell" />
+              <ThOrdUrl label="Satisfação" k="satisfacao" className="px-4 py-3 text-ink-muted text-xs tracking-wider hidden xl:table-cell" />
+              <ThOrdUrl label="End." k="unidades" className="px-4 py-3 text-ink-muted text-xs tracking-wider" />
+              <ThOrdUrl label="OS" k="os" className="px-4 py-3 text-ink-muted text-xs tracking-wider" />
               <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Status</th>
               <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider w-px">Ações</th>
             </tr>
           </thead>
           <tbody>
-            {clientes.length === 0 ? (
-              <tr><td colSpan={8} className="text-center text-ink-subtle py-12">Nenhum cliente encontrado</td></tr>
-            ) : (
-              clientes.map((c, idx) => (
+            {clientes.map((c, idx) => (
                 <tr key={c.id} className={cn(
                   "border-b border-surface-border hover:bg-primary-50/40 transition-colors",
                   idx % 2 === 1 && "bg-surface-alt/30",
                   !c.ativo && "opacity-60",
                 )}>
+                  {massa && <td className="w-px pl-4 pr-1 py-3"><CheckboxLinha id={c.id} rotulo={c.nomeFantasia ?? c.nome} /></td>}
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 flex-wrap">
                       <Link href={`/clientes/${c.id}/editar`} className="font-semibold text-ink hover:text-primary-600 transition-colors">
                         {c.nomeFantasia ?? c.nome}
                       </Link>
                       {!c.ativo && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full whitespace-nowrap">Inativo</span>
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-surface-linha text-ink-muted px-2 py-0.5 rounded-full whitespace-nowrap">Inativo</span>
                       )}
                       {c._count.contratos > 0 && (
                         <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-success-50 text-success-700 px-2 py-0.5 rounded-full whitespace-nowrap">
@@ -172,7 +192,7 @@ export default async function ClientesPage({
                     </div>
                     {c.nomeFantasia && <p className="text-xs text-ink-subtle mt-0.5">{c.nome}</p>}
                   </td>
-                  <td className="px-4 py-3 text-ink-muted hidden md:table-cell">{formatarCpfCnpj(c.cpfCnpj)}</td>
+                  <td className="px-4 py-3 text-ink-muted whitespace-nowrap">{formatarCpfCnpj(c.cpfCnpj)}</td>
                   <td className="px-4 py-3 text-ink-muted hidden lg:table-cell text-xs">
                     {c.segmento ? (LABELS_SEGMENTO[c.segmento] ?? c.segmento) : "—"}
                   </td>
@@ -195,11 +215,19 @@ export default async function ClientesPage({
                     <ClienteAcoes id={c.id} nome={c.nomeFantasia ?? c.nome} ativo={c.ativo} />
                   </td>
                 </tr>
-              ))
-            )}
+              ))}
           </tbody>
         </table>
+        </>
+        )}
+        </ConteudoUrl>
+        <div className="px-4 py-3 border-t border-surface-border">
+          <PaginacaoUrl total={total} pagina={pagina} porPagina={porPagina} rotulo="clientes" />
+        </div>
       </div>
     </div>
+    </ListaUrl>
+    <BarraAcoesMassa />
+    </SelecaoMassaProvider>
   );
 }

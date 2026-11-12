@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmar } from "@/components/ui/avisos";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +18,7 @@ const TIPOS_ITEM = [
   { v: "FOTO", l: "Foto" },
 ];
 
-interface ItemForm { categoria: string; descricao: string; tipo: string; opcoesStr: string; obrigatorio: boolean }
+interface ItemForm { id?: string; categoria: string; descricao: string; tipo: string; opcoesStr: string; obrigatorio: boolean }
 
 const ITEM_VAZIO: ItemForm = { categoria: "", descricao: "", tipo: "OK_NOK", opcoesStr: "OK, NOK", obrigatorio: true };
 
@@ -44,7 +45,7 @@ export function ChecklistTemplatesClient() {
   function abrirEditar(t: any) {
     setNome(t.nome); setDescricao(t.descricao ?? ""); setFrequencia(t.frequencia);
     setItens((t.itens ?? []).map((i: any) => ({
-      categoria: i.categoria, descricao: i.descricao, tipo: i.tipo,
+      id: i.id, categoria: i.categoria, descricao: i.descricao, tipo: i.tipo,
       opcoesStr: (i.opcoes ?? []).join(", "), obrigatorio: i.obrigatorio,
     })));
     setEditando(t.id); setErro("");
@@ -69,8 +70,9 @@ export function ChecklistTemplatesClient() {
     setSalvando(true);
     const payload = {
       nome, descricao, frequencia,
+      // id dos itens existentes: o servidor atualiza no lugar (removido vira inativo, não é apagado)
       itens: itens.map((i, idx) => ({
-        categoria: i.categoria, descricao: i.descricao, tipo: i.tipo,
+        id: i.id, categoria: i.categoria, descricao: i.descricao, tipo: i.tipo,
         opcoes: (i.tipo === "OK_NOK" || i.tipo === "NIVEL") ? i.opcoesStr.split(",").map((s) => s.trim()).filter(Boolean) : [],
         obrigatorio: i.obrigatorio, ordem: idx,
       })),
@@ -86,7 +88,7 @@ export function ChecklistTemplatesClient() {
   }
 
   async function remover(id: string) {
-    if (!confirm("Desativar este template?")) return;
+    if (!(await confirmar({ mensagem: "Desativar este template?", perigo: true, confirmarTexto: "Desativar" }))) return;
     await fetch(`/api/checklist-templates/${id}`, { method: "DELETE" });
     setTemplates((p) => p.map((t) => (t.id === id ? { ...t, ativo: false } : t)));
   }
@@ -95,7 +97,7 @@ export function ChecklistTemplatesClient() {
 
   return (
     <div className="space-y-4">
-      {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
+      {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2">{erro}</div>}
 
       {loading ? (
         <p className="text-sm text-ink-subtle text-center py-8">Carregando…</p>
@@ -110,7 +112,7 @@ export function ChecklistTemplatesClient() {
               </div>
               <div className="flex items-center gap-1">
                 <button onClick={() => abrirEditar(t)} className="p-1.5 text-ink-muted hover:text-primary-600 hover:bg-primary-50 rounded" title="Editar"><Pencil className="w-4 h-4" /></button>
-                <button onClick={() => remover(t.id)} className="p-1.5 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded" title="Desativar"><Trash2 className="w-4 h-4" /></button>
+                <button onClick={() => remover(t.id)} className="p-1.5 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded" title="Desativar"><Trash2 className="w-4 h-4" /></button>
               </div>
             </div>
           ))}
@@ -144,7 +146,7 @@ export function ChecklistTemplatesClient() {
                     <Input value={it.categoria} onChange={(e) => updItem(i, "categoria", e.target.value)} placeholder="Categoria (ex: Motor)" />
                     <Input value={it.descricao} onChange={(e) => updItem(i, "descricao", e.target.value)} placeholder="Item (ex: Nível do óleo)" />
                   </div>
-                  <button type="button" onClick={() => removeItem(i)} className="text-red-500 hover:text-red-700 p-1.5 shrink-0"><Trash2 className="w-4 h-4" /></button>
+                  <button type="button" onClick={() => removeItem(i)} className="text-atrasado hover:text-atrasado-texto p-1.5 shrink-0"><Trash2 className="w-4 h-4" /></button>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:pl-6">
                   <Select value={it.tipo} onChange={(e) => updItem(i, "tipo", e.target.value)}>{TIPOS_ITEM.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}</Select>

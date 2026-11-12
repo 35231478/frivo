@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { authConfig } from "@/auth.config";
 import { moduloDaRota, pode } from "@/lib/permissoes";
+import { ROTA_TECNICO, destinoModoTecnico, emModoTecnico } from "@/lib/tecnico/modo";
 
 // Instância leve do Auth.js (sem provider/bcrypt/Prisma) — apenas lê e verifica o
 // JWT da sessão. Isso mantém o bundle do middleware bem abaixo do limite do Edge.
@@ -13,18 +14,28 @@ const { auth } = NextAuth(authConfig);
 // "/orcamento/" não libera "/orcamentos").
 const rotasPublicas = [
   "/login",
+  "/sessao-encerrada", // limpa o cookie de uma sessão que o servidor já não aceita
+  "/definir-senha",    // convite de usuário e "esqueci a senha" (link assinado, uso único)
+  "/esqueci-senha",    // pede o link de nova senha (resposta sempre genérica)
   "/api/auth",        // endpoints internos do Auth.js
   "/api/webhooks",    // webhooks externos (ex.: Banco Inter)
   "/api/email/processar-lembretes", // cron (valida CRON_SECRET internamente)
+  "/api/fiscal/reconciliar", // cron das NFS-e paradas (valida CRON_SECRET internamente)
+  "/api/cron/faturar-contratos", // cron do faturamento automático dos contratos (valida CRON_SECRET internamente)
   "/portal",          // inclui /portal/login
   "/api/portal-auth",
   "/api/portal/",
   "/orcamento/",
+  "/pedido-compra/",  // PC para o fornecedor (link com token, sem preço)
   "/medicao/",
   "/relatorio/",
   "/api/publico/",
   "/qr/",
   "/api/qr/",
+  "/calculadora",     // calculadora de BTU pública (lead do site, sem login)
+  "/privacidade",     // páginas institucionais públicas (sem login, indexáveis)
+  "/faq",
+  "/termos",
   "/instalar",
   "/offline",
   "/sw.js",
@@ -43,7 +54,14 @@ export default auth(function middleware(req: NextRequest & { auth: any }) {
   }
 
   if (req.auth && pathname === "/login") {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
+    return NextResponse.redirect(new URL(emModoTecnico(req.auth.user) ? ROTA_TECNICO : "/dashboard", req.url));
+  }
+
+  // Modo técnico: o técnico puro fica no app de campo (Meu dia · Agenda · Perfil); o resto do
+  // sistema leva para "Meu dia" (link antigo de execução abre a mesma atividade no app)
+  if (req.auth && !ehRotaPublica && emModoTecnico(req.auth.user)) {
+    const destino = destinoModoTecnico(pathname);
+    if (destino) return NextResponse.redirect(new URL(destino, req.url));
   }
 
   // Controle de acesso por perfil: se a rota exige um módulo e o usuário não tem

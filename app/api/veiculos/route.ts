@@ -1,12 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { validarDocumentoDataUrl, validarFotos } from "@/lib/anexos-server";
 import { veiculoSchema } from "@/lib/validations";
+import { organizarFotosVeiculo } from "@/lib/veiculo-fotos";
+import { exigirAlgumaPermissao, exigirPermissao } from "@/lib/permissoes-server";
 
-export async function GET() {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
-  const empresaId = session.user!.empresaId;
+export async function GET(req: NextRequest) {
+  // ?resumo=1: só o necessário para escolher o veículo na OS / no colaborador (sem fotos)
+  if (req.nextUrl.searchParams.get("resumo") === "1") {
+    const guard = await exigirAlgumaPermissao([["veiculos", "visualizar"], ["ordens", "criar"], ["ordens", "editar"], ["equipes", "gerenciar"]]);
+    if (guard.erro) return guard.resposta;
+    const veiculos = await prisma.veiculo.findMany({
+      where: { empresaId: guard.session.user!.empresaId },
+      select: { id: true, placa: true, modelo: true, marca: true, status: true, equipeId: true },
+      orderBy: { placa: "asc" },
+    });
+    return NextResponse.json(veiculos);
+  }
+  // Lista completa (responsável, equipe, contagens): tela de veículos e formulário de equipe.
+  // Exige a permissão do módulo, não só estar logado; sempre só da empresa da sessão.
+  const guard = await exigirAlgumaPermissao([["veiculos", "visualizar"], ["equipes", "gerenciar"]]);
+  if (guard.erro) return guard.resposta;
+  const empresaId = guard.session.user!.empresaId;
 
   const veiculos = await prisma.veiculo.findMany({
     where: { empresaId },
@@ -22,8 +37,10 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  // Cadastrar/editar veículo exige "veiculos.gerenciar" (antes bastava estar logado)
+  const guard = await exigirPermissao("veiculos", "gerenciar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const empresaId = session.user!.empresaId;
 
   const body = await req.json();
@@ -34,11 +51,24 @@ export async function POST(req: NextRequest) {
   const existente = await prisma.veiculo.findFirst({ where: { empresaId, placa } });
   if (existente) return NextResponse.json({ erro: "Placa já cadastrada" }, { status: 409 });
 
-  const { documentos, responsavelId, equipeId, proximaRevisaoData, seguroVencimento, ...rest } = parsed.data;
+  const { documentos, responsavelId, equipeId, proximaRevisaoData, seguroVencimento, fotos: fotosBrutas, fotosRotulos: rotulosBrutos, ...rest } = parsed.data;
+  // Fotos e documentos: tipo decidido pelos BYTES; grava o data URL normalizado
+  const fotosValidadas = validarFotos(fotosBrutas);
+  if (!fotosValidadas.ok) return NextResponse.json({ erro: fotosValidadas.erro }, { status: 400 });
+  const docsValidados: { tipo: typeof documentos[number]["tipo"]; nome: string; arquivoUrl: string | null; dataVencimento?: string | null }[] = [];
+  for (const d of documentos) {
+    const r = validarDocumentoDataUrl(d.arquivoUrl, d.nome);
+    if (!r.ok) return NextResponse.json({ erro: r.erro }, { status: 400 });
+    docsValidados.push({ ...d, arquivoUrl: r.conteudo });
+  }
+  // Frente primeiro (capa), depois traseira, laterais e outros
+  const { fotos, fotosRotulos } = organizarFotosVeiculo(fotosValidadas.fotos, rotulosBrutos);
 
   const veiculo = await prisma.veiculo.create({
     data: {
       ...rest,
+      fotos,
+      fotosRotulos,
       placa,
       empresaId,
       responsavelId: responsavelId || null,
@@ -46,10 +76,10 @@ export async function POST(req: NextRequest) {
       proximaRevisaoData: proximaRevisaoData ? new Date(proximaRevisaoData) : null,
       seguroVencimento: seguroVencimento ? new Date(seguroVencimento) : null,
       documentos: {
-        create: documentos.map((d) => ({
+        create: docsValidados.map((d) => ({
           tipo: d.tipo,
           nome: d.nome,
-          arquivoUrl: d.arquivoUrl || null,
+          arquivoUrl: d.arquivoUrl,
           dataVencimento: d.dataVencimento ? new Date(d.dataVencimento) : null,
         })),
       },

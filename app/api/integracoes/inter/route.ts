@@ -4,7 +4,7 @@ import { z } from "zod";
 import crypto from "crypto";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { criptografar } from "@/lib/crypto";
-import { testarConexaoInter } from "@/lib/inter-api";
+import { configurarWebhookInter, testarConexaoInter } from "@/lib/inter-api";
 
 const schema = z.object({
   ativo: z.boolean().optional(),
@@ -16,6 +16,8 @@ const schema = z.object({
   clientSecret: z.string().optional().nullable(),
   certificado: z.string().optional().nullable(),
   chavePrivada: z.string().optional().nullable(),
+  // true = gira o segredo do webhook (o antigo para de valer na hora); a URL nova volta UMA vez
+  regerarWebhook: z.boolean().optional(),
 });
 
 /** Retorna a config mascarada (sem segredos). */
@@ -34,7 +36,9 @@ export async function GET() {
     temClientSecret: !!reg?.clientSecret,
     temCertificado: !!reg?.certificado,
     temChavePrivada: !!reg?.chavePrivada,
-    webhookSecret: reg?.webhookSecret ?? null,
+    // O segredo do webhook NUNCA volta na leitura (quem o tem consegue "baixar" boletos).
+    // A URL completa só aparece uma vez, na resposta do PUT que a (re)gera.
+    temWebhookSecret: !!reg?.webhookSecret,
   });
 }
 
@@ -49,13 +53,14 @@ export async function PUT(req: NextRequest) {
 
   const atual = await prisma.integracaoInter.findUnique({ where: { empresaId } });
 
+  const regerou = d.regerarWebhook === true || !atual?.webhookSecret;
   const data: any = {
     ativo: d.ativo ?? atual?.ativo ?? false,
     ambiente: d.ambiente ?? atual?.ambiente ?? "SANDBOX",
     clientId: d.clientId ?? atual?.clientId ?? null,
     contaCorrente: d.contaCorrente ?? atual?.contaCorrente ?? null,
     pixChave: d.pixChave ?? atual?.pixChave ?? null,
-    webhookSecret: atual?.webhookSecret ?? crypto.randomBytes(16).toString("hex"),
+    webhookSecret: regerou ? crypto.randomBytes(32).toString("hex") : atual!.webhookSecret,
   };
   // Segredos: criptografa apenas quando um novo valor é enviado
   if (d.clientSecret) data.clientSecret = criptografar(d.clientSecret);
@@ -68,6 +73,33 @@ export async function PUT(req: NextRequest) {
     update: data,
   });
 
+  // A URL do webhook (com o segredo) aparece UMA única vez, quando é gerada/girada
+  if (regerou) {
+    const base = (process.env.NEXTAUTH_URL ?? req.nextUrl.origin).replace(/\/$/, "");
+    const webhookUrl = `${base}/api/webhooks/inter?token=${data.webhookSecret}`;
+
+    // Registro automático no Inter (PUT /cobranca/v3/cobrancas/webhook): só tenta com a
+    // integração ativa e completa. Se não der, a URL continua valendo do nosso lado e a
+    // pendência volta EXPLICADA para a tela (o segredo antigo já foi revogado de qualquer forma).
+    const faltas: string[] = [];
+    if (!data.ativo) faltas.push("a integração está desativada");
+    if (!data.clientId || !(d.clientSecret || atual?.clientSecret)) faltas.push("faltam o Client ID/Secret");
+    if (!(d.certificado || atual?.certificado) || !(d.chavePrivada || atual?.chavePrivada)) faltas.push("falta o certificado (.crt/.key)");
+
+    let registradoNoInter = false;
+    let registroPendente: string | null = null;
+    if (faltas.length > 0) {
+      registroPendente = faltas.join(", ");
+    } else {
+      try {
+        await configurarWebhookInter(empresaId, webhookUrl);
+        registradoNoInter = true;
+      } catch (e: any) {
+        registroPendente = e?.message ?? "erro desconhecido ao chamar a API do Inter";
+      }
+    }
+    return NextResponse.json({ ok: true, webhookUrl, registradoNoInter, registroPendente });
+  }
   return NextResponse.json({ ok: true });
 }
 

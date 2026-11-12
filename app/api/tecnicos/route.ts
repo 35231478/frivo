@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { validarDocumentoDataUrl, validarFoto } from "@/lib/anexos-server";
+import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { tecnicoSchema } from "@/lib/validations";
+import { exigirPermissao } from "@/lib/permissoes-server";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -23,6 +26,7 @@ export async function GET(req: NextRequest) {
     select: {
       id: true, nome: true, telefone: true, especialidades: true, tipo: true, crea: true, avatar: true,
       competencias: { select: { id: true } },
+      veiculoId: true,
     },
   });
 
@@ -30,8 +34,10 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  // Cadastrar colaborador (inclusive pelo cadastro rápido) exige "Equipes / Colaboradores › gerenciar"
+  const guard = await exigirPermissao("equipes", "gerenciar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
 
   const empresaId = session.user!.empresaId;
   const body = await req.json();
@@ -46,7 +52,31 @@ export async function POST(req: NextRequest) {
   });
   if (existente) return NextResponse.json({ erro: "CPF já cadastrado" }, { status: 409 });
 
-  const { competenciaIds, documentos, dataNascimento, dataAdmissao, cargoId, perfilAcessoId, email, ...rest } = parsed.data;
+  const { competenciaIds, documentos, dataNascimento, dataAdmissao, cargoId, perfilAcessoId, email, veiculoId, ...rest } = parsed.data;
+  // Veículo padrão (opcional) precisa ser da mesma empresa
+  if (veiculoId && !(await prisma.veiculo.findFirst({ where: { id: veiculoId, empresaId }, select: { id: true } })))
+    return NextResponse.json({ erro: "Veículo inválido." }, { status: 400 });
+  // Cargo, perfil de acesso e competências (tipos de OS) precisam ser da mesma empresa
+  try {
+    await Promise.all([
+      validarRefEmpresa("cargo", cargoId, empresaId, "Cargo", { novoAtivo: true }),
+      validarRefEmpresa("perfilAcesso", perfilAcessoId, empresaId, "Perfil de acesso", { novoAtivo: true }),
+      validarRefsEmpresa("tipoOs", competenciaIds, empresaId, "Competência"),
+    ]);
+  } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
+
+  // Avatar e documentos: tipo decidido pelos BYTES; grava o data URL normalizado
+  if (rest.avatar) {
+    const r = validarFoto(rest.avatar);
+    if (!r.ok) return NextResponse.json({ erro: `Foto do colaborador: ${r.erro}` }, { status: 400 });
+    rest.avatar = r.arquivo.conteudo;
+  }
+  const docsValidados: { tipo: string; nome: string; arquivoUrl: string | null; dataVencimento?: string | null }[] = [];
+  for (const d of documentos) {
+    const r = validarDocumentoDataUrl(d.arquivoUrl, d.nome);
+    if (!r.ok) return NextResponse.json({ erro: r.erro }, { status: 400 });
+    docsValidados.push({ ...d, arquivoUrl: r.conteudo });
+  }
 
   const tecnico = await prisma.tecnico.create({
     data: {
@@ -55,19 +85,22 @@ export async function POST(req: NextRequest) {
       email: email || null,
       cargoId: cargoId || null,
       perfilAcessoId: perfilAcessoId || null,
+      veiculoId: veiculoId || null,
       dataNascimento: dataNascimento ? new Date(dataNascimento) : null,
       dataAdmissao: dataAdmissao ? new Date(dataAdmissao) : null,
       competencias: { connect: competenciaIds.map((id) => ({ id })) },
       documentos: {
-        create: documentos.map((d) => ({
+        create: docsValidados.map((d) => ({
           tipo: d.tipo,
           nome: d.nome,
-          arquivoUrl: d.arquivoUrl || null,
+          arquivoUrl: d.arquivoUrl,
           dataVencimento: d.dataVencimento ? new Date(d.dataVencimento) : null,
         })),
       },
     },
   });
 
-  return NextResponse.json(tecnico, { status: 201 });
+  // Salário só pela seção de folha (financeiro.folha): não volta na resposta do cadastro geral
+  const { salario: _, ...resposta } = tecnico;
+  return NextResponse.json(resposta, { status: 201 });
 }

@@ -1,18 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { CampoBusca, Paginacao, sugerirPorUrl } from "@/components/listagem/listagem-ui";
+import { DEBOUNCE_BUSCA_MS, useTamanhoPreferido } from "@/components/listagem/use-listagem-url";
 import Link from "next/link";
 import { OsInativarBotao } from "@/components/os/os-inativar";
+import { CheckboxLinha, CheckboxPagina, useAcoesMassaDisponiveis } from "@/components/acoes-massa/selecao";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { cn, formatarData, MESES_PT, LABELS_STATUS_OS, LABELS_PRIORIDADE, LABELS_ORIGEM_OS } from "@/lib/utils";
+import { cn, formatarData, LABELS_STATUS_OS, LABELS_PRIORIDADE, LABELS_ORIGEM_OS } from "@/lib/utils";
+import { BarraPeriodo, type PeriodoTela } from "@/components/listagem/periodo-cards";
+import { BarraFiltros, FiltroTextoUrl, inputFiltro } from "@/components/listagem/barra-filtros";
+import { urlDoAtalho, urlVizinho, type Periodo } from "@/lib/periodo";
 import { BuscaSelect, type OpcaoBusca } from "@/components/ui/busca-select";
 import { AvatarCliente } from "@/components/ui/avatar-cliente";
 import { AvatarStack } from "@/components/ui/avatar-stack";
-import {
-  ClipboardList, Plus, Search, SlidersHorizontal, X, ArrowUp, ArrowDown, ArrowUpDown,
-  LayoutGrid, List, Download, Headset, Filter, ChevronLeft, ChevronRight, CalendarDays, CalendarCheck,
-} from "lucide-react";
+import { formatarDiaCivil } from "@/lib/os/prazos";
+import { ClipboardList, Plus, LayoutGrid, List, Download, Headset } from "lucide-react";
+import { TabelaPro } from "@/components/listagem/tabela-pro";
+import { PLANILHA } from "@/lib/planilha";
 
 interface TecnicoView { id: string; nome: string; avatar: string | null }
 interface OrdemView {
@@ -33,38 +39,10 @@ const CLASSE_PRIORIDADE: Record<string, string> = {
   URGENTE: "badge-prioridade-urgente", CRITICO: "badge-prioridade-critico",
 };
 
-const FILTROS_CHAVE = ["busca", "status", "prioridade", "origem", "clienteId", "responsavelId", "tipoOsId", "contratoId", "numero", "dataInicio", "dataFim"];
-const AVANCADOS = ["dataInicio", "dataFim", "clienteId", "responsavelId", "tipoOsId", "numero", "origem", "contratoId"];
+/** Os filtros do painel "Mais filtros" (o período e a busca ficam fora) */
+const PARAMS_FILTROS_OS = ["status", "prioridade", "origem", "clienteId", "responsavelId", "tipoOsId", "contratoId", "numero"];
 
-const DIAS_SEMANA = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
-const STATUS_PENDENTE = ["ABERTA", "AGUARDANDO_ATENDIMENTO", "AGENDADA", "AGUARDANDO_PECA"];
-const STATUS_ANDAMENTO = ["EM_ANDAMENTO", "PAUSADA"];
-const STATUS_FINALIZADA = ["CONCLUIDA", "CANCELADA"];
-
-// "2026-06-02" → Date no horário local (evita o deslocamento de fuso do new Date("yyyy-mm-dd"))
-function parseDia(s: string): Date {
-  const [y, m, d] = s.split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
-// Date → "2026-06-02" no horário local
-function ymdLocal(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-function dataPorExtenso(s: string): string {
-  const d = parseDia(s);
-  return `${DIAS_SEMANA[d.getDay()]}, ${String(d.getDate()).padStart(2, "0")} de ${MESES_PT[d.getMonth()]} de ${d.getFullYear()}`;
-}
-// Cor do badge do dia conforme a situação geral das OS (atrasada > pendente > em andamento > concluídas)
-function corDoDia(ordens: OrdemView[]): string {
-  const agora = Date.now();
-  const atrasada = ordens.some((o) => o.previsaoConclusao && new Date(o.previsaoConclusao).getTime() < agora && !STATUS_FINALIZADA.includes(o.status));
-  if (atrasada) return "bg-red-50 text-red-700 border-red-200";
-  if (ordens.some((o) => STATUS_PENDENTE.includes(o.status))) return "bg-amber-50 text-amber-700 border-amber-200";
-  if (ordens.some((o) => STATUS_ANDAMENTO.includes(o.status))) return "bg-primary-50 text-primary-700 border-primary-200";
-  return "bg-success-50 text-success-700 border-success-200";
-}
-
-export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens: OrdemView[]; total: number; exibindo: number; opcoes: Opcoes }) {
+export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, periodo }: { ordens: OrdemView[]; total: number; pagina: number; porPagina: number; opcoes: Opcoes; periodo: PeriodoTela }) {
   const router = useRouter();
   const { pode } = usePermissoes();
   const pathname = usePathname();
@@ -72,64 +50,46 @@ export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens:
   const get = (k: string) => sp.get(k) ?? "";
 
   const view = get("view") === "cards" ? "cards" : "tabela";
+  const massa = useAcoesMassaDisponiveis("ordens");
   const sortAtual = get("sort") || "criadoEm";
   const dirAtual = (get("dir") || "desc") as "asc" | "desc";
-  const filtrosAtivos = FILTROS_CHAVE.filter((k) => get(k) !== "").length;
+  const filtrosAtivos = [...PARAMS_FILTROS_OS, "busca"].filter((k) => get(k) !== "").length;
 
-  const [mostrarAvancados, setMostrarAvancados] = useState(AVANCADOS.some((k) => get(k) !== ""));
   const [buscaLocal, setBuscaLocal] = useState(get("busca"));
-  const [numeroLocal, setNumeroLocal] = useState(get("numero"));
 
-  function setParams(updates: Record<string, string | null>) {
+  const [pendente, startTransition] = useTransition();
+  /** Muda a URL; qualquer filtro novo volta para a página 1 (só a paginação mantém a página). */
+  function setParams(updates: Record<string, string | null>, manterPagina = false) {
     const novo = new URLSearchParams(sp.toString());
     for (const [k, v] of Object.entries(updates)) { if (v) novo.set(k, v); else novo.delete(k); }
-    router.replace(`${pathname}?${novo.toString()}`, { scroll: false });
+    if (!manterPagina && !("pagina" in updates)) novo.delete("pagina");
+    startTransition(() => router.replace(`${pathname}?${novo.toString()}`, { scroll: false }));
   }
+  useTamanhoPreferido((por) => setParams({ por }, true));
+  const sugerir = useMemo(() => sugerirPorUrl("/api/listas/sugestoes?lista=ordens"), []);
 
-  // Debounce da busca geral
+  // Busca ao vivo (debounce), sem Enter
   useEffect(() => {
-    const t = setTimeout(() => { if (buscaLocal !== get("busca")) setParams({ busca: buscaLocal || null }); }, 500);
+    const t = setTimeout(() => { if (buscaLocal !== get("busca")) setParams({ busca: buscaLocal || null }); }, DEBOUNCE_BUSCA_MS);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buscaLocal]);
-  // Debounce do número
-  useEffect(() => {
-    const t = setTimeout(() => { if (numeroLocal !== get("numero")) setParams({ numero: numeroLocal || null }); }, 500);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [numeroLocal]);
-
-  // --- Navegação por data ---
-  const dataAtual = get("data");
-  const hojeStr = ymdLocal(new Date());
-  const ehHoje = dataAtual === hojeStr;
-
-  // Define o dia (limpa o intervalo "de/até" para não conflitar com a navegação)
-  function setData(valor: string | null) {
-    setParams({ data: valor, dataInicio: null, dataFim: null });
-  }
-  function deslocarDia(dias: number) {
-    const base = dataAtual ? parseDia(dataAtual) : new Date();
-    base.setDate(base.getDate() + dias);
-    setData(ymdLocal(base));
-  }
-  const irParaHoje = () => setData(hojeStr);
-
-  // Atalhos de teclado: ← dia anterior · → próximo dia · T volta para hoje
+  // Atalhos de teclado: ← período anterior · → período seguinte · T volta para hoje
   useEffect(() => {
     function aoTeclar(e: KeyboardEvent) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const alvo = document.activeElement as HTMLElement | null;
       const tag = alvo?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || alvo?.isContentEditable) return;
-      if (e.key === "ArrowLeft") { e.preventDefault(); deslocarDia(-1); }
-      else if (e.key === "ArrowRight") { e.preventDefault(); deslocarDia(1); }
-      else if (e.key === "t" || e.key === "T") { e.preventDefault(); irParaHoje(); }
+      const p = periodo as Periodo;
+      if (e.key === "ArrowLeft") { const m = urlVizinho(p, -1); if (m) { e.preventDefault(); setParams(m); } }
+      else if (e.key === "ArrowRight") { const m = urlVizinho(p, 1); if (m) { e.preventDefault(); setParams(m); } }
+      else if (e.key === "t" || e.key === "T") { e.preventDefault(); setParams(urlDoAtalho("hoje")); }
     }
     window.addEventListener("keydown", aoTeclar);
     return () => window.removeEventListener("keydown", aoTeclar);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataAtual]);
+  }, [periodo]);
 
   function toggleLista(param: string, valor: string) {
     const atual = get(param).split(",").filter(Boolean);
@@ -143,208 +103,117 @@ export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens:
     else setParams({ sort: campo, dir: "desc" });
   }
 
+  /** Zera os filtros do painel e a busca (o período fica: é navegação) */
   function limparFiltros() {
-    const novo = new URLSearchParams();
-    if (get("view")) novo.set("view", get("view"));
-    if (get("data")) novo.set("data", get("data"));
-    setBuscaLocal(""); setNumeroLocal("");
-    router.replace(`${pathname}${novo.toString() ? `?${novo}` : ""}`, { scroll: false });
+    setBuscaLocal("");
+    setParams(Object.fromEntries([...PARAMS_FILTROS_OS, "busca"].map((k) => [k, null])));
   }
 
   const exportUrl = `/api/ordens/export${sp.toString() ? `?${sp.toString()}` : ""}`;
 
-  function Seta({ campo }: { campo: string }) {
-    if (sortAtual !== campo) return <ArrowUpDown className="inline w-3 h-3 ml-1 text-ink-subtle" />;
-    return dirAtual === "asc" ? <ArrowUp className="inline w-3 h-3 ml-1 text-primary-600" /> : <ArrowDown className="inline w-3 h-3 ml-1 text-primary-600" />;
-  }
-
-  const selectCls = "w-full bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all";
+  // Chip de filtro (status/prioridade): ligado = acento claro
+  const chip = (ligado: boolean) => cn("text-xs px-2.5 py-1 rounded-full border transition-colors",
+    ligado ? "bg-acento-claro border-acento/40 text-acento font-semibold" : "bg-white border-surface-border text-ink-muted hover:border-acento/40 hover:text-ink");
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary-50 rounded-lg"><ClipboardList className="w-5 h-5 text-primary-600" /></div>
-          <h1 className="page-title">Ordens de Serviço</h1>
-          <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{total}</span>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="p-2 bg-surface-alt rounded-lg"><ClipboardList className="w-5 h-5 text-ink-muted" aria-hidden="true" /></div>
+          <h1 className="page-title">Ordens de serviço</h1>
+          <span className="pill-previsto font-display tabular-nums">{total}</span>
         </div>
         {pode("ordens", "criar") && (
-          <Link href="/ordens/nova" className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow">
+          <Link href="/ordens/nova" className="btn-primary shrink-0">
             <Plus className="w-4 h-4" /> Nova OS
           </Link>
         )}
       </div>
 
-      {/* Navegação por data */}
-      <div className="card p-3 flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={() => deslocarDia(-1)} title="Dia anterior (←)"
-            className="p-2 rounded-lg border border-surface-border bg-white text-ink-muted hover:bg-surface-alt hover:text-ink transition-colors">
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <button type="button" onClick={irParaHoje} title="Voltar para hoje (T)"
-            className={cn("inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border transition-colors",
-              ehHoje ? "bg-success-500 border-success-500 text-white shadow-sm" : "bg-white border-primary-500 text-primary-600 hover:bg-primary-50")}>
-            <CalendarCheck className="w-4 h-4" /> Hoje
-          </button>
-          <button type="button" onClick={() => deslocarDia(1)} title="Próximo dia (→)"
-            className="p-2 rounded-lg border border-surface-border bg-white text-ink-muted hover:bg-surface-alt hover:text-ink transition-colors">
-            <ChevronRight className="w-4 h-4" />
-          </button>
-          <div className="relative">
-            <button type="button" title="Escolher data"
-              className="p-2 rounded-lg border border-surface-border bg-white text-ink-muted hover:bg-surface-alt hover:text-ink transition-colors">
-              <CalendarDays className="w-4 h-4" />
-            </button>
-            <input type="date" value={dataAtual || hojeStr} onChange={(e) => e.target.value && setData(e.target.value)}
-              aria-label="Selecionar data" className="absolute inset-0 opacity-0 cursor-pointer" />
-          </div>
-        </div>
-
-        <div key={dataAtual || "todos"} className="anim-data flex flex-1 items-center justify-center gap-2 flex-wrap min-w-[260px] text-center">
-          {dataAtual ? (
-            <>
-              <span className="text-sm font-semibold text-ink">{dataPorExtenso(dataAtual)}</span>
-              <span className={cn("inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full border", corDoDia(ordens))}>
-                {total} {total === 1 ? "ordem de serviço" : "ordens de serviço"}
-              </span>
-            </>
-          ) : (
-            <span className="text-sm font-semibold text-ink-muted">
-              Todas as datas · {total} {total === 1 ? "ordem de serviço" : "ordens de serviço"}
-            </span>
-          )}
-        </div>
-
-        <div className="flex items-center justify-end gap-2 min-w-[140px]">
-          {dataAtual && (
-            <button type="button" onClick={() => setData(null)}
-              className="inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700">
-              <X className="w-3.5 h-3.5" /> Ver todos os dias
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="card overflow-hidden">
-        {/* Filtros principais */}
-        <div className="p-4 border-b border-surface-border bg-surface-alt/40 space-y-3">
-          <div className="flex flex-wrap gap-2 items-center">
-            <div className="relative flex-1 min-w-[220px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-subtle pointer-events-none" />
-              <input value={buscaLocal} onChange={(e) => setBuscaLocal(e.target.value)} placeholder="Buscar por número, descrição ou cliente..."
-                className="w-full bg-white border border-surface-border rounded-lg pl-9 pr-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all" />
+      {/* Barra enxuta: período + busca + "Mais filtros" (painel recolhido) — padrão da casa */}
+      <BarraFiltros
+        periodo={<BarraPeriodo periodo={periodo} navegar={(m) => setParams(m)} permitirTodos dica="Pelo dia agendado, pela previsão de conclusão ou pela abertura da OS. Atalhos: ← → mudam o período, T volta para hoje." />}
+        busca={
+          <CampoBusca
+            valor={buscaLocal} onChange={setBuscaLocal} placeholder="Pesquisar" rotulo="Pesquisar ordens de serviço"
+            sugerir={sugerir} onEscolher={(s) => s.href && router.push(s.href)} carregando={pendente}
+          />
+        }
+        paramBusca="busca" navegar={(m) => setParams(m)}
+        extras={
+          <>
+            <div className="flex items-center bg-surface-page border border-surface-border rounded-lg p-0.5">
+              <button type="button" onClick={() => setParams({ view: null })} aria-pressed={view === "tabela"} className={cn("p-1.5 rounded-md transition-colors", view === "tabela" ? "bg-white text-acento shadow-card" : "text-ink-muted hover:text-ink")} title="Tabela"><List className="w-4 h-4" /></button>
+              <button type="button" onClick={() => setParams({ view: "cards" })} aria-pressed={view === "cards"} className={cn("p-1.5 rounded-md transition-colors", view === "cards" ? "bg-white text-acento shadow-card" : "text-ink-muted hover:text-ink")} title="Cards"><LayoutGrid className="w-4 h-4" /></button>
             </div>
-            <button type="button" onClick={() => setMostrarAvancados((v) => !v)}
-              className={cn("inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-colors", mostrarAvancados ? "bg-primary-50 border-primary-200 text-primary-700" : "bg-white border-surface-border text-ink-muted hover:bg-surface-alt")}>
-              <SlidersHorizontal className="w-4 h-4" /> Mais filtros
-            </button>
-            {/* Alternar visualização */}
-            <div className="flex rounded-lg border border-surface-border overflow-hidden">
-              <button type="button" onClick={() => setParams({ view: null })} className={cn("p-2", view === "tabela" ? "bg-primary-500 text-white" : "bg-white text-ink-muted hover:bg-surface-alt")} title="Tabela"><List className="w-4 h-4" /></button>
-              <button type="button" onClick={() => setParams({ view: "cards" })} className={cn("p-2", view === "cards" ? "bg-primary-500 text-white" : "bg-white text-ink-muted hover:bg-surface-alt")} title="Cards"><LayoutGrid className="w-4 h-4" /></button>
-            </div>
-            <a href={exportUrl} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-surface-border text-ink-muted hover:bg-surface-alt transition-colors">
+            <a href={exportUrl} className="btn-secondary px-3 py-2 font-medium text-ink-muted">
               <Download className="w-4 h-4" /> Exportar
             </a>
-          </div>
-
-          {/* Chips de status e prioridade (multi) */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          </>
+        }
+        filtros={[
+          { id: "status", label: "Status", params: ["status"], largo: true, render: () => (
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider mr-1">Status</span>
               {Object.entries(LABELS_STATUS_OS).map(([v, l]) => (
-                <button key={v} type="button" onClick={() => toggleLista("status", v)}
-                  className={cn("text-xs px-2 py-1 rounded-full border transition-colors", naLista("status", v) ? "bg-primary-500 border-primary-500 text-white" : "bg-white border-surface-border text-ink-muted hover:border-primary-300")}>{l}</button>
+                <button key={v} type="button" onClick={() => toggleLista("status", v)} aria-pressed={naLista("status", v)}
+                  className={chip(naLista("status", v))}>{l}</button>
               ))}
               {!get("status") && (
-                <span className="text-[11px] text-ink-subtle ml-1" title="OS inativadas ficam ocultas; marque “Cancelada” para vê-las">
+                <span className="text-[11px] text-ink-muted ml-1" title="OS inativadas ficam ocultas; marque “Cancelada” para vê-las">
                   (canceladas ocultas)
                 </span>
               )}
             </div>
+          ) },
+          { id: "prioridade", label: "Prioridade", params: ["prioridade"], largo: true, render: () => (
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider mr-1">Prioridade</span>
               {Object.entries(LABELS_PRIORIDADE).map(([v, l]) => (
-                <button key={v} type="button" onClick={() => toggleLista("prioridade", v)}
-                  className={cn("text-xs px-2 py-1 rounded-full border transition-colors", naLista("prioridade", v) ? "bg-primary-500 border-primary-500 text-white" : "bg-white border-surface-border text-ink-muted hover:border-primary-300")}>{l}</button>
+                <button key={v} type="button" onClick={() => toggleLista("prioridade", v)} aria-pressed={naLista("prioridade", v)}
+                  className={chip(naLista("prioridade", v))}>{l}</button>
               ))}
             </div>
-          </div>
+          ) },
+          { id: "clienteId", label: "Cliente", params: ["clienteId"], render: () => <BuscaSelect value={get("clienteId")} onChange={(v) => setParams({ clienteId: v || null })} options={opcoes.clientes} placeholder="Todos" /> },
+          { id: "responsavelId", label: "Técnico responsável", params: ["responsavelId"], render: () => <BuscaSelect value={get("responsavelId")} onChange={(v) => setParams({ responsavelId: v || null })} options={opcoes.usuarios} placeholder="Todos" /> },
+          { id: "tipoOsId", label: "Tipo de OS", params: ["tipoOsId"], render: () => (
+            <select value={get("tipoOsId")} onChange={(e) => setParams({ tipoOsId: e.target.value || null })} className={inputFiltro(get("tipoOsId"))} aria-label="Tipo de OS">
+              <option value="">Todos</option>
+              {opcoes.tiposOs.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          ) },
+          { id: "numero", label: "Número da OS", params: ["numero"], render: () => <FiltroTextoUrl param="numero" navegar={(m) => setParams(m)} placeholder="OS-2026-..." rotulo="Número da OS" /> },
+          { id: "origem", label: "Origem", params: ["origem"], render: () => (
+            <select value={get("origem")} onChange={(e) => setParams({ origem: e.target.value || null })} className={inputFiltro(get("origem"))} aria-label="Origem">
+              <option value="">Todas</option>
+              {Object.entries(LABELS_ORIGEM_OS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          ) },
+          { id: "contratoId", label: "Contrato", params: ["contratoId"], render: () => <BuscaSelect value={get("contratoId")} onChange={(v) => setParams({ contratoId: v || null })} options={opcoes.contratos} placeholder="Todos" /> },
+        ]}
+      />
 
-          {/* Filtros avançados */}
-          {mostrarAvancados && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-surface-border">
-              <div>
-                <label className="text-[11px] font-semibold text-ink-muted">Abertura — de</label>
-                <input type="date" defaultValue={get("dataInicio")} onChange={(e) => setParams({ dataInicio: e.target.value || null, data: null })} className={selectCls} />
-              </div>
-              <div>
-                <label className="text-[11px] font-semibold text-ink-muted">Abertura — até</label>
-                <input type="date" defaultValue={get("dataFim")} onChange={(e) => setParams({ dataFim: e.target.value || null, data: null })} className={selectCls} />
-              </div>
-              <div>
-                <label className="text-[11px] font-semibold text-ink-muted">Cliente</label>
-                <BuscaSelect value={get("clienteId")} onChange={(v) => setParams({ clienteId: v || null })} options={opcoes.clientes} placeholder="Todos" />
-              </div>
-              <div>
-                <label className="text-[11px] font-semibold text-ink-muted">Técnico responsável</label>
-                <BuscaSelect value={get("responsavelId")} onChange={(v) => setParams({ responsavelId: v || null })} options={opcoes.usuarios} placeholder="Todos" />
-              </div>
-              <div>
-                <label className="text-[11px] font-semibold text-ink-muted">Tipo de OS</label>
-                <select value={get("tipoOsId")} onChange={(e) => setParams({ tipoOsId: e.target.value || null })} className={selectCls}>
-                  <option value="">Todos</option>
-                  {opcoes.tiposOs.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-[11px] font-semibold text-ink-muted">Número da OS</label>
-                <input value={numeroLocal} onChange={(e) => setNumeroLocal(e.target.value)} placeholder="OS-2026-..." className={selectCls} />
-              </div>
-              <div>
-                <label className="text-[11px] font-semibold text-ink-muted">Origem</label>
-                <select value={get("origem")} onChange={(e) => setParams({ origem: e.target.value || null })} className={selectCls}>
-                  <option value="">Todas</option>
-                  {Object.entries(LABELS_ORIGEM_OS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-[11px] font-semibold text-ink-muted">Contrato</label>
-                <BuscaSelect value={get("contratoId")} onChange={(v) => setParams({ contratoId: v || null })} options={opcoes.contratos} placeholder="Todos" />
-              </div>
-            </div>
-          )}
-
-          {/* Resumo / ações de filtro */}
-          <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
-            <div className="flex items-center gap-3 text-sm text-ink-muted">
-              <span>Exibindo <strong className="text-ink">{exibindo}</strong> de <strong className="text-ink">{total}</strong> ordens de serviço</span>
-              {filtrosAtivos > 0 && (
-                <span className="inline-flex items-center gap-1 text-xs font-semibold bg-primary-50 text-primary-700 px-2 py-0.5 rounded-full">
-                  <Filter className="w-3 h-3" /> {filtrosAtivos} filtro(s) ativo(s)
-                </span>
-              )}
-            </div>
-            {filtrosAtivos > 0 && (
-              <button type="button" onClick={limparFiltros} className="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-700">
-                <X className="w-3.5 h-3.5" /> Limpar filtros
-              </button>
-            )}
-          </div>
+      <div className="card overflow-hidden">
+        <div className="px-4 sm:px-5 py-2.5 border-b border-surface-border flex items-center justify-between flex-wrap gap-2 text-sm text-ink-muted">
+          <span data-contador><strong className="text-ink">{total.toLocaleString("pt-BR")}</strong> {total === 1 ? "ordem de serviço" : "ordens de serviço"}{periodo.tipo !== "todos" ? ` · ${periodo.rotulo}` : ""}</span>
         </div>
 
-        {/* Resultados */}
+        {/* Resultados (celular: sempre cartões) */}
+        <div className={cn("transition-opacity", pendente && "opacity-60")} aria-busy={pendente}>
         {ordens.length === 0 ? (
-          <p className="text-center text-ink-subtle py-12">Nenhuma OS encontrada com os filtros aplicados.</p>
-        ) : view === "cards" ? (
-          <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="flex flex-col items-center gap-2 py-12 text-center" data-lista-vazia>
+            <p className="text-sm font-medium text-ink">Nenhuma OS encontrada</p>
+            <p className="text-xs text-ink-muted">{buscaLocal ? `Nada combina com “${buscaLocal}”.` : "Nenhuma OS com os filtros aplicados."}</p>
+            {filtrosAtivos > 0 && <button type="button" onClick={limparFiltros} className="text-sm font-medium text-acento hover:underline">Limpar filtros</button>}
+          </div>
+        ) : (<>
+          <div className={cn("p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3", view !== "cards" && "md:hidden")} data-cartoes>
             {ordens.map((os) => (
               <div key={os.id} className="relative">
-              <Link href={`/ordens/${os.id}`} className="block h-full border border-surface-border rounded-xl p-4 hover:border-primary-200 hover:shadow-card transition-all">
+              {massa && <CheckboxLinha id={os.id} rotulo={os.chamadoNumero ?? os.numero} className="absolute top-3 right-3 z-10 bg-white rounded" />}
+              <Link href={`/ordens/${os.id}`} className="block h-full bg-white border border-surface-border rounded-card p-4 shadow-card hover:border-acento/40 hover:shadow-card-hover transition-shadow">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono font-semibold text-primary-600">{os.chamadoNumero ?? os.numero}</span>
-                  {os.origem === "PORTAL_CLIENTE" && <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-cyan-50 text-cyan-700 px-1.5 py-0.5 rounded"><Headset className="w-3 h-3" /> Portal</span>}
+                  <span className="font-display font-semibold tabular-nums text-acento">{os.chamadoNumero ?? os.numero}</span>
+                  {os.origem === "PORTAL_CLIENTE" && <span className="pill-acento text-[11px] px-2"><Headset className="w-3 h-3" aria-hidden="true" /> Portal</span>}
                 </div>
                 <div className="flex items-center gap-2 mt-1">
                   <AvatarCliente nome={os.cliente} logoUrl={os.clienteLogo} size={28} />
@@ -359,63 +228,62 @@ export function OrdensListaClient({ ordens, total, exibindo, opcoes }: { ordens:
                   <span className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider">Equipe:</span>
                   <AvatarStack tecnicos={os.tecnicos} size={28} />
                 </div>
-                <p className="text-[11px] text-ink-subtle mt-2">Aberta {formatarData(os.criadoEm)}{os.previsaoConclusao ? ` · Prev. ${formatarData(os.previsaoConclusao)}` : ""}</p>
+                <p className="text-[11px] text-ink-muted mt-2 tabular-nums">Aberta {formatarData(os.criadoEm)}{os.previsaoConclusao ? ` · Prev. ${formatarDiaCivil(os.previsaoConclusao)}` : ""}</p>
               </Link>
               <div className="absolute bottom-2 right-2"><OsInativarBotao osId={os.id} numero={os.chamadoNumero ?? os.numero} status={os.status} variante="icone" /></div>
               </div>
             ))}
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-alt border-b border-surface-border">
-                <tr>
-                  <Th onClick={() => ordenarPor("numero")}>Número <Seta campo="numero" /></Th>
-                  <Th onClick={() => ordenarPor("cliente")}>Cliente <Seta campo="cliente" /></Th>
-                  <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden lg:table-cell">Técnico</th>
-                  <Th className="hidden lg:table-cell" onClick={() => ordenarPor("criadoEm")}>Abertura <Seta campo="criadoEm" /></Th>
-                  <Th className="hidden xl:table-cell" onClick={() => ordenarPor("previsaoConclusao")}>Previsão <Seta campo="previsaoConclusao" /></Th>
-                  <Th onClick={() => ordenarPor("status")}>Status <Seta campo="status" /></Th>
-                  <Th className="hidden md:table-cell" onClick={() => ordenarPor("prioridade")}>Prioridade <Seta campo="prioridade" /></Th>
-                  <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Equipe</th>
-                  <th className="w-px px-2 py-3"><span className="sr-only">Ações</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                {ordens.map((os, idx) => (
-                  <tr key={os.id} className={cn("border-b border-surface-border hover:bg-primary-50/40 transition-colors", idx % 2 === 1 && "bg-surface-alt/30")}>
-                    <td className="px-4 py-3">
-                      <Link href={`/ordens/${os.id}`} className="font-mono font-semibold text-primary-600 hover:underline">{os.chamadoNumero ?? os.numero}</Link>
-                      {os.origem === "PORTAL_CLIENTE" && <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-semibold bg-cyan-50 text-cyan-700 px-1.5 py-0.5 rounded"><Headset className="w-3 h-3" /> Portal</span>}
-                    </td>
-                    <td className="px-4 py-3 text-ink font-medium">
-                      <div className="flex items-center gap-2">
-                        <AvatarCliente nome={os.cliente} logoUrl={os.clienteLogo} size={28} />
-                        <span className="truncate">{os.cliente}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-ink-muted hidden lg:table-cell">{os.responsavel ?? "—"}</td>
-                    <td className="px-4 py-3 text-ink-muted hidden lg:table-cell">{formatarData(os.criadoEm)}</td>
-                    <td className="px-4 py-3 text-ink-muted hidden xl:table-cell">{os.previsaoConclusao ? formatarData(os.previsaoConclusao) : "—"}</td>
-                    <td className="px-4 py-3"><span className={CLASSE_STATUS[os.status]}>{LABELS_STATUS_OS[os.status]}</span></td>
-                    <td className="px-4 py-3 hidden md:table-cell"><span className={CLASSE_PRIORIDADE[os.prioridade]}>{LABELS_PRIORIDADE[os.prioridade]}</span></td>
-                    <td className="px-4 py-3"><div className="flex justify-end"><AvatarStack tecnicos={os.tecnicos} size={28} /></div></td>
-                    <td className="px-2 py-3"><OsInativarBotao osId={os.id} numero={os.chamadoNumero ?? os.numero} status={os.status} variante="icone" /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+          {view !== "cards" && (
+          <TabelaPro
+            tela="ordens"
+            ordenacao={{ ativa: sortAtual, dir: dirAtual, onOrdenar: ordenarPor }}
+            colunas={[
+              ...(massa ? [{ id: "sel", titulo: "Selecionar a página", fixa: true, largura: 36, cabecalho: <CheckboxPagina />, classe: "pl-3" }] : []),
+              { id: "numero", titulo: "Número", largura: 176, ordenar: "numero", obrigatoria: true },
+              { id: "cliente", titulo: "Cliente", ordenar: "cliente", obrigatoria: true },
+              { id: "tecnico", titulo: "Técnico", largura: 140, classe: "truncate" },
+              { id: "abertura", titulo: "Abertura", largura: 96, ordenar: "criadoEm" },
+              { id: "previsao", titulo: "Previsão", largura: 96, ordenar: "previsaoConclusao" },
+              { id: "status", titulo: "Status", largura: 168, ordenar: "status" },
+              { id: "prioridade", titulo: "Prioridade", largura: 104, ordenar: "prioridade" },
+              { id: "equipe", titulo: "Equipe", largura: 128, alinhar: "direita" },
+              { id: "acoes", titulo: "Ações", fixa: true, largura: 40, semTitulo: true, alinhar: "direita", classe: "py-0.5" },
+            ]}
+            linhas={ordens.map((os) => ({
+              id: os.id,
+              titulos: { cliente: os.cliente, tecnico: os.responsavel ?? undefined },
+              celulas: {
+                sel: massa ? <CheckboxLinha id={os.id} rotulo={os.chamadoNumero ?? os.numero} /> : null,
+                numero: (
+                  <span className="whitespace-nowrap">
+                    <Link href={`/ordens/${os.id}`} className={cn(PLANILHA.codigo, "text-acento hover:underline")}>{os.chamadoNumero ?? os.numero}</Link>
+                    {os.origem === "PORTAL_CLIENTE" && <span className="ml-2 pill-acento text-[11px] px-2"><Headset className="w-3 h-3" aria-hidden="true" /> Portal</span>}
+                  </span>
+                ),
+                cliente: (
+                  <div className="flex items-center gap-2 min-w-0">
+                    <AvatarCliente nome={os.cliente} logoUrl={os.clienteLogo} size={24} />
+                    <span className={cn(PLANILHA.nome, "truncate")}>{os.cliente}</span>
+                  </div>
+                ),
+                tecnico: <span className={PLANILHA.apagado}>{os.responsavel ?? "—"}</span>,
+                abertura: <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{formatarData(os.criadoEm)}</span>,
+                previsao: <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{formatarDiaCivil(os.previsaoConclusao)}</span>,
+                status: <span className={CLASSE_STATUS[os.status]}>{LABELS_STATUS_OS[os.status]}</span>,
+                prioridade: <span className={CLASSE_PRIORIDADE[os.prioridade]}>{LABELS_PRIORIDADE[os.prioridade]}</span>,
+                equipe: <div className="flex justify-end"><AvatarStack tecnicos={os.tecnicos} size={24} /></div>,
+                acoes: <OsInativarBotao osId={os.id} numero={os.chamadoNumero ?? os.numero} status={os.status} variante="icone" />,
+              },
+            }))}
+          />
+          )}
+        </>)}
+        </div>
+        <div className="px-4 sm:px-5 py-3 border-t border-surface-border">
+          <Paginacao total={total} pagina={pagina} porPagina={porPagina} rotulo={total === 1 ? "ordem de serviço" : "ordens de serviço"} onNavegar={setParams} />
+        </div>
       </div>
     </div>
-  );
-}
-
-function Th({ children, onClick, className }: { children: React.ReactNode; onClick: () => void; className?: string }) {
-  return (
-    <th className={cn("text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider cursor-pointer select-none hover:text-ink", className)} onClick={onClick}>
-      {children}
-    </th>
   );
 }

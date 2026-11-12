@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { contaPagarSchema } from "@/lib/validations";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { proximoNumeroContaPagar } from "@/lib/financeiro-server";
+import { categoriaParaGravar, centroCustoParaGravar, fornecedorParaGravar, respostaRefEmpresa } from "@/lib/ref-empresa";
+import { boletoParaGravar } from "@/lib/financeiro/boleto-conta";
 
 export async function GET() {
   const guard = await exigirPermissao("financeiro", "visualizar");
@@ -11,7 +13,12 @@ export async function GET() {
 
   const contas = await prisma.contaPagar.findMany({
     where: { empresaId },
-    include: { pedidoCompra: { select: { numero: true } } },
+    include: {
+      pedidoCompra: { select: { numero: true } },
+      categoriaFinanceira: { select: { id: true, nome: true, cor: true, ativo: true } },
+      centroCusto: { select: { id: true, nome: true, ativo: true } },
+      fornecedorCadastro: { select: { id: true, nome: true, documento: true, ativo: true } },
+    },
     orderBy: [{ dataVencimento: "asc" }, { criadoEm: "desc" }],
     take: 300,
   });
@@ -27,13 +34,29 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
   const d = parsed.data;
 
-  const numero = await proximoNumeroContaPagar(empresaId, new Date().getFullYear());
+  if (!d.fornecedorId) return NextResponse.json({ erro: "Escolha o fornecedor (cadastre-o em Financeiro › Fornecedores se ainda não existir)." }, { status: 400 });
+
+  const boleto = boletoParaGravar(d.boleto);
+  if (!boleto.ok) return NextResponse.json({ erro: boleto.erro }, { status: 400 });
+
+  let categoria: Awaited<ReturnType<typeof categoriaParaGravar>>;
+  let fornecedor: Awaited<ReturnType<typeof fornecedorParaGravar>>;
+  let centro: Awaited<ReturnType<typeof centroCustoParaGravar>>;
+  try {
+    [categoria, fornecedor, centro] = await Promise.all([
+      categoriaParaGravar(d.categoriaId, empresaId), fornecedorParaGravar(d.fornecedorId, empresaId), centroCustoParaGravar(d.centroCustoId, empresaId),
+    ]);
+  } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
+
+  const numero = await proximoNumeroContaPagar(empresaId);
   const conta = await prisma.contaPagar.create({
     data: {
       empresaId,
       numero,
-      fornecedor: d.fornecedor,
-      fornecedorCnpj: d.fornecedorCnpj || null,
+      // Vínculo pelo ID; nome/CNPJ copiados do cadastro só como histórico
+      fornecedorId: fornecedor.fornecedorId,
+      fornecedor: fornecedor.nome ?? "",
+      fornecedorCnpj: fornecedor.documento ?? null,
       descricao: d.descricao,
       valorTotal: d.valorTotal,
       valorPago: 0,
@@ -44,6 +67,9 @@ export async function POST(req: NextRequest) {
       banco: d.banco || null,
       pedidoCompraId: d.pedidoCompraId || null,
       observacao: d.observacao || null,
+      categoriaId: categoria.categoriaId ?? null,
+      centroCustoId: centro.centroCustoId ?? null,
+      ...boleto.dados,
     },
   });
   return NextResponse.json(conta, { status: 201 });

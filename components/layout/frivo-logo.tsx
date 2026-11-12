@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { acento } from "@/lib/ui/tokens";
 
 interface FrivoLogoProps {
   className?: string;
@@ -21,13 +22,13 @@ export function FrivoLogo({
 }: FrivoLogoProps) {
   const s = sizes[size];
   const textColor = variant === "light" ? "text-white" : "text-ink";
-  const subtitleColor = variant === "light" ? "text-slate-300" : "text-ink-muted";
+  const subtitleColor = variant === "light" ? "text-white/70" : "text-ink-muted";
 
   return (
     <div className={cn("flex items-center gap-2.5", className)}>
       <FrivoMark size={s.icon} />
       <div className="flex flex-col leading-none">
-        <span className={cn("font-bold tracking-tight lowercase", s.text, textColor)}>
+        <span className={cn("font-display font-bold tracking-tight lowercase", s.text, textColor)}>
           frivo
         </span>
         {showSubtitle && (
@@ -50,13 +51,8 @@ export function FrivoMark({ size = 32 }: { size?: number }) {
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
     >
-      <defs>
-        <linearGradient id="frivoGrad" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#0EA5E9" />
-          <stop offset="1" stopColor="#10B981" />
-        </linearGradient>
-      </defs>
-      <rect width="40" height="40" rx="10" fill="url(#frivoGrad)" />
+      {/* Sistema de design: marca em cor sólida (acento petróleo), sem degradê */}
+      <rect width="40" height="40" rx="10" fill={acento.DEFAULT} />
       {/* Floco de neve estilizado */}
       <g stroke="white" strokeWidth="2" strokeLinecap="round">
         <line x1="20" y1="9"  x2="20" y2="31" />

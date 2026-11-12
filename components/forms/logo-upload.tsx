@@ -7,9 +7,11 @@ import { Upload, Trash2, ImageIcon } from "lucide-react";
 interface LogoUploadProps {
   clienteId: string;
   logoInicial?: string | null;
+  /** Variante enxuta (ao lado dos dados básicos): preview menor e dica inline. */
+  compacto?: boolean;
 }
 
-export function LogoUpload({ clienteId, logoInicial }: LogoUploadProps) {
+export function LogoUpload({ clienteId, logoInicial, compacto }: LogoUploadProps) {
   const [logo, setLogo] = useState<string | null>(logoInicial ?? null);
   const [uploading, setUploading] = useState(false);
   const [erro, setErro] = useState("");
@@ -55,20 +57,20 @@ export function LogoUpload({ clienteId, logoInicial }: LogoUploadProps) {
   return (
     <div className="space-y-2">
       {erro && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg px-3 py-1.5">{erro}</div>
+        <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-xs rounded-lg px-3 py-1.5">{erro}</div>
       )}
 
       <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={handleUpload} className="hidden" />
 
       {logo ? (
         <div className="flex items-center gap-4">
-          <img src={logo} alt="Logo" className="w-20 h-20 object-contain rounded-lg border border-gray-200 bg-white p-1" />
-          <div className="flex flex-col gap-1.5">
+          <img src={logo} alt="Logo" className={`${compacto ? "w-14 h-14" : "w-20 h-20"} object-contain rounded-lg border border-surface-border bg-white p-1`} />
+          <div className={compacto ? "flex items-center gap-2" : "flex flex-col gap-1.5"}>
             <Button type="button" variant="secondary" onClick={() => inputRef.current?.click()} loading={uploading} className="text-xs py-1 px-2.5 h-auto">
               <Upload className="w-3 h-3" /> Trocar
             </Button>
-            <Button type="button" variant="ghost" onClick={removerLogo} className="text-xs text-red-500 hover:text-red-700 py-1 px-2.5 h-auto">
-              <Trash2 className="w-3 h-3" /> Remover
+            <Button type="button" variant="ghost" onClick={removerLogo} className="text-xs text-atrasado hover:text-atrasado-texto py-1 px-2.5 h-auto">
+              <Trash2 className="w-3 h-3" /> Excluir
             </Button>
           </div>
         </div>
@@ -76,19 +78,19 @@ export function LogoUpload({ clienteId, logoInicial }: LogoUploadProps) {
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
-          className="flex flex-col items-center justify-center w-24 h-24 border-2 border-dashed border-gray-300 rounded-lg hover:border-frivo-400 hover:bg-frivo-50/50 transition-colors cursor-pointer"
+          className={`flex flex-col items-center justify-center ${compacto ? "w-16 h-16" : "w-24 h-24"} border-2 border-dashed border-surface-border rounded-lg hover:border-frivo-400 hover:bg-frivo-50/50 transition-colors cursor-pointer`}
         >
           {uploading ? (
-            <span className="text-xs text-gray-400">Enviando…</span>
+            <span className="text-xs text-ink-muted">Enviando…</span>
           ) : (
             <>
-              <ImageIcon className="w-6 h-6 text-gray-300" />
-              <span className="text-xs text-gray-400 mt-1">Enviar logo</span>
+              <ImageIcon className={compacto ? "w-5 h-5 text-ink-subtle" : "w-6 h-6 text-ink-subtle"} />
+              <span className="text-[11px] text-ink-muted mt-1">Enviar logo</span>
             </>
           )}
         </button>
       )}
-      <p className="text-xs text-gray-400">PNG, JPG ou WEBP — máx. 2 MB</p>
+      {!compacto && <p className="text-xs text-ink-muted">PNG, JPG ou WEBP — máx. 2 MB</p>}
     </div>
   );
 }

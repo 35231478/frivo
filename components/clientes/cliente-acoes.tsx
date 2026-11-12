@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmar, toast } from "@/components/ui/avisos";
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -31,18 +32,18 @@ export function ClienteAcoes({ id, nome, ativo = true }: { id: string; nome?: st
   async function inativar() {
     setMenu(false);
     const alvo = nome ? `o cliente "${nome}"` : "este cliente";
-    if (!confirm(`Inativar ${alvo}? Ele deixará de aparecer nas listagens padrão, mas todo o histórico será preservado.`)) return;
+    if (!(await confirmar({ titulo: "Inativar cliente", mensagem: `Inativar ${alvo}? Ele deixará de aparecer nas listagens padrão, mas todo o histórico será preservado.`, perigo: true, confirmarTexto: "Inativar" }))) return;
     setInativando(true);
     try {
       const res = await fetch(`/api/clientes/${id}`, { method: "DELETE" });
       if (!res.ok) {
         const e = await res.json().catch(() => ({}));
-        alert(e.erro ?? "Erro ao inativar cliente.");
+        toast(e.erro ?? "Erro ao inativar cliente.", "erro");
         return;
       }
       router.refresh();
     } catch {
-      alert("Erro de conexão.");
+      toast("Erro de conexão.", "erro");
     } finally {
       setInativando(false);
     }
@@ -87,7 +88,7 @@ export function ClienteAcoes({ id, nome, ativo = true }: { id: string; nome?: st
                 <button
                   type="button"
                   onClick={inativar}
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-atrasado hover:bg-atrasado-claro"
                 >
                   <Ban className="w-3.5 h-3.5" /> Inativar cliente
                 </button>

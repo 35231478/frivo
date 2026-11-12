@@ -7,6 +7,7 @@ import { FormField, FormGrid } from "@/components/ui/form-field";
 import { WhatsAppInput } from "@/components/ui/whatsapp-input";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { Plus, Pencil, Trash2, X, Check, UserCircle, ChevronDown, ChevronRight, Star, Phone, Mail } from "lucide-react";
+import { comparaNatural } from "@/lib/utils";
 
 export interface ContatoLocal {
   _tempId: string;
@@ -23,6 +24,9 @@ const emptyContato = (): ContatoLocal => ({
   _tempId: crypto.randomUUID(),
   nome: "", cargo: "", tipo: "OUTRO", telefone: "", whatsapp: "", email: "", principal: false,
 });
+
+/** Cria um contato local em branco (com _tempId) — usado pelo autofill da consulta de CNPJ. */
+export const novoContatoLocal = emptyContato;
 
 interface ContatosLocalProps {
   contatos: ContatoLocal[];
@@ -75,7 +79,7 @@ export function ContatosLocal({ contatos, onChange }: ContatosLocalProps) {
   const ordenados = [...contatos].sort((a, b) => {
     if (a.principal && !b.principal) return -1;
     if (!a.principal && b.principal) return 1;
-    return a.nome.localeCompare(b.nome);
+    return comparaNatural(a.nome, b.nome);
   });
 
   function renderForm() {
@@ -83,19 +87,19 @@ export function ContatosLocal({ contatos, onChange }: ContatosLocalProps) {
       <div className="border border-frivo-200 bg-frivo-50/30 rounded-lg p-4 space-y-4">
         <div className="flex items-center justify-between">
           <h4 className="text-sm font-semibold text-frivo-800">{editando === "novo" ? "Novo contato" : "Editar contato"}</h4>
-          <button type="button" onClick={cancelar} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
+          <button type="button" onClick={cancelar} className="text-ink-muted hover:text-ink"><X className="w-4 h-4" /></button>
         </div>
         <FormGrid>
           <FormField label="Nome" required>
-            <Input value={form.nome} onChange={(e) => updateField("nome", e.target.value)} placeholder="Nome completo" />
+            <Input value={form.nome} onChange={(e) => updateField("nome", e.target.value)} caixa="nome" placeholder="Nome completo" />
           </FormField>
           <FormField label="Cargo">
-            <Input value={form.cargo} onChange={(e) => updateField("cargo", e.target.value)} placeholder="Ex: Gerente, Coordenador" />
+            <Input value={form.cargo} onChange={(e) => updateField("cargo", e.target.value)} caixa="nome" placeholder="Ex: Gerente, Coordenador" />
           </FormField>
         </FormGrid>
         <FormGrid>
           <FormField label="E-mail">
-            <Input value={form.email} onChange={(e) => updateField("email", e.target.value)} type="email" placeholder="email@empresa.com" />
+            <Input value={form.email} onChange={(e) => updateField("email", e.target.value)} caixa="email" type="email" placeholder="email@empresa.com" />
           </FormField>
           <FormField label="Telefone">
             <PhoneInput value={form.telefone} onChange={(e: any) => updateField("telefone", e.target.value)} placeholder="(00) 0000-0000" />
@@ -109,7 +113,7 @@ export function ContatosLocal({ contatos, onChange }: ContatosLocalProps) {
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={cancelar}>Cancelar</Button>
           <Button type="button" onClick={salvar} disabled={!form.nome.trim()}>
-            <Check className="w-4 h-4" /> {editando === "novo" ? "Adicionar" : "Salvar"}
+            <Check className="w-4 h-4" /> Salvar
           </Button>
         </div>
       </div>
@@ -119,41 +123,41 @@ export function ContatosLocal({ contatos, onChange }: ContatosLocalProps) {
   return (
     <div className="space-y-2">
       {ordenados.length === 0 && !editando && (
-        <p className="text-sm text-gray-400 py-2">Nenhum contato adicionado.</p>
+        <p className="text-sm text-ink-muted py-2">Nenhum contato adicionado.</p>
       )}
 
       {ordenados.map((c) => {
         if (editando === c._tempId) return <div key={c._tempId}>{renderForm()}</div>;
         const aberto = expandido.has(c._tempId);
         return (
-          <div key={c._tempId} className="border border-gray-200 rounded-lg overflow-hidden">
-            <button type="button" onClick={() => toggleExpand(c._tempId)} className="flex items-center justify-between w-full p-3 text-left hover:bg-gray-50 transition-colors">
+          <div key={c._tempId} className="border border-surface-border rounded-lg overflow-hidden">
+            <button type="button" onClick={() => toggleExpand(c._tempId)} className="flex items-center justify-between w-full p-3 text-left hover:bg-surface-page transition-colors">
               <div className="flex items-center gap-3 min-w-0">
-                <UserCircle className="w-4 h-4 text-gray-400 shrink-0" />
+                <UserCircle className="w-4 h-4 text-ink-muted shrink-0" />
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-gray-900">{c.nome}</span>
+                    <span className="text-sm font-medium text-ink">{c.nome}</span>
                     {c.principal && (
-                      <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
+                      <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold bg-atencao-claro text-atencao-texto px-1.5 py-0.5 rounded-full">
                         <Star className="w-2.5 h-2.5 fill-current" /> Principal
                       </span>
                     )}
                   </div>
-                  {c.cargo && <p className="text-xs text-gray-500">{c.cargo}</p>}
+                  {c.cargo && <p className="text-xs text-ink-muted">{c.cargo}</p>}
                 </div>
               </div>
-              {aberto ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+              {aberto ? <ChevronDown className="w-4 h-4 text-ink-muted" /> : <ChevronRight className="w-4 h-4 text-ink-muted" />}
             </button>
             {aberto && (
-              <div className="border-t border-gray-100 p-3 space-y-2 bg-gray-50/50">
+              <div className="border-t border-surface-linha p-3 space-y-2 bg-surface-page/50">
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                  {c.email && <div className="flex items-center gap-1"><Mail className="w-3 h-3 text-gray-400" /> <span className="text-gray-700">{c.email}</span></div>}
-                  {c.telefone && <div className="flex items-center gap-1"><Phone className="w-3 h-3 text-gray-400" /> <span className="text-gray-700">{c.telefone}</span></div>}
-                  {c.whatsapp && <div className="flex items-center gap-1"><span className="text-green-500 text-[10px] font-bold">WA</span> <span className="text-gray-700">{c.whatsapp}</span></div>}
+                  {c.email && <div className="flex items-center gap-1"><Mail className="w-3 h-3 text-ink-muted" /> <span className="text-ink">{c.email}</span></div>}
+                  {c.telefone && <div className="flex items-center gap-1"><Phone className="w-3 h-3 text-ink-muted" /> <span className="text-ink">{c.telefone}</span></div>}
+                  {c.whatsapp && <div className="flex items-center gap-1"><span className="text-ok-texto text-[10px] font-bold">WA</span> <span className="text-ink">{c.whatsapp}</span></div>}
                 </div>
                 <div className="flex items-center gap-2 pt-1">
                   <Button type="button" variant="secondary" onClick={() => abrirEditar(c)} className="text-xs h-7 px-2.5"><Pencil className="w-3 h-3" /> Editar</Button>
-                  <Button type="button" variant="ghost" onClick={() => remover(c._tempId)} className="text-xs h-7 px-2.5 text-red-500 hover:text-red-700"><Trash2 className="w-3 h-3" /> Remover</Button>
+                  <Button type="button" variant="ghost" onClick={() => remover(c._tempId)} className="text-xs h-7 px-2.5 text-atrasado hover:text-atrasado-texto"><Trash2 className="w-3 h-3" /> Excluir</Button>
                 </div>
               </div>
             )}
@@ -165,7 +169,7 @@ export function ContatosLocal({ contatos, onChange }: ContatosLocalProps) {
 
       {!editando && (
         <Button type="button" variant="secondary" onClick={abrirNovo} className="w-full justify-center border-dashed mt-2">
-          <Plus className="w-4 h-4" /> Adicionar contato
+          <Plus className="w-4 h-4" /> Novo contato
         </Button>
       )}
     </div>

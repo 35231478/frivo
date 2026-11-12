@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
+import { bloqueioPainelTecnico } from "@/lib/tecnico/painel";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { equipamentosDoCliente } from "@/lib/execucao/vinculos";
+import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
+import { criarPrimeiraAtividade, prepararExecucao, proximoNumeroOs } from "@/lib/os/abertura";
 
 const osCreateSchema = z.object({
   clienteId: z.string().min(1),
@@ -11,12 +15,17 @@ const osCreateSchema = z.object({
   descricao: z.string().min(5),
   previsaoConclusao: z.string().optional(),
   observacoes: z.string().optional(),
+  /** Equipamentos atendidos já na abertura (opcional; dá para vincular depois, na execução) */
+  equipamentoIds: z.array(z.string().min(1)).max(200).optional(),
 });
 
 export async function GET(req: NextRequest) {
   const guard = await exigirPermissao("ordens", "visualizar");
   if (guard.erro) return guard.resposta;
   const { session } = guard;
+  // Lista de OS do PAINEL: bloqueada no modo técnico (o app vê só as OS dele, por /api/tecnico/*).
+  const bloqueio = bloqueioPainelTecnico(session);
+  if (bloqueio) return bloqueio;
   const empresaId = session.user!.empresaId;
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status");
@@ -64,16 +73,24 @@ export async function POST(req: NextRequest) {
   const parsed = osCreateSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
 
-  const ano = new Date().getFullYear();
-  const ultimaOs = await prisma.ordemServico.findFirst({
-    where: { empresaId, numero: { startsWith: `OS-${ano}-` } },
-    orderBy: { numero: "desc" },
-    select: { numero: true },
-  });
-  const seq = (ultimaOs ? Number(ultimaOs.numero.split("-")[2]) : 0) + 1;
-  const numero = `OS-${ano}-${String(seq).padStart(4, "0")}`;
+  // Quem executa é obrigatório ao abrir a OS: equipe OU colaboradores (+ veículo puxado/escolhido)
+  const prep = await prepararExecucao(empresaId, body?.execucao);
+  if ("erro" in prep) return NextResponse.json({ erro: prep.erro }, { status: 400 });
+  // Cliente/endereço/contrato da mesma empresa
+  if (!(await prisma.cliente.findFirst({ where: { id: parsed.data.clienteId, empresaId }, select: { id: true } })))
+    return NextResponse.json({ erro: "Cliente inválido." }, { status: 400 });
+  // Equipamentos atendidos (opcional): só do cliente da OS e ativos
+  let equipamentoIds: string[] = [];
+  if (parsed.data.equipamentoIds?.length) {
+    const r = await equipamentosDoCliente(empresaId, parsed.data.clienteId, parsed.data.equipamentoIds);
+    if (r.erro) return NextResponse.json({ erro: r.erro }, { status: 400 });
+    equipamentoIds = r.validos;
+  }
 
-  const os = await prisma.ordemServico.create({
+  const os = await prisma.$transaction(async (tx) => {
+   // Número pelo contador da empresa, sob trava, na mesma transação do INSERT
+   const numero = await proximoNumeroOs(tx, empresaId);
+   const criada = await tx.ordemServico.create({
     data: {
       empresaId,
       numero,
@@ -88,11 +105,16 @@ export async function POST(req: NextRequest) {
       previsaoConclusao: parsed.data.previsaoConclusao ? new Date(parsed.data.previsaoConclusao) : null,
       observacoes: parsed.data.observacoes || null,
     },
+   });
+   const atividadeId = await criarPrimeiraAtividade(tx, empresaId, criada.id, prep.execucao);
+   if (equipamentoIds.length) await tx.atividadeEquipamento.createMany({ data: equipamentoIds.map((equipamentoId) => ({ atividadeId, equipamentoId })) });
+   await tx.osHistorico.create({
+    data: { ordemServicoId: criada.id, usuarioId, acao: "OS criada", detalhes: `Ordem de serviço ${numero} criada.` },
+   });
+   return criada;
   });
 
-  await prisma.osHistorico.create({
-    data: { ordemServicoId: os.id, usuarioId, acao: "OS criada", detalhes: `Ordem de serviço ${numero} criada.` },
-  });
-
+  // Central da OS: a 1ª atividade agendada com data já põe a OS em "Agendada"
+  await sincronizarStatusOs(os.id, empresaId, usuarioId);
   return NextResponse.json(os, { status: 201 });
 }

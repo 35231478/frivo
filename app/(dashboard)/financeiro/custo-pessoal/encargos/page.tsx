@@ -1,0 +1,33 @@
+import type { Metadata } from "next";
+import { Dica } from "@/components/ui/dica";
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
+import { pode } from "@/lib/permissoes";
+import { PageHeader } from "@/components/ui/page-header";
+import { ModelosEncargosTela } from "@/components/cadastros/telas/modelos-encargos";
+import { Info } from "lucide-react";
+
+export const metadata: Metadata = { title: "Modelos de encargos" };
+
+export default async function ModelosEncargosPage() {
+  const session = await auth();
+  const user = session!.user!;
+  if (!pode(user.permissoes, "financeiro", "folha", user.role)) redirect("/sem-permissao");
+
+  return (
+    <div className="max-w-5xl mx-auto space-y-4">
+      <PageHeader title="Modelos de encargos" description="Percentuais por tipo de contrato, aplicados sobre salário + adicionais + horas extras" backHref="/financeiro/custo-pessoal" />
+      <div className="flex gap-2 rounded-lg border border-atencao/20 bg-atencao-claro px-3 py-2.5 text-xs sm:text-sm text-atencao-texto">
+        <Info className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
+        <p className="flex flex-wrap items-center gap-1">
+          Valores iniciais de <strong>referência</strong> para o regime geral (Lucro Presumido/Real). <strong>Ajuste com o contador.</strong> Estimativa de gestão; não substitui a folha oficial.
+          <Dica rotulo="Regime tributário" texto="No Simples Nacional, por exemplo, o INSS patronal costuma não incidir (Anexo III)." />
+        </p>
+      </div>
+      {/* Cadastro padronizado (lib/cadastros): os modelos padrão são criados na primeira listagem */}
+      <div className="bg-white rounded-card border border-surface-border p-4 sm:p-6">
+        <ModelosEncargosTela />
+      </div>
+    </div>
+  );
+}

@@ -1,6 +1,7 @@
 import { formatarData, nomeMes, TITULO_RELATORIO } from "@/lib/utils";
 import { CabecalhoEmpresa, DadosClienteContrato, EquipamentosTabela, type EmpresaInfo, type ClienteInfo, type ContratoInfo, type EquipamentoInfo } from "./cabecalho-relatorio";
 import { SecaoAtividade, type AtividadeSecao } from "./secao-atividade";
+import { nomesTecnicosAtividade } from "@/lib/atividade-equipe";
 
 export interface RelatorioGeralDocumentoProps {
   relatorio: { numero: string; tipo: string; mesReferencia: number; anoReferencia: number; observacao?: string | null; criadoEm: Date | string; assinadoPor?: string | null; assinaturaUrl?: string | null; assinadoEm?: Date | string | null };
@@ -14,7 +15,9 @@ function duracaoTotal(ativs: AtividadeSecao[]): number {
 }
 
 export function RelatorioGeralDocumento({ relatorio, empresa, os, equipamentos }: RelatorioGeralDocumentoProps) {
-  const tecnicos = [...new Set(os.atividades.map((a) => a.tecnico?.nome).filter(Boolean))] as string[];
+  // Todos os técnicos das atividades (responsáveis e membros das equipes)
+  const tecnicos = [...new Set(os.atividades.flatMap((a) => nomesTecnicosAtividade(a)))];
+  const equipesUsadas = [...new Set(os.atividades.map((a) => a.equipe?.nome).filter(Boolean))] as string[];
   const datas = os.atividades.map((a) => new Date(a.criadoEm).getTime());
   const periodoIni = datas.length ? new Date(Math.min(...datas)) : null;
   const periodoFim = datas.length ? new Date(Math.max(...datas)) : null;
@@ -38,7 +41,11 @@ export function RelatorioGeralDocumento({ relatorio, empresa, os, equipamentos }
         </div>
         <div className="mt-3 text-sm space-y-1">
           <p><span className="text-ink-muted">Período de execução:</span> {periodoIni ? `${formatarData(periodoIni)} → ${formatarData(periodoFim)}` : "—"}</p>
-          {tecnicos.length > 0 && <p><span className="text-ink-muted">Equipe:</span> {tecnicos.join(", ")}</p>}
+          {tecnicos.length > 0 && (
+            <p data-equipe-relatorio>
+              <span className="text-ink-muted">Equipe:</span> {equipesUsadas.length ? `${equipesUsadas.join(", ")} — ` : ""}{tecnicos.join(", ")}
+            </p>
+          )}
           <p><span className="text-ink-muted">OS:</span> <span className="font-mono">{os.numero}</span></p>
         </div>
       </div>

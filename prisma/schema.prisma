@@ -57,6 +57,9 @@ enum TipoEquipamento {
   CONDENSADORA
   EVAPORADORA
   OUTRO
+  PISO_TETO
+  CASSETE
+  SELF_CONTAINED
 }
 
 enum TipoContrato {
@@ -78,6 +81,13 @@ enum StatusContrato {
   EM_RENOVACAO
 }
 
+// Como os serviços avulsos (itens executados + adicionais) do contrato são cobrados (D3):
+// SEPARADO = medição ADICIONAL própria por OS; CONSOLIDADO = entram na medição mensal do contrato.
+enum FaturamentoAdicionais {
+  SEPARADO
+  CONSOLIDADO
+}
+
 enum TipoVencimento {
   DIAS_APOS_FATURAMENTO
   DIA_FIXO_MES
@@ -88,6 +98,12 @@ enum IndiceReajuste {
   IGPM
   INPC
   PERCENTUAL_FIXO
+}
+
+/// PR4 (D8): a decisão de um aniversário de reajuste
+enum SituacaoReajuste {
+  APLICADO
+  DISPENSADO
 }
 
 enum PeriodoRefNFSe {
@@ -113,6 +129,31 @@ enum Periodicidade {
   TRIMESTRAL
   SEMESTRAL
   ANUAL
+}
+
+/// D5: período que a NFS-e do contrato descreve
+enum ReferenciaNfse {
+  CORRENTE
+  ANTERIOR
+}
+
+/// Rotina de faturamento do contrato: em que passo a competência está
+enum EtapaFaturamento {
+  MEDICAO
+  APROVACAO
+  NFSE
+  BOLETO
+  CONCLUIDA
+}
+
+/// Rotina de faturamento do contrato: como o passo atual está
+enum SituacaoFaturamento {
+  PENDENTE
+  AGUARDANDO
+  PENDENCIA
+  FALHA
+  CONCLUIDA
+  CANCELADA
 }
 
 enum TipoServico {
@@ -278,6 +319,15 @@ enum StatusContaReceber {
   RECEBIDO
   CANCELADO
   ATRASADO
+  /// A conta foi dividida em parcelas: ela vira o LANÇAMENTO (guarda a origem, o total e as notas) e
+  /// as parcelas (linhas com lancamento_id) são as cobranças. Fora de todas as somas e listas.
+  PARCELADO
+  /// Inadimplência: o saldo foi dado como perdido (valor_perda). Sai do a receber; o que já entrou
+  /// continua recebido; a receita original não é estornada (a perda é despesa na data da marcação).
+  PERDA
+  /// O saldo foi renegociado: entrou numa conta nova (renegociada_em_id) com juros/multa/desconto e
+  /// parcelas próprias. Sai do a receber; o que já entrou continua recebido; a receita original fica.
+  RENEGOCIADO
 }
 
 enum FormaPagamento {
@@ -325,12 +375,17 @@ enum CanalNotificacao {
   SISTEMA
 }
 
+/// Ciclo automático: SOLICITADO → COTANDO ("Em cotação", ao baixar/enviar o PC) → PARCIAL / CONCLUIDO
+/// (a NF casou parte/todos os itens) | CANCELADO. COMPRADO e ENTREGUE são legados (o SQL migra para
+/// COTANDO/CONCLUIDO) e não são mais gravados.
 enum StatusPedidoCompra {
   SOLICITADO
   COTANDO
   COMPRADO
   ENTREGUE
   CANCELADO
+  PARCIAL
+  CONCLUIDO
 }
 
 enum StatusOsPrazo {
@@ -398,32 +453,50 @@ enum EscopoRelatorio {
 // ─────────────────────────────────────────────
 
 model Empresa {
-  id           String   @id @default(cuid())
-  nome         String
-  nomeFantasia String?
-  cnpj         String   @unique
-  email        String
-  telefone     String?
-  celular      String?
-  site         String?
-  logo         String?
-  endereco     String?
-  numero       String?
-  complemento  String?
-  bairro       String?
-  cidade       String?
-  estado       String?
-  cep          String?
-  latitude     Float?
-  longitude    Float?
-  plano        Plano    @default(BASICO)
-  ativo        Boolean  @default(true)
-  criadoEm     DateTime @default(now()) @map("criado_em")
-  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+  id                   String   @id @default(cuid())
+  nome                 String
+  nomeFantasia         String?
+  cnpj                 String   @unique
+  email                String
+  telefone             String?
+  celular              String?
+  site                 String?
+  logo                 String?
+  endereco             String?
+  numero               String?
+  complemento          String?
+  bairro               String?
+  cidade               String?
+  estado               String?
+  cep                  String?
+  latitude             Float?
+  longitude            Float?
+  /// Dados bancários (saem no orçamento do cliente; sem banco/conta e sem PIX, o bloco não aparece)
+  bancoNome            String?  @map("banco_nome")
+  bancoAgencia         String?  @map("banco_agencia")
+  bancoConta           String?  @map("banco_conta")
+  /// Corrente / Poupança / Pagamento (texto livre)
+  bancoTipoConta       String?  @map("banco_tipo_conta")
+  /// Titular da conta (vazio = razão social da empresa)
+  bancoTitular         String?  @map("banco_titular")
+  pixChave             String?  @map("pix_chave")
+  /// Timbre do orçamento: inscrições estadual/municipal (vazias = não aparecem no documento)
+  inscricaoEstadual    String?  @map("inscricao_estadual")
+  inscricaoMunicipal   String?  @map("inscricao_municipal")
+  /// CNAE principal (subclasse, 7 dígitos). Serviço sem CNAE próprio usa este na NFS-e (lib/nfse/servico.ts)
+  cnaePrincipal        String?  @map("cnae_principal") @db.VarChar(7)
+  /// Responsável técnico padrão (Tecnico RESPONSAVEL_TECNICO com CREA): o orçamento novo nasce com ele
+  responsavelTecnicoId String?  @map("responsavel_tecnico_id")
+  plano                Plano    @default(BASICO)
+  ativo                Boolean  @default(true)
+  criadoEm             DateTime @default(now()) @map("criado_em")
+  atualizadoEm         DateTime @updatedAt @map("atualizado_em")
 
+  responsavelTecnico     Tecnico?                      @relation("EmpresaResponsavelTecnico", fields: [responsavelTecnicoId], references: [id], onDelete: SetNull)
   usuarios               Usuario[]
   clientes               Cliente[]
   equipamentos           Equipamento[]
+  faturamentoExecucoes   FaturamentoContratoExecucao[]
   contratos              Contrato[]
   ordensServico          OrdemServico[]
   tecnicos               Tecnico[]
@@ -431,9 +504,24 @@ model Empresa {
   tiposOs                TipoOs[]
   formularios            FormularioTemplate[]
   tiposEquipamentoCustom TipoEquipamentoCustom[]
+  checklistTipoItens     ChecklistTipoItem[]
+  checklistRespostas     ChecklistResposta[]
+  fotosAtendimento       FotoAtendimento[]
+  servicosAdicionais     ServicoAdicional[]
+  fotosAdicionais        ServicoAdicionalFoto[]
+  syncOperacoes          SyncOperacao[]
   servicos               Servico[]
   produtos               Produto[]
+  kitsMaterial           KitMaterial[]
+  movimentacoesEstoque   MovimentacaoEstoque[]
+  notasCompra            NotaCompra[]
+  deParasProduto         DeParaProdutoFornecedor[]
   orcamentos             Orcamento[]
+  orcamentoAnexos        OrcamentoAnexo[]
+  orcamentoEventos       OrcamentoEvento[]
+  pedidoCompraEventos    PedidoCompraEvento[]
+  pedidoCompraVinculos   PedidoCompraVinculo[]
+  fiscal                 EmpresaFiscal?
   medicoes               Medicao[]
   contasReceber          ContaReceber[]
   prazoTemplates         PrazoTemplate[]
@@ -444,6 +532,9 @@ model Empresa {
   termoTemplates         TermoReferenciaTemplate[]
   qrcodes                Qrcode[]
   cargos                 Cargo[]
+  colaboradoresFolha     ColaboradorFolha[]
+  modelosEncargos        ModeloEncargos[]
+  folhaSnapshots         FolhaSnapshot[]
   veiculos               Veiculo[]
   equipes                Equipe[]
   checklistTemplates     ChecklistTemplate[]
@@ -451,6 +542,12 @@ model Empresa {
   perfisAcesso           PerfilAcesso[]
   contasPagar            ContaPagar[]
   categoriasFinanceiras  CategoriaFinanceira[]
+  centrosCusto           CentroCusto[]
+  categoriasProduto      CategoriaProduto[]
+  contasBancarias        ContaBancaria[]
+  contaReceberEventos    ContaReceberEvento[]
+  recebimentosReceber    ContaReceberRecebimento[]
+  fornecedores           Fornecedor[]
   emailTemplates         EmailTemplate[]
   emailLogs              EmailLog[]
   formTypeMappings       FormTypeMapping[]
@@ -459,9 +556,29 @@ model Empresa {
   integracaoInter IntegracaoInter?
   emailConfig     EmailConfig?
 
+  notasFiscais NotaFiscal[]
+  numeracoes   Numeracao[]
+
   pmocs Pmoc[]
 
   @@map("empresas")
+}
+
+/// Numeração de documentos (Configurações): o PRÓXIMO número de cada tipo (orçamento, OS, contrato…)
+/// por empresa. Toda geração de número passa por aqui sob trava (lib/numeracao-server) e a sequência é
+/// contínua (não reinicia no ano). Sem linha = o próximo é o maior já usado + 1 (semeado no 1º uso).
+model Numeracao {
+  id           String   @id @default(cuid())
+  empresaId    String   @map("empresa_id")
+  /// "orcamento" | "os" | "chamado" | "contrato" | "medicao" | "pedido_compra" | "conta_receber" | "conta_pagar" | "relatorio_os" | "qrcode"
+  tipo         String
+  proximo      Int
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@unique([empresaId, tipo])
+  @@map("numeracoes")
 }
 
 // ─────────────────────────────────────────────
@@ -490,6 +607,43 @@ model Configuracao {
   osPermitirSemContrato     Boolean @default(true) @map("os_permitir_sem_contrato")
   osExigirQuestionario      Boolean @default(false) @map("os_exigir_questionario")
   osPermitirEdicaoConcluida Boolean @default(false) @map("os_permitir_edicao_concluida")
+  /// Estoque E4.2 (Portão 1): a OS só conclui depois que o consumo de todo material separado foi informado.
+  /// Desligado (padrão): a OS avisa o que falta, mas não trava.
+  osExigirPrestacaoMaterial Boolean @default(false) @map("os_exigir_prestacao_material")
+
+  // ─────────────────────────────────────────────
+  // App do colaborador (modo técnico) — o que o colaborador VÊ e PODE FAZER no app.
+  // Por empresa (global), igual para todos os colaboradores. O técnico nunca edita esta tela.
+  // ─────────────────────────────────────────────
+  /// Privacidade: mostra nome/endereço/descrição do cliente no app (desligado = oculta no app)
+  appExibirDadosCliente    Boolean @default(true)  @map("app_exibir_dados_cliente")
+  /// Privacidade: mostra os contatos do cliente (botão Ligar/WhatsApp) no app
+  appExibirContatosCliente Boolean @default(true)  @map("app_exibir_contatos_cliente")
+  /// Comercial: esconde qualquer valor de produtos/serviços no app (ligado = técnico não vê preço)
+  appEsconderValores       Boolean @default(true)  @map("app_esconder_valores")
+  /// Prova: carimba as fotos com marca d'água (data/hora sempre; e os itens abaixo que estiverem ligados)
+  appMarcaDagua            Boolean @default(true)  @map("app_marca_dagua")
+  /// Marca d'água: inclui o identificador da OS
+  appMarcaDaguaOs          Boolean @default(true)  @map("app_marca_dagua_os")
+  /// Marca d'água: inclui o endereço da OS
+  appMarcaDaguaEndereco    Boolean @default(false) @map("app_marca_dagua_endereco")
+  /// Marca d'água: inclui as coordenadas (GPS do aparelho no momento da foto)
+  appMarcaDaguaCoordenadas Boolean @default(false) @map("app_marca_dagua_coordenadas")
+  /// Prova: exige localização ativa (GPS) para usar o app
+  appExigirLocalizacao     Boolean @default(false) @map("app_exigir_localizacao")
+  /// Prova: foto somente pela câmera (ligado = bloqueia enviar da galeria)
+  appFotoSomenteCamera     Boolean @default(false) @map("app_foto_somente_camera")
+  /// Execução: exige preencher o campo de conclusão (resumo) para concluir a atividade
+  appConclusaoObrigatoria  Boolean @default(false) @map("app_conclusao_obrigatoria")
+  /// Dispositivo: apenas um dispositivo ativo por colaborador (entrar em outro desconecta o anterior)
+  appUmDispositivo         Boolean @default(true)  @map("app_um_dispositivo")
+  /// Execução: o técnico pode CADASTRAR equipamento em campo, pelo app (desligado = só vincula os que já existem)
+  appCadastrarEquipamento  Boolean @default(true)  @map("app_cadastrar_equipamento")
+  /// Execução: o técnico avisa o cliente pelo app ("A caminho" / "Cheguei"). Desligado = os botões não aparecem
+  appAvisarCliente         Boolean @default(true)  @map("app_avisar_cliente")
+  /// Rastrear a localização dos técnicos (Operações › Mapa). DESLIGADO por padrão: é dado sensível
+  /// (LGPD) — sem ligar, o app não captura nada e o servidor recusa o que chegar
+  appRastrearLocalizacao   Boolean @default(false) @map("app_rastrear_localizacao")
 
   // Notificações
   notifEmailAbrirOs       Boolean @default(false) @map("notif_email_abrir_os")
@@ -509,6 +663,21 @@ model Configuracao {
 
   // QR Code (acesso público, botões de contato, restrições) — armazenado como JSON
   qrConfig Json? @map("qr_config")
+
+  /// ISS (%) sobre serviços nos orçamentos: somado ao total; o cliente vê embutido nos preços
+  issAliquota Decimal @default(0) @map("iss_aliquota") @db.Decimal(5, 2)
+
+  /// Impressão do relatório da OS: seções ligadas/desligadas e quem vê (cliente × só interno).
+  /// JSON { [secao]: { ativo, cliente } }; ausente = padrões de lib/relatorio-os/config.ts
+  relatorioOsConfig Json? @map("relatorio_os_config")
+
+  /// Padrões do orçamento novo (cada orçamento grava os seus e pode editar)
+  orcamentoValidadeDias    Int      @default(10) @map("orcamento_validade_dias")
+  orcamentoGarantiaServico String?  @default("90 dias") @map("orcamento_garantia_servico")
+  orcamentoGarantiaPecas   String?  @default("Conforme garantia do fabricante") @map("orcamento_garantia_pecas")
+  orcamentoNaoIncluso      String?  @map("orcamento_nao_incluso") @db.Text
+  /// Normas atendidas que já vêm marcadas (lib/orcamentos/normas.ts); vazio = bloco desligado
+  orcamentoNormas          String[] @default([]) @map("orcamento_normas")
 
   empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
 
@@ -633,27 +802,72 @@ model Usuario {
   telefone     String?
   ativo        Boolean   @default(true)
   ultimoAcesso DateTime? @map("ultimo_acesso")
+  /// "Apenas um dispositivo ativo" (Configuracao.appUmDispositivo): nonce do login atual.
+  /// Entrar em outro aparelho regrava o nonce; a sessão anterior cai na leitura seguinte (lib/sessao-ativa).
+  sessaoAtiva  String?   @map("sessao_ativa")
   criadoEm     DateTime  @default(now()) @map("criado_em")
   atualizadoEm DateTime  @updatedAt @map("atualizado_em")
 
-  empresa            Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  ordensEmitidas     OrdemServico[]            @relation("UsuarioCriador")
-  ordensResponsavel  OrdemServico[]            @relation("OsResponsavel")
-  osHistorico        OsHistorico[]
-  interacoesCliente  InteracaoCliente[]
-  orcamentosCriados  Orcamento[]               @relation("OrcamentoCriador")
-  pedidosSolicitados PedidoCompraInterno[]     @relation("PedidoSolicitante")
-  pedidosComprador   PedidoCompraInterno[]     @relation("PedidoComprador")
-  pushSubscriptions  PushSubscription[]
-  contratoHistoricos ContratoHistoricoStatus[]
-  perfilAcessoId     String?                   @map("perfil_acesso_id")
-  perfilAcesso       PerfilAcesso?             @relation(fields: [perfilAcessoId], references: [id])
+  empresa                Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  ordensEmitidas         OrdemServico[]            @relation("UsuarioCriador")
+  ordensResponsavel      OrdemServico[]            @relation("OsResponsavel")
+  osHistorico            OsHistorico[]
+  interacoesCliente      InteracaoCliente[]
+  orcamentosCriados      Orcamento[]               @relation("OrcamentoCriador")
+  orcamentoAnexos        OrcamentoAnexo[]          @relation("OrcamentoAnexoAutor")
+  orcamentoEventos       OrcamentoEvento[]         @relation("OrcamentoEventoAutor")
+  contaReceberEventos    ContaReceberEvento[]      @relation("ContaReceberEventoUsuario")
+  recebimentosReceber    ContaReceberRecebimento[] @relation("ContaReceberRecebimentoUsuario")
+  estornosReceber        ContaReceberRecebimento[] @relation("ContaReceberRecebimentoEstorno")
+  perdasReceber          ContaReceber[]            @relation("ContaReceberPerdaPor")
+  pedidoCompraEventos    PedidoCompraEvento[]      @relation("PedidoCompraEventoAutor")
+  pedidoCompraVinculos   PedidoCompraVinculo[]     @relation("PedidoCompraVinculoAutor")
+  empresasFiscalEditadas EmpresaFiscal[]           @relation("EmpresaFiscalAutor")
+  pedidosSolicitados     PedidoCompraInterno[]     @relation("PedidoSolicitante")
+  pedidosComprador       PedidoCompraInterno[]     @relation("PedidoComprador")
+  pushSubscriptions      PushSubscription[]
+  contratoHistoricos     ContratoHistoricoStatus[]
+  movimentacoesEstoque   MovimentacaoEstoque[]
+  osMateriaisSeparados   OsMaterial[]          @relation("OsMaterialSeparadoPor")
+  osMateriaisConsumidos  OsMaterial[]          @relation("OsMaterialConsumidoPor")
+  osMateriaisDevolvidos  OsMaterial[]          @relation("OsMaterialDevolvidoPor")
+  notasCompra            NotaCompra[]
+  checklistRespostas     ChecklistResposta[]
+  fotosAtendimento       FotoAtendimento[]
+  servicosAdicionais     ServicoAdicional[]
+  fotosAdicionais        ServicoAdicionalFoto[]
+  syncOperacoes          SyncOperacao[]
+  anexosOs               OsAnexo[]
+  perfilAcessoId         String?                   @map("perfil_acesso_id")
+  perfilAcesso           PerfilAcesso?             @relation(fields: [perfilAcessoId], references: [id])
+
+  notasFiscaisEmitidas NotaFiscal[]       @relation("NotaFiscalEmissor")
+  notasFiscaisEventos  NotaFiscalEvento[] @relation("NotaFiscalEventoAutor")
+  reajustesContrato    ReajusteContrato[]
+  preferencias         PreferenciaUsuario[]
 
   pmocsCriados Pmoc[] @relation("PmocCriador")
 
   @@unique([email, empresaId])
   @@index([empresaId, ativo])
   @@map("usuarios")
+}
+
+/// Preferência pessoal de tela (larguras e colunas visíveis das tabelas, …), uma linha por
+/// usuário e chave ("tabela:orcamentos"). Segue o usuário entre dispositivos; o localStorage é só
+/// a reserva enquanto carrega. Não tem empresa: o usuário já é de uma só, e a rota só lê/grava a
+/// preferência do próprio usuário da sessão.
+model PreferenciaUsuario {
+  id           String   @id @default(cuid())
+  usuarioId    String   @map("usuario_id")
+  chave        String
+  valor        Json
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, chave])
+  @@map("preferencias_usuario")
 }
 
 model PushSubscription {
@@ -714,18 +928,23 @@ model Tecnico {
   longitude         Float?
   ultimaLocalizacao DateTime? @map("ultima_localizacao")
   observacoes       String?
+  /// Veículo "padrão" do colaborador (opcional) — puxado automaticamente na OS quando ele executa sozinho
+  veiculoId         String?   @map("veiculo_id")
   ativo             Boolean   @default(true)
   criadoEm          DateTime  @default(now()) @map("criado_em")
   atualizadoEm      DateTime  @updatedAt @map("atualizado_em")
 
   empresa               Empresa                         @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  veiculoPadrao         Veiculo?                        @relation("VeiculoPadraoColaborador", fields: [veiculoId], references: [id], onDelete: SetNull)
   cargo                 Cargo?                          @relation(fields: [cargoId], references: [id])
   perfilAcesso          PerfilAcesso?                   @relation(fields: [perfilAcessoId], references: [id])
   clientesResponsavel   Cliente[]
   contratosResponsavel  Contrato[]
   atividadesOs          AtividadeOs[]
+  atividadesEquipe      AtividadeTecnico[]
   contratosRecorrencia  Contrato[]                      @relation("ContratoTecnicoRecorrencia")
   orcamentosResponsavel Orcamento[]                     @relation("OrcamentoResponsavelTecnico")
+  empresasResponsavel   Empresa[]                       @relation("EmpresaResponsavelTecnico")
   competencias          TipoOs[]                        @relation("ColaboradorCompetencias")
   documentos            ColaboradorDocumento[]
   equipesLideradas      Equipe[]                        @relation("EquipeLider")
@@ -734,11 +953,14 @@ model Tecnico {
   checklistsPreenchidos ChecklistPreenchido[]
   equipamentosMarcados  AtividadeEquipamento[]
   respostasEquipamento  RespostaFormularioEquipamento[]
+  folha                 ColaboradorFolha?
+  posicao               TecnicoPosicao?
 
   pmocsResponsavel Pmoc[] @relation("PmocResponsavelTecnico")
 
   @@unique([cpf, empresaId])
   @@index([empresaId, ativo])
+  @@index([veiculoId])
   @@map("tecnicos")
 }
 
@@ -754,6 +976,11 @@ model Cliente {
   nomeFantasia         String?          @map("nome_fantasia")
   cpfCnpj              String           @map("cpf_cnpj")
   inscricaoEstadual    String?          @map("inscricao_estadual")
+  // Informações fiscais (alimentam o tomador da NFS-e e, no futuro, o destinatário da NF de produto)
+  optanteSimples             Boolean? @map("optante_simples")
+  indicadorInscricaoEstadual String?  @map("indicador_inscricao_estadual") // CONTRIBUINTE | ISENTO | NAO_CONTRIBUINTE
+  inscricaoMunicipal         String?  @map("inscricao_municipal")
+  inscricaoSuframa           String?  @map("inscricao_suframa")
   email                String?
   telefone             String?
   celular              String?
@@ -816,6 +1043,8 @@ model Cliente {
   contasReceber           ContaReceber[]
   tabelaPreco             TabelaPreco?             @relation(fields: [tabelaPrecoId], references: [id])
 
+  notasFiscais NotaFiscal[]
+
   pmocs Pmoc[]
 
   @@unique([cpfCnpj, empresaId])
@@ -856,6 +1085,7 @@ model ContatoCliente {
 
   cliente                 Cliente                  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
   ordensAbertas           OrdemServico[]           @relation("OsContatoOrigem")
+  orcamentosAc            Orcamento[]
   comunicacaoPreferencias ComunicacaoPreferencia[]
 
   @@index([clienteId])
@@ -937,6 +1167,7 @@ model Unidade {
   equipamentos  Equipamento[]
   contratos     ContratoUnidade[]
   ordensServico OrdemServico[]
+  orcamentos    Orcamento[]
 
   pmocs Pmoc[]
 
@@ -1009,6 +1240,10 @@ model Equipamento {
   qrcode              Qrcode?
   atividades          AtividadeEquipamento[]
   respostasFormulario RespostaFormularioEquipamento[]
+  checklistRespostas  ChecklistResposta[]
+  fotosAtendimento    FotoAtendimento[]
+  servicosAdicionais  ServicoAdicional[]
+  anexosOs            OsAnexo[]
 
   pmocs PmocEquipamento[]
 
@@ -1053,6 +1288,10 @@ model Contrato {
   periodicidade        Periodicidade  @default(MENSAL)
   valorMensal          Decimal?       @map("valor_mensal") @db.Decimal(10, 2)
   valorTotal           Decimal?       @map("valor_total") @db.Decimal(10, 2)
+  /// Serviço padrão da mensalidade: a medição do contrato nasce com ele no item (NFS-e sem a
+  /// pendência "vincule o serviço" e retenções herdadas do cadastro do serviço). Opcional.
+  servicoId            String?        @map("servico_id")
+  servico              Servico?       @relation("ContratoServicoPadrao", fields: [servicoId], references: [id], onDelete: SetNull)
   dataInicio           DateTime       @map("data_inicio")
   dataFim              DateTime?      @map("data_fim")
   diaVencimento        Int?           @map("dia_vencimento")
@@ -1092,6 +1331,8 @@ model Contrato {
   reajusteMesAniversario Int?            @map("reajuste_mes_aniversario")
   reajusteNotificar      Boolean         @default(false) @map("reajuste_notificar")
   reajusteNotificarDias  Int?            @map("reajuste_notificar_dias")
+  /// PR4: "Adiar" esconde a sugestão de reajuste até esta data
+  reajusteAdiadoAte      DateTime?       @map("reajuste_adiado_ate") @db.Date
 
   // Alertas e renovação
   alertaDias                Int?    @default(30) @map("alerta_dias")
@@ -1112,23 +1353,36 @@ model Contrato {
   // Origem: proposta de contrato (orçamento) que gerou este contrato
   origemOrcamentoId String? @unique @map("origem_orcamento_id")
 
+  // D3: adicionais na fatura do contrato (CONSOLIDADO) ou em faturas separadas (SEPARADO, padrão)
+  faturamentoAdicionais FaturamentoAdicionais @default(SEPARADO) @map("faturamento_adicionais")
+
+  // Faturamento automático (rotina diária): cada etapa só anda com a sua chave ligada
+  faturamentoAutomatico Boolean        @default(false) @map("faturamento_automatico")
+  aprovacaoAutomatica   Boolean        @default(false) @map("aprovacao_automatica")
+  emitirNfseAuto        Boolean        @default(false) @map("emitir_nfse_auto")
+  emitirBoletoAuto      Boolean        @default(false) @map("emitir_boleto_auto")
+  /// D5: a nota descreve o período corrente (padrão) ou o anterior (cobrança vencida)
+  nfseReferencia        ReferenciaNfse @default(CORRENTE) @map("nfse_referencia")
+
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  empresa            Empresa                    @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  origemOrcamento    Orcamento?                 @relation("OrcamentoContrato", fields: [origemOrcamentoId], references: [id])
-  cliente            Cliente                    @relation(fields: [clienteId], references: [id])
-  responsavelTecnico Tecnico?                   @relation(fields: [responsavelTecnicoId], references: [id])
-  tipoOsRecorrencia  TipoOs?                    @relation("ContratoTipoOsRecorrencia", fields: [tipoOsRecorrenciaId], references: [id])
-  tecnicoRecorrencia Tecnico?                   @relation("ContratoTecnicoRecorrencia", fields: [tecnicoRecorrenciaId], references: [id])
-  unidades           ContratoUnidade[]
-  ordensServico      OrdemServico[]
-  medicoes           Medicao[]
-  relatorios         RelatorioOs[]
-  anexos             AnexoContrato[]
-  reajustes          ReajusteContrato[]
-  historicoStatus    ContratoHistoricoStatus[]
-  recorrenciasLocais ContratoRecorrenciaLocal[]
+  empresa              Empresa                       @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  origemOrcamento      Orcamento?                    @relation("OrcamentoContrato", fields: [origemOrcamentoId], references: [id])
+  cliente              Cliente                       @relation(fields: [clienteId], references: [id])
+  responsavelTecnico   Tecnico?                      @relation(fields: [responsavelTecnicoId], references: [id])
+  tipoOsRecorrencia    TipoOs?                       @relation("ContratoTipoOsRecorrencia", fields: [tipoOsRecorrenciaId], references: [id])
+  tecnicoRecorrencia   Tecnico?                      @relation("ContratoTecnicoRecorrencia", fields: [tecnicoRecorrenciaId], references: [id])
+  unidades             ContratoUnidade[]
+  ordensServico        OrdemServico[]
+  medicoes             Medicao[]
+  relatorios           RelatorioOs[]
+  anexos               AnexoContrato[]
+  reajustes            ReajusteContrato[]
+  historicoStatus      ContratoHistoricoStatus[]
+  recorrenciasLocais   ContratoRecorrenciaLocal[]
+  contasReceber        ContaReceber[]
+  execucoesFaturamento FaturamentoContratoExecucao[]
 
   @@unique([numero, empresaId])
   @@index([empresaId, status])
@@ -1136,6 +1390,7 @@ model Contrato {
   @@index([empresaId, dataFim])
   @@index([clienteId])
   @@index([responsavelTecnicoId])
+  @@index([servicoId])
   @@map("contratos")
 }
 
@@ -1196,18 +1451,28 @@ model AnexoContrato {
 
 // Histórico de reajustes aplicados ao contrato
 model ReajusteContrato {
-  id            String   @id @default(cuid())
-  empresaId     String   @map("empresa_id")
-  contratoId    String   @map("contrato_id")
-  data          DateTime @default(now())
+  id            String           @id @default(cuid())
+  empresaId     String           @map("empresa_id")
+  contratoId    String           @map("contrato_id")
+  data          DateTime         @default(now())
   indice        String
-  percentual    Decimal  @db.Decimal(6, 3)
-  valorAnterior Decimal  @map("valor_anterior") @db.Decimal(10, 2)
-  valorNovo     Decimal  @map("valor_novo") @db.Decimal(10, 2)
-  criadoEm      DateTime @default(now()) @map("criado_em")
+  percentual    Decimal          @db.Decimal(6, 3)
+  valorAnterior Decimal          @map("valor_anterior") @db.Decimal(10, 2)
+  valorNovo     Decimal          @map("valor_novo") @db.Decimal(10, 2)
+  criadoEm      DateTime         @default(now()) @map("criado_em")
+  /// PR4: o aniversário decidido (ano/mês) — uma decisão por contrato × ano
+  anoReferencia Int?             @map("ano_referencia")
+  mesReferencia Int?             @map("mes_referencia")
+  situacao      SituacaoReajuste @default(APLICADO)
+  /// Quem aplicou/dispensou
+  usuarioId     String?          @map("usuario_id")
+  motivo        String?
 
   contrato Contrato @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+  usuario  Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
 
+  @@unique([contratoId, anoReferencia])
+  @@index([usuarioId])
   @@map("reajustes_contrato")
 }
 
@@ -1239,9 +1504,10 @@ model TipoEquipamentoCustom {
   ativo     Boolean  @default(true)
   criadoEm  DateTime @default(now()) @map("criado_em")
 
-  empresa          Empresa           @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  empresa          Empresa             @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   equipamentos     Equipamento[]
   formTypeMappings FormTypeMapping[]
+  checklistItens   ChecklistTipoItem[]
 
   @@map("tipos_equipamento_custom")
 }
@@ -1253,29 +1519,59 @@ model TipoEquipamentoCustom {
 model Servico {
   id          String   @id @default(cuid())
   empresaId   String   @map("empresa_id")
+  /// Código alfanumérico (ex.: "LIMP01"): gerado ao criar pelas 4 primeiras letras do nome + sequencial,
+  /// editável; único na empresa (maiúsculas). Chave da planilha e atalho de busca.
+  codigo      String?
   nome        String
   descricao   String?
   unidade     String   @default("un")
   valorPadrao Decimal? @map("valor_padrao") @db.Decimal(10, 2)
 
-  // Campos fiscais (preenchidos pelo usuário, sem padrão)
-  codigoMunicipal  String?  @map("codigo_municipal")
-  codigoLc116      String?  @map("codigo_lc116")
-  aliquotaISS      Decimal? @map("aliquota_iss") @db.Decimal(5, 2)
-  aliquotaPIS      Decimal? @map("aliquota_pis") @db.Decimal(5, 2)
-  aliquotaCOFINS   Decimal? @map("aliquota_cofins") @db.Decimal(5, 2)
-  aliquotaCSLL     Decimal? @map("aliquota_csll") @db.Decimal(5, 2)
-  aliquotaIR       Decimal? @map("aliquota_ir") @db.Decimal(5, 2)
-  observacaoFiscal String?  @map("observacao_fiscal")
+  // Campos fiscais (preenchidos pelo usuário, sem padrão). NFS-e (lib/nfse/servico.ts):
+  //   codigoLc116 = servico.codigo ("NN.NN"); codigoMunicipal = servico.codigoTributacao (vazio = o LC 116);
+  //   aliquotaISS = iss.aliquota (vazio = o ISS da empresa)
+  codigoMunicipal     String?  @map("codigo_municipal")
+  codigoLc116         String?  @map("codigo_lc116")
+  aliquotaISS         Decimal? @map("aliquota_iss") @db.Decimal(5, 2)
+  /// Tributação do ISS na NFS-e (escolha amigável → iss.tipoTributacao + iss.exigibilidade do PlugNotas):
+  /// TRIBUTAVEL | ISENTO | IMUNE | NAO_INCIDENCIA | SUSPENSA_JUDICIAL | SUSPENSA_ADMINISTRATIVA (texto + CHECK).
+  /// Vazio = TRIBUTAVEL (tributável no município, exigível)
+  nfseTributacao      String?  @map("nfse_tributacao")
+  /// ISS retido pelo tomador (iss.retido + responsavelRetencao = tomador)
+  issRetido           Boolean  @default(false) @map("iss_retido")
+  /// CNAE próprio (subclasse, 7 dígitos). Vazio = usa o CNAE principal da empresa
+  cnae                String?  @db.VarChar(7)
+  /// Texto base da discriminação do serviço na nota (editável na hora de emitir)
+  discriminacaoPadrao String?  @map("discriminacao_padrao")
+  aliquotaPIS         Decimal? @map("aliquota_pis") @db.Decimal(5, 2)
+  aliquotaCOFINS      Decimal? @map("aliquota_cofins") @db.Decimal(5, 2)
+  aliquotaCSLL        Decimal? @map("aliquota_csll") @db.Decimal(5, 2)
+  aliquotaIR          Decimal? @map("aliquota_ir") @db.Decimal(5, 2)
+  aliquotaINSS        Decimal? @map("aliquota_inss") @db.Decimal(5, 2)
+  /// Retenções na fonte herdadas pelo faturamento ("reter"), com a alíquota do próprio serviço acima.
+  /// Padrão Simples Nacional: desmarcadas. O ISS retido é o issRetido (+ aliquotaISS).
+  retIr               Boolean  @default(false) @map("ret_ir")
+  retPis              Boolean  @default(false) @map("ret_pis")
+  retCofins           Boolean  @default(false) @map("ret_cofins")
+  retCsll             Boolean  @default(false) @map("ret_csll")
+  retInss             Boolean  @default(false) @map("ret_inss")
+  observacaoFiscal    String?  @map("observacao_fiscal")
 
   ativo    Boolean  @default(true)
   criadoEm DateTime @default(now()) @map("criado_em")
 
-  empresa        Empresa            @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  orcamentoItens OrcamentoServico[]
-  medicaoItens   MedicaoItem[]
-  tabelaItens    TabelaPrecoItem[]
+  empresa         Empresa            @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  orcamentoItens  OrcamentoServico[]
+  medicaoItens    MedicaoItem[]
+  tabelaItens     TabelaPrecoItem[]
+  contratosPadrao Contrato[]         @relation("ContratoServicoPadrao")
 
+  notasFiscaisItens NotaFiscalItem[]
+  osItens           OsItemOrcamento[]
+  /// Materiais padrão (E3.2): produto solto ou kit + quantidade (+ override do comportamento). Vazio = como sempre
+  materiais         ServicoMaterial[]
+
+  @@unique([empresaId, codigo])
   @@map("servicos")
 }
 
@@ -1284,23 +1580,107 @@ model Servico {
 // ─────────────────────────────────────────────
 
 model Produto {
-  id            String   @id @default(cuid())
-  empresaId     String   @map("empresa_id")
-  nome          String
-  descricao     String?
-  unidade       String   @default("un")
-  valorPadrao   Decimal? @map("valor_padrao") @db.Decimal(10, 2)
-  estoqueMinimo Int?     @map("estoque_minimo")
-  ativo         Boolean  @default(true)
-  criadoEm      DateTime @default(now()) @map("criado_em")
+  id                String   @id @default(cuid())
+  empresaId         String   @map("empresa_id")
+  /// Código numérico do produto, sequencial por empresa (1, 2, 3…), gerado ao criar; único na empresa.
+  /// Chave da planilha (exportar → editar → importar atualiza em vez de duplicar).
+  codigo            Int?
+  nome              String
+  descricao         String?
+  unidade           String   @default("un")
+  /// Preço de venda (o "valor padrão" que orçamentos, medições e tabelas de preço já usam)
+  valorPadrao       Decimal? @map("valor_padrao") @db.Decimal(10, 2)
+  /// Margem alvo % SOBRE A VENDA quando o preço foi definido por margem (preço = custo ÷ (1 − margem)).
+  /// Nula = preço fixo. O preço nunca muda sozinho quando o custo muda (só há aviso).
+  margemVenda       Decimal? @map("margem_venda") @db.Decimal(5, 2)
+  estoqueMinimo     Int?     @map("estoque_minimo")
+  /// Dados fiscais (para o faturamento): vêm do XML da NF de compra quando o produto é criado ou
+  /// vinculado por ela; valor já preenchido não é sobrescrito.
+  ncm               String?
+  cest              String?
+  gtin              String?
+  /// Origem da mercadoria (0 a 8, tabela da NF-e)
+  origemMercadoria  String?  @map("origem_mercadoria")
+  unidadeTributavel String?  @map("unidade_tributavel")
+  /// Saldo em estoque — CACHE da soma das movimentações (a fonte da verdade é movimentacoes_estoque).
+  /// Só muda pela lib/estoque (lançamento + saldo na mesma transação); nunca pelo cadastro.
+  saldo             Decimal  @default(0) @db.Decimal(12, 3)
+  /// Entra na tela Estoque e nos alertas? Falso = produto que não se controla (serviço embalado,
+  /// item sob encomenda…); o razão continua aceitando lançamentos (ex.: entrada pela NF de compra).
+  controlaEstoque   Boolean  @default(true) @map("controla_estoque")
+  /// Categoria (E3.1): de onde vem o comportamento de faturamento. Opcional: sem ela, "incluso no serviço".
+  categoriaProdutoId String? @map("categoria_produto_id")
+  ativo             Boolean  @default(true)
+  criadoEm          DateTime @default(now()) @map("criado_em")
 
-  empresa        Empresa            @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  empresa        Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   orcamentoItens OrcamentoProduto[]
   medicaoItens   MedicaoItem[]
   pedidoItens    PedidoCompraItem[]
   tabelaItens    TabelaPrecoItem[]
+  movimentacoes  MovimentacaoEstoque[]
+  notaItens      NotaCompraItem[]
+  deParas        DeParaProdutoFornecedor[]
+  categoriaProduto CategoriaProduto? @relation(fields: [categoriaProdutoId], references: [id], onDelete: SetNull)
+  kitItens         KitMaterialItem[]
+  servicoMateriais ServicoMaterial[]
+  orcamentoMateriais OrcamentoMaterial[]
+  osItens            OsItemOrcamento[]
+  osMateriais        OsMaterial[]
 
+  @@unique([empresaId, codigo])
+  @@index([categoriaProdutoId])
   @@map("produtos")
+}
+
+// ─────────────────────────────────────────────
+// ESTOQUE — razão de movimentações (fonte da verdade do saldo)
+// ─────────────────────────────────────────────
+
+enum TipoMovimentacaoEstoque {
+  ENTRADA
+  SAIDA
+  AJUSTE
+  DEVOLUCAO
+  /// Separação para uma OS (Leva E4): subtrai como a saída. Já previsto no banco; nenhuma tela gera ainda.
+  RESERVA
+}
+
+enum OrigemMovimentacaoEstoque {
+  COMPRA
+  OS
+  AJUSTE
+  INVENTARIO
+}
+
+/// Uma linha por movimento. `quantidade` é COM SINAL (+ entra, − sai): o saldo do produto é a soma.
+/// AJUSTE/INVENTARIO gravam a diferença para chegar ao valor informado. Nunca é apagada nem editada.
+model MovimentacaoEstoque {
+  id            String                    @id @default(cuid())
+  empresaId     String                    @map("empresa_id")
+  produtoId     String                    @map("produto_id")
+  tipo          TipoMovimentacaoEstoque
+  origem        OrigemMovimentacaoEstoque
+  quantidade    Decimal                   @db.Decimal(12, 3)
+  /// Saldo do produto logo depois deste movimento (extrato)
+  saldoApos     Decimal                   @map("saldo_apos") @db.Decimal(12, 3)
+  custoUnitario Decimal?                  @map("custo_unitario") @db.Decimal(14, 4)
+  /// Id do documento de origem (nota de compra, OS…) — opcional, sem FK. COMPRA: refId = NotaCompra.id
+  refId         String?                   @map("ref_id")
+  observacao    String?
+  usuarioId     String?                   @map("usuario_id")
+  /// Futuro: estoque por local (veículo/almoxarifado). Ainda não usado.
+  localId       String?                   @map("local_id")
+  data          DateTime                  @default(now())
+  criadoEm      DateTime                  @default(now()) @map("criado_em")
+
+  empresa Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  produto Produto  @relation(fields: [produtoId], references: [id])
+  usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([empresaId, produtoId, data])
+  @@index([empresaId, data])
+  @@map("movimentacoes_estoque")
 }
 
 // ─────────────────────────────────────────────
@@ -1308,13 +1688,17 @@ model Produto {
 // ─────────────────────────────────────────────
 
 model TipoOs {
-  id        String   @id @default(cuid())
-  empresaId String   @map("empresa_id")
-  nome      String
-  descricao String?
-  cor       String   @default("#3b82f6")
-  ativo     Boolean  @default(true)
-  criadoEm  DateTime @default(now()) @map("criado_em")
+  id               String   @id @default(cuid())
+  empresaId        String   @map("empresa_id")
+  nome             String
+  descricao        String?
+  cor              String   @default("#3b82f6")
+  ativo            Boolean  @default(true)
+  /// Trava da conclusão: true (padrão) = a atividade deste tipo só conclui com pelo menos 1
+  /// equipamento atendido e completo; false = serviço sem equipamento (visita técnica, vistoria,
+  /// orçamento): conclui sem equipamento — os que forem atendidos continuam exigindo o checklist.
+  exigeEquipamento Boolean  @default(true) @map("exige_equipamento")
+  criadoEm         DateTime @default(now()) @map("criado_em")
 
   empresa                  Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   formularios              FormularioTemplate[]
@@ -1368,6 +1752,8 @@ model FormularioCampo {
   obrigatorio  Boolean   @default(false)
   ordem        Int       @default(0)
   opcoes       Json?
+  /// Campo removido na edição: fica no banco (as respostas antigas apontam para ele), some do preenchimento novo
+  ativo        Boolean   @default(true)
 
   formulario           FormularioTemplate              @relation(fields: [formularioId], references: [id], onDelete: Cascade)
   respostas            AtividadeResposta[]
@@ -1381,47 +1767,61 @@ model FormularioCampo {
 // ─────────────────────────────────────────────
 
 model OrdemServico {
-  id                 String     @id @default(cuid())
-  empresaId          String     @map("empresa_id")
-  numero             String
-  clienteId          String     @map("cliente_id")
-  unidadeId          String?    @map("unidade_id")
-  contratoId         String?    @map("contrato_id")
-  responsavelId      String?    @map("responsavel_id")
-  criadoPorId        String     @map("criado_por_id")
-  prioridade         Prioridade @default(NORMAL)
-  status             StatusOS   @default(ABERTA)
-  origem             OrigemOS   @default(MANUAL)
-  periodoRecorrencia String?    @map("periodo_recorrencia")
-  chamadoNumero      String?    @map("chamado_numero")
-  contatoOrigemId    String?    @map("contato_origem_id")
-  equipamentoId      String?    @map("equipamento_id")
-  descricao          String
-  previsaoConclusao  DateTime?  @map("previsao_conclusao")
-  dataInicio         DateTime?  @map("data_inicio")
-  dataConclusao      DateTime?  @map("data_conclusao")
-  observacoes        String?
-  criadoEm           DateTime   @default(now()) @map("criado_em")
-  atualizadoEm       DateTime   @updatedAt @map("atualizado_em")
+  id                   String     @id @default(cuid())
+  empresaId            String     @map("empresa_id")
+  numero               String
+  clienteId            String     @map("cliente_id")
+  unidadeId            String?    @map("unidade_id")
+  contratoId           String?    @map("contrato_id")
+  responsavelId        String?    @map("responsavel_id")
+  criadoPorId          String     @map("criado_por_id")
+  prioridade           Prioridade @default(NORMAL)
+  status               StatusOS   @default(ABERTA)
+  /// Central da OS: false = o status segue o estado real (atividades, conclusão, medição) e é
+  /// recalculado a cada mudança; true = alguém ajustou à mão (exceção) e o automático não
+  /// sobrescreve até "Voltar ao automático". Quem/quando fica no histórico da OS.
+  statusManual         Boolean    @default(false) @map("status_manual")
+  /// Exceção da trava de equipamento: motivo informado por quem tem "concluir OS" para concluir
+  /// esta OS sem equipamento atendido (quem/quando no histórico). null = trava normal.
+  semEquipamentoMotivo String?    @map("sem_equipamento_motivo")
+  origem               OrigemOS   @default(MANUAL)
+  periodoRecorrencia   String?    @map("periodo_recorrencia")
+  chamadoNumero        String?    @map("chamado_numero")
+  contatoOrigemId      String?    @map("contato_origem_id")
+  equipamentoId        String?    @map("equipamento_id")
+  /// Orçamento aprovado que GEROU esta OS ("Gerar OS" no orçamento). Único: um orçamento gera no
+  /// máximo uma OS (dois cliques não duplicam). O vínculo de leitura continua em OrcamentoOs.
+  orcamentoOrigemId    String?    @unique @map("orcamento_origem_id")
+  descricao            String
+  previsaoConclusao    DateTime?  @map("previsao_conclusao")
+  dataInicio           DateTime?  @map("data_inicio")
+  dataConclusao        DateTime?  @map("data_conclusao")
+  observacoes          String?
+  criadoEm             DateTime   @default(now()) @map("criado_em")
+  atualizadoEm         DateTime   @updatedAt @map("atualizado_em")
 
-  empresa        Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  cliente        Cliente               @relation(fields: [clienteId], references: [id])
-  unidade        Unidade?              @relation(fields: [unidadeId], references: [id])
-  contrato       Contrato?             @relation(fields: [contratoId], references: [id])
-  responsavel    Usuario?              @relation("OsResponsavel", fields: [responsavelId], references: [id])
-  criadoPor      Usuario               @relation("UsuarioCriador", fields: [criadoPorId], references: [id])
-  contatoOrigem  ContatoCliente?       @relation("OsContatoOrigem", fields: [contatoOrigemId], references: [id])
-  equipamento    Equipamento?          @relation(fields: [equipamentoId], references: [id])
-  atividades     AtividadeOs[]
-  itensOrcamento OsItemOrcamento[]
-  medicoes       OsMedicao[]
-  anexos         OsAnexo[]
-  historico      OsHistorico[]
-  orcamentos     OrcamentoOs[]
-  medicaoItens   MedicaoItem[]
-  pedidosCompra  PedidoCompraInterno[]
-  prazos         OsPrazo[]
-  relatorios     RelatorioOs[]
+  empresa            Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  cliente            Cliente               @relation(fields: [clienteId], references: [id])
+  unidade            Unidade?              @relation(fields: [unidadeId], references: [id])
+  contrato           Contrato?             @relation(fields: [contratoId], references: [id])
+  responsavel        Usuario?              @relation("OsResponsavel", fields: [responsavelId], references: [id])
+  criadoPor          Usuario               @relation("UsuarioCriador", fields: [criadoPorId], references: [id])
+  contatoOrigem      ContatoCliente?       @relation("OsContatoOrigem", fields: [contatoOrigemId], references: [id])
+  equipamento        Equipamento?          @relation(fields: [equipamentoId], references: [id])
+  orcamentoOrigem    Orcamento?            @relation("OrcamentoOsGerada", fields: [orcamentoOrigemId], references: [id], onDelete: SetNull)
+  atividades         AtividadeOs[]
+  itensOrcamento     OsItemOrcamento[]
+  materiais          OsMaterial[]
+  anexos             OsAnexo[]
+  historico          OsHistorico[]
+  orcamentos         OrcamentoOs[]
+  medicaoItens       MedicaoItem[]
+  pedidosCompra      PedidoCompraInterno[]
+  prazos             OsPrazo[]
+  relatorios         RelatorioOs[]
+  servicosAdicionais ServicoAdicional[]
+
+  notasFiscais NotaFiscal[]
 
   @@unique([numero, empresaId])
   @@index([empresaId, status])
@@ -1453,29 +1853,127 @@ model AtividadeOs {
   empresaId      String          @map("empresa_id")
   ordemServicoId String          @map("ordem_servico_id")
   tipoOsId       String?         @map("tipo_os_id")
+  /// Técnico RESPONSÁVEL (líder da equipe ou o 1º escolhido). Os demais ficam em `tecnicosEquipe`.
   tecnicoId      String?         @map("tecnico_id")
+  /// Equipe usada para preencher os técnicos (opcional; só registro)
+  equipeId       String?         @map("equipe_id")
+  /// Veículo usado NESTA atividade (puxado da equipe/colaborador, editável; não altera o vínculo padrão)
+  veiculoId      String?         @map("veiculo_id")
   titulo         String
   status         StatusAtividade @default(AGENDADA)
   dataAgendada   DateTime?       @map("data_agendada")
+  /// Prazo próprio da atividade (DIA civil, sem hora): atrasa quando o dia de hoje em Brasília
+  /// passa dele com a atividade ainda aberta (lib/os/prazos.ts).
+  prazo          DateTime?       @map("prazo") @db.Date
   duracaoMin     Int?            @map("duracao_min")
   observacao     String?
   resumo         String?         @db.Text
+  /// Segredo do link público do relatório desta atividade (/relatorio/atividade/<id>?t=<token>):
+  /// 32 bytes aleatórios em base64url (43 caracteres). O banco gera ao criar a atividade (SQL
+  /// 2026-10-20_relatorio_atividade_token); "Gerar novo link" troca e o link antigo para de abrir.
+  tokenRelatorio String          @unique @default(dbgenerated("rtrim(translate(encode(sha256(convert_to((((gen_random_uuid())::text || (gen_random_uuid())::text) || (gen_random_uuid())::text), 'UTF8'::name)), 'base64'::text), '+/'::text, '-_'::text), '='::text)")) @map("token_relatorio")
   criadoEm       DateTime        @default(now()) @map("criado_em")
   atualizadoEm   DateTime        @updatedAt @map("atualizado_em")
 
   ordemServico         OrdemServico                    @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
   tipoOs               TipoOs?                         @relation(fields: [tipoOsId], references: [id])
   tecnico              Tecnico?                        @relation(fields: [tecnicoId], references: [id])
+  equipe               Equipe?                         @relation(fields: [equipeId], references: [id], onDelete: SetNull)
+  veiculo              Veiculo?                        @relation(fields: [veiculoId], references: [id], onDelete: SetNull)
+  tecnicosEquipe       AtividadeTecnico[]
   respostas            AtividadeResposta[]
   relatorios           RelatorioOs[]
   equipamentos         AtividadeEquipamento[]
   respostasEquipamento RespostaFormularioEquipamento[]
+  checklistRespostas   ChecklistResposta[]
+  fotosAtendimento     FotoAtendimento[]
+  servicosAdicionais   ServicoAdicional[]
+  anexosOs             OsAnexo[]
+  avisosCliente        AtividadeAviso[]
 
   @@index([ordemServicoId])
   @@index([tecnicoId])
   @@index([tipoOsId])
+  @@index([equipeId])
+  @@index([veiculoId])
   @@index([empresaId, dataAgendada])
   @@map("atividades_os")
+}
+
+/// App do técnico: "A caminho" / "Cheguei" de uma atividade — o horário do toque e o que aconteceu
+/// com o aviso ao cliente. Um por atividade, por evento e por DIA (dois toques não avisam duas vezes;
+/// a atividade que continua em outro dia pode avisar de novo).
+model AtividadeAviso {
+  id           String    @id @default(cuid())
+  empresaId    String    @map("empresa_id")
+  atividadeId  String    @map("atividade_id")
+  /// A_CAMINHO | CHEGOU
+  evento       String
+  /// Dia civil (Brasília) do toque
+  dia          DateTime  @db.Date
+  /// Horário do toque no aparelho (com ou sem sinal)
+  registradoEm DateTime  @map("registrado_em")
+  usuarioId    String    @map("usuario_id")
+  /// PENDENTE | ENVIADO | ATRASADO | SEM_DESTINO | INDISPONIVEL (lib/tecnico/aviso-cliente.ts)
+  avisoStatus  String    @default("PENDENTE") @map("aviso_status")
+  /// Por que o aviso não saiu (para o escritório)
+  avisoDetalhe String?   @map("aviso_detalhe")
+  /// E-mail que recebeu o aviso
+  avisoPara    String?   @map("aviso_para")
+  avisoEm      DateTime? @map("aviso_em")
+  criadoEm     DateTime  @default(now()) @map("criado_em")
+
+  atividade AtividadeOs @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+
+  @@unique([atividadeId, evento, dia])
+  @@index([empresaId])
+  @@map("atividade_avisos")
+}
+
+/// Operações › Mapa: a ÚLTIMA posição conhecida de cada técnico — UMA linha por técnico (a leitura
+/// mais nova substitui a anterior; não há histórico de trajeto). Só existe com "Rastrear localização
+/// dos técnicos" ligado na empresa. Quem envia hoje é o app web (com o app aberto); o app nativo, quando
+/// existir, envia para o MESMO lugar (origem NATIVO), com mais frequência.
+model TecnicoPosicao {
+  id           String   @id @default(cuid())
+  empresaId    String   @map("empresa_id")
+  tecnicoId    String   @unique @map("tecnico_id")
+  latitude     Float
+  longitude    Float
+  /// Raio de precisão em metros, quando o aparelho informa
+  precisaoM    Float?   @map("precisao_m")
+  /// Bateria (0–100). null = o aparelho não informa (iPhone na web): nunca é inventada
+  bateria      Int?
+  carregando   Boolean?
+  /// Horário da leitura no aparelho (com ou sem sinal), já corrigido pelo relógio do servidor
+  registradoEm DateTime @map("registrado_em")
+  /// Quando a leitura chegou ao servidor
+  recebidoEm   DateTime @default(now()) @map("recebido_em")
+  /// O que disparou a leitura: ABRIU_APP | CHEGUEI | INICIO | CONCLUSAO | SINCRONIZACAO | PERIODICO | SEGUNDO_PLANO
+  motivo       String
+  /// De onde veio: PWA | NATIVO
+  origem       String   @default("PWA")
+  /// Quem estava logado no aparelho
+  usuarioId    String?  @map("usuario_id")
+
+  tecnico Tecnico @relation(fields: [tecnicoId], references: [id], onDelete: Cascade)
+
+  @@index([empresaId])
+  @@map("tecnico_posicoes")
+}
+
+/// Demais técnicos da atividade (além do responsável `AtividadeOs.tecnicoId`).
+model AtividadeTecnico {
+  atividadeId String   @map("atividade_id")
+  tecnicoId   String   @map("tecnico_id")
+  criadoEm    DateTime @default(now()) @map("criado_em")
+
+  atividade AtividadeOs @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+  tecnico   Tecnico     @relation(fields: [tecnicoId], references: [id], onDelete: Cascade)
+
+  @@id([atividadeId, tecnicoId])
+  @@index([tecnicoId])
+  @@map("atividade_tecnicos")
 }
 
 model AtividadeResposta {
@@ -1532,6 +2030,8 @@ model AtividadeEquipamento {
   feito         Boolean   @default(false)
   feitoEm       DateTime? @map("feito_em")
   feitoPorId    String?   @map("feito_por_id")
+  /// Observação do técnico sobre ESTE equipamento nesta atividade (sai no relatório e no histórico)
+  observacao    String?   @db.Text
   criadoEm      DateTime  @default(now()) @map("criado_em")
 
   atividade   AtividadeOs @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
@@ -1541,6 +2041,195 @@ model AtividadeEquipamento {
   @@unique([atividadeId, equipamentoId])
   @@index([equipamentoId])
   @@map("atividade_equipamentos")
+}
+
+/// Tipo de resposta de um item do checklist (por ora só OK / Atenção / Não se aplica).
+enum TipoRespostaChecklist {
+  OK_ATENCAO_NA
+  /// Medição: o técnico só captura número + unidade (sem avaliar no app)
+  MEDICAO
+}
+
+/// Foto do equipamento antes ou depois do serviço (as do checklist ficam sem momento)
+enum MomentoFoto {
+  ANTES
+  DEPOIS
+}
+
+/// Serviço adicional pedido na visita: o adm decide se cobra (Etapa 3 liga à cobrança)
+enum StatusCobrancaAdicional {
+  A_AVALIAR
+  COBRAR
+  NAO_COBRAR
+}
+
+/// Resposta de um item do checklist de um equipamento atendido.
+enum RespostaChecklist {
+  OK
+  ATENCAO
+  NAO_SE_APLICA
+}
+
+/// Item do CHECKLIST do tipo de equipamento (o modelo que cada equipamento daquele tipo responde
+/// numa OS). Editável no cadastro do tipo; item removido vira inativo (as respostas antigas ficam).
+model ChecklistTipoItem {
+  id                String                @id @default(cuid())
+  empresaId         String                @map("empresa_id")
+  tipoEquipamentoId String                @map("tipo_equipamento_id")
+  texto             String
+  tipoResposta      TipoRespostaChecklist @default(OK_ATENCAO_NA) @map("tipo_resposta")
+  /// O técnico precisa anexar foto deste item (exceto quando responde "Não se aplica")
+  pedirFoto         Boolean               @default(false) @map("pedir_foto")
+  /// O técnico precisa escrever observação (ex.: o valor medido), exceto em "Não se aplica"
+  pedirObservacao   Boolean               @default(false) @map("pedir_observacao")
+  /// Medição: unidade padrão (psi, °C, A, V…)
+  unidade           String?
+  ordem             Int                   @default(0)
+  ativo             Boolean               @default(true)
+  criadoEm          DateTime              @default(now()) @map("criado_em")
+  atualizadoEm      DateTime              @updatedAt @map("atualizado_em")
+
+  empresa         Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  tipoEquipamento TipoEquipamentoCustom @relation(fields: [tipoEquipamentoId], references: [id], onDelete: Cascade)
+  respostas       ChecklistResposta[]
+  fotos           FotoAtendimento[]
+
+  @@index([tipoEquipamentoId, ativo, ordem])
+  @@index([empresaId])
+  @@map("checklist_tipo_itens")
+}
+
+/// Resposta de UM item do checklist para UM equipamento atendido numa atividade. Gravada item a
+/// item (nunca em lote): reabrir a execução não apaga nada.
+model ChecklistResposta {
+  id              String             @id @default(cuid())
+  empresaId       String             @map("empresa_id")
+  atividadeId     String             @map("atividade_id")
+  equipamentoId   String             @map("equipamento_id")
+  itemId          String             @map("item_id")
+  status          RespostaChecklist?
+  observacao      String?            @db.Text
+  /// Texto do item quando foi respondido (o relatório antigo continua fiel se o item mudar depois)
+  textoItem       String             @map("texto_item")
+  /// Medição: o número capturado e a unidade (sem avaliação no app — a leitura é do adm)
+  valor           Decimal?           @db.Decimal(12, 3)
+  unidade         String?
+  /// Observação em áudio (data URL), quando o técnico não pôde ditar nem digitar
+  audioUrl        String?            @map("audio_url") @db.Text
+  respondidoPorId String?            @map("respondido_por_id")
+  respondidoEm    DateTime           @default(now()) @map("respondido_em")
+  criadoEm        DateTime           @default(now()) @map("criado_em")
+  atualizadoEm    DateTime           @updatedAt @map("atualizado_em")
+
+  empresa       Empresa           @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  atividade     AtividadeOs       @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+  equipamento   Equipamento       @relation(fields: [equipamentoId], references: [id], onDelete: Cascade)
+  item          ChecklistTipoItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  respondidoPor Usuario?          @relation(fields: [respondidoPorId], references: [id], onDelete: SetNull)
+
+  @@unique([atividadeId, equipamentoId, itemId])
+  @@index([equipamentoId])
+  @@index([itemId])
+  @@map("checklist_respostas")
+}
+
+/// Foto de um equipamento atendido numa atividade — geral (itemId nulo) ou de um item do checklist.
+/// Cada equipamento tem as SUAS fotos (nada é replicado entre equipamentos).
+model FotoAtendimento {
+  id            String       @id @default(cuid())
+  empresaId     String       @map("empresa_id")
+  atividadeId   String       @map("atividade_id")
+  equipamentoId String       @map("equipamento_id")
+  itemId        String?      @map("item_id")
+  /// Imagem em data URL (base64), tipo conferido pelo conteúdo no upload
+  url           String       @db.Text
+  /// Antes / depois do serviço (fotos do equipamento); nulo = foto do item ou geral
+  momento       MomentoFoto?
+  /// Id gerado no aparelho (app offline): reenviar a mesma foto não duplica
+  clientId      String?      @unique @map("client_id")
+  criadoPorId   String?      @map("criado_por_id")
+  criadoEm      DateTime     @default(now()) @map("criado_em")
+
+  empresa     Empresa            @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  atividade   AtividadeOs        @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+  equipamento Equipamento        @relation(fields: [equipamentoId], references: [id], onDelete: Cascade)
+  item        ChecklistTipoItem? @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  criadoPor   Usuario?           @relation(fields: [criadoPorId], references: [id], onDelete: SetNull)
+
+  @@index([atividadeId, equipamentoId])
+  @@index([equipamentoId])
+  @@index([itemId])
+  @@map("fotos_atendimento")
+}
+
+/// Serviço a mais pedido pelo cliente na visita: entra na MESMA OS e no MESMO relatório, destacado
+/// como "Adicional" (o adm avalia a cobrança). Criado pelo técnico, inclusive offline (clientId).
+model ServicoAdicional {
+  id             String                  @id @default(cuid())
+  empresaId      String                  @map("empresa_id")
+  ordemServicoId String                  @map("ordem_servico_id")
+  atividadeId    String                  @map("atividade_id")
+  equipamentoId  String?                 @map("equipamento_id")
+  descricao      String                  @db.Text
+  statusCobranca StatusCobrancaAdicional @default(A_AVALIAR) @map("status_cobranca")
+  /// Preço definido pelo escritório ao marcar COBRAR; o adicional entra como item da medição da OS
+  valor          Decimal?                @db.Decimal(12, 2)
+  /// Id gerado no aparelho: reenviar não duplica
+  clientId       String?                 @unique @map("client_id")
+  criadoPorId    String?                 @map("criado_por_id")
+  criadoEm       DateTime                @default(now()) @map("criado_em")
+  atualizadoEm   DateTime                @updatedAt @map("atualizado_em")
+
+  empresa      Empresa                @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  ordemServico OrdemServico           @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  atividade    AtividadeOs            @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+  equipamento  Equipamento?           @relation(fields: [equipamentoId], references: [id], onDelete: SetNull)
+  criadoPor    Usuario?               @relation(fields: [criadoPorId], references: [id], onDelete: SetNull)
+  fotos        ServicoAdicionalFoto[]
+
+  @@index([ordemServicoId])
+  @@index([atividadeId])
+  @@index([equipamentoId])
+  @@index([empresaId])
+  @@map("servicos_adicionais")
+}
+
+model ServicoAdicionalFoto {
+  id          String   @id @default(cuid())
+  empresaId   String   @map("empresa_id")
+  servicoId   String   @map("servico_id")
+  /// Imagem em data URL (base64), tipo conferido pelo conteúdo no upload
+  url         String   @db.Text
+  clientId    String?  @unique @map("client_id")
+  criadoPorId String?  @map("criado_por_id")
+  criadoEm    DateTime @default(now()) @map("criado_em")
+
+  empresa   Empresa          @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  servico   ServicoAdicional @relation(fields: [servicoId], references: [id], onDelete: Cascade)
+  criadoPor Usuario?         @relation(fields: [criadoPorId], references: [id], onDelete: SetNull)
+
+  @@index([servicoId])
+  @@index([empresaId])
+  @@map("servicos_adicionais_fotos")
+}
+
+/// Operações do app do técnico já aplicadas (id gerado no aparelho): o reenvio da mesma operação
+/// — sinal que cai no meio do envio — devolve o resultado guardado em vez de aplicar de novo.
+model SyncOperacao {
+  id           String   @id
+  empresaId    String   @map("empresa_id")
+  usuarioId    String   @map("usuario_id")
+  tipo         String
+  atividadeId  String?  @map("atividade_id")
+  resultado    Json
+  processadoEm DateTime @default(now()) @map("processado_em")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([empresaId, usuarioId])
+  @@index([processadoEm])
+  @@map("sync_operacoes")
 }
 
 // ─────────────────────────────────────────────
@@ -1575,57 +2264,108 @@ model RespostaFormularioEquipamento {
 // ORÇAMENTO E FINANCEIRO DA OS
 // ─────────────────────────────────────────────
 
-model OsItemOrcamento {
-  id             String    @id @default(cuid())
-  ordemServicoId String    @map("ordem_servico_id")
-  descricao      String
-  quantidade     Decimal   @db.Decimal(10, 2)
-  valorUnitario  Decimal   @map("valor_unitario") @db.Decimal(10, 2)
-  valorTotal     Decimal   @map("valor_total") @db.Decimal(10, 2)
-  executado      Boolean   @default(false)
-  executadoEm    DateTime? @map("executado_em")
+/// Serviço × produto na OS (E3.3b): a peça (venda à parte) é um item PRODUTO, cobrado à parte do serviço
+enum TipoItemOs {
+  SERVICO
+  PRODUTO
+}
 
-  ordemServico    OrdemServico       @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
-  itensFinanceiro OsItemFinanceiro[]
+model OsItemOrcamento {
+  id                 String    @id @default(cuid())
+  ordemServicoId     String    @map("ordem_servico_id")
+  /// Item do orçamento de onde a linha foi copiada ("Gerar OS"): leva o serviço (dados fiscais) até a nota
+  orcamentoServicoId String?   @map("orcamento_servico_id")
+  descricao          String
+  quantidade         Decimal   @db.Decimal(10, 2)
+  valorUnitario      Decimal   @map("valor_unitario") @db.Decimal(10, 2)
+  valorTotal         Decimal   @map("valor_total") @db.Decimal(10, 2)
+  executado          Boolean   @default(false)
+  executadoEm        DateTime? @map("executado_em")
+  /// E3.3b — serviço ou produto (peça); item antigo = SERVICO. Vínculo com o catálogo (opcional; linha livre = nenhum)
+  tipo               TipoItemOs @default(SERVICO)
+  servicoId          String?    @map("servico_id")
+  produtoId          String?    @map("produto_id")
+  /// Como na linha do orçamento (E3.3): valor ANTES dos materiais, ajuste dos inclusos e override manual
+  valorBase          Decimal?   @map("valor_base") @db.Decimal(10, 2)
+  ajusteMateriais    Decimal    @default(0) @map("ajuste_materiais") @db.Decimal(10, 2)
+  valorManual        Boolean    @default(false) @map("valor_manual")
+  /// Peça (venda à parte) derivada de um material de serviço desta OS: linha só de leitura
+  materialId         String?    @unique @map("material_id")
+  ordem              Int        @default(0)
+
+  ordemServico     OrdemServico      @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  orcamentoServico OrcamentoServico? @relation(fields: [orcamentoServicoId], references: [id], onDelete: SetNull)
+  servico          Servico?          @relation(fields: [servicoId], references: [id], onDelete: SetNull)
+  produto          Produto?          @relation(fields: [produtoId], references: [id], onDelete: SetNull)
+  material         OsMaterial?       @relation("OsPecaDerivada", fields: [materialId], references: [id], onDelete: Cascade)
+  materiais        OsMaterial[]      @relation("OsItemMateriais")
 
   @@index([ordemServicoId])
+  @@index([orcamentoServicoId])
   @@map("os_itens_orcamento")
+}
+
+/// Estoque E4.1 — estado da separação de um material da OS: SEPARADO (reservado no razão, prestação de contas
+/// pendente), CONSUMIDO (E4.2) e DEVOLVIDO (E4.3). null = nada separado ainda.
+enum EstadoSeparacaoMaterial {
+  SEPARADO
+  CONSUMIDO
+  DEVOLVIDO
+}
+
+/// Estoque E3.3b — material/peça de UMA linha de serviço da OS: o mesmo snapshot do orçamento (orcamento_materiais),
+/// para a OS criada direto (ou copiado do orçamento ao gerar a OS). Regra: lib/orcamentos/materiais.ts.
+/// E4.1: a separação fica aqui, por material — quantidade separada (= reservada no razão, movimentações RESERVA
+/// com ref_id = OS), estado, quem e quando. Regra: lib/estoque/separacao.ts.
+model OsMaterial {
+  id               String                   @id @default(cuid())
+  ordemServicoId   String                   @map("ordem_servico_id")
+  osItemId         String                   @map("os_item_id")
+  produtoId        String?                  @map("produto_id")
+  descricao        String
+  unidade          String                   @default("un")
+  comportamento    ComportamentoFaturamento
+  quantidade       Decimal                  @db.Decimal(12, 3)
+  quantidadePadrao Decimal                  @default(0) @map("quantidade_padrao") @db.Decimal(12, 3)
+  valorVendaUnit   Decimal                  @map("valor_venda_unit") @db.Decimal(12, 2)
+  custoUnit        Decimal?                 @map("custo_unit") @db.Decimal(14, 4)
+  origem           OrigemMaterialOrcamento  @default(AVULSO)
+  kitNome          String?                  @map("kit_nome")
+  ordem            Int                      @default(0)
+  /// E4.1 — separação: quanto já foi separado (reservado) deste material, o estado e quem/quando separou
+  quantidadeSeparada Decimal                  @default(0) @map("quantidade_separada") @db.Decimal(12, 3)
+  estadoSeparacao    EstadoSeparacaoMaterial? @map("estado_separacao")
+  separadoEm         DateTime?                @map("separado_em")
+  separadoPorId      String?                  @map("separado_por_id")
+  /// E4.2 — consumo informado (estado CONSUMIDO): quanto saiu de verdade (SAIDA no razão), quem e quando.
+  /// A sobra (separada − consumida) continua reservada: "pendente de devolução" até a E4.3.
+  quantidadeConsumida Decimal   @default(0) @map("quantidade_consumida") @db.Decimal(12, 3)
+  consumidoEm         DateTime? @map("consumido_em")
+  consumidoPorId      String?   @map("consumido_por_id")
+  /// E4.3 — devolução da sobra (estado DEVOLVIDO): quanto voltou ao estoque (DEVOLUCAO no razão), quem e quando.
+  quantidadeDevolvida Decimal   @default(0) @map("quantidade_devolvida") @db.Decimal(12, 3)
+  devolvidoEm         DateTime? @map("devolvido_em")
+  devolvidoPorId      String?   @map("devolvido_por_id")
+
+  ordemServico OrdemServico     @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  item         OsItemOrcamento  @relation("OsItemMateriais", fields: [osItemId], references: [id], onDelete: Cascade)
+  produto      Produto?         @relation(fields: [produtoId], references: [id], onDelete: SetNull)
+  linhaProduto OsItemOrcamento? @relation("OsPecaDerivada")
+  separadoPor  Usuario?         @relation("OsMaterialSeparadoPor", fields: [separadoPorId], references: [id], onDelete: SetNull)
+  consumidoPor Usuario?         @relation("OsMaterialConsumidoPor", fields: [consumidoPorId], references: [id], onDelete: SetNull)
+  devolvidoPor Usuario?         @relation("OsMaterialDevolvidoPor", fields: [devolvidoPorId], references: [id], onDelete: SetNull)
+
+  @@index([ordemServicoId])
+  @@index([osItemId])
+  @@index([produtoId])
+  @@index([ordemServicoId, estadoSeparacao])
+  @@map("os_materiais")
 }
 
 enum StatusMedicao {
   RASCUNHO
   ENVIADA
   APROVADA
-}
-
-model OsMedicao {
-  id             String        @id @default(cuid())
-  ordemServicoId String        @map("ordem_servico_id")
-  numero         Int
-  dataMedicao    DateTime      @default(now()) @map("data_medicao")
-  valorTotal     Decimal       @map("valor_total") @db.Decimal(10, 2)
-  status         StatusMedicao @default(RASCUNHO)
-
-  ordemServico    OrdemServico       @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
-  itensFinanceiro OsItemFinanceiro[]
-
-  @@index([ordemServicoId])
-  @@map("os_medicoes")
-}
-
-model OsItemFinanceiro {
-  id              String  @id @default(cuid())
-  ordemServicoId  String  @map("ordem_servico_id")
-  itemOrcamentoId String  @map("item_orcamento_id")
-  medicaoId       String? @map("medicao_id")
-  descricao       String
-  quantidade      Decimal @db.Decimal(10, 2)
-  valorTotal      Decimal @map("valor_total") @db.Decimal(10, 2)
-
-  itemOrcamento OsItemOrcamento @relation(fields: [itemOrcamentoId], references: [id], onDelete: Cascade)
-  medicao       OsMedicao?      @relation(fields: [medicaoId], references: [id])
-
-  @@map("os_itens_financeiro")
 }
 
 // ─────────────────────────────────────────────
@@ -1639,11 +2379,24 @@ model OsAnexo {
   tipo           String
   tamanho        Int
   conteudo       String   @db.Text
+  /// Foto: o equipamento da OS a que se refere (nulo = "Geral da OS"). Documento não tem.
+  equipamentoId  String?  @map("equipamento_id")
+  /// Atividade em que a foto foi tirada (app do técnico); nulo = enviada pelo escritório
+  atividadeId    String?  @map("atividade_id")
+  legenda        String?
+  criadoPorId    String?  @map("criado_por_id")
+  /// Id gerado no aparelho (app offline): reenviar a mesma foto não duplica
+  clientId       String?  @unique @map("client_id")
   criadoEm       DateTime @default(now()) @map("criado_em")
 
   ordemServico OrdemServico @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  equipamento  Equipamento? @relation(fields: [equipamentoId], references: [id], onDelete: SetNull)
+  atividade    AtividadeOs? @relation(fields: [atividadeId], references: [id], onDelete: SetNull)
+  criadoPor    Usuario?     @relation(fields: [criadoPorId], references: [id], onDelete: SetNull)
 
   @@index([ordemServicoId])
+  @@index([equipamentoId])
+  @@index([atividadeId])
   @@map("os_anexos")
 }
 
@@ -1705,9 +2458,34 @@ model Orcamento {
 
   totalServicos Decimal      @default(0) @map("total_servicos") @db.Decimal(12, 2)
   totalProdutos Decimal      @default(0) @map("total_produtos") @db.Decimal(12, 2)
+  /// Desconto total em R$ (soma dos descontos dos grupos) — mantido para quem lê o valor antigo
   desconto      Decimal      @default(0) @db.Decimal(12, 2)
   tipoDesconto  TipoDesconto @default(VALOR) @map("tipo_desconto")
   totalGeral    Decimal      @default(0) @map("total_geral") @db.Decimal(12, 2)
+
+  /// Desconto de cada grupo (valor em R$ ou %), aplicado no subtotal do grupo
+  descontoServicos     Decimal      @default(0) @map("desconto_servicos") @db.Decimal(12, 2)
+  tipoDescontoServicos TipoDesconto @default(VALOR) @map("tipo_desconto_servicos")
+  descontoProdutos     Decimal      @default(0) @map("desconto_produtos") @db.Decimal(12, 2)
+  tipoDescontoProdutos TipoDesconto @default(VALOR) @map("tipo_desconto_produtos")
+  /// ISS sobre os serviços (líquidos do desconto): a alíquota da empresa congelada no orçamento e o valor.
+  /// Somado ao total; no documento do cliente vem embutido nos preços.
+  issAliquota          Decimal      @default(0) @map("iss_aliquota") @db.Decimal(5, 2)
+  /// Prazo de execução dos serviços (texto curto: "5 dias úteis após aprovação"); sai no documento
+  prazoExecucao        String?      @map("prazo_execucao")
+  /// Forma de pagamento (à vista / parcelado / PIX / boleto…); sai no documento
+  formaPagamento       String?      @map("forma_pagamento")
+  /// Garantias (texto curto: "90 dias", "Conforme fabricante"); saem nas Condições do documento
+  garantiaServico      String?      @map("garantia_servico")
+  garantiaPecas        String?      @map("garantia_pecas")
+  /// "Não incluso" (exclusões do escopo), uma por linha
+  naoIncluso           String?      @map("nao_incluso") @db.Text
+  /// Normas atendidas (códigos de lib/orcamentos/normas.ts); vazio = bloco não aparece
+  normas               String[]     @default([])
+  /// Destinatário: unidade do cliente (endereço do "Para:") e contato A/C
+  unidadeId            String?      @map("unidade_id")
+  contatoClienteId     String?      @map("contato_cliente_id")
+  valorIss             Decimal      @default(0) @map("valor_iss") @db.Decimal(12, 2)
 
   tokenPublico      String    @unique @map("token_publico")
   enviadoEm         DateTime? @map("enviado_em")
@@ -1719,6 +2497,18 @@ model Orcamento {
   assinadoPor       String?   @map("assinado_por")
   assinadoCpf       String?   @map("assinado_cpf")
   assinaturaUrl     String?   @db.Text
+  /// Aceite digital: IP e navegador de quem aprovou no link público
+  aprovadoIp        String?   @map("aprovado_ip")
+  aprovadoUserAgent String?   @map("aprovado_user_agent")
+  /// Recusa pelo cliente no link público (status REPROVADO = "Recusado")
+  recusadoEm        DateTime? @map("recusado_em")
+  recusadoPor       String?   @map("recusado_por")
+  recusaMotivo      String?   @map("recusa_motivo") @db.Text
+  recusadoIp        String?   @map("recusado_ip")
+  /// Quantas vezes o cliente abriu o link (a 1ª fica em visualizadoEm)
+  visualizacoes     Int       @default(0)
+  /// Resposta do cliente (aprovou/recusou) já vista pela equipe: some do sino
+  respostaVistaEm   DateTime? @map("resposta_vista_em")
 
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
@@ -1727,19 +2517,78 @@ model Orcamento {
   cliente            Cliente               @relation(fields: [clienteId], references: [id])
   criadoPor          Usuario               @relation("OrcamentoCriador", fields: [criadoPorId], references: [id])
   responsavelTecnico Tecnico?              @relation("OrcamentoResponsavelTecnico", fields: [responsavelTecnicoId], references: [id])
+  unidade            Unidade?              @relation(fields: [unidadeId], references: [id], onDelete: SetNull)
+  contatoCliente     ContatoCliente?       @relation(fields: [contatoClienteId], references: [id], onDelete: SetNull)
+  anexos             OrcamentoAnexo[]
+  eventos            OrcamentoEvento[]
   servicos           OrcamentoServico[]
   produtos           OrcamentoProduto[]
+  /// E3.3: snapshot dos materiais/peças de cada linha de serviço (cópia do cadastro na hora de orçar)
+  materiais          OrcamentoMaterial[]
   ordensServico      OrcamentoOs[]
   medicaoItens       MedicaoItem[]
   contasReceber      ContaReceber[]
   pedidosCompra      PedidoCompraInterno[]
   contratoGerado     Contrato?             @relation("OrcamentoContrato")
+  osGerada           OrdemServico?         @relation("OrcamentoOsGerada")
 
   @@unique([codigo, empresaId])
   @@index([empresaId, status])
   @@index([empresaId, criadoEm])
   @@index([clienteId])
   @@map("orcamentos")
+}
+
+/// Anexos que vão junto com a proposta: arquivos enviados (datasheet, catálogo) e fotos copiadas
+/// de Fotos & Anexos da OS (a proposta é um documento: a foto fica congelada nela).
+model OrcamentoAnexo {
+  id          String   @id @default(cuid())
+  empresaId   String   @map("empresa_id")
+  orcamentoId String   @map("orcamento_id")
+  /// ARQUIVO (enviado) ou FOTO (imagem: sai no registro fotográfico do documento)
+  tipo        String
+  nome        String
+  mime        String
+  tamanho     Int
+  conteudo    String   @db.Text
+  legenda     String?
+  /// De onde veio a foto (ex.: "OS-2026-0304 · Split Samsung"); nulo = enviada aqui
+  origem      String?
+  ordem       Int      @default(0)
+  criadoPorId String?  @map("criado_por_id")
+  criadoEm    DateTime @default(now()) @map("criado_em")
+
+  empresa   Empresa   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  orcamento Orcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+  criadoPor Usuario?  @relation("OrcamentoAnexoAutor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+
+  @@index([orcamentoId])
+  @@index([empresaId])
+  @@map("orcamento_anexos")
+}
+
+/// Linha do tempo do orçamento: envio (e-mail, WhatsApp, link), visualização, aprovação, recusa,
+/// mudanças de status. Só acrescenta: nunca é editado.
+model OrcamentoEvento {
+  id          String   @id @default(cuid())
+  empresaId   String   @map("empresa_id")
+  orcamentoId String   @map("orcamento_id")
+  /// ENVIADO_EMAIL, ENVIADO_WHATSAPP, LINK_COPIADO, ENVIADO, VISUALIZADO, APROVADO, RECUSADO, STATUS
+  tipo        String
+  /// Texto curto para a linha do tempo (destinatário, motivo, de → para…)
+  detalhe     String?  @db.Text
+  /// Quem fez (usuário do sistema); nulo = o cliente pelo link público
+  usuarioId   String?  @map("usuario_id")
+  ip          String?
+  criadoEm    DateTime @default(now()) @map("criado_em")
+
+  empresa   Empresa   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  orcamento Orcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+  usuario   Usuario?  @relation("OrcamentoEventoAutor", fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([orcamentoId, criadoEm])
+  @@index([empresaId])
+  @@map("orcamento_eventos")
 }
 
 model OrcamentoServico {
@@ -1752,9 +2601,17 @@ model OrcamentoServico {
   valorTotal    Decimal @map("valor_total") @db.Decimal(12, 2)
   observacao    String?
   ordem         Int     @default(0)
+  /// E3.3 — valor da linha ANTES dos materiais (unitário × qtd). Nulo = linha sem composição (como sempre).
+  valorBase       Decimal? @map("valor_base") @db.Decimal(12, 2)
+  /// Σ (qtd − qtd padrão) × valor de venda dos materiais INCLUSOS: o que o serviço subiu/desceu por causa deles
+  ajusteMateriais Decimal  @default(0) @map("ajuste_materiais") @db.Decimal(12, 2)
+  /// Valor digitado na mão (override): o total não segue mais base + ajuste
+  valorManual     Boolean  @default(false) @map("valor_manual")
 
-  orcamento Orcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
-  servico   Servico?  @relation(fields: [servicoId], references: [id])
+  orcamento Orcamento           @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+  servico   Servico?            @relation(fields: [servicoId], references: [id])
+  osItens   OsItemOrcamento[]
+  materiais OrcamentoMaterial[]
 
   @@map("orcamento_servicos")
 }
@@ -1770,10 +2627,52 @@ model OrcamentoProduto {
   observacao    String?
   ordem         Int     @default(0)
 
-  orcamento Orcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
-  produto   Produto?  @relation(fields: [produtoId], references: [id])
+  /// E3.3 — peça (venda à parte) gerada do material de um serviço: a linha é derivada dele (não se edita aqui)
+  materialId    String? @unique @map("material_id")
+
+  orcamento Orcamento          @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+  produto   Produto?           @relation(fields: [produtoId], references: [id])
+  material  OrcamentoMaterial? @relation(fields: [materialId], references: [id], onDelete: Cascade)
 
   @@map("orcamento_produtos")
+}
+
+/// De onde o material veio na composição: produto solto do serviço, item de um kit (explodido) ou avulso no orçamento
+enum OrigemMaterialOrcamento {
+  SOLTO
+  KIT
+  AVULSO
+}
+
+/// Estoque E3.3 — material/peça de UMA linha de serviço do orçamento: SNAPSHOT (mudar o cadastro depois não altera
+/// orçamentos já feitos). O comportamento efetivo congelado decide: INCLUSO ajusta o valor do serviço pela diferença
+/// do padrão ((qtd − qtd padrão) × venda) e fica oculto do cliente; VENDA_A_PARTE vira uma linha de produto
+/// (OrcamentoProduto.materialId) cobrada à parte. Custo = último custo de compra (só interno). Sem baixa (E4).
+model OrcamentoMaterial {
+  id                 String                   @id @default(cuid())
+  orcamentoId        String                   @map("orcamento_id")
+  orcamentoServicoId String                   @map("orcamento_servico_id")
+  produtoId          String?                  @map("produto_id")
+  descricao          String
+  unidade            String                   @default("un")
+  comportamento      ComportamentoFaturamento
+  quantidade         Decimal                  @db.Decimal(12, 3)
+  quantidadePadrao   Decimal                  @default(0) @map("quantidade_padrao") @db.Decimal(12, 3)
+  valorVendaUnit     Decimal                  @map("valor_venda_unit") @db.Decimal(12, 2)
+  custoUnit          Decimal?                 @map("custo_unit") @db.Decimal(14, 4)
+  origem             OrigemMaterialOrcamento  @default(AVULSO)
+  kitNome            String?                  @map("kit_nome")
+  ordem              Int                      @default(0)
+
+  orcamento        Orcamento         @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+  orcamentoServico OrcamentoServico  @relation(fields: [orcamentoServicoId], references: [id], onDelete: Cascade)
+  produto          Produto?          @relation(fields: [produtoId], references: [id], onDelete: SetNull)
+  linhaProduto     OrcamentoProduto?
+
+  @@index([orcamentoId])
+  @@index([orcamentoServicoId])
+  @@index([produtoId])
+  @@map("orcamento_materiais")
 }
 
 model OrcamentoOs {
@@ -1810,6 +2709,25 @@ model Medicao {
   descontoPercent Decimal @default(0) @map("desconto_percent") @db.Decimal(5, 2)
   valorLiquido    Decimal @default(0) @map("valor_liquido") @db.Decimal(12, 2)
 
+  /// Retenções na fonte marcadas pelo usuário (alíquota %; NULL = desmarcada). Base = valorLiquido
+  /// (valor dos serviços da nota). A conta a receber/boleto sai por valorLiquido − valorRetencoes.
+  retIssAliquota    Decimal? @map("ret_iss_aliquota") @db.Decimal(5, 2)
+  retIrAliquota     Decimal? @map("ret_ir_aliquota") @db.Decimal(5, 2)
+  retPisAliquota    Decimal? @map("ret_pis_aliquota") @db.Decimal(5, 2)
+  retCofinsAliquota Decimal? @map("ret_cofins_aliquota") @db.Decimal(5, 2)
+  retCsllAliquota   Decimal? @map("ret_csll_aliquota") @db.Decimal(5, 2)
+  retInssAliquota   Decimal? @map("ret_inss_aliquota") @db.Decimal(5, 2)
+  valorRetencoes    Decimal  @default(0) @map("valor_retencoes") @db.Decimal(12, 2)
+
+  /// Fatura avulsa (botão "Faturar" do orçamento/OS): mesma engine, nasce liberada para a nota, sem
+  /// a aprovação do cliente; na tela e na nota aparece como "Fatura" (o número MED-… não muda)
+  avulsa Boolean @default(false)
+  /// P5 — faturamento parcial: esta fatura cobre só PARTE da origem (orçamento/OS). `percentualFaturado` é a
+  /// fatia do total da origem que ela representa (o "resto" também é parcial). O faturado acumulado da
+  /// origem é a soma do valor líquido das faturas avulsas vivas ligadas a ela (pelos itens) — sem tabela nova.
+  faturaParcial      Boolean  @default(false) @map("fatura_parcial")
+  percentualFaturado Decimal? @map("percentual_faturado") @db.Decimal(6, 2)
+
   dataEnvio      DateTime? @map("data_envio")
   dataAprovacao  DateTime? @map("data_aprovacao")
   dataVencimento DateTime? @map("data_vencimento")
@@ -1844,6 +2762,10 @@ model Medicao {
   nfs           MedicaoNf[]
   contasReceber ContaReceber[]
   relatorios    RelatorioOs[]
+
+  notasFiscais NotaFiscal[]
+
+  execucoesFaturamento FaturamentoContratoExecucao[]
 
   @@unique([numero, empresaId])
   @@index([empresaId, status])
@@ -1881,6 +2803,8 @@ model MedicaoItem {
   ordemServico OrdemServico? @relation(fields: [ordemServicoId], references: [id])
   orcamento    Orcamento?    @relation(fields: [orcamentoId], references: [id])
 
+  notasFiscaisItens NotaFiscalItem[]
+
   @@map("medicao_itens")
 }
 
@@ -1906,6 +2830,10 @@ model ContaReceber {
   clienteId   String             @map("cliente_id")
   medicaoId   String?            @map("medicao_id")
   orcamentoId String?            @map("orcamento_id")
+  // C6: previsão de contrato ligada ao contrato e à competência (uma por contrato/mês)
+  contratoId  String?            @map("contrato_id")
+  refMes      Int?               @map("ref_mes")
+  refAno      Int?               @map("ref_ano")
   numero      String
   descricao   String
   valor       Decimal            @db.Decimal(12, 2)
@@ -1928,22 +2856,149 @@ model ContaReceber {
   boletoVencimento     DateTime?     @map("boleto_vencimento")
   boletoStatus         BoletoStatus? @map("boleto_status")
 
-  categoria    String?
-  observacao   String?
-  criadoEm     DateTime @default(now()) @map("criado_em")
-  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+  // Categoria financeira: o vínculo é o ID (Leva 5.1). `categoria` (nome) fica como histórico/fallback
+  // das contas antigas cujo nome não casou com nenhuma categoria cadastrada.
+  categoriaId        String?   @map("categoria_id")
+  categoria          String?
+  observacao         String?
+  /// Gestão (CR robusto): centro de custo e conta bancária por ID. `banco` (texto) fica como
+  /// histórico/fallback e recebe o nome da conta bancária escolhida.
+  centroCustoId      String?   @map("centro_custo_id")
+  contaBancariaId    String?   @map("conta_bancaria_id")
+  canceladaEm        DateTime? @map("cancelada_em")
+  motivoCancelamento String?   @map("motivo_cancelamento")
+  /// Exclusão LÓGICA (só conta manual sem nota fiscal): some das listas, o registro e o histórico ficam
+  excluidaEm         DateTime? @map("excluida_em")
+  /// Baixa parcial: soma dos recebimentos (conta_receber_recebimentos). Saldo em aberto = valor − valorRecebido.
+  /// Conta RECEBIDA antiga (antes dos recebimentos) fica com 0: o recebido dela é o próprio valor.
+  valorRecebido      Decimal   @default(0) @map("valor_recebido") @db.Decimal(12, 2)
+  /// Parcela: aponta para o LANÇAMENTO (a conta original, agora PARCELADO), que guarda a origem
+  /// (medição/orçamento/contrato), o total e as notas fiscais. Parcela não tem origem própria.
+  lancamentoId       String?   @map("lancamento_id")
+  /// "2 de 3": na parcela, o número dela; no lançamento, só o total
+  parcelaNumero      Int?      @map("parcela_numero")
+  parcelaTotal       Int?      @map("parcela_total")
+  /// Marcada como perda: quando, por quê, quanto (o saldo naquele momento) e quem marcou
+  perdaEm            DateTime? @map("perda_em")
+  motivoPerda        String?   @map("motivo_perda")
+  valorPerda         Decimal?  @map("valor_perda") @db.Decimal(12, 2)
+  perdaPorId         String?   @map("perda_por_id")
+  /// Renegociada: a conta nova (a renegociação) para onde foi o saldo desta
+  renegociadaEmId    String?   @map("renegociada_em_id")
+  /// Na conta da renegociação: encargos (receita financeira) e desconto concedido. O valor dela é
+  /// soma dos saldos renegociados + juros + multa − desconto.
+  renegJuros         Decimal?  @map("renegociacao_juros") @db.Decimal(12, 2)
+  renegMulta         Decimal?  @map("renegociacao_multa") @db.Decimal(12, 2)
+  renegDesconto      Decimal?  @map("renegociacao_desconto") @db.Decimal(12, 2)
+  criadoEm           DateTime  @default(now()) @map("criado_em")
+  atualizadoEm       DateTime  @updatedAt @map("atualizado_em")
 
-  empresa   Empresa    @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  cliente   Cliente    @relation(fields: [clienteId], references: [id])
-  medicao   Medicao?   @relation(fields: [medicaoId], references: [id])
-  orcamento Orcamento? @relation(fields: [orcamentoId], references: [id])
+  empresa             Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  lancamento          ContaReceber?             @relation("ParcelasDoLancamento", fields: [lancamentoId], references: [id], onDelete: Restrict)
+  perdaPor            Usuario?                  @relation("ContaReceberPerdaPor", fields: [perdaPorId], references: [id], onDelete: SetNull)
+  renegociadaEm       ContaReceber?             @relation("Renegociacao", fields: [renegociadaEmId], references: [id], onDelete: SetNull)
+  renegociadas        ContaReceber[]            @relation("Renegociacao")
+  parcelas            ContaReceber[]            @relation("ParcelasDoLancamento")
+  recebimentos        ContaReceberRecebimento[]
+  cliente             Cliente                   @relation(fields: [clienteId], references: [id])
+  centroCusto         CentroCusto?              @relation(fields: [centroCustoId], references: [id], onDelete: SetNull)
+  contaBancaria       ContaBancaria?            @relation(fields: [contaBancariaId], references: [id], onDelete: SetNull)
+  eventos             ContaReceberEvento[]
+  medicao             Medicao?                  @relation(fields: [medicaoId], references: [id])
+  orcamento           Orcamento?                @relation(fields: [orcamentoId], references: [id])
+  contrato            Contrato?                 @relation(fields: [contratoId], references: [id], onDelete: SetNull)
+  categoriaFinanceira CategoriaFinanceira?      @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
 
+  notasFiscais NotaFiscal[]
+
+  @@unique([contratoId, refAno, refMes])
+  @@index([categoriaId])
+  @@index([centroCustoId])
+  @@index([contaBancariaId])
   @@index([empresaId, clienteId])
   @@index([empresaId, status, dataVencimento])
   @@index([empresaId, boletoStatus, dataRecebimento])
   @@index([clienteId])
   @@index([medicaoId])
+  @@index([contratoId])
+  @@index([lancamentoId])
+  @@index([empresaId, perdaEm])
+  @@index([renegociadaEmId])
   @@map("contas_receber")
+}
+
+/// Baixa (total ou parcial) de uma conta a receber: cada recebimento informado à mão, pago pelo boleto
+/// ou pela medição. O "recebido no mês" (painel, fluxo) soma estes, pela data de cada um.
+model ContaReceberRecebimento {
+  id              String          @id @default(cuid())
+  empresaId       String          @map("empresa_id")
+  contaReceberId  String          @map("conta_receber_id")
+  valor           Decimal         @db.Decimal(12, 2)
+  /// Dia do recebimento (dia civil, meia-noite UTC — como data_recebimento)
+  data            DateTime
+  formaPagamento  FormaPagamento? @map("forma_pagamento")
+  contaBancariaId String?         @map("conta_bancaria_id")
+  /// MANUAL (Informar recebimento) | BOLETO (Banco Inter) | MEDICAO (pagamento registrado na medição) |
+  /// RECUPERACAO (cliente pagou depois da perda) | LEGADO (baixa antiga, registrada só no estorno)
+  origem          String          @default("MANUAL")
+  observacao      String?
+  usuarioId       String?         @map("usuario_id")
+  /// Estorno (baixa errada desfeita): o recebimento fica no histórico, riscado, e sai de todas as somas
+  estornadoEm     DateTime?       @map("estornado_em")
+  motivoEstorno   String?         @map("motivo_estorno")
+  estornadoPorId  String?         @map("estornado_por_id")
+  criadoEm        DateTime        @default(now()) @map("criado_em")
+
+  empresa       Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  contaReceber  ContaReceber   @relation(fields: [contaReceberId], references: [id], onDelete: Cascade)
+  contaBancaria ContaBancaria? @relation(fields: [contaBancariaId], references: [id], onDelete: SetNull)
+  usuario       Usuario?       @relation("ContaReceberRecebimentoUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
+  estornadoPor  Usuario?       @relation("ContaReceberRecebimentoEstorno", fields: [estornadoPorId], references: [id], onDelete: SetNull)
+
+  @@index([contaReceberId, data])
+  @@index([empresaId, data])
+  @@map("conta_receber_recebimentos")
+}
+
+/// Linha do tempo da conta a receber (edição, baixa, cancelamento, exclusão, boleto, cobrança).
+model ContaReceberEvento {
+  id             String   @id @default(cuid())
+  empresaId      String   @map("empresa_id")
+  contaReceberId String   @map("conta_receber_id")
+  /// EDITADA | RECEBIDA | CANCELADA | EXCLUIDA | BOLETO_EMITIDO | BOLETO_CANCELADO | COBRANCA_ENVIADA | CRIADA
+  tipo           String
+  detalhe        String?  @db.Text
+  usuarioId      String?  @map("usuario_id")
+  criadoEm       DateTime @default(now()) @map("criado_em")
+
+  empresa      Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  contaReceber ContaReceber @relation(fields: [contaReceberId], references: [id], onDelete: Cascade)
+  usuario      Usuario?     @relation("ContaReceberEventoUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([contaReceberId, criadoEm])
+  @@index([empresaId])
+  @@map("conta_receber_eventos")
+}
+
+/// Conta bancária da empresa (onde o dinheiro entra/sai). Cadastro padronizado (lib/cadastros).
+model ContaBancaria {
+  id           String   @id @default(cuid())
+  empresaId    String   @map("empresa_id")
+  /// Apelido mostrado nos seletores (ex.: "Inter PJ", "Itaú — conta movimento")
+  nome         String
+  banco        String?
+  agencia      String?
+  conta        String?
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  empresa       Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  contasReceber ContaReceber[]
+  recebimentos  ContaReceberRecebimento[]
+
+  @@index([empresaId, ativo])
+  @@map("contas_bancarias")
 }
 
 model CategoriaFinanceira {
@@ -1954,36 +3009,198 @@ model CategoriaFinanceira {
   ativo     Boolean  @default(true)
   criadoEm  DateTime @default(now()) @map("criado_em")
 
-  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  empresa            Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  contasReceber      ContaReceber[]
+  contasPagar        ContaPagar[]
+  /// Fornecedores que têm esta categoria como padrão (aprendida na nota de compra)
+  fornecedoresPadrao Fornecedor[]
+  notasCompra        NotaCompra[]
 
   @@map("categorias_financeiras")
 }
 
-model ContaPagar {
-  id             String           @id @default(cuid())
-  empresaId      String           @map("empresa_id")
-  numero         String
-  fornecedor     String
-  fornecedorCnpj String?          @map("fornecedor_cnpj")
-  descricao      String
-  valorTotal     Decimal          @map("valor_total") @db.Decimal(12, 2)
-  valorPago      Decimal          @default(0) @map("valor_pago") @db.Decimal(12, 2)
-  saldoRestante  Decimal          @map("saldo_restante") @db.Decimal(12, 2)
-  status         StatusContaPagar @default(PENDENTE)
-  dataVencimento DateTime?        @map("data_vencimento")
-  dataPagamento  DateTime?        @map("data_pagamento")
-  formaPagamento FormaPagamento?  @map("forma_pagamento")
-  banco          String?
-  pedidoCompraId String?          @map("pedido_compra_id")
-  observacao     String?
-  criadoEm       DateTime         @default(now()) @map("criado_em")
-  atualizadoEm   DateTime         @updatedAt @map("atualizado_em")
+/// Centro de custo (E2.1): onde a despesa pesa (ex.: Obra Shopping Norte, Frota, Administrativo).
+/// Cadastro padronizado (lib/cadastros); a conta a pagar aponta pelo ID, e o fornecedor guarda o
+/// padrão aprendido na nota de compra.
+/// Como o produto entra na cobrança (Estoque E3.1): VENDA_A_PARTE = peça de reposição (cobra separado e
+/// baixa estoque); INCLUSO_NO_SERVICO = material de instalação/consumo (embutido no valor, só baixa estoque).
+enum ComportamentoFaturamento {
+  VENDA_A_PARTE
+  INCLUSO_NO_SERVICO
+}
 
-  empresa      Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  pedidoCompra PedidoCompraInterno?  @relation(fields: [pedidoCompraId], references: [id])
-  pagamentos   PagamentoContaPagar[]
+/// Categoria de produto (por empresa): nome + comportamento de faturamento. Duas vêm pré-cadastradas
+/// ("Peças de reposição", "Materiais de instalação/consumo"); o usuário cria outras. Produto sem
+/// categoria é tratado como INCLUSO (lib/estoque/categoria.ts).
+model CategoriaProduto {
+  id            String                   @id @default(cuid())
+  empresaId     String                   @map("empresa_id")
+  nome          String
+  comportamento ComportamentoFaturamento @default(INCLUSO_NO_SERVICO)
+  ativo         Boolean                  @default(true)
+  criadoEm      DateTime                 @default(now()) @map("criado_em")
+  atualizadoEm  DateTime                 @updatedAt @map("atualizado_em")
+
+  empresa  Empresa   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  produtos Produto[]
+
+  @@index([empresaId, ativo])
+  @@map("categorias_produto")
+}
+
+/// Estoque E3.2 — Kit de material (reutilizável): nome + itens (produto + quantidade). É "vivo": a composição do
+/// serviço REFERENCIA o kit (mudou o kit, o serviço reflete); vira cópia editável só no orçamento/OS (E3.3).
+model KitMaterial {
+  id           String   @id @default(cuid())
+  empresaId    String   @map("empresa_id")
+  nome         String
+  descricao    String?
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  empresa          Empresa           @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  itens            KitMaterialItem[]
+  servicoMateriais ServicoMaterial[]
+
+  @@index([empresaId, ativo])
+  @@map("kits_material")
+}
+
+model KitMaterialItem {
+  id         String  @id @default(cuid())
+  kitId      String  @map("kit_id")
+  produtoId  String  @map("produto_id")
+  /// Quantidade por 1 kit (na unidade do produto)
+  quantidade Decimal @db.Decimal(12, 3)
+  ordem      Int     @default(0)
+
+  kit     KitMaterial @relation(fields: [kitId], references: [id], onDelete: Cascade)
+  produto Produto     @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+
+  @@index([kitId])
+  @@index([produtoId])
+  @@map("kit_material_itens")
+}
+
+/// Composição do serviço ("Materiais padrão", E3.2): cada linha é um produto solto OU um kit, com a quantidade
+/// padrão. `comportamento` = override pontual (só em produto solto); nulo = o da categoria do produto (E3.1).
+/// Preparado para a E3.3 consumir (produtoId/kitId, quantidade, comportamento efetivo via lib/estoque/composicao).
+model ServicoMaterial {
+  id            String                    @id @default(cuid())
+  servicoId     String                    @map("servico_id")
+  produtoId     String?                   @map("produto_id")
+  kitId         String?                   @map("kit_id")
+  quantidade    Decimal                   @db.Decimal(12, 3)
+  comportamento ComportamentoFaturamento?
+  ordem         Int                       @default(0)
+
+  servico Servico      @relation(fields: [servicoId], references: [id], onDelete: Cascade)
+  produto Produto?     @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+  kit     KitMaterial? @relation(fields: [kitId], references: [id], onDelete: Cascade)
+
+  @@index([servicoId])
+  @@index([produtoId])
+  @@index([kitId])
+  @@map("servico_materiais")
+}
+
+model CentroCusto {
+  id           String   @id @default(cuid())
+  empresaId    String   @map("empresa_id")
+  nome         String
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  empresa            Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  contasPagar        ContaPagar[]
+  contasReceber      ContaReceber[]
+  fornecedoresPadrao Fornecedor[]
+  notasCompra        NotaCompra[]
+
+  @@index([empresaId, ativo])
+  @@map("centros_custo")
+}
+
+// Fornecedor (Leva 5.2): cadastro de verdade, ligado na conta a pagar por ID. Documento (CNPJ/CPF)
+// guardado só com dígitos; único por empresa quando preenchido (NULL não conflita no PostgreSQL).
+model Fornecedor {
+  id                  String   @id @default(cuid())
+  empresaId           String   @map("empresa_id")
+  nome                String
+  documento           String?
+  telefone            String?
+  email               String?
+  observacoes         String?
+  /// Padrões aprendidos na nota de compra (E2.1): a próxima nota deste fornecedor já vem com eles
+  categoriaPadraoId   String?  @map("categoria_padrao_id")
+  centroCustoPadraoId String?  @map("centro_custo_padrao_id")
+  ativo               Boolean  @default(true)
+  criadoEm            DateTime @default(now()) @map("criado_em")
+  atualizadoEm        DateTime @updatedAt @map("atualizado_em")
+
+  empresa           Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  categoriaPadrao   CategoriaFinanceira?      @relation(fields: [categoriaPadraoId], references: [id], onDelete: SetNull)
+  centroCustoPadrao CentroCusto?              @relation(fields: [centroCustoPadraoId], references: [id], onDelete: SetNull)
+  contasPagar       ContaPagar[]
+  notasCompra       NotaCompra[]
+  deParas           DeParaProdutoFornecedor[]
+  pedidosCompra     PedidoCompraInterno[]
+
+  @@unique([empresaId, documento])
+  @@index([empresaId, ativo])
+  @@index([categoriaPadraoId])
+  @@index([centroCustoPadraoId])
+  @@map("fornecedores")
+}
+
+model ContaPagar {
+  id                 String           @id @default(cuid())
+  empresaId          String           @map("empresa_id")
+  numero             String
+  // Fornecedor: o vínculo é o ID (Leva 5.2). `fornecedor`/`fornecedorCnpj` (texto) ficam como
+  // histórico/fallback — e são o que aparece nas contas antigas que não casaram com um cadastro.
+  fornecedorId       String?          @map("fornecedor_id")
+  fornecedor         String
+  fornecedorCnpj     String?          @map("fornecedor_cnpj")
+  descricao          String
+  valorTotal         Decimal          @map("valor_total") @db.Decimal(12, 2)
+  valorPago          Decimal          @default(0) @map("valor_pago") @db.Decimal(12, 2)
+  saldoRestante      Decimal          @map("saldo_restante") @db.Decimal(12, 2)
+  status             StatusContaPagar @default(PENDENTE)
+  dataVencimento     DateTime?        @map("data_vencimento")
+  dataPagamento      DateTime?        @map("data_pagamento")
+  formaPagamento     FormaPagamento?  @map("forma_pagamento")
+  banco              String?
+  pedidoCompraId     String?          @map("pedido_compra_id")
+  /// Nota de compra (NF-e importada) que gerou esta conta — uma conta por duplicata
+  notaCompraId       String?          @map("nota_compra_id")
+  // Categoria financeira (Leva 5.1): conta a pagar não tinha categoria; passa a ter, por ID
+  categoriaId        String?          @map("categoria_id")
+  /// Centro de custo (E2.1), por ID
+  centroCustoId      String?          @map("centro_custo_id")
+  /// Boleto desta conta (E2.1, "DDA manual"): linha digitável (47 dígitos, boleto bancário; 48,
+  /// convênio/arrecadação) e o código de barras (44) — os dois só com dígitos, DVs conferidos
+  linhaDigitavel     String?          @map("linha_digitavel")
+  codigoBarrasBoleto String?          @map("codigo_barras_boleto")
+  observacao         String?
+  criadoEm           DateTime         @default(now()) @map("criado_em")
+  atualizadoEm       DateTime         @updatedAt @map("atualizado_em")
+
+  empresa             Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  pedidoCompra        PedidoCompraInterno?  @relation(fields: [pedidoCompraId], references: [id])
+  categoriaFinanceira CategoriaFinanceira?  @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  centroCusto         CentroCusto?          @relation(fields: [centroCustoId], references: [id], onDelete: SetNull)
+  fornecedorCadastro  Fornecedor?           @relation(fields: [fornecedorId], references: [id], onDelete: SetNull)
+  notaCompra          NotaCompra?           @relation(fields: [notaCompraId], references: [id], onDelete: SetNull)
+  pagamentos          PagamentoContaPagar[]
 
   @@unique([numero, empresaId])
+  @@index([categoriaId])
+  @@index([centroCustoId])
+  @@index([fornecedorId])
+  @@index([notaCompraId])
   @@index([empresaId, status])
   @@map("contas_pagar")
 }
@@ -2067,23 +3284,60 @@ model PedidoCompraInterno {
   solicitanteId   String             @map("solicitante_id")
   compradorId     String?            @map("comprador_id")
   status          StatusPedidoCompra @default(SOLICITADO)
+  /// Quando entrou no status atual (a lista mostra "Em cotação desde 27/10")
+  statusEm        DateTime           @default(now()) @map("status_em")
   prazoNecessario DateTime?          @map("prazo_necessario")
   observacao      String?            @db.Text
+  /// Fornecedor a quem o PC é enviado (e-mail/WhatsApp do cadastro); opcional
+  fornecedorId    String?            @map("fornecedor_id")
+  /// PC avulso (sem OS/orçamento): o motivo, ex. "Reposição de estoque"
+  motivo          String?
+  /// Link do PDF para o fornecedor (sem login)
+  tokenPublico    String             @unique @default(uuid()) @map("token_publico")
+  /// Aviso ao solicitante: uma NF foi vinculada (o sino acende enquanto nfVistaEm estiver vazio)
+  nfVinculadaEm   DateTime?          @map("nf_vinculada_em")
+  nfVistaEm       DateTime?          @map("nf_vista_em")
   criadoEm        DateTime           @default(now()) @map("criado_em")
   atualizadoEm    DateTime           @updatedAt @map("atualizado_em")
 
-  empresa      Empresa            @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  ordemServico OrdemServico?      @relation(fields: [ordemServicoId], references: [id])
-  orcamento    Orcamento?         @relation(fields: [orcamentoId], references: [id])
-  solicitante  Usuario            @relation("PedidoSolicitante", fields: [solicitanteId], references: [id])
-  comprador    Usuario?           @relation("PedidoComprador", fields: [compradorId], references: [id])
+  empresa      Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  ordemServico OrdemServico?         @relation(fields: [ordemServicoId], references: [id])
+  orcamento    Orcamento?            @relation(fields: [orcamentoId], references: [id])
+  solicitante  Usuario               @relation("PedidoSolicitante", fields: [solicitanteId], references: [id])
+  comprador    Usuario?              @relation("PedidoComprador", fields: [compradorId], references: [id])
+  fornecedor   Fornecedor?           @relation(fields: [fornecedorId], references: [id], onDelete: SetNull)
   itens        PedidoCompraItem[]
   contasPagar  ContaPagar[]
+  notasCompra  NotaCompra[]
+  eventos      PedidoCompraEvento[]
+  vinculos     PedidoCompraVinculo[]
 
   @@unique([numero, empresaId])
   @@index([empresaId, status])
   @@index([ordemServicoId])
+  @@index([fornecedorId])
   @@map("pedidos_compra_interno")
+}
+
+/// Histórico do pedido de compra: criado, editado (o que mudou), baixado/enviado ao fornecedor,
+/// status, cancelado. Nunca apagado.
+model PedidoCompraEvento {
+  id        String   @id @default(cuid())
+  empresaId String   @map("empresa_id")
+  pedidoId  String   @map("pedido_id")
+  /// CRIADO | EDITADO | BAIXADO | ENVIADO_EMAIL | ENVIADO_WHATSAPP | STATUS | CANCELADO
+  tipo      String
+  detalhe   String?  @db.Text
+  usuarioId String?  @map("usuario_id")
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  empresa Empresa             @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  pedido  PedidoCompraInterno @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  usuario Usuario?            @relation("PedidoCompraEventoAutor", fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([pedidoId, criadoEm])
+  @@index([empresaId])
+  @@map("pedido_compra_eventos")
 }
 
 model PedidoCompraItem {
@@ -2098,10 +3352,48 @@ model PedidoCompraItem {
   fornecedor    String?
   observacao    String?
 
-  pedido  PedidoCompraInterno @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
-  produto Produto?            @relation(fields: [produtoId], references: [id])
+  pedido   PedidoCompraInterno   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  produto  Produto?              @relation(fields: [produtoId], references: [id])
+  vinculos PedidoCompraVinculo[]
 
   @@map("pedidos_compra_item")
+}
+
+/// Conciliação NF ↔ Pedido de Compra, POR ITEM: este item da NF atende esta quantidade deste item do
+/// pedido (na unidade do produto: quantidade da NF × fator). Vincular 2× não duplica (único por par);
+/// desvincular apaga a linha e volta o status e o valor real do item.
+model PedidoCompraVinculo {
+  id                String   @id @default(cuid())
+  empresaId         String   @map("empresa_id")
+  pedidoId          String   @map("pedido_id")
+  pedidoItemId      String   @map("pedido_item_id")
+  notaId            String   @map("nota_id")
+  notaItemId        String   @map("nota_item_id")
+  /// Quanto deste item da NF foi para o item do pedido (unidade do produto)
+  quantidade        Decimal  @db.Decimal(15, 4)
+  /// Custo real por unidade do produto (valor unitário da NF ÷ fator)
+  valorUnitario     Decimal  @map("valor_unitario") @db.Decimal(15, 4)
+  /// Valor real do item do pedido ANTES do 1º vínculo (volta a ele quando o último vínculo sai)
+  valorRealAnterior Decimal? @map("valor_real_anterior") @db.Decimal(12, 2)
+  /// Casou pelo produto (PRODUTO) ou pela semelhança da descrição (DESCRICAO)
+  criterio          String   @default("PRODUTO")
+  /// Vinculado sozinho no lançamento (idêntico) — reversível como qualquer outro
+  automatico        Boolean  @default(false)
+  usuarioId         String?  @map("usuario_id")
+  criadoEm          DateTime @default(now()) @map("criado_em")
+
+  empresa    Empresa             @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  pedido     PedidoCompraInterno @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  pedidoItem PedidoCompraItem    @relation(fields: [pedidoItemId], references: [id], onDelete: Cascade)
+  nota       NotaCompra          @relation(fields: [notaId], references: [id], onDelete: Cascade)
+  notaItem   NotaCompraItem      @relation(fields: [notaItemId], references: [id], onDelete: Cascade)
+  usuario    Usuario?            @relation("PedidoCompraVinculoAutor", fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@unique([pedidoItemId, notaItemId])
+  @@index([notaId])
+  @@index([pedidoId])
+  @@index([empresaId])
+  @@map("pedido_compra_vinculos")
 }
 
 // ─────────────────────────────────────────────
@@ -2382,10 +3674,11 @@ model Equipe {
   criadoEm     DateTime     @default(now()) @map("criado_em")
   atualizadoEm DateTime     @updatedAt @map("atualizado_em")
 
-  empresa  Empresa   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  lider    Tecnico?  @relation("EquipeLider", fields: [liderId], references: [id])
-  membros  Tecnico[] @relation("EquipeMembros")
-  veiculos Veiculo[]
+  empresa      Empresa       @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  lider        Tecnico?      @relation("EquipeLider", fields: [liderId], references: [id])
+  membros      Tecnico[]     @relation("EquipeMembros")
+  veiculos     Veiculo[]
+  atividadesOs AtividadeOs[]
 
   @@map("equipes")
 }
@@ -2394,10 +3687,16 @@ model Veiculo {
   id                 String        @id @default(cuid())
   empresaId          String        @map("empresa_id")
   fotos              String[]
+  /// Ângulo de cada foto, na mesma ordem de `fotos` (FRENTE, TRASEIRA, LATERAL_ESQUERDA, LATERAL_DIREITA, OUTRO).
+  /// A capa é sempre fotos[0] = a FRENTE quando existir. Vazio em veículos antigos.
+  fotosRotulos       String[]      @default([]) @map("fotos_rotulos")
   placa              String
   modelo             String
   marca              String?
+  /// Ano de fabricação
   ano                String?
+  anoModelo          String?       @map("ano_modelo")
+  combustivel        String?
   cor                String?
   tipo               TipoVeiculo   @default(CARRO)
   chassi             String?
@@ -2413,12 +3712,14 @@ model Veiculo {
   criadoEm           DateTime      @default(now()) @map("criado_em")
   atualizadoEm       DateTime      @updatedAt @map("atualizado_em")
 
-  empresa     Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  responsavel Tecnico?              @relation("VeiculoResponsavel", fields: [responsavelId], references: [id])
-  equipe      Equipe?               @relation(fields: [equipeId], references: [id])
-  manutencoes VeiculoManutencao[]
-  documentos  VeiculoDocumento[]
-  checklists  ChecklistPreenchido[]
+  empresa             Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  responsavel         Tecnico?              @relation("VeiculoResponsavel", fields: [responsavelId], references: [id])
+  equipe              Equipe?               @relation(fields: [equipeId], references: [id])
+  manutencoes         VeiculoManutencao[]
+  documentos          VeiculoDocumento[]
+  checklists          ChecklistPreenchido[]
+  colaboradoresPadrao Tecnico[]             @relation("VeiculoPadraoColaborador")
+  atividadesOs        AtividadeOs[]
 
   @@unique([placa, empresaId])
   @@index([empresaId, status])
@@ -2482,6 +3783,8 @@ model ChecklistItemTemplate {
   opcoes      String[]
   obrigatorio Boolean           @default(true)
   ordem       Int               @default(0)
+  /// Item removido na edição: fica no banco (checklists já preenchidos apontam para ele), some do preenchimento novo
+  ativo       Boolean           @default(true)
 
   template         ChecklistTemplate         @relation(fields: [templateId], references: [id], onDelete: Cascade)
   itensPreenchidos ChecklistItemPreenchido[]
@@ -2523,6 +3826,477 @@ model ChecklistItemPreenchido {
   itemTemplate ChecklistItemTemplate @relation(fields: [itemTemplateId], references: [id])
 
   @@map("checklist_item_preenchidos")
+}
+
+/// Registro de uso do assistente Frivo IA (uma linha por pergunta): tokens, custo estimado e
+/// ferramentas consultadas. Sem FK de propósito: o log não pode travar exclusões nem o chat.
+model IaUso {
+  id                 String   @id @default(cuid())
+  empresaId          String   @map("empresa_id")
+  usuarioId          String   @map("usuario_id")
+  modelo             String
+  /// Primeiros 300 caracteres da pergunta (auditoria)
+  pergunta           String
+  ferramentas        String[] @default([])
+  tokensEntrada      Int      @default(0) @map("tokens_entrada")
+  tokensSaida        Int      @default(0) @map("tokens_saida")
+  tokensCacheLeitura Int      @default(0) @map("tokens_cache_leitura")
+  tokensCacheEscrita Int      @default(0) @map("tokens_cache_escrita")
+  custoUsd           Decimal  @default(0) @map("custo_usd") @db.Decimal(12, 6)
+  sucesso            Boolean  @default(true)
+  erro               String?
+  duracaoMs          Int      @default(0) @map("duracao_ms")
+  criadoEm           DateTime @default(now()) @map("criado_em")
+
+  @@index([empresaId, criadoEm])
+  @@index([usuarioId, criadoEm])
+  @@map("ia_uso")
+}
+
+// ─────────────────────────────────────────────
+// CUSTO DE PESSOAL (gestão de folha — NÃO é folha oficial)
+// ─────────────────────────────────────────────
+
+/// Regime de contratação do colaborador (define o modelo de encargos padrão)
+enum RegimeContratacao {
+  CLT
+  PJ
+  DIARISTA
+  AUTONOMO
+}
+
+enum TipoAdicional {
+  NENHUM
+  INSALUBRIDADE
+  PERICULOSIDADE
+}
+
+/// Dados financeiros do colaborador para a gestão de custo de pessoal (1:1 com tecnicos).
+/// O salário/base mensal continua em `tecnicos.salario` (fonte única); aqui fica o resto.
+/// Só quem tem a permissão "Financeiro › Custo de pessoal" lê ou grava.
+model ColaboradorFolha {
+  id                 String            @id @default(cuid())
+  empresaId          String            @map("empresa_id")
+  colaboradorId      String            @unique @map("colaborador_id")
+  regime             RegimeContratacao @default(CLT)
+  /// Diarista: valor da diária × dias no mês = base
+  valorDiaria        Decimal?          @map("valor_diaria") @db.Decimal(12, 2)
+  diasMes            Int?              @map("dias_mes")
+  /// Horas pagas no mês (custo-hora = custo mensal ÷ horas). CLT 44h/semana = 220h.
+  horasMes           Int               @default(220) @map("horas_mes")
+  adicionalTipo      TipoAdicional     @default(NENHUM) @map("adicional_tipo")
+  /// Percentual sobre o salário/base (ex.: periculosidade 30). Ignorado se houver valor fixo.
+  adicionalPercent   Decimal?          @map("adicional_percent") @db.Decimal(6, 2)
+  adicionalValor     Decimal?          @map("adicional_valor") @db.Decimal(12, 2)
+  /// Horas extras: valor mensal estimado (manual, até integrar com o ponto)
+  horasExtrasValor   Decimal?          @map("horas_extras_valor") @db.Decimal(12, 2)
+  valeTransporte     Decimal?          @map("vale_transporte") @db.Decimal(12, 2)
+  /// Desconta do empregado até 6% do salário/base (só CLT)
+  descontaVt         Boolean           @default(true) @map("desconta_vt")
+  valeAlimentacao    Decimal?          @map("vale_alimentacao") @db.Decimal(12, 2)
+  planoSaude         Decimal?          @map("plano_saude") @db.Decimal(12, 2)
+  outrosBeneficios   Decimal?          @map("outros_beneficios") @db.Decimal(12, 2)
+  /// Outros descontos que reduzem o custo da empresa (ex.: coparticipação)
+  descontos          Decimal?          @db.Decimal(12, 2)
+  descontosDescricao String?           @map("descontos_descricao")
+  /// Modelo de encargos específico; vazio = padrão do regime
+  modeloEncargosId   String?           @map("modelo_encargos_id")
+  observacoes        String?
+  criadoEm           DateTime          @default(now()) @map("criado_em")
+  atualizadoEm       DateTime          @updatedAt @map("atualizado_em")
+
+  empresa        Empresa         @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  colaborador    Tecnico         @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  modeloEncargos ModeloEncargos? @relation(fields: [modeloEncargosId], references: [id], onDelete: SetNull)
+
+  @@index([empresaId])
+  @@map("colaborador_folha")
+}
+
+/// Modelo de encargos por regime, com percentuais editáveis (ajustar com o contador).
+/// `itens` = [{ nome, percentual }] — o total incide sobre a remuneração (base + adicionais + HE).
+model ModeloEncargos {
+  id           String            @id @default(cuid())
+  empresaId    String            @map("empresa_id")
+  nome         String
+  regime       RegimeContratacao
+  /// Padrão do regime (um por regime e empresa, garantido na aplicação)
+  padrao       Boolean           @default(false)
+  itens        Json              @default("[]")
+  ativo        Boolean           @default(true)
+  criadoEm     DateTime          @default(now()) @map("criado_em")
+  atualizadoEm DateTime          @updatedAt @map("atualizado_em")
+
+  empresa       Empresa            @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  colaboradores ColaboradorFolha[]
+
+  @@unique([empresaId, nome])
+  @@index([empresaId, regime])
+  @@map("modelos_encargos")
+}
+
+/// Foto do custo de cada colaborador num mês fechado ("YYYY-MM"). Não muda quando salário ou
+/// encargos mudarem depois. Sem FK para o colaborador: o histórico fica mesmo se ele sair.
+model FolhaSnapshot {
+  id            String            @id @default(cuid())
+  empresaId     String            @map("empresa_id")
+  competencia   String
+  colaboradorId String            @map("colaborador_id")
+  nome          String
+  funcao        String?
+  equipe        String?
+  regime        RegimeContratacao
+  base          Decimal           @db.Decimal(12, 2)
+  adicionais    Decimal           @db.Decimal(12, 2)
+  encargos      Decimal           @db.Decimal(12, 2)
+  beneficios    Decimal           @db.Decimal(12, 2)
+  descontos     Decimal           @db.Decimal(12, 2)
+  custoTotal    Decimal           @map("custo_total") @db.Decimal(12, 2)
+  horasMes      Int               @map("horas_mes")
+  custoHora     Decimal           @map("custo_hora") @db.Decimal(12, 2)
+  /// Detalhamento (itens de encargo e percentuais usados), para auditoria
+  detalhe       Json?
+  criadoPor     String?           @map("criado_por")
+  criadoEm      DateTime          @default(now()) @map("criado_em")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@unique([empresaId, competencia, colaboradorId])
+  @@index([empresaId, competencia])
+  @@map("folha_snapshots")
+}
+
+// ─────────────────────────────────────────────
+// ESTOQUE E2 — Nota de compra (NF-e) → produtos + estoque + contas a pagar
+// ─────────────────────────────────────────────
+
+/// IMPORTADA: XML lido, itens ainda sem produto · CONCILIADA: todo item ligado a um produto ·
+/// LANCADA: entrada no estoque + contas a pagar gravadas (não muda mais)
+enum StatusNotaCompra {
+  IMPORTADA
+  CONCILIADA
+  LANCADA
+}
+
+/// NF-e de compra importada por XML (layout 4.00). Uma por chave de acesso na empresa.
+model NotaCompra {
+  id             String           @id @default(cuid())
+  empresaId      String           @map("empresa_id")
+  fornecedorId   String           @map("fornecedor_id")
+  /// 44 dígitos — reimportar a mesma nota é bloqueado (único por empresa)
+  chaveAcesso    String           @map("chave_acesso")
+  numero         String
+  serie          String
+  dataEmissao    DateTime         @map("data_emissao")
+  valorTotal     Decimal          @map("valor_total") @db.Decimal(12, 2)
+  status         StatusNotaCompra @default(IMPORTADA)
+  /// XML original, como veio
+  xml            String           @db.Text
+  /// Emitente como estava na nota (o cadastro do fornecedor pode mudar depois)
+  emitenteNome   String           @map("emitente_nome")
+  emitenteCnpj   String           @map("emitente_cnpj")
+  /// Duplicatas (cobr/dup): [{ numero, vencimento: "AAAA-MM-DD", valor }]
+  duplicatas     Json             @default("[]")
+  /// Pedido de compra atendido por esta nota (opcional): recebe o custo real nos itens
+  pedidoCompraId String?          @map("pedido_compra_id")
+  /// Rascunho do lançamento financeiro (E2.1), editável até "Confirmar e lançar". Categoria e centro
+  /// de custo vêm do padrão aprendido do fornecedor; a forma, do pag/tPag do XML.
+  categoriaId    String?          @map("categoria_id")
+  centroCustoId  String?          @map("centro_custo_id")
+  formaPagamento FormaPagamento?  @map("forma_pagamento")
+  /// Parcelas editadas: [{ numero, vencimento: "AAAA-MM-DD", valor, boleto }]; null = as duplicatas da NF
+  parcelas       Json?
+  usuarioId      String?          @map("usuario_id")
+  lancadaEm      DateTime?        @map("lancada_em")
+  criadoEm       DateTime         @default(now()) @map("criado_em")
+  atualizadoEm   DateTime         @updatedAt @map("atualizado_em")
+
+  empresa        Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  fornecedor     Fornecedor            @relation(fields: [fornecedorId], references: [id])
+  pedidoCompra   PedidoCompraInterno?  @relation(fields: [pedidoCompraId], references: [id], onDelete: SetNull)
+  categoria      CategoriaFinanceira?  @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  centroCusto    CentroCusto?          @relation(fields: [centroCustoId], references: [id], onDelete: SetNull)
+  usuario        Usuario?              @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  itens          NotaCompraItem[]
+  contasPagar    ContaPagar[]
+  vinculosPedido PedidoCompraVinculo[]
+
+  @@unique([empresaId, chaveAcesso])
+  @@index([empresaId, status, criadoEm])
+  @@index([fornecedorId])
+  @@index([categoriaId])
+  @@index([centroCustoId])
+  @@map("notas_compra")
+}
+
+/// Item da NF (det/prod). `produtoId` é preenchido na conciliação (de-para).
+model NotaCompraItem {
+  id                  String   @id @default(cuid())
+  notaId              String   @map("nota_id")
+  /// nItem da NF (1, 2, 3…)
+  numeroItem          Int      @map("numero_item")
+  codigoFornecedor    String   @map("codigo_fornecedor")
+  descricaoFornecedor String   @map("descricao_fornecedor")
+  ncm                 String?
+  cfop                String?
+  cest                String?
+  gtin                String?
+  /// Origem da mercadoria (0 a 8) do ICMS do item
+  origem              String?
+  unidadeTributavel   String?  @map("unidade_tributavel")
+  /// Unidade comercial da nota (uCom): a quantidade e o valor unitário estão nela
+  unidade             String
+  quantidade          Decimal  @db.Decimal(15, 4)
+  valorUnitario       Decimal  @map("valor_unitario") @db.Decimal(15, 4)
+  valorTotal          Decimal  @map("valor_total") @db.Decimal(12, 2)
+  /// 1 [unidade da nota] = fatorConversao [unidade do produto]. Entrada = quantidade × fator;
+  /// custo por unidade do produto = valor unitário ÷ fator.
+  fatorConversao      Decimal  @default(1) @map("fator_conversao") @db.Decimal(15, 6)
+  /// Preço de venda definido na linha da conciliação (E2.1, rascunho): vai para o produto ao lançar.
+  /// margemVenda preenchida = por margem (o preço é recalculado com o custo desta nota); só o preço =
+  /// preço fixo; os dois vazios = o preço do produto não muda.
+  precoVenda          Decimal? @map("preco_venda") @db.Decimal(12, 2)
+  margemVenda         Decimal? @map("margem_venda") @db.Decimal(5, 2)
+  produtoId           String?  @map("produto_id")
+  criadoEm            DateTime @default(now()) @map("criado_em")
+
+  nota           NotaCompra            @relation(fields: [notaId], references: [id], onDelete: Cascade)
+  produto        Produto?              @relation(fields: [produtoId], references: [id], onDelete: SetNull)
+  vinculosPedido PedidoCompraVinculo[]
+
+  @@unique([notaId, numeroItem])
+  @@index([produtoId])
+  @@map("notas_compra_itens")
+}
+
+/// De-para que aprende: o código do item NESTE fornecedor = este produto. Na próxima nota do
+/// mesmo fornecedor, o item já vem vinculado.
+model DeParaProdutoFornecedor {
+  id                  String   @id @default(cuid())
+  empresaId           String   @map("empresa_id")
+  fornecedorId        String   @map("fornecedor_id")
+  codigoFornecedor    String   @map("codigo_fornecedor")
+  descricaoFornecedor String   @map("descricao_fornecedor")
+  produtoId           String   @map("produto_id")
+  /// Unidade em que este fornecedor vende o item (uCom) quando o fator foi aprendido
+  unidadeOrigem       String?  @map("unidade_origem")
+  /// 1 [unidadeOrigem] = fatorConversao [unidade do produto]; pré-preenche a próxima nota
+  fatorConversao      Decimal  @default(1) @map("fator_conversao") @db.Decimal(15, 6)
+  criadoEm            DateTime @default(now()) @map("criado_em")
+  atualizadoEm        DateTime @updatedAt @map("atualizado_em")
+
+  empresa    Empresa    @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  fornecedor Fornecedor @relation(fields: [fornecedorId], references: [id], onDelete: Cascade)
+  produto    Produto    @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+
+  @@unique([empresaId, fornecedorId, codigoFornecedor])
+  @@index([produtoId])
+  @@map("de_para_produto_fornecedor")
+}
+
+/// Tentativas que contam para o limite anti força bruta: senha errada no login, pedido de "esqueci a
+/// senha" e senha atual errada na troca. Sem empresa (o login acontece antes de saber a empresa).
+/// A chave guarda só o HASH do e-mail / IP / usuário, nunca o texto. Linhas com mais de 1 dia são
+/// apagadas no caminho (lib/acesso/limite.ts).
+model TentativaAcesso {
+  id       String   @id @default(cuid())
+  tipo     String
+  chave    String
+  criadoEm DateTime @default(now()) @map("criado_em")
+
+  @@index([tipo, chave, criadoEm])
+  @@index([criadoEm])
+  @@map("tentativas_acesso")
+}
+
+/// NFS-e — a empresa como EMITENTE (gateway PlugNotas). 1:1 com a empresa (empresa da sessão).
+/// O arquivo do certificado A1 e a senha NÃO ficam aqui: vão direto ao PlugNotas e são descartados;
+/// guardamos só as referências (id do certificado e CNPJ do emitente lá) e o que se lê do certificado.
+/// A inscrição municipal é a da própria empresa (empresas.inscricao_municipal).
+model EmpresaFiscal {
+  id                     String    @id @default(cuid())
+  empresaId              String    @unique @map("empresa_id")
+  /// SIMPLES_NACIONAL | LUCRO_PRESUMIDO | LUCRO_REAL | MEI (texto + CHECK no banco, sem enum)
+  regimeTributario       String?   @map("regime_tributario")
+  /// Regime especial de tributação do município (opcional)
+  regimeEspecial         String?   @map("regime_especial")
+  incentivoFiscal        Boolean   @default(false) @map("incentivo_fiscal")
+  incentivadorCultural   Boolean   @default(false) @map("incentivador_cultural")
+  /// HOMOLOGACAO (padrão) | PRODUCAO
+  ambiente               String    @default("HOMOLOGACAO")
+  /// Município de prestação/emissão (código IBGE de 7 dígitos)
+  codigoMunicipio        String?   @map("codigo_municipio") @db.VarChar(7)
+  municipioNome          String?   @map("municipio_nome")
+  municipioUf            String?   @map("municipio_uf") @db.VarChar(2)
+  /// Certificado A1: id no PlugNotas + o que foi lido do .pfx (titular, CNPJ, validade)
+  certificadoId          String?   @map("certificado_id")
+  certificadoTitular     String?   @map("certificado_titular")
+  certificadoCnpj        String?   @map("certificado_cnpj") @db.VarChar(14)
+  certificadoValidoAte   DateTime? @map("certificado_valido_ate")
+  certificadoEnviadoEm   DateTime? @map("certificado_enviado_em")
+  /// Login/senha do portal de NFS-e da prefeitura, CRIPTOGRAFADOS (AES-256-GCM, lib/crypto): nunca em texto
+  prefeituraCripto       String?   @map("prefeitura_cripto")
+  prefeituraAtualizadaEm DateTime? @map("prefeitura_atualizada_em")
+  /// Referência do emitente no PlugNotas (o cpfCnpj) e em que ambiente foi cadastrado
+  emitenteCnpj           String?   @map("emitente_cnpj") @db.VarChar(14)
+  emitenteAmbiente       String?   @map("emitente_ambiente")
+  emitenteSincronizadoEm DateTime? @map("emitente_sincronizado_em")
+  /// NAO_CONFIGURADO | PENDENTE | ATIVO | ERRO
+  status                 String    @default("NAO_CONFIGURADO")
+  ultimoErro             String?   @map("ultimo_erro")
+  ultimoTesteEm          DateTime? @map("ultimo_teste_em")
+  ultimoTesteOk          Boolean?  @map("ultimo_teste_ok")
+  ultimoTesteMensagem    String?   @map("ultimo_teste_mensagem")
+  /// Aviso automático (webhook) do PlugNotas: só o HASH (SHA-256) do segredo da URL; a URL aparece uma vez
+  webhookTokenHash       String?   @unique @map("webhook_token_hash") @db.VarChar(64)
+  webhookGeradoEm        DateTime? @map("webhook_gerado_em")
+  /// Ambiente em que a URL foi cadastrada no PlugNotas (HOMOLOGACAO | PRODUCAO)
+  webhookAmbiente        String?   @map("webhook_ambiente")
+  webhookRegistradoEm    DateTime? @map("webhook_registrado_em")
+  /// Por que o cadastro automático no PlugNotas não deu certo (sem segredos)
+  webhookErro            String?   @map("webhook_erro")
+  webhookRecebidoEm      DateTime? @map("webhook_recebido_em")
+  atualizadoPorId        String?   @map("atualizado_por_id")
+  criadoEm               DateTime  @default(now()) @map("criado_em")
+  atualizadoEm           DateTime  @updatedAt @map("atualizado_em")
+
+  empresa       Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  atualizadoPor Usuario? @relation("EmpresaFiscalAutor", fields: [atualizadoPorId], references: [id], onDelete: SetNull)
+
+  @@map("empresa_fiscal")
+}
+
+// ─────────────────────────────────────────────
+// NFS-e — NOTAS EMITIDAS (PlugNotas). SQL: prisma/sql/2026-11-08_nfse_notas.sql
+// ─────────────────────────────────────────────
+
+/// Uma NFS-e enviada ao PlugNotas. Sai da medição (o documento de cobrança); a OS concluída emite pela
+/// medição dela. Uma nota por código de serviço/regra de ISS (lib/nfse/nota.ts). Nada de token aqui.
+model NotaFiscal {
+  id                String    @id @default(cuid())
+  empresaId         String    @map("empresa_id")
+  medicaoId         String?   @map("medicao_id")
+  ordemServicoId    String?   @map("ordem_servico_id")
+  clienteId         String    @map("cliente_id")
+  contaReceberId    String?   @map("conta_receber_id")
+  /// OS | MEDICAO (de que tela partiu)
+  origem            String
+  /// HOMOLOGACAO | PRODUCAO (o ambiente do emitente no envio)
+  ambiente          String
+  /// ENVIANDO | PROCESSANDO | CONCLUIDO | REJEITADO | CANCELADO | INTERROMPIDO
+  status            String    @default("ENVIANDO")
+  /// Chave do agrupamento (código municipal + LC 116 + regra de ISS)
+  grupo             String
+  codigoLc116       String?   @map("codigo_lc116") @db.VarChar(5)
+  codigoTributacao  String?   @map("codigo_tributacao")
+  aliquotaIss       Decimal?  @map("aliquota_iss") @db.Decimal(5, 2)
+  issRetido         Boolean   @default(false) @map("iss_retido")
+  valorServicos     Decimal   @map("valor_servicos") @db.Decimal(12, 2)
+  valorDesconto     Decimal   @default(0) @map("valor_desconto") @db.Decimal(12, 2)
+  discriminacao     String
+  tomadorCpfCnpj    String    @map("tomador_cpf_cnpj") @db.VarChar(14)
+  tomadorNome       String    @map("tomador_nome")
+  /// Identificação da nota no PlugNotas (o idIntegracao enviado é o nosso `id`)
+  plugnotasId       String?   @unique @map("plugnotas_id")
+  protocolo         String?
+  numero            String?
+  codigoVerificacao String?   @map("codigo_verificacao")
+  autorizadaEm      DateTime? @map("autorizada_em")
+  /// Endereços do PDF/XML no PlugNotas (exigem o token: a tela baixa pelo nosso servidor)
+  pdfUrl            String?   @map("pdf_url")
+  xmlUrl            String?   @map("xml_url")
+  /// Motivo da rejeição (mensagem do PlugNotas/prefeitura, sem segredos)
+  motivo            String?
+  consultas         Int       @default(0)
+  ultimaConsultaEm  DateTime? @map("ultima_consulta_em")
+  /// Resultado (autorizada/rejeitada) já visto na tela; NULL = o sino avisa
+  avisoVistoEm      DateTime? @map("aviso_visto_em")
+  emitidaPorId      String?   @map("emitida_por_id")
+  criadoEm          DateTime  @default(now()) @map("criado_em")
+  atualizadoEm      DateTime  @updatedAt @map("atualizado_em")
+
+  empresa      Empresa            @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  medicao      Medicao?           @relation(fields: [medicaoId], references: [id], onDelete: SetNull)
+  ordemServico OrdemServico?      @relation(fields: [ordemServicoId], references: [id], onDelete: SetNull)
+  cliente      Cliente            @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  contaReceber ContaReceber?      @relation(fields: [contaReceberId], references: [id], onDelete: SetNull)
+  emitidaPor   Usuario?           @relation("NotaFiscalEmissor", fields: [emitidaPorId], references: [id], onDelete: SetNull)
+  itens        NotaFiscalItem[]
+  eventos      NotaFiscalEvento[]
+
+  @@index([empresaId, status])
+  @@index([medicaoId])
+  @@index([ordemServicoId])
+  @@index([contaReceberId])
+  @@index([clienteId])
+  @@index([empresaId, avisoVistoEm])
+  @@map("notas_fiscais")
+}
+
+model NotaFiscalItem {
+  id            String  @id @default(cuid())
+  notaId        String  @map("nota_id")
+  medicaoItemId String? @map("medicao_item_id")
+  servicoId     String? @map("servico_id")
+  descricao     String
+  quantidade    Decimal @db.Decimal(10, 2)
+  valorTotal    Decimal @map("valor_total") @db.Decimal(12, 2)
+  valorDesconto Decimal @default(0) @map("valor_desconto") @db.Decimal(12, 2)
+
+  nota        NotaFiscal   @relation(fields: [notaId], references: [id], onDelete: Cascade)
+  medicaoItem MedicaoItem? @relation(fields: [medicaoItemId], references: [id], onDelete: SetNull)
+  servico     Servico?     @relation(fields: [servicoId], references: [id], onDelete: SetNull)
+
+  @@index([notaId])
+  @@index([medicaoItemId])
+  @@map("notas_fiscais_itens")
+}
+
+/// Histórico da nota: ENVIO | CONSULTA | STATUS | ERRO
+model NotaFiscalEvento {
+  id        String   @id @default(cuid())
+  notaId    String   @map("nota_id")
+  usuarioId String?  @map("usuario_id")
+  tipo      String
+  status    String?
+  mensagem  String?
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  nota    NotaFiscal @relation(fields: [notaId], references: [id], onDelete: Cascade)
+  usuario Usuario?   @relation("NotaFiscalEventoAutor", fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([notaId])
+  @@map("notas_fiscais_eventos")
+}
+
+/// Rotina de faturamento automático: uma linha por contrato × competência (única). Cada etapa retoma
+/// de onde parou; `tentativas`/`proximaTentativa` fazem a retentativa diária (3 e para no sino);
+/// `processandoAte` é a vez de quem está processando (dois crons ao mesmo tempo não andam juntos).
+model FaturamentoContratoExecucao {
+  id               String              @id @default(cuid())
+  empresaId        String              @map("empresa_id")
+  contratoId       String              @map("contrato_id")
+  refAno           Int                 @map("ref_ano")
+  refMes           Int                 @map("ref_mes")
+  medicaoId        String?             @map("medicao_id")
+  etapa            EtapaFaturamento    @default(MEDICAO)
+  situacao         SituacaoFaturamento @default(PENDENTE)
+  erro             String?             @db.Text
+  tentativas       Int                 @default(0)
+  proximaTentativa DateTime?           @map("proxima_tentativa")
+  processandoAte   DateTime?           @map("processando_ate")
+  concluidaEm      DateTime?           @map("concluida_em")
+  criadoEm         DateTime            @default(now()) @map("criado_em")
+  atualizadoEm     DateTime            @updatedAt @map("atualizado_em")
+
+  empresa  Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  contrato Contrato @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+  medicao  Medicao? @relation(fields: [medicaoId], references: [id], onDelete: SetNull)
+
+  @@unique([contratoId, refAno, refMes])
+  @@index([empresaId, situacao])
+  @@index([medicaoId])
+  @@map("faturamento_contrato_execucoes")
 }
 
 // ─────────────────────────────────────────────

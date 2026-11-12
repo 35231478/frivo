@@ -12,6 +12,8 @@ import { EnderecoAutocomplete, type EnderecoSelecionado } from "@/components/ui/
 import { MapaEndereco } from "@/components/ui/mapa-endereco";
 import { ToggleSwitch, ToggleGroup } from "@/components/ui/toggle-switch";
 import type { Empresa, Configuracao } from "@prisma/client";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { formatarCnae } from "@/lib/nfse/servico";
 import { Upload, Trash2, ImageIcon, Check, Building2, SlidersHorizontal } from "lucide-react";
 
 const ESTADOS_BR = [
@@ -23,13 +25,21 @@ type BoolKey = {
   [K in keyof Configuracao]: Configuracao[K] extends boolean ? K : never;
 }[keyof Configuracao];
 
+type ConfigTela = Omit<Configuracao, "issAliquota"> & { issAliquota: number };
+
 interface Props {
   empresa: Empresa;
-  config: Configuracao;
+  config: ConfigTela;
+  /** Qual bloco mostrar (cada um abre no seu cartão de Configurações); sem = os dois */
+  parte?: "empresa" | "preferencias";
+  /** Responsáveis técnicos (com CREA) para o RT padrão dos orçamentos */
+  tecnicosRt?: { id: string; nome: string; crea: string | null; ativo: boolean }[];
 }
 
-export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialConfig }: Props) {
+export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialConfig, parte, tecnicosRt = [] }: Props) {
   const router = useRouter();
+  // CNAE principal é dado fiscal: sem Financeiro › Fiscal fica só para leitura (o servidor confere)
+  const podeFiscal = usePermissoes().pode("financeiro", "fiscal");
   const [salvandoEmpresa, setSalvandoEmpresa] = useState(false);
   const [salvandoConfig, setSalvandoConfig] = useState(false);
   const [erroEmpresa, setErroEmpresa] = useState("");
@@ -57,9 +67,21 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
     cep: initialEmpresa.cep ?? "",
     latitude: initialEmpresa.latitude,
     longitude: initialEmpresa.longitude,
+    bancoNome: initialEmpresa.bancoNome ?? "",
+    bancoAgencia: initialEmpresa.bancoAgencia ?? "",
+    bancoConta: initialEmpresa.bancoConta ?? "",
+    bancoTipoConta: initialEmpresa.bancoTipoConta ?? "",
+    bancoTitular: initialEmpresa.bancoTitular ?? "",
+    pixChave: initialEmpresa.pixChave ?? "",
+    inscricaoEstadual: initialEmpresa.inscricaoEstadual ?? "",
+    inscricaoMunicipal: initialEmpresa.inscricaoMunicipal ?? "",
+    cnaePrincipal: formatarCnae(initialEmpresa.cnaePrincipal),
+    responsavelTecnicoId: initialEmpresa.responsavelTecnicoId ?? "",
   });
 
-  const [cfg, setCfg] = useState<Configuracao>(initialConfig);
+  const [cfg, setCfg] = useState<ConfigTela>(initialConfig);
+  // Texto livre (aceita vírgula); vai como número no salvar
+  const [issTexto, setIssTexto] = useState(String(initialConfig.issAliquota ?? 0).replace(".", ","));
 
   function updateEmp(field: string, value: any) {
     setEmp((f) => ({ ...f, [field]: value }));
@@ -130,7 +152,7 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
       const res = await fetch("/api/configuracoes", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(cfg),
+        body: JSON.stringify({ ...cfg, issAliquota: issTexto.trim() === "" ? 0 : issTexto }),
       });
       if (!res.ok) { const e = await res.json(); setErroConfig(e.erro ?? "Erro."); return; }
       setSucessoConfig(true);
@@ -141,15 +163,15 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
   return (
     <div className="space-y-8">
       {/* ========== DADOS DA EMPRESA ========== */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-6">
+      {parte !== "preferencias" && <div className="bg-white rounded-card border border-surface-border p-6 space-y-6">
         <div className="flex items-center gap-2">
           <Building2 className="w-5 h-5 text-frivo-600" />
-          <h2 className="text-lg font-semibold text-gray-900">Dados da Empresa</h2>
+          <h2 className="text-lg font-semibold text-ink">Dados da empresa</h2>
         </div>
 
-        {erroEmpresa && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{erroEmpresa}</div>}
+        {erroEmpresa && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3">{erroEmpresa}</div>}
         {sucessoEmpresa && (
-          <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3 flex items-center gap-2">
+          <div className="bg-ok-claro border border-ok/20 text-ok-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2">
             <Check className="w-4 h-4" /> Dados da empresa salvos.
           </div>
         )}
@@ -159,21 +181,21 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
           <input ref={logoInputRef} type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
           {logo ? (
             <div className="flex items-center gap-4">
-              <img src={logo} alt="Logo" className="w-20 h-20 object-contain rounded-lg border border-gray-200 bg-white p-1" />
+              <img src={logo} alt="Logo" className="w-20 h-20 object-contain rounded-lg border border-surface-border bg-white p-1" />
               <div className="flex flex-col gap-1.5">
                 <Button type="button" variant="secondary" onClick={() => logoInputRef.current?.click()} loading={uploadingLogo} className="text-xs py-1 px-2.5 h-auto">
                   <Upload className="w-3 h-3" /> Trocar
                 </Button>
-                <Button type="button" variant="ghost" onClick={removerLogo} className="text-xs text-red-500 py-1 px-2.5 h-auto">
-                  <Trash2 className="w-3 h-3" /> Remover
+                <Button type="button" variant="ghost" onClick={removerLogo} className="text-xs text-atrasado py-1 px-2.5 h-auto">
+                  <Trash2 className="w-3 h-3" /> Excluir
                 </Button>
               </div>
             </div>
           ) : (
             <button type="button" onClick={() => logoInputRef.current?.click()}
-              className="flex flex-col items-center justify-center w-24 h-24 border-2 border-dashed border-gray-300 rounded-lg hover:border-frivo-400 transition-colors cursor-pointer">
-              <ImageIcon className="w-6 h-6 text-gray-300" />
-              <span className="text-xs text-gray-400 mt-1">Enviar logo</span>
+              className="flex flex-col items-center justify-center w-24 h-24 border-2 border-dashed border-surface-border rounded-lg hover:border-frivo-400 transition-colors cursor-pointer">
+              <ImageIcon className="w-6 h-6 text-ink-subtle" />
+              <span className="text-xs text-ink-muted mt-1">Enviar logo</span>
             </button>
           )}
         </FormSection>
@@ -195,6 +217,28 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
               <Input value={emp.email} onChange={(e) => updateEmp("email", e.target.value)} type="email" />
             </FormField>
           </FormGrid>
+          <div data-campos-timbre>
+            <FormGrid>
+              <FormField label="Inscrição estadual" dica="Impressa no cabeçalho do orçamento. Em branco, não é exibida. Informe “Isento” quando for o caso.">
+                <Input value={emp.inscricaoEstadual} onChange={(e) => updateEmp("inscricaoEstadual", e.target.value)} maxLength={30} placeholder="Ex.: 123.456.789.110" />
+              </FormField>
+              <FormField label="Inscrição municipal" dica="Impressa no cabeçalho do orçamento. Em branco, não é exibida.">
+                <Input value={emp.inscricaoMunicipal} onChange={(e) => updateEmp("inscricaoMunicipal", e.target.value)} maxLength={30} />
+              </FormField>
+            </FormGrid>
+          </div>
+          <FormGrid>
+            <FormField
+              label="CNAE principal"
+              dica="Usado na NFS-e dos serviços que não têm CNAE próprio. Formato: 0000-0/00."
+              hint={podeFiscal ? undefined : "Somente leitura: requer a permissão Financeiro › Fiscal."}
+            >
+              <Input
+                value={emp.cnaePrincipal} onChange={(e) => updateEmp("cnaePrincipal", e.target.value)}
+                disabled={!podeFiscal} maxLength={12} inputMode="numeric" placeholder="Ex.: 4322-3/02" data-campo="cnae-principal"
+              />
+            </FormField>
+          </FormGrid>
           <FormGrid cols={3}>
             <FormField label="Telefone">
               <PhoneInput value={emp.telefone} onChange={(e: any) => updateEmp("telefone", e.target.value)} placeholder="(00) 0000-0000" />
@@ -208,10 +252,9 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
           </FormGrid>
         </FormSection>
 
-        <FormSection title="Endereço">
-          <p className="text-xs text-gray-400 -mt-2 mb-3">Usado para calcular distância até os clientes.</p>
-          <FormField label="Logradouro" hint="Digite para buscar automaticamente">
-            <EnderecoAutocomplete value={emp.endereco} onChange={(v) => updateEmp("endereco", v)} onSelect={handleEnderecoSelect} placeholder="Rua, Av., etc." />
+        <FormSection title="Endereço" dica="Usado no cálculo da distância até os clientes e na busca do município da NFS-e.">
+          <FormField label="Logradouro">
+            <EnderecoAutocomplete value={emp.endereco} onChange={(v) => updateEmp("endereco", v)} onSelect={handleEnderecoSelect} placeholder="Digite para buscar o endereço" />
           </FormField>
           <FormGrid cols={3}>
             <FormField label="Número"><Input value={emp.numero} onChange={(e) => updateEmp("numero", e.target.value)} /></FormField>
@@ -232,30 +275,60 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
             <MapaEndereco logradouro={emp.endereco} numero={emp.numero} cidade={emp.cidade} estado={emp.estado} cep={emp.cep} />
           )}
           {emp.latitude && emp.longitude && (
-            <p className="text-xs text-gray-400">Coordenadas: {emp.latitude.toFixed(6)}, {emp.longitude.toFixed(6)}</p>
+            <p className="text-xs text-ink-muted">Coordenadas: {emp.latitude.toFixed(6)}, {emp.longitude.toFixed(6)}</p>
           )}
         </FormSection>
 
-        <div className="flex justify-end pt-2 border-t border-gray-100">
+        <FormSection title="Dados bancários" dica="Exibidos no orçamento enviado ao cliente (link e impressão). Campos em branco não são exibidos.">
+          <FormGrid cols={3}>
+            <FormField label="Banco"><Input value={emp.bancoNome} onChange={(e) => updateEmp("bancoNome", e.target.value)} placeholder="Ex.: Banco Inter (077)" maxLength={80} /></FormField>
+            <FormField label="Agência"><Input value={emp.bancoAgencia} onChange={(e) => updateEmp("bancoAgencia", e.target.value)} placeholder="0001" maxLength={20} /></FormField>
+            <FormField label="Conta"><Input value={emp.bancoConta} onChange={(e) => updateEmp("bancoConta", e.target.value)} placeholder="12345-6" maxLength={30} /></FormField>
+          </FormGrid>
+          <FormGrid cols={3}>
+            <FormField label="Tipo de conta">
+              <Select value={emp.bancoTipoConta} onChange={(e) => updateEmp("bancoTipoConta", e.target.value)} placeholder="—">
+                {["Corrente", "Poupança", "Pagamento"].map((t) => (<option key={t} value={t}>{t}</option>))}
+              </Select>
+            </FormField>
+            <FormField label="Titular" dica="Em branco, é exibida a razão social." className="sm:col-span-2"><Input value={emp.bancoTitular} onChange={(e) => updateEmp("bancoTitular", e.target.value)} maxLength={120} /></FormField>
+          </FormGrid>
+          <FormField label="Chave PIX"><Input value={emp.pixChave} onChange={(e) => updateEmp("pixChave", e.target.value)} placeholder="CNPJ, e-mail, telefone ou chave aleatória" maxLength={120} className="max-w-md" /></FormField>
+        </FormSection>
+
+        <FormSection title="Responsável técnico" dica="Preenchido em cada novo orçamento; nome e CREA são impressos no documento, com a menção “ART emitida após aprovação”. Pode ser alterado em cada orçamento.">
+          <FormField label="Responsável técnico padrão" className="max-w-md">
+            <Select value={emp.responsavelTecnicoId} onChange={(e) => updateEmp("responsavelTecnicoId", e.target.value)} placeholder="Nenhum (o documento não mostra RT)" data-rt-padrao>
+              {tecnicosRt.filter((t) => t.ativo || t.id === emp.responsavelTecnicoId).map((t) => (
+                <option key={t.id} value={t.id}>{t.nome}{t.crea ? ` — CREA ${t.crea}` : ""}{t.ativo ? "" : " (inativo)"}</option>
+              ))}
+            </Select>
+          </FormField>
+          {tecnicosRt.length === 0 && (
+            <p className="text-xs text-ink-muted">Nenhum responsável técnico cadastrado. Cadastre em Equipes › Colaboradores, com o tipo “Responsável técnico” e o CREA.</p>
+          )}
+        </FormSection>
+
+        <div className="flex justify-end pt-2 border-t border-surface-linha">
           <Button onClick={salvarEmpresa} loading={salvandoEmpresa}>Salvar dados da empresa</Button>
         </div>
-      </div>
+      </div>}
 
       {/* ========== CONFIGURAÇÕES AVANÇADAS ========== */}
-      <div id="preferencias" className="bg-white rounded-xl border border-gray-200 p-6 space-y-8 scroll-mt-20">
+      {parte !== "empresa" && <div id="preferencias" className="bg-white rounded-card border border-surface-border p-6 space-y-8 scroll-mt-20">
         <div className="flex items-center gap-2">
           <SlidersHorizontal className="w-5 h-5 text-frivo-600" />
-          <h2 className="text-lg font-semibold text-gray-900">Configurações Avançadas</h2>
+          <h2 className="text-lg font-semibold text-ink">Preferências</h2>
         </div>
 
-        {erroConfig && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{erroConfig}</div>}
+        {erroConfig && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3">{erroConfig}</div>}
         {sucessoConfig && (
-          <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3 flex items-center gap-2">
+          <div className="bg-ok-claro border border-ok/20 text-ok-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2">
             <Check className="w-4 h-4" /> Configurações salvas.
           </div>
         )}
 
-        <ToggleGroup title="Campos obrigatórios no cadastro de clientes" description="Defina quais campos devem ser preenchidos obrigatoriamente">
+        <ToggleGroup title="Campos obrigatórios no cadastro de clientes">
           <ToggleSwitch label="E-mail obrigatório" checked={cfg.clienteEmailObrigatorio} onChange={() => toggleCfg("clienteEmailObrigatorio")} />
           <ToggleSwitch label="WhatsApp obrigatório" checked={cfg.clienteWhatsappObrigatorio} onChange={() => toggleCfg("clienteWhatsappObrigatorio")} />
           <ToggleSwitch label="Telefone obrigatório" checked={cfg.clienteTelefoneObrigatorio} onChange={() => toggleCfg("clienteTelefoneObrigatorio")} />
@@ -265,19 +338,20 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
         </ToggleGroup>
 
         <ToggleGroup title="Regras de cadastro">
-          <ToggleSwitch label="Exigir pelo menos um endereço no cadastro de cliente" description="Bloqueia o salvamento se não houver nenhum endereço cadastrado" checked={cfg.clienteExigirUnidade} onChange={() => toggleCfg("clienteExigirUnidade")} />
+          <ToggleSwitch label="Exigir pelo menos um endereço no cadastro de cliente" dica="O cadastro não é salvo sem ao menos um endereço." checked={cfg.clienteExigirUnidade} onChange={() => toggleCfg("clienteExigirUnidade")} />
           <ToggleSwitch label="Exigir CPF/CNPJ no cadastro de cliente" checked={cfg.clienteExigirDocumento} onChange={() => toggleCfg("clienteExigirDocumento")} />
         </ToggleGroup>
 
         <ToggleGroup title="Ordens de serviço">
-          <ToggleSwitch label="Exigir foto para concluir OS" description="O técnico precisa anexar pelo menos uma foto antes de concluir" checked={cfg.osExigirFoto} onChange={() => toggleCfg("osExigirFoto")} />
+          <ToggleSwitch label="Exigir foto para concluir OS" dica="A OS só é concluída com ao menos uma foto anexada pelo técnico." checked={cfg.osExigirFoto} onChange={() => toggleCfg("osExigirFoto")} />
           <ToggleSwitch label="Exigir assinatura do cliente na OS" checked={cfg.osExigirAssinatura} onChange={() => toggleCfg("osExigirAssinatura")} />
           <ToggleSwitch label="Permitir OS sem contrato vinculado" checked={cfg.osPermitirSemContrato} onChange={() => toggleCfg("osPermitirSemContrato")} />
           <ToggleSwitch label="Exigir questionário preenchido para concluir OS" checked={cfg.osExigirQuestionario} onChange={() => toggleCfg("osExigirQuestionario")} />
           <ToggleSwitch label="Permitir técnico editar OS após concluída" checked={cfg.osPermitirEdicaoConcluida} onChange={() => toggleCfg("osPermitirEdicaoConcluida")} />
+          <ToggleSwitch label="Exigir prestação de contas de material para finalizar a OS" dica="Ligado: a OS só conclui depois que o consumo de todo material separado foi informado (aba Materiais &amp; Compras). Desligado: a OS mostra o que falta, mas não trava." checked={cfg.osExigirPrestacaoMaterial} onChange={() => toggleCfg("osExigirPrestacaoMaterial")} />
         </ToggleGroup>
 
-        <ToggleGroup title="Notificações" description="Ações automáticas ao criar ou concluir ordens de serviço">
+        <ToggleGroup title="Notificações" dica="Mensagens enviadas automaticamente ao cliente na abertura e na conclusão das ordens de serviço.">
           <ToggleSwitch label="Notificar cliente por e-mail ao abrir OS" checked={cfg.notifEmailAbrirOs} onChange={() => toggleCfg("notifEmailAbrirOs")} />
           <ToggleSwitch label="Notificar cliente por e-mail ao concluir OS" checked={cfg.notifEmailConcluirOs} onChange={() => toggleCfg("notifEmailConcluirOs")} />
           <ToggleSwitch label="Notificar cliente por WhatsApp ao abrir OS" checked={cfg.notifWhatsappAbrirOs} onChange={() => toggleCfg("notifWhatsappAbrirOs")} />
@@ -290,10 +364,27 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
           <ToggleSwitch label="Mostrar card de técnico mais próximo" checked={cfg.mostrarTecnicoProximo} onChange={() => toggleCfg("mostrarTecnicoProximo")} />
         </ToggleGroup>
 
-        <div className="flex justify-end pt-2 border-t border-gray-100">
+        <FormSection title="Orçamentos">
+          <FormField
+            label="Alíquota de ISS sobre serviços (%)"
+            hint="Vale para os orçamentos criados a partir de agora."
+            dica="Somada ao total dos serviços, após o desconto. No orçamento, aparece em linha própria; no documento do cliente, embutida nos preços. Use 0 para não aplicar."
+          >
+            <Input
+              id="cfg-iss"
+              inputMode="decimal"
+              value={issTexto}
+              onChange={(e) => { setIssTexto(e.target.value.replace(/[^\d.,]/g, "")); setSucessoConfig(false); }}
+              className="max-w-[140px]"
+              placeholder="0"
+            />
+          </FormField>
+        </FormSection>
+
+        <div className="flex justify-end pt-2 border-t border-surface-linha">
           <Button onClick={salvarConfig} loading={salvandoConfig}>Salvar configurações</Button>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

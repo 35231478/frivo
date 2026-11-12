@@ -2,11 +2,24 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { equipeSchema } from "@/lib/validations";
+import { exigirAlgumaPermissao, exigirPermissao } from "@/lib/permissoes-server";
+import { aplicarVeiculosEquipe, planejarVeiculosEquipe, validarPessoasEquipe } from "@/lib/equipe-veiculos";
 
-export async function GET() {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
-  const empresaId = session.user!.empresaId;
+export async function GET(req: NextRequest) {
+  // Equipes são lidas pela tela de equipes/veículos e pelo seletor de técnicos da OS
+  const guard = await exigirAlgumaPermissao([["equipes", "visualizar"], ["veiculos", "visualizar"], ["ordens", "editar"], ["ordens", "criar"]]);
+  if (guard.erro) return guard.resposta;
+  const empresaId = guard.session.user!.empresaId;
+
+  // ?resumo=1: só o necessário para o seletor da OS (sem avatares em base64)
+  if (req.nextUrl.searchParams.get("resumo") === "1") {
+    const equipes = await prisma.equipe.findMany({
+      where: { empresaId, status: "ATIVA" },
+      select: { id: true, nome: true, cor: true, liderId: true, membros: { where: { ativo: true }, select: { id: true } } },
+      orderBy: { nome: "asc" },
+    });
+    return NextResponse.json(equipes.map((e) => ({ id: e.id, nome: e.nome, cor: e.cor, liderId: e.liderId, membroIds: e.membros.map((m) => m.id) })));
+  }
 
   const equipes = await prisma.equipe.findMany({
     where: { empresaId },
@@ -22,15 +35,21 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
-  const empresaId = session.user!.empresaId;
+  // Criar equipe exige "Equipes / Colaboradores › gerenciar" (antes bastava estar logado)
+  const guard = await exigirPermissao("equipes", "gerenciar");
+  if (guard.erro) return guard.resposta;
+  const empresaId = guard.session.user!.empresaId;
 
   const body = await req.json();
   const parsed = equipeSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
 
-  const { membroIds, veiculoId, liderId, ...rest } = parsed.data;
+  const { membroIds, veiculoId, veiculoIds, confirmarDesvinculo: _c, liderId, ...rest } = parsed.data;
+  if (!(await validarPessoasEquipe(empresaId, membroIds, liderId)))
+    return NextResponse.json({ erro: "Colaborador inválido." }, { status: 400 });
+  let plano;
+  try { plano = await planejarVeiculosEquipe(empresaId, null, { veiculoIds, veiculoId }); }
+  catch { return NextResponse.json({ erro: "Veículo inválido." }, { status: 400 }); }
 
   const equipe = await prisma.equipe.create({
     data: {
@@ -41,9 +60,7 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  if (veiculoId) {
-    await prisma.veiculo.updateMany({ where: { id: veiculoId, empresaId }, data: { equipeId: equipe.id } });
-  }
+  await aplicarVeiculosEquipe(empresaId, equipe.id, plano);
 
   return NextResponse.json(equipe, { status: 201 });
 }

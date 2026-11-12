@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
+import { exigirPermissao } from "@/lib/permissoes-server";
 import { orcamentoSchema } from "@/lib/validations";
-import { gerarCodigoOrcamento } from "@/lib/utils";
-import { calcularTotais, montarCamposProposta } from "@/lib/orcamento-helpers";
+import { camposCondicoes, montarValoresOrcamento, montarCamposProposta } from "@/lib/orcamento-helpers";
+import { nomeDoOrcamento } from "@/lib/orcamentos/nome-server";
+import { destinatarioSugerido, padroesOrcamento, validadeDoPadrao, validarDestinatario } from "@/lib/orcamentos/padroes-server";
+import { periodoInstanteBR } from "@/lib/fuso";
+import { comNumero } from "@/lib/numeracao-server";
+import { gravarItensOrcamento, validarMateriaisDoOrcamento } from "@/lib/orcamentos/materiais-server";
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("orcamentos", "visualizar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const empresaId = session.user!.empresaId;
 
   const { searchParams } = new URL(req.url);
@@ -23,13 +29,7 @@ export async function GET(req: NextRequest) {
   if (tipo) where.tipo = tipo;
   if (clienteId) where.clienteId = clienteId;
   if (dataInicio || dataFim) {
-    where.criadoEm = {};
-    if (dataInicio) where.criadoEm.gte = new Date(dataInicio);
-    if (dataFim) {
-      const fim = new Date(dataFim);
-      fim.setHours(23, 59, 59, 999);
-      where.criadoEm.lte = fim;
-    }
+    where.criadoEm = periodoInstanteBR(dataInicio, dataFim) ?? {}; // dias de Brasília
   }
   if (busca) {
     where.OR = [
@@ -53,8 +53,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("orcamentos", "criar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const empresaId = session.user!.empresaId;
   const usuarioId = session.user!.id;
 
@@ -67,6 +68,19 @@ export async function POST(req: NextRequest) {
     );
   }
   const data = parsed.data;
+
+  // Cliente, responsável técnico e itens do catálogo precisam ser da mesma empresa
+  try {
+    await Promise.all([
+      validarRefEmpresa("cliente", data.clienteId, empresaId, "Cliente"),
+      validarRefEmpresa("tecnico", data.responsavelTecnicoId, empresaId, "Responsável técnico"),
+      validarRefsEmpresa("servico", data.servicos.map((s) => s.catalogoId), empresaId, "Serviço do catálogo"),
+      validarRefsEmpresa("produto", data.produtos.map((p) => p.catalogoId), empresaId, "Produto do catálogo"),
+      validarDestinatario(empresaId, data.clienteId, data.unidadeId, data.contatoClienteId),
+      // E3.3: materiais das linhas de serviço (regra pura + produtos da empresa)
+      validarMateriaisDoOrcamento(empresaId, data.servicos),
+    ]);
+  } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
   // Valida que as OS vinculadas pertencem ao mesmo tenant e cliente (evita vínculo cross-tenant)
   if (data.ordensServicoIds.length) {
@@ -82,73 +96,47 @@ export async function POST(req: NextRequest) {
   }
 
   const tokenPublico = crypto.randomUUID();
-  const totais = calcularTotais(data.servicos, data.produtos, data.desconto, data.tipoDesconto);
-  const proposta = montarCamposProposta(data);
+  // ISS: a alíquota da empresa HOJE fica congelada no orçamento
+  const cfg = await prisma.configuracao.findUnique({ where: { empresaId }, select: { issAliquota: true } });
+  const valores = montarValoresOrcamento(data, Number(cfg?.issAliquota ?? 0));
+  // Campo que não veio = padrão de Configurações (validade, garantias, não incluso, normas, RT padrão)
+  const padroes = await padroesOrcamento(empresaId);
+  const proposta = montarCamposProposta(
+    data.responsavelTecnicoId === undefined ? { ...data, responsavelTecnicoId: padroes.responsavelTecnicoId } : data,
+  );
+  const sugerido = data.unidadeId === undefined || data.contatoClienteId === undefined
+    ? await destinatarioSugerido(empresaId, data.clienteId, data.ordensServicoIds)
+    : null;
+  // Nome em branco = automático (tipo da OS, equipamento, cliente/unidade ou itens)
+  const nome = await nomeDoOrcamento(empresaId, data);
 
-  // Numeração derivada do maior código existente do ano (evita reuso após exclusão); retry em colisão
-  const ano = new Date().getFullYear();
-  let orcamento;
-  for (let tentativa = 0; ; tentativa++) {
-    const ultimo = await prisma.orcamento.findFirst({
-      where: { empresaId, codigo: { startsWith: `ORC-${ano}-` } },
-      orderBy: { codigo: "desc" },
-      select: { codigo: true },
-    });
-    const seq = ultimo ? Number(ultimo.codigo.split("-")[2]) + 1 : 1;
-    const codigo = gerarCodigoOrcamento(seq);
-
-    try {
-      orcamento = await prisma.orcamento.create({
+  // Número pelo contador da empresa, sob trava, na mesma transação do INSERT (nunca duplica)
+  const orcamento = await comNumero(empresaId, "orcamento", async (codigo, tx) => {
+      const criado = await tx.orcamento.create({
         data: {
           empresaId,
           codigo,
-          nome: data.nome,
+          nome,
+          ...camposCondicoes(data, padroes),
           clienteId: data.clienteId,
+          unidadeId: data.unidadeId === undefined ? sugerido!.unidadeId : data.unidadeId || null,
+          contatoClienteId: data.contatoClienteId === undefined ? sugerido!.contatoClienteId : data.contatoClienteId || null,
           criadoPorId: usuarioId,
           descricao: data.descricao ?? null,
           observacao: data.observacao ?? null,
-          validadeEm: data.validadeEm ? new Date(data.validadeEm) : null,
-          desconto: data.desconto,
-          tipoDesconto: data.tipoDesconto,
-          totalServicos: totais.totalServicos,
-          totalProdutos: totais.totalProdutos,
-          totalGeral: totais.totalGeral,
+          validadeEm: data.validadeEm === undefined ? validadeDoPadrao(padroes.validadeDias) : data.validadeEm ? new Date(data.validadeEm) : null,
+          ...valores.campos,
           tokenPublico,
           ...proposta,
-          servicos: {
-            create: data.servicos.map((s, idx) => ({
-              servicoId: s.catalogoId || null,
-              descricao: s.descricao,
-              quantidade: s.quantidade,
-              valorUnitario: s.valorUnitario,
-              valorTotal: s.quantidade * s.valorUnitario,
-              observacao: s.observacao ?? null,
-              ordem: idx,
-            })),
-          },
-          produtos: {
-            create: data.produtos.map((p, idx) => ({
-              produtoId: p.catalogoId || null,
-              descricao: p.descricao,
-              quantidade: p.quantidade,
-              valorUnitario: p.valorUnitario,
-              valorTotal: p.quantidade * p.valorUnitario,
-              observacao: p.observacao ?? null,
-              ordem: idx,
-            })),
-          },
           ordensServico: {
             create: data.ordensServicoIds.map((osId) => ({ ordemServicoId: osId })),
           },
         },
       });
-      break;
-    } catch (e: any) {
-      // P2002 = violação de unique (codigo, empresaId) por concorrência → tenta o próximo número
-      if (e?.code === "P2002" && tentativa < 5) continue;
-      throw e;
-    }
-  }
+      // Linhas em ordem: serviço → materiais (snapshot) → produtos → peças derivadas
+      await gravarItensOrcamento(tx, criado.id, valores);
+      return criado;
+  });
 
   return NextResponse.json(orcamento, { status: 201 });
 }

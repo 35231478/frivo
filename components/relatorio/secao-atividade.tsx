@@ -1,4 +1,7 @@
+import { CheckCircle2, XCircle } from "lucide-react";
 import { formatarDataHora } from "@/lib/utils";
+import { acento } from "@/lib/ui/tokens";
+import { textoTecnicosAtividade } from "@/lib/atividade-equipe";
 
 export interface AtividadeSecao {
   id: string;
@@ -10,6 +13,8 @@ export interface AtividadeSecao {
   resumo?: string | null;
   tipoOs?: { nome: string; cor?: string | null } | null;
   tecnico?: { nome: string } | null;
+  tecnicosEquipe?: { tecnico: { nome: string } }[];
+  equipe?: { nome: string } | null;
   respostas: { resposta: string | null; arquivoUrl: string | null; campo: { label: string; tipo: string } }[];
 }
 
@@ -32,14 +37,14 @@ export function SecaoAtividade({ atividade, numero }: { atividade: AtividadeSeca
   return (
     <div style={{ breakInside: "avoid" }}>
       <div className="flex items-center gap-2 flex-wrap mb-2">
-        {numero != null && <span className="w-6 h-6 rounded-full bg-primary-500 text-white text-xs font-bold flex items-center justify-center shrink-0">{numero}</span>}
+        {numero != null && <span className="w-6 h-6 rounded-full bg-acento text-white text-xs font-bold flex items-center justify-center shrink-0">{numero}</span>}
         <h3 className="font-bold text-ink">{atividade.titulo}</h3>
         {atividade.tipoOs && (
-          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded text-white" style={{ backgroundColor: atividade.tipoOs.cor ?? "#0EA5E9" }}>{atividade.tipoOs.nome}</span>
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full text-ink-muted bg-surface-page border border-surface-border"><span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: atividade.tipoOs.cor ?? acento.DEFAULT }} aria-hidden />{atividade.tipoOs.nome}</span>
         )}
       </div>
       <p className="text-xs text-ink-muted mb-3">
-        {atividade.tecnico?.nome ?? "Sem técnico"} · Início {formatarDataHora(atividade.dataAgendada ?? atividade.criadoEm)} · Duração {duracaoTxt(atividade.duracaoMin)}
+        <span data-tecnicos-relatorio>{textoTecnicosAtividade(atividade) ?? "Sem técnico"}</span> · Início {formatarDataHora(atividade.dataAgendada ?? atividade.criadoEm)} · Duração {duracaoTxt(atividade.duracaoMin)}
       </p>
 
       {(atividade.observacao || atividade.resumo) && (
@@ -57,7 +62,9 @@ export function SecaoAtividade({ atividade, numero }: { atividade: AtividadeSeca
               <div key={i}>
                 <p className="text-sm font-semibold text-ink">{r.campo.label}</p>
                 {r.campo.tipo === "SIM_NAO" ? (
-                  <p className="text-sm">{ehSim(r.resposta) ? "✅ Sim" : "❌ Não"}</p>
+                  <p className="text-sm inline-flex items-center gap-1.5">{ehSim(r.resposta)
+                    ? <><CheckCircle2 className="w-4 h-4 text-ok-texto" aria-hidden /> Sim</>
+                    : <><XCircle className="w-4 h-4 text-atrasado-texto" aria-hidden /> Não</>}</p>
                 ) : (
                   <p className="text-sm text-ink-muted whitespace-pre-wrap">{r.resposta}</p>
                 )}

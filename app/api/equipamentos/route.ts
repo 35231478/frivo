@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
+import { validarFotos } from "@/lib/anexos-server";
 import { gerarQrCodeEquipamento } from "@/lib/qrcode-server";
 import { equipamentoSchema } from "@/lib/validations";
 import { resolverTipoEquipamento } from "@/lib/tipo-equipamento";
@@ -23,13 +24,30 @@ export async function GET(req: NextRequest) {
   const unidadeId = searchParams.get("unidadeId");
   const clienteId = searchParams.get("clienteId");
 
+  const where = {
+    empresaId,
+    ativo: true,
+    ...(unidadeId && { unidadeId }),
+    ...(clienteId && { unidade: { clienteId } }),
+  };
+
+  // ?resumo=1: só o que um seletor precisa (sem as fotos em base64, que pesam na lista)
+  if (searchParams.get("resumo") === "1") {
+    const resumo = await prisma.equipamento.findMany({
+      where,
+      select: {
+        id: true, nome: true, marca: true, modelo: true, capacidade: true, potencia: true, patrimonio: true,
+        setor: true, localizacao: true, ativo: true, unidadeId: true,
+        unidade: { select: { id: true, nome: true } },
+        tipoEquipamento: { select: { id: true, nome: true } },
+      },
+      orderBy: { criadoEm: "desc" },
+    });
+    return NextResponse.json(resumo);
+  }
+
   const equipamentos = await prisma.equipamento.findMany({
-    where: {
-      empresaId,
-      ativo: true,
-      ...(unidadeId && { unidadeId }),
-      ...(clienteId && { unidade: { clienteId } }),
-    },
+    where,
     include: {
       unidade: {
         select: {
@@ -39,6 +57,7 @@ export async function GET(req: NextRequest) {
           cliente: { select: { id: true, nome: true, nomeFantasia: true } },
         },
       },
+      tipoEquipamento: { select: { id: true, nome: true } },
     },
     orderBy: { criadoEm: "desc" },
   });
@@ -65,14 +84,19 @@ export async function POST(req: NextRequest) {
   });
   if (!unidade) return NextResponse.json({ erro: "Unidade não encontrada" }, { status: 404 });
 
+  // Fotos: tipo decidido pelos BYTES (HTML/SVG disfarçado é recusado); grava o data URL normalizado
+  const fotosValidadas = validarFotos(parsed.data.fotos);
+  if (!fotosValidadas.ok) return NextResponse.json({ erro: fotosValidadas.erro }, { status: 400 });
+
   const { dataInstalacao, dataFabricacao, garantiaInicio, garantiaAte, tipoEquipamentoId: tipoCustomId, ...resto } = parsed.data;
   if (garantiaInicio && garantiaAte && garantiaInicio > garantiaAte)
     return NextResponse.json({ erro: "O início da garantia deve ser anterior ao fim." }, { status: 400 });
   const tipoResolvido = await resolverTipoEquipamento(empresaId, resto.tipo, tipoCustomId);
-  if (!tipoResolvido) return NextResponse.json({ erro: "Tipo de equipamento não encontrado" }, { status: 400 });
+  if ("erro" in tipoResolvido) return NextResponse.json({ erro: tipoResolvido.erro }, { status: 400 });
   const equipamento = await prisma.equipamento.create({
     data: {
       ...resto,
+      fotos: fotosValidadas.fotos,
       tipo: tipoResolvido.tipo as any,
       empresaId,
       tipoEquipamentoId: tipoResolvido.tipoEquipamentoId,
@@ -91,7 +115,7 @@ export async function POST(req: NextRequest) {
     } catch (e) {
       // O equipamento já foi salvo: não desfaz o cadastro por causa do QR
       console.error("Falha ao gerar QR do equipamento", e);
-      return NextResponse.json({ ...equipamento, qrcode: null, avisoQr: "O equipamento foi salvo, mas o QR Code não pôde ser gerado agora. Gere pela aba QR Code." }, { status: 201 });
+      return NextResponse.json({ ...equipamento, qrcode: null, avisoQr: "O equipamento foi salvo, mas o QR Code não pôde ser gerado agora. Gere pela ficha do equipamento (botão \"Gerar QR\")." }, { status: 201 });
     }
   }
 

@@ -14,6 +14,8 @@ declare module "next-auth" {
       role: Role;
       permissoes: Permissoes;
       perfilNome?: string | null;
+      /** Técnico ligado ao usuário (mesmo e-mail), gravado no login */
+      tecnicoId?: string | null;
     };
   }
 
@@ -27,6 +29,13 @@ declare module "next-auth" {
     role: Role;
     permissoes?: Permissoes;
     perfilNome?: string | null;
+    /** "Manter conectado" marcado no login */
+    lembrar?: boolean;
+    /** Impressão da senha no login (lib/acesso/impressao-senha) */
+    fs?: string;
+    tecnicoId?: string | null;
+    /** Nonce do dispositivo ativo ("apenas um dispositivo ativo"): novo login desconecta o anterior */
+    sessaoAtiva?: string | null;
   }
 }
 
@@ -38,5 +47,14 @@ declare module "next-auth/jwt" {
     role: Role;
     permissoes?: Permissoes;
     perfilNome?: string | null;
+    /** "Manter conectado": false = sessão de 1 dia desde `loginEm` (ms) */
+    lembrar?: boolean;
+    loginEm?: number;
+    /** Impressão da senha no login: senha trocada depois → sessão encerrada */
+    fs?: string;
+    /** Técnico ligado ao usuário (modo técnico) */
+    tecnicoId?: string | null;
+    /** Nonce do dispositivo ("apenas um dispositivo ativo"): não bate com o do banco → sessão encerrada */
+    sa?: string | null;
   }
 }

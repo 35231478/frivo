@@ -9,6 +9,10 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { AlertCircle } from "lucide-react";
+import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
+import { CampoBoleto } from "@/components/financeiro/campo-boleto";
+import { lerBoleto } from "@/lib/financeiro/boleto";
+import { InputData } from "@/components/ui/input-data";
 
 export function ContaPagarForm({ initialData }: { initialData?: any }) {
   const router = useRouter();
@@ -18,8 +22,7 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
   const [pedidos, setPedidos] = useState<any[]>([]);
 
   const [form, setForm] = useState({
-    fornecedor: initialData?.fornecedor ?? "",
-    fornecedorCnpj: initialData?.fornecedorCnpj ?? "",
+    fornecedorId: initialData?.fornecedorId ?? "",
     descricao: initialData?.descricao ?? "",
     valorTotal: initialData?.valorTotal != null ? String(initialData.valorTotal) : "",
     dataVencimento: initialData?.dataVencimento ? String(initialData.dataVencimento).slice(0, 10) : "",
@@ -27,8 +30,13 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
     banco: initialData?.banco ?? "",
     pedidoCompraId: initialData?.pedidoCompraId ?? "",
     observacao: initialData?.observacao ?? "",
+    categoriaId: initialData?.categoriaId ?? "",
+    centroCustoId: initialData?.centroCustoId ?? "",
+    boleto: initialData?.linhaDigitavel ?? "",
   });
   const upd = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  // Conta antiga cujo fornecedor (texto) não casou com nenhum cadastro: mostra o texto e pede a escolha
+  const textoAntigo = isEditing && !initialData?.fornecedorId && initialData?.fornecedor ? String(initialData.fornecedor) : null;
 
   useEffect(() => {
     if (isEditing) return;
@@ -37,9 +45,10 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
 
   async function salvar() {
     setErro("");
-    if (!form.fornecedor.trim()) { setErro("Fornecedor é obrigatório."); return; }
+    if (!form.fornecedorId && !textoAntigo) { setErro("Escolha o fornecedor."); return; }
     if (!form.descricao.trim()) { setErro("Descrição é obrigatória."); return; }
     if (!form.valorTotal || Number(form.valorTotal) <= 0) { setErro("Informe um valor válido."); return; }
+    if (form.boleto.replace(/\D/g, "")) { const b = lerBoleto(form.boleto); if (!b.ok) { setErro(`Boleto: ${b.erro}`); return; } }
     setSalvando(true);
     try {
       const url = isEditing ? `/api/contas-pagar/${initialData.id}` : "/api/contas-pagar";
@@ -48,12 +57,16 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
-          fornecedorCnpj: form.fornecedorCnpj || null,
+          // Só manda o fornecedor quando há um escolhido (conta antiga sem cadastro segue com o texto)
+          fornecedorId: form.fornecedorId || undefined,
           dataVencimento: form.dataVencimento || null,
           formaPagamento: form.formaPagamento || null,
           banco: form.banco || null,
           pedidoCompraId: form.pedidoCompraId || null,
           observacao: form.observacao || null,
+          categoriaId: form.categoriaId || null,
+          centroCustoId: form.centroCustoId || null,
+          boleto: form.boleto.trim() || null,
         }),
       });
       if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao salvar."); return; }
@@ -64,21 +77,38 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
 
   return (
     <div className="space-y-5">
-      {erro && <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3"><AlertCircle className="w-4 h-4 shrink-0" /> {erro}</div>}
+      {erro && <div className="flex items-center gap-2 bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3"><AlertCircle className="w-4 h-4 shrink-0" /> {erro}</div>}
 
-      <div className="bg-white rounded-2xl shadow-card border border-surface-border p-5 sm:p-6 space-y-8">
+      <div className="bg-white rounded-card shadow-card border border-surface-border p-5 sm:p-6 space-y-8">
         <FormSection title="Fornecedor">
+          <FormField label="Fornecedor" required>
+            {/* Só ativos para nova escolha; o fornecedor atual segue visível mesmo inativo (“(inativo)”) */}
+            <SeletorCadastro entidade="fornecedores" valor={form.fornecedorId} vazio={textoAntigo ? "Escolha o fornecedor…" : "Selecione o fornecedor…"} onChange={(v) => upd("fornecedorId", v)} />
+            {textoAntigo && !form.fornecedorId && (
+              <p className="text-xs text-atencao-texto mt-1" data-fornecedor-antigo>
+                Fornecedor antigo: “{textoAntigo}”{initialData?.fornecedorCnpj ? ` (${initialData.fornecedorCnpj})` : ""} — sem cadastro. Escolha o fornecedor para ligar esta conta.
+              </p>
+            )}
+            {/* Fornecedor novo? "+ Novo fornecedor…" no próprio seletor cria sem sair da tela */}
+          </FormField>
           <FormGrid>
-            <FormField label="Fornecedor" required><Input value={form.fornecedor} onChange={(e) => upd("fornecedor", e.target.value)} /></FormField>
-            <FormField label="CNPJ"><Input value={form.fornecedorCnpj} onChange={(e) => upd("fornecedorCnpj", e.target.value)} placeholder="00.000.000/0000-00" /></FormField>
+            <FormField label="Descrição" required><Input value={form.descricao} onChange={(e) => upd("descricao", e.target.value)} placeholder="Ex: Compra de peças" /></FormField>
+            <FormField label="Categoria">
+              {/* Só ativas para nova escolha; a categoria atual segue visível mesmo inativa */}
+              <SeletorCadastro entidade="categorias-financeiras" valor={form.categoriaId} vazio="Sem categoria" onChange={(v) => upd("categoriaId", v)} />
+            </FormField>
           </FormGrid>
-          <FormField label="Descrição" required><Input value={form.descricao} onChange={(e) => upd("descricao", e.target.value)} placeholder="Ex: Compra de peças" /></FormField>
+          <FormGrid>
+            <FormField label="Centro de custo">
+              <SeletorCadastro entidade="centros-custo" valor={form.centroCustoId} vazio="Sem centro de custo" onChange={(v) => upd("centroCustoId", v)} />
+            </FormField>
+          </FormGrid>
         </FormSection>
 
         <FormSection title="Pagamento">
           <FormGrid cols={3}>
             <FormField label="Valor total" required><Input type="number" step="0.01" value={form.valorTotal} onChange={(e) => upd("valorTotal", e.target.value)} placeholder="0,00" /></FormField>
-            <FormField label="Vencimento"><Input type="date" value={form.dataVencimento} onChange={(e) => upd("dataVencimento", e.target.value)} /></FormField>
+            <FormField label="Vencimento"><InputData value={form.dataVencimento} onChange={(v) => upd("dataVencimento", v)} /></FormField>
             <FormField label="Forma de pagamento">
               <Select value={form.formaPagamento} onChange={(e) => upd("formaPagamento", e.target.value)}>
                 <option value="">Selecione…</option>
@@ -97,6 +127,8 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
               </FormField>
             )}
           </FormGrid>
+          <CampoBoleto valor={form.boleto} onChange={(v) => upd("boleto", v)} name="boleto"
+            valorParcela={Number(form.valorTotal) > 0 ? Number(form.valorTotal) : null} vencimentoParcela={form.dataVencimento || null} />
           <FormField label="Observação"><Textarea value={form.observacao} onChange={(e) => upd("observacao", e.target.value)} rows={2} /></FormField>
         </FormSection>
       </div>

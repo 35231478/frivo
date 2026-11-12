@@ -43,7 +43,7 @@ export function GerarOsRecorrentes({ mes, ano }: { mes: number; ano: number }) {
         <span className={
           feedback.tipo === "ok"
             ? "inline-flex items-center gap-1 text-xs text-success-700"
-            : "inline-flex items-center gap-1 text-xs text-red-700"
+            : "inline-flex items-center gap-1 text-xs text-atrasado-texto"
         }>
           {feedback.tipo === "ok" ? <Check className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
           {feedback.msg}

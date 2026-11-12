@@ -1,15 +1,20 @@
 import {
   formatarCpfCnpj, formatarData, formatarDataHora, formatarMoeda, formatarTelefone,
   nomeMes, TITULO_RELATORIO, LABELS_STATUS_RELATORIO, CLASSE_STATUS_RELATORIO,
-  LABELS_TIPO_EQUIPAMENTO, cn,
+  cn,
 } from "@/lib/utils";
+import { EquipamentosTabela, type EquipamentoInfo } from "@/components/relatorio/cabecalho-relatorio";
+import { BlocosEquipamentos, SecaoAdicionais, SecaoFotosServico } from "@/components/relatorio/relatorio-os-documento";
+import type { AdicionalRelatorio, BlocoEquipamento, FotoRelatorio } from "@/lib/relatorio-os/dados";
+import { nomesTecnicosAtividade, textoTecnicosAtividade } from "@/lib/atividade-equipe";
 
 interface Resposta { resposta: string | null; arquivoUrl: string | null; campo: { label: string; tipo: string } }
 interface Atividade {
   id: string; titulo: string; criadoEm: Date | string; resumo: string | null;
   tecnico?: { nome: string } | null; tipoOs?: { nome: string } | null; respostas: Resposta[];
+  tecnicosEquipe?: { tecnico: { nome: string } }[]; equipe?: { nome: string } | null;
 }
-interface Equip { id: string; tipo: string; marca: string; modelo: string; numeroSerie: string | null; localizacao: string | null }
+type Equip = EquipamentoInfo;
 
 export interface RelatorioDocumentoProps {
   relatorio: {
@@ -33,6 +38,12 @@ export interface RelatorioDocumentoProps {
     atividades: Atividade[];
   };
   equipamentos: Equip[];
+  /** Blocos dos equipamentos ATENDIDOS (checklist, fotos e observação de cada um); sem eles, a tabela simples */
+  blocos?: BlocoEquipamento[];
+  /** Serviços adicionais pedidos na visita (destacados) */
+  adicionais?: AdicionalRelatorio[];
+  /** Fotos do serviço (app) que não são de um equipamento atendido */
+  fotosServico?: FotoRelatorio[];
 }
 
 function n(v: unknown): number { return typeof v === "number" ? v : Number(v ?? 0); }
@@ -47,10 +58,9 @@ function enderecoStr(e: any): string {
   return p.join(" — ");
 }
 
-export function RelatorioDocumento({ relatorio, empresa, os, equipamentos }: RelatorioDocumentoProps) {
-  const tecnicosSet = new Map<string, string>();
-  os.atividades.forEach((a) => { if (a.tecnico) tecnicosSet.set(a.tecnico.nome, a.tecnico.nome); });
-  const equipe = [...tecnicosSet.values()];
+export function RelatorioDocumento({ relatorio, empresa, os, equipamentos, blocos, adicionais = [], fotosServico = [] }: RelatorioDocumentoProps) {
+  // Todos os técnicos das atividades (responsáveis e membros das equipes)
+  const equipe = [...new Set(os.atividades.flatMap((a) => nomesTecnicosAtividade(a)))];
   const tipos = [...new Set(os.atividades.map((a) => a.tipoOs?.nome).filter(Boolean))] as string[];
 
   return (
@@ -62,7 +72,7 @@ export function RelatorioDocumento({ relatorio, empresa, os, equipamentos }: Rel
             // eslint-disable-next-line @next/next/no-img-element
             <img src={empresa.logo} alt={empresa.nome} className="w-20 h-20 object-contain rounded-lg border border-surface-border" />
           ) : (
-            <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-primary-500 to-success-500 flex items-center justify-center text-white text-2xl font-bold">
+            <div className="w-20 h-20 rounded-lg bg-acento flex items-center justify-center text-white font-display text-2xl font-bold">
               {empresa.nome.slice(0, 2).toUpperCase()}
             </div>
           )}
@@ -120,32 +130,10 @@ export function RelatorioDocumento({ relatorio, empresa, os, equipamentos }: Rel
         {os.descricao && <p className="text-sm mt-2 text-ink-muted whitespace-pre-wrap">{os.descricao}</p>}
       </div>
 
-      {/* EQUIPAMENTOS ATENDIDOS */}
-      {equipamentos.length > 0 && (
-        <div className="py-4 border-b border-surface-border">
-          <p className="text-xs uppercase tracking-wider text-ink-muted mb-2">Equipamentos atendidos</p>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-surface-alt border-b border-surface-border">
-                <th className="text-left px-2 py-1.5 font-semibold text-ink-muted text-xs uppercase">Equipamento</th>
-                <th className="text-left px-2 py-1.5 font-semibold text-ink-muted text-xs uppercase">Modelo</th>
-                <th className="text-left px-2 py-1.5 font-semibold text-ink-muted text-xs uppercase">Nº série</th>
-                <th className="text-left px-2 py-1.5 font-semibold text-ink-muted text-xs uppercase">Localização</th>
-              </tr>
-            </thead>
-            <tbody>
-              {equipamentos.map((e) => (
-                <tr key={e.id} className="border-b border-surface-border">
-                  <td className="px-2 py-1.5">{LABELS_TIPO_EQUIPAMENTO[e.tipo] ?? e.tipo} — {e.marca}</td>
-                  <td className="px-2 py-1.5 text-ink-muted">{e.modelo}</td>
-                  <td className="px-2 py-1.5 text-ink-muted">{e.numeroSerie ?? "—"}</td>
-                  <td className="px-2 py-1.5 text-ink-muted">{e.localizacao ?? os.unidade?.nome ?? "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* EQUIPAMENTOS ATENDIDOS — ambiente e equipamento separados (tabela compartilhada) */}
+      {blocos ? <BlocosEquipamentos blocos={blocos} /> : <EquipamentosTabela equipamentos={equipamentos} unidadeNome={os.unidade?.nome} />}
+      <SecaoAdicionais adicionais={adicionais} fotos interna={false} />
+      <SecaoFotosServico fotos={fotosServico} />
 
       {/* RELATÓRIO TÉCNICO */}
       <div className="py-4 border-b border-surface-border">
@@ -159,7 +147,7 @@ export function RelatorioDocumento({ relatorio, empresa, os, equipamentos }: Rel
               <div key={a.id} className="border border-surface-border rounded-lg p-3" style={{ breakInside: "avoid" }}>
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <p className="font-semibold text-ink">{a.titulo}</p>
-                  <p className="text-xs text-ink-muted">{formatarDataHora(a.criadoEm)}{a.tecnico ? ` · ${a.tecnico.nome}` : ""}</p>
+                  <p className="text-xs text-ink-muted">{formatarDataHora(a.criadoEm)}{textoTecnicosAtividade(a) ? ` · ${textoTecnicosAtividade(a)}` : ""}</p>
                 </div>
                 {textos.length > 0 && (
                   <div className="space-y-1 text-sm">

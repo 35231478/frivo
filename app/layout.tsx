@@ -1,10 +1,19 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Archivo, Inter } from "next/font/google";
 import "./globals.css";
 
+// Sistema de design: Inter (400/500/600) no corpo e nos dados; Archivo (600/700) em títulos e números.
+// A Inter segue variável (todos os pesos): telas ainda não restilizadas usam 700, e sem ele o
+// navegador sintetizaria o negrito.
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
+  display: "swap",
+});
+const archivo = Archivo({
+  subsets: ["latin"],
+  weight: ["600", "700"],
+  variable: "--font-archivo",
   display: "swap",
 });
 
@@ -29,7 +38,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0F2744",
+  themeColor: "#FFFFFF",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -39,7 +48,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className={inter.variable}>
+    <html lang="pt-BR" className={`${inter.variable} ${archivo.variable}`}>
       <body className="font-sans antialiased bg-surface-page text-ink">{children}</body>
     </html>
   );

@@ -10,9 +10,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { LABELS_PRIORIDADE } from "@/lib/utils";
 import { SelectCadastroRapido } from "@/components/ui/select-cadastro-rapido";
-import { CLIENTE, UNIDADE, EQUIPAMENTO } from "@/components/cadastro-rapido/definicoes";
+import { CLIENTE, UNIDADE, EQUIPAMENTO, TIPO_OS } from "@/components/cadastro-rapido/definicoes";
 import type { OpcaoCadastro } from "@/components/ui/select-cadastro-rapido";
-import { Inbox } from "lucide-react";
+import { Inbox, Link2, Wrench, X } from "lucide-react";
+import { SeletorExecucao, VALOR_EXECUCAO_VAZIO, corpoExecucao, temExecutor, useOpcoesExecucao, type ValorExecucao } from "@/components/os/seletor-execucao";
+import { MSG_SEM_EXECUTOR_TELA } from "@/lib/atividade-equipe";
+import { GavetaEquipamentos } from "@/components/os/gaveta-equipamentos";
+import { detalheEquipamento, rotuloEquipamento, type EquipamentoResumo } from "@/lib/os/vincular-equipamentos";
+import { InputData } from "@/components/ui/input-data";
+import { InputDataHora, MSG_HORA_INVALIDA } from "@/components/ui/input-data-hora";
+import { paraLocalBR } from "@/lib/fuso";
+import { AlertaPerdasCliente, type PerdasCliente } from "@/components/financeiro/alerta-perdas-cliente";
 
 type Item = { id: string; nome: string; nomeFantasia?: string | null };
 type UnidadeItem = { id: string; nome: string; cidade?: string | null };
@@ -25,6 +33,9 @@ const rotuloEquip = (e: EquipItem) => {
   return e.nome ? `${e.nome} — ${base}` : base;
 };
 const opcaoEquip = (e: EquipItem): OpcaoCadastro => ({ value: e.id, label: rotuloEquip(e), descricao: e.unidade?.nome });
+
+/** Princípio 7: a regra de vínculo dos equipamentos fica no ⓘ da seção */
+const DICA_EQUIPAMENTOS = "Opcional na abertura: os equipamentos podem ser vinculados durante a execução, pelo QR Code ou pela lista. Para concluir a OS, ao menos um equipamento precisa ser atendido, com o checklist respondido.";
 
 export default function NovaOrdemPage() {
   const router = useRouter();
@@ -45,14 +56,28 @@ export default function NovaOrdemPage() {
   const [solicitacao, setSolicitacao] = useState<Solicitacao | null>(null);
   const [carregandoSolicitacao, setCarregandoSolicitacao] = useState(false);
   const [dataHora, setDataHora] = useState("");
-  const [tecnicoId, setTecnicoId] = useState("");
-  const [tecnicos, setTecnicos] = useState<Item[]>([]);
+  // Quem executa (OBRIGATÓRIO) + veículo — vira a 1ª atividade da OS
+  const opcoesExecucao = useOpcoesExecucao();
+  const [execucao, setExecucao] = useState<ValorExecucao>(VALOR_EXECUCAO_VAZIO);
+  const [faltaExecutor, setFaltaExecutor] = useState(false);
+  const [tiposOs, setTiposOs] = useState<{ id: string; nome: string; ativo: boolean }[]>([]);
+  const [tipoOsId, setTipoOsId] = useState("");
+  const [agendarPara, setAgendarPara] = useState("");
+  // Data escolhida sem hora válida: não salva (nada de 08:00 escondido nem de hora anterior valendo)
+  const [horaRuim, setHoraRuim] = useState<string | null>(null);
+  const aoProblemaHora = (p: string | null) => { setHoraRuim(p); if (!p) setErro((e) => (e === MSG_HORA_INVALIDA ? "" : e)); };
   const [equipamentoId, setEquipamentoId] = useState("");
   const [equipamentos, setEquipamentos] = useState<EquipItem[]>([]);
+  // Equipamentos atendidos (opcional na abertura; dá para vincular na execução) — escolhidos na gaveta
+  const [atendidos, setAtendidos] = useState<EquipamentoResumo[]>([]);
+  const [gavetaAberta, setGavetaAberta] = useState(false);
+  const [avisoSemCliente, setAvisoSemCliente] = useState(false);
+  const [verTodosAtendidos, setVerTodosAtendidos] = useState(false);
 
   useEffect(() => {
     fetch("/api/clientes").then((r) => r.json()).then((d) => setClientes(Array.isArray(d) ? d : [])).catch(() => {})
       .finally(() => setCarregandoClientes(false));
+    fetch("/api/tipos-os").then((r) => (r.ok ? r.json() : [])).then((d) => setTiposOs(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
 
   // Pré-preenchimento opcional via URL (ex.: "Abrir OS" na ficha do equipamento)
@@ -74,7 +99,6 @@ export default function NovaOrdemPage() {
           contratoId: os.contratoId ?? "", observacoes: os.observacoes ?? "",
         }));
       }).catch(() => setErro("Erro de conexão.")).finally(() => setCarregandoSolicitacao(false));
-      fetch("/api/tecnicos").then((r) => r.json()).then((d) => setTecnicos(Array.isArray(d) ? d : [])).catch(() => {});
       return;
     }
     const cli = sp.get("clienteId");
@@ -92,6 +116,18 @@ export default function NovaOrdemPage() {
     fetch(`/api/contratos?clienteId=${clienteId}`).then((r) => r.json()).then(setContratos).catch(() => {});
   }, [clienteId]);
 
+  // Aviso antes de atender: o cliente teve perda (inadimplência) nos últimos 12 meses — só informa.
+  // Sem permissão para ver o cliente (403) ou erro: nenhum aviso.
+  const [perdas12m, setPerdas12m] = useState<PerdasCliente | null>(null);
+  useEffect(() => {
+    setPerdas12m(null);
+    if (!clienteId) return;
+    let vivo = true;
+    fetch(`/api/clientes/${clienteId}/status-financeiro`).then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (vivo) setPerdas12m(d?.perdas12m ?? null); }).catch(() => {});
+    return () => { vivo = false; };
+  }, [clienteId]);
+
   useEffect(() => {
     if (!solicitacao || !clienteId) return;
     fetch(`/api/equipamentos?clienteId=${clienteId}`).then((r) => r.json()).then((d) => setEquipamentos(Array.isArray(d) ? d : [])).catch(() => {});
@@ -99,16 +135,19 @@ export default function NovaOrdemPage() {
 
   async function aceitarSolicitacao() {
     if (!solicitacao) return;
+    if (horaRuim) { setErro(horaRuim); return; }
     if (!dataHora) { setErro("Escolha a data e a hora do atendimento."); return; }
     if (form.descricao.trim().length < 5) { setErro("Descrição muito curta."); return; }
+    if (!temExecutor(execucao)) { setFaltaExecutor(true); setErro(MSG_SEM_EXECUTOR_TELA); return; }
     setErro(""); setSalvando(true);
     try {
       const res = await fetch(`/api/solicitacoes/${solicitacao.id}/aceitar`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          dataHora, descricao: form.descricao, prioridade: form.prioridade, unidadeId: form.unidadeId || null,
+          // dataHora vai como "AAAA-MM-DDTHH:mm" de Brasília (o que a rota de aceitar espera)
+          dataHora: paraLocalBR(dataHora), descricao: form.descricao, prioridade: form.prioridade, unidadeId: form.unidadeId || null,
           contratoId: form.contratoId || null, observacoes: form.observacoes || null,
-          equipamentoId: equipamentoId || null, tecnicoId: tecnicoId || null,
+          equipamentoId: equipamentoId || null, ...corpoExecucao(execucao),
         }),
       });
       const d = await res.json().catch(() => ({}));
@@ -121,11 +160,18 @@ export default function NovaOrdemPage() {
 
   async function salvar() {
     if (!clienteId || !form.descricao.trim()) { setErro("Cliente e descrição são obrigatórios."); return; }
+    if (!temExecutor(execucao)) { setFaltaExecutor(true); setErro(MSG_SEM_EXECUTOR_TELA); return; }
+    if (horaRuim) { setErro(horaRuim); return; }
     setErro(""); setSalvando(true);
     try {
       const res = await fetch("/api/ordens", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, clienteId }),
+        body: JSON.stringify({
+          ...form, clienteId,
+          ...(atendidos.length ? { equipamentoIds: atendidos.map((e) => e.id) } : {}),
+          // dataAgendada: instante (ISO) da hora de Brasília escolhida
+          execucao: { tipoOsId: tipoOsId || null, dataAgendada: agendarPara || null, ...corpoExecucao(execucao) },
+        }),
       });
       if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao criar OS."); return; }
       const os = await res.json();
@@ -139,15 +185,14 @@ export default function NovaOrdemPage() {
         title={solicitacao ? `Aceitar solicitação ${solicitacao.numero}` : "Nova ordem de serviço"}
         backHref={solicitacao ? "/calendario" : "/ordens"}
       />
-      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-6">
-        {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{erro}</div>}
+      <div className="bg-white rounded-card border border-surface-border p-6 space-y-6">
+        {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3">{erro}</div>}
         {solicitacao && (
-          <div className="flex items-start gap-3 bg-cyan-50 border border-cyan-200 text-cyan-900 text-sm rounded-lg px-4 py-3">
+          <div className="flex items-start gap-3 bg-acento-claro border border-acento/20 text-acento-hover text-sm rounded-lg px-4 py-3">
             <Inbox className="w-4 h-4 shrink-0 mt-0.5" />
             <p>
-              Solicitação enviada pelo cliente, já preenchida com o que ele mandou. Escolha a <strong>data e a hora</strong> do
-              atendimento: ao salvar, esta mesma OS (chamado <strong>{solicitacao.numero}</strong>) passa para <strong>Agendada</strong> e
-              entra no calendário.
+              Solicitação <strong>{solicitacao.numero}</strong>, preenchida pelo cliente. Defina a <strong>data e a hora</strong> do atendimento:
+              ao salvar, a OS passa para <strong>Agendada</strong> e entra no calendário.
             </p>
           </div>
         )}
@@ -159,7 +204,7 @@ export default function NovaOrdemPage() {
             ) : (
             <SelectCadastroRapido
               value={clienteId}
-              onChange={(v) => { setClienteId(v); setForm((f) => ({ ...f, unidadeId: "", contratoId: "" })); }}
+              onChange={(v) => { setClienteId(v); setAtendidos([]); setAvisoSemCliente(false); setForm((f) => ({ ...f, unidadeId: "", contratoId: "" })); }}
               opcoes={clientes.map(CLIENTE.opcao)}
               entidade={CLIENTE.entidade}
               placeholder="Selecione o cliente"
@@ -176,6 +221,7 @@ export default function NovaOrdemPage() {
               }}
             />
             )}
+            {clienteId && <AlertaPerdasCliente clienteId={clienteId} perdas={perdas12m} className="mt-2" />}
           </FormField>
           <FormGrid>
             <FormField label="Endereço do cliente">
@@ -214,11 +260,12 @@ export default function NovaOrdemPage() {
             </FormField>
             {solicitacao ? (
               <FormField label="Data e hora do atendimento" required>
-                <Input type="datetime-local" aria-label="Data e hora do atendimento" value={dataHora} onChange={(e) => setDataHora(e.target.value)} />
+                <InputDataHora aria-label="Data e hora do atendimento" value={dataHora} onChange={setDataHora} onProblema={aoProblemaHora} />
               </FormField>
             ) : (
-              <FormField label="Previsão de conclusão">
-                <Input type="date" value={form.previsaoConclusao} onChange={(e) => setForm((f) => ({ ...f, previsaoConclusao: e.target.value }))} />
+              // Data e hora da 1ª atividade (é ela que aparece no calendário)
+              <FormField label="Agendar para" dica="Opcional. Data e hora da primeira atividade, exibida no calendário.">
+                <InputDataHora aria-label="Agendar para" value={agendarPara} onChange={setAgendarPara} onProblema={aoProblemaHora} />
               </FormField>
             )}
           </FormGrid>
@@ -249,13 +296,88 @@ export default function NovaOrdemPage() {
                   />
                 )}
               </FormField>
-              <FormField label="Técnico">
-                <Select value={tecnicoId} onChange={(e) => setTecnicoId(e.target.value)} placeholder="Definir depois">
-                  {tecnicos.map((t) => (<option key={t.id} value={t.id}>{t.nome}</option>))}
-                </Select>
+            </FormGrid>
+          )}
+        </FormSection>
+
+        {!solicitacao && (
+          <FormSection title="Equipamentos atendidos" dica={DICA_EQUIPAMENTOS}>
+            {atendidos.length > 0 && (
+              <div data-equipamentos-escolhidos>
+                <p className="text-xs font-medium text-ink-muted mb-1.5" data-qtd-atendidos>
+                  {atendidos.length === 1 ? "1 equipamento selecionado" : `${atendidos.length} equipamentos selecionados`}
+                </p>
+                <ul className="divide-y divide-surface-linha rounded-lg border border-surface-border bg-white">
+                  {(verTodosAtendidos ? atendidos : atendidos.slice(0, 5)).map((e) => (
+                    <li key={e.id} className="flex items-center gap-3 px-3 py-2" data-equipamento-escolhido={e.id}>
+                      <Wrench className="w-4 h-4 text-ink-subtle shrink-0" aria-hidden="true" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm text-ink truncate">{rotuloEquipamento(e)}</span>
+                        <span className="block text-xs text-ink-muted truncate">{detalheEquipamento(e, true)}</span>
+                      </span>
+                      <button type="button" onClick={() => setAtendidos((l) => l.filter((x) => x.id !== e.id))}
+                        aria-label={`Tirar ${rotuloEquipamento(e)} da OS`} className="p-1 rounded text-ink-subtle hover:text-atrasado hover:bg-atrasado-claro">
+                        <X className="w-4 h-4" aria-hidden="true" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                {atendidos.length > 5 && (
+                  <button type="button" onClick={() => setVerTodosAtendidos((v) => !v)} className="mt-1.5 text-xs font-semibold text-acento hover:underline" data-ver-todos-atendidos>
+                    {verTodosAtendidos ? "Mostrar menos" : `Mostrar todos (${atendidos.length})`}
+                  </button>
+                )}
+              </div>
+            )}
+            <div>
+              <Button
+                type="button" variant="secondary" data-vincular-equipamento aria-describedby={avisoSemCliente ? "aviso-sem-cliente" : undefined}
+                onClick={() => { if (!clienteId) { setAvisoSemCliente(true); return; } setGavetaAberta(true); }}
+              >
+                <Link2 className="w-4 h-4" aria-hidden="true" /> {atendidos.length ? "Editar equipamentos" : "Vincular equipamento"}
+              </Button>
+              {avisoSemCliente && !clienteId && (
+                <p id="aviso-sem-cliente" role="alert" data-aviso-sem-cliente className="mt-2 text-xs text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2">
+                  Selecione o <strong>cliente</strong> antes: os equipamentos vêm dos endereços dele.
+                </p>
+              )}
+            </div>
+            {clienteId && (
+              <GavetaEquipamentos
+                aberto={gavetaAberta} onFechar={() => setGavetaAberta(false)}
+                clienteId={clienteId} unidadeId={form.unidadeId || null} unidades={unidades.map(UNIDADE.opcao)}
+                selecionados={atendidos} onConfirmar={setAtendidos}
+              />
+            )}
+          </FormSection>
+        )}
+
+        <FormSection title="Quem executa">
+          {!solicitacao && (
+            <FormGrid>
+              <FormField label="Tipo de OS" dica="Filtra os colaboradores pela competência no tipo de serviço.">
+                {/* UX-8 (Y3): tipo novo nasce aqui mesmo, sem abandonar a OS */}
+                <SelectCadastroRapido
+                  value={tipoOsId} onChange={setTipoOsId}
+                  opcoes={tiposOs.filter((t) => t.ativo !== false).map((t) => ({ value: t.id, label: t.nome }))}
+                  entidade={TIPO_OS.entidade} placeholder="Sem tipo definido"
+                  campos={TIPO_OS.campos} campoBusca="nome" permissao={TIPO_OS.permissao} linkCadastroCompleto={TIPO_OS.link}
+                  criar={async (v) => {
+                    const t = await TIPO_OS.criar(v);
+                    setTiposOs((l) => [...l, { id: t.id, nome: t.nome, ativo: true }]);
+                    return { value: t.id, label: t.nome };
+                  }}
+                />
+              </FormField>
+              {/* O prazo da OS: é o que a central usa para dizer se está no prazo ou atrasada */}
+              <FormField label="Prazo para finalizar" dica="Opcional. Após esta data, a OS é sinalizada como atrasada.">
+                <InputData aria-label="Prazo para finalizar" value={form.previsaoConclusao} onChange={(v) => setForm((f) => ({ ...f, previsaoConclusao: v }))} />
               </FormField>
             </FormGrid>
           )}
+          <FormField label="Equipe ou colaboradores" required>
+            <SeletorExecucao opcoes={opcoesExecucao} tipoOsId={solicitacao ? "" : tipoOsId} valor={execucao} onChange={(v) => { setExecucao(v); if (temExecutor(v)) { setFaltaExecutor(false); setErro((e) => (e === MSG_SEM_EXECUTOR_TELA ? "" : e)); } }} erro={faltaExecutor} />
+          </FormField>
         </FormSection>
 
         <FormSection title="Descrição">
@@ -267,7 +389,7 @@ export default function NovaOrdemPage() {
           </FormField>
         </FormSection>
 
-        <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
+        <div className="flex items-center justify-end gap-3 pt-2 border-t border-surface-linha">
           <Button variant="secondary" onClick={() => router.back()}>Cancelar</Button>
           {solicitacao ? (
             <Button loading={salvando} onClick={aceitarSolicitacao} disabled={!solicitacao.pendente || carregandoSolicitacao}>Aceitar e agendar</Button>

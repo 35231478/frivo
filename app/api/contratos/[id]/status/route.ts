@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { exigirPermissao } from "@/lib/permissoes-server";
 import { StatusContrato } from "@prisma/client";
+import { mudarStatusContrato, statusHttp } from "@/lib/acoes-massa/regras";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -12,14 +12,12 @@ const STATUS_VALIDOS = Object.values(StatusContrato) as string[];
  * Body: { status: StatusContrato, motivo?: string }
  */
 export async function PATCH(req: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("contratos", "editar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const { id } = await params;
   const empresaId = session.user!.empresaId;
   const usuarioId = session.user!.id;
-
-  const contrato = await prisma.contrato.findFirst({ where: { id, empresaId }, select: { id: true, status: true } });
-  if (!contrato) return NextResponse.json({ erro: "Contrato não encontrado" }, { status: 404 });
 
   const body = await req.json().catch(() => ({}));
   const novoStatus = body?.status as string | undefined;
@@ -28,24 +26,11 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (!novoStatus || !STATUS_VALIDOS.includes(novoStatus)) {
     return NextResponse.json({ erro: "Status inválido." }, { status: 400 });
   }
-  if (novoStatus === contrato.status) {
-    return NextResponse.json({ erro: "O contrato já está neste status." }, { status: 400 });
-  }
 
-  const [, historico] = await prisma.$transaction([
-    prisma.contrato.update({ where: { id }, data: { status: novoStatus as StatusContrato } }),
-    prisma.contratoHistoricoStatus.create({
-      data: {
-        empresaId,
-        contratoId: id,
-        statusAnterior: contrato.status,
-        statusNovo: novoStatus as StatusContrato,
-        motivo,
-        usuarioId,
-      },
-      include: { usuario: { select: { id: true, nome: true } } },
-    }),
-  ]);
+  // Mesma regra da ação em massa (lib/acoes-massa/regras.ts): troca o status e grava o histórico
+  const r = await mudarStatusContrato(id, novoStatus as StatusContrato, { empresaId, usuarioId, usuarioNome: session.user!.name ?? "usuário", motivo: motivo ?? undefined });
+  if (!r.ok) return NextResponse.json({ erro: r.codigo === "nao_encontrado" ? "Contrato não encontrado" : r.motivo }, { status: statusHttp(r) });
+  const historico = r.dados!.historico as any;
 
   return NextResponse.json({
     ok: true,

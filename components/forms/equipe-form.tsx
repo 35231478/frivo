@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { corDado, paletaSelecao } from "@/lib/ui/tokens";
 import { useRouter } from "next/navigation";
+import { AvisoInativacaoStatus } from "@/components/ui/aviso-inativacao-status";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,12 +11,27 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
-import { AlertCircle, Check } from "lucide-react";
+import { Modal } from "@/components/ui/modal";
+import { AlertCircle, AlertTriangle, Check, Search, Truck } from "lucide-react";
 
 interface Colab { id: string; nome: string; avatar?: string | null }
-interface VeiculoOpt { id: string; placa: string; modelo: string }
+interface VeiculoOpt { id: string; placa: string; modelo: string; equipe: { id: string; nome: string } | null; inativo: boolean }
 
-const CORES = ["#0EA5E9", "#10B981", "#8B5CF6", "#F59E0B", "#EF4444", "#EC4899", "#06B6D4", "#6366F1"];
+const CORES = paletaSelecao;
+
+// Cor que um registro novo recebe (dado salvo no cadastro; o usuário troca no seletor)
+const COR_PADRAO = corDado.azul;
+
+/** A pesquisa de veículos aparece quando a lista passa disto (frota pequena não precisa) */
+export const BUSCA_VEICULOS_A_PARTIR = 6;
+const semAcento = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+/** Filtra por placa (com ou sem hífen) ou modelo, sem diferenciar maiúsculas e acentos. */
+export function filtrarVeiculos<T extends { placa: string; modelo: string }>(veiculos: T[], busca: string): T[] {
+  const q = semAcento(busca.trim());
+  if (!q) return veiculos;
+  const qPlaca = q.replace(/[^a-z0-9]/g, "");
+  return veiculos.filter((v) => semAcento(v.modelo ?? "").includes(q) || (!!qPlaca && semAcento(v.placa).replace(/[^a-z0-9]/g, "").includes(qPlaca)));
+}
 
 export function EquipeForm({ initialData }: { initialData?: any }) {
   const router = useRouter();
@@ -23,11 +40,18 @@ export function EquipeForm({ initialData }: { initialData?: any }) {
   const [salvando, setSalvando] = useState(false);
 
   const [nome, setNome] = useState(initialData?.nome ?? "");
-  const [cor, setCor] = useState(initialData?.cor ?? "#0EA5E9");
+  const [cor, setCor] = useState(initialData?.cor ?? COR_PADRAO);
   const [liderId, setLiderId] = useState(initialData?.liderId ?? "");
   const [membroIds, setMembroIds] = useState<string[]>(initialData?.membros?.map((m: any) => m.id) ?? []);
-  const [veiculoId, setVeiculoId] = useState<string>(initialData?.veiculos?.[0]?.id ?? "");
+  // Todos os veículos da equipe (antes só 1 — salvar desvinculava os demais sem avisar)
+  const vinculadosAntes: string[] = initialData?.veiculos?.map((v: any) => v.id) ?? [];
+  const [veiculoIds, setVeiculoIds] = useState<string[]>(vinculadosAntes);
+  const [buscaVeiculo, setBuscaVeiculo] = useState("");
+  const [confirmar, setConfirmar] = useState<string[] | null>(null);
   const [status, setStatus] = useState(initialData?.status ?? "ATIVA");
+  // Status → Inativa (editando): mostra o impacto e pede motivo, como o botão Inativar
+  const [motivoInativacao, setMotivoInativacao] = useState("");
+  const inativandoPeloStatus = !!initialData?.id && status === "INATIVA" && initialData?.status !== "INATIVA";
   const [observacoes, setObservacoes] = useState(initialData?.observacoes ?? "");
 
   const [colaboradores, setColaboradores] = useState<Colab[]>([]);
@@ -35,25 +59,41 @@ export function EquipeForm({ initialData }: { initialData?: any }) {
 
   useEffect(() => {
     fetch("/api/tecnicos").then((r) => r.json()).then((d) => setColaboradores(Array.isArray(d) ? d : [])).catch(() => {});
-    fetch("/api/veiculos").then((r) => r.json()).then((d) => setVeiculos(Array.isArray(d) ? d.map((v: any) => ({ id: v.id, placa: v.placa, modelo: v.modelo })) : [])).catch(() => {});
+    // Só veículos ativos; os já vinculados continuam aparecendo mesmo se tiverem sido inativados
+    fetch("/api/veiculos").then((r) => r.json()).then((d) => setVeiculos(Array.isArray(d)
+      ? d.filter((v: any) => v.status !== "INATIVO" || vinculadosAntes.includes(v.id))
+        .map((v: any) => ({ id: v.id, placa: v.placa, modelo: v.modelo, equipe: v.equipe ? { id: v.equipe.id, nome: v.equipe.nome } : null, inativo: v.status === "INATIVO" }))
+      : [])).catch(() => {});
   }, []);
+
+  const veiculosVisiveis = filtrarVeiculos(veiculos, buscaVeiculo);
 
   function toggleMembro(id: string) {
     setMembroIds((p) => (p.includes(id) ? p.filter((m) => m !== id) : [...p, id]));
   }
 
-  async function salvar() {
+  function toggleVeiculo(id: string) {
+    setVeiculoIds((p) => (p.includes(id) ? p.filter((v) => v !== id) : [...p, id]));
+  }
+  const saindo = veiculos.filter((v) => vinculadosAntes.includes(v.id) && !veiculoIds.includes(v.id));
+  const vindoDeOutra = veiculos.filter((v) => veiculoIds.includes(v.id) && v.equipe && v.equipe.id !== initialData?.id);
+
+  async function salvar(confirmarDesvinculo = false) {
     setErro("");
     if (!nome.trim()) { setErro("Nome da equipe é obrigatório."); return; }
+    // Desvincular veículo nunca acontece sem a pessoa confirmar
+    if (saindo.length && !confirmarDesvinculo) { setConfirmar(saindo.map((v) => v.placa)); return; }
     setSalvando(true);
     try {
       const url = isEditing ? `/api/equipes/${initialData.id}` : "/api/equipes";
       const res = await fetch(url, {
         method: isEditing ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome, cor, liderId: liderId || null, membroIds, veiculoId: veiculoId || null, status, observacoes }),
+        body: JSON.stringify({ nome, cor, liderId: liderId || null, membroIds, veiculoIds, confirmarDesvinculo, status, observacoes, ...(inativandoPeloStatus && { motivoInativacao }) }),
       });
-      if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao salvar equipe."); return; }
+      const e = await res.json().catch(() => ({}));
+      if (res.status === 409 && e.requerConfirmacao) { setConfirmar(e.desvincular ?? []); return; }
+      if (!res.ok) { setErro(e.erro ?? "Erro ao salvar equipe."); return; }
       router.push("/equipes");
       router.refresh();
     } catch { setErro("Erro de conexão."); } finally { setSalvando(false); }
@@ -62,12 +102,12 @@ export function EquipeForm({ initialData }: { initialData?: any }) {
   return (
     <div className="space-y-5">
       {erro && (
-        <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+        <div className="flex items-center gap-2 bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3">
           <AlertCircle className="w-4 h-4 shrink-0" /> {erro}
         </div>
       )}
 
-      <div className="bg-white rounded-2xl shadow-card border border-surface-border p-5 sm:p-6 lg:p-8 space-y-8">
+      <div className="bg-white rounded-card shadow-card border border-surface-border p-5 sm:p-6 lg:p-8 space-y-8">
         <FormSection title="Identificação">
           <FormGrid>
             <FormField label="Nome da equipe" required>
@@ -80,6 +120,7 @@ export function EquipeForm({ initialData }: { initialData?: any }) {
               </Select>
             </FormField>
           </FormGrid>
+          {initialData?.id && <AvisoInativacaoStatus url={`/api/equipes/${initialData.id}`} mostrar={inativandoPeloStatus} motivo={motivoInativacao} onMotivo={setMotivoInativacao} />}
           <FormField label="Cor de identificação" hint="Usada para destacar a equipe no calendário">
             <div className="flex items-center gap-2 flex-wrap">
               {CORES.map((c) => (
@@ -100,13 +141,49 @@ export function EquipeForm({ initialData }: { initialData?: any }) {
                 {colaboradores.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
               </Select>
             </FormField>
-            <FormField label="Veículo vinculado">
-              <Select value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)}>
-                <option value="">Nenhum</option>
-                {veiculos.map((v) => <option key={v.id} value={v.id}>{v.placa} — {v.modelo}</option>)}
-              </Select>
-            </FormField>
           </FormGrid>
+
+          <FormField label="Veículos da equipe" hint="Marque todos os veículos que ficam com esta equipe">
+            {veiculos.length === 0 ? (
+              <p className="text-sm text-ink-subtle">Nenhum veículo cadastrado.</p>
+            ) : (
+              <>
+              {/* Frota grande: pesquisa por placa ou modelo (os marcados contam à parte, para não sumirem de vista) */}
+              {veiculos.length > BUSCA_VEICULOS_A_PARTIR && (
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <div className="relative flex-1 min-w-[12rem]">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle" aria-hidden />
+                    <Input value={buscaVeiculo} onChange={(e) => setBuscaVeiculo(e.target.value)} placeholder="Pesquisar placa ou modelo" aria-label="Pesquisar veículo" className="pl-9" data-busca-veiculos-equipe />
+                  </div>
+                  <span className="text-xs text-ink-muted" data-veiculos-marcados>{veiculoIds.length === 1 ? "1 marcado" : `${veiculoIds.length} marcados`}</span>
+                </div>
+              )}
+              {veiculosVisiveis.length === 0 && <p className="text-sm text-ink-subtle" data-veiculos-sem-resultado>Nenhum veículo com “{buscaVeiculo.trim()}”.</p>}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" data-veiculos-equipe>
+                {veiculosVisiveis.map((v) => {
+                  const sel = veiculoIds.includes(v.id);
+                  const outra = v.equipe && v.equipe.id !== initialData?.id ? v.equipe.nome : null;
+                  return (
+                    <label key={v.id} className={cn("flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors",
+                      sel ? "border-primary-300 bg-primary-50" : "border-surface-border hover:bg-surface-alt")}>
+                      <input type="checkbox" checked={sel} onChange={() => toggleVeiculo(v.id)} aria-label={`Veículo ${v.placa}`}
+                        className="w-4 h-4 rounded border-surface-border text-primary-600 focus:ring-primary-500" />
+                      <Truck className="w-4 h-4 text-ink-subtle shrink-0" />
+                      <span className="text-sm text-ink truncate"><span className="font-mono font-semibold">{v.placa}</span> — {v.modelo}{v.inativo ? " (inativo)" : ""}</span>
+                      {outra && <span className="ml-auto text-[10px] text-ink-muted bg-surface-alt px-1.5 py-0.5 rounded shrink-0">{outra}</span>}
+                    </label>
+                  );
+                })}
+              </div>
+              </>
+            )}
+            {(saindo.length > 0 || vindoDeOutra.length > 0) && (
+              <div data-aviso-veiculos className="mt-2 text-xs text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2 space-y-0.5">
+                {saindo.length > 0 && <p className="flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5 shrink-0" /> Ao salvar, {saindo.map((v) => v.placa).join(", ")} {saindo.length === 1 ? "será desvinculado" : "serão desvinculados"} desta equipe.</p>}
+                {vindoDeOutra.length > 0 && <p className="flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {vindoDeOutra.map((v) => `${v.placa} sai da equipe ${v.equipe!.nome}`).join("; ")} e passa para esta.</p>}
+              </div>
+            )}
+          </FormField>
 
           <FormField label="Membros" hint="Selecione os colaboradores que compõem a equipe">
             {colaboradores.length === 0 ? (
@@ -139,8 +216,20 @@ export function EquipeForm({ initialData }: { initialData?: any }) {
 
       <div className="flex items-center justify-end gap-3 pt-1">
         <Button type="button" variant="secondary" onClick={() => router.back()}>Cancelar</Button>
-        <Button type="button" loading={salvando} onClick={salvar}><Check className="w-4 h-4" /> {isEditing ? "Salvar alterações" : "Cadastrar equipe"}</Button>
+        <Button type="button" loading={salvando} onClick={() => salvar()}><Check className="w-4 h-4" /> {isEditing ? "Salvar alterações" : "Cadastrar equipe"}</Button>
       </div>
+
+      <Modal aberto={!!confirmar} onFechar={() => setConfirmar(null)} titulo="Desvincular veículo?" tamanho="sm">
+        <div className="space-y-4" data-confirmar-desvinculo>
+          <p className="text-sm text-ink">
+            Ao salvar, {confirmar?.length === 1 ? "o veículo" : "os veículos"} <strong>{confirmar?.join(", ")}</strong> {confirmar?.length === 1 ? "deixa" : "deixam"} de estar vinculado{confirmar && confirmar.length > 1 ? "s" : ""} a esta equipe.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => setConfirmar(null)}>Voltar</Button>
+            <Button type="button" loading={salvando} onClick={() => { setConfirmar(null); salvar(true); }}>Sim, desvincular e salvar</Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

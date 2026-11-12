@@ -1,18 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { acento } from "@/lib/ui/tokens";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { LinkRelatorioAtividade } from "@/components/os/link-relatorio-atividade";
 import { cn, formatarData, formatarDataHora, LABELS_STATUS_OS } from "@/lib/utils";
 import {
-  FileText, FileBarChart, DollarSign, Camera, ListChecks, Wrench, Users, Clock,
-  CornerDownRight, ExternalLink, CalendarRange, AlertCircle,
+  FileBarChart, DollarSign, Camera, ListChecks, Wrench, Users, Clock,
+  CornerDownRight, CalendarRange, AlertCircle, Lock,
 } from "lucide-react";
 
 interface Atividade {
   id: string; titulo: string; status: string; criadoEm: string; duracaoMin: number | null;
   tipoOsNome: string | null; tipoOsCor: string | null; tecnicoNome: string | null;
   resumo: string; fotos: number; respostas: number;
+  /** Link público do relatório, já com o token. */
+  linkRelatorio: string;
 }
 interface Relatorio { id: string; numero: string; escopo: string; tokenPublico: string; status: string }
 interface Resumo {
@@ -21,8 +25,8 @@ interface Resumo {
 }
 
 const STATUS_ATIVIDADE: Record<string, string> = {
-  AGENDADA: "bg-violet-50 text-violet-700", EM_ANDAMENTO: "bg-amber-50 text-amber-700",
-  CONCLUIDA: "bg-success-50 text-success-700", CANCELADA: "bg-red-50 text-red-700",
+  AGENDADA: "bg-acento-claro text-acento", EM_ANDAMENTO: "bg-atencao-claro text-atencao-texto",
+  CONCLUIDA: "bg-success-50 text-success-700", CANCELADA: "bg-atrasado-claro text-atrasado-texto",
 };
 const LABEL_STATUS_ATIVIDADE: Record<string, string> = {
   AGENDADA: "Agendada", EM_ANDAMENTO: "Em andamento", CONCLUIDA: "Concluída", CANCELADA: "Cancelada",
@@ -53,6 +57,10 @@ export function OsRelatorios({ osId }: { osId: string }) {
 
   const geral = relatorios.find((r) => r.escopo === "GERAL");
 
+  function trocarLink(atividadeId: string, linkRelatorio: string) {
+    setResumo((r) => r && { ...r, atividades: r.atividades.map((a) => (a.id === atividadeId ? { ...a, linkRelatorio } : a)) });
+  }
+
   async function gerarMedicao() {
     setGerando(true); setErro("");
     try {
@@ -72,15 +80,15 @@ export function OsRelatorios({ osId }: { osId: string }) {
     { label: "Atividades", valor: resumo.totalAtividades, icone: ListChecks },
     { label: "Técnicos", valor: resumo.totalTecnicos, icone: Users },
     { label: "Fotos", valor: resumo.totalFotos, icone: Camera },
-    { label: "Equipamentos", valor: resumo.totalEquipamentos, icone: Wrench },
+    { label: "Equipamentos atendidos", valor: resumo.totalEquipamentos, icone: Wrench },
   ];
 
   return (
     <div className="space-y-5">
-      {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 flex items-center gap-2"><AlertCircle className="w-4 h-4" />{erro}</div>}
+      {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2 flex items-center gap-2"><AlertCircle className="w-4 h-4" />{erro}</div>}
 
       {/* Resumo geral */}
-      <div className="border border-surface-border rounded-xl p-4 bg-surface-alt/30">
+      <div className="border border-surface-border rounded-card p-4 bg-surface-page">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {cards.map((c) => (
             <div key={c.label} className="bg-white rounded-lg border border-surface-border p-3 flex items-center gap-3">
@@ -102,14 +110,17 @@ export function OsRelatorios({ osId }: { osId: string }) {
               <Clock className="w-4 h-4" /> Status: <span className="font-medium text-ink">{LABELS_STATUS_OS[resumo.statusOs] ?? resumo.statusOs}</span>
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <a href={`/ordens/${osId}/relatorio`} target="_blank" rel="noopener" className="btn-secondary" data-relatorio-interno title="Todas as seções, inclusive as marcadas como só interno">
+              <Lock className="w-4 h-4" /> Versão interna
+            </a>
             {geral ? (
-              <a href={`/relatorio/os/${geral.tokenPublico}`} target="_blank" rel="noopener" className="btn-secondary">
-                <FileBarChart className="w-4 h-4" /> Relatório Geral
+              <a href={`/relatorio/os/${geral.tokenPublico}`} target="_blank" rel="noopener" className="btn-secondary" data-relatorio-cliente title="Link público que o cliente recebe">
+                <FileBarChart className="w-4 h-4" /> Versão do cliente
               </a>
             ) : (
-              <Button variant="secondary" disabled title="Gerado automaticamente quando a OS é concluída">
-                <FileBarChart className="w-4 h-4" /> Relatório Geral
+              <Button variant="secondary" disabled title="O link do cliente é gerado automaticamente quando a OS é concluída">
+                <FileBarChart className="w-4 h-4" /> Versão do cliente
               </Button>
             )}
             <Button variant="success" onClick={gerarMedicao} loading={gerando}>
@@ -117,7 +128,7 @@ export function OsRelatorios({ osId }: { osId: string }) {
             </Button>
           </div>
         </div>
-        {!geral && <p className="text-xs text-ink-subtle mt-2">Os relatórios são gerados automaticamente quando a OS é concluída.</p>}
+        {!geral && <p className="text-xs text-ink-subtle mt-2">O link do cliente é gerado automaticamente quando a OS é concluída. A versão interna já pode ser aberta.</p>}
       </div>
 
       {/* Hierarquia: relatório geral (pai) + atividades (filhos) */}
@@ -138,12 +149,12 @@ export function OsRelatorios({ osId }: { osId: string }) {
             <div key={a.id} className="relative">
               <CornerDownRight className="absolute -left-[26px] top-3 w-4 h-4 text-ink-subtle" />
               <div className="border border-surface-border rounded-lg p-3 bg-white hover:border-primary-200 transition-colors">
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold text-ink">{a.titulo}</p>
                       {a.tipoOsNome && (
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded text-white" style={{ backgroundColor: a.tipoOsCor ?? "#0EA5E9" }}>{a.tipoOsNome}</span>
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full text-ink-muted bg-surface-page border border-surface-border"><span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: a.tipoOsCor ?? acento.DEFAULT }} aria-hidden />{a.tipoOsNome}</span>
                       )}
                       <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded", STATUS_ATIVIDADE[a.status])}>{LABEL_STATUS_ATIVIDADE[a.status] ?? a.status}</span>
                     </div>
@@ -156,10 +167,7 @@ export function OsRelatorios({ osId }: { osId: string }) {
                       <span className="flex items-center gap-1"><ListChecks className="w-3.5 h-3.5" /> {a.respostas} resposta(s)</span>
                     </div>
                   </div>
-                  <a href={`/relatorio/atividade/${a.id}`} target="_blank" rel="noopener"
-                    className="shrink-0 inline-flex items-center gap-1.5 text-xs font-medium text-primary-600 hover:text-primary-700 hover:bg-primary-50 px-2.5 py-1.5 rounded-lg">
-                    <FileText className="w-3.5 h-3.5" /> Ver relatório <ExternalLink className="w-3 h-3" />
-                  </a>
+                  <LinkRelatorioAtividade osId={osId} atividadeId={a.id} link={a.linkRelatorio} onNovoLink={(link) => trocarLink(a.id, link)} />
                 </div>
               </div>
             </div>

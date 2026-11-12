@@ -7,23 +7,28 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid } from "@/components/ui/form-field";
-import { ClienteCombobox } from "@/components/ui/cliente-combobox";
 import { GaleriaImagens } from "@/components/ui/galeria-imagens";
+import { aliviarFotos } from "@/lib/imagem-cliente";
+import { AvisoSerieDuplicada } from "@/components/equipamentos/aviso-serie-duplicada";
+import { Bloco, Opcionais } from "@/components/ui/bloco-cadastro";
 import { MapaEndereco } from "@/components/ui/mapa-endereco";
 import { EquipamentoQrSection } from "@/components/forms/equipamento-qr-section";
 import { TipoBadge, TipoIcone } from "@/components/equipamentos/tipo-equipamento";
 import { StatusSelo } from "@/components/equipamentos/selos";
 import { SelectCadastroRapido, type CampoRapido, type OpcaoCadastro } from "@/components/ui/select-cadastro-rapido";
-import { UNIDADE } from "@/components/cadastro-rapido/definicoes";
+import { CLIENTE, UNIDADE } from "@/components/cadastro-rapido/definicoes";
 import Link from "next/link";
-import { LABELS_TIPO_EQUIPAMENTO, cn } from "@/lib/utils";
-import { Thermometer, ImageIcon, MapPin, Cog, QrCode, History, CheckCircle2, ClipboardList, ChevronLeft, ExternalLink } from "lucide-react";
+import { LABELS_TIPO_EQUIPAMENTO, cn, comparaNatural, formatarData } from "@/lib/utils";
+import { opcoesTipoEquipamento, PREFIXO_TIPO_CUSTOM, type TipoEquipamentoCadastro } from "@/lib/cadastros/tipos-equipamento";
+import { Thermometer, ImageIcon, MapPin, Cog, QrCode, History, CheckCircle2, ClipboardList, ChevronLeft, ExternalLink, Camera, Sparkles, ChevronDown, Circle } from "lucide-react";
+import { chaveDiaCivil } from "@/lib/fuso";
+import { InputData } from "@/components/ui/input-data";
+import { hrefSecaoConfig } from "@/lib/navegacao/configuracoes";
 
-const TIPOS_EQUIPAMENTO = Object.entries(LABELS_TIPO_EQUIPAMENTO);
 
 /** Tipos personalizados (sem `chaveEnum`) entram no select como "custom:<id>". */
-const PREFIXO_CUSTOM = "custom:";
-type TipoCustom = { id: string; nome: string; chaveEnum: string | null; ativo: boolean };
+const PREFIXO_CUSTOM = PREFIXO_TIPO_CUSTOM;
+type TipoCustom = TipoEquipamentoCadastro;
 
 // Cadastro rápido: só o essencial (o cadastro completo fica a um link de distância)
 const CAMPOS_TIPO: CampoRapido[] = [
@@ -34,24 +39,20 @@ const TENSOES = ["110V", "127V", "220V", "380V", "440V"];
 const FASES = ["Monofásico", "Bifásico", "Trifásico"];
 
 const STATUS_OS: Record<string, { label: string; cor: string }> = {
-  ABERTA: { label: "Aberta", cor: "text-sky-600 bg-sky-50" },
-  AGUARDANDO_ATENDIMENTO: { label: "Aguardando", cor: "text-amber-600 bg-amber-50" },
-  AGENDADA: { label: "Agendada", cor: "text-indigo-600 bg-indigo-50" },
-  EM_ANDAMENTO: { label: "Em andamento", cor: "text-sky-600 bg-sky-50" },
-  PAUSADA: { label: "Pausada", cor: "text-gray-500 bg-gray-100" },
-  AGUARDANDO_PECA: { label: "Aguardando peça", cor: "text-amber-600 bg-amber-50" },
-  CONCLUIDA: { label: "Concluída", cor: "text-emerald-600 bg-emerald-50" },
-  CANCELADA: { label: "Cancelada", cor: "text-red-600 bg-red-50" },
+  ABERTA: { label: "Aberta", cor: "text-previsto-texto bg-previsto-claro" },
+  AGUARDANDO_ATENDIMENTO: { label: "Aguardando", cor: "text-previsto-texto bg-previsto-claro" },
+  AGENDADA: { label: "Agendada", cor: "text-acento-hover bg-acento-claro" },
+  EM_ANDAMENTO: { label: "Em andamento", cor: "text-atencao-texto bg-atencao-claro" },
+  PAUSADA: { label: "Pausada", cor: "text-atencao-texto bg-atencao-claro" },
+  AGUARDANDO_PECA: { label: "Aguardando peça", cor: "text-atencao-texto bg-atencao-claro" },
+  CONCLUIDA: { label: "Concluída", cor: "text-ok-texto bg-ok-claro" },
+  CANCELADA: { label: "Cancelada", cor: "text-atrasado-texto bg-atrasado-claro" },
 };
 
 function toDateInput(date: any): string {
-  if (!date) return "";
-  return new Date(date).toISOString().split("T")[0];
+  return date ? chaveDiaCivil(date) : "";
 }
-function dataBR(d: any): string {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
+const dataBR = (d: any): string => formatarData(d);
 const UNIDADES_CAPACIDADE = ["BTU/h", "TR"];
 
 /** Separa "12.000 BTU/h" / "5 TR" em valor + unidade (valores antigos sem unidade = BTU/h). */
@@ -92,22 +93,25 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
 
   const [fotos, setFotos] = useState<string[]>(initialData?.fotos ?? []);
   const [clienteId, setClienteId] = useState<string>(initialData?.unidade?.clienteId ?? "");
+  const [clientes, setClientes] = useState<{ id: string; nome: string; nomeFantasia?: string | null }[]>([]);
+  const [carregandoClientes, setCarregandoClientes] = useState(true);
   const [unidades, setUnidades] = useState<UnidadeItem[]>([]);
   const [carregandoUnidades, setCarregandoUnidades] = useState(false);
   const [tiposCustom, setTiposCustom] = useState<TipoCustom[]>([]);
   // Sugestões de setor/ambiente já usados em outros equipamentos do mesmo endereço
   const [sugestoesLocal, setSugestoesLocal] = useState<{ setores: string[]; ambientes: string[] }>({ setores: [], ambientes: [] });
 
+  // Tipo personalizado (sem chave do enum) é identificado pelo id do cadastro
+  const tipoInicial = initialData?.tipoEquipamento && !initialData.tipoEquipamento.chaveEnum
+    ? `${PREFIXO_CUSTOM}${initialData.tipoEquipamento.id}`
+    : initialData?.tipo ?? "";
   const [form, setForm] = useState({
     nome: initialData?.nome ?? "",
     marca: initialData?.marca ?? "",
     modelo: initialData?.modelo ?? "",
     numeroSerie: initialData?.numeroSerie ?? "",
     patrimonio: initialData?.patrimonio ?? "",
-    // Tipo personalizado (sem chave do enum) é identificado pelo id do cadastro
-    tipo: initialData?.tipoEquipamento && !initialData.tipoEquipamento.chaveEnum
-      ? `${PREFIXO_CUSTOM}${initialData.tipoEquipamento.id}`
-      : initialData?.tipo ?? "",
+    tipo: tipoInicial,
     anoFabricacao: initialData?.anoFabricacao ?? "",
     observacoes: initialData?.observacoes ?? "",
     unidadeId: initialData?.unidadeId ?? unidadeIdFixo ?? "",
@@ -130,6 +134,15 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
     setForm((f) => ({ ...f, [campo]: valor }));
   }
 
+  // O MESMO seletor de cliente da Nova OS (busca + "+ Novo cliente" com RBAC) — UX-2/E1
+  useEffect(() => {
+    fetch("/api/clientes")
+      .then((r) => r.json())
+      .then((d) => setClientes(Array.isArray(d) ? d : []))
+      .catch(() => {})
+      .finally(() => setCarregandoClientes(false));
+  }, []);
+
   // Carrega unidades ao escolher cliente
   useEffect(() => {
     if (!clienteId) { setUnidades([]); return; }
@@ -150,23 +163,37 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
   useEffect(() => {
     fetch("/api/tipos-equipamento")
       .then((r) => r.json())
-      .then((d) => setTiposCustom(Array.isArray(d) ? d.filter((t: TipoCustom) => !t.chaveEnum && t.ativo !== false) : []))
+      .then((d) => setTiposCustom(Array.isArray(d) ? d : []))
       .catch(() => {});
   }, []);
 
-  const opcoesTipo: OpcaoCadastro[] = useMemo(() => [
-    ...TIPOS_EQUIPAMENTO.map(([value, label]) => ({ value, label })),
-    ...tiposCustom.map((t) => ({ value: `${PREFIXO_CUSTOM}${t.id}`, label: t.nome, descricao: "personalizado" })),
-  ], [tiposCustom]);
+  // Só ativos para nova escolha; o tipo atual continua visível mesmo inativo (regra do SeletorCadastro)
+  const opcoesTipo: OpcaoCadastro[] = useMemo(() => opcoesTipoEquipamento(tiposCustom, initialData ? tipoInicial : null), [tiposCustom, initialData, tipoInicial]);
 
   const opcoesUnidade: OpcaoCadastro[] = useMemo(
     () => unidades.map(UNIDADE.opcao),
     [unidades],
   );
 
+  // O cliente atual do equipamento continua selecionável mesmo fora da lista (ex.: inativado)
+  const opcoesCliente: OpcaoCadastro[] = useMemo(() => {
+    const ops = clientes.map(CLIENTE.opcao);
+    const atual = initialData?.unidade?.cliente;
+    if (clienteId && atual && !ops.some((o) => o.value === clienteId)) {
+      ops.unshift(CLIENTE.opcao({ id: clienteId, nome: atual.nome, nomeFantasia: atual.nomeFantasia }));
+    }
+    return ops;
+  }, [clientes, clienteId, initialData]);
+
+  async function criarCliente(v: Record<string, string>): Promise<OpcaoCadastro> {
+    const c = await CLIENTE.criar(v);
+    setClientes((lista) => [...lista, c].sort((x, y) => comparaNatural(x.nomeFantasia ?? x.nome, y.nomeFantasia ?? y.nome)));
+    return CLIENTE.opcao(c);
+  }
+
   async function criarUnidade(v: Record<string, string>): Promise<OpcaoCadastro> {
     const data = await UNIDADE.criar(clienteId, v, unidades.length === 0);
-    setUnidades((lista) => [...lista, data].sort((x, y) => x.nome.localeCompare(y.nome)));
+    setUnidades((lista) => [...lista, data].sort((x, y) => comparaNatural(x.nome, y.nome)));
     return UNIDADE.opcao(data);
   }
 
@@ -178,7 +205,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.erro ?? "Erro ao cadastrar o tipo.");
-    setTiposCustom((lista) => [...lista, data].sort((a, b) => a.nome.localeCompare(b.nome)));
+    setTiposCustom((lista) => [...lista, data].sort((a, b) => comparaNatural(a.nome, b.nome)));
     return { value: `${PREFIXO_CUSTOM}${data.id}`, label: data.nome };
   }
 
@@ -190,11 +217,16 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
       .then((d) => {
         const lista: any[] = Array.isArray(d) ? d : [];
         const unicos = (vals: (string | null | undefined)[]) =>
-          [...new Set(vals.map((v) => (v ?? "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+          [...new Set(vals.map((v) => (v ?? "").trim()).filter(Boolean))].sort(comparaNatural);
         setSugestoesLocal({ setores: unicos(lista.map((e) => e.setor)), ambientes: unicos(lista.map((e) => e.localizacao)) });
       })
       .catch(() => {});
   }, [form.unidadeId]);
+
+  // Cadastro novo (página única): ao dar erro, leva a pessoa até a mensagem
+  useEffect(() => {
+    if (erroGlobal && !isEditing) document.querySelector("[data-erro]")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [erroGlobal, isEditing]);
 
   const ultimaManutencao = useMemo(() => {
     const concluidas = (initialData?.ordensServico ?? []).filter((o: any) => o.status === "CONCLUIDA" && o.dataConclusao);
@@ -235,7 +267,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
         nome: form.nome || undefined,
         marca: form.marca,
         modelo: form.modelo,
-        numeroSerie: form.numeroSerie || undefined,
+        numeroSerie: form.numeroSerie.trim() || undefined,
         patrimonio: form.patrimonio || undefined,
         anoFabricacao: form.anoFabricacao || undefined,
         capacidade: form.capacidade.trim() ? `${form.capacidade.trim()} ${form.capacidadeUnidade}` : undefined,
@@ -251,7 +283,8 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
         garantiaAte: form.garantiaAte || undefined,
         observacoes: form.observacoes || undefined,
         observacoesTecnicas: form.observacoesTecnicas || undefined,
-        fotos,
+        // Fotos antigas salvas no tamanho original são recomprimidas antes de enviar
+        fotos: await aliviarFotos(fotos),
       };
       const url = isEditing ? `/api/equipamentos/${initialData.id}` : "/api/equipamentos";
       const res = await fetch(url, {
@@ -259,7 +292,8 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) { const e = await res.json(); setErroGlobal(e.erro ?? "Erro ao salvar equipamento."); return; }
+      if (res.status === 413) { setErroGlobal("As fotos ficaram grandes demais para enviar. Remova alguma foto e tente de novo."); return; }
+      if (!res.ok) { const e = await res.json().catch(() => ({})); setErroGlobal(e.erro ?? "Erro ao salvar equipamento."); return; }
       router.push("/equipamentos");
       router.refresh();
     } catch { setErroGlobal("Erro de conexão. Tente novamente."); } finally { setSalvando(false); }
@@ -279,15 +313,205 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
   const abas: { id: Aba; label: string; icone: any; oculta?: boolean }[] = [
     { id: "identificacao", label: "Identificação", icone: ImageIcon },
     { id: "localizacao", label: "Localização", icone: MapPin },
-    { id: "tecnicos", label: "Dados Técnicos", icone: Cog },
+    { id: "tecnicos", label: "Dados técnicos", icone: Cog },
     { id: "qrcode", label: "QR Code", icone: QrCode },
     { id: "historico", label: "Atendimentos", icone: History, oculta: !isEditing },
   ];
 
+  // ── NOVO EQUIPAMENTO: página única, em blocos, com a IA em destaque ──
+  // (a edição continua em abas: QR Code e Atendimentos só fazem sentido depois de salvo)
+  if (!isEditing) {
+    const obrigatorios: [string, boolean][] = [
+      ["Tipo", !!form.tipo], ["Marca", !!form.marca.trim()], ["Modelo", !!form.modelo.trim()],
+      ["Cliente", !!clienteId], ["Unidade", !!form.unidadeId],
+    ];
+    const feitos = obrigatorios.filter(([, ok]) => ok).length;
+    const linkFoto = "/equipamentos/novo/foto";
+    return (
+      <div className="space-y-6" data-cadastro-novo>
+        {/* Título */}
+        <div className="flex items-start gap-3">
+          <Link href="/equipamentos" title="Voltar" className="mt-1 p-1.5 -ml-1 rounded-lg text-ink-muted hover:text-primary-600 hover:bg-surface-alt"><ChevronLeft className="w-5 h-5" /></Link>
+          <div>
+            <h1 className="text-2xl font-bold text-ink tracking-tight">Novo equipamento</h1>
+            <p className="text-sm text-ink-muted mt-0.5">Cinco campos obrigatórios; os demais podem ser preenchidos depois.</p>
+          </div>
+        </div>
+
+        {/* Caminho principal: IA */}
+        <Link href={linkFoto} data-atalho-foto
+          className="group block rounded-card border border-acento/30 bg-acento-claro p-5 sm:p-6 hover:border-acento/60 transition-all">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <span className="w-12 h-12 rounded-card bg-primary-500 text-white flex items-center justify-center shrink-0 shadow-sm"><Camera className="w-6 h-6" /></span>
+            <div className="flex-1 min-w-0">
+              <p className="flex items-center gap-2 flex-wrap">
+                <span className="text-lg font-semibold text-ink">Preencher com foto</span>
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-primary-700 bg-primary-100 px-2 py-0.5 rounded-full"><Sparkles className="w-3 h-3" /> Recomendado</span>
+              </p>
+              <p className="text-sm text-ink-muted mt-1">
+                Fotografe a <strong className="text-ink">etiqueta</strong> e o <strong className="text-ink">equipamento</strong>: a IA lê marca, modelo, capacidade, tensão e gás para conferência.
+              </p>
+            </div>
+            <span className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-primary-500 group-hover:bg-primary-600 text-white text-sm font-semibold shrink-0">
+              <Camera className="w-4 h-4" /> Usar fotos
+            </span>
+          </div>
+        </Link>
+
+        <div className="flex items-center gap-3 text-xs text-ink-subtle">
+          <span className="h-px flex-1 bg-surface-border" /> ou preencha manualmente <span className="h-px flex-1 bg-surface-border" />
+        </div>
+
+        {/* Progresso dos obrigatórios */}
+        <div className="flex items-center gap-2 flex-wrap text-xs" data-progresso>
+          <span className="font-semibold text-ink">Obrigatórios {feitos}/{obrigatorios.length}:</span>
+          {obrigatorios.map(([rotulo, ok]) => (
+            <span key={rotulo} className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full border", ok ? "text-ok-texto bg-ok-claro border-ok/20" : "text-ink-muted bg-white border-surface-border")}>
+              {ok ? <CheckCircle2 className="w-3 h-3" /> : <Circle className="w-3 h-3" />} {rotulo}
+            </span>
+          ))}
+        </div>
+
+        {erroGlobal && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3" data-erro>{erroGlobal}</div>}
+
+        <Bloco numero={1} titulo="Identificação" descricao="Tipo, marca e modelo do equipamento.">
+          <FormField label="Tipo de equipamento" required>
+            <SelectCadastroRapido
+              value={form.tipo} onChange={(v) => set("tipo", v)} opcoes={opcoesTipo}
+              entidade={{ singular: "tipo de equipamento", plural: "tipos de equipamento" }} placeholder="Selecione o tipo"
+              campos={CAMPOS_TIPO} campoBusca="nome" criar={criarTipo}
+              permissao={{ modulo: "configuracoes", acao: "gerenciar" }} linkCadastroCompleto={hrefSecaoConfig("tipos-equipamento")}
+            />
+          </FormField>
+          <FormGrid>
+            <FormField label="Marca" required>
+              <Input aria-label="Marca" value={form.marca} onChange={(e) => set("marca", e.target.value)} placeholder="Ex: LG, Carrier, Daikin" />
+            </FormField>
+            <FormField label="Modelo" required>
+              <Input aria-label="Modelo" value={form.modelo} onChange={(e) => set("modelo", e.target.value)} placeholder="Como está na etiqueta" />
+            </FormField>
+          </FormGrid>
+          <Opcionais>
+            <FormGrid cols={3}>
+              <FormField label="Nº de série"><Input aria-label="Nº de série" value={form.numeroSerie} onChange={(e) => set("numeroSerie", e.target.value)} placeholder="S/N" /></FormField>
+              <FormField label="Patrimônio / TAG"><Input aria-label="Patrimônio / TAG" value={form.patrimonio} onChange={(e) => set("patrimonio", e.target.value)} placeholder="Ex: TAG AC-07" /></FormField>
+              <FormField label="Apelido"><Input aria-label="Apelido" value={form.nome} onChange={(e) => set("nome", e.target.value)} placeholder="Ex: Split da recepção" /></FormField>
+            </FormGrid>
+            <AvisoSerieDuplicada numero={form.numeroSerie} />
+          </Opcionais>
+        </Bloco>
+
+        <Bloco numero={2} titulo="Localização" descricao="Cliente, endereço e ambiente de instalação.">
+          <FormGrid>
+            <FormField label="Cliente" required>
+              <SelectCadastroRapido
+                value={clienteId} onChange={(id) => { setClienteId(id); set("unidadeId", ""); }}
+                opcoes={opcoesCliente} entidade={CLIENTE.entidade} placeholder="Selecione o cliente"
+                carregando={carregandoClientes} campos={CLIENTE.campos} valoresIniciais={CLIENTE.valoresIniciais}
+                campoBusca="nome" permissao={CLIENTE.permissao} linkCadastroCompleto={CLIENTE.link} criar={criarCliente}
+              />
+            </FormField>
+            <FormField label="Endereço / Unidade" required>
+              <SelectCadastroRapido
+                value={form.unidadeId} onChange={(v) => set("unidadeId", v)} opcoes={opcoesUnidade} entidade={UNIDADE.entidade}
+                contexto="para este cliente" placeholder="Selecione o endereço" disabled={!clienteId} textoDesabilitado="Selecione um cliente primeiro"
+                carregando={carregandoUnidades} campos={UNIDADE.campos} campoBusca="nome" criar={criarUnidade}
+                permissao={UNIDADE.permissao} linkCadastroCompleto={clienteId ? UNIDADE.link(clienteId) : undefined}
+              />
+            </FormField>
+          </FormGrid>
+          <Opcionais rotulo="Ambiente (recomendado)">
+            <FormGrid>
+              <FormField label="Ambiente / sala" dica="Sala ou ambiente de instalação, exibido na lista de equipamentos e no relatório da OS. Ex.: Recepção, Sala 201, CPD.">
+                <Input aria-label="Ambiente" value={form.localizacao} onChange={(e) => set("localizacao", e.target.value)} placeholder="Ex: Recepção" list="sugestoes-ambiente-novo" />
+                <datalist id="sugestoes-ambiente-novo">{sugestoesLocal.ambientes.map((v) => <option key={v} value={v} />)}</datalist>
+              </FormField>
+              <FormField label="Setor" dica="Andar, bloco ou área dentro do endereço.">
+                <Input aria-label="Setor" value={form.setor} onChange={(e) => set("setor", e.target.value)} placeholder="Ex: 2º andar" list="sugestoes-setor-novo" />
+                <datalist id="sugestoes-setor-novo">{sugestoesLocal.setores.map((v) => <option key={v} value={v} />)}</datalist>
+              </FormField>
+            </FormGrid>
+          </Opcionais>
+        </Bloco>
+
+        <Bloco numero={3} titulo="Dados técnicos" descricao="Capacidade e tensão agilizam o atendimento." opcional>
+          <FormGrid cols={3}>
+            <FormField label="Capacidade">
+              <div className="flex gap-2">
+                <Input aria-label="Capacidade" value={form.capacidade} onChange={(e) => set("capacidade", e.target.value)} placeholder={form.capacidadeUnidade === "TR" ? "Ex: 5" : "Ex: 12.000"} inputMode="decimal" />
+                <Select aria-label="Unidade da capacidade" value={form.capacidadeUnidade} onChange={(e) => set("capacidadeUnidade", e.target.value)} className="w-28 shrink-0">
+                  {UNIDADES_CAPACIDADE.map((u) => (<option key={u} value={u}>{u}</option>))}
+                </Select>
+              </div>
+            </FormField>
+            <FormField label="Tensão">
+              <Select aria-label="Tensão" value={form.tensao} onChange={(e) => set("tensao", e.target.value)} placeholder="Selecione">
+                {opcoesComValor(TENSOES, form.tensao).map((t) => (<option key={t} value={t}>{t}</option>))}
+              </Select>
+            </FormField>
+            <FormField label="Gás refrigerante">
+              <Select aria-label="Gás refrigerante" value={form.fluido} onChange={(e) => set("fluido", e.target.value)} placeholder="Selecione">
+                {opcoesComValor(FLUIDOS, form.fluido).map((x) => (<option key={x} value={x}>{x}</option>))}
+              </Select>
+            </FormField>
+          </FormGrid>
+          <details className="group/mais">
+            <summary className="cursor-pointer list-none inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:text-primary-700">
+              <ChevronDown className="w-4 h-4 transition-transform group-open/mais:rotate-180" /> Mais dados técnicos (fase, potência, corrente, ano)
+            </summary>
+            <div className="mt-4">
+              <FormGrid cols={3}>
+                <FormField label="Fase">
+                  <Select value={form.fase} onChange={(e) => set("fase", e.target.value)} placeholder="Selecione">
+                    {opcoesComValor(FASES, form.fase).map((x) => (<option key={x} value={x}>{x}</option>))}
+                  </Select>
+                </FormField>
+                <FormField label="Potência (kW)"><Input value={form.potencia} onChange={(e) => set("potencia", e.target.value)} placeholder="Ex: 3,5" inputMode="decimal" /></FormField>
+                <FormField label="Corrente nominal (A)"><Input value={form.correnteNominal} onChange={(e) => set("correnteNominal", e.target.value)} placeholder="Ex: 10" inputMode="decimal" /></FormField>
+                <FormField label="Ano de fabricação"><Input value={form.anoFabricacao} onChange={(e) => set("anoFabricacao", e.target.value)} placeholder="Ex: 2022" inputMode="numeric" /></FormField>
+              </FormGrid>
+            </div>
+          </details>
+        </Bloco>
+
+        <Bloco numero={4} titulo="Fotos e outros detalhes" descricao="A primeira foto é a capa: use a do equipamento inteiro, não a da etiqueta." opcional>
+          <GaleriaImagens fotos={fotos} onChange={setFotos} />
+          <details className="group/det">
+            <summary className="cursor-pointer list-none inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:text-primary-700">
+              <ChevronDown className="w-4 h-4 transition-transform group-open/det:rotate-180" /> Instalação, garantia e observações
+            </summary>
+            <div className="mt-4 space-y-4">
+              <FormGrid cols={3}>
+                <FormField label="Data de instalação"><InputData value={form.dataInstalacao} onChange={(v) => set("dataInstalacao", v)} /></FormField>
+                <FormField label="Início da garantia"><InputData value={form.garantiaInicio} onChange={(v) => set("garantiaInicio", v)} /></FormField>
+                <FormField label="Fim da garantia"><InputData value={form.garantiaAte} onChange={(v) => set("garantiaAte", v)} /></FormField>
+              </FormGrid>
+              <FormField label="Observações"><Textarea value={form.observacoes} onChange={(e) => set("observacoes", e.target.value)} rows={2} placeholder="Particularidades, acessórios…" /></FormField>
+              <FormField label="Observações técnicas"><Textarea value={form.observacoesTecnicas} onChange={(e) => set("observacoesTecnicas", e.target.value)} rows={2} placeholder="Notas técnicas, peças trocadas…" /></FormField>
+            </div>
+          </details>
+        </Bloco>
+
+        {/* Barra de ações fixa */}
+        <div className="sticky bottom-20 lg:bottom-4 z-20" data-barra-acoes>
+          <div>
+            <div className="flex items-center justify-between gap-3 bg-white/95 backdrop-blur border border-surface-border rounded-card shadow-lg px-4 py-3">
+              <span className="text-xs text-ink-muted hidden sm:inline">{feitos === obrigatorios.length ? "Campos obrigatórios preenchidos." : `Faltam ${obrigatorios.length - feitos} campo(s) obrigatório(s).`}</span>
+              <div className="flex items-center gap-2 ml-auto">
+                <Button type="button" variant="secondary" onClick={() => router.back()}>Cancelar</Button>
+                <Button type="button" onClick={salvar} loading={salvando}>Cadastrar equipamento</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
       {/* Cabeçalho fixo — mesmo vocabulário visual da ficha (ícone do tipo, selos, local) */}
-      <div className="sticky top-0 z-20 bg-white border border-surface-border rounded-xl shadow-sm px-3 sm:px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+      <div className="sticky top-0 z-20 bg-white border border-surface-border rounded-card shadow-sm px-3 sm:px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
           <Link href={isEditing ? `/equipamentos/${initialData.id}` : "/equipamentos"} title="Voltar" className="p-1.5 -ml-1 rounded-lg text-ink-muted hover:text-primary-600 hover:bg-surface-alt">
             <ChevronLeft className="w-5 h-5" />
@@ -313,10 +537,10 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
         </div>
       </div>
 
-      {erroGlobal && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{erroGlobal}</div>}
+      {erroGlobal && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3">{erroGlobal}</div>}
 
       {/* Abas */}
-      <div className="bg-white border border-surface-border rounded-xl overflow-hidden">
+      <div className="bg-white border border-surface-border rounded-card overflow-hidden">
         <div className="flex border-b border-surface-border overflow-x-auto">
           {abas.filter((a) => !a.oculta).map((a) => {
             const Icone = a.icone;
@@ -343,7 +567,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
             <div className="space-y-5">
               <GaleriaImagens fotos={fotos} onChange={setFotos} />
               <FormGrid>
-                <FormField label="Nome do equipamento" hint="Apelido/identificação (opcional)">
+                <FormField label="Nome do equipamento" dica="Apelido ou identificação interna. Opcional.">
                   <Input value={form.nome} onChange={(e) => set("nome", e.target.value)} placeholder="Ex: Split Sala de Reuniões" />
                 </FormField>
                 <FormField label="Tipo de equipamento" required>
@@ -357,7 +581,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
                     campoBusca="nome"
                     criar={criarTipo}
                     permissao={{ modulo: "configuracoes", acao: "gerenciar" }}
-                    linkCadastroCompleto="/configuracoes/tipos-equipamento"
+                    linkCadastroCompleto={hrefSecaoConfig("tipos-equipamento")}
                   />
                 </FormField>
               </FormGrid>
@@ -369,11 +593,12 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
                   <Input value={form.modelo} onChange={(e) => set("modelo", e.target.value)} />
                 </FormField>
                 <FormField label="Número de série">
-                  <Input value={form.numeroSerie} onChange={(e) => set("numeroSerie", e.target.value)} placeholder="S/N ou código" />
+                  <Input aria-label="Número de série" value={form.numeroSerie} onChange={(e) => set("numeroSerie", e.target.value)} placeholder="S/N ou código" />
+                  <AvisoSerieDuplicada numero={form.numeroSerie} ignorarId={initialData.id} />
                 </FormField>
               </FormGrid>
               <FormGrid>
-                <FormField label="Patrimônio / TAG" hint="Código de patrimônio do cliente ou etiqueta do equipamento">
+                <FormField label="Patrimônio / TAG" dica="Código de patrimônio do cliente ou etiqueta do equipamento.">
                   <Input value={form.patrimonio} onChange={(e) => set("patrimonio", e.target.value)} placeholder="Ex: PAT-00123, TAG AC-07" />
                 </FormField>
                 <FormField label="Ano de fabricação">
@@ -389,11 +614,12 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
           {/* ABA 2 — Localização */}
           {aba === "localizacao" && (
             <div className="space-y-5">
-              <FormField label="Cliente" required hint="Digite 2+ letras para buscar">
-                <ClienteCombobox
-                  value={clienteId}
-                  initialLabel={initialData?.unidade?.cliente ? (initialData.unidade.cliente.nomeFantasia ?? initialData.unidade.cliente.nome) : undefined}
-                  onChange={(id) => { setClienteId(id); set("unidadeId", ""); }}
+              <FormField label="Cliente" required>
+                <SelectCadastroRapido
+                  value={clienteId} onChange={(id) => { setClienteId(id); set("unidadeId", ""); }}
+                  opcoes={opcoesCliente} entidade={CLIENTE.entidade} placeholder="Selecione o cliente"
+                  carregando={carregandoClientes} campos={CLIENTE.campos} valoresIniciais={CLIENTE.valoresIniciais}
+                  campoBusca="nome" permissao={CLIENTE.permissao} linkCadastroCompleto={CLIENTE.link} criar={criarCliente}
                 />
               </FormField>
               <FormField label="Endereço / Unidade" required>
@@ -415,11 +641,11 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
                 />
               </FormField>
               <FormGrid>
-                <FormField label="Setor" hint="Andar, bloco ou área dentro do endereço">
+                <FormField label="Setor" dica="Andar, bloco ou área dentro do endereço.">
                   <Input value={form.setor} onChange={(e) => set("setor", e.target.value)} placeholder="Ex: 2º andar, Bloco B, Administrativo" list="sugestoes-setor" />
                   <datalist id="sugestoes-setor">{sugestoesLocal.setores.map((v) => <option key={v} value={v} />)}</datalist>
                 </FormField>
-                <FormField label="Ambiente" hint="Sala/ambiente onde está instalado">
+                <FormField label="Ambiente" dica="Sala ou ambiente de instalação.">
                   <Input value={form.localizacao} onChange={(e) => set("localizacao", e.target.value)} placeholder="Ex: Sala de Reuniões, Recepção, CPD" list="sugestoes-ambiente" />
                   <datalist id="sugestoes-ambiente">{sugestoesLocal.ambientes.map((v) => <option key={v} value={v} />)}</datalist>
                 </FormField>
@@ -468,18 +694,18 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
               </FormGrid>
               <FormGrid cols={3}>
                 <FormField label="Data de instalação">
-                  <Input type="date" value={form.dataInstalacao} onChange={(e) => set("dataInstalacao", e.target.value)} />
+                  <InputData value={form.dataInstalacao} onChange={(v) => set("dataInstalacao", v)} />
                 </FormField>
-                <FormField label="Última manutenção" hint="Preenchido automaticamente">
+                <FormField label="Última manutenção" hint="Preenchida automaticamente">
                   <Input value={dataBR(ultimaManutencao)} disabled readOnly />
                 </FormField>
               </FormGrid>
               <FormGrid cols={3}>
                 <FormField label="Início da garantia">
-                  <Input type="date" value={form.garantiaInicio} onChange={(e) => set("garantiaInicio", e.target.value)} />
+                  <InputData value={form.garantiaInicio} onChange={(v) => set("garantiaInicio", v)} />
                 </FormField>
                 <FormField label="Fim da garantia">
-                  <Input type="date" value={form.garantiaAte} onChange={(e) => set("garantiaAte", e.target.value)} />
+                  <InputData value={form.garantiaAte} onChange={(v) => set("garantiaAte", v)} />
                 </FormField>
               </FormGrid>
               <FormField label="Observações técnicas">
@@ -526,9 +752,9 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
                         <th className="text-left px-4 py-2.5 font-semibold">Status</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y divide-surface-linha">
                       {(initialData.ordensServico as any[]).map((o) => {
-                        const st = STATUS_OS[o.status] ?? { label: o.status, cor: "text-gray-500 bg-gray-100" };
+                        const st = STATUS_OS[o.status] ?? { label: o.status, cor: "text-ink-muted bg-surface-linha" };
                         return (
                           <tr key={o.id} className="hover:bg-surface-alt/50">
                             <td className="px-4 py-2.5 font-mono text-ink">{o.numero}</td>

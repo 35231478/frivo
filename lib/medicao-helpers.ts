@@ -1,4 +1,5 @@
 import type { MedicaoItemInput } from "./validations";
+import { diaCivilUTC, partesBR } from "@/lib/fuso";
 
 export interface TotaisMedicao {
   valorTotal: number;
@@ -52,11 +53,11 @@ export function calcularVencimento(
   mes: number | null | undefined,
   ano: number | null | undefined,
 ): Date {
-  const hoje = new Date();
-  const m = mes && mes >= 1 && mes <= 12 ? mes - 1 : hoje.getMonth();
-  const a = ano ?? hoje.getFullYear();
+  const hoje = partesBR();
+  const m = mes && mes >= 1 && mes <= 12 ? mes - 1 : hoje.mes;
+  const a = ano ?? hoje.ano;
   const dia = Math.min(Math.max(diaFaturamento || 1, 1), 28);
-  return new Date(a, m, dia, 12, 0, 0);
+  return diaCivilUTC(a, m, dia); // vencimento é dia civil (meia-noite UTC), como os demais
 }
 
 export function buildMedicaoPublicUrl(token: string, origin: string): string {

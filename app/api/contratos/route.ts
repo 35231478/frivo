@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
+import { exigirAlgumaPermissao, exigirPermissao } from "@/lib/permissoes-server";
+import { faltaPermissaoAutomacao } from "@/lib/contratos/automacao";
 import { contratoSchema } from "@/lib/validations";
-import { gerarPrevisaoContratoContasReceber } from "@/lib/financeiro-server";
+import { contratoGeraFinanceiro, gerarPrevisaoContratoContasReceber } from "@/lib/financeiro-server";
 import { gerarOsRecorrentesContrato, gerarOsRecorrentesLocais } from "@/lib/recorrencia-server";
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirAlgumaPermissao([["contratos", "visualizar"], ["ordens", "criar"], ["financeiro", "medicoes"]]);
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
 
   const empresaId = session.user!.empresaId;
   const { searchParams } = new URL(req.url);
@@ -23,8 +26,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("contratos", "criar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
 
   const empresaId = session.user!.empresaId;
   const body = await req.json();
@@ -39,7 +43,21 @@ export async function POST(req: NextRequest) {
   });
   if (dup) return NextResponse.json({ erro: "Número de contrato já cadastrado" }, { status: 409 });
 
-  const { unidadeIds, recorrenciasLocais, dataInicio, dataFim, valorMensal, valorTotal, responsavelTecnicoId, tipoOsRecorrenciaId, tecnicoRecorrenciaId, artVencimento, itensInclusos, ...resto } = parsed.data;
+  // PR3-A/B: a automação do faturamento fatura sem ninguém olhar — pede Financeiro › Medições (+ Fiscal / Contas a receber)
+  const faltaAutomacao = faltaPermissaoAutomacao(parsed.data, {}, session.user!);
+  if (faltaAutomacao) return NextResponse.json({ erro: faltaAutomacao }, { status: 403 });
+  const { unidadeIds, recorrenciasLocais, dataInicio, dataFim, valorMensal, valorTotal, responsavelTecnicoId, tipoOsRecorrenciaId, tecnicoRecorrenciaId, artVencimento, ...resto } = parsed.data;
+  // Cliente, locais, tipos de OS e técnicos (inclusive os da recorrência por local) precisam ser da mesma empresa
+  try {
+    await Promise.all([
+      validarRefEmpresa("cliente", resto.clienteId, empresaId, "Cliente"),
+      validarRefsEmpresa("unidade", unidadeIds, empresaId, "Local"),
+      validarRefsEmpresa("tipoOs", [tipoOsRecorrenciaId, ...recorrenciasLocais.map((r) => r.tipoOsId)], empresaId, "Tipo de OS"),
+      validarRefsEmpresa("tecnico", [responsavelTecnicoId, tecnicoRecorrenciaId, ...recorrenciasLocais.map((r) => r.tecnicoId)], empresaId, "Técnico"),
+      // Serviço padrão: da empresa; escolha nova precisa estar ativo (manter o atual, mesmo inativo, vale)
+      validarRefEmpresa("servico", resto.servicoId, empresaId, "Serviço padrão", { novoAtivo: true }),
+    ]);
+  } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
   const contrato = await prisma.contrato.create({
     data: {
@@ -53,7 +71,6 @@ export async function POST(req: NextRequest) {
       tipoOsRecorrenciaId: tipoOsRecorrenciaId || null,
       tecnicoRecorrenciaId: tecnicoRecorrenciaId || null,
       artVencimento: artVencimento ? new Date(artVencimento) : null,
-      ...(itensInclusos ? { itensInclusos: itensInclusos as any } : {}),
       unidades: {
         create: unidadeIds.map((unidadeId) => ({ unidadeId })),
       },
@@ -75,7 +92,10 @@ export async function POST(req: NextRequest) {
   }
 
   // Gera a previsão de contas a receber (idempotente).
-  await gerarPrevisaoContratoContasReceber(contrato.id).catch(() => 0);
+  // CO2: só contrato ATIVO movimenta financeiro/recorrência
+  if (contratoGeraFinanceiro(contrato.status)) {
+    await gerarPrevisaoContratoContasReceber(contrato.id).catch(() => 0);
+  }
   // Gera as OS recorrentes: por local (novo) + contrato-nível legado (idempotentes).
   await gerarOsRecorrentesLocais(contrato.id, session.user!.id).catch(() => 0);
   if (contrato.recorrencia) await gerarOsRecorrentesContrato(contrato.id, session.user!.id).catch(() => 0);

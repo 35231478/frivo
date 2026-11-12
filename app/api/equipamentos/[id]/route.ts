@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
+import { definirAtivoEquipamento } from "@/lib/acoes-massa/regras";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
+import { validarFotos } from "@/lib/anexos-server";
 import { equipamentoSchema } from "@/lib/validations";
 import { resolverTipoEquipamento } from "@/lib/tipo-equipamento";
 
@@ -45,15 +47,20 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const unidade = await prisma.unidade.findFirst({ where: { id: parsed.data.unidadeId, empresaId } });
   if (!unidade) return NextResponse.json({ erro: "Unidade não encontrada" }, { status: 404 });
 
+  // Fotos: tipo decidido pelos BYTES (HTML/SVG disfarçado é recusado); grava o data URL normalizado
+  const fotosValidadas = validarFotos(parsed.data.fotos);
+  if (!fotosValidadas.ok) return NextResponse.json({ erro: fotosValidadas.erro }, { status: 400 });
+
   const { dataInstalacao, dataFabricacao, garantiaInicio, garantiaAte, tipoEquipamentoId: tipoCustomId, ...resto } = parsed.data;
   if (garantiaInicio && garantiaAte && garantiaInicio > garantiaAte)
     return NextResponse.json({ erro: "O início da garantia deve ser anterior ao fim." }, { status: 400 });
-  const tipoResolvido = await resolverTipoEquipamento(empresaId, resto.tipo, tipoCustomId);
-  if (!tipoResolvido) return NextResponse.json({ erro: "Tipo de equipamento não encontrado" }, { status: 400 });
+  const tipoResolvido = await resolverTipoEquipamento(empresaId, resto.tipo, tipoCustomId, existente.tipoEquipamentoId);
+  if ("erro" in tipoResolvido) return NextResponse.json({ erro: tipoResolvido.erro }, { status: 400 });
   const atualizado = await prisma.equipamento.update({
     where: { id },
     data: {
       ...resto,
+      fotos: fotosValidadas.fotos,
       tipo: tipoResolvido.tipo as any,
       tipoEquipamentoId: tipoResolvido.tipoEquipamentoId,
       dataInstalacao: dataInstalacao ? new Date(dataInstalacao) : null,
@@ -83,8 +90,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (body.ativo === false && !pode(session.user!.permissoes, "equipamentos", "excluir", session.user!.role))
     return NextResponse.json({ erro: "Sem permissão para esta ação" }, { status: 403 });
 
-  const atualizado = await prisma.equipamento.update({ where: { id }, data: { ativo: body.ativo } });
-  return NextResponse.json({ ok: true, ativo: atualizado.ativo });
+  await definirAtivoEquipamento(id, body.ativo, { empresaId, usuarioId: session.user!.id, usuarioNome: session.user!.name ?? "usuário" });
+  return NextResponse.json({ ok: true, ativo: body.ativo });
 }
 
 export async function DELETE(_: NextRequest, { params }: Params) {
@@ -97,6 +104,6 @@ export async function DELETE(_: NextRequest, { params }: Params) {
   const existente = await prisma.equipamento.findFirst({ where: { id, empresaId } });
   if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
 
-  await prisma.equipamento.update({ where: { id }, data: { ativo: false } });
+  await definirAtivoEquipamento(id, false, { empresaId, usuarioId: session.user!.id, usuarioNome: session.user!.name ?? "usuário" });
   return NextResponse.json({ ok: true });
 }

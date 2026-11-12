@@ -9,6 +9,8 @@ import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { proximasOcorrencias } from "@/lib/recorrencia-helpers";
 import { FREQUENCIAS_RECORRENCIA, LABELS_PERIODICIDADE, formatarData } from "@/lib/utils";
 import { MapPin, RefreshCw } from "lucide-react";
+import { InputData } from "@/components/ui/input-data";
+import { diaCivilDeChave, diaDoMesCivil } from "@/lib/fuso";
 
 export interface LocalConfig {
   ativa: boolean;
@@ -39,9 +41,9 @@ export function RecorrenciaLocais({ locais, tiposOs, tecnicos, value, onChange }
     <div className="space-y-3" data-tick={tick}>
       {locais.map((l) => {
         const c = value[l.id] ?? cfgPadrao();
-        const base = c.dataPrimeiraOs ? new Date(`${c.dataPrimeiraOs}T12:00:00`) : null;
+        const base = diaCivilDeChave(c.dataPrimeiraOs); // o dia escolhido, sem fuso
         const preview = (c.ativa && c.frequencia && base)
-          ? proximasOcorrencias({ dataInicio: base, frequencia: c.frequencia, diaRecorrencia: base.getDate(), limite: 6, aPartirDe: base })
+          ? proximasOcorrencias({ dataInicio: base, frequencia: c.frequencia, diaRecorrencia: diaDoMesCivil(base), limite: 6, aPartirDe: base })
           : [];
         const tipoNome = tiposOs.find((t) => t.id === c.tipoOsId)?.nome ?? "Atendimento recorrente";
         const respNome = tecnicos.find((t) => t.id === c.tecnicoId)?.nome ?? "—";
@@ -55,7 +57,7 @@ export function RecorrenciaLocais({ locais, tiposOs, tecnicos, value, onChange }
               onChange={(v) => onChange(l.id, { ativa: v })}
             />
             {c.ativa && (
-              <div className="space-y-4 border-l-2 border-primary-200 pl-4">
+              <div className="space-y-4 border-l-2 border-surface-border pl-4">
                 <FormGrid cols={2}>
                   <FormField label="Frequência">
                     <Select value={c.frequencia} onChange={(e) => onChange(l.id, { frequencia: e.target.value })}>
@@ -63,7 +65,7 @@ export function RecorrenciaLocais({ locais, tiposOs, tecnicos, value, onChange }
                     </Select>
                   </FormField>
                   <FormField label="Data da primeira OS">
-                    <Input type="date" value={c.dataPrimeiraOs} onChange={(e) => onChange(l.id, { dataPrimeiraOs: e.target.value })} />
+                    <InputData value={c.dataPrimeiraOs} onChange={(v) => onChange(l.id, { dataPrimeiraOs: v })} />
                   </FormField>
                 </FormGrid>
                 <FormGrid cols={2}>

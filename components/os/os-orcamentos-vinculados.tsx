@@ -1,11 +1,14 @@
 "use client";
 
+import { confirmar } from "@/components/ui/avisos";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Calculator, ExternalLink, Plus, Link2, X, Trash2 } from "lucide-react";
+import { Calculator, ExternalLink, Link2, X, Trash2 } from "lucide-react";
 import { formatarData, formatarMoeda, cn, LABELS_STATUS_ORCAMENTO, CLASSE_STATUS_ORCAMENTO } from "@/lib/utils";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { OsNovoOrcamento } from "@/components/os/os-novo-orcamento";
 
 interface OrcamentoVinculado {
   id: string; // OrcamentoOs.id (relação)
@@ -32,16 +35,23 @@ interface OrcamentoDisponivel {
 interface OsOrcamentosVinculadosProps {
   osId: string;
   clienteId: string;
+  /** Nº da OS (título da gaveta "Criar orçamento") */
+  numeroOs?: string;
   vinculados: OrcamentoVinculado[];
 }
 
-export function OsOrcamentosVinculados({ osId, clienteId, vinculados: iniciais }: OsOrcamentosVinculadosProps) {
+export function OsOrcamentosVinculados({ osId, clienteId, numeroOs, vinculados: iniciais }: OsOrcamentosVinculadosProps) {
   const router = useRouter();
+  const { pode } = usePermissoes();
+  const podeVincular = pode("ordens", "editar");
   const [vinculados, setVinculados] = useState(iniciais);
+  // Depois de vincular/criar, o router.refresh() traz a lista do servidor: a tela acompanha
+  useEffect(() => { setVinculados(iniciais); }, [iniciais]);
   const [mostraVincular, setMostraVincular] = useState(false);
   const [disponiveis, setDisponiveis] = useState<OrcamentoDisponivel[]>([]);
   const [carregando, setCarregando] = useState(false);
   const [salvando, setSalvando] = useState<string | null>(null);
+  const [erro, setErro] = useState("");
 
   useEffect(() => {
     if (!mostraVincular) return;
@@ -54,7 +64,7 @@ export function OsOrcamentosVinculados({ osId, clienteId, vinculados: iniciais }
   }, [mostraVincular, osId]);
 
   async function vincular(orcamentoId: string) {
-    setSalvando(orcamentoId);
+    setSalvando(orcamentoId); setErro("");
     try {
       const res = await fetch(`/api/ordens/${osId}/orcamentos`, {
         method: "POST",
@@ -64,15 +74,17 @@ export function OsOrcamentosVinculados({ osId, clienteId, vinculados: iniciais }
       if (res.ok) {
         setMostraVincular(false);
         router.refresh();
+      } else {
+        setErro((await res.json().catch(() => null))?.erro ?? "Não foi possível vincular o orçamento.");
       }
-    } finally {
+    } catch { setErro("Erro de conexão. Tente novamente."); } finally {
       setSalvando(null);
     }
   }
 
   async function desvincular(orcamentoId: string, codigo: string) {
-    if (!confirm(`Desvincular o orçamento ${codigo} desta OS?`)) return;
-    setSalvando(orcamentoId);
+    if (!(await confirmar({ mensagem: `Desvincular o orçamento ${codigo} desta OS?`, perigo: true, confirmarTexto: "Desvincular" }))) return;
+    setSalvando(orcamentoId); setErro("");
     try {
       const res = await fetch(`/api/ordens/${osId}/orcamentos?orcamentoId=${orcamentoId}`, {
         method: "DELETE",
@@ -80,14 +92,17 @@ export function OsOrcamentosVinculados({ osId, clienteId, vinculados: iniciais }
       if (res.ok) {
         setVinculados((prev) => prev.filter((v) => v.orcamento.id !== orcamentoId));
         router.refresh();
+      } else {
+        setErro((await res.json().catch(() => null))?.erro ?? "Não foi possível desvincular o orçamento.");
       }
-    } finally {
+    } catch { setErro("Erro de conexão. Tente novamente."); } finally {
       setSalvando(null);
     }
   }
 
   return (
     <div className="space-y-4">
+      {erro && <p className="text-sm text-atrasado bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2" data-erro-vinculo>{erro}</p>}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-ink-muted">
           {vinculados.length === 0
@@ -95,24 +110,30 @@ export function OsOrcamentosVinculados({ osId, clienteId, vinculados: iniciais }
             : `${vinculados.length} orçamento(s) vinculado(s).`}
         </p>
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setMostraVincular((v) => !v)}
-          >
-            <Link2 className="w-4 h-4" /> Vincular existente
-          </Button>
-          <Link
-            href={`/orcamentos/novo?osId=${osId}&clienteId=${clienteId}`}
-            className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-sm"
-          >
-            <Plus className="w-4 h-4" /> Criar novo orçamento
-          </Link>
+          {podeVincular && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setMostraVincular((v) => !v)}
+            >
+              <Link2 className="w-4 h-4" /> Vincular existente
+            </Button>
+          )}
+          {/* Construtor do comercial numa gaveta, sem sair da OS (orçamento já nasce vinculado) */}
+          {pode("orcamentos", "criar") && (
+            <OsNovoOrcamento
+              osId={osId} numeroOs={numeroOs ?? "OS"}
+              onCriado={(orc) => {
+                setVinculados((prev) => prev.some((v) => v.orcamento.id === orc.id) ? prev : [...prev, { id: `novo-${orc.id}`, orcamento: orc }]);
+                router.refresh();
+              }}
+            />
+          )}
         </div>
       </div>
 
       {mostraVincular && (
-        <div className="border-2 border-primary-200 bg-primary-50/30 rounded-xl p-4 space-y-3">
+        <div className="border-2 border-primary-200 bg-primary-50/30 rounded-card p-4 space-y-3">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-bold text-primary-700">Vincular orçamento existente</h4>
             <button
@@ -187,15 +208,15 @@ export function OsOrcamentosVinculados({ osId, clienteId, vinculados: iniciais }
               <span className="text-sm font-semibold text-ink shrink-0">
                 {formatarMoeda(Number(v.orcamento.totalGeral))}
               </span>
-              <button
+              {podeVincular && <button
                 type="button"
                 onClick={() => desvincular(v.orcamento.id, v.orcamento.codigo)}
                 disabled={salvando === v.orcamento.id}
-                className="p-1.5 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                className="p-1.5 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded transition-colors disabled:opacity-50"
                 title="Desvincular"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-              </button>
+              </button>}
             </div>
           ))}
         </div>

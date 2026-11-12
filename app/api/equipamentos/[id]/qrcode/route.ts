@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { exigirPermissao } from "@/lib/permissoes-server";
+import { exigirAlgumaPermissao, exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { gerarQrCodeEquipamento } from "@/lib/qrcode-server";
@@ -10,9 +10,13 @@ const postSchema = z.object({
   qrcodeId: z.string().optional(),
 });
 
-/** Gera um novo QR Code já vinculado ao equipamento, OU vincula um QR existente. */
+/**
+ * Gera um novo QR Code já vinculado ao equipamento, OU vincula um QR existente.
+ * Aceita "criar" além de "editar": quem cadastra o equipamento precisa poder gerar o QR
+ * depois (só acrescenta; trocar/desvincular continua exigindo "editar").
+ */
 export async function POST(req: NextRequest, { params }: Params) {
-  const guard = await exigirPermissao("equipamentos", "editar");
+  const guard = await exigirAlgumaPermissao([["equipamentos", "editar"], ["equipamentos", "criar"]]);
   if (guard.erro) return guard.resposta;
   const { session } = guard;
   const empresaId = session.user!.empresaId;

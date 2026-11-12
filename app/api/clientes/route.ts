@@ -2,23 +2,26 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
+import { respostaRefEmpresa, validarRefEmpresa } from "@/lib/ref-empresa";
+import { validarDataUrl, type ArquivoValidado } from "@/lib/anexos-server";
 import { clienteSchema } from "@/lib/validations";
+import { caixaNome, caixaEmail, caixaLivre } from "@/lib/texto/zod";
 import { z } from "zod";
 
 const unidadeInlineSchema = z.object({
-  nome: z.string().min(1),
+  nome: z.string().min(1).transform(caixaNome),
   principal: z.boolean().default(false),
-  logradouro: z.string().optional(),
+  logradouro: z.string().optional().transform(caixaNome),
   numero: z.string().optional(),
-  complemento: z.string().optional(),
-  bairro: z.string().optional(),
-  cidade: z.string().optional(),
+  complemento: z.string().optional().transform(caixaNome),
+  bairro: z.string().optional().transform(caixaNome),
+  cidade: z.string().optional().transform(caixaNome),
   estado: z.string().optional(),
   cep: z.string().optional(),
   latitude: z.number().optional().nullable(),
   longitude: z.number().optional().nullable(),
   telefone: z.string().optional(),
-  observacoes: z.string().optional(),
+  observacoes: z.string().optional().transform(caixaLivre),
 });
 
 const anexoInlineSchema = z.object({
@@ -29,12 +32,12 @@ const anexoInlineSchema = z.object({
 });
 
 const contatoInlineSchema = z.object({
-  nome: z.string().min(1),
-  cargo: z.string().optional(),
+  nome: z.string().min(1).transform(caixaNome),
+  cargo: z.string().optional().transform(caixaNome),
   tipo: z.string().default("OUTRO"),
   telefone: z.string().optional(),
   whatsapp: z.string().optional(),
-  email: z.string().optional(),
+  email: z.string().optional().transform(caixaEmail),
   principal: z.boolean().default(false),
 });
 
@@ -92,6 +95,21 @@ export async function POST(req: NextRequest) {
   if (existente) return NextResponse.json({ erro: "CPF/CNPJ já cadastrado" }, { status: 409 });
 
   const { responsavelTecnicoId, unidades, anexos, contatos, ...resto } = parsed.data;
+  // Tabela de preço e responsável técnico precisam ser da mesma empresa (tabela: só ativa)
+  try {
+    await Promise.all([
+      validarRefEmpresa("tabelaPreco", resto.tabelaPrecoId, empresaId, "Tabela de preço", { novoAtivo: true }),
+      validarRefEmpresa("tecnico", responsavelTecnicoId, empresaId, "Responsável técnico"),
+    ]);
+  } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
+
+  // Anexos chegam como data URL: o tipo gravado vem do conteúdo, não do que foi declarado
+  const anexosValidos: ArquivoValidado[] = [];
+  for (const a of anexos ?? []) {
+    const v = validarDataUrl(a.conteudo, a.nome);
+    if (!v.ok) return NextResponse.json({ erro: `Anexo "${a.nome}": ${v.erro}` }, { status: 400 });
+    anexosValidos.push(v.arquivo);
+  }
 
   const cliente = await prisma.cliente.create({
     data: {
@@ -108,9 +126,9 @@ export async function POST(req: NextRequest) {
             })),
           }
         : undefined,
-      anexos: anexos && anexos.length > 0
+      anexos: anexosValidos.length > 0
         ? {
-            create: anexos.map((a) => ({ ...a, empresaId })),
+            create: anexosValidos.map((a) => ({ ...a, empresaId })),
           }
         : undefined,
       contatosCliente: contatos && contatos.length > 0

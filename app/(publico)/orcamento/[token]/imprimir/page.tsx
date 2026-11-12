@@ -1,14 +1,16 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { OrcamentoDocumento } from "@/components/orcamento/orcamento-documento";
+import { anexosDoDocumento, INCLUDE_DOCUMENTO_ORCAMENTO, metadataDocumentoOrcamento } from "@/lib/orcamentos/documento-server";
 import { PropostaDocumento } from "@/components/orcamento/proposta-documento";
 import { AutoPrint } from "@/components/orcamento/auto-print";
 
 export const dynamic = "force-dynamic";
-export const metadata = {
-  title: "Imprimir Orçamento",
-  robots: { index: false, follow: false },
-};
+// Título = nome do arquivo ao salvar em PDF: "Orçamento 2026-0015 - CLIENTE" (antes: "Imprimir Orçamento | Frivo")
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  return { ...(await metadataDocumentoOrcamento((await params).token)), robots: { index: false, follow: false } };
+}
 
 export default async function ImprimirOrcamentoPage({
   params,
@@ -19,13 +21,7 @@ export default async function ImprimirOrcamentoPage({
 
   const orcamento = await prisma.orcamento.findUnique({
     where: { tokenPublico: token },
-    include: {
-      empresa: true,
-      cliente: true,
-      responsavelTecnico: { select: { nome: true, crea: true } },
-      servicos: { orderBy: { ordem: "asc" } },
-      produtos: { orderBy: { ordem: "asc" } },
-    },
+    include: INCLUDE_DOCUMENTO_ORCAMENTO,
   });
 
   if (!orcamento) notFound();
@@ -43,11 +39,11 @@ export default async function ImprimirOrcamentoPage({
       <style>{`
         @page { size: A4; margin: 1.5cm; }
         @media print {
-          body { background: white !important; }
+          html, body { background: white !important; }
           .print-hide { display: none !important; }
         }
       `}</style>
-      <div className="min-h-screen bg-surface-page py-6 print:bg-white print:py-0">
+      <div className="min-h-screen bg-surface-page py-6 print:min-h-0 print:bg-white print:py-0">
         <div className="max-w-4xl mx-auto bg-white p-6 md:p-10 rounded-2xl shadow-card print:shadow-none print:rounded-none print:p-0">
           {proposta ? (
             <PropostaDocumento
@@ -62,6 +58,7 @@ export default async function ImprimirOrcamentoPage({
               orcamento={orcamento}
               empresa={orcamento.empresa}
               cliente={orcamento.cliente}
+              anexos={anexosDoDocumento(orcamento.anexos, `/api/publico/orcamentos/${token}/anexos`)}
             />
           )}
         </div>

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { hojeDiaCivil, inicioHojeBR } from "@/lib/fuso";
 
 /**
  * Conta os alertas relacionados à frota de veículos para o sino e o dashboard:
@@ -10,8 +11,9 @@ import { prisma } from "@/lib/prisma";
  */
 export async function contarAlertasVeiculos(empresaId: string) {
   const agora = new Date();
-  const inicioHoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), 0, 0, 0, 0);
-  const em30 = new Date(agora.getTime() + 30 * 864e5);
+  const inicioHoje = inicioHojeBR(agora); // checklist de hoje (instante) — dia de Brasília
+  const hojeCivil = hojeDiaCivil(agora); // vencimentos/revisão são dias civis
+  const em30 = hojeDiaCivil(agora, 30);
 
   const [templatesAtivos, veiculosAtivos, checklistsHoje, checklistsComAlertas, veiculosManutencao, docsVencendo, seguroVencendo, revisaoChegando] =
     await Promise.all([
@@ -22,7 +24,7 @@ export async function contarAlertasVeiculos(empresaId: string) {
       prisma.veiculo.count({ where: { empresaId, status: "MANUTENCAO" } }),
       prisma.veiculo.findMany({ where: { empresaId, documentos: { some: { dataVencimento: { lte: em30 } } } }, select: { id: true } }),
       prisma.veiculo.findMany({ where: { empresaId, seguroVencimento: { lte: em30 } }, select: { id: true } }),
-      prisma.veiculo.count({ where: { empresaId, proximaRevisaoData: { gte: inicioHoje, lte: em30 } } }),
+      prisma.veiculo.count({ where: { empresaId, proximaRevisaoData: { gte: hojeCivil, lte: em30 } } }),
     ]);
 
   const idsComChecklist = new Set(checklistsHoje.map((c) => c.veiculoId));

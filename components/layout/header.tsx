@@ -1,11 +1,12 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import { Bell, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer, Headset, ClipboardCheck, FileWarning, Wrench, Menu, Barcode } from "lucide-react";
+import { Bell, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer, Headset, ClipboardCheck, FileWarning, Wrench, Menu, Barcode, MessageSquareReply, PackageCheck, FileCheck2, FileX2, Hourglass, CalendarX2, TrendingUp, PackageOpen, PackageMinus, Globe } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "next-auth";
+import { pode } from "@/lib/permissoes";
 
 interface Alertas {
   prazosVencidos: number;
@@ -18,6 +19,20 @@ interface Alertas {
   documentosVencendo: number;
   veiculosManutencao: number;
   boletosPagos: number;
+  orcamentosRespondidos: number;
+  leadsSite?: number;
+  nfPedidos: number;
+  nfPedidoId: string | null;
+  nfseAutorizadas?: number;
+  nfseAutorizadaMedicaoId?: string | null;
+  nfseRejeitadas?: number;
+  nfseRejeitadaMedicaoId?: string | null;
+  nfseAguardando?: number;
+  nfseAguardandoMedicaoId?: string | null;
+  faturamentoContratos?: number;
+  reajustesContrato?: number;
+  separacoesPendentes?: number;
+  devolucoesPendentes?: number;
   total: number;
 }
 
@@ -31,29 +46,83 @@ const ROTULOS_ROTA: Record<string, string> = {
   clientes: "Clientes",
   equipamentos: "Equipamentos",
   pmoc: "PMOC",
-  ordens: "Ordens de Serviço",
+  ordens: "Ordens de serviço",
   contratos: "Contratos",
+  "faturamento-contratos": "Faturamento de contratos",
   tecnicos: "Técnicos",
   colaboradores: "Colaboradores",
   equipes: "Equipes",
+  "app-colaborador": "App do colaborador",
   veiculos: "Veículos",
   checklist: "Checklist",
   cargos: "Cargos",
-  "checklists-veiculo": "Checklists de Veículo",
-  "contas-bancarias": "Contas Bancárias",
+  "checklists-veiculo": "Checklists de veículo",
+  "contas-bancarias": "Contas bancárias",
+  faturas: "Faturas",
   perfil: "Meu Perfil",
   configuracoes: "Configurações",
   formularios: "Formulários",
   produtos: "Produtos",
   servicos: "Serviços",
-  "tipos-equipamento": "Tipos de Equipamento",
+  "tipos-equipamento": "Tipos de equipamento",
+  "tabelas-preco": "Tabelas de preços",
   "tipos-os": "Tipos de OS",
+  estoque: "Estoque",
+  notas: "Notas de compra",
+  separacao: "A separar",
+  devolucao: "A devolver",
+  "impressao-os": "Impressão da OS",
+  financeiro: "Financeiro",
+  "custo-pessoal": "Custo de pessoal",
+  fiscal: "Dados fiscais",
+  colaborador: "Colaborador",
+  encargos: "Encargos",
+  importar: "Importar",
+  operacionais: "Operacionais",
+  financeiras: "Financeiras",
+  conta: "Conta",
   novo: "Novo",
   nova: "Nova",
   editar: "Editar",
+  // UX-8 (G5): fim do segmento cru ("Medicoes", "Contas-pagar", "Fluxo-caixa") no breadcrumb
+  medicoes: "Medições",
+  "contas-pagar": "Contas a pagar",
+  "contas-receber": "Contas a receber",
+  "fluxo-caixa": "Fluxo de caixa",
+  fornecedores: "Fornecedores",
+  "centros-custo": "Centros de custo",
+  categorias: "Categorias",
+  compras: "Compras",
+  pedidos: "Pedidos",
+  orcamentos: "Orçamentos",
+  calendario: "Calendário",
+  atividades: "Atividades",
+  prazos: "Prazos",
+  templates: "Modelos",
+  termos: "Termos",
+  "termos-referencia": "Termos de referência",
+  "modelos-prazo": "Modelos de prazo",
+  perfis: "Perfis de acesso",
+  "perfis-acesso": "Perfis de acesso",
+  usuarios: "Usuários",
+  integracoes: "Integrações",
+  inter: "Banco Inter",
+  "leads-site": "Leads do site",
+  qrcodes: "QR Codes",
+  "qr-code": "QR Code",
+  relatorio: "Relatório",
+  imprimir: "Imprimir",
+  executar: "Executar",
+  foto: "Foto",
+  instalar: "Instalar",
+  montador: "Montador",
+  email: "E-mail",
+  "formularios-por-tipo": "Formulários por tipo",
+  portal: "Portal",
+  "sem-permissao": "Sem permissão",
 };
 
-function gerarBreadcrumb(pathname: string) {
+export function gerarBreadcrumb(pathname: string) {
   const segs = pathname.split("/").filter(Boolean);
   const itens: { label: string; href: string }[] = [];
   let acc = "";
@@ -69,6 +138,8 @@ function gerarBreadcrumb(pathname: string) {
 
 export function Header({ session, avatarUrl }: HeaderProps) {
   const usuario = session.user;
+  // Atalhos do sino seguem o RBAC: cada item só aparece para quem pode abrir o destino (T1)
+  const podeVer = (modulo: string, acao?: string) => pode(usuario.permissoes, modulo, (acao as never) ?? "visualizar", usuario.role);
   const pathname = usePathname();
   const breadcrumb = useMemo(() => gerarBreadcrumb(pathname), [pathname]);
 
@@ -112,7 +183,7 @@ export function Header({ session, avatarUrl }: HeaderProps) {
       .toUpperCase() ?? "??";
 
   return (
-    <header className="bg-white border-b border-surface-border shadow-card px-4 sm:px-6 py-3 flex items-center justify-between gap-4 shrink-0">
+    <header className="bg-white border-b border-surface-border px-4 sm:px-6 py-3 flex items-center justify-between gap-4 shrink-0">
       {/* Hamburguer (mobile) */}
       <button
         type="button"
@@ -154,8 +225,8 @@ export function Header({ session, avatarUrl }: HeaderProps) {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-subtle" />
           <input
             type="search"
-            placeholder="Buscar..."
-            className="w-64 bg-surface-alt border border-surface-border rounded-lg pl-9 pr-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all"
+            placeholder="Pesquisar..."
+            className="w-64 bg-surface-page border border-surface-border rounded-lg pl-9 pr-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:bg-white focus:border-acento focus:ring-4 focus:ring-acento/15 transition-colors"
           />
         </div>
 
@@ -164,35 +235,46 @@ export function Header({ session, avatarUrl }: HeaderProps) {
           <button
             onClick={() => setSinoAberto((v) => !v)}
             className="relative p-2 rounded-lg text-ink-muted hover:text-primary-600 hover:bg-surface-alt transition-colors"
-            title="Alertas de prazos"
+            title="Alertas"
           >
             <Bell className="w-5 h-5" />
             {total > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full ring-2 ring-white flex items-center justify-center">
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-atrasado text-white text-[10px] font-semibold tabular-nums rounded-full ring-2 ring-white flex items-center justify-center">
                 {total > 99 ? "99+" : total}
               </span>
             )}
           </button>
 
           {sinoAberto && (
-            <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-surface-border rounded-xl shadow-card-hover z-30 overflow-hidden">
+            <div data-sino-menu className="fixed inset-x-4 top-16 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full mt-2 sm:w-80 max-h-[calc(100dvh-6rem)] overflow-y-auto bg-white border border-surface-border rounded-card shadow-elevated z-30">
               <div className="px-4 py-3 border-b border-surface-border">
-                <p className="text-sm font-bold text-ink">Alertas de prazos</p>
+                <p className="font-display text-sm font-semibold text-ink">Alertas</p>
               </div>
               {total === 0 ? (
-                <p className="text-sm text-ink-muted text-center py-6">Nenhum alerta no momento 🎉</p>
+                <p className="text-sm text-ink-muted text-center py-6">Nenhum alerta no momento.</p>
               ) : (
-                <div className="divide-y divide-surface-border">
-                  <AlertaItem href="/prazos?status=ATRASADO" icone={AlertTriangle} cor="text-red-600" label="Prazos vencidos" valor={alertas?.prazosVencidos ?? 0} onClick={() => setSinoAberto(false)} />
-                  <AlertaItem href="/prazos?status=ATIVO" icone={Clock} cor="text-amber-600" label="Vencendo hoje" valor={alertas?.etapasVencendoHoje ?? 0} onClick={() => setSinoAberto(false)} />
-                  <AlertaItem href="/compras/pedidos" icone={ShoppingCart} cor="text-orange-600" label="Compras pendentes" valor={alertas?.pedidosPendentes ?? 0} onClick={() => setSinoAberto(false)} />
-                  <AlertaItem href="/ordens?origem=PORTAL_CLIENTE" icone={Headset} cor="text-cyan-600" label="Chamados do portal" valor={alertas?.chamadosPortal ?? 0} onClick={() => setSinoAberto(false)} />
-                  <AlertaItem href="/ordens" icone={Timer} cor="text-red-600" label="Atendimentos em atraso" valor={alertas?.atendimentosAtraso ?? 0} onClick={() => setSinoAberto(false)} />
-                  <AlertaItem href="/veiculos/checklist" icone={ClipboardCheck} cor="text-blue-600" label="Checklists pendentes" valor={alertas?.checklistPendente ?? 0} onClick={() => setSinoAberto(false)} />
-                  <AlertaItem href="/veiculos" icone={AlertTriangle} cor="text-amber-600" label="Checklists com alertas" valor={alertas?.checklistsComAlertas ?? 0} onClick={() => setSinoAberto(false)} />
-                  <AlertaItem href="/veiculos" icone={FileWarning} cor="text-orange-600" label="Documentos de veículo vencendo" valor={alertas?.documentosVencendo ?? 0} onClick={() => setSinoAberto(false)} />
-                  <AlertaItem href="/veiculos" icone={Wrench} cor="text-violet-600" label="Veículos em manutenção" valor={alertas?.veiculosManutencao ?? 0} onClick={() => setSinoAberto(false)} />
-                  <AlertaItem href="/financeiro/contas-receber?status=RECEBIDO" icone={Barcode} cor="text-emerald-600" label="Boletos pagos hoje" valor={alertas?.boletosPagos ?? 0} onClick={() => setSinoAberto(false)} />
+                <div className="divide-y divide-surface-linha">
+                  {podeVer("orcamentos") && (alertas?.leadsSite ?? 0) > 0 && <AlertaItem href="/leads-site" icone={Globe} cor="text-primary-600" label="Novos leads do site" valor={alertas?.leadsSite ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("orcamentos") && <AlertaItem href="/orcamentos?resposta=nova&periodo=todos" icone={MessageSquareReply} cor="text-acento" label="Respostas de orçamentos" valor={alertas?.orcamentosRespondidos ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {/* NFS-e: só aparece quando há o que ver (resultado não visto ou nota parada) */}
+                  {podeVer("financeiro", "fiscal") && (alertas?.nfseRejeitadas ?? 0) > 0 && <AlertaItem href={hrefMedicao(alertas?.nfseRejeitadaMedicaoId)} icone={FileX2} cor="text-atrasado" label="NFS-e não aceitas" valor={alertas?.nfseRejeitadas ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("financeiro", "fiscal") && (alertas?.nfseAguardando ?? 0) > 0 && <AlertaItem href={hrefMedicao(alertas?.nfseAguardandoMedicaoId)} icone={Hourglass} cor="text-atencao" label="NFS-e aguardando a prefeitura" valor={alertas?.nfseAguardando ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("financeiro", "fiscal") && (alertas?.nfseAutorizadas ?? 0) > 0 && <AlertaItem href={hrefMedicao(alertas?.nfseAutorizadaMedicaoId)} icone={FileCheck2} cor="text-ok" label="NFS-e autorizadas" valor={alertas?.nfseAutorizadas ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("financeiro", "medicoes") && (alertas?.faturamentoContratos ?? 0) > 0 && <AlertaItem href="/financeiro/faturamento-contratos?atencao=1" icone={CalendarX2} cor="text-atrasado" label="Faturamento de contrato parado" valor={alertas?.faturamentoContratos ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("contratos", "editar") && (alertas?.reajustesContrato ?? 0) > 0 && <AlertaItem href="/contratos/reajustes" icone={TrendingUp} cor="text-atencao" label="Reajustes a aplicar" valor={alertas?.reajustesContrato ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("estoque", "separar") && (alertas?.separacoesPendentes ?? 0) > 0 && <AlertaItem href="/estoque/separacao" icone={PackageOpen} cor="text-acento" label="OS com material a separar" valor={alertas?.separacoesPendentes ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("estoque", "separar") && (alertas?.devolucoesPendentes ?? 0) > 0 && <AlertaItem href="/estoque/devolucao" icone={PackageMinus} cor="text-atencao" label="OS com material a devolver" valor={alertas?.devolucoesPendentes ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {(alertas?.nfPedidos ?? 0) > 0 && <AlertaItem href={`/compras/pedidos/${alertas?.nfPedidoId ?? ""}`} icone={PackageCheck} cor="text-ok" label="NF chegou nos seus pedidos" valor={alertas?.nfPedidos ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("ordens") && <AlertaItem href="/prazos?status=ATRASADO" icone={AlertTriangle} cor="text-atrasado" label="Prazos vencidos" valor={alertas?.prazosVencidos ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("ordens") && <AlertaItem href="/prazos?status=ATIVO" icone={Clock} cor="text-atencao" label="Vencendo hoje" valor={alertas?.etapasVencendoHoje ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("compras") && <AlertaItem href="/compras/pedidos" icone={ShoppingCart} cor="text-atencao" label="Compras pendentes" valor={alertas?.pedidosPendentes ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("ordens") && <AlertaItem href="/ordens?origem=PORTAL_CLIENTE" icone={Headset} cor="text-acento" label="Chamados do portal" valor={alertas?.chamadosPortal ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("ordens") && <AlertaItem href="/ordens" icone={Timer} cor="text-atrasado" label="Atendimentos em atraso" valor={alertas?.atendimentosAtraso ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("veiculos") && <AlertaItem href="/veiculos/checklist" icone={ClipboardCheck} cor="text-acento" label="Checklists pendentes" valor={alertas?.checklistPendente ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={AlertTriangle} cor="text-atencao" label="Checklists com alertas" valor={alertas?.checklistsComAlertas ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={FileWarning} cor="text-atencao" label="Documentos de veículo vencendo" valor={alertas?.documentosVencendo ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={Wrench} cor="text-acento" label="Veículos em manutenção" valor={alertas?.veiculosManutencao ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("financeiro", "contasReceber") && <AlertaItem href="/financeiro/contas-receber?card=RECEBIDO&periodo=todos" icone={Barcode} cor="text-ok" label="Boletos pagos hoje" valor={alertas?.boletosPagos ?? 0} onClick={() => setSinoAberto(false)} />}
                 </div>
               )}
             </div>
@@ -209,15 +291,15 @@ export function Header({ session, avatarUrl }: HeaderProps) {
           </div>
           {avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={avatarUrl} alt={usuario.name ?? "Usuário"} className="w-9 h-9 rounded-full object-cover shadow-sm" />
+            <img src={avatarUrl} alt={usuario.name ?? "Usuário"} className="w-9 h-9 rounded-full object-cover" />
           ) : (
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary-500 to-success-500 flex items-center justify-center text-white text-xs font-bold shadow-sm">
+            <div className="w-9 h-9 rounded-full bg-acento-claro text-acento flex items-center justify-center font-display text-xs font-semibold">
               {iniciais}
             </div>
           )}
           <button
             onClick={() => signOut({ callbackUrl: "/login" })}
-            className="text-ink-muted hover:text-red-500 hover:bg-red-50 transition-colors p-2 rounded-lg"
+            className="text-ink-muted hover:text-atrasado hover:bg-atrasado-claro transition-colors p-2 rounded-lg"
             title="Sair"
           >
             <LogOut className="w-4 h-4" />
@@ -227,6 +309,9 @@ export function Header({ session, avatarUrl }: HeaderProps) {
     </header>
   );
 }
+
+/** A medição da nota mais recente (onde ficam as notas); sem ela, a lista de medições */
+const hrefMedicao = (id: string | null | undefined) => (id ? `/financeiro/medicoes/${id}` : "/financeiro/medicoes");
 
 function AlertaItem({
   href, icone: Icone, cor, label, valor, onClick,

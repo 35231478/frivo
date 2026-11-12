@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { conferirBloqueio, registrarTentativa, limparTentativas } from "@/lib/acesso/limite";
 import { z } from "zod";
+import { MSG_EMAIL_DO_TECNICO, emModoTecnico } from "@/lib/tecnico/modo";
 
 const schema = z.object({
   nome: z.string().trim().min(1, "Nome é obrigatório").optional(),
   email: z.string().trim().email("E-mail inválido").optional(),
   confirmacaoEmail: z.string().trim().email().optional(),
+  senhaAtual: z.string().optional(),
 });
 
 export async function PATCH(req: NextRequest) {
@@ -18,23 +22,42 @@ export async function PATCH(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ erro: parsed.error.errors[0]?.message ?? "Dados inválidos" }, { status: 400 });
   }
-  const { nome, email, confirmacaoEmail } = parsed.data;
+  const { nome, confirmacaoEmail, senhaAtual } = parsed.data;
+  // Login compara o texto exato: grava sempre em minúsculas para a pessoa não ficar sem entrar (S9)
+  const email = parsed.data.email?.toLowerCase();
 
-  const atual = await prisma.usuario.findUnique({ where: { id: userId }, select: { email: true } });
+  const atual = await prisma.usuario.findUnique({ where: { id: userId }, select: { email: true, senha: true } });
   if (!atual) return NextResponse.json({ erro: "Usuário não encontrado" }, { status: 404 });
 
   const data: { nome?: string; email?: string } = {};
   if (nome) data.nome = nome;
 
-  if (email && email.toLowerCase() !== atual.email.toLowerCase()) {
-    if (confirmacaoEmail !== email) {
+  if (email && email !== atual.email.toLowerCase()) {
+    // App do técnico: o técnico é ligado às OS dele pelo e-mail de login. Trocando aqui, ele perderia
+    // o acesso até o escritório acertar — quem troca é o escritório, pela ficha do colaborador (que
+    // leva o login junto). Vale no servidor: a tela do app só mostra o e-mail, mas a rota também recusa.
+    if (emModoTecnico(session.user)) return NextResponse.json({ erro: MSG_EMAIL_DO_TECNICO }, { status: 403 });
+    if (confirmacaoEmail?.toLowerCase() !== email) {
       return NextResponse.json({ erro: "A confirmação de e-mail não coincide." }, { status: 400 });
     }
+    // Trocar o e-mail de LOGIN exige a senha atual: sessão roubada não troca a conta de dono (S9)
+    const bloqueio = await conferirBloqueio("TROCA_SENHA", { usuarioId: userId });
+    if (bloqueio.bloqueado) {
+      return NextResponse.json({ erro: `Muitas tentativas. Aguarde ${bloqueio.minutos} min.` }, { status: 429 });
+    }
+    const senhaOk = senhaAtual ? await bcrypt.compare(senhaAtual, atual.senha ?? "") : false;
+    if (!senhaOk) {
+      await registrarTentativa("TROCA_SENHA", { usuarioId: userId });
+      return NextResponse.json({ erro: "Informe a senha atual para trocar o e-mail de login." }, { status: 400 });
+    }
+    await limparTentativas("TROCA_SENHA", { usuarioId: userId });
+
     const emUso = await prisma.usuario.findFirst({
-      where: { email, id: { not: userId } },
+      where: { email: { equals: email, mode: "insensitive" }, id: { not: userId } },
       select: { id: true },
     });
-    if (emUso) return NextResponse.json({ erro: "Este e-mail já está em uso por outro usuário." }, { status: 409 });
+    // Resposta genérica: o 409 antigo confirmava e-mails de outras empresas (S9)
+    if (emUso) return NextResponse.json({ erro: "Não foi possível usar este e-mail. Escolha outro endereço." }, { status: 409 });
     data.email = email;
   }
 

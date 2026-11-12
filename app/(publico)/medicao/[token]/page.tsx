@@ -5,17 +5,22 @@ import { MedicaoDocumento } from "@/components/medicao/medicao-documento";
 import { MedicaoEnvio } from "@/components/medicao/medicao-envio";
 import { AprovacaoMedicao } from "@/components/medicao/aprovacao-medicao";
 import { RelatorioGeralDocumento } from "@/components/relatorio/relatorio-geral-documento";
+import { RelatorioMensalContratoResumo } from "@/components/medicao/relatorio-mensal-contrato";
 import { carregarRelatorioPorToken } from "@/lib/relatorio-server";
+import { dadosRelatorioMensalContrato } from "@/lib/relatorio-mensal-contrato";
 import { FrivoLogo } from "@/components/layout/frivo-logo";
 import { LABELS_STATUS_MEDICAO, CLASSE_STATUS_MEDICAO, formatarData, cn } from "@/lib/utils";
 import { CheckCircle2, AlertTriangle } from "lucide-react";
+import { referenciaNota } from "@/lib/faturamento/fatura";
+import { emailCobranca, whatsappCobranca } from "@/lib/cliente/cobranca-destino";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Medição",
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  const { token } = await params;
+  const m = await prisma.medicao.findUnique({ where: { tokenPublico: token }, select: { numero: true, avulsa: true } });
+  return { title: m ? referenciaNota(m) : "Medição", robots: { index: false, follow: false } };
+}
 
 export default async function MedicaoPublicaPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -32,6 +37,7 @@ export default async function MedicaoPublicaPage({ params }: { params: Promise<{
   if (!medicao) notFound();
 
   const cancelada = medicao.status === "CANCELADA";
+  const doc = medicao.avulsa ? "Fatura" : "Medição";
   const aguardando = medicao.status === "AGUARDANDO_APROVACAO";
   const jaAprovada = !!medicao.assinaturaUrl;
 
@@ -42,34 +48,41 @@ export default async function MedicaoPublicaPage({ params }: { params: Promise<{
   });
   const consolidado = relVinculado ? await carregarRelatorioPorToken(relVinculado.tokenPublico) : null;
 
-  const emailDestino = medicao.cliente.emailsFaturamento?.[0] ?? medicao.cliente.email ?? null;
-  const whatsappDestino = medicao.cliente.whatsappFaturamento ?? medicao.cliente.celular ?? null;
+  // D1 — medição mensal de contrato vira o RELATÓRIO MENSAL CONSOLIDADO: resumo das OS do
+  // período + próxima manutenção + os relatórios completos do mês (preventiva com fotos)
+  const mensal = medicao.contratoId ? await dadosRelatorioMensalContrato(medicao.id) : null;
+  const relatoriosDoMes = mensal
+    ? (await Promise.all(mensal.relatoriosDoMes.map((t) => carregarRelatorioPorToken(t)))).filter((r): r is NonNullable<typeof r> => !!r)
+    : [];
+
+  const emailDestino = await emailCobranca(medicao.cliente);
+  const whatsappDestino = await whatsappCobranca(medicao.cliente);
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="bg-sidebar text-white py-4 px-6 shadow-sm">
+      <header className="bg-white border-b border-surface-border py-4 px-6">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-4 flex-wrap">
-          <FrivoLogo size="sm" showSubtitle={false} />
-          <MedicaoEnvio token={token} numero={medicao.numero} empresaNome={medicao.empresa.nomeFantasia ?? medicao.empresa.nome} emailDestino={emailDestino} whatsappDestino={whatsappDestino} />
+          <FrivoLogo size="sm" showSubtitle={false} variant="dark" />
+          <MedicaoEnvio token={token} numero={medicao.numero} avulsa={medicao.avulsa} empresaNome={medicao.empresa.nomeFantasia ?? medicao.empresa.nome} emailDestino={emailDestino} whatsappDestino={whatsappDestino} />
         </div>
       </header>
 
       <main className="flex-1 py-8 px-4">
         <div className="max-w-4xl mx-auto space-y-6">
           {cancelada && (
-            <div className="bg-red-50 border-2 border-red-300 text-red-700 rounded-xl px-5 py-4 flex items-center gap-3">
+            <div className="bg-atrasado-claro border-2 border-atrasado/40 text-atrasado-texto rounded-card px-5 py-4 flex items-center gap-3">
               <AlertTriangle className="w-6 h-6 shrink-0" />
               <div>
-                <p className="font-bold">Medição cancelada</p>
-                <p className="text-sm">Esta medição foi cancelada pela empresa.</p>
+                <p className="font-bold">{doc} cancelada</p>
+                <p className="text-sm">Esta {doc.toLowerCase()} foi cancelada pela empresa.</p>
               </div>
             </div>
           )}
           {jaAprovada && (
-            <div className="bg-success-50 border-2 border-success-500 text-success-700 rounded-xl px-5 py-4 flex items-center gap-3">
+            <div className="bg-ok-claro border border-ok/30 text-ok-texto rounded-card px-5 py-4 flex items-center gap-3">
               <CheckCircle2 className="w-6 h-6 shrink-0" />
               <div>
-                <p className="font-bold">Medição aprovada!</p>
+                <p className="font-bold">Medição aprovada.</p>
                 <p className="text-sm">
                   Aprovada por {medicao.assinadoPor} em {formatarData(medicao.dataAprovacao, "dd/MM/yyyy 'às' HH:mm")}.
                 </p>
@@ -77,12 +90,12 @@ export default async function MedicaoPublicaPage({ params }: { params: Promise<{
             </div>
           )}
 
-          <div className="bg-white rounded-2xl shadow-card p-6 md:p-10">
+          <div className="bg-white rounded-card shadow-card p-6 md:p-10">
             <MedicaoDocumento medicao={medicao} empresa={medicao.empresa} cliente={medicao.cliente} />
           </div>
 
           {consolidado && (
-            <div className="bg-white rounded-2xl shadow-card p-6 md:p-10">
+            <div className="bg-white rounded-card shadow-card p-6 md:p-10">
               <p className="text-xs uppercase tracking-wider text-ink-muted mb-4 pb-2 border-b border-surface-border">Relatório técnico completo</p>
               <RelatorioGeralDocumento
                 relatorio={consolidado.relatorio}
@@ -93,9 +106,21 @@ export default async function MedicaoPublicaPage({ params }: { params: Promise<{
             </div>
           )}
 
+          {mensal && (
+            <div className="bg-white rounded-card shadow-card p-6 md:p-10">
+              <RelatorioMensalContratoResumo dados={mensal} />
+            </div>
+          )}
+          {relatoriosDoMes.map((r, i) => (
+            <div key={i} className="bg-white rounded-card shadow-card p-6 md:p-10">
+              <p className="text-xs uppercase tracking-wider text-ink-muted mb-4 pb-2 border-b border-surface-border">Relatório técnico do período</p>
+              <RelatorioGeralDocumento relatorio={r.relatorio} empresa={r.empresa} os={r.os} equipamentos={r.equipamentos} />
+            </div>
+          ))}
+
           {aguardando && !jaAprovada && <AprovacaoMedicao token={token} />}
           {medicao.status === "RASCUNHO" && (
-            <div className="bg-white border border-surface-border rounded-xl px-5 py-4 text-center">
+            <div className="bg-white border border-surface-border rounded-card px-5 py-4 text-center">
               <span className={cn("inline-flex mb-2", CLASSE_STATUS_MEDICAO[medicao.status])}>
                 {LABELS_STATUS_MEDICAO[medicao.status]}
               </span>

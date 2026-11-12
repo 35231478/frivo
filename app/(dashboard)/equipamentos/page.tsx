@@ -1,3 +1,5 @@
+import { SelecaoMassaProvider } from "@/components/acoes-massa/selecao";
+import { BarraAcoesMassa } from "@/components/acoes-massa/barra";
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -140,6 +142,7 @@ export default async function EquipamentosPage({
   }));
 
   return (
+    <SelecaoMassaProvider entidade="equipamentos" idsPagina={itens.map((i) => i.id)} total={total}>
     <EquipamentosListaClient
       itens={itens}
       total={total}
@@ -153,5 +156,7 @@ export default async function EquipamentosPage({
       }}
       resumo={{ ativos, vencendo, vencidas, semQr }}
     />
+    <BarraAcoesMassa />
+    </SelecaoMassaProvider>
   );
 }

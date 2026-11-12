@@ -1,17 +1,20 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/ui/page-header";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { ColaboradorForm } from "@/components/forms/colaborador-form";
 
-export const metadata: Metadata = { title: "Editar Colaborador" };
+export const metadata: Metadata = { title: "Editar colaborador" };
 
 export default async function EditarColaboradorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await auth();
   const empresaId = session!.user!.empresaId;
+  // Ficha completa (CPF, RG, endereço, documentos): mesma permissão que a API exige (CA9)
+  if (!pode(session!.user!.permissoes, "equipes", "gerenciar", session!.user!.role)) redirect("/sem-permissao");
 
   const colaborador = await prisma.tecnico.findFirst({
     where: { id, empresaId },
@@ -19,10 +22,21 @@ export default async function EditarColaboradorPage({ params }: { params: Promis
   });
   if (!colaborador) notFound();
 
-  // Serializa para o client (Decimal/Date → tipos simples)
+  const user = session!.user!;
+  const podeFolha = pode(user.permissoes, "financeiro", "folha", user.role);
+  // Acesso ao app (criar/ligar login de técnico) é gestão de usuários → exige Configurações › gerenciar.
+  const podeAcesso = pode(user.permissoes, "configuracoes", "gerenciar", user.role);
+  const loginEmail = (colaborador.email ?? "").trim();
+  const loginUsuario = podeAcesso && loginEmail
+    ? await prisma.usuario.findFirst({ where: { empresaId, email: { equals: loginEmail, mode: "insensitive" } }, select: { ativo: true, role: true } })
+    : null;
+  const acessoInicial = { email: colaborador.email ?? null, temLogin: !!loginUsuario, acessoAtivo: !!loginUsuario?.ativo, role: loginUsuario?.role ?? null };
+
+  // Serializa para o client (Decimal/Date → tipos simples). O salário NÃO vai para o navegador:
+  // quem tem a permissão de folha vê/edita na aba "Dados financeiros / Folha" (API própria).
+  const { salario: _salario, ...semSalario } = colaborador;
   const initialData = {
-    ...colaborador,
-    salario: colaborador.salario != null ? Number(colaborador.salario) : null,
+    ...semSalario,
     dataNascimento: colaborador.dataNascimento ? colaborador.dataNascimento.toISOString() : null,
     dataAdmissao: colaborador.dataAdmissao ? colaborador.dataAdmissao.toISOString() : null,
     documentos: colaborador.documentos.map((d) => ({
@@ -34,15 +48,21 @@ export default async function EditarColaboradorPage({ params }: { params: Promis
   return (
     <div className="max-w-4xl mx-auto">
       <PageHeader
-        title="Editar Colaborador" description={colaborador.nome} backHref="/colaboradores"
+        title="Editar colaborador" description={colaborador.nome} backHref="/colaboradores"
         actions={<InativarRegistro url={`/api/tecnicos/${colaborador.id}`} modulo="equipes" acaoReativar="gerenciar" variante="botao" ativo={colaborador.ativo} nome={colaborador.nome} entidade="colaborador" />}
       />
       {!colaborador.ativo && (
-        <div data-aviso-inativo className="mb-4 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-3 text-sm">
+        <div data-aviso-inativo className="mb-4 bg-surface-page border border-surface-border text-ink rounded-card px-4 py-3 text-sm">
           Este colaborador está <strong>inativo</strong>: não aparece nas listas nem nos seletores de técnico. Use “Reativar” para voltar a usá-lo.
         </div>
       )}
-      <ColaboradorForm key={`${colaborador.ativo}-${colaborador.statusColaborador}`} initialData={initialData} />
+      <ColaboradorForm
+        key={`${colaborador.ativo}-${colaborador.statusColaborador}`} initialData={initialData}
+        somenteLeitura={!pode(user.permissoes, "equipes", "gerenciar", user.role)}
+        podeFolha={podeFolha}
+        podeAcesso={podeAcesso}
+        acessoInicial={acessoInicial}
+      />
     </div>
   );
 }

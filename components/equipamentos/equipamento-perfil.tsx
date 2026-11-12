@@ -5,6 +5,7 @@ import Link from "next/link";
 import { cn, formatarData, formatarDataHora, LABELS_STATUS_OS } from "@/lib/utils";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { EquipamentoAtivoBotao } from "@/components/equipamentos/equipamento-ativo-botao";
+import { GerarQrBotao } from "@/components/equipamentos/gerar-qr-botao";
 import { TipoBadge, TipoIcone } from "@/components/equipamentos/tipo-equipamento";
 import { GarantiaSelo, StatusSelo } from "@/components/equipamentos/selos";
 import type { EventoHistorico } from "@/lib/equipamento-historico";
@@ -14,6 +15,8 @@ import {
   ChevronLeft, ChevronRight, ClipboardPlus, Printer, CalendarCheck, CalendarClock, Hash, ShieldCheck,
   Cpu, MapPin, IdCard, StickyNote, ListChecks,
 } from "lucide-react";
+import { diasAteDiaCivil } from "@/lib/fuso";
+import { status } from "@/lib/ui/tokens";
 
 interface Indicadores {
   ultimoAtendimento: string | null;
@@ -40,16 +43,16 @@ function resolverAba(aba?: string): Aba {
 }
 
 const COR_STATUS: Record<string, string> = {
-  CONCLUIDA: "text-emerald-700 bg-emerald-50",
-  CANCELADA: "text-red-600 bg-red-50",
-  EM_ANDAMENTO: "text-sky-700 bg-sky-50",
-  AGENDADA: "text-indigo-700 bg-indigo-50",
+  CONCLUIDA: "text-ok-texto bg-ok-claro",
+  CANCELADA: "text-atrasado-texto bg-atrasado-claro",
+  EM_ANDAMENTO: "text-atencao-texto bg-atencao-claro",
+  AGENDADA: "text-acento-hover bg-acento-claro",
 };
 const COR_PONTO: Record<string, string> = {
-  CONCLUIDA: "bg-emerald-500",
-  CANCELADA: "bg-red-400",
-  EM_ANDAMENTO: "bg-sky-500",
-  AGENDADA: "bg-indigo-400",
+  CONCLUIDA: "bg-ok",
+  CANCELADA: "bg-atrasado",
+  EM_ANDAMENTO: "bg-atencao",
+  AGENDADA: "bg-acento",
 };
 
 function haQuanto(iso: string) {
@@ -62,7 +65,7 @@ function haQuanto(iso: string) {
   return a === 1 ? "há 1 ano" : `há ${a} anos`;
 }
 function emQuanto(iso: string) {
-  const dias = Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000);
+  const dias = diasAteDiaCivil(iso) ?? 0; // pelo dia de Brasília
   if (dias <= 0) return "hoje";
   if (dias === 1) return "amanhã";
   return `em ${dias} dias`;
@@ -71,6 +74,8 @@ function emQuanto(iso: string) {
 export function EquipamentoPerfil({ equipamento: e, tipoNome, historico, linhaDoTempo, indicadores, abaInicial }: Props) {
   const { pode } = usePermissoes();
   const podeEditar = pode("equipamentos", "editar");
+  // Quem só cria equipamentos também precisa gerar o QR depois (não tem acesso à edição)
+  const podeGerarQr = podeEditar || pode("equipamentos", "criar");
   const podeAbrirOs = pode("ordens", "criar");
   const podeEtiqueta = pode("qrcodes", "visualizar");
   // ?aba=atendimentos abre direto na linha do tempo (ex.: atalho do QR Code para a equipe)
@@ -117,7 +122,7 @@ export function EquipamentoPerfil({ equipamento: e, tipoNome, historico, linhaDo
   return (
     <div className="max-w-5xl mx-auto space-y-4">
       {/* ── HERO ── */}
-      <section className="bg-white rounded-2xl border border-surface-border overflow-hidden">
+      <section className="bg-white rounded-card border border-surface-border overflow-hidden">
         <div className="flex flex-col md:flex-row">
           {/* Imagem principal */}
           <div className="relative md:w-72 shrink-0 bg-surface-alt h-36 sm:h-48 md:h-auto md:min-h-[240px]">
@@ -165,7 +170,7 @@ export function EquipamentoPerfil({ equipamento: e, tipoNome, historico, linhaDo
               <StatusSelo ativo={e.ativo} />
               <GarantiaSelo fim={e.garantiaAte} />
               {e.qrcode && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full text-slate-600 bg-slate-100 font-mono">
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full text-ink-muted bg-surface-linha font-mono">
                   <QrCode className="w-3 h-3" /> {e.qrcode.codigo}
                 </span>
               )}
@@ -188,6 +193,7 @@ export function EquipamentoPerfil({ equipamento: e, tipoNome, historico, linhaDo
                   <QrCode className="w-4 h-4" /> {e.qrcode ? "QR Code" : "Gerar QR"}
                 </Link>
               )}
+              {!podeEditar && podeGerarQr && !e.qrcode && <GerarQrBotao equipamentoId={e.id} variante="botao" />}
               {podeEditar && (
                 <Link href={`/equipamentos/${e.id}/editar`} className="inline-flex items-center gap-1.5 text-sm text-ink border border-surface-border rounded-lg px-3 py-2 hover:border-primary-300 hover:text-primary-600">
                   <Pencil className="w-4 h-4" /> Editar
@@ -223,7 +229,7 @@ export function EquipamentoPerfil({ equipamento: e, tipoNome, historico, linhaDo
                 : diasGarantia >= 0 ? `restantes · até ${formatarData(e.garantiaAte)}`
                   : `há ${Math.abs(diasGarantia)} dias · ${formatarData(e.garantiaAte)}`
             }
-            tom={situacao === "vencida" ? "text-red-600" : situacao === "vencendo" ? "text-amber-600" : undefined}
+            tom={situacao === "vencida" ? "text-atrasado" : situacao === "vencendo" ? "text-atencao-texto" : undefined}
           />
         </div>
       </section>
@@ -279,7 +285,9 @@ export function EquipamentoPerfil({ equipamento: e, tipoNome, historico, linhaDo
           ]} vazio="Garantia não informada." />
           <CardFicha
             titulo="QR Code" icone={QrCode}
-            acao={podeEditar ? <Link href={`/equipamentos/${e.id}/editar?aba=qrcode`} className="text-xs text-primary-600 hover:text-primary-700">{e.qrcode ? "Gerenciar" : "Gerar QR"}</Link> : undefined}
+            acao={podeEditar
+              ? <Link href={`/equipamentos/${e.id}/editar?aba=qrcode`} className="text-xs text-primary-600 hover:text-primary-700">{e.qrcode ? "Gerenciar" : "Gerar QR"}</Link>
+              : podeGerarQr && !e.qrcode ? <GerarQrBotao equipamentoId={e.id} /> : undefined}
             itens={[
               { label: "Código", valor: e.qrcode?.codigo, mono: true },
               { label: "Situação", valor: e.qrcode ? (e.qrcode.ativo === false ? "Inativo" : "Vinculado") : null },
@@ -287,7 +295,7 @@ export function EquipamentoPerfil({ equipamento: e, tipoNome, historico, linhaDo
             vazio="Nenhum QR Code vinculado."
           />
           {(e.observacoesTecnicas || e.observacoes) && (
-            <section className="bg-white rounded-xl border border-surface-border p-4 space-y-3">
+            <section className="bg-white rounded-card border border-surface-border p-4 space-y-3">
               <h3 className="text-sm font-semibold text-ink flex items-center gap-2"><StickyNote className="w-4 h-4 text-primary-500" /> Observações</h3>
               {e.observacoesTecnicas && (
                 <div>
@@ -316,14 +324,14 @@ export function EquipamentoPerfil({ equipamento: e, tipoNome, historico, linhaDo
             <Vazio icone={ClipboardList} texto="Nenhum formulário respondido para este equipamento." />
           ) : (
             historico.map((h) => (
-              <div key={h.chave} className="bg-white rounded-xl border border-surface-border overflow-hidden">
+              <div key={h.chave} className="bg-white rounded-card border border-surface-border overflow-hidden">
                 <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-surface-alt border-b border-surface-border">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-ink flex items-center gap-2">
                       <ClipboardList className="w-3.5 h-3.5 text-primary-500" /> {h.formularioNome}
                     </p>
                     <p className="text-[11px] text-ink-muted mt-0.5 flex items-center gap-1.5 flex-wrap">
-                      {h.tipoOs && <span className="text-white px-1.5 py-px rounded-full" style={{ backgroundColor: h.tipoOs.cor }}>{h.tipoOs.nome}</span>}
+                      {h.tipoOs && <span className="inline-flex items-center gap-1 text-ink-muted bg-surface-page border border-surface-border px-1.5 py-px rounded-full"><span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: h.tipoOs.cor }} aria-hidden />{h.tipoOs.nome}</span>}
                       <span>{formatarDataHora(h.respondidoEm)}</span>
                       {h.respondidoPor && <span className="flex items-center gap-1"><User className="w-3 h-3" />{h.respondidoPor}</span>}
                     </p>
@@ -376,7 +384,7 @@ function CardFicha({ titulo, icone: Icone, itens, acao, vazio }: {
 }) {
   const preenchidos = itens.filter((i) => i.valor);
   return (
-    <section className="bg-white rounded-xl border border-surface-border p-4">
+    <section className="bg-white rounded-card border border-surface-border p-4">
       <div className="flex items-center justify-between gap-2 mb-3">
         <h3 className="text-sm font-semibold text-ink flex items-center gap-2"><Icone className="w-4 h-4 text-primary-500" /> {titulo}</h3>
         {acao}
@@ -404,11 +412,11 @@ function LinhaDoTempo({ eventos, onVerRespostas }: { eventos: EventoHistorico[];
   // Agrupa por mês/ano para leitura rápida
   const grupos: { chave: string; rotulo: string; itens: EventoHistorico[] }[] = [];
   for (const ev of eventos) {
-    const d = new Date(ev.data);
-    const chave = `${d.getFullYear()}-${d.getMonth()}`;
+    // Mês/ano do atendimento em Brasília
+    const chave = formatarData(ev.data, "yyyy-MM");
     let g = grupos[grupos.length - 1];
     if (!g || g.chave !== chave) {
-      const rotulo = d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+      const rotulo = formatarData(ev.data, "MMMM 'de' yyyy");
       g = { chave, rotulo: rotulo.charAt(0).toUpperCase() + rotulo.slice(1), itens: [] };
       grupos.push(g);
     }
@@ -422,22 +430,22 @@ function LinhaDoTempo({ eventos, onVerRespostas }: { eventos: EventoHistorico[];
           <p className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-2">{g.rotulo}</p>
           <ol className="relative ml-2 border-l-2 border-surface-border space-y-3">
             {g.itens.map((ev) => {
-              const d = new Date(ev.data);
               return (
                 <li key={ev.chave} className="relative pl-5">
                   <span className={cn("absolute -left-[7px] top-4 w-3 h-3 rounded-full ring-4 ring-surface-page", COR_PONTO[ev.status] ?? "bg-primary-400")} />
-                  <div className="bg-white rounded-xl border border-surface-border p-3.5 sm:p-4">
+                  <div className="bg-white rounded-card border border-surface-border p-3.5 sm:p-4">
                     <div className="flex items-start gap-3">
                       {/* Data em destaque */}
                       <div className="text-center shrink-0 w-11">
-                        <p className="text-lg font-bold text-ink leading-none tabular-nums">{String(d.getDate()).padStart(2, "0")}</p>
-                        <p className="text-[10px] text-ink-muted uppercase mt-0.5">{d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "")}</p>
+                        <p className="text-lg font-bold text-ink leading-none tabular-nums">{formatarData(ev.data, "dd")}</p>
+                        <p className="text-[10px] text-ink-muted uppercase mt-0.5">{formatarData(ev.data, "MMM")}</p>
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-2">
                           <p className="text-sm font-semibold text-ink leading-snug">
                             {ev.tipoServico && (
-                              <span className="inline-block align-middle text-[10px] font-medium text-white px-1.5 py-px rounded-full mr-1.5" style={{ backgroundColor: ev.tipoServico.cor ?? "#64748B" }}>
+                              <span className="inline-flex items-center gap-1 align-middle text-[10px] font-medium text-ink-muted bg-surface-page border border-surface-border px-1.5 py-px rounded-full mr-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: ev.tipoServico.cor ?? status.previsto.DEFAULT }} aria-hidden />
                                 {ev.tipoServico.nome}
                               </span>
                             )}
@@ -449,11 +457,69 @@ function LinhaDoTempo({ eventos, onVerRespostas }: { eventos: EventoHistorico[];
                         </div>
                         <p className="text-[11px] text-ink-muted mt-1 flex items-center gap-3 flex-wrap">
                           {ev.tecnico && <span className="flex items-center gap-1"><Wrench className="w-3 h-3" />{ev.tecnico}</span>}
-                          {ev.equipamentoFeito && <span className="flex items-center gap-1 text-emerald-600"><CircleCheck className="w-3 h-3" />Equipamento atendido</span>}
+                          {ev.equipamentoFeito && <span className="flex items-center gap-1 text-ok-texto"><CircleCheck className="w-3 h-3" />Equipamento atendido</span>}
                           <span className="flex items-center gap-1"><Hash className="w-3 h-3" />{ev.os.numero}</span>
                         </p>
 
                         {ev.resumo && <p className="text-xs text-ink mt-2 whitespace-pre-wrap line-clamp-3">{ev.resumo}</p>}
+
+                        {/* Execução deste equipamento: checklist do tipo, observação e as fotos DELE */}
+                        {ev.checklist && (
+                          <div className="mt-2.5" data-checklist-historico>
+                            <p className="text-xs text-ink-muted flex items-center gap-1.5 flex-wrap">
+                              <ListChecks className="w-3.5 h-3.5 text-primary-500" />Checklist
+                              <span className="px-1.5 py-px rounded bg-ok-claro text-ok-texto font-semibold">{ev.checklist.ok} OK</span>
+                              {ev.checklist.atencao > 0 && <span className="px-1.5 py-px rounded bg-atencao-claro text-atencao-texto font-semibold">{ev.checklist.atencao} Atenção</span>}
+                              {ev.checklist.naoSeAplica > 0 && <span className="px-1.5 py-px rounded bg-surface-linha text-ink-muted font-semibold">{ev.checklist.naoSeAplica} N/A</span>}
+                            </p>
+                            {ev.checklist.itensAtencao.length > 0 && (
+                              <p className="text-[11px] text-atencao-texto mt-1" data-itens-atencao>Atenção: {ev.checklist.itensAtencao.join(" · ")}</p>
+                            )}
+                          </div>
+                        )}
+                        {(ev.medicoes ?? []).length > 0 && (
+                          <div className="mt-2" data-medicoes-historico>
+                            <p className="text-[11px] text-ink-muted">Medições</p>
+                            <ul className="flex flex-wrap gap-1.5 mt-0.5">
+                              {ev.medicoes.map((m, i) => (
+                                <li key={i} className="text-[11px] rounded bg-primary-50 text-primary-800 px-1.5 py-0.5">
+                                  {m.texto}: <b className="tabular-nums">{m.valor.toLocaleString("pt-BR", { maximumFractionDigits: 3 })}{m.unidade ? ` ${m.unidade}` : ""}</b>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {ev.observacao && <p className="text-xs text-ink mt-1.5 whitespace-pre-wrap" data-observacao-historico><span className="text-ink-muted">Observação: </span>{ev.observacao}</p>}
+                        {(ev.audios ?? []).map((a) => (
+                          <div key={a.url} className="mt-1.5" data-audio-historico>
+                            <p className="text-[11px] text-ink-muted">Áudio — {a.texto}</p>
+                            <audio controls preload="none" src={a.url} className="h-8 w-full max-w-xs" />
+                          </div>
+                        ))}
+                        {(ev.adicionais ?? []).map((ad, i) => (
+                          <div key={i} className="mt-2 rounded-lg border border-acento/20 bg-acento-claro/60 px-2 py-1.5" data-adicional-historico>
+                            <p className="text-[11px]"><span className="font-bold uppercase tracking-wide text-acento-hover">Adicional</span> <span className="text-ink">{ad.descricao}</span></p>
+                            {ad.fotos.length > 0 && (
+                              <div className="flex gap-1.5 mt-1 overflow-x-auto">
+                                {ad.fotos.slice(0, 6).map((url) => (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <a key={url} href={url} target="_blank" rel="noreferrer" className="shrink-0"><img src={url} alt="Foto do serviço adicional" loading="lazy" className="w-12 h-12 rounded object-cover border border-acento/20" /></a>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                        {ev.fotos.length > 0 && (
+                          <div className="flex gap-1.5 mt-2 overflow-x-auto" data-fotos-historico>
+                            {ev.fotos.slice(0, 8).map((url) => (
+                              <a key={url} href={url} target="_blank" rel="noreferrer" className="shrink-0">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={url} alt="Foto do atendimento" loading="lazy" className="w-14 h-14 rounded-lg object-cover border border-surface-border" />
+                              </a>
+                            ))}
+                            {ev.fotos.length > 8 && <span className="shrink-0 w-14 h-14 rounded-lg bg-surface-alt text-xs text-ink-muted flex items-center justify-center">+{ev.fotos.length - 8}</span>}
+                          </div>
+                        )}
 
                         {ev.formularios.length > 0 && (
                           <div className="mt-2.5 space-y-2">
@@ -487,8 +553,8 @@ function LinhaDoTempo({ eventos, onVerRespostas }: { eventos: EventoHistorico[];
                               <ClipboardList className="w-3 h-3" /> Ver respostas
                             </button>
                           )}
-                          {ev.atividadeId && ev.status === "CONCLUIDA" && (
-                            <a href={`/relatorio/atividade/${ev.atividadeId}`} target="_blank" rel="noreferrer" className="text-primary-600 hover:text-primary-700 inline-flex items-center gap-1">
+                          {ev.linkRelatorio && ev.status === "CONCLUIDA" && (
+                            <a href={ev.linkRelatorio} target="_blank" rel="noreferrer" data-link-relatorio className="text-primary-600 hover:text-primary-700 inline-flex items-center gap-1">
                               <FileText className="w-3 h-3" /> Relatório
                             </a>
                           )}
@@ -508,7 +574,7 @@ function LinhaDoTempo({ eventos, onVerRespostas }: { eventos: EventoHistorico[];
 
 function Vazio({ icone: Icone, texto }: { icone: typeof History; texto: string }) {
   return (
-    <div className="bg-white rounded-xl border border-surface-border text-center py-12">
+    <div className="bg-white rounded-card border border-surface-border text-center py-12">
       <Icone className="w-7 h-7 text-ink-subtle mx-auto mb-2" />
       <p className="text-sm text-ink-muted">{texto}</p>
     </div>
@@ -524,7 +590,7 @@ function renderValor(c: any) {
   }
   if (c.tipo === "SIM_NAO") {
     const sim = c.resposta === "Sim" || c.resposta === "true";
-    return <span className={cn("inline-flex items-center gap-1", sim ? "text-green-600" : "text-ink")}>{sim && <CircleCheck className="w-3.5 h-3.5" />}{c.resposta || "—"}</span>;
+    return <span className={cn("inline-flex items-center gap-1", sim ? "text-ok-texto" : "text-ink")}>{sim && <CircleCheck className="w-3.5 h-3.5" />}{c.resposta || "—"}</span>;
   }
   return <span>{c.resposta || "—"}</span>;
 }

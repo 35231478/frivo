@@ -1,276 +1,401 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState, type ComponentType } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Modal } from "@/components/ui/modal";
+import { AcoesLote } from "@/components/financeiro/acoes-lote";
+import { RenegociarCobrancas } from "@/components/financeiro/renegociar-modal";
+import { motivoSelecaoInvalida } from "@/lib/financeiro/renegociacao";
 import { cn, formatarMoeda, formatarData, formatarCpfCnpj, LABELS_FORMA_PAGAMENTO } from "@/lib/utils";
 import { statusVisualReceber } from "@/lib/financeiro-status";
-import { AvatarCliente } from "@/components/ui/avatar-cliente";
 import { ContaReceberAcoes } from "@/components/financeiro/conta-receber-acoes";
+import { ContaReceberDetalhes } from "@/components/financeiro/conta-receber-detalhes";
+import { origemComLink } from "@/lib/financeiro/conta-receber-gestao";
 import { SincronizarBoletos } from "@/components/financeiro/sincronizar-boletos";
+import { CategoriaBadge } from "@/components/financeiro/categoria-badge";
+import { useListagemUrl } from "@/components/listagem/use-listagem-url";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
 import {
   Receipt, AlertTriangle, CalendarClock, CheckCircle2, Search, SlidersHorizontal,
-  Plus, Download, X, Barcode,
+  Plus, Download, Barcode, Loader2, Sigma, Handshake, X,
 } from "lucide-react";
+import { BarraPeriodo, CardResumo, GradeCards, type PeriodoTela } from "@/components/listagem/periodo-cards";
+import { BarraFiltros, filtroCancelados, FiltroTextoUrl, inputFiltro } from "@/components/listagem/barra-filtros";
+import { CampoBusca, Paginacao } from "@/components/listagem/listagem-ui";
+import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
+import { TabelaPro, type ColunaPro } from "@/components/listagem/tabela-pro";
+import { CheckboxSelecao, CheckboxSelecaoPagina, SelecaoLinhasProvider, useSelecaoLinhas } from "@/components/listagem/selecao-linhas";
+import { PainelTotais, type LinhaTotal } from "@/components/listagem/painel-totais";
+import { CHAVES_RECEBER, totaisReceber } from "@/lib/listagem/totais-selecao";
+import { recebidaEmParte, saldoDaConta } from "@/lib/financeiro/parcelas";
 
 export interface ContaView {
-  id: string; numero: string; descricao: string; categoria: string | null; valor: number;
+  id: string; numero: string; descricao: string; valor: number;
+  /** Categoria ligada (por id) e o texto antigo (só exibido quando não há vínculo) */
+  categoriaId: string | null; categoria: string | null;
   dataVencimento: string | null; dataRecebimento: string | null; status: string; banco: string | null;
   clienteId: string; clienteNome: string; clienteCnpj: string | null; clienteLogo: string | null;
   formaPagamento: string | null;
   whatsapp: string | null; email: string | null; notificacaoEnviadaEm: string | null;
   boletoStatus: string | null; boletoEmitidoEm: string | null; boletoVencimento: string | null;
   boletoLinhaDigitavel: string | null; boletoCodigoBarras: string | null;
+  /** Gestão (CR robusto) */
+  observacao?: string | null; centroCustoId?: string | null; contaBancariaId?: string | null;
+  medicaoId?: string | null; orcamentoId?: string | null; contratoId?: string | null;
+  medicaoNumero?: string | null; orcamentoCodigo?: string | null; contratoNumero?: string | null; medicaoAvulsa?: boolean | null;
+  notas?: { status: string }[];
+  /** Baixa parcial: quanto já entrou (o saldo é valor − valorRecebido) */
+  valorRecebido?: number;
+  /** Parcela: o lançamento de onde saiu e "n/N" */
+  lancamentoId?: string | null; lancamentoNumero?: string | null; parcelaNumero?: number | null; parcelaTotal?: number | null;
+  /** Perda: o saldo dado como perdido na marcação */
+  valorPerda?: number | null;
+  /** Faz parte de uma renegociação (a conta nova ou parcela dela) / a renegociação para onde foi o saldo */
+  renegociacao?: boolean;
+  renegociadaEmNumero?: string | null;
 }
 interface Opcao { id: string; nome: string }
 
-type CardKey = "A_RECEBER" | "VENCIDO" | "VENCE_HOJE" | "RECEBIDO";
+/** Cards do período (lib/listas/filtros: CARDS_PERIODO_RECEBER): quantidade + R$ */
+export type ResumoReceber = Record<CardKey, { v: number; q: number }>;
 
-const inicioMes = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); };
+export interface FiltrosReceber {
+  q: string; card: string; clienteId: string; categoria: string; forma: string; banco: string;
+  valorMin: string; valorMax: string; vencDe: string; vencAte: string;
+  /** chips de status visual, separados por vírgula */
+  status: string;
+  /** ?conta=<id>: abre a conta direto na gaveta de detalhes (links do orçamento/medição/OS) */
+  conta?: string;
+}
 
-export function ContasReceberView({ contas, clientes, categorias, interAtivo, clienteIdInicial = "" }: { contas: ContaView[]; clientes: Opcao[]; categorias: { nome: string; cor: string }[]; interAtivo: boolean; clienteIdInicial?: string }) {
-  const [card, setCard] = useState<CardKey | null>(null);
-  const [busca, setBusca] = useState("");
-  const [painel, setPainel] = useState(!!clienteIdInicial);
-  const [f, setF] = useState({ vencDe: "", vencAte: "", clienteId: clienteIdInicial, forma: "", banco: "", categoria: "", valorMin: "", valorMax: "", status: new Set<string>() });
+type CardKey = "VENCIDO" | "VENCE_HOJE" | "A_VENCER" | "RECEBIDO" | "PERDA" | "TOTAL";
 
-  // status visual por conta (memo)
+/**
+ * Contas a Receber no padrão da casa: período (‹ mês ›, personalizado ou todo o período — pelo
+ * VENCIMENTO) + cards do período clicáveis como filtro, e a lista em "cara de planilha" no desktop
+ * (cartões no celular). Busca, filtros, período e paginação rodam no SERVIDOR (a URL é a fonte da
+ * verdade); a exportação CSV exporta o FILTRO (com o período), não a página.
+ */
+export function ContasReceberView(props: PropsReceber) {
+  // Seleção da página (realce da linha + painel "Total dos N selecionados" + a escolha para renegociar)
+  return <SelecaoLinhasProvider idsPagina={props.contas.map((c) => c.id)}><ContasReceberCorpo {...props} /></SelecaoLinhasProvider>;
+}
+
+interface PropsReceber {
+  contas: ContaView[]; clientes: Opcao[]; categorias: { id: string; nome: string; cor: string; ativo: boolean }[];
+  interAtivo: boolean; resumo: ResumoReceber; total: number; totalFiltrado: number;
+  /** O que falta receber no filtro (abertas, pelo saldo) */
+  abertoFiltrado?: number;
+  pagina: number; porPagina: number; filtros: FiltrosReceber; periodo: PeriodoTela;
+}
+
+function ContasReceberCorpo({
+  contas, clientes, categorias, interAtivo, resumo, total, totalFiltrado, abertoFiltrado, pagina, porPagina, filtros, periodo,
+}: PropsReceber) {
+  const { pode } = usePermissoes();
+  const podeCobrar = pode("financeiro", "contasReceber");
+  const { busca, setBusca, navegar, pendente } = useListagemUrl({
+    chave: "contas-receber", qAtual: filtros.q, paramBusca: "q", lembrarFiltros: false,
+  });
+  const [detalheId, setDetalheId] = useState<string | null>(filtros.conta || null);
+  const fecharDetalhe = () => { setDetalheId(null); if (filtros.conta) navegar({ conta: null }); };
+  const acoes = (c: ContaView) => (
+    <ContaReceberAcoes conta={{ ...c, interAtivo }} categorias={categorias} clientes={clientes} onDetalhes={() => setDetalheId(c.id)} />
+  );
+  // Seleção de linhas (caixa em toda cobrança): pinta a linha, soma no painel do rodapé e abre a barra
+  // flutuante — "Ações em lote" (quem pode cobrar) e, para quem tem Financeiro › Perdas, "Renegociar"
+  // (a barra diz por que não dá, se não der)
+  const router = useRouter();
+  const podeRenegociar = pode("financeiro", "perdas");
+  const podeLote = podeCobrar;
+  const { selecionados, limpar } = useSelecaoLinhas();
+  const [renegociando, setRenegociando] = useState(false);
+  const selecionadas = useMemo(() => contas.filter((c) => selecionados.has(c.id)), [contas, selecionados]);
+  const listaEscolhidas = podeRenegociar ? selecionadas : [];
+  const motivoEscolha = listaEscolhidas.length ? motivoSelecaoInvalida(listaEscolhidas) : null;
+  const saldoEscolhidas = selecionadas.reduce((s, c) => s + saldoDaConta(c), 0);
+  const comBarra = selecionadas.length > 0 && (podeLote || podeRenegociar);
+  const caixa = (c: ContaView) => <CheckboxSelecao id={c.id} rotulo={c.numero} data-escolher-conta={c.id} />;
+  // Painel do rodapé: totais do período (os cards) ou só das marcadas (lib/listagem/totais-selecao)
+  const totaisSelecao = useMemo(() => totaisReceber(selecionadas), [selecionadas]);
+  const statusChips = useMemo(() => new Set(filtros.status.split(",").filter(Boolean)), [filtros.status]);
+  const card = filtros.card as CardKey | "";
+
   const comStatus = useMemo(() => contas.map((c) => ({ c, sv: statusVisualReceber(c.status, c.dataVencimento) })), [contas]);
-
-  // Cards (sobre o conjunto completo)
-  const resumo = useMemo(() => {
-    const ini = inicioMes().getTime();
-    let aReceber = { v: 0, q: 0 }, vencido = { v: 0, q: 0 }, hoje = { v: 0, q: 0 }, recebido = { v: 0, q: 0 };
-    for (const { c, sv } of comStatus) {
-      if (sv.chave === "PREVISTO" || sv.chave === "A_VENCER") { aReceber.v += c.valor; aReceber.q++; }
-      else if (sv.chave === "VENCIDO") { vencido.v += c.valor; vencido.q++; }
-      else if (sv.chave === "VENCE_HOJE") { hoje.v += c.valor; hoje.q++; }
-      if (sv.chave === "PAGO" && c.dataRecebimento && new Date(c.dataRecebimento).getTime() >= ini) { recebido.v += c.valor; recebido.q++; }
-    }
-    return { aReceber, vencido, hoje, recebido };
-  }, [comStatus]);
-
-  const filtrosAtivos =
-    (f.vencDe ? 1 : 0) + (f.vencAte ? 1 : 0) + (f.clienteId ? 1 : 0) + (f.forma ? 1 : 0) +
-    (f.banco ? 1 : 0) + (f.categoria ? 1 : 0) + (f.valorMin ? 1 : 0) + (f.valorMax ? 1 : 0) + (f.status.size ? 1 : 0);
-
-  const filtradas = useMemo(() => {
-    const q = busca.trim().toLowerCase();
-    return comStatus.filter(({ c, sv }) => {
-      // cards
-      if (card === "A_RECEBER" && !(sv.chave === "PREVISTO" || sv.chave === "A_VENCER")) return false;
-      if (card === "VENCIDO" && sv.chave !== "VENCIDO") return false;
-      if (card === "VENCE_HOJE" && sv.chave !== "VENCE_HOJE") return false;
-      if (card === "RECEBIDO" && sv.chave !== "PAGO") return false;
-      // busca
-      if (q && !(`${c.clienteNome} ${c.descricao} ${c.numero}`.toLowerCase().includes(q))) return false;
-      // painel
-      if (f.clienteId && c.clienteId !== f.clienteId) return false;
-      if (f.categoria && c.categoria !== f.categoria) return false;
-      if (f.forma && c.formaPagamento !== f.forma) return false;
-      if (f.banco && !(c.banco ?? "").toLowerCase().includes(f.banco.toLowerCase())) return false;
-      if (f.valorMin && c.valor < Number(f.valorMin)) return false;
-      if (f.valorMax && c.valor > Number(f.valorMax)) return false;
-      if (f.status.size && !f.status.has(sv.chave)) return false;
-      if (f.vencDe && (!c.dataVencimento || c.dataVencimento < f.vencDe)) return false;
-      if (f.vencAte && (!c.dataVencimento || c.dataVencimento.slice(0, 10) > f.vencAte)) return false;
-      return true;
-    });
-  }, [comStatus, card, busca, f]);
-
-  const totalFiltrado = filtradas.reduce((s, x) => s + x.c.valor, 0);
-
-  function limpar() {
-    setF({ vencDe: "", vencAte: "", clienteId: "", forma: "", banco: "", categoria: "", valorMin: "", valorMax: "", status: new Set() });
-  }
   function toggleStatus(chave: string) {
-    setF((p) => { const s = new Set(p.status); s.has(chave) ? s.delete(chave) : s.add(chave); return { ...p, status: s }; });
+    const s = new Set(statusChips);
+    s.has(chave) ? s.delete(chave) : s.add(chave);
+    navegar({ status: [...s].join(",") || null });
   }
+  /** Exporta o FILTRO inteiro (o servidor monta o CSV com o mesmo where da tela). */
   function exportar() {
-    const linhas = [["Número", "Cliente", "CNPJ", "Descrição", "Categoria", "Vencimento", "Valor", "Status"]];
-    for (const { c, sv } of filtradas) {
-      linhas.push([c.numero, c.clienteNome, c.clienteCnpj ?? "", c.descricao, c.categoria ?? "", c.dataVencimento ? formatarData(c.dataVencimento) : "", String(c.valor).replace(".", ","), sv.label]);
-    }
-    const csv = linhas.map((l) => l.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(";")).join("\n");
-    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "contas-a-receber.csv"; a.click();
-    URL.revokeObjectURL(url);
+    window.location.href = `/api/contas-receber/exportar${window.location.search}`;
   }
+
+  // Nada no período: oferece todo o período (busca de uma conta antiga, link de outra tela)
+  const Vazio = () => (
+    <div className="flex flex-col items-center gap-2 py-10 text-center" data-lista-vazia>
+      <p className="text-sm font-medium text-ink">{periodo.tipo === "todos" ? "Nenhuma receita encontrada" : `Nenhuma receita em ${periodo.tipo === "mes" ? periodo.rotulo.toLowerCase() : "o período"}`}</p>
+      {periodo.tipo !== "todos" && (
+        <button type="button" onClick={() => navegar({ mes: null, de: null, ate: null, periodo: "todos" })} className="text-sm text-primary-600 hover:underline" data-ver-todo-periodo>Ver todo o período</button>
+      )}
+    </div>
+  );
 
   const inputCls = "bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all";
 
-  const CARDS: { key: CardKey; label: string; icone: any; cor: string; bgSel: string; borda: string; v: number; q: number }[] = [
-    { key: "A_RECEBER", label: "A Receber", icone: Receipt, cor: "text-primary-600", bgSel: "bg-primary-50", borda: "border-b-primary-500", v: resumo.aReceber.v, q: resumo.aReceber.q },
-    { key: "VENCIDO", label: "Vencido", icone: AlertTriangle, cor: "text-red-600", bgSel: "bg-red-50", borda: "border-b-red-500", v: resumo.vencido.v, q: resumo.vencido.q },
-    { key: "VENCE_HOJE", label: "Vence Hoje", icone: CalendarClock, cor: "text-amber-600", bgSel: "bg-amber-50", borda: "border-b-amber-500", v: resumo.hoje.v, q: resumo.hoje.q },
-    { key: "RECEBIDO", label: "Recebido (mês)", icone: CheckCircle2, cor: "text-success-600", bgSel: "bg-success-50", borda: "border-b-success-500", v: resumo.recebido.v, q: resumo.recebido.q },
+  const CARDS: { key: CardKey; rotulo: string; icone: ComponentType<{ className?: string }>; cor: string; dica?: string }[] = [
+    { key: "VENCIDO", rotulo: "Vencidos", icone: AlertTriangle, cor: "text-atrasado", dica: "Pelo que falta receber: a parte já recebida não entra." },
+    { key: "VENCE_HOJE", rotulo: "Vencem hoje", icone: CalendarClock, cor: "text-atencao-texto" },
+    { key: "A_VENCER", rotulo: "A vencer", icone: Receipt, cor: "text-primary-600", dica: "Inclui as previsões (contratos e orçamentos aprovados). Pelo que falta receber." },
+    { key: "RECEBIDO", rotulo: "Recebidos", icone: CheckCircle2, cor: "text-success-600" },
+    // "Perdas" sai do topo (fica no botão do cabeçalho e no painel de totais): 5 cards, como no Conta Azul
+    { key: "TOTAL", rotulo: "Total do período", icone: Sigma, cor: "text-ink", dica: "Todas as cobranças do período, menos as canceladas. A renegociação não soma de novo: conta a cobrança original." },
   ];
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary-50 rounded-lg"><Receipt className="w-5 h-5 text-primary-600" /></div>
-          <h1 className="page-title">Contas a Receber</h1>
+          <div className="p-2 bg-surface-alt rounded-lg"><Receipt className="w-5 h-5 text-ink-muted" /></div>
+          <h1 className="page-title">Contas a receber</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* "Perdas" saiu do topo e da barra lateral: ver perdas = filtro de status "Perda"; marcar/desmarcar
+              perda virou ação dentro de "Editar" a conta (conta-receber-acoes). */}
           {interAtivo && <SincronizarBoletos />}
           <button onClick={exportar} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-surface-border text-ink-muted hover:bg-surface-alt transition-colors"><Download className="w-4 h-4" /> Exportar</button>
-          <Link href="/financeiro/contas-receber/nova" className="inline-flex items-center gap-1.5 bg-success-500 hover:bg-success-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm"><Plus className="w-4 h-4" /> Nova Cobrança</Link>
+          {/* UX-8 (G14): o botão segue a MESMA permissão do POST de criação — nunca leva a um 403 */}
+          {podeCobrar && <Link href="/financeiro/contas-receber/nova" data-nova-receita className="inline-flex items-center gap-1.5 bg-success-500 hover:bg-success-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm"><Plus className="w-4 h-4" /> Nova receita</Link>}
         </div>
       </div>
 
-      {/* Cards de resumo (clicáveis) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {CARDS.map((c) => {
-          const sel = card === c.key;
-          return (
-            <button key={c.key} type="button" onClick={() => setCard(sel ? null : c.key)}
-              className={cn(
-                "text-left rounded-xl border border-surface-border border-b-2 bg-white p-4 transition-all hover:shadow-card",
-                c.borda, sel ? `${c.bgSel} ring-2 ring-offset-1 ring-primary-200` : "hover:border-primary-200",
-              )}>
-              <div className="flex items-start justify-between">
-                <c.icone className={cn("w-5 h-5", c.cor)} />
-                {sel && <X className="w-3.5 h-3.5 text-ink-subtle" />}
-              </div>
-              <p className="text-xs text-ink-muted mt-2">{c.label}</p>
-              <p className="text-xl font-bold text-ink mt-0.5">{formatarMoeda(c.v)}</p>
-              <p className="text-[11px] text-ink-subtle mt-0.5">{c.q} cobrança{c.q === 1 ? "" : "s"}</p>
-            </button>
-          );
-        })}
-      </div>
+      {/* Barra enxuta e compacta (sem card branco gordo): período (pelo vencimento) + busca + "Mais filtros" */}
+      <BarraFiltros
+        compacto
+        periodo={<BarraPeriodo rotulo="Vencimento" periodo={periodo} navegar={navegar} permitirTodos dica="Pela data de vencimento." />}
+        busca={<CampoBusca valor={busca} onChange={setBusca} placeholder="Pesquisar" rotulo="Pesquisar receitas" carregando={pendente} />}
+        paramBusca="q" navegar={navegar}
+        filtros={[
+          { id: "clienteId", label: "Cliente", params: ["clienteId"], render: () => (
+            <select value={filtros.clienteId} onChange={(e) => navegar({ clienteId: e.target.value || null })} className={inputFiltro(filtros.clienteId)} aria-label="Cliente" data-filtro="clienteId">
+              <option value="">Todos</option>
+              {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </select>
+          ) },
+          { id: "categoria", label: "Categoria", params: ["categoria"], render: () => (
+            <select value={filtros.categoria} onChange={(e) => navegar({ categoria: e.target.value || null })} className={inputFiltro(filtros.categoria)} aria-label="Categoria" data-filtro="categoria">
+              <option value="">Todas</option>
+              {/* Filtro: inclui as inativas (contas antigas continuam filtráveis) */}
+              {categorias.map((c) => <option key={c.id} value={c.id}>{c.ativo ? c.nome : `${c.nome} (inativa)`}</option>)}
+            </select>
+          ) },
+          { id: "forma", label: "Forma de pagamento", params: ["forma"], render: () => (
+            <select value={filtros.forma} onChange={(e) => navegar({ forma: e.target.value || null })} className={inputFiltro(filtros.forma)} aria-label="Forma de pagamento" data-filtro="forma">
+              <option value="">Todas</option>
+              {Object.entries(LABELS_FORMA_PAGAMENTO).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          ) },
+          { id: "banco", label: "Banco", params: ["banco"], render: () => <FiltroTextoUrl param="banco" navegar={navegar} placeholder="Banco" rotulo="Banco" /> },
+          { id: "valor", label: "Valor (de / até)", params: ["valorMin", "valorMax"], render: () => (
+            <div className="flex gap-2">
+              <FiltroTextoUrl param="valorMin" navegar={navegar} tipo="number" placeholder="0,00" rotulo="Valor de" />
+              <FiltroTextoUrl param="valorMax" navegar={navegar} tipo="number" placeholder="0,00" rotulo="Valor até" />
+            </div>
+          ) },
+          { id: "status", label: "Status", params: ["status"], largo: true, render: () => (
+            <div className="flex flex-wrap gap-1.5">
+              {(["PREVISTO", "A_VENCER", "VENCE_HOJE", "VENCIDO", "PARCIAL", "PAGO", "PERDA", "RENEGOCIADO", "CANCELADO"] as const).map((s) => (
+                <button key={s} type="button" data-chip-status={s} onClick={() => toggleStatus(s)} aria-pressed={statusChips.has(s)}
+                  className={cn("text-xs px-2.5 py-1 rounded-full border transition-colors", statusChips.has(s) ? "bg-primary-500 border-primary-500 text-white" : "bg-white border-surface-border text-ink-muted hover:border-primary-300")}>
+                  {LABEL_CHAVE[s]}
+                </button>
+              ))}
+            </div>
+          ) },
+          filtroCancelados(navegar),
+        ]}
+      />
+      <GradeCards colunas={5}>
+        {CARDS.map((c) => (
+          <CardResumo key={c.key} id={c.key} rotulo={c.rotulo} icone={c.icone} cor={c.cor} dica={c.dica}
+            v={resumo[c.key].v} q={resumo[c.key].q} unidade={["receita", "receitas"]}
+            ativo={card === c.key} onClick={() => navegar({ card: card === c.key ? null : c.key })} />
+        ))}
+      </GradeCards>
 
-      {/* Busca + filtros */}
       <div className="card overflow-hidden">
-        <div className="p-3 border-b border-surface-border flex items-center gap-2 flex-wrap">
-          <div className="relative flex-1 min-w-[220px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-subtle pointer-events-none" />
-            <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por cliente, descrição ou número…" className={cn(inputCls, "w-full pl-9")} />
-          </div>
-          <button onClick={() => setPainel((v) => !v)} className={cn("inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-colors", painel || filtrosAtivos ? "bg-primary-50 border-primary-200 text-primary-700" : "bg-white border-surface-border text-ink-muted hover:bg-surface-alt")}>
-            <SlidersHorizontal className="w-4 h-4" /> Filtros
-            {filtrosAtivos > 0 && <span className="text-[10px] font-bold bg-primary-500 text-white rounded-full w-4 h-4 flex items-center justify-center">{filtrosAtivos}</span>}
-          </button>
-        </div>
+        {/* Celular: um cartão por conta (toque abre os detalhes; ações no ⋮) */}
+        <ul className="md:hidden divide-y divide-surface-border" data-cartoes-receber>
+          {comStatus.length === 0 ? (
+            <li><Vazio /></li>
+          ) : comStatus.map(({ c, sv }) => {
+            const origem = origemComLink(c);
+            return (
+              <li key={c.id} className={cn("flex items-start gap-3 px-4 py-3", sv.linhaVermelha && "bg-atrasado-claro", selecionados.has(c.id) && "bg-primary-50")} data-cartao-conta={c.id} data-selecionada={selecionados.has(c.id) ? "" : undefined}>
+                <div className="pt-1 w-4 shrink-0">{caixa(c)}</div>
+                <button type="button" onClick={() => setDetalheId(c.id)} className="flex-1 min-w-0 text-left" aria-label={`Ver detalhes de ${c.numero}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-medium text-ink truncate">{c.clienteNome}</p>
+                    <p className="font-bold text-success-700 shrink-0">{formatarMoeda(c.valor)}</p>
+                  </div>
+                  <p className="text-xs text-ink-muted truncate">{c.numero} · {c.descricao}</p>
+                  {c.status === "RENEGOCIADO" && (
+                    <p className="text-xs text-ink-muted mt-0.5" data-renegociada-cartao>
+                      Renegociada{c.renegociadaEmNumero ? ` em ${c.renegociadaEmNumero}` : ""}{(c.valorRecebido ?? 0) > 0 && ` · recebido ${formatarMoeda(c.valorRecebido ?? 0)}`}
+                    </p>
+                  )}
+                  {c.status === "PERDA" && (
+                    <p className="text-xs text-ink-muted mt-0.5" data-perda-cartao>
+                      Perdido <strong className="text-ink">{formatarMoeda(c.valorPerda ?? 0)}</strong>{(c.valorRecebido ?? 0) > 0 && ` · recebido ${formatarMoeda(c.valorRecebido ?? 0)}`}
+                    </p>
+                  )}
+                  {recebidaEmParte(c) && (
+                    <p className="text-xs text-ink-muted mt-0.5" data-parcial-cartao>
+                      Recebido {formatarMoeda(c.valorRecebido ?? 0)} · <strong className="text-ink">falta {formatarMoeda(saldoDaConta(c))}</strong>
+                    </p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5">
+                    <span className={cn("inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full", sv.classe)}>{sv.label}</span>
+                    {recebidaEmParte(c) && <SeloParcial />}
+                    <span className="text-xs text-ink-subtle">{c.dataVencimento ? `Vence ${formatarData(c.dataVencimento)}` : "Sem vencimento"}</span>
+                    {origem && <span className="text-xs text-acento">{origem.rotulo}</span>}
+                    {c.boletoStatus === "EMITIDO" && <Barcode className="w-3.5 h-3.5 text-ok-texto" aria-label="Boleto emitido" />}
+                  </div>
+                </button>
+                <div className="shrink-0 -mr-1">{acoes(c)}</div>
+              </li>
+            );
+          })}
+        </ul>
 
-        {painel && (
-          <div className="p-4 border-b border-surface-border bg-surface-alt/40 space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <FiltroCampo label="Vencimento — de"><input type="date" value={f.vencDe} onChange={(e) => setF({ ...f, vencDe: e.target.value })} className={inputCls} /></FiltroCampo>
-              <FiltroCampo label="Vencimento — até"><input type="date" value={f.vencAte} onChange={(e) => setF({ ...f, vencAte: e.target.value })} className={inputCls} /></FiltroCampo>
-              <FiltroCampo label="Cliente">
-                <select value={f.clienteId} onChange={(e) => setF({ ...f, clienteId: e.target.value })} className={inputCls}>
-                  <option value="">Todos</option>
-                  {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                </select>
-              </FiltroCampo>
-              <FiltroCampo label="Categoria">
-                <select value={f.categoria} onChange={(e) => setF({ ...f, categoria: e.target.value })} className={inputCls}>
-                  <option value="">Todas</option>
-                  {categorias.map((c) => <option key={c.nome} value={c.nome}>{c.nome}</option>)}
-                </select>
-              </FiltroCampo>
-              <FiltroCampo label="Forma de pagamento">
-                <select value={f.forma} onChange={(e) => setF({ ...f, forma: e.target.value })} className={inputCls}>
-                  <option value="">Todas</option>
-                  {Object.entries(LABELS_FORMA_PAGAMENTO).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                </select>
-              </FiltroCampo>
-              <FiltroCampo label="Banco"><input value={f.banco} onChange={(e) => setF({ ...f, banco: e.target.value })} className={inputCls} placeholder="Banco" /></FiltroCampo>
-              <FiltroCampo label="Valor de"><input type="number" value={f.valorMin} onChange={(e) => setF({ ...f, valorMin: e.target.value })} className={inputCls} placeholder="0,00" /></FiltroCampo>
-              <FiltroCampo label="Valor até"><input type="number" value={f.valorMax} onChange={(e) => setF({ ...f, valorMax: e.target.value })} className={inputCls} placeholder="0,00" /></FiltroCampo>
-            </div>
-            <div>
-              <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider mb-1.5">Status</p>
-              <div className="flex flex-wrap gap-1.5">
-                {(["PREVISTO", "A_VENCER", "VENCE_HOJE", "VENCIDO", "PAGO", "CANCELADO"] as const).map((s) => (
-                  <button key={s} type="button" onClick={() => toggleStatus(s)}
-                    className={cn("text-xs px-2.5 py-1 rounded-full border transition-colors", f.status.has(s) ? "bg-primary-500 border-primary-500 text-white" : "bg-white border-surface-border text-ink-muted hover:border-primary-300")}>
-                    {LABEL_CHAVE[s]}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-1">
-              <button onClick={limpar} className="text-sm text-ink-muted hover:text-ink px-3 py-1.5">Limpar</button>
-              <button onClick={() => setPainel(false)} className="text-sm font-semibold text-white bg-primary-500 hover:bg-primary-600 px-4 py-1.5 rounded-lg">Aplicar</button>
-            </div>
-          </div>
-        )}
-
-        {/* Tabela */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-surface-alt border-b border-surface-border">
-              <tr>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Cliente</th>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden lg:table-cell">Descrição</th>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden md:table-cell">Categoria</th>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden md:table-cell">Vencimento</th>
-                <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Valor</th>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Status</th>
-                <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtradas.length === 0 ? (
-                <tr><td colSpan={7} className="text-center text-ink-subtle py-12">Nenhuma cobrança encontrada</td></tr>
-              ) : filtradas.map(({ c, sv }) => {
-                const cat = categorias.find((x) => x.nome === c.categoria);
-                return (
-                  <tr key={c.id} className={cn("border-b border-surface-border transition-colors", sv.linhaVermelha ? "bg-red-50 hover:bg-red-100/50" : "hover:bg-surface-alt/60")}>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2.5">
-                        <AvatarCliente nome={c.clienteNome} logoUrl={c.clienteLogo} size={32} />
-                        <div className="min-w-0">
-                          <p className="font-medium text-ink truncate max-w-[180px]">{c.clienteNome}</p>
-                          {c.clienteCnpj && <p className="text-xs text-ink-subtle">{formatarCpfCnpj(c.clienteCnpj)}</p>}
-                        </div>
+        {/* Desktop: a tabela profissional (components/listagem/tabela-pro — colunas redimensionáveis, menu "Colunas", preferência por usuário) */}
+        <div data-tabela-receber>
+          {comStatus.length === 0 ? <div className="hidden md:block"><Vazio /></div> : (
+            <TabelaPro
+              tela="contas-receber"
+              colunas={[
+                { id: "sel", titulo: "Selecionar a página", fixa: true, largura: 36, cabecalho: <CheckboxSelecaoPagina />, classe: "pl-3" } satisfies ColunaPro,
+                { id: "vencimento", titulo: "Vencimento", largura: 96 },
+                { id: "numero", titulo: "Nº", largura: 136, classe: "truncate" },
+                { id: "cliente", titulo: "Cliente", largura: 220, obrigatoria: true },
+                { id: "descricao", titulo: "Descrição" },
+                { id: "categoria", titulo: "Categoria", largura: 160 },
+                { id: "situacao", titulo: "Situação", largura: 128 },
+                { id: "valor", titulo: "Valor (R$)", alinhar: "direita", largura: 120, obrigatoria: true },
+                { id: "emAberto", titulo: "Em aberto (R$)", alinhar: "direita", largura: 120 },
+                { id: "acoes", titulo: "Ações", fixa: true, largura: 40, semTitulo: true, alinhar: "direita", classe: "py-0.5" },
+              ]}
+              linhas={comStatus.map(({ c, sv }) => {
+                const origem = origemComLink(c);
+                return {
+                  id: c.id,
+                  atributos: { "data-linha-conta": c.id },
+                  classe: sv.linhaVermelha ? "even:bg-atrasado-claro bg-atrasado-claro hover:bg-atrasado-claro/70" : undefined,
+                  titulos: { numero: c.numero },
+                  celulas: {
+                    sel: caixa(c),
+                    vencimento: <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{c.dataVencimento ? formatarData(c.dataVencimento) : "—"}</span>,
+                    numero: <span className={cn(PLANILHA.codigo, "font-normal text-ink-subtle")} data-numero-conta>{c.numero}</span>,
+                    cliente: <p className={cn(PLANILHA.nome, "truncate")} title={c.clienteCnpj ? `${c.clienteNome} · ${formatarCpfCnpj(c.clienteCnpj)}` : c.clienteNome}>{c.clienteNome}</p>,
+                    descricao: (
+                      <div className="flex items-baseline gap-1.5 min-w-0">
+                        <button type="button" onClick={() => setDetalheId(c.id)} title={c.descricao} className="min-w-0 text-left text-ink hover:text-primary-600 truncate" data-abrir-detalhes={c.id}>{c.descricao}</button>
+                        {origem && <Link href={origem.href} title={origem.rotulo} className="shrink-0 max-w-[45%] truncate text-[11px] text-acento hover:underline" data-origem-conta>{origem.rotulo}</Link>}
                       </div>
-                    </td>
-                    <td className="px-4 py-3 text-ink-muted hidden lg:table-cell truncate max-w-[200px]">{c.descricao}</td>
-                    <td className="px-4 py-3 hidden md:table-cell">
-                      {c.categoria ? <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: `${cat?.cor ?? "#64748B"}1a`, color: cat?.cor ?? "#64748B" }}>{c.categoria}</span> : <span className="text-ink-subtle">—</span>}
-                    </td>
-                    <td className="px-4 py-3 text-ink-muted hidden md:table-cell">{c.dataVencimento ? formatarData(c.dataVencimento) : "—"}</td>
-                    <td className="px-4 py-3 text-right font-bold text-success-700">{formatarMoeda(c.valor)}</td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className={cn("inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full", sv.classe)}>
+                    ),
+                    categoria: <CategoriaBadge conta={c} categorias={categorias} linhaUnica />,
+                    situacao: (
+                      <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                        <span className={cn("inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full", sv.classe)} data-situacao>
                           {sv.linhaVermelha && <AlertTriangle className="w-3 h-3" />}{sv.label}
                         </span>
-                        {c.boletoStatus === "EMITIDO" && <Barcode className="w-4 h-4 text-emerald-600" aria-label="Boleto emitido" />}
+                        {recebidaEmParte(c) && <SeloParcial />}
+                        {c.boletoStatus === "EMITIDO" && <Barcode className="w-3.5 h-3.5 text-ok-texto" aria-label="Boleto emitido" />}
                       </span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <ContaReceberAcoes conta={{
-                        id: c.id, numero: c.numero, descricao: c.descricao, categoria: c.categoria, valor: c.valor,
-                        dataVencimento: c.dataVencimento, status: c.status, banco: c.banco,
-                        clienteNome: c.clienteNome, whatsapp: c.whatsapp, email: c.email, notificacaoEnviadaEm: c.notificacaoEnviadaEm,
-                        interAtivo, boletoStatus: c.boletoStatus, boletoEmitidoEm: c.boletoEmitidoEm, boletoVencimento: c.boletoVencimento,
-                        boletoLinhaDigitavel: c.boletoLinhaDigitavel, boletoCodigoBarras: c.boletoCodigoBarras,
-                      }} categorias={categorias} />
-                    </td>
-                  </tr>
-                );
+                    ),
+                    valor: <span className={cn(PLANILHA.numero, "font-semibold text-ink")} data-valor>{valorSemMoeda(c.valor)}</span>,
+                    // O que falta: igual ao valor sem baixa; menor na baixa parcial; 0 na recebida/cancelada
+                    emAberto: (
+                      <span className={cn(PLANILHA.numero, recebidaEmParte(c) ? "font-semibold text-atencao-texto" : "text-ink-muted")} data-em-aberto>
+                        {c.status === "CANCELADO" ? "—"
+                          : c.status === "PERDA" ? <span title={`Perdido: ${formatarMoeda(c.valorPerda ?? 0)}`} data-perdido>—</span>
+                          : c.status === "RENEGOCIADO" ? <span title={c.renegociadaEmNumero ? `Renegociada em ${c.renegociadaEmNumero}` : "Renegociada"} data-renegociada>—</span>
+                          : valorSemMoeda(saldoDaConta(c))}
+                      </span>
+                    ),
+                    acoes: acoes(c),
+                  },
+                };
               })}
-            </tbody>
-          </table>
+            />
+          )}
         </div>
 
-        <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-surface-border bg-surface-alt/40 text-sm flex-wrap">
-          <span className="text-ink-muted">Exibindo <strong className="text-ink">{filtradas.length}</strong> de <strong className="text-ink">{contas.length}</strong> cobranças</span>
-          <span className="text-ink-muted">Total filtrado: <strong className="text-ink">{formatarMoeda(totalFiltrado)}</strong></span>
+        <PainelTotais unidade={["receita", "receitas"]} abertoInicial={false} lembrarComo="totais-receber"
+          periodo={{
+            rotulo: periodo.rotulo, subtitulo: periodo.tipo === "todos" ? "Todo o período" : periodo.rotulo,
+            total: linhaTotal("TOTAL", resumo.TOTAL),
+            linhas: CHAVES_RECEBER.filter((k) => k !== "TOTAL").map((k) => linhaTotal(k, resumo[k])),
+          }}
+          selecao={{ n: selecionados.size, naPagina: selecionadas.length, total: linhaTotal("TOTAL", totaisSelecao.TOTAL), linhas: CHAVES_RECEBER.filter((k) => k !== "TOTAL").map((k) => linhaTotal(k, totaisSelecao[k])) }}
+        />
+        <div className="px-3 py-2 border-t border-surface-border bg-surface-alt/40 space-y-1.5">
+          <Paginacao total={total} pagina={pagina} porPagina={porPagina} onNavegar={navegar} rotulo="receitas" />
+          <p className="text-[13px] text-ink-muted" data-total-filtrado>
+            Total do filtro: <strong className="text-ink">{formatarMoeda(totalFiltrado)}</strong>
+            {abertoFiltrado != null && <> · em aberto: <strong className="text-ink" data-aberto-filtrado>{formatarMoeda(abertoFiltrado)}</strong></>}
+          </p>
         </div>
       </div>
+      {/* Com a barra flutuante na tela, um respiro no fim para o painel de totais rolar acima dela */}
+      {comBarra && <div className="h-24 md:h-20" aria-hidden data-espaco-barra />}
+      <ContaReceberDetalhes id={detalheId} onFechar={fecharDetalhe} onAbrirConta={setDetalheId} />
+
+      {/* Barra da seleção: quantas, quanto falta, "Ações em lote" e "Renegociar" (mesmo cliente) */}
+      {comBarra && (
+        <div className="fixed inset-x-0 bottom-16 md:bottom-4 z-30 flex justify-center px-4 pointer-events-none" data-barra-selecao>
+          <div className="pointer-events-auto flex flex-wrap items-center gap-x-3 gap-y-2 rounded-card border border-surface-border bg-white shadow-card-hover px-4 py-3 max-w-full">
+            <span className="text-sm text-ink" data-barra-contagem>
+              <strong>{selecionadas.length}</strong> {selecionadas.length === 1 ? "receita" : "receitas"} · falta <strong className="tabular-nums">{formatarMoeda(saldoEscolhidas)}</strong>
+            </span>
+            {motivoEscolha && <span role="alert" className="text-xs text-atencao-texto" data-motivo-escolha>{motivoEscolha}</span>}
+            <div className="flex flex-wrap items-center gap-2 ml-auto">
+              <button type="button" onClick={limpar} className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink px-2 py-1.5" data-limpar-escolha><X className="w-3.5 h-3.5" /> Limpar</button>
+              {podeLote && <AcoesLote lista={{ tipo: "receber", contas: selecionadas }} onConcluido={() => { limpar(); router.refresh(); }} />}
+              {podeRenegociar && (
+                <button type="button" onClick={() => setRenegociando(true)} disabled={!!motivoEscolha}
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-primary-500 hover:bg-primary-600 px-4 py-2 rounded-lg disabled:opacity-50" data-abrir-renegociar>
+                  <Handshake className="w-4 h-4" /> Renegociar
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      <Modal aberto={renegociando} onFechar={() => setRenegociando(false)} titulo={`Renegociar — ${listaEscolhidas[0]?.clienteNome ?? ""}`} tamanho="lg">
+        {renegociando && listaEscolhidas.length > 0 && (
+          <RenegociarCobrancas clienteId={listaEscolhidas[0].clienteId} clienteNome={listaEscolhidas[0].clienteNome} iniciais={listaEscolhidas.map((c) => c.id)}
+            onPronto={() => { setRenegociando(false); limpar(); router.refresh(); }} onCancelar={() => setRenegociando(false)} />
+        )}
+      </Modal>
     </div>
   );
 }
 
-const LABEL_CHAVE: Record<string, string> = { PREVISTO: "Previsto", A_VENCER: "A vencer", VENCE_HOJE: "Vence hoje", VENCIDO: "Vencido", PAGO: "Pago", CANCELADO: "Cancelado" };
+/** Uma linha do painel de totais com o rótulo e a cor do card correspondente */
+const ROTULO_TOTAL: Record<string, { rotulo: string; cor?: string }> = {
+  VENCIDO: { rotulo: "Em aberto (Vencido)", cor: "text-atrasado" }, VENCE_HOJE: { rotulo: "Em aberto (Vence hoje)", cor: "text-atencao-texto" },
+  A_VENCER: { rotulo: "Em aberto (A vencer)" }, RECEBIDO: { rotulo: "Recebidos", cor: "text-success-600" }, PERDA: { rotulo: "Perdas", cor: "text-atrasado-texto" },
+  TOTAL: { rotulo: "Total" },
+};
+const linhaTotal = (chave: string, s: { v: number; q: number }): LinhaTotal => ({ chave, ...ROTULO_TOTAL[chave], v: s.v, q: s.q });
 
-function FiltroCampo({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div><label className="text-[11px] font-semibold text-ink-muted">{label}</label><div className="mt-1">{children}</div></div>;
+const LABEL_CHAVE: Record<string, string> = { PREVISTO: "Previsto", A_VENCER: "A vencer", VENCE_HOJE: "Vence hoje", VENCIDO: "Vencido", PARCIAL: "Recebido em parte", PAGO: "Pago", PERDA: "Perda", RENEGOCIADO: "Renegociada", CANCELADO: "Cancelado" };
+
+/** Baixa parcial: entrou uma parte e ainda falta (a situação continua a do vencimento) */
+function SeloParcial() {
+  return <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-atencao-claro text-atencao-texto" data-selo-parcial>Parcial</span>;
 }
+

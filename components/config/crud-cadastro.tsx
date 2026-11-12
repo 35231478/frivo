@@ -1,18 +1,28 @@
 "use client";
 
+import { confirmar, toast } from "@/components/ui/avisos";
+import { corDado } from "@/lib/ui/tokens";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField } from "@/components/ui/form-field";
+import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { Drawer } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
 import { Plus, Pencil, Trash2, Check, Search } from "lucide-react";
 
+// Cor que um registro novo recebe no seletor (dado salvo no cadastro, não pintura da tela)
+const COR_PADRAO = corDado.azulForte;
+
 export interface CampoConfig {
   key: string;
   label: string;
-  tipo?: "text" | "textarea" | "number" | "color" | "select";
+  tipo?: "text" | "textarea" | "number" | "color" | "select" | "switch";
+  /** Valor de um registro novo (switch: padrão false) */
+  padrao?: unknown;
+  /** Texto de apoio (switch: a explicação ao lado da chave) */
+  ajuda?: string;
   placeholder?: string;
   opcoes?: { value: string; label: string }[];
   obrigatorio?: boolean;
@@ -41,7 +51,7 @@ export function CrudCadastro({ titulo, apiUrl, campos, colunasLista }: CrudCadas
 
   function abrirNovo() {
     const vazio: Record<string, any> = {};
-    campos.forEach((c) => { vazio[c.key] = c.tipo === "color" ? "#3b82f6" : ""; });
+    campos.forEach((c) => { vazio[c.key] = c.padrao !== undefined ? c.padrao : c.tipo === "color" ? COR_PADRAO : c.tipo === "switch" ? false : ""; });
     vazio.ativo = true;
     setForm(vazio);
     setEditando("novo");
@@ -50,7 +60,7 @@ export function CrudCadastro({ titulo, apiUrl, campos, colunasLista }: CrudCadas
 
   function abrirEditar(item: any) {
     const vals: Record<string, any> = {};
-    campos.forEach((c) => { vals[c.key] = item[c.key] ?? (c.tipo === "color" ? "#3b82f6" : ""); });
+    campos.forEach((c) => { vals[c.key] = item[c.key] ?? (c.padrao !== undefined ? c.padrao : c.tipo === "color" ? COR_PADRAO : c.tipo === "switch" ? false : ""); });
     vals.ativo = item.ativo;
     setForm(vals);
     setEditando(item.id);
@@ -96,11 +106,22 @@ export function CrudCadastro({ titulo, apiUrl, campos, colunasLista }: CrudCadas
   }
 
   async function remover(id: string) {
-    if (!confirm("Desativar este item?")) return;
+    if (!(await confirmar({ mensagem: "Desativar este item?", perigo: true, confirmarTexto: "Desativar" }))) return;
     try {
-      await fetch(`${apiUrl}/${id}`, { method: "DELETE" });
+      const res = await fetch(`${apiUrl}/${id}`, { method: "DELETE" });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); toast(e.erro ?? "Não foi possível desativar.", "erro"); return; }
       setItens((p) => p.map((i) => (i.id === id ? { ...i, ativo: false } : i)));
-    } catch {}
+    } catch { toast("Erro de conexão.", "erro"); }
+  }
+
+  // Reativar manda só { ativo: true }: o servidor faz edição parcial e não mexe nos outros campos
+  async function reativar(id: string) {
+    try {
+      const res = await fetch(`${apiUrl}/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ativo: true }) });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); toast(e.erro ?? "Não foi possível reativar.", "erro"); return; }
+      const atualizado = await res.json().catch(() => null);
+      setItens((p) => p.map((x) => (x.id === id ? (atualizado?.id ? atualizado : { ...x, ativo: true }) : x)));
+    } catch { toast("Erro de conexão.", "erro"); }
   }
 
   const ativos = itens.filter((i) => i.ativo !== false);
@@ -117,7 +138,7 @@ export function CrudCadastro({ titulo, apiUrl, campos, colunasLista }: CrudCadas
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="w-4 h-4 text-ink-subtle absolute left-3 top-1/2 -translate-y-1/2" />
-          <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder={`Buscar ${titulo.toLowerCase()}...`} className="pl-9" />
+          <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder={`Pesquisar ${titulo.toLowerCase()}...`} className="pl-9" />
         </div>
         <Button type="button" onClick={abrirNovo} className="ml-auto shrink-0">
           <Plus className="w-4 h-4" /> Novo {titulo.toLowerCase()}
@@ -156,7 +177,7 @@ export function CrudCadastro({ titulo, apiUrl, campos, colunasLista }: CrudCadas
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button onClick={() => abrirEditar(item)} className="p-1.5 text-ink-muted hover:text-primary-600 hover:bg-primary-50 rounded transition-colors" title="Editar"><Pencil className="w-4 h-4" /></button>
-                        <button onClick={() => remover(item.id)} className="p-1.5 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Desativar"><Trash2 className="w-4 h-4" /></button>
+                        <button onClick={() => remover(item.id)} className="p-1.5 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded transition-colors" title="Desativar"><Trash2 className="w-4 h-4" /></button>
                       </div>
                     </td>
                   </tr>
@@ -172,7 +193,7 @@ export function CrudCadastro({ titulo, apiUrl, campos, colunasLista }: CrudCadas
                 {inativos.map((i) => (
                   <div key={i.id} className="flex items-center justify-between px-3 py-1.5 bg-surface-alt rounded">
                     <span className="line-through">{i.nome}</span>
-                    <button onClick={() => { fetch(`${apiUrl}/${i.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ativo: true }) }).then(() => setItens((p) => p.map((x) => (x.id === i.id ? { ...x, ativo: true } : x)))); }}
+                    <button onClick={() => reativar(i.id)}
                       className="text-primary-600 hover:underline font-medium">Reativar</button>
                   </div>
                 ))}
@@ -190,19 +211,23 @@ export function CrudCadastro({ titulo, apiUrl, campos, colunasLista }: CrudCadas
         rodape={
           <>
             <Button type="button" variant="secondary" onClick={cancelar}>Cancelar</Button>
-            <Button type="button" loading={salvando} onClick={salvar}><Check className="w-4 h-4" /> {editando === "novo" ? "Adicionar" : "Salvar"}</Button>
+            <Button type="button" loading={salvando} onClick={salvar}><Check className="w-4 h-4" /> Salvar</Button>
           </>
         }
       >
-        {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 mb-4">{erro}</div>}
+        {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2 mb-4">{erro}</div>}
         <div className="space-y-4">
-          {campos.map((c) => (
+          {campos.map((c) => c.tipo === "switch" ? (
+            <div key={c.key} data-campo-switch={c.key} className="border-t border-surface-border">
+              <ToggleSwitch checked={!!form[c.key]} onChange={(v) => setForm((f) => ({ ...f, [c.key]: v }))} label={c.label} dica={c.ajuda} />
+            </div>
+          ) : (
             <FormField key={c.key} label={c.label} required={c.obrigatorio}>
               {c.tipo === "textarea" ? (
                 <Textarea value={form[c.key] ?? ""} onChange={(e) => setForm((f) => ({ ...f, [c.key]: e.target.value }))} placeholder={c.placeholder} rows={3} />
               ) : c.tipo === "color" ? (
                 <div className="flex items-center gap-2">
-                  <input type="color" value={form[c.key] ?? "#3b82f6"} onChange={(e) => setForm((f) => ({ ...f, [c.key]: e.target.value }))} className="w-10 h-10 rounded border border-gray-300 cursor-pointer" />
+                  <input type="color" value={form[c.key] ?? COR_PADRAO} onChange={(e) => setForm((f) => ({ ...f, [c.key]: e.target.value }))} className="w-10 h-10 rounded border border-surface-border cursor-pointer" />
                   <Input value={form[c.key] ?? ""} onChange={(e) => setForm((f) => ({ ...f, [c.key]: e.target.value }))} className="flex-1 font-mono text-xs" />
                 </div>
               ) : c.tipo === "select" && c.opcoes ? (

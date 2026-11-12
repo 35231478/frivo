@@ -66,7 +66,7 @@ export function MobileShell({ session, avatarUrl }: { session: Session; avatarUr
       <div
         onClick={() => setAberto(false)}
         className={cn(
-          "fixed inset-0 z-40 bg-black/50 transition-opacity duration-200",
+          "fixed inset-0 z-40 bg-ink/40 transition-opacity duration-200",
           aberto ? "opacity-100" : "opacity-0 pointer-events-none",
         )}
         aria-hidden={!aberto}

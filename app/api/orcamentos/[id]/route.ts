@@ -1,15 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { orcamentoSchema } from "@/lib/validations";
-import { calcularTotais, montarCamposProposta } from "@/lib/orcamento-helpers";
+import { camposCondicoes, montarValoresOrcamento, montarCamposProposta } from "@/lib/orcamento-helpers";
+import { nomeDoOrcamento } from "@/lib/orcamentos/nome-server";
+import { validarDestinatario } from "@/lib/orcamentos/padroes-server";
+import { podeMudarStatus } from "@/lib/orcamentos/ciclo";
+import { diaCivilPassou } from "@/lib/fuso";
+import { registrarEvento } from "@/lib/orcamentos/ciclo-server";
+import { LABELS_STATUS_ORCAMENTO } from "@/lib/utils";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { pode } from "@/lib/permissoes";
-import { impactoOrcamento } from "@/lib/inativacao-server";
+import { cancelarPrevistasDoOrcamento, impactoOrcamento } from "@/lib/inativacao-server";
+import { cancelarOrcamento, reativarOrcamento, statusHttp } from "@/lib/acoes-massa/regras";
+import { apagarItensOrcamento, gravarItensOrcamento, validarMateriaisDoOrcamento } from "@/lib/orcamentos/materiais-server";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("orcamentos", "visualizar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const empresaId = session.user!.empresaId;
   const { id } = await params;
 
@@ -18,7 +27,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     include: {
       cliente: true,
       criadoPor: { select: { id: true, nome: true } },
-      servicos: { include: { servico: { select: { id: true, nome: true, unidade: true } } }, orderBy: { ordem: "asc" } },
+      // E3.3: o snapshot dos materiais de cada linha de serviço; a peça derivada traz `materialId`
+      servicos: { include: { servico: { select: { id: true, nome: true, unidade: true } }, materiais: { orderBy: { ordem: "asc" } } }, orderBy: { ordem: "asc" } },
       produtos: { include: { produto: { select: { id: true, nome: true, unidade: true } } }, orderBy: { ordem: "asc" } },
       ordensServico: {
         include: {
@@ -33,8 +43,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  const guard = await exigirPermissao("orcamentos", "editar");
+  if (guard.erro) return guard.resposta;
+  const { session } = guard;
   const empresaId = session.user!.empresaId;
   const { id } = await params;
 
@@ -43,23 +54,49 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const body = await req.json();
 
-  // Mudança simples de status (enviar, cancelar, reprovar)
+  // Mudança simples de status (enviar, cancelar, reprovar) — só as transições da lista
   if (body.status && Object.keys(body).length === 1) {
+    const novo = String(body.status);
+    if (novo === existente.status) return NextResponse.json(existente);
+    // Transições da equipe: lib/orcamentos/ciclo.ts (aprovar é só do cliente, pelo link, com assinatura)
+    if (!podeMudarStatus(existente.status, novo)) {
+      const motivo = novo === "APROVADO"
+        ? "A aprovação é feita pelo cliente, com assinatura, no link do orçamento."
+        : `Não é possível mudar o orçamento de ${existente.status} para ${novo}.`;
+      return NextResponse.json({ erro: motivo }, { status: 400 });
+    }
+    if (novo === "ENVIADO" && diaCivilPassou(existente.validadeEm)) {
+      return NextResponse.json({ erro: "A validade deste orçamento já venceu. Volte para rascunho, ajuste a validade e envie de novo." }, { status: 400 });
+    }
     // Cancelar = inativar o orçamento: mesma regra do botão (exige "excluir" e não pode ter virado contrato/financeiro)
-    if (body.status === "CANCELADO" && existente.status !== "CANCELADO") {
+    if (novo === "CANCELADO") {
       if (!pode(session.user!.permissoes, "orcamentos", "excluir", session.user!.role))
         return NextResponse.json({ erro: "Sem permissão para cancelar orçamentos" }, { status: 403 });
       const impacto = await impactoOrcamento(id, empresaId);
       if (impacto?.bloqueio) return NextResponse.json({ erro: impacto.bloqueio }, { status: 409 });
     }
-    const novo = await prisma.orcamento.update({
+    const agora = new Date();
+    const atualizado = await prisma.$transaction(async (tx) => {
+     const o = await tx.orcamento.update({
       where: { id },
       data: {
-        status: body.status,
-        enviadoEm: body.status === "ENVIADO" ? new Date() : existente.enviadoEm,
+        status: novo as typeof existente.status,
+        enviadoEm: novo === "ENVIADO" ? existente.enviadoEm ?? agora : existente.enviadoEm,
+        // Voltar para rascunho (para corrigir e reenviar): o ciclo recomeça; a linha do tempo guarda o histórico
+        ...(novo === "RASCUNHO" && { enviadoEm: null, visualizadoEm: null, visualizacoes: 0 }),
+        // Recusa registrada pela equipe (o cliente avisou por fora do link)
+        ...(novo === "REPROVADO" && { recusadoEm: agora, recusadoPor: `Registrado por ${session.user!.name ?? "usuário"}`, recusaMotivo: null, recusadoIp: null, respostaVistaEm: agora }),
       },
+     });
+     // Opção A (P2): cancelar leva junto a previsão antiga (conta PREVISTO da aprovação), com motivo e evento
+     if (novo === "CANCELADO") await cancelarPrevistasDoOrcamento(tx, { id, codigo: existente.codigo, empresaId }, session.user!.id);
+     return o;
     });
-    return NextResponse.json(novo);
+    await registrarEvento({
+      empresaId, orcamentoId: id, tipo: "STATUS", usuarioId: session.user!.id,
+      detalhe: `${LABELS_STATUS_ORCAMENTO[existente.status] ?? existente.status} → ${LABELS_STATUS_ORCAMENTO[novo] ?? novo}`,
+    });
+    return NextResponse.json(atualizado);
   }
 
   // Edição completa só em RASCUNHO
@@ -79,6 +116,18 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
   const data = parsed.data;
 
+  // Cliente, responsável técnico e itens do catálogo precisam ser da mesma empresa
+  try {
+    await Promise.all([
+      validarRefEmpresa("cliente", data.clienteId, empresaId, "Cliente"),
+      validarRefEmpresa("tecnico", data.responsavelTecnicoId, empresaId, "Responsável técnico"),
+      validarRefsEmpresa("servico", data.servicos.map((s) => s.catalogoId), empresaId, "Serviço do catálogo"),
+      validarRefsEmpresa("produto", data.produtos.map((p) => p.catalogoId), empresaId, "Produto do catálogo"),
+      validarDestinatario(empresaId, data.clienteId, data.unidadeId, data.contatoClienteId),
+      validarMateriaisDoOrcamento(empresaId, data.servicos),
+    ]);
+  } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
+
   // Valida que as OS vinculadas pertencem ao mesmo tenant e cliente (evita vínculo cross-tenant)
   if (data.ordensServicoIds.length) {
     const validas = await prisma.ordemServico.count({
@@ -92,55 +141,50 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
   }
 
-  const totais = calcularTotais(data.servicos, data.produtos, data.desconto, data.tipoDesconto);
-  const proposta = montarCamposProposta(data);
+  // Destinatário que não veio: mantém o gravado se o cliente for o mesmo (trocou de cliente = solta)
+  const mesmoCliente = data.clienteId === existente.clienteId;
+  const destino = (novo: string | null | undefined, atual: string | null) =>
+    (novo === undefined ? (mesmoCliente ? atual : null) : novo || null);
+
+  // ISS: mantém a alíquota congelada no orçamento; só troca pela atual da empresa se pedirem
+  const issAliquota = data.atualizarIss
+    ? Number((await prisma.configuracao.findUnique({ where: { empresaId }, select: { issAliquota: true } }))?.issAliquota ?? 0)
+    : Number(existente.issAliquota);
+  const valores = montarValoresOrcamento(data, issAliquota);
+  // RT/ART que não vieram: mantém os do orçamento (como garantias, normas e destinatário)
+  const proposta = montarCamposProposta({
+    ...data,
+    responsavelTecnicoId: data.responsavelTecnicoId === undefined ? existente.responsavelTecnicoId : data.responsavelTecnicoId,
+    artNumero: data.artNumero === undefined ? existente.artNumero : data.artNumero,
+  });
+  // Nome em branco = automático (tipo da OS, equipamento, cliente/unidade ou itens)
+  const nome = await nomeDoOrcamento(empresaId, data);
 
   const atualizado = await prisma.$transaction(async (tx) => {
-    await tx.orcamentoServico.deleteMany({ where: { orcamentoId: id } });
-    await tx.orcamentoProduto.deleteMany({ where: { orcamentoId: id } });
+    await apagarItensOrcamento(tx, id);
     await tx.orcamentoOs.deleteMany({ where: { orcamentoId: id } });
 
-    return tx.orcamento.update({
+    const o = await tx.orcamento.update({
       where: { id },
       data: {
-        nome: data.nome,
+        nome,
+        // Garantias/não incluso/normas que não vieram: mantém o que o orçamento já tem
+        ...camposCondicoes(data, existente),
         clienteId: data.clienteId,
+        unidadeId: destino(data.unidadeId, existente.unidadeId),
+        contatoClienteId: destino(data.contatoClienteId, existente.contatoClienteId),
         descricao: data.descricao ?? null,
         observacao: data.observacao ?? null,
-        validadeEm: data.validadeEm ? new Date(data.validadeEm) : null,
-        desconto: data.desconto,
-        tipoDesconto: data.tipoDesconto,
-        totalServicos: totais.totalServicos,
-        totalProdutos: totais.totalProdutos,
-        totalGeral: totais.totalGeral,
+        validadeEm: data.validadeEm === undefined ? existente.validadeEm : data.validadeEm ? new Date(data.validadeEm) : null,
+        ...valores.campos,
         ...proposta,
-        servicos: {
-          create: data.servicos.map((s, idx) => ({
-            servicoId: s.catalogoId || null,
-            descricao: s.descricao,
-            quantidade: s.quantidade,
-            valorUnitario: s.valorUnitario,
-            valorTotal: s.quantidade * s.valorUnitario,
-            observacao: s.observacao ?? null,
-            ordem: idx,
-          })),
-        },
-        produtos: {
-          create: data.produtos.map((p, idx) => ({
-            produtoId: p.catalogoId || null,
-            descricao: p.descricao,
-            quantidade: p.quantidade,
-            valorUnitario: p.valorUnitario,
-            valorTotal: p.quantidade * p.valorUnitario,
-            observacao: p.observacao ?? null,
-            ordem: idx,
-          })),
-        },
         ordensServico: {
           create: data.ordensServicoIds.map((osId) => ({ ordemServicoId: osId })),
         },
       },
     });
+    await gravarItensOrcamento(tx, id, valores);
+    return o;
   });
 
   return NextResponse.json(atualizado);
@@ -157,14 +201,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const empresaId = guard.session.user!.empresaId;
   const { id } = await params;
 
-  const existente = await prisma.orcamento.findFirst({ where: { id, empresaId }, select: { id: true, status: true } });
-  if (!existente) return NextResponse.json({ erro: "Orçamento não encontrado" }, { status: 404 });
-  if (existente.status === "CANCELADO") return NextResponse.json({ ok: true, status: "CANCELADO" });
-
-  const impacto = await impactoOrcamento(id, empresaId);
-  if (impacto?.bloqueio) return NextResponse.json({ erro: impacto.bloqueio }, { status: 409 });
-
-  await prisma.orcamento.update({ where: { id }, data: { status: "CANCELADO", lembretesAtivos: false } });
+  // Mesma regra da ação em massa (lib/acoes-massa/regras.ts)
+  const r = await cancelarOrcamento(id, { empresaId, usuarioId: guard.session.user!.id, usuarioNome: guard.session.user!.name ?? "usuário" });
+  if (!r.ok) return NextResponse.json({ erro: r.codigo === "nao_encontrado" ? "Orçamento não encontrado" : r.motivo }, { status: statusHttp(r) });
   return NextResponse.json({ ok: true, status: "CANCELADO" });
 }
 
@@ -177,10 +216,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const body = await req.json().catch(() => ({}));
   if (body?.ativo !== true) return NextResponse.json({ erro: "Ação inválida" }, { status: 400 });
 
-  const existente = await prisma.orcamento.findFirst({ where: { id, empresaId }, select: { status: true } });
-  if (!existente) return NextResponse.json({ erro: "Orçamento não encontrado" }, { status: 404 });
-  if (existente.status !== "CANCELADO") return NextResponse.json({ ok: true, status: existente.status });
-
-  await prisma.orcamento.update({ where: { id }, data: { status: "RASCUNHO" } });
-  return NextResponse.json({ ok: true, status: "RASCUNHO" });
+  const r = await reativarOrcamento(id, { empresaId, usuarioId: guard.session.user!.id, usuarioNome: guard.session.user!.name ?? "usuário" });
+  if (!r.ok) return NextResponse.json({ erro: "Orçamento não encontrado" }, { status: statusHttp(r) });
+  return NextResponse.json({ ok: true, status: r.dados?.status });
 }
