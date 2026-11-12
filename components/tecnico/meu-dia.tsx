@@ -256,20 +256,22 @@ export function resumoDoDia(atividades: CartaoTela[], fila: OperacaoFila[]) {
 
 /** "Meu dia": as OS de hoje atribuídas a mim, em ordem de horário — abre sem sinal (fica no aparelho). */
 export function MeuDia() {
-  const { motor, usuario } = useTecnico();
+  const { motor, usuario, capturarPosicao } = useTecnico();
   const fila = useFila();
   const [r, setR] = useState<{ dados: RespostaMeuDia | null; baixadoEm: number | null; doAparelho: boolean } | null>(null);
   const [atualizando, setAtualizando] = useState(false);
 
   const carregar = useCallback(async () => {
     if (!motor) return;
+    // Abrir o Meu dia é um dos momentos em que o app envia a localização (só com o rastreamento ligado)
+    capturarPosicao("ABRIU_APP");
     setAtualizando(true);
     const x = await motor.baixarLista<RespostaMeuDia>("meuDia", "/api/tecnico/meu-dia");
     setR(x);
     setAtualizando(false);
     // Deixa cada OS do dia pronta para abrir sem sinal
     if (!x.doAparelho && x.dados) void motor.prepararSemSinal([...x.dados.atividades, ...x.dados.anteriores].map((c) => c.atividadeId));
-  }, [motor]);
+  }, [motor, capturarPosicao]);
   useEffect(() => { void carregar(); }, [carregar]);
   // O sinal voltou, ou o técnico voltou para o app (saiu do mapa/telefone): a lista se atualiza sozinha
   useEffect(() => {

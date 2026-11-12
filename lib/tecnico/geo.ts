@@ -24,6 +24,24 @@ export function posicaoAtual(timeoutMs = 8000): Promise<Coordenadas | null> {
   });
 }
 
+export interface Bateria { /** 0–100 */ nivel: number; carregando: boolean }
+
+/**
+ * Bateria do aparelho, quando o navegador informa (Chrome/Android). No iPhone a web não dá acesso
+ * (o Safari não tem a API): devolve null — quem mostra escreve "—", nunca um número inventado.
+ */
+export async function nivelBateria(): Promise<Bateria | null> {
+  const nav = typeof navigator === "undefined" ? null : (navigator as Navigator & { getBattery?: () => Promise<{ level: number; charging: boolean }> });
+  if (!nav || typeof nav.getBattery !== "function") return null;
+  try {
+    const b = await nav.getBattery();
+    if (typeof b?.level !== "number" || !Number.isFinite(b.level)) return null;
+    return { nivel: Math.max(0, Math.min(100, Math.round(b.level * 100))), carregando: !!b.charging };
+  } catch {
+    return null;
+  }
+}
+
 /** "-23,550520, -46,633308" (6 casas) — como as coordenadas aparecem na marca d'água. */
 export function formatarCoord(c: Coordenadas): string {
   const n = (v: number) => v.toFixed(6);
