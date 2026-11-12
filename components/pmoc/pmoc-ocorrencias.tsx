@@ -108,7 +108,7 @@ export function PmocOcorrencias({ pmocId, equipamentos, somenteLeitura, aoMudar 
       <div className="px-4 py-3 border-b border-surface-border grid gap-2 sm:grid-cols-[1fr_12rem_12rem]" data-filtros-ocorrencias>
         <label className="relative block">
           <Search className="w-4 h-4 text-ink-subtle absolute left-3 top-1/2 -translate-y-1/2" aria-hidden />
-          <Input aria-label="Pesquisar ocorrência" placeholder="Pesquisar por descrição, equipamento ou TAG" value={filtro.busca} className="pl-9"
+          <Input aria-label="Pesquisar ocorrência" placeholder="Descrição, equipamento ou TAG" value={filtro.busca} className="pl-9"
             onChange={(e) => setFiltro((f) => ({ ...f, busca: e.target.value }))} data-busca-ocorrencias />
         </label>
         <Select aria-label="Situação" value={filtro.situacao} onChange={(e) => setFiltro((f) => ({ ...f, situacao: e.target.value as FiltroSituacao }))} data-filtro-situacao>
