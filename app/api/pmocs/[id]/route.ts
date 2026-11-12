@@ -3,6 +3,7 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { pmocSchema, pendenciasPublicacao } from "@/lib/pmoc";
 import { ErroPmoc, SELECT_PMOC, dadosArt, paraData, validarVinculos } from "@/lib/pmoc-server";
+import { atorDoCronograma, gerarAoSalvar } from "@/lib/pmoc-cronograma-rotas";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -46,7 +47,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
         ...dadosArt(d),
       },
     });
-    return NextResponse.json(await prisma.pmoc.findFirst({ where: { id }, select: SELECT_PMOC }));
+    // Etapa 2: publicado, o cronograma gera as OS que faltam (só cria; mudar datas é "Reagendar atividades")
+    const gerado = d.status === "PUBLICADO" ? await gerarAoSalvar(id, atorDoCronograma(guard.session)) : null;
+    return NextResponse.json({ ...(await prisma.pmoc.findFirst({ where: { id }, select: SELECT_PMOC })), osGeradas: gerado?.criadas.length ?? 0 });
   } catch (e) {
     if (e instanceof ErroPmoc) return NextResponse.json({ erro: e.message }, { status: e.status });
     throw e;
