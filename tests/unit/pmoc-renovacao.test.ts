@@ -160,7 +160,7 @@ describe("renovação do PMOC: nome, pedido e histórico", () => {
     expect(nomeDaRenovacao("PMOC 2026/2027 Hospital", ANTIGA, NOVA)).toBe("PMOC 2027/2028 Hospital");
     expect(nomeDaRenovacao("PMOC 2026", { dataInicio: "2026-01-01", dataExpiracao: "2026-12-31" }, { dataInicio: "2027-01-01", dataExpiracao: "2027-12-31" })).toBe("PMOC 2027");
     // número que não é ano da vigência (nem número maior) não é tocado
-    expect(nomeDaRenovacao("PMOC 2027 — Sala 2019 — 120271", ANTIGA, NOVA)).toBe("PMOC 2028 — Sala 2019 — 120271");
+    expect(nomeDaRenovacao("PMOC 2027 — Sala 2019 — contrato 20271", ANTIGA, NOVA)).toBe("PMOC 2028 — Sala 2019 — contrato 20271");
   });
 
   it("nome sem ano ganha o ano da nova vigência no fim, sem passar de 150 caracteres", () => {
