@@ -304,6 +304,10 @@ describe("captura no aparelho", () => {
     expect(await fila()).toHaveLength(1);
     await Rastreio.esquecer(banco);
     expect(await fila()).toEqual([]);
+    // É limpeza: nunca lança, nem com o banco fechado ou com um banco que não sabe apagar
+    await expect(Rastreio.esquecer({} as unknown as BancoTecnico)).resolves.toBeUndefined();
+    const fechado = await BancoTecnico.abrir("outro"); fechado.fechar();
+    await expect(Rastreio.esquecer(fechado)).resolves.toBeUndefined();
   });
 
   it("o aparelho não consegue guardar (sem espaço): a captura não lança — o rastreio nunca atrapalha o trabalho", async () => {

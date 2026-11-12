@@ -74,7 +74,8 @@ export class Rastreio {
 
   /** O que sobrou no aparelho de quando o rastreamento estava ligado: apaga (a empresa desligou). */
   static async esquecer(banco: BancoTecnico): Promise<void> {
-    await banco.apagar([CHAVE_FILA]).catch(() => undefined);
+    // Nunca lança: é limpeza — banco fechado, sem suporte ou incompleto não pode derrubar o app
+    try { await banco.apagar([CHAVE_FILA]); } catch { /* nada a apagar */ }
   }
 
   get atual() { return this.estado; }
