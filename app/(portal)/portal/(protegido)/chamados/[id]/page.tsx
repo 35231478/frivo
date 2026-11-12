@@ -6,7 +6,7 @@ import { requirePortalSession, podeVerChamados } from "@/lib/portal-server";
 import { SemAcesso } from "@/components/portal/sem-acesso";
 import { cn, formatarDataHora, LABELS_STATUS_OS, LABELS_PRIORIDADE } from "@/lib/utils";
 import { CheckCircle2, ChevronLeft, ClipboardCheck, User, Clock, Image as ImageIcon } from "lucide-react";
-import { caminhoPublicoAceite, estadoDoAceite, textoDoAceite } from "@/lib/os/aceite";
+import { caminhoPublicoAceite, estadoDoAceite, temRessalva, textoDoAceite } from "@/lib/os/aceite";
 
 export const metadata: Metadata = { title: "Portal — Chamado" };
 export const dynamic = "force-dynamic";
@@ -24,7 +24,7 @@ export default async function PortalChamadoDetalhe({ params }: { params: Promise
       unidade: { select: { nome: true } },
       equipamento: { select: { marca: true, modelo: true } },
       anexos: { select: { id: true, nome: true, tipo: true, conteudo: true, criadoEm: true }, orderBy: { criadoEm: "asc" } },
-      aceite: { select: { token: true, situacao: true, nome: true, confirmadoEm: true } },
+      aceite: { select: { token: true, situacao: true, nome: true, confirmadoEm: true, ressalva: true } },
     },
   });
   if (!os) notFound();
@@ -87,7 +87,10 @@ export default async function PortalChamadoDetalhe({ params }: { params: Promise
       )}
       {aceite === "CONFIRMADO" && (
         <div className="bg-ok-claro border border-ok/20 rounded-xl p-5 flex items-center justify-between gap-3 flex-wrap" data-aceite-chamado="CONFIRMADO">
-          <p className="text-sm text-ink flex items-center gap-2 min-w-0"><CheckCircle2 className="w-4 h-4 text-ok-texto shrink-0" aria-hidden /> {textoDoAceite(os.aceite!)}</p>
+          <div className="min-w-0 space-y-1">
+            <p className="text-sm text-ink flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-ok-texto shrink-0" aria-hidden /> {textoDoAceite(os.aceite!)}</p>
+            {temRessalva(os.aceite) && <p className="text-sm text-ink break-words whitespace-pre-wrap" data-aceite-chamado-ressalva><strong>Ressalva registrada:</strong> {os.aceite!.ressalva}</p>}
+          </div>
           <Link href={caminhoPublicoAceite(os.aceite!.token)} className="text-sm font-medium text-primary-600 hover:underline shrink-0">Ver o relatório</Link>
         </div>
       )}

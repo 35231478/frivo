@@ -65,7 +65,9 @@ export interface AssinaturaColetada { rotulo: string; url: string; nome: string 
 export interface AceiteRelatorio {
   nome: string | null; confirmadoEm: Date | null; metodo: string | null; ip: string | null;
   /** Assinatura desenhada (só no aceite no local) */
-  assinatura: string | null; colhidoPor: string | null; observacao: string | null;
+  assinatura: string | null; colhidoPor: string | null;
+  /** A ressalva que o cliente registrou ao confirmar (null = confirmou sem ressalva) */
+  ressalva: string | null;
 }
 export interface RelatorioOsDados {
   empresa: EmpresaInfo;
@@ -143,7 +145,7 @@ export interface OsParaRelatorio {
   /** Aceite do cliente (ausente em quem monta o relatório sem carregá-lo) */
   aceite?: {
     situacao: string; nome: string | null; confirmadoEm: Date | null; metodo: string | null; ip: string | null;
-    assinatura: string | null; observacao: string | null; colhidoPor: { nome: string } | null;
+    assinatura: string | null; ressalva: string | null; colhidoPor: { nome: string } | null;
   } | null;
 }
 export interface RelatorioRef { numero: string; observacao: string | null; assinaturaUrl: string | null; assinadoPor: string | null; assinadoEm: Date | null }
@@ -376,7 +378,7 @@ export function montarRelatorioOs(os: OsParaRelatorio, relatorio: RelatorioRef |
     // Só o aceite CONFIRMADO entra no relatório (o pendente não é prova de nada)
     aceite: os.aceite?.situacao === "CONFIRMADO" ? {
       nome: os.aceite.nome, confirmadoEm: os.aceite.confirmadoEm, metodo: os.aceite.metodo, ip: os.aceite.ip,
-      assinatura: os.aceite.assinatura, colhidoPor: os.aceite.colhidoPor?.nome ?? null, observacao: os.aceite.observacao,
+      assinatura: os.aceite.assinatura, colhidoPor: os.aceite.colhidoPor?.nome ?? null, ressalva: (os.aceite.ressalva ?? "").trim() || null,
     } : null,
     assinaturas: {
       coletadas,
@@ -435,7 +437,7 @@ export async function carregarOsParaRelatorio(osId: string, empresaId: string): 
       unidade: { select: { nome: true, logradouro: true, numero: true, bairro: true, cidade: true, estado: true, cep: true } },
       contrato: { select: { numero: true, artNumero: true, responsavelTecnico: { select: { nome: true, crea: true } } } },
       equipamento: { select: SELECT_EQUIP },
-      aceite: { select: { situacao: true, nome: true, confirmadoEm: true, metodo: true, ip: true, assinatura: true, observacao: true, colhidoPor: { select: { nome: true } } } },
+      aceite: { select: { situacao: true, nome: true, confirmadoEm: true, metodo: true, ip: true, assinatura: true, ressalva: true, colhidoPor: { select: { nome: true } } } },
       atividades: {
         orderBy: { criadoEm: "asc" },
         include: {

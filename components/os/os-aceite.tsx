@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, Copy, Hourglass, Loader2, PenLine, Send } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { CheckCircle2, Copy, Hourglass, Loader2, MessageSquareWarning, PenLine, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { toast } from "@/components/ui/avisos";
@@ -9,7 +9,8 @@ import { abaPendente } from "@/components/orcamento/envio-proposta";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { AssinaturaDoCliente } from "@/components/os/aceite-assinatura";
 import { formatarDataHora } from "@/lib/utils";
-import { ROTULO_ESTADO, provaDoAceite, recadoDoPedido, rotuloDaOs, textoDoAceite, textoDoCanal, type AceiteLocal, type EstadoAceite } from "@/lib/os/aceite";
+import { ROTULO_ESTADO, provaDoAceite, recadoDoPedido, rotuloDaOs, rotuloDoAceite, temRessalva, textoDoAceite, textoDoCanal, type AceiteLocal, type EstadoAceite } from "@/lib/os/aceite";
+import { atualizarSino } from "@/lib/ui/sino";
 import type { AceiteDaOs, PedidoDeAceite } from "@/lib/os/aceite-server";
 
 interface Resposta { estado: EstadoAceite; statusOs: string; aceite: AceiteDaOs | null; caminhoPublico: string | null; erro?: string }
@@ -17,12 +18,13 @@ interface Resposta { estado: EstadoAceite; statusOs: string; aceite: AceiteDaOs 
 /**
  * Aceite do cliente na OS (escritório): "concluída, aguardando confirmação do cliente" até o aceite.
  * Quem tem "OS › Editar" envia o link (um clique: e-mail + WhatsApp), copia o link ou colhe a
- * assinatura na hora. Confirmado, mostra a prova: quem, quando, como e de onde.
+ * assinatura na hora. Confirmado, mostra a prova: quem, quando, como e de onde — e a RESSALVA do
+ * cliente, quando há. Abrir a OS (quem tem "OS › Editar") dá a confirmação por vista: sai do sino.
  */
 export function OsAceite({ osId, numero, cliente, statusOs, aoMudar }: {
   osId: string; numero: string; cliente: string; statusOs: string;
   /** Avisa a tela da OS (o selo do cabeçalho e o "o que falta" acompanham) */
-  aoMudar?: (aceite: { situacao: string; nome: string | null; confirmadoEm: string | null; metodo: string | null } | null) => void;
+  aoMudar?: (aceite: { situacao: string; nome: string | null; confirmadoEm: string | null; metodo: string | null; ressalva: string | null } | null) => void;
 }) {
   const { pode } = usePermissoes();
   const podeEditar = pode("ordens", "editar");
@@ -33,7 +35,7 @@ export function OsAceite({ osId, numero, cliente, statusOs, aoMudar }: {
 
   const guardar = useCallback((d: Resposta) => {
     setDados(d);
-    aoMudar?.(d.aceite ? { situacao: d.aceite.situacao, nome: d.aceite.nome, confirmadoEm: d.aceite.confirmadoEm, metodo: d.aceite.metodo } : null);
+    aoMudar?.(d.aceite ? { situacao: d.aceite.situacao, nome: d.aceite.nome, confirmadoEm: d.aceite.confirmadoEm, metodo: d.aceite.metodo, ressalva: d.aceite.ressalva } : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const carregar = useCallback(async () => {
@@ -45,6 +47,16 @@ export function OsAceite({ osId, numero, cliente, statusOs, aoMudar }: {
   }, [osId, guardar]);
   // Relê quando o status da OS muda (concluir abre o aceite; reabrir tira o "aguardando")
   useEffect(() => { void carregar(); }, [carregar, statusOs]);
+
+  // O cliente confirmou e ninguém do escritório tinha aberto a OS: quem pode tratar (OS › Editar) abriu
+  // agora — a confirmação está vista e o aviso sai do sino. Uma vez por tela aberta.
+  const vistoPedido = useRef(false);
+  const naoVisto = dados?.estado === "CONFIRMADO" && !!dados.aceite && !dados.aceite.vistoEm;
+  useEffect(() => {
+    if (!naoVisto || !podeEditar || vistoPedido.current) return;
+    vistoPedido.current = true;
+    fetch(`/api/ordens/${osId}/aceite/visto`, { method: "POST" }).then((r) => { if (r.ok) atualizarSino(); }).catch(() => {});
+  }, [naoVisto, podeEditar, osId]);
 
   async function enviar() {
     setErro(""); setEnviando(true);
@@ -82,14 +94,20 @@ export function OsAceite({ osId, numero, cliente, statusOs, aoMudar }: {
   if (estado === "NAO_SE_APLICA" && !(semRegistro && podeEditar)) return null;
 
   if (estado === "CONFIRMADO" && aceite) {
+    // Com ressalva o serviço está confirmado, mas o cartão chama a atenção: há algo a tratar com o cliente
+    const comRessalva = temRessalva(aceite);
+    const Icone = comRessalva ? MessageSquareWarning : CheckCircle2;
     return (
-      <section className="bg-ok-claro border border-ok/20 rounded-card px-4 py-3 flex items-start gap-3 flex-wrap" data-aceite-os="CONFIRMADO">
-        <CheckCircle2 className="w-5 h-5 text-ok-texto shrink-0 mt-0.5" aria-hidden />
+      <section className={`${comRessalva ? "bg-atencao-claro border-atencao/30" : "bg-ok-claro border-ok/20"} border rounded-card px-4 py-3 flex items-start gap-3 flex-wrap`}
+        data-aceite-os="CONFIRMADO" data-aceite-com-ressalva={comRessalva ? "sim" : "nao"}>
+        <Icone className={`w-5 h-5 shrink-0 mt-0.5 ${comRessalva ? "text-atencao-texto" : "text-ok-texto"}`} aria-hidden />
         <div className="min-w-0 flex-1 space-y-0.5">
-          <p className="text-sm font-semibold text-ok-texto" data-aceite-titulo>{ROTULO_ESTADO.CONFIRMADO}</p>
+          <p className={`text-sm font-semibold ${comRessalva ? "text-atencao-texto" : "text-ok-texto"}`} data-aceite-titulo>{rotuloDoAceite("CONFIRMADO", comRessalva)}</p>
           <p className="text-sm text-ink" data-aceite-quem>{textoDoAceite(aceite)}</p>
           <p className="text-xs text-ink-muted" data-aceite-prova>{provaDoAceite(aceite)}</p>
-          {aceite.observacao && <p className="text-sm text-ink break-words" data-aceite-observacao>Observação do cliente: {aceite.observacao}</p>}
+          {comRessalva && (
+            <p className="text-sm text-ink break-words whitespace-pre-wrap" data-aceite-ressalva><strong>Ressalva do cliente:</strong> {aceite.ressalva}</p>
+          )}
         </div>
         {aceite.assinatura && (
           // eslint-disable-next-line @next/next/no-img-element

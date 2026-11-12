@@ -604,6 +604,8 @@ model Configuracao {
 
   // Ordens de serviço
   osExigirFoto              Boolean @default(false) @map("os_exigir_foto")
+  /// SEM USO: o toggle saiu de Configurações (o aceite do cliente e o gate do portal cobrem). A coluna
+  /// fica no banco até uma limpeza combinada; nada lê nem grava este campo
   osExigirAssinatura        Boolean @default(false) @map("os_exigir_assinatura")
   osPermitirSemContrato     Boolean @default(true) @map("os_permitir_sem_contrato")
   osExigirQuestionario      Boolean @default(false) @map("os_exigir_questionario")
@@ -1973,11 +1975,14 @@ model OsAceite {
   nome           String?
   /// Assinatura desenhada (data URL), só no aceite no local
   assinatura     String? @db.Text
-  /// O que o cliente quis registrar ao confirmar (opcional)
-  observacao     String? @db.Text
+  /// RESSALVA do cliente ao confirmar pelo link: o serviço fica confirmado e o escritório é avisado.
+  /// A coluna se chama "observacao" (era o campo "Observação" da primeira versão do aceite)
+  ressalva       String? @map("observacao") @db.Text
   ip             String?
   userAgent      String? @map("user_agent")
   confirmadoEm   DateTime? @map("confirmado_em")
+  /// Quando alguém do escritório (OS › Editar) abriu a OS depois da confirmação: tira o aviso do sino
+  vistoEm        DateTime? @map("visto_em")
   /// No local: a atividade em que foi colhido e quem colheu
   atividadeId    String? @map("atividade_id")
   colhidoPorId   String? @map("colhido_por_id")

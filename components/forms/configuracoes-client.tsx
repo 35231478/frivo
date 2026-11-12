@@ -344,7 +344,6 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
 
         <ToggleGroup title="Ordens de serviço">
           <ToggleSwitch label="Exigir foto para concluir OS" dica="A OS só é concluída com ao menos uma foto anexada pelo técnico." checked={cfg.osExigirFoto} onChange={() => toggleCfg("osExigirFoto")} />
-          <ToggleSwitch label="Exigir assinatura do cliente na OS" checked={cfg.osExigirAssinatura} onChange={() => toggleCfg("osExigirAssinatura")} />
           <ToggleSwitch label="Permitir OS sem contrato vinculado" checked={cfg.osPermitirSemContrato} onChange={() => toggleCfg("osPermitirSemContrato")} />
           <ToggleSwitch label="Exigir questionário preenchido para concluir OS" checked={cfg.osExigirQuestionario} onChange={() => toggleCfg("osExigirQuestionario")} />
           <ToggleSwitch label="Permitir técnico editar OS após concluída" checked={cfg.osPermitirEdicaoConcluida} onChange={() => toggleCfg("osPermitirEdicaoConcluida")} />

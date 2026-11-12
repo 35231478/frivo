@@ -2,12 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, CheckCircle2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, MessageSquareWarning } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { MSG_NOME, NOME_MAX, NOME_MIN, OBSERVACAO_MAX } from "@/lib/os/aceite";
+import { MSG_NOME, MSG_RESSALVA, NOME_MAX, NOME_MIN, RESSALVA_MAX, RESSALVA_MIN } from "@/lib/os/aceite";
 
 /**
- * A confirmação do cliente no link público: o nome de quem confirma e, se quiser, uma observação.
+ * A confirmação do cliente no link público. Dois caminhos, os dois com o nome de quem confirma:
+ *  - "Confirmo o recebimento do serviço";
+ *  - "Tenho uma ressalva": o serviço fica confirmado do mesmo jeito, mas o cliente escreve o que ficou
+ *    pendente ou diferente do combinado — fica no registro e a empresa é avisada.
  * O servidor grava também a data, a hora e o endereço IP (o texto avisa, como na aprovação do orçamento).
  */
 export function AceitePublico({ token, rotulo, nomeSugerido }: {
@@ -18,17 +21,19 @@ export function AceitePublico({ token, rotulo, nomeSugerido }: {
 }) {
   const router = useRouter();
   const [nome, setNome] = useState(nomeSugerido ?? "");
-  const [observacao, setObservacao] = useState("");
+  const [comRessalva, setComRessalva] = useState(false);
+  const [ressalva, setRessalva] = useState("");
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
 
   async function confirmar() {
     setErro("");
     if (nome.trim().length < NOME_MIN) return setErro(MSG_NOME);
+    if (comRessalva && ressalva.trim().length < RESSALVA_MIN) return setErro(MSG_RESSALVA);
     setEnviando(true);
     try {
       const res = await fetch(`/api/publico/aceites/${encodeURIComponent(token)}/confirmar`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome: nome.trim(), observacao: observacao.trim() || null }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome: nome.trim(), ressalva: comRessalva ? ressalva.trim() : null }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
@@ -42,7 +47,7 @@ export function AceitePublico({ token, rotulo, nomeSugerido }: {
 
   const campo = "mt-1 w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10";
   return (
-    <section id="confirmar" className="bg-white border-2 border-acento/40 rounded-card p-5 sm:p-6 space-y-4 shadow-card" data-aceite-publico>
+    <section id="confirmar" className="bg-white border-2 border-acento/40 rounded-card p-5 sm:p-6 space-y-4 shadow-card" data-aceite-publico={comRessalva ? "RESSALVA" : "CONFIRMAR"}>
       <div>
         <h2 className="text-lg font-bold text-ink flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-success-600" aria-hidden /> Confirmar o serviço</h2>
         <p className="text-sm text-ink-muted mt-1" data-aceite-rotulo>
@@ -58,17 +63,39 @@ export function AceitePublico({ token, rotulo, nomeSugerido }: {
         <span className="text-sm font-semibold text-ink">Nome completo</span>
         <input aria-label="Nome completo" value={nome} maxLength={NOME_MAX} disabled={enviando} onChange={(e) => setNome(e.target.value)} placeholder="Quem está confirmando" className={campo} />
       </label>
-      <label className="block">
-        <span className="text-sm font-semibold text-ink">Observação <span className="font-normal text-ink-muted">(opcional)</span></span>
-        <textarea aria-label="Observação" value={observacao} maxLength={OBSERVACAO_MAX} rows={2} disabled={enviando} onChange={(e) => setObservacao(e.target.value)}
-          placeholder="Algo que queira deixar registrado" className={campo} />
-      </label>
+      {comRessalva && (
+        <div className="bg-atencao-claro border border-atencao/30 rounded-lg p-3 space-y-2" data-ressalva-campo>
+          <label className="block">
+            <span className="text-sm font-semibold text-ink">Qual é a ressalva?</span>
+            <textarea aria-label="Ressalva" value={ressalva} maxLength={RESSALVA_MAX} rows={3} disabled={enviando} autoFocus onChange={(e) => setRessalva(e.target.value)}
+              placeholder="O que ficou pendente ou diferente do combinado" className={campo} />
+          </label>
+          <p className="text-xs text-ink" data-ressalva-explica>
+            <span>O serviço fica confirmado e a ressalva segue junto. </span>
+            <span>A empresa é avisada na hora.</span>
+          </p>
+        </div>
+      )}
       <p className="text-xs text-ink-muted" data-aviso-registro>
         Ao confirmar, registramos seu nome, a data e a hora e o endereço IP desta confirmação.
       </p>
-      <Button variant="success" onClick={confirmar} loading={enviando} className="w-full justify-center text-base py-3" data-confirmar-aceite-publico>
-        <CheckCircle2 className="w-5 h-5" aria-hidden /> Confirmo o recebimento do serviço
-      </Button>
+      {comRessalva ? (
+        <div className="grid gap-2 sm:grid-cols-[auto_1fr]">
+          <Button variant="secondary" onClick={() => { setComRessalva(false); setErro(""); }} disabled={enviando} className="justify-center py-3" data-ressalva-voltar>Voltar</Button>
+          <Button onClick={confirmar} loading={enviando} className="w-full justify-center text-base py-3" data-confirmar-com-ressalva>
+            <MessageSquareWarning className="w-5 h-5" aria-hidden /> Confirmar com ressalva
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <Button variant="success" onClick={confirmar} loading={enviando} className="w-full justify-center text-base py-3" data-confirmar-aceite-publico>
+            <CheckCircle2 className="w-5 h-5" aria-hidden /> Confirmo o recebimento do serviço
+          </Button>
+          <Button variant="secondary" onClick={() => { setComRessalva(true); setErro(""); }} disabled={enviando} className="w-full justify-center py-3" data-tenho-ressalva>
+            <MessageSquareWarning className="w-5 h-5" aria-hidden /> Tenho uma ressalva
+          </Button>
+        </div>
+      )}
     </section>
   );
 }

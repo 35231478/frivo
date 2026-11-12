@@ -33,7 +33,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
   return responderAceite(async () => {
     const r = await registrarAceiteLocal(
-      { empresaId: ator.empresaId, usuarioId: ator.usuarioId, osId: id, exigirOsConcluida: true }, parsed.data,
+      { empresaId: ator.empresaId, usuarioId: ator.usuarioId, osId: id, exigirOsConcluida: true, vistoPeloEscritorio: !ator.restrito }, parsed.data,
       { ip: ipDaRequisicao(req.headers), userAgent: req.headers.get("user-agent") },
     );
     return { estado: "CONFIRMADO", jaEstava: r.jaEstava, aceite: await aceiteDaOs(id, ator.empresaId, { comAssinatura: true }) };

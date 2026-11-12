@@ -32,7 +32,7 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
       responsavel: { select: { id: true, nome: true } },
       criadoPor: { select: { id: true, nome: true } },
       // Aceite do cliente: "concluída, aguardando confirmação" no cabeçalho e no que falta
-      aceite: { select: { situacao: true, metodo: true, nome: true, confirmadoEm: true } },
+      aceite: { select: { situacao: true, metodo: true, nome: true, confirmadoEm: true, ressalva: true } },
       atividades: {
         include: {
           tipoOs: { select: { id: true, nome: true, cor: true } },

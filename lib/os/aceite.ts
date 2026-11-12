@@ -23,11 +23,12 @@ export const ROTULO_METODO: Record<MetodoAceite, string> = { LOCAL: "No local", 
 export const CANAIS_PEDIDO = ["WHATSAPP", "EMAIL", "WHATSAPP_EMAIL", "LINK"] as const;
 export type CanalPedido = (typeof CANAIS_PEDIDO)[number];
 
-export const NOME_MIN = 3, NOME_MAX = 120, OBSERVACAO_MAX = 1000;
+export const NOME_MIN = 3, NOME_MAX = 120, RESSALVA_MIN = 5, RESSALVA_MAX = 1000;
 /** A assinatura é um desenho pequeno (PNG do traço): 300 KB sobra — e cabe na fila do aparelho */
 export const ASSINATURA_MAX_BYTES = 300 * 1024;
 export const MSG_NOME = "Informe o nome completo de quem confirma.";
 export const MSG_ASSINATURA = "Peça para o cliente assinar no quadro.";
+export const MSG_RESSALVA = "Descreva a ressalva em poucas palavras.";
 export const MSG_OS_NAO_CONCLUIDA = "A OS ainda não está concluída.";
 export const MSG_OS_CANCELADA = "Esta OS foi cancelada.";
 export const MSG_JA_CONFIRMADO = "Este serviço já foi confirmado.";
@@ -45,18 +46,26 @@ const assinatura = z.string({ required_error: MSG_ASSINATURA, invalid_type_error
 export const aceiteLocalSchema = z.object({ nome, assinatura }).strict();
 export type AceiteLocal = z.infer<typeof aceiteLocalSchema>;
 
-/** Remoto (link público): nome de quem confirma + uma observação opcional */
+/**
+ * Remoto (link público): nome de quem confirma e, se houver, a RESSALVA — o serviço fica confirmado,
+ * mas o cliente registra o que ficou pendente ou diferente do combinado, e o escritório é avisado.
+ */
 export const aceitePublicoSchema = z.object({
   nome,
-  observacao: z.string().trim().max(OBSERVACAO_MAX, `A observação vai até ${OBSERVACAO_MAX} caracteres.`).optional().nullable().transform((v) => v || null),
-}).strict();
+  ressalva: z.string({ invalid_type_error: MSG_RESSALVA }).trim().max(RESSALVA_MAX, `A ressalva vai até ${RESSALVA_MAX} caracteres.`)
+    .refine((v) => !v || v.length >= RESSALVA_MIN, MSG_RESSALVA).optional().nullable(),
+  // Como o campo se chamava na primeira versão da página: uma aba aberta antes da atualização ainda manda assim
+  observacao: z.string().trim().max(RESSALVA_MAX).optional().nullable(),
+}).strict().transform((d) => ({ nome: d.nome, ressalva: d.ressalva || d.observacao || null }));
 export type AceitePublico = z.infer<typeof aceitePublicoSchema>;
 
 /* ───────── o estado ───────── */
 
 export interface AceiteResumo {
   situacao: string; metodo?: string | null; nome?: string | null; confirmadoEm?: Date | string | null;
-  ip?: string | null; observacao?: string | null; colhidoPor?: string | null;
+  ip?: string | null; ressalva?: string | null; colhidoPor?: string | null;
+  /** Quando o escritório viu a confirmação (vazio = o aviso ainda está no sino) */
+  vistoEm?: Date | string | null;
   enviadoEm?: Date | string | null; enviadoPara?: string | null; envios?: number | null;
 }
 
@@ -74,6 +83,24 @@ export function estadoDoAceite(statusOs: string, aceite: Pick<AceiteResumo, "sit
 export const ROTULO_ESTADO: Record<Exclude<EstadoAceite, "NAO_SE_APLICA">, string> = {
   AGUARDANDO: "Aguardando confirmação do cliente", CONFIRMADO: "Confirmada pelo cliente",
 };
+
+/** O cliente confirmou COM ressalva? (a ressalva só existe no aceite confirmado) */
+export const temRessalva = (a: Pick<AceiteResumo, "situacao" | "ressalva"> | null | undefined): boolean =>
+  a?.situacao === "CONFIRMADO" && !!(a.ressalva ?? "").trim();
+export const ROTULO_COM_RESSALVA = "Confirmada pelo cliente, com ressalva";
+/** O rótulo do estado na OS: a ressalva aparece no próprio rótulo */
+export const rotuloDoAceite = (estado: Exclude<EstadoAceite, "NAO_SE_APLICA">, comRessalva: boolean) =>
+  (estado === "CONFIRMADO" && comRessalva ? ROTULO_COM_RESSALVA : ROTULO_ESTADO[estado]);
+
+/**
+ * O aviso que o aceite acende no SINO do escritório: o cliente confirmou (com ou sem ressalva) e
+ * ninguém com "OS › Editar" abriu a OS ainda. Um aviso por confirmação; some quando é visto.
+ */
+export type AvisoAceite = "RESSALVA" | "CONFIRMADO";
+export function avisoDoAceite(a: Pick<AceiteResumo, "situacao" | "ressalva" | "vistoEm"> | null | undefined): AvisoAceite | null {
+  if (!a || a.situacao !== "CONFIRMADO" || a.vistoEm) return null;
+  return temRessalva(a) ? "RESSALVA" : "CONFIRMADO";
+}
 
 /** O que impede colher ou pedir o aceite agora (null = pode) */
 export function motivoSemAceite(statusOs: string, aceite: Pick<AceiteResumo, "situacao"> | null | undefined): string | null {
@@ -137,6 +164,7 @@ export const rotuloDaOs = (numero: string) => (/^\s*os\b/i.test(numero) ? numero
 
 export const ACAO_PEDIDO = "Confirmação do cliente pedida";
 export const ACAO_ACEITE = "Serviço confirmado pelo cliente";
+export const ACAO_ACEITE_RESSALVA = "Serviço confirmado pelo cliente, com ressalva";
 export const ACAO_EMERGENCIA = "Chamado aberto em emergência";
 
 /** O canal do pedido, pelo que de fato saiu */
