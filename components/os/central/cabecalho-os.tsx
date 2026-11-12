@@ -118,7 +118,8 @@ export function CabecalhoOs({ os, central, acoes, onAba, onAtualizado }: {
           {central.atividades.total ? `${central.atividades.concluidas} de ${central.atividades.total} concluída${central.atividades.total > 1 ? "s" : ""}` : "Nenhuma"}
         </Kpi>
         <Kpi icone={Wrench} rotulo="Equipamentos atendidos" onClick={() => onAba("atividades")} data-numero="equipamentos">
-          {central.equipamentosAtendidos}
+          {/* OS em campanha: o progresso somado das visitas */}
+          {central.visitas ? `${central.visitas.feitos} de ${central.visitas.total}` : central.equipamentosAtendidos}
         </Kpi>
         <Kpi icone={CircleDollarSign} rotulo="Valor (orçado · medido)" onClick={() => onAba("comercial")} data-numero="valor">
           {formatarMoeda(central.valor.orcado)} <span className="text-ink-subtle font-normal">·</span> {formatarMoeda(central.valor.medido)}

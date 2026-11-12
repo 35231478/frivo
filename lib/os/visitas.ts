@@ -339,7 +339,9 @@ export interface EstadoVisitasTela {
   /** Equipamentos sem atendimento em visitas concluídas, fora de qualquer visita pendente */
   sobras: number;
   /** A atividade que o primeiro planejamento divide (null = nenhuma serve) */
-  origem: { id: string; titulo: string; equipamentos: VisitaTela["equipamentos"]; dataAgendada: string | null } | null;
+  origem: { id: string; titulo: string; equipamentos: VisitaTela["equipamentos"]; dataAgendada: string | null; dia: string | null } | null;
+  /** O serviço das visitas (para a tela oferecer só quem tem competência nele) */
+  tipoOsId: string | null;
   /** Quem executa hoje: o da atividade a dividir ou, com o plano feito, o da primeira visita pendente */
   executorModelo: ExecutorDoPlano | null;
   /** Por que não dá para planejar agora (null = dá) */

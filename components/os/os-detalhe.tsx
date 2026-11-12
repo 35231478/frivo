@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Tabs } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { OsAtividades } from "@/components/os/os-atividades";
+import { OsVisitas } from "@/components/os/os-visitas";
 import { OsOrcamento } from "@/components/os/os-orcamento";
 import { OsFinanceiro } from "@/components/os/os-financeiro";
 import { OsOrcamentosVinculados } from "@/components/os/os-orcamentos-vinculados";
@@ -38,6 +39,9 @@ export function abaValida(aba: string | null | undefined): AbaOs {
   if ((ABAS_OS as readonly string[]).includes(aba)) return aba as AbaOs;
   return ABA_ANTIGA[aba] ?? "resumo";
 }
+
+/** Muda quando uma atividade nasce, some, vira visita ou troca de dia */
+const chaveDasAtividades = (ativs: any[]) => (ativs ?? []).map((a) => `${a.id}:${a.planoVisitasId ?? ""}:${a.dataAgendada ?? ""}`).join("|");
 
 export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?: string }) {
   const router = useRouter();
@@ -131,7 +135,10 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
               {ativa === "atividades" && (
                 <div className="space-y-6">
                   {/* Atividades + execução/equipamentos (Etapa 1) + formulário respondido de cada uma */}
-                  <OsAtividades osId={os.id} atividades={os.atividades} clienteId={os.cliente.id} unidadeId={os.unidadeId} onMudou={() => router.refresh()} />
+                  {/* OS em campanha: visitas diárias (cada visita é uma atividade) e o progresso somado */}
+                  <OsVisitas osId={os.id} onMudou={() => router.refresh()} />
+                  {/* A lista remonta quando as visitas mudam de dia ou de quantidade (ela guarda as atividades em estado próprio) */}
+                  <OsAtividades key={chaveDasAtividades(os.atividades)} osId={os.id} atividades={os.atividades} clienteId={os.cliente.id} unidadeId={os.unidadeId} onMudou={() => router.refresh()} />
                   {/* Antiga aba "Prazos": os prazos/SLA por modelo continuam aqui, junto das atividades */}
                   <div className="border-t border-surface-linha pt-6" data-secao-sla>
                     <OsPrazos osId={os.id} />

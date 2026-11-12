@@ -113,7 +113,11 @@ export async function estadoDasVisitas(osId: string, empresaId: string, agora: D
     })).sort((a, b) => (a.numero ?? 9999) - (b.numero ?? 9999)),
     progresso: progressoDasVisitas(c.plano ? regras : []),
     sobras: c.plano ? sobras(regras).length : 0,
-    origem: c.origem ? { id: c.origem.id, titulo: c.origem.titulo, equipamentos: equipamentosDaTela(c.origem), dataAgendada: c.origem.dataAgendada?.toISOString() ?? null } : null,
+    origem: c.origem ? {
+      id: c.origem.id, titulo: c.origem.titulo, equipamentos: equipamentosDaTela(c.origem),
+      dataAgendada: c.origem.dataAgendada?.toISOString() ?? null, dia: c.origem.dataAgendada ? chaveDiaBR(c.origem.dataAgendada) : null,
+    } : null,
+    tipoOsId: (c.origem ?? c.visitas[0])?.tipoOsId ?? null,
     executorModelo: primeira ? executorDe(primeira) : null,
     bloqueio: bloqueioDe(c),
     proposta: {
