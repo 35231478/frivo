@@ -107,6 +107,9 @@ describe("OS › visitas: o convite para planejar", () => {
     expect(texto()).toBe("");
     await abrir({ ...BASE, origem: null, bloqueio: "Para planejar visitas, a OS precisa de uma atividade agendada, ainda não iniciada, com 2 equipamentos ou mais." });
     expect(texto()).toBe("");
+    // OS cancelada: ainda há atividade com equipamentos, mas o bloqueio impede o convite
+    await abrir({ ...BASE, bloqueio: "OS cancelada: não dá para planejar visitas." });
+    expect(texto()).toBe("");
     respostas[`GET ${URL_V}`] = { status: 403, corpo: { erro: "O planejamento das visitas é feito pelo escritório." } };
     await abrir(null);
     expect(texto()).toBe("");
@@ -260,6 +263,15 @@ describe("OS › visitas: replanejar e ajustar", () => {
     await clicar($("[data-trocar-executor]"));
     await clicar($("[data-confirmar-visitas]"));
     expect(envios()[1]).toMatchObject({ incluirSobras: true, executor: { tecnicoIds: [], equipeId: null } });
+  });
+
+  it("visita agendada que já tem registro do técnico (não é mais pendente) fica FORA da prévia do replanejamento", async () => {
+    const comRegistro = { ...COM_PLANO, sobras: 0, visitas: [COM_PLANO.visitas[0], { ...COM_PLANO.visitas[1], pendente: false }, COM_PLANO.visitas[2]] };
+    await abrir(comRegistro);
+    await clicar($("[data-replanejar]"));
+    // só os 10 equipamentos da 3ª visita são redistribuídos; os 25 da 2ª ficam onde estão
+    expect(previa()).toEqual(["1 visita, em sex, 13/11/2026", ["sex, 13/11 · 10"]]);
+    expect(texto($("[data-modal-planejar]"))).toContain("10 a distribuir");
   });
 
   it("INCLUIR UM DIA: a prévia mostra os lotes repartidos por igual; dia que já tem visita é recusado antes de enviar", async () => {

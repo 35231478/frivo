@@ -132,6 +132,14 @@ describe.skipIf(!URL_PG)("OS em campanha — visitas (PostgreSQL real)", () => {
     expect(r.json.origem.equipamentos).toHaveLength(60);
     expect(r.json.origem.equipamentos[0]).toMatchObject({ id: "q001", rotulo: "AC-001 · Split 1", local: "1º andar · Sala 001", feito: false });
     expect(await prisma.osPlanoVisitas.count()).toBe(0); // ler não cria nada
+    // a proposta nunca começa no passado nem no fim de semana: atividade de terça passada → hoje; de sábado → segunda
+    const passada = await novaOs({ atividade: { dataAgendada: em("2026-11-10") } });
+    expect((await chamar("GET", passada.osId)).json.proposta.inicio).toBe("2026-11-12");
+    const sabado = await novaOs({ atividade: { dataAgendada: em("2026-11-14") } });
+    expect((await chamar("GET", sabado.osId)).json.proposta.inicio).toBe("2026-11-16");
+    // poucos equipamentos: a quantidade proposta não passa do que há para distribuir
+    const pequena = await novaOs({ equipamentos: faixa(1, 8) });
+    expect((await chamar("GET", pequena.osId)).json.proposta.porDia).toBe(8);
   });
 
   it("PLANEJAR: divide os 60 equipamentos em 3 visitas (25, 25, 10) que são ATIVIDADES da mesma OS, cada uma num dia, pulando o fim de semana", async () => {
@@ -183,6 +191,20 @@ describe.skipIf(!URL_PG)("OS em campanha — visitas (PostgreSQL real)", () => {
       expect(v.tecnicosEquipe.map((t: any) => t.tecnicoId)).toEqual(["t2"]);
     }
     expect((await chamar("GET", osId)).json.visitas.map((v: any) => v.executor)).toEqual(Array(3).fill("Equipe Alfa: Carlos Lima (responsável), Bruna Reis"));
+    // replanejar SEM dizer quem executa: as visitas que já existem ficam com a equipe, e as NOVAS copiam dela
+    await chamar("POST", osId, { ...P25, porDia: 12 });
+    const cinco = await visitas(osId);
+    expect(cinco).toHaveLength(5);
+    for (const v of cinco) {
+      expect(v).toMatchObject({ tecnicoId: "t1", equipeId: "eqA", veiculoId: "vA", titulo: "Limpeza Química", duracaoMin: 480 });
+      expect(v.tecnicosEquipe.map((t: any) => t.tecnicoId)).toEqual(["t2"]);
+    }
+    // executor em BRANCO no pedido: as visitas pendentes ficam "sem quem execute" (e sem veículo)
+    expect((await chamar("POST", osId, { ...P25, porDia: 30, executor: { tecnicoIds: [] } })).status).toBe(200);
+    for (const v of await visitas(osId)) {
+      expect(v).toMatchObject({ tecnicoId: null, equipeId: null, veiculoId: null });
+      expect(v.tecnicosEquipe).toEqual([]);
+    }
     // um técnico só, sem veículo
     const outra = await novaOs();
     await chamar("POST", outra.osId, { ...P25, executor: { tecnicoIds: ["t2"], veiculoId: null } });
