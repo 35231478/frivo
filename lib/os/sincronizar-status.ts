@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { verificarConclusaoOs } from "@/lib/execucao/dados";
 import { gerarRelatoriosDaOs } from "@/lib/relatorio-server";
+import { garantirAceite } from "@/lib/os/aceite-server";
 import { estagioAutomatico, statusCorresponde, statusDoEstagio, type StatusOsGravado } from "@/lib/os/status";
 
 /**
@@ -12,7 +13,8 @@ import { estagioAutomatico, statusCorresponde, statusDoEstagio, type StatusOsGra
  *    completo) — se não passar, fica "Em andamento" até resolver;
  *  - Grava as datas de início/conclusão como o ajuste manual já gravava, e anota no histórico
  *    ("Status automático: X → Y") em nome de quem causou a mudança;
- *  - Ao concluir, gera os relatórios da OS (o mesmo efeito da conclusão manual).
+ *  - Ao concluir, gera os relatórios da OS (o mesmo efeito da conclusão manual) e deixa o aceite
+ *    do cliente PENDENTE ("concluída, aguardando confirmação do cliente").
  *
  * Idempotente: chamar de novo sem mudança não grava nada. Devolve o status final.
  */
@@ -53,6 +55,8 @@ export async function sincronizarStatusOs(osId: string, empresaId: string, usuar
   if (alvo === "CONCLUIDA") {
     try { await gerarRelatoriosDaOs(osId, empresaId); }
     catch (e) { console.error("Falha ao gerar relatórios automáticos da OS", e); }
+    try { await garantirAceite(osId, empresaId); }
+    catch (e) { console.error("Falha ao abrir o aceite do cliente da OS", e); }
   }
   return alvo;
 }

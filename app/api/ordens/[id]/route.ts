@@ -7,6 +7,7 @@ import { cancelarOs, statusHttp } from "@/lib/acoes-massa/regras";
 import { SOLICITACAO_PENDENTE } from "@/lib/solicitacoes";
 import { prisma } from "@/lib/prisma";
 import { gerarRelatoriosDaOs } from "@/lib/relatorio-server";
+import { garantirAceite } from "@/lib/os/aceite-server";
 import { verificarConclusaoOs } from "@/lib/execucao/dados";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 import { estagioAutomatico, statusCorresponde } from "@/lib/os/status";
@@ -213,6 +214,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
     } catch (e) {
       console.error("Falha ao gerar relatórios automáticos da OS", e);
     }
+    // … e fica "aguardando confirmação do cliente" (aceite pendente; não trava o faturamento)
+    try { await garantirAceite(id, empresaId); } catch (e) { console.error("Falha ao abrir o aceite do cliente da OS", e); }
   }
 
   // Mudou a previsão (e não há ajuste manual): o automático pode mudar (ex.: OS sem atividade com data → Agendada)

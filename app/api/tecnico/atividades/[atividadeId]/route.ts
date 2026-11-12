@@ -8,6 +8,8 @@ import { aplicarPrivacidade } from "@/lib/tecnico/cartao";
 import { carregarConfigApp } from "@/lib/tecnico/config-app-server";
 import { cadastroParaRetrato } from "@/lib/execucao/cadastro-campo";
 import { avisoParaRetrato, avisosDeHoje } from "@/lib/execucao/aviso-cliente";
+import { aceiteParaRetrato } from "@/lib/os/aceite-server";
+import { pode, type Permissoes } from "@/lib/permissoes";
 
 type Params = { params: Promise<{ atividadeId: string }> };
 
@@ -45,6 +47,9 @@ export async function GET(_: NextRequest, { params }: Params) {
   // Aviso ao cliente ("A caminho" / "Cheguei"), se a empresa permite: o nome da empresa para a mensagem,
   // o WhatsApp do cliente (só com "Exibir contatos do cliente") e o que já foi registrado hoje
   const [avisoCliente, avisos] = await Promise.all([avisoParaRetrato(empresaId, config, cartao.osId), avisosDeHoje(atividadeId)]);
+  // Aceite do cliente na conclusão da OS: só vai para quem pode colher (OS › Editar)
+  const { permissoes, role } = guard.session.user;
+  const aceite = pode(permissoes as Permissoes, "ordens", "editar", role) ? await aceiteParaRetrato(empresaId, cartao.osId, atividadeId) : null;
   // Checklist de cada tipo da unidade — e, com o cadastro em campo, de cada tipo que dá para escolher:
   // vincular ou cadastrar sem sinal já mostra o checklist do equipamento novo
   const tipoIds = [...new Set([...daUnidade.map((e) => e.tipoEquipamentoId), ...(cadastro?.tipos ?? []).map((t) => t.tipoEquipamentoId)].filter((x): x is string => !!x))];
@@ -71,6 +76,7 @@ export async function GET(_: NextRequest, { params }: Params) {
     checklistsPorTipo,
     cadastro,
     avisoCliente,
+    aceite,
     geradoEm: new Date().toISOString(),
   }, { headers: { "Cache-Control": "private, no-store" } });
 }

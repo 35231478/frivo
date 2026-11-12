@@ -59,6 +59,10 @@ export const TEMPLATES_PADRAO: DefTemplate[] = [
   { tipo: "OS_CONCLUIDA", nome: "OS Concluída", assunto: "Ordem de serviço {{numero_os}} concluída — {{empresa_nome}}",
     corpo: "<p>Olá <strong>{{cliente_nome}}</strong>,</p><p>A ordem de serviço <strong>{{numero_os}}</strong> foi concluída. Agradecemos a preferência e ficamos à disposição.</p>",
     botaoLabel: "Ver detalhes", botaoVar: "link_documento" },
+  // Aceite do cliente: o link para ler o relatório da OS e confirmar o recebimento do serviço
+  { tipo: "OS_CONFIRMACAO", nome: "Confirmação do serviço (aceite do cliente)", assunto: "Confirme o serviço da OS {{numero_os}} — {{empresa_nome}}",
+    corpo: "<p>Olá <strong>{{cliente_nome}}</strong>,</p><p>Concluímos o serviço da ordem de serviço <strong>{{numero_os}}</strong>.</p><p>Veja o relatório do que foi feito e confirme o recebimento pelo botão abaixo. A confirmação leva menos de um minuto.</p>",
+    botaoLabel: "Ver o relatório e confirmar", botaoVar: "link_documento" },
   // App do técnico: aviso curto ao cliente quando o técnico sai ("A caminho") e quando chega ("Cheguei")
   { tipo: "TECNICO_A_CAMINHO", nome: "Técnico a caminho", assunto: "Técnico a caminho — {{empresa_nome}}",
     corpo: "<p><strong>{{empresa_nome}}</strong>: nosso técnico está a caminho do seu atendimento.</p><p style=\"color:#64748b;font-size:13px\">Ordem de serviço {{numero_os}}.</p>" },
