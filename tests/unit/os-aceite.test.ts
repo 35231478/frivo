@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
 import {
   ACAO_ACEITE, ACAO_EMERGENCIA, ACAO_PEDIDO, ASSINATURA_MAX_BYTES, MSG_GATE, ROTULO_ESTADO, ROTULO_METODO, aceiteLocalSchema, aceiteNoApp, aceitePublicoSchema, bytesDoDataUrl,
   caminhoPublicoAceite, canalDoPedido, estadoDoAceite, gateDoChamado, mensagemPedido, motivoSemAceite, provaDoAceite, recadoDoPedido, rotuloDaOs, rotuloDaPendencia, servicoDaOs,
-  textoDoAceite, textoDoCanal, tituloDasPendencias, type AceiteRetrato,
+  ACAO_ACEITE_RESSALVA, ROTULO_COM_RESSALVA, avisoDoAceite, rotuloDoAceite, temRessalva, textoDoAceite, textoDoCanal, tituloDasPendencias, type AceiteRetrato,
 } from "@/lib/os/aceite";
 import { centralDaOs, type OsCentralEntrada } from "@/lib/os/central";
 import { montarRelatorioOs, type OsParaRelatorio } from "@/lib/relatorio-os/dados";
@@ -54,15 +54,29 @@ describe("aceite do cliente: o que chega", () => {
     expect(aceitePublicoSchema.safeParse({ nome: "João Pereira", assinatura: ASSINATURA }).success).toBe(false);
   });
 
-  it("PELO LINK: nome de quem confirma e, se quiser, uma observação (vazia vira 'sem')", () => {
-    expect(aceitePublicoSchema.parse({ nome: " Maria Lima " })).toEqual({ nome: "Maria Lima", observacao: null });
-    expect(aceitePublicoSchema.parse({ nome: "Maria Lima", observacao: "  Tudo certo  " })).toEqual({ nome: "Maria Lima", observacao: "Tudo certo" });
-    expect(aceitePublicoSchema.parse({ nome: "Maria Lima", observacao: "   " }).observacao).toBeNull();
-    expect(aceitePublicoSchema.parse({ nome: "Maria Lima", observacao: null }).observacao).toBeNull();
+  it("PELO LINK: nome de quem confirma e, se houver, a RESSALVA (vazia = confirmou sem ressalva)", () => {
+    expect(aceitePublicoSchema.parse({ nome: " Maria Lima " })).toEqual({ nome: "Maria Lima", ressalva: null });
+    expect(aceitePublicoSchema.parse({ nome: "Maria Lima", ressalva: "  O split da recepção ainda pinga  " })).toEqual({ nome: "Maria Lima", ressalva: "O split da recepção ainda pinga" });
+    for (const vazia of ["   ", "", null, undefined]) expect(aceitePublicoSchema.parse({ nome: "Maria Lima", ressalva: vazia }).ressalva, String(vazia)).toBeNull();
     for (const nome of [undefined, "", "ab", 12]) expect(erroDe(aceitePublicoSchema, { nome }), String(nome)).toBe("Informe o nome completo de quem confirma.");
-    expect(erroDe(aceitePublicoSchema, { nome: "Maria Lima", observacao: "x".repeat(1000) })).toBeNull();
-    expect(erroDe(aceitePublicoSchema, { nome: "Maria Lima", observacao: "x".repeat(1001) })).toBe("A observação vai até 1000 caracteres.");
+    // Uma ressalva tem de dizer alguma coisa: 5 letras no mínimo, 1.000 no máximo
+    expect(erroDe(aceitePublicoSchema, { nome: "Maria Lima", ressalva: "ruim" })).toBe("Descreva a ressalva em poucas palavras.");
+    expect(erroDe(aceitePublicoSchema, { nome: "Maria Lima", ressalva: " ruim  " })).toBe("Descreva a ressalva em poucas palavras.");
+    expect(erroDe(aceitePublicoSchema, { nome: "Maria Lima", ressalva: "pinga" })).toBeNull();
+    expect(erroDe(aceitePublicoSchema, { nome: "Maria Lima", ressalva: 12 })).toBe("Descreva a ressalva em poucas palavras.");
+    expect(erroDe(aceitePublicoSchema, { nome: "Maria Lima", ressalva: "x".repeat(1000) })).toBeNull();
+    expect(erroDe(aceitePublicoSchema, { nome: "Maria Lima", ressalva: "x".repeat(1001) })).toBe("A ressalva vai até 1000 caracteres.");
+    expect(erroDe(aceitePublicoSchema, { nome: "Maria Lima", ressalva: "Faltou a tampa", situacao: "CONFIRMADO" })).not.toBeNull(); // nada além de nome e ressalva
     expect(erroDe(aceitePublicoSchema, null)).not.toBeNull();
+  });
+
+  it("a página aberta ANTES da atualização ainda manda 'observacao': vale como a ressalva (a ressalva nova tem preferência)", () => {
+    expect(aceitePublicoSchema.parse({ nome: "Maria Lima", observacao: "  Tudo certo  " })).toEqual({ nome: "Maria Lima", ressalva: "Tudo certo" });
+    expect(aceitePublicoSchema.parse({ nome: "Maria Lima", observacao: null })).toEqual({ nome: "Maria Lima", ressalva: null });
+    expect(aceitePublicoSchema.parse({ nome: "Maria Lima", observacao: "ok" }).ressalva).toBe("ok"); // o campo antigo não tinha mínimo
+    expect(aceitePublicoSchema.parse({ nome: "Maria Lima", ressalva: "Faltou a tampa", observacao: "antiga" }).ressalva).toBe("Faltou a tampa");
+    expect(erroDe(aceitePublicoSchema, { nome: "Maria Lima", observacao: "x".repeat(1001) })).not.toBeNull();
+    expect(Object.keys(aceitePublicoSchema.parse({ nome: "Maria Lima", observacao: "Tudo certo" })).sort()).toEqual(["nome", "ressalva"]); // "observacao" não segue adiante
   });
 });
 
@@ -235,14 +249,15 @@ describe("aceite do cliente: a central da OS e o relatório", () => {
     empresa: { nome: "Clima Total" } as OsParaRelatorio["empresa"], cliente: { nome: "Hospital Santa Clara Ltda", nomeFantasia: "Hospital Santa Clara" } as OsParaRelatorio["cliente"],
     unidade: null, contrato: null, equipamento: null, atividades: [], aceite,
   });
-  const CONFIRMADO = { situacao: "CONFIRMADO", nome: "João Pereira", confirmadoEm: new Date("2026-11-05T17:32:00Z"), metodo: "LOCAL", ip: "189.10.20.30", assinatura: ASSINATURA, observacao: null, colhidoPor: { nome: "Carlos Oliveira" } };
+  const CONFIRMADO = { situacao: "CONFIRMADO", nome: "João Pereira", confirmadoEm: new Date("2026-11-05T17:32:00Z"), metodo: "LOCAL", ip: "189.10.20.30", assinatura: ASSINATURA, ressalva: null, colhidoPor: { nome: "Carlos Oliveira" } };
 
   it("RELATÓRIO: o aceite confirmado entra como prova — quem, quando, como, de onde, a assinatura e quem colheu", () => {
     expect(montarRelatorioOs(paraRelatorio(CONFIRMADO), null).aceite).toEqual({
-      nome: "João Pereira", confirmadoEm: new Date("2026-11-05T17:32:00Z"), metodo: "LOCAL", ip: "189.10.20.30", assinatura: ASSINATURA, colhidoPor: "Carlos Oliveira", observacao: null,
+      nome: "João Pereira", confirmadoEm: new Date("2026-11-05T17:32:00Z"), metodo: "LOCAL", ip: "189.10.20.30", assinatura: ASSINATURA, colhidoPor: "Carlos Oliveira", ressalva: null,
     });
-    const remoto = montarRelatorioOs(paraRelatorio({ ...CONFIRMADO, metodo: "REMOTO", assinatura: null, colhidoPor: null, observacao: "Tudo certo" }), null).aceite;
-    expect(remoto).toMatchObject({ metodo: "REMOTO", assinatura: null, colhidoPor: null, observacao: "Tudo certo" });
+    const remoto = montarRelatorioOs(paraRelatorio({ ...CONFIRMADO, metodo: "REMOTO", assinatura: null, colhidoPor: null, ressalva: "  O split ainda pinga " }), null).aceite;
+    expect(remoto).toMatchObject({ metodo: "REMOTO", assinatura: null, colhidoPor: null, ressalva: "O split ainda pinga" }); // a RESSALVA vai no relatório
+    expect(montarRelatorioOs(paraRelatorio({ ...CONFIRMADO, ressalva: "   " }), null).aceite!.ressalva).toBeNull(); // em branco não é ressalva
   });
 
   it("RELATÓRIO: aceite pendente (ou OS sem aceite) não entra — pendente não é prova de nada", () => {
@@ -272,5 +287,54 @@ describe("aceite do cliente: no aparelho do técnico (com ou sem sinal)", () => 
     expect(op({ nome: "Jo", assinatura: ASSINADO })).toBe(false);
     expect(op({ nome: "João Pereira" })).toBe(false);
     expect(op({ nome: "João Pereira", assinatura: ASSINADO, situacao: "CONFIRMADO" })).toBe(false);
+  });
+});
+
+describe("aceite do cliente: a RESSALVA e o aviso no sino", () => {
+  const confirmado = (extra: Record<string, unknown> = {}) => ({ situacao: "CONFIRMADO", ressalva: null as string | null, vistoEm: null as string | null, ...extra });
+
+  it("com ressalva = aceite CONFIRMADO que traz um texto; pendente nunca tem ressalva, e texto em branco não conta", () => {
+    expect(temRessalva(confirmado({ ressalva: "O split da recepção ainda pinga" }))).toBe(true);
+    for (const r of [null, undefined, "", "   "]) expect(temRessalva(confirmado({ ressalva: r })), String(r)).toBe(false);
+    expect(temRessalva({ situacao: "PENDENTE", ressalva: "sobrou de um teste" })).toBe(false);
+    expect(temRessalva(null)).toBe(false);
+    expect(temRessalva(undefined)).toBe(false);
+  });
+
+  it("o rótulo na OS diz quando há ressalva — e só no aceite confirmado", () => {
+    expect(rotuloDoAceite("CONFIRMADO", false)).toBe("Confirmada pelo cliente");
+    expect(rotuloDoAceite("CONFIRMADO", true)).toBe("Confirmada pelo cliente, com ressalva");
+    expect(rotuloDoAceite("AGUARDANDO", false)).toBe("Aguardando confirmação do cliente");
+    expect(rotuloDoAceite("AGUARDANDO", true)).toBe("Aguardando confirmação do cliente");
+    expect(ROTULO_COM_RESSALVA).toBe("Confirmada pelo cliente, com ressalva");
+    expect(ACAO_ACEITE_RESSALVA).toBe("Serviço confirmado pelo cliente, com ressalva");
+    expect(ACAO_ACEITE_RESSALVA).not.toBe(ACAO_ACEITE);
+  });
+
+  it("SINO: UM aviso por confirmação ainda não vista — 'ressalva' ou 'confirmado'; pendente e já visto não avisam", () => {
+    expect(avisoDoAceite(confirmado())).toBe("CONFIRMADO");
+    expect(avisoDoAceite(confirmado({ ressalva: "Faltou a tampa do dreno" }))).toBe("RESSALVA");
+    expect(avisoDoAceite(confirmado({ vistoEm: "2026-11-12T15:00:00.000Z" }))).toBeNull();
+    expect(avisoDoAceite(confirmado({ ressalva: "Faltou a tampa do dreno", vistoEm: new Date("2026-11-12T15:00:00Z") }))).toBeNull();
+    expect(avisoDoAceite({ situacao: "PENDENTE", ressalva: null, vistoEm: null })).toBeNull();
+    expect(avisoDoAceite(null)).toBeNull();
+    expect(avisoDoAceite(undefined)).toBeNull();
+  });
+});
+
+describe("o toggle morto 'Exigir assinatura do cliente na OS' saiu", () => {
+  it("nenhuma tela fala mais nele; no servidor só sobra o filtro que tira o campo do que entra e do que sai", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const raiz = path.resolve(__dirname, "../..");
+    const arquivos = (dir: string): string[] => fs.readdirSync(path.join(raiz, dir), { withFileTypes: true }).flatMap((e) =>
+      e.isDirectory() ? arquivos(path.join(dir, e.name)) : /\.(ts|tsx)$/.test(e.name) ? [path.join(dir, e.name)] : []);
+    const cita = (dir: string) => arquivos(dir).filter((f) => /osExigirAssinatura|Exigir assinatura do cliente na OS/.test(fs.readFileSync(path.join(raiz, f), "utf8"))).sort();
+    expect(cita("components")).toEqual([]);
+    expect(cita("lib")).toEqual([]);
+    expect(cita("app")).toEqual(["app/api/configuracoes/route.ts"]);
+    const rota = fs.readFileSync(path.join(raiz, "app/api/configuracoes/route.ts"), "utf8");
+    expect(rota).not.toMatch(/osExigirAssinatura:\s*z\./); // não é mais um campo aceito
+    expect(rota.match(/semCampoMorto\(/g)).toHaveLength(3);   // sai do GET, do que chega no PUT e da resposta do PUT
   });
 });

@@ -19,6 +19,8 @@ import path from "node:path";
 const URL = process.env.PG_TESTE_URL;
 const RAIZ = path.resolve(__dirname, "../..");
 const ARQUIVO = path.join(RAIZ, "prisma/sql/2026-12-28_os_aceite_cliente.sql");
+/** O arquivo seguinte (a coluna do sino): o schema de hoje é o resultado dos dois, nesta ordem */
+const ARQUIVO_VISTO = path.join(RAIZ, "prisma/sql/2026-12-29_os_aceite_visto.sql");
 const SCHEMA = `teste_aceite_sql_${process.pid}`;
 const PRISMA = `teste_aceite_sql_prisma_${process.pid}`;
 const T = "os_aceites";
@@ -142,7 +144,8 @@ describe.skipIf(!URL)("SQL de produção: aceite do cliente na OS (PostgreSQL re
     expect(fonte).toMatch(/^BEGIN;[\s\S]*COMMIT;\s*$/m);
   });
 
-  it("o resultado é EXATAMENTE o que o Prisma espera: a tabela nova e a coluna da opção", () => {
+  it("o resultado é EXATAMENTE o que o Prisma espera: a tabela nova e a coluna da opção (com o arquivo seguinte, que traz a coluna do sino)", () => {
+    psql(["-f", ARQUIVO_VISTO]);
     const url = `${URL}${URL!.includes("?") ? "&" : "?"}schema=${PRISMA}`;
     execFileSync(path.join(RAIZ, "node_modules/.bin/prisma"), ["db", "push", "--skip-generate", "--schema", "prisma/schema.prisma"], { cwd: RAIZ, env: { ...process.env, DATABASE_URL: url }, stdio: "pipe" });
     for (const f of [colunas, indices, chaves]) expect(f(SCHEMA)).toBe(f(PRISMA));

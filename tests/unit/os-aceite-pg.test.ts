@@ -10,6 +10,9 @@
  *    link grava nome + IP + navegador + data/hora, com troca atômica (como o orçamento);
  *  - PORTAL: as pendências do cliente e o gate do novo chamado — livre por padrão, bloqueio por
  *    empresa, emergência sempre;
+ *  - RESSALVA: o cliente confirma registrando o que ficou pendente — o serviço fica confirmado, a
+ *    ressalva fica no registro, na OS e no relatório;
+ *  - SINO: um aviso por confirmação (as ressalvas à parte), até alguém com "OS › Editar" abrir a OS;
  *  - o aceite confirmado entra no relatório da OS;
  *  - RBAC e multiempresa em cada rota; o link público só precisa do token.
  *   PG_TESTE_URL="postgresql://root@localhost/postgres?host=/var/run/postgresql" npx vitest run tests/unit/os-aceite-pg
@@ -31,6 +34,9 @@ vi.mock("@/lib/auth", () => ({ auth: vi.fn(async () => sessao.atual) }));
 const portal = vi.hoisted(() => ({ sessao: null as any }));
 vi.mock("@/lib/auth-portal", () => ({ getPortalSession: vi.fn(async () => portal.sessao) }));
 const resend = vi.hoisted(() => ({ enviados: [] as any[], falhar: false }));
+// O sino (/api/alertas) agenda tarefas com after(), que só existe numa requisição do Next: aqui não faz nada
+vi.mock("@/lib/nfse/webhook-server", async (orig) => ({ ...(await orig<object>()), reconciliarEmpresa: vi.fn(async () => {}) }));
+vi.mock("next/server", async (orig) => ({ ...(await orig<object>()), after: (fn: () => void) => { void fn; } }));
 vi.mock("resend", () => ({
   Resend: class {
     emails = { send: async (m: any) => { resend.enviados.push(m); return resend.falhar ? { error: { message: "Domínio não verificado" } } : { data: { id: "x" } }; } };
@@ -59,7 +65,7 @@ const sync = async (operacoes: unknown[], cabecalhos: Record<string, string> = A
 const ASSINATURA = `data:image/png;base64,${"iVBORw0KGgo".padEnd(400, "A")}`;
 const opConcluir = (atividadeId: string) => ({ id: randomUUID(), tipo: "concluir", atividadeId, dados: {} });
 const opAceite = (atividadeId: string, nome = "João Pereira da Silva", assinatura: unknown = ASSINATURA) => ({ id: randomUUID(), tipo: "aceite", atividadeId, dados: { nome, assinatura } });
-const R_ACEITE = "ordens/[id]/aceite", R_ENVIAR = "ordens/[id]/aceite/enviar", R_PUBLICO = "publico/aceites/[token]/confirmar";
+const R_ACEITE = "ordens/[id]/aceite", R_ENVIAR = "ordens/[id]/aceite/enviar", R_PUBLICO = "publico/aceites/[token]/confirmar", R_VISTO = "ordens/[id]/aceite/visto";
 const CLIENTE_IP = { "x-forwarded-for": "200.150.10.5", "user-agent": "Mozilla/5.0 (iPhone) Safari/605" };
 
 describe.skipIf(!URL_PG)("Aceite do cliente na conclusão da OS (PostgreSQL real)", () => {
@@ -104,7 +110,7 @@ describe.skipIf(!URL_PG)("Aceite do cliente na conclusão da OS (PostgreSQL real
     (globalThis as any).prisma = undefined;
     ({ prisma } = await import("@/lib/prisma"));
     const { criptografar } = await import("@/lib/crypto");
-    await Promise.all(["tecnico/sync", "tecnico/atividades/[atividadeId]", R_ACEITE, R_ENVIAR, R_PUBLICO, "portal/chamados", "ordens/[id]", "configuracoes"].map((r) => import(/* @vite-ignore */ `@/app/api/${r}/route`)));
+    await Promise.all(["tecnico/sync", "tecnico/atividades/[atividadeId]", R_ACEITE, R_ENVIAR, R_PUBLICO, R_VISTO, "portal/chamados", "ordens/[id]", "configuracoes", "alertas"].map((r) => import(/* @vite-ignore */ `@/app/api/${r}/route`)));
 
     await prisma.empresa.createMany({ data: [
       { id: "e1", nome: "Clima Total Engenharia Ltda", nomeFantasia: "Clima Total", cnpj: "12.345.678/0001-90", email: "e@x.com" },
@@ -214,7 +220,7 @@ describe.skipIf(!URL_PG)("Aceite do cliente na conclusão da OS (PostgreSQL real
     const a = await aceite(x.id);
     expect(a).toMatchObject({
       situacao: "CONFIRMADO", metodo: "LOCAL", nome: "João Pereira da Silva", assinatura: ASSINATURA, ip: "189.10.20.30", userAgent: APARELHO["user-agent"],
-      colhidoPorId: "uT", atividadeId: x.a, contatoId: null, observacao: null,
+      colhidoPorId: "uT", atividadeId: x.a, contatoId: null, ressalva: null, vistoEm: null,
     });
     expect(a.confirmadoEm.getTime()).toBeGreaterThanOrEqual(antes - 1000);
     expect(await statusDa(x.id)).toBe("CONCLUIDA");
@@ -278,6 +284,7 @@ describe.skipIf(!URL_PG)("Aceite do cliente na conclusão da OS (PostgreSQL real
     const r = await chamar(R_ACEITE, "POST", { id: x.id }, corpo, { "x-forwarded-for": "177.1.2.3" });
     expect(r).toMatchObject({ status: 200, json: { estado: "CONFIRMADO", jaEstava: false, aceite: { situacao: "CONFIRMADO", metodo: "LOCAL", nome: "Marta Nunes", colhidoPor: "Ana Souza", ip: "177.1.2.3", assinatura: ASSINATURA } } });
     expect(await aceite(x.id)).toMatchObject({ colhidoPorId: "uA", atividadeId: null, nome: "Marta Nunes" });
+    expect((await aceite(x.id)).vistoEm).toBeInstanceOf(Date); // quem colheu foi o escritório: não há o que avisar no sino
     const de_novo = await chamar(R_ACEITE, "POST", { id: x.id }, { nome: "Outra Pessoa", assinatura: ASSINATURA });
     expect(de_novo.json).toMatchObject({ jaEstava: true, aceite: { nome: "Marta Nunes" } });
     expect(await historico(x.id, "Serviço confirmado pelo cliente")).toEqual(["Serviço confirmado pelo cliente | No local, por Marta Nunes (assinatura colhida na tela) | uA"]);
@@ -403,18 +410,19 @@ describe.skipIf(!URL_PG)("Aceite do cliente na conclusão da OS (PostgreSQL real
     const { token } = await aceite(x.id);
     sessao.atual = null; // ninguém logado: o link público só precisa do token
     const antes = Date.now();
-    const r = await chamar(R_PUBLICO, "POST", { token }, { nome: "  Roberto Almeida ", observacao: " Tudo certo, equipe pontual " }, CLIENTE_IP);
-    expect(r).toMatchObject({ status: 200, json: { ok: true, situacao: "CONFIRMADO", nome: "Roberto Almeida" } });
+    const r = await chamar(R_PUBLICO, "POST", { token }, { nome: "  Roberto Almeida ", ressalva: null }, CLIENTE_IP);
+    expect(r).toMatchObject({ status: 200, json: { ok: true, situacao: "CONFIRMADO", nome: "Roberto Almeida", comRessalva: false } });
     const a = await aceite(x.id);
     expect(a).toMatchObject({
-      situacao: "CONFIRMADO", metodo: "REMOTO", nome: "Roberto Almeida", observacao: "Tudo certo, equipe pontual", ip: "200.150.10.5", userAgent: CLIENTE_IP["user-agent"],
-      assinatura: null, colhidoPorId: null, atividadeId: null, contatoId: null,
+      situacao: "CONFIRMADO", metodo: "REMOTO", nome: "Roberto Almeida", ressalva: null, ip: "200.150.10.5", userAgent: CLIENTE_IP["user-agent"],
+      assinatura: null, colhidoPorId: null, atividadeId: null, contatoId: null, vistoEm: null,
     });
     expect(a.confirmadoEm.getTime()).toBeGreaterThanOrEqual(antes - 1000);
     expect(new Date(r.json.confirmadoEm).getTime()).toBe(a.confirmadoEm.getTime());
     expect(await statusDa(x.id)).toBe("CONCLUIDA");
     // O histórico da OS guarda a prova (em nome de quem abriu a OS: o cliente não é usuário do sistema)
-    expect(await historico(x.id, "Serviço confirmado pelo cliente")).toEqual(["Serviço confirmado pelo cliente | Pelo link, por Roberto Almeida (IP 200.150.10.5). Observação: Tudo certo, equipe pontual | uA"]);
+    expect(await historico(x.id, "Serviço confirmado pelo cliente")).toEqual(["Serviço confirmado pelo cliente | Pelo link, por Roberto Almeida (IP 200.150.10.5) | uA"]);
+    expect(await historico(x.id, "Serviço confirmado pelo cliente, com ressalva")).toEqual([]);
   });
 
   it("troca ATÔMICA: confirmar de novo (ou dois cliques ao mesmo tempo) não troca quem confirmou", async () => {
@@ -556,11 +564,173 @@ describe.skipIf(!URL_PG)("Aceite do cliente na conclusão da OS (PostgreSQL real
     comoTecnico();
     await sync([opAceite(x.a)]);
     const interno = (await relatorioInterno(x.id, "e1"))!.dados.aceite!;
-    expect(interno).toMatchObject({ nome: "João Pereira da Silva", metodo: "LOCAL", ip: "189.10.20.30", assinatura: ASSINATURA, colhidoPor: "João Silva", observacao: null });
+    expect(interno).toMatchObject({ nome: "João Pereira da Silva", metodo: "LOCAL", ip: "189.10.20.30", assinatura: ASSINATURA, colhidoPor: "João Silva", ressalva: null });
     expect(interno.confirmadoEm).toBeInstanceOf(Date);
     const rel = await prisma.relatorioOs.findFirst({ where: { ordemServicoId: x.id, escopo: "GERAL" } });
     expect((await relatorioPorToken(rel.tokenPublico))!.dados.aceite).toMatchObject({ nome: "João Pereira da Silva", metodo: "LOCAL" });
     expect(await relatorioInterno(x.id, "e2")).toBeNull(); // a outra empresa não lê
+  });
+
+
+  /* ───────── ressalva ───────── */
+  const RESSALVA = "O split da recepção continua pingando";
+
+  it("TENHO UMA RESSALVA: o serviço fica CONFIRMADO, a OS segue concluída e a ressalva fica no registro, no histórico e no relatório", async () => {
+    const { relatorioInterno, relatorioPorToken } = await import("@/lib/relatorio-os/dados");
+    const { pendenciasDoCliente } = await import("@/lib/os/aceite-server");
+    const x = await concluida();
+    const { token } = await aceite(x.id);
+    expect((await pendenciasDoCliente("e1", "c1")).map((p) => p.osId)).toEqual([x.id]);
+    sessao.atual = null;
+    const r = await chamar(R_PUBLICO, "POST", { token }, { nome: "Roberto Almeida", ressalva: `  ${RESSALVA}  ` }, CLIENTE_IP);
+    expect(r).toMatchObject({ status: 200, json: { ok: true, situacao: "CONFIRMADO", nome: "Roberto Almeida", comRessalva: true } });
+    expect(await aceite(x.id)).toMatchObject({ situacao: "CONFIRMADO", metodo: "REMOTO", nome: "Roberto Almeida", ressalva: RESSALVA, ip: "200.150.10.5", vistoEm: null });
+    expect(await statusDa(x.id)).toBe("CONCLUIDA"); // a ressalva não reabre nem trava a OS
+    // Histórico: uma ação própria, com a ressalva escrita — e NÃO a ação da confirmação simples
+    expect(await historico(x.id, "Serviço confirmado pelo cliente, com ressalva")).toEqual([`Serviço confirmado pelo cliente, com ressalva | Pelo link, por Roberto Almeida (IP 200.150.10.5). Ressalva: ${RESSALVA} | uA`]);
+    expect(await historico(x.id, "Serviço confirmado pelo cliente")).toEqual([]);
+    // O cliente respondeu: sai das pendências dele (o gate do portal não fica cobrando quem já respondeu)
+    expect(await pendenciasDoCliente("e1", "c1")).toEqual([]);
+    // Na OS (escritório) e no relatório (interno e pelo link do relatório)
+    comoEscritorio();
+    expect((await chamar(R_ACEITE, "GET", { id: x.id })).json).toMatchObject({ estado: "CONFIRMADO", aceite: { ressalva: RESSALVA, vistoEm: null, metodo: "REMOTO" } });
+    expect((await relatorioInterno(x.id, "e1"))!.dados.aceite).toMatchObject({ nome: "Roberto Almeida", metodo: "REMOTO", ressalva: RESSALVA });
+    const rel = await prisma.relatorioOs.findFirst({ where: { ordemServicoId: x.id, escopo: "GERAL" } });
+    expect((await relatorioPorToken(rel.tokenPublico))!.dados.aceite!.ressalva).toBe(RESSALVA);
+  });
+
+  it("a ressalva tem de dizer algo; depois de confirmado ninguém troca nem acrescenta ressalva; a página antiga ('observacao') ainda vale", async () => {
+    const x = await concluida();
+    const { token } = await aceite(x.id);
+    expect(await erro(chamar(R_PUBLICO, "POST", { token }, { nome: "Roberto Almeida", ressalva: "ruim" }))).toBe("400 Descreva a ressalva em poucas palavras.");
+    expect(await erro(chamar(R_PUBLICO, "POST", { token }, { nome: "Roberto Almeida", ressalva: "x".repeat(1001) }))).toBe("400 A ressalva vai até 1000 caracteres.");
+    expect(await erro(chamar(R_PUBLICO, "POST", { token }, { nome: "Ro", ressalva: RESSALVA }))).toBe("400 Informe o nome completo de quem confirma.");
+    expect(await aceite(x.id)).toMatchObject({ situacao: "PENDENTE", ressalva: null, nome: null });
+    // Em branco = confirmou sem ressalva
+    expect((await chamar(R_PUBLICO, "POST", { token }, { nome: "Roberto Almeida", ressalva: "   " })).json).toMatchObject({ comRessalva: false });
+    expect(await aceite(x.id)).toMatchObject({ situacao: "CONFIRMADO", ressalva: null });
+    // Já confirmado: uma ressalva depois não entra (o registro é a prova do que foi dito na hora)
+    expect(await erro(chamar(R_PUBLICO, "POST", { token }, { nome: "Outra Pessoa", ressalva: RESSALVA }))).toBe("409 Este serviço já foi confirmado.");
+    expect(await aceite(x.id)).toMatchObject({ nome: "Roberto Almeida", ressalva: null });
+    // Página aberta antes da atualização: o campo ainda se chama "observacao" — vira a ressalva
+    const y = await concluida();
+    expect((await chamar(R_PUBLICO, "POST", { token: (await aceite(y.id)).token }, { nome: "Roberto Almeida", observacao: " Faltou limpar o piso " })).json).toMatchObject({ comRessalva: true });
+    expect(await aceite(y.id)).toMatchObject({ situacao: "CONFIRMADO", ressalva: "Faltou limpar o piso" });
+    expect(await historico(y.id, "Serviço confirmado pelo cliente, com ressalva")).toHaveLength(1);
+  });
+
+  /* ───────── o sino ───────── */
+  const sino = async () => (await chamar("alertas", "GET", {})).json;
+  const doAceite = (s: any) => ({ aceitesRessalva: s.aceitesRessalva, aceiteRessalvaOsId: s.aceiteRessalvaOsId, aceitesConfirmados: s.aceitesConfirmados, aceiteConfirmadoOsId: s.aceiteConfirmadoOsId });
+  const ZERO = { aceitesRessalva: 0, aceiteRessalvaOsId: null, aceitesConfirmados: 0, aceiteConfirmadoOsId: null };
+  const confirmarPeloLink = async (osId: string, ressalva: string | null = null) => {
+    const atual = sessao.atual; sessao.atual = null;
+    expect((await chamar(R_PUBLICO, "POST", { token: (await aceite(osId)).token }, { nome: "Roberto Almeida", ressalva }, CLIENTE_IP)).status).toBe(200);
+    sessao.atual = atual;
+  };
+
+  it("SINO: UM aviso por confirmação que ninguém viu — as ressalvas à parte, com a OS da mais recente; pendente não avisa", async () => {
+    const [simples, comRessalva, pendente, noLocal] = [await concluida(), await concluida(), await concluida(), await os()];
+    const antes = await sino();
+    expect(doAceite(antes)).toEqual(ZERO); // concluir (aceite pendente) não acende nada
+    await confirmarPeloLink(simples.id);
+    expect(doAceite(await sino())).toEqual({ ...ZERO, aceitesConfirmados: 1, aceiteConfirmadoOsId: simples.id });
+    await confirmarPeloLink(comRessalva.id, RESSALVA);
+    // Assinatura colhida pelo TÉCNICO no local: o escritório também não sabia — avisa
+    comoTecnico();
+    await sync([opConcluir(noLocal.a), opAceite(noLocal.a)]);
+    comoEscritorio();
+    const depois = await sino();
+    expect(doAceite(depois)).toEqual({ aceitesRessalva: 1, aceiteRessalvaOsId: comRessalva.id, aceitesConfirmados: 2, aceiteConfirmadoOsId: noLocal.id });
+    expect(depois.total).toBe(antes.total + 3); // os três entram no número do sino
+    // Idempotente: reler não muda; tentar confirmar de novo (409) não cria outro aviso
+    expect(await erro(chamar(R_PUBLICO, "POST", { token: (await aceite(simples.id)).token }, { nome: "Outra Pessoa" }))).toMatch(/^409/);
+    expect(doAceite(await sino())).toEqual(doAceite(depois));
+    expect((await sino()).total).toBe(depois.total);
+    expect((await aceite(pendente.id)).situacao).toBe("PENDENTE");
+  });
+
+  it("VISTO: quem tem 'OS › Editar' abriu a OS — o aviso sai do sino de todos, uma vez só; quem só visualiza não apaga o aviso", async () => {
+    const [a, b, pendente] = [await concluida(), await concluida(), await concluida()];
+    await confirmarPeloLink(a.id, RESSALVA);
+    await confirmarPeloLink(b.id);
+    comOs(["visualizar", "concluir"]); // vê o sino, mas não dá por visto
+    expect(doAceite(await sino())).toEqual({ aceitesRessalva: 1, aceiteRessalvaOsId: a.id, aceitesConfirmados: 1, aceiteConfirmadoOsId: b.id });
+    expect((await chamar(R_VISTO, "POST", { id: a.id })).status).toBe(403);
+    expect((await aceite(a.id)).vistoEm).toBeNull();
+    comOs(["visualizar", "editar"]);
+    const antes = Date.now();
+    expect((await chamar(R_VISTO, "POST", { id: a.id })).json).toEqual({ ok: true, marcou: true });
+    const visto = (await aceite(a.id)).vistoEm;
+    expect(visto.getTime()).toBeGreaterThanOrEqual(antes - 1000);
+    expect(doAceite(await sino())).toEqual({ ...ZERO, aceitesConfirmados: 1, aceiteConfirmadoOsId: b.id });
+    // De novo: nada muda (nem a data)
+    expect((await chamar(R_VISTO, "POST", { id: a.id })).json).toEqual({ ok: true, marcou: false });
+    expect((await aceite(a.id)).vistoEm.getTime()).toBe(visto.getTime());
+    // A ressalva continua no registro depois de vista: só o AVISO some
+    expect(await aceite(a.id)).toMatchObject({ situacao: "CONFIRMADO", ressalva: RESSALVA });
+    // Aceite ainda pendente: abrir a OS não "vê" nada (o aviso de quando o cliente confirmar não é queimado antes)
+    expect((await chamar(R_VISTO, "POST", { id: pendente.id })).json).toEqual({ ok: true, marcou: false });
+    expect((await aceite(pendente.id)).vistoEm).toBeNull();
+    await confirmarPeloLink(pendente.id);
+    expect((await sino()).aceitesConfirmados).toBe(2);
+    expect((await chamar(R_VISTO, "POST", { id: b.id })).json.marcou).toBe(true);
+    expect((await chamar(R_VISTO, "POST", { id: pendente.id })).json.marcou).toBe(true);
+    expect(doAceite(await sino())).toEqual(ZERO);
+  });
+
+  it("o sino só avisa quem tem acesso à OS: sem o módulo, outra empresa e técnico de outra OS não recebem; OS cancelada não avisa", async () => {
+    const [a, b] = [await concluida(), await concluida()];
+    await confirmarPeloLink(a.id, RESSALVA);
+    await confirmarPeloLink(b.id);
+    const cheio = { aceitesRessalva: 1, aceiteRessalvaOsId: a.id, aceitesConfirmados: 1, aceiteConfirmadoOsId: b.id };
+    comOs(["visualizar"]);
+    expect(doAceite(await sino())).toEqual(cheio);
+    comoEscritorio(montarPermissoes({ pmoc: ["visualizar"], financeiro: ["visualizar"] })); // sem Ordens de serviço
+    const semOs = await sino();
+    expect(doAceite(semOs)).toEqual(ZERO);
+    comoEscritorio(permissoesTotais(), "e2"); // outra empresa, com tudo liberado
+    expect(doAceite(await sino())).toEqual(ZERO);
+    expect((await chamar(R_VISTO, "POST", { id: a.id })).status).toBe(404);
+    sessao.atual = null;
+    expect((await chamar("alertas", "GET", {})).status).toBe(401);
+    expect((await chamar(R_VISTO, "POST", { id: a.id })).status).toBe(401);
+    expect((await aceite(a.id)).vistoEm).toBeNull();
+    // Técnico do app: só das OS em que ele tem atividade (aqui as duas são do t1; o t2 não tem nenhuma)
+    comoTecnico();
+    expect(doAceite(await sino())).toEqual(cheio);
+    comoTecnico("t2", "uT2");
+    expect(doAceite(await sino())).toEqual(ZERO);
+    expect((await chamar(R_VISTO, "POST", { id: a.id })).status).toBe(403);
+    // OS inativada depois da confirmação: o aviso some (não há o que tratar)
+    comoEscritorio();
+    await prisma.ordemServico.update({ where: { id: a.id }, data: { status: "CANCELADA" } });
+    expect(doAceite(await sino())).toEqual({ ...ZERO, aceitesConfirmados: 1, aceiteConfirmadoOsId: b.id });
+  });
+
+  it("assinatura colhida pelo ESCRITÓRIO não vira aviso (foi ele que colheu); a colhida pelo técnico vira", async () => {
+    const [doEscritorio, doTecnico] = [await concluida(), await os()];
+    expect((await chamar(R_ACEITE, "POST", { id: doEscritorio.id }, { nome: "Marta Nunes", assinatura: ASSINATURA })).status).toBe(200);
+    expect(doAceite(await sino())).toEqual(ZERO);
+    comoTecnico();
+    await sync([opConcluir(doTecnico.a), opAceite(doTecnico.a)]);
+    comoEscritorio();
+    expect(doAceite(await sino())).toEqual({ ...ZERO, aceitesConfirmados: 1, aceiteConfirmadoOsId: doTecnico.id });
+  });
+
+  it("o toggle 'Exigir assinatura do cliente na OS' saiu: a API não devolve nem grava o campo — e a tela antiga, que ainda manda, continua salvando", async () => {
+    await prisma.configuracao.deleteMany({});
+    const lido = (await chamar("configuracoes", "GET", {})).json;
+    expect("osExigirAssinatura" in lido).toBe(false);
+    expect(lido).toMatchObject({ osExigirFoto: false, portalAceiteObrigatorio: false }); // os vizinhos continuam vindo
+    // A tela manda a configuração INTEIRA de volta: a de antes da atualização vem com o campo morto dentro
+    const r = await chamar("configuracoes", "PUT", {}, { ...lido, osExigirAssinatura: true, osExigirFoto: true, portalAceiteObrigatorio: true });
+    expect(r.status).toBe(200);
+    expect("osExigirAssinatura" in r.json).toBe(false);
+    // Um campo que nunca existiu continua sendo recusado (a tolerância é só com o que saiu agora)
+    expect((await chamar("configuracoes", "PUT", {}, { osExigirOutraCoisa: true })).status).toBe(400);
+    expect(await prisma.configuracao.findUnique({ where: { empresaId: "e1" }, select: { osExigirAssinatura: true, osExigirFoto: true, portalAceiteObrigatorio: true } }))
+      .toEqual({ osExigirAssinatura: false, osExigirFoto: true, portalAceiteObrigatorio: true }); // os vizinhos continuam gravando
   });
 
   /* ───────── permissões ───────── */
