@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { History, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { ArrowUpRight, History, Loader2 } from "lucide-react";
 import type { LinhaHistorico } from "@/lib/pmoc-documento-server";
 
 const quando = (iso: string) => new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(iso)).replace(",", " às");
@@ -26,7 +27,7 @@ export function PmocHistorico({ pmocId }: { pmocId: string }) {
     <div className="bg-white border border-surface-border rounded-xl" data-historico-pmoc>
       <div className="px-4 py-3 border-b border-surface-border">
         <h2 className="font-semibold text-ink">Histórico do plano</h2>
-        <p className="text-xs text-ink-muted">Envios ao cliente, avisos de vencimento, ART e publicação.</p>
+        <p className="text-xs text-ink-muted">Envios ao cliente, avisos de vencimento, ART, publicação e renovação.</p>
       </div>
       {erro ? <p role="alert" className="text-sm text-atrasado-texto px-4 py-6" data-erro-historico>{erro}</p>
         : !linhas ? <p className="text-sm text-ink-muted px-4 py-6 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Carregando…</p>
@@ -38,6 +39,11 @@ export function PmocHistorico({ pmocId }: { pmocId: string }) {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-ink">{h.acao}</p>
                   {h.detalhes && <p className="text-sm text-ink-muted break-words">{h.detalhes}</p>}
+                  {h.plano && (
+                    <Link href={`/pmoc/${h.plano.id}`} className="inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:underline" data-plano-ligado>
+                      Abrir {h.plano.nome} <ArrowUpRight className="w-3.5 h-3.5" aria-hidden />
+                    </Link>
+                  )}
                   <p className="text-xs text-ink-subtle">{quando(h.criadoEm)}{h.usuario ? ` · ${h.usuario}` : " · automático"}</p>
                 </div>
               </li>

@@ -19,6 +19,8 @@ import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { PmocStatusSelo } from "@/components/pmoc/pmoc-status-selo";
 import { PmocCopiarBotao } from "@/components/pmoc/pmoc-copiar-botao";
+import { PmocRenovar } from "@/components/pmoc/pmoc-renovar";
+import { umAnoDepois } from "@/lib/pmoc-renovacao";
 import { PmocCronograma } from "@/components/pmoc/pmoc-cronograma";
 import { PmocBaixarDocumento, PmocEnviar, type DestinoEnvio } from "@/components/pmoc/pmoc-envio";
 import { PmocHistorico } from "@/components/pmoc/pmoc-historico";
@@ -58,11 +60,6 @@ const ABAS_FUTURAS = [
   { rotulo: "Anexos", icone: Paperclip },
 ];
 
-function umAnoDepois(iso: string) {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCFullYear(d.getUTCFullYear() + 1); d.setUTCDate(d.getUTCDate() - 1);
-  return d.toISOString().slice(0, 10);
-}
 const rotuloEquip = (e: EquipamentoPmoc) => e.nome || `${e.marca} ${e.modelo}`.trim();
 // Tipo e capacidade no formato único do sistema (lib/equipamento-descricao): "48.000 BTU/h", "5 TR"
 const tipoEquip = (e: EquipamentoPmoc) => rotuloTipoEquipamento(e);
@@ -72,8 +69,8 @@ function lerArquivo(file: File): Promise<string> {
   return new Promise((ok, erro) => { const r = new FileReader(); r.onload = () => ok(r.result as string); r.onerror = erro; r.readAsDataURL(file); });
 }
 
-export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente, config, avisoCiente, destino }: {
-  inicial?: PmocDados; abaInicial?: string; copiaRecente?: boolean; criadoRecente?: boolean;
+export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente, renovadoRecente, config, avisoCiente, destino }: {
+  inicial?: PmocDados; abaInicial?: string; copiaRecente?: boolean; criadoRecente?: boolean; renovadoRecente?: boolean;
   /** O padrão da empresa: antecedência do aviso de vencimento e texto técnico dos planos novos */
   config?: ConfigPmoc;
   /** O aviso de vencimento de hoje que já teve ciência (some do cabeçalho) */
@@ -119,7 +116,8 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente, c
   const [removerArt, setRemoverArt] = useState(false);
   const [salvando, setSalvando] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(
-    copiaRecente ? { tipo: "ok", texto: "Cópia criada como Rascunho. A ART não é copiada: informe a ART deste novo plano." }
+    renovadoRecente ? { tipo: "ok", texto: "Renovação criada como Rascunho, com o cronograma. Anexe a nova ART, confira e publique." }
+    : copiaRecente ? { tipo: "ok", texto: "Cópia criada como Rascunho. A ART não é copiada: informe a ART deste novo plano." }
     : criadoRecente ? { tipo: "ok", texto: "PMOC criado como Rascunho. Agora adicione os equipamentos cobertos e publique." } : null);
 
   // Clientes / unidades / RTs
@@ -243,6 +241,7 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente, c
                 <Undo2 className="w-4 h-4" /> Voltar para rascunho
               </button>
             )}
+            <PmocRenovar pmocId={pmoc.id} />
             <PmocCopiarBotao id={pmoc.id} variante="botao" />
             <InativarRegistro url={`/api/pmocs/${pmoc.id}`} modulo="pmoc" acaoReativar="editar" variante="botao" ativo={pmoc.ativo} nome={pmoc.nome} entidade="PMOC" comMotivo={false}
               aoConcluir={(ativo) => { setPmoc((p) => (p ? { ...p, ativo } : p)); router.refresh(); }} />
@@ -260,7 +259,7 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente, c
           className={cn("flex items-center gap-3 flex-wrap rounded-xl px-4 py-3 text-sm border", aviso.tipo === "EXPIRADO" ? "bg-atrasado-claro border-atrasado/20 text-atrasado-texto" : "bg-atencao-claro border-atencao/20 text-atencao-texto")}>
           {aviso.tipo === "EXPIRADO" ? <ShieldX className="w-4 h-4 shrink-0" /> : <ShieldAlert className="w-4 h-4 shrink-0" />}
           <span className="flex-1 min-w-[12rem]">
-            <strong>{textoAviso(aviso, pmoc.dataExpiracao)}.</strong> Para renovar, use “Criar cópia” e informe a nova validade e a nova ART.
+            <strong>{textoAviso(aviso, pmoc.dataExpiracao)}.</strong> Use “Renovar” para criar o plano da próxima vigência, já com o cronograma.
           </span>
           {pode("pmoc", "editar") && (
             <button type="button" onClick={darCiencia} disabled={dandoCiencia} data-ciente

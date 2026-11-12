@@ -214,7 +214,7 @@ describe("PMOC: editor (Identificação e Equipamentos AVAC)", () => {
     expect(futuras.map((b) => texto(b))).toEqual(["Planejamento em breve", "Ocorrências em breve", "Recomendações em breve", "Anexos em breve"]);
     for (const b of futuras) expect((b as HTMLButtonElement).disabled).toBe(true);
     // Etapa 3: documento em PDF, aviso de vencimento, envio ao cliente e histórico entraram — cada um na sua rota
-    expect(fs.readdirSync(path.join(RAIZ, "app/api/pmocs/[id]")).sort()).toEqual(["art", "aviso", "copia", "cronograma", "documento", "enviar", "equipamentos", "historico", "impacto", "route.ts"]);
+    expect(fs.readdirSync(path.join(RAIZ, "app/api/pmocs/[id]")).sort()).toEqual(["art", "aviso", "copia", "cronograma", "documento", "enviar", "equipamentos", "historico", "impacto", "renovacao", "route.ts"]);
     // O cronograma (regras e geração de OS) continua sem saber de envio nem de PDF
     const fonte = ["components/pmoc/pmoc-cronograma.tsx", "lib/pmoc-cronograma.ts", "lib/pmoc-cronograma-server.ts", "lib/pmoc-cronograma-rotas.ts"]
       .map((f) => fs.readFileSync(path.join(RAIZ, f), "utf8")).join("\n");
