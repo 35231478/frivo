@@ -61,13 +61,13 @@ export function AceitePublico({ token, rotulo, nomeSugerido }: {
       )}
       <label className="block">
         <span className="text-sm font-semibold text-ink">Nome completo</span>
-        <input aria-label="Nome completo" value={nome} maxLength={NOME_MAX} disabled={enviando} onChange={(e) => setNome(e.target.value)} placeholder="Quem está confirmando" className={campo} />
+        <input aria-label="Nome completo" value={nome} maxLength={NOME_MAX} disabled={enviando} onChange={(e) => { setNome(e.target.value); setErro(""); }} placeholder="Quem está confirmando" className={campo} />
       </label>
       {comRessalva && (
         <div className="bg-atencao-claro border border-atencao/30 rounded-lg p-3 space-y-2" data-ressalva-campo>
           <label className="block">
             <span className="text-sm font-semibold text-ink">Qual é a ressalva?</span>
-            <textarea aria-label="Ressalva" value={ressalva} maxLength={RESSALVA_MAX} rows={3} disabled={enviando} autoFocus onChange={(e) => setRessalva(e.target.value)}
+            <textarea aria-label="Ressalva" value={ressalva} maxLength={RESSALVA_MAX} rows={3} disabled={enviando} autoFocus onChange={(e) => { setRessalva(e.target.value); setErro(""); }}
               placeholder="O que ficou pendente ou diferente do combinado" className={campo} />
           </label>
           <p className="text-xs text-ink" data-ressalva-explica>

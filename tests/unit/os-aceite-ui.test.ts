@@ -481,6 +481,7 @@ describe("Confirmação pelo link público", () => {
     expect(texto($("[data-erro-aceite-publico]"))).toBe("Descreva a ressalva em poucas palavras.");
     expect(pedidos).toEqual([]);
     await digitar(R, "  O split da recepção continua pingando ");
+    expect($("[data-erro-aceite-publico]")).toBeNull(); // corrigiu: o erro some ao digitar, sem esperar o clique
     await clicar($("[data-confirmar-com-ressalva]"));
     expect(pedidos).toEqual([{ url: "/api/publico/aceites/tok%2F123/confirmar", metodo: "POST", corpo: { nome: "Dra. Paula Reis", ressalva: "O split da recepção continua pingando" } }]);
     expect(navegacao.refresh).toHaveBeenCalledTimes(1);
