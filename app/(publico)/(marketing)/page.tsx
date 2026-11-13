@@ -7,7 +7,7 @@ import {
 import { Cabecalho } from "@/components/marketing/cabecalho";
 import { Rodape } from "@/components/marketing/rodape";
 import { BotaoTeste } from "@/components/marketing/botao-teste";
-import { Celular, Foto, Janela, Notebook } from "@/components/marketing/print";
+import { Celular, Foto, Janela, Miniatura, Notebook } from "@/components/marketing/print";
 import { FaqLista } from "@/components/publico/faq-lista";
 import {
   COMO_FUNCIONA, CTA, CTA_FINAL, DOR, FAQ, HERO, MODULOS, type Modulo, ORIGEM, PLANOS, POR_QUE, PRINTS, PROVA_SOCIAL, PUBLICADA, SEO, URL_SITE,
@@ -38,6 +38,7 @@ const CAIXA = "mx-auto max-w-6xl px-4 sm:px-6";
 const TITULO_SECAO = "font-display text-2xl font-bold leading-tight tracking-tight text-ink sm:text-3xl";
 // Metade da largura no computador, a largura toda no celular
 const SIZES_METADE = "(min-width: 1024px) 560px, 100vw";
+const SIZES_LARGO = "(min-width: 1024px) 640px, 100vw";
 
 export default function HomeDeVendas() {
   return (
@@ -118,15 +119,22 @@ function Modulos() {
   );
 }
 
-/** Um recurso: texto de um lado, print do outro; `invertido` alterna os lados (zigue-zague). */
+/**
+ * Um recurso: texto de um lado, print do outro; `invertido` alterna os lados (zigue-zague). Com
+ * `printEmDestaque`, a coluna do print fica mais larga que a do texto.
+ */
 function BlocoModulo({ modulo, invertido }: { modulo: Modulo; invertido: boolean }) {
-  const { print, printCelular } = modulo;
+  const { print, printCelular, printAbaixo, extras, printEmDestaque } = modulo;
+  const colunas = !printEmDestaque ? "lg:grid-cols-2" : invertido ? "lg:grid-cols-[1.35fr_1fr]" : "lg:grid-cols-[1fr_1.35fr]";
+  const sizes = printEmDestaque ? SIZES_LARGO : SIZES_METADE;
   return (
     <article
       id={modulo.id}
       data-modulo={modulo.id}
+      {...(printEmDestaque ? { "data-print-em-destaque": true } : {})}
       className={cn(
-        "my-8 grid scroll-mt-24 items-center gap-8 sm:my-12 lg:grid-cols-2 lg:gap-14",
+        "my-8 grid scroll-mt-24 items-center gap-8 sm:my-12 lg:gap-14",
+        colunas,
         modulo.destaque && "rounded-card border border-primary-100 bg-acento-claro p-5 sm:p-8 lg:p-10",
       )}
     >
@@ -142,9 +150,17 @@ function BlocoModulo({ modulo, invertido }: { modulo: Modulo; invertido: boolean
           <Celular print={print} sizes="230px" className="w-[52%] max-w-[230px]" />
         </div>
       ) : (
-        <div className={cn("relative", printCelular && "pb-[5%] pr-[5%]")}>
-          <Janela print={print} sizes={SIZES_METADE} />
-          {printCelular && <Celular print={printCelular} sizes="(min-width: 1024px) 130px, 24vw" compacto className="absolute bottom-0 right-0 w-[24%]" />}
+        <div>
+          <div className={cn("relative", printCelular && "pb-[5%] pr-[5%]")}>
+            <Janela print={print} sizes={sizes} />
+            {printCelular && <Celular print={printCelular} sizes="(min-width: 1024px) 130px, 24vw" compacto className="absolute bottom-0 right-0 w-[24%]" />}
+          </div>
+          {printAbaixo && <Janela print={printAbaixo} sizes={sizes} className="ml-[10%] mt-4" />}
+          {extras && (
+            <div className="mt-4 grid grid-cols-3 gap-3 sm:gap-4">
+              {extras.map((e) => <Miniatura key={e.arquivo} print={e} sizes="(min-width: 1024px) 200px, 30vw" />)}
+            </div>
+          )}
         </div>
       )}
     </article>

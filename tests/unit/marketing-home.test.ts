@@ -1,7 +1,7 @@
 /**
  * Home de vendas ("/"): a página renderizada de verdade (react-dom/server) e o middleware real.
- * Prova: estrutura do briefing na ordem, um CTA primário repetido com um destino só, os 10 prints
- * como espaços reservados nomeados (e a troca pela imagem quando o arquivo existe), a seção da origem
+ * Prova: estrutura do briefing na ordem, um CTA primário repetido com um destino só, os prints no
+ * bloco certo (imagem real ou espaço reservado nomeado; 03 e 07 em destaque), a seção da origem
  * com o espaço da foto, nenhuma prova social inventada, SEO básico e o acesso (anônimo vê a home; o resto do sistema segue fechado).
  */
 import { describe, expect, it } from "vitest";
@@ -54,17 +54,57 @@ describe("home de vendas: página", () => {
     expect(html).toMatch(/<header class="sticky top-0[^"]*"/);
   });
 
-  it("os 10 prints da lista são espaços reservados nomeados", () => {
+  it("prints: os 10 enviados na numeração combinada, mais os que faltam; cada lugar mostra a imagem real ou o espaço reservado nomeado", () => {
     const lista = Object.values(PRINTS);
-    expect(lista.map((p) => p.n)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(lista.map((p) => `${p.n} ${p.arquivo}`)).toEqual([
+      "1 01-dashboard", "2 02-calendario-os", "3 03-orcamento-aprovado", "4 04-orcamentos", "5 05-contratos",
+      "6 06-estoque", "7 07-mapa-tecnicos", "8 08-equipes", "9 09-colaboradores", "10 10-financeiro",
+      "11 11-app-tecnico", "12 12-pmoc", "13 13-aceite", "14 14-equipamento-qr",
+    ]);
     expect(new Set(todos(/data-print="([^"]+)"/g))).toEqual(new Set(lista.map((p) => p.arquivo)));
     for (const p of lista) {
-      expect(texto, p.arquivo).toContain(`Print ${p.n} ${p.tela}`);
-      expect(texto).toContain(`${p.arquivo}.webp`);
+      if (localizarPrint(p.arquivo)) {
+        expect(html, p.arquivo).toContain(`alt="${p.alt}"`);
+        expect(texto, p.arquivo).not.toContain(`${p.arquivo}.webp`);
+      } else {
+        expect(texto, p.arquivo).toContain(`Print ${p.n} ${p.tela}`);
+        expect(texto).toContain(`${p.arquivo}.webp`);
+      }
     }
     // o LEIA-ME da pasta lista os mesmos nomes
     const leiaMe = readFileSync("public/marketing/prints/LEIA-ME.md", "utf8");
     for (const p of lista) expect(leiaMe, p.arquivo).toContain(`\`${p.arquivo}\``);
+  });
+
+  it("as telas reais já entregues entram como imagem otimizada (sem espaço reservado)", () => {
+    for (const arquivo of ["06-estoque", "07-mapa-tecnicos", "08-equipes", "09-colaboradores", "10-financeiro"]) {
+      expect(localizarPrint(arquivo), arquivo).toBe(`/marketing/prints/${arquivo}.webp`);
+      const marca = new RegExp(`<div[^>]*data-print="${arquivo}"[^>]*>`).exec(html)![0];
+      expect(marca, arquivo).not.toContain("data-print-pendente");
+    }
+    expect(html).toMatch(/<img[^>]*alt="Mapa com a posição do técnico em campo e a OS em execução"[^>]*srcSet="[^"]*%2Fmarketing%2Fprints%2F07-mapa-tecnicos\.webp/);
+  });
+
+  it("cada tela no bloco do seu assunto; orçamento aprovado (03) e mapa (07) com o print em destaque", () => {
+    const bloco = (id: string) => { const i = html.indexOf(`data-modulo="${id}"`); const f = html.indexOf("</article>", i); return html.slice(html.lastIndexOf("<article", i), f); };
+    const prints = (id: string) => [...bloco(id).matchAll(/data-print="([^"]+)"/g)].map((m) => m[1]);
+    expect(prints("ordens-de-servico")).toEqual(["02-calendario-os", "11-app-tecnico"]);
+    expect(prints("pmoc")).toEqual(["12-pmoc"]);
+    expect(prints("aceite")).toEqual(["13-aceite"]);
+    expect(prints("desempenho")).toEqual(["08-equipes", "09-colaboradores"]);
+    expect(prints("equipamentos")).toEqual(["14-equipamento-qr"]);
+    expect(prints("estoque")).toEqual(["06-estoque"]);
+    expect(prints("financeiro")).toEqual(["03-orcamento-aprovado", "04-orcamentos", "05-contratos", "10-financeiro"]);
+    expect(prints("mapa")).toEqual(["07-mapa-tecnicos"]);
+    // hero: dashboard no notebook
+    expect([...html.slice(html.indexOf('data-secao="hero"'), html.indexOf('data-secao="dor"')).matchAll(/data-print="([^"]+)"/g)].map((m) => m[1])).toEqual(["01-dashboard", "11-app-tecnico"]);
+    // destaque: só os blocos do 03 e do 07 têm a coluna larga do print
+    expect(MODULOS.filter((m) => m.printEmDestaque).map((m) => m.print.arquivo)).toEqual(["03-orcamento-aprovado", "07-mapa-tecnicos"]);
+    expect(html.match(/data-print-em-destaque/g)).toHaveLength(2);
+    expect(bloco("financeiro")).toContain("lg:grid-cols-[1fr_1.35fr]");
+    expect(bloco("mapa")).toContain("lg:grid-cols-[1.35fr_1fr]");
+    // as telas extras do financeiro vêm em miniaturas com legenda
+    expect([...bloco("financeiro").matchAll(/data-miniatura="([^"]+)"/g)].map((m) => m[1])).toEqual(["04-orcamentos", "05-contratos", "10-financeiro"]);
   });
 
   it("o arquivo com o nome certo na pasta troca o espaço reservado pela imagem", () => {

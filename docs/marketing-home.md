@@ -35,11 +35,31 @@ existe · como funciona · prova social · planos · FAQ · CTA final · rodapé
 foto real ao lado e o depoimento do fundador em destaque. O depoimento é do próprio fundador — fica nesta
 seção (`ORIGEM`), não na prova social, que continua reservada a clientes.
 
-## Trocar os prints
+## Prints do sistema
 
-Os 10 prints da lista são **espaços reservados nomeados**. Para trocar, coloque o arquivo com o nome certo em
-`public/marketing/prints/` (nomes, tamanhos e onde cada um aparece no `LEIA-ME.md` da pasta). A página troca
-sozinha, sem mexer em código.
+Cada lugar de print tem um **nome** (`PRINTS`, em `conteudo.ts`). Se o arquivo com esse nome está em
+`public/marketing/prints/`, entra a imagem real; se não, fica o espaço reservado nomeado. Colocar o arquivo
+na pasta troca o espaço sozinho, sem mexer em código. A tabela completa (nome, onde aparece, situação) está
+no `LEIA-ME.md` da pasta.
+
+| # | Tela | Onde aparece |
+|---|---|---|
+| 01 | Dashboard | Hero (notebook) |
+| 02 | Calendário de OS | Ordens de serviço |
+| 03 | Orçamento com aprovação | Financeiro — print principal, **em destaque** |
+| 04, 05, 10 | Orçamentos, Contratos, Financeiro | Financeiro — miniaturas com legenda |
+| 06 | Estoque | Estoque, compras e materiais |
+| 07 | Mapa dos técnicos | Mapa da equipe — **em destaque** |
+| 08, 09 | Equipes, Colaboradores | Desempenho da equipe (um abaixo do outro) |
+| 11 a 14 | App do técnico, PMOC, Aceite, Equipamento + QR | Seguem como espaço reservado (telas não enviadas) |
+
+"Em destaque" = o print ocupa a coluna larga do bloco (`printEmDestaque`). Um recorte fora de 16:10 declara a
+`proporcao` no print, e a moldura segue a imagem.
+
+**Tratamento das telas reais.** Entram só com a área da tela: sem a barra lateral e sem a barra do topo, que
+mostra o e-mail do usuário. O 09 saiu sem a coluna Contato (telefone e e-mail do colaborador) e o 07 teve a
+coordenada do técnico borrada. Nomes de clientes, de colaboradores e valores que aparecem nas telas ficam
+visíveis — conferir antes de publicar.
 
 ## Trocar a foto
 
@@ -50,7 +70,7 @@ A foto da seção "Por que o Frivo existe" segue o mesmo esquema: o arquivo `fot
 
 | O quê | Onde trocar |
 |---|---|
-| Os 10 prints | `public/marketing/prints/` |
+| Os prints que faltam (01 a 05 em arquivo; 11 a 14 por enviar) | `public/marketing/prints/` |
 | A foto da equipe / campo | `public/marketing/prints/foto-equipe` |
 | Prova social (depoimentos, números, logos) | `PROVA_SOCIAL` em `conteudo.ts` — nasce vazia; só entra dado real |
 | Destino do CTA | `LINK_TESTE_GRATIS` em `conteudo.ts` |
@@ -80,12 +100,13 @@ ficam fora do ratchet de tom, como as páginas institucionais.
 
 ## Testes
 
-`tests/unit/marketing-home.test.ts`: seções e módulos na ordem, um CTA com um destino só, os 10 espaços
-reservados nomeados (e a troca pela imagem), a seção da origem (texto, depoimento do fundador, espaço da
+`tests/unit/marketing-home.test.ts`: seções e módulos na ordem, um CTA com um destino só, cada print no bloco
+certo (imagem real ou espaço reservado nomeado; 03 e 07 em destaque), a seção da origem (texto, depoimento do fundador, espaço da
 foto), prova social vazia e sem número inventado, FAQ, rodapé com o contato, SEO, e o
 acesso pelo middleware real (anônimo abre a home; liberar a `/` não libera o sistema; logado vai ao painel).
 
 ## Prints
 
 `docs/prints/marketing-home/`: hero e página inteira no computador e no celular, a imagem de compartilhamento,
-a página provisória do teste grátis, a seção "Por que o Frivo existe" e o rodapé com o contato.
+a página provisória do teste grátis, a seção "Por que o Frivo existe", o rodapé com o contato e os blocos
+que já têm tela real.

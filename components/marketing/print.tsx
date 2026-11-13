@@ -26,11 +26,17 @@ export function localizarPrint(arquivo: string, pasta = PASTA_PRINTS): string | 
 
 const PROPORCAO = { desktop: "aspect-[16/10]", celular: "aspect-[9/19]" } as const;
 
-function Tela({ print, sizes, prioridade, compacto }: { print: Print; sizes: string; prioridade?: boolean; compacto?: boolean }) {
+function Tela({ print, sizes, prioridade, compacto, proporcaoFixa }: { print: Print; sizes: string; prioridade?: boolean; compacto?: boolean; proporcaoFixa?: boolean }) {
   const src = localizarPrint(print.arquivo);
   if (src) {
+    // Recorte da tela: a moldura segue a proporção da imagem (nas miniaturas, todas iguais)
+    const recorte = print.proporcao && !proporcaoFixa ? print.proporcao : null;
     return (
-      <div className={cn("relative w-full overflow-hidden bg-white", PROPORCAO[print.formato])} data-print={print.arquivo}>
+      <div
+        className={cn("relative w-full overflow-hidden bg-white", !recorte && PROPORCAO[print.formato])}
+        style={recorte ? { aspectRatio: recorte } : undefined}
+        data-print={print.arquivo}
+      >
         <Image src={src} alt={print.alt} fill sizes={sizes} priority={prioridade} className="object-cover object-top" />
       </div>
     );
@@ -125,6 +131,18 @@ export function Celular({ print, sizes, prioridade, compacto, className }: { pri
         <Tela print={print} sizes={sizes} prioridade={prioridade} compacto={compacto} />
       </div>
     </div>
+  );
+}
+
+/** Miniatura com legenda: as telas extras de um módulo, abaixo do print principal. */
+export function Miniatura({ print, sizes }: { print: Print; sizes: string }) {
+  return (
+    <figure data-miniatura={print.arquivo}>
+      <div className="overflow-hidden rounded-lg border border-surface-border bg-white shadow-card">
+        <Tela print={print} sizes={sizes} compacto proporcaoFixa />
+      </div>
+      <figcaption className="mt-2 text-center text-xs font-medium text-ink-muted">{print.tela}</figcaption>
+    </figure>
   );
 }
 

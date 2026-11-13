@@ -43,7 +43,7 @@ export const SEO = {
 
 export type FormatoPrint = "desktop" | "celular";
 export interface Print {
-  /** Número na lista do briefing (1 a 10). */
+  /** Número do print (1 a 10: telas enviadas; 11 em diante: ainda por enviar). */
   n: number;
   /** Nome do arquivo em public/marketing/prints, SEM extensão (.webp, .avif, .png ou .jpg). */
   arquivo: string;
@@ -52,19 +52,27 @@ export interface Print {
   formato: FormatoPrint;
   /** Texto alternativo da imagem real. */
   alt: string;
+  /** Proporção "largura/altura" da imagem real, quando ela é um recorte da tela (sem isso: 16:10 ou 9:19). */
+  proporcao?: string;
 }
 
+// Os 10 primeiros são as telas reais enviadas (numeração do dono do produto); 11 a 14 são telas do
+// briefing que ainda não chegaram e seguem como espaço reservado.
 export const PRINTS = {
   dashboard: { n: 1, arquivo: "01-dashboard", tela: "Dashboard", formato: "desktop", alt: "Painel do Frivo com os indicadores do dia" },
   calendario: { n: 2, arquivo: "02-calendario-os", tela: "Calendário de OS", formato: "desktop", alt: "Calendário de ordens de serviço com a equipe distribuída" },
-  appTecnico: { n: 3, arquivo: "03-app-tecnico", tela: "App do técnico (Meu dia / execução)", formato: "celular", alt: "App do técnico com a agenda do dia" },
-  pmoc: { n: 4, arquivo: "04-pmoc", tela: "PMOC (cronograma + documento PDF)", formato: "desktop", alt: "Cronograma do PMOC e o documento gerado" },
-  aceite: { n: 5, arquivo: "05-aceite", tela: "Aceite (assinatura + estrelas)", formato: "celular", alt: "Aceite do cliente com assinatura e avaliação em estrelas" },
-  desempenho: { n: 6, arquivo: "06-desempenho", tela: "Desempenho (ranking + TV)", formato: "desktop", alt: "Ranking de desempenho da equipe" },
-  equipamento: { n: 7, arquivo: "07-equipamento-qr", tela: "Equipamento + QR", formato: "desktop", alt: "Ficha do equipamento com histórico e QR Code" },
-  estoque: { n: 8, arquivo: "08-estoque-materiais", tela: "Estoque / materiais na OS", formato: "desktop", alt: "Materiais do estoque vinculados à ordem de serviço" },
-  financeiro: { n: 9, arquivo: "09-orcamento-financeiro", tela: "Orçamento aprovado + financeiro", formato: "desktop", alt: "Orçamento aprovado e o financeiro" },
-  mapa: { n: 10, arquivo: "10-mapa-tecnicos", tela: "Mapa dos técnicos", formato: "desktop", alt: "Mapa com a posição dos técnicos em campo" },
+  orcamentoAprovado: { n: 3, arquivo: "03-orcamento-aprovado", tela: "Orçamento com aprovação", formato: "desktop", alt: "Orçamento aprovado pelo cliente por link, com a linha do tempo da proposta" },
+  orcamentos: { n: 4, arquivo: "04-orcamentos", tela: "Orçamentos", formato: "desktop", alt: "Lista de orçamentos com status e totais do período" },
+  contratos: { n: 5, arquivo: "05-contratos", tela: "Contratos", formato: "desktop", alt: "Lista de contratos com valor da cobrança e próxima OS" },
+  estoque: { n: 6, arquivo: "06-estoque", tela: "Estoque", formato: "desktop", alt: "Saldos do estoque com aviso de produtos no mínimo", proporcao: "1382/640" },
+  mapa: { n: 7, arquivo: "07-mapa-tecnicos", tela: "Mapa dos técnicos", formato: "desktop", alt: "Mapa com a posição do técnico em campo e a OS em execução" },
+  equipes: { n: 8, arquivo: "08-equipes", tela: "Equipes", formato: "desktop", alt: "Equipes de campo com líder e membros", proporcao: "1000/320" },
+  colaboradores: { n: 9, arquivo: "09-colaboradores", tela: "Colaboradores", formato: "desktop", alt: "Cadastro de colaboradores com cargo, equipe e status", proporcao: "800/256" },
+  financeiro: { n: 10, arquivo: "10-financeiro", tela: "Financeiro", formato: "desktop", alt: "Dashboard financeiro com contas a receber, a pagar e saldo previsto" },
+  appTecnico: { n: 11, arquivo: "11-app-tecnico", tela: "App do técnico (Meu dia / execução)", formato: "celular", alt: "App do técnico com a agenda do dia" },
+  pmoc: { n: 12, arquivo: "12-pmoc", tela: "PMOC (cronograma + documento PDF)", formato: "desktop", alt: "Cronograma do PMOC e o documento gerado" },
+  aceite: { n: 13, arquivo: "13-aceite", tela: "Aceite (assinatura + estrelas)", formato: "celular", alt: "Aceite do cliente com assinatura e avaliação em estrelas" },
+  equipamento: { n: 14, arquivo: "14-equipamento-qr", tela: "Equipamento + QR", formato: "desktop", alt: "Ficha do equipamento com histórico e QR Code" },
 } as const satisfies Record<string, Print>;
 
 // ── 1. Hero ─────────────────────────────────────────────────────────────────────────────────────
@@ -99,6 +107,13 @@ export interface Modulo {
   print: Print;
   /** Segundo print, de celular, sobreposto ao principal. */
   printCelular?: Print;
+  /** Segunda tela de computador, logo abaixo do print principal. */
+  printAbaixo?: Print;
+  /** Mais telas do mesmo assunto, em miniaturas com legenda abaixo do print principal. */
+  extras?: Print[];
+  /** O print ganha a coluna larga do bloco (as telas que mais vendem). */
+  printEmDestaque?: boolean;
+  /** O bloco inteiro em destaque (fundo do acento + CTA). */
   destaque?: boolean;
 }
 
@@ -135,7 +150,8 @@ export const MODULOS: Modulo[] = [
     titulo: "Sua equipe com meta, ranking e bônus — medidos pela qualidade.",
     texto:
       "Escore de qualidade por técnico (no prazo, relatório completo, avaliação do cliente, sem retorno), ranking por função, bônus do mês e modo TV pra parede da empresa.",
-    print: PRINTS.desempenho,
+    print: PRINTS.equipes,
+    printAbaixo: PRINTS.colaboradores,
   },
   {
     id: "equipamentos",
@@ -158,7 +174,9 @@ export const MODULOS: Modulo[] = [
     titulo: "Do orçamento à cobrança, sem sair do sistema.",
     texto:
       "Orçamento com aprovação por link, contas a pagar/receber, nota fiscal de serviço e cobrança por boleto/Pix, integrados.",
-    print: PRINTS.financeiro,
+    print: PRINTS.orcamentoAprovado,
+    printEmDestaque: true,
+    extras: [PRINTS.orcamentos, PRINTS.contratos, PRINTS.financeiro],
   },
   {
     id: "mapa",
@@ -166,6 +184,7 @@ export const MODULOS: Modulo[] = [
     titulo: "Veja onde sua equipe está.",
     texto: "Acompanhe no mapa a posição dos técnicos em campo.",
     print: PRINTS.mapa,
+    printEmDestaque: true,
   },
 ];
 
