@@ -89,6 +89,48 @@ só existe no caminho remoto (link/portal); a assinatura no local não tem esse 
 No banco a ressalva mora na coluna `observacao` de `os_aceites` (era o campo "Observação" da primeira
 versão da página); no código o campo se chama `ressalva`.
 
+## A avaliação do cliente
+
+No momento do aceite o cliente pode **avaliar o serviço**: de **1 a 5 estrelas**, com um **comentário
+opcional**. Aparece nos três lugares em que o aceite é colhido:
+
+- no **link público** e no **portal** (a mesma página), junto de "Confirmo o recebimento do serviço"
+  e de "Tenho uma ressalva";
+- **no local**, no quadro de assinatura — na tela do técnico e no "Colher assinatura" do escritório.
+  No app, a nota entra na mesma operação da assinatura, pela fila: vale sem sinal.
+
+Regras:
+
+- É **opcional**: não tocar nas estrelas não impede confirmar, nem confirmar com ressalva. Tocar de
+  novo na mesma estrela tira a nota.
+- O comentário é **da avaliação**: só aparece para quem deu nota e, sem nota, não é guardado. Não é a
+  ressalva — a ressalva continua no campo dela (`observacao`).
+- A nota é gravada **junto com o aceite**, na mesma troca atômica. Depois de confirmado, ninguém
+  acrescenta nem troca a avaliação.
+- A nota aparece no cartão do aceite da OS, no relatório/PDF (versão interna e a do cliente), na página
+  do link, no portal e no histórico da OS ("Avaliação: 4 de 5 estrelas").
+- A nota **não muda o estado do aceite** nem trava nada: nota baixa não vira ressalva nem pendência.
+
+### A opção da empresa
+
+**Configurações › Preferências › Ordens de serviço › "Pedir avaliação do cliente"** — por empresa,
+nasce **ligada**. Desligada, as estrelas somem dos três lugares e o **servidor descarta** qualquer nota
+que chegue assim mesmo (um aparelho com dados antigos, um pedido montado à mão).
+
+### O dado para o módulo de Desempenho
+
+A nota é **da OS** (`os_aceites.avaliacao`, uma por OS) e chega aos técnicos pelas **atividades
+concluídas** da OS: o responsável (`atividades_os.tecnico_id`) e a equipe (`atividade_tecnicos`).
+`avaliacoesPorTecnico(empresaId, { de, ate })`, em `lib/os/aceite-server.ts`, já entrega isso pronto —
+por técnico: quantas OS avaliadas, a média (duas casas) e quantas de cada nota.
+
+- Cada OS avaliada conta **uma vez** para cada técnico que a executou (o mesmo técnico em duas
+  atividades da OS não conta em dobro).
+- Atividade cancelada não leva a nota; OS inativada e aceite sem nota ficam de fora.
+- O período é pela data da confirmação. Só a empresa pedida.
+
+Ainda não há tela para isso: é a base do módulo de Desempenho.
+
 ## No portal do cliente
 
 - **Início** e **Novo chamado** mostram, em destaque, as confirmações pendentes:
@@ -155,20 +197,27 @@ aceite **confirmado** entra; o pendente não é prova de nada.
 | Técnico do app | Só nas OS em que ele tem atividade; precisa de "Editar" (quem só conclui não colhe) |
 | Confirmar pelo link | Não exige login: só o token |
 | Ligar o bloqueio do portal | Configurações › Gerenciar |
+| Ligar ou desligar "Pedir avaliação do cliente" | Configurações › Gerenciar |
+| Ver a avaliação do cliente | Ordens de serviço › Visualizar (está no aceite da OS) |
 
 Tudo conferido na tela **e** no servidor. Tudo por empresa.
 
 ## Banco
 
-Dois arquivos, aditivos e idempotentes, sem enum (situação, método e canal são texto):
+Três arquivos, aditivos e idempotentes, sem enum (situação, método e canal são texto):
 
 - `prisma/sql/2026-12-28_os_aceite_cliente.sql` — cria a tabela `os_aceites` e a coluna
   `configuracoes.portal_aceite_obrigatorio` (padrão `false`).
 - `prisma/sql/2026-12-29_os_aceite_visto.sql` — cria a coluna `os_aceites.visto_em` (o aviso do sino).
+- `prisma/sql/2026-12-30_os_aceite_avaliacao.sql` — cria `os_aceites.avaliacao` (inteiro, opcional),
+  `os_aceites.avaliacao_comentario` (texto), a regra `os_aceites_avaliacao_check` (nota de 1 a 5) e
+  `configuracoes.aceite_pedir_avaliacao` (padrão `true`). A regra da nota existe só no banco: o
+  Prisma não descreve regras desse tipo, então um banco criado por `prisma db push` não a tem.
 
 ```
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/sql/2026-12-28_os_aceite_cliente.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/sql/2026-12-29_os_aceite_visto.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/sql/2026-12-30_os_aceite_avaliacao.sql
 ```
 
 ### O toggle que saiu
@@ -191,5 +240,6 @@ do campo do `schema.prisma`.
 | Fila do app (operação `aceite`) | `lib/tecnico/sync.ts`, `lib/tecnico/offline/estado.ts` |
 | Telas | `components/os/os-aceite.tsx`, `aceite-assinatura.tsx`, `aceite-publico.tsx`, `components/tecnico/aceite-cliente.tsx`, `components/portal/aceites-pendentes.tsx`, `chamado-form.tsx` |
 | Página pública | `app/(publico)/relatorio/aceite/[token]/page.tsx` |
-| Testes | `tests/unit/os-aceite*.test.ts`, `tests/unit/sql-os-aceite.test.ts` |
-| Prints | `docs/prints/os-aceite-cliente/`, `docs/prints/os-aceite-ressalva-sino/` |
+| Avaliação (estrelas) | `components/os/avaliacao-cliente.tsx` (escolher), `components/os/estrelas.tsx` (exibir) |
+| Testes | `tests/unit/os-aceite*.test.ts`, `tests/unit/sql-os-aceite*.test.ts` |
+| Prints | `docs/prints/os-aceite-cliente/`, `docs/prints/os-aceite-ressalva-sino/`, `docs/prints/os-aceite-avaliacao/` |

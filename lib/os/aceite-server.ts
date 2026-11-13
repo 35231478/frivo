@@ -11,6 +11,10 @@
  *  - `avisosDeAceite` / `marcarAceiteVisto`: o SINO do escritório — o cliente confirmou (com ou sem
  *    ressalva) e ninguém abriu a OS ainda. Mesmo mecanismo da NFS-e e do orçamento ("visto em").
  *
+ *  - a AVALIAÇÃO do cliente (1 a 5 estrelas + comentário opcional) entra junto com o aceite, nos três
+ *    caminhos, quando a empresa pede (`pedeAvaliacao`); `avaliacoesPorTecnico` entrega o dado por
+ *    técnico, para o módulo de Desempenho.
+ *
  * Tudo por empresa. Cada passo deixa uma linha no histórico da OS.
  */
 import { randomBytes } from "node:crypto";
@@ -23,8 +27,8 @@ import { carregarConfigApp } from "@/lib/tecnico/config-app-server";
 import type { ContextoExecucao } from "@/lib/execucao/contexto";
 import type { ResultadoAcao } from "@/lib/execucao/acoes";
 import {
-  ACAO_ACEITE, ACAO_ACEITE_RESSALVA, ACAO_PEDIDO, MSG_JA_CONFIRMADO, MSG_OS_CANCELADA, MSG_OS_NAO_CONCLUIDA, canalDoPedido, caminhoPublicoAceite, mensagemPedido, motivoSemAceite,
-  servicoDaOs, textoDoCanal, type AceiteLocal, type AceitePublico, type AceiteRetrato, type CanalPedido, type PendenciaAceite,
+  ACAO_ACEITE, ACAO_ACEITE_RESSALVA, ACAO_PEDIDO, AVALIACAO_MAX, AVALIACAO_MIN, MSG_JA_CONFIRMADO, MSG_OS_CANCELADA, MSG_OS_NAO_CONCLUIDA, canalDoPedido, caminhoPublicoAceite, mensagemPedido, motivoSemAceite,
+  servicoDaOs, textoDaAvaliacao, textoDoCanal, type AceiteLocal, type AceitePublico, type AceiteRetrato, type CanalPedido, type PendenciaAceite,
 } from "@/lib/os/aceite";
 
 export class ErroAceite extends Error {
@@ -36,18 +40,21 @@ const limpo = (v: string | null | undefined) => (v ?? "").trim();
 
 /** O que as telas leem do aceite — a assinatura (imagem) só vem quando pedida */
 const SELECT_ACEITE = {
-  id: true, token: true, situacao: true, metodo: true, nome: true, ressalva: true, ip: true, confirmadoEm: true, vistoEm: true,
+  id: true, token: true, situacao: true, metodo: true, nome: true, ressalva: true, avaliacao: true, avaliacaoComentario: true, ip: true, confirmadoEm: true, vistoEm: true,
   enviadoEm: true, enviadoCanal: true, enviadoPara: true, envios: true, colhidoPor: { select: { nome: true } },
 } satisfies Prisma.OsAceiteSelect;
 type Linha = Prisma.OsAceiteGetPayload<{ select: typeof SELECT_ACEITE }> & { assinatura?: string | null };
 
 export interface AceiteDaOs {
   token: string; situacao: string; metodo: string | null; nome: string | null; ressalva: string | null; ip: string | null;
+  /** A nota do cliente (1 a 5) e o comentário dela; null = confirmou sem avaliar */
+  avaliacao: number | null; avaliacaoComentario: string | null;
   confirmadoEm: string | null; vistoEm: string | null; colhidoPor: string | null; assinatura: string | null;
   enviadoEm: string | null; enviadoCanal: string | null; enviadoPara: string | null; envios: number;
 }
 const serializar = (a: Linha): AceiteDaOs => ({
   token: a.token, situacao: a.situacao, metodo: a.metodo, nome: a.nome, ressalva: a.ressalva, ip: a.ip,
+  avaliacao: a.avaliacao, avaliacaoComentario: a.avaliacaoComentario,
   confirmadoEm: a.confirmadoEm?.toISOString() ?? null, vistoEm: a.vistoEm?.toISOString() ?? null, colhidoPor: a.colhidoPor?.nome ?? null, assinatura: a.assinatura ?? null,
   enviadoEm: a.enviadoEm?.toISOString() ?? null, enviadoCanal: a.enviadoCanal, enviadoPara: a.enviadoPara, envios: a.envios,
 });
@@ -67,6 +74,24 @@ export async function aceiteDaOs(osId: string, empresaId: string, op: { comAssin
 }
 
 export interface OrigemDoAceite { ip?: string | null; userAgent?: string | null }
+
+/* ───────── a avaliação do cliente ───────── */
+
+/** A opção da empresa "Pedir avaliação do cliente" (nasce ligada; empresa ainda sem configuração = pede) */
+export async function pedeAvaliacao(empresaId: string): Promise<boolean> {
+  const c = await prisma.configuracao.findUnique({ where: { empresaId }, select: { aceitePedirAvaliacao: true } });
+  return c?.aceitePedirAvaliacao ?? true;
+}
+
+/**
+ * A avaliação que vai para o registro: só quando a empresa pede (com a opção desligada, o que vier é
+ * descartado — o servidor decide, não a tela). Sem nota não há comentário.
+ */
+async function avaliacaoParaGravar(empresaId: string, d: { avaliacao: number | null; avaliacaoComentario: string | null }) {
+  const nota = d.avaliacao !== null && (await pedeAvaliacao(empresaId)) ? d.avaliacao : null;
+  return { avaliacao: nota, avaliacaoComentario: nota ? d.avaliacaoComentario : null };
+}
+const notaNoHistorico = (nota: number | null) => (nota ? `. Avaliação: ${textoDaAvaliacao(nota)}` : "");
 const navegador = (ua: string | null | undefined) => limpo(ua).slice(0, 300) || null;
 
 /* ───────── no local ───────── */
@@ -87,15 +112,16 @@ export async function registrarAceiteLocal(
   if (os.status === "CANCELADA") throw new ErroAceite(MSG_OS_CANCELADA, 409);
   if (quem.exigirOsConcluida && os.status !== "CONCLUIDA") throw new ErroAceite(MSG_OS_NAO_CONCLUIDA, 409);
   await garantirAceite(os.id, quem.empresaId);
+  const avaliacao = await avaliacaoParaGravar(quem.empresaId, dados);
   const { count } = await prisma.osAceite.updateMany({
     where: { ordemServicoId: os.id, empresaId: quem.empresaId, situacao: "PENDENTE" },
     data: {
       situacao: "CONFIRMADO", metodo: "LOCAL", nome: dados.nome, assinatura: dados.assinatura, confirmadoEm: agora,
       ip: origem.ip ?? null, userAgent: navegador(origem.userAgent), atividadeId: quem.atividadeId ?? null, colhidoPorId: quem.usuarioId,
-      vistoEm: quem.vistoPeloEscritorio ? agora : null,
+      vistoEm: quem.vistoPeloEscritorio ? agora : null, ...avaliacao,
     },
   });
-  if (count) await prisma.osHistorico.create({ data: { ordemServicoId: os.id, usuarioId: quem.usuarioId, acao: ACAO_ACEITE, detalhes: `No local, por ${dados.nome} (assinatura colhida na tela)`.slice(0, 500) } });
+  if (count) await prisma.osHistorico.create({ data: { ordemServicoId: os.id, usuarioId: quem.usuarioId, acao: ACAO_ACEITE, detalhes: `No local, por ${dados.nome} (assinatura colhida na tela)${notaNoHistorico(avaliacao.avaliacao)}`.slice(0, 500) } });
   return { aceite: (await aceiteDaOs(os.id, quem.empresaId))!, jaEstava: !count };
 }
 
@@ -186,26 +212,27 @@ export async function aceitePorToken(token: string) {
  */
 export async function confirmarAceitePublico(
   token: string, dados: AceitePublico, origem: OrigemDoAceite & { contato?: { id: string; clienteId: string; empresaId: string } | null } = {}, agora: Date = new Date(),
-): Promise<{ confirmadoEm: string; nome: string; comRessalva: boolean }> {
+): Promise<{ confirmadoEm: string; nome: string; comRessalva: boolean; avaliacao: number | null }> {
   const a = await aceitePorToken(token);
   if (!a) throw new ErroAceite("Link de confirmação não encontrado", 404);
   const os = a.ordemServico;
   if (os.status === "CANCELADA") throw new ErroAceite(MSG_OS_CANCELADA, 409);
   if (a.situacao === "CONFIRMADO") throw new ErroAceite(MSG_JA_CONFIRMADO, 409);
   if (os.status !== "CONCLUIDA") throw new ErroAceite("Este serviço não está disponível para confirmação agora.", 409);
+  const avaliacao = await avaliacaoParaGravar(a.empresaId, dados);
   const doCliente = origem.contato && origem.contato.clienteId === os.clienteId && origem.contato.empresaId === a.empresaId ? origem.contato.id : null;
   const { count } = await prisma.osAceite.updateMany({
     where: { id: a.id, situacao: "PENDENTE" },
-    data: { situacao: "CONFIRMADO", metodo: "REMOTO", nome: dados.nome, ressalva: dados.ressalva, confirmadoEm: agora, vistoEm: null, ip: origem.ip ?? null, userAgent: navegador(origem.userAgent), contatoId: doCliente },
+    data: { situacao: "CONFIRMADO", metodo: "REMOTO", nome: dados.nome, ressalva: dados.ressalva, confirmadoEm: agora, vistoEm: null, ip: origem.ip ?? null, userAgent: navegador(origem.userAgent), contatoId: doCliente, ...avaliacao },
   });
   if (count !== 1) throw new ErroAceite(MSG_JA_CONFIRMADO, 409);
   await prisma.osHistorico.create({
     data: {
       ordemServicoId: os.id, usuarioId: os.criadoPorId, acao: dados.ressalva ? ACAO_ACEITE_RESSALVA : ACAO_ACEITE,
-      detalhes: `Pelo link, por ${dados.nome}${origem.ip ? ` (IP ${origem.ip})` : ""}${dados.ressalva ? `. Ressalva: ${dados.ressalva}` : ""}`.slice(0, 1200),
+      detalhes: `Pelo link, por ${dados.nome}${origem.ip ? ` (IP ${origem.ip})` : ""}${dados.ressalva ? `. Ressalva: ${dados.ressalva}` : ""}${notaNoHistorico(avaliacao.avaliacao)}`.slice(0, 1200),
     },
   });
-  return { confirmadoEm: agora.toISOString(), nome: dados.nome, comRessalva: !!dados.ressalva };
+  return { confirmadoEm: agora.toISOString(), nome: dados.nome, comRessalva: !!dados.ressalva, avaliacao: avaliacao.avaliacao };
 }
 
 /* ───────── o aviso no sino do escritório ───────── */
@@ -278,7 +305,7 @@ export async function aceiteParaRetrato(empresaId: string, osId: string, ativida
   if (!os || os.status === "CANCELADA") return null;
   return {
     situacao: os.aceite?.situacao ?? null, nome: os.aceite?.nome ?? null, confirmadoEm: os.aceite?.confirmadoEm?.toISOString() ?? null,
-    osConcluida: os.status === "CONCLUIDA", ultimaDaOs: os.atividades.length === 0,
+    osConcluida: os.status === "CONCLUIDA", ultimaDaOs: os.atividades.length === 0, pedirAvaliacao: await pedeAvaliacao(empresaId),
   };
 }
 
@@ -298,4 +325,47 @@ export async function aceiteNoLocal(ctx: ContextoExecucao, dados: AceiteLocal, o
     if (e instanceof ErroAceite) return { ok: false, status: e.status, erro: e.message };
     throw e;
   }
+}
+
+/* ───────── a avaliação por técnico (base do módulo de Desempenho) ───────── */
+
+export interface AvaliacaoDoTecnico {
+  tecnicoId: string; nome: string;
+  /** Quantas OS avaliadas este técnico executou, a média das notas (2 casas) e quantas de cada nota */
+  avaliacoes: number; media: number; porNota: Record<number, number>;
+}
+
+/**
+ * A avaliação do cliente pronta para o módulo de Desempenho. A nota é da OS; cada OS avaliada conta
+ * UMA vez para cada técnico que a executou — o responsável e a equipe das atividades CONCLUÍDAS da OS
+ * (atividade cancelada ou não feita não leva a nota). `periodo`: pela data da confirmação
+ * (`de` inclusive, `ate` exclusive). Só a empresa pedida; ordenado pelo nome do técnico.
+ */
+export async function avaliacoesPorTecnico(empresaId: string, periodo: { de?: Date; ate?: Date } = {}): Promise<AvaliacaoDoTecnico[]> {
+  const linhas = await prisma.osAceite.findMany({
+    where: {
+      empresaId, situacao: "CONFIRMADO", avaliacao: { gte: AVALIACAO_MIN, lte: AVALIACAO_MAX },
+      ...((periodo.de || periodo.ate) && { confirmadoEm: { ...(periodo.de && { gte: periodo.de }), ...(periodo.ate && { lt: periodo.ate }) } }),
+      ordemServico: { empresaId, status: { not: "CANCELADA" } },
+    },
+    select: {
+      avaliacao: true,
+      ordemServico: { select: { atividades: { where: { status: "CONCLUIDA" }, select: { tecnico: { select: { id: true, nome: true } }, tecnicosEquipe: { select: { tecnico: { select: { id: true, nome: true } } } } } } } },
+    },
+  });
+  const porTecnico = new Map<string, { nome: string; notas: number[] }>();
+  for (const { avaliacao, ordemServico } of linhas) {
+    // Quem executou a OS, sem repetir (o mesmo técnico em duas atividades conta a OS uma vez)
+    const quem = new Map<string, string>();
+    for (const a of ordemServico.atividades) for (const t of [a.tecnico, ...a.tecnicosEquipe.map((e) => e.tecnico)]) if (t) quem.set(t.id, t.nome);
+    for (const [id, nome] of quem) {
+      const t = porTecnico.get(id) ?? { nome, notas: [] };
+      t.notas.push(avaliacao!);
+      porTecnico.set(id, t);
+    }
+  }
+  return [...porTecnico.entries()].map(([tecnicoId, { nome, notas }]) => ({
+    tecnicoId, nome, avaliacoes: notas.length, media: Math.round((notas.reduce((s, n) => s + n, 0) / notas.length) * 100) / 100,
+    porNota: Object.fromEntries([1, 2, 3, 4, 5].map((n) => [n, notas.filter((x) => x === n).length])),
+  })).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR") || a.tecnicoId.localeCompare(b.tecnicoId));
 }

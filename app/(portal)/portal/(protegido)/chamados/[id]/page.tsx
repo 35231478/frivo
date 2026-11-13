@@ -6,7 +6,8 @@ import { requirePortalSession, podeVerChamados } from "@/lib/portal-server";
 import { SemAcesso } from "@/components/portal/sem-acesso";
 import { cn, formatarDataHora, LABELS_STATUS_OS, LABELS_PRIORIDADE } from "@/lib/utils";
 import { CheckCircle2, ChevronLeft, ClipboardCheck, User, Clock, Image as ImageIcon } from "lucide-react";
-import { caminhoPublicoAceite, estadoDoAceite, temRessalva, textoDoAceite } from "@/lib/os/aceite";
+import { caminhoPublicoAceite, estadoDoAceite, notaDoAceite, temRessalva, textoDoAceite } from "@/lib/os/aceite";
+import { Estrelas } from "@/components/os/estrelas";
 
 export const metadata: Metadata = { title: "Portal — Chamado" };
 export const dynamic = "force-dynamic";
@@ -24,7 +25,7 @@ export default async function PortalChamadoDetalhe({ params }: { params: Promise
       unidade: { select: { nome: true } },
       equipamento: { select: { marca: true, modelo: true } },
       anexos: { select: { id: true, nome: true, tipo: true, conteudo: true, criadoEm: true }, orderBy: { criadoEm: "asc" } },
-      aceite: { select: { token: true, situacao: true, nome: true, confirmadoEm: true, ressalva: true } },
+      aceite: { select: { token: true, situacao: true, nome: true, confirmadoEm: true, ressalva: true, avaliacao: true } },
     },
   });
   if (!os) notFound();
@@ -90,6 +91,7 @@ export default async function PortalChamadoDetalhe({ params }: { params: Promise
           <div className="min-w-0 space-y-1">
             <p className="text-sm text-ink flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-ok-texto shrink-0" aria-hidden /> {textoDoAceite(os.aceite!)}</p>
             {temRessalva(os.aceite) && <p className="text-sm text-ink break-words whitespace-pre-wrap" data-aceite-chamado-ressalva><strong>Ressalva registrada:</strong> {os.aceite!.ressalva}</p>}
+            {notaDoAceite(os.aceite) && <p className="text-sm text-ink flex items-center gap-2 flex-wrap" data-aceite-chamado-avaliacao><strong>Avaliação registrada:</strong> <Estrelas nota={notaDoAceite(os.aceite)!} tamanho="sm" /></p>}
           </div>
           <Link href={caminhoPublicoAceite(os.aceite!.token)} className="text-sm font-medium text-primary-600 hover:underline shrink-0">Ver o relatório</Link>
         </div>

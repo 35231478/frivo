@@ -5,20 +5,25 @@ import SignatureCanvas from "react-signature-canvas";
 import { AlertCircle, CheckCircle2, Eraser } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { neutro } from "@/lib/ui/tokens";
+import { AvaliacaoDoCliente } from "@/components/os/avaliacao-cliente";
 import { MSG_ASSINATURA, MSG_NOME, NOME_MAX, NOME_MIN, aceiteLocalSchema, type AceiteLocal } from "@/lib/os/aceite";
 
 /**
  * Aceite NO LOCAL: o responsável do cliente informa o nome e assina no quadro, na tela de quem está
  * com ele (o app do técnico ou o escritório). `aoConfirmar` devolve a mensagem de erro, ou null se gravou.
+ * `pedirAvaliacao`: a empresa pede a avaliação do serviço — o cliente dá a nota ali mesmo, se quiser.
  */
-export function AssinaturaDoCliente({ resumo, aoConfirmar, aoCancelar }: {
+export function AssinaturaDoCliente({ resumo, aoConfirmar, aoCancelar, pedirAvaliacao = false }: {
   /** De qual serviço se trata, para quem assina ler antes ("OS-123 · Hospital Santa Clara") */
   resumo: string;
   aoConfirmar: (dados: AceiteLocal) => Promise<string | null>;
   aoCancelar: () => void;
+  pedirAvaliacao?: boolean;
 }) {
   const quadro = useRef<SignatureCanvas | null>(null);
   const [nome, setNome] = useState("");
+  const [nota, setNota] = useState<number | null>(null);
+  const [comentario, setComentario] = useState("");
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
 
@@ -26,7 +31,10 @@ export function AssinaturaDoCliente({ resumo, aoConfirmar, aoCancelar }: {
     setErro("");
     if (nome.trim().length < NOME_MIN) return setErro(MSG_NOME);
     if (!quadro.current || quadro.current.isEmpty()) return setErro(MSG_ASSINATURA);
-    const dados = aceiteLocalSchema.safeParse({ nome, assinatura: quadro.current.getCanvas().toDataURL("image/png") });
+    const dados = aceiteLocalSchema.safeParse({
+      nome, assinatura: quadro.current.getCanvas().toDataURL("image/png"),
+      ...(pedirAvaliacao && { avaliacao: nota, avaliacaoComentario: nota ? comentario : null }),
+    });
     if (!dados.success) return setErro(dados.error.issues[0]?.message ?? MSG_ASSINATURA);
     setEnviando(true);
     try {
@@ -63,6 +71,7 @@ export function AssinaturaDoCliente({ resumo, aoConfirmar, aoCancelar }: {
         </div>
         <p className="text-xs text-ink-subtle mt-1">Assine com o dedo, dentro do quadro.</p>
       </div>
+      {pedirAvaliacao && <AvaliacaoDoCliente nota={nota} comentario={comentario} aoMudarNota={setNota} aoMudarComentario={setComentario} desabilitado={enviando} />}
       <p className="text-xs text-ink-muted" data-aviso-registro>
         <span>Ficam registrados o nome, a assinatura, a data e a hora. </span>
         <span>A confirmação entra no relatório da OS.</span>

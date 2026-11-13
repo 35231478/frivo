@@ -13,6 +13,8 @@
  *  - RESSALVA: o cliente confirma registrando o que ficou pendente — o serviço fica confirmado, a
  *    ressalva fica no registro, na OS e no relatório;
  *  - SINO: um aviso por confirmação (as ressalvas à parte), até alguém com "OS › Editar" abrir a OS;
+ *  - AVALIAÇÃO: a nota de 1 a 5 e o comentário entram junto com o aceite nos três caminhos, só quando a
+ *    empresa pede; o dado sai por técnico, pronto para o módulo de Desempenho;
  *  - o aceite confirmado entra no relatório da OS;
  *  - RBAC e multiempresa em cada rota; o link público só precisa do token.
  *   PG_TESTE_URL="postgresql://root@localhost/postgres?host=/var/run/postgresql" npx vitest run tests/unit/os-aceite-pg
@@ -159,8 +161,8 @@ describe.skipIf(!URL_PG)("Aceite do cliente na conclusão da OS (PostgreSQL real
     await prisma.ordemServico.deleteMany({});
     await prisma.tentativaAcesso.deleteMany({});
     await prisma.emailConfig.update({ where: { empresaId: "e1" }, data: { ativo: true } });
-    await opcao({ portalAceiteObrigatorio: false, appExibirContatosCliente: true, appExibirDadosCliente: true });
-    await opcao({ portalAceiteObrigatorio: false }, "e2");
+    await opcao({ portalAceiteObrigatorio: false, appExibirContatosCliente: true, appExibirDadosCliente: true, aceitePedirAvaliacao: true });
+    await opcao({ portalAceiteObrigatorio: false, aceitePedirAvaliacao: true }, "e2");
     comoEscritorio();
   });
 
@@ -196,14 +198,14 @@ describe.skipIf(!URL_PG)("Aceite do cliente na conclusão da OS (PostgreSQL real
     const x = await os({}, [{}, { status: "AGENDADA" }]);
     comoTecnico();
     const retrato = async (atividadeId: string) => (await chamar("tecnico/atividades/[atividadeId]", "GET", { atividadeId })).json.aceite;
-    expect(await retrato(x.atividades[0])).toEqual({ situacao: null, nome: null, confirmadoEm: null, osConcluida: false, ultimaDaOs: false });
+    expect(await retrato(x.atividades[0])).toEqual({ situacao: null, nome: null, confirmadoEm: null, osConcluida: false, ultimaDaOs: false, pedirAvaliacao: true });
     await sync([opConcluir(x.atividades[0])]);
     expect(await statusDa(x.id)).not.toBe("CONCLUIDA");
     expect(await aceite(x.id)).toBeNull();
     // Agora só falta a segunda: é ela que fecha a OS
     expect(await retrato(x.atividades[1])).toMatchObject({ osConcluida: false, ultimaDaOs: true });
     await sync([opConcluir(x.atividades[1])]);
-    expect(await retrato(x.atividades[1])).toEqual({ situacao: "PENDENTE", nome: null, confirmadoEm: null, osConcluida: true, ultimaDaOs: true });
+    expect(await retrato(x.atividades[1])).toEqual({ situacao: "PENDENTE", nome: null, confirmadoEm: null, osConcluida: true, ultimaDaOs: true, pedirAvaliacao: true });
     // Quem só conclui (sem "OS › Editar") não colhe aceite: o retrato não leva nada
     comoTecnico("t1", "uT", montarPermissoes({ ordens: ["visualizar", "concluir"] }));
     expect(await retrato(x.atividades[1])).toBeNull();
@@ -374,7 +376,7 @@ describe.skipIf(!URL_PG)("Aceite do cliente na conclusão da OS (PostgreSQL real
     expect(resend.enviados).toHaveLength(0);
     // Legado: concluída direto no banco, sem registro de aceite
     const antiga = await os({ status: "CONCLUIDA", dataConclusao: new Date("2026-09-01T12:00:00Z") }, [{ status: "CONCLUIDA" }]);
-    expect((await chamar(R_ACEITE, "GET", { id: antiga.id })).json).toEqual({ estado: "NAO_SE_APLICA", statusOs: "CONCLUIDA", aceite: null, caminhoPublico: null });
+    expect((await chamar(R_ACEITE, "GET", { id: antiga.id })).json).toEqual({ estado: "NAO_SE_APLICA", statusOs: "CONCLUIDA", aceite: null, caminhoPublico: null, pedirAvaliacao: true });
     expect((await chamar(R_ENVIAR, "POST", { id: antiga.id })).status).toBe(200);
     expect(await aceite(antiga.id)).toMatchObject({ situacao: "PENDENTE", envios: 1 });
     expect((await chamar(R_ACEITE, "GET", { id: antiga.id })).json.estado).toBe("AGUARDANDO");
@@ -731,6 +733,160 @@ describe.skipIf(!URL_PG)("Aceite do cliente na conclusão da OS (PostgreSQL real
     expect((await chamar("configuracoes", "PUT", {}, { osExigirOutraCoisa: true })).status).toBe(400);
     expect(await prisma.configuracao.findUnique({ where: { empresaId: "e1" }, select: { osExigirAssinatura: true, osExigirFoto: true, portalAceiteObrigatorio: true } }))
       .toEqual({ osExigirAssinatura: false, osExigirFoto: true, portalAceiteObrigatorio: true }); // os vizinhos continuam gravando
+  });
+
+
+  /* ───────── avaliação do cliente ───────── */
+  const PELO_LINK = (osId: string, corpo: Record<string, unknown>) => (async () => {
+    const atual = sessao.atual; sessao.atual = null;
+    const r = await chamar(R_PUBLICO, "POST", { token: (await aceite(osId)).token }, { nome: "Roberto Almeida", ...corpo }, CLIENTE_IP);
+    sessao.atual = atual;
+    return r;
+  })();
+
+  it("AVALIAÇÃO pelo link: a nota (1 a 5) e o comentário ficam no registro do aceite, separados da ressalva — e a OS segue concluída", async () => {
+    const x = await concluida();
+    const r = await PELO_LINK(x.id, { avaliacao: 4, avaliacaoComentario: "  Equipe pontual e cuidadosa  " });
+    expect(r).toMatchObject({ status: 200, json: { ok: true, situacao: "CONFIRMADO", comRessalva: false, avaliacao: 4 } });
+    expect(await aceite(x.id)).toMatchObject({ situacao: "CONFIRMADO", metodo: "REMOTO", avaliacao: 4, avaliacaoComentario: "Equipe pontual e cuidadosa", ressalva: null, ip: "200.150.10.5" });
+    expect(await statusDa(x.id)).toBe("CONCLUIDA");
+    expect(await historico(x.id, "Serviço confirmado pelo cliente")).toEqual(["Serviço confirmado pelo cliente | Pelo link, por Roberto Almeida (IP 200.150.10.5). Avaliação: 4 de 5 estrelas | uA"]);
+    // Na OS (quem tem OS › Visualizar vê) e a tela sabe que a empresa pede avaliação
+    comOs(["visualizar"]);
+    expect((await chamar(R_ACEITE, "GET", { id: x.id })).json).toMatchObject({ estado: "CONFIRMADO", pedirAvaliacao: true, aceite: { avaliacao: 4, avaliacaoComentario: "Equipe pontual e cuidadosa", ressalva: null } });
+    // Com ressalva E avaliação: cada uma no seu campo, as duas no histórico
+    comoEscritorio();
+    const y = await concluida();
+    expect((await PELO_LINK(y.id, { ressalva: RESSALVA, avaliacao: 2, avaliacaoComentario: "Demorou para chegar" })).json).toMatchObject({ comRessalva: true, avaliacao: 2 });
+    expect(await aceite(y.id)).toMatchObject({ ressalva: RESSALVA, avaliacao: 2, avaliacaoComentario: "Demorou para chegar" });
+    expect(await historico(y.id, "Serviço confirmado pelo cliente, com ressalva")).toEqual([`Serviço confirmado pelo cliente, com ressalva | Pelo link, por Roberto Almeida (IP 200.150.10.5). Ressalva: ${RESSALVA}. Avaliação: 2 de 5 estrelas | uA`]);
+  });
+
+  it("a avaliação é OPCIONAL: confirmar (ou confirmar com ressalva) sem nota funciona igual; comentário sem nota não é guardado", async () => {
+    const [semNada, soRessalva, soComentario] = [await concluida(), await concluida(), await concluida()];
+    expect((await PELO_LINK(semNada.id, {})).json).toMatchObject({ ok: true, avaliacao: null });
+    expect((await PELO_LINK(soRessalva.id, { ressalva: RESSALVA, avaliacao: null })).json).toMatchObject({ comRessalva: true, avaliacao: null });
+    expect((await PELO_LINK(soComentario.id, { avaliacaoComentario: "Texto solto, sem estrelas" })).status).toBe(200);
+    for (const o of [semNada, soRessalva, soComentario]) expect(await aceite(o.id), o.id).toMatchObject({ situacao: "CONFIRMADO", avaliacao: null, avaliacaoComentario: null });
+    expect((await aceite(soRessalva.id)).ressalva).toBe(RESSALVA);
+    expect(await historico(semNada.id, "Serviço confirmado pelo cliente")).toEqual(["Serviço confirmado pelo cliente | Pelo link, por Roberto Almeida (IP 200.150.10.5) | uA"]);
+  });
+
+  it("nota fora de 1 a 5 é recusada (400) e nada é gravado; depois de confirmado ninguém acrescenta nem troca a avaliação", async () => {
+    const x = await concluida();
+    for (const ruim of [0, 6, 2.5, "5", -1]) expect(await erro(PELO_LINK(x.id, { avaliacao: ruim })), String(ruim)).toBe("400 A avaliação vai de 1 a 5 estrelas.");
+    expect(await erro(PELO_LINK(x.id, { avaliacao: 4, avaliacaoComentario: "x".repeat(1001) }))).toBe("400 O comentário da avaliação vai até 1000 caracteres.");
+    expect(await aceite(x.id)).toMatchObject({ situacao: "PENDENTE", avaliacao: null, nome: null });
+    expect((await PELO_LINK(x.id, { avaliacao: 3 })).status).toBe(200);
+    expect(await erro(PELO_LINK(x.id, { avaliacao: 5, avaliacaoComentario: "Mudei de ideia" }))).toBe("409 Este serviço já foi confirmado.");
+    expect(await aceite(x.id)).toMatchObject({ avaliacao: 3, avaliacaoComentario: null });
+    // No banco a nota também é de 1 a 5 quando o SQL de produção roda (a regra é do arquivo SQL; aqui o Prisma só guarda o inteiro)
+    expect(typeof (await aceite(x.id)).avaliacao).toBe("number");
+  });
+
+  it("AVALIAÇÃO NO LOCAL: pela fila do app (junto com a assinatura) e pelo escritório — a nota entra no mesmo registro", async () => {
+    const x = await os();
+    comoTecnico();
+    const r = await sync([opConcluir(x.a), { ...opAceite(x.a), dados: { nome: "João Pereira da Silva", assinatura: ASSINATURA, avaliacao: 5, avaliacaoComentario: " Muito atencioso " } }]);
+    expect(r.map((o) => o.ok)).toEqual([true, true]);
+    expect(await aceite(x.id)).toMatchObject({ situacao: "CONFIRMADO", metodo: "LOCAL", assinatura: ASSINATURA, avaliacao: 5, avaliacaoComentario: "Muito atencioso", colhidoPorId: "uT", ressalva: null });
+    expect(await historico(x.id, "Serviço confirmado pelo cliente")).toEqual(["Serviço confirmado pelo cliente | No local, por João Pereira da Silva (assinatura colhida na tela). Avaliação: 5 de 5 estrelas | uT"]);
+    // Aparelho ainda na versão anterior: manda só nome e assinatura — vale, sem nota
+    const antigo = await os();
+    expect((await sync([opConcluir(antigo.a), opAceite(antigo.a)])).map((o) => o.ok)).toEqual([true, true]);
+    expect(await aceite(antigo.id)).toMatchObject({ situacao: "CONFIRMADO", avaliacao: null, avaliacaoComentario: null });
+    // Nota inválida na fila: a operação é recusada e a assinatura não entra pela metade
+    const ruim = await os();
+    const rr = await sync([opConcluir(ruim.a), { ...opAceite(ruim.a), dados: { nome: "João Pereira da Silva", assinatura: ASSINATURA, avaliacao: 9 } }]);
+    expect(rr[1]).toMatchObject({ ok: false, status: 400 });
+    expect(await aceite(ruim.id)).toMatchObject({ situacao: "PENDENTE", avaliacao: null });
+    // Escritório ("Colher assinatura"): a mesma coisa pela rota
+    const y = await concluida();
+    const e = await chamar(R_ACEITE, "POST", { id: y.id }, { nome: "Marta Nunes", assinatura: ASSINATURA, avaliacao: 3, avaliacaoComentario: "Atendeu, mas atrasou" });
+    expect(e).toMatchObject({ status: 200, json: { estado: "CONFIRMADO", aceite: { avaliacao: 3, avaliacaoComentario: "Atendeu, mas atrasou", metodo: "LOCAL" } } });
+    expect(await erro(chamar(R_ACEITE, "POST", { id: (await concluida()).id }, { nome: "Marta Nunes", assinatura: ASSINATURA, avaliacao: 6 }))).toBe("400 A avaliação vai de 1 a 5 estrelas.");
+  });
+
+  it("OPÇÃO DA EMPRESA 'Pedir avaliação do cliente': nasce LIGADA; desligada, o servidor não guarda nota nenhuma (e a confirmação segue normal)", async () => {
+    const { pedeAvaliacao } = await import("@/lib/os/aceite-server");
+    await prisma.configuracao.deleteMany({});
+    expect([await pedeAvaliacao("e1"), await pedeAvaliacao("e2")]).toEqual([true, true]); // empresa ainda sem configuração: pede
+    expect((await chamar("configuracoes", "GET", {})).json.aceitePedirAvaliacao).toBe(true); // a linha nasce com a opção ligada
+    expect((await chamar("configuracoes", "PUT", {}, { aceitePedirAvaliacao: false })).status).toBe(200);
+    expect([await pedeAvaliacao("e1"), await pedeAvaliacao("e2")]).toEqual([false, true]); // por empresa: a outra não é tocada
+    expect((await chamar("configuracoes", "PUT", {}, { aceitePedirAvaliacao: "não" })).status).toBe(400);
+    comoEscritorio(montarPermissoes({ ordens: ["visualizar", "editar"], configuracoes: ["visualizar"] }));
+    expect((await chamar("configuracoes", "PUT", {}, { aceitePedirAvaliacao: true })).status).toBe(403);
+    expect(await pedeAvaliacao("e1")).toBe(false);
+    comoEscritorio();
+    // Desligada: as telas ficam sabendo…
+    const x = await os();
+    comoTecnico();
+    expect((await chamar("tecnico/atividades/[atividadeId]", "GET", { atividadeId: x.a })).json.aceite.pedirAvaliacao).toBe(false);
+    // …e o servidor descarta a nota que vier assim mesmo (app com o retrato antigo, pedido montado à mão)
+    await sync([opConcluir(x.a), { ...opAceite(x.a), dados: { nome: "João Pereira da Silva", assinatura: ASSINATURA, avaliacao: 5, avaliacaoComentario: "Ótimo" } }]);
+    expect(await aceite(x.id)).toMatchObject({ situacao: "CONFIRMADO", avaliacao: null, avaliacaoComentario: null, assinatura: ASSINATURA });
+    expect(await historico(x.id, "Serviço confirmado pelo cliente")).toEqual(["Serviço confirmado pelo cliente | No local, por João Pereira da Silva (assinatura colhida na tela) | uT"]);
+    comoEscritorio();
+    expect((await chamar(R_ACEITE, "GET", { id: x.id })).json.pedirAvaliacao).toBe(false);
+    const y = await concluida();
+    expect((await PELO_LINK(y.id, { avaliacao: 1, avaliacaoComentario: "Ruim" })).json).toMatchObject({ ok: true, avaliacao: null });
+    expect(await aceite(y.id)).toMatchObject({ situacao: "CONFIRMADO", avaliacao: null, avaliacaoComentario: null });
+    // Ligada de novo: volta a guardar
+    await opcao({ aceitePedirAvaliacao: true });
+    const z = await concluida();
+    expect((await PELO_LINK(z.id, { avaliacao: 1, avaliacaoComentario: "Ruim" })).json.avaliacao).toBe(1);
+  });
+
+  it("RELATÓRIO da OS: a nota e o comentário entram com o aceite — no interno e no que o cliente recebe", async () => {
+    const { relatorioInterno, relatorioPorToken } = await import("@/lib/relatorio-os/dados");
+    const x = await concluida();
+    await PELO_LINK(x.id, { avaliacao: 5, avaliacaoComentario: "Serviço impecável" });
+    expect((await relatorioInterno(x.id, "e1"))!.dados.aceite).toMatchObject({ nome: "Roberto Almeida", avaliacao: 5, avaliacaoComentario: "Serviço impecável", ressalva: null });
+    const rel = await prisma.relatorioOs.findFirst({ where: { ordemServicoId: x.id, escopo: "GERAL" } });
+    expect((await relatorioPorToken(rel.tokenPublico))!.dados.aceite).toMatchObject({ avaliacao: 5, avaliacaoComentario: "Serviço impecável" });
+    const semNota = await concluida();
+    await PELO_LINK(semNota.id, {});
+    expect((await relatorioInterno(semNota.id, "e1"))!.dados.aceite).toMatchObject({ avaliacao: null, avaliacaoComentario: null });
+  });
+
+  it("DESEMPENHO (dado pronto): a nota da OS vale para cada técnico que a executou — responsável e equipe das atividades concluídas, uma vez por OS", async () => {
+    const { avaliacoesPorTecnico } = await import("@/lib/os/aceite-server");
+    const avaliar = async (x: { id: string }, nota: number | null, em: string) => {
+      await PELO_LINK(x.id, { avaliacao: nota });
+      await prisma.osAceite.update({ where: { ordemServicoId: x.id }, data: { confirmadoEm: new Date(em) } });
+    };
+    expect(await avaliacoesPorTecnico("e1")).toEqual([]);
+    // OS 1: só o João (t1), nota 5
+    await avaliar(await concluida(), 5, "2026-11-03T12:00:00Z");
+    // OS 2: João responsável + o outro técnico (t2) na equipe da atividade, nota 4
+    const dupla = await os();
+    await prisma.atividadeTecnico.create({ data: { atividadeId: dupla.a, tecnicoId: "t2" } });
+    comoTecnico(); await sync([opConcluir(dupla.a)]); comoEscritorio();
+    await avaliar(dupla, 4, "2026-11-10T12:00:00Z");
+    // OS 3: duas atividades concluídas do MESMO técnico (conta a OS uma vez) e uma cancelada de outro (não leva a nota), nota 2
+    const tres = await os({}, [{ status: "CONCLUIDA" }, {}, { status: "CANCELADA", tecnicoId: "t2" }]);
+    comoTecnico(); await sync([opConcluir(tres.atividades[1])]); comoEscritorio();
+    expect(await statusDa(tres.id)).toBe("CONCLUIDA");
+    await avaliar(tres, 2, "2026-11-20T12:00:00Z");
+    // Não entram: confirmada sem nota, ainda pendente, OS inativada depois, e a outra empresa
+    await avaliar(await concluida(), null, "2026-11-11T12:00:00Z");
+    await concluida();
+    const inativada = await concluida();
+    await avaliar(inativada, 1, "2026-11-12T12:00:00Z");
+    await prisma.ordemServico.update({ where: { id: inativada.id }, data: { status: "CANCELADA" } });
+
+    expect(await avaliacoesPorTecnico("e1")).toEqual([
+      { tecnicoId: "t1", nome: "João Silva", avaliacoes: 3, media: 3.67, porNota: { 1: 0, 2: 1, 3: 0, 4: 1, 5: 1 } },
+      { tecnicoId: "t2", nome: "Outro técnico", avaliacoes: 1, media: 4, porNota: { 1: 0, 2: 0, 3: 0, 4: 1, 5: 0 } },
+    ]);
+    expect(await avaliacoesPorTecnico("e2")).toEqual([]); // multiempresa: a outra empresa não enxerga nada
+    // Por período (data da confirmação; início inclusive, fim exclusive)
+    const periodo = async (de?: string, ate?: string) => (await avaliacoesPorTecnico("e1", { de: de ? new Date(de) : undefined, ate: ate ? new Date(ate) : undefined })).map((t) => `${t.tecnicoId}:${t.avaliacoes}:${t.media}`);
+    expect(await periodo("2026-11-10T12:00:00Z", "2026-11-20T12:00:00Z")).toEqual(["t1:1:4", "t2:1:4"]);
+    expect(await periodo("2026-11-10T12:00:00.001Z")).toEqual(["t1:1:2"]);
+    expect(await periodo(undefined, "2026-11-10T12:00:00Z")).toEqual(["t1:1:5"]);
+    expect(await periodo("2027-01-01T00:00:00Z")).toEqual([]);
   });
 
   /* ───────── permissões ───────── */
