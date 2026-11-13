@@ -33,7 +33,9 @@ export const ESCOPO = ["components", "app", "lib/cadastros", "lib/navegacao", "l
 // jurídico e de FAQ OFICIAL, de leitura longa e em registro público (2ª pessoa, "você"). Não são a
 // UI do produto que o ratchet guarda — os princípios 3 e 10 miram as telas internas; aqui o
 // comprimento e o tom são o próprio conteúdo, como a "cena" escura da calculadora é exceção de marca.
-export const IGNORADOS = ["app/(publico)/(institucional)"];
+// Pelo mesmo motivo, a home de vendas ("/"): o texto é a copy de marketing do briefing, em 2ª pessoa
+// ("você", "pra") e com frases de venda; cor e forma seguem os tokens como no resto do sistema.
+export const IGNORADOS = ["app/(publico)/(institucional)", "app/(publico)/(marketing)", "components/marketing"];
 export const CATEGORIAS = ["emoji", "hex", "informal", "exclamacao", "titleCase", "textoLongo"] as const;
 export type Categoria = (typeof CATEGORIAS)[number];
 export interface Violacao { linha: number; trecho: string }
