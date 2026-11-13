@@ -403,6 +403,8 @@ describe.skipIf(!URL_PG)("Desempenho PR 1: medir e mostrar (PostgreSQL real)", (
     await servico({ tecnicos: ["t1"], status: "EM_ANDAMENTO", agendada: br("2026-11-01") });           // aberta e atrasada: ainda não foi concluída
     await servico({ tecnicos: ["t1"], concluida: new Date("2026-11-01T02:00:00Z") });                  // 31/10 às 23h em Brasília: é outubro
     await servico({ tecnicos: ["t1"], concluida: new Date("2026-12-01T03:00:00Z") });                  // 1º/12 à meia-noite em Brasília: é dezembro
+    const reaberta = await servico({ tecnicos: ["t1"], agendada: br("2026-11-09"), concluida: br("2026-11-09", "10:00") });
+    await prisma.atividadeOs.update({ where: { id: reaberta.atividade }, data: { status: "EM_ANDAMENTO" } });  // dado antigo: reaberta com a data ainda gravada
     expect(await prazo()).toBe("2 de 3 atividades");
     // A de outubro existe — em outubro (onde não há regra: sem escore, nunca zero)
     expect(await linha("Ana Dias", "2026-10")).toMatchObject({ escore: null, posicao: null });
@@ -594,6 +596,8 @@ describe.skipIf(!URL_PG)("Desempenho PR 1: medir e mostrar (PostgreSQL real)", (
     await servico({ tecnicos: ["t2"], equipamento: "q4", concluida: br("2026-11-05", "16:00") });
     await corretiva("q4", br("2026-11-09", "09:00"), {}, "toPrev");                                          // tipo que não conta como corretiva
     await corretiva("q4", br("2026-11-09", "10:00"), { status: "CANCELADA" });                               // corretiva cancelada
+    await servico({ tecnicos: ["t3"], equipamento: "q1", status: "EM_ANDAMENTO" });                          // serviço ainda NÃO concluído: não é origem de retorno
+    await corretiva("q1", br("2026-11-10", "09:00"));
     expect(await itens()).toEqual([]);
     // Dentro do prazo exato (30 dias) entra
     await prisma.desempenhoConfig.updateMany({ data: { retornoDias: 36 } });
@@ -669,6 +673,11 @@ describe.skipIf(!URL_PG)("Desempenho PR 1: medir e mostrar (PostgreSQL real)", (
     expect(await escore("Ana Dias")).toBe(antes);
     // Reclamação de mês anterior pesa no mês dela
     expect((await chamar(R.penalidade, "PUT", { id: criada.json.id }, { ...base, data: "2026-10-20" })).json.competencia).toBe("2026-10");
+    await decidir(criada.json.id, "CONTA", "Vale para outubro");
+    expect(await escore("Ana Dias")).toBe(antes); // conta em OUTUBRO: novembro não muda
+    // OS de outra empresa não pode ser ligada à minha reclamação
+    const daOutra = await servico({ tecnicos: ["tE2"], empresaId: "e2", equipamento: null });
+    expect(await erro(chamar(R.penalidades, "POST", {}, { ...base, osNumero: daOutra.numero }))).toMatch(/^404 OS não encontrada/);
     // Outra empresa não edita nem exclui
     gestao({ empresaId: "e2" });
     expect(await erro(chamar(R.penalidade, "PUT", { id: criada.json.id }, base))).toBe("404 Item não encontrado.");

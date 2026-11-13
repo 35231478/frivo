@@ -311,6 +311,10 @@ describe("o escore: índice de qualidade de 0 a 100", () => {
     expect(abaixo.escore).toBe(43);
     expect(abaixo).toMatchObject({ atingiuMeta: false, faixa: null, bonus: 0 });
     expect(faixaDoEscore([{ nome: "Baixa", minimo: 50, valor: 10 }], 60, 70)).toBeNull();
+    // Ficar EXATAMENTE na meta atinge a meta (7 de 10 no prazo e nos relatórios, nota 3,5 = 70,0)
+    const naMeta = calcularEscore(frouxa, entrada({ prazo: { certos: 7, total: 10 }, relatorio: { certos: 7, total: 10 }, avaliacao: { media: 3.5, avaliacoes: 2 } }));
+    expect(naMeta).toMatchObject({ escore: 70, atingiuMeta: true, bonus: 100 });
+    expect(naMeta.faixa?.nome).toBe("Bronze");
     expect(faixaDoEscore([{ nome: "Baixa", minimo: 50, valor: 10 }], 70, 70)?.nome).toBe("Baixa");
   });
 
