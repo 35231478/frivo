@@ -8,6 +8,7 @@ import type { Operacao } from "@/lib/tecnico/sync";
 import type { CadastroCampo } from "@/lib/tecnico/cadastro-equipamento";
 import type { AvisoClienteRetrato, AvisosTela } from "@/lib/tecnico/aviso-cliente";
 import type { AceiteRetrato } from "@/lib/os/aceite";
+import type { MaterialPrevisto } from "@/lib/tecnico/o-que-levar";
 
 export type { Operacao };
 export type TipoOperacao = Operacao["tipo"];
@@ -25,6 +26,8 @@ export interface CartaoTela {
   avisos?: AvisosTela;
   /** OS dividida em visitas diárias: qual é esta ("Visita 3 de 12"). Ausente = atividade comum */
   visita?: { numero: number; total: number };
+  /** "O que levar": materiais previstos da OS. Ausente = opção da empresa desligada (ou lista antiga) */
+  materiais?: MaterialPrevisto[];
 }
 
 export interface EquipamentoInfo {

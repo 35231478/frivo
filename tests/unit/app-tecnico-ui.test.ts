@@ -263,7 +263,7 @@ describe("Meu dia — lapidado (Etapa 2a)", () => {
   it("permissões do app: 'Exibir dados do cliente' DESLIGADO — cartão sem nome, unidade, endereço nem rota; o resto fica", async () => {
     await abrirMeuDia(cfg({ exibirDadosCliente: false }));
     const c = $("[data-cartao=aA]")!;
-    for (const oculto of ["Hospital Santa Luzia", "Av. Paulista", "Matriz", "Rota no mapa"]) expect(c.textContent, oculto).not.toContain(oculto);
+    for (const oculto of ["Hospital Santa Luzia", "Av. Paulista", "Matriz", "Como chegar"]) expect(c.textContent, oculto).not.toContain(oculto);
     expect(c.querySelector("h3")!.textContent).toBe("Preventiva"); // identifica pela OS, sem repetir o título
     expect(c.querySelector("[data-linha-os]")!.textContent).toBe("OS-aA");
     expect(c.querySelector("[data-endereco]")).toBeNull();
@@ -283,7 +283,7 @@ describe("Meu dia — lapidado (Etapa 2a)", () => {
     expect(c.textContent).not.toContain("Ligar");
     expect($$("a[href^='tel:']")).toEqual([]);
     // Antes de chegar: Rota e "Cheguei" na linha; "A caminho" discreto, embaixo. Sem Câmera (a foto é no local)
-    expect(acoes(c.querySelector("[data-acoes-cartao]")!)).toEqual(["Rota no mapa", "Cheguei", "Avisar que estou a caminho"]);
+    expect(acoes(c.querySelector("[data-acoes-cartao]")!)).toEqual(["Como chegar", "Cheguei", "Avisar que estou a caminho"]);
     expect(c.textContent).toContain("Hospital Santa Luzia");
     act(() => root.unmount()); caixa.remove();
     await abrirMeuDia(cfg({ exibirDadosCliente: false, exibirContatosCliente: false }));
@@ -742,7 +742,7 @@ describe("execução guiada — lapidada (Etapa 2b)", () => {
     expect($("h1")!.textContent).toBe("Split Sala 1"); // o trabalho segue identificado pelo equipamento
     await clicar($("[data-vista=equipamento] button")); // "Equipamentos da OS"
     await esperarAte(() => !!$("[data-vista=os]"), "voltou para a OS");
-    for (const dado of ["Hospital Santa Luzia", "Av. Paulista", "Matriz", "Ligar", "Rota no mapa"]) expect(caixa.textContent, dado).not.toContain(dado);
+    for (const dado of ["Hospital Santa Luzia", "Av. Paulista", "Matriz", "Ligar", "Como chegar"]) expect(caixa.textContent, dado).not.toContain(dado);
   });
 
   it("salvamento incremental SEM SINAL: fechar e reabrir não apaga resposta nem foto (ficam no aparelho) — e nada foi enviado", async () => {
@@ -992,7 +992,7 @@ describe("App do colaborador: o que o técnico vê e pode fazer (por empresa)", 
     expect(cab).not.toContain("Hospital Santa Luzia"); // nome do cliente oculto
     expect(cab).not.toContain("Av. Paulista"); // endereço oculto
     expect($("[data-descricao]")!.textContent).toBe("Preventiva mensal"); // o que fazer continua à vista
-    expect(cab).not.toContain("Rota no mapa");
+    expect(cab).not.toContain("Como chegar");
     expect(cab).toContain("Preventiva"); // ainda identifica a OS pelo título/nº
   });
 
@@ -1000,7 +1000,7 @@ describe("App do colaborador: o que o técnico vê e pode fazer (por empresa)", 
     await abrirOs("aA", undefined, cfg({ exibirContatosCliente: false }));
     const cab = $("header")!.textContent!;
     expect(cab).not.toContain("Ligar");
-    expect(cab).toContain("Rota no mapa");
+    expect(cab).toContain("Como chegar");
     expect(cab).toContain("Hospital Santa Luzia");
   });
 
@@ -1008,7 +1008,7 @@ describe("App do colaborador: o que o técnico vê e pode fazer (por empresa)", 
     await abrirOs("aA");
     const cab = $("header")!.textContent!;
     expect(cab).toContain("Hospital Santa Luzia");
-    expect(cab).toContain("Rota no mapa");
+    expect(cab).toContain("Como chegar");
     expect(cab).toContain("Ligar");
   });
 

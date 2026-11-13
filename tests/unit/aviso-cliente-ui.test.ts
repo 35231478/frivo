@@ -215,10 +215,10 @@ const voltarAoMeuDia = async () => { await clicar([...$$("button")].find((b) => 
 
 /* ═════════════════════════ antes de chegar ═════════════════════════ */
 describe("card ANTES de chegar: só se lê", () => {
-  it("ações: 'Rota no mapa' e 'Cheguei' (principal, cheio, na cor da marca); 'A caminho' discreto embaixo; sem 'Ligar' e sem 'Câmera'", async () => {
+  it("ações: 'Como chegar' e 'Cheguei' (principal, cheio, na cor da marca); 'A caminho' discreto embaixo; sem 'Ligar' e sem 'Câmera'", async () => {
     await abrirMeuDia();
     expect(estado()).toBe("antes");
-    expect(acoes()).toEqual(["Rota no mapa", "Cheguei", "Avisar que estou a caminho"]);
+    expect(acoes()).toEqual(["Como chegar", "Cheguei", "Avisar que estou a caminho"]);
     const cheguei = botao("CHEGOU")!;
     expect(cheguei.className).toContain("bg-acento");
     expect(cheguei.className).toContain("text-white");
@@ -291,7 +291,7 @@ describe("card ANTES de chegar: só se lê", () => {
     await clicar(corpo());
     expect(card()!.querySelector("[data-descricao]")!.textContent).toBe(PEDIDO);
     expect(card()!.querySelector("[data-orientacao]")!.textContent).toBe(ORIENTACAO);
-    for (const dado of ["Marta", "marta@", "97777", "Hospital Santa Luzia", "Av. Paulista", "Rota no mapa"]) expect(texto(), dado).not.toContain(dado);
+    for (const dado of ["Marta", "marta@", "97777", "Hospital Santa Luzia", "Av. Paulista", "Como chegar"]) expect(texto(), dado).not.toContain(dado);
     expect(acoes()).toEqual(["Cheguei", "Avisar que estou a caminho"]);
   });
 
@@ -316,7 +316,7 @@ describe("'A caminho': opcional — avisa e some, deixando o 'Cheguei'", () => {
     expect(lotes[0].agora).toBe(new Date(MEIO_DIA).toISOString());
     expect(estado()).toBe("a-caminho");
     expect(botao("A_CAMINHO")).toBeNull();
-    expect(acoes()).toEqual(["Rota no mapa", "Cheguei"]);
+    expect(acoes()).toEqual(["Como chegar", "Cheguei"]);
     expect(dito("A_CAMINHO")).toBe("A caminho · avisado às 12:00");
     expect([...registro("A_CAMINHO")!.querySelectorAll("span > span")].map((x) => texto(x))).toEqual(["A caminho", "avisado às 12:00"]);
     expect(registro("A_CAMINHO")!.tagName).toBe("P"); // registro, não botão
@@ -355,7 +355,7 @@ describe("'A caminho': opcional — avisa e some, deixando o 'Cheguei'", () => {
     await abrirMeuDia();
     expect(estado()).toBe("a-caminho");
     expect(dito("A_CAMINHO")).toBe("A caminho · avisado às 11:30");
-    expect(acoes()).toEqual(["Rota no mapa", "Cheguei"]);
+    expect(acoes()).toEqual(["Como chegar", "Cheguei"]);
   });
 
   it("SEM SINAL: o toque fica no aparelho com o horário local; nada é enviado; o técnico é avisado da regra", async () => {
@@ -369,7 +369,7 @@ describe("'A caminho': opcional — avisa e some, deixando o 'Cheguei'", () => {
     expect(registro("A_CAMINHO")!.dataset.avisoFeito).toBe("no-aparelho");
     expect(dito("A_CAMINHO")).toBe("A caminho · 12:00 · aviso a enviar");
     expect(toasts()).toEqual(["Horário registrado no aparelho. Sem sinal, o aviso só sai se ele voltar logo."]);
-    expect(acoes()).toEqual(["Rota no mapa", "Cheguei"]);
+    expect(acoes()).toEqual(["Como chegar", "Cheguei"]);
   });
 
   it("SEM SINAL, o sinal volta 2 min depois: o aviso ainda faz sentido — sai, com o horário do toque", async () => {
@@ -452,7 +452,7 @@ describe("'Cheguei': registra a chegada, avisa o cliente e ENTRA na OS", () => {
     expect(texto(card()!.querySelector("[data-status]"))).toBe("No local");
     expect(botao("CHEGOU")).toBeNull();
     expect(botao("A_CAMINHO")).toBeNull();
-    expect(acoes()).toEqual(["Câmera", "Rota no mapa"]);
+    expect(acoes()).toEqual(["Câmera", "Como chegar"]);
     expect(card()!.querySelector("[data-abre-os]")).not.toBeNull();
     expect(dito("CHEGOU")).toBe("Cheguei · avisado às 12:00");
     await clicar(corpo());
@@ -565,7 +565,7 @@ describe("'Cheguei' SEM SINAL: entrar na OS é local", () => {
     await reabrir();
     await esperarAte(() => $$("[data-cartao]").length === 3, "Meu dia do aparelho");
     await esperarAte(() => estado() === "chegou", "card lê a OS guardada");
-    expect(acoes()).toEqual(["Câmera", "Rota no mapa"]);
+    expect(acoes()).toEqual(["Câmera", "Como chegar"]);
   });
 });
 
@@ -576,7 +576,7 @@ describe("a OS só abre depois do 'Cheguei' — por nenhum outro caminho", () =>
     expect(vista()).toBe("os-antes-de-chegar");
     expect(texto($("[data-trava-chegada]"))).toBe("Toque em “Cheguei” para abrir a OS.");
     for (const daExecucao of ["[data-abrir-camera-rapida]", "[data-concluir-atividade]", "[data-equip-linha]", "[data-novo-adicional]"]) expect($(daExecucao), daExecucao).toBeNull();
-    expect(acoes()).toEqual(["Rota no mapa", "Cheguei", "Avisar que estou a caminho"]);
+    expect(acoes()).toEqual(["Como chegar", "Cheguei", "Avisar que estou a caminho"]);
     await clicar(botao("CHEGOU"));
     await esperarAte(() => vista() === "os", "entrou na OS");
     expect($("[data-concluir-atividade]")).not.toBeNull();
@@ -594,13 +594,13 @@ describe("a OS só abre depois do 'Cheguei' — por nenhum outro caminho", () =>
     servidor.avisos.aA = { A_CAMINHO: { em: new Date(MEIO_DIA - 5 * MIN).toISOString(), status: "ENVIADO" } };
     await abrirApp(undefined, "/tecnico?ver=os&a=aA");
     expect(vista()).toBe("os-antes-de-chegar");
-    expect(acoes()).toEqual(["Rota no mapa", "Cheguei"]);
+    expect(acoes()).toEqual(["Como chegar", "Cheguei"]);
   });
 
   it("OS já EM ANDAMENTO (o técnico chegou antes): entra direto pelo card e pelo link, com Câmera e sem 'Cheguei'", async () => {
     await abrirMeuDia();
     expect(estado("aB")).toBe("em-andamento");
-    expect(acoes("aB")).toEqual(["Câmera", "Rota no mapa"]);
+    expect(acoes("aB")).toEqual(["Câmera", "Como chegar"]);
     expect(botao("CHEGOU", "aB")).toBeNull();
     await clicar(corpo("aB"));
     await esperarAte(() => vista() === "os", "abriu a OS");
@@ -623,7 +623,7 @@ describe("a OS só abre depois do 'Cheguei' — por nenhum outro caminho", () =>
   it("OS concluída: abre para leitura, sem Câmera nem 'Cheguei'", async () => {
     await abrirMeuDia();
     expect(estado("aC")).toBe("concluida");
-    expect(acoes("aC")).toEqual(["Rota no mapa"]);
+    expect(acoes("aC")).toEqual(["Como chegar"]);
     await clicar(corpo("aC"));
     await esperarAte(() => vista() === "os", "abriu a OS");
     expect(texto()).toContain("Atividade concluída");
@@ -634,7 +634,7 @@ describe("a OS só abre depois do 'Cheguei' — por nenhum outro caminho", () =>
     ajustarCartao = (c) => (c.atividadeId === "aA" ? { ...c, avisos: ontem } : c); // o aparelho ainda guarda o de ontem
     await abrirMeuDia();
     expect(estado()).toBe("antes");
-    expect(acoes()).toEqual(["Rota no mapa", "Cheguei", "Avisar que estou a caminho"]);
+    expect(acoes()).toEqual(["Como chegar", "Cheguei", "Avisar que estou a caminho"]);
     await reabrir(undefined, "/tecnico?ver=os&a=aA");
     expect(vista()).toBe("os-antes-de-chegar");
   });
@@ -723,7 +723,7 @@ describe("respeita as permissões do app do colaborador", () => {
     await guardarNoAparelho();
     online = false; // nem sem sinal fala em aviso
     await abrirMeuDia(semAviso);
-    expect(acoes()).toEqual(["Rota no mapa", "Cheguei"]);
+    expect(acoes()).toEqual(["Como chegar", "Cheguei"]);
     expect(texto()).not.toContain("a caminho");
     await clicar(corpo());
     expect(texto(card()!.querySelector("[data-dica-cheguei]"))).toBe("“Cheguei” registra o horário e abre a OS.");

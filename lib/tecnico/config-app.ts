@@ -34,6 +34,8 @@ export interface ConfigApp {
   cadastrarEquipamento: boolean;
   /** O técnico avisa o cliente ("A caminho" / "Cheguei"); desligado: os botões não aparecem e nada é enviado */
   avisarCliente: boolean;
+  /** "O que levar": mostra os materiais previstos das OS (por OS e somados por dia); desligado, nem saem do servidor */
+  oQueLevar: boolean;
   /**
    * Rastrear a localização dos técnicos (Operações › Mapa). DESLIGADO por padrão (dado sensível, LGPD):
    * desligado, o app não captura nem envia posição e o servidor recusa o que chegar
@@ -55,6 +57,7 @@ export const CONFIG_APP_PADRAO: ConfigApp = {
   umDispositivo: true,
   cadastrarEquipamento: true,
   avisarCliente: true,
+  oQueLevar: true,
   rastrearLocalizacao: false,
 };
 
@@ -73,6 +76,7 @@ export interface ConfiguracaoApp {
   appUmDispositivo: boolean;
   appCadastrarEquipamento: boolean;
   appAvisarCliente: boolean;
+  appOQueLevar: boolean;
   appRastrearLocalizacao: boolean;
 }
 
@@ -91,6 +95,7 @@ export const SELECT_CONFIG_APP = {
   appUmDispositivo: true,
   appCadastrarEquipamento: true,
   appAvisarCliente: true,
+  appOQueLevar: true,
   appRastrearLocalizacao: true,
 } as const;
 
@@ -110,6 +115,7 @@ export function configAppParaPayload(c: ConfigApp): ConfiguracaoApp {
     appUmDispositivo: c.umDispositivo,
     appCadastrarEquipamento: c.cadastrarEquipamento,
     appAvisarCliente: c.avisarCliente,
+    appOQueLevar: c.oQueLevar,
     appRastrearLocalizacao: c.rastrearLocalizacao,
   };
 }
@@ -135,6 +141,7 @@ export function normalizarConfigApp(row: Partial<ConfiguracaoApp> | null | undef
     umDispositivo: ou(row.appUmDispositivo, CONFIG_APP_PADRAO.umDispositivo),
     cadastrarEquipamento: ou(row.appCadastrarEquipamento, CONFIG_APP_PADRAO.cadastrarEquipamento),
     avisarCliente: ou(row.appAvisarCliente, CONFIG_APP_PADRAO.avisarCliente),
+    oQueLevar: ou(row.appOQueLevar, CONFIG_APP_PADRAO.oQueLevar),
     rastrearLocalizacao: ou(row.appRastrearLocalizacao, CONFIG_APP_PADRAO.rastrearLocalizacao),
   };
 }

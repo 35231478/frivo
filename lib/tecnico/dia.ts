@@ -11,6 +11,7 @@ import { enderecoEmLinha, horaMarcada, linkRota, ordenarDoDia } from "@/lib/tecn
 import { avisosDeHojePorAtividade } from "@/lib/execucao/aviso-cliente";
 import type { AvisosTela } from "@/lib/tecnico/aviso-cliente";
 import { numerosDasVisitas } from "@/lib/os/visitas-server";
+import type { MaterialPrevisto } from "@/lib/tecnico/o-que-levar";
 
 const SELECT_CARTAO = {
   id: true, titulo: true, status: true, dataAgendada: true, duracaoMin: true, observacao: true, planoVisitasId: true,
@@ -57,6 +58,11 @@ export interface CartaoAtividade {
   avisos?: AvisosTela;
   /** OS dividida em visitas diárias: qual é esta ("Visita 3 de 12"). Ausente = atividade comum */
   visita?: { numero: number; total: number };
+  /**
+   * "O que levar": materiais previstos da OS (quem põe é a rota, com a opção da empresa ligada —
+   * lib/tecnico/o-que-levar-server). Ausente = opção desligada
+   */
+  materiais?: MaterialPrevisto[];
 }
 
 /** Junta os textos do escritório (sem repetir o mesmo texto), um parágrafo cada. */

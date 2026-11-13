@@ -126,7 +126,7 @@ describe("Perfil enxuto", () => {
     const pref = $("[data-preferencia-rota]")!;
     expect(pref.closest("section")!.querySelector("[data-meus-dados]")).toBeTruthy(); // dentro da mesma seção, depois dos dados
     expect(texto(pref)).toContain("Preferências");
-    expect(texto(pref)).toContain("App que abre em “Rota no mapa”, neste aparelho.");
+    expect(texto(pref)).toContain("App que abre em “Como chegar”, neste aparelho.");
     const opcoes = [...pref.querySelectorAll("[data-opcao-rota]")] as HTMLElement[];
     expect(opcoes.map((o) => [o.getAttribute("data-opcao-rota"), texto(o), o.className.includes("touch-target")])).toEqual([
       ["perguntar", "Perguntar", true], ["google", "Google Maps", true], ["waze", "Waze", true],
@@ -174,7 +174,7 @@ describe("botão de rota das OS: igual a antes", () => {
 
   it("sem preferência pergunta o app e lembra; o aviso diz onde trocar agora (Perfil › Meus dados)", async () => {
     await montarRota();
-    expect(texto($("[data-rota]"))).toBe("Rota no mapa");
+    expect(texto($("[data-rota]"))).toBe("Como chegar");
     await clicar($("[data-rota]"));
     expect(texto($("[data-escolher-rota]"))).toContain("O app escolhido fica lembrado neste aparelho. Troque em Perfil › Meus dados.");
     await clicar($('[data-abrir-rota="waze"]'));
