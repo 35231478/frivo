@@ -654,6 +654,9 @@ model Configuracao {
   appCadastrarEquipamento  Boolean @default(true)  @map("app_cadastrar_equipamento")
   /// Execução: o técnico avisa o cliente pelo app ("A caminho" / "Cheguei"). Desligado = os botões não aparecem
   appAvisarCliente         Boolean @default(true)  @map("app_avisar_cliente")
+  /// "O que levar": o app mostra ao técnico os materiais previstos das OS (o que foi lançado na OS e a
+  /// composição dos serviços), por OS e somados por dia. É só previsão: não baixa estoque nem altera a OS
+  appOQueLevar             Boolean @default(true)  @map("app_o_que_levar")
   /// Rastrear a localização dos técnicos (Operações › Mapa). DESLIGADO por padrão: é dado sensível
   /// (LGPD) — sem ligar, o app não captura nada e o servidor recusa o que chegar
   appRastrearLocalizacao   Boolean @default(false) @map("app_rastrear_localizacao")

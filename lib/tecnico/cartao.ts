@@ -48,26 +48,45 @@ export function ordenarDoDia<T extends { dataAgendada: Date | string | null; hor
   return [...lista].sort((a, b) => chave(a) - chave(b) || a.osNumero.localeCompare(b.osNumero, "pt-BR", { numeric: true }));
 }
 
-/* ───────── Rota: Google Maps ou Waze (o técnico escolhe o app do celular) ───────── */
+/* ───────── Rota: Google Maps, Waze ou Mapas da Apple (o técnico escolhe o app do celular) ─────────
+ * Tudo por URL universal de mapas: sem chave de API, sem custo, e o celular abre o app instalado. */
 
-export type AppRota = "google" | "waze";
-export const APPS_ROTA: { id: AppRota; nome: string }[] = [{ id: "google", nome: "Google Maps" }, { id: "waze", nome: "Waze" }];
+export type AppRota = "google" | "waze" | "apple";
+export const APPS_ROTA: { id: AppRota; nome: string }[] = [{ id: "google", nome: "Google Maps" }, { id: "waze", nome: "Waze" }, { id: "apple", nome: "Mapas da Apple" }];
+export const ehAppRota = (v: unknown): v is AppRota => APPS_ROTA.some((a) => a.id === v);
+
+/** iPhone, iPad ou Mac: só neles o Mapas da Apple existe (no Android o link abriria uma página, não o app). */
+export const ehAparelhoApple = (userAgent: string | null | undefined) => /iPhone|iPad|iPod|Macintosh/i.test(userAgent ?? "");
+
+/** Os apps de rota que fazem sentido neste aparelho. */
+export const appsDeRota = (aparelhoApple: boolean) => APPS_ROTA.filter((a) => a.id !== "apple" || aparelhoApple);
+
+/** O destino (coordenadas ou endereço escrito) que o cartão guardou na rota do Google. */
+function destinoDaRota(rotaGoogle: string | null | undefined): string | null {
+  if (!rotaGoogle) return null;
+  try { return new URL(rotaGoogle).searchParams.get("destination") || null; } catch { return null; }
+}
 
 /**
  * Link do WAZE para o mesmo destino da rota do Google (o cartão guarda só a do Google — assim vale
  * também para o que já está no aparelho). Coordenadas, quando há; senão o endereço escrito.
  */
 export function linkWaze(rotaGoogle: string | null | undefined): string | null {
-  if (!rotaGoogle) return null;
-  let destino: string | null = null;
-  try { destino = new URL(rotaGoogle).searchParams.get("destination"); } catch { return null; }
+  const destino = destinoDaRota(rotaGoogle);
   if (!destino) return null;
   const coord = /^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/.test(destino);
   return `https://waze.com/ul?${coord ? "ll" : "q"}=${encodeURIComponent(destino)}&navigate=yes`;
 }
 
-/** O link da rota no app escolhido (sem Waze possível, cai no Google). */
-export const linkDoApp = (rotaGoogle: string, app: AppRota): string => (app === "waze" ? linkWaze(rotaGoogle) ?? rotaGoogle : rotaGoogle);
+/** Link do MAPAS DA APPLE para o mesmo destino, já traçando a rota de carro a partir de onde o técnico está. */
+export function linkApple(rotaGoogle: string | null | undefined): string | null {
+  const destino = destinoDaRota(rotaGoogle);
+  return destino ? `https://maps.apple.com/?daddr=${encodeURIComponent(destino)}&dirflg=d` : null;
+}
+
+/** O link da rota no app escolhido (quando o app não tem como abrir o destino, cai no Google). */
+export const linkDoApp = (rotaGoogle: string, app: AppRota): string =>
+  (app === "waze" ? linkWaze(rotaGoogle) : app === "apple" ? linkApple(rotaGoogle) : null) ?? rotaGoogle;
 
 /* ───────── Privacidade (Equipes › App do colaborador) ───────── */
 

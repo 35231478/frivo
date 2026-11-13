@@ -27,15 +27,16 @@ describe("ConfigApp — padrões (espelham os @default do schema)", () => {
       umDispositivo: true,
       cadastrarEquipamento: true, // cadastro de equipamento em campo: nasce LIGADO
       avisarCliente: true, // "A caminho" / "Cheguei": nasce LIGADO
+      oQueLevar: true, // "O que levar" (materiais previstos): nasce LIGADO
       rastrearLocalizacao: false, // mapa dos técnicos: dado sensível, nasce DESLIGADO
     });
   });
 
-  it("SELECT_CONFIG_APP cobre exatamente as 14 colunas app*", () => {
+  it("SELECT_CONFIG_APP cobre exatamente as 15 colunas app*", () => {
     expect(Object.keys(SELECT_CONFIG_APP).sort()).toEqual([
       "appAvisarCliente", "appCadastrarEquipamento", "appConclusaoObrigatoria", "appEsconderValores", "appExibirContatosCliente", "appExibirDadosCliente",
       "appExigirLocalizacao", "appFotoSomenteCamera", "appMarcaDagua", "appMarcaDaguaCoordenadas",
-      "appMarcaDaguaEndereco", "appMarcaDaguaOs", "appRastrearLocalizacao", "appUmDispositivo",
+      "appMarcaDaguaEndereco", "appMarcaDaguaOs", "appOQueLevar", "appRastrearLocalizacao", "appUmDispositivo",
     ]);
     expect(Object.values(SELECT_CONFIG_APP).every((v) => v === true)).toBe(true);
   });

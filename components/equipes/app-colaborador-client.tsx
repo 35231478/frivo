@@ -130,6 +130,11 @@ export function AppColaboradorClient({ inicial }: { inicial: ConfigApp }) {
             dica="Ligado: na OS, o colaborador avisa o cliente por e-mail ao sair e ao chegar. Desligado: os botões somem."
             checked={cfg.avisarCliente} onChange={set("avisarCliente")}
           />
+          <ToggleSwitch
+            label="Mostrar “O que levar” (materiais previstos)"
+            dica="Ligado: o app soma os materiais lançados nas OS do dia, para carregar o veículo. É previsão: não baixa estoque."
+            checked={cfg.oQueLevar} onChange={set("oQueLevar")}
+          />
         </ToggleGroup>
       </section>
 

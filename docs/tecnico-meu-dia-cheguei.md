@@ -9,7 +9,7 @@ dia, horário registrado na atividade e no histórico da OS, e-mail ao cliente s
 
 ## O que mudou
 
-1. **Botões do card.** Saiu o "Ligar". Antes de chegar: "Rota no mapa" e **"Cheguei"** (principal,
+1. **Botões do card.** Saiu o "Ligar". Antes de chegar: "Como chegar" e **"Cheguei"** (principal,
    cheio, na cor da marca). "A caminho" virou uma ação discreta embaixo ("Avisar que estou a
    caminho"): é opcional, e o "Cheguei" não depende dela.
 2. **"Cheguei" entra na OS.** Registra a chegada, avisa o cliente e abre a execução — com ou sem

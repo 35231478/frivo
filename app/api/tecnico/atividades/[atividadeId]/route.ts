@@ -10,6 +10,7 @@ import { cadastroParaRetrato } from "@/lib/execucao/cadastro-campo";
 import { avisoParaRetrato, avisosDeHoje } from "@/lib/execucao/aviso-cliente";
 import { aceiteParaRetrato } from "@/lib/os/aceite-server";
 import { pode, type Permissoes } from "@/lib/permissoes";
+import { comMateriaisPrevistos } from "@/lib/tecnico/o-que-levar-server";
 
 type Params = { params: Promise<{ atividadeId: string }> };
 
@@ -62,8 +63,10 @@ export async function GET(_: NextRequest, { params }: Params) {
   for (const { tipoEquipamentoId, ...i } of itens) (checklistsPorTipo[tipoEquipamentoId] ??= []).push(i);
   // O nome da unidade do cliente vem junto de cada equipamento: sem "Exibir dados do cliente", sai também
   const semUnidade = <T extends { unidade: string | null }>(e: T): T => (config.exibirDadosCliente ? e : { ...e, unidade: null });
+  // "O que levar": os materiais previstos desta OS (opção da empresa desligada = nada sai)
+  const [comMateriais] = await comMateriaisPrevistos(empresaId, [cartao], config.oQueLevar);
   return NextResponse.json({
-    cartao: aplicarPrivacidade(cartao, config),
+    cartao: aplicarPrivacidade(comMateriais, config),
     execucao: {
       ...execucao,
       equipamentos: execucao.equipamentos.map((q) => ({ ...q, equipamento: semUnidade(q.equipamento) })),

@@ -28,7 +28,7 @@ aparelho.
 
 ### O que mudou
 - O card saiu. A escolha fica **dentro de "Meus dados"**, numa área discreta chamada **Preferências**:
-  "App que abre em “Rota no mapa”, neste aparelho." — as mesmas três opções.
+  "App que abre em “Como chegar”, neste aparelho." — as mesmas três opções.
 - O Perfil fica com: **Sincronização · Checklist do veículo · Trocar senha · Meus dados · Sair**.
 - O **botão de rota de cada OS continua igual**: na primeira vez pergunta o app e lembra a escolha.
   Só o texto do aviso mudou, para dizer onde trocar agora: "Troque em Perfil › Meus dados."

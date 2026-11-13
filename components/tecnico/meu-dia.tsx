@@ -5,7 +5,8 @@ import { CalendarDays, Camera, Car, CheckCircle2, ChevronDown, ChevronRight, Clo
 import { cn, formatarData } from "@/lib/utils";
 import { confirmar } from "@/components/ui/avisos";
 import { irPara, useTecnico } from "@/components/tecnico/contexto";
-import { BotaoRota } from "@/components/tecnico/rota";
+import { BotaoRota, RotaSemEndereco } from "@/components/tecnico/rota";
+import { MarcaDeMateriais, OQueLevarDaOs, OQueLevarDoDia } from "@/components/tecnico/o-que-levar";
 import { RegistroAviso, useAgora, useToqueAviso, useWhatsappAviso } from "@/components/tecnico/aviso-cliente";
 import type { CartaoTela, OperacaoFila } from "@/lib/tecnico/offline/tipos";
 import { descricaoParaApp } from "@/lib/tecnico/cartao";
@@ -90,6 +91,9 @@ export function CartaoAtividade({ c, fila, mostrarDia, proxima, guardado, listaE
   const verDados = config.exibirDadosCliente;
   const cliente = verDados ? c.cliente : "";
   const rota = verDados ? c.rota : null;
+  // "Sem endereço no cadastro" só vale quando o cartão TEM os dados do cliente e, mesmo assim, não há para onde ir
+  // (cartão que o servidor já mandou sem os dados — a chave foi desligada depois — não é falta de endereço)
+  const semEndereco = verDados && !c.rota && !!c.cliente;
   const encerrada = estado === "concluida" || estado === "cancelada";
   const concluida = status === "CONCLUIDA";
   // Depois do toque: o registro de hoje (um só — o mais recente) e o WhatsApp com a mensagem pronta
@@ -144,6 +148,7 @@ export function CartaoAtividade({ c, fila, mostrarDia, proxima, guardado, listaE
               <HardDrive className="w-3 h-3" /> {c.equipamentos === 1 ? "1 equipamento" : `${c.equipamentos} equipamentos`}
             </span>
             {c.visita && <span className="text-xs font-medium rounded-full px-2 py-0.5 bg-acento-claro text-acento" data-visita={c.visita.numero}>Visita {c.visita.numero} de {c.visita.total}</span>}
+            {!encerrada && <MarcaDeMateriais c={c} />}
             {PRIORIDADE[c.prioridade] && <span className="text-xs font-semibold rounded-full px-2 py-0.5 bg-atrasado-claro text-atrasado-texto" data-prioridade={c.prioridade}>{PRIORIDADE[c.prioridade]}</span>}
             {aEnviar > 0 && <span className="text-xs font-semibold rounded-full px-2 py-0.5 bg-atencao-claro text-atencao-texto">{aEnviar} a enviar</span>}
           </div>
@@ -153,6 +158,7 @@ export function CartaoAtividade({ c, fila, mostrarDia, proxima, guardado, listaE
       {!entra && aberto && (
         <div id={detalhesId} className="border-t border-surface-border bg-surface-alt px-4 py-3 space-y-3" data-detalhes-cartao>
           <DetalhesServico c={c} seVazio="Sem descrição nem orientação do escritório." />
+          <OQueLevarDaOs c={c} />
           <p className="text-xs text-ink-muted" data-dica-cheguei>
             {config.avisarCliente ? "“Cheguei” registra o horário, avisa o cliente e abre a OS." : "“Cheguei” registra o horário e abre a OS."}
           </p>
@@ -175,7 +181,9 @@ export function CartaoAtividade({ c, fila, mostrarDia, proxima, guardado, listaE
         // Antes de chegar: Rota e "Cheguei" (principal). "A caminho" é opcional e some depois do toque.
         <div className="border-t border-surface-border p-3 space-y-1" data-acoes-cartao>
           <div className="flex gap-2">
-            {rota && <BotaoRota rota={rota} className="rounded-card border border-surface-border bg-white" />}
+            {/* Sem endereço no cadastro: o botão fica no lugar, apagado, com o porquê (com os dados do cliente ocultos, nem aparece) */}
+            {rota ? <BotaoRota rota={rota} className="rounded-card border border-surface-border bg-white" />
+              : semEndereco && <RotaSemEndereco className="rounded-card border border-surface-border bg-white" />}
             <button type="button" onClick={chegar} disabled={!!tocando} data-aviso="CHEGOU" data-cheguei
               className="flex-1 rounded-card bg-acento text-white py-3 text-sm font-bold inline-flex items-center justify-center gap-2 active:bg-acento-hover disabled:opacity-60 touch-target">
               <MapPin className="w-5 h-5" /> Cheguei
@@ -197,7 +205,7 @@ export function CartaoAtividade({ c, fila, mostrarDia, proxima, guardado, listaE
               <Camera className="w-4 h-4" /> Câmera
             </button>
           )}
-          {rota && <BotaoRota rota={rota} />}
+          {rota ? <BotaoRota rota={rota} /> : semEndereco && !encerrada && <RotaSemEndereco />}
         </div>
       )}
     </article>
@@ -315,6 +323,9 @@ export function MeuDia() {
       )}
       {d?.aviso && <p className="rounded-card bg-atencao-claro border border-atencao/20 p-4 text-sm text-atencao-texto" data-aviso>{d.aviso}</p>}
 
+      {/* O que carregar no veículo antes de sair: a soma dos materiais previstos das OS ainda por fazer */}
+      {d && <OQueLevarDoDia cartoes={[...d.anteriores, ...d.atividades]} fila={fila} />}
+
       {d && d.anteriores.length > 0 && (
         <section className="space-y-2">
           <h2 className="text-sm font-bold text-ink-muted uppercase tracking-wide">Começadas antes — falta concluir</h2>
@@ -374,6 +385,7 @@ export function Agenda() {
       {d?.dias.map((g) => (
         <section key={g.dia} className="space-y-2">
           <h2 className="text-sm font-bold text-ink capitalize">{nomeDia(g.dia)} <span className="text-ink-muted font-medium">· {g.atividades.length}</span></h2>
+          <OQueLevarDoDia cartoes={g.atividades} fila={fila} titulo="O que levar neste dia" />
           {g.atividades.map((c) => <CartaoAtividade key={c.atividadeId} c={c} fila={fila} guardado={guardados.get(c.atividadeId)} listaEm={r?.baixadoEm} />)}
         </section>
       ))}
