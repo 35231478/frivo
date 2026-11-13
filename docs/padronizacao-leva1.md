@@ -75,6 +75,10 @@ Já existia um componente único: `components/ui/dica.tsx` (`<Dica texto rotulo 
 toque e teclado, fecha com Esc, e o leitor de tela lê "Ajuda: <rótulo>". Nada novo foi criado — as
 telas desta leva passaram a usá-lo no lugar de parágrafos.
 
+Um ajuste de acessibilidade, achado no navegador: com o balão aberto dentro de uma gaveta ou de um
+modal, o Esc fechava o balão **e o painel em volta** — levando o formulário que estava sendo
+preenchido. Agora o primeiro Esc fecha só o balão; o seguinte fecha o painel.
+
 - Lista: `ajuda="…"` no `CadastroPadrao` vira o ⓘ ao lado das abas.
 - Campo: `ajuda` no campo do registro (`lib/cadastros/registro.ts`) vira o ⓘ do rótulo.
 
@@ -150,3 +154,4 @@ O arquivo `components/config/crud-cadastro.tsx` (a tabela própria) foi removido
 - `tests/unit/padronizacao-leva1-pg.test.ts` — rotas reais com PostgreSQL real: a genérica e as
   antigas com a mesma regra (criar, editar parcial, inativar, permissão, multiempresa, paginação,
   impacto).
+- `tests/unit/dica-ui.test.ts` — o ⓘ dentro de gaveta e de modal: Esc fecha só o balão.
