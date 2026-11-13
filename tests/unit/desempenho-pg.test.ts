@@ -954,6 +954,8 @@ describe.skipIf(!URL_PG)("Desempenho PR 1: medir e mostrar (PostgreSQL real)", (
     await servico({ tecnicos: ["t3"], equipamento: "q3", nota: 4 });                                                   // Edu: 94
     reclamacaoDoEdu = (await chamar(R.penalidades, "POST", {}, { tecnicoId: "t3", data: "2026-11-10", descricao: "Cliente ligou: deixou a sala suja" })).json.id;
     ressalvaDaBia = (await itens()).find((i) => i.tipo === "RESSALVA").id;
+    // Item sem revisão de OUTRO mês: não entra no aviso deste
+    await prisma.desempenhoPenalidade.create({ data: { id: "deOutubro", empresaId: "e1", tecnicoId: "t3", tipo: "RECLAMACAO", chave: "MANUAL:outubro", dataFato: br("2026-10-20"), competencia: "2026-10", descricao: "Reclamação de outubro" } });
 
     const p = await previa();
     expect(p).toMatchObject({ competencia: MES, situacao: "ABERTO", bloqueio: null, fechamento: null });
@@ -976,6 +978,7 @@ describe.skipIf(!URL_PG)("Desempenho PR 1: medir e mostrar (PostgreSQL real)", (
     expect(await erro(chamar(R.fechamentos, "POST", {}, { competencia: "11/2026" }))).toBe("400 Informe o mês a fechar.");
     expect(await erro(chamar(R.fechamentos, "POST", {}, { competencia: MES, ganhadores: { x: ["t1"] } }))).toMatch(/^400/); // ninguém escolhe o ganhador à mão
     expect(await prisma.desempenhoFechamento.count()).toBe(0);
+    await prisma.desempenhoPenalidade.delete({ where: { id: "deOutubro" } });
   });
 
   it("FECHAR congela: escore, faixa e bônus de cada colaborador viram definitivos; a folha e os premiados ficam gravados, com quem fechou e quando", async () => {

@@ -56,7 +56,9 @@ describe("folha de bônus", () => {
       { tecnicoId: "novato", nome: "Novato", perfil: "Preventiva", posicao: null, escore: null, faixa: null, valor: 0 },
       { tecnicoId: "edu", nome: "Edu", perfil: "Corretiva", posicao: 1, escore: 92, faixa: "Ouro", valor: 200 },
     ]);
-    expect(folha.total).toBe(550.3); // 350,10 + 0,20 + 200,00 — sem o erro de ponto flutuante
+    expect(folha.total).toBe(550.3); // 350,10 + 0,20 + 200,00
+    // Sem o erro de ponto flutuante: 0,10 + 0,20 é 0,30 (e não 0,30000000000000004)
+    expect(folhaDoPainel({ grupos: [grupo("P", [linha("Ana", 95, { bonus: 0.1 }), linha("Bia", 95, { bonus: 0.2 })])] }).total).toBe(0.3);
   });
 
   it("painel sem valores (bônus vazio) vira folha de zeros; sem ninguém, folha vazia", () => {

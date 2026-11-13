@@ -576,6 +576,13 @@ describe("painel: ranking por perfil, ficha e resumo por equipe", () => {
     expect(p.grupos[0].linhas[1]).toMatchObject({ base: 74, desconto: 5, atingiuMeta: false });
   });
 
+  it("os números do DESEMPATE da premiação vão em cada linha: média das notas, penalidades que contaram e atividades NO PRAZO (não o total)", () => {
+    const [ana, bia, novato] = montar(true).grupos[0].linhas;
+    expect(ana.desempate).toEqual({ mediaAvaliacao: 5, penalidades: 0, noPrazo: 1 });
+    expect(bia.desempate).toEqual({ mediaAvaliacao: 4, penalidades: 1, noPrazo: 1 }); // 2 atividades, 1 no prazo
+    expect(novato.desempate).toEqual({ mediaAvaliacao: null, penalidades: 0, noPrazo: 0 });
+  });
+
   it("encarregado é medido pela equipe que lidera: 1 de 2 no prazo (50%) e satisfação 4,0 (80%) = 65", () => {
     const caio = montar(true).grupos[2].linhas[0];
     expect(caio).toMatchObject({ nome: "Caio", escore: 65, posicao: 1, faixa: null, atingiuMeta: false });
