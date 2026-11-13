@@ -234,7 +234,7 @@ export const PRESETS: Record<string, Permissoes> = {
     qrcodes: ["visualizar", "gerenciar"],
     equipes: ["visualizar", "gerenciar"],
     veiculos: ["visualizar", "checklist", "gerenciar"],
-    desempenho: ["visualizar", "revisar"],
+    desempenho: ["visualizar"], // revisar penalidades concede-se explicitamente
     estoque: ["visualizar", "gerenciar", "separar"],
     relatorios: ["visualizar", "exportar"],
   }),

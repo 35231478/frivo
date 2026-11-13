@@ -31,7 +31,11 @@ export interface LinhaRanking {
   penalidades: Escore["penalidades"];
   /** Bônus projetado em reais; null = quem está vendo não pode ver valores */
   bonus: number | null;
+  /** Os números do desempate da premiação: média das notas, penalidades que contaram e atividades no prazo */
+  desempate: Desempate;
 }
+export interface Desempate { mediaAvaliacao: number | null; penalidades: number; noPrazo: number }
+const SEM_DESEMPATE: Desempate = { mediaAvaliacao: null, penalidades: 0, noPrazo: 0 };
 
 export interface RegraNoPainel extends Omit<RegraDoMes, "faixas"> { faixas: { nome: string; minimo: number; valor: number | null }[] }
 export interface GrupoRanking {
@@ -45,7 +49,7 @@ export interface Painel { competencia: string; grupos: GrupoRanking[]; equipes: 
 
 const semEscore = (p: ParticipanteDoMes): Omit<LinhaRanking, "posicao"> => ({
   tecnicoId: p.tecnicoId, nome: p.nome, escore: null, base: null, desconto: 0, atingiuMeta: false, faixa: null, composicao: [],
-  penalidades: { retornos: 0, reclamacoes: 0, pontosRetorno: 0, pontosReclamacao: 0 }, bonus: null,
+  penalidades: { retornos: 0, reclamacoes: 0, pontosRetorno: 0, pontosReclamacao: 0 }, bonus: null, desempate: SEM_DESEMPATE,
 });
 
 const faixasVisiveis = (faixas: Faixa[], comValores: boolean) => faixas.map((f) => ({ nome: f.nome, minimo: f.minimo, valor: comValores ? f.valor : null }));
@@ -69,6 +73,7 @@ export function montarPainel(
       return {
         tecnicoId: p.tecnicoId, nome: p.nome, escore: e.escore, base: e.base, desconto: e.desconto, atingiuMeta: e.atingiuMeta,
         faixa: e.faixa?.nome ?? null, composicao: e.composicao, penalidades: e.penalidades, bonus: comValores ? e.bonus : null,
+        desempate: { mediaAvaliacao: entrada.avaliacao.media, penalidades: entrada.retornos + entrada.reclamacoes, noPrazo: entrada.prazo.certos },
       };
     });
     for (const l of linhas) escores.set(l.tecnicoId, l.escore);

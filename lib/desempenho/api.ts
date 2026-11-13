@@ -18,5 +18,8 @@ export const invalido = (erro: ZodError) => NextResponse.json({ erro: erro.issue
 
 export const atorDa = (session: Session): Ator => ({ empresaId: session.user.empresaId, usuarioId: session.user.id });
 
+/** Quem age, com o nome que fica gravado (fechar e reabrir o mês) */
+export const autorDa = (session: Session) => ({ ...atorDa(session), nome: session.user.name?.trim() || session.user.email || "Usuário" });
+
 /** Valores em reais (bônus, valor das faixas): só para quem configura o Desempenho. */
 export const veValores = (session: Session) => pode(session.user.permissoes as Permissoes, "desempenho", "gerenciar", session.user.role);

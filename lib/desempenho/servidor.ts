@@ -15,7 +15,10 @@ import {
 import { linhaDoColaborador, montarPainel, paraTv, type EquipeDoMes, type GrupoRanking, type LinhaRanking, type Painel, type PainelTv, type ParticipanteDoMes, type PerfilDoMes, type PremiacaoNaTela, type RegraDoMes } from "./painel";
 import { medirMes } from "./medicao-server";
 import { ErroDesempenho, type Ator } from "./erros";
-import { sincronizarPenalidades } from "./penalidades-server";
+import { contarARevisar, sincronizarPenalidades } from "./penalidades-server";
+import { ITENS_QUE_VALEM } from "./itens-validos";
+import { semValores, type PainelCongelado } from "./fechamento";
+import { fechamentoVigente, type FechamentoVigente } from "./fechamento-estado";
 import type { z } from "zod";
 import type { ajustesSchema, participanteSchema, perfilSchema } from "./regras";
 
@@ -83,7 +86,7 @@ export interface PerfilNaConfiguracao {
 }
 export interface ConfiguracaoDoDesempenho {
   competencia: string; competenciaSeguinte: string;
-  ajustes: { retornoDias: number; notaBaixaAte: number; tiposRetorno: string[] };
+  ajustes: { retornoDias: number; tiposRetorno: string[] };
   tiposOs: { id: string; nome: string; ativo: boolean }[];
   tvToken: string | null;
   perfis: PerfilNaConfiguracao[];
@@ -112,7 +115,7 @@ export async function configuracaoDoDesempenho(empresaId: string, agora: Date = 
   const marcados = new Set(tiposRetorno.map((t) => t.tipoOsId));
   return {
     competencia, competenciaSeguinte: competenciaSeguinte(competencia),
-    ajustes: { retornoDias: config.retornoDias, notaBaixaAte: config.notaBaixaAte, tiposRetorno: [...marcados] },
+    ajustes: { retornoDias: config.retornoDias, tiposRetorno: [...marcados] },
     // Tipo inativo só aparece se já estava marcado (para poder desmarcar)
     tiposOs: tiposOs.filter((t) => t.ativo || marcados.has(t.id)),
     tvToken: config.tvToken,
@@ -137,7 +140,7 @@ export async function salvarAjustes(ator: Ator, d: z.infer<typeof ajustesSchema>
   const validos = ids.length ? await prisma.tipoOs.findMany({ where: { empresaId: ator.empresaId, id: { in: ids } }, select: { id: true } }) : [];
   if (validos.length !== ids.length) throw new ErroDesempenho("Tipo de OS não encontrado.", 404);
   await prisma.$transaction([
-    prisma.desempenhoConfig.update({ where: { empresaId: ator.empresaId }, data: { retornoDias: d.retornoDias, notaBaixaAte: d.notaBaixaAte } }),
+    prisma.desempenhoConfig.update({ where: { empresaId: ator.empresaId }, data: { retornoDias: d.retornoDias } }),
     prisma.desempenhoTipoRetorno.deleteMany({ where: { empresaId: ator.empresaId, tipoOsId: { notIn: ids } } }),
     prisma.desempenhoTipoRetorno.createMany({ data: ids.map((tipoOsId) => ({ empresaId: ator.empresaId, tipoOsId })), skipDuplicates: true }),
   ]);
@@ -280,31 +283,47 @@ export async function premiacoesDoMes(empresaId: string, competencia: string): P
   return linhas.map((p) => ({ id: p.id, titulo: p.titulo, descricao: p.descricao, perfil: p.perfil?.nome ?? null, temImagem: comImagem.has(p.id) }));
 }
 
+/** O mês está fechado: quem fechou, quando e em que versão (null = mês aberto, valores são projeção) */
+export interface SeloDeFechamento { id: string; versao: number; fechadoEm: string; fechadoPor: string }
+const selo = (f: FechamentoVigente | null): SeloDeFechamento | null => (f ? { id: f.id, versao: f.versao, fechadoEm: f.fechadoEm.toISOString(), fechadoPor: f.fechadoPor } : null);
+
 export interface PainelDoMes extends Painel {
   ativo: true;
   premiacoes: PremiacaoNaTela[];
+  fechamento: SeloDeFechamento | null;
   /** Itens esperando a revisão (de qualquer mês) */
   aRevisar: number;
   /** Colaboradores ativos fora de qualquer perfil (não entram no ranking) */
   semPerfil: number;
 }
 
-async function painel(empresaId: string, competencia: string, comValores: boolean): Promise<Painel> {
+/** O painel calculado AGORA, do que a operação gravou (a projeção de um mês aberto). */
+export async function painelAoVivo(empresaId: string, competencia: string, comValores: boolean): Promise<Painel> {
   const [bases, medicao] = await Promise.all([basesDoMes(empresaId, competencia), medirMes(empresaId, competencia)]);
   return montarPainel({ competencia, ...bases, medicao }, comValores);
+}
+
+/**
+ * O painel do mês com as premiações. MÊS FECHADO = o painel guardado no fechamento, como estava: dado
+ * novo (atividade, avaliação, mudança de perfil ou de equipe) não muda mais nada. Mês aberto = ao vivo.
+ */
+async function painelDoPeriodo(empresaId: string, competencia: string, comValores: boolean): Promise<{ painel: PainelCongelado; fechamento: FechamentoVigente | null }> {
+  const fechamento = await fechamentoVigente(empresaId, competencia);
+  if (fechamento) return { painel: comValores ? fechamento.painel : semValores(fechamento.painel), fechamento };
+  const [p, premiacoes] = await Promise.all([painelAoVivo(empresaId, competencia, comValores), premiacoesDoMes(empresaId, competencia)]);
+  return { painel: { ...p, premiacoes }, fechamento: null };
 }
 
 export async function painelDoMes(empresaId: string, competencia: string, comValores: boolean): Promise<PainelDoMes | { ativo: false }> {
   if (!(await desempenhoAtivo(empresaId))) return { ativo: false };
   // Detecta o que ainda não entrou na lista "a revisar" (só cria itens A_REVISAR: nada muda no escore)
   await sincronizarPenalidades(empresaId);
-  const [p, premiacoes, aRevisar, semPerfil] = await Promise.all([
-    painel(empresaId, competencia, comValores),
-    premiacoesDoMes(empresaId, competencia),
-    prisma.desempenhoPenalidade.count({ where: { empresaId, situacao: "A_REVISAR" } }),
+  const [{ painel, fechamento }, aRevisar, semPerfil] = await Promise.all([
+    painelDoPeriodo(empresaId, competencia, comValores),
+    contarARevisar(empresaId),
     prisma.tecnico.count({ where: { empresaId, ...ATIVO_NO_QUADRO, desempenhoParticipante: { is: null } } }),
   ]);
-  return { ativo: true, ...p, premiacoes, aRevisar, semPerfil };
+  return { ativo: true, ...painel, fechamento: selo(fechamento), aRevisar, semPerfil };
 }
 
 /* ───────── ficha do colaborador ───────── */
@@ -320,6 +339,10 @@ export interface FichaDoColaborador {
   participantes: number;
   penalidades: PenalidadeNaFicha[];
   premiacoes: PremiacaoNaTela[];
+  /** Mês fechado: o bônus da linha é DEFINITIVO (null = mês aberto, o bônus é projeção) */
+  fechamento: SeloDeFechamento | null;
+  /** Mês fechado: as premiações que ele ganhou */
+  premiosGanhos: string[];
 }
 
 /**
@@ -328,22 +351,32 @@ export interface FichaDoColaborador {
  */
 export async function fichaDoColaborador(empresaId: string, tecnicoId: string, competencia: string, comValores: boolean): Promise<FichaDoColaborador | null> {
   await sincronizarPenalidades(empresaId);
-  const achado = linhaDoColaborador(await painel(empresaId, competencia, comValores), tecnicoId);
+  const { painel, fechamento } = await painelDoPeriodo(empresaId, competencia, comValores);
+  const achado = linhaDoColaborador(painel, tecnicoId);
   if (!achado) return null;
-  const [penalidades, premiacoes] = await Promise.all([
-    prisma.desempenhoPenalidade.findMany({
-      where: { empresaId, tecnicoId, competencia }, orderBy: [{ dataFato: "asc" }, { id: "asc" }],
-      select: { id: true, tipo: true, situacao: true, descricao: true, dataFato: true, motivo: true },
-    }),
-    premiacoesDoMes(empresaId, competencia),
-  ]);
+  const { premiacoes } = painel;
+  const penalidades = await prisma.desempenhoPenalidade.findMany({
+    where: { empresaId, tecnicoId, competencia, ...ITENS_QUE_VALEM }, orderBy: [{ dataFato: "asc" }, { id: "asc" }],
+    select: { id: true, tipo: true, situacao: true, descricao: true, dataFato: true, motivo: true },
+  });
   return {
     competencia, tecnico: { id: achado.linha.tecnicoId, nome: achado.linha.nome }, perfil: achado.grupo.perfil, regra: achado.grupo.regra,
     linha: achado.linha, participantes: achado.participantes,
     penalidades: penalidades.map((p) => ({ ...p, dataFato: p.dataFato.toISOString() })),
     // O prêmio que ele disputa: os de todos os perfis e os do perfil dele
     premiacoes: premiacoes.filter((p) => !p.perfil || p.perfil === achado.grupo.perfil.nome),
+    fechamento: selo(fechamento),
+    premiosGanhos: (fechamento?.premios ?? []).filter((p) => p.ganhadores.some((g) => g.tecnicoId === tecnicoId)).map((p) => p.titulo),
   };
+}
+
+/**
+ * A ficha como o PRÓPRIO colaborador vê no app: os números dele, sem o que o cliente escreveu. A
+ * avaliação aparece como MÉDIA (na composição); o texto da ressalva e da reclamação não vai — só o
+ * tipo, a data e a situação. O retorno mantém a descrição (são as OS, não palavras do cliente).
+ */
+export function fichaParaOColaborador(f: FichaDoColaborador): FichaDoColaborador {
+  return { ...f, penalidades: f.penalidades.map((p) => (p.tipo === "RETORNO" ? p : { ...p, descricao: null })) };
 }
 
 /* ───────── modo TV (sem login: o token é a chave) ───────── */
@@ -353,7 +386,7 @@ export async function painelDaTv(token: string, agora: Date = new Date()): Promi
   const config = await prisma.desempenhoConfig.findUnique({ where: { tvToken: token }, select: { empresaId: true, empresa: { select: { nome: true, nomeFantasia: true } } } });
   if (!config) return null;
   const competencia = competenciaAtual(agora);
-  const [p, premiacoes] = await Promise.all([painel(config.empresaId, competencia, false), premiacoesDoMes(config.empresaId, competencia)]);
+  const [p, premiacoes] = await Promise.all([painelAoVivo(config.empresaId, competencia, false), premiacoesDoMes(config.empresaId, competencia)]);
   return paraTv(p, { empresa: config.empresa.nomeFantasia?.trim() || config.empresa.nome, premiacoes, agora });
 }
 

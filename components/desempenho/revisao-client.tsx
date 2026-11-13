@@ -21,7 +21,7 @@ import type { ListaDePenalidades, PenalidadeNaLista } from "@/lib/desempenho/pen
 import { CabecalhoDesempenho, Erro, JSON_HEADERS, type PodeDesempenho } from "./comum";
 
 const TOM_SITUACAO: Record<SituacaoPenalidade, TomStatus> = { A_REVISAR: "atencao", CONTA: "atrasado", NAO_CONTA: "previsto" };
-const TOM_TIPO: Record<TipoPenalidade, TomStatus> = { RETORNO: "acento", RESSALVA: "atencao", NOTA_BAIXA: "atencao", RECLAMACAO: "previsto" };
+const TOM_TIPO: Record<TipoPenalidade, TomStatus> = { RETORNO: "acento", RESSALVA: "atencao", RECLAMACAO: "previsto" };
 type Filtro = SituacaoPenalidade | "";
 
 /**
@@ -68,7 +68,7 @@ export function RevisaoDesempenho({ pode }: { pode: PodeDesempenho }) {
       <div className="bg-white border border-surface-border rounded-xl overflow-hidden">
         <div className="px-4 py-3 border-b border-surface-border flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-ink-muted max-w-2xl">
-            Retorno, ressalva e nota baixa entram aqui sozinhos. Só pesam depois de marcados “Conta”, com motivo.
+            Retorno e ressalva sem nota entram aqui sozinhos. Só pesam depois de marcados “Conta”, com motivo.
           </p>
           <Select aria-label="Situação" value={filtro} onChange={(e) => setFiltro(e.target.value as Filtro)} className="w-44" data-filtro-situacao>
             {SITUACOES_PENALIDADE.map((s) => <option key={s} value={s}>{ROTULO_SITUACAO[s]}</option>)}

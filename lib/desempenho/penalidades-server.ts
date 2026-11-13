@@ -21,6 +21,8 @@ import { inicioMesBR, instanteBR } from "@/lib/fuso";
 import { rotuloDoEquipamento } from "@/lib/pmoc-ocorrencias";
 import { competenciaDe, origemDoRetorno, type ServicoNoEquipamento, type SituacaoPenalidade, type TipoPenalidade, type decisaoSchema, type reclamacaoSchema } from "./regras";
 import { ErroDesempenho, type Ator } from "./erros";
+import { competenciasFechadas, exigirMesAberto } from "./fechamento-estado";
+import { ITENS_QUE_VALEM } from "./itens-validos";
 
 /** Até quanto tempo para trás a detecção olha (além do início do módulo na empresa) */
 export const JANELA_DETECCAO_DIAS = 92;
@@ -41,47 +43,47 @@ interface Novo { tecnicoId: string; tipo: TipoPenalidade; chave: string; ordemSe
 
 /** Detecta o que ainda não está na lista e grava como "A_REVISAR". Devolve quantos itens novos entraram. */
 export async function sincronizarPenalidades(empresaId: string, agora: Date = new Date()): Promise<number> {
-  const config = await prisma.desempenhoConfig.findUnique({ where: { empresaId }, select: { retornoDias: true, notaBaixaAte: true, criadoEm: true } });
+  const config = await prisma.desempenhoConfig.findUnique({ where: { empresaId }, select: { retornoDias: true, criadoEm: true } });
   if (!config) return 0;
   const desde = new Date(Math.max(inicioMesBR(config.criadoEm).getTime(), agora.getTime() - JANELA_DETECCAO_DIAS * DIA_MS));
   const participantes = new Set((await prisma.desempenhoParticipante.findMany({ where: { empresaId }, select: { tecnicoId: true } })).map((p) => p.tecnicoId));
   if (!participantes.size) return 0;
 
-  const novos = [...await doAceite(empresaId, desde, config.notaBaixaAte, participantes), ...await retornos(empresaId, desde, config.retornoDias, participantes)];
+  const novos = [...await ressalvas(empresaId, desde, participantes), ...await retornos(empresaId, desde, config.retornoDias, participantes)];
   if (!novos.length) return 0;
-  const { count } = await prisma.desempenhoPenalidade.createMany({
-    data: novos.map((n) => ({ empresaId, ...n, competencia: competenciaDe(n.dataFato) })), skipDuplicates: true,
-  });
+  // Mês fechado não recebe item novo (o escore dele já é definitivo)
+  const fechadas = await competenciasFechadas(empresaId);
+  const dados = novos.map((n) => ({ empresaId, ...n, competencia: competenciaDe(n.dataFato) })).filter((n) => !fechadas.has(n.competencia));
+  if (!dados.length) return 0;
+  const { count } = await prisma.desempenhoPenalidade.createMany({ data: dados, skipDuplicates: true });
   return count;
 }
 
-/** Ressalva do cliente e nota baixa: um item por aceite e por colaborador que executou a OS. */
-async function doAceite(empresaId: string, desde: Date, notaBaixaAte: number, participantes: Set<string>): Promise<Novo[]> {
+/**
+ * Ressalva do cliente SEM nota: um item por aceite e por colaborador que executou a OS. Com nota, a
+ * insatisfação já pesa na média da avaliação — e nota baixa, sozinha, nunca vira penalidade.
+ */
+async function ressalvas(empresaId: string, desde: Date, participantes: Set<string>): Promise<Novo[]> {
   const aceites = await prisma.osAceite.findMany({
     where: {
       empresaId, situacao: "CONFIRMADO", confirmadoEm: { gte: desde }, ordemServico: { empresaId, status: { not: "CANCELADA" } },
-      OR: [{ ressalva: { not: null } }, { avaliacao: { lte: notaBaixaAte } }],
+      ressalva: { not: null }, avaliacao: null,
     },
     select: {
-      id: true, ordemServicoId: true, ressalva: true, avaliacao: true, avaliacaoComentario: true, confirmadoEm: true,
+      id: true, ordemServicoId: true, ressalva: true, confirmadoEm: true,
       ordemServico: { select: { numero: true, atividades: { where: { status: "CONCLUIDA" }, select: { tecnicoId: true, tecnicosEquipe: { select: { tecnicoId: true } } } } } },
     },
   });
   const novos: Novo[] = [];
   for (const a of aceites) {
     const ressalva = (a.ressalva ?? "").trim();
-    const notaBaixa = a.avaliacao !== null && a.avaliacao <= notaBaixaAte;
-    if (!ressalva && !notaBaixa) continue;
-    const nota = a.avaliacao !== null ? `nota ${a.avaliacao} de 5` : null;
-    const comentario = (a.avaliacaoComentario ?? "").trim();
-    const descricao = ressalva
-      ? curto(`${a.ordemServico.numero}: ressalva do cliente — "${ressalva}"${nota ? ` (${nota})` : ""}`)
-      : curto(`${a.ordemServico.numero}: ${nota}${comentario ? ` — "${comentario}"` : ""}`);
+    if (!ressalva) continue;
+    const descricao = curto(`${a.ordemServico.numero}: ressalva do cliente — "${ressalva}"`);
     const executores = new Set(a.ordemServico.atividades.flatMap((x) => [x.tecnicoId, ...x.tecnicosEquipe.map((t) => t.tecnicoId)]).filter((x): x is string => !!x));
     for (const tecnicoId of executores) {
       if (!participantes.has(tecnicoId)) continue;
       novos.push({
-        tecnicoId, tipo: ressalva ? "RESSALVA" : "NOTA_BAIXA", chave: `ACEITE:${a.id}:${tecnicoId}`,
+        tecnicoId, tipo: "RESSALVA", chave: `ACEITE:${a.id}:${tecnicoId}`,
         ordemServicoId: a.ordemServicoId, osRetornoId: null, equipamentoId: null, dataFato: a.confirmadoEm!, descricao,
       });
     }
@@ -192,17 +194,19 @@ export interface PenalidadeNaLista {
   osRetorno: { id: string; numero: string } | null;
   /** Registrada à mão (pode ser editada e excluída); as detectadas não */
   manual: boolean;
+  /** O mês em que pesa está fechado: não dá para decidir, editar nem excluir sem reabrir */
+  mesFechado: boolean;
 }
 
-const serializar = (p: Linha): PenalidadeNaLista => ({
+const serializar = (p: Linha, fechadas: Set<string> = new Set()): PenalidadeNaLista => ({
   id: p.id, tipo: p.tipo as TipoPenalidade, situacao: p.situacao as SituacaoPenalidade, descricao: p.descricao, dataFato: p.dataFato.toISOString(),
   competencia: p.competencia, motivo: p.motivo, revisadoEm: p.revisadoEm?.toISOString() ?? null, revisadoPor: p.revisadoPor?.nome ?? null,
-  criadoPor: p.criadoPor?.nome ?? null, tecnico: p.tecnico, ordemServico: p.ordemServico, osRetorno: p.osRetorno, manual: p.tipo === "RECLAMACAO",
+  criadoPor: p.criadoPor?.nome ?? null, tecnico: p.tecnico, ordemServico: p.ordemServico, osRetorno: p.osRetorno, manual: p.tipo === "RECLAMACAO", mesFechado: fechadas.has(p.competencia),
 });
 
 export interface ListaDePenalidades {
   itens: PenalidadeNaLista[];
-  /** Quantos esperam a revisão (de qualquer mês) */
+  /** Quantos esperam a revisão, nos meses abertos */
   aRevisar: number;
   /** Quem pode receber uma reclamação registrada à mão: os participantes */
   colaboradores: { id: string; nome: string }[];
@@ -211,15 +215,22 @@ export interface ListaDePenalidades {
 /** A lista (detecta o que falta antes de listar). `situacao` vazio = todas. Mais recentes primeiro. */
 export async function listarPenalidades(empresaId: string, filtro: { situacao?: string | null; competencia?: string | null } = {}, agora: Date = new Date()): Promise<ListaDePenalidades> {
   await sincronizarPenalidades(empresaId, agora);
+  const fechadas = await competenciasFechadas(empresaId);
   const [itens, aRevisar, colaboradores] = await Promise.all([
     prisma.desempenhoPenalidade.findMany({
-      where: { empresaId, ...(filtro.situacao && { situacao: filtro.situacao }), ...(filtro.competencia && { competencia: filtro.competencia }) },
+      where: { empresaId, ...ITENS_QUE_VALEM, ...(filtro.situacao && { situacao: filtro.situacao }), ...(filtro.competencia && { competencia: filtro.competencia }) },
       orderBy: [{ dataFato: "desc" }, { id: "desc" }], take: 300, select: SELECT_PENALIDADE,
     }),
-    prisma.desempenhoPenalidade.count({ where: { empresaId, situacao: "A_REVISAR" } }),
+    contarARevisar(empresaId, fechadas),
     prisma.desempenhoParticipante.findMany({ where: { empresaId }, orderBy: { tecnico: { nome: "asc" } }, select: { tecnico: { select: { id: true, nome: true } } } }),
   ]);
-  return { itens: itens.map(serializar), aRevisar, colaboradores: colaboradores.map((c) => c.tecnico) };
+  return { itens: itens.map((i) => serializar(i, fechadas)), aRevisar, colaboradores: colaboradores.map((c) => c.tecnico) };
+}
+
+/** Quantos itens válidos esperam a revisão nos meses ABERTOS (mês fechado não se revisa mais). */
+export async function contarARevisar(empresaId: string, fechadas?: Set<string>): Promise<number> {
+  const meses = [...(fechadas ?? await competenciasFechadas(empresaId))];
+  return prisma.desempenhoPenalidade.count({ where: { empresaId, situacao: "A_REVISAR", ...ITENS_QUE_VALEM, ...(meses.length && { competencia: { notIn: meses } }) } });
 }
 
 /* ───────── a revisão ───────── */
@@ -227,8 +238,10 @@ export async function listarPenalidades(empresaId: string, filtro: { situacao?: 
 export interface Revisor extends Ator { /** O colaborador ligado ao usuário que revisa (ninguém revisa a si mesmo) */ tecnicoId: string | null }
 
 async function penalidadeDaEmpresa(empresaId: string, id: string) {
-  const p = await prisma.desempenhoPenalidade.findFirst({ where: { id, empresaId }, select: { id: true, tipo: true, tecnicoId: true } });
+  const p = await prisma.desempenhoPenalidade.findFirst({ where: { id, empresaId, ...ITENS_QUE_VALEM }, select: { id: true, tipo: true, tecnicoId: true, competencia: true } });
   if (!p) throw new ErroDesempenho(MSG_PENALIDADE_NAO_ENCONTRADA, 404);
+  // Mês fechado: a decisão, a edição e a exclusão ficam travadas até alguém reabrir o mês
+  await exigirMesAberto(empresaId, p.competencia);
   return p;
 }
 
@@ -260,6 +273,7 @@ async function dadosDaReclamacao(empresaId: string, d: z.infer<typeof reclamacao
     if (!os) throw new ErroDesempenho(MSG_OS_NAO_ENCONTRADA, 404);
     ordemServicoId = os.id;
   }
+  await exigirMesAberto(empresaId, d.data.slice(0, 7));
   return { tecnicoId: d.tecnicoId, dataFato, competencia: d.data.slice(0, 7), descricao: d.descricao, ordemServicoId };
 }
 

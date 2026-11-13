@@ -14,6 +14,7 @@
 import { prisma } from "@/lib/prisma";
 import { completo, faltasEquipamento, paraPendencia, type FormularioExecucao, type ItemExecucao, type RespostaItem, type StatusItem, type TipoResposta } from "@/lib/execucao/pendencias";
 import { avaliacoesPorTecnico, osAvaliadas } from "@/lib/os/aceite-server";
+import { ITENS_QUE_VALEM } from "./itens-validos";
 import { concluidaNoPrazo, ehRetorno, periodoDaCompetencia, temAntesEDepois, type AtividadeMedida, type OsAvaliadaMedida, type PenalidadesQueContam } from "./regras";
 
 export interface MedicaoDoMes {
@@ -41,7 +42,7 @@ export async function medirMes(empresaId: string, competencia: string): Promise<
     }),
     avaliacoesPorTecnico(empresaId, periodo),
     osAvaliadas(empresaId, periodo),
-    prisma.desempenhoPenalidade.groupBy({ by: ["tecnicoId", "tipo"], where: { empresaId, competencia, situacao: "CONTA" }, _count: { _all: true } }),
+    prisma.desempenhoPenalidade.groupBy({ by: ["tecnicoId", "tipo"], where: { empresaId, competencia, situacao: "CONTA", ...ITENS_QUE_VALEM }, _count: { _all: true } }),
   ]);
 
   const penalidades = new Map<string, PenalidadesQueContam>();
