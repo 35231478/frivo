@@ -335,13 +335,14 @@ export interface AvaliacaoDoTecnico {
   avaliacoes: number; media: number; porNota: Record<number, number>;
 }
 
+/** Uma OS avaliada no período: a nota, quem executou (sem repetir) e as equipes das atividades concluídas. */
+export interface OsAvaliada { ordemServicoId: string; avaliacao: number; executores: { id: string; nome: string }[]; equipeIds: string[] }
+
 /**
- * A avaliação do cliente pronta para o módulo de Desempenho. A nota é da OS; cada OS avaliada conta
- * UMA vez para cada técnico que a executou — o responsável e a equipe das atividades CONCLUÍDAS da OS
- * (atividade cancelada ou não feita não leva a nota). `periodo`: pela data da confirmação
- * (`de` inclusive, `ate` exclusive). Só a empresa pedida; ordenado pelo nome do técnico.
+ * As OS avaliadas do período, com quem as executou — o dado bruto das duas visões do Desempenho (a
+ * do colaborador e a das equipes de um encarregado). Mesmo recorte de `avaliacoesPorTecnico`.
  */
-export async function avaliacoesPorTecnico(empresaId: string, periodo: { de?: Date; ate?: Date } = {}): Promise<AvaliacaoDoTecnico[]> {
+export async function osAvaliadas(empresaId: string, periodo: { de?: Date; ate?: Date } = {}): Promise<OsAvaliada[]> {
   const linhas = await prisma.osAceite.findMany({
     where: {
       empresaId, situacao: "CONFIRMADO", avaliacao: { gte: AVALIACAO_MIN, lte: AVALIACAO_MAX },
@@ -349,18 +350,33 @@ export async function avaliacoesPorTecnico(empresaId: string, periodo: { de?: Da
       ordemServico: { empresaId, status: { not: "CANCELADA" } },
     },
     select: {
-      avaliacao: true,
-      ordemServico: { select: { atividades: { where: { status: "CONCLUIDA" }, select: { tecnico: { select: { id: true, nome: true } }, tecnicosEquipe: { select: { tecnico: { select: { id: true, nome: true } } } } } } } },
+      avaliacao: true, ordemServicoId: true,
+      ordemServico: { select: { atividades: { where: { status: "CONCLUIDA" }, select: { equipeId: true, tecnico: { select: { id: true, nome: true } }, tecnicosEquipe: { select: { tecnico: { select: { id: true, nome: true } } } } } } } },
     },
   });
-  const porTecnico = new Map<string, { nome: string; notas: number[] }>();
-  for (const { avaliacao, ordemServico } of linhas) {
+  return linhas.map(({ avaliacao, ordemServicoId, ordemServico }) => {
     // Quem executou a OS, sem repetir (o mesmo técnico em duas atividades conta a OS uma vez)
     const quem = new Map<string, string>();
     for (const a of ordemServico.atividades) for (const t of [a.tecnico, ...a.tecnicosEquipe.map((e) => e.tecnico)]) if (t) quem.set(t.id, t.nome);
-    for (const [id, nome] of quem) {
+    return {
+      ordemServicoId, avaliacao: avaliacao!, executores: [...quem].map(([id, nome]) => ({ id, nome })),
+      equipeIds: [...new Set(ordemServico.atividades.map((a) => a.equipeId).filter((x): x is string => !!x))],
+    };
+  });
+}
+
+/**
+ * A avaliação do cliente pronta para o módulo de Desempenho. A nota é da OS; cada OS avaliada conta
+ * UMA vez para cada técnico que a executou — o responsável e a equipe das atividades CONCLUÍDAS da OS
+ * (atividade cancelada ou não feita não leva a nota). `periodo`: pela data da confirmação
+ * (`de` inclusive, `ate` exclusive). Só a empresa pedida; ordenado pelo nome do técnico.
+ */
+export async function avaliacoesPorTecnico(empresaId: string, periodo: { de?: Date; ate?: Date } = {}): Promise<AvaliacaoDoTecnico[]> {
+  const porTecnico = new Map<string, { nome: string; notas: number[] }>();
+  for (const { avaliacao, executores } of await osAvaliadas(empresaId, periodo)) {
+    for (const { id, nome } of executores) {
       const t = porTecnico.get(id) ?? { nome, notas: [] };
-      t.notas.push(avaliacao!);
+      t.notas.push(avaliacao);
       porTecnico.set(id, t);
     }
   }

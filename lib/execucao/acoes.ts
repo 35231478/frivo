@@ -7,6 +7,7 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { momentoDaConclusao, type RelogioDaConclusao } from "@/lib/os/conclusao-atividade";
 import { prisma } from "@/lib/prisma";
 import { TIPOS_IMAGEM } from "@/lib/anexos";
 import { validarDataUrl } from "@/lib/anexos-server";
@@ -563,14 +564,16 @@ export const concluirSchema = z.object({ resumo: z.string().trim().max(4000, "Re
  * Conclui a atividade com a trava da Etapa 1 (a mensagem diz o que falta, equipamento por
  * equipamento). Já concluída = nada a fazer (repetir não é erro); cancelada não conclui.
  */
-export async function concluirAtividade(ctx: ContextoExecucao, d: z.infer<typeof concluirSchema>) {
+export async function concluirAtividade(ctx: ContextoExecucao, d: z.infer<typeof concluirSchema>, relogio?: RelogioDaConclusao) {
   const { atividade } = ctx;
   if (atividade.status === "CONCLUIDA") return ok({ status: "CONCLUIDA", jaEstava: true });
   if (atividade.status === "CANCELADA") return erro(409, "Atividade cancelada: não pode ser concluída.");
   const trava = await travaConclusao(ctx.empresaId, atividade.ordemServico.id, atividade.id);
   if (trava) return trava;
   const resumo = d.resumo === undefined ? undefined : d.resumo || null;
-  await prisma.atividadeOs.update({ where: { id: atividade.id }, data: { status: "CONCLUIDA", ...(resumo !== undefined && { resumo }) } });
+  // A data da conclusão (Desempenho: "no prazo"): a hora do toque no aparelho, mesmo que a fila chegue depois
+  const concluidaEm = momentoDaConclusao(relogio);
+  await prisma.atividadeOs.update({ where: { id: atividade.id }, data: { status: "CONCLUIDA", concluidaEm, ...(resumo !== undefined && { resumo }) } });
   await prisma.osHistorico.create({
     data: { ordemServicoId: atividade.ordemServico.id, usuarioId: ctx.usuarioId, acao: "Status da atividade alterado", detalhes: `"${atividade.titulo}": ${atividade.status} → CONCLUIDA` },
   });

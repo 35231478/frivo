@@ -1,3 +1,4 @@
+import { marcaDeConclusao } from "@/lib/os/conclusao-atividade";
 import { NextRequest, NextResponse } from "next/server";
 import { exigirAlgumaPermissao, exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
@@ -72,7 +73,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
 
   const data: any = {};
-  if (status !== undefined) data.status = status;
+  // Concluir grava a data da conclusão; reabrir limpa (Desempenho: "no prazo")
+  if (status !== undefined) Object.assign(data, { status }, marcaDeConclusao(existente.status, status));
   if (titulo !== undefined) data.titulo = titulo;
   if (tipoOsId !== undefined) data.tipoOsId = tipoOsId || null;
   if (veiculoId !== undefined) data.veiculoId = veiculoId;

@@ -8,14 +8,14 @@ import { corDado } from "@/lib/ui/tokens";
 export type Acao =
   | "visualizar" | "criar" | "editar" | "excluir" | "concluir" | "aprovar"
   | "gerenciar" | "medicoes" | "contasReceber" | "fluxoCaixa" | "folha" | "fiscal" | "perdas" | "checklist" | "exportar"
-  | "separar";
+  | "separar" | "revisar";
 
 export type Permissoes = Record<string, Partial<Record<Acao, boolean>>>;
 
 /** Nome do ícone (lucide-react) que representa o módulo na UI — este arquivo não importa a biblioteca. */
 export type IconeModulo =
   | "ClipboardList" | "Users" | "Thermometer" | "CalendarDays" | "QrCode" | "Package" | "ShoppingCart" | "Calculator"
-  | "FileText" | "Landmark" | "Wallet" | "UsersRound" | "Truck" | "Settings" | "BarChart3" | "LayoutDashboard" | "FileBadge";
+  | "FileText" | "Landmark" | "Wallet" | "UsersRound" | "Truck" | "Settings" | "BarChart3" | "LayoutDashboard" | "FileBadge" | "Trophy";
 export interface ModuloDef { id: string; label: string; icone: IconeModulo; acoes: Acao[] }
 export interface SecaoDef { id: string; label: string; modulos: ModuloDef[] }
 
@@ -36,6 +36,7 @@ export const ACOES_LABEL: Record<Acao, string> = {
   checklist: "Checklist",
   exportar: "Exportar",
   separar: "Separar material",
+  revisar: "Revisar penalidades",
 };
 
 /** Matriz de permissões agrupada por seção (fonte da verdade da UI e dos defaults). */
@@ -74,6 +75,10 @@ export const SECOES: SecaoDef[] = [
     id: "equipe", label: "Equipe", modulos: [
       { id: "equipes", label: "Equipes / Colaboradores", icone: "UsersRound", acoes: ["visualizar", "gerenciar", "excluir"] },
       { id: "veiculos", label: "Veículos", icone: "Truck", acoes: ["visualizar", "checklist", "gerenciar", "excluir"] },
+      // Desempenho (manutenção): ver = painel, ranking e fichas; revisar = decidir "conta / não conta" na
+      // lista de penalidades e registrar reclamação; gerenciar = configurar perfis, pesos, faixas, valores,
+      // premiação e o link da TV (e ver os valores em reais)
+      { id: "desempenho", label: "Desempenho", icone: "Trophy", acoes: ["visualizar", "revisar", "gerenciar"] },
     ],
   },
   {
@@ -190,6 +195,7 @@ const ROTA_MODULO: Record<string, string> = {
   financeiro: "financeiro",
   equipes: "equipes",
   colaboradores: "equipes",
+  desempenho: "desempenho",
   veiculos: "veiculos",
   estoque: "estoque",
   configuracoes: "configuracoes",
@@ -228,6 +234,7 @@ export const PRESETS: Record<string, Permissoes> = {
     qrcodes: ["visualizar", "gerenciar"],
     equipes: ["visualizar", "gerenciar"],
     veiculos: ["visualizar", "checklist", "gerenciar"],
+    desempenho: ["visualizar", "revisar"],
     estoque: ["visualizar", "gerenciar", "separar"],
     relatorios: ["visualizar", "exportar"],
   }),
