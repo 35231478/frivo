@@ -666,6 +666,9 @@ model Configuracao {
   /// Portal: com confirmações de serviço pendentes, o cliente só abre chamado novo depois de confirmar
   /// — ou pela saída de emergência, que existe sempre. false = só mostra as pendências (não bloqueia).
   portalAceiteObrigatorio Boolean @default(false) @map("portal_aceite_obrigatorio")
+  /// Aceite da OS: pede ao cliente a avaliação do serviço (1 a 5 estrelas + comentário opcional), no
+  /// link, no portal e no local. É sempre opcional para o cliente: nunca trava a confirmação
+  aceitePedirAvaliacao    Boolean @default(true) @map("aceite_pedir_avaliacao")
 
   // QR Code (acesso público, botões de contato, restrições) — armazenado como JSON
   qrConfig Json? @map("qr_config")
@@ -1978,6 +1981,11 @@ model OsAceite {
   /// RESSALVA do cliente ao confirmar pelo link: o serviço fica confirmado e o escritório é avisado.
   /// A coluna se chama "observacao" (era o campo "Observação" da primeira versão do aceite)
   ressalva       String? @map("observacao") @db.Text
+  /// AVALIAÇÃO do cliente no aceite: nota de 1 a 5 estrelas (vazio = confirmou sem avaliar). É da OS e,
+  /// por ela, dos técnicos que a executaram — a base do módulo de Desempenho
+  avaliacao           Int?
+  /// Comentário opcional da avaliação (não é a ressalva)
+  avaliacaoComentario String? @map("avaliacao_comentario") @db.Text
   ip             String?
   userAgent      String? @map("user_agent")
   confirmadoEm   DateTime? @map("confirmado_em")

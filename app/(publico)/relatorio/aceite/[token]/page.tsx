@@ -8,8 +8,9 @@ import { RelatorioOsDocumento } from "@/components/relatorio/relatorio-os-docume
 import { AceitePublico } from "@/components/os/aceite-publico";
 import { FrivoLogo } from "@/components/layout/frivo-logo";
 import { getPortalSession } from "@/lib/auth-portal";
-import { aceitePorToken } from "@/lib/os/aceite-server";
-import { provaDoAceite, rotuloDaOs, temRessalva, textoDoAceite } from "@/lib/os/aceite";
+import { aceitePorToken, pedeAvaliacao } from "@/lib/os/aceite-server";
+import { Estrelas } from "@/components/os/estrelas";
+import { notaDoAceite, provaDoAceite, rotuloDaOs, temRessalva, textoDoAceite } from "@/lib/os/aceite";
 import { formatarData } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +37,7 @@ export default async function AceitePage({ params }: { params: Promise<{ token: 
 
   const confirmado = aceite.situacao === "CONFIRMADO";
   const comRessalva = temRessalva(aceite);
+  const nota = notaDoAceite(aceite);
   const disponivel = !confirmado && os.status === "CONCLUIDA";
   const numero = rotuloDaOs(os.numero);
   const servico = dados.tipos.join(", ") || "Atendimento";
@@ -78,6 +80,12 @@ export default async function AceitePage({ params }: { params: Promise<{ token: 
                       <span className="block text-xs text-ink-muted mt-1">{empresaNome} foi avisada.</span>
                     </p>
                   )}
+                  {nota && (
+                    <div className="mt-2 space-y-0.5" data-aceite-avaliacao-registrada={nota}>
+                      <p className="text-sm text-ink flex items-center gap-2 flex-wrap"><strong>Avaliação registrada:</strong> <Estrelas nota={nota} /></p>
+                      {aceite.avaliacaoComentario && <p className="text-sm text-ink whitespace-pre-wrap break-words">{aceite.avaliacaoComentario}</p>}
+                    </div>
+                  )}
                 </div>
               </div>
             ) : disponivel ? (
@@ -96,7 +104,8 @@ export default async function AceitePage({ params }: { params: Promise<{ token: 
           </div>
 
           {disponivel && (
-            <AceitePublico token={token} rotulo={`${numero}${os.dataConclusao ? `, concluída em ${formatarData(os.dataConclusao)}` : ""}`} nomeSugerido={noPortal ? sessao!.user.name : null} />
+            <AceitePublico token={token} rotulo={`${numero}${os.dataConclusao ? `, concluída em ${formatarData(os.dataConclusao)}` : ""}`} nomeSugerido={noPortal ? sessao!.user.name : null}
+              pedirAvaliacao={await pedeAvaliacao(aceite.empresaId)} />
           )}
         </div>
       </main>

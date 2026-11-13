@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle2, MessageSquareWarning } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AvaliacaoDoCliente } from "@/components/os/avaliacao-cliente";
 import { MSG_NOME, MSG_RESSALVA, NOME_MAX, NOME_MIN, RESSALVA_MAX, RESSALVA_MIN } from "@/lib/os/aceite";
 
 /**
@@ -11,18 +12,24 @@ import { MSG_NOME, MSG_RESSALVA, NOME_MAX, NOME_MIN, RESSALVA_MAX, RESSALVA_MIN 
  *  - "Confirmo o recebimento do serviço";
  *  - "Tenho uma ressalva": o serviço fica confirmado do mesmo jeito, mas o cliente escreve o que ficou
  *    pendente ou diferente do combinado — fica no registro e a empresa é avisada.
+ * Quando a empresa pede (`pedirAvaliacao`), os dois caminhos levam junto a AVALIAÇÃO do serviço — de 1
+ * a 5 estrelas, com comentário — sempre opcional: sem tocar nas estrelas, confirma do mesmo jeito.
  * O servidor grava também a data, a hora e o endereço IP (o texto avisa, como na aprovação do orçamento).
  */
-export function AceitePublico({ token, rotulo, nomeSugerido }: {
+export function AceitePublico({ token, rotulo, nomeSugerido, pedirAvaliacao = false }: {
   token: string;
   /** De qual serviço se trata: "OS-123, concluída em 05/11/2026" */
   rotulo: string;
   nomeSugerido?: string | null;
+  /** A empresa pede a avaliação do cliente (opção "Pedir avaliação do cliente") */
+  pedirAvaliacao?: boolean;
 }) {
   const router = useRouter();
   const [nome, setNome] = useState(nomeSugerido ?? "");
   const [comRessalva, setComRessalva] = useState(false);
   const [ressalva, setRessalva] = useState("");
+  const [nota, setNota] = useState<number | null>(null);
+  const [comentario, setComentario] = useState("");
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
 
@@ -33,7 +40,10 @@ export function AceitePublico({ token, rotulo, nomeSugerido }: {
     setEnviando(true);
     try {
       const res = await fetch(`/api/publico/aceites/${encodeURIComponent(token)}/confirmar`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome: nome.trim(), ressalva: comRessalva ? ressalva.trim() : null }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+          nome: nome.trim(), ressalva: comRessalva ? ressalva.trim() : null,
+          ...(pedirAvaliacao && { avaliacao: nota, avaliacaoComentario: nota ? comentario.trim() || null : null }),
+        }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
@@ -76,6 +86,7 @@ export function AceitePublico({ token, rotulo, nomeSugerido }: {
           </p>
         </div>
       )}
+      {pedirAvaliacao && <AvaliacaoDoCliente nota={nota} comentario={comentario} aoMudarNota={setNota} aoMudarComentario={setComentario} desabilitado={enviando} />}
       <p className="text-xs text-ink-muted" data-aviso-registro>
         Ao confirmar, registramos seu nome, a data e a hora e o endereço IP desta confirmação.
       </p>

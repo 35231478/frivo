@@ -18,6 +18,7 @@
  *    equipamento principal da OS conta como atendido (era assim que se registrava).
  */
 import { prisma } from "@/lib/prisma";
+import { notaDoAceite } from "@/lib/os/aceite";
 import { LABELS_STATUS_OS , comparaNatural } from "@/lib/utils";
 import { ambienteEquipamento, descricaoEquipamento, fabricanteModelo } from "@/lib/equipamento-descricao";
 import { textoTecnicosAtividade } from "@/lib/atividade-equipe";
@@ -68,6 +69,8 @@ export interface AceiteRelatorio {
   assinatura: string | null; colhidoPor: string | null;
   /** A ressalva que o cliente registrou ao confirmar (null = confirmou sem ressalva) */
   ressalva: string | null;
+  /** A avaliação do cliente: nota de 1 a 5 e o comentário dela (null = confirmou sem avaliar) */
+  avaliacao: number | null; avaliacaoComentario: string | null;
 }
 export interface RelatorioOsDados {
   empresa: EmpresaInfo;
@@ -146,6 +149,7 @@ export interface OsParaRelatorio {
   aceite?: {
     situacao: string; nome: string | null; confirmadoEm: Date | null; metodo: string | null; ip: string | null;
     assinatura: string | null; ressalva: string | null; colhidoPor: { nome: string } | null;
+    avaliacao?: number | null; avaliacaoComentario?: string | null;
   } | null;
 }
 export interface RelatorioRef { numero: string; observacao: string | null; assinaturaUrl: string | null; assinadoPor: string | null; assinadoEm: Date | null }
@@ -379,6 +383,7 @@ export function montarRelatorioOs(os: OsParaRelatorio, relatorio: RelatorioRef |
     aceite: os.aceite?.situacao === "CONFIRMADO" ? {
       nome: os.aceite.nome, confirmadoEm: os.aceite.confirmadoEm, metodo: os.aceite.metodo, ip: os.aceite.ip,
       assinatura: os.aceite.assinatura, colhidoPor: os.aceite.colhidoPor?.nome ?? null, ressalva: (os.aceite.ressalva ?? "").trim() || null,
+      avaliacao: notaDoAceite(os.aceite), avaliacaoComentario: notaDoAceite(os.aceite) ? (os.aceite.avaliacaoComentario ?? "").trim() || null : null,
     } : null,
     assinaturas: {
       coletadas,
@@ -437,7 +442,7 @@ export async function carregarOsParaRelatorio(osId: string, empresaId: string): 
       unidade: { select: { nome: true, logradouro: true, numero: true, bairro: true, cidade: true, estado: true, cep: true } },
       contrato: { select: { numero: true, artNumero: true, responsavelTecnico: { select: { nome: true, crea: true } } } },
       equipamento: { select: SELECT_EQUIP },
-      aceite: { select: { situacao: true, nome: true, confirmadoEm: true, metodo: true, ip: true, assinatura: true, ressalva: true, colhidoPor: { select: { nome: true } } } },
+      aceite: { select: { situacao: true, nome: true, confirmadoEm: true, metodo: true, ip: true, assinatura: true, ressalva: true, avaliacao: true, avaliacaoComentario: true, colhidoPor: { select: { nome: true } } } },
       atividades: {
         orderBy: { criadoEm: "asc" },
         include: {

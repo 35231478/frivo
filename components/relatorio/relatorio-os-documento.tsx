@@ -6,6 +6,7 @@ import type { AdicionalRelatorio, BlocoEquipamento, ChecklistTipoRelatorio, Foto
 import { ROTULO_COBRANCA } from "@/lib/execucao/adicional";
 import { ROTULO_STATUS, type StatusItem } from "@/lib/execucao/pendencias";
 import { provaDoAceite, textoDoAceite } from "@/lib/os/aceite";
+import { Estrelas } from "@/components/os/estrelas";
 
 /**
  * Relatório da OS — layout por equipamento. Mesmo componente para as duas versões:
@@ -182,6 +183,12 @@ export function RelatorioOsDocumento({ dados: d, config, versao }: { dados: Rela
             <p className="text-xs text-ink-muted" data-aceite-relatorio-prova>{provaDoAceite(d.aceite)}</p>
             {d.aceite.ressalva && (
               <p className="text-sm text-ink whitespace-pre-wrap break-words" data-aceite-relatorio-ressalva><strong>Ressalva do cliente:</strong> {d.aceite.ressalva}</p>
+            )}
+            {d.aceite.avaliacao && (
+              <div className="pt-1 space-y-0.5" data-aceite-relatorio-avaliacao={d.aceite.avaliacao}>
+                <p className="text-sm text-ink flex items-center gap-2 flex-wrap"><strong>Avaliação do cliente:</strong> <Estrelas nota={d.aceite.avaliacao} tamanho="sm" /></p>
+                {d.aceite.avaliacaoComentario && <p className="text-sm text-ink whitespace-pre-wrap break-words" data-aceite-relatorio-avaliacao-comentario>{d.aceite.avaliacaoComentario}</p>}
+              </div>
             )}
           </div>
           {d.aceite.assinatura && (

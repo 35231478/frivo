@@ -86,7 +86,8 @@ export function AceiteNaOs({ r, x, aEnviar, registrar }: { r: RetratoAtividade; 
       </div>
       {pedido && <p role="status" className="text-xs text-ink-muted" data-aceite-pedido>{pedido}</p>}
       <Modal aberto={assinando} onFechar={() => setAssinando(false)} titulo="Aceite do cliente">
-        {assinando && <AssinaturaDoCliente resumo={`${rotuloDaOs(r.cartao.osNumero)} · ${cliente}`} aoConfirmar={assinar} aoCancelar={() => setAssinando(false)} />}
+        {assinando && <AssinaturaDoCliente resumo={`${rotuloDaOs(r.cartao.osNumero)} · ${cliente}`} aoConfirmar={assinar} aoCancelar={() => setAssinando(false)}
+          pedirAvaliacao={!!r.aceite?.pedirAvaliacao} />}
       </Modal>
     </section>
   );

@@ -50,6 +50,7 @@ const configuracaoSchema = z.object({
   portalBoasVindas: z.string().nullable().optional(),
   // Portal: confirmar os serviços pendentes antes de abrir chamado novo (a saída de emergência existe sempre)
   portalAceiteObrigatorio: z.boolean().optional(),
+  aceitePedirAvaliacao: z.boolean().optional(),
   // ISS (%) sobre serviços nos orçamentos — 0 a 100, em centésimos
   issAliquota: z.preprocess(
     (v) => (v === "" || v == null ? undefined : Number(String(v).replace(",", "."))),

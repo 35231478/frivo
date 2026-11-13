@@ -29,6 +29,11 @@ export const ASSINATURA_MAX_BYTES = 300 * 1024;
 export const MSG_NOME = "Informe o nome completo de quem confirma.";
 export const MSG_ASSINATURA = "Peça para o cliente assinar no quadro.";
 export const MSG_RESSALVA = "Descreva a ressalva em poucas palavras.";
+/** A avaliação do serviço: nota em estrelas, com um comentário opcional (que não é a ressalva) */
+export const AVALIACAO_MIN = 1, AVALIACAO_MAX = 5, AVALIACAO_COMENTARIO_MAX = 1000;
+export const NOTAS = [1, 2, 3, 4, 5] as const;
+export const MSG_AVALIACAO = "A avaliação vai de 1 a 5 estrelas.";
+export const ROTULO_NOTA: Record<number, string> = { 1: "Péssimo", 2: "Ruim", 3: "Regular", 4: "Bom", 5: "Excelente" };
 export const MSG_OS_NAO_CONCLUIDA = "A OS ainda não está concluída.";
 export const MSG_OS_CANCELADA = "Esta OS foi cancelada.";
 export const MSG_JA_CONFIRMADO = "Este serviço já foi confirmado.";
@@ -42,8 +47,18 @@ const assinatura = z.string({ required_error: MSG_ASSINATURA, invalid_type_error
   .refine((v) => /^data:image\/png;base64,[A-Za-z0-9+/=]{100,}$/.test(v), MSG_ASSINATURA)
   .refine((v) => bytesDoDataUrl(v) <= ASSINATURA_MAX_BYTES, "Assinatura grande demais: limpe o quadro e assine de novo.");
 
-/** No local: nome de quem recebeu + a assinatura desenhada */
-export const aceiteLocalSchema = z.object({ nome, assinatura }).strict();
+/**
+ * A AVALIAÇÃO que acompanha o aceite — sempre opcional: quem confirma sem avaliar manda vazio. O
+ * comentário é DA avaliação: sem nota, não há comentário (não se guarda texto solto).
+ */
+const avaliacao = z.number({ invalid_type_error: MSG_AVALIACAO }).int(MSG_AVALIACAO).min(AVALIACAO_MIN, MSG_AVALIACAO).max(AVALIACAO_MAX, MSG_AVALIACAO).optional().nullable();
+const avaliacaoComentario = z.string().trim().max(AVALIACAO_COMENTARIO_MAX, `O comentário da avaliação vai até ${AVALIACAO_COMENTARIO_MAX} caracteres.`).optional().nullable();
+const comAvaliacao = (d: { avaliacao?: number | null; avaliacaoComentario?: string | null }) =>
+  ({ avaliacao: d.avaliacao ?? null, avaliacaoComentario: d.avaliacao ? d.avaliacaoComentario || null : null });
+
+/** No local: nome de quem recebeu + a assinatura desenhada (+ a avaliação, se o cliente quiser dar) */
+export const aceiteLocalSchema = z.object({ nome, assinatura, avaliacao, avaliacaoComentario }).strict()
+  .transform((d) => ({ nome: d.nome, assinatura: d.assinatura, ...comAvaliacao(d) }));
 export type AceiteLocal = z.infer<typeof aceiteLocalSchema>;
 
 /**
@@ -56,7 +71,8 @@ export const aceitePublicoSchema = z.object({
     .refine((v) => !v || v.length >= RESSALVA_MIN, MSG_RESSALVA).optional().nullable(),
   // Como o campo se chamava na primeira versão da página: uma aba aberta antes da atualização ainda manda assim
   observacao: z.string().trim().max(RESSALVA_MAX).optional().nullable(),
-}).strict().transform((d) => ({ nome: d.nome, ressalva: d.ressalva || d.observacao || null }));
+  avaliacao, avaliacaoComentario,
+}).strict().transform((d) => ({ nome: d.nome, ressalva: d.ressalva || d.observacao || null, ...comAvaliacao(d) }));
 export type AceitePublico = z.infer<typeof aceitePublicoSchema>;
 
 /* ───────── o estado ───────── */
@@ -66,6 +82,8 @@ export interface AceiteResumo {
   ip?: string | null; ressalva?: string | null; colhidoPor?: string | null;
   /** Quando o escritório viu a confirmação (vazio = o aviso ainda está no sino) */
   vistoEm?: Date | string | null;
+  /** A nota do cliente (1 a 5) e o comentário dela; vazio = confirmou sem avaliar */
+  avaliacao?: number | null; avaliacaoComentario?: string | null;
   enviadoEm?: Date | string | null; enviadoPara?: string | null; envios?: number | null;
 }
 
@@ -83,6 +101,16 @@ export function estadoDoAceite(statusOs: string, aceite: Pick<AceiteResumo, "sit
 export const ROTULO_ESTADO: Record<Exclude<EstadoAceite, "NAO_SE_APLICA">, string> = {
   AGUARDANDO: "Aguardando confirmação do cliente", CONFIRMADO: "Confirmada pelo cliente",
 };
+
+/** A nota do cliente, quando ele avaliou (1 a 5; só existe no aceite confirmado) — senão null */
+export function notaDoAceite(a: Pick<AceiteResumo, "situacao" | "avaliacao"> | null | undefined): number | null {
+  const n = a?.situacao === "CONFIRMADO" ? a.avaliacao : null;
+  return typeof n === "number" && Number.isInteger(n) && n >= AVALIACAO_MIN && n <= AVALIACAO_MAX ? n : null;
+}
+/** "4 de 5 estrelas" / "1 de 5 estrelas" — a nota por extenso (leitor de tela, histórico e PDF sem cor) */
+export const textoDaAvaliacao = (nota: number) => `${nota} de ${AVALIACAO_MAX} estrelas`;
+/** "1 estrela" / "3 estrelas" — o nome de cada opção de nota */
+export const nomeDaNota = (nota: number) => `${nota} ${nota === 1 ? "estrela" : "estrelas"}`;
 
 /** O cliente confirmou COM ressalva? (a ressalva só existe no aceite confirmado) */
 export const temRessalva = (a: Pick<AceiteResumo, "situacao" | "ressalva"> | null | undefined): boolean =>
@@ -117,6 +145,8 @@ export interface AceiteRetrato {
   osConcluida: boolean;
   /** Esta é a última atividade em aberto da OS: concluir aqui conclui a OS — é a hora do aceite */
   ultimaDaOs: boolean;
+  /** A empresa pede a avaliação do cliente no aceite (ausente em retratos antigos = não pede) */
+  pedirAvaliacao?: boolean;
 }
 
 /**

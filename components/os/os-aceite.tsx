@@ -8,12 +8,13 @@ import { toast } from "@/components/ui/avisos";
 import { abaPendente } from "@/components/orcamento/envio-proposta";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { AssinaturaDoCliente } from "@/components/os/aceite-assinatura";
+import { Estrelas } from "@/components/os/estrelas";
 import { formatarDataHora } from "@/lib/utils";
-import { ROTULO_ESTADO, provaDoAceite, recadoDoPedido, rotuloDaOs, rotuloDoAceite, temRessalva, textoDoAceite, textoDoCanal, type AceiteLocal, type EstadoAceite } from "@/lib/os/aceite";
+import { ROTULO_ESTADO, notaDoAceite, provaDoAceite, recadoDoPedido, rotuloDaOs, rotuloDoAceite, temRessalva, textoDoAceite, textoDoCanal, type AceiteLocal, type EstadoAceite } from "@/lib/os/aceite";
 import { atualizarSino } from "@/lib/ui/sino";
 import type { AceiteDaOs, PedidoDeAceite } from "@/lib/os/aceite-server";
 
-interface Resposta { estado: EstadoAceite; statusOs: string; aceite: AceiteDaOs | null; caminhoPublico: string | null; erro?: string }
+interface Resposta { estado: EstadoAceite; statusOs: string; aceite: AceiteDaOs | null; caminhoPublico: string | null; pedirAvaliacao?: boolean; erro?: string }
 
 /**
  * Aceite do cliente na OS (escritório): "concluída, aguardando confirmação do cliente" até o aceite.
@@ -97,6 +98,7 @@ export function OsAceite({ osId, numero, cliente, statusOs, aoMudar }: {
     // Com ressalva o serviço está confirmado, mas o cartão chama a atenção: há algo a tratar com o cliente
     const comRessalva = temRessalva(aceite);
     const Icone = comRessalva ? MessageSquareWarning : CheckCircle2;
+    const nota = notaDoAceite(aceite);
     return (
       <section className={`${comRessalva ? "bg-atencao-claro border-atencao/30" : "bg-ok-claro border-ok/20"} border rounded-card px-4 py-3 flex items-start gap-3 flex-wrap`}
         data-aceite-os="CONFIRMADO" data-aceite-com-ressalva={comRessalva ? "sim" : "nao"}>
@@ -107,6 +109,12 @@ export function OsAceite({ osId, numero, cliente, statusOs, aoMudar }: {
           <p className="text-xs text-ink-muted" data-aceite-prova>{provaDoAceite(aceite)}</p>
           {comRessalva && (
             <p className="text-sm text-ink break-words whitespace-pre-wrap" data-aceite-ressalva><strong>Ressalva do cliente:</strong> {aceite.ressalva}</p>
+          )}
+          {nota && (
+            <div className="pt-1 space-y-0.5" data-aceite-avaliacao={nota}>
+              <p className="text-sm text-ink flex items-center gap-2 flex-wrap"><strong>Avaliação do cliente:</strong> <Estrelas nota={nota} /></p>
+              {aceite.avaliacaoComentario && <p className="text-sm text-ink break-words whitespace-pre-wrap" data-aceite-avaliacao-comentario>{aceite.avaliacaoComentario}</p>}
+            </div>
           )}
         </div>
         {aceite.assinatura && (
@@ -147,7 +155,8 @@ export function OsAceite({ osId, numero, cliente, statusOs, aoMudar }: {
       {enviando && <p className="text-xs text-ink-muted flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden /> Enviando…</p>}
       {erro && <p role="alert" className="text-sm text-atrasado-texto break-all" data-erro-aceite-os>{erro}</p>}
       <Modal aberto={assinando} onFechar={() => setAssinando(false)} titulo="Aceite do cliente">
-        {assinando && <AssinaturaDoCliente resumo={`${rotuloDaOs(numero)} · ${cliente}`} aoConfirmar={assinar} aoCancelar={() => setAssinando(false)} />}
+        {assinando && <AssinaturaDoCliente resumo={`${rotuloDaOs(numero)} · ${cliente}`} aoConfirmar={assinar} aoCancelar={() => setAssinando(false)}
+          pedirAvaliacao={!!dados.pedirAvaliacao} />}
       </Modal>
     </section>
   );

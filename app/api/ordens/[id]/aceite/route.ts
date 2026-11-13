@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ipDaRequisicao } from "@/lib/orcamentos/ciclo";
 import { aceiteLocalSchema, caminhoPublicoAceite, estadoDoAceite } from "@/lib/os/aceite";
-import { aceiteDaOs, registrarAceiteLocal } from "@/lib/os/aceite-server";
+import { aceiteDaOs, pedeAvaliacao, registrarAceiteLocal } from "@/lib/os/aceite-server";
 import { guardaDoAceite, responderAceite } from "@/lib/os/aceite-rotas";
 
 type Params = { params: Promise<{ id: string }> };
@@ -16,7 +16,7 @@ export async function GET(_: NextRequest, { params }: Params) {
   if (!os) return NextResponse.json({ erro: "OS não encontrada" }, { status: 404 });
   const aceite = await aceiteDaOs(id, ator.empresaId, { comAssinatura: true });
   return NextResponse.json(
-    { estado: estadoDoAceite(os.status, aceite), statusOs: os.status, aceite, caminhoPublico: aceite ? caminhoPublicoAceite(aceite.token) : null },
+    { estado: estadoDoAceite(os.status, aceite), statusOs: os.status, aceite, caminhoPublico: aceite ? caminhoPublicoAceite(aceite.token) : null, pedirAvaliacao: await pedeAvaliacao(ator.empresaId) },
     { headers: { "Cache-Control": "private, no-store" } },
   );
 }
