@@ -40,7 +40,7 @@ const RAIZ = path.resolve(__dirname, "../..");
 let root: Root, caixa: HTMLDivElement;
 let respostas: Record<string, { status: number; corpo: unknown }>;
 const chamadas: { url: string; metodo: string; corpo: any }[] = [];
-const SEM_CONFIG = montarPermissoes({ ordens: ["ver", "criar", "editar"], clientes: ["ver", "criar"], equipamentos: ["ver"] });
+const SEM_CONFIG = montarPermissoes({ configuracoes: ["visualizar"], ordens: ["visualizar", "criar", "editar"], clientes: ["visualizar", "criar"], equipamentos: ["visualizar"] });
 
 const esperar = () => act(async () => { for (let i = 0; i < 8; i++) await new Promise((r) => setTimeout(r, 0)); });
 const txt = (el: Element | null | undefined) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();

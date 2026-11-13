@@ -34,7 +34,7 @@ const logar = (permissoes: Permissoes = permissoesTotais(), empresaId = "e1") =>
   sessao.atual = { user: { id: empresaId === "e1" ? "uA" : "uB", name: "Ana", email: "ana@x.com", empresaId, role: "OPERADOR", permissoes } };
 };
 /** Usuário comum do escritório: opera OS, mas não tem Configurações › gerenciar */
-const semConfig = () => logar(montarPermissoes({ ordens: ["ver", "criar", "editar"], clientes: ["ver"] }));
+const semConfig = () => logar(montarPermissoes({ configuracoes: ["visualizar"], ordens: ["visualizar", "criar", "editar"], clientes: ["visualizar"] }));
 
 async function chamar(rota: string, metodo: string, params: Record<string, string> = {}, corpo?: unknown, query = "") {
   const mod = await import(/* @vite-ignore */ `@/app/api/${rota}/route`);
