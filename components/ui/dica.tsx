@@ -75,14 +75,16 @@ export function Dica({ texto, rotulo, className, lado = "centro" }: {
       const alvo = e.target as Node;
       if (!botao.current?.contains(alvo) && !balao.current?.contains(alvo)) fechar();
     };
-    const tecla = (e: KeyboardEvent) => { if (e.key === "Escape") fechar(); };
+    // Esc fecha SÓ o balão: na captura e sem deixar subir, para a gaveta ou o modal em volta não fecharem
+    // junto (e levarem o formulário que estava sendo preenchido). O Esc seguinte fecha o painel.
+    const tecla = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); fechar(); } };
     document.addEventListener("pointerdown", fora, true);
-    document.addEventListener("keydown", tecla);
+    document.addEventListener("keydown", tecla, true);
     window.addEventListener("scroll", fechar, true);
     window.addEventListener("resize", fechar);
     return () => {
       document.removeEventListener("pointerdown", fora, true);
-      document.removeEventListener("keydown", tecla);
+      document.removeEventListener("keydown", tecla, true);
       window.removeEventListener("scroll", fechar, true);
       window.removeEventListener("resize", fechar);
     };
