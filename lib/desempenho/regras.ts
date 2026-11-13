@@ -30,10 +30,11 @@ export const ROTULO_METRICA: Record<TipoPerfil, Record<Metrica, string>> = {
   GESTAO: { prazo: "Equipe no prazo", relatorio: "Relatórios completos da equipe", avaliacao: "Satisfação da equipe" },
 };
 
-export const TIPOS_PENALIDADE = ["RETORNO", "RESSALVA", "NOTA_BAIXA", "RECLAMACAO"] as const;
+// Nota baixa NÃO é penalidade: ela já pesa na média da avaliação (lib/desempenho/itens-validos.ts)
+export const TIPOS_PENALIDADE = ["RETORNO", "RESSALVA", "RECLAMACAO"] as const;
 export type TipoPenalidade = (typeof TIPOS_PENALIDADE)[number];
 export const ROTULO_PENALIDADE: Record<TipoPenalidade, string> = {
-  RETORNO: "Retorno", RESSALVA: "Ressalva do cliente", NOTA_BAIXA: "Nota baixa", RECLAMACAO: "Reclamação",
+  RETORNO: "Retorno", RESSALVA: "Ressalva do cliente", RECLAMACAO: "Reclamação",
 };
 
 export const SITUACOES_PENALIDADE = ["A_REVISAR", "CONTA", "NAO_CONTA"] as const;
@@ -294,7 +295,7 @@ export function calcularEscore(regra: Regra, e: EntradaEscore): Escore {
   return { escore, base, desconto, composicao, penalidades, atingiuMeta: escore >= regra.metaMinima, faixa, bonus: faixa?.valor ?? 0 };
 }
 
-/** A penalidade pesa pelos pontos de retorno ou pelos de reclamação (ressalva, nota baixa e reclamação). */
+/** A penalidade pesa pelos pontos de retorno ou pelos de reclamação (ressalva sem nota e reclamação). */
 export const ehRetorno = (tipo: string) => tipo === "RETORNO";
 
 /* ───────── ranking e equipe ───────── */
@@ -351,7 +352,6 @@ export const perfilSchema = z.object({
 export const RETORNO_DIAS_MAX = 365;
 export const ajustesSchema = z.object({
   retornoDias: inteiro(1, RETORNO_DIAS_MAX, "Prazo do retorno (dias)"),
-  notaBaixaAte: inteiro(1, 4, "Nota baixa"),
   tiposRetorno: z.array(z.string().min(1).max(64)).max(200),
 }).strict();
 

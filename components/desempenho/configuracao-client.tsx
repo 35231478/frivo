@@ -379,7 +379,6 @@ function FormularioRegra({ perfil, cfg, aoFechar, aoSalvar }: PropsDialogo & { p
 
 function Ajustes({ cfg, aoMudar }: { cfg: Cfg; aoMudar: () => Promise<void> }) {
   const [dias, setDias] = useState(String(cfg.ajustes.retornoDias));
-  const [nota, setNota] = useState(String(cfg.ajustes.notaBaixaAte));
   const [tipos, setTipos] = useState<string[]>(cfg.ajustes.tiposRetorno);
   const [erro, setErro] = useState("");
   const [salvo, setSalvo] = useState(false);
@@ -390,7 +389,7 @@ function Ajustes({ cfg, aoMudar }: { cfg: Cfg; aoMudar: () => Promise<void> }) {
     const retornoDias = Number(dias);
     if (!Number.isInteger(retornoDias) || retornoDias < 1 || retornoDias > RETORNO_DIAS_MAX) { setErro(`Prazo do retorno: de 1 a ${RETORNO_DIAS_MAX} dias.`); return; }
     setSalvando(true);
-    const falha = await chamar("/api/desempenho/configuracao", "PUT", { retornoDias, notaBaixaAte: Number(nota), tiposRetorno: tipos });
+    const falha = await chamar("/api/desempenho/configuracao", "PUT", { retornoDias, tiposRetorno: tipos });
     setSalvando(false);
     if (falha) { setErro(falha); return; }
     setSalvo(true); await aoMudar();
@@ -408,11 +407,9 @@ function Ajustes({ cfg, aoMudar }: { cfg: Cfg; aoMudar: () => Promise<void> }) {
             <Input aria-label="Prazo do retorno em dias" inputMode="numeric" value={dias} className="tabular-nums" data-campo-retorno-dias
               onChange={(e) => { setDias(e.target.value.replace(/\D/g, "").slice(0, 3)); mexeu(); }} />
           </FormField>
-          <FormField label="Nota baixa do cliente" hint="Avaliações até esta nota vão para a revisão.">
-            <Select aria-label="Nota baixa do cliente" value={nota} onChange={(e) => { setNota(e.target.value); mexeu(); }} data-campo-nota-baixa>
-              {[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n === 1 ? "1 estrela" : `Até ${n} estrelas`}</option>)}
-            </Select>
-          </FormField>
+          <p className="text-sm text-ink-muted self-center" data-aviso-nota-baixa>
+            Nota baixa do cliente não entra aqui: ela já pesa na média da avaliação.
+          </p>
         </div>
         <fieldset>
           <legend className="text-sm font-medium text-ink">Tipos de OS que contam como corretiva</legend>

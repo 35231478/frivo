@@ -21,7 +21,7 @@ import type { ListaDePenalidades, PenalidadeNaLista } from "@/lib/desempenho/pen
 import { CabecalhoDesempenho, Erro, JSON_HEADERS, type PodeDesempenho } from "./comum";
 
 const TOM_SITUACAO: Record<SituacaoPenalidade, TomStatus> = { A_REVISAR: "atencao", CONTA: "atrasado", NAO_CONTA: "previsto" };
-const TOM_TIPO: Record<TipoPenalidade, TomStatus> = { RETORNO: "acento", RESSALVA: "atencao", NOTA_BAIXA: "atencao", RECLAMACAO: "previsto" };
+const TOM_TIPO: Record<TipoPenalidade, TomStatus> = { RETORNO: "acento", RESSALVA: "atencao", RECLAMACAO: "previsto" };
 type Filtro = SituacaoPenalidade | "";
 
 /**
@@ -68,7 +68,7 @@ export function RevisaoDesempenho({ pode }: { pode: PodeDesempenho }) {
       <div className="bg-white border border-surface-border rounded-xl overflow-hidden">
         <div className="px-4 py-3 border-b border-surface-border flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-ink-muted max-w-2xl">
-            Retorno, ressalva e nota baixa entram aqui sozinhos. Só pesam depois de marcados “Conta”, com motivo.
+            Retorno e ressalva sem nota entram aqui sozinhos. Só pesam depois de marcados “Conta”, com motivo.
           </p>
           <Select aria-label="Situação" value={filtro} onChange={(e) => setFiltro(e.target.value as Filtro)} className="w-44" data-filtro-situacao>
             {SITUACOES_PENALIDADE.map((s) => <option key={s} value={s}>{ROTULO_SITUACAO[s]}</option>)}
@@ -112,7 +112,7 @@ export function RevisaoDesempenho({ pode }: { pode: PodeDesempenho }) {
                     <StatusPill tom={TOM_SITUACAO[p.situacao] ?? "previsto"} tamanho="sm" data-pilula-situacao={p.situacao}>{ROTULO_SITUACAO[p.situacao] ?? p.situacao}</StatusPill>
                   </div>
                   <div className="flex items-center gap-1 flex-wrap lg:w-64 lg:justify-end shrink-0" data-acoes-penalidade>
-                    {p.situacao === "A_REVISAR" ? (
+                    {p.mesFechado ? <span className="text-xs text-ink-muted" data-mes-fechado-item>Mês fechado: reabra para mudar.</span> : p.situacao === "A_REVISAR" ? (
                       <>
                         <Button type="button" variant="outline" size="sm" onClick={() => setDecidindo({ item: p, situacao: "CONTA" })} data-conta><CheckCircle2 className="w-3.5 h-3.5" /> Conta</Button>
                         <Button type="button" variant="secondary" size="sm" onClick={() => setDecidindo({ item: p, situacao: "NAO_CONTA" })} data-nao-conta><XCircle className="w-3.5 h-3.5" /> Não conta</Button>
@@ -120,7 +120,7 @@ export function RevisaoDesempenho({ pode }: { pode: PodeDesempenho }) {
                     ) : (
                       <Button type="button" variant="secondary" size="sm" loading={ocupada === p.id} onClick={() => rever(p)} data-rever><Undo2 className="w-3.5 h-3.5" /> Rever decisão</Button>
                     )}
-                    {p.manual && (
+                    {p.manual && !p.mesFechado && (
                       <>
                         <button type="button" title="Editar reclamação" aria-label="Editar reclamação" onClick={() => setFormulario(p)} data-editar
                           className="p-1.5 rounded-md text-ink-muted hover:text-ink hover:bg-surface-alt"><Pencil className="w-4 h-4" /></button>

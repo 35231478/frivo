@@ -569,6 +569,8 @@ model Empresa {
   desempenhoParticipantes DesempenhoParticipante[]
   desempenhoPenalidades   DesempenhoPenalidade[]
   desempenhoPremiacoes    DesempenhoPremiacao[]
+  desempenhoFechamentos       DesempenhoFechamento[]
+  desempenhoFechamentoLinhas  DesempenhoFechamentoLinha[]
 
   @@map("empresas")
 }
@@ -870,6 +872,8 @@ model Usuario {
 
   desempenhoRevisoes  DesempenhoPenalidade[] @relation("DesempenhoPenalidadeRevisor")
   desempenhoRegistros DesempenhoPenalidade[] @relation("DesempenhoPenalidadeCriador")
+  desempenhoFechamentos DesempenhoFechamento[] @relation("DesempenhoFechamentoFechou")
+  desempenhoReaberturas DesempenhoFechamento[] @relation("DesempenhoFechamentoReabriu")
 
   @@unique([email, empresaId])
   @@index([empresaId, ativo])
@@ -983,6 +987,7 @@ model Tecnico {
 
   desempenhoParticipante DesempenhoParticipante?
   desempenhoPenalidades  DesempenhoPenalidade[]
+  desempenhoFechamentoLinhas DesempenhoFechamentoLinha[]
 
   @@unique([cpf, empresaId])
   @@index([empresaId, ativo])
@@ -4718,7 +4723,8 @@ model DesempenhoConfig {
   empresaId    String   @unique @map("empresa_id")
   /// Retorno: OS corretiva no mesmo equipamento até N dias depois de um serviço do colaborador
   retornoDias  Int      @default(30) @map("retorno_dias")
-  /// Nota do cliente (1 a 5) até este valor cai na lista "a revisar"
+  /// SEM USO: a nota baixa deixou de ser penalidade (ela já pesa na média da avaliação). A coluna
+  /// fica no banco; nada lê nem grava este valor.
   notaBaixaAte Int      @default(2) @map("nota_baixa_ate")
   /// Link do modo TV (sem login, só leitura). null = desligado
   tvToken      String?  @unique @map("tv_token")
@@ -4875,4 +4881,70 @@ model DesempenhoPremiacao {
 
   @@index([empresaId, competencia])
   @@map("desempenho_premiacoes")
+}
+
+/// FECHAMENTO do mês do Desempenho: o escore, a faixa e o valor do bônus de cada colaborador viram
+/// DEFINITIVOS (dado novo não muda mais). Reabrir marca "REABERTO" com quem/quando/por quê; fechar de
+/// novo cria a versão seguinte — nada é apagado. situacao: "FECHADO" | "REABERTO".
+model DesempenhoFechamento {
+  id               String    @id @default(cuid())
+  empresaId        String    @map("empresa_id")
+  /// Competência "AAAA-MM"
+  competencia      String
+  /// 1 no primeiro fechamento do mês; cada novo fechamento depois de reabrir soma 1
+  versao           Int       @default(1)
+  situacao         String    @default("FECHADO")
+  /// O painel do mês como estava ao fechar (ranking, composição, regra e valores)
+  painel           Json
+  /// Quem ganhou cada premiação: [{ premiacaoId, titulo, descricao, perfil, ganhadores: [{ tecnicoId, nome, escore }] }]
+  premios          Json
+  /// Soma dos bônus da folha
+  totalBonus       Decimal   @default(0) @map("total_bonus") @db.Decimal(12, 2)
+  fechadoPorId     String?   @map("fechado_por_id")
+  /// O nome de quem fechou, guardado (o usuário pode sair do sistema)
+  fechadoPorNome   String    @map("fechado_por_nome")
+  fechadoEm        DateTime  @map("fechado_em")
+  reabertoPorId    String?   @map("reaberto_por_id")
+  reabertoPorNome  String?   @map("reaberto_por_nome")
+  reabertoEm       DateTime? @map("reaberto_em")
+  reaberturaMotivo String?   @map("reabertura_motivo")
+  criadoEm         DateTime  @default(now()) @map("criado_em")
+  atualizadoEm     DateTime  @updatedAt @map("atualizado_em")
+
+  empresa     Empresa                     @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  fechadoPor  Usuario?                    @relation("DesempenhoFechamentoFechou", fields: [fechadoPorId], references: [id], onDelete: SetNull)
+  reabertoPor Usuario?                    @relation("DesempenhoFechamentoReabriu", fields: [reabertoPorId], references: [id], onDelete: SetNull)
+  linhas      DesempenhoFechamentoLinha[]
+
+  @@unique([empresaId, competencia, versao])
+  @@index([empresaId, situacao])
+  @@map("desempenho_fechamentos")
+}
+
+/// A FOLHA DE BÔNUS do fechamento: uma linha por colaborador, com o valor definitivo. Só o valor é
+/// registrado aqui — pagamento, imposto e encargo são do financeiro.
+model DesempenhoFechamentoLinha {
+  id           String   @id @default(cuid())
+  fechamentoId String   @map("fechamento_id")
+  empresaId    String   @map("empresa_id")
+  tecnicoId    String?  @map("tecnico_id")
+  /// Nome do colaborador e do perfil como eram ao fechar
+  nome         String
+  perfil       String
+  posicao      Int?
+  /// 0 a 100 (1 casa); vazio = sem medição no mês
+  escore       Decimal? @db.Decimal(5, 1)
+  faixa        String?
+  /// O bônus do mês em reais (zero sem faixa)
+  valor        Decimal  @default(0) @db.Decimal(12, 2)
+  criadoEm     DateTime @default(now()) @map("criado_em")
+
+  fechamento DesempenhoFechamento @relation(fields: [fechamentoId], references: [id], onDelete: Cascade)
+  empresa    Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  tecnico    Tecnico?             @relation(fields: [tecnicoId], references: [id], onDelete: SetNull)
+
+  @@index([fechamentoId])
+  @@index([tecnicoId])
+  @@index([empresaId])
+  @@map("desempenho_fechamento_linhas")
 }

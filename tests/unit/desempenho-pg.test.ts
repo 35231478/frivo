@@ -13,7 +13,9 @@
  *  - atividade de equipe: todos levam o resultado, uma vez cada; encarregado = equipes que lidera;
  *  - premiação do mês (texto + imagem) e modo TV sem valor em reais;
  *  - a data de conclusão da atividade passa a ser gravada (toque no app, tela do escritório, reabrir);
- *  - RBAC em cada rota (ver, revisar, gerenciar; o colaborador vê só o dele) e multiempresa.
+ *  - RBAC em cada rota (ver, revisar, gerenciar; o colaborador vê só o dele) e multiempresa;
+ *  - PR 2 (PAGAR): fechar o mês congela escore, faixa e bônus; reabrir fica registrado; folha de bônus,
+ *    exportação, premiação com desempate, histórico e o que o colaborador vê no app.
  *   PG_TESTE_URL="postgresql://root@localhost/postgres?host=/var/run/postgresql" npx vitest run tests/unit/desempenho-pg
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -67,7 +69,8 @@ const R = {
   painel: "desempenho", ficha: "desempenho/colaboradores/[id]", config: "desempenho/configuracao", tv: "desempenho/tv", perfis: "desempenho/perfis", perfil: "desempenho/perfis/[id]",
   regra: "desempenho/perfis/[id]/regra", participantes: "desempenho/participantes", participante: "desempenho/participantes/[tecnicoId]", penalidades: "desempenho/penalidades",
   penalidade: "desempenho/penalidades/[id]", decisao: "desempenho/penalidades/[id]/decisao", premiacoes: "desempenho/premiacoes", premiacao: "desempenho/premiacoes/[id]",
-  imagem: "desempenho/premiacoes/[id]/imagem", meu: "tecnico/desempenho", tvPublica: "publico/desempenho/[token]", tvImagem: "publico/desempenho/[token]/premiacoes/[id]/imagem",
+  imagem: "desempenho/premiacoes/[id]/imagem", meu: "tecnico/desempenho", fechamentos: "desempenho/fechamentos", fechamento: "desempenho/fechamentos/[id]",
+  reabrir: "desempenho/fechamentos/[id]/reabrir", exportar: "desempenho/fechamentos/[id]/exportar", meuPremio: "tecnico/desempenho/premiacoes/[id]/imagem", tvPublica: "publico/desempenho/[token]", tvImagem: "publico/desempenho/[token]/premiacoes/[id]/imagem",
 };
 
 describe.skipIf(!URL_PG)("Desempenho PR 1: medir e mostrar (PostgreSQL real)", () => {
@@ -211,7 +214,7 @@ describe.skipIf(!URL_PG)("Desempenho PR 1: medir e mostrar (PostgreSQL real)", (
     expect([a.status, b.status]).toEqual([200, 200]);
     const cfg = (await chamar(R.config, "GET")).json;
     expect(cfg.perfis.map((p: any) => `${p.nome}:${p.tipo}:${p.vigente}:${p.agendada}:${p.participantes.length}`)).toEqual(["Preventiva:TECNICO:null:null:0", "Corretiva:TECNICO:null:null:0", "Instalação:TECNICO:null:null:0", "Encarregado:GESTAO:null:null:0"]);
-    expect(cfg).toMatchObject({ competencia: "2026-11", competenciaSeguinte: "2026-12", ajustes: { retornoDias: 30, notaBaixaAte: 2, tiposRetorno: [] }, tvToken: null });
+    expect(cfg).toMatchObject({ competencia: "2026-11", competenciaSeguinte: "2026-12", ajustes: { retornoDias: 30, tiposRetorno: [] }, tvToken: null });
     expect(await prisma.desempenhoConfig.count()).toBe(1);
     expect(await prisma.desempenhoPerfil.count()).toBe(4);
     expect(await prisma.desempenhoRegra.count()).toBe(0);
@@ -306,17 +309,20 @@ describe.skipIf(!URL_PG)("Desempenho PR 1: medir e mostrar (PostgreSQL real)", (
     expect(await prisma.desempenhoParticipante.count({ where: { tecnicoId: "t2" } })).toBe(1);
   });
 
-  it("ajustes: prazo do retorno, nota baixa e os tipos de OS que contam como corretiva (só tipos da minha empresa)", async () => {
-    expect(await erro(chamar(R.config, "PUT", {}, { retornoDias: 0, notaBaixaAte: 2, tiposRetorno: [] }))).toMatch(/^400 Prazo do retorno/);
-    expect(await erro(chamar(R.config, "PUT", {}, { retornoDias: 30, notaBaixaAte: 2, tiposRetorno: ["toE2"] }))).toBe("404 Tipo de OS não encontrado.");
-    expect((await chamar(R.config, "PUT", {}, { retornoDias: 20, notaBaixaAte: 3, tiposRetorno: ["toCorr", "toInativo", "toCorr"] })).status).toBe(200);
+  it("ajustes: prazo do retorno e os tipos de OS que contam como corretiva (só tipos da minha empresa); 'nota baixa' não é mais ajuste", async () => {
+    // A nota baixa deixou de ser penalidade: o ajuste saiu e o servidor recusa quem ainda mandar o campo
+    expect(await erro(chamar(R.config, "PUT", {}, { retornoDias: 30, tiposRetorno: [], ["nota" + "BaixaAte"]: 2 }))).toMatch(/^400 /);
+    expect((await chamar(R.config, "GET")).json.ajustes).not.toHaveProperty("notaBaixaAte");
+    expect(await erro(chamar(R.config, "PUT", {}, { retornoDias: 0, tiposRetorno: [] }))).toMatch(/^400 Prazo do retorno/);
+    expect(await erro(chamar(R.config, "PUT", {}, { retornoDias: 30, tiposRetorno: ["toE2"] }))).toBe("404 Tipo de OS não encontrado.");
+    expect((await chamar(R.config, "PUT", {}, { retornoDias: 20, tiposRetorno: ["toCorr", "toInativo", "toCorr"] })).status).toBe(200);
     let cfg = (await chamar(R.config, "GET")).json;
-    expect(cfg.ajustes).toEqual({ retornoDias: 20, notaBaixaAte: 3, tiposRetorno: expect.arrayContaining(["toCorr", "toInativo"]) });
+    expect(cfg.ajustes).toEqual({ retornoDias: 20, tiposRetorno: expect.arrayContaining(["toCorr", "toInativo"]) });
     expect(cfg.ajustes.tiposRetorno).toHaveLength(2);
     expect(cfg.tiposOs.map((t: any) => t.nome)).toContain("Tipo inativo"); // marcado: aparece para poder desmarcar
-    expect((await chamar(R.config, "PUT", {}, { retornoDias: 30, notaBaixaAte: 2, tiposRetorno: ["toCorr"] })).status).toBe(200);
+    expect((await chamar(R.config, "PUT", {}, { retornoDias: 30, tiposRetorno: ["toCorr"] })).status).toBe(200);
     cfg = (await chamar(R.config, "GET")).json;
-    expect(cfg.ajustes).toEqual({ retornoDias: 30, notaBaixaAte: 2, tiposRetorno: ["toCorr"] });
+    expect(cfg.ajustes).toEqual({ retornoDias: 30, tiposRetorno: ["toCorr"] });
     expect(await prisma.desempenhoTipoRetorno.count()).toBe(1);
   });
 
@@ -358,8 +364,9 @@ describe.skipIf(!URL_PG)("Desempenho PR 1: medir e mostrar (PostgreSQL real)", (
     // Equipe Alfa = média de Bia (84) e Carlos (90); a equipe inativa não aparece
     expect(p.equipes).toEqual([{ id: "eqA", nome: "Equipe Alfa", cor: expect.any(String), lider: "Carlos Lider", escore: 87, participantes: 2, medidos: 2 }]);
     expect(p.semPerfil).toBe(1); // "Fora do Desempenho" — o inativo não conta
-    // A ressalva não existe aqui; a nota 2 do Edu entrou na revisão e AINDA não pesou
-    expect(p.aRevisar).toBe(1);
+    // A nota 2 do Edu NÃO vira item de revisão: ela já pesou na média dele (5 e 2 = 3,5)
+    expect(p.aRevisar).toBe(0);
+    expect(p.grupos[1].linhas[0]).toMatchObject({ desconto: 0, composicao: expect.arrayContaining([expect.objectContaining({ metrica: "avaliacao", detalhe: "média 3,5 em 2 avaliações" })]) });
   });
 
   it("valores em reais: só quem tem Gerenciar recebe bônus e valor de faixa; quem só visualiza recebe o resto igual", async () => {
@@ -499,22 +506,42 @@ describe.skipIf(!URL_PG)("Desempenho PR 1: medir e mostrar (PostgreSQL real)", (
 
   /* ───────── penalidades: nunca automáticas ───────── */
 
-  it("ressalva e nota baixa do aceite entram 'A REVISAR' — um item por aceite e por colaborador que executou, só participantes", async () => {
+  it("só a RESSALVA SEM NOTA entra 'A REVISAR'; NOTA BAIXA não é penalidade (já pesa na média) — um item por aceite e por colaborador, só participantes", async () => {
     await zerarOperacao();
-    const comRessalva = await servico({ tecnicos: ["t1", "t5"], nota: 3, ressalva: "O dreno voltou a pingar" }); // t5 não participa
-    await servico({ tecnicos: ["t2"], nota: 2, comentario: "Demorou e deixou sujeira" });                          // nota baixa (até 2)
-    await servico({ tecnicos: ["t2"], nota: 3 });                                                                  // nota 3: não é baixa
-    await servico({ tecnicos: ["t3"], nota: 1, ressalva: "Não resolveu" });                                        // ressalva + nota baixa: UM item só
-    await servico({ tecnicos: ["t3"], nota: 1, statusOs: "CANCELADA" });                                           // OS cancelada: fora
-    await servico({ tecnicos: ["t1"], nota: 1, confirmadoEm: br("2026-10-31", "20:00") });                         // antes do mês em que o módulo começou: fora
+    const comRessalva = await servico({ tecnicos: ["t1", "t5"], ressalva: "O dreno voltou a pingar" });           // sem nota; t5 não participa
+    await servico({ tecnicos: ["t2"], ressalva: "Ficou com barulho" });                                            // sem nota
+    await servico({ tecnicos: ["t3"], ressalva: "Faltou limpar a sala" });                                         // sem nota
+    await servico({ tecnicos: ["t2"], nota: 2, comentario: "Demorou e deixou sujeira" });                          // NOTA BAIXA: só na média
+    const comNota = await servico({ tecnicos: ["t2"], nota: 1, ressalva: "Não resolveu" });                        // ressalva COM nota: a nota já está na média
+    await servico({ tecnicos: ["t3"], ressalva: "OS cancelada", statusOs: "CANCELADA" });                          // OS cancelada: fora
+    await servico({ tecnicos: ["t1"], ressalva: "Antiga", confirmadoEm: br("2026-10-31", "20:00") });              // antes do mês em que o módulo começou: fora
     const lista = await itens();
-    expect(resumo(lista)).toEqual(["Ana Dias:RESSALVA:A_REVISAR", "Bia Reis:NOTA_BAIXA:A_REVISAR", "Edu Prado:RESSALVA:A_REVISAR"]);
+    expect(resumo(lista)).toEqual(["Ana Dias:RESSALVA:A_REVISAR", "Bia Reis:RESSALVA:A_REVISAR", "Edu Prado:RESSALVA:A_REVISAR"]);
     const ana = lista.find((p) => p.tecnico.nome === "Ana Dias");
-    expect(ana).toMatchObject({ descricao: `${comRessalva.numero}: ressalva do cliente — "O dreno voltou a pingar" (nota 3 de 5)`, competencia: MES, manual: false, motivo: null, ordemServico: { id: comRessalva.os, numero: comRessalva.numero }, osRetorno: null });
-    expect(lista.find((p) => p.tecnico.nome === "Bia Reis").descricao).toMatch(/: nota 2 de 5 — "Demorou e deixou sujeira"$/);
+    expect(ana).toMatchObject({ descricao: `${comRessalva.numero}: ressalva do cliente — "O dreno voltou a pingar"`, competencia: MES, manual: false, mesFechado: false, motivo: null, ordemServico: { id: comRessalva.os, numero: comRessalva.numero }, osRetorno: null });
+    // As notas baixas da Bia (2 e 1) pesam UMA vez só: na média da avaliação — sem item e sem desconto
+    expect(await linha("Bia Reis")).toMatchObject({ desconto: 0, composicao: expect.arrayContaining([expect.objectContaining({ metrica: "avaliacao", valor: 30, detalhe: "média 1,5 em 2 avaliações" })]) });
     // Detectar de novo (abrir a lista, o painel, a ficha) não duplica
     await itens(); await painel(); await chamar(R.ficha, "GET", { id: "t1" });
     expect(await prisma.desempenhoPenalidade.count()).toBe(3);
+
+    // LEGADO: itens de nota baixa e de ressalva COM nota gravados pela regra antiga — até os já marcados "Conta" —
+    // continuam no banco, mas não aparecem, não se decidem e não descontam mais nada
+    const antes = await escore("Bia Reis");
+    await prisma.desempenhoPenalidade.createMany({ data: [
+      { id: "legadoNota", empresaId: "e1", tecnicoId: "t2", tipo: "NOTA_BAIXA", chave: "LEGADO:nota", ordemServicoId: comNota.os, dataFato: br("2026-11-05"), competencia: MES, situacao: "CONTA", motivo: "Regra antiga" },
+      { id: "legadoRessalva", empresaId: "e1", tecnicoId: "t2", tipo: "RESSALVA", chave: "LEGADO:ressalva", ordemServicoId: comNota.os, dataFato: br("2026-11-05"), competencia: MES, situacao: "CONTA", motivo: "Regra antiga" },
+      { id: "legadoARevisar", empresaId: "e1", tecnicoId: "t2", tipo: "NOTA_BAIXA", chave: "LEGADO:arevisar", ordemServicoId: comNota.os, dataFato: br("2026-11-05"), competencia: MES },
+    ] });
+    expect(await linha("Bia Reis")).toMatchObject({ escore: antes, desconto: 0, penalidades: { retornos: 0, reclamacoes: 0 } });
+    expect(resumo(await itens())).toEqual(["Ana Dias:RESSALVA:A_REVISAR", "Bia Reis:RESSALVA:A_REVISAR", "Edu Prado:RESSALVA:A_REVISAR"]);
+    expect(await itens("?situacao=CONTA")).toEqual([]);
+    expect((await chamar(R.penalidades, "GET")).json.aRevisar).toBe(3);
+    expect((await painel()).aRevisar).toBe(3);
+    expect((await chamar(R.ficha, "GET", { id: "t2" })).json.penalidades.map((x: any) => x.tipo)).toEqual(["RESSALVA"]);
+    expect(await erro(decidir("legadoARevisar", "CONTA", "Tentando contar a nota baixa"))).toBe("404 Item não encontrado.");
+    expect(await erro(decidir("legadoNota", "A_REVISAR"))).toBe("404 Item não encontrado.");
+    expect(await prisma.desempenhoPenalidade.count()).toBe(6); // nada foi apagado
   });
 
   it("NADA pesa sozinho: o escore só muda depois de 'CONTA' com motivo; 'não conta' não desconta; dá para rever", async () => {
@@ -540,7 +567,7 @@ describe.skipIf(!URL_PG)("Desempenho PR 1: medir e mostrar (PostgreSQL real)", (
     // Filtros da lista
     await decidir(item.id, "CONTA", "Confirmado com o cliente");
     expect(resumo(await itens("?situacao=CONTA"))).toEqual(["Ana Dias:RESSALVA:CONTA"]);
-    expect(resumo(await itens("?situacao=A_REVISAR"))).toEqual(["Bia Reis:NOTA_BAIXA:A_REVISAR", "Edu Prado:RESSALVA:A_REVISAR"]);
+    expect(resumo(await itens("?situacao=A_REVISAR"))).toEqual(["Bia Reis:RESSALVA:A_REVISAR", "Edu Prado:RESSALVA:A_REVISAR"]);
     expect(await itens("?situacao=NAO_CONTA")).toEqual([]);
     expect(await itens("?mes=2026-10")).toEqual([]);
     expect(await itens(`?mes=${MES}&situacao=INVENTADA`)).toHaveLength(3);
@@ -686,7 +713,7 @@ describe.skipIf(!URL_PG)("Desempenho PR 1: medir e mostrar (PostgreSQL real)", (
     expect((await chamar(R.penalidade, "DELETE", { id: criada.json.id })).status).toBe(200);
     expect(await prisma.desempenhoPenalidade.count({ where: { id: criada.json.id } })).toBe(0);
     // As detectadas (retorno, ressalva, nota) não se editam nem se excluem: decide-se "não conta"
-    await servico({ tecnicos: ["t1"], nota: 1 });
+    await servico({ tecnicos: ["t1"], ressalva: "Não resolveu" });
     const [detectada] = await itens();
     expect(await erro(chamar(R.penalidade, "PUT", { id: detectada.id }, base))).toBe("409 Só a reclamação registrada à mão pode ser editada ou excluída.");
     expect(await erro(chamar(R.penalidade, "DELETE", { id: detectada.id }))).toBe("409 Só a reclamação registrada à mão pode ser editada ou excluída.");
@@ -889,18 +916,326 @@ describe.skipIf(!URL_PG)("Desempenho PR 1: medir e mostrar (PostgreSQL real)", (
     expect(cfg.tiposOs.map((t: any) => t.nome)).toEqual(["Corretiva da outra"]);
     const meu = await perfilId("Preventiva", "e1"), dela = await perfilId("Preventiva", "e2");
     expect(meu).not.toBe(dela);
-    await servico({ tecnicos: ["tE2"], empresaId: "e2", equipamento: null, nota: 1 });
+    await servico({ tecnicos: ["tE2"], empresaId: "e2", equipamento: null, ressalva: "Ficou pingando" });
     expect((await chamar(R.participantes, "POST", {}, { tecnicoId: "tE2", perfilId: dela })).status).toBe(200);
     expect(await erro(chamar(R.participantes, "POST", {}, { tecnicoId: "tE2", perfilId: meu }))).toBe("404 Perfil não encontrado.");
     expect((await chamar(R.regra, "PUT", { id: dela }, REGRA())).json).toEqual({ vigenteDesde: "2026-11", imediata: true });
     const p = await painel();
     expect(p.grupos.flatMap((g: any) => g.linhas.map((l: any) => l.nome))).toEqual(["Técnico da outra"]);
     expect(p.equipes).toEqual([]);
-    expect(resumo(await itens())).toEqual(["Técnico da outra:NOTA_BAIXA:A_REVISAR"]);
+    expect(resumo(await itens())).toEqual(["Técnico da outra:RESSALVA:A_REVISAR"]);
     // O meu painel continua só com os meus
     gestao();
     expect((await painel()).grupos.flatMap((g: any) => g.linhas.map((l: any) => l.nome))).not.toContain("Técnico da outra");
     expect((await itens()).every((i) => i.tecnico.nome !== "Técnico da outra")).toBe(true);
     expect((await prisma.desempenhoRegra.findMany({ where: { perfilId: meu } })).every((r: any) => r.empresaId === "e1")).toBe(true);
+  });
+
+  /* ───────── PR 2: fechamento, folha de bônus, histórico ───────── */
+
+  const DEZEMBRO = new Date("2026-12-02T15:00:00Z");
+  const previa = async (mes = MES) => (await chamar(R.fechamentos, "GET", {}, undefined, `?mes=${mes}`)).json.mes;
+  const fechar = (competencia = MES, ciente?: boolean) => chamar(R.fechamentos, "POST", {}, { competencia, ...(ciente !== undefined && { ciente }) });
+  const versoes = async () => (await prisma.desempenhoFechamento.findMany({ where: { empresaId: "e1" }, orderBy: [{ competencia: "asc" }, { versao: "asc" }] })).map((f: any) => `${f.competencia}:${f.versao}:${f.situacao}`);
+  const folhaTxt = (f: any) => f.linhas.map((l: any) => `${l.posicao ?? "-"}|${l.nome}|${l.perfil}|${l.escore}|${l.faixa}|${l.valor}`);
+  async function csv(id: string) {
+    const mod = await import("@/app/api/desempenho/fechamentos/[id]/exportar/route");
+    const res: Response = await mod.GET(new NextRequest(`${ORIGEM}/api/x`), { params: Promise.resolve({ id }) });
+    return { status: res.status, tipo: res.headers.get("content-type"), arquivo: res.headers.get("content-disposition"), texto: res.status === 200 ? new TextDecoder("utf-8", { ignoreBOM: true }).decode(await res.arrayBuffer()) : "" };
+  }
+  let reclamacaoDoEdu = "";
+  let ressalvaDaBia = "";
+
+  it("FECHAMENTO · antes de fechar só há PROJEÇÃO: a prévia mostra a folha, quem ganharia a premiação e os avisos — e nada fica gravado", async () => {
+    await zerarOperacao();
+    for (const nota of [5, 5, undefined]) await servico({ tecnicos: ["t1"], nota });                                  // Ana: 3 no prazo, média 5 → 100
+    await servico({ tecnicos: ["t2"], equipeId: "eqA", equipamento: "q2", nota: 5 });                                  // Bia: 2 no prazo, média 5 → 100
+    await servico({ tecnicos: ["t2"], equipeId: "eqA", equipamento: "q2", ressalva: "O dreno voltou a pingar" });      // ressalva sem nota: a revisar
+    await servico({ tecnicos: ["t3"], equipamento: "q3", nota: 4 });                                                   // Edu: 94
+    reclamacaoDoEdu = (await chamar(R.penalidades, "POST", {}, { tecnicoId: "t3", data: "2026-11-10", descricao: "Cliente ligou: deixou a sala suja" })).json.id;
+    ressalvaDaBia = (await itens()).find((i) => i.tipo === "RESSALVA").id;
+    // Item sem revisão de OUTRO mês: não entra no aviso deste
+    await prisma.desempenhoPenalidade.create({ data: { id: "deOutubro", empresaId: "e1", tecnicoId: "t3", tipo: "RECLAMACAO", chave: "MANUAL:outubro", dataFato: br("2026-10-20"), competencia: "2026-10", descricao: "Reclamação de outubro" } });
+
+    const p = await previa();
+    expect(p).toMatchObject({ competencia: MES, situacao: "ABERTO", bloqueio: null, fechamento: null });
+    expect(folhaTxt(p.folha)).toEqual(["1|Ana Dias|Preventiva|100|Ouro|350", "1|Bia Reis|Preventiva|100|Ouro|350", "1|Edu Prado|Corretiva|94|Ouro|350", "1|Carlos Lider|Encarregado|100|Ouro|500"]);
+    expect(p.folha.total).toBe(1550);
+    // Hoje é 13/11: o mês está em andamento e há 2 itens sem revisão — os dois avisos
+    expect(p.avisos).toEqual(["O mês ainda não terminou. O que acontecer depois do fechamento não entra no escore nem no bônus.", "Há 2 itens a revisar neste mês. Sem revisão, eles não pesam no escore fechado."]);
+    // PREMIAÇÃO: Ana e Bia empatam em escore (100), em avaliação (5,0) e em penalidades (0) → ganha quem tem mais atividades no prazo
+    expect(p.premios.map((x: any) => `${x.titulo}|${x.perfil}|${x.criterio}|${x.ganhadores.map((g: any) => `${g.nome}:${g.escore}`)}`)).toEqual([
+      "Kit de ferramentas|Preventiva|PRAZO|Ana Dias:100", "Vale-jantar|null|PRAZO|Ana Dias:100",
+    ]);
+    expect(await prisma.desempenhoFechamento.count()).toBe(0);
+    expect((await painel()).fechamento).toBeNull();
+    expect((await chamar(R.ficha, "GET", { id: "t1" })).json).toMatchObject({ fechamento: null, premiosGanhos: [], linha: { bonus: 350 } });
+    // Mês que ainda não começou não fecha; sem confirmar os avisos, também não
+    expect((await previa("2026-12")).bloqueio).toBe("Este mês ainda não começou.");
+    expect(await erro(fechar("2026-12", true))).toBe("409 Este mês ainda não começou.");
+    expect(await erro(fechar(MES))).toMatch(/^409 O mês ainda não terminou\..* Há 2 itens a revisar neste mês\..* Confirme os avisos para fechar o mês\.$/);
+    expect(await erro(fechar(MES, false))).toMatch(/Confirme os avisos/);
+    expect(await erro(chamar(R.fechamentos, "POST", {}, { competencia: "11/2026" }))).toBe("400 Informe o mês a fechar.");
+    expect(await erro(chamar(R.fechamentos, "POST", {}, { competencia: MES, ganhadores: { x: ["t1"] } }))).toMatch(/^400/); // ninguém escolhe o ganhador à mão
+    expect(await prisma.desempenhoFechamento.count()).toBe(0);
+    await prisma.desempenhoPenalidade.delete({ where: { id: "deOutubro" } });
+  });
+
+  it("FECHAR congela: escore, faixa e bônus de cada colaborador viram definitivos; a folha e os premiados ficam gravados, com quem fechou e quando", async () => {
+    vi.setSystemTime(DEZEMBRO);
+    // Mês terminado: sobra só o aviso dos itens sem revisão — e ele precisa ser confirmado
+    expect((await previa()).avisos).toEqual(["Há 2 itens a revisar neste mês. Sem revisão, eles não pesam no escore fechado."]);
+    expect(await erro(fechar(MES))).toMatch(/^409 Há 2 itens a revisar/);
+    const r = await fechar(MES, true);
+    expect(r.status).toBe(201);
+    expect(r.json).toMatchObject({ competencia: MES, versao: 1, situacao: "FECHADO", total: 1550, fechadoPor: "Gestora", fechadoEm: DEZEMBRO.toISOString(), reabertoEm: null, reabertoPor: null, reaberturaMotivo: null });
+    expect(folhaTxt(r.json.folha)).toEqual(["1|Ana Dias|Preventiva|100|Ouro|350", "1|Bia Reis|Preventiva|100|Ouro|350", "1|Edu Prado|Corretiva|94|Ouro|350", "1|Carlos Lider|Encarregado|100|Ouro|500"]);
+    const gravado = await prisma.desempenhoFechamento.findFirstOrThrow({ include: { linhas: { orderBy: { nome: "asc" } } } });
+    expect(gravado).toMatchObject({ empresaId: "e1", competencia: MES, versao: 1, situacao: "FECHADO", fechadoPorId: "uG", fechadoPorNome: "Gestora" });
+    expect(gravado.totalBonus.toNumber()).toBe(1550);
+    expect(gravado.linhas.map((l: any) => `${l.tecnicoId}|${l.nome}|${l.perfil}|${l.posicao}|${l.escore}|${l.faixa}|${l.valor}|${l.empresaId}`)).toEqual([
+      "t1|Ana Dias|Preventiva|1|100|Ouro|350|e1", "t2|Bia Reis|Preventiva|1|100|Ouro|350|e1", "t4|Carlos Lider|Encarregado|1|100|Ouro|500|e1", "t3|Edu Prado|Corretiva|1|94|Ouro|350|e1",
+    ]);
+    expect(gravado.premios.map((x: any) => `${x.titulo}|${x.criterio}|${x.ganhadores.map((g: any) => g.tecnicoId)}`)).toEqual(["Kit de ferramentas|PRAZO|t1", "Vale-jantar|PRAZO|t1"]);
+    // A prévia do mês passa a ser a folha gravada
+    expect(await previa()).toMatchObject({ situacao: "FECHADO", bloqueio: "Este mês já está fechado.", avisos: [], fechamento: { id: gravado.id, versao: 1 }, folha: { total: 1550 } });
+    // Fechar de novo: recusado, nada duplicado
+    expect(await erro(fechar(MES, true))).toBe("409 Este mês já está fechado.");
+    expect(await versoes()).toEqual(["2026-11:1:FECHADO"]);
+  });
+
+  it("CONGELADO de verdade: atividade, avaliação, troca de perfil, de equipe, de regra ou de premiação depois do fechamento NÃO mudam o mês fechado", async () => {
+    vi.setSystemTime(DEZEMBRO);
+    const antes = await painel();
+    await servico({ tecnicos: ["t1"], agendada: br("2026-11-20"), concluida: br("2026-11-25", "10:00"), nota: 1 });   // atrasada e nota 1 para a Ana
+    await participar("t1", "Corretiva");                                                                               // Ana muda de perfil
+    await prisma.equipe.update({ where: { id: "eqA" }, data: { liderId: null } });                                     // Carlos deixa de liderar
+    await prisma.desempenhoRegra.updateMany({ where: { vigenteDesde: MES }, data: { metaMinima: 99, faixas: [{ nome: "Única", minimo: 99, valor: 1 }] } });
+    await prisma.desempenhoPremiacao.deleteMany({ where: { titulo: "Vale-jantar" } });
+    await prisma.tecnico.update({ where: { id: "t2" }, data: { nome: "Bia Reis Souza" } });
+    const depois = await painel();
+    expect(depois.fechamento).toEqual({ id: expect.any(String), versao: 1, fechadoEm: DEZEMBRO.toISOString(), fechadoPor: "Gestora" });
+    expect({ ...depois, fechamento: null, aRevisar: 0, semPerfil: 0 }).toEqual({ ...antes, fechamento: null, aRevisar: 0, semPerfil: 0 });
+    expect(depois.grupos[0].linhas.map((l: any) => `${l.nome}:${l.escore}:${l.faixa}:${l.bonus}`)).toEqual(["Ana Dias:100:Ouro:350", "Bia Reis:100:Ouro:350"]);
+    expect(depois.premiacoes.map((x: any) => x.titulo)).toEqual(["Kit de ferramentas", "Vale-jantar"]);
+    // A ficha do mês fechado: bônus DEFINITIVO e a premiação que ela ganhou
+    const ficha = (await chamar(R.ficha, "GET", { id: "t1" }, undefined, `?mes=${MES}`)).json;
+    expect(ficha).toMatchObject({ perfil: { nome: "Preventiva" }, linha: { escore: 100, bonus: 350, faixa: "Ouro" }, fechamento: { versao: 1 }, premiosGanhos: ["Kit de ferramentas", "Vale-jantar"] });
+    expect((await chamar(R.ficha, "GET", { id: "t2" }, undefined, `?mes=${MES}`)).json.premiosGanhos).toEqual([]);
+    // Quem só visualiza vê o mês fechado SEM os valores em reais
+    com(["visualizar", "revisar"]);
+    const semValor = await painel();
+    expect(semValor.grupos.flatMap((g: any) => g.linhas.map((l: any) => l.bonus))).toEqual([null, null, null, null]);
+    expect(semValor.grupos[0].regra.faixas.map((f: any) => f.valor)).toEqual([null, null, null]);
+    expect(semValor.grupos[0].linhas.map((l: any) => `${l.nome}:${l.escore}:${l.faixa}`)).toEqual(["Ana Dias:100:Ouro", "Bia Reis:100:Ouro"]);
+    expect((await chamar(R.ficha, "GET", { id: "t1" }, undefined, `?mes=${MES}`)).json.linha.bonus).toBeNull();
+    gestao();
+    // O mês SEGUINTE (aberto) já usa o estado novo: é só o fechado que não muda
+    expect((await painel("2026-12")).fechamento).toBeNull();
+    // Desfaz as mudanças para os próximos testes
+    await participar("t1", "Preventiva");
+    await prisma.equipe.update({ where: { id: "eqA" }, data: { liderId: "t4" } });
+    await prisma.desempenhoRegra.updateMany({ where: { vigenteDesde: MES, perfil: { nome: { in: ["Preventiva", "Corretiva"] } } }, data: { metaMinima: 70, faixas: REGRA().faixas } });
+    await prisma.desempenhoRegra.updateMany({ where: { vigenteDesde: MES, perfil: { nome: "Encarregado" } }, data: { metaMinima: 70, faixas: [{ nome: "Ouro", minimo: 90, valor: 500 }] } });
+    await prisma.tecnico.update({ where: { id: "t2" }, data: { nome: "Bia Reis" } });
+    await chamar(R.premiacoes, "POST", {}, { competencia: MES, titulo: "Vale-jantar" });
+  });
+
+  it("mês fechado TRAVA a revisão: decidir, registrar, editar e excluir penalidade dele é recusado; item novo não nasce em mês fechado", async () => {
+    vi.setSystemTime(DEZEMBRO);
+    const MSG = "409 O mês 11/2026 está fechado. Reabra o mês para mudar.";
+    expect(await erro(decidir(ressalvaDaBia, "CONTA", "O dreno não foi desentupido"))).toBe(MSG);
+    expect(await erro(decidir(ressalvaDaBia, "NAO_CONTA", "Vazamento de outro aparelho"))).toBe(MSG);
+    const base = { tecnicoId: "t3", data: "2026-11-12", descricao: "Cliente ligou: aparelho voltou a parar" };
+    expect(await erro(chamar(R.penalidades, "POST", {}, base))).toBe(MSG);
+    expect(await erro(chamar(R.penalidade, "PUT", { id: reclamacaoDoEdu }, base))).toBe(MSG);
+    expect(await erro(chamar(R.penalidade, "DELETE", { id: reclamacaoDoEdu }))).toBe(MSG);
+    // Reclamação de mês ABERTO não pode ser empurrada para o mês fechado (nem o contrário)
+    const dezembro = await chamar(R.penalidades, "POST", {}, { ...base, data: "2026-12-01" });
+    expect(dezembro.status).toBe(201);
+    expect(await erro(chamar(R.penalidade, "PUT", { id: dezembro.json.id }, base))).toBe(MSG);
+    await chamar(R.penalidade, "DELETE", { id: dezembro.json.id });
+    // Ressalva de novembro que só aparece agora: a detecção não cria item no mês fechado
+    const total = await prisma.desempenhoPenalidade.count();
+    await servico({ tecnicos: ["t2"], ressalva: "Ficou barulho", confirmadoEm: br("2026-11-28", "10:00") });
+    const lista = await itens();
+    expect(await prisma.desempenhoPenalidade.count()).toBe(total);
+    // Os itens do mês fechado continuam na lista, marcados — e fora da contagem do que há a revisar
+    expect(lista.map((i) => `${i.tipo}:${i.situacao}:${i.mesFechado}`).sort()).toEqual(["RECLAMACAO:A_REVISAR:true", "RESSALVA:A_REVISAR:true"]);
+    expect((await chamar(R.penalidades, "GET")).json.aRevisar).toBe(0);
+    expect((await painel("2026-12")).aRevisar).toBe(0);
+    expect(await prisma.desempenhoPenalidade.findUnique({ where: { id: ressalvaDaBia }, select: { situacao: true, motivo: true } })).toEqual({ situacao: "A_REVISAR", motivo: null });
+  });
+
+  it("FOLHA DE BÔNUS exportável: CSV para o financeiro (Excel brasileiro) — só o valor do bônus, sem imposto nem encargo", async () => {
+    vi.setSystemTime(DEZEMBRO);
+    const { id } = await prisma.desempenhoFechamento.findFirstOrThrow({ where: { situacao: "FECHADO" } });
+    const folha = (await chamar(R.fechamento, "GET", { id })).json;
+    expect(folha).toMatchObject({ id, competencia: MES, versao: 1, situacao: "FECHADO", total: 1550, folha: { total: 1550 } });
+    expect(folha.premios.map((x: any) => `${x.titulo}:${x.ganhadores.map((g: any) => g.nome)}`)).toEqual(["Kit de ferramentas:Ana Dias", "Vale-jantar:Ana Dias"]);
+    const arquivo = await csv(id);
+    expect(arquivo).toMatchObject({ status: 200, tipo: "text/csv; charset=utf-8", arquivo: 'attachment; filename="bonus-desempenho-2026-11.csv"' });
+    expect(arquivo.texto.charCodeAt(0)).toBe(0xfeff); // BOM: acentos certos ao abrir com dois cliques
+    expect(arquivo.texto.slice(1).trimEnd().split("\r\n")).toEqual([
+      "Competência;Colaborador;Perfil;Posição;Escore (%);Faixa;Bônus (R$);Premiação",
+      "11/2026;Ana Dias;Preventiva;1;100,0;Ouro;350,00;Kit de ferramentas / Vale-jantar",
+      "11/2026;Bia Reis;Preventiva;1;100,0;Ouro;350,00;",
+      "11/2026;Edu Prado;Corretiva;1;94,0;Ouro;350,00;",
+      "11/2026;Carlos Lider;Encarregado;1;100,0;Ouro;500,00;",
+      ";Total;;;;;1550,00;",
+    ]);
+    expect(arquivo.texto).not.toMatch(/imposto|encargo|inss|irrf|l[ií]quido|fgts/i);
+    expect((await chamar(R.fechamento, "GET", { id: "nao-existe" })).status).toBe(404);
+    expect((await csv("nao-existe")).status).toBe(404);
+  });
+
+  it("REABRIR exige motivo e fica REGISTRADO (quem, quando, por quê); o mês volta a ser calculado e o fechamento antigo não é apagado", async () => {
+    vi.setSystemTime(new Date("2026-12-03T15:00:00Z"));
+    const { id } = await prisma.desempenhoFechamento.findFirstOrThrow({ where: { situacao: "FECHADO" } });
+    const reabrir = (motivo?: unknown, qual = id) => chamar(R.reabrir, "POST", { id: qual }, motivo === undefined ? {} : { motivo });
+    expect(await erro(reabrir())).toBe("400 Explique por que o mês está sendo reaberto (mínimo 10 caracteres).");
+    expect(await erro(reabrir("   erro    "))).toBe("400 Explique por que o mês está sendo reaberto (mínimo 10 caracteres).");
+    expect(await erro(reabrir("x".repeat(501)))).toMatch(/^400 Motivo com no máximo 500/);
+    expect(await erro(reabrir("Motivo válido aqui", "nao-existe"))).toBe("404 Fechamento não encontrado.");
+    expect(await versoes()).toEqual(["2026-11:1:FECHADO"]);
+    entrar(montarPermissoes({ desempenho: ["visualizar", "revisar", "gerenciar"] }), { id: "uA" }); // outra pessoa reabre
+    sessao.atual.user.name = "Ana Admin";
+    const r = await reabrir("  Faltou revisar a ressalva da Bia  ");
+    expect(r.json).toMatchObject({ id, situacao: "REABERTO", versao: 1, reabertoPor: "Ana Admin", reabertoEm: "2026-12-03T15:00:00.000Z", reaberturaMotivo: "Faltou revisar a ressalva da Bia", fechadoPor: "Gestora", total: 1550 });
+    expect(await prisma.desempenhoFechamento.findUnique({ where: { id }, select: { reabertoPorId: true, fechadoPorId: true } })).toEqual({ reabertoPorId: "uA", fechadoPorId: "uG" });
+    expect(await erro(reabrir("Reabrindo de novo sem querer"))).toBe("409 Este fechamento já foi reaberto.");
+    expect(await prisma.desempenhoFechamentoLinha.count({ where: { fechamentoId: id } })).toBe(4); // a folha antiga continua gravada
+    gestao();
+    // O mês voltou a ser calculado: a atividade atrasada e a nota 1 da Ana (lançadas depois do fechamento) agora entram
+    const p = await painel();
+    expect(p.fechamento).toBeNull();
+    // 3 de 4 no prazo (30,0) + 4 de 4 relatórios (30,0) + notas 5, 5 e 1 = média 3,67 → 73,4% (22,0) = 82,0
+    expect(await linha("Ana Dias")).toMatchObject({ escore: 82, faixa: "Prata", bonus: 200 });
+    // A revisão destrava; a ressalva de 28/11, que não tinha entrado, agora é detectada
+    expect((await decidir(ressalvaDaBia, "CONTA", "O dreno não foi desentupido")).status).toBe(200);
+    expect((await chamar(R.penalidade, "DELETE", { id: reclamacaoDoEdu })).status).toBe(200);
+    expect(resumo(await itens())).toEqual(["Bia Reis:RESSALVA:A_REVISAR", "Bia Reis:RESSALVA:CONTA"]);
+    expect(await linha("Bia Reis")).toMatchObject({ escore: 95, desconto: 5 });
+    // Premiação recalculada: sem empate, ganha o maior escore — do perfil (Bia) e geral (Carlos, o encarregado)
+    expect((await previa()).premios.map((x: any) => `${x.titulo}|${x.criterio}|${x.ganhadores.map((g: any) => g.nome)}`)).toEqual(["Kit de ferramentas|ESCORE|Bia Reis", "Vale-jantar|ESCORE|Carlos Lider"]);
+  });
+
+  it("fechar de novo cria a VERSÃO seguinte (dois cliques ao mesmo tempo fecham uma vez só); o HISTÓRICO guarda todas, só leitura", async () => {
+    vi.setSystemTime(new Date("2026-12-04T15:00:00Z"));
+    const [a, b] = await Promise.all([fechar(MES, true), fechar(MES, true)]);
+    expect([a.status, b.status].sort()).toEqual([201, 409]);
+    expect(await versoes()).toEqual(["2026-11:1:REABERTO", "2026-11:2:FECHADO"]);
+    const h = (await chamar(R.fechamentos, "GET", {}, undefined, `?mes=${MES}`)).json.historico;
+    expect(h.map((f: any) => `${f.competencia}|v${f.versao}|${f.situacao}|${f.total}|${f.fechadoPor}|${f.reabertoPor ?? "-"}|${f.reaberturaMotivo ?? "-"}`)).toEqual([
+      "2026-11|v2|FECHADO|1400|Gestora|-|-", "2026-11|v1|REABERTO|1550|Gestora|Ana Admin|Faltou revisar a ressalva da Bia",
+    ]);
+    expect(h[0].premios.map((x: any) => `${x.titulo}:${x.ganhadores.map((g: any) => g.nome)}`)).toEqual(["Kit de ferramentas:Bia Reis", "Vale-jantar:Carlos Lider"]);
+    // A folha de cada versão é a DELA: a v1 continua com os valores de quando foi fechada
+    const [v2, v1] = await Promise.all(h.map((f: any) => chamar(R.fechamento, "GET", { id: f.id })));
+    expect(folhaTxt(v1.json.folha)).toEqual(["1|Ana Dias|Preventiva|100|Ouro|350", "1|Bia Reis|Preventiva|100|Ouro|350", "1|Edu Prado|Corretiva|94|Ouro|350", "1|Carlos Lider|Encarregado|100|Ouro|500"]);
+    expect(folhaTxt(v2.json.folha)).toEqual(["1|Bia Reis|Preventiva|95|Ouro|350", "2|Ana Dias|Preventiva|82|Prata|200", "1|Edu Prado|Corretiva|94|Ouro|350", "1|Carlos Lider|Encarregado|100|Ouro|500"]);
+    expect((await csv(h[1].id)).texto).toContain("11/2026;Ana Dias;Preventiva;1;100,0;Ouro;350,00;Kit de ferramentas / Vale-jantar"); // exporta a versão antiga também
+    expect((await csv(h[0].id)).arquivo).toBe('attachment; filename="bonus-desempenho-2026-11-v2.csv"');
+    // O painel do mês lê a versão que está valendo
+    expect((await painel()).fechamento).toMatchObject({ versao: 2 });
+    expect(await linha("Ana Dias")).toMatchObject({ escore: 82, bonus: 200 });
+    // Histórico é só leitura: não há rota para alterar nem apagar um fechamento
+    const rotas = await import("@/app/api/desempenho/fechamentos/[id]/route");
+    expect(Object.keys(rotas).sort()).toEqual(["GET"]);
+  });
+
+  it("apagar o colaborador ou quem fechou NÃO apaga a folha: o nome e o valor ficam gravados", async () => {
+    await prisma.tecnico.create({ data: { id: "tTemp", empresaId: "e1", nome: "Temporário", cpf: "9", telefone: "9" } });
+    const f = await prisma.desempenhoFechamento.findFirstOrThrow({ where: { situacao: "FECHADO" } });
+    await prisma.desempenhoFechamentoLinha.create({ data: { id: "linhaTemp", fechamentoId: f.id, empresaId: "e1", tecnicoId: "tTemp", nome: "Temporário", perfil: "Preventiva", valor: 123.45 } });
+    await prisma.tecnico.delete({ where: { id: "tTemp" } });
+    const l = await prisma.desempenhoFechamentoLinha.findUniqueOrThrow({ where: { id: "linhaTemp" } });
+    expect({ tecnicoId: l.tecnicoId, nome: l.nome, valor: l.valor.toNumber() }).toEqual({ tecnicoId: null, nome: "Temporário", valor: 123.45 });
+    await prisma.desempenhoFechamentoLinha.delete({ where: { id: "linhaTemp" } });
+  });
+
+  it("FECHAMENTO · RBAC: ver a folha, exportar, fechar e reabrir são de quem tem 'Gerenciar'; outra empresa não enxerga nem mexe", async () => {
+    vi.setSystemTime(new Date("2026-12-04T15:00:00Z"));
+    const { id } = await prisma.desempenhoFechamento.findFirstOrThrow({ where: { situacao: "FECHADO" } });
+    const rotas: [string, string, Record<string, string>, unknown][] = [
+      [R.fechamentos, "GET", {}, undefined], [R.fechamentos, "POST", {}, { competencia: "2026-12", ciente: true }], [R.fechamento, "GET", { id }, undefined],
+      [R.exportar, "GET", { id }, undefined], [R.reabrir, "POST", { id }, { motivo: "Sem permissão para reabrir" }],
+    ];
+    for (const [rota, metodo, params, corpo] of rotas) {
+      const nome = `${metodo} ${rota}`;
+      sessao.atual = null;
+      expect((await chamar(rota, metodo, params, corpo)).status, `${nome} sem login`).toBe(401);
+      for (const acoes of [["visualizar"], ["visualizar", "revisar"]] as Acao[][]) { com(acoes); expect((await chamar(rota, metodo, params, corpo)).status, `${nome} com ${acoes}`).toBe(403); }
+      entrar({ ...permissoesTotais(), desempenho: { visualizar: true, revisar: true } });
+      expect((await chamar(rota, metodo, params, corpo)).status, `${nome} com tudo menos Gerenciar`).toBe(403);
+      entrar(PRESETS.TECNICO, { id: "uT", role: "TECNICO", tecnicoId: "t2" });
+      expect((await chamar(rota, metodo, params, corpo)).status, `${nome} como técnico`).toBe(403);
+    }
+    expect(await versoes()).toEqual(["2026-11:1:REABERTO", "2026-11:2:FECHADO"]); // nada mudou
+    // Outra empresa (com Gerenciar na DELA): não vê o meu histórico, a minha folha nem reabre o meu mês
+    gestao({ empresaId: "e2" });
+    expect((await chamar(R.fechamentos, "GET")).json.historico).toEqual([]);
+    expect((await chamar(R.fechamento, "GET", { id })).status).toBe(404);
+    expect((await csv(id)).status).toBe(404);
+    expect(await erro(chamar(R.reabrir, "POST", { id }, { motivo: "Tentando reabrir o mês alheio" }))).toBe("404 Fechamento não encontrado.");
+    expect((await painel()).fechamento).toBeNull(); // o novembro DELA está aberto
+    // A outra empresa fecha o novembro dela sem tocar no meu (versão 1 lá, versão 2 aqui)
+    expect((await fechar(MES, true)).json).toMatchObject({ versao: 1, situacao: "FECHADO", fechadoPor: "Gestora" });
+    expect(await prisma.desempenhoFechamento.count({ where: { empresaId: "e2" } })).toBe(1);
+    gestao();
+    expect(await versoes()).toEqual(["2026-11:1:REABERTO", "2026-11:2:FECHADO"]);
+    expect((await chamar(R.fechamentos, "GET")).json.historico).toHaveLength(2);
+  });
+
+  it("empresa sem o módulo e mês sem ninguém: não há o que fechar", async () => {
+    await prisma.empresa.create({ data: { id: "e3", nome: "Sem módulo", cnpj: "11.111.111/0001-11", email: "s@x.com" } });
+    await prisma.usuario.create({ data: { id: "uC", empresaId: "e3", nome: "Carla", email: "uC@x.com", senha: "x", role: "ADMIN" } });
+    gestao({ empresaId: "e3", id: "uC" });
+    expect((await previa()).bloqueio).toBe("O Desempenho ainda não foi configurado nesta empresa.");
+    expect(await erro(fechar(MES, true))).toBe("409 O Desempenho ainda não foi configurado nesta empresa.");
+    await chamar(R.config, "GET"); // abre o módulo: perfis sem ninguém
+    expect((await previa("2026-10")).bloqueio).toBe("Nenhum colaborador participa do Desempenho: não há o que fechar.");
+    expect(await erro(fechar("2026-10", true))).toBe("409 Nenhum colaborador participa do Desempenho: não há o que fechar.");
+    expect(await prisma.desempenhoFechamento.count({ where: { empresaId: "e3" } })).toBe(0);
+  });
+
+  it("O COLABORADOR NO APP: vê o DELE no mês fechado (bônus definitivo) e no aberto (projeção) — a média das avaliações, nunca o que o cliente escreveu", async () => {
+    vi.setSystemTime(new Date("2026-12-04T15:00:00Z"));
+    const comoBia = () => entrar(PRESETS.TECNICO, { id: "uT", role: "TECNICO", tecnicoId: "t2", email: "bia@x.com" });
+    // Um retorno da Bia em dezembro (mês aberto), para conferir o que vai e o que não vai
+    gestao();
+    await servico({ tecnicos: ["t2"], equipamento: "q4", agendada: br("2026-12-01"), concluida: br("2026-12-01", "16:00"), nota: 3, comentario: "Técnica atrasou e foi grosseira" });
+    await corretiva("q4", br("2026-12-03", "09:00"));
+    await servico({ tecnicos: ["t2"], equipamento: "q1", agendada: br("2026-12-02"), concluida: br("2026-12-02", "16:00"), ressalva: "Deixou a tampa solta", confirmadoEm: br("2026-12-02", "18:00") });
+    await itens();
+    comoBia();
+    const fechado = (await chamar(R.meu, "GET", {}, undefined, `?mes=${MES}`)).json;
+    expect(fechado.ficha).toMatchObject({ tecnico: { id: "t2" }, linha: { escore: 95, posicao: 1, faixa: "Ouro", bonus: 350, desconto: 5 }, fechamento: { versao: 2 }, premiosGanhos: ["Kit de ferramentas"], participantes: 2 });
+    // A ressalva que contou aparece (tipo, data, situação) — SEM o texto do cliente
+    expect(fechado.ficha.penalidades.map((p: any) => `${p.tipo}|${p.situacao}|${p.descricao}`)).toEqual(["RESSALVA|CONTA|null", "RESSALVA|A_REVISAR|null"]);
+    // O motivo da decisão (palavras da gestão, não do cliente) vai: ele precisa saber por que contou
+    expect(fechado.ficha.penalidades[0].motivo).toBe("O dreno não foi desentupido");
+    const aberto = (await chamar(R.meu, "GET", {}, undefined, "?mes=2026-12")).json;
+    expect(aberto.ficha).toMatchObject({ fechamento: null, premiosGanhos: [], linha: { bonus: expect.any(Number) } });
+    expect(aberto.ficha.penalidades.map((p: any) => `${p.tipo}|${p.descricao === null ? "sem texto" : "com texto"}`).sort()).toEqual(["RESSALVA|sem texto", "RETORNO|com texto"]);
+    expect(aberto.ficha.linha.composicao.find((c: any) => c.metrica === "avaliacao").detalhe).toBe("média 3,0 em 1 avaliação"); // a MÉDIA
+    for (const resposta of [fechado, aberto]) {
+      const texto = JSON.stringify(resposta);
+      for (const proibido of ["voltou a pingar", "tampa solta", "grosseira", "barulho", "Ana Dias", "Edu Prado", "Carlos Lider"]) expect(texto, proibido).not.toContain(proibido);
+    }
+    // A gestão continua vendo o texto (é ela quem revisa)
+    gestao();
+    expect((await chamar(R.ficha, "GET", { id: "t2" }, undefined, "?mes=2026-12")).json.penalidades.find((p: any) => p.tipo === "RESSALVA").descricao).toContain("Deixou a tampa solta");
+    // A imagem do prêmio em disputa, pela rota do app: só para quem participa, só da empresa dele
+    const kit = (await prisma.desempenhoPremiacao.findFirstOrThrow({ where: { titulo: "Kit de ferramentas" } })).id;
+    comoBia();
+    expect(await chamar(R.meuPremio, "GET", { id: kit })).toMatchObject({ status: 200, tipo: "image/jpeg" });
+    expect((await chamar(R.meuPremio, "GET", { id: "nao-existe" })).status).toBe(404);
+    entrar(PRESETS.TECNICO, { id: "uG", role: "TECNICO", tecnicoId: "t5" });   // não participa do Desempenho
+    expect((await chamar(R.meuPremio, "GET", { id: kit })).status).toBe(404);
+    entrar(PRESETS.TECNICO, { empresaId: "e2", id: "uB", role: "TECNICO", tecnicoId: "tE2" }); // participa, em outra empresa
+    expect((await chamar(R.meuPremio, "GET", { id: kit })).status).toBe(404);
+    sessao.atual = null;
+    expect((await chamar(R.meuPremio, "GET", { id: kit })).status).toBe(401);
   });
 });

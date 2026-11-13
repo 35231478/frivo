@@ -81,11 +81,13 @@ function Conteudo({ ficha }: { ficha: FichaDoColaborador }) {
           <div className="mt-1"><SeloFaixa faixa={linha.faixa} escore={linha.escore} atingiuMeta={linha.atingiuMeta} /></div>
           <p className="text-xs text-ink-muted mt-2" data-ficha-faixas>{regra.faixas.map((f) => `${f.nome} ${f.minimo}%`).join(" · ")}</p>
         </Cartao>
-        <Cartao rotulo="Bônus projetado">
+        <Cartao rotulo={ficha.fechamento ? "Bônus fechado" : "Bônus projetado"}>
           {linha.bonus === null
             ? <p className="text-sm text-ink-muted mt-1" data-ficha-bonus="oculto">Valor visível só para a gestão.</p>
             : <p className="text-3xl font-bold text-ink tabular-nums" data-ficha-bonus>{formatarMoeda(linha.bonus)}</p>}
-          <p className="text-xs text-ink-muted mt-1">Projeção: muda até o mês ser fechado.</p>
+          <p className="text-xs text-ink-muted mt-1" data-ficha-situacao-bonus={ficha.fechamento ? "fechado" : "projetado"}>
+            {ficha.fechamento ? `Definitivo: mês fechado em ${formatarData(ficha.fechamento.fechadoEm)}.` : "Projeção: muda até o mês ser fechado."}
+          </p>
         </Cartao>
       </section>
 
@@ -150,7 +152,12 @@ function Conteudo({ ficha }: { ficha: FichaDoColaborador }) {
         )}
       </section>
 
-      {ficha.premiacoes.length > 0 && <PremioEmDisputa premiacoes={ficha.premiacoes} />}
+      {ficha.premiosGanhos.length > 0 && (
+        <p className="rounded-xl border border-ok/30 bg-ok-claro text-ok-texto text-sm px-4 py-3" data-premios-ganhos>
+          Ganhou a premiação do mês: {ficha.premiosGanhos.join(", ")}.
+        </p>
+      )}
+      {ficha.premiacoes.length > 0 && <PremioEmDisputa premiacoes={ficha.premiacoes} encerrada={!!ficha.fechamento} />}
     </>
   );
 }

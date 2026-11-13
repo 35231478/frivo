@@ -15,6 +15,8 @@ export interface UsuarioApp {
   id: string; nome: string; email: string; empresaNome: string; podeGravar: boolean;
   /** Foto de perfil (Meus dados › Foto de perfil; sem ela, a do cadastro do colaborador). Sem foto: iniciais */
   avatar?: string | null;
+  /** O colaborador participa do Desempenho da empresa: o app mostra a vista "Desempenho" */
+  desempenho?: boolean;
 }
 
 interface Contexto {
@@ -117,6 +119,7 @@ export type Vista =
   | { ver: "dia" }
   | { ver: "agenda" }
   | { ver: "perfil" }
+  | { ver: "desempenho" }
   | { ver: "os"; a: string; e?: string | null; /** Abre já na câmera rápida (atalho do Meu dia) */ cam?: boolean };
 
 export function lerVista(search: string): Vista {
@@ -124,7 +127,7 @@ export function lerVista(search: string): Vista {
   const ver = q.get("ver");
   const a = q.get("a");
   if (ver === "os" && a) return { ver: "os", a, e: q.get("e"), ...(q.get("cam") === "1" && { cam: true }) };
-  if (ver === "agenda" || ver === "perfil") return { ver };
+  if (ver === "agenda" || ver === "perfil" || ver === "desempenho") return { ver };
   return { ver: "dia" };
 }
 

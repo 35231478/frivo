@@ -123,7 +123,7 @@ describe("Painel Desempenho", () => {
 
   it("avisos e abas seguem a permissão: quem só visualiza não vê 'A revisar', 'Configuração' nem os avisos de gestão", async () => {
     await abrir(TUDO);
-    expect($$("[data-aba]").map((a) => a.getAttribute("data-aba"))).toEqual(["painel", "revisao", "premiacoes", "configuracao"]);
+    expect($$("[data-aba]").map((a) => a.getAttribute("data-aba"))).toEqual(["painel", "revisao", "premiacoes", "fechamento", "configuracao"]);
     expect(texto($("[data-aviso-revisar]"))).toBe("3 itens esperam a revisão. Só pesa depois de revisado.");
     expect(texto($("[data-aviso-sem-perfil]"))).toBe("2 colaboradores ativos estão fora do ranking (sem perfil).");
     expect(texto($("[data-selo-revisar]"))).toBe("3");
@@ -175,7 +175,7 @@ describe("Painel Desempenho", () => {
 describe("Ficha do colaborador", () => {
   const ficha = (x: Record<string, unknown> = {}) => ({
     competencia: MES, tecnico: { id: "t1", nome: "Ana Dias" }, perfil: { id: "p1", nome: "Preventiva", tipo: "TECNICO" }, regra: regra(1), linha: linha({ bonus: 200 }), participantes: 2,
-    penalidades: [], premiacoes: [], ...x,
+    penalidades: [], premiacoes: [], fechamento: null, premiosGanhos: [], ...x,
   });
   async function abrir(dados: unknown = ficha(), status = 200) {
     responder(`GET /api/desempenho/colaboradores/t1?mes=${MES}`, dados, status);
@@ -213,14 +213,14 @@ describe("Ficha do colaborador", () => {
       linha: linha({ escore: 78, base: 88, desconto: 10, penalidades: { retornos: 1, reclamacoes: 1, pontosRetorno: 5, pontosReclamacao: 5 }, bonus: 100 }),
       penalidades: [
         { id: "x1", tipo: "RETORNO", situacao: "CONTA", descricao: "OS-2 aberta 5 dias depois", dataFato: "2026-11-10T15:00:00Z", motivo: "Faltou reaperto" },
-        { id: "x2", tipo: "NOTA_BAIXA", situacao: "A_REVISAR", descricao: "OS-3: nota 2 de 5", dataFato: "2026-11-11T15:00:00Z", motivo: null },
+        { id: "x2", tipo: "RESSALVA", situacao: "A_REVISAR", descricao: "OS-3: ficou barulho", dataFato: "2026-11-11T15:00:00Z", motivo: null },
       ],
     }));
     expect($$("[data-metrica] td:first-child").map((c) => texto(c))).toEqual(["Equipe no prazo", "Relatórios completos da equipe", "Satisfação da equipe"]);
     expect(texto($("[data-ficha-desconto]"))).toBe("− 10,0");
     expect(texto($("[data-linha-desconto]"))).toContain("1 de retorno, 1 de reclamação");
     expect($$("[data-penalidade-ficha]").map((p) => `${p.getAttribute("data-penalidade-ficha")}|${texto(p)}`)).toEqual([
-      "CONTA|10/11/2026RetornoOS-2 aberta 5 dias depoisMotivo da decisão: Faltou reapertoConta", "A_REVISAR|11/11/2026Nota baixaOS-3: nota 2 de 5A revisar",
+      "CONTA|10/11/2026RetornoOS-2 aberta 5 dias depoisMotivo da decisão: Faltou reapertoConta", "A_REVISAR|11/11/2026Ressalva do clienteOS-3: ficou barulhoA revisar",
     ]);
   });
 
@@ -429,7 +429,7 @@ describe("Premiação do mês", () => {
 describe("Configuração do Desempenho", () => {
   const perfil = (x: Record<string, unknown> = {}) => ({ id: "p1", nome: "Preventiva", tipo: "TECNICO", ordem: 0, vigente: null, agendada: null, participantes: [], ...x });
   const cfg = (x: Record<string, unknown> = {}) => ({
-    competencia: MES, competenciaSeguinte: "2026-12", ajustes: { retornoDias: 30, notaBaixaAte: 2, tiposRetorno: ["to1"] },
+    competencia: MES, competenciaSeguinte: "2026-12", ajustes: { retornoDias: 30, tiposRetorno: ["to1"] },
     tiposOs: [{ id: "to1", nome: "Manutenção Corretiva", ativo: true }, { id: "to2", nome: "Preventiva", ativo: true }], tvToken: null,
     perfis: [perfil(), perfil({ id: "p4", nome: "Encarregado", tipo: "GESTAO", ordem: 3 })], disponiveis: [{ id: "t1", nome: "Ana Dias", cargo: "Técnica" }, { id: "t2", nome: "Bia Reis", cargo: null }], ...x,
   });
@@ -568,7 +568,11 @@ describe("Configuração do Desempenho", () => {
     expect(texto($('[data-perfil="Encarregado"] [data-sem-participantes]'))).toBe("Ninguém neste perfil.");
   });
 
-  it("ajustes: prazo do retorno, nota baixa e os tipos que contam como corretiva; prazo fora de 1 a 365 é recusado na tela", async () => {
+  it("ajustes: prazo do retorno e os tipos que contam como corretiva; nota baixa NÃO é ajuste (a tela explica); prazo fora de 1 a 365 é recusado", async () => {
+    await abrir();
+    expect($("[data-campo-nota-baixa]")).toBeNull();
+    expect(texto($("[data-aviso-nota-baixa]"))).toBe("Nota baixa do cliente não entra aqui: ela já pesa na média da avaliação.");
+    act(() => root.unmount()); caixa.remove();
     await abrir();
     expect(($('[data-tipo-corretiva="Manutenção Corretiva"]') as HTMLInputElement).checked).toBe(true);
     expect(($('[data-tipo-corretiva="Preventiva"]') as HTMLInputElement).checked).toBe(false);
@@ -577,11 +581,10 @@ describe("Configuração do Desempenho", () => {
     expect(texto($("[data-erro-ajustes]"))).toBe("Prazo do retorno: de 1 a 365 dias.");
     expect(enviados("PUT")).toHaveLength(0);
     await digitar("[data-campo-retorno-dias]", "45");
-    await escolher("[data-campo-nota-baixa]", "3");
     await clicar('[data-tipo-corretiva="Preventiva"]');
     await clicar('[data-tipo-corretiva="Manutenção Corretiva"]');
     await clicar("[data-salvar-ajustes]");
-    expect(enviados("PUT")).toEqual([{ url: "/api/desempenho/configuracao", metodo: "PUT", corpo: { retornoDias: 45, notaBaixaAte: 3, tiposRetorno: ["to2"] } }]);
+    expect(enviados("PUT")).toEqual([{ url: "/api/desempenho/configuracao", metodo: "PUT", corpo: { retornoDias: 45, tiposRetorno: ["to2"] } }]);
     expect(texto($("[data-ajustes-salvos]"))).toBe("Ajustes salvos.");
   });
 

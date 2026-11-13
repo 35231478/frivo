@@ -15,7 +15,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  MSG_FAIXA_ABAIXO_DA_META, MSG_FAIXA_MINIMO_REPETIDO, MSG_FAIXA_REPETIDA, MSG_MOTIVO, MSG_PESOS, PERFIS_INICIAIS, REGRA_SUGERIDA, SEM_MEDIDA,
+  MSG_FAIXA_ABAIXO_DA_META, MSG_FAIXA_MINIMO_REPETIDO, MSG_FAIXA_REPETIDA, MSG_MOTIVO, MSG_PESOS, PERFIS_INICIAIS, REGRA_SUGERIDA, SEM_MEDIDA, TIPOS_PENALIDADE,
   ajustesSchema, calcularEscore, competenciaAnterior, competenciaAtual, competenciaCurta, competenciaDe, competenciaSeguinte, concluidaNoPrazo, decisaoSchema,
   diaDeReferencia, ehCompetencia, ehRetorno, entradaDaGestao, entradaDoColaborador, faixaDoEscore, formatarEscore, lerFaixas, mediaDaEquipe, notaEmPercentual,
   origemDoRetorno, percentual, perfilSchema, periodoDaCompetencia, premiacaoSchema, ranquear, reclamacaoSchema, regraAgendada, regraSchema, regraVigente,
@@ -345,7 +345,7 @@ describe("o escore: índice de qualidade de 0 a 100", () => {
 
   it("retorno pesa pelos pontos de retorno; ressalva, nota baixa e reclamação pelos de reclamação", () => {
     expect(ehRetorno("RETORNO")).toBe(true);
-    for (const t of ["RESSALVA", "NOTA_BAIXA", "RECLAMACAO", ""]) expect(ehRetorno(t), t).toBe(false);
+    for (const t of ["RESSALVA", "RECLAMACAO", ""]) expect(ehRetorno(t), t).toBe(false);
   });
 });
 
@@ -475,13 +475,13 @@ describe("o que a tela manda", () => {
     expect(perfilSchema.safeParse({ nome: "Ok", tipo: "TECNICO", empresaId: "outra" }).success).toBe(false);
   });
 
-  it("ajustes: prazo do retorno de 1 a 365 dias; nota baixa de 1 a 4 (5 estrelas nunca é nota baixa)", () => {
-    const ok = { retornoDias: 30, notaBaixaAte: 2, tiposRetorno: ["t1"] };
+  it("ajustes: prazo do retorno de 1 a 365 dias; 'nota baixa' não é mais ajuste (ela pesa só na média)", () => {
+    const ok = { retornoDias: 30, tiposRetorno: ["t1"] };
+    expect(ajustesSchema.safeParse({ ...ok, notaBaixaAte: 2 }).success).toBe(false);
+    expect(TIPOS_PENALIDADE).toEqual(["RETORNO", "RESSALVA", "RECLAMACAO"]);
     expect(ajustesSchema.safeParse(ok).success).toBe(true);
     for (const retornoDias of [0, 366, 1.5, -1]) expect(ajustesSchema.safeParse({ ...ok, retornoDias }).success, String(retornoDias)).toBe(false);
     for (const retornoDias of [1, 365]) expect(ajustesSchema.safeParse({ ...ok, retornoDias }).success).toBe(true);
-    for (const notaBaixaAte of [0, 5]) expect(ajustesSchema.safeParse({ ...ok, notaBaixaAte }).success, String(notaBaixaAte)).toBe(false);
-    for (const notaBaixaAte of [1, 4]) expect(ajustesSchema.safeParse({ ...ok, notaBaixaAte }).success).toBe(true);
     expect(ajustesSchema.safeParse({ ...ok, tiposRetorno: [] }).success).toBe(true); // nenhum tipo marcado: nenhum retorno é detectado
   });
 
@@ -533,7 +533,7 @@ describe("o que a tela manda", () => {
 
   it("resumo do item na lista: a descrição ou, sem ela, o nome do tipo", () => {
     expect(resumoDaPenalidade({ tipo: "RETORNO", descricao: " OS-2 aberta 5 dias depois " })).toBe("OS-2 aberta 5 dias depois");
-    expect(resumoDaPenalidade({ tipo: "NOTA_BAIXA", descricao: null })).toBe("Nota baixa");
+    expect(resumoDaPenalidade({ tipo: "RESSALVA", descricao: null })).toBe("Ressalva do cliente");
     expect(resumoDaPenalidade({ tipo: "RECLAMACAO", descricao: "  " })).toBe("Reclamação");
     expect(resumoDaPenalidade({ tipo: "OUTRO", descricao: null })).toBe("OUTRO");
   });
@@ -574,6 +574,13 @@ describe("painel: ranking por perfil, ficha e resumo por equipe", () => {
     // Ana: 100/100/100 = 100 (Ouro). Bia: prazo 50, relatório 100, nota 4 = 20+30+24 = 74 − 5 (retorno) = 69 → abaixo da meta
     expect(prev).toEqual(["1:Ana:100:Ouro:350", "2:Bia:69:null:0", "-:Novato:null:null:0"]);
     expect(p.grupos[0].linhas[1]).toMatchObject({ base: 74, desconto: 5, atingiuMeta: false });
+  });
+
+  it("os números do DESEMPATE da premiação vão em cada linha: média das notas, penalidades que contaram e atividades NO PRAZO (não o total)", () => {
+    const [ana, bia, novato] = montar(true).grupos[0].linhas;
+    expect(ana.desempate).toEqual({ mediaAvaliacao: 5, penalidades: 0, noPrazo: 1 });
+    expect(bia.desempate).toEqual({ mediaAvaliacao: 4, penalidades: 1, noPrazo: 1 }); // 2 atividades, 1 no prazo
+    expect(novato.desempate).toEqual({ mediaAvaliacao: null, penalidades: 0, noPrazo: 0 });
   });
 
   it("encarregado é medido pela equipe que lidera: 1 de 2 no prazo (50%) e satisfação 4,0 (80%) = 65", () => {
@@ -688,10 +695,10 @@ describe("permissão nova: Desempenho", () => {
     expect(moduloDaRota("/relatorio/desempenho/abc")).toBeNull(); // a TV é rota pública (o token é a chave)
   });
 
-  it("quem ganha por padrão: administrador tudo; supervisor vê e revisa (não configura); técnico, auxiliar e financeiro nada", () => {
+  it("quem ganha por padrão: administrador tudo; supervisor SÓ VISUALIZA (revisar concede-se explicitamente); técnico, auxiliar e financeiro nada", () => {
     expect(permissoesTotais().desempenho).toEqual({ visualizar: true, revisar: true, gerenciar: true });
     expect(PRESETS.ADMINISTRADOR.desempenho).toEqual({ visualizar: true, revisar: true, gerenciar: true });
-    expect(PRESETS.SUPERVISOR.desempenho).toEqual({ visualizar: true, revisar: true, gerenciar: false });
+    expect(PRESETS.SUPERVISOR.desempenho).toEqual({ visualizar: true, revisar: false, gerenciar: false });
     for (const tipo of ["TECNICO", "AUXILIAR", "FINANCEIRO", "PERSONALIZADO"]) expect(PRESETS[tipo].desempenho, tipo).toEqual({ visualizar: false, revisar: false, gerenciar: false });
   });
 
