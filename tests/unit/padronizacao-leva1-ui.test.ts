@@ -413,8 +413,9 @@ describe("editar no contexto — Tipo de OS de dentro da OS (TIPO_OS.edicao)", (
   });
 
   it("as telas de OS usam essa edição no seletor de tipo", () => {
-    for (const f of ["components/os/os-atividades.tsx", "app/(dashboard)/ordens/nova/page.tsx"]) {
-      expect(readFileSync(path.join(RAIZ, f), "utf8"), f).toMatch(/edicao=\{TIPO_OS\.edicao\(tiposOs,/);
+    // nova atividade e editar atividade (2) na OS aberta; o tipo na abertura da OS (1)
+    for (const [f, vezes] of [["components/os/os-atividades.tsx", 2], ["app/(dashboard)/ordens/nova/page.tsx", 1]] as const) {
+      expect(readFileSync(path.join(RAIZ, f), "utf8").split("edicao={TIPO_OS.edicao(tiposOs,").length - 1, f).toBe(vezes);
     }
   });
 });
@@ -731,7 +732,7 @@ describe("o mesmo esqueleto em todas as telas de cadastro de apoio", () => {
     expect(txt($("[data-acao='novo-cadastro']"))).toMatch(/^Nov[oa] /);
     for (const p of tela.querySelectorAll("p")) if (!p.closest("[role='tooltip']")) expect(txt(p).length, txt(p)).toBeLessThan(110);
     // largura: nenhuma tela mais estreita que as outras
-    expect(tela.className).not.toMatch(/max-w-/);
+    for (let n: Element | null = tela; n && n !== caixa; n = n.parentElement) expect(n.className, "tela mais estreita que as outras").not.toMatch(/max-w-/);
     act(() => root.unmount()); caixa.remove();
     await montar(createElement(mod[exportado]), SEM_CONFIG);
     expect($("[data-tela-cadastro-apoio]")).not.toBeNull();
