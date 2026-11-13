@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { Mail, MessageCircle } from "lucide-react";
 import { FrivoLogo } from "@/components/layout/frivo-logo";
-import { CONTATO, RODAPE_LINKS } from "./conteudo";
+import { CONTATO, LINK_EMAIL, LINK_WHATSAPP, RODAPE_LINKS } from "./conteudo";
 
-/** Rodapé da home de vendas. O contato segue PLACEHOLDER (CONTATO, em ./conteudo) até a empresa informar. */
+/** Rodapé da home de vendas. O contato vem de CONTATO (./conteudo): WhatsApp abre a conversa, e-mail abre o programa de e-mail. */
 export function Rodape() {
   const ano = new Date().getFullYear();
   return (
@@ -25,14 +25,14 @@ export function Rodape() {
             )}
           </nav>
 
-          <div id="contato" className="flex scroll-mt-24 flex-col" data-contato-pendente>
+          <div id="contato" className="flex scroll-mt-24 flex-col">
             <span className="label-uppercase mb-1">Contato</span>
-            <span className="inline-flex min-h-[44px] items-center gap-2 text-sm text-ink-muted">
+            <a href={LINK_WHATSAPP} target="_blank" rel="noopener noreferrer" data-contato="whatsapp" className="inline-flex min-h-[44px] items-center gap-2 text-sm text-ink hover:text-acento">
               <MessageCircle className="h-4 w-4 text-ink-subtle" aria-hidden /> WhatsApp {CONTATO.whatsapp}
-            </span>
-            <span className="inline-flex min-h-[44px] items-center gap-2 text-sm text-ink-muted">
-              <Mail className="h-4 w-4 text-ink-subtle" aria-hidden /> E-mail {CONTATO.email}
-            </span>
+            </a>
+            <a href={LINK_EMAIL} data-contato="email" className="inline-flex min-h-[44px] items-center gap-2 break-all text-sm text-ink hover:text-acento">
+              <Mail className="h-4 w-4 shrink-0 text-ink-subtle" aria-hidden /> {CONTATO.email}
+            </a>
           </div>
         </div>
 

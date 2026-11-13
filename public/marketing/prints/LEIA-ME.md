@@ -1,4 +1,4 @@
-# Prints da home de vendas
+# Prints e foto da home de vendas
 
 Coloque aqui as telas reais do sistema, **com exatamente estes nomes**. A página (`/`) troca o espaço
 reservado pela imagem sozinha, sem mexer em código. Extensões aceitas: `.webp` (preferida), `.avif`,
@@ -17,7 +17,16 @@ reservado pela imagem sozinha, sem mexer em código. Extensões aceitas: `.webp`
 | 9 | `09-orcamento-financeiro` | Orçamento aprovado + financeiro | computador | Financeiro + NFS-e + Boleto |
 | 10 | `10-mapa-tecnicos` | Mapa dos técnicos | computador | Mapa da equipe |
 
-## Tamanho
+## Foto (seção "Por que o Frivo existe")
+
+| Arquivo | O quê | Onde aparece |
+|---|---|---|
+| `foto-equipe` | Foto real da equipe / em campo | Ao lado do texto "Feito por climatização. Para climatização." |
+
+Qualquer orientação serve, com pelo menos 1200 px no lado menor. No computador a foto aparece em pé (4:5) e
+no celular deitada (4:3), cortada pelo centro — deixe as pessoas no meio do quadro.
+
+## Tamanho dos prints
 
 - **Computador:** proporção 16:10 — 1600 × 1000 px (janela do navegador em 1280 × 800, captura em 2x, já sem a barra do navegador).
 - **Celular:** proporção 9:19 — 780 × 1646 px (tela de 390 px de largura, captura em 2x).

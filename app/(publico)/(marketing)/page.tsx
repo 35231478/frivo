@@ -7,10 +7,10 @@ import {
 import { Cabecalho } from "@/components/marketing/cabecalho";
 import { Rodape } from "@/components/marketing/rodape";
 import { BotaoTeste } from "@/components/marketing/botao-teste";
-import { Celular, Janela, Notebook } from "@/components/marketing/print";
+import { Celular, Foto, Janela, Notebook } from "@/components/marketing/print";
 import { FaqLista } from "@/components/publico/faq-lista";
 import {
-  COMO_FUNCIONA, CTA, CTA_FINAL, DOR, FAQ, HERO, MODULOS, type Modulo, PLANOS, POR_QUE, PRINTS, PROVA_SOCIAL, PUBLICADA, SEO, URL_SITE,
+  COMO_FUNCIONA, CTA, CTA_FINAL, DOR, FAQ, HERO, MODULOS, type Modulo, ORIGEM, PLANOS, POR_QUE, PRINTS, PROVA_SOCIAL, PUBLICADA, SEO, URL_SITE,
 } from "@/components/marketing/conteudo";
 import { cn } from "@/lib/utils";
 
@@ -48,6 +48,7 @@ export default function HomeDeVendas() {
         <Dor />
         <Modulos />
         <PorQue />
+        <Origem />
         <ComoFunciona />
         <ProvaSocial />
         <Planos />
@@ -174,9 +175,40 @@ function PorQue() {
   );
 }
 
+/** Por que o Frivo existe: a origem (texto + foto real ao lado) e o depoimento do fundador em destaque. */
+function Origem() {
+  const { depoimento } = ORIGEM;
+  return (
+    <section id="por-que-existe" className="scroll-mt-16" data-secao="por-que-existe">
+      <div className={cn(CAIXA, "py-14 sm:py-20")}>
+        <div className="grid items-center gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:gap-14">
+          <div>
+            <p className="text-sm font-semibold text-acento">Por que o Frivo existe</p>
+            <h2 className={cn(TITULO_SECAO, "mt-2")}>{ORIGEM.titulo}</h2>
+            <div className="mt-5 space-y-4 text-base leading-relaxed text-ink-muted">
+              {ORIGEM.paragrafos.map((p) => <p key={p}>{p}</p>)}
+            </div>
+          </div>
+          <Foto foto={ORIGEM.foto} sizes="(min-width: 1024px) 480px, 100vw" className="aspect-[4/3] w-full lg:aspect-[4/5]" />
+        </div>
+
+        <figure className="mt-10 rounded-card bg-acento-claro p-6 sm:p-10" data-depoimento-fundador>
+          <Quote className="h-7 w-7 text-acento" aria-hidden />
+          <blockquote className="mt-4 font-display text-xl font-semibold leading-snug tracking-tight text-ink sm:text-2xl">
+            “{depoimento.texto}”
+          </blockquote>
+          <figcaption className="mt-5 text-sm text-ink-muted">
+            <span className="font-semibold text-ink">{depoimento.nome}</span>, {depoimento.papel}
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+  );
+}
+
 function ComoFunciona() {
   return (
-    <section id="como-funciona" className="scroll-mt-16" data-secao="como-funciona">
+    <section id="como-funciona" className="scroll-mt-16 bg-surface-page" data-secao="como-funciona">
       <div className={cn(CAIXA, "py-14 sm:py-20")}>
         <h2 className={cn(TITULO_SECAO, "text-center")}>{COMO_FUNCIONA.titulo}</h2>
         <ol className="mt-10 grid gap-6 md:grid-cols-3">
@@ -207,9 +239,9 @@ function ComoFunciona() {
 function ProvaSocial() {
   const { depoimentos, numeros, logos } = PROVA_SOCIAL;
   const vazia = depoimentos.length + numeros.length + logos.length === 0;
-  const reservado = "flex items-center justify-center rounded-card border border-dashed border-surface-border bg-white text-center text-sm text-ink-muted";
+  const reservado = "flex items-center justify-center rounded-card border border-dashed border-surface-border bg-surface-page text-center text-sm text-ink-muted";
   return (
-    <section className="bg-surface-page" data-secao="prova-social" {...(vazia ? { "data-prova-social-pendente": true } : {})}>
+    <section data-secao="prova-social" {...(vazia ? { "data-prova-social-pendente": true } : {})}>
       <div className={cn(CAIXA, "py-14 sm:py-20")}>
         {vazia ? (
           <>
@@ -265,7 +297,7 @@ function ProvaSocial() {
 
 function Planos() {
   return (
-    <section id="planos" className="scroll-mt-16" data-secao="planos">
+    <section id="planos" className="scroll-mt-16 bg-surface-page" data-secao="planos">
       <div className={cn(CAIXA, "py-14 sm:py-20")}>
         <div className="mx-auto max-w-2xl rounded-card border border-surface-border bg-white p-6 text-center shadow-card sm:p-10">
           <h2 className={TITULO_SECAO}>{PLANOS.titulo}</h2>
@@ -285,7 +317,7 @@ function Planos() {
 
 function Faq() {
   return (
-    <section id="faq" className="scroll-mt-16 bg-surface-page" data-secao="faq">
+    <section id="faq" className="scroll-mt-16" data-secao="faq">
       <div className="mx-auto max-w-3xl px-4 py-14 sm:px-6 sm:py-20">
         <h2 className={cn(TITULO_SECAO, "text-center")}>Perguntas frequentes</h2>
         <div className="mt-8">

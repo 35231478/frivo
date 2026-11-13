@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import Image from "next/image";
+import { Camera } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Print } from "./conteudo";
 
@@ -72,6 +73,32 @@ function Esqueleto({ formato }: { formato: Print["formato"] }) {
         </div>
         <div className="flex-1 rounded-lg border border-surface-border bg-white" />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Foto real (não é tela do sistema), no mesmo esquema: o arquivo com o nome certo na pasta troca o
+ * espaço reservado. A proporção é a do `className` (a foto é cortada pelo centro para caber).
+ */
+export function Foto({ foto, sizes, className }: { foto: { arquivo: string; descricao: string; alt: string }; sizes: string; className?: string }) {
+  const src = localizarPrint(foto.arquivo);
+  if (src) {
+    return (
+      <div className={cn("relative overflow-hidden rounded-card bg-surface-page", className)} data-foto={foto.arquivo}>
+        <Image src={src} alt={foto.alt} fill sizes={sizes} className="object-cover" />
+      </div>
+    );
+  }
+  return (
+    <div
+      className={cn("flex flex-col items-center justify-center gap-2 rounded-card border border-dashed border-surface-border bg-surface-page p-4 text-center", className)}
+      data-foto={foto.arquivo}
+      data-foto-pendente
+    >
+      <Camera className="h-6 w-6 text-ink-subtle" aria-hidden />
+      <span className="font-display text-sm font-semibold text-ink sm:text-base">{foto.descricao}</span>
+      <code className="text-[11px] text-ink-muted">{foto.arquivo}.jpg</code>
     </div>
   );
 }

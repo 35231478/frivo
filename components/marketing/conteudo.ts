@@ -3,8 +3,8 @@
  * prints e os links. Trocar um texto, o destino do CTA ou o contato é mexer aqui; a página só diagrama.
  *
  * Regras do briefing: um CTA primário repetido, nenhum número de cliente ou depoimento inventado
- * (PROVA_SOCIAL nasce vazia) e os prints ficam como espaços reservados nomeados até as telas reais
- * chegarem (ver public/marketing/prints/LEIA-ME.md).
+ * (PROVA_SOCIAL nasce vazia) e os prints e a foto ficam como espaços reservados nomeados até os
+ * arquivos reais chegarem (ver public/marketing/prints/LEIA-ME.md).
  */
 
 /** Destino do CTA primário. Um lugar só: quando o cadastro do teste existir, troca-se aqui. */
@@ -20,13 +20,15 @@ export const CTA = {
 } as const;
 
 /**
- * Enquanto houver espaço reservado (prints, prova social, contato), a página fica fora dos buscadores.
+ * Enquanto houver espaço reservado (prints, foto, prova social), a página fica fora dos buscadores.
  * No lançamento, com as telas reais no lugar: `true`.
  */
 export const PUBLICADA = false;
 
-/** Contato: PLACEHOLDER até a empresa informar — preserve os colchetes (mesmo padrão do rodapé institucional). */
-export const CONTATO = { whatsapp: "[número]", email: "[e-mail]" } as const;
+/** Contato do rodapé e da página do teste grátis. O link do WhatsApp sai dos dígitos do número (DDI 55). */
+export const CONTATO = { whatsapp: "(62) 99999-9999", email: "contato@termofrioengenharia.com.br" } as const;
+export const LINK_WHATSAPP = `https://wa.me/55${CONTATO.whatsapp.replace(/\D/g, "")}`;
+export const LINK_EMAIL = `mailto:${CONTATO.email}`;
 
 /** Endereço público do site: base do canonical e da imagem de Open Graph. */
 export const URL_SITE = process.env.NEXT_PUBLIC_SITE_URL ?? process.env.NEXTAUTH_URL ?? "https://app.frivo.com.br";
@@ -176,6 +178,25 @@ export const POR_QUE = {
     { icone: "rapido", titulo: "Simples e rápido", texto: "Sem burocracia; qualquer um usa sem treinamento." },
     { icone: "completo", titulo: "Completo", texto: "Campo, estoque, financeiro, fiscal e gestão de equipe num lugar só." },
   ],
+} as const;
+
+// ── 4b. Por que o Frivo existe (a origem: feito dentro de uma empresa de climatização) ──────────
+
+export const ORIGEM = {
+  titulo: "Feito por climatização. Para climatização.",
+  paragrafos: [
+    "O Frivo não nasceu numa sala de programadores. Nasceu dentro de uma empresa de climatização de verdade — a Termofrio Engenharia e Clima — no meio da correria de ordem de serviço, PMOC, equipe em campo e cliente esperando.",
+    "Cada tela foi feita resolvendo um problema real do nosso próprio dia a dia — não é teoria de programador. Se existe no Frivo, é porque a gente precisou.",
+    "Por isso ele entende o seu negócio como um sistema genérico nunca vai entender: o PMOC que a lei cobra, o técnico que precisa trabalhar sem sinal, o equipamento com histórico, a prova de que o serviço foi aceito. A gente vive isso todo dia — e colocou tudo num sistema pra você viver melhor.",
+  ],
+  // Depoimento do fundador (real, enviado por ele) — não é prova social de cliente
+  depoimento: {
+    texto: "Eu precisava de um sistema que entendesse climatização de verdade. Como não existia, a gente construiu — e hoje roda a minha empresa.",
+    nome: "Edione Bonfim",
+    papel: "fundador · Termofrio Engenharia e Clima",
+  },
+  /** Foto REAL (equipe/campo), ao lado do texto. Mesmo esquema dos prints: o arquivo com este nome troca o espaço reservado. */
+  foto: { arquivo: "foto-equipe", descricao: "Foto real · equipe / campo", alt: "Equipe da Termofrio Engenharia e Clima em campo" },
 } as const;
 
 // ── 5. Como funciona ────────────────────────────────────────────────────────────────────────────

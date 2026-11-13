@@ -1,8 +1,8 @@
 /**
  * Home de vendas ("/"): a página renderizada de verdade (react-dom/server) e o middleware real.
  * Prova: estrutura do briefing na ordem, um CTA primário repetido com um destino só, os 10 prints
- * como espaços reservados nomeados (e a troca pela imagem quando o arquivo existe), nenhuma prova
- * social inventada, SEO básico e o acesso (anônimo vê a home; o resto do sistema segue fechado).
+ * como espaços reservados nomeados (e a troca pela imagem quando o arquivo existe), a seção da origem
+ * com o espaço da foto, nenhuma prova social inventada, SEO básico e o acesso (anônimo vê a home; o resto do sistema segue fechado).
  */
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
@@ -19,7 +19,7 @@ process.env.AUTH_URL = "http://localhost/api/auth";
 
 import HomeDeVendas, { metadata } from "@/app/(publico)/(marketing)/page";
 import {
-  CTA, CTA_FINAL, DOR, FAQ, HERO, LINK_TESTE_GRATIS, MODULOS, PRINTS, PROVA_SOCIAL, PUBLICADA,
+  CTA, CTA_FINAL, DOR, FAQ, HERO, LINK_TESTE_GRATIS, MODULOS, ORIGEM, PRINTS, PROVA_SOCIAL, PUBLICADA,
 } from "@/components/marketing/conteudo";
 import { localizarPrint } from "@/components/marketing/print";
 
@@ -29,7 +29,7 @@ const texto = html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/\s+/
 
 describe("home de vendas: página", () => {
   it("seções na ordem do briefing, com um h1 só", () => {
-    expect(todos(/data-secao="([^"]+)"/g)).toEqual(["hero", "dor", "modulos", "por-que", "como-funciona", "prova-social", "planos", "faq", "cta-final"]);
+    expect(todos(/data-secao="([^"]+)"/g)).toEqual(["hero", "dor", "modulos", "por-que", "por-que-existe", "como-funciona", "prova-social", "planos", "faq", "cta-final"]);
     expect(todos(/<h1[^>]*>([^<]+)</g)).toEqual([HERO.titulo]);
     expect(texto).toContain(DOR.titulo);
     expect(texto).toContain(CTA_FINAL.titulo);
@@ -81,9 +81,27 @@ describe("home de vendas: página", () => {
     expect(PROVA_SOCIAL).toEqual({ depoimentos: [], numeros: [], logos: [] });
     expect(html).toContain("data-prova-social-pendente");
     expect(todos(/data-reservado="([^"]+)"/g).sort()).toEqual(["depoimento", ...Array(5).fill("logo"), ...Array(3).fill("numero")]);
-    expect(html).not.toContain("<blockquote");
+    const secao = html.slice(html.indexOf('data-secao="prova-social"'), html.indexOf('data-secao="planos"'));
+    expect(secao).not.toContain("<blockquote");
     // nenhum número de cliente na página: "+ de 500 empresas", "98% de satisfação"…
     expect(texto).not.toMatch(/\d+\s*(?:%|mil\b|\+)|\+\s*de\s*\d|\d+\s+(?:empresas|clientes|técnicos|usuários)/i);
+  });
+
+  it("por que o Frivo existe: entre 'Por que Frivo' e 'Como funciona', com o texto, o depoimento do fundador e o espaço da foto", () => {
+    const secao = html.slice(html.indexOf('data-secao="por-que-existe"'), html.indexOf('data-secao="como-funciona"'));
+    const t = secao.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+    expect(secao).toMatch(/<h2[^>]*>Feito por climatização\. Para climatização\.<\/h2>/);
+    expect(ORIGEM.paragrafos).toHaveLength(3);
+    for (const p of ORIGEM.paragrafos) expect(t).toContain(p);
+    expect(t).toContain("Termofrio Engenharia e Clima");
+    // depoimento em destaque, com autor e papel
+    expect(secao).toMatch(/<figure[^>]*data-depoimento-fundador[^>]*>[\s\S]*<blockquote/);
+    expect(t).toContain(`“${ORIGEM.depoimento.texto}”`);
+    expect(t).toContain("Edione Bonfim , fundador · Termofrio Engenharia e Clima");
+    // foto real: espaço reservado nomeado, trocado pelo arquivo como os prints
+    expect(secao).toMatch(/data-foto="foto-equipe"[^>]*data-foto-pendente/);
+    expect(t).toContain("foto-equipe.jpg");
+    expect(readFileSync("public/marketing/prints/LEIA-ME.md", "utf8")).toContain("`foto-equipe`");
   });
 
   it("FAQ: as 6 perguntas do briefing, com resposta, e o caminho para a completa", () => {
@@ -95,11 +113,12 @@ describe("home de vendas: página", () => {
     expect(html).toContain('href="/faq"');
   });
 
-  it("rodapé: links do briefing e contato como placeholder", () => {
+  it("rodapé: links do briefing e o contato (WhatsApp abre a conversa, e-mail abre o programa de e-mail)", () => {
     const rodape = html.slice(html.indexOf("<footer"));
     for (const href of ["#planos", "/faq", "/privacidade", "#contato"]) expect(rodape).toContain(`href="${href}"`);
-    expect(rodape).toContain("WhatsApp [número]");
-    expect(rodape).toContain("E-mail [e-mail]");
+    expect(rodape).toMatch(/<a href="https:\/\/wa\.me\/5562999999999"[^>]*data-contato="whatsapp"[^>]*>.*?WhatsApp[^<]*\(62\) 99999-9999<\/a>/);
+    expect(rodape).toMatch(/<a href="mailto:contato@termofrioengenharia\.com\.br"[^>]*>.*?contato@termofrioengenharia\.com\.br<\/a>/);
+    expect(rodape).not.toMatch(/\[número\]|\[e-mail\]/);
     expect(rodape).toMatch(/© \d{4} Frivo/);
   });
 
