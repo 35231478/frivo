@@ -48,7 +48,7 @@ export function PainelDesempenho({ mesAtual, pode }: { mesAtual: string; pode: P
               </p>
             )}
             <Avisos dados={ativo} pode={pode} />
-            {ativo.premiacoes.length > 0 && <PremioEmDisputa premiacoes={ativo.premiacoes} />}
+            {ativo.premiacoes.length > 0 && <PremioEmDisputa premiacoes={ativo.premiacoes} encerrada={!!ativo.fechamento} />}
             {ativo.grupos.map((g) => <Ranking key={g.perfil.id} grupo={g} mes={mes} gerenciar={pode.gerenciar} />)}
             {ativo.equipes.length > 0 && <PorEquipe equipes={ativo.equipes} />}
           </>
@@ -93,13 +93,13 @@ function Avisos({ dados, pode }: { dados: PainelDoMes; pode: PodeDesempenho }) {
   );
 }
 
-/** Os brindes do mês. `urlDaImagem` muda no modo TV (rota pública com o token). */
-export function PremioEmDisputa({ premiacoes, urlDaImagem = (id) => `/api/desempenho/premiacoes/${id}/imagem`, escuro }: {
-  premiacoes: PremiacaoNaTela[]; urlDaImagem?: (id: string) => string; escuro?: boolean;
+/** Os brindes do mês. `urlDaImagem` muda no modo TV (rota pública com o token). Mês fechado: a disputa acabou. */
+export function PremioEmDisputa({ premiacoes, urlDaImagem = (id) => `/api/desempenho/premiacoes/${id}/imagem`, escuro, encerrada }: {
+  premiacoes: PremiacaoNaTela[]; urlDaImagem?: (id: string) => string; escuro?: boolean; encerrada?: boolean;
 }) {
   return (
     <section className={cn("rounded-xl border p-4", escuro ? "border-white/15 bg-white/5" : "border-surface-border bg-white")} data-premio-em-disputa>
-      <h2 className={cn("font-semibold flex items-center gap-2", escuro ? "text-white" : "text-ink")}><Gift className="w-4 h-4" aria-hidden /> Prêmio em disputa</h2>
+      <h2 className={cn("font-semibold flex items-center gap-2", escuro ? "text-white" : "text-ink")}><Gift className="w-4 h-4" aria-hidden /> <span data-titulo-premio>{encerrada ? "Prêmio do mês" : "Prêmio em disputa"}</span></h2>
       <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {premiacoes.map((p) => (
           <li key={p.id} className={cn("flex gap-3 rounded-lg border p-3", escuro ? "border-white/15" : "border-surface-border")} data-premio={p.id}>

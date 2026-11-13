@@ -142,7 +142,7 @@ function Ficha({ ficha }: { ficha: FichaDoColaborador }) {
         </section>
       )}
 
-      {ficha.premiacoes.length > 0 && <PremioEmDisputa premiacoes={ficha.premiacoes} urlDaImagem={(id) => `/api/tecnico/desempenho/premiacoes/${id}/imagem`} />}
+      {ficha.premiacoes.length > 0 && <PremioEmDisputa premiacoes={ficha.premiacoes} encerrada={fechado} urlDaImagem={(id) => `/api/tecnico/desempenho/premiacoes/${id}/imagem`} />}
     </>
   );
 }

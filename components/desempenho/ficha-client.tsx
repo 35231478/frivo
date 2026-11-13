@@ -157,7 +157,7 @@ function Conteudo({ ficha }: { ficha: FichaDoColaborador }) {
           Ganhou a premiação do mês: {ficha.premiosGanhos.join(", ")}.
         </p>
       )}
-      {ficha.premiacoes.length > 0 && <PremioEmDisputa premiacoes={ficha.premiacoes} />}
+      {ficha.premiacoes.length > 0 && <PremioEmDisputa premiacoes={ficha.premiacoes} encerrada={!!ficha.fechamento} />}
     </>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Download, History, Loader2, Lock, LockOpen, Trophy } from "lucide-react";
-import { formatarData, formatarDataHora, formatarMoeda } from "@/lib/utils";
+import { cn, formatarData, formatarDataHora, formatarMoeda } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
 import { Modal } from "@/components/ui/modal";
@@ -90,6 +90,10 @@ export function FechamentoDesempenho({ mesInicial, mesAtual, pode }: { mesInicia
   );
 }
 
+/** Célula da folha: mais estreita no celular. Perfil e posição só têm coluna própria em tela larga. */
+const CEL = "px-3 sm:px-4 py-2";
+const SO_TELA_LARGA = "hidden sm:table-cell";
+
 function TabelaDaFolha({ folha, definitiva }: { folha: Folha; definitiva: boolean }) {
   return (
     <section className="bg-white border border-surface-border rounded-xl overflow-hidden" data-folha data-folha-definitiva={definitiva ? "sim" : "nao"}>
@@ -102,27 +106,31 @@ function TabelaDaFolha({ folha, definitiva }: { folha: Folha; definitiva: boolea
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-ink-muted border-b border-surface-border">
-                <th className="px-4 py-2 font-medium">Colaborador</th><th className="px-4 py-2 font-medium">Perfil</th>
-                <th className="px-4 py-2 font-medium text-right">Posição</th><th className="px-4 py-2 font-medium text-right">Escore</th>
-                <th className="px-4 py-2 font-medium">Faixa</th><th className="px-4 py-2 font-medium text-right">{definitiva ? "Bônus" : "Bônus projetado"}</th>
+                <th className={cn(CEL, "font-medium")}>Colaborador</th><th className={cn(CEL, SO_TELA_LARGA, "font-medium")}>Perfil</th>
+                <th className={cn(CEL, SO_TELA_LARGA, "font-medium text-right")}>Posição</th><th className={cn(CEL, "font-medium text-right")}>Escore</th>
+                <th className={cn(CEL, "font-medium")}>Faixa</th><th className={cn(CEL, "font-medium text-right")}>{definitiva ? "Bônus" : "Bônus projetado"}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-border">
               {folha.linhas.map((l, i) => (
                 <tr key={`${l.tecnicoId ?? l.nome}-${i}`} data-linha-folha={l.nome}>
-                  <td className="px-4 py-2 font-medium text-ink">{l.nome}</td>
-                  <td className="px-4 py-2 text-ink-muted">{l.perfil}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{posicaoTexto(l.posicao)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums" data-folha-escore>{formatarEscore(l.escore)}</td>
-                  <td className="px-4 py-2" data-folha-faixa>{l.faixa ?? "—"}</td>
-                  <td className="px-4 py-2 text-right tabular-nums font-medium" data-folha-valor>{formatarMoeda(l.valor)}</td>
+                  <td className={cn(CEL, "font-medium text-ink")}>
+                    <span data-folha-nome>{l.nome}</span>
+                    {/* No celular, perfil e posição descem para baixo do nome: o valor do bônus cabe sem rolar */}
+                    <span className="block text-xs font-normal text-ink-muted sm:hidden" data-folha-resumo>{l.perfil} · {posicaoTexto(l.posicao)}</span>
+                  </td>
+                  <td className={cn(CEL, SO_TELA_LARGA, "text-ink-muted")} data-folha-perfil>{l.perfil}</td>
+                  <td className={cn(CEL, SO_TELA_LARGA, "text-right tabular-nums")} data-folha-posicao>{posicaoTexto(l.posicao)}</td>
+                  <td className={cn(CEL, "text-right tabular-nums")} data-folha-escore>{formatarEscore(l.escore)}</td>
+                  <td className={CEL} data-folha-faixa>{l.faixa ?? "—"}</td>
+                  <td className={cn(CEL, "text-right tabular-nums font-medium whitespace-nowrap")} data-folha-valor>{formatarMoeda(l.valor)}</td>
                 </tr>
               ))}
             </tbody>
             <tfoot className="border-t border-surface-border">
               <tr className="font-semibold text-ink">
-                <td className="px-4 py-2" colSpan={5}>Total do mês</td>
-                <td className="px-4 py-2 text-right tabular-nums" data-folha-total>{formatarMoeda(folha.total)}</td>
+                <td className={CEL}>Total do mês</td><td className={cn(CEL, SO_TELA_LARGA)} colSpan={2} /><td className={CEL} colSpan={2} />
+                <td className={cn(CEL, "text-right tabular-nums whitespace-nowrap")} data-folha-total>{formatarMoeda(folha.total)}</td>
               </tr>
             </tfoot>
           </table>
@@ -153,11 +161,11 @@ function Premiados({ premios, definitivo }: { premios: PremioFechado[]; definiti
               {p.ganhadores.length === 0 ? <span className="text-ink-muted" data-sem-ganhador>Ninguém acima da meta mínima: sem ganhador.</span> : (
                 <>
                   <span className="font-semibold text-ink" data-ganhadores>{nomes(p)}</span> <span className="text-ink-muted tabular-nums">· {formatarEscore(p.ganhadores[0].escore)}</span>
+                  {p.criterio === "DIVIDIDO" && <StatusPill tom="atencao" tamanho="sm" className="ml-2 align-middle" data-premio-dividido="">Prêmio dividido</StatusPill>}
                   {p.criterio && <span className="block text-xs text-ink-muted" data-texto-criterio>{TEXTO_CRITERIO[p.criterio]}.</span>}
                 </>
               )}
             </span>
-            {p.criterio === "DIVIDIDO" && <StatusPill tom="atencao" tamanho="sm" data-premio-dividido="">Prêmio dividido</StatusPill>}
           </li>
         ))}
       </ul>

@@ -95,9 +95,13 @@ describe("Fechamento do mês e folha de bônus", () => {
     expect(texto($("[data-mes-aberto]"))).toContain("Os valores abaixo são projeção");
     expect($("[data-folha]")?.getAttribute("data-folha-definitiva")).toBe("nao");
     expect(texto($("[data-folha] thead"))).toContain("Bônus projetado");
-    expect($$("[data-linha-folha]").map((l) => [...l.querySelectorAll("td")].map((c) => reais(c)).join("|"))).toEqual([
+    expect($$("[data-linha-folha]").map((l) => ["nome", "perfil", "posicao", "escore", "faixa", "valor"].map((c) => reais(l.querySelector(`[data-folha-${c}]`))).join("|"))).toEqual([
       "Ana Dias|Preventiva|1º|100,0%|Ouro|R$ 350,00", "Bia Reis|Preventiva|2º|85,0%|Prata|R$ 350,00", "Novato|Corretiva|—|—|—|R$ 0,00",
     ]);
+    // No celular as colunas de perfil e posição somem e os dois descem para baixo do nome — o bônus cabe sem rolar
+    expect($$("[data-folha-resumo]").map((r) => `${texto(r)}|${r.className.includes("sm:hidden")}`)).toEqual(["Preventiva · 1º|true", "Preventiva · 2º|true", "Corretiva · —|true"]);
+    expect($$("[data-folha-perfil], [data-folha-posicao]").every((c) => c.className.includes("hidden sm:table-cell"))).toBe(true);
+    expect($$("[data-folha-valor], [data-folha-total]").some((c) => c.className.includes("hidden"))).toBe(false);
     expect(reais($("[data-folha-total]"))).toBe("R$ 700,00");
     expect(texto($("[data-folha]"))).toContain("Pagamento, imposto e encargo são lançados no financeiro");
     expect($("[data-exportar]")).toBeNull(); // só mês fechado exporta
@@ -344,6 +348,7 @@ describe("App do técnico: a vista Desempenho", () => {
       "Retorno · 10/11/2026OS-9 (corretiva) aberta 5 dias depois do serviço da OS-3Conta", "Ressalva do cliente · 11/11/2026A revisar",
     ]);
     expect(texto($("[data-premio-em-disputa]"))).toContain("Caixa de som");
+    expect(texto($("[data-titulo-premio]"))).toBe("Prêmio em disputa");
     expect($("[data-premio-imagem]")?.getAttribute("src")).toBe("/api/tecnico/desempenho/premiacoes/pr1/imagem"); // a rota do app, não a do painel
   });
 
@@ -358,6 +363,7 @@ describe("App do técnico: a vista Desempenho", () => {
     expect(reais($("[data-meu-bonus]"))).toBe("R$ 350,00");
     expect(texto($("[data-explica-bonus]"))).toBe("Mês fechado em 02/12/2026: o valor é definitivo.");
     expect(texto($("[data-premios-ganhos]"))).toBe("Premiação do mês conquistada: Caixa de som.");
+    expect(texto($("[data-titulo-premio]"))).toBe("Prêmio do mês"); // mês fechado: a disputa acabou
     expect(texto($('[data-metrica="avaliacao"] [data-metrica-valor]'))).toBe("—");
     expect(texto($('[data-metrica="avaliacao"] [data-metrica-pontos]'))).toBe("sem pontos");
     expect(texto($("[data-meu-desconto]"))).toBe("Penalidades que contaram: 0sem desconto");
