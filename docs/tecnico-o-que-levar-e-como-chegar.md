@@ -63,6 +63,15 @@ retrato de cada OS). O bloco funciona sem sinal com o que foi baixado por últim
 - A quantidade da composição é a **do cadastro do serviço**, igual ao que o sistema copia ao lançar o
   serviço na OS — não é multiplicada pela quantidade da linha.
 
+### Anotado para depois (decisão do Zé, 13/11/2026 — não entra agora)
+
+- **Kit de preventiva por tipo de equipamento** (split, VRF, chiller…). Preventiva é metade do
+  trabalho e hoje a OS de contrato/PMOC, por não ter linha de serviço, não mostra "o que levar". O
+  caminho é um cadastro novo: um kit por tipo de equipamento, que alimenta o "o que levar"
+  automaticamente a partir dos equipamentos da OS. Até lá, nada é forçado para essas OS.
+- **Mostrar o que o estoque já separou.** `os_materiais` já guarda o estado da separação; a marca
+  "já separado" na lista fica para quando o fluxo de separação estiver mais usado.
+
 ## Como chegar (rota)
 
 O botão já existia como "Rota no mapa". Agora:
@@ -76,6 +85,10 @@ O botão já existia como "Rota no mapa". Agora:
 - **sem endereço no cadastro**, o botão fica no lugar, apagado, com "Sem endereço no cadastro" — em
   vez de sumir;
 - depois de "Avisar que estou a caminho", o botão continua ao lado do "Cheguei".
+
+Confirmado pelo Zé (13/11/2026): o nome fica **"Como chegar"**; e o Mapas da Apple **não** é oferecido
+no Android (lá ele abriria uma página, não o app — pareceria defeito). Android: Google Maps e Waze.
+iPhone, iPad e Mac: os três.
 
 Privacidade: com *Exibir dados do cliente* desligado, endereço e rota não saem do servidor e o botão
 não aparece (nem o aviso de falta de endereço — não é falta de cadastro).
