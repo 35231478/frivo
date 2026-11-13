@@ -118,7 +118,7 @@ async function executar(ator: Ator, op: Operacao, lote: OpcoesLote): Promise<Res
       if (!(op.dados.resumo ?? "").trim() && await conclusaoExigeResumo(ator.empresaId)) {
         return { ok: false, status: 422, erro: "Preencha o resumo da conclusão para concluir a atividade." };
       }
-      return concluirAtividade(ctx, op.dados);
+      return concluirAtividade(ctx, op.dados, { em: op.em, agoraAparelho: lote.agoraAparelho });
     }
     case "aceite":
       if (lote.podeEditarOs === false) return { ok: false, status: 403, erro: "Sem permissão para registrar o aceite do cliente." };

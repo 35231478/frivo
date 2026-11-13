@@ -562,6 +562,14 @@ model Empresa {
   pmocs Pmoc[]
   pmocConfiguracao PmocConfiguracao?
 
+  desempenhoConfig        DesempenhoConfig?
+  desempenhoTiposRetorno  DesempenhoTipoRetorno[]
+  desempenhoPerfis        DesempenhoPerfil[]
+  desempenhoRegras        DesempenhoRegra[]
+  desempenhoParticipantes DesempenhoParticipante[]
+  desempenhoPenalidades   DesempenhoPenalidade[]
+  desempenhoPremiacoes    DesempenhoPremiacao[]
+
   @@map("empresas")
 }
 
@@ -860,6 +868,9 @@ model Usuario {
   pmocAvisosVistos PmocAviso[] @relation("PmocAvisoVistoPor")
   aceitesColhidos        OsAceite[]             @relation("OsAceiteColhidoPor")
 
+  desempenhoRevisoes  DesempenhoPenalidade[] @relation("DesempenhoPenalidadeRevisor")
+  desempenhoRegistros DesempenhoPenalidade[] @relation("DesempenhoPenalidadeCriador")
+
   @@unique([email, empresaId])
   @@index([empresaId, ativo])
   @@map("usuarios")
@@ -969,6 +980,9 @@ model Tecnico {
   posicao               TecnicoPosicao?
 
   pmocsResponsavel Pmoc[] @relation("PmocResponsavelTecnico")
+
+  desempenhoParticipante DesempenhoParticipante?
+  desempenhoPenalidades  DesempenhoPenalidade[]
 
   @@unique([cpf, empresaId])
   @@index([empresaId, ativo])
@@ -1262,6 +1276,8 @@ model Equipamento {
   pmocCronogramas PmocCronograma[]
   pmocExecucoes   PmocExecucao[]
   pmocOcorrencias PmocOcorrencia[]
+
+  desempenhoPenalidades DesempenhoPenalidade[]
 
   @@index([empresaId, ativo])
   @@index([unidadeId])
@@ -1727,6 +1743,8 @@ model TipoOs {
 
   pmocCronogramas PmocCronograma[]
 
+  desempenhoRetorno DesempenhoTipoRetorno[]
+
   @@map("tipos_os")
 }
 
@@ -1852,6 +1870,10 @@ model OrdemServico {
   /// Aceite do cliente na conclusão (uma linha por OS). Ver OsAceite.
   aceite             OsAceite?
 
+  /// Desempenho: itens da lista "a revisar" ligados a esta OS (o serviço avaliado / a OS corretiva do retorno)
+  desempenhoPenalidades DesempenhoPenalidade[] @relation("DesempenhoPenalidadeOs")
+  desempenhoRetornos    DesempenhoPenalidade[] @relation("DesempenhoPenalidadeOsRetorno")
+
   @@unique([numero, empresaId])
   @@index([empresaId, status])
   @@index([empresaId, criadoEm])
@@ -1894,6 +1916,10 @@ model AtividadeOs {
   /// Prazo próprio da atividade (DIA civil, sem hora): atrasa quando o dia de hoje em Brasília
   /// passa dele com a atividade ainda aberta (lib/os/prazos.ts).
   prazo          DateTime?       @map("prazo") @db.Date
+  /// Quando a atividade foi concluída (o toque do técnico; reabrir limpa). Alimenta o Desempenho:
+  /// "no prazo" = concluída até o fim do dia do prazo ou, sem prazo, do dia agendado. Atividades
+  /// concluídas antes desta coluna existir ficam sem data (sem medição, nunca zero).
+  concluidaEm    DateTime?       @map("concluida_em")
   duracaoMin     Int?            @map("duracao_min")
   observacao     String?
   resumo         String?         @db.Text
@@ -4678,4 +4704,175 @@ model PmocExecucao {
   @@index([equipamentoId])
   @@index([ordemServicoId])
   @@map("pmoc_execucoes")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// DESEMPENHO (manutenção): escore de QUALIDADE por colaborador e por mês → ranking, faixa e bônus.
+// Textos no lugar de enum (tipo, situação, competência "AAAA-MM"). Tudo por empresa.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+/// Ajustes gerais do Desempenho — um por empresa. Nasce quando a gestão abre a configuração pela
+/// primeira vez: a data de criação é o INÍCIO da medição (nada anterior entra na lista "a revisar").
+model DesempenhoConfig {
+  id           String   @id @default(cuid())
+  empresaId    String   @unique @map("empresa_id")
+  /// Retorno: OS corretiva no mesmo equipamento até N dias depois de um serviço do colaborador
+  retornoDias  Int      @default(30) @map("retorno_dias")
+  /// Nota do cliente (1 a 5) até este valor cai na lista "a revisar"
+  notaBaixaAte Int      @default(2) @map("nota_baixa_ate")
+  /// Link do modo TV (sem login, só leitura). null = desligado
+  tvToken      String?  @unique @map("tv_token")
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@map("desempenho_config")
+}
+
+/// Tipos de OS que contam como CORRETIVA para detectar retorno (o tipo de OS não tem essa marca).
+model DesempenhoTipoRetorno {
+  id        String   @id @default(cuid())
+  empresaId String   @map("empresa_id")
+  tipoOsId  String   @map("tipo_os_id")
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  tipoOs  TipoOs  @relation(fields: [tipoOsId], references: [id], onDelete: Cascade)
+
+  @@unique([empresaId, tipoOsId])
+  @@map("desempenho_tipos_retorno")
+}
+
+/// Perfil de desempenho (o "cargo" do módulo): Preventiva, Corretiva, Instalação, Encarregado…
+/// tipo "TECNICO" = métricas do próprio colaborador; "GESTAO" = métricas das equipes que lidera.
+model DesempenhoPerfil {
+  id           String   @id @default(cuid())
+  empresaId    String   @map("empresa_id")
+  nome         String
+  tipo         String   @default("TECNICO")
+  ordem        Int      @default(0)
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  empresa       Empresa                  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  regras        DesempenhoRegra[]
+  participantes DesempenhoParticipante[]
+  premiacoes    DesempenhoPremiacao[]
+
+  @@unique([empresaId, nome])
+  @@map("desempenho_perfis")
+}
+
+/// Regras de um perfil, por VIGÊNCIA: a regra do mês é a de maior "vigente_desde" que não passa
+/// dele. Mudança grava uma regra nova para o mês SEGUINTE — a do mês corrente nunca é alterada.
+model DesempenhoRegra {
+  id                    String   @id @default(cuid())
+  empresaId             String   @map("empresa_id")
+  perfilId              String   @map("perfil_id")
+  /// Competência "AAAA-MM" a partir da qual a regra vale
+  vigenteDesde          String   @map("vigente_desde")
+  /// Pesos das métricas (somam 100; 0 = a métrica não entra)
+  pesoPrazo             Int      @map("peso_prazo")
+  pesoRelatorio         Int      @map("peso_relatorio")
+  pesoAvaliacao         Int      @map("peso_avaliacao")
+  /// Relatório completo exige ao menos uma foto "antes" e uma "depois" por equipamento atendido
+  exigirFotoAntesDepois Boolean  @default(true) @map("exigir_foto_antes_depois")
+  /// Pontos descontados por penalidade que o encarregado marcou "conta"
+  penalidadeRetorno     Int      @default(0) @map("penalidade_retorno")
+  penalidadeReclamacao  Int      @default(0) @map("penalidade_reclamacao")
+  /// Portão: abaixo disto não há faixa nem bônus
+  metaMinima            Int      @map("meta_minima")
+  /// Faixas: [{ nome, minimo, valor }] — valor em reais do bônus da faixa
+  faixas                Json
+  criadoPorId           String?  @map("criado_por_id")
+  criadoEm              DateTime @default(now()) @map("criado_em")
+
+  empresa Empresa          @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  perfil  DesempenhoPerfil @relation(fields: [perfilId], references: [id], onDelete: Cascade)
+
+  @@unique([perfilId, vigenteDesde])
+  @@index([empresaId])
+  @@map("desempenho_regras")
+}
+
+/// Quem participa do Desempenho e em qual perfil (um perfil por colaborador). Sem linha = fora do ranking.
+model DesempenhoParticipante {
+  id        String   @id @default(cuid())
+  empresaId String   @map("empresa_id")
+  tecnicoId String   @unique @map("tecnico_id")
+  perfilId  String   @map("perfil_id")
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  empresa Empresa          @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  tecnico Tecnico          @relation(fields: [tecnicoId], references: [id], onDelete: Cascade)
+  perfil  DesempenhoPerfil @relation(fields: [perfilId], references: [id], onDelete: Cascade)
+
+  @@index([empresaId])
+  @@index([perfilId])
+  @@map("desempenho_participantes")
+}
+
+/// Lista "a revisar": retorno, ressalva, nota baixa e reclamação registrada à mão. NADA pesa no
+/// escore sozinho — só depois de alguém marcar "CONTA" (com motivo). tipo: "RETORNO" | "RESSALVA" |
+/// "NOTA_BAIXA" | "RECLAMACAO"; situacao: "A_REVISAR" | "CONTA" | "NAO_CONTA".
+model DesempenhoPenalidade {
+  id             String    @id @default(cuid())
+  empresaId      String    @map("empresa_id")
+  tecnicoId      String    @map("tecnico_id")
+  tipo           String
+  /// Identidade do fato (um item por fato e colaborador): a detecção roda de novo sem duplicar
+  chave          String    @unique
+  /// A OS do serviço avaliado (no retorno, a do serviço ANTERIOR do colaborador)
+  ordemServicoId String?   @map("ordem_servico_id")
+  /// Retorno: a OS corretiva aberta depois
+  osRetornoId    String?   @map("os_retorno_id")
+  equipamentoId  String?   @map("equipamento_id")
+  /// Quando o fato aconteceu e o mês ("AAAA-MM") em que pesa
+  dataFato       DateTime  @map("data_fato")
+  competencia    String
+  descricao      String?
+  situacao       String    @default("A_REVISAR")
+  motivo         String?
+  revisadoPorId  String?   @map("revisado_por_id")
+  revisadoEm     DateTime? @map("revisado_em")
+  criadoPorId    String?   @map("criado_por_id")
+  criadoEm       DateTime  @default(now()) @map("criado_em")
+  atualizadoEm   DateTime  @updatedAt @map("atualizado_em")
+
+  empresa      Empresa       @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  tecnico      Tecnico       @relation(fields: [tecnicoId], references: [id], onDelete: Cascade)
+  ordemServico OrdemServico? @relation("DesempenhoPenalidadeOs", fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  osRetorno    OrdemServico? @relation("DesempenhoPenalidadeOsRetorno", fields: [osRetornoId], references: [id], onDelete: Cascade)
+  equipamento  Equipamento?  @relation(fields: [equipamentoId], references: [id], onDelete: SetNull)
+  revisadoPor  Usuario?      @relation("DesempenhoPenalidadeRevisor", fields: [revisadoPorId], references: [id], onDelete: SetNull)
+  criadoPor    Usuario?      @relation("DesempenhoPenalidadeCriador", fields: [criadoPorId], references: [id], onDelete: SetNull)
+
+  @@index([empresaId, competencia, situacao])
+  @@index([tecnicoId, competencia])
+  @@index([ordemServicoId])
+  @@index([osRetornoId])
+  @@map("desempenho_penalidades")
+}
+
+/// Premiação do mês (o brinde em disputa): texto + imagem, por empresa e competência ("AAAA-MM").
+/// perfil vazio = disputa de todos os perfis; com perfil = só daquele.
+model DesempenhoPremiacao {
+  id           String   @id @default(cuid())
+  empresaId    String   @map("empresa_id")
+  competencia  String
+  titulo       String
+  descricao    String?
+  /// Imagem do brinde (data URL já comprimida no navegador)
+  imagem       String?
+  perfilId     String?  @map("perfil_id")
+  criadoPorId  String?  @map("criado_por_id")
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  empresa Empresa           @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  perfil  DesempenhoPerfil? @relation(fields: [perfilId], references: [id], onDelete: SetNull)
+
+  @@index([empresaId, competencia])
+  @@map("desempenho_premiacoes")
 }
