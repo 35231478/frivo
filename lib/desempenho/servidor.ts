@@ -37,12 +37,13 @@ export const desempenhoAtivo = async (empresaId: string) => !!(await prisma.dese
  * Garante a configuração da empresa. Na primeira vez cria os ajustes e os quatro perfis iniciais
  * (sem regra: nada vale enquanto a gestão não salvar os pesos e as faixas de cada um).
  */
-export async function garantirDesempenho(empresaId: string) {
+export async function garantirDesempenho(empresaId: string, agora: Date = new Date()) {
   const existente = await prisma.desempenhoConfig.findUnique({ where: { empresaId } });
   if (existente) return existente;
   try {
     return await prisma.$transaction(async (tx) => {
-      const config = await tx.desempenhoConfig.create({ data: { empresaId } });
+      // A data de criação é o início da medição: nada anterior a este mês entra na lista "a revisar"
+      const config = await tx.desempenhoConfig.create({ data: { empresaId, criadoEm: agora } });
       await tx.desempenhoPerfil.createMany({
         data: PERFIS_INICIAIS.map((p, ordem) => ({ empresaId, nome: p.nome, tipo: p.tipo, ordem })), skipDuplicates: true,
       });
@@ -91,7 +92,7 @@ export interface ConfiguracaoDoDesempenho {
 }
 
 export async function configuracaoDoDesempenho(empresaId: string, agora: Date = new Date()): Promise<ConfiguracaoDoDesempenho> {
-  const config = await garantirDesempenho(empresaId);
+  const config = await garantirDesempenho(empresaId, agora);
   const competencia = competenciaAtual(agora);
   const [tiposRetorno, tiposOs, perfis, disponiveis] = await Promise.all([
     prisma.desempenhoTipoRetorno.findMany({ where: { empresaId }, select: { tipoOsId: true } }),
