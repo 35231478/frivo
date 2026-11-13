@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
 import {
   ACAO_ACEITE, ACAO_EMERGENCIA, ACAO_PEDIDO, ASSINATURA_MAX_BYTES, MSG_GATE, ROTULO_ESTADO, ROTULO_METODO, aceiteLocalSchema, aceiteNoApp, aceitePublicoSchema, bytesDoDataUrl,
   caminhoPublicoAceite, canalDoPedido, estadoDoAceite, gateDoChamado, mensagemPedido, motivoSemAceite, provaDoAceite, recadoDoPedido, rotuloDaOs, rotuloDaPendencia, servicoDaOs,
-  ACAO_ACEITE_RESSALVA, ROTULO_COM_RESSALVA, avisoDoAceite, rotuloDoAceite, temRessalva, textoDoAceite, textoDoCanal, tituloDasPendencias, type AceiteRetrato,
+  ACAO_ACEITE_RESSALVA, MSG_AVALIACAO, NOTAS, ROTULO_COM_RESSALVA, ROTULO_NOTA, nomeDaNota, notaDoAceite, textoDaAvaliacao, avisoDoAceite, rotuloDoAceite, temRessalva, textoDoAceite, textoDoCanal, tituloDasPendencias, type AceiteRetrato,
 } from "@/lib/os/aceite";
 import { centralDaOs, type OsCentralEntrada } from "@/lib/os/central";
 import { montarRelatorioOs, type OsParaRelatorio } from "@/lib/relatorio-os/dados";
@@ -27,7 +27,7 @@ const ASSINATURA = png(600);
 
 describe("aceite do cliente: o que chega", () => {
   it("NO LOCAL: nome de quem recebeu (3 a 120 letras, sem espaço sobrando) e a assinatura desenhada (PNG)", () => {
-    expect(aceiteLocalSchema.parse({ nome: "  João Pereira  ", assinatura: ASSINATURA })).toEqual({ nome: "João Pereira", assinatura: ASSINATURA });
+    expect(aceiteLocalSchema.parse({ nome: "  João Pereira  ", assinatura: ASSINATURA })).toEqual({ nome: "João Pereira", assinatura: ASSINATURA, avaliacao: null, avaliacaoComentario: null });
     for (const nome of [undefined, null, "", "  ", "Jo", " a "]) expect(erroDe(aceiteLocalSchema, { nome, assinatura: ASSINATURA }), String(nome)).toBe("Informe o nome completo de quem confirma.");
     expect(erroDe(aceiteLocalSchema, { nome: "Ana", assinatura: ASSINATURA })).toBeNull();
     expect(erroDe(aceiteLocalSchema, { nome: "x".repeat(120), assinatura: ASSINATURA })).toBeNull();
@@ -55,8 +55,8 @@ describe("aceite do cliente: o que chega", () => {
   });
 
   it("PELO LINK: nome de quem confirma e, se houver, a RESSALVA (vazia = confirmou sem ressalva)", () => {
-    expect(aceitePublicoSchema.parse({ nome: " Maria Lima " })).toEqual({ nome: "Maria Lima", ressalva: null });
-    expect(aceitePublicoSchema.parse({ nome: "Maria Lima", ressalva: "  O split da recepção ainda pinga  " })).toEqual({ nome: "Maria Lima", ressalva: "O split da recepção ainda pinga" });
+    expect(aceitePublicoSchema.parse({ nome: " Maria Lima " })).toEqual({ nome: "Maria Lima", ressalva: null, avaliacao: null, avaliacaoComentario: null });
+    expect(aceitePublicoSchema.parse({ nome: "Maria Lima", ressalva: "  O split da recepção ainda pinga  " })).toEqual({ nome: "Maria Lima", ressalva: "O split da recepção ainda pinga", avaliacao: null, avaliacaoComentario: null });
     for (const vazia of ["   ", "", null, undefined]) expect(aceitePublicoSchema.parse({ nome: "Maria Lima", ressalva: vazia }).ressalva, String(vazia)).toBeNull();
     for (const nome of [undefined, "", "ab", 12]) expect(erroDe(aceitePublicoSchema, { nome }), String(nome)).toBe("Informe o nome completo de quem confirma.");
     // Uma ressalva tem de dizer alguma coisa: 5 letras no mínimo, 1.000 no máximo
@@ -71,12 +71,12 @@ describe("aceite do cliente: o que chega", () => {
   });
 
   it("a página aberta ANTES da atualização ainda manda 'observacao': vale como a ressalva (a ressalva nova tem preferência)", () => {
-    expect(aceitePublicoSchema.parse({ nome: "Maria Lima", observacao: "  Tudo certo  " })).toEqual({ nome: "Maria Lima", ressalva: "Tudo certo" });
-    expect(aceitePublicoSchema.parse({ nome: "Maria Lima", observacao: null })).toEqual({ nome: "Maria Lima", ressalva: null });
+    expect(aceitePublicoSchema.parse({ nome: "Maria Lima", observacao: "  Tudo certo  " })).toEqual({ nome: "Maria Lima", ressalva: "Tudo certo", avaliacao: null, avaliacaoComentario: null });
+    expect(aceitePublicoSchema.parse({ nome: "Maria Lima", observacao: null })).toEqual({ nome: "Maria Lima", ressalva: null, avaliacao: null, avaliacaoComentario: null });
     expect(aceitePublicoSchema.parse({ nome: "Maria Lima", observacao: "ok" }).ressalva).toBe("ok"); // o campo antigo não tinha mínimo
     expect(aceitePublicoSchema.parse({ nome: "Maria Lima", ressalva: "Faltou a tampa", observacao: "antiga" }).ressalva).toBe("Faltou a tampa");
     expect(erroDe(aceitePublicoSchema, { nome: "Maria Lima", observacao: "x".repeat(1001) })).not.toBeNull();
-    expect(Object.keys(aceitePublicoSchema.parse({ nome: "Maria Lima", observacao: "Tudo certo" })).sort()).toEqual(["nome", "ressalva"]); // "observacao" não segue adiante
+    expect(Object.keys(aceitePublicoSchema.parse({ nome: "Maria Lima", observacao: "Tudo certo" })).sort()).toEqual(["avaliacao", "avaliacaoComentario", "nome", "ressalva"]); // "observacao" não segue adiante
   });
 });
 
@@ -253,7 +253,7 @@ describe("aceite do cliente: a central da OS e o relatório", () => {
 
   it("RELATÓRIO: o aceite confirmado entra como prova — quem, quando, como, de onde, a assinatura e quem colheu", () => {
     expect(montarRelatorioOs(paraRelatorio(CONFIRMADO), null).aceite).toEqual({
-      nome: "João Pereira", confirmadoEm: new Date("2026-11-05T17:32:00Z"), metodo: "LOCAL", ip: "189.10.20.30", assinatura: ASSINATURA, colhidoPor: "Carlos Oliveira", ressalva: null,
+      nome: "João Pereira", confirmadoEm: new Date("2026-11-05T17:32:00Z"), metodo: "LOCAL", ip: "189.10.20.30", assinatura: ASSINATURA, colhidoPor: "Carlos Oliveira", ressalva: null, avaliacao: null, avaliacaoComentario: null,
     });
     const remoto = montarRelatorioOs(paraRelatorio({ ...CONFIRMADO, metodo: "REMOTO", assinatura: null, colhidoPor: null, ressalva: "  O split ainda pinga " }), null).aceite;
     expect(remoto).toMatchObject({ metodo: "REMOTO", assinatura: null, colhidoPor: null, ressalva: "O split ainda pinga" }); // a RESSALVA vai no relatório
@@ -336,5 +336,90 @@ describe("o toggle morto 'Exigir assinatura do cliente na OS' saiu", () => {
     const rota = fs.readFileSync(path.join(raiz, "app/api/configuracoes/route.ts"), "utf8");
     expect(rota).not.toMatch(/osExigirAssinatura:\s*z\./); // não é mais um campo aceito
     expect(rota.match(/semCampoMorto\(/g)).toHaveLength(3);   // sai do GET, do que chega no PUT e da resposta do PUT
+  });
+});
+
+describe("aceite do cliente: a AVALIAÇÃO (1 a 5 estrelas + comentário opcional)", () => {
+  const PNG = `data:image/png;base64,${"QUJD".repeat(60)}`;
+  const local = (extra: Record<string, unknown>) => ({ nome: "João Pereira", assinatura: PNG, ...extra });
+  const link = (extra: Record<string, unknown>) => ({ nome: "Maria Lima", ...extra });
+
+  it("é OPCIONAL nos dois caminhos: sem nota o aceite vale do mesmo jeito (vazio = confirmou sem avaliar)", () => {
+    for (const vazio of [undefined, null]) {
+      expect(aceiteLocalSchema.parse(local({ avaliacao: vazio }))).toMatchObject({ avaliacao: null, avaliacaoComentario: null });
+      expect(aceitePublicoSchema.parse(link({ avaliacao: vazio }))).toMatchObject({ avaliacao: null, avaliacaoComentario: null });
+    }
+  });
+
+  it("a nota é um inteiro de 1 a 5 — nos dois caminhos; 0, 6, meia estrela e texto são recusados", () => {
+    expect(NOTAS).toEqual([1, 2, 3, 4, 5]);
+    for (const nota of NOTAS) {
+      expect(aceiteLocalSchema.parse(local({ avaliacao: nota })).avaliacao).toBe(nota);
+      expect(aceitePublicoSchema.parse(link({ avaliacao: nota })).avaliacao).toBe(nota);
+    }
+    for (const ruim of [0, 6, -1, 2.5, "4", true, 100]) {
+      expect(erroDe(aceiteLocalSchema, local({ avaliacao: ruim })), String(ruim)).toBe("A avaliação vai de 1 a 5 estrelas.");
+      expect(erroDe(aceitePublicoSchema, link({ avaliacao: ruim })), String(ruim)).toBe(MSG_AVALIACAO);
+    }
+  });
+
+  it("o comentário é DA avaliação: sem espaço sobrando, até 1.000 letras — e sem nota não se guarda comentário", () => {
+    expect(aceitePublicoSchema.parse(link({ avaliacao: 4, avaliacaoComentario: "  Equipe pontual  " }))).toMatchObject({ avaliacao: 4, avaliacaoComentario: "Equipe pontual" });
+    expect(aceiteLocalSchema.parse(local({ avaliacao: 5, avaliacaoComentario: " Muito bom " }))).toMatchObject({ avaliacao: 5, avaliacaoComentario: "Muito bom" });
+    for (const vazio of ["", "   ", null, undefined]) expect(aceitePublicoSchema.parse(link({ avaliacao: 3, avaliacaoComentario: vazio })).avaliacaoComentario, String(vazio)).toBeNull();
+    // Comentário sem nota: não é avaliação — não segue adiante (nos dois caminhos)
+    expect(aceitePublicoSchema.parse(link({ avaliacaoComentario: "Texto solto" }))).toMatchObject({ avaliacao: null, avaliacaoComentario: null });
+    expect(aceiteLocalSchema.parse(local({ avaliacao: null, avaliacaoComentario: "Texto solto" }))).toMatchObject({ avaliacao: null, avaliacaoComentario: null });
+    expect(erroDe(aceitePublicoSchema, link({ avaliacao: 4, avaliacaoComentario: "x".repeat(1000) }))).toBeNull();
+    expect(erroDe(aceitePublicoSchema, link({ avaliacao: 4, avaliacaoComentario: "x".repeat(1001) }))).toBe("O comentário da avaliação vai até 1000 caracteres.");
+    expect(erroDe(aceiteLocalSchema, local({ avaliacao: 4, avaliacaoComentario: "x".repeat(1001) }))).toBe("O comentário da avaliação vai até 1000 caracteres.");
+  });
+
+  it("a avaliação NÃO se confunde com a ressalva: são campos separados e um não mexe no outro", () => {
+    const r = aceitePublicoSchema.parse(link({ ressalva: "O split ainda pinga", avaliacao: 2, avaliacaoComentario: "Demorou para chegar" }));
+    expect(r).toEqual({ nome: "Maria Lima", ressalva: "O split ainda pinga", avaliacao: 2, avaliacaoComentario: "Demorou para chegar" });
+    expect(aceitePublicoSchema.parse(link({ ressalva: "O split ainda pinga" }))).toMatchObject({ ressalva: "O split ainda pinga", avaliacao: null });
+    expect(aceitePublicoSchema.parse(link({ avaliacao: 5 }))).toMatchObject({ ressalva: null, avaliacao: 5 });
+    // A ressalva continua exigindo texto de verdade mesmo com nota; e nada além dos campos conhecidos passa
+    expect(erroDe(aceitePublicoSchema, link({ ressalva: "ruim", avaliacao: 5 }))).toBe("Descreva a ressalva em poucas palavras.");
+    expect(erroDe(aceitePublicoSchema, link({ avaliacao: 5, nota: 5 }))).not.toBeNull();
+    expect(erroDe(aceiteLocalSchema, local({ avaliacao: 5, estrelas: 5 }))).not.toBeNull();
+  });
+
+  it("a fila do app aceita o aceite com e sem avaliação (aparelho antigo não manda) e recusa nota inválida", () => {
+    const op = (dados: unknown) => operacaoSchema.safeParse({ id: "3f2b8c1e-5a7d-4e9f-8b1a-2c3d4e5f6a7b", tipo: "aceite", atividadeId: "a1", dados }).success;
+    expect(op(local({}))).toBe(true);
+    expect(op(local({ avaliacao: 5, avaliacaoComentario: "Ótimo" }))).toBe(true);
+    expect(op(local({ avaliacao: null, avaliacaoComentario: null }))).toBe(true);
+    expect(op(local({ avaliacao: 6 }))).toBe(false);
+    expect(op(local({ avaliacao: 0 }))).toBe(false);
+  });
+
+  it("a nota do aceite: só existe no aceite CONFIRMADO e dentro da faixa — por extenso para o leitor de tela e o PDF", () => {
+    for (const n of NOTAS) expect(notaDoAceite({ situacao: "CONFIRMADO", avaliacao: n })).toBe(n);
+    for (const ruim of [null, undefined, 0, 6, 2.5]) expect(notaDoAceite({ situacao: "CONFIRMADO", avaliacao: ruim as number }), String(ruim)).toBeNull();
+    expect(notaDoAceite({ situacao: "PENDENTE", avaliacao: 5 })).toBeNull();
+    expect(notaDoAceite(null)).toBeNull();
+    expect(notaDoAceite(undefined)).toBeNull();
+    expect(NOTAS.map(textoDaAvaliacao)).toEqual(["1 de 5 estrelas", "2 de 5 estrelas", "3 de 5 estrelas", "4 de 5 estrelas", "5 de 5 estrelas"]);
+    expect(NOTAS.map(nomeDaNota)).toEqual(["1 estrela", "2 estrelas", "3 estrelas", "4 estrelas", "5 estrelas"]);
+    expect(NOTAS.map((n) => ROTULO_NOTA[n])).toEqual(["Péssimo", "Ruim", "Regular", "Bom", "Excelente"]);
+  });
+
+  it("RELATÓRIO: a nota e o comentário do cliente entram com o aceite; sem nota, nada; comentário sem nota não entra", () => {
+    const CONF = { situacao: "CONFIRMADO", nome: "Maria Lima", confirmadoEm: new Date("2026-11-05T17:32:00Z"), metodo: "REMOTO", ip: "200.1.2.3", assinatura: null, ressalva: null, colhidoPor: null };
+    const os = (aceite: OsParaRelatorio["aceite"]): OsParaRelatorio => ({
+      numero: "OS-123", status: "CONCLUIDA", descricao: "Preventiva", observacoes: null, criadoEm: new Date("2026-11-01T12:00:00Z"), dataInicio: null, dataConclusao: new Date("2026-11-05T15:00:00Z"), previsaoConclusao: null,
+      empresa: { nome: "Clima Total" } as OsParaRelatorio["empresa"], cliente: { nome: "Hospital Santa Clara Ltda", nomeFantasia: "Hospital Santa Clara" } as OsParaRelatorio["cliente"],
+      unidade: null, contrato: null, equipamento: null, atividades: [], aceite,
+    });
+    expect(montarRelatorioOs(os({ ...CONF, avaliacao: 4, avaliacaoComentario: "  Equipe pontual " }), null).aceite).toMatchObject({ avaliacao: 4, avaliacaoComentario: "Equipe pontual", ressalva: null });
+    expect(montarRelatorioOs(os({ ...CONF, avaliacao: 5, avaliacaoComentario: "   " }), null).aceite).toMatchObject({ avaliacao: 5, avaliacaoComentario: null });
+    expect(montarRelatorioOs(os({ ...CONF, avaliacao: null, avaliacaoComentario: "Texto solto" }), null).aceite).toMatchObject({ avaliacao: null, avaliacaoComentario: null });
+    expect(montarRelatorioOs(os({ ...CONF, avaliacao: 9, avaliacaoComentario: "fora da faixa" }), null).aceite).toMatchObject({ avaliacao: null, avaliacaoComentario: null });
+    expect(montarRelatorioOs(os(CONF), null).aceite).toMatchObject({ avaliacao: null, avaliacaoComentario: null }); // registro antigo, sem os campos
+    // A ressalva e a avaliação convivem no relatório, cada uma no seu campo
+    expect(montarRelatorioOs(os({ ...CONF, ressalva: "O split ainda pinga", avaliacao: 2, avaliacaoComentario: "Demorou" }), null).aceite).toMatchObject({ ressalva: "O split ainda pinga", avaliacao: 2, avaliacaoComentario: "Demorou" });
+    expect(montarRelatorioOs(os({ ...CONF, situacao: "PENDENTE", avaliacao: 5 }), null).aceite).toBeNull();
   });
 });

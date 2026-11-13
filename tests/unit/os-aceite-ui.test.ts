@@ -117,7 +117,7 @@ describe("Quadro de assinatura do cliente (aceite no local)", () => {
     await abrir();
     await digitar(NOME, "  João Pereira da Silva ");
     await clicar($("[data-confirmar-aceite]"));
-    expect(confirmados).toEqual([{ nome: "João Pereira da Silva", assinatura: ASSINATURA }]);
+    expect(confirmados).toEqual([{ nome: "João Pereira da Silva", assinatura: ASSINATURA, avaliacao: null, avaliacaoComentario: null }]);
     expect($("[data-erro-aceite]")).toBeNull();
     falha = "Sem permissão para registrar o aceite do cliente.";
     await clicar($("[data-confirmar-aceite]"));
@@ -225,7 +225,7 @@ describe("Aceite na OS (escritório)", () => {
     expect(texto($("[data-erro-aceite]"))).toBe("A OS ainda não está concluída."); // a recusa fica no quadro, que continua aberto
     respostas[COLHER] = { status: 200, corpo: {} };
     await clicar($("[data-confirmar-aceite]"));
-    expect(escritas().at(-1)).toEqual({ url: "/api/ordens/os1/aceite", metodo: "POST", corpo: { nome: "Marta Nunes", assinatura: ASSINATURA } });
+    expect(escritas().at(-1)).toEqual({ url: "/api/ordens/os1/aceite", metodo: "POST", corpo: { nome: "Marta Nunes", assinatura: ASSINATURA, avaliacao: null, avaliacaoComentario: null } });
     expect($("[data-assinatura-cliente]")).toBeNull();
     expect(ditos).toEqual([["Aceite do cliente registrado.", "sucesso"]]);
     expect($("[data-aceite-os='CONFIRMADO']")).toBeTruthy();
@@ -343,7 +343,7 @@ describe("Aceite no app do técnico (depois de concluir)", () => {
     expect(texto($("[data-resumo-aceite]"))).toBe("Confirmo que o serviço foi realizado: OS-123 · Hospital Santa Clara.");
     await digitar(NOME, "João Pereira da Silva");
     await clicar($("[data-confirmar-aceite]"));
-    expect(ops).toEqual([{ tipo: "aceite", atividadeId: "a1", dados: { nome: "João Pereira da Silva", assinatura: ASSINATURA } }]);
+    expect(ops).toEqual([{ tipo: "aceite", atividadeId: "a1", dados: { nome: "João Pereira da Silva", assinatura: ASSINATURA, avaliacao: null, avaliacaoComentario: null } }]);
     expect(escritas()).toEqual([]); // nada vai direto ao servidor: é a fila que leva
     expect($("[data-assinatura-cliente]")).toBeNull();
     expect(ditos).toEqual([["Aceite do cliente registrado.", "sucesso"]]);

@@ -18,6 +18,10 @@ const URL = process.env.PG_TESTE_URL;
 const RAIZ = path.resolve(__dirname, "../..");
 const ANTERIOR = path.join(RAIZ, "prisma/sql/2026-12-28_os_aceite_cliente.sql");
 const ARQUIVO = path.join(RAIZ, "prisma/sql/2026-12-29_os_aceite_visto.sql");
+/** O arquivo seguinte (a avaliação do cliente): o schema de hoje é o resultado dos três, nesta ordem */
+const SEGUINTE = path.join(RAIZ, "prisma/sql/2026-12-30_os_aceite_avaliacao.sql");
+/** A regra "nota de 1 a 5" (CHECK) vem do arquivo da avaliação e o Prisma não a descreve: fica fora da comparação */
+const semRegraDaNota = (t: string) => t.split("\n").filter((l) => !l.startsWith("os_aceites_avaliacao_check ")).join("\n");
 const SCHEMA = `teste_aceite_visto_${process.pid}`;
 const PRISMA = `teste_aceite_visto_prisma_${process.pid}`;
 const T = "os_aceites";
@@ -109,10 +113,12 @@ describe.skipIf(!URL)("SQL de produção: aviso do aceite no sino (PostgreSQL re
     expect(fonte).not.toMatch(/DROP |DELETE |UPDATE |TRUNCATE|ALTER COLUMN|RENAME|INSERT |CREATE TYPE|NOT NULL|DEFAULT/);
   });
 
-  it("os dois arquivos juntos dão EXATAMENTE o que o Prisma espera de os_aceites (a ressalva mora na coluna 'observacao')", () => {
+  it("com o arquivo seguinte (a avaliação), o banco é EXATAMENTE o que o Prisma espera de os_aceites (a ressalva mora na coluna 'observacao')", () => {
+    psql(["-f", SEGUINTE]);
     const url = `${URL}${URL!.includes("?") ? "&" : "?"}schema=${PRISMA}`;
     execFileSync(path.join(RAIZ, "node_modules/.bin/prisma"), ["db", "push", "--skip-generate", "--schema", "prisma/schema.prisma"], { cwd: RAIZ, env: { ...process.env, DATABASE_URL: url }, stdio: "pipe" });
-    for (const f of [colunas, indices, chaves]) expect(f(SCHEMA)).toBe(f(PRISMA));
+    for (const f of [colunas, indices]) expect(f(SCHEMA)).toBe(f(PRISMA));
+    expect(semRegraDaNota(chaves(SCHEMA))).toBe(chaves(PRISMA));
     // O Prisma chama o campo de `ressalva`, mas a coluna continua "observacao": não há coluna "ressalva" em lugar nenhum
     expect(colunas(PRISMA)).toContain("observacao text text YES - -");
     expect(colunas(PRISMA)).not.toMatch(/^ressalva /m);
