@@ -191,7 +191,7 @@ describe("botão de rota das OS: igual a antes", () => {
 
 describe("de onde vem a foto (página do app)", () => {
   const sessao = vi.hoisted(() => ({ atual: null as any }));
-  const banco = vi.hoisted(() => ({ usuario: null as any, tecnico: null as any, consultasTecnico: [] as any[] }));
+  const banco = vi.hoisted(() => ({ usuario: null as any, tecnico: null as any, consultasTecnico: [] as any[], participa: 0, consultasParticipa: [] as any[] }));
   const visto = vi.hoisted(() => ({ props: null as any }));
   vi.mock("@/lib/auth", () => ({ auth: vi.fn(async () => sessao.atual) }));
   vi.mock("@/lib/prisma", () => ({
@@ -199,8 +199,12 @@ describe("de onde vem a foto (página do app)", () => {
       usuario: { findUnique: async () => banco.usuario },
       tecnico: { findFirst: async (q: any) => { banco.consultasTecnico.push(q); return banco.tecnico; } },
       configuracao: { findUnique: async () => null },
+      // A página também pergunta se o colaborador deste login participa do Desempenho (aba do app)
+      desempenhoParticipante: { count: async (q: any) => { banco.consultasParticipa.push(q); return banco.participa; } },
     },
   }));
+  /** Só as consultas da FOTO do cadastro (a página também procura o colaborador do login, pelo id ou pelo e-mail). */
+  const consultasDaFoto = () => banco.consultasTecnico.filter((q) => q.select?.avatar);
 
   async function propsDoApp() {
     const { default: Pagina } = await import("@/app/tecnico/page");
@@ -209,7 +213,7 @@ describe("de onde vem a foto (página do app)", () => {
     return achar(arvore);
   }
   beforeEach(() => {
-    banco.consultasTecnico = [];
+    banco.consultasTecnico = []; banco.consultasParticipa = []; banco.participa = 0;
     sessao.atual = { user: { id: "uT", name: "João Silva", email: "joao@clima.com", empresaId: "e1", empresaNome: "Clima Total", role: "TECNICO", permissoes: PRESETS.TECNICO, tecnicoId: "t1", perfilNome: null } };
   });
 
@@ -222,7 +226,7 @@ describe("de onde vem a foto (página do app)", () => {
     banco.usuario = { avatar: null }; banco.tecnico = { avatar: "data:image/jpeg;base64,DO-CADASTRO" };
     const props = await propsDoApp();
     expect(props.usuario.avatar).toBe("data:image/jpeg;base64,DO-CADASTRO");
-    expect(banco.consultasTecnico.at(-1).where).toEqual({ id: "t1", empresaId: "e1" });
+    expect(consultasDaFoto().at(-1).where).toEqual({ id: "t1", empresaId: "e1" });
     expect(props.perfilInicial.avatar).toBeNull(); // uma cópia só da foto na página: "Meus dados" pega do app
     banco.tecnico = { avatar: null };
     expect((await propsDoApp()).usuario.avatar).toBeNull();
@@ -232,6 +236,21 @@ describe("de onde vem a foto (página do app)", () => {
     sessao.atual.user.tecnicoId = null;
     banco.usuario = { avatar: null }; banco.tecnico = { avatar: "data:image/jpeg;base64,NAO-DEVE-USAR" };
     expect((await propsDoApp()).usuario.avatar).toBeNull();
-    expect(banco.consultasTecnico).toEqual([]);
+    expect(consultasDaFoto()).toEqual([]);
+  });
+
+  it("'Desempenho' no app: só para o colaborador que participa (na empresa da sessão)", async () => {
+    banco.usuario = { avatar: null }; banco.tecnico = { id: "t1", nome: "João Silva", avatar: null };
+    banco.participa = 1;
+    expect((await propsDoApp()).usuario.desempenho).toBe(true);
+    expect(banco.consultasParticipa.at(-1).where).toEqual({ tecnicoId: "t1", empresaId: "e1" });
+    banco.participa = 0;
+    expect((await propsDoApp()).usuario.desempenho).toBe(false);
+  });
+
+  it("login sem colaborador ligado: sem 'Desempenho' e nem consulta a participação", async () => {
+    banco.usuario = { avatar: null }; banco.tecnico = null; banco.participa = 1;
+    expect((await propsDoApp()).usuario.desempenho).toBe(false);
+    expect(banco.consultasParticipa).toEqual([]);
   });
 });
