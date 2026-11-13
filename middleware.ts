@@ -36,16 +36,22 @@ const rotasPublicas = [
   "/privacidade",     // páginas institucionais públicas (sem login, indexáveis)
   "/faq",
   "/termos",
+  "/teste-gratis",    // destino do CTA da home de vendas
+  "/marketing/",      // prints da home de vendas (public/marketing)
+  "/opengraph-image", // imagem de compartilhamento da home de vendas
   "/instalar",
   "/offline",
   "/sw.js",
   "/manifest.json",
 ];
 
+// Públicas por caminho EXATO: a home de vendas ("/" como prefixo liberaria o sistema inteiro).
+const rotasPublicasExatas = ["/"];
+
 export default auth(function middleware(req: NextRequest & { auth: any }) {
   const { pathname } = req.nextUrl;
 
-  const ehRotaPublica = rotasPublicas.some((rota) => pathname.startsWith(rota));
+  const ehRotaPublica = rotasPublicasExatas.includes(pathname) || rotasPublicas.some((rota) => pathname.startsWith(rota));
 
   if (!req.auth && !ehRotaPublica) {
     const loginUrl = new URL("/login", req.url);
@@ -53,7 +59,8 @@ export default auth(function middleware(req: NextRequest & { auth: any }) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (req.auth && pathname === "/login") {
+  // Quem já está logado não vê o login nem a home de vendas: vai direto para o trabalho
+  if (req.auth && (pathname === "/login" || pathname === "/")) {
     return NextResponse.redirect(new URL(emModoTecnico(req.auth.user) ? ROTA_TECNICO : "/dashboard", req.url));
   }
 
