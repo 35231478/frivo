@@ -130,13 +130,31 @@ describe("barra inferior do app: Meu dia · Agenda · Perfil", () => {
   });
   afterEach(() => { if (root) act(() => root.unmount()); caixa?.remove(); document.body.innerHTML = ""; root = undefined as unknown as Root; vi.unstubAllGlobals(); });
 
-  async function abrirApp() {
-    window.history.replaceState(null, "", "/tecnico");
+  async function abrirApp(usuario: Record<string, unknown> = USUARIO, endereco = "/tecnico") {
+    window.history.replaceState(null, "", endereco);
     const { AppTecnico } = await import("@/components/tecnico/app-tecnico");
     caixa = document.createElement("div"); document.body.appendChild(caixa); root = createRoot(caixa);
-    await act(async () => { root.render(createElement(AppTecnico, { usuario: USUARIO as any, config: CONFIG_APP_PADRAO, perfilInicial })); });
-    await esperarAte(() => !!$("[data-vista]"), "app carregado");
+    await act(async () => { root.render(createElement(AppTecnico, { usuario: usuario as any, config: CONFIG_APP_PADRAO, perfilInicial })); });
+    await esperarAte(() => !!$("[data-nav]"), "app carregado");
   }
+
+  it("'Desempenho' só entra na barra de quem PARTICIPA do Desempenho (antes do Perfil); os outros continuam com três botões", async () => {
+    const botoes = () => [...document.body.querySelectorAll("[data-nav]")].map((b) => b.getAttribute("data-nav"));
+    await abrirApp();
+    expect(botoes()).toEqual(["dia", "agenda", "perfil"]);
+    expect(nav("dia").parentElement!.className).toContain("grid-cols-3");
+    act(() => root.unmount()); caixa.remove();
+    await abrirApp({ ...USUARIO, desempenho: true });
+    expect(botoes()).toEqual(["dia", "agenda", "desempenho", "perfil"]);
+    expect(nav("dia").parentElement!.className).toContain("grid-cols-4");
+    expect(nav("desempenho").textContent).toBe("Desempenho");
+    expect(nav("desempenho").className).toContain("touch-target");
+    await tocar("desempenho");
+    expect(window.location.search).toBe("?ver=desempenho");
+    expect(nav("desempenho").getAttribute("aria-current")).toBe("page");
+    await esperarAte(() => !!$("[data-desempenho-tecnico]"), "vista Desempenho");
+    expect((globalThis.fetch as any).mock.calls.some(([u]: [string]) => String(u).startsWith("/api/tecnico/desempenho?mes="))).toBe(true);
+  });
 
   it("cada toque dá UM pulso de 10 ms e leva à vista — nos três botões, com alvo de 44 px", async () => {
     const vibrate = vi.fn(() => true); navegador(vibrate);
