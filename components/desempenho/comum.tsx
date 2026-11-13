@@ -8,7 +8,7 @@ import { competenciaAnterior, competenciaSeguinte, formatarEscore, rotuloCompete
 
 export const JSON_HEADERS = { "Content-Type": "application/json" };
 
-export type AbaDesempenho = "painel" | "revisao" | "premiacoes" | "configuracao";
+export type AbaDesempenho = "painel" | "revisao" | "premiacoes" | "fechamento" | "configuracao";
 export interface PodeDesempenho { revisar: boolean; gerenciar: boolean }
 
 /** Título do módulo e as abas (cada uma é uma rota; só aparecem as que a pessoa pode abrir). */
@@ -17,6 +17,8 @@ export function CabecalhoDesempenho({ ativa, pode, aRevisar, acoes }: { ativa: A
     { id: "painel", href: "/desempenho", rotulo: "Painel", mostrar: true },
     { id: "revisao", href: "/desempenho/revisao", rotulo: "A revisar", mostrar: pode.revisar, selo: aRevisar },
     { id: "premiacoes", href: "/desempenho/premiacoes", rotulo: "Premiação", mostrar: true },
+    // Fechamento e folha de bônus são valores em reais: só quem gerencia
+    { id: "fechamento", href: "/desempenho/fechamento", rotulo: "Fechamento", mostrar: pode.gerenciar },
     { id: "configuracao", href: "/desempenho/configuracao", rotulo: "Configuração", mostrar: pode.gerenciar },
   ];
   return (

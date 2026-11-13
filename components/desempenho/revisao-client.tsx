@@ -112,7 +112,7 @@ export function RevisaoDesempenho({ pode }: { pode: PodeDesempenho }) {
                     <StatusPill tom={TOM_SITUACAO[p.situacao] ?? "previsto"} tamanho="sm" data-pilula-situacao={p.situacao}>{ROTULO_SITUACAO[p.situacao] ?? p.situacao}</StatusPill>
                   </div>
                   <div className="flex items-center gap-1 flex-wrap lg:w-64 lg:justify-end shrink-0" data-acoes-penalidade>
-                    {p.situacao === "A_REVISAR" ? (
+                    {p.mesFechado ? <span className="text-xs text-ink-muted" data-mes-fechado-item>Mês fechado: reabra para mudar.</span> : p.situacao === "A_REVISAR" ? (
                       <>
                         <Button type="button" variant="outline" size="sm" onClick={() => setDecidindo({ item: p, situacao: "CONTA" })} data-conta><CheckCircle2 className="w-3.5 h-3.5" /> Conta</Button>
                         <Button type="button" variant="secondary" size="sm" onClick={() => setDecidindo({ item: p, situacao: "NAO_CONTA" })} data-nao-conta><XCircle className="w-3.5 h-3.5" /> Não conta</Button>
@@ -120,7 +120,7 @@ export function RevisaoDesempenho({ pode }: { pode: PodeDesempenho }) {
                     ) : (
                       <Button type="button" variant="secondary" size="sm" loading={ocupada === p.id} onClick={() => rever(p)} data-rever><Undo2 className="w-3.5 h-3.5" /> Rever decisão</Button>
                     )}
-                    {p.manual && (
+                    {p.manual && !p.mesFechado && (
                       <>
                         <button type="button" title="Editar reclamação" aria-label="Editar reclamação" onClick={() => setFormulario(p)} data-editar
                           className="p-1.5 rounded-md text-ink-muted hover:text-ink hover:bg-surface-alt"><Pencil className="w-4 h-4" /></button>

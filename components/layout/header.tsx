@@ -65,6 +65,7 @@ const ROTULOS_ROTA: Record<string, string> = {
   revisao: "A revisar",
   premiacoes: "Premiação",
   configuracao: "Configuração",
+  fechamento: "Fechamento",
   veiculos: "Veículos",
   checklist: "Checklist",
   cargos: "Cargos",

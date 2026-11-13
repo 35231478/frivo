@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { CalendarDays, Loader2, Sun, UserRound } from "lucide-react";
+import { CalendarDays, Loader2, Sun, Trophy, UserRound } from "lucide-react";
 import { Avisos, toast } from "@/components/ui/avisos";
 import { cn } from "@/lib/utils";
 import { toqueLeve } from "@/lib/haptico";
@@ -14,6 +14,7 @@ import type { ConfigApp } from "@/lib/tecnico/config-app";
 import { Agenda, MeuDia } from "@/components/tecnico/meu-dia";
 import { VistaOs } from "@/components/tecnico/execucao";
 import { PerfilTecnico } from "@/components/tecnico/perfil";
+import { DesempenhoTecnico } from "@/components/tecnico/desempenho";
 import { BloqueioLocalizacao, useLocalizacaoObrigatoria } from "@/components/tecnico/localizacao-gate";
 import type { PerfilClient } from "@/components/perfil/perfil-client";
 
@@ -24,6 +25,8 @@ const NAV = [
   { ver: "agenda" as const, rotulo: "Agenda", Icone: CalendarDays },
   { ver: "perfil" as const, rotulo: "Perfil", Icone: UserRound },
 ];
+/** Só para quem participa do Desempenho (entra antes do Perfil) */
+const NAV_DESEMPENHO = { ver: "desempenho" as const, rotulo: "Desempenho", Icone: Trophy };
 
 /**
  * App do TÉCNICO (PWA, offline-first): uma página só, com as vistas Meu dia · Agenda · Perfil e a
@@ -45,6 +48,7 @@ function Casca({ perfilInicial }: { perfilInicial: PerfilInicial }) {
   // "Exigir localização ativa": sem GPS, o app fica travado (libera sozinho quando a posição volta)
   const loc = useLocalizacaoObrigatoria(config.exigirLocalizacao);
   const travadoLoc = config.exigirLocalizacao && loc.estado !== "ok";
+  const nav = usuario.desempenho ? [NAV[0], NAV[1], NAV_DESEMPENHO, NAV[2]] : NAV;
 
   // G12/UX-3: quem clicou num link do escritório foi trazido para cá — avisa em vez de só "piscar"
   useEffect(() => {
@@ -82,8 +86,8 @@ function Casca({ perfilInicial }: { perfilInicial: PerfilInicial }) {
           : !vista || !motor ? <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-ink-subtle" /></div> : <Conteudo vista={vista} perfilInicial={perfilInicial} />}
       </main>
       <nav className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-surface-border safe-bottom" aria-label="Navegação do técnico">
-        <div className="grid grid-cols-3 max-w-2xl mx-auto">
-          {NAV.map(({ ver, rotulo, Icone }) => (
+        <div className={cn("grid max-w-2xl mx-auto", nav.length === 4 ? "grid-cols-4" : "grid-cols-3")}>
+          {nav.map(({ ver, rotulo, Icone }) => (
             // Pulso tátil curtinho no toque (Android; onde não há suporte, nada acontece)
             <button key={ver} type="button" onClick={() => { toqueLeve(); irPara({ ver } as Vista); }} aria-current={ativa === ver ? "page" : undefined} data-nav={ver}
               className={cn("flex flex-col items-center justify-center gap-0.5 py-2.5 touch-target", ativa === ver ? "text-acento" : "text-ink-muted")}>
@@ -101,6 +105,7 @@ function Conteudo({ vista, perfilInicial }: { vista: Vista; perfilInicial: Perfi
   switch (vista.ver) {
     case "agenda": return <Agenda />;
     case "perfil": return <PerfilTecnico perfilInicial={perfilInicial} />;
+    case "desempenho": return <DesempenhoTecnico />;
     case "os": return <VistaOs key={vista.a} atividadeId={vista.a} equipamentoId={vista.e} camera={vista.cam} />;
     default: return <MeuDia />;
   }

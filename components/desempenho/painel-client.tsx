@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ClipboardCheck, Gift, Loader2, Settings, Trophy, UsersRound } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { ClipboardCheck, Gift, Loader2, Lock, Settings, Trophy, UsersRound } from "lucide-react";
+import { cn, formatarData } from "@/lib/utils";
 import { ROTULO_TIPO_PERFIL, formatarEscore } from "@/lib/desempenho/regras";
 import type { GrupoRanking, PremiacaoNaTela } from "@/lib/desempenho/painel";
 import type { PainelDoMes } from "@/lib/desempenho/servidor";
@@ -41,6 +41,12 @@ export function PainelDesempenho({ mesAtual, pode }: { mesAtual: string; pode: P
         : !ativo ? <SemConfiguracao gerenciar={pode.gerenciar} />
         : (
           <>
+            {ativo.fechamento && (
+              <p className="flex items-center gap-2 text-sm rounded-lg border border-surface-border bg-white text-ink px-3 py-2" data-mes-fechado={ativo.fechamento.versao}>
+                <Lock className="w-4 h-4 shrink-0 text-ink-muted" aria-hidden />
+                Mês fechado em {formatarData(ativo.fechamento.fechadoEm)} por {ativo.fechamento.fechadoPor}. Escore, faixa e bônus são definitivos.
+              </p>
+            )}
             <Avisos dados={ativo} pode={pode} />
             {ativo.premiacoes.length > 0 && <PremioEmDisputa premiacoes={ativo.premiacoes} />}
             {ativo.grupos.map((g) => <Ranking key={g.perfil.id} grupo={g} mes={mes} gerenciar={pode.gerenciar} />)}
