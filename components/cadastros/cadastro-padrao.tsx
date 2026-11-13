@@ -512,7 +512,8 @@ function CampoForm({ campo: c, valor, disabled, id, onChange }: {
   if (c.tipo === "cadastro" && c.cadastro) {
     // Vínculo com outro cadastro: seletor da casa (ativos para escolher; o atual fica mesmo inativo; "+ Novo…" inline)
     const outro = CADASTROS[c.cadastro];
-    return <SeletorCadastro entidade={c.cadastro} valor={valor} onChange={(v) => onChange(v)} id={id} nome={c.key} disabled={disabled} vazio={`Sem ${outro.singular.split(" ")[0]}`} />;
+    // `editavel`: o lápis edita o cadastro escolhido aqui mesmo (ex.: a categoria, de dentro do produto)
+    return <SeletorCadastro entidade={c.cadastro} valor={valor} onChange={(v) => onChange(v)} id={id} nome={c.key} disabled={disabled} vazio={`Sem ${outro.singular.split(" ")[0]}`} editavel />;
   }
   if (c.tipo === "estruturado") return null; // só existe dentro da seção própria do grupo
   if (c.tipo === "booleano") {

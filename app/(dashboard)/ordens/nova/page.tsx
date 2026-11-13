@@ -367,6 +367,7 @@ export default function NovaOrdemPage() {
                     setTiposOs((l) => [...l, { id: t.id, nome: t.nome, ativo: true }]);
                     return { value: t.id, label: t.nome };
                   }}
+                  edicao={TIPO_OS.edicao(tiposOs, (t) => setTiposOs((l) => l.map((x) => (x.id === t.id ? { ...x, ...t } : x))))}
                 />
               </FormField>
               {/* O prazo da OS: é o que a central usa para dizer se está no prazo ou atrasada */}

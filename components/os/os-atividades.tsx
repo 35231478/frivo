@@ -280,6 +280,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
                 setTiposOs((l: any[]) => [...l, { id: t.id, nome: t.nome, ativo: true }]);
                 return { value: t.id, label: t.nome };
               }}
+              edicao={TIPO_OS.edicao(tiposOs, (t) => setTiposOs((l: any[]) => l.map((x) => (x.id === t.id ? { ...x, ...t } : x))))}
             />
           </FormField>
           <FormField label="Quem executa" required>
@@ -332,6 +333,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
                   setTiposOs((l: any[]) => [...l, { id: t.id, nome: t.nome, ativo: true }]);
                   return { value: t.id, label: t.nome };
                 }}
+                edicao={TIPO_OS.edicao(tiposOs, (t) => setTiposOs((l: any[]) => l.map((x) => (x.id === t.id ? { ...x, ...t } : x))))}
               />
             </FormField>
           </FormGrid>
