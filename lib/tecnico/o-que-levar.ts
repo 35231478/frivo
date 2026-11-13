@@ -78,7 +78,7 @@ export function materiaisPrevistosDaOs(linhas: readonly LinhaDaOs[]): MaterialPr
   const previstos: MaterialPrevisto[] = [];
   const por = (produtoId: string | null, descricao: string, unidade: string | null | undefined, quantidade: number) => {
     const nome = descricao.trim();
-    if (!nome || !(quantidade > 0)) return;
+    if (!nome) return; // quantidade zero ("não usado") ou inválida cai na soma, logo abaixo
     previstos.push({ chave: chaveDoMaterial(produtoId, nome, unidade), descricao: nome, unidade: unidadeDe(unidade), quantidade });
   };
   for (const l of linhas) {
