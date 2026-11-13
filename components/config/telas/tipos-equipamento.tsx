@@ -1,14 +1,11 @@
-import { PageHeader } from "@/components/ui/page-header";
+import { TelaCadastroApoio } from "@/components/config/tela-cadastro-apoio";
 import { TiposEquipamentoTela } from "@/components/cadastros/telas/tipos-equipamento";
 
+/** Cadastro padronizado (lib/cadastros): abas Ativos/Inativos/Todos, impacto, ações em massa. */
 export function TelaTiposEquipamento() {
   return (
-    <div>
-      <PageHeader title="Tipos de equipamento" description="Categorias de equipamento e seus formulários" backHref="/configuracoes" />
-      {/* Cadastro padronizado (lib/cadastros): abas Ativos/Inativos/Todos, impacto, ações em massa */}
-      <div className="bg-white rounded-card border border-surface-border p-4 sm:p-6">
-        <TiposEquipamentoTela />
-      </div>
-    </div>
+    <TelaCadastroApoio titulo="Tipos de equipamento" descricao="Categorias de equipamento e seus formulários">
+      <TiposEquipamentoTela />
+    </TelaCadastroApoio>
   );
 }

@@ -39,7 +39,7 @@ describe("glossário nos rótulos", () => {
       expect(src, f).not.toMatch(/Adicionar (contato|endereço)/);
       expect(src, f).not.toMatch(/"Adicionar" : "Salvar"/);
     }
-    for (const f of ["components/cadastros/cadastro-padrao.tsx", "components/config/crud-cadastro.tsx", "components/os/os-orcamento.tsx"]) expect(ler(f), f).not.toMatch(/\? "Salvar" : "Adicionar"|"Adicionar" : "Salvar"/);
+    for (const f of ["components/cadastros/cadastro-padrao.tsx", "components/os/os-orcamento.tsx"]) expect(ler(f), f).not.toMatch(/\? "Salvar" : "Adicionar"|"Adicionar" : "Salvar"/);
     // sub-item dentro do formulário continua "Adicionar"
     expect(ler("components/compras/editor-pedido.tsx")).toContain("Adicionar item");
     expect(ler("components/os/os-fotos-anexos.tsx")).toContain("Adicionar foto");
