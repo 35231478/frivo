@@ -1,5 +1,5 @@
 /**
- * DESEMPENHO — a lista "A REVISAR". Retorno, ressalva e nota baixa são DETECTADOS do que a operação
+ * DESEMPENHO — a lista "A REVISAR". Retorno e ressalva do cliente são DETECTADOS do que a operação
  * já grava; a reclamação por fora (telefone, WhatsApp) é registrada à mão. Em todos os casos:
  *
  *  - NADA pesa no escore sozinho: o item nasce "A_REVISAR" e só conta depois de alguém marcar
@@ -19,7 +19,7 @@ import type { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { inicioMesBR, instanteBR } from "@/lib/fuso";
 import { rotuloDoEquipamento } from "@/lib/pmoc-ocorrencias";
-import { competenciaDe, origemDoRetorno, type ServicoNoEquipamento, type SituacaoPenalidade, type TipoPenalidade, type decisaoSchema, type reclamacaoSchema } from "./regras";
+import { competenciaDe, descricaoDaRessalva, origemDoRetorno, type ServicoNoEquipamento, type SituacaoPenalidade, type TipoPenalidade, type decisaoSchema, type reclamacaoSchema } from "./regras";
 import { ErroDesempenho, type Ator } from "./erros";
 import { competenciasFechadas, exigirMesAberto } from "./fechamento-estado";
 import { ITENS_QUE_VALEM } from "./itens-validos";
@@ -60,17 +60,19 @@ export async function sincronizarPenalidades(empresaId: string, agora: Date = ne
 }
 
 /**
- * Ressalva do cliente SEM nota: um item por aceite e por colaborador que executou a OS. Com nota, a
- * insatisfação já pesa na média da avaliação — e nota baixa, sozinha, nunca vira penalidade.
+ * Ressalva escrita pelo cliente no aceite: um item por aceite e por colaborador que executou a OS —
+ * TENHA O CLIENTE DADO NOTA OU NÃO. A nota segue contando só na média da avaliação; a ressalva é o
+ * sinal qualitativo à parte (5 estrelas com um problema escrito não some). A descrição leva a nota
+ * para quem revisa enxergar as duas coisas juntas. Nota baixa SEM ressalva nunca vira item.
  */
 async function ressalvas(empresaId: string, desde: Date, participantes: Set<string>): Promise<Novo[]> {
   const aceites = await prisma.osAceite.findMany({
     where: {
       empresaId, situacao: "CONFIRMADO", confirmadoEm: { gte: desde }, ordemServico: { empresaId, status: { not: "CANCELADA" } },
-      ressalva: { not: null }, avaliacao: null,
+      ressalva: { not: null },
     },
     select: {
-      id: true, ordemServicoId: true, ressalva: true, confirmadoEm: true,
+      id: true, ordemServicoId: true, ressalva: true, avaliacao: true, confirmadoEm: true,
       ordemServico: { select: { numero: true, atividades: { where: { status: "CONCLUIDA" }, select: { tecnicoId: true, tecnicosEquipe: { select: { tecnicoId: true } } } } } },
     },
   });
@@ -78,7 +80,7 @@ async function ressalvas(empresaId: string, desde: Date, participantes: Set<stri
   for (const a of aceites) {
     const ressalva = (a.ressalva ?? "").trim();
     if (!ressalva) continue;
-    const descricao = curto(`${a.ordemServico.numero}: ressalva do cliente — "${ressalva}"`);
+    const descricao = curto(descricaoDaRessalva(a.ordemServico.numero, ressalva, a.avaliacao));
     const executores = new Set(a.ordemServico.atividades.flatMap((x) => [x.tecnicoId, ...x.tecnicosEquipe.map((t) => t.tecnicoId)]).filter((x): x is string => !!x));
     for (const tecnicoId of executores) {
       if (!participantes.has(tecnicoId)) continue;

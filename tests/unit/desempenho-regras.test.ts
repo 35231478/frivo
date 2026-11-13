@@ -17,7 +17,7 @@ import { describe, expect, it } from "vitest";
 import {
   MSG_FAIXA_ABAIXO_DA_META, MSG_FAIXA_MINIMO_REPETIDO, MSG_FAIXA_REPETIDA, MSG_MOTIVO, MSG_PESOS, PERFIS_INICIAIS, REGRA_SUGERIDA, SEM_MEDIDA, TIPOS_PENALIDADE,
   ajustesSchema, calcularEscore, competenciaAnterior, competenciaAtual, competenciaCurta, competenciaDe, competenciaSeguinte, concluidaNoPrazo, decisaoSchema,
-  diaDeReferencia, ehCompetencia, ehRetorno, entradaDaGestao, entradaDoColaborador, faixaDoEscore, formatarEscore, lerFaixas, mediaDaEquipe, notaEmPercentual,
+  descricaoDaRessalva, diaDeReferencia, ehCompetencia, ehRetorno, entradaDaGestao, entradaDoColaborador, faixaDoEscore, formatarEscore, lerFaixas, mediaDaEquipe, notaEmPercentual,
   origemDoRetorno, percentual, perfilSchema, periodoDaCompetencia, premiacaoSchema, ranquear, reclamacaoSchema, regraAgendada, regraSchema, regraVigente,
   relatorioCompleto, resumoDaPenalidade, rotuloCompetencia, somarMeses, temAntesEDepois, vigenciaDaMudanca,
   type AtividadeMedida, type EntradaEscore, type OsAvaliadaMedida, type Regra,
@@ -343,7 +343,17 @@ describe("o escore: índice de qualidade de 0 a 100", () => {
     expect(um.composicao.map((c) => c.detalhe).slice(0, 2)).toEqual(["1 de 1 atividade", "0 de 1 relatório"]);
   });
 
-  it("retorno pesa pelos pontos de retorno; ressalva, nota baixa e reclamação pelos de reclamação", () => {
+  it("texto do item de ressalva: a OS e o que o cliente escreveu; com nota, a nota vem ANTES do texto (não se perde num texto longo)", () => {
+    expect(descricaoDaRessalva("OS-1001", "O dreno voltou a pingar", null)).toBe('OS-1001: ressalva do cliente — "O dreno voltou a pingar"');
+    expect(descricaoDaRessalva("OS-1001", "Ficou com barulho", 5)).toBe('OS-1001: ressalva do cliente (nota 5 de 5) — "Ficou com barulho"');
+    expect(descricaoDaRessalva("OS-1001", "Não resolveu", 1)).toBe('OS-1001: ressalva do cliente (nota 1 de 5) — "Não resolveu"');
+    // Nota fora de 1 a 5 (dado estranho) não entra no texto
+    for (const fora of [0, 6, 4.5, Number.NaN]) expect(descricaoDaRessalva("OS-1", "x", fora), String(fora)).toBe('OS-1: ressalva do cliente — "x"');
+    const longa = descricaoDaRessalva("OS-1001", "a".repeat(400), 5);
+    expect(longa.indexOf("(nota 5 de 5)")).toBeLessThan(40);
+  });
+
+  it("retorno pesa pelos pontos de retorno; ressalva do cliente e reclamação pelos de reclamação", () => {
     expect(ehRetorno("RETORNO")).toBe(true);
     for (const t of ["RESSALVA", "RECLAMACAO", ""]) expect(ehRetorno(t), t).toBe(false);
   });
