@@ -88,7 +88,7 @@ Já estava num componente reutilizável, e foi confirmado:
 - `components/listagem/*` — `TabelaPro`, `CampoBusca`, `Paginacao`, `ListaVazia`, para as listas que
   não são cadastro.
 
-O que faltava e entrou: **toast em toda gravação** (criar, editar, inativar, reativar) e a coluna
+O que faltava e entrou: **toast ao gravar** (criar, editar, inativar, reativar) e a coluna
 `larga` (descrição ocupa o espaço que sobra).
 
 ### Esqueleto das telas de cadastro de apoio
@@ -108,7 +108,7 @@ parágrafo: vai em `ajuda`.
 
 | Tela | Antes | Depois |
 |---|---|---|
-| **Tipos de OS** (Configurações) | Tabela própria: sem abas, sem busca, sem paginação, botões de editar e excluir para qualquer um, sem versão de celular, sem aviso ao salvar, "Novo tipo de os" | Cadastro padrão: abas com contagem, busca, ordenação, Novo / Editar / Inativar só com Configurações › gerenciar, impacto antes de inativar, cartões no celular, toast, regra do equipamento no ⓘ, coluna "Em uso" |
+| **Tipos de OS** (Configurações) | Tabela própria: lista inteira de uma vez (busca só no navegador), sem abas (inativos num recolhível), sem paginação nem ordenação; Editar e Desativar (lixeira) à vista para qualquer usuário — o servidor recusava só depois do clique; sem impacto antes de desativar; sem versão de celular; "Novo tipo de os" | Cadastro padrão: abas com contagem, busca, ordenação e paginação no servidor, Novo / Editar / Inativar só com Configurações › gerenciar, impacto antes de inativar, cartões no celular, toast, regra do equipamento no ⓘ, coluna "Em uso" |
 | **Tipos de problema** (Portal do cliente) | A mesma tabela própria, com um parágrafo de instrução | Cadastro padrão dentro da seção; a instrução foi para o ⓘ |
 | **Tipos de equipamento** | Já no padrão de lista; cabeçalho e cartão montados à mão | Mesmo esqueleto (`TelaCadastroApoio`) e toast |
 | **Categorias de produto** | Idem | Idem |
