@@ -6,7 +6,7 @@ import { listarPenalidades, registrarReclamacao } from "@/lib/desempenho/penalid
 import { desempenhoAtivo, responder } from "@/lib/desempenho/servidor";
 
 /**
- * A lista "a revisar" (retorno, ressalva, nota baixa, reclamação). Detecta o que falta antes de
+ * A lista "a revisar" (retorno, ressalva do cliente, reclamação). Detecta o que falta antes de
  * listar. Filtros: `?situacao=` e `?mes=`. Exige "Desempenho › Revisar penalidades".
  */
 export async function GET(req: NextRequest) {

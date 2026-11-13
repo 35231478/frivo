@@ -20,7 +20,7 @@ Nada é digitado para o escore. Tudo sai do que a operação já grava.
 | Relatórios completos | `atividade_equipamentos` (atendidos), `checklist_respostas`, `fotos_atendimento`, formulário obrigatório | Por equipamento atendido: a **mesma regra que libera a conclusão no app** (`lib/execucao/pendencias`) + uma foto "antes" e uma "depois" (quando o perfil exige) |
 | Avaliação do cliente | `os_aceites.avaliacao`, via `avaliacoesPorTecnico` / `osAvaliadas` (`lib/os/aceite-server`) | Média das notas (1 a 5) ÷ 5 → 5 estrelas = 100%, 4 = 80% |
 | Retorno | OS com atividade de tipo marcado como **corretiva**, aberta até N dias depois do **último** serviço feito no mesmo equipamento (`atividade_equipamentos.feito_em`) | Vai para "a revisar", para quem executou esse último serviço |
-| Ressalva **sem nota** | `os_aceites.observacao` (ressalva) com `avaliacao` vazia | Um item por aceite e por colaborador que executou a OS. Com nota, a reclamação já está na média |
+| Ressalva do cliente | `os_aceites.observacao` (ressalva escrita no aceite), **com nota ou sem** | Um item por aceite e por colaborador que executou a OS. A nota, quando existe, aparece na descrição do item |
 | Reclamação | Registro manual (telefone, WhatsApp), opcionalmente ligado a uma OS | Nasce "a revisar" |
 
 **A data de conclusão não existia.** Até aqui a atividade só guardava o status. `concluida_em` passa a
@@ -42,7 +42,7 @@ escore = base − pontos das penalidades marcadas "conta"   (entre 0 e 100)
 
 ## Penalidade nunca é automática
 
-1. Retorno e ressalva **sem nota** são **detectados** e entram na lista **A revisar**.
+1. Retorno e **toda ressalva escrita** pelo cliente são **detectados** e entram na lista **A revisar**.
 2. Só pesam depois de alguém com *Desempenho › Revisar penalidades* marcar **Conta**, com motivo.
    **Não conta** também pede motivo. Dá para **rever** a decisão.
 3. **Nunca se penaliza quem registrou o problema.** Não é retorno quando, no serviço anterior, o
@@ -66,13 +66,22 @@ escore = base − pontos das penalidades marcadas "conta"   (entre 0 e 100)
 - **Travada no mês**: a primeira regra vale já no mês corrente; qualquer mudança é gravada para o
   **mês seguinte** e não retroage (`desempenho_regras.vigente_desde`).
 
-### A nota baixa conta uma vez só
+### Nota e ressalva são sinais separados
 
-A nota do cliente pesa na **média da avaliação** — e só nela. Nota baixa **não é item de penalidade**:
-contar nos dois lugares cobrava duas vezes o mesmo fato. Vão para revisão o **retorno**, a
-**reclamação** registrada pela gestão e a **ressalva sem nota** (essa não aparece na média).
+- A **nota** do cliente pesa na **média da avaliação** — e só nela. Nota baixa **não é item de
+  penalidade**, com ou sem comentário.
+- A **ressalva** é o que o cliente **escreveu** no aceite. É um sinal qualitativo à parte: **toda
+  ressalva vira item "A revisar"**, tenha o cliente dado nota ou não. Um cliente que dá 5 estrelas e
+  escreve um problema não tem a reclamação escondida pela nota alta.
+- Quem revisa decide: **Conta** ou **Não conta**, com motivo. A descrição do item traz a nota
+  (`OS-123: ressalva do cliente (nota 5 de 5) — "…"`), para as duas coisas serem vistas juntas —
+  inclusive quando a nota já foi baixa e a ressalva repete o mesmo problema.
+- Um item por aceite e por colaborador (chave `ACEITE:<aceite>:<colaborador>`): detectar de novo não
+  duplica nem mexe no que já foi decidido.
 
-Os itens antigos de nota baixa (e de ressalva com nota) continuam gravados, mas não aparecem nem
+Vão para revisão: **retorno**, **ressalva do cliente** e **reclamação** registrada pela gestão.
+
+Os itens antigos de **nota baixa** (da primeira versão) continuam gravados, mas não aparecem nem
 descontam: o filtro é um só, `lib/desempenho/itens-validos.ts`, usado na medição, na lista, na
 contagem, na ficha e na decisão. Nada foi apagado. A coluna `desempenho_config.nota_baixa_ate` ficou
 sem uso.

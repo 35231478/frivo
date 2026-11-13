@@ -506,42 +506,61 @@ describe.skipIf(!URL_PG)("Desempenho PR 1: medir e mostrar (PostgreSQL real)", (
 
   /* ───────── penalidades: nunca automáticas ───────── */
 
-  it("só a RESSALVA SEM NOTA entra 'A REVISAR'; NOTA BAIXA não é penalidade (já pesa na média) — um item por aceite e por colaborador, só participantes", async () => {
+  it("TODA RESSALVA escrita entra 'A REVISAR', com nota do cliente ou sem; NOTA BAIXA sozinha não é penalidade (pesa só na média) — um item por aceite e por colaborador, só participantes", async () => {
     await zerarOperacao();
     const comRessalva = await servico({ tecnicos: ["t1", "t5"], ressalva: "O dreno voltou a pingar" });           // sem nota; t5 não participa
-    await servico({ tecnicos: ["t2"], ressalva: "Ficou com barulho" });                                            // sem nota
+    const cincoEstrelas = await servico({ tecnicos: ["t2"], nota: 5, ressalva: "Ficou com barulho" });             // 5 ESTRELAS e mesmo assim uma ressalva: não some
     await servico({ tecnicos: ["t3"], ressalva: "Faltou limpar a sala" });                                         // sem nota
-    await servico({ tecnicos: ["t2"], nota: 2, comentario: "Demorou e deixou sujeira" });                          // NOTA BAIXA: só na média
-    const comNota = await servico({ tecnicos: ["t2"], nota: 1, ressalva: "Não resolveu" });                        // ressalva COM nota: a nota já está na média
+    await servico({ tecnicos: ["t2"], nota: 2, comentario: "Demorou e deixou sujeira" });                          // NOTA BAIXA sem ressalva: só na média
+    const notaERessalva = await servico({ tecnicos: ["t2"], nota: 1, ressalva: "Não resolveu" });                  // nota baixa COM ressalva: a nota na média, a ressalva a revisar
+    await servico({ tecnicos: ["t3"], nota: 4, ressalva: "   " });                                                 // ressalva só de espaços: não é ressalva
     await servico({ tecnicos: ["t3"], ressalva: "OS cancelada", statusOs: "CANCELADA" });                          // OS cancelada: fora
     await servico({ tecnicos: ["t1"], ressalva: "Antiga", confirmadoEm: br("2026-10-31", "20:00") });              // antes do mês em que o módulo começou: fora
     const lista = await itens();
-    expect(resumo(lista)).toEqual(["Ana Dias:RESSALVA:A_REVISAR", "Bia Reis:RESSALVA:A_REVISAR", "Edu Prado:RESSALVA:A_REVISAR"]);
+    expect(resumo(lista)).toEqual(["Ana Dias:RESSALVA:A_REVISAR", "Bia Reis:RESSALVA:A_REVISAR", "Bia Reis:RESSALVA:A_REVISAR", "Edu Prado:RESSALVA:A_REVISAR"]);
     const ana = lista.find((p) => p.tecnico.nome === "Ana Dias");
     expect(ana).toMatchObject({ descricao: `${comRessalva.numero}: ressalva do cliente — "O dreno voltou a pingar"`, competencia: MES, manual: false, mesFechado: false, motivo: null, ordemServico: { id: comRessalva.os, numero: comRessalva.numero }, osRetorno: null });
-    // As notas baixas da Bia (2 e 1) pesam UMA vez só: na média da avaliação — sem item e sem desconto
-    expect(await linha("Bia Reis")).toMatchObject({ desconto: 0, composicao: expect.arrayContaining([expect.objectContaining({ metrica: "avaliacao", valor: 30, detalhe: "média 1,5 em 2 avaliações" })]) });
-    // Detectar de novo (abrir a lista, o painel, a ficha) não duplica
+    // Com nota, a descrição mostra a nota a quem revisa — as duas coisas juntas
+    expect(lista.filter((p) => p.tecnico.nome === "Bia Reis").map((p) => p.descricao).sort()).toEqual([
+      `${cincoEstrelas.numero}: ressalva do cliente (nota 5 de 5) — "Ficou com barulho"`,
+      `${notaERessalva.numero}: ressalva do cliente (nota 1 de 5) — "Não resolveu"`,
+    ].sort());
+    // A NOTA segue contando só na média (5, 2 e 1 → média 2,67 → 53,4%), e a ressalva, sem decisão, não desconta nada
+    expect(await linha("Bia Reis")).toMatchObject({ desconto: 0, penalidades: { retornos: 0, reclamacoes: 0 }, composicao: expect.arrayContaining([expect.objectContaining({ metrica: "avaliacao", valor: 53.4, detalhe: "média 2,7 em 3 avaliações" })]) });
+    // IDEMPOTENTE: detectar de novo (abrir a lista, o painel, a ficha) não duplica — um item por aceite e colaborador
     await itens(); await painel(); await chamar(R.ficha, "GET", { id: "t1" });
-    expect(await prisma.desempenhoPenalidade.count()).toBe(3);
+    expect(await prisma.desempenhoPenalidade.count()).toBe(4);
+    expect((await prisma.desempenhoPenalidade.findMany({ select: { chave: true } })).map((p: any) => p.chave).every((c: string) => /^ACEITE:[^:]+:t[123]$/.test(c))).toBe(true);
 
-    // LEGADO: itens de nota baixa e de ressalva COM nota gravados pela regra antiga — até os já marcados "Conta" —
-    // continuam no banco, mas não aparecem, não se decidem e não descontam mais nada
+    // A ressalva das 5 estrelas é um item como os outros: quem revisa marca "Conta" (com motivo) e só aí ela desconta
+    const dasCinco = lista.find((p) => p.ordemServico?.id === cincoEstrelas.os);
+    const antesDeContar = await escore("Bia Reis");
+    expect((await decidir(dasCinco.id, "CONTA", "Cliente confirmou o barulho por telefone")).status).toBe(200);
+    expect(await linha("Bia Reis")).toMatchObject({ escore: antesDeContar - 5, desconto: 5, penalidades: { retornos: 0, reclamacoes: 1 } });
+    expect((await decidir(dasCinco.id, "A_REVISAR")).status).toBe(200);
+    expect(await escore("Bia Reis")).toBe(antesDeContar);
+
+    // Item de ressalva COM nota que já existia (da primeira versão, com a mesma chave) volta a valer do jeito que estava;
+    // os de NOTA BAIXA continuam no banco sem aparecer, sem decisão possível e sem descontar — mesmo os marcados "Conta"
     const antes = await escore("Bia Reis");
     await prisma.desempenhoPenalidade.createMany({ data: [
-      { id: "legadoNota", empresaId: "e1", tecnicoId: "t2", tipo: "NOTA_BAIXA", chave: "LEGADO:nota", ordemServicoId: comNota.os, dataFato: br("2026-11-05"), competencia: MES, situacao: "CONTA", motivo: "Regra antiga" },
-      { id: "legadoRessalva", empresaId: "e1", tecnicoId: "t2", tipo: "RESSALVA", chave: "LEGADO:ressalva", ordemServicoId: comNota.os, dataFato: br("2026-11-05"), competencia: MES, situacao: "CONTA", motivo: "Regra antiga" },
-      { id: "legadoARevisar", empresaId: "e1", tecnicoId: "t2", tipo: "NOTA_BAIXA", chave: "LEGADO:arevisar", ordemServicoId: comNota.os, dataFato: br("2026-11-05"), competencia: MES },
+      { id: "legadoNota", empresaId: "e1", tecnicoId: "t2", tipo: "NOTA_BAIXA", chave: "LEGADO:nota", ordemServicoId: notaERessalva.os, dataFato: br("2026-11-05"), competencia: MES, situacao: "CONTA", motivo: "Regra antiga" },
+      { id: "legadoARevisar", empresaId: "e1", tecnicoId: "t2", tipo: "NOTA_BAIXA", chave: "LEGADO:arevisar", ordemServicoId: notaERessalva.os, dataFato: br("2026-11-05"), competencia: MES },
     ] });
     expect(await linha("Bia Reis")).toMatchObject({ escore: antes, desconto: 0, penalidades: { retornos: 0, reclamacoes: 0 } });
-    expect(resumo(await itens())).toEqual(["Ana Dias:RESSALVA:A_REVISAR", "Bia Reis:RESSALVA:A_REVISAR", "Edu Prado:RESSALVA:A_REVISAR"]);
+    expect(resumo(await itens())).toEqual(["Ana Dias:RESSALVA:A_REVISAR", "Bia Reis:RESSALVA:A_REVISAR", "Bia Reis:RESSALVA:A_REVISAR", "Edu Prado:RESSALVA:A_REVISAR"]);
     expect(await itens("?situacao=CONTA")).toEqual([]);
-    expect((await chamar(R.penalidades, "GET")).json.aRevisar).toBe(3);
-    expect((await painel()).aRevisar).toBe(3);
-    expect((await chamar(R.ficha, "GET", { id: "t2" })).json.penalidades.map((x: any) => x.tipo)).toEqual(["RESSALVA"]);
+    expect((await chamar(R.penalidades, "GET")).json.aRevisar).toBe(4);
+    expect((await painel()).aRevisar).toBe(4);
+    expect((await chamar(R.ficha, "GET", { id: "t2" })).json.penalidades.map((x: any) => x.tipo)).toEqual(["RESSALVA", "RESSALVA"]);
     expect(await erro(decidir("legadoARevisar", "CONTA", "Tentando contar a nota baixa"))).toBe("404 Item não encontrado.");
     expect(await erro(decidir("legadoNota", "A_REVISAR"))).toBe("404 Item não encontrado.");
     expect(await prisma.desempenhoPenalidade.count()).toBe(6); // nada foi apagado
+    // Ressalva COM nota marcada "Conta" pela regra antiga (ficou escondida): volta a aparecer e a descontar
+    await prisma.desempenhoPenalidade.update({ where: { id: lista.find((p) => p.ordemServico?.id === notaERessalva.os).id }, data: { situacao: "CONTA", motivo: "Decidido na primeira versão" } });
+    expect(await linha("Bia Reis")).toMatchObject({ escore: antes - 5, desconto: 5 });
+    expect(resumo(await itens("?situacao=CONTA"))).toEqual(["Bia Reis:RESSALVA:CONTA"]);
+    await prisma.desempenhoPenalidade.update({ where: { id: lista.find((p) => p.ordemServico?.id === notaERessalva.os).id }, data: { situacao: "A_REVISAR", motivo: null } });
   });
 
   it("NADA pesa sozinho: o escore só muda depois de 'CONTA' com motivo; 'não conta' não desconta; dá para rever", async () => {
@@ -567,11 +586,11 @@ describe.skipIf(!URL_PG)("Desempenho PR 1: medir e mostrar (PostgreSQL real)", (
     // Filtros da lista
     await decidir(item.id, "CONTA", "Confirmado com o cliente");
     expect(resumo(await itens("?situacao=CONTA"))).toEqual(["Ana Dias:RESSALVA:CONTA"]);
-    expect(resumo(await itens("?situacao=A_REVISAR"))).toEqual(["Bia Reis:RESSALVA:A_REVISAR", "Edu Prado:RESSALVA:A_REVISAR"]);
+    expect(resumo(await itens("?situacao=A_REVISAR"))).toEqual(["Bia Reis:RESSALVA:A_REVISAR", "Bia Reis:RESSALVA:A_REVISAR", "Edu Prado:RESSALVA:A_REVISAR"]);
     expect(await itens("?situacao=NAO_CONTA")).toEqual([]);
     expect(await itens("?mes=2026-10")).toEqual([]);
-    expect(await itens(`?mes=${MES}&situacao=INVENTADA`)).toHaveLength(3);
-    expect((await chamar(R.penalidades, "GET")).json.aRevisar).toBe(2);
+    expect(await itens(`?mes=${MES}&situacao=INVENTADA`)).toHaveLength(4);
+    expect((await chamar(R.penalidades, "GET")).json.aRevisar).toBe(3);
     // A ficha mostra os itens do mês do colaborador, com a situação e o motivo
     expect((await chamar(R.ficha, "GET", { id: "t1" })).json.penalidades).toEqual([expect.objectContaining({ tipo: "RESSALVA", situacao: "CONTA", motivo: "Confirmado com o cliente" })]);
   });

@@ -294,7 +294,7 @@ describe("Mês fechado no painel, na ficha e na revisão", () => {
     }
     expect($('[data-penalidade="abertoD"] [data-conta]')).toBeTruthy();
     expect($('[data-penalidade="abertoD"] [data-mes-fechado-item]')).toBeNull();
-    expect(texto()).toContain("Retorno e ressalva sem nota entram aqui sozinhos.");
+    expect(texto()).toContain("Retorno e ressalva do cliente entram aqui sozinhos.");
   });
 });
 

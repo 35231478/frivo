@@ -295,7 +295,16 @@ export function calcularEscore(regra: Regra, e: EntradaEscore): Escore {
   return { escore, base, desconto, composicao, penalidades, atingiuMeta: escore >= regra.metaMinima, faixa, bonus: faixa?.valor ?? 0 };
 }
 
-/** A penalidade pesa pelos pontos de retorno ou pelos de reclamação (ressalva sem nota e reclamação). */
+/**
+ * O texto do item de ressalva na lista "A revisar". A nota (quando o cliente deu) vem ANTES do texto:
+ * quem revisa vê as duas coisas juntas, e um texto longo cortado não leva a nota embora.
+ */
+export function descricaoDaRessalva(numeroOs: string, ressalva: string, nota: number | null): string {
+  const comNota = nota !== null && Number.isInteger(nota) && nota >= 1 && nota <= 5 ? ` (nota ${nota} de 5)` : "";
+  return `${numeroOs}: ressalva do cliente${comNota} — "${ressalva}"`;
+}
+
+/** A penalidade pesa pelos pontos de retorno ou pelos de reclamação (ressalva do cliente e reclamação). */
 export const ehRetorno = (tipo: string) => tipo === "RETORNO";
 
 /* ───────── ranking e equipe ───────── */

@@ -11,7 +11,7 @@ export async function GET() {
   return responder(() => configuracaoDoDesempenho(guard.session.user.empresaId));
 }
 
-/** Ajustes gerais: prazo do retorno, nota baixa e tipos de OS que contam como corretiva. */
+/** Ajustes gerais: prazo do retorno e tipos de OS que contam como corretiva. */
 export async function PUT(req: NextRequest) {
   const guard = await exigirPermissao("desempenho", "gerenciar");
   if (guard.erro) return guard.resposta;

@@ -25,7 +25,7 @@ const TOM_TIPO: Record<TipoPenalidade, TomStatus> = { RETORNO: "acento", RESSALV
 type Filtro = SituacaoPenalidade | "";
 
 /**
- * Lista "A revisar": retorno, ressalva, nota baixa e reclamação. Nada pesa no escore sozinho — só
+ * Lista "A revisar": retorno, ressalva do cliente e reclamação. Nada pesa no escore sozinho — só
  * depois de alguém marcar "Conta", com motivo. "Não conta" também pede motivo; dá para rever.
  */
 export function RevisaoDesempenho({ pode }: { pode: PodeDesempenho }) {
@@ -68,7 +68,7 @@ export function RevisaoDesempenho({ pode }: { pode: PodeDesempenho }) {
       <div className="bg-white border border-surface-border rounded-xl overflow-hidden">
         <div className="px-4 py-3 border-b border-surface-border flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-ink-muted max-w-2xl">
-            Retorno e ressalva sem nota entram aqui sozinhos. Só pesam depois de marcados “Conta”, com motivo.
+            Retorno e ressalva do cliente entram aqui sozinhos. Só pesam depois de marcados “Conta”, com motivo.
           </p>
           <Select aria-label="Situação" value={filtro} onChange={(e) => setFiltro(e.target.value as Filtro)} className="w-44" data-filtro-situacao>
             {SITUACOES_PENALIDADE.map((s) => <option key={s} value={s}>{ROTULO_SITUACAO[s]}</option>)}
