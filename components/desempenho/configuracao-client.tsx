@@ -160,7 +160,7 @@ function CartaoPerfil({ perfil, cfg, aoMudar, aoEditar, aoRegra, aoExcluir }: {
               onClick={() => fazer(`/api/desempenho/perfis/${perfil.id}/regra`, "DELETE")}>Descartar esta mudança</button>
           </div>
         )}
-        <Button type="button" size="sm" variant={perfil.vigente ? "secondary" : "primary"} onClick={aoRegra} data-definir-regra>{perfil.vigente ? "Alterar regra" : "Definir regra"}</Button>
+        <Button type="button" size="sm" variant={perfil.vigente ? "secondary" : "primary"} onClick={aoRegra} data-definir-regra>{perfil.vigente ? "Editar regra" : "Definir regra"}</Button>
       </div>
 
       <div className="px-4 py-3 space-y-2 flex-1" data-participantes>
@@ -174,7 +174,7 @@ function CartaoPerfil({ perfil, cfg, aoMudar, aoEditar, aoRegra, aoExcluir }: {
                 onChange={(e) => fazer("/api/desempenho/participantes", "POST", { tecnicoId: x.tecnicoId, perfilId: e.target.value })}>
                 {cfg.perfis.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
               </Select>
-              <button type="button" className={cn(botaoIcone, "hover:text-atrasado hover:bg-atrasado-claro")} disabled={ocupado} title="Tirar do Desempenho" aria-label={`Tirar ${x.nome} do Desempenho`}
+              <button type="button" className={cn(botaoIcone, "hover:text-atrasado hover:bg-atrasado-claro")} disabled={ocupado} title="Tirar do ranking" aria-label={`Tirar ${x.nome} do Desempenho`}
                 onClick={() => fazer(`/api/desempenho/participantes/${x.tecnicoId}`, "DELETE")} data-tirar-participante><Trash2 className="w-4 h-4" /></button>
             </li>
           ))}

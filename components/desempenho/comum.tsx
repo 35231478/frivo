@@ -28,7 +28,7 @@ export function CabecalhoDesempenho({ ativa, pode, aRevisar, acoes }: { ativa: A
         </div>
         {acoes && <div className="flex flex-wrap items-center gap-2">{acoes}</div>}
       </div>
-      <nav className="flex gap-1 border-b border-surface-border overflow-x-auto" aria-label="Seções do Desempenho">
+      <nav className="flex gap-1 border-b border-surface-border overflow-x-auto" aria-label="Seções do módulo">
         {abas.filter((a) => a.mostrar).map((a) => (
           <Link key={a.id} href={a.href} data-aba={a.id} aria-current={a.id === ativa ? "page" : undefined}
             className={cn("px-3 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap inline-flex items-center gap-1.5",

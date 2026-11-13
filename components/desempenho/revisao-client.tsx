@@ -68,7 +68,7 @@ export function RevisaoDesempenho({ pode }: { pode: PodeDesempenho }) {
       <div className="bg-white border border-surface-border rounded-xl overflow-hidden">
         <div className="px-4 py-3 border-b border-surface-border flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-ink-muted max-w-2xl">
-            Retorno, ressalva e nota baixa entram aqui sozinhos. Só pesam no escore depois de marcados “Conta”, com motivo.
+            Retorno, ressalva e nota baixa entram aqui sozinhos. Só pesam depois de marcados “Conta”, com motivo.
           </p>
           <Select aria-label="Situação" value={filtro} onChange={(e) => setFiltro(e.target.value as Filtro)} className="w-44" data-filtro-situacao>
             {SITUACOES_PENALIDADE.map((s) => <option key={s} value={s}>{ROTULO_SITUACAO[s]}</option>)}
@@ -212,7 +212,7 @@ function Reclamacao({ item, colaboradores, aoFechar, aoSalvar }: PropsDialogo & 
   return (
     <Modal aberto onFechar={aoFechar} titulo={item ? "Editar reclamação" : "Registrar reclamação"} tamanho="lg">
       <div className="space-y-4" data-modal-reclamacao>
-        <p className="text-sm text-ink-muted">Reclamação recebida por fora do sistema (telefone, WhatsApp). Entra na lista “A revisar”: registrar não é penalizar.</p>
+        <p className="text-sm text-ink-muted">Reclamação recebida por telefone ou WhatsApp. Entra em “A revisar”: registrar não é penalizar.</p>
         <div className="grid gap-3 sm:grid-cols-[1fr_11rem]">
           <FormField label="Colaborador" required>
             <Select aria-label="Colaborador" value={form.tecnicoId} onChange={(e) => set("tecnicoId", e.target.value)} data-campo-colaborador>
