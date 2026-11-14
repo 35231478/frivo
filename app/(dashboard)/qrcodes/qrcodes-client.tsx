@@ -121,7 +121,8 @@ export function QrcodesClient({ lista, equipamentosLivres, proximoCodigo }: Prop
   const equipamento = (x: QrItem) => x.equipamento
     ? <span className="text-ink">{x.equipamento.nome}{x.equipamento.local ? <span className="text-ink-muted"> · {x.equipamento.local}</span> : null}</span>
     : <span className="text-ink-subtle">Não vinculado</span>;
-  const btn = "p-1.5 rounded text-ink-muted hover:text-primary-600 hover:bg-primary-50 transition-colors disabled:opacity-40";
+  // No celular (uso em campo, com o dedo) a área de toque é maior; no desktop, a linha continua baixa
+  const btn = "p-2.5 sm:p-1.5 rounded text-ink-muted hover:text-primary-600 hover:bg-primary-50 transition-colors disabled:opacity-40";
   const acoes = (x: QrItem) => (
     <span className="inline-flex items-center justify-end gap-0.5" data-acoes-qr>
       <Link href={hrefImprimir([x.id])} aria-label={`Imprimir ${x.codigo}`} title="Imprimir" className={btn} data-imprimir-qr={x.id}><Printer className="w-4 h-4" aria-hidden /></Link>
