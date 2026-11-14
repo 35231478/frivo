@@ -126,6 +126,8 @@ describe.skipIf(!URL_PG)("Leva 4A: Clientes, Equipamentos e QR Codes — o servi
       { id: "eq2", empresaId: "e1", unidadeId: "un1", tipo: "AR_CONDICIONADO_SPLIT", marca: "Daikin", modelo: "FTXS" },
       { id: "eq3", empresaId: "e1", unidadeId: "un1", tipo: "AR_CONDICIONADO_SPLIT", marca: "Carrier", modelo: "Antigo", ativo: false },
       { id: "eq9", empresaId: "e2", unidadeId: "un9", tipo: "AR_CONDICIONADO_SPLIT", marca: "Outra", modelo: "Z" },
+      // da outra empresa e SEM etiqueta: se a rota não conferisse a empresa, daria para vincular
+      { id: "eq8", empresaId: "e2", unidadeId: "un9", tipo: "AR_CONDICIONADO_SPLIT", marca: "Outra", modelo: "Livre" },
     ] });
     await prisma.qrcode.createMany({ data: [
       { id: "q1", empresaId: "e1", codigo: "QR-1", equipamentoId: "eq1" },
@@ -201,6 +203,11 @@ describe.skipIf(!URL_PG)("Leva 4A: Clientes, Equipamentos e QR Codes — o servi
       const antes = await prisma.qrcode.findUnique({ where: { id: "q9" } });
       expect((await chamar("qrcodes/[id]", "PATCH", { ativo: false }, { id: "q9" })).status).toBe(404);
       expect((await chamar("qrcodes/[id]", "PATCH", { equipamentoId: "eq9" }, { id: "q2" })).status).toBe(400);
+      // equipamento da outra empresa que está LIVRE: recusado por ser de outra empresa (e não por já ter etiqueta)
+      const livre = await chamar("qrcodes/[id]", "PATCH", { equipamentoId: "eq8" }, { id: "q2" });
+      expect(livre.status).toBe(400);
+      expect(livre.json.erro).toBe("Equipamento inválido");
+      expect(await prisma.qrcode.count({ where: { equipamentoId: "eq8" } })).toBe(0);
       expect(await prisma.qrcode.findUnique({ where: { id: "q9" } })).toEqual(antes);
       expect((await prisma.qrcode.findUnique({ where: { id: "q2" } })).equipamentoId).toBeNull();
     });
