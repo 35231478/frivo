@@ -9,6 +9,8 @@ import type { CentralOs } from "@/lib/os/central";
 import { Card, CardTitulo } from "@/components/ui/card";
 import { StatusPill, TOM_PRAZO } from "@/components/ui/status-pill";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { EditarNoContexto } from "@/components/ui/select-cadastro-rapido";
+import { CLIENTE, UNIDADE } from "@/components/cadastro-rapido/definicoes";
 
 function Cartao({ titulo, icone, children, dado, className }: {
   titulo: string; icone: React.ComponentType<{ className?: string }>; children: React.ReactNode; dado?: string; className?: string;
@@ -21,7 +23,11 @@ function Cartao({ titulo, icone, children, dado, className }: {
   );
 }
 
-export function ResumoOs({ os, central, onAba }: { os: any; central: CentralOs; onAba: (aba: string) => void }) {
+export function ResumoOs({ os, central, onAba, onAtualizado }: {
+  os: any; central: CentralOs; onAba: (aba: string) => void;
+  /** O cadastro do cliente ou da unidade foi corrigido daqui: a tela acompanha */
+  onAtualizado?: (parcial: any) => void;
+}) {
   const [historicoTodo, setHistoricoTodo] = useState(false);
   const { pode } = usePermissoes();
   const historico: any[] = os.historico ?? [];
@@ -56,9 +62,16 @@ export function ResumoOs({ os, central, onAba }: { os: any; central: CentralOs; 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <Cartao titulo="Cliente e local" icone={User} dado="informacoes">
             <dl className="space-y-2 text-sm">
-              <Info rotulo="Cliente">{os.cliente.nomeFantasia ?? os.cliente.nome}</Info>
+              {/* Referência: o lápis corrige o CADASTRO (telefone, e-mail, contatos; nome e endereço da unidade) — vale em
+                  todo lugar e continua disponível com a OS fechada (a trava é das linhas, não do cadastro) */}
+              <Info rotulo="Cliente" acao={<EditarNoContexto id={os.cliente.id} rotulo="Editar o cadastro do cliente" edicao={CLIENTE.edicao()} />}>
+                {os.cliente.nomeFantasia ?? os.cliente.nome}
+              </Info>
               {os.unidade && (
-                <Info rotulo="Endereço"><span className="inline-flex items-start gap-1"><MapPin className="w-3.5 h-3.5 mt-0.5 text-ink-subtle shrink-0" aria-hidden="true" />{os.unidade.nome}{os.unidade.cidade ? ` — ${os.unidade.cidade}/${os.unidade.estado}` : ""}</span></Info>
+                <Info rotulo="Endereço" acao={<EditarNoContexto id={os.unidade.id} rotulo="Editar o cadastro da unidade"
+                  edicao={UNIDADE.edicao<{ id: string; nome: string; cidade?: string | null; estado?: string | null }>(os.cliente.id, (u) => onAtualizado?.({ unidade: { ...os.unidade, nome: u.nome, cidade: u.cidade ?? null, estado: u.estado ?? null } }))} />}>
+                  <span className="inline-flex items-start gap-1"><MapPin className="w-3.5 h-3.5 mt-0.5 text-ink-subtle shrink-0" aria-hidden="true" />{os.unidade.nome}{os.unidade.cidade ? ` — ${os.unidade.cidade}/${os.unidade.estado}` : ""}</span>
+                </Info>
               )}
               {os.contrato && <Info rotulo="Contrato"><span className="font-mono">{os.contrato.numero}</span></Info>}
               {/* OS gerada pelo cronograma de um PMOC: atalho para o plano (só vira link para quem vê o módulo) */}
@@ -136,11 +149,13 @@ export function ResumoOs({ os, central, onAba }: { os: any; central: CentralOs; 
   );
 }
 
-function Info({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
+function Info({ rotulo, children, acao }: { rotulo: string; children: React.ReactNode; acao?: React.ReactNode }) {
   return (
-    <div className="flex gap-2">
+    <div className="flex gap-2 items-start">
       <dt className="text-ink-muted w-24 shrink-0">{rotulo}</dt>
-      <dd className="text-ink min-w-0">{children}</dd>
+      <dd className="text-ink min-w-0 flex-1">{children}</dd>
+      {/* -my-1.5: o lápis não aumenta a altura da linha */}
+      {acao && <dd className="shrink-0 -my-1.5">{acao}</dd>}
     </div>
   );
 }

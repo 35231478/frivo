@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { exigirAlgumaPermissao, exigirPermissao } from "@/lib/permissoes-server";
-import { unidadeSchema } from "@/lib/validations";
+import { dadosParciais, unidadeContextoSchema, unidadeSchema } from "@/lib/validations";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -53,6 +53,28 @@ export async function PUT(req: NextRequest, { params }: Params) {
   // Não permite reatribuir a unidade a outro cliente nesta rota (evita mover entre clientes/tenants)
   const { clienteId: _clienteId, ...dadosAtualizacao } = parsed.data;
   const atualizado = await prisma.unidade.update({ where: { id }, data: dadosAtualizacao });
+  return NextResponse.json(atualizado);
+}
+
+/**
+ * PATCH: edição no contexto (de dentro da OS e do orçamento) — nome e endereço, e só o que mudou.
+ * Mesma permissão da edição completa; o cliente, a marcação de principal e o resto não são tocados.
+ */
+export async function PATCH(req: NextRequest, { params }: Params) {
+  const guard = await exigirPermissao("clientes", "editar");
+  if (guard.erro) return guard.resposta;
+  const { id } = await params;
+  const empresaId = guard.session.user!.empresaId;
+
+  const existente = await prisma.unidade.findFirst({ where: { id, empresaId }, select: { id: true } });
+  if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
+
+  const body = await req.json().catch(() => null);
+  const parsed = unidadeContextoSchema.safeParse(body);
+  if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
+  const dados = dadosParciais(parsed.data);
+  if (!Object.keys(dados).length) return NextResponse.json({ erro: "Nada para alterar." }, { status: 400 });
+  const atualizado = await prisma.unidade.update({ where: { id }, data: dados });
   return NextResponse.json(atualizado);
 }
 

@@ -9,7 +9,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { LABELS_PRIORIDADE } from "@/lib/utils";
-import { SelectCadastroRapido } from "@/components/ui/select-cadastro-rapido";
+import { EditarNoContexto, SelectCadastroRapido } from "@/components/ui/select-cadastro-rapido";
 import { CLIENTE, UNIDADE, EQUIPAMENTO, TIPO_OS } from "@/components/cadastro-rapido/definicoes";
 import type { OpcaoCadastro } from "@/components/ui/select-cadastro-rapido";
 import { Inbox, Link2, Wrench, X } from "lucide-react";
@@ -219,6 +219,7 @@ export default function NovaOrdemPage() {
                 setClientes((l) => [...l, c]);
                 return CLIENTE.opcao(c);
               }}
+              edicao={CLIENTE.edicao()}
             />
             )}
             {clienteId && <AlertaPerdasCliente clienteId={clienteId} perdas={perdas12m} className="mt-2" />}
@@ -244,6 +245,7 @@ export default function NovaOrdemPage() {
                   setUnidades((l) => [...l, u]);
                   return UNIDADE.opcao(u);
                 }}
+                edicao={UNIDADE.edicao<UnidadeItem>(clienteId, (u) => setUnidades((l) => l.map((x) => (x.id === u.id ? { ...x, ...u } : x))))}
               />
             </FormField>
             <FormField label="Contrato vinculado">
@@ -293,6 +295,7 @@ export default function NovaOrdemPage() {
                       setEquipamentos((l) => [...l, e]);
                       return opcaoEquip(e);
                     }}
+                    edicao={EQUIPAMENTO.edicao<EquipItem>((e) => setEquipamentos((l) => l.map((x) => (x.id === e.id ? { ...x, ...e } : x))))}
                   />
                 )}
               </FormField>
@@ -315,6 +318,8 @@ export default function NovaOrdemPage() {
                         <span className="block text-sm text-ink truncate">{rotuloEquipamento(e)}</span>
                         <span className="block text-xs text-ink-muted truncate">{detalheEquipamento(e, true)}</span>
                       </span>
+                      <EditarNoContexto id={e.id} rotulo={`Editar o equipamento ${rotuloEquipamento(e)}`}
+                        edicao={EQUIPAMENTO.edicao<EquipamentoResumo>((novo) => setAtendidos((l) => l.map((x) => (x.id === novo.id ? { ...x, ...novo } : x))))} />
                       <button type="button" onClick={() => setAtendidos((l) => l.filter((x) => x.id !== e.id))}
                         aria-label={`Tirar ${rotuloEquipamento(e)} da OS`} className="p-1 rounded text-ink-subtle hover:text-atrasado hover:bg-atrasado-claro">
                         <X className="w-4 h-4" aria-hidden="true" />

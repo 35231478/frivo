@@ -6,7 +6,9 @@
  * criação já existente e a permissão exigida para exibir o "+ criar". Assim
  * OS, orçamento, contrato e equipamento usam exatamente o mesmo cadastro rápido.
  */
+import { createElement } from "react";
 import { formatarCpfCnpj, LABELS_TIPO_EQUIPAMENTO } from "@/lib/utils";
+import { ContatosNoContexto } from "@/components/cadastro-rapido/contatos-no-contexto";
 import type { CampoRapido, EdicaoDoSelecionado, OpcaoCadastro, PermissaoCriar } from "@/components/ui/select-cadastro-rapido";
 import { hrefSecaoConfig } from "@/lib/navegacao/configuracoes";
 
@@ -25,6 +27,18 @@ async function alterar<T = any>(url: string, corpo: unknown, erroPadrao: string)
   if (!res.ok) throw new Error(data?.erro ?? erroPadrao);
   return data as T;
 }
+
+/** GET JSON; devolve o corpo ou lança Error com a mensagem da API. */
+async function ler<T = any>(url: string, erroPadrao: string): Promise<T> {
+  const res = await fetch(url, { cache: "no-store" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.erro ?? erroPadrao);
+  return data as T;
+}
+/** Só os campos que mudaram (o corpo da edição parcial). */
+const soOQueMudou = (v: Record<string, string>, alterados: string[]) => Object.fromEntries(alterados.map((k) => [k, v[k]]));
+/** Os campos do formulário a partir do registro (nulo vira vazio). */
+const valoresDe = (registro: Record<string, unknown>, campos: readonly CampoRapido[]) => Object.fromEntries(campos.map((c) => [c.nome, registro?.[c.nome] == null ? "" : String(registro[c.nome])]));
 
 /* ───────── Cliente ───────── */
 export const CLIENTE = {
@@ -56,6 +70,56 @@ export const CLIENTE = {
   opcao(c: { id: string; nome: string; nomeFantasia?: string | null }): OpcaoCadastro {
     return { value: c.id, label: c.nomeFantasia ?? c.nome, descricao: c.nomeFantasia ? c.nome : undefined };
   },
+  /**
+   * Editar no contexto (de dentro da OS e do orçamento): telefone, celular e e-mail do CADASTRO do cliente,
+   * com os contatos logo abaixo. Muda em todo lugar — o painel diz isso. O resto fica no cadastro completo.
+   */
+  permissaoEditar: { modulo: "clientes", acao: "editar" } as PermissaoCriar,
+  camposEdicao: [
+    { nome: "telefone", label: "Telefone", colunas: 3, inputMode: "tel", placeholder: "(00) 0000-0000" },
+    { nome: "celular", label: "Celular", colunas: 3, inputMode: "tel", placeholder: "(00) 00000-0000" },
+    { nome: "email", label: "E-mail", inputMode: "email", placeholder: "contato@empresa.com.br" },
+  ] as CampoRapido[],
+  edicao(opcoes: { aoSalvar?: (c: { id: string }) => void; aoMudarContatos?: () => void } = {}): EdicaoDoSelecionado {
+    return {
+      escopo: "referencia", alvo: "do cliente", campos: CLIENTE.camposEdicao, permissao: CLIENTE.permissaoEditar,
+      linkCadastroCompleto: (id) => `/clientes/${id}/editar`, mensagemSucesso: "Cliente atualizado.",
+      valores: async (id) => valoresDe(await ler(`/api/clientes/${id}`, "Não foi possível carregar o cliente."), CLIENTE.camposEdicao),
+      async salvar(id, v, alterados) {
+        // Primeiro grava; só depois avisa a tela (o aviso é opcional — a gravação, nunca)
+        const c = await alterar<{ id: string }>(`/api/clientes/${id}`, soOQueMudou(v, alterados), "Erro ao salvar o cliente.");
+        opcoes.aoSalvar?.(c);
+      },
+      extra: (id) => createElement(ContatosNoContexto, { clienteId: id, aoMudar: opcoes.aoMudarContatos }),
+    };
+  },
+};
+
+/* ───────── Contato do cliente (o "A/C" do orçamento) ───────── */
+export const CONTATO = {
+  permissao: { modulo: "clientes", acao: "editar" } as PermissaoCriar,
+  campos: [
+    { nome: "nome", label: "Nome", obrigatorio: true },
+    { nome: "cargo", label: "Cargo", colunas: 3 },
+    { nome: "telefone", label: "Telefone", colunas: 3, inputMode: "tel" },
+    { nome: "email", label: "E-mail", inputMode: "email" },
+  ] as CampoRapido[],
+  /** Editar no contexto o contato escolhido: é o cadastro do cliente (referência). */
+  edicao<T extends { id: string; nome: string }>(clienteId: string, contatos: readonly T[], aoSalvar: (c: T) => void): EdicaoDoSelecionado {
+    return {
+      escopo: "referencia", alvo: "do contato", campos: CONTATO.campos, permissao: CONTATO.permissao,
+      linkCadastroCompleto: `/clientes/${clienteId}/editar`, mensagemSucesso: "Contato atualizado.",
+      valores: async (id) => {
+        const lista = await ler<Record<string, unknown>[]>(`/api/clientes/${clienteId}/contatos`, "Não foi possível carregar o contato.");
+        return valoresDe(lista.find((c) => c.id === id) ?? contatos.find((c) => c.id === id) ?? {}, CONTATO.campos);
+      },
+      async salvar(id, v, alterados) {
+        const c = await alterar<T>(`/api/clientes/${clienteId}/contatos/${id}`, soOQueMudou(v, alterados), "Erro ao salvar o contato.");
+        aoSalvar(c);
+        return { value: c.id, label: c.nome };
+      },
+    };
+  },
 };
 
 /* ───────── Unidade (endereço do cliente) ───────── */
@@ -78,6 +142,29 @@ export const UNIDADE = {
   },
   opcao(u: { id: string; nome: string; cidade?: string | null }): OpcaoCadastro {
     return { value: u.id, label: u.nome, descricao: u.cidade ?? undefined };
+  },
+  /** Editar no contexto: nome e endereço do CADASTRO da unidade (muda em todo lugar). */
+  camposEdicao: [
+    { nome: "nome", label: "Nome do local", obrigatorio: true },
+    { nome: "cep", label: "CEP", placeholder: "00000-000", colunas: 2, inputMode: "numeric" },
+    { nome: "logradouro", label: "Endereço", placeholder: "Rua / Avenida", colunas: 4 },
+    { nome: "numero", label: "Número", colunas: 2 },
+    { nome: "complemento", label: "Complemento", colunas: 4 },
+    { nome: "bairro", label: "Bairro", colunas: 2 },
+    { nome: "cidade", label: "Cidade", colunas: 2 },
+    { nome: "estado", label: "UF", tipo: "uf", colunas: 2 },
+  ] as CampoRapido[],
+  edicao<T extends { id: string; nome: string; cidade?: string | null }>(clienteId: string, aoSalvar: (u: T) => void): EdicaoDoSelecionado {
+    return {
+      escopo: "referencia", alvo: "da unidade", campos: UNIDADE.camposEdicao, permissao: UNIDADE.permissao,
+      linkCadastroCompleto: clienteId ? UNIDADE.link(clienteId) : undefined, mensagemSucesso: "Unidade atualizada.",
+      valores: async (id) => valoresDe(await ler(`/api/unidades/${id}`, "Não foi possível carregar a unidade."), UNIDADE.camposEdicao),
+      async salvar(id, v, alterados) {
+        const u = await alterar<T>(`/api/unidades/${id}`, soOQueMudou(v, alterados), "Erro ao salvar a unidade.");
+        aoSalvar(u);
+        return UNIDADE.opcao(u);
+      },
+    };
   },
 };
 
@@ -167,6 +254,29 @@ export const EQUIPAMENTO = {
       // sem espaços nas pontas: a etiqueta digitada com espaço não vira "outra" série
       numeroSerie: v.numeroSerie?.trim() || undefined, localizacao: v.localizacao || undefined,
     }, "Erro ao cadastrar o equipamento.");
+  },
+  /**
+   * Editar no contexto: a identificação do CADASTRO do equipamento (muda em todo lugar). Tipo, unidade,
+   * fotos e dados técnicos ficam no cadastro completo.
+   */
+  permissaoEditar: { modulo: "equipamentos", acao: "editar" } as PermissaoCriar,
+  camposEdicao: [
+    { nome: "nome", label: "Identificação", placeholder: "Ex: Split da recepção" },
+    { nome: "marca", label: "Marca", obrigatorio: true, colunas: 3 },
+    { nome: "modelo", label: "Modelo", obrigatorio: true, colunas: 3 },
+    { nome: "numeroSerie", label: "Nº de série", colunas: 3 },
+    { nome: "patrimonio", label: "Patrimônio", colunas: 3 },
+    { nome: "localizacao", label: "Ambiente", placeholder: "Ex: Recepção" },
+  ] as CampoRapido[],
+  edicao<T extends { id: string }>(aoSalvar: (e: T) => void): EdicaoDoSelecionado {
+    return {
+      escopo: "referencia", alvo: "do equipamento", campos: EQUIPAMENTO.camposEdicao, permissao: EQUIPAMENTO.permissaoEditar,
+      linkCadastroCompleto: (id) => `/equipamentos/${id}`, mensagemSucesso: "Equipamento atualizado.",
+      valores: async (id) => valoresDe(await ler(`/api/equipamentos/${id}`, "Não foi possível carregar o equipamento."), EQUIPAMENTO.camposEdicao),
+      async salvar(id, v, alterados) {
+        aoSalvar(await alterar<T>(`/api/equipamentos/${id}`, soOQueMudou(v, alterados), "Erro ao salvar o equipamento."));
+      },
+    };
   },
 };
 

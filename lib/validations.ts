@@ -907,3 +907,23 @@ export type PrazoEtapaTemplateInput = z.infer<typeof prazoEtapaTemplateSchema>;
 export type PedidoCompraInput = z.infer<typeof pedidoCompraSchema>;
 export type PedidoCompraItemInput = z.infer<typeof pedidoCompraItemSchema>;
 export type OsPrazoInput = z.infer<typeof osPrazoSchema>;
+
+/* ───────── Edição no contexto (leva 2 da padronização) ─────────
+ * Só os campos que se corrigem de dentro da OS e do orçamento, sem abrir o cadastro. Parciais (só o que
+ * mudou vem no corpo) e estritos (campo fora da lista = 400): a edição completa continua no cadastro.
+ */
+export const clienteContextoSchema = clienteSchema.pick({ telefone: true, celular: true, email: true }).partial().strict();
+export const contatoContextoSchema = contatoClienteSchema.pick({ nome: true, cargo: true, telefone: true, email: true }).partial().strict();
+export const unidadeContextoSchema = unidadeSchema
+  .pick({ nome: true, cep: true, logradouro: true, numero: true, complemento: true, bairro: true, cidade: true, estado: true }).partial().strict();
+export const equipamentoContextoSchema = equipamentoSchema
+  .pick({ nome: true, marca: true, modelo: true, numeroSerie: true, patrimonio: true, localizacao: true }).partial().strict();
+/** A linha da OS como USO: descrição, quantidade e o preço aplicado naquele documento. Nada do catálogo. */
+export const linhaOsContextoSchema = itemOsSchema.pick({ descricao: true, quantidade: true, valorUnitario: true }).partial().strict();
+/** A linha do orçamento como USO (a observação já existe na linha do orçamento). */
+export const linhaOrcamentoContextoSchema = linhaOsContextoSchema.extend({ observacao: z.string().trim().max(2000).nullable().optional() }).strict();
+
+/** O corpo parcial pronto para gravar: tira o que não veio e grava vazio como nulo. */
+export function dadosParciais<T extends Record<string, unknown>>(dados: T): Partial<T> {
+  return Object.fromEntries(Object.entries(dados).filter(([, v]) => v !== undefined).map(([k, v]) => [k, v === "" ? null : v])) as Partial<T>;
+}

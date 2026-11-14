@@ -80,7 +80,10 @@ async function escolher(sel: Element | null | undefined, v: string) {
 async function montar(itens: unknown[] = []) {
   const { OsOrcamento } = await import("@/components/os/os-orcamento");
   caixa = document.createElement("div"); document.body.appendChild(caixa); root = createRoot(caixa);
-  await act(async () => { root.render(createElement(OsOrcamento as any, { osId: "os1", itens, clienteId: "c1" })); });
+  // Leva 2 da padronização: lápis, lixeira e "novo item" seguem a permissão de editar OS (antes apareciam para todos)
+  const { PermissoesProvider } = await import("@/components/providers/permissoes-provider");
+  const { permissoesTotais } = await import("@/lib/permissoes");
+  await act(async () => { root.render(createElement(PermissoesProvider, { role: "OPERADOR", permissoes: permissoesTotais(), children: createElement(OsOrcamento as any, { osId: "os1", itens, clienteId: "c1" }) })); });
   await esperar(); await esperar();
 }
 const linhas = () => $$("[data-item-os]");
@@ -109,7 +112,10 @@ describe("Itens da OS sem orçamento", () => {
     // A lista: serviço 840 + peça derivada 80 (só leitura), totais separados
     expect(linhas().map((l) => [l.getAttribute("data-tipo-item"), l.getAttribute("data-linha-derivada"), txt(l.querySelector("[data-total-item]"))])).toEqual([["SERVICO", null, "Total R$ 840,00"], ["PRODUTO", "true", "Total R$ 80,00"]]);
     expect(txt(linhas()[1].querySelector("[data-peca-de]"))).toBe("Peça · Instalação split");
-    expect(linhas()[1].querySelector("button[aria-label^='Editar']")).toBeNull();
+    // Leva 2: a linha que não se edita mostra o cadeado desabilitado, com o motivo no ⓘ (antes, nenhum botão)
+    const cadeadoPeca = linhas()[1].querySelector<HTMLButtonElement>("button[aria-label^='Editar']")!;
+    expect([cadeadoPeca.disabled, cadeadoPeca.getAttribute("aria-label")]).toEqual([true, "Editar Capacitor 35uF: edição travada"]);
+    expect(linhas()[1].querySelector("[data-edicao-travada]")).not.toBeNull();
     expect(linhas()[1].querySelector("button[aria-label^='Excluir']")).toBeNull();
     expect(txt(linhas()[0].querySelector("[data-com-materiais]"))).toMatch(/3 materiais · ajuste R\$\s?40,00/);
     expect(txt($("[data-total-os]"))).toMatch(/920,00/);
@@ -130,8 +136,11 @@ describe("Itens da OS sem orçamento", () => {
     await salvarItem();
     expect(posts()[0]).toMatchObject({ valorTotal: 1000, valorManual: true });
     expect(txt(linhas()[0])).toContain("Valor manual");
-    // Editar: abre com o unitário base e o painel; Recalcular tira o manual; PUT regrava
+    // Editar (leva 2 da padronização): o lápis abre o painel "Editando este item da OS"; os materiais continuam
+    // no editor completo, por "Materiais e peças deste item". Lá: unitário base, Recalcular tira o manual, PUT regrava
     await clicar(linhas()[0].querySelector("button[aria-label^='Editar']"));
+    expect(document.querySelector('[role="dialog"] h3')?.textContent).toBe("Editando este item da OS");
+    await clicar(document.querySelector("[data-acao-secundaria]"));
     expect($<HTMLInputElement>("[data-unitario-item]")!.value).toBe("800,00");
     await clicar($("[data-recalcular]"));
     await salvarItem();
@@ -167,7 +176,9 @@ describe("Itens da OS sem orçamento", () => {
     ]);
     expect(linhas().map((l) => [l.getAttribute("data-tipo-item"), txt(l.querySelector("[data-total-item]"))])).toEqual([["SERVICO", "Total R$ 840,00"], ["PRODUTO", "Total R$ 80,00"], ["SERVICO", "Total R$ 200,00"]]);
     expect(txt(linhas()[0])).toContain("Do orçamento");
-    expect(linhas()[0].querySelector("button[aria-label^='Editar']")).toBeNull();
+    // Leva 2: item do orçamento aprovado = cadeado desabilitado, com o motivo no ⓘ (antes, nenhum botão)
+    expect(linhas()[0].querySelector<HTMLButtonElement>("button[aria-label^='Editar']")!.disabled).toBe(true);
+    expect(linhas()[0].querySelector("[data-edicao-travada]")).not.toBeNull();
     expect(linhas()[0].querySelector("button[aria-label^='Excluir']")).toBeNull();
     const painel = linhas()[0].querySelector("[data-materiais-linha]")!;
     expect(painel.getAttribute("data-somente-leitura")).toBe("true");

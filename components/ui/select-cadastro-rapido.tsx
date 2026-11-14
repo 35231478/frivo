@@ -67,8 +67,11 @@ export interface EdicaoDoSelecionado {
   alvo: string;
   /** Campos do mini-formulário de edição (padrão: os mesmos de criar) */
   campos?: CampoRapido[];
-  /** Os valores atuais do item selecionado (o que já está carregado na tela) */
-  valores: (id: string) => Record<string, string>;
+  /**
+   * Os valores atuais do item: o que já está carregado na tela ou, quando a tela só tem o nome, uma
+   * promessa que busca o cadastro (o painel mostra "Carregando…" até chegar).
+   */
+  valores: (id: string) => Record<string, string> | Promise<Record<string, string>>;
   /** Grava (lance Error(msg) em falha). Recebe todos os valores e a lista do que mudou. */
   salvar: (id: string, valores: Record<string, string>, alterados: string[]) => Promise<OpcaoCadastro | void>;
   /** Permissão exigida para editar (ou lista: qualquer uma libera). Sem ela, o lápis não aparece. */
@@ -79,6 +82,10 @@ export interface EdicaoDoSelecionado {
   linkCadastroCompleto?: string | ((id: string) => string);
   /** Texto do toast ao salvar (padrão: "Alterações salvas.") */
   mensagemSucesso?: string;
+  /** Mais uma parte do mesmo cadastro, abaixo dos campos (ex.: os contatos do cliente) */
+  extra?: (id: string) => React.ReactNode;
+  /** Uma edição mais a fundo que continua nesta tela (ex.: os materiais do item) */
+  acaoSecundaria?: (id: string) => { rotulo: string; onClick: () => void } | null;
 }
 
 /** Uma permissão, ou uma lista em que QUALQUER uma libera a criação. */
@@ -277,14 +284,51 @@ export function SelectCadastroRapido({
         />
       )}
       {comLapis && !edicao.travado && (
-        <EdicaoNoContextoModal
-          aberto={editando} onFechar={() => setEditando(false)} escopo={edicao.escopo} alvo={edicao.alvo}
-          campos={edicao.campos ?? campos} valores={editando ? edicao.valores(value) : {}}
-          salvar={(v, alterados) => edicao.salvar(value, v, alterados)} onSalvo={() => setEditando(false)}
-          linkCadastroCompleto={link} mensagemSucesso={edicao.mensagemSucesso}
-        />
+        <PainelDaEdicao id={value} edicao={edicao} camposPadrao={campos} aberto={editando} onFechar={() => setEditando(false)} link={link} />
       )}
     </div>
+  );
+}
+
+/** O painel de edição de um item, a partir da definição (`EdicaoDoSelecionado`): resolve valores, extra e ação. */
+function PainelDaEdicao({ id, edicao, camposPadrao, aberto, onFechar, link }: {
+  id: string; edicao: EdicaoDoSelecionado; camposPadrao?: CampoRapido[]; aberto: boolean; onFechar: () => void; link?: string;
+}) {
+  // Os valores são lidos uma vez por abertura (a função da tela pode devolver uma promessa)
+  const lidos = useMemo(() => (aberto ? edicao.valores(id) : {}), [aberto, id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const promessa = typeof (lidos as Promise<unknown>).then === "function";
+  const acao = aberto ? edicao.acaoSecundaria?.(id) ?? null : null;
+  return (
+    <EdicaoNoContextoModal
+      aberto={aberto} onFechar={onFechar} escopo={edicao.escopo} alvo={edicao.alvo} campos={edicao.campos ?? camposPadrao ?? []}
+      valores={promessa ? {} : (lidos as Record<string, string>)} carregar={promessa ? () => lidos as Promise<Record<string, string>> : undefined}
+      salvar={(v, alterados) => edicao.salvar(id, v, alterados)} onSalvo={onFechar}
+      linkCadastroCompleto={link} mensagemSucesso={edicao.mensagemSucesso}
+      extra={aberto ? edicao.extra?.(id) : undefined}
+      acaoSecundaria={acao ? { rotulo: acao.rotulo, onClick: () => { onFechar(); acao.onClick(); } } : undefined}
+    />
+  );
+}
+
+/**
+ * Lápis + painel para editar um item que NÃO está num seletor: o cliente da OS aberta, o equipamento de uma
+ * lista, a linha de um documento. Mesma regra do seletor: sem a permissão, nada aparece; registro fechado,
+ * cadeado com o motivo no ⓘ.
+ */
+export function EditarNoContexto({ id, edicao, rotulo, className, comMoldura }: {
+  id: string; edicao: EdicaoDoSelecionado; rotulo: string; className?: string;
+  /** Ao lado de um campo de formulário: o lápis com a moldura e a altura do campo */
+  comMoldura?: boolean;
+}) {
+  const pode = usePodeCriar(edicao.permissao);
+  const [aberto, setAberto] = useState(false);
+  if (!pode || !id) return null;
+  const link = typeof edicao.linkCadastroCompleto === "function" ? edicao.linkCadastroCompleto(id) : edicao.linkCadastroCompleto;
+  return (
+    <>
+      <BotaoEditarNoContexto rotulo={rotulo} travado={edicao.travado} onClick={() => setAberto(true)} className={className} compacto={!comMoldura} />
+      {!edicao.travado && <PainelDaEdicao id={id} edicao={edicao} aberto={aberto} onFechar={() => setAberto(false)} link={link} />}
+    </>
   );
 }
 
@@ -293,12 +337,18 @@ export function SelectCadastroRapido({
  * O lápis de "editar aqui mesmo". Registro fechado: vira cadeado (desabilitado) com o motivo no ⓘ.
  * Quem decide se ele aparece é quem chama (permissão e item selecionado).
  */
-export function BotaoEditarNoContexto({ rotulo, travado, onClick, className }: { rotulo: string; travado?: string | null; onClick: () => void; className?: string }) {
-  const classe = "shrink-0 inline-flex items-center justify-center w-10 h-10 rounded-lg border border-surface-campo bg-white";
+export function BotaoEditarNoContexto({ rotulo, travado, onClick, className, compacto }: {
+  rotulo: string; travado?: string | null; onClick: () => void; className?: string;
+  /** Dentro de uma lista ou de uma linha: sem a moldura do campo (o do seletor acompanha a altura dele) */
+  compacto?: boolean;
+}) {
+  const classe = compacto
+    ? "shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-lg"
+    : "shrink-0 inline-flex items-center justify-center w-10 h-10 rounded-lg border border-surface-campo bg-white";
   if (travado) {
     return (
       <span className={cn("inline-flex items-center gap-0.5 shrink-0", className)} data-edicao-travada>
-        <button type="button" disabled aria-label={`${rotulo}: edição travada`} className={cn(classe, "text-ink-subtle cursor-not-allowed bg-surface-alt")} data-editar-no-contexto>
+        <button type="button" disabled aria-label={`${rotulo}: edição travada`} className={cn(classe, "text-ink-subtle cursor-not-allowed", !compacto && "bg-surface-alt")} data-editar-no-contexto>
           <Lock className="w-4 h-4" aria-hidden />
         </button>
         <Dica texto={travado} rotulo="Edição travada" lado="esquerda" />
@@ -307,9 +357,27 @@ export function BotaoEditarNoContexto({ rotulo, travado, onClick, className }: {
   }
   return (
     <button type="button" onClick={onClick} aria-label={rotulo} title={rotulo} data-editar-no-contexto
-      className={cn(classe, "text-ink-muted hover:text-primary-600 hover:border-primary-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-acento/40", className)}>
+      className={cn(classe, "text-ink-muted hover:text-primary-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-acento/40", compacto ? "hover:bg-primary-50" : "hover:border-primary-300", className)}>
       <Pencil className="w-4 h-4" aria-hidden />
     </button>
+  );
+}
+
+/**
+ * A faixa que diz até onde a mudança chega (referência: em todo lugar; uso: só aqui). Com `rotulo`, diz
+ * também o que está sendo editado — para o editor que não é o painel (ex.: os materiais de um item).
+ */
+export function FaixaDaEdicao({ escopo, rotulo, className }: { escopo: EscopoEdicao; rotulo?: string; className?: string }) {
+  return (
+    <div data-faixa-edicao={escopo}
+      className={cn("flex items-start gap-2 rounded-lg border px-3 py-2",
+        escopo === "referencia" ? "border-atencao/30 bg-atencao-claro text-atencao-texto" : "border-surface-border bg-surface-alt text-ink", className)}>
+      {escopo === "referencia" ? <Layers className="w-4 h-4 mt-0.5 shrink-0" aria-hidden /> : <MapPin className="w-4 h-4 mt-0.5 shrink-0" aria-hidden />}
+      <p className="text-sm font-medium">
+        {rotulo && <span data-rotulo-edicao>{rotulo}. </span>}
+        <span data-alcance-edicao>{alcanceDaEdicao(escopo)}</span>
+      </p>
+    </div>
   );
 }
 
@@ -330,18 +398,29 @@ export function EdicaoNoContextoModal(props: {
   mensagemSucesso?: string;
   /** Registro fechado: o motivo. Com ele, o formulário não abre para edição. */
   travado?: string | null;
+  /** Busca os valores atuais ao abrir (quando a tela não os tem): "Carregando…" até chegar */
+  carregar?: () => Promise<Record<string, string>>;
+  /** Mais uma parte do mesmo cadastro, abaixo dos campos */
+  extra?: React.ReactNode;
+  /** Uma edição mais a fundo que continua nesta tela */
+  acaoSecundaria?: { rotulo: string; onClick: () => void };
 }) {
-  const { aberto, onFechar, escopo, alvo, campos, valores, salvar, onSalvo, linkCadastroCompleto, mensagemSucesso, travado } = props;
+  const { aberto, onFechar, escopo, alvo, campos, salvar, onSalvo, linkCadastroCompleto, mensagemSucesso, travado, carregar, extra, acaoSecundaria } = props;
   const titulo = rotuloDaEdicao(escopo, alvo);
-  const faixa = (
-    <div data-faixa-edicao={escopo}
-      className={cn("flex items-start gap-2 rounded-lg border px-3 py-2 -mt-1",
-        escopo === "referencia" ? "border-atencao/30 bg-atencao-claro text-atencao-texto" : "border-surface-border bg-surface-alt text-ink")}>
-      {escopo === "referencia" ? <Layers className="w-4 h-4 mt-0.5 shrink-0" aria-hidden /> : <MapPin className="w-4 h-4 mt-0.5 shrink-0" aria-hidden />}
-      {/* O título do painel já diz O QUE está sendo editado; a faixa diz até onde a mudança chega */}
-      <p className="text-sm font-medium" data-alcance-edicao>{alcanceDaEdicao(escopo)}</p>
-    </div>
-  );
+  // Valores buscados ao abrir (o cadastro que a tela não tinha carregado)
+  const [buscados, setBuscados] = useState<Record<string, string> | null>(null);
+  const [erroBusca, setErroBusca] = useState("");
+  useEffect(() => {
+    if (!aberto || !carregar || travado) return;
+    let vivo = true;
+    setBuscados(null); setErroBusca("");
+    carregar().then((v) => { if (vivo) setBuscados(v); }).catch((e) => { if (vivo) setErroBusca(e instanceof Error && e.message ? e.message : "Não foi possível carregar o cadastro."); });
+    return () => { vivo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aberto]);
+  const valores = carregar ? buscados ?? {} : props.valores;
+  // O título do painel já diz O QUE está sendo editado; a faixa diz até onde a mudança chega
+  const faixa = <FaixaDaEdicao escopo={escopo} className="-mt-1" />;
   if (travado) {
     return (
       <Modal aberto={aberto} onFechar={onFechar} titulo={titulo} tamanho="sm">
@@ -354,10 +433,25 @@ export function EdicaoNoContextoModal(props: {
       </Modal>
     );
   }
+  if (carregar && !buscados) {
+    return (
+      <Modal aberto={aberto} onFechar={onFechar} titulo={titulo} tamanho="sm">
+        <div className="space-y-4" data-edicao-carregando>
+          {faixa}
+          {erroBusca
+            ? <p role="alert" className="text-sm text-atrasado bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2">{erroBusca}</p>
+            : <p className="flex items-center gap-2 text-sm text-ink-muted"><Loader2 className="w-4 h-4 animate-spin" aria-hidden /> Carregando…</p>}
+          <div className="flex justify-end">
+            <button type="button" onClick={onFechar} className="px-4 py-2.5 text-sm font-medium rounded-lg border border-surface-border text-ink hover:bg-surface-alt">Fechar</button>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
   return (
     <MiniCadastro
       aberto={aberto} onFechar={onFechar} titulo={titulo} campos={campos} valoresIniciais={valores} linkCadastroCompleto={linkCadastroCompleto}
-      modo="editar" faixa={faixa} rotuloSalvar="Salvar"
+      modo="editar" faixa={faixa} rotuloSalvar="Salvar" extra={extra} acaoSecundaria={acaoSecundaria}
       criar={async (v) => {
         const alterados = camposAlterados(valores, v, campos.map((c) => c.nome));
         // Nada mudou: fecha sem chamar o servidor (e sem dizer que salvou)
@@ -387,7 +481,7 @@ export function CadastroRapidoModal(props: {
 }
 
 function MiniCadastro({
-  aberto, onFechar, titulo, contexto, campos, criar, linkCadastroCompleto, valoresIniciais, onCriado, rotuloSalvar, modo = "criar", faixa,
+  aberto, onFechar, titulo, contexto, campos, criar, linkCadastroCompleto, valoresIniciais, onCriado, rotuloSalvar, modo = "criar", faixa, extra, acaoSecundaria,
 }: {
   aberto: boolean; onFechar: () => void; titulo: string; contexto?: string;
   campos: CampoRapido[]; criar: Props["criar"]; linkCadastroCompleto?: string;
@@ -396,6 +490,9 @@ function MiniCadastro({
   modo?: "criar" | "editar";
   /** O que vem antes dos campos (na edição: a faixa que diz o que está sendo editado) */
   faixa?: React.ReactNode;
+  /** O que vem depois dos botões (outra parte do mesmo cadastro, que grava por conta própria) */
+  extra?: React.ReactNode;
+  acaoSecundaria?: { rotulo: string; onClick: () => void };
 }) {
   const [valores, setValores] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState(false);
@@ -509,6 +606,10 @@ function MiniCadastro({
             <a href={linkCadastroCompleto} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700">
               Abrir cadastro completo <ExternalLink className="w-3 h-3" />
             </a>
+          ) : acaoSecundaria ? (
+            <button type="button" onClick={acaoSecundaria.onClick} data-acao-secundaria className="self-start inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700">
+              {acaoSecundaria.rotulo}
+            </button>
           ) : <span />}
           <div className="flex gap-2 sm:justify-end">
             <button type="button" onClick={onFechar} className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1 px-4 py-2.5 text-sm font-medium rounded-lg border border-surface-border text-ink hover:bg-surface-alt">
@@ -520,6 +621,7 @@ function MiniCadastro({
             </button>
           </div>
         </div>
+        {extra && <div className="border-t border-surface-border pt-4" data-extra-edicao>{extra}</div>}
       </div>
     </Modal>
   );

@@ -100,5 +100,13 @@ export async function regravarItemOs(tx: Tx, osId: string, itemId: string, p: It
   return item;
 }
 
+/**
+ * Edição da linha como USO (descrição, quantidade, preço): grava só os valores da linha. O snapshot dos
+ * materiais e as peças derivadas ficam como estão — não dependem da quantidade nem do preço da linha.
+ */
+export async function atualizarValoresDoItemOs(tx: Tx, itemId: string, p: ItemOsPreparado) {
+  return tx.osItemOrcamento.update({ where: { id: itemId }, data: linha(p) });
+}
+
 /** Include do item da OS com o snapshot e a peça de origem (o que a tela e a fatura leem). */
 export const INCLUIR_ITEM_OS = { materiais: { orderBy: { ordem: "asc" } }, material: { select: { osItemId: true } } } as const;
