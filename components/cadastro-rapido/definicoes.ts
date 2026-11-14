@@ -86,7 +86,9 @@ export const CLIENTE = {
       linkCadastroCompleto: (id) => `/clientes/${id}/editar`, mensagemSucesso: "Cliente atualizado.",
       valores: async (id) => valoresDe(await ler(`/api/clientes/${id}`, "Não foi possível carregar o cliente."), CLIENTE.camposEdicao),
       async salvar(id, v, alterados) {
-        opcoes.aoSalvar?.(await alterar(`/api/clientes/${id}`, soOQueMudou(v, alterados), "Erro ao salvar o cliente."));
+        // Primeiro grava; só depois avisa a tela (o aviso é opcional — a gravação, nunca)
+        const c = await alterar<{ id: string }>(`/api/clientes/${id}`, soOQueMudou(v, alterados), "Erro ao salvar o cliente.");
+        opcoes.aoSalvar?.(c);
       },
       extra: (id) => createElement(ContatosNoContexto, { clienteId: id, aoMudar: opcoes.aoMudarContatos }),
     };
