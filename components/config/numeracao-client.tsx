@@ -125,7 +125,7 @@ export function NumeracaoClient({ inicial, podeEditar }: { inicial: NumeracaoTel
         ))}
       </ul>
       <TabelaPro
-        tela="config-numeracao" quebra="sm" className="border border-surface-border rounded-lg overflow-hidden" colunas={COLUNAS}
+        tela="config-numeracao" quebra="sm" className="hidden sm:block border border-surface-border rounded-lg overflow-hidden" colunas={COLUNAS}
         barra={<span data-total-numeracao>{linhas.length} documentos</span>}
         linhas={linhas.map((n) => ({
           id: n.tipo, atributos: { "data-numeracao-tipo": n.tipo },

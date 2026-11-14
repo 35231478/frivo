@@ -204,7 +204,7 @@ export function TelaFormularios() {
                 ))}
               </ul>
             <TabelaPro
-            tela="config-formularios" quebra="sm" className="border border-surface-border rounded-lg overflow-hidden" colunas={COLUNAS} atributos={{ "data-tabela-formularios": true }}
+            tela="config-formularios" quebra="sm" className="hidden sm:block border border-surface-border rounded-lg overflow-hidden" colunas={COLUNAS} atributos={{ "data-tabela-formularios": true }}
             barra={<span className="text-xs text-ink-muted" data-total-formularios>{filtrados.length} {filtrados.length === 1 ? "formulário" : "formulários"}</span>}
             linhas={filtrados.map((f) => ({
               id: f.id, atributos: { "data-formulario": f.id }, titulos: { nome: f.nome },

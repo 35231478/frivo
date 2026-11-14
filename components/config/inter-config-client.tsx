@@ -200,7 +200,7 @@ export function InterConfigClient() {
         <p className="text-ink-muted">
           {temWebhook
             ? "Há uma URL de webhook ativa. Ela não é exibida: gerar uma nova a substitui."
-            : "Gere a URL para os pagamentos baixarem sozinhos."}
+            : podeEditar ? "Gere a URL para os pagamentos baixarem sozinhos." : "Nenhuma URL de webhook gerada."}
           {" "}Com a integração ativa (credenciais + certificado), a URL é <strong>registrada no Inter automaticamente</strong>.
           {" "}Cada aviso recebido é conferido na API do Inter antes de baixar a conta.
         </p>

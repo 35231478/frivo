@@ -112,7 +112,7 @@ export function PadronizacaoClient({ podeAplicar }: { podeAplicar: boolean }) {
             ))}
           </ul>
           <TabelaPro
-            tela="config-padronizacao" quebra="sm" className="border border-surface-border rounded-lg overflow-hidden" colunas={COLUNAS}
+            tela="config-padronizacao" quebra="sm" className="hidden sm:block border border-surface-border rounded-lg overflow-hidden" colunas={COLUNAS}
             barra={<span data-total-previa>Prévia{plano.amostraLimitada ? ` (primeiras ${plano.amostra.length})` : `: ${plano.amostra.length} mudanças`}</span>}
             linhas={plano.amostra.map((m, i) => ({
               id: String(i), titulos: { de: m.de, para: m.para },

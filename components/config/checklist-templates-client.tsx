@@ -189,7 +189,7 @@ export function ChecklistTemplatesClient() {
               ))}
             </ul>
           <TabelaPro
-          tela="config-checklists-veiculo" quebra="sm" className="border border-surface-border rounded-lg overflow-hidden" colunas={COLUNAS} atributos={{ "data-tabela-modelos": true }}
+          tela="config-checklists-veiculo" quebra="sm" className="hidden sm:block border border-surface-border rounded-lg overflow-hidden" colunas={COLUNAS} atributos={{ "data-tabela-modelos": true }}
           barra={<span className="text-xs text-ink-muted" data-total-modelos>{filtrados.length} {filtrados.length === 1 ? "modelo" : "modelos"}</span>}
           linhas={filtrados.map((t) => ({
             id: t.id, atributos: { "data-modelo": t.id }, titulos: { nome: t.nome },
