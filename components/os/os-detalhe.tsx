@@ -135,7 +135,7 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
         <Tabs tabs={tabs} active={aba} onChange={irPara}>
           {(ativa) => (
             <div className="px-4 pb-5 sm:px-6 sm:pb-6">
-              {ativa === "resumo" && <ResumoOs os={os} central={central} onAba={irPara} />}
+              {ativa === "resumo" && <ResumoOs os={os} central={central} onAba={irPara} onAtualizado={(d) => setOs((prev: any) => ({ ...prev, ...d }))} />}
 
               {ativa === "atividades" && (
                 <div className="space-y-6">

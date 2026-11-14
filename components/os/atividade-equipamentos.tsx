@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { CadastroRapidoModal, usePodeCriar, type OpcaoCadastro } from "@/components/ui/select-cadastro-rapido";
+import { CadastroRapidoModal, EditarNoContexto, usePodeCriar, type OpcaoCadastro } from "@/components/ui/select-cadastro-rapido";
 import { EQUIPAMENTO, UNIDADE } from "@/components/cadastro-rapido/definicoes";
 import { Plus, X, Check, Trash2, HardDrive, AlertTriangle, Camera, ListChecks } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -121,11 +121,15 @@ export function AtividadeEquipamentos({ osId, atividadeId, clienteId, unidadeId 
                   {e.equipamento.tipo && <span className="text-[10px] bg-surface-linha text-ink-muted px-1.5 py-0.5 rounded-full whitespace-nowrap">{e.equipamento.tipo.nome}</span>}
                   <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap", sit.classe)}>{sit.rotulo}</span>
                 </div>
-                {podeRemover && !bloqueada && (
-                  <button onClick={() => remover(e.vinculoId)} className="p-1 text-ink-subtle hover:text-atrasado shrink-0" title="Tirar da atividade" aria-label={`Tirar ${e.equipamento.titulo} da atividade`}>
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                )}
+                <span className="flex items-center shrink-0">
+                  {/* Referência: corrige o CADASTRO do equipamento (vale em todo lugar), mesmo com a atividade concluída */}
+                  <EditarNoContexto id={e.equipamento.id} rotulo={`Editar o equipamento ${e.equipamento.titulo}`} edicao={EQUIPAMENTO.edicao(() => carregar())} />
+                  {podeRemover && !bloqueada && (
+                    <button onClick={() => remover(e.vinculoId)} className="p-1 text-ink-subtle hover:text-atrasado shrink-0" title="Tirar da atividade" aria-label={`Tirar ${e.equipamento.titulo} da atividade`}>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </span>
               </div>
               <div className="flex items-center gap-3 text-[11px] text-ink-muted mt-1">
                 {ativos.length ? (

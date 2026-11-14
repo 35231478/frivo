@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,8 +10,8 @@ import { FormField, FormGrid, FormSection } from "@/components/ui/form-field";
 import { Dica } from "@/components/ui/dica";
 import { PageHeader } from "@/components/ui/page-header";
 import { ItensTabela, type ItemTabela, type CatalogoItem, type TabelaPrecoCliente, type CadastroCatalogo } from "@/components/orcamento/itens-tabela";
-import { SelectCadastroRapido } from "@/components/ui/select-cadastro-rapido";
-import { CLIENTE, PRODUTO, SERVICO } from "@/components/cadastro-rapido/definicoes";
+import { EditarNoContexto, SelectCadastroRapido } from "@/components/ui/select-cadastro-rapido";
+import { CLIENTE, CONTATO, PRODUTO, SERVICO, UNIDADE } from "@/components/cadastro-rapido/definicoes";
 import { OsVinculadas } from "@/components/orcamento/os-vinculadas";
 import { TotaisBloco, type DescontoGrupoState } from "@/components/orcamento/totais-bloco";
 import { PropostaCampos, PROPOSTA_VAZIA, type PropostaState } from "@/components/orcamento/proposta-campos";
@@ -259,6 +259,9 @@ export function OrcamentoForm({
   const [unidadeId, setUnidadeId] = useState((inicial ? inicial.unidadeId : destinatarioInicial?.unidadeId) ?? "");
   const [contatoClienteId, setContatoClienteId] = useState((inicial ? inicial.contatoClienteId : destinatarioInicial?.contatoClienteId) ?? "");
   const [destinos, setDestinos] = useState<OpcoesDestinatario>({ unidades: [], contatos: [] });
+  // Unidade ou contato corrigido daqui (edição no contexto): as listas do "Para:" são lidas de novo
+  const [versaoDestinos, setVersaoDestinos] = useState(0);
+  const recarregarDestinos = useCallback(() => setVersaoDestinos((v) => v + 1), []);
   // Validade: no novo, a data de hoje (a do orçamento) + os dias do padrão (Configurações; 10) — editável
   const diasValidade = padroes?.validadeDias ?? DIAS_VALIDADE_PADRAO;
   const [validadeEm, setValidadeEm] = useState(
@@ -311,7 +314,7 @@ export function OrcamentoForm({
       .then((d: OpcoesDestinatario) => { if (ativo) setDestinos({ unidades: d.unidades ?? [], contatos: d.contatos ?? [] }); })
       .catch(() => { if (ativo) setDestinos({ unidades: [], contatos: [] }); });
     return () => { ativo = false; };
-  }, [clienteId]);
+  }, [clienteId, versaoDestinos]);
 
   // Carrega equipamentos do cliente para o escopo da proposta
   useEffect(() => {
@@ -617,6 +620,8 @@ export function OrcamentoForm({
                   setClientes((l) => [...l, c]);
                   return CLIENTE.opcao(c);
                 }}
+                // Referência: corrige o CADASTRO do cliente (telefone, e-mail, contatos) sem sair do orçamento
+                edicao={CLIENTE.edicao({ aoMudarContatos: recarregarDestinos })}
               />
             </FormField>
             <FormField label="Validade" dica={`Padrão: ${diasValidade} dias após a data do orçamento (Configurações › Orçamentos). Após a validade, o orçamento não pode ser aprovado.`}>
@@ -627,20 +632,30 @@ export function OrcamentoForm({
             <div data-destinatario>
               <FormGrid cols={2}>
                 <FormField label="Unidade (endereço do “Para:”)" dica="Endereço exibido no campo “Para:” do documento. Em branco, é usado o endereço do cadastro do cliente.">
-                  <Select value={unidadeId} onChange={(e) => setUnidadeId(e.target.value)} placeholder="Endereço do cliente" data-unidade-orcamento>
-                    {unidadeId && !destinos.unidades.some((u) => u.id === unidadeId) && <option value={unidadeId}>Unidade atual</option>}
-                    {destinos.unidades.map((u) => (
-                      <option key={u.id} value={u.id}>{u.nome}{u.cidade ? ` — ${u.cidade}${u.estado ? `/${u.estado}` : ""}` : ""}</option>
-                    ))}
-                  </Select>
+                  <div className="flex items-center gap-1.5" data-campo-com-edicao="unidade">
+                    <div className="flex-1 min-w-0">
+                      <Select value={unidadeId} onChange={(e) => setUnidadeId(e.target.value)} placeholder="Endereço do cliente" data-unidade-orcamento>
+                        {unidadeId && !destinos.unidades.some((u) => u.id === unidadeId) && <option value={unidadeId}>Unidade atual</option>}
+                        {destinos.unidades.map((u) => (
+                          <option key={u.id} value={u.id}>{u.nome}{u.cidade ? ` — ${u.cidade}${u.estado ? `/${u.estado}` : ""}` : ""}</option>
+                        ))}
+                      </Select>
+                    </div>
+                    {unidadeId && <EditarNoContexto comMoldura id={unidadeId} rotulo="Editar a unidade selecionada" edicao={UNIDADE.edicao(clienteId, recarregarDestinos)} />}
+                  </div>
                 </FormField>
                 <FormField label="A/C (aos cuidados de)" dica="Contato do cliente que recebe a proposta.">
-                  <Select value={contatoClienteId} onChange={(e) => setContatoClienteId(e.target.value)} placeholder="Sem contato A/C" data-contato-orcamento>
-                    {contatoClienteId && !destinos.contatos.some((c) => c.id === contatoClienteId) && <option value={contatoClienteId}>Contato atual</option>}
-                    {destinos.contatos.map((c) => (
-                      <option key={c.id} value={c.id}>{c.nome}{c.cargo ? ` (${c.cargo})` : ""}{c.principal ? " · principal" : ""}</option>
-                    ))}
-                  </Select>
+                  <div className="flex items-center gap-1.5" data-campo-com-edicao="contato">
+                    <div className="flex-1 min-w-0">
+                      <Select value={contatoClienteId} onChange={(e) => setContatoClienteId(e.target.value)} placeholder="Sem contato A/C" data-contato-orcamento>
+                        {contatoClienteId && !destinos.contatos.some((c) => c.id === contatoClienteId) && <option value={contatoClienteId}>Contato atual</option>}
+                        {destinos.contatos.map((c) => (
+                          <option key={c.id} value={c.id}>{c.nome}{c.cargo ? ` (${c.cargo})` : ""}{c.principal ? " · principal" : ""}</option>
+                        ))}
+                      </Select>
+                    </div>
+                    {contatoClienteId && <EditarNoContexto comMoldura id={contatoClienteId} rotulo="Editar o contato selecionado" edicao={CONTATO.edicao(clienteId, destinos.contatos, recarregarDestinos)} />}
+                  </div>
                 </FormField>
               </FormGrid>
             </div>
