@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Ban, Eye, Pencil, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Drawer } from "@/components/ui/drawer";
@@ -217,9 +217,13 @@ function PainelDoChecklist({ aberto, colaboradores, podeEditar, onFechar, onEdit
   const [colaboradorId, setColaboradorId] = useState("");
   const [salvando, setSalvando] = useState(false);
   const id = aberto?.id ?? null;
+  // Fechando, a gaveta sai de cena com o que mostrava (sem piscar o esqueleto nem trocar de modo)
+  const ultimo = useRef(aberto);
+  if (aberto) ultimo.current = aberto;
+  const modo = (aberto ?? ultimo.current)?.modo;
 
   useEffect(() => {
-    if (!id) { setD(null); return; }
+    if (!id) return;
     let vivo = true;
     setD(null); setErro("");
     (async () => {
@@ -239,7 +243,7 @@ function PainelDoChecklist({ aberto, colaboradores, podeEditar, onFechar, onEdit
   }, [id]);
 
   const itens = useMemo(() => (d ? d.itens.map((i) => i.itemTemplate) : []), [d]);
-  const editando = aberto?.modo === "editar" && podeEditar && !!d && !d.inativadoEm;
+  const editando = modo === "editar" && podeEditar && !!d && !d.inativadoEm;
 
   async function salvar() {
     if (!d) return;
