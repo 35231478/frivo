@@ -158,7 +158,8 @@ describe.skipIf(!URL_PG)("Leva 2: editar no contexto na OS e no orçamento (Post
       expect(r.json).not.toHaveProperty("senha");
       expect(await prisma.contatoCliente.findUnique({ where: { id: "ct1" } })).toMatchObject({ ...antes, telefone: "(11) 95555-1234", atualizadoEm: expect.anything() });
       expect((await chamar("clientes/[id]/contatos/[contatoId]", "PATCH", { cargo: "" }, { id: "c1", contatoId: "ct1" })).json.cargo).toBeNull();
-      for (const corpo of [{ principal: false }, { tipo: "FINANCEIRO" }, { senha: "x" }, { nome: "A" }, {}]) {
+      // campo proibido junto de um válido: recusa tudo (não grava o válido e ignora o resto)
+      for (const corpo of [{ principal: false }, { tipo: "FINANCEIRO" }, { senha: "x" }, { nome: "A" }, {}, { telefone: "(11) 1", principal: false }, { cargo: "Novo", senha: "x" }]) {
         expect((await chamar("clientes/[id]/contatos/[contatoId]", "PATCH", corpo, { id: "c1", contatoId: "ct1" })).status, JSON.stringify(corpo)).toBe(400);
       }
       // contato de outro cliente/empresa pelo caminho deste cliente
@@ -173,10 +174,13 @@ describe.skipIf(!URL_PG)("Leva 2: editar no contexto na OS e no orçamento (Post
       const r = await chamar("unidades/[id]", "PATCH", { numero: "1578", bairro: "Bela Vista" }, { id: "un1" });
       expect(r.status).toBe(200);
       expect(await prisma.unidade.findUnique({ where: { id: "un1" } })).toMatchObject({ ...antes, numero: "1578", bairro: "Bela Vista", atualizadoEm: expect.anything() });
-      for (const corpo of [{ clienteId: "c9" }, { principal: false }, { nome: "" }, { latitude: 1 }, {}]) {
+      const gravada = await prisma.unidade.findUnique({ where: { id: "un1" } });
+      // campo proibido junto de um válido: recusa tudo
+      for (const corpo of [{ clienteId: "c9" }, { principal: false }, { nome: "" }, { latitude: 1 }, {}, { numero: "9", clienteId: "c9" }, { cidade: "Outra", principal: false }]) {
         expect((await chamar("unidades/[id]", "PATCH", corpo, { id: "un1" })).status, JSON.stringify(corpo)).toBe(400);
       }
-      expect((await prisma.unidade.findUnique({ where: { id: "un1" } })).clienteId).toBe("c1");
+      expect(await prisma.unidade.findUnique({ where: { id: "un1" } })).toEqual(gravada);
+      expect(gravada.clienteId).toBe("c1");
     });
 
     it("equipamento: identificação; tipo, unidade e dados técnicos não são tocados; série sem espaço nas pontas", async () => {
@@ -186,9 +190,12 @@ describe.skipIf(!URL_PG)("Leva 2: editar no contexto na OS e no orçamento (Post
       expect(r.json).toMatchObject({ id: "eq1", marca: "LG", modelo: "Dual Inverter", numeroSerie: "SN-002", localizacao: "Sala 2", unidadeId: "un1" });
       expect(await prisma.equipamento.findUnique({ where: { id: "eq1" } })).toMatchObject({ ...antes, numeroSerie: "SN-002", localizacao: "Sala 2", atualizadoEm: expect.anything() });
       expect((await chamar("equipamentos/[id]", "PATCH", { nome: "Split da recepção", patrimonio: "PAT-9" }, { id: "eq1" })).json).toMatchObject({ nome: "Split da recepção", patrimonio: "PAT-9" });
-      for (const corpo of [{ unidadeId: "un9" }, { tipo: "AR_CONDICIONADO_JANELA" }, { marca: "" }, { capacidade: "9000" }, { fotos: [] }, {}]) {
+      const gravado = await prisma.equipamento.findUnique({ where: { id: "eq1" } });
+      // campo proibido junto de um válido: recusa tudo
+      for (const corpo of [{ unidadeId: "un9" }, { tipo: "AR_CONDICIONADO_JANELA" }, { marca: "" }, { capacidade: "9000" }, { fotos: [] }, {}, { marca: "Outra", unidadeId: "un9" }, { modelo: "Outro", capacidade: "9000" }]) {
         expect((await chamar("equipamentos/[id]", "PATCH", corpo, { id: "eq1" })).status, JSON.stringify(corpo)).toBe(400);
       }
+      expect(await prisma.equipamento.findUnique({ where: { id: "eq1" } })).toEqual(gravado);
       expect(await prisma.equipamento.findUnique({ where: { id: "eq1" } })).toMatchObject({ unidadeId: "un1", tipo: "AR_CONDICIONADO_SPLIT", capacidade: "12000" });
     });
 
@@ -319,7 +326,9 @@ describe.skipIf(!URL_PG)("Leva 2: editar no contexto na OS e no orçamento (Post
     it("estrito e validado: campo fora da lista, quantidade zero, preço negativo e corpo vazio = 400, sem gravar; fica no histórico o que mudou", async () => {
       const { os, livre } = await osComItens();
       const antes = JSON.stringify(await item(livre.id));
-      for (const corpo of [{ servicoId: "sLimp" }, { produtoId: "fita" }, { tipo: "PRODUTO" }, { valorTotal: 1 }, { executado: true }, { materiais: [] }, { quantidade: 0 }, { quantidade: -1 }, { valorUnitario: -5 }, { descricao: "   " }, {}]) {
+      // (os três últimos: campo proibido junto de um válido — recusa tudo, não troca o serviço do catálogo por baixo do pano)
+      for (const corpo of [{ servicoId: "sLimp" }, { produtoId: "fita" }, { tipo: "PRODUTO" }, { valorTotal: 1 }, { executado: true }, { materiais: [] }, { quantidade: 0 }, { quantidade: -1 }, { valorUnitario: -5 }, { descricao: "   " }, {},
+        { quantidade: 7, servicoId: "sLimp" }, { quantidade: 7, executado: true }, { descricao: "Outra", valorTotal: 1 }]) {
         expect((await itens(os.id).editar(livre.id, corpo)).status, JSON.stringify(corpo)).toBe(400);
       }
       expect(JSON.stringify(await item(livre.id))).toBe(antes);
@@ -546,7 +555,8 @@ describe.skipIf(!URL_PG)("Leva 2: editar no contexto na OS e no orçamento (Post
       const o = await novoOrcamento();
       const linha = o.servicos[1];
       const antes = JSON.stringify(await ler(o.id));
-      for (const corpo of [{ catalogoId: "sInst" }, { servicoId: "sInst" }, { valorTotal: 1 }, { materiais: [] }, { quantidade: 0 }, { valorUnitario: -1 }, { descricao: "" }, {}]) {
+      // (os dois últimos: campo proibido junto de um válido — recusa tudo)
+      for (const corpo of [{ catalogoId: "sInst" }, { servicoId: "sInst" }, { valorTotal: 1 }, { materiais: [] }, { quantidade: 0 }, { valorUnitario: -1 }, { descricao: "" }, {}, { quantidade: 7, catalogoId: "sInst" }, { quantidade: 7, valorTotal: 1 }]) {
         expect((await linhaOrc(o.id, linha.id, corpo)).status, JSON.stringify(corpo)).toBe(400);
       }
       expect((await linhaOrc(o.id, "nao-existe", { quantidade: 2 })).status).toBe(404);
@@ -557,6 +567,25 @@ describe.skipIf(!URL_PG)("Leva 2: editar no contexto na OS e no orçamento (Post
       sessao.atual = null;
       expect((await linhaOrc(o.id, linha.id, { quantidade: 2 })).status).toBe(401);
       expect(JSON.stringify(await ler(o.id))).toBe(antes);
+    });
+
+    it("linha com total digitado (3 × 33,33 = 100,00): mudar só a descrição mantém o total; mudar o preço, mesmo em 1 centavo, recalcula", async () => {
+      const r = await chamar("orcamentos", "POST", { clienteId: "c1", produtos: [], servicos: [{ descricao: "Antigo", quantidade: 3, valorUnitario: 33.33, valorTotal: 100 }] });
+      const o = await ler(r.json.id);
+      expect([n(o.servicos[0].valorTotal), n(o.totalServicos)]).toEqual([100, 100]);
+      await linhaOrc(o.id, o.servicos[0].id, { descricao: "Antigo (revisado)" });
+      expect([n((await ler(o.id)).servicos[0].valorTotal), n((await ler(o.id)).totalServicos)]).toEqual([100, 100]);
+      await linhaOrc(o.id, o.servicos[0].id, { valorUnitario: 33.34 });
+      const d = await ler(o.id);
+      expect([n(d.servicos[0].valorUnitario), n(d.servicos[0].valorTotal), n(d.totalServicos)]).toEqual([33.34, 100.02, 100.02]);
+      // 2 × 50,00 com total digitado 100,01. Preço novo 50,01: o total antigo ainda "bateria" com ele dentro do
+      // arredondamento (100,01 × 100,02) — mas o preço mudou, então o total é o do preço novo, não o antigo
+      const r2 = await chamar("orcamentos", "POST", { clienteId: "c1", produtos: [], servicos: [{ descricao: "Arredondado", quantidade: 2, valorUnitario: 50, valorTotal: 100.01 }] });
+      const o2 = await ler(r2.json.id);
+      expect(n(o2.servicos[0].valorTotal)).toBe(100.01);
+      await linhaOrc(o2.id, o2.servicos[0].id, { valorUnitario: 50.01 });
+      const d2 = await ler(o2.id);
+      expect([n(d2.servicos[0].valorUnitario), n(d2.servicos[0].valorTotal), n(d2.totalServicos)]).toEqual([50.01, 100.02, 100.02]);
     });
 
     it("serviço com total digitado à mão: trocar o unitário é recusado; a descrição muda e o total fica", async () => {
