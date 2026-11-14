@@ -4,7 +4,7 @@ import { definirAtivoEquipamento } from "@/lib/acoes-massa/regras";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { validarFotos } from "@/lib/anexos-server";
-import { equipamentoSchema } from "@/lib/validations";
+import { dadosParciais, equipamentoContextoSchema, equipamentoSchema } from "@/lib/validations";
 import { resolverTipoEquipamento } from "@/lib/tipo-equipamento";
 
 type Params = { params: Promise<{ id: string }> };
@@ -84,6 +84,20 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
 
   const body = await req.json().catch(() => ({}));
+  // Edição no contexto (de dentro da OS): identificação do equipamento, e só o que mudou. Mesma permissão
+  // da edição completa (conferida acima); tipo, unidade, fotos e dados técnicos seguem no cadastro.
+  if (body && typeof body === "object" && !Array.isArray(body) && !("ativo" in body)) {
+    const parsed = equipamentoContextoSchema.safeParse(body);
+    if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
+    const dados = dadosParciais(parsed.data);
+    if (typeof dados.numeroSerie === "string") dados.numeroSerie = dados.numeroSerie.trim() || (null as unknown as string);
+    if (!Object.keys(dados).length) return NextResponse.json({ erro: "Nada para alterar." }, { status: 400 });
+    const atualizado = await prisma.equipamento.update({
+      where: { id }, data: dados,
+      select: { id: true, nome: true, marca: true, modelo: true, numeroSerie: true, patrimonio: true, localizacao: true, unidadeId: true },
+    });
+    return NextResponse.json(atualizado);
+  }
   if (typeof body.ativo !== "boolean") {
     return NextResponse.json({ erro: "Campo 'ativo' (boolean) é obrigatório." }, { status: 400 });
   }

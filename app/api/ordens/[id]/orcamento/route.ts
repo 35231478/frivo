@@ -5,6 +5,7 @@ import { osDaEmpresa } from "@/lib/os-server";
 import { respostaRefEmpresa } from "@/lib/ref-empresa";
 import { itemOsSchema } from "@/lib/validations";
 import { criarItemOs, INCLUIR_ITEM_OS, prepararItemOsConferido } from "@/lib/os/materiais-server";
+import { travaDasLinhasDaOs } from "@/lib/os/trava-edicao-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -20,6 +21,9 @@ export async function POST(req: NextRequest, { params }: Params) {
   const empresaId = session.user!.empresaId;
   const { id } = await params;
   if (!(await osDaEmpresa(id, empresaId))) return NextResponse.json({ erro: "OS não encontrada" }, { status: 404 });
+  // Registro fechado (OS concluída, assinada, faturada ou com nota): não entra linha nova
+  const fechada = await travaDasLinhasDaOs(id);
+  if (fechada) return NextResponse.json({ erro: fechada }, { status: 409 });
   const body = await req.json();
   const parsed = itemOsSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });

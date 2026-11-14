@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { respostaRefEmpresa, validarRefEmpresa } from "@/lib/ref-empresa";
-import { clienteSchema } from "@/lib/validations";
+import { clienteContextoSchema, clienteSchema, dadosParciais } from "@/lib/validations";
 import { contatoSeguro } from "@/lib/contato-cliente";
 import { definirAtivoCliente } from "@/lib/acoes-massa/regras";
 
@@ -88,6 +88,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   return NextResponse.json(atualizado);
 }
 
+// PATCH { telefone?, celular?, email? }: edição no contexto (parcial). PATCH { ativo }: como sempre —
 // Alteração pontual de status (ativo/inativo) sem mexer no restante do cadastro.
 // Inativar é um soft-delete: apenas `ativo` muda; todo o histórico é preservado.
 // Reativar exige "editar"; inativar exige também "excluir" (mesma regra do DELETE).
@@ -103,6 +104,18 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
 
   const body = await req.json().catch(() => ({}));
+  // Edição no contexto (de dentro da OS e do orçamento): só telefone, celular e e-mail, e só o que mudou.
+  // Mesma permissão da edição completa (conferida acima); o resto do cadastro não é tocado.
+  if (body && typeof body === "object" && !Array.isArray(body) && !("ativo" in body)) {
+    const parsed = clienteContextoSchema.safeParse(body);
+    if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
+    const dados = dadosParciais(parsed.data);
+    if (!Object.keys(dados).length) return NextResponse.json({ erro: "Nada para alterar." }, { status: 400 });
+    const atualizado = await prisma.cliente.update({
+      where: { id }, data: dados, select: { id: true, nome: true, nomeFantasia: true, telefone: true, celular: true, email: true },
+    });
+    return NextResponse.json(atualizado);
+  }
   if (typeof body.ativo !== "boolean") {
     return NextResponse.json({ erro: "Campo 'ativo' (boolean) é obrigatório." }, { status: 400 });
   }
