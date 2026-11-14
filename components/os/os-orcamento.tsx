@@ -39,7 +39,7 @@ const ALVO_LINHA = "este item da OS";
  * só leitura (como sempre), com o snapshot copiado à vista. Marcar executado continua igual. Sem baixa de estoque.
  *
  * Leva 2 da padronização — a linha é USO: o lápis abre "Editando este item da OS" (descrição, quantidade e o
- * preço aplicado NESTA OS; o catálogo nunca muda). Registro fechado (OS concluída, assinada, faturada ou com
+ * preço aplicado NESTA OS; o catálogo nunca muda). Registro fechado (OS assinada pelo cliente, faturada ou com
  * nota) trava as linhas: cadeado com o motivo no ⓘ, e nada entra nem sai. O servidor confere de novo.
  */
 export function OsOrcamento({ osId, itens: iniciais, clienteId = null, situacao = null }: {

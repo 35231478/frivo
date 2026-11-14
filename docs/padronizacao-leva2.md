@@ -65,17 +65,20 @@ o total, que muda em "Materiais e peças").
 
 Regras puras em `lib/edicao-contexto.ts`; o servidor confere de novo (`lib/os/trava-edicao-server.ts`).
 
-**OS fechada** — concluída, assinada pelo cliente, faturada ou com nota fiscal emitida:
+**OS fechada** — assinada pelo cliente, faturada ou com nota fiscal emitida:
 
 - as linhas viram **cadeado desabilitado**, com o motivo no ⓘ;
 - não há lixeira nem "novo item"; uma faixa no rodapé dos itens diz o motivo;
 - o servidor recusa editar, regravar, apagar e incluir linha, com o mesmo motivo;
-- **"Marcar executado" continua** — é o que leva a OS ao faturamento;
-- reabrir a OS (ajuste manual do status) destrava as linhas.
+- **"Marcar executado" continua** — é o que leva a OS ao faturamento.
 
-Motivos, do mais definitivo para o menos: nota fiscal emitida → faturada → assinada pelo cliente →
-concluída. Fatura cancelada e nota rejeitada, cancelada ou interrompida não travam; nota a caminho
-(enviando ou processando) já trava.
+**OS só concluída não trava.** Sem assinatura, fatura nem nota, a OS concluída continua editável por
+quem tem Ordens › editar: o escritório ainda ajusta os itens antes de faturar. Vale também para a OS
+concluída que aguarda a confirmação do cliente (aceite pendente); a trava começa quando ele assina.
+
+Motivos, do mais definitivo para o menos: nota fiscal emitida → faturada → assinada pelo cliente.
+Fatura cancelada e nota rejeitada, cancelada ou interrompida não travam; nota a caminho (enviando ou
+processando) já trava.
 
 **A trava é do uso, não da referência.** Na OS fechada, o cliente, a unidade e o equipamento continuam
 editáveis no cadastro deles — os lápis do cartão "Cliente e local" seguem habilitados.

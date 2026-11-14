@@ -161,7 +161,7 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
                   <section data-secao-itens>
                     <h3 className="section-title mb-3">Itens da OS</h3>
                     <OsOrcamento osId={os.id} itens={os.itensOrcamento} clienteId={os.cliente.id}
-                      situacao={situacaoDaOs({ status: os.status, aceite: os.aceite, faturada: !!os.fatura, notaEmitida: !!os.notaEmitida })} />
+                      situacao={situacaoDaOs({ aceite: os.aceite, faturada: !!os.fatura, notaEmitida: !!os.notaEmitida })} />
                   </section>
                 </div>
               )}

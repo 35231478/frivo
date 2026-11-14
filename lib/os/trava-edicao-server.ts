@@ -14,14 +14,15 @@ export async function osTemNotaEmitida(osId: string, medicaoId?: string | null):
 
 /**
  * A situação da OS para a trava de registro fechado, lida do banco (a tela não decide sozinha):
- * status, aceite do cliente, se já entrou numa fatura/medição viva e se há nota fiscal emitida.
+ * aceite do cliente, se já entrou numa fatura/medição viva e se há nota fiscal emitida. O status não
+ * entra: OS só concluída continua editável.
  */
 export async function situacaoDaOsNoBanco(osId: string): Promise<SituacaoDoRegistro> {
   const [os, fatura] = await Promise.all([
-    prisma.ordemServico.findUnique({ where: { id: osId }, select: { status: true, aceite: { select: { situacao: true } } } }),
+    prisma.ordemServico.findUnique({ where: { id: osId }, select: { aceite: { select: { situacao: true } } } }),
     osJaFaturada(osId),
   ]);
-  return situacaoDaOs({ status: os?.status, aceite: os?.aceite, faturada: !!fatura, notaEmitida: await osTemNotaEmitida(osId, fatura?.id) });
+  return situacaoDaOs({ aceite: os?.aceite, faturada: !!fatura, notaEmitida: await osTemNotaEmitida(osId, fatura?.id) });
 }
 
 /** Por que as linhas desta OS estão travadas (registro fechado) — ou null. */

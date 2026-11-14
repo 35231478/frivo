@@ -16,8 +16,9 @@
  *    do salvar do formulário.
  *
  * TRAVA de registro fechado:
- *  - OS concluída, assinada, faturada ou com nota: a linha não se edita, não sai e não entra linha nova
+ *  - OS assinada pelo cliente, faturada ou com nota: a linha não se edita, não sai e não entra linha nova
  *    — cada caso com o seu motivo; marcar executado continua (é o que leva a OS ao faturamento);
+ *  - OS só concluída NÃO trava: o escritório ainda ajusta os itens antes de faturar;
  *  - orçamento: só o rascunho se edita; aprovado e convertido são registro fechado.
  *
  * RBAC: sem a permissão, 403; sem login, 401.
@@ -29,7 +30,7 @@ import path from "node:path";
 import { NextRequest } from "next/server";
 import { montarPermissoes, permissoesTotais, type Permissoes } from "@/lib/permissoes";
 import {
-  TRAVA_APROVADO, TRAVA_ASSINADA, TRAVA_CONCLUIDA, TRAVA_FATURADO, TRAVA_NOTA, TRAVA_LINHA_DO_ORCAMENTO, TRAVA_LINHA_EXECUTADA, TRAVA_LINHA_PECA,
+  TRAVA_APROVADO, TRAVA_ASSINADA, TRAVA_FATURADO, TRAVA_NOTA, TRAVA_LINHA_DO_ORCAMENTO, TRAVA_LINHA_EXECUTADA, TRAVA_LINHA_PECA,
   TRAVA_ORCAMENTO_CANCELADO, TRAVA_ORCAMENTO_ENVIADO, TRAVA_ORCAMENTO_REPROVADO,
 } from "@/lib/edicao-contexto";
 
@@ -82,6 +83,7 @@ describe.skipIf(!URL_PG)("Leva 2: editar no contexto na OS e no orçamento (Post
     return { os, servico, peca: servico.pecas[0], livre, produto };
   }
   const fechar = (osId: string) => prisma.ordemServico.update({ where: { id: osId }, data: { status: "CONCLUIDA", dataConclusao: new Date() } });
+  const assinar = (osId: string) => prisma.osAceite.create({ data: { empresaId: "e1", ordemServicoId: osId, token: `tka-${osId}`, situacao: "CONFIRMADO" } });
 
   beforeAll(async () => {
     const url = `${URL_PG}${URL_PG!.includes("?") ? "&" : "?"}schema=${SCHEMA}&connection_limit=10`;
@@ -381,7 +383,6 @@ describe.skipIf(!URL_PG)("Leva 2: editar no contexto na OS e no orçamento (Post
     const linhasDa = async (osId: string) => JSON.stringify(await prisma.osItemOrcamento.findMany({ where: { ordemServicoId: osId }, orderBy: { ordem: "asc" }, include: { materiais: { orderBy: { ordem: "asc" } } } }));
 
     it.each([
-      ["concluída", TRAVA_CONCLUIDA, async (_os: any) => {}],
       ["assinada pelo cliente", TRAVA_ASSINADA, async (os: any) => { await prisma.osAceite.create({ data: { empresaId: "e1", ordemServicoId: os.id, token: `tk-${os.id}`, situacao: "CONFIRMADO" } }); }],
       ["faturada", TRAVA_FATURADO, async (os: any) => {
         const med = await prisma.medicao.create({ data: { empresaId: "e1", clienteId: "c1", numero: `M-${os.numero}`, tokenPublico: `tp-${os.id}` } });
@@ -424,6 +425,8 @@ describe.skipIf(!URL_PG)("Leva 2: editar no contexto na OS e no orçamento (Post
     it("OS fechada: marcar executado continua (leva ao faturamento) e o cadastro-mãe continua editável — a trava é do uso", async () => {
       const { os, livre } = await osComItens();
       await fechar(os.id);
+      await assinar(os.id);
+      expect((await itens(os.id).editar(livre.id, { quantidade: 9 })).json).toEqual({ erro: TRAVA_ASSINADA });
       const r = await itens(os.id).regravar(livre.id, { executado: true });
       expect([r.status, r.json.executado]).toEqual([200, true]);
       // referência: cliente, unidade e equipamento da OS fechada continuam corrigíveis no cadastro deles
@@ -433,13 +436,24 @@ describe.skipIf(!URL_PG)("Leva 2: editar no contexto na OS e no orçamento (Post
       expect((await chamar("clientes/[id]/contatos/[contatoId]", "PATCH", { cargo: "Diretoria" }, { id: "c1", contatoId: "ct1" })).status).toBe(200);
     });
 
-    it("reabrir a OS destrava as linhas", async () => {
-      const { os, livre } = await osComItens();
+    it("OS só CONCLUÍDA (sem assinatura, fatura nem nota) continua editável: o escritório ajusta os itens antes de faturar", async () => {
+      const { os, livre, produto } = await osComItens();
       await fechar(os.id);
-      expect((await itens(os.id).editar(livre.id, { quantidade: 9 })).status).toBe(400);
-      await prisma.ordemServico.update({ where: { id: os.id }, data: { status: "EM_ANDAMENTO" } });
-      expect((await itens(os.id).editar(livre.id, { quantidade: 9 })).status).toBe(200);
-      expect(n((await item(livre.id)).quantidade)).toBe(9);
+      // edita a linha (uso), regrava, inclui e apaga — tudo como na OS aberta
+      const e = await itens(os.id).editar(livre.id, { quantidade: 9, valorUnitario: 12.5 });
+      expect([e.status, n((await item(livre.id)).quantidade), n((await item(livre.id)).valorTotal)]).toEqual([200, 9, 112.5]);
+      expect((await itens(os.id).regravar(livre.id, { quantidade: 4 })).status).toBe(200);
+      const nova = await itens(os.id).criar({ tipo: "SERVICO", descricao: "Ajuste antes de faturar", quantidade: 1, valorUnitario: 10 });
+      expect(nova.status).toBe(201);
+      expect((await itens(os.id).apagar(produto.id)).status).toBe(200);
+      expect(await prisma.osItemOrcamento.count({ where: { id: { in: [nova.json.id, produto.id] } } })).toBe(1);
+      // concluída e aguardando o cliente (aceite pendente): ainda edita
+      await prisma.osAceite.create({ data: { empresaId: "e1", ordemServicoId: os.id, token: `tkp-${os.id}`, situacao: "PENDENTE" } });
+      expect((await itens(os.id).editar(livre.id, { quantidade: 2 })).status).toBe(200);
+      // o cliente assinou: aí fecha — e o status da OS não importa mais
+      await prisma.osAceite.update({ where: { ordemServicoId: os.id }, data: { situacao: "CONFIRMADO" } });
+      expect((await itens(os.id).editar(livre.id, { quantidade: 7 })).json).toEqual({ erro: TRAVA_ASSINADA });
+      expect(n((await item(livre.id)).quantidade)).toBe(2);
     });
   });
 

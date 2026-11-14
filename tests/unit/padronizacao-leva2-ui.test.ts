@@ -18,7 +18,7 @@ import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { montarPermissoes, permissoesTotais, type Permissoes } from "@/lib/permissoes";
 import {
-  situacaoDaOs, TRAVA_APROVADO, TRAVA_ASSINADA, TRAVA_CONCLUIDA, TRAVA_FATURADO, TRAVA_LINHA_DO_ORCAMENTO, TRAVA_LINHA_EXECUTADA, TRAVA_LINHA_PECA, TRAVA_NOTA,
+  situacaoDaOs, TRAVA_APROVADO, TRAVA_ASSINADA, TRAVA_FATURADO, TRAVA_LINHA_DO_ORCAMENTO, TRAVA_LINHA_EXECUTADA, TRAVA_LINHA_PECA, TRAVA_NOTA,
   TRAVA_ORCAMENTO_ENVIADO,
 } from "@/lib/edicao-contexto";
 
@@ -181,7 +181,7 @@ describe("lápis avulso (EditarNoContexto): onde não há seletor", () => {
     await montar(createElement(EditarNoContexto, { id: "i1", rotulo: "Editar Visita", edicao: edicao() }), SO_VE);
     expect($("[data-editar-no-contexto]")).toBeNull();
     desmontar();
-    await montar(createElement(EditarNoContexto, { id: "i1", rotulo: "Editar Visita", edicao: edicao({ travado: TRAVA_CONCLUIDA }) }), SO_VE);
+    await montar(createElement(EditarNoContexto, { id: "i1", rotulo: "Editar Visita", edicao: edicao({ travado: TRAVA_ASSINADA }) }), SO_VE);
     expect($("[data-editar-no-contexto]")).toBeNull();
   });
 
@@ -414,7 +414,7 @@ const LIVRE = { id: "i3", tipo: "SERVICO", descricao: "Visita técnica", quantid
 const PRODUTO = { id: "i4", tipo: "PRODUTO", produtoId: "fita", descricao: "Fita", quantidade: 3, valorUnitario: 15, valorTotal: 45, executado: false };
 
 describe("uso: 'Editando este item da OS'", () => {
-  async function abrirItens(itens: unknown[] = [SERVICO, PECA, LIVRE, PRODUTO], situacao: any = situacaoDaOs({ status: "EM_ANDAMENTO" }), permissoes?: Permissoes) {
+  async function abrirItens(itens: unknown[] = [SERVICO, PECA, LIVRE, PRODUTO], situacao: any = situacaoDaOs({}), permissoes?: Permissoes) {
     const { OsOrcamento } = await import("@/components/os/os-orcamento");
     await montar(createElement(OsOrcamento as any, { osId: "os1", itens, clienteId: "c1", situacao }), permissoes);
     await esperar();
@@ -476,11 +476,11 @@ describe("uso: 'Editando este item da OS'", () => {
     expect(txt(painel())).toContain("Quantidade deve ser maior que zero.");
     expect(gravacoes()).toEqual([]);
     expect(await toasts()).toEqual([]);
-    // recusa do servidor (ex.: a OS foi concluída por outra pessoa enquanto o painel estava aberto)
+    // recusa do servidor (ex.: o cliente assinou a OS enquanto o painel estava aberto)
     await digitar(campo("Quantidade"), "5");
-    respostas["PATCH /api/ordens/os1/orcamento/i3"] = { status: 400, corpo: { erro: TRAVA_CONCLUIDA } };
+    respostas["PATCH /api/ordens/os1/orcamento/i3"] = { status: 400, corpo: { erro: TRAVA_ASSINADA } };
     await salvar();
-    expect(txt(painel())).toContain(TRAVA_CONCLUIDA);
+    expect(txt(painel())).toContain(TRAVA_ASSINADA);
     expect(await toasts()).toEqual([]);
   });
 
@@ -540,10 +540,9 @@ describe("trava de registro fechado nos itens da OS", () => {
     chamadas.length = 0;
   }
   it.each([
-    ["concluída", situacaoDaOs({ status: "CONCLUIDA" }), TRAVA_CONCLUIDA],
-    ["assinada pelo cliente", situacaoDaOs({ status: "CONCLUIDA", aceite: { situacao: "CONFIRMADO" } }), TRAVA_ASSINADA],
-    ["faturada", situacaoDaOs({ status: "CONCLUIDA", faturada: true }), TRAVA_FATURADO],
-    ["com nota emitida", situacaoDaOs({ status: "CONCLUIDA", faturada: true, notaEmitida: true }), TRAVA_NOTA],
+    ["assinada pelo cliente", situacaoDaOs({ aceite: { situacao: "CONFIRMADO" } }), TRAVA_ASSINADA],
+    ["faturada", situacaoDaOs({ faturada: true }), TRAVA_FATURADO],
+    ["com nota emitida", situacaoDaOs({ faturada: true, notaEmitida: true }), TRAVA_NOTA],
   ])("OS %s: todas as linhas com cadeado e o motivo no ⓘ; sem lixeira; sem 'novo item'; o painel não abre", async (_n, situacao, motivo) => {
     await abrirFechada(situacao);
     const linhas = $$("[data-item-os]");
@@ -563,8 +562,24 @@ describe("trava de registro fechado nos itens da OS", () => {
     expect(chamadas).toEqual([]);
   });
 
+  it("OS só CONCLUÍDA (sem assinatura, fatura nem nota) não trava: lápis, lixeira e 'novo item' como na OS aberta", async () => {
+    // a OS como a tela a tem: concluída, aguardando a confirmação do cliente
+    const concluida = { status: "CONCLUIDA", aceite: { situacao: "PENDENTE" }, faturada: false, notaEmitida: false };
+    await abrirFechada(situacaoDaOs(concluida), [LIVRE, PRODUTO]);
+    const linha = (id: string) => $(`[data-item-os='${id}']`)!;
+    const lapisDa = (id: string) => $("[data-editar-no-contexto]", linha(id)) as HTMLButtonElement;
+    for (const id of ["i3", "i4"]) {
+      expect([id, lapisDa(id).disabled, $("[data-edicao-travada]", linha(id))]).toEqual([id, false, null]);
+      expect($("button[aria-label^='Excluir']", linha(id)), id).not.toBeNull();
+    }
+    expect($("[data-itens-travados]")).toBeNull();
+    for (const acao of ["novo-servico", "novo-produto", "novo-livre"]) expect($(`[data-acao='${acao}']`), acao).not.toBeNull();
+    await clicar(lapisDa("i3"));
+    expect(tituloDoPainel()).toBe("Editando este item da OS");
+  });
+
   it("OS fechada: 'Marcar executado' continua (é o que leva ao faturamento)", async () => {
-    await abrirFechada(situacaoDaOs({ status: "CONCLUIDA" }), [LIVRE]);
+    await abrirFechada(situacaoDaOs({ aceite: { situacao: "CONFIRMADO" } }), [LIVRE]);
     respostas["PUT /api/ordens/os1/orcamento/i3"] = { status: 200, corpo: { ...LIVRE, executado: true } };
     await clicar(botao("Marcar executado"));
     expect(gravacoes()).toEqual([{ url: "/api/ordens/os1/orcamento/i3", metodo: "PUT", corpo: { executado: true } }]);
@@ -579,7 +594,7 @@ describe("trava de registro fechado nos itens da OS", () => {
   });
 
   it("RBAC: sem Ordens › editar, os itens aparecem sem lápis, cadeado, lixeira, 'marcar executado' nem 'novo item'", async () => {
-    for (const situacao of [situacaoDaOs({ status: "EM_ANDAMENTO" }), situacaoDaOs({ status: "CONCLUIDA" })]) {
+    for (const situacao of [situacaoDaOs({}), situacaoDaOs({ aceite: { situacao: "CONFIRMADO" } })]) {
       await abrirFechada(situacao, [SERVICO, PECA, LIVRE, PRODUTO], SO_VE);
       expect($$("[data-item-os]")).toHaveLength(4);
       expect(txt($("[data-total-os]"))).toMatch(/R\$\s?1\.165,00/);
@@ -733,7 +748,7 @@ describe("onde a edição no contexto está ligada (telas de OS e de orçamento)
 
   it("OS — central e atividades: itens com a situação da OS; equipamento vinculado com o lápis", () => {
     const detalhe = fonte("components/os/os-detalhe.tsx");
-    expect(detalhe).toContain("situacao={situacaoDaOs({ status: os.status, aceite: os.aceite, faturada: !!os.fatura, notaEmitida: !!os.notaEmitida })}");
+    expect(detalhe).toContain("situacao={situacaoDaOs({ aceite: os.aceite, faturada: !!os.fatura, notaEmitida: !!os.notaEmitida })}");
     expect(detalhe).toContain("onAtualizado={(d) => setOs((prev: any) => ({ ...prev, ...d }))} />}");
     expect(fonte("app/(dashboard)/ordens/[id]/page.tsx")).toContain("const notaEmitida = await osTemNotaEmitida(os.id, fatura?.id);");
     const equip = fonte("components/os/atividade-equipamentos.tsx");

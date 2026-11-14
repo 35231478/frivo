@@ -10,8 +10,8 @@
 import { describe, expect, it } from "vitest";
 import {
   alcanceDaEdicao, camposAlterados, motivoDaLinhaDaOs, motivoDaLinhaDoOrcamento, motivoDaTrava, numeroDoCampo, numeroParaCampo, rotuloDaEdicao,
-  situacaoDaOs, temMaterialMovimentado,
-  TRAVA_APROVADO, TRAVA_ASSINADA, TRAVA_CONCLUIDA, TRAVA_FATURADO, TRAVA_NOTA,
+  situacaoDaOs, temMaterialMovimentado, type SituacaoDoRegistro,
+  TRAVA_APROVADO, TRAVA_ASSINADA, TRAVA_FATURADO, TRAVA_NOTA,
   TRAVA_LINHA_DO_ORCAMENTO, TRAVA_LINHA_EXECUTADA, TRAVA_LINHA_PECA, TRAVA_LINHA_SEPARADA,
   TRAVA_ORCAMENTO_CANCELADO, TRAVA_ORCAMENTO_ENVIADO, TRAVA_ORCAMENTO_REPROVADO,
 } from "@/lib/edicao-contexto";
@@ -38,28 +38,33 @@ describe("o rótulo do que está sendo editado (regra de ouro)", () => {
 
 describe("trava de registro fechado", () => {
   it("registro aberto: nada trava", () => {
-    for (const r of [null, undefined, {}, { statusOs: "EM_ANDAMENTO" }, { statusOrcamento: "RASCUNHO" }, { statusOrcamento: "ENVIADO" }, { aceite: "PENDENTE" }, { faturado: false, notaEmitida: false }, { statusOs: "CANCELADA" }]) {
+    for (const r of [null, undefined, {}, { statusOrcamento: "RASCUNHO" }, { statusOrcamento: "ENVIADO" }, { aceite: "PENDENTE" }, { faturado: false, notaEmitida: false }]) {
       expect(motivoDaTrava(r), JSON.stringify(r)).toBeNull();
     }
   });
 
-  it("cada motivo com a sua frase: nota emitida, faturado, OS assinada, OS concluída, orçamento aprovado", () => {
+  it("OS só concluída NÃO é registro fechado: o escritório ainda ajusta os itens antes de faturar", () => {
+    // o status da OS nem entra na situação; mesmo se alguém mandar, não trava
+    expect(motivoDaTrava({ statusOs: "CONCLUIDA" } as SituacaoDoRegistro)).toBeNull();
+    expect(motivoDaTrava({ statusOs: "CONCLUIDA", aceite: "PENDENTE", faturado: false, notaEmitida: false } as SituacaoDoRegistro)).toBeNull();
+  });
+
+  it("cada motivo com a sua frase: nota emitida, faturado, OS assinada, orçamento aprovado", () => {
     expect(motivoDaTrava({ notaEmitida: true })).toBe(TRAVA_NOTA);
     expect(motivoDaTrava({ faturado: true })).toBe(TRAVA_FATURADO);
     expect(motivoDaTrava({ aceite: "CONFIRMADO" })).toBe(TRAVA_ASSINADA);
-    expect(motivoDaTrava({ statusOs: "CONCLUIDA" })).toBe(TRAVA_CONCLUIDA);
     expect(motivoDaTrava({ statusOrcamento: "APROVADO" })).toBe(TRAVA_APROVADO);
     expect(motivoDaTrava({ statusOrcamento: "CONVERTIDA" })).toBe(TRAVA_APROVADO); // aprovado e já virou OS
-    for (const frase of [TRAVA_NOTA, TRAVA_FATURADO, TRAVA_ASSINADA, TRAVA_CONCLUIDA, TRAVA_APROVADO]) expect(frase).toMatch(/não pode mais ser editado\.$/);
-    expect(new Set([TRAVA_NOTA, TRAVA_FATURADO, TRAVA_ASSINADA, TRAVA_CONCLUIDA, TRAVA_APROVADO]).size).toBe(5);
+    for (const frase of [TRAVA_NOTA, TRAVA_FATURADO, TRAVA_ASSINADA, TRAVA_APROVADO]) expect(frase).toMatch(/não pode mais ser editado\.$/);
+    expect(new Set([TRAVA_NOTA, TRAVA_FATURADO, TRAVA_ASSINADA, TRAVA_APROVADO]).size).toBe(4);
   });
 
-  it("mais de um motivo: fica o mais definitivo (nota > faturado > assinada > concluída > orçamento aprovado)", () => {
-    const tudo = { notaEmitida: true, faturado: true, aceite: "CONFIRMADO", statusOs: "CONCLUIDA", statusOrcamento: "APROVADO" };
+  it("mais de um motivo: fica o mais definitivo (nota > faturado > assinada > orçamento aprovado)", () => {
+    const tudo = { notaEmitida: true, faturado: true, aceite: "CONFIRMADO", statusOrcamento: "APROVADO" };
     expect(motivoDaTrava(tudo)).toBe(TRAVA_NOTA);
     expect(motivoDaTrava({ ...tudo, notaEmitida: false })).toBe(TRAVA_FATURADO);
     expect(motivoDaTrava({ ...tudo, notaEmitida: false, faturado: false })).toBe(TRAVA_ASSINADA);
-    expect(motivoDaTrava({ statusOs: "CONCLUIDA", statusOrcamento: "APROVADO", aceite: "PENDENTE" })).toBe(TRAVA_CONCLUIDA);
+    expect(motivoDaTrava({ statusOrcamento: "APROVADO", aceite: "PENDENTE" })).toBe(TRAVA_APROVADO);
   });
 });
 
@@ -82,35 +87,39 @@ describe("o que mudou (só isso vai para o servidor)", () => {
 /* ───────── Leva 2: a trava nas telas de OS e de orçamento ───────── */
 
 describe("a situação da OS (o que a tela e o servidor sabem dela)", () => {
-  it("status, aceite, fatura e nota viram a situação que a trava entende", () => {
-    expect(situacaoDaOs({ status: "EM_ANDAMENTO" })).toEqual({ statusOs: "EM_ANDAMENTO", aceite: null, faturado: false, notaEmitida: false });
-    expect(situacaoDaOs({ status: "CONCLUIDA", aceite: { situacao: "CONFIRMADO" }, faturada: true, notaEmitida: true }))
-      .toEqual({ statusOs: "CONCLUIDA", aceite: "CONFIRMADO", faturado: true, notaEmitida: true });
-    expect(situacaoDaOs({})).toEqual({ statusOs: null, aceite: null, faturado: false, notaEmitida: false });
+  it("aceite, fatura e nota viram a situação que a trava entende — o status da OS fica de fora", () => {
+    expect(situacaoDaOs({ aceite: { situacao: "PENDENTE" } })).toEqual({ aceite: "PENDENTE", faturado: false, notaEmitida: false });
+    expect(situacaoDaOs({ aceite: { situacao: "CONFIRMADO" }, faturada: true, notaEmitida: true })).toEqual({ aceite: "CONFIRMADO", faturado: true, notaEmitida: true });
+    expect(situacaoDaOs({})).toEqual({ aceite: null, faturado: false, notaEmitida: false });
+    // a OS inteira (como a tela a tem), concluída: o status não passa para a situação
+    const osConcluida = { status: "CONCLUIDA", aceite: null, faturada: false, notaEmitida: false };
+    expect(situacaoDaOs(osConcluida)).toEqual({ aceite: null, faturado: false, notaEmitida: false });
   });
 
-  it("OS aberta não trava; concluída, assinada, faturada e com nota travam — cada uma com o seu motivo", () => {
-    expect(motivoDaTrava(situacaoDaOs({ status: "EM_ANDAMENTO", aceite: { situacao: "PENDENTE" } }))).toBeNull();
-    expect(motivoDaTrava(situacaoDaOs({ status: "CONCLUIDA" }))).toBe(TRAVA_CONCLUIDA);
-    expect(motivoDaTrava(situacaoDaOs({ status: "CONCLUIDA", aceite: { situacao: "CONFIRMADO" } }))).toBe(TRAVA_ASSINADA);
-    expect(motivoDaTrava(situacaoDaOs({ status: "CONCLUIDA", aceite: { situacao: "CONFIRMADO" }, faturada: true }))).toBe(TRAVA_FATURADO);
-    expect(motivoDaTrava(situacaoDaOs({ status: "CONCLUIDA", faturada: true, notaEmitida: true }))).toBe(TRAVA_NOTA);
+  it("OS aberta ou só concluída não trava; assinada, faturada e com nota travam — cada uma com o seu motivo", () => {
+    const concluida = { status: "CONCLUIDA", aceite: null as { situacao: string } | null };
+    expect(motivoDaTrava(situacaoDaOs({ aceite: { situacao: "PENDENTE" } }))).toBeNull();
+    expect(motivoDaTrava(situacaoDaOs(concluida))).toBeNull();
+    expect(motivoDaTrava(situacaoDaOs({ ...concluida, aceite: { situacao: "PENDENTE" } }))).toBeNull(); // concluída, aguardando o cliente
+    expect(motivoDaTrava(situacaoDaOs({ ...concluida, aceite: { situacao: "CONFIRMADO" } }))).toBe(TRAVA_ASSINADA);
+    expect(motivoDaTrava(situacaoDaOs({ ...concluida, aceite: { situacao: "CONFIRMADO" }, faturada: true }))).toBe(TRAVA_FATURADO);
+    expect(motivoDaTrava(situacaoDaOs({ ...concluida, faturada: true, notaEmitida: true }))).toBe(TRAVA_NOTA);
   });
 });
 
 describe("a linha da OS: registro fechado primeiro, depois o motivo da própria linha", () => {
-  const aberta = situacaoDaOs({ status: "EM_ANDAMENTO" });
+  const aberta = situacaoDaOs({});
   it("linha comum de OS aberta: edita", () => {
     expect(motivoDaLinhaDaOs({}, aberta)).toBeNull();
     expect(motivoDaLinhaDaOs({ materialId: null, orcamentoServicoId: null, executado: false, materialMovimentado: false }, null)).toBeNull();
   });
 
   it("OS fechada trava TODAS as linhas com o motivo do documento, seja qual for a linha", () => {
-    const fechada = situacaoDaOs({ status: "CONCLUIDA" });
+    const fechada = situacaoDaOs({ aceite: { situacao: "CONFIRMADO" } });
     for (const linha of [{}, { executado: true }, { materialId: "m1" }, { orcamentoServicoId: "o1" }, { materialMovimentado: true }]) {
-      expect(motivoDaLinhaDaOs(linha, fechada), JSON.stringify(linha)).toBe(TRAVA_CONCLUIDA);
+      expect(motivoDaLinhaDaOs(linha, fechada), JSON.stringify(linha)).toBe(TRAVA_ASSINADA);
     }
-    expect(motivoDaLinhaDaOs({}, situacaoDaOs({ status: "CONCLUIDA", notaEmitida: true }))).toBe(TRAVA_NOTA);
+    expect(motivoDaLinhaDaOs({}, situacaoDaOs({ notaEmitida: true }))).toBe(TRAVA_NOTA);
   });
 
   it("OS aberta: peça derivada, item do orçamento aprovado, item executado e material movimentado — nessa ordem", () => {

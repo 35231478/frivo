@@ -8,9 +8,12 @@
  *  - USO (a linha da transação): muda só ali. Editar quantidade, preço ou descrição de um item da OS
  *    não altera o serviço no catálogo. Rótulo: "Editando este item da OS".
  *
- * E registro FECHADO não se edita: faturado, OS concluída ou assinada pelo cliente, orçamento aprovado
- * pelo cliente, nota emitida. A trava vale para o USO (a linha do registro fechado); o cadastro-mãe
- * continua sendo editado no cadastro dele.
+ * E registro FECHADO não se edita: faturado, OS assinada pelo cliente, orçamento aprovado pelo cliente,
+ * nota emitida. A trava vale para o USO (a linha do registro fechado); o cadastro-mãe continua sendo
+ * editado no cadastro dele.
+ *
+ * OS só "concluída" NÃO é registro fechado: o escritório ainda ajusta os itens antes de faturar. A trava
+ * começa na assinatura do cliente, na fatura ou na nota.
  */
 
 export type EscopoEdicao = "referencia" | "uso";
@@ -40,8 +43,6 @@ export interface SituacaoDoRegistro {
   faturado?: boolean;
   /** Situação do aceite do cliente na OS ("CONFIRMADO" = assinada) */
   aceite?: string | null;
-  /** Status da OS ("CONCLUIDA" = concluída) */
-  statusOs?: string | null;
   /** Status do orçamento ("APROVADO" ou "CONVERTIDA" = aprovado pelo cliente) */
   statusOrcamento?: string | null;
 }
@@ -49,19 +50,17 @@ export interface SituacaoDoRegistro {
 export const TRAVA_NOTA = "Nota fiscal emitida: este registro não pode mais ser editado.";
 export const TRAVA_FATURADO = "Já faturado: este registro não pode mais ser editado.";
 export const TRAVA_ASSINADA = "OS assinada pelo cliente: este registro não pode mais ser editado.";
-export const TRAVA_CONCLUIDA = "OS concluída: este registro não pode mais ser editado.";
 export const TRAVA_APROVADO = "Orçamento aprovado pelo cliente: este registro não pode mais ser editado.";
 
 /**
  * Por que o registro está travado para edição — ou null, se dá para editar. Quando mais de um motivo
- * vale, fica o mais definitivo (nota > faturado > assinada > concluída > orçamento aprovado).
+ * vale, fica o mais definitivo (nota > faturado > assinada > orçamento aprovado).
  */
 export function motivoDaTrava(r: SituacaoDoRegistro | null | undefined): string | null {
   if (!r) return null;
   if (r.notaEmitida) return TRAVA_NOTA;
   if (r.faturado) return TRAVA_FATURADO;
   if (r.aceite === "CONFIRMADO") return TRAVA_ASSINADA;
-  if (r.statusOs === "CONCLUIDA") return TRAVA_CONCLUIDA;
   if (r.statusOrcamento === "APROVADO" || r.statusOrcamento === "CONVERTIDA") return TRAVA_APROVADO;
   return null;
 }
@@ -85,15 +84,17 @@ export const TRAVA_ORCAMENTO_ENVIADO = "Orçamento enviado ao cliente: volte par
 export const TRAVA_ORCAMENTO_REPROVADO = "Orçamento reprovado: só o rascunho pode ser editado.";
 export const TRAVA_ORCAMENTO_CANCELADO = "Orçamento cancelado: reative para editar.";
 
-/** O que a OS sabe dela mesma → a situação que `motivoDaTrava` entende. */
+/**
+ * O que a OS sabe dela mesma → a situação que `motivoDaTrava` entende. O status não entra: OS concluída
+ * sem assinatura, fatura nem nota continua editável.
+ */
 export function situacaoDaOs(os: {
-  status?: string | null;
   aceite?: { situacao?: string | null } | null;
   /** Já entrou numa fatura/medição viva */
   faturada?: boolean;
   notaEmitida?: boolean;
 }): SituacaoDoRegistro {
-  return { statusOs: os.status ?? null, aceite: os.aceite?.situacao ?? null, faturado: !!os.faturada, notaEmitida: !!os.notaEmitida };
+  return { aceite: os.aceite?.situacao ?? null, faturado: !!os.faturada, notaEmitida: !!os.notaEmitida };
 }
 
 /** A linha da OS como a trava a enxerga (só o que decide). */

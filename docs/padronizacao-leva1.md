@@ -22,10 +22,10 @@ também **edita o item já escolhido**, sem sair da tela.
 | `referencia` (cadastro-mãe) | Em todo lugar | "Editando o cadastro do cliente" | "Vale em todo lugar onde este cadastro é usado." |
 | `uso` (a linha da transação) | Só ali | "Editando este item da OS" | "Vale só aqui. O cadastro não muda." |
 
-- **Registro fechado não se edita.** `motivoDaTrava({ notaEmitida, faturado, aceite, statusOs,
-  statusOrcamento })` devolve o motivo — nota emitida, faturado, OS assinada, OS concluída, orçamento
-  aprovado pelo cliente — ou `null`. Com motivo, o lápis vira um cadeado desabilitado e o motivo fica
-  no ⓘ ao lado.
+- **Registro fechado não se edita.** `motivoDaTrava({ notaEmitida, faturado, aceite, statusOrcamento })`
+  devolve o motivo — nota emitida, faturado, OS assinada pelo cliente, orçamento aprovado pelo
+  cliente — ou `null`. OS só concluída não é registro fechado (leva 2). Com motivo, o lápis vira um
+  cadeado desabilitado e o motivo fica no ⓘ ao lado.
 - **Permissão.** Sem a permissão de editar, o lápis nem aparece.
 - **Salvar.** Só vai para o servidor o que mudou (apagar um campo é uma mudança). Nada mudou: fecha
   sem chamar o servidor. Salvou: toast. O formulário principal não é enviado nem perde o que tinha.
@@ -52,7 +52,7 @@ Como usar:
 <SeletorCadastro entidade="cargos" valor={cargoId} onChange={setCargoId} editavel />
 
 // 3) A linha de uma transação (o item da OS, a linha do orçamento): o painel sozinho
-<BotaoEditarNoContexto rotulo="Editar este item" travado={motivoDaTrava({ statusOs })} onClick={abrir} />
+<BotaoEditarNoContexto rotulo="Editar este item" travado={motivoDaTrava({ aceite })} onClick={abrir} />
 <EdicaoNoContextoModal
   aberto={aberto} onFechar={fechar} escopo="uso" alvo="este item da OS"   // "Editando este item da OS"
   campos={campos} valores={valoresDaLinha} salvar={gravarLinha} onSalvo={fechar}

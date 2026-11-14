@@ -22,7 +22,7 @@ import path from "node:path";
 import { act, createElement, useState, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { montarPermissoes, permissoesTotais, type Permissoes } from "@/lib/permissoes";
-import { TRAVA_CONCLUIDA, TRAVA_NOTA, motivoDaTrava } from "@/lib/edicao-contexto";
+import { TRAVA_ASSINADA, TRAVA_NOTA, motivoDaTrava } from "@/lib/edicao-contexto";
 import type { EdicaoDoSelecionado } from "@/components/ui/select-cadastro-rapido";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -284,13 +284,13 @@ describe("editar no contexto — SelectCadastroRapido › edicao", () => {
   });
 
   it("registro FECHADO: o lápis vira cadeado desabilitado, com o motivo no ⓘ, e o painel não abre", async () => {
-    const motivo = motivoDaTrava({ statusOs: "CONCLUIDA" })!;
+    const motivo = motivoDaTrava({ aceite: "CONFIRMADO" })!;
     const { salvar } = await montarFormulario({ edicao: { escopo: "uso", alvo: "este item da OS", travado: motivo } });
     const trava = $("[data-edicao-travada]")!;
     expect(trava).not.toBeNull();
     expect(lapis()!.disabled).toBe(true);
     expect(lapis()!.getAttribute("aria-label")).toBe("Editar o tipo de OS selecionado: edição travada");
-    expect(dica("Edição travada")).toBe(TRAVA_CONCLUIDA);
+    expect(dica("Edição travada")).toBe(TRAVA_ASSINADA);
     await clicar(lapis());
     expect(painel()).toBeNull();
     expect(salvar).not.toHaveBeenCalled();

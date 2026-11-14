@@ -47,7 +47,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (body.executado !== undefined) return NextResponse.json(item);
 
   // Edição (E3.3b)
-  // Registro fechado (OS concluída, assinada, faturada ou com nota): as linhas não mudam mais
+  // Registro fechado (OS assinada pelo cliente, faturada ou com nota): as linhas não mudam mais
   const fechada = await travaDasLinhasDaOs(id);
   if (fechada) return NextResponse.json({ erro: fechada }, { status: 400 });
   if (item.orcamentoServicoId) return NextResponse.json({ erro: "Este item veio do orçamento aprovado: edite-o no orçamento." }, { status: 400 });
@@ -70,7 +70,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
 /**
  * PATCH: edição da linha como USO ("Editando este item da OS") — descrição, quantidade e o preço aplicado
  * NESTA OS, e só o que mudou. Nunca toca no catálogo: o serviço/produto de origem não é lido nem gravado, e
- * o retrato dos materiais copiado para a linha fica como está. Registro fechado (OS concluída, assinada,
+ * o retrato dos materiais copiado para a linha fica como está. Registro fechado (OS assinada pelo cliente,
  * faturada ou com nota), item do orçamento aprovado, peça derivada e item executado não se editam.
  */
 export async function PATCH(req: NextRequest, { params }: Params) {

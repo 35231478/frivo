@@ -206,15 +206,10 @@ describe.skipIf(!URL_PG)("Materiais e peças na OS sem orçamento (PostgreSQL re
     expect(Number(medicao.valorTotal)).toBe(935);
     expect(JSON.stringify(medicao)).not.toMatch(/custo/i);
     // OS avulsa: o serviço com materiais fatura do mesmo jeito (serviço + peça PRODUTO)
-    // Leva 2 da padronização: OS concluída é registro fechado (não entra linha nova) — o item entra com a
-    // OS aberta e a OS é concluída depois, como no fluxo real
-    const os2 = await novaOs();
+    const os2 = await novaOs({ status: "CONCLUIDA", dataConclusao: new Date() });
     const { materiais: m2 } = (await itens(os2.id).catalogo("servicoId=sInst")).json;
     const it2 = await itens(os2.id).criar({ tipo: "SERVICO", servicoId: "sInst", descricao: "Instalação split", quantidade: 1, valorUnitario: 800, materiais: m2 });
     for (const i of [it2.json, ...it2.json.pecas]) await prisma.osItemOrcamento.update({ where: { id: i.id }, data: { executado: true } });
-    await prisma.ordemServico.update({ where: { id: os2.id }, data: { status: "CONCLUIDA", dataConclusao: new Date() } });
-    // … e, concluída, recusa linha nova
-    expect((await itens(os2.id).criar({ tipo: "SERVICO", descricao: "Depois de concluída", quantidade: 1, valorUnitario: 10 })).status).toBe(400);
     const f2 = await faturarOs({ empresaId: "e1", usuarioId: "u1", osId: os2.id });
     expect(f2.tipo).toBe("criada");
     const med2 = await prisma.medicao.findFirst({ where: { empresaId: "e1" }, orderBy: { criadoEm: "desc" }, include: { itens: true } });
