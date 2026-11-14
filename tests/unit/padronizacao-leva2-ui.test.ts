@@ -316,6 +316,9 @@ describe("referência: cliente (telefone, e-mail e contatos) de dentro da OS e d
     await act(async () => { $("[aria-label='Cargo']", secao)!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })); });
     await esperar();
     expect(gravacoes().map((c) => c.url)).toEqual(["/api/clientes/c1/contatos/ct1"]);
+    // … e o painel do cliente em volta continua aberto (o Enter não subiu até ele)
+    expect(tituloDoPainel()).toBe("Editando o cadastro do cliente");
+    expect(await toasts()).toEqual(["Contato atualizado."]);
   });
 
   it("RBAC: quem só vê clientes não tem o lápis (nem o cadastro é buscado)", async () => {
@@ -655,8 +658,9 @@ describe("uso: 'Editando este item do orçamento' (detalhe do orçamento)", () =
   it("documento: o lápis só existe na tela do escritório (edicaoLinhas) e fica fora da impressão; o do cliente não tem", async () => {
     const { OrcamentoDocumento } = await import("@/components/orcamento/orcamento-documento");
     const orcamento = {
-      codigo: "2026-0001", nome: "Orçamento", status: "RASCUNHO", criadoEm: new Date("2026-11-01"), totalServicos: 300, totalProdutos: 45, totalGeral: 345, desconto: 0, tipoDesconto: "VALOR",
-      servicos: [{ id: "l1", descricao: "Limpeza", quantidade: 2, valorUnitario: 150, valorTotal: 300, observacao: null }],
+      codigo: "2026-0001", nome: "Orçamento", status: "RASCUNHO", criadoEm: new Date("2026-11-01"), totalServicos: 1680, totalProdutos: 125, totalGeral: 1805, desconto: 0, tipoDesconto: "VALOR",
+      // serviço com materiais: unitário efetivo 840 (base 800 + ajuste 40), 2 unidades
+      servicos: [{ id: "l1", descricao: "Instalação", quantidade: 2, valorUnitario: 840, valorTotal: 1680, valorBase: 1600, ajusteMateriais: 80, valorManual: false, observacao: "Com andaime" }],
       produtos: [{ id: "p1", descricao: "Fita", quantidade: 3, valorUnitario: 15, valorTotal: 45, observacao: null }, { id: "p2", descricao: "Capacitor", quantidade: 1, valorUnitario: 80, valorTotal: 80, materialId: "m1" }],
     };
     const empresa = { nome: "Clima Total", cnpj: "12.345.678/0001-90" }, cliente = { nome: "Hospital", cpfCnpj: "22.101.333/0001-11" };
@@ -667,6 +671,11 @@ describe("uso: 'Editando este item do orçamento' (detalhe do orçamento)", () =
     expect($$("[data-editar-linha] [data-editar-no-contexto]").map((b) => (b as HTMLButtonElement).disabled)).toEqual([false, false, true]);
     await clicar($("[data-editar-linha] [data-editar-no-contexto]"));
     expect(tituloDoPainel()).toBe("Editando este item do orçamento");
+    // a linha chega ao painel como o documento a tem: serviço com materiais abre no unitário BASE
+    expect([campo("Descrição")!.value, campo("Quantidade")!.value, campo("Unit. base (R$)")!.value, campo("Observação")!.value]).toEqual(["Instalação", "2", "800,00", "Com andaime"]);
+    await clicar(botao("Cancelar", painel()!));
+    await clicar($$("[data-editar-linha] [data-editar-no-contexto]")[1]);
+    expect([campo("Descrição")!.value, campo("Valor unitário (R$)")!.value]).toEqual(["Fita", "15,00"]);
     desmontar();
     await montar(createElement(OrcamentoDocumento as any, { orcamento, empresa, cliente, versao: "cliente" }));
     expect($$("[data-linha-item]")).toHaveLength(3);
