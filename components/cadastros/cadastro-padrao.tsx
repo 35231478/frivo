@@ -206,7 +206,8 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda, aviso, grupos }
           url={`/api/cadastros/${entidade}/${item.id}`} modulo={def.permissoes.inativar?.[0]?.[0] ?? def.modulo}
           acaoInativar={def.permissoes.inativar?.[0]?.[1] ?? "gerenciar"} acaoReativar={def.permissoes.reativar?.[0]?.[1] ?? "gerenciar"}
           ativo={item.ativo} nome={item.nome} entidade={def.singular} feminino={def.feminino} comMotivo={false}
-          aoConcluir={() => { toast(`${Titulo} ${item.ativo ? "inativad" : "reativad"}${def.feminino ? "a" : "o"}.`); void carregar(); }}
+          // O aviso ("Tipo de OS inativado.") é do próprio botão — o mesmo em todo cadastro
+          aoConcluir={() => void carregar()}
         />
       )}
     </div>

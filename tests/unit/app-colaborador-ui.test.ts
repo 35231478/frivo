@@ -29,11 +29,13 @@ const clicar = async (el: Element | null) => { expect(el).not.toBeNull(); await 
 const switchDe = (texto: string): HTMLButtonElement | null => ($$("label").find((l) => l.textContent?.includes(texto))?.querySelector("button[role=switch]") ?? null) as HTMLButtonElement | null;
 
 async function montar(inicial = CONFIG_APP_PADRAO) {
+  // Os avisos primeiro: a tela e a faixa de toasts têm de usar o MESMO módulo
+  const { Avisos } = await import("@/components/ui/avisos");
   const { AppColaboradorClient } = await import("@/components/equipes/app-colaborador-client");
   caixa = document.createElement("div");
   document.body.appendChild(caixa);
   root = createRoot(caixa);
-  await act(async () => { root.render(createElement(AppColaboradorClient, { inicial })); });
+  await act(async () => { root.render(createElement("div", null, createElement(AppColaboradorClient, { inicial }), createElement(Avisos))); });
   await esperar();
 }
 
@@ -72,7 +74,9 @@ describe("Página App do colaborador", () => {
     expect(corpo).toMatchObject({ appEsconderValores: false, appFotoSomenteCamera: true, appUmDispositivo: true, appExibirDadosCliente: true });
     // só colunas app* no corpo (não vaza id/empresaId)
     expect(Object.keys(corpo).every((k) => k.startsWith("app"))).toBe(true);
-    expect($("[data-sucesso]")).not.toBeNull();
+    // Leva 4B: o aviso de gravação deixou de ser uma faixa fixa na página e passou a ser o toast padrão
+    expect($("[data-sucesso]")).toBeNull();
+    expect($$("[data-toast='sucesso']").map((t) => t.textContent)).toEqual(["Preferências do app salvas."]);
     expect(refresh).toHaveBeenCalled();
   });
 });

@@ -12,7 +12,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import { Modal } from "@/components/ui/modal";
-import { AlertCircle, AlertTriangle, Check, Search, Truck } from "lucide-react";
+import { AlertCircle, AlertTriangle, Check, Plus, Search, Truck } from "lucide-react";
+import { toast } from "@/components/ui/avisos";
+import { CadastroRapidoModal, SelectCadastroRapido, usePodeCriar } from "@/components/ui/select-cadastro-rapido";
+import { COLABORADOR } from "@/components/cadastro-rapido/definicoes";
 
 interface Colab { id: string; nome: string; avatar?: string | null }
 interface VeiculoOpt { id: string; placa: string; modelo: string; equipe: { id: string; nome: string } | null; inativo: boolean }
@@ -56,6 +59,16 @@ export function EquipeForm({ initialData }: { initialData?: any }) {
 
   const [colaboradores, setColaboradores] = useState<Colab[]>([]);
   const [veiculos, setVeiculos] = useState<VeiculoOpt[]>([]);
+  // Cadastrar colaborador sem sair da equipe (Equipes › gerenciar, a mesma permissão da rota)
+  const podeCadastrarColaborador = usePodeCriar(COLABORADOR.permissao);
+  const [novoMembro, setNovoMembro] = useState(false);
+  /** Cria o colaborador e o põe na lista (o chamador decide se vira líder ou membro) */
+  async function criarColaborador(v: Record<string, string>) {
+    const c = await COLABORADOR.criar(v);
+    setColaboradores((l) => [...l, { id: c.id, nome: c.nome }].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")));
+    toast("Colaborador cadastrado.");
+    return { value: c.id, label: c.nome };
+  }
 
   useEffect(() => {
     fetch("/api/tecnicos").then((r) => r.json()).then((d) => setColaboradores(Array.isArray(d) ? d : [])).catch(() => {});
@@ -93,17 +106,18 @@ export function EquipeForm({ initialData }: { initialData?: any }) {
       });
       const e = await res.json().catch(() => ({}));
       if (res.status === 409 && e.requerConfirmacao) { setConfirmar(e.desvincular ?? []); return; }
-      if (!res.ok) { setErro(e.erro ?? "Erro ao salvar equipe."); return; }
+      if (!res.ok) { setErro(e.erro ?? "Não foi possível salvar a equipe."); return; }
+      toast(isEditing ? "Equipe salva." : "Equipe cadastrada.");
       router.push("/equipes");
       router.refresh();
-    } catch { setErro("Erro de conexão."); } finally { setSalvando(false); }
+    } catch { setErro("Sem conexão. Tente de novo."); } finally { setSalvando(false); }
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" data-form-equipe>
       {erro && (
-        <div className="flex items-center gap-2 bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3">
-          <AlertCircle className="w-4 h-4 shrink-0" /> {erro}
+        <div role="alert" className="flex items-center gap-2 bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3" data-erro-equipe>
+          <AlertCircle className="w-4 h-4 shrink-0" aria-hidden /> {erro}
         </div>
       )}
 
@@ -121,7 +135,7 @@ export function EquipeForm({ initialData }: { initialData?: any }) {
             </FormField>
           </FormGrid>
           {initialData?.id && <AvisoInativacaoStatus url={`/api/equipes/${initialData.id}`} mostrar={inativandoPeloStatus} motivo={motivoInativacao} onMotivo={setMotivoInativacao} />}
-          <FormField label="Cor de identificação" hint="Usada para destacar a equipe no calendário">
+          <FormField label="Cor de identificação" dica="Usada para destacar a equipe no calendário.">
             <div className="flex items-center gap-2 flex-wrap">
               {CORES.map((c) => (
                 <button key={c} type="button" onClick={() => setCor(c)}
@@ -136,14 +150,20 @@ export function EquipeForm({ initialData }: { initialData?: any }) {
         <FormSection title="Composição">
           <FormGrid>
             <FormField label="Líder da equipe">
-              <Select value={liderId} onChange={(e) => setLiderId(e.target.value)}>
-                <option value="">Selecione…</option>
-                {colaboradores.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-              </Select>
+              <div data-lider-equipe={liderId}>
+                <SelectCadastroRapido
+                  value={liderId} onChange={setLiderId} placeholder="Sem líder"
+                  // Sem colaborador nenhum, o seletor mostra o estado vazio com "Cadastrar agora"
+                  opcoes={colaboradores.length ? [{ value: "", label: "Sem líder" }, ...colaboradores.map((c) => ({ value: c.id, label: c.nome }))] : []}
+                  entidade={COLABORADOR.entidade} campos={COLABORADOR.campos} campoBusca="nome"
+                  permissao={COLABORADOR.permissao} linkCadastroCompleto={COLABORADOR.link} criar={criarColaborador}
+                  edicao={liderId ? COLABORADOR.edicao((c) => setColaboradores((l) => l.map((x) => (x.id === c.id ? { ...x, nome: c.nome } : x)))) : undefined}
+                />
+              </div>
             </FormField>
           </FormGrid>
 
-          <FormField label="Veículos da equipe" hint="Marque todos os veículos que ficam com esta equipe">
+          <FormField label="Veículos da equipe" dica="Marque todos os veículos que ficam com esta equipe.">
             {veiculos.length === 0 ? (
               <p className="text-sm text-ink-subtle">Nenhum veículo cadastrado.</p>
             ) : (
@@ -185,11 +205,16 @@ export function EquipeForm({ initialData }: { initialData?: any }) {
             )}
           </FormField>
 
-          <FormField label="Membros" hint="Selecione os colaboradores que compõem a equipe">
+          <FormField label="Membros" dica="Marque os colaboradores que compõem a equipe.">
+            {podeCadastrarColaborador && (
+              <div className="mb-2">
+                <Button type="button" variant="secondary" size="sm" onClick={() => setNovoMembro(true)} data-novo-membro><Plus className="w-4 h-4" aria-hidden /> Novo colaborador</Button>
+              </div>
+            )}
             {colaboradores.length === 0 ? (
               <p className="text-sm text-ink-subtle">Nenhum colaborador cadastrado.</p>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" data-membros-equipe>
                 {colaboradores.map((c) => {
                   const sel = membroIds.includes(c.id);
                   return (
@@ -197,7 +222,7 @@ export function EquipeForm({ initialData }: { initialData?: any }) {
                       "flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors",
                       sel ? "border-primary-300 bg-primary-50" : "border-surface-border hover:bg-surface-alt",
                     )}>
-                      <input type="checkbox" checked={sel} onChange={() => toggleMembro(c.id)}
+                      <input type="checkbox" checked={sel} onChange={() => toggleMembro(c.id)} aria-label={`Membro ${c.nome}`}
                         className="w-4 h-4 rounded border-surface-border text-primary-600 focus:ring-primary-500" />
                       <AvatarTecnico nome={c.nome} fotoUrl={c.avatar} size={28} />
                       <span className="text-sm text-ink truncate">{c.nome}</span>
@@ -216,8 +241,16 @@ export function EquipeForm({ initialData }: { initialData?: any }) {
 
       <div className="flex items-center justify-end gap-3 pt-1">
         <Button type="button" variant="secondary" onClick={() => router.back()}>Cancelar</Button>
-        <Button type="button" loading={salvando} onClick={() => salvar()}><Check className="w-4 h-4" /> {isEditing ? "Salvar alterações" : "Cadastrar equipe"}</Button>
+        <Button type="button" loading={salvando} onClick={() => salvar()} data-salvar-equipe><Check className="w-4 h-4" aria-hidden /> {isEditing ? "Salvar alterações" : "Cadastrar equipe"}</Button>
       </div>
+
+      {podeCadastrarColaborador && (
+        <CadastroRapidoModal
+          aberto={novoMembro} onFechar={() => setNovoMembro(false)} titulo="Novo colaborador" contexto="entra como membro desta equipe"
+          campos={COLABORADOR.campos} criar={criarColaborador} linkCadastroCompleto={COLABORADOR.link} rotuloSalvar="Cadastrar e marcar"
+          onCriado={(o) => { setNovoMembro(false); setMembroIds((p) => (p.includes(o.value) ? p : [...p, o.value])); }}
+        />
+      )}
 
       <Modal aberto={!!confirmar} onFechar={() => setConfirmar(null)} titulo="Desvincular veículo?" tamanho="sm">
         <div className="space-y-4" data-confirmar-desvinculo>

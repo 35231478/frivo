@@ -1,6 +1,8 @@
 "use client";
 
-import { confirmar } from "@/components/ui/avisos";
+import { confirmar, toast } from "@/components/ui/avisos";
+import { SelectCadastroRapido } from "@/components/ui/select-cadastro-rapido";
+import { COLABORADOR, EQUIPE } from "@/components/cadastro-rapido/definicoes";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -21,6 +23,7 @@ import {
   Truck, UserCog, FileText, Wrench, ClipboardCheck, AlertCircle, Plus, Trash2, Upload, X, ChevronLeft, CheckCircle2, Circle, ChevronDown, Lock,
 } from "lucide-react";
 import { InputData } from "@/components/ui/input-data";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
 
 type Aba = "identificacao" | "responsavel" | "documentos" | "manutencoes" | "checklists";
 
@@ -56,6 +59,7 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
   somenteLeitura?: boolean;
 }) {
   const router = useRouter();
+  const podeChecklist = usePermissoes().pode("veiculos", "checklist");
   const isEditing = !!initialData;
   const veiculoId = initialData?.id as string | undefined;
 
@@ -175,15 +179,53 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
         }),
       });
       if (res.status === 413) { setErro("As fotos ficaram grandes demais para enviar. Remova alguma foto e tente de novo."); return; }
-      if (!res.ok) { const e = await res.json().catch(() => ({})); setErro(e.erro ?? "Erro ao salvar veículo."); return; }
+      if (!res.ok) { const e = await res.json().catch(() => ({})); setErro(e.erro ?? "Não foi possível salvar o veículo."); return; }
+      toast(isEditing ? "Veículo salvo." : "Veículo cadastrado.");
       router.push("/veiculos");
       router.refresh();
-    } catch { setErro("Erro de conexão."); } finally { setSalvando(false); }
+    } catch { setErro("Sem conexão. Tente de novo."); } finally { setSalvando(false); }
   }
+
+  // Responsável e equipe: escolher, cadastrar na hora ou corrigir o escolhido sem sair do veículo
+  const porNome = (a: Opt, b: Opt) => a.nome.localeCompare(b.nome, "pt-BR");
+  const seletorResponsavel = (
+    <div data-responsavel-veiculo={form.responsavelId}>
+      <SelectCadastroRapido
+        value={form.responsavelId} onChange={(v) => upd("responsavelId", v)} placeholder="Sem responsável" disabled={somenteLeitura}
+        textoDesabilitado={colaboradores.find((c) => c.id === form.responsavelId)?.nome ?? "Sem responsável"}
+        opcoes={colaboradores.length ? [{ value: "", label: "Sem responsável" }, ...colaboradores.map((c) => ({ value: c.id, label: c.nome }))] : []}
+        entidade={COLABORADOR.entidade} campos={COLABORADOR.campos} campoBusca="nome" permissao={COLABORADOR.permissao} linkCadastroCompleto={COLABORADOR.link}
+        criar={async (v) => {
+          const c = await COLABORADOR.criar(v);
+          setColaboradores((l) => [...l, { id: c.id, nome: c.nome }].sort(porNome));
+          toast("Colaborador cadastrado.");
+          return { value: c.id, label: c.nome };
+        }}
+        edicao={form.responsavelId ? COLABORADOR.edicao((c) => setColaboradores((l) => l.map((x) => (x.id === c.id ? { ...x, nome: c.nome } : x)))) : undefined}
+      />
+    </div>
+  );
+  const seletorEquipe = (
+    <div data-equipe-veiculo={form.equipeId}>
+      <SelectCadastroRapido
+        value={form.equipeId} onChange={(v) => upd("equipeId", v)} placeholder="Sem equipe" disabled={somenteLeitura}
+        textoDesabilitado={equipes.find((e) => e.id === form.equipeId)?.nome ?? "Sem equipe"}
+        opcoes={equipes.length ? [{ value: "", label: "Sem equipe" }, ...equipes.map((e) => ({ value: e.id, label: e.nome }))] : []}
+        entidade={EQUIPE.entidade} campos={EQUIPE.campos} campoBusca="nome" permissao={EQUIPE.permissao} linkCadastroCompleto={EQUIPE.link}
+        criar={async (v) => {
+          const e = await EQUIPE.criar(v);
+          setEquipes((l) => [...l, { id: e.id, nome: e.nome }].sort(porNome));
+          toast("Equipe cadastrada.");
+          return { value: e.id, label: e.nome };
+        }}
+        edicao={form.equipeId ? EQUIPE.edicao((e) => setEquipes((l) => l.map((x) => (x.id === e.id ? { ...x, nome: e.nome } : x)))) : undefined}
+      />
+    </div>
+  );
 
   const seletorCombustivel = (
     <Select aria-label="Combustível" value={form.combustivel} onChange={(e) => upd("combustivel", e.target.value)}>
-      <option value="">Selecione…</option>
+      <option value="">Selecione</option>
       {COMBUSTIVEIS.map((c) => <option key={c} value={c}>{c}</option>)}
       {form.combustivel && !(COMBUSTIVEIS as readonly string[]).includes(form.combustivel) && <option value={form.combustivel}>{form.combustivel}</option>}
     </Select>
@@ -191,7 +233,6 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
 
   const listaDocumentos = (
     <>
-      <p className="text-sm text-ink-muted -mt-1">CRLV, seguro, IPVA e demais documentos. Vencidos ou vencendo em 30 dias são destacados.</p>
       {documentos.length === 0 ? (
         <p className="text-sm text-ink-subtle py-4 text-center border border-dashed border-surface-border rounded-lg">Nenhum documento adicionado.</p>
       ) : (
@@ -309,18 +350,8 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
 
         <Bloco numero={3} titulo="Responsável e equipe" descricao="Quem dirige e a qual equipe o veículo pertence." opcional>
           <FormGrid>
-            <FormField label="Colaborador / motorista responsável">
-              <Select aria-label="Responsável" value={form.responsavelId} onChange={(e) => upd("responsavelId", e.target.value)}>
-                <option value="">Selecione…</option>
-                {colaboradores.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-              </Select>
-            </FormField>
-            <FormField label="Equipe vinculada">
-              <Select aria-label="Equipe" value={form.equipeId} onChange={(e) => upd("equipeId", e.target.value)}>
-                <option value="">Selecione…</option>
-                {equipes.map((e) => <option key={e.id} value={e.id}>{e.nome}</option>)}
-              </Select>
-            </FormField>
+            <FormField label="Colaborador / motorista responsável">{seletorResponsavel}</FormField>
+            <FormField label="Equipe vinculada">{seletorEquipe}</FormField>
           </FormGrid>
           <FormField label="Quilometragem atual">
             <Input type="number" value={form.quilometragemAtual} onChange={(e) => upd("quilometragemAtual", e.target.value)} placeholder="0" className="sm:max-w-xs" />
@@ -389,7 +420,7 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
           })}
         </nav>
 
-        <fieldset disabled={somenteLeitura} className="p-5 sm:p-6 lg:p-8 space-y-8 min-w-0">
+        <fieldset disabled={somenteLeitura} className={cn("p-5 sm:p-6 lg:p-8 space-y-8 min-w-0", aba === "checklists" && "hidden")}>
           {/* ABA 1 — Identificação */}
           <div className={cn("space-y-8", aba !== "identificacao" && "hidden")}>
             {!somenteLeitura && <CrlvPorFoto compacto onAplicar={aplicarCrlv} onConferindo={setConferindo} />}
@@ -436,18 +467,8 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
           <div className={cn("space-y-8", aba !== "responsavel" && "hidden")}>
             <FormSection title="Responsável e equipe">
               <FormGrid>
-                <FormField label="Colaborador / motorista responsável">
-                  <Select value={form.responsavelId} onChange={(e) => upd("responsavelId", e.target.value)}>
-                    <option value="">Selecione…</option>
-                    {colaboradores.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                  </Select>
-                </FormField>
-                <FormField label="Equipe vinculada">
-                  <Select value={form.equipeId} onChange={(e) => upd("equipeId", e.target.value)}>
-                    <option value="">Selecione…</option>
-                    {equipes.map((e) => <option key={e.id} value={e.id}>{e.nome}</option>)}
-                  </Select>
-                </FormField>
+                <FormField label="Colaborador / motorista responsável">{seletorResponsavel}</FormField>
+                <FormField label="Equipe vinculada">{seletorEquipe}</FormField>
               </FormGrid>
               <FormField label="Quilometragem atual">
                 <Input type="number" value={form.quilometragemAtual} onChange={(e) => upd("quilometragemAtual", e.target.value)} placeholder="0" />
@@ -458,11 +479,11 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
           {/* ABA 3 — Documentos */}
           <div className={cn("space-y-6", aba !== "documentos" && "hidden")}>
             <FormSection title="Vencimento do seguro">
-              <FormField label="Data de vencimento do seguro" hint="Gera alerta no dashboard 30 dias antes de vencer">
+              <FormField label="Data de vencimento do seguro" dica="Gera alerta no dashboard 30 dias antes de vencer.">
                 <InputData value={form.seguroVencimento} onChange={(v) => upd("seguroVencimento", v)} className="sm:max-w-xs" />
               </FormField>
             </FormSection>
-            <FormSection title="Documentos do veículo">
+            <FormSection title="Documentos do veículo" dica="CRLV, seguro, IPVA e demais documentos. Vencidos ou vencendo em 30 dias são destacados.">
               {listaDocumentos}
             </FormSection>
           </div>
@@ -475,15 +496,20 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
                 <FormField label="Próxima revisão — Data"><InputData value={form.proximaRevisaoData} onChange={(v) => upd("proximaRevisaoData", v)} /></FormField>
               </FormGrid>
             </FormSection>
-            {isEditing && <ManutencoesPanel veiculoId={veiculoId!} manutencoes={manutencoes} setManutencoes={setManutencoes} />}
+            {isEditing && <ManutencoesPanel veiculoId={veiculoId!} manutencoes={manutencoes} setManutencoes={setManutencoes} somenteLeitura={somenteLeitura} />}
           </div>
 
+        </fieldset>
+        {/* Fora do fieldset: quem só consulta abre o detalhe do checklist; cada ação confere a própria permissão */}
+        <div className={cn("p-5 sm:p-6 lg:p-8", aba !== "checklists" && "hidden")} data-aba-checklists-veiculo>
           {/* ABA 5 — Checklists */}
-          <div className={cn("space-y-6", aba !== "checklists" && "hidden")}>
+          <div className="space-y-6">
             <FormSection title="Histórico de checklists">
-              <Link href={`/veiculos/checklist?veiculoId=${veiculoId ?? ""}`} className="inline-flex items-center gap-2 text-sm font-semibold text-primary-600 hover:text-primary-700">
-                <ClipboardCheck className="w-4 h-4" /> Preencher novo checklist
-              </Link>
+              {podeChecklist && (
+                <Link href={`/veiculos/checklist?veiculoId=${veiculoId ?? ""}`} className="inline-flex items-center gap-2 text-sm font-semibold text-primary-600 hover:text-primary-700" data-preencher-checklist>
+                  <ClipboardCheck className="w-4 h-4" aria-hidden /> Preencher novo checklist
+                </Link>
+              )}
               {/* Só monta com a aba aberta: a lista vem da rota (com Detalhe, Editar e Excluir por permissão) */}
               {aba === "checklists" && veiculoId && (
                 <ChecklistsPreenchidos veiculoId={veiculoId} colaboradores={colaboradores} onMudou={() => router.refresh()} />
@@ -508,7 +534,7 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
               </FormSection>
             )}
           </div>
-        </fieldset>
+        </div>
       </div>
 
       {conferindo ? null : somenteLeitura ? (
@@ -516,20 +542,26 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
       ) : (
         <div className="flex items-center justify-end gap-3 pt-1">
           <Button type="button" variant="secondary" onClick={() => router.back()}>Cancelar</Button>
-          <Button type="button" loading={salvando} onClick={salvar}>{isEditing ? "Salvar alterações" : "Cadastrar veículo"}</Button>
+          <Button type="button" loading={salvando} onClick={salvar} data-salvar-veiculo>{isEditing ? "Salvar alterações" : "Cadastrar veículo"}</Button>
         </div>
       )}
     </div>
   );
 }
 
-function ManutencoesPanel({ veiculoId, manutencoes, setManutencoes }: { veiculoId: string; manutencoes: any[]; setManutencoes: (m: any[]) => void }) {
+/** O erro que a rota devolveu ({ erro }) ou o texto de reserva */
+async function erroDa(res: Response, reserva: string): Promise<string> {
+  const j = await res.json().catch(() => null);
+  return (j && typeof j.erro === "string" && j.erro) || reserva;
+}
+
+function ManutencoesPanel({ veiculoId, manutencoes, setManutencoes, somenteLeitura }: { veiculoId: string; manutencoes: any[]; setManutencoes: (m: any[]) => void; somenteLeitura?: boolean }) {
   const [mostra, setMostra] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [m, setM] = useState({ tipo: "PREVENTIVA", descricao: "", quilometragem: "", custo: "", dataRealizacao: "", proximaData: "", proximaKm: "" });
 
   async function registrar() {
-    if (!m.descricao.trim() || !m.dataRealizacao) return;
+    if (!m.descricao.trim() || !m.dataRealizacao) { toast("Informe a data e a descrição da manutenção.", "erro"); return; }
     setSalvando(true);
     try {
       const res = await fetch(`/api/veiculos/${veiculoId}/manutencoes`, {
@@ -540,19 +572,25 @@ function ManutencoesPanel({ veiculoId, manutencoes, setManutencoes }: { veiculoI
           proximaData: m.proximaData || null, proximaKm: m.proximaKm || null,
         }),
       });
-      if (res.ok) {
-        const nova = await res.json();
-        setManutencoes([nova, ...manutencoes]);
-        setM({ tipo: "PREVENTIVA", descricao: "", quilometragem: "", custo: "", dataRealizacao: "", proximaData: "", proximaKm: "" });
-        setMostra(false);
-      }
-    } catch {} finally { setSalvando(false); }
+      // Recusado: o formulário fica aberto com o que foi digitado e a tela diz por quê
+      if (!res.ok) { toast(await erroDa(res, "Não foi possível registrar a manutenção."), "erro"); return; }
+      const nova = await res.json();
+      setManutencoes([nova, ...manutencoes]);
+      setM({ tipo: "PREVENTIVA", descricao: "", quilometragem: "", custo: "", dataRealizacao: "", proximaData: "", proximaKm: "" });
+      setMostra(false);
+      toast("Manutenção registrada.");
+    } catch { toast("Sem conexão. Tente de novo.", "erro"); } finally { setSalvando(false); }
   }
 
   async function remover(id: string) {
-    if (!(await confirmar({ mensagem: "Excluir esta manutenção?", perigo: true, confirmarTexto: "Excluir" }))) return;
-    await fetch(`/api/veiculos/${veiculoId}/manutencoes?manutencaoId=${id}`, { method: "DELETE" });
-    setManutencoes(manutencoes.filter((x) => x.id !== id));
+    if (!(await confirmar({ titulo: "Excluir esta manutenção?", mensagem: "O registro sai do histórico do veículo. Não dá para desfazer.", perigo: true, confirmarTexto: "Excluir" }))) return;
+    try {
+      const res = await fetch(`/api/veiculos/${veiculoId}/manutencoes?manutencaoId=${id}`, { method: "DELETE" });
+      // Recusado (sem permissão…): a manutenção continua na lista
+      if (!res.ok) { toast(await erroDa(res, "Não foi possível excluir a manutenção."), "erro"); return; }
+      setManutencoes(manutencoes.filter((x) => x.id !== id));
+      toast("Manutenção excluída.");
+    } catch { toast("Sem conexão. Tente de novo.", "erro"); }
   }
 
   return (
@@ -574,7 +612,9 @@ function ManutencoesPanel({ veiculoId, manutencoes, setManutencoes }: { veiculoI
                   {mn.custo != null && ` · ${formatarMoeda(Number(mn.custo))}`}
                 </p>
               </div>
-              <button type="button" onClick={() => remover(mn.id)} className="text-atrasado hover:text-atrasado-texto p-1.5 shrink-0"><Trash2 className="w-4 h-4" /></button>
+              {!somenteLeitura && (
+                <button type="button" onClick={() => remover(mn.id)} aria-label={`Excluir a manutenção ${mn.descricao}`} title="Excluir" className="text-atrasado hover:text-atrasado-texto p-1.5 shrink-0" data-excluir-manutencao={mn.id}><Trash2 className="w-4 h-4" aria-hidden /></button>
+              )}
             </div>
           ))}
         </div>
@@ -599,12 +639,12 @@ function ManutencoesPanel({ veiculoId, manutencoes, setManutencoes }: { veiculoI
           </FormGrid>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={() => setMostra(false)}>Cancelar</Button>
-            <Button type="button" loading={salvando} onClick={registrar}>Registrar</Button>
+            <Button type="button" loading={salvando} onClick={registrar} data-registrar-manutencao>Registrar</Button>
           </div>
         </div>
-      ) : (
-        <Button type="button" variant="secondary" onClick={() => setMostra(true)} className="w-full justify-center border-dashed">
-          <Plus className="w-4 h-4" /> Registrar manutenção
+      ) : !somenteLeitura && (
+        <Button type="button" variant="secondary" onClick={() => setMostra(true)} className="w-full justify-center border-dashed" data-nova-manutencao>
+          <Plus className="w-4 h-4" aria-hidden /> Registrar manutenção
         </Button>
       )}
     </FormSection>

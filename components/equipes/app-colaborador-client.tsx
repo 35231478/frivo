@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Smartphone, Check, ShieldCheck, Camera, MapPinned, MonitorSmartphone } from "lucide-react";
+import { toast } from "@/components/ui/avisos";
+import { Dica } from "@/components/ui/dica";
 import { Button } from "@/components/ui/button";
 import { ToggleSwitch, ToggleGroup } from "@/components/ui/toggle-switch";
 import { configAppParaPayload, type ConfigApp } from "@/lib/tecnico/config-app";
@@ -16,42 +18,34 @@ export function AppColaboradorClient({ inicial }: { inicial: ConfigApp }) {
   const [cfg, setCfg] = useState<ConfigApp>(inicial);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
-  const [sucesso, setSucesso] = useState(false);
 
-  const set = (k: keyof ConfigApp) => (v: boolean) => { setCfg((c) => ({ ...c, [k]: v })); setSucesso(false); };
+  const set = (k: keyof ConfigApp) => (v: boolean) => setCfg((c) => ({ ...c, [k]: v }));
 
   async function salvar() {
-    setErro(""); setSucesso(false); setSalvando(true);
+    setErro(""); setSalvando(true);
     try {
       const res = await fetch("/api/configuracoes", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(configAppParaPayload(cfg)),
       });
-      if (!res.ok) { const e = await res.json().catch(() => ({})); setErro(e.erro ?? "Não foi possível salvar."); return; }
-      setSucesso(true);
+      // Recusado: as chaves ficam como a pessoa deixou e a tela diz por quê
+      if (!res.ok) { const e = await res.json().catch(() => ({})); setErro(e.erro ?? "Não foi possível salvar as preferências."); return; }
+      toast("Preferências do app salvas.");
       router.refresh();
-    } catch { setErro("Erro de conexão."); } finally { setSalvando(false); }
+    } catch { setErro("Sem conexão. Tente de novo."); } finally { setSalvando(false); }
   }
 
   return (
     <div className="max-w-3xl space-y-6">
-      <header className="flex items-start gap-3">
-        <span className="rounded-card bg-primary-50 text-primary-700 p-2.5"><Smartphone className="w-6 h-6" /></span>
-        <div>
-          <h1 className="text-xl font-bold text-ink">App do colaborador</h1>
-          <p className="text-sm text-ink-muted mt-0.5">
-            O que o colaborador vê e pode fazer no app. Vale para a empresa toda; o técnico não vê esta tela.
-          </p>
-        </div>
+      <header className="flex items-center gap-3">
+        <span className="p-2 bg-surface-alt rounded-lg"><Smartphone className="w-5 h-5 text-ink-muted" aria-hidden /></span>
+        <h1 className="page-title flex items-center gap-1.5">App do colaborador
+          <Dica texto="O que o colaborador vê e pode fazer no app. Vale para a empresa toda; o técnico não vê esta tela." rotulo="App do colaborador" lado="direita" />
+        </h1>
       </header>
 
-      {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3">{erro}</div>}
-      {sucesso && (
-        <div className="bg-ok-claro border border-ok/20 text-ok-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2" data-sucesso>
-          <Check className="w-4 h-4" /> Preferências do app salvas.
-        </div>
-      )}
+      {erro && <div role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3" data-erro-app>{erro}</div>}
 
       {/* ========== Privacidade e comercial ========== */}
       <section className="bg-white rounded-card border border-surface-border p-6">

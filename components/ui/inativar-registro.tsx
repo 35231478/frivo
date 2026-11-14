@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Ban, Loader2, RotateCcw, AlertTriangle, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
+import { toast } from "@/components/ui/avisos";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import type { Acao } from "@/lib/permissoes";
 
@@ -82,6 +83,8 @@ export function InativarRegistro({
       if (!res.ok) { setErro(d.erro ?? "Não foi possível concluir a ação."); return; }
       if (d.aviso) { setErro(d.aviso); return; } // concluiu em parte: mostra o que faltou
       setAberto(false);
+      // "Veículo inativado." / "Equipe reativada." — toda gravação avisa
+      toast(`${entidade.charAt(0).toUpperCase()}${entidade.slice(1)} ${ativo ? "inativad" : "reativad"}${feminino ? "a" : "o"}.`);
       if (aoConcluir) aoConcluir(!ativo); else router.refresh();
     } catch { setErro("Erro de conexão."); } finally { setCarregando(false); }
   }
@@ -95,8 +98,9 @@ export function InativarRegistro({
         <button
           type="button" title={`${rotulo} ${entidade}`} aria-label={`${rotulo} ${entidade}`} onClick={abrir}
           className={cn("p-1.5 rounded-md text-ink-muted hover:bg-surface-alt", ativo ? "hover:text-atrasado" : "hover:text-ok")}
+          data-inativar-registro={ativo ? "inativar" : "reativar"}
         >
-          <Icone className="w-4 h-4" />
+          <Icone className="w-4 h-4" aria-hidden />
         </button>
       ) : (
         <button
