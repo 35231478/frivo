@@ -87,10 +87,13 @@ const pagina = (itens: any[], contagens?: { ativos: number; inativos: number; to
 });
 
 beforeAll(async () => {
-  await Promise.all([
-    import("@/components/ui/select-cadastro-rapido"), import("@/components/cadastros/seletor-cadastro"), import("@/components/cadastros/cadastro-padrao"),
-    import("@/components/config/telas/tipos-os"), import("@/components/config/telas/portal"), import("@/components/providers/permissoes-provider"),
-  ]);
+  // Um de cada vez, com os avisos primeiro (mesmo cuidado dos testes das levas 2, 3 e 4A): importar em
+  // paralelo pode criar duas cópias do módulo simulado dos avisos
+  await import("@/components/ui/avisos");
+  for (const m of [
+    () => import("@/components/ui/select-cadastro-rapido"), () => import("@/components/cadastros/seletor-cadastro"), () => import("@/components/cadastros/cadastro-padrao"),
+    () => import("@/components/config/telas/tipos-os"), () => import("@/components/config/telas/portal"), () => import("@/components/providers/permissoes-provider"),
+  ]) await m();
 }, 120_000);
 beforeEach(async () => {
   chamadas.length = 0;

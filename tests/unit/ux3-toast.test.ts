@@ -98,7 +98,8 @@ describe("varredura: as ações usam o diálogo e o toast da casa", () => {
     await clicar($$("button").find((b) => b.textContent!.includes("Inativar")));
     // diálogo da casa, não o nativo
     expect(nativo).not.toHaveBeenCalled();
-    expect($("[data-confirmacao]")!.textContent).toContain('Inativar o equipamento "Split Sala 1"?');
+    // Leva 4A: o título do diálogo virou a pergunta curta ("Inativar <nome>?"), como nas outras listas
+    expect($("[data-confirmacao]")!.textContent).toContain("Inativar Split Sala 1?");
     await clicar($("[data-confirmar-sim]"));
     // erro da API aparece como toast (não alert)
     expect($("[data-toast=erro]")!.textContent).toContain("Equipamento tem OS aberta.");

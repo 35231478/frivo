@@ -1,7 +1,8 @@
 # Padronização de telas — inventário e plano de levas
 
 Inventário das telas do painel contra o checklist da padronização, para planejar as levas por módulo.
-Feito em 14/11/2026, com o código da leva 2; a tabela de Configurações e o placar foram revistos na leva 3.
+Feito em 14/11/2026, com o código da leva 2; a tabela de Configurações e o placar foram revistos na leva 3,
+e as de Clientes e de Equipamentos e QR Codes na leva 4A.
 
 ## Como foi feito (e o limite disto)
 
@@ -21,18 +22,21 @@ os itens dela que tocam em tela estão citados na leva correspondente.
 
 ## Placar
 
-Números da varredura automática, depois da leva 3.
+Números da varredura automática, depois da leva 4A. A varredura não segue arquivo vizinho (`./x-client`) nem
+reconhece a tabela ligada à URL: por isso `/clientes`, `/equipamentos`, `/qrcodes` e `/qrcodes/imprimir`, feitas
+na 4A e conferidas no navegador, ainda contam aqui como pendentes em lista padrão, toast, ⓘ, permissão e celular.
+A tabela de cada módulo, mais abaixo, traz o estado conferido.
 
 | | Telas |
 |---|---|
 | Telas do painel inventariadas | **111** (fora 35 rotas antigas que só redirecionam) |
-| Já usam a lista padrão | 28 |
-| Com tabela própria | 26 |
-| Sem toast | 47 |
+| Já usam a lista padrão | 30 |
+| Com tabela própria | 23 |
+| Sem toast | 44 |
 | Sem ajuda no ⓘ | 34 |
 | Sem checagem de permissão nos botões | 15 |
 | Com seletor e sem cadastro inline | 26 |
-| Com cadastro inline e sem edição no contexto | 19 |
+| Com cadastro inline e sem edição no contexto | 16 |
 | Sem classes de celular | 26 |
 | Com `alert()`/`confirm()` nativo | 0 |
 
@@ -48,6 +52,10 @@ Números da varredura automática, depois da leva 3.
 - **Leva 3**: telas pequenas de Configurações — botões de gravar só para quem tem a permissão, padrão
   de lista em formulários, checklists de veículo, numeração e padronização, toast em toda gravação e
   instrução no ⓘ. Ver [padronizacao-leva3.md](padronizacao-leva3.md).
+- **Leva 4A**: Clientes, Equipamentos e QR Codes — listas na tabela da casa, QR Codes no celular e com
+  desvincular, inativar e reativar por permissão, toast em toda gravação, editar cliente e unidade no
+  contexto e a consulta de CNPJ no cadastro rápido de cliente. Ver
+  [padronizacao-leva4a.md](padronizacao-leva4a.md).
 
 ## Próximas levas (ordem sugerida)
 
@@ -56,7 +64,7 @@ diário para o que menos atrapalha, e do menor para o maior.
 
 | Leva | Módulo | Telas | Por que nesta ordem |
 |---|---|---|---|
-| 4 | **Cadastros principais** | Clientes (lista), equipamentos (lista, ficha, formulários), QR Codes, veículos, colaboradores, equipes | Listas com tabela própria e formulários sem edição no contexto; são os cadastros que a OS e o orçamento usam |
+| 4B | **Cadastros principais (2ª parte)** | Veículos (lista, formulários, checklist), colaboradores, equipes | A 1ª parte (clientes, equipamentos, QR Codes) é a leva 4A. Falta: detalhe, editar e inativar do checklist de veículo; cadastro rápido do responsável técnico; reativar formulário e modelo de checklist inativados |
 | 5 | **Operação** | Lista de OS, calendário, prazos, execução da atividade, PMOC | Onde o escritório passa o dia. PMOC é planilha: padroniza, não joga fora |
 | 6 | **Comercial** | Lista de orçamentos, contratos (lista, formulário, reajustes, relatório), leads do site | O formulário de contrato tem 12 seletores e tabela própria |
 | 7 | **Estoque e compras** | Estoque, separação, devolução, notas de entrada, pedidos de compra | Telas-planilha de operação; padronizar a lista e os avisos |
@@ -123,7 +131,7 @@ que fazer quando há empate ou pouco histórico (a proposta é não sugerir nada
 
 | Tela | Lista no padrão | Busca e página no servidor | Ajuda no ⓘ | Toast | Botões por permissão | Cadastro inline | Edição no contexto | Celular | O que a varredura não viu |
 |---|---|---|---|---|---|---|---|---|---|
-| `/clientes` | — | sim | sim | sim | sim | sim | — | sim | tabela própria; edição no contexto |
+| `/clientes` | sim | sim | sim | sim | sim | sim | — | sim | feita na leva 4A; lista não tem seletor para editar no contexto |
 | `/clientes/[id]/editar` | — | — | sim | sim | sim | sim | sim | sim | nada apontado pela varredura |
 | `/clientes/novo` | — | — | sim | sim | sim | sim | sim | sim | nada apontado pela varredura |
 
@@ -131,13 +139,13 @@ que fazer quando há empate ou pouco histórico (a proposta é não sugerir nada
 
 | Tela | Lista no padrão | Busca e página no servidor | Ajuda no ⓘ | Toast | Botões por permissão | Cadastro inline | Edição no contexto | Celular | O que a varredura não viu |
 |---|---|---|---|---|---|---|---|---|---|
-| `/equipamentos` | — | — | sim | — | sim | sim | — | sim | toast; edição no contexto |
-| `/equipamentos/[id]` | — | — | — | sim | sim | — | — | — | ajuda no ⓘ; versão de celular |
-| `/equipamentos/[id]/editar` | — | — | sim | — | sim | sim | — | sim | tabela própria; toast; edição no contexto |
-| `/equipamentos/novo` | — | — | sim | — | sim | sim | — | sim | tabela própria; toast; edição no contexto |
-| `/equipamentos/novo/foto` | — | — | sim | — | sim | sim | — | sim | toast; edição no contexto |
-| `/qrcodes` | — | — | — | — | — | — | — | — | toast; ajuda no ⓘ; botões por permissão; versão de celular |
-| `/qrcodes/imprimir` | — | — | — | — | — | — | — | — | toast; ajuda no ⓘ; botões por permissão; versão de celular |
+| `/equipamentos` | sim | sim | sim | sim | sim | sim | — | sim | feita na leva 4A; a busca e a página são pela URL (servidor) |
+| `/equipamentos/[id]` | — | — | — | sim | sim | — | — | sim | conferida na leva 4A: cabe no celular e não tem instrução solta |
+| `/equipamentos/[id]/editar` | sim | — | sim | sim | sim | sim | sim | sim | feita na leva 4A |
+| `/equipamentos/novo` | — | — | sim | sim | sim | sim | sim | sim | feita na leva 4A |
+| `/equipamentos/novo/foto` | — | — | sim | sim | sim | sim | sim | sim | feita na leva 4A; o aviso de privacidade fica visível de propósito |
+| `/qrcodes` | sim | — | sim | sim | sim | — | — | sim | feita na leva 4A; Gerar e Vincular já seguiam a permissão (a varredura não segue o arquivo vizinho) |
+| `/qrcodes/imprimir` | — | — | sim | — | — | — | — | sim | feita na leva 4A; só imprime (não grava: sem toast nem botão por permissão) |
 
 ### Ordens de serviço, calendário, prazos e mapa (7)
 

@@ -9,8 +9,9 @@ import { usePermissoes } from "@/components/providers/permissoes-provider";
 
 /**
  * Inativa (DELETE = soft-delete, exige "excluir") ou reativa (PATCH, exige "editar")
- * um equipamento, com confirmação. Sem a permissão correspondente, não renderiza nada.
- * O histórico de OS, formulários e o QR Code são preservados.
+ * um equipamento. Inativar pede confirmação; reativar vai direto. Sem a permissão correspondente, não
+ * renderiza nada. O histórico de OS, formulários e o QR Code são preservados. Toda gravação avisa (toast);
+ * recusada pelo servidor, a tela fica como está.
  */
 export function EquipamentoAtivoBotao({
   id, nome, ativo, variante = "icone",
@@ -28,10 +29,11 @@ export function EquipamentoAtivoBotao({
   if (!permitido) return null;
 
   async function executar() {
-    const msg = ativo
-      ? `Inativar o equipamento "${nome}"? Sai das listas de seleção; histórico e QR Code ficam.`
-      : `Reativar o equipamento "${nome}"?`;
-    if (!(await confirmar({ mensagem: msg, perigo: ativo, confirmarTexto: ativo ? "Inativar" : "Reativar" }))) return;
+    // Reativar não destrói nada: vai direto. Inativar pede confirmação.
+    if (ativo && !(await confirmar({
+      titulo: `Inativar ${nome}?`, mensagem: "Sai das listas de seleção. O histórico e o QR Code ficam, e o equipamento pode ser reativado.",
+      perigo: true, confirmarTexto: "Inativar",
+    }))) return;
     setCarregando(true);
     try {
       const res = ativo
@@ -43,12 +45,13 @@ export function EquipamentoAtivoBotao({
           });
       if (!res.ok) {
         const e = await res.json().catch(() => ({}));
-        toast(e.erro ?? "Erro ao alterar o status do equipamento.", "erro");
+        toast(e.erro ?? "Não foi possível alterar o equipamento.", "erro");
         return;
       }
+      toast(ativo ? "Equipamento inativado." : "Equipamento reativado.");
       router.refresh();
     } catch {
-      toast("Erro de conexão.", "erro");
+      toast("Sem conexão. Tente de novo.", "erro");
     } finally {
       setCarregando(false);
     }
@@ -61,11 +64,11 @@ export function EquipamentoAtivoBotao({
     return (
       <button
         type="button"
-        title={`${rotulo} equipamento`}
+        title={rotulo} aria-label={`${rotulo} ${nome}`} data-alternar-equipamento={id}
         disabled={carregando}
         onClick={executar}
         className={cn(
-          "p-1 rounded-md hover:bg-surface-alt disabled:opacity-50",
+          "p-1.5 rounded hover:bg-surface-alt disabled:opacity-50",
           ativo ? "text-ink-muted hover:text-atrasado" : "text-ink-muted hover:text-ok-texto",
         )}
       >
@@ -76,7 +79,7 @@ export function EquipamentoAtivoBotao({
 
   return (
     <button
-      type="button"
+      type="button" data-alternar-equipamento={id}
       disabled={carregando}
       onClick={executar}
       className={cn(

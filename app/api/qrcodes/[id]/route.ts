@@ -47,7 +47,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const existente = await prisma.qrcode.findFirst({ where: { id, empresaId } });
   if (!existente) return NextResponse.json({ erro: "QR Code não encontrado" }, { status: 404 });
 
-  const parsed = patchSchema.safeParse(await req.json());
+  const parsed = patchSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
   }

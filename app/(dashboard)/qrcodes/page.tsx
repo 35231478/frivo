@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { QrcodesClient } from "./qrcodes-client";
 import { espiarProximo } from "@/lib/numeracao-server";
+import { localEquipamentoQr, nomeEquipamentoQr, rotuloParaVincular } from "@/lib/qrcode-rotulos";
 
 export const metadata: Metadata = { title: "QR Codes" };
 
@@ -14,13 +15,13 @@ export default async function QrcodesPage() {
     prisma.qrcode.findMany({
       where: { empresaId },
       include: {
-        equipamento: { select: { id: true, marca: true, modelo: true, localizacao: true, unidade: { select: { nome: true } } } },
+        equipamento: { select: { id: true, nome: true, marca: true, modelo: true, localizacao: true, unidade: { select: { nome: true } } } },
       },
       orderBy: { criadoEm: "desc" },
     }),
     prisma.equipamento.findMany({
       where: { empresaId, ativo: true, qrcode: null },
-      select: { id: true, marca: true, modelo: true, localizacao: true, unidade: { select: { nome: true } } },
+      select: { id: true, nome: true, marca: true, modelo: true, localizacao: true, unidade: { select: { nome: true, cliente: { select: { nome: true, nomeFantasia: true } } } } },
       orderBy: [{ marca: "asc" }, { modelo: "asc" }],
     }),
     espiarProximo(empresaId, "qrcode"), // o contador de Configurações › Numeração (só espia, não consome)
@@ -34,15 +35,15 @@ export default async function QrcodesPage() {
     equipamento: q.equipamento
       ? {
           id: q.equipamento.id,
-          nome: `${q.equipamento.marca} ${q.equipamento.modelo}`,
-          local: q.equipamento.unidade?.nome ?? q.equipamento.localizacao ?? null,
+          nome: nomeEquipamentoQr(q.equipamento),
+          local: localEquipamentoQr(q.equipamento),
         }
       : null,
   }));
 
   const equipamentos = equipamentosLivres.map((e) => ({
     id: e.id,
-    nome: `${e.marca} ${e.modelo}${e.unidade?.nome ? ` — ${e.unidade.nome}` : ""}`,
+    nome: rotuloParaVincular(e),
   }));
 
   return <QrcodesClient lista={lista} equipamentosLivres={equipamentos} proximoCodigo={proximoCodigo} />;

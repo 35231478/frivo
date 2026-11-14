@@ -18,6 +18,7 @@ import { reduzirImagem, type QualidadeImagem } from "@/lib/imagem-cliente";
 import { AvisoSerieDuplicada, type ItemLeva } from "@/components/equipamentos/aviso-serie-duplicada";
 import { SlotFoto } from "@/components/ui/slot-foto";
 import { hrefSecaoConfig } from "@/lib/navegacao/configuracoes";
+import { toast } from "@/components/ui/avisos";
 
 /* ───────── Campos lidos da etiqueta (mesmos nomes do JSON pedido à IA) ───────── */
 type Campo =
@@ -286,6 +287,7 @@ export function CadastroPorFoto() {
       const d = await res.json().catch(() => ({}));
       if (!res.ok) { setErroEtapa(d.erro ?? "Não foi possível salvar o equipamento."); return; }
       setSalvo({ id: d.id, qr: d.qrcode?.codigo ?? null, avisoQr: d.avisoQr });
+      toast("Equipamento cadastrado.");
       const serie = valores.numero_serie.trim();
       if (serie && d.id) setLeva((l) => [...l, { id: d.id, numeroSerie: serie, descricao: [rotuloTipo(valores.tipo), [valores.marca.trim(), valores.modelo.trim()].filter(Boolean).join(" ")].filter(Boolean).join(" · ") }]);
       setEtapa("pronto");
@@ -486,7 +488,7 @@ export function CadastroPorFoto() {
         {etapa === "local" && (
           <div className="space-y-4">
             <h2 className="font-semibold text-ink">Onde ele está instalado?</h2>
-            <FormField label="Cliente" required dica="Digite ao menos 2 letras para buscar.">
+            <FormField label="Cliente" required dica="Digite ao menos 2 letras para pesquisar.">
               <ClienteCombobox value={clienteId} onChange={(id) => { setClienteId(id); setUnidadeId(""); }} />
             </FormField>
             <FormField label="Endereço / Unidade" required>
@@ -495,6 +497,7 @@ export function CadastroPorFoto() {
                 contexto="para este cliente" placeholder="Selecione o endereço" disabled={!clienteId} textoDesabilitado="Selecione um cliente primeiro"
                 carregando={carregandoUnidades} campos={UNIDADE.campos} campoBusca="nome" criar={criarUnidade}
                 permissao={UNIDADE.permissao} linkCadastroCompleto={clienteId ? UNIDADE.link(clienteId) : undefined}
+                edicao={UNIDADE.edicao<UnidadeItem>(clienteId, (u) => setUnidades((l) => l.map((x) => (x.id === u.id ? { ...x, ...u } : x))))}
               />
             </FormField>
             <input ref={inputPlaca} type="file" accept="image/*" capture="environment" className="hidden" onChange={aoFotografarPlaca} aria-label="Foto da placa da porta" />
